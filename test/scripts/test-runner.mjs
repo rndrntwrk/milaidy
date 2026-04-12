@@ -63,6 +63,20 @@ await runManagedTestCommand({
 
 await runManagedTestCommand({
   repoRoot,
+  lockName: "live-smoke",
+  label: "live-smoke",
+  command: bunCmd,
+  args: ["run", "test:live:smoke"],
+  cwd: repoRoot,
+  env: {
+    ...buildTestEnv(repoRoot),
+    MILADY_LIVE_TEST: "1",
+    ELIZA_LIVE_TEST: "1",
+  },
+});
+
+await runManagedTestCommand({
+  repoRoot,
   lockName: "orchestrator-integration",
   label: "orchestrator-integration",
   command: bunCmd,

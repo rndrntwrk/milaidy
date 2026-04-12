@@ -20,6 +20,8 @@ import {
   resolveOccurrenceIdByTitle,
   selectLifeOpsLiveProvider,
   startLifeOpsLiveRuntime,
+  waitForDefinitionByTitle,
+  waitForGoalByTitle,
   waitForTrajectoryCall,
 } from "./lifeops-live-harness.ts";
 
@@ -51,6 +53,8 @@ export type ScenarioTurn = {
   plannerExcludes?: string[];
   attempts?: number;
   trajectoryTimeoutMs?: number;
+  waitForDefinitionTitle?: string;
+  waitForGoalTitle?: string;
 };
 
 type DefinitionCountDeltaCheck = {
@@ -532,6 +536,22 @@ async function createScenarioRooms(
   return created;
 }
 
+async function waitForScenarioTurnSideEffects(args: {
+  runtime: StartedLifeOpsLiveRuntime;
+  turn: ScenarioTurn;
+}): Promise<void> {
+  if (args.turn.waitForDefinitionTitle) {
+    await waitForDefinitionByTitle(
+      args.runtime.port,
+      args.turn.waitForDefinitionTitle,
+    );
+  }
+
+  if (args.turn.waitForGoalTitle) {
+    await waitForGoalByTitle(args.runtime.port, args.turn.waitForGoalTitle);
+  }
+}
+
 async function collectScenarioBaseline(
   runtime: StartedLifeOpsLiveRuntime,
   scenario: LifeOpsLiveScenario,
@@ -985,6 +1005,10 @@ export async function runLifeOpsLiveScenario(args: {
         responseText,
         turn.responseExcludes,
       );
+      await waitForScenarioTurnSideEffects({
+        runtime: args.runtime,
+        turn,
+      });
       args.onProgress?.({
         type: "turn:complete",
         index: index + 1,

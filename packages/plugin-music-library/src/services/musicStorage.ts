@@ -1,5 +1,4 @@
-import { logger } from "@elizaos/core";
-import { exec } from "child_process";
+import { exec } from "node:child_process";
 import {
   createReadStream,
   existsSync,
@@ -8,10 +7,11 @@ import {
   statSync,
   unlinkSync,
   writeFileSync,
-} from "fs";
-import { join } from "path";
-import type { Readable } from "stream";
-import { promisify } from "util";
+} from "node:fs";
+import { join } from "node:path";
+import type { Readable } from "node:stream";
+import { promisify } from "node:util";
+import { logger } from "@elizaos/core";
 
 const execAsync = promisify(exec);
 
@@ -145,7 +145,7 @@ export class MusicStorageService {
         format: info.format?.format_name || "webm",
         size: stats.size,
         duration: parseFloat(info.format?.duration) || undefined,
-        bitrate: parseInt(info.format?.bit_rate) || undefined,
+        bitrate: parseInt(info.format?.bit_rate, 10) || undefined,
         storedAt: Date.now(),
       };
 

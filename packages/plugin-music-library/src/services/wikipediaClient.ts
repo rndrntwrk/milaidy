@@ -3,6 +3,29 @@ import type { AlbumInfo, ArtistInfo, TrackInfo } from "../types";
 
 const WIKIPEDIA_SERVICE_NAME = "wikipedia";
 
+interface WikipediaSummaryPage {
+  extract?: string;
+  thumbnail?: {
+    source?: string;
+  };
+  content_urls?: {
+    desktop?: {
+      page?: string;
+    };
+  };
+}
+
+interface WikipediaSearchEntry {
+  title: string;
+  snippet: string;
+}
+
+interface WikipediaSearchResponse {
+  query?: {
+    search?: WikipediaSearchEntry[];
+  };
+}
+
 /**
  * Shared rate limiter for Wikipedia API across all agents per instance
  * Wikipedia recommends: max 200 requests per second per IP
@@ -73,10 +96,6 @@ export class WikipediaService extends Service {
   private readonly searchUrl = "https://en.wikipedia.org/w/api.php";
   private readonly rateLimiter = WikipediaRateLimiter.getInstance();
 
-  constructor(runtime?: IAgentRuntime) {
-    super(runtime);
-  }
-
   static async start(runtime: IAgentRuntime): Promise<WikipediaService> {
     logger.debug(
       `Starting WikipediaService for agent ${runtime.character.name}`,
@@ -91,7 +110,9 @@ export class WikipediaService extends Service {
   /**
    * Search for a Wikipedia page and get summary
    */
-  private async getPageSummary(title: string): Promise<any | null> {
+  private async getPageSummary(
+    title: string,
+  ): Promise<WikipediaSummaryPage | null> {
     await this.rateLimiter.waitForRateLimit();
 
     try {
@@ -116,7 +137,7 @@ export class WikipediaService extends Service {
         return null;
       }
 
-      return await response.json();
+      return (await response.json()) as WikipediaSummaryPage;
     } catch (error) {
       logger.error(`Error fetching Wikipedia page: ${error}`);
       return null;
@@ -154,12 +175,13 @@ export class WikipediaService extends Service {
         return [];
       }
 
-      const data = await response.json();
-      if (!data.query?.search) {
+      const data = (await response.json()) as WikipediaSearchResponse;
+      const searchResults = data.query?.search;
+      if (!searchResults) {
         return [];
       }
 
-      return data.query.search.map((result: any) => ({
+      return searchResults.map((result) => ({
         title: result.title,
         snippet: result.snippet,
       }));
@@ -194,7 +216,7 @@ export class WikipediaService extends Service {
         // Check if this looks like a song page
         if (title.includes(trackLower) || snippet.includes(trackLower)) {
           const page = await this.getPageSummary(result.title);
-          if (page && page.extract) {
+          if (page?.extract) {
             const trackInfo: TrackInfo = {
               title: trackName,
               artist:
@@ -240,7 +262,7 @@ export class WikipediaService extends Service {
         }
       }
 
-      if (!page || !page.extract) {
+      if (!page?.extract) {
         return null;
       }
 
@@ -325,7 +347,7 @@ export class WikipediaService extends Service {
         // Check if this looks like an album page
         if (title.includes(albumLower) || snippet.includes(albumLower)) {
           const page = await this.getPageSummary(result.title);
-          if (page && page.extract) {
+          if (page?.extract) {
             const albumInfo: AlbumInfo = {
               title: albumTitle,
               artist:
@@ -364,7 +386,7 @@ export class WikipediaService extends Service {
     cleaned = cleaned.replace(/\[\d+\]/g, "");
     // Truncate if too long
     if (cleaned.length > maxLength) {
-      cleaned = cleaned.substring(0, maxLength).trim() + "...";
+      cleaned = `${cleaned.substring(0, maxLength).trim()}...`;
     }
     return cleaned;
   }
@@ -381,7 +403,7 @@ export class WikipediaService extends Service {
 
     for (const pattern of patterns) {
       const match = extract.match(pattern);
-      if (match && match[1]) {
+      if (match?.[1]) {
         return match[1].trim();
       }
     }

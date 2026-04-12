@@ -255,12 +255,14 @@ export class GeniusClient {
       {
         maxRetries: 2, // Fewer retries for validation
         retryableErrors: (error: RetryableError) => {
+          const status = error.response?.status;
+
           // Only retry on network errors, not auth errors
           return (
             error?.code === "ECONNRESET" ||
             error?.code === "ETIMEDOUT" ||
             error?.code === "ENOTFOUND" ||
-            (error?.response?.status >= 500 && error?.response?.status < 600)
+            (typeof status === "number" && status >= 500 && status < 600)
           );
         },
       },

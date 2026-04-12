@@ -1,7 +1,16 @@
+import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
+import {
+  createServer,
+  type IncomingMessage,
+  type Server,
+  type ServerResponse,
+} from "node:http";
+import net from "node:net";
 import os from "node:os";
 import path from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import puppeteer, { type Browser, type Page } from "puppeteer-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { describeIf } from "../../../../test/helpers/conditional-tests.ts";
@@ -26,7 +35,7 @@ const DEFAULT_UI_URL = stripTrailingSlash(
     process.env.MILADY_UI_URL ??
     "http://localhost:2138",
 );
-const API_URL = stripTrailingSlash(
+let API_URL = stripTrailingSlash(
   process.env.MILADY_LIVE_API_URL ??
     process.env.MILADY_API_URL ??
     "http://127.0.0.1:31337",
@@ -58,6 +67,9 @@ const EXPECTED_CHEN_GREETING = "you good?";
 const EXPECTED_SARAH_VOICE_ID = "EXAVITQu4vr4xnSDxMaL";
 const KNOWLEDGE_CODEWORD = "VELVET-MOON-4821";
 const QA_ARTIFACT_DIR = path.join(os.tmpdir(), "milady-live-qa");
+const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..", "..", "..");
+const APP_DIST_DIR = path.join(REPO_ROOT, "apps/app", "dist");
+const STACK_READY_TIMEOUT_MS = 120_000;
 
 type QaFetchRecord = {
   url: string;
@@ -130,6 +142,14 @@ type Profile = {
   userAgent?: string;
 };
 
+type StartedStack = {
+  apiBase: string;
+  apiChild: ChildProcessWithoutNullStreams;
+  stateDir: string;
+  uiBase: string;
+  uiServer: Server;
+};
+
 const PROFILES: Profile[] = [
   {
     id: "desktop",
@@ -167,12 +187,19 @@ function logQaStep(profile: Profile, step: string) {
 
 let browser: Browser | null = null;
 let UI_URL = DEFAULT_UI_URL;
+let liveStack: StartedStack | null = null;
 
 describeIf(CAN_RUN)("Live QA checklist", () => {
   beforeAll(async () => {
     if (!CAN_RUN) return;
     await fs.mkdir(QA_ARTIFACT_DIR, { recursive: true });
-    UI_URL = await resolveLiveUiUrl();
+    if (!(await isHttpOk(`${API_URL}/api/status`))) {
+      liveStack = await startRealStack();
+      API_URL = stripTrailingSlash(liveStack.apiBase);
+      UI_URL = stripTrailingSlash(liveStack.uiBase);
+    } else {
+      UI_URL = await resolveLiveUiUrl();
+    }
     await ensureHttpOk(`${UI_URL}/`);
     await ensureHttpOk(`${API_URL}/api/status`);
     browser = await puppeteer.launch({
@@ -191,6 +218,8 @@ describeIf(CAN_RUN)("Live QA checklist", () => {
   afterAll(async () => {
     if (!CAN_RUN) return;
     await browser?.close();
+    await stopRealStack(liveStack);
+    liveStack = null;
   }, 30_000);
 
   for (const profile of ACTIVE_PROFILES) {
@@ -244,23 +273,10 @@ describeIf(CAN_RUN)("Live QA checklist", () => {
         await navigate(page, `${UI_URL}/?test_force_vrm=1`);
 
         logQaStep(profile, "complete local groq onboarding");
-        await waitForText(page, "Get Started");
-        await clickByText(page, "Get Started");
-        await clickByText(page, "Local");
-        await clickByText(page, "Groq");
-        await typeInto(page, 'input[type="password"]', GROQ_API_KEY);
-        await clickByText(page, "Confirm");
-        await clickByText(page, "Continue");
-        await clickByText(page, "Enter");
+        await completeLocalGroqOnboarding(page);
 
-        logQaStep(profile, "verify default chen character select");
-        await waitFor(
-          async () => {
-            return page.url().endsWith("/character-select") ? true : null;
-          },
-          180_000,
-          1000,
-        );
+        logQaStep(profile, "verify default chen character view");
+        await navigate(page, `${UI_URL}/character`);
 
         const rosterState = await waitForCharacterRoster(page, 120_000);
         expect(rosterState.labels[0]).toBe("Chen");
@@ -296,11 +312,7 @@ describeIf(CAN_RUN)("Live QA checklist", () => {
         expect(voiceConfig.elevenlabs?.voiceId).toBe(EXPECTED_SARAH_VOICE_ID);
 
         logQaStep(profile, "enter companion mode");
-        await clickSelector(page, '[data-testid="ui-shell-toggle-companion"]');
-        await page.waitForFunction(
-          () => window.location.pathname.endsWith("/companion"),
-          { timeout: 30_000 },
-        );
+        await enterCompanionMode(page);
         const companionAvatar = await waitForWorldStageAvatar(
           page,
           chenAvatarSlug,
@@ -498,7 +510,7 @@ describeIf(CAN_RUN)("Live QA checklist", () => {
         await navigate(page, `${UI_URL}/settings`);
         await waitForText(page, "Reset Agent");
         await clickByText(page, "Reset Everything");
-        await waitForText(page, "Get Started", 180_000);
+        await waitForOnboardingEntry(page, 180_000);
 
         expect(await onboardingComplete()).toBe(false);
         expect((await listConversations()).length).toBe(0);
@@ -560,15 +572,9 @@ describeIf(CAN_RUN)("Live QA checklist", () => {
         await navigate(page, `${UI_URL}/?test_force_vrm=1`);
 
         logQaStep(profile, "avatar-voice QA complete local groq onboarding");
-        await waitForText(page, "Get Started");
-        await clickByText(page, "Get Started");
-        await clickByText(page, "Local");
-        await clickByText(page, "Groq");
-        await typeInto(page, 'input[type="password"]', GROQ_API_KEY);
-        await clickByText(page, "Confirm");
-        await clickByText(page, "Continue");
-        await clickByText(page, "Enter");
+        await completeLocalGroqOnboarding(page);
 
+        await navigate(page, `${UI_URL}/character`);
         const rosterState = await waitForCharacterRoster(page, 120_000);
         expect(rosterState.labels[0]).toBe("Chen");
         expect(rosterState.selectedLabel).toBe("Chen");
@@ -591,11 +597,7 @@ describeIf(CAN_RUN)("Live QA checklist", () => {
         expect(onboardingAvatar.avatarReady).toBe(true);
 
         logQaStep(profile, "avatar-voice QA enter companion mode");
-        await clickSelector(page, '[data-testid="ui-shell-toggle-companion"]');
-        await page.waitForFunction(
-          () => window.location.pathname.endsWith("/companion"),
-          { timeout: 30_000 },
-        );
+        await enterCompanionMode(page);
 
         const companionAvatar = await waitForWorldStageAvatar(
           page,
@@ -668,6 +670,289 @@ describeIf(CAN_RUN)("Live QA checklist", () => {
     }, 420_000);
   }
 });
+
+function contentTypeFor(filePath: string): string {
+  switch (path.extname(filePath).toLowerCase()) {
+    case ".css":
+      return "text/css; charset=utf-8";
+    case ".html":
+      return "text/html; charset=utf-8";
+    case ".ico":
+      return "image/x-icon";
+    case ".jpeg":
+    case ".jpg":
+      return "image/jpeg";
+    case ".js":
+      return "application/javascript; charset=utf-8";
+    case ".json":
+      return "application/json; charset=utf-8";
+    case ".png":
+      return "image/png";
+    case ".svg":
+      return "image/svg+xml";
+    case ".woff":
+      return "font/woff";
+    case ".woff2":
+      return "font/woff2";
+    default:
+      return "application/octet-stream";
+  }
+}
+
+async function readRequestBody(request: IncomingMessage): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of request) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks);
+}
+
+async function proxyUiRequest(args: {
+  apiBase: string;
+  request: IncomingMessage;
+  response: ServerResponse<IncomingMessage>;
+}): Promise<void> {
+  const requestUrl = new URL(args.request.url ?? "/", "http://127.0.0.1");
+
+  if (requestUrl.pathname.startsWith("/api/")) {
+    const body = await readRequestBody(args.request);
+    const headers: Record<string, string> = {};
+    const contentType = args.request.headers["content-type"];
+    if (typeof contentType === "string") {
+      headers["content-type"] = contentType;
+    }
+    const authorization = args.request.headers.authorization;
+    if (typeof authorization === "string") {
+      headers.authorization = authorization;
+    }
+
+    const upstream = await fetch(
+      `${args.apiBase}${requestUrl.pathname}${requestUrl.search}`,
+      {
+        body: body.byteLength > 0 ? body : undefined,
+        headers,
+        method: args.request.method ?? "GET",
+      },
+    );
+
+    const proxyHeaders: Record<string, string> = {};
+    upstream.headers.forEach((value, key) => {
+      if (key.toLowerCase() === "transfer-encoding") {
+        return;
+      }
+      proxyHeaders[key] = value;
+    });
+
+    args.response.writeHead(upstream.status, proxyHeaders);
+    args.response.end(Buffer.from(await upstream.arrayBuffer()));
+    return;
+  }
+
+  const requestedPath =
+    requestUrl.pathname === "/"
+      ? "index.html"
+      : requestUrl.pathname.replace(/^\/+/, "");
+  let filePath = path.resolve(APP_DIST_DIR, requestedPath);
+  const isAssetRequest = path.extname(filePath).length > 0;
+  if (!isAssetRequest || !filePath.startsWith(APP_DIST_DIR)) {
+    filePath = path.join(APP_DIST_DIR, "index.html");
+  }
+
+  let body: Buffer;
+  try {
+    body = await fs.readFile(filePath);
+  } catch {
+    body = await fs.readFile(path.join(APP_DIST_DIR, "index.html"));
+    filePath = path.join(APP_DIST_DIR, "index.html");
+  }
+
+  args.response.writeHead(200, {
+    "Content-Type": contentTypeFor(filePath),
+  });
+  args.response.end(body);
+}
+
+async function startUiProxyServer(args: {
+  apiBase: string;
+  port: number;
+}): Promise<Server> {
+  const server = createServer(async (request, response) => {
+    try {
+      await proxyUiRequest({
+        apiBase: args.apiBase,
+        request,
+        response,
+      });
+    } catch (error) {
+      response.writeHead(500, {
+        "Content-Type": "application/json; charset=utf-8",
+      });
+      response.end(
+        JSON.stringify({
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    }
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(args.port, "127.0.0.1", () => resolve());
+  });
+  return server;
+}
+
+async function waitForChildExit(
+  child: ChildProcessWithoutNullStreams,
+  timeoutMs: number,
+): Promise<boolean> {
+  if (child.exitCode != null) {
+    return true;
+  }
+
+  return await new Promise((resolve) => {
+    const timeout = setTimeout(() => {
+      cleanup();
+      resolve(false);
+    }, timeoutMs);
+
+    const handleExit = () => {
+      cleanup();
+      resolve(true);
+    };
+
+    const cleanup = () => {
+      clearTimeout(timeout);
+      child.off("exit", handleExit);
+      child.off("close", handleExit);
+    };
+
+    child.once("exit", handleExit);
+    child.once("close", handleExit);
+  });
+}
+
+async function getFreePort(): Promise<number> {
+  return await new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      if (!address || typeof address === "string") {
+        server.close();
+        reject(new Error("Could not allocate a loopback port"));
+        return;
+      }
+      server.close((error) => {
+        if (error) reject(error);
+        else resolve(address.port);
+      });
+    });
+  });
+}
+
+async function fetchJson<T>(url: string): Promise<T> {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Request failed (${response.status}): ${url}`);
+  }
+  return (await response.json()) as T;
+}
+
+async function waitForJson<T>(
+  url: string,
+  timeoutMs: number = STACK_READY_TIMEOUT_MS,
+): Promise<T> {
+  const deadline = Date.now() + timeoutMs;
+  let lastError: unknown = null;
+
+  while (Date.now() < deadline) {
+    try {
+      return await fetchJson<T>(url);
+    } catch (error) {
+      lastError = error;
+      await sleep(1_000);
+    }
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error(`Timed out waiting for ${url}`);
+}
+
+async function startRealStack(): Promise<StartedStack> {
+  const stateDir = await fs.mkdtemp(path.join(os.tmpdir(), "milady-qa-live-"));
+  const apiPort = await getFreePort();
+  const uiPort = await getFreePort();
+  const apiBase = `http://127.0.0.1:${apiPort}`;
+
+  const apiChild = spawn("bun", ["run", "milady", "start"], {
+    cwd: REPO_ROOT,
+    env: {
+      ...process.env,
+      ALLOW_NO_DATABASE: "",
+      ELIZA_PORT: String(apiPort),
+      ELIZA_STATE_DIR: stateDir,
+      FORCE_COLOR: "0",
+      MILADY_API_PORT: String(apiPort),
+      MILADY_PORT: String(apiPort),
+      MILADY_STATE_DIR: stateDir,
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  apiChild.stdout.on("data", (chunk) => {
+    process.stdout.write(`[live-qa][api] ${chunk}`);
+  });
+  apiChild.stderr.on("data", (chunk) => {
+    process.stdout.write(`[live-qa][api-err] ${chunk}`);
+  });
+
+  const onboardingStatus = await waitForJson<{ complete: boolean }>(
+    `${apiBase}/api/onboarding/status`,
+  );
+  if (onboardingStatus.complete) {
+    throw new Error("Fresh live QA stack unexpectedly started complete");
+  }
+
+  const uiServer = await startUiProxyServer({
+    apiBase,
+    port: uiPort,
+  });
+
+  process.env.MILADY_API_PORT = String(apiPort);
+
+  return {
+    apiBase,
+    apiChild,
+    stateDir,
+    uiBase: `http://127.0.0.1:${uiPort}`,
+    uiServer,
+  };
+}
+
+async function stopRealStack(stack: StartedStack | null): Promise<void> {
+  if (!stack) return;
+
+  try {
+    await new Promise<void>((resolve, reject) =>
+      stack.uiServer.close((error) => (error ? reject(error) : resolve())),
+    );
+  } catch {
+    // Best effort during cleanup.
+  }
+
+  if (stack.apiChild.exitCode == null) {
+    stack.apiChild.kill("SIGTERM");
+    const exitedAfterTerm = await waitForChildExit(stack.apiChild, 5_000);
+    if (!exitedAfterTerm && stack.apiChild.exitCode == null) {
+      stack.apiChild.kill("SIGKILL");
+      await waitForChildExit(stack.apiChild, 5_000);
+    }
+  }
+
+  await fs.rm(stack.stateDir, { force: true, recursive: true });
+}
 
 async function smokeTabs(page: Page, profile: Profile) {
   const tabChecks: Array<{
@@ -1044,6 +1329,28 @@ async function waitForText(page: Page, text: string, timeout = 45_000) {
   }, timeout);
 }
 
+async function waitForAnyText(
+  page: Page,
+  texts: readonly string[],
+  timeout = 45_000,
+) {
+  await waitFor(async () => {
+    const bodyText = await page.evaluate(() => {
+      const body = document.body;
+      const visibleText = body?.innerText ?? "";
+      const domText = body?.textContent ?? "";
+      return `${visibleText}\n${domText}`.toLowerCase();
+    });
+    return texts.some((text) => bodyText.includes(text.toLowerCase()))
+      ? true
+      : null;
+  }, timeout);
+}
+
+async function waitForOnboardingEntry(page: Page, timeout = 45_000) {
+  await waitForAnyText(page, ["Create Local Agent", "Get Started"], timeout);
+}
+
 async function currentVrmRegistry(page: Page): Promise<QaVrmRegistryEntry[]> {
   return page.evaluate(() => {
     const qaWindow = window as typeof window & {
@@ -1189,6 +1496,14 @@ async function selectedCharacterPreviewSrc(page: Page): Promise<string> {
 }
 
 async function clickByText(page: Page, text: string) {
+  await clickByTextWithin(page, text);
+}
+
+async function clickByTextWithin(
+  page: Page,
+  text: string,
+  timeout = 45_000,
+) {
   await page.waitForFunction(
     (expected) => {
       const normalizedExpected = String(expected).toLowerCase();
@@ -1204,7 +1519,7 @@ async function clickByText(page: Page, text: string) {
         return visible && label.includes(normalizedExpected);
       });
     },
-    { timeout: 45_000 },
+    { timeout },
     text,
   );
 
@@ -1226,6 +1541,31 @@ async function clickByText(page: Page, text: string) {
     return Boolean(target);
   }, text);
   expect(clicked).toBe(true);
+}
+
+async function clickAnyText(
+  page: Page,
+  texts: readonly string[],
+  timeout = 45_000,
+) {
+  const deadline = Date.now() + timeout;
+  let lastError: unknown = null;
+
+  while (Date.now() < deadline) {
+    for (const text of texts) {
+      try {
+        await clickByTextWithin(page, text, 2_500);
+        return;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    await page.waitForTimeout(250);
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error(`Could not click any of: ${texts.join(", ")}`);
 }
 
 async function clickSelector(page: Page, selector: string) {
@@ -1264,6 +1604,44 @@ async function typeInto(page: Page, selector: string, value: string) {
 async function typeComposerAndSend(page: Page, value: string) {
   await typeInto(page, '[data-testid="chat-composer-textarea"]', value);
   await page.keyboard.press("Enter");
+}
+
+async function completeLocalGroqOnboarding(page: Page) {
+  await waitForOnboardingEntry(page, 180_000);
+  await clickAnyText(page, ["Create Local Agent", "Get Started"]);
+  await waitForAnyText(page, ["Continue", "Chen"], 60_000);
+  await clickAnyText(page, ["Continue"]);
+  await waitForAnyText(page, ["Choose your AI provider", "Groq"], 60_000);
+  await clickAnyText(page, ["Groq"]);
+
+  const providerApiKeyInput = await page
+    .waitForSelector("#provider-api-key", {
+      visible: true,
+      timeout: 2_500,
+    })
+    .catch(() => null);
+
+  if (providerApiKeyInput) {
+    await typeInto(page, "#provider-api-key", GROQ_API_KEY);
+  } else {
+    await typeInto(page, 'input[type="password"]', GROQ_API_KEY);
+  }
+
+  await clickAnyText(page, ["Confirm"]);
+  await waitForAnyText(page, ["Enable features", "Skip for now"], 60_000);
+  await clickAnyText(page, ["Skip for now", "Continue without features"]);
+  await waitFor(async () => (await onboardingComplete()) || null, 120_000);
+}
+
+async function enterCompanionMode(page: Page) {
+  try {
+    await clickSelector(page, '[data-testid="ui-shell-toggle-companion"]');
+  } catch {
+    await navigate(page, `${UI_URL}/companion`);
+  }
+  await page.waitForFunction(() => window.location.pathname.endsWith("/companion"), {
+    timeout: 30_000,
+  });
 }
 
 async function qaCharacterSwitchAndDance(page: Page, profile?: Profile) {

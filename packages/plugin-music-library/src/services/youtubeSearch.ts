@@ -2,6 +2,16 @@ import { type IAgentRuntime, logger, Service } from "@elizaos/core";
 
 const YOUTUBE_SEARCH_SERVICE_NAME = "youtubeSearch";
 
+interface PlayDlSearchResult {
+  url?: string;
+  title?: string;
+  durationInSec?: number;
+  channel?: {
+    name?: string;
+  };
+  views?: number;
+}
+
 export interface YouTubeSearchResult {
   url: string;
   title: string;
@@ -23,10 +33,6 @@ export class YouTubeSearchService extends Service {
     { results: YouTubeSearchResult[]; timestamp: number }
   > = new Map();
   private readonly CACHE_TTL = 3600000; // 1 hour
-
-  constructor(runtime?: IAgentRuntime) {
-    super(runtime);
-  }
 
   static async start(runtime: IAgentRuntime): Promise<YouTubeSearchService> {
     logger.debug(
@@ -75,7 +81,7 @@ export class YouTubeSearchService extends Service {
 
       logger.debug(`Searching YouTube for: ${query} (limit: ${limit})`);
 
-      let searchResults;
+      let searchResults: PlayDlSearchResult[];
       try {
         searchResults = await play.search(query, {
           limit: limit * 2, // Get extra results for filtering
@@ -100,7 +106,7 @@ export class YouTubeSearchService extends Service {
       const results: YouTubeSearchResult[] = [];
       for (const result of searchResults) {
         // Skip if not a valid video URL
-        if (!result.url || !result.url.includes("youtube.com/watch")) {
+        if (!result.url?.includes("youtube.com/watch")) {
           continue;
         }
 
@@ -110,13 +116,18 @@ export class YouTubeSearchService extends Service {
         }
 
         // Add to results
-        const channelName = (result as any).channel?.name;
+        const channelName = result.channel?.name;
+        const views =
+          typeof result.views === "number" ? result.views : undefined;
         results.push({
           url: result.url,
           title: result.title || "Unknown Title",
-          duration: result.durationInSec as number | undefined,
+          duration:
+            typeof result.durationInSec === "number"
+              ? result.durationInSec
+              : undefined,
           channel: typeof channelName === "string" ? channelName : undefined,
-          views: (result as any).views as number | undefined,
+          views,
         });
 
         // Stop when we have enough results

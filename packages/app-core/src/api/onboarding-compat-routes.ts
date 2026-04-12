@@ -25,6 +25,57 @@ import {
   persistCompatOnboardingDefaults,
 } from "./server-onboarding-compat";
 
+async function syncCompatOnboardingConfigState(
+  req: http.IncomingMessage,
+  config: Record<string, unknown>,
+): Promise<void> {
+  const loopbackPort = req.socket.localPort;
+  if (!loopbackPort) {
+    return;
+  }
+
+  const syncPatch: Record<string, unknown> = {};
+  for (const key of [
+    "meta",
+    "agents",
+    "ui",
+    "messages",
+    "deploymentTarget",
+    "linkedAccounts",
+    "serviceRouting",
+    "features",
+    "connectors",
+    "cloud",
+  ]) {
+    if (Object.hasOwn(config, key)) {
+      syncPatch[key] = config[key];
+    }
+  }
+
+  if (Object.keys(syncPatch).length === 0) {
+    return;
+  }
+
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+  };
+  const authorization = req.headers.authorization;
+  if (typeof authorization === "string" && authorization.trim()) {
+    headers.authorization = authorization;
+  }
+
+  const response = await fetch(`http://127.0.0.1:${loopbackPort}/api/config`, {
+    method: "PUT",
+    headers,
+    body: JSON.stringify(syncPatch),
+  });
+  if (!response.ok) {
+    throw new Error(
+      `Loopback config sync failed (${response.status}): ${await response.text()}`,
+    );
+  }
+}
+
 function scheduleCloudApiKeyResave(apiKey: string): void {
   setTimeout(() => {
     try {
@@ -170,6 +221,10 @@ export async function handleOnboardingCompatRoute(
         capturedCloudApiKey = resolvedCloudApiKey;
       }
       saveElizaConfig(config);
+      await syncCompatOnboardingConfigState(
+        req,
+        config as Record<string, unknown>,
+      );
     } catch (err) {
       logger.warn(
         `[milady-api] Failed to persist onboarding state: ${err instanceof Error ? err.message : String(err)}`,

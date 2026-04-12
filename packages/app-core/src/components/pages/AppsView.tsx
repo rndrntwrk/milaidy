@@ -42,6 +42,7 @@ export function AppsView() {
     activeGameViewerUrl,
     appsSubTab,
     favoriteApps,
+    setTab,
     setState,
     setActionNotice,
     t,
@@ -252,7 +253,7 @@ export function AppsView() {
     async (app: RegistryAppInfo) => {
       const internalToolTab = getInternalToolAppTargetTab(app.name);
       if (internalToolTab) {
-        setState("tab", internalToolTab);
+        setTab(internalToolTab);
         return;
       }
 
@@ -352,7 +353,7 @@ export function AppsView() {
         );
       }
     },
-    [mergeRun, pushAppsUrl, setActionNotice, setState, t],
+    [mergeRun, pushAppsUrl, setActionNotice, setState, setTab, t],
   );
 
   const handleOpenCurrentGame = useCallback(() => {

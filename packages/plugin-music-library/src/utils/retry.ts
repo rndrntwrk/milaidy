@@ -24,6 +24,8 @@ const DEFAULT_OPTIONS: Required<RetryOptions> = {
   maxDelay: 30000, // 30 seconds
   backoffMultiplier: 2,
   retryableErrors: (error: RetryableError) => {
+    const status = error.response?.status;
+
     // Retry on network errors, timeouts, and 5xx errors
     if (
       error?.code === "ECONNRESET" ||
@@ -32,11 +34,11 @@ const DEFAULT_OPTIONS: Required<RetryOptions> = {
     ) {
       return true;
     }
-    if (error?.response?.status >= 500 && error?.response?.status < 600) {
+    if (typeof status === "number" && status >= 500 && status < 600) {
       return true;
     }
     // Retry on rate limit errors (429)
-    if (error?.response?.status === 429) {
+    if (status === 429) {
       return true;
     }
     return false;

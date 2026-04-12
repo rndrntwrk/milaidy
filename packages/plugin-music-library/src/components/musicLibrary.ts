@@ -1,4 +1,3 @@
-// @ts-nocheck - Type cast issues with roomId expecting string | undefined but UUID is fine at runtime
 import {
   type IAgentRuntime,
   logger,
@@ -30,8 +29,42 @@ type StoredSong = Omit<LibrarySong, "requestedBy"> & {
   requestedBy?: string[];
 };
 
-function getLibraryScopeRoomId(runtime: IAgentRuntime): string | undefined {
-  return runtime.agentId as string | undefined;
+function getLibraryScopeRoomId(runtime: IAgentRuntime): UUID {
+  return runtime.agentId;
+}
+
+function isStoredSong(value: unknown): value is StoredSong {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const candidate = value as Partial<StoredSong>;
+  return (
+    typeof candidate.id === "string" &&
+    typeof candidate.url === "string" &&
+    typeof candidate.title === "string" &&
+    typeof candidate.playCount === "number" &&
+    typeof candidate.lastPlayed === "number" &&
+    typeof candidate.firstAdded === "number" &&
+    (candidate.artist === undefined || typeof candidate.artist === "string") &&
+    (candidate.channel === undefined ||
+      typeof candidate.channel === "string") &&
+    (candidate.duration === undefined ||
+      typeof candidate.duration === "number") &&
+    (candidate.requestedBy === undefined ||
+      (Array.isArray(candidate.requestedBy) &&
+        candidate.requestedBy.every((entry) => typeof entry === "string")))
+  );
+}
+
+function getStoredSongFromMemory(memory: Memory): StoredSong | null {
+  return isStoredSong(memory.content.song) ? memory.content.song : null;
+}
+
+function getSongIdFromMemory(memory: Memory): string | null {
+  return typeof memory.content.songId === "string"
+    ? memory.content.songId
+    : null;
 }
 
 /**
@@ -72,21 +105,20 @@ export async function getSong(
 ): Promise<LibrarySong | null> {
   const songId = generateSongId(url);
 
-  try {
-    // Need to get ALL memories to find the specific song
-    // count: 1 would only return one random memory, not necessarily the song we want
-    const memories = await runtime.getMemories({
-      tableName: MUSIC_LIBRARY_TABLE,
-      roomId: getLibraryScopeRoomId(runtime), // Use agentId as global scope
-      count: 1000, // Get enough to find the song
-    });
+  // Need to get ALL memories to find the specific song
+  // count: 1 would only return one random memory, not necessarily the song we want
+  const memories = await runtime.getMemories({
+    tableName: MUSIC_LIBRARY_TABLE,
+    roomId: getLibraryScopeRoomId(runtime), // Use agentId as global scope
+    count: 1000, // Get enough to find the song
+  });
 
-    const songMemory = memories.find((m) => m.content.songId === songId);
-    if (songMemory?.content.song) {
-      return hydrateSong(songMemory.content.song);
-    }
-  } catch (_error) {
-    logger.debug(`Song not found in library: ${url}`);
+  const songMemory = memories.find(
+    (memory) => getSongIdFromMemory(memory) === songId,
+  );
+  const storedSong = songMemory ? getStoredSongFromMemory(songMemory) : null;
+  if (storedSong) {
+    return hydrateSong(storedSong);
   }
 
   return null;
@@ -185,8 +217,9 @@ export async function getRecentSongs(
     );
 
     const songs = memories
-      .filter((m) => m.content.song)
-      .map((m) => hydrateSong(m.content.song))
+      .map((memory) => getStoredSongFromMemory(memory))
+      .filter((song): song is StoredSong => song !== null)
+      .map((song) => hydrateSong(song))
       .sort((a, b) => b.lastPlayed - a.lastPlayed)
       .slice(0, limit);
 
@@ -196,8 +229,12 @@ export async function getRecentSongs(
 
     return songs;
   } catch (error) {
-    logger.error("[MusicLibrary] Error getting recent songs:", error);
-    return [];
+    logger.error(
+      `[MusicLibrary] Error getting recent songs: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+    throw error;
   }
 }
 
@@ -220,9 +257,10 @@ export async function searchLibrary(
     const matches: LibrarySong[] = [];
 
     for (const memory of memories) {
-      if (!memory.content.song) continue;
+      const storedSong = getStoredSongFromMemory(memory);
+      if (!storedSong) continue;
 
-      const song = hydrateSong(memory.content.song);
+      const song = hydrateSong(storedSong);
       const titleMatch = song.title.toLowerCase().includes(lowerQuery);
       const artistMatch = song.artist?.toLowerCase().includes(lowerQuery);
       const channelMatch = song.channel?.toLowerCase().includes(lowerQuery);
@@ -242,8 +280,12 @@ export async function searchLibrary(
 
     return matches.slice(0, limit);
   } catch (error) {
-    logger.error("Error searching library:", error);
-    return [];
+    logger.error(
+      `Error searching library: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+    throw error;
   }
 }
 
@@ -272,8 +314,9 @@ export async function getMostPlayedSongs(
     });
 
     const songs = memories
-      .filter((m) => m.content.song)
-      .map((m) => hydrateSong(m.content.song))
+      .map((memory) => getStoredSongFromMemory(memory))
+      .filter((song): song is StoredSong => song !== null)
+      .map((song) => hydrateSong(song))
       .sort((a, b) => {
         if (a.playCount !== b.playCount) {
           return b.playCount - a.playCount;
@@ -284,8 +327,12 @@ export async function getMostPlayedSongs(
 
     return songs;
   } catch (error) {
-    logger.error("Error getting most played songs:", error);
-    return [];
+    logger.error(
+      `Error getting most played songs: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+    throw error;
   }
 }
 
@@ -305,8 +352,9 @@ export async function getLibraryStats(runtime: IAgentRuntime): Promise<{
     });
 
     const songs = memories
-      .filter((m) => m.content.song)
-      .map((m) => hydrateSong(m.content.song));
+      .map((memory) => getStoredSongFromMemory(memory))
+      .filter((song): song is StoredSong => song !== null)
+      .map((song) => hydrateSong(song));
 
     const totalSongs = songs.length;
     const totalPlays = songs.reduce((sum, song) => sum + song.playCount, 0);
@@ -324,10 +372,11 @@ export async function getLibraryStats(runtime: IAgentRuntime): Promise<{
       mostPlayed,
     };
   } catch (error) {
-    logger.error("Error getting library stats:", error);
-    return {
-      totalSongs: 0,
-      totalPlays: 0,
-    };
+    logger.error(
+      `Error getting library stats: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+    throw error;
   }
 }

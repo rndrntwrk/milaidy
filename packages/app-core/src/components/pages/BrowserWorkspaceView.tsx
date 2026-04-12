@@ -132,11 +132,12 @@ function formatBrowserWorkspaceWalletAddress(address: string): string {
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
 }
 
-function resolveBrowserWorkspaceTargetOrigin(url: string): string {
+function resolveBrowserWorkspaceTargetOrigin(url: string): string | null {
   try {
-    return new URL(url).origin;
+    const origin = new URL(url).origin;
+    return origin && origin !== "null" ? origin : null;
   } catch {
-    return "*";
+    return null;
   }
 }
 
@@ -558,7 +559,8 @@ export function BrowserWorkspaceView(): JSX.Element {
   const postBrowserWalletReady = useCallback(
     (tab: BrowserWorkspaceTab, state: BrowserWorkspaceWalletState) => {
       const iframeWindow = iframeRefs.current.get(tab.id)?.contentWindow;
-      if (!iframeWindow) {
+      const targetOrigin = resolveBrowserWorkspaceTargetOrigin(tab.url);
+      if (!iframeWindow || !targetOrigin) {
         return;
       }
       iframeWindow.postMessage(
@@ -566,7 +568,7 @@ export function BrowserWorkspaceView(): JSX.Element {
           type: BROWSER_WALLET_READY_TYPE,
           state,
         },
-        resolveBrowserWorkspaceTargetOrigin(tab.url),
+        targetOrigin,
       );
     },
     [],

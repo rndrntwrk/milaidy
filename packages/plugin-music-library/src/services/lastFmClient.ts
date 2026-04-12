@@ -1,6 +1,79 @@
 import { logger } from "@elizaos/core";
 import type { AlbumInfo, ArtistInfo, TrackInfo } from "../types";
-import { retryWithBackoff } from "../utils/retry";
+import { type RetryableError, retryWithBackoff } from "../utils/retry";
+
+type LastFmHttpError = Error & RetryableError;
+
+interface LastFmTag {
+  name: string;
+}
+
+interface LastFmImage {
+  size?: string;
+  "#text"?: string;
+}
+
+interface LastFmNamedEntity {
+  name: string;
+}
+
+interface LastFmTrackPayload {
+  name: string;
+  artist?: { name?: string };
+  album?: { title?: string };
+  duration?: string;
+  toptags?: { tag?: LastFmTag[] };
+  url?: string;
+  wiki?: { content?: string };
+}
+
+interface LastFmArtistPayload {
+  name: string;
+  tags?: { tag?: LastFmTag[] };
+  bio?: { content?: string };
+  image?: LastFmImage[];
+  similar?: { artist?: LastFmNamedEntity[] };
+  toptracks?: { track?: LastFmNamedEntity[] };
+  albums?: { album?: LastFmNamedEntity[] };
+}
+
+interface LastFmAlbumPayload {
+  name: string;
+  artist?: string;
+  wiki?: { published?: string; content?: string };
+  tags?: { tag?: LastFmTag[] };
+  tracks?: { track?: LastFmNamedEntity[] };
+  image?: LastFmImage[];
+}
+
+interface LastFmTrackInfoResponse {
+  error?: number;
+  message?: string;
+  track?: LastFmTrackPayload;
+}
+
+interface LastFmArtistInfoResponse {
+  error?: number;
+  message?: string;
+  artist?: LastFmArtistPayload;
+}
+
+interface LastFmAlbumInfoResponse {
+  error?: number;
+  message?: string;
+  album?: LastFmAlbumPayload;
+}
+
+function buildLastFmHttpError(response: Response): LastFmHttpError {
+  const error = new Error(
+    `Last.fm API error: ${response.status} ${response.statusText}`,
+  ) as LastFmHttpError;
+  error.response = {
+    status: response.status,
+    headers: response.headers,
+  };
+  return error;
+}
 
 /**
  * Client for Last.fm API
@@ -56,17 +129,10 @@ export class LastFmClient {
       const response = await fetch(url);
 
       if (!response.ok) {
-        const error: any = new Error(
-          `Last.fm API error: ${response.status} ${response.statusText}`,
-        );
-        error.response = {
-          status: response.status,
-          statusText: response.statusText,
-        };
-        throw error;
+        throw buildLastFmHttpError(response);
       }
 
-      const data = await response.json();
+      const data = (await response.json()) as LastFmTrackInfoResponse;
       if (data.error) {
         // Don't retry on API errors (invalid key, not found, etc.)
         logger.debug(`Last.fm error: ${data.message}`);
@@ -85,7 +151,7 @@ export class LastFmClient {
         duration: track.duration
           ? Math.floor(parseInt(track.duration, 10) / 1000)
           : undefined,
-        tags: track.toptags?.tag?.map((tag: any) => tag.name) || [],
+        tags: track.toptags?.tag?.map((tag) => tag.name) || [],
         url: track.url,
         description: track.wiki?.content
           ? track.wiki.content.substring(0, 500).replace(/<[^>]*>/g, "")
@@ -117,17 +183,10 @@ export class LastFmClient {
       const response = await fetch(url);
 
       if (!response.ok) {
-        const error: any = new Error(
-          `Last.fm API error: ${response.status} ${response.statusText}`,
-        );
-        error.response = {
-          status: response.status,
-          statusText: response.statusText,
-        };
-        throw error;
+        throw buildLastFmHttpError(response);
       }
 
-      const data = await response.json();
+      const data = (await response.json()) as LastFmArtistInfoResponse;
       if (data.error || !data.artist) {
         // Don't retry on API errors (invalid key, not found, etc.)
         return null;
@@ -136,17 +195,14 @@ export class LastFmClient {
       const artist = data.artist;
       const artistInfo: ArtistInfo = {
         name: artist.name,
-        genres: artist.tags?.tag?.map((tag: any) => tag.name) || [],
+        genres: artist.tags?.tag?.map((tag) => tag.name) || [],
         bio: artist.bio?.content
           ? artist.bio.content.substring(0, 1000).replace(/<[^>]*>/g, "")
           : undefined,
-        image: artist.image?.find((img: any) => img.size === "large")?.[
-          "#text"
-        ],
-        similarArtists: artist.similar?.artist?.map((a: any) => a.name) || [],
-        topTracks:
-          artist.toptracks?.track?.map((track: any) => track.name) || [],
-        albums: artist.albums?.album?.map((album: any) => album.name) || [],
+        image: artist.image?.find((img) => img.size === "large")?.["#text"],
+        similarArtists: artist.similar?.artist?.map((a) => a.name) || [],
+        topTracks: artist.toptracks?.track?.map((track) => track.name) || [],
+        albums: artist.albums?.album?.map((album) => album.name) || [],
       };
 
       return artistInfo;
@@ -180,17 +236,10 @@ export class LastFmClient {
       const response = await fetch(url);
 
       if (!response.ok) {
-        const error: any = new Error(
-          `Last.fm API error: ${response.status} ${response.statusText}`,
-        );
-        error.response = {
-          status: response.status,
-          statusText: response.statusText,
-        };
-        throw error;
+        throw buildLastFmHttpError(response);
       }
 
-      const data = await response.json();
+      const data = (await response.json()) as LastFmAlbumInfoResponse;
       if (data.error || !data.album) {
         // Don't retry on API errors (invalid key, not found, etc.)
         return null;
@@ -203,11 +252,9 @@ export class LastFmClient {
         year: album.wiki?.published
           ? parseInt(album.wiki.published.substring(0, 4), 10)
           : undefined,
-        genre: album.tags?.tag?.map((tag: any) => tag.name) || [],
-        tracks: album.tracks?.track?.map((track: any) => track.name) || [],
-        coverArt: album.image?.find((img: any) => img.size === "large")?.[
-          "#text"
-        ],
+        genre: album.tags?.tag?.map((tag) => tag.name) || [],
+        tracks: album.tracks?.track?.map((track) => track.name) || [],
+        coverArt: album.image?.find((img) => img.size === "large")?.["#text"],
         description: album.wiki?.content
           ? album.wiki.content.substring(0, 500).replace(/<[^>]*>/g, "")
           : undefined,

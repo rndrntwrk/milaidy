@@ -22,6 +22,7 @@ import { restartAction } from "../actions/restart.js";
 import { searchConversationsAction } from "../actions/search-conversations.js";
 import { sendAdminMessageAction } from "../actions/send-admin-message.js";
 import { setUserNameAction } from "../actions/set-user-name.js";
+import { updateOwnerProfileAction } from "../actions/update-owner-profile.js";
 import {
   addRegisteredSkillSlug,
   clearRegisteredSkillSlugs,
@@ -277,6 +278,7 @@ export function createElizaPlugin(config?: ElizaPluginConfig): Plugin {
       gmailAction,
       lifeAction,
       setUserNameAction,
+      updateOwnerProfileAction,
       skillCommandAction,
       webSearchAction,
       readChannelAction,

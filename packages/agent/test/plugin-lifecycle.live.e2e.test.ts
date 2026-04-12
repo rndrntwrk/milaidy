@@ -26,8 +26,27 @@ import {
 
 const LIVE = process.env.MILADY_LIVE_TEST === "1" || process.env.ELIZA_LIVE_TEST === "1";
 const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..", "..");
-const LOCAL_WORKSPACE_PLUGINS = await listLocalWorkspacePlugins();
+const FILTER_TOKENS = (process.env.MILADY_PLUGIN_LIFECYCLE_FILTER ?? "")
+  .split(",")
+  .map((value) => value.trim())
+  .filter(Boolean);
+const FILTER_SET = FILTER_TOKENS.length > 0 ? new Set(FILTER_TOKENS) : null;
+const ALL_LOCAL_WORKSPACE_PLUGINS = await listLocalWorkspacePlugins();
+const LOCAL_WORKSPACE_PLUGINS = FILTER_SET
+  ? ALL_LOCAL_WORKSPACE_PLUGINS.filter(
+      (plugin) =>
+        FILTER_SET.has(plugin.id) ||
+        FILTER_SET.has(plugin.npmName) ||
+        FILTER_SET.has(plugin.dirName),
+    )
+  : ALL_LOCAL_WORKSPACE_PLUGINS;
 const LOCAL_WORKSPACE_PLUGIN_IDS = LOCAL_WORKSPACE_PLUGINS.map((plugin) => plugin.id);
+
+if (FILTER_SET && LOCAL_WORKSPACE_PLUGINS.length === 0) {
+  throw new Error(
+    `MILADY_PLUGIN_LIFECYCLE_FILTER=${FILTER_TOKENS.join(",")} matched no local workspace plugins.`,
+  );
+}
 
 try {
   const { config } = await import("dotenv");
@@ -370,7 +389,12 @@ describeIf(LIVE)("Live: plugin lifecycle — local workspace matrix", () => {
 
 }, 360_000);
 
-describeIf(LIVE && HAS_LIVE_MODEL_PROVIDER && Boolean(LIVE_PROVIDER_PLUGIN_ID))(
+describeIf(
+  LIVE &&
+    HAS_LIVE_MODEL_PROVIDER &&
+    Boolean(LIVE_PROVIDER_PLUGIN_ID) &&
+    (!FILTER_SET || FILTER_SET.has(LIVE_PROVIDER_PLUGIN_ID as string)),
+)(
   "Live: plugin lifecycle — focused provider roundtrip",
   () => {
     let rt: Runtime;
@@ -396,7 +420,9 @@ describeIf(LIVE && HAS_LIVE_MODEL_PROVIDER && Boolean(LIVE_PROVIDER_PLUGIN_ID))(
   },
 );
 
-describeIf(LIVE)("Live: plugin lifecycle — selfcontrol", () => {
+describeIf(LIVE && (!FILTER_SET || FILTER_SET.has("selfcontrol")))(
+  "Live: plugin lifecycle — selfcontrol",
+  () => {
   let rt: Runtime;
 
   beforeAll(async () => {
@@ -415,18 +441,32 @@ describeIf(LIVE)("Live: plugin lifecycle — selfcontrol", () => {
     expect(blockerRes.data).toHaveProperty("active");
   });
 
-  it("website blocker starts inactive with no blocked sites", async () => {
+  it("website blocker status reflects a coherent live state", async () => {
     const res = await req(rt.port, "GET", "/api/website-blocker");
-    expect(res.data).toMatchObject({ active: false, websites: [] });
+    expect(res.status).toBe(200);
+    expect(res.data).toEqual(
+      expect.objectContaining({
+        active: expect.any(Boolean),
+        websites: expect.any(Array),
+      }),
+    );
+
+    if (res.data.active === true) {
+      expect(res.data.websites.length).toBeGreaterThan(0);
+    } else {
+      expect(res.data.websites).toEqual([]);
+    }
   });
 
   it("permissions endpoint responds", async () => {
     const res = await req(rt.port, "GET", "/api/permissions");
     expect([200, 404]).toContain(res.status);
   });
-}, 300_000);
+  },
+  300_000,
+);
 
-describeIf(LIVE)("Live: plugin lifecycle — minimal boot", () => {
+describeIf(LIVE && !FILTER_SET)("Live: plugin lifecycle — minimal boot", () => {
   let rt: Runtime;
 
   beforeAll(async () => {

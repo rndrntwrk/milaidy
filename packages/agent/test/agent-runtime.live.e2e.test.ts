@@ -30,6 +30,7 @@ import {
 import dotenv from "dotenv";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { itIf } from "../../../test/helpers/conditional-tests.ts";
+import { selectLiveProvider } from "../../../test/helpers/live-provider";
 import { withTimeout, sleep } from "../../../test/helpers/test-utils";
 import { USER_PREFS_TABLE } from "../../../plugins/plugin-personality/typescript/src/types";
 import { startApiServer } from "../src/api/server";
@@ -49,25 +50,12 @@ const packageRoot = path.resolve(testDir, "..");
 dotenv.config({ path: path.resolve(packageRoot, ".env") });
 dotenv.config({ path: path.resolve(packageRoot, "..", "..", ".env") });
 
-const hasOpenAI = Boolean(process.env.OPENAI_API_KEY);
-const hasAnthropic = Boolean(process.env.ANTHROPIC_API_KEY);
-const hasGroq = Boolean(process.env.GROQ_API_KEY);
 const liveModelTestsEnabled =
   process.env.MILADY_LIVE_TEST === "1" || process.env.ELIZA_LIVE_TEST === "1";
-const hasModelProvider =
-  liveModelTestsEnabled && (hasOpenAI || hasAnthropic || hasGroq);
-
-function seedGroqModelDefaults(secrets: Record<string, string>): void {
-  if (!hasGroq) return;
-  if (!process.env.GROQ_SMALL_MODEL) {
-    process.env.GROQ_SMALL_MODEL = "llama-3.1-8b-instant";
-  }
-  if (!process.env.GROQ_LARGE_MODEL) {
-    process.env.GROQ_LARGE_MODEL = "qwen/qwen3-32b";
-  }
-  secrets.GROQ_SMALL_MODEL = process.env.GROQ_SMALL_MODEL;
-  secrets.GROQ_LARGE_MODEL = process.env.GROQ_LARGE_MODEL;
-}
+const selectedLiveProvider = liveModelTestsEnabled
+  ? selectLiveProvider()
+  : null;
+const hasModelProvider = liveModelTestsEnabled && selectedLiveProvider !== null;
 
 // ---------------------------------------------------------------------------
 // Plugin helpers — tracks failures
@@ -199,10 +187,9 @@ async function shouldSkipDueModelProviderUnavailable(
   testName: string,
 ): Promise<boolean> {
   if (cachedModelProviderUnavailableReason) {
-    logger.warn(
-      `[e2e] Skipping "${testName}" due to provider limit: ${cachedModelProviderUnavailableReason}`,
+    throw new Error(
+      `[e2e] "${testName}" failed because the configured model provider is unavailable: ${cachedModelProviderUnavailableReason}`,
     );
-    return true;
   }
 
   for (let attempt = 1; attempt <= 2; attempt += 1) {
@@ -216,10 +203,9 @@ async function shouldSkipDueModelProviderUnavailable(
       const message = errorMessage(err);
       if (isModelProviderUnavailableError(message)) {
         cachedModelProviderUnavailableReason = message;
-        logger.warn(
-          `[e2e] Skipping "${testName}" due to provider limit: ${message}`,
+        throw new Error(
+          `[e2e] "${testName}" failed because the configured model provider is unavailable: ${message}`,
         );
-        return true;
       }
     }
     await sleep(250 * attempt);
@@ -416,13 +402,16 @@ describe("Agent Runtime E2E", () => {
     process.env.MILADY_TRAJECTORY_LOGGING = "false";
     process.env.ELIZA_TRAJECTORY_LOGGING = "false";
 
-    const secrets: Record<string, string> = {};
-    if (hasOpenAI)
-      secrets.OPENAI_API_KEY = process.env.OPENAI_API_KEY as string;
-    if (hasAnthropic)
-      secrets.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY as string;
-    if (hasGroq) secrets.GROQ_API_KEY = process.env.GROQ_API_KEY as string;
-    seedGroqModelDefaults(secrets);
+    const provider = selectedLiveProvider;
+    if (!provider) {
+      throw new Error("Expected a live model provider but none was resolved.");
+    }
+
+    for (const [key, value] of Object.entries(provider.env)) {
+      process.env[key] = value;
+    }
+
+    const secrets: Record<string, string> = { ...provider.env };
 
     const character = createCharacter({
       name: "TestAgent",
@@ -440,16 +429,8 @@ describe("Agent Runtime E2E", () => {
       const p = await loadPlugin(n);
       if (p) plugins.push(p);
     }
-    if (hasOpenAI) {
-      const p = await loadPlugin("@elizaos/plugin-openai");
-      if (p) plugins.push(p);
-    }
-    if (hasAnthropic) {
-      const p = await loadPlugin("@elizaos/plugin-anthropic");
-      if (p) plugins.push(p);
-    }
-    if (hasGroq) {
-      const p = await loadPlugin("@elizaos/plugin-groq");
+    if (provider.pluginPackage) {
+      const p = await loadPlugin(provider.pluginPackage);
       if (p) plugins.push(p);
     }
 

@@ -1,5 +1,64 @@
 import { logger } from "@elizaos/core";
-import { retryWithBackoff } from "../utils/retry";
+import { type RetryableError, retryWithBackoff } from "../utils/retry";
+
+type TheAudioDbHttpError = Error & RetryableError;
+
+interface AudioDbArtistSummary {
+  idArtist: string;
+  strArtist: string;
+  strArtistThumb: string;
+  strArtistLogo: string;
+  strArtistFanart: string;
+  strArtistBanner: string;
+}
+
+interface AudioDbArtistDetail extends AudioDbArtistSummary {
+  strBiographyEN?: string;
+  intFormedYear?: string;
+  strGenre?: string;
+  strCountry?: string;
+}
+
+interface AudioDbAlbumSummary {
+  idAlbum: string;
+  strAlbum: string;
+  strArtist: string;
+  strAlbumThumb: string;
+  strAlbumCDart: string;
+}
+
+interface AudioDbAlbumDetail extends AudioDbAlbumSummary {
+  intYearReleased?: string;
+  strGenre?: string;
+  strDescriptionEN?: string;
+}
+
+interface AudioDbArtistSearchResponse {
+  artists?: AudioDbArtistSummary[];
+}
+
+interface AudioDbArtistDetailResponse {
+  artists?: AudioDbArtistDetail[];
+}
+
+interface AudioDbAlbumSearchResponse {
+  album?: AudioDbAlbumSummary[];
+}
+
+interface AudioDbAlbumDetailResponse {
+  album?: AudioDbAlbumDetail[];
+}
+
+function buildTheAudioDbHttpError(response: Response): TheAudioDbHttpError {
+  const error = new Error(
+    `TheAudioDB API error: ${response.status} ${response.statusText}`,
+  ) as TheAudioDbHttpError;
+  error.response = {
+    status: response.status,
+    headers: response.headers,
+  };
+  return error;
+}
 
 /**
  * Client for TheAudioDB API
@@ -56,17 +115,10 @@ export class TheAudioDbClient {
       });
 
       if (!response.ok) {
-        const error: any = new Error(
-          `TheAudioDB API error: ${response.status} ${response.statusText}`,
-        );
-        error.response = {
-          status: response.status,
-          statusText: response.statusText,
-        };
-        throw error;
+        throw buildTheAudioDbHttpError(response);
       }
 
-      const data = await response.json();
+      const data = (await response.json()) as AudioDbArtistSearchResponse;
       if (!data.artists || data.artists.length === 0) {
         return null;
       }
@@ -113,32 +165,14 @@ export class TheAudioDbClient {
         });
 
         if (!detailResponse.ok) {
-          const error: any = new Error(
-            `TheAudioDB API error: ${detailResponse.status} ${detailResponse.statusText}`,
-          );
-          error.response = {
-            status: detailResponse.status,
-            statusText: detailResponse.statusText,
-          };
-          throw error;
+          throw buildTheAudioDbHttpError(detailResponse);
         }
 
-        return await detailResponse.json();
-      }).catch(() => null);
+        return (await detailResponse.json()) as AudioDbArtistDetailResponse;
+      });
 
-      if (
-        !detailData ||
-        !detailData.artists ||
-        detailData.artists.length === 0
-      ) {
-        // Return basic info if detail request fails
-        return {
-          strArtist: artist.strArtist,
-          strArtistThumb: artist.strArtistThumb,
-          strArtistLogo: artist.strArtistLogo,
-          strArtistFanart: artist.strArtistFanart,
-          strArtistBanner: artist.strArtistBanner,
-        };
+      if (!detailData?.artists || detailData.artists.length === 0) {
+        return null;
       }
 
       const detailArtist = detailData.artists[0];
@@ -189,17 +223,10 @@ export class TheAudioDbClient {
       });
 
       if (!response.ok) {
-        const error: any = new Error(
-          `TheAudioDB API error: ${response.status} ${response.statusText}`,
-        );
-        error.response = {
-          status: response.status,
-          statusText: response.statusText,
-        };
-        throw error;
+        throw buildTheAudioDbHttpError(response);
       }
 
-      const data = await response.json();
+      const data = (await response.json()) as AudioDbAlbumSearchResponse;
       if (!data.album || data.album.length === 0) {
         return null;
       }
@@ -247,27 +274,14 @@ export class TheAudioDbClient {
         });
 
         if (!detailResponse.ok) {
-          const error: any = new Error(
-            `TheAudioDB API error: ${detailResponse.status} ${detailResponse.statusText}`,
-          );
-          error.response = {
-            status: detailResponse.status,
-            statusText: detailResponse.statusText,
-          };
-          throw error;
+          throw buildTheAudioDbHttpError(detailResponse);
         }
 
-        return await detailResponse.json();
-      }).catch(() => null);
+        return (await detailResponse.json()) as AudioDbAlbumDetailResponse;
+      });
 
-      if (!detailData || !detailData.album || detailData.album.length === 0) {
-        // Return basic info if detail request fails
-        return {
-          strAlbum: album.strAlbum,
-          strArtist: album.strArtist,
-          strAlbumThumb: album.strAlbumThumb,
-          strAlbumCDart: album.strAlbumCDart,
-        };
+      if (!detailData?.album || detailData.album.length === 0) {
+        return null;
       }
 
       const detailAlbum = detailData.album[0];
@@ -304,13 +318,15 @@ export class TheAudioDbClient {
       },
       {
         maxRetries: 2, // Fewer retries for validation
-        retryableErrors: (error: any) => {
+        retryableErrors: (error: RetryableError) => {
+          const status = error.response?.status;
+
           // Only retry on network errors, not auth errors
           return (
             error?.code === "ECONNRESET" ||
             error?.code === "ETIMEDOUT" ||
             error?.code === "ENOTFOUND" ||
-            (error?.response?.status >= 500 && error?.response?.status < 600)
+            (typeof status === "number" && status >= 500 && status < 600)
           );
         },
       },

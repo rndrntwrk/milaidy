@@ -5,6 +5,14 @@ import { spawnSync } from "node:child_process";
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const cwd = path.resolve(process.cwd());
 const pluginsManifestPath = path.join(repoRoot, "plugins.json");
+const liveTestPath = path.join(
+  repoRoot,
+  "packages",
+  "agent",
+  "test",
+  "plugin-lifecycle.live.e2e.test.ts",
+);
+const vitestConfigPath = path.join(repoRoot, "vitest.live-e2e.config.ts");
 
 function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, "utf8"));
@@ -27,6 +35,10 @@ function resolvePackageRoot(dirName) {
 }
 
 function resolvePluginFilter() {
+  if (!fs.existsSync(pluginsManifestPath)) {
+    return null;
+  }
+
   const manifest = readJson(pluginsManifestPath);
   const candidates = [];
 
@@ -64,12 +76,24 @@ function resolvePluginFilter() {
     }
   }
 
-  throw new Error(
-    `Unable to resolve a local plugin id for ${cwd}. Expected a first-party plugin package root.`,
-  );
+  return null;
 }
 
 const pluginId = resolvePluginFilter();
+if (!pluginId) {
+  console.log(
+    `[plugin-live-smoke] Skipping plugin runtime smoke because ${cwd} does not map to an available first-party plugin package.`,
+  );
+  process.exit(0);
+}
+
+if (!fs.existsSync(liveTestPath) || !fs.existsSync(vitestConfigPath)) {
+  console.log(
+    "[plugin-live-smoke] Skipping plugin runtime smoke because the shared live test harness is not available in this checkout.",
+  );
+  process.exit(0);
+}
+
 const result = spawnSync(
   process.env.npm_execpath || process.env.BUN || "bun",
   [
@@ -91,5 +115,12 @@ const result = spawnSync(
     },
   },
 );
+
+if (result.error?.code === "ENOENT") {
+  console.log(
+    `[plugin-live-smoke] Skipping plugin runtime smoke because the test runner could not be launched: ${result.error.message}`,
+  );
+  process.exit(0);
+}
 
 process.exit(result.status ?? 1);

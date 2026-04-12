@@ -22,7 +22,6 @@ import {
 } from "../../events/index";
 import { useChatAvatarVoiceBridge, useVoiceChat } from "../../hooks";
 import { useApp } from "../../state/useApp";
-import { WidgetHost } from "../../widgets";
 import { normalizeCharacterMessageExamples } from "../../utils/character-message-examples";
 import {
   EDGE_BACKUP_VOICES,
@@ -30,19 +29,26 @@ import {
   PREMADE_VOICES,
   sanitizeApiKey,
 } from "../../voice/types";
+import { WidgetHost } from "../../widgets";
+import { KnowledgeView } from "../pages/KnowledgeView";
+import {
+  CharacterExamplesPanel,
+  CharacterIdentityPanel,
+  CharacterStylePanel,
+} from "./CharacterEditorPanels";
 import {
   CharacterRoster,
-  createCustomPackRosterEntry,
   type CharacterRosterEntry,
+  createCustomPackRosterEntry,
   resolveRosterEntries,
 } from "./CharacterRoster";
-import { resolveCharacterGreetingAnimation } from "./character-greeting";
 import {
   buildCharacterDraftFromPreset,
   getOnboardingPresetStyles,
   type OnboardingPreset,
   shouldApplyPresetDefaults,
 } from "./character-editor-helpers";
+import { resolveCharacterGreetingAnimation } from "./character-greeting";
 import {
   buildVoiceConfigForCharacterEntry,
   type CharacterEditorVoiceConfig,
@@ -50,13 +56,6 @@ import {
   EDGE_VOICE_GROUPS,
   ELEVENLABS_VOICE_GROUPS,
 } from "./character-voice-config";
-import {
-  CharacterExamplesPanel,
-  CharacterIdentityPanel,
-  CharacterStylePanel,
-  CHARACTER_EDITOR_SECTION_CLASSNAME,
-} from "./CharacterEditorPanels";
-import { KnowledgeView } from "../pages/KnowledgeView";
 
 /* Inline SVG icon helpers – avoids adding lucide-react as a dependency. */
 const svgBase = {
@@ -646,7 +645,6 @@ export function CharacterEditor({
       applyVoicePresetForEntry,
       selectedCharacterId,
       setState,
-      useElevenLabs,
       voiceSelectionLocked,
       voice,
       voiceTestAudio,
@@ -897,10 +895,11 @@ export function CharacterEditor({
   const handleExportCharacter = useCallback(() => {
     const data = currentCharacter;
     if (!data) return;
-    const fileName =
-      (typeof data.name === "string" && data.name.trim()
+    const fileName = `${
+      typeof data.name === "string" && data.name.trim()
         ? data.name.trim().replace(/\s+/g, "-").toLowerCase()
-        : "character") + ".json";
+        : "character"
+    }.json`;
     const json = JSON.stringify(data, null, 2);
     const blob = new Blob([json], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -914,11 +913,11 @@ export function CharacterEditor({
   }, [currentCharacter]);
 
   const buildStandaloneActionButtons = useCallback(
-    (className: string) => (
+    (className: string, buttonClassName = "") => (
       <div className={className}>
         <Button
           size="sm"
-          className={CHARACTER_EDITOR_FOOTER_ACTION_CLASSNAME}
+          className={`${CHARACTER_EDITOR_FOOTER_ACTION_CLASSNAME} ${buttonClassName}`}
           style={hasPendingChanges ? accentGradientStyle : idleSaveBtnStyle}
           disabled={characterSaving || voiceSaving || !hasPendingChanges}
           onClick={() => void handleSaveAll()}
@@ -931,7 +930,7 @@ export function CharacterEditor({
           type="button"
           variant="outline"
           size="sm"
-          className={CHARACTER_EDITOR_FOOTER_ACTION_CLASSNAME}
+          className={`${CHARACTER_EDITOR_FOOTER_ACTION_CLASSNAME} ${buttonClassName}`}
           style={idleSaveBtnStyle}
           onClick={handleResetToDefaults}
           disabled={!activeCharacterRosterEntry}
@@ -946,7 +945,7 @@ export function CharacterEditor({
           type="button"
           variant="outline"
           size="sm"
-          className={CHARACTER_EDITOR_FOOTER_ACTION_CLASSNAME}
+          className={`${CHARACTER_EDITOR_FOOTER_ACTION_CLASSNAME} ${buttonClassName}`}
           style={idleSaveBtnStyle}
           onClick={() =>
             document.getElementById("ce-vrm-upload-standalone")?.click()
@@ -961,7 +960,7 @@ export function CharacterEditor({
           type="button"
           variant="outline"
           size="sm"
-          className={CHARACTER_EDITOR_FOOTER_ACTION_CLASSNAME}
+          className={`${CHARACTER_EDITOR_FOOTER_ACTION_CLASSNAME} ${buttonClassName}`}
           style={idleSaveBtnStyle}
           onClick={handleExportCharacter}
           disabled={!currentCharacter}
@@ -987,19 +986,12 @@ export function CharacterEditor({
     ],
   );
 
-  const standaloneHeaderActions = useMemo(() => {
-    if (sceneOverlay || activePage === "knowledge") {
-      return null;
-    }
-    return buildStandaloneActionButtons("hidden md:flex items-center gap-2");
-  }, [activePage, buildStandaloneActionButtons, sceneOverlay]);
-
   useEffect(() => {
-    onHeaderActionsChange?.(standaloneHeaderActions);
+    onHeaderActionsChange?.(null);
     return () => {
       onHeaderActionsChange?.(null);
     };
-  }, [onHeaderActionsChange, standaloneHeaderActions]);
+  }, [onHeaderActionsChange]);
 
   /* ── Generate field ─────────────────────────────────────────────── */
   const getCharContext = useCallback(
@@ -1343,7 +1335,6 @@ export function CharacterEditor({
                   useElevenLabs={useElevenLabs}
                   elevenLabsVoiceGroups={elevenLabsVoiceGroups}
                   edgeVoiceGroups={edgeVoiceGroups}
-                  voiceTestAudio={voiceTestAudio}
                   handleFieldEdit={handleFieldEdit}
                   handleGenerate={handleGenerate}
                   handleSelectPreset={handleSelectPreset}
@@ -1404,7 +1395,7 @@ export function CharacterEditor({
         {!sceneOverlay && (
           <PageLayout
             className="h-full"
-            contentInnerClassName="mx-auto flex w-full max-w-6xl flex-1 flex-col"
+            contentInnerClassName="mx-auto flex w-full max-w-6xl min-h-0 flex-1 flex-col"
             footer={<WidgetHost slot="character" className="pt-4" />}
             footerClassName="lg:px-8"
             sidebar={
@@ -1418,7 +1409,7 @@ export function CharacterEditor({
                 expandButtonAriaLabel="Expand character editor"
               >
                 <SidebarScrollRegion>
-                  <SidebarPanel>
+                  <SidebarPanel className="space-y-6">
                     <nav
                       className="space-y-1"
                       aria-label="Character editor sections"
@@ -1462,6 +1453,19 @@ export function CharacterEditor({
                         );
                       })}
                     </nav>
+                    <div className="space-y-2">
+                      <SidebarContent.SectionHeader>
+                        <SidebarContent.SectionLabel>
+                          {t("charactereditor.Actions", {
+                            defaultValue: "Actions",
+                          })}
+                        </SidebarContent.SectionLabel>
+                      </SidebarContent.SectionHeader>
+                      {buildStandaloneActionButtons(
+                        "flex flex-col gap-2",
+                        "w-full justify-center",
+                      )}
+                    </div>
                   </SidebarPanel>
                 </SidebarScrollRegion>
               </Sidebar>
@@ -1516,14 +1520,9 @@ export function CharacterEditor({
                 )}
               </div>
             ) : null}
-            {activePage !== "knowledge"
-              ? buildStandaloneActionButtons(
-                  "mb-4 flex flex-wrap items-center justify-end gap-2 md:hidden",
-                )
-              : null}
-            <div className="flex flex-col flex-1 min-w-0">
+            <div className="flex min-h-0 flex-1 min-w-0 flex-col">
               {activePage === "personality" && (
-                <div className="flex flex-col gap-5">
+                <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
                   <CharacterIdentityPanel
                     d={d}
                     bioText={bioText}
@@ -1535,7 +1534,6 @@ export function CharacterEditor({
                     useElevenLabs={useElevenLabs}
                     elevenLabsVoiceGroups={elevenLabsVoiceGroups}
                     edgeVoiceGroups={edgeVoiceGroups}
-                    voiceTestAudio={voiceTestAudio}
                     handleFieldEdit={handleFieldEdit}
                     handleGenerate={handleGenerate}
                     handleSelectPreset={handleSelectPreset}

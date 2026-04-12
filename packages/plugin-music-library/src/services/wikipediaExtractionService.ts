@@ -22,6 +22,33 @@ export interface ExtractedMusicInfo {
   selectionSuggestions?: string[];
 }
 
+type WikipediaExtractionSourceData =
+  | {
+      type: "artist";
+      name: string;
+      bio?: string;
+      genres?: string[];
+      similarArtists?: string[];
+      image?: string;
+    }
+  | {
+      type: "song";
+      name: string;
+      description?: string;
+      artist?: string;
+      album?: string;
+      year?: number;
+      genre?: string[];
+    }
+  | {
+      type: "album";
+      name: string;
+      description?: string;
+      artist?: string;
+      year?: number;
+      genre?: string[];
+    };
+
 /**
  * Service that uses LLMs to dynamically extract relevant information from Wikipedia
  * Based on context (e.g., DJ intro, music selection), extracts different information
@@ -34,10 +61,6 @@ export class WikipediaExtractionService extends Service {
   private cache: Map<string, { data: ExtractedMusicInfo; timestamp: number }> =
     new Map();
   private readonly CACHE_TTL = 3600000; // 1 hour in milliseconds
-
-  constructor(runtime?: IAgentRuntime) {
-    super(runtime);
-  }
 
   static async start(
     runtime: IAgentRuntime,
@@ -82,7 +105,7 @@ export class WikipediaExtractionService extends Service {
         return null;
       }
 
-      let wikiData: any = null;
+      let wikiData: WikipediaExtractionSourceData | null = null;
       if (entityType === "artist") {
         const artistInfo = await wikipediaService.getArtistInfo(entityName);
         if (artistInfo) {
@@ -163,7 +186,7 @@ export class WikipediaExtractionService extends Service {
    * Build extraction prompt based on context
    */
   private buildExtractionPrompt(
-    wikiData: any,
+    wikiData: WikipediaExtractionSourceData,
     context: WikipediaExtractionContext,
   ): string {
     const basePrompt = `Extract relevant music information from the following Wikipedia data based on the context.
@@ -285,7 +308,7 @@ Format as JSON with keys: genres (array), relatedArtists (array), influences (ar
    */
   private extractList(text: string, pattern: RegExp): string[] {
     const match = text.match(pattern);
-    if (!match || !match[1]) {
+    if (!match?.[1]) {
       return [];
     }
 

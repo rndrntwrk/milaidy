@@ -251,29 +251,25 @@ export function ConversationsSidebar({
     onClose?.();
   };
 
+  const handleNewChat = () => {
+    setSourceScope(MILADY_SOURCE_SCOPE);
+    setWorldScope(ALL_WORLDS_SCOPE);
+    setState("activeInboxChat", null);
+    void handleNewConversation();
+    onClose?.();
+  };
+
   const isGameModal = variant === "game-modal";
   const newChatAction = isGameModal ? (
     <Button
       variant="outline"
       className="h-11 w-full rounded-xl border-[color:var(--onboarding-accent-border)] bg-[color:var(--onboarding-accent-bg)] px-3 py-2 text-sm font-medium text-[color:var(--onboarding-text-strong)] shadow-[0_12px_28px_rgba(0,0,0,0.18)] hover:border-[color:var(--onboarding-accent-border-hover)] hover:bg-[color:var(--onboarding-accent-bg-hover)] active:scale-[0.98]"
-      onClick={() => {
-        setSourceScope(MILADY_SOURCE_SCOPE);
-        setWorldScope(ALL_WORLDS_SCOPE);
-        handleNewConversation();
-        onClose?.();
-      }}
+      onClick={handleNewChat}
     >
       {t("conversations.newChat")}
     </Button>
   ) : (
-    <NewActionButton
-      onClick={() => {
-        setSourceScope(MILADY_SOURCE_SCOPE);
-        setWorldScope(ALL_WORLDS_SCOPE);
-        handleNewConversation();
-        onClose?.();
-      }}
-    >
+    <NewActionButton onClick={handleNewChat}>
       {t("conversations.newChat")}
     </NewActionButton>
   );
@@ -389,12 +385,7 @@ export function ConversationsSidebar({
         collapsedRailAction={
           <SidebarCollapsedActionButton
             aria-label={t("conversations.newChat")}
-            onClick={() => {
-              setSourceScope(MILADY_SOURCE_SCOPE);
-              setWorldScope(ALL_WORLDS_SCOPE);
-              handleNewConversation();
-              onClose?.();
-            }}
+            onClick={handleNewChat}
           >
             <Plus className="h-4 w-4" />
           </SidebarCollapsedActionButton>

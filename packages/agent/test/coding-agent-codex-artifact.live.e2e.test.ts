@@ -20,23 +20,6 @@ function isCodexCliAvailable(): boolean {
 
 const CODEX_AVAILABLE = isCodexCliAvailable();
 const CODEX_AUTH_AVAILABLE = fs.existsSync(CODEX_AUTH_PATH);
-const CODEX_UNAVAILABLE_OUTPUT_PATTERNS = [
-  "usage_limit_reached",
-  "insufficient_quota",
-  "rate_limit_exceeded",
-  "429 Too Many Requests",
-  "You've hit your usage limit",
-  "invalid or expired jwt",
-  "invalid_api_key",
-  "401 unauthorized",
-  "403 forbidden",
-  "404 not found",
-  "api.groq.com/openai/v1/responses",
-  "featured_plugins",
-  "chatgpt.com/backend-api/codex/featured_plugins",
-  "do not have access",
-];
-
 function createIsolatedCodexHome(): string {
   const homeDir = fs.mkdtempSync(path.join(os.tmpdir(), "milady-codex-home-"));
   const codexDir = path.join(homeDir, ".codex");
@@ -117,13 +100,7 @@ function runCodexExec(
   });
 }
 
-function isCodexUnavailableOutput(output: string): boolean {
-  return CODEX_UNAVAILABLE_OUTPUT_PATTERNS.some((pattern) =>
-    output.includes(pattern),
-  );
-}
-
-describeIf((CODEX_AVAILABLE && CODEX_AUTH_AVAILABLE))(
+describeIf(CODEX_AVAILABLE && CODEX_AUTH_AVAILABLE)(
   "Coding agent Codex artifact generation",
   () => {
     const cleanupDirs: string[] = [];
@@ -160,13 +137,6 @@ describeIf((CODEX_AVAILABLE && CODEX_AUTH_AVAILABLE))(
       const resultOutput = [result.stdout, result.stderr]
         .filter(Boolean)
         .join("\n\n");
-
-      if (result.exitCode !== 0 && isCodexUnavailableOutput(resultOutput)) {
-        console.warn(
-          "[coding-agent-codex-artifact] Skipping artifact assertion because Codex is currently unavailable (rate limit or usage limit).",
-        );
-        return;
-      }
 
       expect(result.exitCode, resultOutput).toBe(0);
 

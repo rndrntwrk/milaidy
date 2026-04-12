@@ -17,20 +17,14 @@ import { LifeOpsScreenContextSampler } from "../src/lifeops/screen-context";
 
 const LIVE_TESTS_ENABLED =
   process.env.MILADY_LIVE_TEST === "1" || process.env.ELIZA_LIVE_TEST === "1";
-const SCREEN_TESTS_ENABLED = process.env.MILADY_LIVE_SCREEN_TEST === "1";
 const CHROME_SUPPORTED = isBrowserCaptureSupported();
 
 console.info(
-  `[lifeops-screen-live] live=${LIVE_TESTS_ENABLED} screen=${SCREEN_TESTS_ENABLED} chrome=${CHROME_SUPPORTED} chromePath=${getBrowserCaptureExecutablePath()}`,
+  `[lifeops-screen-live] live=${LIVE_TESTS_ENABLED} chrome=${CHROME_SUPPORTED} chromePath=${getBrowserCaptureExecutablePath()}`,
 );
 
 const missingSetupReasons = [
-  !LIVE_TESTS_ENABLED
-    ? "set MILADY_LIVE_TEST=1 or ELIZA_LIVE_TEST=1"
-    : null,
-  !SCREEN_TESTS_ENABLED
-    ? "set MILADY_LIVE_SCREEN_TEST=1"
-    : null,
+  !LIVE_TESTS_ENABLED ? "set MILADY_LIVE_TEST=1 or ELIZA_LIVE_TEST=1" : null,
   !CHROME_SUPPORTED
     ? `install Google Chrome at ${getBrowserCaptureExecutablePath()}`
     : null,
@@ -62,7 +56,7 @@ async function getFreePort(): Promise<number> {
   });
 }
 
-describeIf((LIVE_TESTS_ENABLED && SCREEN_TESTS_ENABLED && CHROME_SUPPORTED))(
+describeIf(LIVE_TESTS_ENABLED && CHROME_SUPPORTED)(
   "Live: LifeOps screen context from browser capture",
   () => {
     let closeServer: (() => Promise<void>) | undefined;
@@ -87,7 +81,9 @@ describeIf((LIVE_TESTS_ENABLED && SCREEN_TESTS_ENABLED && CHROME_SUPPORTED))(
           </html>`);
       });
 
-      await new Promise<void>((resolve) => server.listen(port, "127.0.0.1", resolve));
+      await new Promise<void>((resolve) =>
+        server.listen(port, "127.0.0.1", resolve),
+      );
       serverUrl = `http://127.0.0.1:${port}`;
       closeServer = async () => {
         await new Promise<void>((resolve, reject) =>
@@ -123,7 +119,15 @@ describeIf((LIVE_TESTS_ENABLED && SCREEN_TESTS_ENABLED && CHROME_SUPPORTED))(
         framePath: FRAME_FILE,
         minSampleIntervalMs: 0,
       });
-      const summary = await sampler.sample();
+      let summary = await sampler.sample();
+      const sampleDeadline = Date.now() + 10_000;
+      while (
+        Date.now() < sampleDeadline &&
+        (summary.source !== "browser-capture" || !summary.available)
+      ) {
+        await sleep(250);
+        summary = await sampler.sample();
+      }
 
       expect(summary.source).toBe("browser-capture");
       expect(summary.available).toBe(true);

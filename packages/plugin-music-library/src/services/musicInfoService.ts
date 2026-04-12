@@ -368,7 +368,7 @@ export class MusicInfoService extends Service {
   async getArtistInfo(artistName: string): Promise<ArtistInfo | null> {
     const cacheKey = `artist:${artistName}`;
     const cached = this.cache.get(cacheKey);
-    if (cached && cached.data.artist) {
+    if (cached?.data.artist) {
       if (Date.now() - cached.timestamp < this.CACHE_TTL) {
         return cached.data.artist;
       }
@@ -405,7 +405,7 @@ export class MusicInfoService extends Service {
   ): Promise<AlbumInfo | null> {
     const cacheKey = `album:${albumTitle}:${artistName || ""}`;
     const cached = this.cache.get(cacheKey);
-    if (cached && cached.data.album) {
+    if (cached?.data.album) {
       if (Date.now() - cached.timestamp < this.CACHE_TTL) {
         return cached.data.album;
       }

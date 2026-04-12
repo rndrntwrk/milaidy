@@ -16,7 +16,9 @@
   ],
   "scripts": {
     "build": "tsdown src/index.ts --format esm --dts",
-    "dev": "tsdown src/index.ts --format esm --dts --watch"
+    "dev": "tsdown src/index.ts --format esm --dts --watch",
+    "test:e2e": "node ../../scripts/run-local-plugin-live-smoke.mjs",
+    "test:live": "bun run test:e2e"
   },
   "dependencies": {
     "@elizaos/core": "workspace:*"

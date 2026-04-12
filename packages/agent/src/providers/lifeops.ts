@@ -10,6 +10,10 @@ import type {
   LifeOpsNextCalendarEventContext,
 } from "@miladyai/shared/contracts/lifeops";
 import { hasLifeOpsAccess } from "../actions/lifeops-google-helpers.js";
+import {
+  readLifeOpsOwnerProfile,
+  type LifeOpsOwnerProfile,
+} from "../lifeops/owner-profile.js";
 import { LifeOpsService } from "../lifeops/service.js";
 
 const INTERNAL_URL = new URL("http://127.0.0.1/");
@@ -69,6 +73,12 @@ function summarizeGmailTriage(summary: LifeOpsGmailTriageSummary): string[] {
   return [`Inbox: ${parts.join(", ")}`];
 }
 
+function summarizeOwnerProfile(profile: LifeOpsOwnerProfile): string[] {
+  return [
+    `Owner profile: name=${profile.name} | relationship=${profile.relationshipStatus} | partner=${profile.partnerName} | orientation=${profile.orientation} | gender=${profile.gender} | age=${profile.age} | location=${profile.location}`,
+  ];
+}
+
 export const lifeOpsProvider: Provider = {
   name: "lifeops",
   description:
@@ -85,6 +95,7 @@ export const lifeOpsProvider: Provider = {
     }
 
     const service = new LifeOpsService(runtime);
+    const ownerProfile = await readLifeOpsOwnerProfile(runtime);
     const overview = await service.getOverview();
     const ownerLines = summarizeOccurrences("Owner active items:", overview.owner.occurrences);
     const agentLines = summarizeOccurrences("Agent ops:", overview.agentOps.occurrences);
@@ -130,7 +141,9 @@ export const lifeOpsProvider: Provider = {
         "Use LIFE when the user wants to create, manage, complete, or query tasks, habits, goals, reminders, alarms, escalation, or routines.",
         "Use CALENDAR_ACTION for calendar questions, event search, next-event context, and creating Google Calendar events.",
         "Use GMAIL_ACTION for inbox triage, emails needing a reply, Gmail search, reply drafts, and confirmed send flows.",
+        "Use UPDATE_OWNER_PROFILE to silently store stable owner-only profile details when the canonical owner clearly reveals them. Do not ask just to fill blanks.",
         "Owner life-ops are private to the owner, explicitly granted users, and the agent. Agent ops are internal and should stay separated unless explicitly requested.",
+        ...summarizeOwnerProfile(ownerProfile),
         formatCount("Owner open occurrences", overview.owner.summary.activeOccurrenceCount),
         formatCount("Owner active goals", overview.owner.summary.activeGoalCount),
         formatCount("Owner live reminders", overview.owner.summary.activeReminderCount),
@@ -144,10 +157,18 @@ export const lifeOpsProvider: Provider = {
       values: {
         ownerOpenOccurrences: overview.owner.summary.activeOccurrenceCount,
         ownerActiveGoals: overview.owner.summary.activeGoalCount,
+        ownerProfileName: ownerProfile.name,
+        ownerRelationshipStatus: ownerProfile.relationshipStatus,
+        ownerPartnerName: ownerProfile.partnerName,
+        ownerOrientation: ownerProfile.orientation,
+        ownerGender: ownerProfile.gender,
+        ownerAge: ownerProfile.age,
+        ownerLocation: ownerProfile.location,
         agentOpenOccurrences: overview.agentOps.summary.activeOccurrenceCount,
         agentActiveGoals: overview.agentOps.summary.activeGoalCount,
       },
       data: {
+        ownerProfile,
         overview,
         nextEventContext,
         gmailSummary,

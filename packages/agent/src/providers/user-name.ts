@@ -14,25 +14,8 @@ import type {
   ProviderResult,
   State,
 } from "@elizaos/core";
+import { fetchConfiguredOwnerName } from "../lifeops/owner-profile.js";
 import { hasOwnerAccess } from "../security/access.js";
-
-const API_PORT = process.env.API_PORT || process.env.SERVER_PORT || "2138";
-
-async function fetchOwnerName(): Promise<string | null> {
-  try {
-    const res = await fetch(`http://localhost:${API_PORT}/api/config`, {
-      signal: AbortSignal.timeout(3_000),
-    });
-    if (!res.ok) return null;
-    const cfg = (await res.json()) as Record<string, unknown>;
-    const ui = cfg.ui as Record<string, unknown> | undefined;
-    const name =
-      typeof ui?.ownerName === "string" ? ui.ownerName.trim() : null;
-    return name || null;
-  } catch {
-    return null;
-  }
-}
 
 export function createUserNameProvider(): Provider {
   return {
@@ -56,7 +39,7 @@ export function createUserNameProvider(): Provider {
         return { text: "" };
       }
 
-      const name = await fetchOwnerName();
+      const name = await fetchConfiguredOwnerName();
 
       if (name) {
         return {
@@ -67,9 +50,10 @@ export function createUserNameProvider(): Provider {
 
       return {
         text:
-          "The user has not told you their name yet. " +
+          "No preferred user name is stored yet. The current fallback label is admin. " +
           "If it comes up naturally in conversation, you can ask what " +
           "they'd like to be called and use the SET_USER_NAME action to remember it.",
+        values: { userName: "admin", userNameFallback: true },
       };
     },
   };

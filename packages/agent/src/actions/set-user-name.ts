@@ -14,31 +14,19 @@ import {
   getValidationKeywordTerms,
   textIncludesKeywordTerm,
 } from "@miladyai/shared/validation-keywords";
+import {
+  fetchConfiguredOwnerName,
+  OWNER_NAME_MAX_LENGTH,
+  persistConfiguredOwnerName,
+} from "../lifeops/owner-profile.js";
 import { hasOwnerAccess } from "../security/access.js";
 
-const API_PORT = process.env.API_PORT || process.env.SERVER_PORT || "2138";
-const OWNER_NAME_MAX_LENGTH = 60;
 const SET_USER_NAME_CONTEXT_TERMS = getValidationKeywordTerms(
   "action.setUserName.recentContext",
   {
     includeAllLocales: true,
   },
 );
-
-async function fetchOwnerName(): Promise<string | null> {
-  try {
-    const res = await fetch(`http://localhost:${API_PORT}/api/config`, {
-      signal: AbortSignal.timeout(3_000),
-    });
-    if (!res.ok) return null;
-    const cfg = (await res.json()) as Record<string, unknown>;
-    const ui = cfg.ui as Record<string, unknown> | undefined;
-    const name = typeof ui?.ownerName === "string" ? ui.ownerName.trim() : null;
-    return name || null;
-  } catch {
-    return null;
-  }
-}
 
 function recentMessagesMentionName(state: State): boolean {
   const recent =
@@ -72,7 +60,7 @@ export const setUserNameAction: Action = {
     if (content?.source !== "client_chat") return false;
     if (!(await hasOwnerAccess(runtime, message))) return false;
 
-    const currentName = await fetchOwnerName();
+    const currentName = await fetchConfiguredOwnerName();
     if (currentName) {
       return state ? recentMessagesMentionName(state) : false;
     }
@@ -97,14 +85,8 @@ export const setUserNameAction: Action = {
     if (!name) return { text: "", success: false };
 
     try {
-      const res = await fetch(`http://localhost:${API_PORT}/api/config`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ui: { ownerName: name } }),
-        signal: AbortSignal.timeout(5_000),
-      });
-
-      if (!res.ok) return { text: "", success: false };
+      const saved = await persistConfiguredOwnerName(name);
+      if (!saved) return { text: "", success: false };
     } catch {
       return { text: "", success: false };
     }

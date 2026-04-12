@@ -16,9 +16,10 @@
  * - Keeps CSS animations/transitions enabled for visual parity.
  */
 
-import { existsSync, writeFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import puppeteer from "puppeteer-core";
 
 const CHROME_PATH =
@@ -29,6 +30,7 @@ const CHROME_PATH =
       : "/usr/bin/google-chrome-stable";
 
 let activeBrowser: Awaited<ReturnType<typeof puppeteer.launch>> | null = null;
+let activeCaptureLoop: Promise<void> | null = null;
 let stopSignal = false;
 
 /** Path to the temp frame file that FFmpeg reads */
@@ -56,11 +58,6 @@ export function getBrowserCaptureExecutablePath(): string {
 
 export function isBrowserCaptureSupported(): boolean {
   return existsSync(CHROME_PATH);
-}
-
-interface ScreencastFrameEvent {
-  data: string;
-  sessionId: number;
 }
 
 /**
@@ -100,7 +97,7 @@ export async function startBrowserCapture(config: BrowserCaptureConfig) {
     );
   }
 
-  const { url, width = 1280, height = 720, quality = 70 } = config;
+  const { url, width = 1280, height = 720, fps = 4, quality = 70 } = config;
   const captureUrl = ensurePopoutUrl(url);
 
   stopSignal = false;
@@ -171,46 +168,48 @@ export async function startBrowserCapture(config: BrowserCaptureConfig) {
 
   console.log(`[browser-capture] Page loaded, writing frames to ${FRAME_FILE}`);
 
-  // Use CDP screencast for efficient frame delivery
-  const cdp = await page.createCDPSession();
   let frameCount = 0;
-
-  cdp.on("Page.screencastFrame", async (params: ScreencastFrameEvent) => {
-    if (stopSignal) return;
-    try {
-      const buf = Buffer.from(params.data, "base64");
-      if (buf.length > 0) {
-        writeFileSync(FRAME_FILE, buf);
-        frameCount++;
-        if (frameCount % 100 === 0) {
+  const frameIntervalMs = Math.max(100, Math.round(1000 / Math.max(1, fps)));
+  activeCaptureLoop = (async () => {
+    while (!stopSignal) {
+      try {
+        await page.screenshot({
+          path: FRAME_FILE,
+          quality,
+          type: "jpeg",
+        });
+        frameCount += 1;
+        if (frameCount % 20 === 0) {
           console.log(`[browser-capture] ${frameCount} frames written`);
         }
+      } catch (error) {
+        if (!stopSignal) {
+          console.warn(
+            `[browser-capture] frame capture failed: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
+        }
       }
-      await cdp.send("Page.screencastFrameAck", {
-        sessionId: params.sessionId,
-      });
-    } catch {
-      // Ignore
+      if (!stopSignal) {
+        await sleep(frameIntervalMs);
+      }
     }
-  });
-
-  // Capture every frame from Chrome's compositor (~60fps internally,
-  // limited by everyNthFrame to ~15-30fps actual delivery)
-  await cdp.send("Page.startScreencast", {
-    format: "jpeg",
-    quality,
-    maxWidth: width,
-    maxHeight: height,
-    everyNthFrame: 2, // ~30fps from 60fps compositor
-  });
+  })();
 
   console.log(
-    `[browser-capture] CDP screencast active, saving to ${FRAME_FILE}`,
+    `[browser-capture] Screenshot loop active (${fps} fps), saving to ${FRAME_FILE}`,
   );
 }
 
 export async function stopBrowserCapture() {
   stopSignal = true;
+  if (activeCaptureLoop) {
+    try {
+      await activeCaptureLoop;
+    } catch {}
+    activeCaptureLoop = null;
+  }
   if (activeBrowser) {
     try {
       await activeBrowser.close();

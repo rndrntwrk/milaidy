@@ -24,15 +24,19 @@
       "responseIncludesAny": [
         "routine preview",
         "preview",
+        "how does that look",
         "save it when you're ready",
+        "before we save it",
         "let me know if you'd like to tweak",
+        "let me know if you'd like any tweaks",
         "let me know if you want to tweak"
       ]
     },
     {
       "name": "brush-teeth confirm",
-      "text": "Yes, save that brushing routine.",
-      "responseIncludesAll": ["saved"]
+      "text": "That looks right. Save the Brush teeth routine.",
+      "responseIncludesAll": ["saved"],
+      "waitForDefinitionTitle": "Brush teeth"
     },
     {
       "name": "brush-teeth reduce reminders",

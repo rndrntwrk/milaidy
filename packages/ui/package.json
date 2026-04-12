@@ -22,6 +22,7 @@
     "build": "bun run build:dist",
     "build:dist": "rm -rf dist && tsc -p tsconfig.build.json && node ../../scripts/prepare-package-dist.mjs packages/ui",
     "pack:dry-run": "cd dist && npm pack --dry-run",
+    "test:e2e": "playwright test --config playwright.config.ts",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build"
   },

@@ -5,10 +5,10 @@
  * Each panel renders the content for one tab in the character editor.
  */
 
+import type { MessageExampleGroup } from "@elizaos/core";
 import { Button, Input, Textarea, ThemedSelect } from "@miladyai/ui";
 import type { ChangeEvent, KeyboardEvent } from "react";
 import type { CharacterData } from "../../api/client-types-config";
-import type { MessageExampleGroup } from "@elizaos/core";
 import { EDGE_BACKUP_VOICES, PREMADE_VOICES } from "../../voice/types";
 
 /* ── Inline SVG icon helpers ─────────────────────────────────────── */
@@ -105,7 +105,6 @@ export interface CharacterIdentityPanelProps {
     items: { id: string; text: string }[];
   }[];
   edgeVoiceGroups: { label: string; items: { id: string; text: string }[] }[];
-  voiceTestAudio: HTMLAudioElement | null;
   handleFieldEdit: (field: string, value: unknown) => void;
   handleGenerate: (field: string, mode?: "replace" | "append") => Promise<void>;
   handleSelectPreset: (
@@ -157,7 +156,6 @@ export function CharacterIdentityPanel({
   useElevenLabs,
   elevenLabsVoiceGroups,
   edgeVoiceGroups,
-  voiceTestAudio,
   handleFieldEdit,
   handleGenerate,
   handleSelectPreset,
@@ -167,7 +165,7 @@ export function CharacterIdentityPanel({
   t,
 }: CharacterIdentityPanelProps) {
   return (
-    <>
+    <div className="flex flex-1 min-h-0 flex-col gap-5">
       {/* Name + Voice (50/50 split) */}
       <section className={CHARACTER_EDITOR_SECTION_CLASSNAME}>
         <div className="grid grid-cols-2 gap-3">
@@ -267,7 +265,9 @@ export function CharacterIdentityPanel({
       </section>
 
       {/* Bio / About Me */}
-      <section className={CHARACTER_EDITOR_SECTION_CLASSNAME}>
+      <section
+        className={`${CHARACTER_EDITOR_SECTION_CLASSNAME} flex flex-1 min-h-[15rem] flex-col`}
+      >
         <div className="flex items-center justify-between">
           <span className="text-xs-tight font-semibold uppercase tracking-[0.08em] text-muted">
             {t("charactereditor.AboutMe", {
@@ -299,12 +299,14 @@ export function CharacterIdentityPanel({
           onChange={(e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
             handleFieldEdit("bio", e.target.value)
           }
-          className={`${CHARACTER_EDITOR_TEXTAREA_CLASSNAME} max-h-[400px]`}
+          className={`${CHARACTER_EDITOR_TEXTAREA_CLASSNAME} h-full min-h-[14rem] max-h-none`}
         />
       </section>
 
       {/* System Prompt / Directions */}
-      <section className={CHARACTER_EDITOR_SECTION_CLASSNAME}>
+      <section
+        className={`${CHARACTER_EDITOR_SECTION_CLASSNAME} flex flex-1 min-h-[15rem] flex-col`}
+      >
         <div className="flex items-center justify-between">
           <span className="text-xs-tight font-semibold uppercase tracking-[0.08em] text-muted">
             {t("charactereditor.SystemPrompt", {
@@ -333,10 +335,10 @@ export function CharacterIdentityPanel({
           onChange={(e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
             handleFieldEdit("system", e.target.value)
           }
-          className={`${CHARACTER_EDITOR_TEXTAREA_CLASSNAME} max-h-[400px]`}
+          className={`${CHARACTER_EDITOR_TEXTAREA_CLASSNAME} h-full min-h-[14rem] max-h-none`}
         />
       </section>
-    </>
+    </div>
   );
 }
 

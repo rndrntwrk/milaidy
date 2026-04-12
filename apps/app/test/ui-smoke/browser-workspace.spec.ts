@@ -147,12 +147,21 @@ test("browser workspace can load, add a tab, and switch selection", async ({
   await openAppPath(page, "/browser");
   await expect(page.getByTestId("browser-workspace-view")).toBeVisible();
   await expect(page.getByTestId("browser-workspace-sidebar")).toBeVisible();
-  await expect(page.getByText("Milady home")).toBeVisible();
+  const firstTabButton = page.getByRole("button", {
+    name: /Milady home about:blank/,
+  });
+  await expect(firstTabButton).toBeVisible();
 
   const addressInput = page.getByPlaceholder("Enter a URL");
   await addressInput.fill("example.com");
   await page.getByRole("button", { name: "New tab" }).click();
 
-  await expect(page.getByText("Workspace tab 2")).toBeVisible();
-  await expect(page.getByText("https://example.com/")).toBeVisible();
+  const secondTabButton = page.getByRole("button", {
+    name: /example\.com https:\/\/example\.com\//,
+  });
+  await expect(secondTabButton).toBeVisible();
+  await expect(addressInput).toHaveValue("https://example.com/");
+
+  await firstTabButton.click();
+  await expect(addressInput).toHaveValue("about:blank");
 });

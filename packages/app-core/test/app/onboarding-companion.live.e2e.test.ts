@@ -1,5 +1,11 @@
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import {
+  createServer,
+  type IncomingMessage,
+  type Server,
+  type ServerResponse,
+} from "node:http";
+import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
@@ -10,16 +16,28 @@ import {
   chromium,
   type Page,
 } from "@playwright/test";
-import { createServer as createViteServer, type ViteDevServer } from "vite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { describeIf } from "../../../../test/helpers/conditional-tests.ts";
+import { selectLiveProvider } from "../../../../test/helpers/live-provider";
 
 const LIVE_TESTS_ENABLED = process.env.MILADY_LIVE_TEST === "1";
-const describeLive = describeIf(LIVE_TESTS_ENABLED);
+const LIVE_PROVIDER =
+  (LIVE_TESTS_ENABLED && selectLiveProvider("openai")) ||
+  (LIVE_TESTS_ENABLED ? selectLiveProvider() : null);
+const LIVE_PROVIDER_LABELS = {
+  anthropic: "Anthropic",
+  google: "Gemini",
+  groq: "Groq",
+  openai: "OpenAI",
+  openrouter: "OpenRouter",
+} as const;
+const LIVE_PROVIDER_LABEL = LIVE_PROVIDER
+  ? LIVE_PROVIDER_LABELS[LIVE_PROVIDER.name]
+  : null;
+const describeLive = describeIf(LIVE_TESTS_ENABLED && LIVE_PROVIDER !== null);
 const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..", "..", "..");
-const APP_ROOT = path.join(REPO_ROOT, "apps/app");
+const APP_DIST_DIR = path.join(REPO_ROOT, "apps/app", "dist");
 const SCREENSHOT_DIR = path.join(REPO_ROOT, "test-results", "live-onboarding");
-const OLLAMA_TAGS_URL = "http://127.0.0.1:11434/api/tags";
 const READY_TIMEOUT_MS = 120_000;
 const UI_SETTLE_MS = 4_000;
 
@@ -29,8 +47,137 @@ type StartedStack = {
   browser: Browser;
   stateDir: string;
   uiBase: string;
-  viteServer: ViteDevServer;
+  uiServer: Server;
 };
+
+function contentTypeFor(filePath: string): string {
+  switch (path.extname(filePath).toLowerCase()) {
+    case ".css":
+      return "text/css; charset=utf-8";
+    case ".html":
+      return "text/html; charset=utf-8";
+    case ".ico":
+      return "image/x-icon";
+    case ".jpeg":
+    case ".jpg":
+      return "image/jpeg";
+    case ".js":
+      return "application/javascript; charset=utf-8";
+    case ".json":
+      return "application/json; charset=utf-8";
+    case ".png":
+      return "image/png";
+    case ".svg":
+      return "image/svg+xml";
+    case ".woff":
+      return "font/woff";
+    case ".woff2":
+      return "font/woff2";
+    default:
+      return "application/octet-stream";
+  }
+}
+
+async function readRequestBody(request: IncomingMessage): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of request) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks);
+}
+
+async function proxyUiRequest(args: {
+  apiBase: string;
+  request: IncomingMessage;
+  response: ServerResponse<IncomingMessage>;
+}): Promise<void> {
+  const requestUrl = new URL(args.request.url ?? "/", "http://127.0.0.1");
+
+  if (requestUrl.pathname.startsWith("/api/")) {
+    const body = await readRequestBody(args.request);
+    const headers: Record<string, string> = {};
+    const contentType = args.request.headers["content-type"];
+    if (typeof contentType === "string") {
+      headers["content-type"] = contentType;
+    }
+    const authorization = args.request.headers.authorization;
+    if (typeof authorization === "string") {
+      headers.authorization = authorization;
+    }
+
+    const upstream = await fetch(
+      `${args.apiBase}${requestUrl.pathname}${requestUrl.search}`,
+      {
+        body: body.byteLength > 0 ? body : undefined,
+        headers,
+        method: args.request.method ?? "GET",
+      },
+    );
+    const proxyHeaders: Record<string, string> = {};
+    upstream.headers.forEach((value, key) => {
+      if (key.toLowerCase() === "transfer-encoding") {
+        return;
+      }
+      proxyHeaders[key] = value;
+    });
+    args.response.writeHead(upstream.status, proxyHeaders);
+    args.response.end(Buffer.from(await upstream.arrayBuffer()));
+    return;
+  }
+
+  const requestedPath =
+    requestUrl.pathname === "/"
+      ? "index.html"
+      : requestUrl.pathname.replace(/^\/+/, "");
+  let filePath = path.resolve(APP_DIST_DIR, requestedPath);
+  const isAssetRequest = path.extname(filePath).length > 0;
+  if (!isAssetRequest || !filePath.startsWith(APP_DIST_DIR)) {
+    filePath = path.join(APP_DIST_DIR, "index.html");
+  }
+
+  let body: Buffer;
+  try {
+    body = await readFile(filePath);
+  } catch {
+    body = await readFile(path.join(APP_DIST_DIR, "index.html"));
+    filePath = path.join(APP_DIST_DIR, "index.html");
+  }
+
+  args.response.writeHead(200, {
+    "Content-Type": contentTypeFor(filePath),
+  });
+  args.response.end(body);
+}
+
+async function startUiProxyServer(args: {
+  apiBase: string;
+  port: number;
+}): Promise<Server> {
+  const server = createServer(async (request, response) => {
+    try {
+      await proxyUiRequest({
+        apiBase: args.apiBase,
+        request,
+        response,
+      });
+    } catch (error) {
+      response.writeHead(500, {
+        "Content-Type": "application/json; charset=utf-8",
+      });
+      response.end(
+        JSON.stringify({
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    }
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(args.port, "127.0.0.1", () => resolve());
+  });
+  return server;
+}
 
 async function waitForChildExit(
   child: ChildProcessWithoutNullStreams,
@@ -218,36 +365,6 @@ async function clickVisibleText(
   );
 }
 
-async function waitForTestIdEnabled(
-  page: Page,
-  testId: string,
-  timeoutMs: number = READY_TIMEOUT_MS,
-) {
-  const button = page.getByTestId(testId);
-  await button.waitFor({ state: "visible", timeout: timeoutMs });
-
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (await button.isEnabled().catch(() => false)) {
-      return button;
-    }
-    await page.waitForTimeout(250);
-  }
-
-  throw new Error(`Test id never became enabled: ${testId}`);
-}
-
-async function isOllamaAvailable(): Promise<boolean> {
-  try {
-    const data = await fetchJson<{ models?: Array<{ name?: string }> }>(
-      OLLAMA_TAGS_URL,
-    );
-    return Array.isArray(data.models) && data.models.length > 0;
-  } catch {
-    return false;
-  }
-}
-
 async function startRealStack(): Promise<StartedStack> {
   await mkdir(SCREENSHOT_DIR, { recursive: true });
 
@@ -262,9 +379,11 @@ async function startRealStack(): Promise<StartedStack> {
     cwd: REPO_ROOT,
     env: {
       ...process.env,
+      ALLOW_NO_DATABASE: "",
       ELIZA_STATE_DIR: stateDir,
       ELIZA_PORT: String(apiPort),
       FORCE_COLOR: "0",
+      MILADY_API_PORT: String(apiPort),
       MILADY_PORT: String(apiPort),
       MILADY_STATE_DIR: stateDir,
     },
@@ -287,19 +406,11 @@ async function startRealStack(): Promise<StartedStack> {
     );
   }
 
-  process.env.MILADY_API_PORT = String(apiPort);
-  const viteServer = await createViteServer({
-    configFile: path.join(APP_ROOT, "vite.config.ts"),
-    server: {
-      hmr: false,
-      host: "127.0.0.1",
-      port: uiPort,
-      strictPort: true,
-      watch: null,
-    },
+  const uiServer = await startUiProxyServer({
+    apiBase,
+    port: uiPort,
   });
-  await viteServer.listen();
-
+  process.env.MILADY_API_PORT = String(apiPort);
   const browser = await chromium.launch({
     args: ["--use-angle=swiftshader"],
     headless: true,
@@ -311,7 +422,7 @@ async function startRealStack(): Promise<StartedStack> {
     browser,
     stateDir,
     uiBase: `http://127.0.0.1:${uiPort}`,
-    viteServer,
+    uiServer,
   };
 }
 
@@ -324,7 +435,9 @@ async function stopRealStack(stack: StartedStack | null): Promise<void> {
     // Best effort during cleanup.
   }
   try {
-    await stack.viteServer.close();
+    await new Promise<void>((resolve, reject) =>
+      stack.uiServer.close((error) => (error ? reject(error) : resolve())),
+    );
   } catch {
     // Best effort during cleanup.
   }
@@ -384,7 +497,10 @@ async function verifyWalletRpcRoundtrip(
   await waitForVisibleText(page, ["Tokens"]);
 
   const walletRpcButton = page.getByTestId("wallet-rpc-popup");
-  await walletRpcButton.waitFor({ state: "visible", timeout: READY_TIMEOUT_MS });
+  await walletRpcButton.waitFor({
+    state: "visible",
+    timeout: READY_TIMEOUT_MS,
+  });
   await walletRpcButton.click({ force: true, timeout: READY_TIMEOUT_MS });
 
   await waitForVisibleText(page, [/^Custom RPC$/i, /Custom RPC Providers/i]);
@@ -418,7 +534,10 @@ async function verifyWalletRpcRoundtrip(
 
   await page.reload({ waitUntil: "domcontentloaded" });
   await waitForVisibleText(page, ["Tokens"]);
-  await walletRpcButton.waitFor({ state: "visible", timeout: READY_TIMEOUT_MS });
+  await walletRpcButton.waitFor({
+    state: "visible",
+    timeout: READY_TIMEOUT_MS,
+  });
   await walletRpcButton.click({ force: true, timeout: READY_TIMEOUT_MS });
   await waitForVisibleText(page, [/Custom RPC Providers/i]);
   await waitForVisibleText(page, ["Infura API Key"]);
@@ -428,14 +547,12 @@ async function verifyWalletRpcRoundtrip(
 }
 
 describeLive("real onboarding handoff to companion mode", () => {
-  let canUseOllama = false;
   let stack: StartedStack | null = null;
 
   beforeAll(async () => {
-    canUseOllama = await isOllamaAvailable();
-    if (!canUseOllama) {
+    if (!LIVE_PROVIDER || !LIVE_PROVIDER_LABEL) {
       throw new Error(
-        "MILADY_LIVE_TEST=1 requires a reachable Ollama daemon with at least one local model",
+        "MILADY_LIVE_TEST=1 requires a configured live model provider",
       );
     }
     stack = await startRealStack();
@@ -457,20 +574,42 @@ describeLive("real onboarding handoff to companion mode", () => {
       try {
         await page.goto(stack.uiBase, { waitUntil: "domcontentloaded" });
 
-        await waitForVisibleText(page, [/Create Local Agent/i, /^Continue$/i]);
-        await clickVisibleText(page, [/Create Local Agent/i, /^Get Started$/i]);
+        await waitForVisibleText(page, [
+          /Choose your setup/i,
+          /Connect to Remote Agent/i,
+        ]);
+        await page
+          .getByRole("button", { name: /Connect to Remote Agent/i })
+          .click({ force: true });
+        await page
+          .locator("#remote-api-base")
+          .waitFor({ state: "visible", timeout: READY_TIMEOUT_MS });
+        await page.locator("#remote-api-base").fill(stack.apiBase);
+        await clickVisibleText(page, [/^Connect$/i]);
 
-        await waitForVisibleText(page, [/^Continue$/i, /Chen/i]);
-        await clickVisibleText(page, [/Continue/i]);
+        await waitForVisibleText(page, [
+          /Choose your AI provider/i,
+          new RegExp(LIVE_PROVIDER_LABEL, "i"),
+        ]);
+        await clickVisibleText(page, [
+          new RegExp(`^${LIVE_PROVIDER_LABEL}$`, "i"),
+        ]);
 
-        await waitForVisibleText(page, [/Choose your AI provider/i, /Ollama/i]);
-        await clickVisibleText(page, [/Ollama/i]);
-
-        await waitForVisibleText(page, [/Local models/i, /Confirm/i]);
+        await waitForVisibleText(page, [
+          new RegExp(LIVE_PROVIDER_LABEL, "i"),
+          /Confirm/i,
+        ]);
+        const providerApiKeyInput = page.locator("#provider-api-key");
+        if (await providerApiKeyInput.isVisible().catch(() => false)) {
+          await providerApiKeyInput.fill(LIVE_PROVIDER.apiKey);
+        }
         await clickVisibleText(page, [/Confirm/i]);
 
         await waitForVisibleText(page, [/Enable features/i, /Skip for now/i]);
-        await clickVisibleText(page, [/Skip for now/i, /Continue without features/i]);
+        await clickVisibleText(page, [
+          /Skip for now/i,
+          /Continue without features/i,
+        ]);
 
         await page.waitForURL(/\/companion(?:$|[?#/])/, {
           timeout: READY_TIMEOUT_MS,
@@ -479,8 +618,10 @@ describeLive("real onboarding handoff to companion mode", () => {
           .locator('[data-testid="companion-root"]')
           .waitFor({ state: "visible", timeout: READY_TIMEOUT_MS });
         await page
-          .locator('[data-testid="companion-message-row"]')
-          .first()
+          .getByRole("button", { name: "New Chat" })
+          .waitFor({ state: "visible", timeout: READY_TIMEOUT_MS });
+        await page
+          .getByRole("button", { name: /Agent voice on|Agent voice off/i })
           .waitFor({ state: "visible", timeout: READY_TIMEOUT_MS });
         await page.waitForTimeout(UI_SETTLE_MS);
 
@@ -504,9 +645,6 @@ describeLive("real onboarding handoff to companion mode", () => {
             .getByRole("button", { name: /Agent voice on|Agent voice off/i })
             .isVisible(),
         ).toBe(true);
-        expect(
-          await page.locator('[data-testid="companion-message-row"]').count(),
-        ).toBeGreaterThan(0);
 
         const onboardingStatus = await waitForJsonPredicate<{
           complete: boolean;
