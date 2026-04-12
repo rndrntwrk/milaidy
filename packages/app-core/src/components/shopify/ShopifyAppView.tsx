@@ -42,7 +42,7 @@ import { useShopifyDashboard } from "./useShopifyDashboard";
 function ShopifySetupCard() {
   return (
     <div className="mx-auto w-full max-w-lg">
-      <div className="rounded-[20px] border border-border/30 bg-card/40 px-6 py-8">
+      <div className="rounded-2xl border border-border/30 bg-card/40 px-6 py-8">
         <div className="flex flex-col items-center gap-4 text-center">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-border/30 bg-bg-accent">
             <Store className="h-7 w-7 text-muted-strong" />
@@ -61,7 +61,7 @@ function ShopifySetupCard() {
           </div>
 
           {/* Env var instructions */}
-          <div className="w-full rounded-[14px] border border-border/24 bg-bg px-4 py-4 text-left">
+          <div className="w-full rounded-xl border border-border/24 bg-bg px-4 py-4 text-left">
             <div className="space-y-3">
               <div>
                 <div className="text-2xs font-semibold uppercase tracking-[0.12em] text-muted/70">
@@ -242,7 +242,7 @@ export function ShopifyAppView({ exitToApps }: OverlayAppContext) {
       {/* Body */}
       <div className="min-h-0 flex-1 overflow-y-auto">
         {statusError ? (
-          <div className="m-4 rounded-[14px] border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
+          <div className="m-4 rounded-xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
             {statusError}
           </div>
         ) : null}
@@ -254,7 +254,7 @@ export function ShopifyAppView({ exitToApps }: OverlayAppContext) {
           </div>
         ) : statusLoading && !connected ? (
           <div className="flex min-h-full items-center justify-center">
-            <Skeleton className="h-80 w-full max-w-lg rounded-[20px] mx-4" />
+            <Skeleton className="h-80 w-full max-w-lg rounded-2xl mx-4" />
           </div>
         ) : (
           /* Connected: full dashboard */
