@@ -12,11 +12,10 @@ import { createTriggerTaskAction } from "./action";
 
 let runtime: AgentRuntime;
 let cleanup: () => Promise<void>;
-let action: ReturnType<typeof createTriggerTaskAction>;
+const action = createTriggerTaskAction;
 
 beforeAll(async () => {
   ({ runtime, cleanup } = await createRealTestRuntime());
-  action = createTriggerTaskAction();
 }, 180_000);
 
 afterAll(async () => {

@@ -244,9 +244,9 @@ export function PermissionRow({
         <PermissionIcon icon={def.icon} />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="font-semibold text-[13px] text-txt">{name}</span>
+            <span className="font-semibold text-sm text-txt">{name}</span>
             {isShell && (
-              <span className="rounded-full border border-border/50 bg-bg-hover px-2 py-0.5 text-[10px] font-medium text-muted-strong">
+              <span className="rounded-full border border-border/50 bg-bg-hover px-2 py-0.5 text-2xs font-medium text-muted-strong">
                 {translateWithFallback(
                   t,
                   "permissionssection.LocalRuntime",
@@ -261,11 +261,11 @@ export function PermissionRow({
             withDot
             className="rounded-full font-semibold"
           />
-          <div className="mt-1 text-[11px] leading-5 text-muted">
+          <div className="mt-1 text-xs-tight leading-5 text-muted">
             {description}
           </div>
           {reason && (
-            <div className="mt-1 text-[11px] leading-5 text-muted-strong">
+            <div className="mt-1 text-xs-tight leading-5 text-muted-strong">
               {reason}
             </div>
           )}
@@ -274,7 +274,7 @@ export function PermissionRow({
       <div className="flex w-full items-center justify-end gap-2 sm:w-auto">
         {isShell && onToggleShell && status !== "not-applicable" && (
           <div className="flex min-h-10 items-center gap-2 rounded-xl border border-border/50 bg-bg-hover px-3">
-            <span className="text-[11px] font-medium text-muted-strong">
+            <span className="text-xs-tight font-medium text-muted-strong">
               {shellEnabled
                 ? translateWithFallback(
                     t,
@@ -310,7 +310,7 @@ export function PermissionRow({
           <Button
             variant="default"
             size="sm"
-            className="min-h-10 rounded-xl px-3 text-[11px] font-semibold"
+            className="min-h-10 rounded-xl px-3 text-xs-tight font-semibold"
             onClick={action.type === "request" ? onRequest : onOpenSettings}
             aria-label={`${action.ariaLabelPrefix} ${name}`}
           >
@@ -358,9 +358,9 @@ export function CapabilityToggle({
     >
       <div className="flex-1 min-w-0">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="font-semibold text-[13px] text-txt">{label}</span>
+          <span className="font-semibold text-sm text-txt">{label}</span>
           {!available && (
-            <span className="rounded-full border border-border/50 bg-bg-hover px-2 py-0.5 text-[10px] font-medium text-muted-strong">
+            <span className="rounded-full border border-border/50 bg-bg-hover px-2 py-0.5 text-2xs font-medium text-muted-strong">
               {translateWithFallback(
                 t,
                 "permissionssection.PluginUnavailable",
@@ -369,18 +369,18 @@ export function CapabilityToggle({
             </span>
           )}
           {!permissionsGranted && (
-            <span className="rounded-full border border-warn/30 bg-warn/10 px-2 py-0.5 text-[10px] font-medium text-warn">
+            <span className="rounded-full border border-warn/30 bg-warn/10 px-2 py-0.5 text-2xs font-medium text-warn">
               {t("permissionssection.MissingPermissions")}
             </span>
           )}
         </div>
-        <div className="mt-1 text-[11px] leading-5 text-muted">
+        <div className="mt-1 text-xs-tight leading-5 text-muted">
           {description}
         </div>
       </div>
       <div className="flex w-full justify-end sm:w-auto">
         <div className="flex min-h-10 items-center gap-2 rounded-xl border border-border/50 bg-bg-hover px-3">
-          <span className="text-[11px] font-medium text-muted-strong">
+          <span className="text-xs-tight font-medium text-muted-strong">
             {enabled
               ? translateWithFallback(
                   t,

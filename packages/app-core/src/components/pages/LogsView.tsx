@@ -259,7 +259,7 @@ export function LogsView() {
           />
         ) : (
           <PagePanel variant="inset" className="overflow-hidden rounded-[18px]">
-            <div className="hidden grid-cols-[5.75rem_3.5rem_5rem_14rem_minmax(0,1fr)] gap-3 border-b border-border/40 px-3 py-2 text-[11px] font-medium uppercase tracking-[0.08em] text-muted md:grid">
+            <div className="hidden grid-cols-[5.75rem_3.5rem_5rem_14rem_minmax(0,1fr)] gap-3 border-b border-border/40 px-3 py-2 text-xs-tight font-medium uppercase tracking-[0.08em] text-muted md:grid">
               <span>{t("logsview.Time")}</span>
               <span>{t("logsview.Level")}</span>
               <span>{t("logsview.Source")}</span>
@@ -269,17 +269,17 @@ export function LogsView() {
             {filteredLogs.map((entry: LogEntry) => (
               <div
                 key={`${entry.timestamp}-${entry.source}-${entry.level}-${entry.message}`}
-                className="flex items-start gap-3 border-b border-border/40 px-3 py-3 text-[13px] last:border-b-0"
+                className="flex items-start gap-3 border-b border-border/40 px-3 py-3 text-sm last:border-b-0"
                 data-testid="log-entry"
               >
                 {/* Timestamp */}
-                <span className="w-[5.75rem] shrink-0 whitespace-nowrap text-[11px] text-muted tabular-nums">
+                <span className="w-[5.75rem] shrink-0 whitespace-nowrap text-xs-tight text-muted tabular-nums">
                   {formatTime(entry.timestamp, { fallback: "—" })}
                 </span>
 
                 {/* Level */}
                 <span
-                  className={`w-14 shrink-0 font-semibold uppercase tracking-[0.08em] text-[11px] ${
+                  className={`w-14 shrink-0 font-semibold uppercase tracking-[0.08em] text-xs-tight ${
                     LOGS_LEVEL_CLASSNAMES[entry.level] ?? "text-muted"
                   }`}
                 >
@@ -287,7 +287,7 @@ export function LogsView() {
                 </span>
 
                 {/* Source */}
-                <span className="w-20 shrink-0 truncate text-[11px] text-muted">
+                <span className="w-20 shrink-0 truncate text-xs-tight text-muted">
                   [{entry.source}]
                 </span>
 
@@ -297,7 +297,7 @@ export function LogsView() {
                     return (
                       <span
                         key={t}
-                        className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${TAG_TONE_CLASSNAMES[t] ?? "border-border/35 bg-bg-hover text-muted-strong"}`}
+                        className={`inline-flex items-center rounded-full border px-2 py-0.5 text-2xs font-medium ${TAG_TONE_CLASSNAMES[t] ?? "border-border/35 bg-bg-hover text-muted-strong"}`}
                         style={{
                           fontFamily: "var(--font-body, sans-serif)",
                         }}

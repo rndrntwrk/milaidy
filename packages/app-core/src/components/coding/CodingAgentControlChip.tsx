@@ -22,7 +22,7 @@ export function CodingAgentControlChip() {
 
   return (
     <div className="mb-2 flex items-center justify-between gap-2 rounded-2xl border border-border/28 bg-card/50 px-3 py-1.5 ring-1 ring-inset ring-white/6">
-      <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted">
+      <div className="flex min-w-0 items-center gap-1.5 text-xs-tight text-muted">
         <Terminal
           className="h-3.5 w-3.5 shrink-0 text-muted-strong"
           aria-hidden
@@ -38,7 +38,7 @@ export function CodingAgentControlChip() {
         type="button"
         variant="outline"
         size="sm"
-        className="h-7 shrink-0 gap-1 px-2.5 text-[11px]"
+        className="h-7 shrink-0 gap-1 px-2.5 text-xs-tight"
         onClick={stopAll}
         title={t("codingagentcontrolchip.StopAllTitle", {
           defaultValue: "Stop all coding agent sessions",

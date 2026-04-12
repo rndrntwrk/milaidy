@@ -498,7 +498,7 @@ export function TwoThousandFourScapeOperatorSurface({
       }
     >
       <div className="flex flex-wrap items-center gap-2">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+        <div className="text-xs-tight font-semibold uppercase tracking-[0.18em] text-muted">
           {surfaceTitle}
         </div>
         <SurfaceBadge tone={toneForStatusText(run.status)}>
@@ -510,7 +510,7 @@ export function TwoThousandFourScapeOperatorSurface({
         <SurfaceBadge tone={toneForHealthState(run.health.state)}>
           {run.health.state}
         </SurfaceBadge>
-        <span className="ml-auto text-[10px] uppercase tracking-[0.18em] text-muted">
+        <span className="ml-auto text-2xs uppercase tracking-[0.18em] text-muted">
           {matchingRuns.length} active run{matchingRuns.length === 1 ? "" : "s"}
         </span>
       </div>
@@ -605,7 +605,7 @@ export function TwoThousandFourScapeOperatorSurface({
           </SurfaceGrid>
           {nearbyTargets.length > 0 ? (
             <div className="space-y-2">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
+              <div className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted">
                 Nearby Targets
               </div>
               <div className="grid gap-2 md:grid-cols-2">
@@ -614,13 +614,13 @@ export function TwoThousandFourScapeOperatorSurface({
                     key={target.id}
                     className="rounded-xl border border-border/30 bg-bg/60 px-3 py-2"
                   >
-                    <div className="flex items-center gap-2 text-[11px] font-medium text-txt">
+                    <div className="flex items-center gap-2 text-xs-tight font-medium text-txt">
                       <span>{target.name}</span>
-                      <span className="ml-auto text-[10px] uppercase tracking-[0.18em] text-muted">
+                      <span className="ml-auto text-2xs uppercase tracking-[0.18em] text-muted">
                         {formatDistance(target.distance)}
                       </span>
                     </div>
-                    <div className="mt-1 text-[11px] leading-5 text-muted-strong">
+                    <div className="mt-1 text-xs-tight leading-5 text-muted-strong">
                       {target.action
                         ? `Primary action: ${target.action}`
                         : "Waiting for an action hint."}
@@ -632,7 +632,7 @@ export function TwoThousandFourScapeOperatorSurface({
           ) : null}
           {gameplayNotes.length > 0 ? (
             <div className="space-y-2">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
+              <div className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted">
                 Game Feed
               </div>
               {gameplayNotes.map((entry) => (
@@ -640,10 +640,10 @@ export function TwoThousandFourScapeOperatorSurface({
                   key={entry.id}
                   className="rounded-xl border border-border/30 bg-bg/60 px-3 py-2"
                 >
-                  <div className="text-[11px] font-medium text-txt">
+                  <div className="text-xs-tight font-medium text-txt">
                     {entry.label}
                   </div>
-                  <div className="mt-1 text-[11px] leading-5 text-muted-strong">
+                  <div className="mt-1 text-xs-tight leading-5 text-muted-strong">
                     {entry.detail}
                   </div>
                 </div>
@@ -652,7 +652,7 @@ export function TwoThousandFourScapeOperatorSurface({
           ) : null}
           {recentActivity.length > 0 ? (
             <div className="space-y-2">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
+              <div className="text-2xs font-semibold uppercase tracking-[0.18em] text-muted">
                 Recent Activity
               </div>
               {recentActivity.map((entry) => (
@@ -660,20 +660,20 @@ export function TwoThousandFourScapeOperatorSurface({
                   key={entry.id}
                   className="rounded-xl border border-border/30 bg-bg/60 px-3 py-2"
                 >
-                  <div className="flex items-center gap-2 text-[11px] font-medium text-txt">
+                  <div className="flex items-center gap-2 text-xs-tight font-medium text-txt">
                     <span>{entry.action ?? "activity"}</span>
-                    <span className="ml-auto text-[10px] uppercase tracking-[0.18em] text-muted">
+                    <span className="ml-auto text-2xs uppercase tracking-[0.18em] text-muted">
                       {formatDetailTimestamp(entry.ts)}
                     </span>
                   </div>
-                  <div className="mt-1 text-[11px] leading-5 text-muted-strong">
+                  <div className="mt-1 text-xs-tight leading-5 text-muted-strong">
                     {entry.detail ?? "No detail captured."}
                   </div>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="rounded-xl border border-border/30 bg-bg/60 px-3 py-2 text-[11px] italic text-muted">
+            <div className="rounded-xl border border-border/30 bg-bg/60 px-3 py-2 text-xs-tight italic text-muted">
               No recent gameplay activity has been captured yet.
             </div>
           )}
@@ -753,11 +753,11 @@ export function TwoThousandFourScapeOperatorSurface({
       ) : null}
 
       {statusMessage ? (
-        <div className="rounded-2xl border border-border/35 bg-card/70 px-4 py-3 text-[11px] leading-5 text-muted-strong">
+        <div className="rounded-2xl border border-border/35 bg-card/70 px-4 py-3 text-xs-tight leading-5 text-muted-strong">
           {statusMessage}
         </div>
       ) : null}
-      <div className="text-[10px] uppercase tracking-[0.18em] text-muted">
+      <div className="text-2xs uppercase tracking-[0.18em] text-muted">
         2004scape run stays independent from the viewer.
       </div>
     </section>

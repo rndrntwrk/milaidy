@@ -265,7 +265,7 @@ export function DatabaseView({
         />
         <span>{dbStatus?.provider ?? t("onboarding.connecting")}</span>
       </div>
-      <div className="mt-3 flex flex-wrap gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted/75">
+      <div className="mt-3 flex flex-wrap gap-2 text-2xs font-semibold uppercase tracking-[0.14em] text-muted/75">
         <MetaPill>
           {tables.length} {t("databaseview.tables")}
         </MetaPill>
@@ -335,7 +335,7 @@ export function DatabaseView({
           {view === "tables" ? (
             <>
               <div className="space-y-3 pt-4">
-                <div className="text-[10px] text-muted uppercase font-bold tracking-widest px-2 bg-bg/50 py-1.5 rounded-lg border border-border/30 inline-flex items-center shadow-inner">
+                <div className="text-2xs text-muted uppercase font-bold tracking-widest px-2 bg-bg/50 py-1.5 rounded-lg border border-border/30 inline-flex items-center shadow-inner">
                   {t("databaseview.Tables")} ({filteredTables.length})
                 </div>
               </div>
@@ -382,7 +382,7 @@ export function DatabaseView({
               <div className="space-y-3 pt-4">
                 <PagePanel
                   variant="inset"
-                  className="rounded-[18px] px-3 py-3 text-[11px] text-muted"
+                  className="rounded-[18px] px-3 py-3 text-xs-tight text-muted"
                 >
                   {t("databaseview.QueryWorkspaceInfo", {
                     defaultValue:
@@ -393,14 +393,14 @@ export function DatabaseView({
 
               {queryHistory.length > 0 ? (
                 <SidebarScrollRegion className="mt-3 space-y-1.5">
-                  <div className="text-[10px] text-muted uppercase tracking-[0.16em]">
+                  <div className="text-2xs text-muted uppercase tracking-[0.16em]">
                     {t("databaseview.RecentQueries")}
                   </div>
                   {queryHistory.slice(0, 8).map((q) => (
                     <Button
                       variant="ghost"
                       key={q}
-                      className="h-auto w-full justify-start rounded-[18px] px-3 py-2 text-left text-[11px] font-mono border border-border/32 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_84%,transparent),color-mix(in_srgb,var(--bg)_95%,transparent))] text-muted-strong shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_14px_20px_-18px_rgba(15,23,42,0.14)] backdrop-blur-md transition-[border-color,background-color,color,transform,box-shadow] duration-200 hover:border-border/46 hover:bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_90%,transparent),color-mix(in_srgb,var(--bg)_97%,transparent))] hover:text-txt hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_16px_22px_-18px_rgba(15,23,42,0.16)] active:scale-95 disabled:hover:border-border/32 disabled:hover:bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_84%,transparent),color-mix(in_srgb,var(--bg)_95%,transparent))] disabled:hover:text-muted-strong dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_16px_24px_-20px_rgba(0,0,0,0.24)]"
+                      className="h-auto w-full justify-start rounded-[18px] px-3 py-2 text-left text-xs-tight font-mono border border-border/32 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_84%,transparent),color-mix(in_srgb,var(--bg)_95%,transparent))] text-muted-strong shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_14px_20px_-18px_rgba(15,23,42,0.14)] backdrop-blur-md transition-[border-color,background-color,color,transform,box-shadow] duration-200 hover:border-border/46 hover:bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_90%,transparent),color-mix(in_srgb,var(--bg)_97%,transparent))] hover:text-txt hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_16px_22px_-18px_rgba(15,23,42,0.16)] active:scale-95 disabled:hover:border-border/32 disabled:hover:bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_84%,transparent),color-mix(in_srgb,var(--bg)_95%,transparent))] disabled:hover:text-muted-strong dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_16px_24px_-20px_rgba(0,0,0,0.24)]"
                       onClick={() => setQueryText(q)}
                     >
                       <span className="truncate">{q}</span>
@@ -434,7 +434,7 @@ export function DatabaseView({
                 as="section"
                 className="px-5 py-5 sm:px-6"
               >
-                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
+                <div className="text-xs-tight font-semibold uppercase tracking-[0.16em] text-muted">
                   {t("databaseview.Database")}
                 </div>
                 <h1 className="mt-1 text-2xl font-semibold text-txt-strong">
@@ -458,7 +458,7 @@ export function DatabaseView({
                     as="section"
                     className="px-5 py-5 sm:px-6"
                   >
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
+                    <div className="text-xs-tight font-semibold uppercase tracking-[0.16em] text-muted">
                       {t("databaseview.Database")}
                     </div>
                     <h1 className="mt-1 text-2xl font-semibold text-txt-strong">
@@ -489,7 +489,7 @@ export function DatabaseView({
                   >
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                       <div className="min-w-0 flex-1">
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
+                        <div className="text-xs-tight font-semibold uppercase tracking-[0.16em] text-muted">
                           {t("databaseview.Database")}
                         </div>
                         <h1 className="mt-1 text-2xl font-semibold text-txt-strong">
@@ -676,7 +676,7 @@ export function DatabaseView({
                     className="w-full pr-8 text-xs h-10 rounded-[16px] border-border/34 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_84%,transparent),color-mix(in_srgb,var(--bg)_95%,transparent))] text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_14px_20px_-20px_rgba(15,23,42,0.12)] focus-visible:border-accent/28 focus-visible:ring-1 focus-visible:ring-accent/24 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_16px_22px_-20px_rgba(0,0,0,0.22)]"
                   />
                 </div>
-                <div className="text-[10px] text-muted uppercase font-bold tracking-widest px-2 bg-bg/50 py-1.5 rounded-lg border border-border/30 inline-flex items-center shadow-inner">
+                <div className="text-2xs text-muted uppercase font-bold tracking-widest px-2 bg-bg/50 py-1.5 rounded-lg border border-border/30 inline-flex items-center shadow-inner">
                   {t("databaseview.Tables")} ({filteredTables.length})
                 </div>
                 {loading && tables.length === 0 ? (
@@ -753,7 +753,7 @@ export function DatabaseView({
                   as="section"
                   className="px-5 py-5 sm:px-6"
                 >
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
+                  <div className="text-xs-tight font-semibold uppercase tracking-[0.16em] text-muted">
                     {t("databaseview.Database")}
                   </div>
                   <div className="mt-1 text-2xl font-semibold text-txt-strong">
@@ -784,7 +784,7 @@ export function DatabaseView({
                 >
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div className="min-w-0 flex-1">
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
+                      <div className="text-xs-tight font-semibold uppercase tracking-[0.16em] text-muted">
                         {t("databaseview.Database")}
                       </div>
                       <div className="mt-1 text-2xl font-semibold text-txt-strong">
@@ -867,7 +867,7 @@ export function DatabaseView({
                 <div className="h-px bg-border/30" />
                 <PagePanel
                   variant="inset"
-                  className="rounded-[18px] px-3 py-3 text-[11px] text-muted"
+                  className="rounded-[18px] px-3 py-3 text-xs-tight text-muted"
                 >
                   {t("databaseview.QueryWorkspaceInfo", {
                     defaultValue:
@@ -876,14 +876,14 @@ export function DatabaseView({
                 </PagePanel>
                 {queryHistory.length > 0 ? (
                   <SidebarScrollRegion className="space-y-1.5">
-                    <div className="text-[10px] text-muted uppercase tracking-[0.16em]">
+                    <div className="text-2xs text-muted uppercase tracking-[0.16em]">
                       {t("databaseview.RecentQueries")}
                     </div>
                     {queryHistory.slice(0, 8).map((q) => (
                       <Button
                         variant="ghost"
                         key={q}
-                        className="h-auto w-full justify-start rounded-[18px] px-3 py-2 text-left text-[11px] font-mono border border-border/32 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_84%,transparent),color-mix(in_srgb,var(--bg)_95%,transparent))] text-muted-strong shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_14px_20px_-18px_rgba(15,23,42,0.14)] backdrop-blur-md transition-[border-color,background-color,color,transform,box-shadow] duration-200 hover:border-border/46 hover:bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_90%,transparent),color-mix(in_srgb,var(--bg)_97%,transparent))] hover:text-txt hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_16px_22px_-18px_rgba(15,23,42,0.16)] active:scale-95 disabled:hover:border-border/32 disabled:hover:bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_84%,transparent),color-mix(in_srgb,var(--bg)_95%,transparent))] disabled:hover:text-muted-strong dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_16px_24px_-20px_rgba(0,0,0,0.24)]"
+                        className="h-auto w-full justify-start rounded-[18px] px-3 py-2 text-left text-xs-tight font-mono border border-border/32 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_84%,transparent),color-mix(in_srgb,var(--bg)_95%,transparent))] text-muted-strong shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_14px_20px_-18px_rgba(15,23,42,0.14)] backdrop-blur-md transition-[border-color,background-color,color,transform,box-shadow] duration-200 hover:border-border/46 hover:bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_90%,transparent),color-mix(in_srgb,var(--bg)_97%,transparent))] hover:text-txt hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_16px_22px_-18px_rgba(15,23,42,0.16)] active:scale-95 disabled:hover:border-border/32 disabled:hover:bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_84%,transparent),color-mix(in_srgb,var(--bg)_95%,transparent))] disabled:hover:text-muted-strong dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_16px_24px_-20px_rgba(0,0,0,0.24)]"
                         onClick={() => setQueryText(q)}
                       >
                         <span className="truncate">{q}</span>
@@ -903,7 +903,7 @@ export function DatabaseView({
             >
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div className="min-w-0 flex-1">
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
+                  <div className="text-xs-tight font-semibold uppercase tracking-[0.16em] text-muted">
                     {t("databaseview.Database")}
                   </div>
                   <div className="mt-1 text-2xl font-semibold text-txt-strong">

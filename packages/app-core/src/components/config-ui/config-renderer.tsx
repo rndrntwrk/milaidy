@@ -210,10 +210,10 @@ function ValidationSummary({
 
   return (
     <div
-      className="mb-4 border border-[var(--destructive)] bg-[color-mix(in_srgb,var(--destructive)_6%,transparent)] px-4 py-3 rounded-sm"
+      className="mb-4 border border-destructive bg-[color-mix(in_srgb,var(--destructive)_6%,transparent)] px-4 py-3 rounded-sm"
       role="alert"
     >
-      <div className="text-[13px] font-semibold text-[var(--destructive)] mb-2">
+      <div className="text-[13px] font-semibold text-destructive mb-2">
         {totalErrors} {totalErrors === 1 ? "field needs" : "fields need"}{" "}
         {t("config-renderer.attention", { defaultValue: "attention" })}
       </div>
@@ -223,7 +223,7 @@ function ValidationSummary({
             <Button
               type="button"
               variant="link"
-              className="text-[12px] text-[var(--destructive)] p-0 h-auto hover:underline transition-all text-left flex items-center gap-1.5"
+              className="text-[12px] text-destructive p-0 h-auto hover:underline transition-all text-left flex items-center gap-1.5"
               onClick={() => handleFieldClick(key)}
             >
               <span className="opacity-60">
@@ -569,7 +569,7 @@ export const ConfigRenderer = forwardRef<
 
   if (!schema) {
     return (
-      <div className="text-xs text-[var(--muted)] italic py-3">
+      <div className="text-xs text-muted italic py-3">
         {tFn("config-renderer.NoSchemaProvided")}
       </div>
     );
@@ -585,7 +585,7 @@ export const ConfigRenderer = forwardRef<
         configProgress.requiredSet < configProgress.requiredTotal && (
           <div className="mb-4 px-3.5 py-2.5 border border-[var(--warning,#f39c12)] bg-[color-mix(in_srgb,var(--warning,#f39c12)_6%,transparent)] rounded-sm">
             <ConfigProgressText configProgress={configProgress} />
-            <div className="w-full h-1.5 bg-[var(--border)] rounded-full overflow-hidden">
+            <div className="w-full h-1.5 bg-border rounded-full overflow-hidden">
               <div
                 className="h-full bg-[var(--warning,#f39c12)] rounded-full transition-all duration-300"
                 style={{
@@ -609,10 +609,10 @@ export const ConfigRenderer = forwardRef<
           {showHeaders && (
             <div className="flex items-center gap-2 mb-3">
               <span className="text-base leading-none">{groupIcon(group)}</span>
-              <span className="text-[12px] font-bold uppercase tracking-wider text-[var(--text)] opacity-70">
+              <span className="text-[12px] font-bold uppercase tracking-wider text-txt opacity-70">
                 {group}
               </span>
-              <span className="flex-1 h-px bg-[var(--border)] ml-1" />
+              <span className="flex-1 h-px bg-border ml-1" />
             </div>
           )}
           <div className="grid grid-cols-6 gap-x-5 gap-y-0">
@@ -622,7 +622,7 @@ export const ConfigRenderer = forwardRef<
       ))}
 
       {advanced.length > 0 && (
-        <div className="mt-5 pt-4 border-t border-[var(--border)]">
+        <div className="mt-5 pt-4 border-t border-border">
           <AdvancedSectionToggle
             advanced={advanced}
             advancedOpen={advancedOpen}
@@ -658,7 +658,7 @@ function ConfigProgressText({
           defaultValue: "required fields configured",
         })}
       </span>
-      <span className="text-[11px] text-[var(--muted)]">
+      <span className="text-[11px] text-muted">
         {configProgress.configured}/{configProgress.total}{" "}
         {t("config-renderer.total", { defaultValue: "total" })}
       </span>
@@ -684,18 +684,18 @@ function AdvancedSectionToggle({
       onClick={() => setAdvancedOpen((prev) => !prev)}
     >
       <span
-        className="inline-block text-[10px] text-[var(--muted)] transition-transform duration-200 group-hover:text-[var(--text)]"
+        className="inline-block text-[10px] text-muted transition-transform duration-200 group-hover:text-txt"
         style={{ transform: advancedOpen ? "rotate(90deg)" : "none" }}
       >
         &#9654;
       </span>
-      <span className="text-[12px] font-bold uppercase tracking-wider text-[var(--muted)] group-hover:text-[var(--text)] transition-colors">
+      <span className="text-[12px] font-bold uppercase tracking-wider text-muted group-hover:text-txt transition-colors">
         {t("config-renderer.Advanced", { defaultValue: "Advanced" })}
       </span>
-      <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 text-[10px] font-bold bg-[var(--accent-subtle,rgba(255,255,255,0.05))] text-[var(--accent)] border border-[var(--border)] rounded-sm">
+      <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1.5 text-[10px] font-bold bg-[var(--accent-subtle,rgba(255,255,255,0.05))] text-accent border border-border rounded-sm">
         {advanced.length}
       </span>
-      <span className="flex-1 h-px bg-[var(--border)] opacity-50 ml-1" />
+      <span className="flex-1 h-px bg-border opacity-50 ml-1" />
     </Button>
   );
 }

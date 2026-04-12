@@ -153,7 +153,7 @@
     "test:cleanup": "node test/scripts/test-cleanup.mjs",
     "test:unit": "node test/scripts/test-root-unit.mjs",
     "test:coverage": "bunx vitest run --config vitest.unit.config.ts --coverage && node scripts/report-coverage-surfaces.mjs",
-    "test:ui:playwright": "bun scripts/run-playwright.mjs apps/app test --config playwright.ui-smoke.config.ts test/ui-smoke/ui-smoke.spec.ts test/ui-smoke/apps-session.spec.ts test/ui-smoke/browser-workspace.spec.ts",
+    "test:ui:playwright": "node scripts/run-ui-smoke-playwright-suite.mjs",
     "test:ui:playwright:packaged": "bun scripts/run-playwright.mjs apps/app test --config playwright.ui-packaged.config.ts test/ui-smoke/packaged-hash.spec.ts",
     "test:ui:playwright:settings-chat": "bun scripts/run-playwright.mjs apps/app test --config playwright.ui-smoke.config.ts test/ui-smoke/settings-chat-companion.spec.ts",
     "test:desktop:contract": "cd apps/app/electrobun && bun run test",

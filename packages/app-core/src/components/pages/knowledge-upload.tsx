@@ -158,7 +158,7 @@ export function UploadZone({
         <Button
           variant="default"
           size="sm"
-          className="h-10 px-4 text-[11px] font-semibold text-txt-strong shadow-sm hover:text-txt-strong"
+          className="h-10 px-4 text-xs-tight font-semibold text-txt-strong shadow-sm hover:text-txt-strong"
           onClick={() => fileInputRef.current?.click()}
           disabled={uploading}
         >
@@ -167,14 +167,14 @@ export function UploadZone({
         <Button
           variant="outline"
           size="sm"
-          className="h-10 px-4 text-[11px] font-semibold text-txt shadow-sm hover:text-txt"
+          className="h-10 px-4 text-xs-tight font-semibold text-txt shadow-sm hover:text-txt"
           onClick={() => setShowUrlInput(!showUrlInput)}
           disabled={uploading}
         >
           {t("knowledgeview.AddFromURL")}
         </Button>
       </div>
-      <div className="mt-2 inline-flex min-h-11 w-full items-center gap-2 rounded-xl border border-border/35 bg-bg/18 px-3 text-[11px] leading-relaxed text-muted-strong transition-colors hover:border-border/55 hover:bg-bg/28 hover:text-txt">
+      <div className="mt-2 inline-flex min-h-11 w-full items-center gap-2 rounded-xl border border-border/35 bg-bg/18 px-3 text-xs-tight leading-relaxed text-muted-strong transition-colors hover:border-border/55 hover:bg-bg/28 hover:text-txt">
         <Checkbox
           id="knowledge-upload-image-descriptions"
           checked={includeImageDescriptions}
@@ -196,7 +196,7 @@ export function UploadZone({
         } ${uploading ? "opacity-60" : ""}`}
       >
         {(dragOver || uploading) && (
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted/80">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs-tight text-muted/80">
             <span className="font-medium text-txt/80">
               {uploadStatus
                 ? t("knowledgeview.UploadingProgress", {
@@ -216,12 +216,12 @@ export function UploadZone({
 
         {!dragOver && !uploading && !showUrlInput && (
           <div className="space-y-1 py-1 text-center">
-            <div className="text-[11px] font-medium text-muted-strong">
+            <div className="text-xs-tight font-medium text-muted-strong">
               {t("knowledgeview.DropFilesHereToUpload", {
                 defaultValue: "Drop files here to upload",
               })}
             </div>
-            <div className="text-[10px] text-muted">
+            <div className="text-2xs text-muted">
               {t("knowledgeview.UploadSupportedTypes", {
                 defaultValue: "Docs, PDFs, JSON, CSV, and supported images.",
               })}
@@ -233,7 +233,7 @@ export function UploadZone({
           <div
             className={`${dragOver || uploading ? "mt-2" : ""} animate-in fade-in slide-in-from-top-2 duration-300`}
           >
-            <div className="mb-2 text-[11px] font-medium leading-relaxed text-muted">
+            <div className="mb-2 text-xs-tight font-medium leading-relaxed text-muted">
               {t("knowledgeview.PasteAURLToImpor")}
             </div>
             <div className="flex flex-col gap-2 sm:flex-row">
@@ -249,7 +249,7 @@ export function UploadZone({
               <Button
                 variant="default"
                 size="sm"
-                className="h-10 px-4 text-[11px] font-semibold"
+                className="h-10 px-4 text-xs-tight font-semibold"
                 onClick={handleUrlSubmit}
                 disabled={!urlInput.trim() || uploading}
               >

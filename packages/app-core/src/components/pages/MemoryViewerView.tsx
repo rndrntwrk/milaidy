@@ -110,17 +110,17 @@ function MemoryCard({
     >
       <div className="flex flex-wrap items-center gap-2">
         <span
-          className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em]"
+          className="inline-flex items-center rounded-full px-2 py-0.5 text-2xs font-semibold uppercase tracking-[0.12em]"
           style={{ backgroundColor: color.bg, color: color.fg }}
         >
           {typeLabel(memory.type)}
         </span>
         {memory.source ? (
-          <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted/70">
+          <span className="text-2xs font-semibold uppercase tracking-[0.12em] text-muted/70">
             {memory.source}
           </span>
         ) : null}
-        <span className="ml-auto text-[11px] text-muted">
+        <span className="ml-auto text-xs-tight text-muted">
           {formatRelativeTime(memory.createdAt)}
         </span>
       </div>
@@ -130,32 +130,32 @@ function MemoryCard({
       {expanded ? (
         <div className="mt-3 space-y-1.5 border-t border-border/16 pt-3">
           {memory.entityId ? (
-            <div className="text-[11px] text-muted">
+            <div className="text-xs-tight text-muted">
               <span className="font-semibold uppercase tracking-[0.12em]">
                 Entity
               </span>{" "}
-              <span className="font-mono text-[10px]">{memory.entityId}</span>
+              <span className="font-mono text-2xs">{memory.entityId}</span>
             </div>
           ) : null}
           {memory.roomId ? (
-            <div className="text-[11px] text-muted">
+            <div className="text-xs-tight text-muted">
               <span className="font-semibold uppercase tracking-[0.12em]">
                 Room
               </span>{" "}
-              <span className="font-mono text-[10px]">{memory.roomId}</span>
+              <span className="font-mono text-2xs">{memory.roomId}</span>
             </div>
           ) : null}
-          <div className="text-[11px] text-muted">
+          <div className="text-xs-tight text-muted">
             <span className="font-semibold uppercase tracking-[0.12em]">
               Created
             </span>{" "}
             {formatDateTime(memory.createdAt, { fallback: "unknown" })}
           </div>
-          <div className="text-[11px] text-muted">
+          <div className="text-xs-tight text-muted">
             <span className="font-semibold uppercase tracking-[0.12em]">
               ID
             </span>{" "}
-            <span className="font-mono text-[10px]">{memory.id}</span>
+            <span className="font-mono text-2xs">{memory.id}</span>
           </div>
         </div>
       ) : null}
@@ -239,7 +239,7 @@ function MemoryFeedPanel({ typeFilter }: { typeFilter: string | null }) {
   return (
     <div className="space-y-3" data-testid="memory-feed">
       <div className="flex items-center justify-between gap-3">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted/70">
+        <div className="text-xs-tight font-semibold uppercase tracking-[0.16em] text-muted/70">
           Recent activity ({feed.length}
           {hasMore ? "+" : ""})
         </div>
@@ -377,7 +377,7 @@ function MemoryBrowserPanel({
         />
       ) : (
         <>
-          <div className="flex items-center justify-between gap-3 text-[11px] text-muted">
+          <div className="flex items-center justify-between gap-3 text-xs-tight text-muted">
             <span>
               {offset + 1}–{offset + result.memories.length} of {result.total}
             </span>
@@ -501,7 +501,7 @@ export function MemoryViewerView({
             <>
               <div className="grid grid-cols-2 gap-2">
                 <div className="rounded-[16px] border border-border/24 bg-card/35 px-2.5 py-2">
-                  <div className="text-[10px] uppercase tracking-[0.12em] text-muted/70">
+                  <div className="text-2xs uppercase tracking-[0.12em] text-muted/70">
                     Total
                   </div>
                   <div className="mt-1 text-sm font-semibold text-txt">
@@ -513,7 +513,7 @@ export function MemoryViewerView({
                     key={type}
                     className="rounded-[16px] border border-border/24 bg-card/35 px-2.5 py-2"
                   >
-                    <div className="text-[10px] uppercase tracking-[0.12em] text-muted/70">
+                    <div className="text-2xs uppercase tracking-[0.12em] text-muted/70">
                       {typeLabel(type)}
                     </div>
                     <div className="mt-1 text-sm font-semibold text-txt">
@@ -524,7 +524,7 @@ export function MemoryViewerView({
               </div>
 
               <div>
-                <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted/70">
+                <div className="text-xs-tight font-semibold uppercase tracking-[0.14em] text-muted/70">
                   Filter by type
                 </div>
                 <div className="mt-2 flex flex-wrap gap-1.5">
@@ -532,7 +532,7 @@ export function MemoryViewerView({
                     type="button"
                     size="sm"
                     variant="outline"
-                    className={`h-7 rounded-full px-3 text-[10px] font-semibold tracking-[0.12em] ${
+                    className={`h-7 rounded-full px-3 text-2xs font-semibold tracking-[0.12em] ${
                       typeFilter === null
                         ? "border-accent/40 bg-accent/14 text-txt"
                         : ""
@@ -550,7 +550,7 @@ export function MemoryViewerView({
                         type="button"
                         size="sm"
                         variant="outline"
-                        className={`h-7 rounded-full px-3 text-[10px] font-semibold tracking-[0.12em] ${
+                        className={`h-7 rounded-full px-3 text-2xs font-semibold tracking-[0.12em] ${
                           active ? "border-accent/40 bg-accent/14 text-txt" : ""
                         }`}
                         onClick={() => setTypeFilter(active ? null : type)}
@@ -586,7 +586,7 @@ export function MemoryViewerView({
               type="button"
               size="sm"
               variant="ghost"
-              className="flex-1 text-[11px]"
+              className="flex-1 text-xs-tight"
               onClick={handleClearPerson}
             >
               Show all
@@ -595,7 +595,7 @@ export function MemoryViewerView({
               type="button"
               size="sm"
               variant="ghost"
-              className="flex-1 text-[11px]"
+              className="flex-1 text-xs-tight"
               onClick={() => setTab("relationships")}
             >
               Relationships
@@ -666,7 +666,7 @@ export function MemoryViewerView({
                 type="button"
                 size="sm"
                 variant="ghost"
-                className="h-6 px-2 text-[11px]"
+                className="h-6 px-2 text-xs-tight"
                 onClick={handleClearPerson}
               >
                 Clear

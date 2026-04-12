@@ -311,7 +311,7 @@ export function WebsiteBlockerSettingsCard({
               variant={statusBadge.variant}
             />
           </div>
-          <div className="max-w-2xl text-[11px] leading-5 text-muted">
+          <div className="max-w-2xl text-xs-tight leading-5 text-muted">
             {getModeDescription(mode, t, status)}
           </div>
         </div>
@@ -320,7 +320,7 @@ export function WebsiteBlockerSettingsCard({
             variant="outline"
             size="sm"
             data-testid="website-blocker-refresh-button"
-            className="min-h-10 rounded-xl px-3 text-[11px] font-semibold"
+            className="min-h-10 rounded-xl px-3 text-xs-tight font-semibold"
             onClick={() => void refreshStatus()}
             disabled={loading || actionPending !== null}
           >
@@ -336,7 +336,7 @@ export function WebsiteBlockerSettingsCard({
             <Button
               variant="default"
               size="sm"
-              className="min-h-10 rounded-xl px-3 text-[11px] font-semibold"
+              className="min-h-10 rounded-xl px-3 text-xs-tight font-semibold"
               onClick={() => void handleStopBlock()}
               disabled={actionPending !== null}
             >
@@ -356,7 +356,7 @@ export function WebsiteBlockerSettingsCard({
             <Button
               variant="default"
               size="sm"
-              className="min-h-10 rounded-xl px-3 text-[11px] font-semibold"
+              className="min-h-10 rounded-xl px-3 text-xs-tight font-semibold"
               onClick={() => void handleStartBlock()}
               disabled={
                 actionPending !== null ||
@@ -383,7 +383,7 @@ export function WebsiteBlockerSettingsCard({
       <div className="space-y-4 px-4 py-4">
         <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
           <label className="space-y-1">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+            <span className="text-xs-tight font-semibold uppercase tracking-[0.08em] text-muted">
               {translateWithFallback(
                 t,
                 "permissionssection.WebsiteBlockingTargets",
@@ -405,7 +405,7 @@ export function WebsiteBlockerSettingsCard({
 
           <div className="space-y-3">
             <label className="space-y-1">
-              <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+              <span className="text-xs-tight font-semibold uppercase tracking-[0.08em] text-muted">
                 {translateWithFallback(
                   t,
                   "permissionssection.WebsiteBlockingDuration",
@@ -442,7 +442,7 @@ export function WebsiteBlockerSettingsCard({
           </div>
         </div>
 
-        <div className="grid gap-2 text-[11px] text-muted sm:grid-cols-2">
+        <div className="grid gap-2 text-xs-tight text-muted sm:grid-cols-2">
           <div>
             <span className="font-semibold text-muted-strong">
               {translateWithFallback(
@@ -482,13 +482,13 @@ export function WebsiteBlockerSettingsCard({
         </div>
 
         {status?.reason ? (
-          <div className="rounded-xl border border-border/50 bg-bg-hover/70 px-3 py-2 text-[11px] leading-5 text-muted">
+          <div className="rounded-xl border border-border/50 bg-bg-hover/70 px-3 py-2 text-xs-tight leading-5 text-muted">
             {status.reason}
           </div>
         ) : null}
 
         {permission && permission.status !== "granted" && permissionAction ? (
-          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border/50 bg-bg-hover/70 px-3 py-2 text-[11px] text-muted">
+          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border/50 bg-bg-hover/70 px-3 py-2 text-xs-tight text-muted">
             <span className="flex-1">
               {permission.reason ??
                 translateWithFallback(
@@ -500,7 +500,7 @@ export function WebsiteBlockerSettingsCard({
             <Button
               variant="outline"
               size="sm"
-              className="min-h-9 rounded-xl px-3 text-[11px] font-semibold"
+              className="min-h-9 rounded-xl px-3 text-xs-tight font-semibold"
               onClick={async () => {
                 if (permissionAction.type === "request") {
                   if (onRequestPermission) {
@@ -522,7 +522,7 @@ export function WebsiteBlockerSettingsCard({
         ) : null}
 
         {error ? (
-          <div className="rounded-xl border border-danger/30 bg-danger/10 px-3 py-2 text-[11px] leading-5 text-danger">
+          <div className="rounded-xl border border-danger/30 bg-danger/10 px-3 py-2 text-xs-tight leading-5 text-danger">
             {error}
           </div>
         ) : null}

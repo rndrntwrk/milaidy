@@ -58,6 +58,37 @@ export interface RealTestRuntimeResult {
   cleanup: () => Promise<void>;
 }
 
+type TrajectoryWriteService = {
+  writeQueues?: Map<string, Promise<void>>;
+};
+
+async function flushPendingTrajectoryWrites(
+  runtime: AgentRuntime,
+): Promise<void> {
+  try {
+    const { flushTrajectoryWrites } = await import(
+      "../../packages/agent/src/runtime/trajectory-storage"
+    );
+    await flushTrajectoryWrites(runtime);
+  } catch {
+    // Best effort only. Some test runtimes do not register this helper.
+  }
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const pending = runtime
+      .getServicesByType("trajectories")
+      .flatMap((service) => {
+        const writeQueues = (service as TrajectoryWriteService).writeQueues;
+        return writeQueues instanceof Map ? Array.from(writeQueues.values()) : [];
+      });
+    if (pending.length === 0) {
+      return;
+    }
+    await Promise.allSettled(pending);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+}
+
 /**
  * Create a real AgentRuntime with PGLite database and optional real LLM/connectors.
  *
@@ -168,9 +199,24 @@ export async function createRealTestRuntime(
 
   const cleanup = async () => {
     try {
+      await flushPendingTrajectoryWrites(runtime);
+    } catch (err) {
+      logger.debug(`[real-runtime] trajectory flush error: ${err}`);
+    }
+    try {
       await runtime.stop();
     } catch (err) {
       logger.debug(`[real-runtime] runtime.stop() error: ${err}`);
+    }
+    try {
+      await flushPendingTrajectoryWrites(runtime);
+    } catch (err) {
+      logger.debug(`[real-runtime] post-stop trajectory flush error: ${err}`);
+    }
+    try {
+      await runtime.close();
+    } catch (err) {
+      logger.debug(`[real-runtime] runtime.close() error: ${err}`);
     }
     // Restore previous env
     if (prevPgliteDir !== undefined) {

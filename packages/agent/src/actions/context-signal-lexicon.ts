@@ -3,29 +3,38 @@ import { getValidationKeywordTerms } from "@miladyai/shared/validation-keywords"
 import { normalizeCharacterLanguage } from "../onboarding-presets.js";
 
 export type ContextSignalKey =
+  | "affirmative"
   | "calendar"
+  | "draft_edit"
   | "gmail"
   | "lifeops"
+  | "lifeops_cadence"
   | "lifeops_complete"
   | "lifeops_delete"
+  | "lifeops_escalation"
+  | "lifeops_goal"
   | "lifeops_overview"
+  | "lifeops_phone"
   | "lifeops_reminder_pref"
+  | "lifeops_review"
   | "lifeops_skip"
   | "lifeops_snooze"
   | "lifeops_update"
+  | "negative"
   | "read_channel"
   | "search_conversations"
   | "search_entity"
   | "send_admin_message"
   | "send_message"
   | "stream_control"
+  | "temporal_followup"
+  | "temporal_next"
   | "web_search";
 
 export type ContextSignalStrength = "strong" | "weak";
 
 type ContextSignalSpec = {
   contextLimit?: number;
-  weakThreshold?: number;
   keywordKeys: {
     strong: string;
     weak?: string;
@@ -35,18 +44,45 @@ type ContextSignalSpec = {
 export type ResolvedContextSignalSpec = {
   locale: CharacterLanguage;
   contextLimit: number;
-  weakThreshold: number;
   strongTerms: string[];
   weakTerms: string[];
 };
 
 const DEFAULT_CONTEXT_LIMIT = 8;
-const DEFAULT_WEAK_THRESHOLD = 2;
 
 const CONTEXT_SIGNAL_SPECS: Record<ContextSignalKey, ContextSignalSpec> = {
+  affirmative: {
+    contextLimit: 4,
+    keywordKeys: {
+      strong: "contextSignal.affirmative.strong",
+    },
+  },
+  draft_edit: {
+    contextLimit: 4,
+    keywordKeys: {
+      strong: "contextSignal.draft_edit.strong",
+    },
+  },
+  negative: {
+    contextLimit: 4,
+    keywordKeys: {
+      strong: "contextSignal.negative.strong",
+    },
+  },
+  temporal_followup: {
+    contextLimit: 6,
+    keywordKeys: {
+      strong: "contextSignal.temporal_followup.strong",
+    },
+  },
+  temporal_next: {
+    contextLimit: 6,
+    keywordKeys: {
+      strong: "contextSignal.temporal_next.strong",
+    },
+  },
   gmail: {
     contextLimit: 12,
-    weakThreshold: 2,
     keywordKeys: {
       strong: "contextSignal.gmail.strong",
       weak: "contextSignal.gmail.weak",
@@ -59,51 +95,74 @@ const CONTEXT_SIGNAL_SPECS: Record<ContextSignalKey, ContextSignalSpec> = {
       weak: "contextSignal.lifeops.weak",
     },
   },
+  lifeops_cadence: {
+    contextLimit: 12,
+    keywordKeys: {
+      strong: "contextSignal.lifeops_cadence.strong",
+    },
+  },
   lifeops_complete: {
     contextLimit: 12,
-    weakThreshold: 1,
     keywordKeys: {
       strong: "contextSignal.lifeops_complete.strong",
     },
   },
   lifeops_delete: {
     contextLimit: 12,
-    weakThreshold: 1,
     keywordKeys: {
       strong: "contextSignal.lifeops_delete.strong",
     },
   },
   lifeops_overview: {
     contextLimit: 12,
-    weakThreshold: 1,
     keywordKeys: {
       strong: "contextSignal.lifeops_overview.strong",
     },
   },
   lifeops_reminder_pref: {
     contextLimit: 12,
-    weakThreshold: 1,
     keywordKeys: {
       strong: "contextSignal.lifeops_reminder_pref.strong",
     },
   },
   lifeops_skip: {
     contextLimit: 12,
-    weakThreshold: 1,
     keywordKeys: {
       strong: "contextSignal.lifeops_skip.strong",
     },
   },
   lifeops_snooze: {
     contextLimit: 12,
-    weakThreshold: 1,
     keywordKeys: {
       strong: "contextSignal.lifeops_snooze.strong",
     },
   },
+  lifeops_escalation: {
+    contextLimit: 12,
+    keywordKeys: {
+      strong: "contextSignal.lifeops_escalation.strong",
+    },
+  },
+  lifeops_goal: {
+    contextLimit: 12,
+    keywordKeys: {
+      strong: "contextSignal.lifeops_goal.strong",
+    },
+  },
+  lifeops_phone: {
+    contextLimit: 12,
+    keywordKeys: {
+      strong: "contextSignal.lifeops_phone.strong",
+    },
+  },
+  lifeops_review: {
+    contextLimit: 12,
+    keywordKeys: {
+      strong: "contextSignal.lifeops_review.strong",
+    },
+  },
   lifeops_update: {
     contextLimit: 12,
-    weakThreshold: 1,
     keywordKeys: {
       strong: "contextSignal.lifeops_update.strong",
     },
@@ -174,7 +233,6 @@ export function resolveContextSignalSpec(
   return {
     locale,
     contextLimit: spec.contextLimit ?? DEFAULT_CONTEXT_LIMIT,
-    weakThreshold: spec.weakThreshold ?? DEFAULT_WEAK_THRESHOLD,
     strongTerms: getValidationKeywordTerms(spec.keywordKeys.strong, {
       includeAllLocales,
       locale,

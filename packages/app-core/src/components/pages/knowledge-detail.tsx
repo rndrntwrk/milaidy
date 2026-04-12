@@ -108,10 +108,10 @@ export function DocumentViewer({ documentId }: { documentId: string | null }) {
     <PagePanel className="min-h-[62vh] overflow-hidden">
       {doc && (
         <div className="flex flex-wrap items-center gap-2 px-5 pt-5 sm:px-6 lg:justify-end">
-          <span className="rounded-full border border-border/45 bg-bg/25 px-3 py-1.5 text-[11px] font-semibold text-muted">
+          <span className="rounded-full border border-border/45 bg-bg/25 px-3 py-1.5 text-xs-tight font-semibold text-muted">
             {getKnowledgeTypeLabel(doc.contentType)}
           </span>
-          <span className="rounded-full border border-accent/25 bg-accent/8 px-3 py-1.5 text-[11px] font-semibold text-txt-strong">
+          <span className="rounded-full border border-accent/25 bg-accent/8 px-3 py-1.5 text-xs-tight font-semibold text-txt-strong">
             {getKnowledgeSourceLabel(doc.source, t)}
           </span>
         </div>
@@ -152,12 +152,12 @@ export function DocumentViewer({ documentId }: { documentId: string | null }) {
                   <div className="text-sm font-semibold text-txt">
                     {t("knowledgeview.Preview", { defaultValue: "Preview" })}
                   </div>
-                  <span className="rounded-full border border-border/35 bg-bg/25 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted/70">
+                  <span className="rounded-full border border-border/35 bg-bg/25 px-2.5 py-1 text-2xs font-semibold uppercase tracking-[0.14em] text-muted/70">
                     {formatByteSize(doc.fileSize)}
                   </span>
                 </div>
                 {previewText ? (
-                  <pre className="max-h-[12rem] overflow-auto whitespace-pre-wrap break-words text-[13px] leading-relaxed text-txt/88 custom-scrollbar">
+                  <pre className="max-h-[12rem] overflow-auto whitespace-pre-wrap break-words text-sm leading-relaxed text-txt/88 custom-scrollbar">
                     {previewText.slice(0, 1200)}
                   </pre>
                 ) : (
@@ -181,7 +181,7 @@ export function DocumentViewer({ documentId }: { documentId: string | null }) {
                 </div>
                 <div className="mt-4 grid gap-3 text-xs">
                   <div className="flex flex-col gap-1.5">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-muted/70">
+                    <span className="text-2xs font-bold uppercase tracking-widest text-muted/70">
                       {t("knowledgeview.Type")}
                     </span>
                     <span className="inline-block w-fit rounded-md border border-border/25 bg-bg-hover px-2 py-1 font-medium text-txt">
@@ -189,7 +189,7 @@ export function DocumentViewer({ documentId }: { documentId: string | null }) {
                     </span>
                   </div>
                   <div className="flex flex-col gap-1.5">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-muted/70">
+                    <span className="text-2xs font-bold uppercase tracking-widest text-muted/70">
                       {t("knowledgeview.Source")}
                     </span>
                     <span className="inline-block w-fit rounded-md border border-border/25 bg-bg-hover px-2 py-1 font-medium text-txt">
@@ -197,7 +197,7 @@ export function DocumentViewer({ documentId }: { documentId: string | null }) {
                     </span>
                   </div>
                   <div className="flex flex-col gap-1.5">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-muted/70">
+                    <span className="text-2xs font-bold uppercase tracking-widest text-muted/70">
                       {t("knowledgeview.Uploaded", {
                         defaultValue: "Uploaded",
                       })}
@@ -207,7 +207,7 @@ export function DocumentViewer({ documentId }: { documentId: string | null }) {
                     </span>
                   </div>
                   <div className="flex flex-col gap-1.5">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-muted/70">
+                    <span className="text-2xs font-bold uppercase tracking-widest text-muted/70">
                       {t("knowledgeview.FragmentsLabel", {
                         defaultValue: "Fragments",
                       })}
@@ -218,7 +218,7 @@ export function DocumentViewer({ documentId }: { documentId: string | null }) {
                   </div>
                   {doc.url && (
                     <div className="mt-1 flex flex-col gap-1.5 border-t border-border/20 pt-4">
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-muted/70">
+                      <span className="text-2xs font-bold uppercase tracking-widest text-muted/70">
                         {t("appsview.URL")}
                       </span>
                       <a
@@ -251,16 +251,16 @@ export function DocumentViewer({ documentId }: { documentId: string | null }) {
                     className="rounded-xl border border-border/30 bg-card/86 p-4 shadow-sm transition-colors hover:border-accent/30"
                   >
                     <div className="mb-3 flex items-center justify-between">
-                      <span className="text-[11px] font-bold uppercase tracking-widest text-muted">
+                      <span className="text-xs-tight font-bold uppercase tracking-widest text-muted">
                         {t("knowledgeview.Fragment")} {index + 1}
                       </span>
                       {fragment.position !== undefined && (
-                        <span className="rounded-md border border-border/25 bg-bg-hover px-2 py-0.5 font-mono text-[10px] text-muted-strong">
+                        <span className="rounded-md border border-border/25 bg-bg-hover px-2 py-0.5 font-mono text-2xs text-muted-strong">
                           {t("knowledgeview.Position")} {fragment.position}
                         </span>
                       )}
                     </div>
-                    <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-txt/90 line-clamp-6">
+                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-txt/90 line-clamp-6">
                       {fragment.text}
                     </p>
                   </div>

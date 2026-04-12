@@ -121,7 +121,7 @@ export function SurfaceBadge({
 }) {
   return (
     <span
-      className={`inline-flex min-h-6 items-center rounded-full border px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.14em] ${toneClassName(tone)}`}
+      className={`inline-flex min-h-6 items-center rounded-full border px-2.5 py-1 text-2xs font-medium uppercase tracking-[0.14em] ${toneClassName(tone)}`}
     >
       {children}
     </span>
@@ -141,14 +141,14 @@ export function SurfaceCard({
 }) {
   return (
     <div className="rounded-2xl border border-border/35 bg-card/74 px-4 py-3 shadow-sm">
-      <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted">
+      <div className="text-xs-tight font-medium uppercase tracking-[0.16em] text-muted">
         {label}
       </div>
-      <div className={`mt-1 text-[12px] leading-5 ${toneClassName(tone)}`}>
+      <div className={`mt-1 text-xs leading-5 ${toneClassName(tone)}`}>
         {value}
       </div>
       {subtitle ? (
-        <div className="mt-1 text-[11px] leading-5 text-muted-strong">
+        <div className="mt-1 text-xs-tight leading-5 text-muted-strong">
           {subtitle}
         </div>
       ) : null}
@@ -169,7 +169,7 @@ export function SurfaceSection({
 }) {
   return (
     <section className="space-y-3 rounded-[1.4rem] border border-border/35 bg-card/74 p-4 shadow-sm">
-      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+      <div className="text-xs-tight font-semibold uppercase tracking-[0.18em] text-muted">
         {title}
       </div>
       {children}
@@ -186,10 +186,10 @@ export function SurfaceEmptyState({
 }) {
   return (
     <div className="rounded-[1.4rem] border border-border/35 bg-card/74 p-4 shadow-sm">
-      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+      <div className="text-xs-tight font-semibold uppercase tracking-[0.18em] text-muted">
         {title}
       </div>
-      <p className="mt-2 text-[12px] leading-6 text-muted-strong">{body}</p>
+      <p className="mt-2 text-xs leading-6 text-muted-strong">{body}</p>
     </div>
   );
 }

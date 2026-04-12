@@ -29,7 +29,7 @@ export function ConfirmDeleteControl({
   triggerClassName,
   confirmClassName,
   cancelClassName,
-  promptClassName = "text-[11px] text-[#e74c3c] ml-1",
+  promptClassName = "text-xs-tight text-[#e74c3c] ml-1",
   triggerTitle,
   triggerVariant = "destructive",
 }: ConfirmDeleteControlProps) {

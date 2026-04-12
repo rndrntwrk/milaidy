@@ -144,11 +144,11 @@ export function ResultsGrid({
       className="overflow-auto border border-border/40 bg-card/40 backdrop-blur-md rounded-2xl shadow-inner"
       style={{ maxHeight: "calc(100vh - 340px)" }}
     >
-      <table className="w-full border-collapse text-[12px] font-mono">
+      <table className="w-full border-collapse text-xs font-mono">
         <thead className="sticky top-0 z-10 backdrop-blur-xl bg-bg/80 border-b border-border/40 shadow-sm">
           <tr>
             {/* Row number column */}
-            <th className="w-[50px] min-w-[50px] px-3 py-2.5 text-[10px] text-muted font-medium text-right border-r border-border/40">
+            <th className="w-[50px] min-w-[50px] px-3 py-2.5 text-2xs text-muted font-medium text-right border-r border-border/40">
               #
             </th>
             {columns.map((col) => {
@@ -161,7 +161,7 @@ export function ResultsGrid({
                   onClick={() => onSort?.(col)}
                 >
                   <div className="flex items-center gap-2">
-                    <span className="text-[11px] text-txt font-semibold group-hover:text-txt transition-colors">
+                    <span className="text-xs-tight text-txt font-semibold group-hover:text-txt transition-colors">
                       {col}
                     </span>
                     {meta && (
@@ -181,7 +181,7 @@ export function ResultsGrid({
                       </Badge>
                     )}
                     {isSorted && (
-                      <span className="text-[10px] text-[var(--accent)]">
+                      <span className="text-2xs text-accent">
                         {sortDir === "asc" ? "↑" : "↓"}
                       </span>
                     )}
@@ -197,7 +197,7 @@ export function ResultsGrid({
               key={JSON.stringify(row)}
               className="border-b border-border/20 hover:bg-accent/10 transition-colors group"
             >
-              <td className="px-3 py-2 text-[10px] text-muted text-right border-r border-border/30 bg-bg/20 tabular-nums group-hover:text-txt/70 transition-colors">
+              <td className="px-3 py-2 text-2xs text-muted text-right border-r border-border/30 bg-bg/20 tabular-nums group-hover:text-txt/70 transition-colors">
                 {i + 1}
               </td>
               {columns.map((col) => {
@@ -224,11 +224,11 @@ export function ResultsGrid({
                     tabIndex={isExpandable ? 0 : undefined}
                   >
                     {isNull ? (
-                      <span className="text-[var(--muted)] italic opacity-50">
+                      <span className="text-muted italic opacity-50">
                         {t("databaseview.NULL")}
                       </span>
                     ) : (
-                      <span className="text-[var(--txt)]">{display}</span>
+                      <span className="text-txt">{display}</span>
                     )}
                   </td>
                 );
@@ -261,7 +261,7 @@ export function PaginationBar({
   const hasNext = offset + limit < total;
 
   return (
-    <div className="flex items-center justify-between px-4 py-2.5 border-t border-border/40 bg-card/60 backdrop-blur-md rounded-b-2xl text-[11px] text-muted">
+    <div className="flex items-center justify-between px-4 py-2.5 border-t border-border/40 bg-card/60 backdrop-blur-md rounded-b-2xl text-xs-tight text-muted">
       <span className="font-medium">
         {t("databaseview.RowCountSummary", {
           count: total.toLocaleString(),
@@ -284,7 +284,7 @@ export function PaginationBar({
         <Button
           variant="outline"
           size="sm"
-          className="h-auto min-h-[1.75rem] whitespace-normal break-words rounded-lg border-border/50 bg-bg/50 py-1 text-left text-[11px] backdrop-blur-sm transition-[border-color,color,box-shadow] hover:border-accent hover:text-txt hover:shadow-[0_0_10px_rgba(var(--accent-rgb),0.2)]"
+          className="h-auto min-h-[1.75rem] whitespace-normal break-words rounded-lg border-border/50 bg-bg/50 py-1 text-left text-xs-tight backdrop-blur-sm transition-[border-color,color,box-shadow] hover:border-accent hover:text-txt hover:shadow-[0_0_10px_rgba(var(--accent-rgb),0.2)]"
           disabled={!hasPrev}
           onClick={onPrev}
         >
@@ -293,7 +293,7 @@ export function PaginationBar({
         <Button
           variant="outline"
           size="sm"
-          className="h-auto min-h-[1.75rem] whitespace-normal break-words rounded-lg border-border/50 bg-bg/50 py-1 text-left text-[11px] backdrop-blur-sm transition-[border-color,color,box-shadow] hover:border-accent hover:text-txt hover:shadow-[0_0_10px_rgba(var(--accent-rgb),0.2)]"
+          className="h-auto min-h-[1.75rem] whitespace-normal break-words rounded-lg border-border/50 bg-bg/50 py-1 text-left text-xs-tight backdrop-blur-sm transition-[border-color,color,box-shadow] hover:border-accent hover:text-txt hover:shadow-[0_0_10px_rgba(var(--accent-rgb),0.2)]"
           disabled={!hasNext}
           onClick={onNext}
         >

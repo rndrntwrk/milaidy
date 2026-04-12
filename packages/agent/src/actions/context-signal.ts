@@ -5,6 +5,10 @@
  * keywords can use these helpers to avoid bloating the LLM action context on
  * every turn.
  *
+ * A single keyword match (strong or weak) is always enough to activate.
+ * False positives are cheap (extra action in the LLM menu); false negatives
+ * are expensive (action unavailable when needed).
+ *
  * @module actions/context-signal
  */
 
@@ -111,14 +115,14 @@ export function messageText(message: Memory): string {
 
 /**
  * Fast synchronous signal check using only `state` (no DB round-trip).
- * Use when you already have state composed.
+ * Returns true if ANY strong or weak term matches in the current message
+ * or recent conversation.
  */
 export function hasContextSignalSync(
   message: Memory,
   state: State | undefined,
   strongTerms: readonly string[],
   weakTerms: readonly string[] = [],
-  weakThreshold = 2,
   contextLimit = 8,
 ): boolean {
   const texts = [
@@ -135,8 +139,11 @@ export function hasContextSignalSync(
     return true;
   }
 
-  if (weakTerms.length > 0 && weakThreshold > 0) {
-    return collectKeywordTermMatches(texts, weakTerms).size >= weakThreshold;
+  if (
+    weakTerms.length > 0 &&
+    collectKeywordTermMatches(texts, weakTerms).size > 0
+  ) {
+    return true;
   }
 
   return false;
@@ -150,7 +157,6 @@ export function hasContextSignalSyncForKey(
     contextLimit?: number;
     includeAllLocales?: boolean;
     locale?: unknown;
-    weakThreshold?: number;
   },
 ): boolean {
   const locale = resolveContextSignalLocale(null, state, options?.locale);
@@ -162,13 +168,13 @@ export function hasContextSignalSyncForKey(
     state,
     spec.strongTerms,
     spec.weakTerms,
-    options?.weakThreshold ?? spec.weakThreshold,
     options?.contextLimit ?? spec.contextLimit,
   );
 }
 
 /**
  * Full async signal check with DB memory fallback.
+ * Returns true if ANY strong or weak term matches.
  */
 export async function hasContextSignal(
   runtime: Parameters<typeof collectRecentConversationTexts>[0]["runtime"],
@@ -176,7 +182,6 @@ export async function hasContextSignal(
   state: State | undefined,
   strongTerms: readonly string[],
   weakTerms: readonly string[] = [],
-  weakThreshold = 2,
   contextLimit = 8,
 ): Promise<boolean> {
   const stateTexts = recentConversationTextsFromState(state, contextLimit);
@@ -204,8 +209,11 @@ export async function hasContextSignal(
     return true;
   }
 
-  if (weakTerms.length > 0 && weakThreshold > 0) {
-    return collectKeywordTermMatches(texts, weakTerms).size >= weakThreshold;
+  if (
+    weakTerms.length > 0 &&
+    collectKeywordTermMatches(texts, weakTerms).size > 0
+  ) {
+    return true;
   }
 
   return false;
@@ -220,7 +228,6 @@ export async function hasContextSignalForKey(
     contextLimit?: number;
     includeAllLocales?: boolean;
     locale?: unknown;
-    weakThreshold?: number;
   },
 ): Promise<boolean> {
   const locale = resolveContextSignalLocale(
@@ -237,7 +244,6 @@ export async function hasContextSignalForKey(
     state,
     spec.strongTerms,
     spec.weakTerms,
-    options?.weakThreshold ?? spec.weakThreshold,
     options?.contextLimit ?? spec.contextLimit,
   );
 }

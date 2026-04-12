@@ -23,10 +23,10 @@ export interface ConfirmDeleteProps {
 const DEFAULT_TRIGGER =
   "rounded-md border border-border px-2 py-1 text-xs text-muted transition-colors hover:border-destructive hover:text-destructive";
 const DEFAULT_CONFIRM =
-  "rounded-md border border-destructive bg-destructive px-2 py-0.5 text-[10px] font-medium text-destructive-fg transition-opacity hover:opacity-90 disabled:opacity-50";
+  "rounded-md border border-destructive bg-destructive px-2 py-0.5 text-2xs font-medium text-destructive-fg transition-opacity hover:opacity-90 disabled:opacity-50";
 const DEFAULT_CANCEL =
-  "rounded-md border border-border px-2 py-0.5 text-[10px] text-muted transition-colors hover:border-accent hover:text-accent disabled:opacity-50";
-const DEFAULT_PROMPT = "text-[11px] text-destructive";
+  "rounded-md border border-border px-2 py-0.5 text-2xs text-muted transition-colors hover:border-accent hover:text-accent disabled:opacity-50";
+const DEFAULT_PROMPT = "text-xs-tight text-destructive";
 
 export function ConfirmDelete({
   onConfirm,

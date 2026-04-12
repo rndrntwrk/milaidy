@@ -64,7 +64,7 @@ function ShopifySetupCard() {
           <div className="w-full rounded-[14px] border border-border/24 bg-bg px-4 py-4 text-left">
             <div className="space-y-3">
               <div>
-                <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted/70">
+                <div className="text-2xs font-semibold uppercase tracking-[0.12em] text-muted/70">
                   Store domain
                 </div>
                 <div className="mt-1 font-mono text-xs text-txt">
@@ -73,7 +73,7 @@ function ShopifySetupCard() {
               </div>
               <div className="border-t border-border/20" />
               <div>
-                <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted/70">
+                <div className="text-2xs font-semibold uppercase tracking-[0.12em] text-muted/70">
                   Access token
                 </div>
                 <div className="mt-1 font-mono text-xs text-txt">
@@ -89,19 +89,19 @@ function ShopifySetupCard() {
               Apps → Develop apps → API credentials
             </strong>
             . Request{" "}
-            <code className="rounded bg-bg-accent px-1 py-0.5 font-mono text-[10px]">
+            <code className="rounded bg-bg-accent px-1 py-0.5 font-mono text-2xs">
               read_products
             </code>
             ,{" "}
-            <code className="rounded bg-bg-accent px-1 py-0.5 font-mono text-[10px]">
+            <code className="rounded bg-bg-accent px-1 py-0.5 font-mono text-2xs">
               read_orders
             </code>
             ,{" "}
-            <code className="rounded bg-bg-accent px-1 py-0.5 font-mono text-[10px]">
+            <code className="rounded bg-bg-accent px-1 py-0.5 font-mono text-2xs">
               read_inventory
             </code>
             , and{" "}
-            <code className="rounded bg-bg-accent px-1 py-0.5 font-mono text-[10px]">
+            <code className="rounded bg-bg-accent px-1 py-0.5 font-mono text-2xs">
               read_customers
             </code>{" "}
             scopes.
@@ -298,7 +298,7 @@ export function ShopifyAppView({ exitToApps }: OverlayAppContext) {
                     <div className="rounded-[18px] border border-border/24 bg-card/32 px-4 py-4">
                       <div className="flex items-center gap-2">
                         <ShoppingCart className="h-4 w-4 text-muted-strong" />
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted/70">
+                        <div className="text-xs-tight font-semibold uppercase tracking-[0.14em] text-muted/70">
                           Recent orders
                         </div>
                       </div>
@@ -318,7 +318,7 @@ export function ShopifyAppView({ exitToApps }: OverlayAppContext) {
                               <span className="text-xs font-semibold text-txt">
                                 {order.name}
                               </span>
-                              <span className="truncate text-[11px] text-muted">
+                              <span className="truncate text-xs-tight text-muted">
                                 {order.email}
                               </span>
                               <span className="shrink-0 text-xs font-semibold text-txt">
@@ -338,7 +338,7 @@ export function ShopifyAppView({ exitToApps }: OverlayAppContext) {
                           type="button"
                           variant="ghost"
                           size="sm"
-                          className="mt-2 h-7 text-[11px]"
+                          className="mt-2 h-7 text-xs-tight"
                           onClick={() => setActiveTab("orders")}
                         >
                           View all {ordersTotal.toLocaleString()} orders
@@ -350,7 +350,7 @@ export function ShopifyAppView({ exitToApps }: OverlayAppContext) {
                     <div className="rounded-[18px] border border-border/24 bg-card/32 px-4 py-4">
                       <div className="flex items-center gap-2">
                         <Package className="h-4 w-4 text-muted-strong" />
-                        <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted/70">
+                        <div className="text-xs-tight font-semibold uppercase tracking-[0.14em] text-muted/70">
                           Low inventory
                         </div>
                       </div>
@@ -381,7 +381,7 @@ export function ShopifyAppView({ exitToApps }: OverlayAppContext) {
                                       ? "destructive"
                                       : "secondary"
                                   }
-                                  className="shrink-0 rounded-full text-[10px]"
+                                  className="shrink-0 rounded-full text-2xs"
                                 >
                                   {item.available}
                                 </Badge>
@@ -401,7 +401,7 @@ export function ShopifyAppView({ exitToApps }: OverlayAppContext) {
                           type="button"
                           variant="ghost"
                           size="sm"
-                          className="mt-2 h-7 text-[11px]"
+                          className="mt-2 h-7 text-xs-tight"
                           onClick={() => setActiveTab("inventory")}
                         >
                           View inventory

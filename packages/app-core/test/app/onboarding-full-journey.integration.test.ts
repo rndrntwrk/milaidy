@@ -496,8 +496,6 @@ vi.mock(
 
 vi.mock("@miladyai/app-core/src/components/shell/Header", () => ({
   Header: () => React.createElement("div", null, "Header"),
-}));
-vi.mock("@miladyai/app-core/src/components/shell/Header", () => ({
   Nav: () => React.createElement("div", null, "Nav"),
 }));
 vi.mock("@miladyai/app-core/src/components/shell/CommandPalette", () => ({

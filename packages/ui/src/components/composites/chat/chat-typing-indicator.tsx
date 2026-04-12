@@ -52,7 +52,7 @@ export function TypingIndicator({
             className="h-full w-full object-cover"
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center bg-accent-subtle text-[11px] font-bold text-accent">
+          <div className="flex h-full w-full items-center justify-center bg-accent-subtle text-xs-tight font-bold text-accent">
             {agentInitial}
           </div>
         )}

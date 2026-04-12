@@ -32,7 +32,7 @@ export function CopyableAddress({
         variant="outline"
         size="sm"
         onClick={handleCopy}
-        className="h-6 px-1.5 py-0.5 border-border bg-bg text-[10px] font-mono shadow-sm hover:border-accent hover:text-txt"
+        className="h-6 px-1.5 py-0.5 border-border bg-bg text-2xs font-mono shadow-sm hover:border-accent hover:text-txt"
       >
         {copied ? "copied" : "copy"}
       </Button>

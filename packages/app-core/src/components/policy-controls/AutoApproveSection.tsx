@@ -13,11 +13,11 @@ export function AutoApproveSection({
   return (
     <div className="space-y-3">
       <div className="space-y-1">
-        <Label className="text-[11px] text-muted">
+        <Label className="text-xs-tight text-muted">
           Auto-approve below this amount (USD)
         </Label>
         <div className="relative w-40">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[11px] text-muted pointer-events-none">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs-tight text-muted pointer-events-none">
             $
           </span>
           <Input
@@ -35,7 +35,7 @@ export function AutoApproveSection({
       </div>
       <div className="flex items-center gap-2 rounded-lg bg-accent/5 border border-accent/15 px-3 py-1.5">
         <ShieldCheck className="h-3.5 w-3.5 text-accent shrink-0" />
-        <div className="text-[11px] text-muted">
+        <div className="text-xs-tight text-muted">
           Under{" "}
           <span className="font-semibold text-txt">
             ${parseAmount(config.threshold)}

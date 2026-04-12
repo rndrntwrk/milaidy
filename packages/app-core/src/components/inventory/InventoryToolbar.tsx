@@ -178,7 +178,7 @@ export function InventoryToolbar({
           className="flex flex-wrap items-center gap-2"
           data-testid="wallet-address-copy-row"
         >
-          <span className="text-[11px] text-muted w-full sm:w-auto">
+          <span className="text-xs-tight text-muted w-full sm:w-auto">
             {t("wallet.receiveHint")}
           </span>
           <div className="flex flex-wrap items-center gap-2">

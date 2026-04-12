@@ -82,7 +82,7 @@ export function RelationshipsIdentityCluster({
             x={CLUSTER_CENTER}
             y={CLUSTER_CENTER + 8}
             textAnchor="middle"
-            className="fill-black/70 text-[10px] font-medium"
+            className="fill-black/70 text-2xs font-medium"
           >
             {singleIdentity
               ? (singleIdentity.platforms[0] ?? "single identity")
@@ -105,7 +105,7 @@ export function RelationshipsIdentityCluster({
         {singleIdentity ? (
           <div className="w-full">
             <div className="rounded-[18px] border border-border/24 bg-card/35 px-3 py-2.5">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted/70">
+              <div className="text-2xs font-semibold uppercase tracking-[0.14em] text-muted/70">
                 {(singleIdentity.platforms[0] ?? "linked identity").replace(
                   /_/g,
                   " ",
@@ -182,7 +182,7 @@ export function RelationshipsIdentityCluster({
           x={CLUSTER_CENTER}
           y={CLUSTER_CENTER + 14}
           textAnchor="middle"
-          className="fill-black/70 text-[10px] font-medium"
+          className="fill-black/70 text-2xs font-medium"
         >
           {person.memberEntityIds.length} linked identities
         </text>
@@ -238,7 +238,7 @@ export function RelationshipsIdentityCluster({
             key={identity.entityId}
             className="rounded-[18px] border border-border/24 bg-card/35 px-3 py-2.5"
           >
-            <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted/70">
+            <div className="text-2xs font-semibold uppercase tracking-[0.14em] text-muted/70">
               {(identity.platforms[0] ?? "linked identity").replace(/_/g, " ")}
             </div>
             <div className="mt-1 text-sm font-semibold text-txt">

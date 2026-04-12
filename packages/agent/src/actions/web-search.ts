@@ -15,6 +15,7 @@
 import type { Action, HandlerOptions, Memory, State } from "@elizaos/core";
 import { logger } from "@elizaos/core";
 import { hasContextSignalSyncForKey, messageText } from "./context-signal.js";
+import { hasRoleAccess } from "../security/access.js";
 
 // ---------------------------------------------------------------------------
 // Brave Search API types
@@ -142,6 +143,7 @@ export const webSearchAction: Action = {
     "Use when you need real-time or recent information that may not be in your training data.",
 
   validate: async (runtime, message, state) => {
+    if (!(await hasRoleAccess(runtime, message, "USER"))) return false;
     const key = resolveApiKey(runtime);
     if (!key) return false;
     return hasWebSearchContextSignal(message, state);

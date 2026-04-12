@@ -57,7 +57,7 @@ describe("apps routes (real server)", () => {
 
   test("POST /api/apps/stop rejects requests without name or runId", async () => {
     const { status, data } = await req(port, "POST", "/api/apps/stop", {});
-    expect(status).toBe(500);
+    expect(status).toBe(400);
     expect(data).toHaveProperty("error");
     expect((data as { error: string }).error).toContain("required");
   }, 60_000);

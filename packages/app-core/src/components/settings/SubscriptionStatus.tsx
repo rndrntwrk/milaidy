@@ -360,11 +360,11 @@ export function SubscriptionStatus({
                 }}
                 className="bg-card text-xs font-mono"
               />
-              <div className="text-[11px] text-muted mt-2 whitespace-pre-line">
+              <div className="text-xs-tight text-muted mt-2 whitespace-pre-line">
                 {t("onboarding.setupTokenInstructions")}
               </div>
               {anthropicError && (
-                <div className="text-[11px] text-danger mt-2">
+                <div className="text-xs-tight text-danger mt-2">
                   {anthropicError}
                 </div>
               )}
@@ -382,12 +382,12 @@ export function SubscriptionStatus({
                 </Button>
                 <div className="flex items-center gap-2">
                   {setupTokenSaving && (
-                    <span className="text-[11px] text-muted">
+                    <span className="text-xs-tight text-muted">
                       {t("subscriptionstatus.SavingAmpRestart")}
                     </span>
                   )}
                   {setupTokenSuccess && (
-                    <span className="text-[11px] text-ok">
+                    <span className="text-xs-tight text-ok">
                       {t("apikeyconfig.saved")}
                     </span>
                   )}
@@ -408,11 +408,11 @@ export function SubscriptionStatus({
               >
                 {t("onboarding.loginWithAnthropic")}
               </Button>
-              <div className="text-[11px] text-muted mt-1.5">
+              <div className="text-xs-tight text-muted mt-1.5">
                 {t("subscriptionstatus.RequiresClaudePro")}
               </div>
               {anthropicError && (
-                <div className="text-[11px] text-danger mt-2">
+                <div className="text-xs-tight text-danger mt-2">
                   {anthropicError}
                 </div>
               )}
@@ -433,7 +433,7 @@ export function SubscriptionStatus({
                 className="bg-card text-xs"
               />
               {anthropicError && (
-                <div className="text-[11px] text-danger mt-2">
+                <div className="text-xs-tight text-danger mt-2">
                   {anthropicError}
                 </div>
               )}
@@ -523,15 +523,15 @@ export function SubscriptionStatus({
               >
                 {t("onboarding.loginWithOpenAI")}
               </Button>
-              <div className="text-[11px] text-muted mt-1.5">
+              <div className="text-xs-tight text-muted mt-1.5">
                 {t("subscriptionstatus.RequiresChatGPTPlu")}
               </div>
             </div>
           ) : (
             <div>
-              <div className="p-2.5 border border-border bg-bg text-[11px] text-muted leading-relaxed">
+              <div className="p-2.5 border border-border bg-bg text-xs-tight text-muted leading-relaxed">
                 {t("subscriptionstatus.AfterLoggingInYo")}{" "}
-                <code className="text-[10px] px-1 border border-border bg-card">
+                <code className="text-2xs px-1 border border-border bg-card">
                   {t("subscriptionstatus.localhost1455")}
                 </code>
                 {t("subscriptionstatus.CopyTheEntireU")}
@@ -547,7 +547,7 @@ export function SubscriptionStatus({
                 }}
               />
               {openaiError && (
-                <div className="text-[11px] text-danger mt-2">
+                <div className="text-xs-tight text-danger mt-2">
                   {openaiError}
                 </div>
               )}
@@ -580,9 +580,7 @@ export function SubscriptionStatus({
           )}
 
           {openaiError && !openaiOAuthStarted && (
-            <div className="text-[11px] text-danger mt-2">
-              {openaiError}
-            </div>
+            <div className="text-xs-tight text-danger mt-2">{openaiError}</div>
           )}
         </div>
       )}

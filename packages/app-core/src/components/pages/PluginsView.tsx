@@ -346,7 +346,7 @@ function PluginListView({
             <PagePanel.Meta
               compact
               tone={isActive ? "accent" : "default"}
-              className="text-[10px] font-bold tracking-[0.16em]"
+              className="text-2xs font-bold tracking-[0.16em]"
             >
               {tag.count}
             </PagePanel.Meta>
@@ -359,7 +359,7 @@ function PluginListView({
           key={tag.id}
           variant={isActive ? "default" : "outline"}
           size="sm"
-          className={`h-7 px-3 text-[11px] font-bold tracking-wide rounded-lg transition-all ${
+          className={`h-7 px-3 text-xs-tight font-bold tracking-wide rounded-lg transition-all ${
             isActive
               ? "border-accent/55 bg-accent/16 text-txt-strong shadow-sm"
               : "bg-card/40 backdrop-blur-sm border-border/40 text-muted hover:text-txt shadow-sm hover:border-accent/30"
@@ -1173,7 +1173,7 @@ function PluginListView({
     const connectorContent = (
       <div className="w-full">
         {hasPluginToggleInFlight && (
-          <PagePanel.Notice tone="accent" className="mb-4 text-[11px]">
+          <PagePanel.Notice tone="accent" className="mb-4 text-xs-tight">
             {t("pluginsview.ApplyingPluginChan")}
           </PagePanel.Notice>
         )}
@@ -1356,7 +1356,7 @@ function PluginListView({
                       <Button
                         variant="outline"
                         size="sm"
-                        className="h-9 rounded-full px-4 text-[11px] font-bold tracking-[0.12em]"
+                        className="h-9 rounded-full px-4 text-xs-tight font-bold tracking-[0.12em]"
                         onClick={handleResetOrder}
                         title={t("pluginsview.ResetToDefaultSor")}
                       >
@@ -1367,7 +1367,10 @@ function PluginListView({
                 ) : null}
 
                 {hasPluginToggleInFlight && (
-                  <PagePanel.Notice tone="accent" className="mb-4 text-[11px]">
+                  <PagePanel.Notice
+                    tone="accent"
+                    className="mb-4 text-xs-tight"
+                  >
                     {t("pluginsview.ApplyingPluginChan")}
                   </PagePanel.Notice>
                 )}

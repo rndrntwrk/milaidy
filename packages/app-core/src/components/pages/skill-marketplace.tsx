@@ -46,10 +46,10 @@ export function MarketplaceCard({
       </div>
       <div className="flex-1 min-w-0">
         <div className="font-semibold text-sm text-txt">{item.name}</div>
-        <div className="text-[11px] text-muted mt-0.5 line-clamp-2">
+        <div className="text-xs-tight text-muted mt-0.5 line-clamp-2">
           {item.description || t("skillsview.noDescription")}
         </div>
-        <div className="flex items-center gap-2 mt-1.5 text-[10px] text-muted">
+        <div className="flex items-center gap-2 mt-1.5 text-2xs text-muted">
           <span className="font-mono">{sourceLabel}</span>
           {item.score != null && (
             <>
@@ -78,7 +78,7 @@ export function MarketplaceCard({
         <Button
           variant="destructive"
           size="sm"
-          className="h-8 px-4 text-[11px] font-bold tracking-wide shadow-sm shrink-0"
+          className="h-8 px-4 text-xs-tight font-bold tracking-wide shadow-sm shrink-0"
           onClick={() => onUninstall(item.id, item.name)}
           disabled={isUninstalling}
         >
@@ -90,7 +90,7 @@ export function MarketplaceCard({
         <Button
           variant="default"
           size="sm"
-          className="h-8 px-4 text-[11px] font-bold tracking-wide shadow-sm shrink-0"
+          className="h-8 px-4 text-xs-tight font-bold tracking-wide shadow-sm shrink-0"
           onClick={() => onInstall(item)}
           disabled={isInstalling}
         >
@@ -165,12 +165,12 @@ export function InstallModal({
         className="max-h-[80vh] max-w-2xl"
       >
         <AdminDialogHeader>
-          <DialogTitle className="text-[13px] font-extrabold uppercase tracking-[0.14em]">
+          <DialogTitle className="text-sm font-extrabold uppercase tracking-[0.14em]">
             {t("skillsview.installSkillTitle", {
               defaultValue: "Install Skill",
             })}
           </DialogTitle>
-          <DialogDescription className="mt-0.5 text-[11px] text-muted">
+          <DialogDescription className="mt-0.5 text-xs-tight text-muted">
             {t("skillsview.installSkillDescription", {
               defaultValue:
                 "Add skills from the marketplace or a GitHub repository.",
@@ -248,7 +248,7 @@ export function InstallModal({
 
               {skillsMarketplaceResults.length === 0 ? (
                 <div className="text-center py-12">
-                  <div className="text-[12px] uppercase tracking-[0.1em] text-muted">
+                  <div className="text-xs uppercase tracking-[0.1em] text-muted">
                     {t("skillsview.searchAboveToDiscoverSkills", {
                       defaultValue: "Search above to discover skills.",
                     })}
@@ -256,7 +256,7 @@ export function InstallModal({
                 </div>
               ) : (
                 <div className="flex flex-col gap-2">
-                  <div className="text-[11px] text-muted mb-1">
+                  <div className="text-xs-tight text-muted mb-1">
                     {skillsMarketplaceResults.length} {t("skillsview.result")}
                     {skillsMarketplaceResults.length !== 1 ? "s" : ""}
                   </div>
@@ -281,12 +281,12 @@ export function InstallModal({
               role="tabpanel"
               aria-labelledby="skills-install-tab-url"
             >
-              <div className="mb-1 text-[12px] font-semibold text-txt">
+              <div className="mb-1 text-xs font-semibold text-txt">
                 {t("skillsview.githubRepositoryUrl", {
                   defaultValue: "GitHub Repository URL",
                 })}
               </div>
-              <div className="mb-3 text-[11px] text-muted">
+              <div className="mb-3 text-xs-tight text-muted">
                 {t("skillsview.githubRepositoryDesc", {
                   defaultValue:
                     "Paste a full GitHub repository URL to install a skill directly.",

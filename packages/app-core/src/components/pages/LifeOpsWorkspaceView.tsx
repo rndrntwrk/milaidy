@@ -252,7 +252,7 @@ function CalendarEventCard({
           <div className="truncate text-sm font-semibold text-txt">
             {event.title}
           </div>
-          <div className="mt-1 text-[11px] text-muted">
+          <div className="mt-1 text-xs-tight text-muted">
             {formatEventWindow(event, timeZone)}
           </div>
         </div>
@@ -261,7 +261,7 @@ function CalendarEventCard({
         </Badge>
       </div>
       {event.location.trim().length > 0 ? (
-        <div className="mt-2 truncate text-[11px] text-muted">
+        <div className="mt-2 truncate text-xs-tight text-muted">
           {event.location}
         </div>
       ) : null}
@@ -300,11 +300,13 @@ function GmailMessageCard({
           </Badge>
         ) : null}
       </div>
-      <div className="mt-1 truncate text-[11px] text-muted">{message.from}</div>
-      <div className="mt-2 line-clamp-2 text-[11px] leading-5 text-muted">
+      <div className="mt-1 truncate text-xs-tight text-muted">
+        {message.from}
+      </div>
+      <div className="mt-2 line-clamp-2 text-xs-tight leading-5 text-muted">
         {message.snippet}
       </div>
-      <div className="mt-2 text-[10px] uppercase tracking-[0.08em] text-muted/80">
+      <div className="mt-2 text-2xs uppercase tracking-[0.08em] text-muted/80">
         {formatLocalDateTime(message.receivedAt, timeZone)}
       </div>
     </button>
@@ -317,10 +319,10 @@ function DetailBlock({
 }: ComponentPropsWithoutRef<"div"> & { title: string }) {
   return (
     <div className="rounded-2xl border border-border/40 bg-bg/72 p-4">
-      <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">
+      <div className="text-xs-tight font-semibold uppercase tracking-[0.12em] text-muted">
         {title}
       </div>
-      <div className="mt-2 space-y-2 text-[12px] leading-6 text-muted-strong">
+      <div className="mt-2 space-y-2 text-xs leading-6 text-muted-strong">
         {children}
       </div>
     </div>
@@ -737,7 +739,7 @@ export function LifeOpsWorkspaceView() {
               <Button
                 variant="outline"
                 size="sm"
-                className="rounded-full px-4 text-[11px] font-semibold"
+                className="rounded-full px-4 text-xs-tight font-semibold"
                 onClick={() => setState("tab", "settings")}
               >
                 Open settings
@@ -767,7 +769,7 @@ export function LifeOpsWorkspaceView() {
               <Button
                 variant="outline"
                 size="sm"
-                className="rounded-full px-4 text-[11px] font-semibold"
+                className="rounded-full px-4 text-xs-tight font-semibold"
                 onClick={() => void refreshAll()}
                 disabled={ownerConnector.loading || agentConnector.loading}
               >
@@ -777,7 +779,7 @@ export function LifeOpsWorkspaceView() {
               <Button
                 variant="outline"
                 size="sm"
-                className="rounded-full px-4 text-[11px] font-semibold"
+                className="rounded-full px-4 text-xs-tight font-semibold"
                 onClick={() => setState("tab", "settings")}
               >
                 <Settings2 className="mr-2 h-3.5 w-3.5" />
@@ -789,35 +791,35 @@ export function LifeOpsWorkspaceView() {
 
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="rounded-2xl border border-border/40 bg-bg/72 p-4">
-            <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
+            <div className="text-2xs font-semibold uppercase tracking-[0.12em] text-muted">
               Connector
             </div>
             <div className="mt-2 text-sm font-semibold text-txt">
               {dataStatus ? sideLabel(dataStatus.side) : "Disconnected"}
             </div>
-            <div className="mt-1 text-[11px] text-muted">
+            <div className="mt-1 text-xs-tight text-muted">
               {dataStatus ? modeLabel(dataStatus.mode) : "No account selected"}
             </div>
           </div>
           <div className="rounded-2xl border border-border/40 bg-bg/72 p-4">
-            <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
+            <div className="text-2xs font-semibold uppercase tracking-[0.12em] text-muted">
               Calendar
             </div>
             <div className="mt-2 text-sm font-semibold text-txt">
               {calendarSummary} event{calendarSummary === 1 ? "" : "s"}
             </div>
-            <div className="mt-1 text-[11px] text-muted">
+            <div className="mt-1 text-xs-tight text-muted">
               {pane === "week" ? "7 day window" : "Today’s agenda"}
             </div>
           </div>
           <div className="rounded-2xl border border-border/40 bg-bg/72 p-4">
-            <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
+            <div className="text-2xs font-semibold uppercase tracking-[0.12em] text-muted">
               Inbox
             </div>
             <div className="mt-2 text-sm font-semibold text-txt">
               {replyNeededCount} reply needed
             </div>
-            <div className="mt-1 text-[11px] text-muted">
+            <div className="mt-1 text-xs-tight text-muted">
               {mailSummary} mail item{mailSummary === 1 ? "" : "s"} loaded
             </div>
           </div>
@@ -865,7 +867,7 @@ export function LifeOpsWorkspaceView() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="rounded-full px-4 text-[11px] font-semibold"
+                  className="rounded-full px-4 text-xs-tight font-semibold"
                   onClick={() => void loadWorkspace()}
                 >
                   Refresh mail
@@ -880,7 +882,7 @@ export function LifeOpsWorkspaceView() {
                 placeholder="Search subjects, senders, or snippets"
                 aria-label="Search mail"
               />
-              <label className="flex items-center gap-2 text-[12px] text-muted">
+              <label className="flex items-center gap-2 text-xs text-muted">
                 <input
                   type="checkbox"
                   checked={replyNeededOnly}
@@ -944,7 +946,7 @@ export function LifeOpsWorkspaceView() {
 
                 <div className="grid gap-3 sm:grid-cols-3">
                   <label className="space-y-1 sm:col-span-1">
-                    <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+                    <span className="text-xs-tight font-semibold uppercase tracking-[0.08em] text-muted">
                       Tone
                     </span>
                     <select
@@ -962,7 +964,7 @@ export function LifeOpsWorkspaceView() {
                     </select>
                   </label>
                   <label className="space-y-1 sm:col-span-2">
-                    <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+                    <span className="text-xs-tight font-semibold uppercase tracking-[0.08em] text-muted">
                       Intent
                     </span>
                     <Input
@@ -974,7 +976,7 @@ export function LifeOpsWorkspaceView() {
                   </label>
                 </div>
 
-                <label className="flex items-center gap-2 text-[12px] text-muted">
+                <label className="flex items-center gap-2 text-xs text-muted">
                   <input
                     type="checkbox"
                     checked={draftIncludeQuotedOriginal}
@@ -989,7 +991,7 @@ export function LifeOpsWorkspaceView() {
                   <Button
                     variant="default"
                     size="sm"
-                    className="rounded-full px-4 text-[11px] font-semibold"
+                    className="rounded-full px-4 text-xs-tight font-semibold"
                     onClick={() => void handleGenerateDraft()}
                     disabled={
                       !dataCapabilities.has("google.gmail.triage") || drafting
@@ -1000,7 +1002,7 @@ export function LifeOpsWorkspaceView() {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="rounded-full px-4 text-[11px] font-semibold"
+                    className="rounded-full px-4 text-xs-tight font-semibold"
                     onClick={() => void loadWorkspace()}
                   >
                     Refresh triage
@@ -1044,7 +1046,7 @@ export function LifeOpsWorkspaceView() {
                   <Button
                     variant="default"
                     size="sm"
-                    className="rounded-full px-4 text-[11px] font-semibold"
+                    className="rounded-full px-4 text-xs-tight font-semibold"
                     onClick={() => void handleSendDraft()}
                     disabled={
                       !dataCapabilities.has("google.gmail.send") ||
@@ -1077,7 +1079,7 @@ export function LifeOpsWorkspaceView() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="rounded-full px-4 text-[11px] font-semibold"
+                  className="rounded-full px-4 text-xs-tight font-semibold"
                   onClick={() => void loadWorkspace()}
                 >
                   Refresh calendar
@@ -1095,7 +1097,7 @@ export function LifeOpsWorkspaceView() {
               ) : (
                 groupedCalendarEvents.map((group) => (
                   <div key={group.dayKey} className="space-y-2">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">
+                    <div className="text-xs-tight font-semibold uppercase tracking-[0.12em] text-muted">
                       {group.label}
                     </div>
                     <div className="space-y-2">
@@ -1196,7 +1198,7 @@ export function LifeOpsWorkspaceView() {
                 <DetailBlock title="Quick create">
                   <div className="grid gap-3 sm:grid-cols-2">
                     <label className="space-y-1 sm:col-span-2">
-                      <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+                      <span className="text-xs-tight font-semibold uppercase tracking-[0.08em] text-muted">
                         Title
                       </span>
                       <Input
@@ -1207,7 +1209,7 @@ export function LifeOpsWorkspaceView() {
                       />
                     </label>
                     <label className="space-y-1">
-                      <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+                      <span className="text-xs-tight font-semibold uppercase tracking-[0.08em] text-muted">
                         Date
                       </span>
                       <Input
@@ -1218,7 +1220,7 @@ export function LifeOpsWorkspaceView() {
                       />
                     </label>
                     <label className="space-y-1">
-                      <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+                      <span className="text-xs-tight font-semibold uppercase tracking-[0.08em] text-muted">
                         Time
                       </span>
                       <Input
@@ -1229,7 +1231,7 @@ export function LifeOpsWorkspaceView() {
                       />
                     </label>
                     <label className="space-y-1">
-                      <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+                      <span className="text-xs-tight font-semibold uppercase tracking-[0.08em] text-muted">
                         Duration
                       </span>
                       <Input
@@ -1244,7 +1246,7 @@ export function LifeOpsWorkspaceView() {
                       />
                     </label>
                     <label className="space-y-1 sm:col-span-2">
-                      <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+                      <span className="text-xs-tight font-semibold uppercase tracking-[0.08em] text-muted">
                         Location
                       </span>
                       <Input
@@ -1257,7 +1259,7 @@ export function LifeOpsWorkspaceView() {
                       />
                     </label>
                     <label className="space-y-1 sm:col-span-2">
-                      <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+                      <span className="text-xs-tight font-semibold uppercase tracking-[0.08em] text-muted">
                         Description
                       </span>
                       <Textarea
@@ -1275,7 +1277,7 @@ export function LifeOpsWorkspaceView() {
                     <Button
                       variant="default"
                       size="sm"
-                      className="rounded-full px-4 text-[11px] font-semibold"
+                      className="rounded-full px-4 text-xs-tight font-semibold"
                       onClick={() => void handleCreateEvent()}
                       disabled={
                         creatingEvent ||

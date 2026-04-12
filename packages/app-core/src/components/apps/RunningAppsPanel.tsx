@@ -132,7 +132,7 @@ function HealthBadge({ run }: { run: AppRunSummary }) {
 
   return (
     <span
-      className={`inline-flex min-h-6 items-center rounded-full border px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.14em] ${toneClass}`}
+      className={`inline-flex min-h-6 items-center rounded-full border px-2.5 py-1 text-2xs font-medium uppercase tracking-[0.14em] ${toneClass}`}
     >
       {run.health.state}
     </span>
@@ -184,12 +184,12 @@ export function RunningAppsPanel({
   if (runs.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-border/35 bg-card/72 px-6 py-16 text-center">
-        <div className="text-[12px] font-medium text-muted-strong">
+        <div className="text-xs font-medium text-muted-strong">
           {t("appsview.NoRunningApps", {
             defaultValue: "No app runs are active right now.",
           })}
         </div>
-        <div className="mt-2 text-[11px] leading-5 text-muted">
+        <div className="mt-2 text-xs-tight leading-5 text-muted">
           {t("appsview.NoRunningAppsHint", {
             defaultValue:
               "Launch a game from the catalog and it will appear here as a reattachable run.",
@@ -246,18 +246,18 @@ export function RunningAppsPanel({
                     </span>
                     <HealthBadge run={run} />
                   </div>
-                  <div className="mt-1 text-[11px] text-muted-strong">
+                  <div className="mt-1 text-xs-tight text-muted-strong">
                     {run.status}
                   </div>
-                  <div className="mt-2 line-clamp-2 text-[11px] leading-5 text-muted">
+                  <div className="mt-2 line-clamp-2 text-xs-tight leading-5 text-muted">
                     {run.summary || run.health.message || "Run active"}
                   </div>
                   {attentionReasons.length > 0 ? (
                     <div className="mt-2 flex flex-wrap gap-1.5">
-                      <span className="inline-flex items-center rounded-full border border-warn/30 bg-warn/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-warn">
+                      <span className="inline-flex items-center rounded-full border border-warn/30 bg-warn/10 px-2 py-0.5 text-2xs font-medium uppercase tracking-[0.12em] text-warn">
                         Needs attention
                       </span>
-                      <span className="inline-flex max-w-full items-center rounded-full border border-border/30 bg-bg-hover/70 px-2 py-0.5 text-[10px] text-muted-strong">
+                      <span className="inline-flex max-w-full items-center rounded-full border border-border/30 bg-bg-hover/70 px-2 py-0.5 text-2xs text-muted-strong">
                         <span className="truncate">{attentionReasons[0]}</span>
                       </span>
                     </div>
@@ -273,7 +273,7 @@ export function RunningAppsPanel({
         <section className="space-y-4 rounded-[1.75rem] border border-border/35 bg-card/78 p-5 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-accent">
+              <div className="text-xs-tight font-semibold uppercase tracking-[0.18em] text-accent">
                 {t("appsview.RunningNow", { defaultValue: "Running now" })}
               </div>
               <div className="mt-2 text-xl font-semibold tracking-[0.01em] text-txt">
@@ -281,10 +281,10 @@ export function RunningAppsPanel({
               </div>
               <div className="mt-2 flex flex-wrap gap-2">
                 <HealthBadge run={selectedRun} />
-                <span className="inline-flex min-h-6 items-center rounded-full border border-border/35 bg-bg-hover/70 px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.14em] text-muted-strong">
+                <span className="inline-flex min-h-6 items-center rounded-full border border-border/35 bg-bg-hover/70 px-2.5 py-1 text-2xs font-medium uppercase tracking-[0.14em] text-muted-strong">
                   {selectedRun.viewerAttachment}
                 </span>
-                <span className="inline-flex min-h-6 items-center rounded-full border border-border/35 bg-bg-hover/70 px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.14em] text-muted-strong">
+                <span className="inline-flex min-h-6 items-center rounded-full border border-border/35 bg-bg-hover/70 px-2.5 py-1 text-2xs font-medium uppercase tracking-[0.14em] text-muted-strong">
                   {selectedRun.status}
                 </span>
               </div>
@@ -326,12 +326,12 @@ export function RunningAppsPanel({
 
           {runningAttentionCount > 0 ? (
             <div className="rounded-2xl border border-warn/30 bg-warn/10 px-4 py-3">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-warn">
+              <div className="text-xs-tight font-semibold uppercase tracking-[0.16em] text-warn">
                 {t("appsview.RunAttention", {
                   defaultValue: "Attention needed",
                 })}
               </div>
-              <div className="mt-2 text-[13px] leading-6 text-muted-strong">
+              <div className="mt-2 text-sm leading-6 text-muted-strong">
                 {selectedRunAttentionReasons.length > 0
                   ? selectedRunAttentionReasons.join(". ")
                   : "One or more runs need manual recovery."}
@@ -340,7 +340,7 @@ export function RunningAppsPanel({
                 {selectedRunAttentionReasons.map((reason) => (
                   <span
                     key={reason}
-                    className="inline-flex max-w-full items-center rounded-full border border-warn/30 bg-bg/75 px-2.5 py-1 text-[10px] text-warn"
+                    className="inline-flex max-w-full items-center rounded-full border border-warn/30 bg-bg/75 px-2.5 py-1 text-2xs text-warn"
                   >
                     <span className="truncate">{reason}</span>
                   </span>
@@ -351,75 +351,75 @@ export function RunningAppsPanel({
 
           <div className="grid gap-2 md:grid-cols-2">
             <div className="rounded-2xl border border-border/35 bg-bg/55 px-4 py-3">
-              <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted">
+              <div className="text-xs-tight font-medium uppercase tracking-[0.16em] text-muted">
                 Started
               </div>
-              <div className="mt-1 text-[12px] leading-5 text-txt">
+              <div className="mt-1 text-xs leading-5 text-txt">
                 {formatTimestamp(selectedRun.startedAt)}
               </div>
             </div>
             <div className="rounded-2xl border border-border/35 bg-bg/55 px-4 py-3">
-              <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted">
+              <div className="text-xs-tight font-medium uppercase tracking-[0.16em] text-muted">
                 Last heartbeat
               </div>
-              <div className="mt-1 text-[12px] leading-5 text-txt">
+              <div className="mt-1 text-xs leading-5 text-txt">
                 {selectedRun.lastHeartbeatAt
                   ? formatTimestamp(selectedRun.lastHeartbeatAt)
                   : "No heartbeat recorded"}
               </div>
             </div>
             <div className="rounded-2xl border border-border/35 bg-bg/55 px-4 py-3">
-              <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted">
+              <div className="text-xs-tight font-medium uppercase tracking-[0.16em] text-muted">
                 Session status
               </div>
-              <div className="mt-1 text-[12px] leading-5 text-txt">
+              <div className="mt-1 text-xs leading-5 text-txt">
                 {formatNullableValue(selectedRun.session?.status)}
               </div>
             </div>
             <div className="rounded-2xl border border-border/35 bg-bg/55 px-4 py-3">
-              <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted">
+              <div className="text-xs-tight font-medium uppercase tracking-[0.16em] text-muted">
                 Command bridge
               </div>
-              <div className="mt-1 text-[12px] leading-5 text-txt">
+              <div className="mt-1 text-xs leading-5 text-txt">
                 {selectedRun.session?.canSendCommands
                   ? "Available"
                   : "Unavailable"}
               </div>
             </div>
             <div className="rounded-2xl border border-border/35 bg-bg/55 px-4 py-3">
-              <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted">
+              <div className="text-xs-tight font-medium uppercase tracking-[0.16em] text-muted">
                 Controls
               </div>
-              <div className="mt-1 text-[12px] leading-5 text-txt">
+              <div className="mt-1 text-xs leading-5 text-txt">
                 {formatControls(selectedRun.session?.controls)}
               </div>
             </div>
             {selectedRun.session?.agentId ? (
               <div className="rounded-2xl border border-border/35 bg-bg/55 px-4 py-3">
-                <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted">
+                <div className="text-xs-tight font-medium uppercase tracking-[0.16em] text-muted">
                   Agent
                 </div>
-                <div className="mt-1 text-[12px] leading-5 text-txt">
+                <div className="mt-1 text-xs leading-5 text-txt">
                   {selectedRun.session.agentId}
                 </div>
               </div>
             ) : null}
             {selectedRun.session?.characterId ? (
               <div className="rounded-2xl border border-border/35 bg-bg/55 px-4 py-3">
-                <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted">
+                <div className="text-xs-tight font-medium uppercase tracking-[0.16em] text-muted">
                   Character
                 </div>
-                <div className="mt-1 text-[12px] leading-5 text-txt">
+                <div className="mt-1 text-xs leading-5 text-txt">
                   {selectedRun.session.characterId}
                 </div>
               </div>
             ) : null}
             {selectedRun.session?.followEntity ? (
               <div className="rounded-2xl border border-border/35 bg-bg/55 px-4 py-3">
-                <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted">
+                <div className="text-xs-tight font-medium uppercase tracking-[0.16em] text-muted">
                   Follow target
                 </div>
-                <div className="mt-1 text-[12px] leading-5 text-txt">
+                <div className="mt-1 text-xs leading-5 text-txt">
                   {selectedRun.session.followEntity}
                 </div>
               </div>
@@ -427,10 +427,10 @@ export function RunningAppsPanel({
           </div>
 
           <div className="rounded-2xl border border-border/35 bg-bg/55 px-4 py-3">
-            <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted">
+            <div className="text-xs-tight font-medium uppercase tracking-[0.16em] text-muted">
               Summary
             </div>
-            <div className="mt-1 text-[13px] leading-6 text-muted-strong">
+            <div className="mt-1 text-sm leading-6 text-muted-strong">
               {selectedRun.summary ||
                 selectedRun.health.message ||
                 "This run is active and ready to reattach."}
@@ -439,10 +439,10 @@ export function RunningAppsPanel({
 
           {selectedRun.session?.goalLabel ? (
             <div className="rounded-2xl border border-border/35 bg-bg/55 px-4 py-3">
-              <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted">
+              <div className="text-xs-tight font-medium uppercase tracking-[0.16em] text-muted">
                 Current goal
               </div>
-              <div className="mt-1 text-[13px] leading-6 text-muted-strong">
+              <div className="mt-1 text-sm leading-6 text-muted-strong">
                 {selectedRun.session.goalLabel}
               </div>
             </div>
@@ -450,14 +450,14 @@ export function RunningAppsPanel({
 
           {selectedRun.session?.suggestedPrompts?.length ? (
             <div className="rounded-2xl border border-border/35 bg-bg/55 px-4 py-3">
-              <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted">
+              <div className="text-xs-tight font-medium uppercase tracking-[0.16em] text-muted">
                 Suggested prompts
               </div>
               <div className="mt-2 flex flex-wrap gap-2">
                 {selectedRun.session.suggestedPrompts.map((prompt) => (
                   <span
                     key={prompt}
-                    className="inline-flex max-w-full items-center rounded-full border border-border/30 bg-bg/75 px-2 py-0.5 text-[10px] text-muted-strong"
+                    className="inline-flex max-w-full items-center rounded-full border border-border/30 bg-bg/75 px-2 py-0.5 text-2xs text-muted-strong"
                   >
                     <span className="truncate">{prompt}</span>
                   </span>

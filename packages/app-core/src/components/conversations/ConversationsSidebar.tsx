@@ -441,7 +441,7 @@ export function ConversationsSidebar({
                 }
               >
                 <div className="grid gap-1">
-                  <span className="px-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">
+                  <span className="px-1 text-2xs font-semibold uppercase tracking-[0.16em] text-muted">
                     {t("conversations.filterScope", {
                       defaultValue: "Source",
                     })}
@@ -473,7 +473,7 @@ export function ConversationsSidebar({
 
                 {sidebarModel.showWorldFilter ? (
                   <div className="grid gap-1">
-                    <span className="px-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">
+                    <span className="px-1 text-2xs font-semibold uppercase tracking-[0.16em] text-muted">
                       {t("conversations.filterWorld", {
                         defaultValue: "Server / world",
                       })}

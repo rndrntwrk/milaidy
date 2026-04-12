@@ -121,7 +121,7 @@ export function StreamView({ inModal }: { inModal?: boolean } = {}) {
       <div className="flex flex-1 min-h-0 items-center justify-center">
         {!streamAvailable ? (
           <div className="max-w-lg rounded-3xl border border-border/60 bg-card/94 p-6 text-center shadow-xl backdrop-blur-xl">
-            <p className="text-[11px] uppercase tracking-[0.24em] text-muted">
+            <p className="text-xs-tight uppercase tracking-[0.24em] text-muted">
               {t("streamview.StreamingUnavailabl")}
             </p>
             <h2 className="mt-2 text-xl font-semibold text-txt">

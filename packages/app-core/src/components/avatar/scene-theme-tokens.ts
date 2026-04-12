@@ -7,9 +7,15 @@
  */
 
 function css(prop: string, fallback: string): string {
-  if (typeof document === "undefined") return fallback;
+  const readComputedStyle = globalThis.getComputedStyle;
+  if (
+    typeof document === "undefined" ||
+    typeof readComputedStyle !== "function"
+  ) {
+    return fallback;
+  }
   return (
-    getComputedStyle(document.documentElement).getPropertyValue(prop).trim() ||
+    readComputedStyle(document.documentElement).getPropertyValue(prop).trim() ||
     fallback
   );
 }

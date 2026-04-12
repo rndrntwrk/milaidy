@@ -6601,6 +6601,7 @@ export type { captureEarlyLogs };
 export async function startApiServer(opts?: {
   port?: number;
   runtime?: AgentRuntime;
+  skipDeferredStartupWork?: boolean;
   /** Initial state when starting without a runtime (e.g. embedded startup flow). */
   initialAgentState?: "not_started" | "starting" | "stopped" | "error";
   /**
@@ -7987,7 +7988,9 @@ export async function startApiServer(opts?: {
       logger.info(
         `[eliza-api] Listening on http://${displayHost}:${actualPort}`,
       );
-      startDeferredStartupWork();
+      if (!opts?.skipDeferredStartupWork) {
+        startDeferredStartupWork();
+      }
       resolve({
         port: actualPort,
         close: async () =>

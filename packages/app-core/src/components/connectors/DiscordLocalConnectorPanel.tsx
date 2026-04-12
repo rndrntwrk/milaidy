@@ -248,7 +248,7 @@ export function DiscordLocalConnectorPanel() {
                 })}
           </div>
           {connectedUser ? (
-            <code className="rounded-md border border-border/40 bg-bg/60 px-2 py-1 text-[11px] text-muted-strong">
+            <code className="rounded-md border border-border/40 bg-bg/60 px-2 py-1 text-xs-tight text-muted-strong">
               {connectedUser}
             </code>
           ) : null}
@@ -260,7 +260,7 @@ export function DiscordLocalConnectorPanel() {
               defaultValue: "Discord IPC socket",
             })}
             :{" "}
-            <code className="text-[11px] text-muted-strong">
+            <code className="text-xs-tight text-muted-strong">
               {status.ipcPath}
             </code>
           </div>
@@ -276,7 +276,7 @@ export function DiscordLocalConnectorPanel() {
           <Button
             variant="outline"
             size="sm"
-            className="h-8 rounded-xl px-4 text-[11px] font-semibold"
+            className="h-8 rounded-xl px-4 text-xs-tight font-semibold"
             onClick={() => {
               void refreshStatus();
             }}
@@ -289,7 +289,7 @@ export function DiscordLocalConnectorPanel() {
           <Button
             variant="default"
             size="sm"
-            className="h-8 rounded-xl px-4 text-[11px] font-semibold"
+            className="h-8 rounded-xl px-4 text-xs-tight font-semibold"
             onClick={() => {
               void handleAuthorize();
             }}
@@ -307,7 +307,7 @@ export function DiscordLocalConnectorPanel() {
             <Button
               variant="outline"
               size="sm"
-              className="h-8 rounded-xl px-4 text-[11px] font-semibold"
+              className="h-8 rounded-xl px-4 text-xs-tight font-semibold"
               onClick={() => {
                 void handleDisconnect();
               }}
@@ -420,7 +420,7 @@ export function DiscordLocalConnectorPanel() {
                   <Button
                     variant="default"
                     size="sm"
-                    className="h-8 rounded-xl px-4 text-[11px] font-semibold"
+                    className="h-8 rounded-xl px-4 text-xs-tight font-semibold"
                     onClick={() => {
                       void handleSaveSubscriptions();
                     }}

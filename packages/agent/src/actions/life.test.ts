@@ -2617,6 +2617,36 @@ describeLLM("lifeAction", () => {
     expect(result).toMatchObject({ success: true });
   });
 
+  it("derives the snooze target from the intent when the planner omits it", async () => {
+    mockGetOverview.mockResolvedValue({
+      owner: {
+        occurrences: [
+          {
+            id: "o4",
+            title: "Call dentist",
+            state: "visible",
+            domain: "user_lifeops",
+          },
+        ],
+      },
+      agentOps: { occurrences: [] },
+    });
+    mockSnoozeOccurrence.mockResolvedValue({
+      id: "o4",
+      title: "Call dentist",
+      state: "snoozed",
+    });
+    const result = await invoke("snooze call dentist for 30 minutes", {
+      action: "snooze",
+      details: { minutes: 30 },
+    });
+    expect(mockSnoozeOccurrence).toHaveBeenCalledWith("o4", {
+      preset: undefined,
+      minutes: 30,
+    });
+    expect(result).toMatchObject({ success: true });
+  });
+
   // ── review_goal ───────────────────────────────────
 
   it("reviews a goal", async () => {

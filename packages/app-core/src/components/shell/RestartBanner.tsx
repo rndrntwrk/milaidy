@@ -37,7 +37,7 @@ export function RestartBanner() {
 
   return (
     <div
-      className={`fixed bottom-4 right-4 z-[${Z_SYSTEM_BANNER}] flex flex-col gap-2 rounded-lg px-4 py-3 text-[13px] font-medium shadow-lg`}
+      className={`fixed bottom-4 right-4 z-[${Z_SYSTEM_BANNER}] flex flex-col gap-2 rounded-lg px-4 py-3 text-sm font-medium shadow-lg`}
       style={{
         background: "color-mix(in srgb, var(--bg) 95%, var(--accent) 5%)",
         border: "1px solid color-mix(in srgb, var(--accent) 25%, transparent)",
@@ -63,7 +63,7 @@ export function RestartBanner() {
           size="sm"
           onClick={handleRestart}
           disabled={restarting}
-          className="rounded px-3 py-1 text-[12px] font-semibold border-transparent"
+          className="rounded px-3 py-1 text-xs font-semibold border-transparent"
           style={{
             background: "var(--accent)",
             color: "var(--accent-foreground)",

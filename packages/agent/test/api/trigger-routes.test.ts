@@ -33,10 +33,10 @@ describe("trigger routes (real server)", () => {
     expect(data).toHaveProperty("error");
   }, 60_000);
 
-  test("GET /api/triggers/health returns health snapshot even without runtime", async () => {
+  test("GET /api/triggers/health returns 503 when runtime is not running", async () => {
     const { status, data } = await req(port, "GET", "/api/triggers/health");
-    expect(status).toBe(200);
-    expect(data).toHaveProperty("healthy");
+    expect(status).toBe(503);
+    expect(data).toHaveProperty("error");
   }, 60_000);
 
   test("GET /api/heartbeats aliases to triggers endpoint", async () => {

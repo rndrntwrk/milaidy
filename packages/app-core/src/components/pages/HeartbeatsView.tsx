@@ -376,7 +376,7 @@ function HeartbeatsLayout() {
 
   const selectedTrigger =
     selectedTriggerId != null
-      ? triggers.find((trigger) => trigger.id === selectedTriggerId) ?? null
+      ? (triggers.find((trigger) => trigger.id === selectedTriggerId) ?? null)
       : null;
   const selectedRuns = selectedTrigger
     ? (triggerRunsById[selectedTrigger.id] ?? [])
@@ -400,8 +400,8 @@ function HeartbeatsLayout() {
   const mobileSidebarLabel =
     editorOpen || editingId
       ? modalTitle
-      : selectedTrigger?.displayName ??
-        t("nav.heartbeats", { defaultValue: "Heartbeats" });
+      : (selectedTrigger?.displayName ??
+        t("nav.heartbeats", { defaultValue: "Heartbeats" }));
 
   const openCreateHeartbeat = () => {
     openCreateEditor();
@@ -517,7 +517,7 @@ function HeartbeatsLayout() {
                         withDot
                       />
                     </div>
-                    <div className="mt-0.5 flex items-center justify-between gap-2 text-[11px] text-muted">
+                    <div className="mt-0.5 flex items-center justify-between gap-2 text-xs-tight text-muted">
                       <span className="truncate">
                         {scheduleLabel(trigger, t)}
                       </span>
@@ -548,10 +548,7 @@ function HeartbeatsLayout() {
             {[...userTemplates, ...BUILT_IN_TEMPLATES].map((template) => {
               const isUserTemplate = !template.id.startsWith("__builtin_");
               const templateName = getTemplateName(template, t);
-              const templateInstructions = getTemplateInstructions(
-                template,
-                t,
-              );
+              const templateInstructions = getTemplateInstructions(template, t);
               return (
                 <div key={template.id} className="group relative mb-1.5">
                   <SidebarContent.Item
@@ -580,7 +577,7 @@ function HeartbeatsLayout() {
                     <div className="text-xs font-medium text-txt">
                       {templateName}
                     </div>
-                    <div className="mt-0.5 text-[10px] text-muted/60">
+                    <div className="mt-0.5 text-2xs text-muted/60">
                       {t("heartbeatsview.EveryIntervalUnit", {
                         defaultValue: "Every {{interval}} {{unit}}",
                         interval: template.interval,
@@ -735,7 +732,7 @@ function HeartbeatsLayout() {
 
             <dl className="mb-8 grid gap-4 text-sm sm:grid-cols-2 xl:grid-cols-4">
               <PagePanel.SummaryCard className="px-4 py-4">
-                <dt className="text-[11px] font-semibold uppercase tracking-wider text-muted">
+                <dt className="text-xs-tight font-semibold uppercase tracking-wider text-muted">
                   {t("heartbeatsview.schedule")}
                 </dt>
                 <dd className="mt-1 font-medium text-txt">
@@ -743,7 +740,7 @@ function HeartbeatsLayout() {
                 </dd>
               </PagePanel.SummaryCard>
               <PagePanel.SummaryCard className="px-4 py-4">
-                <dt className="text-[11px] font-semibold uppercase tracking-wider text-muted">
+                <dt className="text-xs-tight font-semibold uppercase tracking-wider text-muted">
                   {t("triggersview.LastRun")}
                 </dt>
                 <dd className="mt-1 font-medium text-txt">
@@ -753,7 +750,7 @@ function HeartbeatsLayout() {
                 </dd>
               </PagePanel.SummaryCard>
               <PagePanel.SummaryCard className="px-4 py-4">
-                <dt className="text-[11px] font-semibold uppercase tracking-wider text-muted">
+                <dt className="text-xs-tight font-semibold uppercase tracking-wider text-muted">
                   {t("heartbeatsview.nextRun")}
                 </dt>
                 <dd className="mt-1 font-medium text-txt">
@@ -764,7 +761,7 @@ function HeartbeatsLayout() {
               </PagePanel.SummaryCard>
               {hasLoadedSelectedRuns && selectedRunCount > 0 ? (
                 <PagePanel.SummaryCard className="px-4 py-4">
-                  <dt className="text-[11px] font-semibold uppercase tracking-wider text-muted">
+                  <dt className="text-xs-tight font-semibold uppercase tracking-wider text-muted">
                     {t("heartbeatsview.runStats")}
                   </dt>
                   <dd className="mt-1 flex items-center gap-2 text-sm font-medium">
@@ -786,13 +783,13 @@ function HeartbeatsLayout() {
 
             <PagePanel variant="padded" className="space-y-4">
               <div className="flex items-center justify-between gap-3">
-                <div className="text-[12px] font-semibold uppercase tracking-wider text-muted">
+                <div className="text-xs font-semibold uppercase tracking-wider text-muted">
                   {t("triggersview.RunHistory")}
                 </div>
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-7 px-3 text-[11px]"
+                  className="h-7 px-3 text-xs-tight"
                   onClick={() => void loadTriggerRuns(selectedTrigger.id)}
                 >
                   {t("common.refresh")}
@@ -820,11 +817,11 @@ function HeartbeatsLayout() {
                           label={localizedExecutionStatus(run.status, t)}
                           variant={toneForLastStatus(run.status)}
                         />
-                        <span className="font-mono text-[11px] text-muted/70">
+                        <span className="font-mono text-xs-tight text-muted/70">
                           {formatDateTime(run.startedAt)}
                         </span>
                       </div>
-                      <div className="text-[11px] text-muted/80">
+                      <div className="text-xs-tight text-muted/80">
                         {formatDurationMs(run.latencyMs)} &middot;{" "}
                         <span className="rounded bg-bg/40 px-1 py-0.5 font-mono text-muted/60">
                           {run.source}

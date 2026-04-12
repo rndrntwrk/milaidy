@@ -546,7 +546,7 @@ export function FineTuningView({
         </div>
         <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-3 xl:grid-cols-6">
           <div className={FINE_TUNING_STATUS_CARD_CLASS}>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted/70">
+            <div className="text-xs-tight font-semibold uppercase tracking-[0.14em] text-muted/70">
               {t("finetuningview.Runtime")}
             </div>
             <div className="mt-2 text-base font-semibold text-txt">
@@ -556,7 +556,7 @@ export function FineTuningView({
             </div>
           </div>
           <div className={FINE_TUNING_STATUS_CARD_CLASS}>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted/70">
+            <div className="text-xs-tight font-semibold uppercase tracking-[0.14em] text-muted/70">
               {t("finetuningview.RunningJobs")}
             </div>
             <div className="mt-2 text-base font-semibold text-txt">
@@ -564,7 +564,7 @@ export function FineTuningView({
             </div>
           </div>
           <div className={FINE_TUNING_STATUS_CARD_CLASS}>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted/70">
+            <div className="text-xs-tight font-semibold uppercase tracking-[0.14em] text-muted/70">
               {t("finetuningview.QueuedJobs")}
             </div>
             <div className="mt-2 text-base font-semibold text-txt">
@@ -572,7 +572,7 @@ export function FineTuningView({
             </div>
           </div>
           <div className={FINE_TUNING_STATUS_CARD_CLASS}>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted/70">
+            <div className="text-xs-tight font-semibold uppercase tracking-[0.14em] text-muted/70">
               {t("finetuningview.Datasets")}
             </div>
             <div className="mt-2 text-base font-semibold text-txt">
@@ -580,7 +580,7 @@ export function FineTuningView({
             </div>
           </div>
           <div className={FINE_TUNING_STATUS_CARD_CLASS}>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted/70">
+            <div className="text-xs-tight font-semibold uppercase tracking-[0.14em] text-muted/70">
               {t("finetuningview.Models")}
             </div>
             <div className="mt-2 text-base font-semibold text-txt">
@@ -588,7 +588,7 @@ export function FineTuningView({
             </div>
           </div>
           <div className={FINE_TUNING_STATUS_CARD_CLASS}>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted/70">
+            <div className="text-xs-tight font-semibold uppercase tracking-[0.14em] text-muted/70">
               {t("finetuningview.FailedJobs")}
             </div>
             <div className="mt-2 text-base font-semibold text-txt">

@@ -275,10 +275,10 @@ function VectorGraph({
     const withEmbeddings = memories.filter(hasEmbedding);
     return (
       <div className="text-center py-16">
-        <div className="text-[var(--muted)] text-sm mb-2">
+        <div className="text-muted text-sm mb-2">
           {t("vectorbrowserview.NotEnoughEmbedding")}
         </div>
-        <div className="text-[var(--muted)] text-xs">
+        <div className="text-muted text-xs">
           {t("vectorbrowserview.NeedAtLeast2Memo")} {withEmbeddings.length}.
         </div>
       </div>
@@ -287,13 +287,13 @@ function VectorGraph({
 
   return (
     <div ref={containerRef} className="w-full">
-      <div className="text-[11px] text-[var(--muted)] mb-2">
+      <div className="text-[11px] text-muted mb-2">
         {graph.withEmbeddings.length}{" "}
         {t("vectorbrowserview.vectorsProjectedTo")}
       </div>
       <canvas
         ref={canvasRef}
-        className="w-full border border-[var(--border)] cursor-crosshair"
+        className="w-full border border-border cursor-crosshair"
         style={{ height: 500 }}
         onMouseMove={handleMouseMove}
         onMouseLeave={() => setHoveredIdx(null)}
@@ -734,10 +734,10 @@ export function VectorGraph3D({
   if (withEmbeddings.length < 2) {
     return (
       <div className="text-center py-16">
-        <div className="text-[var(--muted)] text-sm mb-2">
+        <div className="text-muted text-sm mb-2">
           {t("vectorbrowserview.NotEnoughEmbedding1")}
         </div>
-        <div className="text-[var(--muted)] text-xs">
+        <div className="text-muted text-xs">
           {t("vectorbrowserview.NeedAtLeast2Memo")} {withEmbeddings.length}.
         </div>
       </div>
@@ -746,13 +746,13 @@ export function VectorGraph3D({
 
   if (rendererUnavailable) {
     return (
-      <div className="border border-[var(--border)] bg-[var(--card)] px-4 py-10 text-center">
-        <div className="text-sm text-[var(--txt)]">
+      <div className="border border-border bg-card px-4 py-10 text-center">
+        <div className="text-sm text-txt">
           {t("vectorbrowserview.RendererUnavailable", {
             defaultValue: "3D view unavailable in this environment.",
           })}
         </div>
-        <div className="mt-2 text-xs text-[var(--muted)]">
+        <div className="mt-2 text-xs text-muted">
           {t("vectorbrowserview.RendererUnavailableDescription", {
             defaultValue:
               "The current runtime could not initialize a renderer.",
@@ -766,12 +766,12 @@ export function VectorGraph3D({
 
   return (
     <div className="relative">
-      <div className="text-[11px] text-[var(--muted)] mb-2">
+      <div className="text-[11px] text-muted mb-2">
         {withEmbeddings.length} {t("vectorbrowserview.vectorsProjectedTo1")}
       </div>
       <div
         ref={containerRef}
-        className="w-full border border-[var(--border)] cursor-grab active:cursor-grabbing"
+        className="w-full border border-border cursor-grab active:cursor-grabbing"
         style={{ height: 550 }}
       />
       {/* Tooltip */}
@@ -786,13 +786,13 @@ export function VectorGraph3D({
         >
           <div className="font-medium mb-1 truncate">
             {hoveredMem.type && hoveredMem.type !== "undefined" && (
-              <span className="px-1.5 py-0.5 bg-[var(--accent)]/30 text-[var(--accent)] mr-2 text-[10px]">
+              <span className="px-1.5 py-0.5 bg-accent/30 text-accent mr-2 text-[10px]">
                 {hoveredMem.type}
               </span>
             )}
             {hoveredMem.id.slice(0, 12)}...
           </div>
-          <div className="text-[var(--muted)] line-clamp-3">
+          <div className="text-muted line-clamp-3">
             {hoveredMem.content.slice(0, 150)}
             {hoveredMem.content.length > 150 ? "..." : ""}
           </div>
@@ -811,7 +811,7 @@ export function VectorGraph3D({
                     backgroundColor: `#${color.toString(16).padStart(6, "0")}`,
                   }}
                 />
-                <span className="text-[var(--muted)]">{type}</span>
+                <span className="text-muted">{type}</span>
               </div>
             ),
         )}

@@ -166,7 +166,7 @@ function DesktopPermissionsView() {
                   "System Permissions",
                 )}
               </div>
-              <div className="max-w-2xl text-[11px] leading-5 text-muted">
+              <div className="max-w-2xl text-xs-tight leading-5 text-muted">
                 {platform === "darwin"
                   ? translateWithFallback(
                       t,
@@ -190,7 +190,7 @@ function DesktopPermissionsView() {
               <Button
                 variant="default"
                 size="sm"
-                className="min-h-10 rounded-xl px-3 text-[11px] font-semibold"
+                className="min-h-10 rounded-xl px-3 text-xs-tight font-semibold"
                 onClick={async () => {
                   for (const def of applicablePermissions) {
                     if (def.id === "shell") continue;
@@ -214,7 +214,7 @@ function DesktopPermissionsView() {
                 variant="outline"
                 size="sm"
                 data-testid="permissions-refresh-button"
-                className="min-h-10 rounded-xl px-3 text-[11px] font-semibold"
+                className="min-h-10 rounded-xl px-3 text-xs-tight font-semibold"
                 onClick={handleRefresh}
                 disabled={refreshing}
               >
@@ -251,7 +251,7 @@ function DesktopPermissionsView() {
             })}
           </div>
         </div>
-        <div className="mt-2 text-[11px] leading-5 text-muted">
+        <div className="mt-2 text-xs-tight leading-5 text-muted">
           {platform === "darwin"
             ? translateWithFallback(
                 t,
@@ -287,7 +287,7 @@ function DesktopPermissionsView() {
             <div className="font-bold text-sm text-txt">
               {t("appsview.Capabilities")}
             </div>
-            <div className="mt-1 text-[11px] leading-5 text-muted">
+            <div className="mt-1 text-xs-tight leading-5 text-muted">
               {translateWithFallback(
                 t,
                 "permissionssection.CapabilitiesDescription",
@@ -315,7 +315,7 @@ function DesktopPermissionsView() {
             })}
           </div>
         </div>
-        <div className="mt-2 text-[11px] leading-5 text-muted">
+        <div className="mt-2 text-xs-tight leading-5 text-muted">
           {translateWithFallback(
             t,
             "permissionssection.CapabilitiesRequire",
@@ -530,7 +530,7 @@ function DesktopOnboardingPermissions({
   if (!permissions) {
     return (
       <div className="text-center py-8">
-        <div className="text-[var(--muted)] text-sm mb-4">
+        <div className="text-muted text-sm mb-4">
           {translateWithFallback(
             t,
             "permissionssection.UnableToCheckPerm",
@@ -559,7 +559,7 @@ function DesktopOnboardingPermissions({
             "System Permissions",
           )}
         </div>
-        <div className="text-[var(--muted)] text-sm">
+        <div className="text-muted text-sm">
           {platform === "win32"
             ? translateWithFallback(
                 t,
@@ -603,7 +603,7 @@ function DesktopOnboardingPermissions({
                   <div className="font-semibold text-sm text-txt">
                     {def.name}
                   </div>
-                  <div className="text-[11px] leading-5 text-muted">
+                  <div className="text-xs-tight leading-5 text-muted">
                     {def.description}
                   </div>
                 </div>
@@ -633,7 +633,7 @@ function DesktopOnboardingPermissions({
       </div>
 
       <div className="mt-[18px] border-t border-border/50 pt-3.5">
-        <div className="mb-4 space-y-1 text-[11px] leading-5 text-muted">
+        <div className="mb-4 space-y-1 text-xs-tight leading-5 text-muted">
           <p>{footerStatusMessage}</p>
           {!canProceed ? (
             <p>
@@ -654,7 +654,7 @@ function DesktopOnboardingPermissions({
             <Button
               variant="ghost"
               size="sm"
-              className="justify-start p-0 text-[10px] uppercase tracking-[0.15em] text-muted-strong hover:text-txt"
+              className="justify-start p-0 text-2xs uppercase tracking-[0.15em] text-muted-strong hover:text-txt"
               onClick={() => onBack()}
               type="button"
             >
@@ -669,7 +669,7 @@ function DesktopOnboardingPermissions({
                 type="button"
                 variant="outline"
                 size="sm"
-                className="min-h-11 rounded-xl px-4 py-2 text-[11px] font-semibold"
+                className="min-h-11 rounded-xl px-4 py-2 text-xs-tight font-semibold"
                 disabled={grantingPermissions}
                 onClick={handleSkipForNow}
               >
@@ -681,7 +681,7 @@ function DesktopOnboardingPermissions({
               variant="default"
               size="sm"
               data-testid="permissions-onboarding-continue"
-              className="min-h-11 min-w-[8.5rem] rounded-xl px-4 py-2 text-[11px] font-semibold leading-tight text-txt-strong hover:text-txt-strong"
+              className="min-h-11 min-w-[8.5rem] rounded-xl px-4 py-2 text-xs-tight font-semibold leading-tight text-txt-strong hover:text-txt-strong"
               disabled={grantingPermissions}
               onClick={canProceed ? () => onContinue() : handleGrantPermissions}
             >

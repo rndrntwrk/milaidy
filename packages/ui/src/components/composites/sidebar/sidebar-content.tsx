@@ -13,7 +13,7 @@ export function SidebarSectionLabel({
     <div
       data-sidebar-section-label
       className={cn(
-        "text-[11px] font-semibold uppercase tracking-[0.16em] text-txt-strong drop-shadow-[0_1px_0_rgba(255,255,255,0.14)] dark:drop-shadow-[0_1px_12px_rgba(0,0,0,0.34)]",
+        "text-xs-tight font-semibold uppercase tracking-[0.16em] text-txt-strong drop-shadow-[0_1px_0_rgba(255,255,255,0.14)] dark:drop-shadow-[0_1px_12px_rgba(0,0,0,0.34)]",
         className,
       )}
       {...props}
@@ -39,7 +39,7 @@ export function SidebarSectionHeader({
       {...props}
     >
       {children}
-      {meta ? <div className="text-[10px] text-muted/50">{meta}</div> : null}
+      {meta ? <div className="text-2xs text-muted/50">{meta}</div> : null}
     </div>
   );
 }
@@ -280,7 +280,7 @@ export function SidebarItemDescription({
     <span
       data-sidebar-item-description
       className={cn(
-        "mt-1 block whitespace-normal break-words [overflow-wrap:anywhere] text-[11px] leading-relaxed text-muted/85",
+        "mt-1 block whitespace-normal break-words [overflow-wrap:anywhere] text-xs-tight leading-relaxed text-muted/85",
         className,
       )}
       {...props}
@@ -363,7 +363,7 @@ export function SidebarItemAction({
       type="button"
       data-sidebar-item-action
       className={cn(
-        "absolute right-1.5 top-1.5 rounded bg-bg/80 px-1.5 py-0.5 text-[10px] text-muted opacity-0 transition-opacity group-hover:opacity-100 hover:text-danger",
+        "absolute right-1.5 top-1.5 rounded bg-bg/80 px-1.5 py-0.5 text-2xs text-muted opacity-0 transition-opacity group-hover:opacity-100 hover:text-danger",
         className,
       )}
       {...props}

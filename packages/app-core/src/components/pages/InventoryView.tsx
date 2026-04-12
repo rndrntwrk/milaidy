@@ -89,7 +89,7 @@ function SettingsCopyableAddress({
   return (
     <div className="flex items-center justify-between gap-3 rounded-lg border border-border/50 bg-bg/50 px-3 py-2.5">
       <div className="min-w-0 flex-1">
-        <div className="text-[11px] font-medium text-muted">{label}</div>
+        <div className="text-xs-tight font-medium text-muted">{label}</div>
         <div className="mt-0.5 truncate font-mono text-xs text-txt">
           {address}
         </div>
@@ -136,7 +136,7 @@ function StewardWalletInfoPopup({
               defaultValue: "Wallet managed by Steward",
             })}
           </div>
-          <div className="mt-0.5 text-[11px] text-muted">
+          <div className="mt-0.5 text-xs-tight text-muted">
             {stewardStatus.vaultHealth === "ok"
               ? t("settings.stewardVaultHealthy", {
                   defaultValue: "Vault connected and healthy",
@@ -221,7 +221,7 @@ function StewardWalletInfoPopup({
         </Button>
         {showAdvanced && (
           <div className="mt-3 rounded-lg border border-warn/20 bg-warn/5 p-3">
-            <div className="mb-2 flex items-center gap-2 text-[11px] text-warn">
+            <div className="mb-2 flex items-center gap-2 text-xs-tight text-warn">
               <AlertTriangle className="h-3.5 w-3.5" />
               {t("settings.advancedKeyWarning", {
                 defaultValue: "Not needed with Steward. Use with caution.",
@@ -932,7 +932,7 @@ export function InventoryView() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-8 rounded-full border-danger/35 px-3 text-[11px] text-danger shadow-none hover:bg-danger/10"
+                  className="h-8 rounded-full border-danger/35 px-3 text-xs-tight text-danger shadow-none hover:bg-danger/10"
                   onClick={() => void loadBalances()}
                   title={inlineError.retryTitle ?? t("common.retry")}
                 >
@@ -951,7 +951,7 @@ export function InventoryView() {
                 <Button
                   variant="link"
                   size="sm"
-                  className="h-auto p-0 text-[11px] font-medium text-accent"
+                  className="h-auto p-0 text-xs-tight font-medium text-accent"
                   onClick={goToRpcSettings}
                 >
                   {headerWarning.actionLabel}

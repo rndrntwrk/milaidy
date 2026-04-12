@@ -53,7 +53,7 @@ export function SplashServerChooser({
                   <p className="truncate text-sm font-semibold text-black">
                     {gateway.name}
                   </p>
-                  <p className="truncate text-[11px] text-black/70">
+                  <p className="truncate text-xs-tight text-black/70">
                     {gateway.host}
                   </p>
                 </div>

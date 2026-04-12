@@ -43,7 +43,7 @@ export function TrajectoryCodeBlock({
                 variant="outline"
                 size="sm"
                 type="button"
-                className="h-8 rounded-full px-3 text-[11px]"
+                className="h-8 rounded-full px-3 text-xs-tight"
                 onClick={() => setExpanded((current) => !current)}
               >
                 {expanded ? collapseLabel : expandLabel}
@@ -53,7 +53,7 @@ export function TrajectoryCodeBlock({
               variant="outline"
               size="sm"
               type="button"
-              className="h-8 rounded-full px-3 text-[11px]"
+              className="h-8 rounded-full px-3 text-xs-tight"
               onClick={() => onCopy(content)}
               title={copyToClipboardLabel}
             >

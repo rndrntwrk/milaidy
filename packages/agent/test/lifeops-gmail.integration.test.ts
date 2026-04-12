@@ -14,7 +14,8 @@ import {
   vi,
 } from "vitest";
 import { req } from "../../../test/helpers/http";
-import { saveEnv } from "../../../test/helpers/test-utils";
+import { saveEnv, withTimeout } from "../../../test/helpers/test-utils";
+import { resetRateLimits } from "../src/api/rate-limiter";
 import { startApiServer } from "../src/api/server";
 import { resolveOAuthDir } from "../src/config/paths";
 import { LifeOpsRepository } from "../src/lifeops/repository";
@@ -152,6 +153,7 @@ describe("life-ops gmail triage", () => {
   });
 
   beforeEach(() => {
+    resetRateLimits();
     fetchMock.mockReset();
     process.env.MILADY_GOOGLE_OAUTH_DESKTOP_CLIENT_ID = "desktop-client-id";
     delete process.env.ELIZA_GOOGLE_OAUTH_DESKTOP_CLIENT_ID;
@@ -164,6 +166,7 @@ describe("life-ops gmail triage", () => {
   });
 
   afterEach(async () => {
+    resetRateLimits();
     await fs.rm(path.join(stateDir, "credentials"), {
       recursive: true,
       force: true,
@@ -1078,7 +1081,8 @@ describe("life-ops gmail triage", () => {
           "base64url",
         ).toString("utf-8");
         expect(raw).toContain("Subject: Re:");
-        expect(raw).toContain("Best,");
+        expect(raw).toContain("Thanks. I will follow up shortly.");
+        expect(raw).toContain("Agent Example");
         sendCount += 1;
         return new Response(JSON.stringify({ id: `sent-${sendCount}` }), {
           status: 200,
@@ -1088,16 +1092,15 @@ describe("life-ops gmail triage", () => {
       throw new Error(`Unexpected fetch: ${url}`);
     });
 
-    const batchDraftRes = await req(
-      port,
-      "POST",
-      "/api/lifeops/gmail/batch-reply-drafts",
-      {
+    const batchDraftRes = await withTimeout(
+      req(port, "POST", "/api/lifeops/gmail/batch-reply-drafts", {
         replyNeededOnly: true,
         tone: "brief",
         intent: "Thanks. I will follow up shortly.",
         includeQuotedOriginal: false,
-      },
+      }),
+      15_000,
+      "gmail batch reply drafts",
     );
     expect(batchDraftRes.status).toBe(201);
     expect(batchDraftRes.data.batch.summary).toMatchObject({
@@ -1107,11 +1110,8 @@ describe("life-ops gmail triage", () => {
     });
     expect(batchDraftRes.data.batch.drafts).toHaveLength(2);
 
-    const sendRes = await req(
-      port,
-      "POST",
-      "/api/lifeops/gmail/batch-reply-send",
-      {
+    const sendRes = await withTimeout(
+      req(port, "POST", "/api/lifeops/gmail/batch-reply-send", {
         confirmSend: true,
         items: (
           batchDraftRes.data.batch.drafts as Array<Record<string, unknown>>
@@ -1122,7 +1122,9 @@ describe("life-ops gmail triage", () => {
           to: draft.to,
           cc: draft.cc,
         })),
-      },
+      }),
+      15_000,
+      "gmail batch reply send",
     );
     expect(sendRes.status).toBe(200);
     expect(sendRes.data).toEqual({ ok: true, sentCount: 2 });

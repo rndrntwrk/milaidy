@@ -569,7 +569,7 @@ function expectShellForTab(text: string, tab: Tab): void {
       case "inventory":
         return "InventoryView Ready";
       case "knowledge":
-        return "KnowledgeView Ready";
+        return "CharacterView Ready";
       case "connectors":
         return "SettingsView Ready";
       case "triggers":

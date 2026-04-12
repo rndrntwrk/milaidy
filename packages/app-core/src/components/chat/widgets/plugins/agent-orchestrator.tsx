@@ -62,6 +62,11 @@ const EVENT_TYPE_COLORS: Record<string, string> = {
   nudge: "bg-accent/20 text-accent",
 };
 
+const fallbackTranslate = (
+  key: string,
+  vars?: { defaultValue?: string },
+): string => vars?.defaultValue ?? key;
+
 function TaskCard({ session }: { session: CodingAgentSession }) {
   const activity = session.lastActivity ?? deriveSessionActivity(session);
 
@@ -78,12 +83,12 @@ function TaskCard({ session }: { session: CodingAgentSession }) {
         </span>
       </div>
       {session.originalTask ? (
-        <p className="mb-1 line-clamp-2 text-[11px] text-muted">
+        <p className="mb-1 line-clamp-2 text-xs-tight text-muted">
           {session.originalTask}
         </p>
       ) : null}
       <p
-        className={`truncate text-[11px] ${
+        className={`truncate text-xs-tight ${
           session.status === "blocked" ? "text-warn" : "text-muted"
         }`}
       >
@@ -216,7 +221,7 @@ function TaskThreadCard({
             <div className="truncate text-xs font-semibold text-txt">
               {thread.title}
             </div>
-            <div className="mt-0.5 truncate text-[11px] text-muted">
+            <div className="mt-0.5 truncate text-xs-tight text-muted">
               {thread.originalRequest}
             </div>
           </div>
@@ -229,14 +234,14 @@ function TaskThreadCard({
             {formatThreadStatus(thread.status)}
           </Badge>
         </div>
-        <div className="flex items-center gap-3 text-[10px] text-muted">
+        <div className="flex items-center gap-3 text-2xs text-muted">
           <span>{thread.kind}</span>
           <span>{thread.sessionCount} sessions</span>
           <span>{thread.decisionCount} decisions</span>
           <span>{formatIsoTime(thread.updatedAt)}</span>
         </div>
         {thread.summary ? (
-          <div className="line-clamp-2 text-[11px] text-txt">
+          <div className="line-clamp-2 text-xs-tight text-txt">
             {thread.summary}
           </div>
         ) : null}
@@ -245,7 +250,7 @@ function TaskThreadCard({
       {selected ? (
         <div className="border-t border-border/40 px-3 pb-3 pt-2.5">
           {!detail && detailLoading ? (
-            <div className="text-[11px] text-muted">Loading...</div>
+            <div className="text-xs-tight text-muted">Loading...</div>
           ) : detail ? (
             <ThreadDetailContent
               detail={detail}
@@ -269,7 +274,7 @@ function DetailList({
 }) {
   return (
     <div className="rounded-lg border border-border/50 bg-bg-accent/20 p-2.5">
-      <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
+      <div className="mb-2 text-2xs font-semibold uppercase tracking-[0.08em] text-muted">
         {title}
       </div>
       {children}
@@ -291,7 +296,7 @@ function ProviderRoutingPanel({ status }: { status: CodingAgentStatus }) {
   return (
     <div className="rounded-lg border border-border/50 bg-bg-accent/20 p-3">
       <div className="mb-2 flex flex-wrap items-center gap-2">
-        <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
+        <div className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted">
           Provider Routing
         </div>
         {status.preferredAgentType ? (
@@ -314,7 +319,7 @@ function ProviderRoutingPanel({ status }: { status: CodingAgentStatus }) {
         </Badge>
       </div>
       {status.preferredAgentReason ? (
-        <div className="mb-2 text-[11px] text-muted">
+        <div className="mb-2 text-xs-tight text-muted">
           {status.preferredAgentReason}
         </div>
       ) : null}
@@ -323,7 +328,7 @@ function ProviderRoutingPanel({ status }: { status: CodingAgentStatus }) {
           {frameworks.slice(0, 5).map((framework) => (
             <div
               key={framework.id}
-              className="rounded border border-border/40 bg-bg-hover/30 px-2 py-1.5 text-[11px] text-txt"
+              className="rounded border border-border/40 bg-bg-hover/30 px-2 py-1.5 text-xs-tight text-txt"
             >
               <div className="flex items-center justify-between gap-2">
                 <div className="font-medium">{framework.label}</div>
@@ -375,7 +380,7 @@ function ThreadDetailContent({
   return (
     <div className="flex flex-col gap-2">
       {/* Stats row — detail-level counts */}
-      <div className="flex flex-wrap gap-3 text-[10px] text-muted">
+      <div className="flex flex-wrap gap-3 text-2xs text-muted">
         <span>{(detail.sessions ?? []).length} sessions</span>
         <span>{(detail.artifacts ?? []).length} artifacts</span>
         <span>{(detail.transcripts ?? []).length} transcript entries</span>
@@ -383,14 +388,14 @@ function ThreadDetailContent({
 
       {detail.acceptanceCriteria && detail.acceptanceCriteria.length > 0 ? (
         <div>
-          <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
+          <div className="mb-1 text-2xs font-semibold uppercase tracking-[0.08em] text-muted">
             Acceptance
           </div>
           <div className="space-y-0.5">
             {detail.acceptanceCriteria.map((criterion) => (
               <div
                 key={`${detail.id}-criterion-${criterion}`}
-                className="text-[11px] text-txt"
+                className="text-xs-tight text-txt"
               >
                 {criterion}
               </div>
@@ -401,14 +406,14 @@ function ThreadDetailContent({
 
       <DetailList title="Sessions">
         {(detail.sessions ?? []).length === 0 ? (
-          <div className="text-[11px] text-muted">No sessions recorded.</div>
+          <div className="text-xs-tight text-muted">No sessions recorded.</div>
         ) : (
           <div className="space-y-1.5">
             {(detail.sessions ?? [])
               .slice(-4)
               .reverse()
               .map((session) => (
-                <div key={session.id} className="text-[11px] text-txt">
+                <div key={session.id} className="text-xs-tight text-txt">
                   <div className="font-medium">{session.label}</div>
                   <div className="text-muted">
                     {session.framework}
@@ -445,7 +450,7 @@ function ThreadDetailContent({
             {pendingDecisions.map((decision) => (
               <div
                 key={`${decision.threadId}-${decision.sessionId}`}
-                className="text-[11px] text-txt"
+                className="text-xs-tight text-txt"
               >
                 <div className="font-medium">{decision.promptText}</div>
                 <div className="line-clamp-2 text-muted">
@@ -464,7 +469,7 @@ function ThreadDetailContent({
         <DetailList title="Artifacts">
           <div className="space-y-1.5">
             {latestArtifacts.map((artifact) => (
-              <div key={artifact.id} className="text-[11px] text-txt">
+              <div key={artifact.id} className="text-xs-tight text-txt">
                 <div className="font-medium">{artifact.title}</div>
                 <div className="break-all text-muted">
                   {artifact.artifactType} ·{" "}
@@ -480,7 +485,7 @@ function ThreadDetailContent({
         <DetailList title="Coordinator Decisions">
           <div className="space-y-1.5">
             {latestDecisions.map((decision) => (
-              <div key={decision.id} className="text-[11px] text-txt">
+              <div key={decision.id} className="text-xs-tight text-txt">
                 <div className="font-medium">
                   {decision.decision} · {relativeTime(decision.timestamp)}
                 </div>
@@ -497,7 +502,7 @@ function ThreadDetailContent({
         <DetailList title="Events">
           <div className="space-y-1.5">
             {latestEvents.map((event) => (
-              <div key={event.id} className="text-[11px] text-txt">
+              <div key={event.id} className="text-xs-tight text-txt">
                 <div className="font-medium">
                   {event.eventType.replace(/_/g, " ")} ·{" "}
                   {relativeTime(event.timestamp)}
@@ -520,11 +525,11 @@ function ThreadDetailContent({
                   key={entry.id}
                   className="rounded border border-border/40 bg-bg-hover/40 p-2"
                 >
-                  <div className="mb-1 text-[10px] uppercase tracking-[0.08em] text-muted">
+                  <div className="mb-1 text-2xs uppercase tracking-[0.08em] text-muted">
                     {entry.direction === "stdin" ? "prompt" : "system"} ·{" "}
                     {relativeTime(entry.timestamp)}
                   </div>
-                  <pre className="whitespace-pre-wrap break-words font-mono text-[10px] text-txt">
+                  <pre className="whitespace-pre-wrap break-words font-mono text-2xs text-txt">
                     {text}
                   </pre>
                 </div>
@@ -541,7 +546,7 @@ function ThreadDetailContent({
             size="sm"
             disabled={busy}
             onClick={onReopen}
-            className="h-7 px-2 text-[11px]"
+            className="h-7 px-2 text-xs-tight"
           >
             Reopen
           </Button>
@@ -551,7 +556,7 @@ function ThreadDetailContent({
             size="sm"
             disabled={busy}
             onClick={onDelete}
-            className="h-7 px-2 text-[11px] text-danger hover:bg-danger/10"
+            className="h-7 px-2 text-xs-tight text-danger hover:bg-danger/10"
           >
             Delete
           </Button>
@@ -578,7 +583,7 @@ function ActivityItemsContent({ events }: { events: ActivityEvent[] }) {
           key={event.id}
           className="flex items-start gap-2 rounded px-2 py-1.5 transition-colors hover:bg-bg-hover/50"
         >
-          <span className="mt-0.5 w-12 shrink-0 whitespace-nowrap text-[10px] text-muted">
+          <span className="mt-0.5 w-12 shrink-0 whitespace-nowrap text-2xs text-muted">
             {relativeTime(event.timestamp)}
           </span>
           <Badge
@@ -589,7 +594,7 @@ function ActivityItemsContent({ events }: { events: ActivityEvent[] }) {
           >
             {event.eventType.replace(/_/g, " ")}
           </Badge>
-          <span className="min-w-0 flex-1 break-words text-[11px] text-txt">
+          <span className="min-w-0 flex-1 break-words text-xs-tight text-txt">
             {event.summary}
           </span>
         </div>
@@ -623,7 +628,7 @@ function AppRunCard({
           <div className="truncate text-xs font-semibold text-txt">
             {run.displayName}
           </div>
-          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-muted">
+          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-2xs text-muted">
             <Badge variant="secondary" className={`px-1.5 py-0 ${healthTone}`}>
               {run.health.state}
             </Badge>
@@ -633,7 +638,7 @@ function AppRunCard({
           </div>
         </div>
       </div>
-      <div className="mt-2 line-clamp-2 text-[11px] text-muted">
+      <div className="mt-2 line-clamp-2 text-xs-tight text-muted">
         {run.summary || run.health.message || "Run active."}
       </div>
       {attentionReasons.length > 0 ? (
@@ -644,7 +649,7 @@ function AppRunCard({
           >
             Needs attention
           </Badge>
-          <span className="inline-flex max-w-full items-center rounded-full border border-border/30 bg-bg-hover/70 px-2 py-0.5 text-[10px] text-muted-strong">
+          <span className="inline-flex max-w-full items-center rounded-full border border-border/30 bg-bg-hover/70 px-2 py-0.5 text-2xs text-muted-strong">
             <span className="truncate">{attentionReasons[0]}</span>
           </span>
         </div>
@@ -654,7 +659,10 @@ function AppRunCard({
 }
 
 function AppRunsWidget(_props: ChatSidebarWidgetProps) {
-  const { appRuns, setState, t } = useApp();
+  const app = useApp() as ReturnType<typeof useApp> | undefined;
+  const appRuns = app?.appRuns;
+  const setState = app?.setState ?? (() => undefined);
+  const t = app?.t ?? fallbackTranslate;
   const [runs, setRuns] = useState<AppRunSummary[]>(() =>
     Array.isArray(appRuns) ? appRuns : [],
   );
@@ -733,7 +741,7 @@ function AppRunsWidget(_props: ChatSidebarWidgetProps) {
             <Button
               variant="ghost"
               size="sm"
-              className="h-6 px-2 text-[10px]"
+              className="h-6 px-2 text-2xs"
               onClick={() => {
                 setState("appRuns", runs);
                 setState("activeGameRunId", currentRun.runId);
@@ -747,7 +755,7 @@ function AppRunsWidget(_props: ChatSidebarWidgetProps) {
           <Button
             variant="ghost"
             size="sm"
-            className="h-6 px-2 text-[10px]"
+            className="h-6 px-2 text-2xs"
             onClick={() => {
               setState("appRuns", runs);
               setState("tab", "apps");
@@ -761,13 +769,13 @@ function AppRunsWidget(_props: ChatSidebarWidgetProps) {
       testId="chat-widget-app-runs"
     >
       {error ? (
-        <div className="mb-2 rounded-md border border-danger/30 bg-danger/10 px-2 py-1.5 text-[11px] text-danger">
+        <div className="mb-2 rounded-md border border-danger/30 bg-danger/10 px-2 py-1.5 text-xs-tight text-danger">
           {error}
         </div>
       ) : null}
       {runs.length === 0 ? (
         loading ? (
-          <div className="text-[11px] text-muted">Loading app runs...</div>
+          <div className="text-xs-tight text-muted">Loading app runs...</div>
         ) : (
           <EmptyWidgetState
             icon={<Activity className="h-8 w-8" />}
@@ -776,7 +784,7 @@ function AppRunsWidget(_props: ChatSidebarWidgetProps) {
         )
       ) : (
         <div className="flex flex-col gap-2.5">
-          <div className="flex flex-wrap gap-2 text-[10px] text-muted">
+          <div className="flex flex-wrap gap-2 text-2xs text-muted">
             <Badge variant="secondary" className="bg-bg-hover/70 text-muted">
               Currently playing: {attachedCount}
             </Badge>
@@ -796,7 +804,7 @@ function AppRunsWidget(_props: ChatSidebarWidgetProps) {
           </div>
           {attentionRuns.length > 0 ? (
             <div className="rounded-lg border border-warn/30 bg-warn/10 p-2.5">
-              <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-warn">
+              <div className="mb-2 text-2xs font-semibold uppercase tracking-[0.08em] text-warn">
                 Recovery queue
               </div>
               <div className="flex flex-col gap-2">
@@ -829,7 +837,8 @@ function AppRunsWidget(_props: ChatSidebarWidgetProps) {
 }
 
 function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
-  const { t } = useApp();
+  const app = useApp() as ReturnType<typeof useApp> | undefined;
+  const t = app?.t ?? fallbackTranslate;
   const { ptySessions } = usePtySessions();
   const activeSessions = useMemo(
     () =>
@@ -1027,7 +1036,7 @@ function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
           <Button
             variant={showArchived ? "secondary" : "ghost"}
             size="sm"
-            className="h-6 px-2 text-[10px]"
+            className="h-6 px-2 text-2xs"
             onClick={() => setShowArchived((value) => !value)}
           >
             {showArchived ? "Show Open" : "Show Archive"}
@@ -1041,16 +1050,16 @@ function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           placeholder="Search tasks"
-          className="h-8 w-full rounded-md border border-border/50 bg-bg px-2 text-[11px] text-txt outline-none transition-colors placeholder:text-muted focus:border-accent/50"
+          className="h-8 w-full rounded-md border border-border/50 bg-bg px-2 text-xs-tight text-txt outline-none transition-colors placeholder:text-muted focus:border-accent/50"
         />
       </div>
       {loadError ? (
-        <div className="mb-2 rounded-md border border-danger/30 bg-danger/10 px-2 py-1.5 text-[11px] text-danger">
+        <div className="mb-2 rounded-md border border-danger/30 bg-danger/10 px-2 py-1.5 text-xs-tight text-danger">
           Failed to load task threads: {loadError}
         </div>
       ) : null}
       {mutationError ? (
-        <div className="mb-2 rounded-md border border-danger/30 bg-danger/10 px-2 py-1.5 text-[11px] text-danger">
+        <div className="mb-2 rounded-md border border-danger/30 bg-danger/10 px-2 py-1.5 text-xs-tight text-danger">
           {mutationError}
         </div>
       ) : null}
@@ -1058,7 +1067,7 @@ function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
         <div className="flex flex-col gap-2.5">
           {status ? <ProviderRoutingPanel status={status} /> : null}
           {detailError ? (
-            <div className="rounded-md border border-danger/30 bg-danger/10 px-2 py-1.5 text-[11px] text-danger">
+            <div className="rounded-md border border-danger/30 bg-danger/10 px-2 py-1.5 text-xs-tight text-danger">
               Failed to load task detail: {detailError}
             </div>
           ) : null}
@@ -1081,7 +1090,7 @@ function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
           </div>
         </div>
       ) : loading ? (
-        <div className="text-[11px] text-muted">Loading tasks...</div>
+        <div className="text-xs-tight text-muted">Loading tasks...</div>
       ) : (
         <div className="flex flex-col gap-2.5">
           {status ? <ProviderRoutingPanel status={status} /> : null}
@@ -1096,7 +1105,8 @@ function OrchestratorActivityWidget({
   events,
   clearEvents,
 }: ChatSidebarWidgetProps) {
-  const { t } = useApp();
+  const app = useApp() as ReturnType<typeof useApp> | undefined;
+  const t = app?.t ?? fallbackTranslate;
 
   return (
     <WidgetSection

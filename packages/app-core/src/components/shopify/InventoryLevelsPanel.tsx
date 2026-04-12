@@ -40,7 +40,7 @@ function InventoryRow({ item, onAdjust }: InventoryRowProps) {
         <div className="truncate text-sm font-semibold text-txt">
           {item.productTitle}
         </div>
-        <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted">
+        <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs-tight text-muted">
           {item.variantTitle ? <span>{item.variantTitle}</span> : null}
           {item.sku ? (
             <>
@@ -50,7 +50,7 @@ function InventoryRow({ item, onAdjust }: InventoryRowProps) {
           ) : null}
         </div>
         {adjustError ? (
-          <div className="mt-1 text-[11px] text-danger">{adjustError}</div>
+          <div className="mt-1 text-xs-tight text-danger">{adjustError}</div>
         ) : null}
       </div>
 
@@ -59,7 +59,7 @@ function InventoryRow({ item, onAdjust }: InventoryRowProps) {
         <div className="text-sm font-semibold text-txt">
           {localAvailable.toLocaleString()}
         </div>
-        <div className="mt-0.5 text-[10px] text-muted">available</div>
+        <div className="mt-0.5 text-2xs text-muted">available</div>
       </div>
 
       {/* Incoming */}
@@ -67,7 +67,7 @@ function InventoryRow({ item, onAdjust }: InventoryRowProps) {
         <div className="text-sm font-semibold text-txt">
           {item.incoming.toLocaleString()}
         </div>
-        <div className="mt-0.5 text-[10px] text-muted">incoming</div>
+        <div className="mt-0.5 text-2xs text-muted">incoming</div>
       </div>
 
       {/* Adjust controls */}

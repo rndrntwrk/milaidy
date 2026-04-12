@@ -210,7 +210,7 @@ export function StartupFailureView({
           ) : null}
           {error.detail ? (
             <section className="space-y-2 rounded-2xl border border-border/50 bg-bg/35 p-4 shadow-sm">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+              <div className="text-xs-tight font-semibold uppercase tracking-[0.08em] text-muted">
                 {t("startupfailureview.Details", {
                   defaultValue: "Details",
                 })}

@@ -10,6 +10,7 @@
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { AgentRuntime, UUID } from "@elizaos/core";
+import { ChannelType } from "@elizaos/core";
 import { createRealTestRuntime } from "../../../../test/helpers/real-runtime";
 
 import { restartAction } from "./restart";
@@ -20,9 +21,30 @@ import { terminalAction } from "./terminal";
 
 let runtime: AgentRuntime;
 let cleanup: () => Promise<void>;
+/** Room ID in a world where entities default to GUEST (no roles assigned). */
+let gatedRoomId: UUID;
 
 beforeAll(async () => {
   ({ runtime, cleanup } = await createRealTestRuntime());
+
+  // Create a world + room so role checks can resolve a world context.
+  // Entities not listed in the world's roles metadata default to GUEST.
+  const worldId = "a0000000-0000-4000-8000-000000000001" as UUID;
+  await runtime.ensureWorldExists({
+    id: worldId,
+    name: "GatingTestWorld",
+    agentId: runtime.agentId,
+    serverId: worldId,
+    metadata: { ownership: { ownerId: runtime.agentId } },
+  });
+  gatedRoomId = "a0000000-0000-4000-8000-000000000002" as UUID;
+  await runtime.ensureRoomExists({
+    id: gatedRoomId,
+    name: "gating-test",
+    source: "test",
+    type: ChannelType.GROUP,
+    worldId,
+  });
 }, 180_000);
 
 afterAll(async () => {
@@ -126,7 +148,7 @@ describe("action role gating", () => {
 
     const valid = await skillCommandAction.validate?.(
       runtime,
-      { entityId: nonAdminEntityId, content: { text: "/github open an issue" } } as never,
+      { entityId: nonAdminEntityId, roomId: gatedRoomId, content: { text: "/github open an issue" } } as never,
     );
     expect(valid).toBe(false);
   });

@@ -354,7 +354,7 @@ export function AppearanceSettingsSection() {
                       )}
                     </div>
                     {isActive && (
-                      <span className="shrink-0 rounded bg-primary px-2 py-0.5 text-[10px] font-bold text-primary-foreground">
+                      <span className="shrink-0 rounded bg-primary px-2 py-0.5 text-2xs font-bold text-primary-foreground">
                         {t("settings.appearance.active", {
                           defaultValue: "ACTIVE",
                         })}

@@ -113,12 +113,12 @@ export function MusicPlayerSettingsPanel() {
         <div className="text-xs font-semibold text-txt">
           {t("musicplayersettings.Title")}
         </div>
-        <div className="text-[10px] text-muted mt-1 leading-snug">
+        <div className="text-2xs text-muted mt-1 leading-snug">
           {t("musicplayersettings.Description")}
         </div>
       </div>
 
-      <div className="text-[10px] text-muted space-y-1">
+      <div className="text-2xs text-muted space-y-1">
         <div>
           <span className="font-semibold text-txt">
             {t("musicplayersettings.NowPlaying")}:{" "}
@@ -140,7 +140,7 @@ export function MusicPlayerSettingsPanel() {
           </div>
         )}
       </div>
-      <p className="text-[10px] text-muted leading-snug">
+      <p className="text-2xs text-muted leading-snug">
         {t("musicplayersettings.AudioElementHint")}
       </p>
       {/* biome-ignore lint/a11y/useMediaCaption: raw agent audio stream has no caption track */}
@@ -152,7 +152,7 @@ export function MusicPlayerSettingsPanel() {
         aria-label={t("musicplayersettings.Title")}
       />
       {audioError && (
-        <p className="text-[10px] text-warn break-words font-mono">
+        <p className="text-2xs text-warn break-words font-mono">
           Audio error: {audioError}
         </p>
       )}

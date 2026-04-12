@@ -102,17 +102,42 @@ export function getLiveEntityMetadataFromMessage(
 export function matchEntityToConnectorAdminWhitelist(
   entityMetadata: Record<string, unknown> | undefined,
   whitelist: ConnectorAdminWhitelist,
-): boolean {
-  if (!entityMetadata) return false;
+): { connector: string; matchedField: string; matchedValue: string } | null {
+  if (!entityMetadata) return null;
+  const normalizeUsername = (value: string): string =>
+    value.trim().replace(/^@+/, "").toLowerCase();
   for (const [connector, ids] of Object.entries(whitelist)) {
     if (!ids.length) continue;
     const connectorData = entityMetadata[connector];
     if (!connectorData || typeof connectorData !== "object") continue;
     const data = connectorData as Record<string, unknown>;
-    const userId = String(data.id ?? data.userId ?? data.user_id ?? "");
-    if (userId && ids.includes(userId)) return true;
+    const userId = String(data.id ?? data.userId ?? data.user_id ?? "").trim();
+    if (userId && ids.includes(userId)) {
+      return {
+        connector,
+        matchedField: "userId",
+        matchedValue: userId,
+      };
+    }
+
+    const username = String(
+      data.username ?? data.userName ?? data.user_name ?? data.handle ?? "",
+    ).trim();
+    if (!username) continue;
+
+    const normalizedUsername = normalizeUsername(username);
+    const matchedWhitelistEntry = ids.find(
+      (entry) => normalizeUsername(entry) === normalizedUsername,
+    );
+    if (matchedWhitelistEntry) {
+      return {
+        connector,
+        matchedField: "username",
+        matchedValue: matchedWhitelistEntry,
+      };
+    }
   }
-  return false;
+  return null;
 }
 
 // ── World resolution ───────────────────────────────────────────────────────

@@ -64,7 +64,7 @@ export function BlueBubblesStatusPanel() {
         <Button
           variant="outline"
           size="sm"
-          className="h-8 rounded-xl px-4 text-[11px] font-semibold"
+          className="h-8 rounded-xl px-4 text-xs-tight font-semibold"
           onClick={() => {
             void refresh();
           }}
@@ -98,7 +98,7 @@ export function BlueBubblesStatusPanel() {
                 defaultValue: "Webhook target",
               })}
             </div>
-            <code className="block break-all rounded-lg border border-border/40 bg-bg/70 px-3 py-2 text-[11px] text-muted-strong">
+            <code className="block break-all rounded-lg border border-border/40 bg-bg/70 px-3 py-2 text-xs-tight text-muted-strong">
               {webhookTarget}
             </code>
           </div>

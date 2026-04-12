@@ -49,12 +49,12 @@ export function PolicyToggle({
               {title}
             </div>
             {enabled && summary && !expanded && (
-              <div className="text-[11px] text-muted mt-0.5 truncate">
+              <div className="text-xs-tight text-muted mt-0.5 truncate">
                 {summary}
               </div>
             )}
             {!enabled && (
-              <div className="text-[11px] text-muted/60 mt-0.5">Off</div>
+              <div className="text-xs-tight text-muted/60 mt-0.5">Off</div>
             )}
           </div>
         </button>

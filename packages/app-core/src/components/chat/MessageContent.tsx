@@ -671,9 +671,9 @@ function InlinePluginConfig({ pluginId: rawPluginId }: { pluginId: string }) {
       <div className="flex items-center justify-between px-3 py-2 bg-bg-hover border-b border-border">
         <div className="flex items-center gap-2 text-xs font-bold text-txt">
           {plugin.icon ? (
-            <span className="text-[13px]">{plugin.icon}</span>
+            <span className="text-sm">{plugin.icon}</span>
           ) : (
-            <span className="text-[13px] opacity-60">{"\u2699\uFE0F"}</span>
+            <span className="text-sm opacity-60">{"\u2699\uFE0F"}</span>
           )}
           <span>
             {t("messagecontent.PluginConfigurationTitle", {
@@ -684,12 +684,12 @@ function InlinePluginConfig({ pluginId: rawPluginId }: { pluginId: string }) {
         </div>
         <div className="flex items-center gap-2">
           {plugin.configured && (
-            <span className="text-[10px] text-ok font-medium">
+            <span className="text-2xs text-ok font-medium">
               {t("config-field.Configured")}
             </span>
           )}
           <span
-            className={`text-[10px] font-medium ${isEnabled ? "text-ok" : "text-muted"}`}
+            className={`text-2xs font-medium ${isEnabled ? "text-ok" : "text-muted"}`}
           >
             {isEnabled
               ? t("messagecontent.Active", {
@@ -852,13 +852,13 @@ function UiSpecBlock({ spec, raw }: { spec: UiSpec; raw: string }) {
   return (
     <div className="my-2 border border-border overflow-hidden">
       <div className="flex items-center justify-between px-3 py-1.5 bg-bg-hover border-b border-border">
-        <span className="text-[10px] font-semibold text-muted uppercase tracking-wider">
+        <span className="text-2xs font-semibold text-muted uppercase tracking-wider">
           {t("messagecontent.InteractiveUI")}
         </span>
         <Button
           variant="link"
           size="sm"
-          className="h-auto p-0 text-[10px] text-txt hover:underline decoration-accent/50 underline-offset-2"
+          className="h-auto p-0 text-2xs text-txt hover:underline decoration-accent/50 underline-offset-2"
           onClick={() => setShowRaw((v) => !v)}
         >
           {showRaw
@@ -872,7 +872,7 @@ function UiSpecBlock({ spec, raw }: { spec: UiSpec; raw: string }) {
       </div>
       {showRaw && (
         <div className="px-3 py-2 bg-card border-b border-border overflow-x-auto">
-          <pre className="text-[10px] text-muted font-mono whitespace-pre-wrap break-words m-0">
+          <pre className="text-2xs text-muted font-mono whitespace-pre-wrap break-words m-0">
             {raw}
           </pre>
         </div>

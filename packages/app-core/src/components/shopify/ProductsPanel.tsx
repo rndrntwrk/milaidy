@@ -41,7 +41,7 @@ function ProductStatusBadge({ status }: { status: ShopifyProduct["status"] }) {
 
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] ${styles[status]}`}
+      className={`inline-flex items-center rounded-full px-2 py-0.5 text-2xs font-semibold uppercase tracking-[0.1em] ${styles[status]}`}
     >
       {labels[status]}
     </span>
@@ -227,7 +227,7 @@ function ProductRow({ product }: { product: ShopifyProduct }) {
         <div className="truncate text-sm font-semibold text-txt">
           {product.title}
         </div>
-        <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted">
+        <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs-tight text-muted">
           {product.vendor ? <span>{product.vendor}</span> : null}
           {product.vendor && product.productType ? <span>·</span> : null}
           {product.productType ? <span>{product.productType}</span> : null}
@@ -237,7 +237,7 @@ function ProductRow({ product }: { product: ShopifyProduct }) {
       {/* Price */}
       <div className="shrink-0 text-right">
         <div className="text-sm font-semibold text-txt">{priceLabel}</div>
-        <div className="mt-0.5 text-[11px] text-muted">
+        <div className="mt-0.5 text-xs-tight text-muted">
           {product.totalInventory.toLocaleString()} in stock
         </div>
       </div>

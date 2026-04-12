@@ -22,7 +22,7 @@ export function ConnectionFailedBanner() {
       <div
         role="status"
         aria-live="polite"
-        className={`shrink-0 z-[${Z_SYSTEM_CRITICAL}] flex items-center gap-3 bg-warn px-4 py-2 text-[13px] font-medium text-[color:var(--accent-foreground)] shadow-lg`}
+        className={`shrink-0 z-[${Z_SYSTEM_CRITICAL}] flex items-center gap-3 bg-warn px-4 py-2 text-sm font-medium text-[color:var(--accent-foreground)] shadow-lg`}
       >
         <Spinner
           size={16}
@@ -46,7 +46,7 @@ export function ConnectionFailedBanner() {
       <div
         role="alert"
         aria-live="assertive"
-        className={`shrink-0 z-[${Z_SYSTEM_CRITICAL}] flex items-center justify-between gap-3 bg-danger px-4 py-2 text-[13px] font-medium text-white shadow-lg`}
+        className={`shrink-0 z-[${Z_SYSTEM_CRITICAL}] flex items-center justify-between gap-3 bg-danger px-4 py-2 text-sm font-medium text-white shadow-lg`}
       >
         <span className="truncate">
           {t("connectionfailedbanner.ConnectionLostAfte")}{" "}
@@ -58,7 +58,7 @@ export function ConnectionFailedBanner() {
             variant="ghost"
             size="sm"
             onClick={dismissBackendDisconnectedBanner}
-            className="rounded px-3 py-1 text-[12px] text-red-100 hover:bg-red-700 hover:text-white"
+            className="rounded px-3 py-1 text-xs text-red-100 hover:bg-red-700 hover:text-white"
           >
             {t("skillsview.Dismiss")}
           </Button>

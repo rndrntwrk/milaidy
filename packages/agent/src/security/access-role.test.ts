@@ -154,6 +154,8 @@ describe("hasRoleAccess", () => {
   });
 
   it("returns false when runtime methods throw", async () => {
+    // A thrown room/world lookup is a runtime failure, not a clean "no world"
+    // result, so the access check should fail closed.
     const runtime = {
       agentId: "agent-1",
       getRoom: vi.fn().mockRejectedValue(new Error("boom")),

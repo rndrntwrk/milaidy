@@ -94,7 +94,7 @@ export function CloudRpcStatus({
                 setState("cloudDashboardView", "billing");
                 setTab("settings");
               }}
-              className="ml-1.5 text-[10px] h-auto p-0"
+              className="ml-1.5 text-2xs h-auto p-0"
             >
               {t("configpageview.TopUp")}
             </Button>
@@ -225,7 +225,7 @@ export function RpcConfigSection<T extends string>({
   return (
     <div>
       <div className="text-xs font-bold mb-1">{title}</div>
-      <div className="text-[11px] text-muted mb-2">{description}</div>
+      <div className="text-xs-tight text-muted mb-2">{description}</div>
 
       {renderRpcProviderButtons(
         options,
@@ -443,7 +443,7 @@ export function CloudServicesSection() {
           })}
         </div>
         {needsRestart && (
-          <span className="text-[11px] font-medium px-2.5 py-0.5 rounded-full border border-accent/30 bg-accent/8 text-accent">
+          <span className="text-xs-tight font-medium px-2.5 py-0.5 rounded-full border border-accent/30 bg-accent/8 text-accent">
             {t("configpageview.RestartRequired", {
               defaultValue: "Restart required",
             })}
@@ -473,11 +473,11 @@ export function CloudServicesSection() {
               <div className="flex-1 min-w-0 mr-4">
                 <div
                   id={`cloud-service-${key}`}
-                  className="text-[13px] font-medium text-txt"
+                  className="text-sm font-medium text-txt"
                 >
                   {t(labelKey, { defaultValue: labelDefault })}
                 </div>
-                <div className="text-[11px] text-muted mt-0.5">
+                <div className="text-xs-tight text-muted mt-0.5">
                   {t(descriptionKey, { defaultValue: descriptionDefault })}
                 </div>
               </div>

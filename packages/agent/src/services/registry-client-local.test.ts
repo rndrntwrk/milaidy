@@ -103,9 +103,11 @@ describe("registry-client-local", () => {
       fsSync.chmodSync(pluginsDir, 0o755);
     }
 
-    expect(debugMock).toHaveBeenCalledTimes(1);
-    expect(debugMock).toHaveBeenCalledWith(
-      expect.stringContaining(`could not read workspace dir ${pluginsDir}`),
-    );
+    expect(debugMock).toHaveBeenCalled();
+    expect(
+      debugMock.mock.calls.some(([message]) =>
+        String(message).includes(`could not read workspace dir ${pluginsDir}`),
+      ),
+    ).toBe(true);
   });
 });

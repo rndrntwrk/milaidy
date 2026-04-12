@@ -236,7 +236,7 @@ function Section({
 }) {
   return (
     <section className="rounded-md border border-border bg-card/60">
-      <div className="border-b border-border px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
+      <div className="border-b border-border px-3 py-2 text-2xs font-semibold uppercase tracking-[0.18em] text-muted">
         {title}
       </div>
       <div className="p-3">{children}</div>
@@ -280,9 +280,9 @@ function ActivityFeed({
             className="border-b border-border/50 px-3 py-2 hover:bg-card/60"
           >
             <div className="flex items-start gap-2">
-              <span className="text-[12px]">{icon}</span>
+              <span className="text-xs">{icon}</span>
               <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-1 text-[10px]">
+                <div className="flex flex-wrap items-center gap-1 text-2xs">
                   <span className="text-muted">
                     {formatTime(new Date(item.timestamp).getTime(), {
                       fallback: "\u2014",
@@ -304,11 +304,11 @@ function ActivityFeed({
                     </span>
                   ) : null}
                 </div>
-                <div className="mt-0.5 break-words text-[11px] text-txt">
+                <div className="mt-0.5 break-words text-xs-tight text-txt">
                   {summarizeActivity(item)}
                 </div>
                 {item.reasoning ? (
-                  <div className="mt-1 text-[10px] italic text-muted">
+                  <div className="mt-1 text-2xs italic text-muted">
                     {item.reasoning}
                   </div>
                 ) : null}
@@ -359,7 +359,7 @@ function AgentStatusHeader({
         <span className="truncate text-sm font-semibold text-txt">
           {agent.displayName ?? agent.name}
         </span>
-        <span className="ml-auto text-[10px] uppercase tracking-[0.18em] text-muted">
+        <span className="ml-auto text-2xs uppercase tracking-[0.18em] text-muted">
           {agent.agentStatus ?? "idle"}
         </span>
       </div>
@@ -403,7 +403,7 @@ function AgentStatusHeader({
         <Button
           variant="outline"
           size="sm"
-          className="ml-auto h-6 px-2 text-[10px]"
+          className="ml-auto h-6 px-2 text-2xs"
           onClick={onToggle}
         >
           {agent.autonomous ? "Pause Agent" : "Resume Agent"}
@@ -490,7 +490,7 @@ function TeamAgentsPanel({
                 className="rounded border border-border/60 px-2 py-2"
               >
                 <div className="flex items-center gap-2">
-                  <span className="truncate text-[11px] font-semibold text-txt">
+                  <span className="truncate text-xs-tight font-semibold text-txt">
                     {conversation.name || "Untitled conversation"}
                   </span>
                   {conversation.isActive ? (
@@ -499,7 +499,7 @@ function TeamAgentsPanel({
                     </span>
                   ) : null}
                 </div>
-                <div className="mt-1 text-[10px] text-muted">
+                <div className="mt-1 text-2xs text-muted">
                   Updated{" "}
                   {formatTime(new Date(conversation.updatedAt).getTime(), {
                     fallback: "\u2014",
@@ -530,14 +530,14 @@ function TeamAgentsPanel({
                       agent.autonomous ? "bg-green-400" : "bg-gray-400"
                     }`}
                   />
-                  <span className="truncate text-[11px] font-semibold text-txt">
+                  <span className="truncate text-xs-tight font-semibold text-txt">
                     {agent.displayName ?? agent.name}
                   </span>
-                  <span className="ml-auto text-[10px] text-muted">
+                  <span className="ml-auto text-2xs text-muted">
                     {agent.totalTrades} trades
                   </span>
                 </div>
-                <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] text-muted">
+                <div className="mt-1 flex flex-wrap items-center gap-2 text-2xs text-muted">
                   <span className="font-mono">
                     {formatCurrency(agent.balance)}
                   </span>
@@ -615,7 +615,7 @@ function WalletPanel({
               >
                 <div className="flex items-center gap-2">
                   <span
-                    className={`font-mono text-[11px] ${
+                    className={`font-mono text-xs-tight ${
                       transaction.amount >= 0
                         ? "text-green-400"
                         : "text-red-400"
@@ -624,10 +624,10 @@ function WalletPanel({
                     {transaction.amount >= 0 ? "+" : ""}
                     {transaction.amount.toFixed(2)}
                   </span>
-                  <span className="truncate text-[11px] text-txt">
+                  <span className="truncate text-xs-tight text-txt">
                     {transaction.type}
                   </span>
-                  <span className="ml-auto text-[10px] text-muted">
+                  <span className="ml-auto text-2xs text-muted">
                     {formatTime(new Date(transaction.timestamp).getTime(), {
                       fallback: "\u2014",
                     })}
@@ -663,7 +663,7 @@ function LogsPanel({
         <select
           value={logType}
           onChange={(event) => onTypeChange(event.target.value)}
-          className="h-7 rounded border border-border bg-bg px-2 text-[11px] text-txt"
+          className="h-7 rounded border border-border bg-bg px-2 text-xs-tight text-txt"
         >
           {LOG_TYPE_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>
@@ -674,7 +674,7 @@ function LogsPanel({
         <select
           value={logLevel}
           onChange={(event) => onLevelChange(event.target.value)}
-          className="h-7 rounded border border-border bg-bg px-2 text-[11px] text-txt"
+          className="h-7 rounded border border-border bg-bg px-2 text-xs-tight text-txt"
         >
           {LOG_LEVEL_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>
@@ -684,7 +684,7 @@ function LogsPanel({
         </select>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-3 font-mono text-[10px]">
+      <div className="flex-1 overflow-y-auto p-3 font-mono text-2xs">
         {loading && logs.length === 0 ? (
           <div className="text-center italic text-muted">Loading logs...</div>
         ) : logs.length === 0 ? (
@@ -839,10 +839,10 @@ function OverviewPanel({
                 key={market.id}
                 className="rounded border border-border/60 px-2 py-2"
               >
-                <div className="line-clamp-2 text-[11px] font-semibold text-txt">
+                <div className="line-clamp-2 text-xs-tight font-semibold text-txt">
                   {market.title}
                 </div>
-                <div className="mt-1 flex flex-wrap gap-2 text-[10px] text-muted">
+                <div className="mt-1 flex flex-wrap gap-2 text-2xs text-muted">
                   <span>YES {market.yesPrice.toFixed(2)}</span>
                   <span>NO {market.noPrice.toFixed(2)}</span>
                   <span>Vol {formatCurrency(market.volume)}</span>
@@ -865,12 +865,12 @@ function OverviewPanel({
                 className="rounded border border-border/60 px-2 py-2"
               >
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] font-semibold text-txt">
+                  <span className="text-xs-tight font-semibold text-txt">
                     {summarizeActivity(trade)}
                   </span>
                   {trade.pnl != null ? (
                     <span
-                      className={`ml-auto font-mono text-[10px] ${
+                      className={`ml-auto font-mono text-2xs ${
                         trade.pnl >= 0 ? "text-green-400" : "text-red-400"
                       }`}
                     >
@@ -878,7 +878,7 @@ function OverviewPanel({
                     </span>
                   ) : null}
                 </div>
-                <div className="mt-1 text-[10px] text-muted">
+                <div className="mt-1 text-2xs text-muted">
                   {formatTime(new Date(trade.timestamp).getTime(), {
                     fallback: "\u2014",
                   })}
@@ -901,7 +901,7 @@ function OverviewPanel({
                 key={message.id}
                 className="rounded border border-border/60 px-2 py-2"
               >
-                <div className="flex items-center gap-2 text-[10px] text-muted">
+                <div className="flex items-center gap-2 text-2xs text-muted">
                   <span className="uppercase">
                     {message.senderName ?? message.senderId}
                   </span>
@@ -911,7 +911,7 @@ function OverviewPanel({
                     })}
                   </span>
                 </div>
-                <div className="mt-1 whitespace-pre-wrap text-[11px] text-txt">
+                <div className="mt-1 whitespace-pre-wrap text-xs-tight text-txt">
                   {message.content}
                 </div>
               </div>
@@ -1289,7 +1289,7 @@ export function BabylonTerminal({ appName: _appName }: BabylonTerminalProps) {
           <button
             key={tab.id}
             type="button"
-            className={`rounded px-2 py-1 text-[10px] uppercase tracking-[0.18em] ${
+            className={`rounded px-2 py-1 text-2xs uppercase tracking-[0.18em] ${
               activeTab === tab.id
                 ? "bg-card text-txt"
                 : "text-muted hover:bg-card/50"
@@ -1302,7 +1302,7 @@ export function BabylonTerminal({ appName: _appName }: BabylonTerminalProps) {
       </div>
 
       {statusMessage ? (
-        <div className="border-b border-border bg-card/70 px-3 py-2 text-[11px] text-muted">
+        <div className="border-b border-border bg-card/70 px-3 py-2 text-xs-tight text-muted">
           {statusMessage}
         </div>
       ) : null}
@@ -1310,7 +1310,7 @@ export function BabylonTerminal({ appName: _appName }: BabylonTerminalProps) {
       <div className="flex min-h-0 flex-1 flex-col">{content}</div>
 
       <div className="border-t border-border px-3 py-3">
-        <div className="mb-2 text-[10px] uppercase tracking-[0.18em] text-muted">
+        <div className="mb-2 text-2xs uppercase tracking-[0.18em] text-muted">
           Guide The Agent
         </div>
         <div className="flex items-center gap-2">
@@ -1325,11 +1325,11 @@ export function BabylonTerminal({ appName: _appName }: BabylonTerminalProps) {
               }
             }}
             placeholder="Tell the agent what to do, what to avoid, or what to explain."
-            className="h-9 flex-1 text-[12px]"
+            className="h-9 flex-1 text-xs"
           />
           <Button
             size="sm"
-            className="h-9 px-3 text-[11px]"
+            className="h-9 px-3 text-xs-tight"
             onClick={() => void handleSendChat()}
             disabled={sending || chatInput.trim().length === 0}
           >

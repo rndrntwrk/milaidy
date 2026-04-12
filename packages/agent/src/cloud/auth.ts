@@ -123,6 +123,9 @@ export async function cloudLogin(
       );
     } catch (err) {
       if (isTimeoutError(err)) {
+        if (remaining <= requestTimeoutMs) {
+          break;
+        }
         throw new Error(
           `Cloud login polling request timed out (>${Math.min(requestTimeoutMs, remaining)}ms).`,
         );

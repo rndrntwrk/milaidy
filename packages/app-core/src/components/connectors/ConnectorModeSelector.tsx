@@ -162,7 +162,7 @@ export function ConnectorModeSelector({
             key={mode.id}
             type="button"
             onClick={() => onModeChange(mode.id)}
-            className={`rounded-xl border px-3 py-1.5 text-[11px] font-medium transition-all ${
+            className={`rounded-xl border px-3 py-1.5 text-xs-tight font-medium transition-all ${
               selectedMode === mode.id
                 ? "border-accent bg-accent/10 text-accent"
                 : "border-border/40 bg-card/40 text-muted hover:border-accent/40 hover:text-txt"
@@ -174,7 +174,7 @@ export function ConnectorModeSelector({
         ))}
       </div>
       {modes.find((m) => m.id === selectedMode)?.description && (
-        <div className="mt-1.5 text-[10px] text-muted">
+        <div className="mt-1.5 text-2xs text-muted">
           {modes.find((m) => m.id === selectedMode)!.description}
         </div>
       )}

@@ -12,11 +12,11 @@ import { formatUptime } from "../../utils/format";
 import { IS_POPOUT } from "./helpers";
 
 const STATUS_PILL_CLASSNAME =
-  "inline-flex min-h-9 items-center gap-1.5 rounded-xl border border-border/45 bg-card/92 px-2.5 py-1.5 text-[11px] text-muted-strong shadow-sm";
+  "inline-flex min-h-9 items-center gap-1.5 rounded-xl border border-border/45 bg-card/92 px-2.5 py-1.5 text-xs-tight text-muted-strong shadow-sm";
 const ICON_BUTTON_CLASSNAME =
-  "inline-flex min-h-9 h-9 w-9 items-center justify-center rounded-xl border border-border/45 bg-card/92 px-0 py-1.5 text-[11px] text-muted-strong shadow-sm transition-[border-color,background-color,color,box-shadow] focus-visible:ring-2 focus-visible:ring-accent/35 hover:border-border-strong hover:bg-bg-hover hover:text-txt hover:shadow-md";
+  "inline-flex min-h-9 h-9 w-9 items-center justify-center rounded-xl border border-border/45 bg-card/92 px-0 py-1.5 text-xs-tight text-muted-strong shadow-sm transition-[border-color,background-color,color,box-shadow] focus-visible:ring-2 focus-visible:ring-accent/35 hover:border-border-strong hover:bg-bg-hover hover:text-txt hover:shadow-md";
 const LIVE_ACTION_BUTTON_CLASSNAME =
-  "inline-flex h-9 min-h-9 items-center justify-center rounded-xl border px-3 text-[11px] font-semibold uppercase tracking-[0.16em] shadow-sm transition-[border-color,background-color,color,box-shadow] focus-visible:ring-2 focus-visible:ring-accent/35 disabled:cursor-wait disabled:opacity-50";
+  "inline-flex h-9 min-h-9 items-center justify-center rounded-xl border px-3 text-xs-tight font-semibold uppercase tracking-[0.16em] shadow-sm transition-[border-color,background-color,color,box-shadow] focus-visible:ring-2 focus-visible:ring-accent/35 disabled:cursor-wait disabled:opacity-50";
 
 export function StatusBar({
   agentName,
@@ -83,7 +83,7 @@ export function StatusBar({
       >
         {/* Health stats — live only */}
         {streamLive && (
-          <span className={`${STATUS_PILL_CLASSNAME} font-mono text-[10px]`}>
+          <span className={`${STATUS_PILL_CLASSNAME} font-mono text-2xs`}>
             <span className="text-txt">{formatUptime(uptime)}</span>
             <span className="text-border">|</span>
             <span className="text-txt">{frameCount.toLocaleString()}f</span>

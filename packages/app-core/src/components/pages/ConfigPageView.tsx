@@ -245,7 +245,7 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
           <h2 className="text-lg font-bold mb-1">
             {t("configpageview.Config")}
           </h2>
-          <p className="text-[13px] text-muted mb-5">
+          <p className="text-sm text-muted mb-5">
             {t("configpageview.WalletProvidersAnd")}
           </p>
         </>
@@ -289,13 +289,13 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
               })}
             </span>
           </div>
-          <span className="text-[11px] text-muted leading-snug">
+          <span className="text-xs-tight text-muted leading-snug">
             {t("configpageview.CloudModeDesc", {
               defaultValue: "Managed RPC for all chains. No API keys needed.",
             })}
           </span>
           {rpcMode === "cloud" && (
-            <span className="absolute top-3 right-3 flex h-5 w-5 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-accent-fg">
+            <span className="absolute top-3 right-3 flex h-5 w-5 items-center justify-center rounded-full bg-accent text-2xs font-bold text-accent-fg">
               {"\u2713"}
             </span>
           )}
@@ -335,13 +335,13 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
               })}
             </span>
           </div>
-          <span className="text-[11px] text-muted leading-snug">
+          <span className="text-xs-tight text-muted leading-snug">
             {t("configpageview.CustomModeDesc", {
               defaultValue: "Bring your own API keys. Configure per chain.",
             })}
           </span>
           {rpcMode === "custom" && (
-            <span className="absolute top-3 right-3 flex h-5 w-5 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-accent-fg">
+            <span className="absolute top-3 right-3 flex h-5 w-5 items-center justify-center rounded-full bg-accent text-2xs font-bold text-accent-fg">
               ✓
             </span>
           )}
@@ -357,7 +357,7 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
             defaultValue: "Wallet Network",
           })}
         </div>
-        <div className="text-[11px] text-muted mb-2">
+        <div className="text-xs-tight text-muted mb-2">
           {t("configpageview.WalletNetworkDesc", {
             defaultValue: "Mainnet for live funds, Testnet for practice",
           })}
@@ -392,7 +392,7 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
                 <span
                   className={`w-2 h-2 rounded-full shrink-0 ${elizaCloudAuthRejected ? "bg-danger" : "bg-ok"}`}
                 />
-                <span className="text-[13px] font-semibold text-txt">
+                <span className="text-sm font-semibold text-txt">
                   {elizaCloudAuthRejected
                     ? t("configpageview.ElizaCloudKeyInvalid", {
                         defaultValue: "Eliza Cloud key invalid",
@@ -425,7 +425,7 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
                         href={elizaCloudTopUpUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-[11px] text-accent underline underline-offset-2"
+                        className="text-xs-tight text-accent underline underline-offset-2"
                       >
                         {t("configpageview.TopUp")}
                       </a>
@@ -463,8 +463,10 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
                     <span className="text-xs font-semibold text-txt">
                       {chain.label}
                     </span>
-                    <span className="text-[11px] text-muted">{chain.desc}</span>
-                    <span className="text-[10px] text-accent ml-auto font-medium">
+                    <span className="text-xs-tight text-muted">
+                      {chain.desc}
+                    </span>
+                    <span className="text-2xs text-accent ml-auto font-medium">
                       {t("configpageview.CloudModeTitle", {
                         defaultValue: "Eliza Cloud",
                       })}
@@ -526,7 +528,7 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
             <Button
               variant="default"
               size="sm"
-              className="text-[11px]"
+              className="text-xs-tight"
               onClick={handleWalletSaveAll}
               disabled={walletApiKeySaving}
             >
@@ -551,7 +553,7 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
             </div>
             <Button
               variant="outline"
-              className="min-h-[2.625rem] px-4 rounded-[calc(var(--radius-lg)+2px)] flex items-center gap-1.5 text-[12px] text-muted hover:text-txt"
+              className="min-h-[2.625rem] px-4 rounded-[calc(var(--radius-lg)+2px)] flex items-center gap-1.5 text-xs text-muted hover:text-txt"
               onClick={() => setSecretsOpen(true)}
             >
               <svg
@@ -640,7 +642,7 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
           </div>
 
           {legacyRpcWarning && (
-            <div className="mt-4 rounded-lg border border-warn bg-warn-subtle px-3 py-2 text-[11px] text-txt">
+            <div className="mt-4 rounded-lg border border-warn bg-warn-subtle px-3 py-2 text-xs-tight text-txt">
               {legacyRpcWarning}
             </div>
           )}
@@ -649,7 +651,7 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
             <Button
               variant="default"
               size="sm"
-              className="text-[11px]"
+              className="text-xs-tight"
               onClick={handleWalletSaveAll}
               disabled={walletApiKeySaving}
             >

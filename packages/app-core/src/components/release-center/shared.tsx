@@ -31,7 +31,7 @@ export function StatusPill({
     <StatusBadge
       label={label}
       variant={PILL_TONE_MAP[tone] ?? "muted"}
-      className="rounded-full px-2.5 py-1 text-[11px] font-medium normal-case"
+      className="rounded-full px-2.5 py-1 text-xs-tight font-medium normal-case"
     />
   );
 }

@@ -68,9 +68,9 @@ export function TelegramChatModeToggle({
 }) {
   const { t } = useApp();
   return (
-    <div className="flex items-center justify-between rounded-lg border border-[var(--border)] bg-[var(--card,rgba(255,255,255,0.03))] px-4 py-3 mb-4">
+    <div className="flex items-center justify-between rounded-lg border border-border bg-[var(--card,rgba(255,255,255,0.03))] px-4 py-3 mb-4">
       <div className="flex flex-col gap-0.5">
-        <span className="text-[13px] font-semibold text-[var(--text)]">
+        <span className="text-sm font-semibold text-txt">
           {allowAll
             ? t("pluginsview.AllowAllChats", {
                 defaultValue: "Allow all chats",
@@ -79,7 +79,7 @@ export function TelegramChatModeToggle({
                 defaultValue: "Allow only specific chats",
               })}
         </span>
-        <span className="text-[11px] text-[var(--muted)]">
+        <span className="text-xs-tight text-muted">
           {allowAll
             ? t("pluginsview.BotRespondsAnyChat", {
                 defaultValue: "Bot will respond in any chat",

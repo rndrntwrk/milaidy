@@ -49,11 +49,12 @@ describe("signal routes (real server)", () => {
     expect(data).toHaveProperty("status");
   }, 60_000);
 
-  test("POST /api/signal/pair returns 400 with empty accountId", async () => {
+  test("POST /api/signal/pair falls back to the default account for empty accountId", async () => {
     const { status, data } = await req(port, "POST", "/api/signal/pair", {
       accountId: "",
     });
-    expect(status).toBe(400);
-    expect(data).toHaveProperty("error");
+    expect(status).toBe(200);
+    expect(data).toHaveProperty("ok", true);
+    expect(data).toHaveProperty("status");
   }, 60_000);
 });

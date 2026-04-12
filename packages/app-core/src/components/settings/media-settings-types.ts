@@ -195,7 +195,7 @@ export const CATEGORY_LABELS: Record<MediaCategory, string> = {
 };
 
 export const MEDIA_SEGMENT_BUTTON_CLASSNAME =
-  "flex-1 basis-[calc(50%-0.125rem)] sm:basis-0 min-h-[44px] rounded-lg border px-2 py-1.5 text-[11px] font-semibold !whitespace-normal";
+  "flex-1 basis-[calc(50%-0.125rem)] sm:basis-0 min-h-[44px] rounded-lg border px-2 py-1.5 text-xs-tight font-semibold !whitespace-normal";
 export const MEDIA_SEGMENT_BUTTON_ACTIVE_CLASSNAME =
   "border-accent/45 bg-accent/16 text-txt-strong shadow-sm";
 export const MEDIA_SEGMENT_BUTTON_INACTIVE_CLASSNAME =

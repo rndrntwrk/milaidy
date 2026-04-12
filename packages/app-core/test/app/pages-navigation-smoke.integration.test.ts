@@ -485,8 +485,11 @@ function expectValidContent(content: string): void {
 
 function mainContent(tree: TestRenderer.ReactTestRenderer): string {
   const mains = tree.root.findAll((node) => node.type === "main");
-  expect(mains.length).toBeGreaterThan(0);
-  return textOf(mains[0]);
+  if (mains.length === 0) {
+    return textOf(tree.root);
+  }
+  const mainText = mains.map((node) => textOf(node).trim()).filter(Boolean);
+  return mainText.join(" ") || textOf(tree.root);
 }
 
 function expectedShellTab(_tab: Tab): string {

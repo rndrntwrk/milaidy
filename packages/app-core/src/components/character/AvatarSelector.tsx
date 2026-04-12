@@ -167,7 +167,7 @@ export function AvatarSelector({
             variant="ghost"
             className={`${avatarButtonClass} ${
               selected === i
-                ? "ring-2 ring-[var(--accent)] ring-offset-2 ring-offset-[var(--card)] scale-105"
+                ? "ring-2 ring-accent ring-offset-2 ring-offset-card scale-105"
                 : "opacity-60 hover:opacity-100 hover:scale-105"
             } ${loading ? "cursor-wait pointer-events-none" : ""} p-0`}
             onClick={() => !loading && onSelect(i)}
@@ -232,7 +232,7 @@ export function AvatarSelector({
                 )}
               </svg>
               {dragOver && (
-                <span className="text-[10px] mt-1 font-medium">
+                <span className="text-2xs mt-1 font-medium">
                   {t("avatarselector.dropVrm")}
                 </span>
               )}

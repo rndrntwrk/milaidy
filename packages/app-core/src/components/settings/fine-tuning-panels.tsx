@@ -42,11 +42,11 @@ export const FINE_TUNING_SECTION_CLASS =
 export const FINE_TUNING_SECTION_HEADER_CLASS =
   "mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between";
 export const FINE_TUNING_SECTION_KICKER_CLASS =
-  "text-[11px] font-semibold uppercase tracking-[0.16em] text-muted/70";
+  "text-xs-tight font-semibold uppercase tracking-[0.16em] text-muted/70";
 export const FINE_TUNING_PANEL_CLASS =
   "rounded-2xl border border-border/45 bg-bg/20 shadow-sm";
 export const FINE_TUNING_PANEL_HEADER_CLASS =
-  "border-b border-border/35 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted/70";
+  "border-b border-border/35 px-3 py-2 text-xs-tight font-semibold uppercase tracking-[0.14em] text-muted/70";
 export const FINE_TUNING_ACTION_CLASS =
   "h-10 rounded-xl px-3 text-xs shadow-sm hover:border-accent disabled:opacity-50";
 export const FINE_TUNING_STATUS_CARD_CLASS =
@@ -194,7 +194,7 @@ export function TrajectoriesSection({
               </div>
             </div>
             <div className={`${FINE_TUNING_PANEL_CLASS} p-3`}>
-              <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted/70">
+              <div className="mb-2 text-xs-tight font-semibold uppercase tracking-[0.14em] text-muted/70">
                 {t("finetuningview.SelectedTrajectory")}
               </div>
               {trajectoryLoading ? (
@@ -529,7 +529,7 @@ export function TrainingJobsSection({
                     <Button
                       variant="outline"
                       size="sm"
-                      className="h-8 rounded-xl border-danger/35 px-3 text-[11px] text-danger shadow-sm hover:border-danger hover:bg-danger/10 disabled:opacity-50"
+                      className="h-8 rounded-xl border-danger/35 px-3 text-xs-tight text-danger shadow-sm hover:border-danger hover:bg-danger/10 disabled:opacity-50"
                       disabled={cancellingJobId === job.id}
                       onClick={() => onCancelJob(job.id)}
                     >
@@ -550,7 +550,7 @@ export function TrainingJobsSection({
           )}
         </div>
         <div className={`${FINE_TUNING_PANEL_CLASS} p-3`}>
-          <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted/70">
+          <div className="mb-2 text-xs-tight font-semibold uppercase tracking-[0.14em] text-muted/70">
             {t("finetuningview.SelectedJobLogs")}
           </div>
           <SelectedJobPanel selectedJob={selectedJob} t={t} />
@@ -652,7 +652,7 @@ export function TrainedModelsSection({
           )}
         </div>
         <div className={`${FINE_TUNING_PANEL_CLASS} p-3`}>
-          <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted/70">
+          <div className="mb-2 text-xs-tight font-semibold uppercase tracking-[0.14em] text-muted/70">
             {t("finetuningview.ModelActions")}
           </div>
           <SelectedModelPanel

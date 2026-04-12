@@ -430,7 +430,7 @@ function buildNodePositions(
 
 function GraphLegend() {
   return (
-    <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted">
+    <div className="flex flex-wrap items-center gap-3 text-xs-tight text-muted">
       <div className="flex items-center gap-1.5">
         <span className="h-2.5 w-2.5 rounded-full bg-[rgba(240,185,11,0.9)]" />
         People
@@ -482,7 +482,7 @@ function GraphTooltip({ state }: { state: TooltipState }) {
         <div className="text-sm font-semibold text-txt">
           {person.displayName}
         </div>
-        <div className="mt-1 space-y-0.5 text-[11px] text-muted">
+        <div className="mt-1 space-y-0.5 text-xs-tight text-muted">
           <div>
             {person.memberEntityIds.length} identit
             {person.memberEntityIds.length === 1 ? "y" : "ies"} ·{" "}
@@ -508,7 +508,7 @@ function GraphTooltip({ state }: { state: TooltipState }) {
       <div className="text-sm font-semibold text-txt">
         {edge.sourcePersonName} ↔ {edge.targetPersonName}
       </div>
-      <div className="mt-1 space-y-0.5 text-[11px] text-muted">
+      <div className="mt-1 space-y-0.5 text-xs-tight text-muted">
         <div>
           Strength {edge.strength.toFixed(2)} · {edge.sentiment} ·{" "}
           {edge.interactionCount} interactions
@@ -600,7 +600,7 @@ export function RelationshipsGraphPanel({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted/70">
+          <div className="text-xs-tight font-semibold uppercase tracking-[0.16em] text-muted/70">
             Identity Graph
           </div>
           <div className="mt-2 text-xl font-semibold text-txt">
@@ -752,7 +752,7 @@ export function RelationshipsGraphPanel({
                   <text
                     textAnchor="middle"
                     y={-3}
-                    className={`text-[12px] font-semibold ${isOwner ? "fill-white" : "fill-black"}`}
+                    className={`text-xs font-semibold ${isOwner ? "fill-white" : "fill-black"}`}
                   >
                     {shortLabel(person.displayName, 15)}
                   </text>

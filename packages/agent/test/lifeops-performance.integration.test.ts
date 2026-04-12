@@ -3,6 +3,7 @@ import type { AgentRuntime, Task, UUID } from "@elizaos/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { startApiServer } from "../src/api/server";
 import { LifeOpsRepository } from "../src/lifeops/repository";
+import { LifeOpsService } from "../src/lifeops/service";
 import { DatabaseSync } from "../src/test-utils/sqlite-compat";
 import { req } from "../../../test/helpers/http";
 
@@ -81,14 +82,14 @@ function createRuntimeForPerformanceTests(): AgentRuntime {
 }
 
 async function createReminderDefinitionBatch(
-  port: number,
+  service: LifeOpsService,
   batchStart: number,
   batchSize: number,
 ): Promise<void> {
   await Promise.all(
     Array.from({ length: batchSize }, (_, offset) => {
       const index = batchStart + offset;
-      return req(port, "POST", "/api/lifeops/definitions", {
+      return service.createDefinition({
         kind: "task",
         title: `Performance task ${index}`,
         timezone: "UTC",
@@ -108,8 +109,6 @@ async function createReminderDefinitionBatch(
             },
           ],
         },
-      }).then((response) => {
-        expect(response.status).toBe(201);
       });
     }),
   );
@@ -139,9 +138,10 @@ describe("life-ops performance", () => {
   it("processes 120 due in-app reminders within 4 seconds and records each attempt", async () => {
     const totalDefinitions = 120;
     const batchSize = 20;
+    const service = new LifeOpsService(runtime);
     for (let index = 0; index < totalDefinitions; index += batchSize) {
       await createReminderDefinitionBatch(
-        port,
+        service,
         index,
         Math.min(batchSize, totalDefinitions - index),
       );

@@ -453,21 +453,21 @@ export function useChatSend(deps: UseChatSendDeps) {
 
       let convId: string =
         turn.conversationId ?? activeConversationIdRef.current ?? "";
-        if (!convId) {
-          try {
-            const { conversation: rawConversation } =
-              await client.createConversation(undefined, {
-                lang: uiLanguage,
-              });
-            if (!isConversationRecord(rawConversation)) {
-              throw new Error(
-                "Conversation creation returned an invalid payload.",
-              );
-            }
-            const conversation = rawConversation;
-            const nextCutoffTs = Date.now();
-            setConversations((prev) => [conversation, ...prev]);
-            setActiveConversationId(conversation.id);
+      if (!convId) {
+        try {
+          const { conversation: rawConversation } =
+            await client.createConversation(undefined, {
+              lang: uiLanguage,
+            });
+          if (!isConversationRecord(rawConversation)) {
+            throw new Error(
+              "Conversation creation returned an invalid payload.",
+            );
+          }
+          const conversation = rawConversation;
+          const nextCutoffTs = Date.now();
+          setConversations((prev) => [conversation, ...prev]);
+          setActiveConversationId(conversation.id);
           activeConversationIdRef.current = conversation.id;
           setCompanionMessageCutoffTs(nextCutoffTs);
           convId = conversation.id;
@@ -810,9 +810,10 @@ export function useChatSend(deps: UseChatSendDeps) {
           try {
             const actionTitle =
               trimmed.length > 50 ? `${trimmed.slice(0, 47)}...` : trimmed;
-            const { conversation: rawConversation } = await client.createConversation(
-              actionTitle || t("companion.newChat"),
-            );
+            const { conversation: rawConversation } =
+              await client.createConversation(
+                actionTitle || t("companion.newChat"),
+              );
             if (!isConversationRecord(rawConversation)) {
               throw new Error(
                 "Conversation creation returned an invalid payload.",

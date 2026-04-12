@@ -50,11 +50,11 @@ export function AgentActivityBox({
               STATUS_DOT[s.status] ?? "bg-muted"
             }${PULSE_STATUSES.has(s.status) ? " animate-pulse" : ""}`}
           />
-          <span className="text-[11px] font-medium text-txt max-w-[120px] truncate shrink-0">
+          <span className="text-xs-tight font-medium text-txt max-w-[120px] truncate shrink-0">
             {s.label}
           </span>
           <span
-            className={`text-[11px] truncate min-w-0 flex-1 ${
+            className={`text-xs-tight truncate min-w-0 flex-1 ${
               s.status === "error"
                 ? "text-danger"
                 : s.status === "blocked"

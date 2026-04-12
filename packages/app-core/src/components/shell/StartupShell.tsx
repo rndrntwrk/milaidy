@@ -47,13 +47,8 @@ function phaseToStatusKey(phase: string): string {
 }
 
 export function StartupShell() {
-  const {
-    startupCoordinator,
-    startupError,
-    retryStartup,
-    setState,
-    t,
-  } = useApp();
+  const { startupCoordinator, startupError, retryStartup, setState, t } =
+    useApp();
   const phase = startupCoordinator.phase;
   const cloudSkipProbeStartedRef = useRef(false);
   const isSplash = phase === "splash";

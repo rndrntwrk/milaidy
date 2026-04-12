@@ -73,7 +73,7 @@ export function ShortcutsOverlay() {
           {Object.entries(grouped).map(([scope, shortcuts]) => (
             <div key={scope}>
               <h3
-                className="text-[11px] uppercase tracking-wide font-medium mb-2"
+                className="text-xs-tight uppercase tracking-wide font-medium mb-2"
                 style={{ color: "var(--muted)" }}
               >
                 {scope}
@@ -88,7 +88,7 @@ export function ShortcutsOverlay() {
                       {shortcut.description}
                     </span>
                     <kbd
-                      className="inline-flex items-center gap-0.5 px-2 py-0.5 text-[11px] font-mono rounded"
+                      className="inline-flex items-center gap-0.5 px-2 py-0.5 text-xs-tight font-mono rounded"
                       style={{
                         background: "var(--bg-hover)",
                         border: "1px solid var(--border)",

@@ -1,39 +1,10 @@
-/**
- * Chat route reply fallback/recovery — REAL integration tests.
- *
- * Tests generateChatResponse's fallback recovery logic using a real
- * PGLite-backed runtime. Since this tests the chat route's internal
- * recovery mechanisms (not LLM output), we use the real runtime but
- * focus on structural behavior.
- *
- * Gate: requires MILADY_LIVE_TEST=1 and an LLM provider for the full
- * chat generation path. Without LLM, tests exercise the timeout and
- * no-response paths which don't need inference.
- */
-
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   createMessageMemory,
   stringToUuid,
   type AgentRuntime,
 } from "@elizaos/core";
-import { createRealTestRuntime } from "../../../../../test/helpers/real-runtime";
-import { selectLiveProvider } from "../../../../../test/helpers/live-provider";
 import { generateChatResponse } from "../chat-routes";
-
-let runtime: AgentRuntime;
-let cleanup: () => Promise<void>;
-
-beforeAll(async () => {
-  const hasLLM = !!selectLiveProvider();
-  ({ runtime, cleanup } = await createRealTestRuntime({
-    withLLM: hasLLM,
-  }));
-}, 180_000);
-
-afterAll(async () => {
-  await cleanup();
-});
 
 function createUserMessage(text: string) {
   return createMessageMemory({
@@ -47,53 +18,78 @@ function createUserMessage(text: string) {
   });
 }
 
-describe("generateChatResponse with real runtime", () => {
-  it("generates a response for a simple message", async () => {
-    try {
-      const result = await generateChatResponse(
-        runtime,
-        createUserMessage("hello"),
-        runtime.character?.name ?? "TestAgent",
-        { timeoutDuration: 120_000 },
-      );
+function createChatRouteRuntime(options?: {
+  handleMessage?: AgentRuntime["messageService"]["handleMessage"];
+}) {
+  const logger = {
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  };
 
-      expect(result).toBeDefined();
-      expect(typeof result.text).toBe("string");
-    } catch (err) {
-      // May timeout or fail without LLM — that's acceptable
-      expect(err).toBeDefined();
-    }
-  }, 180_000);
+  return {
+    character: { name: "TestAgent" },
+    messageService: {
+      handleMessage:
+        options?.handleMessage ??
+        (async () => ({
+          responseContent: { text: "hello world" },
+        })),
+    },
+    actions: [],
+    logger,
+    emitEvent: vi.fn(),
+  } as unknown as AgentRuntime;
+}
+
+describe("generateChatResponse reply fallback/recovery", () => {
+  it("generates a response for a simple message", async () => {
+    const runtime = createChatRouteRuntime({
+      handleMessage: async () => ({
+        responseContent: { text: "hello there" },
+      }),
+    });
+
+    const result = await generateChatResponse(
+      runtime,
+      createUserMessage("hello"),
+      "TestAgent",
+      { timeoutDuration: 120_000 },
+    );
+
+    expect(result).toBeDefined();
+    expect(result.text).toBe("hello there");
+  });
 
   it("fails fast when generation exceeds the configured timeout", async () => {
-    // Use a very short timeout to trigger the timeout path
+    const runtime = createChatRouteRuntime({
+      handleMessage: async () => await new Promise(() => {}),
+    });
+
     await expect(
-      generateChatResponse(
-        runtime,
-        createUserMessage("hello"),
-        runtime.character?.name ?? "TestAgent",
-        { timeoutDuration: 1 }, // 1ms timeout — guaranteed to expire
-      ),
+      generateChatResponse(runtime, createUserMessage("hello"), "TestAgent", {
+        timeoutDuration: 1,
+      }),
     ).rejects.toThrow(/timed out/i);
   }, 30_000);
 
   it("handles messages and returns a structured response", async () => {
-    try {
-      const result = await generateChatResponse(
-        runtime,
-        createUserMessage("what can you do?"),
-        runtime.character?.name ?? "TestAgent",
-        { timeoutDuration: 120_000 },
-      );
+    const runtime = createChatRouteRuntime({
+      handleMessage: async () => ({
+        responseContent: { text: "structured reply" },
+      }),
+    });
 
-      expect(result).toBeDefined();
-      // The response should have a text field
-      expect(typeof result.text).toBe("string");
-      // And should have the usedActionCallbacks flag
-      expect(typeof result.usedActionCallbacks).toBe("boolean");
-    } catch (err) {
-      // Expected to fail without LLM or with timeout
-      expect(err).toBeDefined();
-    }
-  }, 180_000);
+    const result = await generateChatResponse(
+      runtime,
+      createUserMessage("what can you do?"),
+      "TestAgent",
+      { timeoutDuration: 120_000 },
+    );
+
+    expect(result).toBeDefined();
+    expect(result.text).toBe("structured reply");
+    expect(typeof (result.usedActionCallbacks ?? false)).toBe("boolean");
+  });
 });

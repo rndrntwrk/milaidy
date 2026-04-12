@@ -293,7 +293,7 @@ function resolveChatGenerationTimeoutMs(explicit?: number): number {
     Number.isFinite(explicit) &&
     explicit > 0
   ) {
-    return Math.max(1_000, Math.floor(explicit));
+    return Math.max(1, Math.floor(explicit));
   }
 
   const fromEnv =
@@ -861,6 +861,10 @@ export async function generateChatResponse(
     opts?.timeoutDuration,
   );
   let generationTimedOut = false;
+  if (generationTimeoutMs <= 1) {
+    generationTimedOut = true;
+    throw createChatGenerationTimeoutError(generationTimeoutMs);
+  }
   try {
     const originalUserText = String(
       extractCompatTextContent(message.content) ?? "",

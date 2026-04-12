@@ -127,7 +127,7 @@ export function FlaminaGuideCard({
             defaultValue: guide.characterImpactDefault,
           })}
         </p>
-        <p className="rounded-xl border border-accent/20 bg-accent/5 px-3 py-2 text-[11px] text-txt">
+        <p className="rounded-xl border border-accent/20 bg-accent/5 px-3 py-2 text-xs-tight text-txt">
           {t(guide.recommendedKey, { defaultValue: guide.recommendedDefault })}
         </p>
       </div>
@@ -191,7 +191,7 @@ export function DeferredSetupChecklist({
         <Button
           variant="ghost"
           size="sm"
-          className="rounded-full text-[11px] font-semibold uppercase tracking-[0.12em] text-muted"
+          className="rounded-full text-xs-tight font-semibold uppercase tracking-[0.12em] text-muted"
           onClick={() => setState("postOnboardingChecklistDismissed", true)}
         >
           {t("flaminaguide.Dismiss")}
@@ -220,7 +220,7 @@ export function DeferredSetupChecklist({
               <Button
                 variant="outline"
                 size="sm"
-                className="rounded-full border-accent/30 bg-accent/10 text-[11px] font-semibold uppercase tracking-[0.12em]"
+                className="rounded-full border-accent/30 bg-accent/10 text-xs-tight font-semibold uppercase tracking-[0.12em]"
                 onClick={() => onOpenTask?.(task)}
               >
                 {t("flaminaguide.Open")}
@@ -228,7 +228,7 @@ export function DeferredSetupChecklist({
               <Button
                 variant="ghost"
                 size="sm"
-                className="rounded-full text-[11px] font-semibold uppercase tracking-[0.12em] text-muted"
+                className="rounded-full text-xs-tight font-semibold uppercase tracking-[0.12em] text-muted"
                 onClick={() => markDone(task)}
               >
                 {t("flaminaguide.Done")}

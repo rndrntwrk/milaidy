@@ -17,7 +17,7 @@ function CustomerRow({ customer }: { customer: ShopifyCustomer }) {
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-[16px] border border-border/20 bg-card/30 px-3 py-3 transition-colors hover:bg-card/50">
       {/* Avatar initials */}
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border/30 bg-bg-accent text-[11px] font-semibold uppercase text-muted-strong">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border/30 bg-bg-accent text-xs-tight font-semibold uppercase text-muted-strong">
         {(customer.firstName?.[0] ?? customer.email[0] ?? "?").toUpperCase()}
       </div>
 
@@ -26,7 +26,7 @@ function CustomerRow({ customer }: { customer: ShopifyCustomer }) {
         <div className="truncate text-sm font-semibold text-txt">
           {fullName}
         </div>
-        <div className="mt-0.5 truncate text-[11px] text-muted">
+        <div className="mt-0.5 truncate text-xs-tight text-muted">
           {customer.email}
         </div>
       </div>
@@ -36,7 +36,7 @@ function CustomerRow({ customer }: { customer: ShopifyCustomer }) {
         <div className="text-sm font-semibold text-txt">
           {customer.ordersCount.toLocaleString()}
         </div>
-        <div className="mt-0.5 text-[10px] text-muted">orders</div>
+        <div className="mt-0.5 text-2xs text-muted">orders</div>
       </div>
 
       {/* Total spent */}
@@ -44,12 +44,12 @@ function CustomerRow({ customer }: { customer: ShopifyCustomer }) {
         <div className="text-sm font-semibold text-txt">
           {customer.totalSpent} {customer.currencyCode}
         </div>
-        <div className="mt-0.5 text-[10px] text-muted">spent</div>
+        <div className="mt-0.5 text-2xs text-muted">spent</div>
       </div>
 
       {/* Join date */}
       <div className="hidden shrink-0 text-right sm:block">
-        <div className="text-[11px] text-muted">
+        <div className="text-xs-tight text-muted">
           Joined {formatShortDate(customer.createdAt)}
         </div>
       </div>

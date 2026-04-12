@@ -94,7 +94,7 @@ function SearchResultListItem({
     >
       <SidebarContent.ItemIcon
         active={active}
-        className="text-[10px] font-semibold"
+        className="text-2xs font-semibold"
       >
         {(result.similarity * 100).toFixed(0)}%
       </SidebarContent.ItemIcon>
@@ -108,7 +108,7 @@ function SearchResultListItem({
         <SidebarContent.ItemDescription className="line-clamp-2">
           {result.text}
         </SidebarContent.ItemDescription>
-        <span className="mt-2 block text-[10px] font-semibold uppercase tracking-[0.12em] text-accent-fg/85">
+        <span className="mt-2 block text-2xs font-semibold uppercase tracking-[0.12em] text-accent-fg/85">
           {(result.similarity * 100).toFixed(0)}% {t("knowledgeview.Match")}
         </span>
       </SidebarContent.ItemBody>
@@ -160,7 +160,7 @@ function DocumentListItem({
             <span className="inline-flex items-center rounded-md border border-border/45 bg-bg/30 px-1.5 py-0.5 text-[9px] font-bold uppercase leading-none tracking-wider text-muted/80">
               {getKnowledgeSourceLabel(doc.source, t)}
             </span>
-            <span className="text-[10px] text-muted/50 opacity-0 transition-opacity group-hover:opacity-100">
+            <span className="text-2xs text-muted/50 opacity-0 transition-opacity group-hover:opacity-100">
               {formatShortDate(doc.createdAt, { fallback: "—" })}
             </span>
           </div>
@@ -168,9 +168,9 @@ function DocumentListItem({
       </SidebarContent.ItemButton>
       <span className="absolute right-2 top-2 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
         <ConfirmDeleteControl
-          triggerClassName="h-7 rounded-lg border border-transparent px-2 text-[10px] font-bold !bg-transparent text-danger/70 transition-all hover:!bg-danger/12 hover:border-danger/25 hover:text-danger"
-          confirmClassName="h-7 rounded-lg border border-danger/25 bg-danger/14 px-2 text-[10px] font-bold text-danger transition-all hover:bg-danger/20"
-          cancelClassName="h-7 rounded-lg border border-border/35 px-2 text-[10px] font-bold text-muted-strong transition-all hover:border-border-strong hover:text-txt"
+          triggerClassName="h-7 rounded-lg border border-transparent px-2 text-2xs font-bold !bg-transparent text-danger/70 transition-all hover:!bg-danger/12 hover:border-danger/25 hover:text-danger"
+          confirmClassName="h-7 rounded-lg border border-danger/25 bg-danger/14 px-2 text-2xs font-bold text-danger transition-all hover:bg-danger/20"
+          cancelClassName="h-7 rounded-lg border border-border/35 px-2 text-2xs font-bold text-muted-strong transition-all hover:border-border-strong hover:text-txt"
           disabled={deleting}
           busyLabel="..."
           onConfirm={() => onDelete(doc.id)}
@@ -185,7 +185,10 @@ function DocumentListItem({
 export function KnowledgeView({
   inModal,
   embedded,
-}: { inModal?: boolean; embedded?: boolean } = {}) {
+}: {
+  inModal?: boolean;
+  embedded?: boolean;
+} = {}) {
   const { t } = useApp();
   const { setActionNotice } = useApp();
   const setActionNoticeRef = useRef(setActionNotice);
@@ -870,17 +873,15 @@ export function KnowledgeView({
             </div>
 
             <div className="space-y-1.5">
-              {loading &&
-                !isShowingSearchResults &&
-                documents.length === 0 && (
-                  <PagePanel.Empty
-                    variant="inset"
-                    className="px-4 py-10 text-center text-sm font-medium"
-                    title={t("knowledgeview.LoadingDocuments")}
-                  >
-                    {t("knowledgeview.LoadingDocuments")}
-                  </PagePanel.Empty>
-                )}
+              {loading && !isShowingSearchResults && documents.length === 0 && (
+                <PagePanel.Empty
+                  variant="inset"
+                  className="px-4 py-10 text-center text-sm font-medium"
+                  title={t("knowledgeview.LoadingDocuments")}
+                >
+                  {t("knowledgeview.LoadingDocuments")}
+                </PagePanel.Empty>
+              )}
 
               {!loading &&
                 !isShowingSearchResults &&
@@ -910,25 +911,26 @@ export function KnowledgeView({
                   />
                 )}
 
-              {isShowingSearchResults &&
-                visibleSearchResults.length === 0 && (
-                  <PagePanel.Empty
-                    variant="inset"
-                    className="min-h-[12rem] px-4 py-8"
-                    description={t("knowledgeview.SearchTips", {
-                      defaultValue:
-                        "Try a filename, topic, or phrase from the document body.",
-                    })}
-                    title={t("knowledgeview.NoResultsFound")}
-                  />
-                )}
+              {isShowingSearchResults && visibleSearchResults.length === 0 && (
+                <PagePanel.Empty
+                  variant="inset"
+                  className="min-h-[12rem] px-4 py-8"
+                  description={t("knowledgeview.SearchTips", {
+                    defaultValue:
+                      "Try a filename, topic, or phrase from the document body.",
+                  })}
+                  title={t("knowledgeview.NoResultsFound")}
+                />
+              )}
 
               {isShowingSearchResults
                 ? visibleSearchResults.map((result) => (
                     <SearchResultListItem
                       key={result.id}
                       result={result}
-                      active={selectedDocId === (result.documentId || result.id)}
+                      active={
+                        selectedDocId === (result.documentId || result.id)
+                      }
                       onSelect={setSelectedDocId}
                     />
                   ))
@@ -956,7 +958,7 @@ export function KnowledgeView({
           variant="inset"
           className="mb-4 flex items-center gap-2 px-4 py-3 text-sm text-muted-strong"
         >
-          <span className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--accent)] border-t-transparent" />
+          <span className="h-4 w-4 animate-spin rounded-full border-2 border-accent border-t-transparent" />
           {t("knowledgeview.KnowledgeServiceIs")}
         </PagePanel>
       )}

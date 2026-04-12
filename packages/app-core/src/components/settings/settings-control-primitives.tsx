@@ -17,12 +17,12 @@ export const SETTINGS_SEGMENTED_GROUP_CLASSNAME =
   "flex gap-1 rounded-xl border border-border bg-card/50 p-1 shrink-0";
 
 export const SETTINGS_TEXTAREA_CLASSNAME =
-  "w-full rounded-xl border border-border/60 bg-bg/55 px-3 py-2 text-[11px] font-mono shadow-sm transition-[border-color,box-shadow,background-color] focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent";
+  "w-full rounded-xl border border-border/60 bg-bg/55 px-3 py-2 text-xs-tight font-mono shadow-sm transition-[border-color,box-shadow,background-color] focus-visible:border-accent focus-visible:ring-1 focus-visible:ring-accent";
 
 export const SETTINGS_TOOLBAR_SELECT_TRIGGER_CLASSNAME =
   "h-11 rounded-xl border-border/60 bg-bg/70 text-left shadow-sm";
 
-export const SETTINGS_MUTED_TEXT_CLASSNAME = "text-[11px] text-[var(--muted)]";
+export const SETTINGS_MUTED_TEXT_CLASSNAME = "text-xs-tight text-muted";
 
 export function SettingsField({
   className,

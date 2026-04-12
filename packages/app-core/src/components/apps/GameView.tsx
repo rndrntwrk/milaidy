@@ -264,7 +264,7 @@ export function DesktopGameWindowControls({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <span className="rounded border border-border px-2 py-1 text-[10px] text-muted">
+      <span className="rounded border border-border px-2 py-1 text-2xs text-muted">
         {boundsLabel}
       </span>
       <Button
@@ -520,7 +520,7 @@ export function DesktopGameWindowControls({
         </>
       )}
       {(message || error) && (
-        <span className={`text-[10px] ${error ? "text-danger" : "text-ok"}`}>
+        <span className={`text-2xs ${error ? "text-danger" : "text-ok"}`}>
           {error ?? message}
         </span>
       )}
@@ -1308,7 +1308,7 @@ export function GameView() {
         <Button
           variant="outline"
           size="sm"
-          className="h-6 text-[10px] px-2 py-0 border-border bg-card hover:border-accent"
+          className="h-6 text-2xs px-2 py-0 border-border bg-card hover:border-accent"
           onClick={() => void loadLogs()}
         >
           {t("common.refresh")}
@@ -1316,20 +1316,20 @@ export function GameView() {
         <Button
           variant="outline"
           size="sm"
-          className="h-6 text-[10px] px-2 py-0 border-border bg-card hover:border-accent"
+          className="h-6 text-2xs px-2 py-0 border-border bg-card hover:border-accent"
           onClick={() => setShowLogsPanel(false)}
         >
           {t("common.hide")}
         </Button>
       </div>
       {activeSessionState?.goalLabel ? (
-        <div className="border-b border-border px-2 py-1.5 text-[10px] text-muted">
+        <div className="border-b border-border px-2 py-1.5 text-2xs text-muted">
           {activeSessionState.goalLabel}
         </div>
       ) : null}
       {/* Defense of the Agents telemetry dashboard */}
       {activeSessionState?.telemetry?.heroClass != null ? (
-        <div className="border-b border-border px-2 py-2 text-[10px] space-y-1.5">
+        <div className="border-b border-border px-2 py-2 text-2xs space-y-1.5">
           <div className="flex items-center gap-2">
             <span className="font-semibold text-txt">
               {String(activeSessionState.telemetry.heroClass)
@@ -1481,7 +1481,7 @@ export function GameView() {
               key={prompt}
               variant="outline"
               size="sm"
-              className="h-6 max-w-full text-[10px] shadow-sm"
+              className="h-6 max-w-full text-2xs shadow-sm"
               onClick={() => void sendChatCommand(prompt)}
               disabled={sendingChat}
             >
@@ -1491,7 +1491,7 @@ export function GameView() {
         </div>
       ) : null}
       {activeSessionState?.recommendations?.length ? (
-        <div className="border-b border-border px-2 py-2 text-[10px] space-y-1.5">
+        <div className="border-b border-border px-2 py-2 text-2xs space-y-1.5">
           <div className="font-semibold text-txt">
             {t("gameview.Recommendations", {
               defaultValue: "Recommendations",
@@ -1513,7 +1513,7 @@ export function GameView() {
         </div>
       ) : null}
       {logLoadError ? (
-        <div className="border-b border-danger/25 bg-danger/8 px-2 py-1.5 text-[10px] text-danger">
+        <div className="border-b border-danger/25 bg-danger/8 px-2 py-1.5 text-2xs text-danger">
           {t("gameview.LogLoadFailed", {
             defaultValue: "Failed to load logs: {{message}}",
             message: logLoadError,
@@ -1548,7 +1548,7 @@ export function GameView() {
           {sendingChat ? "..." : t("common.send")}
         </Button>
       </div>
-      <div className="flex-1 min-h-0 overflow-y-auto p-2 text-[11px] font-mono">
+      <div className="flex-1 min-h-0 overflow-y-auto p-2 text-xs-tight font-mono">
         {/* Prefer telemetry activity feed when available (Defense game loop pushes entries here) */}
         {Array.isArray(
           (activeSessionState?.telemetry as Record<string, unknown> | null)
@@ -1580,11 +1580,11 @@ export function GameView() {
                   className="py-1 border-b border-border/50 flex flex-col gap-0.5"
                 >
                   <div className="flex items-center gap-1">
-                    <span className="text-muted text-[10px]">
+                    <span className="text-muted text-2xs">
                       {formatTime(entry.ts, { fallback: "—" })}
                     </span>
                     <span
-                      className={`font-semibold text-[10px] uppercase ${
+                      className={`font-semibold text-2xs uppercase ${
                         entry.action === "error"
                           ? "text-danger"
                           : entry.action.startsWith("ability")
@@ -1613,11 +1613,11 @@ export function GameView() {
                 className="py-1 border-b border-border/50 flex flex-col gap-0.5"
               >
                 <div className="flex items-center gap-1">
-                  <span className="text-muted text-[10px]">
+                  <span className="text-muted text-2xs">
                     {formatTime(entry.timestamp ?? 0, { fallback: "—" })}
                   </span>
                   <span
-                    className={`font-semibold text-[10px] uppercase ${
+                    className={`font-semibold text-2xs uppercase ${
                       entry.severity === "error"
                         ? "text-danger"
                         : entry.severity === "warning"
@@ -1643,11 +1643,11 @@ export function GameView() {
               className="py-1 border-b border-border/50 flex flex-col gap-0.5"
             >
               <div className="flex items-center gap-1">
-                <span className="text-muted text-[10px]">
+                <span className="text-muted text-2xs">
                   {formatTime(entry.timestamp, { fallback: "—" })}
                 </span>
                 <span
-                  className={`font-semibold text-[10px] uppercase ${
+                  className={`font-semibold text-2xs uppercase ${
                     entry.level === "error"
                       ? "text-danger"
                       : entry.level === "warn"
@@ -1786,7 +1786,7 @@ export function GameView() {
           {activeGameDisplayName || activeGameApp}
         </span>
         <span
-          className={`text-[10px] px-1.5 py-0.5 border ${connectionStatusColor}`}
+          className={`text-2xs px-1.5 py-0.5 border ${connectionStatusColor}`}
         >
           {connectionStatus === "connected"
             ? t("game.connected")
@@ -1794,14 +1794,14 @@ export function GameView() {
               ? t("game.connecting")
               : t("game.disconnected")}
         </span>
-        <span className="text-[10px] px-1.5 py-0.5 border border-border text-muted">
+        <span className="text-2xs px-1.5 py-0.5 border border-border text-muted">
           {activeGameRun?.viewerAttachment ?? "unavailable"}
         </span>
-        <span className="text-[10px] px-1.5 py-0.5 border border-border text-muted">
+        <span className="text-2xs px-1.5 py-0.5 border border-border text-muted">
           {activeGameRun?.health.state ?? "unknown"}
         </span>
         {activeGamePostMessageAuth ? (
-          <span className="text-[10px] px-1.5 py-0.5 border border-border text-muted">
+          <span className="text-2xs px-1.5 py-0.5 border border-border text-muted">
             {t("gameview.postMessageAuth")}
           </span>
         ) : null}
@@ -1809,7 +1809,7 @@ export function GameView() {
         {activeSessionState?.status ? (
           <span
             data-testid="game-session-status"
-            className="max-w-56 truncate text-[10px] px-1.5 py-0.5 border border-border text-muted"
+            className="max-w-56 truncate text-2xs px-1.5 py-0.5 border border-border text-muted"
             title={activeSessionState.summary ?? activeSessionState.status}
           >
             {activeSessionState.summary ?? activeSessionState.status}
@@ -1921,7 +1921,7 @@ export function GameView() {
         </Button>
       </div>
       {activeRunSummary ? (
-        <div className="border-b border-border bg-card/70 px-4 py-2 text-[11px] leading-5 text-muted-strong">
+        <div className="border-b border-border bg-card/70 px-4 py-2 text-xs-tight leading-5 text-muted-strong">
           {activeRunSummary}
         </div>
       ) : null}

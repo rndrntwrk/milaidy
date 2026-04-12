@@ -137,7 +137,14 @@ const SETTINGS_SECTIONS: SettingsSectionDef[] = [
     id: "capabilities",
     label: "settings.sections.capabilities.label",
     description: "settings.sections.capabilities.desc",
-    keywords: ["capabilities", "wallet", "browser", "enable", "disable", "feature"],
+    keywords: [
+      "capabilities",
+      "wallet",
+      "browser",
+      "enable",
+      "disable",
+      "feature",
+    ],
   },
   {
     id: "permissions",

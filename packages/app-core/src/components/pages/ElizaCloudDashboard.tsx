@@ -1094,7 +1094,7 @@ export function CloudDashboard() {
               )}
             </div>
             <span
-              className={`w-fit rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
+              className={`w-fit rounded-full border px-2.5 py-0.5 text-2xs font-semibold uppercase tracking-wider ${
                 summaryCritical
                   ? "border-danger/30 bg-danger/10 text-danger"
                   : summaryLow
@@ -1216,7 +1216,7 @@ export function CloudDashboard() {
                 <h3 className="text-sm font-semibold text-txt-strong">
                   {t("elizaclouddashboard.AutoTopUp")}
                 </h3>
-                <p className="text-[11px] text-muted mt-0.5">
+                <p className="text-xs-tight text-muted mt-0.5">
                   {autoTopUpHasPaymentMethod
                     ? t("elizaclouddashboard.AutoTopUpPaymentReady", {
                         defaultValue: "Card saved",
@@ -1238,7 +1238,7 @@ export function CloudDashboard() {
               <div className="flex-1 space-y-1">
                 <label
                   htmlFor="cloud-auto-topup-threshold"
-                  className="text-[11px] text-muted"
+                  className="text-xs-tight text-muted"
                 >
                   {t("elizaclouddashboard.RefillWhenBelow", {
                     defaultValue: "Refill when below",
@@ -1263,7 +1263,7 @@ export function CloudDashboard() {
               <div className="flex-1 space-y-1">
                 <label
                   htmlFor="cloud-auto-topup-amount"
-                  className="text-[11px] text-muted"
+                  className="text-xs-tight text-muted"
                 >
                   {t("elizaclouddashboard.TopUpAmount", {
                     defaultValue: "Top-up amount",
@@ -1306,16 +1306,16 @@ export function CloudDashboard() {
             <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
               <div className="flex items-center gap-2">
                 <Shield className="w-4 h-4 text-ok shrink-0" />
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-ok/10 text-ok font-bold uppercase tracking-wider border border-ok/20">
+                <span className="text-2xs px-2 py-0.5 rounded-full bg-ok/10 text-ok font-bold uppercase tracking-wider border border-ok/20">
                   {t("elizaclouddashboard.Secure")}
                 </span>
               </div>
               {cloudAccountIdDisplay.mono ? (
-                <code className="break-all font-mono text-[11px] text-muted">
+                <code className="break-all font-mono text-xs-tight text-muted">
                   {cloudAccountIdDisplay.text}
                 </code>
               ) : (
-                <span className="break-words text-[11px] text-muted leading-snug">
+                <span className="break-words text-xs-tight text-muted leading-snug">
                   {cloudAccountIdDisplay.text}
                 </span>
               )}
@@ -1361,7 +1361,7 @@ export function CloudDashboard() {
                   {cloudAccountIdDisplay.text}
                 </code>
               ) : (
-                <span className="max-w-full break-words text-muted text-[11px] leading-snug sm:max-w-[min(100%,280px)]">
+                <span className="max-w-full break-words text-muted text-xs-tight leading-snug sm:max-w-[min(100%,280px)]">
                   {cloudAccountIdDisplay.text}
                 </span>
               )}

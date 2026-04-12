@@ -45,7 +45,7 @@ export function IMessageStatusPanel() {
         <Button
           variant="outline"
           size="sm"
-          className="h-8 rounded-xl px-4 text-[11px] font-semibold"
+          className="h-8 rounded-xl px-4 text-xs-tight font-semibold"
           onClick={() => {
             void refresh();
           }}

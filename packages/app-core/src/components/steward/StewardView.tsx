@@ -133,7 +133,7 @@ export function StewardView() {
         {/* Steward status */}
         {stewardStatus?.connected && (
           <div className="mt-auto pt-4">
-            <div className="inline-flex items-center gap-1.5 rounded-2xl border border-accent/25 bg-accent/10 px-3 py-2 text-[11px] text-accent-fg">
+            <div className="inline-flex items-center gap-1.5 rounded-2xl border border-accent/25 bg-accent/10 px-3 py-2 text-xs-tight text-accent-fg">
               <StewardLogo size={12} />
               <span>Connected</span>
             </div>
@@ -154,7 +154,7 @@ export function StewardView() {
       <div className="mx-auto max-w-[76rem]">
         {/* Header */}
         <PagePanel variant="surface" className="px-5 py-5 sm:px-6">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
+          <div className="text-xs-tight font-semibold uppercase tracking-[0.16em] text-muted">
             Steward
           </div>
           <h1 className="mt-1 text-2xl font-semibold text-txt-strong">

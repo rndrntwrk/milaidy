@@ -907,6 +907,69 @@ describe("AppsView", () => {
     expect(textOf(tree.root)).toContain("Command bridge is unavailable");
   });
 
+  it("keeps the Babylon running surface alive when Babylon metrics are sparse", async () => {
+    const app = createApp("@elizaos/app-babylon", "Babylon", "Market");
+    const run = createRunSummary({
+      runId: "run-babylon",
+      appName: app.name,
+      displayName: app.displayName,
+      pluginName: app.name,
+      status: "running",
+      summary: "Babylon is coordinating the team before the next buy.",
+      viewerAttachment: "detached",
+      session: {
+        sessionId: "run-babylon-session",
+        appName: app.name,
+        mode: "spectate-and-steer",
+        status: "running",
+        displayName: app.displayName,
+        canSendCommands: true,
+        controls: ["pause", "resume"],
+        summary: "Babylon is coordinating the team before the next buy.",
+        goalLabel: "Keep the desk aligned before buying.",
+        suggestedPrompts: ["Check the team inventory"],
+      },
+    });
+    const ctx = createAppsContext({
+      appRuns: [run],
+      appsSubTab: "running",
+    });
+    mockUseApp.mockReturnValue({
+      ...ctx,
+      uiLanguage: "en",
+      t: tStub,
+    });
+    mockClientFns.listApps.mockResolvedValue([app]);
+    mockClientFns.listAppRuns.mockResolvedValue([run]);
+    mockClientFns.getBabylonAgentStatus.mockResolvedValue({} as never);
+    mockClientFns.getBabylonAgentSummary.mockResolvedValue({} as never);
+    mockClientFns.getBabylonAgentGoals.mockResolvedValue({} as never);
+    mockClientFns.getBabylonAgentRecentTrades.mockResolvedValue({} as never);
+    mockClientFns.getBabylonPredictionMarkets.mockResolvedValue({} as never);
+    mockClientFns.getBabylonTeamDashboard.mockResolvedValue({} as never);
+    mockClientFns.getBabylonTeamConversations.mockResolvedValue({} as never);
+    mockClientFns.getBabylonAgentChat.mockResolvedValue({} as never);
+    mockClientFns.getBabylonAgentWallet.mockResolvedValue({} as never);
+    mockClientFns.getBabylonAgentTradingBalance.mockResolvedValue({} as never);
+
+    let tree!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(AppsView));
+    });
+    await flush();
+    await flush();
+
+    expect(textOf(tree.root)).toContain("Running now");
+    expect(textOf(tree.root)).toContain("Babylon");
+    expect(textOf(tree.root)).toContain("Waiting for wallet");
+    expect(
+      tree.root.findAll(
+        (node) =>
+          node.props["data-testid"] === "babylon-running-operator-surface",
+      ).length,
+    ).toBe(1);
+  });
+
   it("shows auth warning when postMessage auth payload is missing", async () => {
     const ctx = createAppsContext();
     mockUseApp.mockReturnValue({

@@ -150,11 +150,11 @@ export function ApiKeyConfig({
           {selectedProvider.name} {t("nav.settings")}
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-[11px] text-muted">
+          <span className="text-xs-tight text-muted">
             {setCount}/{params.length} {t("apikeyconfig.configured")}
           </span>
           <span
-            className="text-[11px] px-2 py-[3px] border"
+            className="text-xs-tight px-2 py-[3px] border"
             style={{
               borderColor: selectedProvider.configured
                 ? "var(--ok)"
@@ -194,7 +194,7 @@ export function ApiKeyConfig({
               : t("apikeyconfig.fetchModels")}
           </Button>
           <span
-            className={`text-[11px] min-h-4 flex items-center max-w-[min(100%,16rem)] ${
+            className={`text-xs-tight min-h-4 flex items-center max-w-[min(100%,16rem)] ${
               modelsFetchResult
                 ? modelsFetchResult.tone === "error"
                   ? "text-danger"

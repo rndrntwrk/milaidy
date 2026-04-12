@@ -52,7 +52,8 @@ describe("permissions routes (real server)", () => {
       enabled: true,
     });
     expect(status).toBe(200);
-    expect(data).toHaveProperty("enabled", true);
+    expect(data).toHaveProperty("shellEnabled", true);
+    expect(data).toHaveProperty("permission.status", "granted");
   }, 60_000);
 
   test("POST /api/permissions/refresh returns refresh message", async () => {

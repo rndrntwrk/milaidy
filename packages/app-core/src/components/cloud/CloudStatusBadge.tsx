@@ -176,7 +176,7 @@ export function CloudStatusBadge(props: CloudStatusBadgeProps) {
       className={`${SHELL_EXPANDED_BUTTON_CLASSNAME} shrink-0 gap-1.5 px-3.5 leading-none no-underline ${
         appearance === "shell"
           ? "text-sm font-medium"
-          : "text-[11px] font-mono sm:text-xs"
+          : "text-xs-tight font-mono sm:text-xs"
       } ${compactOnMobile ? "max-[380px]:w-11 max-[380px]:justify-center max-[380px]:px-0" : ""}`}
       aria-label={status.title}
       title={status.title}

@@ -220,14 +220,14 @@ export function DesktopTalkModePanel() {
             <CardTitle className="text-sm">
               {t("voiceconfigview.DesktopTalkMode")}
             </CardTitle>
-            <CardDescription className="mt-1 text-[11px] leading-5">
+            <CardDescription className="mt-1 text-xs-tight leading-5">
               {t("voiceconfigview.TalkModeDescription")}
             </CardDescription>
           </div>
           <Button
             variant="outline"
             size="sm"
-            className="min-h-10 rounded-xl px-3 text-[11px] font-semibold"
+            className="min-h-10 rounded-xl px-3 text-xs-tight font-semibold"
             onClick={() =>
               void runAction(
                 "voice-talkmode-refresh",
@@ -245,7 +245,7 @@ export function DesktopTalkModePanel() {
       <CardContent className="flex flex-col gap-4 px-4 pb-4">
         {(error || message) && (
           <div
-            className={`rounded-xl border px-3 py-2.5 text-[11px] leading-5 ${
+            className={`rounded-xl border px-3 py-2.5 text-xs-tight leading-5 ${
               error
                 ? "border-danger/40 bg-danger/10 text-danger"
                 : "border-ok/40 bg-ok/10 text-ok"
@@ -257,16 +257,16 @@ export function DesktopTalkModePanel() {
 
         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
           <Card className="border-border/50 bg-bg-hover/60 shadow-none">
-            <CardContent className="px-2.5 py-2 text-[11px]">
-              <div className="text-[10px] text-muted">
+            <CardContent className="px-2.5 py-2 text-xs-tight">
+              <div className="text-2xs text-muted">
                 {t("voiceconfigview.State")}
               </div>
               <div className="font-semibold text-txt">{panelState.state}</div>
             </CardContent>
           </Card>
           <Card className="border-border/50 bg-bg-hover/60 shadow-none">
-            <CardContent className="px-2.5 py-2 text-[11px]">
-              <div className="text-[10px] text-muted">
+            <CardContent className="px-2.5 py-2 text-xs-tight">
+              <div className="text-2xs text-muted">
                 {t("voiceconfigview.Enabled")}
               </div>
               <div className="font-semibold text-txt">
@@ -277,8 +277,8 @@ export function DesktopTalkModePanel() {
             </CardContent>
           </Card>
           <Card className="border-border/50 bg-bg-hover/60 shadow-none">
-            <CardContent className="px-2.5 py-2 text-[11px]">
-              <div className="text-[10px] text-muted">
+            <CardContent className="px-2.5 py-2 text-xs-tight">
+              <div className="text-2xs text-muted">
                 {t("voiceconfigview.Speaking")}
               </div>
               <div className="font-semibold text-txt">
@@ -289,8 +289,8 @@ export function DesktopTalkModePanel() {
             </CardContent>
           </Card>
           <Card className="border-border/50 bg-bg-hover/60 shadow-none">
-            <CardContent className="px-2.5 py-2 text-[11px]">
-              <div className="text-[10px] text-muted">
+            <CardContent className="px-2.5 py-2 text-xs-tight">
+              <div className="text-2xs text-muted">
                 {t("voiceconfigview.Whisper")}
               </div>
               <div className="font-semibold text-txt">
@@ -314,7 +314,7 @@ export function DesktopTalkModePanel() {
           <Button
             variant="outline"
             size="sm"
-            className="min-h-10 rounded-xl px-3 text-[11px] font-semibold"
+            className="min-h-10 rounded-xl px-3 text-xs-tight font-semibold"
             onClick={() =>
               void runAction(
                 "voice-talkmode-start-stop",
@@ -354,7 +354,7 @@ export function DesktopTalkModePanel() {
           <Button
             variant="outline"
             size="sm"
-            className="min-h-10 rounded-xl px-3 text-[11px] font-semibold"
+            className="min-h-10 rounded-xl px-3 text-xs-tight font-semibold"
             onClick={() =>
               void runAction(
                 "voice-talkmode-speak",
@@ -376,7 +376,7 @@ export function DesktopTalkModePanel() {
           <Button
             variant="outline"
             size="sm"
-            className="min-h-10 rounded-xl px-3 text-[11px] font-semibold"
+            className="min-h-10 rounded-xl px-3 text-xs-tight font-semibold"
             onClick={() =>
               void runAction(
                 "voice-talkmode-stop-speaking",
@@ -538,7 +538,7 @@ function WakeWordSection({
           {t("voiceconfigview.WakeWord")}
         </div>
         <div className="flex min-h-10 items-center gap-2 rounded-xl border border-border/50 bg-bg-hover px-3">
-          <span className="text-[11px] font-medium text-muted-strong">
+          <span className="text-xs-tight font-medium text-muted-strong">
             {enabled
               ? t("voiceconfigview.Enabled", { defaultValue: "Enabled" })
               : t("voiceconfigview.Disabled", { defaultValue: "Disabled" })}
@@ -566,7 +566,7 @@ function WakeWordSection({
           {triggers.map((trigger) => (
             <span
               key={trigger}
-              className="flex min-h-7 items-center gap-1 rounded-full border border-accent/30 bg-accent/10 px-2 py-1 text-[10px] text-txt"
+              className="flex min-h-7 items-center gap-1 rounded-full border border-accent/30 bg-accent/10 px-2 py-1 text-2xs text-txt"
             >
               {trigger}
               {triggers.length > 1 && (
@@ -600,7 +600,7 @@ function WakeWordSection({
             }}
           />
         </div>
-        <div className="text-[10px] text-muted">
+        <div className="text-2xs text-muted">
           {t("voiceconfigview.PressEnterOrComma")}
         </div>
       </div>
@@ -609,9 +609,7 @@ function WakeWordSection({
           <span className="text-xs font-semibold">
             {t("voiceconfigview.WakeSensitivity")}
           </span>
-          <span className="text-[10px] text-muted">
-            {sensitivity.toFixed(2)}s
-          </span>
+          <span className="text-2xs text-muted">{sensitivity.toFixed(2)}s</span>
         </div>
         <input
           type="range"
@@ -624,7 +622,7 @@ function WakeWordSection({
             void handleSensitivityChange(parseFloat(e.target.value))
           }
         />
-        <div className="text-[10px] text-muted">
+        <div className="text-2xs text-muted">
           {t("voiceconfigview.LowerMoreSensiti")}
         </div>
       </div>
@@ -645,7 +643,7 @@ function WakeWordSection({
               >
                 <div className="font-semibold">{m.id}</div>
                 {m.hintKey && (
-                  <div className="text-[10px] opacity-70 mt-0.5">
+                  <div className="text-2xs opacity-70 mt-0.5">
                     {t(m.hintKey)}
                   </div>
                 )}
@@ -870,7 +868,7 @@ export function VoiceConfigView() {
                 onClick={() => handleProviderChange(p.id)}
               >
                 <div className="font-semibold">{p.label}</div>
-                <div className="text-[10px] opacity-70 mt-0.5">{p.hint}</div>
+                <div className="text-2xs opacity-70 mt-0.5">{p.hint}</div>
               </Button>
             );
           })}
@@ -883,7 +881,7 @@ export function VoiceConfigView() {
             : `${providerInfo?.label} — ${t("voiceconfigview.NoApiKeyNeeded")}`}
         </span>
         <span
-          className={`inline-flex items-center rounded-full border px-2 py-1 text-[10px] font-medium ${
+          className={`inline-flex items-center rounded-full border px-2 py-1 text-2xs font-medium ${
             isConfigured
               ? "border-ok/35 bg-ok/10 text-ok"
               : "border-warn/35 bg-warn/10 text-warn"
@@ -926,7 +924,7 @@ export function VoiceConfigView() {
                 }
                 onChange={(e) => handleApiKeyChange(e.target.value)}
               />
-              <div className="text-[10px] text-muted">
+              <div className="text-2xs text-muted">
                 {t("voiceconfigview.GetYourKeyAt")}{" "}
                 <a
                   href="https://elevenlabs.io"
@@ -937,7 +935,7 @@ export function VoiceConfigView() {
                   {t("voiceconfigview.elevenlabsIo")}
                 </a>
               </div>
-              <div className="text-[10px] text-muted">
+              <div className="text-2xs text-muted">
                 {t("voiceconfigview.FastPathDefaultE")}
                 {DEFAULT_ELEVEN_FAST_MODEL}`).
               </div>
@@ -964,7 +962,7 @@ export function VoiceConfigView() {
                     <div className="font-semibold text-xs truncate w-full">
                       {preset.name}
                     </div>
-                    <div className="text-[10px] text-muted truncate w-full">
+                    <div className="text-2xs text-muted truncate w-full">
                       {preset.hint}
                     </div>
                   </Button>
@@ -977,7 +975,7 @@ export function VoiceConfigView() {
               <Button
                 variant="outline"
                 size="sm"
-                className="min-h-10 rounded-xl px-3 text-[11px] font-semibold"
+                className="min-h-10 rounded-xl px-3 text-xs-tight font-semibold"
                 disabled={testing}
                 onClick={() => handleTestVoice(selectedPreset.previewUrl)}
               >
@@ -991,7 +989,7 @@ export function VoiceConfigView() {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="min-h-10 rounded-xl px-3 text-[11px] font-semibold"
+                  className="min-h-10 rounded-xl px-3 text-xs-tight font-semibold"
                   onClick={() => {
                     if (audioRef.current) {
                       audioRef.current.pause();

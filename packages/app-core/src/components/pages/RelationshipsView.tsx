@@ -31,7 +31,7 @@ import { RelationshipsGraphPanel } from "./RelationshipsGraphPanel";
 import { RelationshipsIdentityCluster } from "./RelationshipsIdentityCluster";
 
 const TOOLBAR_BUTTON_BASE =
-  "h-8 rounded-full px-3.5 text-[10px] font-semibold tracking-[0.12em] border border-border/32 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_84%,transparent),color-mix(in_srgb,var(--bg)_95%,transparent))] text-muted-strong shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_14px_20px_-18px_rgba(15,23,42,0.14)] backdrop-blur-md transition-[border-color,background-color,color,transform,box-shadow] duration-200 hover:border-border/46 hover:bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_90%,transparent),color-mix(in_srgb,var(--bg)_97%,transparent))] hover:text-txt hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_16px_22px_-18px_rgba(15,23,42,0.16)] active:scale-95 disabled:hover:border-border/32 disabled:hover:bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_84%,transparent),color-mix(in_srgb,var(--bg)_95%,transparent))] disabled:hover:text-muted-strong";
+  "h-8 rounded-full px-3.5 text-2xs font-semibold tracking-[0.12em] border border-border/32 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_84%,transparent),color-mix(in_srgb,var(--bg)_95%,transparent))] text-muted-strong shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_14px_20px_-18px_rgba(15,23,42,0.14)] backdrop-blur-md transition-[border-color,background-color,color,transform,box-shadow] duration-200 hover:border-border/46 hover:bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_90%,transparent),color-mix(in_srgb,var(--bg)_97%,transparent))] hover:text-txt hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_16px_22px_-18px_rgba(15,23,42,0.16)] active:scale-95 disabled:hover:border-border/32 disabled:hover:bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_84%,transparent),color-mix(in_srgb,var(--bg)_95%,transparent))] disabled:hover:text-muted-strong";
 
 function toTimestamp(value?: string): number {
   if (!value) return 0;
@@ -135,7 +135,7 @@ function PersonSummaryCard({
     <PagePanel variant="padded" className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted/70">
+          <div className="text-xs-tight font-semibold uppercase tracking-[0.16em] text-muted/70">
             Canonical person
           </div>
           <div className="mt-2 text-[1.75rem] font-semibold leading-tight text-txt">
@@ -161,7 +161,7 @@ function PersonSummaryCard({
               type="button"
               size="sm"
               variant="outline"
-              className="ml-1 h-7 rounded-full px-3 text-[10px] font-semibold tracking-[0.12em]"
+              className="ml-1 h-7 rounded-full px-3 text-2xs font-semibold tracking-[0.12em]"
               onClick={() => onViewMemories(person.memberEntityIds)}
             >
               View memories
@@ -173,7 +173,7 @@ function PersonSummaryCard({
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="grid gap-3 sm:grid-cols-2">
           <PagePanel variant="inset" className="px-4 py-4">
-            <div className="text-[11px] uppercase tracking-[0.14em] text-muted/70">
+            <div className="text-xs-tight uppercase tracking-[0.14em] text-muted/70">
               Platforms
             </div>
             <div className="mt-2 text-sm font-semibold text-txt">
@@ -181,7 +181,7 @@ function PersonSummaryCard({
             </div>
           </PagePanel>
           <PagePanel variant="inset" className="px-4 py-4">
-            <div className="text-[11px] uppercase tracking-[0.14em] text-muted/70">
+            <div className="text-xs-tight uppercase tracking-[0.14em] text-muted/70">
               Last interaction
             </div>
             <div className="mt-2 text-sm font-semibold text-txt">
@@ -189,7 +189,7 @@ function PersonSummaryCard({
             </div>
           </PagePanel>
           <PagePanel variant="inset" className="px-4 py-4">
-            <div className="text-[11px] uppercase tracking-[0.14em] text-muted/70">
+            <div className="text-xs-tight uppercase tracking-[0.14em] text-muted/70">
               Categories
             </div>
             <div className="mt-2 text-sm font-semibold text-txt">
@@ -197,7 +197,7 @@ function PersonSummaryCard({
             </div>
           </PagePanel>
           <PagePanel variant="inset" className="px-4 py-4">
-            <div className="text-[11px] uppercase tracking-[0.14em] text-muted/70">
+            <div className="text-xs-tight uppercase tracking-[0.14em] text-muted/70">
               Tags
             </div>
             <div className="mt-2 text-sm font-semibold text-txt">
@@ -206,7 +206,7 @@ function PersonSummaryCard({
           </PagePanel>
 
           <PagePanel variant="surface" className="sm:col-span-2 px-4 py-4">
-            <div className="text-[11px] uppercase tracking-[0.14em] text-muted/70">
+            <div className="text-xs-tight uppercase tracking-[0.14em] text-muted/70">
               Reachability
             </div>
             {contacts.length > 0 ? (
@@ -216,7 +216,7 @@ function PersonSummaryCard({
                     key={`${contact.label}:${contact.value}`}
                     className="rounded-[16px] border border-border/24 bg-card/35 px-3 py-3"
                   >
-                    <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted/70">
+                    <div className="text-2xs font-semibold uppercase tracking-[0.12em] text-muted/70">
                       {contact.label}
                     </div>
                     <div className="mt-1 text-sm font-semibold text-txt">
@@ -234,7 +234,7 @@ function PersonSummaryCard({
 
           {hasProfiles ? (
             <PagePanel variant="surface" className="sm:col-span-2 px-4 py-4">
-              <div className="text-[11px] uppercase tracking-[0.14em] text-muted/70">
+              <div className="text-xs-tight uppercase tracking-[0.14em] text-muted/70">
                 Profiles
               </div>
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -244,7 +244,7 @@ function PersonSummaryCard({
                     className="rounded-[16px] border border-border/24 bg-card/35 px-3 py-3"
                   >
                     <div className="flex flex-wrap items-center gap-2">
-                      <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted/70">
+                      <div className="text-2xs font-semibold uppercase tracking-[0.12em] text-muted/70">
                         {profileSourceLabel(profile.source)}
                       </div>
                       {profile.canonical ? (
@@ -283,7 +283,7 @@ function FactsPanel({ person }: { person: RelationshipsPersonDetail }) {
     <PagePanel variant="surface" className="px-4 py-4">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted/70">
+          <div className="text-xs-tight font-semibold uppercase tracking-[0.16em] text-muted/70">
             Facts
           </div>
           <div className="mt-2 text-lg font-semibold text-txt">
@@ -304,7 +304,7 @@ function FactsPanel({ person }: { person: RelationshipsPersonDetail }) {
               key={fact.id}
               className="rounded-[18px] border border-border/24 bg-card/32 px-3.5 py-3"
             >
-              <div className="flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted/70">
+              <div className="flex flex-wrap items-center gap-2 text-2xs font-semibold uppercase tracking-[0.12em] text-muted/70">
                 <span>{fact.sourceType}</span>
                 {fact.field ? <span>{fact.field}</span> : null}
                 {typeof fact.confidence === "number" ? (
@@ -328,7 +328,7 @@ function RelationshipsPanel({ person }: { person: RelationshipsPersonDetail }) {
     <PagePanel variant="surface" className="px-4 py-4">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted/70">
+          <div className="text-xs-tight font-semibold uppercase tracking-[0.16em] text-muted/70">
             Relationships
           </div>
           <div className="mt-2 text-lg font-semibold text-txt">
@@ -390,7 +390,7 @@ function ConversationsPanel({ person }: { person: RelationshipsPersonDetail }) {
     <PagePanel variant="surface" className="px-4 py-4">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted/70">
+          <div className="text-xs-tight font-semibold uppercase tracking-[0.16em] text-muted/70">
             Recent conversations
           </div>
           <div className="mt-2 text-lg font-semibold text-txt">
@@ -415,7 +415,7 @@ function ConversationsPanel({ person }: { person: RelationshipsPersonDetail }) {
                 <div className="text-sm font-semibold text-txt">
                   {conversation.roomName}
                 </div>
-                <div className="text-[11px] text-muted">
+                <div className="text-xs-tight text-muted">
                   {formatDateTime(conversation.lastActivityAt, {
                     fallback: "n/a",
                   })}
@@ -428,7 +428,7 @@ function ConversationsPanel({ person }: { person: RelationshipsPersonDetail }) {
                     key={message.id}
                     className="rounded-[14px] bg-card/50 px-3 py-2.5"
                   >
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted/70">
+                    <div className="text-xs-tight font-semibold uppercase tracking-[0.12em] text-muted/70">
                       {message.speaker}
                     </div>
                     <div className="mt-1 text-sm leading-6 text-txt">
@@ -504,13 +504,13 @@ function RelationshipsActivityFeed() {
           >
             <div className="flex flex-wrap items-center gap-2">
               <span
-                className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em]"
+                className="inline-flex items-center rounded-full px-2 py-0.5 text-2xs font-semibold uppercase tracking-[0.12em]"
                 style={{ backgroundColor: color.bg, color: color.fg }}
               >
                 {item.type}
               </span>
               {item.timestamp ? (
-                <span className="ml-auto text-[11px] text-muted">
+                <span className="ml-auto text-xs-tight text-muted">
                   {formatDateTime(item.timestamp, { fallback: "" })}
                 </span>
               ) : null}
@@ -668,7 +668,7 @@ export function RelationshipsView({
         <PagePanel.SummaryCard compact className="mt-2 space-y-3">
           <div className="grid grid-cols-3 gap-2">
             <div className="rounded-[16px] border border-border/24 bg-card/35 px-2.5 py-2">
-              <div className="text-[10px] uppercase tracking-[0.12em] text-muted/70">
+              <div className="text-2xs uppercase tracking-[0.12em] text-muted/70">
                 People
               </div>
               <div className="mt-1 text-sm font-semibold text-txt">
@@ -676,7 +676,7 @@ export function RelationshipsView({
               </div>
             </div>
             <div className="rounded-[16px] border border-border/24 bg-card/35 px-2.5 py-2">
-              <div className="text-[10px] uppercase tracking-[0.12em] text-muted/70">
+              <div className="text-2xs uppercase tracking-[0.12em] text-muted/70">
                 Links
               </div>
               <div className="mt-1 text-sm font-semibold text-txt">
@@ -684,7 +684,7 @@ export function RelationshipsView({
               </div>
             </div>
             <div className="rounded-[16px] border border-border/24 bg-card/35 px-2.5 py-2">
-              <div className="text-[10px] uppercase tracking-[0.12em] text-muted/70">
+              <div className="text-2xs uppercase tracking-[0.12em] text-muted/70">
                 IDs
               </div>
               <div className="mt-1 text-sm font-semibold text-txt">
@@ -694,7 +694,7 @@ export function RelationshipsView({
           </div>
 
           <div>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted/70">
+            <div className="text-xs-tight font-semibold uppercase tracking-[0.14em] text-muted/70">
               Platform filter
             </div>
             <div className="mt-2 flex flex-wrap gap-1.5">
@@ -865,7 +865,7 @@ export function RelationshipsView({
             <PagePanel variant="surface" className="px-4 py-4">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted/70">
+                  <div className="text-xs-tight font-semibold uppercase tracking-[0.16em] text-muted/70">
                     Activity feed
                   </div>
                   <div className="mt-2 text-lg font-semibold text-txt">

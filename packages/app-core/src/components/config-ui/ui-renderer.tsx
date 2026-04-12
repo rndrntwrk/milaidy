@@ -397,14 +397,12 @@ const GridComponent: ComponentFn = (props, children) => {
 const CardComponent: ComponentFn = (props, children) => {
   const maxW = props.maxWidth === "full" ? "max-w-full" : "";
   return (
-    <div
-      className={`border border-[var(--border)] bg-[var(--card)] p-4 ${maxW}`}
-    >
+    <div className={`border border-border bg-card p-4 ${maxW}`}>
       {props.title ? (
         <div className="font-bold text-sm mb-0.5">{String(props.title)}</div>
       ) : null}
       {props.description ? (
-        <div className="text-xs text-[var(--muted)] mb-3">
+        <div className="text-xs text-muted mb-3">
           {String(props.description)}
         </div>
       ) : null}
@@ -416,9 +414,9 @@ const CardComponent: ComponentFn = (props, children) => {
 const SeparatorComponent: ComponentFn = (props) => {
   const isVert = props.orientation === "vertical";
   return isVert ? (
-    <div className="w-px bg-[var(--border)] self-stretch" />
+    <div className="w-px bg-border self-stretch" />
   ) : (
-    <hr className="border-t border-[var(--border)] my-2" />
+    <hr className="border-t border-border my-2" />
   );
 };
 
@@ -441,10 +439,10 @@ const TextComponent: ComponentFn = (props) => {
   const variant = String(props.variant ?? "body");
   const cls: Record<string, string> = {
     body: "text-sm",
-    caption: "text-xs text-[var(--muted)]",
-    muted: "text-sm text-[var(--muted)]",
+    caption: "text-xs text-muted",
+    muted: "text-sm text-muted",
     lead: "text-sm font-medium",
-    code: "text-xs font-mono bg-[var(--bg-hover)] px-1.5 py-0.5 border border-[var(--border)]",
+    code: "text-xs font-mono bg-[var(--bg-hover)] px-1.5 py-0.5 border border-border",
   };
   return <div className={cls[variant] ?? "text-sm"}>{text}</div>;
 };
@@ -662,11 +660,11 @@ const SwitchComponent: ComponentFn = (props, _children, ctx) => {
       <Button
         type="button"
         variant="ghost"
-        className={`relative w-9 h-[18px] p-0 transition-colors rounded-none ${checked ? "bg-[var(--accent)]" : "bg-[var(--muted)]"}`}
+        className={`relative w-9 h-[18px] p-0 transition-colors rounded-none ${checked ? "bg-accent" : "bg-muted"}`}
         onClick={() => setValue(!checked)}
       >
         <div
-          className={`absolute top-0.5 w-[14px] h-[14px] bg-[var(--card)] transition-all ${checked ? "left-5" : "left-0.5"}`}
+          className={`absolute top-0.5 w-[14px] h-[14px] bg-card transition-all ${checked ? "left-5" : "left-0.5"}`}
         />
       </Button>
       <span className="text-xs font-semibold">{String(props.label ?? "")}</span>
@@ -684,9 +682,7 @@ const SliderComponent: ComponentFn = (props, _children, ctx) => {
       {props.label ? (
         <div className="flex justify-between text-xs">
           <span className="font-semibold">{String(props.label)}</span>
-          <span className="text-[var(--muted)]">
-            {String(value ?? props.min ?? 0)}
-          </span>
+          <span className="text-muted">{String(value ?? props.min ?? 0)}</span>
         </div>
       ) : null}
       <input
@@ -715,8 +711,8 @@ const ToggleComponent: ComponentFn = (props, _children, ctx, el) => {
       variant={pressed ? "default" : "outline"}
       className={`px-3 py-1.5 text-xs transition-colors ${
         pressed
-          ? "bg-[var(--accent)] text-[var(--accent-foreground,#1a1f26)] border-[var(--accent)]"
-          : "bg-[var(--card)] text-[var(--text)] hover:bg-[var(--bg-hover)]"
+          ? "bg-accent text-accent-fg border-accent"
+          : "bg-card text-txt hover:bg-[var(--bg-hover)]"
       }`}
       onClick={() => {
         setValue(!pressed);
@@ -761,8 +757,8 @@ const ToggleGroupComponent: ComponentFn = (props, _children, ctx) => {
             variant={active ? "default" : "outline"}
             className={`px-2.5 py-1 text-xs transition-colors ${
               active
-                ? "bg-[var(--accent)] text-[var(--accent-foreground,#1a1f26)] border-[var(--accent)]"
-                : "bg-[var(--card)] text-[var(--text)] hover:bg-[var(--bg-hover)]"
+                ? "bg-accent text-accent-fg border-accent"
+                : "bg-card text-txt hover:bg-[var(--bg-hover)]"
             }`}
             onClick={() => toggle(item.value)}
           >
@@ -792,8 +788,8 @@ const ButtonGroupComponent: ComponentFn = (props, _children, ctx) => {
             variant={active ? "default" : "outline"}
             className={`px-3 py-1.5 text-xs transition-colors ${
               active
-                ? "bg-[var(--accent)] text-[var(--accent-foreground,#1a1f26)] border-[var(--accent)]"
-                : "bg-[var(--card)] text-[var(--text)] hover:bg-[var(--bg-hover)]"
+                ? "bg-accent text-accent-fg border-accent"
+                : "bg-card text-txt hover:bg-[var(--bg-hover)]"
             }`}
             onClick={() => setValue(btn.value)}
           >
@@ -823,7 +819,7 @@ const TableComponent: ComponentFn = (props) => {
             {columns.map((col) => (
               <th
                 key={col}
-                className="text-left px-2.5 py-1.5 border-b border-[var(--border)] font-semibold text-[var(--muted)]"
+                className="text-left px-2.5 py-1.5 border-b border-border font-semibold text-muted"
               >
                 {col}
               </th>
@@ -834,7 +830,7 @@ const TableComponent: ComponentFn = (props) => {
           {rows.map((row) => (
             <tr
               key={row.join("|")}
-              className="border-b border-[var(--border)] last:border-b-0"
+              className="border-b border-border last:border-b-0"
             >
               {row.map((cell) => (
                 <td key={cell} className="px-2.5 py-1.5">
@@ -856,11 +852,11 @@ const CarouselComponent: ComponentFn = (props) => {
   const [current, setCurrent] = useState(0);
   return (
     <div className="relative">
-      <div className="border border-[var(--border)] bg-[var(--bg-hover)] p-4 min-h-[60px]">
+      <div className="border border-border bg-[var(--bg-hover)] p-4 min-h-[60px]">
         {items[current] && (
           <div>
             <div className="text-xs font-bold">{items[current].title}</div>
-            <div className="text-xs text-[var(--muted)] mt-0.5">
+            <div className="text-xs text-muted mt-0.5">
               {items[current].description}
             </div>
           </div>
@@ -877,7 +873,7 @@ const CarouselComponent: ComponentFn = (props) => {
         >
           {t("ui-renderer.Larr")}
         </Button>
-        <span className="text-[10px] text-[var(--muted)] self-center">
+        <span className="text-[10px] text-muted self-center">
           {current + 1} / {items.length}
         </span>
         <Button
@@ -898,13 +894,12 @@ const CarouselComponent: ComponentFn = (props) => {
 const BadgeComponent: ComponentFn = (props) => {
   const variant = String(props.variant ?? "default");
   const cls: Record<string, string> = {
-    default: "bg-[var(--surface)] text-[var(--text)] border-[var(--border)]",
-    success: "bg-[rgba(22,163,106,0.1)] text-[var(--ok)] border-[var(--ok)]",
+    default: "bg-[var(--surface)] text-txt border-border",
+    success: "bg-[rgba(22,163,106,0.1)] text-ok border-ok",
     warning:
       "bg-[rgba(243,156,18,0.1)] text-[var(--warn,#f39c12)] border-[var(--warn,#f39c12)]",
-    error:
-      "bg-[rgba(231,76,60,0.1)] text-[var(--destructive)] border-[var(--destructive)]",
-    info: "bg-[rgba(52,152,219,0.1)] text-[var(--accent)] border-[var(--accent)]",
+    error: "bg-[rgba(231,76,60,0.1)] text-destructive border-destructive",
+    info: "bg-[rgba(52,152,219,0.1)] text-accent border-accent",
   };
   return (
     <span
@@ -931,7 +926,7 @@ const AvatarComponent: ComponentFn = (props) => {
     .toUpperCase();
   return (
     <div
-      className={`${size} rounded-full bg-[var(--accent)] text-[var(--accent-foreground,#1a1f26)] flex items-center justify-center font-bold shrink-0`}
+      className={`${size} rounded-full bg-accent text-accent-fg flex items-center justify-center font-bold shrink-0`}
     >
       {initials}
     </div>
@@ -949,11 +944,11 @@ const ImageComponent: ComponentFn = (props) => {
       src={resolvedSrc}
       alt={alt}
       style={{ width: w, height: h }}
-      className="object-cover border border-[var(--border)]"
+      className="object-cover border border-border"
     />
   ) : (
     <div
-      className="bg-[var(--bg-hover)] border border-[var(--border)] flex items-center justify-center text-xs text-[var(--muted)]"
+      className="bg-[var(--bg-hover)] border border-border flex items-center justify-center text-xs text-muted"
       style={{ width: w, height: h }}
     >
       {alt || "Image"}
@@ -966,16 +961,16 @@ const ImageComponent: ComponentFn = (props) => {
 const AlertComponent: ComponentFn = (props) => {
   const type = String(props.type ?? "info");
   const borderCls: Record<string, string> = {
-    info: "border-[var(--accent)]",
-    success: "border-[var(--ok)]",
+    info: "border-accent",
+    success: "border-ok",
     warning: "border-[var(--warn,#f39c12)]",
-    error: "border-[var(--destructive)]",
+    error: "border-destructive",
   };
   const textCls: Record<string, string> = {
-    info: "text-[var(--accent)]",
-    success: "text-[var(--ok)]",
+    info: "text-accent",
+    success: "text-ok",
     warning: "text-[var(--warn,#f39c12)]",
-    error: "text-[var(--destructive)]",
+    error: "text-destructive",
   };
   return (
     <div
@@ -987,9 +982,7 @@ const AlertComponent: ComponentFn = (props) => {
         </div>
       ) : null}
       {props.message ? (
-        <div className="text-xs text-[var(--text)] mt-0.5">
-          {String(props.message)}
-        </div>
+        <div className="text-xs text-txt mt-0.5">{String(props.message)}</div>
       ) : null}
     </div>
   );
@@ -1004,12 +997,12 @@ const ProgressComponent: ComponentFn = (props) => {
       {props.label ? (
         <div className="flex justify-between text-xs">
           <span className="font-semibold">{String(props.label)}</span>
-          <span className="text-[var(--muted)]">{Math.round(pct)}%</span>
+          <span className="text-muted">{Math.round(pct)}%</span>
         </div>
       ) : null}
-      <div className="w-full h-2 bg-[var(--bg-hover)] border border-[var(--border)] overflow-hidden">
+      <div className="w-full h-2 bg-[var(--bg-hover)] border border-border overflow-hidden">
         <div
-          className="h-full bg-[var(--accent)] transition-[width] duration-300"
+          className="h-full bg-accent transition-[width] duration-300"
           style={{ width: `${pct}%` }}
         />
       </div>
@@ -1029,7 +1022,7 @@ const RatingComponent: ComponentFn = (props) => {
         {Array.from({ length: max }, (_, i) => i + 1).map((starValue) => (
           <span
             key={starValue}
-            className={`text-sm ${starValue <= value ? "text-[var(--warn,#f39c12)]" : "text-[var(--muted)] opacity-30"}`}
+            className={`text-sm ${starValue <= value ? "text-[var(--warn,#f39c12)]" : "text-muted opacity-30"}`}
           >
             ★
           </span>
@@ -1061,12 +1054,10 @@ const SpinnerComponent: ComponentFn = (props) => {
   return (
     <div className="flex items-center gap-2">
       <div
-        className={`${size} border-2 border-[var(--border)] border-t-[var(--accent)] rounded-full animate-spin`}
+        className={`${size} border-2 border-border border-t-accent rounded-full animate-spin`}
       />
       {props.label ? (
-        <span className="text-xs text-[var(--muted)]">
-          {String(props.label)}
-        </span>
+        <span className="text-xs text-muted">{String(props.label)}</span>
       ) : null}
     </div>
   );
@@ -1077,14 +1068,11 @@ const SpinnerComponent: ComponentFn = (props) => {
 const ButtonComponent: ComponentFn = (props, _children, ctx, el) => {
   const variant = String(props.variant ?? "primary");
   const cls: Record<string, string> = {
-    primary:
-      "bg-[var(--accent)] text-[var(--accent-foreground,#1a1f26)] border-[var(--accent)] hover:opacity-90",
-    secondary:
-      "bg-[var(--card)] text-[var(--text)] border-[var(--border)] hover:bg-[var(--bg-hover)]",
-    danger:
-      "bg-[var(--destructive)] text-white border-[var(--destructive)] hover:opacity-90",
+    primary: "bg-accent text-accent-fg border-accent hover:opacity-90",
+    secondary: "bg-card text-txt border-border hover:bg-[var(--bg-hover)]",
+    danger: "bg-destructive text-white border-destructive hover:opacity-90",
     ghost:
-      "bg-transparent text-[var(--text)] border-transparent hover:bg-[var(--bg-hover)]",
+      "bg-transparent text-txt border-transparent hover:bg-[var(--bg-hover)]",
   };
   return (
     <Button
@@ -1113,7 +1101,7 @@ const LinkComponent: ComponentFn = (props, _children, ctx, el) => {
   return (
     <a
       href={safeHref}
-      className="text-xs text-[var(--accent)] underline hover:opacity-80"
+      className="text-xs text-accent underline hover:opacity-80"
       target={props.external ? "_blank" : undefined}
       rel={props.external ? "noopener noreferrer" : undefined}
       onClick={(e) => {
@@ -1143,7 +1131,7 @@ const DropdownMenuComponent: ComponentFn = (props, _children, ctx) => {
         {String(props.label ?? "Menu")} ▾
       </Button>
       {open && (
-        <div className="absolute top-full left-0 mt-1 min-w-[120px] border border-[var(--border)] bg-[var(--card)] shadow-md z-10">
+        <div className="absolute top-full left-0 mt-1 min-w-[120px] border border-border bg-card shadow-md z-10">
           {items.map((item) => (
             <Button
               key={item.value}
@@ -1180,7 +1168,7 @@ const TabsComponent: ComponentFn = (props, _children, ctx) => {
   const activeTab = tabs.find((t) => t.value === active);
   return (
     <div>
-      <div className="flex border-b border-[var(--border)]">
+      <div className="flex border-b border-border">
         {tabs.map((tab) => (
           <Button
             key={tab.value}
@@ -1188,8 +1176,8 @@ const TabsComponent: ComponentFn = (props, _children, ctx) => {
             variant="ghost"
             className={`px-3 py-1.5 text-xs rounded-none transition-colors h-auto ${
               tab.value === active
-                ? "border-b-2 border-[var(--accent)] text-[var(--accent)] font-semibold"
-                : "text-[var(--muted)] hover:text-[var(--text)]"
+                ? "border-b-2 border-accent text-accent font-semibold"
+                : "text-muted hover:text-txt"
             }`}
             onClick={() => setValue(tab.value)}
           >
@@ -1229,7 +1217,7 @@ const PaginationComponent: ComponentFn = (props, _children, ctx) => {
           size="sm"
           className={`px-2 py-1 text-xs ${
             page === current
-              ? "bg-[var(--accent)] text-[var(--accent-foreground,#1a1f26)] border-[var(--accent)]"
+              ? "bg-accent text-accent-fg border-accent"
               : "hover:bg-[var(--bg-hover)]"
           }`}
           onClick={() => setValue(page)}
@@ -1260,10 +1248,10 @@ const MetricComponent: ComponentFn = (props) => {
       ? "text-status-success"
       : trend === "down"
         ? "text-status-danger"
-        : "text-[var(--muted)]";
+        : "text-muted";
   return (
-    <div className="flex flex-col gap-0.5 p-3 rounded-lg border border-[var(--border)] bg-[var(--card)]">
-      <div className="text-[10px] text-[var(--muted)] uppercase tracking-wider font-medium">
+    <div className="flex flex-col gap-0.5 p-3 rounded-lg border border-border bg-card">
+      <div className="text-[10px] text-muted uppercase tracking-wider font-medium">
         {String(props.label ?? "")}
       </div>
       <div className="flex items-baseline gap-1.5">
@@ -1271,9 +1259,7 @@ const MetricComponent: ComponentFn = (props) => {
           {props.value != null ? String(props.value) : "—"}
         </span>
         {props.unit != null && (
-          <span className="text-xs text-[var(--muted)]">
-            {String(props.unit)}
-          </span>
+          <span className="text-xs text-muted">{String(props.unit)}</span>
         )}
       </div>
       {props.change != null && (
@@ -1301,12 +1287,12 @@ const BarGraphComponent: ComponentFn = (props) => {
             key={d.label}
             className="flex-1 flex flex-col items-center gap-0.5"
           >
-            <div className="text-[9px] text-[var(--muted)]">{d.value}</div>
+            <div className="text-[9px] text-muted">{d.value}</div>
             <div
-              className="w-full bg-[var(--accent)] transition-all duration-300 min-h-[2px]"
+              className="w-full bg-accent transition-all duration-300 min-h-[2px]"
               style={{ height: `${(d.value / maxVal) * 80}px` }}
             />
-            <div className="text-[9px] text-[var(--muted)] truncate max-w-full">
+            <div className="text-[9px] text-muted truncate max-w-full">
               {d.label}
             </div>
           </div>
@@ -1388,11 +1374,11 @@ const TooltipComponent: ComponentFn = (props) => {
       onBlur={() => setShow(false)}
       onClick={() => setShow((prev) => !prev)}
     >
-      <span className="text-xs text-[var(--accent)] underline cursor-help">
+      <span className="text-xs text-accent underline cursor-help">
         {String(props.text ?? "Hover")}
       </span>
       {show && (
-        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-[10px] bg-[var(--text)] text-[var(--card)] whitespace-nowrap z-10">
+        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 text-2xs bg-txt text-card whitespace-nowrap z-10">
           {String(props.content ?? "")}
         </div>
       )}
@@ -1407,19 +1393,19 @@ const PopoverComponent: ComponentFn = (props) => {
       <Button
         type="button"
         variant="link"
-        className="text-xs text-[var(--accent)] underline p-0 h-auto"
+        className="text-xs text-accent underline p-0 h-auto"
         onClick={() => setOpen(!open)}
       >
         {String(props.trigger ?? "Click")}
       </Button>
       {open && (
-        <div className="absolute top-full left-0 mt-1 p-3 border border-[var(--border)] bg-[var(--card)] shadow-md z-10 min-w-[150px]">
+        <div className="absolute top-full left-0 mt-1 p-3 border border-border bg-card shadow-md z-10 min-w-[150px]">
           <div className="text-xs">{String(props.content ?? "")}</div>
           <Button
             type="button"
             variant="ghost"
             size="sm"
-            className="text-[10px] text-[var(--muted)] mt-1 hover:text-[var(--text)] p-0 h-auto"
+            className="text-[10px] text-muted mt-1 hover:text-txt p-0 h-auto"
             onClick={() => setOpen(false)}
           >
             Close
@@ -1433,7 +1419,7 @@ const PopoverComponent: ComponentFn = (props) => {
 const CollapsibleComponent: ComponentFn = (props, children) => {
   const [open, setOpen] = useState(!!props.defaultOpen);
   return (
-    <div className="border border-[var(--border)]">
+    <div className="border border-border">
       <Button
         type="button"
         variant="ghost"
@@ -1469,7 +1455,7 @@ const AccordionComponent: ComponentFn = (props) => {
   };
 
   return (
-    <div className="border border-[var(--border)] divide-y divide-[var(--border)]">
+    <div className="border border-border divide-y divide-border">
       {items.map((item, i) => (
         <div key={`${item.title}:${item.content}`}>
           <Button
@@ -1517,14 +1503,14 @@ const DialogComponent: ComponentFn = (props, children, ctx) => {
       role="dialog"
       aria-modal="true"
     >
-      <div className="w-full max-w-md border border-[var(--border)] bg-[var(--card)] p-5 shadow-lg">
+      <div className="w-full max-w-md border border-border bg-card p-5 shadow-lg">
         <div className="flex items-center justify-between mb-3">
           <div>
             {props.title ? (
               <div className="font-bold text-sm">{String(props.title)}</div>
             ) : null}
             {props.description ? (
-              <div className="text-xs text-[var(--muted)] mt-0.5">
+              <div className="text-xs text-muted mt-0.5">
                 {String(props.description)}
               </div>
             ) : null}
@@ -1533,7 +1519,7 @@ const DialogComponent: ComponentFn = (props, children, ctx) => {
             type="button"
             variant="ghost"
             size="icon"
-            className="text-[var(--muted)] hover:text-[var(--text)] text-lg leading-none px-1 h-auto w-auto"
+            className="text-muted hover:text-txt text-lg leading-none px-1 h-auto w-auto"
             onClick={close}
           >
             ×
@@ -1567,13 +1553,13 @@ const DrawerComponent: ComponentFn = (props, children, ctx) => {
       role="dialog"
       aria-modal="true"
     >
-      <div className="w-full max-h-[80vh] border-t border-[var(--border)] bg-[var(--card)] p-5 shadow-lg overflow-y-auto animate-[slide-up_200ms_ease]">
-        <div className="w-10 h-1 bg-[var(--border)] mx-auto mb-3 rounded-full" />
+      <div className="w-full max-h-[80vh] border-t border-border bg-card p-5 shadow-lg overflow-y-auto animate-[slide-up_200ms_ease]">
+        <div className="w-10 h-1 bg-border mx-auto mb-3 rounded-full" />
         {props.title ? (
           <div className="font-bold text-sm">{String(props.title)}</div>
         ) : null}
         {props.description ? (
-          <div className="text-xs text-[var(--muted)] mt-0.5 mb-3">
+          <div className="text-xs text-muted mt-0.5 mb-3">
             {String(props.description)}
           </div>
         ) : null}
@@ -1655,7 +1641,7 @@ function ElementRenderer({ elementId }: { elementId: string }) {
   const component = COMPONENTS[el.type];
   if (!component) {
     return (
-      <div className="text-[10px] text-[var(--destructive)] border border-dashed border-[var(--destructive)] p-2">
+      <div className="text-[10px] text-destructive border border-dashed border-destructive p-2">
         {t("ui-renderer.UnknownComponent")} {el.type}
       </div>
     );

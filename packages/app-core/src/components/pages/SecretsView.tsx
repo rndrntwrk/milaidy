@@ -52,6 +52,10 @@ const VAULT_PANEL_CLASSNAME =
   "rounded-2xl border border-border/50 bg-card/92 shadow-sm";
 const SECTION_TOGGLE_CLASSNAME =
   "mb-3 h-auto w-full items-center gap-2 rounded-xl border border-transparent px-3 py-2 text-left hover:border-border/50 hover:bg-bg-hover";
+const fallbackTranslate = (
+  key: string,
+  vars?: { defaultValue?: string },
+): string => vars?.defaultValue ?? key;
 
 function groupSecretsByCategory(secrets: SecretInfo[]): GroupedSecrets[] {
   const grouped = new Map<string, SecretInfo[]>();
@@ -108,7 +112,8 @@ export function SecretsView({
   contentHeader?: React.ReactNode;
   inModal?: boolean;
 } = {}) {
-  const { t } = useApp();
+  const app = useApp() as ReturnType<typeof useApp> | undefined;
+  const t = app?.t ?? fallbackTranslate;
   const [allSecrets, setAllSecrets] = useState<SecretInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -238,7 +243,7 @@ export function SecretsView({
     return (
       <ContentLayout contentHeader={contentHeader} inModal={inModal}>
         <div
-          className={`${VAULT_PANEL_CLASSNAME} py-8 text-center text-[13px] italic text-muted`}
+          className={`${VAULT_PANEL_CLASSNAME} py-8 text-center text-sm italic text-muted`}
         >
           {t("secretsview.LoadingSecrets")}
         </div>
@@ -250,11 +255,11 @@ export function SecretsView({
     return (
       <ContentLayout contentHeader={contentHeader} inModal={inModal}>
         <div className={`${VAULT_PANEL_CLASSNAME} px-4 py-8 text-center`}>
-          <div className="mb-2 text-[13px] text-danger">{error}</div>
+          <div className="mb-2 text-sm text-danger">{error}</div>
           <Button
             variant="outline"
             size="sm"
-            className="h-8 px-3 text-[13px]"
+            className="h-8 px-3 text-sm"
             onClick={load}
           >
             {t("common.retry")}
@@ -268,11 +273,11 @@ export function SecretsView({
     <ContentLayout contentHeader={contentHeader} inModal={inModal}>
       <div className="space-y-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="m-0 max-w-2xl text-[13px] leading-6 text-muted" />
+          <div className="m-0 max-w-2xl text-sm leading-6 text-muted" />
           <Button
             variant="default"
             size="sm"
-            className="h-9 flex-shrink-0 px-3 text-[13px] shadow-sm"
+            className="h-9 flex-shrink-0 px-3 text-sm shadow-sm"
             onClick={() => {
               setPickerOpen(true);
               setPickerSearch("");
@@ -298,7 +303,7 @@ export function SecretsView({
         {/* Empty state */}
         {vaultSecrets.length === 0 && (
           <div
-            className={`${VAULT_PANEL_CLASSNAME} border-dashed px-4 py-8 text-center text-[13px] italic text-muted`}
+            className={`${VAULT_PANEL_CLASSNAME} border-dashed px-4 py-8 text-center text-sm italic text-muted`}
           >
             {t("secretsview.YourVaultIsEmpty")}
           </div>
@@ -324,9 +329,7 @@ export function SecretsView({
               <span className="text-[14px] font-semibold text-txt">
                 {label}
               </span>
-              <span className="text-[12px] text-muted">
-                ({catSecrets.length})
-              </span>
+              <span className="text-xs text-muted">({catSecrets.length})</span>
             </Button>
 
             {!collapsed.has(category) && (
@@ -358,7 +361,7 @@ export function SecretsView({
             <Button
               variant="default"
               size="sm"
-              className="h-9 px-4 text-[13px] font-medium shadow-sm transition-colors"
+              className="h-9 px-4 text-sm font-medium shadow-sm transition-colors"
               disabled={dirtyKeys.length === 0 || saving}
               onClick={handleSave}
             >
@@ -367,15 +370,12 @@ export function SecretsView({
                     defaultValue: "Saving...",
                   })
                 : dirtyKeys.length > 0
-                  ? t("secretsview.SaveCount", {
-                      defaultValue: "Save ({{count}})",
-                      count: dirtyKeys.length,
-                    })
+                  ? `${t("common.save")} (${dirtyKeys.length})`
                   : t("common.save")}
             </Button>
             {saveResult && (
               <span
-                className={`text-[13px] ${saveResult.ok ? "text-ok" : "text-danger"}`}
+                className={`text-sm ${saveResult.ok ? "text-ok" : "text-danger"}`}
               >
                 {saveResult.message}
               </span>
@@ -402,7 +402,8 @@ function SecretPicker({
   onAdd: (key: string) => void;
   onClose: () => void;
 }) {
-  const { t } = useApp();
+  const app = useApp() as ReturnType<typeof useApp> | undefined;
+  const t = app?.t ?? fallbackTranslate;
   // Group available by category
   const grouped = useMemo(() => {
     return groupSecretsByCategory(available);
@@ -440,7 +441,7 @@ function SecretPicker({
         </DialogHeader>
         <Input
           type="text"
-          className="h-12 w-full rounded-none border-0 border-b border-border/60 bg-transparent px-4 py-2.5 text-[13px] text-txt shadow-none focus-visible:ring-0 font-body"
+          className="h-12 w-full rounded-none border-0 border-b border-border/60 bg-transparent px-4 py-2.5 text-sm text-txt shadow-none focus-visible:ring-0 font-body"
           placeholder={t("secretsview.SearchByKeyDescr")}
           aria-label={t("secretsview.SearchByKeyDescr")}
           value={search}
@@ -449,7 +450,7 @@ function SecretPicker({
         />
         <div className="flex-1 overflow-y-auto p-3">
           {available.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-border/60 py-6 text-center text-[13px] text-muted">
+            <div className="rounded-xl border border-dashed border-border/60 py-6 text-center text-sm text-muted">
               {search
                 ? "No matching secrets found."
                 : "All available secrets are already in your vault."}
@@ -457,7 +458,7 @@ function SecretPicker({
           ) : (
             grouped.map(({ category, label, secrets }) => (
               <div key={category} className="mb-4 space-y-2">
-                <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+                <div className="text-xs-tight font-semibold uppercase tracking-wide text-muted">
                   {label}
                 </div>
                 {secrets.map((s) => {
@@ -471,11 +472,11 @@ function SecretPicker({
                       className="flex items-start justify-between gap-3 rounded-xl border border-transparent px-3 py-2 hover:border-border/40 hover:bg-bg-hover"
                     >
                       <div className="flex-1 min-w-0">
-                        <div className="truncate text-[13px] font-mono text-txt">
+                        <div className="truncate text-sm font-mono text-txt">
                           {s.key}
                         </div>
                         <div
-                          className="text-[11px] leading-5 text-muted"
+                          className="text-xs-tight leading-5 text-muted"
                           title={pluginList}
                         >
                           {s.description}
@@ -492,7 +493,7 @@ function SecretPicker({
                       <Button
                         variant="default"
                         size="sm"
-                        className="px-2.5 py-1 h-7 text-[12px] shadow-sm flex-shrink-0"
+                        className="px-2.5 py-1 h-7 text-xs shadow-sm flex-shrink-0"
                         onClick={() => onAdd(s.key)}
                       >
                         {t("secretsview.Add")}
@@ -528,7 +529,8 @@ function SecretCard({
   onDraftChange: (val: string) => void;
   onRemove: () => void;
 }) {
-  const { t } = useApp();
+  const app = useApp() as ReturnType<typeof useApp> | undefined;
+  const t = app?.t ?? fallbackTranslate;
   const enabledPlugins = secret.usedBy.filter((u) => u.enabled);
   const pluginList = secret.usedBy
     .map((u) => u.pluginName || u.pluginId)
@@ -550,14 +552,14 @@ function SecretCard({
                 backgroundColor: secret.isSet ? "var(--ok)" : "var(--muted)",
               }}
             />
-            <span className="truncate text-[13px] font-mono font-medium text-txt">
+            <span className="truncate text-sm font-mono font-medium text-txt">
               {secret.key}
             </span>
           </div>
         </div>
         <div className="flex flex-shrink-0 items-center gap-1.5">
           {showRequired && (
-            <span className="rounded border border-danger/35 bg-danger/10 px-1.5 py-0.5 text-[10px] font-medium text-danger">
+            <span className="rounded border border-danger/35 bg-danger/10 px-1.5 py-0.5 text-2xs font-medium text-danger">
               {t("secretsview.Required")}
             </span>
           )}
@@ -566,7 +568,7 @@ function SecretCard({
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 rounded-md px-2 text-[11px] text-muted hover:bg-danger/10 hover:text-danger"
+              className="h-7 rounded-md px-2 text-xs-tight text-muted hover:bg-danger/10 hover:text-danger"
               onClick={onRemove}
               title={t("secretsview.RemoveFromVault")}
             >
@@ -578,7 +580,7 @@ function SecretCard({
 
       {/* Used by */}
       <div
-        className="break-words text-[11px] leading-5 text-muted"
+        className="break-words text-xs-tight leading-5 text-muted"
         title={pluginList}
       >
         {enabledPlugins.length > 0
@@ -588,7 +590,7 @@ function SecretCard({
 
       {/* Current value */}
       {secret.isSet && !hasDraft && (
-        <div className="rounded-lg border border-border/50 bg-bg px-2 py-1 text-[12px] font-mono text-muted">
+        <div className="rounded-lg border border-border/50 bg-bg px-2 py-1 text-xs font-mono text-muted">
           {secret.maskedValue}
         </div>
       )}
@@ -597,7 +599,7 @@ function SecretCard({
       <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
         <Input
           type={isVisible ? "text" : "password"}
-          className="h-9 flex-1 border-border/60 bg-bg px-2.5 py-1.5 text-[13px] font-mono text-txt focus-visible:border-accent/50 focus-visible:ring-1 focus-visible:ring-accent/30"
+          className="h-9 flex-1 border-border/60 bg-bg px-2.5 py-1.5 text-sm font-mono text-txt focus-visible:border-accent/50 focus-visible:ring-1 focus-visible:ring-accent/30"
           placeholder={
             secret.isSet ? "Enter new value to update" : "Enter value"
           }
@@ -607,7 +609,7 @@ function SecretCard({
         <Button
           variant="outline"
           size="sm"
-          className="h-9 px-3 text-[12px] text-muted-strong shadow-sm hover:text-txt"
+          className="h-9 px-3 text-xs text-muted-strong shadow-sm hover:text-txt"
           onClick={onToggleVisible}
           title={isVisible ? "Hide" : "Show"}
         >

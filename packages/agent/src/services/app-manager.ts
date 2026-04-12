@@ -2760,11 +2760,20 @@ export class AppManager {
   ): Promise<InstalledAppInfo[]> {
     const installed = await pluginManager.listInstalledPlugins();
     const registry = await getRegistryPlugins();
+    const refreshedRegistry = await pluginManager
+      .refreshRegistry()
+      .catch(() => new Map<string, RegistryPluginInfo>());
+    const mergedRegistry = new Map<string, RegistryPluginInfo>(registry);
+    for (const [name, info] of refreshedRegistry.entries()) {
+      if (!mergedRegistry.has(name)) {
+        mergedRegistry.set(name, info);
+      }
+    }
     const installedByName = new Map(
       installed.map((plugin) => [plugin.name, plugin] as const),
     );
 
-    const appEntries = Array.from(registry.values())
+    const appEntries = Array.from(mergedRegistry.values())
       .filter(isAppRegistryPlugin)
       .map(flattenAppInfo);
 

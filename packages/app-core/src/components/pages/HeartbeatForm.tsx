@@ -313,7 +313,7 @@ export function HeartbeatForm({
                 }
                 placeholder="*/15 * * * *"
               />
-              <div className="mt-2 text-[11px] text-muted">
+              <div className="mt-2 text-xs-tight text-muted">
                 {t("triggersview.minuteHourDayMont")}
               </div>
             </div>
@@ -428,7 +428,7 @@ function HeartbeatRunHistory({
     <div className="mt-10 grid gap-8 border-t border-border/40 pt-8">
       <dl className="grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-3">
         <PagePanel.SummaryCard className="px-4 py-4">
-          <dt className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
+          <dt className="text-xs-tight font-semibold uppercase tracking-[0.14em] text-muted">
             {t("heartbeatsview.maxRuns")}
           </dt>
           <dd className="mt-1.5 text-txt font-medium">
@@ -443,7 +443,7 @@ function HeartbeatRunHistory({
           </dd>
         </PagePanel.SummaryCard>
         <PagePanel.SummaryCard className="px-4 py-4">
-          <dt className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
+          <dt className="text-xs-tight font-semibold uppercase tracking-[0.14em] text-muted">
             {t("triggersview.LastRun")}
           </dt>
           <dd className="mt-1.5 text-txt font-medium">
@@ -458,7 +458,7 @@ function HeartbeatRunHistory({
           </dd>
         </PagePanel.SummaryCard>
         <PagePanel.SummaryCard className="px-4 py-4">
-          <dt className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
+          <dt className="text-xs-tight font-semibold uppercase tracking-[0.14em] text-muted">
             {t("heartbeatsview.nextRun")}
           </dt>
           <dd className="mt-1.5 text-txt font-medium">
@@ -476,13 +476,13 @@ function HeartbeatRunHistory({
 
       <PagePanel variant="padded" className="space-y-4">
         <div className="flex items-center justify-between gap-3 border-b border-border/30 pb-3">
-          <div className="text-[12px] font-semibold uppercase tracking-[0.14em] text-muted">
+          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">
             {t("triggersview.RunHistory")}
           </div>
           <Button
             variant="outline"
             size="sm"
-            className="h-7 px-3 text-[11px]"
+            className="h-7 px-3 text-xs-tight"
             onClick={() => void loadTriggerRuns(editingId)}
           >
             {t("common.refresh")}
@@ -535,7 +535,7 @@ function HeartbeatRunHistory({
                             })}
                           </span>
                         </div>
-                        <div className="text-[11px] text-muted/80">
+                        <div className="text-xs-tight text-muted/80">
                           {formatDurationMs(run.latencyMs)} &middot;{" "}
                           <span className="font-mono text-muted/60 bg-bg/40 px-1 py-0.5 rounded">
                             {run.source}

@@ -30,7 +30,7 @@ export function WidgetSection({
             {title}
           </span>
           {typeof count === "number" ? (
-            <Badge variant="secondary" className="shrink-0 text-[10px]">
+            <Badge variant="secondary" className="shrink-0 text-2xs">
               {count}
             </Badge>
           ) : null}

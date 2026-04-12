@@ -16,13 +16,13 @@ export function MetaPill({
   return (
     <span
       className={cn(
-        "inline-flex min-h-6 items-center rounded-full px-2.5 py-1 text-[11px] shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_12px_18px_-18px_rgba(15,23,42,0.12)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_12px_18px_-18px_rgba(0,0,0,0.24)]",
+        "inline-flex min-h-6 items-center rounded-full px-2.5 py-1 text-xs-tight shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_12px_18px_-18px_rgba(15,23,42,0.12)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_12px_18px_-18px_rgba(0,0,0,0.24)]",
         tone === "accent"
           ? "border border-accent/55 bg-accent/16 font-bold text-txt-strong shadow-sm"
           : tone === "strong"
             ? "border border-border/32 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_82%,transparent),color-mix(in_srgb,var(--bg)_92%,transparent))] font-medium text-txt-strong"
             : "border border-border/32 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_82%,transparent),color-mix(in_srgb,var(--bg)_92%,transparent))] font-medium text-muted",
-        compact && "min-h-0 px-2 py-1 text-[10px]",
+        compact && "min-h-0 px-2 py-1 text-2xs",
         className,
       )}
       {...props}
@@ -63,7 +63,7 @@ export function PanelHeader({
           {eyebrow ? (
             <div
               className={cn(
-                "text-[10px] font-semibold uppercase tracking-[0.16em] text-muted/60",
+                "text-2xs font-semibold uppercase tracking-[0.16em] text-muted/60",
                 eyebrowClassName,
               )}
             >

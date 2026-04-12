@@ -280,7 +280,7 @@ export function CustomActionsPanel({
                       <div className="font-semibold text-xs text-txt truncate">
                         {action.name}
                       </div>
-                      <p className="text-[10px] text-muted mt-0.5">
+                      <p className="text-2xs text-muted mt-0.5">
                         {formatParameterCount(action.parameters?.length || 0)}
                         {action.similes?.length
                           ? ` • ${formatAliasCount(action.similes.length)}`
@@ -289,7 +289,7 @@ export function CustomActionsPanel({
                     </div>
 
                     <span
-                      className={`text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap ${
+                      className={`text-2xs px-1.5 py-0.5 rounded whitespace-nowrap ${
                         HANDLER_TYPE_COLORS[action.handler.type] ||
                         "bg-surface text-muted"
                       }`}

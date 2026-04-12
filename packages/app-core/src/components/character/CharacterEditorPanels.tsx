@@ -46,9 +46,9 @@ export const CHARACTER_EDITOR_TEXTAREA_CLASSNAME =
 export const CHARACTER_EDITOR_INLINE_RULE_CLASSNAME =
   "group flex items-start gap-2 rounded-md border border-border bg-white/[0.02] px-2.5 py-1.5";
 export const CHARACTER_EDITOR_INLINE_FIELD_CLASSNAME =
-  "h-7 flex-1 rounded-md border border-border bg-white/[0.03] px-2 font-mono text-[11px] text-txt outline-none focus:border-accent";
+  "h-7 flex-1 rounded-md border border-border bg-white/[0.03] px-2 font-mono text-xs-tight text-txt outline-none focus:border-accent";
 export const CHARACTER_EDITOR_SMALL_GOLD_ACTION_CLASSNAME =
-  "h-6 px-2 text-[10px] font-bold text-accent";
+  "h-6 px-2 text-2xs font-bold text-accent";
 export const CHARACTER_EDITOR_ICON_GHOST_CLASSNAME =
   "mt-0.5 h-auto w-auto shrink-0 p-0 text-muted opacity-0 transition-[opacity,color,box-shadow] duration-150 hover:text-red-500 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-danger/40";
 
@@ -175,7 +175,7 @@ export function CharacterIdentityPanel({
             <div className="flex items-center justify-between">
               <span
                 id="character-editor-name-label"
-                className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted"
+                className="text-xs-tight font-semibold uppercase tracking-[0.08em] text-muted"
               >
                 {t("charactereditor.Name", { defaultValue: "Name" })}
               </span>
@@ -190,14 +190,14 @@ export function CharacterIdentityPanel({
               onChange={(
                 e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
               ) => handleFieldEdit("name", e.target.value)}
-              className="h-8 rounded-lg border-border bg-white/[0.04] text-[13px] text-txt"
+              className="h-8 rounded-lg border-border bg-white/[0.04] text-sm text-txt"
             />
           </div>
           <div className="flex flex-col gap-2 min-w-0">
             <div className="flex items-center justify-between">
               <span
                 id="character-editor-voice-label"
-                className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted"
+                className="text-xs-tight font-semibold uppercase tracking-[0.08em] text-muted"
               >
                 {t("charactereditor.Voice", {
                   defaultValue: "Voice",
@@ -221,7 +221,7 @@ export function CharacterIdentityPanel({
                 ariaLabelledBy="character-editor-voice-label"
                 menuPlacement="bottom"
                 className="flex-1 min-w-0"
-                triggerClassName="h-8 rounded-md border-border/50 bg-bg/65 px-3 py-0 text-[11px] shadow-inner backdrop-blur-sm"
+                triggerClassName="h-8 rounded-md border-border/50 bg-bg/65 px-3 py-0 text-xs-tight shadow-inner backdrop-blur-sm"
                 menuClassName="border-border/60 bg-bg/92 shadow-2xl backdrop-blur-md"
               />
               <Button
@@ -269,7 +269,7 @@ export function CharacterIdentityPanel({
       {/* Bio / About Me */}
       <section className={CHARACTER_EDITOR_SECTION_CLASSNAME}>
         <div className="flex items-center justify-between">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+          <span className="text-xs-tight font-semibold uppercase tracking-[0.08em] text-muted">
             {t("charactereditor.AboutMe", {
               defaultValue: "About Me",
             })}
@@ -306,7 +306,7 @@ export function CharacterIdentityPanel({
       {/* System Prompt / Directions */}
       <section className={CHARACTER_EDITOR_SECTION_CLASSNAME}>
         <div className="flex items-center justify-between">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+          <span className="text-xs-tight font-semibold uppercase tracking-[0.08em] text-muted">
             {t("charactereditor.SystemPrompt", {
               defaultValue: "System Prompt",
             })}
@@ -388,7 +388,7 @@ export function CharacterStylePanel({
                       key={`${key}:${item}`}
                       className={CHARACTER_EDITOR_INLINE_RULE_CLASSNAME}
                     >
-                      <span className="mt-0.5 shrink-0 text-[10px] font-bold text-accent">
+                      <span className="mt-0.5 shrink-0 text-2xs font-bold text-accent">
                         {index + 1}
                       </span>
                       <Textarea
@@ -429,7 +429,7 @@ export function CharacterStylePanel({
                     </div>
                   ))
                 ) : (
-                  <div className="rounded-md border border-dashed border-border px-3 py-2 text-[11px] text-muted">
+                  <div className="rounded-md border border-dashed border-border px-3 py-2 text-xs-tight text-muted">
                     {t(STYLE_SECTION_EMPTY_STATES[key].key, {
                       defaultValue:
                         STYLE_SECTION_EMPTY_STATES[key].defaultValue,
@@ -490,7 +490,7 @@ export function CharacterExamplesPanel({
       {/* Chat Examples */}
       <section className={CHARACTER_EDITOR_SECTION_CLASSNAME}>
         <div className="flex items-center justify-between">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+          <span className="text-xs-tight font-semibold uppercase tracking-[0.08em] text-muted">
             {t("charactereditor.ChatExamples", {
               defaultValue: "Chat Examples",
             })}
@@ -569,7 +569,7 @@ export function CharacterExamplesPanel({
             </div>
           ))}
           {normalizedMessageExamples.length === 0 && (
-            <div className="rounded-md border border-dashed border-border px-3 py-2 text-[11px] text-muted">
+            <div className="rounded-md border border-dashed border-border px-3 py-2 text-xs-tight text-muted">
               {t("charactereditor.NoChatExamples", {
                 defaultValue: "No chat examples yet.",
               })}
@@ -581,7 +581,7 @@ export function CharacterExamplesPanel({
       {/* Post Examples */}
       <section className={CHARACTER_EDITOR_SECTION_CLASSNAME}>
         <div className="flex items-center justify-between">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+          <span className="text-xs-tight font-semibold uppercase tracking-[0.08em] text-muted">
             {t("charactereditor.PostExamples", {
               defaultValue: "Post Examples",
             })}
@@ -629,7 +629,7 @@ export function CharacterExamplesPanel({
             </div>
           ))}
           {(d.postExamples ?? []).length === 0 && (
-            <div className="rounded-md border border-dashed border-border px-3 py-2 text-[11px] text-muted">
+            <div className="rounded-md border border-dashed border-border px-3 py-2 text-xs-tight text-muted">
               {t("charactereditor.NoPostExamples", {
                 defaultValue: "No post examples yet.",
               })}
@@ -637,7 +637,7 @@ export function CharacterExamplesPanel({
           )}
           <Button
             variant="ghost"
-            className="text-[10px] font-bold text-accent p-0 h-auto py-1 text-left hover:underline"
+            className="text-2xs font-bold text-accent p-0 h-auto py-1 text-left hover:underline"
             onClick={() => {
               const updated = [...(d.postExamples ?? []), ""];
               handleFieldEdit("postExamples", updated);

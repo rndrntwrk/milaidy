@@ -72,7 +72,7 @@ export function ApprovedAddressesSection({
       {/* Mode toggle */}
       <div className="flex items-center gap-2">
         <span
-          className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${
+          className={`text-xs-tight px-2 py-0.5 rounded-full font-medium ${
             config.mode === "whitelist"
               ? "bg-ok/15 text-ok"
               : "bg-danger/15 text-danger"
@@ -83,7 +83,7 @@ export function ApprovedAddressesSection({
         <Button
           variant="ghost"
           size="sm"
-          className="text-[11px] h-6 px-2"
+          className="text-xs-tight h-6 px-2"
           onClick={() =>
             onChange({
               ...config,
@@ -107,7 +107,7 @@ export function ApprovedAddressesSection({
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[11px] font-mono text-txt truncate">
+                    <span className="text-xs-tight font-mono text-txt truncate">
                       {entry.address}
                     </span>
                     {chain && (
@@ -117,7 +117,7 @@ export function ApprovedAddressesSection({
                     )}
                   </div>
                   {entry.label && (
-                    <div className="text-[10px] text-muted">{entry.label}</div>
+                    <div className="text-2xs text-muted">{entry.label}</div>
                   )}
                 </div>
                 <Button
@@ -134,7 +134,7 @@ export function ApprovedAddressesSection({
           })}
         </div>
       ) : (
-        <div className="text-[11px] text-muted/60 py-1">
+        <div className="text-xs-tight text-muted/60 py-1">
           {config.mode === "whitelist"
             ? "No addresses — agent can't send anywhere yet."
             : "No addresses blocked."}
@@ -170,7 +170,7 @@ export function ApprovedAddressesSection({
         </Button>
       </div>
       {addressError && (
-        <div className="text-[11px] text-danger">{addressError}</div>
+        <div className="text-xs-tight text-danger">{addressError}</div>
       )}
     </div>
   );

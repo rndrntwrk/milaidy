@@ -142,7 +142,7 @@ function CloudLoginErrorMessage({ error }: { error: string }) {
 
   return (
     <div
-      className={`${rpcCalloutClass} border-[color:color-mix(in_srgb,var(--danger)_42%,transparent)] bg-[color:color-mix(in_srgb,var(--danger)_12%,transparent)] text-[var(--danger)]`}
+      className={`${rpcCalloutClass} border-[color:color-mix(in_srgb,var(--danger)_42%,transparent)] bg-[color:color-mix(in_srgb,var(--danger)_12%,transparent)] text-danger`}
       role="alert"
       style={onboardingBodyTextShadowStyle}
     >
@@ -243,7 +243,7 @@ export function RpcStep() {
         <div className="mx-auto w-full max-w-[25rem] text-center">
           {elizaCloudConnected ? (
             <div
-              className={`${rpcCalloutClass} border-[var(--ok-muted)] bg-[var(--ok-subtle)] text-[var(--ok)]`}
+              className={`${rpcCalloutClass} border-[var(--ok-muted)] bg-[var(--ok-subtle)] text-ok`}
               role="status"
               style={onboardingBodyTextShadowStyle}
             >

@@ -235,9 +235,7 @@ export function StreamingPermissionsSettingsView({
           <Cloud className="w-4 h-4 text-accent" />
           <div className="font-bold text-sm">{title}</div>
         </div>
-        <div className="text-[11px] text-muted mb-3">
-          {description}
-        </div>
+        <div className="text-xs-tight text-muted mb-3">{description}</div>
         <div className="border border-border bg-card">
           {MEDIA_PERMISSIONS.map((def) => {
             const status = permStates[def.id] ?? "unknown";
@@ -274,7 +272,7 @@ export function StreamingPermissionsSettingsView({
                       className="rounded-full font-semibold"
                     />
                   </div>
-                  <div className="text-[11px] text-muted mt-0.5 truncate">
+                  <div className="text-xs-tight text-muted mt-0.5 truncate">
                     {description}
                   </div>
                 </div>
@@ -282,7 +280,7 @@ export function StreamingPermissionsSettingsView({
                   <Button
                     variant="default"
                     size="sm"
-                    className="h-auto text-[11px] py-1 px-2.5"
+                    className="h-auto text-xs-tight py-1 px-2.5"
                     onClick={() => void requestPermission(def.id)}
                     aria-label={`${translateWithFallback(t, "permissionssection.Grant", "Grant")} ${name}`}
                   >
@@ -366,7 +364,7 @@ export function StreamingPermissionsOnboardingView({
               data-permission-id={def.id}
               className={`flex items-center gap-4 rounded-[16px] border px-4 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] ${
                 isGranted
-                  ? "border-[var(--ok)] bg-[color:color-mix(in_srgb,var(--ok)_16%,var(--onboarding-card-bg)_84%)]"
+                  ? "border-ok bg-[color:color-mix(in_srgb,var(--ok)_16%,var(--onboarding-card-bg)_84%)]"
                   : "border-[var(--onboarding-card-border)] bg-[var(--onboarding-card-bg)]"
               }`}
             >
@@ -375,7 +373,7 @@ export function StreamingPermissionsOnboardingView({
                 <div className="text-sm font-semibold text-[var(--onboarding-text-strong)]">
                   {name}
                 </div>
-                <div className="text-[11px] text-[var(--onboarding-text-subtle)]">
+                <div className="text-xs-tight text-[var(--onboarding-text-subtle)]">
                   {description}
                 </div>
               </div>
@@ -406,7 +404,7 @@ export function StreamingPermissionsOnboardingView({
           <Button
             variant="ghost"
             size="sm"
-            className="text-[10px] text-[rgba(240,238,250,0.62)] tracking-[0.15em] uppercase cursor-pointer no-underline transition-colors duration-300 p-0 hover:text-[rgba(240,238,250,0.9)]"
+            className="text-2xs text-[rgba(240,238,250,0.62)] tracking-[0.15em] uppercase cursor-pointer no-underline transition-colors duration-300 p-0 hover:text-[rgba(240,238,250,0.9)]"
             style={{ textShadow: "0 1px 8px rgba(3,5,10,0.45)" }}
             onClick={() => onBack()}
           >
@@ -418,7 +416,7 @@ export function StreamingPermissionsOnboardingView({
         <Button
           variant="default"
           data-testid="permissions-onboarding-continue"
-          className="group relative inline-flex items-center justify-center gap-[8px] px-[32px] py-[12px] min-h-[44px] bg-[rgba(240,185,11,0.18)] border border-[rgba(240,185,11,0.35)] rounded-[6px] text-[var(--onboarding-accent-foreground)] text-[11px] font-semibold tracking-[0.18em] uppercase cursor-pointer transition-all duration-300 overflow-hidden hover:bg-[rgba(240,185,11,0.28)] hover:border-[rgba(240,185,11,0.6)] disabled:opacity-40 disabled:cursor-not-allowed"
+          className="group relative inline-flex items-center justify-center gap-[8px] px-[32px] py-[12px] min-h-[44px] bg-[rgba(240,185,11,0.18)] border border-[rgba(240,185,11,0.35)] rounded-[6px] text-[var(--onboarding-accent-foreground)] text-xs-tight font-semibold tracking-[0.18em] uppercase cursor-pointer transition-all duration-300 overflow-hidden hover:bg-[rgba(240,185,11,0.28)] hover:border-[rgba(240,185,11,0.6)] disabled:opacity-40 disabled:cursor-not-allowed"
           onClick={(e) => {
             if (e?.currentTarget) {
               const rect = e.currentTarget.getBoundingClientRect();

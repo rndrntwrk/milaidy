@@ -262,13 +262,20 @@ async function waitForWebsiteBlockStatus(
   );
 }
 
-async function startLiveRuntime(): Promise<StartedRuntime> {
+async function startLiveRuntime(options?: {
+  includeProviderPlugin?: boolean;
+}): Promise<StartedRuntime> {
   const tempRoot = await mkdtemp(path.join(os.tmpdir(), "milady-selfcontrol-"));
   const stateDir = path.join(tempRoot, "state");
   const configPath = path.join(tempRoot, "eliza.json");
   const hostsFilePath = path.join(tempRoot, "hosts");
   const apiPort = await getFreePort();
   const logs: string[] = [];
+  const allowPlugins = ["selfcontrol"];
+
+  if (options?.includeProviderPlugin && selectedLiveProviderPlugin) {
+    allowPlugins.push(selectedLiveProviderPlugin);
+  }
 
   await mkdir(stateDir, { recursive: true });
   await writeFile(hostsFilePath, "127.0.0.1 localhost\n", "utf8");
@@ -278,9 +285,7 @@ async function startLiveRuntime(): Promise<StartedRuntime> {
       {
         logging: { level: "info" },
         plugins: {
-          allow: ["selfcontrol", selectedLiveProviderPlugin].filter(
-            (entry): entry is string => typeof entry === "string",
-          ),
+          allow: allowPlugins,
         },
       },
       null,
@@ -436,8 +441,8 @@ describeIf(liveSelfcontrolChatEnabled)(
     let runtime: StartedRuntime | undefined;
 
     beforeAll(async () => {
-      runtime = await startLiveRuntime();
-    }, 120_000);
+      runtime = await startLiveRuntime({ includeProviderPlugin: true });
+    }, 180_000);
 
     afterAll(async () => {
       if (runtime) {

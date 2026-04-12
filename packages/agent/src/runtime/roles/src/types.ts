@@ -23,8 +23,18 @@ export interface RolesConfig {
 }
 
 export interface RoleCheckResult {
+  entityId: string;
   role: RoleName;
   isOwner: boolean;
   isAdmin: boolean;
+  canManageRoles: boolean;
+}
+
+export interface PrivateAccessCheckResult extends RoleCheckResult {
   hasPrivateAccess: boolean;
+  accessRole: RoleName | null;
+  accessSource:
+    | RoleGrantSource
+    | `linked_${Exclude<RoleGrantSource, "connector_admin">}`
+    | null;
 }

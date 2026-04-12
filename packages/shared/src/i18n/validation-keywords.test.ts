@@ -67,12 +67,13 @@ const AUDITED_VALIDATION_KEYWORDS = [
 ] as const;
 
 describe("shared validation keyword locale coverage", () => {
-  it.each(AUDITED_VALIDATION_KEYWORDS)(
-    "has locale terms for every supported language: %s",
-    (key) => {
-      for (const locale of NON_ENGLISH_LOCALES) {
-        expect(getValidationKeywordLocaleTerms(key, locale).length).toBeGreaterThan(0);
-      }
-    },
-  );
+  it.each(
+    AUDITED_VALIDATION_KEYWORDS,
+  )("has locale terms for every supported language: %s", (key) => {
+    for (const locale of NON_ENGLISH_LOCALES) {
+      expect(
+        getValidationKeywordLocaleTerms(key, locale).length,
+      ).toBeGreaterThan(0);
+    }
+  });
 });

@@ -620,7 +620,7 @@ export function ScapeOperatorSurface({
     >
       {/* Header badges */}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+        <div className="text-xs-tight font-semibold uppercase tracking-[0.18em] text-muted">
           {surfaceTitle}
         </div>
         <SurfaceBadge tone={toneForStatusText(run.status)}>
@@ -633,7 +633,7 @@ export function ScapeOperatorSurface({
           {run.health.state}
         </SurfaceBadge>
         {paused ? <SurfaceBadge tone="warn">paused</SurfaceBadge> : null}
-        <span className="ml-auto text-[10px] uppercase tracking-[0.18em] text-muted">
+        <span className="ml-auto text-2xs uppercase tracking-[0.18em] text-muted">
           {matchingRuns.length} active run{matchingRuns.length === 1 ? "" : "s"}
         </span>
       </div>
@@ -710,7 +710,7 @@ export function ScapeOperatorSurface({
             >
               Resume autonomous loop
             </Button>
-            <span className="ml-auto self-center text-[11px] text-muted-strong">
+            <span className="ml-auto self-center text-xs-tight text-muted-strong">
               {paused
                 ? "Loop is paused. Resume to let the agent act again."
                 : botSdkOnline
@@ -726,7 +726,7 @@ export function ScapeOperatorSurface({
         <SurfaceSection title="Active Goal">
           <div className="rounded-2xl border border-border/35 bg-card/74 p-3">
             <div className="flex items-center gap-2">
-              <div className="text-[13px] font-medium text-default">
+              <div className="text-sm font-medium text-default">
                 {activeGoal.title}
               </div>
               <SurfaceBadge tone={goalStatusTone(activeGoal.status)}>
@@ -734,18 +734,18 @@ export function ScapeOperatorSurface({
               </SurfaceBadge>
               <SurfaceBadge tone="neutral">{activeGoal.source}</SurfaceBadge>
               {typeof activeGoal.progress === "number" ? (
-                <span className="ml-auto text-[11px] text-muted-strong">
+                <span className="ml-auto text-xs-tight text-muted-strong">
                   {Math.round(activeGoal.progress * 100)}%
                 </span>
               ) : null}
             </div>
             {activeGoal.notes ? (
-              <p className="mt-2 text-[12px] leading-5 text-muted-strong">
+              <p className="mt-2 text-xs leading-5 text-muted-strong">
                 {activeGoal.notes}
               </p>
             ) : null}
             {activeGoal.updatedAt > 0 ? (
-              <div className="mt-2 text-[10px] uppercase tracking-[0.16em] text-muted">
+              <div className="mt-2 text-2xs uppercase tracking-[0.16em] text-muted">
                 Updated {formatDetailTimestamp(activeGoal.updatedAt)}
               </div>
             ) : null}
@@ -800,7 +800,7 @@ export function ScapeOperatorSurface({
               </div>
             ) : null}
             {statusMessage ? (
-              <p className="text-[11px] text-muted-strong">{statusMessage}</p>
+              <p className="text-xs-tight text-muted-strong">{statusMessage}</p>
             ) : null}
           </div>
         </SurfaceSection>
@@ -821,24 +821,24 @@ export function ScapeOperatorSurface({
                       {memory.kind}
                     </SurfaceBadge>
                     {memory.position ? (
-                      <span className="text-[10px] uppercase tracking-[0.16em] text-muted">
+                      <span className="text-2xs uppercase tracking-[0.16em] text-muted">
                         {formatPosition(memory.position)}
                       </span>
                     ) : null}
-                    <span className="ml-auto text-[10px] uppercase tracking-[0.16em] text-muted">
+                    <span className="ml-auto text-2xs uppercase tracking-[0.16em] text-muted">
                       {memory.timestamp > 0
                         ? formatDetailTimestamp(memory.timestamp)
                         : ""}
                     </span>
                   </div>
-                  <p className="mt-1 text-[12px] leading-5 text-default">
+                  <p className="mt-1 text-xs leading-5 text-default">
                     {memory.text}
                   </p>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="text-[11px] text-muted-strong">
+            <p className="text-xs-tight text-muted-strong">
               The agent has not written any memories yet. Directives, spawn
               events, and notable encounters will appear here.
             </p>
@@ -961,9 +961,7 @@ export function ScapeOperatorSurface({
                 >
                   {entry.type}
                 </SurfaceBadge>
-                <span className="text-[12px] text-default">
-                  {entry.message}
-                </span>
+                <span className="text-xs text-default">{entry.message}</span>
               </li>
             ))}
           </ul>

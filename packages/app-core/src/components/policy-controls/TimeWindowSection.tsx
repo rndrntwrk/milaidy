@@ -23,7 +23,7 @@ export function TimeWindowSection({
       {/* Hours — start/end */}
       <div className="flex items-center gap-3">
         <div className="flex-1 space-y-1">
-          <Label className="text-[11px] text-muted">From</Label>
+          <Label className="text-xs-tight text-muted">From</Label>
           <select
             value={hours.start}
             onChange={(e) =>
@@ -45,7 +45,7 @@ export function TimeWindowSection({
         </div>
         <span className="text-muted text-xs mt-5">→</span>
         <div className="flex-1 space-y-1">
-          <Label className="text-[11px] text-muted">To</Label>
+          <Label className="text-xs-tight text-muted">To</Label>
           <select
             value={hours.end}
             onChange={(e) =>
@@ -69,7 +69,7 @@ export function TimeWindowSection({
 
       {/* Days — compact row */}
       <div className="space-y-1">
-        <Label className="text-[11px] text-muted">Active Days</Label>
+        <Label className="text-xs-tight text-muted">Active Days</Label>
         <div className="flex gap-1">
           {DAY_NAMES.map((name, i) => {
             const active = config.allowedDays.includes(i);
@@ -78,7 +78,7 @@ export function TimeWindowSection({
                 key={name}
                 variant={active ? "default" : "outline"}
                 size="sm"
-                className={`h-7 w-9 text-[10px] font-medium p-0 ${
+                className={`h-7 w-9 text-2xs font-medium p-0 ${
                   active ? "" : "border-border/50 text-muted hover:text-txt"
                 }`}
                 onClick={() => {
@@ -97,7 +97,7 @@ export function TimeWindowSection({
 
       {/* Timezone */}
       <div className="space-y-1">
-        <Label className="text-[11px] text-muted">Timezone</Label>
+        <Label className="text-xs-tight text-muted">Timezone</Label>
         <select
           value={config.timezone ?? "UTC"}
           onChange={(e) => onChange({ ...config, timezone: e.target.value })}

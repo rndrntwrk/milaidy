@@ -978,6 +978,7 @@ export async function extractGmailPlanWithLlm(
   message: Memory,
   state: State | undefined,
   intent: string,
+  activeComposeDraft?: GmailComposeDraft | null,
 ): Promise<GmailLlmPlan> {
   const recentConversation = (
     await collectGmailConversationContext({ runtime, message, state })
@@ -1037,10 +1038,17 @@ export async function extractGmailPlanWithLlm(
     "For send_message, preserve the exact recipient addresses and keep the user's intended subject/body wording as close as possible.",
     "When the user writes in another language, still infer the correct Gmail action and keep extracted subject/body wording in that language unless the user asked to translate.",
     "",
-    "Gmail search operators reference:",
-    "  from:name  to:name  cc:name  subject:word  has:attachment  is:unread  is:starred  is:important",
-    "  newer_than:7d  older_than:30d  after:2025/01/01  before:2025/12/31  label:work  in:sent  from:me",
-    "  {term1 term2} for OR.  Combine operators: from:suran is:unread newer_than:21d",
+    "Gmail search operators — complete reference:",
+    "  Sender/recipient: from:name  to:name  cc:name  bcc:name  deliveredto:alias@example.com",
+    '  Content: subject:word  "exact phrase"  has:attachment  filename:report.pdf  has:drive  has:document  has:spreadsheet  has:presentation  has:youtube',
+    "  Status: is:unread  is:read  is:starred  is:important  is:snoozed",
+    "  Location: in:inbox  in:sent  in:draft  in:trash  in:spam  in:anywhere  label:work  category:primary  category:social  category:promotions  category:updates  category:forums",
+    "  Date/time: newer_than:7d  older_than:30d  after:2025/01/01  before:2025/12/31",
+    "  Size: size:5m  larger:10m  smaller:1m  larger_than:500k  smaller_than:2m",
+    "  Special: from:me  list:info@mailinglist.com",
+    "  Negation: -from:name  -subject:word  -label:work  -is:unread  (prefix any operator with - to exclude)",
+    "  Boolean: {term1 term2} for OR.  Combine operators: from:suran is:unread newer_than:21d",
+    "  Proximity: AROUND (not widely supported but available)",
     "",
     "Preserve sender names, email addresses, subject keywords, unread/starred/important status, attachment mentions, and time windows.",
     "Use the current local datetime to convert relative time references like today, yesterday, this week, and this month into Gmail-compatible operators.",
@@ -1058,6 +1066,17 @@ export async function extractGmailPlanWithLlm(
     '  "envíale un correo a maria@example.com con asunto hola y cuerpo nos vemos mañana" → {"subaction":"send_message","shouldAct":true,"response":null,"queries":[],"to":["maria@example.com"],"subject":"hola","bodyText":"nos vemos mañana"}',
     '  "send an email to zo@iqlabs.dev, subject hello anon, body how are you doing today?" → {"subaction":"send_message","shouldAct":true,"response":null,"queries":[],"to":["zo@iqlabs.dev"],"subject":"hello anon","bodyText":"how are you doing today?"}',
     '  "can you help me with my email?" → {"subaction":null,"shouldAct":false,"response":"What do you want to do in Gmail — check inbox, search, read, or draft a reply?","queries":[]}',
+    '  "send an email like \'test\'" with active draft having to=["shaw@gmail.com"] → {"subaction":"send_message","shouldAct":true,"response":null,"queries":[],"to":["shaw@gmail.com"],"subject":"test","bodyText":"test"}',
+    ...(activeComposeDraft
+      ? [
+          "",
+          "Active compose draft (fields already established in this conversation):",
+          `  ${JSON.stringify({ to: activeComposeDraft.to, cc: activeComposeDraft.cc, bcc: activeComposeDraft.bcc, subject: activeComposeDraft.subject, bodyText: activeComposeDraft.bodyText })}`,
+          "If the active compose draft already has a recipient, subject, or body, do NOT ask for those again.",
+          "Set shouldAct=true and subaction=send_message when the user provides missing fields, confirms sending, or provides a short payload like 'test' to use as subject and body.",
+          "Only set shouldAct=false when genuinely no information is available from conversation context or active draft.",
+        ]
+      : []),
     "",
     "Return ONLY valid JSON. No prose. No markdown. No XML. No <think>.",
     "",
@@ -1469,19 +1488,20 @@ export const gmailAction: Action & {
     const explicitSubaction = normalizeGmailSubaction(params.subaction);
     const intent =
       normalizePlannerString(params.intent) ?? messageText(message).trim();
+    const activeComposeDraft = latestGmailComposeDraft(state, [
+      "pending_clarification",
+    ]);
+    const previousSentComposeDraft = latestGmailComposeDraft(state, ["sent"]);
     const llmPlan = await extractGmailPlanWithLlm(
       runtime,
       message,
       state,
       intent,
+      activeComposeDraft,
     );
     const latestReplyDraft = latestGmailReplyDraftContext(state);
     const latestMessageTarget = latestGmailMessageTargetContext(state);
     const latestBatchReplyDraftItems = latestGmailBatchReplyDraftItems(state);
-    const activeComposeDraft = latestGmailComposeDraft(state, [
-      "pending_clarification",
-    ]);
-    const previousSentComposeDraft = latestGmailComposeDraft(state, ["sent"]);
     const hasStructuredComposeSignal = Boolean(
       params.bodyText ||
         detailString(details, "bodyText") ||

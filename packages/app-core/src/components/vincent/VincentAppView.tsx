@@ -54,7 +54,7 @@ export function VincentAppView({ exitToApps, t }: OverlayAppContext) {
           </Button>
           <div>
             <h1 className="text-base font-semibold text-txt">Vincent</h1>
-            <p className="text-[11px] text-muted leading-none">
+            <p className="text-xs-tight text-muted leading-none">
               DeFi vault management &amp; autotrading
             </p>
           </div>
@@ -63,7 +63,7 @@ export function VincentAppView({ exitToApps, t }: OverlayAppContext) {
         <div className="flex items-center gap-2">
           {/* Connection status pill */}
           <span
-            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
+            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs-tight font-semibold ${
               vincentConnected
                 ? "border-ok/35 bg-ok/12 text-ok"
                 : "border-border bg-bg-accent text-muted"

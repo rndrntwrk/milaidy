@@ -13,6 +13,11 @@ import type {
 const TODO_REFRESH_INTERVAL_MS = 15_000;
 const MAX_VISIBLE_TODOS = 8;
 
+const fallbackTranslate = (
+  key: string,
+  vars?: { defaultValue?: string },
+): string => vars?.defaultValue ?? key;
+
 function sortTodosForWidget(todos: WorkbenchTodo[]): WorkbenchTodo[] {
   return [...todos].sort((left, right) => {
     if (left.isCompleted !== right.isCompleted) {
@@ -77,7 +82,7 @@ function TodoRow({ todo }: { todo: WorkbenchTodo }) {
             ) : null}
           </div>
           {showDescription ? (
-            <p className="mt-1 line-clamp-2 text-[11px] leading-5 text-muted">
+            <p className="mt-1 line-clamp-2 text-xs-tight leading-5 text-muted">
               {todo.description}
             </p>
           ) : null}
@@ -118,12 +123,12 @@ function TodoItemsContent({
         <TodoRow key={todo.id} todo={todo} />
       ))}
       {remainingCount > 0 ? (
-        <p className="px-1 text-[11px] text-muted">
+        <p className="px-1 text-xs-tight text-muted">
           +{remainingCount} more open todo{remainingCount === 1 ? "" : "s"}
         </p>
       ) : null}
       {hiddenCompletedCount > 0 ? (
-        <p className="px-1 text-[11px] text-muted">
+        <p className="px-1 text-xs-tight text-muted">
           {hiddenCompletedCount} completed todo
           {hiddenCompletedCount === 1 ? "" : "s"} hidden
         </p>
@@ -133,7 +138,9 @@ function TodoItemsContent({
 }
 
 function TodoSidebarWidget(_props: ChatSidebarWidgetProps) {
-  const { workbench, t } = useApp();
+  const app = useApp() as ReturnType<typeof useApp> | undefined;
+  const workbench = app?.workbench;
+  const t = app?.t ?? fallbackTranslate;
   const [todos, setTodos] = useState<WorkbenchTodo[]>(() =>
     dedupeTodos(workbench?.todos ?? []),
   );
@@ -176,14 +183,14 @@ function TodoSidebarWidget(_props: ChatSidebarWidgetProps) {
       if (!active) return;
     })();
 
-    const intervalId = window.setInterval(() => {
+    const intervalId = setInterval(() => {
       if (!active) return;
       void loadTodos(true);
     }, TODO_REFRESH_INTERVAL_MS);
 
     return () => {
       active = false;
-      window.clearInterval(intervalId);
+      clearInterval(intervalId);
     };
   }, [loadTodos, todos.length]);
 

@@ -1,6 +1,5 @@
 import { createRequire } from "node:module";
 import process from "node:process";
-import { bootElizaRuntime, startEliza } from "../runtime/index.js";
 
 function printHelp(): void {
   console.log(`eliza-autonomous
@@ -44,11 +43,13 @@ export async function runAutonomousCli(
   }
 
   if (command === "runtime") {
+    const { bootElizaRuntime } = await import("../runtime/index.js");
     await bootElizaRuntime();
     return;
   }
 
   if (command === "serve" || command === "start") {
+    const { startEliza } = await import("../runtime/index.js");
     await startEliza({ serverOnly: true });
     return;
   }

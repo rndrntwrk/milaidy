@@ -159,7 +159,7 @@ export function PluginCard({
       <div className="flex items-center gap-2 px-3 pt-3 pb-1">
         {allowCustomOrder && (
           <span
-            className="text-[10px] text-muted opacity-30 hover:opacity-70 cursor-grab active:cursor-grabbing shrink-0 select-none leading-none"
+            className="text-2xs text-muted opacity-30 hover:opacity-70 cursor-grab active:cursor-grabbing shrink-0 select-none leading-none"
             title={t("pluginsview.DragToReorder")}
           >
             {t("pluginsview.X2807")}
@@ -191,7 +191,7 @@ export function PluginCard({
           {p.name}
         </span>
         {isShowcase ? (
-          <span className="text-[10px] font-bold tracking-wider px-2.5 py-[2px] border border-accent text-txt bg-accent-subtle shrink-0">
+          <span className="text-2xs font-bold tracking-wider px-2.5 py-[2px] border border-accent text-txt bg-accent-subtle shrink-0">
             {t("pluginsview.DEMO")}
           </span>
         ) : (
@@ -199,7 +199,7 @@ export function PluginCard({
             variant="outline"
             size="sm"
             data-plugin-toggle={p.id}
-            className={`text-[10px] font-bold tracking-wider px-2.5 py-[2px] h-auto rounded-none border transition-colors duration-150 shrink-0 ${
+            className={`text-2xs font-bold tracking-wider px-2.5 py-[2px] h-auto rounded-none border transition-colors duration-150 shrink-0 ${
               p.enabled
                 ? "bg-accent text-accent-fg border-accent"
                 : "bg-transparent text-muted border-border hover:text-txt"
@@ -225,22 +225,22 @@ export function PluginCard({
         )}
       </div>
       <div className="flex items-center gap-1.5 px-3 pb-1.5">
-        <span className="text-[10px] px-1.5 py-px border border-border bg-surface text-muted lowercase tracking-wide whitespace-nowrap">
+        <span className="text-2xs px-1.5 py-px border border-border bg-surface text-muted lowercase tracking-wide whitespace-nowrap">
           {categoryLabel}
         </span>
         {p.version && (
-          <span className="text-[10px] font-mono text-muted opacity-70">
+          <span className="text-2xs font-mono text-muted opacity-70">
             v{p.version}
           </span>
         )}
         {showReleaseControls && (
-          <span className="text-[10px] px-1.5 py-px border border-border bg-surface text-muted lowercase tracking-wide whitespace-nowrap">
+          <span className="text-2xs px-1.5 py-px border border-border bg-surface text-muted lowercase tracking-wide whitespace-nowrap">
             {selectedReleaseStream}
           </span>
         )}
         {p.enabled && !p.isActive && !isShowcase && (
           <span
-            className={`text-[10px] px-1.5 py-px border lowercase tracking-wide whitespace-nowrap ${
+            className={`text-2xs px-1.5 py-px border lowercase tracking-wide whitespace-nowrap ${
               p.loadError
                 ? "border-destructive bg-[rgba(153,27,27,0.04)] text-destructive"
                 : "border-warn bg-[rgba(234,179,8,0.06)] text-warn"
@@ -253,7 +253,7 @@ export function PluginCard({
           </span>
         )}
         {isToggleBusy && (
-          <span className="text-[10px] px-1.5 py-px border border-accent bg-accent-subtle text-txt lowercase tracking-wide whitespace-nowrap">
+          <span className="text-2xs px-1.5 py-px border border-accent bg-accent-subtle text-txt lowercase tracking-wide whitespace-nowrap">
             {t("pluginsview.restarting")}
           </span>
         )}
@@ -275,7 +275,7 @@ export function PluginCard({
           {p.tags?.slice(0, 4).map((tag) => (
             <span
               key={`${p.id}:${tag}`}
-              className="whitespace-nowrap border border-border/50 bg-bg-accent/80 px-1.5 py-px text-[10px] lowercase tracking-wide text-muted-strong"
+              className="whitespace-nowrap border border-border/50 bg-bg-accent/80 px-1.5 py-px text-2xs lowercase tracking-wide text-muted-strong"
             >
               {tag}
             </span>
@@ -290,7 +290,7 @@ export function PluginCard({
               key={`${p.id}:${link.key}`}
               variant="outline"
               size="sm"
-              className="h-6 px-2 text-[10px] font-bold border-border/40 text-muted hover:text-txt hover:border-accent hover:bg-accent/5 backdrop-blur-sm transition-all"
+              className="h-6 px-2 text-2xs font-bold border-border/40 text-muted hover:text-txt hover:border-accent hover:bg-accent/5 backdrop-blur-sm transition-all"
               onClick={(e) => {
                 e.stopPropagation();
                 void onOpenExternalUrl(link.url);
@@ -312,16 +312,16 @@ export function PluginCard({
                   : "bg-destructive text-destructive"
               }`}
             />
-            <span className="text-[11px] font-bold tracking-wide text-muted">
+            <span className="text-xs-tight font-bold tracking-wide text-muted">
               {setCount}/{totalCount} {t("pluginsview.configured")}
             </span>
           </>
         ) : !hasParams && !isShowcase ? (
-          <span className="text-[11px] font-bold tracking-wide text-muted/60">
+          <span className="text-xs-tight font-bold tracking-wide text-muted/60">
             {t("pluginsview.NoConfigNeeded")}
           </span>
         ) : (
-          <span className="text-[11px] font-bold tracking-wide text-muted/60">
+          <span className="text-xs-tight font-bold tracking-wide text-muted/60">
             {t("pluginsview.23FieldDemos")}
           </span>
         )}
@@ -332,7 +332,7 @@ export function PluginCard({
                 selectedReleaseStream === "latest" ? "default" : "outline"
               }
               size="sm"
-              className="h-6 px-2 text-[10px] font-bold tracking-wide"
+              className="h-6 px-2 text-2xs font-bold tracking-wide"
               onClick={(e) => {
                 e.stopPropagation();
                 onReleaseStreamChange(p.id, "latest");
@@ -345,7 +345,7 @@ export function PluginCard({
                 selectedReleaseStream === "alpha" ? "default" : "outline"
               }
               size="sm"
-              className="h-6 px-2 text-[10px] font-bold tracking-wide"
+              className="h-6 px-2 text-2xs font-bold tracking-wide"
               onClick={(e) => {
                 e.stopPropagation();
                 onReleaseStreamChange(p.id, "alpha");
@@ -356,7 +356,7 @@ export function PluginCard({
           </div>
         )}
         {showReleaseControls && remoteVersionForSelection && (
-          <span className="text-[10px] font-mono text-muted/70 whitespace-nowrap">
+          <span className="text-2xs font-mono text-muted/70 whitespace-nowrap">
             {selectedReleaseStream}:{remoteVersionForSelection}
           </span>
         )}
@@ -365,7 +365,7 @@ export function PluginCard({
           <Button
             variant="default"
             size="sm"
-            className="h-7 px-3 text-[10px] font-bold tracking-wide shadow-sm max-w-[140px] truncate"
+            className="h-7 px-3 text-2xs font-bold tracking-wide shadow-sm max-w-[140px] truncate"
             disabled={isInstalling || isUpdating || isUninstalling}
             onClick={(e) => {
               e.stopPropagation();
@@ -383,7 +383,7 @@ export function PluginCard({
           <Button
             variant="outline"
             size="sm"
-            className="h-7 px-3 text-[10px] font-bold tracking-wide"
+            className="h-7 px-3 text-2xs font-bold tracking-wide"
             disabled={isInstalling || isUpdating || isUninstalling}
             onClick={(e) => {
               e.stopPropagation();
@@ -399,7 +399,7 @@ export function PluginCard({
           <Button
             variant="outline"
             size="sm"
-            className="h-7 px-3 text-[10px] font-bold tracking-wide text-destructive border-destructive/40 hover:border-destructive"
+            className="h-7 px-3 text-2xs font-bold tracking-wide text-destructive border-destructive/40 hover:border-destructive"
             disabled={isInstalling || isUpdating || isUninstalling}
             onClick={(e) => {
               e.stopPropagation();
@@ -419,7 +419,7 @@ export function PluginCard({
           <Button
             variant="ghost"
             size="sm"
-            className={`h-7 px-2.5 text-[11px] font-bold transition-all flex items-center gap-1.5 ${
+            className={`h-7 px-2.5 text-xs-tight font-bold transition-all flex items-center gap-1.5 ${
               isOpen
                 ? "text-txt bg-accent/10 hover:bg-accent/20"
                 : "text-muted hover:bg-bg-hover hover:text-txt"
@@ -432,7 +432,7 @@ export function PluginCard({
           >
             <span className="text-[14px] leading-none">&#9881;</span>
             <span
-              className={`inline-block text-[10px] transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`}
+              className={`inline-block text-2xs transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`}
             >
               &#9654;
             </span>
@@ -444,7 +444,7 @@ export function PluginCard({
           {p.validationErrors.map((err: { field: string; message: string }) => (
             <div
               key={`${err.field}:${err.message}`}
-              className="text-destructive mb-0.5 text-[10px]"
+              className="text-destructive mb-0.5 text-2xs"
             >
               {err.field}: {err.message}
             </div>
@@ -454,10 +454,7 @@ export function PluginCard({
       {p.enabled && p.validationWarnings && p.validationWarnings.length > 0 && (
         <div className="px-3 py-1">
           {p.validationWarnings.map((w: { field: string; message: string }) => (
-            <div
-              key={`${w.field}:${w.message}`}
-              className="text-warn text-[10px]"
-            >
+            <div key={`${w.field}:${w.message}`} className="text-warn text-2xs">
               {w.message}
             </div>
           ))}

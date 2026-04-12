@@ -131,13 +131,13 @@ export function EditSkillModal({
               })}
             </DialogDescription>
             {hasChanges && (
-              <span className="text-[10px] font-medium text-warn">
+              <span className="text-2xs font-medium text-warn">
                 {t("skillsview.unsaved")}
               </span>
             )}
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-[10px] text-muted">
+            <span className="text-2xs text-muted">
               {navigator.platform.includes("Mac") ? "\u2318S" : "Ctrl+S"}{" "}
               {t("skillsview.toSave")}
             </span>
@@ -170,7 +170,7 @@ export function EditSkillModal({
           )}
         </div>
         <div className="flex shrink-0 items-center justify-between border-t border-border px-5 py-3">
-          <div className="text-[11px] text-muted">
+          <div className="text-xs-tight text-muted">
             {content
               ? `${content.split("\n").length} ${t("trajectorydetailview.lines")}`
               : ""}

@@ -221,7 +221,7 @@ export function PluginGameModal({
                 {selectedPlugin.tags?.map((tag) => (
                   <span
                     key={`${selectedPlugin.id}:${tag}`}
-                    className="text-[10px] px-1.5 py-px border border-border bg-black/10 text-muted lowercase tracking-wide whitespace-nowrap"
+                    className="text-2xs px-1.5 py-px border border-border bg-black/10 text-muted lowercase tracking-wide whitespace-nowrap"
                   >
                     {tag}
                   </span>
@@ -236,7 +236,7 @@ export function PluginGameModal({
                     size="sm"
                     key={`${selectedPlugin.id}:${link.key}`}
                     type="button"
-                    className="plugins-game-link-btn border border-border bg-transparent px-2.5 py-1 text-[11px] text-muted transition-colors hover:border-accent hover:text-txt"
+                    className="plugins-game-link-btn border border-border bg-transparent px-2.5 py-1 text-xs-tight text-muted transition-colors hover:border-accent hover:text-txt"
                     onClick={() => {
                       void onOpenExternalUrl(link.url);
                     }}
@@ -253,14 +253,14 @@ export function PluginGameModal({
                     <div key={param.key} id={`field-${param.key}`}>
                       <label
                         htmlFor={`input-${param.key}`}
-                        className="text-[11px] tracking-wider text-muted block mb-1"
+                        className="text-xs-tight tracking-wider text-muted block mb-1"
                       >
                         {param.key}
                       </label>
                       <Input
                         id={`input-${param.key}`}
                         type={param.sensitive ? "password" : "text"}
-                        className="w-full px-2 py-1 text-[12px]"
+                        className="w-full px-2 py-1 text-xs"
                         placeholder={param.description}
                         value={
                           pluginConfigs[selectedPlugin.id]?.[param.key] ??

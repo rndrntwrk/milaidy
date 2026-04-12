@@ -505,7 +505,8 @@ export function useChatCallbacks(deps: UseChatCallbacksDeps) {
       conversationHydrationEpochRef.current === hydrationEpoch;
 
     try {
-      const { conversations: rawConversations } = await client.listConversations();
+      const { conversations: rawConversations } =
+        await client.listConversations();
       const conversations = normalizeConversationList(rawConversations);
       traceMiladyGreeting("hydrate:listConversations", {
         count: conversations.length,

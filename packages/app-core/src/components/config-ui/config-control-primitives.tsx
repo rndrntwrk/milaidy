@@ -1,22 +1,20 @@
 import { cn } from "@miladyai/ui";
 
 export const CONFIG_FIELD_LABEL_CLASSNAME = "text-xs font-semibold";
-export const CONFIG_FIELD_ERROR_TEXT_CLASSNAME =
-  "text-[10px] text-[var(--destructive)]";
+export const CONFIG_FIELD_ERROR_TEXT_CLASSNAME = "text-2xs text-destructive";
 
 const CONFIG_CONTROL_BASE_CLASSNAME =
-  "w-full border border-[var(--border)] bg-[var(--card)] font-[var(--mono)] box-border transition-[border-color,box-shadow,background-color] focus:border-[var(--accent)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)] placeholder:text-[var(--muted)] placeholder:opacity-60";
+  "w-full border border-border bg-card font-[var(--mono)] box-border transition-[border-color,box-shadow,background-color] focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent placeholder:text-muted placeholder:opacity-60";
 const CONFIG_CONTROL_ERROR_CLASSNAME =
-  "border-[var(--destructive)] bg-[color-mix(in_srgb,var(--destructive)_3%,var(--card))]";
-const CONFIG_CONTROL_COMPACT_CLASSNAME = "h-[30px] px-2 py-[5px] text-xs";
-const CONFIG_CONTROL_REGULAR_CLASSNAME =
-  "h-[36px] rounded-sm px-3 py-2 text-[13px]";
+  "border-destructive bg-[color-mix(in_srgb,var(--destructive)_3%,var(--card))]";
+const CONFIG_CONTROL_COMPACT_CLASSNAME = "h-8 px-2 py-1 text-xs";
+const CONFIG_CONTROL_REGULAR_CLASSNAME = "h-9 rounded-sm px-3 py-2 text-sm";
 
 const CONFIG_TEXTAREA_BASE_CLASSNAME =
-  "w-full border border-[var(--border)] bg-[var(--card)] font-[var(--mono)] box-border transition-[border-color,box-shadow,background-color] focus:border-[var(--accent)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)] resize-y";
-const CONFIG_TEXTAREA_COMPACT_CLASSNAME = "min-h-[64px] px-2 py-[5px] text-xs";
+  "w-full border border-border bg-card font-[var(--mono)] box-border transition-[border-color,box-shadow,background-color] focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent resize-y";
+const CONFIG_TEXTAREA_COMPACT_CLASSNAME = "min-h-16 px-2 py-1 text-xs";
 const CONFIG_TEXTAREA_REGULAR_CLASSNAME =
-  "min-h-[72px] max-h-[400px] rounded-sm px-3 py-2 text-[13px]";
+  "min-h-[72px] max-h-[400px] rounded-sm px-3 py-2 text-sm";
 
 export function getConfigInputClassName({
   className,

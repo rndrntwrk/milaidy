@@ -292,7 +292,7 @@ export function ChatComposer({
           disabled={isComposerLocked}
         />
         {voice.isListening && voice.interimTranscript ? (
-          <div className="pointer-events-none absolute inset-x-4 bottom-2.5 truncate text-[11px] text-muted">
+          <div className="pointer-events-none absolute inset-x-4 bottom-2.5 truncate text-xs-tight text-muted">
             {voice.interimTranscript}
           </div>
         ) : null}

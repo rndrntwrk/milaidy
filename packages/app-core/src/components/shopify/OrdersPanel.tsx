@@ -36,7 +36,7 @@ function FulfillmentBadge({
 
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] ${styles[status]}`}
+      className={`inline-flex items-center rounded-full px-2 py-0.5 text-2xs font-semibold uppercase tracking-[0.1em] ${styles[status]}`}
     >
       {labels[status]}
     </span>
@@ -64,7 +64,7 @@ function FinancialBadge({
 
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] ${styles[status]}`}
+      className={`inline-flex items-center rounded-full px-2 py-0.5 text-2xs font-semibold uppercase tracking-[0.1em] ${styles[status]}`}
     >
       {labels[status]}
     </span>
@@ -86,7 +86,7 @@ function OrderRow({ order }: { order: ShopifyOrder }) {
         {/* Order name */}
         <div className="min-w-[4rem] shrink-0">
           <div className="text-sm font-semibold text-txt">{order.name}</div>
-          <div className="mt-0.5 text-[11px] text-muted">
+          <div className="mt-0.5 text-xs-tight text-muted">
             {order.lineItemCount} item{order.lineItemCount !== 1 ? "s" : ""}
           </div>
         </div>
@@ -101,7 +101,7 @@ function OrderRow({ order }: { order: ShopifyOrder }) {
           <div className="text-sm font-semibold text-txt">
             {order.totalPrice} {order.currencyCode}
           </div>
-          <div className="mt-0.5 text-[11px] text-muted">
+          <div className="mt-0.5 text-xs-tight text-muted">
             {formatShortDate(order.createdAt)}
           </div>
         </div>
@@ -126,7 +126,7 @@ function OrderRow({ order }: { order: ShopifyOrder }) {
         <div className="border-t border-border/20 px-4 py-3">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <div className="rounded-[12px] border border-border/20 bg-card/35 px-3 py-2.5">
-              <div className="text-[10px] uppercase tracking-[0.12em] text-muted/70">
+              <div className="text-2xs uppercase tracking-[0.12em] text-muted/70">
                 Order ID
               </div>
               <div className="mt-1 text-xs font-semibold text-txt break-all">
@@ -134,7 +134,7 @@ function OrderRow({ order }: { order: ShopifyOrder }) {
               </div>
             </div>
             <div className="rounded-[12px] border border-border/20 bg-card/35 px-3 py-2.5">
-              <div className="text-[10px] uppercase tracking-[0.12em] text-muted/70">
+              <div className="text-2xs uppercase tracking-[0.12em] text-muted/70">
                 Customer
               </div>
               <div className="mt-1 text-xs font-semibold text-txt">
@@ -142,7 +142,7 @@ function OrderRow({ order }: { order: ShopifyOrder }) {
               </div>
             </div>
             <div className="rounded-[12px] border border-border/20 bg-card/35 px-3 py-2.5">
-              <div className="text-[10px] uppercase tracking-[0.12em] text-muted/70">
+              <div className="text-2xs uppercase tracking-[0.12em] text-muted/70">
                 Total
               </div>
               <div className="mt-1 text-xs font-semibold text-txt">
@@ -150,7 +150,7 @@ function OrderRow({ order }: { order: ShopifyOrder }) {
               </div>
             </div>
             <div className="rounded-[12px] border border-border/20 bg-card/35 px-3 py-2.5">
-              <div className="text-[10px] uppercase tracking-[0.12em] text-muted/70">
+              <div className="text-2xs uppercase tracking-[0.12em] text-muted/70">
                 Fulfillment
               </div>
               <div className="mt-1.5">
@@ -158,7 +158,7 @@ function OrderRow({ order }: { order: ShopifyOrder }) {
               </div>
             </div>
             <div className="rounded-[12px] border border-border/20 bg-card/35 px-3 py-2.5">
-              <div className="text-[10px] uppercase tracking-[0.12em] text-muted/70">
+              <div className="text-2xs uppercase tracking-[0.12em] text-muted/70">
                 Payment
               </div>
               <div className="mt-1.5">
@@ -166,7 +166,7 @@ function OrderRow({ order }: { order: ShopifyOrder }) {
               </div>
             </div>
             <div className="rounded-[12px] border border-border/20 bg-card/35 px-3 py-2.5">
-              <div className="text-[10px] uppercase tracking-[0.12em] text-muted/70">
+              <div className="text-2xs uppercase tracking-[0.12em] text-muted/70">
                 Created
               </div>
               <div className="mt-1 text-xs font-semibold text-txt">

@@ -97,13 +97,13 @@ export function TokensTable({
           <thead>
             <tr className="border-b border-border/50 bg-bg/24">
               <th className="pl-3 pr-2 py-2 text-left w-12" />
-              <th className="px-3 py-2 text-left text-[10px] text-muted font-bold uppercase tracking-wide">
+              <th className="px-3 py-2 text-left text-2xs text-muted font-bold uppercase tracking-wide">
                 {t("wallet.table.token")}
               </th>
-              <th className="px-3 py-2 text-right text-[10px] text-muted font-bold uppercase tracking-wide">
+              <th className="px-3 py-2 text-right text-2xs text-muted font-bold uppercase tracking-wide">
                 {t("wallet.table.balance")}
               </th>
-              <th className="px-3 py-2 text-right text-[10px] text-muted font-bold uppercase tracking-wide">
+              <th className="px-3 py-2 text-right text-2xs text-muted font-bold uppercase tracking-wide">
                 {t("wallet.value")}
               </th>
               <th className="pl-3 pr-3 py-2 text-right w-24" />
@@ -134,7 +134,7 @@ export function TokensTable({
                         <div className="text-sm font-bold font-mono leading-tight">
                           {row.symbol}
                         </div>
-                        <div className="text-[10px] text-muted leading-tight mt-0.5">
+                        <div className="text-2xs text-muted leading-tight mt-0.5">
                           {row.isNative ? (
                             <span className="rounded-full border border-accent/20 bg-accent/10 px-1.5 py-0.5 text-[9px] text-accent">
                               {t("tokenstable.nativeGas")}
@@ -177,7 +177,7 @@ export function TokensTable({
                         variant="link"
                         size="sm"
                         data-testid="wallet-token-untrack"
-                        className="h-auto cursor-pointer p-0 text-[10px] text-danger hover:underline"
+                        className="h-auto cursor-pointer p-0 text-2xs text-danger hover:underline"
                         title={t("wallet.removeManualTitle")}
                         onClick={() => handleUntrackToken(contractAddress)}
                       >

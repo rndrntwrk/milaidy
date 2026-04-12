@@ -7,7 +7,7 @@ import { cn } from "../../lib/utils";
 export interface NewActionButtonProps extends Omit<ButtonProps, "variant"> {}
 
 const NEW_ACTION_BUTTON_CLASSNAME =
-  "min-h-[44px] w-full justify-start rounded-[14px] px-4 py-2.5 text-sm font-medium";
+  "min-h-touch w-full justify-start rounded-xl px-4 py-2.5 text-sm font-medium";
 
 function normalizeNewActionLabel(children: React.ReactNode): React.ReactNode {
   return React.Children.map(children, (child) =>

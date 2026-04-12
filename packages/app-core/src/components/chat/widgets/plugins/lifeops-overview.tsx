@@ -240,10 +240,10 @@ function DetailPanel({
 }: PropsWithChildren<{ title: string }>) {
   return (
     <div className="mt-3 rounded-lg border border-border/50 bg-bg-accent/20 p-3">
-      <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
+      <div className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted">
         {title}
       </div>
-      <div className="mt-2 flex flex-col gap-2 text-[11px] leading-5 text-muted">
+      <div className="mt-2 flex flex-col gap-2 text-xs-tight leading-5 text-muted">
         {children}
       </div>
     </div>
@@ -381,7 +381,7 @@ function SnoozeMenu({
         variant="ghost"
         disabled={disabled}
         onClick={() => setOpen(true)}
-        className="h-7 px-2 text-[11px]"
+        className="h-7 px-2 text-xs-tight"
       >
         Snooze
       </Button>
@@ -400,7 +400,7 @@ function SnoozeMenu({
             setOpen(false);
             void onSnooze(occurrenceId, preset);
           }}
-          className="h-7 px-1.5 text-[10px]"
+          className="h-7 px-1.5 text-2xs"
         >
           {label}
         </Button>
@@ -409,7 +409,7 @@ function SnoozeMenu({
         size="sm"
         variant="ghost"
         onClick={() => setOpen(false)}
-        className="h-7 px-1.5 text-[10px] text-muted"
+        className="h-7 px-1.5 text-2xs text-muted"
       >
         Cancel
       </Button>
@@ -475,11 +475,11 @@ function OccurrenceRow({
             ) : null}
           </div>
           {description ? (
-            <p className="mt-1 line-clamp-2 text-[11px] leading-5 text-muted">
+            <p className="mt-1 line-clamp-2 text-xs-tight leading-5 text-muted">
               {description}
             </p>
           ) : null}
-          <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-[0.08em] text-muted/80">
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-2xs uppercase tracking-[0.08em] text-muted/80">
             {dueLabel ? <span>{dueLabel}</span> : null}
             {cadenceSecondary ? <span>{cadenceSecondary}</span> : null}
           </div>
@@ -491,7 +491,7 @@ function OccurrenceRow({
                   variant="outline"
                   disabled={actionPending}
                   onClick={() => void onAction(occurrence.id, "complete")}
-                  className="h-7 px-2 text-[11px]"
+                  className="h-7 px-2 text-xs-tight"
                 >
                   Done
                 </Button>
@@ -505,7 +505,7 @@ function OccurrenceRow({
                   variant="ghost"
                   disabled={actionPending}
                   onClick={() => void onAction(occurrence.id, "skip")}
-                  className="h-7 px-2 text-[11px]"
+                  className="h-7 px-2 text-xs-tight"
                 >
                   Skip
                 </Button>
@@ -516,7 +516,7 @@ function OccurrenceRow({
               variant="ghost"
               disabled={detailPending}
               onClick={() => void onExplain(occurrence.id)}
-              className="h-7 px-2 text-[11px]"
+              className="h-7 px-2 text-xs-tight"
             >
               {isExpanded ? "Hide why" : "Why this?"}
             </Button>
@@ -559,12 +559,12 @@ function GoalRow({
         </Badge>
       </div>
       {description.length > 0 ? (
-        <p className="mt-1 line-clamp-2 text-[11px] leading-5 text-muted">
+        <p className="mt-1 line-clamp-2 text-xs-tight leading-5 text-muted">
           {description}
         </p>
       ) : null}
       {cadenceText ? (
-        <div className="mt-2 text-[10px] uppercase tracking-[0.08em] text-muted/80">
+        <div className="mt-2 text-2xs uppercase tracking-[0.08em] text-muted/80">
           {cadenceText}
         </div>
       ) : null}
@@ -574,7 +574,7 @@ function GoalRow({
           variant="ghost"
           disabled={detailPending}
           onClick={() => void onReview(goal.id)}
-          className="h-7 px-2 text-[11px]"
+          className="h-7 px-2 text-xs-tight"
         >
           {isExpanded ? "Hide review" : "Review"}
         </Button>
@@ -598,8 +598,8 @@ function ReminderRow({ reminder }: { reminder: LifeOpsActiveReminderView }) {
           {reminderChannelLabel(reminder.channel)}
         </Badge>
       </div>
-      <div className="mt-1 text-[11px] text-muted">{reminder.stepLabel}</div>
-      <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-[0.08em] text-muted/80">
+      <div className="mt-1 text-xs-tight text-muted">{reminder.stepLabel}</div>
+      <div className="mt-2 flex flex-wrap items-center gap-2 text-2xs uppercase tracking-[0.08em] text-muted/80">
         {scheduledFor ? <span>{scheduledFor}</span> : null}
         {dueAt ? <span>Due {dueAt}</span> : null}
       </div>
@@ -644,7 +644,7 @@ function OccurrenceBucketBlock({
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-2 px-0.5">
         <span className="text-muted">{icon}</span>
-        <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+        <span className="text-xs-tight font-semibold uppercase tracking-[0.08em] text-muted">
           {title}
         </span>
         <Badge variant="secondary" className="text-[9px]">
@@ -691,7 +691,7 @@ function GoalSection({
         <span className="text-muted">
           <Sparkles className="h-3.5 w-3.5" />
         </span>
-        <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+        <span className="text-xs-tight font-semibold uppercase tracking-[0.08em] text-muted">
           Goals
         </span>
         <Badge variant="secondary" className="text-[9px]">
@@ -727,7 +727,7 @@ function ReminderSection({
         <span className="text-muted">
           <BellRing className="h-3.5 w-3.5" />
         </span>
-        <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+        <span className="text-xs-tight font-semibold uppercase tracking-[0.08em] text-muted">
           Reminder ladder
         </span>
         <Badge variant="secondary" className="text-[9px]">
@@ -785,7 +785,7 @@ function AgentOpsSection({
         <span className="text-muted">
           <Bot className="h-3.5 w-3.5" />
         </span>
-        <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+        <span className="text-xs-tight font-semibold uppercase tracking-[0.08em] text-muted">
           Agent ops
         </span>
         <Badge variant="secondary" className="text-[9px]">
@@ -794,7 +794,9 @@ function AgentOpsSection({
             section.summary.activeReminderCount}
         </Badge>
       </div>
-      <p className="px-0.5 text-[11px] text-muted">{sectionSummary(section)}</p>
+      <p className="px-0.5 text-xs-tight text-muted">
+        {sectionSummary(section)}
+      </p>
       {section.occurrences
         .slice(0, MAX_SECTION_OCCURRENCES)
         .map((occurrence) => (
@@ -1178,7 +1180,7 @@ export function LifeOpsOverviewSidebarWidget(_props: ChatSidebarWidgetProps) {
             onExplainOccurrence={onExplainOccurrence}
             onReviewGoal={onReviewGoal}
           />
-          <div className="rounded-lg border border-border/50 bg-bg-accent/30 px-3 py-2 text-[11px] text-muted">
+          <div className="rounded-lg border border-border/50 bg-bg-accent/30 px-3 py-2 text-xs-tight text-muted">
             <div className="flex items-center gap-2">
               <BellRing className="h-3.5 w-3.5" />
               <span>
@@ -1190,7 +1192,7 @@ export function LifeOpsOverviewSidebarWidget(_props: ChatSidebarWidgetProps) {
         </div>
       )}
       {error ? (
-        <div className="mt-3 text-[11px] text-danger">{error}</div>
+        <div className="mt-3 text-xs-tight text-danger">{error}</div>
       ) : null}
     </WidgetSection>
   );

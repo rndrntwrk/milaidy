@@ -24,12 +24,21 @@ const VALIDATION_KEYWORD_DOCS = {
           e-mail
           gmail
           inbox
+          mailbox
           compose
           draft
           drafts
           unread
           starred
           mail
+          message
+          messages
+          respond to
+          reply to
+          check my email
+          check email
+          new mail
+          shoot me an email
         `),
         locales: {
           "zh-CN": termDoc(`
@@ -37,12 +46,15 @@ const VALIDATION_KEYWORD_DOCS = {
             电子邮件
             邮箱
             收件箱
+            消息
           `),
           ko: termDoc(`
             이메일
             메일
             지메일
             받은편지함
+            메시지
+            메세지
           `),
           es: termDoc(`
             correo
@@ -50,6 +62,8 @@ const VALIDATION_KEYWORD_DOCS = {
             correo electronico
             correo electrónico
             bandeja de entrada
+            mensaje
+            mensajes
           `),
           pt: termDoc(`
             correio
@@ -57,16 +71,20 @@ const VALIDATION_KEYWORD_DOCS = {
             correio eletronico
             correio eletrônico
             caixa de entrada
+            mensagem
+            mensagens
           `),
           vi: termDoc(`
             thư điện tử
             thu dien tu
             hộp thư
             hop thu
+            tin nhắn
           `),
           tl: termDoc(`
             koreo
             liham
+            mensahe
           `),
         },
       },
@@ -1318,6 +1336,8 @@ const VALIDATION_KEYWORD_DOCS = {
       strong: {
         base: termDoc(`
           todo
+          to-do
+          to do
           task
           habit
           routine
@@ -1328,10 +1348,19 @@ const VALIDATION_KEYWORD_DOCS = {
           streak
           lifeops
           life ops
+          workout
+          exercise
+          meditation
+          checklist
+          self-care
+          wellness
+          accountability
         `),
         locales: {
           "zh-CN": termDoc(`
             待办
+            代办事项
+            待办事项
             任务
             习惯
             日程
@@ -1339,7 +1368,13 @@ const VALIDATION_KEYWORD_DOCS = {
             闹钟
             目标
             打卡
+            签到
             追踪
+            锻炼
+            健身
+            冥想
+            自律
+            早起
           `),
           ko: termDoc(`
             할일
@@ -1352,6 +1387,13 @@ const VALIDATION_KEYWORD_DOCS = {
             목표
             추적
             스트릭
+            운동
+            명상
+            투두
+            체크리스트
+            스케줄
+            리마인더
+            자기관리
           `),
           es: termDoc(`
             tarea
@@ -1366,6 +1408,16 @@ const VALIDATION_KEYWORD_DOCS = {
             objetivo
             seguimiento
             rastrear
+            pendiente
+            pendientes
+            ejercicio
+            entrenamiento
+            meditación
+            meditacion
+            racha
+            lista de tareas
+            quehacer
+            quehaceres
           `),
           pt: termDoc(`
             tarefa
@@ -1380,15 +1432,38 @@ const VALIDATION_KEYWORD_DOCS = {
             objetivo
             acompanhamento
             rastrear
+            exercício
+            exercicio
+            treino
+            meditação
+            meditacao
+            sequência
+            sequencia
+            lista de tarefas
+            afazer
+            afazeres
+            pendência
+            pendencia
           `),
           vi: termDoc(`
             việc cần làm
+            viec can lam
             nhiệm vụ
+            nhiem vu
             thói quen
+            thoi quen
             nhắc nhở
+            nhac nho
             chuông báo
+            chuong bao
             mục tiêu
+            muc tieu
             theo dõi
+            theo doi
+            tập thể dục
+            tap the duc
+            thiền
+            thien
           `),
           tl: termDoc(`
             gawain
@@ -1398,6 +1473,14 @@ const VALIDATION_KEYWORD_DOCS = {
             alarma
             layunin
             subaybay
+            ehersisyo
+            meditasyon
+            listahan
+            tsek
+            workout
+            goal
+            reminder
+            task
           `),
         },
       },
@@ -1572,6 +1655,15 @@ const VALIDATION_KEYWORD_DOCS = {
           i already
           i've done
           i have done
+          all done
+          got it done
+          took care of it
+          knocked it out
+          crushed it
+          nailed it
+          handled it
+          accomplished
+          yep done
         `),
         locales: {
           "zh-CN": termDoc(`
@@ -1579,10 +1671,16 @@ const VALIDATION_KEYWORD_DOCS = {
             做完了
             已完成
             搞定了
+            搞定
             弄好了
             做好了
             打卡
             已做
+            OK了
+            完事了
+            好了
+            办完了
+            整完了
           `),
           ko: termDoc(`
             했어
@@ -1594,6 +1692,13 @@ const VALIDATION_KEYWORD_DOCS = {
             다 했어
             마쳤어
             체크
+            끝
+            했습니다
+            완료했어
+            완료했습니다
+            해냈어
+            클리어
+            했지
           `),
           es: termDoc(`
             hecho
@@ -1608,6 +1713,16 @@ const VALIDATION_KEYWORD_DOCS = {
             ya hice
             marcar hecho
             marcar completo
+            ya
+            ya está
+            ya esta
+            lo hice
+            lo terminé
+            lo termine
+            acabé
+            acabe
+            cumplido
+            dale
           `),
           pt: termDoc(`
             feito
@@ -1620,8 +1735,18 @@ const VALIDATION_KEYWORD_DOCS = {
             concluído
             concluido
             já fiz
+            ja fiz
             marcar feito
             marcar concluído
+            tá feito
+            ta feito
+            fiz
+            acabei
+            beleza
+            tá pronto
+            ta pronto
+            resolvido
+            finalizado
           `),
           vi: termDoc(`
             xong rồi
@@ -1629,9 +1754,18 @@ const VALIDATION_KEYWORD_DOCS = {
             đã xong
             da xong
             hoàn thành rồi
+            hoan thanh roi
             đã làm
             da lam
             đánh dấu xong
+            danh dau xong
+            xong
+            làm rồi
+            lam roi
+            ok rồi
+            ok roi
+            xử lý xong
+            xu ly xong
           `),
           tl: termDoc(`
             tapos na
@@ -1639,6 +1773,11 @@ const VALIDATION_KEYWORD_DOCS = {
             ginawa ko na
             natapos ko
             markahang tapos
+            ayos na
+            okay na
+            done na
+            tapos ko na
+            goods na
           `),
         },
       },
@@ -1651,6 +1790,16 @@ const VALIDATION_KEYWORD_DOCS = {
           not today
           skip today
           skip this
+          nah
+          pass
+          nope
+          not doing it
+          not gonna
+          gonna skip
+          can't today
+          not this time
+          hard pass
+          no thanks
         `),
         locales: {
           "zh-CN": termDoc(`
@@ -1658,12 +1807,24 @@ const VALIDATION_KEYWORD_DOCS = {
             今天不做
             今天跳过
             算了
+            不了
+            不想做
+            懒得做
+            免了
+            不做了
+            放弃
           `),
           ko: termDoc(`
             건너뛰기
             오늘 안 해
             오늘은 패스
             패스
+            스킵
+            안 할래
+            됐어
+            안 해
+            귀찮아
+            넘어가
           `),
           es: termDoc(`
             omitir
@@ -1671,22 +1832,51 @@ const VALIDATION_KEYWORD_DOCS = {
             hoy no
             paso
             pasar
+            nah
+            no quiero
+            dejalo
+            déjalo
+            paso de eso
+            nel
+            que va
           `),
           pt: termDoc(`
             pular
             hoje não
             hoje nao
             passar
+            deixa pra lá
+            deixa pra la
+            não quero
+            nao quero
+            nah
+            nem
+            to fora
+            próximo
+            proximo
           `),
           vi: termDoc(`
             bỏ qua
             bo qua
             hôm nay không
+            hom nay khong
+            thôi
+            thoi
+            khỏi
+            khoi
+            không làm
+            khong lam
+            bỏ đi
+            bo di
           `),
           tl: termDoc(`
             laktawan
             hindi ngayon
             pasa
+            skip
+            ayaw ko
+            wag na
+            di ko gagawin
           `),
         },
       },
@@ -1695,13 +1885,24 @@ const VALIDATION_KEYWORD_DOCS = {
       strong: {
         base: termDoc(`
           snooze
-          later
           remind me later
           remind me again
           postpone
           defer
           push back
+          push it back
+          push that back
           put off
+          put it off
+          put that off
+          in a bit
+          hold off
+          not right now
+          maybe later
+          not yet
+          come back later
+          ask me again
+          give me a minute
         `),
         locales: {
           "zh-CN": termDoc(`
@@ -1711,6 +1912,13 @@ const VALIDATION_KEYWORD_DOCS = {
             等下提醒
             延后
             延迟
+            一会儿再说
+            先不急
+            别急
+            缓缓
+            等等
+            明天再说
+            过一会儿
           `),
           ko: termDoc(`
             나중에
@@ -1719,6 +1927,11 @@ const VALIDATION_KEYWORD_DOCS = {
             나중에 알려줘
             연기
             미루다
+            잠깐
+            조금 뒤에
+            이따가
+            좀 있다가
+            잠시만
           `),
           es: termDoc(`
             posponer
@@ -1729,6 +1942,13 @@ const VALIDATION_KEYWORD_DOCS = {
             despues
             recuérdame después
             recuerdame despues
+            ahora no
+            ahorita no
+            ahorita
+            en un rato
+            luego
+            al rato
+            un momento
           `),
           pt: termDoc(`
             adiar
@@ -1736,19 +1956,45 @@ const VALIDATION_KEYWORD_DOCS = {
             depois
             lembrar depois
             postergar
+            agora não
+            agora nao
+            daqui a pouco
+            já já
+            ja ja
+            peraí
+            perai
+            calma
+            espera
           `),
           vi: termDoc(`
             để sau
             de sau
             hoãn
+            hoan
             nhắc lại sau
             nhac lai sau
+            chờ chút
+            cho chut
+            chưa
+            chua
+            từ từ
+            tu tu
+            lát nữa
+            lat nua
+            tí nữa
+            ti nua
           `),
           tl: termDoc(`
             mamaya
             ipagpaliban
             ipaalala mamaya
             mamaya na lang
+            sandali lang
+            saglit
+            di muna
+            hindi pa
+            maya-maya
+            later
           `),
         },
       },
@@ -1764,6 +2010,18 @@ const VALIDATION_KEYWORD_DOCS = {
           stop tracking
           stop the
           stop my
+          ditch
+          scrap
+          nuke it
+          kill it
+          trash
+          toss
+          forget about
+          forget it
+          never mind
+          no longer need
+          don't need this
+          don't want this
         `),
         locales: {
           "zh-CN": termDoc(`
@@ -1773,6 +2031,11 @@ const VALIDATION_KEYWORD_DOCS = {
             不要了
             停止追踪
             停止跟踪
+            去掉
+            扔掉
+            不做了
+            不需要了
+            干掉
           `),
           ko: termDoc(`
             삭제
@@ -1781,6 +2044,12 @@ const VALIDATION_KEYWORD_DOCS = {
             없애줘
             추적 중지
             그만 추적
+            지워줘
+            버려
+            필요 없어
+            그만
+            빼줘
+            캔슬
           `),
           es: termDoc(`
             eliminar
@@ -1789,6 +2058,15 @@ const VALIDATION_KEYWORD_DOCS = {
             cancelar
             dejar de rastrear
             dejar de seguir
+            borra
+            olvídate
+            olvidate
+            no necesito
+            ya no quiero
+            sácalo
+            sacalo
+            tíralo
+            tiralo
           `),
           pt: termDoc(`
             excluir
@@ -1797,6 +2075,15 @@ const VALIDATION_KEYWORD_DOCS = {
             cancelar
             parar de rastrear
             parar de acompanhar
+            apagar
+            apaga
+            joga fora
+            tira
+            não preciso
+            nao preciso
+            não quero mais
+            nao quero mais
+            esquece
           `),
           vi: termDoc(`
             xóa
@@ -1806,12 +2093,26 @@ const VALIDATION_KEYWORD_DOCS = {
             bỏ
             bo
             ngừng theo dõi
+            ngung theo doi
+            gỡ
+            go
+            bỏ đi
+            bo di
+            không cần nữa
+            khong can nua
+            quên đi
+            quen di
           `),
           tl: termDoc(`
             tanggalin
             alisin
             kanselahin
             itigil ang pagsubaybay
+            delete
+            itapon
+            di ko na kailangan
+            kalimutan na
+            wag na
           `),
         },
       },
@@ -1826,6 +2127,13 @@ const VALIDATION_KEYWORD_DOCS = {
           adjust
           rename
           reschedule
+          tweak
+          fix
+          switch
+          move
+          set to
+          swap
+          revise
         `),
         locales: {
           "zh-CN": termDoc(`
@@ -1836,6 +2144,11 @@ const VALIDATION_KEYWORD_DOCS = {
             重命名
             改时间
             重新安排
+            改
+            换
+            改成
+            换成
+            微调
           `),
           ko: termDoc(`
             수정
@@ -1844,6 +2157,12 @@ const VALIDATION_KEYWORD_DOCS = {
             조정
             이름 바꾸기
             일정 변경
+            바꿔줘
+            고쳐줘
+            바꿔
+            고쳐
+            옮기기
+            업데이트
           `),
           es: termDoc(`
             actualizar
@@ -1853,6 +2172,13 @@ const VALIDATION_KEYWORD_DOCS = {
             ajustar
             renombrar
             reprogramar
+            arreglar
+            arregla
+            mover
+            cámbialo
+            cambialo
+            corregir
+            ponle
           `),
           pt: termDoc(`
             atualizar
@@ -1862,6 +2188,14 @@ const VALIDATION_KEYWORD_DOCS = {
             ajustar
             renomear
             reagendar
+            arrumar
+            arruma
+            mudar
+            muda
+            trocar
+            troca
+            mexer
+            corrigir
           `),
           vi: termDoc(`
             cập nhật
@@ -1871,8 +2205,17 @@ const VALIDATION_KEYWORD_DOCS = {
             sửa
             sua
             điều chỉnh
+            dieu chinh
             đổi tên
+            doi ten
             đổi lịch
+            doi lich
+            chỉnh
+            chinh
+            đổi
+            doi
+            dời
+            doi
           `),
           tl: termDoc(`
             baguhin
@@ -1880,6 +2223,10 @@ const VALIDATION_KEYWORD_DOCS = {
             i-adjust
             palitan ang pangalan
             palitan ang iskedyul
+            update
+            change
+            ayusin
+            ilipat
           `),
         },
       },
@@ -1900,6 +2247,21 @@ const VALIDATION_KEYWORD_DOCS = {
           only high priority
           be more persistent
           more persistent
+          remind me less
+          remind me more
+          remind less
+          remind more
+          start reminding me again
+          turn reminders back on
+          stop nagging
+          quit bugging me
+          enough reminders
+          too many reminders
+          chill with the reminders
+          bug me more
+          nag me about
+          keep on me about
+          stay on top of me
         `),
         locales: {
           "zh-CN": termDoc(`
@@ -1911,6 +2273,10 @@ const VALIDATION_KEYWORD_DOCS = {
             少提醒
             静音提醒
             仅高优先
+            别烦我
+            别催了
+            多催催
+            盯着我
           `),
           ko: termDoc(`
             알림 중지
@@ -1921,6 +2287,10 @@ const VALIDATION_KEYWORD_DOCS = {
             알림 줄여
             알림 음소거
             높은 우선순위만
+            좀 그만
+            자꾸 알려줘
+            계속 알려줘
+            잔소리 그만
           `),
           es: termDoc(`
             dejar de recordarme
@@ -1933,6 +2303,11 @@ const VALIDATION_KEYWORD_DOCS = {
             recordatorios normales
             silenciar recordatorios
             solo prioridad alta
+            deja de molestar
+            no me molestes
+            ya basta de recordatorios
+            insísteme
+            insisteme
           `),
           pt: termDoc(`
             parar de lembrar
@@ -1945,15 +2320,28 @@ const VALIDATION_KEYWORD_DOCS = {
             lembretes normais
             silenciar lembretes
             apenas alta prioridade
+            para de encher
+            chega de lembrete
+            me cobra mais
+            insiste mais
           `),
           vi: termDoc(`
             ngừng nhắc
+            ngung nhac
             đừng nhắc
+            dung nhac
             tạm dừng nhắc
+            tam dung nhac
             tiếp tục nhắc
+            tiep tuc nhac
             nhắc nhiều hơn
+            nhac nhieu hon
             nhắc ít hơn
+            nhac it hon
             tắt nhắc
+            tat nhac
+            đủ rồi
+            du roi
           `),
           tl: termDoc(`
             itigil ang paalala
@@ -1962,6 +2350,9 @@ const VALIDATION_KEYWORD_DOCS = {
             ituloy ang paalala
             dagdagan ang paalala
             bawasan ang paalala
+            tama na
+            stop na
+            tigilan mo na
           `),
         },
       },
@@ -1978,8 +2369,26 @@ const VALIDATION_KEYWORD_DOCS = {
           show me everything
           what's left
           what is left
+          still left
           what do i still need
           anything else to do
+          need to get done
+          need to finish
+          get done today
+          anything else
+          still need to do
+          what's on my plate
+          what am i juggling
+          where do things stand
+          give me the rundown
+          catch me up
+          what's pending
+          what's outstanding
+          show my tasks
+          my list
+          my tasks
+          how many tasks
+          list everything
         `),
         locales: {
           "zh-CN": termDoc(`
@@ -1991,6 +2400,11 @@ const VALIDATION_KEYWORD_DOCS = {
             剩余任务
             活跃任务
             我还要做什么
+            都有啥
+            看一下
+            我的任务
+            还剩什么
+            有什么要做的
           `),
           ko: termDoc(`
             개요
@@ -2000,6 +2414,11 @@ const VALIDATION_KEYWORD_DOCS = {
             남은 거
             활성 항목
             아직 할 거
+            뭐 해야 돼
+            뭐 해야 해
+            할 일 목록
+            얼마나 남았어
+            보여줘
           `),
           es: termDoc(`
             resumen
@@ -2010,6 +2429,14 @@ const VALIDATION_KEYWORD_DOCS = {
             qué tengo
             mostrar todo
             tareas activas
+            qué hay pendiente
+            que hay pendiente
+            mis tareas
+            mi lista
+            qué falta
+            que falta
+            en qué ando
+            en que ando
           `),
           pt: termDoc(`
             resumo
@@ -2018,14 +2445,31 @@ const VALIDATION_KEYWORD_DOCS = {
             o que tenho
             mostrar tudo
             tarefas ativas
+            o que tem pendente
+            minhas tarefas
+            minha lista
+            quanto falta
+            cadê minhas coisas
+            cade minhas coisas
           `),
           vi: termDoc(`
             tổng quan
+            tong quan
             tóm tắt
+            tom tat
             trạng thái
+            trang thai
             còn gì
+            con gi
             còn gì nữa
+            con gi nua
             việc đang làm
+            viec dang lam
+            danh sách
+            danh sach
+            cho xem
+            có gì
+            co gi
           `),
           tl: termDoc(`
             buod
@@ -2033,6 +2477,1186 @@ const VALIDATION_KEYWORD_DOCS = {
             ano pa ang natitira
             ipakita lahat
             mga aktibong gawain
+            ano ang mga gawain ko
+            lista ko
+            anong meron
+            show
+          `),
+        },
+      },
+    },
+    lifeops_cadence: {
+      strong: {
+        base: termDoc(`
+          every day
+          everyday
+          daily
+          weekly
+          monthly
+          weekdays
+          weekends
+          each day
+          each morning
+          each night
+          each week
+          each month
+          every week
+          every month
+          every morning
+          every afternoon
+          every evening
+          every night
+          twice a day
+          per day
+          per week
+          throughout the day
+          with lunch
+          with breakfast
+          with dinner
+          times a day
+          times per day
+          times a week
+          once a day
+          once a week
+          before bed
+          after work
+          when i wake up
+          first thing in the morning
+          at night
+          in the morning
+          on mondays
+          on tuesdays
+          on wednesdays
+          on thursdays
+          on fridays
+          on saturdays
+          on sundays
+        `),
+        locales: {
+          "zh-CN": termDoc(`
+            每天
+            每日
+            每周
+            每月
+            工作日
+            周末
+            每个早上
+            每个下午
+            每个晚上
+            一天两次
+            每天一次
+            起床后
+            睡前
+            下班后
+            上班前
+            隔天
+            每隔一天
+            一周三次
+          `),
+          ko: termDoc(`
+            매일
+            매주
+            매월
+            평일
+            주말
+            매일 아침
+            매일 저녁
+            하루에 두 번
+            하루에 한 번
+            일어나면
+            자기 전에
+            퇴근 후
+            출근 전
+            격일
+            주 3회
+            월수금
+            일주일에 한 번
+          `),
+          es: termDoc(`
+            cada día
+            cada dia
+            diario
+            diariamente
+            semanal
+            semanalmente
+            mensual
+            mensualmente
+            entre semana
+            fin de semana
+            fines de semana
+            cada mañana
+            cada tarde
+            cada noche
+            dos veces al día
+            dos veces al dia
+            por día
+            por dia
+            antes de dormir
+            al despertar
+            después del trabajo
+            despues del trabajo
+            lunes a viernes
+            todos los días
+            todos los dias
+            cada rato
+          `),
+          pt: termDoc(`
+            todo dia
+            todos os dias
+            diário
+            diario
+            diariamente
+            semanal
+            semanalmente
+            mensal
+            mensalmente
+            dia de semana
+            fim de semana
+            toda manhã
+            toda manha
+            toda tarde
+            toda noite
+            duas vezes ao dia
+            por dia
+            antes de dormir
+            ao acordar
+            depois do trabalho
+            segunda a sexta
+            dia sim dia não
+            dia sim dia nao
+          `),
+          vi: termDoc(`
+            mỗi ngày
+            moi ngay
+            hàng ngày
+            hang ngay
+            hàng tuần
+            hang tuan
+            hàng tháng
+            hang thang
+            ngày trong tuần
+            cuối tuần
+            cuoi tuan
+            mỗi sáng
+            moi sang
+            mỗi chiều
+            moi chieu
+            mỗi tối
+            moi toi
+            hai lần mỗi ngày
+            trước khi ngủ
+            truoc khi ngu
+            khi thức dậy
+            khi thuc day
+            sau giờ làm
+            sau gio lam
+            cách ngày
+            cach ngay
+          `),
+          tl: termDoc(`
+            araw-araw
+            lingguhan
+            buwanan
+            weekdays
+            weekends
+            tuwing umaga
+            tuwing hapon
+            tuwing gabi
+            dalawang beses sa isang araw
+            bago matulog
+            pagkagising
+            pagkatapos ng trabaho
+            everyday
+            daily
+          `),
+        },
+      },
+    },
+    lifeops_goal: {
+      strong: {
+        base: termDoc(`
+          goal
+          goals
+          aspiration
+          life goal
+          achieve
+          aim
+          target
+          ambition
+          milestone
+          objective
+          dream
+          bucket list
+          resolution
+          i want to
+          i wanna
+          working toward
+          working towards
+          strive
+          vision
+          purpose
+          intention
+        `),
+        locales: {
+          "zh-CN": termDoc(`
+            目标
+            志向
+            梦想
+            愿望
+            里程碑
+            想要
+            追求
+            心愿
+            计划
+            努力
+            愿景
+          `),
+          ko: termDoc(`
+            목표
+            꿈
+            포부
+            야망
+            이정표
+            하고 싶다
+            되고 싶다
+            비전
+            계획
+            다짐
+            버킷리스트
+          `),
+          es: termDoc(`
+            meta
+            metas
+            objetivo
+            objetivos
+            aspiración
+            aspiracion
+            lograr
+            sueño
+            ambición
+            ambicion
+            quiero
+            propósito
+            proposito
+            resolución
+            resolucion
+            plan
+          `),
+          pt: termDoc(`
+            meta
+            metas
+            objetivo
+            objetivos
+            aspiração
+            aspiracao
+            alcançar
+            alcancar
+            sonho
+            ambição
+            ambicao
+            quero
+            propósito
+            proposito
+            resolução
+            resolucao
+            plano
+          `),
+          vi: termDoc(`
+            mục tiêu
+            muc tieu
+            ước mơ
+            uoc mo
+            hoài bão
+            hoai bao
+            khát vọng
+            khat vong
+            muốn
+            muon
+            quyết tâm
+            quyet tam
+            kế hoạch
+            ke hoach
+          `),
+          tl: termDoc(`
+            layunin
+            pangarap
+            ambisyon
+            mithiin
+            gusto ko
+            plano
+            resolusyon
+            goal
+            bucket list
+          `),
+        },
+      },
+    },
+    lifeops_escalation: {
+      strong: {
+        base: termDoc(`
+          escalate
+          escalation
+          reminder plan
+          set up sms
+          set up text
+          set up voice
+          notify if
+          text me if
+          call me if
+          sms if
+          text if i ignore
+          text if i miss
+          call if i ignore
+          call if i miss
+          text me if i ignore
+          text me if i miss
+          call me if i ignore
+          call me if i miss
+          nag me
+          bug me
+          keep bugging me
+          blow up my phone
+          ping me
+          if i don't respond
+          if i don't do it
+        `),
+        locales: {
+          "zh-CN": termDoc(`
+            升级
+            升级提醒
+            设置短信
+            设置语音
+            如果忽略就发短信
+            如果忽略就打电话
+            催我
+            盯紧
+            如果我不做
+            如果我不回复
+          `),
+          ko: termDoc(`
+            에스컬레이션
+            알림 계획
+            문자 설정
+            음성 설정
+            무시하면 문자
+            무시하면 전화
+            계속 알려줘
+            안 하면 문자해
+            잔소리해줘
+          `),
+          es: termDoc(`
+            escalar
+            escalación
+            escalacion
+            plan de recordatorio
+            configurar sms
+            configurar texto
+            configurar voz
+            notificar si
+            enviar texto si ignoro
+            llamar si ignoro
+            insísteme
+            insisteme
+            si no respondo
+            si no lo hago
+          `),
+          pt: termDoc(`
+            escalar
+            escalação
+            escalacao
+            plano de lembrete
+            configurar sms
+            configurar texto
+            configurar voz
+            notificar se
+            enviar mensagem se ignorar
+            ligar se ignorar
+            me cobre
+            se eu não fizer
+            se eu nao fizer
+          `),
+          vi: termDoc(`
+            leo thang
+            kế hoạch nhắc nhở
+            ke hoach nhac nho
+            thiết lập sms
+            thiet lap sms
+            nhắn tin nếu bỏ lỡ
+            nhan tin neu bo lo
+            gọi nếu bỏ lỡ
+            goi neu bo lo
+          `),
+          tl: termDoc(`
+            i-escalate
+            plano ng paalala
+            i-setup ang sms
+            i-text kung hindi pinansin
+            tawagan kung hindi pinansin
+            pag hindi ko ginawa
+            kulitin mo ako
+            text mo ako
+          `),
+        },
+      },
+    },
+    lifeops_phone: {
+      strong: {
+        base: termDoc(`
+          phone
+          text me
+          call me
+          sms
+          my number
+          voice call
+          my phone number
+          phone number
+          txt me
+          ring me
+          my cell
+          mobile
+          my mobile
+          whatsapp me
+          whatsapp
+        `),
+        locales: {
+          "zh-CN": termDoc(`
+            电话
+            给我发短信
+            打给我
+            短信
+            我的号码
+            我的电话号码
+            手机
+            手机号
+            微信
+          `),
+          ko: termDoc(`
+            전화
+            문자 보내줘
+            전화해줘
+            내 번호
+            내 전화번호
+            핸드폰
+            휴대폰
+            폰
+            카톡
+            카카오톡
+          `),
+          es: termDoc(`
+            teléfono
+            telefono
+            envíame un mensaje
+            mandame un mensaje
+            llámame
+            llamame
+            sms
+            mi número
+            mi numero
+            celular
+            cel
+            mi cel
+            móvil
+            movil
+            whatsapp
+          `),
+          pt: termDoc(`
+            telefone
+            me mande mensagem
+            me ligue
+            sms
+            meu número
+            meu numero
+            celular
+            cel
+            meu cel
+            whatsapp
+            zap
+            me zapa
+          `),
+          vi: termDoc(`
+            điện thoại
+            dien thoai
+            nhắn tin cho tôi
+            nhan tin cho toi
+            gọi cho tôi
+            goi cho toi
+            số của tôi
+            so cua toi
+            số điện thoại
+            so dien thoai
+            di động
+            di dong
+            zalo
+          `),
+          tl: termDoc(`
+            telepono
+            i-text ako
+            tawagan ako
+            sms
+            numero ko
+            cellphone
+            cp
+            number ko
+            viber
+          `),
+        },
+      },
+    },
+    lifeops_review: {
+      strong: {
+        base: termDoc(`
+          review
+          how am i doing
+          how's it going
+          how'd i do
+          progress
+          check on
+          check goal
+          check my goal
+          progress report
+          am i on track
+          am i keeping up
+          where am i at
+          recap
+          streak check
+          goal check
+          habit check
+        `),
+        locales: {
+          "zh-CN": termDoc(`
+            回顾
+            进展如何
+            检查进度
+            查看目标
+            我做得怎么样
+            看看进度
+            怎么样了
+            表现如何
+            坚持得怎样
+          `),
+          ko: termDoc(`
+            리뷰
+            어떻게 하고 있어
+            진행 상황
+            목표 확인
+            잘 하고 있어
+            얼마나 했어
+            성과
+            습관 체크
+            스트릭 확인
+          `),
+          es: termDoc(`
+            revisar
+            cómo voy
+            como voy
+            progreso
+            revisar meta
+            revisar objetivo
+            cómo me fue
+            como me fue
+            estoy en buen camino
+            mi racha
+            cómo llevo
+            como llevo
+          `),
+          pt: termDoc(`
+            revisar
+            como estou indo
+            progresso
+            verificar meta
+            verificar objetivo
+            como fui
+            estou no caminho certo
+            minha sequência
+            minha sequencia
+            como tá indo
+            como ta indo
+          `),
+          vi: termDoc(`
+            xem lại
+            xem lai
+            tiến triển thế nào
+            tien trien the nao
+            tiến độ
+            tien do
+            kiểm tra mục tiêu
+            kiem tra muc tieu
+            kết quả
+            ket qua
+            đánh giá
+            danh gia
+          `),
+          tl: termDoc(`
+            suriin
+            kumusta ang progreso
+            tingnan ang layunin
+            kamusta
+            report
+          `),
+        },
+      },
+    },
+    affirmative: {
+      strong: {
+        base: termDoc(`
+          yes
+          yeah
+          yep
+          yup
+          ok
+          okay
+          sure
+          confirm
+          confirmed
+          go ahead
+          do it
+          please do
+          sounds good
+          correct
+          exactly
+          perfect
+          that works
+          looks good
+          go for it
+          lgtm
+          absolutely
+          affirmative
+          approved
+          lets go
+          let's go
+          save it
+          create it
+        `),
+        locales: {
+          "zh-CN": termDoc(`
+            是的
+            好的
+            确认
+            可以
+            没问题
+            行
+            对
+            好
+            确定
+            同意
+            当然
+            就这样
+            保存
+            创建
+          `),
+          ko: termDoc(`
+            네
+            예
+            좋아
+            좋아요
+            확인
+            맞아
+            괜찮아
+            알겠어
+            동의
+            물론
+            그래
+            응
+            저장
+            만들어
+          `),
+          es: termDoc(`
+            sí
+            si
+            claro
+            vale
+            bien
+            confirmar
+            de acuerdo
+            perfecto
+            adelante
+            correcto
+            exacto
+            hazlo
+            por favor
+            listo
+            guardar
+            crear
+          `),
+          pt: termDoc(`
+            sim
+            claro
+            ok
+            beleza
+            confirmar
+            de acordo
+            perfeito
+            pode
+            correto
+            exato
+            vai em frente
+            com certeza
+            salvar
+            criar
+          `),
+          vi: termDoc(`
+            vâng
+            rồi
+            được
+            đồng ý
+            đúng rồi
+            ok
+            chắc chắn
+            xác nhận
+            tốt
+            hay
+            đúng
+            lưu
+            tạo
+          `),
+          tl: termDoc(`
+            oo
+            sige
+            tama
+            sigurado
+            ok
+            ayos na
+            kumpirmahin
+            sabi mo
+            ayan
+            i-save
+            gawin
+          `),
+        },
+      },
+    },
+    negative: {
+      strong: {
+        base: termDoc(`
+          no
+          nope
+          nah
+          don't
+          do not
+          wait
+          hold on
+          cancel
+          nevermind
+          never mind
+          forget it
+          skip it
+          stop
+          not now
+          not yet
+        `),
+        locales: {
+          "zh-CN": termDoc(`
+            不
+            不要
+            不是
+            取消
+            等一下
+            算了
+            别
+            停
+            不用
+            暂时不
+          `),
+          ko: termDoc(`
+            아니요
+            아니
+            안돼
+            취소
+            잠깐
+            됐어
+            하지마
+            멈춰
+            아직
+            나중에
+          `),
+          es: termDoc(`
+            no
+            nada
+            cancelar
+            espera
+            olvídalo
+            olvidalo
+            para
+            detente
+            todavía no
+            aún no
+            aun no
+          `),
+          pt: termDoc(`
+            não
+            nao
+            nada
+            cancelar
+            espera
+            esqueça
+            esqueca
+            pare
+            ainda não
+            ainda nao
+          `),
+          vi: termDoc(`
+            không
+            đừng
+            hủy
+            chờ
+            thôi
+            dừng
+            chưa
+            bỏ đi
+          `),
+          tl: termDoc(`
+            hindi
+            huwag
+            kanselahin
+            teka
+            kalimutan mo na
+            hinto
+            wag
+          `),
+        },
+      },
+    },
+    draft_edit: {
+      strong: {
+        base: termDoc(`
+          how about
+          what about
+          instead
+          actually
+          make it
+          change it
+          edit it
+          update it
+          rename it
+          switch it
+          swap it
+          rather
+          keep it
+          but change
+          but make
+        `),
+        locales: {
+          "zh-CN": termDoc(`
+            改成
+            换成
+            改为
+            换个
+            怎么样
+            还是
+            改一下
+            更新
+            其实
+            但是改
+          `),
+          ko: termDoc(`
+            바꿔
+            변경
+            대신
+            어떨까
+            고쳐
+            수정
+            업데이트
+            사실
+            그런데
+          `),
+          es: termDoc(`
+            cambiarlo
+            mejor
+            qué tal
+            que tal
+            en vez de
+            editar
+            actualizar
+            renombrar
+            en realidad
+            pero cambia
+          `),
+          pt: termDoc(`
+            mudar
+            melhor
+            que tal
+            em vez de
+            editar
+            atualizar
+            renomear
+            na verdade
+            mas muda
+          `),
+          vi: termDoc(`
+            đổi thành
+            thay đổi
+            sửa
+            cập nhật
+            thế nào
+            thực ra
+            nhưng đổi
+          `),
+          tl: termDoc(`
+            palitan
+            baguhin
+            imbes
+            i-edit
+            i-update
+            sa halip
+            pero palitan
+          `),
+        },
+      },
+    },
+    temporal_next: {
+      strong: {
+        base: termDoc(`
+          next
+          upcoming
+          soon
+          about to
+          coming up
+          after this
+        `),
+        locales: {
+          "zh-CN": termDoc(`
+            下一个
+            即将
+            马上
+            接下来
+            快到了
+          `),
+          ko: termDoc(`
+            다음
+            곧
+            다가오는
+            이제
+            곧 있을
+          `),
+          es: termDoc(`
+            próximo
+            proximo
+            siguiente
+            pronto
+            a punto de
+          `),
+          pt: termDoc(`
+            próximo
+            proximo
+            seguinte
+            logo
+            em breve
+          `),
+          vi: termDoc(`
+            tiếp theo
+            sắp tới
+            sớm
+            sắp
+          `),
+          tl: termDoc(`
+            susunod
+            malapit na
+            mamaya
+          `),
+        },
+      },
+    },
+    temporal_followup: {
+      strong: {
+        base: termDoc(`
+          yesterday
+          today
+          tomorrow
+          tonight
+          later
+          earlier
+          this week
+          next week
+          the week after
+          week after next
+          this weekend
+          next weekend
+          weekend
+          this month
+          next month
+          this year
+          next year
+          last year
+          monday
+          tuesday
+          wednesday
+          thursday
+          friday
+          saturday
+          sunday
+          find it
+          look it up
+          check again
+          try to find
+          try again
+          retry
+          again
+        `),
+        locales: {
+          "zh-CN": termDoc(`
+            昨天
+            今天
+            明天
+            今晚
+            稍后
+            更早
+            这周
+            下周
+            这个月
+            下个月
+            今年
+            明年
+            去年
+            周一
+            周二
+            周三
+            周四
+            周五
+            周六
+            周日
+            星期一
+            星期二
+            星期三
+            星期四
+            星期五
+            星期六
+            星期天
+            再试
+            查找
+            再查
+            再看看
+          `),
+          ko: termDoc(`
+            어제
+            오늘
+            내일
+            오늘밤
+            나중에
+            이번주
+            다음주
+            이번달
+            다음달
+            올해
+            내년
+            작년
+            월요일
+            화요일
+            수요일
+            목요일
+            금요일
+            토요일
+            일요일
+            다시
+            찾아
+            다시 시도
+            다시 확인
+          `),
+          es: termDoc(`
+            ayer
+            hoy
+            mañana
+            esta noche
+            luego
+            más tarde
+            mas tarde
+            esta semana
+            próxima semana
+            proxima semana
+            este mes
+            próximo mes
+            proximo mes
+            este año
+            este ano
+            lunes
+            martes
+            miércoles
+            miercoles
+            jueves
+            viernes
+            sábado
+            sabado
+            domingo
+            reintentar
+            buscar
+            otra vez
+            de nuevo
+          `),
+          pt: termDoc(`
+            ontem
+            hoje
+            amanhã
+            amanha
+            esta noite
+            mais tarde
+            esta semana
+            próxima semana
+            proxima semana
+            este mês
+            este mes
+            próximo mês
+            proximo mes
+            este ano
+            segunda
+            terça
+            terca
+            quarta
+            quinta
+            sexta
+            sábado
+            sabado
+            domingo
+            tentar novamente
+            procurar
+            de novo
+            outra vez
+          `),
+          vi: termDoc(`
+            hôm qua
+            hôm nay
+            ngày mai
+            tối nay
+            sau
+            sớm hơn
+            tuần này
+            tuần sau
+            tháng này
+            tháng sau
+            năm nay
+            năm sau
+            năm ngoái
+            thứ hai
+            thứ ba
+            thứ tư
+            thứ năm
+            thứ sáu
+            thứ bảy
+            chủ nhật
+            thử lại
+            tìm
+            lại
+          `),
+          tl: termDoc(`
+            kahapon
+            ngayon
+            bukas
+            mamaya
+            mamayang gabi
+            ngayong linggo
+            susunod na linggo
+            ngayong buwan
+            susunod na buwan
+            ngayong taon
+            lunes
+            martes
+            miyerkules
+            huwebes
+            biyernes
+            sabado
+            linggo
+            subukan muli
+            hanapin
+            ulit
+            muli
           `),
         },
       },
@@ -2766,6 +4390,50 @@ const VALIDATION_KEYWORD_DOCS = {
           hyperscape
           babylon
         `),
+        locales: {
+          "zh-CN": termDoc(`
+            shopify
+            vincent
+            companion
+            hyperscape
+            babylon
+          `),
+          ko: termDoc(`
+            shopify
+            vincent
+            companion
+            hyperscape
+            babylon
+          `),
+          es: termDoc(`
+            shopify
+            vincent
+            companion
+            hyperscape
+            babylon
+          `),
+          pt: termDoc(`
+            shopify
+            vincent
+            companion
+            hyperscape
+            babylon
+          `),
+          vi: termDoc(`
+            shopify
+            vincent
+            companion
+            hyperscape
+            babylon
+          `),
+          tl: termDoc(`
+            shopify
+            vincent
+            companion
+            hyperscape
+            babylon
+          `),
+        },
       },
     },
     terminal: {
@@ -2935,6 +4603,24 @@ const VALIDATION_KEYWORD_DOCS = {
           ko: termDoc(`
             비트코인
           `),
+          es: termDoc(`
+            bitcóin
+            bitcoín
+            bitcoin
+          `),
+          pt: termDoc(`
+            bitcóin
+            bitcoin
+          `),
+          vi: termDoc(`
+            đồng bitcoin
+            dong bitcoin
+            bitcoin
+          `),
+          tl: termDoc(`
+            bitcoin
+            barya ng bitcoin
+          `),
         },
       },
       cryptoEthereum: {
@@ -2949,6 +4635,24 @@ const VALIDATION_KEYWORD_DOCS = {
           ko: termDoc(`
             이더리움
           `),
+          es: termDoc(`
+            ethereum
+            etéreo
+            etereo
+          `),
+          pt: termDoc(`
+            ethereum
+            ether
+          `),
+          vi: termDoc(`
+            ethereum
+            đồng ethereum
+            dong ethereum
+          `),
+          tl: termDoc(`
+            ethereum
+            ether
+          `),
         },
       },
       cryptoSolana: {
@@ -2962,6 +4666,20 @@ const VALIDATION_KEYWORD_DOCS = {
           `),
           ko: termDoc(`
             솔라나
+          `),
+          es: termDoc(`
+            solana
+          `),
+          pt: termDoc(`
+            solana
+          `),
+          vi: termDoc(`
+            solana
+            đồng solana
+            dong solana
+          `),
+          tl: termDoc(`
+            solana
           `),
         },
       },
@@ -3271,6 +4989,10 @@ const VALIDATION_KEYWORD_DOCS = {
               theo dõi
               theo doi
             `),
+            tl: termDoc(`
+              bakas
+              trace
+            `),
           },
         },
         debug: {
@@ -3295,6 +5017,10 @@ const VALIDATION_KEYWORD_DOCS = {
             vi: termDoc(`
               gỡ lỗi
               go loi
+            `),
+            tl: termDoc(`
+              debug
+              pag-debug
             `),
           },
         },
@@ -3368,12 +5094,20 @@ const VALIDATION_KEYWORD_DOCS = {
             ko: termDoc(`
               오류
             `),
+            es: termDoc(`
+              error
+              errores
+            `),
             pt: termDoc(`
               erro
             `),
             vi: termDoc(`
               lỗi
               loi
+            `),
+            tl: termDoc(`
+              error
+              mga error
             `),
           },
         },

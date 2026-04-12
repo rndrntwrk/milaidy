@@ -38,10 +38,10 @@ type RuntimeTreeSectionKey = Exclude<RuntimeSectionKey, "summary">;
 
 /** Inline class strings for toolbar buttons (previously composed from desktop-surface-primitives tokens). */
 const TOOLBAR_BUTTON_BASE =
-  "h-8 rounded-full px-3.5 text-[10px] font-semibold tracking-[0.12em] border border-border/32 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_84%,transparent),color-mix(in_srgb,var(--bg)_95%,transparent))] text-muted-strong shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_14px_20px_-18px_rgba(15,23,42,0.14)] backdrop-blur-md transition-[border-color,background-color,color,transform,box-shadow] duration-200 hover:border-border/46 hover:bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_90%,transparent),color-mix(in_srgb,var(--bg)_97%,transparent))] hover:text-txt hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_16px_22px_-18px_rgba(15,23,42,0.16)] active:scale-95 disabled:hover:border-border/32 disabled:hover:bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_84%,transparent),color-mix(in_srgb,var(--bg)_95%,transparent))] disabled:hover:text-muted-strong dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_16px_24px_-20px_rgba(0,0,0,0.24)]";
+  "h-8 rounded-full px-3.5 text-2xs font-semibold tracking-[0.12em] border border-border/32 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_84%,transparent),color-mix(in_srgb,var(--bg)_95%,transparent))] text-muted-strong shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_14px_20px_-18px_rgba(15,23,42,0.14)] backdrop-blur-md transition-[border-color,background-color,color,transform,box-shadow] duration-200 hover:border-border/46 hover:bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_90%,transparent),color-mix(in_srgb,var(--bg)_97%,transparent))] hover:text-txt hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_16px_22px_-18px_rgba(15,23,42,0.16)] active:scale-95 disabled:hover:border-border/32 disabled:hover:bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_84%,transparent),color-mix(in_srgb,var(--bg)_95%,transparent))] disabled:hover:text-muted-strong dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_16px_24px_-20px_rgba(0,0,0,0.24)]";
 
 const TOOLBAR_BUTTON_ACCENT =
-  "h-8 rounded-full px-3.5 text-[10px] font-semibold tracking-[0.12em] border border-accent/26 bg-[linear-gradient(180deg,rgba(var(--accent-rgb),0.16),rgba(var(--accent-rgb),0.07))] text-txt-strong shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_14px_22px_-18px_rgba(var(--accent-rgb),0.24)] ring-1 ring-inset ring-accent/10 hover:border-accent/42 hover:bg-[linear-gradient(180deg,rgba(var(--accent-rgb),0.2),rgba(var(--accent-rgb),0.1))] hover:text-txt-strong";
+  "h-8 rounded-full px-3.5 text-2xs font-semibold tracking-[0.12em] border border-accent/26 bg-[linear-gradient(180deg,rgba(var(--accent-rgb),0.16),rgba(var(--accent-rgb),0.07))] text-txt-strong shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_14px_22px_-18px_rgba(var(--accent-rgb),0.24)] ring-1 ring-inset ring-accent/10 hover:border-accent/42 hover:bg-[linear-gradient(180deg,rgba(var(--accent-rgb),0.2),rgba(var(--accent-rgb),0.1))] hover:text-txt-strong";
 
 const INPUT_CLASSNAME =
   "relative overflow-hidden border border-border/28 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_86%,transparent),color-mix(in_srgb,var(--bg)_95%,transparent))] shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_18px_28px_-24px_rgba(15,23,42,0.12)] backdrop-blur-md transition-[border-color,background-color,box-shadow] duration-200 before:pointer-events-none before:absolute before:inset-x-3 before:top-0 before:h-px before:bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.24),transparent)] hover:border-border/40 hover:bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_90%,transparent),color-mix(in_srgb,var(--bg)_96%,transparent))] focus-within:border-accent/24 focus-within:bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_92%,transparent),color-mix(in_srgb,var(--bg)_97%,transparent))] focus-within:shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_20px_30px_-24px_rgba(15,23,42,0.14)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_20px_30px_-26px_rgba(0,0,0,0.24)] h-9 rounded-[16px] px-3 text-sm text-txt";
@@ -236,7 +236,7 @@ function OrderCard(props: { title: string; entries: RuntimeOrderItem[] }) {
       </div>
       <PagePanel
         variant="inset"
-        className="max-h-[18rem] overflow-auto px-4 py-3 text-[12px] font-mono leading-6 tabular-nums"
+        className="max-h-[18rem] overflow-auto px-4 py-3 text-xs font-mono leading-6 tabular-nums"
       >
         {entries.length === 0 ? (
           <div className="text-muted">{t("runtimeview.none")}</div>
@@ -271,7 +271,7 @@ function ServicesOrderCard(props: { entries: RuntimeServiceOrderItem[] }) {
       </div>
       <PagePanel
         variant="inset"
-        className="max-h-[18rem] space-y-3 overflow-auto px-4 py-3 text-[12px] font-mono leading-6 tabular-nums"
+        className="max-h-[18rem] space-y-3 overflow-auto px-4 py-3 text-xs font-mono leading-6 tabular-nums"
       >
         {entries.length === 0 ? (
           <div className="text-muted">{t("runtimeview.none")}</div>
@@ -353,8 +353,8 @@ function RuntimeSummaryCard(props: {
         <div
           className={
             snapshot.runtimeAvailable
-              ? "rounded-full border border-ok/30 bg-ok/10 px-2.5 py-1 text-[11px] font-medium text-ok"
-              : "rounded-full border border-warning/30 bg-warning/10 px-2.5 py-1 text-[11px] font-medium text-warning"
+              ? "rounded-full border border-ok/30 bg-ok/10 px-2.5 py-1 text-xs-tight font-medium text-ok"
+              : "rounded-full border border-warning/30 bg-warning/10 px-2.5 py-1 text-xs-tight font-medium text-warning"
           }
         >
           {snapshot.runtimeAvailable
@@ -498,7 +498,7 @@ export function RuntimeView({
       <SidebarPanel>
         <PagePanel.SummaryCard compact className="mt-2 space-y-2">
           {/* biome-ignore lint/a11y/noLabelWithoutControl: programmatic control association is preserved */}
-          <label className="flex flex-col gap-1 text-[11px] text-muted">
+          <label className="flex flex-col gap-1 text-xs-tight text-muted">
             <span>{t("runtimeview.depth")}</span>
             <Input
               type="number"
@@ -515,7 +515,7 @@ export function RuntimeView({
           </label>
 
           {/* biome-ignore lint/a11y/noLabelWithoutControl: programmatic control association is preserved */}
-          <label className="flex flex-col gap-1 text-[11px] text-muted">
+          <label className="flex flex-col gap-1 text-xs-tight text-muted">
             <span>{t("runtimeview.arrayCap")}</span>
             <Input
               type="number"
@@ -532,7 +532,7 @@ export function RuntimeView({
           </label>
 
           {/* biome-ignore lint/a11y/noLabelWithoutControl: programmatic control association is preserved */}
-          <label className="flex flex-col gap-1 text-[11px] text-muted">
+          <label className="flex flex-col gap-1 text-xs-tight text-muted">
             <span>{t("runtimeview.objectCap")}</span>
             <Input
               type="number"
@@ -670,7 +670,7 @@ export function RuntimeView({
             <PagePanel variant="padded">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted/70">
+                  <div className="text-xs-tight font-semibold uppercase tracking-[0.16em] text-muted/70">
                     {t("runtimeview.sectionLabel")}
                   </div>
                   <div className="mt-2 text-[2rem] font-semibold leading-tight text-txt">
@@ -712,7 +712,7 @@ export function RuntimeView({
 
               <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <PagePanel variant="inset" className="px-4 py-4">
-                  <div className="text-[11px] uppercase tracking-[0.14em] text-muted/70">
+                  <div className="text-xs-tight uppercase tracking-[0.14em] text-muted/70">
                     {t("runtimeview.path")}
                   </div>
                   <div className="mt-2 font-mono text-sm text-txt">
@@ -720,7 +720,7 @@ export function RuntimeView({
                   </div>
                 </PagePanel>
                 <PagePanel variant="inset" className="px-4 py-4">
-                  <div className="text-[11px] uppercase tracking-[0.14em] text-muted/70">
+                  <div className="text-xs-tight uppercase tracking-[0.14em] text-muted/70">
                     {t("runtimeview.lastUpdated")}
                   </div>
                   <div className="mt-2 text-sm font-semibold text-txt">
@@ -730,7 +730,7 @@ export function RuntimeView({
                   </div>
                 </PagePanel>
                 <PagePanel variant="inset" className="px-4 py-4">
-                  <div className="text-[11px] uppercase tracking-[0.14em] text-muted/70">
+                  <div className="text-xs-tight uppercase tracking-[0.14em] text-muted/70">
                     {t("runtimeview.depth")}
                   </div>
                   <div className="mt-2 text-sm font-semibold text-txt">
@@ -738,7 +738,7 @@ export function RuntimeView({
                   </div>
                 </PagePanel>
                 <PagePanel variant="inset" className="px-4 py-4">
-                  <div className="text-[11px] uppercase tracking-[0.14em] text-muted/70">
+                  <div className="text-xs-tight uppercase tracking-[0.14em] text-muted/70">
                     {t("runtimeview.objectCap")}
                   </div>
                   <div className="mt-2 text-sm font-semibold text-txt">

@@ -145,7 +145,7 @@ function PasswordFieldInner({ fp: props }: { fp: FieldRenderProps }) {
     <div className="flex">
       <input
         ref={inputRef}
-        className="flex-1 px-3 py-2 border border-[var(--border)] border-r-0 bg-[var(--card)] text-[13px] font-[var(--mono)] transition-all focus:border-[var(--accent)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)] box-border h-[36px] rounded-l-sm placeholder:text-[var(--muted)] placeholder:opacity-60"
+        className="flex-1 px-3 py-2 border border-border border-r-0 bg-card text-sm font-[var(--mono)] transition-all focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent box-border h-9 rounded-l-sm placeholder:text-muted placeholder:opacity-60"
         type={visible ? "text" : "password"}
         value={fieldValue}
         placeholder={placeholder}
@@ -162,7 +162,7 @@ function PasswordFieldInner({ fp: props }: { fp: FieldRenderProps }) {
         type="button"
         variant="outline"
         size="default"
-        className="px-3 border border-[var(--border)] bg-[var(--bg-hover)] text-[11px] text-[var(--muted)] whitespace-nowrap min-w-[56px] text-center transition-colors hover:bg-[var(--surface)] hover:text-[var(--text)] h-[36px] font-medium rounded-l-none rounded-r-sm"
+        className="px-3 border border-border bg-bg-hover text-xs-tight text-muted whitespace-nowrap min-w-[56px] text-center transition-colors hover:bg-surface hover:text-txt h-9 font-medium rounded-l-none rounded-r-sm"
         onClick={() => {
           void handleToggle();
           fireAction(props, "click");
@@ -220,7 +220,7 @@ function NumberFieldInner({ fp: props }: { fp: FieldRenderProps }) {
             type="button"
             variant="outline"
             size="default"
-            className="px-2 py-1.5 bg-transparent text-sm text-[var(--muted)] transition-colors hover:bg-[var(--surface)] hover:text-[var(--text)] h-[36px] rounded-sm font-mono select-none"
+            className="px-2 py-1.5 bg-transparent text-sm text-muted transition-colors hover:bg-surface hover:text-txt h-9 rounded-sm font-mono select-none"
             onClick={() => step(-1)}
           >
             −
@@ -250,20 +250,20 @@ function NumberFieldInner({ fp: props }: { fp: FieldRenderProps }) {
             type="button"
             variant="outline"
             size="default"
-            className="px-2 py-1.5 bg-transparent text-sm text-[var(--muted)] transition-colors hover:bg-[var(--surface)] hover:text-[var(--text)] h-[36px] rounded-sm font-mono select-none"
+            className="px-2 py-1.5 bg-transparent text-sm text-muted transition-colors hover:bg-surface hover:text-txt h-9 rounded-sm font-mono select-none"
             onClick={() => step(1)}
           >
             +
           </Button>
         )}
         {unit && (
-          <span className="text-[11px] text-[var(--muted)] font-medium shrink-0 min-w-[20px]">
+          <span className="text-xs-tight text-muted font-medium shrink-0 min-w-[20px]">
             {unit}
           </span>
         )}
       </div>
       {hasRange && (
-        <div className="text-[10px] text-[var(--muted)] mt-0.5 opacity-70">
+        <div className="text-2xs text-muted mt-0.5 opacity-70">
           {minVal != null && maxVal != null
             ? `Range: ${minVal}–${maxVal}${unit ? ` ${unit}` : ""}`
             : minVal != null
@@ -313,7 +313,7 @@ function BooleanFieldInner({ fp: props }: { fp: FieldRenderProps }) {
         }}
       />
       <span
-        className={`text-xs transition-colors ${localVal ? "text-[var(--text)] font-medium" : "text-[var(--muted)]"}`}
+        className={`text-xs transition-colors ${localVal ? "text-txt font-medium" : "text-muted"}`}
       >
         {localVal ? "Enabled" : "Disabled"}
       </span>
@@ -533,10 +533,10 @@ function SearchableSelectInner({
         data-config-key={props.key}
         data-field-type="select"
       >
-        <span className={inputVal ? "" : "text-[var(--muted)] opacity-60"}>
+        <span className={inputVal ? "" : "text-muted opacity-60"}>
           {inputVal || "Select..."}
         </span>
-        <span className="text-[var(--muted)] text-[10px] shrink-0">
+        <span className="text-muted text-2xs shrink-0">
           {open ? "\u25B2" : "\u25BC"}
         </span>
       </Button>
@@ -548,14 +548,14 @@ function SearchableSelectInner({
             ref={dropdownRef}
             data-floating-layer={SELECT_FLOATING_LAYER_NAME}
             style={dropdownStyle}
-            className="border border-[var(--border)] bg-[var(--card)] shadow-lg rounded-sm"
+            className="border border-border bg-card shadow-lg rounded-sm"
           >
             {/* Search input */}
-            <div className="p-1.5 border-b border-[var(--border)]">
+            <div className="p-1.5 border-b border-border">
               <input
                 // biome-ignore lint/a11y/noAutofocus: dropdown search needs immediate focus
                 autoFocus
-                className="w-full px-2 py-1.5 border border-[var(--border)] bg-[var(--bg)] text-[12px] font-[var(--mono)] focus:border-[var(--accent)] focus:outline-none rounded-sm"
+                className="w-full px-2 py-1.5 border border-border bg-bg text-xs font-[var(--mono)] focus:border-accent focus:outline-none rounded-sm"
                 type="text"
                 value={filter}
                 placeholder={`Search ${options.length} options...`}
@@ -576,7 +576,7 @@ function SearchableSelectInner({
                 <Button
                   type="button"
                   variant="ghost"
-                  className="w-full text-left px-3 py-1.5 text-[12px] text-[var(--muted)] hover:bg-[var(--bg-hover)] transition-colors italic rounded-none justify-start h-auto"
+                  className="w-full text-left px-3 py-1.5 text-xs text-muted hover:bg-bg-hover transition-colors italic rounded-none justify-start h-auto"
                   onClick={() => {
                     props.onChange("");
                     setInputVal("");
@@ -589,7 +589,7 @@ function SearchableSelectInner({
                 </Button>
               )}
               {filtered.length === 0 && (
-                <div className="px-3 py-3 text-[12px] text-[var(--muted)] text-center">
+                <div className="px-3 py-3 text-xs text-muted text-center">
                   {t("config-field.NoMatches", {
                     defaultValue: "No matches",
                   })}
@@ -600,23 +600,23 @@ function SearchableSelectInner({
                   key={opt.value}
                   type="button"
                   variant="ghost"
-                  className={`w-full text-left px-3 py-1.5 text-[12px] hover:bg-[var(--bg-hover)] transition-colors rounded-none justify-start h-auto ${
+                  className={`w-full text-left px-3 py-1.5 text-xs hover:bg-bg-hover transition-colors rounded-none justify-start h-auto ${
                     opt.value === effectiveValue
-                      ? "bg-[color-mix(in_srgb,var(--accent)_10%,var(--card))] text-[var(--accent)] font-medium"
+                      ? "bg-[color-mix(in_srgb,var(--accent)_10%,var(--card))] text-accent font-medium"
                       : ""
                   }`}
                   onClick={() => select(opt)}
                 >
                   {opt.label}
                   {opt.description && (
-                    <span className="text-[var(--muted)] ml-1.5 text-[11px]">
+                    <span className="text-muted ml-1.5 text-xs-tight">
                       {opt.description}
                     </span>
                   )}
                 </Button>
               ))}
             </div>
-            <div className="px-3 py-1 border-t border-[var(--border)] text-[10px] text-[var(--muted)]">
+            <div className="px-3 py-1 border-t border-border text-2xs text-muted">
               {filtered.length} of {options.length}{" "}
               {t("config-field.options", { defaultValue: "options" })}
             </div>
@@ -718,7 +718,7 @@ function ColorFieldInner({ fp: props }: { fp: FieldRenderProps }) {
   return (
     <div className="flex items-center gap-2">
       <input
-        className="w-[36px] h-[36px] border border-[var(--border)] p-0.5 cursor-pointer bg-transparent rounded-sm [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:border-none [&::-webkit-color-swatch]:rounded-sm"
+        className="w-[36px] h-9 border border-border p-0.5 cursor-pointer bg-transparent rounded-sm [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:border-none [&::-webkit-color-swatch]:rounded-sm"
         type="color"
         value={color}
         data-config-key={props.key}
@@ -786,7 +786,7 @@ function RadioFieldInner({ fp: props }: { fp: FieldRenderProps }) {
       {options.map((opt) => (
         <label
           key={opt.value}
-          className="flex items-start gap-2 cursor-pointer text-[13px]"
+          className="flex items-start gap-2 cursor-pointer text-sm"
         >
           <input
             type="radio"
@@ -802,7 +802,7 @@ function RadioFieldInner({ fp: props }: { fp: FieldRenderProps }) {
           <span>
             {opt.label}
             {opt.description && (
-              <div className="text-[11px] text-[var(--muted)] mt-px">
+              <div className="text-xs-tight text-muted mt-px">
                 {opt.description}
               </div>
             )}
@@ -872,7 +872,7 @@ function MultiselectFieldInner({ fp: props }: { fp: FieldRenderProps }) {
           {selectedOptions.map((opt) => (
             <span
               key={opt.value}
-              className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] bg-[var(--accent-subtle,rgba(59,130,246,0.1))] text-[var(--accent)] border border-[var(--accent)] border-opacity-30 rounded-full"
+              className="inline-flex items-center gap-1 px-2 py-0.5 text-xs-tight bg-accent-subtle text-accent border border-accent border-opacity-30 rounded-full"
             >
               {opt.label}
               {!props.readonly && (
@@ -880,7 +880,7 @@ function MultiselectFieldInner({ fp: props }: { fp: FieldRenderProps }) {
                   type="button"
                   variant="ghost"
                   size="icon"
-                  className="inline-flex items-center justify-center w-3.5 h-3.5 text-[10px] rounded-full hover:bg-[var(--accent)] hover:text-[var(--accent-foreground,#1a1f26)] transition-colors"
+                  className="inline-flex items-center justify-center w-3.5 h-3.5 text-2xs rounded-full hover:bg-accent hover:text-accent-fg transition-colors"
                   onClick={() => remove(opt.value)}
                 >
                   ×
@@ -896,7 +896,7 @@ function MultiselectFieldInner({ fp: props }: { fp: FieldRenderProps }) {
           // biome-ignore lint/a11y/noLabelWithoutControl: form control is associated programmatically
           <label
             key={opt.value}
-            className="flex items-center gap-2 cursor-pointer text-[13px]"
+            className="flex items-center gap-2 cursor-pointer text-sm"
           >
             <Checkbox
               checked={selected.has(opt.value)}
@@ -996,7 +996,7 @@ function JsonFieldInner({ fp: props }: { fp: FieldRenderProps }) {
         onClick={() => fireAction(props, "click")}
       />
       {jsonError && (
-        <div className="text-[11px] text-[var(--destructive)] mt-1 leading-snug">
+        <div className="text-xs-tight text-destructive mt-1 leading-snug">
           {jsonError}
         </div>
       )}
@@ -1070,7 +1070,7 @@ function ArrayItem({
             type="button"
             variant="ghost"
             size="icon"
-            className="px-1 py-0 h-auto w-auto text-[10px] leading-tight text-[var(--muted)] hover:text-[var(--text)] disabled:opacity-30 disabled:cursor-not-allowed"
+            className="px-1 py-0 h-auto w-auto text-2xs leading-tight text-muted hover:text-txt disabled:opacity-30 disabled:cursor-not-allowed"
             onClick={onMoveUp}
             disabled={index === 0}
             title={t("config-field.MoveUp", {
@@ -1083,7 +1083,7 @@ function ArrayItem({
             type="button"
             variant="ghost"
             size="icon"
-            className="px-1 py-0 h-auto w-auto text-[10px] leading-tight text-[var(--muted)] hover:text-[var(--text)] disabled:opacity-30 disabled:cursor-not-allowed"
+            className="px-1 py-0 h-auto w-auto text-2xs leading-tight text-muted hover:text-txt disabled:opacity-30 disabled:cursor-not-allowed"
             onClick={onMoveDown}
             disabled={index === total - 1}
             title={t("config-field.MoveDown", {
@@ -1108,7 +1108,7 @@ function ArrayItem({
           type="button"
           variant="outline"
           size="icon"
-          className="px-2 py-1.5 bg-[var(--bg-hover)] text-xs text-[var(--muted)] transition-colors hover:bg-[var(--surface)] hover:text-[var(--destructive)] h-[36px] rounded-sm"
+          className="px-2 py-1.5 bg-bg-hover text-xs text-muted transition-colors hover:bg-surface hover:text-destructive h-9 rounded-sm"
           onClick={onRemove}
         >
           <X className="w-3 h-3" />
@@ -1185,7 +1185,7 @@ function ArrayFieldInner({ fp: props }: { fp: FieldRenderProps }) {
           type="button"
           variant="outline"
           size="sm"
-          className="self-start px-3 py-1.5 border-dashed bg-transparent text-[11px] text-[var(--muted)] transition-colors hover:bg-[var(--bg-hover)] hover:text-[var(--text)] hover:border-[var(--accent)] rounded-sm"
+          className="self-start px-3 py-1.5 border-dashed bg-transparent text-xs-tight text-muted transition-colors hover:bg-bg-hover hover:text-txt hover:border-accent rounded-sm"
           onClick={() => {
             addItem();
             fireAction(props, "click");
@@ -1277,7 +1277,7 @@ function KeyValueFieldInner({ fp: props }: { fp: FieldRenderProps }) {
               type="button"
               variant="outline"
               size="icon"
-              className="px-2 py-1.5 bg-[var(--bg-hover)] text-xs text-[var(--muted)] transition-colors hover:bg-[var(--surface)] hover:text-[var(--destructive)] h-[36px] rounded-sm"
+              className="px-2 py-1.5 bg-bg-hover text-xs text-muted transition-colors hover:bg-surface hover:text-destructive h-9 rounded-sm"
               onClick={() => {
                 removeRow(index);
                 fireAction(props, "click");
@@ -1293,7 +1293,7 @@ function KeyValueFieldInner({ fp: props }: { fp: FieldRenderProps }) {
           type="button"
           variant="outline"
           size="sm"
-          className="self-start px-3 py-1.5 border-dashed bg-transparent text-[11px] text-[var(--muted)] transition-colors hover:bg-[var(--bg-hover)] hover:text-[var(--text)] hover:border-[var(--accent)] rounded-sm"
+          className="self-start px-3 py-1.5 border-dashed bg-transparent text-xs-tight text-muted transition-colors hover:bg-bg-hover hover:text-txt hover:border-accent rounded-sm"
           onClick={() => {
             addRow();
             fireAction(props, "click");
@@ -1358,7 +1358,7 @@ export function RenderFileField(props: FieldRenderProps) {
         onBlur={() => fireAction(props, "blur")}
         onClick={() => fireAction(props, "click")}
       />
-      <div className="text-[11px] text-[var(--muted)] mt-0.5">
+      <div className="text-xs-tight text-muted mt-0.5">
         {t("config-field.EnterAFilePathOr", {
           defaultValue: "Enter a file path or paste one here.",
         })}
@@ -1378,7 +1378,7 @@ export function RenderCustomField(props: FieldRenderProps) {
 
   return (
     <div
-      className="px-3 py-4 border border-dashed border-[var(--border)] bg-[var(--bg-hover)] text-[13px] text-[var(--muted)]"
+      className="px-3 py-4 border border-dashed border-border bg-bg-hover text-sm text-muted"
       data-config-key={props.key}
       data-field-type="custom"
     >
@@ -1413,9 +1413,9 @@ function renderMarkdown(text: string): React.ReactNode {
       elements.push(
         <pre
           key={`code:${code}`}
-          className="bg-[var(--bg-hover)] px-3 py-2 rounded-sm overflow-x-auto my-2"
+          className="bg-bg-hover px-3 py-2 rounded-sm overflow-x-auto my-2"
         >
-          <code className="font-mono text-[12px]">{code}</code>
+          <code className="font-mono text-xs">{code}</code>
         </pre>,
       );
       return;
@@ -1489,7 +1489,7 @@ function processInline(text: string): React.ReactNode {
           href={linkMatch[2]}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-[var(--accent)] underline"
+          className="text-accent underline"
         >
           {linkMatch[1]}
         </a>,
@@ -1507,7 +1507,7 @@ function processInline(text: string): React.ReactNode {
       parts.push(
         <code
           key={key++}
-          className="bg-[var(--bg-hover)] px-1 py-0.5 rounded font-mono text-[12px]"
+          className="bg-bg-hover px-1 py-0.5 rounded font-mono text-xs"
         >
           {codeMatch[1]}
         </code>,
@@ -1566,10 +1566,10 @@ function MarkdownFieldInner(props: FieldRenderProps) {
           type="button"
           variant={!preview ? "default" : "outline"}
           size="sm"
-          className={`text-[11px] px-2 py-0.5 transition-colors h-auto ${
+          className={`text-xs-tight px-2 py-0.5 transition-colors h-auto ${
             !preview
-              ? "bg-[var(--accent)] text-[var(--accent-fg)] border-[var(--accent)]"
-              : "bg-transparent text-[var(--muted)] hover:text-[var(--txt)]"
+              ? "bg-accent text-accent-fg border-accent"
+              : "bg-transparent text-muted hover:text-txt"
           }`}
           onClick={() => setPreview(false)}
         >
@@ -1579,10 +1579,10 @@ function MarkdownFieldInner(props: FieldRenderProps) {
           type="button"
           variant={preview ? "default" : "outline"}
           size="sm"
-          className={`text-[11px] px-2 py-0.5 transition-colors h-auto ${
+          className={`text-xs-tight px-2 py-0.5 transition-colors h-auto ${
             preview
-              ? "bg-[var(--accent)] text-[var(--accent-fg)] border-[var(--accent)]"
-              : "bg-transparent text-[var(--muted)] hover:text-[var(--txt)]"
+              ? "bg-accent text-accent-fg border-accent"
+              : "bg-transparent text-muted hover:text-txt"
           }`}
           onClick={() => setPreview(true)}
         >
@@ -1591,14 +1591,14 @@ function MarkdownFieldInner(props: FieldRenderProps) {
       </div>
       {preview ? (
         <div
-          className="min-h-[100px] px-3 py-2 border border-[var(--border)] bg-[var(--surface)] text-[13px] leading-relaxed"
+          className="min-h-[100px] px-3 py-2 border border-border bg-surface text-sm leading-relaxed"
           data-config-key={props.key}
           data-field-type="markdown"
         >
           {value ? (
             renderMarkdown(value)
           ) : (
-            <span className="text-[var(--muted)] italic">
+            <span className="text-muted italic">
               {t("config-field.NothingToPreview", {
                 defaultValue: "Nothing to preview",
               })}
@@ -1673,9 +1673,9 @@ function CheckboxGroupInner(props: FieldRenderProps) {
         // biome-ignore lint/a11y/noLabelWithoutControl: form control is associated programmatically
         <label
           key={opt.value}
-          className={`flex items-start gap-2.5 px-3 py-2 border border-[var(--border)] bg-[var(--card)] cursor-pointer transition-colors hover:bg-[var(--bg-hover)] ${
+          className={`flex items-start gap-2.5 px-3 py-2 border border-border bg-card cursor-pointer transition-colors hover:bg-bg-hover ${
             selected.has(opt.value)
-              ? "border-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_5%,var(--card))]"
+              ? "border-accent bg-[color-mix(in_srgb,var(--accent)_5%,var(--card))]"
               : ""
           } ${opt.disabled ? "opacity-50 pointer-events-none" : ""}`}
         >
@@ -1686,9 +1686,9 @@ function CheckboxGroupInner(props: FieldRenderProps) {
             className="mt-0.5"
           />
           <div className="flex flex-col">
-            <span className="text-[13px]">{opt.label}</span>
+            <span className="text-sm">{opt.label}</span>
             {opt.description && (
-              <span className="text-[11px] text-[var(--muted)] mt-0.5">
+              <span className="text-xs-tight text-muted mt-0.5">
                 {opt.description}
               </span>
             )}
@@ -1696,7 +1696,7 @@ function CheckboxGroupInner(props: FieldRenderProps) {
         </label>
       ))}
       {options.length === 0 && (
-        <span className="text-[11px] text-[var(--muted)] italic">
+        <span className="text-xs-tight text-muted italic">
           {t("config-field.NoOptionsDefined", {
             defaultValue: "No options defined",
           })}
@@ -1717,11 +1717,11 @@ export const renderGroupField: FieldRenderer = (props) => {
   const value = typeof props.value === "string" ? props.value : "";
   return (
     <fieldset
-      className="border border-[var(--border)] px-4 py-3 bg-[var(--surface)]"
+      className="border border-border px-4 py-3 bg-surface"
       data-config-key={props.key}
       data-field-type="group"
     >
-      <legend className="text-[12px] font-semibold text-[var(--muted)] px-1.5">
+      <legend className="text-xs font-semibold text-muted px-1.5">
         {props.hint.label ?? props.key}
       </legend>
       <textarea
@@ -1789,31 +1789,31 @@ function TableFieldInner(props: FieldRenderProps) {
       data-config-key={props.key}
       data-field-type="table"
     >
-      <div className="border border-[var(--border)] overflow-x-auto">
-        <table className="w-full text-[13px] border-collapse">
+      <div className="border border-border overflow-x-auto">
+        <table className="w-full text-sm border-collapse">
           <thead>
-            <tr className="bg-[var(--surface)]">
+            <tr className="bg-surface">
               {columns.map((col) => (
                 <th
                   key={col.key}
-                  className="text-left text-[11px] font-semibold text-[var(--muted)] px-3 py-1.5 border-b border-[var(--border)]"
+                  className="text-left text-xs-tight font-semibold text-muted px-3 py-1.5 border-b border-border"
                 >
                   {col.label}
                 </th>
               ))}
-              <th className="w-[36px] border-b border-[var(--border)]" />
+              <th className="w-[36px] border-b border-border" />
             </tr>
           </thead>
           <tbody>
             {rows.map((row, ri) => (
               <tr
                 key={JSON.stringify(row)}
-                className="border-b border-[var(--border)] last:border-b-0"
+                className="border-b border-border last:border-b-0"
               >
                 {columns.map((col) => (
                   <td key={col.key} className="px-1 py-0.5">
                     <input
-                      className="w-full px-2 py-1 bg-transparent text-[13px] border-none outline-none focus:bg-[var(--bg-hover)]"
+                      className="w-full px-2 py-1 bg-transparent text-sm border-none outline-none focus:bg-bg-hover"
                       value={row[col.key] ?? ""}
                       placeholder={col.label}
                       disabled={props.readonly}
@@ -1827,7 +1827,7 @@ function TableFieldInner(props: FieldRenderProps) {
                       type="button"
                       variant="ghost"
                       size="icon"
-                      className="text-[var(--muted)] hover:text-[var(--destructive)] text-[14px] px-1 h-auto w-auto"
+                      className="text-muted hover:text-destructive text-[14px] px-1 h-auto w-auto"
                       onClick={() => removeRow(ri)}
                       title={t("config-field.RemoveRow", {
                         defaultValue: "Remove row",
@@ -1847,7 +1847,7 @@ function TableFieldInner(props: FieldRenderProps) {
           type="button"
           variant="link"
           size="sm"
-          className="self-start text-[11px] text-[var(--accent)] hover:underline p-0 h-auto"
+          className="self-start text-xs-tight text-accent hover:underline p-0 h-auto"
           onClick={addRow}
         >
           {t("config-field.AddRow", { defaultValue: "Add row" })}
@@ -1928,7 +1928,7 @@ export function ConfigField({
     >
       {/* Required-but-empty accent bar */}
       {isRequiredEmpty && (
-        <div className="absolute left-0 top-2.5 bottom-2.5 w-[2px] bg-[var(--destructive)] opacity-40 rounded-full" />
+        <div className="absolute left-0 top-2.5 bottom-2.5 w-[2px] bg-destructive opacity-40 rounded-full" />
       )}
 
       <div className={isRequiredEmpty ? "pl-2.5" : ""}>
@@ -1944,13 +1944,13 @@ export function ConfigField({
             {label}
           </span>
           {renderProps.required && !renderProps.isSet && (
-            <span className="text-[10px] text-[var(--destructive)] font-semibold px-1.5 py-px bg-[color-mix(in_srgb,var(--destructive)_10%,transparent)] rounded-sm shrink-0">
+            <span className="text-2xs text-destructive font-semibold px-1.5 py-px bg-[color-mix(in_srgb,var(--destructive)_10%,transparent)] rounded-sm shrink-0">
               {t("secretsview.Required")}
             </span>
           )}
           {renderProps.isSet && (
-            <span className="inline-flex items-center gap-1 text-[10px] text-[var(--ok)] font-medium shrink-0">
-              <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--ok)]" />
+            <span className="inline-flex items-center gap-1 text-2xs text-ok font-medium shrink-0">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-ok" />
 
               {t("config-field.Configured")}
             </span>

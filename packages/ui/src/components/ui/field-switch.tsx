@@ -16,7 +16,7 @@ const FIELD_SWITCH_CLASSNAME =
   "inline-flex h-10 w-full cursor-pointer select-none items-center gap-3 rounded-xl border border-border/50 bg-bg/50 px-4 py-2 text-sm text-txt transition-[border-color,background-color,box-shadow] hover:border-accent/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50";
 const FIELD_SWITCH_TRACK_CLASSNAME =
   "relative inline-flex h-[24px] w-[44px] shrink-0 items-center rounded-full border-2 border-transparent bg-input transition-colors";
-const FIELD_SWITCH_TRACK_CHECKED_CLASSNAME = "bg-[var(--ok)]";
+const FIELD_SWITCH_TRACK_CHECKED_CLASSNAME = "bg-ok";
 const FIELD_SWITCH_THUMB_CLASSNAME =
   "pointer-events-none block h-5 w-5 rounded-full bg-white shadow-lg transition-transform";
 

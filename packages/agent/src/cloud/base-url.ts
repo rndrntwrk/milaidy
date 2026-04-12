@@ -5,6 +5,16 @@ const LEGACY_CLOUD_HOST_ALIASES = new Set([
   "www.elizacloud.ai",
 ]);
 
+function isLoopbackHost(hostname: string): boolean {
+  const normalized = hostname.toLowerCase();
+  return (
+    normalized === "localhost" ||
+    normalized === "::1" ||
+    normalized === "0:0:0:0:0:0:0:1" ||
+    normalized.startsWith("127.")
+  );
+}
+
 function trimApiPath(pathname: string): string {
   const normalized = pathname.trim().replace(/\/+$/, "");
   if (!normalized) return "";
@@ -24,11 +34,14 @@ export function normalizeCloudSiteUrl(rawUrl?: string): string {
     const parsed = new URL(candidate);
     const pathname = trimApiPath(parsed.pathname);
     const host = parsed.hostname.toLowerCase();
+    const preserveLocalOrigin = isLoopbackHost(host);
 
     parsed.hash = "";
     parsed.search = "";
-    parsed.protocol = "https:";
-    parsed.port = "";
+    if (!preserveLocalOrigin) {
+      parsed.protocol = "https:";
+      parsed.port = "";
+    }
     parsed.pathname = pathname;
 
     if (LEGACY_CLOUD_HOST_ALIASES.has(host)) {

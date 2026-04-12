@@ -209,7 +209,7 @@ export function MediaSettingsSection() {
             <div className="text-xs font-semibold text-txt">
               {t("settings.companionVrmPower.label")}
             </div>
-            <div className="text-[10px] text-muted mt-1 leading-snug">
+            <div className="text-2xs text-muted mt-1 leading-snug">
               {t("settings.companionVrmPower.desc")}
             </div>
           </div>
@@ -243,7 +243,7 @@ export function MediaSettingsSection() {
               <div className="text-xs font-semibold text-txt">
                 {t("settings.companionHalfFramerate.label")}
               </div>
-              <div className="text-[10px] text-muted mt-1 leading-snug">
+              <div className="text-2xs text-muted mt-1 leading-snug">
                 {t("settings.companionHalfFramerate.desc")}
               </div>
             </div>
@@ -278,7 +278,7 @@ export function MediaSettingsSection() {
               {t("settings.companionAnimateWhenHidden.title")}
             </div>
             <div className="flex items-end justify-between gap-3">
-              <div className="min-w-0 flex-1 text-[10px] text-muted leading-snug pr-2">
+              <div className="min-w-0 flex-1 text-2xs text-muted leading-snug pr-2">
                 {t("settings.companionAnimateWhenHidden.desc")}
               </div>
               <Switch
@@ -302,12 +302,12 @@ export function MediaSettingsSection() {
         })}
       >
         <header className="flex flex-col gap-0.5 pb-2 border-b border-border/80">
-          <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-muted">
+          <p className="text-2xs font-bold uppercase tracking-[0.1em] text-muted">
             {t("mediasettingssection.GenerateGroupTitle", {
               defaultValue: "Generation",
             })}
           </p>
-          <p className="text-[10px] text-muted leading-snug">
+          <p className="text-2xs text-muted leading-snug">
             {t("mediasettingssection.GenerateGroupHint", {
               defaultValue:
                 "Use the tabs to switch category; settings below apply to the selected tab.",
@@ -327,7 +327,7 @@ export function MediaSettingsSection() {
                 key={cat}
                 variant={active ? "default" : "ghost"}
                 size="sm"
-                className={`flex-1 basis-[calc(50%-0.125rem)] sm:basis-0 min-h-[44px] rounded-lg border px-2 py-2 text-[10px] sm:text-xs font-semibold !whitespace-normal ${
+                className={`flex-1 basis-[calc(50%-0.125rem)] sm:basis-0 min-h-[44px] rounded-lg border px-2 py-2 text-2xs sm:text-xs font-semibold !whitespace-normal ${
                   active
                     ? MEDIA_SEGMENT_BUTTON_ACTIVE_CLASSNAME
                     : MEDIA_SEGMENT_BUTTON_INACTIVE_CLASSNAME
@@ -377,7 +377,7 @@ export function MediaSettingsSection() {
 
               {/* Status badge */}
               <span
-                className={`ml-auto rounded-full border px-2 py-0.5 text-[10px] ${
+                className={`ml-auto rounded-full border px-2 py-0.5 text-2xs ${
                   configured
                     ? "border-ok bg-ok/10 text-txt"
                     : "border-warn bg-warn-subtle text-txt"
@@ -440,7 +440,7 @@ export function MediaSettingsSection() {
                               ? t("providerswitcher.elizaCloud")
                               : t(p.labelKey)}
                           </div>
-                          <div className="text-[10px] text-muted mt-0.5">
+                          <div className="text-2xs text-muted mt-0.5">
                             {p.id === "cloud"
                               ? t("elizaclouddashboard.NoSetupNeeded")
                               : t(p.hint)}

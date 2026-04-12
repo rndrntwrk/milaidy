@@ -547,7 +547,7 @@ export function DesktopWorkspaceSection({
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <pre className="overflow-x-auto break-all rounded-xl border border-border bg-bg px-3 py-3 text-[11px] leading-5 text-txt">
+            <pre className="overflow-x-auto break-all rounded-xl border border-border bg-bg px-3 py-3 text-xs-tight leading-5 text-txt">
               {diagnosticsText}
             </pre>
           </CardContent>
@@ -587,7 +587,7 @@ export function DesktopWorkspaceSection({
                 Copy Full Diagnostics Bundle
               </Button>
             </div>
-            <pre className="max-h-72 overflow-auto break-all rounded-xl border border-border bg-bg px-3 py-3 text-[11px] leading-5 text-txt">
+            <pre className="max-h-72 overflow-auto break-all rounded-xl border border-border bg-bg px-3 py-3 text-xs-tight leading-5 text-txt">
               {devStackText}
             </pre>
           </CardContent>
@@ -681,7 +681,7 @@ export function DesktopWorkspaceSection({
               "No console lines match the current filter."
             }
             readOnly
-            className="min-h-[22rem] font-mono text-[11px] leading-5"
+            className="min-h-[22rem] font-mono text-xs-tight leading-5"
           />
         </CardContent>
       </Card>

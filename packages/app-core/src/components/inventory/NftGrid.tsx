@@ -71,7 +71,7 @@ export function NftGrid({
                 }}
               />
             ) : (
-              <div className="flex h-[180px] w-full items-center justify-center bg-bg-muted text-[11px] text-muted">
+              <div className="flex h-[180px] w-full items-center justify-center bg-bg-muted text-xs-tight text-muted">
                 {t("wallet.noImage")}
               </div>
             )}
@@ -79,10 +79,10 @@ export function NftGrid({
               <div className="truncate text-[12px] font-semibold text-txt-strong">
                 {nft.name}
               </div>
-              <div className="mt-1 truncate text-[10px] text-muted">
+              <div className="mt-1 truncate text-2xs text-muted">
                 {nft.collectionName}
               </div>
-              <div className="mt-2 inline-flex items-center gap-1 rounded-full border border-border/45 bg-bg/25 px-2 py-1 text-[10px] text-muted">
+              <div className="mt-2 inline-flex items-center gap-1 rounded-full border border-border/45 bg-bg/25 px-2 py-1 text-2xs text-muted">
                 <span
                   className={`inline-block w-3 h-3 rounded-full text-center leading-3 text-[7px] font-bold font-mono text-white ${icon.cls}`}
                 >

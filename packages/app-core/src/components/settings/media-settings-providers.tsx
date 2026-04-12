@@ -214,7 +214,7 @@ export function DesktopMediaControlPanel() {
               defaultValue: "Native Capture Controls",
             })}
           </div>
-          <div className="text-[10px] text-muted">
+          <div className="text-2xs text-muted">
             {t("mediasettingssection.NativeCaptureControlsDesc", {
               defaultValue:
                 "Camera preview, capture, recording, and screencapture tools owned by the desktop runtime.",
@@ -241,7 +241,7 @@ export function DesktopMediaControlPanel() {
 
       {(error || message) && (
         <div
-          className={`rounded-lg border px-2.5 py-2 text-[11px] ${
+          className={`rounded-lg border px-2.5 py-2 text-xs-tight ${
             error
               ? "border-danger/40 bg-danger/10 text-danger"
               : "border-ok/40 bg-ok/10 text-ok"
@@ -256,7 +256,7 @@ export function DesktopMediaControlPanel() {
           <div className="text-xs font-semibold text-txt">
             {t("mediasettingssection.Camera", { defaultValue: "Camera" })}
           </div>
-          <div className="text-[10px] text-muted">
+          <div className="text-2xs text-muted">
             {t("mediasettingssection.Permission", {
               defaultValue: "Permission",
             })}
@@ -465,7 +465,7 @@ export function DesktopMediaControlPanel() {
             ref={cameraPreviewHostRef}
             className="min-h-40 overflow-hidden rounded-lg border border-border/60 bg-black/60"
           />
-          <div className="text-[11px] text-muted">{lastPhotoStatus}</div>
+          <div className="text-xs-tight text-muted">{lastPhotoStatus}</div>
         </div>
 
         <div className="space-y-3 rounded-lg border border-border bg-card px-3 py-3">
@@ -474,7 +474,7 @@ export function DesktopMediaControlPanel() {
               defaultValue: "Screen Capture",
             })}
           </div>
-          <div className="text-[10px] text-muted">
+          <div className="text-2xs text-muted">
             {t("mediasettingssection.Permission", {
               defaultValue: "Permission",
             })}
@@ -745,7 +745,7 @@ export function DesktopMediaControlPanel() {
               </Button>
             )}
           </div>
-          <div className="text-[11px] text-muted break-all">
+          <div className="text-xs-tight text-muted break-all">
             {lastSavedPath
               ? t("mediasettingssection.LastSavedPath", {
                   defaultValue: "Last saved path: {{path}}",

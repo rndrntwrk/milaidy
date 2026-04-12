@@ -281,7 +281,7 @@ export function CommandPalette() {
             <div
               role="status"
               aria-live="polite"
-              className="py-5 text-center text-[13px]"
+              className="py-5 text-center text-sm"
               style={{ color: "var(--muted)" }}
             >
               {t("commandpalette.NoCommandsFound")}

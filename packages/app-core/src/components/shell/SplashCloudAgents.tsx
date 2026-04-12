@@ -402,7 +402,7 @@ export function SplashCloudAgents({
       {agents.length === 0 && !error && (
         <p
           style={{ fontFamily: MONO_FONT }}
-          className="text-[10px] text-black/50 text-center py-2"
+          className="text-2xs text-black/50 text-center py-2"
         >
           {t("startupshell.NoCloudAgents", {
             defaultValue: "No cloud agents yet",

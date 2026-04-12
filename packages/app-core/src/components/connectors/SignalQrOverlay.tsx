@@ -43,7 +43,7 @@ export function SignalQrOverlay({
             {phoneNumber ? ` (${phoneNumber})` : ""}
           </span>
         </div>
-        <div className="mt-1 text-[10px] text-muted">
+        <div className="mt-1 text-2xs text-muted">
           {onConnected
             ? "Finishing Signal setup..."
             : "Signal is paired. Auth state is saved for automatic reconnection."}
@@ -52,7 +52,7 @@ export function SignalQrOverlay({
           <Button
             variant="destructive"
             size="sm"
-            className="mt-2 text-[10px]"
+            className="mt-2 text-2xs"
             onClick={() => void disconnect()}
           >
             {t("providerswitcher.disconnect")}
@@ -73,7 +73,7 @@ export function SignalQrOverlay({
         <Button
           variant="outline"
           size="sm"
-          className="text-[11px]"
+          className="text-xs-tight"
           style={{ borderColor: "var(--accent)", color: "var(--accent)" }}
           onClick={() => {
             firedRef.current = false;
@@ -90,7 +90,7 @@ export function SignalQrOverlay({
 
   if (status === "idle" || status === "disconnected") {
     return (
-      <div className="mt-3 p-4 border border-[var(--border)] bg-[var(--bg-hover)]">
+      <div className="mt-3 p-4 border border-border bg-bg-hover">
         <div className="mb-2 text-xs text-muted">
           {t("signalqroverlay.PairUsingSignalDesktop", {
             defaultValue:
@@ -101,7 +101,7 @@ export function SignalQrOverlay({
         <Button
           variant="outline"
           size="sm"
-          className="text-[11px]"
+          className="text-xs-tight"
           style={{ borderColor: "var(--accent)", color: "var(--accent)" }}
           onClick={() => {
             firedRef.current = false;
@@ -158,7 +158,7 @@ export function SignalQrOverlay({
               defaultValue: "Scan with Signal Desktop",
             })}
           </div>
-          <ol className="m-0 list-decimal space-y-1 pl-4 text-[11px] text-muted">
+          <ol className="m-0 list-decimal space-y-1 pl-4 text-xs-tight text-muted">
             <li>
               {t("signalqroverlay.OpenSignalDesktop", {
                 defaultValue: "Open Signal Desktop on your Mac.",
@@ -179,7 +179,7 @@ export function SignalQrOverlay({
           <Button
             variant="ghost"
             size="sm"
-            className="mt-3 text-[10px] text-muted"
+            className="mt-3 text-2xs text-muted"
             onClick={() => void stopPairing()}
           >
             {t("common.cancel")}

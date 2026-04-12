@@ -33,7 +33,7 @@ export function StoreOverviewCard({ shop, counts }: StoreOverviewCardProps) {
             <span className="text-lg font-semibold text-txt">{shop.name}</span>
             <Badge
               variant="secondary"
-              className="rounded-full text-[10px] font-semibold uppercase tracking-[0.12em]"
+              className="rounded-full text-2xs font-semibold uppercase tracking-[0.12em]"
             >
               {shop.plan}
             </Badge>
@@ -51,7 +51,7 @@ export function StoreOverviewCard({ shop, counts }: StoreOverviewCardProps) {
       {/* Aggregate stats */}
       <div className="mt-4 grid grid-cols-3 gap-3">
         <div className="rounded-[14px] border border-border/24 bg-card/35 px-3 py-3">
-          <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.12em] text-muted/70">
+          <div className="flex items-center gap-1.5 text-2xs uppercase tracking-[0.12em] text-muted/70">
             <Package className="h-3 w-3" />
             Products
           </div>
@@ -60,7 +60,7 @@ export function StoreOverviewCard({ shop, counts }: StoreOverviewCardProps) {
           </div>
         </div>
         <div className="rounded-[14px] border border-border/24 bg-card/35 px-3 py-3">
-          <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.12em] text-muted/70">
+          <div className="flex items-center gap-1.5 text-2xs uppercase tracking-[0.12em] text-muted/70">
             <ShoppingCart className="h-3 w-3" />
             Orders
           </div>
@@ -69,7 +69,7 @@ export function StoreOverviewCard({ shop, counts }: StoreOverviewCardProps) {
           </div>
         </div>
         <div className="rounded-[14px] border border-border/24 bg-card/35 px-3 py-3">
-          <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.12em] text-muted/70">
+          <div className="flex items-center gap-1.5 text-2xs uppercase tracking-[0.12em] text-muted/70">
             <Users className="h-3 w-3" />
             Customers
           </div>

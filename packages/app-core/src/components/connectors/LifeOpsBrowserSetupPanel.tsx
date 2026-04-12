@@ -1046,7 +1046,7 @@ export function LifeOpsBrowserSetupPanel() {
                 <span className="text-txt">{companions.length}</span>
                 <br />
                 Extension workspace:{" "}
-                <span className="break-all font-mono text-[11px] text-txt">
+                <span className="break-all font-mono text-xs-tight text-txt">
                   {packageStatus?.extensionPath ?? "Unavailable"}
                 </span>
               </div>

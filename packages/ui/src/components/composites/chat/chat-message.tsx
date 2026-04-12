@@ -176,7 +176,7 @@ function ReactionStrip({
             key={`${reaction.emoji}:${reaction.count}`}
             data-testid="chat-reaction-badge"
             title={title}
-            className="inline-flex items-center gap-1 rounded-full border border-border/28 bg-bg/70 px-2 py-1 text-[11px] font-medium text-txt-strong shadow-[0_10px_18px_-16px_rgba(15,23,42,0.45)]"
+            className="inline-flex items-center gap-1 rounded-full border border-border/28 bg-bg/70 px-2 py-1 text-xs-tight font-medium text-txt-strong shadow-[0_10px_18px_-16px_rgba(15,23,42,0.45)]"
           >
             <ReactionEmoji emoji={reaction.emoji} />
             {reaction.count > 1 ? <span>{reaction.count}</span> : null}
@@ -207,7 +207,7 @@ function SenderAvatar({
   return (
     <div
       aria-hidden="true"
-      className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-accent/18 bg-[linear-gradient(180deg,rgba(var(--accent-rgb),0.18),rgba(var(--accent-rgb),0.08))] text-[10px] font-semibold uppercase tracking-[0.08em] text-txt-strong shadow-[0_10px_18px_-16px_rgba(var(--accent-rgb),0.45)]"
+      className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-accent/18 bg-[linear-gradient(180deg,rgba(var(--accent-rgb),0.18),rgba(var(--accent-rgb),0.08))] text-2xs font-semibold uppercase tracking-[0.08em] text-txt-strong shadow-[0_10px_18px_-16px_rgba(var(--accent-rgb),0.45)]"
     >
       {senderInitials(label)}
     </div>
@@ -480,7 +480,7 @@ export const ChatMessage = memo(function ChatMessage({
                     {senderPrimaryLabel}
                   </div>
                   {senderHandle ? (
-                    <div className="truncate text-[11px] text-muted">
+                    <div className="truncate text-xs-tight text-muted">
                       {senderHandle}
                     </div>
                   ) : null}
@@ -501,7 +501,7 @@ export const ChatMessage = memo(function ChatMessage({
                     {senderPrimaryLabel}
                   </div>
                   {senderHandle ? (
-                    <div className="truncate text-[11px] text-muted">
+                    <div className="truncate text-xs-tight text-muted">
                       {senderHandle}
                     </div>
                   ) : null}

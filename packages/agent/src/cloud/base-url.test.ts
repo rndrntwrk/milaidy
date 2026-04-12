@@ -31,4 +31,15 @@ describe("normalizeCloudSiteUrl", () => {
       "https://www.elizacloud.ai",
     );
   });
+
+  it("preserves loopback protocol and port for local auth flows", () => {
+    delete process.env.ELIZAOS_CLOUD_BASE_URL;
+
+    expect(normalizeCloudSiteUrl("http://127.0.0.1:3456/api/v1/")).toBe(
+      "http://127.0.0.1:3456",
+    );
+    expect(resolveCloudApiBaseUrl("http://127.0.0.1:3456/api/v1/")).toBe(
+      "http://127.0.0.1:3456/api/v1",
+    );
+  });
 });

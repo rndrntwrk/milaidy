@@ -49,7 +49,7 @@ export function AppsCatalogGrid({
           placeholder={t("appsview.SearchPlaceholder")}
           value={searchQuery}
           onChange={(event) => onSearchQueryChange(event.target.value)}
-          className="min-w-[200px] flex-1 rounded-xl border-border/50 bg-card/86 text-[12px] text-txt placeholder:text-muted focus:border-accent"
+          className="min-w-[200px] flex-1 rounded-xl border-border/50 bg-card/86 text-xs text-txt placeholder:text-muted focus:border-accent"
         />
         <Button
           variant="outline"
@@ -70,18 +70,18 @@ export function AppsCatalogGrid({
       </div>
 
       {error ? (
-        <div className="mb-4 rounded-xl border border-danger/30 bg-danger/10 px-3 py-2 text-[11px] text-danger">
+        <div className="mb-4 rounded-xl border border-danger/30 bg-danger/10 px-3 py-2 text-xs-tight text-danger">
           {error}
         </div>
       ) : null}
 
       {loading ? (
-        <div className="rounded-2xl border border-border/30 bg-card/72 py-16 text-center text-[12px] text-muted">
+        <div className="rounded-2xl border border-border/30 bg-card/72 py-16 text-center text-xs text-muted">
           {t("appsview.Loading")}
         </div>
       ) : visibleApps.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border/35 bg-card/72 px-6 py-16 text-center">
-          <div className="text-[12px] font-medium text-muted-strong">
+          <div className="text-xs font-medium text-muted-strong">
             {searchQuery
               ? t("appsview.NoAppsMatchSearch")
               : t("appsview.NoAppsAvailable")}
@@ -96,11 +96,11 @@ export function AppsCatalogGrid({
               className="space-y-3"
             >
               <div className="flex items-center gap-3">
-                <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-strong">
+                <h2 className="text-xs-tight font-semibold uppercase tracking-[0.18em] text-muted-strong">
                   {section.label}
                 </h2>
                 <div className="h-px flex-1 bg-border/30" />
-                <span className="text-[10px] text-muted">
+                <span className="text-2xs text-muted">
                   {section.apps.length}
                 </span>
               </div>
@@ -133,7 +133,7 @@ export function AppsCatalogGrid({
                             <div className="text-sm font-semibold text-txt">
                               {displayName}
                             </div>
-                            <div className="text-[11px] text-muted-strong">
+                            <div className="text-xs-tight text-muted-strong">
                               {getAppCatalogSectionLabel(app)}
                             </div>
                           </div>
@@ -169,7 +169,7 @@ export function AppsCatalogGrid({
                           </svg>
                         </button>
                       </div>
-                      <p className="mt-3 line-clamp-2 text-[12px] leading-5 text-muted-strong">
+                      <p className="mt-3 line-clamp-2 text-xs leading-5 text-muted-strong">
                         {app.description ||
                           "Launch and manage this agent experience."}
                       </p>

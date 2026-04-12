@@ -24,6 +24,7 @@ import {
   vi,
 } from "vitest";
 import { req } from "../../../../test/helpers/http";
+import { textOf } from "../../../../test/helpers/react-test";
 
 function translateTest(
   key: string,
@@ -626,7 +627,7 @@ describe("InventoryView UI", () => {
       tree = TestRenderer.create(React.createElement(InventoryView));
     });
 
-    const allText = JSON.stringify(tree?.toJSON());
+    const allText = textOf(tree!.root);
     // With mock providing empty chains, the component renders the wallet overview
     // with an empty token state — verify the wallet UI structure is present
     expect(

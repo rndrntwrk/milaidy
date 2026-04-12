@@ -480,7 +480,7 @@ function UsdField({
 }) {
   return (
     <div className="relative w-28">
-      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] text-muted pointer-events-none">
+      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-2xs text-muted pointer-events-none">
         $
       </span>
       <Input
@@ -508,7 +508,7 @@ function UsdFieldLabeled({
 }) {
   return (
     <div className="space-y-1">
-      <Label className="text-[11px] text-muted">{label}</Label>
+      <Label className="text-xs-tight text-muted">{label}</Label>
       <UsdField value={value} onChange={onChange} />
     </div>
   );
@@ -590,7 +590,7 @@ function AddressSection({
         <Button
           variant={config.mode === "whitelist" ? "default" : "ghost"}
           size="sm"
-          className="text-[11px] h-7"
+          className="text-xs-tight h-7"
           onClick={() => onUpdate({ ...config, mode: "whitelist" })}
         >
           Allowlist
@@ -598,7 +598,7 @@ function AddressSection({
         <Button
           variant={config.mode === "blacklist" ? "default" : "ghost"}
           size="sm"
-          className="text-[11px] h-7"
+          className="text-xs-tight h-7"
           onClick={() => onUpdate({ ...config, mode: "blacklist" })}
         >
           Blocklist
@@ -612,7 +612,7 @@ function AddressSection({
             return (
               <div
                 key={addr}
-                className="flex items-center justify-between group text-[11px] font-mono text-muted py-1"
+                className="flex items-center justify-between group text-xs-tight font-mono text-muted py-1"
               >
                 <div className="flex items-center gap-1.5 truncate">
                   <span className="truncate">{addr}</span>
@@ -624,7 +624,7 @@ function AddressSection({
                 </div>
                 <button
                   type="button"
-                  className="text-danger opacity-0 group-hover:opacity-100 text-[10px] ml-2"
+                  className="text-danger opacity-0 group-hover:opacity-100 text-2xs ml-2"
                   onClick={() => handleRemove(addr)}
                 >
                   remove
@@ -656,7 +656,9 @@ function AddressSection({
           Add
         </Button>
       </div>
-      {addrError && <div className="text-[11px] text-danger">{addrError}</div>}
+      {addrError && (
+        <div className="text-xs-tight text-danger">{addrError}</div>
+      )}
     </div>
   );
 }
@@ -675,7 +677,7 @@ function TimeSection({
     <div className="space-y-3">
       <div className="flex items-center gap-3">
         <div className="space-y-1">
-          <Label className="text-[11px] text-muted">From</Label>
+          <Label className="text-xs-tight text-muted">From</Label>
           <select
             value={hours.start}
             onChange={(e) =>
@@ -697,7 +699,7 @@ function TimeSection({
         </div>
         <span className="text-muted text-xs mt-5">→</span>
         <div className="space-y-1">
-          <Label className="text-[11px] text-muted">To</Label>
+          <Label className="text-xs-tight text-muted">To</Label>
           <select
             value={hours.end}
             onChange={(e) =>
@@ -724,7 +726,7 @@ function TimeSection({
           <button
             key={name}
             type="button"
-            className={`h-7 w-9 rounded text-[10px] font-medium transition-colors ${
+            className={`h-7 w-9 rounded text-2xs font-medium transition-colors ${
               days.includes(i)
                 ? "bg-accent/20 text-accent border border-accent/30"
                 : "bg-bg text-muted border border-border/30 hover:border-border/50"
@@ -742,7 +744,7 @@ function TimeSection({
       </div>
 
       <div className="space-y-1">
-        <Label className="text-[11px] text-muted">Timezone</Label>
+        <Label className="text-xs-tight text-muted">Timezone</Label>
         <select
           value={
             config.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone

@@ -54,7 +54,7 @@ function splitStateTextCandidates(value: string): string[] {
     .map((line) =>
       line
         .replace(
-          /^(?:user|assistant|system|owner|admin|shaw|chen|eliza)\s*:\s*/i,
+          /^[a-zA-Z\u00C0-\u024F\u0400-\u04FF\u3000-\u9FFF]{1,20}\s*:\s*/,
           "",
         )
         .trim(),
@@ -175,6 +175,19 @@ function normalizeIntent(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }
 
+const LIFE_CREATE_HINT_RE =
+  /\b(add|create|make|set up|set|help me(?: remember)?|remember to|remind(?: me)?|make sure|keep bugging me|nudge me|ping me)\b/;
+const LIFE_ITEM_RE = /\b(todo|task|habit|routine|reminder|alarm)\b/;
+const LIFE_SCHEDULE_RE =
+  /\b(every|daily|weekly|tomorrow|today|tonight|morning|night|afternoon|evening|wake(?:-|\s)?up|before bed|before sleep|breakfast|lunch|after lunch|dinner|during the day|throughout the day|weekdays?|weekends?)\b/;
+const LIFE_TIME_RE = /\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b/;
+const LIFE_SPECIFIC_ACTIVITY_RE =
+  /\b(call|email|text|submit|pay|take|drink|brush|stretch|work ?out|workout|exercise|meditat(?:e|ion)|shower|shave|floss|hug|invisalign|water|vitamins?)\b/;
+const LIFE_SEEDED_ROUTINE_RE =
+  /\b(invisalign|water|stretch(?:ing)?|vitamins?|brush(?:ing|ed)?|teeth|cepill(?:ar|arme|arte|arse|ando|ado)|dientes|work ?out|workout|exercise|gym|shower|shave)\b/;
+const LIFE_REMINDER_ONLY_SCHEDULE_RE =
+  /\b(alarm|wake(?:-|\s)?up|wake me up|remind(?: me)?|reminder)\b/;
+
 function buildHeuristicOperationPlan(args: {
   intent: string;
   currentMessage: string;
@@ -198,19 +211,18 @@ function buildHeuristicOperationPlan(args: {
   }
 
   const asksToCreate =
-    /\b(add|create|make|set up|set|help me add|help me create|help me make)\b/.test(
-      lower,
-    );
-  const mentionsLifeItem =
-    /\b(todo|task|habit|routine|reminder|alarm)\b/.test(lower);
+    /\b(add|create|make|set up|set|help me add|help me create|help me make)\b/.test(lower);
+  const mentionsLifeItem = LIFE_ITEM_RE.test(lower);
   const hasSpecificTitle =
     /\bto\s+[a-z]/.test(lower) ||
     /\b\d+\s+[a-z]/.test(lower) ||
-    /\b(call|email|text|submit|pay|brush|stretch|drink|take)\b/.test(lower);
-  const hasSchedule =
-    /\b(every|daily|weekly|tomorrow|today|tonight|morning|night|afternoon|evening)\b/.test(
-      lower,
-    ) || /\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b/.test(lower);
+    LIFE_SPECIFIC_ACTIVITY_RE.test(lower);
+  const hasSchedule = LIFE_SCHEDULE_RE.test(lower) || LIFE_TIME_RE.test(lower);
+  const hasCreateHint = LIFE_CREATE_HINT_RE.test(lower) || asksToCreate;
+  const hasSeededRoutine = LIFE_SEEDED_ROUTINE_RE.test(lower);
+  const hasSpecificActionableActivity = hasSpecificTitle || hasSeededRoutine;
+  const reminderScheduleOnly =
+    LIFE_REMINDER_ONLY_SCHEDULE_RE.test(lower) && hasSchedule;
 
   if (asksToCreate && mentionsLifeItem && !hasSpecificTitle && !hasSchedule) {
     return {
@@ -221,9 +233,23 @@ function buildHeuristicOperationPlan(args: {
     };
   }
 
+  if (
+    reminderScheduleOnly ||
+    (hasCreateHint &&
+      hasSpecificActionableActivity &&
+      (hasSchedule || hasSeededRoutine || mentionsLifeItem))
+  ) {
+    return {
+      operation: "create_definition",
+      confidence: hasSeededRoutine ? 0.91 : 0.86,
+      shouldAct: true,
+      missing: [],
+    };
+  }
+
   const shortTimedFollowup =
     text.length <= 32 &&
-    (/\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b/.test(lower) ||
+    (LIFE_TIME_RE.test(lower) ||
       /\b(today|tomorrow|tonight)\b/.test(lower));
   if (
     shortTimedFollowup &&
@@ -311,6 +337,10 @@ export async function extractLifeOperationWithLlm(args: {
     '  "remind me to take vitamins every morning" -> {"operation":"create_definition","confidence":0.95,"shouldAct":true,"missing":[]}',
     '  "set an alarm for 7 am" -> {"operation":"create_definition","confidence":0.95,"shouldAct":true,"missing":[]}',
     '  "set a reminder for tomorrow at 9" -> {"operation":"create_definition","confidence":0.95,"shouldAct":true,"missing":[]}',
+    '  "please remind me about my Invisalign on weekdays after lunch" -> {"operation":"create_definition","confidence":0.95,"shouldAct":true,"missing":[]}',
+    '  "help me remember to drink water" -> {"operation":"create_definition","confidence":0.9,"shouldAct":true,"missing":[]}',
+    '  "help me remember to stretch during the day" -> {"operation":"create_definition","confidence":0.9,"shouldAct":true,"missing":[]}',
+    '  "make sure I brush my teeth when I wake up and before bed" -> {"operation":"create_definition","confidence":0.95,"shouldAct":true,"missing":[]}',
     '  "how am I doing on my reading goal" -> {"operation":"review_goal","confidence":0.9,"shouldAct":true,"missing":[]}',
     '  "what\'s still left for today" -> {"operation":"query_overview","confidence":0.88,"shouldAct":true,"missing":[]}',
     '  "lol yeah. can you help me add a todo for my life?" -> {"operation":"create_definition","confidence":0.82,"shouldAct":false,"missing":["title","schedule"]}',
@@ -370,6 +400,10 @@ export async function extractLifeOperationWithLlm(args: {
     heuristicPlan &&
     (parsedPlan.operation === null ||
       parsedPlan.shouldAct === null ||
+      (heuristicPlan.shouldAct === true &&
+        parsedPlan.shouldAct === false &&
+        (parsedPlan.operation === null ||
+          parsedPlan.operation === heuristicPlan.operation)) ||
       (parsedPlan.confidence ?? 0) < 0.5 ||
       (heuristicPlan.shouldAct === false &&
         parsedPlan.operation === heuristicPlan.operation &&

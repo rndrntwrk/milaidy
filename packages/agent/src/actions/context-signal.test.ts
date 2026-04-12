@@ -65,16 +65,15 @@ describe("hasContextSignalSync", () => {
     ).toBe(true);
   });
 
-  it("rejects with only 1 weak term match when threshold is 2", () => {
+  it("activates with 1 weak term match at default threshold", () => {
     expect(
       hasContextSignalSync(
         mem("please send it"),
         undefined,
         [],
         ["send", "reply", "forward"],
-        2,
       ),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it("returns false for empty text", () => {
@@ -100,14 +99,14 @@ describe("hasContextSignalSyncForKey", () => {
       ).toBe(true);
     });
 
-    it("does NOT activate on just 'message' (too generic for email)", () => {
+    it("activates on 'message' (greedy — better to include than miss)", () => {
       expect(
         hasContextSignalSyncForKey(
           mem("send a message to bob"),
           undefined,
           "gmail",
         ),
-      ).toBe(false);
+      ).toBe(true);
     });
 
     it("activates on gmail weak terms in conversation context", () => {

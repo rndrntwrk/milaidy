@@ -104,7 +104,7 @@ export function PtyConsoleBase({
               key={s.sessionId}
               type="button"
               onClick={() => handleTabClick(s.sessionId)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-[12px] border-b-2 transition-colors cursor-pointer${isSidePanel ? " whitespace-nowrap" : ""} ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs border-b-2 transition-colors cursor-pointer${isSidePanel ? " whitespace-nowrap" : ""} ${
                 isActive
                   ? "border-accent text-txt"
                   : "border-transparent text-muted hover:text-txt"

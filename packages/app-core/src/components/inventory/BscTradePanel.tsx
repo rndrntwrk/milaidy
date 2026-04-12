@@ -325,7 +325,7 @@ export function TradePanel({
         {policyResults.map((p) => (
           <div
             key={p.policyId ?? p.name ?? p.status}
-            className="text-muted text-[10px]"
+            className="text-muted text-2xs"
           >
             {p.name && <span className="font-mono">{p.name}: </span>}
             <span
@@ -363,9 +363,7 @@ export function TradePanel({
               {t("bsctradepanel.ViewTx")} {shortHash}
             </a>
             {latestExecution.mode === "steward" && (
-              <span className="text-[10px] text-purple-400 ml-1">
-                🔐 Steward
-              </span>
+              <span className="text-2xs text-purple-400 ml-1">🔐 Steward</span>
             )}
           </div>
           {status === "pending" && (
@@ -377,7 +375,7 @@ export function TradePanel({
                 variant="outline"
                 size="sm"
                 data-testid="wallet-tx-refresh"
-                className="h-6 px-2 py-0.5 text-[10px] font-mono shadow-sm hover:border-accent"
+                className="h-6 px-2 py-0.5 text-2xs font-mono shadow-sm hover:border-accent"
                 onClick={handleRefreshTxStatus}
               >
                 {t("bsctradepanel.RefreshStatus")}
@@ -447,7 +445,7 @@ export function TradePanel({
               variant="outline"
               size="sm"
               data-testid="wallet-copy-approve-tx"
-              className="h-6 px-2 py-0.5 text-[10px] font-mono shadow-sm hover:border-accent"
+              className="h-6 px-2 py-0.5 text-2xs font-mono shadow-sm hover:border-accent"
               onClick={() =>
                 copyToClipboard(
                   JSON.stringify(latestExecution.unsignedApprovalTx),
@@ -462,7 +460,7 @@ export function TradePanel({
               variant="outline"
               size="sm"
               data-testid="wallet-copy-swap-tx"
-              className="h-6 px-2 py-0.5 text-[10px] font-mono shadow-sm hover:border-accent"
+              className="h-6 px-2 py-0.5 text-2xs font-mono shadow-sm hover:border-accent"
               onClick={() =>
                 copyToClipboard(JSON.stringify(latestExecution.unsignedTx))
               }
@@ -511,7 +509,7 @@ export function TradePanel({
             variant="outline"
             size="sm"
             data-testid="wallet-token-preflight"
-            className="h-6 px-2 py-0.5 text-[10px] font-mono shadow-sm hover:border-accent"
+            className="h-6 px-2 py-0.5 text-2xs font-mono shadow-sm hover:border-accent"
             onClick={() => {
               void handlePreflight();
             }}
@@ -524,7 +522,7 @@ export function TradePanel({
             variant="outline"
             size="sm"
             data-testid="wallet-token-quote"
-            className="h-6 px-2 py-0.5 text-[10px] font-mono shadow-sm hover:border-accent"
+            className="h-6 px-2 py-0.5 text-2xs font-mono shadow-sm hover:border-accent"
             onClick={() => {
               void handleToolbarQuote();
             }}
@@ -563,7 +561,7 @@ export function TradePanel({
             variant="outline"
             size="sm"
             data-testid="wallet-quick-add-token"
-            className="h-8 px-2 py-1 text-[10px] font-mono shadow-sm hover:border-accent"
+            className="h-8 px-2 py-1 text-2xs font-mono shadow-sm hover:border-accent"
             onClick={handleAddToken}
           >
             {t("secretsview.Add")}
@@ -577,7 +575,7 @@ export function TradePanel({
               variant="outline"
               size="sm"
               data-testid={`wallet-quick-amount-${amt}`}
-              className={`px-2 py-0.5 text-[10px] font-mono cursor-pointer ${
+              className={`px-2 py-0.5 text-2xs font-mono cursor-pointer ${
                 quickAmount === String(amt)
                   ? "border-accent text-txt"
                   : "border-border bg-bg hover:border-accent"
@@ -641,7 +639,7 @@ export function TradePanel({
                   variant="outline"
                   size="sm"
                   data-testid="wallet-quote-confirm"
-                  className="h-7 px-3 py-1 text-[10px] font-mono text-green-500 border-green-500 hover:bg-green-500 hover:text-white shadow-sm"
+                  className="h-7 px-3 py-1 text-2xs font-mono text-green-500 border-green-500 hover:bg-green-500 hover:text-white shadow-sm"
                   onClick={handleConfirmExecute}
                 >
                   {t("onboarding.confirm")}
@@ -650,7 +648,7 @@ export function TradePanel({
                   variant="outline"
                   size="sm"
                   data-testid="wallet-quote-cancel"
-                  className="h-7 px-3 py-1 text-[10px] font-mono text-muted border-border hover:border-danger hover:text-danger shadow-sm"
+                  className="h-7 px-3 py-1 text-2xs font-mono text-muted border-border hover:border-danger hover:text-danger shadow-sm"
                   onClick={handleCancelExecute}
                 >
                   {t("common.cancel")}
@@ -661,7 +659,7 @@ export function TradePanel({
                 variant="default"
                 size="sm"
                 data-testid="wallet-quote-execute"
-                className="mt-1 h-7 px-3 py-1 text-[10px] font-mono shadow-sm"
+                className="mt-1 h-7 px-3 py-1 text-2xs font-mono shadow-sm"
                 onClick={handleRequestExecute}
               >
                 {t("bsctradepanel.ExecuteTrade")}

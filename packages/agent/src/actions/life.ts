@@ -153,6 +153,46 @@ const LIFE_CALENDAR_TERMS = getValidationKeywordTerms(
   "contextSignal.calendar.strong",
   LIFE_I18N_OPTS,
 );
+const LIFE_CADENCE_TERMS = getValidationKeywordTerms(
+  "contextSignal.lifeops_cadence.strong",
+  LIFE_I18N_OPTS,
+);
+const LIFE_GOAL_TERMS = getValidationKeywordTerms(
+  "contextSignal.lifeops_goal.strong",
+  LIFE_I18N_OPTS,
+);
+const LIFE_ESCALATION_TERMS = getValidationKeywordTerms(
+  "contextSignal.lifeops_escalation.strong",
+  LIFE_I18N_OPTS,
+);
+const LIFE_PHONE_TERMS = getValidationKeywordTerms(
+  "contextSignal.lifeops_phone.strong",
+  LIFE_I18N_OPTS,
+);
+const LIFE_REVIEW_TERMS = getValidationKeywordTerms(
+  "contextSignal.lifeops_review.strong",
+  LIFE_I18N_OPTS,
+);
+const LIFE_LIFEOPS_STRONG_TERMS = getValidationKeywordTerms(
+  "contextSignal.lifeops.strong",
+  LIFE_I18N_OPTS,
+);
+const LIFE_AFFIRMATIVE_TERMS = getValidationKeywordTerms(
+  "contextSignal.affirmative.strong",
+  LIFE_I18N_OPTS,
+);
+const LIFE_NEGATIVE_TERMS = getValidationKeywordTerms(
+  "contextSignal.negative.strong",
+  LIFE_I18N_OPTS,
+);
+const LIFE_DRAFT_EDIT_TERMS = getValidationKeywordTerms(
+  "contextSignal.draft_edit.strong",
+  LIFE_I18N_OPTS,
+);
+const LIFE_TEMPORAL_NEXT_TERMS = getValidationKeywordTerms(
+  "contextSignal.temporal_next.strong",
+  LIFE_I18N_OPTS,
+);
 
 function textMatchesAnyTerm(text: string, terms: readonly string[]): boolean {
   return terms.some((term) => textIncludesKeywordTerm(text, term));
@@ -195,8 +235,7 @@ type LifeDefinitionSeed = {
   websiteAccess?: CreateLifeOpsDefinitionRequest["websiteAccess"];
 };
 
-const CADENCE_HINT_RE =
-  /\b(?:every day|daily|weekly|monthly|weekdays?|weekends?|each day|every week|every month|every mornings?|every afternoons?|every evenings?|every nights?|mornings?|afternoons?|evenings?|nights?|twice a day|(?:\w+|\d+)\s*(?:x|times?)\s*(?:a|per)\s*day|per day|per week|throughout the day|with lunch|with breakfast|with dinner|every\s+\d+\s*(?:hours?|minutes?))\b/i;
+// CADENCE_HINT_RE removed — cadence detection uses i18n LIFE_CADENCE_TERMS
 const GENERIC_DERIVED_TITLE_RE =
   /^(?:new\s+)?(?:habit|routine|task|goal|life goal|thing|item|something|anything|stuff|plan|reminder|todo|to do|achieve|achieve a|achieve an)$/i;
 const DERIVED_TITLE_STOPWORDS = new Set([
@@ -418,107 +457,71 @@ type DeferredLifeDraftReuseMode = "confirm" | "edit";
 // ── Intent classifier ─────────────────────────────────
 
 export function classifyIntent(intent: string): LifeOperation {
-  const lower = intent.toLowerCase();
-  const hasEmailIntentTerm = textMatchesAnyTerm(intent, LIFE_EMAIL_QUERY_TERMS);
+  // All matching is i18n-aware via validation keyword terms.
+  // English words are included in the base terms so no regex needed.
 
-  // Reminder preference (i18n + regex)
-  if (
-    textMatchesAnyTerm(intent, LIFE_REMINDER_PREF_TERMS) ||
-    /\b(remind|reminder|ping|message|nudge)\b.*\b(less|fewer|more|again|back on|resume|normal)\b/.test(
-      lower,
-    )
-  ) {
+  // Reminder preference — check early
+  if (textMatchesAnyTerm(intent, LIFE_REMINDER_PREF_TERMS)) {
     return "set_reminder_preference";
   }
 
-  // Update (i18n + regex) — check before calendar so "edit my workout schedule" doesn't hit calendar
-  if (
-    textMatchesAnyTerm(intent, LIFE_UPDATE_TERMS) ||
-    /\b(update|change|edit|modify|adjust|rename|reschedule)\b/.test(lower)
-  ) {
-    if (/\b(goal)\b/.test(lower)) return "update_goal";
+  // Update — check before calendar so "edit my workout schedule" doesn't hit calendar
+  if (textMatchesAnyTerm(intent, LIFE_UPDATE_TERMS)) {
+    if (textMatchesAnyTerm(intent, LIFE_GOAL_TERMS)) return "update_goal";
     return "update_definition";
   }
 
-  // Escalation config — check before phone capture; more specific patterns
-  if (
-    /\b(escalat|reminder plan|set up (sms|text|voice)|notify.*if|text.*if.*(ignore|miss)|call.*if.*(ignore|miss)|sms.*if)\b/.test(
-      lower,
-    )
-  )
+  // Escalation config — check before phone capture
+  if (textMatchesAnyTerm(intent, LIFE_ESCALATION_TERMS))
     return "configure_escalation";
 
-  // Phone capture — "text me", "call me", "my number"
-  if (/\b(phone|text me|call me|sms|my number|voice call)\b/.test(lower))
-    return "capture_phone";
+  // Phone capture
+  if (textMatchesAnyTerm(intent, LIFE_PHONE_TERMS)) return "capture_phone";
 
-  // Review — check before calendar so "review the calendar event" doesn't hit calendar
-  if (/\b(review|how.*(doing|going)|progress|check.*(goal|on))\b/.test(lower))
-    return "review_goal";
+  // Review — check before calendar
+  if (textMatchesAnyTerm(intent, LIFE_REVIEW_TERMS)) return "review_goal";
 
-  // Delete (i18n + regex) — check before calendar so "stop the reminder" doesn't hit create
-  if (
-    textMatchesAnyTerm(intent, LIFE_DELETE_TERMS) ||
-    /\b(delete|remove|cancel|get rid of|drop|stop tracking|stop the|stop my)\b/.test(
-      lower,
-    )
-  ) {
-    if (/\b(goal)\b/.test(lower)) return "delete_goal";
+  // Delete — check before calendar
+  if (textMatchesAnyTerm(intent, LIFE_DELETE_TERMS)) {
+    if (textMatchesAnyTerm(intent, LIFE_GOAL_TERMS)) return "delete_goal";
     return "delete_definition";
   }
 
-  // Completion (i18n + regex)
+  // Completion
   if (looksLikeCompletionReport(intent)) return "complete_occurrence";
 
-  // Skip (i18n + regex)
-  if (
-    textMatchesAnyTerm(intent, LIFE_SKIP_TERMS) ||
-    /\b(skip|pass\b|not today|skip.*(today|this))\b/.test(lower)
-  )
-    return "skip_occurrence";
+  // Skip
+  if (textMatchesAnyTerm(intent, LIFE_SKIP_TERMS)) return "skip_occurrence";
 
-  // Snooze (i18n + regex)
-  if (
-    textMatchesAnyTerm(intent, LIFE_SNOOZE_TERMS) ||
-    /\b(snooze|later|remind.*(later|again|in)|postpone|defer|push\b.*\bback)\b/.test(
-      lower,
-    )
-  )
-    return "snooze_occurrence";
+  // Snooze
+  if (textMatchesAnyTerm(intent, LIFE_SNOOZE_TERMS)) return "snooze_occurrence";
 
-  // Calendar query (i18n + regex) — check before create default
+  // Calendar query — only when not a lifeops create or lifeops item reference
   if (
-    textMatchesAnyTerm(intent, LIFE_CALENDAR_TERMS) ||
-    /\b(calendar|events?|meetings?|what'?s on|agenda|(?:my|today'?s|this week'?s|tomorrow'?s) schedule)\b/.test(
-      lower,
-    )
+    !looksLikeDefinitionCreateIntent(intent) &&
+    !looksLikeGoalCreateIntent(intent) &&
+    !textMatchesAnyTerm(intent, LIFE_LIFEOPS_STRONG_TERMS) &&
+    textMatchesAnyTerm(intent, LIFE_CALENDAR_TERMS)
   ) {
-    if (/\b(next|upcoming|soon|about to)\b/.test(lower))
+    // Sub-classify: next event vs today/tomorrow/week
+    const lower = intent.toLowerCase();
+    if (textMatchesAnyTerm(lower, LIFE_TEMPORAL_NEXT_TERMS))
       return "query_calendar_next";
-    if (/\b(tomorrow)\b/.test(lower)) return "query_calendar_today";
-    if (/\b(this week|week)\b/.test(lower)) return "query_calendar_today";
     return "query_calendar_today";
   }
-  // Email query (i18n — hasDirectEmailQuery removed, covered by i18n terms)
-  if (
-    hasEmailIntentTerm ||
-    /\b(respond to|important.*(need|should|must))\b/.test(lower)
-  )
+
+  // Email query
+  if (textMatchesAnyTerm(intent, LIFE_EMAIL_QUERY_TERMS))
     return "query_email";
-  // Overview (i18n + regex)
-  if (
-    textMatchesAnyTerm(intent, LIFE_OVERVIEW_TERMS) ||
-    /\b(overview|summary|what'?s active|status|what do i have|show me everything|what'?s still left(?: for today)?|what do i still need to do today|anything else .*?(?:get done|finish).*?today)\b/.test(
-      lower,
-    )
-  )
-    return "query_overview";
 
-  if (looksLikeDefinitionCreateIntent(lower)) {
-    return "create_definition";
-  }
+  // Overview
+  if (textMatchesAnyTerm(intent, LIFE_OVERVIEW_TERMS)) return "query_overview";
 
-  if (looksLikeGoalCreateIntent(lower)) return "create_goal";
+  // Create definition (has cadence hint)
+  if (looksLikeDefinitionCreateIntent(intent)) return "create_definition";
+
+  // Create goal (goal mention without cadence)
+  if (looksLikeGoalCreateIntent(intent)) return "create_goal";
 
   // Default: create a task/habit/routine
   return "create_definition";
@@ -568,7 +571,7 @@ async function resolveLifeOperationPlan(args: {
           confidence: extracted.confidence,
           llmOp: extracted.operation,
         },
-        "Life LLM extraction returned low confidence; falling back to regex classifier",
+        "Life LLM extraction returned low confidence; falling back to i18n keyword classifier",
       );
       return {
         operation: classifyIntent(intent),
@@ -587,7 +590,7 @@ async function resolveLifeOperationPlan(args: {
 
   runtime.logger?.warn?.(
     { src: "action:life", intent },
-    "Life LLM extraction returned no operation; falling back to regex classifier",
+    "Life LLM extraction returned no operation; falling back to i18n keyword classifier",
   );
   return {
     operation: classifyIntent(intent),
@@ -597,44 +600,80 @@ async function resolveLifeOperationPlan(args: {
   };
 }
 
-function looksLikeDefinitionCreateIntent(lower: string): boolean {
-  return hasCadenceHint(lower);
+function looksLikeDefinitionCreateIntent(text: string): boolean {
+  return hasCadenceHint(text);
 }
 
-function looksLikeGoalCreateIntent(lower: string): boolean {
-  return /\bgoals?\b/.test(lower) && !hasCadenceHint(lower);
+function looksLikeGoalCreateIntent(text: string): boolean {
+  return textMatchesAnyTerm(text, LIFE_GOAL_TERMS) && !hasCadenceHint(text);
 }
 
-function hasCadenceHint(lower: string): boolean {
-  return CADENCE_HINT_RE.test(lower);
+function hasCadenceHint(text: string): boolean {
+  return textMatchesAnyTerm(text, LIFE_CADENCE_TERMS);
 }
 
-function looksLikeCompletionReport(text: string): boolean {
-  const lower = text.toLowerCase();
-  // Exclude overview queries that happen to contain "done/finish"
-  if (
-    /\b(what(?:'s| is)|what do i|anything else)\b.*\b(?:need to|still)\b.*\b(get done|finish)\b.*\btoday\b/.test(
-      lower,
-    )
-  ) {
+function shouldForceLifeCreateExecution(args: {
+  intent: string;
+  missing: ExtractedLifeMissingField[];
+  operation: LifeOperation | null;
+  details: Record<string, unknown> | undefined;
+  title: string | undefined;
+}): boolean {
+  if (args.operation !== "create_definition") {
     return false;
   }
 
-  // i18n check first
-  if (textMatchesAnyTerm(text, LIFE_COMPLETE_TERMS)) {
+  const blockingFields = args.missing.filter(
+    (field) => field !== "title" && field !== "schedule",
+  );
+  if (blockingFields.length > 0) {
+    return false;
+  }
+
+  if (typeof args.title === "string" && args.title.trim().length > 0) {
     return true;
   }
 
-  // English regex fallback
-  return (
-    /\b(done|finished)\b/.test(lower) ||
-    /\bcompleted\b/.test(lower) ||
-    /\bdid (it|that|my|the)\b/.test(lower) ||
-    /\bmark.*\b(done|complete)\b/.test(lower) ||
-    /\bi(?:'ve| have)? (already )?(done|completed|finished)\b/.test(lower) ||
-    /\bjust (did|finished|completed|done with)\b/.test(lower) ||
-    /\b(checked off|ticked off|crossed off)\b/.test(lower)
-  );
+  if (inferLifeDefinitionSeed(args.intent)) {
+    return true;
+  }
+
+  if (normalizeCadenceDetail(detailObject(args.details, "cadence"))) {
+    return true;
+  }
+
+  const derivedTitle = deriveDefinitionTitle(args.intent);
+  if (
+    derivedTitle &&
+    scoreDefinitionTitleQuality(derivedTitle) > 0 &&
+    looksLikeDefinitionCreateIntent(args.intent)
+  ) {
+    return true;
+  }
+
+  const timedRequestKind = resolveTimedRequestKind({
+    intent: args.intent,
+    llmRequestKind: null,
+    recentWindow: [],
+  });
+  const timedDefaults = deriveTimedRequestDefaults({
+    intent: args.intent,
+    requestKind: timedRequestKind,
+    timeZone: extractLifeTimeZoneFromText(args.intent) ?? undefined,
+  });
+  return Boolean(timedDefaults?.title || timedDefaults?.cadence);
+}
+
+function looksLikeCompletionReport(text: string): boolean {
+  // Exclude overview queries — these mention "done/finish" but ask what's remaining
+  if (textMatchesAnyTerm(text, LIFE_OVERVIEW_TERMS)) {
+    return false;
+  }
+  // Exclude create-intent with cadence — "create a habit until I complete it"
+  if (textMatchesAnyTerm(text, LIFE_CADENCE_TERMS)) {
+    return false;
+  }
+  return textMatchesAnyTerm(text, LIFE_COMPLETE_TERMS);
 }
 
 function shouldRecoverMissingOccurrenceAsCreate(
@@ -646,42 +685,16 @@ function shouldRecoverMissingOccurrenceAsCreate(
   }
   const lower = intent.toLowerCase();
   return (
-    looksLikeDefinitionCreateIntent(lower) && !looksLikeCompletionReport(lower)
+    looksLikeDefinitionCreateIntent(lower) && !looksLikeCompletionReport(intent)
   );
 }
 
 function inferReminderIntensityFromIntent(
-  intent: string,
+  _intent: string,
 ): LifeOpsReminderIntensity | null {
-  const lower = intent.toLowerCase();
-  if (
-    /\b(stop reminding me|don't remind me|pause reminders?|mute reminders?|high priority only|only high priority)\b/.test(
-      lower,
-    )
-  ) {
-    return "high_priority_only";
-  }
-  if (
-    /\b(resume reminders?|start reminding me again|turn reminders? back on|normal reminders?)\b/.test(
-      lower,
-    )
-  ) {
-    return "normal";
-  }
-  if (
-    /\b(less|fewer|lower)\s+reminders?\b/.test(lower) ||
-    /\b(remind|ping|message|nudge)\b.*\b(less|fewer|lower)\b/.test(lower)
-  ) {
-    return "minimal";
-  }
-  if (
-    /\bmore reminders?\b/.test(lower) ||
-    /\b(remind|ping|message|nudge)\b.*\bmore\b/.test(lower) ||
-    /\bbe more persistent\b/.test(lower) ||
-    /\bmore persistent\b/.test(lower)
-  ) {
-    return "persistent";
-  }
+  // LLM extraction (extractReminderIntensityWithLlm) is the primary path.
+  // This fallback returns null so the handler asks for clarification
+  // rather than silently misrouting via English-only regex.
   return null;
 }
 
@@ -1101,26 +1114,10 @@ function latestDeferredLifeDraft(
 
 function looksLikeDeferredLifeConfirmation(text: string): boolean {
   const normalized = text.trim().toLowerCase();
-  if (!normalized) {
-    return false;
-  }
-
-  if (
-    /\b(no|nope|nah|don't|do not|wait|hold on|change|edit|update|rename|instead|actually)\b/.test(
-      normalized,
-    )
-  ) {
-    return false;
-  }
-
-  return (
-    /^(?:yes|yeah|yep|yup|ok|okay|sure|confirm|confirmed|go ahead|do it|please do|sounds good|correct|exactly|perfect|that works|looks good|go for it|lgtm|absolutely|affirmative|approved|lets go|let's go)\b/.test(
-      normalized,
-    ) ||
-    /\b(?:save|create)\s+(?:it|that|this|them|the goal|the habit|the routine|the task)\b/.test(
-      normalized,
-    )
-  );
+  if (!normalized) return false;
+  if (textMatchesAnyTerm(normalized, LIFE_NEGATIVE_TERMS)) return false;
+  if (textMatchesAnyTerm(normalized, LIFE_DRAFT_EDIT_TERMS)) return false;
+  return textMatchesAnyTerm(normalized, LIFE_AFFIRMATIVE_TERMS);
 }
 
 function deferredLifeDraftExpiryReason(args: {
@@ -1148,23 +1145,9 @@ function deferredLifeDraftExpiryReason(args: {
 
 function looksLikeDeferredLifeDraftEdit(text: string): boolean {
   const normalized = normalizeIntentText(text);
-  if (!normalized || looksLikeDeferredLifeConfirmation(text)) {
-    return false;
-  }
-  if (
-    /\b(no|nope|nah|cancel|nevermind|never mind|forget it|skip it)\b/.test(
-      normalized,
-    )
-  ) {
-    return false;
-  }
-  if (
-    /\b(how about|what about|instead|actually|make it|change it|edit it|update it|rename it|switch it|swap it|rather|keep it)\b/.test(
-      normalized,
-    )
-  ) {
-    return true;
-  }
+  if (!normalized || looksLikeDeferredLifeConfirmation(text)) return false;
+  if (textMatchesAnyTerm(normalized, LIFE_NEGATIVE_TERMS)) return false;
+  if (textMatchesAnyTerm(normalized, LIFE_DRAFT_EDIT_TERMS)) return true;
   return hasCadenceHint(normalized) || /\b\d+\b/.test(normalized);
 }
 
@@ -1411,7 +1394,95 @@ async function resolveOccurrence(
     };
   }
 
+  const targetTokens = normalized.split(/\s+/).filter(Boolean);
+  if (targetTokens.length > 1) {
+    const tokenSetMatches = all.filter((occurrence) => {
+      const occurrenceTokens = new Set(
+        normalizeTitle(occurrence.title).split(/\s+/).filter(Boolean),
+      );
+      return targetTokens.every((token) => occurrenceTokens.has(token));
+    });
+    if (tokenSetMatches.length === 1) {
+      return { match: tokenSetMatches[0], ambiguousCandidates: [] };
+    }
+    if (tokenSetMatches.length > 1) {
+      return {
+        match: null,
+        ambiguousCandidates: tokenSetMatches.map(
+          formatOccurrenceDisambiguationLabel,
+        ),
+      };
+    }
+  }
+
   return { match: null, ambiguousCandidates: [] };
+}
+
+function deriveOccurrenceTargetFromIntent(
+  intent: string,
+  operation: LifeOperation,
+): string | null {
+  const normalized = normalizeLifeInputText(intent);
+  if (!normalized) {
+    return null;
+  }
+
+  let candidate = normalized;
+  if (operation === "snooze_occurrence") {
+    candidate = candidate
+      .replace(
+        /^(?:please\s+)?(?:snooze|postpone|push\b.*\bback|remind me later about)\s+/i,
+        "",
+      )
+      .replace(
+        /\bfor\s+\d+\s*(?:minutes?|hours?)\b.*$/i,
+        "",
+      )
+      .replace(/\b(?:until|til)\b.+$/i, "")
+      .trim();
+  } else if (operation === "skip_occurrence") {
+    candidate = candidate
+      .replace(/^(?:please\s+)?(?:skip|pass on)\s+/i, "")
+      .replace(/\b(?:today|tonight|for now)\b.*$/i, "")
+      .trim();
+  } else if (operation === "complete_occurrence") {
+    candidate = candidate
+      .replace(
+        /^(?:please\s+)?(?:mark\s+|i(?:'ve| have)?\s+|just\s+)?(?:done|completed|finished|did)\s+/i,
+        "",
+      )
+      .replace(/\b(?:done|complete|completed|finished)\b.*$/i, "")
+      .trim();
+  }
+
+  return candidate.length > 0 ? candidate : null;
+}
+
+async function resolveOccurrenceWithIntentFallback(args: {
+  service: LifeOpsService;
+  target: string | undefined;
+  domain?: LifeOpsDomain;
+  intent: string;
+  operation: LifeOperation;
+}): Promise<OccurrenceResult> {
+  const direct = await resolveOccurrence(args.service, args.target, args.domain);
+  if (direct.match || direct.ambiguousCandidates.length > 0) {
+    return direct;
+  }
+
+  const fallbackTarget = deriveOccurrenceTargetFromIntent(
+    args.intent,
+    args.operation,
+  );
+  if (
+    !fallbackTarget ||
+    (args.target &&
+      normalizeTitle(fallbackTarget) === normalizeTitle(args.target))
+  ) {
+    return direct;
+  }
+
+  return resolveOccurrence(args.service, fallbackTarget, args.domain);
 }
 
 function summarizeCadence(cadence: LifeOpsCadence): string {
@@ -1883,7 +1954,9 @@ function extractIntentWeekdays(intent: string): number[] {
       if (weekdayToken.startsWith("sat")) return 6;
       return null;
     })
-    .filter((weekday): weekday is number => weekday !== null);
+    .filter(
+      (weekday): weekday is 0 | 1 | 2 | 3 | 4 | 5 | 6 => weekday !== null,
+    );
   return [...new Set(matches)];
 }
 
@@ -2156,7 +2229,7 @@ function deriveAlarmLikeDefaults(
   return {
     title: resolveAlarmTitle(intent),
     cadence:
-      slot && !CADENCE_HINT_RE.test(lower)
+      slot && !hasCadenceHint(intent)
         ? {
             kind: "once",
             dueAt: buildOneOffDueAtFromMinuteOfDay({
@@ -2187,7 +2260,7 @@ function deriveReminderLikeDefaults(
   return {
     title: "Reminder",
     cadence:
-      slot && !CADENCE_HINT_RE.test(lower)
+      slot && !hasCadenceHint(intent)
         ? {
             kind: "once",
             dueAt: buildOneOffDueAtFromMinuteOfDay({
@@ -3398,7 +3471,12 @@ function shouldRequireLifeCreateConfirmation(args: {
 function inferLifeDefinitionSeed(intent: string): LifeDefinitionSeed | null {
   const lower = intent.toLowerCase();
 
-  if (/\bbrush(?:ing|ed)?\b/.test(lower) && /\bteeth\b/.test(lower)) {
+  if (
+    ((/\bbrush(?:ing|ed)?\b/.test(lower) ||
+      /\bcepill(?:ar|arme|arte|arse|ando|ado|arme)\b/.test(lower)) &&
+      /\bteeth\b/.test(lower)) ||
+    (/\bcepill/.test(lower) && /\bdientes\b/.test(lower))
+  ) {
     const title = "Brush teeth";
     return {
       title,
@@ -3612,6 +3690,7 @@ export const lifeAction: Action & {
     "USE this action for: creating, editing, or deleting tasks, habits, routines, and goals; " +
     "setting one-off alarms or wake-up reminders like 'set an alarm for 7am' or 'wake me up at 7'; " +
     "helping the user actually set up follow-through when they say things like 'help me brush my teeth every day', 'i keep forgetting x', or 'help me actually do it'; " +
+    "using LifeOps defaults for common routines when the user gives a natural window instead of an exact clock, like water reminders, stretch breaks, weekday-after-lunch Invisalign checks, or brushing when they wake up and before bed; " +
     "marking items as complete, skipping, or snoozing them; reviewing goal progress; " +
     "setting up phone/SMS escalation channels; adjusting reminder frequency or intensity; " +
     "querying an overview of active LifeOps items. " +
@@ -3728,7 +3807,14 @@ export const lifeAction: Action & {
             intent,
             explicitOperation,
           });
-    if (!operationPlan.shouldAct) {
+    const forceCreateExecution = shouldForceLifeCreateExecution({
+      intent,
+      missing: operationPlan.missing,
+      operation: operationPlan.operation,
+      details,
+      title: params.title,
+    });
+    if (!operationPlan.shouldAct && !forceCreateExecution) {
       const fallback = buildLifeClarificationFallback({
         missing: operationPlan.missing,
         operation: operationPlan.operation,
@@ -3757,7 +3843,9 @@ export const lifeAction: Action & {
         },
       };
     }
-    const operation = operationPlan.operation ?? classifyIntent(intent);
+    const operation =
+      (forceCreateExecution ? "create_definition" : operationPlan.operation) ??
+      classifyIntent(intent);
     const service = new LifeOpsService(runtime);
     const domain = detailString(details, "domain") as LifeOpsDomain | undefined;
     const ownership = requestedOwnership(domain);
@@ -3875,6 +3963,7 @@ export const lifeAction: Action & {
             llmPlan?.mode === "respond" &&
             Boolean(llmPlan.response) &&
             !editingDeferredDefinitionDraft &&
+            !seed &&
             !params.title &&
             !explicitCadenceDetail &&
             !detailString(details, "description") &&
@@ -4571,11 +4660,14 @@ export const lifeAction: Action & {
       }
 
       if (operation === "complete_occurrence") {
-        const { match: target, ambiguousCandidates } = await resolveOccurrence(
-          service,
-          targetName,
-          domain,
-        );
+        const { match: target, ambiguousCandidates } =
+          await resolveOccurrenceWithIntentFallback({
+            service,
+            target: targetName,
+            domain,
+            intent,
+            operation,
+          });
         if (!target) {
           if (ambiguousCandidates.length > 0) {
             return {
@@ -4621,11 +4713,14 @@ export const lifeAction: Action & {
       }
 
       if (operation === "skip_occurrence") {
-        const { match: target, ambiguousCandidates } = await resolveOccurrence(
-          service,
-          targetName,
-          domain,
-        );
+        const { match: target, ambiguousCandidates } =
+          await resolveOccurrenceWithIntentFallback({
+            service,
+            target: targetName,
+            domain,
+            intent,
+            operation,
+          });
         if (!target) {
           if (ambiguousCandidates.length > 0) {
             return {
@@ -4660,11 +4755,14 @@ export const lifeAction: Action & {
       }
 
       if (operation === "snooze_occurrence") {
-        const { match: target, ambiguousCandidates } = await resolveOccurrence(
-          service,
-          targetName,
-          domain,
-        );
+        const { match: target, ambiguousCandidates } =
+          await resolveOccurrenceWithIntentFallback({
+            service,
+            target: targetName,
+            domain,
+            intent,
+            operation,
+          });
         if (!target) {
           if (ambiguousCandidates.length > 0) {
             return {
@@ -4970,6 +5068,66 @@ export const lifeAction: Action & {
     },
   ],
   examples: [
+    [
+      {
+        name: "{{name1}}",
+        content: {
+          text: "help me remember to drink water",
+        },
+      },
+      {
+        name: "{{agentName}}",
+        content: {
+          text: 'I can set up a "Drink water" habit with a reasonable daytime default cadence. Confirm and I\'ll save it.',
+          actions: ["LIFE"],
+        },
+      },
+    ],
+    [
+      {
+        name: "{{name1}}",
+        content: {
+          text: "help me remember to stretch during the day",
+        },
+      },
+      {
+        name: "{{agentName}}",
+        content: {
+          text: 'I can set up a "Stretch" habit with daytime stretch-break defaults. Confirm and I\'ll save it.',
+          actions: ["LIFE"],
+        },
+      },
+    ],
+    [
+      {
+        name: "{{name1}}",
+        content: {
+          text: "please remind me about my Invisalign on weekdays after lunch",
+        },
+      },
+      {
+        name: "{{agentName}}",
+        content: {
+          text: 'I can set up a weekday-after-lunch Invisalign habit. Confirm and I\'ll save it.',
+          actions: ["LIFE"],
+        },
+      },
+    ],
+    [
+      {
+        name: "{{name1}}",
+        content: {
+          text: "recuérdame cepillarme los dientes por la mañana y por la noche",
+        },
+      },
+      {
+        name: "{{agentName}}",
+        content: {
+          text: 'Puedo guardar el hábito "Brush teeth" para la mañana y la noche. Confirma y lo guardo.',
+          actions: ["LIFE"],
+        },
+      },
+    ],
     [
       {
         name: "{{name1}}",

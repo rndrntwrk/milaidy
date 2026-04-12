@@ -634,7 +634,7 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
         >
           <SelectTrigger
             id="provider-switcher-select"
-            className="w-full px-3 py-2.5 border border-border bg-card text-[13px] rounded-lg transition-all duration-200 focus:border-accent focus:ring-2 focus:ring-accent/20 focus:outline-none hover:border-border-hover"
+            className="w-full px-3 py-2.5 border border-border bg-card text-sm rounded-lg transition-all duration-200 focus:border-accent focus:ring-2 focus:ring-accent/20 focus:outline-none hover:border-border-hover"
           >
             <SelectValue />
           </SelectTrigger>
@@ -650,10 +650,10 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
             ))}
           </SelectContent>
         </Select>
-        <p className="text-[11px] text-muted mt-1.5">
+        <p className="text-xs-tight text-muted mt-1.5">
           {t("providerswitcher.chooseYourPreferredProvider")}
         </p>
-        <p className="text-[11px] text-muted mt-1">
+        <p className="text-xs-tight text-muted mt-1">
           {t("providerswitcher.cloudInferenceToggleHint")}
         </p>
       </div>
@@ -687,7 +687,7 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
               <div className="text-xs mb-4">
                 {elizaCloudUserId && (
                   <span className="text-muted mr-3">
-                    <code className="font-[var(--mono)] text-[11px]">
+                    <code className="font-[var(--mono)] text-xs-tight">
                       {elizaCloudUserId}
                     </code>
                   </span>
@@ -716,7 +716,7 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
                         setState("cloudDashboardView", "billing");
                         setTab("settings");
                       }}
-                      className="ml-2 bg-transparent border-0 p-0 cursor-pointer text-[11px] text-txt underline decoration-accent underline-offset-2 hover:opacity-80 h-auto min-h-0"
+                      className="ml-2 bg-transparent border-0 p-0 cursor-pointer text-xs-tight text-txt underline decoration-accent underline-offset-2 hover:opacity-80 h-auto min-h-0"
                     >
                       {t("configpageview.TopUp")}
                     </Button>
@@ -1028,17 +1028,17 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
 
               <div className="flex items-center justify-end gap-2 mt-3">
                 {modelSaving && (
-                  <span className="text-[11px] text-muted">
+                  <span className="text-xs-tight text-muted">
                     {t("providerswitcher.savingRestarting")}
                   </span>
                 )}
                 {modelSaveSuccess && (
-                  <span className="text-[11px] text-ok">
+                  <span className="text-xs-tight text-ok">
                     {t("providerswitcher.savedRestartingAgent")}
                   </span>
                 )}
               </div>
-              <p className="mt-2 text-[11px] text-muted">
+              <p className="mt-2 text-xs-tight text-muted">
                 {t("providerswitcher.restartRequiredHint")}
               </p>
             </div>
@@ -1060,7 +1060,7 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
                       variant="link"
                       size="sm"
                       type="button"
-                      className="!mt-0 !px-0 text-[11px]"
+                      className="!mt-0 !px-0 text-xs-tight"
                       onClick={() => openExternalUrl(branding.bugReportUrl)}
                     >
                       {t("providerswitcher.reportIssueWithTemplate")}
@@ -1074,7 +1074,7 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
                   >
                     {t("providerswitcher.logInToElizaCloud")}
                   </Button>
-                  <div className="text-[11px] text-muted mt-1.5">
+                  <div className="text-xs-tight text-muted mt-1.5">
                     {t("providerswitcher.opensABrowserWindow")}
                   </div>
                 </>
@@ -1104,12 +1104,12 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
           <div className="text-xs font-semibold mb-2">
             {t("providerswitcher.piSettings")}
           </div>
-          <div className="text-[11px] text-muted mb-2">
+          <div className="text-xs-tight text-muted mb-2">
             {t("onboarding.piCredentialsHint")}
           </div>
           <label
             htmlFor="pi-ai-model-override"
-            className="block text-[11px] text-muted mb-1"
+            className="block text-xs-tight text-muted mb-1"
           >
             {t("providerswitcher.primaryModelOverride")}
           </label>
@@ -1137,7 +1137,7 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
               >
                 <SelectTrigger
                   id="pi-ai-model-override"
-                  className="w-full px-2.5 py-[8px] border border-border bg-card text-[13px] transition-colors focus:border-accent focus:outline-none"
+                  className="w-full px-2.5 py-[8px] border border-border bg-card text-sm transition-colors focus:border-accent focus:outline-none"
                 >
                   <SelectValue />
                 </SelectTrigger>
@@ -1166,7 +1166,7 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
                     setPiAiModelSpec(e.target.value);
                   }}
                   placeholder={t("providerswitcher.providerModelPlaceholder")}
-                  className="mt-2 bg-card text-[13px]"
+                  className="mt-2 bg-card text-sm"
                 />
               )}
             </>
@@ -1177,17 +1177,17 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
               value={piAiModelSpec}
               onChange={(e) => setPiAiModelSpec(e.target.value)}
               placeholder={t("providerswitcher.providerModelPlaceholder")}
-              className="bg-card text-[13px]"
+              className="bg-card text-sm"
             />
           )}
           <div className="flex items-center justify-end gap-2 mt-3">
             {piAiSaving && (
-              <span className="text-[11px] text-muted">
+              <span className="text-xs-tight text-muted">
                 {t("providerswitcher.savingRestarting")}
               </span>
             )}
             {piAiSaveSuccess && (
-              <span className="text-[11px] text-ok">
+              <span className="text-xs-tight text-ok">
                 {t("providerswitcher.savedRestartingAgent")}
               </span>
             )}

@@ -126,7 +126,7 @@ export function PluginSettingsDialog({
             <AdminDialog.MonoMeta>v{plugin.version}</AdminDialog.MonoMeta>
           )}
           {isShowcase && (
-            <span className="text-[10px] font-bold tracking-widest px-2.5 py-[2px] border border-accent/30 text-txt bg-accent/10 rounded-full">
+            <span className="text-2xs font-bold tracking-widest px-2.5 py-[2px] border border-accent/30 text-txt bg-accent/10 rounded-full">
               {t("pluginsview.DEMO")}
             </span>
           )}
@@ -134,7 +134,7 @@ export function PluginSettingsDialog({
         <AdminDialog.BodyScroll>
           <div className="px-5 pt-4 pb-1 flex items-center gap-3 flex-wrap text-xs text-muted">
             {plugin.description && (
-              <span className="text-[12px] text-muted leading-relaxed">
+              <span className="text-xs text-muted leading-relaxed">
                 {plugin.description}
               </span>
             )}
@@ -143,7 +143,7 @@ export function PluginSettingsDialog({
                 {plugin.tags?.map((tag) => (
                   <span
                     key={`${plugin.id}:${tag}:settings`}
-                    className="whitespace-nowrap border border-border/40 bg-bg-accent/80 px-1.5 py-px text-[10px] lowercase tracking-wide text-muted-strong"
+                    className="whitespace-nowrap border border-border/40 bg-bg-accent/80 px-1.5 py-px text-2xs lowercase tracking-wide text-muted-strong"
                   >
                     {tag}
                   </span>
@@ -155,19 +155,19 @@ export function PluginSettingsDialog({
             (plugin.pluginDeps && plugin.pluginDeps.length > 0)) && (
             <div className="px-5 pb-2 flex items-center gap-3 flex-wrap">
               {plugin.npmName && (
-                <span className="font-mono text-[10px] text-muted opacity-50">
+                <span className="font-mono text-2xs text-muted opacity-50">
                   {plugin.npmName}
                 </span>
               )}
               {plugin.pluginDeps && plugin.pluginDeps.length > 0 && (
                 <span className="flex items-center gap-1 flex-wrap">
-                  <span className="text-[10px] text-muted opacity-60">
+                  <span className="text-2xs text-muted opacity-60">
                     {t("pluginsview.dependsOn")}
                   </span>
                   {plugin.pluginDeps.map((dep: string) => (
                     <span
                       key={dep}
-                      className="text-[10px] px-1.5 py-px border border-border bg-accent-subtle text-muted rounded-sm"
+                      className="text-2xs px-1.5 py-px border border-border bg-accent-subtle text-muted rounded-sm"
                     >
                       {dep}
                     </span>
@@ -204,7 +204,7 @@ export function PluginSettingsDialog({
                 <Button
                   variant="default"
                   size="sm"
-                  className="h-8 px-4 text-[11px] font-bold tracking-wide shadow-sm"
+                  className="h-8 px-4 text-xs-tight font-bold tracking-wide shadow-sm"
                   disabled={installingPlugins.has(plugin.id)}
                   onClick={() =>
                     void onInstallPlugin(plugin.id, plugin.npmName ?? "")
@@ -219,7 +219,7 @@ export function PluginSettingsDialog({
               )}
             {plugin.loadError && (
               <span
-                className="px-3 py-1.5 text-[11px] text-danger font-bold tracking-wide"
+                className="px-3 py-1.5 text-xs-tight text-danger font-bold tracking-wide"
                 title={plugin.loadError}
               >
                 {t("pluginsview.PackageBrokenMis")}
@@ -235,7 +235,7 @@ export function PluginSettingsDialog({
                       : "outline"
                 }
                 size="sm"
-                className={`h-8 px-4 text-[11px] font-bold tracking-wide transition-all ${
+                className={`h-8 px-4 text-xs-tight font-bold tracking-wide transition-all ${
                   testResults.get(plugin.id)?.loading
                     ? "opacity-70 cursor-wait"
                     : testResults.get(plugin.id)?.success
@@ -253,7 +253,7 @@ export function PluginSettingsDialog({
             <Button
               variant="ghost"
               size="sm"
-              className="h-8 px-4 text-[12px] font-bold text-muted hover:text-txt transition-all"
+              className="h-8 px-4 text-xs font-bold text-muted hover:text-txt transition-all"
               onClick={() => onConfigReset(plugin.id)}
             >
               {t("pluginsview.Reset")}
@@ -261,7 +261,7 @@ export function PluginSettingsDialog({
             <Button
               variant={saveSuccess ? "default" : "secondary"}
               size="sm"
-              className={`h-8 px-5 text-[12px] font-bold tracking-wide transition-all ${
+              className={`h-8 px-5 text-xs font-bold tracking-wide transition-all ${
                 saveSuccess
                   ? "bg-ok text-ok-fg hover:bg-ok/90"
                   : "bg-accent text-accent-fg hover:bg-accent/90 shadow-lg shadow-accent/20"

@@ -665,7 +665,7 @@ describe("calendarAction", () => {
     expect(valid).toBe(true);
   });
 
-  it("does not validate a generic time question without calendar context", async () => {
+  it("validates a generic time question greedy (weak term 'time' is enough)", async () => {
     const valid = await calendarAction.validate?.(
       stubRuntime,
       msg("what time is it?"),
@@ -680,7 +680,7 @@ describe("calendarAction", () => {
       } as never,
     );
 
-    expect(valid).toBe(false);
+    expect(valid).toBe(true);
   });
 
   it("does not validate reminder-style requests that belong to LifeOps", async () => {
@@ -703,7 +703,7 @@ describe("calendarAction", () => {
     expect(valid).toBe(true);
   });
 
-  it("only uses the most recent 12 messages for calendar validation context", async () => {
+  it("validates 'next week' greedy even when calendar context scrolled off", async () => {
     const recentMessages = [
       "user: check my flight to denver",
       ...Array.from(
@@ -722,7 +722,8 @@ describe("calendarAction", () => {
       } as never,
     );
 
-    expect(valid).toBe(false);
+    // "week" is a weak term — greedy validation makes this available
+    expect(valid).toBe(true);
   });
 
   it("returns the next event context", async () => {

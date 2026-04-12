@@ -165,9 +165,7 @@ export function SectionSurface({
         </div>
         <div className="min-w-0 flex-1">
           <div className="text-sm font-semibold text-txt">{title}</div>
-          <div className="mt-1 text-[12px] leading-5 text-muted">
-            {subtitle}
-          </div>
+          <div className="mt-1 text-xs leading-5 text-muted">{subtitle}</div>
         </div>
       </div>
       <div className="mt-4 space-y-3">{children}</div>
@@ -186,11 +184,11 @@ export function SummaryMetric({
 }) {
   return (
     <div className="rounded-2xl border border-border/40 bg-bg/72 p-4">
-      <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">
+      <div className="text-2xs font-semibold uppercase tracking-[0.12em] text-muted">
         {label}
       </div>
       <div className="mt-2 text-lg font-semibold text-txt">{value}</div>
-      <div className="mt-1 text-[11px] text-muted">{detail}</div>
+      <div className="mt-1 text-xs-tight text-muted">{detail}</div>
     </div>
   );
 }
@@ -202,7 +200,7 @@ export function OccurrenceList({
 }) {
   if (occurrences.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-border/45 bg-bg/55 p-4 text-[12px] text-muted">
+      <div className="rounded-2xl border border-dashed border-border/45 bg-bg/55 p-4 text-xs text-muted">
         No active items.
       </div>
     );
@@ -220,21 +218,21 @@ export function OccurrenceList({
               <div className="truncate text-sm font-semibold text-txt">
                 {occurrence.title}
               </div>
-              <div className="mt-1 text-[12px] leading-5 text-muted">
+              <div className="mt-1 text-xs leading-5 text-muted">
                 {occurrenceWindowLabel(occurrence)}
               </div>
             </div>
-            <Badge variant="secondary" className="text-[10px]">
+            <Badge variant="secondary" className="text-2xs">
               {humanize(occurrence.state)}
             </Badge>
           </div>
-          <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-muted">
+          <div className="mt-2 flex flex-wrap gap-2 text-xs-tight text-muted">
             <span>{cadenceLabel(occurrence.cadence)}</span>
             <span>Priority {occurrence.priority}</span>
             <span>{humanize(occurrence.domain)}</span>
           </div>
           {occurrence.description.trim().length > 0 ? (
-            <div className="mt-2 text-[12px] leading-5 text-muted">
+            <div className="mt-2 text-xs leading-5 text-muted">
               {occurrence.description}
             </div>
           ) : null}
@@ -247,7 +245,7 @@ export function OccurrenceList({
 export function GoalList({ goals }: { goals: LifeOpsGoalDefinition[] }) {
   if (goals.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-border/45 bg-bg/55 p-4 text-[12px] text-muted">
+      <div className="rounded-2xl border border-dashed border-border/45 bg-bg/55 p-4 text-xs text-muted">
         No active goals.
       </div>
     );
@@ -265,15 +263,15 @@ export function GoalList({ goals }: { goals: LifeOpsGoalDefinition[] }) {
               <div className="truncate text-sm font-semibold text-txt">
                 {goal.title}
               </div>
-              <div className="mt-1 text-[12px] leading-5 text-muted">
+              <div className="mt-1 text-xs leading-5 text-muted">
                 {goal.description.trim() || "No goal detail yet."}
               </div>
             </div>
-            <Badge variant="secondary" className="text-[10px]">
+            <Badge variant="secondary" className="text-2xs">
               {humanize(goal.reviewState)}
             </Badge>
           </div>
-          <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-muted">
+          <div className="mt-2 flex flex-wrap gap-2 text-xs-tight text-muted">
             <span>{humanize(goal.status)}</span>
             <span>{humanize(goal.domain)}</span>
             <span>Updated {formatDateTime(goal.updatedAt)}</span>
@@ -291,7 +289,7 @@ export function ReminderList({
 }) {
   if (reminders.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-border/45 bg-bg/55 p-4 text-[12px] text-muted">
+      <div className="rounded-2xl border border-dashed border-border/45 bg-bg/55 p-4 text-xs text-muted">
         No live reminders.
       </div>
     );
@@ -309,15 +307,15 @@ export function ReminderList({
               <div className="truncate text-sm font-semibold text-txt">
                 {reminder.title}
               </div>
-              <div className="mt-1 text-[12px] leading-5 text-muted">
+              <div className="mt-1 text-xs leading-5 text-muted">
                 {reminder.stepLabel} via {humanize(reminder.channel)}
               </div>
             </div>
-            <Badge variant="outline" className="text-[10px]">
+            <Badge variant="outline" className="text-2xs">
               {humanize(reminder.state)}
             </Badge>
           </div>
-          <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-muted">
+          <div className="mt-2 flex flex-wrap gap-2 text-xs-tight text-muted">
             <span>Scheduled {formatDateTime(reminder.scheduledFor)}</span>
             {reminder.dueAt ? (
               <span>Due {formatDateTime(reminder.dueAt)}</span>
@@ -345,7 +343,7 @@ export function OwnerGithubConnectionCard({
           <div className="truncate text-sm font-semibold text-txt">
             {githubIdentityLabel(connection)}
           </div>
-          <div className="mt-1 text-[12px] text-muted">
+          <div className="mt-1 text-xs text-muted">
             {connection.username
               ? `@${connection.username}`
               : (connection.email ?? "GitHub")}
@@ -353,12 +351,12 @@ export function OwnerGithubConnectionCard({
         </div>
         <Badge
           variant={connection.status === "active" ? "secondary" : "outline"}
-          className="text-[10px]"
+          className="text-2xs"
         >
           {humanize(connection.status)}
         </Badge>
       </div>
-      <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-muted">
+      <div className="mt-3 flex flex-wrap gap-2 text-xs-tight text-muted">
         <span>Linked {formatDateTime(connection.linkedAt)}</span>
         <span>{connection.scopes.length} scopes</span>
         {connection.connectionRole ? (
@@ -368,12 +366,12 @@ export function OwnerGithubConnectionCard({
       {connection.scopes.length > 0 ? (
         <div className="mt-3 flex flex-wrap gap-1.5">
           {connection.scopes.slice(0, 4).map((scope) => (
-            <Badge key={scope} variant="outline" className="text-[10px]">
+            <Badge key={scope} variant="outline" className="text-2xs">
               {scope}
             </Badge>
           ))}
           {connection.scopes.length > 4 ? (
-            <Badge variant="outline" className="text-[10px]">
+            <Badge variant="outline" className="text-2xs">
               +{connection.scopes.length - 4} more
             </Badge>
           ) : null}
@@ -383,7 +381,7 @@ export function OwnerGithubConnectionCard({
         <Button
           variant="outline"
           size="sm"
-          className="rounded-full px-4 text-[11px] font-semibold"
+          className="rounded-full px-4 text-xs-tight font-semibold"
           disabled={busy}
           onClick={() => onDisconnect(connection.id)}
         >
@@ -422,7 +420,7 @@ export function AgentGithubCard({
           <div className="truncate text-sm font-semibold text-txt">
             {agent.agent_name}
           </div>
-          <div className="mt-1 text-[12px] text-muted">
+          <div className="mt-1 text-xs text-muted">
             {connected
               ? githubIdentityLabel({
                   displayName: github?.githubDisplayName,
@@ -434,12 +432,12 @@ export function AgentGithubCard({
         </div>
         <Badge
           variant={connected ? "secondary" : "outline"}
-          className="text-[10px]"
+          className="text-2xs"
         >
           {connected ? "Connected" : "Not connected"}
         </Badge>
       </div>
-      <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-muted">
+      <div className="mt-3 flex flex-wrap gap-2 text-xs-tight text-muted">
         <span>Agent {humanize(agent.status)}</span>
         {github?.connectedAt ? (
           <span>Linked {formatDateTime(github.connectedAt)}</span>
@@ -450,12 +448,12 @@ export function AgentGithubCard({
       {github?.scopes?.length ? (
         <div className="mt-3 flex flex-wrap gap-1.5">
           {github.scopes.slice(0, 4).map((scope) => (
-            <Badge key={scope} variant="outline" className="text-[10px]">
+            <Badge key={scope} variant="outline" className="text-2xs">
               {scope}
             </Badge>
           ))}
           {github.scopes.length > 4 ? (
-            <Badge variant="outline" className="text-[10px]">
+            <Badge variant="outline" className="text-2xs">
               +{github.scopes.length - 4} more
             </Badge>
           ) : null}
@@ -465,7 +463,7 @@ export function AgentGithubCard({
         <Button
           variant="default"
           size="sm"
-          className="rounded-full px-4 text-[11px] font-semibold"
+          className="rounded-full px-4 text-xs-tight font-semibold"
           disabled={busy || github?.configured === false}
           onClick={() => onConnect(agent.agent_id)}
         >
@@ -476,7 +474,7 @@ export function AgentGithubCard({
           <Button
             variant="outline"
             size="sm"
-            className="rounded-full px-4 text-[11px] font-semibold"
+            className="rounded-full px-4 text-xs-tight font-semibold"
             disabled={busy}
             onClick={() => onDisconnect(agent.agent_id)}
           >
@@ -486,10 +484,10 @@ export function AgentGithubCard({
       </div>
       {ownerConnections.length > 0 ? (
         <div className="mt-4 rounded-2xl border border-border/35 bg-card/70 p-3">
-          <div className="text-[11px] font-semibold text-txt">
+          <div className="text-xs-tight font-semibold text-txt">
             Use LifeOps GitHub
           </div>
-          <div className="mt-1 text-[11px] leading-5 text-muted">
+          <div className="mt-1 text-xs-tight leading-5 text-muted">
             Link this agent to one of the owner’s LifeOps GitHub connections
             through Eliza Cloud. Disconnecting the agent later leaves the owner
             connection intact.
@@ -504,7 +502,7 @@ export function AgentGithubCard({
                   key={connection.id}
                   variant="outline"
                   size="sm"
-                  className="rounded-full px-4 text-[11px] font-semibold"
+                  className="rounded-full px-4 text-xs-tight font-semibold"
                   disabled={busy || alreadySelected}
                   onClick={() =>
                     onUseOwnerConnection(agent.agent_id, connection.id)
@@ -518,7 +516,7 @@ export function AgentGithubCard({
           </div>
         </div>
       ) : null}
-      <div className="mt-3 text-[11px] leading-5 text-muted">
+      <div className="mt-3 text-xs-tight leading-5 text-muted">
         This account is bound to the cloud agent for coding, pull requests, and
         repo context. Repo access still depends on the GitHub account or app
         installation behind it.

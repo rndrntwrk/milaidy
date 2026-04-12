@@ -69,7 +69,7 @@ export function PairingView() {
         <CardHeader className="border-b border-border/60 bg-card/70 pb-6 pt-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0 space-y-1.5">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted/80">
+              <div className="text-xs-tight font-semibold uppercase tracking-[0.16em] text-muted/80">
                 {branding.appName}
               </div>
               <CardTitle className="text-xl text-txt-strong">

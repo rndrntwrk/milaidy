@@ -131,6 +131,15 @@ function runCliEntry(
   });
 }
 
+function startValidationApiServer(
+  opts?: Parameters<typeof startApiServer>[0],
+) {
+  return startApiServer({
+    ...opts,
+    skipDeferredStartupWork: true,
+  });
+}
+
 dotenv.config({ path: path.resolve(packageRoot, ".env") });
 dotenv.config({ path: path.resolve(packageRoot, "..", "..", ".env") });
 
@@ -457,7 +466,7 @@ describe("Fresh Install Simulation", () => {
   }, 120_000);
 
   it("API server starts and serves status endpoint", async () => {
-    const srv = await startApiServer({ port: 0 });
+    const srv = await startValidationApiServer({ port: 0 });
     try {
       const { status, data } = await http$(srv.port, "GET", "/api/status");
       expect(status).toBe(200);
@@ -469,7 +478,7 @@ describe("Fresh Install Simulation", () => {
   }, 30_000);
 
   it("onboarding flow: POST /api/onboarding creates agent config", async () => {
-    const srv = await startApiServer({ port: 0 });
+    const srv = await startValidationApiServer({ port: 0 });
     try {
       const { status, data } = await http$(
         srv.port,
@@ -499,7 +508,7 @@ describe("Fresh Install Simulation", () => {
   }, 30_000);
 
   it("full lifecycle: not_started → start → running → stop", async () => {
-    const srv = await startApiServer({ port: 0 });
+    const srv = await startValidationApiServer({ port: 0 });
     try {
       // Initial state
       const s0 = await http$(srv.port, "GET", "/api/status");
@@ -734,7 +743,7 @@ describe("Long-Running Session Simulation", () => {
   let server: { port: number; close: () => Promise<void> } | null = null;
 
   beforeAll(async () => {
-    server = await startApiServer({ port: 0 });
+    server = await startValidationApiServer({ port: 0 });
   }, 30_000);
 
   afterAll(async () => {
@@ -891,7 +900,7 @@ describe("Context Integrity (no corruption)", () => {
   });
 
   it("config round-trip preserves integrity", async () => {
-    const srv = await startApiServer({ port: 0 });
+    const srv = await startValidationApiServer({ port: 0 });
     try {
       // Get original config
       const { data: original } = await http$(srv.port, "GET", "/api/config");
@@ -930,7 +939,7 @@ describe("Context Integrity (no corruption)", () => {
   }, 30_000);
 
   it("multiple concurrent config writes do not corrupt state", async () => {
-    const srv = await startApiServer({ port: 0 });
+    const srv = await startValidationApiServer({ port: 0 });
     try {
       // Fire 10 concurrent writes with different values — use "features" (allowed key)
       const writes = Array.from({ length: 10 }, (_, i) =>
@@ -969,7 +978,7 @@ describe("Context Integrity (no corruption)", () => {
 describe("Deadlock Detection", () => {
   it("concurrent requests to different endpoints complete within timeout", async () => {
     const isolatedState = withIsolatedApiStateDir();
-    const srv = await startApiServer({ port: 0 });
+    const srv = await startValidationApiServer({ port: 0 });
     try {
       const startTime = performance.now();
 
@@ -1017,7 +1026,7 @@ describe("Deadlock Detection", () => {
 
   it("rapid state transitions do not cause deadlock", async () => {
     const isolatedState = withIsolatedApiStateDir();
-    const srv = await startApiServer({ port: 0 });
+    const srv = await startValidationApiServer({ port: 0 });
     try {
       const startTime = performance.now();
 
@@ -1048,7 +1057,7 @@ describe("Deadlock Detection", () => {
 
   it("interleaved read/write operations do not deadlock", async () => {
     const isolatedState = withIsolatedApiStateDir();
-    const srv = await startApiServer({ port: 0 });
+    const srv = await startValidationApiServer({ port: 0 });
     try {
       // Interleave reads and writes
       const ops: Array<
@@ -1088,7 +1097,7 @@ describe("Memory Leak Detection", () => {
   it("repeated server start/stop does not leak file descriptors", async () => {
     // Start and stop the server 10 times — leaked sockets would cause EMFILE
     for (let i = 0; i < 10; i++) {
-      const srv = await startApiServer({ port: 0 });
+      const srv = await startValidationApiServer({ port: 0 });
       const { status } = await http$(srv.port, "GET", "/api/status");
       expect(status).toBe(200);
       await srv.close();
@@ -1098,7 +1107,7 @@ describe("Memory Leak Detection", () => {
   }, 60_000);
 
   it("heap usage stays bounded after many requests", async () => {
-    const srv = await startApiServer({ port: 0 });
+    const srv = await startValidationApiServer({ port: 0 });
     try {
       // Force GC if available
       if (global.gc) global.gc();
@@ -1127,7 +1136,7 @@ describe("Memory Leak Detection", () => {
   }, 60_000);
 
   it("plugin list endpoint does not accumulate stale data", async () => {
-    const srv = await startApiServer({ port: 0 });
+    const srv = await startValidationApiServer({ port: 0 });
     try {
       // Fetch plugins multiple times and verify list size is stable
       const sizes: number[] = [];
@@ -1152,7 +1161,7 @@ describe("Memory Leak Detection", () => {
 
 describe("Rapid Sequential Operations", () => {
   it("50 rapid onboarding status checks", async () => {
-    const srv = await startApiServer({ port: 0 });
+    const srv = await startValidationApiServer({ port: 0 });
     try {
       const start = performance.now();
       for (let i = 0; i < 50; i++) {
@@ -1173,7 +1182,7 @@ describe("Rapid Sequential Operations", () => {
   }, 30_000);
 
   it("rapid plugin enable/disable cycling", async () => {
-    const srv = await startApiServer({ port: 0 });
+    const srv = await startValidationApiServer({ port: 0 });
     try {
       const { data: listData } = await http$(srv.port, "GET", "/api/plugins");
       const plugins = (listData.plugins as PluginApiRecord[]).filter(
@@ -1207,7 +1216,7 @@ describe("Rapid Sequential Operations", () => {
   }, 30_000);
 
   it("rapid config read/write cycles maintain consistency", async () => {
-    const srv = await startApiServer({ port: 0 });
+    const srv = await startValidationApiServer({ port: 0 });
     try {
       for (let i = 0; i < 20; i++) {
         // Write — use "features" (allowed key)
@@ -1402,7 +1411,7 @@ describe("Runtime Integration (with model provider)", () => {
       });
     }
 
-    server = await startApiServer({ port: 0, runtime });
+    server = await startValidationApiServer({ port: 0, runtime });
   }, 180_000);
 
   afterAll(async () => {

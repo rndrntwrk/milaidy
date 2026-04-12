@@ -421,11 +421,11 @@ function ConnectorPluginCard({
             </PagePanel.Meta>
           ) : null}
           {hasParams ? (
-            <span className="text-[11px] font-medium text-muted">
+            <span className="text-xs-tight font-medium text-muted">
               {setCount}/{totalCount} {t("pluginsview.configured")}
             </span>
           ) : (
-            <span className="text-[11px] font-medium text-muted">
+            <span className="text-xs-tight font-medium text-muted">
               {noConfigurationNeededLabel}
             </span>
           )}
@@ -435,7 +435,7 @@ function ConnectorPluginCard({
             {plugin.description || pluginDescriptionFallback}
           </p>
           {plugin.enabled && !plugin.isActive && (
-            <span className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] text-muted">
+            <span className="mt-1.5 flex flex-wrap items-center gap-2 text-xs-tight text-muted">
               <StatusBadge
                 label={inactiveLabel}
                 tone={plugin.loadError ? "danger" : "warning"}
@@ -448,7 +448,7 @@ function ConnectorPluginCard({
         <Button
           variant="outline"
           size="sm"
-          className={`h-auto min-w-[3.75rem] rounded-full border px-3 py-1.5 text-[10px] font-bold tracking-[0.16em] transition-colors ${
+          className={`h-auto min-w-[3.75rem] rounded-full border px-3 py-1.5 text-2xs font-bold tracking-[0.16em] transition-colors ${
             plugin.enabled
               ? "border-accent bg-accent text-accent-fg"
               : "border-border bg-transparent text-muted hover:border-accent/40 hover:text-txt"
@@ -521,7 +521,7 @@ function ConnectorPluginCard({
               <Button
                 variant="outline"
                 size="sm"
-                className="h-8 rounded-xl px-4 text-[11px] font-semibold"
+                className="h-8 rounded-xl px-4 text-xs-tight font-semibold"
                 onClick={() => {
                   void handleOpenManagedDiscord();
                 }}
@@ -576,7 +576,7 @@ function ConnectorPluginCard({
                 <Button
                   variant="default"
                   size="sm"
-                  className="h-9 rounded-xl px-4 text-[11px] font-semibold"
+                  className="h-9 rounded-xl px-4 text-xs-tight font-semibold"
                   onClick={() => {
                     void handleConfirmManagedDiscordAgent();
                   }}
@@ -602,7 +602,7 @@ function ConnectorPluginCard({
                 key={`${plugin.id}:${link.key}`}
                 variant="outline"
                 size="sm"
-                className="h-8 rounded-xl border-border/40 bg-card/40 px-3 text-[11px] font-semibold text-muted transition-all hover:border-accent hover:bg-accent/5 hover:text-txt"
+                className="h-8 rounded-xl border-border/40 bg-card/40 px-3 text-xs-tight font-semibold text-muted transition-all hover:border-accent hover:bg-accent/5 hover:text-txt"
                 onClick={() => {
                   void handleOpenPluginExternalUrl(link.url);
                 }}
@@ -622,7 +622,7 @@ function ConnectorPluginCard({
               <Button
                 variant="default"
                 size="sm"
-                className="h-8 rounded-xl px-4 text-[11px] font-bold"
+                className="h-8 rounded-xl px-4 text-xs-tight font-bold"
                 disabled={installingPlugins.has(plugin.id)}
                 onClick={() =>
                   void handleInstallPlugin(plugin.id, plugin.npmName ?? "")
@@ -695,7 +695,7 @@ function ConnectorPluginCard({
                     : "outline"
               }
               size="sm"
-              className={`h-8 rounded-xl px-4 text-[11px] font-bold transition-all ${
+              className={`h-8 rounded-xl px-4 text-xs-tight font-bold transition-all ${
                 testResult?.loading
                   ? "cursor-wait opacity-70"
                   : testResult?.success
@@ -715,7 +715,7 @@ function ConnectorPluginCard({
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-8 rounded-xl px-4 text-[11px] font-semibold text-muted hover:text-txt"
+                className="h-8 rounded-xl px-4 text-xs-tight font-semibold text-muted hover:text-txt"
                 onClick={() => handleConfigReset(plugin.id)}
               >
                 {t("pluginsview.Reset")}
@@ -723,7 +723,7 @@ function ConnectorPluginCard({
               <Button
                 variant={saveSuccess ? "default" : "secondary"}
                 size="sm"
-                className={`h-8 rounded-xl px-4 text-[11px] font-bold transition-all ${
+                className={`h-8 rounded-xl px-4 text-xs-tight font-bold transition-all ${
                   saveSuccess
                     ? "bg-ok text-ok-fg hover:bg-ok/90"
                     : "bg-accent text-accent-fg hover:bg-accent/90"
@@ -749,7 +749,7 @@ export function ConnectorPluginGroups(props: ConnectorPluginGroupsProps) {
       key={group.id}
       className="relative rounded-xl border border-border/30 px-2 pb-2 pt-5"
     >
-      <span className="absolute -top-2.5 left-3 bg-bg px-2 text-[10px] font-semibold uppercase tracking-wider text-muted">
+      <span className="absolute -top-2.5 left-3 bg-bg px-2 text-2xs font-semibold uppercase tracking-wider text-muted">
         {group.label}
       </span>
       <div className="space-y-4">

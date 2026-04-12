@@ -7,10 +7,10 @@ import type { AppOperatorSurfaceProps } from "./types";
 function DetailCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-2xl border border-border/35 bg-bg/55 px-4 py-3">
-      <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted">
+      <div className="text-xs-tight font-medium uppercase tracking-[0.16em] text-muted">
         {label}
       </div>
-      <div className="mt-1 text-[12px] leading-5 text-txt">{value}</div>
+      <div className="mt-1 text-xs leading-5 text-txt">{value}</div>
     </div>
   );
 }
@@ -144,11 +144,11 @@ export function DefenseAgentsOperatorSurface({
   if (!run) {
     return (
       <section className="space-y-3">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+        <div className="text-xs-tight font-semibold uppercase tracking-[0.18em] text-muted">
           Operator Surface
         </div>
         <div className="rounded-[1.4rem] border border-border/35 bg-card/74 p-4 shadow-sm">
-          <p className="text-[12px] leading-6 text-muted-strong">
+          <p className="text-xs leading-6 text-muted-strong">
             Defense of the Agents uses a Milady-hosted spectator shell. Launch
             it to monitor the agent, keep the autoplay script running, and steer
             the hero with live chat guidance.
@@ -188,15 +188,15 @@ export function DefenseAgentsOperatorSurface({
       }
     >
       <div className="flex flex-wrap items-center gap-2">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+        <div className="text-xs-tight font-semibold uppercase tracking-[0.18em] text-muted">
           {surfaceTitle}
         </div>
         <span
-          className={`inline-flex min-h-6 items-center rounded-full border px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.14em] ${statusTone(run.status)}`}
+          className={`inline-flex min-h-6 items-center rounded-full border px-2.5 py-1 text-2xs font-medium uppercase tracking-[0.14em] ${statusTone(run.status)}`}
         >
           {run.status}
         </span>
-        <span className="inline-flex min-h-6 items-center rounded-full border border-border/35 bg-bg-hover/70 px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.14em] text-muted-strong">
+        <span className="inline-flex min-h-6 items-center rounded-full border border-border/35 bg-bg-hover/70 px-2.5 py-1 text-2xs font-medium uppercase tracking-[0.14em] text-muted-strong">
           {run.viewerAttachment}
         </span>
       </div>
@@ -215,10 +215,10 @@ export function DefenseAgentsOperatorSurface({
 
       {showDashboard ? (
         <div className="rounded-[1.4rem] border border-border/35 bg-card/74 p-4 shadow-sm">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+          <div className="text-xs-tight font-semibold uppercase tracking-[0.18em] text-muted">
             Session Summary
           </div>
-          <p className="mt-2 text-[12px] leading-6 text-muted-strong">
+          <p className="mt-2 text-xs leading-6 text-muted-strong">
             {run.summary || run.health.message || "Run active."}
           </p>
           <div className="mt-3 grid gap-2 md:grid-cols-2">
@@ -240,7 +240,7 @@ export function DefenseAgentsOperatorSurface({
 
       {showDashboard ? (
         <div className="rounded-[1.4rem] border border-border/35 bg-card/74 p-4 shadow-sm">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+          <div className="text-xs-tight font-semibold uppercase tracking-[0.18em] text-muted">
             Active Scripts
           </div>
           <div className="mt-3 grid gap-2 md:grid-cols-2">
@@ -282,7 +282,7 @@ export function DefenseAgentsOperatorSurface({
 
       {showChat ? (
         <div className="rounded-[1.4rem] border border-border/35 bg-card/74 p-4 shadow-sm">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+          <div className="text-xs-tight font-semibold uppercase tracking-[0.18em] text-muted">
             Steering
           </div>
           <div className="mt-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
@@ -334,7 +334,7 @@ export function DefenseAgentsOperatorSurface({
 
       {showChat && recentActivity.length > 0 ? (
         <div className="rounded-[1.4rem] border border-border/35 bg-card/74 p-4 shadow-sm">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+          <div className="text-xs-tight font-semibold uppercase tracking-[0.18em] text-muted">
             Recent Behavior
           </div>
           <div className="mt-3 space-y-2">
@@ -354,13 +354,13 @@ export function DefenseAgentsOperatorSurface({
                   key={`${action}-${detail}-${ts}`}
                   className="rounded-xl border border-border/30 bg-bg/60 px-3 py-2"
                 >
-                  <div className="text-[11px] font-medium text-txt">
+                  <div className="text-xs-tight font-medium text-txt">
                     {action}
                   </div>
-                  <div className="mt-1 text-[11px] leading-5 text-muted-strong">
+                  <div className="mt-1 text-xs-tight leading-5 text-muted-strong">
                     {detail}
                   </div>
-                  <div className="mt-1 text-[10px] text-muted">{ts}</div>
+                  <div className="mt-1 text-2xs text-muted">{ts}</div>
                 </div>
               );
             })}
@@ -369,7 +369,7 @@ export function DefenseAgentsOperatorSurface({
       ) : null}
 
       {statusMessage ? (
-        <div className="rounded-2xl border border-border/35 bg-card/70 px-4 py-3 text-[11px] leading-5 text-muted-strong">
+        <div className="rounded-2xl border border-border/35 bg-card/70 px-4 py-3 text-xs-tight leading-5 text-muted-strong">
           {statusMessage}
         </div>
       ) : null}

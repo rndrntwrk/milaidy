@@ -10,7 +10,7 @@ function InlineMeta({
   label: React.ReactNode;
 }) {
   return (
-    <span className="inline-flex items-center gap-1.5 text-[10px] font-medium text-muted/85">
+    <span className="inline-flex items-center gap-1.5 text-2xs font-medium text-muted/85">
       <span
         className="h-1.5 w-1.5 rounded-full"
         style={color ? { backgroundColor: color } : undefined}
@@ -53,7 +53,7 @@ export function TrajectorySidebarItem({
     >
       <SidebarContent.ItemIcon
         active={active}
-        className="text-[11px] font-bold"
+        className="text-xs-tight font-bold"
       >
         {callCount}
       </SidebarContent.ItemIcon>

@@ -211,7 +211,7 @@ export function ApprovalQueue({
         <PagePanel.Toolbar className="justify-between">
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold text-txt">Pending</span>
-            <span className="inline-flex min-w-[20px] items-center justify-center rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-bold text-accent-fg">
+            <span className="inline-flex min-w-[20px] items-center justify-center rounded-full bg-accent px-1.5 py-0.5 text-2xs font-bold text-accent-fg">
               {items.length}
             </span>
           </div>
@@ -253,7 +253,7 @@ export function ApprovalQueue({
                   <div className="flex items-center gap-2 text-xs text-muted">
                     <Clock className="h-3 w-3" />
                     <span>{formatTime(item.requestedAt)}</span>
-                    <span className="rounded-full border border-border/30 bg-card/60 px-2 py-0.5 text-[10px] font-medium">
+                    <span className="rounded-full border border-border/30 bg-card/60 px-2 py-0.5 text-2xs font-medium">
                       {getChainName(tx.request?.chainId ?? 0)}
                     </span>
                   </div>
@@ -261,7 +261,7 @@ export function ApprovalQueue({
                   {/* Destination + amount */}
                   <div className="flex flex-wrap items-center gap-3">
                     <div>
-                      <span className="text-[10px] uppercase tracking-wider text-muted/60">
+                      <span className="text-2xs uppercase tracking-wider text-muted/60">
                         To
                       </span>
                       <button
@@ -277,7 +277,7 @@ export function ApprovalQueue({
                       </button>
                     </div>
                     <div>
-                      <span className="text-[10px] uppercase tracking-wider text-muted/60">
+                      <span className="text-2xs uppercase tracking-wider text-muted/60">
                         Amount
                       </span>
                       <p className="text-sm font-semibold text-txt">
@@ -292,7 +292,7 @@ export function ApprovalQueue({
                   {/* Policy reasons */}
                   {reasons.length > 0 && (
                     <div className="space-y-1">
-                      <span className="text-[10px] uppercase tracking-wider text-muted/60">
+                      <span className="text-2xs uppercase tracking-wider text-muted/60">
                         Policy reason
                       </span>
                       {reasons.map((reason) => (
@@ -340,7 +340,7 @@ export function ApprovalQueue({
               {rejectDialogTxId === tx.id && (
                 <div className="mt-3 flex items-end gap-2 border-t border-border/20 pt-3">
                   <div className="flex-1">
-                    <label className="block text-[10px] font-semibold uppercase tracking-wider text-muted/60 mb-1">
+                    <label className="block text-2xs font-semibold uppercase tracking-wider text-muted/60 mb-1">
                       Rejection reason (optional)
                       <input
                         type="text"

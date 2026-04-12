@@ -68,7 +68,7 @@ const modalInputClassName =
 const modalTextareaClassName =
   "min-h-[88px] rounded-xl border-border bg-bg-hover px-4 py-3 text-sm text-txt placeholder:text-muted/70 focus-visible:ring-accent/30";
 
-const subtleMonoDescriptionClassName = "font-mono text-[11px] text-muted";
+const subtleMonoDescriptionClassName = "font-mono text-xs-tight text-muted";
 
 function environmentOptionLabel(
   t: ReturnType<typeof useApp>["t"],
@@ -648,7 +648,7 @@ export function BugReportModal() {
               {showLogs && (
                 <div className="space-y-3">
                   {desktopRuntime ? (
-                    <div className="flex flex-wrap gap-4 text-[11px] text-muted">
+                    <div className="flex flex-wrap gap-4 text-xs-tight text-muted">
                       <label className="inline-flex items-center gap-2">
                         <input
                           type="checkbox"

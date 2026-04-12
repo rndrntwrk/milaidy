@@ -213,7 +213,7 @@ export function HyperscapeOperatorSurface({
       data-testid={surfaceTestId(variant)}
     >
       <div className="flex flex-wrap items-center gap-2">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+        <div className="text-xs-tight font-semibold uppercase tracking-[0.18em] text-muted">
           {surfaceTitle}
         </div>
         <SurfaceBadge tone={toneForStatusText(run.status)}>
@@ -225,7 +225,7 @@ export function HyperscapeOperatorSurface({
         <SurfaceBadge tone={toneForHealthState(run.health.state)}>
           {run.health.state}
         </SurfaceBadge>
-        <span className="ml-auto text-[10px] uppercase tracking-[0.18em] text-muted">
+        <span className="ml-auto text-2xs uppercase tracking-[0.18em] text-muted">
           {matchingRuns.length} active run{matchingRuns.length === 1 ? "" : "s"}
         </span>
       </div>
@@ -317,20 +317,20 @@ export function HyperscapeOperatorSurface({
                     key={entry.id}
                     className="rounded-xl border border-border/30 bg-bg/60 px-3 py-2"
                   >
-                    <div className="flex items-center gap-2 text-[11px] font-medium text-txt">
+                    <div className="flex items-center gap-2 text-xs-tight font-medium text-txt">
                       <span>{entry.label}</span>
-                      <span className="ml-auto text-[10px] uppercase tracking-[0.18em] text-muted">
+                      <span className="ml-auto text-2xs uppercase tracking-[0.18em] text-muted">
                         {formatDetailTimestamp(entry.timestamp)}
                       </span>
                     </div>
-                    <div className="mt-1 text-[11px] leading-5 text-muted-strong">
+                    <div className="mt-1 text-xs-tight leading-5 text-muted-strong">
                       {entry.detail}
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="rounded-xl border border-border/30 bg-bg/60 px-3 py-2 text-[11px] italic text-muted">
+              <div className="rounded-xl border border-border/30 bg-bg/60 px-3 py-2 text-xs-tight italic text-muted">
                 No host-side activity has been captured yet.
               </div>
             )}
@@ -414,7 +414,7 @@ export function HyperscapeOperatorSurface({
       ) : null}
 
       {statusMessage ? (
-        <div className="rounded-2xl border border-border/35 bg-card/70 px-4 py-3 text-[11px] leading-5 text-muted-strong">
+        <div className="rounded-2xl border border-border/35 bg-card/70 px-4 py-3 text-xs-tight leading-5 text-muted-strong">
           {statusMessage}
         </div>
       ) : null}

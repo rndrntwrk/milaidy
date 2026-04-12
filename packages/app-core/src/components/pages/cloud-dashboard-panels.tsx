@@ -40,7 +40,7 @@ export function AgentStatusBadge({ status }: { status: string }) {
   const badge = STATUS_BADGE[status] ?? STATUS_BADGE.stopped;
   return (
     <span
-      className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border ${badge?.className}`}
+      className={`text-2xs px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border ${badge?.className}`}
     >
       {t(badge?.i18nKey)}
     </span>
@@ -112,7 +112,7 @@ export function CloudAgentCard({
         <AgentStatusBadge status={agent.status} />
       </div>
 
-      <div className="space-y-1 text-[11px] text-muted">
+      <div className="space-y-1 text-xs-tight text-muted">
         <div className="flex items-center justify-between gap-3">
           <span>{t("elizaclouddashboard.node")}</span>
           <span className="truncate font-mono text-txt-strong/70">
@@ -342,7 +342,7 @@ function DiscordSettingsPanel({
         className="flex w-full items-center justify-between px-3 py-2 text-left"
         onClick={() => setExpanded((v) => !v)}
       >
-        <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-muted">
+        <span className="flex items-center gap-1.5 text-2xs font-bold uppercase tracking-wider text-muted">
           <Settings2 className="h-3 w-3" />
           {t("elizaclouddashboard.DiscordSettings", {
             defaultValue: "Discord Settings",
@@ -356,14 +356,14 @@ function DiscordSettingsPanel({
       {expanded && (
         <div className="space-y-3 border-t border-border/25 px-3 pb-3 pt-3">
           {loadError ? (
-            <p className="text-[11px] text-muted">
+            <p className="text-xs-tight text-muted">
               {t("elizaclouddashboard.DiscordSettingsLoadError", {
                 defaultValue:
                   "Could not load Discord settings. The cloud endpoint may not be available yet.",
               })}
             </p>
           ) : !config ? (
-            <div className="flex items-center gap-2 text-[11px] text-muted">
+            <div className="flex items-center gap-2 text-xs-tight text-muted">
               <Loader2 className="h-3 w-3 animate-spin" />
               {t("common.loading", { defaultValue: "Loading..." })}
             </div>
@@ -371,7 +371,7 @@ function DiscordSettingsPanel({
             <>
               {/* ── DM Policy ─────────────────────────────── */}
               <div className="rounded-lg border border-border/30 bg-bg/55 p-3">
-                <span className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-muted">
+                <span className="mb-2 block text-2xs font-bold uppercase tracking-wider text-muted">
                   {t("elizaclouddashboard.DiscordDmPolicy", {
                     defaultValue: "DM Policy",
                   })}
@@ -430,7 +430,7 @@ function DiscordSettingsPanel({
 
               {/* ── Guild Settings ────────────────────────── */}
               <div className="rounded-lg border border-border/30 bg-bg/55 p-3">
-                <span className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-muted">
+                <span className="mb-2 block text-2xs font-bold uppercase tracking-wider text-muted">
                   {t("elizaclouddashboard.DiscordGuildSettings", {
                     defaultValue: "Guild Settings",
                   })}
@@ -482,7 +482,7 @@ function DiscordSettingsPanel({
 
               {/* ── Action Toggles ────────────────────────── */}
               <div className="rounded-lg border border-border/30 bg-bg/55 p-3">
-                <span className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-muted">
+                <span className="mb-2 block text-2xs font-bold uppercase tracking-wider text-muted">
                   {t("elizaclouddashboard.DiscordActions", {
                     defaultValue: "Action Toggles",
                   })}
@@ -493,7 +493,7 @@ function DiscordSettingsPanel({
                       key={key}
                       className="flex items-center justify-between gap-2"
                     >
-                      <span className="text-[11px] text-txt-strong">
+                      <span className="text-xs-tight text-txt-strong">
                         {label}
                       </span>
                       <Switch
@@ -508,14 +508,14 @@ function DiscordSettingsPanel({
 
               {/* ── Message Formatting ────────────────────── */}
               <div className="rounded-lg border border-border/30 bg-bg/55 p-3">
-                <span className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-muted">
+                <span className="mb-2 block text-2xs font-bold uppercase tracking-wider text-muted">
                   {t("elizaclouddashboard.DiscordFormatting", {
                     defaultValue: "Message Formatting",
                   })}
                 </span>
                 <div className="grid gap-2 sm:grid-cols-2">
                   <div>
-                    <span className="mb-1 block text-[11px] text-muted">
+                    <span className="mb-1 block text-xs-tight text-muted">
                       {t("elizaclouddashboard.DiscordMaxLines", {
                         defaultValue: "Max lines per message",
                       })}
@@ -535,7 +535,7 @@ function DiscordSettingsPanel({
                     />
                   </div>
                   <div>
-                    <span className="mb-1 block text-[11px] text-muted">
+                    <span className="mb-1 block text-xs-tight text-muted">
                       {t("elizaclouddashboard.DiscordChunkLimit", {
                         defaultValue: "Text chunk limit",
                       })}
@@ -559,7 +559,7 @@ function DiscordSettingsPanel({
 
               {/* ── Intents ───────────────────────────────── */}
               <div className="rounded-lg border border-border/30 bg-bg/55 p-3">
-                <span className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-muted">
+                <span className="mb-2 block text-2xs font-bold uppercase tracking-wider text-muted">
                   {t("elizaclouddashboard.DiscordIntents", {
                     defaultValue: "Privileged Intents",
                   })}
@@ -589,7 +589,7 @@ function DiscordSettingsPanel({
                       className="scale-75"
                     />
                   </div>
-                  <p className="text-[10px] leading-relaxed text-warn">
+                  <p className="text-2xs leading-relaxed text-warn">
                     {t("elizaclouddashboard.DiscordIntentsWarning", {
                       defaultValue:
                         "Privileged intents require opt-in via the Discord Developer Portal. Enable them there first or the bot will fail to connect.",
@@ -600,7 +600,7 @@ function DiscordSettingsPanel({
 
               {/* ── Advanced ──────────────────────────────── */}
               <div className="rounded-lg border border-border/30 bg-bg/55 p-3">
-                <span className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-muted">
+                <span className="mb-2 block text-2xs font-bold uppercase tracking-wider text-muted">
                   {t("elizaclouddashboard.DiscordAdvanced", {
                     defaultValue: "Advanced",
                   })}
@@ -908,7 +908,7 @@ export function AgentDetailSidebar({
         <div className="mt-4 space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="rounded-xl border border-border/40 bg-bg/40 p-3">
-              <span className="text-[10px] text-muted uppercase font-bold tracking-wider mb-1 block">
+              <span className="text-2xs text-muted uppercase font-bold tracking-wider mb-1 block">
                 {t("elizaclouddashboard.Status", {
                   defaultValue: "Status",
                 })}
@@ -916,7 +916,7 @@ export function AgentDetailSidebar({
               <AgentStatusBadge status={statusDetail?.status || agent.status} />
             </div>
             <div className="rounded-xl border border-border/40 bg-bg/40 p-3">
-              <span className="text-[10px] text-muted uppercase font-bold tracking-wider mb-1 block">
+              <span className="text-2xs text-muted uppercase font-bold tracking-wider mb-1 block">
                 {t("elizaclouddashboard.DatabaseStatus", {
                   defaultValue: "DB Status",
                 })}
@@ -926,7 +926,7 @@ export function AgentDetailSidebar({
               </span>
             </div>
             <div className="rounded-xl border border-border/40 bg-bg/40 p-3 sm:col-span-2">
-              <span className="text-[10px] text-muted uppercase font-bold tracking-wider mb-1 block">
+              <span className="text-2xs text-muted uppercase font-bold tracking-wider mb-1 block">
                 {t("elizaclouddashboard.Heartbeat", {
                   defaultValue: "Heartbeat",
                 })}
@@ -945,14 +945,14 @@ export function AgentDetailSidebar({
 
           <div className="rounded-xl border border-border/40 bg-bg/80 p-3">
             <div className="mb-3 flex items-center justify-between gap-3">
-              <span className="text-[10px] text-muted uppercase font-bold tracking-wider flex items-center gap-2">
+              <span className="text-2xs text-muted uppercase font-bold tracking-wider flex items-center gap-2">
                 <MessageCircle className="w-3 h-3" />
                 {t("elizaclouddashboard.Discord", {
                   defaultValue: "Discord",
                 })}
               </span>
               <span
-                className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+                className={`rounded-full border px-2 py-0.5 text-2xs font-bold uppercase tracking-wider ${
                   managedDiscord?.connected
                     ? "border-ok/30 bg-ok/10 text-ok"
                     : "border-border/50 bg-bg/50 text-muted"
@@ -971,7 +971,7 @@ export function AgentDetailSidebar({
             <div className="space-y-3">
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="rounded-lg border border-border/30 bg-bg/55 p-3">
-                  <span className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-muted">
+                  <span className="mb-1 block text-2xs font-bold uppercase tracking-wider text-muted">
                     {t("elizaclouddashboard.Server", {
                       defaultValue: "Server",
                     })}
@@ -984,7 +984,7 @@ export function AgentDetailSidebar({
                   </span>
                 </div>
                 <div className="rounded-lg border border-border/30 bg-bg/55 p-3">
-                  <span className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-muted">
+                  <span className="mb-1 block text-2xs font-bold uppercase tracking-wider text-muted">
                     {t("elizaclouddashboard.AdminLock", {
                       defaultValue: "Admin lock",
                     })}
@@ -1014,7 +1014,7 @@ export function AgentDetailSidebar({
               </div>
 
               <div className="rounded-lg border border-border/30 bg-bg/55 p-3">
-                <span className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-muted">
+                <span className="mb-2 block text-2xs font-bold uppercase tracking-wider text-muted">
                   {t("elizaclouddashboard.BotNickname", {
                     defaultValue: "Bot nickname",
                   })}
@@ -1026,7 +1026,7 @@ export function AgentDetailSidebar({
                   className="h-9 rounded-lg bg-bg/80 text-sm"
                   placeholder={agent.agent_name || "Milady"}
                 />
-                <p className="mt-2 text-[11px] leading-relaxed text-muted">
+                <p className="mt-2 text-xs-tight leading-relaxed text-muted">
                   {managedDiscord?.configured
                     ? t("elizaclouddashboard.DiscordAdminLockCopy", {
                         defaultValue:
@@ -1038,7 +1038,7 @@ export function AgentDetailSidebar({
                       })}
                 </p>
                 {managedDiscord?.applicationId ? (
-                  <p className="mt-1 text-[11px] text-muted">
+                  <p className="mt-1 text-xs-tight text-muted">
                     {t("elizaclouddashboard.SharedAppId", {
                       defaultValue: "Shared app ID: {{id}}",
                       id: managedDiscord.applicationId,
@@ -1085,7 +1085,7 @@ export function AgentDetailSidebar({
               </div>
 
               {managedDiscord?.connectedAt ? (
-                <div className="flex items-start gap-2 rounded-lg border border-border/25 bg-bg/40 px-3 py-2 text-[11px] text-muted">
+                <div className="flex items-start gap-2 rounded-lg border border-border/25 bg-bg/40 px-3 py-2 text-xs-tight text-muted">
                   <ShieldAlert className="mt-0.5 h-3 w-3 shrink-0" />
                   <span>
                     {t("elizaclouddashboard.DiscordConnectedAt", {
@@ -1110,14 +1110,14 @@ export function AgentDetailSidebar({
 
           <div className="rounded-xl border border-border/40 bg-bg/80 p-3">
             <div className="mb-3 flex items-center justify-between gap-3">
-              <span className="text-[10px] text-muted uppercase font-bold tracking-wider flex items-center gap-2">
+              <span className="text-2xs text-muted uppercase font-bold tracking-wider flex items-center gap-2">
                 <Github className="w-3 h-3" />
                 {t("elizaclouddashboard.GitHub", {
                   defaultValue: "GitHub",
                 })}
               </span>
               <span
-                className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+                className={`rounded-full border px-2 py-0.5 text-2xs font-bold uppercase tracking-wider ${
                   managedGithub?.connected
                     ? "border-ok/30 bg-ok/10 text-ok"
                     : "border-border/50 bg-bg/50 text-muted"
@@ -1136,7 +1136,7 @@ export function AgentDetailSidebar({
             <div className="space-y-3">
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="rounded-lg border border-border/30 bg-bg/55 p-3">
-                  <span className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-muted">
+                  <span className="mb-1 block text-2xs font-bold uppercase tracking-wider text-muted">
                     {t("elizaclouddashboard.GitHubAccount", {
                       defaultValue: "Account",
                     })}
@@ -1150,7 +1150,7 @@ export function AgentDetailSidebar({
                   </span>
                 </div>
                 <div className="rounded-lg border border-border/30 bg-bg/55 p-3">
-                  <span className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-muted">
+                  <span className="mb-1 block text-2xs font-bold uppercase tracking-wider text-muted">
                     {t("elizaclouddashboard.GitHubScopes", {
                       defaultValue: "Scopes",
                     })}
@@ -1163,7 +1163,7 @@ export function AgentDetailSidebar({
                 </div>
               </div>
 
-              <p className="text-[11px] leading-relaxed text-muted">
+              <p className="text-xs-tight leading-relaxed text-muted">
                 {managedGithub?.configured
                   ? t("elizaclouddashboard.GitHubOAuthCopy", {
                       defaultValue:
@@ -1213,7 +1213,7 @@ export function AgentDetailSidebar({
               </div>
 
               {managedGithub?.connectedAt ? (
-                <div className="flex items-start gap-2 rounded-lg border border-border/25 bg-bg/40 px-3 py-2 text-[11px] text-muted">
+                <div className="flex items-start gap-2 rounded-lg border border-border/25 bg-bg/40 px-3 py-2 text-xs-tight text-muted">
                   <ShieldAlert className="mt-0.5 h-3 w-3 shrink-0" />
                   <span>
                     {t("elizaclouddashboard.GitHubConnectedAt", {
@@ -1229,14 +1229,14 @@ export function AgentDetailSidebar({
           </div>
 
           <div className="rounded-xl border border-border/40 bg-bg/80 p-3">
-            <span className="text-[10px] text-muted uppercase font-bold tracking-wider mb-2 flex items-center gap-2">
+            <span className="text-2xs text-muted uppercase font-bold tracking-wider mb-2 flex items-center gap-2">
               <Terminal className="w-3 h-3" />{" "}
               {t("elizaclouddashboard.LiveLogs", {
                 defaultValue: "Live Logs",
               })}
             </span>
             <div className="custom-scrollbar h-64 overflow-y-auto rounded-lg border border-border/30 bg-bg/65 p-3">
-              <pre className="text-[10px] font-mono text-txt-strong/85 whitespace-pre-wrap break-all">
+              <pre className="text-2xs font-mono text-txt-strong/85 whitespace-pre-wrap break-all">
                 {logs ||
                   t("elizaclouddashboard.NoLogsAvailableDeploying", {
                     defaultValue: "No logs available. Deploying...",

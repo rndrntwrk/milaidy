@@ -107,6 +107,7 @@ declare module "@elizaos/core/roles" {
   };
   export type ConnectorAdminMatch = {
     connector: string;
+    matchedField: string;
     matchedValue: string;
   };
   export type ServerOwnershipState = RolesWorldMetadata | null;

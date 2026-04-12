@@ -57,7 +57,7 @@ export const SectionCard = React.forwardRef<HTMLDivElement, SectionCardProps>(
                   {collapsible && (
                     <span
                       className={cn(
-                        "mr-1.5 inline-block text-[10px] text-muted transition-transform",
+                        "mr-1.5 inline-block text-2xs text-muted transition-transform",
                         !collapsed && "rotate-90",
                       )}
                     >
@@ -68,7 +68,7 @@ export const SectionCard = React.forwardRef<HTMLDivElement, SectionCardProps>(
                 </Button>
               )}
               {description && (
-                <span className="text-[11px] text-muted">{description}</span>
+                <span className="text-xs-tight text-muted">{description}</span>
               )}
             </div>
             {actions && (

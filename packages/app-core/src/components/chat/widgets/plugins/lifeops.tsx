@@ -130,7 +130,7 @@ function SectionHeading({
   return (
     <div className="flex items-center gap-2 px-0.5">
       <span className="text-muted">{icon}</span>
-      <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">
+      <span className="text-xs-tight font-semibold uppercase tracking-[0.08em] text-muted">
         {title}
       </span>
       {typeof count === "number" ? (
@@ -163,7 +163,7 @@ function CalendarRow({
         ) : null}
       </div>
       {event.location.trim().length > 0 ? (
-        <div className="mt-1 truncate text-[11px] text-muted">
+        <div className="mt-1 truncate text-xs-tight text-muted">
           {event.location}
         </div>
       ) : null}
@@ -185,14 +185,16 @@ function GmailRow({ message }: { message: LifeOpsGmailMessageSummary }) {
           </Badge>
         ) : null}
       </div>
-      <div className="mt-1 truncate text-[11px] text-muted">{message.from}</div>
+      <div className="mt-1 truncate text-xs-tight text-muted">
+        {message.from}
+      </div>
       {message.snippet.trim().length > 0 ? (
-        <div className="mt-1 line-clamp-2 text-[11px] leading-5 text-muted">
+        <div className="mt-1 line-clamp-2 text-xs-tight leading-5 text-muted">
           {message.snippet}
         </div>
       ) : null}
       {receivedLabel ? (
-        <div className="mt-2 text-[10px] uppercase tracking-[0.08em] text-muted/80">
+        <div className="mt-2 text-2xs uppercase tracking-[0.08em] text-muted/80">
           {receivedLabel}
         </div>
       ) : null}
@@ -229,7 +231,7 @@ function GoogleAccountCard({
         </Badge>
       </div>
       {identityLabel.secondary ? (
-        <div className="mt-1 truncate text-[11px] text-muted">
+        <div className="mt-1 truncate text-xs-tight text-muted">
           {identityLabel.secondary}
         </div>
       ) : null}
@@ -392,7 +394,7 @@ export function GoogleSidebarWidget(_props: ChatSidebarWidgetProps) {
               count={calendarEvents.length}
             />
             {connectorError ? null : calendarEvents.length === 0 ? (
-              <div className="px-0.5 text-[11px] text-muted">
+              <div className="px-0.5 text-xs-tight text-muted">
                 No upcoming events
               </div>
             ) : (
@@ -420,7 +422,7 @@ export function GoogleSidebarWidget(_props: ChatSidebarWidgetProps) {
               }
             />
             {connectorError ? null : gmailMessages.length === 0 ? (
-              <div className="px-0.5 text-[11px] text-muted">
+              <div className="px-0.5 text-xs-tight text-muted">
                 No priority mail
               </div>
             ) : (
@@ -434,7 +436,7 @@ export function GoogleSidebarWidget(_props: ChatSidebarWidgetProps) {
         ) : null}
 
         {connectorError ? (
-          <div className="text-[11px] text-danger">{connectorError}</div>
+          <div className="text-xs-tight text-danger">{connectorError}</div>
         ) : null}
       </div>
     </WidgetSection>

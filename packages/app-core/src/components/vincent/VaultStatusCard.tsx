@@ -35,7 +35,7 @@ function CopyableAddress({
   return (
     <div className="flex items-center justify-between gap-3 rounded-lg border border-border/50 bg-bg/50 px-3 py-2.5">
       <div className="min-w-0 flex-1">
-        <div className="text-[11px] font-medium text-muted">{label}</div>
+        <div className="text-xs-tight font-medium text-muted">{label}</div>
         <div className="mt-0.5 truncate font-mono text-xs text-txt">
           {address}
         </div>
@@ -56,7 +56,7 @@ function CopyableAddress({
 function BalancePill({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col items-start gap-0.5 rounded-xl border border-border/30 bg-card/60 px-3 py-2 min-w-[100px]">
-      <span className="text-[10px] font-semibold uppercase tracking-wider text-muted/70">
+      <span className="text-2xs font-semibold uppercase tracking-wider text-muted/70">
         {label}
       </span>
       <span className="text-sm font-semibold tabular-nums text-txt">
@@ -155,9 +155,7 @@ export function VaultStatusCard({
       <div className="rounded-[28px] border border-border/18 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_92%,transparent),color-mix(in_srgb,var(--bg)_98%,transparent))] px-5 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
         <div className="flex items-center gap-2">
           <Wallet className="h-4 w-4 text-muted/50" />
-          <span className="text-sm text-muted">
-            Wallet data loading...
-          </span>
+          <span className="text-sm text-muted">Wallet data loading...</span>
         </div>
       </div>
     );
@@ -171,9 +169,7 @@ export function VaultStatusCard({
           <Wallet className="h-4 w-4 text-accent" />
           <span className="text-sm font-semibold text-txt">Agent Wallet</span>
         </div>
-        {totalUsd && (
-          <StatusBadge label={totalUsd} tone="success" withDot />
-        )}
+        {totalUsd && <StatusBadge label={totalUsd} tone="success" withDot />}
       </div>
 
       {/* Addresses */}
@@ -213,9 +209,7 @@ export function VaultStatusCard({
 
       {/* No balances message */}
       {walletBalances && balancePills.length === 0 && (
-        <p className="text-xs text-muted">
-          No token balances above $0.01.
-        </p>
+        <p className="text-xs text-muted">No token balances above $0.01.</p>
       )}
     </div>
   );

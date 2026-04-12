@@ -103,18 +103,18 @@ export function AgentTabsSection({
                 {installState === "installed" &&
                   llmProvider === "subscription" &&
                   preflightByAgent[agent]?.auth?.status === "authenticated" && (
-                    <span className="text-[10px] font-medium text-green-500 opacity-90">
+                    <span className="text-2xs font-medium text-green-500 opacity-90">
                       ✓
                     </span>
                   )}
                 {installState === "installed" &&
                   llmProvider !== "subscription" && (
-                    <span className="text-[10px] font-medium opacity-80">
+                    <span className="text-2xs font-medium opacity-80">
                       {t("codingagentsettingssection.Installed")}
                     </span>
                   )}
                 {installState === "unknown" && (
-                  <span className="text-[10px] font-medium opacity-70">
+                  <span className="text-2xs font-medium opacity-70">
                     {t("codingagentsettingssection.Unknown")}
                   </span>
                 )}
@@ -159,7 +159,7 @@ export function AgentTabsSection({
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-6 px-2 text-[10px]"
+                className="h-6 px-2 text-2xs"
                 disabled={authInProgress !== null}
                 onClick={() => onAuth(authResult.agent)}
               >

@@ -280,7 +280,7 @@ export function ChatConversationItem({
             variant={variant}
           />
           {!isGameModal ? (
-            <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px] font-medium leading-none text-muted/72 [font-variant-numeric:tabular-nums]">
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs-tight font-medium leading-none text-muted/72 [font-variant-numeric:tabular-nums]">
               {conversation.updatedAtLabel ? (
                 <span>{conversation.updatedAtLabel}</span>
               ) : null}
@@ -343,13 +343,13 @@ export function ChatConversationItem({
 
       {isConfirmingDelete ? (
         <div className="flex flex-shrink-0 items-center gap-1.5 rounded-[12px] border border-danger/22 bg-[linear-gradient(180deg,rgba(239,68,68,0.1),rgba(239,68,68,0.04))] px-2 py-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_10px_16px_-16px_rgba(127,29,29,0.18)]">
-          <span className="text-[10px] font-medium text-danger">
+          <span className="text-2xs font-medium text-danger">
             {labels.deleteConfirm ?? "Delete?"}
           </span>
           <Button
             variant="destructive"
             size="sm"
-            className="h-7 rounded-md px-2 py-0.5 text-[10px] shadow-sm disabled:opacity-50"
+            className="h-7 rounded-md px-2 py-0.5 text-2xs shadow-sm disabled:opacity-50"
             onClick={() => void onConfirmDelete?.()}
             disabled={deleting}
           >
@@ -358,7 +358,7 @@ export function ChatConversationItem({
           <Button
             variant="outline"
             size="sm"
-            className="h-7 rounded-md px-2 py-0.5 text-[10px] text-muted-strong shadow-sm hover:border-accent/40 hover:text-txt disabled:opacity-50"
+            className="h-7 rounded-md px-2 py-0.5 text-2xs text-muted-strong shadow-sm hover:border-accent/40 hover:text-txt disabled:opacity-50"
             onClick={onCancelDelete}
             disabled={deleting}
           >

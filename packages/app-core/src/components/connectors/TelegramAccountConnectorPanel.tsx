@@ -201,7 +201,7 @@ export function TelegramAccountConnectorPanel() {
         ) : null}
 
         {connectedLabel ? (
-          <div className="rounded-lg border border-border/40 bg-bg/60 px-3 py-2 text-[11px] text-muted-strong">
+          <div className="rounded-lg border border-border/40 bg-bg/60 px-3 py-2 text-xs-tight text-muted-strong">
             {status?.serviceConnected
               ? `Connected as ${connectedLabel}.`
               : `Authenticated as ${connectedLabel}.`}
@@ -220,12 +220,12 @@ export function TelegramAccountConnectorPanel() {
                 }
               }}
               placeholder="+15551234567"
-              className="h-8 w-full rounded-lg border border-border/50 bg-bg/70 px-3 text-[11px] text-txt placeholder:text-muted/50 focus:border-accent focus:outline-none"
+              className="h-8 w-full rounded-lg border border-border/50 bg-bg/70 px-3 text-xs-tight text-txt placeholder:text-muted/50 focus:border-accent focus:outline-none"
             />
             <Button
               variant="default"
               size="sm"
-              className="h-8 rounded-xl px-4 text-[11px] font-semibold"
+              className="h-8 rounded-xl px-4 text-xs-tight font-semibold"
               onClick={() => {
                 void startAuth();
               }}
@@ -252,7 +252,7 @@ export function TelegramAccountConnectorPanel() {
                   }
                 }}
                 placeholder={prompt.placeholder}
-                className="h-8 flex-1 rounded-lg border border-border/50 bg-bg/70 px-3 text-[11px] text-txt placeholder:text-muted/50 focus:border-accent focus:outline-none"
+                className="h-8 flex-1 rounded-lg border border-border/50 bg-bg/70 px-3 text-xs-tight text-txt placeholder:text-muted/50 focus:border-accent focus:outline-none"
                 onKeyDown={(event) => {
                   if (event.key === "Enter") {
                     void submitAuthInput();
@@ -262,7 +262,7 @@ export function TelegramAccountConnectorPanel() {
               <Button
                 variant="default"
                 size="sm"
-                className="h-8 rounded-xl px-4 text-[11px] font-semibold"
+                className="h-8 rounded-xl px-4 text-xs-tight font-semibold"
                 onClick={() => {
                   void submitAuthInput();
                 }}
@@ -277,7 +277,7 @@ export function TelegramAccountConnectorPanel() {
         ) : null}
 
         {status?.restartRequired ? (
-          <div className="space-y-2 rounded-lg border border-border/40 bg-bg/60 px-3 py-2 text-[11px] text-muted-strong">
+          <div className="space-y-2 rounded-lg border border-border/40 bg-bg/60 px-3 py-2 text-xs-tight text-muted-strong">
             <div>
               {t("pluginsview.TelegramAccountRestartHint", {
                 defaultValue:
@@ -287,7 +287,7 @@ export function TelegramAccountConnectorPanel() {
             <Button
               variant="outline"
               size="sm"
-              className="h-8 rounded-xl px-4 text-[11px] font-semibold"
+              className="h-8 rounded-xl px-4 text-xs-tight font-semibold"
               onClick={() => {
                 void restartAgent();
               }}
@@ -304,7 +304,7 @@ export function TelegramAccountConnectorPanel() {
           <Button
             variant="outline"
             size="sm"
-            className="h-8 rounded-xl px-4 text-[11px] font-semibold"
+            className="h-8 rounded-xl px-4 text-xs-tight font-semibold"
             onClick={() => {
               void disconnect();
             }}

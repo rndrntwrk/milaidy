@@ -125,6 +125,25 @@ function extractTradingBalance(value: unknown): number {
   return typeof balance === "number" ? balance : 0;
 }
 
+function extractWallet(value: unknown): BabylonWallet | null {
+  const data = asRecord(value);
+  if (!data) return null;
+
+  const balance = asFiniteNumber(data.balance);
+  const transactions = Array.isArray(data.transactions)
+    ? (data.transactions as BabylonWallet["transactions"])
+    : [];
+
+  if (balance == null && !Array.isArray(data.transactions)) {
+    return null;
+  }
+
+  return {
+    balance: balance ?? 0,
+    transactions,
+  };
+}
+
 function asFiniteNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
@@ -272,7 +291,7 @@ export function BabylonOperatorSurface({
         extractTeamConversations(conversationsRaw).conversations,
       );
       setAgentChatMessages(extractChatMessages(chatRaw));
-      setWallet(walletResponse);
+      setWallet(extractWallet(walletResponse));
       setTradingBalance(extractTradingBalance(tradingBalanceResponse));
       setStatusMessage(
         status.agentStatus
@@ -390,7 +409,7 @@ export function BabylonOperatorSurface({
       }
     >
       <div className="flex flex-wrap items-center gap-2">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+        <div className="text-xs-tight font-semibold uppercase tracking-[0.18em] text-muted">
           {surfaceTitle}
         </div>
         <SurfaceBadge tone={toneForStatusText(run.status)}>
@@ -402,7 +421,7 @@ export function BabylonOperatorSurface({
         <SurfaceBadge tone={toneForHealthState(run.health.state)}>
           {run.health.state}
         </SurfaceBadge>
-        <span className="ml-auto text-[10px] uppercase tracking-[0.18em] text-muted">
+        <span className="ml-auto text-2xs uppercase tracking-[0.18em] text-muted">
           {matchingRuns.length} active run{matchingRuns.length === 1 ? "" : "s"}
         </span>
       </div>
@@ -530,7 +549,7 @@ export function BabylonOperatorSurface({
                 key={message.id}
                 className="rounded-xl border border-border/30 bg-bg/60 px-3 py-2"
               >
-                <div className="flex items-center gap-2 text-[10px] text-muted">
+                <div className="flex items-center gap-2 text-2xs text-muted">
                   <span className="uppercase">
                     {message.senderName ?? message.senderId}
                   </span>
@@ -538,13 +557,13 @@ export function BabylonOperatorSurface({
                     {formatDetailTimestamp(message.createdAt)}
                   </span>
                 </div>
-                <div className="mt-1 whitespace-pre-wrap text-[11px] leading-5 text-txt">
+                <div className="mt-1 whitespace-pre-wrap text-xs-tight leading-5 text-txt">
                   {message.content}
                 </div>
               </div>
             ))}
             {agentChatMessages.length === 0 ? (
-              <div className="rounded-xl border border-border/30 bg-bg/60 px-3 py-2 text-[11px] italic text-muted">
+              <div className="rounded-xl border border-border/30 bg-bg/60 px-3 py-2 text-xs-tight italic text-muted">
                 No agent chat history yet.
               </div>
             ) : null}
@@ -633,11 +652,11 @@ export function BabylonOperatorSurface({
       ) : null}
 
       {statusMessage ? (
-        <div className="rounded-2xl border border-border/35 bg-card/70 px-4 py-3 text-[11px] leading-5 text-muted-strong">
+        <div className="rounded-2xl border border-border/35 bg-card/70 px-4 py-3 text-xs-tight leading-5 text-muted-strong">
           {statusMessage}
         </div>
       ) : null}
-      <div className="text-[10px] uppercase tracking-[0.18em] text-muted">
+      <div className="text-2xs uppercase tracking-[0.18em] text-muted">
         {loading ? "Refreshing Babylon surface..." : "Babylon surface ready."}
       </div>
     </section>

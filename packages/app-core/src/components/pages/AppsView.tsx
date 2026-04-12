@@ -127,7 +127,8 @@ export function AppsView() {
       console.warn("[AppsView] Failed to list app runs:", err);
     });
     try {
-      const serverAppsResult = await client.listApps()
+      const serverAppsResult = await client
+        .listApps()
         .then((apps) => ({
           status: "fulfilled" as const,
           value: apps,
@@ -139,7 +140,10 @@ export function AppsView() {
       const serverApps =
         serverAppsResult.status === "fulfilled" ? serverAppsResult.value : [];
       if (serverAppsResult.status === "rejected") {
-        console.warn("[AppsView] Failed to list apps:", serverAppsResult.reason);
+        console.warn(
+          "[AppsView] Failed to list apps:",
+          serverAppsResult.reason,
+        );
       }
       const internalToolApps = getInternalToolApps();
       // Inject registered overlay apps (e.g. companion) if not already from server
@@ -535,7 +539,7 @@ export function AppsView() {
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            className={`rounded-full border px-3 py-1.5 text-[11px] font-medium transition-colors ${
+            className={`rounded-full border px-3 py-1.5 text-xs-tight font-medium transition-colors ${
               appsSubTab === "browse"
                 ? "border-accent/35 bg-accent/10 text-accent"
                 : "border-border/35 bg-card/72 text-muted-strong hover:border-accent/20 hover:text-txt"
@@ -549,7 +553,7 @@ export function AppsView() {
           </button>
           <button
             type="button"
-            className={`rounded-full border px-3 py-1.5 text-[11px] font-medium transition-colors ${
+            className={`rounded-full border px-3 py-1.5 text-xs-tight font-medium transition-colors ${
               appsSubTab === "running"
                 ? "border-accent/35 bg-accent/10 text-accent"
                 : "border-border/35 bg-card/72 text-muted-strong hover:border-accent/20 hover:text-txt"
@@ -561,7 +565,7 @@ export function AppsView() {
           {hasActiveRun ? (
             <button
               type="button"
-              className="rounded-full border border-ok/35 bg-ok/10 px-3 py-1.5 text-[11px] font-medium text-ok transition-colors hover:bg-ok/15"
+              className="rounded-full border border-ok/35 bg-ok/10 px-3 py-1.5 text-xs-tight font-medium text-ok transition-colors hover:bg-ok/15"
               onClick={handleOpenCurrentGame}
             >
               {hasCurrentGame ? "Live viewer" : "Active run"}

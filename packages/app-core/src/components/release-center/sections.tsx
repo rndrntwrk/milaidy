@@ -455,7 +455,7 @@ export function SessionControlsSection({
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <div className="text-xs font-semibold text-txt">{label}</div>
-                  <div className="mt-1 text-[11px] text-muted">
+                  <div className="mt-1 text-xs-tight text-muted">
                     {partitionDescription(partition, t)}
                   </div>
                 </div>
@@ -499,14 +499,14 @@ export function SessionControlsSection({
                   {snapshot.cookies.slice(0, 8).map((cookie) => (
                     <span
                       key={`${partition}:${cookie.name}:${cookie.domain ?? ""}`}
-                      className="inline-flex items-center rounded-full border border-border bg-bg-accent px-2 py-1 text-[11px] text-txt"
+                      className="inline-flex items-center rounded-full border border-border bg-bg-accent px-2 py-1 text-xs-tight text-txt"
                     >
                       {cookie.name}
                     </span>
                   ))}
                 </div>
               ) : (
-                <div className="mt-3 text-[11px] text-muted">
+                <div className="mt-3 text-xs-tight text-muted">
                   {tr(
                     t,
                     "releasecenter.NoCookiesStoredForThisPartition",

@@ -23,6 +23,7 @@ import {
   vi,
 } from "vitest";
 import { req } from "../../../../test/helpers/http";
+import { textOf } from "../../../../test/helpers/react-test";
 
 import { createInlineUiMock } from "./mockInlineUi";
 
@@ -482,7 +483,7 @@ describe("Export/Import UI", () => {
     });
 
     // Look for Export key
-    const allText = JSON.stringify(tree?.toJSON());
+    const allText = textOf(tree!.root);
     expect(allText).toContain("settings.exportAgent");
   });
 
@@ -493,7 +494,7 @@ describe("Export/Import UI", () => {
       tree = TestRenderer.create(React.createElement(SettingsView));
     });
 
-    const allText = JSON.stringify(tree?.toJSON());
+    const allText = textOf(tree!.root);
     expect(allText).toContain("settings.importAgent");
   });
 });
