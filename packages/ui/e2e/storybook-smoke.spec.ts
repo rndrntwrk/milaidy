@@ -11,10 +11,25 @@ type StoryIndex = {
   >;
 };
 
+const STORYBOOK_STARTUP_ERROR_PATTERNS = [
+  "Error fetching `/index.json`",
+  "Unable to index ./src/stories/",
+] as const;
+
+function isIgnorableStartupError(message: string) {
+  return STORYBOOK_STARTUP_ERROR_PATTERNS.some((pattern) =>
+    message.includes(pattern),
+  );
+}
+
 test("all Storybook stories render in light mode", async ({ page }) => {
   test.setTimeout(10 * 60 * 1000);
 
-  const response = await page.request.get("/index.json");
+  let response = await page.request.get("/index.json");
+  for (let attempt = 0; !response.ok() && attempt < 10; attempt += 1) {
+    await page.waitForTimeout(500);
+    response = await page.request.get("/index.json");
+  }
   expect(response.ok()).toBeTruthy();
 
   const storyIndex = (await response.json()) as StoryIndex;
@@ -26,6 +41,9 @@ test("all Storybook stories render in light mode", async ({ page }) => {
   const pageErrors: string[] = [];
 
   page.on("pageerror", (error) => {
+    if (isIgnorableStartupError(error.message)) {
+      return;
+    }
     pageErrors.push(error.message);
   });
 

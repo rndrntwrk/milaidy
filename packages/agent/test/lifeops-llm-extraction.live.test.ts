@@ -379,6 +379,11 @@ describeIfLive("LLM plan extraction (live)", () => {
         expectQueries: true,
       },
       {
+        intent: "busca en mi correo si Suran me escribio hoy",
+        expectedSubaction: "search",
+        expectQueries: true,
+      },
+      {
         intent: "check my inbox",
         expectedSubaction: "triage",
         expectQueries: false,
@@ -399,6 +404,13 @@ describeIfLive("LLM plan extraction (live)", () => {
         expectQueries: false,
       },
       {
+        intent:
+          "enviale un correo a maria@example.com con asunto hola y cuerpo nos vemos manana",
+        expectedSubaction: "send_message",
+        expectQueries: false,
+        expectedTo: "maria@example.com",
+      },
+      {
         intent: "send that reply now",
         expectedSubaction: "send_reply",
         expectQueries: false,
@@ -411,6 +423,7 @@ describeIfLive("LLM plan extraction (live)", () => {
       intent,
       expectedSubaction,
       expectQueries,
+      expectedTo,
       recentMessages,
     } of cases) {
       it(
@@ -425,6 +438,9 @@ describeIfLive("LLM plan extraction (live)", () => {
           expect(plan.subaction).toBe(expectedSubaction);
           if (expectQueries) {
             expect(plan.queries.length).toBeGreaterThan(0);
+          }
+          if (expectedTo) {
+            expect(plan.to ?? []).toContain(expectedTo);
           }
         },
         TEST_TIMEOUT,

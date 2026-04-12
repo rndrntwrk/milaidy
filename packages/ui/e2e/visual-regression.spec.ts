@@ -206,18 +206,28 @@ const STORIES: VisualStory[] = [
 
 let storyIndexPromise: Promise<StoryIndex> | null = null;
 
+async function loadStoryIndex(page: Page) {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const response = await page.request.get("/index.json");
+    if (response.ok()) {
+      return (await response.json()) as StoryIndex;
+    }
+
+    await page.waitForTimeout(500);
+  }
+
+  const response = await page.request.get("/index.json");
+  throw new Error(`Failed to load Storybook index: ${response.status()}`);
+}
+
 async function getStoryId(
   page: Page,
   story: VisualStory,
 ) {
-  storyIndexPromise ??= page.request
-    .get("/index.json")
-    .then(async (response) => {
-      if (!response.ok()) {
-        throw new Error(`Failed to load Storybook index: ${response.status()}`);
-      }
-      return (await response.json()) as StoryIndex;
-    });
+  storyIndexPromise ??= loadStoryIndex(page).catch((error) => {
+    storyIndexPromise = null;
+    throw error;
+  });
 
   const index = await storyIndexPromise;
   const match = Object.entries(index.entries).find(

@@ -963,6 +963,14 @@ describe("life-ops gmail triage", () => {
         query: "in:anywhere from:suran",
         expectedSubjects: ["Dinner agenda"],
       },
+      {
+        query: "{from:suran from:alex@example.com}",
+        expectedSubjects: ["Dinner agenda", "Venue invoice"],
+      },
+      {
+        query: "-from:noreply@example.com invoice",
+        expectedSubjects: ["Venue invoice"],
+      },
     ] as const;
 
     for (const testCase of cases) {
@@ -1423,6 +1431,54 @@ describe("life-ops gmail triage", () => {
       bodyText: "Here is the final draft.",
       confirmSend: true,
     });
+    expect(sendRes.status).toBe(200);
+    expect(sendRes.data).toEqual({ ok: true });
+  });
+
+  it("normalizes display-name recipient strings when sending a brand-new Gmail message", async () => {
+    await connectGoogle(
+      ["google.gmail.triage", "google.gmail.send"],
+      [
+        "openid",
+        "email",
+        "profile",
+        "https://www.googleapis.com/auth/gmail.readonly",
+        "https://www.googleapis.com/auth/gmail.send",
+      ],
+    );
+
+    fetchMock.mockImplementation(async (input, init) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.endsWith("/gmail/v1/users/me/messages/send")) {
+        const parsedBody = JSON.parse(String(init?.body ?? "{}")) as {
+          raw?: string;
+        };
+        const raw = Buffer.from(
+          String(parsedBody.raw ?? ""),
+          "base64url",
+        ).toString("utf-8");
+        expect(raw).toContain("To: mira@example.com, ops@example.com");
+        expect(raw).toContain("Cc: team@example.com");
+        expect(raw).toContain("Bcc: audit@example.com");
+        expect(raw).toContain("Subject: hola");
+        expect(raw).toContain("nos vemos manana");
+        return new Response(JSON.stringify({ id: "sent-compose-1" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    const sendRes = await req(port, "POST", "/api/lifeops/gmail/message-send", {
+      to: 'Mira <mira@example.com>; ops@example.com',
+      cc: '"Team" <team@example.com>',
+      bcc: "audit@example.com",
+      subject: "hola",
+      bodyText: "nos vemos manana",
+      confirmSend: true,
+    });
+
     expect(sendRes.status).toBe(200);
     expect(sendRes.data).toEqual({ ok: true });
   });

@@ -381,6 +381,11 @@ export function classifyIntent(intent: string): LifeOperation {
   const hasEmailIntentTerm = LIFE_EMAIL_QUERY_TERMS.some((term) =>
     textIncludesKeywordTerm(lower, term),
   );
+  const hasDirectEmailQuery =
+    /\b(inbox|gmail|email|emails)\b/.test(lower) &&
+    /\b(check|show|read|see|what(?:'s| is)|anything|urgent|important|latest|new)\b/.test(
+      lower,
+    );
 
   if (
     /\b(remind|reminder|ping|message|nudge)\b.*\b(less|fewer|more|again|back on|resume|normal)\b/.test(
@@ -454,6 +459,7 @@ export function classifyIntent(intent: string): LifeOperation {
   }
   if (
     hasEmailIntentTerm ||
+    hasDirectEmailQuery ||
     /\b(respond to|important.*(need|should|must))\b/.test(lower)
   )
     return "query_email";
@@ -3198,6 +3204,92 @@ function shouldPreferDerivedDefinitionOverSeed(
     return false;
   }
   return hasSpecificDerivedDefinitionDetails(intent);
+}
+
+function scoreDefinitionTitleQuality(value: string | null | undefined): number {
+  const normalized = normalizeTitle(value ?? "");
+  if (!normalized) {
+    return Number.NEGATIVE_INFINITY;
+  }
+
+  let score = normalized.split(/\s+/).filter(Boolean).length;
+  if (/\b\d+\b/.test(normalized)) {
+    score += 6;
+  }
+  if (/[+&]/.test(value ?? "") || /\band\b/.test(normalized)) {
+    score += 4;
+  }
+  if (
+    /^(?:do|work out|workout|habit|routine|task|todo|reminder|alarm)\b/.test(
+      normalized,
+    )
+  ) {
+    score -= 5;
+  }
+  if (GENERIC_DERIVED_TITLE_RE.test(normalized)) {
+    score -= 6;
+  }
+  return score;
+}
+
+function shouldAdoptPlannerTitle(args: {
+  currentTitle: string | null | undefined;
+  plannerTitle: string | null | undefined;
+}): boolean {
+  const plannerTitle = args.plannerTitle?.trim();
+  if (!plannerTitle) {
+    return false;
+  }
+  const currentTitle = args.currentTitle?.trim();
+  if (!currentTitle) {
+    return true;
+  }
+  if (normalizeTitle(currentTitle) === normalizeTitle(plannerTitle)) {
+    return false;
+  }
+  return (
+    scoreDefinitionTitleQuality(plannerTitle) >
+    scoreDefinitionTitleQuality(currentTitle)
+  );
+}
+
+function shouldAdoptPlannerCadence(args: {
+  currentCadence: LifeOpsCadence | undefined;
+  plannerCadence: LifeOpsCadence;
+}): boolean {
+  const { currentCadence, plannerCadence } = args;
+  if (!currentCadence) {
+    return true;
+  }
+  if (currentCadence.kind === "times_per_day") {
+    return (
+      plannerCadence.kind === "times_per_day" &&
+      plannerCadence.slots.length >= currentCadence.slots.length
+    );
+  }
+  if (currentCadence.kind === "weekly") {
+    return (
+      plannerCadence.kind === "weekly" &&
+      plannerCadence.weekdays.length >= currentCadence.weekdays.length &&
+      (currentCadence.windows.includes("custom")
+        ? plannerCadence.windows.includes("custom")
+        : plannerCadence.windows.length >= currentCadence.windows.length)
+    );
+  }
+  if (currentCadence.kind === "interval") {
+    return plannerCadence.kind === "interval";
+  }
+  if (currentCadence.kind === "once") {
+    return plannerCadence.kind === "once";
+  }
+  if (currentCadence.kind === "daily") {
+    return (
+      plannerCadence.kind === "times_per_day" ||
+      (plannerCadence.kind === "daily" &&
+        plannerCadence.windows.length >= currentCadence.windows.length)
+    );
+  }
+  return true;
 }
 
 function shouldRequireLifeCreateConfirmation(args: {
