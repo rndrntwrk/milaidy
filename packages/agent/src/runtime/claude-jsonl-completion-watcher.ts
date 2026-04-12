@@ -238,9 +238,24 @@ export async function findLatestJsonl(
   } catch {
     return null;
   }
-  const jsonls = entries.filter((f) => f.endsWith(".jsonl")).sort();
+  const jsonls = entries.filter((f) => f.endsWith(".jsonl"));
   if (jsonls.length === 0) return null;
-  return path.join(projectDir, jsonls[jsonls.length - 1]);
+  if (jsonls.length === 1) return path.join(projectDir, jsonls[0]);
+  // Sort by modification time (newest first). UUID-based filenames have no
+  // chronological order when sorted lexicographically.
+  const withMtime = await Promise.all(
+    jsonls.map(async (f) => {
+      const full = path.join(projectDir, f);
+      try {
+        const stat = await fs.stat(full);
+        return { f, mtime: stat.mtimeMs };
+      } catch {
+        return { f, mtime: 0 };
+      }
+    }),
+  );
+  withMtime.sort((a, b) => b.mtime - a.mtime);
+  return path.join(projectDir, withMtime[0].f);
 }
 
 /**
