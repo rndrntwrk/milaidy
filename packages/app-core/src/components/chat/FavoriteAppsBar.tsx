@@ -19,7 +19,15 @@ import {
 } from "../apps/overlay-app-registry";
 
 export function FavoriteAppsBar() {
-  const { favoriteApps, setState, setActionNotice, t } = useApp();
+  const {
+    favoriteApps: favoriteAppsValue,
+    setState,
+    setActionNotice,
+    t,
+  } = useApp();
+  const favoriteApps = Array.isArray(favoriteAppsValue)
+    ? favoriteAppsValue
+    : [];
   const [apps, setApps] = useState<RegistryAppInfo[]>([]);
 
   useEffect(() => {
