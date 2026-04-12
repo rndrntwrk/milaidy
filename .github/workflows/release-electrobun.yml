@@ -191,6 +191,8 @@ jobs:
     needs: [prepare, validate-release]
     runs-on: macos-14
     timeout-minutes: 60
+    outputs:
+      packaged: ${{ steps.package-lifeops-browser.outputs.packaged }}
     defaults:
       run:
         shell: bash -euo pipefail {0}
@@ -237,9 +239,17 @@ jobs:
         run: bun run postinstall
 
       - name: Package LifeOps Browser release bundles
-        run: bun run lifeops:browser:package:release
+        id: package-lifeops-browser
+        run: |
+          if bun run lifeops:browser:package:release; then
+            echo "packaged=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::LifeOps Browser packaging failed; desktop release will continue without browser companion bundles."
+            echo "packaged=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Upload LifeOps Browser release artifacts
+        if: steps.package-lifeops-browser.outputs.packaged == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: lifeops-browser-store-bundles
@@ -1205,7 +1215,7 @@ jobs:
   release:
     name: Create Release
     if: ${{ github.event_name != 'workflow_call' || inputs.publish_release }}
-    needs: [prepare, build, build-browser-companions]
+    needs: [prepare, build]
     runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
     timeout-minutes: 10
     permissions:
@@ -1222,13 +1232,6 @@ jobs:
           pattern: electrobun-*
           merge-multiple: false
 
-      - name: Download LifeOps Browser artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: release-artifacts
-          pattern: lifeops-browser-*
-          merge-multiple: false
-
       - name: List artifacts
         run: find release-artifacts -type f | sort 2>/dev/null || echo "No artifacts"
 
@@ -1243,9 +1246,6 @@ jobs:
             -name "Milady-Setup-*.exe" -o \
             -name "Milady-Setup-*.exe.zip" -o \
             -name "*Setup*.tar.gz" -o \
-            -name "lifeops-browser-chrome-v*.zip" -o \
-            -name "lifeops-browser-safari-v*.zip" -o \
-            -name "lifeops-browser-release-manifest-v*.json" -o \
             -name "*.msix" \
           \) -exec cp {} release-files/ \; 2>/dev/null || true
 
@@ -1321,3 +1321,34 @@ jobs:
             update-channel/ \
             releases@milady.ai:/var/www/releases/
           rm -f /tmp/release_key
+
+  publish-browser-companions:
+    name: Publish LifeOps Browser companions
+    if: ${{ (github.event_name != 'workflow_call' || inputs.publish_release) && needs.build-browser-companions.outputs.packaged == 'true' && needs.release.result == 'success' }}
+    needs: [prepare, build-browser-companions, release]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Download LifeOps Browser artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: lifeops-browser-release
+          pattern: lifeops-browser-*
+          merge-multiple: false
+
+      - name: List LifeOps Browser artifacts
+        run: find lifeops-browser-release -type f | sort 2>/dev/null || echo "No LifeOps Browser artifacts"
+
+      - name: Attach LifeOps Browser assets to GitHub release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          find lifeops-browser-release -type f \
+            \( \
+              -name "lifeops-browser-chrome-v*.zip" -o \
+              -name "lifeops-browser-safari-v*.zip" -o \
+              -name "lifeops-browser-release-manifest-v*.json" \
+            \) \
+            -print0 | xargs -0 -r gh release upload "${{ needs.prepare.outputs.tag }}" --clobber

@@ -89,7 +89,10 @@ export type {
 let memoryCache: {
   plugins: Map<string, RegistryPluginInfo>;
   fetchedAt: number;
+  ttlMs?: number;
 } | null = null;
+
+const LOCAL_FALLBACK_CACHE_TTL_MS = 60_000;
 
 // ---------------------------------------------------------------------------
 // Network fetch + parse (inlined wire types — not exported)
@@ -110,6 +113,15 @@ async function fetchFromNetwork(): Promise<Map<string, RegistryPluginInfo>> {
     );
     throw err;
   }
+}
+
+async function buildLocalRegistrySnapshot(): Promise<
+  Map<string, RegistryPluginInfo>
+> {
+  const plugins = new Map<string, RegistryPluginInfo>();
+  await applyLocalWorkspaceApps(plugins);
+  await applyNodeModulePlugins(plugins);
+  return plugins;
 }
 
 // ---------------------------------------------------------------------------
@@ -291,7 +303,10 @@ export function isDefaultEndpoint(url: string): boolean {
 export async function getRegistryPlugins(): Promise<
   Map<string, RegistryPluginInfo>
 > {
-  if (memoryCache && Date.now() - memoryCache.fetchedAt < CACHE_TTL_MS) {
+  if (
+    memoryCache &&
+    Date.now() - memoryCache.fetchedAt < (memoryCache.ttlMs ?? CACHE_TTL_MS)
+  ) {
     return memoryCache.plugins;
   }
 
@@ -306,15 +321,33 @@ export async function getRegistryPlugins(): Promise<
   }
 
   logger.info("[registry-client] Fetching plugin registry from next branch...");
-  const plugins = await fetchFromNetwork();
+  let plugins: Map<string, RegistryPluginInfo>;
+  let usedLocalFallback = false;
+  try {
+    plugins = await fetchFromNetwork();
+  } catch (err) {
+    logger.warn(
+      `[registry-client] Falling back to local registry discovery: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+    plugins = await buildLocalRegistrySnapshot();
+    usedLocalFallback = true;
+  }
   await mergeCustomEndpoints(plugins, getConfiguredEndpoints());
   filterBlockedRegistryPlugins(plugins);
   logger.info(`[registry-client] Loaded ${plugins.size} plugins`);
 
-  memoryCache = { plugins, fetchedAt: Date.now() };
-  writeFileCache(plugins).catch((err) =>
-    logger.warn(`[registry-client] Cache write failed: ${String(err)}`),
-  );
+  memoryCache = {
+    plugins,
+    fetchedAt: Date.now(),
+    ttlMs: usedLocalFallback ? LOCAL_FALLBACK_CACHE_TTL_MS : CACHE_TTL_MS,
+  };
+  if (!usedLocalFallback) {
+    writeFileCache(plugins).catch((err) =>
+      logger.warn(`[registry-client] Cache write failed: ${String(err)}`),
+    );
+  }
 
   return plugins;
 }

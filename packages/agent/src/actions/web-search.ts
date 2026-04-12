@@ -14,7 +14,7 @@
 
 import type { Action, HandlerOptions, Memory, State } from "@elizaos/core";
 import { logger } from "@elizaos/core";
-import { hasContextSignalSync, messageText } from "./context-signal.js";
+import { hasContextSignalSyncForKey, messageText } from "./context-signal.js";
 
 // ---------------------------------------------------------------------------
 // Brave Search API types
@@ -52,50 +52,11 @@ function resolveApiKey(runtime: unknown): string | undefined {
   return undefined;
 }
 
-// ── Web search context-signal keywords ───────────────────────────────────
-
-const WEB_SEARCH_STRONG_TERMS = [
-  "search",
-  "google",
-  "look up",
-  "look it up",
-  "web search",
-  "search the web",
-  "search online",
-  "search for",
-  "find out",
-  "browse for",
-] as const;
-
-const WEB_SEARCH_WEAK_TERMS = [
-  "what is",
-  "who is",
-  "when did",
-  "latest",
-  "recent",
-  "news",
-  "current",
-  "today",
-  "how much",
-  "price of",
-  "where is",
-  "find",
-  "research",
-  "check",
-] as const;
-
 function hasWebSearchContextSignal(
   message: Memory,
   state: State | undefined,
 ): boolean {
-  return hasContextSignalSync(
-    message,
-    state,
-    WEB_SEARCH_STRONG_TERMS,
-    WEB_SEARCH_WEAK_TERMS,
-    2,
-    6,
-  );
+  return hasContextSignalSyncForKey(message, state, "web_search");
 }
 
 function resolveMaxResults(runtime: unknown): number {

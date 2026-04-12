@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildGitHubReleaseAssetDownloadUrl,
+  buildGitHubReleasePageUrl,
   buildChromeExtensionVersion,
   buildLifeOpsBrowserReleaseMetadata,
   buildSafariExtensionVersions,
   parseReleaseVersion,
+  resolveLifeOpsBrowserReleaseRepository,
+  resolveLifeOpsBrowserStoreUrls,
   versionedArtifactName,
 } from "./release-version.mjs";
 
@@ -50,5 +54,48 @@ describe("LifeOps Browser release versioning", () => {
     expect(
       versionedArtifactName("lifeops-browser-chrome", "zip", release),
     ).toBe("lifeops-browser-chrome-v2.0.0-alpha.116.zip");
+  });
+
+  it("builds portable GitHub release URLs from repository metadata", () => {
+    const release = parseReleaseVersion("2.0.0");
+
+    expect(
+      buildGitHubReleasePageUrl("milady-ai/milady", release),
+    ).toBe("https://github.com/milady-ai/milady/releases/tag/v2.0.0");
+    expect(
+      buildGitHubReleaseAssetDownloadUrl(
+        "milady-ai/milady",
+        release,
+        "lifeops-browser-chrome-v2.0.0.zip",
+      ),
+    ).toBe(
+      "https://github.com/milady-ai/milady/releases/download/v2.0.0/lifeops-browser-chrome-v2.0.0.zip",
+    );
+  });
+
+  it("reads repository and optional store URLs from the environment", () => {
+    expect(
+      resolveLifeOpsBrowserReleaseRepository({
+        GITHUB_REPOSITORY: "milady-ai/custom",
+      }),
+    ).toBe("milady-ai/custom");
+    expect(
+      resolveLifeOpsBrowserReleaseRepository({
+        GITHUB_REPOSITORY: "   ",
+      }),
+    ).toBe("milady-ai/milady");
+    expect(
+      resolveLifeOpsBrowserStoreUrls({
+        MILADY_LIFEOPS_BROWSER_CHROME_STORE_URL:
+          "https://chromewebstore.google.com/detail/lifeops-browser/example",
+        MILADY_LIFEOPS_BROWSER_SAFARI_STORE_URL:
+          "https://apps.apple.com/us/app/lifeops-browser/id1234567890",
+      }),
+    ).toEqual({
+      chromeWebStoreUrl:
+        "https://chromewebstore.google.com/detail/lifeops-browser/example",
+      safariAppStoreUrl:
+        "https://apps.apple.com/us/app/lifeops-browser/id1234567890",
+    });
   });
 });

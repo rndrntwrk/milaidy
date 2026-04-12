@@ -2,6 +2,7 @@ import {
   type CreateLifeOpsBrowserCompanionPairingRequest,
   LIFEOPS_BROWSER_SITE_ACCESS_MODES,
   type LifeOpsBrowserCompanionPairingResponse,
+  type LifeOpsBrowserCompanionReleaseManifest,
   type LifeOpsBrowserKind,
   type LifeOpsBrowserSettings,
   type LifeOpsBrowserSiteAccessMode,
@@ -210,6 +211,7 @@ function mergePackageStatus(
     safariWebExtensionPath: string | null;
     safariAppPath: string | null;
     safariPackagePath: string | null;
+    releaseManifest?: LifeOpsBrowserCompanionReleaseManifest | null;
   },
 ): ExtensionStatus {
   return {
@@ -221,7 +223,80 @@ function mergePackageStatus(
     safariWebExtensionPath: next.safariWebExtensionPath,
     safariAppPath: next.safariAppPath,
     safariPackagePath: next.safariPackagePath,
+    releaseManifest: next.releaseManifest ?? null,
   };
+}
+
+function releaseTargetForBrowser(
+  browser: LifeOpsBrowserKind,
+  releaseManifest: LifeOpsBrowserCompanionReleaseManifest | null | undefined,
+) {
+  if (!releaseManifest) {
+    return null;
+  }
+  return browser === "chrome" ? releaseManifest.chrome : releaseManifest.safari;
+}
+
+function installButtonLabel(
+  browser: LifeOpsBrowserKind,
+  releaseManifest: LifeOpsBrowserCompanionReleaseManifest | null | undefined,
+): string {
+  const target = releaseTargetForBrowser(browser, releaseManifest);
+  if (target?.installKind === "chrome_web_store") {
+    return "Open Chrome Web Store";
+  }
+  if (target?.installKind === "apple_app_store") {
+    return "Open App Store";
+  }
+  if (target?.installKind === "github_release") {
+    return `Download ${browser === "chrome" ? "Chrome" : "Safari"} Release`;
+  }
+  if (target?.installKind === "local_download") {
+    return `Download ${browser === "chrome" ? "Chrome" : "Safari"} Package`;
+  }
+  return `Install ${browser === "chrome" ? "Chrome" : "Safari"}`;
+}
+
+function installHint(
+  browser: LifeOpsBrowserKind,
+  releaseManifest: LifeOpsBrowserCompanionReleaseManifest | null | undefined,
+): string {
+  const target = releaseTargetForBrowser(browser, releaseManifest);
+  if (target?.installKind === "chrome_web_store") {
+    return "Open the Chrome Web Store listing, install the release build, then import the copied pairing JSON in the extension popup.";
+  }
+  if (target?.installKind === "apple_app_store") {
+    return "Open the Safari companion listing, install the released app, then enable the extension and import the copied pairing JSON.";
+  }
+  if (target?.installKind === "github_release") {
+    return "Download the tagged release bundle, install it, then import the copied pairing JSON in the extension popup.";
+  }
+  if (target?.installKind === "local_download") {
+    return "Download the packaged companion bundle, install it locally, then import the copied pairing JSON.";
+  }
+  return browser === "chrome"
+    ? "Load the unpacked build folder in Chrome, or use the packaged zip for distribution."
+    : "Open the generated macOS app once, then enable the Safari extension in Safari Settings.";
+}
+
+function releaseBadgeLabel(
+  browser: LifeOpsBrowserKind,
+  releaseManifest: LifeOpsBrowserCompanionReleaseManifest | null | undefined,
+): string | null {
+  const target = releaseTargetForBrowser(browser, releaseManifest);
+  if (!target) {
+    return null;
+  }
+  if (target.installKind === "chrome_web_store") {
+    return "Chrome Web Store";
+  }
+  if (target.installKind === "apple_app_store") {
+    return "App Store";
+  }
+  if (target.installKind === "github_release") {
+    return "Release build";
+  }
+  return "Download";
 }
 
 function BrowserCompanionRow({
@@ -229,6 +304,7 @@ function BrowserCompanionRow({
   buildPath,
   packagePath,
   appPath,
+  releaseManifest,
   busy,
   pairing,
   onInstall,
@@ -242,6 +318,7 @@ function BrowserCompanionRow({
   buildPath: string | null | undefined;
   packagePath: string | null | undefined;
   appPath?: string | null | undefined;
+  releaseManifest?: LifeOpsBrowserCompanionReleaseManifest | null;
   busy: boolean;
   pairing: LifeOpsBrowserCompanionPairingResponse | null;
   onInstall: (browser: LifeOpsBrowserKind) => Promise<void>;
@@ -252,10 +329,11 @@ function BrowserCompanionRow({
   onOpenPath: (path: string, revealOnly?: boolean) => Promise<void>;
 }) {
   const browserLabel = browser === "chrome" ? "Chrome" : "Safari";
-  const installHint =
-    browser === "chrome"
-      ? "Load the unpacked build folder in Chrome, or use the packaged zip for distribution."
-      : "Open the generated macOS app once, then enable the Safari extension in Safari Settings.";
+  const installHintText = installHint(browser, releaseManifest);
+  const installLabel = installButtonLabel(browser, releaseManifest);
+  const distributionLabel = releaseBadgeLabel(browser, releaseManifest);
+  const hasLocalArtifact = Boolean(buildPath || packagePath || appPath);
+  const showBuiltBadge = hasLocalArtifact || !distributionLabel;
 
   return (
     <div className="rounded-2xl border border-border/60 bg-bg/30 p-4 space-y-3">
@@ -263,13 +341,17 @@ function BrowserCompanionRow({
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <Badge variant="outline">{browserLabel}</Badge>
-            {packagePath || appPath ? (
+            {distributionLabel ? (
+              <Badge variant="secondary">{distributionLabel}</Badge>
+            ) : null}
+            {showBuiltBadge && hasLocalArtifact ? (
               <Badge variant="secondary">Built</Badge>
-            ) : (
+            ) : null}
+            {showBuiltBadge && !hasLocalArtifact ? (
               <Badge variant="outline">Not built</Badge>
-            )}
+            ) : null}
           </div>
-          <p className="text-sm text-muted">{installHint}</p>
+          <p className="text-sm text-muted">{installHintText}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button
@@ -278,7 +360,7 @@ function BrowserCompanionRow({
             onClick={() => void onInstall(browser)}
           >
             <Sparkles className="mr-2 h-3.5 w-3.5" />
-            {busy ? "Preparing…" : `Install ${browserLabel}`}
+            {busy ? "Preparing…" : installLabel}
           </Button>
           <Button
             size="sm"
@@ -630,6 +712,27 @@ export function LifeOpsBrowserSetupPanel() {
     setInstallingBrowser(browser);
     setError(null);
     try {
+      const releaseTarget = releaseTargetForBrowser(
+        browser,
+        packageStatus?.releaseManifest,
+      );
+      const response = await createPairing(browser, { silent: true });
+      await copyTextToClipboard(
+        JSON.stringify(pairingPayload(response), null, 2),
+      );
+
+      if (releaseTarget?.installUrl) {
+        await openExternalUrl(releaseTarget.installUrl);
+        setStatusMessage(
+          releaseTarget.installKind === "chrome_web_store"
+            ? "Chrome install is prepared. We copied the pairing JSON and opened the Chrome Web Store listing. Install the release build, then import the copied pairing JSON in the extension popup."
+            : releaseTarget.installKind === "apple_app_store"
+              ? "Safari install is prepared. We copied the pairing JSON and opened the App Store listing. Install the release app, enable the Safari extension, then import the copied pairing JSON."
+              : `${browser === "chrome" ? "Chrome" : "Safari"} install is prepared. We copied the pairing JSON and opened the release download. Install the release build, then import the copied pairing JSON in the extension popup.`,
+        );
+        return;
+      }
+
       const needsBuild =
         browser === "chrome"
           ? isElectrobunRuntime()
@@ -642,10 +745,6 @@ export function LifeOpsBrowserSetupPanel() {
       const nextStatus = needsBuild
         ? await buildPackage(browser, { silent: true })
         : packageStatus;
-      const response = await createPairing(browser, { silent: true });
-      await copyTextToClipboard(
-        JSON.stringify(pairingPayload(response), null, 2),
-      );
 
       if (browser === "chrome") {
         if (isElectrobunRuntime()) {
@@ -725,6 +824,7 @@ export function LifeOpsBrowserSetupPanel() {
             browser="chrome"
             buildPath={packageStatus?.chromeBuildPath}
             packagePath={packageStatus?.chromePackagePath}
+            releaseManifest={packageStatus?.releaseManifest ?? null}
             busy={
               buildingBrowser === "chrome" ||
               pairingBrowser === "chrome" ||
@@ -743,6 +843,7 @@ export function LifeOpsBrowserSetupPanel() {
             buildPath={packageStatus?.safariWebExtensionPath}
             packagePath={packageStatus?.safariPackagePath}
             appPath={packageStatus?.safariAppPath}
+            releaseManifest={packageStatus?.releaseManifest ?? null}
             busy={
               buildingBrowser === "safari" ||
               pairingBrowser === "safari" ||

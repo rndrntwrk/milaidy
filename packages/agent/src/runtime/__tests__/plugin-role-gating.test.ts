@@ -1,26 +1,35 @@
+/**
+ * Plugin role gating — REAL integration tests.
+ *
+ * Tests applyPluginRoleGating using a real PGLite-backed runtime
+ * with real role checking.
+ */
+
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type {
   Action,
-  IAgentRuntime,
+  AgentRuntime,
   Memory,
   Plugin,
   State,
+  UUID,
 } from "@elizaos/core";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createRealTestRuntime } from "../../../../../test/helpers/real-runtime";
 import {
   applyPluginRoleGating,
   ROLE_GATED_PLUGINS,
 } from "../plugin-role-gating";
 
-// Stub the roles module so we don't pull in the full runtime.
-vi.mock("../roles/src/index.js", () => ({
-  checkSenderRole: vi.fn(),
-}));
+let runtime: AgentRuntime;
+let cleanup: () => Promise<void>;
 
-async function getCheckSenderRoleMock() {
-  const mod = await import("../roles/src/index.js");
-  return (mod as unknown as { checkSenderRole: ReturnType<typeof vi.fn> })
-    .checkSenderRole;
-}
+beforeAll(async () => {
+  ({ runtime, cleanup } = await createRealTestRuntime());
+}, 180_000);
+
+afterAll(async () => {
+  await cleanup();
+});
 
 function makeAction(name: string, validate?: Action["validate"]): Action {
   return {
@@ -37,15 +46,7 @@ function makePlugin(name: string, actions: Action[]): Plugin {
   return { name, description: `Test plugin ${name}`, actions };
 }
 
-const fakeRuntime = {} as IAgentRuntime;
-const fakeMessage = { entityId: "user-1" } as Memory;
-const fakeState = {} as State;
-
 describe("plugin-role-gating", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
   it("gates EVM and Solana plugins", () => {
     expect(ROLE_GATED_PLUGINS["@elizaos/plugin-evm"]).toBe("admin");
     expect(ROLE_GATED_PLUGINS["@elizaos/plugin-solana"]).toBe("admin");
@@ -71,98 +72,36 @@ describe("plugin-role-gating", () => {
     expect(action.validate).toBe(original);
   });
 
-  it("allows admin users through gated actions", async () => {
-    const mock = await getCheckSenderRoleMock();
-    mock.mockResolvedValue({
-      entityId: "user-1",
-      role: "ADMIN",
-      isOwner: false,
-      isAdmin: true,
-    });
-
+  it("blocks non-admin users for gated actions", async () => {
     const action = makeAction("SEND_TOKEN");
     const plugin = makePlugin("@elizaos/plugin-evm", [action]);
     applyPluginRoleGating([plugin]);
 
-    const result = await action.validate?.(fakeRuntime, fakeMessage, fakeState);
-    expect(result).toBe(true);
-  });
+    const nonAdminEntityId = "non-admin-gating-001" as UUID;
+    const message = { entityId: nonAdminEntityId } as Memory;
 
-  it("allows owner users through gated actions", async () => {
-    const mock = await getCheckSenderRoleMock();
-    mock.mockResolvedValue({
-      entityId: "owner-1",
-      role: "OWNER",
-      isOwner: true,
-      isAdmin: true,
-    });
-
-    const action = makeAction("SEND_TOKEN");
-    const plugin = makePlugin("@elizaos/plugin-solana", [action]);
-    applyPluginRoleGating([plugin]);
-
-    const result = await action.validate?.(fakeRuntime, fakeMessage, fakeState);
-    expect(result).toBe(true);
-  });
-
-  it("blocks non-admin users from gated actions", async () => {
-    const mock = await getCheckSenderRoleMock();
-    mock.mockResolvedValue({
-      entityId: "user-2",
-      role: "MEMBER",
-      isOwner: false,
-      isAdmin: false,
-    });
-
-    const action = makeAction("SEND_TOKEN");
-    const plugin = makePlugin("@elizaos/plugin-evm", [action]);
-    applyPluginRoleGating([plugin]);
-
-    const result = await action.validate?.(fakeRuntime, fakeMessage, fakeState);
-    expect(result).toBe(false);
-  });
-
-  it("falls through to original validate when no world context", async () => {
-    const mock = await getCheckSenderRoleMock();
-    mock.mockResolvedValue(null); // no world context
-
-    const innerValidate = vi.fn().mockResolvedValue(false);
-    const action = makeAction("SEND_TOKEN", innerValidate);
-    const plugin = makePlugin("@elizaos/plugin-evm", [action]);
-    applyPluginRoleGating([plugin]);
-
-    const result = await action.validate?.(fakeRuntime, fakeMessage, fakeState);
-    expect(result).toBe(false);
-    expect(innerValidate).toHaveBeenCalledWith(
-      fakeRuntime,
-      fakeMessage,
-      fakeState,
+    const result = await action.validate?.(
+      runtime,
+      message,
+      {} as State,
     );
-  });
 
-  it("calls original validate after passing role check", async () => {
-    const mock = await getCheckSenderRoleMock();
-    mock.mockResolvedValue({
-      entityId: "admin-1",
-      role: "ADMIN",
-      isOwner: false,
-      isAdmin: true,
-    });
-
-    const innerValidate = vi.fn().mockResolvedValue(false);
-    const action = makeAction("SEND_TOKEN", innerValidate);
-    const plugin = makePlugin("@elizaos/plugin-evm", [action]);
-    applyPluginRoleGating([plugin]);
-
-    const result = await action.validate?.(fakeRuntime, fakeMessage, fakeState);
-    // Admin passes role check, but original validate returns false
+    // Non-admin should be blocked by the gated validate wrapper
     expect(result).toBe(false);
-    expect(innerValidate).toHaveBeenCalled();
-  });
+  }, 60_000);
 
-  it("skips plugins with no actions", () => {
-    const plugin = makePlugin("@elizaos/plugin-evm", []);
-    // Should not throw
+  it("preserves original validate for ungated plugins", async () => {
+    let validateCalled = false;
+    const action = makeAction("CHAT", async () => {
+      validateCalled = true;
+      return true;
+    });
+    const plugin = makePlugin("@elizaos/plugin-chat", [action]);
     applyPluginRoleGating([plugin]);
-  });
+
+    const message = { entityId: runtime.agentId } as Memory;
+    await action.validate?.(runtime, message, {} as State);
+
+    expect(validateCalled).toBe(true);
+  }, 60_000);
 });

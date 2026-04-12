@@ -137,11 +137,20 @@ function applyOnboardingPatch(
   if (patch.onboardingPrimaryModel !== undefined) {
     setState("onboardingPrimaryModel", patch.onboardingPrimaryModel);
   }
+  if (patch.onboardingRemoteApiBase !== undefined) {
+    setState("onboardingRemoteApiBase", patch.onboardingRemoteApiBase);
+  }
+  if (patch.onboardingRemoteToken !== undefined) {
+    setState("onboardingRemoteToken", patch.onboardingRemoteToken);
+  }
   if (patch.onboardingRemoteError !== undefined) {
     setState("onboardingRemoteError", patch.onboardingRemoteError);
   }
   if (patch.onboardingRemoteConnecting !== undefined) {
     setState("onboardingRemoteConnecting", patch.onboardingRemoteConnecting);
+  }
+  if (patch.onboardingRemoteConnected !== undefined) {
+    setState("onboardingRemoteConnected", patch.onboardingRemoteConnected);
   }
   if (patch.onboardingSubscriptionTab !== undefined) {
     setState("onboardingSubscriptionTab", patch.onboardingSubscriptionTab);

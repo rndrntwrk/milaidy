@@ -8,32 +8,7 @@ import type {
 } from "@elizaos/core";
 import { logger } from "@elizaos/core";
 import { hasAdminAccess } from "../security/access.js";
-import { hasContextSignalSync } from "./context-signal.js";
-
-const ENTITY_STRONG_TERMS = [
-  "search entity",
-  "find person",
-  "lookup user",
-  "search contacts",
-  "search rolodex",
-  "who is",
-  "contact details",
-  "view person",
-  "get contact",
-] as const;
-
-const ENTITY_WEAK_TERMS = [
-  "person",
-  "contact",
-  "entity",
-  "user",
-  "lookup",
-  "who",
-  "profile",
-  "identity",
-  "rolodex",
-  "details",
-] as const;
+import { hasContextSignalSyncForKey } from "./context-signal.js";
 import type {
   RelationshipsGraphService,
   RelationshipsPersonDetail,
@@ -189,7 +164,7 @@ export const searchEntityAction: Action = {
 
   validate: async (runtime, message, state) => {
     if (!(await hasAdminAccess(runtime, message))) return false;
-    return hasContextSignalSync(message, state, ENTITY_STRONG_TERMS, ENTITY_WEAK_TERMS, 2);
+    return hasContextSignalSyncForKey(message, state, "search_entity");
   },
 
   handler: async (runtime, message, _state, options) => {
@@ -336,7 +311,7 @@ export const readEntityAction: Action = {
 
   validate: async (runtime, message, state) => {
     if (!(await hasAdminAccess(runtime, message))) return false;
-    return hasContextSignalSync(message, state, ENTITY_STRONG_TERMS, ENTITY_WEAK_TERMS, 2);
+    return hasContextSignalSyncForKey(message, state, "search_entity");
   },
 
   handler: async (runtime, message, _state, options) => {

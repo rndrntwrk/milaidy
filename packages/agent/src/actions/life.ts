@@ -32,6 +32,7 @@ import {
   type NativeAppleReminderLikeKind,
 } from "../lifeops/apple-reminders.js";
 import {
+  isValidTimeZone,
   resolveDefaultTimeZone,
   resolveDefaultWindowPolicy,
 } from "../lifeops/defaults.js";
@@ -174,6 +175,7 @@ const DERIVED_TITLE_STOPWORDS = new Set([
   "goals",
   "had",
   "happen",
+  "how",
   "happens",
   "has",
   "have",
@@ -196,6 +198,8 @@ const DERIVED_TITLE_STOPWORDS = new Set([
   "need",
   "new",
   "named",
+  "ok",
+  "okay",
   "of",
   "on",
   "ops",
@@ -223,6 +227,10 @@ const DERIVED_TITLE_STOPWORDS = new Set([
   "todo",
   "titled",
   "track",
+  "uh",
+  "uhh",
+  "um",
+  "umm",
   "until",
   "up",
   "want",
@@ -230,8 +238,13 @@ const DERIVED_TITLE_STOPWORDS = new Set([
   "were",
   "with",
   "would",
+  "yeah",
   "you",
   "your",
+  "yep",
+  "yup",
+  "lol",
+  "lmao",
 ]);
 const DERIVED_TITLE_CADENCE_TOKENS = new Set([
   "afternoon",
@@ -298,6 +311,27 @@ const DRAFT_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
 /** Maximum conversation turns before a deferred draft expires. */
 const DRAFT_MAX_TURNS = 3;
 
+const LIFE_TIME_ZONE_ALIASES: Record<string, string> = {
+  pst: "America/Los_Angeles",
+  pdt: "America/Los_Angeles",
+  pt: "America/Los_Angeles",
+  pacific: "America/Los_Angeles",
+  mst: "America/Denver",
+  mdt: "America/Denver",
+  mt: "America/Denver",
+  mountain: "America/Denver",
+  cst: "America/Chicago",
+  cdt: "America/Chicago",
+  ct: "America/Chicago",
+  central: "America/Chicago",
+  est: "America/New_York",
+  edt: "America/New_York",
+  et: "America/New_York",
+  eastern: "America/New_York",
+  utc: "UTC",
+  gmt: "UTC",
+};
+
 type DeferredLifeDefinitionDraft = {
   intent: string;
   operation: "create_definition";
@@ -311,12 +345,50 @@ type DeferredLifeDefinitionDraft = {
     priority?: number;
     progressionRule?: CreateLifeOpsDefinitionRequest["progressionRule"];
     reminderPlan?: CreateLifeOpsDefinitionRequest["reminderPlan"];
+    timezone?: string;
     title: string;
     metadata?: CreateLifeOpsDefinitionRequest["metadata"];
     windowPolicy?: CreateLifeOpsDefinitionRequest["windowPolicy"];
     websiteAccess?: CreateLifeOpsDefinitionRequest["websiteAccess"];
   };
 };
+
+function normalizeLifeTimeZoneToken(
+  value: string | null | undefined,
+): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const alias = LIFE_TIME_ZONE_ALIASES[trimmed.toLowerCase()];
+  if (alias && isValidTimeZone(alias)) {
+    return alias;
+  }
+  if (isValidTimeZone(trimmed)) {
+    return trimmed;
+  }
+  return null;
+}
+
+function extractLifeTimeZoneFromText(
+  value: string | null | undefined,
+): string | null {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    return null;
+  }
+  const ianaMatch = value.match(/\b([A-Za-z]+(?:\/[A-Za-z0-9_+-]+)+)\b/);
+  const iana = normalizeLifeTimeZoneToken(ianaMatch?.[1]);
+  if (iana) {
+    return iana;
+  }
+  const aliasMatch = value.match(
+    /\b(pst|pdt|pt|pacific|mst|mdt|mt|mountain|cst|cdt|ct|central|est|edt|et|eastern|utc|gmt)\b/i,
+  );
+  return normalizeLifeTimeZoneToken(aliasMatch?.[1] ?? aliasMatch?.[0]);
+}
 
 type DeferredLifeGoalDraft = {
   intent: string;
@@ -683,6 +755,8 @@ function coerceDeferredLifeDraft(value: unknown): DeferredLifeDraft | null {
           request.progressionRule as CreateLifeOpsDefinitionRequest["progressionRule"],
         reminderPlan:
           request.reminderPlan as CreateLifeOpsDefinitionRequest["reminderPlan"],
+        timezone:
+          typeof request.timezone === "string" ? request.timezone : undefined,
         title,
         metadata:
           request.metadata && typeof request.metadata === "object"
@@ -1374,6 +1448,90 @@ type LifeReplyScenario =
   | "captured_phone"
   | "configured_escalation";
 
+function extractNaturalTimePhrase(intent: string): string | null {
+  const normalized = normalizeLifeInputText(intent).toLowerCase();
+  if (/\bmornings?\s+only\b|\bmornings?\b/.test(normalized)) {
+    return "mornings now";
+  }
+  if (/\bafternoons?\s+only\b|\bafternoons?\b/.test(normalized)) {
+    return "afternoons now";
+  }
+  if (/\bevenings?\s+only\b|\bevenings?\b/.test(normalized)) {
+    return "evenings now";
+  }
+  if (/\bnights?\s+only\b|\bnights?\b/.test(normalized)) {
+    return "nights now";
+  }
+  const timeMatch = normalized.match(/\b(\d{1,2}(?::\d{2})?\s*(?:am|pm))\b/);
+  if (timeMatch?.[1]) {
+    return `${timeMatch[1].replace(/\s+/g, "")} now`;
+  }
+  return null;
+}
+
+function buildRuleBasedLifeReply(args: {
+  scenario: LifeReplyScenario;
+  intent: string;
+  fallback: string;
+  context?: Record<string, unknown>;
+}): string {
+  const context = args.context ?? {};
+  const updated =
+    context.updated && typeof context.updated === "object"
+      ? (context.updated as Record<string, unknown>)
+      : null;
+  const created =
+    context.created && typeof context.created === "object"
+      ? (context.created as Record<string, unknown>)
+      : null;
+  const title =
+    (typeof updated?.title === "string" ? updated.title : null) ??
+    (typeof created?.title === "string" ? created.title : null) ??
+    (typeof context.title === "string" ? context.title : null) ??
+    null;
+  const timePhrase = extractNaturalTimePhrase(args.intent);
+
+  switch (args.scenario) {
+    case "updated_definition":
+      if (title && timePhrase) {
+        return `${title} is set for ${timePhrase}.`;
+      }
+      if (title) {
+        return `${title} is updated.`;
+      }
+      break;
+    case "deleted_definition":
+      if (title) {
+        return `${title} is off your list.`;
+      }
+      break;
+    case "deleted_goal":
+      if (title) {
+        return `${title} is off your goals list.`;
+      }
+      break;
+    case "completed_occurrence":
+      if (title) {
+        return `Marked ${title} done.`;
+      }
+      break;
+    case "skipped_occurrence":
+      if (title) {
+        return `Okay, skipping ${title} for now.`;
+      }
+      break;
+    case "snoozed_occurrence":
+      if (title) {
+        return `Okay, I'll bring ${title} back a bit later.`;
+      }
+      break;
+    default:
+      break;
+  }
+
+  return args.fallback;
+}
+
 function normalizeLifeReplyText(raw: string): string {
   return raw
     .trim()
@@ -1402,8 +1560,14 @@ async function renderLifeActionReply(args: {
   context?: Record<string, unknown>;
 }): Promise<string> {
   const { runtime, message, state, intent, scenario, fallback, context } = args;
+  const naturalFallback = buildRuleBasedLifeReply({
+    scenario,
+    intent,
+    fallback,
+    context,
+  });
   if (typeof runtime.useModel !== "function") {
-    return fallback;
+    return naturalFallback;
   }
 
   const recentConversation = await recentConversationTexts({
@@ -1437,12 +1601,12 @@ async function renderLifeActionReply(args: {
     const result = await runtime.useModel(ModelType.TEXT_LARGE, { prompt });
     const raw = typeof result === "string" ? result : "";
     if (looksLikeStructuredLifeReply(raw)) {
-      return fallback;
+      return naturalFallback;
     }
     const text = normalizeLifeReplyText(raw);
-    return text || fallback;
+    return text || naturalFallback;
   } catch {
-    return fallback;
+    return naturalFallback;
   }
 }
 
@@ -1464,6 +1628,32 @@ function buildLifeClarificationFallback(args: {
     return "When should it happen?";
   }
   return "Tell me a bit more about what you want to set up.";
+}
+
+function buildLifeServiceErrorFallback(
+  error: LifeOpsServiceError,
+  intent: string,
+): string {
+  const normalized = error.message.toLowerCase();
+  if (
+    normalized.includes("utc 'z' suffix") ||
+    normalized.includes("local datetime without 'z'") ||
+    normalized.includes("time didn't parse") ||
+    normalized.includes("invalid dueat") ||
+    normalized.includes("cadence.dueat")
+  ) {
+    return `I couldn't pin down the reminder time from "${intent}". Tell me the time again in plain language, like "Friday at 8 pm Pacific."`;
+  }
+  if (
+    normalized.includes("when windowpreset is not provided") ||
+    normalized.includes("startat is required")
+  ) {
+    return "I still need the time for that reminder. Tell me when it should happen.";
+  }
+  if (error.status === 429 || normalized.includes("rate limit")) {
+    return "LifeOps is rate-limited right now. Try again in a bit.";
+  }
+  return "I couldn't finish that LifeOps change yet. Tell me the task and timing again, and I'll try it a different way.";
 }
 
 // ── Calendar/email formatters ─────────────────────────
@@ -1708,6 +1898,20 @@ function buildSingleDailySlot(
   };
 }
 
+function addYearsToLocalDate(
+  dateOnly: { year: number; month: number; day: number },
+  yearDelta: number,
+): { year: number; month: number; day: number } {
+  const utcDate = new Date(
+    Date.UTC(dateOnly.year + yearDelta, dateOnly.month - 1, dateOnly.day, 12),
+  );
+  return {
+    year: utcDate.getUTCFullYear(),
+    month: utcDate.getUTCMonth() + 1,
+    day: utcDate.getUTCDate(),
+  };
+}
+
 function buildCustomTimeWindowPolicy(
   minuteOfDay: number,
   timeZone: string,
@@ -1822,9 +2026,17 @@ function buildOneOffDueAtFromMinuteOfDay(args: {
     day: nowParts.day,
   };
 
+  const explicitDate =
+    typeof args.intent === "string"
+      ? parseExplicitLocalDateForLifeRequest(args.intent, timeZone, now)
+      : null;
+  if (explicitDate) {
+    localDate = explicitDate;
+  }
+
   const explicitDayOffset =
     typeof args.intent === "string" ? resolveAlarmDayOffset(args.intent) : null;
-  if (explicitDayOffset !== null) {
+  if (explicitDate === null && explicitDayOffset !== null) {
     localDate = addDaysToLocalDate(localDate, explicitDayOffset);
   }
 
@@ -1837,15 +2049,27 @@ function buildOneOffDueAtFromMinuteOfDay(args: {
     });
 
   let candidate = buildCandidate();
-  if (explicitDayOffset === null && candidate.getTime() <= now.getTime()) {
-    localDate = addDaysToLocalDate(localDate, 1);
-    candidate = buildCandidate();
+  if (candidate.getTime() <= now.getTime()) {
+    if (explicitDate && !explicitDate.explicitYear) {
+      localDate = addYearsToLocalDate(localDate, 1);
+      candidate = buildCandidate();
+    } else if (explicitDate === null && explicitDayOffset === null) {
+      localDate = addDaysToLocalDate(localDate, 1);
+      candidate = buildCandidate();
+    }
   }
 
   return candidate.toISOString();
 }
 
 function deriveAlarmLikeDefaults(intent: string): {
+  title: string;
+  cadence?: LifeOpsCadence;
+} | null;
+function deriveAlarmLikeDefaults(
+  intent: string,
+  timeZone?: string,
+): {
   title: string;
   cadence?: LifeOpsCadence;
 } | null {
@@ -1866,6 +2090,7 @@ function deriveAlarmLikeDefaults(intent: string): {
             dueAt: buildOneOffDueAtFromMinuteOfDay({
               intent,
               minuteOfDay: slot.minuteOfDay,
+              timeZone,
             }),
           }
         : undefined,
@@ -1873,6 +2098,13 @@ function deriveAlarmLikeDefaults(intent: string): {
 }
 
 function deriveReminderLikeDefaults(intent: string): {
+  title: string;
+  cadence?: LifeOpsCadence;
+} | null;
+function deriveReminderLikeDefaults(
+  intent: string,
+  timeZone?: string,
+): {
   title: string;
   cadence?: LifeOpsCadence;
 } | null {
@@ -1893,6 +2125,7 @@ function deriveReminderLikeDefaults(intent: string): {
             dueAt: buildOneOffDueAtFromMinuteOfDay({
               intent,
               minuteOfDay: slot.minuteOfDay,
+              timeZone,
             }),
           }
         : undefined,
@@ -1918,17 +2151,147 @@ function resolveTimedRequestKind(args: {
 function deriveTimedRequestDefaults(args: {
   intent: string;
   requestKind: NativeAppleReminderLikeKind | null;
+  timeZone?: string;
 }): {
   title: string;
   cadence?: LifeOpsCadence;
 } | null {
   if (args.requestKind === "alarm") {
-    return deriveAlarmLikeDefaults(args.intent);
+    return deriveAlarmLikeDefaults(args.intent, args.timeZone);
   }
   if (args.requestKind === "reminder") {
-    return deriveReminderLikeDefaults(args.intent);
+    return deriveReminderLikeDefaults(args.intent, args.timeZone);
   }
   return null;
+}
+
+function parseExplicitLocalDateForLifeRequest(
+  value: string,
+  timeZone: string,
+  now = new Date(),
+): { year: number; month: number; day: number; explicitYear: boolean } | null {
+  const normalized = normalizeLifeInputText(value).toLowerCase();
+  const localToday = getZonedDateParts(now, timeZone);
+  const monthMap: Record<string, number> = {
+    january: 1,
+    jan: 1,
+    february: 2,
+    feb: 2,
+    march: 3,
+    mar: 3,
+    april: 4,
+    apr: 4,
+    may: 5,
+    june: 6,
+    jun: 6,
+    july: 7,
+    jul: 7,
+    august: 8,
+    aug: 8,
+    september: 9,
+    sept: 9,
+    sep: 9,
+    october: 10,
+    oct: 10,
+    november: 11,
+    nov: 11,
+    december: 12,
+    dec: 12,
+  };
+  const weekdayMap: Record<string, number> = {
+    sunday: 0,
+    sun: 0,
+    monday: 1,
+    mon: 1,
+    tuesday: 2,
+    tue: 2,
+    tues: 2,
+    wednesday: 3,
+    wed: 3,
+    thursday: 4,
+    thu: 4,
+    thur: 4,
+    thurs: 4,
+    friday: 5,
+    fri: 5,
+    saturday: 6,
+    sat: 6,
+  };
+
+  const isoMatch = normalized.match(/\b(\d{4})-(\d{1,2})-(\d{1,2})\b/);
+  if (isoMatch) {
+    return {
+      year: Number(isoMatch[1]),
+      month: Number(isoMatch[2]),
+      day: Number(isoMatch[3]),
+      explicitYear: true,
+    };
+  }
+
+  const monthNameMatch = normalized.match(
+    /\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s+(\d{4}))?\b/i,
+  );
+  if (monthNameMatch) {
+    return {
+      year: monthNameMatch[3] ? Number(monthNameMatch[3]) : localToday.year,
+      month: monthMap[monthNameMatch[1].toLowerCase().replace(/\./g, "")],
+      day: Number(monthNameMatch[2]),
+      explicitYear: Boolean(monthNameMatch[3]),
+    };
+  }
+
+  const numericMatch = normalized.match(
+    /\b(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?\b/,
+  );
+  if (numericMatch) {
+    const yearRaw = numericMatch[3];
+    const year =
+      yearRaw === undefined
+        ? localToday.year
+        : yearRaw.length === 2
+          ? 2000 + Number(yearRaw)
+          : Number(yearRaw);
+    return {
+      year,
+      month: Number(numericMatch[1]),
+      day: Number(numericMatch[2]),
+      explicitYear: Boolean(yearRaw),
+    };
+  }
+
+  const weekdayMatch = normalized.match(
+    /\b(?:(this|next)\s+)?(sun(?:day)?|mon(?:day)?|tue(?:s(?:day)?)?|wed(?:nesday)?|thu(?:r(?:s(?:day)?)?)?|fri(?:day)?|sat(?:urday)?)\b/i,
+  );
+  if (!weekdayMatch) {
+    return null;
+  }
+
+  const weekdayToken = weekdayMatch[2]?.toLowerCase();
+  const targetWeekday = weekdayToken ? weekdayMap[weekdayToken] : undefined;
+  if (targetWeekday === undefined) {
+    return null;
+  }
+
+  const qualifier = weekdayMatch[1]?.toLowerCase() ?? "";
+  const currentWeekday = new Date(
+    Date.UTC(localToday.year, Math.max(0, localToday.month - 1), localToday.day, 12),
+  ).getUTCDay();
+  let delta = (targetWeekday - currentWeekday + 7) % 7;
+  if (qualifier === "next") {
+    delta = delta === 0 ? 7 : delta + 7;
+  }
+  const resolved = addDaysToLocalDate(
+    {
+      year: localToday.year,
+      month: localToday.month,
+      day: localToday.day,
+    },
+    delta,
+  );
+  return {
+    ...resolved,
+    explicitYear: false,
+  };
 }
 
 function mergeMetadataRecords(
@@ -2175,6 +2538,7 @@ function buildCadenceFromLlmParams(
 } | null {
   const kind = params.cadenceKind;
   if (!kind) return null;
+  const effectiveTimeZone = context?.timeZone;
   const timeOfDayMinute =
     typeof params.timeOfDay === "string"
       ? parseTimeOfDayToken(params.timeOfDay)
@@ -2204,7 +2568,7 @@ function buildCadenceFromLlmParams(
             intent: context?.intent,
             minuteOfDay: timeOfDayMinute,
             now: context?.now,
-            timeZone: context?.timeZone,
+            timeZone: effectiveTimeZone,
           }),
         },
       };
@@ -2232,7 +2596,7 @@ function buildCadenceFromLlmParams(
         cadence: { kind: "weekly", weekdays, windows: ["custom"] },
         windowPolicy: buildCustomTimeWindowPolicy(
           timeOfDayMinute,
-          context?.timeZone ?? resolveDefaultTimeZone(),
+          effectiveTimeZone ?? resolveDefaultTimeZone(),
         ),
       };
     }
@@ -2670,7 +3034,10 @@ function normalizeDerivedSegment(raw: string): string {
 }
 
 function deriveIntentSegments(intent: string): DerivedIntentSegment[] {
-  const rawSegments = intent
+  const sanitizedIntent = intent
+    .replace(/\[\s*language instruction:[^\]]*\]/gi, " ")
+    .replace(/\[\s*system(?: note| instruction)?:[^\]]*\]/gi, " ");
+  const rawSegments = sanitizedIntent
     .split(/[.!?]/)
     .flatMap((part) => part.split(/\s+(?:and|&)\s+|,|\s*\+\s*/i))
     .map((part) => part.trim())
@@ -2678,16 +3045,32 @@ function deriveIntentSegments(intent: string): DerivedIntentSegment[] {
 
   const segments: DerivedIntentSegment[] = [];
   const seen = new Set<string>();
+  let previousQuantity: string | null = null;
   for (const raw of rawSegments) {
-    const text = normalizeDerivedSegment(raw);
+    const quantityMatch = raw.match(/\b(\d+)\b/);
+    let text = normalizeDerivedSegment(raw);
+    if (
+      text &&
+      !/\b\d+\b/.test(text) &&
+      previousQuantity &&
+      tokenizeDerivedSegment(raw).length <= 3
+    ) {
+      text = `${previousQuantity} ${text}`;
+    }
     if (!text || seen.has(text)) {
+      if (quantityMatch?.[1]) {
+        previousQuantity = quantityMatch[1];
+      }
       continue;
     }
     seen.add(text);
     segments.push({
       text,
-      hasQuantity: /\b\d+\b/.test(raw),
+      hasQuantity: /\b\d+\b/.test(text) || /\b\d+\b/.test(raw),
     });
+    if (quantityMatch?.[1]) {
+      previousQuantity = quantityMatch[1];
+    }
   }
   return segments;
 }
@@ -2696,6 +3079,13 @@ function deriveDefinitionTitle(intent: string): string | null {
   const explicitTitle = extractQuotedTitle(intent);
   if (explicitTitle) {
     return explicitTitle;
+  }
+
+  const scheduledReminderMatch = intent.match(
+    /\b(?:set (?:a )?reminder|create (?:a )?reminder|remind(?: me)?)\b.*?\bfor\b.+?\bto\s+(.+)$/i,
+  );
+  if (scheduledReminderMatch?.[1]) {
+    return titleCase(trimWords(scheduledReminderMatch[1], 8));
   }
 
   const segments = deriveIntentSegments(intent).sort(
@@ -3245,7 +3635,20 @@ export const lifeAction: Action & {
             state,
             message,
           });
-          if (llmPlan?.mode === "respond" && llmPlan.response) {
+          const explicitCadenceDetail = normalizeCadenceDetail(
+            detailObject(details, "cadence"),
+          );
+          const shouldHonorPlannerResponse =
+            llmPlan?.mode === "respond" &&
+            Boolean(llmPlan.response) &&
+            !editingDeferredDefinitionDraft &&
+            !params.title &&
+            !explicitCadenceDetail &&
+            !detailString(details, "description") &&
+            !detailString(details, "goalId") &&
+            !detailString(details, "goalTitle") &&
+            !detailString(details, "kind");
+          if (shouldHonorPlannerResponse && llmPlan?.response) {
             return {
               success: true as const,
               text: llmPlan.response,
@@ -3260,9 +3663,15 @@ export const lifeAction: Action & {
               (editingDeferredDefinitionDraft || !hadExplicitCadence) &&
               llmPlan.cadenceKind
             ) {
+              const llmCadenceTimeZone =
+                normalizeLifeTimeZoneToken(
+                  detailString(details, "timeZone") ??
+                    deferredDefinitionDraft?.request.timezone ??
+                    windowPolicy?.timezone,
+                ) ?? extractLifeTimeZoneFromText(intent);
               const llmCadence = buildCadenceFromLlmParams(llmPlan, {
                 intent,
-                timeZone: windowPolicy?.timezone,
+                timeZone: llmCadenceTimeZone,
               });
               if (llmCadence) {
                 cadence = llmCadence.cadence;
@@ -3277,6 +3686,12 @@ export const lifeAction: Action & {
             }
           }
         }
+        const resolvedTimeZone =
+          normalizeLifeTimeZoneToken(
+            detailString(details, "timeZone") ??
+              deferredDefinitionDraft?.request.timezone ??
+              windowPolicy?.timezone,
+          ) ?? extractLifeTimeZoneFromText(intent);
         const timedRequestKind = resolveTimedRequestKind({
           intent,
           llmRequestKind,
@@ -3284,6 +3699,7 @@ export const lifeAction: Action & {
         const timedDefaults = deriveTimedRequestDefaults({
           intent,
           requestKind: timedRequestKind,
+          timeZone: resolvedTimeZone,
         });
         if (timedDefaults) {
           if (!title) {
@@ -3404,6 +3820,14 @@ export const lifeAction: Action & {
               (preferDerivedDefinition
                 ? buildDefaultReminderPlan(`${title} reminder`)
                 : seed?.reminderPlan),
+            timezone:
+              extractLifeTimeZoneFromText(intent) ??
+              normalizeLifeTimeZoneToken(
+                resolvedTimeZone ??
+                  deferredDefinitionDraft?.request.timezone,
+              ) ??
+              resolvedTimeZone ??
+              deferredDefinitionDraft?.request.timezone,
             title,
             metadata: definitionMetadata,
             windowPolicy,
@@ -3491,6 +3915,10 @@ export const lifeAction: Action & {
           originalIntent:
             definitionDraft.intent || definitionDraft.request.title,
           cadence: definitionDraft.request.cadence,
+          timezone:
+            extractLifeTimeZoneFromText(definitionDraft.intent) ??
+            normalizeLifeTimeZoneToken(definitionDraft.request.timezone) ??
+            definitionDraft.request.timezone,
           priority: definitionDraft.request.priority,
           windowPolicy: definitionDraft.request.windowPolicy,
           progressionRule: definitionDraft.request.progressionRule,
@@ -4210,7 +4638,22 @@ export const lifeAction: Action & {
       };
     } catch (err) {
       if (err instanceof LifeOpsServiceError) {
-        return { success: false, text: err.message };
+        const fallback = buildLifeServiceErrorFallback(err, intent);
+        return {
+          success: false,
+          text: await renderLifeActionReply({
+            runtime,
+            message,
+            state,
+            intent,
+            scenario: "service_error",
+            fallback,
+            context: {
+              status: err.status,
+              operation,
+            },
+          }),
+        };
       }
       throw err;
     }

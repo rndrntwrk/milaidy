@@ -278,6 +278,11 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
       remote: onboardingRemote,
       rpcSelections: onboardingRpcSelections,
       rpcKeys: onboardingRpcKeys,
+      featureTelegram: onboardingFeatureTelegram,
+      featureDiscord: onboardingFeatureDiscord,
+      featurePhone: onboardingFeaturePhone,
+      featureCrypto: onboardingFeatureCrypto,
+      featureBrowser: onboardingFeatureBrowser,
       cloudProvisionedContainer,
     },
     completionCommittedRef: onboardingCompletionCommittedRef,
@@ -419,6 +424,11 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
           onboardingRemoteToken,
           onboardingSmallModel,
           onboardingLargeModel,
+          onboardingFeatureTelegram,
+          onboardingFeatureDiscord,
+          onboardingFeaturePhone,
+          onboardingFeatureCrypto,
+          onboardingFeatureBrowser,
         });
 
         const rpcSel = onboardingRpcSelections as Record<string, string>;
@@ -521,6 +531,23 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
         }
 
         const sandboxMode = isSandboxMode ? "standard" : "off";
+        const onboardingConnectors = runtimeConfig.featureSetup?.connectors
+          ? Object.fromEntries(
+              Object.entries(runtimeConfig.featureSetup.connectors).map(
+                ([connectorId, connectorConfig]) => [
+                  connectorId,
+                  {
+                    enabled: true,
+                    ...connectorConfig,
+                  },
+                ],
+              ),
+            )
+          : undefined;
+        const onboardingFeatures = runtimeConfig.featureSetup?.capabilities
+          .browser
+          ? { browser: { enabled: true } }
+          : undefined;
         await client.submitOnboarding({
           name: onboardingName,
           sandboxMode: sandboxMode as "off",
@@ -544,6 +571,8 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
           ...(runtimeConfig.credentialInputs
             ? { credentialInputs: runtimeConfig.credentialInputs }
             : {}),
+          ...(onboardingConnectors ? { connectors: onboardingConnectors } : {}),
+          ...(onboardingFeatures ? { features: onboardingFeatures } : {}),
           walletConfig: nextWalletConfig,
         } as Parameters<typeof client.submitOnboarding>[0]);
         try {
@@ -598,6 +627,11 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
       onboardingRemoteToken,
       onboardingOpenRouterModel,
       onboardingPrimaryModel,
+      onboardingFeatureTelegram,
+      onboardingFeatureDiscord,
+      onboardingFeaturePhone,
+      onboardingFeatureCrypto,
+      onboardingFeatureBrowser,
       onboardingVoiceProvider,
       onboardingVoiceApiKey,
       selectedVrmIndex,
@@ -656,11 +690,20 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
     if (patch.onboardingPrimaryModel !== undefined) {
       _setOnboardingPrimaryModel(patch.onboardingPrimaryModel);
     }
+    if (patch.onboardingRemoteApiBase !== undefined) {
+      setOnboardingRemoteApiBase(patch.onboardingRemoteApiBase);
+    }
+    if (patch.onboardingRemoteToken !== undefined) {
+      setOnboardingRemoteToken(patch.onboardingRemoteToken);
+    }
     if (patch.onboardingRemoteError !== undefined) {
       setOnboardingRemoteError(patch.onboardingRemoteError);
     }
     if (patch.onboardingRemoteConnecting !== undefined) {
       setOnboardingRemoteConnecting(patch.onboardingRemoteConnecting);
+    }
+    if (patch.onboardingRemoteConnected !== undefined) {
+      setOnboardingRemoteConnected(patch.onboardingRemoteConnected);
     }
   }, [
     setOnboardingApiKey,
@@ -668,8 +711,11 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
     setOnboardingServerTarget,
     _setOnboardingPrimaryModel,
     setOnboardingProvider,
+    setOnboardingRemoteApiBase,
     setOnboardingRemoteConnecting,
+    setOnboardingRemoteConnected,
     setOnboardingRemoteError,
+    setOnboardingRemoteToken,
   ]);
 
   // ── advanceOnboarding / handleOnboardingNext ─────────────────────

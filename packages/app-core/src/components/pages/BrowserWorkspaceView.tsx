@@ -19,7 +19,7 @@ import {
   SidebarPanel,
   SidebarScrollRegion,
 } from "@miladyai/ui";
-import { ExternalLink, Globe, Plus, RefreshCw, X } from "lucide-react";
+import { ExternalLink, Plus, RefreshCw, X } from "lucide-react";
 import {
   type JSX,
   useCallback,
@@ -49,8 +49,6 @@ const POLL_INTERVAL_MS = 2_500;
 const DEFAULT_BROWSER_WALLET_CHAIN_ID = 1;
 const ADDRESS_INPUT_CLASSNAME =
   "h-10 rounded-full border-border/35 bg-card/70 px-4 text-sm text-txt shadow-sm transition-colors focus-visible:border-accent/40";
-const TAB_BUTTON_BASE =
-  "inline-flex h-10 items-center gap-2 rounded-full border px-4 text-sm font-medium transition-colors";
 
 function normalizeBrowserWorkspaceInputUrl(rawUrl: string): string | null {
   const trimmed = rawUrl.trim();
@@ -1072,47 +1070,104 @@ export function BrowserWorkspaceView(): JSX.Element {
         );
       })}
       footer={
-        <div className="space-y-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-10 w-full justify-start rounded-xl px-4 text-xs font-semibold"
-            onClick={() =>
-              void runBrowserWorkspaceAction("open:new", async () => {
-                await openNewBrowserWorkspaceTab(
-                  locationInput || "about:blank",
-                );
-              })
-            }
-            disabled={busyAction !== null}
-          >
-            <Plus className="h-4 w-4" />
-            {t("browserworkspace.NewTab", {
-              defaultValue: "New tab",
-            })}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-10 w-full justify-start rounded-xl px-4 text-xs font-semibold"
-            onClick={() =>
-              void runBrowserWorkspaceAction("refresh:list", async () => {
-                await loadWorkspace({
-                  preferTabId: selectedTabId,
-                  silent: true,
-                });
-              })
-            }
-            disabled={busyAction !== null}
-          >
-            <RefreshCw className="h-4 w-4" />
-            {t("common.refresh")}
-          </Button>
-        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-10 w-full justify-start rounded-xl px-4 text-xs font-semibold"
+          onClick={() =>
+            void runBrowserWorkspaceAction("refresh:list", async () => {
+              await loadWorkspace({
+                preferTabId: selectedTabId,
+                silent: true,
+              });
+            })
+          }
+          disabled={busyAction !== null}
+        >
+          <RefreshCw className="h-4 w-4" />
+          {t("common.refresh")}
+        </Button>
       }
     >
       <SidebarScrollRegion>
         <SidebarPanel>
+          {/* URL controls */}
+          <div className="space-y-2 mb-4">
+            <Input
+              value={locationInput}
+              onChange={(event) => {
+                setLocationInput(event.target.value);
+                setLocationDirty(true);
+              }}
+              placeholder={t("browserworkspace.AddressPlaceholder", {
+                defaultValue: "Enter a URL",
+              })}
+              className={`w-full ${ADDRESS_INPUT_CLASSNAME}`}
+            />
+            <div className="flex gap-1.5">
+              <Button
+                variant="default"
+                size="sm"
+                className="h-9 flex-1 rounded-xl px-3 text-xs font-semibold"
+                onClick={() =>
+                  void runBrowserWorkspaceAction("navigate:selected", async () => {
+                    await navigateSelectedBrowserWorkspaceTab(locationInput);
+                  })
+                }
+                disabled={busyAction !== null}
+              >
+                {selectedTab
+                  ? t("browserworkspace.Go", { defaultValue: "Go" })
+                  : t("browserworkspace.Open", { defaultValue: "Open" })}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 flex-1 rounded-xl px-3 text-xs font-semibold"
+                onClick={() =>
+                  void runBrowserWorkspaceAction("open:new-address", async () => {
+                    await openNewBrowserWorkspaceTab(locationInput || "about:blank");
+                  })
+                }
+                disabled={busyAction !== null}
+              >
+                <Plus className="mr-1 h-3.5 w-3.5" />
+                {t("browserworkspace.NewTab", { defaultValue: "New tab" })}
+              </Button>
+            </div>
+            <div className="flex gap-1.5">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 flex-1 rounded-xl px-3 text-xs font-semibold"
+                onClick={() =>
+                  void runBrowserWorkspaceAction("open:external", async () => {
+                    if (!selectedTab) return;
+                    await openExternalUrl(selectedTab.url);
+                  })
+                }
+                disabled={!selectedTab || busyAction !== null}
+              >
+                <ExternalLink className="mr-1 h-3.5 w-3.5" />
+                {t("browserworkspace.OpenExternal", { defaultValue: "Open external" })}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 flex-1 rounded-xl px-3 text-xs font-semibold"
+                onClick={() =>
+                  void runBrowserWorkspaceAction("close:selected", async () => {
+                    await closeSelectedBrowserWorkspaceTab();
+                  })
+                }
+                disabled={!selectedTab || busyAction !== null}
+              >
+                <X className="mr-1 h-3.5 w-3.5" />
+                {t("browserworkspace.Close", { defaultValue: "Close" })}
+              </Button>
+            </div>
+          </div>
+
           <PagePanel.SummaryCard compact className="space-y-3">
             <div className="flex items-center justify-between gap-3">
               <span className="text-[11px] uppercase tracking-[0.16em] text-muted/70">
@@ -1185,250 +1240,101 @@ export function BrowserWorkspaceView(): JSX.Element {
     </Sidebar>
   );
 
-  const browserTabsHeader = (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-2 overflow-x-auto pb-1">
-        {workspace.tabs.length === 0 ? (
-          <div className="text-sm text-muted">
-            {t("browserworkspace.NoTabsOpen", {
-              defaultValue: "No tabs open yet.",
-            })}
-          </div>
-        ) : (
-          workspace.tabs.map((tab) => {
-            const active = tab.id === selectedTabId;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() =>
-                  void runBrowserWorkspaceAction(`show:${tab.id}`, async () => {
-                    await activateBrowserWorkspaceTab(tab.id);
-                  })
-                }
-                className={`${TAB_BUTTON_BASE} ${
-                  active
-                    ? "border-accent/30 bg-accent/12 text-txt shadow-sm"
-                    : "border-border/35 bg-card/70 text-muted hover:border-border/55 hover:text-txt"
-                }`}
-              >
-                <Globe className="h-4 w-4 shrink-0" />
-                <span className="max-w-[12rem] truncate">
-                  {getBrowserWorkspaceTabLabel(tab)}
-                </span>
-              </button>
-            );
-          })
-        )}
-      </div>
+  return (
+    <PageLayout
+      sidebar={browserSidebar}
+      contentInnerClassName="mx-auto flex h-full w-full max-w-[110rem] flex-1"
+      data-testid="browser-workspace-view"
+      footer={<WidgetHost slot="browser" className="py-3" />}
+    >
+      <div className="flex min-h-0 flex-1 flex-col gap-3">
+        {loadError ? (
+          <PagePanel.Notice tone="danger">{loadError}</PagePanel.Notice>
+        ) : null}
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Input
-          value={locationInput}
-          onChange={(event) => {
-            setLocationInput(event.target.value);
-            setLocationDirty(true);
-          }}
-          placeholder={t("browserworkspace.AddressPlaceholder", {
-            defaultValue: "Enter a URL",
-          })}
-          className={`min-w-[18rem] flex-1 ${ADDRESS_INPUT_CLASSNAME}`}
-        />
-        <Button
-          variant="default"
-          size="sm"
-          className="h-10 rounded-full px-5"
-          onClick={() =>
-            void runBrowserWorkspaceAction("navigate:selected", async () => {
-              await navigateSelectedBrowserWorkspaceTab(locationInput);
-            })
-          }
-          disabled={busyAction !== null}
-        >
-          {selectedTab
-            ? t("browserworkspace.Go", {
-                defaultValue: "Go",
-              })
-            : t("browserworkspace.Open", {
-                defaultValue: "Open",
+        {loading && workspace.tabs.length === 0 ? (
+          <PagePanel.Loading
+            variant="workspace"
+            heading={t("browserworkspace.Loading", {
+              defaultValue: "Loading browser workspace",
+            })}
+          />
+        ) : workspace.tabs.length === 0 ? (
+          <PagePanel.Empty
+            variant="panel"
+            title={t("browserworkspace.EmptyTitle", {
+              defaultValue: "No browser tabs yet",
+            })}
+            description={t("browserworkspace.EmptyDescription", {
+              defaultValue:
+                "Open a page here, or let the agent create tabs through the Milady browser workspace plugin.",
+            })}
+            className="min-h-[28rem]"
+          />
+        ) : (
+          <PagePanel
+            variant="workspace"
+            className="flex min-h-[34rem] flex-1 overflow-hidden p-0"
+          >
+            <div className="relative flex-1 overflow-hidden rounded-[calc(var(--radius-xl,1.5rem)-0.25rem)] bg-black/5">
+              {workspace.tabs.map((tab) => {
+                const active = tab.id === selectedTabId;
+                return (
+                  <iframe
+                    key={tab.id}
+                    ref={(iframe) =>
+                      registerBrowserWorkspaceIframe(tab.id, iframe)
+                    }
+                    title={getBrowserWorkspaceTabLabel(tab)}
+                    src={tab.url}
+                    loading="eager"
+                    sandbox="allow-downloads allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts"
+                    allow="clipboard-read; clipboard-write"
+                    referrerPolicy="strict-origin-when-cross-origin"
+                    className={`absolute inset-0 h-full w-full border-0 bg-white transition-opacity ${
+                      active
+                        ? "pointer-events-auto opacity-100"
+                        : "pointer-events-none opacity-0"
+                    }`}
+                    onLoad={() => {
+                      postBrowserWalletReady(
+                        tab,
+                        browserWalletStateRef.current,
+                      );
+                    }}
+                  />
+                );
               })}
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-10 rounded-full px-5"
-          onClick={() =>
-            void runBrowserWorkspaceAction("open:new-address", async () => {
-              await openNewBrowserWorkspaceTab(locationInput || "about:blank");
-            })
-          }
-          disabled={busyAction !== null}
-        >
-          <Plus className="mr-1.5 h-3.5 w-3.5" />
-          {t("browserworkspace.NewTab", {
-            defaultValue: "New tab",
-          })}
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-10 rounded-full px-5"
-          onClick={() =>
-            void runBrowserWorkspaceAction("open:external", async () => {
-              if (!selectedTab) {
-                return;
-              }
-              await openExternalUrl(selectedTab.url);
-            })
-          }
-          disabled={!selectedTab || busyAction !== null}
-        >
-          <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
-          {t("browserworkspace.OpenExternal", {
-            defaultValue: "Open external",
-          })}
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-10 rounded-full px-5"
-          onClick={() =>
-            void runBrowserWorkspaceAction("close:selected", async () => {
-              await closeSelectedBrowserWorkspaceTab();
-            })
-          }
-          disabled={!selectedTab || busyAction !== null}
-        >
-          <X className="mr-1.5 h-3.5 w-3.5" />
-          {t("browserworkspace.Close", {
-            defaultValue: "Close",
-          })}
-        </Button>
-        {browserWalletState.connected ? (
-          <>
-            <MetaPill compact>
-              {browserWalletState.mode === "blocked"
-                ? "Wallet blocked"
-                : "Wallet connected"}
-            </MetaPill>
-            {browserWalletState.pendingApprovals > 0 ? (
-              <MetaPill compact>
-                {browserWalletState.pendingApprovals} pending
-              </MetaPill>
-            ) : null}
-            {browserWalletState.address ? (
-              <span className="inline-flex h-10 items-center rounded-full border border-border/35 bg-card/70 px-4 font-mono text-xs text-muted">
-                {formatBrowserWorkspaceWalletAddress(
-                  browserWalletState.address,
-                )}
-              </span>
-            ) : null}
-          </>
+            </div>
+          </PagePanel>
+        )}
+
+        {selectedTab ? (
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
+            <MetaPill compact>{getBrowserWorkspaceTabLabel(selectedTab)}</MetaPill>
+            <span>{selectedTab.url}</span>
+            <span>•</span>
+            <span>
+              {t("browserworkspace.LastSeen", {
+                defaultValue: "Last seen {{time}}",
+                time: formatBrowserWorkspaceTimestamp(
+                  selectedTab.lastFocusedAt ?? selectedTab.updatedAt,
+                ),
+              })}
+            </span>
+            <span>•</span>
+            <span>
+              {selectedTab.visible
+                ? t("browserworkspace.Visible", {
+                    defaultValue: "Visible",
+                  })
+                : t("browserworkspace.Background", {
+                    defaultValue: "Background",
+                  })}
+            </span>
+          </div>
         ) : null}
       </div>
-    </div>
-  );
-
-  return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <PageLayout
-        sidebar={browserSidebar}
-        contentHeader={browserTabsHeader}
-        contentInnerClassName="mx-auto flex h-full w-full max-w-[110rem] flex-1"
-        data-testid="browser-workspace-view"
-      >
-        <div className="flex min-h-0 flex-1 flex-col gap-3">
-          {loadError ? (
-            <PagePanel.Notice tone="danger">{loadError}</PagePanel.Notice>
-          ) : null}
-
-          {loading && workspace.tabs.length === 0 ? (
-            <PagePanel.Loading
-              variant="workspace"
-              heading={t("browserworkspace.Loading", {
-                defaultValue: "Loading browser workspace",
-              })}
-            />
-          ) : workspace.tabs.length === 0 ? (
-            <PagePanel.Empty
-              variant="panel"
-              title={t("browserworkspace.EmptyTitle", {
-                defaultValue: "No browser tabs yet",
-              })}
-              description={t("browserworkspace.EmptyDescription", {
-                defaultValue:
-                  "Open a page here, or let the agent create tabs through the Milady browser workspace plugin.",
-              })}
-              className="min-h-[28rem]"
-            />
-          ) : (
-            <PagePanel
-              variant="workspace"
-              className="flex min-h-[34rem] flex-1 overflow-hidden p-0"
-            >
-              <div className="relative flex-1 overflow-hidden rounded-[calc(var(--radius-xl,1.5rem)-0.25rem)] bg-black/5">
-                {workspace.tabs.map((tab) => {
-                  const active = tab.id === selectedTabId;
-                  return (
-                    <iframe
-                      key={tab.id}
-                      ref={(iframe) =>
-                        registerBrowserWorkspaceIframe(tab.id, iframe)
-                      }
-                      title={getBrowserWorkspaceTabLabel(tab)}
-                      src={tab.url}
-                      loading="eager"
-                      sandbox="allow-downloads allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts"
-                      allow="clipboard-read; clipboard-write"
-                      referrerPolicy="strict-origin-when-cross-origin"
-                      className={`absolute inset-0 h-full w-full border-0 bg-white transition-opacity ${
-                        active
-                          ? "pointer-events-auto opacity-100"
-                          : "pointer-events-none opacity-0"
-                      }`}
-                      onLoad={() => {
-                        postBrowserWalletReady(
-                          tab,
-                          browserWalletStateRef.current,
-                        );
-                      }}
-                    />
-                  );
-                })}
-              </div>
-            </PagePanel>
-          )}
-
-          {selectedTab ? (
-            <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
-              <MetaPill compact>
-                {getBrowserWorkspaceTabLabel(selectedTab)}
-              </MetaPill>
-              <span>{selectedTab.url}</span>
-              <span>•</span>
-              <span>
-                {t("browserworkspace.LastSeen", {
-                  defaultValue: "Last seen {{time}}",
-                  time: formatBrowserWorkspaceTimestamp(
-                    selectedTab.lastFocusedAt ?? selectedTab.updatedAt,
-                  ),
-                })}
-              </span>
-              <span>•</span>
-              <span>
-                {selectedTab.visible
-                  ? t("browserworkspace.Visible", {
-                      defaultValue: "Visible",
-                    })
-                  : t("browserworkspace.Background", {
-                      defaultValue: "Background",
-                    })}
-              </span>
-            </div>
-          ) : null}
-        </div>
-      </PageLayout>
-      <WidgetHost slot="browser" className="px-4 py-3" />
-    </div>
+    </PageLayout>
   );
 }

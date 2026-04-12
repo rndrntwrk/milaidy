@@ -29,6 +29,7 @@ import type {
   RunLifeOpsWorkflowRequest,
   SelectLifeOpsGoogleConnectorPreferenceRequest,
   SendLifeOpsGmailBatchReplyRequest,
+  SendLifeOpsGmailMessageRequest,
   SendLifeOpsGmailReplyRequest,
   SetLifeOpsReminderPreferenceRequest,
   SnoozeLifeOpsOccurrenceRequest,
@@ -746,6 +747,15 @@ export async function handleLifeOpsRoutes(
     if (!body) return true;
     return runRoute(ctx, async (service) => {
       json(res, await service.sendGmailReply(url, body));
+    });
+  }
+
+  if (method === "POST" && pathname === "/api/lifeops/gmail/message-send") {
+    if (rateLimitRequest(ctx, "gmail_send")) return true;
+    const body = await readJsonBody<SendLifeOpsGmailMessageRequest>(req, res);
+    if (!body) return true;
+    return runRoute(ctx, async (service) => {
+      json(res, await service.sendGmailMessage(url, body));
     });
   }
 

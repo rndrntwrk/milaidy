@@ -349,6 +349,35 @@ function waitForPort(port, { timeout = 120_000, interval = 400 } = {}) {
   });
 }
 
+async function waitForApiRoute(
+  port,
+  pathname,
+  { timeout = 120_000, interval = 400 } = {},
+) {
+  const deadline = Date.now() + timeout;
+  const url = `http://127.0.0.1:${port}${pathname}`;
+
+  while (Date.now() <= deadline) {
+    try {
+      const response = await fetch(url, {
+        headers: { Accept: "application/json" },
+        signal: AbortSignal.timeout(3_000),
+      });
+      if (response.ok || response.status === 401 || response.status === 403) {
+        return;
+      }
+    } catch {
+      // Keep polling until the API starts serving HTTP.
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, interval));
+  }
+
+  throw new Error(
+    `Timed out waiting for ${pathname} on port ${port} after ${timeout / 1000}s`,
+  );
+}
+
 const children = [];
 
 /** First Ctrl-C starts graceful shutdown; second exits immediately (pipes keep the process alive until then). */
@@ -544,6 +573,35 @@ async function launch() {
   }
   console.log("");
 
+  if (!skipApi) {
+    pushChild(
+      "api",
+      "bun",
+      ["--watch", "packages/app-core/src/runtime/dev-server.ts"],
+      repoRoot,
+      {
+        NODE_ENV: "development",
+        ELIZA_PORT: apiPort,
+        ELIZA_API_PORT: apiPort,
+        ELIZA_HEADLESS: "1",
+        MILADY_API_PORT: apiPort,
+        MILADY_PORT: String(uiDevPort),
+        MILADY_NAMESPACE: process.env.MILADY_NAMESPACE ?? "milady",
+        ELIZA_NAMESPACE: process.env.ELIZA_NAMESPACE ?? "milady",
+        ...(rendererUrlForShell
+          ? { MILADY_RENDERER_URL: rendererUrlForShell }
+          : {}),
+        MILADY_DESKTOP_API_BASE: `http://127.0.0.1:${apiPort}`,
+        ...screenshotEnvApi,
+        ...(desktopDevLogPath
+          ? { MILADY_DESKTOP_DEV_LOG_PATH: desktopDevLogPath }
+          : {}),
+      },
+    );
+    await waitForPort(Number(apiPort));
+    await waitForApiRoute(Number(apiPort), "/api/status");
+  }
+
   if (viteDevServer) {
     killUiListenPort(uiDevPort);
     console.log(
@@ -572,34 +630,6 @@ async function launch() {
     );
     await waitForPort(uiDevPort);
     console.log(`[eliza] Vite ready on ${rendererUrlForShell}\n`);
-  }
-
-  if (!skipApi) {
-    pushChild(
-      "api",
-      "bun",
-      ["--watch", "packages/app-core/src/runtime/dev-server.ts"],
-      repoRoot,
-      {
-        NODE_ENV: "development",
-        ELIZA_PORT: apiPort,
-        ELIZA_API_PORT: apiPort,
-        ELIZA_HEADLESS: "1",
-        MILADY_API_PORT: apiPort,
-        MILADY_PORT: String(uiDevPort),
-        MILADY_NAMESPACE: process.env.MILADY_NAMESPACE ?? "milady",
-        ELIZA_NAMESPACE: process.env.ELIZA_NAMESPACE ?? "milady",
-        ...(rendererUrlForShell
-          ? { MILADY_RENDERER_URL: rendererUrlForShell }
-          : {}),
-        MILADY_DESKTOP_API_BASE: `http://127.0.0.1:${apiPort}`,
-        ...screenshotEnvApi,
-        ...(desktopDevLogPath
-          ? { MILADY_DESKTOP_DEV_LOG_PATH: desktopDevLogPath }
-          : {}),
-      },
-    );
-    await waitForPort(Number(apiPort));
   }
 
   if (viteRollupWatch) {

@@ -9,26 +9,7 @@ import type {
 import { logger, stringToUuid } from "@elizaos/core";
 import { resolveCanonicalOwnerIdForMessage } from "@elizaos/core/roles";
 import { hasAdminAccess } from "../security/access.js";
-import { hasContextSignalSync } from "./context-signal.js";
-
-const ADMIN_MSG_STRONG_TERMS = [
-  "message admin",
-  "notify owner",
-  "alert admin",
-  "tell admin",
-  "tell owner",
-  "escalate",
-] as const;
-
-const ADMIN_MSG_WEAK_TERMS = [
-  "admin",
-  "owner",
-  "notify",
-  "alert",
-  "urgent",
-  "escalate",
-  "important",
-] as const;
+import { hasContextSignalSyncForKey } from "./context-signal.js";
 
 type SendAdminMessageParams = {
   text?: string;
@@ -72,12 +53,10 @@ export const sendAdminMessageAction: Action = {
 
   validate: async (runtime, message, state) => {
     if (!(await hasAdminAccess(runtime, message))) return false;
-    return hasContextSignalSync(
+    return hasContextSignalSyncForKey(
       message,
       state,
-      ADMIN_MSG_STRONG_TERMS,
-      ADMIN_MSG_WEAK_TERMS,
-      2,
+      "send_admin_message",
     );
   },
 

@@ -117,7 +117,11 @@ function TabContentView({ children }: { children: ReactNode }) {
   );
 }
 
-function ViewRouter() {
+function ViewRouter({
+  onCharacterHeaderActionsChange,
+}: {
+  onCharacterHeaderActionsChange?: (actions: ReactNode | null) => void;
+}) {
   const { tab } = useApp();
   const view = (() => {
     switch (tab) {
@@ -154,7 +158,9 @@ function ViewRouter() {
       case "knowledge":
         return (
           <TabScrollView>
-            <CharacterEditor />
+            <CharacterEditor
+              onHeaderActionsChange={onCharacterHeaderActionsChange}
+            />
           </TabScrollView>
         );
       case "inventory":
@@ -316,9 +322,13 @@ export function App() {
   );
   const [mobileConversationsOpen, setMobileConversationsOpen] = useState(false);
   const [desktopShuttingDown, setDesktopShuttingDown] = useState(false);
+  const [characterHeaderActions, setCharacterHeaderActions] =
+    useState<ReactNode | null>(null);
 
   const isCompanionTab = tab === "companion";
   const isChat = tab === "chat";
+  const isCharacterPage =
+    tab === "character" || tab === "character-select" || tab === "knowledge";
   const isWallets = tab === "inventory";
   const isHeartbeats = tab === "triggers";
   const isSettingsPage =
@@ -694,9 +704,13 @@ export function App() {
           key={`tab-shell-${tab}`}
           className="flex flex-col flex-1 min-h-0 w-full font-body text-txt bg-bg"
         >
-          <Header />
+          <Header
+            pageRightExtras={isCharacterPage ? characterHeaderActions : null}
+          />
           <main className="flex flex-1 min-h-0 min-w-0 overflow-hidden px-3 xl:px-5 py-4 xl:py-6">
-            <ViewRouter />
+            <ViewRouter
+              onCharacterHeaderActionsChange={setCharacterHeaderActions}
+            />
           </main>
         </div>
       ),
@@ -706,6 +720,7 @@ export function App() {
       isCompanionTab,
       actionNotice,
       isChat,
+      isCharacterPage,
       isHeartbeats,
       isSettingsPage,
       isWallets,
@@ -714,11 +729,13 @@ export function App() {
       isChatMobileLayout,
       mobileConversationsOpen,
       mobileChatControls,
+      characterHeaderActions,
       tasksEventsPanelOpen,
       handleDeferredTaskOpen,
       activityEvents,
       clearActivityEvents,
       customActionsPanelOpen,
+      setCharacterHeaderActions,
       settingsInitialSection,
       t,
     ],

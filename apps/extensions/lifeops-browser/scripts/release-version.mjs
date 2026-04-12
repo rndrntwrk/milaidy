@@ -9,6 +9,7 @@ const extensionRoot = path.resolve(
 );
 const extensionPackageJsonPath = path.join(extensionRoot, "package.json");
 const NIGHTLY_EPOCH_UTC_MS = Date.UTC(2020, 0, 1);
+const DEFAULT_REPOSITORY = "milady-ai/milady";
 
 function readExtensionPackageVersion() {
   const packageJson = JSON.parse(
@@ -73,6 +74,11 @@ export function resolveLifeOpsBrowserReleaseVersion(env = process.env) {
     normalizeReleaseVersionCandidate(env.npm_package_version) ??
     readExtensionPackageVersion();
   return parseReleaseVersion(candidate);
+}
+
+export function resolveLifeOpsBrowserReleaseRepository(env = process.env) {
+  const raw = typeof env.GITHUB_REPOSITORY === "string" ? env.GITHUB_REPOSITORY.trim() : "";
+  return raw || DEFAULT_REPOSITORY;
 }
 
 function parseNumericPrereleaseValue(value) {
@@ -190,4 +196,35 @@ export function buildLifeOpsBrowserReleaseMetadata(release) {
 
 export function versionedArtifactName(prefix, extension, release) {
   return `${prefix}-${release.tag}.${extension.replace(/^\./, "")}`;
+}
+
+export function buildGitHubReleasePageUrl(repository, release) {
+  if (!repository) {
+    return null;
+  }
+  return `https://github.com/${repository}/releases/tag/${release.tag}`;
+}
+
+export function buildGitHubReleaseAssetDownloadUrl(repository, release, assetName) {
+  if (!repository || !assetName) {
+    return null;
+  }
+  return `https://github.com/${repository}/releases/download/${release.tag}/${assetName}`;
+}
+
+export function resolveLifeOpsBrowserStoreUrls(env = process.env) {
+  const chromeWebStoreUrl =
+    typeof env.MILADY_LIFEOPS_BROWSER_CHROME_STORE_URL === "string" &&
+    env.MILADY_LIFEOPS_BROWSER_CHROME_STORE_URL.trim()
+      ? env.MILADY_LIFEOPS_BROWSER_CHROME_STORE_URL.trim()
+      : null;
+  const safariAppStoreUrl =
+    typeof env.MILADY_LIFEOPS_BROWSER_SAFARI_STORE_URL === "string" &&
+    env.MILADY_LIFEOPS_BROWSER_SAFARI_STORE_URL.trim()
+      ? env.MILADY_LIFEOPS_BROWSER_SAFARI_STORE_URL.trim()
+      : null;
+  return {
+    chromeWebStoreUrl,
+    safariAppStoreUrl,
+  };
 }

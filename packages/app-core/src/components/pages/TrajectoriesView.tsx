@@ -71,13 +71,18 @@ interface TrajectoriesViewProps {
 
 export function TrajectoriesView({
   contentHeader,
-  selectedTrajectoryId = null,
-  onSelectTrajectory,
+  selectedTrajectoryId: controlledId,
+  onSelectTrajectory: controlledOnSelect,
 }: TrajectoriesViewProps) {
   const { t, setActionNotice } = useApp();
   const [loading, setLoading] = useState(true);
   const [result, setResult] = useState<TrajectoryListResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Self-manage selection when no external callback is provided (standalone mode).
+  const [internalId, setInternalId] = useState<string | null>(null);
+  const selectedTrajectoryId = controlledOnSelect ? (controlledId ?? null) : internalId;
+  const onSelectTrajectory = controlledOnSelect ?? setInternalId;
 
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(0);

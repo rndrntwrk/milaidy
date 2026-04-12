@@ -111,6 +111,7 @@ import type {
   LifeOpsXConnectorStatus,
   LifeOpsXPostResponse,
   SendLifeOpsGmailBatchReplyRequest,
+  SendLifeOpsGmailMessageRequest,
   SendLifeOpsGmailReplyRequest,
   SetLifeOpsReminderPreferenceRequest,
   SnoozeLifeOpsOccurrenceRequest,
@@ -170,8 +171,11 @@ import { resolveOwnerEntityId } from "../runtime/owner-entity.js";
 import { readProfileFromMetadata } from "../activity-profile/service.js";
 import type { ActivityProfile } from "../activity-profile/types.js";
 import {
+  buildNativeAppleReminderMetadata,
   createNativeAppleReminderLikeItem,
+  deleteNativeAppleReminderLikeItem,
   readNativeAppleReminderMetadata,
+  updateNativeAppleReminderLikeItem,
 } from "./apple-reminders.js";
 import {
   computeNextCronRunAtMs,
@@ -318,6 +322,26 @@ const REMINDER_ESCALATION_RESOLUTION_METADATA_KEY =
 const REMINDER_ESCALATION_RESOLUTION_NOTE_METADATA_KEY =
   "reminderEscalationResolutionNote";
 const reminderProcessingQueues = new Map<string, Promise<void>>();
+const LIFEOPS_TIME_ZONE_ALIASES: Record<string, string> = {
+  pst: "America/Los_Angeles",
+  pdt: "America/Los_Angeles",
+  pt: "America/Los_Angeles",
+  pacific: "America/Los_Angeles",
+  mst: "America/Denver",
+  mdt: "America/Denver",
+  mt: "America/Denver",
+  mountain: "America/Denver",
+  cst: "America/Chicago",
+  cdt: "America/Chicago",
+  ct: "America/Chicago",
+  central: "America/Chicago",
+  est: "America/New_York",
+  edt: "America/New_York",
+  et: "America/New_York",
+  eastern: "America/New_York",
+  utc: "UTC",
+  gmt: "UTC",
+};
 const PROACTIVE_TASK_QUERY_TAGS = ["queue", "repeat", "proactive"] as const;
 const REMINDER_ESCALATION_DELAYS: Record<
   LifeOpsReminderUrgency,
@@ -1430,9 +1454,7 @@ function normalizeCalendarDateTimeInTimeZone(
       minute: Number(localMatch[5] ?? "0"),
       second: Number(localMatch[6] ?? "0"),
     });
-    localized.setUTCMilliseconds(
-      Number((localMatch[7] ?? "0").padEnd(3, "0")),
-    );
+    localized.setUTCMilliseconds(Number((localMatch[7] ?? "0").padEnd(3, "0")));
     return localized.toISOString();
   }
 
@@ -2190,14 +2212,13 @@ function summarizeGmailNeedsResponse(
   };
 }
 
-function buildGmailReplyDraft(args: {
+function buildFallbackGmailReplyDraftBody(args: {
   message: LifeOpsGmailMessageSummary;
   tone: "brief" | "neutral" | "warm";
   intent?: string;
   includeQuotedOriginal: boolean;
   senderName: string;
-  sendAllowed: boolean;
-}): LifeOpsGmailReplyDraft {
+}): string {
   const recipientLabel =
     args.message.from.split("<")[0]?.trim() ||
     args.message.fromEmail ||
@@ -2221,6 +2242,43 @@ function buildGmailReplyDraft(args: {
     bodyLines.push("", "Quoted context:", args.message.snippet.trim());
   }
 
+  return bodyLines.join("\n");
+}
+
+function normalizeGeneratedGmailReplyDraftBody(value: string): string | null {
+  const withoutThink = value.replace(/<think>[\s\S]*?<\/think>/gi, " ").trim();
+  if (!withoutThink) {
+    return null;
+  }
+  const withoutCodeFences = withoutThink
+    .replace(/^```[a-z0-9_-]*\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+  const withoutSubject = withoutCodeFences.replace(/^subject:\s*.+\n+/i, "");
+  const normalized = withoutSubject
+    .replace(/\r\n/g, "\n")
+    .replace(/^["'`]+|["'`]+$/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
+function buildGmailReplyPreviewLines(bodyText: string): string[] {
+  const lines = bodyText
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .slice(0, 3);
+  return lines.length > 0 ? lines : [bodyText.trim()].filter(Boolean);
+}
+
+function buildGmailReplyDraft(args: {
+  message: LifeOpsGmailMessageSummary;
+  senderName: string;
+  sendAllowed: boolean;
+  bodyText: string;
+}): LifeOpsGmailReplyDraft {
+
   const recipient = args.message.replyTo ?? args.message.fromEmail ?? null;
   if (!recipient) {
     fail(409, "The selected Gmail message has no replyable sender.");
@@ -2232,31 +2290,11 @@ function buildGmailReplyDraft(args: {
     subject: args.message.subject,
     to: [recipient.toLowerCase()],
     cc: [],
-    bodyText: bodyLines.join("\n"),
-    previewLines: bodyLines.slice(0, 3),
+    bodyText: args.bodyText,
+    previewLines: buildGmailReplyPreviewLines(args.bodyText),
     sendAllowed: args.sendAllowed,
     requiresConfirmation: true,
   };
-}
-
-function buildGmailReplyDrafts(args: {
-  messages: LifeOpsGmailMessageSummary[];
-  tone: "brief" | "neutral" | "warm";
-  intent?: string;
-  includeQuotedOriginal: boolean;
-  senderName: string;
-  sendAllowed: boolean;
-}): LifeOpsGmailReplyDraft[] {
-  return args.messages.map((message) =>
-    buildGmailReplyDraft({
-      message,
-      tone: args.tone,
-      intent: args.intent,
-      includeQuotedOriginal: args.includeQuotedOriginal,
-      senderName: args.senderName,
-      sendAllowed: args.sendAllowed,
-    }),
-  );
 }
 
 function createCalendarEventId(
@@ -2372,10 +2410,12 @@ function normalizeValidTimeZone(
   if (candidate.length === 0) {
     return fallback;
   }
-  if (!isValidTimeZone(candidate)) {
+  const normalized =
+    LIFEOPS_TIME_ZONE_ALIASES[candidate.toLowerCase()] ?? candidate;
+  if (!isValidTimeZone(normalized)) {
     fail(400, `${field} must be a valid IANA time zone`);
   }
-  return candidate;
+  return normalized;
 }
 
 function normalizeWindowPolicyInput(
@@ -2716,7 +2756,10 @@ function normalizeOrigin(value: unknown, field: string): string {
   return parsed.origin;
 }
 
-function normalizeBrowserPermissionGrant(value: unknown, field: string): string {
+function normalizeBrowserPermissionGrant(
+  value: unknown,
+  field: string,
+): string {
   const text = requireNonEmptyString(value, field);
   const isHostPermissionPattern =
     /^(?:https?|file|ftp|chrome-extension|moz-extension):\/\/\S+$/i.test(text);
@@ -3764,15 +3807,19 @@ function buildReminderBody(args: {
         if (Math.abs(deltaMinutes) <= 10) {
           return " now";
         }
-        const sameDay = reminderDate.toDateString() === new Date().toDateString();
+        const sameDay =
+          reminderDate.toDateString() === new Date().toDateString();
         const formatted = reminderDate.toLocaleTimeString([], {
           hour: "numeric",
           minute: "2-digit",
         });
-        return sameDay ? ` at ${formatted}` : ` on ${reminderDate.toLocaleString()}`;
+        return sameDay
+          ? ` at ${formatted}`
+          : ` on ${reminderDate.toLocaleString()}`;
       })();
   const nearby =
-    Array.isArray(args.nearbyReminderTitles) && args.nearbyReminderTitles.length > 0
+    Array.isArray(args.nearbyReminderTitles) &&
+    args.nearbyReminderTitles.length > 0
       ? ` ${formatNearbyReminderTitlesForFallback(args.nearbyReminderTitles)}`
       : "";
   if (args.channel === "voice") {
@@ -3800,7 +3847,10 @@ function buildReminderVoiceContext(runtime: IAgentRuntime): string {
     return "";
   }
   const sections: string[] = [];
-  if (typeof character.system === "string" && character.system.trim().length > 0) {
+  if (
+    typeof character.system === "string" &&
+    character.system.trim().length > 0
+  ) {
     sections.push(`System:\n${character.system.trim()}`);
   }
   const bioLines = normalizeCharacterLines(character.bio);
@@ -3876,7 +3926,9 @@ function normalizeGeneratedLifeOpsAssistantText(
   if (!cleaned) {
     return null;
   }
-  return cleaned.length > 280 ? `${cleaned.slice(0, 277).trimEnd()}...` : cleaned;
+  return cleaned.length > 280
+    ? `${cleaned.slice(0, 277).trimEnd()}...`
+    : cleaned;
 }
 
 function formatNearbyReminderTitlesForPrompt(titles: string[]): string {
@@ -3938,9 +3990,7 @@ function collectNearbyReminderTitles(args: {
     .filter((candidate) => Number.isFinite(candidate.atMs))
     .sort((left, right) => {
       if (Number.isFinite(anchorMs)) {
-        return (
-          Math.abs(left.atMs - anchorMs) - Math.abs(right.atMs - anchorMs)
-        );
+        return Math.abs(left.atMs - anchorMs) - Math.abs(right.atMs - anchorMs);
       }
       return left.atMs - right.atMs;
     });
@@ -5230,17 +5280,13 @@ export class LifeOpsService {
     scheduledFor: string;
     dueAt: string | null;
   }): void {
-    this.emitAssistantEvent(
-      args.text,
-      "lifeops-reminder",
-      {
-        ownerType: args.ownerType,
-        ownerId: args.ownerId,
-        subjectType: args.subjectType,
-        scheduledFor: args.scheduledFor,
-        dueAt: args.dueAt,
-      },
-    );
+    this.emitAssistantEvent(args.text, "lifeops-reminder", {
+      ownerType: args.ownerType,
+      ownerId: args.ownerId,
+      subjectType: args.subjectType,
+      scheduledFor: args.scheduledFor,
+      dueAt: args.dueAt,
+    });
   }
 
   private async readRecentReminderConversation(args: {
@@ -5255,7 +5301,8 @@ export class LifeOpsService {
       return [];
     }
 
-    const ownerEntityId = (await this.ownerRoutingEntityId()) ?? this.ownerEntityId();
+    const ownerEntityId =
+      (await this.ownerRoutingEntityId()) ?? this.ownerEntityId();
     const agentId = this.agentId();
     try {
       const roomIds = await this.runtime.getRoomsForParticipants([
@@ -5455,40 +5502,125 @@ export class LifeOpsService {
     });
   }
 
-  private async syncNativeAppleReminderForDefinition(
+  private withNativeAppleReminderId(
     definition: LifeOpsTaskDefinition,
-  ): Promise<void> {
-    if (definition.subjectType !== "owner" || definition.domain !== "user_lifeops") {
-      return;
-    }
-    if (definition.cadence.kind !== "once") {
-      return;
-    }
-
+    reminderId: string | null,
+  ): LifeOpsTaskDefinition {
     const nativeMetadata = readNativeAppleReminderMetadata(definition.metadata);
     if (!nativeMetadata) {
-      return;
+      return definition;
+    }
+    return {
+      ...definition,
+      metadata: mergeMetadata(
+        definition.metadata,
+        buildNativeAppleReminderMetadata({
+          kind: nativeMetadata.kind,
+          source: nativeMetadata.source,
+          reminderId,
+        }),
+      ),
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  private async syncNativeAppleReminderForDefinition(args: {
+    definition: LifeOpsTaskDefinition | null;
+    previousDefinition?: LifeOpsTaskDefinition | null;
+  }): Promise<LifeOpsTaskDefinition | null> {
+    const previousMetadata = args.previousDefinition
+      ? readNativeAppleReminderMetadata(args.previousDefinition.metadata)
+      : null;
+    const nextMetadata = args.definition
+      ? readNativeAppleReminderMetadata(args.definition.metadata)
+      : null;
+    const previousReminderId = previousMetadata?.reminderId ?? null;
+    const shouldSyncNext =
+      args.definition !== null &&
+      nextMetadata !== null &&
+      args.definition.subjectType === "owner" &&
+      args.definition.domain === "user_lifeops" &&
+      args.definition.cadence.kind === "once";
+
+    if (!shouldSyncNext) {
+      if (previousReminderId) {
+        const deleteResult =
+          await deleteNativeAppleReminderLikeItem(previousReminderId);
+        if (deleteResult.ok === false) {
+          this.logLifeOpsWarn(
+            "native_apple_reminder_sync",
+            "[lifeops] Failed to delete a native Apple reminder.",
+            {
+              definitionId: args.previousDefinition?.id ?? null,
+              reminderId: previousReminderId,
+              skippedReason: deleteResult.skippedReason,
+              error: deleteResult.error,
+            },
+          );
+        }
+      }
+      if (args.definition && nextMetadata?.reminderId) {
+        return this.withNativeAppleReminderId(args.definition, null);
+      }
+      return args.definition;
     }
 
-    const result = await createNativeAppleReminderLikeItem({
+    const definition = args.definition;
+    const nativeMetadata = nextMetadata;
+    const reminderId = nativeMetadata.reminderId ?? previousReminderId;
+    if (reminderId) {
+      const updateResult = await updateNativeAppleReminderLikeItem({
+        reminderId,
+        kind: nativeMetadata.kind,
+        title: definition.title,
+        dueAt: definition.cadence.dueAt,
+        notes: definition.description,
+        originalIntent: definition.originalIntent,
+      });
+      if (updateResult.ok === true) {
+        return this.withNativeAppleReminderId(
+          definition,
+          updateResult.reminderId ?? reminderId,
+        );
+      }
+      this.logLifeOpsWarn(
+        "native_apple_reminder_sync",
+        "[lifeops] Failed to update a native Apple reminder.",
+        {
+          definitionId: definition.id,
+          kind: nativeMetadata.kind,
+          reminderId,
+          skippedReason: updateResult.skippedReason,
+          error: updateResult.error,
+        },
+      );
+      return this.withNativeAppleReminderId(definition, reminderId);
+    }
+
+    const createResult = await createNativeAppleReminderLikeItem({
       kind: nativeMetadata.kind,
       title: definition.title,
       dueAt: definition.cadence.dueAt,
       notes: definition.description,
       originalIntent: definition.originalIntent,
     });
-    if (result.ok === false) {
+    if (createResult.ok === false) {
       this.logLifeOpsWarn(
         "native_apple_reminder_sync",
         "[lifeops] Failed to sync a native Apple reminder.",
         {
           definitionId: definition.id,
           kind: nativeMetadata.kind,
-          skippedReason: result.skippedReason,
-          error: result.error,
+          skippedReason: createResult.skippedReason,
+          error: createResult.error,
         },
       );
+      return definition;
     }
+    return this.withNativeAppleReminderId(
+      definition,
+      createResult.reminderId ?? null,
+    );
   }
 
   private readWorkflowSchedulerState(
@@ -6132,7 +6264,10 @@ export class LifeOpsService {
     now: Date,
   ): Promise<ReturnType<typeof computeAdaptiveWindowPolicy> | null> {
     const cached = this.adaptiveWindowPolicyCache;
-    if (cached && now.getTime() - cached.computedAt < LifeOpsService.ADAPTIVE_POLICY_TTL_MS) {
+    if (
+      cached &&
+      now.getTime() - cached.computedAt < LifeOpsService.ADAPTIVE_POLICY_TTL_MS
+    ) {
       return cached.policy;
     }
     try {
@@ -6145,12 +6280,15 @@ export class LifeOpsService {
         return (
           task.name === "PROACTIVE_AGENT" &&
           isRecord(metadata?.proactiveAgent) &&
-          (metadata.proactiveAgent as Record<string, unknown>).kind === "runtime_runner"
+          (metadata.proactiveAgent as Record<string, unknown>).kind ===
+            "runtime_runner"
         );
       });
       const profile = proactiveTask
         ? readProfileFromMetadata(
-            isRecord(proactiveTask.metadata) ? proactiveTask.metadata as Record<string, unknown> : null,
+            isRecord(proactiveTask.metadata)
+              ? (proactiveTask.metadata as Record<string, unknown>)
+              : null,
           )
         : null;
       if (!profile) {
@@ -7684,7 +7822,7 @@ export class LifeOpsService {
       request.goalId ?? null,
       ownership,
     );
-    const definition = createLifeOpsTaskDefinition({
+    let definition = createLifeOpsTaskDefinition({
       agentId,
       ...ownership,
       kind,
@@ -7718,7 +7856,11 @@ export class LifeOpsService {
     }
     await this.syncGoalLink(definition);
     await this.refreshDefinitionOccurrences(definition);
-    await this.syncNativeAppleReminderForDefinition(definition);
+    definition =
+      (await this.syncNativeAppleReminderForDefinition({
+        definition,
+      })) ?? definition;
+    await this.repository.updateDefinition(definition);
     await this.recordAudit(
       "definition_created",
       "definition",
@@ -7862,7 +8004,7 @@ export class LifeOpsService {
             "status",
             LIFEOPS_DEFINITION_STATUSES,
           );
-    const nextDefinition: LifeOpsTaskDefinition = {
+    let nextDefinition: LifeOpsTaskDefinition = {
       ...current.definition,
       ...ownership,
       title:
@@ -7924,6 +8066,11 @@ export class LifeOpsService {
     if (nextDefinition.status === "active") {
       await this.refreshDefinitionOccurrences(nextDefinition);
     }
+    nextDefinition =
+      (await this.syncNativeAppleReminderForDefinition({
+        definition: nextDefinition,
+        previousDefinition: current.definition,
+      })) ?? nextDefinition;
     await this.repository.updateDefinition(nextDefinition);
     await this.recordAudit(
       "definition_updated",
@@ -7964,6 +8111,10 @@ export class LifeOpsService {
     if (!definition) {
       fail(404, "life-ops definition not found");
     }
+    await this.syncNativeAppleReminderForDefinition({
+      definition: null,
+      previousDefinition: definition,
+    });
     await this.repository.deleteDefinition(this.agentId(), definitionId);
     await this.recordAudit(
       "definition_deleted",
@@ -11491,13 +11642,14 @@ export class LifeOpsService {
         request.includeQuotedOriginal,
         "includeQuotedOriginal",
       ) ?? false;
-    const drafts = buildGmailReplyDrafts({
+    const drafts = await this.renderGmailReplyDrafts({
       messages: selection.messages,
       tone,
       intent,
       includeQuotedOriginal,
       senderName,
       sendAllowed: hasGoogleGmailSendCapability(selection.grant),
+      subjectType: selection.grant.side === "owner" ? "owner" : "agent",
     });
     await this.recordGmailAudit(
       "gmail_reply_drafted",
@@ -11522,6 +11674,117 @@ export class LifeOpsService {
       syncedAt: selection.syncedAt,
       summary: summarizeGmailBatchReplyDrafts(drafts),
     };
+  }
+
+  private async renderGmailReplyDraft(args: {
+    message: LifeOpsGmailMessageSummary;
+    tone: "brief" | "neutral" | "warm";
+    intent?: string;
+    includeQuotedOriginal: boolean;
+    senderName: string;
+    sendAllowed: boolean;
+    subjectType: LifeOpsSubjectType;
+  }): Promise<LifeOpsGmailReplyDraft> {
+    const fallbackBody = buildFallbackGmailReplyDraftBody({
+      message: args.message,
+      tone: args.tone,
+      intent: args.intent,
+      includeQuotedOriginal: args.includeQuotedOriginal,
+      senderName: args.senderName,
+    });
+
+    let bodyText = fallbackBody;
+    if (typeof this.runtime.useModel === "function") {
+      const recentConversation = await this.readRecentReminderConversation({
+        subjectType: args.subjectType,
+        limit: 6,
+      });
+      const prompt = [
+        `Write a plain-text email reply draft in the voice of ${this.runtime.character?.name ?? "the assistant"}.`,
+        "This is a send-ready email reply, not a chat response.",
+        "",
+        "Character voice:",
+        buildReminderVoiceContext(this.runtime) || "No extra character context.",
+        "",
+        "Recent conversation:",
+        recentConversation.length > 0
+          ? recentConversation.join("\n")
+          : "No recent conversation available.",
+        "",
+        "Original email:",
+        `- from: ${args.message.from}`,
+        `- fromEmail: ${args.message.fromEmail ?? "unknown"}`,
+        `- subject: ${args.message.subject}`,
+        `- snippet: ${args.message.snippet || "No snippet available."}`,
+        `- receivedAt: ${args.message.receivedAt}`,
+        "",
+        "Reply instructions:",
+        `- tone: ${args.tone}`,
+        `- requested intent: ${args.intent ?? "No explicit user wording was provided. Write a short, safe acknowledgment reply that fits the email."}`,
+        `- include quoted original: ${args.includeQuotedOriginal ? "yes" : "no"}`,
+        `- sign off as: ${args.senderName}`,
+        "",
+        "Rules:",
+        "- Return only the email body text.",
+        "- Sound natural and in character, but keep it appropriate for email.",
+        "- Preserve the user's requested wording and intent when it is provided.",
+        "- Do not invent facts, promises, dates, attachments, or commitments that are not in the context.",
+        "- Keep it concise unless the user's wording clearly asks for more detail.",
+        "- Include a greeting and a sign-off.",
+        "- Do not include a subject line.",
+        args.includeQuotedOriginal
+          ? "- Include a short quoted context block near the end using only the provided snippet."
+          : "- Do not quote the original email.",
+        "",
+        "Email body:",
+      ].join("\n");
+
+      try {
+        const response = await this.runtime.useModel(ModelType.TEXT_LARGE, {
+          prompt,
+        });
+        const generated =
+          typeof response === "string"
+            ? normalizeGeneratedGmailReplyDraftBody(response)
+            : null;
+        bodyText = generated ?? fallbackBody;
+      } catch {
+        bodyText = fallbackBody;
+      }
+    }
+
+    return buildGmailReplyDraft({
+      message: args.message,
+      senderName: args.senderName,
+      sendAllowed: args.sendAllowed,
+      bodyText,
+    });
+  }
+
+  private async renderGmailReplyDrafts(args: {
+    messages: LifeOpsGmailMessageSummary[];
+    tone: "brief" | "neutral" | "warm";
+    intent?: string;
+    includeQuotedOriginal: boolean;
+    senderName: string;
+    sendAllowed: boolean;
+    subjectType: LifeOpsSubjectType;
+  }): Promise<LifeOpsGmailReplyDraft[]> {
+    const drafts: LifeOpsGmailReplyDraft[] = [];
+    for (const message of args.messages) {
+      drafts.push(
+        await this.renderGmailReplyDraft({
+          message,
+          tone: args.tone,
+          intent: args.intent,
+          includeQuotedOriginal: args.includeQuotedOriginal,
+          senderName: args.senderName,
+          sendAllowed: args.sendAllowed,
+          subjectType: args.subjectType,
+        }),
+      );
+    }
+    return drafts;
   }
 
   async createCalendarEvent(
@@ -12022,13 +12285,14 @@ export class LifeOpsService {
       normalizeOptionalString(grant.identity.name) ??
       normalizeOptionalString(grant.identity.email)?.split("@")[0] ??
       "Milady";
-    const draft = buildGmailReplyDraft({
+    const draft = await this.renderGmailReplyDraft({
       message,
       tone,
       intent,
       includeQuotedOriginal,
       senderName,
       sendAllowed: hasGoogleGmailSendCapability(grant),
+      subjectType: grant.side === "owner" ? "owner" : "agent",
     });
     await this.recordGmailAudit(
       "gmail_reply_drafted",
@@ -12213,16 +12477,7 @@ export class LifeOpsService {
 
   async sendGmailMessage(
     requestUrl: URL,
-    request: {
-      mode?: LifeOpsConnectorMode | null;
-      side?: LifeOpsConnectorSide | null;
-      to: string[];
-      cc?: string[] | null;
-      bcc?: string[] | null;
-      subject: string;
-      bodyText: string;
-      confirmSend?: boolean | null;
-    },
+    request: SendLifeOpsGmailMessageRequest,
   ): Promise<{ ok: true }> {
     const mode = normalizeOptionalConnectorMode(request.mode, "mode");
     const side = normalizeOptionalConnectorSide(request.side, "side");
@@ -12247,14 +12502,16 @@ export class LifeOpsService {
     );
     let sentMessageId: string | null = null;
     const sendMessage = async () => {
-      // Cloud-managed gmail send for new messages isn't exposed by the
-      // managed client yet — refuse loudly so callers don't think the
-      // message was sent when it wasn't.
       if (resolveGoogleExecutionTarget(grant) === "cloud") {
-        fail(
-          501,
-          "Gmail compose-and-send is not supported through the cloud-managed connector yet.",
-        );
+        await this.googleManagedClient.sendGmailMessage({
+          side: grant.side,
+          to,
+          cc,
+          bcc,
+          subject,
+          bodyText,
+        });
+        return;
       }
       const result = await sendGoogleGmailMessage({
         accessToken: (

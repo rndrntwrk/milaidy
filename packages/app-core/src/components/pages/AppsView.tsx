@@ -124,13 +124,18 @@ export function AppsView() {
     setLoading(true);
     setError(null);
     try {
-      const [serverApps] = await Promise.all([
+      const [serverAppsResult] = await Promise.allSettled([
         client.listApps(),
         refreshRuns().catch((err: unknown) => {
           console.warn("[AppsView] Failed to list app runs:", err);
           return [];
         }),
       ]);
+      const serverApps =
+        serverAppsResult.status === "fulfilled" ? serverAppsResult.value : [];
+      if (serverAppsResult.status === "rejected") {
+        console.warn("[AppsView] Failed to list apps:", serverAppsResult.reason);
+      }
       const internalToolApps = getInternalToolApps();
       // Inject registered overlay apps (e.g. companion) if not already from server
       const overlayDescriptors = getAllOverlayApps()
@@ -156,6 +161,15 @@ export function AppsView() {
       setLoading(false);
     }
   }, [refreshRuns, t]);
+
+  const refreshApps = useCallback(async () => {
+    try {
+      await client.refreshRegistry();
+    } catch (err) {
+      console.warn("[AppsView] Failed to refresh registry:", err);
+    }
+    await loadApps();
+  }, [loadApps]);
 
   useEffect(() => {
     void loadApps();
@@ -573,7 +587,7 @@ export function AppsView() {
           showActiveOnly={showActiveOnly}
           visibleApps={visibleApps}
           onLaunch={(app) => void handleLaunch(app)}
-          onRefresh={() => void loadApps()}
+          onRefresh={() => void refreshApps()}
           onSearchQueryChange={setSearchQuery}
           onToggleActiveOnly={() => setShowActiveOnly((current) => !current)}
           onToggleFavorite={handleToggleFavorite}

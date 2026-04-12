@@ -198,6 +198,9 @@ export function getResetConnectionWizardToHostingStepPatch(): ConnectionStatePat
     ...resetHostingSelectionPatch(),
     onboardingProvider: "",
     onboardingPrimaryModel: "",
+    onboardingRemoteApiBase: "",
+    onboardingRemoteToken: "",
+    onboardingRemoteConnected: false,
   };
 }
 
@@ -366,6 +369,9 @@ export function mergeConnectionSnapshot(
   }
   if (patch.onboardingProvider !== undefined) {
     next.onboardingProvider = patch.onboardingProvider;
+  }
+  if (patch.onboardingRemoteConnected !== undefined) {
+    next.onboardingRemoteConnected = patch.onboardingRemoteConnected;
   }
   if (patch.onboardingElizaCloudTab !== undefined) {
     next.onboardingElizaCloudTab = patch.onboardingElizaCloudTab;

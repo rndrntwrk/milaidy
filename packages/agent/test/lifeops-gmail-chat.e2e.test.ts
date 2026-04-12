@@ -233,9 +233,57 @@ describe("life-ops gmail chat transcripts", () => {
         const prompt = String(params?.prompt ?? "");
         const promptLower = prompt.toLowerCase();
         if (prompt.includes("Plan the Gmail action for this request.")) {
+          const currentRequestMatch = prompt.match(/Current request:\s*"([^"]*)"/);
+          const resolvedIntentMatch = prompt.match(/Resolved intent:\s*"([^"]*)"/);
+          const requestLower = String(currentRequestMatch?.[1] ?? "").toLowerCase();
+          const resolvedLower = String(resolvedIntentMatch?.[1] ?? "").toLowerCase();
+          const focusLower = `${requestLower}\n${resolvedLower}`;
           if (
-            promptLower.includes("suran me escribió") ||
-            promptLower.includes("suran me escribio")
+            focusLower.includes("what about unread ones") ||
+            focusLower.includes("unread ones")
+          ) {
+            return '{"subaction":"search","queries":["from:suran is:unread"]}';
+          }
+          if (
+            focusLower.includes("read it to me") ||
+            focusLower.includes("read that email")
+          ) {
+            return '{"subaction":"read","queries":["from:suran newer_than:21d"]}';
+          }
+          if (
+            focusLower.includes("yeah try it") ||
+            focusLower.includes("try again")
+          ) {
+            return '{"subaction":"search","queries":["from:suran"]}';
+          }
+          if (focusLower.includes("show unread emails from alex@example.com")) {
+            return '{"subaction":"search","queries":["from:alex@example.com is:unread"]}';
+          }
+          if (
+            focusLower.includes("which emails need a reply about venue") ||
+            focusLower.includes("need a reply about venue")
+          ) {
+            return '{"subaction":"search","queries":["venue"],"replyNeededOnly":true}';
+          }
+          if (
+            focusLower.includes("last few weeks") ||
+            focusLower.includes("past few weeks")
+          ) {
+            return '{"subaction":"search","queries":["from:suran newer_than:21d"]}';
+          }
+          if (
+            focusLower.includes("find an email from suran") ||
+            focusLower.includes("find emails from suran") ||
+            focusLower.includes("find the last email suran sent me") ||
+            focusLower.includes("did suran email me") ||
+            focusLower.includes("just search suran") ||
+            focusLower.includes("anyone named suran emailed me")
+          ) {
+            return '{"subaction":"search","queries":["from:suran"]}';
+          }
+          if (
+            focusLower.includes("suran me escribió") ||
+            focusLower.includes("suran me escribio")
           ) {
             return '{"subaction":"search","queries":["from:suran"]}';
           }

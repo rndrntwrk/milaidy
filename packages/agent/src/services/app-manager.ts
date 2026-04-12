@@ -2330,29 +2330,8 @@ export class AppManager {
   async listAvailable(
     pluginManager: PluginManagerLike,
   ): Promise<RegistryPluginInfo[]> {
-    const registry = await pluginManager.refreshRegistry();
-    // Merge in local workspace app entries that are discovered by our
-    // registry-client but not by the elizaos
-    // plugin-manager service.
-    try {
-      const localRegistry = await getRegistryPlugins();
-      for (const [name, info] of localRegistry) {
-        if (info.kind !== "app" && !info.appMeta) {
-          continue;
-        }
-
-        const existing = registry.get(name) as RegistryAppPlugin | undefined;
-        if (!existing) {
-          registry.set(name, info);
-          continue;
-        }
-
-        mergeLocalRegistryInfo(existing, info);
-        registry.set(name, existing);
-      }
-    } catch {
-      // local discovery is best-effort
-    }
+    void pluginManager;
+    const registry = await getRegistryPlugins();
     const apps = curateCatalogApps(
       Array.from(registry.values()).filter(isAppRegistryPlugin),
     );
@@ -2780,7 +2759,7 @@ export class AppManager {
     pluginManager: PluginManagerLike,
   ): Promise<InstalledAppInfo[]> {
     const installed = await pluginManager.listInstalledPlugins();
-    const registry = await pluginManager.refreshRegistry();
+    const registry = await getRegistryPlugins();
     const installedByName = new Map(
       installed.map((plugin) => [plugin.name, plugin] as const),
     );

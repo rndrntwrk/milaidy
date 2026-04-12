@@ -952,6 +952,8 @@ export function SettingsView({
     <PageLayout
       className={cn("h-full", inModal && "min-h-0")}
       data-testid="settings-shell"
+      footer={<WidgetHost slot="settings" />}
+      footerClassName="pt-2"
       sidebar={settingsSidebar}
       contentRef={contentContainerRef}
       contentClassName={SETTINGS_CONTENT_CLASS}
@@ -962,7 +964,6 @@ export function SettingsView({
     >
       <div ref={shellRef} className={`w-full ${SETTINGS_SECTION_STACK_CLASS}`}>
         {sectionsContent}
-        <WidgetHost slot="settings" className="mt-6" />
       </div>
     </PageLayout>
   );

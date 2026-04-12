@@ -39,8 +39,11 @@ export type ConnectionStatePatch = Partial<{
   onboardingProvider: string;
   onboardingApiKey: string;
   onboardingPrimaryModel: string;
+  onboardingRemoteApiBase: string;
+  onboardingRemoteToken: string;
   onboardingRemoteError: string | null;
   onboardingRemoteConnecting: boolean;
+  onboardingRemoteConnected: boolean;
   onboardingSubscriptionTab: AppState["onboardingSubscriptionTab"];
   onboardingElizaCloudTab: AppState["onboardingElizaCloudTab"];
 }>;

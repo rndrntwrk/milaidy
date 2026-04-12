@@ -34,7 +34,9 @@ const ownerEntityMocks = vi.hoisted(() => ({
 
 const appleReminderMocks = vi.hoisted(() => ({
   createNativeAppleReminderLikeItem: vi.fn(),
+  deleteNativeAppleReminderLikeItem: vi.fn(),
   readNativeAppleReminderMetadata: vi.fn(),
+  updateNativeAppleReminderLikeItem: vi.fn(),
 }));
 
 vi.mock("@miladyai/plugin-selfcontrol/selfcontrol", () => ({
@@ -51,12 +53,20 @@ vi.mock("../runtime/owner-entity.js", () => ({
   resolveOwnerEntityId: ownerEntityMocks.resolveOwnerEntityId,
 }));
 
-vi.mock("./apple-reminders.js", () => ({
-  createNativeAppleReminderLikeItem:
-    appleReminderMocks.createNativeAppleReminderLikeItem,
-  readNativeAppleReminderMetadata:
-    appleReminderMocks.readNativeAppleReminderMetadata,
-}));
+vi.mock("./apple-reminders.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./apple-reminders.js")>();
+  return {
+    ...actual,
+    createNativeAppleReminderLikeItem:
+      appleReminderMocks.createNativeAppleReminderLikeItem,
+    deleteNativeAppleReminderLikeItem:
+      appleReminderMocks.deleteNativeAppleReminderLikeItem,
+    readNativeAppleReminderMetadata:
+      appleReminderMocks.readNativeAppleReminderMetadata,
+    updateNativeAppleReminderLikeItem:
+      appleReminderMocks.updateNativeAppleReminderLikeItem,
+  };
+});
 
 // ---------------------------------------------------------------------------
 // PGlite runtime adapter (mirrors the pattern in lifeops-pglite-schema.test.ts)
@@ -173,6 +183,15 @@ describe("LifeOpsService (PGlite integration)", () => {
       provider: "apple_reminders",
       reminderId: "native-reminder-1",
     });
+    appleReminderMocks.updateNativeAppleReminderLikeItem.mockResolvedValue({
+      ok: true,
+      provider: "apple_reminders",
+      reminderId: "native-reminder-1",
+    });
+    appleReminderMocks.deleteNativeAppleReminderLikeItem.mockResolvedValue({
+      ok: true,
+      provider: "apple_reminders",
+    });
 
     repository = new LifeOpsRepository(runtime);
     // Ensure schema is bootstrapped before each test.
@@ -211,6 +230,164 @@ describe("LifeOpsService (PGlite integration)", () => {
     expect(definitions[0]?.id).toBe(record.definition.id);
     expect(definitions[0]?.title).toBe("Buy groceries");
     expect(definitions[0]?.description).toBe("Weekly grocery run.");
+  });
+
+  it("normalizes reminder timezone aliases when creating definitions", async () => {
+    const record = await service.createDefinition({
+      ownership: { subjectType: "owner", domain: "user_lifeops" },
+      kind: "task",
+      title: "Hug my wife",
+      timezone: "pst",
+      cadence: {
+        kind: "once",
+        dueAt: "2026-04-18T03:00:00.000Z",
+      },
+      source: "chat",
+    });
+
+    expect(record.definition.timezone).toBe("America/Los_Angeles");
+    const stored = await repository.getDefinition(AGENT_ID, record.definition.id);
+    expect(stored?.timezone).toBe("America/Los_Angeles");
+  });
+
+  it("normalizes reminder timezone aliases when updating definitions", async () => {
+    const created = await service.createDefinition({
+      ownership: { subjectType: "owner", domain: "user_lifeops" },
+      kind: "task",
+      title: "Call mom",
+      timezone: "UTC",
+      cadence: {
+        kind: "once",
+        dueAt: "2026-04-15T10:00:00.000Z",
+      },
+      source: "chat",
+    });
+
+    const updated = await service.updateDefinition(created.definition.id, {
+      ownership: { subjectType: "owner", domain: "user_lifeops" },
+      timezone: "pt",
+    });
+
+    expect(updated.definition.timezone).toBe("America/Los_Angeles");
+    const stored = await repository.getDefinition(AGENT_ID, created.definition.id);
+    expect(stored?.timezone).toBe("America/Los_Angeles");
+  });
+
+  it("persists native Apple reminder ids for one-off owner definitions", async () => {
+    appleReminderMocks.readNativeAppleReminderMetadata.mockReturnValue({
+      kind: "reminder",
+      provider: "apple_reminders",
+      source: "llm",
+      reminderId: null,
+    });
+
+    const record = await service.createDefinition({
+      ownership: { subjectType: "owner", domain: "user_lifeops" },
+      kind: "task",
+      title: "Call mom",
+      description: "Call before lunch.",
+      originalIntent: "set a reminder for tomorrow at 9am to call mom",
+      cadence: {
+        kind: "once",
+        dueAt: "2026-04-15T10:00:00.000Z",
+      },
+      metadata: {
+        nativeAppleReminder: {
+          kind: "reminder",
+          provider: "apple_reminders",
+          source: "llm",
+        },
+      },
+      source: "chat",
+    });
+
+    expect(appleReminderMocks.createNativeAppleReminderLikeItem).toHaveBeenCalledWith({
+      kind: "reminder",
+      title: "Call mom",
+      dueAt: "2026-04-15T10:00:00.000Z",
+      notes: "Call before lunch.",
+      originalIntent: "set a reminder for tomorrow at 9am to call mom",
+    });
+
+    const stored = await repository.getDefinition(AGENT_ID, record.definition.id);
+    expect(stored?.metadata).toMatchObject({
+      nativeAppleReminder: expect.objectContaining({
+        reminderId: "native-reminder-1",
+      }),
+    });
+  });
+
+  it("updates and deletes synced native Apple reminders across the real repository layer", async () => {
+    appleReminderMocks.readNativeAppleReminderMetadata.mockImplementation(
+      (metadata: unknown) => {
+        const record =
+          metadata && typeof metadata === "object"
+            ? (metadata as Record<string, unknown>)
+            : null;
+        const nativeRecord =
+          record?.nativeAppleReminder &&
+          typeof record.nativeAppleReminder === "object"
+            ? (record.nativeAppleReminder as Record<string, unknown>)
+            : null;
+        if (!nativeRecord) {
+          return null;
+        }
+        return {
+          kind: nativeRecord.kind === "alarm" ? "alarm" : "reminder",
+          provider: "apple_reminders" as const,
+          source: nativeRecord.source === "heuristic" ? "heuristic" : "llm",
+          reminderId:
+            typeof nativeRecord.reminderId === "string"
+              ? nativeRecord.reminderId
+              : null,
+        };
+      },
+    );
+
+    const created = await service.createDefinition({
+      ownership: { subjectType: "owner", domain: "user_lifeops" },
+      kind: "task",
+      title: "Call mom",
+      description: "Call before lunch.",
+      originalIntent: "set a reminder for tomorrow at 9am to call mom",
+      cadence: {
+        kind: "once",
+        dueAt: "2026-04-15T10:00:00.000Z",
+      },
+      metadata: {
+        nativeAppleReminder: {
+          kind: "reminder",
+          provider: "apple_reminders",
+          source: "llm",
+        },
+      },
+      source: "chat",
+    });
+
+    const updated = await service.updateDefinition(created.definition.id, {
+      ownership: { subjectType: "owner", domain: "user_lifeops" },
+      title: "Call mom and dad",
+    });
+
+    expect(appleReminderMocks.updateNativeAppleReminderLikeItem).toHaveBeenCalledWith({
+      reminderId: "native-reminder-1",
+      kind: "reminder",
+      title: "Call mom and dad",
+      dueAt: "2026-04-15T10:00:00.000Z",
+      notes: "Call before lunch.",
+      originalIntent: "set a reminder for tomorrow at 9am to call mom",
+    });
+    expect(updated.definition.metadata).toMatchObject({
+      nativeAppleReminder: expect.objectContaining({
+        reminderId: "native-reminder-1",
+      }),
+    });
+
+    await service.deleteDefinition(created.definition.id);
+    expect(appleReminderMocks.deleteNativeAppleReminderLikeItem).toHaveBeenCalledWith(
+      "native-reminder-1",
+    );
+    expect(await repository.getDefinition(AGENT_ID, created.definition.id)).toBeNull();
   });
 
   // -----------------------------------------------------------------------

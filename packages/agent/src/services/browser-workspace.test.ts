@@ -26,8 +26,6 @@ import {
   resolveBrowserWorkspaceBridgeConfig,
 } from "./browser-workspace";
 
-const originalFetch = globalThis.fetch;
-
 type BrowserFixture = {
   formUrl: string;
   tasksUrl: string;
@@ -136,14 +134,39 @@ async function startBrowserFixture(): Promise<BrowserFixture> {
 
 describe("browser-workspace service", () => {
   let fixture: BrowserFixture;
+  let bridgeServer: http.Server;
+  let bridgePort: number;
+  let capturedBridgeAuth: string | null = null;
 
   beforeAll(async () => {
     fixture = await startBrowserFixture();
+
+    // Small bridge server that captures the Authorization header
+    bridgeServer = http.createServer((req, res) => {
+      capturedBridgeAuth = req.headers.authorization ?? null;
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({
+        tab: {
+          id: "btab_1",
+          title: "Milady Browser",
+          url: "https://example.com",
+          partition: "persist:milady-browser",
+          visible: false,
+          createdAt: "2026-04-05T00:00:00.000Z",
+          updatedAt: "2026-04-05T00:00:00.000Z",
+          lastFocusedAt: null,
+        },
+      }));
+    });
+    await new Promise<void>((resolve) => {
+      bridgeServer.listen(0, "127.0.0.1", () => resolve());
+    });
+    bridgePort = (bridgeServer.address() as AddressInfo).port;
   });
 
   beforeEach(async () => {
-    globalThis.fetch = originalFetch;
     vi.restoreAllMocks();
+    capturedBridgeAuth = null;
     await __resetBrowserWorkspaceStateForTests();
     const tabs = await listBrowserWorkspaceTabs({} as NodeJS.ProcessEnv);
     await Promise.all(
@@ -154,13 +177,15 @@ describe("browser-workspace service", () => {
   });
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
     vi.restoreAllMocks();
   });
 
   afterAll(async () => {
     await __resetBrowserWorkspaceStateForTests();
     await fixture.close();
+    await new Promise<void>((resolve, reject) => {
+      bridgeServer.close((err) => (err ? reject(err) : resolve()));
+    });
   });
 
   it("detects when the desktop bridge is unavailable", () => {
@@ -225,33 +250,13 @@ describe("browser-workspace service", () => {
   });
 
   it("sends bearer auth when opening a tab", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        tab: {
-          id: "btab_1",
-          title: "Milady Browser",
-          url: "https://example.com",
-          partition: "persist:milady-browser",
-          visible: false,
-          createdAt: "2026-04-05T00:00:00.000Z",
-          updatedAt: "2026-04-05T00:00:00.000Z",
-          lastFocusedAt: null,
-        },
-      }),
-    });
-    globalThis.fetch = fetchMock as unknown as typeof globalThis.fetch;
-
     const tab = await openBrowserWorkspaceTab({ url: "https://example.com" }, {
-      MILADY_BROWSER_WORKSPACE_URL: "http://127.0.0.1:31340",
+      MILADY_BROWSER_WORKSPACE_URL: `http://127.0.0.1:${bridgePort}`,
       MILADY_BROWSER_WORKSPACE_TOKEN: "secret",
     } as NodeJS.ProcessEnv);
 
     expect(tab.id).toBe("btab_1");
-    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
-    expect(new Headers(init.headers).get("Authorization")).toBe(
-      "Bearer secret",
-    );
+    expect(capturedBridgeAuth).toBe("Bearer secret");
   });
 
   it("executes real browser subactions in web mode against fixture pages", async () => {

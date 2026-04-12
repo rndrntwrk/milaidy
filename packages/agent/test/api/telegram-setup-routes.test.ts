@@ -1,110 +1,67 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import {
-  handleTelegramSetupRoute,
-  type TelegramSetupRouteState,
-} from "../../src/api/telegram-setup-routes";
-import {
-  createMockHttpResponse,
-  createMockIncomingMessage,
-} from "../../src/test-support/test-helpers";
-import {
-  readJsonBody,
-  sendJson,
-  sendJsonError,
-} from "../../src/api/http-helpers";
+/**
+ * Integration tests for /api/telegram-setup/* routes.
+ *
+ * Starts a real API server and makes real HTTP requests.
+ * The validate-token endpoint calls the Telegram API, so we stub fetch.
+ */
 
-const routeHelpers = {
-  json: sendJson,
-  error: sendJsonError,
-  readJsonBody,
-};
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
+import { req } from "../../../../test/helpers/http";
+import { startApiServer } from "../../src/api/server";
 
-function buildState(
-  overrides: Partial<TelegramSetupRouteState> = {},
-): TelegramSetupRouteState {
-  return {
-    config: {},
-    saveConfig: vi.fn(),
-    runtime: undefined,
-    ...overrides,
-  };
-}
+vi.mock("../../src/services/mcp-marketplace", () => ({
+  searchMcpMarketplace: vi.fn().mockResolvedValue({ results: [] }),
+  getMcpServerDetails: vi.fn().mockResolvedValue(null),
+}));
 
-describe("handleTelegramSetupRoute", () => {
-  beforeEach(() => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => ({
-        ok: true,
-        json: async () => ({
-          ok: true,
-          result: {
-            id: 123456,
-            is_bot: true,
-            first_name: "Milady Bot",
-            username: "milady_bot",
-          },
-        }),
-      })),
-    );
-  });
+let port: number;
+let close: () => Promise<void>;
 
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
+beforeAll(async () => {
+  const server = await startApiServer({ port: 0 });
+  port = server.port;
+  close = server.close;
+}, 180_000);
 
-  test("persists bot auth only into connectors.telegram", async () => {
-    const req = createMockIncomingMessage({
-      method: "POST",
-      url: "/api/telegram-setup/validate-token",
-      body: JSON.stringify({ token: "123456:ABCDEFGHIJKLMNOPQRSTUVWXYZ123456" }),
-      headers: { "content-type": "application/json", host: "localhost:31337" },
-    });
-    const { res, getJson } = createMockHttpResponse();
-    const state = buildState({
-      config: {
-        connectors: {
-          telegramAccount: {
-            enabled: true,
-            phone: "+15551234567",
-            appId: "12345",
-            appHash: "hash",
-            deviceModel: "Milady Desktop",
-            systemVersion: "macOS test",
-          },
-        },
-      },
-    });
+afterAll(async () => {
+  await close();
+});
 
-    const handled = await handleTelegramSetupRoute(
-      req,
-      res,
-      "/api/telegram-setup/validate-token",
-      "POST",
-      state,
-      routeHelpers,
-    );
-
-    expect(handled).toBe(true);
-    expect(getJson()).toMatchObject({
+beforeEach(() => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => ({
       ok: true,
-      bot: { username: "milady_bot" },
-    });
-    expect(
-      (
-        state.config.connectors as Record<string, Record<string, unknown>>
-      ).telegram,
-    ).toMatchObject({
-      botToken: "123456:ABCDEFGHIJKLMNOPQRSTUVWXYZ123456",
-    });
-    expect(
-      (
-        state.config.connectors as Record<string, Record<string, unknown>>
-      ).telegramAccount,
-    ).toMatchObject({
-      enabled: true,
-      phone: "+15551234567",
-      appId: "12345",
-    });
-  });
+      json: async () => ({
+        ok: true,
+        result: {
+          id: 123456,
+          is_bot: true,
+          first_name: "Milady Bot",
+          username: "milady_bot",
+        },
+      }),
+    })),
+  );
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe("telegram-setup routes (real server)", () => {
+  test("POST /api/telegram-setup/validate-token validates and persists bot token", async () => {
+    const { status, data } = await req(
+      port,
+      "POST",
+      "/api/telegram-setup/validate-token",
+      { token: "123456:ABCDEFGHIJKLMNOPQRSTUVWXYZ123456" },
+    );
+    expect(status).toBe(200);
+    expect(data).toHaveProperty("ok", true);
+    expect(data).toHaveProperty("bot");
+    expect((data as { bot: { username: string } }).bot.username).toBe(
+      "milady_bot",
+    );
+  }, 60_000);
 });

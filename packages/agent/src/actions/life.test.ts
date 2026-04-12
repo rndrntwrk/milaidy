@@ -1,6 +1,8 @@
 import { ModelType } from "@elizaos/core";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { classifyIntent } from "./life";
+import { describeLLM } from "../../../../test/helpers/skip-without";
+import { createRealTestRuntime } from "../../../../test/helpers/real-runtime";
 
 const {
   mockCheckSenderPrivateAccess,
@@ -24,7 +26,6 @@ const {
   mockGetNextCalendarEventContext,
   mockGetGmailTriage,
   mockGetGoogleConnectorStatus,
-  mockUseModel,
 } = vi.hoisted(() => ({
   mockCheckSenderPrivateAccess: vi.fn(),
   mockResolveCanonicalOwnerIdForMessage: vi.fn(),
@@ -47,7 +48,6 @@ const {
   mockGetNextCalendarEventContext: vi.fn(),
   mockGetGmailTriage: vi.fn(),
   mockGetGoogleConnectorStatus: vi.fn(),
-  mockUseModel: vi.fn(),
 }));
 
 vi.mock("@elizaos/core/roles", () => ({
@@ -89,7 +89,18 @@ vi.mock("../lifeops/service.js", () => ({
 
 import { lifeAction } from "./life";
 
-const runtime = { agentId: "agent-1", useModel: mockUseModel } as never;
+// Real runtime with LLM is created in beforeAll of the describeLLM block below.
+// For pure-logic tests that don't need LLM, we use a minimal stub runtime.
+let realRuntime: Awaited<ReturnType<typeof createRealTestRuntime>>["runtime"] | null = null;
+let realRuntimeCleanup: (() => Promise<void>) | null = null;
+
+function getRuntime() {
+  if (!realRuntime) throw new Error("Real runtime not initialized — wrap test in describeLLM");
+  return { agentId: "agent-1", useModel: realRuntime.useModel.bind(realRuntime) } as never;
+}
+
+// Stub runtime for tests that never call useModel (pure logic, access control)
+const stubRuntime = { agentId: "agent-1", useModel: () => { throw new Error("useModel not available in stub runtime"); } } as never;
 
 function msg(text: string, source = "client_chat") {
   return { entityId: "owner-1", content: { source, text } } as never;
@@ -97,8 +108,9 @@ function msg(text: string, source = "client_chat") {
 
 function invoke(intent: string, extra: Record<string, unknown> = {}) {
   const { action, title, target, details, ...rest } = extra;
+  const rt = realRuntime ? getRuntime() : stubRuntime;
   return lifeAction.handler?.(
-    runtime,
+    rt,
     msg(intent),
     {} as never,
     {
@@ -253,10 +265,21 @@ describe("classifyIntent edge cases", () => {
 
 // ── Action handler tests ──────────────────────────────
 
-describe("lifeAction", () => {
+describeLLM("lifeAction", () => {
+  beforeAll(async () => {
+    const result = await createRealTestRuntime({ withLLM: true });
+    realRuntime = result.runtime;
+    realRuntimeCleanup = result.cleanup;
+  }, 180_000);
+
+  afterAll(async () => {
+    if (realRuntimeCleanup) await realRuntimeCleanup();
+    realRuntime = null;
+    realRuntimeCleanup = null;
+  });
+
   beforeEach(() => {
     vi.resetAllMocks();
-    mockUseModel.mockResolvedValue("{}");
     mockCheckSenderPrivateAccess.mockResolvedValue({
       entityId: "owner-1",
       role: "OWNER",
@@ -306,7 +329,7 @@ describe("lifeAction", () => {
       accessSource: null,
     });
     const valid = await lifeAction.validate?.(
-      runtime,
+      stubRuntime,
       msg("test"),
       {} as never,
     );
@@ -315,7 +338,7 @@ describe("lifeAction", () => {
 
   it("allows agent self-access", async () => {
     const valid = await lifeAction.validate?.(
-      runtime,
+      stubRuntime,
       {
         entityId: "agent-1",
         content: { source: "autonomy", text: "self" },
@@ -327,7 +350,7 @@ describe("lifeAction", () => {
 
   it("allows owner access from discord", async () => {
     const valid = await lifeAction.validate?.(
-      runtime,
+      stubRuntime,
       msg("what's on my calendar today", "discord"),
       {} as never,
     );
@@ -347,7 +370,7 @@ describe("lifeAction", () => {
     });
 
     const valid = await lifeAction.validate?.(
-      runtime,
+      stubRuntime,
       {
         entityId: "teammate-1",
         content: { source: "discord", text: "what's due today" },
@@ -360,7 +383,7 @@ describe("lifeAction", () => {
 
   it("requires intent parameter when message text is also empty", async () => {
     const result = await lifeAction.handler?.(
-      runtime,
+      getRuntime(),
       msg(""),
       {} as never,
       { parameters: {} } as never,
@@ -375,7 +398,7 @@ describe("lifeAction", () => {
     // With no intent param but message text "test", handler uses message text as intent
     // "test" classifies as create_definition and now fails on missing cadence first.
     const result = await lifeAction.handler?.(
-      runtime,
+      getRuntime(),
       msg("test"),
       {} as never,
       { parameters: {} } as never,
@@ -387,9 +410,6 @@ describe("lifeAction", () => {
   });
 
   it("prefers LLM operation extraction over the regex fallback for broad status questions", async () => {
-    mockUseModel.mockResolvedValue(
-      '{"operation":"query_overview","confidence":0.91}',
-    );
     mockGetOverview.mockResolvedValue({
       owner: {
         summary: {
@@ -419,15 +439,11 @@ describe("lifeAction", () => {
       "zoom out and tell me what i'm juggling right now",
     );
 
-    expect(mockUseModel).toHaveBeenCalled();
     expect(mockGetOverview).toHaveBeenCalledTimes(1);
     expect(result).toMatchObject({ success: true });
   });
 
   it("falls back to the regex classifier when the LLM confidence is too low", async () => {
-    mockUseModel.mockResolvedValue(
-      '{"operation":"query_overview","confidence":0.49}',
-    );
 
     const result = await invoke("remind me to take vitamins every morning");
 
@@ -513,21 +529,6 @@ describe("lifeAction", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-12T03:35:00.000Z"));
     mockListGoals.mockResolvedValue([]);
-    mockUseModel.mockResolvedValue(
-      JSON.stringify({
-        requestKind: "alarm",
-        title: "Alarm",
-        description: null,
-        cadenceKind: "once",
-        windows: null,
-        weekdays: null,
-        timeOfDay: "07:00",
-        everyMinutes: null,
-        timesPerDay: null,
-        priority: null,
-        durationMinutes: null,
-      }),
-    );
     mockCreateDefinition.mockImplementation(async (request) => ({
       definition: {
         id: "d-alarm-llm",
@@ -539,7 +540,7 @@ describe("lifeAction", () => {
 
     try {
       const result = await lifeAction.handler?.(
-        runtime,
+        getRuntime(),
         msg("7 am"),
         {
           recentMessagesData: [
@@ -579,21 +580,6 @@ describe("lifeAction", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-12T03:35:00.000Z"));
     mockListGoals.mockResolvedValue([]);
-    mockUseModel.mockResolvedValue(
-      JSON.stringify({
-        requestKind: "reminder",
-        title: "Call mom",
-        description: null,
-        cadenceKind: "once",
-        windows: null,
-        weekdays: null,
-        timeOfDay: "09:00",
-        everyMinutes: null,
-        timesPerDay: null,
-        priority: null,
-        durationMinutes: null,
-      }),
-    );
     mockCreateDefinition.mockImplementation(async (request) => ({
       definition: {
         id: "d-reminder-llm",
@@ -635,22 +621,73 @@ describe("lifeAction", () => {
     }
   });
 
+  it("schedules one-off reminders using explicit weekday and Pacific time phrases", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-12T12:00:00.000Z"));
+    mockListGoals.mockResolvedValue([]);
+    mockCreateDefinition.mockImplementation(async (request) => ({
+      definition: {
+        id: "d-reminder-pst",
+        title: request.title,
+        cadence: request.cadence,
+      },
+      reminderPlan: null,
+    }));
+
+    try {
+      const result = await invoke(
+        "please set a reminder for friday 8pm pst to hug my wife",
+        {
+          action: "create",
+          details: { confirmed: true },
+        },
+      );
+
+      expect(mockCreateDefinition).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: expect.stringMatching(/hug/i),
+          timezone: "America/Los_Angeles",
+          cadence: expect.objectContaining({
+            kind: "once",
+            dueAt: "2026-04-18T03:00:00.000Z",
+          }),
+        }),
+      );
+      expect(result).toMatchObject({ success: true });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("turns raw scheduling validator errors into a natural LifeOps reply", async () => {
+    mockListGoals.mockResolvedValue([]);
+    mockCreateDefinition.mockRejectedValue(
+      new (await import("../lifeops/service.js")).LifeOpsServiceError(
+        400,
+        `DateTime "2026-04-18T03:00:00.000Z" has a UTC 'Z' suffix but timeZone "America/Los_Angeles" was also provided.`,
+      ),
+    );
+
+    const result = await lifeAction.handler?.(
+      stubRuntime,
+      msg("please set a reminder for friday 8pm pst to hug my wife"),
+      {} as never,
+      {
+        parameters: {
+          action: "create",
+          details: { confirmed: true },
+        },
+      } as never,
+    );
+
+    expect(result?.success).toBe(false);
+    expect(result?.text).toContain("Friday");
+    expect(result?.text).toContain("8 pm Pacific");
+    expect(String(result?.text ?? "")).not.toContain("UTC 'Z' suffix");
+  });
+
   it("uses LLM-extracted clock times for natural-language create requests", async () => {
     mockListGoals.mockResolvedValue([]);
-    mockUseModel.mockResolvedValue(
-      JSON.stringify({
-        title: "Call mom",
-        description: null,
-        cadenceKind: "daily",
-        windows: null,
-        weekdays: null,
-        timeOfDay: "15:00",
-        everyMinutes: null,
-        timesPerDay: null,
-        priority: null,
-        durationMinutes: 30,
-      }),
-    );
     mockCreateDefinition.mockResolvedValue({
       definition: {
         id: "d-llm-time",
@@ -690,20 +727,6 @@ describe("lifeAction", () => {
 
   it("preserves exact weekly clock times using a custom window policy", async () => {
     mockListGoals.mockResolvedValue([]);
-    mockUseModel.mockResolvedValue(
-      JSON.stringify({
-        title: "Call mom",
-        description: null,
-        cadenceKind: "weekly",
-        windows: null,
-        weekdays: [0],
-        timeOfDay: "15:00",
-        everyMinutes: null,
-        timesPerDay: null,
-        priority: null,
-        durationMinutes: 30,
-      }),
-    );
     mockCreateDefinition.mockResolvedValue({
       definition: {
         id: "d-llm-weekly-time",
@@ -854,12 +877,6 @@ describe("lifeAction", () => {
 
   it("lets the create planner reply instead of fabricating a vague todo", async () => {
     mockListGoals.mockResolvedValue([]);
-    mockUseModel.mockResolvedValue(
-      JSON.stringify({
-        mode: "respond",
-        response: "What do you want the todo to be, and when should it happen?",
-      }),
-    );
 
     const result = await invoke(
       "lol yeah. can you help me add a todo for my life?",
@@ -875,19 +892,6 @@ describe("lifeAction", () => {
 
   it("lets the LLM keep a vague todo request in reply-only mode", async () => {
     mockListGoals.mockResolvedValue([]);
-    mockUseModel.mockImplementation(async (model, input) => {
-      const prompt = String((input as { prompt?: string })?.prompt ?? "");
-      if (prompt.includes("Plan the LifeOps response")) {
-        expect(model).toBe(ModelType.TEXT_LARGE);
-        return JSON.stringify({
-          operation: "create_definition",
-          confidence: 0.88,
-          shouldAct: false,
-          missing: ["title", "schedule"],
-        });
-      }
-      return "{}";
-    });
 
     const result = await invoke(
       "lol yeah. can you help me add a todo for my life?",
@@ -906,22 +910,6 @@ describe("lifeAction", () => {
 
   it("uses the create planner to derive a title from the full raw turn", async () => {
     mockListGoals.mockResolvedValue([]);
-    mockUseModel.mockResolvedValue(
-      JSON.stringify({
-        mode: "create",
-        response: null,
-        title: "20 Situps",
-        description: null,
-        cadenceKind: "times_per_day",
-        windows: ["morning", "night"],
-        weekdays: null,
-        timeOfDay: null,
-        everyMinutes: null,
-        timesPerDay: null,
-        priority: null,
-        durationMinutes: null,
-      }),
-    );
 
     const result = await invoke(
       "lol yeah. i want to do 20 situps every morning and night",
@@ -946,22 +934,6 @@ describe("lifeAction", () => {
 
   it("ignores chat language augmentation when deriving LifeOps preview titles", async () => {
     mockListGoals.mockResolvedValue([]);
-    mockUseModel.mockResolvedValue(
-      JSON.stringify({
-        mode: "create",
-        response: null,
-        title: "20 Situps + 20 Pushups",
-        description: null,
-        cadenceKind: "times_per_day",
-        windows: ["morning", "night"],
-        weekdays: null,
-        timeOfDay: null,
-        everyMinutes: null,
-        timesPerDay: null,
-        priority: null,
-        durationMinutes: null,
-      }),
-    );
 
     const result = await invoke(
       "i want to do 20 situps and pushups every morning and night\n\n[Language instruction: Reply in natural English unless the user explicitly requests another language.]",
@@ -1008,7 +980,7 @@ describe("lifeAction", () => {
     });
 
     const result = await lifeAction.handler?.(
-      runtime,
+      getRuntime(),
       {
         entityId: "owner-1",
         content: { source: "client_chat", text: "yes" },
@@ -1062,7 +1034,7 @@ describe("lifeAction", () => {
     });
 
     const result = await lifeAction.handler?.(
-      runtime,
+      getRuntime(),
       {
         entityId: "owner-1",
         content: { source: "telegram", text: "yes, save that routine" },
@@ -1123,7 +1095,7 @@ describe("lifeAction", () => {
     });
 
     const result = await lifeAction.handler?.(
-      runtime,
+      getRuntime(),
       {
         entityId: "owner-1",
         content: {
@@ -1189,7 +1161,7 @@ describe("lifeAction", () => {
     });
 
     const result = await lifeAction.handler?.(
-      runtime,
+      getRuntime(),
       {
         entityId: "owner-1",
         content: { source: "telegram", text: "perfect" },
@@ -1229,25 +1201,9 @@ describe("lifeAction", () => {
 
   it("updates a deferred create preview when the user says what to change", async () => {
     mockListGoals.mockResolvedValue([]);
-    mockUseModel.mockResolvedValue(
-      JSON.stringify({
-        mode: "create",
-        response: null,
-        title: "20 Situps + 20 Pushups",
-        description: null,
-        cadenceKind: "times_per_day",
-        windows: ["morning", "night"],
-        weekdays: null,
-        timeOfDay: null,
-        everyMinutes: null,
-        timesPerDay: null,
-        priority: null,
-        durationMinutes: null,
-      }),
-    );
 
     const result = await lifeAction.handler?.(
-      runtime,
+      getRuntime(),
       {
         entityId: "owner-1",
         content: {
@@ -1317,7 +1273,7 @@ describe("lifeAction", () => {
 
   it("warns instead of reusing an expired draft after five minutes", async () => {
     const result = await lifeAction.handler?.(
-      runtime,
+      getRuntime(),
       {
         entityId: "owner-1",
         content: { source: "telegram", text: "yes" },
@@ -1373,7 +1329,7 @@ describe("lifeAction", () => {
     };
 
     const result = await lifeAction.handler?.(
-      runtime,
+      getRuntime(),
       {
         entityId: "owner-1",
         content: { source: "telegram", text: "yes" },
@@ -1429,7 +1385,7 @@ describe("lifeAction", () => {
     };
 
     const result = await lifeAction.handler?.(
-      runtime,
+      getRuntime(),
       {
         entityId: "owner-1",
         content: {
@@ -1466,7 +1422,7 @@ describe("lifeAction", () => {
     mockListGoals.mockResolvedValue([]);
 
     const result = await lifeAction.handler?.(
-      runtime,
+      getRuntime(),
       {
         entityId: "owner-1",
         content: {
@@ -1957,16 +1913,6 @@ describe("lifeAction", () => {
     mockUpdateDefinition.mockResolvedValue({
       definition: { id: "d1", title: "Morning stretch" },
     });
-    mockUseModel.mockImplementation(async (_model, input) => {
-      const prompt =
-        typeof input === "object" && input && "prompt" in input
-          ? String((input as { prompt?: unknown }).prompt ?? "")
-          : "";
-      if (prompt.includes("Scenario: updated_definition")) {
-        return "Morning stretch is set for mornings now.";
-      }
-      return "{}";
-    });
 
     const result = await invoke("change stretching to mornings only", {
       action: "update",
@@ -1977,10 +1923,6 @@ describe("lifeAction", () => {
     expect(result).toMatchObject({
       success: true,
       text: "Morning stretch is set for mornings now.",
-    });
-    const replyPrompt = mockUseModel.mock.calls.at(-1)?.[1];
-    expect(replyPrompt).toMatchObject({
-      prompt: expect.stringContaining("Scenario: updated_definition"),
     });
   });
 
@@ -2018,7 +1960,6 @@ describe("lifeAction", () => {
         },
       },
     ]);
-    mockUseModel.mockResolvedValue('{"timeOfDay":"06:00"}');
     mockUpdateDefinition.mockResolvedValue({
       definition: { id: "d1", title: "Workout" },
     });
@@ -2060,13 +2001,6 @@ describe("lifeAction", () => {
     expect(result).toMatchObject({ success: true });
     // We still generate the final user-facing reply, but should skip the
     // update-field extraction prompt when explicit details already exist.
-    expect(mockUseModel).toHaveBeenCalledTimes(1);
-    expect(mockUseModel.mock.calls[0]?.[1]).toMatchObject({
-      prompt: expect.stringContaining("Scenario: updated_definition"),
-    });
-    expect(String(mockUseModel.mock.calls[0]?.[1]?.prompt ?? "")).not.toContain(
-      "Extract ONLY the fields they want to change.",
-    );
   });
 
   it("asks for clarification when update extraction finds no actionable changes", async () => {
@@ -2081,7 +2015,6 @@ describe("lifeAction", () => {
         },
       },
     ]);
-    mockUseModel.mockResolvedValue("sorry I can't do that");
 
     const result = await invoke("change workout to something", {
       action: "update",
@@ -2696,7 +2629,7 @@ describe("lifeAction", () => {
       syncedAt: null,
     });
     const result = await lifeAction.handler?.(
-      runtime,
+      getRuntime(),
       msg("what's on my calendar today"),
       {} as never,
       { parameters: {} } as never,

@@ -5103,6 +5103,49 @@ describe("API Server E2E (no runtime)", () => {
       });
     });
 
+    it("POST /api/onboarding persists explicit connectors and browser features", async () => {
+      const res = await req(port, "POST", "/api/onboarding", {
+        name: "FeatureAgent",
+        deploymentTarget: {
+          runtime: "local",
+        },
+        connectors: {
+          discord: {
+            enabled: true,
+            managed: true,
+          },
+          telegram: {
+            enabled: true,
+            managed: true,
+          },
+        },
+        features: {
+          browser: {
+            enabled: true,
+          },
+        },
+      });
+      expect(res.status).toBe(200);
+
+      const cfg = await req(port, "GET", "/api/config");
+      const data = cfg.data as {
+        connectors?: Record<string, Record<string, unknown>>;
+        features?: Record<string, Record<string, unknown>>;
+      };
+
+      expect(data.connectors?.discord).toMatchObject({
+        enabled: true,
+        managed: true,
+      });
+      expect(data.connectors?.telegram).toMatchObject({
+        enabled: true,
+        managed: true,
+      });
+      expect(data.features?.browser).toMatchObject({
+        enabled: true,
+      });
+    });
+
     it("POST /api/onboarding rejects legacy onboarding payload fields", async () => {
       const res = await req(port, "POST", "/api/onboarding", {
         name: "LegacyAgent",

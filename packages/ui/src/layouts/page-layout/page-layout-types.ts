@@ -1,17 +1,11 @@
 import type * as React from "react";
 
 import type { SidebarProps } from "../../components/composites/sidebar";
+import type { WorkspaceLayoutProps } from "../workspace-layout";
 
-export interface PageLayoutProps extends React.HTMLAttributes<HTMLDivElement> {
+export interface PageLayoutProps
+  extends Omit<WorkspaceLayoutProps, "headerPlacement" | "sidebar"> {
   sidebar: React.ReactElement<SidebarProps>;
-  contentHeader?: React.ReactNode;
-  contentHeaderClassName?: string;
-  contentClassName?: string;
-  contentInnerClassName?: string;
-  contentRef?: React.Ref<HTMLElement>;
-  sidebarCollapsible?: boolean;
-  mobileSidebarLabel?: React.ReactNode;
-  mobileSidebarTriggerClassName?: string;
 }
 
 export interface PageLayoutMobileDrawerProps {
