@@ -213,7 +213,7 @@ export function runInitSubmodules({
           cwd: rootDir,
           stdio: "inherit",
         });
-      } catch (shallowErr) {
+      } catch (_shallowErr) {
         // Shallow clones (common in CI) may fail to fetch the pinned SHA.
         // Retry: register the submodule, fetch all refs deeply, then update.
         log(
@@ -235,10 +235,10 @@ export function runInitSubmodules({
             shell: true,
           });
         }
-        exec(
-          `git submodule update --recursive "${submodule.path}"`,
-          { cwd: rootDir, stdio: "inherit" },
-        );
+        exec(`git submodule update --recursive "${submodule.path}"`, {
+          cwd: rootDir,
+          stdio: "inherit",
+        });
       }
       if (
         !isSubmoduleCheckoutReady(submodule.path, {
