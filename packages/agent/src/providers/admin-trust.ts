@@ -8,7 +8,7 @@ import type {
 import {
   checkSenderRole,
   resolveCanonicalOwnerIdForMessage,
-} from "@elizaos/core/roles";
+} from "@miladyai/shared/eliza-core-roles";
 import { hasAdminAccess } from "../security/access.js";
 
 export const adminTrustProvider: Provider = createAdminTrustProvider();

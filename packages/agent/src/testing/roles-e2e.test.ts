@@ -39,7 +39,7 @@ const {
   mockCheckSenderRole: vi.fn(),
 }));
 
-vi.mock("@elizaos/core/roles", () => ({
+vi.mock("@miladyai/shared/eliza-core-roles", () => ({
   getConnectorAdminWhitelist: mockGetConnectorAdminWhitelist,
   getEntityRole: mockGetEntityRole,
   hasConfiguredCanonicalOwner: mockHasConfiguredCanonicalOwner,

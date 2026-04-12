@@ -1,5 +1,5 @@
 import { stringToUuid, type IAgentRuntime } from "@elizaos/core";
-import { resolveCanonicalOwnerId } from "@elizaos/core/roles";
+import { resolveCanonicalOwnerId } from "@miladyai/shared/eliza-core-roles";
 
 type WorldMetadataShape = {
   ownership?: { ownerId?: string };

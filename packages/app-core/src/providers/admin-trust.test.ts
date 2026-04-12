@@ -7,7 +7,7 @@ const { mockCheckSenderRole, mockResolveCanonicalOwnerIdForMessage } =
     mockResolveCanonicalOwnerIdForMessage: vi.fn(),
   }));
 
-vi.mock("@elizaos/core/roles", () => ({
+vi.mock("@miladyai/shared/eliza-core-roles", () => ({
   checkSenderRole: mockCheckSenderRole,
   resolveCanonicalOwnerIdForMessage: mockResolveCanonicalOwnerIdForMessage,
 }));

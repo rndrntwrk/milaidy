@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
  * Integration test for rolesProvider — no module mocks.
  *
  * Uses real hasAdminAccess from security/access.js, which calls the real
- * checkSenderRole from @elizaos/core/roles. Mock runtime objects implement
+ * checkSenderRole from @miladyai/shared/eliza-core-roles. Mock runtime objects implement
  * the interface methods (getRoom, getWorld, getEntityById, getSetting) so
  * the real code path resolves roles from world metadata.
  */

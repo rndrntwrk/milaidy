@@ -5,7 +5,7 @@ import { hasRoleAccess } from "./access";
 /**
  * Integration test for hasRoleAccess — no module mocks.
  *
- * Uses the real checkSenderRole from @elizaos/core/roles, backed by minimal
+ * Uses the real checkSenderRole from @miladyai/shared/eliza-core-roles, backed by minimal
  * runtime objects that implement the interface methods it needs (getRoom,
  * getWorld, getSetting, getEntityById).
  */

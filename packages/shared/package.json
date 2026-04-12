@@ -41,6 +41,7 @@
     "./awareness": "./src/awareness/index.ts",
     "./restart": "./src/restart.ts",
     "./spoken-text": "./src/spoken-text.ts",
+    "./eliza-core-roles": "./src/eliza-core-roles.ts",
     "./validation-keywords": "./src/validation-keywords.ts",
     "./onboarding-presets": "./src/onboarding-presets.ts",
     "./dev-settings-table": "./src/dev-settings-table.ts",

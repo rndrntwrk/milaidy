@@ -10,7 +10,7 @@ const roleMocks = vi.hoisted(() => ({
   checkSenderRole: vi.fn(),
 }));
 
-vi.mock("@elizaos/core/roles", () => ({
+vi.mock("@miladyai/shared/eliza-core-roles", () => ({
   checkSenderRole: roleMocks.checkSenderRole,
 }));
 

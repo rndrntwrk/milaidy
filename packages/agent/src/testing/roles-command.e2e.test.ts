@@ -1,5 +1,5 @@
 import type { Memory, State, UUID } from "@elizaos/core";
-import { setConnectorAdminWhitelist } from "@elizaos/core/roles";
+import { setConnectorAdminWhitelist } from "@miladyai/shared/eliza-core-roles";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { lateJoinWhitelistEvaluator } from "../evaluators/late-join-whitelist";
 import { roleBackfillProvider } from "../providers/role-backfill";
