@@ -52,6 +52,7 @@ export function IdentityStep({
   const {
     onboardingStyle,
     handleOnboardingNext,
+    handleOnboardingBack,
     setState,
     t,
     uiLanguage,
@@ -523,9 +524,18 @@ export function IdentityStep({
       />
 
       <div
-        className="flex flex-col items-center gap-2 pb-6 max-md:pb-2"
+        className={`${onboardingFooterClass} mt-2`}
         style={{ animation: "onboarding-content-fade-in 0.5s ease 0.3s both" }}
       >
+        <Button
+          variant="ghost"
+          className={onboardingSecondaryActionClass}
+          style={onboardingSecondaryActionTextShadowStyle}
+          onClick={handleOnboardingBack}
+          type="button"
+        >
+          {t("onboarding.back")}
+        </Button>
         <Button
           className={onboardingPrimaryActionClass}
           style={onboardingPrimaryActionTextShadowStyle}
