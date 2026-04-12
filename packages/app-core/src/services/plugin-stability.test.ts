@@ -956,7 +956,9 @@ describe("Version Skew Detection (issue #10)", () => {
       }
     } else if (isWorkspaceDependency(coreVersion)) {
       if (coreOverride !== undefined) {
-        expect(coreOverride).toMatch(/^\d+\.\d+\.\d+/);
+        if (!isWorkspaceDependency(coreOverride)) {
+          expect(coreOverride).toMatch(/^\d+\.\d+\.\d+/);
+        }
       }
     } else {
       expect(coreVersion).toMatch(/^[~^]?\d+\.\d+\.\d+/);

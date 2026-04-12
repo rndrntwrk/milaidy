@@ -10,6 +10,10 @@ export type HttpResponse = {
   data: Record<string, unknown>;
 };
 
+export type HttpRequestOptions = {
+  timeoutMs?: number;
+};
+
 export function readConversationId(data: Record<string, unknown>): string {
   const conversation =
     data.conversation &&
@@ -35,6 +39,7 @@ export function req(
   headersOrContentType?:
     | Record<string, string>
     | string,
+  options?: HttpRequestOptions,
 ): Promise<HttpResponse> {
   return new Promise((resolve, reject) => {
     const contentType =
@@ -50,6 +55,22 @@ export function req(
           ? body
           : JSON.stringify(body)
         : undefined;
+
+    let settled = false;
+    const fail = (error: unknown) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      reject(error);
+    };
+    const succeed = (response: HttpResponse) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      resolve(response);
+    };
 
     const r = http.request(
       {
@@ -74,11 +95,20 @@ export function req(
           } catch {
             data = { _raw: raw };
           }
-          resolve({ status: res.statusCode ?? 0, headers: res.headers, data });
+          succeed({ status: res.statusCode ?? 0, headers: res.headers, data });
         });
       },
     );
-    r.on("error", reject);
+    r.on("error", fail);
+    if (typeof options?.timeoutMs === "number" && options.timeoutMs > 0) {
+      r.setTimeout(options.timeoutMs, () => {
+        r.destroy(
+          new Error(
+            `Request timed out after ${options.timeoutMs}ms: ${method.toUpperCase()} ${path}`,
+          ),
+        );
+      });
+    }
     if (b) r.write(b);
     r.end();
   });
@@ -90,6 +120,7 @@ export async function createConversation(
   headersOrContentType?:
     | Record<string, string>
     | string,
+  requestOptions?: HttpRequestOptions,
 ): Promise<HttpResponse & { conversationId: string }> {
   const response = await req(
     port,
@@ -97,6 +128,7 @@ export async function createConversation(
     "/api/conversations",
     options,
     headersOrContentType,
+    requestOptions,
   );
   return {
     ...response,
@@ -111,6 +143,7 @@ export function postConversationMessage(
   headersOrContentType?:
     | Record<string, string>
     | string,
+  requestOptions?: HttpRequestOptions,
 ): Promise<HttpResponse> {
   return req(
     port,
@@ -118,5 +151,6 @@ export function postConversationMessage(
     `/api/conversations/${encodeURIComponent(conversationId)}/messages`,
     body,
     headersOrContentType,
+    requestOptions,
   );
 }

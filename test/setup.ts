@@ -2,10 +2,7 @@ import Module from "node:module";
 import { afterAll, afterEach, vi } from "vitest";
 import * as testRenderer from "react-test-renderer";
 import {
-  createMockStorage,
   hasStorageApi,
-  installCanvasMocks,
-  installMediaElementMocks,
   suppressReactTestConsoleErrors,
 } from "./helpers/browser-mocks";
 
@@ -132,7 +129,6 @@ function ensureStorage(
   if (hasStorageApi(existing)) {
     return existing;
   }
-  const storage = fallback ?? createMockStorage();
   Object.defineProperty(target, key, {
     value: storage,
     writable: true,
@@ -150,8 +146,6 @@ const sharedSessionStorage = ensureStorage(
   "sessionStorage",
 );
 
-installCanvasMocks();
-installMediaElementMocks();
 
 if (typeof globalThis.window !== "undefined") {
   const win = globalThis.window as unknown as Record<string, unknown>;

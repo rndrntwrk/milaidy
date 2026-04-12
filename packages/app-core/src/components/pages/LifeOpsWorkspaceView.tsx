@@ -748,7 +748,7 @@ export function LifeOpsWorkspaceView() {
           />
           <PagePanel.Empty
             variant="surface"
-            className="min-h-[14rem] rounded-[1.5rem]"
+            className="min-h-[14rem] rounded-3xl"
             title="No Google connection yet"
             description="The workspace shows agenda, week, and reply-needed email views after a Google account is connected."
           />
@@ -894,7 +894,7 @@ export function LifeOpsWorkspaceView() {
                 {filteredGmailMessages.length === 0 ? (
                   <PagePanel.Empty
                     variant="surface"
-                    className="min-h-[12rem] rounded-[1.5rem]"
+                    className="min-h-[12rem] rounded-3xl"
                     title="No mail matches"
                     description="Clear the filter or turn off reply-needed only to inspect the loaded Gmail triage feed."
                   />
@@ -1061,7 +1061,7 @@ export function LifeOpsWorkspaceView() {
             ) : (
               <PagePanel.Empty
                 variant="surface"
-                className="min-h-[20rem] rounded-[1.5rem]"
+                className="min-h-[20rem] rounded-3xl"
                 title="Select a message"
                 description="Pick a reply-needed thread to draft or send a follow-up."
               />
@@ -1090,7 +1090,7 @@ export function LifeOpsWorkspaceView() {
               {groupedCalendarEvents.length === 0 ? (
                 <PagePanel.Empty
                   variant="surface"
-                  className="min-h-[12rem] rounded-[1.5rem]"
+                  className="min-h-[12rem] rounded-3xl"
                   title="No upcoming events"
                   description="The calendar feed is empty in this window."
                 />
@@ -1292,7 +1292,7 @@ export function LifeOpsWorkspaceView() {
             ) : (
               <PagePanel.Empty
                 variant="surface"
-                className="min-h-[20rem] rounded-[1.5rem]"
+                className="min-h-[20rem] rounded-3xl"
                 title="Select a day"
                 description="Pick an event to inspect detail and linked context."
               />

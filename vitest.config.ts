@@ -85,36 +85,7 @@ const isWindows = process.platform === "win32";
 const localWorkers = 2;
 const ciWorkers = isWindows ? 2 : 3;
 
-export default defineConfig({
-  resolve: {
-    dedupe: ["react", "react-dom", "ethers", "@elizaos/core"],
-    alias: [
-      {
-        // The @lookingglass/webxr package has a broken ESM import chain
-        // (extensionless relative import of @lookingglass/webxr-polyfill/src/api/index)
-        // that crashes under Node's strict ESM resolver used by vitest.
-        // Stub all @lookingglass/* imports so tests that transitively import
-        // VrmEngine.ts don't fail at module resolution time.
-        find: /^@lookingglass\/.*/,
-        replacement: path.join(
-          repoRoot,
-          "test",
-          "stubs",
-          "lookingglass-webxr.ts",
-        ),
-      },
-      {
-        // App-core unit tests mock this plugin, but the specifier still has to
-        // resolve during module graph construction under the root Vitest config.
-        find: "@miladyai/capacitor-agent",
-        replacement: path.join(
-          repoRoot,
-          "test",
-          "stubs",
-          "empty-module.mjs",
-        ),
-      },
-      {
+export default defineConfig(            {
         find: "milady/plugin-sdk",
         replacement: path.join(repoRoot, "src", "plugin-sdk", "index.ts"),
       },
@@ -136,41 +107,7 @@ export default defineConfig({
       // `plugin-stub.mjs`), our specific stub below never runs and
       // tests get a stub whose default export doesn't expose the
       // `PluginManagerService` class.
-      {
-        // `@elizaos-plugins/client-telegram-account` (note the
-        // hyphenated scope, different from `@elizaos/plugin-*`) has a
-        // package.json whose `main`/`module`/`exports` all point at
-        // `dist/index.js`, and CI with MILADY_SKIP_LOCAL_UPSTREAMS=1
-        // never builds that dist. Every vitest run that transitively
-        // imports the runtime agent loader trips on this package at
-        // resolve time — even `vi.mock(...)` calls fail, because
-        // vitest still has to resolve the specifier before installing
-        // the mock. Alias to the generic plugin stub so resolution
-        // always succeeds.
-        find: "@elizaos-plugins/client-telegram-account",
-        replacement: path.join(repoRoot, "test", "stubs", "plugin-stub.mjs"),
-      },
-      {
-        // `@elizaos/plugin-plugin-manager` is a real test dependency
-        // of `packages/app-core/src/services/app-manager.test.ts`
-        // which does `new PluginManagerService(...)` and then spy-
-        // stubs its methods. The published dist is absent under
-        // SKIP_LOCAL_UPSTREAMS, and aliasing to the submodule source
-        // pulls in `fs-extra` and other transitive deps that aren't
-        // installed at the repo root. Alias to a local stub that
-        // provides the class shape the tests need (spy-stubbable
-        // methods + a `pluginRegistry` namespace with
-        // `resetRegistryCache`). See
-        // `test/stubs/plugin-plugin-manager-module.ts`.
-        find: "@elizaos/plugin-plugin-manager",
-        replacement: path.join(
-          repoRoot,
-          "test",
-          "stubs",
-          "plugin-plugin-manager-module.ts",
-        ),
-      },
-      // Resolve key @elizaos packages to the installed npm tarball files so
+                  // Resolve key @elizaos packages to the installed npm tarball files so
       // Vitest does not depend on sibling workspace checkouts or package
       // export quirks.
       ...(elizaCoreEntry
@@ -205,66 +142,10 @@ export default defineConfig({
             },
           ]
         : [
-            {
-              // Stub @miladyai/agent sub-path imports when the package is absent
-              // so transitive imports (e.g. contracts/wallet) don't break tests.
-              find: /^@elizaos\/agent(\/.*)?$/,
-              replacement: path.join(
-                repoRoot,
-                "test",
-                "stubs",
-                "empty-module.mjs",
-              ),
-            },
-            {
-              find: /^@miladyai\/agent(\/.*)?$/,
-              replacement: path.join(
-                repoRoot,
-                "test",
-                "stubs",
-                "empty-module.mjs",
-              ),
-            },
-          ]),
+                                  ]),
       ...(appCoreSourceRoot
         ? [
-            {
-              find: "@miladyai/app-core/bridge/electrobun-rpc.js",
-              replacement: path.join(
-                repoRoot,
-                "test",
-                "stubs",
-                "app-core-bridge.ts",
-              ),
-            },
-            {
-              find: "@miladyai/app-core/bridge/electrobun-rpc",
-              replacement: path.join(
-                repoRoot,
-                "test",
-                "stubs",
-                "app-core-bridge.ts",
-              ),
-            },
-            {
-              find: "@miladyai/app-core/bridge/electrobun-runtime",
-              replacement: path.join(
-                repoRoot,
-                "test",
-                "stubs",
-                "app-core-bridge.ts",
-              ),
-            },
-            {
-              find: "@miladyai/app-core/bridge",
-              replacement: path.join(
-                repoRoot,
-                "test",
-                "stubs",
-                "app-core-bridge.ts",
-              ),
-            },
-            {
+                                                            {
               find: /^@elizaos\/app-core\/(.*)/,
               replacement: path.join(appCoreSourceRoot, "$1"),
             },
@@ -284,18 +165,7 @@ export default defineConfig({
             },
           ]
         : [
-            {
-              // Stub app-core when workspace is absent — its npm dist has
-              // extensionless JS imports that break under vitest/vite.
-              find: /^@elizaos\/app-core(\/.*)?$/,
-              replacement: path.join(
-                repoRoot,
-                "test",
-                "stubs",
-                "plugin-stub.mjs",
-              ),
-            },
-          ]),
+                      ]),
       // @miladyai/shared — always resolve subpath imports from source
       {
         find: /^@miladyai\/plugin-selfcontrol\/(.*)/,

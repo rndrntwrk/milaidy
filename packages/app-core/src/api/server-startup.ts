@@ -8,19 +8,9 @@ import {
   isSafeResetStateDir as upstreamIsSafeResetStateDir,
   resolveCorsOrigin as upstreamResolveCorsOrigin,
 } from "@miladyai/agent/api/server";
-import { syncMiladyEnvToEliza, syncElizaEnvToMilady } from "../utils/env.js";
+import { syncElizaEnvToMilady, syncMiladyEnvToEliza } from "../utils/env.js";
 
 const PACKAGE_ROOT_NAMES = new Set(["eliza", "elizaai", "elizaos", "milady"]);
-
-/**
- * Register additional package root names for findOwnPackageRoot().
- * Called by the host app at startup to add brand-specific names.
- */
-export function registerPackageRootNames(...names: string[]): void {
-  for (const name of names) {
-    PACKAGE_ROOT_NAMES.add(name.toLowerCase());
-  }
-}
 
 export function isSafeResetStateDir(
   ...args: Parameters<typeof upstreamIsSafeResetStateDir>

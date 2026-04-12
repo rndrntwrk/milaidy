@@ -54,7 +54,7 @@ export function NftGrid({
         return (
           <div
             key={key}
-            className="overflow-hidden rounded-[1.35rem] border border-border/40 bg-card/88 shadow-sm transition-transform hover:-translate-y-0.5"
+            className="overflow-hidden rounded-2xl border border-border/40 bg-card/88 shadow-sm transition-transform hover:-translate-y-0.5"
           >
             {showImage ? (
               <img

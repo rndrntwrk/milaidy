@@ -147,11 +147,7 @@ export default defineConfig({
           "index.ts",
         ),
       },
-      {
-        find: "@elizaos/skills",
-        replacement: path.join(repoRoot, "test", "stubs", "empty-module.mjs"),
-      },
-      ...(fs.existsSync(pluginPersonalityEntry)
+            ...(fs.existsSync(pluginPersonalityEntry)
         ? [
             {
               find: "@elizaos/plugin-personality",
@@ -159,41 +155,7 @@ export default defineConfig({
             },
           ]
         : []),
-      {
-        find: "@elizaos/plugin-repoprompt",
-        replacement: path.join(repoRoot, "test", "stubs", "empty-module.mjs"),
-      },
-      {
-        find: "@elizaos/plugin-agent-orchestrator",
-        replacement: path.join(
-          repoRoot,
-          "test",
-          "stubs",
-          "coding-agent-module.ts",
-        ),
-      },
-      {
-        find: "@elizaos/plugin-coding-agent",
-        replacement: path.join(
-          repoRoot,
-          "test",
-          "stubs",
-          "coding-agent-module.ts",
-        ),
-      },
-      {
-        find: "@elizaos/plugin-pdf",
-        replacement: path.join(repoRoot, "test", "stubs", "empty-module.mjs"),
-      },
-      {
-        find: "@elizaos/plugin-form",
-        replacement: path.join(repoRoot, "test", "stubs", "empty-module.mjs"),
-      },
-      {
-        find: "@elizaos/plugin-pi-ai",
-        replacement: path.join(repoRoot, "test", "stubs", "pi-ai-module.ts"),
-      },
-      ...(fs.existsSync(pluginSignalEntry)
+                                          ...(fs.existsSync(pluginSignalEntry)
         ? [
             {
               find: "@elizaos/plugin-signal",
@@ -209,68 +171,11 @@ export default defineConfig({
             },
           ]
         : []),
-      {
-        find: "@elizaos/plugin-edge-tts",
-        replacement: path.join(repoRoot, "test", "stubs", "empty-module.mjs"),
-      },
-      {
-        find: "@elizaos/plugin-edge-tts/node",
-        replacement: path.join(repoRoot, "test", "stubs", "empty-module.mjs"),
-      },
-      ...(!liveTest
+                  ...(!liveTest
         ? [
-            {
-              find: "@elizaos/plugin-openai",
-              replacement: path.join(
-                repoRoot,
-                "test",
-                "stubs",
-                "plugin-stub.mjs",
-              ),
-            },
-            {
-              find: "@elizaos/plugin-ollama",
-              replacement: path.join(
-                repoRoot,
-                "test",
-                "stubs",
-                "plugin-stub.mjs",
-              ),
-            },
-            {
-              find: "@elizaos/plugin-local-embedding",
-              replacement: path.join(
-                repoRoot,
-                "test",
-                "stubs",
-                "plugin-stub.mjs",
-              ),
-            },
-            {
-              find: "@elizaos/plugin-discord",
-              replacement: path.join(
-                repoRoot,
-                "test",
-                "stubs",
-                "plugin-stub.mjs",
-              ),
-            },
-          ]
+                                                          ]
         : []),
-      {
-        find: "@elizaos/plugin-telegram",
-        replacement: path.join(
-          repoRoot,
-          "test",
-          "stubs",
-          "plugin-telegram-module.ts",
-        ),
-      },
-      {
-        find: "electron",
-        replacement: path.join(repoRoot, "test", "stubs", "electron-module.ts"),
-      },
-      ...(fs.existsSync(pluginWhatsappEntry)
+                  ...(fs.existsSync(pluginWhatsappEntry)
         ? [
             {
               find: "@elizaos/plugin-whatsapp",
@@ -278,11 +183,7 @@ export default defineConfig({
             },
           ]
         : []),
-      {
-        find: /^@lookingglass\/webxr/,
-        replacement: path.join(repoRoot, "test", "stubs", "empty-module.mjs"),
-      },
-    ],
+          ],
   },
   test: {
     testTimeout: 120_000,

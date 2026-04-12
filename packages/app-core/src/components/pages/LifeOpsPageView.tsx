@@ -592,7 +592,7 @@ export function LifeOpsPageView() {
         {!elizaCloudConnected ? (
           <PagePanel.Empty
             variant="surface"
-            className="mt-4 min-h-[12rem] rounded-[1.5rem]"
+            className="mt-4 min-h-[12rem] rounded-3xl"
             title="Connect Eliza Cloud first"
             description="GitHub authorization runs through Eliza Cloud. Connect Cloud, then come back here to manage both accounts."
           />

@@ -49,7 +49,7 @@ export function VincentConnectionCard({
   } = useVincentState({ setActionNotice, t });
 
   return (
-    <div className="rounded-[28px] border border-border/18 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_92%,transparent),color-mix(in_srgb,var(--bg)_98%,transparent))] px-5 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+    <div className="rounded-3xl border border-border/18 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_92%,transparent),color-mix(in_srgb,var(--bg)_98%,transparent))] px-5 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
       <div className="flex items-start justify-between gap-4">
         {/* Status */}
         <div className="flex min-w-0 flex-1 items-center gap-3">

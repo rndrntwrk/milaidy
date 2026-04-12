@@ -18,7 +18,7 @@ type CliOptions = {
 
 function parseArgs(argv: string[]): CliOptions {
   const options: CliOptions = {
-    isolate: "shared",
+    isolate: "per-scenario",
     listOnly: false,
     scenarioIds: [],
   };
@@ -82,6 +82,25 @@ async function main(): Promise<void> {
 
   const { report, reportPath } = await runLifeOpsScenarioMatrix({
     isolate: options.isolate,
+    onProgress: (event) => {
+      if (event.type === "scenario:start") {
+        console.log(
+          `[lifeops-scenarios] START ${event.scenarioId} ${event.title}`,
+        );
+        return;
+      }
+      if (event.type === "turn:start") {
+        console.log(
+          `[lifeops-scenarios]   turn ${event.index}/${event.total} ${event.scenarioId} :: ${event.turnName}`,
+        );
+        return;
+      }
+      if (event.type === "scenario:complete") {
+        console.log(
+          `[lifeops-scenarios] ${event.status.toUpperCase()} ${event.scenarioId} (${event.durationMs}ms)${event.error ? ` :: ${event.error}` : ""}`,
+        );
+      }
+    },
     reportPath: options.reportPath
       ? path.resolve(process.cwd(), options.reportPath)
       : undefined,

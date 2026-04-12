@@ -323,7 +323,7 @@ function SkillsFullView({ contentHeader }: { contentHeader?: ReactNode } = {}) {
                 <PagePanel.Empty
                   data-testid="skills-empty-state"
                   variant="surface"
-                  className="min-h-[18rem] rounded-[1.6rem] px-6 py-12"
+                  className="min-h-[18rem] rounded-3xl px-6 py-12"
                   title={t("skillsview.noSkillsInstalled", {
                     defaultValue: "No Skills Installed",
                   })}
@@ -358,7 +358,7 @@ function SkillsFullView({ contentHeader }: { contentHeader?: ReactNode } = {}) {
                 <PagePanel.Empty
                   data-testid="skills-filter-empty"
                   variant="surface"
-                  className="min-h-[16rem] rounded-[1.6rem] px-6 py-12"
+                  className="min-h-[16rem] rounded-3xl px-6 py-12"
                   title={t("skillsview.noMatchingSkills", {
                     defaultValue: "No matching skills",
                   })}
@@ -663,7 +663,7 @@ function SkillsFullView({ contentHeader }: { contentHeader?: ReactNode } = {}) {
               ) : (
                 <PagePanel.Empty
                   variant="surface"
-                  className="min-h-[16rem] rounded-[1.6rem] px-6 py-12"
+                  className="min-h-[16rem] rounded-3xl px-6 py-12"
                   title={t("skillsview.SelectATalentToConf", {
                     defaultValue: "Select a talent to configure",
                   })}

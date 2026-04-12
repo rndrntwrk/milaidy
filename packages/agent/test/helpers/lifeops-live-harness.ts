@@ -28,6 +28,10 @@ export const REPO_ROOT = path.resolve(
   "..",
 );
 const ENV_PATH = path.join(REPO_ROOT, ".env");
+const LIVE_HTTP_REQUEST_TIMEOUT_MS = 120_000;
+const LIVE_BOOT_HTTP_TIMEOUT_MS = 15_000;
+const LIVE_ENTITY_RESOLUTION_TIMEOUT_MS = 20_000;
+const LIVE_ENTITY_RESOLUTION_RETRY_MS = 500;
 
 try {
   const { config } = await import("dotenv");
@@ -402,7 +406,17 @@ async function waitForJsonPredicate<T>(
 
   while (Date.now() < deadline) {
     try {
-      const response = await fetch(url);
+      const controller = new AbortController();
+      const timeout = setTimeout(
+        () => controller.abort(),
+        Math.min(LIVE_BOOT_HTTP_TIMEOUT_MS, Math.max(deadline - Date.now(), 1)),
+      );
+      let response: Response;
+      try {
+        response = await fetch(url, { signal: controller.signal });
+      } finally {
+        clearTimeout(timeout);
+      }
       if (!response.ok) {
         throw new Error(`Request failed (${response.status}): ${url}`);
       }
@@ -434,7 +448,7 @@ async function waitForLiveRuntimeBootstrap(
     try {
       const conversation = await createConversation(port, {
         title: `Live LifeOps Bootstrap ${Date.now()}`,
-      });
+      }, undefined, { timeoutMs: LIVE_BOOT_HTTP_TIMEOUT_MS });
       if (conversation.conversationId) {
         return;
       }
@@ -676,6 +690,8 @@ export async function postLiveConversationMessage(
         mode: "power",
         ...(source ? { source } : {}),
       },
+      undefined,
+      { timeoutMs: LIVE_HTTP_REQUEST_TIMEOUT_MS },
     );
     const responseText = String(response.data.text ?? "");
 
@@ -755,6 +771,9 @@ export async function waitForTrajectoryCall(
         port,
         "GET",
         `/api/trajectories?limit=100&search=${encodeURIComponent(searchQuery)}`,
+        undefined,
+        undefined,
+        { timeoutMs: LIVE_HTTP_REQUEST_TIMEOUT_MS },
       );
       const trajectories = Array.isArray(list.data.trajectories)
         ? (list.data.trajectories as Array<{ id?: string }>)
@@ -768,7 +787,14 @@ export async function waitForTrajectoryCall(
     }
 
     if (trajectoryMap.size === 0) {
-      const list = await req(port, "GET", "/api/trajectories?limit=100");
+      const list = await req(
+        port,
+        "GET",
+        "/api/trajectories?limit=100",
+        undefined,
+        undefined,
+        { timeoutMs: LIVE_HTTP_REQUEST_TIMEOUT_MS },
+      );
       const trajectories = Array.isArray(list.data.trajectories)
         ? (list.data.trajectories as Array<{ id?: string }>)
         : [];
@@ -788,6 +814,9 @@ export async function waitForTrajectoryCall(
         port,
         "GET",
         `/api/trajectories/${encodeURIComponent(trajectoryId)}`,
+        undefined,
+        undefined,
+        { timeoutMs: LIVE_HTTP_REQUEST_TIMEOUT_MS },
       );
       const llmCalls = Array.isArray(detail.data.llmCalls)
         ? (detail.data.llmCalls as Array<{
@@ -828,7 +857,14 @@ export async function waitForTrajectoryCall(
 export async function listDefinitionEntries(
   port: number,
 ): Promise<LifeOpsDefinitionEntry[]> {
-  const response = await req(port, "GET", "/api/lifeops/definitions");
+  const response = await req(
+    port,
+    "GET",
+    "/api/lifeops/definitions",
+    undefined,
+    undefined,
+    { timeoutMs: LIVE_HTTP_REQUEST_TIMEOUT_MS },
+  );
   if (response.status !== 200) {
     throw new Error(
       `Failed to load LifeOps definitions (${response.status}): ${JSON.stringify(response.data)}`,
@@ -842,7 +878,14 @@ export async function listDefinitionEntries(
 export async function listGoalEntries(
   port: number,
 ): Promise<LifeOpsGoalEntry[]> {
-  const response = await req(port, "GET", "/api/lifeops/goals");
+  const response = await req(
+    port,
+    "GET",
+    "/api/lifeops/goals",
+    undefined,
+    undefined,
+    { timeoutMs: LIVE_HTTP_REQUEST_TIMEOUT_MS },
+  );
   if (response.status !== 200) {
     throw new Error(
       `Failed to load LifeOps goals (${response.status}): ${JSON.stringify(response.data)}`,
@@ -856,7 +899,14 @@ export async function listGoalEntries(
 export async function getLifeOpsOverview(
   port: number,
 ): Promise<LifeOpsOverviewRecord> {
-  const response = await req(port, "GET", "/api/lifeops/overview");
+  const response = await req(
+    port,
+    "GET",
+    "/api/lifeops/overview",
+    undefined,
+    undefined,
+    { timeoutMs: LIVE_HTTP_REQUEST_TIMEOUT_MS },
+  );
   if (response.status !== 200) {
     throw new Error(
       `Failed to load LifeOps overview (${response.status}): ${JSON.stringify(response.data)}`,
@@ -869,41 +919,70 @@ export async function resolveDefinitionIdByTitle(
   port: number,
   title: string,
 ): Promise<string> {
-  const definitions = await listDefinitionEntries(port);
   const normalizedTitle = normalizeLiveText(title);
-  const match = definitions.find(
-    (entry) =>
-      normalizeLiveText(String(entry.definition?.title ?? "")) ===
-      normalizedTitle,
-  );
-  const definitionId = String(match?.definition?.id ?? "");
-  if (!definitionId) {
-    throw new Error(
-      `Could not resolve LifeOps definition id for title "${title}"`,
-    );
+  const deadline = Date.now() + LIVE_ENTITY_RESOLUTION_TIMEOUT_MS;
+  let lastError: unknown = null;
+
+  while (Date.now() < deadline) {
+    try {
+      const definitions = await listDefinitionEntries(port);
+      const match = definitions.find(
+        (entry) =>
+          normalizeLiveText(String(entry.definition?.title ?? "")) ===
+          normalizedTitle,
+      );
+      const definitionId = String(match?.definition?.id ?? "");
+      if (definitionId) {
+        return definitionId;
+      }
+    } catch (error) {
+      lastError = error;
+    }
+
+    await sleep(LIVE_ENTITY_RESOLUTION_RETRY_MS);
   }
-  return definitionId;
+
+  throw new Error(
+    `Could not resolve LifeOps definition id for title "${title}"${
+      lastError instanceof Error ? `: ${lastError.message}` : ""
+    }`,
+  );
 }
 
 export async function resolveOccurrenceIdByTitle(
   port: number,
   title: string,
 ): Promise<string> {
-  const overview = await getLifeOpsOverview(port);
-  const occurrences = Array.isArray(overview.occurrences)
-    ? overview.occurrences
-    : [];
   const normalizedTitle = normalizeLiveText(title);
-  const match = occurrences.find(
-    (entry) => normalizeLiveText(String(entry.title ?? "")) === normalizedTitle,
-  );
-  const occurrenceId = String(match?.id ?? "");
-  if (!occurrenceId) {
-    throw new Error(
-      `Could not resolve LifeOps occurrence id for title "${title}"`,
-    );
+  const deadline = Date.now() + LIVE_ENTITY_RESOLUTION_TIMEOUT_MS;
+  let lastError: unknown = null;
+
+  while (Date.now() < deadline) {
+    try {
+      const overview = await getLifeOpsOverview(port);
+      const occurrences = Array.isArray(overview.occurrences)
+        ? overview.occurrences
+        : [];
+      const match = occurrences.find(
+        (entry) =>
+          normalizeLiveText(String(entry.title ?? "")) === normalizedTitle,
+      );
+      const occurrenceId = String(match?.id ?? "");
+      if (occurrenceId) {
+        return occurrenceId;
+      }
+    } catch (error) {
+      lastError = error;
+    }
+
+    await sleep(LIVE_ENTITY_RESOLUTION_RETRY_MS);
   }
-  return occurrenceId;
+
+  throw new Error(
+    `Could not resolve LifeOps occurrence id for title "${title}"${
+      lastError instanceof Error ? `: ${lastError.message}` : ""
+    }`,
+  );
 }
 
 export async function waitForDefinitionByTitle(
@@ -966,6 +1045,9 @@ export async function getReminderPreference(
     port,
     "GET",
     `/api/lifeops/reminder-preferences?definitionId=${encodeURIComponent(definitionId)}`,
+    undefined,
+    undefined,
+    { timeoutMs: LIVE_HTTP_REQUEST_TIMEOUT_MS },
   );
   if (response.status !== 200) {
     throw new Error(

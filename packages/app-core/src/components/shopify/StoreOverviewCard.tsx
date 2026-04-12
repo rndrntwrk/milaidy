@@ -22,7 +22,7 @@ interface StoreOverviewCardProps {
 
 export function StoreOverviewCard({ shop, counts }: StoreOverviewCardProps) {
   return (
-    <div className="rounded-[18px] border border-border/30 bg-card/40 px-5 py-4">
+    <div className="rounded-2xl border border-border/30 bg-card/40 px-5 py-4">
       {/* Header row */}
       <div className="flex flex-wrap items-start gap-3">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border/30 bg-bg-accent">
@@ -50,7 +50,7 @@ export function StoreOverviewCard({ shop, counts }: StoreOverviewCardProps) {
 
       {/* Aggregate stats */}
       <div className="mt-4 grid grid-cols-3 gap-3">
-        <div className="rounded-[14px] border border-border/24 bg-card/35 px-3 py-3">
+        <div className="rounded-xl border border-border/24 bg-card/35 px-3 py-3">
           <div className="flex items-center gap-1.5 text-2xs uppercase tracking-[0.12em] text-muted/70">
             <Package className="h-3 w-3" />
             Products
@@ -59,7 +59,7 @@ export function StoreOverviewCard({ shop, counts }: StoreOverviewCardProps) {
             {counts.productCount.toLocaleString()}
           </div>
         </div>
-        <div className="rounded-[14px] border border-border/24 bg-card/35 px-3 py-3">
+        <div className="rounded-xl border border-border/24 bg-card/35 px-3 py-3">
           <div className="flex items-center gap-1.5 text-2xs uppercase tracking-[0.12em] text-muted/70">
             <ShoppingCart className="h-3 w-3" />
             Orders
@@ -68,7 +68,7 @@ export function StoreOverviewCard({ shop, counts }: StoreOverviewCardProps) {
             {counts.orderCount.toLocaleString()}
           </div>
         </div>
-        <div className="rounded-[14px] border border-border/24 bg-card/35 px-3 py-3">
+        <div className="rounded-xl border border-border/24 bg-card/35 px-3 py-3">
           <div className="flex items-center gap-1.5 text-2xs uppercase tracking-[0.12em] text-muted/70">
             <Users className="h-3 w-3" />
             Customers

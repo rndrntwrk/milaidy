@@ -13,6 +13,7 @@
 
 import http from "node:http";
 import type { AddressInfo } from "node:net";
+import { setTimeout as sleep } from "node:timers/promises";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { BackupScheduler } from "./backup";
 import { ElizaCloudClient } from "./bridge-client";
@@ -92,13 +93,11 @@ describe("BackupScheduler", () => {
     const client = createClient();
     const scheduler = new BackupScheduler(client, "a1", 30);
 
-    vi.useFakeTimers();
     try {
       scheduler.start();
-      await vi.advanceTimersByTimeAsync(60);
-      scheduler.stop();
+      await sleep(200);
     } finally {
-      vi.useRealTimers();
+      scheduler.stop();
     }
 
     expect(snapshotCallCount).toBeGreaterThanOrEqual(1);
@@ -108,13 +107,11 @@ describe("BackupScheduler", () => {
     const client = createClient();
     const scheduler = new BackupScheduler(client, "a1", 20);
 
-    vi.useFakeTimers();
     try {
       scheduler.start();
-      await vi.advanceTimersByTimeAsync(250);
-      scheduler.stop();
+      await sleep(320);
     } finally {
-      vi.useRealTimers();
+      scheduler.stop();
     }
 
     expect(snapshotCallCount).toBeGreaterThanOrEqual(3);
@@ -124,18 +121,16 @@ describe("BackupScheduler", () => {
     const client = createClient();
     const scheduler = new BackupScheduler(client, "a1", 20);
 
-    vi.useFakeTimers();
     let countAtStop = 0;
     try {
       scheduler.start();
-      await vi.advanceTimersByTimeAsync(40);
+      await sleep(200);
       countAtStop = snapshotCallCount;
       expect(countAtStop).toBeGreaterThanOrEqual(1);
-
       scheduler.stop();
-      await vi.advanceTimersByTimeAsync(60);
+      await sleep(120);
     } finally {
-      vi.useRealTimers();
+      scheduler.stop();
     }
 
     // No additional calls after stop
@@ -156,19 +151,18 @@ describe("BackupScheduler", () => {
     const client = createClient();
     const scheduler = new BackupScheduler(client, "a1", 50);
 
-    vi.useFakeTimers();
     try {
       scheduler.start();
       scheduler.start(); // should not create second timer
-      await vi.advanceTimersByTimeAsync(80);
-      scheduler.stop();
+      await sleep(220);
     } finally {
-      vi.useRealTimers();
+      scheduler.stop();
     }
 
-    // With a single timer at 50ms, after 80ms we expect 1-2 calls.
-    // CI timing variance may yield an extra tick, so allow up to 3.
-    expect(snapshotCallCount).toBeLessThanOrEqual(3);
+    expect(snapshotCallCount).toBeGreaterThanOrEqual(1);
+    // With a single 50ms timer and a 220ms wait, a healthy scheduler
+    // typically fires 4-5 times. A duplicated timer would exceed that.
+    expect(snapshotCallCount).toBeLessThanOrEqual(5);
   });
 
   it("continues running after a failed snapshot", async () => {
@@ -178,17 +172,13 @@ describe("BackupScheduler", () => {
     const client = createClient();
     const scheduler = new BackupScheduler(client, "a1", 20);
 
-    vi.useFakeTimers();
     try {
       scheduler.start();
-      await vi.advanceTimersByTimeAsync(60);
-      scheduler.stop();
+      await sleep(260);
     } finally {
-      vi.useRealTimers();
+      scheduler.stop();
     }
 
-    // At least 2 calls (first fails, second succeeds). CI timing
-    // variance may yield an extra tick, so use >= instead of exact.
     expect(snapshotCallCount).toBeGreaterThanOrEqual(2);
     expect(scheduler.isRunning()).toBe(false); // stopped
   });

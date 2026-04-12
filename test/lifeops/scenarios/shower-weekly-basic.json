@@ -27,7 +27,7 @@
       "title": "Shower",
       "delta": 1,
       "cadenceKind": "weekly",
-      "requiredWeekdays": [1, 3, 6],
+      "requiredWeekdays": [1, 3, 5],
       "requiredWindows": ["morning", "night"],
       "requireReminderPlan": true
     }

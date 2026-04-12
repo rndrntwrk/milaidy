@@ -550,7 +550,7 @@ async function resolveLifeOperationPlan(args: {
     state,
     intent,
   });
-  if (extracted.shouldAct === false) {
+  if (!extracted.shouldAct || !extracted.operation) {
     return {
       operation: extracted.operation,
       confidence: extracted.confidence,
@@ -558,42 +558,8 @@ async function resolveLifeOperationPlan(args: {
       shouldAct: false,
     };
   }
-  if (extracted.operation) {
-    // When the LLM is very uncertain, prefer the regex classifier which
-    // is more conservative (defaults to create_definition).
-    if (
-      typeof extracted.confidence === "number" &&
-      extracted.confidence < 0.5
-    ) {
-      runtime.logger?.debug?.(
-        {
-          src: "action:life",
-          confidence: extracted.confidence,
-          llmOp: extracted.operation,
-        },
-        "Life LLM extraction returned low confidence; falling back to i18n keyword classifier",
-      );
-      return {
-        operation: classifyIntent(intent),
-        confidence: extracted.confidence,
-        missing: extracted.missing,
-        shouldAct: true,
-      };
-    }
-    return {
-      operation: extracted.operation,
-      confidence: extracted.confidence,
-      missing: extracted.missing,
-      shouldAct: true,
-    };
-  }
-
-  runtime.logger?.warn?.(
-    { src: "action:life", intent },
-    "Life LLM extraction returned no operation; falling back to i18n keyword classifier",
-  );
   return {
-    operation: classifyIntent(intent),
+    operation: extracted.operation,
     confidence: extracted.confidence,
     missing: extracted.missing,
     shouldAct: true,
@@ -1865,6 +1831,19 @@ function inferWebsiteTargetsFromIntent(intent: string): string[] {
   return [...normalized].sort();
 }
 
+const UNLOCK_UNTIL_DONE_TERMS = [
+  "until i say done",
+  "until i say i'm done",
+  "until i say im done",
+  "until i'm done",
+  "until im done",
+  "until i say stop",
+  "until i lock it again",
+  "until i lock again",
+  "until i relock",
+  "until i re-lock",
+] as const;
+
 function inferWebsiteAccessPolicyFromIntent(
   intent: string,
   title: string,
@@ -1883,10 +1862,9 @@ function inferWebsiteAccessPolicyFromIntent(
     return undefined;
   }
 
-  const manualUnlock =
-    /\b(?:unlock|unblock)\b.*\buntil i (?:say done|say so|relock|lock it again|block it again|turn it off)\b/.test(
-      lower,
-    ) || /\buntil i say done\b/.test(lower);
+  const manualUnlock = UNLOCK_UNTIL_DONE_TERMS.some((t) =>
+    textIncludesKeywordTerm(lower, t),
+  );
   const callbackMatch = lower.match(
     /\b(?:unlock|unblock)\b.*\buntil ([a-z0-9][a-z0-9\s_-]{1,40}?) (?:happens|is done|is over|completes|finishes|ends)\b/,
   );
@@ -1928,35 +1906,57 @@ function inferWebsiteAccessPolicyFromIntent(
   };
 }
 
+// ── i18n time-window terms ──────────────────────────
+const WINDOW_MORNING_TERMS = [
+  "morning", "mornings", "wake up", "wake-up", "breakfast", "before work",
+  "早上", "起床", "早餐", "上班前",
+  "아침", "기상", "아침식사", "출근 전",
+  "mañana", "desayuno", "antes del trabajo",
+  "manhã", "café da manhã", "cafe da manha", "antes do trabalho",
+  "sáng", "buổi sáng", "trước khi làm",
+  "umaga", "bago magtrabaho",
+] as const;
+
+const WINDOW_AFTERNOON_TERMS = [
+  "afternoon", "afternoons", "lunch", "after lunch", "midday", "mid-day", "during the day",
+  "下午", "午餐", "中午",
+  "오후", "점심", "낮",
+  "tarde", "almuerzo", "después del almuerzo",
+  "tarde", "almoço", "depois do almoço",
+  "chiều", "buổi trưa", "sau bữa trưa",
+  "hapon", "tanghalian",
+] as const;
+
+const WINDOW_EVENING_TERMS = [
+  "evening", "evenings", "after work", "dinner",
+  "傍晚", "下班后", "晚餐",
+  "저녁", "퇴근 후", "저녁식사",
+  "noche", "después del trabajo", "cena",
+  "noite", "depois do trabalho", "jantar",
+  "tối", "sau giờ làm", "bữa tối",
+  "gabi", "pagkatapos magtrabaho", "hapunan",
+] as const;
+
+const WINDOW_NIGHT_TERMS = [
+  "night", "nights", "bedtime", "before bed", "before sleep", "before i sleep",
+  "before going to bed", "before i go to bed",
+  "夜晚", "睡前", "睡觉前",
+  "밤", "취침", "자기 전",
+  "noche", "antes de dormir", "hora de dormir",
+  "noite", "antes de dormir", "hora de dormir",
+  "đêm", "trước khi ngủ",
+  "gabi", "bago matulog",
+] as const;
+
 function extractIntentWindows(
   intent: string,
 ): Array<"morning" | "afternoon" | "evening" | "night"> {
   const lower = intent.toLowerCase();
   const windows: Array<"morning" | "afternoon" | "evening" | "night"> = [];
-  if (
-    /\bmornings?\b|\bwake(?:\s|-)?up\b|\bbreakfast\b|\bbefore (?:work|i start work|starting work)\b/.test(
-      lower,
-    )
-  ) {
-    windows.push("morning");
-  }
-  if (
-    /\bafternoons?\b|\blunch\b|\bafter lunch\b|\bmid(?:\s|-)?day\b|\bduring the day\b/.test(
-      lower,
-    )
-  ) {
-    windows.push("afternoon");
-  }
-  if (/\bevenings?\b|\bafter work\b|\bdinner\b/.test(lower)) {
-    windows.push("evening");
-  }
-  if (
-    /\bnights?\b|\bbedtime\b|\bbefore bed\b|\bbefore sleep\b|\bbefore i sleep\b|\bbefore (?:going to bed|i go to bed)\b/.test(
-      lower,
-    )
-  ) {
-    windows.push("night");
-  }
+  if (textMatchesAnyTerm(lower, WINDOW_MORNING_TERMS)) windows.push("morning");
+  if (textMatchesAnyTerm(lower, WINDOW_AFTERNOON_TERMS)) windows.push("afternoon");
+  if (textMatchesAnyTerm(lower, WINDOW_EVENING_TERMS)) windows.push("evening");
+  if (textMatchesAnyTerm(lower, WINDOW_NIGHT_TERMS)) windows.push("night");
   return windows;
 }
 
@@ -2166,16 +2166,36 @@ function parseTimeOfDayToken(token: string): number | null {
   return parseClockToken(normalized);
 }
 
+// ── i18n alarm / reminder terms ─────────────────────
+const ALARM_TERMS = [
+  "alarm", "wake me up", "wake-up", "wake up",
+  "闹钟", "叫我起床",
+  "알람", "깨워줘",
+  "alarma", "despiértame", "despiertame",
+  "alarme", "me acorde", "me acordar",
+  "báo thức", "đánh thức tôi",
+  "alarma", "gisingin mo ako",
+] as const;
+
+const REMINDER_TERMS_LOCAL = [
+  "remind me", "remind", "reminder", "set a reminder", "set reminder",
+  "create a reminder", "create reminder", "nudge me", "ping me",
+  "提醒我", "提醒", "设置提醒",
+  "알려줘", "리마인더", "알림 설정",
+  "recuérdame", "recordatorio", "crear recordatorio",
+  "lembre-me", "lembrete", "criar lembrete",
+  "nhắc tôi", "nhắc nhở", "đặt nhắc nhở",
+  "ipaalala", "paalala",
+] as const;
+
 function looksLikeAlarmRequest(intent: string): boolean {
   const lower = normalizeLifeInputText(intent).toLowerCase();
-  return /\b(alarm|wake me up|wake-up|wake up)\b/.test(lower);
+  return textMatchesAnyTerm(lower, ALARM_TERMS);
 }
 
 function looksLikeReminderRequest(intent: string): boolean {
   const lower = normalizeLifeInputText(intent).toLowerCase();
-  return /\b(remind(?: me)?|reminder|set (?:a )?reminder|create (?:a )?reminder|nudge me|ping me)\b/.test(
-    lower,
-  );
+  return textMatchesAnyTerm(lower, REMINDER_TERMS_LOCAL);
 }
 
 function resolveAlarmTitle(intent: string): string {

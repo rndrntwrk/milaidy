@@ -93,111 +93,11 @@ export default defineConfig({
             },
           ]
         : []),
-      {
-        find: "@elizaos/skills",
-        replacement: path.join(repoRoot, "test", "stubs", "empty-module.mjs"),
-      },
-      {
-        find: "@elizaos/plugin-repoprompt",
-        replacement: path.join(repoRoot, "test", "stubs", "empty-module.mjs"),
-      },
-      {
-        find: "@elizaos/plugin-agent-orchestrator",
-        replacement: path.join(
-          repoRoot,
-          "test",
-          "stubs",
-          "coding-agent-module.ts",
-        ),
-      },
-      {
-        find: "@elizaos/plugin-coding-agent",
-        replacement: path.join(
-          repoRoot,
-          "test",
-          "stubs",
-          "coding-agent-module.ts",
-        ),
-      },
-      {
-        find: "@elizaos/plugin-pdf",
-        replacement: path.join(repoRoot, "test", "stubs", "empty-module.mjs"),
-      },
-      {
-        find: "@elizaos/plugin-form",
-        replacement: path.join(repoRoot, "test", "stubs", "empty-module.mjs"),
-      },
-      {
-        find: "@elizaos/plugin-pi-ai",
-        replacement: path.join(repoRoot, "test", "stubs", "pi-ai-module.ts"),
-      },
-      ...(!liveTest
+                                                ...(!liveTest
         ? [
-            {
-              find: "@elizaos/plugin-openai",
-              replacement: path.join(
-                repoRoot,
-                "test",
-                "stubs",
-                "plugin-stub.mjs",
-              ),
-            },
-            {
-              find: "@elizaos/plugin-ollama",
-              replacement: path.join(
-                repoRoot,
-                "test",
-                "stubs",
-                "plugin-stub.mjs",
-              ),
-            },
-            {
-              find: "@elizaos/plugin-local-embedding",
-              replacement: path.join(
-                repoRoot,
-                "test",
-                "stubs",
-                "plugin-stub.mjs",
-              ),
-            },
-            {
-              find: "@elizaos/plugin-sql",
-              replacement: path.join(
-                repoRoot,
-                "test",
-                "stubs",
-                "plugin-stub.mjs",
-              ),
-            },
-            {
-              find: "@elizaos/plugin-discord",
-              replacement: path.join(
-                repoRoot,
-                "test",
-                "stubs",
-                "plugin-stub.mjs",
-              ),
-            },
-          ]
+                                                                      ]
         : []),
-      {
-        find: "@elizaos/plugin-telegram",
-        replacement: path.join(
-          repoRoot,
-          "test",
-          "stubs",
-          "plugin-telegram-module.ts",
-        ),
-      },
-      {
-        find: "electron",
-        replacement: path.join(repoRoot, "test", "stubs", "electron-module.ts"),
-      },
-      {
-        find: /^@lookingglass\/webxr/,
-        replacement: path.join(repoRoot, "test", "stubs", "empty-module.mjs"),
-      },
-    ],
+                      ],
   },
   test: {
     testTimeout: 120_000,

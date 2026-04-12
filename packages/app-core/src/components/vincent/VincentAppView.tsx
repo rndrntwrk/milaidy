@@ -124,7 +124,7 @@ export function VincentAppView({ exitToApps, t }: OverlayAppContext) {
 
               {/* Not-connected informational card */}
               {!vincentConnected && !loading && (
-                <div className="rounded-[28px] border border-border/18 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_92%,transparent),color-mix(in_srgb,var(--bg)_98%,transparent))] px-5 py-8 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+                <div className="rounded-3xl border border-border/18 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_92%,transparent),color-mix(in_srgb,var(--bg)_98%,transparent))] px-5 py-8 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
                   <p className="text-sm font-medium text-txt">
                     {t("vincent.connectPrompt", {
                       defaultValue:

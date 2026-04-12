@@ -29,6 +29,7 @@ import type {
   TriageResult,
 } from "../inbox/types.js";
 import { loadInboxTriageConfig } from "../inbox/config.js";
+import { textIncludesKeywordTerm } from "@miladyai/shared/validation-keywords";
 import { resolveAdminEntityId } from "./send-message.js";
 import { INTERNAL_URL } from "./lifeops-google-helpers.js";
 
@@ -55,12 +56,35 @@ type InboxActionParams = {
 // Subaction inference
 // ---------------------------------------------------------------------------
 
-const TRIAGE_PATTERN =
-  /\b(triage|check|scan|new messages|check inbox)\b/i;
-const DIGEST_PATTERN =
-  /\b(digest|summary|briefing|daily|overview|recap|report)\b/i;
-const RESPOND_PATTERN =
-  /\b(respond|reply|send|confirm|approve)\b/i;
+const TRIAGE_TERMS = [
+  "triage", "check", "scan", "new messages", "check inbox",
+  "检查", "新消息", "查看收件箱",
+  "확인", "새 메시지", "받은편지함",
+  "revisar", "nuevos mensajes", "bandeja de entrada",
+  "verificar", "novas mensagens", "caixa de entrada",
+  "kiểm tra", "tin nhắn mới", "hộp thư đến",
+  "tingnan", "bagong mensahe",
+] as const;
+
+const DIGEST_TERMS = [
+  "digest", "summary", "briefing", "daily", "overview", "recap", "report",
+  "摘要", "简报", "概览", "总结",
+  "요약", "브리핑", "개요",
+  "resumen", "informe", "resúmen",
+  "resumo", "relatório", "relatorio",
+  "tóm tắt", "báo cáo", "tổng quan",
+  "buod", "ulat",
+] as const;
+
+const RESPOND_TERMS = [
+  "respond", "reply", "send", "confirm", "approve",
+  "回复", "发送", "确认", "批准",
+  "답장", "보내기", "확인", "승인",
+  "responder", "enviar", "confirmar", "aprobar",
+  "responder", "enviar", "confirmar", "aprovar",
+  "trả lời", "gửi", "xác nhận", "phê duyệt",
+  "sumagot", "ipadala", "kumpirmahin", "aprubahan",
+] as const;
 
 function resolveSubaction(
   params: InboxActionParams,
@@ -72,9 +96,9 @@ function resolveSubaction(
 
   // 2. Infer from intent or message text
   const text = params.intent ?? messageText;
-  if (TRIAGE_PATTERN.test(text)) return "triage";
-  if (DIGEST_PATTERN.test(text)) return "digest";
-  if (RESPOND_PATTERN.test(text)) return "respond";
+  if (TRIAGE_TERMS.some((t) => textIncludesKeywordTerm(text, t))) return "triage";
+  if (DIGEST_TERMS.some((t) => textIncludesKeywordTerm(text, t))) return "digest";
+  if (RESPOND_TERMS.some((t) => textIncludesKeywordTerm(text, t))) return "respond";
 
   // 3. If there's a pending draft in state, assume respond
   if (latestPendingDraft(state)) return "respond";

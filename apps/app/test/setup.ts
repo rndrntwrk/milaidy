@@ -8,10 +8,7 @@
 import React from "react";
 import { vi } from "vitest";
 import {
-  createMockStorage,
   hasStorageApi,
-  installCanvasMocks,
-  installMediaElementMocks,
   suppressReactTestConsoleErrors,
 } from "../../../test/helpers/browser-mocks";
 
@@ -26,7 +23,6 @@ globalThis.React = React;
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 suppressReactTestConsoleErrors();
-installMediaElementMocks();
 
 // ---------------------------------------------------------------------------
 // Mock @miladyai/app-core bridge modules — the real electrobun RPC module
@@ -393,14 +389,12 @@ if (typeof globalThis.document === "undefined") {
 
 if (!hasStorageApi(globalThis.localStorage)) {
   Object.defineProperty(globalThis, "localStorage", {
-    value: createMockStorage(),
     writable: true,
     configurable: true,
   });
 }
 if (!hasStorageApi(globalThis.sessionStorage)) {
   Object.defineProperty(globalThis, "sessionStorage", {
-    value: createMockStorage(),
     writable: true,
     configurable: true,
   });
@@ -451,7 +445,6 @@ if (typeof globalThis.window === "undefined") {
   }
 }
 
-installCanvasMocks();
 
 if (typeof globalThis.WebSocket === "undefined") {
   class MockWebSocket {

@@ -10,13 +10,13 @@
 
 ## Triage Verdicts
 
-### CLOSE (3 issues)
+### CLOSE (3 issues) — all were already closed at time of review
 
-| # | Title | Reason |
-|---|-------|--------|
-| #1782 | sprint check list | Redundant meta-issue. Full W16 sprint plan copy-pasted as HTML. All items already tracked as individual issues #1794-#1813. Labels (bug, connector, performance) are misapplied. |
-| #1130 | ChatGPT Subscription OAuth token lacks API scope | 3+ weeks old. Root cause is entirely external: the upstream OAuth client `app_EMoamEEZ73f0CkXaXp7hrann` in `@mariozechner/pi-ai` requests only identity scopes, not `api.model.read`. Not fixable in milady codebase. No upstream movement. Workaround documented (use Claude Subscription). |
-| #1828 | [Docs] Tester feedback burn-down tracker | Pure tracking issue whose items are already covered by W16 sprint issues. The source doc (`docs/apps/desktop/user-feedback-2026-03-08.md`) is the ground truth; this issue adds nothing. |
+| # | Title | Reason | Status |
+|---|-------|--------|--------|
+| #1782 | sprint check list | Redundant meta-issue. Full W16 sprint plan copy-pasted as HTML. All items already tracked as individual issues #1794-#1813. Labels (bug, connector, performance) were misapplied. | Already closed |
+| #1130 | ChatGPT Subscription OAuth token lacks API scope | 3+ weeks old. Root cause is entirely external: upstream OAuth client in `@mariozechner/pi-ai` requests only identity scopes, not `api.model.read`. Not fixable in milady codebase. Workaround: use Claude Subscription. | Already closed |
+| #1828 | [Docs] Tester feedback burn-down tracker | Pure tracking issue whose items are already covered by W16 sprint issues. Source doc is ground truth; this issue adds nothing. | Already closed |
 
 ### KEEP — Active Sprint W16 Desktop Track (10 issues)
 

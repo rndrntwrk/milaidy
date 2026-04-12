@@ -20,6 +20,8 @@ const LIVE_SCENARIO_SUITE_ENABLED =
   LIVE_CHAT_TESTS_ENABLED &&
   LIVE_SCENARIO_TESTS_ENABLED &&
   selectedLiveProvider !== null;
+const SHARED_RUNTIME_ENABLED =
+  process.env.MILADY_LIVE_SCENARIO_SHARED_RUNTIME === "1";
 
 if (!LIVE_SCENARIO_SUITE_ENABLED) {
   console.info(
@@ -35,6 +37,9 @@ describeIf(LIVE_SCENARIO_SUITE_ENABLED)(
     let runtime: StartedLifeOpsLiveRuntime | undefined;
 
     beforeAll(async () => {
+      if (!SHARED_RUNTIME_ENABLED) {
+        return;
+      }
       runtime = await startLifeOpsLiveRuntime({
         selectedProvider: selectedLiveProvider,
       });
@@ -48,7 +53,7 @@ describeIf(LIVE_SCENARIO_SUITE_ENABLED)(
 
     for (const scenario of scenarios) {
       it(`${scenario.id}: ${scenario.title}`, async () => {
-        if (scenario.requiresIsolation) {
+        if (scenario.requiresIsolation || !SHARED_RUNTIME_ENABLED) {
           const isolatedRuntime = await startLifeOpsLiveRuntime({
             selectedProvider: selectedLiveProvider,
           });

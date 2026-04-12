@@ -173,13 +173,13 @@ describe("release-check package guards", () => {
         {
           dependencies: {
             "@elizaos/core": "2.0.0-alpha.113",
-            "@elizaos/plugin-openai": "2.0.0-alpha.15",
+            "@elizaos/plugin-openai": "alpha",
           },
         },
         {
           dependencies: {
             "@elizaos/core": "alpha",
-            "@elizaos/plugin-openai": "2.0.0-alpha.15",
+            "@elizaos/plugin-openai": "alpha",
             "@elizaos/plugin-shell": "alpha",
           },
         },
@@ -291,21 +291,24 @@ miladyai-2.0.0-alpha.92.tgz
       sanitizeNpmOverridesForPack({
         dependencies: {
           "@elizaos/core": "workspace:*",
-          "@elizaos/plugin-openai": "2.0.0-alpha.21",
+          "@elizaos/plugin-openai": "workspace:*",
         },
         overrides: {
-          "@elizaos/core": "2.0.0-alpha.115",
+          "@elizaos/core": "workspace:*",
           "@elizaos/plugin-discord": "workspace:*",
-          "@elizaos/plugin-openai": "2.0.0-alpha.21",
+          "@elizaos/plugin-openai": "workspace:*",
           axios: "1.14.0",
         },
       }),
     ).toEqual({
       overrides: {
-        "@elizaos/plugin-openai": "2.0.0-alpha.21",
         axios: "1.14.0",
       },
-      removed: ["@elizaos/core", "@elizaos/plugin-discord"],
+      removed: [
+        "@elizaos/core",
+        "@elizaos/plugin-discord",
+        "@elizaos/plugin-openai",
+      ],
     });
   });
 

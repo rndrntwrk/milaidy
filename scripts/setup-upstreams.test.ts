@@ -425,7 +425,7 @@ describe("getPublishedElizaPackageSpecs", () => {
         path.join(repoRoot, "package.json"),
         JSON.stringify({
           dependencies: {
-            "@elizaos/core": "2.0.0-alpha.113",
+            "@elizaos/core": "workspace:*",
             "@elizaos/plugin-agent-orchestrator": "workspace:*",
           },
           devDependencies: {
@@ -457,38 +457,38 @@ describe("ensurePublishedElizaPackageLinks", () => {
 
     try {
       const repoRoot = path.join(tempRoot, "milady");
-      const cachedCoreDir = path.join(
+      const cachedPromptsDir = path.join(
         repoRoot,
         "node_modules",
         ".bun",
-        "@elizaos+core@2.0.0-alpha.113+example",
+        "@elizaos+prompts@2.0.0-alpha.113+example",
         "node_modules",
         "@elizaos",
-        "core",
+        "prompts",
       );
 
       mkdirSync(path.join(repoRoot, "apps", "app"), { recursive: true });
       mkdirSync(path.join(repoRoot, "apps", "home"), { recursive: true });
-      mkdirSync(cachedCoreDir, { recursive: true });
+      mkdirSync(cachedPromptsDir, { recursive: true });
       writeFileSync(
         path.join(repoRoot, "package.json"),
         JSON.stringify({
           dependencies: {
-            "@elizaos/core": "2.0.0-alpha.113",
+            "@elizaos/prompts": "2.0.0-alpha.113",
           },
         }),
         "utf8",
       );
       writeFileSync(
-        path.join(cachedCoreDir, "package.json"),
-        JSON.stringify({ name: "@elizaos/core" }),
+        path.join(cachedPromptsDir, "package.json"),
+        JSON.stringify({ name: "@elizaos/prompts" }),
         "utf8",
       );
 
       expect(ensurePublishedElizaPackageLinks(repoRoot)).toBe(3);
       expect(
-        realpathSync(path.join(repoRoot, "node_modules", "@elizaos", "core")),
-      ).toBe(realpathSync(cachedCoreDir));
+        realpathSync(path.join(repoRoot, "node_modules", "@elizaos", "prompts")),
+      ).toBe(realpathSync(cachedPromptsDir));
       expect(
         realpathSync(
           path.join(
@@ -497,10 +497,10 @@ describe("ensurePublishedElizaPackageLinks", () => {
             "app",
             "node_modules",
             "@elizaos",
-            "core",
+            "prompts",
           ),
         ),
-      ).toBe(realpathSync(cachedCoreDir));
+      ).toBe(realpathSync(cachedPromptsDir));
       expect(
         realpathSync(
           path.join(
@@ -509,10 +509,10 @@ describe("ensurePublishedElizaPackageLinks", () => {
             "home",
             "node_modules",
             "@elizaos",
-            "core",
+            "prompts",
           ),
         ),
-      ).toBe(realpathSync(cachedCoreDir));
+      ).toBe(realpathSync(cachedPromptsDir));
     } finally {
       rmSync(tempRoot, { force: true, recursive: true });
     }

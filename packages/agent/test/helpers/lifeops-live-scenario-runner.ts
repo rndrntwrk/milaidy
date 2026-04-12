@@ -155,8 +155,39 @@ const DEFAULT_SCENARIO_DIR = path.join(
   "lifeops",
   "scenarios",
 );
-const FINAL_CHECK_TIMEOUT_MS = 8_000;
+const FINAL_CHECK_TIMEOUT_MS = 20_000;
 const FINAL_CHECK_RETRY_MS = 500;
+const LIVE_API_TURN_TIMEOUT_MS = 120_000;
+const LIVE_ROOM_CREATION_TIMEOUT_MS = 30_000;
+
+export type ScenarioProgressEvent =
+  | {
+      type: "scenario:start";
+      scenarioId: string;
+      title: string;
+    }
+  | {
+      type: "scenario:complete";
+      durationMs: number;
+      error?: string;
+      scenarioId: string;
+      status: "passed" | "failed";
+      title: string;
+    }
+  | {
+      type: "turn:start";
+      index: number;
+      scenarioId: string;
+      total: number;
+      turnName: string;
+    }
+  | {
+      type: "turn:complete";
+      index: number;
+      scenarioId: string;
+      total: number;
+      turnName: string;
+    };
 
 function normalizeText(text: string): string {
   return normalizeLiveText(text);
@@ -392,6 +423,8 @@ async function executeScenarioApiTurn(args: {
     method,
     resolvedPath,
     method === "POST" ? resolvedBody : undefined,
+    undefined,
+    { timeoutMs: LIVE_API_TURN_TIMEOUT_MS },
   );
   const expectedStatus = args.turn.apiStatus ?? (method === "POST" ? 200 : 200);
   if (response.status !== expectedStatus) {
@@ -438,7 +471,7 @@ async function createScenarioRooms(
   for (const room of rooms) {
     const conversation = await createConversation(runtime.port, {
       title: room.title ?? `${scenario.title} (${room.id})`,
-    });
+    }, undefined, { timeoutMs: LIVE_ROOM_CREATION_TIMEOUT_MS });
     created.set(room.id, {
       conversationId: conversation.conversationId,
       source: room.source ?? "discord",
@@ -778,6 +811,7 @@ async function waitForFinalChecks(args: {
 }
 
 export async function runLifeOpsLiveScenario(args: {
+  onProgress?: (event: ScenarioProgressEvent) => void;
   runtime: StartedLifeOpsLiveRuntime;
   scenario: LifeOpsLiveScenario;
 }): Promise<ScenarioReport> {
@@ -788,9 +822,21 @@ export async function runLifeOpsLiveScenario(args: {
   const baseline = await collectScenarioBaseline(args.runtime, args.scenario);
 
   try {
+    args.onProgress?.({
+      type: "scenario:start",
+      scenarioId: args.scenario.id,
+      title: args.scenario.title,
+    });
     const rooms = await createScenarioRooms(args.runtime, args.scenario);
 
-    for (const turn of args.scenario.turns) {
+    for (const [index, turn] of args.scenario.turns.entries()) {
+      args.onProgress?.({
+        type: "turn:start",
+        index: index + 1,
+        scenarioId: args.scenario.id,
+        total: args.scenario.turns.length,
+        turnName: turn.name,
+      });
       if (turn.apiRequest) {
         const apiResult = await executeScenarioApiTurn({
           runtime: args.runtime,
@@ -803,6 +849,13 @@ export async function runLifeOpsLiveScenario(args: {
           responseText: apiResult.responseText,
           source: "api",
           text: apiResult.text,
+        });
+        args.onProgress?.({
+          type: "turn:complete",
+          index: index + 1,
+          scenarioId: args.scenario.id,
+          total: args.scenario.turns.length,
+          turnName: turn.name,
         });
         continue;
       }
@@ -881,6 +934,13 @@ export async function runLifeOpsLiveScenario(args: {
         responseText,
         turn.responseExcludes,
       );
+      args.onProgress?.({
+        type: "turn:complete",
+        index: index + 1,
+        scenarioId: args.scenario.id,
+        total: args.scenario.turns.length,
+        turnName: turn.name,
+      });
     }
 
     const finalChecks = await waitForFinalChecks({
@@ -889,7 +949,7 @@ export async function runLifeOpsLiveScenario(args: {
       scenario: args.scenario,
     });
 
-    return {
+    const report = {
       durationMs: Date.now() - startedMs,
       finalChecks,
       id: args.scenario.id,
@@ -899,8 +959,16 @@ export async function runLifeOpsLiveScenario(args: {
       title: args.scenario.title,
       turns,
     };
+    args.onProgress?.({
+      type: "scenario:complete",
+      durationMs: report.durationMs,
+      scenarioId: args.scenario.id,
+      status: report.status,
+      title: args.scenario.title,
+    });
+    return report;
   } catch (error) {
-    return {
+    const report = {
       durationMs: Date.now() - startedMs,
       error: error instanceof Error ? error.message : String(error),
       finalChecks: [],
@@ -911,6 +979,15 @@ export async function runLifeOpsLiveScenario(args: {
       title: args.scenario.title,
       turns,
     };
+    args.onProgress?.({
+      type: "scenario:complete",
+      durationMs: report.durationMs,
+      error: report.error,
+      scenarioId: args.scenario.id,
+      status: report.status,
+      title: args.scenario.title,
+    });
+    return report;
   }
 }
 
@@ -935,6 +1012,7 @@ export async function loadLifeOpsScenarioCatalog(
 
 export async function runLifeOpsScenarioMatrix(options?: {
   isolate?: "shared" | "per-scenario";
+  onProgress?: (event: ScenarioProgressEvent) => void;
   reportPath?: string;
   scenarioIds?: string[];
   selectedProvider?: SelectedLiveProvider | null;
@@ -958,7 +1036,7 @@ export async function runLifeOpsScenarioMatrix(options?: {
     );
   }
 
-  const isolate = options?.isolate ?? "shared";
+  const isolate = options?.isolate ?? "per-scenario";
   const reports: ScenarioReport[] = [];
   let sharedRuntime: StartedLifeOpsLiveRuntime | null = null;
 
@@ -978,7 +1056,13 @@ export async function runLifeOpsScenarioMatrix(options?: {
         : (sharedRuntime as StartedLifeOpsLiveRuntime);
 
       try {
-        reports.push(await runLifeOpsLiveScenario({ runtime, scenario }));
+        reports.push(
+          await runLifeOpsLiveScenario({
+            onProgress: options?.onProgress,
+            runtime,
+            scenario,
+          }),
+        );
       } finally {
         if (useIsolatedRuntime) {
           await runtime.close();

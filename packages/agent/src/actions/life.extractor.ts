@@ -38,9 +38,9 @@ export type ExtractedLifeMissingField =
 
 type ExtractedLifeOperationPlan = {
   operation: ExtractedLifeOperation | null;
-  confidence: number | null;
+  confidence: number;
   missing: ExtractedLifeMissingField[];
-  shouldAct: boolean | null;
+  shouldAct: boolean;
 };
 
 function messageText(message: Memory): string {
@@ -175,106 +175,57 @@ function normalizeIntent(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }
 
-const LIFE_CREATE_HINT_RE =
-  /\b(add|create|make|set up|set|help me(?: remember)?|remember to|remind(?: me)?|make sure|keep bugging me|nudge me|ping me)\b/;
-const LIFE_ITEM_RE = /\b(todo|task|habit|routine|reminder|alarm)\b/;
-const LIFE_SCHEDULE_RE =
-  /\b(every|daily|weekly|tomorrow|today|tonight|morning|night|afternoon|evening|wake(?:-|\s)?up|before bed|before sleep|breakfast|lunch|after lunch|dinner|during the day|throughout the day|weekdays?|weekends?)\b/;
-const LIFE_TIME_RE = /\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b/;
-const LIFE_SPECIFIC_ACTIVITY_RE =
-  /\b(call|email|text|submit|pay|take|drink|brush|stretch|work ?out|workout|exercise|meditat(?:e|ion)|shower|shave|floss|hug|invisalign|water|vitamins?)\b/;
-const LIFE_SEEDED_ROUTINE_RE =
-  /\b(invisalign|water|stretch(?:ing)?|vitamins?|brush(?:ing|ed)?|teeth|cepill(?:ar|arme|arte|arse|ando|ado)|dientes|work ?out|workout|exercise|gym|shower|shave)\b/;
-const LIFE_REMINDER_ONLY_SCHEDULE_RE =
-  /\b(alarm|wake(?:-|\s)?up|wake me up|remind(?: me)?|reminder)\b/;
+const REPLY_ONLY_OPERATION_PLAN: ExtractedLifeOperationPlan = {
+  operation: null,
+  confidence: 0,
+  missing: [],
+  shouldAct: false,
+};
 
-function buildHeuristicOperationPlan(args: {
-  intent: string;
+function normalizeOperationPlan(
+  parsed: Record<string, unknown>,
+): ExtractedLifeOperationPlan | null {
+  const operation = normalizeOperation(parsed.operation);
+  const shouldAct = normalizeShouldAct(parsed.shouldAct);
+  if (shouldAct === null) {
+    return null;
+  }
+
+  // Acting without a concrete operation is invalid; keep the plan reply-only.
+  if (shouldAct && operation === null) {
+    return null;
+  }
+
+  return {
+    operation,
+    confidence: normalizeConfidence(parsed.confidence) ?? 0,
+    missing: normalizeMissingFields(parsed.missing),
+    shouldAct,
+  };
+}
+
+function buildRepairPrompt(args: {
   currentMessage: string;
+  intent: string;
+  rawResponse: string;
   recentConversation: string[];
-}): ExtractedLifeOperationPlan | null {
-  const text = normalizeIntent(args.intent || args.currentMessage);
-  const lower = text.toLowerCase();
-  const recentWindow = args.recentConversation.slice(-resolveContextWindow());
-
-  if (
-    /\b(zoom out|big picture|juggling|what am i juggling|everything i have going on)\b/.test(
-      lower,
-    )
-  ) {
-    return {
-      operation: "query_overview",
-      confidence: 0.82,
-      shouldAct: true,
-      missing: [],
-    };
-  }
-
-  const asksToCreate =
-    /\b(add|create|make|set up|set|help me add|help me create|help me make)\b/.test(
-      lower,
-    );
-  const mentionsLifeItem =
-    /\b(todo|task|habit|routine|reminder|alarm)\b/.test(lower);
-  const hasSpecificTitle =
-    /\bto\s+[a-z]/.test(lower) ||
-    /\b\d+\s+[a-z]/.test(lower) ||
-    /\b(call|email|text|submit|pay|brush|stretch|drink|take)\b/.test(lower);
-  const hasSchedule =
-    /\b(every|daily|weekly|tomorrow|today|tonight|morning|night|afternoon|evening)\b/.test(
-      lower,
-    ) || /\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b/.test(lower);
-
-  if (asksToCreate && mentionsLifeItem && !hasSpecificTitle && !hasSchedule) {
-    return {
-      operation: "create_definition",
-      confidence: 0.8,
-      shouldAct: false,
-      missing: ["title", "schedule"],
-    };
-  }
-
-  const seededLifeCreate =
-    (LIFE_CREATE_HINT_RE.test(lower) || LIFE_ITEM_RE.test(lower)) &&
-    (LIFE_SPECIFIC_ACTIVITY_RE.test(lower) ||
-      LIFE_SEEDED_ROUTINE_RE.test(lower) ||
-      LIFE_SCHEDULE_RE.test(lower) ||
-      LIFE_TIME_RE.test(lower) ||
-      LIFE_REMINDER_ONLY_SCHEDULE_RE.test(lower));
-  const specificScheduledLifeCreate =
-    (LIFE_SPECIFIC_ACTIVITY_RE.test(lower) || LIFE_SEEDED_ROUTINE_RE.test(lower)) &&
-    (LIFE_SCHEDULE_RE.test(lower) || LIFE_TIME_RE.test(lower));
-
-  if (seededLifeCreate || specificScheduledLifeCreate) {
-    return {
-      operation: "create_definition",
-      confidence: 0.84,
-      shouldAct: true,
-      missing: [],
-    };
-  }
-
-  const shortTimedFollowup =
-    text.length <= 32 &&
-    (/\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b/.test(lower) ||
-      /\b(today|tomorrow|tonight)\b/.test(lower));
-  if (
-    shortTimedFollowup &&
-    recentWindow.some((entry) =>
-      /\b(alarm|wake(?:-|\s)?up|wake me up|remind(?: me)?|reminder)\b/i.test(
-        entry,
-      ),
-    )
-  ) {
-    return {
-      operation: "create_definition",
-      confidence: 0.76,
-      shouldAct: true,
-      missing: [],
-    };
-  }
-
-  return null;
+}): string {
+  return [
+    "Your last reply for the LifeOps operation planner was invalid.",
+    "Return ONLY valid JSON with exactly these fields:",
+    '  operation: one of the allowed operations, or null when this should be reply-only/no-op',
+    "  confidence: number from 0 to 1",
+    "  shouldAct: boolean",
+    '  missing: array of missing fields from ["title","schedule","target","goal","phone_number","reminder_intensity","details"]',
+    "",
+    "Do not add prose, markdown, XML, or code fences.",
+    "",
+    `Allowed operations: ${LIFE_OPERATION_VALUES.join(", ")}, or null`,
+    `Current request: ${JSON.stringify(args.currentMessage)}`,
+    `Resolved intent: ${JSON.stringify(args.intent)}`,
+    `Recent conversation: ${JSON.stringify(args.recentConversation.join("\n"))}`,
+    `Previous invalid output: ${JSON.stringify(args.rawResponse)}`,
+  ].join("\n");
 }
 
 export async function extractLifeOperationWithLlm(args: {
@@ -288,20 +239,12 @@ export async function extractLifeOperationWithLlm(args: {
     -resolveContextWindow(),
   );
   const currentMessage = messageText(message);
-  const heuristicPlan = buildHeuristicOperationPlan({
-    intent,
-    currentMessage,
-    recentConversation,
-  });
   if (typeof runtime.useModel !== "function") {
-    return (
-      heuristicPlan ?? {
-        operation: null,
-        confidence: null,
-        shouldAct: null,
-        missing: [],
-      }
+    runtime.logger?.warn?.(
+      { src: "action:life" },
+      "Life operation extraction skipped because runtime.useModel is unavailable",
     );
+    return REPLY_ONLY_OPERATION_PLAN;
   }
   const prompt = [
     "Plan the LifeOps response for the current user request.",
@@ -312,6 +255,8 @@ export async function extractLifeOperationWithLlm(args: {
     "Set shouldAct=false when the user is chatting, acknowledging, brainstorming, or asking for help in a way that is too vague to safely create, update, complete, or query anything yet.",
     "When the user clearly wants a LifeOps action but key information is missing, set operation to the closest operation, shouldAct=false, and list the blocking pieces in missing.",
     "Only set shouldAct=true when the assistant should execute, preview, update, or query right now.",
+    "Requests with concrete routine content and interpretable cadence are actionable even when some fields are implied.",
+    "Treat requests like weekdays after lunch, during the day, every morning, tomorrow at 9, set an alarm for 7 am, and remind me about my Invisalign as specific enough to act on now.",
     "",
     "Return a JSON object with exactly these fields:",
     '  operation: one of the allowed operations below, or null when this should be reply-only/no-op',
@@ -361,10 +306,32 @@ export async function extractLifeOperationWithLlm(args: {
     `Recent conversation: ${JSON.stringify(recentConversation.join("\n"))}`,
   ].join("\n");
 
-  let rawResponse = "";
+  const parseResponse = (rawResponse: string) => {
+    const parsed =
+      parseKeyValueXml<Record<string, unknown>>(rawResponse) ??
+      parseJSONObjectFromText(rawResponse);
+    return parsed ? normalizeOperationPlan(parsed) : null;
+  };
+
   try {
     const result = await runtime.useModel(ModelType.TEXT_LARGE, { prompt });
-    rawResponse = typeof result === "string" ? result : "";
+    const rawResponse = typeof result === "string" ? result : "";
+    const parsedPlan = parseResponse(rawResponse);
+    if (parsedPlan) {
+      return parsedPlan;
+    }
+
+    const repairResult = await runtime.useModel(ModelType.TEXT_LARGE, {
+      prompt: buildRepairPrompt({
+        currentMessage,
+        intent,
+        rawResponse,
+        recentConversation,
+      }),
+    });
+    const repairedRawResponse =
+      typeof repairResult === "string" ? repairResult : "";
+    return parseResponse(repairedRawResponse) ?? REPLY_ONLY_OPERATION_PLAN;
   } catch (error) {
     runtime.logger?.warn?.(
       {
@@ -373,51 +340,6 @@ export async function extractLifeOperationWithLlm(args: {
       },
       "Life operation extraction model call failed",
     );
-    return (
-      heuristicPlan ?? {
-        operation: null,
-        confidence: null,
-        shouldAct: null,
-        missing: [],
-      }
-    );
+    return REPLY_ONLY_OPERATION_PLAN;
   }
-
-  const parsed =
-    parseKeyValueXml<Record<string, unknown>>(rawResponse) ??
-    parseJSONObjectFromText(rawResponse);
-  if (!parsed) {
-    return (
-      heuristicPlan ?? {
-        operation: null,
-        confidence: null,
-        shouldAct: null,
-        missing: [],
-      }
-    );
-  }
-
-  const parsedPlan = {
-    operation: normalizeOperation(parsed.operation),
-    confidence: normalizeConfidence(parsed.confidence),
-    shouldAct: normalizeShouldAct(parsed.shouldAct),
-    missing: normalizeMissingFields(parsed.missing),
-  };
-  if (
-    heuristicPlan &&
-    (parsedPlan.operation === null ||
-      parsedPlan.shouldAct === null ||
-      (heuristicPlan.shouldAct === true &&
-        parsedPlan.shouldAct === false &&
-        (parsedPlan.operation === null ||
-          parsedPlan.operation === heuristicPlan.operation)) ||
-      (parsedPlan.confidence ?? 0) < 0.5 ||
-      (heuristicPlan.shouldAct === false &&
-        parsedPlan.operation === heuristicPlan.operation &&
-        parsedPlan.shouldAct === true &&
-        (parsedPlan.confidence ?? 0) < 0.9))
-  ) {
-    return heuristicPlan;
-  }
-  return parsedPlan;
 }

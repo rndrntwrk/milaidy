@@ -86,45 +86,7 @@ export default mergeConfig(
               },
             ]
           : []),
-        {
-          find: "@elizaos/plugin-cron",
-          replacement: path.join(repoRoot, "test", "stubs", "plugin-stub.mjs"),
-        },
-        {
-          find: "@elizaos/plugin-edge-tts/node",
-          replacement: path.join(repoRoot, "test", "stubs", "plugin-stub.mjs"),
-        },
-        {
-          find: "@elizaos/plugin-edge-tts",
-          replacement: path.join(repoRoot, "test", "stubs", "plugin-stub.mjs"),
-        },
-        {
-          find: "@elizaos/plugin-openai",
-          replacement: path.join(repoRoot, "test", "stubs", "plugin-stub.mjs"),
-        },
-        {
-          find: "@elizaos/plugin-trust",
-          replacement: path.join(repoRoot, "test", "stubs", "plugin-stub.mjs"),
-        },
-        {
-          find: "@elizaos/plugin-agent-orchestrator",
-          replacement: path.join(
-            repoRoot,
-            "test",
-            "stubs",
-            "coding-agent-module.ts",
-          ),
-        },
-        {
-          find: "@elizaos/plugin-coding-agent",
-          replacement: path.join(
-            repoRoot,
-            "test",
-            "stubs",
-            "coding-agent-module.ts",
-          ),
-        },
-        // NOTE: aliases for `@elizaos-plugins/client-telegram-account`
+                                                                // NOTE: aliases for `@elizaos-plugins/client-telegram-account`
         // and `@elizaos/plugin-plugin-manager` were hoisted into the
         // base `vitest.config.ts` so they also apply when the pre-
         // review gate runs `bunx vitest run <file>` without `--config`
