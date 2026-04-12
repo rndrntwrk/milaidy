@@ -1,5 +1,5 @@
 import type { IAgentRuntime, Memory } from "@elizaos/core";
-import * as roles from "../runtime/roles.js";
+import * as roles from "@miladyai/shared/eliza-core-roles";
 
 /** Role names matching the elizaOS role hierarchy. */
 export type RequiredRole = "OWNER" | "ADMIN" | "USER" | "GUEST";
@@ -15,8 +15,6 @@ type AccessContext = {
   runtime: IAgentRuntime & { agentId: string };
   message: Memory & { entityId: string };
 };
-
-type RoleContextResolution = "present" | "missing" | "error";
 
 function getAccessContext(
   runtime: IAgentRuntime | undefined,
@@ -47,41 +45,6 @@ export function isAgentSelf(
     return false;
   }
   return context.message.entityId === context.runtime.agentId;
-}
-
-async function resolveRoleContextState(
-  runtime: IAgentRuntime,
-  message: Memory,
-): Promise<RoleContextResolution> {
-  const getRoom = (
-    runtime as unknown as {
-      getRoom?: (roomId: string) => Promise<{ worldId?: string } | null>;
-    }
-  ).getRoom;
-  if (typeof getRoom !== "function") {
-    return "missing";
-  }
-
-  try {
-    const room = await getRoom(message.roomId);
-    if (!room?.worldId) {
-      return "missing";
-    }
-
-    const getWorld = (
-      runtime as unknown as {
-        getWorld?: (worldId: string) => Promise<unknown>;
-      }
-    ).getWorld;
-    if (typeof getWorld !== "function") {
-      return "missing";
-    }
-
-    const world = await getWorld(room.worldId);
-    return world ? "present" : "missing";
-  } catch {
-    return "error";
-  }
 }
 
 async function isCanonicalOwner(
@@ -264,12 +227,8 @@ export async function hasRoleAccess(
   try {
     const result = await checkRole(context.runtime, context.message);
     if (!result) {
-      const contextState = await resolveRoleContextState(
-        context.runtime,
-        context.message,
-      );
       // No world context — allow through (same lenient fallback as plugin-role-gating)
-      return contextState === "missing";
+      return true;
     }
 
     const senderRank = ROLE_RANK[result.role as RequiredRole] ?? 0;

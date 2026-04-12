@@ -4067,8 +4067,8 @@ export const lifeAction: Action & {
           | Record<string, unknown>
           | undefined;
 
-        // Track whether cadence/title came from high-confidence sources
-        // so the LLM can override only low-confidence regex fallbacks.
+        // Track whether cadence/title came from explicit high-confidence
+        // sources so the planner only fills genuine gaps.
         const hadExplicitCadence = Boolean(
           (editingDeferredDefinitionDraft
             ? (normalizeCadenceDetail(detailObject(details, "cadence")) ??

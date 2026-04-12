@@ -83,6 +83,18 @@ async function main(): Promise<void> {
   const { report, reportPath } = await runLifeOpsScenarioMatrix({
     isolate: options.isolate,
     onProgress: (event) => {
+      if (event.type === "runtime:start") {
+        console.log(
+          `[lifeops-scenarios] booting ${event.mode} runtime${event.scenarioId ? ` for ${event.scenarioId}` : ""}`,
+        );
+        return;
+      }
+      if (event.type === "runtime:ready") {
+        console.log(
+          `[lifeops-scenarios] ready ${event.mode} runtime${event.scenarioId ? ` for ${event.scenarioId}` : ""}`,
+        );
+        return;
+      }
       if (event.type === "scenario:start") {
         console.log(
           `[lifeops-scenarios] START ${event.scenarioId} ${event.title}`,

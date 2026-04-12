@@ -444,8 +444,9 @@ describe("Electrobun release workflow drift", () => {
       updateChannelIndex,
       checksumsIndex,
     );
-    const browserReleaseSection = workflow.slice(publishBrowserIndex);
+    const publishBrowserSection = workflow.slice(publishBrowserIndex);
 
+    expect(workflow).toContain("name: Collect public release files");
     expect(publicReleaseSection).toContain(' -name "*.dmg" -o \\');
     expect(publicReleaseSection).toContain(' -name "Milady-Setup-*.exe" -o \\');
     expect(publicReleaseSection).toContain(
@@ -482,13 +483,13 @@ describe("Electrobun release workflow drift", () => {
     );
 
     expect(workflow).toContain("files: release-files/*");
-    expect(browserReleaseSection).toContain(
+    expect(publishBrowserSection).toContain(
       ' -name "lifeops-browser-chrome-v*.zip" -o \\',
     );
-    expect(browserReleaseSection).toContain(
+    expect(publishBrowserSection).toContain(
       ' -name "lifeops-browser-safari-v*.zip" -o \\',
     );
-    expect(browserReleaseSection).toContain(
+    expect(publishBrowserSection).toContain(
       ' -name "lifeops-browser-release-manifest-v*.json" \\',
     );
   });

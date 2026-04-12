@@ -162,6 +162,16 @@ const LIVE_ROOM_CREATION_TIMEOUT_MS = 30_000;
 
 export type ScenarioProgressEvent =
   | {
+      type: "runtime:ready";
+      mode: "isolated" | "shared";
+      scenarioId?: string;
+    }
+  | {
+      type: "runtime:start";
+      mode: "isolated" | "shared";
+      scenarioId?: string;
+    }
+  | {
       type: "scenario:start";
       scenarioId: string;
       title: string;
@@ -301,9 +311,13 @@ function definitionMatchesTitle(
   title: string,
   titleAliases: string[] = [],
 ): boolean {
-  const normalizedTitle = normalizeText(String(entry.definition?.title ?? ""));
+  const entryTitle = String(entry.definition?.title ?? "");
+  const normalizedTitle = normalizeText(entryTitle);
   return [title, ...titleAliases].some(
-    (candidate) => normalizedTitle === normalizeText(candidate),
+    (candidate) =>
+      normalizedTitle === normalizeText(candidate) ||
+      includesComparableFragment(entryTitle, candidate) ||
+      includesComparableFragment(candidate, entryTitle),
   );
 }
 
@@ -312,9 +326,13 @@ function goalMatchesTitle(
   title: string,
   titleAliases: string[] = [],
 ): boolean {
-  const normalizedTitle = normalizeText(String(entry.goal?.title ?? ""));
+  const entryTitle = String(entry.goal?.title ?? "");
+  const normalizedTitle = normalizeText(entryTitle);
   return [title, ...titleAliases].some(
-    (candidate) => normalizedTitle === normalizeText(candidate),
+    (candidate) =>
+      normalizedTitle === normalizeText(candidate) ||
+      includesComparableFragment(entryTitle, candidate) ||
+      includesComparableFragment(candidate, entryTitle),
   );
 }
 
@@ -1090,7 +1108,9 @@ export async function runLifeOpsScenarioMatrix(options?: {
     isolate === "shared" &&
     scenarios.some((scenario) => !scenario.requiresIsolation)
   ) {
+    options?.onProgress?.({ type: "runtime:start", mode: "shared" });
     sharedRuntime = await startLifeOpsLiveRuntime({ selectedProvider });
+    options?.onProgress?.({ type: "runtime:ready", mode: "shared" });
   }
 
   try {
@@ -1098,7 +1118,20 @@ export async function runLifeOpsScenarioMatrix(options?: {
       const useIsolatedRuntime =
         isolate === "per-scenario" || scenario.requiresIsolation === true;
       const runtime = useIsolatedRuntime
-        ? await startLifeOpsLiveRuntime({ selectedProvider })
+        ? await (async () => {
+            options?.onProgress?.({
+              type: "runtime:start",
+              mode: "isolated",
+              scenarioId: scenario.id,
+            });
+            const started = await startLifeOpsLiveRuntime({ selectedProvider });
+            options?.onProgress?.({
+              type: "runtime:ready",
+              mode: "isolated",
+              scenarioId: scenario.id,
+            });
+            return started;
+          })()
         : (sharedRuntime as StartedLifeOpsLiveRuntime);
 
       try {

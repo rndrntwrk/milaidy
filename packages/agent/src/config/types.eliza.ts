@@ -1,5 +1,5 @@
 import type { SessionConfig, SessionSendPolicyConfig } from "@elizaos/core";
-import type { RolesConfig } from "../runtime/roles.js";
+import type { RolesConfig } from "@miladyai/shared/eliza-core-roles";
 import type {
   CustomActionDef,
   DatabaseProviderType,
@@ -177,7 +177,7 @@ export type KnowledgeConfig = {
   docsPath?: string;
 };
 
-export type { RolesConfig } from "../runtime/roles.js";
+export type { RolesConfig } from "@miladyai/shared/eliza-core-roles";
 
 // --- Models types (merged from types.models.ts) ---
 

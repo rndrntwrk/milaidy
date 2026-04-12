@@ -50,6 +50,7 @@ export interface ShopifyInventoryItem {
   sku: string;
   productTitle: string;
   variantTitle: string;
+  locationId: string | null;
   locationName: string;
   available: number;
   incoming: number;

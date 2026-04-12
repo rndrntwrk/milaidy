@@ -1,13 +1,13 @@
 /**
  * Smoke tests for the LIFE action -- verifies the full handler chain
  * with a real PGLite-backed LifeOps service and real runtime, exercising
- * the real classifyIntent + handler code path without a live LLM.
+ * the handler path with and without explicit action parameters.
  *
  * These simulate what happens when the LLM selects the LIFE action
  * with various parameter combinations:
  *
  *   1. LLM provides `action` param (primary path, reliable)
- *   2. LLM omits `action` but provides `intent` (fallback classifier path)
+ *   2. LLM omits `action` but provides `intent` (classifier path)
  *   3. LLM provides both (action wins)
  *   4. LLM provides malformed/missing params (error paths)
  *
@@ -86,7 +86,7 @@ describe("LIFE action smoke tests -- BRD acceptance criteria", () => {
     60_000,
   );
 
-  it("AC-1 fallback: classifier routes brushing request to create_definition", () => {
+  it("AC-1 classifier: routes brushing request to create_definition", () => {
     expect(classifyIntent("I need help brushing my teeth twice a day")).toBe(
       "create_definition",
     );
@@ -188,7 +188,7 @@ describe("LIFE action smoke tests -- BRD acceptance criteria", () => {
     60_000,
   );
 
-  it("AC-4 fallback: explicit goal phrasing routes to goal creation", () => {
+  it("AC-4 classifier: explicit goal phrasing routes to goal creation", () => {
     expect(classifyIntent("my goal is to stay healthy")).toBe("create_goal");
   });
 
@@ -227,7 +227,7 @@ describe("LIFE action smoke tests -- BRD acceptance criteria", () => {
     60_000,
   );
 
-  it("AC-7 fallback: classifier routes email query", () => {
+  it("AC-7 classifier: routes email query", () => {
     expect(
       classifyIntent("Do I have anything important I need to respond to?"),
     ).toBe("query_email");
@@ -329,7 +329,7 @@ describe("LIFE action -- robustness scenarios", () => {
   );
 
   it(
-    "handles missing action + intent (double fallback)",
+    "handles missing action + intent",
     async () => {
       const result = await send({ intent: "asdfghjkl gibberish" });
       expect(result).toMatchObject({

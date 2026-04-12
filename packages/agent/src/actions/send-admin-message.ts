@@ -7,7 +7,7 @@ import type {
   UUID,
 } from "@elizaos/core";
 import { logger, stringToUuid } from "@elizaos/core";
-import { resolveCanonicalOwnerIdForMessage } from "../runtime/roles.js";
+import { resolveCanonicalOwnerIdForMessage } from "@miladyai/shared/eliza-core-roles";
 import { hasAdminAccess } from "../security/access.js";
 import { hasContextSignalSyncForKey } from "./context-signal.js";
 

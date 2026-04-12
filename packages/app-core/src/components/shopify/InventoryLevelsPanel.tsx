@@ -3,7 +3,7 @@
  * +/- inventory adjustment controls.
  */
 
-import { Button, Input, Skeleton } from "@miladyai/ui";
+import { Button, Skeleton } from "@miladyai/ui";
 import { Minus, Package, Plus } from "lucide-react";
 import { useState } from "react";
 import type { ShopifyInventoryItem } from "./useShopifyDashboard";
@@ -12,7 +12,11 @@ import type { ShopifyInventoryItem } from "./useShopifyDashboard";
 
 interface InventoryRowProps {
   item: ShopifyInventoryItem;
-  onAdjust: (itemId: string, delta: number) => Promise<void>;
+  onAdjust: (
+    itemId: string,
+    locationId: string | null,
+    delta: number,
+  ) => Promise<void>;
 }
 
 function InventoryRow({ item, onAdjust }: InventoryRowProps) {
@@ -24,7 +28,7 @@ function InventoryRow({ item, onAdjust }: InventoryRowProps) {
     setAdjusting(true);
     setAdjustError(null);
     try {
-      await onAdjust(item.id, delta);
+      await onAdjust(item.id, item.locationId, delta);
       setLocalAvailable((prev) => prev + delta);
     } catch (err) {
       setAdjustError(err instanceof Error ? err.message : "Adjustment failed.");
@@ -121,11 +125,15 @@ export function InventoryLevelsPanel({
       ? items
       : items.filter((item) => item.locationName === selectedLocation);
 
-  async function handleAdjust(itemId: string, delta: number): Promise<void> {
+  async function handleAdjust(
+    itemId: string,
+    locationId: string | null,
+    delta: number,
+  ): Promise<void> {
     const res = await fetch(`/api/shopify/inventory/${itemId}/adjust`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ delta }),
+      body: JSON.stringify({ delta, locationId }),
     });
     if (!res.ok) {
       const text = await res.text().catch(() => "Unknown error");
