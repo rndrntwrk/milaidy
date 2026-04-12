@@ -107,6 +107,13 @@ import {
 } from "../services/signal-pairing.js";
 import { streamManager } from "../services/stream-manager.js";
 import {
+  clearTelegramAccountAuthState,
+  clearTelegramAccountSession,
+  TelegramAccountAuthSession,
+  telegramAccountAuthStateExists,
+  telegramAccountSessionExists,
+} from "../services/telegram-account-auth.js";
+import {
   sanitizeAccountId as sanitizeWhatsAppAccountId,
   WhatsAppPairingSession,
   whatsappAuthExists,
@@ -224,6 +231,7 @@ import { discoverSkills } from "./skill-discovery-helpers.js";
 import { handleSkillsRoutes } from "./skills-routes.js";
 import { handleSubscriptionRoutes } from "./subscription-routes.js";
 import { routeTaskAgentTextToConnector } from "./task-agent-message-routing.js";
+import { handleTelegramAccountRoute } from "./telegram-account-routes.js";
 import { handleTelegramSetupRoute } from "./telegram-setup-routes.js";
 import { handleTrainingRoutes } from "./training-routes.js";
 import type { TrainingServiceWithRuntime } from "./training-service-like.js";
@@ -703,6 +711,8 @@ export interface ServerState {
     string,
     import("../services/signal-pairing.js").SignalPairingSnapshot
   >;
+  /** Active Telegram account auth session (user-account login flow). */
+  telegramAccountAuthSession?: import("../services/telegram-account-auth.js").TelegramAccountAuthSessionLike | null;
 }
 
 export interface ShareIngestItem {
@@ -4704,15 +4714,28 @@ async function handleCodingAgentsFallback(
       return true;
     }
     try {
-      const { createAdapter } = await import("coding-agent-adapters");
-      const adapter = createAdapter(
-        agentType as import("coding-agent-adapters").AdapterType,
-      );
-      const authAdapter = adapter as unknown as CodingAgentAdapterAuthHook;
-      const triggerAuthFn = authAdapter.triggerAuth;
-      if (typeof triggerAuthFn !== "function") {
-        error(res, `Auth trigger is unavailable for ${agentType}`, 501);
-        return true;
+      const ptyService = runtime.getService("PTY_SERVICE") as {
+        triggerAgentAuth?: (
+          agent: import("coding-agent-adapters").AdapterType,
+        ) => Promise<unknown>;
+      } | null;
+      const triggerAuthFn =
+        typeof ptyService?.triggerAgentAuth === "function"
+          ? () =>
+              ptyService.triggerAgentAuth?.(
+                agentType as import("coding-agent-adapters").AdapterType,
+              )
+          : null;
+      if (!triggerAuthFn) {
+        const { createAdapter } = await import("coding-agent-adapters");
+        const adapter = createAdapter(
+          agentType as import("coding-agent-adapters").AdapterType,
+        );
+        const authAdapter = adapter as unknown as CodingAgentAdapterAuthHook;
+        if (typeof authAdapter.triggerAuth !== "function") {
+          error(res, `Auth trigger is unavailable for ${agentType}`, 501);
+          return true;
+        }
       }
       // Server-side timeout: some CLI auth flows spawn an interactive
       // subprocess that can hang indefinitely in headless / Docker
@@ -4721,7 +4744,13 @@ async function handleCodingAgentsFallback(
       const AUTH_TIMEOUT_MS = 15_000;
       const timeoutError = new Error("auth trigger timeout");
       const triggered = await Promise.race([
-        triggerAuthFn.call(adapter),
+        triggerAuthFn
+          ? triggerAuthFn()
+          : (
+              (await import("coding-agent-adapters")).createAdapter(
+                agentType as import("coding-agent-adapters").AdapterType,
+              ) as unknown as CodingAgentAdapterAuthHook
+            ).triggerAuth?.(),
         new Promise((_, reject) =>
           setTimeout(() => reject(timeoutError), AUTH_TIMEOUT_MS),
         ),
@@ -5022,7 +5051,7 @@ async function handleRequest(
       setProviderSwitchInProgress: (v: boolean) => {
         providerSwitchInProgress = v;
       },
-      onRestart: ctx?.onRestart ?? undefined,
+      restartRuntime,
     })
   ) {
     return;
@@ -5716,6 +5745,48 @@ async function handleRequest(
       },
       { json, error, readJsonBody },
     );
+    if (handled) return;
+  }
+
+  // ── Telegram account routes (/api/telegram-account/*) ────────────────
+  if (pathname.startsWith("/api/telegram-account")) {
+    const routeState = {
+      config: state.config,
+      saveConfig: () => saveElizaConfig(state.config),
+      runtime: state.runtime
+        ? {
+            getService: (type: string) =>
+              (
+                state.runtime as { getService: (t: string) => unknown }
+              ).getService(type),
+            getSetting: (key: string) =>
+              (
+                state.runtime as {
+                  getSetting: (k: string) => string | undefined;
+                }
+              ).getSetting(key),
+          }
+        : undefined,
+      telegramAccountAuthSession: state.telegramAccountAuthSession,
+    };
+    const handled = await handleTelegramAccountRoute(
+      req,
+      res,
+      pathname,
+      method,
+      routeState,
+      { json, error, readJsonBody },
+      {
+        createAuthSession: (options) =>
+          new TelegramAccountAuthSession(options),
+        authStateExists: telegramAccountAuthStateExists,
+        sessionExists: telegramAccountSessionExists,
+        clearAuthState: clearTelegramAccountAuthState,
+        clearSession: clearTelegramAccountSession,
+      },
+    );
+    state.telegramAccountAuthSession =
+      routeState.telegramAccountAuthSession ?? null;
     if (handled) return;
   }
 
@@ -7919,8 +7990,8 @@ export async function startApiServer(opts?: {
       startDeferredStartupWork();
       resolve({
         port: actualPort,
-        close: () =>
-          new Promise<void>((r) => {
+        close: async () =>
+          await new Promise<void>(async (r) => {
             const closeAllConnections = (
               server as { closeAllConnections?: () => void }
             ).closeAllConnections;
@@ -7968,6 +8039,14 @@ export async function startApiServer(opts?: {
                 }
               }
               state.signalPairingSessions.clear();
+            }
+            if (state.telegramAccountAuthSession) {
+              try {
+                await state.telegramAccountAuthSession.stop();
+              } catch {
+                /* non-fatal */
+              }
+              state.telegramAccountAuthSession = null;
             }
             wss.close();
             const closeTimeout = setTimeout(() => r(), 5_000);

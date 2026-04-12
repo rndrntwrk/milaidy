@@ -15,10 +15,11 @@ import {
 const LIVE_TESTS_ENABLED =
   process.env.MILADY_LIVE_TEST === "1" || process.env.ELIZA_LIVE_TEST === "1";
 const LIVE_CHAT_TESTS_ENABLED = process.env.MILADY_LIVE_CHAT_TEST === "1";
+const LIVE_PROVIDER_OVERRIDE = process.env.MILADY_LIVE_PROVIDER?.trim().toLowerCase();
 const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..", "..");
 const ENV_PATH = path.join(REPO_ROOT, ".env");
 const LIVE_CHAT_TEST_TIMEOUT_MS = 300_000;
-const LIVE_RUNTIME_BOOT_TIMEOUT_MS = 60_000;
+const LIVE_RUNTIME_BOOT_TIMEOUT_MS = 180_000;
 
 try {
   const { config } = await import("dotenv");
@@ -29,44 +30,57 @@ try {
 
 const LIVE_PROVIDER_CANDIDATES = [
   {
-    name: "groq",
-    plugin: "@elizaos/plugin-groq",
-    keys: ["GROQ_API_KEY"],
-    predicate: () =>
-      /groq/i.test(process.env.OPENAI_BASE_URL ?? "") ||
-      !process.env.OPENAI_API_KEY?.trim(),
-  },
-  {
     name: "openai",
     plugin: "@elizaos/plugin-openai",
     keys: ["OPENAI_API_KEY"],
-    predicate: () => true,
-  },
-  {
-    name: "groq",
-    plugin: "@elizaos/plugin-groq",
-    keys: ["GROQ_API_KEY"],
-    predicate: () => true,
   },
   {
     name: "openrouter",
     plugin: "@elizaos/plugin-openrouter",
     keys: ["OPENROUTER_API_KEY"],
-    predicate: () => true,
   },
   {
     name: "google",
     plugin: "@elizaos/plugin-google-genai",
     keys: ["GOOGLE_GENERATIVE_AI_API_KEY", "GOOGLE_API_KEY"],
-    predicate: () => true,
   },
   {
     name: "anthropic",
     plugin: "@elizaos/plugin-anthropic",
     keys: ["ANTHROPIC_API_KEY"],
-    predicate: () => true,
+  },
+  {
+    name: "groq",
+    plugin: "@elizaos/plugin-groq",
+    keys: ["GROQ_API_KEY"],
   },
 ] as const;
+
+const LIVE_PROVIDER_ENV_KEYS = [
+  "OPENAI_API_KEY",
+  "OPENAI_BASE_URL",
+  "OPENAI_SMALL_MODEL",
+  "OPENAI_LARGE_MODEL",
+  "OPENROUTER_API_KEY",
+  "OPENROUTER_SMALL_MODEL",
+  "OPENROUTER_LARGE_MODEL",
+  "GOOGLE_API_KEY",
+  "GOOGLE_GENERATIVE_AI_API_KEY",
+  "GOOGLE_SMALL_MODEL",
+  "GOOGLE_LARGE_MODEL",
+  "ANTHROPIC_API_KEY",
+  "ANTHROPIC_SMALL_MODEL",
+  "ANTHROPIC_LARGE_MODEL",
+  "GROQ_API_KEY",
+  "GROQ_SMALL_MODEL",
+  "GROQ_LARGE_MODEL",
+  "SMALL_MODEL",
+  "LARGE_MODEL",
+] as const;
+
+const LIVE_PROVIDER_PLUGIN_NAMES = new Set(
+  LIVE_PROVIDER_CANDIDATES.map((candidate) => candidate.plugin),
+);
 
 const LIVE_PROVIDER_CHEAP_MODELS = {
   anthropic: {
@@ -89,9 +103,9 @@ const LIVE_PROVIDER_CHEAP_MODELS = {
   },
   openai: {
     smallKey: "OPENAI_SMALL_MODEL",
-    smallModel: "gpt-5.4-mini",
+    smallModel: "gpt-4.1-mini",
     largeKey: "OPENAI_LARGE_MODEL",
-    largeModel: "gpt-5.4-mini",
+    largeModel: "gpt-4.1-mini",
   },
   openrouter: {
     smallKey: "OPENROUTER_SMALL_MODEL",
@@ -134,10 +148,14 @@ async function selectLiveProvider(): Promise<{
   env: Record<string, string>;
   plugin: string;
 } | null> {
-  for (const candidate of LIVE_PROVIDER_CANDIDATES) {
-    if (!candidate.predicate()) {
-      continue;
-    }
+  const candidates =
+    LIVE_PROVIDER_OVERRIDE && LIVE_PROVIDER_OVERRIDE.length > 0
+      ? LIVE_PROVIDER_CANDIDATES.filter(
+          (candidate) => candidate.name === LIVE_PROVIDER_OVERRIDE,
+        )
+      : LIVE_PROVIDER_CANDIDATES;
+
+  for (const candidate of candidates) {
     const env: Record<string, string> = {};
     for (const key of candidate.keys) {
       const value = process.env[key]?.trim();
@@ -560,6 +578,9 @@ async function startLiveRuntime(): Promise<StartedRuntime> {
       ? ((baseConfig.plugins as { allow?: unknown }).allow as unknown[])
           .filter((entry): entry is string => typeof entry === "string")
       : [];
+  const basePluginsWithoutProviders = basePlugins.filter(
+    (entry) => !LIVE_PROVIDER_PLUGIN_NAMES.has(entry),
+  );
   const assistantConfig =
     baseConfig.ui &&
     typeof baseConfig.ui === "object" &&
@@ -592,7 +613,7 @@ async function startLiveRuntime(): Promise<StartedRuntime> {
           ...(baseConfig.plugins && typeof baseConfig.plugins === "object"
             ? (baseConfig.plugins as Record<string, unknown>)
             : {}),
-          allow: [...new Set([...basePlugins, selectedLiveProviderPlugin].filter(
+          allow: [...new Set([...basePluginsWithoutProviders, selectedLiveProviderPlugin].filter(
             (entry): entry is string => typeof entry === "string",
           ))],
         },
@@ -606,7 +627,14 @@ async function startLiveRuntime(): Promise<StartedRuntime> {
   const child = spawn("bun", ["run", "start:eliza"], {
     cwd: REPO_ROOT,
     env: {
-      ...process.env,
+      ...Object.fromEntries(
+        Object.entries(process.env).filter(
+          ([key]) =>
+            !LIVE_PROVIDER_ENV_KEYS.includes(
+              key as (typeof LIVE_PROVIDER_ENV_KEYS)[number],
+            ),
+        ),
+      ),
       ...(selectedLiveProvider?.env ?? {}),
       ELIZA_CONFIG_PATH: configPath,
       MILADY_CONFIG_PATH: configPath,
@@ -614,8 +642,10 @@ async function startLiveRuntime(): Promise<StartedRuntime> {
       MILADY_STATE_DIR: stateDir,
       ELIZA_PORT: String(apiPort),
       MILADY_API_PORT: String(apiPort),
-      ELIZA_DISABLE_LOCAL_EMBEDDINGS: "1",
-      MILADY_DISABLE_LOCAL_EMBEDDINGS: "1",
+      LOCAL_EMBEDDING_DIMENSIONS:
+        process.env.LOCAL_EMBEDDING_DIMENSIONS?.trim() || "384",
+      EMBEDDING_DIMENSION:
+        process.env.EMBEDDING_DIMENSION?.trim() || "384",
       ALLOW_NO_DATABASE: "",
       DISCORD_API_TOKEN: "",
       DISCORD_BOT_TOKEN: "",

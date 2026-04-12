@@ -92,7 +92,11 @@ import {
   type ElizaConfig,
   loadElizaConfig,
 } from "../config/config.js";
-import { CONNECTOR_ENV_MAP, collectConfigEnvVars } from "../config/env-vars.js";
+import {
+  CONNECTOR_ENV_MAP,
+  collectConfigEnvVars,
+  collectConnectorEnvVars,
+} from "../config/env-vars.js";
 import { resolveStateDir, resolveUserPath } from "../config/paths.js";
 import { resolveServerOnlyPort } from "../config/runtime-env.js";
 import type { PluginInstallRecord } from "../config/types.eliza.js";
@@ -3671,6 +3675,10 @@ export async function startEliza(
           isEnvKeyAllowedForForwarding(key),
         ),
       ),
+      // Forward connector config vars as-is. The connector env map is curated
+      // and plugins need access to secrets like passwords and tokens via
+      // runtime.getSetting() for real transports to boot.
+      ...collectConnectorEnvVars(config),
       // Forward Eliza config env vars as runtime settings
       ...(preferredProviderId ? { MODEL_PROVIDER: preferredProviderId } : {}),
       ...(visionModeSetting ? { VISION_MODE: visionModeSetting } : {}),

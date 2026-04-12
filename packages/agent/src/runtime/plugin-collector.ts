@@ -287,12 +287,20 @@ export function collectPluginNames(
     ((config as Record<string, unknown>).channels as Record<string, unknown>) ??
     {};
   for (const [channelName, channelConfig] of Object.entries(connectors)) {
-    if (channelConfig && typeof channelConfig === "object") {
-      const pluginName = CHANNEL_PLUGIN_MAP[channelName];
-      if (pluginName) {
-        pluginsToLoad.add(pluginName);
-        track(pluginName, `connectors.${channelName}`);
-      }
+    if (
+      !channelConfig ||
+      typeof channelConfig !== "object" ||
+      Array.isArray(channelConfig)
+    ) {
+      continue;
+    }
+    if ((channelConfig as Record<string, unknown>).enabled === false) {
+      continue;
+    }
+    const pluginName = CHANNEL_PLUGIN_MAP[channelName];
+    if (pluginName) {
+      pluginsToLoad.add(pluginName);
+      track(pluginName, `connectors.${channelName}`);
     }
   }
 

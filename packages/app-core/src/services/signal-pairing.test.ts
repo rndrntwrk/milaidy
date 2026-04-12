@@ -4,6 +4,8 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   classifySignalPairingErrorStatus,
+  extractSignalCliProvisioningUrl,
+  parseSignalCliAccountsOutput,
   type SignalPairingEvent,
   SignalPairingSession,
   sanitizeAccountId,
@@ -37,10 +39,28 @@ describe("signal-pairing", () => {
       expect(signalAuthExists(tmpDir)).toBe(false);
     });
 
-    it("returns true when the account auth directory exists", () => {
-      fs.mkdirSync(path.join(tmpDir, "signal-auth", "default"), {
+    it("returns false when accounts.json is missing or empty", () => {
+      const authDir = path.join(tmpDir, "signal-auth", "default");
+      fs.mkdirSync(path.join(authDir, "data"), {
         recursive: true,
       });
+      fs.writeFileSync(
+        path.join(authDir, "data", "accounts.json"),
+        JSON.stringify({ accounts: [] }),
+      );
+
+      expect(signalAuthExists(tmpDir)).toBe(false);
+    });
+
+    it("returns true when a linked account is recorded", () => {
+      const authDir = path.join(tmpDir, "signal-auth", "default");
+      fs.mkdirSync(path.join(authDir, "data"), {
+        recursive: true,
+      });
+      fs.writeFileSync(
+        path.join(authDir, "data", "accounts.json"),
+        JSON.stringify({ accounts: ["+15551234567"] }),
+      );
 
       expect(signalAuthExists(tmpDir)).toBe(true);
     });
@@ -87,6 +107,27 @@ describe("signal-pairing", () => {
 
     it("maps other failures to error", () => {
       expect(classifySignalPairingErrorStatus("network refused")).toBe("error");
+    });
+  });
+
+  describe("signal-cli helpers", () => {
+    it("extracts provisioning URLs from signal-cli output", () => {
+      expect(
+        extractSignalCliProvisioningUrl(
+          "sgnl://linkdevice?uuid=test&pub_key=value",
+        ),
+      ).toBe("sgnl://linkdevice?uuid=test&pub_key=value");
+      expect(extractSignalCliProvisioningUrl("not-a-link")).toBeNull();
+    });
+
+    it("parses linked accounts from JSON or plain text output", () => {
+      expect(
+        parseSignalCliAccountsOutput('["+15551234567"]'),
+      ).toBe("+15551234567");
+      expect(parseSignalCliAccountsOutput("+15559876543\n")).toBe(
+        "+15559876543",
+      );
+      expect(parseSignalCliAccountsOutput("")).toBeNull();
     });
   });
 });

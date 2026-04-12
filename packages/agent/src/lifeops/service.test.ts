@@ -95,6 +95,33 @@ function createGmailMessage(
   };
 }
 
+function createCalendarEvent(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "cal-1",
+    externalId: "google-cal-1",
+    agentId: "agent-lifeops",
+    provider: "google",
+    side: "owner",
+    calendarId: "primary",
+    title: "Tomorrow standup",
+    description: "",
+    location: "",
+    status: "confirmed",
+    startAt: "2026-04-10T09:00:00.000Z",
+    endAt: "2026-04-10T09:30:00.000Z",
+    isAllDay: false,
+    timezone: "UTC",
+    htmlLink: null,
+    conferenceLink: null,
+    organizer: null,
+    attendees: [],
+    metadata: {},
+    syncedAt: "2026-04-09T23:00:00.000Z",
+    updatedAt: "2026-04-09T23:00:00.000Z",
+    ...overrides,
+  };
+}
+
 describe("LifeOpsService", () => {
   beforeEach(() => {
     vi.resetAllMocks();
@@ -232,6 +259,45 @@ describe("LifeOpsService", () => {
       outcome: "delivered",
       connectorRef: "runtime:discord:owner-discord-uuid",
     });
+  });
+
+  it("looks ahead beyond today when resolving the next calendar event", async () => {
+    const runtime = createRuntime();
+    const service = new LifeOpsService(runtime);
+    const getCalendarFeedSpy = vi
+      .spyOn(service, "getCalendarFeed")
+      .mockResolvedValue({
+        calendarId: "primary",
+        events: [createCalendarEvent()],
+        source: "cache",
+        timeMin: "2026-04-09T00:00:00.000Z",
+        timeMax: "2026-05-09T00:00:00.000Z",
+        syncedAt: null,
+      } as never);
+    vi.spyOn(service, "getGoogleConnectorStatus").mockResolvedValue({
+      connected: false,
+      mode: "local",
+      grant: null,
+      grantedCapabilities: [],
+    } as never);
+
+    const now = new Date("2026-04-09T23:30:00.000Z");
+    const context = await service.getNextCalendarEventContext(
+      new URL("http://localhost"),
+      { timeZone: "UTC" },
+      now,
+    );
+
+    expect(getCalendarFeedSpy).toHaveBeenCalledWith(
+      expect.any(URL),
+      expect.objectContaining({
+        timeZone: "UTC",
+        timeMin: "2026-04-09T00:00:00.000Z",
+        timeMax: "2026-05-09T00:00:00.000Z",
+      }),
+      now,
+    );
+    expect(context.event?.title).toBe("Tomorrow standup");
   });
 
   it("falls back to the resolved owner entity when no explicit owner contact exists", async () => {

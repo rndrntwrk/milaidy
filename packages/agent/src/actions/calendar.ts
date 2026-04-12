@@ -625,6 +625,25 @@ function parseExplicitLocalDate(
     december: 12,
     dec: 12,
   };
+  const weekdayMap: Record<string, number> = {
+    sunday: 0,
+    sun: 0,
+    monday: 1,
+    mon: 1,
+    tuesday: 2,
+    tues: 2,
+    tue: 2,
+    wednesday: 3,
+    wed: 3,
+    thursday: 4,
+    thurs: 4,
+    thur: 4,
+    thu: 4,
+    friday: 5,
+    fri: 5,
+    saturday: 6,
+    sat: 6,
+  };
 
   const isoMatch = normalized.match(/\b(\d{4})-(\d{1,2})-(\d{1,2})\b/);
   if (isoMatch) {
@@ -660,6 +679,32 @@ function parseExplicitLocalDate(
       month: Number(numericMatch[1]),
       day: Number(numericMatch[2]),
     };
+  }
+
+  const weekdayMatch = normalized.match(
+    /\b(?:(this|next)\s+)?(sun(?:day)?|mon(?:day)?|tue(?:s(?:day)?)?|wed(?:nesday)?|thu(?:r(?:s(?:day)?)?)?|fri(?:day)?|sat(?:urday)?)\b/i,
+  );
+  if (weekdayMatch) {
+    const qualifier = normalizeLookupKey(weekdayMatch[1] ?? "");
+    const weekdayKey = normalizeLookupKey(weekdayMatch[2] ?? "");
+    const targetWeekday = weekdayMap[weekdayKey];
+    if (targetWeekday !== undefined) {
+      const currentWeekday = new Date(
+        Date.UTC(localToday.year, Math.max(0, localToday.month - 1), localToday.day, 12, 0, 0),
+      ).getUTCDay();
+      let delta = (targetWeekday - currentWeekday + 7) % 7;
+      if (qualifier === "next") {
+        delta = delta === 0 ? 7 : delta + 7;
+      }
+      return addDaysToLocalDate(
+        {
+          year: localToday.year,
+          month: localToday.month,
+          day: localToday.day,
+        },
+        delta,
+      );
+    }
   }
 
   return null;
@@ -755,6 +800,11 @@ function resolveCalendarWindow(
   const explicitDate = parseExplicitLocalDate(normalizedIntent, timeZone);
   if (explicitDate) {
     const nextDate = addDaysToLocalDate(explicitDate, 1);
+    const explicitDateLabel = (
+      normalizedIntent.match(/(?:on|for)\s+(.+)$/i)?.[1] ?? normalizedIntent
+    )
+      .replace(/^(?:on|for)\s+/i, "")
+      .trim();
     return {
       request: {
         calendarId,
@@ -777,7 +827,7 @@ function resolveCalendarWindow(
           second: 0,
         }).toISOString(),
       },
-      label: `on ${normalizedIntent.match(/(?:on|for)\s+(.+)$/i)?.[1] ?? normalizedIntent}`,
+      label: `on ${explicitDateLabel}`,
     };
   }
   if (
@@ -904,11 +954,11 @@ function inferCalendarSearchQuery(intent: string): string | undefined {
   }
 
   const patterns = [
-    /\b(?:find|search(?: for)?|look(?:ing)? for|show me)\s+(.+)$/i,
-    /\b(?:do i have|are there)\s+(?:any\s+)?(.+?)(?:\?|$)/i,
-    /\b(?:check|look|see)\s+(?:my\s+)?calendar\s+for\s+(.+?)(?:\?|$)/i,
-    /\bwhat\s+(?:event|events)\s+do\s+i\s+have\s+(?:on|for)\s+(.+?)(?:\?|$)/i,
-    /\bany\s+(.+?)(?:\?|$)/i,
+    /^(?:please\s+)?(?:find|search(?: for)?|look(?:ing)? for|show me)\s+(.+)$/i,
+    /^(?:please\s+)?(?:do i have|are there)\s+(?:any\s+)?(.+?)(?:\?|$)/i,
+    /^(?:please\s+)?(?:check|look|see)\s+(?:my\s+)?calendar\s+for\s+(.+?)(?:\?|$)/i,
+    /^what\s+(?:event|events)\s+do\s+i\s+have\s+(?:on|for)\s+(.+?)(?:\?|$)/i,
+    /^(?:please\s+)?any\s+(.+?)(?:\?|$)/i,
   ];
 
   for (const pattern of patterns) {

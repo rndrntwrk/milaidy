@@ -14,6 +14,7 @@ function buildState(
 ): SignalRouteState {
   return {
     signalPairingSessions: new Map(),
+    signalPairingSnapshots: new Map(),
     broadcastWs: vi.fn(),
     config: {},
     runtime: undefined,
@@ -176,6 +177,85 @@ describe("handleSignalRoute", () => {
     });
   });
 
+  test("GET /api/signal/status returns the last terminal snapshot when no live session remains", async () => {
+    const req = createMockIncomingMessage({
+      method: "GET",
+      url: "/api/signal/status?accountId=test-account",
+      headers: { host: "localhost:2138" },
+    });
+    const { res, getStatus, getJson } = createMockHttpResponse<{
+      accountId: string;
+      status: string;
+      qrDataUrl: string | null;
+      phoneNumber: string | null;
+      error: string | null;
+    }>();
+    const state = buildState({
+      signalPairingSnapshots: new Map([
+        [
+          "test-account",
+          {
+            status: "error",
+            qrDataUrl: null,
+            phoneNumber: null,
+            error: "missing signal-cli",
+          },
+        ],
+      ]),
+    });
+
+    const handled = await handleSignalRoute(
+      req,
+      res,
+      "/api/signal/status",
+      "GET",
+      state,
+      buildDeps(),
+    );
+
+    expect(handled).toBe(true);
+    expect(getStatus()).toBe(200);
+    expect(getJson()).toMatchObject({
+      accountId: "test-account",
+      status: "error",
+      error: "missing signal-cli",
+    });
+  });
+
+  test("GET /api/signal/status stays idle when no linked account exists", async () => {
+    const req = createMockIncomingMessage({
+      method: "GET",
+      url: "/api/signal/status?accountId=test-account",
+      headers: { host: "localhost:2138" },
+    });
+    const { res, getStatus, getJson } = createMockHttpResponse<{
+      accountId: string;
+      status: string;
+      authExists: boolean;
+      serviceConnected: boolean;
+    }>();
+
+    const handled = await handleSignalRoute(
+      req,
+      res,
+      "/api/signal/status",
+      "GET",
+      buildState(),
+      buildDeps({
+        signalAuthExists: vi.fn(() => false),
+      }),
+    );
+
+    expect(handled).toBe(true);
+    expect(getStatus()).toBe(200);
+    expect(getJson()).toMatchObject({
+      accountId: "test-account",
+      status: "idle",
+      authExists: false,
+      serviceConnected: false,
+    });
+  });
+
   test("removes terminal pairing sessions after they connect", async () => {
     let emitConnected: (() => void) | null = null;
     const state = buildState();
@@ -226,6 +306,14 @@ describe("handleSignalRoute", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(state.signalPairingSessions.size).toBe(0);
     expect(state.saveConfig).toHaveBeenCalledOnce();
+    expect(state.config).toMatchObject({
+      connectors: {
+        signal: {
+          enabled: true,
+          account: "+15551234567",
+        },
+      },
+    });
   });
 
   test("POST /api/signal/disconnect returns 500 when logout fails", async () => {

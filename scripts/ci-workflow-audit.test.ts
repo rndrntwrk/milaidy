@@ -29,9 +29,7 @@ describe("CI workflow audit regressions", () => {
   });
 
   it("android workflows pin Bun version", () => {
-    const files = [
-      "android-release.yml",
-    ];
+    const files = ["android-release.yml"];
     for (const f of files) {
       const content = readWorkflow(f);
       expect(content).toMatch(/bun-version:\s*["']?1\.3\.10/);

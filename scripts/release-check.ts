@@ -351,8 +351,7 @@ function withSanitizedNpmOverrides<T>(fn: () => T): T {
   const sanitizedPkg = { ...pkg, overrides: sanitizedOverrides };
   const hasTrailingNewline = originalRaw.endsWith("\n");
   const sanitizedRaw =
-    JSON.stringify(sanitizedPkg, null, 2) +
-    (hasTrailingNewline ? "\n" : "");
+    JSON.stringify(sanitizedPkg, null, 2) + (hasTrailingNewline ? "\n" : "");
 
   writeFileSync(pkgPath, sanitizedRaw);
   try {
@@ -393,8 +392,8 @@ function runPackDry(): PackResult[] {
         });
         return parseBunPackDryRunOutput(raw);
       } catch (bunError) {
-        const bunOutput = (bunError as { stderr?: string; stdout?: string })
-          .stderr ?? "";
+        const bunOutput =
+          (bunError as { stderr?: string; stdout?: string }).stderr ?? "";
         if (
           bunOutput.includes("Duplicate package path") ||
           bunOutput.includes("InvalidPackageKey")

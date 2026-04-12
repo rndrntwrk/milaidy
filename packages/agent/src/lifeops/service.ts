@@ -263,6 +263,7 @@ const GOOGLE_GMAIL_CACHE_TTL_MS = 5 * 60 * 1000;
 const GOOGLE_PRIMARY_CALENDAR_ID = "primary";
 const GOOGLE_GMAIL_MAILBOX = "me";
 const DEFAULT_GMAIL_TRIAGE_MAX_RESULTS = 12;
+const DEFAULT_NEXT_EVENT_LOOKAHEAD_DAYS = 30;
 const DEFAULT_GMAIL_SEARCH_SCAN_LIMIT = 50;
 const DEFAULT_GMAIL_SEARCH_CACHE_SCAN_LIMIT = 200;
 const DEFAULT_REMINDER_PROCESS_LIMIT = 24;
@@ -1427,6 +1428,48 @@ function resolveCalendarWindow(args: {
   return {
     timeMin: dayStart.toISOString(),
     timeMax: dayEnd.toISOString(),
+  };
+}
+
+function resolveNextCalendarEventWindow(args: {
+  now: Date;
+  timeZone: string;
+  requestedTimeMin?: string;
+  requestedTimeMax?: string;
+  lookaheadDays?: number;
+}): { timeMin: string; timeMax: string } {
+  const explicitWindow = resolveCalendarWindow({
+    now: args.now,
+    timeZone: args.timeZone,
+    requestedTimeMin: args.requestedTimeMin,
+    requestedTimeMax: args.requestedTimeMax,
+  });
+
+  if (args.requestedTimeMin || args.requestedTimeMax) {
+    return explicitWindow;
+  }
+
+  const zonedNow = getZonedDateParts(args.now, args.timeZone);
+  const endDate = addDaysToLocalDate(
+    {
+      year: zonedNow.year,
+      month: zonedNow.month,
+      day: zonedNow.day,
+    },
+    args.lookaheadDays ?? DEFAULT_NEXT_EVENT_LOOKAHEAD_DAYS,
+  );
+  const timeMax = buildUtcDateFromLocalParts(args.timeZone, {
+    year: endDate.year,
+    month: endDate.month,
+    day: endDate.day,
+    hour: 0,
+    minute: 0,
+    second: 0,
+  }).toISOString();
+
+  return {
+    timeMin: explicitWindow.timeMin,
+    timeMax,
   };
 }
 
@@ -10856,7 +10899,21 @@ export class LifeOpsService {
     now = new Date(),
   ): Promise<LifeOpsNextCalendarEventContext> {
     const mode = normalizeOptionalConnectorMode(request.mode, "mode");
-    const feed = await this.getCalendarFeed(requestUrl, request, now);
+    const timeZone = normalizeCalendarTimeZone(request.timeZone);
+    const feed = await this.getCalendarFeed(
+      requestUrl,
+      {
+        ...request,
+        timeZone,
+        ...resolveNextCalendarEventWindow({
+          now,
+          timeZone,
+          requestedTimeMin: request.timeMin,
+          requestedTimeMax: request.timeMax,
+        }),
+      },
+      now,
+    );
     const nextEvent =
       feed.events.find((event) => Date.parse(event.endAt) > now.getTime()) ??
       null;
@@ -10890,11 +10947,11 @@ export class LifeOpsService {
       linkedMailState = "cache";
       if (linkedMail.length === 0) {
         try {
-          const triage = await this.getGmailTriage(
-            requestUrl,
-            {
-              mode,
-              side: status.grant.side,
+        const triage = await this.getGmailTriage(
+          requestUrl,
+          {
+            mode,
+            side: status.grant.side,
               maxResults: DEFAULT_GMAIL_TRIAGE_MAX_RESULTS,
             },
             now,

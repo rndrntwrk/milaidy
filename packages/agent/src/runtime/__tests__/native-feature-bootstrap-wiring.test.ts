@@ -157,4 +157,9 @@ describe("native feature bootstrap wiring", () => {
     expect(trajectoryProbe).not.toContain("const fn =");
     expect(knowledgeProbe).not.toContain("const fn =");
   });
+
+  it("forwards connector env vars into runtime settings", () => {
+    expect(elizaSource).toContain("collectConnectorEnvVars");
+    expect(elizaSource).toContain("...collectConnectorEnvVars(config)");
+  });
 });
