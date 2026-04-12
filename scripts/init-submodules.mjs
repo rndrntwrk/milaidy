@@ -208,10 +208,38 @@ export function runInitSubmodules({
       }...`,
     );
     try {
-      exec(`git submodule update --init --recursive "${submodule.path}"`, {
-        cwd: rootDir,
-        stdio: "inherit",
-      });
+      try {
+        exec(`git submodule update --init --recursive "${submodule.path}"`, {
+          cwd: rootDir,
+          stdio: "inherit",
+        });
+      } catch (shallowErr) {
+        // Shallow clones (common in CI) may fail to fetch the pinned SHA.
+        // Retry: register the submodule, fetch all refs deeply, then update.
+        log(
+          `[init-submodules] Shallow init failed for ${submodule.name}, retrying with full fetch...`,
+        );
+        try {
+          exec(`git submodule init "${submodule.path}"`, {
+            cwd: rootDir,
+            stdio: "inherit",
+          });
+        } catch {
+          // init may already have been done by the first attempt
+        }
+        const smRoot = resolve(rootDir, submodule.path);
+        if (exists(smRoot) && exists(resolve(smRoot, ".git"))) {
+          exec("git fetch --unshallow || git fetch --all", {
+            cwd: smRoot,
+            stdio: "inherit",
+            shell: true,
+          });
+        }
+        exec(
+          `git submodule update --recursive "${submodule.path}"`,
+          { cwd: rootDir, stdio: "inherit" },
+        );
+      }
       if (
         !isSubmoduleCheckoutReady(submodule.path, {
           rootDir,

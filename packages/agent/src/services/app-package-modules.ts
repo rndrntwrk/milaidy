@@ -466,6 +466,11 @@ export async function importAppRouteModule(
   const label = packageName ?? appIdentifier;
 
   try {
+    // Prefer workspace-local route modules before built-ins so checked-out app
+    // plugins can intentionally override the packaged bridge during local
+    // development. This lookup is repo/workspace-scoped rather than install-
+    // directory scoped, so accidental shadowing stays limited to active dev
+    // workspaces.
     const localModule = await importLocalAppRouteModule(appIdentifier);
     if (localModule) {
       return localModule;

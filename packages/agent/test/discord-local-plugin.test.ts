@@ -1,3 +1,4 @@
+import { logger } from "@elizaos/core";
 import { describe, expect, it, vi } from "vitest";
 import {
   DISCORD_LOCAL_SERVICE_NAME,
@@ -142,6 +143,36 @@ describeDarwinOnly("DiscordLocalService.subscribeChannelMessages", () => {
         }),
       }),
       "messages",
+    );
+  });
+
+  it("discards malformed IPC frames without throwing", () => {
+    const service = new DiscordLocalService(createRuntime() as never);
+    const handleRpcPayload = vi.fn();
+    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+    (
+      service as unknown as {
+        handleRpcPayload: typeof handleRpcPayload;
+      }
+    ).handleRpcPayload = handleRpcPayload;
+
+    const body = Buffer.from("{", "utf8");
+    const frame = Buffer.alloc(8 + body.length);
+    frame.writeInt32LE(1, 0);
+    frame.writeInt32LE(body.length, 4);
+    body.copy(frame, 8);
+
+    expect(() => {
+      (
+        service as unknown as {
+          handleSocketData: (chunk: Buffer) => void;
+        }
+      ).handleSocketData(frame);
+    }).not.toThrow();
+    expect(handleRpcPayload).not.toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalledWith(
+      "[discord-local] Discarding malformed IPC frame with invalid JSON payload",
     );
   });
 });

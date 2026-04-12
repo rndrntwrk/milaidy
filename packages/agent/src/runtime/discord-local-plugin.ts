@@ -865,13 +865,28 @@ export class DiscordLocalService extends Service {
     while (this.readBuffer.length >= 8) {
       const op = this.readBuffer.readInt32LE(0);
       const length = this.readBuffer.readInt32LE(4);
+      if (length < 0) {
+        logger.warn(
+          "[discord-local] Discarding malformed IPC frame with negative payload length",
+        );
+        this.readBuffer = Buffer.alloc(0);
+        return;
+      }
       if (this.readBuffer.length < 8 + length) {
         return;
       }
 
       const body = this.readBuffer.subarray(8, 8 + length);
       this.readBuffer = this.readBuffer.subarray(8 + length);
-      const payload = JSON.parse(body.toString("utf8")) as DiscordLocalRpcPayload;
+      let payload: DiscordLocalRpcPayload;
+      try {
+        payload = JSON.parse(body.toString("utf8")) as DiscordLocalRpcPayload;
+      } catch {
+        logger.warn(
+          "[discord-local] Discarding malformed IPC frame with invalid JSON payload",
+        );
+        continue;
+      }
       this.handleRpcPayload(op, payload);
     }
   }

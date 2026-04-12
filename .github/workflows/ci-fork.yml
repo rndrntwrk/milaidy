@@ -30,7 +30,7 @@ jobs:
         uses: ./.github/actions/setup-bun-workspace
         with:
           bun-version: ${{ env.BUN_VERSION }}
-          install-command: bun install --no-frozen-lockfile --ignore-scripts
+          install-command: bun install --frozen-lockfile --ignore-scripts
 
       - name: Biome lint
         run: bun run verify:lint
@@ -54,7 +54,7 @@ jobs:
         uses: ./.github/actions/setup-bun-workspace
         with:
           bun-version: ${{ env.BUN_VERSION }}
-          install-command: bun install --no-frozen-lockfile --ignore-scripts
+          install-command: bun install --frozen-lockfile --ignore-scripts
 
       - name: Run type checker
         run: bun run verify:typecheck
@@ -75,7 +75,7 @@ jobs:
         uses: ./.github/actions/setup-bun-workspace
         with:
           bun-version: ${{ env.BUN_VERSION }}
-          install-command: bun install --no-frozen-lockfile --ignore-scripts
+          install-command: bun install --frozen-lockfile --ignore-scripts
 
       - name: Run onboarding voice regression tests
         run: bunx vitest run packages/app-core/src/components/onboarding/identity-preview-tts.test.ts
@@ -98,7 +98,7 @@ jobs:
         uses: ./.github/actions/setup-bun-workspace
         with:
           bun-version: ${{ env.BUN_VERSION }}
-          install-command: bun install --no-frozen-lockfile --ignore-scripts
+          install-command: bun install --frozen-lockfile --ignore-scripts
 
       - name: Build project
         run: bun run build

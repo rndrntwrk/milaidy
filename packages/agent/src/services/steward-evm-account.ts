@@ -159,6 +159,7 @@ export async function fetchStewardWalletAddress(
   agentId: string,
 ): Promise<Address> {
   const baseUrl = apiUrl.replace(/\/+$/, "");
+  const timeoutMs = 10_000;
   const headers = {
     "Content-Type": "application/json",
     Accept: "application/json",
@@ -169,7 +170,10 @@ export async function fetchStewardWalletAddress(
   try {
     const addrResp = await fetch(
       `${baseUrl}/vault/${encodeURIComponent(agentId)}/addresses`,
-      { headers }
+      {
+        headers,
+        signal: AbortSignal.timeout(timeoutMs),
+      },
     );
     if (addrResp.ok) {
       const addrData = (await addrResp.json()) as StewardApiResponse<{ evm?: string; solana?: string }>;
@@ -185,7 +189,10 @@ export async function fetchStewardWalletAddress(
   try {
     const agentResp = await fetch(
       `${baseUrl}/agents/${encodeURIComponent(agentId)}`,
-      { headers }
+      {
+        headers,
+        signal: AbortSignal.timeout(timeoutMs),
+      },
     );
     if (agentResp.ok) {
       const agentData = (await agentResp.json()) as StewardApiResponse<{ walletAddress?: string }>;
