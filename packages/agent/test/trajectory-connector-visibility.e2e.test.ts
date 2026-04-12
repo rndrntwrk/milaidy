@@ -1,5 +1,5 @@
 import { PGlite } from "@electric-sql/pglite";
-import { type AgentRuntime, TrajectoriesService } from "@elizaos/core";
+import type { AgentRuntime, TrajectoriesService as TrajectoriesServiceType } from "@elizaos/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { req } from "../../../test/helpers/http";
 import { startApiServer } from "../src/api/server";
@@ -30,10 +30,30 @@ function extractSqlText(query: SqlQuery): string {
     .join("");
 }
 
+async function loadTrajectoriesServiceCtor(): Promise<
+  new (runtime: AgentRuntime) => TrajectoriesServiceType
+> {
+  const mod = await import("@elizaos/core");
+  const candidates = [
+    (mod as { TrajectoriesService?: unknown }).TrajectoriesService,
+    (mod as { default?: Record<string, unknown> }).default?.TrajectoriesService,
+  ];
+  const ctor = candidates.find(
+    (value) =>
+      typeof value === "function" &&
+      ((value as Function).name === "TrajectoriesService" ||
+        (value as { prototype?: unknown }).prototype),
+  );
+  if (!ctor) {
+    throw new TypeError("TrajectoriesService export not found");
+  }
+  return ctor as new (runtime: AgentRuntime) => TrajectoriesServiceType;
+}
+
 describe("Connector trajectory visibility", () => {
   let db: PGlite;
   let runtime: TestRuntime;
-  let trajectoryLogger: TrajectoriesService;
+  let trajectoryLogger: TrajectoriesServiceType;
   let server: { port: number; close: () => Promise<void> } | null = null;
 
   beforeAll(async () => {
@@ -72,7 +92,8 @@ describe("Connector trajectory visibility", () => {
       getServicesByType: () => [],
     } as TestRuntime;
 
-    trajectoryLogger = new TrajectoriesService(runtime);
+    const TrajectoriesServiceCtor = await loadTrajectoriesServiceCtor();
+    trajectoryLogger = new TrajectoriesServiceCtor(runtime);
     await trajectoryLogger.initialize();
 
     runtime.getService = ((serviceType: string) =>

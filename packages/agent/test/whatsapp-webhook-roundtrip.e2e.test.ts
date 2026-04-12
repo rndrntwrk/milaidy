@@ -7,11 +7,32 @@ import {
   type Content,
   type Memory,
 } from "@elizaos/core";
-import { WhatsAppConnectorService } from "@elizaos/plugin-whatsapp";
+import type { WhatsAppConnectorService as WhatsAppConnectorServiceType } from "@elizaos/plugin-whatsapp";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { req } from "../../../test/helpers/http";
 import { saveEnv } from "../../../test/helpers/test-utils";
 import { startApiServer } from "../src/api/server";
+
+async function loadWhatsAppConnectorServiceCtor(): Promise<
+  new (runtime: AgentRuntime) => WhatsAppConnectorServiceType
+> {
+  const mod = await import("@elizaos/plugin-whatsapp");
+  const candidates = [
+    (mod as { WhatsAppConnectorService?: unknown }).WhatsAppConnectorService,
+    (mod as { default?: Record<string, unknown> }).default
+      ?.WhatsAppConnectorService,
+  ];
+  const ctor = candidates.find(
+    (value) =>
+      typeof value === "function" &&
+      ((value as Function).name === "WhatsAppConnectorService" ||
+        (value as { prototype?: unknown }).prototype),
+  );
+  if (!ctor) {
+    throw new TypeError("WhatsAppConnectorService export not found");
+  }
+  return ctor as new (runtime: AgentRuntime) => WhatsAppConnectorServiceType;
+}
 
 describe("WhatsApp webhook roundtrip", () => {
   let closeServer: (() => Promise<void>) | null = null;
@@ -22,7 +43,7 @@ describe("WhatsApp webhook roundtrip", () => {
   let inboundMemory: Memory | null = null;
   let outboundMemories: Memory[] = [];
   let ensureConnection: ReturnType<typeof vi.fn>;
-  let whatsappService: WhatsAppConnectorService;
+  let whatsappService: WhatsAppConnectorServiceType;
 
   beforeAll(async () => {
     envBackup = saveEnv("ELIZA_CONFIG_PATH", "ELIZA_STATE_DIR");
@@ -78,7 +99,9 @@ describe("WhatsApp webhook roundtrip", () => {
       getServicesByType: () => [],
     } as unknown as AgentRuntime;
 
-    whatsappService = new WhatsAppConnectorService(runtime);
+    const WhatsAppConnectorServiceCtor =
+      await loadWhatsAppConnectorServiceCtor();
+    whatsappService = new WhatsAppConnectorServiceCtor(runtime);
     (whatsappService as unknown as {
       config: Record<string, unknown>;
       client: Record<string, unknown>;

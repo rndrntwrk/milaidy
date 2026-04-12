@@ -891,9 +891,25 @@ function isMiladyManualResetPgliteError(err: unknown): boolean {
     return true;
   }
 
-  return collectErrorMessages(err).some((message) =>
-    message.includes("rename or delete only this directory before retrying"),
-  );
+  return collectErrorMessages(err).some((message) => {
+    const normalized = message.toLowerCase();
+    if (
+      normalized.includes(
+        "rename or delete only this directory before retrying",
+      )
+    ) {
+      return true;
+    }
+
+    if (
+      normalized.includes("@elizaos/plugin-sql") &&
+      normalized.includes("migrations._migrations")
+    ) {
+      return true;
+    }
+
+    return false;
+  });
 }
 
 function getPgliteDataDirFromError(err: unknown): string | null {
@@ -1016,6 +1032,46 @@ async function quarantinePgliteDataDir(
   throw new Error(`Could not allocate a backup path for ${dataDir}`);
 }
 
+function normalizeMiladyPgliteStartupError(err: unknown): unknown {
+  if (!isMiladyManualResetPgliteError(err)) {
+    return err;
+  }
+
+  if (
+    err instanceof Error &&
+    getPgliteErrorCode(err) === MILADY_AUTO_RESET_PGLITE_ERROR_CODE
+  ) {
+    return err;
+  }
+
+  const dataDir =
+    getPgliteDataDirFromError(err) ?? resolveMiladyManagedPgliteDataDir();
+  const detail =
+    collectErrorMessages(err)[0] ??
+    (err instanceof Error ? err.message : String(err));
+  const wrapped = new Error(
+    dataDir
+      ? `PGlite initialization failed for ${dataDir}: ${detail}. Stop Milady, then rename or delete only this directory before retrying: ${dataDir}`
+      : `PGlite initialization failed: ${detail}. Stop Milady, then rename or delete only the managed PGlite data directory before retrying.`,
+    { cause: err },
+  ) as ErrorWithCause;
+  wrapped.code = MILADY_AUTO_RESET_PGLITE_ERROR_CODE;
+  if (dataDir) {
+    wrapped.dataDir = dataDir;
+  }
+  return wrapped;
+}
+
+async function upstreamStartElizaWithMiladyPgliteCompat(
+  options?: StartElizaOptions,
+): Promise<Awaited<ReturnType<typeof upstreamStartEliza>>> {
+  try {
+    return await upstreamStartEliza(options);
+  } catch (err) {
+    throw normalizeMiladyPgliteStartupError(err);
+  }
+}
+
 export async function attemptMiladyPgliteAutoReset(
   err: unknown,
 ): Promise<string | null> {
@@ -1064,7 +1120,7 @@ export async function startEliza(
 
     if (options?.serverOnly) {
       let currentRuntime =
-        (await upstreamStartEliza({
+        (await upstreamStartElizaWithMiladyPgliteCompat({
           ...options,
           headless: true,
           serverOnly: false,
@@ -1094,7 +1150,7 @@ export async function startEliza(
           );
 
           const restarted =
-            (await upstreamStartEliza({
+            (await upstreamStartElizaWithMiladyPgliteCompat({
               ...options,
               headless: true,
               serverOnly: false,
@@ -1165,7 +1221,7 @@ export async function startEliza(
       return currentRuntime;
     }
 
-    const runtime = await upstreamStartEliza(options);
+    const runtime = await upstreamStartElizaWithMiladyPgliteCompat(options);
     return runtime ? await repairRuntimeAfterBoot(runtime) : runtime;
   } finally {
     syncElizaEnvToMilady();

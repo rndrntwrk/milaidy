@@ -7,7 +7,7 @@ import {
   ModelType,
   runWithTrajectoryContext,
   trajectoriesPlugin,
-  TrajectoriesService,
+  type TrajectoriesService as TrajectoriesServiceType,
   type UUID,
 } from "@elizaos/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -42,6 +42,26 @@ function extractSqlText(query: SqlQuery): string {
       return String(value ?? "");
     })
     .join("");
+}
+
+async function loadTrajectoriesServiceCtor(): Promise<
+  new (runtime: AgentRuntime) => TrajectoriesServiceType
+> {
+  const mod = await import("@elizaos/core");
+  const candidates = [
+    (mod as { TrajectoriesService?: unknown }).TrajectoriesService,
+    (mod as { default?: Record<string, unknown> }).default?.TrajectoriesService,
+  ];
+  const ctor = candidates.find(
+    (value) =>
+      typeof value === "function" &&
+      ((value as Function).name === "TrajectoriesService" ||
+        (value as { prototype?: unknown }).prototype),
+  );
+  if (!ctor) {
+    throw new TypeError("TrajectoriesService export not found");
+  }
+  return ctor as new (runtime: AgentRuntime) => TrajectoriesServiceType;
 }
 
 async function waitForTrajectoryCall(
@@ -94,7 +114,7 @@ async function waitForTrajectoryCall(
 
 describe("Trajectory logger chat roundtrip", () => {
   let runtime: TestRuntime;
-  let trajectoryLogger: TrajectoriesService;
+  let trajectoryLogger: TrajectoriesServiceType;
   let db: PGlite;
   let server: { port: number; close: () => Promise<void> } | null = null;
 
@@ -285,7 +305,8 @@ describe("Trajectory logger chat roundtrip", () => {
       }
     };
 
-    trajectoryLogger = new TrajectoriesService(runtime);
+    const TrajectoriesServiceCtor = await loadTrajectoriesServiceCtor();
+    trajectoryLogger = new TrajectoriesServiceCtor(runtime);
     await trajectoryLogger.initialize();
 
     server = await startApiServer({ port: 0, runtime });

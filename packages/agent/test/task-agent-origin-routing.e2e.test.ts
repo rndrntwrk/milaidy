@@ -188,16 +188,25 @@ describe("Task agent origin routing", () => {
         ],
       });
 
-      const session = await ptyService.spawnSession({
-        name: "routing-session-end-shell",
+      const sessionId = `routing-session-end-${Date.now()}`;
+      await coordinator.registerTask(sessionId, {
+        threadId: taskThread.id,
         agentType: "shell",
+        label: "routing-session-end-shell",
+        originalTask: "Simulate a task-agent session_end hook event",
         workdir,
-        metadata: {
-          threadId: taskThread.id,
-        },
+      });
+      (
+        ptyService as unknown as {
+          sessionMetadata: Map<string, Record<string, unknown>>;
+        }
+      ).sessionMetadata.set(sessionId, {
+        threadId: taskThread.id,
+        agentType: "shell",
+        requestedType: "shell",
       });
 
-      ptyService.handleHookEvent(session.id, "session_end", {
+      ptyService.handleHookEvent(sessionId, "session_end", {
         reason: "e2e_session_end",
       });
 
@@ -211,8 +220,6 @@ describe("Task agent origin routing", () => {
 
       expect(delivered.target.channelId).toBe("telegram-routing-e2e");
       expect(delivered.content.source).toBe("telegram");
-
-      await ptyService.stopSession(session.id, true).catch(() => {});
     },
     60_000,
   );
