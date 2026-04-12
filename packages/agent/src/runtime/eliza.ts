@@ -181,7 +181,10 @@ try {
 let pluginSecretsManager: unknown = null;
 try {
   pluginSecretsManager = require("@elizaos/plugin-secrets-manager");
-} catch {
+} catch (error) {
+  logger.warn(
+    `[eliza] Optional plugin @elizaos/plugin-secrets-manager unavailable: ${formatError(error)}`,
+  );
   pluginSecretsManager = null;
 }
 // Keep plugin-cron behind a guarded runtime require for the same reason. Some

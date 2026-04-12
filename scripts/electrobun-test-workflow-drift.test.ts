@@ -38,7 +38,9 @@ describe("Electrobun test workflow drift", () => {
     expect(workflow).toContain(
       "name: Setup workspace dependencies\n        uses: ./.github/actions/setup-bun-workspace",
     );
-    expect(workflow).toContain("install-command: bun install --ignore-scripts");
+    expect(workflow).toContain(
+      "install-command: bun install --no-frozen-lockfile --ignore-scripts",
+    );
     expect(workflow).not.toContain("run-postinstall:");
     expect(workflow).not.toContain("install-command: bun install\n");
   });

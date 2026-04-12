@@ -219,4 +219,59 @@ describe("TelegramAccountAuthSession", () => {
     });
     expect(telegramAccountAuthStateExists()).toBe(false);
   });
+
+  test("coerces legacy persisted connector state back into the enabled runtime config", () => {
+    const stateDir = useTempStateDir();
+    const authStateFile = path.join(
+      stateDir,
+      "telegram-account",
+      "auth-state.json",
+    );
+    fs.mkdirSync(path.dirname(authStateFile), { recursive: true });
+    fs.writeFileSync(
+      authStateFile,
+      JSON.stringify({
+        snapshot: {
+          status: "configured",
+          phone: "+15551234567",
+          error: null,
+          isCodeViaApp: false,
+          account: {
+            id: "1",
+            username: "shaw",
+            firstName: "Shaw",
+            lastName: null,
+            phone: "15551234567",
+          },
+        },
+        credentials: null,
+        connectorConfig: {
+          phone: "+15551234567",
+          appId: "12345",
+          appHash: "api-hash",
+          deviceModel: "Milady Desktop",
+          systemVersion: "macOS 14",
+          enabled: false,
+        },
+        provisioningRandomHash: null,
+        phoneCodeHash: null,
+      }),
+      "utf8",
+    );
+
+    const session = new TelegramAccountAuthSession();
+
+    expect(session.getSnapshot()).toMatchObject({
+      status: "configured",
+      phone: "+15551234567",
+    });
+    expect(session.getResolvedConnectorConfig()).toEqual({
+      phone: "+15551234567",
+      appId: "12345",
+      appHash: "api-hash",
+      deviceModel: "Milady Desktop",
+      systemVersion: "macOS 14",
+      enabled: true,
+    });
+  });
 });

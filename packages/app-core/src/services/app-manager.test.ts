@@ -1311,7 +1311,7 @@ describe("App session launch metadata", () => {
           mode: "spectate-and-steer",
           status: "connecting",
           canSendCommands: true,
-          controls: ["pause", "resume"],
+          controls: ["resume"],
           summary: "Connecting session...",
         }),
       );

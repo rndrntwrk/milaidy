@@ -240,11 +240,14 @@ function readPersistedConnectorConfig(
     !appId ||
     !appHash ||
     !deviceModel ||
-    !systemVersion ||
-    record.enabled === false
+    !systemVersion
   ) {
     return null;
   }
+  // Older persisted connector snapshots could save `enabled: false` while the
+  // auth state still represented a completed Telegram account setup. Coerce
+  // those upgrade-path records back into the live connector shape so the saved
+  // credentials are not silently discarded after restart.
   return {
     phone,
     appId,

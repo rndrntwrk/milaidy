@@ -67,6 +67,9 @@ describe("native feature bootstrap wiring", () => {
       'pluginSecretsManager = require("@elizaos/plugin-secrets-manager");',
     );
     expect(elizaSource).toContain(
+      "Optional plugin @elizaos/plugin-secrets-manager unavailable",
+    );
+    expect(elizaSource).toContain(
       '"@elizaos/plugin-secrets-manager": pluginSecretsManager',
     );
   });

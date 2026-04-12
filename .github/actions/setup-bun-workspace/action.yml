@@ -13,7 +13,7 @@ inputs:
   install-command:
     description: "Dependency install command"
     required: false
-    default: "bun install --ignore-scripts"
+    default: "bun install --frozen-lockfile --ignore-scripts"
   install-native-deps:
     description: "Whether to install native apt dependencies"
     required: false
