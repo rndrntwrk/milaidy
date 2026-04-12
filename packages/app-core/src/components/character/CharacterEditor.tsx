@@ -1522,7 +1522,7 @@ export function CharacterEditor({
                       </div>
                     )}
                   </div>
-                </section>
+                </div>
 
                 {/* Post Examples */}
                 <section
