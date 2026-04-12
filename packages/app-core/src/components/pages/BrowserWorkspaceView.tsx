@@ -381,7 +381,9 @@ export function BrowserWorkspaceView(): JSX.Element {
 
   const loadBrowserWalletState = useCallback(async () => {
     try {
-      const stewardStatus = await getStewardStatusRef.current().catch(() => null);
+      const stewardStatus = await getStewardStatusRef
+        .current()
+        .catch(() => null);
       const resolvedWalletConfig =
         walletConfigRef.current ??
         (await client.getWalletConfig().catch(() => null));
