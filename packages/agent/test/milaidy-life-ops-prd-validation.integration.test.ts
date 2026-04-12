@@ -1682,29 +1682,33 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
                   ),
                 );
 
-                const readStart = await req(
-                  port,
-                  "POST",
-                  "/api/lifeops/connectors/google/start",
-                  { capabilities: ["google.calendar.read"] },
+                const readStart = await withTimeout(
+                  req(port, "POST", "/api/lifeops/connectors/google/start", {
+                    capabilities: ["google.calendar.read"],
+                  }),
+                  15_000,
+                  "P1-05 read grant start",
                 );
                 const readAuthUrl = new URL(String(readStart.data.authUrl));
-                await req(
-                  port,
-                  "GET",
-                  `/api/lifeops/connectors/google/callback?state=${encodeURIComponent(readAuthUrl.searchParams.get("state") ?? "")}&code=read-code`,
+                await withTimeout(
+                  req(
+                    port,
+                    "GET",
+                    `/api/lifeops/connectors/google/callback?state=${encodeURIComponent(readAuthUrl.searchParams.get("state") ?? "")}&code=read-code`,
+                  ),
+                  15_000,
+                  "P1-05 read grant callback",
                 );
 
-                const rejected = await req(
-                  port,
-                  "POST",
-                  "/api/lifeops/calendar/events",
-                  {
+                const rejected = await withTimeout(
+                  req(port, "POST", "/api/lifeops/calendar/events", {
                     title: "Coffee with Mira",
                     windowPreset: "tomorrow_afternoon",
                     durationMinutes: 90,
                     timeZone: "America/Los_Angeles",
-                  },
+                  }),
+                  15_000,
+                  "P1-05 create rejected without write grant",
                 );
                 expect(rejected.status).toBe(403);
 
@@ -1735,17 +1739,22 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
                   ),
                 );
 
-                const writeStart = await req(
-                  port,
-                  "POST",
-                  "/api/lifeops/connectors/google/start",
-                  { capabilities: ["google.calendar.write"] },
+                const writeStart = await withTimeout(
+                  req(port, "POST", "/api/lifeops/connectors/google/start", {
+                    capabilities: ["google.calendar.write"],
+                  }),
+                  15_000,
+                  "P1-05 write grant start",
                 );
                 const writeAuthUrl = new URL(String(writeStart.data.authUrl));
-                await req(
-                  port,
-                  "GET",
-                  `/api/lifeops/connectors/google/callback?state=${encodeURIComponent(writeAuthUrl.searchParams.get("state") ?? "")}&code=write-code`,
+                await withTimeout(
+                  req(
+                    port,
+                    "GET",
+                    `/api/lifeops/connectors/google/callback?state=${encodeURIComponent(writeAuthUrl.searchParams.get("state") ?? "")}&code=write-code`,
+                  ),
+                  15_000,
+                  "P1-05 write grant callback",
                 );
 
                 fetchMock.mockImplementationOnce(async (input, init) => {
@@ -1792,16 +1801,15 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
                   );
                 });
 
-                const createRes = await req(
-                  port,
-                  "POST",
-                  "/api/lifeops/calendar/events",
-                  {
+                const createRes = await withTimeout(
+                  req(port, "POST", "/api/lifeops/calendar/events", {
                     title: "Coffee with Mira",
                     windowPreset: "tomorrow_afternoon",
                     durationMinutes: 90,
                     timeZone: "America/Los_Angeles",
-                  },
+                  }),
+                  15_000,
+                  "P1-05 create with write grant",
                 );
                 expect(createRes.status).toBe(201);
                 expect(createRes.data.event).toMatchObject({

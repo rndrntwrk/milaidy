@@ -222,7 +222,7 @@ describe("localized validate audit for Milady keyword-gated actions", () => {
     await expect(
       gmailAction.validate?.(
         makeRuntime(),
-        makeMessage("buscar correos de Alice"),
+        makeMessage("buscar correo de Alice"),
         undefined,
       ),
     ).resolves.toBe(true);

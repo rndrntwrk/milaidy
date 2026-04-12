@@ -215,7 +215,77 @@ function normalizePlannerString(value: unknown): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+function splitLooseListString(value: string): string[] {
+  const parts: string[] = [];
+  let current = "";
+  let inQuotes = false;
+  let angleDepth = 0;
+
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index];
+    const next = value[index + 1];
+
+    if (char === '"') {
+      inQuotes = !inQuotes;
+      current += char;
+      continue;
+    }
+    if (!inQuotes && char === "<") {
+      angleDepth += 1;
+      current += char;
+      continue;
+    }
+    if (!inQuotes && char === ">") {
+      angleDepth = Math.max(0, angleDepth - 1);
+      current += char;
+      continue;
+    }
+    if (!inQuotes && angleDepth === 0 && char === "|" && next === "|") {
+      const trimmed = current.trim();
+      if (trimmed.length > 0) {
+        parts.push(trimmed);
+      }
+      current = "";
+      index += 1;
+      continue;
+    }
+    if (
+      !inQuotes &&
+      angleDepth === 0 &&
+      (char === "," || char === ";" || char === "\n")
+    ) {
+      const trimmed = current.trim();
+      if (trimmed.length > 0) {
+        parts.push(trimmed);
+      }
+      current = "";
+      continue;
+    }
+    current += char;
+  }
+
+  const trimmed = current.trim();
+  if (trimmed.length > 0) {
+    parts.push(trimmed);
+  }
+  return parts;
+}
+
 function normalizePlannerStringArray(value: unknown): string[] | undefined {
+  if (Array.isArray(value)) {
+    return dedupeQueries(
+      value.flatMap((item) =>
+        typeof item === "string" ? splitLooseListString(item) : [],
+      ),
+    );
+  }
+  if (typeof value === "string") {
+    return dedupeQueries(splitLooseListString(value));
+  }
+  return undefined;
+}
+
+function normalizeQueryStringArray(value: unknown): string[] | undefined {
   if (Array.isArray(value)) {
     return dedupeQueries(
       value.map((item) => (typeof item === "string" ? item.trim() : "")),
@@ -453,12 +523,13 @@ function normalizeGmailDetails(
 }
 
 function normalizeStringArray(value: unknown): string[] | undefined {
-  if (!Array.isArray(value)) {
-    return undefined;
-  }
-  const normalized = value
-    .map((item) => (typeof item === "string" ? item.trim() : ""))
-    .filter((item) => item.length > 0);
+  const normalized = Array.isArray(value)
+    ? value.flatMap((item) =>
+        typeof item === "string" ? splitLooseListString(item) : [],
+      )
+    : typeof value === "string"
+      ? splitLooseListString(value)
+      : [];
   return normalized.length > 0 ? normalized : undefined;
 }
 
@@ -915,10 +986,15 @@ export async function extractGmailPlanWithLlm(
   const timeZone = resolveDefaultTimeZone();
   const now = new Date();
   const nowIso = now.toISOString();
-  const localNow = new Intl.DateTimeFormat("en-US", {
+  const localNow = new Intl.DateTimeFormat(undefined, {
     timeZone,
-    dateStyle: "full",
-    timeStyle: "long",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
   }).format(now);
   const prompt = [
     "Plan the Gmail action for this request.",
@@ -928,6 +1004,7 @@ export async function extractGmailPlanWithLlm(
     "You are allowed to decide that the assistant should reply naturally without acting yet.",
     "Set shouldAct=false when the user is vague, only acknowledging, brainstorming, or asking for email help without enough specifics to safely act.",
     "When shouldAct=false, provide a short natural response that asks only for what is missing.",
+    "When shouldAct=false, write that response in the user's language unless they clearly asked to switch languages.",
     "For clear reply-workflow commands like 'draft a reply to John's email' or 'send that reply now', still choose the intent-level subaction even if the exact Gmail message id is not known yet. Downstream Gmail logic can clarify the target email.",
     "",
     "Return a JSON object with exactly these fields:",
@@ -958,6 +1035,7 @@ export async function extractGmailPlanWithLlm(
     "For draft_reply, send_reply, and draft_batch_replies, also extract Gmail-compatible queries whenever the target email is described by sender, subject, keyword, or timeframe but no explicit Gmail message id is known.",
     "Return Gmail operators in Gmail syntax even if the user speaks another language, and preserve names, addresses, and subject keywords in their original language or script when useful.",
     "For send_message, preserve the exact recipient addresses and keep the user's intended subject/body wording as close as possible.",
+    "When the user writes in another language, still infer the correct Gmail action and keep extracted subject/body wording in that language unless the user asked to translate.",
     "",
     "Gmail search operators reference:",
     "  from:name  to:name  cc:name  subject:word  has:attachment  is:unread  is:starred  is:important",
@@ -976,6 +1054,8 @@ export async function extractGmailPlanWithLlm(
     '  "send that reply now" with recent context about an existing drafted reply → {"subaction":"send_reply","shouldAct":true,"response":null}',
     '  "check my inbox" → {"subaction":"triage","shouldAct":true,"response":null}',
     '  "any emails from Sarah about the report" → {"subaction":"search","shouldAct":true,"response":null,"queries":["from:sarah subject:report"]}',
+    '  "busca en mi correo si Suran me escribió hoy" → {"subaction":"search","shouldAct":true,"response":null,"queries":["from:suran newer_than:1d"]}',
+    '  "envíale un correo a maria@example.com con asunto hola y cuerpo nos vemos mañana" → {"subaction":"send_message","shouldAct":true,"response":null,"queries":[],"to":["maria@example.com"],"subject":"hola","bodyText":"nos vemos mañana"}',
     '  "send an email to zo@iqlabs.dev, subject hello anon, body how are you doing today?" → {"subaction":"send_message","shouldAct":true,"response":null,"queries":[],"to":["zo@iqlabs.dev"],"subject":"hello anon","bodyText":"how are you doing today?"}',
     '  "can you help me with my email?" → {"subaction":null,"shouldAct":false,"response":"What do you want to do in Gmail — check inbox, search, read, or draft a reply?","queries":[]}',
     "",
@@ -1099,6 +1179,7 @@ async function recoverSendMessagePlanWithLlm(args: {
     "When there is an active pending compose draft, keep its recipient, cc, bcc, subject, and body unless the user changes them.",
     "When the user says something like 'same as the last email', reuse subject/body/cc/bcc from the most recent completed outbound email, but keep the active draft recipient unless the user changes it.",
     "When a recipient is already known and the user gives a single short payload like send an email like 'test', treat that payload as the body text and, if subject is still missing, use the same short payload as the minimal subject.",
+    "Keep the subject and body in the user's language unless the user explicitly asks to translate or switch languages.",
     "If the user is only pausing, thinking, or not ready yet, set shouldResume=false and do not invent missing fields.",
     "If the user cancels the email, set cancelled=true and shouldResume=false.",
     "",
@@ -1122,6 +1203,8 @@ async function recoverSendMessagePlanWithLlm(args: {
     "  <shouldResume>true</shouldResume><cancelled>false</cancelled><to>shawmakesmagic@gmail.com</to><subject>test</subject><bodyText>test</bodyText>",
     '  active draft recipient: ["shawmakesmagic@gmail.com"], previous sent subject/body: "Quick test" / "test", current message: "same as the last email"',
     "  <shouldResume>true</shouldResume><cancelled>false</cancelled><to>shawmakesmagic@gmail.com</to><subject>Quick test</subject><bodyText>test</bodyText>",
+    '  current message: "enviale un correo a maria@example.com con asunto hola y cuerpo nos vemos manana"',
+    "  <shouldResume>true</shouldResume><cancelled>false</cancelled><to>maria@example.com</to><subject>hola</subject><bodyText>nos vemos manana</bodyText>",
     `Current user message: ${JSON.stringify(currentMessage)}`,
     `Resolved intent: ${JSON.stringify(intent)}`,
     `Current Gmail planner draft: ${JSON.stringify({
@@ -1435,7 +1518,7 @@ export const gmailAction: Action = {
     );
     const explicitQueryArray = [
       ...(params.queries ?? []),
-      ...(normalizeStringArray(details?.queries) ?? []),
+      ...(normalizeQueryStringArray(details?.queries) ?? []),
     ];
     const hasExplicitGmailExecutionInput = Boolean(
       explicitSubaction ||

@@ -87,6 +87,22 @@ const WEEKDAY_MAP: Record<string, number> = {
 };
 const FILLER_PREFIX_RE =
   /^(?:lol|lmao|yeah|yep|yup|uh|uhh|um|umm|hmm|actually|please|can you|could you|would you|help me|hey|so|just)\b[\s,!.-]*/i;
+const TITLE_PREFIX_RE =
+  /\b(?:i want to|want to|need to|have to|gotta|make sure i|make sure|help me(?: remember)? to|can you help me(?: remember)? to|please(?: help me)?(?: remember)? to|remember to|remind(?: me)?(?: to)?|set (?:an?|the)? ?(?:alarm|reminder)(?: for)?(?: to)?|create (?:an?|the)? ?reminder(?: for)?(?: to)?|add (?:an?|the)? ?(?:todo|task|habit|routine)(?: to)?|create (?:an?|the)? ?(?:todo|task|habit|routine)(?: to)?|make (?:an?|the)? ?(?:todo|task|habit|routine)(?: to)?)\b/gi;
+const TITLE_ARTICLE_RE =
+  /\b(?:an?|the)\s+(?:alarm|reminder|todo|task|habit|routine)\b/gi;
+const TITLE_SCHEDULE_SUFFIX_RE =
+  /\b(?:every|each|daily|weekly|monthly|today|tomorrow|tonight|morning|mornings|afternoon|afternoons|evening|evenings|night|nights|weekdays?|workdays?|weekends?|when i wake up|before bed|before sleep|before i sleep|before i go to bed|with breakfast|with lunch|with dinner|after lunch|after work|throughout the day|at \d{1,2}(?::\d{2})?\s*(?:am|pm)|noon|midnight)\b.*$/i;
+const TITLE_TRAILING_SCHEDULE_RE =
+  /\b(?:daily|weekly|monthly|morning|mornings|afternoon|afternoons|evening|evenings|night|nights|weekdays?|workdays?|weekends?)\b$/i;
+const TITLE_GENERIC_ONLY_RE =
+  /^(?:do|work out|workout|habit|routine|task|todo|reminder|alarm|thing|stuff|something)$/i;
+const TITLE_GENERIC_VERB_RE = /^(?:do|work out|workout)\b/i;
+
+type HeuristicTitleSegment = {
+  hasQuantity: boolean;
+  text: string;
+};
 
 // ── Prompt ────────────────────────────────────────────
 
@@ -240,7 +256,10 @@ function validateRequestKindAgainstContext(
 }
 
 function normalizeIntent(value: string): string {
-  return value.replace(/\s+/g, " ").trim();
+  return value
+    .replace(/[\u00a0\u1680\u2000-\u200b\u202f\u205f\u3000]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function stripLanguageAugmentation(value: string): string {
@@ -263,28 +282,109 @@ function titleCase(value: string): string {
 function normalizeTitleCandidate(value: string): string | null {
   const cleaned = stripLanguageAugmentation(value)
     .replace(FILLER_PREFIX_RE, "")
+    .replace(TITLE_PREFIX_RE, " ")
     .replace(
       /\b(?:set|add|create|make|help me add|help me create|help me make|please set|please add)\b/gi,
       " ",
     )
-    .replace(
-      /\b(?:an?|the)\s+(?:alarm|reminder|todo|task|habit|routine)\b/gi,
-      " ",
-    )
-    .replace(
-      /\b(?:every|each)\b.+$/i,
-      " ",
-    )
-    .replace(
-      /\b(?:daily|weekly|in the morning|in the afternoon|in the evening|at night|morning and night|night and morning|when i wake up|before bed|before sleep|with breakfast|with lunch|with dinner|throughout the day|twice a week|twice a day|on weekdays?|on weekends?)\b.+$/i,
-      " ",
-    )
+    .replace(TITLE_ARTICLE_RE, " ")
+    .replace(/\b(?:every|each)\b.+$/i, " ")
+    .replace(TITLE_SCHEDULE_SUFFIX_RE, " ")
+    .replace(TITLE_TRAILING_SCHEDULE_RE, " ")
+    .replace(/^(?:to|do)\s+/i, "")
     .replace(/\s+/g, " ")
     .trim();
   if (!cleaned) {
     return null;
   }
   return titleCase(cleaned.split(/\s+/).slice(0, 5).join(" "));
+}
+
+function normalizeTitleSegment(raw: string): string {
+  const normalized = stripLanguageAugmentation(raw)
+    .replace(FILLER_PREFIX_RE, " ")
+    .replace(TITLE_PREFIX_RE, " ")
+    .replace(TITLE_ARTICLE_RE, " ")
+    .replace(TITLE_SCHEDULE_SUFFIX_RE, " ")
+    .replace(TITLE_TRAILING_SCHEDULE_RE, " ")
+    .replace(/^(?:to|do)\s+/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!normalized || TITLE_GENERIC_ONLY_RE.test(normalized)) {
+    return "";
+  }
+  return normalized;
+}
+
+function deriveHeuristicTitleSegments(value: string): HeuristicTitleSegment[] {
+  const rawSegments = stripLanguageAugmentation(value)
+    .split(/[.!?]/)
+    .flatMap((part) => part.split(/\s+(?:and|&)\s+|,|\s*\+\s*/i))
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+
+  const segments: HeuristicTitleSegment[] = [];
+  const seen = new Set<string>();
+  let previousQuantity: string | null = null;
+
+  for (const raw of rawSegments) {
+    const quantityMatch = raw.match(/\b(\d+)\b/);
+    let text = normalizeTitleSegment(raw);
+    if (
+      text &&
+      !/\b\d+\b/.test(text) &&
+      previousQuantity &&
+      text.split(/\s+/).length <= 3
+    ) {
+      text = `${previousQuantity} ${text}`;
+    }
+    if (!text || TITLE_GENERIC_VERB_RE.test(text)) {
+      if (quantityMatch?.[1]) {
+        previousQuantity = quantityMatch[1];
+      }
+      continue;
+    }
+    const normalizedKey = text.toLowerCase();
+    if (seen.has(normalizedKey)) {
+      if (quantityMatch?.[1]) {
+        previousQuantity = quantityMatch[1];
+      }
+      continue;
+    }
+    seen.add(normalizedKey);
+    segments.push({
+      text,
+      hasQuantity: /\b\d+\b/.test(text) || /\b\d+\b/.test(raw),
+    });
+    if (quantityMatch?.[1]) {
+      previousQuantity = quantityMatch[1];
+    }
+  }
+
+  return segments;
+}
+
+function deriveStructuredTitleCandidate(value: string): string | null {
+  const scheduledReminderMatch = stripLanguageAugmentation(value).match(
+    /\b(?:set (?:a )?reminder|create (?:a )?reminder|remind(?: me)?)\b.*?\bto\s+(.+)$/i,
+  );
+  if (scheduledReminderMatch?.[1]) {
+    return normalizeTitleCandidate(scheduledReminderMatch[1]);
+  }
+
+  const segments = deriveHeuristicTitleSegments(value).sort(
+    (left, right) => Number(right.hasQuantity) - Number(left.hasQuantity),
+  );
+  if (segments.length === 0) {
+    return null;
+  }
+  if (segments.length === 1) {
+    return titleCase(segments[0].text);
+  }
+  return segments
+    .slice(0, 2)
+    .map((segment) => titleCase(segment.text))
+    .join(" + ");
 }
 
 function parseTimeOfDay(value: string): string | null {
@@ -336,8 +436,9 @@ function parseTimeOfDay(value: string): string | null {
 
 function countTimeTokens(value: string): number {
   return (
-    value.match(/\b(\d{1,2}(?::\d{2})?\s*(?:am|pm)|noon|midnight)\b/gi)
-      ?.length ?? 0
+    normalizeIntent(value).match(
+      /\b(\d{1,2}(?::\d{2})?\s*(?:am|pm)|noon|midnight)\b/gi,
+    )?.length ?? 0
   );
 }
 
@@ -434,6 +535,11 @@ function extractHeuristicTitle(args: {
     return /\bwake(?:-|\s)?up\b|\bwake me up\b/.test(lower)
       ? "Wake up"
       : "Alarm";
+  }
+
+  const structuredTitle = deriveStructuredTitleCandidate(normalized);
+  if (structuredTitle) {
+    return structuredTitle;
   }
 
   const toActionMatch = normalized.match(/\bto\s+(.+)$/i);

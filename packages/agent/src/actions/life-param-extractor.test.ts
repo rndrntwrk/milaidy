@@ -147,41 +147,53 @@ describe("extractTaskParamsWithLlm", () => {
     expect(result).toBeNull();
   });
 
-  it("returns null when runtime.useModel is not a function", async () => {
+  it("falls back to heuristic extraction when runtime.useModel is not a function", async () => {
     const runtime = {} as import("@elizaos/core").IAgentRuntime;
     const result = await extractTaskParamsWithLlm({
       runtime,
       intent: "brush teeth daily",
       state: undefined,
     });
-    expect(result).toBeNull();
+    expect(result).toMatchObject({
+      title: expect.stringContaining("Brush"),
+      cadenceKind: "daily",
+    });
   });
 
-  it("returns null when the LLM throws an error", async () => {
+  it("falls back to heuristic extraction when the LLM throws an error", async () => {
     const result = await extractTaskParamsWithLlm({
       runtime: makeRuntime(new Error("model unavailable")),
       intent: "brush teeth daily",
       state: undefined,
     });
-    expect(result).toBeNull();
+    expect(result).toMatchObject({
+      title: expect.stringContaining("Brush"),
+      cadenceKind: "daily",
+    });
   });
 
-  it("returns null when LLM returns non-JSON garbage", async () => {
+  it("falls back to heuristic extraction when LLM returns non-JSON garbage", async () => {
     const result = await extractTaskParamsWithLlm({
       runtime: makeRuntime("I'm sorry, I can't help with that."),
       intent: "brush teeth daily",
       state: undefined,
     });
-    expect(result).toBeNull();
+    expect(result).toMatchObject({
+      title: expect.stringContaining("Brush"),
+      cadenceKind: "daily",
+    });
   });
 
-  it("returns null when LLM returns empty string", async () => {
+  it("falls back to heuristic extraction when LLM returns empty string", async () => {
     const result = await extractTaskParamsWithLlm({
       runtime: makeRuntime(""),
       intent: "brush teeth daily",
       state: undefined,
     });
-    expect(result).toBeNull();
+    expect(result).toMatchObject({
+      title: expect.stringContaining("Brush"),
+      cadenceKind: "daily",
+    });
   });
 
   it("clamps priority to 1-5 range", async () => {

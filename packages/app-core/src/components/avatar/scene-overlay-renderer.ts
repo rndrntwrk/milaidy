@@ -6,22 +6,44 @@
  * subtle borders, dark text on light backgrounds.
  */
 
-// -- Design tokens ------------------------------------------------------------
-const ACCENT = "#3a7bd5";
-const ACCENT_BORDER = "rgba(58, 123, 213, 0.3)";
-const BG_PANEL = "rgba(255, 255, 255, 0.82)";
-const BG_CARD = "rgba(240, 243, 248, 0.75)";
-const TEXT_PRIMARY = "#1a1a2e";
-const TEXT_SECONDARY = "rgba(26, 26, 46, 0.6)";
-const TEXT_MUTED = "rgba(26, 26, 46, 0.35)";
-const STATUS_GREEN = "#10b981";
-const STATUS_RED = "#ef4444";
-const STATUS_YELLOW = "#f59e0b";
-const STATUS_BLUE = "#3b82f6";
+import { getSceneTokens } from "./scene-theme-tokens";
 
-const FONT_SANS = '"DM Sans", "Inter", sans-serif';
-const FONT_MONO = '"JetBrains Mono", "Fira Code", monospace';
+// -- Design tokens (resolved from CSS vars at paint time) ---------------------
+// Kept as module-level aliases so existing call-sites compile unchanged.
+// Functions that paint call `refreshTokens()` at the top of each frame.
+let _t = getSceneTokens();
+let ACCENT = _t.accent;
+let ACCENT_BORDER = _t.accentBorder;
+let BG_PANEL = _t.bgPanel;
+let BG_CARD = _t.bgCard;
+let TEXT_PRIMARY = _t.textPrimary;
+let TEXT_SECONDARY = _t.textSecondary;
+let TEXT_MUTED = _t.textMuted;
+let STATUS_GREEN = _t.statusGreen;
+let STATUS_RED = _t.statusRed;
+let STATUS_YELLOW = _t.statusYellow;
+let STATUS_BLUE = _t.statusBlue;
+let FONT_SANS = _t.fontSans;
+let FONT_MONO = _t.fontMono;
 const CORNER_RADIUS = 16;
+
+/** Re-read CSS custom properties so canvas colors track the active theme. */
+export function refreshTokens() {
+  _t = getSceneTokens();
+  ACCENT = _t.accent;
+  ACCENT_BORDER = _t.accentBorder;
+  BG_PANEL = _t.bgPanel;
+  BG_CARD = _t.bgCard;
+  TEXT_PRIMARY = _t.textPrimary;
+  TEXT_SECONDARY = _t.textSecondary;
+  TEXT_MUTED = _t.textMuted;
+  STATUS_GREEN = _t.statusGreen;
+  STATUS_RED = _t.statusRed;
+  STATUS_YELLOW = _t.statusYellow;
+  STATUS_BLUE = _t.statusBlue;
+  FONT_SANS = _t.fontSans;
+  FONT_MONO = _t.fontMono;
+}
 
 // -- Shared types -------------------------------------------------------------
 
@@ -211,6 +233,7 @@ export function renderChatPanel(
   h: number,
   messages: ChatOverlayMessage[],
 ): void {
+  refreshTokens();
   ctx.clearRect(0, 0, w, h);
 
   const pad = 10;
@@ -300,6 +323,7 @@ export function renderStatusPanel(
   h: number,
   status: AgentStatusOverlay | null,
 ): void {
+  refreshTokens();
   ctx.clearRect(0, 0, w, h);
 
   const pad = 12;
@@ -395,6 +419,7 @@ export function renderHeartbeatsPanel(
   h: number,
   triggers: TriggerOverlay[],
 ): void {
+  refreshTokens();
   ctx.clearRect(0, 0, w, h);
 
   const pad = 12;

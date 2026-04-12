@@ -737,7 +737,6 @@
         "@storybook/addon-themes": "^8.6.18",
         "@storybook/react": "^8.6.18",
         "@storybook/react-vite": "^8.6.18",
-        "@tailwindcss/vite": "^4.2.1",
         "@testing-library/jest-dom": "^6.9.1",
         "@testing-library/react": "^16.3.2",
         "@testing-library/user-event": "^14.6.1",

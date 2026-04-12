@@ -270,12 +270,7 @@ export function SubscriptionStatus({
           <div className="flex justify-between items-center mb-3">
             <div className="flex items-center gap-2">
               <span
-                className="inline-block w-2 h-2 rounded-full"
-                style={{
-                  background: anthropicConnected
-                    ? "var(--ok,#16a34a)"
-                    : "var(--warning,#f39c12)",
-                }}
+                className={`inline-block w-2 h-2 rounded-full ${anthropicConnected ? "bg-ok" : "bg-warn"}`}
               />
               <span className="text-xs font-semibold">
                 {anthropicConnected
@@ -304,14 +299,14 @@ export function SubscriptionStatus({
 
           {/* TOS restriction warning — Claude subscription tokens can only
               be used through the Claude Code CLI, not for direct API calls. */}
-          <div className="text-xs leading-relaxed p-2.5 mb-3 border border-[var(--warning,#f39c12)]/30 bg-[var(--warning,#f39c12)]/5 rounded">
+          <div className="text-xs leading-relaxed p-2.5 mb-3 border border-warn/30 bg-warn/5 rounded">
             <span className="font-semibold">
               {t("subscriptionstatus.ClaudeTosWarningShort")}
             </span>
           </div>
 
           {anthropicStatus?.configured && !anthropicStatus.valid && (
-            <div className="text-xs text-[var(--warning,#f39c12)] mb-3">
+            <div className="text-xs text-warn mb-3">
               {t("subscriptionstatus.ClaudeSubscription")}
             </div>
           )}
@@ -324,7 +319,7 @@ export function SubscriptionStatus({
               className={`text-xs pb-2 border-b-2 rounded-none ${
                 subscriptionTab === "token"
                   ? "border-[var(--accent)] text-[var(--accent)]"
-                  : "border-transparent text-[var(--muted)] hover:text-[var(--text)]"
+                  : "border-transparent text-muted hover:text-[var(--text)]"
               }`}
               onClick={() => setSubscriptionTab("token")}
             >
@@ -337,7 +332,7 @@ export function SubscriptionStatus({
               className={`text-xs pb-2 border-b-2 rounded-none ${
                 subscriptionTab === "oauth"
                   ? "border-[var(--accent)] text-[var(--accent)]"
-                  : "border-transparent text-[var(--muted)] hover:text-[var(--text)]"
+                  : "border-transparent text-muted hover:text-[var(--text)]"
               }`}
               onClick={() => setSubscriptionTab("oauth")}
             >
@@ -365,11 +360,11 @@ export function SubscriptionStatus({
                 }}
                 className="bg-card text-xs font-mono"
               />
-              <div className="text-[11px] text-[var(--muted)] mt-2 whitespace-pre-line">
+              <div className="text-[11px] text-muted mt-2 whitespace-pre-line">
                 {t("onboarding.setupTokenInstructions")}
               </div>
               {anthropicError && (
-                <div className="text-[11px] text-[var(--danger,#e74c3c)] mt-2">
+                <div className="text-[11px] text-danger mt-2">
                   {anthropicError}
                 </div>
               )}
@@ -387,12 +382,12 @@ export function SubscriptionStatus({
                 </Button>
                 <div className="flex items-center gap-2">
                   {setupTokenSaving && (
-                    <span className="text-[11px] text-[var(--muted)]">
+                    <span className="text-[11px] text-muted">
                       {t("subscriptionstatus.SavingAmpRestart")}
                     </span>
                   )}
                   {setupTokenSuccess && (
-                    <span className="text-[11px] text-[var(--ok,#16a34a)]">
+                    <span className="text-[11px] text-ok">
                       {t("apikeyconfig.saved")}
                     </span>
                   )}
@@ -400,7 +395,7 @@ export function SubscriptionStatus({
               </div>
             </div>
           ) : anthropicConnected ? (
-            <div className="text-xs text-[var(--muted)]">
+            <div className="text-xs text-muted">
               {t("subscriptionstatus.YourClaudeSubscrip")}
             </div>
           ) : !anthropicOAuthStarted ? (
@@ -413,18 +408,18 @@ export function SubscriptionStatus({
               >
                 {t("onboarding.loginWithAnthropic")}
               </Button>
-              <div className="text-[11px] text-[var(--muted)] mt-1.5">
+              <div className="text-[11px] text-muted mt-1.5">
                 {t("subscriptionstatus.RequiresClaudePro")}
               </div>
               {anthropicError && (
-                <div className="text-[11px] text-[var(--danger,#e74c3c)] mt-2">
+                <div className="text-[11px] text-danger mt-2">
                   {anthropicError}
                 </div>
               )}
             </div>
           ) : (
             <div>
-              <div className="text-xs text-[var(--muted)] mb-2">
+              <div className="text-xs text-muted mb-2">
                 {t("subscriptionstatus.AfterLoggingInCo")}
               </div>
               <Input
@@ -438,7 +433,7 @@ export function SubscriptionStatus({
                 className="bg-card text-xs"
               />
               {anthropicError && (
-                <div className="text-[11px] text-[var(--danger,#e74c3c)] mt-2">
+                <div className="text-[11px] text-danger mt-2">
                   {anthropicError}
                 </div>
               )}
@@ -520,7 +515,7 @@ export function SubscriptionStatus({
           )}
 
           {openaiConnected ? (
-            <div className="text-xs text-[var(--muted)]">
+            <div className="text-xs text-muted">
               {t("subscriptionstatus.YourChatGPTSubscri")}
             </div>
           ) : !openaiOAuthStarted ? (
@@ -533,13 +528,13 @@ export function SubscriptionStatus({
               >
                 {t("onboarding.loginWithOpenAI")}
               </Button>
-              <div className="text-[11px] text-[var(--muted)] mt-1.5">
+              <div className="text-[11px] text-muted mt-1.5">
                 {t("subscriptionstatus.RequiresChatGPTPlu")}
               </div>
             </div>
           ) : (
             <div>
-              <div className="p-2.5 border border-[var(--border)] bg-[var(--bg-muted)] text-[11px] text-[var(--muted)] leading-relaxed">
+              <div className="p-2.5 border border-[var(--border)] bg-[var(--bg-muted)] text-[11px] text-muted leading-relaxed">
                 {t("subscriptionstatus.AfterLoggingInYo")}{" "}
                 <code className="text-[10px] px-1 border border-[var(--border)] bg-[var(--card)]">
                   {t("subscriptionstatus.localhost1455")}
@@ -557,7 +552,7 @@ export function SubscriptionStatus({
                 }}
               />
               {openaiError && (
-                <div className="text-[11px] text-[var(--danger,#e74c3c)] mt-2">
+                <div className="text-[11px] text-danger mt-2">
                   {openaiError}
                 </div>
               )}
@@ -590,7 +585,7 @@ export function SubscriptionStatus({
           )}
 
           {openaiError && !openaiOAuthStarted && (
-            <div className="text-[11px] text-[var(--danger,#e74c3c)] mt-2">
+            <div className="text-[11px] text-danger mt-2">
               {openaiError}
             </div>
           )}

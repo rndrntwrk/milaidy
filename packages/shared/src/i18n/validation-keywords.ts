@@ -23,9 +23,13 @@ const VALIDATION_KEYWORD_DOCS = {
           emails
           e-mail
           gmail
+          inbox
+          compose
+          draft
+          drafts
+          unread
+          starred
           mail
-          message
-          messages
         `),
         locales: {
           "zh-CN": termDoc(`
@@ -43,15 +47,19 @@ const VALIDATION_KEYWORD_DOCS = {
           `),
           es: termDoc(`
             correo
+            correos
             correo electronico
             correo electrónico
             mensaje
+            mensajes
           `),
           pt: termDoc(`
             correio
+            correios
             correio eletronico
             correio eletrônico
             mensagem
+            mensagens
           `),
           vi: termDoc(`
             thư điện tử
