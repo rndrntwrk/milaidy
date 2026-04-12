@@ -3,6 +3,46 @@ title: Changelog
 description: What's new in Milady — features, improvements, and fixes.
 ---
 
+<Update label="2026-04-12" description="Week of April 12; Shopify plugin, inbox actions, connector setup, companion overlay, provider switcher" tags={["Feature", "Update", "Fix"]}>
+
+## Shopify plugin
+
+Your agent can now manage a Shopify store through conversation. Ask your agent to look up products, check order status, manage inventory levels, or search customer records — all without leaving the chat. The plugin connects to your Shopify store and handles product, order, inventory, and customer operations with natural language. Enable it from the [plugins](/plugins/overview) view.
+
+## Inbox triage, digest, and respond
+
+The [unified inbox](/rest/inbox) now supports three new actions you can trigger through chat. Ask your agent to triage incoming messages and it classifies them by urgency and source. Request a digest and it summarizes what's come in across all your connected platforms. You can also ask your agent to draft and route a response back to the right channel — the reply deep-links to the originating platform automatically.
+
+## Connector setup panels
+
+Setting up connectors no longer requires editing config files. Discord, Telegram, iMessage, Signal, and WhatsApp now have dedicated setup panels directly in the dashboard. Each panel walks you through authentication, shows connection status, and lets you configure per-connector settings like chat permissions and mode selection. See [connectors](/guides/connectors) for details.
+
+## Companion overlay app
+
+Companion mode has been redesigned as a launchable overlay app instead of a shell toggle. Open it from the apps view and it floats above your dashboard. The 3D scene now uses a lighter procedural environment, and VRM avatar files are significantly smaller — reducing the initial download by roughly 70%. Avatars load lazily when you open the companion and are disposed when you close it.
+
+## Vincent trading panels
+
+The [Apps view](/dashboard/apps) now includes Vincent trading profile and strategy panels. View your vault status, connection state, and trading strategies without leaving the dashboard.
+
+## Updates
+
+- **Provider switcher** — A new provider switcher in [settings](/apps/dashboard/settings) lets you swap between local and cloud LLM providers in one click. Your routing preference is saved and applied immediately — no restart required.
+- **Character tab in navigation** — Character configuration is now accessible from the main navigation pill row, making it faster to reach your agent's personality and avatar settings.
+- **Life-ops LLM routing** — Calendar and Gmail actions now let the LLM drive subaction routing instead of using post-generation regex overrides, which means more accurate handling of complex requests like "reschedule my 3pm and reply to the invite."
+- **Relationships graph improvements** — The [contacts view](/rest/inbox) identity cluster graph now shows richer relationship data with improved layout and filtering in the graph panel.
+- **Plugin role gating** — Plugins can now declare required roles, and the runtime only loads them when the active user meets the role requirement. This keeps the action space focused and prevents accidental access to admin-only features.
+- **Life-ops widget visibility** — Sidebar widgets for life-ops features like Calendar and Gmail now hide automatically when the corresponding plugin isn't loaded, reducing clutter for users who haven't configured those integrations.
+- **Hyperscape live telemetry** — The [Hyperscape game](/dashboard/apps) now streams live session data including goals, quick-actions, and agent thoughts directly into the app panel.
+
+## Bug fixes
+
+- Fixed streamed chat responses being replaced with a generic error message when a post-action continuation failed — the successfully streamed text is now preserved
+- Fixed life-ops widgets polling the backend even when no Google connector was configured
+- Fixed a dev-mode startup crash caused by barrel file resolution in the Rollup bundler
+
+</Update>
+
 <Update label="2026-04-10" description="Week of April 10; Eliza Cloud for coding agents, contacts view, content pack picker, Discord cloud settings, connection overlay" tags={["Feature", "Update", "Fix"]}>
 
 ## Eliza Cloud as a provider for coding agents
