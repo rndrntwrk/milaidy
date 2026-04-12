@@ -147,10 +147,14 @@ pushd packages/agent >/dev/null
 bun run build:docker-dist
 popd >/dev/null
 
-log "Building core workspace"
-pushd eliza/packages/typescript >/dev/null
-bun run build
-popd >/dev/null
+if [[ "${MILADY_SKIP_LOCAL_UPSTREAMS:-0}" != "1" && -d eliza/packages/typescript ]]; then
+  log "Building core workspace"
+  pushd eliza/packages/typescript >/dev/null
+  bun run build
+  popd >/dev/null
+else
+  log "Skipping core workspace build (published upstream mode)"
+fi
 
 log "Building bundled orchestrator workspace"
 pushd plugins/plugin-agent-orchestrator >/dev/null
@@ -202,7 +206,7 @@ probe_ok() {
   local url="$1"
   local out="$2"
   local code
-  code="$(curl -sS -o "$out" -w '%{http_code}' "$url" || true)"
+  code="$(curl -sS --connect-timeout 1 --max-time 3 -o "$out" -w '%{http_code}' "$url" || true)"
   case "$code" in
     200)
       return 0

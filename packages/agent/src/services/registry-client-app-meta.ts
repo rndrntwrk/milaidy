@@ -39,6 +39,12 @@ interface LocalAppOverride {
 
 const LOCAL_APP_OVERRIDES: Readonly<Record<string, LocalAppOverride>> = {
   "@hyperscape/plugin-hyperscape": {
+    launchUrl: "{HYPERSCAPE_CLIENT_URL}",
+    viewer: {
+      url: "{HYPERSCAPE_CLIENT_URL}",
+      postMessageAuth: true,
+      sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
+    },
     uiExtension: {
       detailPanelId: "hyperscape-embedded-agents",
     },

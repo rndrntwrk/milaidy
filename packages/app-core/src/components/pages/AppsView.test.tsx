@@ -662,10 +662,7 @@ describe("AppsView", () => {
     await flush();
 
     await act(async () => {
-      findButtonByTitle(
-        tree.root,
-        "Defense of the Agents",
-      ).props.onClick();
+      findButtonByTitle(tree.root, "Defense of the Agents").props.onClick();
     });
     await flush();
 
@@ -1168,8 +1165,7 @@ describe("AppsView", () => {
     const root = tree?.root;
     expect(
       root.findAll(
-        (node) =>
-          node.type === "button" && node.props.title === "Hyperscape",
+        (node) => node.type === "button" && node.props.title === "Hyperscape",
       ).length,
     ).toBe(1);
     expect(
@@ -1183,8 +1179,7 @@ describe("AppsView", () => {
     });
     expect(
       root.findAll(
-        (node) =>
-          node.type === "button" && node.props.title === "Hyperscape",
+        (node) => node.type === "button" && node.props.title === "Hyperscape",
       ).length,
     ).toBe(1);
     expect(
@@ -1250,14 +1245,9 @@ describe("AppsView", () => {
       }),
     ]);
     mockClientFns.listApps.mockResolvedValue([
-      createApp(
-        "@hyperscape/plugin-hyperscape",
-        "Hyperscape",
-        "Arena world",
-        {
-          category: "game",
-        },
-      ),
+      createApp("@hyperscape/plugin-hyperscape", "Hyperscape", "Arena world", {
+        category: "game",
+      }),
       createApp("@elizaos/app-babylon", "Babylon", "Market watch", {
         category: "platform",
       }),

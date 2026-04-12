@@ -60,11 +60,8 @@ export function SplashCloudAgents({
   onBack,
   dispatchStartup,
 }: SplashCloudAgentsProps) {
-  const {
-    elizaCloudConnected,
-    elizaCloudLoginBusy,
-    handleCloudLogin,
-  } = useApp();
+  const { elizaCloudConnected, elizaCloudLoginBusy, handleCloudLogin } =
+    useApp();
 
   const [stage, setStage] = useState<Stage>(
     elizaCloudConnected ? "loading" : "login",
@@ -107,9 +104,7 @@ export function SplashCloudAgents({
         }
       } catch (err) {
         if (cancelled) return;
-        setError(
-          err instanceof Error ? err.message : "Failed to load agents",
-        );
+        setError(err instanceof Error ? err.message : "Failed to load agents");
         setStage("agent-list");
       }
     })();
@@ -224,9 +219,7 @@ export function SplashCloudAgents({
         }
       }, 2500);
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to create agent",
-      );
+      setError(err instanceof Error ? err.message : "Failed to create agent");
       setStage("agent-list");
     }
   }, [newAgentName, connectToAgent]);
@@ -299,7 +292,11 @@ export function SplashCloudAgents({
   }
 
   // ── Provisioning / Connecting stage ─────────────────────────────────
-  if (stage === "creating" || stage === "provisioning" || stage === "connecting") {
+  if (
+    stage === "creating" ||
+    stage === "provisioning" ||
+    stage === "connecting"
+  ) {
     return (
       <div className="mt-4 flex w-full flex-col items-center gap-3">
         <Spinner className="h-6 w-6 text-black/60" />
@@ -448,7 +445,10 @@ export function SplashCloudAgents({
 function BackButton({
   t,
   onClick,
-}: { t: SplashCloudAgentsProps["t"]; onClick: () => void }) {
+}: {
+  t: SplashCloudAgentsProps["t"];
+  onClick: () => void;
+}) {
   return (
     <button
       type="button"

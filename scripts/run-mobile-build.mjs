@@ -11,6 +11,11 @@ const repoRoot = path.resolve(__dirname, "..");
 const appDir = path.join(repoRoot, "apps", "app");
 const iosDir = path.join(appDir, "ios", "App");
 const androidDir = path.join(appDir, "android");
+const prepareIosCocoapodsScript = path.join(
+  repoRoot,
+  "scripts",
+  "prepare-ios-cocoapods.sh",
+);
 
 const target = process.argv[2];
 
@@ -135,6 +140,7 @@ async function buildIos() {
   }
 
   await buildSharedApp();
+  await run("bash", [prepareIosCocoapodsScript], { cwd: repoRoot });
   await run("bun", ["run", "cap:sync:ios"], { cwd: appDir });
   await run(
     "xcodebuild",

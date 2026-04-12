@@ -156,7 +156,9 @@ function readTrimmedString(value: unknown): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
-function readPersistedAccount(value: unknown): TelegramAccountAuthAccount | null {
+function readPersistedAccount(
+  value: unknown,
+): TelegramAccountAuthAccount | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return null;
   }
@@ -233,16 +235,26 @@ function readPersistedConnectorConfig(
   const appHash = readTrimmedString(record.appHash);
   const deviceModel = readTrimmedString(record.deviceModel);
   const systemVersion = readTrimmedString(record.systemVersion);
-  if (!phone || !appId || !appHash || !deviceModel || !systemVersion) {
+  if (
+    !phone ||
+    !appId ||
+    !appHash ||
+    !deviceModel ||
+    !systemVersion
+  ) {
     return null;
   }
+  // Older persisted connector snapshots could save `enabled: false` while the
+  // auth state still represented a completed Telegram account setup. Coerce
+  // those upgrade-path records back into the live connector shape so the saved
+  // credentials are not silently discarded after restart.
   return {
     phone,
     appId,
     appHash,
     deviceModel,
     systemVersion,
-    enabled: (record.enabled !== false) as true,
+    enabled: true,
   };
 }
 
@@ -253,7 +265,9 @@ function loadTelegramAccountAuthState(): PersistedTelegramAccountAuthState | nul
   }
 
   try {
-    const parsed = JSON.parse(fs.readFileSync(authStateFile, "utf8")) as unknown;
+    const parsed = JSON.parse(
+      fs.readFileSync(authStateFile, "utf8"),
+    ) as unknown;
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       return null;
     }
@@ -277,10 +291,14 @@ function loadTelegramAccountAuthState(): PersistedTelegramAccountAuthState | nul
 function saveTelegramAccountAuthState(
   state: PersistedTelegramAccountAuthState,
 ): void {
-  fs.writeFileSync(resolveTelegramAccountAuthStateFile(), JSON.stringify(state), {
-    encoding: "utf8",
-    mode: 0o600,
-  });
+  fs.writeFileSync(
+    resolveTelegramAccountAuthStateFile(),
+    JSON.stringify(state),
+    {
+      encoding: "utf8",
+      mode: 0o600,
+    },
+  );
 }
 
 export function clearTelegramAccountAuthState(): void {
@@ -373,7 +391,10 @@ function getSetCookieHeaders(headers: Headers): string[] {
   return single ? [single] : [];
 }
 
-function extractCookieValue(headers: Headers, cookieName: string): string | null {
+function extractCookieValue(
+  headers: Headers,
+  cookieName: string,
+): string | null {
   const pattern = new RegExp(`(?:^|;\\s*)${cookieName}=([^;]+)`);
   for (const header of getSetCookieHeaders(headers)) {
     const match = header.match(pattern);
@@ -576,8 +597,7 @@ export class TelegramAccountAuthSession
       return this.getSnapshot();
     }
 
-    this.provisioningRandomHash =
-      await this.deps.sendProvisioningCode(phone);
+    this.provisioningRandomHash = await this.deps.sendProvisioningCode(phone);
     this.snapshot.status = "waiting_for_provisioning_code";
     this.persistAuthState();
     return this.getSnapshot();
@@ -684,7 +704,12 @@ export class TelegramAccountAuthSession
   }
 
   private async completeTelegramCode(code: string): Promise<void> {
-    if (!this.client || !this.credentials || !this.snapshot.phone || !this.phoneCodeHash) {
+    if (
+      !this.client ||
+      !this.credentials ||
+      !this.snapshot.phone ||
+      !this.phoneCodeHash
+    ) {
       throw new Error("Telegram login session is missing state");
     }
     try {
@@ -722,8 +747,8 @@ export class TelegramAccountAuthSession
     try {
       const user = (await this.client.signInWithPassword(this.credentials, {
         password: async () => password,
-        onError: (error) => {
-          throw error;
+        onError: (error: unknown) => {
+          throw error instanceof Error ? error : new Error(String(error));
         },
       })) as Api.User;
       await this.finishAuthorized(user);
@@ -798,7 +823,9 @@ export class TelegramAccountAuthSession
     }
     const sessionString = loadTelegramAccountSessionString();
     if (!sessionString.trim()) {
-      throw new Error("Telegram login session is missing persisted session data");
+      throw new Error(
+        "Telegram login session is missing persisted session data",
+      );
     }
     this.client = this.deps.createTelegramClient(
       new StringSession(sessionString),

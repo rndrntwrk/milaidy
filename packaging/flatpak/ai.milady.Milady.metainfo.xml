@@ -43,18 +43,20 @@
 
   <launchable type="desktop-id">ai.milady.Milady.desktop</launchable>
 
-  <screenshots>
-    <!-- Add screenshots before Flathub submission.
-    <screenshot type="default">
-      <caption>Milady web dashboard showing agent management</caption>
-      <image type="source">https://milady.ai/screenshots/dashboard.png</image>
-    </screenshot>
-    <screenshot>
-      <caption>Interactive CLI setup wizard</caption>
-      <image type="source">https://milady.ai/screenshots/cli-setup.png</image>
-    </screenshot>
-    -->
-  </screenshots>
+  <!--
+  Screenshots are required by Flathub but not by `appstream-util
+  validate-relax`, which is what CI runs. An empty <screenshots/>
+  tag trips `tag-invalid : Expected children for tag`, so omit the
+  block entirely until real screenshot URLs are ready. Add something
+  like this before Flathub submission:
+
+    <screenshots>
+      <screenshot type="default">
+        <caption>Milady web dashboard showing agent management</caption>
+        <image type="source">https://milady.ai/screenshots/dashboard.png</image>
+      </screenshot>
+    </screenshots>
+  -->
 
   <releases>
     <release version="2.0.0-alpha.7" date="2026-02-07">

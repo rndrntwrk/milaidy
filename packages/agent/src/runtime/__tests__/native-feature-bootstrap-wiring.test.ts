@@ -47,6 +47,42 @@ describe("native feature bootstrap wiring", () => {
     expect(elizaSource).toContain('"@elizaos/plugin-commands": pluginCommands');
   });
 
+  it("guards plugin-plugin-manager bootstrap behind a runtime require", () => {
+    expect(elizaSource).not.toContain(
+      'import * as pluginPluginManager from "@elizaos/plugin-plugin-manager";',
+    );
+    expect(elizaSource).toContain(
+      'pluginPluginManager = require("@elizaos/plugin-plugin-manager");',
+    );
+    expect(elizaSource).toContain(
+      '"@elizaos/plugin-plugin-manager": pluginPluginManager',
+    );
+  });
+
+  it("guards plugin-secrets-manager bootstrap behind a runtime require", () => {
+    expect(elizaSource).not.toContain(
+      'import * as pluginSecretsManager from "@elizaos/plugin-secrets-manager";',
+    );
+    expect(elizaSource).toContain(
+      'pluginSecretsManager = require("@elizaos/plugin-secrets-manager");',
+    );
+    expect(elizaSource).toContain(
+      "Optional plugin @elizaos/plugin-secrets-manager unavailable",
+    );
+    expect(elizaSource).toContain(
+      '"@elizaos/plugin-secrets-manager": pluginSecretsManager',
+    );
+  });
+
+  it("guards plugin-shell bootstrap behind a runtime require", () => {
+    expect(elizaSource).not.toContain(
+      'import * as pluginShell from "@elizaos/plugin-shell";',
+    );
+    expect(elizaSource).toContain(
+      'pluginShell = require("@elizaos/plugin-shell");',
+    );
+    expect(elizaSource).toContain('"@elizaos/plugin-shell": pluginShell');
+  });
   it("guards plugin-cron bootstrap behind a runtime require", () => {
     expect(elizaSource).not.toContain(
       'import * as pluginCron from "@elizaos/plugin-cron";',

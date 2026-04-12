@@ -25,26 +25,38 @@ const useLocalElizaCore =
     path.join(repoRoot, "eliza", "packages", "typescript", "node_modules"),
   );
 
+// `@elizaos/core/roles` fallback to the committed shim when the local
+// eliza checkout is absent (CI published-only mode). See
+// `vitest.config.ts` for the rationale. This alias MUST be declared in
+// the unit config too: `mergeConfig` does not deep-merge
+// `resolve.alias` arrays between base and extended configs the way
+// top-level config keys merge, so the alias in vitest.config.ts is
+// NOT inherited by unit-test runs.
+const elizaCoreRolesSourceFile = path.join(
+  repoRoot,
+  "eliza",
+  "packages",
+  "typescript",
+  "src",
+  "roles.ts",
+);
+const elizaCoreRolesEntry = existsSync(elizaCoreRolesSourceFile)
+  ? elizaCoreRolesSourceFile
+  : path.join(repoRoot, "scripts", "lib", "elizaos-core-roles-shim.js");
+
 export default mergeConfig(
   baseConfig,
   defineConfig({
     resolve: {
       alias: [
-        // Subpath exports must be aliased before the catch-all "@elizaos/core"
-        // entry, otherwise Vite's alias matching swallows the subpath.
+        {
+          // Always applied — the shim fallback is always present even
+          // when the local eliza checkout is disabled.
+          find: "@elizaos/core/roles",
+          replacement: elizaCoreRolesEntry,
+        },
         ...(useLocalElizaCore
           ? [
-              {
-                find: "@elizaos/core/roles",
-                replacement: path.join(
-                  repoRoot,
-                  "eliza",
-                  "packages",
-                  "typescript",
-                  "src",
-                  "roles.ts",
-                ),
-              },
               {
                 find: "@elizaos/core/testing",
                 replacement: path.join(
@@ -112,6 +124,13 @@ export default mergeConfig(
             "coding-agent-module.ts",
           ),
         },
+        // NOTE: aliases for `@elizaos-plugins/client-telegram-account`
+        // and `@elizaos/plugin-plugin-manager` were hoisted into the
+        // base `vitest.config.ts` so they also apply when the pre-
+        // review gate runs `bunx vitest run <file>` without `--config`
+        // (which uses the base config, not this one). Keeping them in
+        // one place prevents drift between the unit-only config and
+        // the default pre-review config.
       ],
     },
     test: {

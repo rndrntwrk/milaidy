@@ -16,7 +16,13 @@ import {
 
 const repoRoot = path.dirname(fileURLToPath(import.meta.url));
 const elizaCoreEntry = getElizaCoreEntry(repoRoot);
-const elizaCoreRolesEntry = path.join(
+// Prefer the repo-local eliza source when it's present; fall back to the
+// committed `scripts/lib/elizaos-core-roles-shim.js` bundle when it is not.
+// CI with `MILADY_SKIP_LOCAL_UPSTREAMS=1` renames `./eliza/` to
+// `./.eliza.ci-disabled/`, so the first path does not exist there. The shim
+// is a pre-bundled ESM copy of eliza/packages/typescript/src/roles.ts with
+// its helper dependencies left as top-level imports from `@elizaos/core`.
+const elizaCoreRolesSource = path.join(
   repoRoot,
   "eliza",
   "packages",
@@ -24,6 +30,9 @@ const elizaCoreRolesEntry = path.join(
   "src",
   "roles.ts",
 );
+const elizaCoreRolesEntry = fs.existsSync(elizaCoreRolesSource)
+  ? elizaCoreRolesSource
+  : path.join(repoRoot, "scripts", "lib", "elizaos-core-roles-shim.js");
 const autonomousSourceRoot = getAutonomousSourceRoot(repoRoot);
 const appCoreSourceRoot = getAppCoreSourceRoot(repoRoot);
 const packageManifest = JSON.parse(
@@ -109,21 +118,73 @@ export default defineConfig({
         find: "milady/plugin-sdk",
         replacement: path.join(repoRoot, "src", "plugin-sdk", "index.ts"),
       },
+      // The `@elizaos/core/roles` alias is always applied — the shim
+      // fallback in `scripts/lib/elizaos-core-roles-shim.js` is always
+      // present, even when the local eliza checkout is absent (CI
+      // published-only mode). Without this, vitest tries to resolve
+      // the subpath via Node's normal package.json `exports` lookup
+      // and fails with `ERR_MODULE_NOT_FOUND` because the published
+      // `@elizaos/core@alpha` does not declare a `./roles` subpath.
+      {
+        find: "@elizaos/core/roles",
+        replacement: elizaCoreRolesEntry,
+      },
+      // Specific aliases MUST precede the glob-style `elizaPluginAliases`
+      // and `unresolvedPluginStubs` entries. Vitest's alias resolver
+      // takes the first match, so if `@elizaos/plugin-plugin-manager`
+      // ends up in `unresolvedPluginStubs` first (pointing at
+      // `plugin-stub.mjs`), our specific stub below never runs and
+      // tests get a stub whose default export doesn't expose the
+      // `PluginManagerService` class.
+      {
+        // `@elizaos-plugins/client-telegram-account` (note the
+        // hyphenated scope, different from `@elizaos/plugin-*`) has a
+        // package.json whose `main`/`module`/`exports` all point at
+        // `dist/index.js`, and CI with MILADY_SKIP_LOCAL_UPSTREAMS=1
+        // never builds that dist. Every vitest run that transitively
+        // imports the runtime agent loader trips on this package at
+        // resolve time — even `vi.mock(...)` calls fail, because
+        // vitest still has to resolve the specifier before installing
+        // the mock. Alias to the generic plugin stub so resolution
+        // always succeeds.
+        find: "@elizaos-plugins/client-telegram-account",
+        replacement: path.join(repoRoot, "test", "stubs", "plugin-stub.mjs"),
+      },
+      {
+        // `@elizaos/plugin-plugin-manager` is a real test dependency
+        // of `packages/app-core/src/services/app-manager.test.ts`
+        // which does `new PluginManagerService(...)` and then spy-
+        // stubs its methods. The published dist is absent under
+        // SKIP_LOCAL_UPSTREAMS, and aliasing to the submodule source
+        // pulls in `fs-extra` and other transitive deps that aren't
+        // installed at the repo root. Alias to a local stub that
+        // provides the class shape the tests need (spy-stubbable
+        // methods + a `pluginRegistry` namespace with
+        // `resetRegistryCache`). See
+        // `test/stubs/plugin-plugin-manager-module.ts`.
+        find: "@elizaos/plugin-plugin-manager",
+        replacement: path.join(
+          repoRoot,
+          "test",
+          "stubs",
+          "plugin-plugin-manager-module.ts",
+        ),
+      },
       // Resolve key @elizaos packages to the installed npm tarball files so
       // Vitest does not depend on sibling workspace checkouts or package
       // export quirks.
       ...(elizaCoreEntry
         ? [
             {
-              find: "@elizaos/core/roles",
-              replacement: elizaCoreRolesEntry,
-            },
-            {
               find: "@elizaos/core",
               replacement: elizaCoreEntry,
             },
-            ...elizaPluginAliases,
-            ...unresolvedPluginStubs,
+            ...elizaPluginAliases.filter(
+              (alias) => alias.find !== "@elizaos/plugin-plugin-manager",
+            ),
+            ...unresolvedPluginStubs.filter(
+              (alias) => alias.find !== "@elizaos/plugin-plugin-manager",
+            ),
           ]
         : []),
       ...(autonomousSourceRoot

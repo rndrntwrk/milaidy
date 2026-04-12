@@ -274,7 +274,7 @@ vi.mock("@miladyai/app-core/src/components/shopify/shopify-app", () => ({}));
 vi.mock(
   "@miladyai/app-core/src/components/apps/overlay-app-registry",
   () => ({
-    registerOverlayApp: () => undefined,
+    registerOverlayApp: noop,
     getOverlayApp: (name: string) =>
       name === "@miladyai/app-companion"
         ? {
@@ -571,22 +571,22 @@ function expectShellForTab(text: string, tab: Tab): void {
       case "knowledge":
         return "KnowledgeView Ready";
       case "connectors":
-        return "ConnectorsPageView Ready";
+        return "SettingsView Ready";
       case "triggers":
         return "HeartbeatsDesktopShell Ready";
       case "apps":
         return "AppsPageView Ready";
+      case "plugins":
+        return "PluginsPageView Ready";
+      case "skills":
+        return "SkillsView Ready";
       case "settings":
       case "voice":
         return "SettingsView Ready";
       case "stream":
         return "StreamView Ready";
-      case "plugins":
-        return "PluginsPageView Ready";
-      case "skills":
-        return "SkillsView Ready";
-      case "advanced":
       case "fine-tuning":
+      case "advanced":
         return "FineTuningView Ready";
       case "trajectories":
         return "TrajectoriesView Ready";
@@ -596,6 +596,9 @@ function expectShellForTab(text: string, tab: Tab): void {
         return "DatabasePageView Ready";
       case "logs":
         return "LogsPageView Ready";
+      case "actions":
+      case "security":
+        return "AdvancedPageView Ready";
       default:
         return "ChatView Ready";
     }
@@ -603,8 +606,10 @@ function expectShellForTab(text: string, tab: Tab): void {
 
   expect(text).toContain(expectedToken);
   if (tab === "companion") {
-    // Companion shell has no Header — it renders the overlay app directly.
     expect(text).not.toContain("Header");
+  } else if (tab === "character" || tab === "character-select") {
+    expect(text).toContain("Header");
+    expect(text).toContain("Save");
   } else {
     // All other tabs (including character) are in the native shell with Header.
     expect(text).toContain("Header");

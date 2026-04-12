@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildRepoTestCommand,
   classificationFromInputs,
   isTestExempt,
   scanDiffTextForBlockedPatterns,
+  shouldRunTargetedRegressionTests,
   splitRunnableTestFiles,
 } from "./pre-review-local.mjs";
 
@@ -149,5 +151,38 @@ describe("splitRunnableTestFiles", () => {
       "scripts/pre-review-local.test.ts",
     ]);
     expect(repoTests).toContain("scripts/pre-review-local.test.ts");
+  });
+});
+
+describe("buildRepoTestCommand", () => {
+  it("pins repo test runs to the unit Vitest config", () => {
+    expect(
+      buildRepoTestCommand([
+        "packages/app-core/src/services/plugin-stability.test.ts",
+        "scripts/ci-workflow-audit.test.ts",
+      ]),
+    ).toBe(
+      "bunx vitest run --config vitest.unit.config.ts packages/app-core/src/services/plugin-stability.test.ts scripts/ci-workflow-audit.test.ts",
+    );
+  });
+});
+
+describe("shouldRunTargetedRegressionTests", () => {
+  it("skips duplicate targeted test runs on detached GitHub merge refs", () => {
+    expect(
+      shouldRunTargetedRegressionTests({
+        branch: "HEAD (detached)",
+        env: { GITHUB_ACTIONS: "true" },
+      }),
+    ).toBe(false);
+  });
+
+  it("keeps targeted test runs enabled outside GitHub merge refs", () => {
+    expect(
+      shouldRunTargetedRegressionTests({
+        branch: "feat/app-scape",
+        env: {},
+      }),
+    ).toBe(true);
   });
 });

@@ -949,7 +949,8 @@ export function buildPluginListState(options: {
       (mode !== "streaming" || plugin.category === "streaming"),
   );
   const nonDbPlugins = [SHOWCASE_PLUGIN, ...categoryPlugins];
-  const searchLower = effectiveSearch.toLowerCase();
+  const searchLower =
+    typeof effectiveSearch === "string" ? effectiveSearch.toLowerCase() : "";
   const sorted = sortPlugins(
     categoryPlugins.filter((plugin) =>
       matchesPluginFilters(plugin, searchLower, effectiveStatusFilter),

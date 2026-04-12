@@ -52,6 +52,9 @@ describe("CI workflow drift", () => {
     const action = read(SETUP_ACTION_PATH);
 
     expect(action).toContain('name: "Setup Bun Workspace"');
+    expect(action).toContain(
+      'default: "bun install --frozen-lockfile --ignore-scripts"',
+    );
     expect(action).toContain("uses: actions/setup-python@v5");
     expect(action).toContain("uses: oven-sh/setup-bun@v2");
     expect(action).toContain("uses: actions/cache@v4");
@@ -95,11 +98,19 @@ describe("CI workflow drift", () => {
     expect(
       countOccurrences(workflow, "uses: ./.github/actions/setup-bun-workspace"),
     ).toBe(6);
-    expect(workflow).toContain('run-postinstall: "false"');
-    expect(workflow).toContain("install-command: bun install");
-    // removed: submodules: false means the lockfile naturally
-    // diverges from checked-in state (missing submodule workspaces).
-    expect(workflow).toContain("bun install --ignore-scripts");
+    expect(workflow).not.toContain("install-command: bun install\n");
+    expect(workflow).not.toContain(
+      "install-command: bun install --ignore-scripts",
+    );
+    expect(
+      countOccurrences(
+        workflow,
+        "install-command: bun install --no-frozen-lockfile --ignore-scripts",
+      ),
+    ).toBeGreaterThanOrEqual(4);
+    expect(workflow).toContain(
+      "bun install --no-frozen-lockfile --ignore-scripts",
+    );
   });
 
   it("checks out recursive submodules before root workspace installs", () => {

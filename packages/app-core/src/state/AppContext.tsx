@@ -951,16 +951,25 @@ function AppProviderInner({
   // chatPendingImages now comes from useChatState
 
   // --- Admin ---
-  const [appsSubTab, setAppsSubTabRaw] = useState<"browse" | "running" | "games">(() => {
+  const [appsSubTab, setAppsSubTabRaw] = useState<
+    "browse" | "running" | "games"
+  >(() => {
     try {
       const stored = sessionStorage.getItem("eliza:appsSubTab");
-      if (stored === "browse" || stored === "running" || stored === "games") return stored;
-    } catch { /* ignore */ }
+      if (stored === "browse" || stored === "running" || stored === "games")
+        return stored;
+    } catch {
+      /* ignore */
+    }
     return "browse";
   });
   const setAppsSubTab = useCallback((v: "browse" | "running" | "games") => {
     setAppsSubTabRaw(v);
-    try { sessionStorage.setItem("eliza:appsSubTab", v); } catch { /* ignore */ }
+    try {
+      sessionStorage.setItem("eliza:appsSubTab", v);
+    } catch {
+      /* ignore */
+    }
   }, []);
   const [agentSubTab, setAgentSubTab] = useState<
     "character" | "inventory" | "knowledge"

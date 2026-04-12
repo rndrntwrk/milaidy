@@ -1095,6 +1095,7 @@ public class MiladyCanvasPlugin: CAPPlugin, CAPBridgedPlugin {
 
     // MARK: - Web View Management
 
+    @MainActor
     @discardableResult
     private func ensureWebView(for canvas: ManagedCanvas) -> WKWebView {
         if let existing = canvas.webView { return existing }
@@ -1735,6 +1736,16 @@ extension MiladyCanvasPlugin {
 
 /// Handles navigation policy for the canvas web view: intercepts milady:// deep links,
 /// reports load errors, and emits navigation events to the Capacitor layer.
+// `@MainActor` on the whole delegate class lets us invoke
+// `decisionHandler` (which WebKit now types as `@MainActor @Sendable`
+// in modern SDKs) synchronously from the nonisolated
+// `webView(_:decidePolicyFor:decisionHandler:)` method. Without the
+// isolation, Swift 6 strict concurrency rejects the direct call with:
+//   error: call to main actor-isolated parameter 'decisionHandler'
+//   in a synchronous nonisolated context
+// WKNavigationDelegate callbacks are always invoked by WebKit on the
+// main thread, so this matches the actual runtime contract.
+@MainActor
 final class CanvasNavigationDelegate: NSObject, WKNavigationDelegate {
     weak var plugin: MiladyCanvasPlugin?
     let canvasId: String

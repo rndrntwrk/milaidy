@@ -140,7 +140,11 @@ export function AppsCatalogGrid({
                         </div>
                         <button
                           type="button"
-                          aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+                          aria-label={
+                            isFavorite
+                              ? "Remove from favorites"
+                              : "Add to favorites"
+                          }
                           className={`shrink-0 p-1 transition-colors ${
                             isFavorite
                               ? "text-amber-400"

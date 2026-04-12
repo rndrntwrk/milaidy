@@ -3,11 +3,7 @@ import { useCallback, useState } from "react";
 import { client } from "../../api";
 import { useApp } from "../../state";
 
-type TelegramSetupStatus =
-  | "idle"
-  | "validating"
-  | "connected"
-  | "error";
+type TelegramSetupStatus = "idle" | "validating" | "connected" | "error";
 
 type BotInfo = {
   id: number;
@@ -128,7 +124,8 @@ export function TelegramBotSetupPanel() {
           </li>
           <li>
             {t("pluginsview.TelegramStep2", {
-              defaultValue: "Send /newbot and follow the prompts to create your bot",
+              defaultValue:
+                "Send /newbot and follow the prompts to create your bot",
             })}
           </li>
           <li>

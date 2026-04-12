@@ -15,6 +15,7 @@ import {
   isPackPathCoveredByFilesList,
   isWorkspaceSpecifier,
   parseBunPackDryRunOutput,
+  sanitizeNpmOverridesForPack,
   shouldSkipExactPackDryRun,
 } from "./release-check";
 
@@ -283,6 +284,29 @@ miladyai-2.0.0-alpha.92.tgz
       "npm error code EOVERRIDE\nnpm error Override for @elizaos/core conflicts with direct dependency";
 
     expect(isNpmOverrideConflictError(error)).toBe(true);
+  });
+
+  it("strips pack-incompatible overrides for workspace direct dependencies", () => {
+    expect(
+      sanitizeNpmOverridesForPack({
+        dependencies: {
+          "@elizaos/core": "workspace:*",
+          "@elizaos/plugin-openai": "2.0.0-alpha.21",
+        },
+        overrides: {
+          "@elizaos/core": "2.0.0-alpha.115",
+          "@elizaos/plugin-discord": "workspace:*",
+          "@elizaos/plugin-openai": "2.0.0-alpha.21",
+          axios: "1.14.0",
+        },
+      }),
+    ).toEqual({
+      overrides: {
+        "@elizaos/plugin-openai": "2.0.0-alpha.21",
+        axios: "1.14.0",
+      },
+      removed: ["@elizaos/core", "@elizaos/plugin-discord"],
+    });
   });
 
   it("accepts the patched Electrobun CLI helper contract", () => {

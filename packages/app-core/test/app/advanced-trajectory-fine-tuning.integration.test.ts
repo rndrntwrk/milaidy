@@ -1,16 +1,14 @@
 // @vitest-environment jsdom
 
 /**
- * Advanced trajectories/fine-tuning integration test.
+ * Advanced fine-tuning shell integration test.
  *
- * Verifies that AdvancedPageView correctly wires TrajectoriesView and
- * TrajectoryDetailView (via the onSelectTrajectory / selectedTrajectoryId
- * flow) and that TrajectoriesView and the Fine-Tuning tab both see the
- * same trajectory data through the API client.
+ * Verifies that AdvancedPageView keeps the shared advanced tab chrome in both
+ * standard and modal layouts, and that the advanced shell now routes to the
+ * fine-tuning workspace rather than the legacy trajectories sub-shell.
  *
  * All child views are mocked to avoid react-test-renderer incompatibilities
  * with Radix UI's DOM-dependent components (closest(), portal, etc.).
- * The test validates data flow by inspecting API mock calls.
  */
 
 import type {
@@ -360,7 +358,7 @@ describe("Advanced trajectories/fine-tuning integration", () => {
     const t = (k: string) => k;
     const cachedMock = {
       t,
-      tab: "trajectories" as const,
+      tab: "fine-tuning" as const,
       setTab,
       handleRestart,
       setActionNotice,
@@ -409,7 +407,7 @@ describe("Advanced trajectories/fine-tuning integration", () => {
     expect(modalSubtabButtons.length).toBeGreaterThan(0);
   });
 
-  it("wires trajectory selection through the advanced trajectories shell", async () => {
+  it("renders the fine-tuning workspace as the advanced shell", async () => {
     let tree!: ReactTestRenderer;
 
     await act(async () => {
@@ -417,16 +415,10 @@ describe("Advanced trajectories/fine-tuning integration", () => {
     });
     await flush();
 
-    const selectTrajectory =
-      mockTrajectoriesViewProps.at(-1)?.onSelectTrajectory;
-    expect(typeof selectTrajectory).toBe("function");
-
-    await act(async () => {
-      selectTrajectory?.(SHARED_TRAJECTORY_ID);
-    });
-    await flush();
     expect(
-      tree.root.findAll((node) => containsText(node, "shared-traj...")).length,
+      tree.root.findAll((node) => containsText(node, "stub-fine-tuning"))
+        .length,
     ).toBeGreaterThan(0);
+    expect(mockTrajectoriesViewProps).toHaveLength(0);
   });
 });

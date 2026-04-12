@@ -27,9 +27,7 @@ function InventoryRow({ item, onAdjust }: InventoryRowProps) {
       await onAdjust(item.id, delta);
       setLocalAvailable((prev) => prev + delta);
     } catch (err) {
-      setAdjustError(
-        err instanceof Error ? err.message : "Adjustment failed.",
-      );
+      setAdjustError(err instanceof Error ? err.message : "Adjustment failed.");
     } finally {
       setAdjusting(false);
     }

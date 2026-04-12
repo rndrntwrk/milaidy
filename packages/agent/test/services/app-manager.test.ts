@@ -1383,6 +1383,55 @@ describe("AppManager", () => {
     }
   });
 
+  it("returns a no-op stop for a previously launched app even if the registry lookup later misses", async () => {
+    const manager = new AppManager();
+    const runtime = createRuntimeStub({
+      settings: {
+        HYPERSCAPE_CLIENT_URL: "https://hyperscape.example",
+      },
+    });
+    appPackageModuleMocks.importAppRouteModule.mockResolvedValue({});
+
+    const launchPluginManager = buildPluginManager([], HYPERSCAPE_APP_INFO);
+    const stopPluginManager = buildPluginManager([], null);
+
+    const launch = await manager.launch(
+      launchPluginManager,
+      "@hyperscape/plugin-hyperscape",
+      undefined,
+      runtime,
+    );
+
+    expect(launch.run?.runId).toBeTruthy();
+
+    const stopResult = await manager.stop(
+      launchPluginManager,
+      "@hyperscape/plugin-hyperscape",
+    );
+    expect(stopResult).toEqual(
+      expect.objectContaining({
+        success: true,
+        appName: "@hyperscape/plugin-hyperscape",
+        stopScope: "viewer-session",
+      }),
+    );
+
+    const repeatedStop = await manager.stop(
+      stopPluginManager,
+      "@hyperscape/plugin-hyperscape",
+    );
+    expect(repeatedStop).toEqual(
+      expect.objectContaining({
+        success: false,
+        appName: "@hyperscape/plugin-hyperscape",
+        stopScope: "no-op",
+        message:
+          'No active app run found for "@hyperscape/plugin-hyperscape".',
+      }),
+    );
+    expect(stopPluginManager.getRegistryPlugin).not.toHaveBeenCalled();
+  });
+
   it("uses hyperscape.gg as the production viewer default", async () => {
     const fixtureServer = await startHyperscapeFixtureServer();
     process.env.HYPERSCAPE_API_URL = fixtureServer.url;

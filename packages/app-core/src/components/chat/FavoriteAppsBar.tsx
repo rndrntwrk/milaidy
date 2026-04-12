@@ -8,7 +8,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { client, type RegistryAppInfo } from "../../api";
 import { useApp } from "../../state";
 import { getAppEmoji, getAppShortName } from "../apps/helpers";
-import { getInternalToolApps, getInternalToolAppTargetTab } from "../apps/internal-tool-apps";
+import {
+  getInternalToolApps,
+  getInternalToolAppTargetTab,
+} from "../apps/internal-tool-apps";
 import {
   getAllOverlayApps,
   isOverlayApp,
@@ -16,7 +19,15 @@ import {
 } from "../apps/overlay-app-registry";
 
 export function FavoriteAppsBar() {
-  const { favoriteApps, setState, setActionNotice, t } = useApp();
+  const {
+    favoriteApps: favoriteAppsValue,
+    setState,
+    setActionNotice,
+    t,
+  } = useApp();
+  const favoriteApps = Array.isArray(favoriteAppsValue)
+    ? favoriteAppsValue
+    : [];
   const [apps, setApps] = useState<RegistryAppInfo[]>([]);
 
   useEffect(() => {
@@ -30,7 +41,11 @@ export function FavoriteAppsBar() {
         const overlayDescriptors = getAllOverlayApps()
           .filter((oa) => !serverApps.some((a) => a.name === oa.name))
           .map(overlayAppToRegistryInfo);
-        const all = [...internalToolApps, ...overlayDescriptors, ...serverApps].filter(
+        const all = [
+          ...internalToolApps,
+          ...overlayDescriptors,
+          ...serverApps,
+        ].filter(
           (app, index, items) =>
             items.findIndex((c) => c.name === app.name) === index,
         );

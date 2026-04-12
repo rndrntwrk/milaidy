@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
@@ -10,6 +11,20 @@ import {
 
 const repoRoot = path.dirname(fileURLToPath(import.meta.url));
 const elizaCoreEntry = getElizaCoreEntry(repoRoot);
+// See vitest.config.ts for the rationale — `@elizaos/core/roles` falls
+// back to the committed shim when the local eliza checkout is absent
+// (CI published-only mode).
+const elizaCoreRolesSourceFile = path.join(
+  repoRoot,
+  "eliza",
+  "packages",
+  "typescript",
+  "src",
+  "roles.ts",
+);
+const elizaCoreRolesEntry = fs.existsSync(elizaCoreRolesSourceFile)
+  ? elizaCoreRolesSourceFile
+  : path.join(repoRoot, "scripts", "lib", "elizaos-core-roles-shim.js");
 const autonomousSourceRoot = getAutonomousSourceRoot(repoRoot);
 const appCoreSourceRoot = getAppCoreSourceRoot(repoRoot);
 
@@ -25,6 +40,10 @@ export default defineConfig({
       {
         find: "milady/plugin-sdk",
         replacement: path.join(repoRoot, "src", "plugin-sdk", "index.ts"),
+      },
+      {
+        find: "@elizaos/core/roles",
+        replacement: elizaCoreRolesEntry,
       },
       ...(elizaCoreEntry
         ? [

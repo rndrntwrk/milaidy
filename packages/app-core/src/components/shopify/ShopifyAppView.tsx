@@ -9,7 +9,15 @@
  */
 
 import type { OverlayAppContext } from "../apps/overlay-app-api";
-import { Badge, Button, Skeleton, Tabs, TabsContent, TabsList, TabsTrigger } from "@miladyai/ui";
+import {
+  Badge,
+  Button,
+  Skeleton,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@miladyai/ui";
 import {
   BarChart3,
   ChevronLeft,
@@ -138,7 +146,12 @@ function ConnectionStatus({
 
 // ── Main view ─────────────────────────────────────────────────────────────
 
-type DashboardTab = "overview" | "products" | "orders" | "inventory" | "customers";
+type DashboardTab =
+  | "overview"
+  | "products"
+  | "orders"
+  | "inventory"
+  | "customers";
 
 export function ShopifyAppView({ exitToApps }: OverlayAppContext) {
   const [activeTab, setActiveTab] = useState<DashboardTab>("overview");
@@ -296,24 +309,28 @@ export function ShopifyAppView({ exitToApps }: OverlayAppContext) {
                             <Skeleton className="h-8 w-full rounded-[10px]" />
                             <Skeleton className="h-8 w-full rounded-[10px]" />
                           </>
-                        ) : orders.slice(0, 5).map((order) => (
-                          <div
-                            key={order.id}
-                            className="flex items-center justify-between gap-2 rounded-[10px] bg-card/40 px-3 py-2"
-                          >
-                            <span className="text-xs font-semibold text-txt">
-                              {order.name}
-                            </span>
-                            <span className="truncate text-[11px] text-muted">
-                              {order.email}
-                            </span>
-                            <span className="shrink-0 text-xs font-semibold text-txt">
-                              {order.totalPrice} {order.currencyCode}
-                            </span>
-                          </div>
-                        ))}
+                        ) : (
+                          orders.slice(0, 5).map((order) => (
+                            <div
+                              key={order.id}
+                              className="flex items-center justify-between gap-2 rounded-[10px] bg-card/40 px-3 py-2"
+                            >
+                              <span className="text-xs font-semibold text-txt">
+                                {order.name}
+                              </span>
+                              <span className="truncate text-[11px] text-muted">
+                                {order.email}
+                              </span>
+                              <span className="shrink-0 text-xs font-semibold text-txt">
+                                {order.totalPrice} {order.currencyCode}
+                              </span>
+                            </div>
+                          ))
+                        )}
                         {orders.length === 0 && !ordersLoading ? (
-                          <p className="text-xs text-muted">No recent orders.</p>
+                          <p className="text-xs text-muted">
+                            No recent orders.
+                          </p>
                         ) : null}
                       </div>
                       {ordersTotal > 5 ? (
@@ -372,8 +389,7 @@ export function ShopifyAppView({ exitToApps }: OverlayAppContext) {
                             ))
                         )}
                         {inventoryItems.filter((i) => i.available <= 5)
-                          .length === 0 &&
-                        !inventoryLoading ? (
+                          .length === 0 && !inventoryLoading ? (
                           <p className="text-xs text-muted">
                             All items sufficiently stocked.
                           </p>

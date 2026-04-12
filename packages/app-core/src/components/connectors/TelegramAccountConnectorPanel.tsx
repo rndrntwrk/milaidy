@@ -31,12 +31,15 @@ function currentPrompt(status: TelegramAccountStatus | null): {
     case "waiting_for_provisioning_code":
       return {
         label: "Telegram app provisioning code",
-        placeholder: "Code from Telegram after the my.telegram.org login prompt",
+        placeholder:
+          "Code from Telegram after the my.telegram.org login prompt",
         field: "provisioningCode",
       };
     case "waiting_for_telegram_code":
       return {
-        label: status.isCodeViaApp ? "Telegram app login code" : "Telegram SMS login code",
+        label: status.isCodeViaApp
+          ? "Telegram app login code"
+          : "Telegram SMS login code",
         placeholder: status.isCodeViaApp
           ? "Code delivered inside Telegram"
           : "SMS code delivered to your phone",
@@ -308,7 +311,9 @@ export function TelegramAccountConnectorPanel() {
             disabled={disconnecting}
           >
             {disconnecting
-              ? t("common.disconnecting", { defaultValue: "Disconnecting\u2026" })
+              ? t("common.disconnecting", {
+                  defaultValue: "Disconnecting\u2026",
+                })
               : t("common.disconnect", { defaultValue: "Disconnect" })}
           </Button>
         ) : null}
@@ -332,7 +337,8 @@ export function TelegramAccountConnectorPanel() {
 
         {status?.status === "waiting_for_password" ? (
           <div className="text-muted">
-            Enter your Telegram two-factor password to finish linking this account.
+            Enter your Telegram two-factor password to finish linking this
+            account.
           </div>
         ) : null}
 

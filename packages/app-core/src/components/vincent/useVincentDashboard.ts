@@ -167,7 +167,10 @@ export function useVincentDashboard(): VincentDashboardState {
       intervalRef.current = null;
     }
     if (vincentConnected) {
-      intervalRef.current = setInterval(() => void fetchAll(), POLL_INTERVAL_MS);
+      intervalRef.current = setInterval(
+        () => void fetchAll(),
+        POLL_INTERVAL_MS,
+      );
     }
     return () => {
       if (intervalRef.current) {

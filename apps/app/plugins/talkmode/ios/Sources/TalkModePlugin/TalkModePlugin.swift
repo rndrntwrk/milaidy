@@ -375,7 +375,14 @@ public class TalkModePlugin: CAPPlugin, CAPBridgedPlugin {
         silenceTask = Task { [weak self] in
             while self?.enabled == true {
                 try? await Task.sleep(nanoseconds: 200_000_000) // 200ms poll
-                await MainActor.run { self?.checkSilence() }
+                // Re-capture `self` explicitly in the inner MainActor
+                // closure. Without this, Swift 6 strict concurrency
+                // rejects it with:
+                //   error: reference to captured var 'self' in
+                //   concurrently-executing code
+                // because the outer `[weak self]` list does not
+                // propagate into the nested `MainActor.run` closure.
+                await MainActor.run { [weak self] in self?.checkSilence() }
             }
         }
     }

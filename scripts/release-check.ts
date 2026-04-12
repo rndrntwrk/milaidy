@@ -40,7 +40,7 @@ const homepageReleaseDataPathCandidates = [
   "apps/web/src/generated/release-data.ts",
 ] as const;
 const requiredWorkflowSnippets = [
-  'BUN_VERSION: "1.3.9"',
+  'BUN_VERSION: "1.3.11"',
   "workflow_call:",
   "name: Validate Release Inputs",
   "Manual branch dispatches must provide inputs.tag; refusing to derive a release tag from package.json.",
@@ -59,7 +59,7 @@ const requiredWorkflowSnippets = [
   "run: bun run release:check",
   "build-browser-companions:",
   "name: Build LifeOps Browser companions",
-  "run: bun run lifeops:browser:package:release",
+  "if bun run lifeops:browser:package:release; then",
   'echo "packaged=true" >> "$GITHUB_OUTPUT"',
   "LifeOps Browser packaging failed; desktop release will continue without browser companion bundles.",
   "name: Upload LifeOps Browser release artifacts",
@@ -219,7 +219,7 @@ const requiredElectrobunPrWorkflowSnippets = [
   "workflow_dispatch:",
   "permissions:",
   "contents: read",
-  'BUN_VERSION: "1.3.9"',
+  'BUN_VERSION: "1.3.11"',
   "name: Release Workflow Contract",
   "bun install --ignore-scripts",
   "bun run postinstall",
@@ -252,6 +252,7 @@ type RootPackageJson = {
   bundledDependencies?: string[];
   dependencies?: Record<string, string>;
   files?: string[];
+  overrides?: Record<string, unknown>;
   scripts?: Record<string, string>;
 };
 const cloudAgentTemplateReleaseDependencies = [
@@ -308,22 +309,61 @@ export function isNpmOverrideConflictError(error: unknown): boolean {
   return combinedOutput.includes("EOVERRIDE");
 }
 
+export function sanitizeNpmOverridesForPack(pkg: RootPackageJson): {
+  overrides?: Record<string, unknown>;
+  removed: string[];
+} {
+  const overrides =
+    pkg.overrides && typeof pkg.overrides === "object" ? pkg.overrides : {};
+  const dependencies = pkg.dependencies ?? {};
+  const sanitizedOverrides: Record<string, unknown> = {};
+  const removed: string[] = [];
+
+  for (const [name, value] of Object.entries(overrides)) {
+    const directDependencySpecifier = dependencies[name];
+    const removeBecauseOverrideUsesWorkspaceProtocol =
+      typeof value === "string" && value.startsWith("workspace:");
+    const removeBecauseDirectDependencyUsesWorkspaceProtocol =
+      typeof directDependencySpecifier === "string" &&
+      directDependencySpecifier.startsWith("workspace:");
+
+    if (
+      removeBecauseOverrideUsesWorkspaceProtocol ||
+      removeBecauseDirectDependencyUsesWorkspaceProtocol
+    ) {
+      removed.push(name);
+      continue;
+    }
+
+    sanitizedOverrides[name] = value;
+  }
+
+  if (removed.length === 0) {
+    return { overrides: pkg.overrides, removed };
+  }
+
+  if (Object.keys(sanitizedOverrides).length === 0) {
+    return { overrides: undefined, removed };
+  }
+
+  return { overrides: sanitizedOverrides, removed };
+}
+
 /**
- * Strip every `workspace:*` entry out of the root `package.json`
- * `overrides` block (and only that block) for the duration of a
- * callback, then restore the file byte-for-byte. Returns the
- * callback's result.
+ * Strip pack-incompatible root `package.json` override entries for the duration
+ * of a callback, then restore the file byte-for-byte. Returns the callback's
+ * result.
  *
- * Why: `npm pack --dry-run` walks the root `package.json` and
- * validates `overrides`. npm does not understand Bun's `workspace:*`
- * protocol in an overrides context, so it errors with `EOVERRIDE`,
- * and the old fallback — `bun pm pack --dry-run` — then trips on a
- * pre-existing Bun 1.3.11 lockfile parser bug (`error: Duplicate
- * package path at bun.lock:2034:5`). Neither error path is
- * recoverable from inside `release-check.ts`. Neutralizing the
- * offending override entries only while `npm pack` is running
- * sidesteps both problems without touching the committed `bun.lock`
- * or the runtime `package.json`.
+ * Why: `npm pack --dry-run` validates `overrides` using npm's resolution rules.
+ * That trips on two Milady patterns:
+ * - override entries that still use Bun's `workspace:*` protocol
+ * - override entries for direct dependencies that themselves remain
+ *   `workspace:*` in the root package
+ *
+ * Once npm exits with `EOVERRIDE`, the old fallback — `bun pm pack --dry-run`
+ * — can still hit Bun 1.3.11's lockfile parser bug in CI. Neutralizing the
+ * incompatible override entries only while `npm pack` is running sidesteps both
+ * issues without touching the committed `bun.lock` or the runtime `package.json`.
  */
 function withSanitizedNpmOverrides<T>(fn: () => T): T {
   const pkgPath = resolve("package.json");
@@ -332,12 +372,9 @@ function withSanitizedNpmOverrides<T>(fn: () => T): T {
   }
 
   const originalRaw = readFileSync(pkgPath, "utf8");
-  let pkg: {
-    overrides?: Record<string, unknown> | undefined;
-    [key: string]: unknown;
-  };
+  let pkg: RootPackageJson & Record<string, unknown>;
   try {
-    pkg = JSON.parse(originalRaw);
+    pkg = JSON.parse(originalRaw) as RootPackageJson & Record<string, unknown>;
   } catch {
     return fn();
   }
@@ -346,21 +383,17 @@ function withSanitizedNpmOverrides<T>(fn: () => T): T {
     return fn();
   }
 
-  const sanitizedOverrides: Record<string, unknown> = {};
-  let removed = 0;
-  for (const [name, value] of Object.entries(pkg.overrides)) {
-    if (typeof value === "string" && value.startsWith("workspace:")) {
-      removed++;
-      continue;
-    }
-    sanitizedOverrides[name] = value;
-  }
-
-  if (removed === 0) {
+  const { overrides, removed } = sanitizeNpmOverridesForPack(pkg);
+  if (removed.length === 0) {
     return fn();
   }
 
-  const sanitizedPkg = { ...pkg, overrides: sanitizedOverrides };
+  const sanitizedPkg = { ...pkg };
+  if (overrides && Object.keys(overrides).length > 0) {
+    sanitizedPkg.overrides = overrides;
+  } else {
+    delete sanitizedPkg.overrides;
+  }
   const hasTrailingNewline = originalRaw.endsWith("\n");
   const sanitizedRaw =
     JSON.stringify(sanitizedPkg, null, 2) + (hasTrailingNewline ? "\n" : "");

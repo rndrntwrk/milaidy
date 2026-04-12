@@ -1394,7 +1394,26 @@ function normalizeBatchSendItems(
   return normalized.length > 0 ? normalized : undefined;
 }
 
-export const gmailAction: Action = {
+// `suppressPostActionContinuation` is a local feature flag the runtime
+// reads via a wider Action shape than the npm `@elizaos/core@alpha`
+// dist-tag's exported type — the published type hasn't caught up yet
+// so tsc rejects the property when compiled against node_modules on CI
+// (local resolves via paths map to the newer eliza/ source and accepts
+// it natively).
+//
+// We used to end this declaration with
+// `} satisfies Action & { suppressPostActionContinuation?: boolean }`,
+// but `satisfies` keeps the inferred literal type on the `const`. When
+// the Docker CI Smoke build walks `packages/agent` with
+// `declaration: true`, TypeScript tries to emit a portable `.d.ts`
+// and fails with TS2742 because the inferred literal transitively
+// references `@bufbuild/protobuf` types that are not in this package's
+// direct dependency graph. An explicit type annotation on the binding
+// makes `gmailAction` widen to the declared type, so tsc only has to
+// emit the (portable) declared shape in the `.d.ts`.
+export const gmailAction: Action & {
+  suppressPostActionContinuation?: boolean;
+} = {
   name: "GMAIL_ACTION",
   similes: [
     "GMAIL",

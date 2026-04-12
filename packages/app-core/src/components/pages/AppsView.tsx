@@ -59,10 +59,7 @@ export function AppsView() {
     () => new Set(appRuns.map((run) => run.appName)),
     [appRuns],
   );
-  const favoriteAppNames = useMemo(
-    () => new Set(favoriteApps),
-    [favoriteApps],
-  );
+  const favoriteAppNames = useMemo(() => new Set(favoriteApps), [favoriteApps]);
   const activeGameRun = useMemo(
     () => appRuns.find((run) => run.runId === activeGameRunId) ?? null,
     [activeGameRunId, appRuns],

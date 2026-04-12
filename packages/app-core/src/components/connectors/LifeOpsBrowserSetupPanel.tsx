@@ -325,7 +325,7 @@ function BrowserCompanionRow({
   onBuild: (browser: LifeOpsBrowserKind) => Promise<unknown>;
   onCreatePairing: (browser: LifeOpsBrowserKind) => Promise<unknown>;
   onCopyPairing: (browser: LifeOpsBrowserKind) => Promise<void>;
-  onDownload: (browser: LifeOpsBrowserKind) => Promise<void>;
+  onDownload: (browser: LifeOpsBrowserKind) => Promise<unknown>;
   onOpenPath: (path: string, revealOnly?: boolean) => Promise<void>;
 }) {
   const browserLabel = browser === "chrome" ? "Chrome" : "Safari";

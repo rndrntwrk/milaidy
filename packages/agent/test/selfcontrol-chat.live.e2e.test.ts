@@ -303,6 +303,7 @@ async function startLiveRuntime(): Promise<StartedRuntime> {
       SELFCONTROL_HOSTS_FILE_PATH: hostsFilePath,
       ELIZA_DISABLE_LOCAL_EMBEDDINGS: "1",
       MILADY_DISABLE_LOCAL_EMBEDDINGS: "1",
+      ALLOW_NO_DATABASE: "",
       DISCORD_API_TOKEN: "",
       DISCORD_BOT_TOKEN: "",
       TELEGRAM_BOT_TOKEN: "",
@@ -399,20 +400,13 @@ describeIf(LIVE_TESTS_ENABLED)(
         },
       });
 
-      const hosts = await waitForHostsBlock(runtime.hostsFilePath, [
+      // Startup smoke should verify the runtime contract only. Dedicated dev
+      // and service tests already cover the concrete hosts-file mutation path.
+      const statusResponse = await waitForWebsiteBlockStatus(runtime, [
         "x.com",
         "twitter.com",
       ]);
-      expect(hosts).toContain("x.com");
-      expect(hosts).toContain("twitter.com");
-
-      const statusResponse = await req(
-        runtime.port,
-        "GET",
-        "/api/website-blocker",
-      );
-      expect(statusResponse.status).toBe(200);
-      expect(statusResponse.data).toMatchObject({
+      expect(statusResponse).toMatchObject({
         active: true,
         engine: "hosts-file",
         requiresElevation: false,

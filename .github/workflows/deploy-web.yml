@@ -13,8 +13,12 @@ on:
       - "install.ps1"
       - "package.json"
       - "bun.lock"
-  release:
-    types: [published]
+  workflow_call:
+    inputs:
+      release_version:
+        description: "Release tag override for homepage metadata (e.g. v2.0.0-alpha.87)"
+        required: false
+        type: string
   workflow_dispatch:
 
 concurrency:
@@ -72,6 +76,7 @@ jobs:
       - name: Generate release metadata
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MILADY_RELEASE_TAG: ${{ inputs.release_version }}
         run: node scripts/write-homepage-release-data.mjs
 
       - name: Build homepage

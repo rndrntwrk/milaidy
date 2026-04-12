@@ -111,7 +111,9 @@ function resolveService(
     return null;
   }
   const service = state.runtime.getService("telegram-account");
-  return (service as TelegramAccountRuntimeServiceLike | null | undefined) ?? null;
+  return (
+    (service as TelegramAccountRuntimeServiceLike | null | undefined) ?? null
+  );
 }
 
 function isServiceConnected(
@@ -169,7 +171,8 @@ function statusFromState(
     serviceConnected,
     restartRequired: status === "configured" && !serviceConnected,
     hasAppCredentials: Boolean(
-      (typeof connectorConfig.appId === "string" || typeof connectorConfig.appId === "number") &&
+      (typeof connectorConfig.appId === "string" ||
+        typeof connectorConfig.appId === "number") &&
         typeof connectorConfig.appHash === "string" &&
         connectorConfig.appHash.trim().length > 0,
     ),
@@ -197,9 +200,7 @@ function ensureConnectorBlock(
   return connectors.telegramAccount;
 }
 
-function createSessionOptions(
-  state: TelegramAccountRouteState,
-): {
+function createSessionOptions(state: TelegramAccountRouteState): {
   deviceModel?: string;
   systemVersion?: string;
 } {
@@ -326,11 +327,15 @@ export async function handleTelegramAccountRoute(
       helpers.error(res, "telegram login session has not been started", 400);
       return true;
     }
+    const authSession = state.telegramAccountAuthSession;
+    if (!authSession) {
+      helpers.error(res, "telegram login session has not been started", 400);
+      return true;
+    }
 
     try {
-      await state.telegramAccountAuthSession!.submit(body);
-      const resolved =
-        state.telegramAccountAuthSession!.getResolvedConnectorConfig();
+      await authSession.submit(body);
+      const resolved = authSession.getResolvedConnectorConfig();
       if (resolved) {
         Object.assign(ensureConnectorBlock(state), resolved);
         state.saveConfig();

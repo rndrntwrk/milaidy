@@ -121,9 +121,9 @@ describe("signal-pairing", () => {
     });
 
     it("parses linked accounts from JSON or plain text output", () => {
-      expect(
-        parseSignalCliAccountsOutput('["+15551234567"]'),
-      ).toBe("+15551234567");
+      expect(parseSignalCliAccountsOutput('["+15551234567"]')).toBe(
+        "+15551234567",
+      );
       expect(parseSignalCliAccountsOutput("+15559876543\n")).toBe(
         "+15559876543",
       );

@@ -1195,7 +1195,7 @@ describe("Apps E2E", () => {
   // ===================================================================
 
   describe("Hyperscape postMessage auth", () => {
-    it("launch includes postMessageAuth config when HYPERSCAPE_AUTH_TOKEN is set", async () => {
+    it("surfaces an auth diagnostic when HYPERSCAPE_AUTH_TOKEN is set without a runtime agent", async () => {
       // Save original env
       const originalToken = process.env.HYPERSCAPE_AUTH_TOKEN;
 
@@ -1215,36 +1215,20 @@ describe("Apps E2E", () => {
           !Array.isArray(body.viewer)
         ) {
           const viewer = body.viewer;
-          expect(viewer.postMessageAuth).toBe(true);
-          if (
-            viewer.embedParams &&
-            typeof viewer.embedParams === "object" &&
-            !Array.isArray(viewer.embedParams)
-          ) {
-            expect(viewer.embedParams.mode).toBe("spectator");
-            expect(viewer.embedParams.surface).toBe("agent-control");
-          }
-
-          if (
-            viewer.authMessage &&
-            typeof viewer.authMessage === "object" &&
-            !Array.isArray(viewer.authMessage)
-          ) {
-            const authMsg = viewer.authMessage;
-            expect(authMsg.type).toBe("HYPERSCAPE_AUTH");
-            expect(authMsg.authToken).toBe("test-auth-token-e2e");
-            if (typeof authMsg.agentId === "string") {
-              expect(authMsg.agentId.length).toBeGreaterThan(0);
-            }
-          }
+          expect(viewer.postMessageAuth).toBe(false);
+          expect(viewer.authMessage).toBeUndefined();
+          expect(viewer.embedParams).toBeUndefined();
         }
-        if (
-          body.session &&
-          typeof body.session === "object" &&
-          !Array.isArray(body.session)
-        ) {
-          expect(body.session.mode).toBe("spectate-and-steer");
-          expect(typeof body.session.sessionId).toBe("string");
+        expect(body.session ?? null).toBeNull();
+        if (Array.isArray(body.diagnostics)) {
+          expect(body.diagnostics).toEqual(
+            expect.arrayContaining([
+              expect.objectContaining({
+                code: "hyperscape-auth-unavailable",
+                severity: "error",
+              }),
+            ]),
+          );
         }
       } finally {
         // Restore original env

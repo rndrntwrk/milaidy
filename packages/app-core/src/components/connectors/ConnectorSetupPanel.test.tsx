@@ -35,7 +35,10 @@ vi.mock("./TelegramAccountConnectorPanel", () => ({
   TelegramAccountConnectorPanel: () => <div>telegram-account-panel</div>,
 }));
 
-import { ConnectorSetupPanel, hasConnectorSetupPanel } from "./ConnectorSetupPanel";
+import {
+  ConnectorSetupPanel,
+  hasConnectorSetupPanel,
+} from "./ConnectorSetupPanel";
 
 describe("ConnectorSetupPanel telegram separation", () => {
   afterEach(() => {

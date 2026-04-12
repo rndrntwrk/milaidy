@@ -115,9 +115,7 @@ export function loadAgentProfileRegistry(): AgentProfileRegistry {
   }, emptyRegistry());
 }
 
-export function saveAgentProfileRegistry(
-  registry: AgentProfileRegistry,
-): void {
+export function saveAgentProfileRegistry(registry: AgentProfileRegistry): void {
   tryLocalStorage(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(registry));
   }, undefined);

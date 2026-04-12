@@ -7,11 +7,26 @@ import {
   type Content,
   type Memory,
 } from "@elizaos/core";
-import { WhatsAppConnectorService } from "@elizaos/plugin-whatsapp";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { req } from "../../../test/helpers/http";
 import { saveEnv } from "../../../test/helpers/test-utils";
 import { startApiServer } from "../src/api/server";
+
+type WhatsAppRuntimeServiceModule = typeof import("../../../plugins/plugin-whatsapp/typescript/src/runtime-service");
+
+vi.mock(
+  "qrcode-terminal",
+  () => ({
+    default: {
+      generate: (
+        _qr: string,
+        _options: { small?: boolean },
+        callback: (output: string) => void,
+      ) => callback(""),
+    },
+  }),
+  { virtual: true },
+);
 
 describe("WhatsApp webhook roundtrip", () => {
   let closeServer: (() => Promise<void>) | null = null;
@@ -22,9 +37,16 @@ describe("WhatsApp webhook roundtrip", () => {
   let inboundMemory: Memory | null = null;
   let outboundMemories: Memory[] = [];
   let ensureConnection: ReturnType<typeof vi.fn>;
-  let whatsappService: WhatsAppConnectorService;
+  let WhatsAppConnectorServiceCtor: WhatsAppRuntimeServiceModule["WhatsAppConnectorService"];
+  let whatsappService: InstanceType<
+    WhatsAppRuntimeServiceModule["WhatsAppConnectorService"]
+  >;
 
   beforeAll(async () => {
+    ({ WhatsAppConnectorService: WhatsAppConnectorServiceCtor } = await import(
+      "../../../plugins/plugin-whatsapp/typescript/src/runtime-service"
+    ));
+
     envBackup = saveEnv("ELIZA_CONFIG_PATH", "ELIZA_STATE_DIR");
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "milady-wa-roundtrip-"));
     process.env.ELIZA_CONFIG_PATH = path.join(tempDir, "milady.json");
@@ -78,11 +100,13 @@ describe("WhatsApp webhook roundtrip", () => {
       getServicesByType: () => [],
     } as unknown as AgentRuntime;
 
-    whatsappService = new WhatsAppConnectorService(runtime);
-    (whatsappService as unknown as {
-      config: Record<string, unknown>;
-      client: Record<string, unknown>;
-    }).config = {
+    whatsappService = new WhatsAppConnectorServiceCtor(runtime);
+    (
+      whatsappService as unknown as {
+        config: Record<string, unknown>;
+        client: Record<string, unknown>;
+      }
+    ).config = {
       transport: "cloudapi",
       accessToken: "test-token",
       phoneNumberId: "1234567890",
@@ -96,7 +120,9 @@ describe("WhatsApp webhook roundtrip", () => {
       };
 
     runtime.getService = ((type: string) =>
-      type === "whatsapp" ? whatsappService : null) as AgentRuntime["getService"];
+      type === "whatsapp"
+        ? whatsappService
+        : null) as AgentRuntime["getService"];
 
     const server = await startApiServer({ port: 0, runtime });
     port = server.port;

@@ -82,22 +82,20 @@ describe("TelegramAccountConnectorPanel", () => {
       },
       error: null,
     });
-    mockClient.disconnectTelegramAccount
-      .mockReset()
-      .mockResolvedValue({
-        ok: true,
-        available: true,
-        status: "idle",
-        configured: false,
-        sessionExists: false,
-        serviceConnected: false,
-        restartRequired: false,
-        hasAppCredentials: false,
-        phone: null,
-        isCodeViaApp: false,
-        account: null,
-        error: null,
-      });
+    mockClient.disconnectTelegramAccount.mockReset().mockResolvedValue({
+      ok: true,
+      available: true,
+      status: "idle",
+      configured: false,
+      sessionExists: false,
+      serviceConnected: false,
+      restartRequired: false,
+      hasAppCredentials: false,
+      phone: null,
+      isCodeViaApp: false,
+      account: null,
+      error: null,
+    });
     mockClient.restartAndWait.mockReset().mockResolvedValue({});
     mockClient.onWsEvent.mockReset().mockReturnValue(() => {});
     mockUseApp.mockReset().mockReturnValue({
@@ -161,8 +159,6 @@ describe("TelegramAccountConnectorPanel", () => {
     );
 
     expect(await screen.findByText("Authenticated as @shaw.")).toBeTruthy();
-    expect(
-      screen.getByRole("button", { name: "Restart agent" }),
-    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Restart agent" })).toBeTruthy();
   });
 });

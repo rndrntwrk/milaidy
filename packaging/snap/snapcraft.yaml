@@ -112,52 +112,153 @@ parts:
       # Skip building upstream plugins from source — use npm-published packages
       export MILADY_SKIP_LOCAL_UPSTREAMS=1
 
-      # Strip workspace entries that reference git submodule directories
-      # (plugins/*, eliza/*) which are not available inside the snap build.
-      # Also remove workspace:* dependency refs that point to those packages
-      # and bundleDependencies referencing them.
+      # Use the shared disable-local-eliza-workspace script so snap and
+      # every other SKIP_LOCAL_UPSTREAMS CI path are consistent. The
+      # script strips `eliza/packages/*` from workspaces, rewrites
+      # `@elizaos/core: workspace:*` to the pinned registry version
+      # across every workspace package.json, and cleans the root
+      # `overrides` block so `bun install` and `bun pm pack` produce a
+      # conflict-free lockfile. Snapcraft runs inside a multipass VM
+      # that does NOT inherit `GITHUB_ACTIONS=true`, so we set the
+      # force flag here to opt into the destructive mutation path.
+      MILADY_DISABLE_LOCAL_UPSTREAMS=force node scripts/disable-local-eliza-workspace.mjs
+
+      # Remove plugin source directories so tsc/build does not attempt
+      # to compile them (their deps like coding-agent-adapters are
+      # absent from the snap sandbox). The workspace rewrite above
+      # already remapped `@elizaos/plugin-*: workspace:*` → registry
+      # pins for the ones that need them at build time, so removing
+      # the on-disk plugin sources is safe.
       node -e '
         const fs = require("fs");
         const path = require("path");
-
-        function stripSubmoduleRefs(pkgPath) {
-          if (!fs.existsSync(pkgPath)) return;
-          const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
-          // Strip workspace entries for submodule dirs
-          if (pkg.workspaces) {
-            pkg.workspaces = pkg.workspaces.filter(w =>
-              !w.startsWith("plugins/") && !w.startsWith("eliza/")
-            );
-          }
-          // Remove workspace:* deps that resolve to submodule packages
-          for (const section of ["dependencies", "devDependencies", "optionalDependencies"]) {
-            if (!pkg[section]) continue;
-            for (const [k, v] of Object.entries(pkg[section])) {
-              if (v === "workspace:*" && k === "@elizaos/plugin-agent-orchestrator") {
-                delete pkg[section][k];
-              }
-            }
-          }
-          // Clean bundleDependencies
-          if (Array.isArray(pkg.bundleDependencies)) {
-            pkg.bundleDependencies = pkg.bundleDependencies.filter(
-              d => d !== "@elizaos/plugin-agent-orchestrator"
-            );
-          }
-          fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + "\n");
-        }
-
-        stripSubmoduleRefs("package.json");
-        stripSubmoduleRefs("packages/agent/package.json");
-
-        // Remove plugin source directories so tsc/build does not attempt
-        // to compile them (their deps like coding-agent-adapters are absent).
+        if (!fs.existsSync("plugins")) process.exit(0);
         for (const dir of fs.readdirSync("plugins").filter(d =>
           fs.statSync(path.join("plugins", d)).isDirectory()
         )) {
           fs.rmSync(path.join("plugins", dir), { recursive: true, force: true });
         }
       '
+
+      # Also drop any remaining `workspace:*` entries that point at
+      # plugin workspaces we just removed. This has to scan every
+      # surviving package.json, not just the root + packages/agent,
+      # because package-level devDependencies such as app-core's
+      # plugin-agent-skills/plugin-plugin-manager refs also participate
+      # in Bun's workspace resolution.
+      node -e '
+        const fs = require("fs");
+        const path = require("path");
+        const repoRoot = process.cwd();
+        const packageJsonPaths = [path.join(repoRoot, "package.json")];
+        const availableWorkspaceNames = new Set();
+        const dependencySections = [
+          "dependencies",
+          "devDependencies",
+          "peerDependencies",
+          "optionalDependencies",
+        ];
+
+        function walk(dir) {
+          if (!fs.existsSync(dir)) return;
+          for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+            if (entry.name === "node_modules" || entry.name.startsWith(".git")) {
+              continue;
+            }
+            const entryPath = path.join(dir, entry.name);
+            if (entry.isDirectory()) {
+              walk(entryPath);
+              continue;
+            }
+            if (entry.isFile() && entry.name === "package.json") {
+              packageJsonPaths.push(entryPath);
+            }
+          }
+        }
+
+        for (const dir of ["apps", "packages", "deploy"]) {
+          walk(path.join(repoRoot, dir));
+        }
+
+        for (const pkgPath of packageJsonPaths) {
+          try {
+            const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+            if (typeof pkg.name === "string" && pkg.name.length > 0) {
+              availableWorkspaceNames.add(pkg.name);
+            }
+          } catch {}
+        }
+
+        function stripWorkspaceDeps(pkgPath) {
+          if (!fs.existsSync(pkgPath)) return;
+          const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+          let mutated = false;
+          for (const section of dependencySections) {
+            if (!pkg[section]) continue;
+            for (const [k, v] of Object.entries(pkg[section])) {
+              if (
+                typeof v === "string" &&
+                v.startsWith("workspace:") &&
+                !availableWorkspaceNames.has(k)
+              ) {
+                delete pkg[section][k];
+                mutated = true;
+              }
+            }
+          }
+          if (pkg.overrides && typeof pkg.overrides === "object") {
+            for (const [k, v] of Object.entries(pkg.overrides)) {
+              if (
+                typeof v === "string" &&
+                v.startsWith("workspace:") &&
+                !availableWorkspaceNames.has(k)
+              ) {
+                delete pkg.overrides[k];
+                mutated = true;
+              }
+            }
+            if (Object.keys(pkg.overrides).length === 0) {
+              delete pkg.overrides;
+            }
+          }
+          if (Array.isArray(pkg.bundleDependencies)) {
+            pkg.bundleDependencies = pkg.bundleDependencies.filter(
+              d => availableWorkspaceNames.has(d)
+            );
+            mutated = true;
+          }
+          if (mutated) {
+            fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + "\n");
+          }
+        }
+        for (const pkgPath of packageJsonPaths) {
+          stripWorkspaceDeps(pkgPath);
+        }
+      '
+
+      # The cloud-agent template is a release helper workspace, not a
+      # snap runtime dependency. Keeping it in the workspace graph
+      # pulls the published @elizaos/plugin-sql package, whose current
+      # alpha manifest self-pins an unavailable alpha.114 build.
+      node -e '
+        const fs = require("fs");
+        const pkgPath = "package.json";
+        const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+        if (Array.isArray(pkg.workspaces)) {
+          const next = pkg.workspaces.filter(
+            (entry) => entry !== "deploy/cloud-agent-template"
+          );
+          if (next.length !== pkg.workspaces.length) {
+            pkg.workspaces = next;
+            fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + "\n");
+          }
+        }
+      '
+
+      # The committed lockfile still references repo-local workspace
+      # paths that no longer exist after the destructive rewrite
+      # above. Force Bun to resolve against the patched manifests.
+      rm -f bun.lock
 
       # Install dependencies — skip postinstall to avoid ensure-bundled-workspaces
       # trying to build the (now-removed) plugin-agent-orchestrator from source.

@@ -1,8 +1,11 @@
 import { PGlite } from "@electric-sql/pglite";
-import { type AgentRuntime, TrajectoriesService } from "@elizaos/core";
+import type {
+  AgentRuntime,
+} from "@elizaos/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { req } from "../../../test/helpers/http";
 import { startApiServer } from "../src/api/server";
+import { DatabaseTrajectoryLogger } from "../src/runtime/trajectory-storage";
 
 type SqlQuery = {
   queryChunks?: Array<{ value?: unknown }>;
@@ -33,7 +36,7 @@ function extractSqlText(query: SqlQuery): string {
 describe("Connector trajectory visibility", () => {
   let db: PGlite;
   let runtime: TestRuntime;
-  let trajectoryLogger: TrajectoriesService;
+  let trajectoryLogger: DatabaseTrajectoryLogger;
   let server: { port: number; close: () => Promise<void> } | null = null;
 
   beforeAll(async () => {
@@ -72,11 +75,13 @@ describe("Connector trajectory visibility", () => {
       getServicesByType: () => [],
     } as TestRuntime;
 
-    trajectoryLogger = new TrajectoriesService(runtime);
+    trajectoryLogger = new DatabaseTrajectoryLogger(runtime);
     await trajectoryLogger.initialize();
 
     runtime.getService = ((serviceType: string) =>
-      serviceType === "trajectories" ? trajectoryLogger : null) as AgentRuntime["getService"];
+      serviceType === "trajectories"
+        ? trajectoryLogger
+        : null) as AgentRuntime["getService"];
     runtime.getServicesByType = ((serviceType: string) =>
       serviceType === "trajectories"
         ? [trajectoryLogger]
@@ -97,14 +102,17 @@ describe("Connector trajectory visibility", () => {
     prompt: string,
     response: string,
   ): Promise<string> {
-    const trajectoryId = await trajectoryLogger.startTrajectory(runtime.agentId, {
-      source,
-      metadata: {
-        roomId: `${source}-room`,
-        entityId: `${source}-user`,
-        messageId: `${source}-message`,
+    const trajectoryId = await trajectoryLogger.startTrajectory(
+      runtime.agentId,
+      {
+        source,
+        metadata: {
+          roomId: `${source}-room`,
+          entityId: `${source}-user`,
+          messageId: `${source}-message`,
+        },
       },
-    });
+    );
     const stepId = trajectoryLogger.startStep(trajectoryId, {
       timestamp: Date.now() - 1_000,
       agentBalance: 0,
@@ -130,12 +138,6 @@ describe("Connector trajectory visibility", () => {
       latencyMs: 5,
       promptTokens: Math.ceil(prompt.length / 4),
       completionTokens: Math.ceil(response.length / 4),
-    });
-    trajectoryLogger.completeStep(trajectoryId, stepId, {
-      actionType: "RESPOND",
-      actionName: "RESPOND",
-      parameters: {},
-      success: true,
     });
     await trajectoryLogger.endTrajectory(trajectoryId, "completed");
 
@@ -220,13 +222,23 @@ describe("Connector trajectory visibility", () => {
       "second connector response",
     );
 
-    const emptyDelete = await req(server.port, "DELETE", "/api/trajectories", {});
+    const emptyDelete = await req(
+      server.port,
+      "DELETE",
+      "/api/trajectories",
+      {},
+    );
     expect(emptyDelete.status).toBe(200);
     expect(emptyDelete.data.deleted).toBe(0);
 
-    const clearAllResponse = await req(server.port, "DELETE", "/api/trajectories", {
-      clearAll: true,
-    });
+    const clearAllResponse = await req(
+      server.port,
+      "DELETE",
+      "/api/trajectories",
+      {
+        clearAll: true,
+      },
+    );
     expect(clearAllResponse.status).toBe(200);
     expect(clearAllResponse.data.deleted).toBeGreaterThanOrEqual(2);
 
@@ -239,7 +251,8 @@ describe("Connector trajectory visibility", () => {
     expect(
       Array.isArray(listAfterClear.data.trajectories) &&
         listAfterClear.data.trajectories.some(
-          (item: { id?: string }) => item.id === firstId || item.id === secondId,
+          (item: { id?: string }) =>
+            item.id === firstId || item.id === secondId,
         ),
     ).toBe(false);
   });

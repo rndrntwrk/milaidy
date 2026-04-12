@@ -53,8 +53,7 @@ export function CloudInstancePanel() {
     return () => clearInterval(interval);
   }, [refresh]);
 
-  const isActive =
-    relayStatus?.available && relayStatus?.status === "polling";
+  const isActive = relayStatus?.available && relayStatus?.status === "polling";
   const isRegistered =
     relayStatus?.available && relayStatus?.status === "registered";
 

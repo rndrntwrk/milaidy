@@ -36,7 +36,7 @@ jobs:
         uses: ./.github/actions/setup-bun-workspace
         with:
           bun-version: ${{ env.BUN_VERSION }}
-          install-command: bun install --ignore-scripts
+          install-command: bun install --no-frozen-lockfile --ignore-scripts
           skip-avatar-clone: "true"
           no-vision-deps: "true"
 
@@ -68,7 +68,7 @@ jobs:
         uses: ./.github/actions/setup-bun-workspace
         with:
           bun-version: ${{ env.BUN_VERSION }}
-          install-command: bun install --ignore-scripts
+          install-command: bun install --no-frozen-lockfile --ignore-scripts
 
       - name: Biome lint
         run: bun run verify:lint
@@ -94,7 +94,7 @@ jobs:
         uses: ./.github/actions/setup-bun-workspace
         with:
           bun-version: ${{ env.BUN_VERSION }}
-          install-command: bun install --ignore-scripts
+          install-command: bun install --no-frozen-lockfile --ignore-scripts
 
       - name: Run type checker
         run: bun run verify:typecheck
@@ -117,7 +117,7 @@ jobs:
         uses: ./.github/actions/setup-bun-workspace
         with:
           bun-version: ${{ env.BUN_VERSION }}
-          install-command: bun install --ignore-scripts
+          install-command: bun install --no-frozen-lockfile --ignore-scripts
 
       - name: Run unit tests
         run: bunx vitest run --config vitest.unit.config.ts
@@ -142,7 +142,7 @@ jobs:
         uses: ./.github/actions/setup-bun-workspace
         with:
           bun-version: ${{ env.BUN_VERSION }}
-          install-command: bun install --ignore-scripts
+          install-command: bun install --no-frozen-lockfile --ignore-scripts
 
       - name: Build project
         run: bun run build

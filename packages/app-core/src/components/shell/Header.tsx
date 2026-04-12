@@ -221,9 +221,7 @@ export function Header({
         style={{ WebkitUserSelect: "none", userSelect: "none" }}
         data-no-camera-drag="true"
       >
-        <div
-          className="px-2 py-1"
-        >
+        <div className="px-2 py-1">
           <div
             className={`pointer-events-auto relative mx-auto w-full rounded-[20px] border bg-clip-padding transition-all sm:rounded-[22px] ${headerFrameClassName} ${headerShellClassName}`}
             data-testid="header-glass-shell"

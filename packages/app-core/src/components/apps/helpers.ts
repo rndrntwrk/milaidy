@@ -173,7 +173,10 @@ export function getDefaultAppsCatalogSelection(
 }
 
 export function getAppCatalogSectionKey(
-  app: Pick<RegistryAppInfo, "name" | "displayName" | "description" | "category">,
+  app: Pick<
+    RegistryAppInfo,
+    "name" | "displayName" | "description" | "category"
+  >,
 ): AppCatalogSectionKey {
   if (app.name === "@miladyai/app-lifeops") {
     return "lifeManagement";
@@ -252,7 +255,10 @@ export function getAppCatalogSectionKey(
 }
 
 export function getAppCatalogSectionLabel(
-  app: Pick<RegistryAppInfo, "name" | "displayName" | "description" | "category">,
+  app: Pick<
+    RegistryAppInfo,
+    "name" | "displayName" | "description" | "category"
+  >,
 ): string {
   return APP_CATALOG_SECTION_LABELS[getAppCatalogSectionKey(app)];
 }

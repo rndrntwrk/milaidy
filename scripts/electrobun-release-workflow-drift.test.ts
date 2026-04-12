@@ -140,7 +140,7 @@ describe("Electrobun release workflow drift", () => {
     );
     const releaseCheckIndex = workflow.indexOf("run: bun run release:check");
 
-    expect(workflow).toContain('BUN_VERSION: "1.3.9"');
+    expect(workflow).toContain('BUN_VERSION: "1.3.11"');
     expect(workflow).toContain('NODE_NO_WARNINGS: "1"');
     expect(workflow).toContain("bun-version: $" + "{{ env.BUN_VERSION }}");
     expect(workflow).not.toContain("bun-version: latest");
@@ -418,17 +418,34 @@ describe("Electrobun release workflow drift", () => {
     expect(workflow).toContain("ELECTROBUN_REAL_HDIUTIL: /usr/bin/hdiutil");
   });
 
-  it("keeps updater transport files off the public GitHub release asset list", () => {
+  it("keeps desktop release files, updater channels, and browser companions split into separate workflow sections", () => {
     const workflow = fs.readFileSync(WORKFLOW_PATH, "utf8");
-    const publicReleaseSection = workflow.slice(
-      workflow.indexOf("name: Collect public release files"),
-      workflow.indexOf("name: Collect update channel files"),
+    const publicReleaseIndex = workflow.indexOf(
+      "name: Collect public release files",
     );
-    const publishBrowserSection = workflow.slice(
-      workflow.indexOf("name: Publish LifeOps Browser companions"),
+    const updateChannelIndex = workflow.indexOf(
+      "name: Collect update channel files",
+    );
+    const checksumsIndex = workflow.indexOf("name: Generate checksums");
+    const publishBrowserIndex = workflow.indexOf(
+      "name: Publish LifeOps Browser companions",
     );
 
-    expect(workflow).toContain("name: Collect public release files");
+    expect(publicReleaseIndex).toBeGreaterThan(-1);
+    expect(updateChannelIndex).toBeGreaterThan(publicReleaseIndex);
+    expect(checksumsIndex).toBeGreaterThan(updateChannelIndex);
+    expect(publishBrowserIndex).toBeGreaterThan(checksumsIndex);
+
+    const publicReleaseSection = workflow.slice(
+      publicReleaseIndex,
+      updateChannelIndex,
+    );
+    const updateChannelSection = workflow.slice(
+      updateChannelIndex,
+      checksumsIndex,
+    );
+    const browserReleaseSection = workflow.slice(publishBrowserIndex);
+
     expect(publicReleaseSection).toContain(' -name "*.dmg" -o \\');
     expect(publicReleaseSection).toContain(' -name "Milady-Setup-*.exe" -o \\');
     expect(publicReleaseSection).toContain(
@@ -450,19 +467,28 @@ describe("Electrobun release workflow drift", () => {
     );
     expect(publicReleaseSection).not.toContain(' -name "*.exe" -o \\');
 
-    expect(workflow).toContain("name: Collect update channel files");
-    expect(workflow).toContain(' -name "*.tar.zst" -o \\');
-    expect(workflow).toContain(' -name "*.patch" -o \\');
-    expect(workflow).toContain(' -name "*-update.json" \\');
-    expect(workflow).toContain("files: release-files/*");
-    expect(workflow).toContain("update-channel/");
-    expect(publishBrowserSection).toContain(
+    expect(updateChannelSection).toContain(' -name "*.tar.zst" -o \\');
+    expect(updateChannelSection).toContain(' -name "*.patch" -o \\');
+    expect(updateChannelSection).toContain(' -name "*-update.json" \\');
+    expect(updateChannelSection).toContain("update-channel/");
+    expect(updateChannelSection).not.toContain(
       ' -name "lifeops-browser-chrome-v*.zip" -o \\',
     );
-    expect(publishBrowserSection).toContain(
+    expect(updateChannelSection).not.toContain(
       ' -name "lifeops-browser-safari-v*.zip" -o \\',
     );
-    expect(publishBrowserSection).toContain(
+    expect(updateChannelSection).not.toContain(
+      ' -name "lifeops-browser-release-manifest-v*.json" \\',
+    );
+
+    expect(workflow).toContain("files: release-files/*");
+    expect(browserReleaseSection).toContain(
+      ' -name "lifeops-browser-chrome-v*.zip" -o \\',
+    );
+    expect(browserReleaseSection).toContain(
+      ' -name "lifeops-browser-safari-v*.zip" -o \\',
+    );
+    expect(browserReleaseSection).toContain(
       ' -name "lifeops-browser-release-manifest-v*.json" \\',
     );
   });

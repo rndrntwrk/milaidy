@@ -26,18 +26,11 @@ import type { ShopifyProduct } from "./useShopifyDashboard";
 
 // ── Status badge ──────────────────────────────────────────────────────────
 
-function ProductStatusBadge({
-  status,
-}: {
-  status: ShopifyProduct["status"];
-}) {
+function ProductStatusBadge({ status }: { status: ShopifyProduct["status"] }) {
   const styles = {
-    ACTIVE:
-      "bg-green-500/15 text-green-400 border border-green-500/20",
-    DRAFT:
-      "bg-bg-accent text-muted border border-border/30",
-    ARCHIVED:
-      "bg-red-500/15 text-red-400 border border-red-500/20",
+    ACTIVE: "bg-green-500/15 text-green-400 border border-green-500/20",
+    DRAFT: "bg-bg-accent text-muted border border-border/30",
+    ARCHIVED: "bg-red-500/15 text-red-400 border border-red-500/20",
   } satisfies Record<ShopifyProduct["status"], string>;
 
   const labels: Record<ShopifyProduct["status"], string> = {
@@ -126,7 +119,10 @@ function CreateProductDialog({ open, onClose }: CreateProductDialogProps) {
         </DialogHeader>
         <form onSubmit={(e) => void handleSubmit(e)} className="space-y-3">
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-muted-strong" htmlFor="product-title">
+            <label
+              className="text-xs font-semibold text-muted-strong"
+              htmlFor="product-title"
+            >
               Title <span className="text-danger">*</span>
             </label>
             <Input
@@ -138,7 +134,10 @@ function CreateProductDialog({ open, onClose }: CreateProductDialogProps) {
             />
           </div>
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-muted-strong" htmlFor="product-vendor">
+            <label
+              className="text-xs font-semibold text-muted-strong"
+              htmlFor="product-vendor"
+            >
               Vendor
             </label>
             <Input
@@ -149,7 +148,10 @@ function CreateProductDialog({ open, onClose }: CreateProductDialogProps) {
             />
           </div>
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-muted-strong" htmlFor="product-type">
+            <label
+              className="text-xs font-semibold text-muted-strong"
+              htmlFor="product-type"
+            >
               Product type
             </label>
             <Input
@@ -160,7 +162,10 @@ function CreateProductDialog({ open, onClose }: CreateProductDialogProps) {
             />
           </div>
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-muted-strong" htmlFor="product-price">
+            <label
+              className="text-xs font-semibold text-muted-strong"
+              htmlFor="product-price"
+            >
               Base price
             </label>
             <Input

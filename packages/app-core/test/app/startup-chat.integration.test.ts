@@ -228,6 +228,7 @@ vi.mock("../../src/app-shell-components", () => ({
     children: React.ReactNode;
   }) => React.createElement(React.Fragment, null, children),
   ShellOverlays: () => null,
+  SkillsView: () => React.createElement("div", null, "SkillsView"),
   StartupFailureView: () =>
     React.createElement("div", null, "StartupFailureView"),
   StreamView: () => React.createElement("div", null, "StreamView"),

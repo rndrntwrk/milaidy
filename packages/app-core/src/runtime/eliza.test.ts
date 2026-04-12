@@ -3544,6 +3544,30 @@ describe("attemptMiladyPgliteAutoReset", () => {
       attemptMiladyPgliteAutoReset(new Error("database is locked")),
     ).resolves.toBeNull();
   });
+
+  it("treats published plugin-sql migration corruption errors as manual-reset failures", async () => {
+    const dataDir = path.join(tmpDir, ".elizadb");
+    await fs.mkdir(path.join(dataDir, "global"), { recursive: true });
+    await fs.writeFile(path.join(dataDir, "global", "1213"), "x");
+    process.env.PGLITE_DATA_DIR = dataDir;
+
+    const backupDir = await attemptMiladyPgliteAutoReset(
+      new Error(
+        [
+          "1 migration(s) failed:",
+          "  @elizaos/plugin-sql: Failed query: SELECT id, hash, created_at",
+          "          FROM migrations._migrations",
+          "          WHERE plugin_name = $1",
+          "          ORDER BY created_at DESC",
+          "          LIMIT 1",
+          " params: @elizaos/plugin-sql",
+        ].join("\n"),
+      ),
+    );
+
+    expect(backupDir).toMatch(/\.elizadb\.corrupt-/);
+    await expect(fs.stat(dataDir)).rejects.toThrow();
+  });
 });
 
 // ensurePluginManagerAllowed tests are in plugin-manager-auto-enable.test.ts

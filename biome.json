@@ -31,7 +31,8 @@
       "!**/vrms/imported-avatars.json",
       "!collision-report.json",
       "!scripts/type-audit-report.json",
-      "!scripts/type-audit-report.md"
+      "!scripts/type-audit-report.md",
+      "!scripts/lib/elizaos-core-roles-shim.js"
     ]
   },
   "assist": {

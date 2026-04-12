@@ -9,6 +9,33 @@ import { describe, expect, it } from "vitest";
 
 const WORKFLOWS_DIR = path.resolve(__dirname, "../.github/workflows");
 const ACTIONS_DIR = path.resolve(__dirname, "../.github/actions");
+const SCRIPTS_DIR = path.resolve(__dirname, "../scripts");
+const SNAPCRAFT_PATH = path.resolve(
+  __dirname,
+  "../packaging/snap/snapcraft.yaml",
+);
+const ANDROID_GRADLE_FILES = [
+  path.resolve(__dirname, "../apps/app/android/build.gradle"),
+  path.resolve(__dirname, "../apps/app/plugins/agent/android/build.gradle"),
+  path.resolve(__dirname, "../apps/app/plugins/camera/android/build.gradle"),
+  path.resolve(__dirname, "../apps/app/plugins/canvas/android/build.gradle"),
+  path.resolve(__dirname, "../apps/app/plugins/gateway/android/build.gradle"),
+  path.resolve(__dirname, "../apps/app/plugins/location/android/build.gradle"),
+  path.resolve(
+    __dirname,
+    "../apps/app/plugins/mobile-signals/android/build.gradle",
+  ),
+  path.resolve(
+    __dirname,
+    "../apps/app/plugins/screencapture/android/build.gradle",
+  ),
+  path.resolve(__dirname, "../apps/app/plugins/swabble/android/build.gradle"),
+  path.resolve(__dirname, "../apps/app/plugins/talkmode/android/build.gradle"),
+  path.resolve(
+    __dirname,
+    "../apps/app/plugins/websiteblocker/android/build.gradle",
+  ),
+];
 
 function readWorkflow(name: string): string {
   return fs.readFileSync(path.join(WORKFLOWS_DIR, name), "utf-8");
@@ -17,8 +44,8 @@ function readWorkflow(name: string): string {
 describe("CI workflow audit regressions", () => {
   it("electrobun workflows keep expected Bun pins", () => {
     const expectedPins: Record<string, string> = {
-      "release-electrobun.yml": "1.3.9",
-      "test-electrobun-release.yml": "1.3.9",
+      "release-electrobun.yml": "1.3.11",
+      "test-electrobun-release.yml": "1.3.11",
     };
     for (const [f, expected] of Object.entries(expectedPins)) {
       const content = readWorkflow(f);
@@ -81,6 +108,66 @@ describe("CI workflow audit regressions", () => {
     ).toBe(true);
   });
 
+  it("iOS smoke workflow primes CocoaPods before capacitor sync", () => {
+    const content = readWorkflow("mobile-build-smoke.yml");
+    expect(
+      fs.existsSync(path.join(SCRIPTS_DIR, "prepare-ios-cocoapods.sh")),
+    ).toBe(true);
+    expect(content).toContain("name: Prepare CocoaPods trunk repo");
+    expect(content).toContain("run: bash scripts/prepare-ios-cocoapods.sh");
+    expect(content).toContain("run: bun run cap:sync:ios");
+  });
+
+  it("iOS CocoaPods helper uses the CDN-aware trunk bootstrap", () => {
+    const script = fs.readFileSync(
+      path.join(SCRIPTS_DIR, "prepare-ios-cocoapods.sh"),
+      "utf-8",
+    );
+
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: intentional shell variable syntax in assertion string
+    expect(script).toContain('pod repo add-cdn trunk "${TRUNK_REPO_URL}"');
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: intentional shell variable syntax in assertion string
+    expect(script).toContain('pod repo add trunk "${TRUNK_REPO_URL}"');
+  });
+
+  it("android gradle files keep the Maven Central mirror ahead of mavenCentral()", () => {
+    const rootGradle = fs.readFileSync(ANDROID_GRADLE_FILES[0], "utf-8");
+    expect(rootGradle).toContain(
+      "https://maven-central.storage-download.googleapis.com/maven2/",
+    );
+    expect(rootGradle).toContain(
+      "url = uri('https://maven-central.storage-download.googleapis.com/maven2/')",
+    );
+    expect(
+      rootGradle.indexOf(
+        "url = uri('https://maven-central.storage-download.googleapis.com/maven2/')",
+      ),
+    ).toBeLessThan(rootGradle.indexOf("mavenCentral()"));
+    expect(rootGradle).toContain(
+      "mavenCentralMirrorUrl = miladyMavenCentralMirrorUrl",
+    );
+
+    for (const file of ANDROID_GRADLE_FILES.slice(1)) {
+      const content = fs.readFileSync(file, "utf-8");
+      expect(content).toContain("uri(rootProject.ext.mavenCentralMirrorUrl)");
+      expect(content).toMatch(/mavenCentral\(\)/);
+      expect(
+        content.indexOf("uri(rootProject.ext.mavenCentralMirrorUrl)"),
+      ).toBeLessThan(content.indexOf("mavenCentral()"));
+    }
+  });
+
+  it("snap packaging strips removed workspace refs and invalidates the stale Bun lockfile", () => {
+    const content = fs.readFileSync(SNAPCRAFT_PATH, "utf-8");
+    expect(content).toContain("const availableWorkspaceNames = new Set()");
+    expect(content).toContain("dependencySections");
+    expect(content).toContain("pkg.overrides");
+    expect(content).toContain("!availableWorkspaceNames.has(k)");
+    expect(content).toContain("for (const pkgPath of packageJsonPaths)");
+    expect(content).toContain('entry !== "deploy/cloud-agent-template"');
+    expect(content).toContain("rm -f bun.lock");
+  });
+
   it("agent-fix-ci.yml and agent-implement.yml exist with trust scoring", () => {
     const fixer = readWorkflow("agent-fix-ci.yml");
     const implementer = readWorkflow("agent-implement.yml");
@@ -88,10 +175,16 @@ describe("CI workflow audit regressions", () => {
     expect(implementer).toMatch(/trust-scoring\.cjs/);
   });
 
-  it("release-orchestrator.yml exists with trust gate", () => {
+  it("release-orchestrator.yml exists as the post-release reusable fan-out", () => {
     const content = readWorkflow("release-orchestrator.yml");
-    expect(content).toMatch(/trust-scoring\.cjs/);
-    expect(content).toMatch(/release-tracker/);
+    expect(content).toContain("uses: ./.github/workflows/publish-npm.yml");
+    expect(content).toContain("uses: ./.github/workflows/publish-packages.yml");
+    expect(content).toContain("uses: ./.github/workflows/android-release.yml");
+    expect(content).toContain(
+      "uses: ./.github/workflows/apple-store-release.yml",
+    );
+    expect(content).toContain("uses: ./.github/workflows/update-homebrew.yml");
+    expect(content).toContain("uses: ./.github/workflows/deploy-web.yml");
   });
 
   it("deploy-origin-smoke runs both origin status smoke and life-ops smoke", () => {

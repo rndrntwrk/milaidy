@@ -86,7 +86,9 @@ export function useMiscUiState() {
     try {
       if (id) sessionStorage.setItem("eliza:activeGameRunId", id);
       else sessionStorage.removeItem("eliza:activeGameRunId");
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }, []);
   const [gameOverlayEnabled, setGameOverlayEnabled] = useState(false);
   const [activeOverlayApp, setActiveOverlayApp] = useState<string | null>(null);

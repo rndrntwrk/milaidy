@@ -10,6 +10,7 @@ const ANY_TYPE_PATTERN = /:\s*any\b|<\s*any\s*>|\bas\s+any\b/;
 // against Markdown, YAML, JSON, shell scripts, or other non-source files where
 // the literal strings may legitimately appear in prose or configuration.
 const SOURCE_CODE_EXTENSIONS = /\.(?:m|c)?[jt]sx?$/i;
+const DEFAULT_MAX_BUFFER = 16 * 1024 * 1024;
 
 export function isSourceCode(file) {
   return SOURCE_CODE_EXTENSIONS.test(file);
@@ -78,6 +79,7 @@ function runCommand(command, options = {}) {
       ok: true,
       stdout: execSync(command, {
         encoding: "utf8",
+        maxBuffer: DEFAULT_MAX_BUFFER,
         stdio: ["pipe", "pipe", "pipe"],
         ...options,
       }),
@@ -95,6 +97,7 @@ function runCommandArgs(command, args, options = {}) {
       ok: true,
       stdout: execFileSync(command, args, {
         encoding: "utf8",
+        maxBuffer: DEFAULT_MAX_BUFFER,
         stdio: ["pipe", "pipe", "pipe"],
         ...options,
       }),
@@ -246,6 +249,17 @@ export function resolveRunnableTestFiles(testFiles, cwd = process.cwd()) {
   return testFiles.filter((file) => existsSync(path.resolve(cwd, file)));
 }
 
+export function buildRepoTestCommand(repoTests) {
+  return `bunx vitest run --config vitest.unit.config.ts ${repoTests.join(" ")}`;
+}
+
+export function shouldRunTargetedRegressionTests({
+  branch,
+  env = process.env,
+} = {}) {
+  return !(env.GITHUB_ACTIONS === "true" && branch === "HEAD (detached)");
+}
+
 export function splitRunnableTestFiles(testFiles) {
   const repoTests = [];
   const homepageTests = [];
@@ -315,6 +329,7 @@ export function runChecks() {
     branch,
     message: commitMessage,
   });
+  const shouldRunTargetedTests = shouldRunTargetedRegressionTests({ branch });
   const scope = scopeVerdictFor(classification);
 
   const changed = collectChangedFiles(base);
@@ -399,13 +414,13 @@ export function runChecks() {
         checklist.push(
           "Run tests that validate the exact behavior change and check them in.",
         );
-      } else {
+      } else if (shouldRunTargetedTests) {
         const { repoTests, repoE2eTests, homepageTests } =
           splitRunnableTestFiles(runnableTestFiles);
         const testCommands = [];
 
         if (repoTests.length > 0) {
-          testCommands.push(`bunx vitest run ${repoTests.join(" ")}`);
+          testCommands.push(buildRepoTestCommand(repoTests));
         }
 
         if (repoE2eTests.length > 0) {
@@ -433,6 +448,10 @@ export function runChecks() {
             break;
           }
         }
+      } else {
+        checklist.push(
+          "Changed tests detected; dedicated CI test lanes will validate them for merge refs.",
+        );
       }
     }
   }

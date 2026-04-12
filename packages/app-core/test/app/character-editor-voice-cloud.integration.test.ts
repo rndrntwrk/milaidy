@@ -63,7 +63,7 @@ vi.mock("../../src/api/client", () => ({
 
 vi.mock("../../src/events/index", () => ({
   APP_EMOTE_EVENT: "app:emote",
-  VOICE_CONFIG_UPDATED_EVENT: "voice-config-updated",
+  VOICE_CONFIG_UPDATED_EVENT: "eliza:voice-config-updated",
   dispatchWindowEvent: dispatchWindowEventMock,
 }));
 
@@ -348,7 +348,7 @@ describe("CharacterEditor voice cloud fallback (e2e)", () => {
     });
 
     expect(dispatchWindowEventMock).toHaveBeenLastCalledWith(
-      "voice-config-updated",
+      "eliza:voice-config-updated",
       expect.objectContaining({
         provider: "elevenlabs",
         elevenlabs: expect.objectContaining({
