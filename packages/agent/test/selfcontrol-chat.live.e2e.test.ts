@@ -15,6 +15,8 @@ import {
 const LIVE_TESTS_ENABLED =
   process.env.MILADY_LIVE_TEST === "1" || process.env.ELIZA_LIVE_TEST === "1";
 const LIVE_CHAT_TESTS_ENABLED = process.env.MILADY_LIVE_CHAT_TEST === "1";
+const SELFCONTROL_CHAT_TESTS_ENABLED =
+  process.env.MILADY_LIVE_SELFCONTROL_CHAT_TEST === "1";
 const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..", "..");
 const ENV_PATH = path.join(REPO_ROOT, ".env");
 
@@ -106,6 +108,12 @@ function resolveSelectedProviderPlugin(): string | null {
 }
 
 const selectedLiveProviderPlugin = resolveSelectedProviderPlugin();
+const liveSelfcontrolChatEnabled =
+  LIVE_TESTS_ENABLED &&
+  LIVE_CHAT_TESTS_ENABLED &&
+  SELFCONTROL_CHAT_TESTS_ENABLED &&
+  Boolean(selectedLiveProvider) &&
+  Boolean(selectedLiveProviderPlugin);
 
 type StartedRuntime = {
   close: () => Promise<void>;
@@ -428,14 +436,9 @@ describeIf(LIVE_TESTS_ENABLED)(
   },
 );
 
-describeIf(
-  !(
-    LIVE_TESTS_ENABLED &&
-    LIVE_CHAT_TESTS_ENABLED &&
-    selectedLiveProvider &&
-    selectedLiveProviderPlugin
-  ),
-)("Live: website blocker chat roundtrip", () => {
+describeIf(liveSelfcontrolChatEnabled)(
+  "Live: website blocker chat roundtrip",
+  () => {
   let runtime: StartedRuntime | undefined;
 
   beforeAll(async () => {
@@ -513,4 +516,5 @@ describeIf(
     expect(hosts).toContain("x.com");
     expect(hosts).toContain("twitter.com");
   }, 180_000);
-});
+  },
+);

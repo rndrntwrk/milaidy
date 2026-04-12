@@ -11,7 +11,7 @@ describe("localized provider relevance keywords", () => {
 
   it("includes non-English keywords for relevant conversations", () => {
     expect(relevantConversationsProvider.relevanceKeywords).toContain(
-      "conversación",
+      "quién dijo",
     );
   });
 

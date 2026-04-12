@@ -1,15 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../security/access.js", () => ({
-  hasOwnerAccess: vi.fn().mockResolvedValue(true),
-  hasAdminAccess: vi.fn().mockResolvedValue(true),
-  hasLifeOpsAccess: vi.fn().mockResolvedValue(true),
-  hasRoleAccess: vi.fn().mockResolvedValue(true),
-}));
+vi.mock("../security/access.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../security/access.js")>();
+  return {
+    ...actual,
+    hasOwnerAccess: vi.fn().mockResolvedValue(true),
+    hasAdminAccess: vi.fn().mockResolvedValue(true),
+    hasLifeOpsAccess: vi.fn().mockResolvedValue(true),
+    hasRoleAccess: vi.fn().mockResolvedValue(true),
+    hasPrivateAccess: vi.fn().mockResolvedValue(true),
+  };
+});
 
-import { calendarAction } from "./calendar";
+import { updateRoleAction } from "../runtime/roles/src/action";
+import { createTriggerTaskAction } from "../triggers/action";
 import { launchAppAction, stopAppAction } from "./app-control";
-import { searchEntityAction, readEntityAction } from "./entity-actions";
+import { calendarAction } from "./calendar";
+import { readEntityAction, searchEntityAction } from "./entity-actions";
 import { gmailAction } from "./gmail";
 import { readChannelAction } from "./read-channel";
 import { restartAction } from "./restart";
@@ -19,8 +26,6 @@ import { sendMessageAction } from "./send-message";
 import { setUserNameAction } from "./set-user-name";
 import { goLiveAction, goOfflineAction } from "./stream-control";
 import { terminalAction } from "./terminal";
-import { createTriggerTaskAction } from "../triggers/action";
-import { updateRoleAction } from "../runtime/roles/src/action";
 import { webSearchAction } from "./web-search";
 
 function makeRuntime(overrides: Record<string, unknown> = {}) {
@@ -122,7 +127,11 @@ describe("localized validate audit for Milady keyword-gated actions", () => {
   it("validates web-search requests in Spanish", async () => {
     await expect(
       webSearchAction.validate?.(
-        makeRuntime(),
+        makeRuntime({
+          getSetting: vi.fn((key: string) =>
+            key === "BRAVE_API_KEY" ? "test-key" : undefined,
+          ),
+        }),
         makeMessage("busca en la web el precio de bitcoin"),
         undefined,
       ),

@@ -1479,7 +1479,7 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
                 ),
               );
 
-              vi.useFakeTimers();
+              vi.useFakeTimers({ toFake: ["Date"] });
               vi.setSystemTime(new Date("2026-04-04T16:00:00.000Z"));
               try {
                 const feedRes = await req(
@@ -1514,7 +1514,7 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
               MILADY_GOOGLE_OAUTH_DESKTOP_CLIENT_ID: "desktop-client-id",
             },
             async ({ port, fetchMock }) => {
-              vi.useFakeTimers();
+              vi.useFakeTimers({ toFake: ["Date"] });
               vi.setSystemTime(new Date("2026-04-04T16:00:00.000Z"));
               try {
                 fetchMock.mockResolvedValueOnce(
@@ -1652,7 +1652,7 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
               MILADY_GOOGLE_OAUTH_DESKTOP_CLIENT_ID: "desktop-client-id",
             },
             async ({ port, fetchMock }) => {
-              vi.useFakeTimers();
+              vi.useFakeTimers({ toFake: ["Date"] });
               vi.setSystemTime(new Date("2026-04-04T19:00:00.000Z"));
               try {
                 fetchMock.mockResolvedValueOnce(

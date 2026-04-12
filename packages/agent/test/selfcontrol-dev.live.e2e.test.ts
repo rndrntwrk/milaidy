@@ -10,6 +10,8 @@ import { req } from "../../../test/helpers/http";
 
 const LIVE_TESTS_ENABLED =
   process.env.MILADY_LIVE_TEST === "1" || process.env.ELIZA_LIVE_TEST === "1";
+const SELFCONTROL_DEV_TESTS_ENABLED =
+  LIVE_TESTS_ENABLED && process.env.MILADY_LIVE_SELFCONTROL_DEV_TEST === "1";
 const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..", "..");
 
 type StartedDevStack = {
@@ -246,7 +248,7 @@ async function startDevStack(): Promise<StartedDevStack> {
   };
 }
 
-describeIf(LIVE_TESTS_ENABLED)(
+describeIf(SELFCONTROL_DEV_TESTS_ENABLED)(
   "Live: website blocker dev launcher",
   () => {
     let stack: StartedDevStack | undefined;
