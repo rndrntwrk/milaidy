@@ -64,7 +64,6 @@ import * as pluginAnthropic from "@elizaos/plugin-anthropic";
 import * as pluginForm from "@elizaos/plugin-form";
 import * as pluginLocalEmbedding from "@elizaos/plugin-local-embedding";
 import * as pluginPdf from "@elizaos/plugin-pdf";
-import * as pluginPluginManager from "@elizaos/plugin-plugin-manager";
 import * as pluginSecretsManager from "@elizaos/plugin-secrets-manager";
 import * as pluginShell from "@elizaos/plugin-shell";
 import * as pluginSql from "@elizaos/plugin-sql";
@@ -150,6 +149,15 @@ try {
   pluginCommands = require("@elizaos/plugin-commands");
 } catch {
   pluginCommands = null;
+}
+// Keep plugin-plugin-manager behind a guarded runtime require too. Some
+// published alpha builds resolve through package.json but do not ship
+// dist/index.js, which breaks CLI/bootstrap in published-only CI.
+let pluginPluginManager: unknown = null;
+try {
+  pluginPluginManager = require("@elizaos/plugin-plugin-manager");
+} catch {
+  pluginPluginManager = null;
 }
 // Keep plugin-cron behind a guarded runtime require for the same reason. Some
 // published alpha builds resolve through package.json but are missing the
@@ -294,7 +302,9 @@ export const STATIC_ELIZA_PLUGINS: Record<string, unknown> = {
     : {}),
   ...(pluginCron ? { "@elizaos/plugin-cron": pluginCron } : {}),
   "@elizaos/plugin-shell": pluginShell,
-  "@elizaos/plugin-plugin-manager": pluginPluginManager,
+  ...(pluginPluginManager
+    ? { "@elizaos/plugin-plugin-manager": pluginPluginManager }
+    : {}),
   "@elizaos/plugin-agent-skills": pluginAgentSkills,
   ...(pluginCommands ? { "@elizaos/plugin-commands": pluginCommands } : {}),
   "@elizaos/plugin-pdf": pluginPdf,
