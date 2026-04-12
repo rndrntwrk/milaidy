@@ -1806,46 +1806,83 @@ export const gmailAction: Action = {
         });
       }
 
-      if (subaction === "send_message") {
-        // Parse "email <addr> with subject "X" and body "Y"" patterns
-        // directly from the user message. The chat LLM almost never puts
-        // these into structured details.* fields — it just rewrites the
-        // intent. Without a literal-text parser the action would always
-        // fail validation for natural-language compose requests.
+      if (subaction === “send_message”) {
+        // Use LLM to extract recipient, subject, and body from the
+        // user's natural-language message. This replaces the old brittle
+        // regex approach that failed on non-standard phrasing.
         const rawText = messageText(message);
-        const emailRegex = /\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b/g;
-        const recipientsFromIntent = rawText.match(emailRegex) ?? [];
-        const subjectMatch =
-          rawText.match(
-            /\bsubject(?:\s+is|\s*[:=]|\s+of)?\s+["“]([^"”]+)["”]/i,
-          ) ?? rawText.match(/\bsubject\s+["“]([^"”]+)["”]/i);
-        const subjectFromIntent = subjectMatch?.[1]?.trim();
-        const bodyMatch =
-          rawText.match(
-            /\bbody(?:\s+is|\s*[:=]|\s+of)?\s+["“]([^"”]+)["”]/i,
-          ) ?? rawText.match(/\bbody\s+["“]([^"”]+)["”]/i);
-        const bodyFromIntent = bodyMatch?.[1]?.trim();
 
-        const to =
-          normalizeStringArray(details?.to) ??
-          (recipientsFromIntent.length > 0 ? recipientsFromIntent : []);
-        const subject =
-          detailString(details, "subject") ??
-          subjectFromIntent ??
-          undefined;
-        const bodyText =
-          params.bodyText ??
-          detailString(details, "bodyText") ??
-          bodyFromIntent;
+        // Prefer structured details when the upstream LLM already
+        // provided them — fall back to LLM extraction from raw text.
+        let to = normalizeStringArray(details?.to) ?? [];
+        let subject = detailString(details, “subject”) ?? undefined;
+        let bodyText =
+          params.bodyText ?? detailString(details, “bodyText”) ?? undefined;
+
+        if (to.length === 0 || !subject || !bodyText) {
+          try {
+            const extractionPrompt = [
+              “Extract email fields from the following user message.”,
+              “Return ONLY a JSON object with these keys:”,
+              '  “to”: array of email addresses (strings)',
+              '  “subject”: the email subject line (string)',
+              '  “body”: the email body text (string)',
+              “If a field is not present in the message, set it to null.”,
+              “Do not add any explanation, just the JSON object.”,
+              “”,
+              `User message: ${rawText}`,
+            ].join(“\n”);
+
+            const extractionResult = await runtime.useModel(
+              ModelType.TEXT_SMALL,
+              { prompt: extractionPrompt },
+            );
+            const extractionRaw =
+              typeof extractionResult === “string” ? extractionResult : “”;
+            const extracted = parseJSONObjectFromText(extractionRaw) as {
+              to?: string | string[] | null;
+              subject?: string | null;
+              body?: string | null;
+            } | null;
+
+            if (extracted) {
+              if (to.length === 0) {
+                const llmTo = extracted.to;
+                if (Array.isArray(llmTo)) {
+                  to = llmTo.filter(
+                    (v): v is string => typeof v === “string” && v.includes(“@”),
+                  );
+                } else if (typeof llmTo === “string” && llmTo.includes(“@”)) {
+                  to = [llmTo];
+                }
+              }
+              if (!subject && typeof extracted.subject === “string”) {
+                subject = extracted.subject;
+              }
+              if (!bodyText && typeof extracted.body === “string”) {
+                bodyText = extracted.body;
+              }
+            }
+          } catch (error) {
+            runtime.logger?.warn?.(
+              {
+                src: “action:gmail:send_message”,
+                error:
+                  error instanceof Error ? error.message : String(error),
+              },
+              “LLM email extraction failed, falling back to structured details only”,
+            );
+          }
+        }
 
         if (to.length === 0 || !subject || !bodyText) {
           const missing: string[] = [];
-          if (to.length === 0) missing.push("recipient address");
-          if (!subject) missing.push("subject");
-          if (!bodyText) missing.push("body text");
+          if (to.length === 0) missing.push(“recipient address”);
+          if (!subject) missing.push(“subject”);
+          if (!bodyText) missing.push(“body text”);
           return respond({
             success: false,
-            text: `i need ${missing.join(", ")} to compose that email. format: 'email <addr> with subject "X" and body "Y"'.`,
+            text: `i need ${missing.join(“, “)} to compose that email. could you provide the ${missing.join(“, “)}?`,
           });
         }
         const result = await service.sendGmailMessage(INTERNAL_URL, {
