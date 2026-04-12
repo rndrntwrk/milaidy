@@ -861,5 +861,98 @@ describeIf(LIVE_SUITE_ENABLED)(
       expect(normalizedResponse).toContain("text");
       expect(normalizedResponse).toContain("invisalign");
     }, 240_000);
+
+    it("captures owner profile details for LifeOps and recalls them across channels", async () => {
+      const sourceRoomId = crypto.randomUUID() as UUID;
+      const sourceWorldId = crypto.randomUUID() as UUID;
+      const targetRoomId = crypto.randomUUID() as UUID;
+      const targetWorldId = crypto.randomUUID() as UUID;
+
+      await ensureDmRoom({
+        runtime,
+        entityId: ownerId,
+        roomId: sourceRoomId,
+        worldId: sourceWorldId,
+        source: "telegram",
+        channelId: `telegram-${sourceRoomId}`,
+        userName: "shaw",
+      });
+      await ensureDmRoom({
+        runtime,
+        entityId: ownerId,
+        roomId: targetRoomId,
+        worldId: targetWorldId,
+        source: "discord",
+        channelId: `discord-${targetRoomId}`,
+        userName: "shaw",
+      });
+
+      const setupTurns = [
+        "for future lifeops stuff: my name is shaw.",
+        "i'm single.",
+        "i'm 34 years old.",
+        "i live in denver.",
+      ];
+
+      for (const text of setupTurns) {
+        const response = await sendUserTurn({
+          runtime,
+          entityId: ownerId,
+          roomId: sourceRoomId,
+          source: "telegram",
+          text,
+        });
+        expect(response.trim().length).toBeGreaterThan(0);
+      }
+
+      const ownerProfile = await waitForValue(
+        "lifeops owner profile",
+        async () => {
+          const tasks = await runtime.getTasks({
+            agentIds: [runtime.agentId],
+            tags: ["queue", "repeat", "lifeops"],
+          });
+          const schedulerTask = tasks.find(
+            (task) => task.name === "LIFEOPS_SCHEDULER",
+          );
+          const metadata =
+            schedulerTask?.metadata &&
+            typeof schedulerTask.metadata === "object" &&
+            !Array.isArray(schedulerTask.metadata)
+              ? (schedulerTask.metadata as Record<string, unknown>)
+              : null;
+          const profile =
+            metadata?.ownerProfile &&
+            typeof metadata.ownerProfile === "object" &&
+            !Array.isArray(metadata.ownerProfile)
+              ? (metadata.ownerProfile as Record<string, unknown>)
+              : null;
+          return profile;
+        },
+        (profile) =>
+          profile !== null &&
+          normalizeText(String(profile.name ?? "")).includes("shaw") &&
+          normalizeText(String(profile.relationshipStatus ?? "")).includes(
+            "single",
+          ) &&
+          normalizeText(String(profile.age ?? "")).includes("34") &&
+          normalizeText(String(profile.location ?? "")).includes("denver"),
+        120_000,
+      );
+      expect(ownerProfile).not.toBeNull();
+
+      const crossChannelResponse = await sendUserTurn({
+        runtime,
+        entityId: ownerId,
+        roomId: targetRoomId,
+        source: "discord",
+        text: "we switched channels. what's my name, relationship status, age, and location?",
+      });
+      const normalizedResponse = normalizeText(crossChannelResponse);
+      expect(normalizedResponse).toContain("shaw");
+      expect(normalizedResponse).toContain("single");
+      expect(normalizedResponse).toContain("34");
+      expect(normalizedResponse).toContain("denver");
+    }, 240_000);
   },
 );

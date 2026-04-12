@@ -193,13 +193,9 @@ describeIf(CAN_RUN)("Live QA checklist", () => {
   beforeAll(async () => {
     if (!CAN_RUN) return;
     await fs.mkdir(QA_ARTIFACT_DIR, { recursive: true });
-    if (!(await isHttpOk(`${API_URL}/api/status`))) {
-      liveStack = await startRealStack();
-      API_URL = stripTrailingSlash(liveStack.apiBase);
-      UI_URL = stripTrailingSlash(liveStack.uiBase);
-    } else {
-      UI_URL = await resolveLiveUiUrl();
-    }
+    liveStack = await startRealStack();
+    API_URL = stripTrailingSlash(liveStack.apiBase);
+    UI_URL = stripTrailingSlash(liveStack.uiBase);
     await ensureHttpOk(`${UI_URL}/`);
     await ensureHttpOk(`${API_URL}/api/status`);
     browser = await puppeteer.launch({
@@ -929,6 +925,17 @@ async function startRealStack(): Promise<StartedStack> {
     uiBase: `http://127.0.0.1:${uiPort}`,
     uiServer,
   };
+}
+
+async function restartLiveStack(): Promise<void> {
+  if (!liveStack) {
+    throw new Error("Cannot restart QA live stack before it exists");
+  }
+
+  await stopRealStack(liveStack);
+  liveStack = await startRealStack();
+  API_URL = stripTrailingSlash(liveStack.apiBase);
+  UI_URL = stripTrailingSlash(liveStack.uiBase);
 }
 
 async function stopRealStack(stack: StartedStack | null): Promise<void> {
@@ -1859,6 +1866,16 @@ async function onboardingComplete(): Promise<boolean> {
 }
 
 async function resetAgentViaApi() {
+  if (liveStack) {
+    await restartLiveStack();
+    if (await onboardingComplete()) {
+      throw new Error(
+        "Fresh QA stack unexpectedly reported onboarding complete after restart.",
+      );
+    }
+    return;
+  }
+
   await apiJson("/api/agent/reset", { method: "POST" });
   await waitFor(async () => !(await onboardingComplete()), 30_000);
   const conversations = await listConversations();

@@ -326,6 +326,10 @@ declare module "./client-base" {
         lifeopsAvailable?: boolean;
       }
     >;
+    getLifeOpsAppState(): Promise<{ enabled: boolean }>;
+    updateLifeOpsAppState(data: {
+      enabled: boolean;
+    }): Promise<{ enabled: boolean }>;
     getLifeOpsOverview(): Promise<LifeOpsOverview>;
     getLifeOpsBrowserSettings(): Promise<{ settings: LifeOpsBrowserSettings }>;
     updateLifeOpsBrowserSettings(
@@ -1166,6 +1170,22 @@ MiladyClient.prototype.getLifeOpsOverview = async function (
   this: MiladyClient,
 ) {
   return this.fetch("/api/lifeops/overview");
+};
+
+MiladyClient.prototype.getLifeOpsAppState = async function (
+  this: MiladyClient,
+) {
+  return this.fetch("/api/lifeops/app-state");
+};
+
+MiladyClient.prototype.updateLifeOpsAppState = async function (
+  this: MiladyClient,
+  data,
+) {
+  return this.fetch("/api/lifeops/app-state", {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
 };
 
 MiladyClient.prototype.getLifeOpsBrowserSettings = async function (

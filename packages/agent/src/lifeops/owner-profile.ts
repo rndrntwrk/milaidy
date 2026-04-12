@@ -3,6 +3,7 @@ import {
   ensureLifeOpsSchedulerTask,
   LIFEOPS_TASK_NAME,
   LIFEOPS_TASK_TAGS,
+  resolveLifeOpsTaskIntervalMs,
 } from "./runtime.js";
 
 const API_PORT = process.env.API_PORT || process.env.SERVER_PORT || "2138";
@@ -66,6 +67,19 @@ function isLifeOpsSchedulerTask(task: Task): boolean {
     isRecord(metadata?.lifeopsScheduler) &&
     metadata.lifeopsScheduler.kind === "runtime_runner"
   );
+}
+
+function buildFallbackSchedulerMetadata(agentId: string): Record<string, unknown> {
+  const intervalMs = resolveLifeOpsTaskIntervalMs(agentId as never);
+  return {
+    updateInterval: intervalMs,
+    baseInterval: intervalMs,
+    blocking: true,
+    lifeopsScheduler: {
+      kind: "runtime_runner",
+      version: 1,
+    },
+  };
 }
 
 async function readLifeOpsSchedulerTask(
@@ -179,7 +193,9 @@ export async function updateLifeOpsOwnerProfile(
   ]);
 
   const metadata =
-    isRecord(task?.metadata) && task.id === taskId ? task.metadata : null;
+    isRecord(task?.metadata) && task.id === taskId
+      ? task.metadata
+      : buildFallbackSchedulerMetadata(runtime.agentId);
   const nextProfile: LifeOpsOwnerProfile = {
     ...resolveLifeOpsOwnerProfile(metadata, configuredName),
     ...normalizedPatch,

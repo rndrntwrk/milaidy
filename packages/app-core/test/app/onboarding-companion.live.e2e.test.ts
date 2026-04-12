@@ -581,6 +581,12 @@ describeLive("real onboarding handoff to companion mode", () => {
         await page
           .getByRole("button", { name: /Connect to Remote Agent/i })
           .click({ force: true });
+        await page.waitForTimeout(2_000);
+        console.log(
+          `[live-onboarding] after remote click: ${(
+            await page.locator("body").innerText()
+          ).slice(0, 2_000)}`,
+        );
         await page
           .locator("#remote-api-base")
           .waitFor({ state: "visible", timeout: READY_TIMEOUT_MS });

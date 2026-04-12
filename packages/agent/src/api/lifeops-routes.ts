@@ -45,6 +45,10 @@ import type {
 } from "../contracts/lifeops.js";
 import { LIFEOPS_ACTIVITY_SIGNAL_STATES } from "../contracts/lifeops.js";
 import { createIntegrationTelemetrySpan } from "../diagnostics/integration-observability.js";
+import {
+  loadLifeOpsAppState,
+  saveLifeOpsAppState,
+} from "../lifeops/app-state.js";
 import { LifeOpsService, LifeOpsServiceError } from "../lifeops/service.js";
 import { isRetryableLifeOpsStorageError } from "../lifeops/sql.js";
 import type { ReadJsonBodyOptions } from "./http-helpers.js";
@@ -413,6 +417,37 @@ export async function handleLifeOpsRoutes(
     readJsonBody,
     decodePathComponent,
   } = ctx;
+
+  if (method === "GET" && pathname === "/api/lifeops/app-state") {
+    if (!ctx.state.runtime) {
+      ctx.error(res, "Agent runtime is not available", 503);
+      return true;
+    }
+    json(res, await loadLifeOpsAppState(ctx.state.runtime));
+    return true;
+  }
+
+  if (method === "PUT" && pathname === "/api/lifeops/app-state") {
+    if (!ctx.state.runtime) {
+      ctx.error(res, "Agent runtime is not available", 503);
+      return true;
+    }
+    const body = await readJsonBody<{ enabled?: unknown }>(req, res);
+    if (!body) {
+      return true;
+    }
+    if (typeof body.enabled !== "boolean") {
+      ctx.error(res, "enabled must be a boolean", 400);
+      return true;
+    }
+    json(
+      res,
+      await saveLifeOpsAppState(ctx.state.runtime, {
+        enabled: body.enabled,
+      }),
+    );
+    return true;
+  }
 
   if (
     method === "GET" &&

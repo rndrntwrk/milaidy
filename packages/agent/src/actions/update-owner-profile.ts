@@ -54,29 +54,40 @@ export const updateOwnerProfileAction: Action = {
       };
     }
 
-    const profile = await updateLifeOpsOwnerProfile(runtime, patch);
-    if (!profile) {
+    try {
+      const profile = await updateLifeOpsOwnerProfile(runtime, patch);
+      if (!profile) {
+        return {
+          text: "",
+          success: false,
+          data: { error: "PROFILE_UPDATE_FAILED" },
+        };
+      }
+
+      const nameSyncSaved =
+        typeof patch.name === "string"
+          ? await persistConfiguredOwnerName(patch.name)
+          : null;
+
+      return {
+        text: "",
+        success: true,
+        data: {
+          profile,
+          updatedFields: Object.keys(patch),
+          nameSyncSaved,
+        },
+      };
+    } catch (error) {
       return {
         text: "",
         success: false,
-        data: { error: "PROFILE_UPDATE_FAILED" },
+        data: {
+          error: "PROFILE_UPDATE_FAILED",
+          detail: error instanceof Error ? error.message : String(error),
+        },
       };
     }
-
-    const nameSyncSaved =
-      typeof patch.name === "string"
-        ? await persistConfiguredOwnerName(patch.name)
-        : null;
-
-    return {
-      text: "",
-      success: true,
-      data: {
-        profile,
-        updatedFields: Object.keys(patch),
-        nameSyncSaved,
-      },
-    };
   },
 
   parameters: [
