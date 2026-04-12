@@ -44,6 +44,14 @@ skip() {
   SKIP=$((SKIP + 1))
 }
 
+python_has_module() {
+  local module="$1"
+  if ! command -v python3 &>/dev/null; then
+    return 1
+  fi
+  python3 -c "import ${module}" >/dev/null 2>&1
+}
+
 # ── Header ───────────────────────────────────────────────────────────────────
 echo ""
 bold "╔══════════════════════════════════════╗"
@@ -162,11 +170,13 @@ bold "4. Snap Package"
 check_file "snapcraft.yaml" "$SCRIPT_DIR/snap/snapcraft.yaml"
 
 # Validate YAML syntax
-if command -v python3 &>/dev/null; then
+if python_has_module yaml; then
   check "YAML syntax valid" python3 -c "
 import yaml, pathlib
 yaml.safe_load(pathlib.Path('$SCRIPT_DIR/snap/snapcraft.yaml').read_text())
 "
+elif command -v python3 &>/dev/null; then
+  skip "YAML syntax valid" "pyyaml not installed"
 fi
 
 check "Has name field" grep -q "^name: milady" "$SCRIPT_DIR/snap/snapcraft.yaml"
@@ -186,11 +196,13 @@ check_file "Desktop entry" "$SCRIPT_DIR/flatpak/ai.milady.Milady.desktop"
 check_file "Metainfo XML" "$SCRIPT_DIR/flatpak/ai.milady.Milady.metainfo.xml"
 
 # Validate YAML
-if command -v python3 &>/dev/null; then
+if python_has_module yaml; then
   check "Manifest YAML valid" python3 -c "
 import yaml, pathlib
 yaml.safe_load(pathlib.Path('$SCRIPT_DIR/flatpak/ai.milady.Milady.yml').read_text())
 "
+elif command -v python3 &>/dev/null; then
+  skip "Manifest YAML valid" "pyyaml not installed"
 fi
 
 check "SHA256 not placeholder (x64)" bash -c "! grep -q PLACEHOLDER_SHA256_X64 '$SCRIPT_DIR/flatpak/ai.milady.Milady.yml'"
@@ -207,11 +219,13 @@ bold "6. CI/CD Workflow"
 WORKFLOW="$(dirname "$SCRIPT_DIR")/.github/workflows/publish-packages.yml"
 check_file "publish-packages.yml" "$WORKFLOW"
 
-if command -v python3 &>/dev/null; then
+if python_has_module yaml; then
   check "Workflow YAML valid" python3 -c "
 import yaml, pathlib
 yaml.safe_load(pathlib.Path('$WORKFLOW').read_text())
 "
+elif command -v python3 &>/dev/null; then
+  skip "Workflow YAML valid" "pyyaml not installed"
 fi
 
 check "Has release trigger" grep -q "release:" "$WORKFLOW"
