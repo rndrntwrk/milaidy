@@ -143,6 +143,12 @@ vi.mock("@miladyai/app-core/src/app-shell-components", () => ({
     React.createElement("aside", null, "CustomActionEditor"),
   CustomActionsPanel: () =>
     React.createElement("aside", null, "CustomActionsPanel"),
+  DatabasePageView: () =>
+    React.createElement("section", null, "DatabasePageView Ready"),
+  DesktopWorkspaceSection: () =>
+    React.createElement("section", null, "DesktopWorkspaceSection Ready"),
+  FineTuningView: () =>
+    React.createElement("section", null, "FineTuningView Ready"),
   GameViewOverlay: () => React.createElement("div", null, "GameViewOverlay"),
   Header: () => React.createElement("header", null, "Header"),
   HeartbeatsDesktopShell: () =>
@@ -153,17 +159,30 @@ vi.mock("@miladyai/app-core/src/app-shell-components", () => ({
     React.createElement("section", null, "InventoryView Ready"),
   KnowledgeView: () =>
     React.createElement("section", null, "KnowledgeView Ready"),
+  LogsPageView: () =>
+    React.createElement("section", null, "LogsPageView Ready"),
+  MemoryViewerView: () =>
+    React.createElement("section", null, "MemoryViewerView Ready"),
   OnboardingWizard: () => React.createElement("div", null, "OnboardingWizard"),
   PairingView: () => React.createElement("div", null, "PairingView"),
+  PluginsPageView: () =>
+    React.createElement("section", null, "PluginsPageView Ready"),
+  RelationshipsView: () =>
+    React.createElement("section", null, "RelationshipsView Ready"),
+  RuntimeView: () =>
+    React.createElement("section", null, "RuntimeView Ready"),
   SaveCommandModal: () => React.createElement("div", null, "SaveCommandModal"),
   SettingsView: () =>
     React.createElement("section", null, "SettingsView Ready"),
   ShellOverlays: () => null,
+  SkillsView: () => React.createElement("section", null, "SkillsView Ready"),
   StartupFailureView: ({ error }: { error: { message: string } }) =>
     React.createElement("div", null, error.message),
   StreamView: () => React.createElement("section", null, "StreamView Ready"),
   SystemWarningBanner: () =>
     React.createElement("div", null, "SystemWarningBanner"),
+  TrajectoriesView: () =>
+    React.createElement("section", null, "TrajectoriesView Ready"),
 }));
 
 vi.mock("@miladyai/app-core/src/components/shell/Header", () => ({
@@ -499,25 +518,32 @@ function expectShellForTab(text: string, tab: Tab): void {
       case "knowledge":
         return "KnowledgeView Ready";
       case "connectors":
-        return "ConnectorsPageView Ready";
+        return "SettingsView Ready";
       case "triggers":
         return "HeartbeatsDesktopShell Ready";
       case "apps":
         return "AppsPageView Ready";
+      case "plugins":
+        return "PluginsPageView Ready";
+      case "skills":
+        return "SkillsView Ready";
       case "settings":
       case "voice":
         return "SettingsView Ready";
       case "stream":
         return "StreamView Ready";
-      case "advanced":
-      case "plugins":
-      case "skills":
-      case "actions":
       case "fine-tuning":
+      case "advanced":
+        return "FineTuningView Ready";
       case "trajectories":
+        return "TrajectoriesView Ready";
       case "runtime":
+        return "RuntimeView Ready";
       case "database":
+        return "DatabasePageView Ready";
       case "logs":
+        return "LogsPageView Ready";
+      case "actions":
       case "security":
         return "AdvancedPageView Ready";
       default:
@@ -526,14 +552,10 @@ function expectShellForTab(text: string, tab: Tab): void {
   })();
 
   expect(text).toContain(expectedToken);
-  if (
-    tab === "companion" ||
-    tab === "character" ||
-    tab === "character-select"
-  ) {
+  if (tab === "companion") {
     expect(text).not.toContain("Header");
   } else if (tab === "character" || tab === "character-select") {
-    expect(text).not.toContain("Header");
+    expect(text).toContain("Header");
     expect(text).toContain("Save");
   } else {
     expect(text).toContain("Header");

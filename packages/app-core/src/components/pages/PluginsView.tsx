@@ -75,10 +75,10 @@ function PluginListView({
   inModal,
 }: PluginListViewProps) {
   const {
-    plugins,
-    pluginStatusFilter,
-    pluginSearch,
-    pluginSettingsOpen,
+    plugins = [],
+    pluginStatusFilter = "all",
+    pluginSearch = "",
+    pluginSettingsOpen = new Set<string>(),
     pluginSaving,
     pluginSaveSuccess,
     loadPlugins,

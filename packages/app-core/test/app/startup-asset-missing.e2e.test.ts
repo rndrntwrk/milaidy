@@ -54,6 +54,7 @@ vi.mock("../../src/app-shell-components", async () => {
     SharedCompanionScene: ({ children }: { children: React.ReactNode }) =>
       React.createElement(React.Fragment, null, children),
     ShellOverlays: () => null,
+    SkillsView: () => React.createElement("div", null, "SkillsView"),
     StartupFailureView: StartupFailureViewMock,
     StartupShell: () => {
       const { startupCoordinator, startupError, retryStartup } = useApp();

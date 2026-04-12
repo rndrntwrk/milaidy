@@ -413,6 +413,7 @@ vi.mock("@miladyai/app-core/src/app-shell-components", () => ({
   SharedCompanionScene: ({ children }: { children: React.ReactNode }) =>
     React.createElement(React.Fragment, null, children),
   ShellOverlays: () => null,
+  SkillsView: () => React.createElement("div", null, "SkillsView"),
   StartupFailureView: ({ error }: { error: { message: string } }) =>
     React.createElement("div", null, error.message),
   StartupShell: () => {

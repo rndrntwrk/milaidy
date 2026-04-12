@@ -43,6 +43,7 @@ vi.mock("../../src/app-shell-components", async () => {
     SharedCompanionScene: ({ children }: { children: React.ReactNode }) =>
       React.createElement(React.Fragment, null, children),
     ShellOverlays: () => null,
+    SkillsView: () => React.createElement("div", null, "SkillsView"),
     StartupFailureView: () =>
       React.createElement("div", null, "StartupFailureView"),
     StartupShell: () => {
