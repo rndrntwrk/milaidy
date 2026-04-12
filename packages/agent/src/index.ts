@@ -16,3 +16,4 @@ export * from "./triggers/scheduling.js";
 export * from "./triggers/types.js";
 export * from "./utils/number-parsing.js";
 export * from "./utils/spoken-text.js";
+export { RolesConfig } from "./config/index.js";

@@ -12,7 +12,6 @@
     "baseUrl": ".",
     "paths": {
       "@elizaos/core": ["../../eliza/packages/typescript/src/index.node.ts"],
-      "@elizaos/core/roles": ["./src/runtime/roles/src/index.ts"],
       "@elizaos/core/*": ["../../eliza/packages/typescript/src/*"],
       "@miladyai/plugin-selfcontrol": ["../plugin-selfcontrol/src/index.ts"],
       "@miladyai/plugin-selfcontrol/*": ["../plugin-selfcontrol/src/*"],

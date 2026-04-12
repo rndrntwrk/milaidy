@@ -34,7 +34,6 @@ import {
 } from "@elizaos/core";
 import dotenv from "dotenv";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { itIf } from "../../../test/helpers/conditional-tests.ts";
 import { withTimeout } from "../../../test/helpers/test-utils";
 import { validateRuntimeContext } from "../src/api/plugin-validation";
 import { startApiServer } from "../src/api/server";
@@ -576,7 +575,7 @@ describe("Plugin Stress Test", () => {
     "@elizaos/plugin-edge-tts",
     "@elizaos/plugin-mcp",
     "@elizaos/plugin-pdf",
-    "@elizaos/plugin-scratchpad",
+    "@elizaos/plugin-clipboard",
     "@elizaos/plugin-secrets-manager",
     "@elizaos/plugin-trust",
     "@elizaos/plugin-vision",
@@ -1296,7 +1295,8 @@ describe("Workspace Integrity", () => {
 //  10. RUNTIME INTEGRATION (requires model provider)
 // ===================================================================
 
-describe("Runtime Integration (with model provider)", () => {
+if (hasModelProvider || hasKnownBrokenGroqLargeModel) {
+  describe("Runtime Integration (with model provider)", () => {
   let runtime: AgentRuntime | null = null;
   let server: { port: number; close: () => Promise<void> } | null = null;
   let initialized = false;
@@ -1441,17 +1441,14 @@ describe("Runtime Integration (with model provider)", () => {
     }
   }, 150_000);
 
-  itIf(hasModelProvider || hasKnownBrokenGroqLargeModel)(
-    "runtime initializes with all plugins",
-    () => {
-    expect(initialized).toBe(true);
-    expect(runtime?.plugins.length).toBeGreaterThanOrEqual(5);
-    },
-  );
+    it("runtime initializes with all plugins", () => {
+      expect(initialized).toBe(true);
+      expect(runtime?.plugins.length).toBeGreaterThanOrEqual(5);
+    });
 
-  itIf(hasModelProvider || hasKnownBrokenGroqLargeModel)(
-    "generates text response",
-    async () => {
+    it(
+      "generates text response",
+      async () => {
       const activeRuntime = runtime;
       if (!activeRuntime) throw new Error("Runtime not initialized");
 
@@ -1510,13 +1507,13 @@ describe("Runtime Integration (with model provider)", () => {
         );
       }
       expect(text.length).toBeGreaterThan(0);
-    },
-    120_000,
-  );
+      },
+      120_000,
+    );
 
-  itIf(hasModelProvider || hasKnownBrokenGroqLargeModel)(
-    "handleMessage produces response",
-    async () => {
+    it(
+      "handleMessage produces response",
+      async () => {
       const activeRuntime = runtime;
       if (!activeRuntime) throw new Error("Runtime not initialized");
       const msg = createMessageMemory({
@@ -1541,13 +1538,13 @@ describe("Runtime Integration (with model provider)", () => {
         }
       }
       expect(resp.length).toBeGreaterThan(0);
-    },
-    120_000,
-  );
+      },
+      120_000,
+    );
 
-  itIf(hasModelProvider || hasKnownBrokenGroqLargeModel)(
-    "context integrity maintained across 5 sequential messages",
-    async () => {
+    it(
+      "context integrity maintained across 5 sequential messages",
+      async () => {
       const activeRuntime = runtime;
       if (!activeRuntime) throw new Error("Runtime not initialized");
       const messages = [
@@ -1587,13 +1584,13 @@ describe("Runtime Integration (with model provider)", () => {
       // We verify the model didn't crash or return empty — the content check
       // is a soft assertion since models can be unpredictable
       expect(lastResponse.length).toBeGreaterThan(0);
-    },
-    300_000,
-  );
+      },
+      300_000,
+    );
 
-  itIf(hasModelProvider || hasKnownBrokenGroqLargeModel)(
-    "3 parallel chat requests complete without crashes",
-    async () => {
+    it(
+      "3 parallel chat requests complete without crashes",
+      async () => {
       const prompts = [
         "What is 2 + 2? Number only.",
         "What is 3 + 3? Number only.",
@@ -1630,21 +1627,19 @@ describe("Runtime Integration (with model provider)", () => {
         }
         expect((r.data.text as string).length).toBeGreaterThan(0);
       }
-    },
-    90_000,
-  );
+      },
+      90_000,
+    );
 
-  itIf(hasModelProvider || hasKnownBrokenGroqLargeModel)(
-    "API server status reflects runtime state",
-    async () => {
+    it("API server status reflects runtime state", async () => {
       const { status, data } = await http$(server?.port, "GET", "/api/status");
       expect(status).toBe(200);
       expect(data.state).toBe("running");
       expect(typeof data.startedAt).toBe("number");
       expect(typeof data.uptime).toBe("number");
-    },
-  );
-});
+    });
+  });
+}
 
 // ===================================================================
 //  11. DOCKER-COMPATIBLE FRESH MACHINE CHECKS

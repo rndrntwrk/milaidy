@@ -79,7 +79,7 @@ export class MiladyClient {
     const bootBase = getBootConfig().apiBase;
     const injectedBase = getElizaApiBase();
     const storedBase =
-      typeof window !== "undefined"
+      typeof window !== "undefined" && window.localStorage
         ? window.localStorage.getItem(LOCAL_STORAGE_API_BASE_KEY)
         : null;
 

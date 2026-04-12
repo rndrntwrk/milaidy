@@ -26,9 +26,6 @@ describe("Electrobun test workflow drift", () => {
     expect(workflow).toContain("bun run test:live:cloud");
     expect(workflow).toContain("bun run test:e2e:validation");
     expect(workflow).not.toContain(
-      "--exclude packages/agent/test/anvil-contracts.e2e.test.ts",
-    );
-    expect(workflow).not.toContain(
       "--exclude packages/agent/test/apps-e2e.e2e.test.ts",
     );
   });

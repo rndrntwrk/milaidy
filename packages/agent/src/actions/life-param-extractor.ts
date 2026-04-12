@@ -243,7 +243,7 @@ function buildTaskCreatePlan(args: {
     mode,
     response:
       mode === "respond"
-        ? validateResponse(parsed.response) ?? DEFAULT_CREATE_PLAN_RESPONSE
+        ? (validateResponse(parsed.response) ?? DEFAULT_CREATE_PLAN_RESPONSE)
         : null,
     requestKind: validateRequestKindAgainstContext(
       validateRequestKind(parsed.requestKind),
@@ -272,7 +272,7 @@ function buildRepairPrompt(args: {
   return [
     "Your last reply for the LifeOps create-definition planner was invalid.",
     "Return ONLY valid JSON with these exact fields:",
-    'mode, response, requestKind, title, description, cadenceKind, windows, weekdays, timeOfDay, timeZone, everyMinutes, timesPerDay, priority, durationMinutes',
+    "mode, response, requestKind, title, description, cadenceKind, windows, weekdays, timeOfDay, timeZone, everyMinutes, timesPerDay, priority, durationMinutes",
     "",
     'mode must be "create" or "respond".',
     "If mode is respond, include a short clarifying response.",

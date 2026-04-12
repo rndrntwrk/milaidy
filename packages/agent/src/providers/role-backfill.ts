@@ -28,7 +28,7 @@ import {
   type RoleGrantSource,
   type RoleName,
   resolveCanonicalOwnerId,
-} from "@miladyai/shared/eliza-core-roles";
+} from "@elizaos/core";
 
 type RolesWorldMetadata = {
   ownership?: { ownerId?: string };

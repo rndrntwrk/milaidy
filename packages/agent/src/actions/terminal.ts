@@ -5,7 +5,7 @@
  *   1. Extracts the command from the parameters, NL text, or MCP-style JSON
  *   2. POSTs to the local API server to execute it
  *   3. The API broadcasts output via WebSocket for real-time display
- *   4. Optionally captures the output and stores it in bounded scratchpad state
+ *   4. Optionally captures the output and stores it in bounded clipboard state
  *   5. Returns a descriptive text response
  *
  * @module actions/terminal
@@ -90,17 +90,17 @@ type TerminalActionParameters = {
   arguments?: unknown;
   command?: unknown;
   shellCommand?: unknown;
-  addToScratchpad?: unknown;
-  persistToScratchpad?: unknown;
-  saveToScratchpad?: unknown;
-  scratchpadTitle?: unknown;
+  addToClipboard?: unknown;
+  persistToClipboard?: unknown;
+  saveToClipboard?: unknown;
+  clipboardTitle?: unknown;
   title?: unknown;
 };
 
 type TerminalActionInput = {
   command?: string;
-  addToScratchpad: boolean;
-  scratchpadTitle?: string;
+  addToClipboard: boolean;
+  clipboardTitle?: string;
 };
 
 type CapturedTerminalRun = {
@@ -114,7 +114,7 @@ type CapturedTerminalRun = {
   maxDurationMs?: number;
 };
 
-type ScratchpadStoreResult = {
+type ClipboardStoreResult = {
   requested?: boolean;
   stored: boolean;
   replaced?: boolean;
@@ -129,7 +129,7 @@ type ScratchpadStoreResult = {
   };
 };
 
-type ScratchpadStoreFn = (
+type ClipboardStoreFn = (
   runtime: IAgentRuntime,
   message: Memory,
   options: {
@@ -139,9 +139,9 @@ type ScratchpadStoreFn = (
     sourceId: string;
     sourceLabel: string;
   },
-) => Promise<ScratchpadStoreResult>;
+) => Promise<ClipboardStoreResult>;
 
-let cachedScratchpadStoreFn: ScratchpadStoreFn | null | undefined;
+let cachedClipboardStoreFn: ClipboardStoreFn | null | undefined;
 
 function parseBooleanFlag(value: unknown): boolean {
   if (value === true) {
@@ -249,35 +249,35 @@ function parseJsonArguments(
   return undefined;
 }
 
-function resolveScratchpadRequested(
+function resolveClipboardRequested(
   params: TerminalActionParameters,
   argumentParams: Record<string, unknown> | undefined,
   message?: Memory,
 ): boolean {
   return [
-    params.addToScratchpad,
-    params.persistToScratchpad,
-    params.saveToScratchpad,
-    argumentParams?.addToScratchpad,
-    argumentParams?.persistToScratchpad,
-    argumentParams?.saveToScratchpad,
-    message?.content?.addToScratchpad,
-    message?.content?.persistToScratchpad,
-    message?.content?.saveToScratchpad,
+    params.addToClipboard,
+    params.persistToClipboard,
+    params.saveToClipboard,
+    argumentParams?.addToClipboard,
+    argumentParams?.persistToClipboard,
+    argumentParams?.saveToClipboard,
+    message?.content?.addToClipboard,
+    message?.content?.persistToClipboard,
+    message?.content?.saveToClipboard,
   ].some((value) => parseBooleanFlag(value));
 }
 
-function resolveScratchpadTitle(
+function resolveClipboardTitle(
   params: TerminalActionParameters,
   argumentParams: Record<string, unknown> | undefined,
   message?: Memory,
 ): string | undefined {
   return (
-    readStringValue(params.scratchpadTitle) ??
+    readStringValue(params.clipboardTitle) ??
     readStringValue(params.title) ??
-    readStringValue(argumentParams?.scratchpadTitle) ??
+    readStringValue(argumentParams?.clipboardTitle) ??
     readStringValue(argumentParams?.title) ??
-    readStringValue(message?.content?.scratchpadTitle) ??
+    readStringValue(message?.content?.clipboardTitle) ??
     readStringValue(message?.content?.title)
   );
 }
@@ -347,12 +347,12 @@ function resolveTerminalInput(
 
   return {
     command: getCommand(options, message),
-    addToScratchpad: resolveScratchpadRequested(
+    addToClipboard: resolveClipboardRequested(
       params,
       argumentParams,
       message,
     ),
-    scratchpadTitle: resolveScratchpadTitle(params, argumentParams, message),
+    clipboardTitle: resolveClipboardTitle(params, argumentParams, message),
   };
 }
 
@@ -385,27 +385,27 @@ function normalizeCapturedRun(
   };
 }
 
-async function getScratchpadStoreFn(): Promise<ScratchpadStoreFn | null> {
-  if (cachedScratchpadStoreFn !== undefined) {
-    return cachedScratchpadStoreFn;
+async function getClipboardStoreFn(): Promise<ClipboardStoreFn | null> {
+  if (cachedClipboardStoreFn !== undefined) {
+    return cachedClipboardStoreFn;
   }
 
   try {
-    const mod = (await import("@elizaos/plugin-scratchpad")) as {
-      maybeStoreTaskScratchpadItem?: ScratchpadStoreFn;
+    const mod = (await import("@elizaos/plugin-clipboard")) as {
+      maybeStoreTaskClipboardItem?: ClipboardStoreFn;
     };
-    cachedScratchpadStoreFn =
-      typeof mod.maybeStoreTaskScratchpadItem === "function"
-        ? mod.maybeStoreTaskScratchpadItem
+    cachedClipboardStoreFn =
+      typeof mod.maybeStoreTaskClipboardItem === "function"
+        ? mod.maybeStoreTaskClipboardItem
         : null;
   } catch (error) {
-    cachedScratchpadStoreFn = null;
+    cachedClipboardStoreFn = null;
     logger.warn(
-      `[terminal] Scratchpad plugin unavailable; shell output will not be persisted (${error instanceof Error ? error.message : String(error)})`,
+      `[terminal] Clipboard plugin unavailable; shell output will not be persisted (${error instanceof Error ? error.message : String(error)})`,
     );
   }
 
-  return cachedScratchpadStoreFn;
+  return cachedClipboardStoreFn;
 }
 
 function formatOutputBlock(content: string): string {
@@ -437,7 +437,7 @@ async function maybeStoreCommandOutput(
   input: TerminalActionInput,
   result: CapturedTerminalRun,
 ) {
-  if (!input.addToScratchpad) {
+  if (!input.addToClipboard) {
     return {
       requested: false,
       stored: false,
@@ -449,33 +449,33 @@ async function maybeStoreCommandOutput(
       requested: true,
       stored: false,
       reason:
-        "Runtime unavailable; command output could not be added to the scratchpad.",
+        "Runtime unavailable; command output could not be added to the clipboard.",
     } as const;
   }
 
-  const scratchpadMessage = {
+  const clipboardMessage = {
     ...message,
     content: {
       ...message.content,
-      addToScratchpad: true,
-      ...(input.scratchpadTitle
-        ? { scratchpadTitle: input.scratchpadTitle }
+      addToClipboard: true,
+      ...(input.clipboardTitle
+        ? { clipboardTitle: input.clipboardTitle }
         : {}),
     },
   } as Memory;
 
-  const storeScratchpadItem = await getScratchpadStoreFn();
-  if (!storeScratchpadItem) {
+  const storeClipboardItem = await getClipboardStoreFn();
+  if (!storeClipboardItem) {
     return {
       requested: true,
       stored: false,
       reason:
-        "Scratchpad plugin unavailable; command output could not be added to the scratchpad.",
+        "Clipboard plugin unavailable; command output could not be added to the clipboard.",
     } as const;
   }
 
-  return storeScratchpadItem(runtime, scratchpadMessage, {
-    fallbackTitle: input.scratchpadTitle ?? result.command,
+  return storeClipboardItem(runtime, clipboardMessage, {
+    fallbackTitle: input.clipboardTitle ?? result.command,
     content: buildCommandArtifactContent(result),
     sourceType: "command",
     sourceId: result.command,
@@ -485,13 +485,13 @@ async function maybeStoreCommandOutput(
 
 function buildCapturedResponseText(
   result: CapturedTerminalRun,
-  scratchpadResult: Awaited<ReturnType<typeof maybeStoreCommandOutput>>,
+  clipboardResult: Awaited<ReturnType<typeof maybeStoreCommandOutput>>,
 ): string {
-  const scratchpadItem = scratchpadResult.stored
-    ? scratchpadResult.item
+  const clipboardItem = clipboardResult.stored
+    ? clipboardResult.item
     : undefined;
-  const scratchpadSnapshot = scratchpadResult.stored
-    ? scratchpadResult.snapshot
+  const clipboardSnapshot = clipboardResult.stored
+    ? clipboardResult.snapshot
     : undefined;
 
   return [
@@ -501,16 +501,16 @@ function buildCapturedResponseText(
       ? `Timed out${typeof result.maxDurationMs === "number" ? ` after ${result.maxDurationMs} ms` : ""}.`
       : "",
     result.truncated ? "Captured output truncated to 128 KB." : "",
-    scratchpadResult.requested
-      ? scratchpadResult.stored
-        ? `${scratchpadResult.replaced ? "Updated" : "Added"} scratchpad item ${scratchpadItem?.id ?? "unknown"}: ${scratchpadItem?.title ?? result.command}`
-        : `Scratchpad add skipped: ${scratchpadResult.reason}`
+    clipboardResult.requested
+      ? clipboardResult.stored
+        ? `${clipboardResult.replaced ? "Updated" : "Added"} clipboard item ${clipboardItem?.id ?? "unknown"}: ${clipboardItem?.title ?? result.command}`
+        : `Clipboard add skipped: ${clipboardResult.reason}`
       : "",
-    scratchpadSnapshot
-      ? `Scratchpad usage: ${scratchpadSnapshot.items.length}/${scratchpadSnapshot.maxItems}.`
+    clipboardSnapshot
+      ? `Clipboard usage: ${clipboardSnapshot.items.length}/${clipboardSnapshot.maxItems}.`
       : "",
-    scratchpadSnapshot
-      ? "Clear unused scratchpad state when it is no longer needed."
+    clipboardSnapshot
+      ? "Clear unused clipboard state when it is no longer needed."
       : "",
     "",
     "STDOUT:",
@@ -541,7 +541,7 @@ export const terminalAction: Action = {
     "Run a single explicit shell command that the user provided directly. " +
     "Only use when the user gives a specific command like 'run ls -la' or 'execute npm install'. " +
     "Do NOT use for building projects, creating websites, or multi-step work — use CREATE_TASK instead. " +
-    "Set addToScratchpad=true to capture the command output, return it inline, and store it in bounded scratchpad state.",
+    "Set addToClipboard=true to capture the command output, return it inline, and store it in bounded clipboard state.",
 
   validate: async (runtime, message) => {
     if (!(await hasOwnerAccess(runtime, message))) {
@@ -597,7 +597,7 @@ export const terminalAction: Action = {
           body: JSON.stringify({
             command,
             clientId: "runtime-terminal-action",
-            ...(input.addToScratchpad ? { captureOutput: true } : {}),
+            ...(input.addToClipboard ? { captureOutput: true } : {}),
           }),
         },
       );
@@ -606,7 +606,7 @@ export const terminalAction: Action = {
         return FAIL;
       }
 
-      if (!input.addToScratchpad) {
+      if (!input.addToClipboard) {
         return {
           text: `Running in terminal: \`${command}\``,
           success: true,
@@ -615,7 +615,7 @@ export const terminalAction: Action = {
       }
 
       const capturedRun = normalizeCapturedRun(command, await response.json());
-      const scratchpadResult = await maybeStoreCommandOutput(
+      const clipboardResult = await maybeStoreCommandOutput(
         runtime as IAgentRuntime | undefined,
         message as Memory,
         input,
@@ -623,11 +623,11 @@ export const terminalAction: Action = {
       );
 
       return {
-        text: buildCapturedResponseText(capturedRun, scratchpadResult),
+        text: buildCapturedResponseText(capturedRun, clipboardResult),
         success: true,
         data: {
           ...capturedRun,
-          scratchpad: scratchpadResult,
+          clipboard: clipboardResult,
         },
       };
     } catch {
@@ -643,16 +643,16 @@ export const terminalAction: Action = {
       schema: { type: "string" as const },
     },
     {
-      name: "addToScratchpad",
+      name: "addToClipboard",
       description:
-        "When true, wait for the command to finish, capture stdout/stderr, and store the result in bounded scratchpad state.",
+        "When true, wait for the command to finish, capture stdout/stderr, and store the result in bounded clipboard state.",
       required: false,
       schema: { type: "boolean" as const },
     },
     {
-      name: "scratchpadTitle",
+      name: "clipboardTitle",
       description:
-        "Optional scratchpad title to use when addToScratchpad=true.",
+        "Optional clipboard title to use when addToClipboard=true.",
       required: false,
       schema: { type: "string" as const },
     },

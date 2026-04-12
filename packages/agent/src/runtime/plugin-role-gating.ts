@@ -60,8 +60,8 @@ const ROLE_GATED_PLUGINS: Readonly<Record<string, RoleGate>> = {
   // Cloud — provisioning, billing, agent lifecycle
   elizaOSCloud: "admin",
 
-  // Scratchpad / Clipboard — floor is "user" for reads; writes elevated below
-  scratchpad: "user",
+  // Clipboard — floor is "user" for reads; writes elevated below
+  clipboard: "user",
 
   // Experience — records agent learnings
   experience: "admin",
@@ -133,10 +133,10 @@ const ACTION_ROLE_OVERRIDES: Readonly<Record<string, RoleGate>> = {
   MANAGE_ROUTING: "admin",
   MANAGE_ZONES: "admin",
 
-  // --- plugin-scratchpad / clipboard: global writes are admin, reads are user (floor) ---
-  SCRATCHPAD_WRITE: "admin",
-  SCRATCHPAD_APPEND: "admin",
-  SCRATCHPAD_DELETE: "admin",
+  // --- clipboard: global writes are admin, reads are user (floor) ---
+  CLIPBOARD_WRITE: "admin",
+  CLIPBOARD_APPEND: "admin",
+  CLIPBOARD_DELETE: "admin",
   READ_FILE: "admin",
 };
 
@@ -168,8 +168,8 @@ const PROVIDER_ROLE_OVERRIDES: Readonly<Record<string, RoleGate>> = {
   elizacloud_health: "admin",
   elizacloud_models: "admin",
 
-  // Scratchpad
-  scratchpad: "admin",
+  // Clipboard
+  clipboard: "admin",
 };
 
 // ---------------------------------------------------------------------------
@@ -217,7 +217,7 @@ function gateAction(action: Action, gate: RoleGate): void {
     message: Memory,
     state?: State,
   ): Promise<boolean> => {
-    const { checkSenderRole } = await import("./roles/src/index.js");
+    const { checkSenderRole } = await import("./roles.js");
 
     const check = await checkSenderRole(runtime, message);
     if (!check) {
@@ -253,7 +253,7 @@ function gateProvider(provider: Provider, gate: RoleGate): void {
     message: Memory,
     state: State,
   ): Promise<ProviderResult> => {
-    const { checkSenderRole } = await import("./roles/src/index.js");
+    const { checkSenderRole } = await import("./roles.js");
 
     const check = await checkSenderRole(runtime, message);
     if (check && !roleCheckPasses(check, gate)) {

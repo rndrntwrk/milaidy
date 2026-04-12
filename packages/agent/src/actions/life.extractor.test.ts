@@ -39,7 +39,8 @@ function makeState(): State {
 
 describe("extractLifeOperationWithLlm", () => {
   it("accepts actionable recurring create requests directly from the model", async () => {
-    const intent = "Please remind me about my Invisalign on weekdays after lunch.";
+    const intent =
+      "Please remind me about my Invisalign on weekdays after lunch.";
     const result = await extractLifeOperationWithLlm({
       runtime: makeRuntime(
         JSON.stringify({

@@ -59,8 +59,6 @@ const packageRoot = path.resolve(testDir, "..");
 dotenv.config({ path: path.resolve(packageRoot, ".env") });
 dotenv.config({ path: path.resolve(packageRoot, "..", "..", ".env") });
 
-const runE2E = process.env.ELIZA_RUN_CONVERSATION_CONTEXT_E2E === "1";
-
 // ---------------------------------------------------------------------------
 // Plugin loader
 // ---------------------------------------------------------------------------
@@ -107,7 +105,7 @@ const loneUserEntityId = crypto.randomUUID() as UUID; // only in telegram
 // Test suite
 // ---------------------------------------------------------------------------
 
-describe.skipIf(!runE2E)("Conversation Context E2E", () => {
+describe("Conversation Context E2E", () => {
   let runtime: AgentRuntime;
   let initialized = false;
 
@@ -206,6 +204,26 @@ describe.skipIf(!runE2E)("Conversation Context E2E", () => {
     // Agent participates in both
     await runtime.ensureParticipantInRoom(runtime.agentId, discordGeneralRoomId);
     await runtime.ensureParticipantInRoom(runtime.agentId, discordDevRoomId);
+    await runtime.ensureConnection({
+      entityId: ownerEntityId,
+      roomId: discordGeneralRoomId,
+      worldId: discordWorldId,
+      userName: "shaw",
+      name: "shaw",
+      source: "discord",
+      channelId: "discord-general",
+      type: ChannelType.GROUP,
+    });
+    await runtime.ensureConnection({
+      entityId: ownerEntityId,
+      roomId: discordDevRoomId,
+      worldId: discordWorldId,
+      userName: "shaw",
+      name: "shaw",
+      source: "discord",
+      channelId: "discord-dev",
+      type: ChannelType.GROUP,
+    });
 
     // Telegram world + DM
     await runtime.ensureWorldExists({
@@ -213,6 +231,20 @@ describe.skipIf(!runE2E)("Conversation Context E2E", () => {
       name: "Telegram",
       agentId: runtime.agentId,
     } as Parameters<typeof runtime.ensureWorldExists>[0]);
+
+    for (const worldId of [discordWorldId, telegramWorldId]) {
+      const world = await runtime.getWorld(worldId);
+      if (!world) {
+        throw new Error(`Expected seeded world ${worldId} to exist`);
+      }
+      await runtime.updateWorld({
+        ...world,
+        metadata: {
+          ...(world.metadata ?? {}),
+          ownership: { ownerId: ownerEntityId },
+        },
+      });
+    }
 
     await runtime.ensureConnection({
       entityId: ownerEntityId,
@@ -228,8 +260,6 @@ describe.skipIf(!runE2E)("Conversation Context E2E", () => {
     await runtime.ensureParticipantInRoom(ownerEntityId, telegramDmRoomId);
 
     // Owner participates everywhere
-    await runtime.ensureParticipantInRoom(ownerEntityId, discordGeneralRoomId);
-    await runtime.ensureParticipantInRoom(ownerEntityId, discordDevRoomId);
 
     // ── Seed messages ───────────────────────────────────────────────
 
@@ -436,19 +466,18 @@ describe.skipIf(!runE2E)("Conversation Context E2E", () => {
   // ─── recentConversationsProvider ──────────────────────────────────────
 
   describe("recentConversationsProvider", () => {
-    it("returns recent messages from the owner's rooms", async () => {
+    it("returns recent messages from the agent's rooms", async () => {
       expect(initialized).toBe(true);
 
       const result = await recentConversationsProvider.get(
         runtime,
-        ownerMessage("what's been happening?"),
+        agentMessage("what's been happening?"),
         {} as never,
       );
 
       expect(result.text).toBeTruthy();
       expect(result.text).toContain("Recent conversations:");
-      // Should include messages from rooms the owner participates in
-      // Owner is in all 3 rooms
+      // The agent participates in all seeded rooms with message history.
       const messageCount = result.values?.recentConversationCount;
       expect(typeof messageCount).toBe("number");
       expect(messageCount).toBeGreaterThan(0);
@@ -479,8 +508,7 @@ describe.skipIf(!runE2E)("Conversation Context E2E", () => {
       // Line numbers present
       expect(result!.text).toMatch(/\s+1 \|/);
       expect(result!.text).toMatch(/\s+5 \|/);
-      // Scratchpad hint present
-      expect(result!.text).toContain("scratchpad");
+      expect(result!.text).toContain("CLIPBOARD_WRITE");
 
       logger.info(`[e2e:ctx] READ_CHANNEL returned:\n${result!.text!.slice(0, 500)}`);
     });
@@ -579,7 +607,7 @@ describe.skipIf(!runE2E)("Conversation Context E2E", () => {
         expect(result!.text).toContain("TypeScript");
         // Line numbers present
         expect(result!.text).toMatch(/\s+1 \|/);
-        expect(result!.text).toContain("scratchpad");
+        expect(result!.text).toContain("clipboard");
         logger.info(`[e2e:ctx] SEARCH_CONVERSATIONS 'TypeScript' found ${(result!.values as Record<string, unknown>).resultCount} results`);
       } else {
         logger.warn("[e2e:ctx] SEARCH_CONVERSATIONS 'TypeScript' returned 0 results (embedding mismatch?)");
@@ -703,7 +731,7 @@ describe.skipIf(!runE2E)("Conversation Context E2E", () => {
 
       expect(result).toBeDefined();
       if (result!.success) {
-        expect(result!.text).toContain("scratchpad");
+        expect(result!.text).toContain("clipboard");
         logger.info(`[e2e:ctx] READ_ENTITY 'alice' succeeded:\n${result!.text!.slice(0, 500)}`);
       } else {
         // Service may not be loaded
@@ -1285,8 +1313,7 @@ describe.skipIf(!runE2E)("Conversation Context E2E", () => {
       expect(result!.text).toContain("5 messages");
       // Should contain a separator line
       expect(result!.text).toContain("─");
-      // Should contain scratchpad hint
-      expect(result!.text).toContain("scratchpad");
+      expect(result!.text).toContain("CLIPBOARD_WRITE");
     });
 
     it("READ_CHANNEL data.messages has correct shape", async () => {

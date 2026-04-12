@@ -439,7 +439,6 @@ describe("getPublishedElizaPackageSpecs", () => {
       );
 
       expect(getPublishedElizaPackageSpecs(repoRoot)).toEqual([
-        ["@elizaos/core", "2.0.0-alpha.113"],
         ["@elizaos/prompts", "2.0.0-alpha.113"],
         ["@elizaos/skills", "2.0.0-alpha.113"],
       ]);
@@ -487,7 +486,9 @@ describe("ensurePublishedElizaPackageLinks", () => {
 
       expect(ensurePublishedElizaPackageLinks(repoRoot)).toBe(3);
       expect(
-        realpathSync(path.join(repoRoot, "node_modules", "@elizaos", "prompts")),
+        realpathSync(
+          path.join(repoRoot, "node_modules", "@elizaos", "prompts"),
+        ),
       ).toBe(realpathSync(cachedPromptsDir));
       expect(
         realpathSync(

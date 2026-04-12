@@ -107,7 +107,7 @@ Optional plugins (and some core-adjacent packages) can end up in the load set be
 
 **Why we record provenance:** `collectPluginNames()` optionally fills a **`PluginLoadReasons`** map (first source wins per package). `resolvePlugins()` passes it through; benign optional failures are summarized as **`Optional plugins not installed: … (added by: …)`**. That answers “what should I change?” — edit config, unset env, install the package, or add a plugin checkout — instead of chasing a false “eliza is broken” hypothesis.
 
-The above content shows the entire, complete file contents of the requested file.
+**Browser / stagehand:** `@elizaos/plugin-browser` expects a **stagehand-server** tree that is **not** in the npm tarball. Milady discovers `plugins/plugin-browser/stagehand-server` by **walking parents** from the runtime so both flat Milady checkouts and **`eliza/` submodule** layouts resolve. See **[Developer diagnostics and workspace](guides/developer-diagnostics-and-workspace.md)**.
 
 ## Pack-and-test and Vendored Workspace Validation (Phase 5)
 

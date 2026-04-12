@@ -1,6 +1,6 @@
 import Module from "node:module";
-import { afterAll, afterEach, vi } from "vitest";
 import * as testRenderer from "react-test-renderer";
+import { afterAll, afterEach, vi } from "vitest";
 import {
   createMockStorage,
   hasStorageApi,
@@ -95,8 +95,16 @@ if (typeof globalThis.Bun === "undefined") {
       pid: 0,
       exitCode: 0,
       exited: Promise.resolve(0),
-      stdout: new ReadableStream({ start(c) { c.close(); } }),
-      stderr: new ReadableStream({ start(c) { c.close(); } }),
+      stdout: new ReadableStream({
+        start(c) {
+          c.close();
+        },
+      }),
+      stderr: new ReadableStream({
+        start(c) {
+          c.close();
+        },
+      }),
       kill: () => {},
     }),
     spawnSync: (_cmd: unknown, _opts?: unknown) => ({
@@ -108,8 +116,6 @@ if (typeof globalThis.Bun === "undefined") {
     env: { ...process.env },
   };
 }
-
-
 
 declare global {
   // React 18 testing flag to suppress act() environment warnings.
@@ -147,7 +153,6 @@ const sharedSessionStorage = ensureStorage(
   globalThis as Record<string, unknown>,
   "sessionStorage",
 );
-
 
 if (typeof globalThis.window !== "undefined") {
   const win = globalThis.window as unknown as Record<string, unknown>;
@@ -290,25 +295,47 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+type MockHostNode = {
+  children: unknown[];
+  style: Record<string, unknown>;
+  appendChild: (child: unknown) => void;
+  removeChild: (child: unknown) => void;
+  insertBefore: (child: unknown, before: unknown) => void;
+  removeAttribute: () => void;
+  setAttribute: () => void;
+  addEventListener: () => void;
+  removeEventListener: () => void;
+  focus: () => void;
+  getBoundingClientRect: () => DOMRect;
+  querySelector: () => null;
+  querySelectorAll: () => unknown[];
+};
+
+type TestRendererModule = typeof testRenderer & {
+  create?: (children: unknown, options?: Record<string, unknown>) => unknown;
+};
+
 // Provide a safe default node mock for react-test-renderer portals and host nodes.
-const defaultCreateNodeMock = (element: any) => {
+const defaultCreateNodeMock = (
+  element: { type?: unknown } | null | undefined,
+) => {
   if (typeof element?.type !== "string") {
     return null;
   }
 
-  const node: any = {
+  const node: MockHostNode = {
     children: [],
     style: {},
-    appendChild: (child: any) => {
+    appendChild: (child: unknown) => {
       node.children.push(child);
     },
-    removeChild: (child: any) => {
+    removeChild: (child: unknown) => {
       const index = node.children.indexOf(child);
       if (index >= 0) {
         node.children.splice(index, 1);
       }
     },
-    insertBefore: (child: any, before: any) => {
+    insertBefore: (child: unknown, before: unknown) => {
       const index = node.children.indexOf(before);
       if (index === -1) {
         node.children.push(child);
@@ -338,7 +365,8 @@ const defaultCreateNodeMock = (element: any) => {
   return node;
 };
 
-const originalCreate = (testRenderer as any).create;
+const testRendererModule = testRenderer as TestRendererModule;
+const originalCreate = testRendererModule.create;
 const createDescriptor =
   typeof testRenderer === "object" && testRenderer !== null
     ? Object.getOwnPropertyDescriptor(testRenderer, "create")
@@ -347,14 +375,18 @@ if (
   typeof originalCreate === "function" &&
   (createDescriptor?.writable === true || createDescriptor?.set)
 ) {
-  Reflect.set(testRenderer as object, "create", (children: any, options: any = {}) => {
-    if (!options.createNodeMock) {
-      options = {
-        ...options,
-        createNodeMock: defaultCreateNodeMock,
-      };
-    }
+  Reflect.set(
+    testRenderer as object,
+    "create",
+    (children: unknown, options: Record<string, unknown> = {}) => {
+      if (!options.createNodeMock) {
+        options = {
+          ...options,
+          createNodeMock: defaultCreateNodeMock,
+        };
+      }
 
-    return originalCreate.call(testRenderer, children, options);
-  });
+      return originalCreate.call(testRenderer, children, options);
+    },
+  );
 }

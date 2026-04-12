@@ -161,10 +161,7 @@ function normalizeMissingFields(value: unknown): ExtractedLifeMissingField[] {
       continue;
     }
     const normalized = item.trim().toLowerCase() as ExtractedLifeMissingField;
-    if (
-      VALID_MISSING_FIELDS.has(normalized) &&
-      !missing.includes(normalized)
-    ) {
+    if (VALID_MISSING_FIELDS.has(normalized) && !missing.includes(normalized)) {
       missing.push(normalized);
     }
   }
@@ -209,7 +206,7 @@ function buildRepairPrompt(args: {
   return [
     "Your last reply for the LifeOps operation planner was invalid.",
     "Return ONLY valid JSON with exactly these fields:",
-    '  operation: one of the allowed operations, or null when this should be reply-only/no-op',
+    "  operation: one of the allowed operations, or null when this should be reply-only/no-op",
     "  confidence: number from 0 to 1",
     "  shouldAct: boolean",
     '  missing: array of missing fields from ["title","schedule","target","goal","phone_number","reminder_intensity","details"]',
@@ -255,7 +252,7 @@ export async function extractLifeOperationWithLlm(args: {
     "Treat requests like weekdays after lunch, during the day, every morning, tomorrow at 9, set an alarm for 7 am, and remind me about my Invisalign as specific enough to act on now.",
     "",
     "Return a JSON object with exactly these fields:",
-    '  operation: one of the allowed operations below, or null when this should be reply-only/no-op',
+    "  operation: one of the allowed operations below, or null when this should be reply-only/no-op",
     "  confidence: number from 0 to 1",
     "  shouldAct: boolean",
     '  missing: array of missing fields from ["title","schedule","target","goal","phone_number","reminder_intensity","details"]',

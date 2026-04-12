@@ -102,8 +102,8 @@
 	path = plugins/plugin-shell
 	url = https://github.com/elizaos-plugins/plugin-shell.git
 	branch = alpha
-[submodule "plugins/plugin-scratchpad"]
-	path = plugins/plugin-scratchpad
+[submodule "plugins/plugin-clipboard"]
+	path = plugins/plugin-clipboard
 	url = https://github.com/elizaos-plugins/plugin-scratchpad.git
 	branch = alpha
 [submodule "plugins/plugin-sql"]

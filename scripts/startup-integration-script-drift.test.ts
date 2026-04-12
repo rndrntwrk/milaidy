@@ -5,7 +5,10 @@ import { describe, expect, it } from "vitest";
 const ROOT = path.resolve(import.meta.dirname, "..");
 const PACKAGE_JSON_PATH = path.join(ROOT, "package.json");
 const INTEGRATION_CONFIG_PATH = path.join(ROOT, "vitest.integration.config.ts");
-const STARTUP_E2E_CONFIG_PATH = path.join(ROOT, "vitest.startup-e2e.config.ts");
+const STARTUP_E2E_CONFIG_PATH = path.join(
+  ROOT,
+  "vitest.startup.integration.config.ts",
+);
 const TEST_PARALLEL_PATH = path.join(
   ROOT,
   "test",
@@ -22,7 +25,7 @@ describe("startup integration script contract", () => {
 
     expect(script).toBeDefined();
     expect(script).toContain(
-      "bunx vitest run --config vitest.startup-e2e.config.ts",
+      "bunx vitest run --config vitest.startup.integration.config.ts",
     );
     expect(script).not.toContain("--passWithNoTests");
     expect(script).toContain(

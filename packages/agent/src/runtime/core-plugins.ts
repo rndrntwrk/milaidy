@@ -62,5 +62,5 @@ export const OPTIONAL_CORE_PLUGINS: readonly string[] = [
   // "@elizaos/plugin-directives", // directive processing - not yet ready
   // "@elizaos/plugin-mcp", // MCP protocol support - not yet ready
   // "@elizaos/plugin-scheduling", // scheduling - not yet ready
-  // "@elizaos/plugin-scratchpad", // scratchpad notes - not yet ready
+  // "@elizaos/plugin-clipboard", // clipboard notes - not yet ready
 ];

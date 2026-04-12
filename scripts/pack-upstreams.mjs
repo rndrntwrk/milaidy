@@ -6,7 +6,7 @@
  */
 
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, rmSync, renameSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -25,21 +25,25 @@ function runCommand(command, args, cwd) {
   const printable = `${command} ${args.join(" ")}`;
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { cwd, stdio: "inherit" });
-    child.on("error", (error) => reject(new Error(`${printable} failed: ${error.message}`)));
+    child.on("error", (error) =>
+      reject(new Error(`${printable} failed: ${error.message}`)),
+    );
     child.on("exit", (code, signal) => {
-      if (signal) return reject(new Error(`${printable} exited due to signal ${signal}`));
-      if (code !== 0) return reject(new Error(`${printable} exited with code ${code}`));
+      if (signal)
+        return reject(new Error(`${printable} exited due to signal ${signal}`));
+      if (code !== 0)
+        return reject(new Error(`${printable} exited with code ${code}`));
       resolve();
     });
   });
 }
 
 function readPackageJson(dir) {
-    try {
-        return JSON.parse(readFileSync(path.join(dir, "package.json"), "utf8"));
-    } catch {
-        return null;
-    }
+  try {
+    return JSON.parse(readFileSync(path.join(dir, "package.json"), "utf8"));
+  } catch {
+    return null;
+  }
 }
 
 async function packUpstreams() {
@@ -60,9 +64,9 @@ async function packUpstreams() {
     }
 
     console.log(`\n[pack-upstreams] === Packing ${pkgJson.name} ===`);
-    
+
     // Some packages require build before pack if dist isn't precompiled
-    if (pkgJson.scripts && pkgJson.scripts.build && !existsSync(path.join(pkgDir, "dist"))) {
+    if (pkgJson.scripts?.build && !existsSync(path.join(pkgDir, "dist"))) {
       console.log(`[pack-upstreams] Building ${pkgJson.name}...`);
       await runCommand("bun", ["run", "build"], pkgDir);
     }
@@ -72,17 +76,21 @@ async function packUpstreams() {
     console.log(`[pack-upstreams] Packing ${pkgJson.name}...`);
     // Output directly into the package directory
     await runCommand("npm", ["pack"], pkgDir);
-    
+
     // Move the generated tarball to ARTIFACTS_DIR
-    const expectedTarballName = `${pkgJson.name.replace('@', '').replace('/', '-')}-${pkgJson.version}.tgz`;
+    const expectedTarballName = `${pkgJson.name.replace("@", "").replace("/", "-")}-${pkgJson.version}.tgz`;
     const tarballPath = path.join(pkgDir, expectedTarballName);
     const destTarballPath = path.join(ARTIFACTS_DIR, expectedTarballName);
-    
+
     if (existsSync(tarballPath)) {
-        renameSync(tarballPath, destTarballPath);
-        console.log(`[pack-upstreams] Packed tarball moved to ${destTarballPath}`);
+      renameSync(tarballPath, destTarballPath);
+      console.log(
+        `[pack-upstreams] Packed tarball moved to ${destTarballPath}`,
+      );
     } else {
-        console.warn(`[pack-upstreams] Tarball not found at expected path: ${tarballPath}. Ensure pack succeeded.`);
+      console.warn(
+        `[pack-upstreams] Tarball not found at expected path: ${tarballPath}. Ensure pack succeeded.`,
+      );
     }
   }
 

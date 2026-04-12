@@ -11,6 +11,16 @@
  * 2) Dependency compatibility fixes (@noble/*, cssstyle, @ai-sdk/groq,
  *    proper-lockfile, pty-manager).
  * 3) Startup noise / native loader suppression (bigint-buffer, sharp, jsdom).
+ *
+ * Many former patches have been retired because the upstream submodule source
+ * (workspace:*) now includes the fixes. The following patches were removed
+ * because the workspace source already resolves them:
+ *   - patchElizaCoreMemoryStorageStub (requireStorage refactored out)
+ *   - patchElizaCoreStreamingTtsHandlerGuard (already guarded in source)
+ *   - patchElizaCoreStreamingRetryPlaceholder (removed from source)
+ *   - patchPluginSqlCountMemoriesSignature (countMemories supports both forms)
+ *   - patchGroqSdkVersion (plugin-groq uses workspace:*)
+ *   - patchElizaCoreNodeTypes (workspace builds include types)
  */
 import {
   existsSync,
@@ -524,220 +534,17 @@ function patchCssstyleColorCompat() {
 }
 patchCssstyleColorCompat();
 
-/**
- * 8) @elizaos/plugin-groq: The published plugin bundles @ai-sdk/groq@1.x which
- *    creates v1-spec models. Our root overrides ai@6.x (AI SDK 5) which requires
- *    spec v2+. Symlink the nested @ai-sdk/groq to the root's @ai-sdk/groq@3.x
- *    so the plugin uses the compatible version.
- */
-function patchGroqSdkVersion() {
-  const rootGroq = resolve(root, "node_modules", "@ai-sdk", "groq");
-  if (!existsSync(rootGroq)) return;
-
-  const bunDir = resolve(root, "node_modules", ".bun");
-  if (!existsSync(bunDir)) return;
-
-  let patched = 0;
-  for (const entry of readdirSync(bunDir)) {
-    if (!entry.startsWith("@elizaos+plugin-groq@")) continue;
-    const nested = resolve(bunDir, entry, "node_modules", "@ai-sdk", "groq");
-    if (!existsSync(nested)) continue;
-
-    // Skip if already a symlink pointing to root
-    try {
-      if (lstatSync(nested).isSymbolicLink()) {
-        if (realpathSync(nested) === realpathSync(rootGroq)) continue;
-        unlinkSync(nested);
-      } else {
-        rmSync(nested, { recursive: true, force: true });
-      }
-    } catch {
-      continue;
-    }
-
-    try {
-      symlinkSync(rootGroq, nested);
-      patched++;
-    } catch {
-      // Symlink may fail on some systems; non-critical
-    }
-  }
-
-  if (patched > 0) {
-    console.log(
-      `[patch-deps] Replaced ${patched} nested @ai-sdk/groq with root v3.x for AI SDK 5 compat`,
-    );
-  }
-}
-patchGroqSdkVersion();
-
-/**
- * Stub missing @elizaos/core type declarations.
- *
- * The npm-published @elizaos/core@2.0.0-alpha.115 declares
- * `"types": "./dist/node/index.d.ts"` in its exports but doesn't ship that
- * file. TypeScript strict-mode builds that import @elizaos/core then fail
- * with TS7016 (noImplicitAny). This creates a minimal re-export stub so the
- * package resolves types correctly.
- */
-function patchElizaCoreNodeTypes() {
-  const bunCacheDir = resolve(root, "node_modules/.bun");
-  const dirs = [resolve(root, "node_modules/@elizaos/core")];
-  if (existsSync(bunCacheDir)) {
-    try {
-      for (const entry of readdirSync(bunCacheDir)) {
-        if (entry.startsWith("@elizaos+core@")) {
-          dirs.push(resolve(bunCacheDir, entry, "node_modules/@elizaos/core"));
-        }
-      }
-    } catch {}
-  }
-
-  let patched = 0;
-  for (const pkgDir of dirs) {
-    const nodeDir = resolve(pkgDir, "dist/node");
-    const dtsTarget = resolve(nodeDir, "index.d.ts");
-    if (existsSync(dtsTarget)) continue;
-
-    // Find the main .d.ts that contains the real type exports.
-    const mainDts = resolve(pkgDir, "dist/index.d.ts");
-    if (!existsSync(mainDts) || !existsSync(nodeDir)) continue;
-
-    try {
-      writeFileSync(
-        dtsTarget,
-        '// Auto-generated stub — see patch-deps.mjs patchElizaCoreNodeTypes\nexport * from "../index";\n',
-      );
-      patched++;
-    } catch {}
-  }
-  if (patched > 0) {
-    console.log(
-      `[patch-deps] Created ${patched} @elizaos/core dist/node/index.d.ts stub(s)`,
-    );
-  }
-}
-patchElizaCoreNodeTypes();
-
 // ---------------------------------------------------------------------------
-// MILADY FORK PATCHES
+// RETIRED MILADY FORK PATCHES
 //
-// These two patches address upstream alpha API drift that breaks the agent
-// runtime on our fork. Both are surgical edits to the compiled node_modules
-// dist files, idempotent across reruns, and logged so you can see them
-// happening at postinstall time.
+// The following patches have been retired because the workspace submodule
+// source (@elizaos/core, @elizaos/plugin-sql) already includes these fixes
+// and they resolve via workspace:* rather than npm tarballs:
+//
+// - patchPluginSqlCountMemoriesSignature (plugin-sql supports both signatures)
+// - patchElizaCoreMemoryStorageStub (requireStorage refactored out of core)
+// - patchElizaCoreStreamingTtsHandlerGuard (TTS guard already in source)
+// - patchElizaCoreStreamingRetryPlaceholder (retry placeholder removed)
+// - patchElizaCoreNodeTypes (workspace builds include types)
+// - patchGroqSdkVersion (plugin-groq uses workspace:*, no nested @ai-sdk/groq)
 // ---------------------------------------------------------------------------
-
-/**
- * Patch @elizaos/plugin-sql countMemories to accept both the old positional
- * signature `(roomId, unique, tableName)` AND the new object signature
- * `({roomIds, unique, tableName})`.
- *
- * Why: upstream @elizaos/core@2.0.0-alpha.113+ calls `adapter.countMemories`
- * with an object `{ roomIds, unique, tableName }`, but
- * @elizaos/plugin-sql@2.0.0-alpha.17 still defines the method with the old
- * positional signature. When core passes an object, plugin-sql receives
- * `roomId = {...}` and `tableName = ""` (default), then throws
- * "tableName is required" on every chat message and completely breaks the
- * /v1/chat/completions endpoint plus every message the bot tries to send.
- *
- * Until plugin-sql is updated upstream to match core's new interface, we
- * rewrite the method prologue to detect and destructure the object form.
- */
-function patchPluginSqlCountMemoriesSignature() {
-  const dirs = [
-    ...collectInstalledPackageDirs("@elizaos/plugin-sql", {
-      includeGlobalBunCache: true,
-    }),
-    resolve(root, "plugins/plugin-sql/typescript"),
-  ];
-  const needle =
-    'async countMemories(roomId, unique3 = true, tableName = "") {';
-  const replacement =
-    'async countMemories(roomIdOrParams, unique3 = true, tableName = "") { let roomId = roomIdOrParams; if (typeof roomIdOrParams === "object" && roomIdOrParams !== null && !Array.isArray(roomIdOrParams)) { const p = roomIdOrParams; tableName = p.tableName ?? tableName; unique3 = p.unique !== undefined ? p.unique : unique3; roomId = (p.roomIds && p.roomIds[0]) ?? p.roomId; }';
-  let patched = 0;
-  for (const pkgDir of dirs) {
-    const file = resolve(pkgDir, "dist/node/index.node.js");
-    if (!existsSync(file)) continue;
-    try {
-      const content = readFileSync(file, "utf8");
-      if (!content.includes(needle)) continue; // already patched or signature changed
-      writeFileSync(file, content.replace(needle, replacement));
-      patched++;
-    } catch {
-      // Best-effort — ignore patch failures.
-    }
-  }
-  if (patched > 0) {
-    console.log(
-      `[patch-deps] Patched ${patched} @elizaos/plugin-sql countMemories signature (milady fork, object-style support)`,
-    );
-  }
-}
-patchPluginSqlCountMemoriesSignature();
-
-/**
- * Patch @elizaos/core MemoryService.requireStorage() to return a no-op
- * stub when no MemoryStorageProvider is registered, instead of throwing.
- *
- * Why: upstream @elizaos/core@2.0.0-alpha.113+ introduced an
- * advanced-memory plugin that expects a "memoryStorage" service to be
- * registered by a database plugin. @elizaos/plugin-sql@2.0.0-alpha.17
- * hasn't been updated to provide one. When any api path composes state
- * or runs evaluators, MemoryService.requireStorage() throws
- * "MemoryStorageProvider not available", which breaks the
- * /v1/chat/completions endpoint and several providers.
- *
- * Until plugin-sql catches up, we replace requireStorage() with a shim
- * that returns an in-memory no-op provider. Advanced-memory features
- * (long-term memory, session summaries) gracefully degrade to no-ops
- * instead of crashing the whole message pipeline.
- */
-function patchElizaCoreMemoryStorageStub() {
-  const dirs = collectInstalledPackageDirs("@elizaos/core", {
-    includeGlobalBunCache: true,
-  });
-  const needle = `requireStorage() {
-      if (!this.storage) {
-        throw new Error("MemoryStorageProvider not available. Register a memoryStorage service from your database plugin.");
-      }
-      return this.storage;
-    }`;
-  const replacement = `requireStorage() {
-      if (!this.storage) {
-        // milady patch: return a no-op stub so advanced-memory gracefully
-        // degrades when no database plugin provides memoryStorage. Without
-        // this the api layer throws on every chat message.
-        return {
-          storeLongTermMemory: async (m) => ({ ...m, id: "stub-" + Date.now(), createdAt: Date.now(), updatedAt: Date.now(), accessCount: 0 }),
-          getLongTermMemories: async () => [],
-          updateLongTermMemory: async () => {},
-          deleteLongTermMemory: async () => {},
-          storeSessionSummary: async (s) => ({ ...s, id: "stub-" + Date.now(), createdAt: Date.now(), updatedAt: Date.now() }),
-          getCurrentSessionSummary: async () => null,
-          updateSessionSummary: async () => {},
-          getSessionSummaries: async () => [],
-        };
-      }
-      return this.storage;
-    }`;
-  let patched = 0;
-  for (const pkgDir of dirs) {
-    const file = resolve(pkgDir, "dist/node/index.node.js");
-    if (!existsSync(file)) continue;
-    try {
-      const content = readFileSync(file, "utf8");
-      if (!content.includes(needle)) continue; // already patched or text drifted
-      writeFileSync(file, content.replace(needle, replacement));
-      patched++;
-    } catch {
-      // Best-effort — ignore patch failures.
-    }
-  }
-  if (patched > 0) {
-    console.log(
-      `[patch-deps] Patched ${patched} @elizaos/core MemoryService.requireStorage stub (milady fork, graceful degradation)`,
-    );
-  }
-}
-patchElizaCoreMemoryStorageStub();

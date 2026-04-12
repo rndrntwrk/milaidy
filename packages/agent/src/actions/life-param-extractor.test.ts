@@ -168,7 +168,8 @@ describe("extractTaskCreatePlanWithLlm", () => {
 
     expect(result).toEqual({
       mode: "respond",
-      response: "Restate the reminder in one sentence with the task and timing.",
+      response:
+        "Restate the reminder in one sentence with the task and timing.",
       requestKind: null,
       title: null,
       description: null,

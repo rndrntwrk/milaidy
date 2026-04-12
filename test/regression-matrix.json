@@ -18,7 +18,6 @@
         "regression-matrix-pr"
       ],
       "bannedSnippets": [
-        "--exclude packages/agent/test/anvil-contracts.e2e.test.ts",
         "--exclude packages/agent/test/apps-e2e.e2e.test.ts"
       ]
     },
@@ -322,7 +321,7 @@
   "exceptions": {
     "heavyOnlyE2E": [
       {
-        "path": "packages/agent/test/anvil-contracts.e2e.test.ts",
+        "path": "packages/agent/test/anvil-contracts.real.e2e.test.ts",
         "suite": "e2e-heavy",
         "tier": "heavy",
         "rationale": "requires contract and anvil setup that stays out of the deterministic PR E2E gate"
@@ -542,7 +541,6 @@
   "guards": {
     "packageScriptDisallowlist": {
       "test:e2e": [
-        "--exclude test/anvil-contracts.e2e.test.ts",
         "--exclude test/apps-e2e.e2e.test.ts"
       ]
     },

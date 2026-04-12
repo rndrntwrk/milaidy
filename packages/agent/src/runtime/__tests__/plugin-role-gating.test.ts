@@ -133,8 +133,8 @@ describe("plugin-role-gating", () => {
     expect(ROLE_GATED_PLUGINS["@elizaos/plugin-secrets-manager"]).toBe("owner");
     expect(ROLE_GATED_PLUGINS["cron"]).toBe("admin");
     expect(ROLE_GATED_PLUGINS["elizaOSCloud"]).toBe("admin");
-    // Scratchpad floor is "user" — writes elevated to admin via overrides
-    expect(ROLE_GATED_PLUGINS["scratchpad"]).toBe("user");
+    // Clipboard floor is "user" — writes elevated to admin via overrides
+    expect(ROLE_GATED_PLUGINS["clipboard"]).toBe("user");
     expect(ROLE_GATED_PLUGINS["discord"]).toBe("user");
     expect(ROLE_GATED_PLUGINS["music-player"]).toBe("user");
   });

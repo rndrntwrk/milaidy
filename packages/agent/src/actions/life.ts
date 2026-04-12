@@ -2273,7 +2273,6 @@ function deriveAlarmLikeDefaults(
   }
 
   const slots = extractExplicitDailySlots(intent);
-  const lower = normalizeLifeInputText(intent).toLowerCase();
   const slot = slots[0] ?? null;
 
   return {
@@ -2304,7 +2303,6 @@ function deriveReminderLikeDefaults(
   }
 
   const slots = extractExplicitDailySlots(intent);
-  const lower = normalizeLifeInputText(intent).toLowerCase();
   const slot = slots[0] ?? null;
 
   return {

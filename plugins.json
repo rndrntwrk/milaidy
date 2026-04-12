@@ -4904,13 +4904,13 @@
       "repository": "https://github.com/elizaos/eliza"
     },
     {
-      "id": "scratchpad",
-      "dirName": "plugin-scratchpad",
-      "name": "Scratchpad",
-      "npmName": "@elizaos/plugin-scratchpad",
-      "description": "File-based memory storage plugin for ElizaOS - persistent notes and memories",
+      "id": "clipboard",
+      "dirName": "plugin-clipboard",
+      "name": "Clipboard",
+      "npmName": "@elizaos/plugin-clipboard",
+      "description": "File-based memory storage plugin for ElizaOS - persistent notes and clipboard",
       "tags": [
-        "scratchpad",
+        "clipboard",
         "memory",
         "notes",
         "storage"
@@ -4918,18 +4918,18 @@
       "category": "feature",
       "envKey": null,
       "configKeys": [
-        "SCRATCHPAD_BASE_PATH",
-        "SCRATCHPAD_MAX_FILE_SIZE"
+        "CLIPBOARD_BASE_PATH",
+        "CLIPBOARD_MAX_FILE_SIZE"
       ],
       "version": "2.0.0-alpha.4",
       "pluginParameters": {
-        "SCRATCHPAD_BASE_PATH": {
+        "CLIPBOARD_BASE_PATH": {
           "type": "string",
-          "description": "Base directory for scratchpad files (default: ~/.eliza/scratchpad)",
+          "description": "Base directory for clipboard files (default: ~/.eliza/clipboard)",
           "required": false,
           "sensitive": false
         },
-        "SCRATCHPAD_MAX_FILE_SIZE": {
+        "CLIPBOARD_MAX_FILE_SIZE": {
           "type": "number",
           "description": "Maximum file size in bytes (default: 1MB)",
           "required": false,
@@ -4937,8 +4937,8 @@
           "default": "1048576"
         }
       },
-      "homepage": "https://github.com/elizaos-plugins/plugin-scratchpad#readme",
-      "repository": "https://github.com/elizaos-plugins/plugin-scratchpad"
+      "homepage": "https://github.com/elizaos-plugins/plugin-clipboard#readme",
+      "repository": "https://github.com/elizaos-plugins/plugin-clipboard"
     },
     {
       "id": "secrets-manager",

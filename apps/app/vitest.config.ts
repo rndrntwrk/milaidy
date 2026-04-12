@@ -44,7 +44,23 @@ function appCoreBridgeStubPlugin(): Plugin {
   };
 }
 
-export default defineConfig(      {
+export default defineConfig({
+  plugins: [appCoreBridgeStubPlugin()],
+  resolve: {
+    alias: [
+      {
+        // Stub the broken @lookingglass/webxr ESM chain for tests
+        find: /^@lookingglass\/.*/,
+        replacement: path.join(
+          here,
+          "..",
+          "..",
+          "test",
+          "stubs",
+          "lookingglass-webxr.ts",
+        ),
+      },
+      {
         find: "react",
         replacement: path.join(here, "node_modules/react"),
       },
@@ -155,6 +171,7 @@ export default defineConfig(      {
     setupFiles: [path.join(here, "test/setup.ts")],
     environment: "node",
     alias: {
+      "@elizaos/skills": path.join(here, "test/__mocks__/elizaos-skills.ts"),
       "@miladyai/capacitor-gateway": path.join(
         here,
         "plugins/gateway/src/index.ts",

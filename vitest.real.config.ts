@@ -2,8 +2,7 @@
  * Vitest config for the live/real suite only.
  *
  * This config deliberately avoids the default unit/e2e stub graph and includes
- * only files that are already marked `live` or `real`, plus the mixed
- * cloud-provider integration spec that contains gated live cases.
+ * only files that are already marked `live` or `real`.
  *
  * Browser-driven QA flows remain opt-in inside the test files themselves
  * (`MILADY_LIVE_BROWSER_SUITE=1`) so `bun run test:real` can pass in
@@ -166,7 +165,6 @@ export default defineConfig({
       "**/*.real.e2e.test.tsx",
       "**/*-real.e2e.test.ts",
       "**/*-real.e2e.test.tsx",
-      "packages/agent/test/cloud-providers.e2e.test.ts",
     ],
     exclude: [
       "dist/**",

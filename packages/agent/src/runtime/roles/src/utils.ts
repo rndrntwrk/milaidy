@@ -1,1 +1,1 @@
-export * from "@miladyai/shared/eliza-core-roles";
+export * from "@elizaos/core";

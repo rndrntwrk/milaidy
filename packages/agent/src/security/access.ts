@@ -1,5 +1,5 @@
 import type { IAgentRuntime, Memory } from "@elizaos/core";
-import * as roles from "@miladyai/shared/eliza-core-roles";
+import * as roles from "@elizaos/core";
 
 /** Role names matching the elizaOS role hierarchy. */
 export type RequiredRole = "OWNER" | "ADMIN" | "USER" | "GUEST";

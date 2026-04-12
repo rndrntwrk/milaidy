@@ -134,7 +134,7 @@ import {
   runtimeTrajectoriesEnabled,
 } from "./native-runtime-features.js";
 import { installRuntimePluginLifecycle } from "./plugin-lifecycle.js";
-import rolesPlugin from "./roles/src/index.js";
+import rolesPlugin from "./roles.js";
 import { shouldEnableTrajectoryLoggingByDefault } from "./trajectory-persistence.js";
 
 const require = createRequire(import.meta.url);

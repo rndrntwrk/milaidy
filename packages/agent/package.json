@@ -140,7 +140,7 @@
     "@elizaos/plugin-plugin-manager": "workspace:*",
     "@elizaos/plugin-secrets-manager": "workspace:*",
     "@elizaos/plugin-shell": "workspace:*",
-    "@elizaos/plugin-scratchpad": "workspace:*",
+    "@elizaos/plugin-clipboard": "workspace:*",
     "@elizaos/plugin-solana": "1.2.6",
     "@elizaos/plugin-sql": "workspace:*",
     "@elizaos/plugin-trust": "workspace:*",

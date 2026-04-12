@@ -208,10 +208,10 @@ declare module "@elizaos/plugin-plugin-manager" {
   export default pluginManagerPlugin;
 }
 
-declare module "@elizaos/plugin-scratchpad" {
-  import type { IAgentRuntime, Memory, Plugin } from "@elizaos/core";
+declare module "@elizaos/plugin-clipboard" {
+  import type { IAgentRuntime, Memory } from "@elizaos/core";
 
-  export function maybeStoreTaskScratchpadItem(
+  export function maybeStoreTaskClipboardItem(
     runtime: IAgentRuntime,
     message: Memory,
     item: Record<string, unknown>,
