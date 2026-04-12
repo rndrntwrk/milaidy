@@ -10,6 +10,11 @@
  */
 
 import { Button, Card, CardContent, Input, Spinner } from "@miladyai/ui";
+import {
+  OnboardingSecondaryActionButton,
+  onboardingBodyTextShadowStyle,
+  onboardingTextShadowStyle,
+} from "./onboarding-step-chrome";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { client } from "../../api";
 import type {
@@ -31,6 +36,13 @@ import {
 
 const MONO_FONT = "'Courier New', 'Courier', 'Monaco', monospace";
 
+export function shouldShowLocalDeploymentOption(args: {
+  isDesktop: boolean;
+  isDevelopment: boolean;
+}): boolean {
+  return args.isDesktop || args.isDevelopment;
+}
+
 type SubView = "chooser" | "cloud" | "remote";
 
 type CloudStage =
@@ -40,13 +52,6 @@ type CloudStage =
   | "creating"
   | "provisioning"
   | "connecting";
-
-export function shouldShowLocalDeploymentOption(args: {
-  isDesktop: boolean;
-  isDevelopment: boolean;
-}): boolean {
-  return args.isDesktop || args.isDevelopment;
-}
 
 function statusBadge(status: string): { label: string; className: string } {
   switch (status) {
@@ -156,7 +161,9 @@ export function DeploymentStep() {
         }
       } catch (err) {
         if (cancelled) return;
-        setError(err instanceof Error ? err.message : "Failed to load agents");
+        setError(
+          err instanceof Error ? err.message : "Failed to load agents",
+        );
         setCloudStage("agent-list");
       }
     })();
@@ -307,7 +314,9 @@ export function DeploymentStep() {
         }
       }, 2500);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create agent");
+      setError(
+        err instanceof Error ? err.message : "Failed to create agent",
+      );
       setCloudStage("agent-list");
     }
   }, [newAgentName, connectToAgent]);
@@ -341,34 +350,33 @@ export function DeploymentStep() {
     setState("onboardingServerTarget", "remote");
     startupCoordinator.dispatch({ type: "SPLASH_CONTINUE" });
     handleOnboardingNext();
-  }, [
-    remoteUrl,
-    remoteToken,
-    setState,
-    startupCoordinator,
-    handleOnboardingNext,
-  ]);
+  }, [remoteUrl, remoteToken, setState, startupCoordinator, handleOnboardingNext]);
 
   // ── Render: chooser ────────────────────────────────────────────────
   if (subView === "chooser") {
+    const cardBase =
+      "flex w-full cursor-pointer flex-col items-start gap-1.5 rounded-xl border px-5 py-4 text-left backdrop-blur-xl transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--onboarding-secondary-focus-ring)]";
+    const cardDefault = `${cardBase} border-white/20 bg-white/[0.07] shadow-lg hover:border-white/35 hover:bg-white/[0.12]`;
+    const cardRecommended = `${cardBase} border-[#f0b90b]/40 bg-[#f0b90b]/[0.1] shadow-lg hover:border-[#f0b90b]/60 hover:bg-[#f0b90b]/[0.18]`;
+
     return (
       <StepContainer>
         <StepHeader t={t} />
 
-        <div className="mt-4 flex w-full flex-col gap-3 text-left">
+        <div className="mt-6 flex w-full flex-col gap-3 text-left">
           {/* Discovered gateways */}
           {discoveredGateways.length > 0 && (
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-3">
               {discoveredGateways.map((gateway) => (
                 <Card
                   key={gateway.stableId}
-                  className="border-2 border-black bg-white shadow-md"
+                  className="rounded-xl border-white/20 bg-white/[0.07] shadow-lg backdrop-blur-xl"
                 >
-                  <CardContent className="flex items-center justify-between gap-3 px-3 py-3">
+                  <CardContent className="flex items-center justify-between gap-3 px-5 py-4">
                     <div className="min-w-0">
                       <p
                         style={{ fontFamily: MONO_FONT }}
-                        className="text-3xs uppercase text-black/60"
+                        className="text-3xs uppercase text-white/60"
                       >
                         {gateway.isLocal
                           ? t("startupshell.LocalNetworkAgent", {
@@ -378,10 +386,10 @@ export function DeploymentStep() {
                               defaultValue: "Network agent",
                             })}
                       </p>
-                      <p className="truncate text-sm font-semibold text-black">
+                      <p className="truncate text-sm font-semibold text-white/95">
                         {gateway.name}
                       </p>
-                      <p className="truncate text-xs-tight text-black/70">
+                      <p className="truncate text-xs-tight text-white/50">
                         {gateway.host}
                       </p>
                     </div>
@@ -389,7 +397,7 @@ export function DeploymentStep() {
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="shrink-0 border-2 border-black bg-white text-black font-semibold hover:bg-black hover:text-[#ffe600]"
+                      className="shrink-0 rounded-lg border-[#f0b90b]/40 bg-[#f0b90b]/15 text-[#fffaee] font-semibold hover:bg-[#f0b90b]/25 hover:border-[#f0b90b]/60"
                       onClick={() => handleConnectGateway(gateway)}
                     >
                       {t("startupshell.Connect", { defaultValue: "Connect" })}
@@ -402,77 +410,85 @@ export function DeploymentStep() {
 
           {/* Create Local Agent */}
           {showCreateLocal && (
-            <Button
+            <button
               type="button"
-              variant="default"
-              className="justify-start border-2 border-black bg-black px-3 py-5 text-left text-[#ffe600] font-semibold shadow-md hover:bg-[#ffe600] hover:text-black hover:border-black"
+              className={cardRecommended}
               onClick={handleCreateLocal}
             >
-              <span className="flex flex-col items-start gap-1">
-                <span
-                  style={{ fontFamily: MONO_FONT }}
-                  className="text-3xs uppercase text-[#ffe600]/80"
-                >
-                  {t("startupshell.CreateAgentLabel", {
-                    defaultValue: "New local agent",
-                  })}
-                </span>
-                <span className="text-sm font-bold">
-                  {t("startupshell.CreateLocalAgent", {
-                    defaultValue: "Create Local Agent",
-                  })}
-                </span>
+              <span
+                style={{ fontFamily: MONO_FONT }}
+                className="text-3xs uppercase text-[#f0b90b]/80"
+              >
+                {t("startupshell.CreateAgentLabel", {
+                  defaultValue: "New local agent",
+                })}
               </span>
-            </Button>
+              <span className="text-sm font-bold text-white/95">
+                {t("startupshell.CreateLocalAgent", {
+                  defaultValue: "Create Local Agent",
+                })}
+              </span>
+              <span className="text-xs-tight leading-snug text-white/60">
+                {t("startupshell.CreateLocalAgentDesc", {
+                  defaultValue: "Run an agent locally on this device",
+                })}
+              </span>
+            </button>
           )}
 
           {/* Manage Cloud Agents */}
-          <Button
+          <button
             type="button"
-            variant="default"
-            className="justify-start border-2 border-black bg-white px-3 py-5 text-left text-black font-semibold shadow-md hover:bg-black hover:text-[#ffe600]"
+            className={cardDefault}
             onClick={() => setSubView("cloud")}
           >
-            <span className="flex flex-col items-start gap-1">
-              <span
-                style={{ fontFamily: MONO_FONT }}
-                className="text-3xs uppercase text-black/60"
-              >
-                {t("startupshell.ElizaCloudAgent", {
-                  defaultValue: "Eliza Cloud",
-                })}
-              </span>
-              <span className="text-sm font-bold">
-                {t("startupshell.ManageCloudAgents", {
-                  defaultValue: "Manage Cloud Agents",
-                })}
-              </span>
+            <span
+              style={{ fontFamily: MONO_FONT }}
+              className="text-3xs uppercase text-white/60"
+            >
+              {t("startupshell.ElizaCloudAgent", {
+                defaultValue: "Eliza Cloud",
+              })}
             </span>
-          </Button>
+            <span className="text-sm font-bold text-white/95">
+              {t("startupshell.ManageCloudAgents", {
+                defaultValue: "Manage Cloud Agents",
+              })}
+            </span>
+            <span className="text-xs-tight leading-snug text-white/60">
+              {t("startupshell.ManageCloudAgentsDesc", {
+                defaultValue:
+                  "Host agents on Eliza Cloud infrastructure",
+              })}
+            </span>
+          </button>
 
           {/* Connect to Remote */}
-          <Button
+          <button
             type="button"
-            variant="default"
-            className="justify-start border-2 border-black bg-white px-3 py-5 text-left text-black font-semibold shadow-md hover:bg-black hover:text-[#ffe600]"
+            className={cardDefault}
             onClick={() => setSubView("remote")}
           >
-            <span className="flex flex-col items-start gap-1">
-              <span
-                style={{ fontFamily: MONO_FONT }}
-                className="text-3xs uppercase text-black/60"
-              >
-                {t("startupshell.RemoteAgentLabel", {
-                  defaultValue: "Remote server",
-                })}
-              </span>
-              <span className="text-sm font-bold">
-                {t("startupshell.ConnectToRemote", {
-                  defaultValue: "Connect to Remote Agent",
-                })}
-              </span>
+            <span
+              style={{ fontFamily: MONO_FONT }}
+              className="text-3xs uppercase text-white/60"
+            >
+              {t("startupshell.RemoteAgentLabel", {
+                defaultValue: "Existing server",
+              })}
             </span>
-          </Button>
+            <span className="text-sm font-bold text-white/95">
+              {t("startupshell.ConnectToRemote", {
+                defaultValue: "Connect to Remote Agent",
+              })}
+            </span>
+            <span className="text-xs-tight leading-snug text-white/60">
+              {t("startupshell.ConnectToRemoteDesc", {
+                defaultValue:
+                  "Connect to a server running on your network",
+              })}
+            </span>
+          </button>
         </div>
       </StepContainer>
     );
@@ -489,7 +505,7 @@ export function DeploymentStep() {
           <div className="mt-4 flex w-full flex-col gap-3 text-left">
             <p
               style={{ fontFamily: MONO_FONT }}
-              className="text-3xs uppercase text-black/60"
+              className="text-3xs uppercase text-white/60"
             >
               {t("startupshell.CloudLogin", {
                 defaultValue: "Sign in to Eliza Cloud",
@@ -498,7 +514,7 @@ export function DeploymentStep() {
             <Button
               type="button"
               variant="default"
-              className="justify-center border-2 border-black bg-black px-3 py-5 text-[#ffe600] font-semibold shadow-md hover:bg-[#ffe600] hover:text-black"
+              className="justify-center rounded-xl border border-[#f0b90b]/40 bg-[#f0b90b]/15 px-3 py-5 text-[#f0b90b] font-semibold shadow-lg hover:bg-[#f0b90b]/25 hover:border-[#f0b90b]/60"
               onClick={handleLogin}
               disabled={elizaCloudLoginBusy}
             >
@@ -518,7 +534,7 @@ export function DeploymentStep() {
             {error && (
               <p
                 style={{ fontFamily: MONO_FONT }}
-                className="text-3xs text-danger"
+                className="text-3xs text-red-400"
               >
                 {error}
               </p>
@@ -530,10 +546,10 @@ export function DeploymentStep() {
         {/* Loading */}
         {cloudStage === "loading" && (
           <div className="mt-4 flex w-full flex-col items-center gap-3">
-            <Spinner className="h-6 w-6 text-black/60" />
+            <Spinner className="h-6 w-6 text-white/60" />
             <p
               style={{ fontFamily: MONO_FONT }}
-              className="text-3xs uppercase text-black/50"
+              className="text-3xs uppercase text-white/50"
             >
               {t("startupshell.LoadingAgents", {
                 defaultValue: "Loading agents...",
@@ -547,10 +563,10 @@ export function DeploymentStep() {
           cloudStage === "provisioning" ||
           cloudStage === "connecting") && (
           <div className="mt-4 flex w-full flex-col items-center gap-3">
-            <Spinner className="h-6 w-6 text-black/60" />
+            <Spinner className="h-6 w-6 text-white/60" />
             <p
               style={{ fontFamily: MONO_FONT }}
-              className="text-3xs uppercase text-black/50"
+              className="text-3xs uppercase text-white/50"
             >
               {cloudStage === "creating"
                 ? t("startupshell.CreatingAgent", {
@@ -574,7 +590,7 @@ export function DeploymentStep() {
             <div className="flex items-center justify-between">
               <p
                 style={{ fontFamily: MONO_FONT }}
-                className="text-3xs uppercase text-black/60"
+                className="text-3xs uppercase text-white/60"
               >
                 {t("startupshell.YourCloudAgents", {
                   defaultValue: "Your cloud agents",
@@ -584,7 +600,7 @@ export function DeploymentStep() {
                 type="button"
                 onClick={handleRefresh}
                 style={{ fontFamily: MONO_FONT }}
-                className="text-3xs uppercase text-black/50 hover:text-black underline"
+                className="text-3xs uppercase text-white/50 hover:text-white underline"
               >
                 {t("startupshell.Refresh", { defaultValue: "Refresh" })}
               </button>
@@ -593,7 +609,7 @@ export function DeploymentStep() {
             {error && (
               <p
                 style={{ fontFamily: MONO_FONT }}
-                className="text-3xs text-danger"
+                className="text-3xs text-red-400"
               >
                 {error}
               </p>
@@ -606,16 +622,16 @@ export function DeploymentStep() {
                   return (
                     <Card
                       key={agent.agent_id}
-                      className="border-2 border-black bg-white shadow-md"
+                      className="border border-white/20 bg-white/[0.07] shadow-lg backdrop-blur-xl"
                     >
                       <CardContent className="flex items-center justify-between gap-3 px-3 py-3">
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
-                            <p className="truncate text-sm font-semibold text-black">
+                            <p className="truncate text-sm font-semibold text-white/95">
                               {agent.agent_name}
                             </p>
                             <span
-                              className={`shrink-0 rounded px-1.5 py-0.5 text-3xs font-bold ${badge.className}`}
+                              className={`shrink-0 rounded px-1.5 py-0.5 text-2xs font-bold ${badge.className}`}
                             >
                               {badge.label}
                             </span>
@@ -623,7 +639,7 @@ export function DeploymentStep() {
                           {agent.web_ui_url && (
                             <p
                               style={{ fontFamily: MONO_FONT }}
-                              className="truncate text-3xs text-black/50"
+                              className="truncate text-3xs text-white/50"
                             >
                               {agent.web_ui_url}
                             </p>
@@ -633,7 +649,7 @@ export function DeploymentStep() {
                           type="button"
                           variant="outline"
                           size="sm"
-                          className="shrink-0 border-2 border-black bg-white text-black font-semibold hover:bg-black hover:text-[#ffe600]"
+                          className="shrink-0 rounded-lg border-[#f0b90b]/40 bg-[#f0b90b]/15 text-[#f0b90b] font-semibold hover:bg-[#f0b90b]/25 hover:border-[#f0b90b]/60"
                           onClick={() => connectToAgent(agent)}
                           disabled={agent.status === "failed"}
                         >
@@ -651,7 +667,7 @@ export function DeploymentStep() {
             {agents.length === 0 && !error && (
               <p
                 style={{ fontFamily: MONO_FONT }}
-                className="text-2xs text-black/50 text-center py-2"
+                className="text-3xs text-white/50 text-center py-2"
               >
                 {t("startupshell.NoCloudAgents", {
                   defaultValue: "No cloud agents yet",
@@ -660,7 +676,7 @@ export function DeploymentStep() {
             )}
 
             {/* Inline create form */}
-            <Card className="border-2 border-dashed border-black/40 bg-white/80">
+            <Card className="border border-dashed border-white/20 bg-white/[0.05]">
               <CardContent className="flex items-center gap-2 px-3 py-2.5">
                 <Input
                   placeholder={t("startupshell.AgentName", {
@@ -668,7 +684,7 @@ export function DeploymentStep() {
                   })}
                   value={newAgentName}
                   onChange={(e) => setNewAgentName(e.target.value)}
-                  className="h-8 flex-1 border-black/30 text-sm"
+                  className="h-8 flex-1 border-white/20 bg-transparent text-white text-sm placeholder:text-white/40"
                   onKeyDown={(e) => {
                     if (e.key === "Enter") handleCreate();
                   }}
@@ -677,7 +693,7 @@ export function DeploymentStep() {
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="shrink-0 border-2 border-black bg-black text-[#ffe600] font-semibold hover:bg-[#ffe600] hover:text-black"
+                  className="shrink-0 rounded-lg border-[#f0b90b]/40 bg-[#f0b90b]/15 text-[#f0b90b] font-semibold hover:bg-[#f0b90b]/25 hover:border-[#f0b90b]/60"
                   onClick={handleCreate}
                   disabled={!newAgentName.trim()}
                 >
@@ -701,7 +717,7 @@ export function DeploymentStep() {
       <div className="mt-4 flex w-full flex-col gap-3 text-left">
         <p
           style={{ fontFamily: MONO_FONT }}
-          className="text-3xs uppercase text-black/60"
+          className="text-3xs uppercase text-white/60"
         >
           {t("onboarding.deployment.remoteLabel", {
             defaultValue: "Connect to a remote agent",
@@ -714,7 +730,7 @@ export function DeploymentStep() {
           })}
           value={remoteUrl}
           onChange={(e) => setRemoteUrl(e.target.value)}
-          className="h-10 border-2 border-black/30 text-sm"
+          className="h-10 border border-white/20 bg-transparent text-white text-sm placeholder:text-white/40"
         />
 
         <Input
@@ -724,13 +740,13 @@ export function DeploymentStep() {
           type="password"
           value={remoteToken}
           onChange={(e) => setRemoteToken(e.target.value)}
-          className="h-10 border-2 border-black/30 text-sm"
+          className="h-10 border border-white/20 bg-transparent text-white text-sm placeholder:text-white/40"
         />
 
         <Button
           type="button"
           variant="default"
-          className="justify-center border-2 border-black bg-black px-3 py-4 text-[#ffe600] font-semibold shadow-md hover:bg-[#ffe600] hover:text-black"
+          className="justify-center rounded-xl border border-[#f0b90b]/40 bg-[#f0b90b]/15 px-3 py-4 text-[#f0b90b] font-semibold shadow-lg hover:bg-[#f0b90b]/25 hover:border-[#f0b90b]/60"
           onClick={handleRemoteConnect}
           disabled={!remoteUrl.trim()}
         >
@@ -755,22 +771,20 @@ function StepContainer({ children }: { children: React.ReactNode }) {
 
 function StepHeader({
   t,
-}: {
-  t: (key: string, values?: Record<string, unknown>) => string;
-}) {
+}: { t: (key: string, values?: Record<string, unknown>) => string }) {
   return (
     <div>
       <h2
-        style={{ fontFamily: MONO_FONT }}
-        className="text-lg font-bold text-black"
+        style={{ fontFamily: MONO_FONT, ...onboardingTextShadowStyle }}
+        className="text-xl font-light text-white/95"
       >
         {t("onboarding.deployment.title", {
           defaultValue: "Choose your setup",
         })}
       </h2>
       <p
-        style={{ fontFamily: MONO_FONT }}
-        className="text-2xs uppercase text-black/50 mt-1"
+        style={{ fontFamily: MONO_FONT, ...onboardingBodyTextShadowStyle }}
+        className="text-3xs uppercase tracking-[0.2em] text-white/60 mt-2"
       >
         {t("onboarding.deployment.subtitle", {
           defaultValue: "Where should your agent run?",
@@ -788,13 +802,11 @@ function BackButton({
   onClick: () => void;
 }) {
   return (
-    <button
-      type="button"
+    <OnboardingSecondaryActionButton
       onClick={onClick}
-      style={{ fontFamily: MONO_FONT }}
-      className="mt-1 text-3xs uppercase text-black/50 hover:text-black underline text-center"
+      className="mt-2 self-center"
     >
       {t("startupshell.Back", { defaultValue: "Back" })}
-    </button>
+    </OnboardingSecondaryActionButton>
   );
 }
