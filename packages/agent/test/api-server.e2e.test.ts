@@ -4309,9 +4309,9 @@ describe("API Server E2E (no runtime)", () => {
         expect(typeof p.description).toBe("string");
         expect(typeof p.enabled).toBe("boolean");
         expect(typeof p.configured).toBe("boolean");
-        expect(["ai-provider", "connector", "database", "feature"]).toContain(
-          p.category,
-        );
+        expect(
+          ["ai-provider", "app", "connector", "database", "feature"],
+        ).toContain(p.category);
         expect(Array.isArray(p.configKeys)).toBe(true);
       }
     });

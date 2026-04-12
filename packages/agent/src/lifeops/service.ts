@@ -1422,6 +1422,42 @@ function resolveCalendarWindow(args: {
   };
 }
 
+function buildCalendarLookaheadWindow(
+  now: Date,
+  timeZone: string,
+  daysAhead: number,
+): { timeMin: string; timeMax: string } {
+  const zonedNow = getZonedDateParts(now, timeZone);
+  const windowStart = buildUtcDateFromLocalParts(timeZone, {
+    year: zonedNow.year,
+    month: zonedNow.month,
+    day: zonedNow.day,
+    hour: 0,
+    minute: 0,
+    second: 0,
+  });
+  const endDay = addDaysToLocalDate(
+    {
+      year: zonedNow.year,
+      month: zonedNow.month,
+      day: zonedNow.day,
+    },
+    Math.max(1, daysAhead),
+  );
+  const windowEnd = buildUtcDateFromLocalParts(timeZone, {
+    year: endDay.year,
+    month: endDay.month,
+    day: endDay.day,
+    hour: 0,
+    minute: 0,
+    second: 0,
+  });
+  return {
+    timeMin: windowStart.toISOString(),
+    timeMax: windowEnd.toISOString(),
+  };
+}
+
 function hasGoogleCalendarReadCapability(
   grant: LifeOpsConnectorGrant,
 ): boolean {
@@ -10361,7 +10397,15 @@ export class LifeOpsService {
     now = new Date(),
   ): Promise<LifeOpsNextCalendarEventContext> {
     const mode = normalizeOptionalConnectorMode(request.mode, "mode");
-    const feed = await this.getCalendarFeed(requestUrl, request, now);
+    const timeZone = normalizeCalendarTimeZone(request.timeZone);
+    const feedRequest =
+      request.timeMin || request.timeMax
+        ? request
+        : {
+            ...request,
+            ...buildCalendarLookaheadWindow(now, timeZone, 30),
+          };
+    const feed = await this.getCalendarFeed(requestUrl, feedRequest, now);
     const nextEvent =
       feed.events.find((event) => Date.parse(event.endAt) > now.getTime()) ??
       null;

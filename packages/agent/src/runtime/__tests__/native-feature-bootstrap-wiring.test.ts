@@ -81,6 +81,16 @@ describe("native feature bootstrap wiring", () => {
     );
   });
 
+  it("guards plugin-ollama bootstrap behind a runtime require", () => {
+    expect(elizaSource).not.toContain(
+      'import * as pluginOllama from "@elizaos/plugin-ollama";',
+    );
+    expect(elizaSource).toContain(
+      'pluginOllama = require("@elizaos/plugin-ollama");',
+    );
+    expect(elizaSource).toContain('"@elizaos/plugin-ollama": pluginOllama');
+  });
+
   it("guards trajectory bootstrap behind the native trajectories toggle", () => {
     const waitBlock =
       elizaSource.match(

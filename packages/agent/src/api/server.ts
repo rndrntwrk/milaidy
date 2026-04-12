@@ -3786,9 +3786,9 @@ function wireCodingAgentChatBridge(st: ServerState): boolean {
     // In the real task-agent stack the PTY progress streamer + jsonl watcher
     // already deliver the success path. Keep generic coordinator chatter
     // suppressed, but still route task-specific issue messages when the
-    // coordinator includes per-task routing metadata.
+    // coordinator includes per-task routing metadata or when the text itself
+    // identifies a unique task thread.
     coordinator.setChatCallback(async (text, source, routing) => {
-      if (!routing) return;
       const delivered = await routeTaskAgentTextToConnector(
         st.runtime,
         text,
