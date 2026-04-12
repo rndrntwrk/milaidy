@@ -64,7 +64,6 @@ import * as pluginAnthropic from "@elizaos/plugin-anthropic";
 import * as pluginForm from "@elizaos/plugin-form";
 import * as pluginLocalEmbedding from "@elizaos/plugin-local-embedding";
 import * as pluginPdf from "@elizaos/plugin-pdf";
-import * as pluginPersonality from "@elizaos/plugin-personality";
 import * as pluginPluginManager from "@elizaos/plugin-plugin-manager";
 import * as pluginSecretsManager from "@elizaos/plugin-secrets-manager";
 import * as pluginShell from "@elizaos/plugin-shell";
@@ -197,6 +196,15 @@ try {
 } catch {
   pluginOpenai = null;
 }
+// Keep plugin-personality behind a guarded runtime require too. Some published
+// alpha builds resolve through package.json but do not ship the runtime entry,
+// which breaks live startup smokes before the API server is ready.
+let pluginPersonality: unknown = null;
+try {
+  pluginPersonality = require("@elizaos/plugin-personality");
+} catch {
+  pluginPersonality = null;
+}
 
 type SignalShutdownContext = {
   getRuntime: () => AgentRuntime;
@@ -299,7 +307,9 @@ export const STATIC_ELIZA_PLUGINS: Record<string, unknown> = {
   "@elizaos/plugin-trust": pluginTrust,
   "@miladyai/plugin-selfcontrol": pluginSelfControl,
   "@miladyai/plugin-discord-local": discordLocalPlugin,
-  "@elizaos/plugin-personality": pluginPersonality,
+  ...(pluginPersonality
+    ? { "@elizaos/plugin-personality": pluginPersonality }
+    : {}),
   ...(pluginExperience
     ? { "@elizaos/plugin-experience": pluginExperience }
     : {}),
