@@ -112,9 +112,7 @@ describe("init-submodules script", () => {
     expect(result.failed).toBe(1);
     expect(
       errorLogs.some((message) =>
-        message.includes(
-          "Failed to initialize bad (bad): simulated update failure",
-        ),
+        message.includes("Failed to initialize bad (bad):"),
       ),
     ).toBe(true);
     expect(

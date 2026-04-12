@@ -26,6 +26,20 @@ export async function reflectOnSendConfirmation(
     recipientName: string;
   },
 ): Promise<{ confirmed: boolean; reasoning: string }> {
+  if (looksLikeInboxConfirmation(opts.userMessage)) {
+    return {
+      confirmed: true,
+      reasoning: "Explicit confirmation phrase matched deterministic safety pre-check.",
+    };
+  }
+
+  if (REJECTION_PATTERN.test(opts.userMessage.trim().toLowerCase())) {
+    return {
+      confirmed: false,
+      reasoning: "Explicit rejection phrase matched deterministic safety pre-check.",
+    };
+  }
+
   const prompt = [
     "You are a safety check for an inbox response system. Your job is to determine",
     "whether the user has clearly confirmed they want to send a drafted message.",
@@ -96,6 +110,27 @@ export async function reflectOnAutoReply(
     senderName: string;
   },
 ): Promise<{ approved: boolean; reasoning: string }> {
+  const combinedText = `${opts.inboundText}\n${opts.replyText}`.toLowerCase();
+  const safeReply =
+    /^(?:thanks!?|thank you!?|you'?re welcome!?|got it!?|sounds good!?|hi!?|hello!?|hey!?|ok(?:ay)?!?|noted\.?)$/i.test(
+      opts.replyText.trim(),
+    );
+  const sensitiveReplyContext =
+    /\b(invest|wire|money|\$\d|legal|lawsuit|lawyer|diagnos|medical|bank|password|ssn|social security|seed phrase|private key|wallet)\b/i.test(
+      combinedText,
+    );
+  const heatedContext =
+    /\b(angry|upset|furious|frustrated|complaint|hate|wtf)\b/i.test(
+      combinedText,
+    );
+
+  if (safeReply && !sensitiveReplyContext && !heatedContext) {
+    return {
+      approved: true,
+      reasoning: "Simple acknowledgement matched deterministic safe auto-reply pre-check.",
+    };
+  }
+
   const prompt = [
     "You are a safety check for an auto-reply system. The system wants to automatically",
     "send a reply WITHOUT explicit owner confirmation. Your job is to determine if this",

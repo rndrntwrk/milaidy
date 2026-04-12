@@ -1219,7 +1219,7 @@ export function VectorBrowserView({
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                  className={`flex-1 h-10 rounded-[16px] border-border/40 bg-card/50 text-sm placeholder:text-muted/65 focus-visible:ring-accent/30 ${SETTINGS_COMPACT_INPUT_CLASSNAME}`}
+                  className={`flex-1 h-10 rounded-xl border-border/40 bg-card/50 text-sm placeholder:text-muted/65 focus-visible:ring-accent/30 ${SETTINGS_COMPACT_INPUT_CLASSNAME}`}
                 />
                 <Button variant="default" size="sm" onClick={handleSearch}>
                   {t("vectorbrowserview.Search")}

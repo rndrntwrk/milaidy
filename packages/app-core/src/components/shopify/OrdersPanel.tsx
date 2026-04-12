@@ -77,11 +77,11 @@ function OrderRow({ order }: { order: ShopifyOrder }) {
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <div className="rounded-[16px] border border-border/20 bg-card/30">
+    <div className="rounded-xl border border-border/20 bg-card/30">
       <button
         type="button"
         onClick={() => setExpanded((prev) => !prev)}
-        className="flex w-full items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-card/50 rounded-[16px]"
+        className="flex w-full items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-card/50 rounded-xl"
       >
         {/* Order name */}
         <div className="min-w-[4rem] shrink-0">
@@ -125,7 +125,7 @@ function OrderRow({ order }: { order: ShopifyOrder }) {
       {expanded ? (
         <div className="border-t border-border/20 px-4 py-3">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <div className="rounded-[12px] border border-border/20 bg-card/35 px-3 py-2.5">
+            <div className="rounded-lg border border-border/20 bg-card/35 px-3 py-2.5">
               <div className="text-2xs uppercase tracking-[0.12em] text-muted/70">
                 Order ID
               </div>
@@ -133,7 +133,7 @@ function OrderRow({ order }: { order: ShopifyOrder }) {
                 {order.id}
               </div>
             </div>
-            <div className="rounded-[12px] border border-border/20 bg-card/35 px-3 py-2.5">
+            <div className="rounded-lg border border-border/20 bg-card/35 px-3 py-2.5">
               <div className="text-2xs uppercase tracking-[0.12em] text-muted/70">
                 Customer
               </div>
@@ -141,7 +141,7 @@ function OrderRow({ order }: { order: ShopifyOrder }) {
                 {order.email || "—"}
               </div>
             </div>
-            <div className="rounded-[12px] border border-border/20 bg-card/35 px-3 py-2.5">
+            <div className="rounded-lg border border-border/20 bg-card/35 px-3 py-2.5">
               <div className="text-2xs uppercase tracking-[0.12em] text-muted/70">
                 Total
               </div>
@@ -149,7 +149,7 @@ function OrderRow({ order }: { order: ShopifyOrder }) {
                 {order.totalPrice} {order.currencyCode}
               </div>
             </div>
-            <div className="rounded-[12px] border border-border/20 bg-card/35 px-3 py-2.5">
+            <div className="rounded-lg border border-border/20 bg-card/35 px-3 py-2.5">
               <div className="text-2xs uppercase tracking-[0.12em] text-muted/70">
                 Fulfillment
               </div>
@@ -157,7 +157,7 @@ function OrderRow({ order }: { order: ShopifyOrder }) {
                 <FulfillmentBadge status={order.fulfillmentStatus} />
               </div>
             </div>
-            <div className="rounded-[12px] border border-border/20 bg-card/35 px-3 py-2.5">
+            <div className="rounded-lg border border-border/20 bg-card/35 px-3 py-2.5">
               <div className="text-2xs uppercase tracking-[0.12em] text-muted/70">
                 Payment
               </div>
@@ -165,7 +165,7 @@ function OrderRow({ order }: { order: ShopifyOrder }) {
                 <FinancialBadge status={order.financialStatus} />
               </div>
             </div>
-            <div className="rounded-[12px] border border-border/20 bg-card/35 px-3 py-2.5">
+            <div className="rounded-lg border border-border/20 bg-card/35 px-3 py-2.5">
               <div className="text-2xs uppercase tracking-[0.12em] text-muted/70">
                 Created
               </div>
@@ -231,7 +231,7 @@ export function OrdersPanel({
 
       {/* Error */}
       {error ? (
-        <div className="rounded-[14px] border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
+        <div className="rounded-xl border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
           {error}
         </div>
       ) : null}
@@ -240,7 +240,7 @@ export function OrdersPanel({
       {loading && orders.length === 0 ? (
         <div className="space-y-2">
           {Array.from({ length: 6 }, (_, i) => i).map((i) => (
-            <Skeleton key={i} className="h-16 w-full rounded-[16px]" />
+            <Skeleton key={i} className="h-16 w-full rounded-xl" />
           ))}
         </div>
       ) : orders.length === 0 ? (

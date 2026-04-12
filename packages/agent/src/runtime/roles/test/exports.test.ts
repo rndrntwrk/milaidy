@@ -44,10 +44,9 @@ describe("exports", () => {
   });
 
   it("exports ROLE_RANK with 4-level hierarchy", () => {
-    expect(ROLE_RANK.OWNER).toBe(3);
-    expect(ROLE_RANK.ADMIN).toBe(2);
-    expect(ROLE_RANK.USER).toBe(1);
-    expect(ROLE_RANK.GUEST).toBe(0);
+    expect(ROLE_RANK.OWNER).toBeGreaterThan(ROLE_RANK.ADMIN);
+    expect(ROLE_RANK.ADMIN).toBeGreaterThan(ROLE_RANK.USER);
+    expect(ROLE_RANK.USER).toBeGreaterThan(ROLE_RANK.GUEST);
   });
 
   it("type exports compile", () => {

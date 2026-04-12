@@ -6,7 +6,7 @@
  */
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { AgentRuntime, Memory, UUID } from "@elizaos/core";
+import { stringToUuid, type AgentRuntime, type Memory, type UUID } from "@elizaos/core";
 import { createRealTestRuntime } from "../../../../test/helpers/real-runtime";
 import { createEscalationTriggerProvider } from "./escalation-trigger";
 
@@ -21,10 +21,18 @@ afterAll(async () => {
   await cleanup();
 });
 
+function normalizeUuidLike(value: string): UUID {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
+  )
+    ? (value as UUID)
+    : (stringToUuid(value) as UUID);
+}
+
 function makeMessage(overrides: Record<string, unknown> = {}): Memory {
   return {
     entityId: runtime.agentId,
-    roomId: "room-esc-trigger-001" as UUID,
+    roomId: normalizeUuidLike("room-esc-trigger-001"),
     content: { text: "hello", source: "client_chat" },
     ...overrides,
   } as Memory;
@@ -46,7 +54,7 @@ describe("escalationTriggerProvider", () => {
 
   it("returns empty for non-admin callers", async () => {
     const nonAdminMsg = makeMessage({
-      entityId: "non-admin-esc-001" as UUID,
+      entityId: normalizeUuidLike("non-admin-esc-001"),
     });
 
     const result = await provider.get(

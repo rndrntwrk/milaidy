@@ -6,7 +6,7 @@
  */
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { AgentRuntime, Memory, UUID } from "@elizaos/core";
+import { stringToUuid, type AgentRuntime, type Memory, type UUID } from "@elizaos/core";
 import { createRealTestRuntime } from "../../../../test/helpers/real-runtime";
 import { lateJoinWhitelistEvaluator } from "./late-join-whitelist";
 
@@ -21,8 +21,16 @@ afterAll(async () => {
   await cleanup();
 });
 
-const ENTITY_ID = "entity-late-join-001" as UUID;
-const ROOM_ID = "room-late-join-001" as UUID;
+function normalizeUuidLike(value: string): UUID {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
+  )
+    ? (value as UUID)
+    : (stringToUuid(value) as UUID);
+}
+
+const ENTITY_ID = normalizeUuidLike("entity-late-join-001");
+const ROOM_ID = normalizeUuidLike("room-late-join-001");
 
 function makeMessage(overrides: Record<string, unknown> = {}): Memory {
   return {
@@ -61,7 +69,7 @@ describe("lateJoinWhitelistEvaluator", () => {
 
   it("processes messages from unknown entities gracefully", async () => {
     const unknownEntityMsg = makeMessage({
-      entityId: "unknown-entity-xyz-late-join" as UUID,
+      entityId: normalizeUuidLike("unknown-entity-xyz-late-join"),
     });
 
     const valid = await lateJoinWhitelistEvaluator.validate(

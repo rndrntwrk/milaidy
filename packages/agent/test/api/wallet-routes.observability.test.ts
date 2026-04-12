@@ -20,7 +20,7 @@ const { createSpanMock, spanSuccessMock, spanFailureMock } = vi.hoisted(() => ({
   spanFailureMock: vi.fn(),
 }));
 
-vi.mock("../../src/diagnostics/integration-observability", () => ({
+vi.mock("../../src/diagnostics/integration-observability.js", () => ({
   createIntegrationTelemetrySpan: createSpanMock,
 }));
 

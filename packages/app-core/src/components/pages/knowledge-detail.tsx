@@ -125,7 +125,7 @@ export function DocumentViewer({ documentId }: { documentId: string | null }) {
         )}
 
         {error && (
-          <div className="mx-auto max-w-lg rounded-[18px] border border-danger/25 bg-danger/10 py-10 text-center font-medium text-danger">
+          <div className="mx-auto max-w-lg rounded-2xl border border-danger/25 bg-danger/10 py-10 text-center font-medium text-danger">
             {error}
           </div>
         )}

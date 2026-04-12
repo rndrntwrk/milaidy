@@ -6,7 +6,7 @@
  */
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { AgentRuntime, Memory, UUID } from "@elizaos/core";
+import { stringToUuid, type AgentRuntime, type Memory, type UUID } from "@elizaos/core";
 import { createRealTestRuntime } from "../../../../test/helpers/real-runtime";
 import { createAdminPanelProvider } from "./admin-panel";
 
@@ -21,7 +21,15 @@ afterAll(async () => {
   await cleanup();
 });
 
-const ROOM_ID = "room-admin-panel-001" as UUID;
+function normalizeUuidLike(value: string): UUID {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
+  )
+    ? (value as UUID)
+    : (stringToUuid(value) as UUID);
+}
+
+const ROOM_ID = normalizeUuidLike("room-admin-panel-001");
 
 function makeMessage(overrides: Record<string, unknown> = {}): Memory {
   return {
@@ -37,7 +45,7 @@ describe("adminPanelProvider", () => {
 
   it("returns empty for non-admin callers", async () => {
     const nonAdminMsg = makeMessage({
-      entityId: "non-admin-panel-test-001" as UUID,
+      entityId: normalizeUuidLike("non-admin-panel-test-001"),
     });
 
     const result = await provider.get(

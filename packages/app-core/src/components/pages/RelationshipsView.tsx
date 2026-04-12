@@ -214,7 +214,7 @@ function PersonSummaryCard({
                 {contacts.map((contact) => (
                   <div
                     key={`${contact.label}:${contact.value}`}
-                    className="rounded-[16px] border border-border/24 bg-card/35 px-3 py-3"
+                    className="rounded-xl border border-border/24 bg-card/35 px-3 py-3"
                   >
                     <div className="text-2xs font-semibold uppercase tracking-[0.12em] text-muted/70">
                       {contact.label}
@@ -241,7 +241,7 @@ function PersonSummaryCard({
                 {person.profiles.map((profile) => (
                   <div
                     key={`${profile.source}:${profile.entityId}`}
-                    className="rounded-[16px] border border-border/24 bg-card/35 px-3 py-3"
+                    className="rounded-xl border border-border/24 bg-card/35 px-3 py-3"
                   >
                     <div className="flex flex-wrap items-center gap-2">
                       <div className="text-2xs font-semibold uppercase tracking-[0.12em] text-muted/70">
@@ -302,7 +302,7 @@ function FactsPanel({ person }: { person: RelationshipsPersonDetail }) {
           {person.facts.map((fact) => (
             <div
               key={fact.id}
-              className="rounded-[18px] border border-border/24 bg-card/32 px-3.5 py-3"
+              className="rounded-2xl border border-border/24 bg-card/32 px-3.5 py-3"
             >
               <div className="flex flex-wrap items-center gap-2 text-2xs font-semibold uppercase tracking-[0.12em] text-muted/70">
                 <span>{fact.sourceType}</span>
@@ -353,7 +353,7 @@ function RelationshipsPanel({ person }: { person: RelationshipsPersonDetail }) {
             return (
               <div
                 key={relationship.id}
-                className="rounded-[18px] border border-border/24 bg-card/32 px-3.5 py-3"
+                className="rounded-2xl border border-border/24 bg-card/32 px-3.5 py-3"
               >
                 <div className="flex flex-wrap items-center gap-2">
                   <MetaPill compact>
@@ -409,7 +409,7 @@ function ConversationsPanel({ person }: { person: RelationshipsPersonDetail }) {
           {person.recentConversations.map((conversation) => (
             <div
               key={conversation.roomId}
-              className="rounded-[18px] border border-border/24 bg-card/32 px-3.5 py-3"
+              className="rounded-2xl border border-border/24 bg-card/32 px-3.5 py-3"
             >
               <div className="flex items-center justify-between gap-3">
                 <div className="text-sm font-semibold text-txt">
@@ -426,7 +426,7 @@ function ConversationsPanel({ person }: { person: RelationshipsPersonDetail }) {
                 {conversation.messages.map((message) => (
                   <div
                     key={message.id}
-                    className="rounded-[14px] bg-card/50 px-3 py-2.5"
+                    className="rounded-xl bg-card/50 px-3 py-2.5"
                   >
                     <div className="text-xs-tight font-semibold uppercase tracking-[0.12em] text-muted/70">
                       {message.speaker}
@@ -477,7 +477,7 @@ function RelationshipsActivityFeed() {
 
   if (error) {
     return (
-      <div className="rounded-[18px] border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
+      <div className="rounded-2xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
         {error}
       </div>
     );
@@ -500,7 +500,7 @@ function RelationshipsActivityFeed() {
         return (
           <div
             key={`${item.personId}-${item.type}-${item.timestamp ?? "none"}-${item.summary}`}
-            className="rounded-[14px] border border-border/24 bg-card/32 px-3 py-2.5"
+            className="rounded-xl border border-border/24 bg-card/32 px-3 py-2.5"
           >
             <div className="flex flex-wrap items-center gap-2">
               <span
@@ -667,7 +667,7 @@ export function RelationshipsView({
       <SidebarPanel>
         <PagePanel.SummaryCard compact className="mt-2 space-y-3">
           <div className="grid grid-cols-3 gap-2">
-            <div className="rounded-[16px] border border-border/24 bg-card/35 px-2.5 py-2">
+            <div className="rounded-xl border border-border/24 bg-card/35 px-2.5 py-2">
               <div className="text-2xs uppercase tracking-[0.12em] text-muted/70">
                 People
               </div>
@@ -675,7 +675,7 @@ export function RelationshipsView({
                 {graph?.stats.totalPeople ?? 0}
               </div>
             </div>
-            <div className="rounded-[16px] border border-border/24 bg-card/35 px-2.5 py-2">
+            <div className="rounded-xl border border-border/24 bg-card/35 px-2.5 py-2">
               <div className="text-2xs uppercase tracking-[0.12em] text-muted/70">
                 Links
               </div>
@@ -683,7 +683,7 @@ export function RelationshipsView({
                 {graph?.stats.totalRelationships ?? 0}
               </div>
             </div>
-            <div className="rounded-[16px] border border-border/24 bg-card/35 px-2.5 py-2">
+            <div className="rounded-xl border border-border/24 bg-card/35 px-2.5 py-2">
               <div className="text-2xs uppercase tracking-[0.12em] text-muted/70">
                 IDs
               </div>
@@ -786,12 +786,12 @@ export function RelationshipsView({
     >
       <div className="flex min-h-0 flex-1 flex-col gap-4">
         {graphError ? (
-          <div className="rounded-[18px] border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
+          <div className="rounded-2xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
             {graphError}
           </div>
         ) : null}
         {detailError ? (
-          <div className="rounded-[18px] border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-warning">
+          <div className="rounded-2xl border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-warning">
             {detailError}
           </div>
         ) : null}

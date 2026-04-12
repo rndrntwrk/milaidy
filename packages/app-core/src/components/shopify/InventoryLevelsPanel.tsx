@@ -34,7 +34,7 @@ function InventoryRow({ item, onAdjust }: InventoryRowProps) {
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-3 rounded-[16px] border border-border/20 bg-card/30 px-3 py-3">
+    <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border/20 bg-card/30 px-3 py-3">
       {/* Product / variant info */}
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm font-semibold text-txt">
@@ -165,7 +165,7 @@ export function InventoryLevelsPanel({
 
       {/* Error */}
       {error ? (
-        <div className="rounded-[14px] border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
+        <div className="rounded-xl border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
           {error}
         </div>
       ) : null}
@@ -174,11 +174,11 @@ export function InventoryLevelsPanel({
       {loading && items.length === 0 ? (
         <div className="space-y-2">
           {Array.from({ length: 6 }, (_, i) => i).map((i) => (
-            <Skeleton key={i} className="h-16 w-full rounded-[16px]" />
+            <Skeleton key={i} className="h-16 w-full rounded-xl" />
           ))}
         </div>
       ) : displayedItems.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 rounded-[18px] border border-border/20 bg-card/20 py-12 text-center">
+        <div className="flex flex-col items-center gap-3 rounded-2xl border border-border/20 bg-card/20 py-12 text-center">
           <Package className="h-8 w-8 text-muted/40" />
           <div className="text-sm text-muted">
             {selectedLocation === "all"

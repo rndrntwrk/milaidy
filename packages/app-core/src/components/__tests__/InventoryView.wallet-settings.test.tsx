@@ -509,10 +509,8 @@ describe("InventoryView wallet settings", () => {
 
     // Wallet Overview heading is removed
     expect(
-      JSON.stringify(tree?.toJSON(), (_key, value) =>
-        typeof value === "function" ? "[function]" : value,
-      ),
-    ).not.toContain("Wallet Overview");
+      tree?.root.findAll((node) => node.children.includes("Wallet Overview")),
+    ).toHaveLength(0);
     expect(
       tree?.root.findAll((node) => node.children.includes("WALLET")),
     ).toHaveLength(0);
