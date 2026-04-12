@@ -303,7 +303,7 @@ export function readLatestAssistantEntry(
     let text = "";
     for (const c of msg.content ?? []) {
       if (c.type === "text" && typeof c.text === "string" && c.text.trim()) {
-        text = c.text.trim();
+        text += (text ? "\n" : "") + c.text.trim();
       }
     }
     return { text, isEndTurn: msg.stop_reason === "end_turn" };
