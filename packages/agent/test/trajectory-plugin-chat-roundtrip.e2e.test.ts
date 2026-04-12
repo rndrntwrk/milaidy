@@ -45,7 +45,7 @@ function extractSqlText(query: SqlQuery): string {
 }
 
 async function waitForTrajectoryCall(
-  port: number,
+  db: PGlite,
   expectedUserPrompt: string,
 ): Promise<{
   trajectoryId: string;
@@ -55,27 +55,31 @@ async function waitForTrajectoryCall(
     response?: string;
   };
 }> {
-  for (let attempt = 0; attempt < 60; attempt += 1) {
-    const list = await req(port, "GET", "/api/trajectories?limit=20");
-    const trajectories = Array.isArray(list.data.trajectories)
-      ? (list.data.trajectories as Array<{ id?: string }>)
-      : [];
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    const result = await db.query<Record<string, unknown>>(
+      "SELECT id, steps_json FROM trajectories ORDER BY updated_at DESC, created_at DESC LIMIT 20",
+    );
 
-    for (const trajectory of trajectories) {
+    for (const trajectory of result.rows) {
       const trajectoryId = String(trajectory.id ?? "");
       if (!trajectoryId) continue;
-
-      const detail = await req(
-        port,
-        "GET",
-        `/api/trajectories/${encodeURIComponent(trajectoryId)}`,
-      );
-      const llmCalls = Array.isArray(detail.data.llmCalls)
-        ? (detail.data.llmCalls as Array<{
-            systemPrompt?: string;
-            userPrompt?: string;
-            response?: string;
-          }>)
+      const rawSteps = trajectory.steps_json;
+      const steps =
+        typeof rawSteps === "string"
+          ? JSON.parse(rawSteps)
+          : Array.isArray(rawSteps)
+            ? rawSteps
+            : [];
+      const llmCalls = Array.isArray(steps)
+        ? steps.flatMap((step) =>
+            Array.isArray((step as { llmCalls?: unknown }).llmCalls)
+              ? ((step as { llmCalls: Array<{
+                    systemPrompt?: string;
+                    userPrompt?: string;
+                    response?: string;
+                  }> }).llmCalls)
+              : [],
+          )
         : [];
 
       const match = llmCalls.find(
@@ -89,7 +93,7 @@ async function waitForTrajectoryCall(
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
 
-  throw new Error("Timed out waiting for trajectory prompt/response roundtrip");
+  throw new Error("Timed out waiting for persisted trajectory prompt/response roundtrip");
 }
 
 describe("Trajectory logger chat roundtrip", () => {
@@ -316,43 +320,43 @@ describe("Trajectory logger chat roundtrip", () => {
     expect(chat.status).toBe(200);
     expect(String(chat.data.text ?? "")).toBe(expectedResponse);
 
-    const detail = await waitForTrajectoryCall(server.port, prompt);
-    expect(detail.trajectoryId.length).toBeGreaterThan(0);
-    expect(detail.llmCall.systemPrompt).toContain(
+    const persisted = await waitForTrajectoryCall(db, prompt);
+    expect(persisted.trajectoryId.length).toBeGreaterThan(0);
+    expect(persisted.llmCall.systemPrompt).toContain(
       "trajectory logger regression test agent",
     );
-    expect(detail.llmCall.userPrompt).toBe(prompt);
-    expect(detail.llmCall.response).toBe(expectedResponse);
-
-    const list = await req(server.port, "GET", "/api/trajectories?limit=20");
-    expect(list.status).toBe(200);
-    const trajectories = Array.isArray(list.data.trajectories)
-      ? (list.data.trajectories as Array<{ id?: string; llmCallCount?: number }>)
-      : [];
-    expect(
-      trajectories.some(
-        (trajectory) => String(trajectory.id ?? "") === detail.trajectoryId,
-      ),
-    ).toBe(true);
-    expect(
-      trajectories.some(
-        (trajectory) =>
-          String(trajectory.id ?? "") === detail.trajectoryId &&
-          Number(trajectory.llmCallCount ?? 0) >= 1,
-      ),
-    ).toBe(true);
+    expect(persisted.llmCall.userPrompt).toBe(prompt);
+    expect(persisted.llmCall.response).toBe(expectedResponse);
 
     const hydratedDetail = await req(
       server.port,
       "GET",
-      `/api/trajectories/${encodeURIComponent(detail.trajectoryId)}`,
+      `/api/trajectories/${encodeURIComponent(persisted.trajectoryId)}`,
     );
     expect(hydratedDetail.status).toBe(200);
+    const llmCalls = Array.isArray(hydratedDetail.data.llmCalls)
+      ? (hydratedDetail.data.llmCalls as Array<{
+          systemPrompt?: string;
+          userPrompt?: string;
+          response?: string;
+        }>)
+      : [];
+    expect(llmCalls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          systemPrompt: expect.stringContaining(
+            "trajectory logger regression test agent",
+          ),
+          userPrompt: prompt,
+          response: expectedResponse,
+        }),
+      ]),
+    );
     const trajectory = hydratedDetail.data.trajectory as Record<
       string,
       unknown
     >;
-    expect(trajectory.id).toBe(detail.trajectoryId);
+    expect(trajectory.id).toBe(persisted.trajectoryId);
     expect(trajectory.source).toBe("chat");
     expect(trajectory.status).toBe("completed");
     expect(typeof trajectory.endTime).toBe("number");

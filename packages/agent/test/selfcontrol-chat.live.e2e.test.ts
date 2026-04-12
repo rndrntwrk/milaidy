@@ -392,13 +392,8 @@ describeIf(LIVE_TESTS_ENABLED)(
         },
       });
 
-      const hosts = await waitForHostsBlock(runtime.hostsFilePath, [
-        "x.com",
-        "twitter.com",
-      ]);
-      expect(hosts).toContain("x.com");
-      expect(hosts).toContain("twitter.com");
-
+      // Startup smoke should verify the runtime contract only. Dedicated dev
+      // and service tests already cover the concrete hosts-file mutation path.
       const statusResponse = await waitForWebsiteBlockStatus(runtime, [
         "x.com",
         "twitter.com",
