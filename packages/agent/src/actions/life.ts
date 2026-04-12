@@ -1911,7 +1911,9 @@ function describeReminderIntensity(
 
 // ── Main action ───────────────────────────────────────
 
-export const lifeAction: Action = {
+export const lifeAction: Action & {
+  suppressPostActionContinuation?: boolean;
+} = {
   name: "LIFE",
   similes: [
     "MANAGE_LIFEOPS",
