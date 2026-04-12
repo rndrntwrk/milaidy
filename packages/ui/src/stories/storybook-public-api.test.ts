@@ -105,7 +105,7 @@ function assertMappedStoryFiles(
 
 describe("Storybook public API coverage", () => {
   it("covers exported primitives", () => {
-    const primitivesIndex = readSource("../components/primitives/index.ts");
+    const primitivesIndex = readSource("components/primitives/index.ts");
     const exportedPrimitives = parseExportTargets(
       primitivesIndex,
       /export \* from "\.\.\/ui\/([^"]+)";/g,
@@ -115,7 +115,7 @@ describe("Storybook public API coverage", () => {
   });
 
   it("covers exported UI helpers from the shared composite index", () => {
-    const compositeIndex = readSource("../components/composites/index.ts");
+    const compositeIndex = readSource("components/composites/index.ts");
     const exportedUiHelpers = parseExportTargets(
       compositeIndex,
       /export \* from "\.\.\/ui\/([^"]+)";/g,
@@ -125,7 +125,7 @@ describe("Storybook public API coverage", () => {
   });
 
   it("covers exported composite families", () => {
-    const compositeIndex = readSource("../components/composites/index.ts");
+    const compositeIndex = readSource("components/composites/index.ts");
     const exportedFamilies = parseExportTargets(
       compositeIndex,
       /export \* from "\.\/([^"]+)";/g,
@@ -135,7 +135,7 @@ describe("Storybook public API coverage", () => {
   });
 
   it("covers exported layouts", () => {
-    const layoutsIndex = readSource("../layouts/index.ts");
+    const layoutsIndex = readSource("layouts/index.ts");
     const exportedLayouts = parseExportTargets(
       layoutsIndex,
       /export \* from "\.\/([^"]+)";/g,

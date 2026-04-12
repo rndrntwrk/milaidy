@@ -337,4 +337,80 @@ describe("BabylonDetailExtension", () => {
       "Hold the line.",
     );
   });
+
+  it("falls back gracefully when Babylon metrics are partially missing", async () => {
+    mockUseApp.mockReturnValue({
+      appRuns: [createRun()],
+    });
+
+    mockClient.getBabylonAgentStatus.mockResolvedValue({
+      displayName: "Babylon Alpha",
+      agentStatus: "active",
+      autonomous: true,
+    });
+    mockClient.getBabylonAgentSummary.mockResolvedValue({
+      portfolio: {
+        totalAssets: undefined,
+        positions: undefined,
+        totalPnL: undefined,
+      },
+    });
+    mockClient.getBabylonAgentGoals.mockResolvedValue([
+      {
+        id: "goal-1",
+        description: "Protect the market",
+        status: "active",
+        createdAt: "2026-04-06T00:00:00.000Z",
+      },
+    ]);
+    mockClient.getBabylonAgentRecentTrades.mockResolvedValue({ items: [] });
+    mockClient.getBabylonPredictionMarkets.mockResolvedValue({
+      markets: [
+        {
+          id: "market-1",
+          title: "Will Babylon close green?",
+        },
+      ],
+    });
+    mockClient.getBabylonTeamDashboard.mockResolvedValue({
+      summary: {
+        ownerName: "Babylon Team",
+        totals: {},
+      },
+    });
+    mockClient.getBabylonTeamConversations.mockResolvedValue({
+      conversations: [],
+    });
+    mockClient.getBabylonAgentChat.mockResolvedValue({
+      messages: [],
+    });
+    mockClient.getBabylonAgentWallet.mockResolvedValue({
+      balance: 0,
+      transactions: [],
+    });
+    mockClient.getBabylonAgentTradingBalance.mockResolvedValue({
+      balance: 0,
+    });
+    mockClient.controlAppRun.mockResolvedValue({
+      success: true,
+      message: "Babylon autonomy paused.",
+    });
+    mockClient.sendAppRunMessage.mockResolvedValue({
+      success: true,
+      message: "Queued",
+    });
+
+    let tree!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(<BabylonDetailExtension app={createApp()} />);
+      await flushPromises();
+      await flushPromises();
+    });
+
+    const output = textOf(tree.root);
+    expect(output).toContain("Babylon Operator Dashboard");
+    expect(output).toContain("Protect the market");
+    expect(output).toContain("Will Babylon close green?");
+    expect(output).toContain("n/a wallet");
+  });
 });

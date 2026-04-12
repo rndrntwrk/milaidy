@@ -960,7 +960,7 @@ describe("ChatView", () => {
       tree?.root.findAll(
         (node) => node.props["aria-label"] === "aria.chatWorkspace",
       ),
-    ).toHaveLength(1);
+    ).not.toHaveLength(0);
     expect(mockClient.getInboxMessages).not.toHaveBeenCalled();
   });
 

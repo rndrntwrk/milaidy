@@ -1,6 +1,7 @@
 import type {
   CreateLifeOpsCalendarEventAttendee,
   CreateLifeOpsCalendarEventRequest,
+  CreateLifeOpsCalendarEventAttendee,
   LifeOpsConnectorSide,
   LifeOpsGoogleCapability,
   LifeOpsGoogleConnectorReason,
