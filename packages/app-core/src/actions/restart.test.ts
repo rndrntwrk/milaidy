@@ -64,6 +64,19 @@ describe("RESTART_AGENT action", () => {
     expect(result).toBe(true);
   });
 
+  it("validate accepts localized restart requests", async () => {
+    const result = await restartAction.validate(
+      {} as Parameters<typeof restartAction.validate>[0],
+      {
+        content: {
+          text: "reinicia el agente",
+        },
+      } as Parameters<typeof restartAction.validate>[1],
+      {} as Parameters<typeof restartAction.validate>[2],
+    );
+    expect(result).toBe(true);
+  });
+
   it("handler returns a success response with restart text", async () => {
     const result = await restartAction.handler(
       mockRuntime(),

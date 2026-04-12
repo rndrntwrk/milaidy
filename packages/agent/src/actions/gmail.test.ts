@@ -1,14 +1,7 @@
-import {
-  afterAll,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-} from "vitest";
-import { describeLLM } from "../../../../test/helpers/skip-without";
+import { ModelType } from "@elizaos/core";
+import { afterAll, beforeAll, beforeEach, expect, it, vi } from "vitest";
 import { createRealTestRuntime } from "../../../../test/helpers/real-runtime";
+import { describeLLM } from "../../../../test/helpers/skip-without";
 
 const {
   mockCheckSenderPrivateAccess,
@@ -595,11 +588,137 @@ describeLLM("gmailAction", () => {
       expect.any(URL),
       expect.objectContaining({ query: "from:alex subject:venue" }),
     );
+    expect(runtime.useModel.mock.calls[0]?.[0]).toBe(ModelType.TEXT_LARGE);
     expect(mockCreateGmailReplyDraft).toHaveBeenCalledWith(
       expect.any(URL),
       expect.objectContaining({ messageId: "msg-from-alex-subject-venue" }),
     );
     expect(result?.success).toBe(true);
+  });
+
+  it("resolves a reply draft target from a Gmail search query when messageId is absent", async () => {
+    mockGetGmailSearch.mockResolvedValue(
+      searchResult({
+        query: "from:suran",
+        subject: "Dinner tonight",
+        from: "Suran Lee",
+        fromEmail: "suran@example.com",
+      }),
+    );
+    mockCreateGmailReplyDraft.mockResolvedValue({
+      messageId: "msg-from-suran",
+      threadId: "thread-search",
+      subject: "Re: Dinner tonight",
+      to: ["suran@example.com"],
+      cc: [],
+      bodyText: "Sounds good to me.",
+      previewLines: ["Sounds good to me."],
+      sendAllowed: true,
+      requiresConfirmation: true,
+    });
+
+    const result = await invoke("draft a reply to suran", {
+      subaction: "draft_reply",
+      query: "from:suran",
+    });
+
+    expect(mockGetGmailSearch).toHaveBeenCalledWith(
+      expect.any(URL),
+      expect.objectContaining({ query: "from:suran" }),
+    );
+    expect(mockCreateGmailReplyDraft).toHaveBeenCalledWith(
+      expect.any(URL),
+      expect.objectContaining({ messageId: "msg-from-suran" }),
+    );
+    expect(result?.success).toBe(true);
+  });
+
+  it("asks for clarification instead of drafting a reply from the first colliding Gmail search result", async () => {
+    mockGetGmailSearch.mockResolvedValue({
+      query: "from:suran",
+      messages: [
+        searchResult({
+          query: "from:suran-one",
+          subject: "Dinner tonight",
+          from: "Suran Lee",
+          fromEmail: "suran@example.com",
+        }).messages[0],
+        {
+          ...searchResult({
+            query: "from:suran-two",
+            subject: "Follow-up on dinner",
+            from: "Suran Lee",
+            fromEmail: "suran@example.com",
+          }).messages[0],
+          id: "msg-from-suran-2",
+          externalId: "ext-from-suran-2",
+        },
+      ],
+      source: "cache",
+      syncedAt: "2026-04-09T16:00:00.000Z",
+      summary: {
+        totalCount: 2,
+        unreadCount: 0,
+        importantCount: 0,
+        replyNeededCount: 0,
+      },
+    });
+
+    const result = await invoke("draft a reply to suran", {
+      subaction: "draft_reply",
+      query: "from:suran",
+    });
+
+    expect(mockCreateGmailReplyDraft).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ success: false });
+    expect(result?.text).toContain("Dinner tonight");
+    expect(result?.text).toContain("Follow-up on dinner");
+  });
+
+  it("asks for clarification instead of reading the first colliding Gmail search result", async () => {
+    mockGetGmailSearch.mockResolvedValue({
+      query: "subject:project",
+      messages: [
+        {
+          ...searchResult({
+            query: "subject:project-a",
+            subject: "Project sync",
+            from: "Founder Example",
+            fromEmail: "founder@example.com",
+          }).messages[0],
+          id: "msg-project-1",
+          externalId: "ext-project-1",
+        },
+        {
+          ...searchResult({
+            query: "subject:project-b",
+            subject: "Project follow-up",
+            from: "Founder Example",
+            fromEmail: "founder@example.com",
+          }).messages[0],
+          id: "msg-project-2",
+          externalId: "ext-project-2",
+        },
+      ],
+      source: "cache",
+      syncedAt: "2026-04-09T16:00:00.000Z",
+      summary: {
+        totalCount: 2,
+        unreadCount: 0,
+        importantCount: 0,
+        replyNeededCount: 0,
+      },
+    });
+
+    const result = await invoke("read the project email", {
+      subaction: "read",
+      query: "subject:project",
+    });
+
+    expect(mockReadGmailMessage).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ success: false });
+    expect(result?.text).toContain("Project sync");
+    expect(result?.text).toContain("Project follow-up");
   });
 
   it("creates batch reply drafts", async () => {
@@ -771,6 +890,33 @@ describeLLM("gmailAction", () => {
     expect(result).toMatchObject({ success: true });
   });
 
+  it("accepts recipient and cc lists passed as natural string fields", async () => {
+    mockSendGmailMessage.mockResolvedValue({ ok: true });
+
+    const result = await invoke("send this email", {
+      subaction: "send_message",
+      details: {
+        to: 'Mira <mira@example.com>; ops@example.com',
+        cc: '"Ops Team" <ops@example.com>',
+        subject: "hola",
+        bodyText: "nos vemos manana",
+        confirmSend: true,
+      },
+    });
+
+    expect(mockSendGmailMessage).toHaveBeenCalledWith(
+      expect.any(URL),
+      expect.objectContaining({
+        to: ["Mira <mira@example.com>", "ops@example.com"],
+        cc: ['"Ops Team" <ops@example.com>'],
+        subject: "hola",
+        bodyText: "nos vemos manana",
+        confirmSend: true,
+      }),
+    );
+    expect(result).toMatchObject({ success: true });
+  });
+
   it("asks for missing compose fields without quote-specific instructions", async () => {
     const runtime = makeRuntimeWithModelResponses(
       JSON.stringify({
@@ -877,6 +1023,8 @@ describeLLM("gmailAction", () => {
         bodyText: "test",
       }),
     );
+    expect(runtime.useModel.mock.calls[0]?.[0]).toBe(ModelType.TEXT_LARGE);
+    expect(runtime.useModel.mock.calls[1]?.[0]).toBe(ModelType.TEXT_LARGE);
     expect(result?.success).toBe(true);
   });
 
@@ -1004,11 +1152,9 @@ describeLLM("gmailAction", () => {
       },
     };
 
-    const result = await invokeWithRuntime(
-      runtime,
-      "send all those replies",
-      { state },
-    );
+    const result = await invokeWithRuntime(runtime, "send all those replies", {
+      state,
+    });
 
     expect(mockSendGmailReplies).toHaveBeenCalledWith(
       expect.any(URL),

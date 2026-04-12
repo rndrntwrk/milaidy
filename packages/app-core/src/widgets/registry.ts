@@ -18,6 +18,7 @@ import { AGENT_ORCHESTRATOR_PLUGIN_WIDGETS } from "../components/chat/widgets/pl
 import { LIFEOPS_WIDGETS } from "../components/chat/widgets/plugins/lifeops";
 import { LIFEOPS_OVERVIEW_WIDGETS } from "../components/chat/widgets/plugins/lifeops-overview";
 import { TODO_PLUGIN_WIDGETS } from "../components/chat/widgets/plugins/todo";
+import type { ChatSidebarWidgetDefinition } from "../components/chat/widgets/types";
 
 // -- Static component registry -----------------------------------------------
 
@@ -51,11 +52,7 @@ export function getWidgetComponent(
  * `WidgetProps` (events + clearEvents).
  */
 function seedLegacyWidgets(
-  definitions: ReadonlyArray<{
-    id: string;
-    pluginId: string;
-    Component: React.ComponentType<unknown>;
-  }>,
+  definitions: ReadonlyArray<ChatSidebarWidgetDefinition>,
 ): void {
   for (const def of definitions) {
     registerWidgetComponent(

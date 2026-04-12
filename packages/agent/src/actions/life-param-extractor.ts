@@ -18,7 +18,10 @@ import type { IAgentRuntime, Memory, State } from "@elizaos/core";
 import { ModelType, parseJSONObjectFromText } from "@elizaos/core";
 import { recentConversationTexts } from "./life-recent-context.js";
 import { resolveContextWindow } from "./lifeops-extraction-config.js";
-import { normalizeExplicitTimeZoneToken } from "./timezone-normalization.js";
+import {
+  extractExplicitTimeZoneFromText,
+  normalizeExplicitTimeZoneToken,
+} from "./timezone-normalization.js";
 
 // ── Types ─────────────────────────────────────────────
 
@@ -63,8 +66,6 @@ const REMINDER_CONTEXT_RE =
 const REQUEST_KIND_VALIDATION_WINDOW = 6;
 const TIME_OF_DAY_TOKEN_RE =
   /\b(\d{1,2}(?::\d{2})?\s*(?:am|pm)|noon|midnight)\b/i;
-const EXPLICIT_TIME_ZONE_TOKEN_RE =
-  /\b([A-Z]{2,5}|PT|PST|PDT|MT|MST|MDT|CT|CST|CDT|ET|EST|EDT)\b/i;
 const WEEKDAY_MAP: Record<string, number> = {
   sunday: 0,
   sun: 0,
@@ -96,7 +97,9 @@ function buildExtractionPrompt(
   return [
     "Plan the next step for a LifeOps create_definition request.",
     "Use the full current user request plus recent conversation.",
+    "The user may speak informally, formally, code-switched, or in another language.",
     "Do not strip acknowledgements, fillers, or language-footer text. Interpret the whole request in context.",
+    "Infer practical reminder windows from natural phrases when needed: wake up or before work -> morning, lunch or after lunch -> afternoon, after work or dinner -> evening, before bed or before sleep -> night.",
     "Return ONLY a JSON object with these fields (use null for unknown):",
     "",
     '- mode: "create" when the request is specific enough to create or preview a LifeOps item now, "respond" when you should reply without creating anything yet',
@@ -108,6 +111,7 @@ function buildExtractionPrompt(
     '- windows: array of time windows like ["morning", "night", "afternoon", "evening"]',
     "- weekdays: array of weekday numbers (0=Sun, 1=Mon, ..., 6=Sat) for weekly tasks",
     '- timeOfDay: specific time in HH:MM 24h format like "15:00" or "08:30" if mentioned',
+    '- timeZone: IANA timezone like "America/Denver" when the user explicitly gives one',
     '- everyMinutes: interval in minutes for recurring tasks (e.g., 120 for "every 2 hours")',
     '- timesPerDay: number of times per day if mentioned (e.g., 4 for "four times a day")',
     "- priority: 1-5 (1=low, 5=critical) based on urgency/importance language",
@@ -120,6 +124,9 @@ function buildExtractionPrompt(
     '  "workout 4 times a week" -> {"mode":"create","response":null,"requestKind":null,"title":"Workout","cadenceKind":"weekly","weekdays":[1,3,5,6],"timesPerDay":null,"description":null,"windows":null,"timeOfDay":null,"everyMinutes":null,"priority":null,"durationMinutes":null}',
     '  "set an alarm for 7 am" -> {"mode":"create","response":null,"requestKind":"alarm","title":"Alarm","cadenceKind":"once","timeOfDay":"07:00","description":null,"windows":null,"weekdays":null,"everyMinutes":null,"timesPerDay":null,"priority":null,"durationMinutes":null}',
     '  "set a reminder for tomorrow at 9am to call mom" -> {"mode":"create","response":null,"requestKind":"reminder","title":"Call mom","cadenceKind":"once","timeOfDay":"09:00","description":null,"windows":null,"weekdays":null,"everyMinutes":null,"timesPerDay":null,"priority":null,"durationMinutes":null}',
+    '  "make sure I brush my teeth when I wake up and before bed" -> {"mode":"create","response":null,"requestKind":"reminder","title":"Brush teeth","cadenceKind":"daily","windows":["morning","night"],"description":null,"weekdays":null,"timeOfDay":null,"timeZone":null,"everyMinutes":null,"timesPerDay":null,"priority":null,"durationMinutes":null}',
+    '  "recuérdame cepillarme los dientes por la mañana y por la noche" -> {"mode":"create","response":null,"requestKind":"reminder","title":"Brush teeth","cadenceKind":"daily","windows":["morning","night"],"description":null,"weekdays":null,"timeOfDay":null,"timeZone":null,"everyMinutes":null,"timesPerDay":null,"priority":null,"durationMinutes":null}',
+    '  "set a reminder for april 17 at 8pm mountain time to hug my wife" -> {"mode":"create","response":null,"requestKind":"reminder","title":"Hug my wife","cadenceKind":"once","timeOfDay":"20:00","timeZone":"America/Denver","description":null,"windows":null,"weekdays":null,"everyMinutes":null,"timesPerDay":null,"priority":null,"durationMinutes":30}',
     '  "lol yeah. can you help me add a todo for my life?" -> {"mode":"respond","response":"What do you want the todo to be, and when should it happen?","requestKind":null,"title":null,"description":null,"cadenceKind":null,"windows":null,"weekdays":null,"timeOfDay":null,"everyMinutes":null,"timesPerDay":null,"priority":null,"durationMinutes":null}',
     "",
     "Use recent conversation only to resolve short follow-ups. Do not emit requestKind='alarm' or requestKind='reminder' unless the current request or recent conversation explicitly supports it.",
@@ -264,6 +271,14 @@ function normalizeTitleCandidate(value: string): string | null {
       /\b(?:an?|the)\s+(?:alarm|reminder|todo|task|habit|routine)\b/gi,
       " ",
     )
+    .replace(
+      /\b(?:every|each)\b.+$/i,
+      " ",
+    )
+    .replace(
+      /\b(?:daily|weekly|in the morning|in the afternoon|in the evening|at night|morning and night|night and morning|when i wake up|before bed|before sleep|with breakfast|with lunch|with dinner|throughout the day|twice a week|twice a day|on weekdays?|on weekends?)\b.+$/i,
+      " ",
+    )
     .replace(/\s+/g, " ")
     .trim();
   if (!cleaned) {
@@ -327,23 +342,42 @@ function countTimeTokens(value: string): number {
 }
 
 function extractExplicitTimeZone(value: string): string | null {
-  const token = value.match(EXPLICIT_TIME_ZONE_TOKEN_RE)?.[1];
-  return token ? normalizeExplicitTimeZoneToken(token) : null;
+  return extractExplicitTimeZoneFromText(value);
 }
 
 function extractWindowsFromIntent(value: string): string[] | null {
   const lower = normalizeIntent(value).toLowerCase();
   const windows = [
-    /\bmornings?\b/.test(lower) ? "morning" : null,
-    /\bafternoons?\b/.test(lower) ? "afternoon" : null,
-    /\bevenings?\b/.test(lower) ? "evening" : null,
-    /\bnights?\b/.test(lower) ? "night" : null,
+    /\bmornings?\b|\bwake(?:\s|-)?up\b|\bwake up\b|\bbreakfast\b|\bbefore (?:work|i start work|starting work)\b/.test(
+      lower,
+    )
+      ? "morning"
+      : null,
+    /\bafternoons?\b|\blunch\b|\bafter lunch\b|\bmid(?:\s|-)?day\b|\bduring the day\b/.test(
+      lower,
+    )
+      ? "afternoon"
+      : null,
+    /\bevenings?\b|\bafter work\b|\bdinner\b/.test(lower)
+      ? "evening"
+      : null,
+    /\bnights?\b|\bbedtime\b|\bbefore bed\b|\bbefore sleep\b|\bbefore i sleep\b|\bbefore (?:going to bed|i go to bed)\b/.test(
+      lower,
+    )
+      ? "night"
+      : null,
   ].filter((window): window is string => window !== null);
   return windows.length > 0 ? [...new Set(windows)] : null;
 }
 
 function extractWeekdaysFromIntent(value: string): number[] | null {
   const lower = normalizeIntent(value).toLowerCase();
+  if (/\bweekdays?\b|\bworkdays?\b/.test(lower)) {
+    return [1, 2, 3, 4, 5];
+  }
+  if (/\bweekends?\b/.test(lower)) {
+    return [0, 6];
+  }
   const matches = [
     ...lower.matchAll(
       /\b(?:every|each)\s+(sun(?:day)?|mon(?:day)?|tue(?:s(?:day)?)?|wed(?:nesday)?|thu(?:r(?:s(?:day)?)?)?|fri(?:day)?|sat(?:urday)?)\b/g,
@@ -415,7 +449,7 @@ function extractHeuristicTitle(args: {
   }
 
   const genericActionMatch = normalized.match(
-    /\b(?:do|call|text|email|submit|pay|take|drink|brush|stretch|work out|workout|hug)\b.*$/i,
+    /\b(?:do|call|text|email|submit|pay|take|drink|brush|stretch|work out|workout|hug|shave|shower|floss|meditat(?:e|ion)|invisalign)\b.*$/i,
   );
   if (genericActionMatch?.[0]) {
     return normalizeTitleCandidate(genericActionMatch[0]);
@@ -500,13 +534,7 @@ function buildHeuristicTaskCreatePlan(args: {
     };
   }
 
-  if (!oneOffReminderLike && !explicitTimeDrivenSchedule) {
-    return null;
-  }
-
-  const title = oneOffReminderLike
-    ? extractHeuristicTitle({ intent, requestKind })
-    : null;
+  const title = extractHeuristicTitle({ intent, requestKind });
   const intervalMatch = lower.match(/\bevery\s+(\d+)\s*(hours?|minutes?)\b/);
   const timesPerDayMatch =
     lower.match(
@@ -550,6 +578,12 @@ function buildHeuristicTaskCreatePlan(args: {
     cadenceKind = "daily";
   }
 
+  const recurringCreateLike =
+    cadenceKind !== null &&
+    (Boolean(title) ||
+      /\b(?:habit|routine|task|todo|reminder)\b/.test(lower) ||
+      REMINDER_CONTEXT_RE.test(intent));
+
   if (
     cadenceKind === null &&
     looksLikeShortTimedFollowup(intent) &&
@@ -560,6 +594,14 @@ function buildHeuristicTaskCreatePlan(args: {
   }
 
   if (!title && !cadenceKind && !requestKind) {
+    return null;
+  }
+
+  if (
+    !oneOffReminderLike &&
+    !explicitTimeDrivenSchedule &&
+    !recurringCreateLike
+  ) {
     return null;
   }
 
@@ -682,14 +724,21 @@ export async function extractTaskCreatePlanWithLlm(args: {
       return heuristicPlan;
     }
 
-    return mergeTaskCreatePlans(
-      buildTaskCreatePlan({
-        parsed,
-        intent,
-        recentWindow,
-      }),
-      heuristicPlan,
-    );
+    const parsedPlan = buildTaskCreatePlan({
+      parsed,
+      intent,
+      recentWindow,
+    });
+    if (
+      parsedPlan.mode === "respond" &&
+      heuristicPlan?.mode === "create" &&
+      heuristicPlan.title &&
+      heuristicPlan.cadenceKind
+    ) {
+      return heuristicPlan;
+    }
+
+    return mergeTaskCreatePlans(parsedPlan, heuristicPlan);
   } catch {
     return heuristicPlan;
   }

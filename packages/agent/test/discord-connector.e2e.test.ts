@@ -650,19 +650,21 @@ describeIfPluginAvailable("Discord Connector - Permissions & Channels", () => {
 describeIfPluginAvailable("Discord Connector - Error Handling", () => {
   it("warns instead of throwing when the Discord token is missing", async () => {
     const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const runtime = new AgentRuntime({
+      character: createCharacter({ name: "TestBot" }),
+      plugins: [],
+      logLevel: "error",
+    });
 
-    await discordPluginProbe?.init?.(
-      {},
-      {
-        character: { name: "TestBot" },
-        logger: { info: vi.fn() },
-        getSetting: () => "",
-      } as unknown as AgentRuntime,
-    );
+    await discordPluginProbe?.init?.({}, runtime);
 
-    expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining("Discord API Token not provided"),
-    );
+    expect(
+      warnSpy.mock.calls.some(
+        ([message]) =>
+          typeof message === "string" &&
+          /discord bot token not provided/i.test(message),
+      ),
+    ).toBe(true);
     warnSpy.mockRestore();
   });
 

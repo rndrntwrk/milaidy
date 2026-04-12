@@ -7,8 +7,8 @@ import {
   buildGitHubReleaseAssetDownloadUrl,
   buildGitHubReleasePageUrl,
   buildLifeOpsBrowserReleaseMetadata,
-  resolveLifeOpsBrowserReleaseVersion,
   resolveLifeOpsBrowserReleaseRepository,
+  resolveLifeOpsBrowserReleaseVersion,
   resolveLifeOpsBrowserStoreUrls,
   versionedArtifactName,
 } from "./release-version.mjs";
@@ -16,7 +16,6 @@ import {
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const extensionRoot = path.resolve(scriptDir, "..");
 const artifactsDir = path.join(extensionRoot, "dist", "artifacts");
-const appName = "LifeOps Browser";
 const release = resolveLifeOpsBrowserReleaseVersion();
 const repository = resolveLifeOpsBrowserReleaseRepository();
 const storeUrls = resolveLifeOpsBrowserStoreUrls();
@@ -69,7 +68,9 @@ const manifest = {
   releasePageUrl: buildGitHubReleasePageUrl(repository, release),
   generatedAt: new Date().toISOString(),
   chrome: {
-    installKind: storeUrls.chromeWebStoreUrl ? "chrome_web_store" : "github_release",
+    installKind: storeUrls.chromeWebStoreUrl
+      ? "chrome_web_store"
+      : "github_release",
     installUrl:
       storeUrls.chromeWebStoreUrl ??
       buildGitHubReleaseAssetDownloadUrl(repository, release, chromeAssetName),
@@ -84,7 +85,9 @@ const manifest = {
     },
   },
   safari: {
-    installKind: storeUrls.safariAppStoreUrl ? "apple_app_store" : "github_release",
+    installKind: storeUrls.safariAppStoreUrl
+      ? "apple_app_store"
+      : "github_release",
     installUrl:
       storeUrls.safariAppStoreUrl ??
       buildGitHubReleaseAssetDownloadUrl(repository, release, safariAssetName),

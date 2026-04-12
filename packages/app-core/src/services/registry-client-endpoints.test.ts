@@ -7,9 +7,17 @@
  * endpoints.
  */
 
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+const { dnsLookupMock } = vi.hoisted(() => ({
+  dnsLookupMock: vi.fn(),
+}));
+
+vi.mock("node:dns/promises", () => ({
+  lookup: dnsLookupMock,
+}));
 import {
   isDefaultEndpoint,
+  mergeCustomEndpoints,
   normaliseEndpointUrl,
   parseRegistryEndpointUrl,
 } from "./registry-client-endpoints.js";
@@ -19,6 +27,11 @@ vi.mock("@elizaos/core", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@elizaos/core")>()),
   logger: { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() },
 }));
+
+afterEach(() => {
+  dnsLookupMock.mockReset();
+  vi.unstubAllGlobals();
+});
 
 // ═════════════════════════════════════════════════════════════════════════
 describe("registry-client-endpoints", () => {
@@ -151,6 +164,35 @@ describe("registry-client-endpoints", () => {
       expect(() =>
         parseRegistryEndpointUrl("https://printer.local/api"),
       ).toThrow("blocked");
+    });
+  });
+
+  describe("mergeCustomEndpoints", () => {
+    it("uses an abortable fetch for custom endpoint requests", async () => {
+      dnsLookupMock.mockResolvedValue([{ address: "93.184.216.34" }]);
+      const fetchMock = vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        json: async () => ({ registry: {} }),
+      }));
+      vi.stubGlobal("fetch", fetchMock);
+
+      await mergeCustomEndpoints(new Map(), [
+        {
+          label: "Custom",
+          url: "https://registry.example.com/generated-registry.json",
+          enabled: true,
+        },
+      ]);
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        "https://registry.example.com/generated-registry.json",
+        expect.objectContaining({
+          redirect: "error",
+          signal: expect.any(AbortSignal),
+        }),
+      );
     });
   });
 });

@@ -15,7 +15,11 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { describeIf } from "../../../../test/helpers/conditional-tests.ts";
 
 const LIVE_TESTS_ENABLED = process.env.MILADY_LIVE_TEST === "1";
-const describeLive = describeIf(LIVE_TESTS_ENABLED);
+const LIVE_BROWSER_SUITE_ENABLED =
+  process.env.MILADY_LIVE_BROWSER_SUITE === "1";
+const describeLive = describeIf(
+  LIVE_TESTS_ENABLED && LIVE_BROWSER_SUITE_ENABLED,
+);
 const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..", "..", "..");
 const APP_ROOT = path.join(REPO_ROOT, "apps/app");
 const SCREENSHOT_DIR = path.join(REPO_ROOT, "test-results", "live-onboarding");

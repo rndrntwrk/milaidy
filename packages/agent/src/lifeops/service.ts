@@ -5,7 +5,6 @@ import {
   ModelType,
   stringToUuid,
 } from "@elizaos/core";
-import { registerEscalationChannel } from "../services/escalation.js";
 import {
   getSelfControlStatus,
   startSelfControlBlock,
@@ -160,6 +159,7 @@ import {
   LIFEOPS_WORKFLOW_TRIGGER_TYPES,
   LIFEOPS_X_CAPABILITIES,
 } from "@miladyai/shared/contracts/lifeops";
+import { readProfileFromMetadata } from "../activity-profile/service.js";
 import {
   loadOwnerContactRoutingHints,
   loadOwnerContactsConfig,
@@ -168,8 +168,11 @@ import {
 } from "../config/owner-contacts.js";
 import { getAgentEventService } from "../runtime/agent-event-service.js";
 import { resolveOwnerEntityId } from "../runtime/owner-entity.js";
-import { readProfileFromMetadata } from "../activity-profile/service.js";
-import type { ActivityProfile } from "../activity-profile/types.js";
+import { registerEscalationChannel } from "../services/escalation.js";
+import {
+  computeNextCronRunAtMs,
+  parseCronExpression,
+} from "../triggers/scheduling.js";
 import {
   buildNativeAppleReminderMetadata,
   createNativeAppleReminderLikeItem,
@@ -177,10 +180,6 @@ import {
   readNativeAppleReminderMetadata,
   updateNativeAppleReminderLikeItem,
 } from "./apple-reminders.js";
-import {
-  computeNextCronRunAtMs,
-  parseCronExpression,
-} from "../triggers/scheduling.js";
 import {
   computeAdaptiveWindowPolicy,
   DEFAULT_REMINDER_STEPS,
@@ -190,10 +189,6 @@ import {
   windowPolicyMatchesDefaults,
 } from "./defaults.js";
 import { materializeDefinitionOccurrences } from "./engine.js";
-import {
-  ROUTINE_SEED_TEMPLATES,
-  type RoutineSeedTemplate,
-} from "./seed-routines.js";
 import {
   GoogleApiError,
   googleErrorLooksLikeAdminPolicyBlock,
@@ -263,6 +258,10 @@ import {
   LifeOpsRepository,
   type LifeOpsWebsiteAccessGrant,
 } from "./repository.js";
+import {
+  ROUTINE_SEED_TEMPLATES,
+  type RoutineSeedTemplate,
+} from "./seed-routines.js";
 import {
   addDaysToLocalDate,
   addMinutes,
@@ -1868,6 +1867,75 @@ function parseGmailDateBoundary(value: string): number | null {
   return Date.UTC(year, month - 1, day, 0, 0, 0, 0);
 }
 
+function splitMailboxLikeList(value: string): string[] {
+  const parts: string[] = [];
+  let current = "";
+  let inQuotes = false;
+  let angleDepth = 0;
+
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index];
+    const next = value[index + 1];
+    if (char === '"') {
+      inQuotes = !inQuotes;
+      current += char;
+      continue;
+    }
+    if (!inQuotes && char === "<") {
+      angleDepth += 1;
+      current += char;
+      continue;
+    }
+    if (!inQuotes && char === ">") {
+      angleDepth = Math.max(0, angleDepth - 1);
+      current += char;
+      continue;
+    }
+    if (!inQuotes && angleDepth === 0 && char === "|" && next === "|") {
+      const trimmed = current.trim();
+      if (trimmed.length > 0) {
+        parts.push(trimmed);
+      }
+      current = "";
+      index += 1;
+      continue;
+    }
+    if (!inQuotes && angleDepth === 0 && (char === "," || char === ";" || char === "\n")) {
+      const trimmed = current.trim();
+      if (trimmed.length > 0) {
+        parts.push(trimmed);
+      }
+      current = "";
+      continue;
+    }
+    current += char;
+  }
+
+  const trimmed = current.trim();
+  if (trimmed.length > 0) {
+    parts.push(trimmed);
+  }
+  return parts;
+}
+
+function extractNormalizedEmailAddress(value: string): string | null {
+  const trimmed = value.trim().replace(/^mailto:/i, "");
+  if (!trimmed) {
+    return null;
+  }
+  const angleMatch = trimmed.match(/<\s*([^<>\s@]+@[^<>\s@]+)\s*>/u);
+  const rawCandidate =
+    angleMatch?.[1] ??
+    trimmed.match(/([^\s<>()"';,]+@[^\s<>()"';,]+)/u)?.[1] ??
+    trimmed;
+  const normalized = rawCandidate
+    .trim()
+    .replace(/^["']+|["']+$/g, "")
+    .replace(/[>;,\s]+$/g, "")
+    .toLowerCase();
+  return /^[^@\s]+@[^@\s]+\.[^@\s]+$/u.test(normalized) ? normalized : null;
+}
+
 function normalizeOptionalMessageIdArray(
   value: unknown,
   field: string,
@@ -1922,13 +1990,24 @@ function normalizeGmailSearchQueryMatches(
   const tokens: string[] = [];
   let current = "";
   let inQuotes = false;
+  let braceDepth = 0;
   for (const char of query.trim()) {
     if (char === '"') {
       inQuotes = !inQuotes;
       current += char;
       continue;
     }
-    if (!inQuotes && /\s/.test(char)) {
+    if (!inQuotes && char === "{") {
+      braceDepth += 1;
+      current += char;
+      continue;
+    }
+    if (!inQuotes && char === "}") {
+      braceDepth = Math.max(0, braceDepth - 1);
+      current += char;
+      continue;
+    }
+    if (!inQuotes && braceDepth === 0 && /\s/.test(char)) {
       if (current.length > 0) {
         tokens.push(current);
         current = "";
@@ -1943,75 +2022,130 @@ function normalizeGmailSearchQueryMatches(
   if (tokens.length === 0) {
     return false;
   }
+
+  const matchesToken = (token: string): boolean => {
+    const normalizedToken = token.trim();
+    if (normalizedToken.length === 0) {
+      return true;
+    }
+    const isNegated = normalizedToken.startsWith("-");
+    const tokenBody = isNegated ? normalizedToken.slice(1).trim() : normalizedToken;
+    if (!tokenBody) {
+      return true;
+    }
+    if (tokenBody.startsWith("{") && tokenBody.endsWith("}")) {
+      const groupMembers = tokenBody
+        .slice(1, -1)
+        .trim()
+        .split(/\s+/)
+        .map((entry) => entry.trim())
+        .filter(Boolean);
+      if (groupMembers.length === 0) {
+        return true;
+      }
+      const groupMatched = groupMembers.some((entry) => matchesToken(entry));
+      return isNegated ? !groupMatched : groupMatched;
+    }
+    const operatorMatch = tokenBody.match(/^([a-z_]+):(.*)$/i);
+    const rawValue = operatorMatch ? operatorMatch[2] : tokenBody;
+    const value = rawValue.replace(/^"|"$/g, "").trim().toLowerCase();
+    if (value.length === 0) {
+      return true;
+    }
+
+    const labelTokens = message.labels.map((label) => label.toLowerCase());
+    const hasAttachment =
+      typeof message.metadata?.hasAttachments === "boolean"
+        ? message.metadata.hasAttachments === true
+        : /\battach(?:ed|ment|ments)?\b/i.test(
+            `${message.subject} ${message.snippet}`,
+          );
+    const matched = (() => {
+      if (!operatorMatch) {
+        return all.includes(value);
+      }
+
+      const operator = operatorMatch[1].toLowerCase();
+      switch (operator) {
+        case "from":
+          if (value === "me") {
+            return labelTokens.includes("sent");
+          }
+          return sender.includes(value);
+        case "subject":
+          return subject.includes(value);
+        case "to":
+          return to.includes(value);
+        case "cc":
+          return cc.includes(value);
+        case "label":
+        case "labels":
+          return labels.includes(value);
+        case "category":
+          return labelTokens.includes(`category_${value}`);
+        case "in":
+          return value === "anywhere" ? true : labelTokens.includes(value);
+        case "has":
+          return value === "attachment" ? hasAttachment : all.includes(value);
+        case "is":
+          if (value === "unread") {
+            return message.isUnread;
+          }
+          if (value === "read") {
+            return !message.isUnread;
+          }
+          if (value === "important") {
+            return message.isImportant;
+          }
+          if (value === "starred") {
+            return labelTokens.includes("starred");
+          }
+          return all.includes(value);
+        case "newer_than": {
+          const relativeMs = parseGmailRelativeDuration(value);
+          return relativeMs === null
+            ? all.includes(value)
+            : receivedAtMs >= nowMs - relativeMs;
+        }
+        case "older_than": {
+          const relativeMs = parseGmailRelativeDuration(value);
+          return relativeMs === null
+            ? all.includes(value)
+            : receivedAtMs <= nowMs - relativeMs;
+        }
+        case "after": {
+          const boundary = parseGmailDateBoundary(value);
+          return boundary === null
+            ? all.includes(value)
+            : receivedAtMs >= boundary;
+        }
+        case "before": {
+          const boundary = parseGmailDateBoundary(value);
+          return boundary === null
+            ? all.includes(value)
+            : receivedAtMs < boundary;
+        }
+        default:
+          return all.includes(value);
+      }
+    })();
+    return isNegated ? !matched : matched;
+  };
+
   return tokens.every((token) => {
     const normalizedToken = token.trim();
     if (normalizedToken.length === 0) {
       return true;
     }
     const operatorMatch = normalizedToken.match(/^([a-z_]+):(.*)$/i);
-    const rawValue = operatorMatch ? operatorMatch[2] : normalizedToken;
-    const value = rawValue.replace(/^"|"$/g, "").trim().toLowerCase();
-    if (value.length === 0) {
-      return true;
+    if (
+      operatorMatch &&
+      operatorMatch[1].toLowerCase() === "or" &&
+      operatorMatch[2]
+    ) {
+      return matchesToken(operatorMatch[2]);
     }
-
-    if (!operatorMatch) {
-      return all.includes(value);
-    }
-
-    const operator = operatorMatch[1].toLowerCase();
-    switch (operator) {
-      case "from":
-        return sender.includes(value);
-      case "subject":
-        return subject.includes(value);
-      case "to":
-        return to.includes(value);
-      case "cc":
-        return cc.includes(value);
-      case "label":
-      case "labels":
-        return labels.includes(value);
-      case "in":
-        return value === "anywhere" ? true : labels.includes(value);
-      case "is":
-        if (value === "unread") {
-          return message.isUnread;
-        }
-        if (value === "read") {
-          return !message.isUnread;
-        }
-        if (value === "important") {
-          return message.isImportant;
-        }
-        return all.includes(value);
-      case "newer_than": {
-        const relativeMs = parseGmailRelativeDuration(value);
-        return relativeMs === null
-          ? all.includes(value)
-          : receivedAtMs >= nowMs - relativeMs;
-      }
-      case "older_than": {
-        const relativeMs = parseGmailRelativeDuration(value);
-        return relativeMs === null
-          ? all.includes(value)
-          : receivedAtMs <= nowMs - relativeMs;
-      }
-      case "after": {
-        const boundary = parseGmailDateBoundary(value);
-        return boundary === null
-          ? all.includes(value)
-          : receivedAtMs >= boundary;
-      }
-      case "before": {
-        const boundary = parseGmailDateBoundary(value);
-        return boundary === null
-          ? all.includes(value)
-          : receivedAtMs < boundary;
-      }
-      default:
-        return all.includes(value);
-    }
+    return matchesToken(normalizedToken);
   });
 }
 
@@ -2052,17 +2186,17 @@ function normalizeOptionalStringArray(
   if (value === undefined) {
     return undefined;
   }
-  if (!Array.isArray(value)) {
-    fail(400, `${field} must be an array`);
-  }
+  const rawValues = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? splitMailboxLikeList(value)
+      : fail(400, `${field} must be an array or string`);
   const items: string[] = [];
   const seen = new Set<string>();
-  for (const [index, candidate] of value.entries()) {
-    const item = requireNonEmptyString(
-      candidate,
-      `${field}[${index}]`,
-    ).toLowerCase();
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(item)) {
+  for (const [index, candidate] of rawValues.entries()) {
+    const source = requireNonEmptyString(candidate, `${field}[${index}]`);
+    const item = extractNormalizedEmailAddress(source);
+    if (!item) {
       fail(400, `${field}[${index}] must be a valid email address`);
     }
     if (seen.has(item)) {
@@ -2222,13 +2356,8 @@ function buildFallbackGmailReplyDraftBody(args: {
   const recipientLabel =
     args.message.from.split("<")[0]?.trim() ||
     args.message.fromEmail ||
-    "there";
-  const greeting =
-    args.tone === "brief"
-      ? `Hi ${recipientLabel},`
-      : args.tone === "warm"
-        ? `Hi ${recipientLabel},`
-        : `Hello ${recipientLabel},`;
+    "friend";
+  const greeting = args.intent?.trim() ? `${recipientLabel},` : `Hi ${recipientLabel},`;
   const subject = args.message.subject.trim() || "your message";
   const bodyCore = args.intent?.trim()
     ? args.intent.trim()
@@ -2237,9 +2366,15 @@ function buildFallbackGmailReplyDraftBody(args: {
       : args.tone === "warm"
         ? `Thanks for reaching out about ${subject}. I reviewed your note and wanted to follow up.`
         : `Thanks for the note about ${subject}. I reviewed your message and wanted to follow up.`;
-  const bodyLines = [greeting, "", bodyCore, "", "Best,", args.senderName];
+  const bodyLines = [greeting, "", bodyCore, "", args.senderName];
   if (args.includeQuotedOriginal && args.message.snippet.trim().length > 0) {
-    bodyLines.push("", "Quoted context:", args.message.snippet.trim());
+    bodyLines.push(
+      "",
+      ...args.message.snippet
+        .trim()
+        .split("\n")
+        .map((line) => `> ${line.trim()}`),
+    );
   }
 
   return bodyLines.join("\n");
@@ -2278,7 +2413,6 @@ function buildGmailReplyDraft(args: {
   sendAllowed: boolean;
   bodyText: string;
 }): LifeOpsGmailReplyDraft {
-
   const recipient = args.message.replyTo ?? args.message.fromEmail ?? null;
   if (!recipient) {
     fail(409, "The selected Gmail message has no replyable sender.");
@@ -5535,14 +5669,13 @@ export class LifeOpsService {
       ? readNativeAppleReminderMetadata(args.definition.metadata)
       : null;
     const previousReminderId = previousMetadata?.reminderId ?? null;
-    const shouldSyncNext =
-      args.definition !== null &&
-      nextMetadata !== null &&
-      args.definition.subjectType === "owner" &&
-      args.definition.domain === "user_lifeops" &&
-      args.definition.cadence.kind === "once";
-
-    if (!shouldSyncNext) {
+    if (
+      args.definition === null ||
+      nextMetadata === null ||
+      args.definition.subjectType !== "owner" ||
+      args.definition.domain !== "user_lifeops" ||
+      args.definition.cadence.kind !== "once"
+    ) {
       if (previousReminderId) {
         const deleteResult =
           await deleteNativeAppleReminderLikeItem(previousReminderId);
@@ -5567,13 +5700,18 @@ export class LifeOpsService {
 
     const definition = args.definition;
     const nativeMetadata = nextMetadata;
+    const cadence =
+      definition.cadence.kind === "once" ? definition.cadence : null;
+    if (!cadence) {
+      return definition;
+    }
     const reminderId = nativeMetadata.reminderId ?? previousReminderId;
     if (reminderId) {
       const updateResult = await updateNativeAppleReminderLikeItem({
         reminderId,
         kind: nativeMetadata.kind,
         title: definition.title,
-        dueAt: definition.cadence.dueAt,
+        dueAt: cadence.dueAt,
         notes: definition.description,
         originalIntent: definition.originalIntent,
       });
@@ -5600,7 +5738,7 @@ export class LifeOpsService {
     const createResult = await createNativeAppleReminderLikeItem({
       kind: nativeMetadata.kind,
       title: definition.title,
-      dueAt: definition.cadence.dueAt,
+      dueAt: cadence.dueAt,
       notes: definition.description,
       originalIntent: definition.originalIntent,
     });
@@ -11389,6 +11527,14 @@ export class LifeOpsService {
         },
         now,
       );
+      if (search.messages.length > 1) {
+        fail(
+          409,
+          `Multiple Gmail messages matched ${JSON.stringify(
+            query,
+          )}. Provide a messageId or narrow the query.`,
+        );
+      }
       selectedMessage = search.messages[0] ?? null;
       if (!selectedMessage) {
         fail(404, `No Gmail message matched ${JSON.stringify(query)}.`);
@@ -11704,7 +11850,8 @@ export class LifeOpsService {
         "This is a send-ready email reply, not a chat response.",
         "",
         "Character voice:",
-        buildReminderVoiceContext(this.runtime) || "No extra character context.",
+        buildReminderVoiceContext(this.runtime) ||
+          "No extra character context.",
         "",
         "Recent conversation:",
         recentConversation.length > 0
@@ -11728,6 +11875,7 @@ export class LifeOpsService {
         "- Return only the email body text.",
         "- Sound natural and in character, but keep it appropriate for email.",
         "- Preserve the user's requested wording and intent when it is provided.",
+        "- Write in the user's requested language, or the source email's language when that is clear, unless the user asked to translate.",
         "- Do not invent facts, promises, dates, attachments, or commitments that are not in the context.",
         "- Keep it concise unless the user's wording clearly asks for more detail.",
         "- Include a greeting and a sign-off.",
@@ -11910,96 +12058,110 @@ export class LifeOpsService {
       side,
     );
     const updateEvent = async () => {
-      if (resolveGoogleExecutionTarget(grant) === "cloud") {
-        fail(
-          501,
-          "Calendar update is not supported through the cloud-managed Google connector yet.",
-        );
-      }
-      const accessToken = (
-        await ensureFreshGoogleAccessToken(
-          grant.tokenRef ??
-            fail(409, "Google Calendar token reference is missing."),
-        )
-      ).accessToken;
+      const normalizedAttendees = request.attendees
+        ? normalizeCalendarAttendees(request.attendees)
+        : undefined;
+      const materializedUpdated =
+        resolveGoogleExecutionTarget(grant) === "cloud"
+          ? (
+              await this.googleManagedClient.updateCalendarEvent({
+                side: grant.side,
+                calendarId,
+                eventId: externalEventId,
+                title: request.title,
+                description: request.description,
+                location: request.location,
+                startAt: request.startAt,
+                endAt: request.endAt,
+                timeZone: request.timeZone,
+                attendees: normalizedAttendees,
+              })
+            ).event
+          : await (async () => {
+              const accessToken = (
+                await ensureFreshGoogleAccessToken(
+                  grant.tokenRef ??
+                    fail(409, "Google Calendar token reference is missing."),
+                )
+              ).accessToken;
 
-      // Google's PATCH semantics: if you send `start.dateTime` you must
-      // also send `end.dateTime`, otherwise the API rejects the call as
-      // "Bad Request" because the event would have inconsistent bounds.
-      // When the caller only supplies one bound or omits the timezone,
-      // load the current event so we can preserve both the existing
-      // timezone and duration instead of guessing.
-      const ONE_HOUR_MS = 60 * 60 * 1000;
-      const needsExistingEventContext =
-        Boolean(request.startAt || request.endAt) &&
-        (!request.timeZone || !request.startAt || !request.endAt);
-      const existingEvent = needsExistingEventContext
-        ? await fetchGoogleCalendarEvent({
-            accessToken,
-            calendarId: calendarId ?? undefined,
-            eventId: externalEventId,
-          })
-        : null;
-      const normalizedTimeZone = normalizeCalendarTimeZone(
-        request.timeZone ?? existingEvent?.timezone ?? undefined,
-      );
-      let normalizedStartAt = normalizeCalendarDateTimeInTimeZone(
-        request.startAt,
-        "startAt",
-        normalizedTimeZone,
-      );
-      let normalizedEndAt = normalizeCalendarDateTimeInTimeZone(
-        request.endAt,
-        "endAt",
-        normalizedTimeZone,
-      );
-      const existingDurationMs =
-        existingEvent &&
-        Number.isFinite(Date.parse(existingEvent.startAt)) &&
-        Number.isFinite(Date.parse(existingEvent.endAt))
-          ? Date.parse(existingEvent.endAt) - Date.parse(existingEvent.startAt)
-          : Number.NaN;
-      const fallbackDurationMs =
-        Number.isFinite(existingDurationMs) && existingDurationMs > 0
-          ? existingDurationMs
-          : ONE_HOUR_MS;
-      if (normalizedStartAt && !normalizedEndAt) {
-        normalizedEndAt = new Date(
-          new Date(normalizedStartAt).getTime() + fallbackDurationMs,
-        ).toISOString();
-      } else if (normalizedEndAt && !normalizedStartAt) {
-        normalizedStartAt = new Date(
-          new Date(normalizedEndAt).getTime() - fallbackDurationMs,
-        ).toISOString();
-      }
+              // Google's PATCH semantics: if you send `start.dateTime` you must
+              // also send `end.dateTime`, otherwise the API rejects the call as
+              // "Bad Request" because the event would have inconsistent bounds.
+              // When the caller only supplies one bound or omits the timezone,
+              // load the current event so we can preserve both the existing
+              // timezone and duration instead of guessing.
+              const ONE_HOUR_MS = 60 * 60 * 1000;
+              const needsExistingEventContext =
+                Boolean(request.startAt || request.endAt) &&
+                (!request.timeZone || !request.startAt || !request.endAt);
+              const existingEvent = needsExistingEventContext
+                ? await fetchGoogleCalendarEvent({
+                    accessToken,
+                    calendarId: calendarId ?? undefined,
+                    eventId: externalEventId,
+                  })
+                : null;
+              const normalizedTimeZone = normalizeCalendarTimeZone(
+                request.timeZone ?? existingEvent?.timezone ?? undefined,
+              );
+              let normalizedStartAt = normalizeCalendarDateTimeInTimeZone(
+                request.startAt,
+                "startAt",
+                normalizedTimeZone,
+              );
+              let normalizedEndAt = normalizeCalendarDateTimeInTimeZone(
+                request.endAt,
+                "endAt",
+                normalizedTimeZone,
+              );
+              const existingDurationMs =
+                existingEvent &&
+                Number.isFinite(Date.parse(existingEvent.startAt)) &&
+                Number.isFinite(Date.parse(existingEvent.endAt))
+                  ? Date.parse(existingEvent.endAt) -
+                    Date.parse(existingEvent.startAt)
+                  : Number.NaN;
+              const fallbackDurationMs =
+                Number.isFinite(existingDurationMs) && existingDurationMs > 0
+                  ? existingDurationMs
+                  : ONE_HOUR_MS;
+              if (normalizedStartAt && !normalizedEndAt) {
+                normalizedEndAt = new Date(
+                  new Date(normalizedStartAt).getTime() + fallbackDurationMs,
+                ).toISOString();
+              } else if (normalizedEndAt && !normalizedStartAt) {
+                normalizedStartAt = new Date(
+                  new Date(normalizedEndAt).getTime() - fallbackDurationMs,
+                ).toISOString();
+              }
 
-      const updated = await updateGoogleCalendarEvent({
-        accessToken,
-        calendarId: calendarId ?? undefined,
-        eventId: externalEventId,
-        title: request.title,
-        description: request.description,
-        location: request.location,
-        startAt: normalizedStartAt,
-        endAt: normalizedEndAt,
-        timeZone: normalizedTimeZone,
-        attendees: request.attendees
-          ? normalizeCalendarAttendees(request.attendees)
-          : undefined,
-      });
+              return updateGoogleCalendarEvent({
+                accessToken,
+                calendarId: calendarId ?? undefined,
+                eventId: externalEventId,
+                title: request.title,
+                description: request.description,
+                location: request.location,
+                startAt: normalizedStartAt,
+                endAt: normalizedEndAt,
+                timeZone: normalizedTimeZone,
+                attendees: normalizedAttendees,
+              });
+            })();
       const syncedAt = new Date().toISOString();
       const event: LifeOpsCalendarEvent = {
         id: createCalendarEventId(
           this.agentId(),
           "google",
           grant.side,
-          updated.calendarId,
-          updated.externalId,
+          materializedUpdated.calendarId,
+          materializedUpdated.externalId,
         ),
         agentId: this.agentId(),
         provider: "google",
         side: grant.side,
-        ...updated,
+        ...materializedUpdated,
         syncedAt,
         updatedAt: syncedAt,
       };
@@ -12057,27 +12219,25 @@ export class LifeOpsService {
       side,
     );
     const deleteEvent = async () => {
-      // Cloud-managed Google delete is not yet exposed by the managed client;
-      // local execution path is the only supported route here. Refuse loudly
-      // rather than silently no-op so the caller doesn't think the event was
-      // removed when it wasn't.
       if (resolveGoogleExecutionTarget(grant) === "cloud") {
-        fail(
-          501,
-          "Calendar delete is not supported through the cloud-managed Google connector yet.",
-        );
+        await this.googleManagedClient.deleteCalendarEvent({
+          side: grant.side,
+          calendarId,
+          eventId: externalEventId,
+        });
+      } else {
+        const accessToken = (
+          await ensureFreshGoogleAccessToken(
+            grant.tokenRef ??
+              fail(409, "Google Calendar token reference is missing."),
+          )
+        ).accessToken;
+        await deleteGoogleCalendarEvent({
+          accessToken,
+          calendarId: calendarId ?? undefined,
+          eventId: externalEventId,
+        });
       }
-      const accessToken = (
-        await ensureFreshGoogleAccessToken(
-          grant.tokenRef ??
-            fail(409, "Google Calendar token reference is missing."),
-        )
-      ).accessToken;
-      await deleteGoogleCalendarEvent({
-        accessToken,
-        calendarId: calendarId ?? undefined,
-        eventId: externalEventId,
-      });
       // Best-effort: drop the local cached row so subsequent feed reads
       // don't show a phantom event. Ignore failures here — the source of
       // truth (Google) has already accepted the delete.

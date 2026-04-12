@@ -1389,6 +1389,7 @@ function AppProviderInner({
     setOnboardingRemoteError,
     setOnboardingRemoteConnected,
     setPostOnboardingChecklistDismissed,
+    setBrowserEnabled,
     setOnboardingComplete,
     coordinatorOnboardingCompleteRef,
     initialTabSetRef,
@@ -1401,6 +1402,7 @@ function AppProviderInner({
     elizaCloudConnected,
     setActionNotice,
     retryStartup,
+    setWalletEnabled,
     forceLocalBootstrapRef,
     client,
   });

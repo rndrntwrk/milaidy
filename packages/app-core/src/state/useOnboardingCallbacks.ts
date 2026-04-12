@@ -26,6 +26,7 @@ import { getResetConnectionWizardToHostingStepPatch } from "../onboarding/connec
 import {
   canRevertOnboardingTo,
   getFlaminaTopicForOnboardingStep,
+  getOnboardingStepIndex,
   resolveOnboardingNextStep,
   resolveOnboardingPreviousStep,
   shouldSkipConnectionStepsForCloudProvisionedContainer,
@@ -165,6 +166,35 @@ async function persistOnboardingStyleVoice(args: {
   });
 }
 
+function buildOnboardingFeatureSubmitPayload(args: {
+  onboardingFeatureTelegram: boolean;
+  onboardingFeatureDiscord: boolean;
+  onboardingFeatureBrowser: boolean;
+}): {
+  connectors?: Record<string, { enabled: true; managed: true }>;
+  features?: Record<string, { enabled: true }>;
+} {
+  const connectors =
+    args.onboardingFeatureTelegram || args.onboardingFeatureDiscord
+      ? {
+          ...(args.onboardingFeatureTelegram
+            ? { telegram: { enabled: true as const, managed: true as const } }
+            : {}),
+          ...(args.onboardingFeatureDiscord
+            ? { discord: { enabled: true as const, managed: true as const } }
+            : {}),
+        }
+      : undefined;
+  const features = args.onboardingFeatureBrowser
+    ? { browser: { enabled: true as const } }
+    : undefined;
+
+  return {
+    ...(connectors ? { connectors } : {}),
+    ...(features ? { features } : {}),
+  };
+}
+
 // ── Hook deps ─────────────────────────────────────────────────────────────
 
 export interface OnboardingCallbacksDeps {
@@ -195,6 +225,8 @@ export interface OnboardingCallbacksDeps {
   setOnboardingRemoteError: (v: string | null) => void;
   setOnboardingRemoteConnected: (v: boolean) => void;
   setPostOnboardingChecklistDismissed: (v: boolean) => void;
+  setBrowserEnabled?: (v: boolean) => void;
+  setWalletEnabled?: (v: boolean) => void;
 
   /** Lifecycle / global */
   setOnboardingComplete: (v: boolean) => void;
@@ -237,6 +269,7 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
     setOnboardingRemoteError,
     setOnboardingRemoteConnected,
     setPostOnboardingChecklistDismissed,
+    setBrowserEnabled,
     setOnboardingComplete,
     coordinatorOnboardingCompleteRef,
     initialTabSetRef,
@@ -249,6 +282,7 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
     elizaCloudConnected,
     setActionNotice,
     retryStartup,
+    setWalletEnabled,
     forceLocalBootstrapRef,
     addDeferredOnboardingTask,
     client,
@@ -346,6 +380,17 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
           onboardingRunMode,
           onboardingProvider,
         });
+        const onboardingFeaturePayload = buildOnboardingFeatureSubmitPayload({
+          onboardingFeatureTelegram,
+          onboardingFeatureDiscord,
+          onboardingFeatureBrowser,
+        });
+        const shouldApplyLocalCapabilities = onboardingStep === "features";
+        const applySelectedLocalCapabilities = () => {
+          if (!shouldApplyLocalCapabilities) return;
+          setWalletEnabled?.(onboardingFeatureCrypto);
+          setBrowserEnabled?.(onboardingFeatureBrowser);
+        };
 
         if (useCloudFastTrack) {
           const style = resolveSelectedOnboardingStyle({
@@ -378,6 +423,7 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
             cloudProvider: "elizacloud",
             smallModel: onboardingSmallModel,
             largeModel: onboardingLargeModel,
+            ...onboardingFeaturePayload,
           } as unknown as Parameters<typeof client.submitOnboarding>[0]);
           try {
             await persistOnboardingStyleVoice({
@@ -394,6 +440,7 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
             );
           }
 
+          applySelectedLocalCapabilities();
           completeOnboarding();
           return;
         }
@@ -531,23 +578,6 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
         }
 
         const sandboxMode = isSandboxMode ? "standard" : "off";
-        const onboardingConnectors = runtimeConfig.featureSetup?.connectors
-          ? Object.fromEntries(
-              Object.entries(runtimeConfig.featureSetup.connectors).map(
-                ([connectorId, connectorConfig]) => [
-                  connectorId,
-                  {
-                    enabled: true,
-                    ...connectorConfig,
-                  },
-                ],
-              ),
-            )
-          : undefined;
-        const onboardingFeatures = runtimeConfig.featureSetup?.capabilities
-          .browser
-          ? { browser: { enabled: true } }
-          : undefined;
         await client.submitOnboarding({
           name: onboardingName,
           sandboxMode: sandboxMode as "off",
@@ -571,8 +601,7 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
           ...(runtimeConfig.credentialInputs
             ? { credentialInputs: runtimeConfig.credentialInputs }
             : {}),
-          ...(onboardingConnectors ? { connectors: onboardingConnectors } : {}),
-          ...(onboardingFeatures ? { features: onboardingFeatures } : {}),
+          ...onboardingFeaturePayload,
           walletConfig: nextWalletConfig,
         } as Parameters<typeof client.submitOnboarding>[0]);
         try {
@@ -592,6 +621,7 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
           );
         }
 
+        applySelectedLocalCapabilities();
         if (runtimeConfig.needsProviderSetup) {
           setActionNotice(
             "Choose a chat provider in Settings to start chatting.",
@@ -620,6 +650,7 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
       onboardingCloudApiKey,
       onboardingSmallModel,
       onboardingLargeModel,
+      onboardingStep,
       onboardingProvider,
       onboardingApiKey,
       onboardingRemoteApiBase,
@@ -638,6 +669,7 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
       uiLanguage,
       onboardingRpcSelections,
       onboardingRpcKeys,
+      setBrowserEnabled,
       walletConfig,
       onboardingMode,
       elizaCloudConnected,
@@ -645,6 +677,7 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
       completeOnboarding,
       client,
       setActionNotice,
+      setWalletEnabled,
     ],
   );
 
@@ -738,7 +771,7 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
 
       const nextStep = resolveOnboardingNextStep(onboardingStep);
 
-      // Skip features step for remote-only targets (no managed connectors)
+      // Keep any target-specific feature-step shortcuts centralized in flow.ts.
       if (
         nextStep === "features" &&
         shouldSkipFeaturesStep({ onboardingServerTarget })
@@ -817,10 +850,20 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
   const handleOnboardingJumpToStep = useCallback(
     (target: OnboardingStep) => {
       if (!canRevertOnboardingTo({ current: onboardingStep, target })) return;
-      // Reset connection subflow when jumping away from "providers" so the
-      // user starts fresh at the hosting screen when they advance again.
-      if (onboardingStep === "providers") {
+      const currentStepIndex = getOnboardingStepIndex(onboardingStep);
+      const targetStepIndex = getOnboardingStepIndex(target);
+      const providersStepIndex = getOnboardingStepIndex("providers");
+
+      // Sidebar back jumps must match repeated Back semantics, including the
+      // connection wizard reset when the jump crosses back past providers.
+      if (
+        currentStepIndex >= providersStepIndex &&
+        targetStepIndex < providersStepIndex
+      ) {
         applyResetConnectionWizardToHostingStep();
+      }
+      if (target === "deployment") {
+        setOnboardingServerTarget("");
       }
       setOnboardingStep(target);
       setOnboardingActiveGuide(
@@ -835,6 +878,7 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
       onboardingStep,
       setOnboardingStep,
       setOnboardingActiveGuide,
+      setOnboardingServerTarget,
     ],
   );
 

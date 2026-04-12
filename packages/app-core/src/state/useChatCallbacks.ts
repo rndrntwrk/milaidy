@@ -25,6 +25,10 @@ import {
   type LoadConversationMessagesResult,
   loadActiveConversationId,
 } from "./internal";
+import {
+  isConversationRecord,
+  normalizeConversationList,
+} from "./chat-conversation-guards";
 import type { OnboardingMode, OnboardingStep } from "./types";
 
 import { useChatLifecycle } from "./useChatLifecycle";
@@ -501,17 +505,21 @@ export function useChatCallbacks(deps: UseChatCallbacksDeps) {
       conversationHydrationEpochRef.current === hydrationEpoch;
 
     try {
-      const { conversations: c } = await client.listConversations();
-      traceMiladyGreeting("hydrate:listConversations", { count: c.length });
+      const { conversations: rawConversations } = await client.listConversations();
+      const conversations = normalizeConversationList(rawConversations);
+      traceMiladyGreeting("hydrate:listConversations", {
+        count: conversations.length,
+      });
       if (!isCurrentHydration()) {
         return null;
       }
-      setConversations(c);
-      if (c.length > 0) {
+      setConversations(conversations);
+      if (conversations.length > 0) {
         const savedConversationId = loadActiveConversationId();
         const restoredConversation =
-          c.find((conversation) => conversation.id === savedConversationId) ??
-          c[0];
+          conversations.find(
+            (conversation) => conversation.id === savedConversationId,
+          ) ?? conversations[0];
         if (!isCurrentHydration()) {
           return null;
         }
@@ -566,11 +574,15 @@ export function useChatCallbacks(deps: UseChatCallbacksDeps) {
 
       traceMiladyGreeting("hydrate:auto_create_initial_conversation");
       try {
-        const { conversation, greeting: inlineGreeting } =
+        const { conversation: rawConversation, greeting: inlineGreeting } =
           await client.createConversation(undefined, {
             bootstrapGreeting: true,
             lang: uiLanguage,
           });
+        if (!isConversationRecord(rawConversation)) {
+          throw new Error("Conversation creation returned an invalid payload.");
+        }
+        const conversation = rawConversation;
 
         if (!isCurrentHydration()) {
           return null;
@@ -753,11 +765,15 @@ export function useChatCallbacks(deps: UseChatCallbacksDeps) {
       resetConversationDraftState();
 
       try {
-        const { conversation, greeting: inlineGreeting } =
+        const { conversation: rawConversation, greeting: inlineGreeting } =
           await client.createConversation(title, {
             bootstrapGreeting: true,
             lang: uiLanguage,
           });
+        if (!isConversationRecord(rawConversation)) {
+          throw new Error("Conversation creation returned an invalid payload.");
+        }
+        const conversation = rawConversation;
         const nextCutoffTs = Date.now();
         setConversations((prev) => [conversation, ...prev]);
         setActiveConversationId(conversation.id);

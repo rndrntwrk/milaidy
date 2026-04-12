@@ -1,7 +1,7 @@
 import type {
   Action,
-  ActionResult,
   ActionExample,
+  ActionResult,
   HandlerCallback,
   HandlerOptions,
   IAgentRuntime,
@@ -32,6 +32,7 @@ import {
   collectKeywordTermMatchesForKey,
   hasContextSignalSyncForKey,
 } from "./context-signal.js";
+import { recentConversationTexts as collectRecentConversationTexts } from "./life-recent-context.js";
 import {
   calendarReadUnavailableMessage,
   calendarWriteUnavailableMessage,
@@ -48,7 +49,6 @@ import {
   messageText,
   toActionData,
 } from "./lifeops-google-helpers.js";
-import { recentConversationTexts as collectRecentConversationTexts } from "./life-recent-context.js";
 
 type CalendarSubaction =
   | "feed"
@@ -260,6 +260,48 @@ function buildCalendarEventDisambiguationFallback(args: {
     ...previewLines,
     `Tell me which one to ${args.action} by giving the title and date/time.${suffix}`,
   ].join("\n");
+}
+
+function shouldDeleteAllMatchingCalendarEvents(args: {
+  intent: string;
+  titleHint?: string;
+  candidateCount: number;
+}): boolean {
+  const normalizedIntent = normalizeText(args.intent);
+  const normalizedTitleHint = normalizeText(args.titleHint ?? "");
+  const titleStartsWithQuantifier = /^(all|both|every|each)\b/.test(
+    normalizedTitleHint,
+  );
+
+  if (
+    /\b(?:remove|delete|cancel|kill|drop)\b\s+(?:the\s+)?(?:duplicates?|copies)\b/.test(
+      normalizedIntent,
+    )
+  ) {
+    return true;
+  }
+
+  const quantifierMatch = normalizedIntent.match(
+    /\b(?:remove|delete|cancel|kill|drop)\b\s+(both|all|every|each)\b/,
+  );
+  if (!quantifierMatch) {
+    return false;
+  }
+  if (titleStartsWithQuantifier) {
+    return false;
+  }
+
+  const quantifier = quantifierMatch[1];
+  if (quantifier === "both" && args.candidateCount !== 2) {
+    return false;
+  }
+
+  const trailingIntent = normalizedIntent.slice(
+    (quantifierMatch.index ?? 0) + quantifierMatch[0].length,
+  );
+  return /\b(?:matching|events?|meetings?|appointments?|invites?|entries|duplicates?|copies)\b/.test(
+    trailingIntent,
+  );
 }
 
 function normalizeCalendarReplyText(raw: string): string {
@@ -2084,7 +2126,7 @@ export async function extractCalendarPlanWithLlm(
     "When shouldAct=false, provide a short natural response that asks only for what is missing.",
     "",
     "Return a JSON object with exactly these fields:",
-    '  subaction: one of the allowed subactions below, or null when this should be reply-only/no-op',
+    "  subaction: one of the allowed subactions below, or null when this should be reply-only/no-op",
     "  shouldAct: boolean",
     "  response: short natural-language reply when shouldAct is false, otherwise empty or null",
     "  queries: array or ||-delimited string of up to 3 search queries",
@@ -2887,7 +2929,9 @@ function scoreCalendarEvent(
   if (/\b(return|back|home)\b/.test(normalizedQuery)) {
     if (/\b(return|back|home)\b/.test(`${title} ${description}`)) {
       score += 24;
-    } else if (/\b(flight|travel|trip)\b/.test(`${title} ${description} ${location}`)) {
+    } else if (
+      /\b(flight|travel|trip)\b/.test(`${title} ${description} ${location}`)
+    ) {
       score -= 36;
     }
   }
@@ -3970,11 +4014,11 @@ export const calendarAction: Action & { suppressPostActionContinuation?: boolean
 
           // Detect "delete all / delete both / delete N" phrasing — when the
           // user explicitly opts in to multi-delete, sweep every match.
-          const deleteAllMatch =
-            /\b(all|both|every|each)\b/i.test(intent) ||
-            /\b(remove|delete|cancel|kill|drop)\b\s+(?:both|all|every|the\s+(?:duplicates?|copies))\b/i.test(
-              intent,
-            );
+          const deleteAllMatch = shouldDeleteAllMatchingCalendarEvents({
+            intent,
+            titleHint,
+            candidateCount: candidates.length,
+          });
 
           if (candidates.length > 1 && !deleteAllMatch) {
             const fallback = buildCalendarEventDisambiguationFallback({
@@ -4024,19 +4068,22 @@ export const calendarAction: Action & { suppressPostActionContinuation?: boolean
           }
           const okCount = deleteResults.filter((r) => r.ok).length;
           const failCount = deleteResults.length - okCount;
+          const publicDeleteResults = deleteResults.map((result) => ({
+            title: result.title,
+            ok: result.ok,
+          }));
           const summary =
             failCount === 0
               ? targets.length === 1
                 ? `deleted "${deleteResults[0].title}".`
                 : `deleted ${okCount} matching events.`
-              : `deleted ${okCount}, failed ${failCount}: ${deleteResults
-                  .filter((r) => !r.ok)
-                  .map((r) => r.error)
-                  .join("; ")}`;
+              : okCount === 0
+                ? `I couldn't delete those ${deleteResults.length} matching events. Try again in a bit or tell me which one to remove.`
+                : `Deleted ${okCount} matching event${okCount === 1 ? "" : "s"}, but ${failCount} failed. Tell me which one to remove if you want me to retry individually.`;
           return respond({
             success: failCount === 0,
             text: await renderReply("deleted_event", summary, {
-              deleteResults,
+              deleteResults: publicDeleteResults,
               okCount,
               failCount,
             }),

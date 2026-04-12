@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@elizaos/core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@elizaos/core")>();
@@ -128,5 +128,6 @@ describe("recentConversationsProvider", () => {
     expect(recentConversationsProvider.name).toBe("recent-conversations");
     expect(recentConversationsProvider.dynamic).toBe(true);
     expect(recentConversationsProvider.position).toBe(5);
+    expect(recentConversationsProvider.relevanceKeywords).toContain("最近");
   });
 });

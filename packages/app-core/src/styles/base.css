@@ -99,6 +99,13 @@
   --radius: 0.5rem;
   --duration-normal: 150ms;
 
+  /* Compact text sizes (replaces arbitrary text-[10px], text-[11px]) */
+  --text-2xs: 0.625rem;
+  --text-xs-tight: 0.6875rem;
+
+  /* Touch target minimum (Apple HIG 44px) */
+  --min-touch-target: 2.75rem;
+
   /* Plugin UI Design Tokens */
   --plugin-field-gap: 1rem;
   --plugin-group-gap: 1.5rem;
@@ -209,6 +216,11 @@
   --radius-full: 9999px;
   --radius: 0.5rem;
   --duration-normal: 200ms;
+
+  /* Compact text sizes */
+  --text-2xs: 0.625rem;
+  --text-xs-tight: 0.6875rem;
+  --min-touch-target: 2.75rem;
 
   /* Plugin UI */
   --plugin-field-gap: 1rem;

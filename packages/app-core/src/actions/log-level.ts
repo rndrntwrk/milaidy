@@ -6,6 +6,64 @@ import {
   type Memory,
   type State,
 } from "@elizaos/core";
+import {
+  getValidationKeywordTerms,
+  textIncludesKeywordTerm,
+} from "@miladyai/shared/validation-keywords";
+
+const LOG_LEVEL_COMMAND_TERMS = getValidationKeywordTerms(
+  "action.logLevel.command",
+  {
+    includeAllLocales: true,
+  },
+);
+const LOG_LEVEL_SET_TERMS = getValidationKeywordTerms(
+  "action.logLevel.setVerb",
+  {
+    includeAllLocales: true,
+  },
+);
+const LOG_LEVEL_DOMAIN_TERMS = getValidationKeywordTerms(
+  "action.logLevel.domain",
+  {
+    includeAllLocales: true,
+  },
+);
+const LOG_LEVEL_ALIASES = {
+  trace: getValidationKeywordTerms("action.logLevel.level.trace", {
+    includeAllLocales: true,
+  }),
+  debug: getValidationKeywordTerms("action.logLevel.level.debug", {
+    includeAllLocales: true,
+  }),
+  info: getValidationKeywordTerms("action.logLevel.level.info", {
+    includeAllLocales: true,
+  }),
+  warn: getValidationKeywordTerms("action.logLevel.level.warn", {
+    includeAllLocales: true,
+  }),
+  error: getValidationKeywordTerms("action.logLevel.level.error", {
+    includeAllLocales: true,
+  }),
+} as const;
+
+type CanonicalLogLevel = keyof typeof LOG_LEVEL_ALIASES;
+
+function containsLogLevelTerm(text: string, terms: readonly string[]): boolean {
+  return terms.some((term) => textIncludesKeywordTerm(text, term));
+}
+
+function resolveLogLevel(text: string): CanonicalLogLevel | null {
+  const entries = Object.entries(LOG_LEVEL_ALIASES) as Array<
+    [CanonicalLogLevel, readonly string[]]
+  >;
+  for (const [level, aliases] of entries) {
+    if (containsLogLevelTerm(text, aliases)) {
+      return level;
+    }
+  }
+  return null;
+}
 
 export const logLevelAction: Action = {
   name: "LOG_LEVEL",
@@ -19,17 +77,16 @@ export const logLevelAction: Action = {
   description:
     "Set the log level for the current session (trace, debug, info, warn, error).",
   validate: async (_runtime: IAgentRuntime, message: Memory) => {
-    const text = (message.content.text || "").toLowerCase();
-    const hasLevel = /\b(trace|debug|info|warn|error)\b/.test(text);
+    const text = message.content.text || "";
+    const hasLevel = resolveLogLevel(text) !== null;
     if (!hasLevel) {
       return false;
     }
 
     return (
-      /\/loglevel\b/.test(text) ||
-      /\blog(?:ging)?\s+level\b/.test(text) ||
-      (/\b(set|change|switch)\b/.test(text) &&
-        /\b(log(?:ging)?|verbosity)\b/.test(text))
+      containsLogLevelTerm(text, LOG_LEVEL_COMMAND_TERMS) ||
+      (containsLogLevelTerm(text, LOG_LEVEL_SET_TERMS) &&
+        containsLogLevelTerm(text, LOG_LEVEL_DOMAIN_TERMS))
     );
   },
   handler: async (
@@ -39,13 +96,9 @@ export const logLevelAction: Action = {
     _options: unknown,
     callback?: HandlerCallback,
   ): Promise<import("@elizaos/core").ActionResult> => {
-    const text = (message.content.text || "").toLowerCase();
-    const levels = ["trace", "debug", "info", "warn", "error"] as const;
-
-    // Extract level from text
-    const level = levels.find((candidate) =>
-      new RegExp(`\\b${candidate}\\b`).test(text),
-    );
+    const text = message.content.text || "";
+    const levels = Object.keys(LOG_LEVEL_ALIASES) as CanonicalLogLevel[];
+    const level = resolveLogLevel(text);
 
     if (!level) {
       if (callback) {

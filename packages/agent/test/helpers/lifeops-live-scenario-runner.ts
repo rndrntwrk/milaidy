@@ -68,8 +68,11 @@ type DefinitionCountDeltaCheck = {
   delta: number;
   cadenceKind?: string;
   requiredWindows?: string[];
+  requiredWeekdays?: number[];
   requiredSlots?: Array<{ label?: string; minuteOfDay?: number }>;
+  requiredEveryMinutes?: number;
   requireReminderPlan?: boolean;
+  expectedTimeZone?: string;
   websiteAccess?: {
     unlockMode?: string;
     unlockDurationMinutes?: number;
@@ -563,6 +566,16 @@ async function validateFinalChecks(args: {
               }
             }
           }
+          if (check.requiredWeekdays?.length) {
+            const weekdays = Array.isArray(cadence?.weekdays)
+              ? cadence.weekdays.map((entry) => Number(entry))
+              : [];
+            for (const weekday of check.requiredWeekdays) {
+              if (!weekdays.includes(weekday)) {
+                throw new Error(`expected cadence weekday "${weekday}"`);
+              }
+            }
+          }
           if (check.requiredSlots?.length) {
             const slots = Array.isArray(cadence?.slots) ? cadence.slots : [];
             for (const requiredSlot of check.requiredSlots) {
@@ -592,12 +605,31 @@ async function validateFinalChecks(args: {
               }
             }
           }
+          if (typeof check.requiredEveryMinutes === "number") {
+            if (
+              Number(cadence?.everyMinutes ?? -1) !== check.requiredEveryMinutes
+            ) {
+              throw new Error(
+                `expected everyMinutes ${check.requiredEveryMinutes} but saw ${String(cadence?.everyMinutes ?? "")}`,
+              );
+            }
+          }
         }
 
         if (latest && check.requireReminderPlan) {
           const reminderPlanId = String(latest.reminderPlan?.id ?? "");
           if (!reminderPlanId) {
             throw new Error(`expected a reminder plan for "${check.title}"`);
+          }
+        }
+
+        if (latest && check.expectedTimeZone) {
+          if (
+            String(latest.definition?.timezone ?? "") !== check.expectedTimeZone
+          ) {
+            throw new Error(
+              `expected definition timezone ${check.expectedTimeZone} but saw ${String(latest.definition?.timezone ?? "")}`,
+            );
           }
         }
 

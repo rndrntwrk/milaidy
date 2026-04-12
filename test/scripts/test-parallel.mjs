@@ -41,15 +41,21 @@ const runs = [
     reportFile: path.join(os.tmpdir(), "milady-vitest-unit-report.json"),
   },
   {
+    name: "integration",
+    cmd: bunCmd,
+    args: ["run", "test:integration"],
+    forceSerial: true,
+  },
+  {
     name: "e2e",
     cmd: bunCmd,
     args: ["run", "test:e2e"],
     forceSerial: true,
   },
   {
-    name: "startup-e2e",
+    name: "startup-integration",
     cmd: bunCmd,
-    args: ["run", "test:startup:e2e"],
+    args: ["run", "test:startup:integration"],
     forceSerial: true,
   },
   {

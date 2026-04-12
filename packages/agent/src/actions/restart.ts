@@ -18,17 +18,34 @@
 import crypto from "node:crypto";
 import type { Action, HandlerOptions, Memory, UUID } from "@elizaos/core";
 import { logger } from "@elizaos/core";
-import { hasOwnerAccess } from "../security/access.js";
+import {
+  getValidationKeywordTerms,
+  textIncludesKeywordTerm,
+} from "@miladyai/shared/validation-keywords";
 import { requestRestart } from "../runtime/restart.js";
+import { hasOwnerAccess } from "../security/access.js";
 
 /** Small delay (ms) before restarting so the response has time to flush. */
 const SHUTDOWN_DELAY_MS = 1_500;
+const RESTART_REQUEST_TERMS = getValidationKeywordTerms(
+  "action.restart.request",
+  {
+    includeAllLocales: true,
+  },
+);
 
 function isExplicitRestartRequest(message: Memory | undefined): boolean {
-  const userText = (message?.content?.text ?? "").toLowerCase();
-  return (
-    /\b(restart|reboot|reload|refresh|respawn)\b/i.test(userText) ||
-    userText.startsWith("/restart")
+  const userText = (message?.content?.text ?? "").trim();
+  if (!userText) {
+    return false;
+  }
+
+  if (userText.toLowerCase().startsWith("/restart")) {
+    return true;
+  }
+
+  return RESTART_REQUEST_TERMS.some((term) =>
+    textIncludesKeywordTerm(userText, term),
   );
 }
 
@@ -75,7 +92,9 @@ export const restartAction: Action = {
     }
 
     // This action declares parameters, so the runtime provides HandlerOptions.
-    const params = (options as HandlerOptions | undefined)?.parameters as { reason?: string } | undefined;
+    const params = (options as HandlerOptions | undefined)?.parameters as
+      | { reason?: string }
+      | undefined;
     const reason = params?.reason;
 
     const restartText = reason ? `Restarting… (${reason})` : "Restarting…";

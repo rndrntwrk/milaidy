@@ -96,6 +96,8 @@ async function detectLivePlanner(): Promise<LivePlanner | null> {
 }
 
 const livePlanner = await detectLivePlanner();
+const LIVE_BROWSER_WORKSPACE_ENABLED =
+  LIVE_TESTS_ENABLED && Boolean(livePlanner);
 
 type BrowserPlan = {
   steps?: Array<Record<string, unknown>>;
@@ -169,7 +171,7 @@ async function startLocalSiteFixture(): Promise<LocalSiteFixture> {
   };
 }
 
-describeIf(LIVE_TESTS_ENABLED || !livePlanner)(
+describeIf(LIVE_BROWSER_WORKSPACE_ENABLED)(
   "Browser workspace live planner validation",
   () => {
     let siteFixture: LocalSiteFixture;

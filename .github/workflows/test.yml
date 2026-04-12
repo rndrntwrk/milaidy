@@ -123,7 +123,7 @@ jobs:
         run: bun run db:check
 
   e2e-tests:
-    name: E2E Tests (Vitest)
+    name: Integration + E2E Tests (Vitest)
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -146,6 +146,9 @@ jobs:
 
       - name: Build
         run: bun run build
+
+      - name: Run integration tests
+        run: bun run test:integration
 
       - name: Run E2E tests
         run: bun run test:e2e
@@ -442,8 +445,8 @@ jobs:
       - name: Build iOS website blocker app
         run: bun run test:selfcontrol:mobile:ios
 
-  app-startup-e2e:
-    name: App Startup E2E (Onboarding)
+  app-startup-integration:
+    name: App Startup Integration (Onboarding)
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -477,7 +480,7 @@ jobs:
         run: bun run test:startup:contract
 
       - name: Run app startup/onboarding tests
-        run: bun run test:startup:e2e
+        run: bun run test:startup:integration
 
   desktop-contract:
     name: Electrobun Desktop Contract
@@ -611,7 +614,7 @@ jobs:
   test-status:
     name: All Tests Passed
     if: always()
-    needs: [regression-matrix, unit-tests, db-check, e2e-tests, website-blocker-cross-platform, website-blocker-startup-smoke, website-blocker-desktop-smoke, website-blocker-mobile-android, website-blocker-mobile-ios, app-startup-e2e, desktop-contract, cloud-live-e2e, validation-e2e]
+    needs: [regression-matrix, unit-tests, db-check, e2e-tests, website-blocker-cross-platform, website-blocker-startup-smoke, website-blocker-desktop-smoke, website-blocker-mobile-android, website-blocker-mobile-ios, app-startup-integration, desktop-contract, cloud-live-e2e, validation-e2e]
     runs-on: ubuntu-24.04
     steps:
       - name: Check test results
@@ -629,7 +632,7 @@ jobs:
           echo "website-blocker-desktop-smoke:  ${{ needs.website-blocker-desktop-smoke.result }}"
           echo "website-blocker-mobile-android: ${{ needs.website-blocker-mobile-android.result }}"
           echo "website-blocker-mobile-ios:     ${{ needs.website-blocker-mobile-ios.result }}"
-          echo "app-startup-e2e:    ${{ needs.app-startup-e2e.result }}"
+          echo "app-startup-integration: ${{ needs.app-startup-integration.result }}"
           echo "desktop-contract:   ${{ needs.desktop-contract.result }}"
           echo "cloud-live-e2e:     ${{ needs.cloud-live-e2e.result }}"
           echo "validation-e2e:     ${{ needs.validation-e2e.result }}"
@@ -645,7 +648,7 @@ jobs:
             "website-blocker-desktop-smoke:${{ needs.website-blocker-desktop-smoke.result }}" \
             "website-blocker-mobile-android:${{ needs.website-blocker-mobile-android.result }}" \
             "website-blocker-mobile-ios:${{ needs.website-blocker-mobile-ios.result }}" \
-            "app-startup-e2e:${{ needs.app-startup-e2e.result }}" \
+            "app-startup-integration:${{ needs.app-startup-integration.result }}" \
             "desktop-contract:${{ needs.desktop-contract.result }}" \
             "cloud-live-e2e:${{ needs.cloud-live-e2e.result }}" \
             "validation-e2e:${{ needs.validation-e2e.result }}"; do

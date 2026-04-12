@@ -39,6 +39,10 @@ import {
   TrajectoriesSection,
 } from "./fine-tuning-panels";
 
+function asArray<T>(value: T[] | null | undefined): T[] {
+  return Array.isArray(value) ? value : [];
+}
+
 export function FineTuningView({
   contentHeader,
 }: {
@@ -124,30 +128,33 @@ export function FineTuningView({
 
   const loadDatasets = useCallback(async () => {
     const listed = await client.listTrainingDatasets();
-    setDatasets(listed.datasets);
+    const nextDatasets = asArray(listed.datasets);
+    setDatasets(nextDatasets);
     setSelectedDatasetId((prev) => {
-      if (prev && listed.datasets.some((dataset) => dataset.id === prev)) {
+      if (prev && nextDatasets.some((dataset) => dataset.id === prev)) {
         return prev;
       }
-      return listed.datasets[0]?.id ?? "";
+      return nextDatasets[0]?.id ?? "";
     });
   }, []);
 
   const loadJobs = useCallback(async () => {
     const listed = await client.listTrainingJobs();
-    setJobs(listed.jobs);
+    const nextJobs = asArray(listed.jobs);
+    setJobs(nextJobs);
     setSelectedJobId((prev) => {
-      if (prev && listed.jobs.some((job) => job.id === prev)) return prev;
-      return listed.jobs[0]?.id ?? "";
+      if (prev && nextJobs.some((job) => job.id === prev)) return prev;
+      return nextJobs[0]?.id ?? "";
     });
   }, []);
 
   const loadModels = useCallback(async () => {
     const listed = await client.listTrainingModels();
-    setModels(listed.models);
+    const nextModels = asArray(listed.models);
+    setModels(nextModels);
     setSelectedModelId((prev) => {
-      if (prev && listed.models.some((model) => model.id === prev)) return prev;
-      return listed.models[0]?.id ?? "";
+      if (prev && nextModels.some((model) => model.id === prev)) return prev;
+      return nextModels[0]?.id ?? "";
     });
   }, []);
 

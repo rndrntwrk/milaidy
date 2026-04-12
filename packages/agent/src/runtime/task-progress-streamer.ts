@@ -151,8 +151,13 @@ export function installTaskProgressStreamer(
       setTimeout(async () => {
         // Resolve room routing HERE (not at session start) because the
         // fire-and-forget async lookup at start may not have finished yet.
-        let roomCache = sessionRooms;
-        if (!sessionRooms.has(sessionId)) {
+        let roomCache: typeof sessionRooms;
+        const cachedRoom = sessionRooms.get(sessionId);
+        if (cachedRoom) {
+          // Snapshot the entry — forgetSession may delete it from sessionRooms
+          // before this callback runs.
+          roomCache = new Map([[sessionId, cachedRoom]]);
+        } else {
           const meta = svc.sessionMetadata?.get(sessionId) as SessionMetadata | undefined;
           let roomId = meta?.roomId;
           if (!roomId && meta?.threadId) {
@@ -169,14 +174,17 @@ export function installTaskProgressStreamer(
           if (roomId) {
             const room = await runtime.getRoom(roomId).catch(() => null);
             if (room?.source) {
-              const resolved = new Map([[sessionId, {
+              roomCache = new Map([[sessionId, {
                 roomId,
                 channelId: room.channelId ?? room.id,
                 source: room.source,
                 serverId: room.serverId,
               }]]);
-              roomCache = resolved;
+            } else {
+              roomCache = new Map();
             }
+          } else {
+            roomCache = new Map();
           }
         }
         logger.info(

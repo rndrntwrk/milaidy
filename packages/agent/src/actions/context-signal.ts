@@ -10,70 +10,20 @@
 
 import type { Memory, State } from "@elizaos/core";
 import {
+  collectKeywordTermMatches,
+  textIncludesKeywordTerm,
+} from "@miladyai/shared/validation-keywords";
+import {
+  type ContextSignalKey,
   getContextSignalTerms,
   resolveContextSignalSpec,
-  type ContextSignalKey,
 } from "./context-signal-lexicon.js";
 import {
   recentConversationTexts as collectRecentConversationTexts,
   recentConversationTextsFromState,
 } from "./life-recent-context.js";
 
-// ── Keyword matching primitives ─────────────────────────────────────────
-
-function escapePattern(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function normalizeKeywordMatchText(value: string): string {
-  return value.normalize("NFKC").toLowerCase().replace(/\s+/g, " ").trim();
-}
-
-function usesAsciiWordBoundaries(term: string): boolean {
-  return /^[a-z0-9][a-z0-9' -]*$/i.test(term);
-}
-
-export function textIncludesKeywordTerm(text: string, term: string): boolean {
-  const normalizedText = normalizeKeywordMatchText(text);
-  const normalizedTerm = normalizeKeywordMatchText(term);
-  if (!normalizedText || !normalizedTerm) {
-    return false;
-  }
-
-  if (usesAsciiWordBoundaries(normalizedTerm)) {
-    const pattern = new RegExp(
-      `\\b${escapePattern(normalizedTerm).replace(/\\ /g, "\\s+")}\\b`,
-      "i",
-    );
-    if (pattern.test(text)) {
-      return true;
-    }
-
-    // CJK/Hangul text often embeds latin product words without whitespace,
-    // which breaks word boundaries.
-    if (/[^\x00-\x7F]/.test(text)) {
-      return normalizedText.includes(normalizedTerm);
-    }
-    return false;
-  }
-
-  return normalizedText.includes(normalizedTerm);
-}
-
-export function collectKeywordTermMatches(
-  texts: string[],
-  terms: readonly string[],
-): Set<string> {
-  const matches = new Set<string>();
-  for (const text of texts) {
-    for (const term of terms) {
-      if (textIncludesKeywordTerm(text, term)) {
-        matches.add(term);
-      }
-    }
-  }
-  return matches;
-}
+export { collectKeywordTermMatches, textIncludesKeywordTerm };
 
 type ContextSignalRuntimeLike = {
   getSetting?: (key: string) => unknown;
@@ -198,12 +148,15 @@ export function hasContextSignalSyncForKey(
   key: ContextSignalKey,
   options?: {
     contextLimit?: number;
+    includeAllLocales?: boolean;
     locale?: unknown;
     weakThreshold?: number;
   },
 ): boolean {
   const locale = resolveContextSignalLocale(null, state, options?.locale);
-  const spec = resolveContextSignalSpec(key, locale);
+  const spec = resolveContextSignalSpec(key, locale, {
+    includeAllLocales: options?.includeAllLocales ?? true,
+  });
   return hasContextSignalSync(
     message,
     state,
@@ -240,9 +193,7 @@ export async function hasContextSignal(
     });
   }
 
-  texts = [...texts, messageText(message).trim()].filter(
-    (t) => t.length > 0,
-  );
+  texts = [...texts, messageText(message).trim()].filter((t) => t.length > 0);
 
   if (texts.length === 0) return false;
 
@@ -267,6 +218,7 @@ export async function hasContextSignalForKey(
   key: ContextSignalKey,
   options?: {
     contextLimit?: number;
+    includeAllLocales?: boolean;
     locale?: unknown;
     weakThreshold?: number;
   },
@@ -276,7 +228,9 @@ export async function hasContextSignalForKey(
     state,
     options?.locale,
   );
-  const spec = resolveContextSignalSpec(key, locale);
+  const spec = resolveContextSignalSpec(key, locale, {
+    includeAllLocales: options?.includeAllLocales ?? true,
+  });
   return hasContextSignal(
     runtime,
     message,

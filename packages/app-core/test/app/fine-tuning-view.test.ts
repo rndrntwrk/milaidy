@@ -10,7 +10,11 @@ import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { testT } from "../../../../test/helpers/i18n";
-import { findButtonByText, flush } from "../../../../test/helpers/react-test";
+import {
+  findButtonByText,
+  flush,
+  textOf,
+} from "../../../../test/helpers/react-test";
 
 interface FineTuningContextStub {
   t: (key: string, vars?: Record<string, unknown>) => string;
@@ -389,6 +393,29 @@ describe("FineTuningView", () => {
       "error",
       4200,
     );
+  });
+
+  it("treats missing datasets, jobs, and models lists as empty state", async () => {
+    mockClientFns.listTrainingDatasets.mockResolvedValueOnce({
+      datasets: undefined,
+    });
+    mockClientFns.listTrainingJobs.mockResolvedValueOnce({
+      jobs: undefined,
+    });
+    mockClientFns.listTrainingModels.mockResolvedValueOnce({
+      models: undefined,
+    });
+
+    let tree!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(FineTuningView));
+    });
+    await flush();
+
+    expect(findButtonByText(tree.root, "Build Dataset")).toBeTruthy();
+    expect(textOf(tree.root)).toContain("No datasets yet.");
+    expect(textOf(tree.root)).toContain("No jobs yet.");
+    expect(textOf(tree.root)).toContain("No trained models yet.");
   });
 
   it("starts a training job and handles live training events", async () => {

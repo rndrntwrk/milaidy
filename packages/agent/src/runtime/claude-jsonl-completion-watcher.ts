@@ -246,23 +246,22 @@ export async function findLatestJsonl(workdir: string): Promise<string | null> {
   }
   const jsonls = entries.filter((f) => f.endsWith(".jsonl"));
   if (jsonls.length === 0) return null;
-  const stats = await Promise.all(
-    jsonls.map(async (name) => {
-      const full = path.join(projectDir, name);
+  if (jsonls.length === 1) return path.join(projectDir, jsonls[0]);
+  // Sort by modification time (newest first). UUID-based filenames have no
+  // chronological order when sorted lexicographically.
+  const withMtime = await Promise.all(
+    jsonls.map(async (f) => {
+      const full = path.join(projectDir, f);
       try {
-        const st = await fs.stat(full);
-        return { full, mtimeMs: st.mtimeMs };
+        const stat = await fs.stat(full);
+        return { f, mtime: stat.mtimeMs };
       } catch {
-        return null;
+        return { f, mtime: 0 };
       }
     }),
   );
-  let newest: { full: string; mtimeMs: number } | null = null;
-  for (const entry of stats) {
-    if (!entry) continue;
-    if (!newest || entry.mtimeMs > newest.mtimeMs) newest = entry;
-  }
-  return newest?.full ?? null;
+  withMtime.sort((a, b) => b.mtime - a.mtime);
+  return path.join(projectDir, withMtime[0].f);
 }
 
 /**
@@ -303,7 +302,7 @@ export function readLatestAssistantEntry(
     let text = "";
     for (const c of msg.content ?? []) {
       if (c.type === "text" && typeof c.text === "string" && c.text.trim()) {
-        text = c.text.trim();
+        text += (text ? "\n" : "") + c.text.trim();
       }
     }
     return { text, isEndTurn: msg.stop_reason === "end_turn" };

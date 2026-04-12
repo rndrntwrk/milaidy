@@ -78,15 +78,52 @@ vi.mock("@miladyai/ui", () => {
   const DummyComponent = ({ children }: React.PropsWithChildren) =>
     React.createElement("div", null, children);
 
+  const PageLayout = ({
+    children,
+    sidebar,
+    footer,
+    contentInnerClassName,
+    className,
+  }: React.PropsWithChildren<{
+    sidebar?: React.ReactNode;
+    footer?: React.ReactNode;
+    contentInnerClassName?: string;
+    className?: string;
+  }>) =>
+    React.createElement(
+      "div",
+      {
+        "data-testid": "page-layout",
+        "data-content-inner-class": contentInnerClassName ?? "",
+        "data-page-layout-class": className ?? "",
+      },
+      sidebar,
+      children,
+      footer,
+    );
+
+  const SidebarContent = {
+    Item: ({
+      children,
+      ...props
+    }: React.PropsWithChildren<React.HTMLAttributes<HTMLButtonElement>>) =>
+      React.createElement("button", props, children),
+    ItemTitle: ({
+      children,
+      ...props
+    }: React.PropsWithChildren<React.HTMLAttributes<HTMLSpanElement>>) =>
+      React.createElement("span", props, children),
+  };
+
   return {
     ConfirmDialog: DummyComponent,
     ErrorBoundary: DummyComponent,
-    PageLayout: DummyComponent,
+    PageLayout,
     PagePanel: DummyComponent,
     PromptDialog: DummyComponent,
     SaveFooter: DummyComponent,
     Sidebar: DummyComponent,
-    SidebarContent: DummyComponent,
+    SidebarContent,
     SidebarHeader: DummyComponent,
     SidebarPanel: DummyComponent,
     SidebarScrollRegion: DummyComponent,
@@ -364,6 +401,32 @@ describe("CharacterEditor regressions", () => {
       "[CharacterEditor] Failed to load voice config:",
       expect.objectContaining({ message: "config unavailable" }),
     );
+  });
+
+  it("keeps the standalone shell full-width and constrains only the content column", async () => {
+    let tree: TestRenderer.ReactTestRenderer | null = null;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(CharacterEditor));
+    });
+
+    await flushEffects();
+
+    expect(tree).not.toBeNull();
+    if (!tree) {
+      throw new Error("expected CharacterEditor to render");
+    }
+
+    const pageLayout = tree.root.findByProps({ "data-testid": "page-layout" });
+    expect(pageLayout.props["data-page-layout-class"]).toContain("h-full");
+    expect(pageLayout.props["data-content-inner-class"]).toContain("max-w-6xl");
+
+    expect(
+      tree.root.findAll(
+        (node: TestRenderer.ReactTestInstance) =>
+          typeof node.props.className === "string" &&
+          node.props.className.includes("max-w-6xl"),
+      ),
+    ).toHaveLength(0);
   });
 
   it("logs malformed style JSON instead of failing silently", async () => {

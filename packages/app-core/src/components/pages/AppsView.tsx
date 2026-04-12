@@ -123,14 +123,19 @@ export function AppsView() {
   const loadApps = useCallback(async () => {
     setLoading(true);
     setError(null);
+    void refreshRuns().catch((err: unknown) => {
+      console.warn("[AppsView] Failed to list app runs:", err);
+    });
     try {
-      const [serverAppsResult] = await Promise.allSettled([
-        client.listApps(),
-        refreshRuns().catch((err: unknown) => {
-          console.warn("[AppsView] Failed to list app runs:", err);
-          return [];
-        }),
-      ]);
+      const serverAppsResult = await client.listApps()
+        .then((apps) => ({
+          status: "fulfilled" as const,
+          value: apps,
+        }))
+        .catch((reason) => ({
+          status: "rejected" as const,
+          reason,
+        }));
       const serverApps =
         serverAppsResult.status === "fulfilled" ? serverAppsResult.value : [];
       if (serverAppsResult.status === "rejected") {

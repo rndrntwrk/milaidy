@@ -941,6 +941,29 @@ describe("ChatView", () => {
     ).toHaveLength(0);
   });
 
+  it("ignores malformed inbox chat state instead of crashing the chat workspace", async () => {
+    mockUseApp.mockReturnValue({
+      ...createContext(),
+      activeInboxChat: {
+        source: "discord",
+        title: "Broken room",
+      } as never,
+    });
+
+    let tree: TestRenderer.ReactTestRenderer | undefined;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(ChatView));
+    });
+    await flush();
+
+    expect(
+      tree?.root.findAll(
+        (node) => node.props["aria-label"] === "aria.chatWorkspace",
+      ),
+    ).not.toHaveLength(0);
+    expect(mockClient.getInboxMessages).not.toHaveBeenCalled();
+  });
+
   it("scrolls inbox chats to the bottom on open and when new messages arrive", async () => {
     vi.useFakeTimers();
 

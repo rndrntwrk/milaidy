@@ -10,10 +10,20 @@
  */
 
 import type { Action, HandlerOptions, State } from "@elizaos/core";
+import {
+  getValidationKeywordTerms,
+  textIncludesKeywordTerm,
+} from "@miladyai/shared/validation-keywords";
 import { hasOwnerAccess } from "../security/access.js";
 
 const API_PORT = process.env.API_PORT || process.env.SERVER_PORT || "2138";
 const OWNER_NAME_MAX_LENGTH = 60;
+const SET_USER_NAME_CONTEXT_TERMS = getValidationKeywordTerms(
+  "action.setUserName.recentContext",
+  {
+    includeAllLocales: true,
+  },
+);
 
 async function fetchOwnerName(): Promise<string | null> {
   try {
@@ -23,8 +33,7 @@ async function fetchOwnerName(): Promise<string | null> {
     if (!res.ok) return null;
     const cfg = (await res.json()) as Record<string, unknown>;
     const ui = cfg.ui as Record<string, unknown> | undefined;
-    const name =
-      typeof ui?.ownerName === "string" ? ui.ownerName.trim() : null;
+    const name = typeof ui?.ownerName === "string" ? ui.ownerName.trim() : null;
     return name || null;
   } catch {
     return null;
@@ -42,7 +51,9 @@ function recentMessagesMentionName(state: State): boolean {
   return lastTwo.some((m: Record<string, unknown>) => {
     const content = m.content as Record<string, unknown> | undefined;
     const text = (content?.text as string) ?? "";
-    return /\bname\b/i.test(text);
+    return SET_USER_NAME_CONTEXT_TERMS.some((term) =>
+      textIncludesKeywordTerm(text, term),
+    );
   });
 }
 

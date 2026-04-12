@@ -43,6 +43,16 @@ for (let shard = 1; shard <= unitShardCount; shard += 1) {
 
 await runManagedTestCommand({
   repoRoot,
+  lockName: "integration",
+  label: "integration",
+  command: bunCmd,
+  args: ["run", "test:integration"],
+  cwd: repoRoot,
+  env: buildTestEnv(repoRoot),
+});
+
+await runManagedTestCommand({
+  repoRoot,
   lockName: "e2e",
   label: "e2e",
   command: bunCmd,
@@ -53,10 +63,10 @@ await runManagedTestCommand({
 
 await runManagedTestCommand({
   repoRoot,
-  lockName: "startup-e2e",
-  label: "startup-e2e",
+  lockName: "startup-integration",
+  label: "startup-integration",
   command: bunCmd,
-  args: ["run", "test:startup:e2e"],
+  args: ["run", "test:startup:integration"],
   cwd: repoRoot,
   env: buildTestEnv(repoRoot),
 });

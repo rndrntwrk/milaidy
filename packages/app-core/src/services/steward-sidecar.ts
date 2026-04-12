@@ -499,5 +499,3 @@ export function createDesktopStewardSidecar(
     ...overrides,
   });
 }
-
-export default StewardSidecar;

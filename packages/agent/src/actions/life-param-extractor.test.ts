@@ -452,6 +452,7 @@ describe("extractTaskCreatePlanWithLlm", () => {
       windows: null,
       weekdays: null,
       timeOfDay: null,
+      timeZone: null,
       everyMinutes: null,
       timesPerDay: null,
       priority: null,
@@ -486,6 +487,94 @@ describe("extractTaskCreatePlanWithLlm", () => {
     expect(result?.title).toBe("20 Situps + 20 Pushups");
     expect(result?.windows).toEqual(["morning", "night"]);
   });
+
+  it("keeps explicit timezone phrases in heuristic one-off reminder extraction", async () => {
+    const result = await extractTaskCreatePlanWithLlm({
+      runtime: makeRuntime(new Error("model unavailable")),
+      intent:
+        "please set a reminder for april 17 at 8pm mountain time to hug my wife",
+      state: undefined,
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        mode: "create",
+        requestKind: "reminder",
+        title: "Hug My Wife",
+        cadenceKind: "once",
+        timeOfDay: "20:00",
+        timeZone: "America/Denver",
+      }),
+    );
+  });
+
+  it("accepts timeZone from LLM extraction output", async () => {
+    const llmResponse = JSON.stringify({
+      mode: "create",
+      response: null,
+      requestKind: "reminder",
+      title: "Hug my wife",
+      description: null,
+      cadenceKind: "once",
+      windows: null,
+      weekdays: null,
+      timeOfDay: "20:00",
+      timeZone: "America/Denver",
+      everyMinutes: null,
+      timesPerDay: null,
+      priority: null,
+      durationMinutes: 30,
+    });
+
+    const result = await extractTaskCreatePlanWithLlm({
+      runtime: makeRuntime(llmResponse),
+      intent: "set a reminder for april 17 at 8pm mountain time to hug my wife",
+      state: undefined,
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        mode: "create",
+        requestKind: "reminder",
+        cadenceKind: "once",
+        timeOfDay: "20:00",
+        timeZone: "America/Denver",
+      }),
+    );
+  });
+
+  it("prefers the heuristic create plan when the model over-clarifies a specific recurring request", async () => {
+    const llmResponse = JSON.stringify({
+      mode: "respond",
+      response: "What time after lunch should the reminder fire?",
+      title: null,
+      description: null,
+      cadenceKind: null,
+      windows: null,
+      weekdays: null,
+      timeOfDay: null,
+      timeZone: null,
+      everyMinutes: null,
+      timesPerDay: null,
+      priority: null,
+      durationMinutes: null,
+    });
+
+    const result = await extractTaskCreatePlanWithLlm({
+      runtime: makeRuntime(llmResponse),
+      intent: "Please remind me about my Invisalign on weekdays after lunch.",
+      state: undefined,
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        mode: "create",
+        cadenceKind: "weekly",
+        weekdays: [1, 2, 3, 4, 5],
+        windows: ["afternoon"],
+      }),
+    );
+  });
 });
 
 describe("buildExtractionPrompt", () => {
@@ -503,6 +592,7 @@ describe("buildExtractionPrompt", () => {
 
   it("includes all field descriptions", () => {
     const prompt = buildExtractionPrompt("test", "");
+    expect(prompt).toContain("The user may speak informally, formally, code-switched, or in another language.");
     expect(prompt).toContain("mode:");
     expect(prompt).toContain("response:");
     expect(prompt).toContain("requestKind:");
@@ -511,6 +601,7 @@ describe("buildExtractionPrompt", () => {
     expect(prompt).toContain("windows:");
     expect(prompt).toContain("weekdays:");
     expect(prompt).toContain("timeOfDay:");
+    expect(prompt).toContain("timeZone:");
     expect(prompt).toContain("everyMinutes:");
     expect(prompt).toContain("timesPerDay:");
     expect(prompt).toContain("priority:");

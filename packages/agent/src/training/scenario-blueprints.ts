@@ -918,8 +918,6 @@ export const ALL_BLUEPRINTS: ScenarioBlueprint[] = dedupeBlueprints([
   ...generatedStopScenarios,
 ]);
 
-export const DEDUPED_BLUEPRINTS: ScenarioBlueprint[] = ALL_BLUEPRINTS;
-
 export const BLUEPRINT_STATS = {
   manualCount:
     respondGeneral.length +
@@ -937,7 +935,7 @@ export const BLUEPRINT_STATS = {
   generatedProviderCount: generatedProviderScenarios.length,
   generatedIgnoreCount: generatedIgnoreScenarios.length,
   generatedStopCount: generatedStopScenarios.length,
-  totalCount: DEDUPED_BLUEPRINTS.length,
+  totalCount: ALL_BLUEPRINTS.length,
 } as const;
 
 /**
@@ -946,7 +944,7 @@ export const BLUEPRINT_STATS = {
 export function getBlueprintsByDecision(
   decision: "RESPOND" | "IGNORE" | "STOP",
 ): ScenarioBlueprint[] {
-  return DEDUPED_BLUEPRINTS.filter((b) => b.decision === decision);
+  return ALL_BLUEPRINTS.filter((b) => b.decision === decision);
 }
 
 /**
@@ -955,7 +953,7 @@ export function getBlueprintsByDecision(
 export function getBlueprintsByContext(
   context: AgentContext,
 ): ScenarioBlueprint[] {
-  return DEDUPED_BLUEPRINTS.filter(
+  return ALL_BLUEPRINTS.filter(
     (b) =>
       b.primaryContext === context ||
       b.secondaryContexts?.includes(context),

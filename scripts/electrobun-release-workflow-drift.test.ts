@@ -420,17 +420,21 @@ describe("Electrobun release workflow drift", () => {
 
   it("keeps desktop release files, updater channels, and browser companions split into separate workflow sections", () => {
     const workflow = fs.readFileSync(WORKFLOW_PATH, "utf8");
-    const publicReleaseIndex = workflow.indexOf("name: Collect public release files");
-    const updateChannelIndex = workflow.indexOf("name: Collect update channel files");
+    const publicReleaseIndex = workflow.indexOf(
+      "name: Collect public release files",
+    );
+    const updateChannelIndex = workflow.indexOf(
+      "name: Collect update channel files",
+    );
     const checksumsIndex = workflow.indexOf("name: Generate checksums");
-    const browserReleaseIndex = workflow.indexOf(
-      "name: Attach LifeOps Browser assets to GitHub release",
+    const publishBrowserIndex = workflow.indexOf(
+      "name: Publish LifeOps Browser companions",
     );
 
     expect(publicReleaseIndex).toBeGreaterThan(-1);
     expect(updateChannelIndex).toBeGreaterThan(publicReleaseIndex);
     expect(checksumsIndex).toBeGreaterThan(updateChannelIndex);
-    expect(browserReleaseIndex).toBeGreaterThan(checksumsIndex);
+    expect(publishBrowserIndex).toBeGreaterThan(checksumsIndex);
 
     const publicReleaseSection = workflow.slice(
       publicReleaseIndex,
@@ -440,8 +444,9 @@ describe("Electrobun release workflow drift", () => {
       updateChannelIndex,
       checksumsIndex,
     );
-    const browserReleaseSection = workflow.slice(browserReleaseIndex);
+    const publishBrowserSection = workflow.slice(publishBrowserIndex);
 
+    expect(workflow).toContain("name: Collect public release files");
     expect(publicReleaseSection).toContain(' -name "*.dmg" -o \\');
     expect(publicReleaseSection).toContain(' -name "Milady-Setup-*.exe" -o \\');
     expect(publicReleaseSection).toContain(
@@ -478,13 +483,13 @@ describe("Electrobun release workflow drift", () => {
     );
 
     expect(workflow).toContain("files: release-files/*");
-    expect(browserReleaseSection).toContain(
+    expect(publishBrowserSection).toContain(
       ' -name "lifeops-browser-chrome-v*.zip" -o \\',
     );
-    expect(browserReleaseSection).toContain(
+    expect(publishBrowserSection).toContain(
       ' -name "lifeops-browser-safari-v*.zip" -o \\',
     );
-    expect(browserReleaseSection).toContain(
+    expect(publishBrowserSection).toContain(
       ' -name "lifeops-browser-release-manifest-v*.json" \\',
     );
   });

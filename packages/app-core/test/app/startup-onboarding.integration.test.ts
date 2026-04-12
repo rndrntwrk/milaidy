@@ -19,6 +19,7 @@ type AppHarnessState = {
   onboardingComplete: boolean;
   tab: string;
   actionNotice: null;
+  favoriteApps: unknown[];
   onboardingStep: OnboardingStep;
   onboardingMode: "basic" | "advanced";
   onboardingActiveGuide: "provider" | "rpc" | "permissions" | "voice" | null;
@@ -881,6 +882,7 @@ function createHarnessState(): AppHarnessState {
     onboardingComplete: false,
     tab: "chat",
     actionNotice: null,
+    favoriteApps: [],
     onboardingStep: "identity",
     onboardingMode: "basic",
     onboardingActiveGuide: null,

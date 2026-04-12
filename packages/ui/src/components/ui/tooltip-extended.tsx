@@ -1,7 +1,7 @@
 import { X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Button } from "./button";
 import { Z_OVERLAY, Z_TOOLTIP } from "../../lib/floating-layers";
+import { Button } from "./button";
 
 export interface HoverTooltipProps {
   children: React.ReactNode;
@@ -77,7 +77,7 @@ export function HoverTooltip({
         <div
           className={`absolute z-50 ${positionClasses[position]} ${className}`}
         >
-          <div className="relative bg-bg-elevated border border-border rounded-lg shadow-xl p-3 max-w-xs">
+          <div className="relative bg-bg-elevated border border-border rounded-lg shadow-xl p-3 min-w-[10rem] max-w-xs">
             {onDismiss && (
               <Button
                 variant="ghost"
@@ -127,14 +127,14 @@ export function IconTooltip({
       : "bottom-full left-1/2 -translate-x-1/2 -mb-1 border-4 border-transparent border-b-bg-elevated";
 
   const bodyClass = multiline
-    ? "max-w-[min(22rem,calc(100vw-1.5rem))] whitespace-normal text-left leading-snug"
-    : "whitespace-nowrap";
+    ? "min-w-[10rem] max-w-[min(22rem,calc(100vw-1.5rem))] whitespace-normal text-left leading-snug"
+    : "min-w-[6rem] whitespace-nowrap";
 
   return (
     <div className="relative isolate group">
       {children}
       <div
-        className={`absolute ${posClass} px-2 py-1.5 bg-bg-elevated border border-border text-[11px] text-txt-strong rounded-md ${bodyClass} opacity-0 invisible group-hover:opacity-100 group-hover:visible group-focus-within:opacity-100 group-focus-within:visible transition-opacity duration-200 z-[${Z_OVERLAY}] shadow-lg pointer-events-none`}
+        className={`absolute ${posClass} px-3 py-2 bg-bg-elevated border border-border text-xs text-txt-strong rounded-lg ${bodyClass} opacity-0 invisible group-hover:opacity-100 group-hover:visible group-focus-within:opacity-100 group-focus-within:visible transition-opacity duration-200 z-[${Z_OVERLAY}] shadow-lg pointer-events-none`}
         role="tooltip"
       >
         <div className="font-medium">{label}</div>
@@ -234,11 +234,7 @@ export function Spotlight({
         <p className="text-sm text-muted mb-4">{description}</p>
 
         <div className="flex items-center justify-between">
-          <Button
-            variant="outline"
-            onClick={onPrev}
-            disabled={step === 1}
-          >
+          <Button variant="outline" onClick={onPrev} disabled={step === 1}>
             {labels.previous ?? "Previous"}
           </Button>
 
@@ -255,9 +251,7 @@ export function Spotlight({
             )}
           </div>
 
-          <Button
-            onClick={onNext}
-          >
+          <Button onClick={onNext}>
             {step === totalSteps
               ? (labels.finish ?? "Finish")
               : (labels.next ?? "Next")}

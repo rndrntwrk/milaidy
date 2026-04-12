@@ -1,155 +1,12 @@
 import type { Meta, StoryObj } from "@storybook/react";
-
+import { WorkspaceLayout } from "../index";
 import {
-  Button,
-  PagePanel,
-  Sidebar,
-  SidebarContent,
-  SidebarHeader,
-  SidebarPanel,
-  SidebarScrollRegion,
-  WorkspaceLayout,
-} from "../index";
-
-function DemoSidebar() {
-  return (
-    <Sidebar
-      collapsible
-      contentIdentity="storybook-workspace-layout"
-      mobileTitle="Sections"
-      header={
-        <SidebarHeader
-          search={{
-            value: "",
-            onChange: () => {},
-            placeholder: "Search sections",
-            "aria-label": "Search sections",
-          }}
-        />
-      }
-    >
-      <SidebarScrollRegion>
-        <SidebarPanel>
-          <nav className="space-y-1" aria-label="Demo sections">
-            <SidebarContent.Item active>
-              <SidebarContent.ItemTitle>Overview</SidebarContent.ItemTitle>
-            </SidebarContent.Item>
-            <SidebarContent.Item>
-              <SidebarContent.ItemTitle>Details</SidebarContent.ItemTitle>
-            </SidebarContent.Item>
-            <SidebarContent.Item>
-              <SidebarContent.ItemTitle>History</SidebarContent.ItemTitle>
-            </SidebarContent.Item>
-            <SidebarContent.Item>
-              <SidebarContent.ItemTitle>Widgets</SidebarContent.ItemTitle>
-            </SidebarContent.Item>
-          </nav>
-        </SidebarPanel>
-      </SidebarScrollRegion>
-    </Sidebar>
-  );
-}
-
-function DemoContent() {
-  return (
-    <div className="mx-auto flex w-full max-w-[72rem] flex-1 flex-col gap-4">
-      <PagePanel variant="workspace" className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div className="text-[11px] uppercase tracking-[0.18em] text-muted">
-              Layout contract
-            </div>
-            <h2 className="mt-1 text-lg font-semibold text-txt">
-              Shared page shell
-            </h2>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline">
-              Secondary
-            </Button>
-            <Button size="sm">Primary</Button>
-          </div>
-        </div>
-        <p className="max-w-3xl text-sm text-muted">
-          This story exercises the standardized app page structure: optional
-          left sidebar, scrollable main column, shared header slot, and a
-          supplementary widget/footer region.
-        </p>
-      </PagePanel>
-
-      <div className="grid gap-4 lg:grid-cols-[1.35fr_0.65fr]">
-        <PagePanel variant="workspace" className="space-y-3">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
-            Primary content
-          </div>
-          <div className="space-y-3">
-            {Array.from({ length: 4 }).map((_, index) => (
-              <div
-                key={index}
-                className="rounded-2xl border border-border/40 bg-bg/40 p-4"
-              >
-                <div className="text-sm font-medium text-txt">
-                  Section {index + 1}
-                </div>
-                <p className="mt-1 text-sm text-muted">
-                  Responsive spacing, sidebar behavior, and the footer widget
-                  slot should remain consistent across every page shape.
-                </p>
-              </div>
-            ))}
-          </div>
-        </PagePanel>
-
-        <PagePanel variant="workspace" className="space-y-3">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
-            Supporting column
-          </div>
-          <div className="space-y-2">
-            <div className="rounded-2xl border border-border/40 bg-bg/40 p-4 text-sm text-muted">
-              Use this area to verify long-form content, summary cards, or
-              right-column panels at tablet and desktop breakpoints.
-            </div>
-            <div className="rounded-2xl border border-border/40 bg-bg/40 p-4 text-sm text-muted">
-              On narrow widths the column naturally stacks under the primary
-              content.
-            </div>
-          </div>
-        </PagePanel>
-      </div>
-    </div>
-  );
-}
-
-function DemoHeader() {
-  return (
-    <div className="mx-auto flex w-full max-w-[72rem] flex-wrap items-center justify-between gap-3">
-      <div className="min-w-0">
-        <div className="text-[11px] uppercase tracking-[0.18em] text-muted">
-          Shell header
-        </div>
-        <div className="truncate text-sm font-medium text-txt">
-          Shared content header slot
-        </div>
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <Button size="sm" variant="outline">
-          Filter
-        </Button>
-        <Button size="sm">Create</Button>
-      </div>
-    </div>
-  );
-}
-
-function DemoFooter() {
-  return (
-    <div className="mx-auto w-full max-w-[72rem]">
-      <div className="rounded-[1.5rem] border border-border/40 bg-card/75 px-4 py-3 text-sm text-muted shadow-sm">
-        Supplementary widget/footer slot
-      </div>
-    </div>
-  );
-}
+  fullLayoutArgs,
+  LayoutStoryContent,
+  LayoutStoryFooter,
+  LayoutStoryFrame,
+  LayoutStoryHeader,
+} from "./layout-story-fixtures";
 
 const meta = {
   title: "Layouts/WorkspaceLayout",
@@ -165,22 +22,16 @@ const meta = {
     sidebar: { control: false },
   },
   render: (args) => (
-    <div className="flex min-h-screen bg-bg">
+    <LayoutStoryFrame>
       <WorkspaceLayout {...args}>
-        <DemoContent />
+        <LayoutStoryContent />
       </WorkspaceLayout>
-    </div>
+    </LayoutStoryFrame>
   ),
 } satisfies Meta<typeof WorkspaceLayout>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
-
-const fullLayoutArgs = {
-  contentHeader: <DemoHeader />,
-  footer: <DemoFooter />,
-  sidebar: <DemoSidebar />,
-};
 
 export const Desktop: Story = {
   args: fullLayoutArgs,
@@ -212,8 +63,8 @@ export const IPadPortrait: Story = {
 
 export const SinglePane: Story = {
   args: {
-    contentHeader: <DemoHeader />,
-    footer: <DemoFooter />,
+    contentHeader: <LayoutStoryHeader />,
+    footer: <LayoutStoryFooter />,
   },
   parameters: {
     viewport: { defaultViewport: "desktopWide" },

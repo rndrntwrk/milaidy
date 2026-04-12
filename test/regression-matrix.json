@@ -9,8 +9,9 @@
       "scheduledSuites": [
         "coverage",
         "db-check",
+        "integration-deterministic",
         "e2e-deterministic",
-        "startup-e2e",
+        "startup-integration",
         "desktop-contract",
         "validation-e2e",
         "live-cloud",
@@ -28,8 +29,9 @@
       "scheduledSuites": [
         "coverage",
         "db-check",
+        "integration-deterministic",
         "e2e-deterministic",
-        "startup-e2e",
+        "startup-integration",
         "desktop-contract",
         "validation-e2e",
         "regression-matrix-nightly",
@@ -68,6 +70,10 @@
       "tier": "required",
       "command": "bun run db:check"
     },
+    "integration-deterministic": {
+      "tier": "required",
+      "command": "bun run test:integration"
+    },
     "e2e-deterministic": {
       "tier": "required",
       "command": "bun run test:e2e"
@@ -76,9 +82,9 @@
       "tier": "heavy",
       "command": "bun run test:e2e:heavy"
     },
-    "startup-e2e": {
+    "startup-integration": {
       "tier": "required",
-      "command": "bun run test:startup:e2e"
+      "command": "bun run test:startup:integration"
     },
     "desktop-contract": {
       "tier": "required",
@@ -151,14 +157,16 @@
       "workflowSuites": {
         "pr": [
           "coverage",
+          "integration-deterministic",
           "e2e-deterministic",
-          "startup-e2e",
+          "startup-integration",
           "validation-e2e"
         ],
         "nightly": [
           "coverage",
+          "integration-deterministic",
           "e2e-deterministic",
-          "startup-e2e",
+          "startup-integration",
           "validation-e2e",
           "e2e-heavy",
           "live-cloud"
@@ -174,14 +182,16 @@
         "pr": [
           "coverage",
           "db-check",
+          "integration-deterministic",
           "e2e-deterministic",
-          "startup-e2e"
+          "startup-integration"
         ],
         "nightly": [
           "coverage",
           "db-check",
+          "integration-deterministic",
           "e2e-deterministic",
-          "startup-e2e",
+          "startup-integration",
           "e2e-heavy",
           "live-cloud"
         ],
@@ -200,15 +210,17 @@
         "pr": [
           "coverage",
           "db-check",
+          "integration-deterministic",
           "e2e-deterministic",
-          "startup-e2e",
+          "startup-integration",
           "validation-e2e"
         ],
         "nightly": [
           "coverage",
           "db-check",
+          "integration-deterministic",
           "e2e-deterministic",
-          "startup-e2e",
+          "startup-integration",
           "validation-e2e",
           "e2e-heavy",
           "live-cloud"
@@ -282,17 +294,20 @@
         "test/**",
         "packages/agent/test/**",
         "packages/app-core/test/**",
+        "vitest.integration.config.ts",
         "vitest.e2e.config.ts"
       ],
       "workflowSuites": {
         "pr": [
+          "integration-deterministic",
           "e2e-deterministic",
-          "startup-e2e",
+          "startup-integration",
           "validation-e2e"
         ],
         "nightly": [
+          "integration-deterministic",
           "e2e-deterministic",
-          "startup-e2e",
+          "startup-integration",
           "validation-e2e",
           "e2e-heavy",
           "live-cloud"

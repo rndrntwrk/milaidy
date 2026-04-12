@@ -1,13 +1,20 @@
 // @vitest-environment jsdom
 
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
+  mockClientSetBaseUrl,
+  mockClientSetToken,
+  mockClearPersistedActiveServer,
   mockDiscoverGatewayEndpoints,
   mockIsDesktopPlatform,
   mockUseApp,
 } = vi.hoisted(() => ({
+  mockClientSetBaseUrl: vi.fn(),
+  mockClientSetToken: vi.fn(),
+  mockClearPersistedActiveServer: vi.fn(),
   mockDiscoverGatewayEndpoints: vi.fn(async () => []),
   mockIsDesktopPlatform: vi.fn(() => false),
   mockUseApp: vi.fn(),
@@ -20,7 +27,8 @@ vi.mock("../../api", () => ({
     provisionCloudCompatAgent: vi.fn(),
     getCloudCompatAgent: vi.fn(),
     getCloudCompatJobStatus: vi.fn(),
-    setBaseUrl: vi.fn(),
+    setBaseUrl: (...args: unknown[]) => mockClientSetBaseUrl(...args),
+    setToken: (...args: unknown[]) => mockClientSetToken(...args),
   },
 }));
 
@@ -36,6 +44,7 @@ vi.mock("../../platform/init", () => ({
 
 vi.mock("../../state", () => ({
   addAgentProfile: vi.fn(),
+  clearPersistedActiveServer: () => mockClearPersistedActiveServer(),
   savePersistedActiveServer: vi.fn(),
   useApp: () => mockUseApp(),
 }));
@@ -91,6 +100,9 @@ describe("shouldShowLocalDeploymentOption", () => {
 
 describe("DeploymentStep", () => {
   beforeEach(() => {
+    mockClientSetBaseUrl.mockReset();
+    mockClientSetToken.mockReset();
+    mockClearPersistedActiveServer.mockReset();
     mockDiscoverGatewayEndpoints.mockReset();
     mockDiscoverGatewayEndpoints.mockResolvedValue([]);
     mockIsDesktopPlatform.mockReset();
@@ -106,5 +118,25 @@ describe("DeploymentStep", () => {
       screen.getByRole("button", { name: /create local agent/i }),
     ).toBeTruthy();
     expect(screen.getByText("New local agent")).toBeTruthy();
+  });
+
+  it("clears stale remote client state before starting a local agent", async () => {
+    const user = userEvent.setup();
+    const handleOnboardingNext = vi.fn();
+    mockUseApp.mockReturnValue({
+      ...baseAppContext(),
+      handleOnboardingNext,
+    });
+
+    render(<DeploymentStep />);
+
+    await user.click(
+      screen.getAllByRole("button", { name: /create local agent/i })[0]!,
+    );
+
+    expect(mockClientSetBaseUrl).toHaveBeenCalledWith(null);
+    expect(mockClientSetToken).toHaveBeenCalledWith(null);
+    expect(mockClearPersistedActiveServer).toHaveBeenCalledTimes(1);
+    expect(handleOnboardingNext).toHaveBeenCalledTimes(1);
   });
 });

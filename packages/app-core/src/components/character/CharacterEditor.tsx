@@ -1193,7 +1193,7 @@ export function CharacterEditor({
         className={
           sceneOverlay
             ? `relative flex flex-col justify-end w-full flex-1 gap-2 overflow-hidden select-none transition-[width,margin-left] duration-[400ms] ease-in-out [-webkit-tap-highlight-color:transparent] max-[600px]:overflow-visible [&_input]:select-text [&_textarea]:select-text [&_*:focus-visible:not(input):not(textarea)]:outline-none [&_*:focus-visible:not(input):not(textarea)]:shadow-none [&_button:focus-visible]:outline-none [&_button:focus-visible]:shadow-none${customizing ? " md:w-[40%] md:ml-auto" : ""}`
-            : "relative flex flex-col w-full flex-1 gap-6 select-none [&_input]:select-text [&_textarea]:select-text max-w-6xl mx-auto px-4 lg:px-8"
+            : "relative flex min-h-0 w-full flex-1 flex-col select-none [&_input]:select-text [&_textarea]:select-text"
         }
       >
         {/* ── Companion overlay: Character Roster ────────────────────── */}
@@ -1398,6 +1398,8 @@ export function CharacterEditor({
         {/* ── Standalone page: standard PageLayout + Sidebar */}
         {!sceneOverlay && (
           <PageLayout
+            className="h-full"
+            contentInnerClassName="mx-auto flex w-full max-w-6xl flex-1 flex-col"
             footer={<WidgetHost slot="character" className="pt-4" />}
             footerClassName="lg:px-8"
             sidebar={

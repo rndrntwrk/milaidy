@@ -1432,17 +1432,11 @@ test("apps page launches a Hyperscape session with iframe auth and live session 
       `/apps?apiBase=${encodeURIComponent(fixture.baseUrl)}`,
     );
 
-    await expect(page.getByTestId("apps-session-status-card")).toContainText(
-      "No app session running",
+    const hyperscapeCard = page.getByTestId(
+      "app-card--hyperscape-plugin-hyperscape",
     );
-    await expect(
-      page.getByTestId("app-card--hyperscape-plugin-hyperscape"),
-    ).toBeVisible();
-    await expect(page.getByTestId("apps-detail-panel")).toContainText(
-      "Spectate + steer",
-    );
-
-    await page.getByTestId("apps-detail-launch").click();
+    await expect(hyperscapeCard).toBeVisible();
+    await hyperscapeCard.click();
 
     await expect
       .poll(() => fixture.state.launchRequestName, {
@@ -1522,10 +1516,9 @@ test("apps page launches a Babylon session with embedded auth and the live dashb
       `/apps?apiBase=${encodeURIComponent(fixture.baseUrl)}`,
     );
 
-    await expect(
-      page.getByTestId("app-card--elizaos-app-babylon"),
-    ).toBeVisible();
-    await page.getByTestId("apps-detail-launch").click();
+    const babylonCard = page.getByTestId("app-card--elizaos-app-babylon");
+    await expect(babylonCard).toBeVisible();
+    await babylonCard.click();
 
     await expect
       .poll(() => fixture.state.launchRequestName, {
@@ -1601,9 +1594,6 @@ test("apps page launches a 2004scape session with auto-login and mobile dashboar
     const appCard = page.getByTestId("app-card--elizaos-app-2004scape");
     await expect(appCard).toBeVisible();
     await appCard.click();
-    const detailPanel = page.getByTestId("apps-detail-panel");
-    await expect(detailPanel).toBeVisible();
-    await detailPanel.getByRole("button", { name: /^Launch$/ }).click();
 
     await expect
       .poll(() => fixture.state.launchRequestName, {
@@ -1729,7 +1719,9 @@ test("apps page launches a Defense session with the spectator shell and live ste
     await expect(
       page.getByTestId("app-card--elizaos-app-defense-of-the-agents"),
     ).toBeVisible();
-    await page.getByTestId("apps-detail-launch").click();
+    await page
+      .getByTestId("app-card--elizaos-app-defense-of-the-agents")
+      .click();
 
     await expect
       .poll(() => fixture.state.launchRequestName, {

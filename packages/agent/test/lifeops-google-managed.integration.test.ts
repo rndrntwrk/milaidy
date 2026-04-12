@@ -17,6 +17,7 @@ import { req } from "../../../test/helpers/http";
 import { saveEnv } from "../../../test/helpers/test-utils";
 import { startApiServer } from "../src/api/server";
 import { LifeOpsRepository } from "../src/lifeops/repository";
+import { LifeOpsService } from "../src/lifeops/service";
 import { DatabaseSync } from "../src/test-utils/sqlite-compat";
 
 type SqlQuery = {
@@ -664,6 +665,49 @@ describe("life-ops managed Google connector", () => {
       }
 
       if (
+        url ===
+          "https://cloud.example/api/v1/milady/google/calendar/events/managed-created-event" &&
+        method === "PATCH"
+      ) {
+        const body = JSON.parse(String(init?.body ?? "{}")) as Record<
+          string,
+          unknown
+        >;
+        expect(body.side).toBe("owner");
+        return jsonResponse({
+          event: {
+            externalId: "managed-created-event",
+            calendarId: "primary",
+            title: body.title ?? "Launch review",
+            description: body.description ?? "Review launch details",
+            location: body.location ?? "",
+            status: "confirmed",
+            startAt: body.startAt,
+            endAt: body.endAt,
+            isAllDay: false,
+            timezone: body.timeZone ?? "UTC",
+            htmlLink:
+              "https://calendar.google.com/event?eid=managed-created-event",
+            conferenceLink: null,
+            organizer: {
+              email: "founder@example.com",
+              displayName: "Founder Example",
+            },
+            attendees: [],
+            metadata: {},
+          },
+        });
+      }
+
+      if (
+        url ===
+          "https://cloud.example/api/v1/milady/google/calendar/events/managed-created-event?side=owner&calendarId=primary" &&
+        method === "DELETE"
+      ) {
+        return jsonResponse({ ok: true });
+      }
+
+      if (
         url.startsWith(
           "https://cloud.example/api/v1/milady/google/gmail/triage?",
         ) &&
@@ -812,6 +856,28 @@ describe("life-ops managed Google connector", () => {
     expect(createRes.data.event.title).toBe("Launch review");
     expect(createdEventIds).toEqual(["Launch review"]);
 
+    const lifeOpsService = new LifeOpsService(runtime);
+    const updatedEvent = await lifeOpsService.updateCalendarEvent(
+      new URL(`http://127.0.0.1:${port}/api/lifeops/calendar/events`),
+      {
+        mode: "cloud_managed",
+        eventId: "managed-created-event",
+        title: "Launch review moved",
+        startAt: "2099-04-04T20:00:00.000Z",
+        endAt: "2099-04-04T20:45:00.000Z",
+        timeZone: "UTC",
+      },
+    );
+    expect(updatedEvent.title).toBe("Launch review moved");
+
+    await lifeOpsService.deleteCalendarEvent(
+      new URL(`http://127.0.0.1:${port}/api/lifeops/calendar/events`),
+      {
+        mode: "cloud_managed",
+        eventId: "managed-created-event",
+      },
+    );
+
     const triageRes = await req(
       port,
       "GET",
@@ -891,8 +957,8 @@ describe("life-ops managed Google connector", () => {
     expect(calendarEvents.map((event) => event.title)).toContain(
       "Founder sync",
     );
-    expect(calendarEvents.map((event) => event.title)).toContain(
-      "Launch review",
+    expect(calendarEvents.map((event) => event.title)).not.toContain(
+      "Launch review moved",
     );
 
     const gmailMessages = await repository.listGmailMessages(

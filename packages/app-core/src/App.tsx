@@ -157,11 +157,11 @@ function ViewRouter({
       case "character-select":
       case "knowledge":
         return (
-          <TabScrollView>
+          <TabContentView>
             <CharacterEditor
               onHeaderActionsChange={onCharacterHeaderActionsChange}
             />
-          </TabScrollView>
+          </TabContentView>
         );
       case "inventory":
         return (
@@ -677,6 +677,18 @@ export function App() {
           <Header />
           <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden">
             <InventoryView />
+          </div>
+        </div>
+      ) : isCharacterPage ? (
+        <div
+          key={`character-shell-${tab}`}
+          className="flex flex-col flex-1 min-h-0 w-full font-body text-txt bg-bg"
+        >
+          <Header pageRightExtras={characterHeaderActions} />
+          <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden">
+            <ViewRouter
+              onCharacterHeaderActionsChange={setCharacterHeaderActions}
+            />
           </div>
         </div>
       ) : isAppsToolPage ? (

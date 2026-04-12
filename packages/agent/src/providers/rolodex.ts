@@ -6,6 +6,7 @@ import type {
   State,
 } from "@elizaos/core";
 import { logger } from "@elizaos/core";
+import { getValidationKeywordTerms } from "@miladyai/shared/validation-keywords";
 import type {
   RelationshipsGraphService,
   RelationshipsPersonSummary,
@@ -42,18 +43,9 @@ export const rolodexProvider: Provider = {
     "Known contacts and relationships across all connected platforms (the Rolodex).",
   dynamic: true,
   position: 7,
-  relevanceKeywords: [
-    "who",
-    "contact",
-    "reach",
-    "rolodex",
-    "know",
-    "relationship",
-    "person",
-    "people",
-    "friend",
-    "user",
-  ],
+  relevanceKeywords: getValidationKeywordTerms("provider.rolodex.relevance", {
+    includeAllLocales: true,
+  }),
 
   async get(
     runtime: IAgentRuntime,

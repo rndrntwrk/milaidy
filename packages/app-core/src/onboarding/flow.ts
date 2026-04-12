@@ -27,6 +27,10 @@ export function getStepOrder(): OnboardingStep[] {
   return ONBOARDING_STEPS.map((s) => s.id);
 }
 
+export function getOnboardingStepIndex(step: OnboardingStep): number {
+  return getStepOrder().indexOf(step);
+}
+
 /**
  * Next step in the flow, or null at the end.
  * WHY null instead of throwing: callers treat "no next" as a no-op after
@@ -63,9 +67,8 @@ export function canRevertOnboardingTo(params: {
   current: OnboardingStep;
   target: OnboardingStep;
 }): boolean {
-  const order = getStepOrder();
-  const curIdx = order.indexOf(params.current);
-  const tgtIdx = order.indexOf(params.target);
+  const curIdx = getOnboardingStepIndex(params.current);
+  const tgtIdx = getOnboardingStepIndex(params.target);
   return tgtIdx >= 0 && curIdx >= 0 && tgtIdx < curIdx;
 }
 
@@ -92,13 +95,14 @@ export function shouldSkipConnectionStepsForCloudProvisionedContainer(args: {
 
 /**
  * Whether to skip the features step entirely.
- * Remote-only targets without cloud don't support managed connectors,
- * so the features step adds little value.
+ * The current wizard always shows features so local capabilities such as
+ * Browser and Wallet can be chosen for local, remote, and cloud agents.
  */
 export function shouldSkipFeaturesStep(args: {
   onboardingServerTarget: string;
 }): boolean {
-  return args.onboardingServerTarget === "remote";
+  void args;
+  return false;
 }
 
 export function shouldUseCloudOnboardingFastTrack(args: {

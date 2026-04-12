@@ -52,6 +52,8 @@ docker-compose.extra.yml
 apps/ui/src/ui/__screenshots__/
 apps/ui/playwright-report/
 apps/ui/test-results/
+packages/ui/test-results/
+packages/ui/e2e/visual-regression.spec.ts-snapshots/
 
 # Vendored repos (clone separately if needed)
 vendor/

@@ -36,8 +36,6 @@ export interface ParsedGeneration {
 export const HTTP_METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH"] as const;
 const METHODS_SET = new Set<string>(HTTP_METHODS);
 
-export const HTTP_METHODS_LIST = HTTP_METHODS;
-
 /* ── CSS class names ───────────────────────────────────────────────── */
 
 export const editorDialogContentClassName =

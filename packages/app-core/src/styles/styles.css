@@ -95,6 +95,15 @@
   --radius-md: var(--radius-md);
   --radius-lg: var(--radius-lg);
   --radius-xl: var(--radius-xl);
+
+  /* Compact text sizes — replaces text-[10px] / text-[11px] arbitraries */
+  --font-size-2xs: var(--text-2xs);
+  --font-size-2xs--line-height: 1rem;
+  --font-size-xs-tight: var(--text-xs-tight);
+  --font-size-xs-tight--line-height: 1rem;
+
+  /* Touch target */
+  --spacing-touch: var(--min-touch-target);
 }
 
 /* ── Global resets ──────────────────────────────────────────────────── */

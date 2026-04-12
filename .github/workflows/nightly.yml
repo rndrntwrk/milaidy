@@ -177,13 +177,16 @@ jobs:
         run: bun run build
 
       - name: Run deterministic E2E tests
+        run: bun run test:integration
+
+      - name: Run real local E2E tests
         run: bun run test:e2e
 
       - name: Run startup E2E contract guard
         run: bun run test:startup:contract
 
-      - name: Run startup E2E tests
-        run: bun run test:startup:e2e
+      - name: Run startup integration tests
+        run: bun run test:startup:integration
 
       - name: Run desktop contract tests
         run: bun run test:desktop:contract

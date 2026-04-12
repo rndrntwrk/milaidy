@@ -53,11 +53,54 @@ export { __resetCompanionSpeechMemoryForTests } from "./chat-view-hooks";
 const CHAT_INPUT_MIN_HEIGHT_PX = 46;
 const CHAT_INPUT_MAX_HEIGHT_PX = 200;
 type ChatViewVariant = "default" | "game-modal";
+type InboxChatSelection = {
+  avatarUrl?: string;
+  canSend?: boolean;
+  id: string;
+  source: string;
+  title: string;
+  transportSource?: string;
+  worldId?: string;
+  worldLabel?: string;
+};
 
 interface ChatViewProps {
   variant?: ChatViewVariant;
   /** Override click handler for agent activity box sessions. */
   onPtySessionClick?: (sessionId: string) => void;
+}
+
+function normalizeInboxChatSelection(value: unknown): InboxChatSelection | null {
+  if (!value || typeof value !== "object") return null;
+
+  const candidate = value as Record<string, unknown>;
+  const id = typeof candidate.id === "string" ? candidate.id.trim() : "";
+  const title =
+    typeof candidate.title === "string" ? candidate.title.trim() : "";
+  const source =
+    typeof candidate.source === "string" ? candidate.source.trim() : "";
+  const transportSource =
+    typeof candidate.transportSource === "string" &&
+    candidate.transportSource.trim().length > 0
+      ? candidate.transportSource.trim()
+      : undefined;
+
+  if (!id || !title || (!source && !transportSource)) {
+    return null;
+  }
+
+  return {
+    avatarUrl:
+      typeof candidate.avatarUrl === "string" ? candidate.avatarUrl : undefined,
+    canSend: typeof candidate.canSend === "boolean" ? candidate.canSend : undefined,
+    id,
+    source,
+    title,
+    transportSource,
+    worldId: typeof candidate.worldId === "string" ? candidate.worldId : undefined,
+    worldLabel:
+      typeof candidate.worldLabel === "string" ? candidate.worldLabel : undefined,
+  };
 }
 
 export function ChatView({
@@ -104,6 +147,10 @@ export function ChatView({
   const chatPendingImages = Array.isArray(rawChatPendingImages)
     ? rawChatPendingImages
     : [];
+  const inboxChat = useMemo(
+    () => normalizeInboxChatSelection(activeInboxChat),
+    [activeInboxChat],
+  );
 
   const t = useCallback(
     (key: string, values?: Record<string, unknown>) => {
@@ -620,11 +667,11 @@ export function ChatView({
   );
 
   // ── Inbox-chat branch ────────────────────────────────────────────
-  if (activeInboxChat) {
+  if (inboxChat) {
     return (
       <InboxChatPanel
-        key={activeInboxChat.id}
-        activeInboxChat={activeInboxChat}
+        key={inboxChat.id}
+        activeInboxChat={inboxChat}
         variant={variant}
       />
     );

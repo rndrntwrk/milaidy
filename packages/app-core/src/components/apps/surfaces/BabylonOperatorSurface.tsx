@@ -125,23 +125,39 @@ function extractTradingBalance(value: unknown): number {
   return typeof balance === "number" ? balance : 0;
 }
 
-function formatCurrency(value: number): string {
-  return `$${value.toFixed(2)}`;
+function asFiniteNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
-function formatPnL(value: number): string {
-  const sign = value >= 0 ? "+" : "";
-  return `${sign}$${value.toFixed(2)}`;
+function formatDecimal(value: unknown, digits: number): string | null {
+  const parsed = asFiniteNumber(value);
+  return parsed == null ? null : parsed.toFixed(digits);
+}
+
+function formatCurrency(value: unknown): string {
+  const formatted = formatDecimal(value, 2);
+  return formatted == null ? "n/a" : `$${formatted}`;
+}
+
+function formatPnL(value: unknown): string {
+  const parsed = asFiniteNumber(value);
+  if (parsed == null) return "n/a";
+  const sign = parsed >= 0 ? "+" : "";
+  return `${sign}$${parsed.toFixed(2)}`;
 }
 
 function listPreview(items: BabylonPredictionMarket[]): string {
   if (items.length === 0) return "Market data is not available yet.";
   return items
     .slice(0, 3)
-    .map(
-      (market) =>
-        `${market.title} (${market.yesPrice.toFixed(2)}/${market.noPrice.toFixed(2)})`,
-    )
+    .map((market) => {
+      const yesPrice = formatDecimal(market.yesPrice, 2);
+      const noPrice = formatDecimal(market.noPrice, 2);
+      if (!yesPrice || !noPrice) {
+        return market.title;
+      }
+      return `${market.title} (${yesPrice}/${noPrice})`;
+    })
     .join(" · ");
 }
 
@@ -408,9 +424,12 @@ export function BabylonOperatorSurface({
               value={activeGoal?.description ?? "No active goal recorded."}
               subtitle={
                 activeGoal
-                  ? activeGoal.progress != null
-                    ? `${activeGoal.status} · ${activeGoal.progress.toFixed(0)}%`
-                    : activeGoal.status
+                  ? (() => {
+                      const progress = formatDecimal(activeGoal.progress, 0);
+                      return progress
+                        ? `${activeGoal.status} · ${progress}%`
+                        : activeGoal.status;
+                    })()
                   : undefined
               }
             />
@@ -435,7 +454,11 @@ export function BabylonOperatorSurface({
               }
               subtitle={
                 teamTotals
-                  ? `${formatCurrency(teamTotals.walletBalance)} wallet · ${teamTotals.openPositions} open positions`
+                  ? `${formatCurrency(teamTotals.walletBalance)} wallet${
+                      asFiniteNumber(teamTotals.openPositions) != null
+                        ? ` · ${teamTotals.openPositions} open positions`
+                        : ""
+                    }`
                   : "Team summary is not available yet."
               }
             />

@@ -1,8 +1,15 @@
-import { ModelType } from "@elizaos/core";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { classifyIntent } from "./life";
-import { describeLLM } from "../../../../test/helpers/skip-without";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import { createRealTestRuntime } from "../../../../test/helpers/real-runtime";
+import { describeLLM } from "../../../../test/helpers/skip-without";
+import { classifyIntent } from "./life";
 
 const {
   mockCheckSenderPrivateAccess,
@@ -91,16 +98,27 @@ import { lifeAction } from "./life";
 
 // Real runtime with LLM is created in beforeAll of the describeLLM block below.
 // For pure-logic tests that don't need LLM, we use a minimal stub runtime.
-let realRuntime: Awaited<ReturnType<typeof createRealTestRuntime>>["runtime"] | null = null;
+let realRuntime:
+  | Awaited<ReturnType<typeof createRealTestRuntime>>["runtime"]
+  | null = null;
 let realRuntimeCleanup: (() => Promise<void>) | null = null;
 
 function getRuntime() {
-  if (!realRuntime) throw new Error("Real runtime not initialized — wrap test in describeLLM");
-  return { agentId: "agent-1", useModel: realRuntime.useModel.bind(realRuntime) } as never;
+  if (!realRuntime)
+    throw new Error("Real runtime not initialized — wrap test in describeLLM");
+  return {
+    agentId: "agent-1",
+    useModel: realRuntime.useModel.bind(realRuntime),
+  } as never;
 }
 
 // Stub runtime for tests that never call useModel (pure logic, access control)
-const stubRuntime = { agentId: "agent-1", useModel: () => { throw new Error("useModel not available in stub runtime"); } } as never;
+const stubRuntime = {
+  agentId: "agent-1",
+  useModel: () => {
+    throw new Error("useModel not available in stub runtime");
+  },
+} as never;
 
 function msg(text: string, source = "client_chat") {
   return { entityId: "owner-1", content: { source, text } } as never;
@@ -444,7 +462,6 @@ describeLLM("lifeAction", () => {
   });
 
   it("falls back to the regex classifier when the LLM confidence is too low", async () => {
-
     const result = await invoke("remind me to take vitamins every morning");
 
     expect(mockGetOverview).not.toHaveBeenCalled();
@@ -650,6 +667,39 @@ describeLLM("lifeAction", () => {
           cadence: expect.objectContaining({
             kind: "once",
             dueAt: "2026-04-18T03:00:00.000Z",
+          }),
+        }),
+      );
+      expect(result).toMatchObject({ success: true });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("rolls explicit month/day reminders without a year into the next year when the date already passed", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-12-20T18:00:00.000Z"));
+    mockListGoals.mockResolvedValue([]);
+    mockCreateDefinition.mockImplementation(async (request) => ({
+      definition: {
+        id: "d-reminder-next-year",
+        title: request.title,
+        cadence: request.cadence,
+      },
+      reminderPlan: null,
+    }));
+
+    try {
+      const result = await invoke("remind me on jan 5 at 8pm to hug my wife", {
+        action: "create",
+        details: { confirmed: true },
+      });
+
+      expect(mockCreateDefinition).toHaveBeenCalledWith(
+        expect.objectContaining({
+          cadence: expect.objectContaining({
+            kind: "once",
+            dueAt: "2027-01-06T03:00:00.000Z",
           }),
         }),
       );
@@ -1788,6 +1838,82 @@ describeLLM("lifeAction", () => {
     expect(result).toMatchObject({
       success: true,
       text: expect.stringContaining("Take vitamins"),
+    });
+  });
+
+  it("maps wake-up and before-bed phrasing onto brushing windows", async () => {
+    mockListGoals.mockResolvedValue([]);
+    mockCreateDefinition.mockResolvedValue({
+      definition: {
+        id: "d-brush-phrases",
+        title: "Brush teeth",
+        cadence: { kind: "times_per_day", slots: [] },
+      },
+      reminderPlan: { id: "rp-brush-phrases" },
+    });
+
+    const result = await invoke(
+      "make sure I brush my teeth when I wake up and before bed",
+      {
+        action: "create",
+        details: { confirmed: true },
+      },
+    );
+
+    expect(mockCreateDefinition).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Brush teeth",
+        cadence: expect.objectContaining({
+          kind: "times_per_day",
+          slots: expect.arrayContaining([
+            expect.objectContaining({ label: "Morning", minuteOfDay: 8 * 60 }),
+            expect.objectContaining({ label: "Night", minuteOfDay: 21 * 60 }),
+          ]),
+        }),
+      }),
+    );
+    expect(result).toMatchObject({
+      success: true,
+      text: expect.stringContaining("Brush teeth"),
+    });
+  });
+
+  it("maps explicit weekday meal phrasing onto a weekday Invisalign cadence", async () => {
+    mockListGoals.mockResolvedValue([]);
+    mockCreateDefinition.mockResolvedValue({
+      definition: {
+        id: "d-invisalign-weekdays",
+        title: "Keep Invisalign in",
+        cadence: {
+          kind: "weekly",
+          weekdays: [1, 2, 3, 4, 5],
+          windows: ["afternoon"],
+        },
+      },
+      reminderPlan: { id: "rp-invisalign-weekdays" },
+    });
+
+    const result = await invoke(
+      "keep bugging me about invisalign on weekdays after lunch",
+      {
+        action: "create",
+        details: { confirmed: true },
+      },
+    );
+
+    expect(mockCreateDefinition).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Keep Invisalign in",
+        cadence: expect.objectContaining({
+          kind: "weekly",
+          weekdays: [1, 2, 3, 4, 5],
+          windows: ["afternoon"],
+        }),
+      }),
+    );
+    expect(result).toMatchObject({
+      success: true,
+      text: expect.stringContaining("Invisalign"),
     });
   });
 

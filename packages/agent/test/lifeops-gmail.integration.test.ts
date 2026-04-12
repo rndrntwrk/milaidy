@@ -16,6 +16,7 @@ import {
 import { startApiServer } from "../src/api/server";
 import { resolveOAuthDir } from "../src/config/paths";
 import { LifeOpsRepository } from "../src/lifeops/repository";
+import { LifeOpsService } from "../src/lifeops/service";
 import { DatabaseSync } from "../src/test-utils/sqlite-compat";
 import { req } from "../../../test/helpers/http";
 import { saveEnv } from "../../../test/helpers/test-utils";
@@ -642,6 +643,98 @@ describe("life-ops gmail triage", () => {
     expect(emptyRes.data.messages).toEqual([]);
   });
 
+  it("rejects ambiguous Gmail reads by query instead of silently picking the first match", async () => {
+    await connectGoogle(
+      ["google.gmail.triage"],
+      [
+        "openid",
+        "email",
+        "profile",
+        "https://www.googleapis.com/auth/gmail.readonly",
+      ],
+    );
+
+    const nowMs = Date.now();
+    fetchMock.mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.includes("q=project")) {
+        return new Response(
+          JSON.stringify({
+            messages: [
+              { id: "msg-project-1", threadId: "thread-project-1" },
+              { id: "msg-project-2", threadId: "thread-project-2" },
+            ],
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      if (url.includes("/gmail/v1/users/me/messages/msg-project-1?")) {
+        return new Response(
+          JSON.stringify({
+            id: "msg-project-1",
+            threadId: "thread-project-1",
+            labelIds: ["INBOX", "UNREAD"],
+            snippet: "Project kickoff details.",
+            internalDate: String(nowMs - 12 * 60_000),
+            payload: {
+              headers: [
+                { name: "Subject", value: "Project kickoff" },
+                { name: "From", value: "Alex <alex@example.com>" },
+                { name: "To", value: "agent@example.com" },
+                { name: "Message-Id", value: "<project-1@example.com>" },
+              ],
+            },
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      if (url.includes("/gmail/v1/users/me/messages/msg-project-2?")) {
+        return new Response(
+          JSON.stringify({
+            id: "msg-project-2",
+            threadId: "thread-project-2",
+            labelIds: ["INBOX"],
+            snippet: "Project retro notes.",
+            internalDate: String(nowMs - 30 * 60_000),
+            payload: {
+              headers: [
+                { name: "Subject", value: "Project retro" },
+                { name: "From", value: "Blair <blair@example.com>" },
+                { name: "To", value: "agent@example.com" },
+                { name: "Message-Id", value: "<project-2@example.com>" },
+              ],
+            },
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    const service = new LifeOpsService(runtime);
+    const requestUrl = new URL(`http://127.0.0.1:${port}/api/lifeops/gmail/read`);
+
+    await expect(
+      service.readGmailMessage(requestUrl, {
+        query: "project",
+        maxResults: 5,
+      }),
+    ).rejects.toMatchObject({
+      status: 409,
+      message:
+        'Multiple Gmail messages matched "project". Provide a messageId or narrow the query.',
+    });
+  });
+
   it("falls back to recent synced Gmail metadata when the connector lacks Gmail read scope", async () => {
     await connectGoogle(
       ["google.gmail.triage"],
@@ -869,6 +962,14 @@ describe("life-ops gmail triage", () => {
       {
         query: "in:anywhere from:suran",
         expectedSubjects: ["Dinner agenda"],
+      },
+      {
+        query: "{from:suran from:alex@example.com}",
+        expectedSubjects: ["Dinner agenda", "Venue invoice"],
+      },
+      {
+        query: "-from:noreply@example.com invoice",
+        expectedSubjects: ["Venue invoice"],
       },
     ] as const;
 
@@ -1330,6 +1431,54 @@ describe("life-ops gmail triage", () => {
       bodyText: "Here is the final draft.",
       confirmSend: true,
     });
+    expect(sendRes.status).toBe(200);
+    expect(sendRes.data).toEqual({ ok: true });
+  });
+
+  it("normalizes display-name recipient strings when sending a brand-new Gmail message", async () => {
+    await connectGoogle(
+      ["google.gmail.triage", "google.gmail.send"],
+      [
+        "openid",
+        "email",
+        "profile",
+        "https://www.googleapis.com/auth/gmail.readonly",
+        "https://www.googleapis.com/auth/gmail.send",
+      ],
+    );
+
+    fetchMock.mockImplementation(async (input, init) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.endsWith("/gmail/v1/users/me/messages/send")) {
+        const parsedBody = JSON.parse(String(init?.body ?? "{}")) as {
+          raw?: string;
+        };
+        const raw = Buffer.from(
+          String(parsedBody.raw ?? ""),
+          "base64url",
+        ).toString("utf-8");
+        expect(raw).toContain("To: mira@example.com, ops@example.com");
+        expect(raw).toContain("Cc: team@example.com");
+        expect(raw).toContain("Bcc: audit@example.com");
+        expect(raw).toContain("Subject: hola");
+        expect(raw).toContain("nos vemos manana");
+        return new Response(JSON.stringify({ id: "sent-compose-1" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    const sendRes = await req(port, "POST", "/api/lifeops/gmail/message-send", {
+      to: 'Mira <mira@example.com>; ops@example.com',
+      cc: '"Team" <team@example.com>',
+      bcc: "audit@example.com",
+      subject: "hola",
+      bodyText: "nos vemos manana",
+      confirmSend: true,
+    });
+
     expect(sendRes.status).toBe(200);
     expect(sendRes.data).toEqual({ ok: true });
   });

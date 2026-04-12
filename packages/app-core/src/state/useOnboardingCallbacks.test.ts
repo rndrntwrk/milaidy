@@ -427,6 +427,160 @@ describe("useOnboardingCallbacks", () => {
     expect(setOnboardingRemoteConnected).toHaveBeenCalledWith(false);
   });
 
+  it("jumps back past providers from features and resets the connection wizard state", () => {
+    const setOnboardingStep = vi.fn();
+    const setOnboardingActiveGuide = vi.fn();
+    const setOnboardingServerTarget = vi.fn();
+    const setOnboardingCloudApiKey = vi.fn();
+    const setOnboardingProvider = vi.fn();
+    const setOnboardingApiKey = vi.fn();
+    const setOnboardingPrimaryModel = vi.fn();
+    const setOnboardingRemoteApiBase = vi.fn();
+    const setOnboardingRemoteToken = vi.fn();
+    const setOnboardingRemoteError = vi.fn();
+    const setOnboardingRemoteConnecting = vi.fn();
+    const setOnboardingRemoteConnected = vi.fn();
+
+    const { result } = renderHook(() => {
+      const onboarding = useOnboardingState();
+      return {
+        onboarding,
+        callbacks: useOnboardingCallbacks({
+          onboarding,
+          setOnboardingStep,
+          setOnboardingMode: vi.fn(),
+          setOnboardingActiveGuide,
+          addDeferredOnboardingTask: vi.fn(),
+          setOnboardingDetectedProviders: vi.fn(),
+          setOnboardingServerTarget,
+          setOnboardingCloudApiKey,
+          setOnboardingProvider,
+          setOnboardingApiKey,
+          setOnboardingPrimaryModel,
+          setOnboardingRemoteApiBase,
+          setOnboardingRemoteToken,
+          setOnboardingRemoteConnecting,
+          setOnboardingRemoteError,
+          setOnboardingRemoteConnected,
+          setPostOnboardingChecklistDismissed: vi.fn(),
+          setOnboardingComplete: vi.fn(),
+          coordinatorOnboardingCompleteRef: { current: null },
+          initialTabSetRef: { current: false },
+          setTab: vi.fn(),
+          defaultLandingTab: "chat",
+          loadCharacter: async () => {},
+          uiLanguage: "en",
+          selectedVrmIndex: 1,
+          walletConfig: {},
+          elizaCloudConnected: false,
+          setActionNotice: vi.fn(),
+          retryStartup: vi.fn(),
+          forceLocalBootstrapRef: { current: false },
+          client: new MiladyClient("http://127.0.0.1:31337"),
+        }),
+      };
+    });
+
+    act(() => {
+      result.current.onboarding.setMode("advanced");
+      result.current.onboarding.setStep("features");
+    });
+
+    act(() => {
+      result.current.callbacks.handleOnboardingJumpToStep("identity");
+    });
+
+    expect(setOnboardingStep).toHaveBeenCalledWith("identity");
+    expect(setOnboardingActiveGuide).toHaveBeenCalledWith(null);
+    expect(setOnboardingServerTarget).toHaveBeenCalledWith("");
+    expect(setOnboardingCloudApiKey).toHaveBeenCalledWith("");
+    expect(setOnboardingProvider).toHaveBeenCalledWith("");
+    expect(setOnboardingApiKey).toHaveBeenCalledWith("");
+    expect(setOnboardingPrimaryModel).toHaveBeenCalledWith("");
+    expect(setOnboardingRemoteApiBase).toHaveBeenCalledWith("");
+    expect(setOnboardingRemoteToken).toHaveBeenCalledWith("");
+    expect(setOnboardingRemoteError).toHaveBeenCalledWith(null);
+    expect(setOnboardingRemoteConnecting).toHaveBeenCalledWith(false);
+    expect(setOnboardingRemoteConnected).toHaveBeenCalledWith(false);
+  });
+
+  it("jumps back to deployment from providers and clears the deployment target", () => {
+    const setOnboardingStep = vi.fn();
+    const setOnboardingActiveGuide = vi.fn();
+    const setOnboardingServerTarget = vi.fn();
+    const setOnboardingCloudApiKey = vi.fn();
+    const setOnboardingProvider = vi.fn();
+    const setOnboardingApiKey = vi.fn();
+    const setOnboardingPrimaryModel = vi.fn();
+    const setOnboardingRemoteApiBase = vi.fn();
+    const setOnboardingRemoteToken = vi.fn();
+    const setOnboardingRemoteError = vi.fn();
+    const setOnboardingRemoteConnecting = vi.fn();
+    const setOnboardingRemoteConnected = vi.fn();
+
+    const { result } = renderHook(() => {
+      const onboarding = useOnboardingState();
+      return {
+        onboarding,
+        callbacks: useOnboardingCallbacks({
+          onboarding,
+          setOnboardingStep,
+          setOnboardingMode: vi.fn(),
+          setOnboardingActiveGuide,
+          addDeferredOnboardingTask: vi.fn(),
+          setOnboardingDetectedProviders: vi.fn(),
+          setOnboardingServerTarget,
+          setOnboardingCloudApiKey,
+          setOnboardingProvider,
+          setOnboardingApiKey,
+          setOnboardingPrimaryModel,
+          setOnboardingRemoteApiBase,
+          setOnboardingRemoteToken,
+          setOnboardingRemoteConnecting,
+          setOnboardingRemoteError,
+          setOnboardingRemoteConnected,
+          setPostOnboardingChecklistDismissed: vi.fn(),
+          setOnboardingComplete: vi.fn(),
+          coordinatorOnboardingCompleteRef: { current: null },
+          initialTabSetRef: { current: false },
+          setTab: vi.fn(),
+          defaultLandingTab: "chat",
+          loadCharacter: async () => {},
+          uiLanguage: "en",
+          selectedVrmIndex: 1,
+          walletConfig: {},
+          elizaCloudConnected: false,
+          setActionNotice: vi.fn(),
+          retryStartup: vi.fn(),
+          forceLocalBootstrapRef: { current: false },
+          client: new MiladyClient("http://127.0.0.1:31337"),
+        }),
+      };
+    });
+
+    act(() => {
+      result.current.onboarding.setMode("advanced");
+      result.current.onboarding.setStep("providers");
+    });
+
+    act(() => {
+      result.current.callbacks.handleOnboardingJumpToStep("deployment");
+    });
+
+    expect(setOnboardingStep).toHaveBeenCalledWith("deployment");
+    expect(setOnboardingActiveGuide).toHaveBeenCalledWith(null);
+    expect(setOnboardingServerTarget).toHaveBeenCalledWith("");
+    expect(setOnboardingCloudApiKey).toHaveBeenCalledWith("");
+    expect(setOnboardingProvider).toHaveBeenCalledWith("");
+    expect(setOnboardingApiKey).toHaveBeenCalledWith("");
+    expect(setOnboardingPrimaryModel).toHaveBeenCalledWith("");
+    expect(setOnboardingRemoteApiBase).toHaveBeenCalledWith("");
+    expect(setOnboardingRemoteToken).toHaveBeenCalledWith("");
+    expect(setOnboardingRemoteError).toHaveBeenCalledWith(null);
+    expect(setOnboardingRemoteConnecting).toHaveBeenCalledWith(false);
+    expect(setOnboardingRemoteConnected).toHaveBeenCalledWith(false);
+  });
+
   it("advances from identity to providers through the public next-step callback", async () => {
     const setOnboardingStep = vi.fn();
     const setOnboardingActiveGuide = vi.fn();
@@ -482,6 +636,68 @@ describe("useOnboardingCallbacks", () => {
 
     expect(setOnboardingStep).toHaveBeenCalledWith("providers");
     expect(setOnboardingActiveGuide).toHaveBeenCalledWith("provider");
+  });
+
+  it("advances remote onboarding from providers to features instead of finishing early", async () => {
+    const setOnboardingStep = vi.fn();
+    const setOnboardingActiveGuide = vi.fn();
+    const submitOnboarding = vi.fn();
+
+    const { result } = renderHook(() => {
+      const onboarding = useOnboardingState();
+      return {
+        onboarding,
+        callbacks: useOnboardingCallbacks({
+          onboarding,
+          setOnboardingStep,
+          setOnboardingMode: vi.fn(),
+          setOnboardingActiveGuide,
+          addDeferredOnboardingTask: vi.fn(),
+          setOnboardingDetectedProviders: vi.fn(),
+          setOnboardingServerTarget: vi.fn(),
+          setOnboardingCloudApiKey: vi.fn(),
+          setOnboardingProvider: vi.fn(),
+          setOnboardingApiKey: vi.fn(),
+          setOnboardingPrimaryModel: vi.fn(),
+          setOnboardingRemoteApiBase: vi.fn(),
+          setOnboardingRemoteToken: vi.fn(),
+          setOnboardingRemoteConnecting: vi.fn(),
+          setOnboardingRemoteError: vi.fn(),
+          setOnboardingRemoteConnected: vi.fn(),
+          setPostOnboardingChecklistDismissed: vi.fn(),
+          setOnboardingComplete: vi.fn(),
+          coordinatorOnboardingCompleteRef: { current: null },
+          initialTabSetRef: { current: false },
+          setTab: vi.fn(),
+          defaultLandingTab: "chat",
+          loadCharacter: async () => {},
+          uiLanguage: "en",
+          selectedVrmIndex: 1,
+          walletConfig: {},
+          elizaCloudConnected: false,
+          setActionNotice: vi.fn(),
+          retryStartup: vi.fn(),
+          forceLocalBootstrapRef: { current: false },
+          client: {
+            submitOnboarding,
+          } as unknown as MiladyClient,
+        }),
+      };
+    });
+
+    act(() => {
+      result.current.onboarding.setMode("advanced");
+      result.current.onboarding.setStep("providers");
+      result.current.onboarding.setField("serverTarget", "remote");
+    });
+
+    await act(async () => {
+      await result.current.callbacks.handleOnboardingNext();
+    });
+
+    expect(setOnboardingStep).toHaveBeenCalledWith("features");
+    expect(setOnboardingActiveGuide).toHaveBeenCalledWith("features");
+    expect(submitOnboarding).not.toHaveBeenCalled();
   });
 
   it("routes explicit step navigation through the guide resolver", () => {
@@ -542,8 +758,10 @@ describe("useOnboardingCallbacks", () => {
 
   it("finishes onboarding when next is invoked from the last step", async () => {
     const submitOnboarding = vi.fn().mockResolvedValue(undefined);
+    const setBrowserEnabled = vi.fn();
     const setOnboardingComplete = vi.fn();
     const setTab = vi.fn();
+    const setWalletEnabled = vi.fn();
 
     const { result } = renderHook(() => {
       const onboarding = useOnboardingState();
@@ -567,6 +785,7 @@ describe("useOnboardingCallbacks", () => {
           setOnboardingRemoteError: vi.fn(),
           setOnboardingRemoteConnected: vi.fn(),
           setPostOnboardingChecklistDismissed: vi.fn(),
+          setBrowserEnabled,
           setOnboardingComplete,
           coordinatorOnboardingCompleteRef: { current: null },
           initialTabSetRef: { current: false },
@@ -579,6 +798,7 @@ describe("useOnboardingCallbacks", () => {
           elizaCloudConnected: false,
           setActionNotice: vi.fn(),
           retryStartup: vi.fn(),
+          setWalletEnabled,
           forceLocalBootstrapRef: { current: false },
           client: {
             getAuthStatus: vi.fn().mockResolvedValue({
@@ -607,6 +827,7 @@ describe("useOnboardingCallbacks", () => {
       result.current.onboarding.setField("serverTarget", "local");
       result.current.onboarding.setField("provider", "openai");
       result.current.onboarding.setField("apiKey", "sk-openai-test");
+      result.current.onboarding.setField("featureCrypto", true);
       result.current.onboarding.setField("featureDiscord", true);
       result.current.onboarding.setField("featureBrowser", true);
       result.current.onboarding.setStep("features");
@@ -632,6 +853,8 @@ describe("useOnboardingCallbacks", () => {
         },
       }),
     );
+    expect(setWalletEnabled).toHaveBeenCalledWith(true);
+    expect(setBrowserEnabled).toHaveBeenCalledWith(true);
     expect(setOnboardingComplete).toHaveBeenCalledWith(true);
     expect(setTab).toHaveBeenCalledWith("chat");
   });
@@ -725,6 +948,99 @@ describe("useOnboardingCallbacks", () => {
     expect(setTimeoutSpy).toHaveBeenCalled();
     expect(submitOnboarding).toHaveBeenCalledTimes(1);
     expect(setOnboardingComplete).toHaveBeenCalledWith(true);
+  });
+
+  it("preserves selected onboarding features during the Eliza Cloud fast-track finish path", async () => {
+    const setBrowserEnabled = vi.fn();
+    const setWalletEnabled = vi.fn();
+    const submitOnboarding = vi.fn().mockResolvedValue(undefined);
+
+    const { result } = renderHook(() => {
+      const onboarding = useOnboardingState();
+      return {
+        onboarding,
+        callbacks: useOnboardingCallbacks({
+          onboarding,
+          setOnboardingStep: vi.fn(),
+          setOnboardingMode: vi.fn(),
+          setOnboardingActiveGuide: vi.fn(),
+          addDeferredOnboardingTask: vi.fn(),
+          setOnboardingDetectedProviders: vi.fn(),
+          setOnboardingServerTarget: vi.fn(),
+          setOnboardingCloudApiKey: vi.fn(),
+          setOnboardingProvider: vi.fn(),
+          setOnboardingApiKey: vi.fn(),
+          setOnboardingPrimaryModel: vi.fn(),
+          setOnboardingRemoteApiBase: vi.fn(),
+          setOnboardingRemoteToken: vi.fn(),
+          setOnboardingRemoteConnecting: vi.fn(),
+          setOnboardingRemoteError: vi.fn(),
+          setOnboardingRemoteConnected: vi.fn(),
+          setPostOnboardingChecklistDismissed: vi.fn(),
+          setBrowserEnabled,
+          setOnboardingComplete: vi.fn(),
+          coordinatorOnboardingCompleteRef: { current: null },
+          initialTabSetRef: { current: false },
+          setTab: vi.fn(),
+          defaultLandingTab: "chat",
+          loadCharacter: vi.fn(async () => {}),
+          uiLanguage: "en",
+          selectedVrmIndex: 1,
+          walletConfig: {},
+          elizaCloudConnected: true,
+          setActionNotice: vi.fn(),
+          retryStartup: vi.fn(),
+          setWalletEnabled,
+          forceLocalBootstrapRef: { current: false },
+          client: {
+            submitOnboarding,
+            updateConfig: vi.fn().mockResolvedValue({}),
+          } as unknown as MiladyClient,
+        }),
+      };
+    });
+
+    act(() => {
+      result.current.onboarding.setOptions({
+        names: [],
+        styles: [getDefaultStylePreset("en")],
+        providers: [],
+        cloudProviders: [],
+        models: { small: [], large: [] },
+        inventoryProviders: [],
+        sharedStyleRules: "Keep responses brief.",
+      });
+      result.current.onboarding.setField("name", "Chen");
+      result.current.onboarding.setField("serverTarget", "elizacloud");
+      result.current.onboarding.setField("provider", "elizacloud");
+      result.current.onboarding.setField("featureTelegram", true);
+      result.current.onboarding.setField("featureBrowser", true);
+      result.current.onboarding.setStep("features");
+    });
+
+    await act(async () => {
+      await result.current.callbacks.handleOnboardingFinish();
+    });
+
+    expect(submitOnboarding).toHaveBeenCalledWith(
+      expect.objectContaining({
+        runMode: "cloud",
+        cloudProvider: "elizacloud",
+        connectors: {
+          telegram: {
+            enabled: true,
+            managed: true,
+          },
+        },
+        features: {
+          browser: {
+            enabled: true,
+          },
+        },
+      }),
+    );
+    expect(setWalletEnabled).toHaveBeenCalledWith(false);
+    expect(setBrowserEnabled).toHaveBeenCalledWith(true);
   });
 
   it("falls back to the Capacitor agent starter when the desktop bridge start request fails", async () => {

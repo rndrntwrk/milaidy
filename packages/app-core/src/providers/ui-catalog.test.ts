@@ -21,6 +21,7 @@ describe("uiCatalogProvider", () => {
 
   it("has name 'uiCatalog'", () => {
     expect(uiCatalogProvider.name).toBe("uiCatalog");
+    expect(uiCatalogProvider.relevanceKeywords).toContain("configurar");
   });
 
   it("DM channel returns catalog text", async () => {
