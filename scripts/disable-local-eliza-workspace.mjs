@@ -45,109 +45,55 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const skipLocalUpstreams =
-  process.env.MILADY_SKIP_LOCAL_UPSTREAMS === "1" ||
-  process.env.ELIZA_SKIP_LOCAL_UPSTREAMS === "1";
-
-// Gate: run in GitHub Actions automatically, and also run in any
-// packaging sandbox that explicitly sets `MILADY_DISABLE_LOCAL_UPSTREAMS
-// =force`. Snapcraft builds inside a multipass VM that does NOT inherit
-// `GITHUB_ACTIONS=true`, so snapcraft.yaml sets the force flag directly
-// when it calls this script. Never run without `SKIP_LOCAL_UPSTREAMS`
-// — we must not mutate `package.json` on a normal local dev checkout.
-const runningInCi = process.env.GITHUB_ACTIONS === "true";
-const forced = process.env.MILADY_DISABLE_LOCAL_UPSTREAMS === "force";
-
-if (!skipLocalUpstreams || (!runningInCi && !forced)) {
-  process.exit(0);
-}
-
-const repoRoot = process.cwd();
-const elizaRoot = path.join(repoRoot, "eliza");
-const disabledElizaRoot = path.join(repoRoot, ".eliza.ci-disabled");
-const packageJsonPath = path.join(repoRoot, "package.json");
-const ELIZA_WORKSPACE_GLOB = "eliza/packages/*";
-
-if (fs.existsSync(elizaRoot)) {
-  fs.rmSync(disabledElizaRoot, { recursive: true, force: true });
-  fs.renameSync(elizaRoot, disabledElizaRoot);
-  console.log(
-    `[disable-local-eliza-workspace] Disabled repo-local eliza workspace at ${elizaRoot}`,
-  );
-} else {
-  console.log(
-    "[disable-local-eliza-workspace] Repo-local eliza workspace already absent",
-  );
-}
-
-if (!fs.existsSync(packageJsonPath)) {
-  console.log(
-    "[disable-local-eliza-workspace] Root package.json not found; skipping workspace patch",
-  );
-  process.exit(0);
-}
-
-const rawRootPkg = fs.readFileSync(packageJsonPath, "utf8");
-let rootPkg;
-try {
-  rootPkg = JSON.parse(rawRootPkg);
-} catch (error) {
-  console.error(
-    `[disable-local-eliza-workspace] Failed to parse ${packageJsonPath}: ${error.message}`,
-  );
-  process.exit(1);
-}
-
-// ---------------------------------------------------------------------------
-// Step 1: strip eliza/packages/* from root workspaces
-// ---------------------------------------------------------------------------
-
-if (Array.isArray(rootPkg.workspaces)) {
-  const originalWorkspaces = rootPkg.workspaces;
-  const filteredWorkspaces = originalWorkspaces.filter(
-    (entry) => entry !== ELIZA_WORKSPACE_GLOB,
-  );
-
-  if (filteredWorkspaces.length === originalWorkspaces.length) {
-    console.log(
-      `[disable-local-eliza-workspace] Root package.json workspaces array does not include ${ELIZA_WORKSPACE_GLOB}; nothing to patch`,
-    );
-  } else {
-    rootPkg.workspaces = filteredWorkspaces;
-    console.log(
-      `[disable-local-eliza-workspace] Removed ${ELIZA_WORKSPACE_GLOB} from root package.json workspaces`,
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Step 2: determine the pinned `@elizaos/core` registry version. Prefer
-// the root `overrides` block (authoritative for this codebase); fall
-// back to `deploy/cloud-agent-template` which pins the same thing.
-// ---------------------------------------------------------------------------
+export const ELIZA_WORKSPACE_GLOB = "eliza/packages/*";
+export const PLUGIN_TYPESCRIPT_WORKSPACE_GLOB = "plugins/plugin-*/typescript";
+export const DISABLED_WORKSPACE_GLOBS = [
+  ELIZA_WORKSPACE_GLOB,
+  PLUGIN_TYPESCRIPT_WORKSPACE_GLOB,
+];
+export const DEPENDENCY_FIELDS = [
+  "dependencies",
+  "devDependencies",
+  "peerDependencies",
+  "optionalDependencies",
+];
 
 const ELIZAOS_CORE_NAME = "@elizaos/core";
+const SCRIPT_PATH = fileURLToPath(import.meta.url);
+const DEFAULT_REPO_ROOT = process.cwd();
 
 function isExactRegistryVersion(specifier) {
   return typeof specifier === "string" && /^\d+\.\d+\.\d+/.test(specifier);
 }
 
-function resolvePinnedCoreVersion() {
-  const fromOverrides = rootPkg?.overrides?.[ELIZAOS_CORE_NAME];
+export function isWorkspaceProtocolSpecifier(specifier) {
+  return typeof specifier === "string" && specifier.startsWith("workspace:");
+}
+
+export function readPackageJson(filePath) {
+  return JSON.parse(fs.readFileSync(filePath, "utf8"));
+}
+
+export function resolvePinnedCoreVersion(
+  rootDir,
+  { rootPackage, readJson = readPackageJson } = {},
+) {
+  const fromOverrides = rootPackage?.overrides?.[ELIZAOS_CORE_NAME];
   if (isExactRegistryVersion(fromOverrides)) {
     return fromOverrides;
   }
 
   const templatePath = path.join(
-    repoRoot,
+    rootDir,
     "deploy",
     "cloud-agent-template",
     "package.json",
   );
   if (fs.existsSync(templatePath)) {
     try {
-      const templatePkg = JSON.parse(fs.readFileSync(templatePath, "utf8"));
+      const templatePkg = readJson(templatePath);
       const fromTemplate = templatePkg?.dependencies?.[ELIZAOS_CORE_NAME];
       if (isExactRegistryVersion(fromTemplate)) {
         return fromTemplate;
@@ -160,11 +106,9 @@ function resolvePinnedCoreVersion() {
   return null;
 }
 
-const pinnedCoreVersion = resolvePinnedCoreVersion();
-
 // Persist root package.json mutations before touching sub-packages so
 // the workspaces patch is written even if the core-rewrite step bails.
-function writePackageJson(filePath, originalRaw, pkg) {
+export function writePackageJson(filePath, originalRaw, pkg) {
   const hasTrailingNewline = originalRaw.endsWith("\n");
   const serialized =
     JSON.stringify(pkg, null, 2) + (hasTrailingNewline ? "\n" : "");
@@ -175,47 +119,7 @@ function writePackageJson(filePath, originalRaw, pkg) {
   return true;
 }
 
-writePackageJson(packageJsonPath, rawRootPkg, rootPkg);
-
-if (!pinnedCoreVersion) {
-  console.warn(
-    "[disable-local-eliza-workspace] Could not resolve a pinned @elizaos/core version from overrides or cloud-agent-template; leaving workspace:* specifiers in place",
-  );
-  process.exit(0);
-}
-
-console.log(
-  `[disable-local-eliza-workspace] Rewriting @elizaos/core workspace:* → ${pinnedCoreVersion}`,
-);
-
-// ---------------------------------------------------------------------------
-// Step 3: walk every workspace package and rewrite
-// `"@elizaos/core": "workspace:*"` → the pinned registry version. We
-// enumerate via the (now-patched) root workspaces array so we don't
-// miss packages outside `packages/*`.
-// ---------------------------------------------------------------------------
-
-const DEPENDENCY_FIELDS = [
-  "dependencies",
-  "devDependencies",
-  "peerDependencies",
-  "optionalDependencies",
-];
-
-function rewriteWorkspaceCore(pkg) {
-  let mutated = false;
-  for (const field of DEPENDENCY_FIELDS) {
-    const deps = pkg?.[field];
-    if (!deps || typeof deps !== "object") continue;
-    if (deps[ELIZAOS_CORE_NAME] === "workspace:*") {
-      deps[ELIZAOS_CORE_NAME] = pinnedCoreVersion;
-      mutated = true;
-    }
-  }
-  return mutated;
-}
-
-function expandGlob(glob) {
+export function expandGlob(glob, { rootDir = DEFAULT_REPO_ROOT } = {}) {
   if (!glob.includes("*")) {
     return [glob];
   }
@@ -226,8 +130,8 @@ function expandGlob(glob) {
   }
   const baseSegments = parts.slice(0, starIndex);
   const base = baseSegments.length
-    ? path.join(repoRoot, ...baseSegments)
-    : repoRoot;
+    ? path.join(rootDir, ...baseSegments)
+    : rootDir;
   if (!fs.existsSync(base)) {
     return [];
   }
@@ -255,74 +159,243 @@ function expandGlob(glob) {
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
     if (!regex.test(entry.name)) continue;
-    const base = path.join(...baseSegments, entry.name);
-    matches.push(tail.length ? path.join(base, ...tail) : base);
+    const relativePath = path.join(...baseSegments, entry.name);
+    matches.push(tail.length ? path.join(relativePath, ...tail) : relativePath);
   }
 
   if (tail.length === 0) {
     return matches;
   }
 
-  const resolved = [];
-  for (const match of matches) {
-    const absolute = path.join(repoRoot, match);
-    if (fs.existsSync(absolute)) {
-      resolved.push(match);
+  return matches.filter((match) => fs.existsSync(path.join(rootDir, match)));
+}
+
+export function resolvePinnedWorkspaceVersions(
+  rootDir,
+  {
+    disabledWorkspaceGlobs = DISABLED_WORKSPACE_GLOBS,
+    rootPackage = undefined,
+    pinnedCore = resolvePinnedCoreVersion(rootDir, { rootPackage }),
+  } = {},
+) {
+  const pinnedVersions = new Map();
+
+  if (isExactRegistryVersion(pinnedCore)) {
+    pinnedVersions.set(ELIZAOS_CORE_NAME, pinnedCore);
+  }
+
+  for (const [dependencyName, specifier] of Object.entries(
+    rootPackage?.overrides ?? {},
+  )) {
+    if (isExactRegistryVersion(specifier)) {
+      pinnedVersions.set(dependencyName, specifier);
     }
   }
-  return resolved;
-}
 
-const seen = new Set();
-const pendingWorkspaceDirs = [];
-
-for (const entry of rootPkg.workspaces ?? []) {
-  const expanded = expandGlob(entry);
-  for (const match of expanded) {
-    if (!seen.has(match)) {
-      seen.add(match);
-      pendingWorkspaceDirs.push(match);
+  for (const workspaceGlob of disabledWorkspaceGlobs) {
+    for (const workspaceRel of expandGlob(workspaceGlob, { rootDir })) {
+      const pkgPath = path.join(rootDir, workspaceRel, "package.json");
+      if (!fs.existsSync(pkgPath)) continue;
+      try {
+        const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+        if (
+          typeof pkg?.name === "string" &&
+          isExactRegistryVersion(pkg?.version)
+        ) {
+          pinnedVersions.set(pkg.name, pkg.version);
+        }
+      } catch {
+        // Ignore malformed/partial plugin checkouts and continue.
+      }
     }
   }
+
+  return pinnedVersions;
 }
 
-// Also include the root package itself.
-let rewrites = 0;
-if (rewriteWorkspaceCore(rootPkg)) {
-  writePackageJson(packageJsonPath, rawRootPkg, rootPkg);
-  rewrites++;
-  console.log("[disable-local-eliza-workspace]   patched .");
+export function rewriteWorkspaceDependencySpecifiers(pkg, pinnedVersions) {
+  let mutated = false;
+  for (const field of [...DEPENDENCY_FIELDS, "overrides"]) {
+    const deps = pkg?.[field];
+    if (!deps || typeof deps !== "object") continue;
+    for (const [dependencyName, specifier] of Object.entries(deps)) {
+      const pinnedVersion = pinnedVersions.get(dependencyName);
+      if (!pinnedVersion || !isWorkspaceProtocolSpecifier(specifier)) {
+        continue;
+      }
+      deps[dependencyName] = pinnedVersion;
+      mutated = true;
+    }
+  }
+  return mutated;
 }
 
-for (const workspaceRel of pendingWorkspaceDirs) {
-  const pkgPath = path.join(repoRoot, workspaceRel, "package.json");
-  if (!fs.existsSync(pkgPath)) continue;
+export function disableLocalElizaWorkspace(
+  repoRoot = DEFAULT_REPO_ROOT,
+  { log = console.log, warn = console.warn, errorLog = console.error } = {},
+) {
+  const elizaRoot = path.join(repoRoot, "eliza");
+  const disabledElizaRoot = path.join(repoRoot, ".eliza.ci-disabled");
+  const packageJsonPath = path.join(repoRoot, "package.json");
 
-  let originalRaw;
-  let pkg;
-  try {
-    originalRaw = fs.readFileSync(pkgPath, "utf8");
-    pkg = JSON.parse(originalRaw);
-  } catch (error) {
-    console.warn(
-      `[disable-local-eliza-workspace]   skipped ${workspaceRel}: ${error.message}`,
+  if (fs.existsSync(elizaRoot)) {
+    fs.rmSync(disabledElizaRoot, { recursive: true, force: true });
+    fs.renameSync(elizaRoot, disabledElizaRoot);
+    log(
+      `[disable-local-eliza-workspace] Disabled repo-local eliza workspace at ${elizaRoot}`,
     );
-    continue;
+  } else {
+    log(
+      "[disable-local-eliza-workspace] Repo-local eliza workspace already absent",
+    );
   }
 
-  if (!rewriteWorkspaceCore(pkg)) continue;
-  if (writePackageJson(pkgPath, originalRaw, pkg)) {
-    rewrites++;
-    console.log(`[disable-local-eliza-workspace]   patched ${workspaceRel}`);
+  if (!fs.existsSync(packageJsonPath)) {
+    log(
+      "[disable-local-eliza-workspace] Root package.json not found; skipping workspace patch",
+    );
+    return {
+      rewrites: 0,
+      removedWorkspaceGlobs: [],
+      pinnedWorkspaceVersions: new Map(),
+    };
   }
+
+  const rawRootPkg = fs.readFileSync(packageJsonPath, "utf8");
+  let rootPkg;
+  try {
+    rootPkg = JSON.parse(rawRootPkg);
+  } catch (error) {
+    errorLog(
+      `[disable-local-eliza-workspace] Failed to parse ${packageJsonPath}: ${error.message}`,
+    );
+    throw error;
+  }
+
+  const removedWorkspaceGlobs = [];
+  if (Array.isArray(rootPkg.workspaces)) {
+    const originalWorkspaces = rootPkg.workspaces;
+    const filteredWorkspaces = originalWorkspaces.filter((entry) => {
+      if (DISABLED_WORKSPACE_GLOBS.includes(entry)) {
+        removedWorkspaceGlobs.push(entry);
+        return false;
+      }
+      return true;
+    });
+
+    if (removedWorkspaceGlobs.length === 0) {
+      log(
+        `[disable-local-eliza-workspace] Root package.json workspaces array does not include ${DISABLED_WORKSPACE_GLOBS.join(", ")}; nothing to patch`,
+      );
+    } else {
+      rootPkg.workspaces = filteredWorkspaces;
+      log(
+        `[disable-local-eliza-workspace] Removed ${removedWorkspaceGlobs.join(", ")} from root package.json workspaces`,
+      );
+    }
+  }
+
+  writePackageJson(packageJsonPath, rawRootPkg, rootPkg);
+
+  const pinnedWorkspaceVersions = resolvePinnedWorkspaceVersions(repoRoot, {
+    rootPackage: rootPkg,
+  });
+
+  if (!pinnedWorkspaceVersions.has(ELIZAOS_CORE_NAME)) {
+    warn(
+      "[disable-local-eliza-workspace] Could not resolve a pinned @elizaos/core version from overrides or cloud-agent-template; leaving workspace:* specifiers in place",
+    );
+    return {
+      rewrites: 0,
+      removedWorkspaceGlobs,
+      pinnedWorkspaceVersions,
+    };
+  }
+
+  log(
+    `[disable-local-eliza-workspace] Rewriting workspace specifiers for ${pinnedWorkspaceVersions.size} package(s) to exact registry versions`,
+  );
+
+  const seen = new Set();
+  const pendingWorkspaceDirs = [];
+
+  for (const entry of rootPkg.workspaces ?? []) {
+    const expanded = expandGlob(entry, { rootDir: repoRoot });
+    for (const match of expanded) {
+      if (!seen.has(match)) {
+        seen.add(match);
+        pendingWorkspaceDirs.push(match);
+      }
+    }
+  }
+
+  let rewrites = 0;
+  if (rewriteWorkspaceDependencySpecifiers(rootPkg, pinnedWorkspaceVersions)) {
+    writePackageJson(packageJsonPath, rawRootPkg, rootPkg);
+    rewrites++;
+    log("[disable-local-eliza-workspace]   patched .");
+  }
+
+  for (const workspaceRel of pendingWorkspaceDirs) {
+    const pkgPath = path.join(repoRoot, workspaceRel, "package.json");
+    if (!fs.existsSync(pkgPath)) continue;
+
+    let originalRaw;
+    let pkg;
+    try {
+      originalRaw = fs.readFileSync(pkgPath, "utf8");
+      pkg = JSON.parse(originalRaw);
+    } catch (error) {
+      warn(
+        `[disable-local-eliza-workspace]   skipped ${workspaceRel}: ${error.message}`,
+      );
+      continue;
+    }
+
+    if (!rewriteWorkspaceDependencySpecifiers(pkg, pinnedWorkspaceVersions)) {
+      continue;
+    }
+    if (writePackageJson(pkgPath, originalRaw, pkg)) {
+      rewrites++;
+      log(`[disable-local-eliza-workspace]   patched ${workspaceRel}`);
+    }
+  }
+
+  if (rewrites === 0) {
+    log(
+      "[disable-local-eliza-workspace] No disabled upstream workspace specifiers found; nothing rewritten",
+    );
+  } else {
+    log(
+      `[disable-local-eliza-workspace] Rewrote disabled upstream workspace specifiers in ${rewrites} package.json file(s)`,
+    );
+  }
+
+  return {
+    rewrites,
+    removedWorkspaceGlobs,
+    pinnedWorkspaceVersions,
+  };
 }
 
-if (rewrites === 0) {
-  console.log(
-    "[disable-local-eliza-workspace] No @elizaos/core workspace:* specifiers found; nothing rewritten",
-  );
-} else {
-  console.log(
-    `[disable-local-eliza-workspace] Rewrote @elizaos/core workspace:* specifiers in ${rewrites} package.json file(s)`,
-  );
+const isMain =
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === path.resolve(SCRIPT_PATH);
+
+if (isMain) {
+  const skipLocalUpstreams =
+    process.env.MILADY_SKIP_LOCAL_UPSTREAMS === "1" ||
+    process.env.ELIZA_SKIP_LOCAL_UPSTREAMS === "1";
+  const runningInCi = process.env.GITHUB_ACTIONS === "true";
+  const forced = process.env.MILADY_DISABLE_LOCAL_UPSTREAMS === "force";
+
+  if (!skipLocalUpstreams || (!runningInCi && !forced)) {
+    process.exit(0);
+  }
+
+  try {
+    disableLocalElizaWorkspace();
+  } catch {
+    process.exit(1);
+  }
 }
