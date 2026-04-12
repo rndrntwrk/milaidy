@@ -140,7 +140,7 @@ const instrumentedRequest = new Proxy(rpc.request, {
 
     return async (params: unknown) => {
       try {
-        return await value(params);
+        return await value.call(target, params);
       } catch (error) {
         void rpc.request
           .rendererReportDiagnostic({

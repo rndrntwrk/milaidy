@@ -1,16 +1,17 @@
 import {
   getElectrobunRendererRpc,
-  invokeDesktopBridgeRequest,
+  invokeDesktopBridgeRequestWithTimeout,
 } from "../bridge/electrobun-rpc";
 
 export async function openExternalUrl(url: string): Promise<void> {
-  const bridged = await invokeDesktopBridgeRequest<void>({
+  const bridged = await invokeDesktopBridgeRequestWithTimeout<void>({
     rpcMethod: "desktopOpenExternal",
     ipcChannel: "desktop:openExternal",
     params: { url },
+    timeoutMs: 10_000,
   });
 
-  if (bridged !== null) return;
+  if (bridged !== null && bridged.status === "ok") return;
 
   // Inside Electrobun — never fall through to window.open() which spawns an
   // unmanaged BrowserView to an external URL and crashes the shell.

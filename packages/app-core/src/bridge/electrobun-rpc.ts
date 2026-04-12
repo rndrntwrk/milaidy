@@ -37,8 +37,8 @@ export async function invokeDesktopBridgeRequest<T>(options: {
 }): Promise<T | null> {
   const rpc = getElectrobunRendererRpc();
   const request = rpc?.request?.[options.rpcMethod];
-  if (request) {
-    return (await request(options.params)) as T;
+  if (request && rpc?.request) {
+    return (await request.call(rpc.request, options.params)) as T;
   }
 
   return null;
@@ -62,11 +62,11 @@ export async function invokeDesktopBridgeRequestWithTimeout<T>(options: {
 }): Promise<DesktopBridgeTimeoutResult<T>> {
   const rpc = getElectrobunRendererRpc();
   const request = rpc?.request?.[options.rpcMethod];
-  if (!request) {
+  if (!request || !rpc?.request) {
     return { status: "missing" };
   }
 
-  const call = request(options.params) as Promise<T>;
+  const call = request.call(rpc.request, options.params) as Promise<T>;
   let tid: ReturnType<typeof setTimeout> | undefined;
   type RaceWinner =
     | { tag: "done"; value: T }
