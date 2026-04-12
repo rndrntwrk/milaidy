@@ -603,7 +603,7 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
       <div className="mb-3">
         <label
           htmlFor="provider-switcher-select"
-          className="block text-xs font-semibold mb-1.5 text-[var(--muted)]"
+          className="block text-xs font-semibold mb-1.5 text-muted"
         >
           {t("providerswitcher.selectAIProvider")}
         </label>
@@ -634,7 +634,7 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
         >
           <SelectTrigger
             id="provider-switcher-select"
-            className="w-full px-3 py-2.5 border border-[var(--border)] bg-[var(--card)] text-[13px] rounded-lg transition-all duration-200 focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/20 focus:outline-none hover:border-[var(--border-hover)]"
+            className="w-full px-3 py-2.5 border border-border bg-card text-[13px] rounded-lg transition-all duration-200 focus:border-accent focus:ring-2 focus:ring-accent/20 focus:outline-none hover:border-border-hover"
           >
             <SelectValue />
           </SelectTrigger>
@@ -650,22 +650,22 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
             ))}
           </SelectContent>
         </Select>
-        <p className="text-[11px] text-[var(--muted)] mt-1.5">
+        <p className="text-[11px] text-muted mt-1.5">
           {t("providerswitcher.chooseYourPreferredProvider")}
         </p>
-        <p className="text-[11px] text-[var(--muted)] mt-1">
+        <p className="text-[11px] text-muted mt-1">
           {t("providerswitcher.cloudInferenceToggleHint")}
         </p>
       </div>
 
       {/* Cloud settings */}
       {isCloudSelected && (
-        <div className="mt-4 pt-4 border-t border-[var(--border)]">
+        <div className="mt-4 pt-4 border-t border-border">
           {elizaCloudConnected ? (
             <div>
               <div className="flex justify-between items-center mb-3">
                 <div className="flex items-center gap-2">
-                  <span className="inline-block w-2 h-2 rounded-full bg-[var(--ok)]" />
+                  <span className="inline-block w-2 h-2 rounded-full bg-ok" />
                   <span className="text-xs font-semibold">
                     {t("providerswitcher.loggedIntoElizaCloud")}
                   </span>
@@ -686,7 +686,7 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
 
               <div className="text-xs mb-4">
                 {elizaCloudUserId && (
-                  <span className="text-[var(--muted)] mr-3">
+                  <span className="text-muted mr-3">
                     <code className="font-[var(--mono)] text-[11px]">
                       {elizaCloudUserId}
                     </code>
@@ -694,15 +694,15 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
                 )}
                 {elizaCloudCredits !== null && (
                   <span>
-                    <span className="text-[var(--muted)]">
+                    <span className="text-muted">
                       {t("configpageview.Credits")}
                     </span>{" "}
                     <span
                       className={
                         elizaCloudCreditsCritical
-                          ? "text-[var(--danger)] font-bold"
+                          ? "text-danger font-bold"
                           : elizaCloudCreditsLow
-                            ? "rounded-md bg-[var(--warn-subtle)] px-1.5 py-0.5 text-[var(--text)] font-bold"
+                            ? "rounded-md bg-warn-subtle px-1.5 py-0.5 text-txt font-bold"
                             : ""
                       }
                     >
@@ -716,7 +716,7 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
                         setState("cloudDashboardView", "billing");
                         setTab("settings");
                       }}
-                      className="ml-2 bg-transparent border-0 p-0 cursor-pointer text-[11px] text-[var(--text)] underline decoration-[var(--accent)] underline-offset-2 hover:opacity-80 h-auto min-h-0"
+                      className="ml-2 bg-transparent border-0 p-0 cursor-pointer text-[11px] text-txt underline decoration-[var(--accent)] underline-offset-2 hover:opacity-80 h-auto min-h-0"
                     >
                       {t("configpageview.TopUp")}
                     </Button>
@@ -1028,30 +1028,30 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
 
               <div className="flex items-center justify-end gap-2 mt-3">
                 {modelSaving && (
-                  <span className="text-[11px] text-[var(--muted)]">
+                  <span className="text-[11px] text-muted">
                     {t("providerswitcher.savingRestarting")}
                   </span>
                 )}
                 {modelSaveSuccess && (
-                  <span className="text-[11px] text-[var(--ok)]">
+                  <span className="text-[11px] text-ok">
                     {t("providerswitcher.savedRestartingAgent")}
                   </span>
                 )}
               </div>
-              <p className="mt-2 text-[11px] text-[var(--muted)]">
+              <p className="mt-2 text-[11px] text-muted">
                 {t("providerswitcher.restartRequiredHint")}
               </p>
             </div>
           ) : (
             <div>
               {elizaCloudLoginBusy ? (
-                <div className="text-xs text-[var(--muted)]">
+                <div className="text-xs text-muted">
                   {t("providerswitcher.waitingForBrowser")}
                 </div>
               ) : (
                 <>
                   {elizaCloudLoginError && (
-                    <div className="text-xs text-[var(--danger)] mb-2">
+                    <div className="text-xs text-danger mb-2">
                       {elizaCloudLoginError}
                     </div>
                   )}
@@ -1074,7 +1074,7 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
                   >
                     {t("providerswitcher.logInToElizaCloud")}
                   </Button>
-                  <div className="text-[11px] text-[var(--muted)] mt-1.5">
+                  <div className="text-[11px] text-muted mt-1.5">
                     {t("providerswitcher.opensABrowserWindow")}
                   </div>
                 </>
@@ -1100,16 +1100,16 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
 
       {/* pi-ai settings */}
       {!isCloudSelected && isPiAiSelected && (
-        <div className="mt-4 pt-4 border-t border-[var(--border)]">
+        <div className="mt-4 pt-4 border-t border-border">
           <div className="text-xs font-semibold mb-2">
             {t("providerswitcher.piSettings")}
           </div>
-          <div className="text-[11px] text-[var(--muted)] mb-2">
+          <div className="text-[11px] text-muted mb-2">
             {t("onboarding.piCredentialsHint")}
           </div>
           <label
             htmlFor="pi-ai-model-override"
-            className="block text-[11px] text-[var(--muted)] mb-1"
+            className="block text-[11px] text-muted mb-1"
           >
             {t("providerswitcher.primaryModelOverride")}
           </label>
@@ -1137,7 +1137,7 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
               >
                 <SelectTrigger
                   id="pi-ai-model-override"
-                  className="w-full px-2.5 py-[8px] border border-[var(--border)] bg-[var(--card)] text-[13px] transition-colors focus:border-[var(--accent)] focus:outline-none"
+                  className="w-full px-2.5 py-[8px] border border-border bg-card text-[13px] transition-colors focus:border-accent focus:outline-none"
                 >
                   <SelectValue />
                 </SelectTrigger>
@@ -1182,12 +1182,12 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
           )}
           <div className="flex items-center justify-end gap-2 mt-3">
             {piAiSaving && (
-              <span className="text-[11px] text-[var(--muted)]">
+              <span className="text-[11px] text-muted">
                 {t("providerswitcher.savingRestarting")}
               </span>
             )}
             {piAiSaveSuccess && (
-              <span className="text-[11px] text-[var(--ok)]">
+              <span className="text-[11px] text-ok">
                 {t("providerswitcher.savedRestartingAgent")}
               </span>
             )}

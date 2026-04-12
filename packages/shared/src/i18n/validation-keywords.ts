@@ -1314,6 +1314,729 @@ const VALIDATION_KEYWORD_DOCS = {
         },
       },
     },
+    lifeops: {
+      strong: {
+        base: termDoc(`
+          todo
+          task
+          habit
+          routine
+          reminder
+          alarm
+          goal
+          track
+          streak
+          lifeops
+          life ops
+        `),
+        locales: {
+          "zh-CN": termDoc(`
+            待办
+            任务
+            习惯
+            日程
+            提醒
+            闹钟
+            目标
+            打卡
+            追踪
+          `),
+          ko: termDoc(`
+            할일
+            할 일
+            과제
+            습관
+            루틴
+            알림
+            알람
+            목표
+            추적
+            스트릭
+          `),
+          es: termDoc(`
+            tarea
+            tareas
+            habito
+            hábito
+            rutina
+            recordatorio
+            alarma
+            meta
+            metas
+            objetivo
+            seguimiento
+            rastrear
+          `),
+          pt: termDoc(`
+            tarefa
+            tarefas
+            habito
+            hábito
+            rotina
+            lembrete
+            alarme
+            meta
+            metas
+            objetivo
+            acompanhamento
+            rastrear
+          `),
+          vi: termDoc(`
+            việc cần làm
+            nhiệm vụ
+            thói quen
+            nhắc nhở
+            chuông báo
+            mục tiêu
+            theo dõi
+          `),
+          tl: termDoc(`
+            gawain
+            gawi
+            rutina
+            paalala
+            alarma
+            layunin
+            subaybay
+          `),
+        },
+      },
+      weak: {
+        base: termDoc(`
+          done
+          finished
+          completed
+          skip
+          snooze
+          later
+          postpone
+          defer
+          mark
+          check off
+          delete
+          remove
+          cancel
+          update
+          change
+          edit
+          modify
+          overview
+          summary
+          status
+          progress
+          active
+          what do i have
+          what's left
+        `),
+        locales: {
+          "zh-CN": termDoc(`
+            完成
+            做完了
+            跳过
+            推迟
+            稍后
+            延迟
+            标记
+            删除
+            移除
+            取消
+            更新
+            修改
+            编辑
+            概览
+            摘要
+            状态
+            进度
+            活跃
+          `),
+          ko: termDoc(`
+            완료
+            끝났어
+            건너뛰기
+            나중에
+            미루기
+            연기
+            표시
+            삭제
+            제거
+            취소
+            수정
+            변경
+            편집
+            개요
+            요약
+            상태
+            진행
+            활성
+          `),
+          es: termDoc(`
+            hecho
+            terminado
+            completado
+            omitir
+            saltar
+            posponer
+            aplazar
+            despues
+            después
+            marcar
+            eliminar
+            quitar
+            cancelar
+            actualizar
+            cambiar
+            editar
+            modificar
+            resumen
+            estado
+            progreso
+            activo
+          `),
+          pt: termDoc(`
+            feito
+            terminado
+            concluido
+            concluído
+            pular
+            adiar
+            depois
+            marcar
+            excluir
+            remover
+            cancelar
+            atualizar
+            alterar
+            editar
+            modificar
+            resumo
+            estado
+            progresso
+            ativo
+          `),
+          vi: termDoc(`
+            xong
+            hoàn thành
+            bỏ qua
+            để sau
+            hoãn
+            đánh dấu
+            xóa
+            hủy
+            cập nhật
+            thay đổi
+            sửa
+            tổng quan
+            tóm tắt
+            trạng thái
+            tiến độ
+          `),
+          tl: termDoc(`
+            tapos
+            natapos
+            laktawan
+            mamaya
+            ipagpaliban
+            markahan
+            tanggalin
+            alisin
+            kanselahin
+            baguhin
+            i-edit
+            buod
+            estado
+            progreso
+            aktibo
+          `),
+        },
+      },
+    },
+    lifeops_complete: {
+      strong: {
+        base: termDoc(`
+          done
+          finished
+          completed
+          did it
+          did that
+          did my
+          did the
+          mark done
+          mark complete
+          mark as done
+          checked off
+          ticked off
+          crossed off
+          just finished
+          just completed
+          just did
+          i already
+          i've done
+          i have done
+        `),
+        locales: {
+          "zh-CN": termDoc(`
+            完成了
+            做完了
+            已完成
+            搞定了
+            弄好了
+            做好了
+            打卡
+            已做
+          `),
+          ko: termDoc(`
+            했어
+            했어요
+            완료
+            끝났어
+            끝냈어
+            다했어
+            다 했어
+            마쳤어
+            체크
+          `),
+          es: termDoc(`
+            hecho
+            listo
+            terminé
+            termine
+            terminado
+            completé
+            complete
+            completado
+            ya lo hice
+            ya hice
+            marcar hecho
+            marcar completo
+          `),
+          pt: termDoc(`
+            feito
+            pronto
+            terminei
+            terminado
+            completei
+            concluí
+            conclui
+            concluído
+            concluido
+            já fiz
+            marcar feito
+            marcar concluído
+          `),
+          vi: termDoc(`
+            xong rồi
+            xong roi
+            đã xong
+            da xong
+            hoàn thành rồi
+            đã làm
+            da lam
+            đánh dấu xong
+          `),
+          tl: termDoc(`
+            tapos na
+            natapos na
+            ginawa ko na
+            natapos ko
+            markahang tapos
+          `),
+        },
+      },
+    },
+    lifeops_skip: {
+      strong: {
+        base: termDoc(`
+          skip
+          pass on
+          not today
+          skip today
+          skip this
+        `),
+        locales: {
+          "zh-CN": termDoc(`
+            跳过
+            今天不做
+            今天跳过
+            算了
+          `),
+          ko: termDoc(`
+            건너뛰기
+            오늘 안 해
+            오늘은 패스
+            패스
+          `),
+          es: termDoc(`
+            omitir
+            saltar
+            hoy no
+            paso
+            pasar
+          `),
+          pt: termDoc(`
+            pular
+            hoje não
+            hoje nao
+            passar
+          `),
+          vi: termDoc(`
+            bỏ qua
+            bo qua
+            hôm nay không
+          `),
+          tl: termDoc(`
+            laktawan
+            hindi ngayon
+            pasa
+          `),
+        },
+      },
+    },
+    lifeops_snooze: {
+      strong: {
+        base: termDoc(`
+          snooze
+          later
+          remind me later
+          remind me again
+          postpone
+          defer
+          push back
+          put off
+        `),
+        locales: {
+          "zh-CN": termDoc(`
+            推迟
+            稍后
+            晚点再说
+            等下提醒
+            延后
+            延迟
+          `),
+          ko: termDoc(`
+            나중에
+            미루기
+            다시 알려줘
+            나중에 알려줘
+            연기
+            미루다
+          `),
+          es: termDoc(`
+            posponer
+            aplazar
+            más tarde
+            mas tarde
+            después
+            despues
+            recuérdame después
+            recuerdame despues
+          `),
+          pt: termDoc(`
+            adiar
+            mais tarde
+            depois
+            lembrar depois
+            postergar
+          `),
+          vi: termDoc(`
+            để sau
+            de sau
+            hoãn
+            nhắc lại sau
+            nhac lai sau
+          `),
+          tl: termDoc(`
+            mamaya
+            ipagpaliban
+            ipaalala mamaya
+            mamaya na lang
+          `),
+        },
+      },
+    },
+    lifeops_delete: {
+      strong: {
+        base: termDoc(`
+          delete
+          remove
+          cancel
+          get rid of
+          drop
+          stop tracking
+          stop the
+          stop my
+        `),
+        locales: {
+          "zh-CN": termDoc(`
+            删除
+            移除
+            取消
+            不要了
+            停止追踪
+            停止跟踪
+          `),
+          ko: termDoc(`
+            삭제
+            제거
+            취소
+            없애줘
+            추적 중지
+            그만 추적
+          `),
+          es: termDoc(`
+            eliminar
+            quitar
+            borrar
+            cancelar
+            dejar de rastrear
+            dejar de seguir
+          `),
+          pt: termDoc(`
+            excluir
+            deletar
+            remover
+            cancelar
+            parar de rastrear
+            parar de acompanhar
+          `),
+          vi: termDoc(`
+            xóa
+            xoa
+            hủy
+            huy
+            bỏ
+            bo
+            ngừng theo dõi
+          `),
+          tl: termDoc(`
+            tanggalin
+            alisin
+            kanselahin
+            itigil ang pagsubaybay
+          `),
+        },
+      },
+    },
+    lifeops_update: {
+      strong: {
+        base: termDoc(`
+          update
+          change
+          edit
+          modify
+          adjust
+          rename
+          reschedule
+        `),
+        locales: {
+          "zh-CN": termDoc(`
+            更新
+            修改
+            编辑
+            调整
+            重命名
+            改时间
+            重新安排
+          `),
+          ko: termDoc(`
+            수정
+            변경
+            편집
+            조정
+            이름 바꾸기
+            일정 변경
+          `),
+          es: termDoc(`
+            actualizar
+            cambiar
+            editar
+            modificar
+            ajustar
+            renombrar
+            reprogramar
+          `),
+          pt: termDoc(`
+            atualizar
+            alterar
+            editar
+            modificar
+            ajustar
+            renomear
+            reagendar
+          `),
+          vi: termDoc(`
+            cập nhật
+            cap nhat
+            thay đổi
+            thay doi
+            sửa
+            sua
+            điều chỉnh
+            đổi tên
+            đổi lịch
+          `),
+          tl: termDoc(`
+            baguhin
+            i-edit
+            i-adjust
+            palitan ang pangalan
+            palitan ang iskedyul
+          `),
+        },
+      },
+    },
+    lifeops_reminder_pref: {
+      strong: {
+        base: termDoc(`
+          stop reminding me
+          don't remind me
+          pause reminders
+          resume reminders
+          more reminders
+          less reminders
+          fewer reminders
+          normal reminders
+          mute reminders
+          high priority only
+          only high priority
+          be more persistent
+          more persistent
+        `),
+        locales: {
+          "zh-CN": termDoc(`
+            停止提醒
+            别提醒了
+            暂停提醒
+            恢复提醒
+            多提醒
+            少提醒
+            静音提醒
+            仅高优先
+          `),
+          ko: termDoc(`
+            알림 중지
+            알림 그만
+            알림 일시 중지
+            알림 재개
+            알림 더
+            알림 줄여
+            알림 음소거
+            높은 우선순위만
+          `),
+          es: termDoc(`
+            dejar de recordarme
+            no me recuerdes
+            pausar recordatorios
+            reanudar recordatorios
+            más recordatorios
+            mas recordatorios
+            menos recordatorios
+            recordatorios normales
+            silenciar recordatorios
+            solo prioridad alta
+          `),
+          pt: termDoc(`
+            parar de lembrar
+            não me lembre
+            nao me lembre
+            pausar lembretes
+            retomar lembretes
+            mais lembretes
+            menos lembretes
+            lembretes normais
+            silenciar lembretes
+            apenas alta prioridade
+          `),
+          vi: termDoc(`
+            ngừng nhắc
+            đừng nhắc
+            tạm dừng nhắc
+            tiếp tục nhắc
+            nhắc nhiều hơn
+            nhắc ít hơn
+            tắt nhắc
+          `),
+          tl: termDoc(`
+            itigil ang paalala
+            huwag na akong paalalahanan
+            i-pause ang paalala
+            ituloy ang paalala
+            dagdagan ang paalala
+            bawasan ang paalala
+          `),
+        },
+      },
+    },
+    lifeops_overview: {
+      strong: {
+        base: termDoc(`
+          overview
+          summary
+          what's active
+          what is active
+          status
+          what do i have
+          show me everything
+          what's left
+          what is left
+          what do i still need
+          anything else to do
+        `),
+        locales: {
+          "zh-CN": termDoc(`
+            概览
+            总结
+            摘要
+            状态
+            还有什么
+            剩余任务
+            活跃任务
+            我还要做什么
+          `),
+          ko: termDoc(`
+            개요
+            요약
+            상태
+            뭐 남았어
+            남은 거
+            활성 항목
+            아직 할 거
+          `),
+          es: termDoc(`
+            resumen
+            estado
+            que me queda
+            qué me queda
+            que tengo
+            qué tengo
+            mostrar todo
+            tareas activas
+          `),
+          pt: termDoc(`
+            resumo
+            estado
+            o que falta
+            o que tenho
+            mostrar tudo
+            tarefas ativas
+          `),
+          vi: termDoc(`
+            tổng quan
+            tóm tắt
+            trạng thái
+            còn gì
+            còn gì nữa
+            việc đang làm
+          `),
+          tl: termDoc(`
+            buod
+            estado
+            ano pa ang natitira
+            ipakita lahat
+            mga aktibong gawain
+          `),
+        },
+      },
+    },
   },
   provider: {
     recentConversations: {

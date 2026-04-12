@@ -155,16 +155,10 @@ export function WhatsAppQrOverlay({
 
         {/* Instructions */}
         <div className="flex-1 min-w-0">
-          <div
-            className="text-xs font-medium mb-2"
-            style={{ color: "var(--text)" }}
-          >
+          <div className="text-xs font-medium mb-2 text-txt">
             {t("whatsappqroverlay.ScanWithWhatsApp")}
           </div>
-          <ol
-            className="text-[11px] space-y-1 list-decimal pl-4 m-0"
-            style={{ color: "var(--muted)" }}
-          >
+          <ol className="text-[11px] space-y-1 list-decimal pl-4 m-0 text-muted">
             <li>{t("whatsappqroverlay.OpenWhatsAppOnYou")}</li>
             <li>
               {t("whatsappqroverlay.Tap")}{" "}
@@ -184,7 +178,7 @@ export function WhatsAppQrOverlay({
               className="inline-block w-1.5 h-1.5 rounded-full animate-pulse"
               style={{ background: "var(--accent)" }}
             />
-            <span className="text-[10px]" style={{ color: "var(--muted)" }}>
+            <span className="text-[10px] text-muted">
               {t("whatsappqroverlay.QRRefreshesAutomat")}
             </span>
           </div>
