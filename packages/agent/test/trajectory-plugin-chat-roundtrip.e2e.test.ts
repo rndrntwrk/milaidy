@@ -316,18 +316,6 @@ describe("Trajectory logger chat roundtrip", () => {
     expect(chat.status).toBe(200);
     expect(String(chat.data.text ?? "")).toBe(expectedResponse);
 
-    const list = await req(server.port, "GET", "/api/trajectories?limit=20");
-    expect(list.status).toBe(200);
-    expect(
-      Array.isArray(list.data.trajectories) &&
-        list.data.trajectories.length >= 1,
-    ).toBe(true);
-    expect(
-      (list.data.trajectories as Array<{ llmCallCount?: number }>).some(
-        (trajectory) => Number(trajectory.llmCallCount ?? 0) >= 1,
-      ),
-    ).toBe(true);
-
     const detail = await waitForTrajectoryCall(server.port, prompt);
     expect(detail.trajectoryId.length).toBeGreaterThan(0);
     expect(detail.llmCall.systemPrompt).toContain(
@@ -335,6 +323,24 @@ describe("Trajectory logger chat roundtrip", () => {
     );
     expect(detail.llmCall.userPrompt).toBe(prompt);
     expect(detail.llmCall.response).toBe(expectedResponse);
+
+    const list = await req(server.port, "GET", "/api/trajectories?limit=20");
+    expect(list.status).toBe(200);
+    const trajectories = Array.isArray(list.data.trajectories)
+      ? (list.data.trajectories as Array<{ id?: string; llmCallCount?: number }>)
+      : [];
+    expect(
+      trajectories.some(
+        (trajectory) => String(trajectory.id ?? "") === detail.trajectoryId,
+      ),
+    ).toBe(true);
+    expect(
+      trajectories.some(
+        (trajectory) =>
+          String(trajectory.id ?? "") === detail.trajectoryId &&
+          Number(trajectory.llmCallCount ?? 0) >= 1,
+      ),
+    ).toBe(true);
 
     const hydratedDetail = await req(
       server.port,
