@@ -472,12 +472,7 @@ export function SubscriptionStatus({
           <div className="flex justify-between items-center mb-3">
             <div className="flex items-center gap-2">
               <span
-                className="inline-block w-2 h-2 rounded-full"
-                style={{
-                  background: openaiConnected
-                    ? "var(--ok,#16a34a)"
-                    : "var(--warning,#f39c12)",
-                }}
+                className={`inline-block w-2 h-2 rounded-full ${openaiConnected ? "bg-ok" : "bg-warn"}`}
               />
               <span className="text-xs font-semibold">
                 {openaiConnected
@@ -503,13 +498,13 @@ export function SubscriptionStatus({
           </div>
 
           {openaiConnected && (
-            <div className="text-xs leading-relaxed p-2.5 mb-3 border border-[var(--ok,#16a34a)]/30 bg-[var(--ok,#16a34a)]/5 rounded">
+            <div className="text-xs leading-relaxed p-2.5 mb-3 border border-ok/30 bg-ok/5 rounded">
               {t("subscriptionstatus.CodexAllAccess")}
             </div>
           )}
 
           {openaiStatus?.configured && !openaiStatus.valid && (
-            <div className="text-xs text-[var(--warning,#f39c12)] mb-3">
+            <div className="text-xs text-warn mb-3">
               {t("subscriptionstatus.ChatGPTSubscription")}
             </div>
           )}

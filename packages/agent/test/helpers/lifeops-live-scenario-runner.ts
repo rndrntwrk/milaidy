@@ -71,6 +71,7 @@ type DefinitionCountDeltaCheck = {
   requiredWeekdays?: number[];
   requiredSlots?: Array<{ label?: string; minuteOfDay?: number }>;
   requiredEveryMinutes?: number;
+  requiredMaxOccurrencesPerDay?: number;
   requireReminderPlan?: boolean;
   expectedTimeZone?: string;
   websiteAccess?: {
@@ -611,6 +612,16 @@ async function validateFinalChecks(args: {
             ) {
               throw new Error(
                 `expected everyMinutes ${check.requiredEveryMinutes} but saw ${String(cadence?.everyMinutes ?? "")}`,
+              );
+            }
+          }
+          if (typeof check.requiredMaxOccurrencesPerDay === "number") {
+            if (
+              Number(cadence?.maxOccurrencesPerDay ?? -1) !==
+              check.requiredMaxOccurrencesPerDay
+            ) {
+              throw new Error(
+                `expected maxOccurrencesPerDay ${check.requiredMaxOccurrencesPerDay} but saw ${String(cadence?.maxOccurrencesPerDay ?? "")}`,
               );
             }
           }

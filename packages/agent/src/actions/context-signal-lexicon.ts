@@ -38,9 +38,10 @@ const DEFAULT_WEAK_THRESHOLD = 2;
 const CONTEXT_SIGNAL_SPECS: Record<ContextSignalKey, ContextSignalSpec> = {
   gmail: {
     contextLimit: 12,
-    weakThreshold: 1,
+    weakThreshold: 2,
     keywordKeys: {
       strong: "contextSignal.gmail.strong",
+      weak: "contextSignal.gmail.weak",
     },
   },
   calendar: {

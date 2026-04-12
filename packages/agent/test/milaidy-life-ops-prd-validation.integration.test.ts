@@ -14,7 +14,7 @@ import type { AgentRuntime, Task, UUID } from "@elizaos/core";
 import { describe, expect, it, vi } from "vitest";
 import { describeIf, itIf } from "../../../test/helpers/conditional-tests.ts";
 import { req } from "../../../test/helpers/http";
-import { saveEnv, sleep } from "../../../test/helpers/test-utils";
+import { saveEnv, sleep, withTimeout } from "../../../test/helpers/test-utils";
 import { startApiServer } from "../src/api/server";
 import { resolveOAuthDir } from "../src/config/paths";
 import { LifeOpsRepository } from "../src/lifeops/repository";

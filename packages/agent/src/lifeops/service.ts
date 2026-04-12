@@ -2354,10 +2354,8 @@ function buildFallbackGmailReplyDraftBody(args: {
   senderName: string;
 }): string {
   const recipientLabel =
-    args.message.from.split("<")[0]?.trim() ||
-    args.message.fromEmail ||
-    "friend";
-  const greeting = args.intent?.trim() ? `${recipientLabel},` : `Hi ${recipientLabel},`;
+    args.message.from.split("<")[0]?.trim() || args.message.fromEmail || "";
+  const greeting = recipientLabel ? `${recipientLabel},` : "";
   const subject = args.message.subject.trim() || "your message";
   const bodyCore = args.intent?.trim()
     ? args.intent.trim()
@@ -2366,7 +2364,9 @@ function buildFallbackGmailReplyDraftBody(args: {
       : args.tone === "warm"
         ? `Thanks for reaching out about ${subject}. I reviewed your note and wanted to follow up.`
         : `Thanks for the note about ${subject}. I reviewed your message and wanted to follow up.`;
-  const bodyLines = [greeting, "", bodyCore, "", args.senderName];
+  const bodyLines = [greeting, bodyCore, args.senderName].filter(
+    (line) => line.trim().length > 0,
+  );
   if (args.includeQuotedOriginal && args.message.snippet.trim().length > 0) {
     bodyLines.push(
       "",

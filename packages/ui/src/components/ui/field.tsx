@@ -21,9 +21,9 @@ const FieldLabel = React.forwardRef<
     ref={ref}
     className={cn(
       variant === "form"
-        ? "mb-2 block text-[11px] font-semibold uppercase tracking-[0.14em] text-muted/80"
+        ? "mb-2 block text-xs-tight font-semibold uppercase tracking-[0.14em] text-muted/80"
         : variant === "kicker"
-          ? "text-[11px] font-semibold uppercase tracking-[0.16em] text-muted"
+          ? "text-xs-tight font-semibold uppercase tracking-[0.16em] text-muted"
           : "text-sm font-medium text-txt-strong",
       className,
     )}

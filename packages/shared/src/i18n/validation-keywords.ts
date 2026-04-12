@@ -36,41 +36,118 @@ const VALIDATION_KEYWORD_DOCS = {
             邮件
             电子邮件
             邮箱
-            消息
+            收件箱
           `),
           ko: termDoc(`
             이메일
             메일
             지메일
-            메시지
-            메세지
+            받은편지함
           `),
           es: termDoc(`
             correo
             correos
             correo electronico
             correo electrónico
-            mensaje
-            mensajes
+            bandeja de entrada
           `),
           pt: termDoc(`
             correio
             correios
             correio eletronico
             correio eletrônico
-            mensagem
-            mensagens
+            caixa de entrada
           `),
           vi: termDoc(`
             thư điện tử
             thu dien tu
-            thư
-            tin nhắn
+            hộp thư
+            hop thu
           `),
           tl: termDoc(`
             koreo
             liham
-            mensahe
+          `),
+        },
+      },
+      weak: {
+        base: termDoc(`
+          send
+          reply
+          respond
+          sender
+          subject
+          attach
+          attachment
+          cc
+          bcc
+          from
+          forward
+          important
+        `),
+        locales: {
+          "zh-CN": termDoc(`
+            发送
+            回复
+            发件人
+            主题
+            附件
+            抄送
+            转发
+            重要
+          `),
+          ko: termDoc(`
+            보내기
+            답장
+            보낸사람
+            제목
+            첨부
+            참조
+            전달
+            중요
+          `),
+          es: termDoc(`
+            enviar
+            responder
+            remitente
+            asunto
+            adjunto
+            adjuntar
+            reenviar
+            importante
+          `),
+          pt: termDoc(`
+            enviar
+            responder
+            remetente
+            assunto
+            anexo
+            anexar
+            encaminhar
+            importante
+          `),
+          vi: termDoc(`
+            gửi
+            gui
+            trả lời
+            tra loi
+            người gửi
+            nguoi gui
+            chủ đề
+            chu de
+            đính kèm
+            dinh kem
+            chuyển tiếp
+            chuyen tiep
+          `),
+          tl: termDoc(`
+            ipadala
+            sagot
+            nagpadala
+            paksa
+            kalakip
+            ipasa
+            mahalaga
           `),
         },
       },

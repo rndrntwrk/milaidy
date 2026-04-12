@@ -35,24 +35,15 @@ export function SignalQrOverlay({
 
   if (status === "connected") {
     return (
-      <div
-        className="mt-3 p-4"
-        style={{
-          border: "1px solid #22c55e",
-          background: "var(--ok-subtle)",
-        }}
-      >
+      <div className="mt-3 p-4 border border-ok bg-[var(--ok-subtle)]">
         <div className="flex items-center gap-2">
-          <span
-            className="inline-block h-2 w-2 rounded-full"
-            style={{ background: "#22c55e" }}
-          />
-          <span className="text-xs font-medium" style={{ color: "#22c55e" }}>
+          <span className="inline-block h-2 w-2 rounded-full bg-ok" />
+          <span className="text-xs font-medium text-ok">
             {t("onboarding.connected")}
             {phoneNumber ? ` (${phoneNumber})` : ""}
           </span>
         </div>
-        <div className="mt-1 text-[10px]" style={{ color: "var(--muted)" }}>
+        <div className="mt-1 text-[10px] text-muted">
           {onConnected
             ? "Finishing Signal setup..."
             : "Signal is paired. Auth state is saved for automatic reconnection."}
@@ -73,14 +64,8 @@ export function SignalQrOverlay({
 
   if (status === "error" || status === "timeout") {
     return (
-      <div
-        className="mt-3 p-4"
-        style={{
-          border: "1px solid #ef4444",
-          background: "var(--destructive-subtle)",
-        }}
-      >
-        <div className="mb-2 text-xs" style={{ color: "#ef4444" }}>
+      <div className="mt-3 p-4 border border-danger bg-[var(--destructive-subtle)]">
+        <div className="mb-2 text-xs text-danger">
           {status === "timeout"
             ? "Signal pairing timed out. Start a new session and scan again."
             : (error ?? "Signal pairing failed.")}
@@ -105,14 +90,8 @@ export function SignalQrOverlay({
 
   if (status === "idle" || status === "disconnected") {
     return (
-      <div
-        className="mt-3 p-4"
-        style={{
-          border: "1px solid var(--border)",
-          background: "var(--bg-hover)",
-        }}
-      >
-        <div className="mb-2 text-xs" style={{ color: "var(--muted)" }}>
+      <div className="mt-3 p-4 border border-[var(--border)] bg-[var(--bg-hover)]">
+        <div className="mb-2 text-xs text-muted">
           {t("signalqroverlay.PairUsingSignalDesktop", {
             defaultValue:
               "Pair Signal by generating a provisioning QR code and scanning it from Signal Desktop.",
@@ -165,10 +144,7 @@ export function SignalQrOverlay({
                 background: "var(--bg-hover)",
               }}
             >
-              <span
-                className="animate-pulse text-xs"
-                style={{ color: "var(--muted)" }}
-              >
+              <span className="animate-pulse text-xs text-muted">
                 {t("signalqroverlay.GeneratingQR", {
                   defaultValue: "Generating QR…",
                 })}
@@ -177,18 +153,12 @@ export function SignalQrOverlay({
           )}
         </div>
         <div className="min-w-0 flex-1">
-          <div
-            className="mb-2 text-xs font-medium"
-            style={{ color: "var(--text)" }}
-          >
+          <div className="mb-2 text-xs font-medium text-txt">
             {t("signalqroverlay.ScanWithSignalDesktop", {
               defaultValue: "Scan with Signal Desktop",
             })}
           </div>
-          <ol
-            className="m-0 list-decimal space-y-1 pl-4 text-[11px]"
-            style={{ color: "var(--muted)" }}
-          >
+          <ol className="m-0 list-decimal space-y-1 pl-4 text-[11px] text-muted">
             <li>
               {t("signalqroverlay.OpenSignalDesktop", {
                 defaultValue: "Open Signal Desktop on your Mac.",

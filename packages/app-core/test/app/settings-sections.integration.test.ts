@@ -18,6 +18,7 @@ import TestRenderer, { act } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createInlineUiMock } from "./mockInlineUi";
+import { textOf } from "../../../../test/helpers/react-test";
 
 const mockUseApp = vi.fn();
 
@@ -292,17 +293,15 @@ describe("SettingsView Sections", () => {
 
       expect(sidebar).toBeDefined();
       expect(searchInput).toBeDefined();
-      expect(JSON.stringify(tree?.toJSON())).not.toContain(
-        "settings.sections.lifeops.label",
-      );
+      expect(textOf(tree!.root)).not.toContain("settings.sections.lifeops.label");
 
       await act(async () => {
         searchInput?.props.onChange({ target: { value: "media" } });
       });
 
-      const renderedTree = JSON.stringify(tree?.toJSON());
-      expect(renderedTree).toContain("settings.sections.media.label");
-      expect(renderedTree).not.toContain("settings.sections.permissions.label");
+      const renderedText = textOf(tree!.root);
+      expect(renderedText).toContain("settings.sections.media.label");
+      expect(renderedText).not.toContain("settings.sections.permissions.label");
     });
 
     it("uses the shared collapsible settings rail", async () => {

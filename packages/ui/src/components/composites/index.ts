@@ -18,6 +18,7 @@ export * from "../ui/status-badge";
 export * from "../ui/themed-select";
 export * from "../ui/tooltip-extended";
 export * from "./chat";
+export * from "./form-field";
 export * from "./page-panel";
 export * from "./search";
 export * from "./sidebar";
