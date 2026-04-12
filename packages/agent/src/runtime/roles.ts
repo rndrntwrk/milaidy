@@ -1,12 +1,5 @@
-import type { Plugin } from "@elizaos/core";
-
-// Internal compatibility barrel for roles helpers used by published Milady packages.
-// The old in-repo roles plugin source moved into @elizaos/core/roles, but the
-// runtime still pre-registers a lightweight internal capability during bootstrap.
-const rolesPlugin: Plugin = {
-  name: "internal-roles",
-  description: "Internal compatibility barrel for roles helpers",
-};
-
-export default rolesPlugin;
-export * from "@elizaos/core/roles";
+// Canonical roles plugin barrel used by runtime bootstrap and internal imports.
+// Keep this pointed at the in-repo implementation so the runtime, tests, and
+// helper exports all share the same contract.
+export { default } from "./roles/src/index.js";
+export * from "./roles/src/index.js";

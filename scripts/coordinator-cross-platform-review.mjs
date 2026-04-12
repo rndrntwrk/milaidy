@@ -98,15 +98,6 @@ const checks = [
   },
 ];
 
-if (process.env.MILADY_COORDINATOR_QA_HEAVY === "1") {
-  checks.push({
-    key: "startupIntegration",
-    command: "bun",
-    args: ["run", "test:startup:integration"],
-    timeoutMs: 20 * 60_000,
-  });
-}
-
 const availabilityChecks = [
   {
     key: "codex",

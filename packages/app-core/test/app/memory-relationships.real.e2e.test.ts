@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import puppeteer, { type Browser, type Page } from "puppeteer-core";
@@ -23,8 +24,7 @@ const CHROME_PATH =
   process.env.MILADY_CHROME_PATH ??
   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const LIVE_TESTS_ENABLED = process.env.MILADY_LIVE_TEST === "1";
-const LIVE_BROWSER_SUITE_ENABLED =
-  process.env.MILADY_LIVE_BROWSER_SUITE === "1";
+const CHROME_AVAILABLE = existsSync(CHROME_PATH);
 const ARTIFACT_DIR = path.resolve(
   import.meta.dirname,
   "../../../../.tmp/live-memory-relationships-e2e",
@@ -73,9 +73,13 @@ let browser: Browser | null = null;
 const uiUrl = DEFAULT_UI_URL;
 const apiUrl = DEFAULT_API_URL;
 
-const describeLive = describeIf(
-  LIVE_TESTS_ENABLED && LIVE_BROWSER_SUITE_ENABLED,
-);
+const describeLive = describeIf(LIVE_TESTS_ENABLED && CHROME_AVAILABLE);
+
+if (LIVE_TESTS_ENABLED && !CHROME_AVAILABLE) {
+  console.info(
+    `[live-memory-relationships] Chrome not found at ${CHROME_PATH}; suite unavailable until a real browser is installed there or MILADY_CHROME_PATH is set.`,
+  );
+}
 
 describeLive("Live memory + relationships browser E2E", () => {
   beforeAll(async () => {

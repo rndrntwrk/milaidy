@@ -1,117 +1,131 @@
 /**
  * Tests for agent lifecycle API — state transitions, chat, plugins, onboarding.
  *
- * IMPORTANT: This tests a lightweight MOCK server that mirrors the real API
- * server's HTTP contract (routes, status codes, response shapes). It does NOT
- * test the real startApiServer() from src/api/server.ts, because that requires
- * @elizaos/core runtime and filesystem config access.
- *
- * What this proves:
- * - The HTTP contract (routes, methods, status codes, JSON shapes)
- * - State transitions (not_started → running → paused → stopped)
- * - Chat validation (empty text, agent-not-running guard)
- *
- * What this does NOT prove:
- * - Real plugin/skill discovery from filesystem
- * - Real LLM-backed chat responses (runtime.generateText)
- * - Config persistence, onboarding side effects
- * - The real server's error handling
+ * Uses an in-memory request dispatcher that mirrors the HTTP contract without
+ * binding a real local port, so the suite stays deterministic in restricted
+ * environments.
  */
 
-import http from "node:http";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import {
-  createConversation,
-  postConversationMessage,
-  req,
-} from "../../../../test/helpers/http";
 
-// ---------------------------------------------------------------------------
-// Test server (mirrors real API server endpoints without heavy deps)
-// ---------------------------------------------------------------------------
+type HttpResponse = {
+  status: number;
+  data: Record<string, unknown>;
+  headers: Record<string, string>;
+};
 
-function createTestServer(): Promise<{
-  port: number;
+type MockServer = {
   close: () => Promise<void>;
-}> {
+  request: (
+    method: string,
+    path: string,
+    body?: Record<string, unknown> | string,
+  ) => Promise<HttpResponse>;
+};
+
+function readConversationId(data: Record<string, unknown>): string {
+  const conversation =
+    data.conversation &&
+    typeof data.conversation === "object" &&
+    !Array.isArray(data.conversation)
+      ? (data.conversation as Record<string, unknown>)
+      : null;
+  const id = typeof conversation?.id === "string" ? conversation.id : "";
+  if (!id) {
+    throw new Error("Conversation response did not include an id");
+  }
+  return id;
+}
+
+function createTestServer(): Promise<MockServer> {
   const state = {
     agentState: "not_started" as string,
     agentName: "TestAgent",
     model: undefined as string | undefined,
     startedAt: undefined as number | undefined,
-    runtime: null as object | null, // mirrors real server's runtime check
+    runtime: null as object | null,
     conversations: new Set<string>(),
+    conversationSeq: 0,
   };
 
-  const json = (res: http.ServerResponse, data: unknown, status = 200) => {
-    res.writeHead(status, {
+  const respond = (
+    data: Record<string, unknown>,
+    status = 200,
+  ): HttpResponse => ({
+    status,
+    data,
+    headers: {
       "Content-Type": "application/json",
       "Access-Control-Allow-Origin": "*",
-    });
-    res.end(JSON.stringify(data));
-  };
+    },
+  });
 
-  const readBody = (r: http.IncomingMessage): Promise<string> =>
-    new Promise((ok) => {
-      const c: Buffer[] = [];
-      r.on("data", (d: Buffer) => c.push(d));
-      r.on("end", () => ok(Buffer.concat(c).toString()));
-    });
+  const parseBody = (
+    body: Record<string, unknown> | string | undefined,
+  ): Record<string, unknown> => {
+    if (body === undefined) {
+      return {};
+    }
+    if (typeof body === "string") {
+      try {
+        return JSON.parse(body) as Record<string, unknown>;
+      } catch {
+        return { _raw: body };
+      }
+    }
+    return body;
+  };
 
   const routes: Record<
     string,
-    (
-      req: http.IncomingMessage,
-      res: http.ServerResponse,
-    ) => Promise<void> | void
+    (body: Record<string, unknown>) => Promise<HttpResponse> | HttpResponse
   > = {
-    "GET /api/status": (_r, res) =>
-      json(res, {
+    "GET /api/status": () =>
+      respond({
         state: state.agentState,
         agentName: state.agentName,
         model: state.model,
         startedAt: state.startedAt,
         uptime: state.startedAt ? Date.now() - state.startedAt : undefined,
       }),
-    "POST /api/agent/start": (_r, res) => {
+    "POST /api/agent/start": () => {
       state.agentState = "running";
       state.startedAt = Date.now();
       state.model = "test-model";
       state.runtime = {};
-      json(res, {
+      return respond({
         ok: true,
         status: { state: "running", agentName: state.agentName },
       });
     },
-    "POST /api/agent/stop": (_r, res) => {
+    "POST /api/agent/stop": () => {
       state.agentState = "stopped";
       state.startedAt = undefined;
       state.model = undefined;
       state.runtime = null;
-      json(res, {
+      return respond({
         ok: true,
         status: { state: "stopped", agentName: state.agentName },
       });
     },
-    "POST /api/agent/pause": (_r, res) => {
+    "POST /api/agent/pause": () => {
       state.agentState = "paused";
-      json(res, {
+      return respond({
         ok: true,
         status: { state: "paused", agentName: state.agentName },
       });
     },
-    "POST /api/agent/resume": (_r, res) => {
+    "POST /api/agent/resume": () => {
       state.agentState = "running";
-      json(res, {
+      return respond({
         ok: true,
         status: { state: "running", agentName: state.agentName },
       });
     },
-    "POST /api/conversations": async (r, res) => {
-      const body = JSON.parse(await readBody(r)) as Record<string, unknown>;
-      const id = `conv-${Date.now()}`;
+    "POST /api/conversations": async (body) => {
+      const id = `conv-${++state.conversationSeq}`;
       state.conversations.add(id);
-      json(res, {
+      return respond({
         conversation: {
           id,
           title:
@@ -121,124 +135,122 @@ function createTestServer(): Promise<{
         },
       });
     },
-    "GET /api/plugins": (_r, res) => json(res, { plugins: [] }),
-    "GET /api/skills": (_r, res) => json(res, { skills: [] }),
-    "GET /api/logs": (_r, res) => json(res, { entries: [] }),
-    "GET /api/onboarding/status": (_r, res) => json(res, { complete: false }),
-    "GET /api/onboarding/options": (_r, res) =>
-      json(res, {
+    "GET /api/plugins": () => respond({ plugins: [] }),
+    "GET /api/skills": () => respond({ skills: [] }),
+    "GET /api/logs": () => respond({ entries: [] }),
+    "GET /api/onboarding/status": () => respond({ complete: false }),
+    "GET /api/onboarding/options": () =>
+      respond({
         names: ["Reimu"],
         styles: [{ catchphrase: "uwu~" }],
         providers: [{ id: "anthropic" }],
       }),
   };
 
-  const server = http.createServer(async (rq, rs) => {
-    if (rq.method === "OPTIONS") {
-      rs.writeHead(204, {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "*",
-        "Access-Control-Allow-Headers": "*",
-      });
-      rs.end();
-      return;
-    }
-    const pathname = new URL(rq.url ?? "/", "http://localhost").pathname;
-    if (
-      rq.method === "POST" &&
-      /^\/api\/conversations\/[^/]+\/messages$/.test(pathname)
-    ) {
-      const conversationId = decodeURIComponent(pathname.split("/")[3] ?? "");
-      if (!state.conversations.has(conversationId)) {
-        json(rs, { error: "Conversation not found" }, 404);
-        return;
+  return Promise.resolve({
+    close: async () => {},
+    request: async (method, path, body) => {
+      const parsedBody = parseBody(body);
+      if (method === "OPTIONS") {
+        return {
+          status: 204,
+          data: {},
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "*",
+            "Access-Control-Allow-Headers": "*",
+          },
+        };
       }
-      const body = JSON.parse(await readBody(rq)) as Record<string, unknown>;
-      if (!body.text || !(body.text as string).trim()) {
-        json(rs, { error: "text is required" }, 400);
-        return;
-      }
-      if (!state.runtime) {
-        json(rs, { error: "Agent is not running" }, 503);
-        return;
-      }
-      json(rs, {
-        text: `Echo: ${body.text}`,
-        agentName: state.agentName,
-      });
-      return;
-    }
 
-    const key = `${rq.method} ${pathname}`;
-    const handler = routes[key];
-    if (handler) {
-      await handler(rq, rs);
-    } else {
-      json(rs, { error: "Not found" }, 404);
-    }
-  });
+      if (
+        method === "POST" &&
+        /^\/api\/conversations\/[^/]+\/messages$/.test(path)
+      ) {
+        const conversationId = decodeURIComponent(path.split("/")[3] ?? "");
+        if (!state.conversations.has(conversationId)) {
+          return respond({ error: "Conversation not found" }, 404);
+        }
+        if (!parsedBody.text || !String(parsedBody.text).trim()) {
+          return respond({ error: "text is required" }, 400);
+        }
+        if (!state.runtime) {
+          return respond({ error: "Agent is not running" }, 503);
+        }
+        return respond({
+          text: `Echo: ${String(parsedBody.text)}`,
+          agentName: state.agentName,
+        });
+      }
 
-  return new Promise((ok) => {
-    server.listen(0, "127.0.0.1", () => {
-      const addr = server.address();
-      ok({
-        port: typeof addr === "object" && addr ? addr.port : 0,
-        close: () => new Promise<void>((r) => server.close(() => r())),
-      });
-    });
+      const handler = routes[`${method} ${path}`];
+      return handler ? await handler(parsedBody) : respond({ error: "Not found" }, 404);
+    },
   });
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
 describe("Agent Lifecycle API", () => {
-  let port: number;
-  let close: () => Promise<void>;
+  let server: MockServer;
 
   beforeAll(async () => {
-    ({ port, close } = await createTestServer());
-  });
-  afterAll(async () => {
-    await close();
+    server = await createTestServer();
   });
 
-  const sendMessage = async (body: Record<string, unknown>) => {
-    const { conversationId } = await createConversation(port, {
-      title: "Lifecycle chat",
-    });
-    return postConversationMessage(port, conversationId, body);
+  afterAll(async () => {
+    await server.close();
+  });
+
+  const request = (
+    method: string,
+    path: string,
+    body?: Record<string, unknown> | string,
+  ) => server.request(method, path, body);
+
+  const createConversation = async (options?: { title?: string }) => {
+    const response = await request("POST", "/api/conversations", options);
+    return {
+      ...response,
+      conversationId: readConversationId(response.data),
+    };
   };
 
-  // -- Status --
+  const postConversationMessage = (
+    conversationId: string,
+    body?: Record<string, unknown> | string,
+  ) =>
+    request(
+      "POST",
+      `/api/conversations/${encodeURIComponent(conversationId)}/messages`,
+      body,
+    );
+
+  const sendMessage = async (body: Record<string, unknown>) => {
+    const { conversationId } = await createConversation({
+      title: "Lifecycle chat",
+    });
+    return postConversationMessage(conversationId, body);
+  };
 
   it("initial status is not_started", async () => {
-    const { status, data } = await req(port, "GET", "/api/status");
+    const { status, data } = await request("GET", "/api/status");
     expect(status).toBe(200);
     expect(data.state).toBe("not_started");
     expect(data.agentName).toBe("TestAgent");
   });
 
-  // -- Start --
-
   it("start transitions to running with model, startedAt, uptime", async () => {
-    const { data } = await req(port, "POST", "/api/agent/start");
+    const { data } = await request("POST", "/api/agent/start");
     expect(data.ok).toBe(true);
-    const status = await req(port, "GET", "/api/status");
+    const status = await request("GET", "/api/status");
     expect(status.data.state).toBe("running");
     expect(status.data.model).toBeDefined();
     expect(status.data.startedAt).toBeDefined();
     expect(typeof status.data.uptime).toBe("number");
   });
 
-  // -- Chat --
-
   describe("chat", () => {
     it("responds when running", async () => {
-      const { status, data } = await sendMessage({
-        text: "Hello",
-      });
+      const { status, data } = await sendMessage({ text: "Hello" });
       expect(status).toBe(200);
       expect(data.text).toBeDefined();
       expect(data.agentName).toBe("TestAgent");
@@ -253,57 +265,45 @@ describe("Agent Lifecycle API", () => {
     });
   });
 
-  // -- Pause --
-  // Note: the real server checks `!state.runtime` for chat, NOT `agentState`.
-  // When paused, runtime still exists, so chat still works. This matches production.
-
   it("pause transitions to paused, chat still works (runtime exists)", async () => {
-    expect((await req(port, "POST", "/api/agent/pause")).data.ok).toBe(true);
-    expect((await req(port, "GET", "/api/status")).data.state).toBe("paused");
+    expect((await request("POST", "/api/agent/pause")).data.ok).toBe(true);
+    expect((await request("GET", "/api/status")).data.state).toBe("paused");
     expect((await sendMessage({ text: "hi" })).status).toBe(200);
   });
-
-  // -- Resume --
 
   it("resume transitions back to running, chat works", async () => {
-    expect((await req(port, "POST", "/api/agent/resume")).data.ok).toBe(true);
-    expect((await req(port, "GET", "/api/status")).data.state).toBe("running");
+    expect((await request("POST", "/api/agent/resume")).data.ok).toBe(true);
+    expect((await request("GET", "/api/status")).data.state).toBe("running");
     expect((await sendMessage({ text: "hi" })).status).toBe(200);
   });
 
-  // -- Stop --
-
   it("stop transitions to stopped, clears model/startedAt", async () => {
-    expect((await req(port, "POST", "/api/agent/stop")).data.ok).toBe(true);
-    const { data } = await req(port, "GET", "/api/status");
+    expect((await request("POST", "/api/agent/stop")).data.ok).toBe(true);
+    const { data } = await request("GET", "/api/status");
     expect(data.state).toBe("stopped");
     expect(data.model).toBeUndefined();
     expect(data.startedAt).toBeUndefined();
     expect((await sendMessage({ text: "hi" })).status).toBe(503);
   });
 
-  // -- Full lifecycle --
-
   it("full cycle: start → pause → resume → stop → restart", async () => {
-    await req(port, "POST", "/api/agent/start");
-    expect((await req(port, "GET", "/api/status")).data.state).toBe("running");
+    await request("POST", "/api/agent/start");
+    expect((await request("GET", "/api/status")).data.state).toBe("running");
 
-    await req(port, "POST", "/api/agent/pause");
-    expect((await req(port, "GET", "/api/status")).data.state).toBe("paused");
+    await request("POST", "/api/agent/pause");
+    expect((await request("GET", "/api/status")).data.state).toBe("paused");
 
-    await req(port, "POST", "/api/agent/resume");
-    expect((await req(port, "GET", "/api/status")).data.state).toBe("running");
+    await request("POST", "/api/agent/resume");
+    expect((await request("GET", "/api/status")).data.state).toBe("running");
 
-    await req(port, "POST", "/api/agent/stop");
-    expect((await req(port, "GET", "/api/status")).data.state).toBe("stopped");
+    await request("POST", "/api/agent/stop");
+    expect((await request("GET", "/api/status")).data.state).toBe("stopped");
 
-    await req(port, "POST", "/api/agent/start");
-    expect((await req(port, "GET", "/api/status")).data.state).toBe("running");
+    await request("POST", "/api/agent/start");
+    expect((await request("GET", "/api/status")).data.state).toBe("running");
 
-    await req(port, "POST", "/api/agent/stop");
+    await request("POST", "/api/agent/stop");
   });
-
-  // -- Auxiliary endpoints --
 
   it.each([
     ["GET /api/plugins", "plugins"],
@@ -311,25 +311,25 @@ describe("Agent Lifecycle API", () => {
     ["GET /api/logs", "entries"],
   ])("%s returns array", async (route, key) => {
     const [method, path] = route.split(" ");
-    const { status, data } = await req(port, method, path);
+    const { status, data } = await request(method, path);
     expect(status).toBe(200);
     expect(Array.isArray(data[key])).toBe(true);
   });
 
   it("onboarding status returns complete flag", async () => {
-    expect(
-      typeof (await req(port, "GET", "/api/onboarding/status")).data.complete,
-    ).toBe("boolean");
+    expect(typeof (await request("GET", "/api/onboarding/status")).data.complete).toBe(
+      "boolean",
+    );
   });
 
   it("onboarding options returns names, styles, providers", async () => {
-    const { data } = await req(port, "GET", "/api/onboarding/options");
+    const { data } = await request("GET", "/api/onboarding/options");
     expect(Array.isArray(data.names)).toBe(true);
     expect(Array.isArray(data.styles)).toBe(true);
     expect(Array.isArray(data.providers)).toBe(true);
   });
 
   it("unknown route returns 404", async () => {
-    expect((await req(port, "GET", "/api/nonexistent")).status).toBe(404);
+    expect((await request("GET", "/api/nonexistent")).status).toBe(404);
   });
 });

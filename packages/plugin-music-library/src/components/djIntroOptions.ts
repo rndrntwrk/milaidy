@@ -1,5 +1,6 @@
 import { type IAgentRuntime, type UUID, logger, createUniqueUuid } from '@elizaos/core';
 import { v4 } from 'uuid';
+import { requireRoomContext } from './storageContext';
 
 /**
  * DJ Intro Options
@@ -111,44 +112,14 @@ export async function setDJIntroOptions(
       });
     } else {
       // Create new component
-      // Ensure room exists
-      let room = await runtime.getRoom(roomId);
-      let effectiveRoomId = roomId;
-      let effectiveWorldId = runtime.agentId as UUID;
-      
-      if (!room) {
-        logger.warn(`Room ${roomId} not found, using agent ID as fallback`);
-        effectiveRoomId = runtime.agentId as UUID;
-        effectiveWorldId = runtime.agentId as UUID;
-        
-        await runtime.ensureWorldExists({
-          id: effectiveWorldId,
-          name: 'DJ Options Fallback World',
-          agentId: runtime.agentId,
-          serverId: effectiveWorldId,
-          metadata: { purpose: 'dj-options-fallback' },
-        });
-        
-        await runtime.ensureRoomExists({
-          id: effectiveRoomId,
-          name: 'DJ Options Fallback Room',
-          source: 'dj-plugin',
-          type: 'GROUP' as any,
-          channelId: effectiveRoomId,
-          serverId: effectiveRoomId,
-          worldId: effectiveWorldId,
-          metadata: { purpose: 'dj-options-fallback' },
-        });
-      } else {
-        effectiveWorldId = room.worldId || (runtime.agentId as UUID);
-      }
+      const roomContext = await requireRoomContext(runtime, roomId, 'DJ Intro Options');
       
       await runtime.createComponent({
         id: v4() as UUID,
         entityId,
         agentId: runtime.agentId,
-        roomId: effectiveRoomId,
-        worldId: effectiveWorldId,
+        roomId: roomContext.roomId,
+        worldId: roomContext.worldId,
         sourceEntityId: runtime.agentId,
         type: DJ_INTRO_OPTIONS_COMPONENT_TYPE,
         createdAt: Date.now(),
@@ -276,4 +247,3 @@ export function buildIntroPrompt(
   
   return prompt;
 }
-

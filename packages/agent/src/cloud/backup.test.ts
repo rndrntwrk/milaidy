@@ -1,83 +1,77 @@
 /**
  * Tests for cloud/backup.ts — the BackupScheduler.
  *
- * Uses a local HTTP server with a real ElizaCloudClient instead of mocks.
- *
- * Exercises:
- *   - Start/stop lifecycle
- *   - Periodic snapshot calls
- *   - finalSnapshot for graceful shutdown
- *   - Error tolerance (failed snapshots don't crash scheduler)
- *   - Double-start prevention
+ * Uses the real ElizaCloudClient with mocked fetch responses so the suite
+ * stays deterministic and does not depend on local socket permissions.
  */
 
-import http from "node:http";
-import type { AddressInfo } from "node:net";
 import { setTimeout as sleep } from "node:timers/promises";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BackupScheduler } from "./backup";
 import { ElizaCloudClient } from "./bridge-client";
 
-// ---------------------------------------------------------------------------
-// Local test server that counts snapshot requests
-// ---------------------------------------------------------------------------
-
-let server: http.Server;
-let serverPort: number;
 let snapshotCallCount = 0;
 let shouldFail = false;
 let failCount = 0;
 let maxFails = 0;
 
-beforeAll(async () => {
-  server = http.createServer((req, res) => {
-    const url = new URL(req.url ?? "/", "http://127.0.0.1");
+function createClient(): ElizaCloudClient {
+  return new ElizaCloudClient("http://cloud.test", "test-key");
+}
 
-    // POST /api/v1/eliza/agents/:id/snapshot
-    if (url.pathname.match(/\/api\/v1\/eliza\/agents\/.*\/snapshot/) && req.method === "POST") {
-      snapshotCallCount++;
-
-      if (shouldFail && failCount < maxFails) {
-        failCount++;
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ success: false, error: "Network error" }));
-        return;
-      }
-
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({
-        success: true,
-        data: { id: `bk-${snapshotCallCount}`, snapshotType: "auto", sizeBytes: null, createdAt: new Date().toISOString() },
-      }));
-      return;
-    }
-
-    res.writeHead(404);
-    res.end("Not found");
-  });
-
-  await new Promise<void>((resolve) => {
-    server.listen(0, "127.0.0.1", () => resolve());
-  });
-  serverPort = (server.address() as AddressInfo).port;
-});
-
-afterEach(() => {
+beforeEach(() => {
   snapshotCallCount = 0;
   shouldFail = false;
   failCount = 0;
   maxFails = 0;
+
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: string | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname.match(/\/api\/v1\/eliza\/agents\/.*\/snapshot/)) {
+        snapshotCallCount++;
+
+        if (shouldFail && failCount < maxFails) {
+          failCount++;
+          return new Response(
+            JSON.stringify({ success: false, error: "Network error" }),
+            {
+              status: 500,
+              headers: { "Content-Type": "application/json" },
+            },
+          );
+        }
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            data: {
+              id: `bk-${snapshotCallCount}`,
+              snapshotType: "auto",
+              sizeBytes: null,
+              createdAt: new Date().toISOString(),
+            },
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      return new Response("Not found", { status: 404 });
+    }),
+  );
 });
 
-afterAll(async () => {
-  await new Promise<void>((resolve, reject) => {
-    server.close((err) => (err ? reject(err) : resolve()));
-  });
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
-function createClient(): ElizaCloudClient {
-  return new ElizaCloudClient(`http://127.0.0.1:${serverPort}`, "test-key");
-}
+afterAll(() => {
+  vi.restoreAllMocks();
+});
 
 describe("BackupScheduler", () => {
   it("does not fire immediately on start", () => {
@@ -133,7 +127,6 @@ describe("BackupScheduler", () => {
       scheduler.stop();
     }
 
-    // No additional calls after stop
     expect(snapshotCallCount).toBe(countAtStop);
   });
 
@@ -153,15 +146,13 @@ describe("BackupScheduler", () => {
 
     try {
       scheduler.start();
-      scheduler.start(); // should not create second timer
+      scheduler.start();
       await sleep(220);
     } finally {
       scheduler.stop();
     }
 
     expect(snapshotCallCount).toBeGreaterThanOrEqual(1);
-    // With a single 50ms timer and a 220ms wait, a healthy scheduler
-    // typically fires 4-5 times. A duplicated timer would exceed that.
     expect(snapshotCallCount).toBeLessThanOrEqual(5);
   });
 
@@ -180,7 +171,7 @@ describe("BackupScheduler", () => {
     }
 
     expect(snapshotCallCount).toBeGreaterThanOrEqual(2);
-    expect(scheduler.isRunning()).toBe(false); // stopped
+    expect(scheduler.isRunning()).toBe(false);
   });
 
   it("finalSnapshot calls snapshot and handles failure gracefully", async () => {
@@ -190,7 +181,6 @@ describe("BackupScheduler", () => {
     const client = createClient();
     const scheduler = new BackupScheduler(client, "a1", 100);
 
-    // finalSnapshot should not throw even if snapshot fails
     await scheduler.finalSnapshot();
     expect(snapshotCallCount).toBe(1);
   });

@@ -63,16 +63,6 @@ await runManagedTestCommand({
 
 await runManagedTestCommand({
   repoRoot,
-  lockName: "startup-integration",
-  label: "startup-integration",
-  command: bunCmd,
-  args: ["run", "test:startup:integration"],
-  cwd: repoRoot,
-  env: buildTestEnv(repoRoot),
-});
-
-await runManagedTestCommand({
-  repoRoot,
   lockName: "orchestrator-integration",
   label: "orchestrator-integration",
   command: bunCmd,

@@ -21,8 +21,7 @@ function FulfillmentBadge({
   const styles = {
     FULFILLED: "bg-ok/15 text-ok border border-ok/20",
     UNFULFILLED: "bg-warn/15 text-warn border border-warn/20",
-    PARTIALLY_FULFILLED:
-      "bg-warn/15 text-warn border border-warn/20",
+    PARTIALLY_FULFILLED: "bg-warn/15 text-warn border border-warn/20",
   } satisfies Record<NonNullable<ShopifyOrder["fulfillmentStatus"]>, string>;
 
   const labels: Record<

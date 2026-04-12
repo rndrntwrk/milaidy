@@ -326,9 +326,7 @@ export function SecretsView({
                     : "rotate(0deg)",
                 }}
               />
-              <span className="text-sm font-semibold text-txt">
-                {label}
-              </span>
+              <span className="text-sm font-semibold text-txt">{label}</span>
               <span className="text-xs text-muted">({catSecrets.length})</span>
             </Button>
 

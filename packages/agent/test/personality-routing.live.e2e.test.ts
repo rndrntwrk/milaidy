@@ -96,103 +96,103 @@ async function handleMessageAndCollectText(
 
 if (hasModelProvider) {
   describe("Personality Routing E2E", () => {
-  let runtime: AgentRuntime;
+    let runtime: AgentRuntime;
 
-  const pgliteDir = fs.mkdtempSync(
-    path.join(os.tmpdir(), "eliza-personality-e2e-pglite-"),
-  );
-  const worldId = stringToUuid("personality-routing-world");
+    const pgliteDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "eliza-personality-e2e-pglite-"),
+    );
+    const worldId = stringToUuid("personality-routing-world");
 
-  beforeAll(async () => {
-    process.env.LOG_LEVEL = "error";
-    process.env.PGLITE_DATA_DIR = pgliteDir;
+    beforeAll(async () => {
+      process.env.LOG_LEVEL = "error";
+      process.env.PGLITE_DATA_DIR = pgliteDir;
 
-    const secrets: Record<string, string> = {};
-    if (hasOpenAI) {
-      secrets.OPENAI_API_KEY = process.env.OPENAI_API_KEY!;
-    }
-    if (hasAnthropic) {
-      secrets.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY!;
-    }
-    if (hasGroq) {
-      secrets.GROQ_API_KEY = process.env.GROQ_API_KEY!;
-      secrets.GROQ_SMALL_MODEL =
-        process.env.GROQ_SMALL_MODEL || "llama-3.1-8b-instant";
-      secrets.GROQ_LARGE_MODEL =
-        process.env.GROQ_LARGE_MODEL || "qwen/qwen3-32b";
-      process.env.GROQ_SMALL_MODEL = secrets.GROQ_SMALL_MODEL;
-      process.env.GROQ_LARGE_MODEL = secrets.GROQ_LARGE_MODEL;
-    }
-
-    const character = createCharacter({
-      name: "PersonalityTestAgent",
-      bio: "A test agent used to verify personality routing behavior.",
-      secrets,
-    });
-
-    const plugins: Plugin[] = [];
-    const sqlPlugin = await loadPlugin("@elizaos/plugin-sql");
-    const localEmbeddingPlugin = await loadPlugin("@elizaos/plugin-local-embedding");
-    const personalityPlugin = await loadPlugin("@elizaos/plugin-personality");
-
-    if (personalityPlugin) {
-      plugins.push(personalityPlugin);
-    }
-
-    if (hasOpenAI) {
-      const plugin = await loadPlugin("@elizaos/plugin-openai");
-      if (plugin) {
-        plugins.push(plugin);
+      const secrets: Record<string, string> = {};
+      if (hasOpenAI) {
+        secrets.OPENAI_API_KEY = process.env.OPENAI_API_KEY!;
       }
-    } else if (hasAnthropic) {
-      const plugin = await loadPlugin("@elizaos/plugin-anthropic");
-      if (plugin) {
-        plugins.push(plugin);
+      if (hasAnthropic) {
+        secrets.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY!;
       }
-    } else if (hasGroq) {
-      const plugin = await loadPlugin("@elizaos/plugin-groq");
-      if (plugin) {
-        plugins.push(plugin);
+      if (hasGroq) {
+        secrets.GROQ_API_KEY = process.env.GROQ_API_KEY!;
+        secrets.GROQ_SMALL_MODEL =
+          process.env.GROQ_SMALL_MODEL || "llama-3.1-8b-instant";
+        secrets.GROQ_LARGE_MODEL =
+          process.env.GROQ_LARGE_MODEL || "qwen/qwen3-32b";
+        process.env.GROQ_SMALL_MODEL = secrets.GROQ_SMALL_MODEL;
+        process.env.GROQ_LARGE_MODEL = secrets.GROQ_LARGE_MODEL;
       }
-    }
 
-    runtime = new AgentRuntime({
-      character,
-      plugins,
-      logLevel: "error",
-    });
+      const character = createCharacter({
+        name: "PersonalityTestAgent",
+        bio: "A test agent used to verify personality routing behavior.",
+        secrets,
+      });
 
-    if (sqlPlugin) {
-      await runtime.registerPlugin(sqlPlugin);
-      if (runtime.adapter && !(await runtime.adapter.isReady())) {
-        await runtime.adapter.init();
+      const plugins: Plugin[] = [];
+      const sqlPlugin = await loadPlugin("@elizaos/plugin-sql");
+      const localEmbeddingPlugin = await loadPlugin(
+        "@elizaos/plugin-local-embedding",
+      );
+      const personalityPlugin = await loadPlugin("@elizaos/plugin-personality");
+
+      if (personalityPlugin) {
+        plugins.push(personalityPlugin);
       }
-    }
-    if (localEmbeddingPlugin) {
-      configureLocalEmbeddingPlugin(localEmbeddingPlugin);
-      await runtime.registerPlugin(localEmbeddingPlugin);
-    }
 
-    await runtime.initialize();
+      if (hasOpenAI) {
+        const plugin = await loadPlugin("@elizaos/plugin-openai");
+        if (plugin) {
+          plugins.push(plugin);
+        }
+      } else if (hasAnthropic) {
+        const plugin = await loadPlugin("@elizaos/plugin-anthropic");
+        if (plugin) {
+          plugins.push(plugin);
+        }
+      } else if (hasGroq) {
+        const plugin = await loadPlugin("@elizaos/plugin-groq");
+        if (plugin) {
+          plugins.push(plugin);
+        }
+      }
 
-    await runtime.ensureWorldExists({
-      id: worldId,
-      name: "Personality Routing World",
-      agentId: runtime.agentId,
-    } as Parameters<typeof runtime.ensureWorldExists>[0]);
-  }, 120_000);
+      runtime = new AgentRuntime({
+        character,
+        plugins,
+        logLevel: "error",
+      });
 
-  afterAll(async () => {
-    if (runtime) {
-      await withTimeout(runtime.stop(), 60_000, "runtime.stop()");
-    }
+      if (sqlPlugin) {
+        await runtime.registerPlugin(sqlPlugin);
+        if (runtime.adapter && !(await runtime.adapter.isReady())) {
+          await runtime.adapter.init();
+        }
+      }
+      if (localEmbeddingPlugin) {
+        configureLocalEmbeddingPlugin(localEmbeddingPlugin);
+        await runtime.registerPlugin(localEmbeddingPlugin);
+      }
 
-    fs.rmSync(pgliteDir, { recursive: true, force: true });
-  }, 90_000);
+      await runtime.initialize();
 
-  it(
-    "group-chat personality-update phrasing bypasses ignore-biased shouldRespond gating",
-    async () => {
+      await runtime.ensureWorldExists({
+        id: worldId,
+        name: "Personality Routing World",
+        agentId: runtime.agentId,
+      } as Parameters<typeof runtime.ensureWorldExists>[0]);
+    }, 120_000);
+
+    afterAll(async () => {
+      if (runtime) {
+        await withTimeout(runtime.stop(), 60_000, "runtime.stop()");
+      }
+
+      fs.rmSync(pgliteDir, { recursive: true, force: true });
+    }, 90_000);
+
+    it("group-chat personality-update phrasing bypasses ignore-biased shouldRespond gating", async () => {
       const userId = crypto.randomUUID() as UUID;
       const roomId = crypto.randomUUID() as UUID;
 
@@ -222,7 +222,11 @@ if (hasModelProvider) {
       const room = await runtime.getRoom(roomId);
       expect(room).toBeDefined();
 
-      const decision = runtime.messageService?.shouldRespond(runtime, message, room);
+      const decision = runtime.messageService?.shouldRespond(
+        runtime,
+        message,
+        room,
+      );
       expect(decision?.shouldRespond).toBe(true);
       expect(decision?.skipEvaluation).toBe(true);
       expect(decision?.reason).toContain("self-modification");
@@ -230,13 +234,9 @@ if (hasModelProvider) {
       const responseText = await handleMessageAndCollectText(runtime, message);
 
       expect(responseText.length).toBeGreaterThan(0);
-    },
-    120_000,
-  );
+    }, 120_000);
 
-  it(
-    "MODIFY_CHARACTER stores per-user preferences for response-style requests",
-    async () => {
+    it("MODIFY_CHARACTER stores per-user preferences for response-style requests", async () => {
       const userId = crypto.randomUUID() as UUID;
       const roomId = crypto.randomUUID() as UUID;
 
@@ -305,8 +305,6 @@ if (hasModelProvider) {
           return text.includes("concise") || text.includes("direct");
         }),
       ).toBe(true);
-    },
-    120_000,
-  );
+    }, 120_000);
   });
 }

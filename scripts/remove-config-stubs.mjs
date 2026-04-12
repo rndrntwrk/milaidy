@@ -35,7 +35,6 @@ async function stripStubsFromConfig(filePath) {
 async function main() {
   const files = [
     "vitest.integration.config.ts",
-    "vitest.startup.integration.config.ts",
     "vitest.config.ts",
     "apps/app/test/setup.ts",
     "vitest.unit.config.ts",

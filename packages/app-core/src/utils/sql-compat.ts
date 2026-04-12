@@ -1,5 +1,4 @@
 import type { AgentRuntime } from "@elizaos/core";
-import { logger } from "@elizaos/core";
 
 const repairedRuntimes = new WeakSet<AgentRuntime>();
 const repairPromises = new WeakMap<AgentRuntime, Promise<void>>();
@@ -119,40 +118,9 @@ async function addColumnIfMissing(
     return;
   }
 
-  const safeTable = sanitizeIdentifier(tableName);
-  const safeColumn = sanitizeIdentifier(columnName);
-  if (!safeTable || !safeColumn) {
-    return;
-  }
-
-  try {
-    await executeRawSql(
-      runtime,
-      `ALTER TABLE ${quoteIdent(safeTable)}
-       ADD COLUMN IF NOT EXISTS ${quoteIdent(safeColumn)} ${definition}`,
-    );
-  } catch (errorWithIfExists) {
-    try {
-      await executeRawSql(
-        runtime,
-        `ALTER TABLE ${quoteIdent(safeTable)}
-         ADD COLUMN ${quoteIdent(safeColumn)} ${definition}`,
-      );
-    } catch (errorPlain) {
-      const message =
-        `${errorWithIfExists instanceof Error ? errorWithIfExists.message : String(errorWithIfExists)} | ${errorPlain instanceof Error ? errorPlain.message : String(errorPlain)}`.toLowerCase();
-
-      if (
-        message.includes("already exists") ||
-        message.includes("duplicate column") ||
-        message.includes("duplicate_column")
-      ) {
-        return;
-      }
-
-      throw errorPlain;
-    }
-  }
+  throw new Error(
+    `[milady-sql-compat] Missing required column ${quoteIdent(tableName)}.${quoteIdent(columnName)} (${definition}). Run the appropriate database migrations before starting Milady.`,
+  );
 }
 
 export async function ensureRuntimeSqlCompatibility(
@@ -173,78 +141,27 @@ export async function ensureRuntimeSqlCompatibility(
   }
 
   const repairPromise = (async () => {
-    try {
-      await addColumnIfMissing(
-        runtime,
-        "participants",
-        "agent_id",
-        'uuid REFERENCES "agents"("id") ON DELETE CASCADE',
-      );
-      await addColumnIfMissing(runtime, "participants", "room_state", "text");
+    await addColumnIfMissing(
+      runtime,
+      "participants",
+      "agent_id",
+      'uuid REFERENCES "agents"("id") ON DELETE CASCADE',
+    );
+    await addColumnIfMissing(runtime, "participants", "room_state", "text");
 
-      try {
-        const participantColumns = await getTableColumnNames(
-          runtime,
-          "participants",
-        );
-
-        if (
-          participantColumns.has("room_state") &&
-          participantColumns.has("user_state")
-        ) {
-          await executeRawSql(
-            runtime,
-            `UPDATE participants
-                SET room_state = COALESCE(room_state, user_state)
-              WHERE user_state IS NOT NULL`,
-          );
-        }
-
-        if (participantColumns.has("agent_id")) {
-          await executeRawSql(
-            runtime,
-            `UPDATE participants AS participants
-                SET agent_id = rooms.agent_id
-               FROM rooms
-              WHERE participants.room_id = rooms.id
-                AND participants.agent_id IS NULL`,
-          );
-        }
-      } catch (error) {
-        logger.warn(
-          `[milady-sql-compat] Participant repair failed: ${error instanceof Error ? error.message : String(error)}`,
-        );
-      }
-
-      for (const [columnName, definition] of [
-        ["step_count", "integer NOT NULL DEFAULT 0"],
-        ["llm_call_count", "integer NOT NULL DEFAULT 0"],
-        ["total_prompt_tokens", "integer NOT NULL DEFAULT 0"],
-        ["total_completion_tokens", "integer NOT NULL DEFAULT 0"],
-        ["total_reward", "real NOT NULL DEFAULT 0"],
-        ["scenario_id", "text"],
-        ["batch_id", "text"],
-      ] as const) {
-        try {
-          await addColumnIfMissing(
-            runtime,
-            "trajectories",
-            columnName,
-            definition,
-          );
-        } catch (error) {
-          logger.warn(
-            `[milady-sql-compat] Trajectory repair failed for ${columnName}: ${error instanceof Error ? error.message : String(error)}`,
-          );
-        }
-      }
-
-      repairedRuntimes.add(runtime);
-    } catch (error) {
-      logger.warn(
-        `[milady-sql-compat] Compatibility repair failed: ${error instanceof Error ? error.message : String(error)}`,
-      );
+    for (const [columnName, definition] of [
+      ["step_count", "integer NOT NULL DEFAULT 0"],
+      ["llm_call_count", "integer NOT NULL DEFAULT 0"],
+      ["total_prompt_tokens", "integer NOT NULL DEFAULT 0"],
+      ["total_completion_tokens", "integer NOT NULL DEFAULT 0"],
+      ["total_reward", "real NOT NULL DEFAULT 0"],
+      ["scenario_id", "text"],
+      ["batch_id", "text"],
+    ] as const) {
+      await addColumnIfMissing(runtime, "trajectories", columnName, definition);
     }
+
+    repairedRuntimes.add(runtime);
   })().finally(() => {
     repairPromises.delete(runtime);
   });

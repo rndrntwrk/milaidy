@@ -237,7 +237,7 @@ export function createMockIncomingMessage({
   req.method = method;
   req.url = url;
   req.headers = headers;
-  req.destroy = () => {};
+  req.destroy = ((_: Error | undefined) => req) as typeof req.destroy;
 
   const chunks: Buffer[] = [];
 

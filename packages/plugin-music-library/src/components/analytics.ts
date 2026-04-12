@@ -7,6 +7,7 @@ import {
     logger,
 } from '@elizaos/core';
 import { v4 } from 'uuid';
+import { requireRoomContext } from './storageContext';
 
 /**
  * Analytics data for a guild/room
@@ -36,60 +37,11 @@ function getAnalyticsEntityId(runtime: IAgentRuntime, roomId: UUID): UUID {
 async function ensureAnalyticsEntity(
     runtime: IAgentRuntime,
     roomId: UUID
-): Promise<{ entityId: UUID; room: Room | null; effectiveRoomId: UUID; effectiveWorldId: UUID } | null> {
-    let room: Room | null = null;
-    let effectiveRoomId: UUID = roomId;
-    let effectiveWorldId: UUID = runtime.agentId as UUID;
-
-    try {
-        room = await runtime.getRoom(roomId);
-        if (room) {
-            effectiveWorldId = room.worldId || (runtime.agentId as UUID);
-        } else {
-            logger.warn(
-                `[DJ Analytics] Room ${roomId} not found in database, creating fallback room for analytics storage`
-            );
-            // Create a fallback room using agentId
-            effectiveRoomId = runtime.agentId as UUID;
-            effectiveWorldId = runtime.agentId as UUID;
-
-            // Ensure the fallback world and room exist in the database
-            try {
-                await runtime.ensureWorldExists({
-                    id: effectiveWorldId,
-                    name: 'DJ Analytics Fallback World',
-                    agentId: runtime.agentId,
-                    serverId: effectiveWorldId,
-                    metadata: { purpose: 'analytics-fallback' },
-                });
-                logger.debug(`[DJ Analytics] Ensured fallback world ${effectiveWorldId}`);
-            } catch (worldError) {
-                logger.debug(`[DJ Analytics] Fallback world may already exist: ${worldError instanceof Error ? worldError.message : String(worldError)}`);
-            }
-
-            try {
-                await runtime.ensureRoomExists({
-                    id: effectiveRoomId,
-                    name: 'DJ Analytics Fallback Room',
-                    source: 'dj-plugin',
-                    type: 'GROUP' as any,
-                    channelId: effectiveRoomId,
-                    serverId: effectiveRoomId,
-                    worldId: effectiveWorldId,
-                    metadata: { purpose: 'analytics-fallback' },
-                });
-                logger.debug(`[DJ Analytics] Created fallback room ${effectiveRoomId}`);
-            } catch (roomError) {
-                logger.debug(`[DJ Analytics] Fallback room may already exist: ${roomError instanceof Error ? roomError.message : String(roomError)}`);
-            }
-        }
-    } catch (error) {
-        logger.warn(
-            `[DJ Analytics] Error checking room ${roomId}: ${error instanceof Error ? error.message : String(error)}, using agentId as fallback`
-        );
-        effectiveRoomId = runtime.agentId as UUID;
-        effectiveWorldId = runtime.agentId as UUID;
-    }
+): Promise<{ entityId: UUID; room: Room; effectiveRoomId: UUID; effectiveWorldId: UUID }> {
+    const roomContext = await requireRoomContext(runtime, roomId, 'DJ Analytics');
+    const room = roomContext.room;
+    const effectiveRoomId = roomContext.roomId;
+    const effectiveWorldId = roomContext.worldId;
 
     const entityId = getAnalyticsEntityId(runtime, roomId);
     let entity = await runtime.getEntityById(entityId);
@@ -117,7 +69,9 @@ async function ensureAnalyticsEntity(
                 logger.error(
                     `[DJ Analytics] Failed to ensure analytics entity exists for room ${roomId}`
                 );
-                return null;
+                throw new Error(
+                    `[DJ Analytics] Failed to ensure analytics entity exists for room ${roomId}`
+                );
             }
         }
     }
@@ -154,10 +108,6 @@ async function initializeAnalytics(
     roomId: UUID
 ): Promise<Component | null> {
     const context = await ensureAnalyticsEntity(runtime, roomId);
-    if (!context) {
-        return null;
-    }
-
     const { entityId, effectiveRoomId, effectiveWorldId } = context;
     const now = Date.now();
     const initialAnalytics: DJAnalytics = {
@@ -190,7 +140,7 @@ async function initializeAnalytics(
     });
 
     if (!success) {
-        return null;
+        throw new Error(`[DJ Analytics] Failed to create analytics component for room ${roomId}`);
     }
 
     // Return the component we just created
@@ -217,7 +167,7 @@ export async function trackTrackPlayed(
     if (!component) {
         const newComponent = await initializeAnalytics(runtime, roomId);
         if (!newComponent) {
-            return; // Failed to initialize
+            throw new Error(`[DJ Analytics] Failed to initialize analytics for room ${roomId}`);
         }
         component = newComponent;
     }
@@ -343,7 +293,7 @@ export async function trackSession(
     if (!component) {
         const newComponent = await initializeAnalytics(runtime, roomId);
         if (!newComponent) {
-            return; // Failed to initialize
+            throw new Error(`[DJ Analytics] Failed to initialize analytics for room ${roomId}`);
         }
         component = newComponent;
     }
@@ -400,10 +350,6 @@ export async function trackListenerSnapshot(
     }
 ): Promise<void> {
     const setup = await ensureAnalyticsEntity(runtime, roomId);
-    if (!setup) {
-        return;
-    }
-
     const { entityId, effectiveRoomId, effectiveWorldId } = setup;
 
     // Get or create component
@@ -425,14 +371,17 @@ export async function trackListenerSnapshot(
         });
 
         if (!created) {
-            logger.error('Failed to create listener tracking component');
-            return;
+            throw new Error(
+                `[DJ Analytics] Failed to create listener tracking component for room ${roomId}`
+            );
         }
 
         // Re-fetch the component
         component = await runtime.getComponent(entityId, ANALYTICS_COMPONENT_TYPE, undefined, runtime.agentId);
         if (!component) {
-            return;
+            throw new Error(
+                `[DJ Analytics] Listener tracking component missing after creation for room ${roomId}`
+            );
         }
     }
 
@@ -454,4 +403,3 @@ export async function trackListenerSnapshot(
         },
     });
 }
-

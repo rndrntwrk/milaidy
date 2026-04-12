@@ -15,6 +15,7 @@ import {
 import dotenv from "dotenv";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { describeIf } from "../../../test/helpers/conditional-tests.ts";
+import { selectLiveProvider as selectSharedLiveProvider } from "../../../test/helpers/live-provider";
 import { saveEnv, sleep, withTimeout } from "../../../test/helpers/test-utils";
 import { LifeOpsService } from "../src/lifeops/service";
 import {
@@ -34,9 +35,8 @@ dotenv.config({ path: path.resolve(packageRoot, "..", "..", ".env") });
 
 const LIVE_TESTS_ENABLED =
   process.env.MILADY_LIVE_TEST === "1" || process.env.ELIZA_LIVE_TEST === "1";
-const LIVE_CHAT_TESTS_ENABLED = process.env.MILADY_LIVE_CHAT_TEST === "1";
-const LIVE_MEMORY_TESTS_ENABLED = process.env.MILADY_LIVE_MEMORY_TEST === "1";
-const LIVE_PROVIDER_OVERRIDE = process.env.MILADY_LIVE_PROVIDER?.trim().toLowerCase();
+const LIVE_PROVIDER_OVERRIDE =
+  process.env.MILADY_LIVE_PROVIDER?.trim().toLowerCase();
 const LIVE_CLOUD_ENV_PREFIXES = ["ELIZAOS_CLOUD_", "ELIZA_CLOUD_"] as const;
 const PROVIDER_ENV_KEYS = [
   "OPENAI_API_KEY",
@@ -234,7 +234,6 @@ async function selectLiveProvider(): Promise<SelectedLiveProvider | null> {
       : LIVE_PROVIDER_CANDIDATES;
 
   for (const candidate of candidates) {
-
     const env: Record<string, string> = {};
     for (const key of candidate.keys) {
       const value = process.env[key]?.trim();
@@ -268,6 +267,24 @@ async function selectLiveProvider(): Promise<SelectedLiveProvider | null> {
     };
   }
 
+  const sharedProvider = selectSharedLiveProvider(
+    LIVE_PROVIDER_OVERRIDE
+      ? (LIVE_PROVIDER_OVERRIDE as
+          | "anthropic"
+          | "google"
+          | "groq"
+          | "openai"
+          | "openrouter")
+      : undefined,
+  );
+  if (sharedProvider && (await canImportPlugin(sharedProvider.pluginPackage))) {
+    return {
+      name: sharedProvider.name,
+      env: sharedProvider.env,
+      plugin: sharedProvider.pluginPackage,
+    };
+  }
+
   return null;
 }
 
@@ -297,43 +314,6 @@ function seedGroqModelDefaults(): void {
 
 function normalizeText(text: string): string {
   return text.toLowerCase().replace(/\s+/g, " ").trim();
-}
-
-function escapeXml(text: string): string {
-  return text
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&apos;");
-}
-
-function buildLifeActionPrompt(
-  summary: string,
-  action: string,
-  intent: string,
-  title?: string,
-): string {
-  const params = [
-    `    <action>${escapeXml(action)}</action>`,
-    `    <intent>${escapeXml(intent)}</intent>`,
-    ...(title ? [`    <title>${escapeXml(title)}</title>`] : []),
-  ].join("\n");
-
-  return [
-    summary,
-    "Reply with exactly this assistant message and no extra text:",
-    "Assistant:",
-    "<actions>",
-    "  <action>REPLY</action>",
-    "  <action>LIFE</action>",
-    "</actions>",
-    "<params>",
-    "  <LIFE>",
-    params,
-    "  </LIFE>",
-    "</params>",
-  ].join("\n");
 }
 
 async function handleMessageAndCollectText(
@@ -411,7 +391,9 @@ async function waitForValue<T>(
     await sleep(intervalMs);
   }
 
-  throw new Error(`Timed out waiting for ${label}: ${JSON.stringify(lastValue)}`);
+  throw new Error(
+    `Timed out waiting for ${label}: ${JSON.stringify(lastValue)}`,
+  );
 }
 
 async function ensureDmRoom(args: {
@@ -468,16 +450,12 @@ const MEMORY_SUITE_PROVIDER_SUPPORTED =
   MEMORY_SUITE_PROVIDER_NAMES.has(selectedLiveProvider.name);
 const LIVE_SUITE_ENABLED =
   LIVE_TESTS_ENABLED &&
-  LIVE_CHAT_TESTS_ENABLED &&
-  LIVE_MEMORY_TESTS_ENABLED &&
   selectedLiveProvider !== null &&
   MEMORY_SUITE_PROVIDER_SUPPORTED;
 
 if (!LIVE_SUITE_ENABLED) {
   const warnings = [
     !LIVE_TESTS_ENABLED ? "set MILADY_LIVE_TEST=1 or ELIZA_LIVE_TEST=1" : null,
-    !LIVE_CHAT_TESTS_ENABLED ? "set MILADY_LIVE_CHAT_TEST=1" : null,
-    !LIVE_MEMORY_TESTS_ENABLED ? "set MILADY_LIVE_MEMORY_TEST=1" : null,
     !selectedLiveProvider
       ? "provide a live provider key for OpenAI, Groq, OpenRouter, Google, or Anthropic"
       : null,
@@ -544,7 +522,9 @@ describeIf(LIVE_SUITE_ENABLED)(
       for (const key of PROVIDER_ENV_KEYS) {
         delete process.env[key];
       }
-      for (const [key, value] of Object.entries(selectedLiveProvider?.env ?? {})) {
+      for (const [key, value] of Object.entries(
+        selectedLiveProvider?.env ?? {},
+      )) {
         if (value.trim().length > 0) {
           process.env[key] = value;
         }
@@ -555,7 +535,9 @@ describeIf(LIVE_SUITE_ENABLED)(
 
       const character = buildCharacterFromConfig({});
       const providerSecrets: Record<string, string> = {};
-      for (const [key, value] of Object.entries(selectedLiveProvider?.env ?? {})) {
+      for (const [key, value] of Object.entries(
+        selectedLiveProvider?.env ?? {},
+      )) {
         if (value.trim().length > 0) {
           providerSecrets[key] = value;
         }
@@ -655,13 +637,19 @@ describeIf(LIVE_SUITE_ENABLED)(
       expect(runtime.character.advancedMemory).toBe(true);
       expect(memoryService).toBeTruthy();
       expect(
-        runtime.providers.some((provider) => provider.name === "SUMMARIZED_CONTEXT"),
+        runtime.providers.some(
+          (provider) => provider.name === "SUMMARIZED_CONTEXT",
+        ),
       ).toBe(true);
       expect(
-        runtime.providers.some((provider) => provider.name === "LONG_TERM_MEMORY"),
+        runtime.providers.some(
+          (provider) => provider.name === "LONG_TERM_MEMORY",
+        ),
       ).toBe(true);
       expect(
-        runtime.evaluators.some((evaluator) => evaluator.name === "MEMORY_SUMMARIZATION"),
+        runtime.evaluators.some(
+          (evaluator) => evaluator.name === "MEMORY_SUMMARIZATION",
+        ),
       ).toBe(true);
       expect(
         runtime.evaluators.some(
@@ -673,215 +661,205 @@ describeIf(LIVE_SUITE_ENABLED)(
       ).toBe(true);
     });
 
-    it(
-      "starts with smalltalk, previews brush-teeth creation, then saves it only after confirmation",
-      async () => {
-        const roomId = crypto.randomUUID() as UUID;
-        const worldId = crypto.randomUUID() as UUID;
-        await ensureDmRoom({
-          runtime,
-          entityId: ownerId,
-          roomId,
-          worldId,
-          source: "telegram",
-          channelId: `telegram-${roomId}`,
-          userName: "shaw",
-        });
+    it("starts with smalltalk, previews brush-teeth creation, then saves it only after confirmation", async () => {
+      const roomId = crypto.randomUUID() as UUID;
+      const worldId = crypto.randomUUID() as UUID;
+      await ensureDmRoom({
+        runtime,
+        entityId: ownerId,
+        roomId,
+        worldId,
+        source: "telegram",
+        channelId: `telegram-${roomId}`,
+        userName: "shaw",
+      });
 
-        const turn1 = await sendUserTurn({
-          runtime,
-          entityId: ownerId,
-          roomId,
-          source: "telegram",
-          text: "hey, mornings have been a little chaotic lately.",
-        });
-        expect(turn1.trim().length).toBeGreaterThan(0);
+      const turn1 = await sendUserTurn({
+        runtime,
+        entityId: ownerId,
+        roomId,
+        source: "telegram",
+        text: "hey, mornings have been a little chaotic lately.",
+      });
+      expect(turn1.trim().length).toBeGreaterThan(0);
 
-        const turn2 = await sendUserTurn({
-          runtime,
-          entityId: ownerId,
-          roomId,
-          source: "telegram",
-          text: "the main thing i keep forgetting is brushing my teeth before i start working.",
-        });
-        expect(turn2.trim().length).toBeGreaterThan(0);
+      const turn2 = await sendUserTurn({
+        runtime,
+        entityId: ownerId,
+        roomId,
+        source: "telegram",
+        text: "the main thing i keep forgetting is brushing my teeth before i start working.",
+      });
+      expect(turn2.trim().length).toBeGreaterThan(0);
 
-        const beforePreviewDefinitions = await lifeOpsService.listDefinitions();
-        expect(findDefinitionByTitle(beforePreviewDefinitions, "Brush teeth")).toBeNull();
+      const beforePreviewDefinitions = await lifeOpsService.listDefinitions();
+      expect(
+        findDefinitionByTitle(beforePreviewDefinitions, "Brush teeth"),
+      ).toBeNull();
 
-        const createPrompt = buildLifeActionPrompt(
-          "Continue the same conversation. The user has already explained that mornings are chaotic and they keep forgetting to brush their teeth.",
-          "create",
-          "Actually create a routine named Brush teeth that happens every morning and every night. Do not just give advice.",
+      const createPrompt =
+        "Can you turn that into a real recurring Brush teeth routine for me? I want it in the morning around 8am and again at night around 9pm, but please preview it before you save anything.";
+      const previewResponse = await sendUserTurn({
+        runtime,
+        entityId: ownerId,
+        roomId,
+        source: "telegram",
+        text: createPrompt,
+      });
+      expect(previewResponse.trim().length).toBeGreaterThan(0);
+      expect(
+        findDefinitionByTitle(
+          await lifeOpsService.listDefinitions(),
           "Brush teeth",
-        );
-        const previewResponse = await sendUserTurn({
-          runtime,
-          entityId: ownerId,
-          roomId,
-          source: "telegram",
-          text: createPrompt,
-        });
-        expect(previewResponse.trim().length).toBeGreaterThan(0);
-        expect(
-          findDefinitionByTitle(await lifeOpsService.listDefinitions(), "Brush teeth"),
-        ).toBeNull();
+        ),
+      ).toBeNull();
 
-        const confirmResponse = await sendUserTurn({
-          runtime,
-          entityId: ownerId,
-          roomId,
-          source: "telegram",
-          text: "Yes, save that brushing routine.",
-        });
-        expect(confirmResponse).toContain("Saved");
+      const confirmResponse = await sendUserTurn({
+        runtime,
+        entityId: ownerId,
+        roomId,
+        source: "telegram",
+        text: "Yes, save that brushing routine.",
+      });
+      expect(confirmResponse).toContain("Saved");
 
-        const brushTeeth = await waitForValue(
-          "brush-teeth definition",
-          async () => findDefinitionByTitle(await lifeOpsService.listDefinitions(), "Brush teeth"),
-          (entry) => entry !== null,
-        );
-        expect(brushTeeth?.definition.cadence).toMatchObject({
-          kind: "times_per_day",
-          slots: expect.arrayContaining([
-            expect.objectContaining({ minuteOfDay: 8 * 60 }),
-            expect.objectContaining({ minuteOfDay: 21 * 60 }),
-          ]),
-        });
-        expect(brushTeeth?.reminderPlan?.id ?? null).not.toBeNull();
+      const brushTeeth = await waitForValue(
+        "brush-teeth definition",
+        async () =>
+          findDefinitionByTitle(
+            await lifeOpsService.listDefinitions(),
+            "Brush teeth",
+          ),
+        (entry) => entry !== null,
+      );
+      expect(brushTeeth?.definition.cadence).toMatchObject({
+        kind: "times_per_day",
+        slots: expect.arrayContaining([
+          expect.objectContaining({ minuteOfDay: 8 * 60 }),
+          expect.objectContaining({ minuteOfDay: 21 * 60 }),
+        ]),
+      });
+      expect(brushTeeth?.reminderPlan?.id ?? null).not.toBeNull();
 
-        const preferencePrompt = buildLifeActionPrompt(
-          "Continue the same conversation.",
-          "reminder_preference",
-          "Actually remind me less about Brush teeth. Do not just explain the setting.",
-          "Brush teeth",
-        );
-        const preferenceResponse = await sendUserTurn({
-          runtime,
-          entityId: ownerId,
-          roomId,
-          source: "telegram",
-          text: preferencePrompt,
-        });
-        expect(preferenceResponse).toContain(
-          'Reminder intensity for "Brush teeth" is now minimal.',
-        );
+      const preferencePrompt =
+        "Keep the Brush teeth routine, but make the reminders minimal from now on.";
+      const preferenceResponse = await sendUserTurn({
+        runtime,
+        entityId: ownerId,
+        roomId,
+        source: "telegram",
+        text: preferencePrompt,
+      });
+      expect(preferenceResponse).toContain(
+        'Reminder intensity for "Brush teeth" is now minimal.',
+      );
 
-        const preference = await lifeOpsService.getReminderPreference(
-          brushTeeth?.definition.id,
-        );
-        expect(preference.effective.intensity).toBe("minimal");
-      },
-      240_000,
-    );
+      const preference = await lifeOpsService.getReminderPreference(
+        brushTeeth?.definition.id,
+      );
+      expect(preference.effective.intensity).toBe("minimal");
+    }, 240_000);
 
-    it(
-      "stores summaries, reflection facts, and long-term memories, then recalls them from another channel",
-      async () => {
-        const sourceRoomId = crypto.randomUUID() as UUID;
-        const sourceWorldId = crypto.randomUUID() as UUID;
-        const targetRoomId = crypto.randomUUID() as UUID;
-        const targetWorldId = crypto.randomUUID() as UUID;
+    it("stores summaries, reflection facts, and long-term memories, then recalls them from another channel", async () => {
+      const sourceRoomId = crypto.randomUUID() as UUID;
+      const sourceWorldId = crypto.randomUUID() as UUID;
+      const targetRoomId = crypto.randomUUID() as UUID;
+      const targetWorldId = crypto.randomUUID() as UUID;
 
-        await ensureDmRoom({
+      await ensureDmRoom({
+        runtime,
+        entityId: ownerId,
+        roomId: sourceRoomId,
+        worldId: sourceWorldId,
+        source: "telegram",
+        channelId: `telegram-${sourceRoomId}`,
+        userName: "shaw",
+      });
+      await ensureDmRoom({
+        runtime,
+        entityId: ownerId,
+        roomId: targetRoomId,
+        worldId: targetWorldId,
+        source: "discord",
+        channelId: `discord-${targetRoomId}`,
+        userName: "shaw",
+      });
+
+      const setupTurns = [
+        "hey, quick check-in before we get into anything serious.",
+        "small thing to remember: i always prefer text reminders and i do not want phone-call reminders.",
+        "to be explicit, that is a stable preference for me: text reminders only, never phone calls.",
+        "also, i wear Invisalign during the day and i usually forget to put it back in after lunch.",
+        "that invisalign thing is a real recurring pattern for me, especially on weekdays after lunch.",
+        "gentle nudges work better for me than aggressive ones.",
+        "can you keep those preferences in mind for later?",
+      ];
+
+      for (const text of setupTurns) {
+        const response = await sendUserTurn({
           runtime,
           entityId: ownerId,
           roomId: sourceRoomId,
-          worldId: sourceWorldId,
           source: "telegram",
-          channelId: `telegram-${sourceRoomId}`,
-          userName: "shaw",
+          text,
         });
-        await ensureDmRoom({
-          runtime,
-          entityId: ownerId,
-          roomId: targetRoomId,
-          worldId: targetWorldId,
-          source: "discord",
-          channelId: `discord-${targetRoomId}`,
-          userName: "shaw",
-        });
+        expect(response.trim().length).toBeGreaterThan(0);
+      }
 
-        const setupTurns = [
-          "hey, quick check-in before we get into anything serious.",
-          "small thing to remember: i always prefer text reminders and i do not want phone-call reminders.",
-          "to be explicit, that is a stable preference for me: text reminders only, never phone calls.",
-          "also, i wear Invisalign during the day and i usually forget to put it back in after lunch.",
-          "that invisalign thing is a real recurring pattern for me, especially on weekdays after lunch.",
-          "gentle nudges work better for me than aggressive ones.",
-          "can you keep those preferences in mind for later?",
-        ];
+      const sessionSummary =
+        await memoryService.getCurrentSessionSummary(sourceRoomId);
+      if (sessionSummary) {
+        expect(sessionSummary.summary.trim().length).toBeGreaterThan(0);
+      }
 
-        for (const text of setupTurns) {
-          const response = await sendUserTurn({
-            runtime,
-            entityId: ownerId,
+      const reflectionFacts = await waitForValue(
+        "reflection facts",
+        async () =>
+          (await runtime.getMemories({
+            tableName: "facts",
             roomId: sourceRoomId,
-            source: "telegram",
-            text,
-          });
-          expect(response.trim().length).toBeGreaterThan(0);
-        }
+            count: 20,
+            unique: false,
+          })) as Memory[],
+        (facts) =>
+          facts.length > 0 &&
+          facts.some((fact) =>
+            /text|phone|invisalign/i.test(String(fact.content?.text ?? "")),
+          ),
+        120_000,
+      );
+      expect(reflectionFacts.length).toBeGreaterThan(0);
 
-        const sessionSummary = await memoryService.getCurrentSessionSummary(
-          sourceRoomId,
-        );
-        if (sessionSummary) {
-          expect(sessionSummary.summary.trim().length).toBeGreaterThan(0);
-        }
+      const relationships = await waitForValue(
+        "reflection relationships",
+        async () =>
+          await runtime.getRelationships({
+            entityIds: [ownerId],
+          }),
+        (entries) => Array.isArray(entries) && entries.length > 0,
+      );
+      expect(relationships.length).toBeGreaterThan(0);
 
-        const reflectionFacts = await waitForValue(
-          "reflection facts",
-          async () =>
-            (await runtime.getMemories({
-              tableName: "facts",
-              roomId: sourceRoomId,
-              count: 20,
-              unique: false,
-            })) as Memory[],
-          (facts) =>
-            facts.length > 0 &&
-            facts.some((fact) =>
-              /text|phone|invisalign/i.test(
-                String(fact.content?.text ?? ""),
-              ),
-            ),
-          120_000,
-        );
-        expect(reflectionFacts.length).toBeGreaterThan(0);
+      const longTermMemories = await waitForValue(
+        "long-term memories",
+        async () => memoryService.getLongTermMemories(ownerId, undefined, 10),
+        (memories) =>
+          memories.some((memory) => /text|phone/i.test(memory.content)) &&
+          memories.some((memory) => /invisalign/i.test(memory.content)),
+        90_000,
+      );
+      expect(longTermMemories.length).toBeGreaterThan(0);
 
-        const relationships = await waitForValue(
-          "reflection relationships",
-          async () =>
-            await runtime.getRelationships({
-              entityIds: [ownerId],
-            }),
-          (entries) => Array.isArray(entries) && entries.length > 0,
-        );
-        expect(relationships.length).toBeGreaterThan(0);
-
-        const longTermMemories = await waitForValue(
-          "long-term memories",
-          async () => memoryService.getLongTermMemories(ownerId, undefined, 10),
-          (memories) =>
-            memories.some((memory) => /text|phone/i.test(memory.content)) &&
-            memories.some((memory) => /invisalign/i.test(memory.content)),
-          90_000,
-        );
-        expect(longTermMemories.length).toBeGreaterThan(0);
-
-        const crossChannelResponse = await sendUserTurn({
-          runtime,
-          entityId: ownerId,
-          roomId: targetRoomId,
-          source: "discord",
-          text: "we switched channels. what reminder channel do i prefer, and what do i usually forget after lunch?",
-        });
-        const normalizedResponse = normalizeText(crossChannelResponse);
-        expect(normalizedResponse).toContain("text");
-        expect(normalizedResponse).toContain("invisalign");
-      },
-      240_000,
-    );
+      const crossChannelResponse = await sendUserTurn({
+        runtime,
+        entityId: ownerId,
+        roomId: targetRoomId,
+        source: "discord",
+        text: "we switched channels. what reminder channel do i prefer, and what do i usually forget after lunch?",
+      });
+      const normalizedResponse = normalizeText(crossChannelResponse);
+      expect(normalizedResponse).toContain("text");
+      expect(normalizedResponse).toContain("invisalign");
+    }, 240_000);
   },
 );

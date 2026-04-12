@@ -14,7 +14,8 @@ import {
 } from "@elizaos/core";
 import dotenv from "dotenv";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { describeIf, itIf } from "../../../test/helpers/conditional-tests.ts";
+import { describeIf } from "../../../test/helpers/conditional-tests.ts";
+import { selectLiveProvider as selectSharedLiveProvider } from "../../../test/helpers/live-provider";
 import { saveEnv, sleep, withTimeout } from "../../../test/helpers/test-utils";
 import { resolveOAuthDir } from "../src/config/paths";
 import {
@@ -44,11 +45,6 @@ dotenv.config({ path: path.resolve(packageRoot, "..", "..", ".env") });
 
 const LIVE_TESTS_ENABLED =
   process.env.MILADY_LIVE_TEST === "1" || process.env.ELIZA_LIVE_TEST === "1";
-const LIVE_CHAT_TESTS_ENABLED = process.env.MILADY_LIVE_CHAT_TEST === "1";
-const LIVE_ASSISTANT_JOURNEYS_ENABLED =
-  process.env.MILADY_LIVE_ASSISTANT_JOURNEYS === "1";
-const EXTENDED_JOURNEY_SCENARIOS_ENABLED =
-  process.env.MILADY_LIVE_ASSISTANT_JOURNEYS_EXTENDED === "1";
 const TEST_TIME_ZONE = "America/Los_Angeles";
 const GOOGLE_CLIENT_ID = "assistant-user-journeys-google-client";
 const PROVIDER_ENV_KEYS = [
@@ -234,6 +230,24 @@ async function selectLiveProvider(): Promise<SelectedLiveProvider | null> {
       name: candidate.name as keyof typeof LIVE_PROVIDER_CHEAP_MODELS,
       env,
       plugin: candidate.plugin,
+    };
+  }
+
+  const sharedProvider = selectSharedLiveProvider(
+    preferredProvider.length > 0
+      ? (preferredProvider as
+          | "anthropic"
+          | "google"
+          | "groq"
+          | "openai"
+          | "openrouter")
+      : undefined,
+  );
+  if (sharedProvider && (await canImportPlugin(sharedProvider.pluginPackage))) {
+    return {
+      name: sharedProvider.name,
+      env: sharedProvider.env,
+      plugin: sharedProvider.pluginPackage,
     };
   }
 
@@ -527,7 +541,10 @@ async function seedGoogleConnector(
   return repository;
 }
 
-async function seedCalendarData(repository: LifeOpsRepository, agentId: string) {
+async function seedCalendarData(
+  repository: LifeOpsRepository,
+  agentId: string,
+) {
   const nowIso = new Date().toISOString();
   const saturdayOffset = nextLocalWeekdayOffset(6);
   const sundayOffset = nextLocalWeekdayOffset(0);
@@ -782,7 +799,8 @@ async function seedGmailData(repository: LifeOpsRepository, agentId: string) {
       replyTo: "mom@example.com",
       to: ["shawmakesmagic@gmail.com"],
       cc: [],
-      snippet: "We decided at the last minute to have everyone over at our house Saturday.",
+      snippet:
+        "We decided at the last minute to have everyone over at our house Saturday.",
       receivedAt: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
       isUnread: true,
       isImportant: true,
@@ -980,18 +998,12 @@ const selectedLiveProvider = await selectLiveProvider();
 const SUPPORTED_PROVIDER_NAMES = new Set(["openai", "openrouter", "google"]);
 const LIVE_SUITE_ENABLED =
   LIVE_TESTS_ENABLED &&
-  LIVE_CHAT_TESTS_ENABLED &&
-  LIVE_ASSISTANT_JOURNEYS_ENABLED &&
   selectedLiveProvider !== null &&
   SUPPORTED_PROVIDER_NAMES.has(selectedLiveProvider.name);
 
 if (!LIVE_SUITE_ENABLED) {
   const warnings = [
     !LIVE_TESTS_ENABLED ? "set MILADY_LIVE_TEST=1 or ELIZA_LIVE_TEST=1" : null,
-    !LIVE_CHAT_TESTS_ENABLED ? "set MILADY_LIVE_CHAT_TEST=1" : null,
-    !LIVE_ASSISTANT_JOURNEYS_ENABLED
-      ? "set MILADY_LIVE_ASSISTANT_JOURNEYS=1"
-      : null,
     !selectedLiveProvider
       ? "provide a live provider key for OpenAI, OpenRouter, or Google"
       : null,
@@ -1046,7 +1058,9 @@ describeIf(LIVE_SUITE_ENABLED)(
       for (const key of PROVIDER_ENV_KEYS) {
         delete process.env[key];
       }
-      for (const [key, value] of Object.entries(selectedLiveProvider?.env ?? {})) {
+      for (const [key, value] of Object.entries(
+        selectedLiveProvider?.env ?? {},
+      )) {
         if (value.trim().length > 0) {
           process.env[key] = value;
         }
@@ -1156,299 +1170,262 @@ describeIf(LIVE_SUITE_ENABLED)(
       fs.rmSync(workspaceDir, { recursive: true, force: true });
     }, 30_000);
 
-    itIf(EXTENDED_JOURNEY_SCENARIOS_ENABLED)(
-      "summarizes multi-platform messages and separates urgent follow-ups from waitable items",
-      async () => {
-        let response = await sendUserTurn({
-          runtime,
-          entityId: ownerId,
-          roomId: dmRoomId,
-          source: "telegram",
-          text: [
-            "You already have my recent cross-platform conversations in context.",
-            "Do not ask me for a channel, account, or search term.",
-            "Use the recent WhatsApp, WeChat, Telegram, X, and Instagram messages you already have about today and this weekend.",
-            "Give me a short summary with these sections: reply now, can wait, urgent or high-priority.",
-          ].join(" "),
-        });
+    it("summarizes multi-platform messages and separates urgent follow-ups from waitable items", async () => {
+      let response = await sendUserTurn({
+        runtime,
+        entityId: ownerId,
+        roomId: dmRoomId,
+        source: "telegram",
+        text: [
+          "You already have my recent cross-platform conversations in context.",
+          "Do not ask me for a channel, account, or search term.",
+          "Use the recent WhatsApp, WeChat, Telegram, X, and Instagram messages you already have about today and this weekend.",
+          "Give me a short summary with these sections: reply now, can wait, urgent or high-priority.",
+        ].join(" "),
+      });
 
-        if (
-          /(channel|platform|search term|keyword|which messages|which conversation)/i.test(
-            response,
-          ) ||
-          !containsAllFragments(response, ["kentucky derby"])
-        ) {
-          response = await sendUserTurn({
-            runtime,
-            entityId: ownerId,
-            roomId: dmRoomId,
-            source: "telegram",
-            text:
-              "No follow-up questions. Use only the recent cross-platform messages already in your context and summarize them now.",
-          });
-        }
-
-        expectContainsAtLeast(
+      if (
+        /(channel|platform|search term|keyword|which messages|which conversation)/i.test(
           response,
-          [
-            "kentucky derby",
-            "soccer",
-            "birthday party",
-            "dinner",
-            "rowan",
-            "theo",
-          ],
-          3,
+        ) ||
+        !containsAllFragments(response, ["kentucky derby"])
+      ) {
+        response = await sendUserTurn({
+          runtime,
+          entityId: ownerId,
+          roomId: dmRoomId,
+          source: "telegram",
+          text: "No follow-up questions. Use only the recent cross-platform messages already in your context and summarize them now.",
+        });
+      }
+
+      expectContainsAtLeast(
+        response,
+        [
+          "kentucky derby",
+          "soccer",
+          "birthday party",
+          "dinner",
+          "rowan",
+          "theo",
+        ],
+        3,
+      );
+    }, 180_000);
+
+    it("recalls the thing the user said was still happening later in the day", async () => {
+      await sendUserTurn({
+        runtime,
+        entityId: ownerId,
+        roomId: dmRoomId,
+        source: "telegram",
+        text: "Don't forget the permit inspection is still happening at 4pm today.",
+      });
+
+      const response = await sendUserTurn({
+        runtime,
+        entityId: ownerId,
+        roomId: dmRoomId,
+        source: "telegram",
+        text: "Don't forget that thing I told you about this morning is STILL happening, did you forget about it already?",
+      });
+
+      expectContainsAll(response, ["permit inspection", "4pm"]);
+    }, 180_000);
+
+    it("grounds today's schedule from the seeded calendar cache", async () => {
+      let response = await sendUserTurn({
+        runtime,
+        entityId: ownerId,
+        roomId: dmRoomId,
+        source: "telegram",
+        text: "Use my connected calendar. Morning. List today's actual events by name, time, and where I'm supposed to be. Do not give me just a heading.",
+      });
+
+      if (!containsAllFragments(response, ["dentist", "lunch with mike"])) {
+        response = await sendUserTurn({
+          runtime,
+          entityId: ownerId,
+          roomId: dmRoomId,
+          source: "telegram",
+          text: "You only gave me a heading. Use the calendar results you already have and list the actual events for today by name.",
+        });
+      }
+
+      expectContainsAll(response, ["dentist", "lunch with mike"]);
+    }, 180_000);
+
+    it("lists the weekend events from the seeded calendar cache", async () => {
+      let response = await sendUserTurn({
+        runtime,
+        entityId: ownerId,
+        roomId: dmRoomId,
+        source: "telegram",
+        text: [
+          "Use my connected calendar.",
+          "What's going on this weekend?",
+          "List the actual event names on my calendar this weekend.",
+          "Do not give me just a heading.",
+        ].join(" "),
+      });
+
+      if (
+        !containsAllFragments(response, ["rowan soccer game"]) ||
+        !containsAllFragments(response, ["mason birthday party"])
+      ) {
+        response = await sendUserTurn({
+          runtime,
+          entityId: ownerId,
+          roomId: dmRoomId,
+          source: "telegram",
+          text: "You only gave me a partial answer. Use the calendar results you already have and list the actual weekend events by name.",
+        });
+      }
+
+      expectContainsAtLeast(
+        response,
+        [
+          "rowan with shaw this weekend",
+          "rowan soccer game",
+          "mason birthday party",
+          "family dinner at parents' house",
+          "adults-only wedding",
+        ],
+        4,
+      );
+    }, 180_000);
+
+    it("surfaces the lunch reminder detail from the cached calendar event", async () => {
+      let response = await sendUserTurn({
+        runtime,
+        entityId: ownerId,
+        roomId: dmRoomId,
+        source: "telegram",
+        text: "Use my connected calendar. What does the note on my lunch with Mike event today say I need to remember?",
+      });
+
+      if (
+        !containsAllFragments(response, ["kentucky derby"]) &&
+        !containsAllFragments(response, ["gin"])
+      ) {
+        response = await sendUserTurn({
+          runtime,
+          entityId: ownerId,
+          roomId: dmRoomId,
+          source: "telegram",
+          text: "Use the lunch event description you already have on my calendar and answer directly.",
+        });
+      }
+
+      expectContainsAtLeast(
+        response,
+        ["mike", "kentucky derby", "gin", "cocktail"],
+        2,
+      );
+    }, 180_000);
+
+    it("finds the most overdue bill from email context", async () => {
+      let response = await sendUserTurn({
+        runtime,
+        entityId: ownerId,
+        roomId: dmRoomId,
+        source: "telegram",
+        text: "Use my connected email. Check my email and tell me which bill is the most overdue, and say why.",
+      });
+
+      if (
+        !containsAllFragments(response, ["electric"]) &&
+        !containsAllFragments(response, ["march 28"])
+      ) {
+        response = await sendUserTurn({
+          runtime,
+          entityId: ownerId,
+          roomId: dmRoomId,
+          source: "telegram",
+          text: "Yes. Search my connected email for bill or invoice messages and tell me the exact bill, who sent it, and the overdue date.",
+        });
+      }
+
+      if (
+        !containsAllFragments(response, ["electric"]) &&
+        !containsAllFragments(response, ["march 28"])
+      ) {
+        console.info(
+          `[assistant-user-journeys-live] overdue bill response: ${response}`,
         );
-      },
-      180_000,
-    );
+      }
 
-    itIf(EXTENDED_JOURNEY_SCENARIOS_ENABLED)(
-      "recalls the thing the user said was still happening later in the day",
-      async () => {
-        await sendUserTurn({
-          runtime,
-          entityId: ownerId,
-          roomId: dmRoomId,
-          source: "telegram",
-          text: "Don't forget the permit inspection is still happening at 4pm today.",
-        });
+      expectContainsAtLeast(
+        response,
+        ["electric", "march 28", "power", "most overdue"],
+        2,
+      );
+    }, 180_000);
 
-        const response = await sendUserTurn({
-          runtime,
-          entityId: ownerId,
-          roomId: dmRoomId,
-          source: "telegram",
-          text: "Don't forget that thing I told you about this morning is STILL happening, did you forget about it already?",
-        });
+    it("creates a recurring morning-news heartbeat from natural language", async () => {
+      let response = await sendUserTurn({
+        runtime,
+        entityId: ownerId,
+        roomId: dmRoomId,
+        source: "telegram",
+        text: "Hey Eliza, can you create a recurring 9am heartbeat that summarizes financial and international news every morning and sends it to me?",
+      });
 
-        expectContainsAll(response, ["permit inspection", "4pm"]);
-      },
-      180_000,
-    );
-
-    it(
-      "grounds today's schedule from the seeded calendar cache",
-      async () => {
-        let response = await sendUserTurn({
-          runtime,
-          entityId: ownerId,
-          roomId: dmRoomId,
-          source: "telegram",
-          text:
-            "Use my connected calendar. Morning. List today's actual events by name, time, and where I'm supposed to be. Do not give me just a heading.",
-        });
-
-        if (!containsAllFragments(response, ["dentist", "lunch with mike"])) {
-          response = await sendUserTurn({
-            runtime,
-            entityId: ownerId,
-            roomId: dmRoomId,
-            source: "telegram",
-            text:
-              "You only gave me a heading. Use the calendar results you already have and list the actual events for today by name.",
-          });
-        }
-
-        expectContainsAll(response, ["dentist", "lunch with mike"]);
-      },
-      180_000,
-    );
-
-    itIf(EXTENDED_JOURNEY_SCENARIOS_ENABLED)(
-      "lists the weekend events from the seeded calendar cache",
-      async () => {
-        let response = await sendUserTurn({
-          runtime,
-          entityId: ownerId,
-          roomId: dmRoomId,
-          source: "telegram",
-          text: [
-            "Use my connected calendar.",
-            "What's going on this weekend?",
-            "List the actual event names on my calendar this weekend.",
-            "Do not give me just a heading.",
-          ].join(" "),
-        });
-
-        if (
-          !containsAllFragments(response, ["rowan soccer game"]) ||
-          !containsAllFragments(response, ["mason birthday party"])
-        ) {
-          response = await sendUserTurn({
-            runtime,
-            entityId: ownerId,
-            roomId: dmRoomId,
-            source: "telegram",
-            text:
-              "You only gave me a partial answer. Use the calendar results you already have and list the actual weekend events by name.",
-          });
-        }
-
-        expectContainsAtLeast(
-          response,
-          [
-            "rowan with shaw this weekend",
-            "rowan soccer game",
-            "mason birthday party",
-            "family dinner at parents' house",
-            "adults-only wedding",
-          ],
-          4,
+      const findNewsTrigger = async () => {
+        const tasks = await listTriggerTasks(runtime);
+        return (
+          tasks.find((task) => {
+            const trigger = readTriggerConfig(task);
+            return Boolean(
+              trigger &&
+                normalizeText(trigger.instructions).includes(
+                  "financial and international news",
+                ),
+            );
+          }) ?? null
         );
-      },
-      180_000,
-    );
+      };
 
-    itIf(EXTENDED_JOURNEY_SCENARIOS_ENABLED)(
-      "surfaces the lunch reminder detail from the cached calendar event",
-      async () => {
-        let response = await sendUserTurn({
-          runtime,
-          entityId: ownerId,
-          roomId: dmRoomId,
-          source: "telegram",
-          text:
-            "Use my connected calendar. What does the note on my lunch with Mike event today say I need to remember?",
-        });
-
-        if (
-          !containsAllFragments(response, ["kentucky derby"]) &&
-          !containsAllFragments(response, ["gin"])
-        ) {
+      let triggerTask = await findNewsTrigger();
+      if (!triggerTask) {
+        try {
+          triggerTask = await waitForValue(
+            "news trigger",
+            findNewsTrigger,
+            (value) => value !== null,
+            15_000,
+            1_000,
+          );
+        } catch {
           response = await sendUserTurn({
             runtime,
             entityId: ownerId,
             roomId: dmRoomId,
             source: "telegram",
-            text:
-              "Use the lunch event description you already have on my calendar and answer directly.",
+            text: "Actually create that recurring 9am financial and international news heartbeat now. Do not just describe it.",
           });
-        }
 
-        expectContainsAtLeast(
-          response,
-          ["mike", "kentucky derby", "gin", "cocktail"],
-          2,
-        );
-      },
-      180_000,
-    );
-
-    itIf(EXTENDED_JOURNEY_SCENARIOS_ENABLED)(
-      "finds the most overdue bill from email context",
-      async () => {
-        let response = await sendUserTurn({
-          runtime,
-          entityId: ownerId,
-          roomId: dmRoomId,
-          source: "telegram",
-          text:
-            "Use my connected email. Check my email and tell me which bill is the most overdue, and say why.",
-        });
-
-        if (
-          !containsAllFragments(response, ["electric"]) &&
-          !containsAllFragments(response, ["march 28"])
-        ) {
-          response = await sendUserTurn({
-            runtime,
-            entityId: ownerId,
-            roomId: dmRoomId,
-            source: "telegram",
-            text:
-              "Yes. Search my connected email for bill or invoice messages and tell me the exact bill, who sent it, and the overdue date.",
-          });
-        }
-
-        if (
-          !containsAllFragments(response, ["electric"]) &&
-          !containsAllFragments(response, ["march 28"])
-        ) {
-          console.info(
-            `[assistant-user-journeys-live] overdue bill response: ${response}`,
+          triggerTask = await waitForValue(
+            "news trigger",
+            findNewsTrigger,
+            (value) => value !== null,
+            60_000,
+            1_000,
           );
         }
+      }
 
-        expectContainsAtLeast(
-          response,
-          ["electric", "march 28", "power", "most overdue"],
-          2,
-        );
-      },
-      180_000,
-    );
-
-    it(
-      "creates a recurring morning-news heartbeat from natural language",
-      async () => {
-        let response = await sendUserTurn({
-          runtime,
-          entityId: ownerId,
-          roomId: dmRoomId,
-          source: "telegram",
-          text: "Hey Eliza, can you create a recurring 9am heartbeat that summarizes financial and international news every morning and sends it to me?",
-        });
-
-        const findNewsTrigger = async () => {
-          const tasks = await listTriggerTasks(runtime);
-          return (
-            tasks.find((task) => {
-              const trigger = readTriggerConfig(task);
-              return Boolean(
-                trigger &&
-                  normalizeText(trigger.instructions).includes(
-                    "financial and international news",
-                  ),
-              );
-            }) ?? null
-          );
-        };
-
-        let triggerTask = await findNewsTrigger();
-        if (!triggerTask) {
-          try {
-            triggerTask = await waitForValue(
-              "news trigger",
-              findNewsTrigger,
-              (value) => value !== null,
-              15_000,
-              1_000,
-            );
-          } catch {
-            response = await sendUserTurn({
-              runtime,
-              entityId: ownerId,
-              roomId: dmRoomId,
-              source: "telegram",
-              text:
-                "Actually create that recurring 9am financial and international news heartbeat now. Do not just describe it.",
-            });
-
-            triggerTask = await waitForValue(
-              "news trigger",
-              findNewsTrigger,
-              (value) => value !== null,
-              60_000,
-              1_000,
-            );
-          }
-        }
-
-        const trigger = readTriggerConfig(triggerTask);
-        expect(trigger).not.toBeNull();
-        expect(normalizeText(trigger?.instructions ?? "")).toContain(
-          "financial and international news",
-        );
-        expect(
-          Boolean(trigger?.cronExpression) || Boolean(trigger?.intervalMs),
-        ).toBe(true);
-        expect(normalizeText(response)).toMatch(
-          /(scheduled|heartbeat|every morning|9am|9:00)/,
-        );
-      },
-      180_000,
-    );
+      const trigger = readTriggerConfig(triggerTask);
+      expect(trigger).not.toBeNull();
+      expect(normalizeText(trigger?.instructions ?? "")).toContain(
+        "financial and international news",
+      );
+      expect(
+        Boolean(trigger?.cronExpression) || Boolean(trigger?.intervalMs),
+      ).toBe(true);
+      expect(normalizeText(response)).toMatch(
+        /(scheduled|heartbeat|every morning|9am|9:00)/,
+      );
+    }, 180_000);
   },
 );

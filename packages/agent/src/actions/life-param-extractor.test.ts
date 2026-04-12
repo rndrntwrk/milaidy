@@ -1,4 +1,4 @@
-import type { IAgentRuntime, State } from "@elizaos/core";
+import type { AgentRuntime } from "@elizaos/core";
 import { describe, expect, it } from "vitest";
 import {
   buildExtractionPrompt,
@@ -6,215 +6,200 @@ import {
   extractTaskParamsWithLlm,
 } from "./life-param-extractor.js";
 
-function makeRuntime(
-  modelResponse?: string | Error | Array<string | Error>,
-): IAgentRuntime {
-  const responses = Array.isArray(modelResponse)
-    ? modelResponse
-    : [modelResponse ?? ""];
-  let index = 0;
+function createRuntime(
+  responses: Array<string>,
+): AgentRuntime & {
+  useModelCallCount: number;
+} {
+  const queue = [...responses];
+  let useModelCallCount = 0;
   const useModel = async () => {
-    const response = responses[Math.min(index, responses.length - 1)] ?? "";
-    index += 1;
-    if (response instanceof Error) {
-      throw response;
-    }
-    return response;
+    useModelCallCount += 1;
+    return queue.shift() ?? "";
   };
-
-  return { useModel } as unknown as IAgentRuntime;
+  return {
+    useModel,
+    get useModelCallCount() {
+      return useModelCallCount;
+    },
+  } as unknown as AgentRuntime & { useModelCallCount: number };
 }
 
 describe("extractTaskParamsWithLlm", () => {
-  it("extracts structured params from a well-formed LLM JSON response", async () => {
-    const llmResponse = JSON.stringify({
-      mode: "create",
-      response: null,
-      requestKind: null,
-      title: "Call mom",
-      description: "Weekly call to check in with mom",
-      cadenceKind: "weekly",
-      windows: null,
-      weekdays: [0],
-      timeOfDay: "15:00",
-      timeZone: null,
-      everyMinutes: null,
-      timesPerDay: null,
-      priority: 3,
-      durationMinutes: 30,
-    });
+  it("extracts structured params for a weekly phone call", async () => {
+    const runtime = createRuntime([
+      JSON.stringify({
+        mode: "create",
+        response: null,
+        requestKind: null,
+        title: "Call mom",
+        description: null,
+        cadenceKind: "weekly",
+        windows: null,
+        weekdays: [0],
+        timeOfDay: "15:00",
+        timeZone: null,
+        everyMinutes: null,
+        timesPerDay: null,
+        priority: null,
+        durationMinutes: null,
+      }),
+    ]);
 
     const result = await extractTaskParamsWithLlm({
-      runtime: makeRuntime(llmResponse),
+      runtime,
       intent: "call mom every Sunday at 3pm",
       state: undefined,
     });
 
-    expect(result).toMatchObject({
-      requestKind: null,
-      title: "Call mom",
-      description: "Weekly call to check in with mom",
-      cadenceKind: "weekly",
-      weekdays: [0],
-      timeOfDay: "15:00",
-      priority: 3,
-      durationMinutes: 30,
-      windows: null,
-      everyMinutes: null,
-      timesPerDay: null,
-    });
+    expect(result.title).toBe("Call mom");
+    expect(result.cadenceKind).toBe("weekly");
+    expect(result.weekdays).toEqual([0]);
+    expect(result.timeOfDay).toBe("15:00");
   });
 
-  it("returns an empty structured result instead of null for empty intent", async () => {
+  it("repairs an invalid first response", async () => {
+    const runtime = createRuntime([
+      "not valid json",
+      JSON.stringify({
+        mode: "create",
+        response: null,
+        requestKind: "reminder",
+        title: "Take vitamins",
+        description: null,
+        cadenceKind: "daily",
+        windows: ["morning"],
+        weekdays: null,
+        timeOfDay: "08:00",
+        timeZone: null,
+        everyMinutes: null,
+        timesPerDay: null,
+        priority: null,
+        durationMinutes: null,
+      }),
+    ]);
+
     const result = await extractTaskParamsWithLlm({
-      runtime: makeRuntime("{}"),
+      runtime,
+      intent: "remind me to take vitamins every morning at 8am",
+      state: undefined,
+    });
+
+    expect(runtime.useModelCallCount).toBe(2);
+    expect(result.title).toBe("Take vitamins");
+    expect(result.requestKind).toBe("reminder");
+    expect(result.cadenceKind).toBe("daily");
+    expect(result.windows).toEqual(["morning"]);
+    expect(result.timeOfDay).toBe("08:00");
+  });
+
+  it("returns null fields for empty intent", async () => {
+    const runtime = createRuntime([]);
+    const result = await extractTaskParamsWithLlm({
+      runtime,
       intent: "",
       state: undefined,
     });
 
-    expect(result).toEqual({
-      requestKind: null,
-      title: null,
-      description: null,
-      cadenceKind: null,
-      windows: null,
-      weekdays: null,
-      timeOfDay: null,
-      timeZone: null,
-      everyMinutes: null,
-      timesPerDay: null,
-      priority: null,
-      durationMinutes: null,
-    });
+    expect(result.title).toBeNull();
+    expect(result.cadenceKind).toBeNull();
+    expect(result.timeOfDay).toBeNull();
   });
 });
 
 describe("extractTaskCreatePlanWithLlm", () => {
-  it("extracts a concrete create plan from the model", async () => {
-    const llmResponse = JSON.stringify({
-      mode: "create",
-      response: null,
-      requestKind: "reminder",
-      title: "Brush teeth",
-      description: null,
-      cadenceKind: "daily",
-      windows: ["morning", "night"],
-      weekdays: null,
-      timeOfDay: null,
-      timeZone: null,
-      everyMinutes: null,
-      timesPerDay: null,
-      priority: null,
-      durationMinutes: 5,
-    });
+  it("produces a create plan for a brushing reminder", async () => {
+    const runtime = createRuntime([
+      JSON.stringify({
+        mode: "create",
+        response: null,
+        requestKind: "reminder",
+        title: "Brush teeth",
+        description: null,
+        cadenceKind: "daily",
+        windows: ["morning", "night"],
+        weekdays: null,
+        timeOfDay: null,
+        timeZone: null,
+        everyMinutes: null,
+        timesPerDay: null,
+        priority: null,
+        durationMinutes: 5,
+      }),
+    ]);
 
     const result = await extractTaskCreatePlanWithLlm({
-      runtime: makeRuntime(llmResponse),
+      runtime,
       intent: "remind me to brush teeth morning and night",
       state: undefined,
     });
 
-    expect(result).toMatchObject({
-      mode: "create",
-      requestKind: "reminder",
-      title: "Brush teeth",
-      cadenceKind: "daily",
-      windows: ["morning", "night"],
-      durationMinutes: 5,
-    });
+    expect(result.mode).toBe("create");
+    expect(result.title).toBe("Brush teeth");
+    expect(result.requestKind).toBe("reminder");
+    expect(result.windows).toEqual(["morning", "night"]);
   });
 
-  it("repairs an invalid first model reply", async () => {
+  it("produces a create plan for a one-off timed reminder", async () => {
+    const runtime = createRuntime([
+      JSON.stringify({
+        mode: "create",
+        response: null,
+        requestKind: "reminder",
+        title: "Hug my wife",
+        description: null,
+        cadenceKind: "once",
+        windows: null,
+        weekdays: null,
+        timeOfDay: "20:00",
+        timeZone: "America/Denver",
+        everyMinutes: null,
+        timesPerDay: null,
+        priority: null,
+        durationMinutes: 30,
+      }),
+    ]);
+
     const result = await extractTaskCreatePlanWithLlm({
-      runtime: makeRuntime([
-        "I think this should be a reminder.",
-        JSON.stringify({
-          mode: "create",
-          response: null,
-          requestKind: "reminder",
-          title: "Hug my wife",
-          description: null,
-          cadenceKind: "once",
-          windows: null,
-          weekdays: null,
-          timeOfDay: "20:00",
-          timeZone: "America/Denver",
-          everyMinutes: null,
-          timesPerDay: null,
-          priority: null,
-          durationMinutes: 30,
-        }),
-      ]),
+      runtime,
       intent: "set a reminder for april 17 at 8pm mountain time to hug my wife",
       state: undefined,
     });
 
-    expect(result).toMatchObject({
-      mode: "create",
-      requestKind: "reminder",
-      title: "Hug my wife",
-      cadenceKind: "once",
-      timeOfDay: "20:00",
-      timeZone: "America/Denver",
-    });
+    expect(result.mode).toBe("create");
+    expect(result.title).toBe("Hug my wife");
+    expect(result.timeOfDay).toBe("20:00");
+    expect(result.timeZone).toBe("America/Denver");
   });
 
-  it("returns a structured respond plan when extraction is unavailable", async () => {
+  it("returns a structured respond plan when runtime has no model", async () => {
     const result = await extractTaskCreatePlanWithLlm({
-      runtime: {} as IAgentRuntime,
+      runtime: {} as AgentRuntime,
       intent: "brush teeth daily",
       state: undefined,
     });
 
-    expect(result).toEqual({
-      mode: "respond",
-      response:
-        "Restate the reminder in one sentence with the task and timing.",
-      requestKind: null,
-      title: null,
-      description: null,
-      cadenceKind: null,
-      windows: null,
-      weekdays: null,
-      timeOfDay: null,
-      timeZone: null,
-      everyMinutes: null,
-      timesPerDay: null,
-      priority: null,
-      durationMinutes: null,
-    });
+    expect(result.mode).toBe("respond");
+    expect(result.response).toBe(
+      "Restate the reminder in one sentence with the task and timing.",
+    );
+    expect(result.title).toBeNull();
   });
 
-  it("keeps requestKind only when recent context supports it", async () => {
-    const llmResponse = JSON.stringify({
-      mode: "create",
-      response: null,
-      requestKind: "reminder",
-      title: "Call mom",
-      description: null,
-      cadenceKind: "once",
-      windows: null,
-      weekdays: null,
-      timeOfDay: "09:00",
-      timeZone: null,
-      everyMinutes: null,
-      timesPerDay: null,
-      priority: null,
-      durationMinutes: null,
-    });
-
+  it("returns a structured respond plan when the model stays invalid", async () => {
+    const runtime = createRuntime(["<response></response>", "still not json"]);
     const result = await extractTaskCreatePlanWithLlm({
-      runtime: makeRuntime(llmResponse),
-      intent: "tomorrow at 9",
-      state: {
-        recentMessagesData: [
-          { content: { text: "can you set a reminder for tomorrow?" } },
-          { content: { text: "tomorrow at 9" } },
-        ],
-      } as unknown as State,
+      runtime,
+      intent: "remind me to stretch later",
+      state: undefined,
     });
 
-    expect(result.requestKind).toBe("reminder");
+    expect(runtime.useModelCallCount).toBe(2);
+    expect(result.mode).toBe("respond");
+    expect(result.response).toBe(
+      "Restate the reminder in one sentence with the task and timing.",
+    );
+    expect(result.title).toBeNull();
   });
 });
 

@@ -211,9 +211,10 @@ export async function handleShopifyRoute(
       };
 
       for (let currentPage = 1; currentPage <= page; currentPage++) {
-        const data: ShopifyProductsPageResponse = await shopifyGql<ShopifyProductsPageResponse>(
-          config,
-          `query ListProductsPage($first: Int!, $after: String, $query: String) {
+        const data: ShopifyProductsPageResponse =
+          await shopifyGql<ShopifyProductsPageResponse>(
+            config,
+            `query ListProductsPage($first: Int!, $after: String, $query: String) {
             products(first: $first, after: $after, query: $query, sortKey: TITLE) {
               edges {
                 cursor
@@ -226,19 +227,22 @@ export async function handleShopifyRoute(
               pageInfo { hasNextPage endCursor }
             }
           }`,
-          {
-            first: limit,
-            after,
-            query: search,
-          },
-        );
+            {
+              first: limit,
+              after,
+              query: search,
+            },
+          );
 
         if (currentPage === page) {
           pageProducts = data.products.edges;
           break;
         }
 
-        if (!data.products.pageInfo.hasNextPage || !data.products.pageInfo.endCursor) {
+        if (
+          !data.products.pageInfo.hasNextPage ||
+          !data.products.pageInfo.endCursor
+        ) {
           pageProducts = [];
           break;
         }
@@ -594,7 +598,10 @@ export async function handleShopifyRoute(
   if (adjustMatch && method === "POST") {
     try {
       const raw = await readBody(req);
-      const body = JSON.parse(raw) as { delta?: number; locationId?: string | null };
+      const body = JSON.parse(raw) as {
+        delta?: number;
+        locationId?: string | null;
+      };
       const delta = Number(body.delta);
       if (!Number.isInteger(delta) || delta === 0) {
         sendJsonError(res, 400, "delta must be a non-zero integer");

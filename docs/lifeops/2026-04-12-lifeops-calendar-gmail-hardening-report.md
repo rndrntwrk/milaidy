@@ -131,9 +131,9 @@ Command:
 
 ```bash
 bunx vitest run --config vitest.e2e.config.ts \
-  packages/agent/test/lifeops-calendar-chat.e2e.test.ts \
+  packages/agent/test/lifeops-calendar-chat.integration.test.ts \
   packages/agent/test/lifeops-gmail-chat.e2e.test.ts \
-  packages/agent/test/lifeops-life-chat.e2e.test.ts \
+  packages/agent/test/lifeops-life-chat.integration.test.ts \
   packages/agent/test/lifeops-google-managed.e2e.test.ts
 ```
 

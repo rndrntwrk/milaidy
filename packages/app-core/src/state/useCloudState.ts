@@ -410,7 +410,9 @@ export function useCloudState({
                 timeoutMs: 15_000,
               }).catch(() => {});
             } else {
-              void fetch("/api/agent/restart", { method: "POST" }).catch(() => {});
+              void fetch("/api/agent/restart", { method: "POST" }).catch(
+                () => {},
+              );
             }
 
             void loadWalletConfig();

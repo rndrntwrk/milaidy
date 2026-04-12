@@ -10,6 +10,7 @@ import {
 } from "@miladyai/plugin-selfcontrol/selfcontrol";
 import { afterEach, describe, expect, it } from "vitest";
 import { req } from "../../../test/helpers/http";
+import { canBindLoopback } from "../../../test/helpers/loopback";
 import { startApiServer } from "../src/api/server";
 import { DatabaseSync } from "../src/test-utils/sqlite-compat";
 
@@ -90,6 +91,7 @@ function createRuntimeForLifeOpsEarnedAccessTests(): AgentRuntime {
 let tempDir = "";
 let hostsFilePath = "";
 let closeServer: (() => Promise<void>) | undefined;
+const describeLoopback = describe.skipIf(!(await canBindLoopback()));
 
 afterEach(async () => {
   cancelSelfControlExpiryTimer();
@@ -166,7 +168,7 @@ async function readWebsiteBlockStatus(port: number) {
   return response.data as Record<string, unknown>;
 }
 
-describe("LifeOps earned access E2E", () => {
+describeLoopback("LifeOps earned access E2E", () => {
   it("unlocks a fixed-duration earned-access group on completion and relocks it through the API", async () => {
     const server = await createServer();
 

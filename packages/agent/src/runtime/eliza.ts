@@ -3817,12 +3817,12 @@ export async function startEliza(
   //     to the next, guaranteeing that cross-plugin getService() calls resolve.
   {
     try {
-      logger.info("[eliza] Pre-registering internal roles capability...");
+      logger.info("[eliza] Pre-registering roles capability...");
       await runtime.registerPlugin(rolesPlugin);
-      logger.info("[eliza] ✓ internal roles capability pre-registered");
+      logger.info("[eliza] ✓ roles capability pre-registered");
     } catch (err) {
       logger.warn(
-        `[eliza] Internal roles capability pre-registration failed: ${formatError(err)}`,
+        `[eliza] Roles capability pre-registration failed: ${formatError(err)}`,
       );
     }
 
@@ -4308,7 +4308,7 @@ export async function startEliza(
               await newRuntime.registerPlugin(rolesPlugin);
             } catch (err) {
               logger.warn(
-                `[eliza] Hot-reload: internal roles capability pre-registration failed: ${formatError(err)}`,
+                `[eliza] Hot-reload: roles capability pre-registration failed: ${formatError(err)}`,
               );
             }
 

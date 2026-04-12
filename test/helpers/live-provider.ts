@@ -13,6 +13,8 @@
  *   const provider = requireLiveProvider("openai");   // skips if openai key missing
  */
 
+import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
 // Load .env from repo root if dotenv is available
@@ -23,6 +25,31 @@ try {
 } catch {
   // dotenv optional
 }
+
+const ELIZA_CLOUD_OPENAI_BASE_URL = "https://elizacloud.ai/api/v1";
+
+function loadConfiguredCloudApiKey(): string {
+  const configuredPath =
+    process.env.MILADY_CONFIG_PATH?.trim() ||
+    process.env.ELIZA_CONFIG_PATH?.trim() ||
+    path.join(os.homedir(), ".milady", "milady.json");
+
+  try {
+    const raw = fs.readFileSync(configuredPath, "utf8");
+    const parsed = JSON.parse(raw) as {
+      cloud?: {
+        apiKey?: unknown;
+      };
+    };
+    return typeof parsed.cloud?.apiKey === "string"
+      ? parsed.cloud.apiKey.trim()
+      : "";
+  } catch {
+    return "";
+  }
+}
+
+const configuredCloudApiKey = loadConfiguredCloudApiKey();
 
 // ---------------------------------------------------------------------------
 // Types
@@ -144,7 +171,7 @@ export function selectLiveProvider(
     if (!apiKey) continue;
 
     const baseUrl = def.baseUrlEnvVar
-      ? (process.env[def.baseUrlEnvVar]?.trim() || def.defaultBaseUrl)
+      ? process.env[def.baseUrlEnvVar]?.trim() || def.defaultBaseUrl
       : def.defaultBaseUrl;
 
     const smallModel =
@@ -173,6 +200,35 @@ export function selectLiveProvider(
       largeModel,
       pluginPackage: def.plugin,
       env,
+    };
+  }
+
+  const cloudApiKey =
+    process.env.ELIZAOS_CLOUD_API_KEY?.trim() ||
+    process.env.ELIZA_CLOUD_API_KEY?.trim() ||
+    configuredCloudApiKey;
+  if (cloudApiKey && (!preferredProvider || preferredProvider === "openai")) {
+    const smallModel = process.env.OPENAI_SMALL_MODEL?.trim() || "gpt-5.4-mini";
+    const largeModel =
+      process.env.OPENAI_LARGE_MODEL?.trim() ||
+      process.env.OPENAI_SMALL_MODEL?.trim() ||
+      "gpt-5.4-mini";
+
+    return {
+      name: "openai",
+      apiKey: cloudApiKey,
+      baseUrl: ELIZA_CLOUD_OPENAI_BASE_URL,
+      smallModel,
+      largeModel,
+      pluginPackage: "@elizaos/plugin-openai",
+      env: {
+        OPENAI_API_KEY: cloudApiKey,
+        OPENAI_BASE_URL: ELIZA_CLOUD_OPENAI_BASE_URL,
+        OPENAI_SMALL_MODEL: smallModel,
+        OPENAI_LARGE_MODEL: largeModel,
+        SMALL_MODEL: process.env.SMALL_MODEL?.trim() || smallModel,
+        LARGE_MODEL: process.env.LARGE_MODEL?.trim() || largeModel,
+      },
     };
   }
 
@@ -209,7 +265,17 @@ export function isLiveTestEnabled(): boolean {
  * Returns a list of all LLM provider env var names that have keys set.
  */
 export function availableProviderNames(): LiveProviderName[] {
-  return PROVIDERS.filter((def) =>
-    def.keyEnvVars.some((k) => process.env[k]?.trim()),
-  ).map((def) => def.name);
+  const providers = new Set<LiveProviderName>(
+    PROVIDERS.filter((def) =>
+      def.keyEnvVars.some((k) => process.env[k]?.trim()),
+    ).map((def) => def.name),
+  );
+  if (
+    process.env.ELIZAOS_CLOUD_API_KEY?.trim() ||
+    process.env.ELIZA_CLOUD_API_KEY?.trim() ||
+    configuredCloudApiKey
+  ) {
+    providers.add("openai");
+  }
+  return [...providers];
 }

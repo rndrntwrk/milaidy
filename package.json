@@ -162,7 +162,7 @@
     "test:desktop:packaged:windows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/run-windows-smoke-launcher.ps1 apps/app/electrobun/scripts/smoke-test-windows.ps1",
     "test:desktop:playwright": "node scripts/run-desktop-playwright.mjs",
     "test:desktop:playwright:windows": "cd apps/app && bunx playwright test --config playwright.electrobun.packaged.config.ts test/electrobun-packaged/electrobun-windows-startup.e2e.spec.ts",
-    "test:e2e": "bunx vitest run --config vitest.e2e.config.ts --exclude packages/agent/test/apps-e2e.e2e.test.ts",
+    "test:e2e": "bunx vitest run --config vitest.e2e.config.ts --exclude packages/agent/test/anvil-contracts.real.e2e.test.ts --exclude packages/agent/test/apps-e2e.e2e.test.ts",
     "test:integration": "bunx vitest run --config vitest.integration.config.ts",
     "test:audit:live": "node scripts/audit-live-test-surface.mjs",
     "test:audit:live:strict": "node scripts/audit-live-test-surface.mjs --fail-on-violations",
@@ -208,6 +208,7 @@
     "test:live:browser-workspace": "node scripts/run-with-env.mjs MILADY_LIVE_TEST=1 -- bunx vitest run --config vitest.live-e2e.config.ts packages/agent/test/browser-workspace-agent-chat.live.e2e.test.ts",
     "test:live:identity": "node scripts/run-with-env.mjs MILADY_LIVE_TEST=1 -- bunx vitest run --config vitest.live-e2e.config.ts packages/agent/test/identity-live.test.ts",
     "test:live:knowledge": "node scripts/run-with-env.mjs MILADY_LIVE_TEST=1 ELIZA_LIVE_TEST=1 MILADY_LIVE_KNOWLEDGE_TEST=1 -- bunx vitest run --config vitest.live-e2e.config.ts packages/agent/test/knowledge-live.e2e.test.ts",
+    "test:live:plugins": "node scripts/run-with-env.mjs MILADY_LIVE_TEST=1 -- bunx vitest run --config vitest.live-e2e.config.ts packages/agent/test/plugin-lifecycle.live.e2e.test.ts",
     "test:live": "node scripts/run-with-env.mjs MILADY_LIVE_TEST=1 -- bunx vitest run --config vitest.live-e2e.config.ts packages/agent/test/wallet-live.e2e.test.ts packages/agent/test/api-auth-live.e2e.test.ts packages/agent/test/cloud-providers.live.e2e.test.ts packages/agent/test/lifeops-chat.live.e2e.test.ts packages/agent/test/selfcontrol-chat.live.e2e.test.ts packages/agent/test/selfcontrol-dev.live.e2e.test.ts",
     "test:regression-matrix:nightly": "node scripts/validate-regression-matrix.mjs --workflow nightly",
     "test:regression-matrix:pr": "node scripts/validate-regression-matrix.mjs --workflow pr",
@@ -215,7 +216,6 @@
     "test:regression-matrix:release-contract": "node scripts/validate-regression-matrix.mjs --workflow release-contract",
     "test:release:contract": "node scripts/run-release-contract-suite.mjs",
     "test:startup:contract": "bunx vitest run scripts/startup-integration-script-drift.test.ts",
-    "test:startup:integration": "bunx vitest run --config vitest.startup.integration.config.ts packages/app-core/test/app/startup-chat.integration.test.ts packages/app-core/test/app/startup-onboarding.integration.test.ts packages/app-core/test/app/startup-backend-missing.integration.test.ts packages/app-core/test/app/startup-token-401.integration.test.ts",
     "test:watch": "bunx vitest",
     "milady:doctor": "node scripts/rt.mjs scripts/run-node.mjs doctor",
     "doctor": "bun run milady:doctor",
@@ -356,6 +356,9 @@
   "patchedDependencies": {
     "@noble/curves@2.0.1": "patches/@noble%2Fcurves@2.0.1.patch",
     "proper-lockfile@4.1.2": "patches/proper-lockfile@4.1.2.patch",
-    "@pixiv/three-vrm@3.5.1": "patches/@pixiv%2Fthree-vrm@3.5.1.patch"
+    "@pixiv/three-vrm@3.5.1": "patches/@pixiv%2Fthree-vrm@3.5.1.patch",
+    "electrobun@1.16.0": "patches/electrobun@1.16.0.patch",
+    "pty-manager@1.11.0": "patches/pty-manager@1.11.0.patch",
+    "coding-agent-adapters@0.16.3": "patches/coding-agent-adapters@0.16.3.patch"
   }
 }

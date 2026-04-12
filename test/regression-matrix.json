@@ -11,7 +11,6 @@
         "db-check",
         "integration-deterministic",
         "e2e-deterministic",
-        "startup-integration",
         "desktop-contract",
         "validation-e2e",
         "live-cloud",
@@ -30,7 +29,6 @@
         "db-check",
         "integration-deterministic",
         "e2e-deterministic",
-        "startup-integration",
         "desktop-contract",
         "validation-e2e",
         "regression-matrix-nightly",
@@ -80,10 +78,6 @@
     "e2e-heavy": {
       "tier": "heavy",
       "command": "bun run test:e2e:heavy"
-    },
-    "startup-integration": {
-      "tier": "required",
-      "command": "bun run test:startup:integration"
     },
     "desktop-contract": {
       "tier": "required",
@@ -158,14 +152,12 @@
           "coverage",
           "integration-deterministic",
           "e2e-deterministic",
-          "startup-integration",
           "validation-e2e"
         ],
         "nightly": [
           "coverage",
           "integration-deterministic",
           "e2e-deterministic",
-          "startup-integration",
           "validation-e2e",
           "e2e-heavy",
           "live-cloud"
@@ -182,15 +174,13 @@
           "coverage",
           "db-check",
           "integration-deterministic",
-          "e2e-deterministic",
-          "startup-integration"
+          "e2e-deterministic"
         ],
         "nightly": [
           "coverage",
           "db-check",
           "integration-deterministic",
           "e2e-deterministic",
-          "startup-integration",
           "e2e-heavy",
           "live-cloud"
         ],
@@ -211,7 +201,6 @@
           "db-check",
           "integration-deterministic",
           "e2e-deterministic",
-          "startup-integration",
           "validation-e2e"
         ],
         "nightly": [
@@ -219,7 +208,6 @@
           "db-check",
           "integration-deterministic",
           "e2e-deterministic",
-          "startup-integration",
           "validation-e2e",
           "e2e-heavy",
           "live-cloud"
@@ -300,13 +288,11 @@
         "pr": [
           "integration-deterministic",
           "e2e-deterministic",
-          "startup-integration",
           "validation-e2e"
         ],
         "nightly": [
           "integration-deterministic",
           "e2e-deterministic",
-          "startup-integration",
           "validation-e2e",
           "e2e-heavy",
           "live-cloud"
@@ -545,7 +531,7 @@
       ]
     },
     "desktopInventorySources": [
-      "apps/app/electrobun/src/__tests__/kitchen-sink.test.ts"
+      "docs/apps/desktop/release-heavy-inventory.md"
     ],
     "forbiddenDesktopInventoryMarkers": [
       "it.todo(",

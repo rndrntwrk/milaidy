@@ -41,38 +41,33 @@ describe("Coding agent route readiness", () => {
     }
   });
 
-  it("returns empty coordinator status instead of 503 when the coordinator is unavailable", async () => {
+  it("returns 503 when the coordinator is unavailable", async () => {
     const response = await req(
       server?.port ?? 0,
       "GET",
       "/api/coding-agents/coordinator/status",
     );
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(503);
     expect(response.data).toMatchObject({
-      supervisionLevel: "autonomous",
-      taskCount: 0,
-      tasks: [],
-      recentTasks: [],
-      taskThreadCount: 0,
-      taskThreads: [],
-      pendingConfirmations: 0,
-      frameworks: [],
+      error: "Coding agent coordinator unavailable",
     });
   });
 
-  it("returns empty preflight instead of 503 when PTY service is unavailable", async () => {
+  it("returns 503 when PTY service is unavailable", async () => {
     const response = await req(
       server?.port ?? 0,
       "GET",
       "/api/coding-agents/preflight",
     );
 
-    expect(response.status).toBe(200);
-    expect(response.data).toEqual([]);
+    expect(response.status).toBe(503);
+    expect(response.data).toMatchObject({
+      error: "Coding agent preflight unavailable",
+    });
   });
 
-  it("returns a safe startup response for task and session polling before services exist", async () => {
+  it("returns 503 for task and session polling before services exist", async () => {
     const tasks = await req(
       server?.port ?? 0,
       "GET",
@@ -84,26 +79,17 @@ describe("Coding agent route readiness", () => {
       "/api/coding-agents/sessions",
     );
 
-    expect([200, 503]).toContain(tasks.status);
-    if (tasks.status === 200) {
-      expect(tasks.data).toEqual({ tasks: [] });
-    } else {
-      expect(tasks.data).toMatchObject({
-        error: expect.any(String),
-      });
-    }
-
-    expect([200, 503]).toContain(sessions.status);
-    if (sessions.status === 200) {
-      expect(sessions.data).toEqual({ sessions: [] });
-    } else {
-      expect(sessions.data).toMatchObject({
-        error: expect.any(String),
-      });
-    }
+    expect(tasks.status).toBe(503);
+    expect(tasks.data).toMatchObject({
+      error: "Coding agent task service unavailable",
+    });
+    expect(sessions.status).toBe(503);
+    expect(sessions.data).toMatchObject({
+      error: "Coding agent session service unavailable",
+    });
   });
 
-  it("returns not found for task and session detail polling before services exist", async () => {
+  it("returns 503 for task and session detail polling before services exist", async () => {
     const task = await req(
       server?.port ?? 0,
       "GET",
@@ -115,9 +101,13 @@ describe("Coding agent route readiness", () => {
       "/api/coding-agents/sessions/nonexistent-session",
     );
 
-    expect(task.status).toBe(404);
-    expect(task.data).toMatchObject({ error: "Task not found" });
-    expect(session.status).toBe(404);
-    expect(session.data).toMatchObject({ error: "Session not found" });
+    expect(task.status).toBe(503);
+    expect(task.data).toMatchObject({
+      error: "Coding agent task service unavailable",
+    });
+    expect(session.status).toBe(503);
+    expect(session.data).toMatchObject({
+      error: "Coding agent session service unavailable",
+    });
   });
 });

@@ -192,7 +192,7 @@ async function hasNonSymlinkWorkspaceNodeModulesPackage(
 function wrapPluginWithErrorBoundary(
   pluginName: string,
   plugin: Plugin,
-  options?: { isCore?: boolean },
+  _options?: { isCore?: boolean },
 ): Plugin {
   const wrapped: Plugin = { ...plugin };
 
@@ -206,15 +206,7 @@ function wrapPluginWithErrorBoundary(
         logger.error(
           `[eliza] Plugin "${pluginName}" crashed during init: ${formatError(err)}`,
         );
-        // Core plugins are essential — re-throw so the agent does not
-        // start in an undefined state (e.g. missing database adapter).
-        if (options?.isCore) {
-          throw err;
-        }
-        // Optional plugins continue in degraded mode.
-        logger.warn(
-          `[eliza] Plugin "${pluginName}" will run in degraded mode (init failed)`,
-        );
+        throw err;
       }
     };
   }
@@ -231,12 +223,7 @@ function wrapPluginWithErrorBoundary(
           logger.error(
             `[eliza] Provider "${provider.name}" (plugin: ${pluginName}) crashed: ${msg}`,
           );
-          // Return an error marker so downstream consumers can detect
-          // the failure rather than silently using empty data.
-          return {
-            text: `[Provider ${provider.name} error: ${msg}]`,
-            data: { _providerError: true },
-          };
+          throw err;
         }
       },
     }));
@@ -430,7 +417,13 @@ async function linkMissingPackagesFromNodeModules(params: {
         if (!scopedEntry.isDirectory() && !scopedEntry.isSymbolicLink()) {
           continue;
         }
-        await fs.symlink(scopedSourcePath, scopedTargetPath, "dir");
+        try {
+          await fs.symlink(scopedSourcePath, scopedTargetPath, "dir");
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
+            throw error;
+          }
+        }
       }
       continue;
     }
@@ -442,7 +435,13 @@ async function linkMissingPackagesFromNodeModules(params: {
       continue;
     }
 
-    await fs.symlink(sourcePath, targetPath, "dir");
+    try {
+      await fs.symlink(sourcePath, targetPath, "dir");
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
+        throw error;
+      }
+    }
   }
 }
 
@@ -845,7 +844,17 @@ export async function resolvePlugins(
           logger.debug(
             `[eliza] Loading repo node_modules plugin: ${pluginName}`,
           );
-          mod = await importOfficialPluginFromNodeModules();
+          try {
+            mod = await importOfficialPluginFromNodeModules();
+          } catch (error) {
+            logger.warn(
+              `[eliza] Repo node_modules plugin import failed for ${pluginName}; falling back to workspace override: ${formatError(error)}`,
+            );
+            mod = await importPluginModuleFromPath(
+              workspaceOverridePath,
+              pluginName,
+            );
+          }
         } else {
           logger.debug(
             `[eliza] Loading workspace plugin override: ${pluginName} from ${workspaceOverridePath}`,

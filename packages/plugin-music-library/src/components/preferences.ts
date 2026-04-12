@@ -1,5 +1,6 @@
 import { type IAgentRuntime, type UUID, logger } from '@elizaos/core';
 import { v4 } from 'uuid';
+import { requireRoomContext } from './storageContext';
 
 /**
  * User music preferences
@@ -71,64 +72,25 @@ export async function updateUserPreferences(
             throw new Error(`Entity ${entityId} not found`);
         }
 
-        // Determine roomId and worldId for component creation
-        // We need to ensure the room/world exists in the database, otherwise use agentId as fallback
-        let finalRoomId: UUID = runtime.agentId as UUID;
-        let finalWorldId: UUID = runtime.agentId as UUID;
+        if (!roomId) {
+            throw new Error(
+                '[DJ Preferences] roomId is required when creating a preferences component'
+            );
+        }
 
-        if (roomId) {
-            try {
-                const room = await runtime.getRoom(roomId);
-                if (room) {
-                    finalRoomId = roomId;
-                    finalWorldId = room.worldId || (runtime.agentId as UUID);
-                } else {
-                    logger.warn(
-                        `[DJ Preferences] Room ${roomId} not found in database, creating fallback room for component creation`
-                    );
-                    // Ensure the fallback world and room exist in the database
-                    try {
-                        await runtime.ensureWorldExists({
-                            id: finalWorldId,
-                            name: 'DJ Preferences Fallback World',
-                            agentId: runtime.agentId,
-                            serverId: finalWorldId,
-                            metadata: { purpose: 'preferences-fallback' },
-                        });
-                        logger.debug(`[DJ Preferences] Ensured fallback world ${finalWorldId}`);
-                    } catch (worldError) {
-                        logger.debug(`[DJ Preferences] Fallback world may already exist: ${worldError instanceof Error ? worldError.message : String(worldError)}`);
-                    }
-
-                    try {
-                        await runtime.ensureRoomExists({
-                            id: finalRoomId,
-                            name: 'DJ Preferences Fallback Room',
-                            source: 'dj-plugin',
-                            type: 'GROUP' as any,
-                            channelId: finalRoomId,
-                            serverId: finalRoomId,
-                            worldId: finalWorldId,
-                            metadata: { purpose: 'preferences-fallback' },
-                        });
-                        logger.debug(`[DJ Preferences] Created fallback room ${finalRoomId}`);
-                    } catch (roomError) {
-                        logger.debug(`[DJ Preferences] Fallback room may already exist: ${roomError instanceof Error ? roomError.message : String(roomError)}`);
-                    }
-                }
-            } catch (error) {
-                logger.warn(
-                    `[DJ Preferences] Error checking room ${roomId}: ${error instanceof Error ? error.message : String(error)}, using agentId as fallback`
-                );
-            }
+        const roomContext = await requireRoomContext(runtime, roomId, 'DJ Preferences');
+        if (worldId && worldId !== roomContext.worldId) {
+            throw new Error(
+                `[DJ Preferences] worldId ${worldId} does not match room ${roomId} world ${roomContext.worldId}`
+            );
         }
 
         await runtime.createComponent({
             id: v4() as UUID,
             entityId,
             agentId: runtime.agentId,
-            roomId: finalRoomId,
-            worldId: finalWorldId,
+            roomId: roomContext.roomId,
+            worldId: roomContext.worldId,
             sourceEntityId: runtime.agentId,
             type: PREFERENCES_COMPONENT_TYPE,
             createdAt: Date.now(),
@@ -290,4 +252,3 @@ export async function trackFavorite(
         worldId
     );
 }
-

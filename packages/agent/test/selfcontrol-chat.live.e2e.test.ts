@@ -6,6 +6,7 @@ import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { describeIf } from "../../../test/helpers/conditional-tests.ts";
+import { selectLiveProvider } from "../../../test/helpers/live-provider";
 import {
   createConversation,
   postConversationMessage,
@@ -14,9 +15,6 @@ import {
 
 const LIVE_TESTS_ENABLED =
   process.env.MILADY_LIVE_TEST === "1" || process.env.ELIZA_LIVE_TEST === "1";
-const LIVE_CHAT_TESTS_ENABLED = process.env.MILADY_LIVE_CHAT_TEST === "1";
-const SELFCONTROL_CHAT_TESTS_ENABLED =
-  process.env.MILADY_LIVE_SELFCONTROL_CHAT_TEST === "1";
 const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..", "..");
 const ENV_PATH = path.join(REPO_ROOT, ".env");
 
@@ -27,91 +25,10 @@ try {
   // dotenv is optional in this test environment.
 }
 
-const LIVE_PROVIDER_CANDIDATES = [
-  {
-    name: "groq",
-    keys: ["GROQ_API_KEY"],
-    predicate: () =>
-      /groq/i.test(process.env.OPENAI_BASE_URL ?? "") ||
-      !process.env.OPENAI_API_KEY?.trim(),
-  },
-  {
-    name: "openai",
-    keys: ["OPENAI_API_KEY"],
-    predicate: () => !/groq/i.test(process.env.OPENAI_BASE_URL ?? ""),
-  },
-  {
-    name: "groq",
-    keys: ["GROQ_API_KEY"],
-    predicate: () => true,
-  },
-  {
-    name: "openrouter",
-    keys: ["OPENROUTER_API_KEY"],
-    predicate: () => true,
-  },
-  {
-    name: "google",
-    keys: ["GOOGLE_GENERATIVE_AI_API_KEY", "GOOGLE_API_KEY"],
-    predicate: () => true,
-  },
-  {
-    name: "anthropic",
-    keys: ["ANTHROPIC_API_KEY"],
-    predicate: () => true,
-  },
-] as const;
-
-function selectLiveProvider(): {
-  name: string;
-  env: Record<string, string>;
-} | null {
-  for (const candidate of LIVE_PROVIDER_CANDIDATES) {
-    if (!candidate.predicate()) {
-      continue;
-    }
-    const env: Record<string, string> = {};
-    for (const key of candidate.keys) {
-      const value = process.env[key]?.trim();
-      if (value) {
-        env[key] = value;
-      }
-    }
-    if (Object.keys(env).length > 0) {
-      return {
-        name: candidate.name,
-        env,
-      };
-    }
-  }
-
-  return null;
-}
-
 const selectedLiveProvider = selectLiveProvider();
-
-function resolveSelectedProviderPlugin(): string | null {
-  switch (selectedLiveProvider?.name) {
-    case "groq":
-      return "@elizaos/plugin-groq";
-    case "openai":
-      return "@elizaos/plugin-openai";
-    case "openrouter":
-      return "@elizaos/plugin-openrouter";
-    case "google":
-      return "@elizaos/plugin-google-genai";
-    case "anthropic":
-      return "@elizaos/plugin-anthropic";
-    default:
-      return null;
-  }
-}
-
-const selectedLiveProviderPlugin = resolveSelectedProviderPlugin();
+const selectedLiveProviderPlugin = selectedLiveProvider?.pluginPackage ?? null;
 const liveSelfcontrolChatEnabled =
   LIVE_TESTS_ENABLED &&
-  LIVE_CHAT_TESTS_ENABLED &&
-  SELFCONTROL_CHAT_TESTS_ENABLED &&
   Boolean(selectedLiveProvider) &&
   Boolean(selectedLiveProviderPlugin);
 
@@ -298,6 +215,7 @@ async function startLiveRuntime(options?: {
     cwd: REPO_ROOT,
     env: {
       ...process.env,
+      ...(selectedLiveProvider?.env ?? {}),
       ELIZA_CONFIG_PATH: configPath,
       MILADY_CONFIG_PATH: configPath,
       ELIZA_STATE_DIR: stateDir,
@@ -371,69 +289,66 @@ function assertNoProviderIssue(
   );
 }
 
-describeIf(LIVE_TESTS_ENABLED)(
-  "Live: website blocker API roundtrip",
-  () => {
-    let runtime: StartedRuntime | undefined;
+describeIf(LIVE_TESTS_ENABLED)("Live: website blocker API roundtrip", () => {
+  let runtime: StartedRuntime | undefined;
 
-    beforeAll(async () => {
-      runtime = await startLiveRuntime();
-    }, 120_000);
+  beforeAll(async () => {
+    runtime = await startLiveRuntime();
+  }, 120_000);
 
-    afterAll(async () => {
-      if (runtime) {
-        await runtime.close();
-      }
+  afterAll(async () => {
+    if (runtime) {
+      await runtime.close();
+    }
+  });
+
+  it("blocks and unblocks websites through the real runtime API", async () => {
+    const startResponse = await req(
+      runtime.port,
+      "PUT",
+      "/api/website-blocker",
+      {
+        websites: ["x.com", "twitter.com"],
+        durationMinutes: 1,
+      },
+    );
+    expect(startResponse.status).toBe(200);
+    expect(startResponse.data).toMatchObject({
+      success: true,
+      request: {
+        websites: ["x.com", "twitter.com"],
+        durationMinutes: 1,
+      },
     });
 
-    it("blocks and unblocks websites through the real runtime API", async () => {
-      const startResponse = await req(
-        runtime.port,
-        "PUT",
-        "/api/website-blocker",
-        {
-          websites: ["x.com", "twitter.com"],
-          durationMinutes: 1,
-        },
-      );
-      expect(startResponse.status).toBe(200);
-      expect(startResponse.data).toMatchObject({
-        success: true,
-        request: {
-          websites: ["x.com", "twitter.com"],
-          durationMinutes: 1,
-        },
-      });
+    // Startup smoke should verify the runtime contract only. Dedicated dev
+    // and service tests already cover the concrete hosts-file mutation path.
+    const statusResponse = await waitForWebsiteBlockStatus(runtime, [
+      "x.com",
+      "twitter.com",
+    ]);
+    expect(statusResponse).toMatchObject({
+      active: true,
+      engine: "hosts-file",
+      requiresElevation: false,
+      websites: ["x.com", "twitter.com"],
+    });
 
-      // Startup smoke should verify the runtime contract only. Dedicated dev
-      // and service tests already cover the concrete hosts-file mutation path.
-      const statusResponse = await waitForWebsiteBlockStatus(runtime, [
-        "x.com",
-        "twitter.com",
-      ]);
-      expect(statusResponse).toMatchObject({
-        active: true,
-        engine: "hosts-file",
-        requiresElevation: false,
-        websites: ["x.com", "twitter.com"],
-      });
-
-      const stopResponse = await req(
-        runtime.port,
-        "DELETE",
-        "/api/website-blocker",
-      );
-      expect(stopResponse.status).toBe(200);
-      expect(stopResponse.data).toMatchObject({
-        success: true,
-        removed: true,
-        status: {
-          active: false,
-        },
-      });
-    }, 180_000);
-  },
-);
+    const stopResponse = await req(
+      runtime.port,
+      "DELETE",
+      "/api/website-blocker",
+    );
+    expect(stopResponse.status).toBe(200);
+    expect(stopResponse.data).toMatchObject({
+      success: true,
+      removed: true,
+      status: {
+        active: false,
+      },
+    });
+  }, 180_000);
+});
 
 describeIf(liveSelfcontrolChatEnabled)(
   "Live: website blocker chat roundtrip",

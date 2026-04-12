@@ -4336,11 +4336,15 @@ async function handleCodingAgentsFallback(
 
   // GET /api/coding-agents/tasks
   if (method === "GET" && pathname === "/api/coding-agents/tasks") {
+    if (!codeTaskService?.getTasks) {
+      error(res, "Coding agent task service unavailable", 503);
+      return true;
+    }
     try {
       const url = new URL(req.url ?? pathname, "http://localhost");
       const requestedStatus = url.searchParams.get("status");
       const requestedLimit = Number(url.searchParams.get("limit"));
-      let tasks = (await codeTaskService?.getTasks?.()) ?? [];
+      let tasks = (await codeTaskService.getTasks()) ?? [];
       if (!Array.isArray(tasks)) {
         tasks = [];
       }
@@ -4367,8 +4371,12 @@ async function handleCodingAgentsFallback(
       error(res, "Invalid task ID", 400);
       return true;
     }
+    if (!codeTaskService?.getTasks) {
+      error(res, "Coding agent task service unavailable", 503);
+      return true;
+    }
     try {
-      const tasks = (await codeTaskService?.getTasks?.()) ?? [];
+      const tasks = (await codeTaskService.getTasks()) ?? [];
       const task = Array.isArray(tasks)
         ? tasks.find((entry) => entry.id === taskId)
         : undefined;
@@ -4386,8 +4394,12 @@ async function handleCodingAgentsFallback(
 
   // GET /api/coding-agents/sessions
   if (method === "GET" && pathname === "/api/coding-agents/sessions") {
+    if (!ptyListService?.listSessions) {
+      error(res, "Coding agent session service unavailable", 503);
+      return true;
+    }
     try {
-      const sessions = (await ptyListService?.listSessions?.()) ?? [];
+      const sessions = (await ptyListService.listSessions()) ?? [];
       json(res, { sessions: Array.isArray(sessions) ? sessions : [] });
       return true;
     } catch (e) {
@@ -4405,8 +4417,12 @@ async function handleCodingAgentsFallback(
       error(res, "Invalid session ID", 400);
       return true;
     }
+    if (!ptyListService?.listSessions) {
+      error(res, "Coding agent session service unavailable", 503);
+      return true;
+    }
     try {
-      const sessions = (await ptyListService?.listSessions?.()) ?? [];
+      const sessions = (await ptyListService.listSessions()) ?? [];
       const session = Array.isArray(sessions)
         ? sessions.find((entry) => {
             if (!entry || typeof entry !== "object") return false;
@@ -4432,13 +4448,17 @@ async function handleCodingAgentsFallback(
 
   // GET /api/coding-agents/preflight
   if (method === "GET" && pathname === "/api/coding-agents/preflight") {
+    const loaders: Array<(() => Promise<unknown>) | undefined> = [
+      codeTaskService?.getAgentPreflight,
+      codeTaskService?.listAgentPreflight,
+      codeTaskService?.preflightCodingAgents,
+      codeTaskService?.preflight,
+    ];
+    if (!loaders.some(Boolean)) {
+      error(res, "Coding agent preflight unavailable", 503);
+      return true;
+    }
     try {
-      const loaders: Array<(() => Promise<unknown>) | undefined> = [
-        codeTaskService?.getAgentPreflight,
-        codeTaskService?.listAgentPreflight,
-        codeTaskService?.preflightCodingAgents,
-        codeTaskService?.preflight,
-      ];
       let rows: unknown[] = [];
       for (const loader of loaders) {
         if (!loader) continue;
@@ -4485,8 +4505,7 @@ async function handleCodingAgentsFallback(
     pathname === "/api/coding-agents/coordinator/status"
   ) {
     if (!codeTaskService?.getTasks) {
-      // Return empty status if service not available
-      json(res, buildEmptyCoordinatorStatus());
+      error(res, "Coding agent coordinator unavailable", 503);
       return true;
     }
 
@@ -4576,12 +4595,16 @@ async function handleCodingAgentsFallback(
 
   // GET /api/coding-agents/scratch
   if (method === "GET" && pathname === "/api/coding-agents/scratch") {
+    const loaders: Array<(() => Promise<unknown>) | undefined> = [
+      codeTaskService?.listScratchWorkspaces,
+      codeTaskService?.getScratchWorkspaces,
+      codeTaskService?.listScratch,
+    ];
+    if (!loaders.some(Boolean)) {
+      error(res, "Coding agent scratch workspace service unavailable", 503);
+      return true;
+    }
     try {
-      const loaders: Array<(() => Promise<unknown>) | undefined> = [
-        codeTaskService?.listScratchWorkspaces,
-        codeTaskService?.getScratchWorkspaces,
-        codeTaskService?.listScratch,
-      ];
       let rows: unknown[] = [];
       for (const loader of loaders) {
         if (!loader) continue;
@@ -4687,12 +4710,16 @@ async function handleCodingAgentsFallback(
 
   // GET /api/coding-agents — list active PTY sessions (used by getCodingAgentStatus fallback)
   if (method === "GET" && pathname === "/api/coding-agents") {
+    if (!codeTaskService?.getTasks) {
+      error(res, "Coding agent task service unavailable", 503);
+      return true;
+    }
     try {
-      const tasks = await codeTaskService?.getTasks?.();
+      const tasks = await codeTaskService.getTasks();
       json(res, Array.isArray(tasks) ? tasks : []);
       return true;
-    } catch {
-      json(res, []);
+    } catch (e) {
+      error(res, `Failed to list coding agents: ${e}`, 500);
       return true;
     }
   }
@@ -6215,24 +6242,12 @@ async function handleRequest(
   }
 
   // ── Coding Agent API (/api/coding-agents/*, /api/workspace/*, /api/issues/*) ──
-  // Return graceful empty responses for read-only polling endpoints even
-  // before the runtime is available — the frontend polls these on startup
-  // and a 404/503 logs noisy console errors.
   if (
     !state.runtime &&
     method === "GET" &&
     pathname === "/api/coding-agents/coordinator/status"
   ) {
-    json(res, {
-      supervisionLevel: "autonomous",
-      taskCount: 0,
-      tasks: [],
-      recentTasks: [],
-      taskThreadCount: 0,
-      taskThreads: [],
-      pendingConfirmations: 0,
-      frameworks: [],
-    });
+    error(res, "Coding agent runtime unavailable", 503);
     return;
   }
   if (
@@ -6240,7 +6255,7 @@ async function handleRequest(
     method === "GET" &&
     pathname === "/api/coding-agents/preflight"
   ) {
-    json(res, []);
+    error(res, "Coding agent runtime unavailable", 503);
     return;
   }
   if (
@@ -6248,23 +6263,7 @@ async function handleRequest(
     method === "GET" &&
     pathname.startsWith("/api/coding-agents")
   ) {
-    // Return graceful empty responses for all coding-agent polling endpoints
-    // before the runtime is available — prevents 30s timeout → 500 errors.
-    if (pathname === "/api/coding-agents") {
-      json(res, []);
-    } else if (pathname === "/api/coding-agents/tasks") {
-      json(res, { tasks: [] });
-    } else if (pathname === "/api/coding-agents/sessions") {
-      json(res, { sessions: [] });
-    } else if (/^\/api\/coding-agents\/tasks\/[^/]+$/.test(pathname)) {
-      error(res, "Task not found", 404);
-    } else if (/^\/api\/coding-agents\/sessions\/[^/]+$/.test(pathname)) {
-      error(res, "Session not found", 404);
-    } else if (pathname === "/api/coding-agents/scratch") {
-      json(res, []);
-    } else {
-      json(res, {});
-    }
+    error(res, "Coding agent runtime unavailable", 503);
     return;
   }
   if (
@@ -6294,7 +6293,7 @@ async function handleRequest(
         await state.runtime.getServiceLoadPromise("PTY_SERVICE");
         wireCodingAgentBridgesNow(state);
       } catch {
-        // Service start failed — fall through to graceful fallback
+        // Service start failed — the fallback handler will surface 503 unavailability.
       }
     }
 
@@ -6302,13 +6301,29 @@ async function handleRequest(
       "PTY_SERVICE",
     ) as PTYService | null;
     const coordinator = getCoordinatorFromRuntime(state.runtime);
+    const codeTaskService = state.runtime.getService("CODE_TASK");
+    const isTaskRoute = method === "GET" && pathname === "/api/coding-agents/tasks";
+    const isTaskDetailRoute =
+      method === "GET" && /^\/api\/coding-agents\/tasks\/[^/]+$/.test(pathname);
+    const isSessionsRoute =
+      method === "GET" && pathname === "/api/coding-agents/sessions";
+    const isSessionDetailRoute =
+      method === "GET" &&
+      /^\/api\/coding-agents\/sessions\/[^/]+$/.test(pathname);
+    const isScratchRoute =
+      method === "GET" && pathname === "/api/coding-agents/scratch";
+    const isAgentListRoute =
+      method === "GET" && pathname === "/api/coding-agents";
 
     // The settings UI and startup hydration poll these routes early. When the
-    // PTY/coordinator services are not ready yet, prefer the built-in graceful
-    // fallback response over the plugin's hard 503.
+    // PTY/coordinator services are not ready yet, surface explicit 503
+    // unavailability rather than synthesizing success-shaped empty payloads.
     if (
       (isCoordinatorStatusRoute && !coordinator) ||
-      (isPreflightRoute && !ptyService)
+      (isPreflightRoute && !ptyService) ||
+      ((isTaskRoute || isTaskDetailRoute || isScratchRoute || isAgentListRoute) &&
+        !codeTaskService) ||
+      ((isSessionsRoute || isSessionDetailRoute) && !ptyService)
     ) {
       handled = await handleCodingAgentsFallback(
         state.runtime,

@@ -1,5 +1,6 @@
 import { type IAgentRuntime, type UUID, logger, createUniqueUuid } from '@elizaos/core';
 import { v4 } from 'uuid';
+import { ensureAgentStorageContext } from './storageContext';
 
 /**
  * DJ Tip record
@@ -50,35 +51,14 @@ export async function trackDJTip(
   let component = await runtime.getComponent(entityId, DJ_TIPS_COMPONENT_TYPE, undefined, runtime.agentId);
   
   if (!component) {
-    // Create component
-    const fallbackRoomId = runtime.agentId as UUID;
-    const fallbackWorldId = runtime.agentId as UUID;
-    
-    await runtime.ensureWorldExists({
-      id: fallbackWorldId,
-      name: 'DJ Tips World',
-      agentId: runtime.agentId,
-      serverId: fallbackWorldId,
-      metadata: { purpose: 'dj-tips' },
-    });
-    
-    await runtime.ensureRoomExists({
-      id: fallbackRoomId,
-      name: 'DJ Tips Room',
-      source: 'radio-plugin',
-      type: 'GROUP' as any,
-      channelId: fallbackRoomId,
-      serverId: fallbackRoomId,
-      worldId: fallbackWorldId,
-      metadata: { purpose: 'dj-tips' },
-    });
+    const storageContext = await ensureAgentStorageContext(runtime, 'dj-tips', 'radio-plugin');
     
     component = {
       id: v4() as UUID,
       entityId,
       agentId: runtime.agentId,
-      roomId: fallbackRoomId,
-      worldId: fallbackWorldId,
+      roomId: storageContext.roomId,
+      worldId: storageContext.worldId,
       sourceEntityId: runtime.agentId,
       type: DJ_TIPS_COMPONENT_TYPE,
       createdAt: Date.now(),
@@ -179,4 +159,3 @@ export async function getTopTippers(
   const stats = await getDJTipStats(runtime);
   return stats.topTippers.slice(0, limit);
 }
-

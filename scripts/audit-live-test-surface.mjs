@@ -109,14 +109,14 @@ function isLiveTestFile(rootId, relPath) {
   const fileName = path.basename(relPath);
   if (
     [
-    ".live.test.",
-    "-live.test.",
-    ".live.e2e.test.",
-    "-live.e2e.test.",
-    ".real.test.",
-    "-real.test.",
-    ".real.e2e.test.",
-    "-real.e2e.test.",
+      ".live.test.",
+      "-live.test.",
+      ".live.e2e.test.",
+      "-live.e2e.test.",
+      ".real.test.",
+      "-real.test.",
+      ".real.e2e.test.",
+      "-real.e2e.test.",
     ].some((marker) => fileName.includes(marker))
   ) {
     return true;

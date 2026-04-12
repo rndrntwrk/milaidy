@@ -10,8 +10,6 @@ import { req } from "../../../test/helpers/http";
 
 const LIVE_TESTS_ENABLED =
   process.env.MILADY_LIVE_TEST === "1" || process.env.ELIZA_LIVE_TEST === "1";
-const LIVE_DESKTOP_TESTS_ENABLED =
-  LIVE_TESTS_ENABLED && process.env.MILADY_LIVE_DESKTOP_TEST === "1";
 const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..", "..");
 
 type DesktopMode = "dev:desktop" | "dev:desktop:watch";
@@ -296,7 +294,7 @@ async function startDesktopStack(
   };
 }
 
-describeIf(LIVE_DESKTOP_TESTS_ENABLED)(
+describeIf(LIVE_TESTS_ENABLED)(
   "Live: website blocker desktop orchestrator",
   () => {
     const startedStacks: StartedDesktopStack[] = [];

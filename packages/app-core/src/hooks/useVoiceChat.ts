@@ -54,35 +54,36 @@ import {
   ASSISTANT_TTS_FINAL_ONLY,
   ASSISTANT_TTS_FIRST_FLUSH_CHARS,
   ASSISTANT_TTS_MIN_CHUNK_CHARS,
+  type AssistantSpeechState,
   DEFAULT_ELEVEN_MODEL,
   DEFAULT_ELEVEN_VOICE,
-  MAX_CACHED_SEGMENTS,
-  TALKMODE_STOP_SETTLE_MS,
   describeTtsCloudFetchTargetForDebug,
   getSpeechRecognitionCtor,
   globalAudioCache,
   isAbortError,
   localePrefix,
+  MAX_CACHED_SEGMENTS,
   matchesVoiceLocale,
   normalizeSpeechLocale,
   resolveEffectiveVoiceConfig,
   resolveVoiceMode,
   resolveVoiceProxyEndpoint,
-  toArrayBuffer,
-  webSpeechVoiceDebugFields,
-  type AssistantSpeechState,
   type SpeakTask,
   type SpeechRecognitionInstance,
   type SpeechRecognitionResultEvent,
+  TALKMODE_STOP_SETTLE_MS,
+  toArrayBuffer,
   type VoiceCaptureMode,
   type VoiceChatOptions,
   type VoiceChatState,
   type VoicePlaybackStartEvent,
   type VoiceTranscriptPreviewEvent,
+  webSpeechVoiceDebugFields,
 } from "./voice-chat-types";
 
 // ── Re-exports (public API) ──────────────────────────────────────────
 
+export { nextIdleMouthOpen } from "./voice-chat-playback";
 export type {
   VoiceCaptureMode,
   VoiceChatOptions,
@@ -90,7 +91,6 @@ export type {
   VoicePlaybackStartEvent,
   VoiceTranscriptPreviewEvent,
 } from "./voice-chat-types";
-export { nextIdleMouthOpen } from "./voice-chat-playback";
 
 // ── Shared mutable state ─────────────────────────────────────────────
 
@@ -881,14 +881,7 @@ export function useVoiceChat(options: VoiceChatOptions): VoiceChatState {
             signal: controller.signal,
           };
 
-          let res = await fetch(resolveApiUrl("/api/tts/cloud"), init);
-          if (!res.ok) {
-            const fallback = await fetch(
-              resolveApiUrl("/api/tts/elevenlabs"),
-              init,
-            );
-            if (fallback.ok) res = fallback;
-          }
+          const res = await fetch(resolveApiUrl("/api/tts/cloud"), init);
           return res;
         };
 
@@ -1297,23 +1290,22 @@ export function useVoiceChat(options: VoiceChatOptions): VoiceChatState {
                 break;
               }
               console.warn(
-                "[useVoiceChat] ElevenLabs TTS failed, falling back to browser:",
+                "[useVoiceChat] ElevenLabs TTS failed:",
                 error instanceof Error
                   ? `${error.name}: ${error.message}`
                   : error,
               );
-              miladyTtsDebug("useVoiceChat:elevenlabs-fallback-to-browser", {
+              miladyTtsDebug("useVoiceChat:elevenlabs-failed", {
                 err:
                   error instanceof Error
                     ? `${error.name}: ${error.message.slice(0, 200)}`
                     : String(error).slice(0, 200),
                 ttsTarget: describeTtsCloudFetchTargetForDebug(),
                 hadBearer: Boolean(getElizaApiToken()?.trim()),
-                nextPath:
-                  "speakBrowser (Web Speech / Microsoft Edge voice or talkmode bridge)",
               });
               usingAudioAnalysisRef.current = false;
               setUsingAudioAnalysis(false);
+              throw error;
             }
           } else {
             usingAudioAnalysisRef.current = false;

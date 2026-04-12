@@ -1,14 +1,12 @@
 /**
  * Live plugin lifecycle tests.
  *
- * Boots a real milady runtime with specific plugins enabled and verifies:
- * - Plugins are loaded and registered
- * - Plugin APIs respond correctly
- * - Plugin lifecycle hooks (start/stop) work on real infra
+ * Boots a real milady runtime and verifies the local workspace plugin matrix,
+ * real database access, and a live agent roundtrip through the HTTP API.
  *
  * Gated on MILADY_LIVE_TEST=1.
  */
-import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
+import { spawn } from "node:child_process";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import net from "node:net";
 import os from "node:os";
@@ -16,15 +14,48 @@ import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { describeIf } from "../../../test/helpers/conditional-tests.ts";
-import { req } from "../../../test/helpers/http.ts";
+import {
+  createConversation,
+  postConversationMessage,
+  req,
+} from "../../../test/helpers/http.ts";
+import {
+  importLocalWorkspacePlugin,
+  listLocalWorkspacePlugins,
+} from "./helpers/local-plugin-inventory.ts";
 
 const LIVE = process.env.MILADY_LIVE_TEST === "1" || process.env.ELIZA_LIVE_TEST === "1";
 const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..", "..");
+const LOCAL_WORKSPACE_PLUGINS = await listLocalWorkspacePlugins();
+const LOCAL_WORKSPACE_PLUGIN_IDS = LOCAL_WORKSPACE_PLUGINS.map((plugin) => plugin.id);
 
 try {
   const { config } = await import("dotenv");
   config({ path: path.join(REPO_ROOT, ".env") });
 } catch { /* dotenv optional */ }
+
+const HAS_LIVE_MODEL_PROVIDER = Boolean(
+  process.env.OPENAI_API_KEY ||
+    process.env.ANTHROPIC_API_KEY ||
+    process.env.GROQ_API_KEY ||
+    process.env.OPENROUTER_API_KEY ||
+    process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
+    process.env.GEMINI_API_KEY ||
+    process.env.GOOGLE_API_KEY ||
+    process.env.OLLAMA_HOST ||
+    process.env.OLLAMA_BASE_URL,
+);
+const LIVE_PROVIDER_PLUGIN_ID =
+  (process.env.OPENAI_API_KEY && "openai") ||
+  (process.env.ANTHROPIC_API_KEY && "anthropic") ||
+  (process.env.GROQ_API_KEY && "groq") ||
+  (process.env.OPENROUTER_API_KEY && "openrouter") ||
+  ((process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
+    process.env.GEMINI_API_KEY ||
+    process.env.GOOGLE_API_KEY) &&
+    "google-genai") ||
+  ((process.env.OLLAMA_HOST || process.env.OLLAMA_BASE_URL) && "ollama") ||
+  null;
 
 async function getFreePort(): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -48,6 +79,7 @@ async function startRuntimeWithPlugins(allowPlugins: string[]): Promise<Runtime>
   const logBuf: string[] = [];
 
   await mkdir(stateDir, { recursive: true });
+  await mkdir(path.join(stateDir, "cache"), { recursive: true });
   await writeFile(configPath, JSON.stringify({
     logging: { level: "info" },
     plugins: { allow: allowPlugins },
@@ -63,6 +95,7 @@ async function startRuntimeWithPlugins(allowPlugins: string[]): Promise<Runtime>
       MILADY_STATE_DIR: stateDir,
       ELIZA_PORT: String(port),
       MILADY_API_PORT: String(port),
+      CACHE_DIR: path.join(stateDir, "cache"),
       ELIZA_DISABLE_LOCAL_EMBEDDINGS: "1",
       MILADY_DISABLE_LOCAL_EMBEDDINGS: "1",
       ALLOW_NO_DATABASE: "",
@@ -79,15 +112,33 @@ async function startRuntimeWithPlugins(allowPlugins: string[]): Promise<Runtime>
   child.stderr.on("data", (c: string) => logBuf.push(c));
 
   const deadline = Date.now() + 150_000;
+  let ready = false;
   while (Date.now() < deadline) {
     try {
       const r = await fetch(`http://127.0.0.1:${port}/api/health`);
       if (r.ok) {
         const d = (await r.json()) as { ready?: boolean; runtime?: string };
-        if (d.ready === true && d.runtime === "ok") break;
+        if (d.ready === true && d.runtime === "ok") {
+          ready = true;
+          break;
+        }
       }
     } catch { /* not ready */ }
     await sleep(1_000);
+  }
+
+  if (!ready) {
+    if (child.exitCode == null) {
+      child.kill("SIGTERM");
+      await new Promise<void>((resolve) => {
+        child.once("exit", () => resolve());
+        setTimeout(() => resolve(), 10_000);
+      });
+    }
+    await rm(tmp, { recursive: true, force: true });
+    throw new Error(
+      `Runtime failed to become ready with allowPlugins=${allowPlugins.join(", ")}\n${logBuf.join("").slice(-8_000)}`,
+    );
   }
 
   return {
@@ -103,6 +154,247 @@ async function startRuntimeWithPlugins(allowPlugins: string[]): Promise<Runtime>
     },
   };
 }
+
+function getLocalPluginRows(
+  plugins: Array<Record<string, unknown>>,
+): Array<Record<string, unknown>> {
+  const localIds = new Set(LOCAL_WORKSPACE_PLUGIN_IDS);
+  return plugins.filter((plugin) => {
+    const id = plugin.id;
+    return typeof id === "string" && localIds.has(id);
+  });
+}
+
+function isConfigGatedPluginRow(plugin: Record<string, unknown>): boolean {
+  return (
+    plugin.enabled === false &&
+    Array.isArray(plugin.validationErrors) &&
+    plugin.validationErrors.length > 0
+  );
+}
+
+async function postChatPromptWithRetries(
+  port: number,
+  prompt: string,
+  attempts = 4,
+  timeoutMs = 90_000,
+): Promise<{ status: number; data: Record<string, unknown> }> {
+  const errors: string[] = [];
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const { conversationId } = await createConversation(port, {
+        title: `plugin lifecycle live prompt ${attempt}`,
+      });
+      const response = await postConversationMessage(
+        port,
+        conversationId,
+        { text: prompt, mode: "simple" },
+        undefined,
+        { timeoutMs },
+      );
+      const text = response.data.text;
+      if (
+        response.status === 200 &&
+        typeof text === "string" &&
+        text.trim().length > 0
+      ) {
+        return response;
+      }
+      errors.push(
+        `attempt ${attempt}: status=${response.status}, textType=${typeof text}, textLength=${
+          typeof text === "string" ? text.length : 0
+        }`,
+      );
+    } catch (error) {
+      errors.push(
+        `attempt ${attempt}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+    if (attempt < attempts) {
+      await sleep(1_000);
+    }
+  }
+
+  throw new Error(
+    `Live plugin chat failed after ${attempts} attempts: ${errors.join(" | ")}`,
+  );
+}
+
+describeIf(LIVE)("Live: plugin lifecycle — local workspace matrix", () => {
+  let rt: Runtime;
+  let localPluginImportFailures: string[] = [];
+  let localPluginRouteKeys = new Map<string, string>();
+
+  beforeAll(async () => {
+    localPluginImportFailures = [];
+    localPluginRouteKeys = new Map<string, string>();
+    for (const plugin of LOCAL_WORKSPACE_PLUGINS) {
+      try {
+        const loaded = await importLocalWorkspacePlugin(plugin);
+        if (!loaded.extractedPlugin) {
+          localPluginImportFailures.push(
+            `${plugin.id}: no plugin export from ${plugin.entryPath}`,
+          );
+          continue;
+        }
+        localPluginRouteKeys.set(plugin.id, loaded.extractedPlugin.name);
+      } catch (error) {
+        localPluginImportFailures.push(
+          `${plugin.id}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+    rt = await startRuntimeWithPlugins(LOCAL_WORKSPACE_PLUGIN_IDS);
+  }, 240_000);
+
+  afterAll(async () => {
+    if (rt) await rt.close();
+  });
+
+  it("imports every local workspace plugin through its real package entry", async () => {
+    expect(localPluginImportFailures).toEqual([]);
+  }, 120_000);
+
+  it("surfaces every local workspace plugin in /api/plugins", async () => {
+    const pluginsRes = await req(rt.port, "GET", "/api/plugins");
+    expect(pluginsRes.status).toBe(200);
+
+    const plugins = pluginsRes.data.plugins as Array<Record<string, unknown>>;
+    const visibleIds = new Set(
+      getLocalPluginRows(plugins)
+        .map((plugin) => plugin.id)
+        .filter((value): value is string => typeof value === "string"),
+    );
+    const missing = LOCAL_WORKSPACE_PLUGIN_IDS.filter((id) => !visibleIds.has(id));
+
+    expect(missing).toEqual([]);
+  });
+
+  it("activates every requested local workspace plugin in the real runtime", async () => {
+    const pluginsRes = await req(rt.port, "GET", "/api/plugins");
+    expect(pluginsRes.status).toBe(200);
+
+    const rows = getLocalPluginRows(
+      pluginsRes.data.plugins as Array<Record<string, unknown>>,
+    );
+    const rowById = new Map(
+      rows
+        .map((plugin) =>
+          typeof plugin.id === "string" ? [plugin.id, plugin] : null,
+        )
+        .filter((entry): entry is [string, Record<string, unknown>] => entry !== null),
+    );
+    const unresolved: Array<Record<string, unknown>> = [];
+
+    for (const plugin of LOCAL_WORKSPACE_PLUGINS) {
+      const row = rowById.get(plugin.id);
+      if (!row) {
+        unresolved.push({ id: plugin.id, reason: "missing from /api/plugins" });
+        continue;
+      }
+      if (row.isActive === true || isConfigGatedPluginRow(row)) {
+        continue;
+      }
+
+      const routeKey = localPluginRouteKeys.get(plugin.id) ?? plugin.id;
+      const testRes = await req(
+        rt.port,
+        "POST",
+        `/api/plugins/${encodeURIComponent(routeKey)}/test`,
+      );
+      if (testRes.status === 200 && testRes.data.success === true) {
+        continue;
+      }
+
+      unresolved.push({
+        id: plugin.id,
+        routeKey,
+        enabled: row.enabled,
+        configured: row.configured,
+        loadError: row.loadError,
+        validationErrors: row.validationErrors,
+        testStatus: testRes.status,
+        testBody: testRes.data,
+      });
+    }
+
+    expect(unresolved).toEqual([]);
+  });
+
+  it("plugin test endpoint succeeds for every loadable local workspace plugin", async () => {
+    const failures: string[] = [];
+
+    const pluginsRes = await req(rt.port, "GET", "/api/plugins");
+    expect(pluginsRes.status).toBe(200);
+    const rows = getLocalPluginRows(
+      pluginsRes.data.plugins as Array<Record<string, unknown>>,
+    );
+    const rowById = new Map(
+      rows
+        .map((plugin) =>
+          typeof plugin.id === "string" ? [plugin.id, plugin] : null,
+        )
+        .filter((entry): entry is [string, Record<string, unknown>] => entry !== null),
+    );
+
+    for (const plugin of LOCAL_WORKSPACE_PLUGINS) {
+      const row = rowById.get(plugin.id);
+      if (!row || isConfigGatedPluginRow(row)) {
+        continue;
+      }
+
+      const routeKey = localPluginRouteKeys.get(plugin.id) ?? plugin.id;
+      const result = await req(
+        rt.port,
+        "POST",
+        `/api/plugins/${encodeURIComponent(routeKey)}/test`,
+      );
+      const ok = result.status === 200 && result.data.success === true;
+      if (!ok) {
+        failures.push(
+          `${plugin.id} via ${routeKey}: status=${result.status}, body=${JSON.stringify(result.data)}`,
+        );
+      }
+    }
+
+    expect(failures).toEqual([]);
+  }, 120_000);
+
+  it("database is accessible under aggregate plugin load", async () => {
+    const conversation = await createConversation(rt.port, {
+      title: "plugin lifecycle aggregate db check",
+    });
+    expect(conversation.status).toBe(200);
+    expect(conversation.conversationId.length).toBeGreaterThan(0);
+  });
+
+}, 360_000);
+
+describeIf(LIVE && HAS_LIVE_MODEL_PROVIDER && Boolean(LIVE_PROVIDER_PLUGIN_ID))(
+  "Live: plugin lifecycle — focused provider roundtrip",
+  () => {
+    let rt: Runtime;
+
+    beforeAll(async () => {
+      rt = await startRuntimeWithPlugins([LIVE_PROVIDER_PLUGIN_ID as string]);
+    }, 240_000);
+
+    afterAll(async () => {
+      if (rt) await rt.close();
+    });
+
+    it("agent chat uses a live model provider through the HTTP API", async () => {
+      const response = await postChatPromptWithRetries(
+        rt.port,
+        "Reply with a short sentence about plugin lifecycle verification.",
+      );
+      expect(response.status).toBe(200);
+      expect(typeof response.data.text).toBe("string");
+      expect((response.data.text as string).trim().length).toBeGreaterThan(0);
+      expect((response.data.text as string)).not.toMatch(/provider issue/i);
+    }, 150_000);
+  },
+);
 
 describeIf(LIVE)("Live: plugin lifecycle — selfcontrol", () => {
   let rt: Runtime;

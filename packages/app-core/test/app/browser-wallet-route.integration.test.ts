@@ -5,6 +5,7 @@ import { deriveSolanaAddress } from "@miladyai/agent/api/wallet";
 import { ethers } from "ethers";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { req } from "../../../../test/helpers/http";
+import { canBindLoopback } from "../../../../test/helpers/loopback";
 import { startApiServer } from "../../src/api/server";
 
 const SOLANA_PKCS8_DER_PREFIX = Buffer.from(
@@ -17,6 +18,7 @@ type StewardFixture = {
   lastRequest: Record<string, unknown> | null;
   url: string;
 };
+const describeLoopback = describe.skipIf(!(await canBindLoopback()));
 
 async function readJsonBody(
   req: http.IncomingMessage,
@@ -79,7 +81,7 @@ async function startStewardFixture(): Promise<StewardFixture> {
   };
 }
 
-describe("browser wallet route", () => {
+describeLoopback("browser wallet route", () => {
   let closeApiServer: () => Promise<void>;
   let port: number;
   let stewardFixture: StewardFixture;

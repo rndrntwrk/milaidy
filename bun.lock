@@ -18,6 +18,7 @@
         "@elizaos/plugin-agent-skills": "workspace:*",
         "@elizaos/plugin-anthropic": "workspace:*",
         "@elizaos/plugin-bluebubbles": "workspace:*",
+        "@elizaos/plugin-clipboard": "workspace:*",
         "@elizaos/plugin-commands": "workspace:*",
         "@elizaos/plugin-cron": "workspace:*",
         "@elizaos/plugin-discord": "workspace:*",
@@ -37,7 +38,6 @@
         "@elizaos/plugin-personality": "workspace:*",
         "@elizaos/plugin-pi-ai": "workspace:*",
         "@elizaos/plugin-plugin-manager": "workspace:*",
-        "@elizaos/plugin-scratchpad": "workspace:*",
         "@elizaos/plugin-secrets-manager": "workspace:*",
         "@elizaos/plugin-shell": "workspace:*",
         "@elizaos/plugin-signal": "workspace:*",
@@ -531,6 +531,7 @@
         "@elizaos/plugin-agent-orchestrator": "workspace:*",
         "@elizaos/plugin-agent-skills": "workspace:*",
         "@elizaos/plugin-anthropic": "workspace:*",
+        "@elizaos/plugin-clipboard": "workspace:*",
         "@elizaos/plugin-cron": "workspace:*",
         "@elizaos/plugin-discord": "workspace:*",
         "@elizaos/plugin-elizacloud": "workspace:*",
@@ -543,7 +544,6 @@
         "@elizaos/plugin-personality": "workspace:*",
         "@elizaos/plugin-pi-ai": "workspace:*",
         "@elizaos/plugin-plugin-manager": "workspace:*",
-        "@elizaos/plugin-scratchpad": "workspace:*",
         "@elizaos/plugin-secrets-manager": "workspace:*",
         "@elizaos/plugin-shell": "workspace:*",
         "@elizaos/plugin-solana": "1.2.6",
@@ -944,6 +944,34 @@
         "strip-literal": "^3.1.0",
         "typescript": "^5.7.3",
         "vitest": "^4.0.18",
+      },
+    },
+    "plugins/plugin-clipboard": {
+      "name": "@elizaos/plugin-clipboard-root",
+      "version": "2.0.0-alpha",
+      "dependencies": {
+        "@elizaos/core": "workspace:*",
+      },
+      "devDependencies": {
+        "@biomejs/biome": "^2.3.11",
+        "@types/node": "^25.0.3",
+        "typescript": "^5.9.3",
+      },
+    },
+    "plugins/plugin-clipboard/typescript": {
+      "name": "@elizaos/plugin-clipboard",
+      "version": "2.0.0-alpha.7",
+      "dependencies": {
+        "@elizaos/core": "workspace:*",
+      },
+      "devDependencies": {
+        "@biomejs/biome": "^2.3.11",
+        "@types/bun": "^1.3.9",
+        "@types/node": "^25.0.3",
+        "typescript": "^5.9.3",
+      },
+      "peerDependencies": {
+        "@elizaos/core": "workspace:*",
       },
     },
     "plugins/plugin-coding-agent": {
@@ -1579,34 +1607,6 @@
         "vitest": "3.1.4",
       },
     },
-    "plugins/plugin-scratchpad": {
-      "name": "@elizaos/plugin-scratchpad-root",
-      "version": "2.0.0-alpha",
-      "dependencies": {
-        "@elizaos/core": "workspace:*",
-      },
-      "devDependencies": {
-        "@biomejs/biome": "^2.3.11",
-        "@types/node": "^25.0.3",
-        "typescript": "^5.9.3",
-      },
-    },
-    "plugins/plugin-scratchpad/typescript": {
-      "name": "@elizaos/plugin-scratchpad",
-      "version": "2.0.0-alpha.7",
-      "dependencies": {
-        "@elizaos/core": "workspace:*",
-      },
-      "devDependencies": {
-        "@biomejs/biome": "^2.3.11",
-        "@types/bun": "^1.3.9",
-        "@types/node": "^25.0.3",
-        "typescript": "^5.9.3",
-      },
-      "peerDependencies": {
-        "@elizaos/core": "workspace:*",
-      },
-    },
     "plugins/plugin-secrets-manager": {
       "name": "@elizaos/plugin-secrets-manager-root",
       "version": "1.0.0",
@@ -1849,8 +1849,11 @@
   },
   "patchedDependencies": {
     "@noble/curves@2.0.1": "patches/@noble%2Fcurves@2.0.1.patch",
+    "pty-manager@1.11.0": "patches/pty-manager@1.11.0.patch",
     "@pixiv/three-vrm@3.5.1": "patches/@pixiv%2Fthree-vrm@3.5.1.patch",
+    "coding-agent-adapters@0.16.3": "patches/coding-agent-adapters@0.16.3.patch",
     "proper-lockfile@4.1.2": "patches/proper-lockfile@4.1.2.patch",
+    "electrobun@1.16.0": "patches/electrobun@1.16.0.patch",
   },
   "overrides": {
     "@ai-sdk/groq": "3.0.31",
@@ -2184,6 +2187,10 @@
 
     "@elizaos/plugin-cli-root": ["@elizaos/plugin-cli-root@workspace:plugins/plugin-cli"],
 
+    "@elizaos/plugin-clipboard": ["@elizaos/plugin-clipboard@workspace:plugins/plugin-clipboard/typescript"],
+
+    "@elizaos/plugin-clipboard-root": ["@elizaos/plugin-clipboard-root@workspace:plugins/plugin-clipboard"],
+
     "@elizaos/plugin-coding-agent": ["@elizaos/plugin-coding-agent@workspace:plugins/plugin-coding-agent"],
 
     "@elizaos/plugin-commands": ["@elizaos/plugin-commands@workspace:plugins/plugin-commands/typescript"],
@@ -2263,10 +2270,6 @@
     "@elizaos/plugin-plugin-manager": ["@elizaos/plugin-plugin-manager@workspace:plugins/plugin-plugin-manager/typescript"],
 
     "@elizaos/plugin-plugin-manager-root": ["@elizaos/plugin-plugin-manager-root@workspace:plugins/plugin-plugin-manager"],
-
-    "@elizaos/plugin-scratchpad": ["@elizaos/plugin-scratchpad@workspace:plugins/plugin-scratchpad/typescript"],
-
-    "@elizaos/plugin-scratchpad-root": ["@elizaos/plugin-scratchpad-root@workspace:plugins/plugin-scratchpad"],
 
     "@elizaos/plugin-secrets-manager": ["@elizaos/plugin-secrets-manager@workspace:plugins/plugin-secrets-manager/typescript"],
 
@@ -6044,7 +6047,7 @@
 
     "@elizaos/plugin-edge-tts/@types/node": ["@types/node@24.12.2", "", { "dependencies": { "undici-types": "~7.16.0" } }, "sha512-A1sre26ke7HDIuY/M23nd9gfB+nrmhtYyMINbjI1zHJxYteKR6qSMX56FsmjMcDb3SMcjJg5BiRRgOCC/yBD0g=="],
 
-    "@elizaos/plugin-form/uuid": ["uuid@11.0.5", "", { "bin": { "uuid": "dist/esm/bin/uuid" } }, "sha512-508e6IcKLrhxKdBbcA2b4KQZlLVp2+J5UwQ6F7Drckkc5N9ZJwFa4TgWtsww9UG8fGHbm6gbV19TdM5pQ4GaIA=="],
+    "@elizaos/plugin-form/uuid": ["uuid@11.1.0", "", { "bin": { "uuid": "dist/esm/bin/uuid" } }, "sha512-0/A9rDy9P7cJ+8w1c9WD9V//9Wj15Ce2MPz8Ri6032usz+NfePxx5AcN3bN+r6ZL6jEo066/yNYB3tn4pQEx+A=="],
 
     "@elizaos/plugin-imessage/@types/node": ["@types/node@20.19.39", "", { "dependencies": { "undici-types": "~6.21.0" } }, "sha512-orrrD74MBUyK8jOAD/r0+lfa1I2MO6I+vAkmAWzMYbCcgrN4lCrmK52gRFQq/JRxfYPfonkr4b0jcY7Olqdqbw=="],
 

@@ -1,5 +1,6 @@
 import { type IAgentRuntime, type UUID, logger, createUniqueUuid } from '@elizaos/core';
 import { v4 } from 'uuid';
+import { ensureAgentStorageContext } from './storageContext';
 
 /**
  * Detailed per-song memory and statistics
@@ -124,35 +125,18 @@ async function createSongMemory(
         updatedAt: Date.now(),
     };
 
-    // Create component with fallback room
-    const fallbackRoomId = runtime.agentId as UUID;
-    const fallbackWorldId = runtime.agentId as UUID;
-
-    await runtime.ensureWorldExists({
-        id: fallbackWorldId,
-        name: 'Song Memory World',
-        agentId: runtime.agentId,
-        serverId: fallbackWorldId,
-        metadata: { purpose: 'song-memory' },
-    });
-
-    await runtime.ensureRoomExists({
-        id: fallbackRoomId,
-        name: 'Song Memory Room',
-        source: 'music-library',
-        type: 'GROUP' as any,
-        channelId: fallbackRoomId,
-        serverId: fallbackRoomId,
-        worldId: fallbackWorldId,
-        metadata: { purpose: 'song-memory' },
-    });
+    const storageContext = await ensureAgentStorageContext(
+        runtime,
+        'song-memory',
+        'music-library'
+    );
 
     await runtime.createComponent({
         id: v4() as UUID,
         entityId,
         agentId: runtime.agentId,
-        roomId: fallbackRoomId,
-        worldId: fallbackWorldId,
+        roomId: storageContext.roomId,
+        worldId: storageContext.worldId,
         sourceEntityId: runtime.agentId,
         type: SONG_MEMORY_COMPONENT_TYPE,
         createdAt: Date.now(),
@@ -367,4 +351,3 @@ export async function getMostRequestedSongs(
     logger.warn('getMostRequestedSongs not fully implemented - requires runtime-level query support');
     return [];
 }
-

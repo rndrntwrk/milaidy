@@ -262,10 +262,7 @@ export function SplashCloudAgents({
           )}
         </Button>
         {error && (
-          <p
-            style={{ fontFamily: MONO_FONT }}
-            className="text-3xs text-danger"
-          >
+          <p style={{ fontFamily: MONO_FONT }} className="text-3xs text-danger">
             {error}
           </p>
         )}
@@ -344,10 +341,7 @@ export function SplashCloudAgents({
       </div>
 
       {error && (
-        <p
-          style={{ fontFamily: MONO_FONT }}
-          className="text-3xs text-danger"
-        >
+        <p style={{ fontFamily: MONO_FONT }} className="text-3xs text-danger">
           {error}
         </p>
       )}

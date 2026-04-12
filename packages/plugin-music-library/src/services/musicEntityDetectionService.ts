@@ -49,7 +49,7 @@ export class MusicEntityDetectionService extends Service {
     }
 
     if (!this.runtime) {
-      return [];
+      throw new Error('MusicEntityDetectionService requires a runtime');
     }
 
     try {
@@ -121,9 +121,11 @@ IMPORTANT: Only return valid JSON. Do not include any explanation or text outsid
           }))
           .filter((e: DetectedMusicEntity) => e.confidence > 0.3); // Filter low confidence
       } catch (parseError) {
-        logger.warn(`Failed to parse entity detection response: ${parseError}`);
-        // Fallback: try simple pattern matching
-        entities = this.fallbackDetection(text);
+        throw new Error(
+          `Failed to parse music entity detection response: ${
+            parseError instanceof Error ? parseError.message : String(parseError)
+          }`,
+        );
       }
 
       // Cache results
@@ -135,54 +137,8 @@ IMPORTANT: Only return valid JSON. Do not include any explanation or text outsid
       return entities;
     } catch (error) {
       logger.error(`Error detecting music entities: ${error}`);
-      // Fallback to simple pattern matching
-      return this.fallbackDetection(text);
+      throw error;
     }
-  }
-
-  /**
-   * Fallback detection using simple patterns when LLM fails
-   */
-  private fallbackDetection(text: string): DetectedMusicEntity[] {
-    const entities: DetectedMusicEntity[] = [];
-
-    // Look for quoted strings (often song/album names)
-    const quotedMatches = text.matchAll(/"([^"]+)"/g);
-    for (const match of quotedMatches) {
-      const name = match[1].trim();
-      if (name.length > 2 && name.length < 100) {
-        entities.push({
-          type: 'song', // Assume song if quoted
-          name,
-          confidence: 0.5,
-          context: match[0],
-        });
-      }
-    }
-
-    // Look for "by Artist" patterns
-    const byPattern = /"([^"]+)"\s+by\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/gi;
-    const byMatches = text.matchAll(byPattern);
-    for (const match of byMatches) {
-      if (match[1]) {
-        entities.push({
-          type: 'song',
-          name: match[1].trim(),
-          confidence: 0.7,
-          context: match[0],
-        });
-      }
-      if (match[2]) {
-        entities.push({
-          type: 'artist',
-          name: match[2].trim(),
-          confidence: 0.7,
-          context: match[0],
-        });
-      }
-    }
-
-    return entities;
   }
 
   /**
@@ -204,4 +160,3 @@ IMPORTANT: Only return valid JSON. Do not include any explanation or text outsid
     }
   }
 }
-

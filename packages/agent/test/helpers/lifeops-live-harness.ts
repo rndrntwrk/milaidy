@@ -30,6 +30,7 @@ export const REPO_ROOT = path.resolve(
 const ENV_PATH = path.join(REPO_ROOT, ".env");
 const LIVE_HTTP_REQUEST_TIMEOUT_MS = 120_000;
 const LIVE_BOOT_HTTP_TIMEOUT_MS = 15_000;
+const LIVE_CONVERSATION_REQUEST_TIMEOUT_MS = 45_000;
 const LIVE_ENTITY_RESOLUTION_TIMEOUT_MS = 20_000;
 const LIVE_ENTITY_RESOLUTION_RETRY_MS = 500;
 
@@ -471,9 +472,14 @@ async function waitForLiveRuntimeBootstrap(
 
   while (Date.now() < deadline) {
     try {
-      const conversation = await createConversation(port, {
-        title: `Live LifeOps Bootstrap ${Date.now()}`,
-      }, undefined, { timeoutMs: LIVE_BOOT_HTTP_TIMEOUT_MS });
+      const conversation = await createConversation(
+        port,
+        {
+          title: `Live LifeOps Bootstrap ${Date.now()}`,
+        },
+        undefined,
+        { timeoutMs: LIVE_BOOT_HTTP_TIMEOUT_MS },
+      );
       if (conversation.conversationId) {
         return;
       }
@@ -707,31 +713,38 @@ export async function postLiveConversationMessage(
   let lastError: unknown = null;
 
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
-    const response = await postConversationMessage(
-      runtime.port,
-      conversationId,
-      {
-        text,
-        mode: "power",
-        ...(source ? { source } : {}),
-      },
-      undefined,
-      { timeoutMs: LIVE_HTTP_REQUEST_TIMEOUT_MS },
-    );
-    const responseText = String(response.data.text ?? "");
+    try {
+      const response = await postConversationMessage(
+        runtime.port,
+        conversationId,
+        {
+          text,
+          mode: "power",
+          ...(source ? { source } : {}),
+        },
+        undefined,
+        { timeoutMs: LIVE_CONVERSATION_REQUEST_TIMEOUT_MS },
+      );
+      const responseText = String(response.data.text ?? "");
 
-    if (response.status === 200 && !/provider issue/i.test(responseText)) {
-      return responseText;
+      if (response.status === 200 && !/provider issue/i.test(responseText)) {
+        return responseText;
+      }
+
+      lastError =
+        response.status === 200
+          ? new Error(
+              `${turnName} returned a provider issue reply on attempt ${attempt}\n${runtime.getLogTail()}`,
+            )
+          : new Error(
+              `${turnName} failed with status ${response.status} on attempt ${attempt}\n${runtime.getLogTail()}`,
+            );
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      lastError = new Error(
+        `${turnName} request failed on attempt ${attempt}: ${detail}\n${runtime.getLogTail()}`,
+      );
     }
-
-    lastError =
-      response.status === 200
-        ? new Error(
-            `${turnName} returned a provider issue reply on attempt ${attempt}`,
-          )
-        : new Error(
-            `${turnName} failed with status ${response.status} on attempt ${attempt}`,
-          );
 
     if (attempt < attempts) {
       await sleep(2_000);

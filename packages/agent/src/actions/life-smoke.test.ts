@@ -279,11 +279,10 @@ describe("LIFE action -- robustness scenarios", () => {
 
   it("handles missing action + intent", async () => {
     const result = await send({ intent: "asdfghjkl gibberish" });
-    expect(result).toMatchObject({
-      success: true,
-      text: expect.stringContaining(
-        "Tell me a bit more about what you want to set up.",
-      ),
+    // Without explicit action and with gibberish, handler should clarify (noop)
+    expect(result).toMatchObject({ success: true });
+    expect((result as Record<string, unknown>).data).toMatchObject({
+      noop: true,
     });
   }, 60_000);
 

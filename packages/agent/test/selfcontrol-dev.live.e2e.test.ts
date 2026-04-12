@@ -10,8 +10,6 @@ import { req } from "../../../test/helpers/http";
 
 const LIVE_TESTS_ENABLED =
   process.env.MILADY_LIVE_TEST === "1" || process.env.ELIZA_LIVE_TEST === "1";
-const SELFCONTROL_DEV_TESTS_ENABLED =
-  LIVE_TESTS_ENABLED && process.env.MILADY_LIVE_SELFCONTROL_DEV_TEST === "1";
 const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..", "..");
 
 type StartedDevStack = {
@@ -249,79 +247,76 @@ async function startDevStack(): Promise<StartedDevStack> {
   };
 }
 
-describeIf(SELFCONTROL_DEV_TESTS_ENABLED)(
-  "Live: website blocker dev launcher",
-  () => {
-    let stack: StartedDevStack | undefined;
+describeIf(LIVE_TESTS_ENABLED)("Live: website blocker dev launcher", () => {
+  let stack: StartedDevStack | undefined;
 
-    beforeAll(async () => {
-      stack = await startDevStack();
-    }, 240_000);
+  beforeAll(async () => {
+    stack = await startDevStack();
+  }, 240_000);
 
-    afterAll(async () => {
-      if (stack) {
-        await stack.close();
-      }
+  afterAll(async () => {
+    if (stack) {
+      await stack.close();
+    }
+  });
+
+  it("boots bun run dev with website blocker APIs and UI available", async () => {
+    const uiResponse = await fetch(`http://127.0.0.1:${stack.uiPort}`);
+    expect(uiResponse.ok).toBe(true);
+
+    const permissionResponse = await req(
+      stack.apiPort,
+      "GET",
+      "/api/permissions/website-blocking",
+    );
+    expect(permissionResponse.status).toBe(200);
+    expect(permissionResponse.data).toMatchObject({
+      id: "website-blocking",
+      status: "granted",
+      canRequest: false,
     });
 
-    it("boots bun run dev with website blocker APIs and UI available", async () => {
-      const uiResponse = await fetch(`http://127.0.0.1:${stack.uiPort}`);
-      expect(uiResponse.ok).toBe(true);
+    const startResponse = await req(
+      stack.apiPort,
+      "PUT",
+      "/api/website-blocker",
+      {
+        websites: ["x.com", "twitter.com"],
+        durationMinutes: 5,
+      },
+    );
+    expect(startResponse.status).toBe(200);
+    expect(startResponse.data).toMatchObject({
+      success: true,
+      request: {
+        websites: ["x.com", "twitter.com"],
+        durationMinutes: 5,
+      },
+    });
 
-      const permissionResponse = await req(
-        stack.apiPort,
-        "GET",
-        "/api/permissions/website-blocking",
-      );
-      expect(permissionResponse.status).toBe(200);
-      expect(permissionResponse.data).toMatchObject({
-        id: "website-blocking",
-        status: "granted",
-        canRequest: false,
-      });
+    const hosts = await waitForHostsBlock(stack.hostsFilePath, [
+      "x.com",
+      "twitter.com",
+    ]);
+    expect(hosts).toContain("0.0.0.0 x.com");
+    expect(hosts).toContain("0.0.0.0 twitter.com");
 
-      const startResponse = await req(
-        stack.apiPort,
-        "PUT",
-        "/api/website-blocker",
-        {
-          websites: ["x.com", "twitter.com"],
-          durationMinutes: 5,
-        },
-      );
-      expect(startResponse.status).toBe(200);
-      expect(startResponse.data).toMatchObject({
-        success: true,
-        request: {
-          websites: ["x.com", "twitter.com"],
-          durationMinutes: 5,
-        },
-      });
-
-      const hosts = await waitForHostsBlock(stack.hostsFilePath, [
-        "x.com",
-        "twitter.com",
-      ]);
-      expect(hosts).toContain("0.0.0.0 x.com");
-      expect(hosts).toContain("0.0.0.0 twitter.com");
-
-      const stopResponse = await req(
-        stack.apiPort,
-        "DELETE",
-        "/api/website-blocker",
-      );
-      expect(stopResponse.status).toBe(200);
-      expect(stopResponse.data).toMatchObject({
-        success: true,
-        removed: true,
-        status: {
-          active: false,
-          websites: [],
-        },
-      });
-      expect(await readFile(stack.hostsFilePath, "utf8")).toBe(
-        "127.0.0.1 localhost\n",
-      );
-    }, 240_000);
-  },
-);
+    const stopResponse = await req(
+      stack.apiPort,
+      "DELETE",
+      "/api/website-blocker",
+    );
+    expect(stopResponse.status).toBe(200);
+    expect(stopResponse.data).toMatchObject({
+      success: true,
+      removed: true,
+      status: {
+        active: false,
+        websites: [],
+      },
+    });
+    expect(await readFile(stack.hostsFilePath, "utf8")).toBe(
+      "127.0.0.1 localhost\n",
+    );
+  }, 240_000);
+});

@@ -24,13 +24,11 @@
  */
 import {
   existsSync,
-  lstatSync,
   readdirSync,
   readFileSync,
   realpathSync,
   rmSync,
   symlinkSync,
-  unlinkSync,
   writeFileSync,
 } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -39,13 +37,9 @@ import {
   patchAutonomousMiladyOnboardingPresets,
   patchBrokenElizaCoreRuntimeDists,
   patchCodexFolderApprovalPromptCompat,
-  patchElectrobunWindowsTar,
   patchElizaCoreRolesSubpath,
   patchExtensionlessJsExports,
   patchNobleHashesCompat,
-  patchProperLockfileSignalExitCompat,
-  patchPtyManagerCursorPositionCompat,
-  patchPtyManagerEsmDirnameCompat,
   pruneNestedElizaPluginCoreCopies,
   warnStaleBunCache,
 } from "./lib/patch-bun-exports.mjs";
@@ -59,19 +53,11 @@ const root = resolve(__dirname, "..");
 // ---------------------------------------------------------------------------
 warnStaleBunCache(root);
 
-// @noble/curves and @noble/hashes publish ".js" subpath exports, while ethers
-// imports extensionless paths like "@noble/curves/secp256k1" and
-// "@noble/hashes/sha3". Add extensionless aliases so Bun resolves them.
-patchExtensionlessJsExports(root, "@noble/curves");
-
 // @noble/hashes only exports subpaths with explicit ".js" suffixes (for
 // example "./sha3.js"), but ethers imports "@noble/hashes/sha3". Add
 // extensionless aliases so Bun resolves the published package at runtime.
 patchExtensionlessJsExports(root, "@noble/hashes");
 patchNobleHashesCompat(root);
-patchProperLockfileSignalExitCompat(root);
-patchPtyManagerEsmDirnameCompat(root);
-patchPtyManagerCursorPositionCompat(root);
 patchCodexFolderApprovalPromptCompat(root);
 patchBrokenElizaCoreRuntimeDists(root);
 patchElizaCoreRolesSubpath(root);
@@ -81,7 +67,6 @@ try {
 } catch {
   // Source file may not exist (moved to @miladyai/shared).
 }
-patchElectrobunWindowsTar(root);
 
 function uniqueResolvedPaths(paths) {
   return [...new Set(paths.map((candidate) => resolve(candidate)))];

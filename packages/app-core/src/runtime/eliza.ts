@@ -240,13 +240,8 @@ type RuntimeWithModelRegistration = AgentRuntime & {
 export async function ensureMiladyTextToSpeechHandler(
   runtime: AgentRuntime,
 ): Promise<void> {
-  let config: Parameters<typeof upstreamCollectPluginNames>[0];
-  try {
-    const { loadElizaConfig } = await import("@miladyai/agent/config/config");
-    config = loadElizaConfig();
-  } catch {
-    config = {} as Parameters<typeof upstreamCollectPluginNames>[0];
-  }
+  const { loadElizaConfig } = await import("@miladyai/agent/config/config");
+  const config = loadElizaConfig();
 
   if (isMiladyEdgeTtsDisabled(config)) {
     return;
@@ -278,47 +273,22 @@ export async function ensureMiladyTextToSpeechHandler(
   };
 
   try {
-    // Prefer the CommonJS entry in local workspaces. Some workspace ESM builds
-    // throw during module evaluation, and Bun can hang a later hot-restart when
-    // the same broken specifier is imported again. The CJS export remains stable.
-    let handler: TtsModelHandler | undefined;
-    try {
-      const cjsMod = require("@elizaos/plugin-edge-tts") as EdgeTtsPluginModule;
-      handler = readHandler(cjsMod.edgeTTSPlugin);
-    } catch {
-      handler = undefined;
-    }
+    const nodeMod = (await import(
+      "@elizaos/plugin-edge-tts/node"
+    )) as EdgeTtsPluginModule;
+    const handler = readHandler(nodeMod.default);
 
-    // The package root export can resolve to the **browser stub** (`models: {}`)
-    // under Bun / some bundlers. The `/node` subpath always loads `node-edge-tts`.
     if (!handler) {
-      try {
-        const nodeMod = (await import(
-          "@elizaos/plugin-edge-tts/node"
-        )) as EdgeTtsPluginModule;
-        handler = readHandler(nodeMod.default);
-      } catch {
-        handler = undefined;
-      }
-    }
-    if (!handler) {
-      const rootMod = (await import(
-        "@elizaos/plugin-edge-tts"
-      )) as EdgeTtsPluginModule;
-      handler = readHandler(rootMod.default);
-    }
-    if (!handler) {
-      logger.warn(
-        "[milady] @elizaos/plugin-edge-tts: no TEXT_TO_SPEECH handler (browser stub or incompatible build — use @elizaos/plugin-edge-tts/node)",
+      throw new Error(
+        "@elizaos/plugin-edge-tts/node did not expose a TEXT_TO_SPEECH handler",
       );
-      return;
     }
     r.registerModel(ModelType.TEXT_TO_SPEECH, handler, "edge-tts", 0);
     logger.info(
       "[milady] Registered Edge TTS for runtime TEXT_TO_SPEECH (streaming / swarm voice)",
     );
   } catch (err) {
-    logger.warn(
+    throw new Error(
       `[milady] Could not register Edge TTS for TEXT_TO_SPEECH: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
@@ -501,7 +471,7 @@ async function repairRuntimeAfterBoot(
         "[milady] AutonomyService started after SQL compatibility repair",
       );
     } catch (error) {
-      logger.warn(
+      throw new Error(
         `[milady] AutonomyService restart after SQL compatibility repair failed: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
@@ -521,7 +491,7 @@ async function repairRuntimeAfterBoot(
           "[milady] AutonomyService enabled — trigger instructions will be processed",
         );
       } catch (err) {
-        logger.warn(
+        throw new Error(
           `[milady] Failed to enable autonomy loop: ${err instanceof Error ? err.message : String(err)}`,
         );
       }

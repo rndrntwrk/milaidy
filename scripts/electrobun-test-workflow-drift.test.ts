@@ -21,7 +21,6 @@ describe("Electrobun test workflow drift", () => {
     expect(workflow).toContain("bun run test:integration");
     expect(workflow).toContain("bun run test:e2e");
     expect(workflow).toContain("bun run test:startup:contract");
-    expect(workflow).toContain("bun run test:startup:integration");
     expect(workflow).toContain("bun run test:desktop:contract");
     expect(workflow).toContain("bun run test:live:cloud");
     expect(workflow).toContain("bun run test:e2e:validation");

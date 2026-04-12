@@ -391,9 +391,7 @@ function AgentStatusHeader({
           <span
             key={item.label}
             className={`rounded px-1.5 py-0.5 text-3xs ${
-              item.on
-                ? "bg-ok/15 text-ok"
-                : "bg-muted/15 text-muted"
+              item.on ? "bg-ok/15 text-ok" : "bg-muted/15 text-muted"
             }`}
           >
             {item.label}
@@ -616,9 +614,7 @@ function WalletPanel({
                 <div className="flex items-center gap-2">
                   <span
                     className={`font-mono text-xs-tight ${
-                      transaction.amount >= 0
-                        ? "text-ok"
-                        : "text-danger"
+                      transaction.amount >= 0 ? "text-ok" : "text-danger"
                     }`}
                   >
                     {transaction.amount >= 0 ? "+" : ""}

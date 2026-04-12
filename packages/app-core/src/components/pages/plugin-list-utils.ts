@@ -114,7 +114,7 @@ export const ALWAYS_ON_PLUGIN_IDS = new Set([
   "code",
   "edge-tts",
   "pdf",
-  "scratchpad",
+  "clipboard",
   "secrets-manager",
   "todo",
   "trust",
@@ -562,7 +562,7 @@ export const DEFAULT_ICONS: Record<string, LucideIcon> = {
   "local-embedding": Binary,
   pdf: FileText,
   "secrets-manager": FileKey,
-  scratchpad: StickyNote,
+  clipboard: StickyNote,
   rlm: RefreshCw,
   // Features — agents & orchestration
   "agent-orchestrator": Target,
@@ -752,7 +752,7 @@ export const FEATURE_SUBGROUP: Record<string, string> = {
   "local-embedding": "knowledge",
   pdf: "knowledge",
   "secrets-manager": "knowledge",
-  scratchpad: "knowledge",
+  clipboard: "knowledge",
   rlm: "knowledge",
   // Agents & Orchestration
   "agent-orchestrator": "agents",

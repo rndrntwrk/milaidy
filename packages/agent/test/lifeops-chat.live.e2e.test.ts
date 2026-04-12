@@ -15,12 +15,13 @@ import { loadElizaConfig } from "../src/config/config";
 
 const LIVE_TESTS_ENABLED =
   process.env.MILADY_LIVE_TEST === "1" || process.env.ELIZA_LIVE_TEST === "1";
-const LIVE_CHAT_TESTS_ENABLED = process.env.MILADY_LIVE_CHAT_TEST === "1";
-const LIVE_PROVIDER_OVERRIDE = process.env.MILADY_LIVE_PROVIDER?.trim().toLowerCase();
+const LIVE_PROVIDER_OVERRIDE =
+  process.env.MILADY_LIVE_PROVIDER?.trim().toLowerCase();
 const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..", "..");
 const ENV_PATH = path.join(REPO_ROOT, ".env");
 const LIVE_CHAT_TEST_TIMEOUT_MS = 300_000;
 const LIVE_RUNTIME_BOOT_TIMEOUT_MS = 180_000;
+const LIVE_CONVERSATION_REQUEST_TIMEOUT_MS = 45_000;
 
 try {
   const { config } = await import("dotenv");
@@ -142,7 +143,9 @@ function resolveLiveProviderModelEnv(
   };
 }
 
-async function canImportLiveProviderPlugin(pluginName: string): Promise<boolean> {
+async function canImportLiveProviderPlugin(
+  pluginName: string,
+): Promise<boolean> {
   try {
     await import(pluginName);
     return true;
@@ -265,13 +268,11 @@ const selectedLiveProvider = await selectLiveProvider();
 const selectedLiveProviderPlugin = selectedLiveProvider?.plugin ?? null;
 const LIVE_CHAT_SUITE_ENABLED =
   LIVE_TESTS_ENABLED &&
-  LIVE_CHAT_TESTS_ENABLED &&
   selectedLiveProvider !== null &&
   selectedLiveProviderPlugin !== null;
 
 const liveSetupWarnings = [
   !LIVE_TESTS_ENABLED ? "set MILADY_LIVE_TEST=1 or ELIZA_LIVE_TEST=1" : null,
-  !LIVE_CHAT_TESTS_ENABLED ? "set MILADY_LIVE_CHAT_TEST=1" : null,
   !selectedLiveProvider
     ? "provide a live provider key such as OPENAI_API_KEY, GROQ_API_KEY, OPENROUTER_API_KEY, GOOGLE_API_KEY, GOOGLE_GENERATIVE_AI_API_KEY, or ANTHROPIC_API_KEY, or configure cloud.apiKey in the Milady config"
     : null,
@@ -418,7 +419,10 @@ async function waitForTrajectoryCall(
       .filter((line) => line.length >= 12),
   ]
     .map((candidate) => normalizePromptText(candidate))
-    .filter((candidate, index, all) => candidate.length > 0 && all.indexOf(candidate) === index);
+    .filter(
+      (candidate, index, all) =>
+        candidate.length > 0 && all.indexOf(candidate) === index,
+    );
 
   while (Date.now() < deadline) {
     const trajectoryMap = new Map<string, { id?: string }>();
@@ -603,28 +607,37 @@ async function postLiveConversationMessage(
   let lastError: unknown = null;
 
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
-    const response = await postConversationMessage(
-      runtime.port,
-      conversationId,
-      {
-        text,
-        mode: "power",
-      },
-    );
-    const responseText = String(response.data.text ?? "");
+    try {
+      const response = await postConversationMessage(
+        runtime.port,
+        conversationId,
+        {
+          text,
+          mode: "power",
+        },
+        undefined,
+        { timeoutMs: LIVE_CONVERSATION_REQUEST_TIMEOUT_MS },
+      );
+      const responseText = String(response.data.text ?? "");
 
-    if (response.status === 200 && !/provider issue/i.test(responseText)) {
-      return responseText;
+      if (response.status === 200 && !/provider issue/i.test(responseText)) {
+        return responseText;
+      }
+
+      lastError =
+        response.status === 200
+          ? new Error(
+              `${turnName} returned a provider issue reply on attempt ${attempt}\n${runtime.getLogTail()}`,
+            )
+          : new Error(
+              `${turnName} failed with status ${response.status} on attempt ${attempt}\n${runtime.getLogTail()}`,
+            );
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      lastError = new Error(
+        `${turnName} request failed on attempt ${attempt}: ${detail}\n${runtime.getLogTail()}`,
+      );
     }
-
-    lastError =
-      response.status === 200
-        ? new Error(
-            `${turnName} returned a provider issue reply on attempt ${attempt}`,
-          )
-        : new Error(
-            `${turnName} failed with status ${response.status} on attempt ${attempt}`,
-          );
 
     if (attempt < attempts) {
       await sleep(2_000);
@@ -649,8 +662,9 @@ async function startLiveRuntime(): Promise<StartedRuntime> {
     baseConfig.plugins &&
     typeof baseConfig.plugins === "object" &&
     Array.isArray((baseConfig.plugins as { allow?: unknown }).allow)
-      ? ((baseConfig.plugins as { allow?: unknown }).allow as unknown[])
-          .filter((entry): entry is string => typeof entry === "string")
+      ? ((baseConfig.plugins as { allow?: unknown }).allow as unknown[]).filter(
+          (entry): entry is string => typeof entry === "string",
+        )
       : [];
   const basePluginsWithoutProviders = basePlugins.filter(
     (entry) => !LIVE_PROVIDER_PLUGIN_NAMES.has(entry),
@@ -704,9 +718,14 @@ async function startLiveRuntime(): Promise<StartedRuntime> {
           ...(baseConfig.plugins && typeof baseConfig.plugins === "object"
             ? (baseConfig.plugins as Record<string, unknown>)
             : {}),
-          allow: [...new Set([...basePluginsWithoutProviders, selectedLiveProviderPlugin].filter(
-            (entry): entry is string => typeof entry === "string",
-          ))],
+          allow: [
+            ...new Set(
+              [
+                ...basePluginsWithoutProviders,
+                selectedLiveProviderPlugin,
+              ].filter((entry): entry is string => typeof entry === "string"),
+            ),
+          ],
         },
         serviceRouting: {
           ...baseServiceRouting,
@@ -761,8 +780,7 @@ async function startLiveRuntime(): Promise<StartedRuntime> {
       MILADY_API_PORT: String(apiPort),
       LOCAL_EMBEDDING_DIMENSIONS:
         process.env.LOCAL_EMBEDDING_DIMENSIONS?.trim() || "384",
-      EMBEDDING_DIMENSION:
-        process.env.EMBEDDING_DIMENSION?.trim() || "384",
+      EMBEDDING_DIMENSION: process.env.EMBEDDING_DIMENSION?.trim() || "384",
       ALLOW_NO_DATABASE: "",
       DISCORD_API_TOKEN: "",
       DISCORD_BOT_TOKEN: "",
@@ -842,43 +860,6 @@ function assertNoProviderIssue(
   );
 }
 
-function escapeXml(text: string): string {
-  return text
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&apos;");
-}
-
-function buildLifeActionPrompt(
-  summary: string,
-  action: string,
-  intent: string,
-  title?: string,
-): string {
-  const params = [
-    `    <action>${escapeXml(action)}</action>`,
-    `    <intent>${escapeXml(intent)}</intent>`,
-    ...(title ? [`    <title>${escapeXml(title)}</title>`] : []),
-  ].join("\n");
-
-  return [
-    summary,
-    "Reply with exactly this assistant message and no extra text:",
-    "Assistant:",
-    "<actions>",
-    "  <action>REPLY</action>",
-    "  <action>LIFE</action>",
-    "</actions>",
-    "<params>",
-    "  <LIFE>",
-    params,
-    "  </LIFE>",
-    "</params>",
-  ].join("\n");
-}
-
 function normalizePlannerResponseText(text: string): string {
   return text.toLowerCase().replace(/\s+/g, " ").trim();
 }
@@ -943,11 +924,7 @@ describeIf(LIVE_CHAT_SUITE_ENABLED)(
           requestText,
           "brush-teeth preview",
         );
-        assertNoProviderIssue(
-          "brush-teeth preview",
-          previewText,
-          liveRuntime,
-        );
+        assertNoProviderIssue("brush-teeth preview", previewText, liveRuntime);
         expect(previewText.trim().length).toBeGreaterThan(0);
 
         const definitionsBeforeConfirm = await req(
@@ -1045,12 +1022,8 @@ describeIf(LIVE_CHAT_SUITE_ENABLED)(
         );
         expect(contextResponse.trim().length).toBeGreaterThan(0);
 
-        const createPrompt = buildLifeActionPrompt(
-          "Continue the same conversation. The user already explained that mornings are chaotic and they keep forgetting to brush their teeth before work.",
-          "create",
-          "Actually create a routine named Brush teeth that happens every morning and every night. Do not just give advice.",
-          "Brush teeth",
-        );
+        const createPrompt =
+          "Can you turn that into a real recurring Brush teeth routine for me? I want it in the morning around 8am and again at night around 9pm, but please show me the plan before you save anything.";
         const createResponse = await postLiveConversationMessage(
           liveRuntime,
           conversationId,
@@ -1108,12 +1081,8 @@ describeIf(LIVE_CHAT_SUITE_ENABLED)(
         });
         expect(brushTeeth.reminderPlan?.id ?? null).not.toBeNull();
 
-        const preferencePrompt = buildLifeActionPrompt(
-          "Continue the same conversation.",
-          "reminder_preference",
-          "Actually remind me less about Brush teeth. Do not just explain the setting.",
-          "Brush teeth",
-        );
+        const preferencePrompt =
+          "Keep the Brush teeth routine, but make the reminders minimal from now on.";
         const preferenceResponse = await postLiveConversationMessage(
           liveRuntime,
           conversationId,
@@ -1385,18 +1354,15 @@ describeIf(LIVE_CHAT_SUITE_ENABLED)(
           title: "Live LifeOps Reminder Preference",
         });
 
-        const createPrompt = "Please remind me to drink water throughout the day.";
+        const createPrompt =
+          "Please remind me to drink water throughout the day.";
         const previewText = await postLiveConversationMessage(
           liveRuntime,
           conversationId,
           createPrompt,
           "water preview",
         );
-        assertNoProviderIssue(
-          "water preview",
-          previewText,
-          liveRuntime,
-        );
+        assertNoProviderIssue("water preview", previewText, liveRuntime);
         expect(previewText.trim().length).toBeGreaterThan(0);
 
         const waterDefinitionsBeforeConfirm = await req(
@@ -1420,11 +1386,7 @@ describeIf(LIVE_CHAT_SUITE_ENABLED)(
           confirmText,
           "water confirm",
         );
-        assertNoProviderIssue(
-          "water confirm",
-          createResponseText,
-          liveRuntime,
-        );
+        assertNoProviderIssue("water confirm", createResponseText, liveRuntime);
         expect(createResponseText).toMatch(/drink water/i);
 
         const drinkWater = await waitForDefinitionByTitle(

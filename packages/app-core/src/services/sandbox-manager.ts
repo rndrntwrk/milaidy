@@ -259,6 +259,7 @@ export class SandboxManager {
                 err instanceof Error ? err.message : String(err)
               }`,
             });
+            throw err;
           }
         }
 
@@ -266,7 +267,7 @@ export class SandboxManager {
         if (healthy) {
           this.setState("ready");
         } else {
-          this.setState("degraded");
+          throw new Error("Sandbox health check failed after startup");
         }
       } catch (err) {
         this.emitEvent({
@@ -314,7 +315,7 @@ export class SandboxManager {
         if (healthy) {
           this.setState("ready");
         } else {
-          this.setState("degraded");
+          throw new Error("Sandbox health check failed during recovery");
         }
       } catch (err) {
         this.emitEvent({
@@ -325,6 +326,7 @@ export class SandboxManager {
           }`,
         });
         this.setState("degraded");
+        throw err;
       }
     });
   }

@@ -286,11 +286,15 @@ function getBaseExport<T = unknown>(name: string): T | undefined {
 function resolveBasePlugin(): Plugin {
   const plugin = getBaseExport("default") ?? getBaseExport("codingAgentPlugin");
   if (!plugin || typeof plugin !== "object") {
-    // Return a no-op stub when orchestrator is unavailable
     return {
-      name: "agent-orchestrator-stub",
+      name: "agent-orchestrator-missing",
       description:
-        "Stub: plugin-agent-orchestrator not available in this environment",
+        "plugin-agent-orchestrator is required but not available in this environment",
+      init: async () => {
+        throw new Error(
+          "plugin-agent-orchestrator is required but not available in this environment",
+        );
+      },
       actions: [],
       providers: [],
       services: [],

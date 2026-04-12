@@ -1,11 +1,28 @@
-import { type AddressInfo, createServer } from "node:net";
-import { afterEach, describe, expect, it } from "vitest";
+import { EventEmitter } from "node:events";
+import { createConnection } from "node:net";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+const { createConnectionMock } = vi.hoisted(() => ({
+  createConnectionMock: vi.fn(),
+}));
+
+vi.mock("node:net", () => ({
+  createConnection: createConnectionMock,
+}));
+
+function createMockSocket(outcome: "connect" | "error") {
+  const socket = new EventEmitter() as EventEmitter & { destroy: () => void };
+  socket.destroy = vi.fn();
+  queueMicrotask(() => {
+    socket.emit(outcome);
+  });
+  return socket;
+}
 
 function waitForPort(
   port: number,
   { timeout = 2000, interval = 100 } = {},
 ): Promise<void> {
-  const { createConnection } = require("node:net");
   return new Promise((resolve, reject) => {
     const deadline = Date.now() + timeout;
     let activeSocket: ReturnType<typeof createConnection> | null = null;
@@ -41,23 +58,33 @@ function waitForPort(
 }
 
 describe("waitForPort", () => {
-  let server: ReturnType<typeof createServer> | null = null;
-
   afterEach(() => {
-    server?.close();
-    server = null;
+    createConnectionMock.mockReset();
+    vi.restoreAllMocks();
   });
 
   it("resolves when port becomes available", async () => {
-    server = createServer();
-    await new Promise<void>((r) => server?.listen(0, "127.0.0.1", r));
-    const port = (server.address() as AddressInfo).port;
-    await expect(waitForPort(port, { timeout: 5000 })).resolves.toBeUndefined();
+    createConnectionMock.mockReturnValue(createMockSocket("connect"));
+    await expect(
+      waitForPort(31337, { timeout: 5000 }),
+    ).resolves.toBeUndefined();
+    expect(createConnectionMock).toHaveBeenCalledTimes(1);
   });
 
   it("rejects on timeout without leaking sockets", async () => {
-    await expect(
-      waitForPort(1, { timeout: 300, interval: 50 }),
-    ).rejects.toThrow("Timed out");
+    vi.spyOn(Date, "now")
+      .mockReturnValueOnce(1_000)
+      .mockReturnValueOnce(1_000)
+      .mockReturnValue(1_100);
+    createConnectionMock.mockImplementation(() => createMockSocket("error"));
+
+    await expect(waitForPort(1, { timeout: 50, interval: 0 })).rejects.toThrow(
+      "Timed out",
+    );
+
+    const firstSocket = createConnectionMock.mock.results[0]?.value as
+      | { destroy: ReturnType<typeof vi.fn> }
+      | undefined;
+    expect(firstSocket?.destroy).toHaveBeenCalled();
   });
 });

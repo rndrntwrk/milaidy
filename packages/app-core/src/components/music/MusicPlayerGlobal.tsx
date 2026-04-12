@@ -154,9 +154,7 @@ export function MusicPlayerGlobal() {
             <div className="flex items-center gap-2 min-w-0">
               <span
                 className={`inline-block w-2 h-2 rounded-full shrink-0 ${
-                  track.isPaused
-                    ? "bg-warn"
-                    : "bg-ok animate-pulse"
+                  track.isPaused ? "bg-warn" : "bg-ok animate-pulse"
                 }`}
               />
               <span className="text-xs font-semibold text-txt truncate">

@@ -212,10 +212,6 @@ export default defineConfig({
     exclude: [
       "dist/**",
       "**/node_modules/**",
-      "packages/app-core/test/app/startup-chat.integration.test.ts",
-      "packages/app-core/test/app/startup-onboarding.integration.test.ts",
-      "packages/app-core/test/app/startup-backend-missing.integration.test.ts",
-      "packages/app-core/test/app/startup-token-401.integration.test.ts",
       "**/*-live.test.ts",
       "**/*-live.test.tsx",
       "**/*.live.test.ts",

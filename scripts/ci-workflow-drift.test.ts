@@ -97,7 +97,7 @@ describe("CI workflow drift", () => {
 
     expect(
       countOccurrences(workflow, "uses: ./.github/actions/setup-bun-workspace"),
-    ).toBe(6);
+    ).toBe(5);
     expect(workflow).not.toContain("install-command: bun install\n");
     expect(workflow).not.toContain(
       "install-command: bun install --ignore-scripts",
@@ -107,7 +107,7 @@ describe("CI workflow drift", () => {
         workflow,
         "install-command: bun install --frozen-lockfile --ignore-scripts",
       ),
-    ).toBeGreaterThanOrEqual(5);
+    ).toBeGreaterThanOrEqual(4);
     expect(workflow).not.toContain(
       "install-command: bun install --no-frozen-lockfile --ignore-scripts",
     );
@@ -123,7 +123,7 @@ describe("CI workflow drift", () => {
     // test.yml also uses submodules: false (13 jobs)
     expect(
       countOccurrences(read(TEST_WORKFLOW_PATH), "submodules: false"),
-    ).toBe(13);
+    ).toBe(12);
     expect(read(BUILD_DOCKER_WORKFLOW_PATH)).toContain("submodules: false");
     expect(read(BUILD_CLOUD_IMAGE_WORKFLOW_PATH)).toContain(
       "submodules: false",

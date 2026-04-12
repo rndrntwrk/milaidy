@@ -53,12 +53,6 @@ const runs = [
     forceSerial: true,
   },
   {
-    name: "startup-integration",
-    cmd: bunCmd,
-    args: ["run", "test:startup:integration"],
-    forceSerial: true,
-  },
-  {
     name: "orchestrator-integration",
     cmd: bunCmd,
     args: ["run", "test:orchestrator:integration"],

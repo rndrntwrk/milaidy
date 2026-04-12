@@ -9,11 +9,13 @@ import {
 } from "@miladyai/plugin-selfcontrol/selfcontrol";
 import { afterEach, describe, expect, it } from "vitest";
 import { req } from "../../../test/helpers/http";
+import { canBindLoopback } from "../../../test/helpers/loopback";
 import { startApiServer } from "../src/api/server";
 
 let tempDir = "";
 let hostsFilePath = "";
 let closeServer: (() => Promise<void>) | undefined;
+const describeLoopback = describe.skipIf(!(await canBindLoopback()));
 
 function createRuntimeMock(): AgentRuntime {
   const workerRegistry = new Map<string, unknown>();
@@ -86,7 +88,7 @@ afterEach(async () => {
   }
 });
 
-describe("website-blocker API (e2e)", () => {
+describeLoopback("website-blocker API (e2e)", () => {
   it("blocks, reports status, and unblocks websites through the real API server", async () => {
     tempDir = await fs.mkdtemp(
       path.join(os.tmpdir(), "milady-website-blocker-e2e-"),

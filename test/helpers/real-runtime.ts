@@ -22,6 +22,7 @@ import os from "node:os";
 import path from "node:path";
 import type { Plugin } from "@elizaos/core";
 import { AgentRuntime, createCharacter, logger } from "@elizaos/core";
+import { configureLocalEmbeddingPlugin } from "../../packages/agent/src/runtime/eliza";
 import {
   selectLiveProvider,
   type LiveProviderConfig,
@@ -56,6 +57,15 @@ export interface RealTestRuntimeResult {
   providerConfig: LiveProviderConfig | null;
   /** Stops the runtime and removes the temp PGLite directory. */
   cleanup: () => Promise<void>;
+}
+
+function applyRuntimeSettings(
+  runtime: AgentRuntime,
+  settings: Record<string, string>,
+): void {
+  for (const [key, value] of Object.entries(settings)) {
+    runtime.setSetting(key, value, /(API_KEY|TOKEN|SECRET|PASSWORD)/i.test(key));
+  }
 }
 
 type TrajectoryWriteService = {
@@ -131,6 +141,24 @@ export async function createRealTestRuntime(
   const { default: pluginSql } = await import("@elizaos/plugin-sql");
   await runtime.registerPlugin(pluginSql);
 
+  if (options?.withLLM) {
+    try {
+      const pluginModule = await import("@elizaos/plugin-local-embedding");
+      const plugin = pluginModule.default ?? pluginModule.elizaPlugin;
+      if (plugin) {
+        configureLocalEmbeddingPlugin(plugin);
+        await runtime.registerPlugin(plugin);
+        logger.info(
+          "[real-runtime] Registered local embedding plugin for TEXT_EMBEDDING",
+        );
+      }
+    } catch (err) {
+      logger.warn(
+        `[real-runtime] Failed to register local embedding plugin: ${err}`,
+      );
+    }
+  }
+
   // Register LLM plugin if requested
   let providerName: LiveProviderName | null = null;
   let providerConfig: LiveProviderConfig | null = null;
@@ -143,6 +171,7 @@ export async function createRealTestRuntime(
       for (const [key, value] of Object.entries(providerConfig.env)) {
         process.env[key] = value;
       }
+      applyRuntimeSettings(runtime, providerConfig.env);
       try {
         const pluginModule = await import(providerConfig.pluginPackage);
         const plugin = pluginModule.default ?? pluginModule.elizaPlugin;

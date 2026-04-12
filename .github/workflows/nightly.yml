@@ -185,9 +185,6 @@ jobs:
       - name: Run startup E2E contract guard
         run: bun run test:startup:contract
 
-      - name: Run startup integration tests
-        run: bun run test:startup:integration
-
       - name: Run desktop contract tests
         run: bun run test:desktop:contract
 
@@ -228,6 +225,7 @@ jobs:
     with:
       tag: ${{ needs.build-and-test.outputs.nightly_tag }}
       draft: false
+      publish_docker: false
       publish_release: false
     secrets: inherit
 
