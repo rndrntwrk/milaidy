@@ -267,6 +267,19 @@ describe("life-ops life chat transcripts", () => {
     expect(preference.effective.intensity).toBe("minimal");
   });
 
+  it("previews a one-off reminder with a Pacific timezone alias through chat without surfacing raw datetime errors", async () => {
+    const { response: preview } = await createConversationAndSend(
+      port,
+      "please set a reminder for april 17 2026 at 8pm pst to hug my wife",
+    );
+
+    expect(preview.status).toBe(200);
+    const previewText = String(preview.data.text ?? "");
+    expect(previewText.toLowerCase()).toContain("hug");
+    expect(previewText).not.toContain("UTC 'Z' suffix");
+    expect(previewText).not.toContain("local datetime without 'Z'");
+  });
+
   it("asks a natural clarifying question instead of inventing a vague todo", async () => {
     const definitionsBefore = (await service.listDefinitions()).length;
 

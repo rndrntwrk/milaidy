@@ -37,7 +37,9 @@ const ownerEntityMocks = vi.hoisted(() => ({
 
 const appleReminderMocks = vi.hoisted(() => ({
   createNativeAppleReminderLikeItem: vi.fn(),
+  deleteNativeAppleReminderLikeItem: vi.fn(),
   readNativeAppleReminderMetadata: vi.fn(),
+  updateNativeAppleReminderLikeItem: vi.fn(),
 }));
 
 vi.mock("@miladyai/plugin-selfcontrol/selfcontrol", () => ({
@@ -54,12 +56,21 @@ vi.mock("../runtime/owner-entity.js", () => ({
   resolveOwnerEntityId: ownerEntityMocks.resolveOwnerEntityId,
 }));
 
-vi.mock("../lifeops/apple-reminders.js", () => ({
-  createNativeAppleReminderLikeItem:
-    appleReminderMocks.createNativeAppleReminderLikeItem,
-  readNativeAppleReminderMetadata:
-    appleReminderMocks.readNativeAppleReminderMetadata,
-}));
+vi.mock("../lifeops/apple-reminders.js", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../lifeops/apple-reminders.js")>();
+  return {
+    ...actual,
+    createNativeAppleReminderLikeItem:
+      appleReminderMocks.createNativeAppleReminderLikeItem,
+    deleteNativeAppleReminderLikeItem:
+      appleReminderMocks.deleteNativeAppleReminderLikeItem,
+    readNativeAppleReminderMetadata:
+      appleReminderMocks.readNativeAppleReminderMetadata,
+    updateNativeAppleReminderLikeItem:
+      appleReminderMocks.updateNativeAppleReminderLikeItem,
+  };
+});
 
 // ---------------------------------------------------------------------------
 // PGlite runtime adapter (matches the pattern in lifeops/service-pglite.test.ts)

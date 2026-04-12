@@ -119,4 +119,20 @@ describe("PageLayout", () => {
     expect(screen.getByText("Tabs")).toBeInTheDocument();
     expect(screen.getByText("Content")).toBeInTheDocument();
   });
+
+  it("renders the shared footer slot below the content region", () => {
+    installMatchMedia(true);
+
+    render(
+      <PageLayout
+        sidebar={<SidebarProbe mobileTitle="Browse" />}
+        footer={<div>Widget slot</div>}
+      >
+        <div>Content</div>
+      </PageLayout>,
+    );
+
+    expect(screen.getByText("Content")).toBeInTheDocument();
+    expect(screen.getByText("Widget slot")).toBeInTheDocument();
+  });
 });

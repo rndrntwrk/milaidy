@@ -225,8 +225,11 @@ describe("useOnboardingCallbacks", () => {
     const setOnboardingProvider = vi.fn();
     const setOnboardingApiKey = vi.fn();
     const setOnboardingPrimaryModel = vi.fn();
+    const setOnboardingRemoteApiBase = vi.fn();
+    const setOnboardingRemoteToken = vi.fn();
     const setOnboardingRemoteError = vi.fn();
     const setOnboardingRemoteConnecting = vi.fn();
+    const setOnboardingRemoteConnected = vi.fn();
 
     const { result } = renderHook(() => {
       const onboarding = useOnboardingState();
@@ -244,11 +247,11 @@ describe("useOnboardingCallbacks", () => {
           setOnboardingProvider,
           setOnboardingApiKey,
           setOnboardingPrimaryModel,
-          setOnboardingRemoteApiBase: vi.fn(),
-          setOnboardingRemoteToken: vi.fn(),
+          setOnboardingRemoteApiBase,
+          setOnboardingRemoteToken,
           setOnboardingRemoteConnecting,
           setOnboardingRemoteError,
-          setOnboardingRemoteConnected: vi.fn(),
+          setOnboardingRemoteConnected,
           setPostOnboardingChecklistDismissed: vi.fn(),
           setOnboardingComplete: vi.fn(),
           coordinatorOnboardingCompleteRef: { current: null },
@@ -284,8 +287,11 @@ describe("useOnboardingCallbacks", () => {
     expect(setOnboardingProvider).toHaveBeenCalledWith("");
     expect(setOnboardingApiKey).toHaveBeenCalledWith("");
     expect(setOnboardingPrimaryModel).toHaveBeenCalledWith("");
+    expect(setOnboardingRemoteApiBase).toHaveBeenCalledWith("");
+    expect(setOnboardingRemoteToken).toHaveBeenCalledWith("");
     expect(setOnboardingRemoteError).toHaveBeenCalledWith(null);
     expect(setOnboardingRemoteConnecting).toHaveBeenCalledWith(false);
+    expect(setOnboardingRemoteConnected).toHaveBeenCalledWith(false);
   });
 
   it("ignores invalid onboarding jump targets instead of pretending to navigate", () => {
@@ -352,8 +358,11 @@ describe("useOnboardingCallbacks", () => {
     const setOnboardingProvider = vi.fn();
     const setOnboardingApiKey = vi.fn();
     const setOnboardingPrimaryModel = vi.fn();
+    const setOnboardingRemoteApiBase = vi.fn();
+    const setOnboardingRemoteToken = vi.fn();
     const setOnboardingRemoteError = vi.fn();
     const setOnboardingRemoteConnecting = vi.fn();
+    const setOnboardingRemoteConnected = vi.fn();
 
     const { result } = renderHook(() => {
       const onboarding = useOnboardingState();
@@ -371,11 +380,11 @@ describe("useOnboardingCallbacks", () => {
           setOnboardingProvider,
           setOnboardingApiKey,
           setOnboardingPrimaryModel,
-          setOnboardingRemoteApiBase: vi.fn(),
-          setOnboardingRemoteToken: vi.fn(),
+          setOnboardingRemoteApiBase,
+          setOnboardingRemoteToken,
           setOnboardingRemoteConnecting,
           setOnboardingRemoteError,
-          setOnboardingRemoteConnected: vi.fn(),
+          setOnboardingRemoteConnected,
           setPostOnboardingChecklistDismissed: vi.fn(),
           setOnboardingComplete: vi.fn(),
           coordinatorOnboardingCompleteRef: { current: null },
@@ -411,8 +420,11 @@ describe("useOnboardingCallbacks", () => {
     expect(setOnboardingProvider).toHaveBeenCalledWith("");
     expect(setOnboardingApiKey).toHaveBeenCalledWith("");
     expect(setOnboardingPrimaryModel).toHaveBeenCalledWith("");
+    expect(setOnboardingRemoteApiBase).toHaveBeenCalledWith("");
+    expect(setOnboardingRemoteToken).toHaveBeenCalledWith("");
     expect(setOnboardingRemoteError).toHaveBeenCalledWith(null);
     expect(setOnboardingRemoteConnecting).toHaveBeenCalledWith(false);
+    expect(setOnboardingRemoteConnected).toHaveBeenCalledWith(false);
   });
 
   it("advances from identity to providers through the public next-step callback", async () => {
@@ -595,7 +607,9 @@ describe("useOnboardingCallbacks", () => {
       result.current.onboarding.setField("serverTarget", "local");
       result.current.onboarding.setField("provider", "openai");
       result.current.onboarding.setField("apiKey", "sk-openai-test");
-      result.current.onboarding.setStep("providers");
+      result.current.onboarding.setField("featureDiscord", true);
+      result.current.onboarding.setField("featureBrowser", true);
+      result.current.onboarding.setStep("features");
     });
 
     await act(async () => {
@@ -603,6 +617,21 @@ describe("useOnboardingCallbacks", () => {
     });
 
     expect(submitOnboarding).toHaveBeenCalledTimes(1);
+    expect(submitOnboarding).toHaveBeenCalledWith(
+      expect.objectContaining({
+        connectors: {
+          discord: {
+            enabled: true,
+            managed: true,
+          },
+        },
+        features: {
+          browser: {
+            enabled: true,
+          },
+        },
+      }),
+    );
     expect(setOnboardingComplete).toHaveBeenCalledWith(true);
     expect(setTab).toHaveBeenCalledWith("chat");
   });

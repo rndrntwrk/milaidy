@@ -192,6 +192,50 @@ describe("GoogleManagedClient", () => {
     );
   });
 
+  it("calls the managed Gmail message-send endpoint", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }),
+    );
+
+    const client = new GoogleManagedClient({
+      configured: true,
+      apiKey: "test-key",
+      apiBaseUrl: "https://cloud.example/api/v1",
+      siteUrl: "https://cloud.example",
+    });
+
+    await client.sendGmailMessage({
+      side: "owner",
+      to: ["founder@example.com"],
+      cc: ["ops@example.com"],
+      bcc: ["archive@example.com"],
+      subject: "Project sync",
+      bodyText: "Reviewing it now.",
+    });
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        href: "https://cloud.example/api/v1/milady/google/gmail/message-send",
+      }),
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          side: "owner",
+          to: ["founder@example.com"],
+          cc: ["ops@example.com"],
+          bcc: ["archive@example.com"],
+          subject: "Project sync",
+          bodyText: "Reviewing it now.",
+        }),
+      }),
+    );
+  });
+
   it("starts managed Google auth through the generic cloud OAuth route", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(
@@ -253,7 +297,7 @@ describe("GoogleManagedClient", () => {
     });
   });
 
-  it("forwards managed calendar create requests without reinterpreting UTC instants", async () => {
+  it("normalizes managed calendar create requests when a timezone is supplied with UTC instants", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ event: {} }), {
         status: 200,
@@ -280,8 +324,39 @@ describe("GoogleManagedClient", () => {
 
     expect(fetchSpy).toHaveBeenCalledOnce();
     const body = JSON.parse(fetchSpy.mock.calls[0][1]?.body as string);
-    expect(body.startAt).toBe("2026-04-12T16:00:00.000Z");
-    expect(body.endAt).toBe("2026-04-12T17:00:00.000Z");
+    expect(body.startAt).toBe("2026-04-12T09:00:00-07:00");
+    expect(body.endAt).toBe("2026-04-12T10:00:00-07:00");
+    expect(body.timeZone).toBe("America/Los_Angeles");
+  });
+
+  it("leaves managed calendar create requests alone when the datetime is already local", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ event: {} }), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }),
+    );
+
+    const client = new GoogleManagedClient({
+      configured: true,
+      apiKey: "test-key",
+      apiBaseUrl: "https://cloud.example/api/v1",
+      siteUrl: "https://cloud.example",
+    });
+
+    await client.createCalendarEvent({
+      side: "owner",
+      title: "Coffee",
+      startAt: "2026-04-12T09:00:00",
+      endAt: "2026-04-12T10:00:00",
+      timeZone: "America/Los_Angeles",
+    });
+
+    const body = JSON.parse(fetchSpy.mock.calls[0][1]?.body as string);
+    expect(body.startAt).toBe("2026-04-12T09:00:00");
+    expect(body.endAt).toBe("2026-04-12T10:00:00");
     expect(body.timeZone).toBe("America/Los_Angeles");
   });
 });

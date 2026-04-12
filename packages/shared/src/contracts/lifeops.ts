@@ -776,6 +776,38 @@ export interface LifeOpsBrowserCompanionPackageStatus {
   safariWebExtensionPath: string | null;
   safariAppPath: string | null;
   safariPackagePath: string | null;
+  releaseManifest: LifeOpsBrowserCompanionReleaseManifest | null;
+}
+
+export interface LifeOpsBrowserCompanionReleaseAsset {
+  fileName: string;
+  downloadUrl: string | null;
+}
+
+export interface LifeOpsBrowserCompanionReleaseTarget {
+  installKind:
+    | "chrome_web_store"
+    | "apple_app_store"
+    | "github_release"
+    | "local_download";
+  installUrl: string | null;
+  storeListingUrl: string | null;
+  asset: LifeOpsBrowserCompanionReleaseAsset;
+}
+
+export interface LifeOpsBrowserCompanionReleaseManifest {
+  schema: "lifeops_browser_release_v2";
+  releaseTag: string;
+  releaseVersion: string;
+  repository: string | null;
+  releasePageUrl: string | null;
+  chromeVersion: string;
+  chromeVersionName: string;
+  safariMarketingVersion: string;
+  safariBuildVersion: string;
+  chrome: LifeOpsBrowserCompanionReleaseTarget;
+  safari: LifeOpsBrowserCompanionReleaseTarget;
+  generatedAt: string;
 }
 
 export interface LifeOpsWorkflowActionBase {
@@ -1227,6 +1259,17 @@ export interface SendLifeOpsGmailReplyRequest {
   subject?: string;
   to?: string[];
   cc?: string[];
+  confirmSend?: boolean;
+}
+
+export interface SendLifeOpsGmailMessageRequest {
+  side?: LifeOpsConnectorSide;
+  mode?: LifeOpsConnectorMode;
+  to: string[];
+  cc?: string[];
+  bcc?: string[];
+  subject: string;
+  bodyText: string;
   confirmSend?: boolean;
 }
 

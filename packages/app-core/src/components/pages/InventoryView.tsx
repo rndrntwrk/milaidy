@@ -881,12 +881,14 @@ export function InventoryView() {
         ) : undefined,
     },
   ];
-  const walletSubTabHeader = (
-    <SegmentedControl
-      value={walletSubTab}
-      onValueChange={setWalletSubTab}
-      items={walletSubTabItems}
-    />
+  const walletSubTabControls = (
+    <div className="mb-4 flex justify-end">
+      <SegmentedControl
+        value={walletSubTab}
+        onValueChange={setWalletSubTab}
+        items={walletSubTabItems}
+      />
+    </div>
   );
 
   // ════════════════════════════════════════════════════════════════════
@@ -896,18 +898,17 @@ export function InventoryView() {
   // ── Standalone states (no two-panel layout) ─────────────────────
   if (walletLoading && !walletBalances) {
     return (
-      <div className="flex flex-1 min-h-0 flex-col">
-        <PageLayout
-          sidebar={walletSidebar}
-          contentHeader={walletSubTabHeader}
-          contentInnerClassName="mx-auto w-full max-w-[76rem]"
-        >
-          <PagePanel.Loading
-            variant="workspace"
-            heading={t("wallet.loadingBalances")}
-          />
-        </PageLayout>
-      </div>
+      <PageLayout
+        sidebar={walletSidebar}
+        contentInnerClassName="mx-auto w-full max-w-[76rem]"
+        footer={<WidgetHost slot="wallet" className="py-3" />}
+      >
+        {walletSubTabControls}
+        <PagePanel.Loading
+          variant="workspace"
+          heading={t("wallet.loadingBalances")}
+        />
+      </PageLayout>
     );
   }
 
@@ -915,9 +916,10 @@ export function InventoryView() {
     <div className="flex flex-1 min-h-0 flex-col">
       <PageLayout
         sidebar={walletSidebar}
-        contentHeader={walletSubTabHeader}
         contentInnerClassName="mx-auto w-full max-w-[76rem]"
+        footer={<WidgetHost slot="wallet" className="py-3" />}
       >
+        {walletSubTabControls}
         <div className="grid gap-3">
           {walletError ? (
             <PagePanel.Notice tone="danger">{walletError}</PagePanel.Notice>
@@ -1082,8 +1084,6 @@ export function InventoryView() {
           )}
         </div>
       </PageLayout>
-
-      <WidgetHost slot="wallet" className="px-4 py-3" />
 
       {/* ── Wallet & RPC popup ── */}
       <Dialog open={walletRpcOpen} onOpenChange={setWalletRpcOpen}>

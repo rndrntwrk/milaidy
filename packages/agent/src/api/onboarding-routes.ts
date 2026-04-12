@@ -215,6 +215,12 @@ export interface OnboardingServerState {
   chatConnectionPromise: Promise<void> | null;
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
 // ---------------------------------------------------------------------------
 // Route handler
 // ---------------------------------------------------------------------------
@@ -598,6 +604,22 @@ export async function handleOnboardingRoutes(
 
     // ── Connectors (Telegram, Discord, WhatsApp, Twilio, Blooio) ────────
     if (!config.connectors) config.connectors = {};
+    const explicitConnectors = asRecord(body.connectors);
+    if (explicitConnectors) {
+      for (const [connectorName, connectorValue] of Object.entries(
+        explicitConnectors,
+      )) {
+        const nextConnector = asRecord(connectorValue);
+        if (!nextConnector) {
+          continue;
+        }
+        const currentConnector = asRecord(config.connectors[connectorName]);
+        config.connectors[connectorName] = {
+          ...(currentConnector ?? {}),
+          ...nextConnector,
+        };
+      }
+    }
     if (
       body.telegramToken &&
       typeof body.telegramToken === "string" &&
@@ -676,6 +698,14 @@ export async function handleOnboardingRoutes(
       }
 
       config.connectors.blooio = blooioConnector;
+    }
+
+    const explicitFeatures = asRecord(body.features);
+    if (explicitFeatures) {
+      config.features = {
+        ...(asRecord(config.features) ?? {}),
+        ...explicitFeatures,
+      };
     }
 
     // ── Inventory / RPC providers ─────────────────────────────────────────

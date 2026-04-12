@@ -1,20 +1,43 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import type { IAgentRuntime } from "@elizaos/core";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const configMocks = vi.hoisted(() => ({
-  loadElizaConfig: vi.fn(),
-  saveElizaConfig: vi.fn(),
-}));
-
-vi.mock("../config/config.js", () => ({
-  loadElizaConfig: configMocks.loadElizaConfig,
-  saveElizaConfig: configMocks.saveElizaConfig,
-}));
+/**
+ * Integration test for character persistence — no module mocks.
+ *
+ * Uses real config file I/O by pointing the config path resolution at temp
+ * directories via env vars.
+ */
 
 import {
   MiladyCharacterPersistenceService,
   syncCharacterIntoConfig,
 } from "./character-persistence";
+
+let tmpDir: string;
+let tmpConfigPath: string;
+
+const ENV_KEYS = [
+  "MILADY_CONFIG_PATH",
+  "MILADY_PERSIST_CONFIG_PATH",
+  "MILADY_STATE_DIR",
+  "ELIZA_CONFIG_PATH",
+  "ELIZA_PERSIST_CONFIG_PATH",
+  "ELIZA_STATE_DIR",
+] as const;
+
+const envBackup = new Map<string, string | undefined>();
+
+function writeJson(filePath: string, value: unknown): void {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+}
+
+function readJson(filePath: string): unknown {
+  return JSON.parse(fs.readFileSync(filePath, "utf8"));
+}
 
 describe("syncCharacterIntoConfig", () => {
   it("copies runtime character fields into the primary agent config", () => {
@@ -61,9 +84,21 @@ describe("MiladyCharacterPersistenceService", () => {
   };
 
   beforeEach(() => {
-    configMocks.loadElizaConfig.mockReset();
-    configMocks.saveElizaConfig.mockReset();
-    configMocks.loadElizaConfig.mockReturnValue({
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "milady-charpersist-"));
+    tmpConfigPath = path.join(tmpDir, "milady.json");
+
+    for (const key of ENV_KEYS) {
+      envBackup.set(key, process.env[key]);
+      delete process.env[key];
+    }
+
+    // Point the real config loader/saver at our temp directory
+    process.env.MILADY_CONFIG_PATH = tmpConfigPath;
+    process.env.MILADY_PERSIST_CONFIG_PATH = tmpConfigPath;
+    process.env.MILADY_STATE_DIR = tmpDir;
+
+    // Write an initial config file
+    writeJson(tmpConfigPath, {
       agents: {
         list: [{ id: "main", default: true, name: "Old Milady" }],
       },
@@ -91,13 +126,31 @@ describe("MiladyCharacterPersistenceService", () => {
     };
   });
 
+  afterEach(() => {
+    for (const key of ENV_KEYS) {
+      const value = envBackup.get(key);
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+    envBackup.clear();
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
   it("persists runtime character changes to config and agent storage", async () => {
     const service = new MiladyCharacterPersistenceService(runtime);
 
     const result = await service.persistCharacter();
 
     expect(result).toEqual({ success: true });
-    expect(configMocks.saveElizaConfig).toHaveBeenCalledTimes(1);
+
+    // Verify the config file was actually written
+    expect(fs.existsSync(tmpConfigPath)).toBe(true);
+    const savedConfig = readJson(tmpConfigPath) as Record<string, unknown>;
+    expect(savedConfig).toBeDefined();
+
     expect(runtime.updateAgent).toHaveBeenCalledWith("agent-1", {
       name: "Milady",
       metadata: {

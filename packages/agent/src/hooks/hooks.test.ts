@@ -3,9 +3,11 @@
  *
  * Covers the parts NOT already tested in registry.test.ts:
  * - Eligibility checks (OS, binaries, env, config)
- * - Loader orchestration (discover → eligibility → register)
+ * - Loader orchestration (discover -> eligibility -> register)
  * - Discovery frontmatter parsing
- * - End-to-end: load → trigger → handler fires
+ * - End-to-end: load -> trigger -> handler fires
+ *
+ * No module mocks — uses real imports.
  */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -18,14 +20,6 @@ import {
   triggerHook,
 } from "./registry";
 import type { ElizaHookMetadata } from "./types";
-
-// ---------------------------------------------------------------------------
-// mocks
-// ---------------------------------------------------------------------------
-
-vi.mock("@elizaos/core", () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() },
-}));
 
 // ---------------------------------------------------------------------------
 // lifecycle
@@ -69,10 +63,9 @@ describe("checkEligibility", () => {
   });
 
   it("accepts when OS matches current platform", () => {
-    const { platform } = require("node:os");
     const metadata: ElizaHookMetadata = {
       events: ["command:new"],
-      os: [platform()],
+      os: [process.platform],
     };
     const result = checkEligibility(metadata, undefined);
     expect(result.eligible).toBe(true);
@@ -245,11 +238,11 @@ describe("resolveHookConfig", () => {
 });
 
 // ============================================================================
-//  3. End-to-end: register → trigger → handler fires with correct payload
+//  3. End-to-end: register -> trigger -> handler fires with correct payload
 // ============================================================================
 
 describe("hooks end-to-end smoke", () => {
-  it("hook registration → event trigger → handler receives payload", async () => {
+  it("hook registration -> event trigger -> handler receives payload", async () => {
     const received: Array<{
       type: string;
       action: string;

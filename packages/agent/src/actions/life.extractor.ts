@@ -171,6 +171,79 @@ function normalizeMissingFields(value: unknown): ExtractedLifeMissingField[] {
   return missing;
 }
 
+function normalizeIntent(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function buildHeuristicOperationPlan(args: {
+  intent: string;
+  currentMessage: string;
+  recentConversation: string[];
+}): ExtractedLifeOperationPlan | null {
+  const text = normalizeIntent(args.intent || args.currentMessage);
+  const lower = text.toLowerCase();
+  const recentWindow = args.recentConversation.slice(-resolveContextWindow());
+
+  if (
+    /\b(zoom out|big picture|juggling|what am i juggling|everything i have going on)\b/.test(
+      lower,
+    )
+  ) {
+    return {
+      operation: "query_overview",
+      confidence: 0.82,
+      shouldAct: true,
+      missing: [],
+    };
+  }
+
+  const asksToCreate =
+    /\b(add|create|make|set up|set|help me add|help me create|help me make)\b/.test(
+      lower,
+    );
+  const mentionsLifeItem =
+    /\b(todo|task|habit|routine|reminder|alarm)\b/.test(lower);
+  const hasSpecificTitle =
+    /\bto\s+[a-z]/.test(lower) ||
+    /\b\d+\s+[a-z]/.test(lower) ||
+    /\b(call|email|text|submit|pay|brush|stretch|drink|take)\b/.test(lower);
+  const hasSchedule =
+    /\b(every|daily|weekly|tomorrow|today|tonight|morning|night|afternoon|evening)\b/.test(
+      lower,
+    ) || /\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b/.test(lower);
+
+  if (asksToCreate && mentionsLifeItem && !hasSpecificTitle && !hasSchedule) {
+    return {
+      operation: "create_definition",
+      confidence: 0.8,
+      shouldAct: false,
+      missing: ["title", "schedule"],
+    };
+  }
+
+  const shortTimedFollowup =
+    text.length <= 32 &&
+    (/\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b/.test(lower) ||
+      /\b(today|tomorrow|tonight)\b/.test(lower));
+  if (
+    shortTimedFollowup &&
+    recentWindow.some((entry) =>
+      /\b(alarm|wake(?:-|\s)?up|wake me up|remind(?: me)?|reminder)\b/i.test(
+        entry,
+      ),
+    )
+  ) {
+    return {
+      operation: "create_definition",
+      confidence: 0.76,
+      shouldAct: true,
+      missing: [],
+    };
+  }
+
+  return null;
+}
+
 export async function extractLifeOperationWithLlm(args: {
   runtime: IAgentRuntime;
   message: Memory;
@@ -178,14 +251,25 @@ export async function extractLifeOperationWithLlm(args: {
   intent: string;
 }): Promise<ExtractedLifeOperationPlan> {
   const { runtime, message, state, intent } = args;
-  if (typeof runtime.useModel !== "function") {
-    return { operation: null, confidence: null, shouldAct: null, missing: [] };
-  }
-
-  const recentConversation = stateTextCandidates(state)
-    .slice(-resolveContextWindow())
-    .join("\n");
+  const recentConversation = stateTextCandidates(state).slice(
+    -resolveContextWindow(),
+  );
   const currentMessage = messageText(message);
+  const heuristicPlan = buildHeuristicOperationPlan({
+    intent,
+    currentMessage,
+    recentConversation,
+  });
+  if (typeof runtime.useModel !== "function") {
+    return (
+      heuristicPlan ?? {
+        operation: null,
+        confidence: null,
+        shouldAct: null,
+        missing: [],
+      }
+    );
+  }
   const prompt = [
     "Plan the LifeOps response for the current user request.",
     "The user may speak in any language.",
@@ -237,7 +321,7 @@ export async function extractLifeOperationWithLlm(args: {
     `Allowed operations: ${LIFE_OPERATION_VALUES.join(", ")}, or null`,
     `Current request: ${JSON.stringify(currentMessage)}`,
     `Resolved intent: ${JSON.stringify(intent)}`,
-    `Recent conversation: ${JSON.stringify(recentConversation)}`,
+    `Recent conversation: ${JSON.stringify(recentConversation.join("\n"))}`,
   ].join("\n");
 
   let rawResponse = "";
@@ -252,20 +336,47 @@ export async function extractLifeOperationWithLlm(args: {
       },
       "Life operation extraction model call failed",
     );
-    return { operation: null, confidence: null, shouldAct: null, missing: [] };
+    return (
+      heuristicPlan ?? {
+        operation: null,
+        confidence: null,
+        shouldAct: null,
+        missing: [],
+      }
+    );
   }
 
   const parsed =
     parseKeyValueXml<Record<string, unknown>>(rawResponse) ??
     parseJSONObjectFromText(rawResponse);
   if (!parsed) {
-    return { operation: null, confidence: null, shouldAct: null, missing: [] };
+    return (
+      heuristicPlan ?? {
+        operation: null,
+        confidence: null,
+        shouldAct: null,
+        missing: [],
+      }
+    );
   }
 
-  return {
+  const parsedPlan = {
     operation: normalizeOperation(parsed.operation),
     confidence: normalizeConfidence(parsed.confidence),
     shouldAct: normalizeShouldAct(parsed.shouldAct),
     missing: normalizeMissingFields(parsed.missing),
   };
+  if (
+    heuristicPlan &&
+    (parsedPlan.operation === null ||
+      parsedPlan.shouldAct === null ||
+      (parsedPlan.confidence ?? 0) < 0.5 ||
+      (heuristicPlan.shouldAct === false &&
+        parsedPlan.operation === heuristicPlan.operation &&
+        parsedPlan.shouldAct === true &&
+        (parsedPlan.confidence ?? 0) < 0.9))
+  ) {
+    return heuristicPlan;
+  }
+  return parsedPlan;
 }

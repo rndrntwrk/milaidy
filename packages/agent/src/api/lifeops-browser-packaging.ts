@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type {
+  LifeOpsBrowserCompanionReleaseManifest,
   LifeOpsBrowserCompanionPackageStatus,
   LifeOpsBrowserKind,
 } from "../contracts/lifeops.js";
@@ -20,6 +21,25 @@ const extensionRoot = path.join(
 
 function existingPath(candidate: string): string | null {
   return fs.existsSync(candidate) ? candidate : null;
+}
+
+function readReleaseManifest(
+  artifactsDir: string,
+): LifeOpsBrowserCompanionReleaseManifest | null {
+  const manifestPath = path.join(
+    artifactsDir,
+    "lifeops-browser-release-manifest.json",
+  );
+  if (!fs.existsSync(manifestPath)) {
+    return null;
+  }
+  try {
+    return JSON.parse(
+      fs.readFileSync(manifestPath, "utf8"),
+    ) as LifeOpsBrowserCompanionReleaseManifest;
+  } catch {
+    return null;
+  }
 }
 
 function packageScriptName(browser: LifeOpsBrowserKind): string {
@@ -71,6 +91,7 @@ export function getLifeOpsBrowserCompanionPackageStatus(): LifeOpsBrowserCompani
       safariWebExtensionPath: null,
       safariAppPath: null,
       safariPackagePath: null,
+      releaseManifest: null,
     };
   }
 
@@ -88,6 +109,7 @@ export function getLifeOpsBrowserCompanionPackageStatus(): LifeOpsBrowserCompani
     safariPackagePath: existingPath(
       path.join(artifactsDir, "lifeops-browser-safari.zip"),
     ),
+    releaseManifest: readReleaseManifest(artifactsDir),
   };
 }
 

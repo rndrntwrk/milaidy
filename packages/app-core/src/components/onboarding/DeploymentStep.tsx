@@ -2,7 +2,7 @@
  * DeploymentStep — first onboarding step, absorbs the old splash server chooser.
  *
  * Presents three deployment options:
- * 1. Create Local Agent (desktop only)
+ * 1. Create Local Agent (desktop and development web)
  * 2. Manage Cloud Agents (Eliza Cloud login + agent list + provisioning)
  * 3. Connect to Remote Agent (manual URL entry)
  *
@@ -39,6 +39,13 @@ type CloudStage =
   | "creating"
   | "provisioning"
   | "connecting";
+
+export function shouldShowLocalDeploymentOption(args: {
+  isDesktop: boolean;
+  isDevelopment: boolean;
+}): boolean {
+  return args.isDesktop || args.isDevelopment;
+}
 
 function statusBadge(status: string): { label: string; className: string } {
   switch (status) {
@@ -91,7 +98,10 @@ export function DeploymentStep() {
   const [remoteUrl, setRemoteUrl] = useState("");
   const [remoteToken, setRemoteToken] = useState("");
 
-  const showCreateLocal = isDesktopPlatform();
+  const showCreateLocal = shouldShowLocalDeploymentOption({
+    isDesktop: isDesktopPlatform(),
+    isDevelopment: import.meta.env.DEV,
+  });
 
   // ── Gateway discovery ──────────────────────────────────────────────
   useEffect(() => {
@@ -396,7 +406,7 @@ export function DeploymentStep() {
                   className="text-[9px] uppercase text-[#ffe600]/80"
                 >
                   {t("startupshell.CreateAgentLabel", {
-                    defaultValue: "Desktop only",
+                    defaultValue: "New local agent",
                   })}
                 </span>
                 <span className="text-sm font-bold">

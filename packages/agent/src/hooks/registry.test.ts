@@ -1,11 +1,13 @@
 /**
- * Hook Registry — Unit Tests
+ * Hook Registry — Integration Tests
  *
  * Tests for:
  * - registerHook (registration by event key)
  * - clearHooks (clearing the registry)
  * - triggerHook (dispatching to specific and general handlers)
  * - createHookEvent (factory for HookEvent objects)
+ *
+ * No module mocks — uses real imports.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -15,14 +17,6 @@ import {
   registerHook,
   triggerHook,
 } from "./registry";
-
-// ---------------------------------------------------------------------------
-// mocks
-// ---------------------------------------------------------------------------
-
-vi.mock("@elizaos/core", () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() },
-}));
 
 // ---------------------------------------------------------------------------
 // lifecycle

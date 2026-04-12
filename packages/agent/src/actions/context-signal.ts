@@ -3,16 +3,17 @@
  *
  * Actions that are only relevant when the recent conversation mentions certain
  * keywords can use these helpers to avoid bloating the LLM action context on
- * every turn.  The approach mirrors CALENDAR_ACTION's proven pattern:
- *
- *   1. Collect recent conversation texts (from state + DB fallback).
- *   2. Check for **strong terms** — a single match is sufficient.
- *   3. Check for **weak terms** — two or more matches required.
+ * every turn.
  *
  * @module actions/context-signal
  */
 
 import type { Memory, State } from "@elizaos/core";
+import {
+  getContextSignalTerms,
+  resolveContextSignalSpec,
+  type ContextSignalKey,
+} from "./context-signal-lexicon.js";
 import {
   recentConversationTexts as collectRecentConversationTexts,
   recentConversationTextsFromState,
@@ -24,15 +25,42 @@ function escapePattern(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function textIncludesKeywordTerm(text: string, term: string): boolean {
-  const pattern = new RegExp(
-    `\\b${escapePattern(term).replace(/\\ /g, "\\s+")}\\b`,
-    "i",
-  );
-  return pattern.test(text);
+function normalizeKeywordMatchText(value: string): string {
+  return value.normalize("NFKC").toLowerCase().replace(/\s+/g, " ").trim();
 }
 
-function collectKeywordTermMatches(
+function usesAsciiWordBoundaries(term: string): boolean {
+  return /^[a-z0-9][a-z0-9' -]*$/i.test(term);
+}
+
+export function textIncludesKeywordTerm(text: string, term: string): boolean {
+  const normalizedText = normalizeKeywordMatchText(text);
+  const normalizedTerm = normalizeKeywordMatchText(term);
+  if (!normalizedText || !normalizedTerm) {
+    return false;
+  }
+
+  if (usesAsciiWordBoundaries(normalizedTerm)) {
+    const pattern = new RegExp(
+      `\\b${escapePattern(normalizedTerm).replace(/\\ /g, "\\s+")}\\b`,
+      "i",
+    );
+    if (pattern.test(text)) {
+      return true;
+    }
+
+    // CJK/Hangul text often embeds latin product words without whitespace,
+    // which breaks word boundaries.
+    if (/[^\x00-\x7F]/.test(text)) {
+      return normalizedText.includes(normalizedTerm);
+    }
+    return false;
+  }
+
+  return normalizedText.includes(normalizedTerm);
+}
+
+export function collectKeywordTermMatches(
   texts: string[],
   terms: readonly string[],
 ): Set<string> {
@@ -45,6 +73,81 @@ function collectKeywordTermMatches(
     }
   }
   return matches;
+}
+
+type ContextSignalRuntimeLike = {
+  getSetting?: (key: string) => unknown;
+  character?: unknown;
+};
+
+function resolveContextSignalLocale(
+  runtime: ContextSignalRuntimeLike | null,
+  state: State | undefined,
+  localeOverride?: unknown,
+): unknown {
+  if (localeOverride !== undefined) {
+    return localeOverride;
+  }
+
+  const stateRecord =
+    state && typeof state === "object"
+      ? (state as Record<string, unknown>)
+      : undefined;
+  const values =
+    stateRecord?.values && typeof stateRecord.values === "object"
+      ? (stateRecord.values as Record<string, unknown>)
+      : undefined;
+  const config =
+    stateRecord?.config && typeof stateRecord.config === "object"
+      ? (stateRecord.config as Record<string, unknown>)
+      : undefined;
+  const ui =
+    config?.ui && typeof config.ui === "object"
+      ? (config.ui as Record<string, unknown>)
+      : undefined;
+  const runtimeCharacter =
+    runtime?.character && typeof runtime.character === "object"
+      ? (runtime.character as Record<string, unknown>)
+      : undefined;
+  const runtimeSettings =
+    runtimeCharacter?.settings && typeof runtimeCharacter.settings === "object"
+      ? (runtimeCharacter.settings as Record<string, unknown>)
+      : undefined;
+  const runtimeUi =
+    runtimeSettings?.ui && typeof runtimeSettings.ui === "object"
+      ? (runtimeSettings.ui as Record<string, unknown>)
+      : undefined;
+
+  return [
+    values?.preferredLanguage,
+    values?.language,
+    stateRecord?.preferredLanguage,
+    ui?.language,
+    runtimeUi?.language,
+    runtimeSettings?.language,
+    runtime?.getSetting?.("preferredLanguage"),
+    runtime?.getSetting?.("language"),
+    runtime?.getSetting?.("ui.language"),
+  ].find(
+    (candidate): candidate is string =>
+      typeof candidate === "string" && candidate.trim().length > 0,
+  );
+}
+
+export function collectKeywordTermMatchesForKey(
+  texts: string[],
+  key: ContextSignalKey,
+  options?: {
+    includeAllLocales?: boolean;
+    locale?: unknown;
+    strength?: "strong" | "weak";
+  },
+): Set<string> {
+  const strength = options?.strength ?? "strong";
+  return collectKeywordTermMatches(
+    texts,
+    getContextSignalTerms(key, strength, options),
+  );
 }
 
 // ── Public API ───────────────────────────────────────────────────────────
@@ -83,16 +186,36 @@ export function hasContextSignalSync(
   }
 
   if (weakTerms.length > 0 && weakThreshold > 0) {
-    return (
-      collectKeywordTermMatches(texts, weakTerms).size >= weakThreshold
-    );
+    return collectKeywordTermMatches(texts, weakTerms).size >= weakThreshold;
   }
 
   return false;
 }
 
+export function hasContextSignalSyncForKey(
+  message: Memory,
+  state: State | undefined,
+  key: ContextSignalKey,
+  options?: {
+    contextLimit?: number;
+    locale?: unknown;
+    weakThreshold?: number;
+  },
+): boolean {
+  const locale = resolveContextSignalLocale(null, state, options?.locale);
+  const spec = resolveContextSignalSpec(key, locale);
+  return hasContextSignalSync(
+    message,
+    state,
+    spec.strongTerms,
+    spec.weakTerms,
+    options?.weakThreshold ?? spec.weakThreshold,
+    options?.contextLimit ?? spec.contextLimit,
+  );
+}
+
 /**
- * Full async signal check with DB memory fallback (mirrors calendar).
+ * Full async signal check with DB memory fallback.
  */
 export async function hasContextSignal(
   runtime: Parameters<typeof collectRecentConversationTexts>[0]["runtime"],
@@ -131,10 +254,36 @@ export async function hasContextSignal(
   }
 
   if (weakTerms.length > 0 && weakThreshold > 0) {
-    return (
-      collectKeywordTermMatches(texts, weakTerms).size >= weakThreshold
-    );
+    return collectKeywordTermMatches(texts, weakTerms).size >= weakThreshold;
   }
 
   return false;
+}
+
+export async function hasContextSignalForKey(
+  runtime: Parameters<typeof collectRecentConversationTexts>[0]["runtime"],
+  message: Memory,
+  state: State | undefined,
+  key: ContextSignalKey,
+  options?: {
+    contextLimit?: number;
+    locale?: unknown;
+    weakThreshold?: number;
+  },
+): Promise<boolean> {
+  const locale = resolveContextSignalLocale(
+    runtime as ContextSignalRuntimeLike,
+    state,
+    options?.locale,
+  );
+  const spec = resolveContextSignalSpec(key, locale);
+  return hasContextSignal(
+    runtime,
+    message,
+    state,
+    spec.strongTerms,
+    spec.weakTerms,
+    options?.weakThreshold ?? spec.weakThreshold,
+    options?.contextLimit ?? spec.contextLimit,
+  );
 }

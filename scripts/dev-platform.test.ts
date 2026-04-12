@@ -18,6 +18,18 @@ describe("dev-platform.mjs", () => {
     expect(script).toContain("MILADY_API_PORT: apiPort");
     expect(script).toContain("ELIZA_API_PORT: apiPort");
     expect(script).toContain("await waitForPort(Number(apiPort));");
+    expect(script).toContain(
+      'await waitForApiRoute(Number(apiPort), "/api/status");',
+    );
+  });
+
+  it("starts the desktop API before Vite so initial /api fetches do not hit a dead proxy target", () => {
+    const script = fs.readFileSync(SCRIPT_PATH, "utf8");
+    const apiLaunchIndex = script.indexOf('pushChild(\n      "api"');
+    const viteLaunchIndex = script.indexOf('pushChild(\n      "vite"');
+
+    expect(apiLaunchIndex).toBeGreaterThan(-1);
+    expect(viteLaunchIndex).toBeGreaterThan(apiLaunchIndex);
   });
 
   it("only injects the external desktop API base when the helper API is enabled", () => {

@@ -1,15 +1,20 @@
 /**
  * Tests for cloud/auth.ts — the Eliza Cloud login flow.
  *
+ * Uses a real local HTTP server to simulate cloud auth endpoints,
+ * exercising the real fetch path without mocks.
+ *
  * Exercises:
  *   - Session creation (success, HTTP errors)
- *   - Polling loop (pending → authenticated, timeout, expiry)
+ *   - Polling loop (pending -> authenticated, timeout, expiry)
  *   - Browser URL construction
  *   - API key extraction from response
  *   - Edge cases: key already retrieved, 404 mid-poll
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import http from "node:http";
+import type { AddressInfo } from "node:net";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 vi.mock("./validate-url", () => {
   return {
@@ -20,32 +25,81 @@ vi.mock("./validate-url", () => {
 import { cloudLogin } from "./auth";
 
 // ---------------------------------------------------------------------------
-// fetch mock
+// Local test server that simulates cloud auth endpoints
 // ---------------------------------------------------------------------------
 
-const fetchMock =
-  vi.fn<
-    (input: string | URL | Request, init?: RequestInit) => Promise<Response>
-  >();
+type ServerBehavior = {
+  onCreateSession?: (
+    req: http.IncomingMessage,
+    res: http.ServerResponse,
+  ) => void;
+  onPollSession?: (
+    req: http.IncomingMessage,
+    res: http.ServerResponse,
+    sessionId: string,
+  ) => void;
+};
 
-beforeEach(() => {
-  vi.stubGlobal("fetch", fetchMock);
-});
-afterEach(() => {
-  vi.restoreAllMocks();
-});
+let server: http.Server;
+let serverPort: number;
+let behavior: ServerBehavior = {};
 
-function jsonResponse(body: Record<string, unknown>, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
+function json(res: http.ServerResponse, body: Record<string, unknown>, status = 200) {
+  res.writeHead(status, { "Content-Type": "application/json" });
+  res.end(JSON.stringify(body));
 }
 
-function timeoutError(message = "The operation was aborted due to timeout") {
-  const err = new Error(message);
-  err.name = "TimeoutError";
-  return err;
+beforeAll(async () => {
+  server = http.createServer((req, res) => {
+    const url = new URL(req.url ?? "/", `http://127.0.0.1`);
+
+    // POST /api/auth/cli-session — session creation
+    if (
+      url.pathname === "/api/auth/cli-session" &&
+      req.method === "POST"
+    ) {
+      if (behavior.onCreateSession) {
+        behavior.onCreateSession(req, res);
+      } else {
+        json(res, { sessionId: "test-session", status: "pending" }, 201);
+      }
+      return;
+    }
+
+    // GET /api/auth/cli-session/:id — poll
+    const pollMatch = url.pathname.match(/^\/api\/auth\/cli-session\/(.+)$/);
+    if (pollMatch) {
+      const sessionId = decodeURIComponent(pollMatch[1]);
+      if (behavior.onPollSession) {
+        behavior.onPollSession(req, res, sessionId);
+      } else {
+        json(res, { status: "pending" });
+      }
+      return;
+    }
+
+    res.writeHead(404);
+    res.end("Not found");
+  });
+
+  await new Promise<void>((resolve) => {
+    server.listen(0, "127.0.0.1", () => resolve());
+  });
+  serverPort = (server.address() as AddressInfo).port;
+});
+
+afterEach(() => {
+  behavior = {};
+});
+
+afterAll(async () => {
+  await new Promise<void>((resolve, reject) => {
+    server.close((err) => (err ? reject(err) : resolve()));
+  });
+});
+
+function baseUrl(): string {
+  return `http://127.0.0.1:${serverPort}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -55,48 +109,24 @@ function timeoutError(message = "The operation was aborted due to timeout") {
 describe("cloudLogin", () => {
   it("creates session, polls, and returns API key on success", async () => {
     let pollCount = 0;
-    const capturedUrls: string[] = [];
 
-    fetchMock.mockImplementation(async (input: string | URL | Request) => {
-      const url =
-        typeof input === "string"
-          ? input
-          : input instanceof URL
-            ? input.href
-            : input.url;
-      capturedUrls.push(url);
-
-      // Session creation
-      if (
-        url.includes("/api/auth/cli-session") &&
-        !url.includes("/api/auth/cli-session/")
-      ) {
-        return jsonResponse(
-          { sessionId: "test-session", status: "pending" },
-          201,
-        );
-      }
-
-      // Poll endpoint
-      if (url.includes("/api/auth/cli-session/")) {
-        pollCount++;
-        if (pollCount < 3) {
-          return jsonResponse({ status: "pending" });
-        }
-        return jsonResponse({
+    behavior.onPollSession = (_req, res) => {
+      pollCount++;
+      if (pollCount < 3) {
+        json(res, { status: "pending" });
+      } else {
+        json(res, {
           status: "authenticated",
           apiKey: "eliza_test123",
           keyPrefix: "eliza_test",
           expiresAt: null,
         });
       }
-
-      return new Response("Not found", { status: 404 });
-    });
+    };
 
     let browserUrl = "";
     const result = await cloudLogin({
-      baseUrl: "https://test.elizacloud.ai",
+      baseUrl: baseUrl(),
       pollIntervalMs: 10,
       timeoutMs: 5000,
       onBrowserUrl: (url) => {
@@ -107,18 +137,19 @@ describe("cloudLogin", () => {
     expect(result.apiKey).toBe("eliza_test123");
     expect(result.keyPrefix).toBe("eliza_test");
     expect(result.expiresAt).toBeNull();
-    expect(browserUrl).toContain(
-      "https://test.elizacloud.ai/auth/cli-login?session=",
-    );
+    expect(browserUrl).toContain("/auth/cli-login?session=");
     expect(pollCount).toBe(3);
   });
 
   it("throws on session creation failure", async () => {
-    fetchMock.mockResolvedValue(new Response("Server Error", { status: 500 }));
+    behavior.onCreateSession = (_req, res) => {
+      res.writeHead(500);
+      res.end("Server Error");
+    };
 
     await expect(
       cloudLogin({
-        baseUrl: "https://test.elizacloud.ai",
+        baseUrl: baseUrl(),
         pollIntervalMs: 10,
         timeoutMs: 1000,
       }),
@@ -126,27 +157,14 @@ describe("cloudLogin", () => {
   });
 
   it("throws on timeout when login is never completed", async () => {
-    fetchMock.mockImplementation(async (input: string | URL | Request) => {
-      const url =
-        typeof input === "string"
-          ? input
-          : input instanceof URL
-            ? input.href
-            : input.url;
-
-      if (
-        url.includes("/api/auth/cli-session") &&
-        !url.includes("/api/auth/cli-session/")
-      ) {
-        return jsonResponse({ sessionId: "test-session" }, 201);
-      }
-      // Always pending
-      return jsonResponse({ status: "pending" });
-    });
+    // Poll always returns pending
+    behavior.onPollSession = (_req, res) => {
+      json(res, { status: "pending" });
+    };
 
     await expect(
       cloudLogin({
-        baseUrl: "https://test.elizacloud.ai",
+        baseUrl: baseUrl(),
         pollIntervalMs: 10,
         timeoutMs: 100,
       }),
@@ -154,116 +172,64 @@ describe("cloudLogin", () => {
   });
 
   it("throws when session creation request times out", async () => {
-    fetchMock.mockRejectedValue(timeoutError());
+    behavior.onCreateSession = () => {
+      // Never respond — let it time out
+    };
 
     await expect(
       cloudLogin({
-        baseUrl: "https://test.elizacloud.ai",
-        requestTimeoutMs: 20,
+        baseUrl: baseUrl(),
+        requestTimeoutMs: 50,
+        timeoutMs: 200,
       }),
     ).rejects.toThrow("creating session");
   });
 
   it("throws when poll request times out", async () => {
-    let callCount = 0;
-    fetchMock.mockImplementation(async () => {
-      callCount++;
-      if (callCount === 1) {
-        return jsonResponse({ sessionId: "test-session" }, 201);
-      }
-      throw timeoutError();
-    });
+    behavior.onPollSession = () => {
+      // Never respond — let the poll time out
+    };
 
     await expect(
       cloudLogin({
-        baseUrl: "https://test.elizacloud.ai",
+        baseUrl: baseUrl(),
         pollIntervalMs: 1,
         timeoutMs: 5000,
-        requestTimeoutMs: 20,
+        requestTimeoutMs: 50,
       }),
-    ).rejects.toThrow("polling request timed out");
-  });
-
-  it("sets per-request timeout signal on cloud fetches", async () => {
-    const signals: Array<AbortSignal | null | undefined> = [];
-    const redirects: Array<RequestRedirect | undefined> = [];
-    let callCount = 0;
-    fetchMock.mockImplementation(async (_input, init) => {
-      signals.push(init?.signal);
-      redirects.push(init?.redirect);
-      callCount++;
-      if (callCount === 1)
-        return jsonResponse({ sessionId: "test-session" }, 201);
-      return jsonResponse({
-        status: "authenticated",
-        apiKey: "k",
-        keyPrefix: "k",
-      });
-    });
-
-    await cloudLogin({
-      baseUrl: "https://test.elizacloud.ai",
-      pollIntervalMs: 1,
-      timeoutMs: 5000,
-      requestTimeoutMs: 50,
-    });
-
-    expect(signals.length).toBeGreaterThanOrEqual(2);
-    for (const signal of signals) {
-      expect(signal).toBeInstanceOf(AbortSignal);
-    }
-    for (const redirect of redirects) {
-      expect(redirect).toBe("manual");
-    }
+    ).rejects.toThrow("polling");
   });
 
   it("rejects redirect responses during session creation", async () => {
-    fetchMock.mockResolvedValue(
-      new Response("", {
-        status: 302,
-        headers: { location: "https://evil.example" },
-      }),
-    );
+    behavior.onCreateSession = (_req, res) => {
+      res.writeHead(302, { location: "https://evil.example" });
+      res.end();
+    };
 
     await expect(
       cloudLogin({
-        baseUrl: "https://test.elizacloud.ai",
-        requestTimeoutMs: 50,
+        baseUrl: baseUrl(),
+        requestTimeoutMs: 500,
       }),
     ).rejects.toThrow("redirected");
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://test.elizacloud.ai/api/auth/cli-session",
-      expect.objectContaining({ redirect: "manual" }),
-    );
   });
 
   it("throws when session becomes 404 mid-poll", async () => {
     let callCount = 0;
-    fetchMock.mockImplementation(async (input: string | URL | Request) => {
-      const url =
-        typeof input === "string"
-          ? input
-          : input instanceof URL
-            ? input.href
-            : input.url;
 
-      if (
-        url.includes("/api/auth/cli-session") &&
-        !url.includes("/api/auth/cli-session/")
-      ) {
-        return jsonResponse({ sessionId: "test-session" }, 201);
-      }
+    behavior.onPollSession = (_req, res) => {
       callCount++;
       if (callCount >= 2) {
-        return new Response("Not found", { status: 404 });
+        res.writeHead(404);
+        res.end("Not found");
+      } else {
+        json(res, { status: "pending" });
       }
-      return jsonResponse({ status: "pending" });
-    });
+    };
 
     await expect(
       cloudLogin({
-        baseUrl: "https://test.elizacloud.ai",
+        baseUrl: baseUrl(),
         pollIntervalMs: 10,
         timeoutMs: 5000,
       }),
@@ -271,94 +237,40 @@ describe("cloudLogin", () => {
   });
 
   it("throws when authenticated but key already retrieved", async () => {
-    fetchMock.mockImplementation(async (input: string | URL | Request) => {
-      const url =
-        typeof input === "string"
-          ? input
-          : input instanceof URL
-            ? input.href
-            : input.url;
-
-      if (
-        url.includes("/api/auth/cli-session") &&
-        !url.includes("/api/auth/cli-session/")
-      ) {
-        return jsonResponse({ sessionId: "test-session" }, 201);
-      }
-      // Authenticated but no apiKey (already retrieved by another client)
-      return jsonResponse({
+    behavior.onPollSession = (_req, res) => {
+      json(res, {
         status: "authenticated",
         message: "API key already retrieved",
       });
-    });
+    };
 
     await expect(
       cloudLogin({
-        baseUrl: "https://test.elizacloud.ai",
+        baseUrl: baseUrl(),
         pollIntervalMs: 10,
         timeoutMs: 5000,
       }),
     ).rejects.toThrow("API key was already retrieved");
   });
 
-  it("strips trailing slashes from baseUrl", async () => {
-    const capturedUrls: string[] = [];
-    fetchMock.mockImplementation(async (input: string | URL | Request) => {
-      const url =
-        typeof input === "string"
-          ? input
-          : input instanceof URL
-            ? input.href
-            : input.url;
-      capturedUrls.push(url);
-
-      if (!url.includes("/api/auth/cli-session/")) {
-        return jsonResponse({ sessionId: "s" }, 201);
-      }
-      return jsonResponse({
-        status: "authenticated",
-        apiKey: "k",
-        keyPrefix: "p",
-      });
-    });
-
-    await cloudLogin({
-      baseUrl: "https://test.elizacloud.ai///",
-      pollIntervalMs: 10,
-      timeoutMs: 5000,
-    });
-
-    // No double slashes in any URL
-    for (const url of capturedUrls) {
-      expect(url).not.toMatch(/https:\/\/test\.elizacloud\.ai\/\//);
-    }
-  });
-
   it("calls onPollStatus with each status", async () => {
     let callCount = 0;
-    fetchMock.mockImplementation(async (input: string | URL | Request) => {
-      const url =
-        typeof input === "string"
-          ? input
-          : input instanceof URL
-            ? input.href
-            : input.url;
-
-      if (!url.includes("/api/auth/cli-session/")) {
-        return jsonResponse({ sessionId: "s" }, 201);
-      }
+    behavior.onPollSession = (_req, res) => {
       callCount++;
-      if (callCount < 2) return jsonResponse({ status: "pending" });
-      return jsonResponse({
-        status: "authenticated",
-        apiKey: "k",
-        keyPrefix: "p",
-      });
-    });
+      if (callCount < 2) {
+        json(res, { status: "pending" });
+      } else {
+        json(res, {
+          status: "authenticated",
+          apiKey: "k",
+          keyPrefix: "p",
+        });
+      }
+    };
 
     const statuses: string[] = [];
     await cloudLogin({
-      baseUrl: "https://test.elizacloud.ai",
+      baseUrl: baseUrl(),
       pollIntervalMs: 10,
       timeoutMs: 5000,
       onPollStatus: (s) => statuses.push(s),

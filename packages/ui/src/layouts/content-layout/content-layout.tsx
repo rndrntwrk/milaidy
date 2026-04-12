@@ -1,15 +1,12 @@
 /**
  * ContentLayout — single-pane layout shell for views without a sidebar.
  *
- * Mirrors PageLayout's padding, contentHeader placement, and scroll
- * behavior but without the sidebar column. Every single-pane page
- * (Logs, FineTuning, Desktop, Security, Database SQL mode) should
- * use this instead of a bare `<div>`.
+ * Uses the same shared workspace shell as PageLayout, but keeps the
+ * content header inside the scrollable column for single-pane pages.
  */
 
 import type { ReactNode } from "react";
-import { cn } from "../../lib/utils";
-import { PageLayoutHeader } from "../page-layout/page-layout-header";
+import { WorkspaceLayout } from "../workspace-layout";
 
 export interface ContentLayoutProps {
   /** Optional header rendered above the content (e.g. SegmentedControl nav). */
@@ -24,9 +21,6 @@ export interface ContentLayoutProps {
   contentClassName?: string;
 }
 
-const CONTENT_PADDING =
-  "px-4 pb-4 pt-2 sm:px-6 sm:pb-6 sm:pt-3 lg:px-7 lg:pb-7 lg:pt-4";
-
 export function ContentLayout({
   contentHeader,
   children,
@@ -35,19 +29,15 @@ export function ContentLayout({
   contentClassName,
 }: ContentLayoutProps) {
   return (
-    <div
-      className={cn(
-        "chat-native-scrollbar relative flex flex-1 min-h-0 min-w-0 flex-col overflow-x-hidden overflow-y-auto bg-transparent",
-        !inModal && CONTENT_PADDING,
-        className,
-      )}
+    <WorkspaceLayout
+      className={className}
+      contentClassName={contentClassName}
+      contentHeader={contentHeader}
+      contentPadding={!inModal}
+      contentInnerClassName="min-h-0"
+      headerPlacement="inside"
     >
-      {contentHeader ? (
-        <PageLayoutHeader>{contentHeader}</PageLayoutHeader>
-      ) : null}
-      <div className={cn("flex flex-1 flex-col min-h-0", contentClassName)}>
-        {children}
-      </div>
-    </div>
+      {children}
+    </WorkspaceLayout>
   );
 }

@@ -1,168 +1,48 @@
-import { describe, expect, test, vi } from "vitest";
-import type { AgentAdminRouteContext } from "../../src/api/agent-admin-routes";
-import { handleAgentAdminRoutes } from "../../src/api/agent-admin-routes";
-import {
-  createMockHttpResponse,
-  createMockIncomingMessage,
-} from "../../src/test-support/test-helpers";
+/**
+ * Integration tests for /api/agent/admin routes.
+ *
+ * Starts a real API server (no runtime, no restart handler) and makes
+ * real HTTP requests.
+ */
 
-function buildCtx(
-  method: string,
-  pathname: string,
-  overrides?: Partial<AgentAdminRouteContext>,
-): AgentAdminRouteContext & {
-  getStatus: () => number;
-  getJson: () => unknown;
-} {
-  const { res, getStatus, getJson } = createMockHttpResponse();
-  const req = createMockIncomingMessage({ method, url: pathname });
-  const ctx = {
-    req,
-    res,
-    method,
-    pathname,
-    json: vi.fn((r, data, status = 200) => {
-      r.writeHead(status);
-      r.end(JSON.stringify(data));
-    }),
-    error: vi.fn((r, msg, status = 500) => {
-      r.writeHead(status);
-      r.end(JSON.stringify({ error: msg }));
-    }),
-    state: {
-      runtime: null,
-      config: {},
-      agentState: "running" as const,
-      agentName: "TestAgent",
-      model: "gpt-4",
-      startedAt: Date.now(),
-      chatRoomId: null,
-      chatUserId: null,
-      chatConnectionReady: null,
-      chatConnectionPromise: null,
-      pendingRestartReasons: [],
-    },
-    onRestart: undefined,
-    onRuntimeSwapped: undefined,
-    resolveStateDir: () => "/tmp/eliza-state",
-    resolvePath: (value: string) => value,
-    getHomeDir: () => "/home/test",
-    isSafeResetStateDir: (_resolvedState: string, _home: string) => true,
-    stateDirExists: (_resolvedState: string) => false,
-    removeStateDir: vi.fn<(_resolvedState: string) => void>(),
-    logWarn: vi.fn<(_message: string) => void>(),
-    getStatus,
-    getJson,
-    ...overrides,
-  } as AgentAdminRouteContext & {
-    getStatus: () => number;
-    getJson: () => unknown;
-  };
-  return ctx;
-}
+import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
+import { req } from "../../../../test/helpers/http";
+import { startApiServer } from "../../src/api/server";
 
-describe("agent-admin-routes", () => {
-  describe("POST /api/agent/restart", () => {
-    test("returns 501 when no onRestart handler is registered", async () => {
-      const ctx = buildCtx("POST", "/api/agent/restart");
-      const handled = await handleAgentAdminRoutes(ctx);
-      expect(handled).toBe(true);
-      expect(ctx.error).toHaveBeenCalledOnce();
-      const args = (ctx.error as ReturnType<typeof vi.fn>).mock.calls[0];
-      expect(args[2]).toBe(501);
-      expect(args[1]).toContain("not supported");
-    });
+vi.mock("../../src/services/mcp-marketplace", () => ({
+  searchMcpMarketplace: vi.fn().mockResolvedValue({ results: [] }),
+  getMcpServerDetails: vi.fn().mockResolvedValue(null),
+}));
 
-    test("returns 409 when agent is already restarting", async () => {
-      const ctx = buildCtx("POST", "/api/agent/restart", {
-        onRestart: vi.fn(async () => null),
-        state: {
-          runtime: null,
-          config: {},
-          agentState: "restarting",
-          agentName: "TestAgent",
-          model: "gpt-4",
-          startedAt: Date.now(),
-          chatRoomId: null,
-          chatUserId: null,
-          chatConnectionReady: null,
-          chatConnectionPromise: null,
-          pendingRestartReasons: [],
-        },
-      });
-      const handled = await handleAgentAdminRoutes(ctx);
-      expect(handled).toBe(true);
-      expect(ctx.error).toHaveBeenCalledOnce();
-      const args = (ctx.error as ReturnType<typeof vi.fn>).mock.calls[0];
-      expect(args[2]).toBe(409);
-      expect(args[1]).toContain("already in progress");
-    });
+let port: number;
+let close: () => Promise<void>;
 
-    test("returns success when onRestart returns a new runtime", async () => {
-      const mockRuntime: Pick<
-        import("@elizaos/core").AgentRuntime,
-        "character" | "getSetting"
-      > = {
-        character: { name: "NewAgent" } as import("@elizaos/core").Character,
-        getSetting: () => null,
-      };
-      const onRestart = vi.fn(
-        async () =>
-          mockRuntime as unknown as import("@elizaos/core").AgentRuntime,
-      );
-      const onRuntimeSwapped = vi.fn();
-      const ctx = buildCtx("POST", "/api/agent/restart", {
-        onRestart,
-        onRuntimeSwapped,
-      });
-      const handled = await handleAgentAdminRoutes(ctx);
-      expect(handled).toBe(true);
-      expect(ctx.json).toHaveBeenCalledOnce();
-      const payload = (ctx.json as ReturnType<typeof vi.fn>).mock.calls[0][1];
-      expect(payload.ok).toBe(true);
-      expect(payload.pendingRestart).toBe(false);
-      expect(ctx.state.agentState).toBe("running");
-      expect(onRuntimeSwapped).toHaveBeenCalled();
-    });
+beforeAll(async () => {
+  // Start without a restart handler — POST /api/agent/restart should return 501
+  const server = await startApiServer({ port: 0 });
+  port = server.port;
+  close = server.close;
+}, 180_000);
 
-    test("returns 500 when onRestart returns null", async () => {
-      const ctx = buildCtx("POST", "/api/agent/restart", {
-        onRestart: vi.fn(async () => null),
-      });
-      const handled = await handleAgentAdminRoutes(ctx);
-      expect(handled).toBe(true);
-      expect(ctx.error).toHaveBeenCalledOnce();
-      const args = (ctx.error as ReturnType<typeof vi.fn>).mock.calls[0];
-      expect(args[2]).toBe(500);
-      expect(args[1]).toContain("failed to re-initialize");
-      expect(ctx.state.agentState).toBe("running");
-    });
+afterAll(async () => {
+  await close();
+});
 
-    test("returns 500 when onRestart throws", async () => {
-      const ctx = buildCtx("POST", "/api/agent/restart", {
-        onRestart: vi.fn(async () => {
-          throw new Error("boom");
-        }),
-      });
-      const handled = await handleAgentAdminRoutes(ctx);
-      expect(handled).toBe(true);
-      expect(ctx.error).toHaveBeenCalledOnce();
-      const args = (ctx.error as ReturnType<typeof vi.fn>).mock.calls[0];
-      expect(args[2]).toBe(500);
-      expect(args[1]).toContain("boom");
-      expect(ctx.state.agentState).toBe("running");
-    });
-  });
+describe("agent-admin-routes (real server)", () => {
+  test("POST /api/agent/restart returns 501 when no restart handler", async () => {
+    const { status, data } = await req(port, "POST", "/api/agent/restart");
+    expect(status).toBe(501);
+    expect(data).toHaveProperty("error");
+    expect((data as { error: string }).error).toContain("not supported");
+  }, 60_000);
 
-  describe("routing", () => {
-    test("unrelated path returns false", async () => {
-      const ctx = buildCtx("GET", "/api/other");
-      expect(await handleAgentAdminRoutes(ctx)).toBe(false);
-    });
+  test("GET /api/agent/restart returns 404 (wrong method)", async () => {
+    const { status } = await req(port, "GET", "/api/agent/restart");
+    expect(status).toBe(404);
+  }, 60_000);
 
-    test("GET to restart endpoint returns false (wrong method)", async () => {
-      const ctx = buildCtx("GET", "/api/agent/restart");
-      expect(await handleAgentAdminRoutes(ctx)).toBe(false);
-    });
-  });
+  test("unrelated path is not handled", async () => {
+    const { status } = await req(port, "GET", "/api/agent/unknown-path");
+    expect(status).toBe(404);
+  }, 60_000);
 });

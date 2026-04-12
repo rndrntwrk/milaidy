@@ -18,6 +18,7 @@ import type { IAgentRuntime, Memory, State } from "@elizaos/core";
 import { ModelType, parseJSONObjectFromText } from "@elizaos/core";
 import { recentConversationTexts } from "./life-recent-context.js";
 import { resolveContextWindow } from "./lifeops-extraction-config.js";
+import { normalizeExplicitTimeZoneToken } from "./timezone-normalization.js";
 
 // ── Types ─────────────────────────────────────────────
 
@@ -35,6 +36,7 @@ export interface ExtractedTaskParams {
   windows: string[] | null;
   weekdays: number[] | null;
   timeOfDay: string | null;
+  timeZone: string | null;
   everyMinutes: number | null;
   timesPerDay: number | null;
   priority: number | null;
@@ -59,6 +61,31 @@ const ALARM_CONTEXT_RE = /\b(alarm|wake(?:-|\s)?up|wake me up)\b/i;
 const REMINDER_CONTEXT_RE =
   /\b(remind(?: me)?|reminder|set (?:a )?reminder|create (?:a )?reminder|nudge me|ping me)\b/i;
 const REQUEST_KIND_VALIDATION_WINDOW = 6;
+const TIME_OF_DAY_TOKEN_RE =
+  /\b(\d{1,2}(?::\d{2})?\s*(?:am|pm)|noon|midnight)\b/i;
+const EXPLICIT_TIME_ZONE_TOKEN_RE =
+  /\b([A-Z]{2,5}|PT|PST|PDT|MT|MST|MDT|CT|CST|CDT|ET|EST|EDT)\b/i;
+const WEEKDAY_MAP: Record<string, number> = {
+  sunday: 0,
+  sun: 0,
+  monday: 1,
+  mon: 1,
+  tuesday: 2,
+  tue: 2,
+  tues: 2,
+  wednesday: 3,
+  wed: 3,
+  thursday: 4,
+  thu: 4,
+  thur: 4,
+  thurs: 4,
+  friday: 5,
+  fri: 5,
+  saturday: 6,
+  sat: 6,
+};
+const FILLER_PREFIX_RE =
+  /^(?:lol|lmao|yeah|yep|yup|uh|uhh|um|umm|hmm|actually|please|can you|could you|would you|help me|hey|so|just)\b[\s,!.-]*/i;
 
 // ── Prompt ────────────────────────────────────────────
 
@@ -173,6 +200,13 @@ function validateTimeOfDay(value: unknown): string | null {
   return null;
 }
 
+function validateTimeZone(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  return normalizeExplicitTimeZoneToken(value);
+}
+
 function validatePositiveNumber(value: unknown): number | null {
   if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
     return null;
@@ -198,6 +232,383 @@ function validateRequestKindAgainstContext(
   return texts.some((text) => pattern.test(text)) ? value : null;
 }
 
+function normalizeIntent(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function stripLanguageAugmentation(value: string): string {
+  return value
+    .replace(/\[\s*language instruction:[^\]]*\]/gi, " ")
+    .replace(/\[\s*system(?: note| instruction)?:[^\]]*\]/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function titleCase(value: string): string {
+  return value
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+function normalizeTitleCandidate(value: string): string | null {
+  const cleaned = stripLanguageAugmentation(value)
+    .replace(FILLER_PREFIX_RE, "")
+    .replace(
+      /\b(?:set|add|create|make|help me add|help me create|help me make|please set|please add)\b/gi,
+      " ",
+    )
+    .replace(
+      /\b(?:an?|the)\s+(?:alarm|reminder|todo|task|habit|routine)\b/gi,
+      " ",
+    )
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!cleaned) {
+    return null;
+  }
+  return titleCase(cleaned.split(/\s+/).slice(0, 5).join(" "));
+}
+
+function parseTimeOfDay(value: string): string | null {
+  const normalized = normalizeIntent(value).toLowerCase();
+  const hhmmMatch = normalized.match(/\b(\d{1,2}):(\d{2})\b/);
+  if (hhmmMatch) {
+    const hour = Number(hhmmMatch[1]);
+    const minute = Number(hhmmMatch[2]);
+    if (
+      Number.isFinite(hour) &&
+      Number.isFinite(minute) &&
+      hour >= 0 &&
+      hour <= 23 &&
+      minute >= 0 &&
+      minute < 60
+    ) {
+      return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+    }
+  }
+
+  const token = normalized.match(TIME_OF_DAY_TOKEN_RE)?.[1]?.toLowerCase() ?? "";
+  if (!token) {
+    return null;
+  }
+  if (token === "noon") {
+    return "12:00";
+  }
+  if (token === "midnight") {
+    return "00:00";
+  }
+  const clockMatch = token.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)$/);
+  if (!clockMatch) {
+    return null;
+  }
+  const rawHour = Number(clockMatch[1]);
+  const minute = Number(clockMatch[2] ?? "0");
+  if (!Number.isFinite(rawHour) || !Number.isFinite(minute) || minute >= 60) {
+    return null;
+  }
+  const meridiem = clockMatch[3];
+  const hour =
+    meridiem === "am"
+      ? rawHour % 12
+      : rawHour % 12 === 0
+        ? 12
+        : (rawHour % 12) + 12;
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+function countTimeTokens(value: string): number {
+  return (
+    value.match(/\b(\d{1,2}(?::\d{2})?\s*(?:am|pm)|noon|midnight)\b/gi)
+      ?.length ?? 0
+  );
+}
+
+function extractExplicitTimeZone(value: string): string | null {
+  const token = value.match(EXPLICIT_TIME_ZONE_TOKEN_RE)?.[1];
+  return token ? normalizeExplicitTimeZoneToken(token) : null;
+}
+
+function extractWindowsFromIntent(value: string): string[] | null {
+  const lower = normalizeIntent(value).toLowerCase();
+  const windows = [
+    /\bmornings?\b/.test(lower) ? "morning" : null,
+    /\bafternoons?\b/.test(lower) ? "afternoon" : null,
+    /\bevenings?\b/.test(lower) ? "evening" : null,
+    /\bnights?\b/.test(lower) ? "night" : null,
+  ].filter((window): window is string => window !== null);
+  return windows.length > 0 ? [...new Set(windows)] : null;
+}
+
+function extractWeekdaysFromIntent(value: string): number[] | null {
+  const lower = normalizeIntent(value).toLowerCase();
+  const matches = [
+    ...lower.matchAll(
+      /\b(?:every|each)\s+(sun(?:day)?|mon(?:day)?|tue(?:s(?:day)?)?|wed(?:nesday)?|thu(?:r(?:s(?:day)?)?)?|fri(?:day)?|sat(?:urday)?)\b/g,
+    ),
+  ]
+    .map((match) => WEEKDAY_MAP[match[1]])
+    .filter((weekday): weekday is number => weekday !== undefined);
+  return matches.length > 0 ? [...new Set(matches)] : null;
+}
+
+function looksLikeShortTimedFollowup(value: string): boolean {
+  const normalized = normalizeIntent(value);
+  return (
+    normalized.length <= 32 &&
+    (TIME_OF_DAY_TOKEN_RE.test(normalized) ||
+      /\b(today|tomorrow|tonight)\b/i.test(normalized))
+  );
+}
+
+function findValidatedRequestKind(
+  currentText: string,
+  recentWindow: string[],
+): ExtractedTaskParams["requestKind"] {
+  if (ALARM_CONTEXT_RE.test(currentText)) {
+    return "alarm";
+  }
+  if (REMINDER_CONTEXT_RE.test(currentText)) {
+    return "reminder";
+  }
+  if (!looksLikeShortTimedFollowup(currentText)) {
+    return null;
+  }
+  for (const text of [...recentWindow]
+    .slice(-REQUEST_KIND_VALIDATION_WINDOW)
+    .reverse()) {
+    if (ALARM_CONTEXT_RE.test(text)) {
+      return "alarm";
+    }
+    if (REMINDER_CONTEXT_RE.test(text)) {
+      return "reminder";
+    }
+  }
+  return null;
+}
+
+function extractHeuristicTitle(args: {
+  intent: string;
+  requestKind: ExtractedTaskParams["requestKind"];
+}): string | null {
+  const normalized = normalizeIntent(stripLanguageAugmentation(args.intent));
+  const lower = normalized.toLowerCase();
+
+  if (args.requestKind === "alarm") {
+    return /\bwake(?:-|\s)?up\b|\bwake me up\b/.test(lower)
+      ? "Wake up"
+      : "Alarm";
+  }
+
+  const toActionMatch = normalized.match(/\bto\s+(.+)$/i);
+  if (toActionMatch?.[1]) {
+    return normalizeTitleCandidate(toActionMatch[1]);
+  }
+
+  const reminderActionMatch = normalized.match(
+    /\b(?:remind(?: me)?|set (?:a )?reminder|create (?:a )?reminder)\b\s+(.+)$/i,
+  );
+  if (reminderActionMatch?.[1]) {
+    return normalizeTitleCandidate(reminderActionMatch[1]);
+  }
+
+  const genericActionMatch = normalized.match(
+    /\b(?:do|call|text|email|submit|pay|take|drink|brush|stretch|work out|workout|hug)\b.*$/i,
+  );
+  if (genericActionMatch?.[0]) {
+    return normalizeTitleCandidate(genericActionMatch[0]);
+  }
+
+  return null;
+}
+
+function inferDurationMinutes(value: string): number | null {
+  const lower = normalizeIntent(value).toLowerCase();
+  if (/\b(call|phone|check in|hug|meet)\b/.test(lower)) {
+    return 30;
+  }
+  return null;
+}
+
+function isVagueCreateRequest(value: string): boolean {
+  const lower = normalizeIntent(stripLanguageAugmentation(value)).toLowerCase();
+  const asksToCreate =
+    /\b(add|create|make|set up|set|help me add|help me create|help me make)\b/.test(
+      lower,
+    );
+  const mentionsThing =
+    /\b(todo|task|habit|routine|reminder|alarm)\b/.test(lower);
+  const hasSpecificAction =
+    /\bto\s+[a-z]/.test(lower) ||
+    /\b\d+\s+[a-z]/.test(lower) ||
+    /\b(call|email|text|submit|pay|brush|stretch|drink|take)\b/.test(lower);
+  const hasSchedule =
+    /\b(every|daily|weekly|tomorrow|today|tonight|morning|night|afternoon|evening)\b/.test(
+      lower,
+    ) || TIME_OF_DAY_TOKEN_RE.test(lower);
+
+  return asksToCreate && mentionsThing && !hasSpecificAction && !hasSchedule;
+}
+
+function buildHeuristicTaskCreatePlan(args: {
+  intent: string;
+  recentWindow: string[];
+}): ExtractedTaskCreatePlan | null {
+  const intent = normalizeIntent(args.intent);
+  if (!intent) {
+    return null;
+  }
+
+  const requestKind = findValidatedRequestKind(intent, args.recentWindow);
+  const timeOfDay = parseTimeOfDay(intent);
+  const timeZone = extractExplicitTimeZone(intent);
+  const weekdays = extractWeekdaysFromIntent(intent);
+  const windows = extractWindowsFromIntent(intent);
+  const lower = intent.toLowerCase();
+  const timeTokenCount = countTimeTokens(intent);
+  const oneOffReminderLike =
+    requestKind !== null &&
+    (timeOfDay !== null ||
+      /\b(today|tomorrow|tonight)\b/.test(lower) ||
+      /\bfor\s+(sun(?:day)?|mon(?:day)?|tue(?:s(?:day)?)?|wed(?:nesday)?|thu(?:r(?:s(?:day)?)?)?|fri(?:day)?|sat(?:urday)?)\b/.test(
+        lower,
+      ));
+  const explicitTimeDrivenSchedule =
+    timeOfDay !== null &&
+    timeTokenCount === 1 &&
+    (/\b(every day|daily|each day)\b/.test(lower) ||
+      (weekdays?.length ?? 0) > 0);
+
+  if (isVagueCreateRequest(intent)) {
+    return {
+      mode: "respond",
+      response: "What do you want the todo to be, and when should it happen?",
+      requestKind,
+      title: null,
+      description: null,
+      cadenceKind: null,
+      windows: null,
+      weekdays: null,
+      timeOfDay: null,
+      timeZone,
+      everyMinutes: null,
+      timesPerDay: null,
+      priority: null,
+      durationMinutes: null,
+    };
+  }
+
+  if (!oneOffReminderLike && !explicitTimeDrivenSchedule) {
+    return null;
+  }
+
+  const title = oneOffReminderLike
+    ? extractHeuristicTitle({ intent, requestKind })
+    : null;
+  const intervalMatch = lower.match(/\bevery\s+(\d+)\s*(hours?|minutes?)\b/);
+  const timesPerDayMatch =
+    lower.match(
+      /\b(one|two|three|four|five|six|\d+)\s*(?:x|times?)\s*(?:a|per)\s*day\b/,
+    ) ?? lower.match(/\b(once|twice)\s+a\s+day\b/);
+  const numberMap: Record<string, number> = {
+    one: 1,
+    two: 2,
+    three: 3,
+    four: 4,
+    five: 5,
+    six: 6,
+    once: 1,
+    twice: 2,
+  };
+  const timesPerDay = timesPerDayMatch?.[1]
+    ? (numberMap[timesPerDayMatch[1].toLowerCase()] ??
+      Number(timesPerDayMatch[1]))
+    : null;
+
+  let cadenceKind: ExtractedTaskParams["cadenceKind"] = null;
+  let everyMinutes: number | null = null;
+
+  if (oneOffReminderLike) {
+    cadenceKind = "once";
+  } else if (weekdays && weekdays.length > 0) {
+    cadenceKind = "weekly";
+  } else if (intervalMatch) {
+    cadenceKind = "interval";
+    everyMinutes =
+      Number(intervalMatch[1]) *
+      (intervalMatch[2].startsWith("hour") ? 60 : 1);
+  } else if (timesPerDay && timesPerDay > 0) {
+    cadenceKind = "times_per_day";
+  } else if (
+    /\b(every day|daily|each day|every morning|every night|every evening|every afternoon)\b/.test(
+      lower,
+    ) ||
+    windows?.length
+  ) {
+    cadenceKind = "daily";
+  }
+
+  if (
+    cadenceKind === null &&
+    looksLikeShortTimedFollowup(intent) &&
+    requestKind !== null &&
+    timeOfDay !== null
+  ) {
+    cadenceKind = "once";
+  }
+
+  if (!title && !cadenceKind && !requestKind) {
+    return null;
+  }
+
+  return {
+    mode: "create",
+    response: null,
+    requestKind,
+    title,
+    description: null,
+    cadenceKind,
+    windows,
+    weekdays,
+    timeOfDay,
+    timeZone,
+    everyMinutes,
+    timesPerDay:
+      typeof timesPerDay === "number" && Number.isFinite(timesPerDay)
+        ? timesPerDay
+        : null,
+    priority: /\b(urgent|important|critical)\b/.test(lower) ? 4 : null,
+    durationMinutes: inferDurationMinutes(intent),
+  };
+}
+
+function mergeTaskCreatePlans(
+  primary: ExtractedTaskCreatePlan,
+  fallback: ExtractedTaskCreatePlan | null,
+): ExtractedTaskCreatePlan {
+  if (!fallback) {
+    return primary;
+  }
+  return {
+    mode: primary.mode ?? fallback.mode,
+    response: primary.response ?? fallback.response,
+    requestKind: primary.requestKind ?? fallback.requestKind,
+    title: primary.title ?? fallback.title,
+    description: primary.description ?? fallback.description,
+    cadenceKind: primary.cadenceKind ?? fallback.cadenceKind,
+    windows: primary.windows ?? fallback.windows,
+    weekdays: primary.weekdays ?? fallback.weekdays,
+    timeOfDay: primary.timeOfDay ?? fallback.timeOfDay,
+    timeZone: primary.timeZone ?? fallback.timeZone,
+    everyMinutes: primary.everyMinutes ?? fallback.everyMinutes,
+    timesPerDay: primary.timesPerDay ?? fallback.timesPerDay,
+    priority: primary.priority ?? fallback.priority,
+    durationMinutes: primary.durationMinutes ?? fallback.durationMinutes,
+  };
+}
+
 function buildTaskCreatePlan(args: {
   parsed: Record<string, unknown>;
   intent: string;
@@ -218,6 +629,7 @@ function buildTaskCreatePlan(args: {
     windows: validateWindows(parsed.windows),
     weekdays: validateWeekdays(parsed.weekdays),
     timeOfDay: validateTimeOfDay(parsed.timeOfDay),
+    timeZone: validateTimeZone(parsed.timeZone),
     everyMinutes: validatePositiveNumber(parsed.everyMinutes),
     timesPerDay: validatePositiveNumber(parsed.timesPerDay),
     priority: validatePriority(parsed.priority),
@@ -240,9 +652,6 @@ export async function extractTaskCreatePlanWithLlm(args: {
 }): Promise<ExtractedTaskCreatePlan | null> {
   const { runtime, intent } = args;
 
-  if (typeof runtime.useModel !== "function") {
-    return null;
-  }
   if (!intent || intent.trim().length === 0) {
     return null;
   }
@@ -253,6 +662,13 @@ export async function extractTaskCreatePlanWithLlm(args: {
     state: args.state,
     limit: Math.max(resolveContextWindow(), REQUEST_KIND_VALIDATION_WINDOW),
   });
+  const heuristicPlan = buildHeuristicTaskCreatePlan({
+    intent,
+    recentWindow,
+  });
+  if (typeof runtime.useModel !== "function") {
+    return heuristicPlan;
+  }
   const prompt = buildExtractionPrompt(
     intent,
     recentWindow.slice(-resolveContextWindow()).join("\n"),
@@ -262,15 +678,20 @@ export async function extractTaskCreatePlanWithLlm(args: {
     const result = await runtime.useModel(ModelType.TEXT_LARGE, { prompt });
     const raw = typeof result === "string" ? result : "";
     const parsed = parseJSONObjectFromText(raw);
-    if (!parsed) return null;
+    if (!parsed) {
+      return heuristicPlan;
+    }
 
-    return buildTaskCreatePlan({
-      parsed,
-      intent,
-      recentWindow,
-    });
+    return mergeTaskCreatePlans(
+      buildTaskCreatePlan({
+        parsed,
+        intent,
+        recentWindow,
+      }),
+      heuristicPlan,
+    );
   } catch {
-    return null;
+    return heuristicPlan;
   }
 }
 

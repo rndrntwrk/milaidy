@@ -349,6 +349,7 @@ export interface ExtensionStatus {
   safariWebExtensionPath?: string | null;
   safariAppPath?: string | null;
   safariPackagePath?: string | null;
+  releaseManifest?: import("@miladyai/shared/contracts/lifeops").LifeOpsBrowserCompanionReleaseManifest | null;
 }
 
 // WebSocket

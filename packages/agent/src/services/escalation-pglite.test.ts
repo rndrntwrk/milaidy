@@ -486,6 +486,482 @@ describe("EscalationService (PGlite integration)", () => {
   });
 
   // -----------------------------------------------------------------------
+  // 8. Sends to the first configured channel immediately
+  // -----------------------------------------------------------------------
+
+  it("sends to the first configured channel immediately", async () => {
+    setupTempConfig({
+      agents: {
+        defaults: {
+          escalation: {
+            channels: ["client_chat", "telegram"],
+            waitMinutes: 5,
+            maxRetries: 3,
+          },
+          ownerContacts: {
+            client_chat: { entityId: "owner-1" },
+            telegram: { entityId: "owner-1", channelId: "tg-123" },
+          },
+        },
+      },
+    });
+
+    const state = await EscalationService.startEscalation(
+      runtime,
+      "test reason",
+      "Something needs attention",
+    );
+
+    expect(state.id).toMatch(/^esc-/);
+    expect(state.resolved).toBe(false);
+    expect(state.channelsSent).toEqual(["client_chat"]);
+    expect(state.currentStep).toBe(0);
+
+    const sendSpy = vi.mocked(runtime.sendMessageToTarget);
+    expect(sendSpy).toHaveBeenCalledOnce();
+    const [target, content] = sendSpy.mock.calls[0];
+    expect(target.source).toBe("client_chat");
+    expect(target.entityId).toBe("owner-1");
+    expect(content.text).toBe("Something needs attention");
+    expect(content.metadata).toEqual(
+      expect.objectContaining({
+        urgency: "urgent",
+        escalation: true,
+        routeSource: "client_chat",
+        routeResolution: "config",
+      }),
+    );
+  });
+
+  // -----------------------------------------------------------------------
+  // 9. Routes telegram through telegramAccount owner contact
+  // -----------------------------------------------------------------------
+
+  it("routes telegram reminders through the telegramAccount owner contact", async () => {
+    setupTempConfig({
+      agents: {
+        defaults: {
+          escalation: {
+            channels: ["telegram"],
+            waitMinutes: 5,
+            maxRetries: 3,
+          },
+          ownerContacts: {
+            telegramAccount: {
+              entityId: "owner-1",
+              channelId: "tg-account-123",
+            },
+          },
+        },
+      },
+    });
+
+    const state = await EscalationService.startEscalation(
+      runtime,
+      "test reason",
+      "Telegram account reminder",
+    );
+
+    expect(state.channelsSent).toEqual(["telegram"]);
+    const sendSpy = vi.mocked(runtime.sendMessageToTarget);
+    expect(sendSpy).toHaveBeenCalledOnce();
+    const [target, content] = sendSpy.mock.calls[0];
+    expect(target.source).toBe("telegram-account");
+    expect(target.channelId).toBe("tg-account-123");
+    expect(content.source).toBe("telegram-account");
+    expect(content.metadata).toEqual(
+      expect.objectContaining({
+        routeSource: "telegram-account",
+      }),
+    );
+  });
+
+  // -----------------------------------------------------------------------
+  // 10. Falls back to resolved owner entity for discord
+  // -----------------------------------------------------------------------
+
+  it("falls back to the resolved owner entity for discord escalation", async () => {
+    ownerEntityMocks.resolveOwnerEntityId.mockResolvedValue(
+      "owner-discord-uuid",
+    );
+    setupTempConfig({
+      agents: {
+        defaults: {
+          escalation: { channels: ["discord"], waitMinutes: 5, maxRetries: 1 },
+          ownerContacts: {},
+        },
+      },
+    });
+
+    const state = await EscalationService.startEscalation(
+      runtime,
+      "discord fallback",
+      "Check Discord DM routing",
+    );
+
+    expect(state.channelsSent).toEqual(["discord"]);
+    const sendSpy = vi.mocked(runtime.sendMessageToTarget);
+    expect(sendSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: "discord",
+        entityId: "owner-discord-uuid",
+      }),
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          routeSource: "discord",
+          routeResolution: "config",
+          routeEndpoint: "owner-discord-uuid",
+        }),
+      }),
+    );
+  });
+
+  // -----------------------------------------------------------------------
+  // 11. Skips client_chat until send handler is registered
+  // -----------------------------------------------------------------------
+
+  it("skips client_chat escalation delivery until the send handler is registered", async () => {
+    setupTempConfig({
+      agents: {
+        defaults: {
+          escalation: {
+            channels: ["client_chat"],
+            waitMinutes: 5,
+            maxRetries: 1,
+          },
+          ownerContacts: {
+            client_chat: { entityId: "owner-1" },
+          },
+        },
+      },
+    });
+
+    // Create a runtime with no send handlers
+    const noHandlerRuntime = createPgliteRuntime(db, {
+      sendHandlers: new Map<string, unknown>(),
+    });
+
+    const state = await EscalationService.startEscalation(
+      noHandlerRuntime,
+      "test reason",
+      "Something needs attention",
+    );
+
+    expect(state.channelsSent).toEqual([]);
+    expect(
+      vi.mocked(noHandlerRuntime.sendMessageToTarget),
+    ).not.toHaveBeenCalled();
+  });
+
+  // -----------------------------------------------------------------------
+  // 12. Advances to next channel when owner has not responded
+  // -----------------------------------------------------------------------
+
+  it("advances to the next channel when owner has not responded", async () => {
+    setupTempConfig({
+      agents: {
+        defaults: {
+          escalation: {
+            channels: ["client_chat", "telegram"],
+            waitMinutes: 1,
+            maxRetries: 3,
+          },
+          ownerContacts: {
+            client_chat: { entityId: "owner-1" },
+            telegram: { entityId: "owner-1", channelId: "tg-123" },
+          },
+        },
+      },
+    });
+
+    const state = await EscalationService.startEscalation(
+      runtime,
+      "urgent",
+      "Help needed",
+    );
+
+    // No owner response -- getMemoriesByRoomIds returns empty.
+    vi.mocked(runtime.sendMessageToTarget).mockClear();
+
+    await EscalationService.checkEscalation(runtime, state.id);
+
+    expect(state.currentStep).toBe(1);
+    expect(state.channelsSent).toContain("telegram");
+    const sendSpy = vi.mocked(runtime.sendMessageToTarget);
+    expect(sendSpy).toHaveBeenCalledOnce();
+    const [target] = sendSpy.mock.calls[0];
+    expect(target.source).toBe("telegram");
+  });
+
+  // -----------------------------------------------------------------------
+  // 13. Resolves when owner has responded
+  // -----------------------------------------------------------------------
+
+  it("resolves when the owner has responded", async () => {
+    setupTempConfig({
+      agents: {
+        defaults: {
+          escalation: {
+            channels: ["client_chat", "telegram"],
+            waitMinutes: 1,
+            maxRetries: 3,
+          },
+          ownerContacts: {
+            client_chat: { entityId: "owner-1" },
+            telegram: { entityId: "owner-1", channelId: "tg-123" },
+          },
+        },
+      },
+    });
+
+    const state = await EscalationService.startEscalation(
+      runtime,
+      "urgent",
+      "Help needed",
+    );
+
+    // Simulate owner response
+    vi.mocked(runtime.getRoomsForParticipant).mockResolvedValue([
+      "room-abc" as UUID,
+    ]);
+    vi.mocked(runtime.getMemoriesByRoomIds).mockResolvedValue([
+      {
+        entityId: "owner-1",
+        createdAt: Date.now() + 1000,
+        content: { text: "Got it" },
+      },
+    ]);
+
+    vi.mocked(runtime.sendMessageToTarget).mockClear();
+    await EscalationService.checkEscalation(runtime, state.id);
+
+    expect(state.resolved).toBe(true);
+    expect(state.resolvedAt).toBeTypeOf("number");
+    // Should NOT have sent to next channel.
+    expect(vi.mocked(runtime.sendMessageToTarget)).not.toHaveBeenCalled();
+  });
+
+  // -----------------------------------------------------------------------
+  // 14. Uses relationships hints to resolve escalation endpoint
+  // -----------------------------------------------------------------------
+
+  it("uses relationships hints to resolve the selected escalation endpoint", async () => {
+    setupTempConfig({
+      agents: {
+        defaults: {
+          escalation: {
+            channels: ["discord"],
+            waitMinutes: 1,
+            maxRetries: 3,
+          },
+          ownerContacts: {
+            discord: { entityId: "owner-1" },
+          },
+        },
+      },
+    });
+
+    const relRuntime = createPgliteRuntime(db, {
+      getService: vi.fn((name: string) =>
+        name === "relationships"
+          ? {
+              getContact: vi.fn().mockResolvedValue({
+                preferences: { preferredCommunicationChannel: "discord" },
+                customFields: {
+                  discordChannelId: "dm-relationships",
+                },
+              }),
+            }
+          : null,
+      ),
+      getRoomsForParticipant: vi.fn().mockResolvedValue(["room-1"]),
+      getMemoriesByRoomIds: vi.fn().mockResolvedValue([
+        {
+          entityId: "owner-1",
+          createdAt: Date.now() + 1000,
+          content: { text: "responded" },
+        },
+      ]),
+    });
+
+    const state = await EscalationService.startEscalation(
+      relRuntime,
+      "test",
+      "hello",
+    );
+
+    expect(state.channelsSent).toEqual(["discord"]);
+    expect(vi.mocked(relRuntime.sendMessageToTarget)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: "discord",
+        entityId: "owner-1",
+        channelId: "dm-relationships",
+      }),
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          routeSource: "discord",
+          routeResolution: "config+relationships",
+          routeEndpoint: "dm-relationships",
+          routeLastResponseChannel: "discord",
+        }),
+      }),
+    );
+  });
+
+  // -----------------------------------------------------------------------
+  // 15. Stops after max retries
+  // -----------------------------------------------------------------------
+
+  it("stops after max retries are exhausted", async () => {
+    setupTempConfig({
+      agents: {
+        defaults: {
+          escalation: {
+            channels: ["client_chat"],
+            waitMinutes: 1,
+            maxRetries: 2,
+          },
+          ownerContacts: {
+            client_chat: { entityId: "owner-1" },
+          },
+        },
+      },
+    });
+
+    const state = await EscalationService.startEscalation(
+      runtime,
+      "urgent",
+      "Help",
+    );
+
+    // Step 0 already happened (initial send). Check advances to step 1.
+    await EscalationService.checkEscalation(runtime, state.id);
+    expect(state.currentStep).toBe(1);
+    expect(state.channelsSent).toEqual(["client_chat", "client_chat"]);
+
+    // Step 1 -> step 2: exceeds maxRetries (2), so it gives up.
+    await EscalationService.checkEscalation(runtime, state.id);
+    expect(state.currentStep).toBe(2);
+    expect(state.resolved).toBe(true);
+  });
+
+  // -----------------------------------------------------------------------
+  // 16. Uses default config when escalation config is missing
+  // -----------------------------------------------------------------------
+
+  it("uses default config when escalation config is missing", async () => {
+    setupTempConfig({});
+
+    const state = await EscalationService.startEscalation(
+      runtime,
+      "fallback",
+      "Default test",
+    );
+
+    // Default channel is client_chat, but no owner contact configured
+    // so send should fail gracefully.
+    expect(state.channelsSent).toEqual([]);
+    expect(state.resolved).toBe(false);
+  });
+
+  // -----------------------------------------------------------------------
+  // 17. getActiveEscalation returns null / returns active
+  // -----------------------------------------------------------------------
+
+  it("returns null when no active escalation exists", async () => {
+    setupTempConfig({ agents: { defaults: {} } });
+    const result = await EscalationService.getActiveEscalation(runtime);
+    expect(result).toBeNull();
+  });
+
+  it("returns the active escalation", async () => {
+    setupTempConfig({
+      agents: {
+        defaults: {
+          escalation: {
+            channels: ["client_chat"],
+            waitMinutes: 5,
+            maxRetries: 1,
+          },
+          ownerContacts: {
+            client_chat: { entityId: "owner-1" },
+          },
+        },
+      },
+    });
+
+    await EscalationService.startEscalation(runtime, "test", "hello");
+
+    const active = await EscalationService.getActiveEscalation(runtime);
+    expect(active).not.toBeNull();
+    expect(active?.reason).toBe("test");
+  });
+
+  // -----------------------------------------------------------------------
+  // 18. resolveEscalation marks resolved / idempotent
+  // -----------------------------------------------------------------------
+
+  it("resolveEscalation is idempotent", async () => {
+    setupTempConfig({ agents: { defaults: {} } });
+    // Resolving a non-existent escalation should not throw.
+    await expect(
+      EscalationService.resolveEscalation("nonexistent"),
+    ).resolves.not.toThrow();
+  });
+
+  // -----------------------------------------------------------------------
+  // 19. registerEscalationChannel edge cases
+  // -----------------------------------------------------------------------
+
+  it("returns false when channel is already registered", () => {
+    setupTempConfig({
+      agents: {
+        defaults: {
+          escalation: { channels: ["client_chat", "telegram"] },
+        },
+      },
+    });
+
+    const result = registerEscalationChannel("telegram");
+    expect(result).toBe(false);
+  });
+
+  it("normalizes channel name to lowercase", () => {
+    const configPath = setupTempConfig({
+      agents: { defaults: { escalation: {} } },
+    });
+
+    registerEscalationChannel("  Telegram  ");
+
+    const raw = fs.readFileSync(configPath, "utf-8");
+    const config = JSON.parse(raw) as Record<string, unknown>;
+    const agents = config.agents as Record<string, unknown>;
+    const defaults = agents.defaults as Record<string, unknown>;
+    const escalation = defaults.escalation as Record<string, unknown>;
+    expect(escalation.channels).toEqual(["client_chat", "telegram"]);
+  });
+
+  it("returns false for empty or whitespace-only channel names", () => {
+    setupTempConfig({ agents: { defaults: { escalation: {} } } });
+    expect(registerEscalationChannel("")).toBe(false);
+    expect(registerEscalationChannel("   ")).toBe(false);
+  });
+
+  it("bootstraps the full config path when agents.defaults.escalation is missing", () => {
+    const configPath = setupTempConfig({});
+
+    const result = registerEscalationChannel("sms");
+
+    expect(result).toBe(true);
+    const raw = fs.readFileSync(configPath, "utf-8");
+    const config = JSON.parse(raw) as Record<string, unknown>;
+    const agents = (config as Record<string, Record<string, unknown>>).agents;
+    const defaults = agents?.defaults as Record<string, unknown>;
+    const escalation = defaults?.escalation as Record<string, unknown>;
+    expect(escalation?.channels).toEqual(["client_chat", "sms"]);
+  });
+
+  // -----------------------------------------------------------------------
   // Bonus: _resetDb clears DB state
   // -----------------------------------------------------------------------
 

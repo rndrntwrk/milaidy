@@ -560,6 +560,10 @@ export interface OnboardingData {
   serviceRouting?: ServiceRoutingConfig;
   credentialInputs?: OnboardingCredentialInputs;
   channels?: Record<string, unknown>;
+  features?: Record<
+    string,
+    boolean | { enabled?: boolean; [key: string]: unknown }
+  >;
   walletConfig?: WalletConfigUpdateRequest;
   inventoryProviders?: Array<{
     chain: string;

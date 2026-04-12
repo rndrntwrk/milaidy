@@ -29,6 +29,10 @@ import {
   getZonedDateParts,
 } from "../lifeops/time.js";
 import {
+  collectKeywordTermMatchesForKey,
+  hasContextSignalSyncForKey,
+} from "./context-signal.js";
+import {
   calendarReadUnavailableMessage,
   calendarWriteUnavailableMessage,
   detailArray,
@@ -94,44 +98,6 @@ type CalendarActionParams = {
 };
 
 const CALENDAR_VALIDATION_CONTEXT_LIMIT = 12;
-const CALENDAR_VALIDATION_STRONG_TERMS = [
-  "calendar",
-  "event",
-  "events",
-  "flight",
-  "flights",
-  "meeting",
-  "meetings",
-  "appointment",
-  "appointments",
-  "trip",
-  "travel",
-  "itinerary",
-  "agenda",
-  "schedule",
-  "hotel",
-  "hotels",
-] as const;
-const CALENDAR_VALIDATION_WEAK_TERMS = [
-  "time",
-  "awake",
-  "sleep",
-  "earlier",
-  "later",
-  "book",
-  "booking",
-  "booked",
-  "check",
-  "free",
-  "busy",
-  "week",
-  "yesterday",
-  "today",
-  "tomorrow",
-  "tonight",
-  "month",
-  "year",
-] as const;
 const WEAK_CONFIRMATION_PATTERN =
   /^(?:yes|yeah|yep|yup|ok|okay|sure|please|please do|do it|go ahead|sounds good|mm-?hmm|mhm|uh-?huh)$/i;
 const FOLLOW_UP_PATTERN =
@@ -228,6 +194,74 @@ function buildCalendarReplyOnlyFallback(
   }
 }
 
+function looksLikeLifeReminderRequestForCalendarAction(text: string): boolean {
+  const normalized = normalizeText(text);
+  if (!normalized) {
+    return false;
+  }
+  if (
+    collectKeywordTermMatchesForKey([normalized], "calendar", {
+      includeAllLocales: true,
+    }).size > 0
+  ) {
+    return false;
+  }
+  return /\b(remind(?: me)?|reminder|alarm|habit|routine|todo|to do|task|goal)\b/.test(
+    normalized,
+  );
+}
+
+function buildCalendarServiceErrorFallback(
+  error: LifeOpsServiceError,
+  intent: string,
+): string {
+  const normalized = normalizeText(error.message);
+  if (
+    normalized.includes("utc 'z' suffix") ||
+    normalized.includes("local datetime without 'z'")
+  ) {
+    return `I couldn't pin down the event time from "${intent}". Tell me the date and time again in plain language, like "Friday at 8 pm Pacific."`;
+  }
+  if (
+    normalized.includes("startat is required") ||
+    normalized.includes("windowpreset is not provided")
+  ) {
+    return "I still need the time for that event. Tell me when it should happen.";
+  }
+  if (normalized.includes("endat must be later than startat")) {
+    return "That end time lands before the start. Give me the date and time again and I'll fix it.";
+  }
+  if (error.status === 429 || normalized.includes("rate limit")) {
+    return "Calendar is rate-limited right now. Try again in a bit.";
+  }
+  return "I couldn't finish that calendar change yet. Tell me the event and timing again, and I'll try it a different way.";
+}
+
+function buildCalendarEventDisambiguationFallback(args: {
+  action: "update" | "delete";
+  candidates: LifeOpsCalendarEvent[];
+  titleHint?: string;
+}): string {
+  const previewLines = args.candidates.slice(0, 3).map((candidate) => {
+    const when = formatCalendarEventDateTime(candidate, {
+      includeTimeZoneName: true,
+    });
+    return `- ${candidate.title} (${when})`;
+  });
+  const intro = args.titleHint
+    ? `I found multiple events matching "${args.titleHint}".`
+    : "I found multiple matching calendar events.";
+  const suffix =
+    args.candidates.length > 3
+      ? ` There are ${args.candidates.length} matches total.`
+      : "";
+  return [
+    intro,
+    ...previewLines,
+    `Tell me which one to ${args.action} by giving the title and date/time.${suffix}`,
+  ].join("\n");
+}
+
 function normalizeCalendarReplyText(raw: string): string {
   return raw
     .trim()
@@ -316,44 +350,23 @@ function normalizeLookupKey(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-function escapePattern(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function textIncludesKeywordTerm(text: string, term: string): boolean {
-  const pattern = new RegExp(
-    `\\b${escapePattern(term).replace(/\\ /g, "\\s+")}\\b`,
-    "i",
-  );
-  return pattern.test(text);
-}
-
-function collectKeywordTermMatches(
-  texts: string[],
-  terms: readonly string[],
-): Set<string> {
-  const matches = new Set<string>();
-  for (const text of texts) {
-    for (const term of terms) {
-      if (textIncludesKeywordTerm(text, term)) {
-        matches.add(term);
-      }
-    }
-  }
-  return matches;
-}
-
 function hasCalendarTextSignal(text: string): boolean {
   if (!text.trim()) {
     return false;
   }
   if (
-    collectKeywordTermMatches([text], CALENDAR_VALIDATION_STRONG_TERMS).size > 0
+    collectKeywordTermMatchesForKey([text], "calendar", {
+      includeAllLocales: true,
+      strength: "strong",
+    }).size > 0
   ) {
     return true;
   }
   return (
-    collectKeywordTermMatches([text], CALENDAR_VALIDATION_WEAK_TERMS).size >= 2
+    collectKeywordTermMatchesForKey([text], "calendar", {
+      includeAllLocales: true,
+      strength: "weak",
+    }).size >= 2
   );
 }
 
@@ -575,78 +588,13 @@ function planningConversationLines(state: State | undefined): string[] {
     .map((line) => `${line.role}: ${line.text}`);
 }
 
-function recentConversationTexts(
-  state: State | undefined,
-  limit = CALENDAR_VALIDATION_CONTEXT_LIMIT,
-): string[] {
-  if (!state || typeof state !== "object") {
-    return [];
-  }
-
-  const stateRecord = state as Record<string, unknown>;
-  const values =
-    stateRecord.values && typeof stateRecord.values === "object"
-      ? (stateRecord.values as Record<string, unknown>)
-      : undefined;
-  const raw =
-    typeof values?.recentMessages === "string"
-      ? values.recentMessages
-      : typeof stateRecord.text === "string"
-        ? stateRecord.text
-        : "";
-
-  if (raw) {
-    return raw
-      .split(/\n+/)
-      .map((line) => parseStateLine(line).text)
-      .filter((text) => text.length > 0)
-      .slice(-limit);
-  }
-
-  const recentMessagesData =
-    stateRecord.recentMessagesData ?? stateRecord.recentMessages;
-  if (!Array.isArray(recentMessagesData)) {
-    return [];
-  }
-
-  return recentMessagesData
-    .flatMap((item) => {
-      if (!item || typeof item !== "object") {
-        return [];
-      }
-      const content = (item as Record<string, unknown>).content;
-      if (!content || typeof content !== "object") {
-        return [];
-      }
-      const text = (content as Record<string, unknown>).text;
-      return typeof text === "string" && text.trim().length > 0
-        ? [text.trim()]
-        : [];
-    })
-    .slice(-limit);
-}
-
 function hasCalendarContextSignal(
   message: Memory,
   state: State | undefined,
 ): boolean {
-  const texts = [
-    ...recentConversationTexts(state),
-    messageText(message).trim(),
-  ].filter((text) => text.length > 0);
-
-  if (texts.length === 0) {
-    return false;
-  }
-
-  if (
-    collectKeywordTermMatches(texts, CALENDAR_VALIDATION_STRONG_TERMS).size > 0
-  ) {
-    return true;
-  }
-  return (
-    collectKeywordTermMatches(texts, CALENDAR_VALIDATION_WEAK_TERMS).size >= 2
-  );
+  return hasContextSignalSyncForKey(message, state, "calendar", {
+    contextLimit: CALENDAR_VALIDATION_CONTEXT_LIMIT,
+  });
 }
 
 function stateTextCandidates(state: State | undefined): string[] {
@@ -3395,14 +3343,14 @@ export const calendarAction: Action = {
         /\b(?:rename|change|move|reschedule|push back)\b[^.?!]+\bto\b/.test(
           text,
         ) ||
-        /\b(rename|reschedule|update|edit|modify|change|move)\b.*\b(event|meeting|appointment|calendar|invite|reminder)\b/.test(
+        /\b(rename|reschedule|update|edit|modify|change|move)\b.*\b(event|meeting|appointment|calendar|invite)\b/.test(
           text,
         )
       ) {
         return "update_event";
       }
       if (
-        /\b(delete|remove|cancel|drop|get rid of|trash|kill)\b.*\b(event|meeting|appointment|calendar|invite|reminder)\b/.test(
+        /\b(delete|remove|cancel|drop|get rid of|trash|kill)\b.*\b(event|meeting|appointment|calendar|invite)\b/.test(
           text,
         ) ||
         /\b(delete|remove|cancel)\b.+\b(today|tomorrow|tonight|this week|next week)\b/.test(
@@ -3415,7 +3363,7 @@ export const calendarAction: Action = {
       // The verb has to be paired with a calendar noun so we don't catch
       // unrelated phrases like "create a file" or "add a column".
       if (
-        /\b(create|add|book|schedule|make|put)\b[^.?!]*\b(event|meeting|appointment|invite|calendar|reminder)\b/.test(
+        /\b(create|add|book|schedule|make|put)\b[^.?!]*\b(event|meeting|appointment|invite|calendar)\b/.test(
           text,
         )
       ) {
@@ -3503,6 +3451,26 @@ export const calendarAction: Action = {
         fallback,
         context,
       });
+
+    if (
+      !hasExplicitCalendarExecutionInput &&
+      !forcedSubaction &&
+      !tripWindowIntent &&
+      looksLikeLifeReminderRequestForCalendarAction(messageText(message))
+    ) {
+      const fallback =
+        "That sounds like a reminder or todo rather than a calendar event. Tell me the reminder and when it should happen.";
+      return respond({
+        success: true,
+        text: await renderReply("out_of_domain", fallback, {
+          requestedDomain: "lifeops",
+        }),
+        data: {
+          noop: true,
+          suggestedSubaction: null,
+        },
+      });
+    }
 
     if (
       llmPlan.shouldAct === false &&
@@ -3794,12 +3762,18 @@ export const calendarAction: Action = {
               }),
             });
           }
-          if (candidates.length > 1 && !titleHint) {
-            const fallback = `i found ${candidates.length} events in that window — tell me which one (by title) so i don't update the wrong one.`;
+          if (candidates.length > 1) {
+            const fallback = buildCalendarEventDisambiguationFallback({
+              action: "update",
+              candidates,
+              titleHint,
+            });
             return respond({
               success: false,
               text: await renderReply("clarify_update_event_target", fallback, {
                 candidateCount: candidates.length,
+                titleHint,
+                candidates,
               }),
             });
           }
@@ -4002,25 +3976,18 @@ export const calendarAction: Action = {
               intent,
             );
 
-          // When multiple candidates have the SAME normalized title, treat
-          // them as duplicates of one logical event. The user almost
-          // certainly meant "any one of these" — picking the first is safer
-          // than asking them to disambiguate by title (which won't help).
-          const allSameTitle =
-            candidates.length > 1 &&
-            new Set(candidates.map((e) => normalizeText(e.title))).size === 1;
-
-          if (
-            candidates.length > 1 &&
-            !titleHint &&
-            !deleteAllMatch &&
-            !allSameTitle
-          ) {
-            const fallback = `i found ${candidates.length} events in that window — tell me which one (by title) so i don't delete the wrong one.`;
+          if (candidates.length > 1 && !deleteAllMatch) {
+            const fallback = buildCalendarEventDisambiguationFallback({
+              action: "delete",
+              candidates,
+              titleHint,
+            });
             return respond({
               success: false,
               text: await renderReply("clarify_delete_event_target", fallback, {
                 candidateCount: candidates.length,
+                titleHint,
+                candidates,
               }),
             });
           }
@@ -4314,7 +4281,14 @@ export const calendarAction: Action = {
       });
     } catch (error) {
       if (error instanceof LifeOpsServiceError) {
-        return respond({ success: false, text: error.message });
+        const fallback = buildCalendarServiceErrorFallback(error, intent);
+        return respond({
+          success: false,
+          text: await renderReply("service_error", fallback, {
+            status: error.status,
+            subaction,
+          }),
+        });
       }
       throw error;
     }

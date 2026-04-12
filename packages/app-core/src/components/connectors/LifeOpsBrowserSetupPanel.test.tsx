@@ -148,6 +148,7 @@ describe("LifeOpsBrowserSetupPanel", () => {
         safariWebExtensionPath: null,
         safariAppPath: null,
         safariPackagePath: null,
+        releaseManifest: null,
       },
     });
     mockClient.buildLifeOpsBrowserCompanionPackage
@@ -161,6 +162,7 @@ describe("LifeOpsBrowserSetupPanel", () => {
           safariWebExtensionPath: null,
           safariAppPath: null,
           safariPackagePath: null,
+          releaseManifest: null,
         },
       });
     mockClient.createLifeOpsBrowserCompanionPairing
@@ -234,5 +236,100 @@ describe("LifeOpsBrowserSetupPanel", () => {
       expect(mockOpenExternalUrl).toHaveBeenCalledWith("chrome://extensions/"),
     );
     expect(await screen.findByText(/Chrome install is prepared/i)).toBeTruthy();
+  });
+
+  it("prefers the Chrome Web Store flow when a release manifest is available", async () => {
+    mockClient.getLifeOpsBrowserPackageStatus.mockResolvedValue({
+      status: {
+        extensionPath: "/tmp/lifeops-browser",
+        chromeBuildPath: null,
+        chromePackagePath: null,
+        safariWebExtensionPath: null,
+        safariAppPath: null,
+        safariPackagePath: null,
+        releaseManifest: {
+          schema: "lifeops_browser_release_v2",
+          releaseTag: "v2.0.0",
+          releaseVersion: "2.0.0",
+          repository: "milady-ai/milady",
+          releasePageUrl:
+            "https://github.com/milady-ai/milady/releases/tag/v2.0.0",
+          chromeVersion: "2.0.0.60000",
+          chromeVersionName: "2.0.0",
+          safariMarketingVersion: "2.0.0",
+          safariBuildVersion: "200009000",
+          chrome: {
+            installKind: "chrome_web_store",
+            installUrl:
+              "https://chromewebstore.google.com/detail/lifeops-browser/example",
+            storeListingUrl:
+              "https://chromewebstore.google.com/detail/lifeops-browser/example",
+            asset: {
+              fileName: "lifeops-browser-chrome-v2.0.0.zip",
+              downloadUrl:
+                "https://github.com/milady-ai/milady/releases/download/v2.0.0/lifeops-browser-chrome-v2.0.0.zip",
+            },
+          },
+          safari: {
+            installKind: "github_release",
+            installUrl:
+              "https://github.com/milady-ai/milady/releases/download/v2.0.0/lifeops-browser-safari-v2.0.0.zip",
+            storeListingUrl: null,
+            asset: {
+              fileName: "lifeops-browser-safari-v2.0.0.zip",
+              downloadUrl:
+                "https://github.com/milady-ai/milady/releases/download/v2.0.0/lifeops-browser-safari-v2.0.0.zip",
+            },
+          },
+          generatedAt: "2026-04-12T00:00:00.000Z",
+        },
+      },
+    });
+
+    render(<LifeOpsBrowserSetupPanel />);
+
+    const installButton = await screen.findByRole("button", {
+      name: "Open Chrome Web Store",
+    });
+    fireEvent.click(installButton);
+
+    await waitFor(() =>
+      expect(
+        mockClient.createLifeOpsBrowserCompanionPairing,
+      ).toHaveBeenCalledWith({
+        browser: "chrome",
+        profileId: "default",
+        profileLabel: "Default",
+        label: "LifeOps Browser chrome Default",
+      }),
+    );
+    expect(
+      mockClient.buildLifeOpsBrowserCompanionPackage,
+    ).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(mockCopyTextToClipboard).toHaveBeenCalledWith(
+        JSON.stringify(
+          {
+            apiBaseUrl: "https://remote.example",
+            companionId: "companion-1",
+            pairingToken: "lobr_token",
+            browser: "chrome",
+            profileId: "default",
+            profileLabel: "Default",
+            label: "LifeOps Browser chrome Default",
+          },
+          null,
+          2,
+        ),
+      ),
+    );
+    await waitFor(() =>
+      expect(mockOpenExternalUrl).toHaveBeenCalledWith(
+        "https://chromewebstore.google.com/detail/lifeops-browser/example",
+      ),
+    );
+    expect(
+      await screen.findByText(/opened the Chrome Web Store listing/i),
+    ).toBeTruthy();
   });
 });

@@ -3,6 +3,14 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+/**
+ * Tests for Claude Code OAuth refresh caching behavior.
+ *
+ * Uses real filesystem for credentials files. The refreshAnthropicToken
+ * function is mocked because we need to simulate a specific invalid_grant
+ * error condition that requires a revoked refresh token.
+ */
+
 const mockRefreshAnthropicToken = vi.hoisted(() => vi.fn());
 const mockLogger = vi.hoisted(() => ({
   debug: vi.fn(),
