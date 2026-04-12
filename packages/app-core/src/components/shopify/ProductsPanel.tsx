@@ -180,7 +180,7 @@ function CreateProductDialog({ open, onClose }: CreateProductDialogProps) {
           </div>
 
           {submitError ? (
-            <div className="rounded-[14px] border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
+            <div className="rounded-xl border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
               {submitError}
             </div>
           ) : null}
@@ -208,7 +208,7 @@ function ProductRow({ product }: { product: ShopifyProduct }) {
       : `${product.priceRange.min} – ${product.priceRange.max}`;
 
   return (
-    <div className="flex items-center gap-3 rounded-[16px] border border-border/20 bg-card/30 px-3 py-3 transition-colors hover:bg-card/50">
+    <div className="flex items-center gap-3 rounded-xl border border-border/20 bg-card/30 px-3 py-3 transition-colors hover:bg-card/50">
       {/* Thumbnail */}
       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border/20 bg-bg-accent overflow-hidden">
         {product.imageUrl ? (
@@ -307,7 +307,7 @@ export function ProductsPanel({
 
       {/* Error */}
       {error ? (
-        <div className="rounded-[14px] border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
+        <div className="rounded-xl border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
           {error}
         </div>
       ) : null}
@@ -316,11 +316,11 @@ export function ProductsPanel({
       {loading && products.length === 0 ? (
         <div className="space-y-2">
           {Array.from({ length: 6 }, (_, i) => i).map((i) => (
-            <Skeleton key={i} className="h-16 w-full rounded-[16px]" />
+            <Skeleton key={i} className="h-16 w-full rounded-xl" />
           ))}
         </div>
       ) : products.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 rounded-[18px] border border-border/20 bg-card/20 py-12 text-center">
+        <div className="flex flex-col items-center gap-3 rounded-2xl border border-border/20 bg-card/20 py-12 text-center">
           <Package className="h-8 w-8 text-muted/40" />
           <div className="text-sm text-muted">
             {search ? "No products match your search." : "No products found."}
