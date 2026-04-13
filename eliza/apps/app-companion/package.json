@@ -27,7 +27,6 @@
   "dependencies": {
     "@elizaos/agent": "workspace:*",
     "@elizaos/core": "workspace:*",
-    "@lookingglass/webxr": "^0.6.0",
     "lucide-react": "^0.575.0"
   },
   "devDependencies": {

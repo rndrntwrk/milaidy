@@ -154,12 +154,8 @@ export const OPTIONAL_PLUGIN_MAP: Readonly<Record<string, string>> = {
   bluebubbles: "@elizaos/plugin-bluebubbles",
   discordLocal: "@elizaos/plugin-discord-local",
   x402: "@elizaos/plugin-x402",
-  "plugin-manager": "@elizaos/plugin-plugin-manager",
-  pluginManager: "@elizaos/plugin-plugin-manager",
-  "secrets-manager": "@elizaos/plugin-secrets-manager",
-  secretsManager: "@elizaos/plugin-secrets-manager",
-  trust: "@elizaos/plugin-trust",
-  pluginTrust: "@elizaos/plugin-trust",
+  // plugin-manager, secrets-manager, trust: now built-in core capabilities
+  // Enable via ENABLE_PLUGIN_MANAGER, ENABLE_SECRETS_MANAGER, ENABLE_TRUST
   "streaming-base": "@elizaos/plugin-streaming-base",
   "twitch-streaming": "@elizaos/plugin-twitch-streaming",
   "youtube-streaming": "@elizaos/plugin-youtube-streaming",

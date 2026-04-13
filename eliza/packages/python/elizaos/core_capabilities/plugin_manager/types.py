@@ -107,6 +107,69 @@ class UninstallResult:
     error: str | None = None
 
 
+@dataclass
+class UpstreamMetadata:
+    """Metadata tracking the upstream source for an ejected plugin/core."""
+
+    schema: str  # "milaidy-upstream-v1"
+    source: str
+    git_url: str
+    branch: str
+    commit_hash: str
+    ejected_at: str
+    npm_package: str
+    npm_version: str
+    last_sync_at: str | None = None
+    local_commits: int = 0
+
+
+@dataclass
+class EjectedPluginInfo:
+    """Information about an ejected plugin being managed locally."""
+
+    name: str
+    path: str
+    version: str
+    upstream: UpstreamMetadata | None = None
+
+
+@dataclass
+class PluginSearchResult:
+    """A single result from a registry search."""
+
+    name: str
+    description: str
+    score: float
+    tags: list[str]
+    version: str | None
+    npm_package: str
+    repository: str
+    stars: int
+    supports: dict[str, bool] = field(default_factory=dict)
+
+
+@dataclass
+class RegistryPlugin:
+    """Normalised representation of a plugin from the remote registry."""
+
+    name: str
+    git_repo: str
+    git_url: str
+    description: str
+    homepage: str | None
+    topics: list[str]
+    stars: int
+    language: str
+    npm_package: str
+    npm_v0_version: str | None = None
+    npm_v1_version: str | None = None
+    npm_v2_version: str | None = None
+    supports_v0: bool = False
+    supports_v1: bool = False
+    supports_v2: bool = False
+    kind: str | None = None
+
+
 # Protected plugins that cannot be manipulated externally
 PROTECTED_PLUGINS: frozenset[str] = frozenset({
     "plugin-manager",

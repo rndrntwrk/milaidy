@@ -17,6 +17,7 @@ from elizaos.types import Service
 
 from .types import (
     ComponentRegistration,
+    EjectedPluginInfo,
     PluginComponents,
     PluginManagerConfig,
     PluginMetadata,
@@ -195,3 +196,37 @@ class PluginManagerService(Service):
                 counts["evaluators"] += len(plugin.components.evaluators)
                 counts["services"] += len(plugin.components.services)
         return counts
+
+    async def list_ejected_plugins(self) -> list[EjectedPluginInfo]:
+        """List all ejected plugins.
+
+        Delegates to the CoreManagerService if available; otherwise returns
+        an empty list.
+        """
+        if self._runtime is None:
+            return []
+
+        core_mgr = None
+        for svc in (self._runtime.services or {}).values():
+            if getattr(svc, "service_type", None) == "core_manager":
+                core_mgr = svc
+                break
+
+        if core_mgr is None:
+            return []
+
+        try:
+            status = await core_mgr.get_core_status()
+            if status.ejected:
+                return [
+                    EjectedPluginInfo(
+                        name="@elizaos/core",
+                        path=status.ejected_path,
+                        version=status.version,
+                        upstream=status.upstream,
+                    )
+                ]
+        except Exception:
+            pass
+
+        return []

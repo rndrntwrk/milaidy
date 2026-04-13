@@ -7,6 +7,9 @@ from .actions import (
     clipboard_read_action,
     clipboard_search_action,
     clipboard_write_action,
+    read_attachment_action,
+    read_file_action,
+    remove_from_clipboard_action,
 )
 from .providers import clipboard_provider
 from .services import (
@@ -36,6 +39,9 @@ __all__ = [
     "clipboard_read_action",
     "clipboard_search_action",
     "clipboard_write_action",
+    "read_file_action",
+    "read_attachment_action",
+    "remove_from_clipboard_action",
     # Provider
     "clipboard_provider",
     # Services

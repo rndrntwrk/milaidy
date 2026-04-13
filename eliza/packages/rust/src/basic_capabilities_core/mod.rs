@@ -87,6 +87,20 @@ pub fn create_basic_capabilities_plugin(
     // with flag precedence + minimum viable actions/providers.
     let _ = (config.enable_extended, config.enable_autonomy);
 
+    // New built-in capability flags — wired into CapabilityConfig for parity with
+    // TypeScript/Python. The actual component registration happens via
+    // get_advanced_capabilities() (experience, form, clipboard, personality) and
+    // core_capabilities (trust, secrets, plugin_manager) modules.
+    let _ = (
+        config.enable_experience,
+        config.enable_forms,
+        config.enable_clipboard,
+        config.enable_personality,
+        config.enable_trust,
+        config.enable_secrets,
+        config.enable_plugin_manager,
+    );
+
     plugin
 }
 

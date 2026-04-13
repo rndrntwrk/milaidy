@@ -23,16 +23,16 @@
     "baseUrl": ".",
     "paths": {
       "@elizaos/app-lifeops": [
-        "./eliza/plugins/app-lifeops/src/index.ts"
+        "./eliza/apps/app-lifeops/src/index.ts"
       ],
       "@elizaos/app-lifeops/*": [
-        "./eliza/plugins/app-lifeops/src/*"
+        "./eliza/apps/app-lifeops/src/*"
       ],
       "@elizaos/app-companion": [
-        "./eliza/plugins/app-companion/src/index.ts"
+        "./eliza/apps/app-companion/src/index.ts"
       ],
       "@elizaos/app-companion/*": [
-        "./eliza/plugins/app-companion/src/*"
+        "./eliza/apps/app-companion/src/*"
       ],
       "@elizaos/app-core": [
         "./eliza/packages/app-core/src/index.ts"

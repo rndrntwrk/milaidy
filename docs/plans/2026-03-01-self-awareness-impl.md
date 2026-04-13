@@ -1,7 +1,5 @@
 # Agent Self-Awareness System — Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Give the Milady agent runtime perception of its own wallet, permissions, plugins, provider, connectors, cloud, and feature state via a layered lazy-load system with declarative contributor registration.
 
 **Architecture:** A new `AwarenessRegistry` collects `AwarenessContributor` implementations (one per module), composes their summaries into ~300 tokens injected every LLM turn via a new elizaOS provider, and exposes detail via a `GET_SELF_STATUS` action. Six P0 guardrails enforce sanitization, token budgets, failure isolation, event invalidation, versioned contracts, and trust boundaries.

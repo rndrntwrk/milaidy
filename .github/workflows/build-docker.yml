@@ -170,7 +170,7 @@ jobs:
           npx tsdown
           echo '{"type":"module"}' > dist/package.json
           # write-build-info.ts may not exist on all branches — soft fail
-          node --import tsx scripts/write-build-info.ts 2>/dev/null || true
+          node --import tsx eliza/packages/app-core/scripts/write-build-info.ts 2>/dev/null || true
 
       # ── 10. Build UI (vite) ─────────────────────────────────────────────────
       - name: Build UI (vite)

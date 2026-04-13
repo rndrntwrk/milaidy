@@ -1,10 +1,3 @@
-// Looking Glass WebXR polyfill — loaded dynamically in setupLookingGlass()
-// to avoid an eager WebSocket connection to ws://localhost:11222/driver on
-// every page load (the module connects on import).
-type LookingGlassWebXRPolyfillType = new (
-  opts: Record<string, unknown>,
-) => unknown;
-
 import { resolveAppAssetUrl } from "@elizaos/app-core/utils";
 import {
   MToonMaterialLoaderPlugin,
@@ -43,7 +36,6 @@ type TslNode = any;
 import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { VRButton } from "three/examples/jsm/webxr/VRButton.js";
 import {
   type AnimationLoaderContext,
   loadEmoteClip,
@@ -155,7 +147,6 @@ const COMPANION_ZOOM_NEAR_FACTOR = 0.25;
 const COMPANION_ZOOM_MIN_RADIUS = 1.2;
 const MAX_RENDERER_PIXEL_RATIO = 2;
 const AVATAR_RENDERER_OVERRIDE_KEY = "eliza.avatarRenderer";
-const LOOKING_GLASS_ENABLED_KEY = "eliza.avatarLookingGlass";
 const KNOWN_VRM_WEBGPU_WARNING =
   'TSL: "transformedNormalView" is deprecated. Use "normalView" instead.';
 
@@ -163,9 +154,6 @@ let knownVrmWebGpuWarningFilterRefs = 0;
 let releaseKnownVrmWebGpuWarningFilterGlobal: (() => void) | null = null;
 let sharedDracoLoader: DRACOLoader | null = null;
 let teleportSparkleTexture: THREE.CanvasTexture | null = null;
-/** Module-level singleton: the polyfill overrides navigator.xr globally so
- *  multiple instances cause "attempted to assign baselayer twice" errors. */
-let sharedLkgPolyfill: unknown = null;
 let _cachedDracoDecoderPath: string | null = null;
 /** Lazy + cached: module-load resolution can be wrong in bundled/desktop init order. */
 function getDracoDecoderPath(): string {
@@ -204,20 +192,6 @@ function getPreferredAvatarRendererBackend(): RendererBackend {
     return normalizedOverride;
   }
   return isElectrobunAvatarRuntime() ? "webgpu" : "webgl";
-}
-
-function isLookingGlassEnabled(): boolean {
-  if (typeof window === "undefined" || !isElectrobunAvatarRuntime()) {
-    return false;
-  }
-
-  try {
-    const raw = window.localStorage.getItem(LOOKING_GLASS_ENABLED_KEY);
-    const normalized = raw?.trim().toLowerCase();
-    return normalized === "1" || normalized === "true" || normalized === "on";
-  } catch {
-    return false;
-  }
 }
 
 function installKnownVrmWebGpuWarningFilter(): () => void {
@@ -596,9 +570,6 @@ export class VrmEngine {
   private avatarLookTarget: THREE.Group | null = null;
   private headLookTarget = new THREE.Vector2();
   private headLookCurrent = new THREE.Vector2();
-  private lkgVrButton: HTMLElement | null = null;
-  private lkgRenderer: THREE.WebGLRenderer | null = null;
-  private lkgKeyListener: ((e: KeyboardEvent) => void) | null = null;
   private clearEmoteTimeout(): void {
     if (this.emoteTimeout !== null) {
       clearTimeout(this.emoteTimeout);
@@ -1244,11 +1215,6 @@ export class VrmEngine {
           webglRenderer.outputColorSpace = THREE.SRGBColorSpace;
         }
         this.rendererBackend = backend;
-        if (backend === "webgl" && isLookingGlassEnabled()) {
-          // Looking Glass: create a SEPARATE hidden renderer so the main
-          // canvas and camera are never affected by the XR polyfill.
-          this.setupLookingGlass();
-        }
         const scene = new THREE.Scene();
         this.scene = scene;
         // Build construct environment (white void, floating screens, fog)
@@ -1387,148 +1353,12 @@ export class VrmEngine {
     }
     this.renderer = null;
     this.rendererBackend = "webgl";
-    this.disposeLookingGlass();
     this.keyDirectionalLight = null;
     this.scene = null;
     this.avatarRoot = null;
     this.camera = null;
     this.onUpdate = null;
     this.paused = false;
-  }
-
-  /**
-   * Create a separate hidden WebGLRenderer dedicated to the Looking Glass.
-   * This runs independently from the main renderer so the app's canvas and
-   * camera are never affected by the XR polyfill.
-   */
-  private async setupLookingGlass(): Promise<void> {
-    // Remove any stale button / renderer from a previous mount
-    document.getElementById("VRButton")?.remove();
-    this.lkgRenderer?.dispose();
-
-    // Polyfill singleton (overrides navigator.xr globally once).
-    // Dynamic import so the module's WebSocket to localhost:11222 only
-    // opens when Looking Glass is actually enabled.
-    if (!sharedLkgPolyfill) {
-      try {
-        // @ts-expect-error - No type definitions available for lookingglass/webxr yet
-        const mod = await import("@lookingglass/webxr");
-        const Ctor =
-          mod.LookingGlassWebXRPolyfill as LookingGlassWebXRPolyfillType;
-        sharedLkgPolyfill = new Ctor({
-          inlineView: 1,
-          targetY: 1.0,
-          targetZ: 0,
-          targetDiam: 3,
-          fovy: (40 * Math.PI) / 180,
-        });
-      } catch (err) {
-        console.warn("[vrm] Looking Glass WebXR polyfill failed to load:", err);
-        return;
-      }
-    }
-    // Separate hidden canvas + renderer — the polyfill will resize/take over
-    // this canvas, NOT the main app canvas.
-    const lkgCanvas = document.createElement("canvas");
-    lkgCanvas.width = 1;
-    lkgCanvas.height = 1;
-    lkgCanvas.style.cssText =
-      "position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;pointer-events:none;z-index:-1;";
-    document.body.appendChild(lkgCanvas);
-
-    const lkgR = new THREE.WebGLRenderer({
-      canvas: lkgCanvas,
-      alpha: true,
-      antialias: false,
-    });
-    lkgR.xr.enabled = true;
-    this.lkgRenderer = lkgR;
-
-    // LKG render loop: share the scene and camera from the main engine
-    lkgR.setAnimationLoop(() => {
-      const scene = this.scene;
-      const camera = this.camera;
-      if (!scene || !camera) return;
-      lkgR.render(scene, camera);
-    });
-
-    // VRButton creates the Enter VR flow on the LKG renderer
-    const vrBtn = VRButton.createButton(lkgR);
-    vrBtn.id = "VRButton";
-    // Override VRButton's default styles, then force hidden
-    vrBtn.style.cssText =
-      "position:fixed;top:50%;left:20px;transform:translateY(-50%);" +
-      "padding:12px 24px;border:1px solid rgba(255,255,255,0.4);" +
-      "border-radius:8px;background:rgba(0,0,0,0.6);" +
-      "color:#fff;font:13px sans-serif;cursor:pointer;z-index:2147483647;" +
-      "pointer-events:auto;";
-    // Force hidden — must be set after cssText and re-applied if VRButton
-    // resets its style (it uses a timeout to update button text/style).
-    vrBtn.style.display = "none";
-    const lkgBtnObserver = new MutationObserver(() => {
-      if (!this.lkgVrButton) return;
-      if (
-        this.lkgVrButton.dataset.lkgVisible !== "1" &&
-        this.lkgVrButton.style.display !== "none"
-      ) {
-        this.lkgVrButton.style.display = "none";
-      }
-    });
-    lkgBtnObserver.observe(vrBtn, {
-      attributes: true,
-      attributeFilter: ["style"],
-    });
-
-    // Pre-open popup synchronously in user gesture context
-    vrBtn.addEventListener(
-      "click",
-      () => {
-        const popup = window.open("", "new", "width=640,height=360");
-        if (popup) {
-          popup.document.title = "Looking Glass Window (fullscreen me on LKG!)";
-          popup.document.body.style.background = "black";
-        }
-      },
-      true,
-    );
-
-    document.body.appendChild(vrBtn);
-    this.lkgVrButton = vrBtn;
-
-    // Shift+F5 toggles the button visibility
-    const keyListener = (e: KeyboardEvent) => {
-      if (e.shiftKey && e.key === "F5") {
-        e.preventDefault();
-        const btn = this.lkgVrButton;
-        if (btn instanceof HTMLElement) {
-          const show = btn.dataset.lkgVisible !== "1";
-          btn.dataset.lkgVisible = show ? "1" : "0";
-          btn.style.display = show ? "block" : "none";
-        }
-      }
-    };
-    window.addEventListener("keydown", keyListener);
-    this.lkgKeyListener = keyListener;
-  }
-
-  /** Clean up the dedicated Looking Glass renderer and UI. */
-  private disposeLookingGlass(): void {
-    if (this.lkgKeyListener) {
-      window.removeEventListener("keydown", this.lkgKeyListener);
-      this.lkgKeyListener = null;
-    }
-    if (this.lkgVrButton) {
-      this.lkgVrButton.parentElement?.removeChild(this.lkgVrButton);
-      this.lkgVrButton = null;
-    }
-    if (this.lkgRenderer) {
-      this.lkgRenderer.setAnimationLoop(null);
-      this.lkgRenderer.dispose();
-      this.lkgRenderer.domElement.parentElement?.removeChild(
-        this.lkgRenderer.domElement,
-      );
-      this.lkgRenderer = null;
-    }
   }
 
   setPaused(paused: boolean): void {

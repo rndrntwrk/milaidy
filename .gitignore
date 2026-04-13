@@ -101,15 +101,12 @@ src/knowledge/*
 !src/knowledge/history.ts
 !src/knowledge/history.md
 scripts/knowledge-loop.mjs
-# Foundry build artifacts (keep source .sol, foundry.toml, lib/)
-test/contracts/out/
-test/contracts/cache/
 **/__pycache__/
 apps/app/test-results/
 # WhatsApp session files (Baileys auth state)
 /auth/
 :memory:/
-benchmarks/results/
+eliza/packages/benchmarks/app-eval/results/
 !docs/plugins/
 
 # Electrobun compiled native binaries (built locally, not committed)
@@ -149,24 +146,24 @@ data/
 
 # Generated raw avatar/animation assets from local setup hooks (non-source)
 # Companion plugin owns these assets; ensure-avatars.mjs populates them.
-eliza/plugins/app-companion/public/animations/**/*.fbx
-eliza/plugins/app-companion/public/animations/**/*.fbx.gz
-eliza/plugins/app-companion/public/animations/**/*.glb
-eliza/plugins/app-companion/public/animations/**/*.glb.gz
-eliza/plugins/app-companion/public/animations/*.fbx
-eliza/plugins/app-companion/public/animations/*.fbx.gz
-eliza/plugins/app-companion/public/animations/*.glb
-eliza/plugins/app-companion/public/animations/*.glb.gz
-eliza/plugins/app-companion/public/vrms/**/*.vrm
-eliza/plugins/app-companion/public/vrms/**/*.vrm.gz
-eliza/plugins/app-companion/public/vrms/*.vrm
-eliza/plugins/app-companion/public/vrms/*.vrm.gz
-eliza/plugins/app-companion/public/vrms/imported-avatars.json
-eliza/plugins/app-companion/public/vrms/backgrounds/*.png
-eliza/plugins/app-companion/public/vrms/previews/*.png
-eliza/plugins/app-companion/public/vrms/backgrounds/*.jpg
-eliza/plugins/app-companion/public/vrms/previews/*.jpg
-eliza/plugins/app-companion/public/vrms/*.jpg
+eliza/apps/app-companion/public/animations/**/*.fbx
+eliza/apps/app-companion/public/animations/**/*.fbx.gz
+eliza/apps/app-companion/public/animations/**/*.glb
+eliza/apps/app-companion/public/animations/**/*.glb.gz
+eliza/apps/app-companion/public/animations/*.fbx
+eliza/apps/app-companion/public/animations/*.fbx.gz
+eliza/apps/app-companion/public/animations/*.glb
+eliza/apps/app-companion/public/animations/*.glb.gz
+eliza/apps/app-companion/public/vrms/**/*.vrm
+eliza/apps/app-companion/public/vrms/**/*.vrm.gz
+eliza/apps/app-companion/public/vrms/*.vrm
+eliza/apps/app-companion/public/vrms/*.vrm.gz
+eliza/apps/app-companion/public/vrms/imported-avatars.json
+eliza/apps/app-companion/public/vrms/backgrounds/*.png
+eliza/apps/app-companion/public/vrms/previews/*.png
+eliza/apps/app-companion/public/vrms/backgrounds/*.jpg
+eliza/apps/app-companion/public/vrms/previews/*.jpg
+eliza/apps/app-companion/public/vrms/*.jpg
 apps/app/ios/App/build*/
 
 # Ignored caches

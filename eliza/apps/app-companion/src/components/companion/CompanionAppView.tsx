@@ -27,7 +27,7 @@ import {
   useState,
 } from "react";
 import { ChatModalView } from "@elizaos/app-core/components/pages/ChatModalView";
-import { PtyConsoleSidePanel } from "@elizaos/app-core/components/coding/PtyConsoleSidePanel";
+import { PtyConsoleSidePanel } from "@elizaos/app-coding/PtyConsoleSidePanel";
 import { useCompanionSceneStatus } from "./companion-scene-status-context";
 
 const CharacterEditor = lazy(() =>

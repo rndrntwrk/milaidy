@@ -226,8 +226,31 @@ class ValidationResult:
     details: str | None = None
 
 
-# Callback types
+@dataclass
+class PendingPluginActivation:
+    """Plugin activation registration."""
+
+    plugin_id: str
+    required_secrets: list[str]
+    callback: Callable[[], Awaitable[None]]
+    registered_at: float
+
+
+@dataclass
+class PluginActivatorConfig:
+    """Plugin activator service configuration."""
+
+    enable_auto_activation: bool = True
+    polling_interval_ms: int = 5000
+    max_wait_ms: int = 0  # 0 = wait forever
+
+
+# Also define SecretMetadata as a type alias used by storage/service.
+SecretMetadata = dict[str, SecretConfig]
+
+# Callback / function types
 SecretChangeCallback = Callable[[str, str | None, SecretContext], Awaitable[None]]
+CustomValidator = Callable[[str, str], Awaitable[ValidationResult]]
 
 
 # ---------------------------------------------------------------------------

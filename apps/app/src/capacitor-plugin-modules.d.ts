@@ -76,6 +76,5 @@ declare module "@elizaos/capacitor-websiteblocker" {
   export const WebsiteBlocker: WebsiteBlockerPluginType;
 }
 
-declare module "@elizaos/plugin-coding-agent";
 declare module "@elizaos/signal-native";
 declare module "qrcode";

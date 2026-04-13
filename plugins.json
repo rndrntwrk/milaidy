@@ -1639,8 +1639,8 @@
           "default": "2.0.0-alpha"
         }
       },
-      "homepage": "https://github.com/elizaos-plugins/plugin-elizacloud#readme",
-      "repository": "https://github.com/elizaos-plugins/plugin-elizacloud"
+      "homepage": "https://github.com/milady-ai/milady/tree/develop/packages/plugin-elizacloud#readme",
+      "repository": "https://github.com/milady-ai/milady"
     },
     {
       "id": "evm",

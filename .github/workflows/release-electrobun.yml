@@ -154,18 +154,18 @@ jobs:
           if-no-files-found: error
 
       - name: Align version with release tag
-        run: node scripts/align-electrobun-version.mjs
+        run: node eliza/packages/app-core/scripts/align-electrobun-version.mjs
         env:
           RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
 
       - name: Ensure avatar assets
-        run: node scripts/ensure-avatars.mjs
+        run: node eliza/packages/app-core/scripts/ensure-avatars.mjs
 
       - name: Build core dist (server bundle)
         run: |
           bunx tsdown
           echo '{"type":"module"}' > dist/package.json
-          node --import tsx scripts/write-build-info.ts
+          node --import tsx eliza/packages/app-core/scripts/write-build-info.ts
 
       - name: Run heavy E2E regression suite
         run: bun run test:e2e:heavy
@@ -178,7 +178,7 @@ jobs:
           ELIZAOS_CLOUD_BASE_URL: ${{ secrets.ELIZAOS_CLOUD_BASE_URL }}
 
       - name: Restore build metadata after test rebuilds
-        run: node --import tsx scripts/write-build-info.ts
+        run: node --import tsx eliza/packages/app-core/scripts/write-build-info.ts
 
       - name: Release readiness checks
         env:
@@ -368,7 +368,7 @@ jobs:
           cp .artifacts/whisper-model/ggml-base.en.bin "$HOME/.cache/milady/whisper/ggml-base.en.bin"
 
       - name: Align version with release tag
-        run: node scripts/align-electrobun-version.mjs
+        run: node eliza/packages/app-core/scripts/align-electrobun-version.mjs
         env:
           RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
 
@@ -514,7 +514,7 @@ jobs:
         if: matrix.platform.os == 'windows'
         shell: bash
         run: |
-          node scripts/build-patched-electrobun-cli.mjs "${{ steps.resolve-electrobun.outputs.package-dir }}"
+          node eliza/packages/app-core/scripts/build-patched-electrobun-cli.mjs "${{ steps.resolve-electrobun.outputs.package-dir }}"
 
       - name: Build Electrobun app
         run: |
@@ -670,7 +670,7 @@ jobs:
           WINDOWS_SIGN_TIMESTAMP_URL: ${{ secrets.WINDOWS_SIGN_TIMESTAMP_URL }}
         shell: pwsh
         run: |
-          pwsh -File packaging/inno/build-inno.ps1 `
+          pwsh -File eliza/packages/app-core/packaging/inno/build-inno.ps1 `
             -BuildDir "C:\m" `
             -OutputDir (Join-Path $PWD "apps/app/electrobun/artifacts") `
             -Version "${{ needs.prepare.outputs.version }}" `
@@ -910,7 +910,7 @@ jobs:
           WINDOWS_SIGN_TIMESTAMP_URL: ${{ secrets.WINDOWS_SIGN_TIMESTAMP_URL }}
         shell: pwsh
         run: |
-          pwsh -File packaging/msix/build-msix.ps1 `
+          pwsh -File eliza/packages/app-core/packaging/msix/build-msix.ps1 `
             -BuildDir (Join-Path $PWD "apps/app/electrobun/build") `
             -OutputDir (Join-Path $PWD "apps/app/electrobun/artifacts") `
             -Version "${{ needs.prepare.outputs.version }}"

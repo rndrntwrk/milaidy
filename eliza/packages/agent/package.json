@@ -89,6 +89,7 @@
     "./utils": "./src/utils/index.ts",
     "./utils/*": "./src/utils/*.ts",
     "./version-resolver": "./src/version-resolver.ts",
+    "./services/app-session-gate": "./src/services/app-session-gate.ts",
     "./services/signal-pairing": "./src/services/signal-pairing.ts",
     "./services/whatsapp-pairing": "./src/services/whatsapp-pairing.ts",
     "./services/plugin-manager-types": "./src/services/plugin-manager-types.ts",

@@ -791,7 +791,7 @@ function watchWorkspacePackagesPlugin(): Plugin {
 function companionAssetsPlugin(): Plugin {
   const companionPublic = path.resolve(
     miladyRoot,
-    "eliza/plugins/app-companion/public",
+    "eliza/apps/app-companion/public",
   );
   return {
     name: "companion-assets",
@@ -937,20 +937,64 @@ export default defineConfig({
           "websiteblocker/src/index.ts",
         ),
       },
-      {
-        find: /^@elizaos\/app-lifeops\/(.*)/,
-        replacement: path.resolve(
+      // Dynamic aliases for all eliza/apps/* packages
+      ...(() => {
+        const appsDir = path.resolve(miladyRoot, "eliza/apps");
+        const aliases = [];
+        for (const entry of fs.readdirSync(appsDir, { withFileTypes: true })) {
+          if (!entry.isDirectory()) continue;
+          const pkgPath = path.join(appsDir, entry.name, "package.json");
+          if (!fs.existsSync(pkgPath)) continue;
+          const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+          const pkgName = pkg.name;
+          if (!pkgName) continue;
+          const pkgDir = path.dirname(pkgPath);
+          // Generate export-map aliases
+          for (const [key, value] of Object.entries(pkg.exports || {})) {
+            if (typeof value !== "string") continue;
+            const aliasKey =
+              key === "." ? pkgName : `${pkgName}/${key.replace(/^\.\//, "")}`;
+            aliases.push({
+              find: new RegExp(
+                `^${aliasKey.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`,
+              ),
+              replacement: path.resolve(pkgDir, value),
+            });
+          }
+          // Catch-all subpath for direct src/ access
+          aliases.push({
+            find: new RegExp(
+              `^${pkgName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/(.*)`,
+            ),
+            replacement: path.resolve(pkgDir, "src/$1"),
+          });
+        }
+        return aliases;
+      })(),
+      ...(() => {
+        const sharedPkgPath = path.resolve(
           miladyRoot,
-          "eliza/plugins/app-lifeops/src/$1",
-        ),
-      },
-      {
-        find: /^@elizaos\/app-lifeops$/,
-        replacement: path.resolve(
-          miladyRoot,
-          "eliza/plugins/app-lifeops/src/index.ts",
-        ),
-      },
+          "eliza/packages/shared/package.json",
+        );
+        const sharedPkgDir = path.dirname(sharedPkgPath);
+        const sharedPkg = JSON.parse(fs.readFileSync(sharedPkgPath, "utf8"));
+        const aliases = [];
+        for (const [key, value] of Object.entries(sharedPkg.exports || {})) {
+          if (typeof value === "string") {
+            const aliasKey =
+              key === "."
+                ? "@elizaos/shared"
+                : `@elizaos/shared/${key.replace(/^\.\//, "")}`;
+            aliases.push({
+              find: new RegExp(
+                `^${aliasKey.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`,
+              ),
+              replacement: path.resolve(sharedPkgDir, value),
+            });
+          }
+        }
+        return aliases;
+      })(),
       // Force local @elizaos/app-core when workspace-linked (prevents stale
       // bun cache copies from overriding the symlinked local source).
       ...(() => {
@@ -1039,7 +1083,6 @@ export default defineConfig({
       "three/examples/jsm/loaders/DRACOLoader.js",
       "three/examples/jsm/loaders/GLTFLoader.js",
       "three/examples/jsm/loaders/FBXLoader.js",
-      "three/examples/jsm/webxr/VRButton.js",
     ],
     // Remap node: builtins to npm polyfills during dep optimization so
     // esbuild doesn't externalize them as "browser-external:node:*".
@@ -1097,10 +1140,7 @@ export default defineConfig({
       "@node-llama-cpp/mac-arm64-metal",
       // Contains native-only pty-state-capture import; skip pre-bundling.
       "@elizaos/core/agent-orchestrator",
-      // Ships its own @elizaos/core copy that references exports missing from
-      // the browser entry; skip pre-bundling so it's served on-demand via the
-      // transform plugin that patches missing exports.
-      "@elizaos/plugin-secrets-manager",
+      // @elizaos/plugin-secrets-manager is now built into @elizaos/core core-capabilities
       // Node-only HTTP client — crashes in browser, stub via nativeModuleStubPlugin
       "undici",
       // Native LLM embedding — uses node-llama-cpp, never runs in browser
@@ -1141,7 +1181,6 @@ export default defineConfig({
       },
       input: {
         main: path.resolve(here, "index.html"),
-        screenshotter: path.resolve(here, "public_src/screenshotter.html"),
       },
       output: {
         manualChunks: resolveManualChunk,

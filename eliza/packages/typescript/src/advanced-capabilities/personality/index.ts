@@ -4,7 +4,9 @@
  */
 
 export * from "./types.ts";
-export { CharacterFileManager } from "./services/character-file-manager.ts";
+// CharacterFileManager is lazy-loaded in advancedServices (advanced-capabilities/index.ts)
+// to avoid circular dependency with @elizaos/core
+export type { CharacterFileManager } from "./services/character-file-manager.ts";
 export { modifyCharacterAction } from "./actions/modify-character.ts";
 export { characterEvolutionEvaluator } from "./evaluators/character-evolution.ts";
 export { userPersonalityProvider } from "./providers/user-personality.ts";
