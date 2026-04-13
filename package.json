@@ -111,9 +111,6 @@
     "tui:dev": "MILADY_PROFILE=dev scripts/rt.sh scripts/run-node.mjs --dev tui",
     "db:reset": "scripts/rt.sh scripts/run-node.mjs db reset",
     "doctor": "scripts/rt.sh scripts/run-node.mjs doctor",
-    "evals:alice:baseline": "bun --bun scripts/run-alice-evals.ts --mode baseline",
-    "evals:alice:compare": "bun --bun scripts/run-alice-evals.ts --mode compare",
-    "evals:alice:validate": "bun --bun scripts/run-alice-evals.ts --mode validate",
     "repair": "node scripts/run-repo-setup.mjs",
     "build:win": "node scripts/build-win.mjs",
     "dev:win": "node scripts/dev-win.mjs"

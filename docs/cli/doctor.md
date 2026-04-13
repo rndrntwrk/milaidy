@@ -1,105 +1,81 @@
 ---
 title: "milady doctor"
 sidebarTitle: "doctor"
-description: "Run diagnostics to verify your Milady installation."
+description: "Run diagnostics to verify your Milady installation (planned)."
 ---
 
-`milady doctor` runs a real health check over the current Milady environment. It inspects runtime prerequisites, config resolution, model-provider setup, storage paths, and optional port availability, then prints either a human-readable report or JSON for CI.
+<Warning>
+The `doctor` command is **not yet implemented**. This page describes the planned behavior for an upcoming release. Running `milady doctor` will currently produce an "unknown command" error.
+</Warning>
 
-## Usage
+The `doctor` command will run a suite of diagnostic checks to verify that your Milady installation is healthy and properly configured. It will inspect the runtime environment, configuration, API key availability, plugin state, and network connectivity, then print a structured report with pass/fail indicators and suggested fixes.
+
+## Planned Usage
 
 ```bash
 milady doctor
 ```
 
-## Options
-
-| Flag | Description |
-|------|-------------|
-| `--no-ports` | Skip the port availability checks |
-| `--fix` | Auto-run any safe Milady sub-command fixes |
-| `--json` | Emit machine-readable JSON instead of terminal output |
-
-## Checks
+## Planned Diagnostic Checks
 
 ### Runtime
 
 | Check | Pass Condition |
 |-------|---------------|
-| Runtime | Bun or Node meets the minimum runtime requirement |
-| `node_modules` | Dependencies are installed in the current project root |
-| Build artifacts | `dist/entry.js` exists, or a source-run warning is emitted |
+| Node.js / Bun version | Runtime meets minimum version requirement |
+| CLI version | Installed version matches the latest on the active channel |
+| Config file readable | `~/.milady/milady.json` exists and is valid JSON |
+| State directory writable | `~/.milady/` can be written to |
 
 ### Configuration
 
 | Check | Pass Condition |
 |-------|---------------|
-| Config file | Resolved config file exists and parses successfully |
-| Model API key | At least one supported provider variable is configured |
-| Host binding | Bind/token configuration is safe for the current host exposure |
+| Config file valid | File parses without errors and matches the expected schema |
+| Workspace directory | Workspace directory exists and contains bootstrap files |
+| Config path resolution | `MILADY_STATE_DIR` and `MILADY_CONFIG_PATH` resolve to accessible paths |
 
-### Storage
+### API Keys
 
 | Check | Pass Condition |
 |-------|---------------|
-| State directory | Resolved state directory exists or is safely creatable |
-| Database | Database path exists, or a warning explains that it will be created on first start |
-| Disk space | The state volume has enough free space |
+| At least one model provider configured | One or more model provider environment variables is set |
+| Anthropic API key | `ANTHROPIC_API_KEY` is set (checked if present) |
+| OpenAI API key | `OPENAI_API_KEY` is set (checked if present) |
+| Other provider keys | Any other provider keys detected |
 
 ### Connectivity
 
 | Check | Pass Condition |
 |-------|---------------|
-| Port `31337` | The runtime port is available, or doctor warns who is using it |
-| Port `2138` | The Control UI/API port is available, or doctor warns who is using it |
+| API server reachable | Port `2138` (or `MILADY_PORT`) responds to a TCP probe |
+| npm registry reachable | The plugin registry endpoint is accessible |
 
-## Example
+### Plugins
 
-```bash
-milady doctor --no-ports
-```
+| Check | Pass Condition |
+|-------|---------------|
+| Custom plugins valid | All plugins in `~/.milady/plugins/custom/` pass the plugin validation test |
+| Plugin registry cache | Registry cache file is present and not stale |
+| Installed plugins | All registry-installed plugins are present on disk |
 
-```text
-Milady Health Check
+## Workarounds Until `doctor` Exists
 
-  System
-  ✓ Runtime              Bun 1.3.1
-  ✓ node_modules         /path/to/repo/node_modules
-  ✓ Build artifacts      /path/to/repo/dist
-
-  Configuration
-  ✓ Config file          /tmp/mld008-state-proof/milady.json
-  ✓ Model API key        OLLAMA_BASE_URL set (Ollama (local))
-  ✓ Host binding         Loopback only (default)
-
-  Storage
-  ✓ State directory      /tmp/mld008-state-proof
-  ✓ Database             /tmp/mld008-state-proof/workspace/.eliza/.elizadb
-  ✓ Disk space           15.5 GB free
-
-  Everything looks good. Ready to run milady start.
-```
-
-## JSON Mode
-
-Use JSON mode for automation or acceptance evidence:
+You can manually verify your installation using existing commands:
 
 ```bash
-milady doctor --json --no-ports
-```
+# Check model providers
+milady models
 
-Doctor exits non-zero when any check returns `fail`.
+# Validate custom plugins
+milady plugins test
 
-## Auto-fix
+# Inspect config file location and values
+milady config path
+milady config show
 
-`--fix` only runs safe Milady subcommands such as `milady setup`. It does not shell out to arbitrary remediation strings.
-
-## Source Checkout Validation
-
-If you are validating from a source checkout instead of an installed CLI, use the repo runner:
-
-```bash
-bun scripts/run-node.mjs doctor --no-ports
+# Verify workspace setup
+milady setup
 ```
 
 ## Related
