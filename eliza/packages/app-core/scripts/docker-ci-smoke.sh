@@ -157,6 +157,10 @@ log "Installing dependencies"
 node scripts/init-submodules.mjs
 node scripts/disable-local-eliza-workspace.mjs
 bun install --ignore-scripts
+if [[ -d "$REPO_ROOT/.eliza.ci-disabled" && ! -d "$REPO_ROOT/eliza" ]]; then
+  log "Restoring eliza/ from .eliza.ci-disabled for downstream build steps"
+  mv "$REPO_ROOT/.eliza.ci-disabled" "$REPO_ROOT/eliza"
+fi
 
 log "Running repository postinstall"
 SKIP_AVATAR_CLONE=1 ELIZA_NO_VISION_DEPS=1 bun run postinstall
