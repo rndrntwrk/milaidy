@@ -34,6 +34,7 @@ const { TEST_VRM_ASSETS } = vi.hoisted(() => {
 import {
   getDefaultBundledVrmIndex,
   getCompanionBackgroundUrl,
+  getVrmBackgroundUrl,
   getVrmPreviewUrl,
   getVrmTitle,
   getVrmUrl,
@@ -90,15 +91,35 @@ describe("Avatar VRM Utilities", () => {
         "milady-9",
       ];
       expectedSlugs.forEach((slug, index) => {
-        expect(getVrmPreviewUrl(index + 1)).toBe(`/vrms/previews/${slug}.png`);
+        const version = slug === "milady-9" ? "?v=20260413-alice-capture" : "";
+        expect(getVrmPreviewUrl(index + 1)).toBe(
+          `/vrms/previews/${slug}.png${version}`,
+        );
       });
     });
 
     it("clamps out-of-range preview indices to the default bundled avatar", () => {
-      expect(getVrmPreviewUrl(10)).toBe("/vrms/previews/milady-9.png");
-      expect(getVrmPreviewUrl(999)).toBe("/vrms/previews/milady-9.png");
-      expect(getVrmPreviewUrl(-1)).toBe("/vrms/previews/milady-9.png");
-      expect(getVrmPreviewUrl(0)).toBe("/vrms/previews/milady-9.png");
+      expect(getVrmPreviewUrl(10)).toBe(
+        "/vrms/previews/milady-9.png?v=20260413-alice-capture",
+      );
+      expect(getVrmPreviewUrl(999)).toBe(
+        "/vrms/previews/milady-9.png?v=20260413-alice-capture",
+      );
+      expect(getVrmPreviewUrl(-1)).toBe(
+        "/vrms/previews/milady-9.png?v=20260413-alice-capture",
+      );
+      expect(getVrmPreviewUrl(0)).toBe(
+        "/vrms/previews/milady-9.png?v=20260413-alice-capture",
+      );
+    });
+  });
+
+  describe("getVrmBackgroundUrl", () => {
+    it("cache-busts Alice background captures without changing other avatars", () => {
+      expect(getVrmBackgroundUrl(8)).toBe("/vrms/backgrounds/milady-8.png");
+      expect(getVrmBackgroundUrl(9)).toBe(
+        "/vrms/backgrounds/milady-9.png?v=20260413-alice-capture",
+      );
     });
   });
 

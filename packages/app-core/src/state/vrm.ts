@@ -13,6 +13,15 @@ import { DEFAULT_VISUAL_AVATAR_INDEX } from "@miladyai/shared/onboarding-presets
  * a `default.vrm.gz` URL 404s and breaks the companion in desktop/WebView.
  */
 const BUNDLED_VRM_FALLBACK_SLUG = "milady-1";
+const BUNDLED_AVATAR_IMAGE_VERSION_BY_SLUG: Record<string, string> = {
+  "milady-9": "20260413-alice-capture",
+};
+
+function resolveBundledAvatarImageUrl(assetPath: string, slug: string): string {
+  const version = BUNDLED_AVATAR_IMAGE_VERSION_BY_SLUG[slug];
+  const versionedPath = version ? `${assetPath}?v=${version}` : assetPath;
+  return resolveAppAssetUrl(versionedPath);
+}
 
 /**
  * Get the VRM asset roster from the boot config.
@@ -86,7 +95,7 @@ export function getVrmPreviewUrl(index: number): string {
   const n = normalizeAvatarIndex(index);
   const safe = n > 0 ? n : getDefaultBundledVrmIndex();
   const slug = assets[safe - 1]?.slug ?? assets[0]?.slug ?? "default";
-  return resolveAppAssetUrl(`vrms/previews/${slug}.png`);
+  return resolveBundledAvatarImageUrl(`vrms/previews/${slug}.png`, slug);
 }
 
 /** Resolve a bundled VRM index (1-N) to its custom background URL. */
@@ -99,7 +108,7 @@ export function getVrmBackgroundUrl(index: number): string {
   const n = normalizeAvatarIndex(index);
   const safe = n > 0 ? n : getDefaultBundledVrmIndex();
   const slug = assets[safe - 1]?.slug ?? assets[0]?.slug ?? "default";
-  return resolveAppAssetUrl(`vrms/backgrounds/${slug}.png`);
+  return resolveBundledAvatarImageUrl(`vrms/backgrounds/${slug}.png`, slug);
 }
 
 const COMPANION_THEME_BACKGROUND_INDEX: Record<UiTheme, number> = {

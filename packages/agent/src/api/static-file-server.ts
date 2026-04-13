@@ -202,9 +202,11 @@ export function serveStaticUi(
     if (stat.isFile()) {
       const ext = path.extname(candidatePath).toLowerCase();
       const body = getCachedFile(candidatePath, stat.mtimeMs);
-      const isPreviewOrBinaryAsset =
+      const isBundledAvatarImageAsset =
         relativePath.startsWith("vrms/previews/") ||
-        relativePath.startsWith("vrms/backgrounds/") ||
+        relativePath.startsWith("vrms/backgrounds/");
+      const isPreviewOrBinaryAsset =
+        isBundledAvatarImageAsset ||
         [
           ".png",
           ".jpg",
@@ -224,6 +226,8 @@ export function serveStaticUi(
         ].includes(ext);
       const cacheControl = relativePath.startsWith("assets/")
         ? "public, max-age=31536000, immutable"
+        : isBundledAvatarImageAsset
+          ? "public, max-age=0, must-revalidate"
         : ext === ".vrm" ||
             relativePath.endsWith(".vrm.gz") ||
             isPreviewOrBinaryAsset
