@@ -11,7 +11,7 @@ const repoRoot = path.resolve(here, "..", "..");
 const bunCmd = process.env.npm_execpath || process.env.BUN || "bun";
 const nodeCmd = resolveNodeCmd();
 const appRoot = path.join(repoRoot, "apps", "app");
-const unitShardCount = 8;
+const unitShardCount = 1;
 
 await runManagedTestCommand({
   repoRoot,
