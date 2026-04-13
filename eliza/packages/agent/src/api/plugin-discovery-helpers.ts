@@ -26,7 +26,7 @@ import {
   type PluginParamInfo,
   validatePluginConfig,
 } from "./plugin-validation.js";
-import { findOwnPackageRoot } from "./server.js";
+import { findOwnPackageRoot } from "./server-helpers.js";
 import { applySignalQrOverride } from "./signal-routes.js";
 import { applyWhatsAppQrOverride } from "./whatsapp-routes.js";
 
@@ -53,20 +53,7 @@ function findPluginsManifestRoot(startDir: string): string {
   return manifestRoot ?? findOwnPackageRoot(startDir);
 }
 
-export interface PluginParamDef {
-  key: string;
-  type: string;
-  description: string;
-  required: boolean;
-  sensitive: boolean;
-  default?: string;
-  /** Predefined options for dropdown selection (e.g. model names). */
-  options?: string[];
-  /** Current value from process.env (masked if sensitive). */
-  currentValue: string | null;
-  /** Whether a value is currently set in the environment. */
-  isSet: boolean;
-}
+export type { PluginParamDef } from "./server-types.js";
 
 export interface PluginEntry {
   id: string;
