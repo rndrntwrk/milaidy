@@ -98,6 +98,20 @@ function getMessageGroupingKey(message: ChatMessageData): string {
   return `user:${source}|${senderName}|${senderHandle}|${avatarUrl}`;
 }
 
+function buildTranscriptMessageKeys(
+  messages: ChatMessageData[],
+  prefix = "",
+): string[] {
+  const counts = new Map<string, number>();
+  return messages.map((message, index) => {
+    const baseId = message.id || `message-${index}`;
+    const baseKey = prefix ? `${prefix}-${baseId}` : baseId;
+    const count = counts.get(baseKey) ?? 0;
+    counts.set(baseKey, count + 1);
+    return count === 0 ? baseKey : `${baseKey}:${count}`;
+  });
+}
+
 export const ChatTranscript = memo(function ChatTranscript({
   agentName = "Agent",
   carryoverMessages = [],
@@ -114,15 +128,20 @@ export const ChatTranscript = memo(function ChatTranscript({
   variant = "default",
 }: ChatTranscriptProps) {
   const normalizedMessages = messages.map(normalizeTranscriptMessage);
+  const messageKeys = buildTranscriptMessageKeys(normalizedMessages);
 
   if (variant === "game-modal") {
+    const carryoverMessageKeys = buildTranscriptMessageKeys(
+      carryoverMessages,
+      "carryover",
+    );
     return (
       <div className="flex min-h-full w-full flex-col justify-end gap-4 px-1 py-4">
-        {carryoverMessages.map((message) => {
+        {carryoverMessages.map((message, index) => {
           const isUser = message.role === "user";
           return (
             <div
-              key={`carryover-${message.id}`}
+              key={carryoverMessageKeys[index]}
               data-testid="companion-message-row"
               data-companion-carryover="true"
               className={`flex w-full ${isUser ? "justify-end" : "justify-start"}`}
@@ -147,11 +166,11 @@ export const ChatTranscript = memo(function ChatTranscript({
             </div>
           );
         })}
-        {normalizedMessages.map((message) => {
+        {normalizedMessages.map((message, index) => {
           const isUser = message.role === "user";
           return (
             <div
-              key={message.id}
+              key={messageKeys[index]}
               data-testid="companion-message-row"
               className={`flex w-full ${isUser ? "justify-end" : "justify-start"}`}
             >
@@ -199,7 +218,7 @@ export const ChatTranscript = memo(function ChatTranscript({
 
         return (
           <ChatMessage
-            key={message.id}
+            key={messageKeys[index]}
             message={message}
             isGrouped={isGrouped}
             agentName={agentName}

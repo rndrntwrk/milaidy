@@ -102,6 +102,28 @@ type ChatAction =
   | { type: "SET_PENDING_IMAGES"; value: ImageAttachment[] }
   | { type: "RESET_DRAFT" };
 
+function dedupeConversationMessagesById(
+  messages: ConversationMessage[],
+): ConversationMessage[] {
+  const seen = new Set<string>();
+  const deduped: ConversationMessage[] = [];
+  let changed = false;
+
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message.id && seen.has(message.id)) {
+      changed = true;
+      continue;
+    }
+    if (message.id) {
+      seen.add(message.id);
+    }
+    deduped.push(message);
+  }
+
+  return changed ? deduped.reverse() : messages;
+}
+
 function chatReducer(state: ChatState, action: ChatAction): ChatState {
   switch (action.type) {
     case "SET_FIELD":
@@ -131,6 +153,13 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
     case "SET_MESSAGES":
       return { ...state, conversationMessages: action.value };
     case "APPEND_MESSAGE":
+      if (
+        state.conversationMessages.some(
+          (message) => message.id === action.message.id,
+        )
+      ) {
+        return state;
+      }
       return {
         ...state,
         conversationMessages: [...state.conversationMessages, action.message],
@@ -332,8 +361,9 @@ export function useChatState(): ChatStateHook {
     ) => {
       const next =
         typeof v === "function" ? v(conversationMessagesRef.current) : v;
-      conversationMessagesRef.current = next;
-      dispatch({ type: "SET_MESSAGES", value: next });
+      const deduped = dedupeConversationMessagesById(next);
+      conversationMessagesRef.current = deduped;
+      dispatch({ type: "SET_MESSAGES", value: deduped });
     },
     [],
   ) as React.Dispatch<React.SetStateAction<ConversationMessage[]>>;

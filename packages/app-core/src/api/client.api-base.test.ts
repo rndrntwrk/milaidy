@@ -172,6 +172,55 @@ describe("MiladyClient runtime API base/token fallback", () => {
     );
   });
 
+  it("captures LifeOps activity signals through the shipped client", async () => {
+    const { setBootConfig, DEFAULT_BOOT_CONFIG } = await import(
+      "../config/boot-config"
+    );
+    const { MiladyClient } = await import("./client");
+
+    setBootConfig(DEFAULT_BOOT_CONFIG);
+    const request = {
+      source: "page_visibility" as const,
+      platform: "web_app",
+      state: "active" as const,
+    };
+    const response = {
+      signal: {
+        id: "signal-1",
+        agentId: "agent-1",
+        source: request.source,
+        platform: request.platform,
+        state: request.state,
+        observedAt: "2026-04-13T00:00:00.000Z",
+        createdAt: "2026-04-13T00:00:00.000Z",
+        idleState: null,
+        idleTimeSeconds: null,
+        onBattery: null,
+        health: null,
+        metadata: {},
+      },
+    };
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(response), {
+        status: 201,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    const client = new MiladyClient();
+    await expect(client.captureLifeOpsActivitySignal(request)).resolves.toEqual(
+      response,
+    );
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "http://127.0.0.1:31337/api/lifeops/activity-signals",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify(request),
+      }),
+    );
+  });
+
   it("aborts timed-out requests instead of leaving fetches pending", async () => {
     vi.useFakeTimers();
     try {

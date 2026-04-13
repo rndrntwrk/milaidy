@@ -216,6 +216,33 @@ describe("ChatTranscript", () => {
     expect(screen.getByText("Again")).toBeInTheDocument();
   });
 
+  it("does not emit duplicate-key warnings when upstream repeats a message id", () => {
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    try {
+      render(
+        <ChatTranscript
+          agentName="Alice"
+          messages={[
+            { id: "duplicate-message", role: "assistant", text: "First" },
+            { id: "duplicate-message", role: "assistant", text: "Second" },
+          ]}
+        />,
+      );
+
+      expect(screen.getByText("First")).toBeInTheDocument();
+      expect(screen.getByText("Second")).toBeInTheDocument();
+      expect(
+        consoleErrorSpy.mock.calls.filter((args) =>
+          String(args[0]).includes("Encountered two children"),
+        ),
+      ).toHaveLength(0);
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
+
   it("renders sender identity for external user messages without a source pill", () => {
     render(
       <ChatTranscript

@@ -82,6 +82,10 @@ import type {
   WalletTradingProfileWindow,
 } from "@miladyai/agent/contracts/wallet";
 import type { AvatarSpeechManifest } from "@miladyai/shared/contracts";
+import type {
+  CaptureLifeOpsActivitySignalRequest,
+  LifeOpsActivitySignal,
+} from "@miladyai/shared/contracts/lifeops";
 import {
   DEFAULT_WALLET_RPC_SELECTIONS,
   normalizeWalletRpcProviderId,
@@ -2310,12 +2314,13 @@ export class MiladyClient {
       typeof window !== "undefined"
         ? window.sessionStorage.getItem(SESSION_STORAGE_API_BASE_KEY)
         : null;
-    this._explicitBase = baseUrl != null || Boolean(storedBase?.trim());
+    this._explicitBase = baseUrl != null;
     this._token = token?.trim() || null;
-    // Priority: explicit arg > session storage(base only) > boot config > same origin (Vite proxy)
+    // Priority: explicit arg > boot/runtime injection > session storage(base only) > same origin.
+    // Session storage can survive a prior local runtime; it must not beat the
+    // boot config injected by the current shell/server process.
     const bootBase = getBootConfig().apiBase;
-    this._baseUrl =
-      baseUrl ?? storedBase ?? bootBase ?? getElizaApiBase() ?? "";
+    this._baseUrl = baseUrl ?? bootBase ?? getElizaApiBase() ?? storedBase ?? "";
   }
 
   /**
@@ -2983,6 +2988,15 @@ export class MiladyClient {
     return this.fetch("/api/avatar/manifest", {
       method: "POST",
       body: JSON.stringify(manifest),
+    });
+  }
+
+  async captureLifeOpsActivitySignal(
+    data: CaptureLifeOpsActivitySignalRequest,
+  ): Promise<{ signal: LifeOpsActivitySignal }> {
+    return this.fetch("/api/lifeops/activity-signals", {
+      method: "POST",
+      body: JSON.stringify(data),
     });
   }
 
