@@ -90,7 +90,6 @@
     "@capacitor/preferences": "^8.0.1",
     "@elizaos/core": "workspace:*",
     "@elizaos/agent": "workspace:*",
-    "@elizaos/app-companion": "workspace:*",
     "@elizaos/plugin-wechat": "github:milady-ai/plugin-wechat",
     "@lookingglass/webxr": "^0.6.0",
     "@elizaos/app-core": "workspace:*",
@@ -122,8 +121,6 @@
     "directory": "dist"
   },
   "devDependencies": {
-    "@elizaos/plugin-agent-skills": "workspace:*",
-    "@elizaos/plugin-plugin-manager": "workspace:*",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/react": "^16.3.2",
     "@types/react": "^19.0.0",

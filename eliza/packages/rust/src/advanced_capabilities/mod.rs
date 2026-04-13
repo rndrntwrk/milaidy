@@ -6,8 +6,17 @@
 //! - Extended providers (facts, knowledge, relationships, etc.)
 //! - Evaluators (reflection, relationship extraction)
 //! - Extended services (relationships, follow-up scheduling)
+//! - Experience tracking and learning
+//! - Form-based user journeys
+//! - Task clipboard / working memory
+//! - Personality evolution and per-user preferences
 //!
 //! These capabilities are re-exported from the basic_capabilities module for organizational clarity.
+
+pub mod clipboard;
+pub mod experience;
+pub mod form;
+pub mod personality;
 
 // Re-export advanced capabilities from basic_capabilities
 pub use crate::basic_capabilities::actions::{

@@ -355,8 +355,13 @@ export function runInitSubmodules({
       "[init-submodules] Ensuring nested checkouts under eliza/ (cloud, steward-fi, plugins, …)…",
     );
     try {
-      exec(`git submodule update --init --recursive -- eliza`, {
-        cwd: rootDir,
+      // Run from inside eliza/ so git reads eliza/.gitmodules directly.
+      // Running `git submodule update --init --recursive -- eliza` from the
+      // parent can fail when git tries to resolve nested submodule paths
+      // (e.g. eliza/cloud) against the parent's .gitmodules instead of
+      // eliza's own .gitmodules.
+      exec(`git submodule update --init --recursive`, {
+        cwd: resolve(rootDir, "eliza"),
         stdio: "inherit",
       });
     } catch (err) {

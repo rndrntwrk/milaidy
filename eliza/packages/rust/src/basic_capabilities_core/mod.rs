@@ -33,6 +33,20 @@ pub struct CapabilityConfig {
     pub skip_character_provider: bool,
     /// Enable autonomy capabilities (reserved for future parity).
     pub enable_autonomy: bool,
+    /// Enable experience tracking (learn from successes/failures).
+    pub enable_experience: bool,
+    /// Enable form-based user journeys.
+    pub enable_forms: bool,
+    /// Enable task clipboard / working memory.
+    pub enable_clipboard: bool,
+    /// Enable personality evolution and per-user preferences.
+    pub enable_personality: bool,
+    /// Enable trust scoring and security monitoring.
+    pub enable_trust: bool,
+    /// Enable secrets management.
+    pub enable_secrets: bool,
+    /// Enable plugin manager.
+    pub enable_plugin_manager: bool,
 }
 
 /// Create the built-in basic_capabilities plugin for the core runtime.
