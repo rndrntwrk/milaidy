@@ -23,11 +23,13 @@ export * from "./schemas/character";
 export { type BaseTables, buildBaseTables } from "./schemas/index";
 export * from "./search";
 export * from "./services";
+export * from "./services/agentEvent";
 export * from "./services/message";
 export * from "./services/trajectories";
 export * from "./settings";
 export * from "./streaming-context";
 export * from "./trajectory-context";
+export * from "./trajectory-utils";
 // Export everything from types (type-only, safe for browser)
 export * from "./types";
 export * from "./types/message-service";
