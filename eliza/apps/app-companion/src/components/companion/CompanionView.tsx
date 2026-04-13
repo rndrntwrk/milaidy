@@ -10,11 +10,8 @@ import {
   useState,
 } from "react";
 import { ChatModalView } from "@elizaos/app-core/components/pages/ChatModalView";
-import {
-  useCompanionSceneStatus,
-  type CompanionShellView,
-} from "./companion-scene-status-context";
-import { CompanionHeader } from "./CompanionHeader";
+import { useCompanionSceneStatus } from "./companion-scene-status-context";
+import { CompanionHeader, type CompanionShellView } from "./CompanionHeader";
 import { CompanionSceneHost } from "./CompanionSceneHost";
 import { InferenceCloudAlertButton } from "./InferenceCloudAlertButton";
 import { resolveCompanionInferenceNotice } from "./resolve-companion-inference-notice";

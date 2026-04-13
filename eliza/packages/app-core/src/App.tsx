@@ -26,7 +26,6 @@ import {
   BugReportModal,
   CharacterEditor,
   ChatView,
-  CompanionShell,
   ConnectionFailedBanner,
   ConnectionLostOverlay,
   ConversationsSidebar,
@@ -55,6 +54,7 @@ import {
   SystemWarningBanner,
   TrajectoriesView,
 } from "./app-shell-components";
+import { CompanionShell } from "@elizaos/app-companion";
 // Register overlay apps (self-register on import)
 import "@elizaos/app-companion/register";
 import "./components/vincent/vincent-app";
