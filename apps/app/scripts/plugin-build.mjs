@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -17,31 +17,6 @@ const pluginNames = CAPACITOR_PLUGIN_NAMES;
 // Skip plugin builds if explicitly disabled or if Capacitor core is missing
 const skipPlugins =
   process.env.SKIP_NATIVE_PLUGINS === "1" || process.env.CI === "true";
-const activeChildren = new Set();
-
-function terminateActiveChildren() {
-  for (const child of activeChildren) {
-    if (!child || child.exitCode !== null || child.killed) {
-      continue;
-    }
-    if (process.platform === "win32") {
-      spawnSync("taskkill", ["/PID", String(child.pid), "/T", "/F"], {
-        stdio: "ignore",
-      });
-      continue;
-    }
-    child.kill("SIGTERM");
-  }
-}
-
-process.on("SIGINT", () => {
-  terminateActiveChildren();
-  process.exit(130);
-});
-process.on("SIGTERM", () => {
-  terminateActiveChildren();
-  process.exit(143);
-});
 
 function run(command, args, cwd) {
   return new Promise((resolve, reject) => {
@@ -50,46 +25,22 @@ function run(command, args, cwd) {
       stdio: "inherit",
       env: process.env,
     });
-    activeChildren.add(child);
-    let settled = false;
-    function finish(err) {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      activeChildren.delete(child);
-      if (err) {
-        reject(err);
-        return;
-      }
-      resolve();
-    }
-    child.on("error", (err) => finish(err));
     child.on("exit", (code, signal) => {
       if (signal) {
-        finish(new Error(`${command} exited due to signal ${signal}`));
+        reject(new Error(`${command} exited due to signal ${signal}`));
         return;
       }
       if ((code ?? 1) !== 0) {
-        finish(new Error(`${command} exited with code ${code ?? 1}`));
+        reject(new Error(`${command} exited with code ${code ?? 1}`));
         return;
       }
-      finish();
+      resolve();
     });
   });
 }
 
 const npmCommand = "bun";
 const npmArgs = ["run", "build"];
-const requestedConcurrency = Number.parseInt(
-  process.env.NATIVE_PLUGIN_BUILD_CONCURRENCY ?? "",
-  10,
-);
-const maxConcurrency = Number.isFinite(requestedConcurrency)
-  ? Math.max(1, requestedConcurrency)
-  : process.platform === "win32"
-    ? 1
-    : pluginNames.length;
 
 if (skipPlugins) {
   console.log(
@@ -98,26 +49,11 @@ if (skipPlugins) {
   process.exit(0);
 }
 
-async function buildPlugin(name) {
-  console.log(`[plugin:${name}] building...`);
-  await run(npmCommand, npmArgs, path.join(pluginsDir, name));
-  console.log(`[plugin:${name}] done`);
-}
-
-let nextPluginIndex = 0;
-const workers = Array.from(
-  { length: Math.min(maxConcurrency, pluginNames.length) },
-  async () => {
-    while (nextPluginIndex < pluginNames.length) {
-      const name = pluginNames[nextPluginIndex++];
-      await buildPlugin(name);
-    }
-  },
+// Plugins have no inter-dependencies — build in parallel
+await Promise.all(
+  pluginNames.map(async (name) => {
+    console.log(`[plugin:${name}] building...`);
+    await run(npmCommand, npmArgs, path.join(pluginsDir, name));
+    console.log(`[plugin:${name}] done`);
+  }),
 );
-
-try {
-  await Promise.all(workers);
-} catch (error) {
-  terminateActiveChildren();
-  throw error;
-}

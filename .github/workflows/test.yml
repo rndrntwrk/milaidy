@@ -17,7 +17,6 @@ env:
   NODE_VERSION: "22.20.0"
   NODE_NO_WARNINGS: "1"
   NODE_OPTIONS: "--max-old-space-size=4096"
-  MILADY_SKIP_LOCAL_UPSTREAMS: "1"
 
 jobs:
   regression-matrix:
@@ -62,6 +61,7 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
           install-command: bun install --frozen-lockfile --ignore-scripts
+          disable-local-eliza-workspace: "false"
           skip-avatar-clone: "true"
           no-vision-deps: "true"
 
@@ -105,6 +105,7 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
           install-command: bun install --frozen-lockfile --ignore-scripts
+          disable-local-eliza-workspace: "false"
           skip-avatar-clone: "true"
           no-vision-deps: "true"
 
@@ -130,7 +131,32 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
-      - name: Checkout
+      - name: Enable Git long paths (Windows)
+        if: runner.os == 'Windows'
+        run: git config --system core.longpaths true
+
+      - name: Checkout (Windows sparse)
+        if: runner.os == 'Windows'
+        uses: actions/checkout@v4
+        with:
+          # Published-only CI restores the required non-eliza submodules explicitly.
+          submodules: false
+          sparse-checkout: |
+            /
+            apps/
+            scripts/
+            eliza/apps/
+            eliza/packages/app-core/
+            eliza/packages/native-plugins/
+            eliza/packages/typescript/
+            eliza/packages/shared/
+            eliza/packages/agent/
+            eliza/packages/server/
+            eliza/plugins/
+          sparse-checkout-cone-mode: false
+
+      - name: Checkout (Non-Windows)
+        if: runner.os != 'Windows'
         uses: actions/checkout@v4
         with:
           # Published-only CI restores the required non-eliza submodules explicitly.
@@ -160,9 +186,6 @@ jobs:
           path: ~/.bun/install/cache
           key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
           restore-keys: bun-${{ runner.os }}-
-
-      - name: Disable repo-local eliza workspace
-        run: node scripts/disable-local-eliza-workspace.mjs
 
       - name: Install dependencies
         shell: bash
@@ -196,7 +219,32 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
-      - name: Checkout
+      - name: Enable Git long paths (Windows)
+        if: runner.os == 'Windows'
+        run: git config --system core.longpaths true
+
+      - name: Checkout (Windows sparse)
+        if: runner.os == 'Windows'
+        uses: actions/checkout@v4
+        with:
+          # Published-only CI restores the required non-eliza submodules explicitly.
+          submodules: false
+          sparse-checkout: |
+            /
+            apps/
+            scripts/
+            eliza/apps/
+            eliza/packages/app-core/
+            eliza/packages/native-plugins/
+            eliza/packages/typescript/
+            eliza/packages/shared/
+            eliza/packages/agent/
+            eliza/packages/server/
+            eliza/plugins/
+          sparse-checkout-cone-mode: false
+
+      - name: Checkout (Non-Windows)
+        if: runner.os != 'Windows'
         uses: actions/checkout@v4
         with:
           # Published-only CI restores the required non-eliza submodules explicitly.
@@ -226,9 +274,6 @@ jobs:
           path: ~/.bun/install/cache
           key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
           restore-keys: bun-${{ runner.os }}-
-
-      - name: Disable repo-local eliza workspace
-        run: node scripts/disable-local-eliza-workspace.mjs
 
       - name: Install dependencies
         run: bun install --frozen-lockfile --ignore-scripts
@@ -276,9 +321,6 @@ jobs:
 
       - name: Initialize tracked workspace submodules
         run: node scripts/init-submodules.mjs
-
-      - name: Disable repo-local eliza workspace
-        run: node scripts/disable-local-eliza-workspace.mjs
 
       - name: Install dependencies
         run: bun install --frozen-lockfile --ignore-scripts
@@ -348,9 +390,6 @@ jobs:
       - name: Initialize tracked workspace submodules
         run: node scripts/init-submodules.mjs
 
-      - name: Disable repo-local eliza workspace
-        run: node scripts/disable-local-eliza-workspace.mjs
-
       - name: Install dependencies
         run: bun install --frozen-lockfile --ignore-scripts
 
@@ -397,9 +436,6 @@ jobs:
 
       - name: Initialize tracked workspace submodules
         run: node scripts/init-submodules.mjs
-
-      - name: Disable repo-local eliza workspace
-        run: node scripts/disable-local-eliza-workspace.mjs
 
       - name: Install dependencies
         run: bun install --frozen-lockfile --ignore-scripts
@@ -454,9 +490,6 @@ jobs:
       - name: Initialize tracked workspace submodules
         run: node scripts/init-submodules.mjs
 
-      - name: Disable repo-local eliza workspace
-        run: node scripts/disable-local-eliza-workspace.mjs
-
       - name: Install dependencies
         run: bun install --frozen-lockfile --ignore-scripts
         env:
@@ -503,6 +536,7 @@ jobs:
         uses: ./.github/actions/setup-bun-workspace
         with:
           bun-version: ${{ env.BUN_VERSION }}
+          disable-local-eliza-workspace: "false"
           install-command: |
             for i in 1 2 3 4 5; do
               bun install --frozen-lockfile --ignore-scripts && break

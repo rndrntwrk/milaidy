@@ -19,15 +19,28 @@ jobs:
     name: desktop preload preflight (windows)
     runs-on: windows-latest
     steps:
+      - name: Enable long paths (Windows)
+        run: git config --system core.longpaths true
+
       - uses: actions/checkout@v4
         with:
           submodules: false
+          sparse-checkout: |
+            /
+            apps/
+            scripts/
+            eliza/apps/
+            eliza/packages/app-core/
+            eliza/packages/native-plugins/
+            eliza/packages/typescript/
+            eliza/packages/shared/
+            eliza/packages/agent/
+            eliza/packages/server/
+            eliza/plugins/
+          sparse-checkout-cone-mode: false
 
       - name: Initialize workspace submodules
         run: node scripts/init-submodules.mjs
-
-      - name: Enable long paths (Windows)
-        run: git config --global core.longpaths true
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
