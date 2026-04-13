@@ -21,6 +21,8 @@ jobs:
     name: iOS Simulator Build
     runs-on: macos-14
     timeout-minutes: 30
+    env:
+      MILADY_SKIP_LOCAL_UPSTREAMS: "1"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -31,40 +33,22 @@ jobs:
         with:
           node-version: 22
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install setuptools for distutils
-        run: pip install setuptools
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+      - name: Setup workspace dependencies
+        uses: ./.github/actions/setup-bun-workspace
         with:
           bun-version: ${{ env.BUN_VERSION }}
+          install-native-deps: "false"
+          disable-local-eliza-workspace: "true"
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+          run-postinstall: "true"
+          skip-avatar-clone: "true"
+          no-vision-deps: "true"
 
-      - name: Cache Bun install
-        uses: actions/cache@v4
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: bun-${{ runner.os }}-
-
-      - name: Initialize tracked workspace submodules
-        run: node scripts/init-submodules.mjs
-
-      - name: Install dependencies
-        run: bun install --ignore-scripts
-        env:
-          SKIP_AVATAR_CLONE: "1"
-          MILADY_NO_VISION_DEPS: "1"
-
-      - name: Run postinstall (patch deps)
-        run: bun run postinstall
-        env:
-          SKIP_AVATAR_CLONE: "1"
-          MILADY_NO_VISION_DEPS: "1"
+      - name: Restore eliza workspace paths for build scripts
+        run: |
+          if [ -d ".eliza.ci-disabled" ] && [ ! -d "eliza" ]; then
+            mv .eliza.ci-disabled eliza
+          fi
 
       - name: Build web assets
         working-directory: apps/app
@@ -130,6 +114,8 @@ jobs:
     name: Android Debug Build
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    env:
+      MILADY_SKIP_LOCAL_UPSTREAMS: "1"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -150,12 +136,18 @@ jobs:
         uses: ./.github/actions/setup-bun-workspace
         with:
           bun-version: ${{ env.BUN_VERSION }}
-          disable-local-eliza-workspace: "false"
-          install-command: bun install --ignore-scripts
+          disable-local-eliza-workspace: "true"
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
           install-native-deps: "false"
           run-postinstall: "true"
           skip-avatar-clone: "true"
           no-vision-deps: "true"
+
+      - name: Restore eliza workspace paths for build scripts
+        run: |
+          if [ -d ".eliza.ci-disabled" ] && [ ! -d "eliza" ]; then
+            mv .eliza.ci-disabled eliza
+          fi
 
       - name: Build web assets
         working-directory: apps/app
