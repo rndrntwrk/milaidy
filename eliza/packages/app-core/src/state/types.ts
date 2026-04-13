@@ -147,12 +147,7 @@ export const ONBOARDING_PERMISSION_LABELS: Record<SystemPermissionId, string> =
     "website-blocking": "Website Blocking",
   };
 
-export interface ActionNotice {
-  tone: string;
-  text: string;
-  /** When true, ShellOverlays shows an indeterminate spinner (long-running work). */
-  busy?: boolean;
-}
+export type { ActionNotice } from "./action-notice";
 
 export type LifecycleAction = "start" | "stop" | "restart" | "reset";
 
