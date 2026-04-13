@@ -65,11 +65,6 @@ const pluginAgentOrchestratorEntry =
   resolveModuleEntry(
     path.join(repoRoot, "plugins", "plugin-agent-orchestrator", "src", "index"),
   );
-const pluginPiAiEntry =
-  getInstalledPackageEntry("@elizaos/plugin-pi-ai", repoRoot) ??
-  resolveModuleEntry(
-    path.join(repoRoot, "plugins", "plugin-pi-ai", "src", "index"),
-  );
 const pluginTelegramEntry =
   getInstalledPackageEntry("@elizaos/plugin-telegram", repoRoot) ??
   resolveModuleEntry(
@@ -127,10 +122,6 @@ export default {
               replacement: path.join(autonomousSourceRoot, "$1"),
             },
             {
-              find: /^@miladyai\/agent\/(.*)/,
-              replacement: path.join(autonomousSourceRoot, "$1"),
-            },
-            {
               find: "@elizaos/agent",
               replacement: resolveModuleEntry(
                 path.join(autonomousSourceRoot, "index"),
@@ -165,10 +156,6 @@ export default {
             {
               find: /^@elizaos\/ui\/(.*)/,
               replacement: path.join(uiSourceRoot, "$1"),
-            },
-            {
-              find: "@elizaos/ui",
-              replacement: resolveModuleEntry(path.join(uiSourceRoot, "index")),
             },
           ]
         : []),
@@ -232,14 +219,6 @@ export default {
             },
           ]
         : []),
-      ...(fs.existsSync(pluginPiAiEntry)
-        ? [
-            {
-              find: "@elizaos/plugin-pi-ai",
-              replacement: pluginPiAiEntry,
-            },
-          ]
-        : []),
       ...(fs.existsSync(pluginSignalEntry)
         ? [
             {
@@ -295,10 +274,10 @@ export default {
     },
     include: [
       "test/**/*.e2e.test.ts",
-      "eliza/agent/test/**/*.e2e.test.ts",
+      "eliza/packages/agent/test/**/*.e2e.test.ts",
       "eliza/packages/app-core/test/**/*.e2e.test.ts",
-      "packages/agent/test/**/*.e2e.test.ts",
-      "packages/app-core/test/**/*.e2e.test.ts",
+      "eliza/packages/agent/test/**/*.e2e.test.ts",
+      "eliza/packages/app-core/test/**/*.e2e.test.ts",
     ],
     setupFiles: ["test/setup.ts"],
     exclude: [

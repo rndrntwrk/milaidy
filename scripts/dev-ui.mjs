@@ -27,11 +27,14 @@ import path from "node:path";
 import process from "node:process";
 import { ethers } from "ethers";
 import * as JSON5Module from "json5";
-import { CAPACITOR_PLUGIN_NAMES } from "../apps/app/scripts/capacitor-plugin-names.mjs";
+import {
+  CAPACITOR_PLUGIN_NAMES,
+  NATIVE_PLUGINS_ROOT,
+} from "../apps/app/scripts/capacitor-plugin-names.mjs";
 import {
   resolveDesktopApiPort,
   resolveDesktopUiPort,
-} from "../packages/shared/src/runtime-env.ts";
+} from "../eliza/packages/shared/src/runtime-env.ts";
 import { getBunVersionAdvisory } from "./lib/bun-version-guard.mjs";
 import { capacitorPluginsBuildNeeded } from "./lib/capacitor-plugin-build-needed.mjs";
 import {
@@ -1184,7 +1187,7 @@ function startVite() {
       const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
       if (pkg.scripts?.["plugin:build"]) {
         const appAbs = path.join(cwd, appDir);
-        const pluginsDir = path.join(appAbs, "plugins");
+        const pluginsDir = NATIVE_PLUGINS_ROOT;
         const forcePlugins =
           process.env.MILADY_DEV_PLUGIN_BUILD === "1" ||
           process.env.MILADY_DEV_PLUGIN_BUILD === "always";
@@ -1370,7 +1373,7 @@ if (uiOnly) {
           filePath,
         ]),
         "--watch",
-        "packages/app-core/src/runtime/dev-server.ts",
+        "eliza/packages/app-core/src/runtime/dev-server.ts",
       ]
     : [
         "node",
@@ -1378,7 +1381,7 @@ if (uiOnly) {
         "--import",
         "tsx",
         "--watch",
-        "packages/app-core/src/runtime/dev-server.ts",
+        "eliza/packages/app-core/src/runtime/dev-server.ts",
       ];
   apiProcess = spawn(apiCmd[0], apiCmd.slice(1), {
     cwd,

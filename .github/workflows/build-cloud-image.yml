@@ -120,22 +120,22 @@ jobs:
 
       - name: Build shared workspace
         run: |
-          cd packages/shared
+          cd eliza/packages/shared
           bun run build
 
       - name: Build selfcontrol workspace
         run: |
-          cd packages/plugin-selfcontrol
+          cd eliza/plugins/plugin-selfcontrol
           bun run build
 
       - name: Build agent workspace
         run: |
-          cd packages/agent
+          cd eliza/packages/agent
           bun run build:docker-dist
 
       - name: Build bundled orchestrator workspace
         run: |
-          cd plugins/plugin-agent-orchestrator
+          cd eliza/plugins/plugin-agent-orchestrator
           bun run build
 
       - name: Build runtime (tsdown)

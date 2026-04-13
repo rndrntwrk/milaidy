@@ -175,7 +175,7 @@ const runs = [
     label: "cloud-e2e-smoke",
     command: bunCmd,
     args: ["run", "test:e2e:smoke"],
-    cwd: path.join(repoRoot, "cloud"),
+    cwd: path.join(repoRoot, "eliza", "cloud"),
     scriptName: "test:e2e:smoke",
     skipEnvVar: "MILADY_SKIP_CLOUD_LIVE_SMOKE",
     async getSkipReason() {
@@ -199,7 +199,7 @@ const runs = [
     label: "steward-fi-e2e-smoke",
     command: bunCmd,
     args: ["run", "test:e2e:smoke"],
-    cwd: path.join(repoRoot, "steward-fi"),
+    cwd: path.join(repoRoot, "eliza", "steward-fi"),
     scriptName: "test:e2e:smoke",
     skipEnvVar: "MILADY_SKIP_STEWARD_FI_LIVE_SMOKE",
     getSkipReason() {

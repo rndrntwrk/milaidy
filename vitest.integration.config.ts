@@ -94,10 +94,6 @@ export default defineConfig({
               replacement: path.join(autonomousSourceRoot, "$1"),
             },
             {
-              find: /^@miladyai\/agent\/(.*)/,
-              replacement: path.join(autonomousSourceRoot, "$1"),
-            },
-            {
               find: "@elizaos/agent",
               replacement: resolveModuleEntry(
                 path.join(autonomousSourceRoot, "index"),
@@ -205,8 +201,8 @@ export default defineConfig({
     },
     include: [
       "test/**/*.integration.test.ts",
-      "packages/agent/test/**/*.integration.test.ts",
-      "packages/app-core/test/**/*.integration.test.ts",
+      "eliza/packages/agent/test/**/*.integration.test.ts",
+      "eliza/packages/app-core/test/**/*.integration.test.ts",
     ],
     setupFiles: ["test/setup.ts"],
     exclude: [

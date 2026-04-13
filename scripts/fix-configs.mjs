@@ -24,5 +24,5 @@ async function fixVitestConfig(filepath) {
   console.log("Fixed", filepath);
 }
 
-await fixAgentE2EConfig("packages/agent/vitest.e2e.config.ts");
+await fixAgentE2EConfig("eliza/agent/vitest.e2e.config.ts");
 await fixVitestConfig("vitest.config.ts");

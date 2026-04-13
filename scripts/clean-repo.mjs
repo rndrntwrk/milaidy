@@ -14,7 +14,10 @@ import { existsSync, readdirSync, rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { CAPACITOR_PLUGIN_NAMES } from "../apps/app/scripts/capacitor-plugin-names.mjs";
+import {
+  CAPACITOR_PLUGIN_NAMES,
+  NATIVE_PLUGINS_ROOT,
+} from "../apps/app/scripts/capacitor-plugin-names.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");
@@ -62,13 +65,12 @@ function rmNodeModulesCaches() {
 }
 
 function rmPluginDists() {
-  const pluginsRoot = path.join(root, "apps", "app", "plugins");
+  const pluginsRoot = NATIVE_PLUGINS_ROOT;
   if (!existsSync(pluginsRoot)) return;
+  const relPlugins =
+    path.relative(root, pluginsRoot) || "eliza/packages/native-plugins";
   for (const name of CAPACITOR_PLUGIN_NAMES) {
-    rmPath(
-      `apps/app/plugins/${name}/dist`,
-      path.join(pluginsRoot, name, "dist"),
-    );
+    rmPath(`${relPlugins}/${name}/dist`, path.join(pluginsRoot, name, "dist"));
   }
   // Any extra plugin dirs (not in canonical list) still get dist removed
   try {
@@ -77,7 +79,7 @@ function rmPluginDists() {
       if (CAPACITOR_PLUGIN_NAMES.includes(ent.name)) continue;
       const dist = path.join(pluginsRoot, ent.name, "dist");
       if (existsSync(dist)) {
-        rmPath(`apps/app/plugins/${ent.name}/dist`, dist);
+        rmPath(`${relPlugins}/${ent.name}/dist`, dist);
       }
     }
   } catch {
@@ -94,10 +96,9 @@ function main() {
   rmPath("apps/homepage/dist", path.join(root, "apps", "homepage", "dist"));
   rmPath("apps/homepage/.vite", path.join(root, "apps", "homepage", ".vite"));
 
-  rmPath("packages/ui/dist", path.join(root, "packages", "ui", "dist"));
   rmPath(
-    "packages/app-core/dist",
-    path.join(root, "packages", "app-core", "dist"),
+    "eliza/packages/app-core/dist",
+    path.join(root, "eliza", "packages", "app-core", "dist"),
   );
 
   rmPluginDists();

@@ -102,7 +102,7 @@ const result = spawnSync(
     "run",
     "--config",
     "vitest.live-e2e.config.ts",
-    "packages/agent/test/plugin-lifecycle.live.e2e.test.ts",
+    "eliza/agent/test/plugin-lifecycle.live.e2e.test.ts",
   ],
   {
     cwd: repoRoot,

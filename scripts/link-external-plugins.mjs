@@ -46,9 +46,15 @@ const DEFAULT_REPO_ROOT = path.resolve(__dirname, "..");
  */
 export const EXTERNAL_PLUGIN_SOURCES = [
   // plugin-imessage — two-way iMessage connector. Prefer the submodule
-  // at plugins/plugin-imessage; fall back to a sibling source checkout
+  // at eliza/plugins/plugin-imessage; fall back to a sibling source checkout
   // at ~/src/plugin-imessage for independent PR development.
-  path.resolve(DEFAULT_REPO_ROOT, "plugins", "plugin-imessage", "typescript"),
+  path.resolve(
+    DEFAULT_REPO_ROOT,
+    "eliza",
+    "plugins",
+    "plugin-imessage",
+    "typescript",
+  ),
   path.resolve(DEFAULT_REPO_ROOT, "..", "src", "plugin-imessage", "typescript"),
 ];
 

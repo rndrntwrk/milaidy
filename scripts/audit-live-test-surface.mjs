@@ -48,14 +48,14 @@ const ROOTS = [
   {
     id: "main",
     dir: repoRoot,
-    ignoreDirs: new Set([...IGNORE_DIRS, "cloud", "eliza", "examples"]),
+    ignoreDirs: new Set([...IGNORE_DIRS, "eliza"]),
     packageJson: path.join(repoRoot, "package.json"),
   },
   {
     id: "cloud",
-    dir: path.join(repoRoot, "cloud"),
-    ignoreDirs: IGNORE_DIRS,
-    packageJson: path.join(repoRoot, "cloud", "package.json"),
+    dir: path.join(repoRoot, "eliza", "cloud"),
+    ignoreDirs: new Set([...IGNORE_DIRS, "examples"]),
+    packageJson: path.join(repoRoot, "eliza", "cloud", "package.json"),
   },
   {
     id: "eliza",
@@ -91,7 +91,6 @@ const STUB_PATTERNS = [
   { id: "plugin-stub", regex: /plugin-stub\.mjs/g },
   { id: "empty-module", regex: /empty-module\.mjs/g },
   { id: "coding-agent-module", regex: /coding-agent-module\.ts/g },
-  { id: "pi-ai-module", regex: /pi-ai-module\.ts/g },
   { id: "plugin-telegram-module", regex: /plugin-telegram-module\.ts/g },
   { id: "lookingglass-webxr", regex: /lookingglass-webxr\.ts/g },
 ];
@@ -122,7 +121,10 @@ function isLiveTestFile(rootId, relPath) {
     return true;
   }
 
-  if (rootId === "cloud" && relPath.startsWith("cloud/packages/tests/e2e/")) {
+  if (
+    rootId === "cloud" &&
+    relPath.startsWith("eliza/cloud/packages/tests/e2e/")
+  ) {
     return true;
   }
 

@@ -497,7 +497,7 @@ function patchCssstyleColorCompat() {
   }
 
   const needle = 'require("@asamuzakjp/css-color")';
-  const replacement = 'require("@miladyai/css-color-cjs")';
+  const replacement = 'require("@elizaos/css-color-cjs")';
 
   let patched = 0;
   for (const dir of searchDirs) {

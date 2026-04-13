@@ -16,7 +16,10 @@ import { execSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 
-import { CAPACITOR_PLUGIN_NAMES } from "../apps/app/scripts/capacitor-plugin-names.mjs";
+import {
+  CAPACITOR_PLUGIN_NAMES,
+  NATIVE_PLUGINS_ROOT,
+} from "../apps/app/scripts/capacitor-plugin-names.mjs";
 
 const rootDir = resolve(import.meta.dirname, "..");
 const appDir = join(rootDir, "apps", "app");
@@ -53,7 +56,7 @@ try {
     console.log("\n=== Step 3/4: Build Capacitor plugins ===");
     const plugins = CAPACITOR_PLUGIN_NAMES;
     for (const plugin of plugins) {
-      const pluginDir = join(appDir, "plugins", plugin);
+      const pluginDir = join(NATIVE_PLUGINS_ROOT, plugin);
       if (!existsSync(pluginDir)) {
         console.log(`  [plugin:${plugin}] directory not found, skipping`);
         continue;

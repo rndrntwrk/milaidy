@@ -9,18 +9,18 @@ ChatGPT Subscription OAuth login completes successfully, but the token cannot ca
 
 ## Root Cause
 
-The OAuth client `app_EMoamEEZ73f0CkXaXp7hrann` (registered in `@mariozechner/pi-ai`) only requests identity scopes (`openid profile email offline_access`). OpenAI API now requires `api.model.read` and `api.model.write` scopes. The OAuth client is not authorized to request those scopes on OpenAI's platform.
+The OAuth client `app_EMoamEEZ73f0CkXaXp7hrann` (same client id as the former pi-ai helper) only requests identity scopes (`openid profile email offline_access`). OpenAI API now requires `api.model.read` and `api.model.write` scopes. The OAuth client is not authorized to request those scopes on OpenAI's platform.
 
 ## Why This Cannot Be Fixed in Milady
 
-1. The OAuth client is registered and owned by `@mariozechner/pi-ai`
+1. The OAuth client is registered on OpenAI's side (historically bundled via the pi-ai helper package)
 2. The client needs to be updated on **OpenAI's developer platform** to allow API scopes
-3. Then `@mariozechner/pi-ai` needs to include those scopes in auth requests
+3. Any client library using that client id would need to request those scopes in auth requests
 4. Milady has no control over either of these
 
 ## Codebase Presence
 
-- `@mariozechner/pi-ai` is referenced in: `package.json`, provider detail screens, onboarding tests, provider switcher, server config
+- Historical note: the npm package `@mariozechner/pi-ai` was removed from this repo; OAuth constants are inlined under `eliza/packages/agent/src/auth/vendor/pi-oauth/`.
 - Used for OAuth flows across multiple providers (not just OpenAI)
 
 ## Workaround
@@ -29,7 +29,7 @@ Use Claude Subscription instead of ChatGPT Subscription — it works correctly.
 
 ## Recommendation
 
-Close as "won't fix / upstream dependency". File upstream issue on `@mariozechner/pi-ai` if not already done. The workaround (Claude Subscription) is viable for all users.
+Close as "won't fix / upstream dependency" (OpenAI client registration + scopes). The workaround (Claude Subscription) is viable for all users.
 
 ## Age
 

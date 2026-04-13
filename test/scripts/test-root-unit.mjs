@@ -23,18 +23,18 @@ const unitShards = [
   {
     label: "unit:app-core",
     patterns: [
-      "packages/app-core/src",
-      "packages/shared/src",
+      "eliza/packages/app-core/src",
+      "eliza/packages/shared/src",
     ],
   },
   {
     label: "unit:plugins",
     patterns: [
       "packages/agent/src/runtime/roles/test",
-      "plugins/plugin-selfcontrol/src",
+      "eliza/plugins/app-lifeops/src/selfcontrol",
       "packages/plugin-wechat/src",
-      "plugins/plugin-music-player/src",
-      "plugins/plugin-discord/typescript/__tests__/identity.test.ts",
+      "eliza/plugins/plugin-music-player/src",
+      "eliza/plugins/plugin-discord/typescript/__tests__/identity.test.ts",
     ],
   },
   {

@@ -47,9 +47,8 @@
 ## #1796 — Provider onboarding UX pass (P0, 5pts)
 
 ### Current State
-- `@mariozechner/pi-ai` handles OAuth flows
+- Subscription OAuth (Anthropic / OpenAI Codex) uses inlined helpers under `eliza/packages/agent/src/auth/vendor/pi-oauth/`
 - Provider picker exists in `packages/app-core/src/components/onboarding/`
-- `ConnectionProviderDetailScreen.tsx` has pi-ai references
 - Provider switcher at `packages/app-core/src/components/settings/ProviderSwitcher.tsx`
 
 ### Integration Work
@@ -58,7 +57,7 @@
 - Validate post-onboarding → first reply works (depends on #1794)
 
 ### Risks
-- OAuth flow is partially upstream (`pi-ai` package) — limited control
+- OpenAI subscription OAuth remains constrained by OpenAI-registered client scopes (#1130)
 - Multiple provider modes means combinatorial testing surface
 
 ---

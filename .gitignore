@@ -22,22 +22,22 @@ apps/app/electron/tsc-out/
 **/android/build/
 
 # TypeScript declaration build outputs inside source dirs
-packages/*/src/**/*.d.ts
-!packages/app-core/src/ambient-modules.d.ts
+eliza/packages/*/src/**/*.d.ts
+!eliza/packages/app-core/src/ambient-modules.d.ts
 # Ambient declaration shims for `@elizaos/core/roles` — the published
 # alpha dist-tag doesn't ship the subpath exports field, so each
 # package that imports it needs its own per-package .d.ts.
-!packages/shared/src/elizaos-core-roles.d.ts
-!packages/plugin-selfcontrol/src/elizaos-core-roles.d.ts
-packages/*/src/**/*.d.ts.map
+!eliza/packages/shared/src/elizaos-core-roles.d.ts
+!plugins/plugin-selfcontrol/src/elizaos-core-roles.d.ts
+eliza/packages/*/src/**/*.d.ts.map
 # Local ./eliza checkout — only @elizaos/core typescript sources had stray emit (see eliza/.gitignore)
 eliza/packages/typescript/src/**/*.d.ts
 eliza/packages/typescript/src/**/*.d.ts.map
 src/plugins/**/*.d.ts
 src/plugins/**/*.d.ts.map
 
-# Compiled JS build outputs inside source dirs (packages/ui uses tsx source directly)
-packages/ui/src/**/*.js
+# Compiled JS build outputs inside source dirs (app-core/ui uses tsx source directly)
+eliza/packages/app-core/src/ui/**/*.js
 
 # Lock files (managed at repo root)
 package-lock.json
@@ -52,8 +52,8 @@ docker-compose.extra.yml
 apps/ui/src/ui/__screenshots__/
 apps/ui/playwright-report/
 apps/ui/test-results/
-packages/ui/test-results/
-packages/ui/e2e/visual-regression.spec.ts-snapshots/
+eliza/packages/app-core/src/ui/test-results/
+eliza/packages/app-core/src/ui/e2e/visual-regression.spec.ts-snapshots/
 
 # Vendored repos (clone separately if needed)
 vendor/
@@ -147,18 +147,25 @@ data/
 .claude/worktrees/
 
 # Generated raw avatar/animation assets from local setup hooks (non-source)
-apps/app/public/animations/**/*.fbx
-apps/app/public/animations/**/*.glb
-apps/app/public/animations/*.fbx
-apps/app/public/animations/*.glb
-apps/app/public/vrms/**/*.vrm
-apps/app/public/vrms/*.vrm
-apps/app/public/vrms/imported-avatars.json
-apps/app/public/vrms/backgrounds/*.png
-apps/app/public/vrms/previews/*.png
-apps/app/public/vrms/backgrounds/*.jpg
-apps/app/public/vrms/previews/*.jpg
-apps/app/public/vrms/*.jpg
+# Companion plugin owns these assets; ensure-avatars.mjs populates them.
+eliza/plugins/app-companion/public/animations/**/*.fbx
+eliza/plugins/app-companion/public/animations/**/*.fbx.gz
+eliza/plugins/app-companion/public/animations/**/*.glb
+eliza/plugins/app-companion/public/animations/**/*.glb.gz
+eliza/plugins/app-companion/public/animations/*.fbx
+eliza/plugins/app-companion/public/animations/*.fbx.gz
+eliza/plugins/app-companion/public/animations/*.glb
+eliza/plugins/app-companion/public/animations/*.glb.gz
+eliza/plugins/app-companion/public/vrms/**/*.vrm
+eliza/plugins/app-companion/public/vrms/**/*.vrm.gz
+eliza/plugins/app-companion/public/vrms/*.vrm
+eliza/plugins/app-companion/public/vrms/*.vrm.gz
+eliza/plugins/app-companion/public/vrms/imported-avatars.json
+eliza/plugins/app-companion/public/vrms/backgrounds/*.png
+eliza/plugins/app-companion/public/vrms/previews/*.png
+eliza/plugins/app-companion/public/vrms/backgrounds/*.jpg
+eliza/plugins/app-companion/public/vrms/previews/*.jpg
+eliza/plugins/app-companion/public/vrms/*.jpg
 apps/app/ios/App/build*/
 
 # Ignored caches
@@ -195,3 +202,4 @@ scripts/bin/yt-dlp_*
 # because it's a developer tool, not product code.
 scripts/codex-sniff.ts
 .tmp-live/
+signal-auth/

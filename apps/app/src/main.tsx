@@ -54,8 +54,8 @@ import {
 } from "@elizaos/app-core/shell";
 import { AppProvider } from "@elizaos/app-core/state";
 import { applyUiTheme, loadUiTheme } from "@elizaos/app-core/state";
-import { Agent } from "@miladyai/capacitor-agent";
-import { Desktop } from "@miladyai/capacitor-desktop";
+import { Agent } from "@elizaos/capacitor-agent";
+import { Desktop } from "@elizaos/capacitor-desktop";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { MILADY_ENV_ALIASES } from "./brand-env";

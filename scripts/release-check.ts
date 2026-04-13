@@ -21,6 +21,7 @@ const forbiddenPrefixes = ["dist/Milady.app/"];
 const orchestratorPackageName = "@elizaos/plugin-agent-orchestrator";
 const orchestratorBrokenLifecycleTarget = "./scripts/ensure-node-pty.mjs";
 const orchestratorWorkspaceDir = resolve(
+  "eliza",
   "plugins",
   "plugin-agent-orchestrator",
 );
@@ -29,12 +30,12 @@ const orchestratorWorkspacePackageJsonPath = resolve(
   "package.json",
 );
 const autonomousServerPathCandidates = [
-  "node_modules/@elizaos/agent/packages/agent/src/api/server.js",
-  "packages/agent/src/api/server.ts",
+  "node_modules/@elizaos/agent/src/api/server.js",
+  "eliza/agent/src/api/server.ts",
 ] as const;
 const autonomousElizaPathCandidates = [
-  "node_modules/@elizaos/agent/packages/agent/src/runtime/eliza.js",
-  "packages/agent/src/runtime/eliza.ts",
+  "node_modules/@elizaos/agent/src/runtime/eliza.js",
+  "eliza/agent/src/runtime/eliza.ts",
 ] as const;
 const homepageReleaseDataPathCandidates = [
   "apps/homepage/src/generated/release-data.ts",
@@ -679,7 +680,7 @@ function assertBundledAgentOrchestratorInstallFix() {
   if (!existsSync(orchestratorPackageJsonPath)) {
     console.error(
       usingWorkspace
-        ? "release-check: plugins/plugin-agent-orchestrator/package.json is missing. Initialize the orchestrator submodule before publishing."
+        ? "release-check: eliza/plugins/plugin-agent-orchestrator/package.json is missing. Initialize the eliza submodule (and nested plugin submodules) before publishing."
         : "release-check: node_modules/@elizaos/plugin-agent-orchestrator/package.json is missing. Run bun install before publishing.",
     );
     process.exit(1);
@@ -718,7 +719,7 @@ function assertOrchestratorVersionPinned() {
   if (isWorkspaceSpecifier(version)) {
     if (!existsSync(orchestratorWorkspacePackageJsonPath)) {
       console.error(
-        `release-check: ${orchestratorPackageName} is configured as workspace:*, but plugins/plugin-agent-orchestrator/package.json is missing.`,
+        `release-check: ${orchestratorPackageName} is configured as workspace:*, but eliza/plugins/plugin-agent-orchestrator/package.json is missing.`,
       );
       process.exit(1);
     }
@@ -757,7 +758,7 @@ function assertAgentDependenciesAlignedWithRootPins() {
     readFileSync("package.json", "utf8"),
   ) as RootPackageJson;
   const agentPackage = JSON.parse(
-    readFileSync("packages/agent/package.json", "utf8"),
+    readFileSync("eliza/agent/package.json", "utf8"),
   ) as RootPackageJson;
   const mismatches = findMismatchedSharedAgentDependencySpecs(
     rootPackage,

@@ -3,7 +3,7 @@ import path from "node:path";
 
 const ROOTS = [
   {
-    dir: "cloud",
+    dir: "eliza/cloud",
     ignoreDirs: new Set([
       ".git",
       ".next",
@@ -16,6 +16,7 @@ const ROOTS = [
       "node_modules",
       "out",
       "test-results",
+      "examples",
     ]),
   },
   {
@@ -49,9 +50,7 @@ const ROOTS = [
       "node_modules",
       "out",
       "test-results",
-      "cloud",
       "eliza",
-      "examples",
     ]),
   },
 ];

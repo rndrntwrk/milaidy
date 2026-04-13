@@ -1,4 +1,3 @@
-import { STYLE_PRESETS } from "@elizaos/shared/onboarding-presets";
 import {
   Button,
   Field,
@@ -8,6 +7,7 @@ import {
   Input,
   Textarea,
 } from "@elizaos/app-core";
+import { STYLE_PRESETS } from "@elizaos/shared/onboarding-presets";
 import { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AgentProvider, useAgents } from "../../lib/AgentProvider";

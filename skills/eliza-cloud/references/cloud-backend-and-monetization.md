@@ -91,9 +91,9 @@ The Cloud UI also includes affiliate markup flows where a code can add markup to
 
 Prefer these implementation surfaces:
 
-- `cloud/packages/db/schemas/app-billing.ts`
-- `cloud/packages/db/schemas/apps.ts`
-- `cloud/packages/db/schemas/redeemable-earnings.ts`
-- `cloud/packages/ui/src/components/apps/app-monetization-settings.tsx`
-- `cloud/packages/ui/src/components/apps/app-earnings-dashboard.tsx`
-- `cloud/packages/ui/src/components/auth/authorize-content.tsx`
+- `eliza/cloud/packages/db/schemas/app-billing.ts`
+- `eliza/cloud/packages/db/schemas/apps.ts`
+- `eliza/cloud/packages/db/schemas/redeemable-earnings.ts`
+- `eliza/cloud/packages/ui/src/components/apps/app-monetization-settings.tsx`
+- `eliza/cloud/packages/ui/src/components/apps/app-earnings-dashboard.tsx`
+- `eliza/cloud/packages/ui/src/components/auth/authorize-content.tsx`

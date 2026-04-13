@@ -2,11 +2,11 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 
 const BIOME_CRASHER_PATHS = new Set([
-  "apps/app/plugins/screencapture/src/web.ts",
-  "apps/app/plugins/talkmode/electrobun/src/index.d.ts",
-  "apps/app/plugins/gateway/electrobun/src/index.ts",
-  "packages/app-core/src/types/elizaos-tui-fallback.d.ts",
-  "packages/app-core/src/types/optional-plugin-modules.d.ts",
+  "eliza/packages/native-plugins/screencapture/src/web.ts",
+  "eliza/packages/native-plugins/talkmode/electrobun/src/index.d.ts",
+  "eliza/packages/native-plugins/gateway/electrobun/src/index.ts",
+  "eliza/packages/app-core/src/types/elizaos-tui-fallback.d.ts",
+  "eliza/packages/app-core/src/types/optional-plugin-modules.d.ts",
   "scripts/type-audit-report.json",
   "scripts/type-audit-report.md",
 ]);

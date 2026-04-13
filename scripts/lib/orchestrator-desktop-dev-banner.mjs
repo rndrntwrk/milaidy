@@ -2,12 +2,12 @@
  * Orchestrator-only settings table for `scripts/dev-platform.mjs`.
  * Plain string (figlet heading + framed table + footer); TTY color applied by dev-platform.
  */
-import { prependDevSubsystemFigletHeading } from "../../packages/shared/src/dev-settings-figlet-heading.ts";
-import { formatDevSettingsTable } from "../../packages/shared/src/dev-settings-table.ts";
+import { prependDevSubsystemFigletHeading } from "../../eliza/packages/shared/src/dev-settings-figlet-heading.ts";
+import { formatDevSettingsTable } from "../../eliza/packages/shared/src/dev-settings-table.ts";
 import {
   resolveDesktopApiPortPreference,
   resolveDesktopUiPortPreference,
-} from "../../packages/shared/src/runtime-env.ts";
+} from "../../eliza/packages/shared/src/runtime-env.ts";
 
 /**
  * @param {object} p
@@ -61,7 +61,7 @@ export function formatOrchestratorDesktopDevBanner(p) {
   const rendererChange =
     "bun run dev:desktop -- --force-renderer or MILADY_DESKTOP_RENDERER_BUILD=always; omit to follow mtime heuristic";
 
-  /** @type {import("../../packages/shared/src/dev-settings-table.ts").DevSettingsRow[]} */
+  /** @type {import("../../eliza/packages/shared/src/dev-settings-table.ts").DevSettingsRow[]} */
   const rows = [
     {
       setting: ".env.worktree",
@@ -278,7 +278,7 @@ export function formatOrchestratorDesktopDevBanner(p) {
   );
   const footer =
     "Per-process settings: Vite, API, and Electrobun print their own tables below.\n" +
-    "Other env: inherited process.env; see docs/apps/desktop-local-development.md and packages/shared/src/runtime-env.ts.\n";
+    "Other env: inherited process.env; see docs/apps/desktop-local-development.md and eliza/packages/shared/src/runtime-env.ts.\n";
   return prependDevSubsystemFigletHeading(
     "orchestrator",
     `${table}\n${footer}`,

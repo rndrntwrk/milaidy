@@ -234,18 +234,6 @@ const ENV_PROVIDER_MAP: Array<{
     includeValue: true,
   },
   {
-    envVar: "ELIZA_USE_PI_AI",
-    providerId: "pi-ai",
-    authMode: "credentials",
-    includeValue: false,
-  },
-  {
-    envVar: "MILADY_USE_PI_AI",
-    providerId: "pi-ai",
-    authMode: "credentials",
-    includeValue: false,
-  },
-  {
     envVar: "ELIZAOS_CLOUD_API_KEY",
     providerId: "elizacloud",
     authMode: "cloud",

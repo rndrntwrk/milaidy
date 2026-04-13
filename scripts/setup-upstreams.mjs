@@ -138,7 +138,7 @@ export function getRepoElizaRoot(repoRoot = DEFAULT_REPO_ROOT) {
 }
 
 export function getRepoPluginsRoot(repoRoot = DEFAULT_REPO_ROOT) {
-  return path.resolve(repoRoot, "plugins");
+  return path.resolve(repoRoot, "eliza", "plugins");
 }
 
 export function getElizaWorkspaceSkipReason(

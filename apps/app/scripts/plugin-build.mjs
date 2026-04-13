@@ -4,11 +4,14 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
-import { CAPACITOR_PLUGIN_NAMES } from "./capacitor-plugin-names.mjs";
+import {
+  CAPACITOR_PLUGIN_NAMES,
+  NATIVE_PLUGINS_ROOT,
+} from "./capacitor-plugin-names.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const appDir = path.resolve(__dirname, "..");
-const pluginsDir = path.join(appDir, "plugins");
+const _appDir = path.resolve(__dirname, "..");
+const pluginsDir = NATIVE_PLUGINS_ROOT;
 const pluginNames = CAPACITOR_PLUGIN_NAMES;
 
 function run(command, args, cwd) {

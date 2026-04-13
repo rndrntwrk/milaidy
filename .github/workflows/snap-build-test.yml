@@ -35,7 +35,7 @@ jobs:
         with:
           # Snap build runs `bun install` inside the snapcraft
           # sandbox, which requires every `workspace:*` dependency
-          # under `plugins/plugin-*/typescript` to be present. Without
+          # under `eliza/plugins/plugin-*/typescript` to be present. Without
           # submodules, those directories are empty and `bun install`
           # fails with "Workspace dependency @elizaos/plugin-... not
           # found" for every plugin submodule.

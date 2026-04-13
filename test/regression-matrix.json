@@ -145,7 +145,7 @@
     {
       "name": "packages-shared",
       "globs": [
-        "packages/shared/**"
+        "eliza/packages/shared/**"
       ],
       "workflowSuites": {
         "pr": [
@@ -193,7 +193,7 @@
     {
       "name": "packages-app-core",
       "globs": [
-        "packages/app-core/**"
+        "eliza/packages/app-core/**"
       ],
       "workflowSuites": {
         "pr": [
@@ -280,7 +280,7 @@
       "globs": [
         "test/**",
         "packages/agent/test/**",
-        "packages/app-core/test/**",
+        "eliza/packages/app-core/test/**",
         "vitest.integration.config.ts",
         "vitest.e2e.config.ts"
       ],

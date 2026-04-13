@@ -53,7 +53,6 @@ The heaviest `.bun` entries included:
    - `app-core`
    - `shared`
    - `ui`
-   - `vrm-utils`
 6. **Copy only runtime artifacts**
    - root `dist/`
    - `apps/app/dist/`

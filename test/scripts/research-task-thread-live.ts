@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import type { AgentRuntime, IAgentRuntime } from "@elizaos/core";
 import { createTestRuntime } from "../helpers/pglite-runtime";
-import { SwarmCoordinator } from "../../plugins/plugin-agent-orchestrator/src/services/swarm-coordinator.js";
+import { SwarmCoordinator } from "../../eliza/plugins/plugin-agent-orchestrator/src/services/swarm-coordinator.js";
 
 type CodexEvent =
 	| {

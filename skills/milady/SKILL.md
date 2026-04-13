@@ -17,7 +17,7 @@ Milady is a local-first AI assistant built on elizaOS. This repo wraps the eliza
 - Prefer `packages/app-core/` for Milady behavior.
 - Prefer `packages/agent/` for Milady agent providers, services, and skill/runtime glue.
 - Prefer `apps/app/` for UI and Electrobun work.
-- Treat `cloud/` as the Eliza Cloud product and backend surface.
+- Treat `eliza/cloud/` as the Eliza Cloud product and backend surface.
 - Treat `eliza/` as upstream elizaOS. Edit it only when the bug or feature is genuinely upstream.
 
 ## Hard Constraints

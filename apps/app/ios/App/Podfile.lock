@@ -38,16 +38,16 @@ DEPENDENCIES:
   - "CapacitorKeyboard (from `../../../../node_modules/.bun/@capacitor+keyboard@8.0.0+db0c1b46371b240c/node_modules/@capacitor/keyboard`)"
   - "CapacitorPreferences (from `../../../../node_modules/.bun/@capacitor+preferences@8.0.1+db0c1b46371b240c/node_modules/@capacitor/preferences`)"
   - "CapacitorStatusBar (from `../../../../node_modules/.bun/@capacitor+status-bar@8.0.2+db0c1b46371b240c/node_modules/@capacitor/status-bar`)"
-  - MiladyaiCapacitorAgent (from `../../plugins/agent`)
-  - MiladyaiCapacitorCamera (from `../../plugins/camera`)
-  - MiladyaiCapacitorCanvas (from `../../plugins/canvas`)
-  - MiladyaiCapacitorGateway (from `../../plugins/gateway`)
-  - MiladyaiCapacitorLocation (from `../../plugins/location`)
-  - MiladyaiCapacitorMobileSignals (from `../../plugins/mobile-signals`)
-  - MiladyaiCapacitorScreencapture (from `../../plugins/screencapture`)
-  - MiladyaiCapacitorSwabble (from `../../plugins/swabble`)
-  - MiladyaiCapacitorTalkmode (from `../../plugins/talkmode`)
-  - MiladyaiCapacitorWebsiteblocker (from `../../plugins/websiteblocker`)
+  - MiladyaiCapacitorAgent (from `../../../../eliza/packages/native-plugins/agent`)
+  - MiladyaiCapacitorCamera (from `../../../../eliza/packages/native-plugins/camera`)
+  - MiladyaiCapacitorCanvas (from `../../../../eliza/packages/native-plugins/canvas`)
+  - MiladyaiCapacitorGateway (from `../../../../eliza/packages/native-plugins/gateway`)
+  - MiladyaiCapacitorLocation (from `../../../../eliza/packages/native-plugins/location`)
+  - MiladyaiCapacitorMobileSignals (from `../../../../eliza/packages/native-plugins/mobile-signals`)
+  - MiladyaiCapacitorScreencapture (from `../../../../eliza/packages/native-plugins/screencapture`)
+  - MiladyaiCapacitorSwabble (from `../../../../eliza/packages/native-plugins/swabble`)
+  - MiladyaiCapacitorTalkmode (from `../../../../eliza/packages/native-plugins/talkmode`)
+  - MiladyaiCapacitorWebsiteblocker (from `../../../../eliza/packages/native-plugins/websiteblocker`)
 
 EXTERNAL SOURCES:
   Capacitor:
@@ -63,25 +63,25 @@ EXTERNAL SOURCES:
   CapacitorStatusBar:
     :path: "../../../../node_modules/.bun/@capacitor+status-bar@8.0.2+db0c1b46371b240c/node_modules/@capacitor/status-bar"
   MiladyaiCapacitorAgent:
-    :path: "../../plugins/agent"
+    :path: "../../../../eliza/packages/native-plugins/agent"
   MiladyaiCapacitorCamera:
-    :path: "../../plugins/camera"
+    :path: "../../../../eliza/packages/native-plugins/camera"
   MiladyaiCapacitorCanvas:
-    :path: "../../plugins/canvas"
+    :path: "../../../../eliza/packages/native-plugins/canvas"
   MiladyaiCapacitorGateway:
-    :path: "../../plugins/gateway"
+    :path: "../../../../eliza/packages/native-plugins/gateway"
   MiladyaiCapacitorLocation:
-    :path: "../../plugins/location"
+    :path: "../../../../eliza/packages/native-plugins/location"
   MiladyaiCapacitorMobileSignals:
-    :path: "../../plugins/mobile-signals"
+    :path: "../../../../eliza/packages/native-plugins/mobile-signals"
   MiladyaiCapacitorScreencapture:
-    :path: "../../plugins/screencapture"
+    :path: "../../../../eliza/packages/native-plugins/screencapture"
   MiladyaiCapacitorSwabble:
-    :path: "../../plugins/swabble"
+    :path: "../../../../eliza/packages/native-plugins/swabble"
   MiladyaiCapacitorTalkmode:
-    :path: "../../plugins/talkmode"
+    :path: "../../../../eliza/packages/native-plugins/talkmode"
   MiladyaiCapacitorWebsiteblocker:
-    :path: "../../plugins/websiteblocker"
+    :path: "../../../../eliza/packages/native-plugins/websiteblocker"
 
 SPEC CHECKSUMS:
   Capacitor: 22e541237135648c9aa736232bb4d2eec35fddcb

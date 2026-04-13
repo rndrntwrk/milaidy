@@ -32,9 +32,9 @@ function getRepoLocalWorkspaceRoot(
     ],
     "@elizaos/shared": ["eliza/packages/shared", "../eliza/packages/shared"],
     "@elizaos/shared": ["eliza/packages/shared", "../eliza/packages/shared"],
-    "@elizaos/vrm-utils": [
-      "eliza/packages/vrm-utils",
-      "../eliza/packages/vrm-utils",
+    "@elizaos/app-companion": [
+      "eliza/plugins/app-companion",
+      "../eliza/plugins/app-companion",
     ],
   };
 

@@ -16,17 +16,17 @@ import { resolve } from "node:path";
 const ROOT = resolve(import.meta.dirname, "..");
 
 const CSS_FILES = [
-  "packages/app-core/src/styles/styles.css",
-  "packages/app-core/src/styles/base.css",
-  "packages/app-core/src/styles/brand-gold.css",
-  "packages/app-core/src/styles/electrobun-mac-window-drag.css",
-  "packages/app-core/src/styles/xterm.css",
+  "eliza/packages/app-core/src/styles/styles.css",
+  "eliza/packages/app-core/src/styles/base.css",
+  "eliza/packages/app-core/src/styles/brand-gold.css",
+  "eliza/packages/app-core/src/styles/electrobun-mac-window-drag.css",
+  "eliza/packages/app-core/src/styles/xterm.css",
 ];
 
 // Directories to search for selector usage
 const SEARCH_DIRS = [
-  "packages/app-core/src",
-  "packages/ui/src",
+  "eliza/packages/app-core/src",
+  "eliza/packages/app-core/src/ui",
   "apps/app/src",
   "apps/homepage/src",
 ];

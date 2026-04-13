@@ -157,7 +157,7 @@ else
 fi
 
 log "Building bundled orchestrator workspace"
-pushd plugins/plugin-agent-orchestrator >/dev/null
+pushd eliza/plugins/plugin-agent-orchestrator >/dev/null
 bun run build
 popd >/dev/null
 

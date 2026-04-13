@@ -4,20 +4,19 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react-swc";
-import type { Plugin } from "vite";
-import { defineConfig } from "vite";
-import { colorizeDevSettingsStartupBanner } from "../../packages/shared/src/dev-settings-banner-style.ts";
-import { prependDevSubsystemFigletHeading } from "../../packages/shared/src/dev-settings-figlet-heading.ts";
+import { defineConfig, type Plugin } from "vite";
+import { colorizeDevSettingsStartupBanner } from "../../eliza/packages/shared/src/dev-settings-banner-style.ts";
+import { prependDevSubsystemFigletHeading } from "../../eliza/packages/shared/src/dev-settings-figlet-heading.ts";
 import {
   type DevSettingsRow,
   formatDevSettingsTable,
-} from "../../packages/shared/src/dev-settings-table.ts";
+} from "../../eliza/packages/shared/src/dev-settings-table.ts";
 import {
   resolveDesktopApiPort,
   resolveDesktopApiPortPreference,
   resolveDesktopUiPort,
   resolveDesktopUiPortPreference,
-} from "../../packages/shared/src/runtime-env.ts";
+} from "../../eliza/packages/shared/src/runtime-env.ts";
 
 const _require = createRequire(import.meta.url);
 
@@ -26,6 +25,10 @@ const _require = createRequire(import.meta.url);
 // .ts files directly in CI.
 const here = path.dirname(fileURLToPath(import.meta.url));
 const miladyRoot = path.resolve(here, "../..");
+const nativePluginsRoot = path.join(
+  miladyRoot,
+  "eliza/packages/native-plugins",
+);
 
 /**
  * Pinned @elizaos/core from the repo root (must match the agent/runtime lock).
@@ -765,6 +768,7 @@ function watchWorkspacePackagesPlugin(): Plugin {
     name: "watch-workspace-packages",
     configureServer(server) {
       server.watcher.add(path.resolve(miladyRoot, "packages"));
+      server.watcher.add(nativePluginsRoot);
       server.watcher.on("change", (file) => {
         if (file.includes("/packages/")) {
           if (file.endsWith("package.json")) {
@@ -775,6 +779,49 @@ function watchWorkspacePackagesPlugin(): Plugin {
           }
         }
       });
+    },
+  };
+}
+
+/**
+ * Serve @elizaos/app-companion's public/ assets alongside the app's own
+ * public/ directory. In dev the companion dir is served as a fallback
+ * middleware; in build the files are copied into the output.
+ */
+function companionAssetsPlugin(): Plugin {
+  const companionPublic = path.resolve(
+    miladyRoot,
+    "eliza/plugins/app-companion/public",
+  );
+  return {
+    name: "companion-assets",
+    configureServer(server) {
+      // Serve companion public as fallback (after app public)
+      server.middlewares.use((req, res, next) => {
+        if (!req.url) return next();
+        const clean = req.url.split("?")[0];
+        const filePath = path.join(companionPublic, clean);
+        if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+          res.setHeader(
+            "Content-Type",
+            filePath.endsWith(".wasm")
+              ? "application/wasm"
+              : filePath.endsWith(".js")
+                ? "application/javascript"
+                : "application/octet-stream",
+          );
+          fs.createReadStream(filePath).pipe(res);
+        } else {
+          next();
+        }
+      });
+    },
+    closeBundle() {
+      // Copy companion public to dist at build time
+      if (fs.existsSync(companionPublic)) {
+        const outDir = path.resolve(here, "dist");
+        fs.cpSync(companionPublic, outDir, { recursive: true, force: false });
+      }
     },
   };
 }
@@ -806,6 +853,7 @@ export default defineConfig({
     ),
   },
   plugins: [
+    companionAssetsPlugin(),
     nativeModuleStubPlugin(),
     asyncLocalStoragePatchPlugin(),
     watchWorkspacePackagesPlugin(),
@@ -840,61 +888,95 @@ export default defineConfig({
       ]),
       // Capacitor plugins — resolve to local plugin sources
       {
-        find: /^@miladyai\/capacitor-agent$/,
-        replacement: path.resolve(here, "plugins/agent/src/index.ts"),
+        find: /^@elizaos\/capacitor-agent$/,
+        replacement: path.join(nativePluginsRoot, "agent/src/index.ts"),
       },
       {
-        find: /^@miladyai\/capacitor-camera$/,
-        replacement: path.resolve(here, "plugins/camera/src/index.ts"),
+        find: /^@elizaos\/capacitor-camera$/,
+        replacement: path.join(nativePluginsRoot, "camera/src/index.ts"),
       },
       {
-        find: /^@miladyai\/capacitor-canvas$/,
-        replacement: path.resolve(here, "plugins/canvas/src/index.ts"),
+        find: /^@elizaos\/capacitor-canvas$/,
+        replacement: path.join(nativePluginsRoot, "canvas/src/index.ts"),
       },
       {
-        find: /^@miladyai\/capacitor-desktop$/,
-        replacement: path.resolve(here, "plugins/desktop/src/index.ts"),
+        find: /^@elizaos\/capacitor-desktop$/,
+        replacement: path.join(nativePluginsRoot, "desktop/src/index.ts"),
       },
       {
-        find: /^@miladyai\/capacitor-gateway$/,
-        replacement: path.resolve(here, "plugins/gateway/src/index.ts"),
+        find: /^@elizaos\/capacitor-gateway$/,
+        replacement: path.join(nativePluginsRoot, "gateway/src/index.ts"),
       },
       {
-        find: /^@miladyai\/capacitor-location$/,
-        replacement: path.resolve(here, "plugins/location/src/index.ts"),
+        find: /^@elizaos\/capacitor-location$/,
+        replacement: path.join(nativePluginsRoot, "location/src/index.ts"),
       },
       {
-        find: /^@miladyai\/capacitor-mobile-signals$/,
-        replacement: path.resolve(here, "plugins/mobile-signals/src/index.ts"),
+        find: /^@elizaos\/capacitor-mobile-signals$/,
+        replacement: path.join(
+          nativePluginsRoot,
+          "mobile-signals/src/index.ts",
+        ),
       },
       {
-        find: /^@miladyai\/capacitor-screencapture$/,
-        replacement: path.resolve(here, "plugins/screencapture/src/index.ts"),
+        find: /^@elizaos\/capacitor-screencapture$/,
+        replacement: path.join(nativePluginsRoot, "screencapture/src/index.ts"),
       },
       {
-        find: /^@miladyai\/capacitor-swabble$/,
-        replacement: path.resolve(here, "plugins/swabble/src/index.ts"),
+        find: /^@elizaos\/capacitor-swabble$/,
+        replacement: path.join(nativePluginsRoot, "swabble/src/index.ts"),
       },
       {
-        find: /^@miladyai\/capacitor-talkmode$/,
-        replacement: path.resolve(here, "plugins/talkmode/src/index.ts"),
+        find: /^@elizaos\/capacitor-talkmode$/,
+        replacement: path.join(nativePluginsRoot, "talkmode/src/index.ts"),
       },
       {
-        find: /^@miladyai\/capacitor-websiteblocker$/,
-        replacement: path.resolve(here, "plugins/websiteblocker/src/index.ts"),
+        find: /^@elizaos\/capacitor-websiteblocker$/,
+        replacement: path.join(
+          nativePluginsRoot,
+          "websiteblocker/src/index.ts",
+        ),
       },
       {
         find: /^@miladyai\/plugin-selfcontrol\/(.*)/,
         replacement: path.resolve(
           miladyRoot,
-          "plugins/plugin-selfcontrol/src/$1",
+          "eliza/plugins/plugin-selfcontrol/src/$1",
         ),
       },
       {
         find: /^@miladyai\/plugin-selfcontrol$/,
         replacement: path.resolve(
           miladyRoot,
-          "plugins/plugin-selfcontrol/src/index.ts",
+          "eliza/plugins/plugin-selfcontrol/src/index.ts",
+        ),
+      },
+      {
+        find: /^@miladyai\/app-lifeops\/(.*)/,
+        replacement: path.resolve(
+          miladyRoot,
+          "eliza/plugins/app-lifeops/src/$1",
+        ),
+      },
+      {
+        find: /^@miladyai\/app-lifeops$/,
+        replacement: path.resolve(
+          miladyRoot,
+          "eliza/plugins/app-lifeops/src/index.ts",
+        ),
+      },
+      {
+        find: /^@elizaos\/plugin-lifeops-browser\/(.*)/,
+        replacement: path.resolve(
+          miladyRoot,
+          "eliza/plugins/app-lifeops/src/$1",
+        ),
+      },
+      {
+        find: /^@elizaos\/plugin-lifeops-browser$/,
+        replacement: path.resolve(
+          miladyRoot,
+          "eliza/plugins/app-lifeops/src/index.ts",
         ),
       },
       // Force local @elizaos/app-core when workspace-linked (prevents stale
@@ -902,7 +984,7 @@ export default defineConfig({
       ...(() => {
         const appCorePkgPath = path.resolve(
           miladyRoot,
-          "packages/app-core/package.json",
+          "eliza/packages/app-core/package.json",
         );
         const appCorePkgDir = path.dirname(appCorePkgPath);
         const appCorePkg = JSON.parse(fs.readFileSync(appCorePkgPath, "utf8"));
@@ -933,7 +1015,10 @@ export default defineConfig({
           }
         }
 
-        const uiSource = path.resolve(miladyRoot, "packages/ui/src");
+        const uiSource = path.resolve(
+          miladyRoot,
+          "eliza/packages/app-core/src/ui",
+        );
         const _autonomousSource = path.resolve(
           miladyRoot,
           "node_modules/@elizaos/agent/packages/agent/src",
@@ -983,12 +1068,6 @@ export default defineConfig({
       "three/examples/jsm/loaders/GLTFLoader.js",
       "three/examples/jsm/loaders/FBXLoader.js",
       "three/examples/jsm/webxr/VRButton.js",
-      // CJS polyfills that browser deps import as ESM named exports —
-      // pre-bundling converts them so Vite can serve named imports.
-      "events",
-      "util",
-      "buffer",
-      "stream-browserify",
     ],
     // Remap node: builtins to npm polyfills during dep optimization so
     // esbuild doesn't externalize them as "browser-external:node:*".

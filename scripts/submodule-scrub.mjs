@@ -56,14 +56,10 @@ async function scanAndDelete(dirPath) {
 
 async function main() {
   const rootDir = process.cwd();
-  console.log("Scanning cloud...");
-  const cloudCount = await scanAndDelete(join(rootDir, "cloud"));
-  console.log("Scanning eliza...");
+  console.log("Scanning eliza (includes nested cloud and steward-fi)...");
   const elizaCount = await scanAndDelete(join(rootDir, "eliza"));
 
-  console.log(
-    `Deleted ${cloudCount} cloud test files and ${elizaCount} eliza test files.`,
-  );
+  console.log(`Deleted ${elizaCount} eliza tree test files.`);
 }
 
 main().catch(console.error);

@@ -41,9 +41,9 @@ Main React UI and desktop shell.
 - settings UI
 - Electrobun native process under `apps/app/electrobun/`
 
-### `cloud/`
+### `eliza/cloud/`
 
-Eliza Cloud product code.
+Eliza Cloud product code (git submodule nested under `eliza/`).
 
 - apps
 - billing

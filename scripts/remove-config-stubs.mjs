@@ -38,7 +38,7 @@ async function main() {
     "vitest.config.ts",
     "apps/app/test/setup.ts",
     "vitest.unit.config.ts",
-    "packages/agent/vitest.e2e.config.ts",
+    "eliza/agent/vitest.e2e.config.ts",
     "test/setup.ts",
     "apps/app/vitest.config.ts",
   ];

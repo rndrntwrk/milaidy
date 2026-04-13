@@ -12,7 +12,7 @@ Use this skill for implementation work in this checkout. It replaces the older `
 - `packages/app-core/` for Milady runtime behavior, CLI, API, onboarding, config, and service routing
 - `packages/agent/` for Milady-specific providers, services, skills, and runtime glue around elizaOS
 - `apps/app/` for the React UI and Electrobun shell
-- `cloud/` for Eliza Cloud apps, billing, auth, containers, and app platform work
+- `eliza/cloud/` for Eliza Cloud apps, billing, auth, containers, and app platform work
 - `scripts/` and `docs/` for build/dev/release tooling and documentation
 - `eliza/` only when the issue is clearly upstream or the user explicitly wants upstream changes
 
@@ -46,7 +46,7 @@ bun run test:e2e
 - For prompt/provider/skill behavior: `packages/agent/src/`
 - For onboarding and routing between local, remote, and cloud: `packages/app-core/src/onboarding/` and `packages/app-core/src/runtime/`
 - For shipped default skills: `skills/` plus `scripts/ensure-skills.mjs`
-- For Eliza Cloud backend or monetization work: `cloud/` and the shipped `eliza-cloud` skill
+- For Eliza Cloud backend or monetization work: `eliza/cloud/` and the shipped `eliza-cloud` skill
 
 ## Cloud Bias
 

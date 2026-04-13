@@ -5,8 +5,7 @@ on:
     branches: [main, develop]
     paths:
       - "apps/app/**"
-      - "packages/ui/**"
-      - "packages/app-core/**"
+      - "eliza/packages/app-core/**"
       - ".github/workflows/mobile-build-smoke.yml"
   workflow_dispatch:
 

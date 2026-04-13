@@ -19,10 +19,8 @@ const skipLocalUpstreams =
   process.env.MILADY_SKIP_LOCAL_UPSTREAMS === "1" ||
   process.env.ELIZA_SKIP_LOCAL_UPSTREAMS === "1";
 const SUBMODULE_READINESS_MARKERS = {
-  cloud: ["package.json"],
   eliza: ["package.json", "packages/typescript/package.json"],
-  "plugins/plugin-agent-orchestrator": ["package.json"],
-  "steward-fi": ["package.json", "packages/api/package.json"],
+  "eliza/plugins/plugin-agent-orchestrator": ["package.json"],
   "test/contracts/lib/openzeppelin-contracts": [
     "package.json",
     "contracts/package.json",
@@ -33,13 +31,13 @@ const SUBMODULE_READINESS_MARKERS = {
 // typescript/ that Windows git rejects as invalid filenames. Skip checkout
 // until elizaos-plugins/plugin-openrouter#25 is merged; the package is
 // available via npm in the meantime.
-const SKIP_SUBMODULES = new Set(["plugins/plugin-openrouter"]);
+const SKIP_SUBMODULES = new Set(["eliza/plugins/plugin-openrouter"]);
 
 // Submodules whose own nested submodules should NOT be recursively initialized.
-// eliza's nested plugins/plugin-sql points to an internal commit that is not
-// publicly reachable, so --recursive would always fail on CI. We only need the
-// top-level eliza source tree (packages/typescript) for the build.
-const NO_RECURSE_SUBMODULES = new Set(["eliza"]);
+const NO_RECURSE_SUBMODULES = new Set([]);
+
+/** Top-level paths that moved under `eliza/`; drop stale gitlinks after migration. */
+const LEGACY_ROOT_SUBMODULE_PATHS = ["cloud", "steward-fi"];
 
 function getSubmoduleSkipReason(
   submodulePath,
@@ -88,6 +86,75 @@ export function loadTrackedSubmodules({ exec = execSync, cwd = root } = {}) {
     return parseTrackedSubmodules(output);
   } catch {
     return [];
+  }
+}
+
+/**
+ * After moving `cloud` and `steward-fi` under `eliza/`, older clones may still
+ * have gitlinks at the repo root. If `.gitmodules` no longer lists those paths
+ * but the index still does, remove them so postinstall does not clone into
+ * `./cloud` or `./steward-fi`.
+ */
+export function pruneLegacyRootSubmodulesMovedUnderEliza(
+  rootDir,
+  {
+    exec = execSync,
+    log = console.log,
+    logError = console.error,
+    exists = existsSync,
+  } = {},
+) {
+  const tracked = new Set(
+    loadTrackedSubmodules({ exec, cwd: rootDir }).map((s) => s.path),
+  );
+
+  for (const rel of LEGACY_ROOT_SUBMODULE_PATHS) {
+    if (tracked.has(rel)) {
+      continue;
+    }
+
+    let mode = "";
+    try {
+      const line = exec(`git ls-files -s -- "${rel}"`, {
+        cwd: rootDir,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      }).trim();
+      if (!line) {
+        continue;
+      }
+      mode = line.split(/\s+/)[0] ?? "";
+    } catch {
+      continue;
+    }
+
+    if (mode !== "160000") {
+      continue;
+    }
+
+    log(
+      `[init-submodules] Removing stale top-level submodule "${rel}" (now under eliza/). Deinitializing…`,
+    );
+    try {
+      exec(`git submodule deinit -f -- "${rel}"`, {
+        cwd: rootDir,
+        stdio: "inherit",
+      });
+    } catch {
+      // Best effort — worktree may already be missing.
+    }
+    try {
+      exec(`git rm -f -- "${rel}"`, {
+        cwd: rootDir,
+        stdio: "inherit",
+      });
+    } catch (err) {
+      logError(
+        `[init-submodules] Could not drop stale submodule "${rel}" from the index: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
   }
 }
 
@@ -140,6 +207,22 @@ export function runInitSubmodules({
     log("[init-submodules] No tracked submodules found — skipping");
     return { initialized: 0, alreadyInitialized: 0, failed: 0, submodules: [] };
   }
+
+  const hasLegacyRootCloudPaths = submodules.some(
+    (s) => s.path === "cloud" || s.path === "steward-fi",
+  );
+  if (hasLegacyRootCloudPaths) {
+    log(
+      "[init-submodules] This .gitmodules still lists cloud/ or steward-fi/ at the repo root. Pull the latest branch where those repos are nested under eliza/, or edit .gitmodules to match.",
+    );
+  }
+
+  pruneLegacyRootSubmodulesMovedUnderEliza(rootDir, {
+    exec,
+    log,
+    logError,
+    exists,
+  });
 
   let initialized = 0;
   let alreadyInitialized = 0;
@@ -266,6 +349,27 @@ export function runInitSubmodules({
       const message = err instanceof Error ? err.message : String(err);
       logError(
         `[init-submodules] Failed to initialize ${submodule.name} (${submodule.path}): ${message}`,
+      );
+    }
+  }
+
+  if (
+    !shouldSkipSubmodule("eliza") &&
+    exists(resolve(rootDir, "eliza", ".gitmodules"))
+  ) {
+    log(
+      "[init-submodules] Ensuring nested checkouts under eliza/ (cloud, steward-fi, plugins, …)…",
+    );
+    try {
+      exec(`git submodule update --init --recursive -- eliza`, {
+        cwd: rootDir,
+        stdio: "inherit",
+      });
+    } catch (err) {
+      logError(
+        `[init-submodules] Nested eliza submodule update failed (fix broken plugin submodules under eliza/ if needed): ${
+          err instanceof Error ? err.message : String(err)
+        }`,
       );
     }
   }

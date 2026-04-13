@@ -139,7 +139,7 @@ Removing bad, redundant, pointless, pedantic, larp, incomplete, and stub tests. 
 
 ### What I'm doing:
 1. **Phase 0-1 (DONE)**: knip/madge, removed 42 compiled `.js` from `packages/ui/src/`, fixed circular deps
-2. **Phase 2 (DONE)**: Created `packages/vrm-utils/` shared package
+2. **Phase 2 (DONE)**: Mixamo→VRM retarget helpers live under `plugins/app-companion/src/mixamo-retarget/`
 3. **Phase 3 (DONE)**: CSS cleanup
 4. **Phase 4 (IN PROGRESS)**: Migrating inline UI patterns to `@elizaos/app-core` components
 
@@ -148,14 +148,14 @@ Components now use Card, Select, Dialog from @elizaos/app-core. Their test mocks
 - `MediaSettingsSection.desktop.test.tsx` — needs Select/SelectTrigger/SelectValue/SelectContent/SelectItem
 - `DesktopWorkspaceSection.test.tsx` — needs Card/CardContent/CardHeader/CardTitle/Switch
 - `VoiceConfigView.desktop.test.tsx` — needs Card/Select mocks
-- `VrmAnimationLoader.test.ts` — mock path must be `@miladyai/vrm-utils` NOT `./retargetMixamoGltfToVrm`
+- `VrmAnimationLoader.test.ts` — mock dynamic import target `../../mixamo-retarget` (or `./retargetMixamoGltfToVrm` sibling) consistently with the loader
 
 **Dear test cleanup agent**: Please do NOT revert these test mock expansions. The source components have been migrated to use these UI library components, so the mocks must match. If you revert my mock changes, the tests will fail with "No X export defined on @elizaos/app-core mock".
 
 ### Files I'm actively editing:
 - Component files in `packages/app-core/src/components/` (UI migrations)
 - Test mock updates for the above
-- `packages/vrm-utils/` (new shared package)
+- `plugins/app-companion/src/mixamo-retarget/` (Mixamo retarget exports)
 - `.gitignore`, package.json files
 
 ### NOT touching:

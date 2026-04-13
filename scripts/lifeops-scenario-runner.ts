@@ -3,11 +3,11 @@ import process from "node:process";
 import {
   getLifeOpsLiveSetupWarnings,
   selectLifeOpsLiveProvider,
-} from "../packages/agent/test/helpers/lifeops-live-harness.ts";
+} from "../eliza/agent/test/helpers/lifeops-live-harness.ts";
 import {
   loadLifeOpsScenarioCatalog,
   runLifeOpsScenarioMatrix,
-} from "../packages/agent/test/helpers/lifeops-live-scenario-runner.ts";
+} from "../eliza/agent/test/helpers/lifeops-live-scenario-runner.ts";
 
 type CliOptions = {
   isolate: "shared" | "per-scenario";

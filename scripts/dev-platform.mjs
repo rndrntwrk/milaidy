@@ -67,11 +67,11 @@ import { createConnection } from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import chalk from "chalk";
-import { colorizeDevSettingsStartupBanner } from "../packages/shared/src/dev-settings-banner-style.ts";
+import { colorizeDevSettingsStartupBanner } from "../eliza/packages/shared/src/dev-settings-banner-style.ts";
 import {
   resolveDesktopApiPort,
   resolveDesktopUiPort,
-} from "../packages/shared/src/runtime-env.ts";
+} from "../eliza/packages/shared/src/runtime-env.ts";
 import { allocateFirstFreeLoopbackPort } from "./lib/allocate-loopback-port.mjs";
 import { signalSpawnedProcessTree } from "./lib/kill-process-tree.mjs";
 import { killUiListenPort } from "./lib/kill-ui-listen-port.mjs";
@@ -577,7 +577,7 @@ async function launch() {
     pushChild(
       "api",
       "bun",
-      ["--watch", "packages/app-core/src/runtime/dev-server.ts"],
+      ["--watch", "eliza/packages/app-core/src/runtime/dev-server.ts"],
       repoRoot,
       {
         NODE_ENV: "development",

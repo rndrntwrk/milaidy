@@ -111,7 +111,7 @@ export default defineConfig({
       {
         // App-core unit tests mock this plugin, but the specifier still has to
         // resolve during module graph construction under the root Vitest config.
-        find: "@miladyai/capacitor-agent",
+        find: "@elizaos/capacitor-agent",
         replacement: path.join(
           repoRoot,
           "test",
@@ -162,7 +162,7 @@ export default defineConfig({
       },
       {
         // `@elizaos/plugin-plugin-manager` is a real test dependency
-        // of `packages/app-core/src/services/app-manager.test.ts`
+        // of `eliza/packages/app-core/src/services/app-manager.test.ts`
         // which does `new PluginManagerService(...)` and then spy-
         // stubs its methods. The published dist is absent under
         // SKIP_LOCAL_UPSTREAMS, and aliasing to the submodule source
@@ -203,10 +203,6 @@ export default defineConfig({
               replacement: path.join(autonomousSourceRoot, "$1"),
             },
             {
-              find: /^@miladyai\/agent\/(.*)/,
-              replacement: path.join(autonomousSourceRoot, "$1"),
-            },
-            {
               find: "@elizaos/agent",
               replacement: resolveModuleEntry(
                 path.join(autonomousSourceRoot, "index"),
@@ -218,15 +214,6 @@ export default defineConfig({
               // Stub @elizaos/agent sub-path imports when the package is absent
               // so transitive imports (e.g. contracts/wallet) don't break tests.
               find: /^@elizaos\/agent(\/.*)?$/,
-              replacement: path.join(
-                repoRoot,
-                "test",
-                "stubs",
-                "module-fallback.mjs",
-              ),
-            },
-            {
-              find: /^@miladyai\/agent(\/.*)?$/,
               replacement: path.join(
                 repoRoot,
                 "test",
@@ -307,9 +294,10 @@ export default defineConfig({
           ]),
       // @elizaos/shared — always resolve subpath imports from source
       {
-        find: /^@miladyai\/plugin-selfcontrol\/(.*)/,
+        find: /^@elizaos\/plugin-selfcontrol\/(.*)/,
         replacement: path.join(
           repoRoot,
+          "eliza",
           "plugins",
           "plugin-selfcontrol",
           "src",
@@ -320,6 +308,7 @@ export default defineConfig({
         find: "@elizaos/plugin-selfcontrol",
         replacement: path.join(
           repoRoot,
+          "eliza",
           "plugins",
           "plugin-selfcontrol",
           "src",
@@ -327,13 +316,48 @@ export default defineConfig({
         ),
       },
       {
+        find: /^@elizaos\/app-lifeops\/(.*)/,
+        replacement: path.join(repoRoot, "eliza", "plugins", "app-lifeops", "src", "$1"),
+      },
+      {
+        find: "@elizaos/app-lifeops",
+        replacement: path.join(
+          repoRoot,
+          "eliza",
+          "plugins",
+          "app-lifeops",
+          "src",
+          "index.ts",
+        ),
+      },
+      {
+        find: /^@elizaos\/plugin-lifeops-browser\/(.*)/,
+        replacement: path.join(repoRoot, "eliza", "plugins", "plugin-lifeops-browser", "src", "$1"),
+      },
+      {
+        find: "@elizaos/plugin-lifeops-browser",
+        replacement: path.join(
+          repoRoot,
+          "eliza",
+          "plugins",
+          "plugin-lifeops-browser",
+          "src",
+          "index.ts",
+        ),
+      },
+      {
         find: /^@miladyai\/shared\/(.*)/,
-        replacement: path.join(repoRoot, "packages", "shared", "src", "$1"),
+        replacement: path.join(repoRoot, "eliza", "packages", "shared", "src", "$1"),
+      },
+      {
+        find: /^@elizaos\/shared\/(.*)/,
+        replacement: path.join(repoRoot, "eliza", "packages", "shared", "src", "$1"),
       },
       {
         find: "@elizaos/shared",
         replacement: path.join(
           repoRoot,
+          "eliza",
           "packages",
           "shared",
           "src",
@@ -352,23 +376,23 @@ export default defineConfig({
     // teardown, especially for jsdom-heavy test files.
     execArgv: ["--max-old-space-size=4096"],
     include: [
-      "packages/agent/src/**/*.test.ts",
-      "packages/agent/src/**/*.test.tsx",
-      "packages/agent/test/**/*.test.ts",
-      "packages/agent/test/**/*.test.tsx",
+      "eliza/packages/agent/src/**/*.test.ts",
+      "eliza/packages/agent/src/**/*.test.tsx",
+      "eliza/packages/agent/test/**/*.test.ts",
+      "eliza/packages/agent/test/**/*.test.tsx",
       // app-core src-colocated tests run here; test/ harness suites run in
       // the app-unit config (apps/app/vitest.config.ts) which provides the
       // correct @elizaos/app-core alias resolution. Running both in parallel
       // causes file-system race conditions on shared test fixtures.
-      "packages/app-core/src/**/*.test.ts",
-      "packages/shared/src/**/*.test.ts",
-      "packages/app-core/src/**/*.test.tsx",
-      "packages/agent/src/runtime/roles/test/**/*.test.ts",
-      "plugins/plugin-selfcontrol/src/**/*.test.ts",
+      "eliza/packages/app-core/src/**/*.test.ts",
+      "eliza/packages/shared/src/**/*.test.ts",
+      "eliza/packages/app-core/src/**/*.test.tsx",
+      "eliza/packages/agent/src/runtime/roles/test/**/*.test.ts",
+      "eliza/plugins/app-lifeops/src/selfcontrol/**/*.test.ts",
       "packages/plugin-wechat/src/**/*.test.ts",
-      "plugins/plugin-music-player/src/**/*.test.ts",
-      "plugins/plugin-discord/typescript/__tests__/identity.test.ts",
-      "plugins/plugin-discord/typescript/__tests__/slash-command-roles.test.ts",
+      "eliza/plugins/plugin-music-player/src/**/*.test.ts",
+      "eliza/plugins/plugin-discord/typescript/__tests__/identity.test.ts",
+      "eliza/plugins/plugin-discord/typescript/__tests__/slash-command-roles.test.ts",
       "src/**/*.test.ts",
       "scripts/**/*.test.ts",
       "apps/app/electrobun/src/**/*.test.ts",
@@ -411,8 +435,8 @@ export default defineConfig({
         "src/hooks/**",
         // Large files with inline TypeScript `type` imports that rolldown
         // (used by @vitest/coverage-v8) cannot parse. Covered by e2e tests.
-        "packages/agent/src/api/server.ts",
-        "packages/agent/src/runtime/eliza.ts",
+        "eliza/packages/agent/src/api/server.ts",
+        "eliza/packages/agent/src/runtime/eliza.ts",
       ],
     },
     server: {

@@ -9,7 +9,7 @@
 
 /* Scan @elizaos/app-core source so Tailwind generates CSS for all UI package classes
    (z-[160], z-[170], bg-black/80, bg-bg, text-muted, ring-ring, etc.) */
-@source "../../../packages/ui/src/**/*.{ts,tsx}";
+@source "../../../eliza/packages/ui/src/**/*.{ts,tsx}";
 /* Scan MDX doc content so Tailwind generates classes referenced inside .mdx files
    and the docs components. */
 @source "./src/docs/**/*.{ts,tsx,mdx}";

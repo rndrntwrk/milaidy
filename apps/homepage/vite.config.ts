@@ -73,7 +73,10 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      "@elizaos/app-core": path.resolve(here, "../../packages/ui/src/index.ts"),
+      "@elizaos/app-core": path.resolve(
+        here,
+        "../../eliza/packages/app-core/src/index.ts",
+      ),
     },
   },
   build: {

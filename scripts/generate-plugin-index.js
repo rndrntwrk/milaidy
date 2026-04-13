@@ -364,8 +364,15 @@ function readLocalPackageMetadata(dirName, npmName) {
   if (!dirName) return {};
   const candidates = [
     path.join(packageRoot, "packages", dirName, "package.json"),
-    path.join(packageRoot, "plugins", dirName, "typescript", "package.json"),
-    path.join(packageRoot, "plugins", dirName, "package.json"),
+    path.join(
+      packageRoot,
+      "eliza",
+      "plugins",
+      dirName,
+      "typescript",
+      "package.json",
+    ),
+    path.join(packageRoot, "eliza", "plugins", dirName, "package.json"),
   ];
 
   let metadata = {

@@ -33,7 +33,7 @@ const VOICE_MAP = {
 };
 
 // Character definitions — catchphrases extracted from
-// packages/shared/src/onboarding-presets.characters.ts
+// eliza/packages/shared/src/onboarding-presets.characters.ts
 const CHARACTERS = [
   {
     id: "chen",

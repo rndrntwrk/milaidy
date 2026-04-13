@@ -193,7 +193,7 @@ export default defineConfig({
       "**/node_modules/**",
       "apps/app/electrobun/**",
       "apps/chrome-extension/**",
-      "cloud/**",
+      "eliza/cloud/**",
     ],
     server: {
       deps: {

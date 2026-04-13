@@ -837,7 +837,7 @@ export function patchMissingLifecycleScript(
 function loadMiladyOnboardingPresetsSource(root, targetPath) {
   const sourcePath = resolve(
     root,
-    "packages/app-core/src/onboarding-presets.ts",
+    "eliza/packages/app-core/src/onboarding-presets.ts",
   );
   const source = readFileSync(sourcePath, "utf8");
   if (!targetPath?.endsWith(".js")) {
@@ -909,7 +909,7 @@ export function patchAutonomousMiladyOnboardingPresets(
     ...findPackageFilePaths(
       root,
       "@elizaos/agent",
-      "packages/agent/src/onboarding-presets.js",
+      "eliza/agent/src/onboarding-presets.js",
     ),
     ...findPackageFilePaths(
       root,
@@ -932,7 +932,7 @@ export function patchAutonomousMiladyOnboardingPresets(
     }
     patched = true;
     log(
-      "[patch-deps] Patched @elizaos/agent packages/agent/src/onboarding-presets.js: onboarding presets now derive from Milady.",
+      "[patch-deps] Patched @elizaos/agent eliza/agent/src/onboarding-presets.js: onboarding presets now derive from Milady.",
     );
   }
 

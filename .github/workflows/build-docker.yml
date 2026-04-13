@@ -138,7 +138,7 @@ jobs:
           MILADY_NO_VISION_DEPS: "1"
 
       # ── 6. Build Capacitor plugins ──────────────────────────────────────────
-      # The Vite UI imports @miladyai/capacitor-* workspace packages which need
+      # The Vite UI imports @elizaos/capacitor-* workspace packages which need
       # their dist/ built before vite can resolve them.
       - name: Build Capacitor plugins
         run: |
@@ -148,17 +148,17 @@ jobs:
       # ── 7. Build runtime workspace packages with source exports ─────────────
       - name: Build shared workspace
         run: |
-          cd packages/shared
+          cd eliza/packages/shared
           bun run build
 
       - name: Build selfcontrol workspace
         run: |
-          cd packages/plugin-selfcontrol
+          cd eliza/plugins/plugin-selfcontrol
           bun run build
 
       - name: Build agent workspace
         run: |
-          cd packages/agent
+          cd eliza/packages/agent
           bun run build:docker-dist
 
       # ── 8. Build bundled orchestrator workspace ─────────────────────────────
@@ -166,7 +166,7 @@ jobs:
       # dist/index.js export, so clean checkouts must build that package first.
       - name: Build bundled orchestrator workspace
         run: |
-          cd plugins/plugin-agent-orchestrator
+          cd eliza/plugins/plugin-agent-orchestrator
           bun run build
 
       # ── 9. Build runtime (tsdown) ───────────────────────────────────────────

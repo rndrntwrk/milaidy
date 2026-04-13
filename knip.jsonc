@@ -1,5 +1,5 @@
 {
-  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "$schema": "https://unpkg.com/knip@6next/schema.json",
   "ignore": [
     "**/*.d.ts",
     ".eslintrc.js",
@@ -34,7 +34,7 @@
       "project": ["src/**/*.{ts,tsx}", "scripts/**/*.{ts,mjs,js}"],
       "ignore": ["dist/**", "build/**", "coverage/**", "**/*.test.ts"]
     },
-    "packages/app-core": {
+    "eliza/packages/app-core": {
       "entry": [
         "src/index.ts",
         "src/runtime/dev-server.ts",
@@ -55,7 +55,11 @@
         "src/providers/index.ts",
         "src/bridge/index.ts",
         "src/bridge/electrobun-rpc.ts",
-        "src/bridge/electrobun-runtime.ts"
+        "src/bridge/electrobun-runtime.ts",
+        "src/ui/index.ts",
+        "src/ui/components/ui/*.tsx",
+        "src/ui/hooks/**/*.ts",
+        "src/ui/lib/*.ts"
       ],
       "project": ["src/**/*.{ts,tsx}"],
       "ignore": [
@@ -66,35 +70,12 @@
         "**/*.test.tsx"
       ]
     },
-    "packages/ui": {
-      "entry": [
-        "src/index.ts",
-        "src/components/ui/*.tsx",
-        "src/hooks/**/*.ts",
-        "src/lib/*.ts",
-        "src/stories/*.{ts,tsx}"
-      ],
-      "project": ["src/**/*.{ts,tsx}"],
-      "includeEntryExports": true
-    },
-    "packages/agent": {
+    "eliza/packages/agent": {
       "entry": ["src/index.ts"],
       "project": ["src/**/*.{ts,tsx}"],
       "ignore": ["test/**"]
     },
-    "packages/shared": {
-      "entry": ["src/index.ts"],
-      "project": ["src/**/*.{ts,tsx}"]
-    },
-    "packages/types": {
-      "entry": ["src/index.ts"],
-      "project": ["src/**/*.{ts,tsx}"]
-    },
-    "packages/vrm-utils": {
-      "entry": ["src/index.ts"],
-      "project": ["src/**/*.{ts,tsx}"]
-    },
-    "packages/plugin-wechat": {
+    "eliza/packages/shared": {
       "entry": ["src/index.ts"],
       "project": ["src/**/*.{ts,tsx}"]
     },

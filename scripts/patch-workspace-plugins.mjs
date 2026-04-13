@@ -29,10 +29,10 @@ const patchDir = resolve(__dirname, "workspace-plugin-patches");
  * Convention: patch file is named `<plugin-name>-<description>.patch`.
  */
 export const PLUGIN_PATCH_DIRS = {
-  "plugin-anthropic": "plugins/plugin-anthropic",
-  "plugin-google-genai": "plugins/plugin-google-genai",
-  "plugin-personality": "plugins/plugin-personality",
-  "plugin-agent-skills": "plugins/plugin-agent-skills",
+  "plugin-anthropic": "eliza/plugins/plugin-anthropic",
+  "plugin-google-genai": "eliza/plugins/plugin-google-genai",
+  "plugin-personality": "eliza/plugins/plugin-personality",
+  "plugin-agent-skills": "eliza/plugins/plugin-agent-skills",
 };
 
 export function resolvePluginDir(patchFile, { rootDir = root } = {}) {

@@ -26,10 +26,10 @@ const customDirs = dirsIdx >= 0 ? args.slice(dirsIdx + 1) : null;
 const ROOT = new URL("..", import.meta.url).pathname;
 
 const DEFAULT_DIRS = [
-  "packages/app-core/src/components",
-  "packages/app-core/src/hooks",
-  "packages/ui/src/components",
-  "packages/ui/src/hooks",
+  "eliza/packages/app-core/src/components",
+  "eliza/packages/app-core/src/hooks",
+  "eliza/packages/app-core/src/ui/components",
+  "eliza/packages/app-core/src/ui/hooks",
 ];
 
 const DIRS = (customDirs ?? DEFAULT_DIRS).map((d) =>

@@ -18,7 +18,6 @@
 - `packages/ui/` — Shared UI component library. Design primitives.
 - `packages/agent/` — Upstream elizaOS agent with core plugins.
 - `packages/shared/` — Shared utilities.
-- `packages/vrm-utils/` — VRM avatar utilities.
 - `packages/plugin-wechat/` — WeChat connector plugin.
 
 ### Key Dependencies

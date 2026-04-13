@@ -377,7 +377,7 @@ jobs:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: gradle-${{ runner.os }}-${{ hashFiles('apps/app/android/**/*.gradle*', 'apps/app/android/**/gradle-wrapper.properties', 'apps/app/plugins/websiteblocker/android/**/*.kt') }}
+          key: gradle-${{ runner.os }}-${{ hashFiles('apps/app/android/**/*.gradle*', 'apps/app/android/**/gradle-wrapper.properties', 'eliza/packages/native-plugins/websiteblocker/android/**/*.kt') }}
           restore-keys: gradle-${{ runner.os }}-
 
       - name: Initialize tracked workspace submodules

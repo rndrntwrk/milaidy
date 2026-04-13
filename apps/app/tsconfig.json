@@ -23,8 +23,8 @@
   "include": [
     "src/**/*.ts",
     "src/**/*.tsx",
-    "../../packages/app-core/src/ambient-modules.d.ts",
-    "../../packages/agent/src/external-modules.d.ts"
+    "../../eliza/packages/app-core/src/ambient-modules.d.ts",
+    "../../eliza/agent/src/external-modules.d.ts"
   ],
   "exclude": ["node_modules", "dist", "ios", "android", "electrobun"]
 }

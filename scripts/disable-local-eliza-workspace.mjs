@@ -48,9 +48,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const ELIZA_WORKSPACE_GLOB = "eliza/packages/*";
-export const PLUGIN_TYPESCRIPT_WORKSPACE_GLOB = "plugins/plugin-*/typescript";
+export const PLUGIN_ROOT_WORKSPACE_GLOB = "eliza/plugins/*";
+export const PLUGIN_TYPESCRIPT_WORKSPACE_GLOB =
+  "eliza/plugins/plugin-*/typescript";
 export const DISABLED_WORKSPACE_GLOBS = [
   ELIZA_WORKSPACE_GLOB,
+  PLUGIN_ROOT_WORKSPACE_GLOB,
   PLUGIN_TYPESCRIPT_WORKSPACE_GLOB,
 ];
 export const DEPENDENCY_FIELDS = [

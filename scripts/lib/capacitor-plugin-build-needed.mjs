@@ -1,6 +1,7 @@
 /**
- * Returns true if any Capacitor plugin under apps/app/plugins needs a rebuild
- * (missing dist or src / config newer than dist marker).
+ * Returns true if any Capacitor plugin under the given directory (typically
+ * `eliza/packages/native-plugins`) needs a rebuild (missing dist or src /
+ * config newer than dist marker).
  */
 import fs from "node:fs";
 import path from "node:path";
