@@ -65,7 +65,7 @@ pruneNestedElizaPluginCoreCopies(root);
 try {
   patchAutonomousMiladyOnboardingPresets(root);
 } catch {
-  // Source file may not exist (moved to @miladyai/shared).
+  // Source file may not exist (moved to @elizaos/shared).
 }
 
 function uniqueResolvedPaths(paths) {

@@ -4,7 +4,7 @@ import type {
   AppLaunchResult,
   AppSessionActionResult,
   AppSessionState,
-} from "@miladyai/shared/contracts/apps";
+} from "@elizaos/shared/contracts/apps";
 
 /** Inlined from packages/agent — keeps this plugin free of circular deps. */
 interface AppLaunchSessionContext {

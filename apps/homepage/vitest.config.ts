@@ -10,7 +10,7 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      "@miladyai/ui": path.resolve(here, "../../packages/ui/src/index.ts"),
+      "@elizaos/app-core": path.resolve(here, "../../packages/ui/src/index.ts"),
     },
   },
   test: {

@@ -201,12 +201,12 @@ export type {
   PermissionState,
   PermissionStatus,
   SystemPermissionId,
-} from "@miladyai/shared/contracts/permissions";
+} from "@elizaos/shared/contracts/permissions";
 
 import type {
   PermissionState,
   SystemPermissionId,
-} from "@miladyai/shared/contracts/permissions";
+} from "@elizaos/shared/contracts/permissions";
 
 /** Local variant uses an index signature (the canonical contract uses explicit keys). */
 export interface AllPermissionsState {

@@ -20,7 +20,7 @@ import {
   createDesktopStewardSidecar,
   type StewardSidecar,
   type StewardSidecarStatus,
-} from "@miladyai/app-core/services/steward-sidecar";
+} from "@elizaos/app-core/services/steward-sidecar";
 
 // ---------------------------------------------------------------------------
 // Types

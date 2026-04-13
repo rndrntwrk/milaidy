@@ -31,7 +31,7 @@
   "author": "Milady",
   "license": "MIT",
   "dependencies": {
-    "@miladyai/app-core": "workspace:*"
+    "@elizaos/app-core": "workspace:*"
   },
   "repository": {
     "type": "git",

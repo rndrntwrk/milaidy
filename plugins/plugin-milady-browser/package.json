@@ -1,5 +1,5 @@
 {
-  "name": "@miladyai/plugin-milady-browser",
+  "name": "@elizaos/plugin-milady-browser",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@elizaos/core": "workspace:*",
-    "@miladyai/agent": "workspace:*"
+    "@elizaos/agent": "workspace:*"
   },
   "agentConfig": {
     "pluginType": "elizaos:plugin:1.0.0",

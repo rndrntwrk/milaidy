@@ -22,7 +22,7 @@ const bridgeStubPath = path.join(
 );
 
 /**
- * Custom Vite plugin that redirects @miladyai/app-core/bridge imports to
+ * Custom Vite plugin that redirects @elizaos/app-core/bridge imports to
  * the test shim before Vite's built-in resolver tries to resolve through
  * the package's exports map (which may reference native bindings that are
  * unavailable in the test environment).
@@ -33,9 +33,9 @@ function appCoreBridgeStubPlugin(): Plugin {
     enforce: "pre",
     resolveId(source) {
       if (
-        source === "@miladyai/app-core/bridge/electrobun-rpc" ||
-        source === "@miladyai/app-core/bridge/electrobun-runtime" ||
-        source === "@miladyai/app-core/bridge"
+        source === "@elizaos/app-core/bridge/electrobun-rpc" ||
+        source === "@elizaos/app-core/bridge/electrobun-runtime" ||
+        source === "@elizaos/app-core/bridge"
       ) {
         return bridgeStubPath;
       }
@@ -85,8 +85,8 @@ export default defineConfig({
               if (typeof value === "string") {
                 const aliasKey =
                   key === "."
-                    ? "@miladyai/app-core"
-                    : `@miladyai/app-core/${key.replace(/^\.\//, "")}`;
+                    ? "@elizaos/app-core"
+                    : `@elizaos/app-core/${key.replace(/^\.\//, "")}`;
                 const targetPath = path.resolve(
                   appCorePackageRoot,
                   "..",
@@ -105,7 +105,7 @@ export default defineConfig({
                 }
               }
             }
-            // Catch-all: resolve any @miladyai/app-core sub-path imports
+            // Catch-all: resolve any @elizaos/app-core sub-path imports
             // not explicitly listed in the exports map directly to the
             // source tree (e.g. components/Header → src/components/Header).
             generatedAliases.push({
@@ -119,7 +119,7 @@ export default defineConfig({
             return generatedAliases;
           })()
         : []),
-      // Resolve @miladyai/agent sub-path imports to the source tree
+      // Resolve @elizaos/agent sub-path imports to the source tree
       ...(agentSourceRoot
         ? [
             {
@@ -222,7 +222,7 @@ export default defineConfig({
     globals: true,
     server: {
       deps: {
-        inline: ["@miladyai/app-core"],
+        inline: ["@elizaos/app-core"],
       },
     },
   },

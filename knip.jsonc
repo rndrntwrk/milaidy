@@ -1,65 +1,43 @@
 {
-  "$schema": "https://unpkg.com/knip@next/schema.json",
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignore": [
+    "**/*.d.ts",
+    ".eslintrc.js",
+    "**/__tests__/**",
+    "**/__mocks__/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/.vite/**",
+    "**/test-results/**",
+    "**/.playwright-artifacts*/**",
+    "**/*.spec.ts-snapshots/**",
+    "node_modules/**",
+    "test/contracts/lib/**"
+  ],
+  "ignoreDependencies": ["typescript"],
   "workspaces": {
     ".": {
       "entry": [
+        "src/entry.ts",
         "milady.mjs",
-        "scripts/**/*.ts",
+        "scripts/*.js",
+        "scripts/*.mjs",
+        "scripts/*.ts",
+        "scripts/**/*.js",
         "scripts/**/*.mjs",
-        "scripts/**/*.js"
+        "scripts/**/*.ts",
+        "scripts/rt.sh",
+        "tsdown.electrobun.config.ts",
+        "tsdown.electrobun.config.test.ts",
+        "vitest.live.config.ts"
       ],
-      "project": ["scripts/**/*.ts"],
+      "project": ["src/**/*.{ts,tsx}", "scripts/**/*.{ts,mjs,js}"],
       "ignore": ["dist/**", "build/**", "coverage/**", "**/*.test.ts"]
-    },
-    "apps/app": {
-      "entry": [
-        "src/main.tsx",
-        "vite.config.ts",
-        "vitest.config.ts",
-        "index.html",
-        "capacitor.config.ts"
-      ],
-      "project": ["src/**/*.{ts,tsx}"],
-      "ignore": [
-        "dist/**",
-        "build/**",
-        "coverage/**",
-        "**/*.test.ts",
-        "public/**",
-        "test/**",
-        ".storybook/**",
-        "src/stories/**",
-        "playwright.electrobun.packaged.config.ts",
-        "cypress.config.ts",
-        "**/*.cy.ts",
-        "**/cypress/**",
-        "tsdown.config.ts"
-      ]
-    },
-    "apps/app/electrobun": {
-      "entry": [
-        "src/index.ts",
-        "src/bridge/electrobun-preload.ts",
-        "electrobun.config.ts",
-        "vitest.config.ts"
-      ],
-      "project": ["src/**/*.ts", "scripts/**/*.ts"],
-      "ignore": [
-        "build/**",
-        "coverage/**",
-        "src/preload.js",
-        "src/libMacWindowEffects.dylib",
-        "src/**/__tests__/**"
-      ]
-    },
-    "apps/homepage": {
-      "entry": ["src/main.tsx", "vite.config.ts", "index.html"],
-      "project": ["src/**/*.{ts,tsx}"],
-      "ignore": ["dist/**", "build/**", "coverage/**", "public/**"]
     },
     "packages/app-core": {
       "entry": [
         "src/index.ts",
+        "src/runtime/dev-server.ts",
         "src/api/index.ts",
         "src/config/index.ts",
         "src/events/index.ts",
@@ -85,10 +63,90 @@
         "build/**",
         "coverage/**",
         "**/*.test.ts",
-        "**/*.test.tsx",
-        "**/__tests__/**"
+        "**/*.test.tsx"
       ]
+    },
+    "packages/ui": {
+      "entry": [
+        "src/index.ts",
+        "src/components/ui/*.tsx",
+        "src/hooks/**/*.ts",
+        "src/lib/*.ts",
+        "src/stories/*.{ts,tsx}"
+      ],
+      "project": ["src/**/*.{ts,tsx}"],
+      "includeEntryExports": true
+    },
+    "packages/agent": {
+      "entry": ["src/index.ts"],
+      "project": ["src/**/*.{ts,tsx}"],
+      "ignore": ["test/**"]
+    },
+    "packages/shared": {
+      "entry": ["src/index.ts"],
+      "project": ["src/**/*.{ts,tsx}"]
+    },
+    "packages/types": {
+      "entry": ["src/index.ts"],
+      "project": ["src/**/*.{ts,tsx}"]
+    },
+    "packages/vrm-utils": {
+      "entry": ["src/index.ts"],
+      "project": ["src/**/*.{ts,tsx}"]
+    },
+    "packages/plugin-wechat": {
+      "entry": ["src/index.ts"],
+      "project": ["src/**/*.{ts,tsx}"]
+    },
+    "apps/app": {
+      "entry": [
+        "src/main.tsx",
+        "src/stubs/*.ts",
+        "vite.config.ts",
+        "vitest.config.ts",
+        "index.html",
+        "capacitor.config.ts"
+      ],
+      "project": ["src/**/*.{ts,tsx}"],
+      "ignore": [
+        "dist/**",
+        "build/**",
+        "coverage/**",
+        "**/*.test.ts",
+        "public/**",
+        "test/**",
+        ".storybook/**",
+        "src/stories/**",
+        "electrobun/**",
+        "plugins/**",
+        "playwright.electrobun.packaged.config.ts",
+        "cypress.config.ts",
+        "**/*.cy.ts",
+        "**/cypress/**",
+        "tsdown.config.ts"
+      ]
+    },
+    "apps/app/electrobun": {
+      "entry": [
+        "src/index.ts",
+        "src/native/agent.ts",
+        "src/bridge/electrobun-preload.ts",
+        "electrobun.config.ts",
+        "vitest.config.ts"
+      ],
+      "project": ["src/**/*.{ts,tsx}", "scripts/**/*.ts"],
+      "ignore": [
+        "build/**",
+        "coverage/**",
+        "src/preload.js",
+        "src/libMacWindowEffects.dylib",
+        "src/**/__tests__/**"
+      ]
+    },
+    "apps/homepage": {
+      "entry": ["src/main.tsx", "vite.config.ts", "index.html"],
+      "project": ["src/**/*.{ts,tsx}"],
+      "ignore": ["dist/**", "build/**", "coverage/**", "public/**"]
     }
-  },
-  "ignore": ["**/*.d.ts", ".eslintrc.js", "**/__tests__/**", "**/__mocks__/**"]
+  }
 }

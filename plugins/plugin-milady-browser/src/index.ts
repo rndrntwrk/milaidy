@@ -9,7 +9,7 @@ import {
 } from "./wallet-action";
 
 export const miladyBrowserPlugin: Plugin = {
-  name: "@miladyai/plugin-milady-browser",
+  name: "@elizaos/plugin-milady-browser",
   description:
     "Controls Milady browser workspace tabs and Steward wallet signing requests across the desktop bridge and web iframe workspace.",
   actions: [

@@ -10,6 +10,9 @@ export default defineConfig({
   test: {
     ...(config.test ?? {}),
     include: [
+      "eliza/agent/test/**/*.live.test.ts",
+      "eliza/packages/app-core/test/**/*.live.test.ts",
+      "eliza/packages/app-core/test/**/*.live.e2e.test.ts",
       "packages/agent/test/**/*.live.test.ts",
       "packages/app-core/test/**/*.live.test.ts",
       "packages/app-core/test/**/*.live.e2e.test.ts",

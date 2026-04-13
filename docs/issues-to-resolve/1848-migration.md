@@ -2,7 +2,7 @@
 
 ## Summary
 
-**New direction (from Shaw):** Consolidate `@miladyai/app-core` + `@miladyai/ui` into a single `@elizaos/app-ui` package and move it upstream into `elizaOS/eliza`. This reverses the earlier "stay in milady" path. Since eliza is a git submodule of milady, both sides of the rename are controlled in lockstep.
+**New direction (from Shaw):** Consolidate `@elizaos/app-core` + `@elizaos/app-core` into a single `@elizaos/app-ui` package and move it upstream into `elizaOS/eliza`. This reverses the earlier "stay in milady" path. Since eliza is a git submodule of milady, both sides of the rename are controlled in lockstep.
 
 ## Proposed Phases
 
@@ -37,7 +37,7 @@
 ### HIGH RISKS
 4. **Phase 3 `packages/autonomous` split.** This package likely has tight coupling between "eliza-shaped" and "milady-specific" code. Splitting requires understanding every dependency edge.
 5. **Build system complexity.** Moving packages upstream while maintaining the submodule workflow means builds now span two repos with synchronized versions.
-6. **Import path churn.** Every file that imports from `@miladyai/app-core` or `@miladyai/ui` needs updating. This is hundreds of files.
+6. **Import path churn.** Every file that imports from `@elizaos/app-core` or `@elizaos/app-core` needs updating. This is hundreds of files.
 
 ### MEDIUM RISKS
 7. **Plugin extraction (Phase 2).** Plugin-shaped code in `src/plugins/*` may have milady-specific assumptions (config paths, env vars, API endpoints) that don't generalize.

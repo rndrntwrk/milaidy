@@ -4,7 +4,7 @@ import { rsSdkProviders } from "./providers/index.js";
 import { rsSdkActions } from "./actions/index.js";
 
 export const rs2004scapePlugin: Plugin = {
-  name: "@miladyai/plugin-2004scape",
+  name: "@elizaos/plugin-2004scape",
   description:
     "Autonomous 2004scape game agent — WebSocket SDK, LLM-driven game loop, 32 game actions, and 4 world-context providers.",
 

@@ -88,7 +88,7 @@ RUN set -eux; \
   cp -a milady.mjs package.json plugins.json /runtime/; \
   sed -i 's/const stats = service.getCatalogStats();/const stats = typeof service.getCatalogStats === "function" ? service.getCatalogStats() : { loaded: 0, total: 0, storageType: "unknown" };/g' /runtime/node_modules/@elizaos/plugin-agent-skills/dist/index.js 2>/dev/null || true; \
   if [ -n "${VERSION_CLEAN}" ]; then \
-    node -e "const fs=require('fs'); const v=process.argv[1]; const p='/runtime/node_modules/@miladyai/agent/package.json'; try { const pkg=JSON.parse(fs.readFileSync(p,'utf8')); pkg.version=v; fs.writeFileSync(p, JSON.stringify(pkg, null, 2)); console.log('Patched autonomous to', v); } catch (err) { console.log('skip:', err.message); }" "${VERSION_CLEAN}"; \
+    node -e "const fs=require('fs'); const v=process.argv[1]; const p='/runtime/node_modules/@elizaos/agent/package.json'; try { const pkg=JSON.parse(fs.readFileSync(p,'utf8')); pkg.version=v; fs.writeFileSync(p, JSON.stringify(pkg, null, 2)); console.log('Patched autonomous to', v); } catch (err) { console.log('skip:', err.message); }" "${VERSION_CLEAN}"; \
   fi; \
   # ---------- Safe cleanup only (no .bun store pruning — transitive deps break) ----------
   # Only remove top-level symlinks for packages that are confirmed unused AND

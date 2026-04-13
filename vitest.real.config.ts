@@ -18,6 +18,8 @@ import {
   getAppCoreSourceRoot,
   getAutonomousSourceRoot,
   getElizaCoreEntry,
+  getSharedSourceRoot,
+  getUiSourceRoot,
   resolveModuleEntry,
 } from "./test/eliza-package-paths";
 
@@ -36,6 +38,8 @@ const elizaCoreRolesEntry = fs.existsSync(elizaCoreRolesSource)
   : path.join(repoRoot, "scripts", "lib", "elizaos-core-roles-shim.js");
 const autonomousSourceRoot = getAutonomousSourceRoot(repoRoot);
 const appCoreSourceRoot = getAppCoreSourceRoot(repoRoot);
+const sharedSourceRoot = getSharedSourceRoot(repoRoot);
+const uiSourceRoot = getUiSourceRoot(repoRoot);
 
 process.env.MILADY_LIVE_TEST = "1";
 process.env.ELIZA_LIVE_TEST = "1";
@@ -70,7 +74,7 @@ export default defineConfig({
               replacement: path.join(autonomousSourceRoot, "$1"),
             },
             {
-              find: "@miladyai/agent",
+              find: "@elizaos/agent",
               replacement: resolveModuleEntry(
                 path.join(autonomousSourceRoot, "index"),
               ),
@@ -92,10 +96,22 @@ export default defineConfig({
               replacement: path.join(appCoreSourceRoot, "$1"),
             },
             {
-              find: "@miladyai/app-core",
+              find: "@elizaos/app-core",
               replacement: resolveModuleEntry(
                 path.join(appCoreSourceRoot, "index"),
               ),
+            },
+          ]
+        : []),
+      ...(uiSourceRoot
+        ? [
+            {
+              find: /^@elizaos\/ui\/(.*)/,
+              replacement: path.join(uiSourceRoot, "$1"),
+            },
+            {
+              find: "@elizaos/ui",
+              replacement: resolveModuleEntry(path.join(uiSourceRoot, "index")),
             },
           ]
         : []),
@@ -110,7 +126,7 @@ export default defineConfig({
         ),
       },
       {
-        find: "@miladyai/plugin-selfcontrol",
+        find: "@elizaos/plugin-selfcontrol",
         replacement: path.join(
           repoRoot,
           "packages",
@@ -119,20 +135,26 @@ export default defineConfig({
           "index.ts",
         ),
       },
-      {
-        find: /^@miladyai\/shared\/(.*)/,
-        replacement: path.join(repoRoot, "packages", "shared", "src", "$1"),
-      },
-      {
-        find: "@miladyai/shared",
-        replacement: path.join(
-          repoRoot,
-          "packages",
-          "shared",
-          "src",
-          "index.ts",
-        ),
-      },
+      ...(sharedSourceRoot
+        ? [
+            {
+              find: /^@elizaos\/shared\/(.*)/,
+              replacement: path.join(sharedSourceRoot, "$1"),
+            },
+            {
+              find: "@elizaos/shared",
+              replacement: path.join(sharedSourceRoot, "index.ts"),
+            },
+            {
+              find: /^@miladyai\/shared\/(.*)/,
+              replacement: path.join(sharedSourceRoot, "$1"),
+            },
+            {
+              find: "@elizaos/shared",
+              replacement: path.join(sharedSourceRoot, "index.ts"),
+            },
+          ]
+        : []),
     ],
   },
   test: {
@@ -177,8 +199,8 @@ export default defineConfig({
       deps: {
         inline: [
           "@elizaos/core",
-          "@miladyai/agent",
-          "@miladyai/app-core",
+          "@elizaos/agent",
+          "@elizaos/app-core",
           /^@miladyai\/shared/,
           /^@elizaos\/plugin-/,
           "zod",

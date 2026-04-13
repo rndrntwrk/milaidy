@@ -1,6 +1,6 @@
 ---
 name: eliza-plugin-dev
-description: Builds and modifies @elizaos/* plugins and the local @miladyai/plugin-* packages. Handles dynamic import plumbing, bun-exports patches, NODE_PATH hazards, and plugin auto-enable config. Use when adding a connector, fixing a plugin load failure, or changing plugin registration logic.
+description: Builds and modifies @elizaos/* plugins and the local @elizaos/plugin-* packages. Handles dynamic import plumbing, bun-exports patches, NODE_PATH hazards, and plugin auto-enable config. Use when adding a connector, fixing a plugin load failure, or changing plugin registration logic.
 tools: Read, Write, Edit, Bash, Grep, Glob
 model: opus
 color: green

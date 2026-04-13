@@ -5,7 +5,7 @@ import path from "node:path";
 import {
   resolveApiToken,
   resolveDesktopApiPort,
-} from "@miladyai/shared/runtime-env";
+} from "@elizaos/shared/runtime-env";
 import Electrobun, {
   ApplicationMenu,
   BrowserView,

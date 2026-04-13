@@ -15,7 +15,7 @@ import {
   type BrowserWorkspaceSubaction,
   type BrowserWorkspaceWaitState,
   executeBrowserWorkspaceCommand,
-} from "@miladyai/agent/services/browser-workspace";
+} from "@elizaos/agent/services/browser-workspace";
 
 type BrowserWorkspaceActionRequest = BrowserWorkspaceCommand;
 

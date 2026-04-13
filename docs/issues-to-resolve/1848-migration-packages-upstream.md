@@ -17,12 +17,12 @@ Proposal to consolidate `packages/app-core` + `packages/ui` into a single `@eliz
 - **All `@elizaos/*` deps**: Already `workspace:*` (local resolution)
 - **plugins/**: 20+ submodules already exist (orchestrator, anthropic, discord, etc.)
 - **Capacitor plugins**: 11 native plugins in `apps/app/plugins/` (agent, camera, canvas, desktop, gateway, location, mobile-signals, screencapture, swabble, talkmode, websiteblocker)
-- **Thin-wrapper pattern already exists**: `packages/agent` is published as both `@miladyai/agent` and `@elizaos/agent` — migration can follow this pattern
+- **Thin-wrapper pattern already exists**: `packages/agent` is published as both `@elizaos/agent` and `@elizaos/agent` — migration can follow this pattern
 
 ## Integration Assessment
 
 ### Phase 1: Consolidate app-core + ui → @elizaos/app-ui upstream
-- **Blast radius**: ~312 direct `from "@miladyai/app-core"` imports + ~194 `from "@miladyai/ui"` imports (506 total)
+- **Blast radius**: ~312 direct `from "@elizaos/app-core"` imports + ~194 `from "@elizaos/app-core"` imports (506 total)
 - **Combined size**: 1,415 files, ~329k LOC to move
 - **Mechanical work**: Large but straightforward rename. Since `eliza` is a submodule, both sides change in one PR
 - **Risk**: HIGH — 329k LOC move. Merge conflicts with any parallel work. Build system changes.

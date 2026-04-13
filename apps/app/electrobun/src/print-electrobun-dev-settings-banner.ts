@@ -1,13 +1,13 @@
-import { colorizeDevSettingsStartupBanner } from "@miladyai/shared/dev-settings-banner-style";
-import { prependDevSubsystemFigletHeading } from "@miladyai/shared/dev-settings-figlet-heading";
+import { colorizeDevSettingsStartupBanner } from "@elizaos/shared/dev-settings-banner-style";
+import { prependDevSubsystemFigletHeading } from "@elizaos/shared/dev-settings-figlet-heading";
 import {
   type DevSettingsRow,
   formatDevSettingsTable,
-} from "@miladyai/shared/dev-settings-table";
+} from "@elizaos/shared/dev-settings-table";
 import {
   firstWinningEnvString,
   resolveDesktopApiPortPreference,
-} from "@miladyai/shared/runtime-env";
+} from "@elizaos/shared/runtime-env";
 import { resolveDesktopRuntimeMode } from "./api-base";
 import { resolveMainWindowPartition } from "./main-window-session";
 

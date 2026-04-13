@@ -13,7 +13,7 @@ import type { PluginListenerHandle } from "@capacitor/core";
 import {
   invokeDesktopBridgeRequest,
   subscribeDesktopBridgeEvent,
-} from "@miladyai/app-core/bridge/electrobun-rpc.js";
+} from "@elizaos/app-core/bridge/electrobun-rpc.js";
 import type { EventCallback } from "../../../shared-types.js";
 import type {
   LocationErrorEvent,

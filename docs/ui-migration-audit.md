@@ -100,7 +100,7 @@ These files in `packages/app-core` contain Milady-specific code that should be i
 ## 5. API Server Monolith (HIGH PRIORITY)
 
 `packages/app-core/src/api/server.ts` is **3,730 lines** — a monolithic file that:
-- Re-exports all of `@miladyai/agent/api/server`
+- Re-exports all of `@elizaos/agent/api/server`
 - Overrides 6 upstream functions
 - Adds 30+ Milady-specific endpoint handlers
 - Contains ElevenLabs API key aliasing
@@ -221,7 +221,7 @@ Duplication exists because renderer can't import main-process modules. This is a
 
 **Active agents working on related tasks (see docs/collaboration.md):**
 1. **AppContext Decomposition agent** — Breaking up the 6,951-line AppContext.tsx god object
-2. **Dedup & UI Migration agent** — Already migrating inline UI patterns to `@miladyai/ui`, created `packages/vrm-utils`
+2. **Dedup & UI Migration agent** — Already migrating inline UI patterns to `@elizaos/app-core`, created `packages/vrm-utils`
 3. **Code Quality agent** — Splitting server.ts, removing dead code, fixing bugs
 4. **Test Cleanup agent** — Removing dead/stub tests
 

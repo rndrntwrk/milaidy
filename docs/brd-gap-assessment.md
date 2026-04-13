@@ -157,7 +157,7 @@ The remaining gaps (now addressed) were:
 #### Research Document
 
 **Option A: Monolithic LifeOps Plugin**
-Create a single `@miladyai/plugin-lifeops` with all actions:
+Create a single `@elizaos/plugin-lifeops` with all actions:
 - `createLifeOpsItem` — LLM classifies intent (task/habit/goal/reminder) and calls appropriate service method
 - `queryLifeOps` — Handles "what's on my calendar?", "any important emails?", "what are my goals?"
 - `modifyLifeOps` — Handles snooze, complete, skip, reschedule, update
@@ -176,7 +176,7 @@ Add actions directly in `packages/agent/src/lifeops/actions/`:
 *Cons:* Not reusable outside Milady agent, tighter coupling
 
 **Option C: Hybrid — Plugin shell with service delegation**
-Create `@miladyai/plugin-lifeops` that registers actions, but each action delegates to the existing `LifeOpsService` instance via runtime context.
+Create `@elizaos/plugin-lifeops` that registers actions, but each action delegates to the existing `LifeOpsService` instance via runtime context.
 
 *Pros:* Clean plugin boundary, reusable, testable, uses existing service
 *Cons:* Need to ensure service is available in runtime context

@@ -54,7 +54,7 @@ async function flushPendingTrajectoryWrites(
 ): Promise<void> {
   try {
     const { flushTrajectoryWrites } = await import(
-      "../../packages/agent/src/runtime/trajectory-storage"
+      "../../eliza/agent/src/runtime/trajectory-storage"
     );
     await flushTrajectoryWrites(runtime);
   } catch {

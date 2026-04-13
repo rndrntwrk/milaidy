@@ -16,9 +16,9 @@ WORKDIR /app
 COPY . .
 
 RUN node scripts/relink-workspace-packages-to-dist.mjs \
-  @miladyai/shared \
-  @miladyai/plugin-selfcontrol \
-  @miladyai/agent
+  @elizaos/shared \
+  @elizaos/plugin-selfcontrol \
+  @elizaos/agent
 
 # Patch plugin-agent-skills getCatalogStats crash (alpha.11 vs alpha.66 interface mismatch)
 RUN sed -i 's/const stats = service.getCatalogStats();/const stats = typeof service.getCatalogStats === "function" ? service.getCatalogStats() : { loaded: 0, total: 0, storageType: "unknown" };/g' node_modules/@elizaos/plugin-agent-skills/dist/index.js 2>/dev/null || true
@@ -30,9 +30,9 @@ RUN if [ -n "${VERSION_CLEAN}" ]; then \
   const fs = require('fs'); \
   const v = '${VERSION_CLEAN}'; \
   try { \
-  const p = JSON.parse(fs.readFileSync('node_modules/@miladyai/agent/package.json', 'utf8')); \
+  const p = JSON.parse(fs.readFileSync('node_modules/@elizaos/agent/package.json', 'utf8')); \
   p.version = v; \
-  fs.writeFileSync('node_modules/@miladyai/agent/package.json', JSON.stringify(p, null, 2)); \
+  fs.writeFileSync('node_modules/@elizaos/agent/package.json', JSON.stringify(p, null, 2)); \
   console.log('Patched autonomous to', v); \
   } catch(e) { console.log('skip:', e.message); } \
   "; \

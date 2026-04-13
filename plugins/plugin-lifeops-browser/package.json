@@ -1,5 +1,5 @@
 {
-  "name": "@miladyai/plugin-lifeops-browser",
+  "name": "@elizaos/plugin-lifeops-browser",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -10,8 +10,8 @@
   },
   "dependencies": {
     "@elizaos/core": "workspace:*",
-    "@miladyai/agent": "workspace:*",
-    "@miladyai/shared": "workspace:*"
+    "@elizaos/agent": "workspace:*",
+    "@elizaos/shared": "workspace:*"
   },
   "agentConfig": {
     "pluginType": "elizaos:plugin:1.0.0",

@@ -23,7 +23,7 @@ import {
     getMiladyCuratedAppDefinition,
     isMiladyCuratedAppName,
     normalizeMiladyCuratedAppName,
-} from "@miladyai/shared/contracts/apps";
+} from "@elizaos/shared/contracts/apps";
 import appScapePlugin, {
     createAppScapePlugin,
 } from "@elizaos/app-scape";

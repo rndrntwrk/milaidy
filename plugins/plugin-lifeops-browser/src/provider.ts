@@ -5,8 +5,8 @@ import type {
   ProviderResult,
   State,
 } from "@elizaos/core";
-import { LifeOpsService } from "@miladyai/agent/lifeops/service";
-import { hasAdminAccess } from "@miladyai/agent/security/access";
+import { LifeOpsService } from "@elizaos/agent/lifeops/service";
+import { hasAdminAccess } from "@elizaos/agent/security/access";
 
 function formatSettingsLine(
   settings: Awaited<ReturnType<LifeOpsService["getBrowserSettings"]>>,

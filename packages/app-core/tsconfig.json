@@ -12,9 +12,9 @@
     "baseUrl": "../../",
     "paths": {
       "@miladyai/plugin-selfcontrol": [
-        "./packages/plugin-selfcontrol/src/index.ts"
+        "./plugins/plugin-selfcontrol/src/index.ts"
       ],
-      "@miladyai/plugin-selfcontrol/*": ["./packages/plugin-selfcontrol/src/*"],
+      "@miladyai/plugin-selfcontrol/*": ["./plugins/plugin-selfcontrol/src/*"],
       "@miladyai/ui": ["./packages/ui/src/index.ts"],
       "@miladyai/ui/*": ["./packages/ui/src/*"],
       "@miladyai/agent/*": ["./packages/agent/src/*"],

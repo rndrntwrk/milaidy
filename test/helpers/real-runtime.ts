@@ -22,7 +22,7 @@ import os from "node:os";
 import path from "node:path";
 import type { Plugin } from "@elizaos/core";
 import { AgentRuntime, createCharacter, logger } from "@elizaos/core";
-import { configureLocalEmbeddingPlugin } from "../../packages/agent/src/runtime/eliza";
+import { configureLocalEmbeddingPlugin } from "../../eliza/agent/src/runtime/eliza";
 import {
   selectLiveProvider,
   type LiveProviderConfig,
@@ -77,7 +77,7 @@ async function flushPendingTrajectoryWrites(
 ): Promise<void> {
   try {
     const { flushTrajectoryWrites } = await import(
-      "../../packages/agent/src/runtime/trajectory-storage"
+      "../../eliza/agent/src/runtime/trajectory-storage"
     );
     await flushTrajectoryWrites(runtime);
   } catch {

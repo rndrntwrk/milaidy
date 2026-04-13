@@ -1,12 +1,13 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { defineConfig } from "vitest/config";
 import {
   getAppCoreSourceRoot,
   getAutonomousSourceRoot,
   getElizaCoreEntry,
   getInstalledPackageEntry,
+  getSharedSourceRoot,
+  getUiSourceRoot,
   resolveModuleEntry,
 } from "./test/eliza-package-paths";
 
@@ -28,6 +29,8 @@ const elizaCoreRolesEntry = fs.existsSync(elizaCoreRolesSource)
   : path.join(repoRoot, "scripts", "lib", "elizaos-core-roles-shim.js");
 const autonomousSourceRoot = getAutonomousSourceRoot(repoRoot);
 const appCoreSourceRoot = getAppCoreSourceRoot(repoRoot);
+const sharedSourceRoot = getSharedSourceRoot(repoRoot);
+const uiSourceRoot = getUiSourceRoot(repoRoot);
 const pluginPersonalityEntry =
   getInstalledPackageEntry("@elizaos/plugin-personality", repoRoot, "node") ??
   resolveModuleEntry(
@@ -92,7 +95,7 @@ const pluginWhatsappEntry =
     ),
   );
 
-export default defineConfig({
+export default {
   resolve: {
     alias: [
       {
@@ -128,7 +131,7 @@ export default defineConfig({
               replacement: path.join(autonomousSourceRoot, "$1"),
             },
             {
-              find: "@miladyai/agent",
+              find: "@elizaos/agent",
               replacement: resolveModuleEntry(
                 path.join(autonomousSourceRoot, "index"),
               ),
@@ -150,10 +153,22 @@ export default defineConfig({
               replacement: path.join(appCoreSourceRoot, "$1"),
             },
             {
-              find: "@miladyai/app-core",
+              find: "@elizaos/app-core",
               replacement: resolveModuleEntry(
                 path.join(appCoreSourceRoot, "index"),
               ),
+            },
+          ]
+        : []),
+      ...(uiSourceRoot
+        ? [
+            {
+              find: /^@elizaos\/ui\/(.*)/,
+              replacement: path.join(uiSourceRoot, "$1"),
+            },
+            {
+              find: "@elizaos/ui",
+              replacement: resolveModuleEntry(path.join(uiSourceRoot, "index")),
             },
           ]
         : []),
@@ -168,7 +183,7 @@ export default defineConfig({
         ),
       },
       {
-        find: "@miladyai/plugin-selfcontrol",
+        find: "@elizaos/plugin-selfcontrol",
         replacement: path.join(
           repoRoot,
           "packages",
@@ -177,6 +192,26 @@ export default defineConfig({
           "index.ts",
         ),
       },
+      ...(sharedSourceRoot
+        ? [
+            {
+              find: /^@elizaos\/shared\/(.*)/,
+              replacement: path.join(sharedSourceRoot, "$1"),
+            },
+            {
+              find: "@elizaos/shared",
+              replacement: path.join(sharedSourceRoot, "index.ts"),
+            },
+            {
+              find: /^@miladyai\/shared\/(.*)/,
+              replacement: path.join(sharedSourceRoot, "$1"),
+            },
+            {
+              find: "@elizaos/shared",
+              replacement: path.join(sharedSourceRoot, "index.ts"),
+            },
+          ]
+        : []),
       ...(fs.existsSync(pluginPersonalityEntry)
         ? [
             {
@@ -260,6 +295,8 @@ export default defineConfig({
     },
     include: [
       "test/**/*.e2e.test.ts",
+      "eliza/agent/test/**/*.e2e.test.ts",
+      "eliza/packages/app-core/test/**/*.e2e.test.ts",
       "packages/agent/test/**/*.e2e.test.ts",
       "packages/app-core/test/**/*.e2e.test.ts",
     ],
@@ -282,11 +319,11 @@ export default defineConfig({
       deps: {
         inline: [
           "@elizaos/core",
-          "@miladyai/agent",
+          "@elizaos/agent",
           /^@elizaos\/plugin-/,
           "zod",
         ],
       },
     },
   },
-});
+};

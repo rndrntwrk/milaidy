@@ -17,19 +17,17 @@
     "useDefineForClassFields": false,
     "baseUrl": ".",
     "paths": {
-      "@miladyai/plugin-selfcontrol": [
-        "./packages/plugin-selfcontrol/src/index.ts"
+      "@elizaos/plugin-selfcontrol": [
+        "./plugins/plugin-selfcontrol/src/index.ts"
       ],
-      "@miladyai/plugin-selfcontrol/*": ["./packages/plugin-selfcontrol/src/*"],
-      "@miladyai/ui": ["./packages/ui/src/index.ts"],
-      "@miladyai/ui/*": ["./packages/ui/src/*"],
-      "@miladyai/agent/*": ["./packages/agent/src/*"],
-      "@miladyai/shared": ["./packages/shared/src/index.ts"],
-      "@miladyai/shared/*": ["./packages/shared/src/*"],
+      "@elizaos/plugin-selfcontrol/*": ["./plugins/plugin-selfcontrol/src/*"],
+      "@elizaos/app-core": ["./packages/ui/src/index.ts"],
+      "@elizaos/app-core/*": ["./packages/ui/src/*"],
+      "@elizaos/agent/*": ["./packages/agent/src/*"],
+      "@elizaos/shared": ["./packages/shared/src/index.ts"],
+      "@elizaos/shared/*": ["./packages/shared/src/*"],
       "@miladyai/vrm-utils": ["./packages/vrm-utils/src/index.ts"],
       "@miladyai/vrm-utils/*": ["./packages/vrm-utils/src/*"],
-      "@elizaos/plugin-selfcontrol": ["./packages/plugin-selfcontrol/src/index.ts"],
-      "@elizaos/plugin-selfcontrol/*": ["./packages/plugin-selfcontrol/src/*"],
       "@elizaos/ui": ["./packages/ui/src/index.ts"],
       "@elizaos/ui/*": ["./packages/ui/src/*"],
       "@elizaos/agent": ["./packages/agent/src/index.ts"],

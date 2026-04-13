@@ -52,7 +52,7 @@ packages/
       connectors/       Connector integration code
       services/         Business logic
   agent/                Upstream elizaOS agent (core plugins, auto-enable maps)
-  plugin-wechat/        WeChat connector plugin (@miladyai/plugin-wechat)
+  plugin-wechat/        WeChat connector plugin (@elizaos/plugin-wechat)
   ui/                   Shared UI component library
   shared/               Shared utilities
   vrm-utils/            VRM avatar utilities

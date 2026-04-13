@@ -29,11 +29,11 @@ const orchestratorWorkspacePackageJsonPath = resolve(
   "package.json",
 );
 const autonomousServerPathCandidates = [
-  "node_modules/@miladyai/agent/packages/agent/src/api/server.js",
+  "node_modules/@elizaos/agent/packages/agent/src/api/server.js",
   "packages/agent/src/api/server.ts",
 ] as const;
 const autonomousElizaPathCandidates = [
-  "node_modules/@miladyai/agent/packages/agent/src/runtime/eliza.js",
+  "node_modules/@elizaos/agent/packages/agent/src/runtime/eliza.js",
   "packages/agent/src/runtime/eliza.ts",
 ] as const;
 const homepageReleaseDataPathCandidates = [

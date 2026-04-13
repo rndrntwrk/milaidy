@@ -13,7 +13,7 @@ Stack: Bun 1.3.10, Node 22, Electrobun, React, PGlite (with optional Railway-hos
 ## Repo layout
 
 ```
-packages/ui/                            @miladyai/ui — reusable primitives
+packages/ui/                            @elizaos/app-core — reusable primitives
   src/                                  Button, Input, Card, Dialog, Popover,
                                         Select, Dropdown, Tabs, Toast, Spinner,
                                         Tooltip, ChatAtoms, SearchBar, etc.
@@ -29,7 +29,7 @@ packages/app-core/                      @elizaos/app-core — runtime + React fe
     services/                           Business logic
     telemetry/                          OTEL + PGlite HTTP
     state/AppContext.tsx                Startup phase, uiShellMode, cloud login
-    App.tsx                             Root React tree (imports @miladyai/ui)
+    App.tsx                             Root React tree (imports @elizaos/app-core)
     components/
       avatar/VrmViewer.tsx              VRM rendering (engineReady gate)
       shell/CompanionShell.tsx          Overlay tab shell
@@ -92,7 +92,7 @@ You are invoked by `agent-review.yml` ONLY when it classifies scope as "needs de
 
 ## Known duplication traps (flag reinvention)
 
-- **`@miladyai/ui` primitives** at `packages/ui/` — Button, Input, Card, Dialog, Popover, Select, Dropdown, Tabs, Toast, Spinner, Tooltip, ChatAtoms, SearchBar, etc. The Storybook at `packages/ui/src/stories/` is the canonical catalog. Hand-rolling any of these is a reject.
+- **`@elizaos/app-core` primitives** at `packages/ui/` — Button, Input, Card, Dialog, Popover, Select, Dropdown, Tabs, Toast, Spinner, Tooltip, ChatAtoms, SearchBar, etc. The Storybook at `packages/ui/src/stories/` is the canonical catalog. Hand-rolling any of these is a reject.
 - **Feature components** at `packages/app-core/src/components/` — chat, settings, avatar, companion shell, onboarding, release-center, connectors, config-ui. Check for existing equivalents before adding new ones.
 - **Declarative/schema renderers** at `packages/app-core/src/components/config-ui/ui-renderer.tsx` and `config-renderer.tsx` — JSON-to-UI and plugin config forms. New agent-driven UI should extend these, not replace them.
 - **Dynamic plugin loading** — the agent loader in `packages/agent/src/runtime/eliza.ts` already resolves `@elizaos/plugin-*` with NODE_PATH. Don't write a parallel path.

@@ -94,7 +94,7 @@ await callback({ text: "Now playing: **Track**", source: message.content.source 
 </div>
 
 - **实现：** `packages/agent/src/api/chat-routes.ts` — `replaceCallbackText`、`preCallbackText`。
-- **示例辅助工具：** `packages/plugin-music-player/src/utils/progressiveMessage.ts`。
+- **示例辅助工具：** `plugins/plugin-music-player/src/utils/progressiveMessage.ts`。
 - **UI 流式传输：** [仪表盘 — 聊天](/zh/dashboard/chat)（SSE / 输入指示器）。
 - **更新日志：** [更新日志](/zh/changelog) — 搜索 "action callback" 或发布日期。
 

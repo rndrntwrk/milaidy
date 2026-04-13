@@ -31,9 +31,9 @@ const unitShards = [
     label: "unit:plugins",
     patterns: [
       "packages/agent/src/runtime/roles/test",
-      "packages/plugin-selfcontrol/src",
+      "plugins/plugin-selfcontrol/src",
       "packages/plugin-wechat/src",
-      "packages/plugin-music-player/src",
+      "plugins/plugin-music-player/src",
       "plugins/plugin-discord/typescript/__tests__/identity.test.ts",
     ],
   },

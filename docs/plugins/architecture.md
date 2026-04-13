@@ -179,11 +179,11 @@ const CONNECTOR_PLUGINS = {
   nostr:       "@elizaos/plugin-nostr",
   blooio:      "@elizaos/plugin-blooio",
   twitch:      "@elizaos/plugin-twitch",
-  wechat:      "@miladyai/plugin-wechat",  // Milady-specific (added in app-core)
+  wechat:      "@elizaos/plugin-wechat",  // Milady-specific (added in app-core)
 };
 ```
 
-> **Note:** The upstream `packages/agent` defines all `@elizaos/*` connectors. Milady's `packages/app-core` extends this map with the `wechat` entry pointing to `@miladyai/plugin-wechat`.
+> **Note:** The upstream `packages/agent` defines all `@elizaos/*` connectors. Milady's `packages/app-core` extends this map with the `wechat` entry pointing to `@elizaos/plugin-wechat`.
 
 **Feature flags** — The `features` section of `milady.json` auto-enables feature plugins. A feature can be enabled with `features.<name>: true` or `features.<name>.enabled: true`:
 

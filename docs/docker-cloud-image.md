@@ -62,7 +62,7 @@ The heaviest `.bun` entries included:
    - docker entrypoint
 7. **Preserve compatibility patches** from `Dockerfile.ci`
    - plugin-agent-skills crash guard
-   - version patching for `@miladyai/agent`
+   - version patching for `@elizaos/agent`
 8. **Prune obvious non-runtime weight** from the flattened runtime tree
    - source maps
    - test directories
@@ -72,7 +72,7 @@ The heaviest `.bun` entries included:
 
 ## Runtime compatibility note
 
-The CLI still imports workspace package source paths like `@miladyai/agent/src/...`, so the cloud image cannot be fully `dist`-only yet. To keep startup working, `Dockerfile.cloud` includes the required workspace source packages and uses a tiny standalone `tsx` loader path:
+The CLI still imports workspace package source paths like `@elizaos/agent/src/...`, so the cloud image cannot be fully `dist`-only yet. To keep startup working, `Dockerfile.cloud` includes the required workspace source packages and uses a tiny standalone `tsx` loader path:
 
 ```sh
 node --import /opt/tsx/node_modules/tsx/dist/loader.mjs milady.mjs start

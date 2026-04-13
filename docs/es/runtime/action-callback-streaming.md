@@ -94,7 +94,7 @@ Sin campos adicionales, sin APIs específicas de Milady, sin adjuntos al runtime
 </div>
 
 - **Implementación:** `packages/agent/src/api/chat-routes.ts` — `replaceCallbackText`, `preCallbackText`.
-- **Helper de ejemplo:** `packages/plugin-music-player/src/utils/progressiveMessage.ts`.
+- **Helper de ejemplo:** `plugins/plugin-music-player/src/utils/progressiveMessage.ts`.
 - **Transmisión en UI:** [Panel — Chat](/es/dashboard/chat) (SSE / indicador de escritura).
 - **Registro de cambios:** [Registro de cambios](/es/changelog) — busca "action callback" o la fecha de publicación.
 

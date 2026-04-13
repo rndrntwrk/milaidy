@@ -33,7 +33,7 @@ import {
   resolveDesktopApiPort,
   resolveDisableAutoApiToken,
   setApiToken,
-} from "@miladyai/shared/runtime-env";
+} from "@elizaos/shared/runtime-env";
 
 import { resolveDesktopRuntimeMode } from "../api-base";
 import { DEFAULT_API_PORT } from "../constants";

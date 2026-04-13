@@ -6,7 +6,7 @@ import type {
   AppSessionActivityItem,
   AppSessionJsonValue,
   AppSessionState,
-} from "@miladyai/shared/contracts/apps";
+} from "@elizaos/shared/contracts/apps";
 import { decode, encode } from "@toon-format/toon";
 
 import type { JournalGoal, JournalMemory } from "./journal/types.js";

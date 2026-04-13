@@ -7,6 +7,47 @@ const skipLocalUpstreams =
   process.env.MILADY_SKIP_LOCAL_UPSTREAMS === "1" ||
   process.env.ELIZA_SKIP_LOCAL_UPSTREAMS === "1";
 
+function getRepoLocalWorkspaceRoot(
+  packageName: string,
+  repoRoot: string,
+): string | undefined {
+  if (skipLocalUpstreams) {
+    return undefined;
+  }
+
+  if (packageName === "@elizaos/core") {
+    return getRepoLocalElizaCoreRoot(packageName, repoRoot);
+  }
+
+  const relativeRoots: Record<string, string[]> = {
+    "@elizaos/agent": ["eliza/agent", "../eliza/agent"],
+    "@elizaos/agent": ["eliza/agent", "../eliza/agent"],
+    "@elizaos/app-core": [
+      "eliza/packages/app-core",
+      "../eliza/packages/app-core",
+    ],
+    "@elizaos/app-core": [
+      "eliza/packages/app-core",
+      "../eliza/packages/app-core",
+    ],
+    "@elizaos/shared": ["eliza/packages/shared", "../eliza/packages/shared"],
+    "@elizaos/shared": ["eliza/packages/shared", "../eliza/packages/shared"],
+    "@elizaos/vrm-utils": [
+      "eliza/packages/vrm-utils",
+      "../eliza/packages/vrm-utils",
+    ],
+  };
+
+  for (const relativeRoot of relativeRoots[packageName] ?? []) {
+    const candidate = path.resolve(repoRoot, relativeRoot);
+    if (existsSync(path.join(candidate, "package.json"))) {
+      return candidate;
+    }
+  }
+
+  return undefined;
+}
+
 /**
  * Return the repo-local eliza core workspace root when it is checked out as
  * part of the Milady repo. This avoids relying on node_modules symlinks which
@@ -121,10 +162,8 @@ export function getInstalledPackageRoot(
   packageName: string,
   fromDir?: string,
 ): string | undefined {
-  // Prefer the repo-local eliza core checkout to avoid Bun reverting symlinks
-  // or depending on registry package export quirks during fresh CI installs.
   if (fromDir) {
-    const localPackage = getRepoLocalElizaCoreRoot(packageName, fromDir);
+    const localPackage = getRepoLocalWorkspaceRoot(packageName, fromDir);
     if (localPackage) return localPackage;
   }
 
@@ -315,7 +354,9 @@ export function getElizaCoreEntry(repoRoot: string): string | undefined {
 }
 
 export function getAutonomousSourceRoot(repoRoot: string): string | undefined {
-  const packageRoot = getInstalledPackageRoot("@miladyai/agent", repoRoot);
+  const packageRoot =
+    getInstalledPackageRoot("@elizaos/agent", repoRoot) ??
+    getInstalledPackageRoot("@elizaos/agent", repoRoot);
 
   if (!packageRoot) {
     return undefined;
@@ -334,7 +375,9 @@ export function getAutonomousSourceRoot(repoRoot: string): string | undefined {
 }
 
 export function getAppCoreSourceRoot(repoRoot: string): string | undefined {
-  const packageRoot = getInstalledPackageRoot("@miladyai/app-core", repoRoot);
+  const packageRoot =
+    getInstalledPackageRoot("@elizaos/app-core", repoRoot) ??
+    getInstalledPackageRoot("@elizaos/app-core", repoRoot);
   if (!packageRoot) {
     return undefined;
   }
@@ -345,4 +388,30 @@ export function getAppCoreSourceRoot(repoRoot: string): string | undefined {
 
   const sourceRoot = path.join(packageRoot, "src");
   return existsSync(sourceRoot) ? sourceRoot : packageRoot;
+}
+
+export function getSharedSourceRoot(repoRoot: string): string | undefined {
+  const packageRoot =
+    getInstalledPackageRoot("@elizaos/shared", repoRoot) ??
+    getInstalledPackageRoot("@elizaos/shared", repoRoot);
+  if (!packageRoot) {
+    return undefined;
+  }
+
+  if (path.basename(packageRoot) === "src") {
+    return packageRoot;
+  }
+
+  const sourceRoot = path.join(packageRoot, "src");
+  return existsSync(sourceRoot) ? sourceRoot : packageRoot;
+}
+
+export function getUiSourceRoot(repoRoot: string): string | undefined {
+  const appCoreSourceRoot = getAppCoreSourceRoot(repoRoot);
+  if (!appCoreSourceRoot) {
+    return undefined;
+  }
+
+  const sourceRoot = path.join(appCoreSourceRoot, "ui");
+  return existsSync(path.join(sourceRoot, "index.ts")) ? sourceRoot : undefined;
 }

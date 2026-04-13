@@ -94,7 +94,7 @@ Pas de champs supplémentaires, pas d'API spécifiques à Milady, pas d'attachem
 </div>
 
 - **Implémentation :** `packages/agent/src/api/chat-routes.ts` — `replaceCallbackText`, `preCallbackText`.
-- **Helper d'exemple :** `packages/plugin-music-player/src/utils/progressiveMessage.ts`.
+- **Helper d'exemple :** `plugins/plugin-music-player/src/utils/progressiveMessage.ts`.
 - **Streaming UI :** [Tableau de bord — Chat](/fr/dashboard/chat) (SSE / indicateur de saisie).
 - **Journal des modifications :** [Journal des modifications](/fr/changelog) — recherchez "action callback" ou la date de publication.
 

@@ -48,10 +48,10 @@
         "@elizaos/prompts": "2.0.0-alpha.127",
         "@elizaos/skills": "2.0.0-alpha.127",
         "@hapi/boom": "^10.0.1",
-        "@miladyai/agent": "workspace:*",
-        "@miladyai/app-core": "workspace:*",
+        "@elizaos/agent": "workspace:*",
+        "@elizaos/app-core": "workspace:*",
         "@miladyai/css-color-cjs": "npm:@asamuzakjp/css-color@4.1.2",
-        "@miladyai/plugin-selfcontrol": "workspace:*",
+        "@elizaos/plugin-selfcontrol": "workspace:*",
         "@noble/curves": "^2.0.1",
         "@opinion-labs/opinion-clob-sdk": "0.5.2",
         "@pixiv/three-vrm": "^3.5.1",
@@ -119,7 +119,7 @@
         "@capacitor/keyboard": "8.0.0",
         "@capacitor/preferences": "^8.0.1",
         "@capacitor/status-bar": "^8.0.1",
-        "@miladyai/app-core": "workspace:*",
+        "@elizaos/app-core": "workspace:*",
         "@miladyai/capacitor-agent": "workspace:*",
         "@miladyai/capacitor-camera": "workspace:*",
         "@miladyai/capacitor-canvas": "workspace:*",
@@ -131,8 +131,8 @@
         "@miladyai/capacitor-swabble": "workspace:*",
         "@miladyai/capacitor-talkmode": "workspace:*",
         "@miladyai/capacitor-websiteblocker": "workspace:*",
-        "@miladyai/shared": "workspace:*",
-        "@miladyai/ui": "workspace:*",
+        "@elizaos/shared": "workspace:*",
+        "@elizaos/app-core": "workspace:*",
         "@pixiv/three-vrm": "^3.4.5",
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
@@ -159,7 +159,7 @@
       "name": "@miladyai/electrobun",
       "version": "2.0.0-alpha.87",
       "dependencies": {
-        "@miladyai/shared": "workspace:*",
+        "@elizaos/shared": "workspace:*",
         "bonjour-service": "1.3.0",
         "electrobun": "^1.16.0",
       },
@@ -219,7 +219,7 @@
       "name": "@miladyai/capacitor-desktop",
       "version": "1.0.0",
       "dependencies": {
-        "@miladyai/app-core": "workspace:*",
+        "@elizaos/app-core": "workspace:*",
       },
       "devDependencies": {
         "@capacitor/core": "^8.0.0",
@@ -236,7 +236,7 @@
       "name": "@miladyai/capacitor-gateway",
       "version": "1.0.0",
       "dependencies": {
-        "@miladyai/app-core": "workspace:*",
+        "@elizaos/app-core": "workspace:*",
       },
       "devDependencies": {
         "@capacitor/android": "^8.0.0",
@@ -261,7 +261,7 @@
       "name": "@miladyai/capacitor-location",
       "version": "1.0.0",
       "dependencies": {
-        "@miladyai/app-core": "workspace:*",
+        "@elizaos/app-core": "workspace:*",
       },
       "devDependencies": {
         "@capacitor/cli": "^8.0.0",
@@ -295,7 +295,7 @@
       "name": "@miladyai/capacitor-screencapture",
       "version": "1.0.0",
       "dependencies": {
-        "@miladyai/app-core": "workspace:*",
+        "@elizaos/app-core": "workspace:*",
       },
       "devDependencies": {
         "@capacitor/android": "^8.0.0",
@@ -314,7 +314,7 @@
       "name": "@miladyai/capacitor-swabble",
       "version": "1.0.0",
       "dependencies": {
-        "@miladyai/app-core": "workspace:*",
+        "@elizaos/app-core": "workspace:*",
       },
       "devDependencies": {
         "@capacitor/android": "^8.0.0",
@@ -333,7 +333,7 @@
       "name": "@miladyai/capacitor-talkmode",
       "version": "1.0.0",
       "dependencies": {
-        "@miladyai/app-core": "workspace:*",
+        "@elizaos/app-core": "workspace:*",
       },
       "devDependencies": {
         "@capacitor/cli": "^8.0.0",
@@ -365,8 +365,8 @@
       "name": "@miladyai/homepage",
       "version": "1.0.0",
       "dependencies": {
-        "@miladyai/shared": "workspace:*",
-        "@miladyai/ui": "workspace:*",
+        "@elizaos/shared": "workspace:*",
+        "@elizaos/app-core": "workspace:*",
         "@miladyai/vrm-utils": "workspace:*",
         "@pixiv/three-vrm": "^3.5.0",
         "@react-three/fiber": "^9.5.0",
@@ -520,7 +520,7 @@
       },
     },
     "packages/agent": {
-      "name": "@miladyai/agent",
+      "name": "@elizaos/agent",
       "version": "2.0.0-alpha.83",
       "bin": {
         "eliza-autonomous": "./src/bin.ts",
@@ -551,10 +551,10 @@
         "@elizaos/plugin-trust": "workspace:*",
         "@hapi/boom": "^10.0.1",
         "@mariozechner/pi-ai": "0.52.12",
-        "@miladyai/plugin-2004scape": "workspace:*",
-        "@miladyai/plugin-selfcontrol": "workspace:*",
-        "@miladyai/plugin-wechat": "github:milady-ai/plugin-wechat",
-        "@miladyai/shared": "workspace:*",
+        "@elizaos/plugin-2004scape": "workspace:*",
+        "@elizaos/plugin-selfcontrol": "workspace:*",
+        "@elizaos/plugin-wechat": "github:milady-ai/plugin-wechat",
+        "@elizaos/shared": "workspace:*",
         "@noble/curves": "^2.0.1",
         "@whiskeysockets/baileys": "7.0.0-rc.9",
         "abitype": "^1.0.0",
@@ -594,7 +594,7 @@
       ],
     },
     "packages/app-core": {
-      "name": "@miladyai/app-core",
+      "name": "@elizaos/app-core",
       "version": "2.0.0-alpha.83",
       "dependencies": {
         "@capacitor/core": "8.0.2",
@@ -603,10 +603,10 @@
         "@capacitor/preferences": "^8.0.1",
         "@elizaos/core": "workspace:*",
         "@lookingglass/webxr": "^0.6.0",
-        "@miladyai/agent": "workspace:*",
-        "@miladyai/plugin-wechat": "github:milady-ai/plugin-wechat",
-        "@miladyai/shared": "workspace:*",
-        "@miladyai/ui": "workspace:*",
+        "@elizaos/agent": "workspace:*",
+        "@elizaos/plugin-wechat": "github:milady-ai/plugin-wechat",
+        "@elizaos/shared": "workspace:*",
+        "@elizaos/app-core": "workspace:*",
         "@miladyai/vrm-utils": "workspace:*",
         "@stwd/sdk": "^0.3.0",
         "@xterm/addon-fit": "^0.10.0",
@@ -677,11 +677,11 @@
       },
     },
     "packages/plugin-selfcontrol": {
-      "name": "@miladyai/plugin-selfcontrol",
+      "name": "@elizaos/plugin-selfcontrol",
       "version": "2.0.0-alpha.83",
       "dependencies": {
         "@elizaos/core": "workspace:*",
-        "@miladyai/shared": "workspace:*",
+        "@elizaos/shared": "workspace:*",
       },
       "devDependencies": {
         "typescript": "^5.9.3",
@@ -696,7 +696,7 @@
       },
     },
     "packages/shared": {
-      "name": "@miladyai/shared",
+      "name": "@elizaos/shared",
       "version": "2.0.0-alpha.83",
       "dependencies": {
         "@elizaos/core": "workspace:*",
@@ -711,7 +711,7 @@
       },
     },
     "packages/ui": {
-      "name": "@miladyai/ui",
+      "name": "@elizaos/app-core",
       "version": "2.0.0-alpha.83",
       "dependencies": {
         "@radix-ui/react-checkbox": "^1.3.3",
@@ -767,7 +767,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@elizaos/core": "workspace:*",
-        "@miladyai/shared": "workspace:*",
+        "@elizaos/shared": "workspace:*",
       },
     },
     "plugins/app-clawville": {
@@ -775,7 +775,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@elizaos/core": "workspace:*",
-        "@miladyai/shared": "workspace:*",
+        "@elizaos/shared": "workspace:*",
       },
     },
     "plugins/app-defense-of-the-agents": {
@@ -783,7 +783,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@elizaos/core": "workspace:*",
-        "@miladyai/shared": "workspace:*",
+        "@elizaos/shared": "workspace:*",
       },
     },
     "plugins/app-scape": {
@@ -791,7 +791,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@elizaos/core": "workspace:*",
-        "@miladyai/shared": "workspace:*",
+        "@elizaos/shared": "workspace:*",
         "@toon-format/toon": "2.1.0",
       },
     },
@@ -812,7 +812,7 @@
       },
     },
     "plugins/plugin-2004scape": {
-      "name": "@miladyai/plugin-2004scape",
+      "name": "@elizaos/plugin-2004scape",
       "version": "0.1.0",
       "dependencies": {
         "@elizaos/core": "workspace:*",
@@ -1356,12 +1356,12 @@
       },
     },
     "plugins/plugin-lifeops-browser": {
-      "name": "@miladyai/plugin-lifeops-browser",
+      "name": "@elizaos/plugin-lifeops-browser",
       "version": "0.0.0",
       "dependencies": {
         "@elizaos/core": "workspace:*",
-        "@miladyai/agent": "workspace:*",
-        "@miladyai/shared": "workspace:*",
+        "@elizaos/agent": "workspace:*",
+        "@elizaos/shared": "workspace:*",
       },
     },
     "plugins/plugin-local-embedding": {
@@ -1396,11 +1396,11 @@
       },
     },
     "plugins/plugin-milady-browser": {
-      "name": "@miladyai/plugin-milady-browser",
+      "name": "@elizaos/plugin-milady-browser",
       "version": "0.0.0",
       "dependencies": {
         "@elizaos/core": "workspace:*",
-        "@miladyai/agent": "workspace:*",
+        "@elizaos/agent": "workspace:*",
       },
     },
     "plugins/plugin-ollama": {
@@ -2577,11 +2577,11 @@
 
     "@mermaid-js/parser": ["@mermaid-js/parser@1.1.0", "", { "dependencies": { "langium": "^4.0.0" } }, "sha512-gxK9ZX2+Fex5zu8LhRQoMeMPEHbc73UKZ0FQ54YrQtUxE1VVhMwzeNtKRPAu5aXks4FasbMe4xB4bWrmq6Jlxw=="],
 
-    "@miladyai/agent": ["@miladyai/agent@workspace:packages/agent"],
+    "@elizaos/agent": ["@elizaos/agent@workspace:packages/agent"],
 
     "@miladyai/app": ["@miladyai/app@workspace:apps/app"],
 
-    "@miladyai/app-core": ["@miladyai/app-core@workspace:packages/app-core"],
+    "@elizaos/app-core": ["@elizaos/app-core@workspace:packages/app-core"],
 
     "@miladyai/capacitor-agent": ["@miladyai/capacitor-agent@workspace:apps/app/plugins/agent"],
 
@@ -2611,19 +2611,19 @@
 
     "@miladyai/homepage": ["@miladyai/homepage@workspace:apps/web"],
 
-    "@miladyai/plugin-2004scape": ["@miladyai/plugin-2004scape@workspace:plugins/plugin-2004scape"],
+    "@elizaos/plugin-2004scape": ["@elizaos/plugin-2004scape@workspace:plugins/plugin-2004scape"],
 
-    "@miladyai/plugin-lifeops-browser": ["@miladyai/plugin-lifeops-browser@workspace:plugins/plugin-lifeops-browser"],
+    "@elizaos/plugin-lifeops-browser": ["@elizaos/plugin-lifeops-browser@workspace:plugins/plugin-lifeops-browser"],
 
-    "@miladyai/plugin-milady-browser": ["@miladyai/plugin-milady-browser@workspace:plugins/plugin-milady-browser"],
+    "@elizaos/plugin-milady-browser": ["@elizaos/plugin-milady-browser@workspace:plugins/plugin-milady-browser"],
 
-    "@miladyai/plugin-selfcontrol": ["@miladyai/plugin-selfcontrol@workspace:packages/plugin-selfcontrol"],
+    "@elizaos/plugin-selfcontrol": ["@elizaos/plugin-selfcontrol@workspace:packages/plugin-selfcontrol"],
 
-    "@miladyai/plugin-wechat": ["@miladyai/plugin-wechat@github:milady-ai/plugin-wechat#d73ade8", { "peerDependencies": { "@elizaos/core": "alpha" } }, "milady-ai-plugin-wechat-d73ade8", "sha512-ibuaYzgoN7H6JxY+B9xXCYY2fGmCOk3vchjtVvcTiXwtbst4c4XlzYxq3dLXqCIUBePbb7xGmwFsaEVVpNc55g=="],
+    "@elizaos/plugin-wechat": ["@elizaos/plugin-wechat@github:milady-ai/plugin-wechat#d73ade8", { "peerDependencies": { "@elizaos/core": "alpha" } }, "milady-ai-plugin-wechat-d73ade8", "sha512-ibuaYzgoN7H6JxY+B9xXCYY2fGmCOk3vchjtVvcTiXwtbst4c4XlzYxq3dLXqCIUBePbb7xGmwFsaEVVpNc55g=="],
 
-    "@miladyai/shared": ["@miladyai/shared@workspace:packages/shared"],
+    "@elizaos/shared": ["@elizaos/shared@workspace:packages/shared"],
 
-    "@miladyai/ui": ["@miladyai/ui@workspace:packages/ui"],
+    "@elizaos/app-core": ["@elizaos/app-core@workspace:packages/ui"],
 
     "@miladyai/vrm-utils": ["@miladyai/vrm-utils@workspace:packages/vrm-utils"],
 
@@ -6189,15 +6189,15 @@
 
     "@mariozechner/pi-ai/@anthropic-ai/sdk": ["@anthropic-ai/sdk@0.73.0", "", { "dependencies": { "json-schema-to-ts": "^3.1.1" }, "peerDependencies": { "zod": "^3.25.0 || ^4.0.0" }, "optionalPeers": ["zod"], "bin": { "anthropic-ai-sdk": "bin/cli" } }, "sha512-URURVzhxXGJDGUGFunIOtBlSl7KWvZiAAKY/ttTkZAkXT9bTPqdk2eK0b8qqSxXpikh3QKPnPYpiyX98zf5ebw=="],
 
-    "@miladyai/agent/@elizaos/plugin-solana": ["@elizaos/plugin-solana@1.2.6", "", { "dependencies": { "@solana/spl-token": "0.4.14", "@solana/spl-token-metadata": "^0.1.6", "@solana/web3.js": "^1.98.0", "bignumber.js": "9.3.0", "bs58": "6.0.0", "tweetnacl": "^1.0.3" }, "peerDependencies": { "@elizaos/core": "latest", "@elizaos/service-interfaces": "latest", "form-data": "4.0.2", "whatwg-url": "7.1.0" } }, "sha512-VWp4u2jOkEOgqNNaVN8j3g2TWKwq56GZzIawFPsr6YsF4NuCiQOaWfmeq+edVxpze5LkkzVfC/KPeU19jjZDuA=="],
+    "@elizaos/agent/@elizaos/plugin-solana": ["@elizaos/plugin-solana@1.2.6", "", { "dependencies": { "@solana/spl-token": "0.4.14", "@solana/spl-token-metadata": "^0.1.6", "@solana/web3.js": "^1.98.0", "bignumber.js": "9.3.0", "bs58": "6.0.0", "tweetnacl": "^1.0.3" }, "peerDependencies": { "@elizaos/core": "latest", "@elizaos/service-interfaces": "latest", "form-data": "4.0.2", "whatwg-url": "7.1.0" } }, "sha512-VWp4u2jOkEOgqNNaVN8j3g2TWKwq56GZzIawFPsr6YsF4NuCiQOaWfmeq+edVxpze5LkkzVfC/KPeU19jjZDuA=="],
 
     "@miladyai/app/vite": ["vite@5.4.21", "", { "dependencies": { "esbuild": "^0.21.3", "postcss": "^8.4.43", "rollup": "^4.20.0" }, "optionalDependencies": { "fsevents": "~2.3.3" }, "peerDependencies": { "@types/node": "^18.0.0 || >=20.0.0", "less": "*", "lightningcss": "^1.21.0", "sass": "*", "sass-embedded": "*", "stylus": "*", "sugarss": "*", "terser": "^5.4.0" }, "optionalPeers": ["@types/node", "less", "lightningcss", "sass", "sass-embedded", "stylus", "sugarss", "terser"], "bin": { "vite": "bin/vite.js" } }, "sha512-o5a9xKjbtuhY6Bi5S3+HvbRERmouabWbyUcpXXUA1u+GNUKoROi9byOJ8M0nHbHYHkYICiMlqxkg1KkYmm25Sw=="],
 
     "@miladyai/app/vitest": ["vitest@2.1.9", "", { "dependencies": { "@vitest/expect": "2.1.9", "@vitest/mocker": "2.1.9", "@vitest/pretty-format": "^2.1.9", "@vitest/runner": "2.1.9", "@vitest/snapshot": "2.1.9", "@vitest/spy": "2.1.9", "@vitest/utils": "2.1.9", "chai": "^5.1.2", "debug": "^4.3.7", "expect-type": "^1.1.0", "magic-string": "^0.30.12", "pathe": "^1.1.2", "std-env": "^3.8.0", "tinybench": "^2.9.0", "tinyexec": "^0.3.1", "tinypool": "^1.0.1", "tinyrainbow": "^1.2.0", "vite": "^5.0.0", "vite-node": "2.1.9", "why-is-node-running": "^2.3.0" }, "peerDependencies": { "@edge-runtime/vm": "*", "@types/node": "^18.0.0 || >=20.0.0", "@vitest/browser": "2.1.9", "@vitest/ui": "2.1.9", "happy-dom": "*", "jsdom": "*" }, "optionalPeers": ["@edge-runtime/vm", "@types/node", "@vitest/browser", "@vitest/ui", "happy-dom", "jsdom"], "bin": { "vitest": "vitest.mjs" } }, "sha512-MSmPM9REYqDGBI8439mA4mWhV5sKmDlBKWIYbA3lRb2PTHACE0mgKwA8yQ2xq9vxDTuk4iPrECBAEW2aoFXY0Q=="],
 
-    "@miladyai/app-core/@capacitor/core": ["@capacitor/core@8.0.2", "", { "dependencies": { "tslib": "^2.1.0" } }, "sha512-EXZfxkL6GFJS2cb7TIBR7RiHA5iz6ufDcl1VmUpI2pga3lJ5Ck2+iqbx7N+osL3XYem9ad4XCidJEMm64DX6UQ=="],
+    "@elizaos/app-core/@capacitor/core": ["@capacitor/core@8.0.2", "", { "dependencies": { "tslib": "^2.1.0" } }, "sha512-EXZfxkL6GFJS2cb7TIBR7RiHA5iz6ufDcl1VmUpI2pga3lJ5Ck2+iqbx7N+osL3XYem9ad4XCidJEMm64DX6UQ=="],
 
-    "@miladyai/app-core/lucide-react": ["lucide-react@0.575.0", "", { "peerDependencies": { "react": "^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0" } }, "sha512-VuXgKZrk0uiDlWjGGXmKV6MSk9Yy4l10qgVvzGn2AWBx1Ylt0iBexKOAoA6I7JO3m+M9oeovJd3yYENfkUbOeg=="],
+    "@elizaos/app-core/lucide-react": ["lucide-react@0.575.0", "", { "peerDependencies": { "react": "^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0" } }, "sha512-VuXgKZrk0uiDlWjGGXmKV6MSk9Yy4l10qgVvzGn2AWBx1Ylt0iBexKOAoA6I7JO3m+M9oeovJd3yYENfkUbOeg=="],
 
     "@miladyai/capacitor-gateway/eslint": ["eslint@8.57.1", "", { "dependencies": { "@eslint-community/eslint-utils": "^4.2.0", "@eslint-community/regexpp": "^4.6.1", "@eslint/eslintrc": "^2.1.4", "@eslint/js": "8.57.1", "@humanwhocodes/config-array": "^0.13.0", "@humanwhocodes/module-importer": "^1.0.1", "@nodelib/fs.walk": "^1.2.8", "@ungap/structured-clone": "^1.2.0", "ajv": "^6.12.4", "chalk": "^4.0.0", "cross-spawn": "^7.0.2", "debug": "^4.3.2", "doctrine": "^3.0.0", "escape-string-regexp": "^4.0.0", "eslint-scope": "^7.2.2", "eslint-visitor-keys": "^3.4.3", "espree": "^9.6.1", "esquery": "^1.4.2", "esutils": "^2.0.2", "fast-deep-equal": "^3.1.3", "file-entry-cache": "^6.0.1", "find-up": "^5.0.0", "glob-parent": "^6.0.2", "globals": "^13.19.0", "graphemer": "^1.4.0", "ignore": "^5.2.0", "imurmurhash": "^0.1.4", "is-glob": "^4.0.0", "is-path-inside": "^3.0.3", "js-yaml": "^4.1.0", "json-stable-stringify-without-jsonify": "^1.0.1", "levn": "^0.4.1", "lodash.merge": "^4.6.2", "minimatch": "^3.1.2", "natural-compare": "^1.4.0", "optionator": "^0.9.3", "strip-ansi": "^6.0.1", "text-table": "^0.2.0" }, "bin": { "eslint": "bin/eslint.js" } }, "sha512-ypowyDxpVSYpkXr9WPv2PAZCtNip1Mv5KTW0SCurXv/9iOpcrH9PaqUElksqEB6pChqHGDRCFTyrZlGhnLNGiA=="],
 
@@ -6211,9 +6211,9 @@
 
     "@miladyai/homepage/vite": ["vite@5.4.21", "", { "dependencies": { "esbuild": "^0.21.3", "postcss": "^8.4.43", "rollup": "^4.20.0" }, "optionalDependencies": { "fsevents": "~2.3.3" }, "peerDependencies": { "@types/node": "^18.0.0 || >=20.0.0", "less": "*", "lightningcss": "^1.21.0", "sass": "*", "sass-embedded": "*", "stylus": "*", "sugarss": "*", "terser": "^5.4.0" }, "optionalPeers": ["@types/node", "less", "lightningcss", "sass", "sass-embedded", "stylus", "sugarss", "terser"], "bin": { "vite": "bin/vite.js" } }, "sha512-o5a9xKjbtuhY6Bi5S3+HvbRERmouabWbyUcpXXUA1u+GNUKoROi9byOJ8M0nHbHYHkYICiMlqxkg1KkYmm25Sw=="],
 
-    "@miladyai/ui/jsdom": ["jsdom@29.0.2", "", { "dependencies": { "@asamuzakjp/css-color": "^5.1.5", "@asamuzakjp/dom-selector": "^7.0.6", "@bramus/specificity": "^2.4.2", "@csstools/css-syntax-patches-for-csstree": "^1.1.1", "@exodus/bytes": "^1.15.0", "css-tree": "^3.2.1", "data-urls": "^7.0.0", "decimal.js": "^10.6.0", "html-encoding-sniffer": "^6.0.0", "is-potential-custom-element-name": "^1.0.1", "lru-cache": "^11.2.7", "parse5": "^8.0.0", "saxes": "^6.0.0", "symbol-tree": "^3.2.4", "tough-cookie": "^6.0.1", "undici": "^7.24.5", "w3c-xmlserializer": "^5.0.0", "webidl-conversions": "^8.0.1", "whatwg-mimetype": "^5.0.0", "whatwg-url": "^16.0.1", "xml-name-validator": "^5.0.0" }, "peerDependencies": { "canvas": "^3.0.0" }, "optionalPeers": ["canvas"] }, "sha512-9VnGEBosc/ZpwyOsJBCQ/3I5p7Q5ngOY14a9bf5btenAORmZfDse1ZEheMiWcJ3h81+Fv7HmJFdS0szo/waF2w=="],
+    "@elizaos/app-core/jsdom": ["jsdom@29.0.2", "", { "dependencies": { "@asamuzakjp/css-color": "^5.1.5", "@asamuzakjp/dom-selector": "^7.0.6", "@bramus/specificity": "^2.4.2", "@csstools/css-syntax-patches-for-csstree": "^1.1.1", "@exodus/bytes": "^1.15.0", "css-tree": "^3.2.1", "data-urls": "^7.0.0", "decimal.js": "^10.6.0", "html-encoding-sniffer": "^6.0.0", "is-potential-custom-element-name": "^1.0.1", "lru-cache": "^11.2.7", "parse5": "^8.0.0", "saxes": "^6.0.0", "symbol-tree": "^3.2.4", "tough-cookie": "^6.0.1", "undici": "^7.24.5", "w3c-xmlserializer": "^5.0.0", "webidl-conversions": "^8.0.1", "whatwg-mimetype": "^5.0.0", "whatwg-url": "^16.0.1", "xml-name-validator": "^5.0.0" }, "peerDependencies": { "canvas": "^3.0.0" }, "optionalPeers": ["canvas"] }, "sha512-9VnGEBosc/ZpwyOsJBCQ/3I5p7Q5ngOY14a9bf5btenAORmZfDse1ZEheMiWcJ3h81+Fv7HmJFdS0szo/waF2w=="],
 
-    "@miladyai/ui/lucide-react": ["lucide-react@0.575.0", "", { "peerDependencies": { "react": "^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0" } }, "sha512-VuXgKZrk0uiDlWjGGXmKV6MSk9Yy4l10qgVvzGn2AWBx1Ylt0iBexKOAoA6I7JO3m+M9oeovJd3yYENfkUbOeg=="],
+    "@elizaos/app-core/lucide-react": ["lucide-react@0.575.0", "", { "peerDependencies": { "react": "^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0" } }, "sha512-VuXgKZrk0uiDlWjGGXmKV6MSk9Yy4l10qgVvzGn2AWBx1Ylt0iBexKOAoA6I7JO3m+M9oeovJd3yYENfkUbOeg=="],
 
     "@mistralai/mistralai/zod": ["zod@3.25.76", "", {}, "sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ=="],
 
@@ -7389,7 +7389,7 @@
 
     "@langchain/core/p-queue/p-timeout": ["p-timeout@3.2.0", "", { "dependencies": { "p-finally": "^1.0.0" } }, "sha512-rhIwUycgwwKcP9yTOOFK/AKsAopjjCakVqLHePO3CC6Mir1Z99xT+R63jZxAT5lFZLa2inS5h+ZS2GvR99/FBg=="],
 
-    "@miladyai/app-core/@capacitor/core/tslib": ["tslib@2.8.1", "", {}, "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w=="],
+    "@elizaos/app-core/@capacitor/core/tslib": ["tslib@2.8.1", "", {}, "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w=="],
 
     "@miladyai/app/vitest/@vitest/expect": ["@vitest/expect@2.1.9", "", { "dependencies": { "@vitest/spy": "2.1.9", "@vitest/utils": "2.1.9", "chai": "^5.1.2", "tinyrainbow": "^1.2.0" } }, "sha512-UJCIkTBenHeKT1TTlKMJWy1laZewsRIzYighyYiJKZreqtdxSos/S1t+ktRMQWu2CKqaarrkeszJx1cgC5tGZw=="],
 
@@ -7449,9 +7449,9 @@
 
     "@miladyai/homepage/jsdom/whatwg-url": ["whatwg-url@16.0.1", "", { "dependencies": { "@exodus/bytes": "^1.11.0", "tr46": "^6.0.0", "webidl-conversions": "^8.0.1" } }, "sha512-1to4zXBxmXHV3IiSSEInrreIlu02vUOvrhxJJH5vcxYTBDAx51cqZiKdyTxlecdKNSjj8EcxGBxNf6Vg+945gw=="],
 
-    "@miladyai/ui/jsdom/@asamuzakjp/dom-selector": ["@asamuzakjp/dom-selector@7.0.9", "", { "dependencies": { "@asamuzakjp/nwsapi": "^2.3.9", "bidi-js": "^1.0.3", "css-tree": "^3.2.1", "is-potential-custom-element-name": "^1.0.1" } }, "sha512-r3ElRr7y8ucyN2KdICwGsmj19RoN13CLCa/pvGydghWK6ZzeKQ+TcDjVdtEZz2ElpndM5jXw//B9CEee0mWnVg=="],
+    "@elizaos/app-core/jsdom/@asamuzakjp/dom-selector": ["@asamuzakjp/dom-selector@7.0.9", "", { "dependencies": { "@asamuzakjp/nwsapi": "^2.3.9", "bidi-js": "^1.0.3", "css-tree": "^3.2.1", "is-potential-custom-element-name": "^1.0.1" } }, "sha512-r3ElRr7y8ucyN2KdICwGsmj19RoN13CLCa/pvGydghWK6ZzeKQ+TcDjVdtEZz2ElpndM5jXw//B9CEee0mWnVg=="],
 
-    "@miladyai/ui/jsdom/whatwg-url": ["whatwg-url@16.0.1", "", { "dependencies": { "@exodus/bytes": "^1.11.0", "tr46": "^6.0.0", "webidl-conversions": "^8.0.1" } }, "sha512-1to4zXBxmXHV3IiSSEInrreIlu02vUOvrhxJJH5vcxYTBDAx51cqZiKdyTxlecdKNSjj8EcxGBxNf6Vg+945gw=="],
+    "@elizaos/app-core/jsdom/whatwg-url": ["whatwg-url@16.0.1", "", { "dependencies": { "@exodus/bytes": "^1.11.0", "tr46": "^6.0.0", "webidl-conversions": "^8.0.1" } }, "sha512-1to4zXBxmXHV3IiSSEInrreIlu02vUOvrhxJJH5vcxYTBDAx51cqZiKdyTxlecdKNSjj8EcxGBxNf6Vg+945gw=="],
 
     "@neondatabase/serverless/@types/node/undici-types": ["undici-types@6.21.0", "", {}, "sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ=="],
 
@@ -7975,7 +7975,7 @@
 
     "@miladyai/homepage/jsdom/whatwg-url/tr46": ["tr46@6.0.0", "", { "dependencies": { "punycode": "^2.3.1" } }, "sha512-bLVMLPtstlZ4iMQHpFHTR7GAGj2jxi8Dg0s2h2MafAE4uSWF98FC/3MomU51iQAMf8/qDUbKWf5GxuvvVcXEhw=="],
 
-    "@miladyai/ui/jsdom/whatwg-url/tr46": ["tr46@6.0.0", "", { "dependencies": { "punycode": "^2.3.1" } }, "sha512-bLVMLPtstlZ4iMQHpFHTR7GAGj2jxi8Dg0s2h2MafAE4uSWF98FC/3MomU51iQAMf8/qDUbKWf5GxuvvVcXEhw=="],
+    "@elizaos/app-core/jsdom/whatwg-url/tr46": ["tr46@6.0.0", "", { "dependencies": { "punycode": "^2.3.1" } }, "sha512-bLVMLPtstlZ4iMQHpFHTR7GAGj2jxi8Dg0s2h2MafAE4uSWF98FC/3MomU51iQAMf8/qDUbKWf5GxuvvVcXEhw=="],
 
     "@puppeteer/browsers/yargs/cliui/strip-ansi": ["strip-ansi@6.0.1", "", { "dependencies": { "ansi-regex": "^5.0.1" } }, "sha512-Y38VPSHcqkFrCpFnQ9vuSXmquuv5oXOKpGeT6aGrr3o3Gc9AlVa6JBfUSOCnbxGGZF+/0ooI7KrPuUSztUdU5A=="],
 

@@ -207,7 +207,7 @@ export default defineConfig({
               replacement: path.join(autonomousSourceRoot, "$1"),
             },
             {
-              find: "@miladyai/agent",
+              find: "@elizaos/agent",
               replacement: resolveModuleEntry(
                 path.join(autonomousSourceRoot, "index"),
               ),
@@ -215,7 +215,7 @@ export default defineConfig({
           ]
         : [
             {
-              // Stub @miladyai/agent sub-path imports when the package is absent
+              // Stub @elizaos/agent sub-path imports when the package is absent
               // so transitive imports (e.g. contracts/wallet) don't break tests.
               find: /^@elizaos\/agent(\/.*)?$/,
               replacement: path.join(
@@ -238,7 +238,7 @@ export default defineConfig({
       ...(appCoreSourceRoot
         ? [
             {
-              find: "@miladyai/app-core/bridge/electrobun-rpc.js",
+              find: "@elizaos/app-core/bridge/electrobun-rpc.js",
               replacement: path.join(
                 repoRoot,
                 "test",
@@ -247,7 +247,7 @@ export default defineConfig({
               ),
             },
             {
-              find: "@miladyai/app-core/bridge/electrobun-rpc",
+              find: "@elizaos/app-core/bridge/electrobun-rpc",
               replacement: path.join(
                 repoRoot,
                 "test",
@@ -256,7 +256,7 @@ export default defineConfig({
               ),
             },
             {
-              find: "@miladyai/app-core/bridge/electrobun-runtime",
+              find: "@elizaos/app-core/bridge/electrobun-runtime",
               replacement: path.join(
                 repoRoot,
                 "test",
@@ -265,7 +265,7 @@ export default defineConfig({
               ),
             },
             {
-              find: "@miladyai/app-core/bridge",
+              find: "@elizaos/app-core/bridge",
               replacement: path.join(
                 repoRoot,
                 "test",
@@ -286,7 +286,7 @@ export default defineConfig({
               replacement: path.join(appCoreSourceRoot, "$1"),
             },
             {
-              find: "@miladyai/app-core",
+              find: "@elizaos/app-core",
               replacement: resolveModuleEntry(
                 path.join(appCoreSourceRoot, "index"),
               ),
@@ -305,22 +305,22 @@ export default defineConfig({
               ),
             },
           ]),
-      // @miladyai/shared — always resolve subpath imports from source
+      // @elizaos/shared — always resolve subpath imports from source
       {
         find: /^@miladyai\/plugin-selfcontrol\/(.*)/,
         replacement: path.join(
           repoRoot,
-          "packages",
+          "plugins",
           "plugin-selfcontrol",
           "src",
           "$1",
         ),
       },
       {
-        find: "@miladyai/plugin-selfcontrol",
+        find: "@elizaos/plugin-selfcontrol",
         replacement: path.join(
           repoRoot,
-          "packages",
+          "plugins",
           "plugin-selfcontrol",
           "src",
           "index.ts",
@@ -331,7 +331,7 @@ export default defineConfig({
         replacement: path.join(repoRoot, "packages", "shared", "src", "$1"),
       },
       {
-        find: "@miladyai/shared",
+        find: "@elizaos/shared",
         replacement: path.join(
           repoRoot,
           "packages",
@@ -358,15 +358,15 @@ export default defineConfig({
       "packages/agent/test/**/*.test.tsx",
       // app-core src-colocated tests run here; test/ harness suites run in
       // the app-unit config (apps/app/vitest.config.ts) which provides the
-      // correct @miladyai/app-core alias resolution. Running both in parallel
+      // correct @elizaos/app-core alias resolution. Running both in parallel
       // causes file-system race conditions on shared test fixtures.
       "packages/app-core/src/**/*.test.ts",
       "packages/shared/src/**/*.test.ts",
       "packages/app-core/src/**/*.test.tsx",
       "packages/agent/src/runtime/roles/test/**/*.test.ts",
-      "packages/plugin-selfcontrol/src/**/*.test.ts",
+      "plugins/plugin-selfcontrol/src/**/*.test.ts",
       "packages/plugin-wechat/src/**/*.test.ts",
-      "packages/plugin-music-player/src/**/*.test.ts",
+      "plugins/plugin-music-player/src/**/*.test.ts",
       "plugins/plugin-discord/typescript/__tests__/identity.test.ts",
       "plugins/plugin-discord/typescript/__tests__/slash-command-roles.test.ts",
       "src/**/*.test.ts",
@@ -419,8 +419,8 @@ export default defineConfig({
       deps: {
         inline: [
           "@elizaos/core",
-          "@miladyai/agent",
-          "@miladyai/app-core",
+          "@elizaos/agent",
+          "@elizaos/app-core",
           /^@miladyai\/shared/,
           /^@elizaos\/plugin-/,
           "zod",

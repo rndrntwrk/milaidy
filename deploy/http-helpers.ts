@@ -1,1 +1,1 @@
-export { readRequestBody } from "@miladyai/app-core/api";
+export { readRequestBody } from "@elizaos/app-core/api";

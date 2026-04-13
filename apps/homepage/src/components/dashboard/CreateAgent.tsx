@@ -1,4 +1,4 @@
-import { STYLE_PRESETS } from "@miladyai/shared/onboarding-presets";
+import { STYLE_PRESETS } from "@elizaos/shared/onboarding-presets";
 import {
   Button,
   Field,
@@ -7,7 +7,7 @@ import {
   FieldMessage,
   Input,
   Textarea,
-} from "@miladyai/ui";
+} from "@elizaos/app-core";
 import { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AgentProvider, useAgents } from "../../lib/AgentProvider";

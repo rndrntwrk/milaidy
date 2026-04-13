@@ -73,7 +73,7 @@
 
 - [x] Fix package hierarchy drift.
 - [x] Start with manifest-level correctness:
-  - `packages/app-core/package.json` currently imports `@miladyai/agent` throughout source but does not declare it.
+  - `packages/app-core/package.json` currently imports `@elizaos/agent` throughout source but does not declare it.
 - [x] Re-run the new audit and verify the hierarchy violation count drops sharply.
 - [x] Reduce hierarchy violations to 0.
 - [ ] Re-run the full unit and e2e entrypoints without the current Vitest hang.

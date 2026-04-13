@@ -1,4 +1,4 @@
-# @miladyai/plugin-milady-browser
+# @elizaos/plugin-milady-browser
 
 Local Milady desktop browser control plugin.
 

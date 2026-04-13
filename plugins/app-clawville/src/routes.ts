@@ -26,7 +26,7 @@ import type {
   AppLaunchResult,
   AppSessionActionResult,
   AppSessionState,
-} from "@miladyai/shared/contracts/apps";
+} from "@elizaos/shared/contracts/apps";
 
 import {
   asRuntimeLike,

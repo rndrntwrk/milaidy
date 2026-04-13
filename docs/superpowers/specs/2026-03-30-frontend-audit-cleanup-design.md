@@ -146,7 +146,7 @@ Token additions, constant definitions, component updates to reference them. No v
 
 ### Token unification
 
-- Add `@import "@miladyai/app-core/styles/base.css"` to `apps/homepage/src/styles.css`
+- Add `@import "@elizaos/app-core/styles/base.css"` to `apps/homepage/src/styles.css`
 - Remap the `@theme inline` block to reference shared variables
 - Delete the 23 standalone homepage token definitions
 - Keep homepage-only tokens (e.g., `--color-status-provisioning`) namespaced clearly
@@ -173,7 +173,7 @@ Replace raw Tailwind classes with semantic tokens:
 
 ### Shared UI adoption
 
-- Dashboard section already imports from `@miladyai/ui` — no change needed
+- Dashboard section already imports from `@elizaos/app-core` — no change needed
 - Marketing pages (Hero, Nav, Footer) — don't force component library adoption. Adopt token system and Button component where natural (Nav CTA, Footer links), keep custom layouts.
 
 ### Accessibility fixes

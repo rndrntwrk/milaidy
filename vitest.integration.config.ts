@@ -98,7 +98,7 @@ export default defineConfig({
               replacement: path.join(autonomousSourceRoot, "$1"),
             },
             {
-              find: "@miladyai/agent",
+              find: "@elizaos/agent",
               replacement: resolveModuleEntry(
                 path.join(autonomousSourceRoot, "index"),
               ),
@@ -120,7 +120,7 @@ export default defineConfig({
               replacement: path.join(appCoreSourceRoot, "$1"),
             },
             {
-              find: "@miladyai/app-core",
+              find: "@elizaos/app-core",
               replacement: resolveModuleEntry(
                 path.join(appCoreSourceRoot, "index"),
               ),
@@ -138,7 +138,7 @@ export default defineConfig({
         ),
       },
       {
-        find: "@miladyai/plugin-selfcontrol",
+        find: "@elizaos/plugin-selfcontrol",
         replacement: path.join(
           repoRoot,
           "packages",
@@ -227,7 +227,7 @@ export default defineConfig({
       deps: {
         inline: [
           "@elizaos/core",
-          "@miladyai/agent",
+          "@elizaos/agent",
           /^@elizaos\/plugin-/,
           "zod",
         ],

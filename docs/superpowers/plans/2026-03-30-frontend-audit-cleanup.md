@@ -34,7 +34,7 @@
 Run a search to confirm zero imports before deleting. This is a safety check.
 
 ```bash
-bun run --filter @miladyai/ui build 2>&1 | head -20
+bun run --filter @elizaos/app-core build 2>&1 | head -20
 grep -r "chat-atoms\|confirm-delete\|search-bar\|search-input\|tag-editor\|tag-input\|sonner\|tooltip-extended" \
   packages/app-core/src/ apps/app/src/ apps/homepage/src/ \
   --include="*.ts" --include="*.tsx" \
@@ -590,7 +590,7 @@ For Tailwind to pick up dynamic class names, the z-index values are numeric cons
 
 In each file, add the import:
 ```typescript
-import { Z_MODAL, Z_OVERLAY, Z_SYSTEM_CRITICAL, Z_SHELL_OVERLAY, Z_GLOBAL_EMOTE, Z_SYSTEM_BANNER } from "@miladyai/ui";
+import { Z_MODAL, Z_OVERLAY, Z_SYSTEM_CRITICAL, Z_SHELL_OVERLAY, Z_GLOBAL_EMOTE, Z_SYSTEM_BANNER } from "@elizaos/app-core";
 ```
 
 Then replace hardcoded values:
@@ -605,7 +605,7 @@ Search for and update any remaining files: `SystemWarningBanner.tsx` (z-[9998] -
 - [ ] **Step 4: Update `apps/homepage/src/App.tsx`**
 
 ```typescript
-import { Z_MODAL } from "@miladyai/ui";
+import { Z_MODAL } from "@elizaos/app-core";
 ```
 
 Replace `z-[100]` with `` z-[${Z_MODAL}] ``.
@@ -939,7 +939,7 @@ Expected: Minimal or zero results.
 At the top of `apps/homepage/src/styles.css`, after the existing `@import "tailwindcss"` line, add:
 
 ```css
-@import "@miladyai/app-core/styles/base.css";
+@import "@elizaos/app-core/styles/base.css";
 ```
 
 This brings in all the shared CSS custom properties (`--bg`, `--text`, `--accent`, `--border`, `--ok`, `--danger`, `--warn`, etc.) with light and dark mode support.
@@ -997,7 +997,7 @@ Expected: Build succeeds. Colors now come from shared tokens.
 git add apps/homepage/src/styles.css
 git commit -m "refactor: homepage tokens now reference shared base.css
 
-Import @miladyai/app-core/styles/base.css and remap all homepage
+Import @elizaos/app-core/styles/base.css and remap all homepage
 color tokens to shared variables. Values align automatically."
 ```
 

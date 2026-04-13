@@ -2,11 +2,11 @@ import type { Provider } from "@elizaos/core";
 import {
   getBrowserWorkspaceMode,
   listBrowserWorkspaceTabs,
-} from "@miladyai/agent/services/browser-workspace";
+} from "@elizaos/agent/services/browser-workspace";
 import {
   getStewardPendingApprovals,
   getStewardWalletStatus,
-} from "@miladyai/agent/services/steward-wallet";
+} from "@elizaos/agent/services/steward-wallet";
 
 async function formatWorkspaceSummary(): Promise<{
   text: string;

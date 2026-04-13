@@ -821,7 +821,7 @@ export default defineConfig({
     target: "es2022",
   },
   resolve: {
-    dedupe: ["react", "react-dom", "three", "@miladyai/app-core"],
+    dedupe: ["react", "react-dom", "three", "@elizaos/app-core"],
     alias: [
       // Bare Node built-in polyfills for browser — pathe provides ESM path,
       // events is pre-bundled via optimizeDeps.
@@ -887,17 +887,17 @@ export default defineConfig({
         find: /^@miladyai\/plugin-selfcontrol\/(.*)/,
         replacement: path.resolve(
           miladyRoot,
-          "packages/plugin-selfcontrol/src/$1",
+          "plugins/plugin-selfcontrol/src/$1",
         ),
       },
       {
         find: /^@miladyai\/plugin-selfcontrol$/,
         replacement: path.resolve(
           miladyRoot,
-          "packages/plugin-selfcontrol/src/index.ts",
+          "plugins/plugin-selfcontrol/src/index.ts",
         ),
       },
-      // Force local @miladyai/app-core when workspace-linked (prevents stale
+      // Force local @elizaos/app-core when workspace-linked (prevents stale
       // bun cache copies from overriding the symlinked local source).
       ...(() => {
         const appCorePkgPath = path.resolve(
@@ -913,8 +913,8 @@ export default defineConfig({
           if (typeof value === "string") {
             const aliasKey =
               key === "."
-                ? "@miladyai/app-core"
-                : `@miladyai/app-core/${key.replace(/^\.\//, "")}`;
+                ? "@elizaos/app-core"
+                : `@elizaos/app-core/${key.replace(/^\.\//, "")}`;
             // If the package exports something ending with .js instead of .ts, we check for .ts locally
             // But the exports in app-core point directly to .ts, .tsx, .css, so we can just resolve it
             const targetPath = path.resolve(appCorePkgDir, value);
@@ -936,7 +936,7 @@ export default defineConfig({
         const uiSource = path.resolve(miladyRoot, "packages/ui/src");
         const _autonomousSource = path.resolve(
           miladyRoot,
-          "node_modules/@miladyai/agent/packages/agent/src",
+          "node_modules/@elizaos/agent/packages/agent/src",
         );
 
         return [
@@ -952,7 +952,7 @@ export default defineConfig({
           // NOTE: @elizaos/agent barrel re-exports server-only code (eliza.ts,
           // server.ts) that imports native modules (node-llama-cpp, node:module).
           // Nothing in the browser needs the barrel — only subpath imports like
-          // @miladyai/agent/contracts/onboarding are used.  Map the bare import
+          // @elizaos/agent/contracts/onboarding are used.  Map the bare import
           // to an empty module so Vite never traverses the server-side tree.
           {
             find: /^@elizaos\/agent$/,

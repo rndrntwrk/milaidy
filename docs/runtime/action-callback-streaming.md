@@ -82,7 +82,7 @@ No extra fields, no Milady-specific APIs, no runtime attachment. Helpers like `P
 ## Related code and docs
 
 - **Implementation:** `packages/agent/src/api/chat-routes.ts` — `replaceCallbackText`, `preCallbackText`.
-- **Example helper:** `packages/plugin-music-player/src/utils/progressiveMessage.ts`.
+- **Example helper:** `plugins/plugin-music-player/src/utils/progressiveMessage.ts`.
 - **UI streaming:** [Dashboard — Chat](/dashboard/chat) (SSE / typing indicator).
 - **Changelog:** [Changelog](/changelog) — search for “action callback” or the ship date.
 

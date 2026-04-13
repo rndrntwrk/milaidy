@@ -19,7 +19,7 @@
   ],
   "dependencies": {
     "@elizaos/core": "workspace:*",
-    "@miladyai/shared": "workspace:*",
+    "@elizaos/shared": "workspace:*",
     "@toon-format/toon": "2.1.0"
   },
   "agentConfig": {

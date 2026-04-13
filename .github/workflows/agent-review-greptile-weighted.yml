@@ -240,7 +240,7 @@ jobs:
                11. Dev observability endpoints default-on, loopback-only
                12. Access control files (`imessage/access.json`, `discord/access.json`, `telegram/access.json`) not modified
                If an invariant is relevant to the diff and NEITHER reviewer covered it, flag that as a coverage gap and verify it yourself.
-            7. **Verify UI reuse** — if the PR touches React components, confirm no hand-rolled primitives that `@miladyai/ui` (at `packages/ui/`) already exports, and no feature components that duplicate `packages/app-core/src/components/`. New UI code must not land in `apps/app/src/` (thin Vite shell).
+            7. **Verify UI reuse** — if the PR touches React components, confirm no hand-rolled primitives that `@elizaos/app-core` (at `packages/ui/`) already exports, and no feature components that duplicate `packages/app-core/src/components/`. New UI code must not land in `apps/app/src/` (thin Vite shell).
             8. **Produce the FINAL verdict.** Post it as a NEW comment (do not edit the preliminary one — that will be marked superseded by a later step).
 
             ## Output format (post as a new PR comment)
@@ -260,7 +260,7 @@ jobs:
             <all 12 universal invariants covered by at least one reviewer? If any gaps, list them and your own verdict on each>
 
             ## UI reuse check
-            <N/A if not a UI PR, else: `@miladyai/ui` primitives respected? `packages/app-core/src/components/` feature components respected? New UI code out of `apps/app/src/`?>
+            <N/A if not a UI PR, else: `@elizaos/app-core` primitives respected? `packages/app-core/src/components/` feature components respected? New UI code out of `apps/app/src/`?>
 
             ## Final decision
             Decision: APPROVE | REQUEST CHANGES | CLOSE

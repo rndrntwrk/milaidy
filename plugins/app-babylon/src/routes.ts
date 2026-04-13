@@ -2,7 +2,7 @@ import type { IAgentRuntime } from "@elizaos/core";
 import type {
   AppLaunchResult,
   AppSessionState,
-} from "@miladyai/shared/contracts/apps";
+} from "@elizaos/shared/contracts/apps";
 import {
   asRuntimeLike,
   type BabylonConfig,

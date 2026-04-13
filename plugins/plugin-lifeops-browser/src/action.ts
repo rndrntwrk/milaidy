@@ -9,8 +9,8 @@ import type {
 import {
   LifeOpsService,
   LifeOpsServiceError,
-} from "@miladyai/agent/lifeops/service";
-import { hasAdminAccess } from "@miladyai/agent/security/access";
+} from "@elizaos/agent/lifeops/service";
+import { hasAdminAccess } from "@elizaos/agent/security/access";
 import type {
   CompleteLifeOpsBrowserSessionRequest,
   ConfirmLifeOpsBrowserSessionRequest,
@@ -18,7 +18,7 @@ import type {
   LifeOpsBrowserActionKind,
   LifeOpsBrowserKind,
   UpdateLifeOpsBrowserSettingsRequest,
-} from "@miladyai/shared/contracts/lifeops";
+} from "@elizaos/shared/contracts/lifeops";
 
 type BrowserCommand =
   | "get_settings"

@@ -5,14 +5,14 @@ export type {
   Platform,
   SystemPermissionDefinition,
   SystemPermissionId,
-} from "@miladyai/shared/contracts/permissions";
+} from "@elizaos/shared/contracts/permissions";
 
 import type {
   PermissionState,
   Platform,
   SystemPermissionDefinition,
   SystemPermissionId,
-} from "@miladyai/shared/contracts/permissions";
+} from "@elizaos/shared/contracts/permissions";
 
 /** Local variant uses an index signature (the canonical contract uses explicit keys). */
 export interface AllPermissionsState {

@@ -1,7 +1,6 @@
-import { defineConfig } from "vitest/config";
 import baseConfig from "./vitest.e2e.config";
 
-export default defineConfig({
+export default {
   ...baseConfig,
   test: {
     ...baseConfig.test,
@@ -16,6 +15,16 @@ export default defineConfig({
       "test/**/*.real.e2e.test.tsx",
       "test/**/*-live.e2e.test.ts",
       "test/**/*-live.e2e.test.tsx",
+      "eliza/agent/test/**/*.live.test.ts",
+      "eliza/agent/test/**/*.live.test.tsx",
+      "eliza/agent/test/**/*-live.test.ts",
+      "eliza/agent/test/**/*-live.test.tsx",
+      "eliza/agent/test/**/*.live.e2e.test.ts",
+      "eliza/agent/test/**/*.live.e2e.test.tsx",
+      "eliza/agent/test/**/*.real.e2e.test.ts",
+      "eliza/agent/test/**/*.real.e2e.test.tsx",
+      "eliza/agent/test/**/*-live.e2e.test.ts",
+      "eliza/agent/test/**/*-live.e2e.test.tsx",
       "packages/agent/test/**/*.live.test.ts",
       "packages/agent/test/**/*.live.test.tsx",
       "packages/agent/test/**/*-live.test.ts",
@@ -26,6 +35,16 @@ export default defineConfig({
       "packages/agent/test/**/*.real.e2e.test.tsx",
       "packages/agent/test/**/*-live.e2e.test.ts",
       "packages/agent/test/**/*-live.e2e.test.tsx",
+      "eliza/packages/app-core/test/**/*.live.test.ts",
+      "eliza/packages/app-core/test/**/*.live.test.tsx",
+      "eliza/packages/app-core/test/**/*-live.test.ts",
+      "eliza/packages/app-core/test/**/*-live.test.tsx",
+      "eliza/packages/app-core/test/**/*.live.e2e.test.ts",
+      "eliza/packages/app-core/test/**/*.live.e2e.test.tsx",
+      "eliza/packages/app-core/test/**/*.real.e2e.test.ts",
+      "eliza/packages/app-core/test/**/*.real.e2e.test.tsx",
+      "eliza/packages/app-core/test/**/*-live.e2e.test.ts",
+      "eliza/packages/app-core/test/**/*-live.e2e.test.tsx",
       "packages/app-core/test/**/*.live.test.ts",
       "packages/app-core/test/**/*.live.test.tsx",
       "packages/app-core/test/**/*-live.test.ts",
@@ -39,4 +58,4 @@ export default defineConfig({
     ],
     exclude: ["dist/**", "**/node_modules/**"],
   },
-});
+};

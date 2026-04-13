@@ -10,8 +10,8 @@ import {
   getStewardWalletUnavailableMessage,
   rejectStewardWalletRequest,
   signWithStewardWallet,
-} from "@miladyai/agent/services/steward-wallet";
-import type { StewardSignResponse } from "@miladyai/shared/contracts/wallet";
+} from "@elizaos/agent/services/steward-wallet";
+import type { StewardSignResponse } from "@elizaos/shared/contracts/wallet";
 
 type StewardSignActionRequest = {
   to: string;
