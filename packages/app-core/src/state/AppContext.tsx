@@ -7912,6 +7912,35 @@ function AppProviderInner({
     requestGreetingWhenRunningRef2.current = requestGreetingWhenRunning;
   }, [requestGreetingWhenRunning]);
 
+  const dispatchStartupCoordinatorEvent = useCallback(
+    (event: import("./startup-coordinator").StartupEvent) => {
+      switch (event.type) {
+        case "RETRY":
+        case "RESET":
+        case "SWITCH_AGENT":
+          retryStartup();
+          return;
+        case "PAIRING_SUCCESS":
+          setAuthRequired(false);
+          retryStartup();
+          return;
+        case "ONBOARDING_COMPLETE":
+        case "SPLASH_CLOUD_SKIP":
+          setOnboardingLoading(false);
+          setOnboardingComplete(true);
+          return;
+        default:
+          return;
+      }
+    },
+    [
+      retryStartup,
+      setAuthRequired,
+      setOnboardingComplete,
+      setOnboardingLoading,
+    ],
+  );
+
   const switchAgentProfile = useCallback(
     (profileId: string) => {
       const profile = loadAgentProfileRegistry().profiles.find(
@@ -7942,12 +7971,12 @@ function AppProviderInner({
           : profile.kind === "remote"
             ? "remote-backend"
             : "embedded-local";
-      stableStartupCoordinator.dispatch({
+      dispatchStartupCoordinatorEvent({
         type: "SWITCH_AGENT",
         target: target as RuntimeTarget,
       });
     },
-    [stableStartupCoordinator],
+    [dispatchStartupCoordinatorEvent],
   );
 
   // When agent transitions to "running", send a greeting if conversation is empty
@@ -8116,29 +8145,9 @@ function AppProviderInner({
                     attempts: backendConnection.reconnectAttempt,
                   };
 
-    const dispatch = (event: import("./startup-coordinator").StartupEvent) => {
-      switch (event.type) {
-        case "RETRY":
-        case "RESET":
-          retryStartup();
-          return;
-        case "PAIRING_SUCCESS":
-          setAuthRequired(false);
-          retryStartup();
-          return;
-        case "ONBOARDING_COMPLETE":
-        case "SPLASH_CLOUD_SKIP":
-          setOnboardingLoading(false);
-          setOnboardingComplete(true);
-          return;
-        default:
-          return;
-      }
-    };
-
     return {
       state,
-      dispatch,
+      dispatch: dispatchStartupCoordinatorEvent,
       retry: retryStartup,
       reset: retryStartup,
       pairingSuccess: () => {
@@ -8166,6 +8175,7 @@ function AppProviderInner({
     authRequired,
     backendConnection.reconnectAttempt,
     backendConnection.state,
+    dispatchStartupCoordinatorEvent,
     onboardingComplete,
     onboardingLoading,
     retryStartup,
