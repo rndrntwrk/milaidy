@@ -4846,9 +4846,11 @@ async function maybeRouteAutonomyEventToConversation(
   const text = typeof payload?.text === "string" ? payload.text.trim() : "";
   if (!text) return;
 
+  const explicitSource =
+    typeof payload?.source === "string" ? payload.source : null;
   const hasExplicitSource =
-    typeof payload?.source === "string" && payload.source.trim().length > 0;
-  const source = hasExplicitSource ? payload.source.trim() : "autonomy";
+    explicitSource !== null && explicitSource.trim().length > 0;
+  const source = hasExplicitSource ? explicitSource.trim() : "autonomy";
 
   // Regular user conversation turns should never be re-routed as proactive.
   // Some AGENT_EVENT payloads may omit roomId metadata, so rely on source too.

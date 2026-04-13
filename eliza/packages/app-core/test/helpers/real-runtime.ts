@@ -145,7 +145,11 @@ export async function createRealTestRuntime(
   if (options?.withLLM) {
     try {
       const pluginModule = await import("@elizaos/plugin-local-embedding");
-      const plugin = pluginModule.default ?? pluginModule.elizaPlugin;
+      const plugin =
+        pluginModule.default ??
+        ("localAiPlugin" in pluginModule
+          ? pluginModule.localAiPlugin
+          : undefined);
       if (plugin) {
         configureLocalEmbeddingPlugin(plugin);
         await runtime.registerPlugin(plugin);
