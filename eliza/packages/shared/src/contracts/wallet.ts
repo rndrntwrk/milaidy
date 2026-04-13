@@ -224,6 +224,39 @@ export interface WalletConfigStatus {
   executionReady?: boolean;
   executionBlockedReason?: string | null;
   solanaSigningAvailable?: boolean;
+  /** Present only when ENABLE_CLOUD_WALLET is on. */
+  wallets?: WalletEntry[];
+  /** Present only when ENABLE_CLOUD_WALLET is on. */
+  primary?: WalletPrimaryMap;
+}
+
+export type WalletSource = "local" | "cloud";
+export type WalletChainKind = "evm" | "solana";
+export type WalletProviderKind = "local" | "privy" | "steward";
+
+export interface WalletEntry {
+  source: WalletSource;
+  chain: WalletChainKind;
+  address: string;
+  provider: WalletProviderKind;
+  primary: boolean;
+}
+
+export interface WalletPrimaryMap {
+  evm: WalletSource;
+  solana: WalletSource;
+}
+
+export interface WalletPrimaryUpdateRequest {
+  chain: WalletChainKind;
+  source: WalletSource;
+}
+
+export interface WalletPrimaryUpdateResponse {
+  ok: boolean;
+  chain: WalletChainKind;
+  source: WalletSource;
+  warnings?: string[];
 }
 
 export type TradePermissionMode =
@@ -482,6 +515,54 @@ export interface StewardStatusResponse {
   walletAddresses?: { evm: string | null; solana: string | null };
   agentName?: string;
   vaultHealth?: "ok" | "degraded" | "error";
+}
+
+/** Response from GET /api/wallet/steward-addresses. */
+export interface StewardWalletAddressesResponse {
+  evmAddress: string | null;
+  solanaAddress: string | null;
+}
+
+/** Response from GET /api/wallet/steward-balances. */
+export interface StewardBalanceResponse {
+  balance: string;
+  formatted: string;
+  symbol: string;
+  chainId: number;
+}
+
+/** Response from GET /api/wallet/steward-tokens. */
+export interface StewardTokenBalancesResponse {
+  native: StewardBalanceResponse;
+  tokens: Array<{
+    address: string;
+    symbol: string;
+    name: string;
+    balance: string;
+    formatted: string;
+    decimals: number;
+    valueUsd?: string;
+    logoUrl?: string;
+  }>;
+}
+
+export type StewardWebhookEventType =
+  | "tx.pending"
+  | "tx.approved"
+  | "tx.denied"
+  | "tx.confirmed";
+
+/** Event entry from GET /api/wallet/steward-webhook-events. */
+export interface StewardWebhookEvent {
+  event: StewardWebhookEventType;
+  data: Record<string, unknown>;
+  timestamp?: string;
+}
+
+/** Response from GET /api/wallet/steward-webhook-events. */
+export interface StewardWebhookEventsResponse {
+  events: StewardWebhookEvent[];
+  nextIndex: number;
 }
 
 export interface BscTradeExecuteResponse {

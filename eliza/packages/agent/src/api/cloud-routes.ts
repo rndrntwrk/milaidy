@@ -1,11 +1,22 @@
+import fs from "node:fs/promises";
 import type http from "node:http";
+import path from "node:path";
 import { logger } from "@elizaos/core";
 import {
   isCloudInferenceSelectedInConfig,
   migrateLegacyRuntimeConfig,
 } from "@elizaos/shared/contracts/onboarding";
 import { normalizeCloudSiteUrl } from "../cloud/base-url.js";
+import {
+  getOrCreateClientAddressKey,
+  MILADY_CLOUD_CLIENT_ADDRESS_KEY_ENV,
+  persistCloudWalletCache,
+  provisionCloudWallets,
+} from "../cloud/cloud-wallet.js";
 import { validateCloudBaseUrl } from "../cloud/validate-url.js";
+import { isCloudWalletEnabled } from "../config/feature-flags.js";
+import { resolveStateDir } from "../config/paths.js";
+import { persistConfigEnv } from "./config-env.js";
 import {
   readJsonBody as parseJsonBody,
   sendJson,
@@ -78,6 +89,13 @@ export interface CloudRouteState {
   runtime: RuntimeLike | null;
   saveConfig?: (config: CloudConfigLike) => void;
   createTelemetrySpan?: CreateTelemetrySpanLike;
+  /**
+   * Optional runtime restart hook. When Phase 8 lands the cloud-wallet
+   * provisioning integration, the cloud-login handler will call this to
+   * rebind plugin-evm / plugin-solana to the cloud provider. Threaded
+   * from server.ts the same way provider-switch-routes does.
+   */
+  restartRuntime?: (reason: string) => Promise<boolean> | boolean;
 }
 
 const UUID_RE =
@@ -85,10 +103,105 @@ const UUID_RE =
 
 const CLOUD_LOGIN_CREATE_TIMEOUT_MS = 10_000;
 const CLOUD_LOGIN_POLL_TIMEOUT_MS = 10_000;
+const CONFIG_ENV_FILENAME = "config.env";
+const CONFIG_ENV_BAK_SUFFIX = ".bak";
+const CLOUD_WALLET_ROLLBACK_ENV_KEYS = [
+  MILADY_CLOUD_CLIENT_ADDRESS_KEY_ENV,
+  "MILADY_CLOUD_EVM_ADDRESS",
+  "MILADY_CLOUD_SOLANA_ADDRESS",
+  "ENABLE_EVM_PLUGIN",
+  "WALLET_SOURCE_EVM",
+  "WALLET_SOURCE_SOLANA",
+] as const;
+
+type CloudWalletRollbackEnvKey =
+  (typeof CLOUD_WALLET_ROLLBACK_ENV_KEYS)[number];
+
+interface ConfigEnvRollbackSnapshot {
+  bakPath: string;
+  filePath: string;
+  originalRaw: string | null;
+  previousEnv: Partial<Record<CloudWalletRollbackEnvKey, string>>;
+}
 
 function extractAgentId(pathname: string): string | null {
   const id = pathname.split("/")[4];
   return id && UUID_RE.test(id) ? id : null;
+}
+
+function replaceMutableRoot<T extends object>(target: T, snapshot: T): void {
+  const targetRecord = target as Record<string, unknown>;
+  for (const key of Object.keys(targetRecord)) {
+    delete targetRecord[key];
+  }
+  Object.assign(
+    targetRecord,
+    structuredClone(snapshot as Record<string, unknown>),
+  );
+}
+
+async function captureConfigEnvRollbackSnapshot(): Promise<ConfigEnvRollbackSnapshot> {
+  const filePath = path.join(resolveStateDir(), CONFIG_ENV_FILENAME);
+  const bakPath = `${filePath}${CONFIG_ENV_BAK_SUFFIX}`;
+
+  let originalRaw: string | null = null;
+  try {
+    originalRaw = await fs.readFile(filePath, "utf8");
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+      throw err;
+    }
+  }
+
+  const previousEnv = Object.fromEntries(
+    CLOUD_WALLET_ROLLBACK_ENV_KEYS.flatMap((key) => {
+      const value = process.env[key];
+      return typeof value === "string" ? ([[key, value]] as const) : [];
+    }),
+  ) as Partial<Record<CloudWalletRollbackEnvKey, string>>;
+
+  return {
+    bakPath,
+    filePath,
+    originalRaw,
+    previousEnv,
+  };
+}
+
+async function restoreConfigEnvRollbackSnapshot(
+  snapshot: ConfigEnvRollbackSnapshot,
+): Promise<void> {
+  await fs.mkdir(path.dirname(snapshot.filePath), { recursive: true });
+
+  if (snapshot.originalRaw === null) {
+    await fs.rm(snapshot.filePath, { force: true });
+    await fs.rm(snapshot.bakPath, { force: true });
+  } else {
+    await fs.writeFile(snapshot.filePath, snapshot.originalRaw, {
+      encoding: "utf8",
+      mode: 0o600,
+    });
+    await fs.writeFile(snapshot.bakPath, snapshot.originalRaw, {
+      encoding: "utf8",
+      mode: 0o600,
+    });
+  }
+
+  for (const key of CLOUD_WALLET_ROLLBACK_ENV_KEYS) {
+    const previousValue = snapshot.previousEnv[key];
+    if (typeof previousValue === "string") {
+      process.env[key] = previousValue;
+    } else {
+      delete process.env[key];
+    }
+  }
+}
+
+function saveConfigOrThrow(state: CloudRouteState): void {
+  if (!state.saveConfig) {
+    throw new Error("saveConfig not available");
+  }
+  state.saveConfig(state.config);
 }
 
 async function readJsonBody<T = Record<string, unknown>>(
@@ -395,6 +508,130 @@ export async function handleCloudRoute(
         typeof state.cloudManager.init === "function"
       ) {
         await state.cloudManager.init();
+      }
+
+      // Cloud-wallet remote-signing bridge (gated by ENABLE_CLOUD_WALLET).
+      // Failures here do NOT abort the cloud-login response — the API key
+      // is already saved. We log, rollback the partial wallet bind, and
+      // fall through so the user stays logged in.
+      if (isCloudWalletEnabled()) {
+        const rollbackConfigSnapshot = structuredClone(
+          state.config as Record<string, unknown>,
+        ) as CloudConfigLike;
+        const rollbackEnvSnapshot = await captureConfigEnvRollbackSnapshot();
+
+        try {
+          const bridge = state.cloudManager?.getClient();
+          const agentId = state.runtime?.agentId;
+          if (!bridge) {
+            throw new Error("cloud-wallet bridge unavailable");
+          }
+          if (!agentId) {
+            throw new Error("cloud-wallet runtime agentId missing");
+          }
+
+          const { address: clientAddress, minted } =
+            await getOrCreateClientAddressKey();
+          if (minted) {
+            logger.info(
+              `[cloud-login] cloud-wallet: minted client_address ${clientAddress}`,
+            );
+          }
+
+          const descriptors = await provisionCloudWallets(bridge, {
+            agentId,
+            clientAddress,
+          });
+
+          persistCloudWalletCache(
+            state.config as Record<string, unknown>,
+            descriptors,
+          );
+
+          const cloudCfg = (state.config.cloud ?? {}) as Record<
+            string,
+            unknown
+          >;
+          cloudCfg.clientAddressPublicKey = clientAddress;
+          (state.config as Record<string, unknown>).cloud = cloudCfg;
+          saveConfigOrThrow(state);
+
+          if (descriptors.evm?.walletAddress) {
+            process.env.MILADY_CLOUD_EVM_ADDRESS =
+              descriptors.evm.walletAddress;
+            await persistConfigEnv(
+              "MILADY_CLOUD_EVM_ADDRESS",
+              descriptors.evm.walletAddress,
+            );
+          }
+          if (descriptors.solana?.walletAddress) {
+            process.env.MILADY_CLOUD_SOLANA_ADDRESS =
+              descriptors.solana.walletAddress;
+            await persistConfigEnv(
+              "MILADY_CLOUD_SOLANA_ADDRESS",
+              descriptors.solana.walletAddress,
+            );
+          }
+
+          await persistConfigEnv("ENABLE_EVM_PLUGIN", "1");
+          if (descriptors.evm) {
+            await persistConfigEnv("WALLET_SOURCE_EVM", "cloud");
+          }
+          if (descriptors.solana) {
+            await persistConfigEnv("WALLET_SOURCE_SOLANA", "cloud");
+          }
+
+          const wallet = ((state.config as Record<string, unknown>).wallet ??
+            {}) as Record<string, unknown>;
+          const primary = {
+            ...((wallet.primary ?? {}) as Record<string, string>),
+          };
+          if (descriptors.evm) primary.evm = "cloud";
+          if (descriptors.solana) primary.solana = "cloud";
+          wallet.primary = primary;
+          (state.config as Record<string, unknown>).wallet = wallet;
+          saveConfigOrThrow(state);
+
+          logger.info(
+            `[cloud-login] cloud-wallet: provisioned ${Object.keys(descriptors).join(", ")} — applying runtime reload`,
+          );
+
+          const restarted = state.restartRuntime
+            ? await Promise.resolve(state.restartRuntime("cloud-wallet-bound"))
+            : false;
+          if (!restarted) {
+            logger.warn(
+              "[cloud-login] cloud-wallet: restartRuntime not wired or restart declined — user must restart manually",
+            );
+          }
+        } catch (cloudWalletErr) {
+          try {
+            await restoreConfigEnvRollbackSnapshot(rollbackEnvSnapshot);
+          } catch (rollbackErr) {
+            logger.error(
+              `[cloud-login] cloud-wallet rollback failed: ${String(
+                rollbackErr,
+              )}`,
+            );
+          }
+
+          replaceMutableRoot(state.config, rollbackConfigSnapshot);
+          try {
+            saveConfigOrThrow(state);
+          } catch (saveRollbackErr) {
+            logger.error(
+              `[cloud-login] cloud-wallet config rollback failed: ${String(
+                saveRollbackErr,
+              )}`,
+            );
+          }
+
+          logger.error(
+            `[cloud-login] cloud-wallet provision failed: ${String(
+              cloudWalletErr,
+            )}`,
+          );
+        }
       }
 
       sendJson(res, { status: "authenticated", keyPrefix: data.keyPrefix });

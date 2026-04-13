@@ -584,7 +584,7 @@ async function fetchAnkrChainBalances(
 
 // ── Direct RPC balance fetching ───────────────────────────────────────
 
-async function fetchNativeBalanceViaRpc(
+export async function fetchEvmNativeBalanceViaRpc(
   rpcUrl: string,
   address: string,
 ): Promise<string> {
@@ -704,7 +704,7 @@ async function fetchEvmChainBalancesViaRpc(
   const errors: string[] = [];
   for (const rpcUrl of rpcUrls) {
     try {
-      const nativeBalance = await fetchNativeBalanceViaRpc(rpcUrl, address);
+      const nativeBalance = await fetchEvmNativeBalanceViaRpc(rpcUrl, address);
 
       // Query known ERC-20 tokens (e.g. from trade ledger).
       const tokens: EvmTokenBalance[] = [];

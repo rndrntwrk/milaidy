@@ -1,3 +1,9 @@
+import type {
+  WalletChainKind,
+  WalletEntry,
+  WalletPrimaryMap,
+  WalletSource,
+} from "@miladyai/shared/contracts/wallet";
 import type { Dispatch, SetStateAction } from "react";
 import type {
   AgentStatus,
@@ -39,9 +45,14 @@ import type {
   SkillMarketplaceResult,
   SkillScanReportSummary,
   StewardApprovalActionResponse,
+  StewardBalanceResponse,
   StewardHistoryResponse,
   StewardPendingResponse,
   StewardStatusResponse,
+  StewardTokenBalancesResponse,
+  StewardWalletAddressesResponse,
+  StewardWebhookEventsResponse,
+  StewardWebhookEventType,
   StreamEventEnvelope,
   SystemPermissionId,
   TriggerHealthSnapshot,
@@ -391,6 +402,11 @@ export interface AppState {
   inventorySortDirection: "asc" | "desc";
   inventoryChainFilters: InventoryChainFilters;
   walletError: string | null;
+  wallets: WalletEntry[];
+  walletPrimary: WalletPrimaryMap | null;
+  walletPrimaryRestarting: Partial<Record<WalletChainKind, boolean>>;
+  walletPrimaryPending: Partial<Record<WalletChainKind, boolean>>;
+  cloudRefreshing: boolean;
 
   // ERC-8004 Registry
   registryStatus: RegistryStatus | null;
@@ -773,6 +789,13 @@ export interface AppActions {
   ) => Promise<BscTradeQuoteResponse>;
   getBscTradeTxStatus: (hash: string) => Promise<BscTradeTxStatusResponse>;
   getStewardStatus: () => Promise<StewardStatusResponse>;
+  getStewardAddresses: () => Promise<StewardWalletAddressesResponse>;
+  getStewardBalance: (chainId?: number) => Promise<StewardBalanceResponse>;
+  getStewardTokens: (chainId?: number) => Promise<StewardTokenBalancesResponse>;
+  getStewardWebhookEvents: (opts?: {
+    event?: StewardWebhookEventType;
+    since?: number;
+  }) => Promise<StewardWebhookEventsResponse>;
   getStewardHistory: (opts?: {
     status?: string;
     limit?: number;
@@ -793,7 +816,14 @@ export interface AppActions {
     window?: WalletTradingProfileWindow,
     source?: WalletTradingProfileSourceFilter,
   ) => Promise<WalletTradingProfileResponse>;
-  handleWalletApiKeySave: (config: WalletConfigUpdateRequest) => Promise<void>;
+  handleWalletApiKeySave: (
+    config: WalletConfigUpdateRequest,
+  ) => Promise<boolean>;
+  setWalletPrimary: (
+    chain: WalletChainKind,
+    source: WalletSource,
+  ) => Promise<void>;
+  refreshCloudWallets: () => Promise<void>;
   handleExportKeys: () => Promise<void>;
 
   // Registry / Drop

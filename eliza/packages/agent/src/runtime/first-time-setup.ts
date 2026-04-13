@@ -18,7 +18,9 @@
  *
  * @module first-time-setup
  */
+import { persistConfigEnv } from "../api/config-env.js";
 import { type ElizaConfig, saveElizaConfig } from "../config/config.js";
+import { isCloudWalletEnabled } from "../config/feature-flags.js";
 import type { AgentConfig } from "../config/types.agents.js";
 import type { StylePreset } from "../contracts/onboarding.js";
 import { migrateLegacyRuntimeConfig } from "../contracts/onboarding.js";
@@ -141,12 +143,143 @@ function cancelOnboarding(): never {
 // Main function
 // ---------------------------------------------------------------------------
 
+/**
+ * Read whether the runtime config holds cached cloud-wallet descriptors.
+ * Uses defensive accessors because `wallet.cloud` is introduced by the
+ * cloud-wallet module (Phase 3) and may not exist in older configs.
+ */
+function hasCloudWalletBinding(config: ElizaConfig): boolean {
+  const walletSection = (config as unknown as { wallet?: unknown }).wallet;
+  if (!walletSection || typeof walletSection !== "object") return false;
+  const cloud = (walletSection as { cloud?: unknown }).cloud;
+  if (!cloud || typeof cloud !== "object") return false;
+  const cloudObj = cloud as Record<string, unknown>;
+  return Boolean(cloudObj.evm || cloudObj.solana);
+}
+
+function readCloudWalletAddress(
+  config: ElizaConfig,
+  chain: "evm" | "solana",
+): string | null {
+  const walletSection = (
+    config as unknown as {
+      wallet?: {
+        cloud?: Partial<
+          Record<
+            "evm" | "solana",
+            { walletAddress?: unknown; address?: unknown } | undefined
+          >
+        >;
+      };
+    }
+  ).wallet;
+  const descriptor = walletSection?.cloud?.[chain];
+  if (!descriptor || typeof descriptor !== "object") return null;
+
+  const raw =
+    typeof descriptor.walletAddress === "string"
+      ? descriptor.walletAddress
+      : typeof descriptor.address === "string"
+        ? descriptor.address
+        : null;
+  return raw?.trim() ? raw.trim() : null;
+}
+
+/**
+ * Read the user's saved primary wallet source selection from config.
+ * Returns { evm, solana } where each can be:
+ *  - "cloud": user explicitly chose cloud
+ *  - "local": user explicitly chose local
+ *  - null: user has not made an explicit choice (should auto-bind to cloud)
+ */
+function readUserPrimarySelection(config: ElizaConfig): { evm: "local" | "cloud" | null; solana: "local" | "cloud" | null } {
+  const wallet = (config as unknown as { wallet?: unknown }).wallet;
+  const raw =
+    wallet && typeof wallet === "object"
+      ? (wallet as { primary?: unknown }).primary
+      : undefined;
+  const result = { evm: null as const, solana: null as const };
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    const record = raw as Record<string, unknown>;
+    if (record.evm === "cloud" || record.evm === "local") {
+      result.evm = record.evm;
+    }
+    if (record.solana === "cloud" || record.solana === "local") {
+      result.solana = record.solana;
+    }
+  }
+  return result;
+}
+
+/**
+ * When cloud mode + cloud wallet are both on and the cloud cache holds
+ * descriptors, mark the runtime env so plugin-evm / plugin-solana bind
+ * against the cloud signer rather than a local private key. Writes
+ * `WALLET_SOURCE_EVM=cloud` / `WALLET_SOURCE_SOLANA=cloud` and the resolved
+ * cloud wallet addresses to config.env (durable across restarts) and to
+ * `process.env` (visible to the in-flight runtime).
+ *
+ * IMPORTANT: Only binds to cloud if the user has not explicitly selected
+ * local as primary for that chain. This preserves user-made primary selection
+ * changes across restarts.
+ *
+ * No-ops if `ENABLE_CLOUD_WALLET` is off or if the cache is empty.
+ */
+export async function bindCloudProvider(config: ElizaConfig): Promise<void> {
+  if (!isCloudWalletEnabled()) return;
+  if (!hasCloudWalletBinding(config)) return;
+
+  const walletSection = (
+    config as unknown as { wallet?: { cloud?: Record<string, unknown> } }
+  ).wallet;
+  const cloud = walletSection?.cloud ?? {};
+  const evmAddress = readCloudWalletAddress(config, "evm");
+  const solanaAddress = readCloudWalletAddress(config, "solana");
+
+  if (evmAddress && process.env.MILADY_CLOUD_EVM_ADDRESS !== evmAddress) {
+    await persistConfigEnv("MILADY_CLOUD_EVM_ADDRESS", evmAddress);
+  }
+  if (
+    solanaAddress &&
+    process.env.MILADY_CLOUD_SOLANA_ADDRESS !== solanaAddress
+  ) {
+    await persistConfigEnv("MILADY_CLOUD_SOLANA_ADDRESS", solanaAddress);
+  }
+
+  // Only bind WALLET_SOURCE_* to cloud if:
+  //   1. User has explicitly set it to "cloud", OR
+  //   2. User has NOT made an explicit choice yet (null = auto-bind as default)
+  // DO NOT bind if user has explicitly set it to "local".
+  const userPrimary = readUserPrimarySelection(config);
+
+  if (cloud.evm && process.env.WALLET_SOURCE_EVM !== "cloud") {
+    // Bind to cloud if not explicitly set to local
+    if (userPrimary.evm !== "local") {
+      await persistConfigEnv("WALLET_SOURCE_EVM", "cloud");
+    }
+  }
+  if (cloud.solana && process.env.WALLET_SOURCE_SOLANA !== "cloud") {
+    // Bind to cloud if not explicitly set to local
+    if (userPrimary.solana !== "local") {
+      await persistConfigEnv("WALLET_SOURCE_SOLANA", "cloud");
+    }
+  }
+}
+
 export async function runFirstTimeSetup(
   config: ElizaConfig,
 ): Promise<ElizaConfig> {
   const agentEntry = config.agents?.list?.[0];
   const hasName = Boolean(agentEntry?.name || config.ui?.assistant?.name);
-  if (hasName) return config;
+
+  // hasName short-circuits the interactive onboarding prompts but must NOT
+  // bypass runtime-rebind steps (e.g. cloud-wallet → WALLET_SOURCE_*). Those
+  // need to re-run every restart so cloud state changes made while the agent
+  // was offline are reflected in env before plugins load.
+  if (hasName) {
+    await bindCloudProvider(config);
+    return config;
+  }
 
   // Only prompt when stdin is a TTY (interactive terminal)
   if (!process.stdin.isTTY) return config;
@@ -665,6 +798,17 @@ export async function runFirstTimeSetup(
     // Non-fatal: the agent can still start, but choices won't persist.
     clack.log.warn(`Could not save config: ${formatError(err)}`);
   }
+
+  // If cloud-mode onboarding already left cloud-wallet descriptors in the
+  // config (rare on first run, but possible when resuming a partial flow),
+  // make sure plugin-evm / plugin-solana see WALLET_SOURCE_*=cloud before
+  // they load.
+  try {
+    await bindCloudProvider(topologyUpdated);
+  } catch (err) {
+    clack.log.warn(`Could not bind cloud wallet provider: ${formatError(err)}`);
+  }
+
   clack.log.message(`${name}: ${styleChoice} Alright, that's me.`);
   clack.outro(
     isCloudMode ? "Your agent is live in the cloud! ☁️" : "Let's get started!",
