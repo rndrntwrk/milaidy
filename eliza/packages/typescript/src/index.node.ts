@@ -8,9 +8,9 @@
 
 // Export all core modules
 export * from "./actions";
-export * from "./advanced-memory";
+export * from "./features/advanced-memory";
 // Export capabilities and plugin creation
-export * from "./basic-capabilities/index";
+export * from "./features/basic-capabilities/index";
 // Export configuration and plugin modules - will be removed once cli cleanup
 export * from "./character";
 // Export character utilities

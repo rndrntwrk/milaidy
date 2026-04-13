@@ -14,6 +14,10 @@ const FETCH_TIMEOUT_MS = 8_000;
 const THOUGHTS_LIMIT = 5;
 const HYPERSCAPE_SESSION_MODE = "spectate-and-steer" as const;
 
+function normalizeStringSetting(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
 function resolveApiBase(runtime: IAgentRuntime | null): string | null {
   // Prefer the explicit API URL when the host has configured one;
   // otherwise fall back to the viewer client URL. Unit tests and
@@ -21,7 +25,7 @@ function resolveApiBase(runtime: IAgentRuntime | null): string | null {
   // is served from the same origin as the client), so treating the
   // client URL as an API fallback keeps the route module active in
   // those contexts without requiring duplicated env configuration.
-  const rawCandidates: Array<string | null | undefined> = [
+  const rawCandidates: unknown[] = [
     typeof runtime?.getSetting === "function"
       ? runtime.getSetting("HYPERSCAPE_API_URL")
       : null,
@@ -32,11 +36,12 @@ function resolveApiBase(runtime: IAgentRuntime | null): string | null {
     process.env.HYPERSCAPE_CLIENT_URL,
   ];
   for (const raw of rawCandidates) {
-    if (!raw) continue;
+    const candidate = normalizeStringSetting(raw);
+    if (!candidate) continue;
     try {
-      const parsed = new URL(raw);
+      const parsed = new URL(candidate);
       if (parsed.protocol !== "http:" && parsed.protocol !== "https:") continue;
-      return raw.replace(/\/+$/, "");
+      return candidate.replace(/\/+$/, "");
     } catch {
       // try the next candidate
     }
@@ -48,9 +53,8 @@ function resolveAgentId(
   runtime: IAgentRuntime | null,
   viewer: AppLaunchResult["viewer"] | null,
 ): string | null {
-  const authMsg = viewer?.authMessage as Record<string, unknown> | undefined;
-  const fromViewer =
-    authMsg && typeof authMsg.agentId === "string" ? authMsg.agentId : null;
+  const authMsg = viewer?.authMessage;
+  const fromViewer = typeof authMsg?.agentId === "string" ? authMsg.agentId : null;
   const fromRuntime =
     typeof runtime?.agentId === "string" && runtime.agentId.trim()
       ? runtime.agentId.trim()
@@ -62,16 +66,14 @@ function resolveCharacterId(
   runtime: IAgentRuntime | null,
   viewer: AppLaunchResult["viewer"] | null,
 ): string | null {
-  const authMsg = viewer?.authMessage as Record<string, unknown> | undefined;
+  const authMsg = viewer?.authMessage;
   const fromViewer =
-    authMsg && typeof authMsg.characterId === "string"
-      ? authMsg.characterId
-      : null;
+    typeof authMsg?.characterId === "string" ? authMsg.characterId : null;
   if (fromViewer) return fromViewer;
-  return (
-    (typeof runtime?.getSetting === "function"
+  return normalizeStringSetting(
+    typeof runtime?.getSetting === "function"
       ? runtime.getSetting("HYPERSCAPE_CHARACTER_ID")
-      : null) ?? null
+      : null,
   );
 }
 

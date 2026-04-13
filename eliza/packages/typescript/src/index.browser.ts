@@ -8,7 +8,7 @@
 
 // Export core modules (all browser-compatible after refactoring)
 export * from "./actions";
-export * from "./advanced-memory";
+export * from "./features/advanced-memory";
 export * from "./character";
 export * from "./database";
 export * from "./database/inMemoryAdapter";

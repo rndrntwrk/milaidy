@@ -9,7 +9,7 @@
  */
 
 export * from "./actions";
-export * from "./basic-capabilities/index";
+export * from "./features/basic-capabilities/index";
 export * from "./character";
 export * from "./character-utils";
 export * from "./connection";
