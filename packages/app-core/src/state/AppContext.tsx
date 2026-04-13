@@ -167,6 +167,7 @@ import {
   formatSearchBullet,
   formatStartupErrorDetail,
   type GamePostMessageAuthPayload,
+  getDefaultBundledVrmIndex,
   inferOnboardingResumeStep,
   LIFECYCLE_MESSAGES,
   type LoadConversationMessagesResult,
@@ -219,7 +220,9 @@ import {
 import {
   createPersistedActiveServer,
   loadFavoriteApps,
+  loadPersistedActivePackId,
   saveFavoriteApps,
+  savePersistedActivePackId,
   savePersistedActiveServer,
 } from "./persistence";
 import { NavigationEventHub } from "./navigation-events";
@@ -246,6 +249,7 @@ import { useLogsState } from "./useLogsState";
 import { useMiscUiState } from "./useMiscUiState";
 import { useDisplayPreferences } from "./useDisplayPreferences";
 import { useOnboardingState } from "./useOnboardingState";
+import { useVincentState } from "./useVincentState";
 
 const AGENT_STATUS_POLL_INTERVAL_MS = 500;
 const ONBOARDING_GREETING_READY_TIMEOUT_MS = 15_000;
@@ -788,6 +792,13 @@ function AppProviderInner({
     lifecycleBusyRef,
     lifecycleActionRef,
   } = lifecycle;
+  const {
+    vincentConnected,
+    vincentLoginBusy,
+    vincentLoginError,
+    handleVincentLogin,
+    handleVincentDisconnect,
+  } = useVincentState({ setActionNotice, t });
 
   // Compatibility wrappers — old code calls these separately; lifecycle hook combines them.
   const setPendingRestart = useCallback(
@@ -942,6 +953,7 @@ function AppProviderInner({
 
   // --- Triggers ---
   const [triggers, setTriggers] = useState<TriggerSummary[]>([]);
+  const [triggersLoaded, setTriggersLoaded] = useState(false);
   const [triggersLoading, setTriggersLoading] = useState(false);
   const [triggersSaving, setTriggersSaving] = useState(false);
   const [triggerRunsById, setTriggerRunsById] = useState<
@@ -1003,8 +1015,11 @@ function AppProviderInner({
   const [logTagFilter, setLogTagFilter] = useState("");
   const [logLevelFilter, setLogLevelFilter] = useState("");
   const [logSourceFilter, setLogSourceFilter] = useState("");
+  const [logLoadError, setLogLoadError] = useState<string | null>(null);
 
   // --- Wallet / Inventory ---
+  const [browserEnabled, setBrowserEnabled] = useState(false);
+  const [walletEnabled, setWalletEnabled] = useState(false);
   const [walletAddresses, setWalletAddresses] =
     useState<WalletAddresses | null>(null);
   const [walletConfig, setWalletConfig] = useState<WalletConfigStatus | null>(
@@ -1078,7 +1093,19 @@ function AppProviderInner({
   const [characterDraft, setCharacterDraft] = useState<CharacterData>({});
   const [selectedVrmIndex, setSelectedVrmIndexRaw] = useState(loadAvatarIndex);
   const [customVrmUrl, setCustomVrmUrl] = useState("");
+  const [customVrmPreviewUrl, setCustomVrmPreviewUrl] = useState("");
   const [customBackgroundUrl, setCustomBackgroundUrl] = useState("");
+  const [customCatchphrase, setCustomCatchphrase] = useState("");
+  const [customVoicePresetId, setCustomVoicePresetId] = useState("");
+  const [activePackId, setActivePackIdRaw] = useState<string | null>(() =>
+    loadPersistedActivePackId(),
+  );
+  const [customWorldUrl, setCustomWorldUrl] = useState("");
+
+  const setActivePackId = useCallback((id: string | null) => {
+    setActivePackIdRaw(id);
+    savePersistedActivePackId(id);
+  }, []);
 
   // Wrap setter to also persist to localStorage
   const setSelectedVrmIndex = useCallback((v: number) => {
@@ -1091,6 +1118,8 @@ function AppProviderInner({
 
   // --- Eliza Cloud ---
   const [elizaCloudEnabled, setElizaCloudEnabled] = useState(false);
+  const [elizaCloudVoiceProxyAvailable, setElizaCloudVoiceProxyAvailable] =
+    useState(false);
   const [elizaCloudConnected, setElizaCloudConnected] = useState(false);
   const [elizaCloudHasPersistedKey, setElizaCloudHasPersistedKey] =
     useState(false);
@@ -1205,6 +1234,8 @@ function AppProviderInner({
       avatar: onboardingAvatar,
       runMode: onboardingRunMode,
       cloudProvider: onboardingCloudProvider,
+      serverTarget: onboardingServerTarget,
+      cloudApiKey: onboardingCloudApiKey,
       provider: onboardingProvider,
       apiKey: onboardingApiKey,
       voiceProvider: onboardingVoiceProvider,
@@ -1246,6 +1277,7 @@ function AppProviderInner({
   const onboardingRemoteConnecting = onboardingRemote.status === "connecting";
   const onboardingRemoteError = onboardingRemote.error;
   const onboardingRemoteConnected = onboardingRemote.status === "connected";
+  const ownerName = onboardingOwnerName || null;
 
   // Map connector tokens to old individual variable names
   const onboardingTelegramToken = connectorTokens.telegramToken;
@@ -1719,6 +1751,10 @@ function AppProviderInner({
     }
   }, []);
 
+  const ensurePluginsLoaded = useCallback(async () => {
+    await loadPlugins();
+  }, [loadPlugins]);
+
   const loadSkills = useCallback(async () => {
     try {
       const { skills: s } = await client.getSkills();
@@ -1754,8 +1790,11 @@ function AppProviderInner({
       setLogs(data.entries);
       if (data.sources?.length) setLogSources(data.sources);
       if (data.tags?.length) setLogTags(data.tags);
-    } catch {
-      /* ignore */
+      setLogLoadError(null);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Failed to load logs";
+      setLogLoadError(message);
     }
   }, [logTagFilter, logLevelFilter, logSourceFilter]);
 
@@ -1768,8 +1807,11 @@ function AppProviderInner({
     }
   }, []);
 
-  const loadTriggers = useCallback(async () => {
-    setTriggersLoading(true);
+  const loadTriggers = useCallback(async (options?: { silent?: boolean }) => {
+    const silent = options?.silent === true;
+    if (!silent) {
+      setTriggersLoading(true);
+    }
     try {
       const data = await client.getTriggers();
       setTriggers(sortTriggersByNextRun(data.triggers));
@@ -1778,11 +1820,20 @@ function AppProviderInner({
       const message =
         err instanceof Error ? err.message : "Failed to load triggers";
       setTriggerError(message);
-      setTriggers([]);
+      if (!silent) {
+        setTriggers([]);
+      }
     } finally {
-      setTriggersLoading(false);
+      setTriggersLoaded(true);
+      if (!silent) {
+        setTriggersLoading(false);
+      }
     }
   }, [sortTriggersByNextRun]);
+
+  const ensureTriggersLoaded = useCallback(async () => {
+    await loadTriggers(triggersLoaded ? { silent: true } : undefined);
+  }, [loadTriggers, triggersLoaded]);
 
   const loadTriggerRuns = useCallback(async (id: string) => {
     try {
@@ -2148,6 +2199,28 @@ function AppProviderInner({
 
   const getStewardStatus = useCallback(
     async () => client.getStewardStatus(),
+    [],
+  );
+
+  const getStewardHistory = useCallback(
+    async (opts?: Parameters<typeof client.getStewardHistory>[0]) =>
+      client.getStewardHistory(opts),
+    [],
+  );
+
+  const getStewardPending = useCallback(
+    async () => client.getStewardPending(),
+    [],
+  );
+
+  const approveStewardTx = useCallback(
+    async (txId: string) => client.approveStewardTx(txId),
+    [],
+  );
+
+  const rejectStewardTx = useCallback(
+    async (txId: string, reason?: string) =>
+      client.rejectStewardTx(txId, reason),
     [],
   );
 
@@ -6652,6 +6725,8 @@ function AppProviderInner({
         onboardingStyle: setOnboardingStyle,
         onboardingRunMode: setOnboardingRunMode,
         onboardingCloudProvider: setOnboardingCloudProvider,
+        onboardingServerTarget: (v) => setOnboardingField("serverTarget", v),
+        onboardingCloudApiKey: (v) => setOnboardingField("cloudApiKey", v),
         onboardingSmallModel: setOnboardingSmallModel,
         onboardingLargeModel: setOnboardingLargeModel,
         onboardingProvider: setOnboardingProvider,
@@ -6684,10 +6759,16 @@ function AppProviderInner({
         onboardingAvatar: setOnboardingAvatar,
         onboardingRestarting: setOnboardingRestarting,
         elizaCloudEnabled: setElizaCloudEnabled,
+        elizaCloudVoiceProxyAvailable: setElizaCloudVoiceProxyAvailable,
         cloudDashboardView: setCloudDashboardView,
         selectedVrmIndex: setSelectedVrmIndex,
         customVrmUrl: setCustomVrmUrl,
+        customVrmPreviewUrl: setCustomVrmPreviewUrl,
         customBackgroundUrl: setCustomBackgroundUrl,
+        customCatchphrase: setCustomCatchphrase,
+        customVoicePresetId: setCustomVoicePresetId,
+        activePackId: setActivePackId,
+        customWorldUrl: setCustomWorldUrl,
         commandQuery: setCommandQuery,
         commandActiveIndex: setCommandActiveIndex,
         emotePickerOpen: setEmotePickerOpen,
@@ -6699,12 +6780,8 @@ function AppProviderInner({
         catalogPage: setCatalogPage,
         skillReviewId: setSkillReviewId,
         skillReviewReport: setSkillReviewReport,
-        activeGameApp: setActiveGameApp,
-        activeGameDisplayName: setActiveGameDisplayName,
-        activeGameViewerUrl: setActiveGameViewerUrl,
-        activeGameSandbox: setActiveGameSandbox,
-        activeGamePostMessageAuth: setActiveGamePostMessageAuth,
-        activeGamePostMessagePayload: setActiveGamePostMessagePayload,
+        appRuns: setAppRuns,
+        activeGameRunId: setActiveGameRunId,
         gameOverlayEnabled: setGameOverlayEnabled,
         companionAppRunning: (v: boolean) =>
           setActiveOverlayApp(v ? "@miladyai/app-companion" : null),

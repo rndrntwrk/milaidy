@@ -62,7 +62,10 @@ import type {
   EvmTokenBalance,
   SolanaNft,
   SolanaTokenBalance,
+  StewardApprovalActionResponse,
   StewardApprovalInfo,
+  StewardHistoryResponse,
+  StewardPendingResponse,
   StewardPolicyResult,
   StewardStatusResponse,
   WalletAddresses,
@@ -292,6 +295,17 @@ export interface ApplyProductionWalletDefaultsResponse {
   tradePermissionMode: "user-sign-only";
   bscExecutionEnabled: false;
   clearedSecrets: string[];
+}
+
+export interface VincentStartLoginResponse {
+  authUrl: string;
+  state: string;
+  redirectUri: string;
+}
+
+export interface VincentStatusResponse {
+  connected: boolean;
+  connectedAt: number | null;
 }
 
 export interface AgentSelfStatusSnapshot {
@@ -3761,6 +3775,47 @@ export class MiladyClient {
     return this.fetch("/api/wallet/steward-status");
   }
 
+  async getStewardHistory(opts?: {
+    status?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<{
+    records: StewardHistoryResponse;
+    total: number;
+    offset: number;
+    limit: number;
+  }> {
+    const params = new URLSearchParams();
+    if (opts?.status) params.set("status", opts.status);
+    if (opts?.limit != null) params.set("limit", String(opts.limit));
+    if (opts?.offset != null) params.set("offset", String(opts.offset));
+    const qs = params.toString();
+    return this.fetch(`/api/wallet/steward-tx-records${qs ? `?${qs}` : ""}`);
+  }
+
+  async getStewardPending(): Promise<StewardPendingResponse> {
+    return this.fetch("/api/wallet/steward-pending-approvals");
+  }
+
+  async approveStewardTx(
+    txId: string,
+  ): Promise<StewardApprovalActionResponse> {
+    return this.fetch("/api/wallet/steward-approve-tx", {
+      method: "POST",
+      body: JSON.stringify({ txId }),
+    });
+  }
+
+  async rejectStewardTx(
+    txId: string,
+    reason?: string,
+  ): Promise<StewardApprovalActionResponse> {
+    return this.fetch("/api/wallet/steward-deny-tx", {
+      method: "POST",
+      body: JSON.stringify({ txId, reason }),
+    });
+  }
+
   async getWalletTradingProfile(
     window: WalletTradingProfileWindow = "30d",
     source: WalletTradingProfileSourceFilter = "all",
@@ -3777,6 +3832,23 @@ export class MiladyClient {
       method: "POST",
       body: JSON.stringify({ confirm: true }),
     });
+  }
+
+  async vincentStartLogin(
+    appName = "Milady",
+  ): Promise<VincentStartLoginResponse> {
+    return this.fetch("/api/vincent/start-login", {
+      method: "POST",
+      body: JSON.stringify({ appName }),
+    });
+  }
+
+  async vincentStatus(): Promise<VincentStatusResponse> {
+    return this.fetch("/api/vincent/status");
+  }
+
+  async vincentDisconnect(): Promise<{ ok: boolean }> {
+    return this.fetch("/api/vincent/disconnect", { method: "POST" });
   }
 
   // Software Updates
