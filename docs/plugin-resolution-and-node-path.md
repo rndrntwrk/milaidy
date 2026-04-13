@@ -107,7 +107,7 @@ Optional plugins (and some core-adjacent packages) can end up in the load set be
 
 **Why we record provenance:** `collectPluginNames()` optionally fills a **`PluginLoadReasons`** map (first source wins per package). `resolvePlugins()` passes it through; benign optional failures are summarized as **`Optional plugins not installed: … (added by: …)`**. That answers “what should I change?” — edit config, unset env, install the package, or add a plugin checkout — instead of chasing a false “eliza is broken” hypothesis.
 
-**Browser / stagehand:** `@elizaos/plugin-browser` expects a **stagehand-server** tree that is **not** in the npm tarball. Milady discovers `plugins/plugin-browser/stagehand-server` by **walking parents** from the runtime so the current repo-local vendored layout resolves consistently. See **[Developer diagnostics and workspace](guides/developer-diagnostics-and-workspace.md)**.
+**Browser / stagehand:** `@elizaos/plugin-browser` expects a **stagehand-server** tree that is **not** in the npm tarball. Milady discovers `plugins/plugin-browser/stagehand-server` by **walking parents** from the runtime so both flat Milady checkouts and **`eliza/` submodule** layouts resolve. See **[Developer diagnostics and workspace](guides/developer-diagnostics-and-workspace.md)**.
 
 ## Pack-and-test and Vendored Workspace Validation (Phase 5)
 
@@ -119,7 +119,7 @@ We provide two scripts to validate and prevent drift:
 To simulate a real publish release locally, run `pack-upstreams.mjs`. It iterates over the target vendored packages (e.g. `@elizaos/core`, `@elizaos/plugin-agent-orchestrator`), builds them, runs an `npm pack`, and places the resulting `.tgz` artifacts in the root `artifacts/` fallback directory.
 
 ### `scripts/check-upstream-drift.mjs`
-To ensure that root-level explicitly pinned dependencies (e.g., `"@elizaos/plugin-openrouter": "2.0.0-alpha.13"`) do not drift from the vendored source in this repo, run `check-upstream-drift.mjs`. The command inspects root pins against the `package.json` inside local vendor trees and fails if their explicitly pinned specifications diverge from source.
+To ensure that root-level explicitly pinned dependencies (e.g., `"@elizaos/plugin-openrouter": "2.0.0-alpha.13"`) do not drift from the source code checked into the submodule branches, run `check-upstream-drift.mjs`. The command inspects root pins against the `package.json` inside local vendor trees and fails if their explicitly pinned specifications diverge from source.
 
 ### Vendored Source Verification (Proof of Life)
 Because all packages resolve via `workspace:*`, local modifications are live the moment you restart `bun run dev`. 
