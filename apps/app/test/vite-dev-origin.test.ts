@@ -10,10 +10,7 @@ describe("resolveViteDevServerRuntime", () => {
 
   it("pins loopback when desktop watch requests it", () => {
     expect(
-      resolveViteDevServerRuntime(
-        { MILADY_VITE_LOOPBACK_ORIGIN: "1" },
-        2138,
-      ),
+      resolveViteDevServerRuntime({ MILADY_VITE_LOOPBACK_ORIGIN: "1" }, 2138),
     ).toEqual({
       origin: "http://127.0.0.1:2138",
       hmr: {

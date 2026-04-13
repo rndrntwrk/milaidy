@@ -19,7 +19,7 @@ import {
 import { Check, ChevronDown } from "lucide-react";
 import { useState } from "react";
 import type { UiLanguage } from "../../i18n/messages";
-import { SHELL_EXPANDED_BUTTON_CLASSNAME } from "@elizaos/app-companion";
+import { SHELL_EXPANDED_BUTTON_CLASSNAME } from "@elizaos/app-companion/ui";
 
 /** Minimal translator function type. Receive key, return string. */
 export type TranslatorFn = (key: string) => string;

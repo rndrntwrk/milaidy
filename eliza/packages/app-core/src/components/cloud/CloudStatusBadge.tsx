@@ -1,7 +1,7 @@
 import { Button } from "@elizaos/app-core";
 import { AlertTriangle } from "lucide-react";
 import type { CSSProperties } from "react";
-import { SHELL_EXPANDED_BUTTON_CLASSNAME } from "@elizaos/app-companion";
+import { SHELL_EXPANDED_BUTTON_CLASSNAME } from "@elizaos/app-companion/ui";
 
 const CLOUD_STATUS_BUTTON_STYLE = {
   clipPath: "none",

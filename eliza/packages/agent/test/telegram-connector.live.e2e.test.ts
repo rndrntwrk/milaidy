@@ -790,7 +790,7 @@ describeIfLive("Telegram Connector - Enhanced Features", () => {
 describe("Telegram Connector - Integration", () => {
   it("Telegram connector is mapped in plugin auto-enable", async () => {
     const { CONNECTOR_PLUGINS } = await import(
-      "@elizaos/app-core/src/config/plugin-auto-enable"
+      "../src/config/plugin-auto-enable.ts"
     );
     expect(CONNECTOR_PLUGINS.telegram).toBe("@elizaos/plugin-telegram");
   });

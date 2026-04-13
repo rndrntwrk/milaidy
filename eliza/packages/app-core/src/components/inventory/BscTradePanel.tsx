@@ -15,7 +15,7 @@ import type {
 import { useApp } from "@elizaos/app-core/state";
 import { Button, Input } from "@elizaos/app-core";
 import { useCallback, useState } from "react";
-import { HEX_ADDRESS_RE } from "@elizaos/app-companion";
+import { HEX_ADDRESS_RE } from "@elizaos/app-companion/ui";
 import { formatBalance, type TrackedToken } from "./constants";
 import { StewardLogo } from "@elizaos/app-steward/ui";
 

@@ -4,5 +4,6 @@ export * from "./ProductsPanel";
 export * from "./OrdersPanel";
 export * from "./InventoryLevelsPanel";
 export * from "./CustomersPanel";
+export * from "./routes";
 export * from "./useShopifyDashboard";
 export { SHOPIFY_APP_NAME, shopifyApp } from "./shopify-app";

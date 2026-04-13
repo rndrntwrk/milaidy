@@ -31,7 +31,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { useCompanionSceneStatus } from "@elizaos/app-companion";
+import { useCompanionSceneStatus } from "@elizaos/app-companion/ui";
 
 /* ── Shared constants ──────────────────────────────────────────────── */
 

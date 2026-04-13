@@ -8,8 +8,6 @@ import { App as CapacitorApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import { Keyboard } from "@capacitor/keyboard";
 import { StatusBar, Style } from "@capacitor/status-bar";
-import { CompanionShell } from "@elizaos/app-companion";
-import "@elizaos/app-companion/register";
 import { App } from "@elizaos/app-core/App";
 import { client } from "@elizaos/app-core/api";
 import {
@@ -56,17 +54,19 @@ import {
 } from "@elizaos/app-core/shell";
 import { AppProvider } from "@elizaos/app-core/state";
 import { applyUiTheme, loadUiTheme } from "@elizaos/app-core/state";
-import {
-  LifeOpsBrowserSetupPanel,
-  LifeOpsPageView,
-  WebsiteBlockerSettingsCard,
-} from "@elizaos/app-lifeops";
-import "@elizaos/app-shopify/register";
-import "@elizaos/app-vincent/register";
 import { Agent } from "@elizaos/capacitor-agent";
 import { Desktop } from "@elizaos/capacitor-desktop";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { CompanionShell } from "../../../eliza/apps/app-companion/src/ui";
+import "../../../eliza/apps/app-companion/src/register";
+import {
+  LifeOpsBrowserSetupPanel,
+  LifeOpsPageView,
+  WebsiteBlockerSettingsCard,
+} from "../../../eliza/apps/app-lifeops/src/ui";
+import "../../../eliza/apps/app-shopify/src/register";
+import "../../../eliza/apps/app-vincent/src/register";
 import { MILADY_ENV_ALIASES } from "./brand-env";
 import { MILADY_CHARACTER_CATALOG } from "./character-catalog";
 import { shouldUseCloudOnlyBranding } from "./cloud-only";

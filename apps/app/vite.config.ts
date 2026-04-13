@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react-swc";
 import { defineConfig, type Plugin, transformWithEsbuild } from "vite";
+import { syncElizaEnvAliases } from "../../eliza/packages/app-core/scripts/lib/sync-eliza-env-aliases.mjs";
 import { colorizeDevSettingsStartupBanner } from "../../eliza/packages/shared/src/dev-settings-banner-style.ts";
 import { prependDevSubsystemFigletHeading } from "../../eliza/packages/shared/src/dev-settings-figlet-heading.ts";
 import {
@@ -31,6 +32,9 @@ const nativePluginsRoot = path.join(
   "eliza/packages/native-plugins",
 );
 const appCoreSrcRoot = path.join(miladyRoot, "eliza/packages/app-core/src");
+
+// Mirror MILADY_* env into ELIZA_* before the shared runtime helpers resolve ports.
+syncElizaEnvAliases();
 
 /**
  * Pinned @elizaos/core from the repo root (must match the agent/runtime lock).

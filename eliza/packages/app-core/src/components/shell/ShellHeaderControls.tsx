@@ -28,7 +28,7 @@ import {
   SHELL_SEGMENT_ACTIVE_CLASSNAME,
   SHELL_SEGMENT_INACTIVE_CLASSNAME,
   SHELL_SEGMENTED_CONTROL_CLASSNAME,
-} from "@elizaos/app-companion";
+} from "@elizaos/app-companion/ui";
 
 export {
   HEADER_BUTTON_STYLE,

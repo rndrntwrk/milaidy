@@ -462,7 +462,6 @@ const MEMORY_SUITE_PROVIDER_NAMES = new Set([
   "openrouter",
   "google",
   "anthropic",
-  "groq",
 ]);
 const MEMORY_SUITE_PROVIDER_SUPPORTED =
   selectedLiveProvider !== null &&
@@ -479,7 +478,7 @@ if (!LIVE_SUITE_ENABLED) {
       ? "provide a live provider key for OpenAI, Groq, OpenRouter, Google, or Anthropic"
       : null,
     selectedLiveProvider && !MEMORY_SUITE_PROVIDER_SUPPORTED
-      ? `selected provider "${selectedLiveProvider.name}" does not support the reflection/fact-extraction live suite; use OpenAI, OpenRouter, or Google`
+      ? `selected provider "${selectedLiveProvider.name}" does not support the reflection/fact-extraction live suite; use OpenAI, OpenRouter, Google, or Anthropic`
       : null,
   ].filter((entry): entry is string => Boolean(entry));
 
