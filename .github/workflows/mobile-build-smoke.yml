@@ -52,7 +52,9 @@ jobs:
 
       - name: Build web assets
         working-directory: apps/app
-        run: bun scripts/build.mjs
+        run: |
+          bun scripts/plugin-build.mjs
+          bun run build:web
 
       - name: Prepare CocoaPods trunk repo
         run: bash eliza/packages/app-core/scripts/prepare-ios-cocoapods.sh
@@ -151,7 +153,9 @@ jobs:
 
       - name: Build web assets
         working-directory: apps/app
-        run: bun scripts/build.mjs
+        run: |
+          bun scripts/plugin-build.mjs
+          bun run build:web
 
       - name: Capacitor sync Android
         working-directory: apps/app

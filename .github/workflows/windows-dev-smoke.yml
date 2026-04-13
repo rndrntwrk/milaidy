@@ -31,7 +31,10 @@ jobs:
         with:
           submodules: false
           sparse-checkout: |
-            /
+            /package.json
+            /bun.lock
+            /bunfig.toml
+            /tsconfig.json
             apps/
             scripts/
             eliza/apps/

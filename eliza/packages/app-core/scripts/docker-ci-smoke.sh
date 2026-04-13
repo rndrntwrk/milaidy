@@ -162,6 +162,39 @@ if [[ -d "$REPO_ROOT/.eliza.ci-disabled" && ! -d "$REPO_ROOT/eliza" ]]; then
   mv "$REPO_ROOT/.eliza.ci-disabled" "$REPO_ROOT/eliza"
 fi
 
+log "Rewriting workspace:* deps for agent package in published-only mode"
+node --input-type=module <<'NODE'
+import fs from "node:fs";
+import path from "node:path";
+import {
+  resolvePinnedWorkspaceVersions,
+  rewriteWorkspaceDependencySpecifiers,
+} from "./scripts/disable-local-eliza-workspace.mjs";
+
+const repoRoot = process.cwd();
+const rootPackagePath = path.join(repoRoot, "package.json");
+const agentPackagePath = path.join(
+  repoRoot,
+  "eliza",
+  "packages",
+  "agent",
+  "package.json",
+);
+
+if (!fs.existsSync(agentPackagePath) || !fs.existsSync(rootPackagePath)) {
+  process.exit(0);
+}
+
+const rootPackage = JSON.parse(fs.readFileSync(rootPackagePath, "utf8"));
+const pinned = resolvePinnedWorkspaceVersions(repoRoot, { rootPackage });
+const original = fs.readFileSync(agentPackagePath, "utf8");
+const agentPackage = JSON.parse(original);
+if (rewriteWorkspaceDependencySpecifiers(agentPackage, pinned)) {
+  const next = `${JSON.stringify(agentPackage, null, 2)}\n`;
+  fs.writeFileSync(agentPackagePath, next);
+}
+NODE
+
 log "Running repository postinstall"
 SKIP_AVATAR_CLONE=1 ELIZA_NO_VISION_DEPS=1 bun run postinstall
 

@@ -99,7 +99,7 @@ jobs:
           fi
 
       - name: Run onboarding voice regression tests
-        run: bunx vitest run eliza/packages/app-core/src/components/onboarding/identity-preview-tts.test.ts
+        run: bunx vitest run eliza/packages/app-core/src/onboarding/tests/flow.test.ts
         env:
           NODE_NO_WARNINGS: "1"
 

@@ -142,7 +142,10 @@ jobs:
           # Published-only CI restores the required non-eliza submodules explicitly.
           submodules: false
           sparse-checkout: |
-            /
+            /package.json
+            /bun.lock
+            /bunfig.toml
+            /tsconfig.json
             apps/
             scripts/
             eliza/apps/
@@ -230,7 +233,10 @@ jobs:
           # Published-only CI restores the required non-eliza submodules explicitly.
           submodules: false
           sparse-checkout: |
-            /
+            /package.json
+            /bun.lock
+            /bunfig.toml
+            /tsconfig.json
             apps/
             scripts/
             eliza/apps/
