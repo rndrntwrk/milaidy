@@ -7,6 +7,7 @@
  * Usage:
  *   node scripts/run-screenshotter.mjs
  *   node scripts/run-screenshotter.mjs --url http://localhost:2138
+ *   node scripts/run-screenshotter.mjs --only milady-9
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -31,23 +32,28 @@ const BACKGROUNDS_DIR = path.join(
   "vrms",
   "backgrounds",
 );
-const VRM_COUNT = 8;
-
 function parseArgs() {
   const args = process.argv.slice(2);
   let url = "http://localhost:2138";
+  let only = null;
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--url" && args[i + 1]) {
       url = args[i + 1];
       i++;
+    } else if (args[i] === "--only" && args[i + 1]) {
+      only = args[i + 1];
+      i++;
     }
   }
-  return { url };
+  return { url, only };
 }
 
 async function main() {
-  const { url } = parseArgs();
-  const screenshotterUrl = `${url}/public_src/screenshotter.html`;
+  const { url, only } = parseArgs();
+  const screenshotterUrl = new URL("/public_src/screenshotter.html", url);
+  if (only) {
+    screenshotterUrl.searchParams.set("only", only);
+  }
 
   console.log("[run-screenshotter] Launching browser...");
   const browser = await chromium.launch({
@@ -63,10 +69,16 @@ async function main() {
   const context = await browser.newContext();
   const page = await context.newPage();
   page.setDefaultTimeout(180000);
+  page.on("console", (message) => {
+    console.log(`[screenshotter:${message.type()}] ${message.text()}`);
+  });
+  page.on("pageerror", (error) => {
+    console.error(`[screenshotter:pageerror] ${error.message}`);
+  });
 
   try {
     console.log("[run-screenshotter] Loading screenshotter...");
-    const response = await page.goto(screenshotterUrl, {
+    const response = await page.goto(screenshotterUrl.toString(), {
       waitUntil: "networkidle",
       timeout: 15000,
     });
@@ -104,29 +116,35 @@ async function main() {
     fs.mkdirSync(PREVIEWS_DIR, { recursive: true });
     fs.mkdirSync(BACKGROUNDS_DIR, { recursive: true });
 
+    const captures = await page.$$eval(".dl", (links) =>
+      links.map((link) => ({
+        dataUrl: link.href,
+        slug: link.getAttribute("download")?.replace(/\.png$/, "") ?? "",
+      })),
+    );
+
     let saved = 0;
-    for (let i = 1; i <= VRM_COUNT; i++) {
-      const dataUrl = await page.evaluate((index) => {
-        const dl = document.getElementById(`d${index}`);
-        return dl?.href ?? null;
-      }, i);
+    for (const { dataUrl, slug } of captures) {
+      if (only && slug !== only) {
+        continue;
+      }
       if (!dataUrl?.startsWith("data:image/png")) {
-        console.warn(`[run-screenshotter] No preview for eliza-${i}`);
+        console.warn(`[run-screenshotter] No preview for ${slug || "unknown"}`);
         continue;
       }
       const base64 = dataUrl.replace(/^data:image\/png;base64,/, "");
       const buf = Buffer.from(base64, "base64");
-      const previewPath = path.join(PREVIEWS_DIR, `eliza-${i}.png`);
+      const previewPath = path.join(PREVIEWS_DIR, `${slug}.png`);
       fs.writeFileSync(previewPath, buf);
       console.log(`[run-screenshotter] Saved ${previewPath}`);
       saved++;
 
-      const bgPath = path.join(BACKGROUNDS_DIR, `eliza-${i}.png`);
+      const bgPath = path.join(BACKGROUNDS_DIR, `${slug}.png`);
       fs.writeFileSync(bgPath, buf);
     }
 
     console.log(
-      `[run-screenshotter] Done. Saved ${saved}/${VRM_COUNT} previews and backgrounds.`,
+      `[run-screenshotter] Done. Saved ${saved}/${only ? 1 : captures.length} previews and backgrounds.`,
     );
   } finally {
     await browser.close();

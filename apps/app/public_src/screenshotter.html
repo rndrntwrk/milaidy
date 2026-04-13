@@ -33,7 +33,6 @@
 <div class="grid" id="grid"></div>
 
 <script type="module">
-import { getMiladyCharacterAssets } from "@miladyai/app-core/character-catalog";
 
 /**
  * Import Three.js and three-vrm. Vite resolves these when screenshotter is an entry point.
@@ -55,7 +54,22 @@ async function loadModules() {
   };
 }
 
-const vrmAssets = getMiladyCharacterAssets();
+const allVrmAssets = [
+  { id: 1, slug: "milady-1", title: "Chen", rawVrmPath: "vrms/milady-1.vrm" },
+  { id: 2, slug: "milady-2", title: "Jin", rawVrmPath: "vrms/milady-2.vrm" },
+  { id: 3, slug: "milady-3", title: "Kei", rawVrmPath: "vrms/milady-3.vrm" },
+  { id: 4, slug: "milady-4", title: "Momo", rawVrmPath: "vrms/milady-4.vrm" },
+  { id: 5, slug: "milady-5", title: "Rin", rawVrmPath: "vrms/milady-5.vrm" },
+  { id: 6, slug: "milady-6", title: "Ryu", rawVrmPath: "vrms/milady-6.vrm" },
+  { id: 7, slug: "milady-7", title: "Satoshi", rawVrmPath: "vrms/milady-7.vrm" },
+  { id: 8, slug: "milady-8", title: "Yuki", rawVrmPath: "vrms/milady-8.vrm" },
+  { id: 9, slug: "milady-9", title: "Alice", rawVrmPath: "vrms/milady-9.vrm" },
+];
+
+const onlySlug = new URLSearchParams(window.location.search).get("only");
+const vrmAssets = onlySlug
+  ? allVrmAssets.filter((asset) => asset.slug === onlySlug)
+  : allVrmAssets;
 const CANVAS_W = 400;
 const CANVAS_H = 400;
 const grid = document.getElementById('grid');
@@ -215,7 +229,7 @@ async function renderVRM(asset, modules) {
       origWarn(...args);
     };
 
-    const gltf = await loader.loadAsync(asset.rawVrmPath);
+    const gltf = await loader.loadAsync(`/public_src/${asset.rawVrmPath}`);
     console.warn = origWarn;
 
     const vrm = gltf.userData.vrm;
@@ -262,7 +276,7 @@ async function renderVRM(asset, modules) {
     // Apply idle animation (retarget Mixamo -> VRM)
     // Load a fresh copy of the idle GLB for each VRM to avoid stale matrices
     const idleLoader = new GLTFLoader();
-    const idleGltf = await idleLoader.loadAsync('/animations/idle.glb');
+    const idleGltf = await idleLoader.loadAsync('/public_src/animations/idle.glb');
     const mixer = new THREE.AnimationMixer(vrm.scene);
     const clip = retargetMixamoToVrm(THREE, idleGltf, vrm);
     if (clip) {
@@ -304,15 +318,17 @@ async function renderVRM(asset, modules) {
         const chestPos = new THREE.Vector3();
         headNode.getWorldPosition(headPos);
         chestNode.getWorldPosition(chestPos);
-        lookY2 = (headPos.y + chestPos.y) / 2;
-        // Portrait span as fraction of normalized height for consistent framing
-        const portraitSpan = totalHeight * 0.38;
+        lookY2 = (headPos.y + chestPos.y) / 2 + totalHeight * 0.06;
+        const portraitSpan = Math.max(
+          totalHeight * 0.48,
+          (poseBox.max.y - chestPos.y) * 1.18,
+        );
         const fovRad2 = (camera.fov * Math.PI) / 180;
-        frameDist = (portraitSpan * 0.55) / Math.tan(fovRad2 * 0.5);
+        frameDist = (portraitSpan * 0.58) / Math.tan(fovRad2 * 0.5);
       } else {
         lookY2 = poseBox.min.y + totalHeight * 0.75;
         const fovRad2 = (camera.fov * Math.PI) / 180;
-        frameDist = (totalHeight * 0.35 * 0.55) / Math.tan(fovRad2 * 0.5);
+        frameDist = (totalHeight * 0.48 * 0.58) / Math.tan(fovRad2 * 0.5);
       }
 
       camera.position.set(0, lookY2, frameDist * 1.1);
