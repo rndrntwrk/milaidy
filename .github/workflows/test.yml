@@ -87,7 +87,7 @@ jobs:
           if [ "${MILADY_SKIP_LOCAL_UPSTREAMS:-0}" != "1" ] && [ -d eliza/packages/schemas ] && [ -f eliza/packages/schemas/buf.gen.yaml ] && [ ! -d eliza/packages/typescript/src/types/generated ]; then
             cd eliza/packages/schemas
             node node_modules/@bufbuild/buf/install.js 2>/dev/null || true
-            npx --yes @bufbuild/buf@1.67.0 generate
+            bunx @bufbuild/buf@1.67.0 generate
           fi
 
       - name: Build
@@ -134,7 +134,7 @@ jobs:
           if [ "${MILADY_SKIP_LOCAL_UPSTREAMS:-0}" != "1" ] && [ -d eliza/packages/schemas ] && [ -f eliza/packages/schemas/buf.gen.yaml ] && [ ! -d eliza/packages/typescript/src/types/generated ]; then
             cd eliza/packages/schemas
             node node_modules/@bufbuild/buf/install.js 2>/dev/null || true
-            npx --yes @bufbuild/buf@1.67.0 generate
+            bunx @bufbuild/buf@1.67.0 generate
           fi
 
       - name: Run database security and query-guard tests
@@ -556,18 +556,10 @@ jobs:
       - name: Initialize tracked workspace submodules
         run: node scripts/init-submodules.mjs
 
-      - name: Disable repo-local eliza workspace
-        env:
-          MILADY_SKIP_LOCAL_UPSTREAMS: "1"
-        run: node scripts/disable-local-eliza-workspace.mjs
-
       - name: Install dependencies
-        run: bun install --ignore-scripts --no-frozen-lockfile
+        run: bun install --frozen-lockfile --ignore-scripts
         env:
           npm_config_python: ${{ env.pythonLocation }}/bin/python3
-
-      - name: Restore eliza workspace paths for repo scripts
-        run: node -e "const fs=require('node:fs');if(fs.existsSync('.eliza.ci-disabled')&&!fs.existsSync('eliza'))fs.renameSync('.eliza.ci-disabled','eliza');"
 
       - name: Run repository postinstall patches
         run: bun run postinstall
