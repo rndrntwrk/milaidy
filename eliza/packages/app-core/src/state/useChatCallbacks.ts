@@ -918,7 +918,8 @@ export function useChatCallbacks(deps: UseChatCallbacksDeps) {
         return next;
       });
       const loaded = await loadConversationMessages(id);
-      if (loaded.ok) return;
+      if (loaded.ok === true) return;
+      const loadedMessage = loaded.message;
 
       if (loaded.ok === false && loaded.status === 404) {
         const refreshed = await loadConversations();
@@ -970,7 +971,7 @@ export function useChatCallbacks(deps: UseChatCallbacksDeps) {
         setConversationMessages([]);
       }
       setActionNotice(
-        `Failed to load conversation: ${loaded.message}`,
+        `Failed to load conversation: ${loadedMessage}`,
         "error",
         4200,
       );
