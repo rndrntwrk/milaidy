@@ -2,7 +2,8 @@
 /**
  * Ensure required skills exist in the managed skills store.
  *
- * This script is run during startup to seed shipped skills into:
+ * Shipped skill assets come from `@elizaos/skills` (`skills/` inside that package).
+ * Seeds into:
  *   $MILADY_STATE_DIR/skills
  *   $ELIZA_STATE_DIR/skills
  * or, by default for Milady:
@@ -12,6 +13,7 @@
  *   node scripts/ensure-skills.mjs
  */
 import { cpSync, existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
+import { createRequire } from "node:module";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -19,7 +21,56 @@ import { fileURLToPath } from "node:url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-export const SHIPPED_SKILLS_DIR = join(__dirname, "..", "skills");
+const require = createRequire(import.meta.url);
+
+function hasShippedSkillTree(dir) {
+  if (!existsSync(dir)) {
+    return false;
+  }
+  for (const name of readdirSync(dir)) {
+    if (name.startsWith(".")) {
+      continue;
+    }
+    try {
+      if (
+        statSync(join(dir, name)).isDirectory() &&
+        existsSync(join(dir, name, "SKILL.md"))
+      ) {
+        return true;
+      }
+    } catch {
+      // ignore unreadable entries
+    }
+  }
+  return false;
+}
+
+/**
+ * Resolve the directory containing bundled skill folders (each with SKILL.md).
+ * Prefer installed `@elizaos/skills`; fall back to repo-local `eliza/packages/skills/skills` for bootstrap.
+ */
+export function resolveShippedSkillsAssetsDir() {
+  try {
+    const pkgJson = require.resolve("@elizaos/skills/package.json");
+    const dir = join(dirname(pkgJson), "skills");
+    if (hasShippedSkillTree(dir)) {
+      return dir;
+    }
+  } catch {
+    // Package not resolvable yet (e.g. before first install).
+  }
+
+  const repoFallback = join(__dirname, "..", "eliza", "packages", "skills", "skills");
+  if (hasShippedSkillTree(repoFallback)) {
+    return repoFallback;
+  }
+
+  throw new Error(
+    "Could not resolve bundled skills. Install dependencies (bun install) so @elizaos/skills is available, or ensure eliza/packages/skills/skills exists.",
+  );
+}
+
+export const SHIPPED_SKILLS_DIR = resolveShippedSkillsAssetsDir();
 
 function resolveUserPath(input, home = homedir) {
   const trimmed = input.trim();

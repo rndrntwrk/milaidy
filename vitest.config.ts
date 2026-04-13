@@ -134,32 +134,6 @@ export default defineConfig({
         find: "@elizaos/core/roles",
         replacement: elizaCoreRolesEntry,
       },
-      // Specific aliases MUST precede the glob-style `elizaPluginAliases`
-      // and `unresolvedPluginStubs` entries. Vitest's alias resolver
-      // takes the first match, so if `@elizaos/plugin-plugin-manager`
-      // ends up in `unresolvedPluginStubs` first (pointing at
-      // the generic plugin fallback), our specific stub below never runs and
-      // tests get a stub whose default export doesn't expose the
-      // `PluginManagerService` class.
-      {
-        // `@elizaos-plugins/client-telegram-account` (note the
-        // hyphenated scope, different from `@elizaos/plugin-*`) has a
-        // package.json whose `main`/`module`/`exports` all point at
-        // `dist/index.js`, and CI with MILADY_SKIP_LOCAL_UPSTREAMS=1
-        // never builds that dist. Every vitest run that transitively
-        // imports the runtime agent loader trips on this package at
-        // resolve time — even `vi.mock(...)` calls fail, because
-        // vitest still has to resolve the specifier before installing
-        // the mock. Alias to the generic plugin fallback so resolution
-        // always succeeds.
-        find: "@elizaos-plugins/client-telegram-account",
-        replacement: path.join(
-          repoRoot,
-          "test",
-          "stubs",
-          "plugin-fallback-module.mjs",
-        ),
-      },
       {
         // `@elizaos/plugin-plugin-manager` is a real test dependency
         // of `eliza/packages/app-core/src/services/app-manager.test.ts`
@@ -294,28 +268,6 @@ export default defineConfig({
           ]),
       // @elizaos/shared — always resolve subpath imports from source
       {
-        find: /^@elizaos\/plugin-selfcontrol\/(.*)/,
-        replacement: path.join(
-          repoRoot,
-          "eliza",
-          "plugins",
-          "plugin-selfcontrol",
-          "src",
-          "$1",
-        ),
-      },
-      {
-        find: "@elizaos/plugin-selfcontrol",
-        replacement: path.join(
-          repoRoot,
-          "eliza",
-          "plugins",
-          "plugin-selfcontrol",
-          "src",
-          "index.ts",
-        ),
-      },
-      {
         find: /^@elizaos\/app-lifeops\/(.*)/,
         replacement: path.join(repoRoot, "eliza", "plugins", "app-lifeops", "src", "$1"),
       },
@@ -326,21 +278,6 @@ export default defineConfig({
           "eliza",
           "plugins",
           "app-lifeops",
-          "src",
-          "index.ts",
-        ),
-      },
-      {
-        find: /^@elizaos\/plugin-lifeops-browser\/(.*)/,
-        replacement: path.join(repoRoot, "eliza", "plugins", "plugin-lifeops-browser", "src", "$1"),
-      },
-      {
-        find: "@elizaos/plugin-lifeops-browser",
-        replacement: path.join(
-          repoRoot,
-          "eliza",
-          "plugins",
-          "plugin-lifeops-browser",
           "src",
           "index.ts",
         ),
@@ -439,6 +376,17 @@ export default defineConfig({
         "eliza/packages/agent/src/runtime/eliza.ts",
       ],
     },
+    deps: {
+      inline: [
+        "@elizaos/core",
+        "@elizaos/agent",
+        "@elizaos/app-core",
+        /^@miladyai\/shared/,
+        /^@elizaos\/plugin-/,
+        /^@elizaos\/shared/,
+        "zod",
+      ],
+    },
     server: {
       deps: {
         inline: [
@@ -447,6 +395,7 @@ export default defineConfig({
           "@elizaos/app-core",
           /^@miladyai\/shared/,
           /^@elizaos\/plugin-/,
+          /^@elizaos\/shared/,
           "zod",
         ],
       },

@@ -4,8 +4,8 @@
 
 Milady uses three container roles:
 
-- The canonical full app image, built from `Dockerfile.ci`
-- A cloud-deploy full app image, also built from `Dockerfile.ci` and published under cloud-specific tags
+- The canonical full app image, built from `deploy/Dockerfile.ci`
+- A cloud-deploy full app image, also built from `deploy/Dockerfile.ci` and published under cloud-specific tags
 - A subordinate cloud-agent runtime image, built from `deploy/Dockerfile.cloud-agent`
 
 Use the full app images when users should open Milady in a browser and interact
@@ -23,7 +23,7 @@ only for app-managed child agents that run in their own Docker containers.
 │  └──────────────────────────────────┘   │
 │                                         │
 │  Base: node:22-slim + tsx               │
-│  Build: Dockerfile.ci                   │
+│  Build: deploy/Dockerfile.ci            │
 └─────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────┐
@@ -35,7 +35,7 @@ only for app-managed child agents that run in their own Docker containers.
 │  └──────────────────────────────────┘   │
 │                                         │
 │  Base: node:22-slim                     │
-│  Build: Dockerfile.ci                   │
+│  Build: deploy/Dockerfile.ci            │
 └─────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────┐
@@ -69,10 +69,10 @@ only for app-managed child agents that run in their own Docker containers.
 
 ```bash
 # Build the canonical full app image
-docker build -f Dockerfile.ci -t milady/agent:latest .
+docker build -f deploy/Dockerfile.ci -t milady/agent:latest .
 
 # Build the cloud-deploy full app image
-docker build -f Dockerfile.ci -t milady/agent:cloud-app .
+docker build -f deploy/Dockerfile.ci -t milady/agent:cloud-app .
 
 # Build the subordinate cloud-agent runtime image
 docker build -f deploy/Dockerfile.cloud-agent -t milady/agent:cloud-agent-runtime .
@@ -225,7 +225,7 @@ docker pull ghcr.io/milady-ai/agent:latest
 docker pull ghcr.io/milady-ai/milady/agent:cloud-app
 
 # Or build locally and transfer via SSH
-docker build -f Dockerfile.ci -t milady/agent:latest .
+docker build -f deploy/Dockerfile.ci -t milady/agent:latest .
 ```
 
 ### Typical update flow
@@ -234,8 +234,8 @@ docker build -f Dockerfile.ci -t milady/agent:latest .
 git tag v2.0.0-alpha.82
 git push origin v2.0.0-alpha.82
   → CI builds and pushes the canonical image and cloud app image to GHCR
-  → OR: docker build -f Dockerfile.ci -t milady/agent:latest . (manual)
-  → OR: docker build -f Dockerfile.ci -t milady/agent:cloud-app . (manual)
+  → OR: docker build -f deploy/Dockerfile.ci -t milady/agent:latest . (manual)
+  → OR: docker build -f deploy/Dockerfile.ci -t milady/agent:cloud-app . (manual)
 ./deploy/deploy-to-nodes.sh --restart --rolling
 ```
 
@@ -261,7 +261,7 @@ The health check hits `http://localhost:$PORT/health`. Common issues:
 
 The image is ~14 GB because it includes the full monorepo build. To reduce:
 - Consider a multi-stage build that only copies dist output
-- Use `.dockerignore` to exclude test files, docs, etc.
+- Use `deploy/.dockerignore.ci` (copied to `.dockerignore` at the repo root for `docker build`) to exclude test files, docs, etc.
 
 ### SSH transfer slow
 
@@ -278,7 +278,7 @@ docker save milady/agent:latest | gzip | \
 
 | File | Description |
 |------|-------------|
-| `../Dockerfile.ci` | Canonical full app image used for generic and cloud app builds |
+| `Dockerfile.ci` | Canonical full app image used for generic and cloud app builds (this directory) |
 | `Dockerfile.cloud-agent` | Subordinate cloud-agent runtime image |
 | `../scripts/container-entrypoint.mjs` | Runtime selector used by the generic image |
 | `cloud-agent-entrypoint.ts` | Cloud agent entrypoint (bridge server + runtime) |

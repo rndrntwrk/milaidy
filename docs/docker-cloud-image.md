@@ -2,7 +2,7 @@
 
 ## Result
 
-`Dockerfile.cloud` switches the cloud image from "copy the whole repo + existing Bun node_modules" to a production-only runtime assembly.
+`deploy/Dockerfile.cloud` switches the cloud image from "copy the whole repo + existing Bun node_modules" to a production-only runtime assembly.
 
 In local validation, the assembled runtime footprint was roughly:
 
@@ -42,7 +42,7 @@ The heaviest `.bun` entries included:
 - `onnxruntime-web`: **91MB**
 - `@node-llama-cpp+linux-x64-vulkan`: **76MB**
 
-## Strategy used in `Dockerfile.cloud`
+## Strategy used in `deploy/Dockerfile.cloud`
 
 1. **Production-only install** via Bun (`bun install --production --frozen-lockfile --ignore-scripts`)
 2. **Manifest-only dependency resolution** in the deps stage so the builder does not need the entire repo for install
@@ -59,7 +59,7 @@ The heaviest `.bun` entries included:
    - `milady.mjs`
    - `plugins.json`
    - docker entrypoint
-7. **Preserve compatibility patches** from `Dockerfile.ci`
+7. **Preserve compatibility patches** from `deploy/Dockerfile.ci`
    - plugin-agent-skills crash guard
    - version patching for `@elizaos/agent`
 8. **Prune obvious non-runtime weight** from the flattened runtime tree
@@ -71,7 +71,7 @@ The heaviest `.bun` entries included:
 
 ## Runtime compatibility note
 
-The CLI still imports workspace package source paths like `@elizaos/agent/src/...`, so the cloud image cannot be fully `dist`-only yet. To keep startup working, `Dockerfile.cloud` includes the required workspace source packages and uses a tiny standalone `tsx` loader path:
+The CLI still imports workspace package source paths like `@elizaos/agent/src/...`, so the cloud image cannot be fully `dist`-only yet. To keep startup working, `deploy/Dockerfile.cloud` includes the required workspace source packages and uses a tiny standalone `tsx` loader path:
 
 ```sh
 node --import /opt/tsx/node_modules/tsx/dist/loader.mjs milady.mjs start

@@ -151,7 +151,7 @@ function resolveElizaCoreBundlePath(): string {
 const apiPort = resolveDesktopApiPort(process.env);
 const uiPort = resolveDesktopUiPort(process.env);
 const enableAppSourceMaps = process.env.MILADY_APP_SOURCEMAP === "1";
-/** Set by scripts/dev-platform.mjs for `vite build --watch` (Electrobun desktop). */
+/** Set by eliza/packages/app-core/scripts/dev-platform.mjs for `vite build --watch` (Electrobun desktop). */
 const desktopFastDist = process.env.MILADY_DESKTOP_VITE_FAST_DIST === "1";
 
 function pathIncludesAny(id: string, markers: string[]): boolean {
@@ -938,42 +938,14 @@ export default defineConfig({
         ),
       },
       {
-        find: /^@miladyai\/plugin-selfcontrol\/(.*)/,
-        replacement: path.resolve(
-          miladyRoot,
-          "eliza/plugins/plugin-selfcontrol/src/$1",
-        ),
-      },
-      {
-        find: /^@miladyai\/plugin-selfcontrol$/,
-        replacement: path.resolve(
-          miladyRoot,
-          "eliza/plugins/plugin-selfcontrol/src/index.ts",
-        ),
-      },
-      {
-        find: /^@miladyai\/app-lifeops\/(.*)/,
+        find: /^@elizaos\/app-lifeops\/(.*)/,
         replacement: path.resolve(
           miladyRoot,
           "eliza/plugins/app-lifeops/src/$1",
         ),
       },
       {
-        find: /^@miladyai\/app-lifeops$/,
-        replacement: path.resolve(
-          miladyRoot,
-          "eliza/plugins/app-lifeops/src/index.ts",
-        ),
-      },
-      {
-        find: /^@elizaos\/plugin-lifeops-browser\/(.*)/,
-        replacement: path.resolve(
-          miladyRoot,
-          "eliza/plugins/app-lifeops/src/$1",
-        ),
-      },
-      {
-        find: /^@elizaos\/plugin-lifeops-browser$/,
+        find: /^@elizaos\/app-lifeops$/,
         replacement: path.resolve(
           miladyRoot,
           "eliza/plugins/app-lifeops/src/index.ts",
@@ -1124,7 +1096,7 @@ export default defineConfig({
       "node-llama-cpp",
       "@node-llama-cpp/mac-arm64-metal",
       // Contains native-only pty-state-capture import; skip pre-bundling.
-      "@elizaos/plugin-agent-orchestrator",
+      "@elizaos/core/agent-orchestrator",
       // Ships its own @elizaos/core copy that references exports missing from
       // the browser entry; skip pre-bundling so it's served on-demand via the
       // transform plugin that patches missing exports.

@@ -40,7 +40,7 @@ if (existsSync(_rootModules)) {
 
 **Note on `Module._initPaths()`:** It is a private Node.js API but widely used for exactly this purpose (runtime NODE_PATH mutation). Node caches resolution paths at startup; after we set `process.env.NODE_PATH` we must call it so the next `import()` sees the new paths.
 
-### 2. `scripts/run-node.mjs` (child process env)
+### 2. `eliza/packages/app-core/scripts/run-node.mjs` (child process env)
 
 ```js
 const rootModules = path.join(cwd, "node_modules");

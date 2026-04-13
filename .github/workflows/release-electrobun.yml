@@ -375,9 +375,9 @@ jobs:
       - name: Stage desktop bundle inputs
         run: |
           if [ "${{ matrix.platform.os }}" = "macos" ] && [ "${{ matrix.platform.artifact-name }}" = "macos-x64" ]; then
-            MILADY_DESKTOP_COMMAND_PREFIX="arch -x86_64" node scripts/desktop-build.mjs stage --variant=base --build-whisper
+            MILADY_DESKTOP_COMMAND_PREFIX="arch -x86_64" node eliza/packages/app-core/scripts/desktop-build.mjs stage --variant=base --build-whisper
           else
-            node scripts/desktop-build.mjs stage --variant=base --build-whisper
+            node eliza/packages/app-core/scripts/desktop-build.mjs stage --variant=base --build-whisper
           fi
 
       # Import the Developer ID certificate into a temporary keychain.
@@ -519,9 +519,9 @@ jobs:
       - name: Build Electrobun app
         run: |
           if [ "${{ matrix.platform.os }}" = "macos" ] && [ "${{ matrix.platform.artifact-name }}" = "macos-x64" ]; then
-            MILADY_DESKTOP_COMMAND_PREFIX="arch -x86_64" node scripts/desktop-build.mjs package --env=${{ needs.prepare.outputs.env }}
+            MILADY_DESKTOP_COMMAND_PREFIX="arch -x86_64" node eliza/packages/app-core/scripts/desktop-build.mjs package --env=${{ needs.prepare.outputs.env }}
           else
-            node scripts/desktop-build.mjs package --env=${{ needs.prepare.outputs.env }}
+            node eliza/packages/app-core/scripts/desktop-build.mjs package --env=${{ needs.prepare.outputs.env }}
           fi
         env:
           # Electrobun reads these env vars directly. The workflow derives the

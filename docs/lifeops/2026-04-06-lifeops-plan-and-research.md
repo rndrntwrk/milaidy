@@ -91,7 +91,7 @@ Important implication:
 
 - Google Calendar and Gmail are already the primary external productivity integrations.
 - Twilio is the current production reminder channel path for SMS and voice.
-- Website blocking depends on `@elizaos/plugin-selfcontrol`.
+- Website blocking depends on `@elizaos/app-lifeops`.
 - Desktop sensing depends on Milady desktop surfaces in `apps/app/electrobun`.
 - Screen capture depends on Milady’s native screencapture plumbing and any future `plugin-vision` adoption.
 - If we pursue Telegram as a user account rather than a bot, that is a distinct MTProto workstream and should not be confused with current bot-token paths.
@@ -154,7 +154,7 @@ Use these as the default implementation pattern instead of inventing parallel sy
 
 - Google OAuth plus Calendar/Gmail access
 - Twilio for SMS and voice
-- `@elizaos/plugin-selfcontrol` for blocking
+- `@elizaos/app-lifeops` for blocking
 - trajectory capture routes for auditability
 
 ## 5.3 External references relevant to the requested roadmap

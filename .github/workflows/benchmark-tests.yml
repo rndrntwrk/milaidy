@@ -47,7 +47,7 @@ jobs:
       # eliza workspace disable, Bun install, and postinstall patches
       # happen in the same deterministic order as the rest of CI.
       # Without this the benchmark job was hitting
-      # "Workspace dependency @elizaos/plugin-agent-orchestrator not found"
+      # "Workspace dependency @elizaos/agent-orchestrator not found"
       # because nothing had initialized the `eliza` submodule (including nested
       # `eliza/plugins/*` checkouts).
       - name: Setup Node.js

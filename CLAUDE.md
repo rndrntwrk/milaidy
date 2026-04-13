@@ -61,7 +61,7 @@ apps/
   homepage/             Marketing site
 scripts/
   dev-ui.mjs            Dev orchestrator (API + Vite)
-  run-node.mjs          CLI runner (spawns entry.js with NODE_PATH)
+  eliza/packages/app-core/scripts/run-node.mjs   CLI runner (spawns entry.js with NODE_PATH)
   run-repo-setup.mjs    Postinstall sequencer
   setup-upstreams.mjs   Initialize repo-local upstreams and link @elizaos packages
   patch-deps.mjs        Post-install patches for broken upstream exports
@@ -69,13 +69,13 @@ scripts/
 
 ## Default Agent Knowledge
 
-Treat the shipped skills in `skills/` as the default knowledge base for code agents working in this repo. The canonical entry points are:
+Treat bundled skills from `@elizaos/skills` as the default knowledge base for code agents working in this repo. The canonical entry points are:
 
-- `skills/milady/SKILL.md` — what Milady is, where to edit it, and how local, remote, and cloud paths fit together
-- `skills/elizaos/SKILL.md` — elizaOS runtime concepts, plugin abstractions, and extension points
-- `skills/eliza-cloud/SKILL.md` — Eliza Cloud as a managed backend, app platform, deployment target, and monetization surface
+- `eliza/packages/skills/skills/eliza-app-development/SKILL.md` — this repo as an elizaOS app (Milady is this checkout’s product name), layout, and how local, remote, and cloud paths fit together
+- `eliza/packages/skills/skills/elizaos/SKILL.md` — elizaOS runtime concepts, plugin abstractions, and extension points
+- `eliza/packages/skills/skills/eliza-cloud/SKILL.md` — Eliza Cloud as a managed backend, app platform, deployment target, and monetization surface
 
-`scripts/ensure-skills.mjs` seeds these shipped skills into the managed skills store on first run.
+`scripts/ensure-skills.mjs` seeds bundled skills from `@elizaos/skills` into the managed skills store on first run.
 Separately, `packages/agent/src/runtime/default-knowledge.ts` seeds bundled runtime knowledge items for Milady itself, including the baseline Eliza Cloud app/backend guidance.
 
 For source checkouts and app repos, the default agent workspace now follows the runtime `cwd` when that directory looks like a real project workspace (`package.json`, `AGENTS.md`, `skills/`, etc.). That makes the repo's own `AGENTS.md` and `skills/` available to the runtime by default, which is what lets Milady reason about and patch the checkout it is running in. Packaged installs still fall back to the state-dir workspace, and `MILADY_WORKSPACE_DIR` / `ELIZA_WORKSPACE_DIR` always win when set explicitly.
@@ -89,7 +89,7 @@ Cloud monetization is a first-class product constraint. App creators can earn th
 ### NODE_PATH (do not remove)
 Dynamic plugin imports (`import("@elizaos/plugin-foo")`) need NODE_PATH set to the repo root's `node_modules`. This is set in three places — all three are required:
 1. `packages/agent/src/runtime/eliza.ts` — module-level, before dynamic imports
-2. `scripts/run-node.mjs` — child process env
+2. `eliza/packages/app-core/scripts/run-node.mjs` — child process env
 3. `apps/app/electrobun/src/native/agent.ts` — Electrobun main process
 
 See `docs/plugin-resolution-and-node-path.md`.

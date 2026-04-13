@@ -61,9 +61,17 @@ const pluginSqlEntry =
     path.join(repoRoot, "plugins", "plugin-sql", "typescript", "index.node"),
   );
 const pluginAgentOrchestratorEntry =
-  getInstalledPackageEntry("@elizaos/plugin-agent-orchestrator", repoRoot) ??
+  getInstalledPackageEntry("@elizaos/core/agent-orchestrator", repoRoot) ??
   resolveModuleEntry(
-    path.join(repoRoot, "plugins", "plugin-agent-orchestrator", "src", "index"),
+    path.join(
+      repoRoot,
+      "eliza",
+      "packages",
+      "typescript",
+      "src",
+      "agent-orchestrator",
+      "index",
+    ),
   );
 const pluginTelegramEntry =
   getInstalledPackageEntry("@elizaos/plugin-telegram", repoRoot) ??
@@ -160,24 +168,12 @@ export default {
           ]
         : []),
       {
-        find: /^@miladyai\/plugin-selfcontrol\/(.*)/,
-        replacement: path.join(
-          repoRoot,
-          "packages",
-          "plugin-selfcontrol",
-          "src",
-          "$1",
-        ),
+        find: /^@elizaos\/app-lifeops\/(.*)/,
+        replacement: path.join(repoRoot, "eliza", "plugins", "app-lifeops", "src", "$1"),
       },
       {
-        find: "@elizaos/plugin-selfcontrol",
-        replacement: path.join(
-          repoRoot,
-          "packages",
-          "plugin-selfcontrol",
-          "src",
-          "index.ts",
-        ),
+        find: "@elizaos/app-lifeops",
+        replacement: path.join(repoRoot, "eliza", "plugins", "app-lifeops", "src", "index.ts"),
       },
       ...(sharedSourceRoot
         ? [
@@ -209,6 +205,10 @@ export default {
         : []),
       ...(fs.existsSync(pluginAgentOrchestratorEntry)
         ? [
+            {
+              find: "@elizaos/core/agent-orchestrator",
+              replacement: pluginAgentOrchestratorEntry,
+            },
             {
               find: "@elizaos/plugin-agent-orchestrator",
               replacement: pluginAgentOrchestratorEntry,

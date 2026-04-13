@@ -77,7 +77,7 @@ You are invoked by `agent-review.yml` ONLY when it classifies scope as "needs de
 
 ## Hard invariants (do NOT suggest changes that violate these)
 
-1. **NODE_PATH** must be set at module level in all three sites: `packages/agent/src/runtime/eliza.ts`, `scripts/run-node.mjs`, `apps/app/electrobun/src/native/agent.ts`. Required for dynamic `@elizaos/plugin-*` imports under Bun.
+1. **NODE_PATH** must be set at module level in all three sites: `packages/agent/src/runtime/eliza.ts`, `eliza/packages/app-core/scripts/run-node.mjs`, `apps/app/electrobun/src/native/agent.ts`. Required for dynamic `@elizaos/plugin-*` imports under Bun.
 2. **`scripts/patch-deps.mjs`** deletes dead `exports["."].bun` keys in broken `@elizaos/*` packages. Never remove; extend when new plugins break.
 3. **Electrobun startup try/catch guards** in `apps/app/electrobun/src/native/agent.ts` keep the desktop window usable when runtime init fails.
 4. **Namespace is `milady`**, not `eliza`. State dir `~/.milady/`, config `milady.json`. Env precedence: `MILADY_*` → `ELIZA_*` → defaults.

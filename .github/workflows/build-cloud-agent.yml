@@ -154,11 +154,15 @@ jobs:
         env:
           NODE_ENV: production
 
-      # ── 9. Set up Docker builder ────────────────────────────────
+      # ── 9. Docker ignore (context root must have .dockerignore; source: deploy/)
+      - name: Set up CI dockerignore
+        run: cp deploy/.dockerignore.ci .dockerignore
+
+      # ── 10. Set up Docker builder ────────────────────────────────
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # ── 10. Login to GHCR ──────────────────────────────────────────────────
+      # ── 11. Login to GHCR ──────────────────────────────────────────────────
       - name: Login to GHCR
         uses: docker/login-action@v3
         with:
@@ -166,12 +170,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # ── 11. Build and push with Docker layer cache ────────────────────────────
+      # ── 12. Build and push with Docker layer cache ────────────────────────────
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: Dockerfile.ci
+          file: deploy/Dockerfile.ci
           platforms: linux/amd64
           push: ${{ github.event_name == 'push' || inputs.push_image != false }}
           tags: |
@@ -182,7 +186,7 @@ jobs:
             VERSION_CLEAN=${{ steps.version.outputs.version_clean }}
           provenance: false
 
-      # ── 12. Trigger production deploy webhook ──────────────────────────────
+      # ── 13. Trigger production deploy webhook ──────────────────────────────
       - name: Trigger cloud fleet deploy webhook
         if: success() && steps.version.outputs.build_environment == 'production' && (github.event_name == 'push' || inputs.push_image != false) && (github.event_name == 'push' || inputs.skip_rollout != true)
         env:

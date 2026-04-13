@@ -116,24 +116,12 @@ export default defineConfig({
           ]
         : []),
       {
-        find: /^@miladyai\/plugin-selfcontrol\/(.*)/,
-        replacement: path.join(
-          repoRoot,
-          "packages",
-          "plugin-selfcontrol",
-          "src",
-          "$1",
-        ),
+        find: /^@elizaos\/app-lifeops\/(.*)/,
+        replacement: path.join(repoRoot, "eliza", "plugins", "app-lifeops", "src", "$1"),
       },
       {
-        find: "@elizaos/plugin-selfcontrol",
-        replacement: path.join(
-          repoRoot,
-          "packages",
-          "plugin-selfcontrol",
-          "src",
-          "index.ts",
-        ),
+        find: "@elizaos/app-lifeops",
+        replacement: path.join(repoRoot, "eliza", "plugins", "app-lifeops", "src", "index.ts"),
       },
       ...(sharedSourceRoot
         ? [

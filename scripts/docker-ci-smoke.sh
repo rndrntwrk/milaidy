@@ -76,8 +76,8 @@ REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$REPO_ROOT"
 
 [[ -f package.json ]] || fail "Run from the repo root"
-[[ -f Dockerfile.ci ]] || fail "Dockerfile.ci not found"
-[[ -f .dockerignore.ci ]] || fail ".dockerignore.ci not found"
+[[ -f deploy/Dockerfile.ci ]] || fail "deploy/Dockerfile.ci not found"
+[[ -f deploy/.dockerignore.ci ]] || fail "deploy/.dockerignore.ci not found"
 
 if [[ -z "$VERSION" ]]; then
   VERSION="v$(node -p "require('./package.json').version")-docker-smoke"
@@ -104,7 +104,13 @@ DOCKER_BIN="$(find_docker_bin)" || fail "docker is required"
 "$DOCKER_BIN" info >/dev/null 2>&1 || fail "docker daemon is not available"
 
 DOCKERIGNORE_BACKUP="$(mktemp)"
-cp .dockerignore "$DOCKERIGNORE_BACKUP"
+HAD_ROOT_DOCKERIGNORE=0
+if [[ -f .dockerignore ]]; then
+  HAD_ROOT_DOCKERIGNORE=1
+  cp .dockerignore "$DOCKERIGNORE_BACKUP"
+else
+  : >"$DOCKERIGNORE_BACKUP"
+fi
 cleanup() {
   set +e
   if "$DOCKER_BIN" ps -a --format '{{.Names}}' | grep -Fxq "$CONTAINER_NAME"; then
@@ -113,7 +119,11 @@ cleanup() {
     "$DOCKER_BIN" rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
   fi
   if [[ -f "$DOCKERIGNORE_BACKUP" ]]; then
-    cp "$DOCKERIGNORE_BACKUP" .dockerignore >/dev/null 2>&1 || true
+    if [[ "$HAD_ROOT_DOCKERIGNORE" == "1" ]]; then
+      cp "$DOCKERIGNORE_BACKUP" .dockerignore >/dev/null 2>&1 || true
+    else
+      rm -f .dockerignore >/dev/null 2>&1 || true
+    fi
     rm -f "$DOCKERIGNORE_BACKUP" >/dev/null 2>&1 || true
   fi
 }
@@ -137,11 +147,6 @@ pushd packages/shared >/dev/null
 bun run build
 popd >/dev/null
 
-log "Building selfcontrol workspace"
-pushd packages/plugin-selfcontrol >/dev/null
-bun run build
-popd >/dev/null
-
 log "Building agent workspace"
 pushd packages/agent >/dev/null
 bun run build:docker-dist
@@ -156,8 +161,8 @@ else
   log "Skipping core workspace build (published upstream mode)"
 fi
 
-log "Building bundled orchestrator workspace"
-pushd eliza/plugins/plugin-agent-orchestrator >/dev/null
+log "Building @elizaos/core (includes agent-orchestrator)"
+pushd eliza/packages/typescript >/dev/null
 bun run build
 popd >/dev/null
 
@@ -172,11 +177,11 @@ NODE_ENV=production npx vite build
 popd >/dev/null
 
 log "Preparing CI dockerignore"
-cp .dockerignore.ci .dockerignore
+cp deploy/.dockerignore.ci .dockerignore
 
 log "Building Docker image"
 "$DOCKER_BIN" build \
-  --file Dockerfile.ci \
+  --file deploy/Dockerfile.ci \
   --tag "$DOCKER_IMAGE" \
   --build-arg "BUN_VERSION=$BUN_VERSION" \
   --build-arg "VERSION=$VERSION" \

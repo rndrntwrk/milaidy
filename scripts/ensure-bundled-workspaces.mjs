@@ -11,18 +11,6 @@ const DEFAULT_REPO_ROOT = path.resolve(__dirname, "..");
 
 export const BUNDLED_WORKSPACE_BUILDS = [
   {
-    label: "@elizaos/plugin-agent-orchestrator",
-    cwd: path.join("plugins", "plugin-agent-orchestrator"),
-    manifest: path.join("plugins", "plugin-agent-orchestrator", "package.json"),
-    artifact: path.join(
-      "plugins",
-      "plugin-agent-orchestrator",
-      "dist",
-      "index.js",
-    ),
-    args: ["../../scripts/build-bundled-orchestrator-artifact.mjs"],
-  },
-  {
     label: "@elizaos/plugin-agent-skills",
     cwd: path.join("plugins", "plugin-agent-skills", "typescript"),
     manifest: path.join(
@@ -58,8 +46,7 @@ export const BUNDLED_WORKSPACE_BUILDS = [
   //
   // Nothing we ship here consumes those plugins at build-time from
   // source, so building them is a footgun. Keep only the two
-  // historically-bundled builds (plugin-agent-orchestrator and
-  // plugin-agent-skills) that actually need to be on disk for
+  // historically-bundled builds (plugin-agent-skills) that actually need to be on disk for
   // downstream packaging to work.
 ];
 

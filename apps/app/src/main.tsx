@@ -29,7 +29,7 @@ import {
   APP_RESUME_EVENT,
   COMMAND_PALETTE_EVENT,
   CONNECT_EVENT,
-  dispatchMiladyEvent,
+  dispatchAppEvent,
   SHARE_TARGET_EVENT,
   TRAY_ACTION_EVENT,
 } from "@elizaos/app-core/events";
@@ -124,7 +124,7 @@ declare global {
 const windowShellRoute = resolveWindowShellRoute();
 
 /**
- * Adds `milady-electrobun-frameless` for CSS `-webkit-app-region` (Chromium/CEF).
+ * Adds `eliza-electrobun-frameless` for CSS `-webkit-app-region` (Chromium/CEF).
  * macOS WKWebView move/resize are still driven by native overlays in
  * window-effects.mm; this class mainly marks the shell and helps non-WK engines.
  */
@@ -137,7 +137,7 @@ function shouldEnableElectrobunMacWindowDrag(): boolean {
 }
 
 if (shouldEnableElectrobunMacWindowDrag()) {
-  document.documentElement.classList.add("milady-electrobun-frameless");
+  document.documentElement.classList.add("eliza-electrobun-frameless");
 }
 
 // Dev escape hatch: ?reset forces a truly fresh onboarding session by clearing
@@ -188,13 +188,13 @@ function dispatchShareTarget(payload: ShareTargetPayload): void {
     window.__MILADY_SHARE_QUEUE__ = [];
   }
   window.__MILADY_SHARE_QUEUE__.push(payload);
-  dispatchMiladyEvent(SHARE_TARGET_EVENT, payload);
+  dispatchAppEvent(SHARE_TARGET_EVENT, payload);
 }
 
 async function initializeAgent(): Promise<void> {
   try {
     const status = await Agent.getStatus();
-    dispatchMiladyEvent(AGENT_READY_EVENT, status);
+    dispatchAppEvent(AGENT_READY_EVENT, status);
   } catch (err) {
     console.warn(
       "[Milady] Agent not available:",
@@ -251,9 +251,9 @@ async function initializeKeyboard(): Promise<void> {
 function initializeAppLifecycle(): void {
   CapacitorApp.addListener("appStateChange", ({ isActive }) => {
     if (isActive) {
-      dispatchMiladyEvent(APP_RESUME_EVENT);
+      dispatchAppEvent(APP_RESUME_EVENT);
     } else {
-      dispatchMiladyEvent(APP_PAUSE_EVENT);
+      dispatchAppEvent(APP_PAUSE_EVENT);
     }
   });
 
@@ -312,7 +312,7 @@ function handleDeepLink(url: string): void {
             );
             break;
           }
-          dispatchMiladyEvent(CONNECT_EVENT, {
+          dispatchAppEvent(CONNECT_EVENT, {
             gatewayUrl: validatedUrl.href,
           });
         } catch {
@@ -370,7 +370,7 @@ async function initializeDesktopShell(): Promise<void> {
 
   await Desktop.addListener("shortcutPressed", (event: { id: string }) => {
     if (event.id === "command-palette") {
-      dispatchMiladyEvent(COMMAND_PALETTE_EVENT);
+      dispatchAppEvent(COMMAND_PALETTE_EVENT);
     }
   });
 
@@ -381,7 +381,7 @@ async function initializeDesktopShell(): Promise<void> {
   await Desktop.addListener(
     "trayMenuClick",
     (event: { itemId: string; checked?: boolean }) => {
-      dispatchMiladyEvent(TRAY_ACTION_EVENT, event);
+      dispatchAppEvent(TRAY_ACTION_EVENT, event);
     },
   );
 

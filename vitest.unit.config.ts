@@ -86,9 +86,8 @@ export default mergeConfig(
               },
             ]
           : []),
-                                                                // NOTE: aliases for `@elizaos-plugins/client-telegram-account`
-        // and `@elizaos/plugin-plugin-manager` were hoisted into the
-        // base `vitest.config.ts` so they also apply when the pre-
+        // NOTE: `@elizaos/plugin-plugin-manager` aliases were hoisted into
+        // the base `vitest.config.ts` so they also apply when the pre-
         // review gate runs `bunx vitest run <file>` without `--config`
         // (which uses the base config, not this one). Keeping them in
         // one place prevents drift between the unit-only config and

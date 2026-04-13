@@ -6,11 +6,11 @@ import net from "node:net";
 import path from "node:path";
 import type { AgentRuntime, IAgentRuntime } from "@elizaos/core";
 import { createTestRuntime } from "../helpers/pglite-runtime";
-import { PTYService } from "../../eliza/plugins/plugin-agent-orchestrator/src/services/pty-service.js";
-import { listAgentsAction } from "../../eliza/plugins/plugin-agent-orchestrator/src/actions/list-agents.js";
-import { spawnAgentAction } from "../../eliza/plugins/plugin-agent-orchestrator/src/actions/spawn-agent.js";
-import { sendToAgentAction } from "../../eliza/plugins/plugin-agent-orchestrator/src/actions/send-to-agent.js";
-import { cleanForChat } from "../../eliza/plugins/plugin-agent-orchestrator/src/services/ansi-utils.js";
+import { PTYService } from "../../eliza/packages/typescript/src/agent-orchestrator/src/services/pty-service.ts";
+import { listAgentsAction } from "../../eliza/packages/typescript/src/agent-orchestrator/src/actions/list-agents.ts";
+import { spawnAgentAction } from "../../eliza/packages/typescript/src/agent-orchestrator/src/actions/spawn-agent.ts";
+import { sendToAgentAction } from "../../eliza/packages/typescript/src/agent-orchestrator/src/actions/send-to-agent.ts";
+import { cleanForChat } from "../../eliza/packages/typescript/src/agent-orchestrator/src/services/ansi-utils.ts";
 
 type Framework = "claude" | "codex";
 type Mode = "sequential" | "web";
@@ -80,7 +80,7 @@ function createWorkdir(agentType: Framework, label: string): string {
   return fs.mkdtempSync(
     path.join(
       ensureLiveBaseDir(),
-      `plugin-agent-orchestrator-${agentType}-${label}-`,
+      `agent-orchestrator-${agentType}-${label}-`,
     ),
   );
 }

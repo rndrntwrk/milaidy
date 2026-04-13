@@ -1,7 +1,7 @@
 // Stub for @elizaos/plugin-coding-agent used in e2e tests.
 // The real module is optional and not available in all environments.
 export const codingAgentPlugin = {
-  name: "@elizaos/plugin-agent-orchestrator",
+  name: "@elizaos/agent-orchestrator",
   description: "Stub coding agent plugin for e2e tests",
   actions: [],
   providers: [],

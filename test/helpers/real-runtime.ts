@@ -22,7 +22,7 @@ import os from "node:os";
 import path from "node:path";
 import type { Plugin } from "@elizaos/core";
 import { AgentRuntime, createCharacter, logger } from "@elizaos/core";
-import { configureLocalEmbeddingPlugin } from "../../eliza/agent/src/runtime/eliza";
+import { configureLocalEmbeddingPlugin } from "../../eliza/packages/agent/src/runtime/eliza";
 import {
   selectLiveProvider,
   type LiveProviderConfig,
@@ -195,7 +195,7 @@ export async function createRealTestRuntime(
   if (options?.withDiscord && process.env.DISCORD_BOT_TOKEN?.trim()) {
     try {
       const discordModule = await import("@elizaos/plugin-discord");
-      const plugin = discordModule.default ?? discordModule.elizaPlugin;
+      const plugin = discordModule.default ?? discordModule.discordPlugin;
       if (plugin) {
         await runtime.registerPlugin(plugin);
         logger.info("[real-runtime] Registered Discord plugin");
@@ -209,7 +209,7 @@ export async function createRealTestRuntime(
   if (options?.withTelegram && process.env.TELEGRAM_BOT_TOKEN?.trim()) {
     try {
       const telegramModule = await import("@elizaos/plugin-telegram");
-      const plugin = telegramModule.default ?? telegramModule.elizaPlugin;
+      const plugin = telegramModule.default ?? telegramModule.telegramPlugin;
       if (plugin) {
         await runtime.registerPlugin(plugin);
         logger.info("[real-runtime] Registered Telegram plugin");

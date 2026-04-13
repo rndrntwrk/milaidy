@@ -20,7 +20,6 @@ const skipLocalUpstreams =
   process.env.ELIZA_SKIP_LOCAL_UPSTREAMS === "1";
 const SUBMODULE_READINESS_MARKERS = {
   eliza: ["package.json", "packages/typescript/package.json"],
-  "eliza/plugins/plugin-agent-orchestrator": ["package.json"],
   "test/contracts/lib/openzeppelin-contracts": [
     "package.json",
     "contracts/package.json",
@@ -97,12 +96,7 @@ export function loadTrackedSubmodules({ exec = execSync, cwd = root } = {}) {
  */
 export function pruneLegacyRootSubmodulesMovedUnderEliza(
   rootDir,
-  {
-    exec = execSync,
-    log = console.log,
-    logError = console.error,
-    exists = existsSync,
-  } = {},
+  { exec = execSync, log = console.log, logError = console.error } = {},
 ) {
   const tracked = new Set(
     loadTrackedSubmodules({ exec, cwd: rootDir }).map((s) => s.path),

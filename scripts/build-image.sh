@@ -110,11 +110,11 @@ log "Tag:     ${YELLOW}${IMAGE_NAME}${NC}"
 $DRY_RUN && warn "DRY RUN mode — commands will be shown but not executed"
 
 # ── Select Dockerfile ─────────────────────────────────────────────────────────
-if [[ -f "Dockerfile.ci" ]]; then
-  DOCKERFILE="Dockerfile.ci"
+if [[ -f "deploy/Dockerfile.ci" ]]; then
+  DOCKERFILE="deploy/Dockerfile.ci"
   log "Dockerfile: ${YELLOW}${DOCKERFILE}${NC} (canonical production image)"
 else
-  die "No Dockerfile found. Expected Dockerfile.ci at repo root."
+  die "No Dockerfile found. Expected deploy/Dockerfile.ci."
 fi
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -195,11 +195,16 @@ fi
 
 # Set up cleanup trap: always revert the vite config patch, even on error
 DOCKERIGNORE_BACKUP=""
+HAD_ROOT_DOCKERIGNORE=0
 cleanup() {
   local exit_code=$?
   if [[ -n "$DOCKERIGNORE_BACKUP" ]] && [[ -f "$DOCKERIGNORE_BACKUP" ]] && ! $DRY_RUN; then
     log "Restoring .dockerignore..."
-    cp "$DOCKERIGNORE_BACKUP" .dockerignore 2>/dev/null || warn "Could not restore .dockerignore"
+    if [[ "$HAD_ROOT_DOCKERIGNORE" == "1" ]]; then
+      cp "$DOCKERIGNORE_BACKUP" .dockerignore 2>/dev/null || warn "Could not restore .dockerignore"
+    else
+      rm -f .dockerignore 2>/dev/null || true
+    fi
     rm -f "$DOCKERIGNORE_BACKUP" 2>/dev/null || true
   fi
   if [[ -f "apps/app/vite.config.ts" ]] && ! $DRY_RUN; then
@@ -282,15 +287,20 @@ BUILD_ARGS=(
   "--build-arg" "VERSION_CLEAN=${VERSION#v}"
 )
 
-if [[ "$DOCKERFILE" == "Dockerfile.ci" ]]; then
-  [[ -f ".dockerignore.ci" ]] || die ".dockerignore.ci is required for Dockerfile.ci builds"
+if [[ "$DOCKERFILE" == "deploy/Dockerfile.ci" ]]; then
+  [[ -f "deploy/.dockerignore.ci" ]] || die "deploy/.dockerignore.ci is required for Dockerfile.ci builds"
   if $DRY_RUN; then
-    warn "[dry-run] Would swap .dockerignore → .dockerignore.ci for Dockerfile.ci"
+    warn "[dry-run] Would copy deploy/.dockerignore.ci → .dockerignore for Dockerfile.ci"
   else
     DOCKERIGNORE_BACKUP="$(mktemp)"
-    cp .dockerignore "$DOCKERIGNORE_BACKUP"
-    cp .dockerignore.ci .dockerignore
-    ok "Using .dockerignore.ci for canonical image build"
+    if [[ -f .dockerignore ]]; then
+      HAD_ROOT_DOCKERIGNORE=1
+      cp .dockerignore "$DOCKERIGNORE_BACKUP"
+    else
+      : >"$DOCKERIGNORE_BACKUP"
+    fi
+    cp deploy/.dockerignore.ci .dockerignore
+    ok "Using deploy/.dockerignore.ci for canonical image build"
   fi
 fi
 

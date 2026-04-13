@@ -22,22 +22,10 @@
     "useDefineForClassFields": false,
     "baseUrl": ".",
     "paths": {
-      "@elizaos/plugin-selfcontrol": [
-        "./eliza/plugins/plugin-selfcontrol/src/index.ts"
-      ],
-      "@elizaos/plugin-selfcontrol/*": [
-        "./eliza/plugins/plugin-selfcontrol/src/*"
-      ],
       "@elizaos/app-lifeops": [
         "./eliza/plugins/app-lifeops/src/index.ts"
       ],
       "@elizaos/app-lifeops/*": [
-        "./eliza/plugins/app-lifeops/src/*"
-      ],
-      "@elizaos/plugin-lifeops-browser": [
-        "./eliza/plugins/app-lifeops/src/index.ts"
-      ],
-      "@elizaos/plugin-lifeops-browser/*": [
         "./eliza/plugins/app-lifeops/src/*"
       ],
       "@elizaos/app-companion": [

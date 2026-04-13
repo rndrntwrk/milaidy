@@ -151,11 +151,6 @@ jobs:
           cd eliza/packages/shared
           bun run build
 
-      - name: Build selfcontrol workspace
-        run: |
-          cd eliza/plugins/plugin-selfcontrol
-          bun run build
-
       - name: Build agent workspace
         run: |
           cd eliza/packages/agent
@@ -164,9 +159,9 @@ jobs:
       # ── 8. Build bundled orchestrator workspace ─────────────────────────────
       # The Docker image imports the workspace package via its published
       # dist/index.js export, so clean checkouts must build that package first.
-      - name: Build bundled orchestrator workspace
+      - name: Build @elizaos/core (includes agent-orchestrator)
         run: |
-          cd eliza/plugins/plugin-agent-orchestrator
+          cd eliza/packages/typescript
           bun run build
 
       # ── 9. Build runtime (tsdown) ───────────────────────────────────────────
@@ -229,9 +224,9 @@ jobs:
       # ── 12. Override dockerignore to include pre-built dist/ ────────────────
       # The repo's .dockerignore excludes dist/ to keep developer Docker builds clean.
       # For CI, dist/ is pre-built by GHA so we need it in the build context.
-      # We use .dockerignore.ci (tracked in the repo) instead of the default.
+      # We use deploy/.dockerignore.ci (tracked in the repo) instead of the default.
       - name: Set up CI dockerignore
-        run: cp .dockerignore.ci .dockerignore
+        run: cp deploy/.dockerignore.ci .dockerignore
 
       # ── 13. Set up Docker Buildx ────────────────────────────────────────────
       - name: Set up Docker Buildx
@@ -262,7 +257,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: Dockerfile.ci
+          file: deploy/Dockerfile.ci
           platforms: linux/amd64
           push: ${{ github.event_name == 'push' || inputs.push_image != false }}
           tags: ${{ steps.meta.outputs.tags }}

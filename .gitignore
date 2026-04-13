@@ -28,7 +28,6 @@ eliza/packages/*/src/**/*.d.ts
 # alpha dist-tag doesn't ship the subpath exports field, so each
 # package that imports it needs its own per-package .d.ts.
 !eliza/packages/shared/src/elizaos-core-roles.d.ts
-!plugins/plugin-selfcontrol/src/elizaos-core-roles.d.ts
 eliza/packages/*/src/**/*.d.ts.map
 # Local ./eliza checkout — only @elizaos/core typescript sources had stray emit (see eliza/.gitignore)
 eliza/packages/typescript/src/**/*.d.ts
@@ -47,6 +46,8 @@ pnpm-lock.yaml
 
 # Docker overrides
 docker-compose.extra.yml
+# Copied from deploy/.dockerignore.ci for local `docker build` (context root)
+.dockerignore
 
 # UI test artifacts
 apps/ui/src/ui/__screenshots__/

@@ -18,15 +18,11 @@ const requiredPaths = [
   "scripts/ensure-vision-deps.mjs",
 ];
 const forbiddenPrefixes = ["dist/Milady.app/"];
-const orchestratorPackageName = "@elizaos/plugin-agent-orchestrator";
 const orchestratorBrokenLifecycleTarget = "./scripts/ensure-node-pty.mjs";
-const orchestratorWorkspaceDir = resolve(
+const coreTypescriptPackageJsonPath = resolve(
   "eliza",
-  "plugins",
-  "plugin-agent-orchestrator",
-);
-const orchestratorWorkspacePackageJsonPath = resolve(
-  orchestratorWorkspaceDir,
+  "packages",
+  "typescript",
   "package.json",
 );
 const autonomousServerPathCandidates = [
@@ -87,7 +83,7 @@ const requiredWorkflowSnippets = [
   "name: Download Whisper model artifact",
   "name: Seed Whisper model cache",
   "Stage desktop bundle inputs",
-  "node scripts/desktop-build.mjs stage --variant=base --build-whisper",
+  "node eliza/packages/app-core/scripts/desktop-build.mjs stage --variant=base --build-whisper",
   "Inject version.json into bundle (Windows)",
   "Inject version.json into bundle (macOS / Linux)",
   '"identifier":"com.miladyai.milady"',
@@ -147,7 +143,7 @@ const requiredWorkflowSnippets = [
   "name: Build patched Electrobun CLI for Windows",
   'node scripts/build-patched-electrobun-cli.mjs "$' +
     '{{ steps.resolve-electrobun.outputs.package-dir }}"',
-  "node scripts/desktop-build.mjs package --env=$" +
+  "node eliza/packages/app-core/scripts/desktop-build.mjs package --env=$" +
     "{{ needs.prepare.outputs.env }}",
   "MILADY_ELECTROBUN_NOTARIZE: 0",
   'MILADY_DISABLE_LOCAL_EMBEDDINGS: "1"',
@@ -651,56 +647,39 @@ function assertBundledAgentOrchestratorInstallFix() {
   const rootPackage = JSON.parse(
     readFileSync("package.json", "utf8"),
   ) as RootPackageJson;
-  if (!bundlesDependency(rootPackage, orchestratorPackageName)) {
+  if (!bundlesDependency(rootPackage, "@elizaos/core")) {
     console.error(
-      "release-check: package.json must bundle @elizaos/plugin-agent-orchestrator so packaged Milady includes the orchestrator implementation.",
+      "release-check: package.json must bundle @elizaos/core so packaged Milady includes the embedded agent-orchestrator implementation.",
     );
     process.exit(1);
   }
 
-  const orchestratorVersion =
-    rootPackage.dependencies?.[orchestratorPackageName];
-  const usingWorkspace = isWorkspaceSpecifier(orchestratorVersion);
-
-  if (!usingWorkspace && !isExactVersionSpecifier(orchestratorVersion)) {
+  if (!existsSync(coreTypescriptPackageJsonPath)) {
     console.error(
-      "release-check: package.json must either use workspace:* for the local plugin-agent-orchestrator submodule or pin @elizaos/plugin-agent-orchestrator to an exact published version.",
+      "release-check: eliza/packages/typescript/package.json is missing (embedded agent-orchestrator lives in @elizaos/core).",
     );
     process.exit(1);
   }
 
-  const orchestratorPackageJsonPath = usingWorkspace
-    ? orchestratorWorkspacePackageJsonPath
-    : resolve(
-        "node_modules",
-        "@elizaos",
-        "plugin-agent-orchestrator",
-        "package.json",
-      );
-  if (!existsSync(orchestratorPackageJsonPath)) {
-    console.error(
-      usingWorkspace
-        ? "release-check: eliza/plugins/plugin-agent-orchestrator/package.json is missing. Initialize the eliza submodule (and nested plugin submodules) before publishing."
-        : "release-check: node_modules/@elizaos/plugin-agent-orchestrator/package.json is missing. Run bun install before publishing.",
-    );
-    process.exit(1);
-  }
-
-  const orchestratorPackage = JSON.parse(
-    readFileSync(orchestratorPackageJsonPath, "utf8"),
+  const corePackage = JSON.parse(
+    readFileSync(coreTypescriptPackageJsonPath, "utf8"),
   ) as DependencyPackageJson;
+  if (!corePackage.dependencies?.["coding-agent-adapters"]) {
+    console.error(
+      "release-check: @elizaos/core must list coding-agent-adapters for the embedded agent-orchestrator.",
+    );
+    process.exit(1);
+  }
   if (
     hasLifecycleScriptReferencingMissingFile(
-      orchestratorPackage,
-      dirname(orchestratorPackageJsonPath),
+      corePackage,
+      dirname(coreTypescriptPackageJsonPath),
       "postinstall",
       orchestratorBrokenLifecycleTarget,
     )
   ) {
     console.error(
-      usingWorkspace
-        ? "release-check: the local plugin-agent-orchestrator workspace references scripts/ensure-node-pty.mjs, but that file is missing."
-        : "release-check: @elizaos/plugin-agent-orchestrator still references missing scripts/ensure-node-pty.mjs. The pnpm patch should remove this postinstall script.",
+      "release-check: @elizaos/core references scripts/ensure-node-pty.mjs in postinstall, but that file is missing under eliza/packages/typescript/scripts/.",
     );
     process.exit(1);
   }
@@ -709,17 +688,15 @@ function assertOrchestratorVersionPinned() {
   const rootPackage = JSON.parse(
     readFileSync("package.json", "utf8"),
   ) as RootPackageJson;
-  const version = rootPackage.dependencies?.[orchestratorPackageName];
+  const version = rootPackage.dependencies?.["@elizaos/core"];
   if (!version) {
-    console.error(
-      `release-check: ${orchestratorPackageName} is not in dependencies.`,
-    );
+    console.error("release-check: @elizaos/core is not in dependencies.");
     process.exit(1);
   }
   if (isWorkspaceSpecifier(version)) {
-    if (!existsSync(orchestratorWorkspacePackageJsonPath)) {
+    if (!existsSync(coreTypescriptPackageJsonPath)) {
       console.error(
-        `release-check: ${orchestratorPackageName} is configured as workspace:*, but eliza/plugins/plugin-agent-orchestrator/package.json is missing.`,
+        "release-check: @elizaos/core is configured as workspace:*, but eliza/packages/typescript/package.json is missing.",
       );
       process.exit(1);
     }
@@ -727,7 +704,7 @@ function assertOrchestratorVersionPinned() {
   }
   if (!isExactVersion(version)) {
     console.error(
-      `release-check: ${orchestratorPackageName} must either use workspace:* for the local submodule or be pinned to an exact version (for example "0.3.14"), but found "${version}".`,
+      `release-check: @elizaos/core must either use workspace:* for the local checkout or be pinned to an exact version, but found "${version}".`,
     );
     process.exit(1);
   }

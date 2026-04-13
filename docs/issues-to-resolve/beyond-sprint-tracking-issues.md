@@ -55,7 +55,7 @@ Records are keyed by `agent_id`, not by user or agent subject. This is the core 
 ### Current State
 - Detailed PRD gap analysis at `docs/plans/2026-04-06-agentic-games-apps-prd-gap-analysis.md` (1098 lines)
 - Supported apps: `@elizaos/app-2004scape`, `@hyperscape/plugin-hyperscape`, `@elizaos/app-babylon`, `@elizaos/app-defense-of-the-agents`
-- Some game plugins already in `plugins/` (plugin-2004scape, app-babylon, app-defense-of-the-agents, app-clawville)
+- Some game plugins already in `plugins/` (app-2004scape, app-babylon, app-defense-of-the-agents, app-clawville)
 - BabylonTerminal component exists at `packages/app-core/src/components/apps/BabylonTerminal.tsx`
 - GameView exists at `packages/app-core/src/components/apps/GameView.tsx`
 
@@ -81,7 +81,7 @@ Records are keyed by `agent_id`, not by user or agent subject. This is the core 
   - `packages/agent/src/services/browser-workspace.ts` — agent-side client
   - `packages/agent/src/api/browser-workspace-routes.ts` — API surface
   - `packages/app-core/src/components/pages/BrowserWorkspaceView.tsx` — UI
-  - `plugins/plugin-milady-browser` — plugin for browser + wallet actions
+  - `plugins/app-browser` (`@elizaos/app-browser`) — browser workspace + wallet actions
 
 ### Integration Work (follow-ups from doc)
 - Richer page introspection beyond raw JS eval/screenshot

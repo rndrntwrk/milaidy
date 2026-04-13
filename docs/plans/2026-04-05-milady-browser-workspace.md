@@ -32,7 +32,7 @@ Use a desktop-owned browser workspace instead:
   Web browser workspace UI with persistent iframe tabs.
 - `packages/app-core/src/components/browser/BrowserWorkspaceWalletPanel.tsx`
   Steward signing rail beside the browser workspace.
-- `plugins/plugin-milady-browser`
+- `plugins/app-browser` (`@elizaos/app-browser`)
   Local elizaOS plugin for browser and Steward wallet actions/providers.
 
 ## Follow-up work

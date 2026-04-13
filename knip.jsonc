@@ -26,7 +26,9 @@
         "scripts/**/*.js",
         "scripts/**/*.mjs",
         "scripts/**/*.ts",
-        "scripts/rt.sh",
+        "eliza/packages/app-core/scripts/rt.sh",
+        "eliza/packages/app-core/scripts/*.mjs",
+        "eliza/packages/app-core/scripts/lib/*.mjs",
         "tsdown.electrobun.config.ts",
         "tsdown.electrobun.config.test.ts",
         "vitest.live.config.ts"
@@ -59,9 +61,11 @@
         "src/ui/index.ts",
         "src/ui/components/ui/*.tsx",
         "src/ui/hooks/**/*.ts",
-        "src/ui/lib/*.ts"
+        "src/ui/lib/*.ts",
+        "scripts/*.mjs",
+        "scripts/lib/*.mjs"
       ],
-      "project": ["src/**/*.{ts,tsx}"],
+      "project": ["src/**/*.{ts,tsx}", "scripts/**/*.{mjs,js}"],
       "ignore": [
         "dist/**",
         "build/**",

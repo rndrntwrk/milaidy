@@ -16,9 +16,9 @@ import {
 } from "@elizaos/core";
 import { v4 as uuid } from "uuid";
 import { createTestRuntime } from "../helpers/pglite-runtime";
-import { PTYService } from "../../eliza/plugins/plugin-agent-orchestrator/src/services/pty-service.js";
-import { startCodingTaskAction } from "../../eliza/plugins/plugin-agent-orchestrator/src/actions/start-coding-task.js";
-import { sendToAgentAction } from "../../eliza/plugins/plugin-agent-orchestrator/src/actions/send-to-agent.js";
+import { PTYService } from "../../eliza/packages/typescript/src/agent-orchestrator/src/services/pty-service.ts";
+import { startCodingTaskAction } from "../../eliza/packages/typescript/src/agent-orchestrator/src/actions/start-coding-task.ts";
+import { sendToAgentAction } from "../../eliza/packages/typescript/src/agent-orchestrator/src/actions/send-to-agent.ts";
 
 type DiscordConfig = {
 	env?: {

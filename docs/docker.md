@@ -8,19 +8,19 @@ Milady produces two Docker images:
 
 | Image | Dockerfile | Published To | Purpose |
 |-------|-----------|-------------|---------|
-| **Agent** (main) | `Dockerfile.ci` | `ghcr.io/milady-ai/milady/agent:dev`, `:latest`, `:v{version}` | Full Milady runtime with API, UI, and all plugins |
+| **Agent** (main) | `deploy/Dockerfile.ci` | `ghcr.io/milady-ai/milady/agent:dev`, `:latest`, `:v{version}` | Full Milady runtime with API, UI, and all plugins |
 | **Cloud Agent** (child) | `deploy/Dockerfile.cloud-agent` | Internal (not pushed to registry by default) | Subordinate agent for Eliza Cloud orchestration |
 
-There is only one production Dockerfile: **`Dockerfile.ci`**. Both the main agent image and the cloud-app variant are built from it.
+There is only one production Dockerfile: **`deploy/Dockerfile.ci`**. Both the main agent image and the cloud-app variant are built from it.
 
 ## File Map
 
 ### Core (required)
 
 ```
-Dockerfile.ci                    # Canonical production image (slim Debian + Bun)
-.dockerignore                    # Default ignore for local dev builds
-.dockerignore.ci                 # CI-specific ignore (includes pre-built dist/)
+deploy/Dockerfile.ci             # Canonical production image (slim Debian + Bun)
+deploy/.dockerignore             # Default ignore for local dev builds
+deploy/.dockerignore.ci          # CI-specific ignore (pre-built dist/ in context)
 scripts/docker-entrypoint.sh     # Container entrypoint (syncs PORT env)
 scripts/docker-ci-smoke.sh       # CI smoke test (builds + boots + health probe)
 scripts/docker-contract.test.ts  # Contract tests (base image, CMD, ports, labels)
@@ -63,8 +63,8 @@ bash scripts/build-image.sh --tag milady:local
 
 # Manual build
 bun run build                                    # Build runtime + UI
-cp .dockerignore.ci .dockerignore                # Use CI ignore (includes dist/)
-docker build -f Dockerfile.ci -t milady:local .  # Build image
+cp deploy/.dockerignore.ci .dockerignore         # CI ignore (context is repo root)
+docker build -f deploy/Dockerfile.ci -t milady:local .  # Build image
 ```
 
 ## How CI Builds Work
@@ -74,10 +74,10 @@ All three workflows follow the same pattern:
 1. `bun install --ignore-scripts` (fast, no native deps)
 2. `bun run postinstall` (patches broken upstream packages)
 3. Build runtime (`tsdown`), UI (`vite`), Capacitor plugins
-4. Copy `.dockerignore.ci` over `.dockerignore`
-5. `docker build -f Dockerfile.ci`
+4. Copy `deploy/.dockerignore.ci` to `.dockerignore` at the **build context root** (repo root)
+5. `docker build -f deploy/Dockerfile.ci`
 
-The `.dockerignore.ci` is different from the default `.dockerignore` because CI pre-builds `dist/` artifacts that need to be included in the Docker context.
+`deploy/.dockerignore.ci` is the stricter ignore list used for CI and local production builds; `deploy/.dockerignore` is the shorter default. Docker only reads `.dockerignore` from the context directory (`.`), so CI copies the CI variant into place before `docker build`.
 
 ## When Each Workflow Runs
 

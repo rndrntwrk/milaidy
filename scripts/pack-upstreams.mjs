@@ -17,8 +17,7 @@ const ARTIFACTS_DIR = path.join(ROOT, "artifacts");
 
 // Target packages to pack (MVP for Phase 5)
 const TARGETS = [
-  path.join(ROOT, "eliza", "packages", "core"), // @elizaos/core
-  path.join(ROOT, "plugins", "plugin-agent-orchestrator"), // @elizaos/plugin-agent-orchestrator
+  path.join(ROOT, "eliza", "packages", "typescript"), // @elizaos/core (includes embedded agent-orchestrator)
 ];
 
 function runCommand(command, args, cwd) {
