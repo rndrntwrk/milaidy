@@ -22,6 +22,7 @@ import type { PropsWithChildren, ReactElement } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { client } from "../../../../api";
 import { isApiError } from "../../../../api/client-types-core";
+import { useLifeOpsAppState } from "../../../../hooks";
 import { useApp } from "../../../../state";
 import { EmptyWidgetState, WidgetSection } from "../shared";
 import type {
@@ -333,6 +334,27 @@ function GoalReviewPanel({ review }: { review: LifeOpsGoalReview }) {
   return (
     <DetailPanel title="Goal review">
       <div>{review.summary.explanation}</div>
+      {typeof review.summary.progressScore === "number" ? (
+        <div>
+          <span className="font-semibold text-txt">Progress signal:</span>{" "}
+          {Math.round(review.summary.progressScore * 100)}%
+          {typeof review.summary.confidence === "number"
+            ? ` at ${Math.round(review.summary.confidence * 100)}% confidence`
+            : ""}
+        </div>
+      ) : null}
+      {review.summary.groundingSummary ? (
+        <div>
+          <span className="font-semibold text-txt">Evaluation contract:</span>{" "}
+          {review.summary.groundingSummary}
+        </div>
+      ) : null}
+      {review.summary.evidenceSummary ? (
+        <div>
+          <span className="font-semibold text-txt">Evidence used:</span>{" "}
+          {review.summary.evidenceSummary}
+        </div>
+      ) : null}
       <div>
         <span className="font-semibold text-txt">Support structure:</span>{" "}
         {review.summary.linkedDefinitionCount} linked{" "}
@@ -350,6 +372,13 @@ function GoalReviewPanel({ review }: { review: LifeOpsGoalReview }) {
         <div>
           <span className="font-semibold text-txt">Suggested next steps:</span>{" "}
           {review.suggestions.map((suggestion) => suggestion.title).join(" • ")}
+        </div>
+      ) : null}
+      {review.summary.missingEvidence &&
+      review.summary.missingEvidence.length > 0 ? (
+        <div>
+          <span className="font-semibold text-txt">Missing evidence:</span>{" "}
+          {review.summary.missingEvidence.join(" • ")}
         </div>
       ) : null}
       {review.summary.lastActivityAt ? (
@@ -546,7 +575,16 @@ function GoalRow({
   const cadence = isRecord(goal.cadence) ? goal.cadence : null;
   const cadenceText =
     cadence && typeof cadence.kind === "string" ? cadence.kind : null;
-  const description = goal.description.trim();
+  const goalMetadata = isRecord(goal.metadata) ? goal.metadata : null;
+  const grounding =
+    goalMetadata && isRecord(goalMetadata.goalGrounding)
+      ? (goalMetadata.goalGrounding as Record<string, unknown>)
+      : null;
+  const groundingSummary =
+    grounding && typeof grounding.summary === "string"
+      ? grounding.summary
+      : null;
+  const description = goal.description.trim() || groundingSummary || "";
 
   return (
     <div className="rounded-lg border border-border/50 bg-bg/70 p-3">
@@ -833,6 +871,7 @@ function AgentOpsSection({
 }
 
 export function LifeOpsOverviewSidebarWidget(_props: ChatSidebarWidgetProps) {
+  const lifeOpsApp = useLifeOpsAppState();
   const { workbench, agentStatus, backendConnection, startupPhase } = useApp();
   const [overview, setOverview] = useState<LifeOpsOverview | null>(
     workbench?.lifeops ?? null,
@@ -852,7 +891,7 @@ export function LifeOpsOverviewSidebarWidget(_props: ChatSidebarWidgetProps) {
     Record<string, LifeOpsGoalReview>
   >({});
   const runtimeReady = isLifeOpsRuntimeReady({
-    startupPhase,
+    startupPhase: lifeOpsApp.enabled ? startupPhase : null,
     agentState: agentStatus?.state ?? null,
     backendState: backendConnection?.state ?? null,
   });
@@ -1084,6 +1123,10 @@ export function LifeOpsOverviewSidebarWidget(_props: ChatSidebarWidgetProps) {
     () => bucketOccurrences(overview?.owner.occurrences ?? [], new Date()),
     [overview?.owner.occurrences],
   );
+
+  if (lifeOpsApp.loading || !lifeOpsApp.enabled) {
+    return null;
+  }
 
   return (
     <WidgetSection

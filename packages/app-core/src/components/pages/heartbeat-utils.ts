@@ -213,7 +213,7 @@ export function parsePositiveInteger(value: string): number | undefined {
 
 export function scheduleLabel(trigger: TriggerSummary, t: TranslateFn): string {
   if (trigger.triggerType === "interval") {
-    return `${t("heartbeatsview.every")} ${formatDurationMs(trigger.intervalMs)}`;
+    return `${t("heartbeatsview.every")} ${formatDurationMs(trigger.intervalMs, { t })}`;
   }
   if (trigger.triggerType === "once") {
     return trigger.scheduledAtIso

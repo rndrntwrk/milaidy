@@ -41,11 +41,17 @@ import {
   getZonedDateParts,
 } from "../lifeops/time.js";
 import { gmailAction } from "./gmail.js";
+import { renderGroundedActionReply } from "./grounded-action-reply.js";
 import {
   type ExtractedLifeMissingField,
   type ExtractedLifeOperation,
   extractLifeOperationWithLlm,
 } from "./life.extractor.js";
+import {
+  extractGoalCreatePlanWithLlm,
+  extractGoalUpdatePlanWithLlm,
+  mergeGoalMetadataWithGrounding,
+} from "./life-goal-extractor.js";
 import {
   extractReminderIntensityWithLlm,
   extractTaskCreatePlanWithLlm,
@@ -220,167 +226,6 @@ type LifeParams = {
 // CADENCE_HINT_RE removed — cadence detection uses i18n LIFE_CADENCE_TERMS
 const GENERIC_DERIVED_TITLE_RE =
   /^(?:new\s+)?(?:habit|routine|task|goal|life goal|thing|item|something|anything|stuff|plan|reminder|todo|to do|achieve|achieve a|achieve an)$/i;
-const DERIVED_TITLE_STOPWORDS = new Set([
-  "a",
-  "about",
-  "actually",
-  "add",
-  "am",
-  "an",
-  "and",
-  "anything",
-  "are",
-  "as",
-  "at",
-  "be",
-  "been",
-  "being",
-  "by",
-  "can",
-  "called",
-  "could",
-  "create",
-  "did",
-  "do",
-  "does",
-  "doing",
-  "done",
-  "for",
-  "goal",
-  "goals",
-  "had",
-  "happen",
-  "how",
-  "happens",
-  "has",
-  "have",
-  "help",
-  "habit",
-  "i",
-  "im",
-  "i'm",
-  "item",
-  "its",
-  "it",
-  "just",
-  "life",
-  "make",
-  "manage",
-  "me",
-  "mine",
-  "more",
-  "my",
-  "need",
-  "new",
-  "named",
-  "ok",
-  "okay",
-  "of",
-  "on",
-  "ops",
-  "our",
-  "ours",
-  "plan",
-  "please",
-  "really",
-  "reminder",
-  "routine",
-  "save",
-  "set",
-  "setup",
-  "something",
-  "start",
-  "stuff",
-  "task",
-  "that",
-  "the",
-  "them",
-  "then",
-  "thing",
-  "this",
-  "to",
-  "todo",
-  "titled",
-  "track",
-  "uh",
-  "uhh",
-  "um",
-  "umm",
-  "until",
-  "up",
-  "want",
-  "we",
-  "were",
-  "with",
-  "would",
-  "yeah",
-  "you",
-  "your",
-  "yep",
-  "yup",
-  "lol",
-  "lmao",
-]);
-const DERIVED_TITLE_CADENCE_TOKENS = new Set([
-  "afternoon",
-  "afternoons",
-  "breakfast",
-  "daily",
-  "day",
-  "days",
-  "dinner",
-  "each",
-  "evening",
-  "evenings",
-  "every",
-  "hour",
-  "hours",
-  "lunch",
-  "minute",
-  "minutes",
-  "monthly",
-  "morning",
-  "mornings",
-  "night",
-  "nights",
-  "once",
-  "per",
-  "throughout",
-  "time",
-  "times",
-  "today",
-  "tomorrow",
-  "twice",
-  "week",
-  "weeks",
-  "weekly",
-  "with",
-  "x",
-  "year",
-  "years",
-]);
-const GENERIC_DERIVED_TOKENS = new Set([
-  "achieve",
-  "achieving",
-  "better",
-  "goal",
-  "habit",
-  "improve",
-  "item",
-  "plan",
-  "reminder",
-  "routine",
-  "something",
-  "stuff",
-  "task",
-  "thing",
-  "todo",
-]);
-type DerivedIntentSegment = {
-  hasQuantity: boolean;
-  text: string;
-};
-
 /** Maximum age (ms) for a deferred draft before it expires. */
 const DRAFT_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
 /** Maximum conversation turns before a deferred draft expires. */
@@ -427,6 +272,7 @@ type DeferredLifeGoalDraft = {
   request: {
     cadence?: CreateLifeOpsGoalRequest["cadence"];
     description?: string;
+    metadata?: CreateLifeOpsGoalRequest["metadata"];
     successCriteria?: CreateLifeOpsGoalRequest["successCriteria"];
     supportStrategy?: CreateLifeOpsGoalRequest["supportStrategy"];
     title: string;
@@ -435,6 +281,10 @@ type DeferredLifeGoalDraft = {
 
 type DeferredLifeDraft = DeferredLifeDefinitionDraft | DeferredLifeGoalDraft;
 type DeferredLifeDraftReuseMode = "confirm" | "edit";
+type DeferredLifeDraftFollowupMode =
+  | DeferredLifeDraftReuseMode
+  | "cancel"
+  | null;
 
 // ── Intent classifier ─────────────────────────────────
 
@@ -721,6 +571,10 @@ function coerceDeferredLifeDraft(value: unknown): DeferredLifeDraft | null {
         description:
           typeof request.description === "string"
             ? request.description
+            : undefined,
+        metadata:
+          request.metadata && typeof request.metadata === "object"
+            ? (request.metadata as CreateLifeOpsGoalRequest["metadata"])
             : undefined,
         successCriteria:
           request.successCriteria as CreateLifeOpsGoalRequest["successCriteria"],
@@ -1021,6 +875,41 @@ function looksLikeDeferredLifeConfirmation(text: string): boolean {
   return textMatchesAnyTerm(normalized, LIFE_AFFIRMATIVE_TERMS);
 }
 
+function normalizeDeferredLifeDraftReference(
+  value: string | undefined,
+): string {
+  return normalizeIntentText(value ?? "")
+    .replace(
+      /\b(the|that|this|a|an|my|routine|habit|task|goal|reminder)\b/g,
+      " ",
+    )
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function matchesDeferredLifeDraftTitle(
+  value: string | undefined,
+  draft: DeferredLifeDraft | null,
+): boolean {
+  if (!draft) {
+    return false;
+  }
+
+  const normalizedValue = normalizeDeferredLifeDraftReference(value);
+  const normalizedDraftTitle = normalizeDeferredLifeDraftReference(
+    draft.request.title,
+  );
+  if (!normalizedValue || !normalizedDraftTitle) {
+    return false;
+  }
+
+  return (
+    normalizedValue === normalizedDraftTitle ||
+    normalizedValue.includes(normalizedDraftTitle) ||
+    normalizedDraftTitle.includes(normalizedValue)
+  );
+}
+
 function deferredLifeDraftExpiryReason(args: {
   draft: DeferredLifeDraft | null;
   turnsSinceDraft?: number;
@@ -1052,6 +941,86 @@ function looksLikeDeferredLifeDraftEdit(text: string): boolean {
   return hasCadenceHint(normalized) || /\b\d+\b/.test(normalized);
 }
 
+async function extractDeferredLifeDraftFollowupWithLlm(args: {
+  runtime: IAgentRuntime;
+  message: Memory;
+  state: State | undefined;
+  currentText: string;
+  draft: DeferredLifeDraft;
+}): Promise<DeferredLifeDraftFollowupMode> {
+  if (typeof args.runtime.useModel !== "function") {
+    return null;
+  }
+
+  const recentConversation = await recentConversationTexts({
+    runtime: args.runtime,
+    message: args.message,
+    state: args.state,
+    limit: 12,
+  });
+  const prompt = [
+    "Decide how the assistant should interpret the user's follow-up to a previewed LifeOps draft that has not been saved yet.",
+    "Use the current message, the draft summary, and recent conversation.",
+    "The user may speak in any language.",
+    "",
+    "Return ONLY valid JSON with exactly this shape:",
+    '{"mode":"confirm"|"edit"|"cancel"|"none"}',
+    "",
+    "Choose confirm when the user clearly approves saving the current draft now.",
+    "Choose edit when the user wants to change the draft or continue specifying it before saving.",
+    "Choose cancel when the user says not to save it, never mind, not yet, hold off, or equivalent.",
+    "Choose none when the follow-up is unrelated or too ambiguous to attach to the draft.",
+    "",
+    "Previewed draft:",
+    stringifyDeferredLifeDraftForPrompt(args.draft),
+    "",
+    `Current user message: ${JSON.stringify(args.currentText)}`,
+    `Recent conversation: ${JSON.stringify(recentConversation.join("\n"))}`,
+  ].join("\n");
+
+  try {
+    const result = await args.runtime.useModel(ModelType.TEXT_LARGE, {
+      prompt,
+    });
+    const raw = typeof result === "string" ? result : "";
+    const parsed = parseJSONObjectFromText(raw);
+    const mode =
+      parsed && typeof parsed.mode === "string"
+        ? parsed.mode.trim().toLowerCase()
+        : "";
+    switch (mode) {
+      case "confirm":
+      case "edit":
+      case "cancel":
+        return mode;
+      default:
+        return null;
+    }
+  } catch {
+    return null;
+  }
+}
+
+function stringifyDeferredLifeDraftForPrompt(draft: DeferredLifeDraft): string {
+  if (draft.operation === "create_definition") {
+    return JSON.stringify({
+      operation: draft.operation,
+      title: draft.request.title,
+      kind: draft.request.kind,
+      cadence: draft.request.cadence,
+      timezone: draft.request.timezone ?? null,
+      description: draft.request.description ?? null,
+    });
+  }
+
+  return JSON.stringify({
+    operation: draft.operation,
+    title: draft.request.title,
+    cadence: draft.request.cadence ?? null,
+    description: draft.request.description ?? null,
+  });
+}
+
 function resolveDeferredLifeDraftReuseMode(args: {
   currentText: string;
   details: Record<string, unknown> | undefined;
@@ -1060,6 +1029,7 @@ function resolveDeferredLifeDraftReuseMode(args: {
   paramsIntent: string | undefined;
   target: string | undefined;
   title: string | undefined;
+  llmMode?: DeferredLifeDraftFollowupMode;
   /** Number of messages since the draft was stored. */
   turnsSinceDraft?: number;
 }): DeferredLifeDraftReuseMode | null {
@@ -1091,6 +1061,21 @@ function resolveDeferredLifeDraftReuseMode(args: {
     return "confirm";
   }
 
+  const explicitReferenceMatchesDraft =
+    matchesDeferredLifeDraftTitle(args.title, args.draft) ||
+    matchesDeferredLifeDraftTitle(args.target, args.draft);
+  if (looksLikeDeferredLifeConfirmation(args.currentText)) {
+    if (
+      args.explicitAction &&
+      ACTION_TO_OPERATION[args.explicitAction] !== args.draft.operation
+    ) {
+      return null;
+    }
+    if (explicitReferenceMatchesDraft) {
+      return "confirm";
+    }
+  }
+
   const normalizedCurrentText = normalizeIntentText(args.currentText);
   const normalizedParamsIntent =
     typeof args.paramsIntent === "string" && args.paramsIntent.trim().length > 0
@@ -1109,6 +1094,10 @@ function resolveDeferredLifeDraftReuseMode(args: {
     ACTION_TO_OPERATION[args.explicitAction] !== args.draft.operation
   ) {
     return null;
+  }
+
+  if (args.llmMode === "confirm" || args.llmMode === "edit") {
+    return args.llmMode;
   }
 
   if (args.title || args.target) {
@@ -1447,6 +1436,7 @@ type LifeReplyScenario =
   | "set_reminder_preference"
   | "captured_phone"
   | "configured_escalation"
+  | "overview"
   | "service_error";
 
 function extractNaturalTimePhrase(intent: string): string | null {
@@ -1533,24 +1523,6 @@ function buildRuleBasedLifeReply(args: {
   return args.fallback;
 }
 
-function normalizeLifeReplyText(raw: string): string {
-  return raw
-    .trim()
-    .replace(/^["'`]+|["'`]+$/g, "")
-    .trim();
-}
-
-function looksLikeStructuredLifeReply(raw: string): boolean {
-  const trimmed = raw.trim();
-  if (!trimmed) {
-    return true;
-  }
-  if (parseJSONObjectFromText(trimmed)) {
-    return true;
-  }
-  return /^(?:operation|confidence|shouldAct|missing)\s*:/m.test(trimmed);
-}
-
 async function renderLifeActionReply(args: {
   runtime: IAgentRuntime;
   message: Memory;
@@ -1567,48 +1539,24 @@ async function renderLifeActionReply(args: {
     fallback,
     context,
   });
-  if (typeof runtime.useModel !== "function") {
-    return naturalFallback;
-  }
-
-  const recentConversation = await recentConversationTexts({
+  return renderGroundedActionReply({
     runtime,
     message,
     state,
-    limit: 12,
+    intent,
+    domain: "lifeops",
+    scenario,
+    fallback: naturalFallback,
+    context,
+    preferCharacterVoice: true,
+    additionalRules: [
+      "Mirror the user's phrasing for time and date when possible.",
+      "Prefer phrases like tomorrow morning, every night, 7 am, or the user's own wording over robotic schedule language.",
+      "Never surface raw ISO timestamps unless the user used raw ISO timestamps.",
+      "If this is a preview, make clear it is not saved yet and the user can confirm or change it naturally.",
+      "If this is reply-only, do not pretend you saved or changed anything.",
+    ],
   });
-  const prompt = [
-    "Write the assistant's user-facing reply for a LifeOps / todo interaction.",
-    "Be natural, brief, and grounded in the provided context.",
-    "Mirror the user's tone lightly without parodying them.",
-    "Mirror the user's phrasing for time and date when possible.",
-    "Prefer phrases like 'tomorrow morning', 'every night', '7 am', or the user's own wording over robotic schedule language.",
-    "Never surface raw ISO timestamps unless the user used raw ISO timestamps.",
-    "Never mention internal schema words like create_definition, cadence, times_per_day, windowPolicy, or metadata.",
-    "If asking a clarifying question, ask only for the missing information.",
-    "If this is a preview, make clear it is not saved yet and the user can confirm or change it, but do that naturally rather than with stock canned phrasing.",
-    "If this is reply-only, do not pretend you saved or changed anything.",
-    "Return only the reply text.",
-    "",
-    `Scenario: ${scenario}`,
-    `Current user message: ${JSON.stringify(messageText(message))}`,
-    `Resolved intent: ${JSON.stringify(intent)}`,
-    `Recent conversation: ${JSON.stringify(recentConversation.join("\n"))}`,
-    `Structured context: ${JSON.stringify(context ?? {})}`,
-    `Canonical fallback: ${JSON.stringify(fallback)}`,
-  ].join("\n");
-
-  try {
-    const result = await runtime.useModel(ModelType.TEXT_LARGE, { prompt });
-    const raw = typeof result === "string" ? result : "";
-    if (looksLikeStructuredLifeReply(raw)) {
-      return naturalFallback;
-    }
-    const text = normalizeLifeReplyText(raw);
-    return text || naturalFallback;
-  } catch {
-    return naturalFallback;
-  }
 }
 
 function buildLifeClarificationFallback(args: {
@@ -2625,139 +2573,6 @@ function buildDefaultReminderPlan(
   };
 }
 
-function sentenceCase(value: string): string {
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return "";
-  }
-  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
-}
-
-function titleCase(value: string): string {
-  return value
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
-}
-
-function trimWords(value: string, maxWords: number): string {
-  const words = value.trim().split(/\s+/).filter(Boolean);
-  return words.slice(0, maxWords).join(" ");
-}
-
-function extractQuotedTitle(intent: string): string | null {
-  const matches = [...intent.matchAll(/["“]([^"”]+)["”]/g)];
-  const title = matches[matches.length - 1]?.[1]?.trim() ?? "";
-  return title.length > 0 ? sentenceCase(title) : null;
-}
-
-function tokenizeDerivedSegment(raw: string): string[] {
-  const tokens = raw.match(/[a-z0-9][a-z0-9'-]*/gi) ?? [];
-  return tokens
-    .map((token) => token.trim())
-    .filter((token) => token.length > 0)
-    .filter((token) => {
-      const lower = token.toLowerCase();
-      return (
-        !DERIVED_TITLE_STOPWORDS.has(lower) &&
-        !DERIVED_TITLE_CADENCE_TOKENS.has(lower)
-      );
-    });
-}
-
-function isGenericDerivedSegment(tokens: string[]): boolean {
-  if (tokens.length === 0) {
-    return true;
-  }
-  const normalized = tokens.join(" ").toLowerCase();
-  if (GENERIC_DERIVED_TITLE_RE.test(normalized)) {
-    return true;
-  }
-  return tokens.every((token) =>
-    GENERIC_DERIVED_TOKENS.has(token.toLowerCase()),
-  );
-}
-
-function isAuxiliaryDerivedSegment(raw: string): boolean {
-  const lower = raw.toLowerCase();
-  return /\b(?:block|blocks|blocked|blocking|lock|locks|locked|locking|unlock|unlocks|unlocked|unlocking|until i|do not just|don't just)\b/.test(
-    lower,
-  );
-}
-
-function normalizeDerivedSegment(raw: string): string {
-  if (isAuxiliaryDerivedSegment(raw)) {
-    return "";
-  }
-  const tokens = tokenizeDerivedSegment(raw);
-  if (
-    !tokens.some((token) => /[a-z]/i.test(token)) ||
-    isGenericDerivedSegment(tokens)
-  ) {
-    return "";
-  }
-  return trimWords(tokens.join(" ").toLowerCase(), 6);
-}
-
-function deriveIntentSegments(intent: string): DerivedIntentSegment[] {
-  const sanitizedIntent = intent
-    .replace(/\[\s*language instruction:[^\]]*\]/gi, " ")
-    .replace(/\[\s*system(?: note| instruction)?:[^\]]*\]/gi, " ");
-  const rawSegments = sanitizedIntent
-    .split(/[.!?]/)
-    .flatMap((part) => part.split(/\s+(?:and|&)\s+|,|\s*\+\s*/i))
-    .map((part) => part.trim())
-    .filter((part) => part.length > 0);
-
-  const segments: DerivedIntentSegment[] = [];
-  const seen = new Set<string>();
-  let previousQuantity: string | null = null;
-  for (const raw of rawSegments) {
-    const quantityMatch = raw.match(/\b(\d+)\b/);
-    let text = normalizeDerivedSegment(raw);
-    if (
-      text &&
-      !/\b\d+\b/.test(text) &&
-      previousQuantity &&
-      tokenizeDerivedSegment(raw).length <= 3
-    ) {
-      text = `${previousQuantity} ${text}`;
-    }
-    if (!text || seen.has(text)) {
-      if (quantityMatch?.[1]) {
-        previousQuantity = quantityMatch[1];
-      }
-      continue;
-    }
-    seen.add(text);
-    segments.push({
-      text,
-      hasQuantity: /\b\d+\b/.test(text) || /\b\d+\b/.test(raw),
-    });
-    if (quantityMatch?.[1]) {
-      previousQuantity = quantityMatch[1];
-    }
-  }
-  return segments;
-}
-
-function deriveGoalTitle(intent: string): string | null {
-  const explicitTitle = extractQuotedTitle(intent);
-  if (explicitTitle) {
-    return explicitTitle;
-  }
-
-  const segments = deriveIntentSegments(intent).sort(
-    (left, right) => right.text.length - left.text.length,
-  );
-  if (segments.length === 0) {
-    return null;
-  }
-  return titleCase(trimWords(segments[0].text, 8));
-}
-
 function scoreDefinitionTitleQuality(value: string | null | undefined): number {
   const normalized = normalizeTitle(value ?? "");
   if (!normalized) {
@@ -2965,6 +2780,42 @@ export const lifeAction: Action & {
         }),
       };
     }
+    const deferredDraftFollowupMode = deferredDraft
+      ? await extractDeferredLifeDraftFollowupWithLlm({
+          runtime,
+          message,
+          state,
+          currentText,
+          draft: deferredDraft,
+        })
+      : null;
+    if (deferredDraftFollowupMode === "cancel") {
+      const fallback = "Okay, I won't save it yet.";
+      return {
+        success: true,
+        text: await renderLifeActionReply({
+          runtime,
+          message,
+          state,
+          intent: currentText,
+          scenario: "reply_only",
+          fallback,
+          context: {
+            reason: "draft_cancelled",
+            draft: deferredDraft
+              ? {
+                  operation: deferredDraft.operation,
+                  title: deferredDraft.request.title,
+                }
+              : null,
+          },
+        }),
+        data: {
+          actionName: "LIFE",
+          noop: true,
+        },
+      };
+    }
     const deferredDraftReuseMode = resolveDeferredLifeDraftReuseMode({
       currentText,
       details,
@@ -2973,6 +2824,7 @@ export const lifeAction: Action & {
       paramsIntent: params.intent,
       target: params.target,
       title: params.title,
+      llmMode: deferredDraftFollowupMode,
       turnsSinceDraft,
     });
     const reuseDeferredDraft = deferredDraftReuseMode !== null;
@@ -3465,9 +3317,26 @@ export const lifeAction: Action & {
       if (operation === "query_overview") {
         const overview = await service.getOverview();
         const userQuery = messageText(message) || intent || "overview";
+        const fallback = formatOverviewForQuery(overview, userQuery);
         return {
           success: true,
-          text: formatOverviewForQuery(overview, userQuery),
+          text: await renderLifeActionReply({
+            runtime,
+            message,
+            state,
+            intent: userQuery,
+            scenario: "overview",
+            fallback,
+            context: {
+              summary: overview.owner.summary,
+              occurrenceTitles: overview.owner.occurrences
+                .slice(0, 6)
+                .map((occurrence) => occurrence.title),
+              goalTitles: overview.owner.goals
+                .slice(0, 3)
+                .map((goal) => goal.title),
+            },
+          }),
           data: toActionData(overview),
         };
       }
@@ -3483,10 +3352,107 @@ export const lifeAction: Action & {
           reuseDeferredDraft && deferredDraft?.operation === "create_goal"
             ? deferredDraft
             : null;
-        const title =
-          deferredGoalDraft?.request.title ??
-          params.title ??
-          deriveGoalTitle(intent);
+        const editingDeferredGoalDraft =
+          deferredDraftReuseMode === "edit" &&
+          deferredGoalDraft?.operation === "create_goal";
+        const explicitDescription = detailString(details, "description");
+        const explicitCadence = normalizeCadenceDetail(
+          detailObject(details, "cadence"),
+        ) as CreateLifeOpsGoalRequest["cadence"];
+        const explicitSuccessCriteria = detailObject(
+          details,
+          "successCriteria",
+        ) as CreateLifeOpsGoalRequest["successCriteria"] | undefined;
+        const explicitSupportStrategy = detailObject(
+          details,
+          "supportStrategy",
+        ) as CreateLifeOpsGoalRequest["supportStrategy"] | undefined;
+        const explicitMetadata = detailObject(details, "metadata") as
+          | CreateLifeOpsGoalRequest["metadata"]
+          | undefined;
+        let title: string | null = editingDeferredGoalDraft
+          ? (params.title ?? deferredGoalDraft?.request.title ?? null)
+          : (deferredGoalDraft?.request.title ?? params.title ?? null);
+        let description: string | undefined = editingDeferredGoalDraft
+          ? (explicitDescription ?? deferredGoalDraft?.request.description)
+          : (deferredGoalDraft?.request.description ?? explicitDescription);
+        let cadence = editingDeferredGoalDraft
+          ? (explicitCadence ?? deferredGoalDraft?.request.cadence)
+          : (deferredGoalDraft?.request.cadence ?? explicitCadence);
+        let successCriteria = editingDeferredGoalDraft
+          ? (explicitSuccessCriteria ??
+            deferredGoalDraft?.request.successCriteria)
+          : (deferredGoalDraft?.request.successCriteria ??
+            explicitSuccessCriteria);
+        let supportStrategy = editingDeferredGoalDraft
+          ? (explicitSupportStrategy ??
+            deferredGoalDraft?.request.supportStrategy)
+          : (deferredGoalDraft?.request.supportStrategy ??
+            explicitSupportStrategy);
+        let goalMetadata: CreateLifeOpsGoalRequest["metadata"] | undefined =
+          editingDeferredGoalDraft
+            ? (explicitMetadata ?? deferredGoalDraft?.request.metadata)
+            : (deferredGoalDraft?.request.metadata ?? explicitMetadata);
+        let evaluationSummary: string | null = null;
+
+        if (!deferredGoalDraft || editingDeferredGoalDraft) {
+          const llmPlan = await extractGoalCreatePlanWithLlm({
+            runtime,
+            intent,
+            state: state ?? undefined,
+            message: message ?? undefined,
+          });
+          if (!title && llmPlan.title) {
+            title = llmPlan.title;
+          }
+          if (!description && llmPlan.description) {
+            description = llmPlan.description;
+          }
+          if (!cadence && llmPlan.cadence) {
+            cadence = llmPlan.cadence;
+          }
+          if (!successCriteria && llmPlan.successCriteria) {
+            successCriteria = llmPlan.successCriteria;
+          }
+          if (!supportStrategy && llmPlan.supportStrategy) {
+            supportStrategy = llmPlan.supportStrategy;
+          }
+          evaluationSummary = llmPlan.evaluationSummary;
+          if (
+            llmPlan.groundingState === "grounded" &&
+            llmPlan.successCriteria &&
+            title
+          ) {
+            goalMetadata = mergeGoalMetadataWithGrounding({
+              metadata: {
+                ...(goalMetadata ?? {}),
+                source: "chat",
+                originalIntent: intent,
+              },
+              nowIso: new Date().toISOString(),
+              plan: llmPlan,
+            });
+          }
+          if (
+            llmPlan.groundingState !== "grounded" ||
+            !title ||
+            !successCriteria ||
+            !supportStrategy
+          ) {
+            return {
+              success: true,
+              text:
+                llmPlan.response ??
+                "What would count as success for that goal, and over what time window?",
+              data: {
+                actionName: "LIFE",
+                noop: true,
+                suggestedOperation: "create_goal",
+              },
+            };
+          }
+        }
+
         if (!title)
           return {
             success: false,
@@ -3508,12 +3474,11 @@ export const lifeAction: Action & {
           operation: "create_goal",
           createdAt: Date.now(),
           request: {
-            cadence: normalizeCadenceDetail(
-              detailObject(details, "cadence"),
-            ) as CreateLifeOpsGoalRequest["cadence"],
-            description: detailString(details, "description"),
-            successCriteria: detailObject(details, "successCriteria"),
-            supportStrategy: detailObject(details, "supportStrategy"),
+            cadence,
+            description,
+            metadata: goalMetadata,
+            successCriteria,
+            supportStrategy,
             title,
           },
         };
@@ -3526,7 +3491,9 @@ export const lifeAction: Action & {
                 : undefined,
           })
         ) {
-          const fallback = `I can save this goal as "${goalDraft.request.title}". Confirm and I'll save it, or tell me what to change.`;
+          const fallback = evaluationSummary
+            ? `I can save "${goalDraft.request.title}" as a goal. Success looks like this: ${evaluationSummary} Confirm and I'll save it, or tell me what to change.`
+            : `I can save this goal as "${goalDraft.request.title}". Confirm and I'll save it, or tell me what to change.`;
           return {
             success: true,
             text: await renderLifeActionReply({
@@ -3538,6 +3505,7 @@ export const lifeAction: Action & {
               fallback,
               context: {
                 draft: goalDraft.request,
+                groundingSummary: evaluationSummary,
               },
             }),
             data: {
@@ -3558,6 +3526,7 @@ export const lifeAction: Action & {
           supportStrategy: goalDraft.request.supportStrategy,
           successCriteria: goalDraft.request.successCriteria,
           metadata: {
+            ...(goalDraft.request.metadata ?? {}),
             source: "chat",
             originalIntent: goalDraft.intent || goalDraft.request.title,
           },
@@ -3687,9 +3656,76 @@ export const lifeAction: Action & {
           ownership,
           title: params.title !== target.goal.title ? params.title : undefined,
           description: detailString(details, "description"),
+          cadence: normalizeCadenceDetail(
+            detailObject(details, "cadence"),
+          ) as unknown as UpdateLifeOpsGoalRequest["cadence"],
           supportStrategy: detailObject(details, "supportStrategy"),
           successCriteria: detailObject(details, "successCriteria"),
         };
+        const hasExplicitGoalChanges =
+          request.title !== undefined ||
+          request.description !== undefined ||
+          request.cadence !== undefined ||
+          request.supportStrategy !== undefined ||
+          request.successCriteria !== undefined;
+        if (!hasExplicitGoalChanges) {
+          const llmPlan = await extractGoalUpdatePlanWithLlm({
+            runtime,
+            currentGoal: target.goal,
+            intent,
+            state: state ?? undefined,
+            message: message ?? undefined,
+          });
+          if (llmPlan.mode === "respond") {
+            return {
+              success: true,
+              text:
+                llmPlan.response ??
+                `Tell me what to change about "${target.goal.title}" and I'll update it.`,
+              data: {
+                actionName: "LIFE",
+                noop: true,
+                suggestedOperation: "update_goal",
+              },
+            };
+          }
+          if (llmPlan.title) request.title = llmPlan.title;
+          if (llmPlan.description) request.description = llmPlan.description;
+          if (llmPlan.cadence) request.cadence = llmPlan.cadence;
+          if (llmPlan.supportStrategy)
+            request.supportStrategy = llmPlan.supportStrategy;
+          if (llmPlan.successCriteria)
+            request.successCriteria = llmPlan.successCriteria;
+          if (llmPlan.groundingState) {
+            request.metadata = mergeGoalMetadataWithGrounding({
+              metadata: target.goal.metadata,
+              nowIso: new Date().toISOString(),
+              plan: {
+                cadence: llmPlan.cadence,
+                confidence: llmPlan.confidence,
+                evaluationSummary: llmPlan.evaluationSummary,
+                groundingState: llmPlan.groundingState,
+                missingCriticalFields: llmPlan.missingCriticalFields,
+                successCriteria:
+                  llmPlan.successCriteria ?? target.goal.successCriteria,
+                targetDomain: llmPlan.targetDomain,
+              },
+            });
+          }
+        }
+        if (
+          request.title === undefined &&
+          request.description === undefined &&
+          request.cadence === undefined &&
+          request.supportStrategy === undefined &&
+          request.successCriteria === undefined &&
+          request.metadata === undefined
+        ) {
+          return {
+            success: false,
+            text: `Tell me what to change about "${target.goal.title}" and I'll update it.`,
+          };
+        }
         const updated = await service.updateGoal(target.goal.id, request);
         const fallback = `Updated goal "${updated.goal.title}".`;
         return {

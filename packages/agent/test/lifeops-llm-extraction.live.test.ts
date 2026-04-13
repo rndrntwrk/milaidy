@@ -17,6 +17,7 @@ import { describe, expect, it } from "vitest";
 import { extractCalendarPlanWithLlm } from "../src/actions/calendar.js";
 import { extractGmailPlanWithLlm } from "../src/actions/gmail.js";
 import { extractLifeOperationWithLlm } from "../src/actions/life.extractor.js";
+import { extractGoalCreatePlanWithLlm } from "../src/actions/life-goal-extractor.js";
 import { extractTaskCreatePlanWithLlm } from "../src/actions/life-param-extractor.js";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..", "..");
@@ -376,6 +377,26 @@ describeIfLive("LLM plan extraction (live)", () => {
         TEST_TIMEOUT,
       );
     }
+  });
+
+  describe("extractGoalCreatePlanWithLlm", () => {
+    it(
+      "asks for clarification on a title-only goal",
+      async () => {
+        const intent = "I want a goal called Stabilize sleep schedule.";
+        const plan = await extractGoalCreatePlanWithLlm({
+          runtime,
+          intent,
+          state: makeState(),
+          message: makeMessage(intent),
+        });
+        expect(plan.mode).toBe("respond");
+        expect(plan.groundingState).toBe("partial");
+        expect(plan.response).toBeTruthy();
+        expect(plan.missingCriticalFields.length).toBeGreaterThan(0);
+      },
+      TEST_TIMEOUT,
+    );
   });
 
   describe("extractGmailPlanWithLlm", () => {

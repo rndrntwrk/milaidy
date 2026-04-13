@@ -6,6 +6,7 @@ import {
   Phone,
   Send,
   Shield,
+  TerminalSquare,
 } from "lucide-react";
 import type * as React from "react";
 
@@ -37,6 +38,13 @@ function DiscordIcon({ className }: SourceIconProps) {
 }
 
 const SOURCE_META: Record<string, ChatSourceMeta> = {
+  milady: {
+    badgeClassName: "border-accent/30 bg-accent/10 text-accent",
+    borderClassName: "border-accent/60",
+    iconClassName: "text-accent",
+    Icon: TerminalSquare,
+    label: "Milady",
+  },
   discord: {
     badgeClassName: "border-[#5865F2]/30 bg-[#5865F2]/10 text-[#c7cdff]",
     borderClassName: "border-[#5865F2]/60",

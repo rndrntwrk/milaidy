@@ -1,5 +1,6 @@
 import { getChatSourceMeta } from "@miladyai/ui";
 import { normalizeConnectorSource } from "@miladyai/shared/connectors";
+import type * as React from "react";
 
 import type { Conversation } from "../../api/client-types-chat";
 import {
@@ -55,6 +56,7 @@ export interface ConversationsSidebarSection {
 
 export interface ConversationsSidebarOption {
   count: number;
+  icon?: React.ComponentType<{ className?: string }>;
   label: string;
   value: string;
 }
@@ -149,6 +151,7 @@ function buildSourceOptions(
     .sort((left, right) => left[0].localeCompare(right[0]))
     .map(([value, count]) => ({
       count,
+      icon: getChatSourceMeta(value).Icon,
       label: sourceLabel(value),
       value,
     }));
@@ -156,6 +159,7 @@ function buildSourceOptions(
   const options: ConversationsSidebarOption[] = [
     {
       count: miladyRows.length,
+      icon: getChatSourceMeta("milady").Icon,
       label: t("conversations.scopeMilady", { defaultValue: "Milady" }),
       value: MILADY_SOURCE_SCOPE,
     },

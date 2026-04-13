@@ -8,7 +8,7 @@ export interface LifeOpsAppState {
 
 type RuntimeCacheLike = {
   getCache<T>(key: string): Promise<T | null | undefined>;
-  setCache<T>(key: string, value: T): Promise<void>;
+  setCache<T>(key: string, value: T): Promise<boolean | void>;
 };
 
 const DEFAULT_LIFEOPS_APP_STATE: LifeOpsAppState = {

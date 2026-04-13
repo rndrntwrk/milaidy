@@ -8,7 +8,7 @@
  *   and forces side effects (cloud login, finish, provider fill) to stay in
  *   AppContext where they already close over the right state.
  *
- * 4-step flow: deployment → identity → providers → features
+ * 3-step flow: deployment → providers → features
  * Deployment absorbs the old splash server chooser. Features enables connectors.
  *
  * See: docs/guides/onboarding-ui-flow.md
@@ -47,7 +47,7 @@ export function resolveOnboardingNextStep(
 
 /**
  * Previous step in the flow.
- * Returns null from the first step (identity).
+ * Returns null from the first step (deployment).
  */
 export function resolveOnboardingPreviousStep(
   current: OnboardingStep,

@@ -60,6 +60,14 @@ type DurationFormatOptions = {
    * Fallback string for non-positive/invalid durations.
    */
   fallback?: string;
+  /**
+   * Optional translation function for localized duration labels.
+   * When provided, uses i18n keys like "format.duration.seconds" etc.
+   */
+  t?: (
+    key: string,
+    vars?: Record<string, string | number>,
+  ) => string;
 };
 
 /**
@@ -146,14 +154,22 @@ export function formatDurationMs(
   ms?: number | null,
   options: DurationFormatOptions = {},
 ): string {
-  const { fallback = "—" } = options;
+  const { fallback = "—", t } = options;
   if (ms == null || !Number.isFinite(ms) || ms < 0) return fallback;
-  if (ms < 60_000) return `${Math.round(ms / 1000)}s`;
-  if (ms < 3_600_000) return `${Math.round(ms / 60_000)}m`;
+  if (ms < 60_000) {
+    const value = Math.round(ms / 1000);
+    return t ? t("format.duration.seconds", { value }) : `${value}s`;
+  }
+  if (ms < 3_600_000) {
+    const value = Math.round(ms / 60_000);
+    return t ? t("format.duration.minutes", { value }) : `${value}m`;
+  }
   if (ms < 86_400_000) {
     const hours = ms / 3_600_000;
-    return hours === Math.floor(hours) ? `${hours}h` : `${hours.toFixed(1)}h`;
+    const value = hours === Math.floor(hours) ? hours : Number(hours.toFixed(1));
+    return t ? t("format.duration.hours", { value }) : `${value}h`;
   }
   const days = ms / 86_400_000;
-  return days === Math.floor(days) ? `${days}d` : `${days.toFixed(1)}d`;
+  const value = days === Math.floor(days) ? days : Number(days.toFixed(1));
+  return t ? t("format.duration.days", { value }) : `${value}d`;
 }

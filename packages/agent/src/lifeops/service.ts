@@ -259,6 +259,13 @@ import {
   type LifeOpsWebsiteAccessGrant,
 } from "./repository.js";
 import {
+  buildGoalSemanticReviewMetadata,
+  mergeGoalSemanticReviewMetadata,
+  readGoalGroundingMetadata,
+  readGoalSemanticReviewMetadata,
+} from "./goal-grounding.js";
+import { evaluateGoalProgressWithLlm } from "./goal-semantic-evaluator.js";
+import {
   ROUTINE_SEED_TEMPLATES,
   type RoutineSeedTemplate,
 } from "./seed-routines.js";
@@ -291,6 +298,7 @@ const DEFAULT_GMAIL_SEARCH_CACHE_SCAN_LIMIT = 200;
 const DEFAULT_REMINDER_PROCESS_LIMIT = 24;
 const DEFAULT_WORKFLOW_PROCESS_LIMIT = 12;
 const GOAL_REVIEW_LOOKBACK_DAYS = 7;
+const GOAL_SEMANTIC_REVIEW_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 const DEFINITION_PERFORMANCE_LAST7_DAYS = 7;
 const DEFINITION_PERFORMANCE_LAST30_DAYS = 30;
 const DEFAULT_REMINDER_INTENSITY: LifeOpsReminderIntensity = "normal";
@@ -8639,25 +8647,211 @@ export class LifeOpsService {
     return suggestions.slice(0, 3);
   }
 
+  private formatLocalHourMinute(
+    isoValue: string | null,
+    timeZone: string,
+  ): string | null {
+    if (!isoValue) {
+      return null;
+    }
+    const date = new Date(isoValue);
+    if (Number.isNaN(date.getTime())) {
+      return null;
+    }
+    const parts = getZonedDateParts(date, timeZone);
+    return `${String(parts.hour).padStart(2, "0")}:${String(
+      parts.minute,
+    ).padStart(2, "0")}`;
+  }
+
+  private median(values: number[]): number | null {
+    if (values.length === 0) {
+      return null;
+    }
+    const sorted = [...values].sort((left, right) => left - right);
+    const middle = Math.floor(sorted.length / 2);
+    if (sorted.length % 2 === 1) {
+      return sorted[middle];
+    }
+    return (sorted[middle - 1] + sorted[middle]) / 2;
+  }
+
+  private async buildGoalSemanticEvidence(args: {
+    activeOccurrences: LifeOpsOccurrenceView[];
+    goal: LifeOpsGoalDefinition;
+    lastActivityAt: string | null;
+    linkedDefinitions: LifeOpsTaskDefinition[];
+    overdueOccurrences: LifeOpsOccurrenceView[];
+    recentCompletions: LifeOpsOccurrenceView[];
+    reviewState: LifeOpsGoalDefinition["reviewState"];
+    summary: LifeOpsGoalReview["summary"];
+    now: Date;
+  }): Promise<Record<string, unknown>> {
+    const timeZone = resolveDefaultTimeZone();
+    const linkedDefinitionSummaries = args.linkedDefinitions
+      .slice(0, 8)
+      .map((definition) => ({
+        id: definition.id,
+        kind: definition.kind,
+        title: definition.title,
+        cadence: definition.cadence,
+        status: definition.status,
+      }));
+    const sleepSignals = (
+      await this.listActivitySignals({
+        sinceAt: new Date(
+          args.now.getTime() - 30 * 24 * 60 * 60 * 1000,
+        ).toISOString(),
+        limit: 80,
+      })
+    )
+      .filter((signal) => signal.health?.sleep)
+      .slice(0, 30);
+    const sleepSessions = sleepSignals
+      .map((signal) => {
+        const sleep = signal.health?.sleep;
+        if (!sleep) {
+          return null;
+        }
+        return {
+          observedAt: signal.observedAt,
+          asleepAt: sleep.asleepAt,
+          awakeAt: sleep.awakeAt,
+          durationMinutes: sleep.durationMinutes,
+          localBedtime: this.formatLocalHourMinute(sleep.asleepAt, timeZone),
+          localWakeTime: this.formatLocalHourMinute(sleep.awakeAt, timeZone),
+          stage: sleep.stage,
+        };
+      })
+      .filter(
+        (session): session is NonNullable<typeof session> => session !== null,
+      )
+      .slice(0, 14);
+    const sleepStartHours = sleepSessions
+      .map((session) => {
+        const localBedtime = session.localBedtime;
+        if (!localBedtime) {
+          return null;
+        }
+        const [hour, minute] = localBedtime.split(":").map(Number);
+        if (!Number.isFinite(hour) || !Number.isFinite(minute)) {
+          return null;
+        }
+        return hour + minute / 60;
+      })
+      .filter((value): value is number => value !== null);
+    const wakeHours = sleepSessions
+      .map((session) => {
+        const localWakeTime = session.localWakeTime;
+        if (!localWakeTime) {
+          return null;
+        }
+        const [hour, minute] = localWakeTime.split(":").map(Number);
+        if (!Number.isFinite(hour) || !Number.isFinite(minute)) {
+          return null;
+        }
+        return hour + minute / 60;
+      })
+      .filter((value): value is number => value !== null);
+    const durations = sleepSessions
+      .map((session) => session.durationMinutes)
+      .filter((value): value is number => typeof value === "number");
+    return {
+      now: args.now.toISOString(),
+      timeZone,
+      goalGrounding: readGoalGroundingMetadata(args.goal.metadata),
+      deterministicSummary: args.summary,
+      reviewState: args.reviewState,
+      linkedDefinitions: linkedDefinitionSummaries,
+      activeOccurrences: args.activeOccurrences
+        .slice(0, 8)
+        .map((occurrence) => ({
+          id: occurrence.id,
+          title: occurrence.title,
+          dueAt: occurrence.dueAt,
+          state: occurrence.state,
+        })),
+      overdueOccurrences: args.overdueOccurrences
+        .slice(0, 8)
+        .map((occurrence) => ({
+          id: occurrence.id,
+          title: occurrence.title,
+          dueAt: occurrence.dueAt,
+          state: occurrence.state,
+        })),
+      recentCompletions: args.recentCompletions
+        .slice(0, 8)
+        .map((occurrence) => ({
+          id: occurrence.id,
+          title: occurrence.title,
+          updatedAt: occurrence.updatedAt,
+        })),
+      lastActivityAt: args.lastActivityAt,
+      sleepSummary: {
+        sampleCount: sleepSessions.length,
+        typicalBedtimeHour: this.median(sleepStartHours),
+        typicalWakeHour: this.median(wakeHours),
+        typicalSleepDurationMinutes:
+          durations.length > 0
+            ? Math.round(
+                durations.reduce((sum, value) => sum + value, 0) /
+                  durations.length,
+              )
+            : null,
+      },
+      sleepSessions,
+    };
+  }
+
+  private getCachedSemanticGoalReview(args: {
+    goal: LifeOpsGoalDefinition;
+    now: Date;
+  }) {
+    const cached = readGoalSemanticReviewMetadata(args.goal.metadata);
+    if (!cached) {
+      return null;
+    }
+    const reviewedAtMs = new Date(cached.reviewedAt).getTime();
+    if (!Number.isFinite(reviewedAtMs)) {
+      return null;
+    }
+    if (args.now.getTime() - reviewedAtMs > GOAL_SEMANTIC_REVIEW_CACHE_TTL_MS) {
+      return null;
+    }
+    return cached;
+  }
+
   private async syncComputedGoalReviewState(
     goal: LifeOpsGoalDefinition,
     reviewState: LifeOpsGoalDefinition["reviewState"],
     summary: LifeOpsGoalReview["summary"],
+    semanticReview: ReturnType<typeof buildGoalSemanticReviewMetadata> | null,
     now: Date,
   ): Promise<LifeOpsGoalDefinition> {
-    if (goal.reviewState === reviewState) {
+    const currentSemanticReview = readGoalSemanticReviewMetadata(goal.metadata);
+    const semanticUnchanged =
+      !semanticReview ||
+      (currentSemanticReview &&
+        semanticReview &&
+        currentSemanticReview.reviewedAt === semanticReview.reviewedAt &&
+        currentSemanticReview.reviewState === semanticReview.reviewState &&
+        currentSemanticReview.explanation === semanticReview.explanation);
+    if (goal.reviewState === reviewState && semanticUnchanged) {
       return goal;
     }
+    const mergedMetadata = mergeMetadata(goal.metadata, {
+      computedGoalReview: {
+        reviewedAt: now.toISOString(),
+        reviewState,
+        summary,
+      },
+    });
     const nextGoal: LifeOpsGoalDefinition = {
       ...goal,
       reviewState,
-      metadata: mergeMetadata(goal.metadata, {
-        computedGoalReview: {
-          reviewedAt: now.toISOString(),
-          reviewState,
-          summary,
-        },
-      }),
+      metadata: semanticReview
+        ? mergeGoalSemanticReviewMetadata(mergedMetadata, semanticReview)
+        : mergedMetadata,
       updatedAt: now.toISOString(),
     };
     await this.repository.updateGoal(nextGoal);
@@ -8684,6 +8878,7 @@ export class LifeOpsService {
   private async buildGoalReview(
     goalRecord: LifeOpsGoalRecord,
     now: Date,
+    options: { allowSemanticEvaluation?: boolean } = {},
   ): Promise<LifeOpsGoalReview> {
     const linkedDefinitions =
       await this.collectLinkedDefinitionsForGoal(goalRecord);
@@ -8748,12 +8943,73 @@ export class LifeOpsService {
         lastActivityAt,
       }),
     };
+    const cachedSemanticReview = this.getCachedSemanticGoalReview({
+      goal: goalRecord.goal,
+      now,
+    });
+    const semanticEvidence = readGoalGroundingMetadata(goalRecord.goal.metadata)
+      ? await this.buildGoalSemanticEvidence({
+          activeOccurrences,
+          goal: goalRecord.goal,
+          lastActivityAt,
+          linkedDefinitions,
+          overdueOccurrences,
+          recentCompletions,
+          reviewState: derivedReviewState,
+          summary,
+          now,
+        })
+      : null;
+    const semanticReview =
+      options.allowSemanticEvaluation && semanticEvidence
+        ? await evaluateGoalProgressWithLlm({
+            runtime: this.runtime,
+            evidence: semanticEvidence,
+            goal: goalRecord.goal,
+            nowIso: now.toISOString(),
+          })
+        : cachedSemanticReview;
+    const effectiveReviewState =
+      semanticReview?.reviewState ?? derivedReviewState;
+    const effectiveSummary: LifeOpsGoalReview["summary"] = {
+      ...summary,
+      reviewState: effectiveReviewState,
+      explanation: semanticReview?.explanation ?? summary.explanation,
+      progressScore: semanticReview?.progressScore ?? null,
+      confidence: semanticReview?.confidence ?? null,
+      evidenceSummary: semanticReview?.evidenceSummary ?? null,
+      missingEvidence: semanticReview?.missingEvidence ?? [],
+      groundingState:
+        readGoalGroundingMetadata(goalRecord.goal.metadata)?.groundingState ??
+        null,
+      groundingSummary:
+        readGoalGroundingMetadata(goalRecord.goal.metadata)?.summary ?? null,
+      semanticReviewedAt: semanticReview?.reviewedAt ?? null,
+    };
     const goal = await this.syncComputedGoalReviewState(
       goalRecord.goal,
-      derivedReviewState,
-      summary,
+      effectiveReviewState,
+      effectiveSummary,
+      semanticReview,
       now,
     );
+    const suggestions = semanticReview?.suggestions.length
+      ? semanticReview.suggestions.map((suggestion) => ({
+          kind:
+            (suggestion.kind as LifeOpsGoalSupportSuggestion["kind"]) ??
+            "review_progress",
+          title: suggestion.title,
+          detail: suggestion.detail,
+          definitionId: null,
+          occurrenceId: null,
+        }))
+      : this.buildGoalSupportSuggestions({
+          goal,
+          linkedDefinitions,
+          activeOccurrences,
+          overdueOccurrences,
+          recentCompletions,
+        });
     return {
       goal,
       links: goalRecord.links,
@@ -8761,20 +9017,14 @@ export class LifeOpsService {
       activeOccurrences,
       overdueOccurrences,
       recentCompletions,
-      suggestions: this.buildGoalSupportSuggestions({
-        goal,
-        linkedDefinitions,
-        activeOccurrences,
-        overdueOccurrences,
-        recentCompletions,
-      }),
+      suggestions,
       audits: await this.repository.listAuditEvents(
         this.agentId(),
         "goal",
         goal.id,
       ),
       summary: {
-        ...summary,
+        ...effectiveSummary,
         reviewState: goal.reviewState,
       },
     };
@@ -8785,7 +9035,9 @@ export class LifeOpsService {
     now = new Date(),
   ): Promise<LifeOpsGoalReview> {
     const goalRecord = await this.getGoalRecord(goalId);
-    return this.buildGoalReview(goalRecord, now);
+    return this.buildGoalReview(goalRecord, now, {
+      allowSemanticEvaluation: true,
+    });
   }
 
   async explainOccurrence(
@@ -8860,6 +9112,7 @@ export class LifeOpsService {
           ),
         },
         now,
+        { allowSemanticEvaluation: false },
       );
       refreshed.push(review.goal);
     }
@@ -11802,6 +12055,9 @@ export class LifeOpsService {
       senderName,
       sendAllowed: hasGoogleGmailSendCapability(selection.grant),
       subjectType: selection.grant.side === "owner" ? "owner" : "agent",
+      conversationContext: request.conversationContext,
+      actionHistory: request.actionHistory,
+      trajectorySummary: request.trajectorySummary,
     });
     await this.recordGmailAudit(
       "gmail_reply_drafted",
@@ -11836,6 +12092,9 @@ export class LifeOpsService {
     senderName: string;
     sendAllowed: boolean;
     subjectType: LifeOpsSubjectType;
+    conversationContext?: string[];
+    actionHistory?: string[];
+    trajectorySummary?: string | null;
   }): Promise<LifeOpsGmailReplyDraft> {
     const fallbackBody = buildFallbackGmailReplyDraftBody({
       message: args.message,
@@ -11847,10 +12106,13 @@ export class LifeOpsService {
 
     let bodyText = fallbackBody;
     if (typeof this.runtime.useModel === "function") {
-      const recentConversation = await this.readRecentReminderConversation({
-        subjectType: args.subjectType,
-        limit: 6,
-      });
+      const recentConversation =
+        args.conversationContext && args.conversationContext.length > 0
+          ? args.conversationContext
+          : await this.readRecentReminderConversation({
+              subjectType: args.subjectType,
+              limit: 6,
+            });
       const prompt = [
         `Write a plain-text email reply draft in the voice of ${this.runtime.character?.name ?? "the assistant"}.`,
         "This is a send-ready email reply, not a chat response.",
@@ -11863,6 +12125,15 @@ export class LifeOpsService {
         recentConversation.length > 0
           ? recentConversation.join("\n")
           : "No recent conversation available.",
+        "",
+        "Recent action history:",
+        args.actionHistory && args.actionHistory.length > 0
+          ? args.actionHistory.join("\n")
+          : "No recent action history available.",
+        "",
+        "Current trajectory context:",
+        args.trajectorySummary?.trim() ||
+          "No active trajectory context available.",
         "",
         "Original email:",
         `- from: ${args.message.from}`,
@@ -11923,6 +12194,9 @@ export class LifeOpsService {
     senderName: string;
     sendAllowed: boolean;
     subjectType: LifeOpsSubjectType;
+    conversationContext?: string[];
+    actionHistory?: string[];
+    trajectorySummary?: string | null;
   }): Promise<LifeOpsGmailReplyDraft[]> {
     const drafts: LifeOpsGmailReplyDraft[] = [];
     for (const message of args.messages) {
@@ -11935,6 +12209,9 @@ export class LifeOpsService {
           senderName: args.senderName,
           sendAllowed: args.sendAllowed,
           subjectType: args.subjectType,
+          conversationContext: args.conversationContext,
+          actionHistory: args.actionHistory,
+          trajectorySummary: args.trajectorySummary,
         }),
       );
     }
@@ -12459,6 +12736,9 @@ export class LifeOpsService {
       senderName,
       sendAllowed: hasGoogleGmailSendCapability(grant),
       subjectType: grant.side === "owner" ? "owner" : "agent",
+      conversationContext: request.conversationContext,
+      actionHistory: request.actionHistory,
+      trajectorySummary: request.trajectorySummary,
     });
     await this.recordGmailAudit(
       "gmail_reply_drafted",

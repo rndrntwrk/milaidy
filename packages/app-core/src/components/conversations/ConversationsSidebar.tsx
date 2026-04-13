@@ -90,7 +90,21 @@ function rowListId(row: ConversationsSidebarRow): string {
   return row.kind === "inbox" ? `${INBOX_ID_PREFIX}${row.id}` : row.id;
 }
 
-function selectLabel(option: { count: number; label: string }) {
+function selectLabel(option: {
+  count: number;
+  icon?: React.ComponentType<{ className?: string }>;
+  label: string;
+}) {
+  const Icon = option.icon;
+  if (Icon) {
+    return (
+      <span className="inline-flex items-center gap-1.5">
+        <Icon className="h-3.5 w-3.5 shrink-0" />
+        <span>{option.label}</span>
+        <span className="text-muted">({option.count})</span>
+      </span>
+    );
+  }
   return `${option.label} (${option.count})`;
 }
 

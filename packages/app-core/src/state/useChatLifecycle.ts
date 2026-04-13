@@ -6,6 +6,7 @@
  */
 
 import { type MutableRefObject, useCallback, useEffect, useRef } from "react";
+import { getDefaultStylePreset } from "@miladyai/shared/onboarding-presets";
 import { type AgentStatus, type StreamEventEnvelope, client } from "../api";
 import { invokeDesktopBridgeRequest, isElectrobunRuntime } from "../bridge";
 import { alertDesktopMessage, confirmDesktopAction } from "../utils";
@@ -187,6 +188,7 @@ export interface UseChatLifecycleDeps {
 // ── Hook ────────────────────────────────────────────────────────────
 
 export function useChatLifecycle(deps: UseChatLifecycleDeps) {
+  const defaultOnboardingStyle = getDefaultStylePreset();
   const {
     agentStatus,
     setAgentStatus,
@@ -603,13 +605,13 @@ export function useChatLifecycle(deps: UseChatLifecycleDeps) {
           setOnboardingUiRevealNonce((n) => n + 1);
           setOnboardingLoading(false);
           setOnboardingComplete(false);
-          setOnboardingStep("identity");
+          setOnboardingStep("deployment");
           setOnboardingMode("basic");
           setOnboardingActiveGuide(null);
           setOnboardingDeferredTasks([]);
           setPostOnboardingChecklistDismissed(false);
-          setOnboardingName("Chen");
-          setOnboardingStyle("chen");
+          setOnboardingName(defaultOnboardingStyle.name);
+          setOnboardingStyle(defaultOnboardingStyle.id);
           setOnboardingServerTarget("");
           setOnboardingProvider("");
           setOnboardingApiKey("");
@@ -626,7 +628,7 @@ export function useChatLifecycle(deps: UseChatLifecycleDeps) {
           coordinatorResetRef.current?.();
         },
         resetAvatarSelection: () => {
-          setSelectedVrmIndex(1);
+          setSelectedVrmIndex(defaultOnboardingStyle.avatarIndex);
           setCustomVrmUrl("");
           setCustomBackgroundUrl("");
         },
@@ -695,6 +697,7 @@ export function useChatLifecycle(deps: UseChatLifecycleDeps) {
       setSelectedVrmIndex,
       setCustomVrmUrl,
       setCustomBackgroundUrl,
+      defaultOnboardingStyle,
     ],
   );
 

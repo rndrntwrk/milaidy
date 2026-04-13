@@ -17,6 +17,7 @@ import {
   type Page,
 } from "@playwright/test";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { WebSocket, WebSocketServer } from "ws";
 import { describeIf } from "../../../../test/helpers/conditional-tests.ts";
 import { selectLiveProvider } from "../../../../test/helpers/live-provider";
 
@@ -149,6 +150,76 @@ async function proxyUiRequest(args: {
   args.response.end(body);
 }
 
+function relayWebSocket(args: {
+  apiBase: string;
+  request: IncomingMessage;
+  clientSocket: WebSocket;
+}): void {
+  const requestUrl = new URL(args.request.url ?? "/ws", "http://127.0.0.1");
+  const upstreamUrl = new URL(args.apiBase);
+  upstreamUrl.protocol = upstreamUrl.protocol === "https:" ? "wss:" : "ws:";
+  upstreamUrl.pathname = requestUrl.pathname;
+  upstreamUrl.search = requestUrl.search;
+
+  const upstreamSocket = new WebSocket(upstreamUrl, {
+    headers:
+      typeof args.request.headers.authorization === "string"
+        ? { authorization: args.request.headers.authorization }
+        : undefined,
+  });
+
+  const pendingClientMessages: Array<{
+    data: Parameters<WebSocket["send"]>[0];
+    isBinary: boolean;
+  }> = [];
+
+  const closeSocket = (socket: WebSocket) => {
+    if (
+      socket.readyState === WebSocket.OPEN ||
+      socket.readyState === WebSocket.CONNECTING
+    ) {
+      socket.close();
+    }
+  };
+
+  args.clientSocket.on("message", (data, isBinary) => {
+    if (upstreamSocket.readyState === WebSocket.OPEN) {
+      upstreamSocket.send(data, { binary: isBinary });
+      return;
+    }
+    if (upstreamSocket.readyState === WebSocket.CONNECTING) {
+      pendingClientMessages.push({ data, isBinary });
+    }
+  });
+
+  upstreamSocket.on("open", () => {
+    for (const message of pendingClientMessages.splice(0)) {
+      upstreamSocket.send(message.data, { binary: message.isBinary });
+    }
+  });
+
+  upstreamSocket.on("message", (data, isBinary) => {
+    if (args.clientSocket.readyState !== WebSocket.OPEN) {
+      return;
+    }
+    args.clientSocket.send(data, { binary: isBinary });
+  });
+
+  args.clientSocket.on("close", () => {
+    closeSocket(upstreamSocket);
+  });
+  upstreamSocket.on("close", () => {
+    closeSocket(args.clientSocket);
+  });
+
+  args.clientSocket.on("error", () => {
+    closeSocket(upstreamSocket);
+  });
+  upstreamSocket.on("error", () => {
+    closeSocket(args.clientSocket);
+  });
+}
+
 async function startUiProxyServer(args: {
   apiBase: string;
   port: number;
@@ -170,6 +241,28 @@ async function startUiProxyServer(args: {
         }),
       );
     }
+  });
+  const wss = new WebSocketServer({ noServer: true });
+
+  server.on("upgrade", (request, socket, head) => {
+    const requestUrl = new URL(request.url ?? "/", "http://127.0.0.1");
+    if (requestUrl.pathname !== "/ws") {
+      socket.destroy();
+      return;
+    }
+    wss.handleUpgrade(request, socket, head, (clientSocket) => {
+      relayWebSocket({
+        apiBase: args.apiBase,
+        request,
+        clientSocket,
+      });
+    });
+  });
+  server.on("close", () => {
+    for (const client of wss.clients) {
+      client.close();
+    }
+    wss.close();
   });
 
   await new Promise<void>((resolve, reject) => {
@@ -384,6 +477,7 @@ async function startRealStack(): Promise<StartedStack> {
       ELIZA_PORT: String(apiPort),
       FORCE_COLOR: "0",
       MILADY_API_PORT: String(apiPort),
+      MILADY_HOME_PORT: String(uiPort),
       MILADY_PORT: String(apiPort),
       MILADY_STATE_DIR: stateDir,
     },
@@ -581,48 +675,88 @@ describeLive("real onboarding handoff to companion mode", () => {
         await page
           .getByRole("button", { name: /Connect to Remote Agent/i })
           .click({ force: true });
-        await page.waitForTimeout(2_000);
-        console.log(
-          `[live-onboarding] after remote click: ${(
-            await page.locator("body").innerText()
-          ).slice(0, 2_000)}`,
-        );
-        await page
-          .locator("#remote-api-base")
-          .waitFor({ state: "visible", timeout: READY_TIMEOUT_MS });
-        await page.locator("#remote-api-base").fill(stack.apiBase);
-        await clickVisibleText(page, [/^Connect$/i]);
-
-        await waitForVisibleText(page, [
-          /Choose your AI provider/i,
-          new RegExp(LIVE_PROVIDER_LABEL, "i"),
-        ]);
-        await clickVisibleText(page, [
-          new RegExp(`^${LIVE_PROVIDER_LABEL}$`, "i"),
-        ]);
-
-        await waitForVisibleText(page, [
-          new RegExp(LIVE_PROVIDER_LABEL, "i"),
-          /Confirm/i,
-        ]);
-        const providerApiKeyInput = page.locator("#provider-api-key");
-        if (await providerApiKeyInput.isVisible().catch(() => false)) {
-          await providerApiKeyInput.fill(LIVE_PROVIDER.apiKey);
-        }
-        await clickVisibleText(page, [/Confirm/i]);
-
-        await waitForVisibleText(page, [/Enable features/i, /Skip for now/i]);
-        await clickVisibleText(page, [
-          /Skip for now/i,
-          /Continue without features/i,
-        ]);
-
-        await page.waitForURL(/\/companion(?:$|[?#/])/, {
+        const remoteApiBaseInput = page.locator("input").first();
+        await remoteApiBaseInput.waitFor({
+          state: "visible",
           timeout: READY_TIMEOUT_MS,
         });
+        await remoteApiBaseInput.fill(stack.apiBase);
+        await clickVisibleText(page, [/^Connect$/i]);
+        await page.waitForTimeout(5_000);
+
+        const companionRoot = page.locator('[data-testid="companion-root"]');
+        const landedInCompanion = await companionRoot
+          .isVisible()
+          .catch(() => false);
+
+        if (!landedInCompanion) {
+          const identityContinue = page.getByRole("button", {
+            name: /^CONTINUE$/i,
+          });
+          if (
+            (await page
+              .getByText(/Choose your style/i)
+              .isVisible()
+              .catch(() => false)) &&
+            (await identityContinue.isVisible().catch(() => false))
+          ) {
+            await identityContinue.click({ force: true });
+            await page.waitForTimeout(2_000);
+          }
+
+          if (
+            await page
+              .getByText(/Backend address/i)
+              .isVisible()
+              .catch(() => false)
+          ) {
+            const providerRemoteApiBaseInput = page.locator("input").first();
+            await providerRemoteApiBaseInput.waitFor({
+              state: "visible",
+              timeout: READY_TIMEOUT_MS,
+            });
+            await providerRemoteApiBaseInput.fill(stack.apiBase);
+            await clickVisibleText(page, [
+              /Connect remote backend/i,
+              /^Connect$/i,
+            ]);
+            await page.waitForTimeout(5_000);
+          }
+
+          await waitForVisibleText(page, [
+            /Choose your AI provider/i,
+            new RegExp(LIVE_PROVIDER_LABEL, "i"),
+          ]);
+          await clickVisibleText(page, [
+            new RegExp(`^${LIVE_PROVIDER_LABEL}$`, "i"),
+          ]);
+
+          await waitForVisibleText(page, [
+            new RegExp(LIVE_PROVIDER_LABEL, "i"),
+            /Confirm/i,
+          ]);
+          const providerApiKeyInput = page.locator("#provider-api-key");
+          if (await providerApiKeyInput.isVisible().catch(() => false)) {
+            await providerApiKeyInput.fill(LIVE_PROVIDER.apiKey);
+          }
+          await clickVisibleText(page, [/Confirm/i]);
+
+          await waitForVisibleText(page, [/Enable features/i, /Skip for now/i]);
+          await clickVisibleText(page, [
+            /Skip for now/i,
+            /Continue without features/i,
+          ]);
+        }
+
         await page
-          .locator('[data-testid="companion-root"]')
-          .waitFor({ state: "visible", timeout: READY_TIMEOUT_MS });
+          .waitForURL(/\/companion(?:$|[?#/])/, {
+            timeout: READY_TIMEOUT_MS,
+          })
+          .catch(() => {});
+        await companionRoot.waitFor({
+          state: "visible",
+          timeout: READY_TIMEOUT_MS,
+        });
         await page
           .getByRole("button", { name: "New Chat" })
           .waitFor({ state: "visible", timeout: READY_TIMEOUT_MS });
@@ -640,9 +774,7 @@ describeLive("real onboarding handoff to companion mode", () => {
         });
 
         expect(page.url()).toContain("/companion");
-        expect(
-          await page.locator('[data-testid="companion-root"]').isVisible(),
-        ).toBe(true);
+        expect(await companionRoot.isVisible()).toBe(true);
         expect(
           await page.getByRole("button", { name: "New Chat" }).isVisible(),
         ).toBe(true);

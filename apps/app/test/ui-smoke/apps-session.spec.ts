@@ -1,9 +1,5 @@
 import { expect, test } from "@playwright/test";
-import {
-  installDefaultAppMocks,
-  openAppPath,
-  seedAppStorage,
-} from "./helpers";
+import { installDefaultAppMocks, openAppPath, seedAppStorage } from "./helpers";
 
 test.beforeEach(async ({ page }) => {
   await seedAppStorage(page);

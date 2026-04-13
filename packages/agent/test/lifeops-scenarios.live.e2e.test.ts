@@ -56,6 +56,7 @@ describeIf(LIVE_SCENARIO_SUITE_ENABLED)(
             const report = await runLifeOpsLiveScenario({
               runtime: isolatedRuntime,
               scenario,
+              selectedProvider: selectedLiveProvider,
             });
             expect(report.status, report.error).toBe("passed");
             expect(report.turns.length).toBe(scenario.turns.length);
@@ -74,6 +75,7 @@ describeIf(LIVE_SCENARIO_SUITE_ENABLED)(
         const report = await runLifeOpsLiveScenario({
           runtime,
           scenario,
+          selectedProvider: selectedLiveProvider,
         });
         expect(report.status, report.error).toBe("passed");
         expect(report.turns.length).toBe(scenario.turns.length);

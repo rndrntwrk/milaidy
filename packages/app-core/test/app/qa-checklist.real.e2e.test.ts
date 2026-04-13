@@ -1355,7 +1355,26 @@ async function waitForAnyText(
 }
 
 async function waitForOnboardingEntry(page: Page, timeout = 45_000) {
-  await waitForAnyText(page, ["Create Local Agent", "Get Started"], timeout);
+  await waitForAnyText(
+    page,
+    [
+      "Choose your setup",
+      "Create Local Agent",
+      "Get Started",
+      "Connect to Remote Agent",
+    ],
+    timeout,
+  );
+}
+
+async function pageContainsText(page: Page, text: string): Promise<boolean> {
+  const bodyText = await page.evaluate(() => {
+    const body = document.body;
+    const visibleText = body?.innerText ?? "";
+    const domText = body?.textContent ?? "";
+    return `${visibleText}\n${domText}`.toLowerCase();
+  });
+  return bodyText.includes(text.toLowerCase());
 }
 
 async function currentVrmRegistry(page: Page): Promise<QaVrmRegistryEntry[]> {
@@ -1575,6 +1594,51 @@ async function clickAnyText(
     : new Error(`Could not click any of: ${texts.join(", ")}`);
 }
 
+async function clickButtonLabel(
+  page: Page,
+  label: string,
+  timeout = 45_000,
+) {
+  const normalizedLabel = label.trim().toLowerCase();
+  await page.waitForFunction(
+    (expected) => {
+      const elements = Array.from(
+        document.querySelectorAll<HTMLElement>("button,[role='button']"),
+      );
+      return elements.some((element) => {
+        const position = window.getComputedStyle(element).position;
+        const visible =
+          element.offsetParent !== null ||
+          position === "fixed" ||
+          position === "sticky";
+        const text = (element.innerText ?? "").trim().toLowerCase();
+        return visible && text === expected;
+      });
+    },
+    { timeout },
+    normalizedLabel,
+  );
+
+  const clicked = await page.evaluate((expected) => {
+    const elements = Array.from(
+      document.querySelectorAll<HTMLElement>("button,[role='button']"),
+    );
+    const target = elements.find((element) => {
+      const position = window.getComputedStyle(element).position;
+      const visible =
+        element.offsetParent !== null ||
+        position === "fixed" ||
+        position === "sticky";
+      const text = (element.innerText ?? "").trim().toLowerCase();
+      return visible && text === expected;
+    });
+    target?.click();
+    return Boolean(target);
+  }, normalizedLabel);
+
+  expect(clicked).toBe(true);
+}
+
 async function clickSelector(page: Page, selector: string) {
   await page.waitForFunction(
     (expected) => {
@@ -1615,7 +1679,41 @@ async function typeComposerAndSend(page: Page, value: string) {
 
 async function completeLocalGroqOnboarding(page: Page) {
   await waitForOnboardingEntry(page, 180_000);
-  await clickAnyText(page, ["Create Local Agent", "Get Started"]);
+
+  if (await pageContainsText(page, "Choose your setup")) {
+    if (await pageContainsText(page, "Create Local Agent")) {
+      await clickAnyText(page, ["Create Local Agent"]);
+    } else {
+      await clickAnyText(page, ["Connect to Remote Agent"]);
+      await page.waitForSelector(
+        'input[placeholder*="your-agent.example.com"]',
+        {
+          visible: true,
+          timeout: 30_000,
+        },
+      );
+      await typeInto(page, 'input[placeholder*="your-agent.example.com"]', UI_URL);
+      await clickButtonLabel(page, "Connect");
+
+      const connectionRemoteApiBase = await page
+        .waitForSelector("#remote-api-base", {
+          visible: true,
+          timeout: 30_000,
+        })
+        .catch(() => null);
+      if (connectionRemoteApiBase) {
+        await typeInto(page, "#remote-api-base", UI_URL);
+        await clickButtonLabel(page, "Connect remote backend");
+      }
+    }
+  } else {
+    if (await pageContainsText(page, "Create Local Agent")) {
+      await clickAnyText(page, ["Create Local Agent"]);
+    } else {
+      await clickAnyText(page, ["Get Started"]);
+    }
+  }
+
   await waitForAnyText(page, ["Continue", "Chen"], 60_000);
   await clickAnyText(page, ["Continue"]);
   await waitForAnyText(page, ["Choose your AI provider", "Groq"], 60_000);

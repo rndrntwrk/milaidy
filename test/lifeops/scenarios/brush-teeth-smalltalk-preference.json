@@ -36,7 +36,11 @@
       "name": "brush-teeth confirm",
       "text": "That looks right. Save the Brush teeth routine.",
       "responseIncludesAll": ["saved"],
-      "waitForDefinitionTitle": "Brush teeth"
+      "waitForDefinitionTitle": "Brush teeth",
+      "waitForDefinitionTitleAliases": [
+        "Brush teeth 8 + 9 pm",
+        "Brush teeth 8 am & 9 pm"
+      ]
     },
     {
       "name": "brush-teeth reduce reminders",
@@ -47,6 +51,10 @@
     {
       "type": "definitionCountDelta",
       "title": "Brush teeth",
+      "titleAliases": [
+        "Brush teeth 8 + 9 pm",
+        "Brush teeth 8 am & 9 pm"
+      ],
       "delta": 1,
       "cadenceKind": "times_per_day",
       "requiredSlots": [{ "minuteOfDay": 480 }, { "minuteOfDay": 1260 }],

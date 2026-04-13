@@ -53,6 +53,7 @@ import {
   messageText,
   toActionData,
 } from "./lifeops-google-helpers.js";
+import { renderGroundedActionReply } from "./grounded-action-reply.js";
 
 type CalendarSubaction =
   | "feed"
@@ -362,32 +363,6 @@ function shouldDeleteAllMatchingCalendarEvents(args: {
   );
 }
 
-function normalizeCalendarReplyText(raw: string): string {
-  return raw
-    .trim()
-    .replace(/^["'`]+|["'`]+$/g, "")
-    .trim();
-}
-
-function looksLikeStructuredCalendarReply(raw: string): boolean {
-  const trimmed = raw.trim();
-  if (!trimmed) {
-    return true;
-  }
-  if (/^<[^>]+>/.test(trimmed)) {
-    return true;
-  }
-  if (
-    parseJSONObjectFromText(trimmed) ||
-    parseKeyValueXml<Record<string, unknown>>(trimmed)
-  ) {
-    return true;
-  }
-  return /^(?:subaction|shouldAct|response|queries|title|tripLocation|timeMin|timeMax|windowLabel)\s*:/m.test(
-    trimmed,
-  );
-}
-
 async function renderCalendarActionReply(args: {
   runtime: IAgentRuntime;
   message: Memory;
@@ -398,48 +373,24 @@ async function renderCalendarActionReply(args: {
   context?: Record<string, unknown>;
 }): Promise<string> {
   const { runtime, message, state, intent, scenario, fallback, context } = args;
-  if (typeof runtime.useModel !== "function") {
-    return fallback;
-  }
-
-  const recentConversation = await collectRecentConversationTexts({
+  return renderGroundedActionReply({
     runtime,
     message,
     state,
-    limit: 12,
+    intent,
+    domain: "calendar",
+    scenario,
+    fallback,
+    context,
+    preferCharacterVoice: true,
+    additionalRules: [
+      "Mirror the user's phrasing for dates, times, ranges, and scheduling language when possible.",
+      "Prefer phrases like tomorrow morning, next week, later, earlier, free, busy, or the user's own wording over robotic calendar language.",
+      "Never surface raw ISO timestamps unless the user used raw ISO timestamps.",
+      "Preserve all concrete event facts from the context and canonical fallback.",
+      "If this is reply-only or a clarification, do not pretend you already changed the calendar.",
+    ],
   });
-  const prompt = [
-    "Write the assistant's user-facing reply for a calendar interaction.",
-    "Be natural, brief, and grounded in the provided context.",
-    "Mirror the user's tone lightly without parodying them.",
-    "Mirror the user's phrasing for dates, times, ranges, and scheduling language when possible.",
-    "Prefer phrases like tomorrow morning, next week, later, earlier, free, busy, or the user's own wording over robotic calendar language.",
-    "Never surface raw ISO timestamps unless the user used raw ISO timestamps.",
-    "Never mention internal schema, tool names, or JSON field names.",
-    "Preserve all concrete event facts from the context and canonical fallback.",
-    "If asking a clarifying question, ask only for the missing information.",
-    "If this is reply-only or a clarification, do not pretend you already changed the calendar.",
-    "Return only the reply text.",
-    "",
-    `Scenario: ${scenario}`,
-    `Current user message: ${JSON.stringify(messageText(message))}`,
-    `Resolved intent: ${JSON.stringify(intent)}`,
-    `Recent conversation: ${JSON.stringify(recentConversation.join("\n"))}`,
-    `Structured context: ${JSON.stringify(context ?? {})}`,
-    `Canonical fallback: ${JSON.stringify(fallback)}`,
-  ].join("\n");
-
-  try {
-    const result = await runtime.useModel(ModelType.TEXT_LARGE, { prompt });
-    const raw = typeof result === "string" ? result : "";
-    if (looksLikeStructuredCalendarReply(raw)) {
-      return fallback;
-    }
-    const text = normalizeCalendarReplyText(raw);
-    return text || fallback;
-  } catch {
-    return fallback;
-  }
 }
 
 function normalizeText(value: string): string {

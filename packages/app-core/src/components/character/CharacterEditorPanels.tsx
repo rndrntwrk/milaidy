@@ -173,7 +173,7 @@ export function CharacterIdentityPanel({
             <div className="flex items-center justify-between">
               <span
                 id="character-editor-name-label"
-                className="text-xs-tight font-semibold uppercase tracking-[0.08em] text-muted"
+                className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted"
               >
                 {t("charactereditor.Name", { defaultValue: "Name" })}
               </span>
@@ -195,7 +195,7 @@ export function CharacterIdentityPanel({
             <div className="flex items-center justify-between">
               <span
                 id="character-editor-voice-label"
-                className="text-xs-tight font-semibold uppercase tracking-[0.08em] text-muted"
+                className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted"
               >
                 {t("charactereditor.Voice", {
                   defaultValue: "Voice",
@@ -269,7 +269,7 @@ export function CharacterIdentityPanel({
         className={`${CHARACTER_EDITOR_SECTION_CLASSNAME} flex flex-1 min-h-[15rem] flex-col`}
       >
         <div className="flex items-center justify-between">
-          <span className="text-xs-tight font-semibold uppercase tracking-[0.08em] text-muted">
+          <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted">
             {t("charactereditor.AboutMe", {
               defaultValue: "About Me",
             })}
@@ -308,7 +308,7 @@ export function CharacterIdentityPanel({
         className={`${CHARACTER_EDITOR_SECTION_CLASSNAME} flex flex-1 min-h-[15rem] flex-col`}
       >
         <div className="flex items-center justify-between">
-          <span className="text-xs-tight font-semibold uppercase tracking-[0.08em] text-muted">
+          <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted">
             {t("charactereditor.SystemPrompt", {
               defaultValue: "System Prompt",
             })}
@@ -492,7 +492,7 @@ export function CharacterExamplesPanel({
       {/* Chat Examples */}
       <section className={CHARACTER_EDITOR_SECTION_CLASSNAME}>
         <div className="flex items-center justify-between">
-          <span className="text-xs-tight font-semibold uppercase tracking-[0.08em] text-muted">
+          <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted">
             {t("charactereditor.ChatExamples", {
               defaultValue: "Chat Examples",
             })}
@@ -583,7 +583,7 @@ export function CharacterExamplesPanel({
       {/* Post Examples */}
       <section className={CHARACTER_EDITOR_SECTION_CLASSNAME}>
         <div className="flex items-center justify-between">
-          <span className="text-xs-tight font-semibold uppercase tracking-[0.08em] text-muted">
+          <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted">
             {t("charactereditor.PostExamples", {
               defaultValue: "Post Examples",
             })}

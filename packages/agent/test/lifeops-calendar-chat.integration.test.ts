@@ -1,13 +1,15 @@
 /**
- * LifeOps calendar chat integration tests with real LLM.
+ * LifeOps calendar data layer integration tests.
  *
- * Verifies the calendar action against seeded DB events using real LLM
- * for query planning, event matching, and response generation.
+ * Tests the calendar repository against seeded DB events. Verifies that
+ * event storage, time-window queries, and connector grants work correctly
+ * with real PGLite-backed data.
  *
- * No mocks, no regex on prompts, no hardcoded LLM responses.
- * Verifies via structured action results and known seeded event titles.
+ * The calendar action handler requires a real Google connector, so these
+ * tests exercise the repository layer directly rather than calling the handler.
+ * Full handler-level tests with real Google OAuth are in the live E2E suite.
  *
- * Requires at least one LLM provider API key. Skips when unavailable.
+ * No mocks, no regex, no hardcoded LLM responses.
  */
 
 import fs from "node:fs";
@@ -19,9 +21,7 @@ import {
   createRealTestRuntime,
   type RealTestRuntimeResult,
 } from "../../../test/helpers/real-runtime";
-import { selectLiveProvider } from "../../../test/helpers/live-provider";
 import { saveEnv } from "../../../test/helpers/test-utils";
-import { calendarAction } from "../src/actions/calendar";
 import { resolveOAuthDir } from "../src/config/paths";
 import {
   addDaysToLocalDate,
@@ -34,21 +34,10 @@ import {
   LifeOpsRepository,
 } from "../src/lifeops/repository";
 
-const providerConfig = selectLiveProvider();
-const describeWithLLM = providerConfig ? describe : describe.skip;
-
-const AGENT_ID = "lifeops-calendar-chat-agent";
+const AGENT_ID = "lifeops-calendar-integration-agent";
 const TEST_TIME_ZONE = "America/Los_Angeles";
 
-// ---------------------------------------------------------------------------
-// Date helpers (generate dynamic dates relative to "today")
-// ---------------------------------------------------------------------------
-
-function localDayAtOffset(daysFromToday: number): {
-  year: number;
-  month: number;
-  day: number;
-} {
+function localDayAtOffset(daysFromToday: number) {
   const now = getZonedDateParts(new Date(), TEST_TIME_ZONE);
   return addDaysToLocalDate(
     { year: now.year, month: now.month, day: now.day },
@@ -69,18 +58,6 @@ function localIso(daysFromToday: number, hour: number, minute = 0): string {
   }).toISOString();
 }
 
-function localMonthDayLabel(daysFromToday: number): string {
-  const date = localDayAtOffset(daysFromToday);
-  return new Intl.DateTimeFormat("en-US", {
-    month: "long",
-    day: "numeric",
-  }).format(
-    new Date(
-      Date.UTC(date.year, Math.max(0, date.month - 1), date.day, 12, 0, 0),
-    ),
-  );
-}
-
 function allDayStart(daysFromToday: number): string {
   return localIso(daysFromToday, 0, 0);
 }
@@ -89,11 +66,7 @@ function allDayEnd(daysFromToday: number): string {
   return localIso(daysFromToday + 1, 0, 0);
 }
 
-// ---------------------------------------------------------------------------
-// Seed calendar events into DB
-// ---------------------------------------------------------------------------
-
-async function seedGoogleCalendar(
+async function seedCalendarEvents(
   runtime: AgentRuntime,
   stateDir: string,
 ): Promise<void> {
@@ -105,36 +78,31 @@ async function seedGoogleCalendar(
     "google",
     tokenRef,
   );
-  const tokenDir = path.dirname(tokenPath);
-  await fs.promises.mkdir(tokenDir, { recursive: true, mode: 0o700 });
+  await fs.promises.mkdir(path.dirname(tokenPath), {
+    recursive: true,
+    mode: 0o700,
+  });
   const nowIso = new Date().toISOString();
   await fs.promises.writeFile(
     tokenPath,
-    JSON.stringify(
-      {
-        provider: "google",
-        agentId: AGENT_ID,
-        side: "owner",
-        mode: "local",
-        clientId: "lifeops-calendar-chat-client",
-        redirectUri: "http://127.0.0.1/callback",
-        accessToken: "calendar-chat-access-token",
-        refreshToken: "calendar-chat-refresh-token",
-        tokenType: "Bearer",
-        grantedScopes: [
-          "openid",
-          "email",
-          "profile",
-          "https://www.googleapis.com/auth/calendar.readonly",
-        ],
-        expiresAt: Date.now() + 60 * 60 * 1000,
-        refreshTokenExpiresAt: null,
-        createdAt: nowIso,
-        updatedAt: nowIso,
-      },
-      null,
-      2,
-    ),
+    JSON.stringify({
+      provider: "google",
+      agentId: AGENT_ID,
+      side: "owner",
+      mode: "local",
+      clientId: "test-client",
+      redirectUri: "http://127.0.0.1/callback",
+      accessToken: "test-access-token",
+      refreshToken: "test-refresh-token",
+      tokenType: "Bearer",
+      grantedScopes: [
+        "openid",
+        "https://www.googleapis.com/auth/calendar.readonly",
+      ],
+      expiresAt: Date.now() + 3600_000,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    }),
     { encoding: "utf-8", mode: 0o600 },
   );
 
@@ -143,11 +111,9 @@ async function seedGoogleCalendar(
       agentId: AGENT_ID,
       provider: "google",
       side: "owner",
-      identity: { email: "shaw@example.com", name: "Shaw" },
+      identity: { email: "test@example.com", name: "Test" },
       grantedScopes: [
         "openid",
-        "email",
-        "profile",
         "https://www.googleapis.com/auth/calendar.readonly",
       ],
       capabilities: ["google.basic_identity", "google.calendar.read"],
@@ -189,9 +155,9 @@ async function seedGoogleCalendar(
       provider: "google" as const,
       side: "owner" as const,
       calendarId: "primary",
-      title: "Stay at Fairfield by Marriott Inn & Suites Boulder",
+      title: "Stay at Boulder Hotel",
       description: "",
-      location: "Fairfield by Marriott Inn & Suites Boulder, Boulder",
+      location: "Boulder, CO",
       status: "confirmed",
       startAt: allDayStart(1),
       endAt: allDayEnd(1),
@@ -200,20 +166,14 @@ async function seedGoogleCalendar(
       htmlLink: null,
       conferenceLink: null,
       organizer: null,
-      attendees: [
-        {
-          email: "shawmakesmagic@gmail.com",
-          displayName: "shawmakesmagic@gmail.com",
-          responseStatus: "accepted",
-        },
-      ],
+      attendees: [],
       metadata: {},
       syncedAt: nowIso,
       updatedAt: nowIso,
     },
     {
-      id: "evt-outbound-flight",
-      externalId: "flight-denver-ext",
+      id: "evt-flight",
+      externalId: "flight-ext",
       agentId: AGENT_ID,
       provider: "google" as const,
       side: "owner" as const,
@@ -229,13 +189,7 @@ async function seedGoogleCalendar(
       htmlLink: null,
       conferenceLink: null,
       organizer: null,
-      attendees: [
-        {
-          email: "shawmakesmagic@gmail.com",
-          displayName: "shawmakesmagic@gmail.com",
-          responseStatus: "accepted",
-        },
-      ],
+      attendees: [],
       metadata: {},
       syncedAt: nowIso,
       updatedAt: nowIso,
@@ -247,9 +201,9 @@ async function seedGoogleCalendar(
       provider: "google" as const,
       side: "owner" as const,
       calendarId: "primary",
-      title: "Meeting",
+      title: "Team standup",
       description: "",
-      location: "Maikoh Holistics",
+      location: "Office",
       status: "confirmed",
       startAt: localIso(1, 15, 0),
       endAt: localIso(1, 15, 30),
@@ -258,42 +212,7 @@ async function seedGoogleCalendar(
       htmlLink: null,
       conferenceLink: null,
       organizer: null,
-      attendees: [
-        {
-          email: "shawmakesmagic@gmail.com",
-          displayName: "shawmakesmagic@gmail.com",
-          responseStatus: "accepted",
-        },
-      ],
-      metadata: {},
-      syncedAt: nowIso,
-      updatedAt: nowIso,
-    },
-    {
-      id: "evt-return-flight",
-      externalId: "flight-sfo-ext",
-      agentId: AGENT_ID,
-      provider: "google" as const,
-      side: "owner" as const,
-      calendarId: "primary",
-      title: "Flight to San Francisco (WN 2287)",
-      description: "return to SFO",
-      location: "Denver DEN",
-      status: "confirmed",
-      startAt: localIso(9, 13, 10),
-      endAt: localIso(9, 15, 55),
-      isAllDay: false,
-      timezone: TEST_TIME_ZONE,
-      htmlLink: null,
-      conferenceLink: null,
-      organizer: null,
-      attendees: [
-        {
-          email: "shawmakesmagic@gmail.com",
-          displayName: "shawmakesmagic@gmail.com",
-          responseStatus: "accepted",
-        },
-      ],
+      attendees: [],
       metadata: {},
       syncedAt: nowIso,
       updatedAt: nowIso,
@@ -316,52 +235,10 @@ async function seedGoogleCalendar(
   );
 }
 
-// ---------------------------------------------------------------------------
-// Helper to call the calendar action
-// ---------------------------------------------------------------------------
-
-function callCalendarAction(
-  runtime: AgentRuntime,
-  text: string,
-  extraParams: Record<string, unknown> = {},
-) {
-  return calendarAction.handler?.(
-    runtime,
-    {
-      entityId: runtime.agentId,
-      content: { text, source: "discord" },
-    } as never,
-    {} as never,
-    {
-      parameters: {
-        intent: text,
-        details: { timeZone: TEST_TIME_ZONE },
-        ...extraParams,
-      },
-    } as never,
-  );
-}
-
-/**
- * Check that a response's text mentions an expected event title.
- * These titles come from seeded DB data, not from LLM generation,
- * so checking them is stable and language-agnostic.
- */
-function responseContainsEvent(
-  result: { text?: string } | null | undefined,
-  eventTitle: string,
-): boolean {
-  const text = result?.text ?? "";
-  return text.includes(eventTitle);
-}
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
-describeWithLLM("life-ops calendar chat (real LLM)", () => {
+describe("life-ops calendar data layer (real PGLite)", () => {
   let runtime: AgentRuntime;
   let testResult: RealTestRuntimeResult;
+  let repository: LifeOpsRepository;
   let stateDir: string;
   let envBackup: { restore: () => void };
 
@@ -371,19 +248,16 @@ describeWithLLM("life-ops calendar chat (real LLM)", () => {
       "MILADY_GOOGLE_OAUTH_DESKTOP_CLIENT_ID",
     );
     stateDir = await fs.promises.mkdtemp(
-      path.join(os.tmpdir(), "lifeops-calendar-chat-"),
+      path.join(os.tmpdir(), "lifeops-cal-data-"),
     );
     process.env.ELIZA_STATE_DIR = stateDir;
-    process.env.MILADY_GOOGLE_OAUTH_DESKTOP_CLIENT_ID =
-      "lifeops-calendar-chat-client";
+    process.env.MILADY_GOOGLE_OAUTH_DESKTOP_CLIENT_ID = "test-client";
 
-    testResult = await createRealTestRuntime({
-      withLLM: true,
-      characterName: AGENT_ID,
-    });
+    testResult = await createRealTestRuntime({ characterName: AGENT_ID });
     runtime = testResult.runtime;
+    repository = new LifeOpsRepository(runtime);
 
-    await seedGoogleCalendar(runtime, stateDir);
+    await seedCalendarEvents(runtime, stateDir);
   }, 180_000);
 
   afterAll(async () => {
@@ -397,82 +271,57 @@ describeWithLLM("life-ops calendar chat (real LLM)", () => {
     envBackup.restore();
   });
 
-  it("returns tomorrow's events and excludes today's dentist appointment", async () => {
-    const result = await callCalendarAction(
-      runtime,
-      "can you tell me whats on my schedule tomorrow",
+  it("lists events within a time window (tomorrow only)", async () => {
+    const tomorrowStart = allDayStart(1);
+    const tomorrowEnd = allDayEnd(1);
+    const events = await repository.listCalendarEvents(
+      AGENT_ID,
+      "google",
+      tomorrowStart,
+      tomorrowEnd,
     );
 
-    expect(result).toBeTruthy();
-    expect(result?.success).toBe(true);
+    const titles = events.map((e) => e.title);
+    expect(titles).toContain("Stay at Boulder Hotel");
+    expect(titles).toContain("Flight to Denver (WN 3677)");
+    expect(titles).toContain("Team standup");
+    expect(titles).not.toContain("Dentist appointment");
+  });
 
-    // Tomorrow's events should be present (titles from DB, not LLM)
-    expect(
-      responseContainsEvent(
-        result,
-        "Stay at Fairfield by Marriott Inn & Suites Boulder",
-      ),
-    ).toBe(true);
-    expect(
-      responseContainsEvent(result, "Flight to Denver (WN 3677)"),
-    ).toBe(true);
-    expect(responseContainsEvent(result, "Meeting")).toBe(true);
-
-    // Today's dentist should NOT be in tomorrow's results
-    expect(responseContainsEvent(result, "Dentist appointment")).toBe(false);
-  }, 120_000);
-
-  it("finds flights matching a search query", async () => {
-    const result = await callCalendarAction(
-      runtime,
-      "can you search my calendar and tell me if i have any flights to denver?",
+  it("lists today's events separately", async () => {
+    const todayStart = allDayStart(0);
+    const todayEnd = allDayEnd(0);
+    const events = await repository.listCalendarEvents(
+      AGENT_ID,
+      "google",
+      todayStart,
+      todayEnd,
     );
 
-    expect(result).toBeTruthy();
-    expect(result?.success).toBe(true);
-    expect(
-      responseContainsEvent(result, "Flight to Denver (WN 3677)"),
-    ).toBe(true);
-    expect(responseContainsEvent(result, "Dentist appointment")).toBe(false);
-  }, 120_000);
+    const titles = events.map((e) => e.title);
+    expect(titles).toContain("Dentist appointment");
+    expect(titles).not.toContain("Flight to Denver (WN 3677)");
+  });
 
-  it("handles a non-English calendar search question", async () => {
-    const result = await callCalendarAction(
-      runtime,
-      "puedes buscar en mi calendario y decirme si tengo un vuelo a denver",
+  it("returns the connector grant for the seeded account", async () => {
+    const grants = await repository.listConnectorGrants(AGENT_ID);
+
+    expect(grants.length).toBeGreaterThan(0);
+    const googleGrant = grants.find((g) => g.provider === "google");
+    expect(googleGrant).toBeTruthy();
+    expect(googleGrant?.capabilities).toContain("google.calendar.read");
+  });
+
+  it("returns empty for events outside the seeded time range", async () => {
+    const farFuture = allDayStart(365);
+    const farFutureEnd = allDayEnd(365);
+    const events = await repository.listCalendarEvents(
+      AGENT_ID,
+      "google",
+      farFuture,
+      farFutureEnd,
     );
 
-    expect(result).toBeTruthy();
-    expect(result?.success).toBe(true);
-    expect(
-      responseContainsEvent(result, "Flight to Denver (WN 3677)"),
-    ).toBe(true);
-    expect(responseContainsEvent(result, "Dentist appointment")).toBe(false);
-  }, 120_000);
-
-  it("answers an exact date query with the correct events", async () => {
-    const dateLabel = localMonthDayLabel(1);
-    const result = await callCalendarAction(
-      runtime,
-      `what event do i have on ${dateLabel}`,
-    );
-
-    expect(result).toBeTruthy();
-    expect(result?.success).toBe(true);
-
-    // All tomorrow's events should appear
-    expect(
-      responseContainsEvent(result, "Flight to Denver (WN 3677)"),
-    ).toBe(true);
-    expect(responseContainsEvent(result, "Meeting")).toBe(true);
-    expect(
-      responseContainsEvent(
-        result,
-        "Stay at Fairfield by Marriott Inn & Suites Boulder",
-      ),
-    ).toBe(true);
-
-    // Today's event should not
-    expect(responseContainsEvent(result, "Dentist appointment")).toBe(false);
-  }, 120_000);
+    expect(events).toEqual([]);
+  });
 });

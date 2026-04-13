@@ -30,7 +30,7 @@ export function TasksEventsPanel({
 
   const rootClassName = mobile
     ? "flex flex-1 min-h-0 flex-col overflow-hidden bg-bg"
-    : "flex min-h-0 w-[22rem] shrink-0 flex-col overflow-hidden border-l border-border bg-bg";
+    : "flex min-h-0 w-[22rem] shrink-0 flex-col overflow-hidden";
 
   return (
     <aside className={rootClassName} data-testid="chat-widgets-bar">

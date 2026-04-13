@@ -1273,7 +1273,7 @@ export function BabylonTerminal({ appName: _appName }: BabylonTerminalProps) {
   })();
 
   return (
-    <div className="flex h-full min-h-0 flex-col border-l border-border bg-bg">
+    <div className="flex h-full min-h-0 flex-col">
       <AgentStatusHeader
         agent={agentStatus}
         liveConnected={sse.connected}

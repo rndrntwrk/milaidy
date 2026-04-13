@@ -184,9 +184,7 @@ export const PROVIDER_CONTEXT_MAP: Record<string, AgentContext[]> = {
 };
 
 /** All canonical contexts. */
-export const ALL_CONTEXTS: AgentContext[] = [
-  ...AGENT_CONTEXTS,
-];
+export const ALL_CONTEXTS: AgentContext[] = [...AGENT_CONTEXTS];
 
 function sanitizeContexts(
   contexts?: AgentContext[],
@@ -203,7 +201,9 @@ function sanitizeContexts(
   return normalized.length > 0 ? normalized : undefined;
 }
 
-function resolveActionCatalogEntry(actionName: string): AgentContext[] | undefined {
+function resolveActionCatalogEntry(
+  actionName: string,
+): AgentContext[] | undefined {
   return ACTION_CONTEXT_MAP[actionName.toUpperCase()];
 }
 

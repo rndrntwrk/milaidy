@@ -39,7 +39,7 @@ function formatError(err: unknown): string {
 
 type FirstTimeSetupCloudResult =
   import("./cloud-onboarding").CloudOnboardingResult;
-const DEFAULT_ONBOARDING_AGENT_NAME = "Chen";
+const DEFAULT_ONBOARDING_AGENT_NAME = getStylePresets()[0]?.name ?? "Eliza";
 
 export function applyFirstTimeSetupTopology(
   config: ElizaConfig,

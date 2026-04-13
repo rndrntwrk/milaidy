@@ -1,4 +1,5 @@
 import type { IAgentRuntime, Task } from "@elizaos/core";
+import { loadElizaConfig, saveElizaConfig } from "../config/config.js";
 import {
   ensureLifeOpsSchedulerTask,
   LIFEOPS_TASK_NAME,
@@ -69,7 +70,9 @@ function isLifeOpsSchedulerTask(task: Task): boolean {
   );
 }
 
-function buildFallbackSchedulerMetadata(agentId: string): Record<string, unknown> {
+function buildFallbackSchedulerMetadata(
+  agentId: string,
+): Record<string, unknown> {
   const intervalMs = resolveLifeOpsTaskIntervalMs(agentId as never);
   return {
     updateInterval: intervalMs,
@@ -80,6 +83,38 @@ function buildFallbackSchedulerMetadata(agentId: string): Record<string, unknown
       version: 1,
     },
   };
+}
+
+function readConfiguredOwnerNameFromConfig(): string | null {
+  try {
+    const config = loadElizaConfig() as Record<string, unknown>;
+    const ui = isRecord(config.ui) ? config.ui : null;
+    return normalizeProfileValue(ui?.ownerName, OWNER_NAME_MAX_LENGTH);
+  } catch {
+    return null;
+  }
+}
+
+function writeConfiguredOwnerNameToConfig(name: string): boolean {
+  const normalized = normalizeProfileValue(name, OWNER_NAME_MAX_LENGTH);
+  if (!normalized) {
+    return false;
+  }
+
+  try {
+    const config = loadElizaConfig() as Record<string, unknown>;
+    const nextUi = isRecord(config.ui) ? config.ui : {};
+    saveElizaConfig({
+      ...config,
+      ui: {
+        ...nextUi,
+        ownerName: normalized,
+      },
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function readLifeOpsSchedulerTask(
@@ -113,6 +148,11 @@ export function normalizeLifeOpsOwnerProfilePatch(
 }
 
 export async function fetchConfiguredOwnerName(): Promise<string | null> {
+  const fromConfig = readConfiguredOwnerNameFromConfig();
+  if (fromConfig) {
+    return fromConfig;
+  }
+
   try {
     const response = await fetch(`http://localhost:${API_PORT}/api/config`, {
       signal: AbortSignal.timeout(3_000),
@@ -128,12 +168,15 @@ export async function fetchConfiguredOwnerName(): Promise<string | null> {
   }
 }
 
-export async function persistConfiguredOwnerName(name: string): Promise<boolean> {
+export async function persistConfiguredOwnerName(
+  name: string,
+): Promise<boolean> {
   const normalized = normalizeProfileValue(name, OWNER_NAME_MAX_LENGTH);
   if (!normalized) {
     return false;
   }
 
+  const savedToConfig = writeConfiguredOwnerNameToConfig(normalized);
   try {
     const response = await fetch(`http://localhost:${API_PORT}/api/config`, {
       method: "PUT",
@@ -141,9 +184,9 @@ export async function persistConfiguredOwnerName(name: string): Promise<boolean>
       body: JSON.stringify({ ui: { ownerName: normalized } }),
       signal: AbortSignal.timeout(5_000),
     });
-    return response.ok;
+    return response.ok || savedToConfig;
   } catch {
-    return false;
+    return savedToConfig;
   }
 }
 
@@ -151,7 +194,9 @@ export function resolveLifeOpsOwnerProfile(
   metadata: Record<string, unknown> | null | undefined,
   configuredName?: string | null,
 ): LifeOpsOwnerProfile {
-  const ownerProfile = isRecord(metadata?.ownerProfile) ? metadata.ownerProfile : null;
+  const ownerProfile = isRecord(metadata?.ownerProfile)
+    ? metadata.ownerProfile
+    : null;
   const normalized = normalizeLifeOpsOwnerProfilePatch(ownerProfile);
   const updatedAt =
     ownerProfile && typeof ownerProfile.updatedAt === "string"

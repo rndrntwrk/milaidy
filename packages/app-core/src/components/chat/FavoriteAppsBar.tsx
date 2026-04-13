@@ -105,7 +105,7 @@ export function FavoriteAppsBar() {
   if (favoriteAppList.length === 0) return null;
 
   return (
-    <div className="flex flex-wrap items-center gap-2 border-b border-border/30 pb-3">
+    <div className="flex flex-wrap items-center gap-2">
       {favoriteAppList.map((app) => {
         const displayName = app.displayName ?? getAppShortName(app);
         return (

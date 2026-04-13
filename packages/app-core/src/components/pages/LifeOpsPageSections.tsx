@@ -18,6 +18,10 @@ export type ManagedAgentGithubEntry = {
   github: CloudCompatManagedGithubStatus | null;
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 function formatDateTime(value: string | null | undefined): string {
   if (!value) {
     return "—";
@@ -253,31 +257,43 @@ export function GoalList({ goals }: { goals: LifeOpsGoalDefinition[] }) {
 
   return (
     <>
-      {goals.map((goal) => (
-        <div
-          key={goal.id}
-          className="rounded-2xl border border-border/40 bg-bg/60 p-3"
-        >
-          <div className="flex items-start gap-2">
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-semibold text-txt">
-                {goal.title}
+      {goals.map((goal) => {
+        const goalMetadata = isRecord(goal.metadata) ? goal.metadata : null;
+        const grounding =
+          goalMetadata && isRecord(goalMetadata.goalGrounding)
+            ? (goalMetadata.goalGrounding as Record<string, unknown>)
+            : null;
+        const groundingSummary =
+          grounding && typeof grounding.summary === "string"
+            ? grounding.summary
+            : null;
+        const goalDescription = goal.description.trim() || groundingSummary;
+        return (
+          <div
+            key={goal.id}
+            className="rounded-2xl border border-border/40 bg-bg/60 p-3"
+          >
+            <div className="flex items-start gap-2">
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-semibold text-txt">
+                  {goal.title}
+                </div>
+                <div className="mt-1 text-xs leading-5 text-muted">
+                  {goalDescription || "No goal detail yet."}
+                </div>
               </div>
-              <div className="mt-1 text-xs leading-5 text-muted">
-                {goal.description.trim() || "No goal detail yet."}
-              </div>
+              <Badge variant="secondary" className="text-2xs">
+                {humanize(goal.reviewState)}
+              </Badge>
             </div>
-            <Badge variant="secondary" className="text-2xs">
-              {humanize(goal.reviewState)}
-            </Badge>
+            <div className="mt-2 flex flex-wrap gap-2 text-xs-tight text-muted">
+              <span>{humanize(goal.status)}</span>
+              <span>{humanize(goal.domain)}</span>
+              <span>Updated {formatDateTime(goal.updatedAt)}</span>
+            </div>
           </div>
-          <div className="mt-2 flex flex-wrap gap-2 text-xs-tight text-muted">
-            <span>{humanize(goal.status)}</span>
-            <span>{humanize(goal.domain)}</span>
-            <span>Updated {formatDateTime(goal.updatedAt)}</span>
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </>
   );
 }

@@ -105,27 +105,27 @@ export function DocumentViewer({ documentId }: { documentId: string | null }) {
   const previewText = doc?.content?.text?.trim();
 
   return (
-    <PagePanel className="min-h-[62vh] overflow-hidden">
+    <PagePanel className="flex flex-col overflow-hidden">
       {doc && (
-        <div className="flex flex-wrap items-center gap-2 px-5 pt-5 sm:px-6 lg:justify-end">
-          <span className="rounded-full border border-border/45 bg-bg/25 px-3 py-1.5 text-xs-tight font-semibold text-muted">
+        <div className="flex flex-wrap items-center gap-2 px-4 pt-4">
+          <span className="rounded-full border border-border/45 bg-bg/25 px-2.5 py-1 text-2xs font-semibold text-muted">
             {getKnowledgeTypeLabel(doc.contentType)}
           </span>
-          <span className="rounded-full border border-accent/25 bg-accent/8 px-3 py-1.5 text-xs-tight font-semibold text-txt-strong">
+          <span className="rounded-full border border-accent/25 bg-accent/8 px-2.5 py-1 text-2xs font-semibold text-txt-strong">
             {getKnowledgeSourceLabel(doc.source, t)}
           </span>
         </div>
       )}
-      <div className="space-y-4 px-5 py-5 sm:px-6">
+      <div className="space-y-3 px-4 py-4">
         {loading && (
-          <div className="py-12 text-center font-bold tracking-wide text-muted animate-pulse">
+          <div className="py-10 text-center font-bold tracking-wide text-muted animate-pulse">
             <span className="mr-3 inline-block h-4 w-4 animate-spin rounded-full border-2 border-accent border-t-transparent align-middle" />
             {t("databaseview.Loading")}
           </div>
         )}
 
         {error && (
-          <div className="mx-auto max-w-lg rounded-2xl border border-danger/25 bg-danger/10 py-10 text-center font-medium text-danger">
+          <div className="rounded-xl border border-danger/25 bg-danger/10 py-8 text-center text-sm font-medium text-danger">
             {error}
           </div>
         )}
@@ -133,10 +133,10 @@ export function DocumentViewer({ documentId }: { documentId: string | null }) {
         {!loading && !error && !doc && (
           <PagePanel.Empty
             variant="inset"
-            className="px-6 py-16"
+            className="px-4 py-12"
             description={t("knowledgeview.NoDocumentSelectedDesc", {
               defaultValue:
-                "Upload a file or choose an item from the sidebar to start viewing fragments and metadata.",
+                "Select a document from the list to view its fragments and metadata.",
             })}
             title={t("knowledgeview.NoDocumentSelected", {
               defaultValue: "No document selected",
@@ -146,121 +146,116 @@ export function DocumentViewer({ documentId }: { documentId: string | null }) {
 
         {!loading && !error && doc && (
           <>
-            <div className="grid gap-3 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.9fr)]">
-              <PagePanel variant="inset" className="p-5">
-                <div className="mb-3 flex items-center justify-between gap-3 border-b border-border/25 pb-3">
-                  <div className="text-sm font-semibold text-txt">
-                    {t("knowledgeview.Preview", { defaultValue: "Preview" })}
-                  </div>
-                  <span className="rounded-full border border-border/35 bg-bg/25 px-2.5 py-1 text-2xs font-semibold uppercase tracking-[0.14em] text-muted/70">
-                    {formatByteSize(doc.fileSize)}
+            {/* Preview */}
+            <PagePanel variant="inset" className="p-4">
+              <div className="mb-2 flex items-center justify-between gap-2 border-b border-border/25 pb-2">
+                <div className="text-xs font-semibold text-txt">
+                  {t("knowledgeview.Preview", { defaultValue: "Preview" })}
+                </div>
+                <span className="rounded-full border border-border/35 bg-bg/25 px-2 py-0.5 text-3xs font-semibold uppercase tracking-[0.14em] text-muted/70">
+                  {formatByteSize(doc.fileSize)}
+                </span>
+              </div>
+              {previewText ? (
+                <pre className="max-h-[10rem] overflow-auto whitespace-pre-wrap break-words text-xs leading-relaxed text-txt/88 custom-scrollbar">
+                  {previewText.slice(0, 800)}
+                </pre>
+              ) : (
+                <div className="py-6 text-center text-xs text-muted">
+                  {t("knowledgeview.NoPreview", {
+                    defaultValue: "Full text preview is not available",
+                  })}
+                </div>
+              )}
+            </PagePanel>
+
+            {/* Details */}
+            <PagePanel variant="inset" className="p-4">
+              <div className="mb-3 text-xs font-semibold text-txt">
+                {t("knowledgeview.Details", { defaultValue: "Details" })}
+              </div>
+              <div className="grid gap-2.5 text-xs">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-2xs font-bold uppercase tracking-widest text-muted/70">
+                    {t("knowledgeview.Type")}
+                  </span>
+                  <span className="rounded-md border border-border/25 bg-bg-hover px-2 py-0.5 text-2xs font-medium text-txt">
+                    {doc.contentType}
                   </span>
                 </div>
-                {previewText ? (
-                  <pre className="max-h-[12rem] overflow-auto whitespace-pre-wrap break-words text-sm leading-relaxed text-txt/88 custom-scrollbar">
-                    {previewText.slice(0, 1200)}
-                  </pre>
-                ) : (
-                  <PagePanel.Empty
-                    variant="inset"
-                    className="min-h-[10rem] px-4 py-10 text-sm"
-                    description={t("knowledgeview.NoPreviewDesc", {
-                      defaultValue:
-                        "Indexed fragments are still available below for this document type.",
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-2xs font-bold uppercase tracking-widest text-muted/70">
+                    {t("knowledgeview.Source")}
+                  </span>
+                  <span className="rounded-md border border-border/25 bg-bg-hover px-2 py-0.5 text-2xs font-medium text-txt">
+                    {doc.source}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-2xs font-bold uppercase tracking-widest text-muted/70">
+                    {t("knowledgeview.Uploaded", {
+                      defaultValue: "Uploaded",
                     })}
-                    title={t("knowledgeview.NoPreview", {
-                      defaultValue: "Full text preview is not available",
+                  </span>
+                  <span className="rounded-md border border-border/25 bg-bg-hover px-2 py-0.5 text-2xs font-medium text-txt">
+                    {formatShortDate(doc.createdAt, { fallback: "\u2014" })}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-2xs font-bold uppercase tracking-widest text-muted/70">
+                    {t("knowledgeview.FragmentsLabel", {
+                      defaultValue: "Fragments",
                     })}
-                  />
+                  </span>
+                  <span className="rounded-md border border-border/25 bg-bg-hover px-2 py-0.5 text-2xs font-medium text-txt">
+                    {fragments.length}
+                  </span>
+                </div>
+                {doc.url && (
+                  <div className="border-t border-border/20 pt-2.5">
+                    <span className="text-2xs font-bold uppercase tracking-widest text-muted/70">
+                      {t("appsview.URL")}
+                    </span>
+                    <a
+                      href={doc.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-1 block break-all text-xs font-medium text-txt underline decoration-accent/30 underline-offset-4 transition-colors hover:text-txt/80"
+                    >
+                      {doc.url}
+                    </a>
+                  </div>
                 )}
-              </PagePanel>
+              </div>
+            </PagePanel>
 
-              <PagePanel variant="inset" className="p-5">
-                <div className="text-sm font-semibold text-txt">
-                  {t("knowledgeview.Details", { defaultValue: "Details" })}
-                </div>
-                <div className="mt-4 grid gap-3 text-xs">
-                  <div className="flex flex-col gap-1.5">
-                    <span className="text-2xs font-bold uppercase tracking-widest text-muted/70">
-                      {t("knowledgeview.Type")}
-                    </span>
-                    <span className="inline-block w-fit rounded-md border border-border/25 bg-bg-hover px-2 py-1 font-medium text-txt">
-                      {doc.contentType}
-                    </span>
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <span className="text-2xs font-bold uppercase tracking-widest text-muted/70">
-                      {t("knowledgeview.Source")}
-                    </span>
-                    <span className="inline-block w-fit rounded-md border border-border/25 bg-bg-hover px-2 py-1 font-medium text-txt">
-                      {doc.source}
-                    </span>
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <span className="text-2xs font-bold uppercase tracking-widest text-muted/70">
-                      {t("knowledgeview.Uploaded", {
-                        defaultValue: "Uploaded",
-                      })}
-                    </span>
-                    <span className="inline-block w-fit rounded-md border border-border/25 bg-bg-hover px-2 py-1 font-medium text-txt">
-                      {formatShortDate(doc.createdAt, { fallback: "\u2014" })}
-                    </span>
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <span className="text-2xs font-bold uppercase tracking-widest text-muted/70">
-                      {t("knowledgeview.FragmentsLabel", {
-                        defaultValue: "Fragments",
-                      })}
-                    </span>
-                    <span className="inline-block w-fit rounded-md border border-border/25 bg-bg-hover px-2 py-1 font-medium text-txt">
-                      {fragments.length}
-                    </span>
-                  </div>
-                  {doc.url && (
-                    <div className="mt-1 flex flex-col gap-1.5 border-t border-border/20 pt-4">
-                      <span className="text-2xs font-bold uppercase tracking-widest text-muted/70">
-                        {t("appsview.URL")}
-                      </span>
-                      <a
-                        href={doc.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="break-all text-sm font-medium text-txt underline decoration-accent/30 underline-offset-4 transition-colors hover:text-txt/80"
-                      >
-                        {doc.url}
-                      </a>
-                    </div>
-                  )}
-                </div>
-              </PagePanel>
-            </div>
-
-            <PagePanel variant="inset" className="p-5">
-              <div className="mb-4 flex items-center justify-between border-b border-border/30 pb-3">
-                <h3 className="text-sm font-bold tracking-wide text-txt">
+            {/* Fragments */}
+            <PagePanel variant="inset" className="p-4">
+              <div className="mb-3 flex items-center justify-between border-b border-border/30 pb-2">
+                <h3 className="text-xs font-bold tracking-wide text-txt">
                   {t("knowledgeview.Fragments1")}
-                  <span className="ml-2 rounded-full border border-border/30 bg-bg-hover px-2 py-0.5 font-mono text-xs text-muted-strong">
+                  <span className="ml-1.5 rounded-full border border-border/30 bg-bg-hover px-1.5 py-0.5 font-mono text-2xs text-muted-strong">
                     {fragments.length}
                   </span>
                 </h3>
               </div>
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {fragments.map((fragment, index) => (
                   <div
                     key={fragment.id}
-                    className="rounded-xl border border-border/30 bg-card/86 p-4 shadow-sm transition-colors hover:border-accent/30"
+                    className="rounded-lg border border-border/30 bg-card/86 p-3 shadow-sm transition-colors hover:border-accent/30"
                   >
-                    <div className="mb-3 flex items-center justify-between">
-                      <span className="text-xs-tight font-bold uppercase tracking-widest text-muted">
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="text-2xs font-bold uppercase tracking-widest text-muted">
                         {t("knowledgeview.Fragment")} {index + 1}
                       </span>
                       {fragment.position !== undefined && (
-                        <span className="rounded-md border border-border/25 bg-bg-hover px-2 py-0.5 font-mono text-2xs text-muted-strong">
+                        <span className="rounded-md border border-border/25 bg-bg-hover px-1.5 py-0.5 font-mono text-3xs text-muted-strong">
                           {t("knowledgeview.Position")} {fragment.position}
                         </span>
                       )}
                     </div>
-                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-txt/90 line-clamp-6">
+                    <p className="whitespace-pre-wrap text-xs leading-relaxed text-txt/90 line-clamp-4">
                       {fragment.text}
                     </p>
                   </div>
@@ -268,7 +263,7 @@ export function DocumentViewer({ documentId }: { documentId: string | null }) {
                 {fragments.length === 0 && (
                   <PagePanel.Empty
                     variant="inset"
-                    className="min-h-[10rem] py-12"
+                    className="min-h-[8rem] py-8"
                     title={t("knowledgeview.NoFragmentsFound")}
                   />
                 )}

@@ -7,7 +7,6 @@
  *
  * Requires:
  *   - MILADY_LIVE_TEST=1 (or ELIZA_LIVE_TEST=1)
- *   - ELIZA_RUN_PERSONALITY_ROUTING_E2E=1
  *   - at least one real model provider API key
  */
 import crypto from "node:crypto";
@@ -27,6 +26,7 @@ import {
 } from "@elizaos/core";
 import dotenv from "dotenv";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { selectLiveProvider } from "../../../test/helpers/live-provider";
 import { USER_PREFS_TABLE } from "../../../plugins/plugin-personality/typescript/src/types";
 import { withTimeout } from "../../../test/helpers/test-utils";
 import { configureLocalEmbeddingPlugin } from "../src/runtime/eliza";
@@ -40,14 +40,12 @@ const packageRoot = path.resolve(testDir, "..");
 dotenv.config({ path: path.resolve(packageRoot, ".env") });
 dotenv.config({ path: path.resolve(packageRoot, "..", "..", ".env") });
 
-const hasOpenAI = Boolean(process.env.OPENAI_API_KEY);
-const hasAnthropic = Boolean(process.env.ANTHROPIC_API_KEY);
-const hasGroq = Boolean(process.env.GROQ_API_KEY);
 const liveModelTestsEnabled =
   process.env.MILADY_LIVE_TEST === "1" || process.env.ELIZA_LIVE_TEST === "1";
-const runE2E = process.env.ELIZA_RUN_PERSONALITY_ROUTING_E2E === "1";
-const hasModelProvider =
-  liveModelTestsEnabled && runE2E && (hasOpenAI || hasAnthropic || hasGroq);
+const selectedLiveProvider = liveModelTestsEnabled
+  ? selectLiveProvider()
+  : null;
+const hasModelProvider = liveModelTestsEnabled && selectedLiveProvider !== null;
 
 async function loadPlugin(name: string): Promise<Plugin | null> {
   try {
@@ -107,22 +105,15 @@ if (hasModelProvider) {
       process.env.LOG_LEVEL = "error";
       process.env.PGLITE_DATA_DIR = pgliteDir;
 
-      const secrets: Record<string, string> = {};
-      if (hasOpenAI) {
-        secrets.OPENAI_API_KEY = process.env.OPENAI_API_KEY!;
+      if (!selectedLiveProvider) {
+        throw new Error("No live model provider configured.");
       }
-      if (hasAnthropic) {
-        secrets.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY!;
+      for (const [key, value] of Object.entries(selectedLiveProvider.env)) {
+        process.env[key] = value;
       }
-      if (hasGroq) {
-        secrets.GROQ_API_KEY = process.env.GROQ_API_KEY!;
-        secrets.GROQ_SMALL_MODEL =
-          process.env.GROQ_SMALL_MODEL || "llama-3.1-8b-instant";
-        secrets.GROQ_LARGE_MODEL =
-          process.env.GROQ_LARGE_MODEL || "qwen/qwen3-32b";
-        process.env.GROQ_SMALL_MODEL = secrets.GROQ_SMALL_MODEL;
-        process.env.GROQ_LARGE_MODEL = secrets.GROQ_LARGE_MODEL;
-      }
+      const secrets: Record<string, string> = {
+        ...selectedLiveProvider.env,
+      };
 
       const character = createCharacter({
         name: "PersonalityTestAgent",
@@ -141,21 +132,9 @@ if (hasModelProvider) {
         plugins.push(personalityPlugin);
       }
 
-      if (hasOpenAI) {
-        const plugin = await loadPlugin("@elizaos/plugin-openai");
-        if (plugin) {
-          plugins.push(plugin);
-        }
-      } else if (hasAnthropic) {
-        const plugin = await loadPlugin("@elizaos/plugin-anthropic");
-        if (plugin) {
-          plugins.push(plugin);
-        }
-      } else if (hasGroq) {
-        const plugin = await loadPlugin("@elizaos/plugin-groq");
-        if (plugin) {
-          plugins.push(plugin);
-        }
+      const modelPlugin = await loadPlugin(selectedLiveProvider.pluginPackage);
+      if (modelPlugin) {
+        plugins.push(modelPlugin);
       }
 
       runtime = new AgentRuntime({

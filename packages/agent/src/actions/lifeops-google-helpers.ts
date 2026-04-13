@@ -608,6 +608,77 @@ function isRelevantToToday(
   return anchorKey <= todayKey;
 }
 
+type RemainingTodayGroup = {
+  definitionId: string;
+  title: string;
+  count: number;
+  earliestAnchorMs: number;
+  windows: string[];
+};
+
+function normalizeRemainingTodayWindowLabel(
+  value: string | null | undefined,
+): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed.toLowerCase() : null;
+}
+
+function buildRemainingTodayGroups(
+  occurrences: LifeOpsOccurrenceView[],
+  now: Date,
+): RemainingTodayGroup[] {
+  const groups = new Map<string, RemainingTodayGroup>();
+
+  for (const occurrence of occurrences) {
+    if (!isRelevantToToday(occurrence, now)) {
+      continue;
+    }
+
+    const key = `${occurrence.definitionId}:${occurrence.title}`;
+    const anchorMs = Date.parse(overviewAnchorIso(occurrence));
+    const windowLabel = normalizeRemainingTodayWindowLabel(occurrence.windowName);
+    const existing = groups.get(key);
+    if (existing) {
+      existing.count += 1;
+      if (Number.isFinite(anchorMs) && anchorMs < existing.earliestAnchorMs) {
+        existing.earliestAnchorMs = anchorMs;
+      }
+      if (windowLabel && !existing.windows.includes(windowLabel)) {
+        existing.windows.push(windowLabel);
+      }
+      continue;
+    }
+
+    groups.set(key, {
+      definitionId: occurrence.definitionId,
+      title: occurrence.title,
+      count: 1,
+      earliestAnchorMs: Number.isFinite(anchorMs) ? anchorMs : Number.MAX_SAFE_INTEGER,
+      windows: windowLabel ? [windowLabel] : [],
+    });
+  }
+
+  return [...groups.values()].sort(
+    (left, right) => left.earliestAnchorMs - right.earliestAnchorMs,
+  );
+}
+
+function formatRemainingTodayLabel(group: RemainingTodayGroup): string {
+  if (group.windows.length === 1) {
+    return `${group.title} ${group.windows[0]}`;
+  }
+  if (group.windows.length > 1) {
+    return `${group.title} (${formatHumanList(group.windows)})`;
+  }
+  if (group.count > 1) {
+    return `${group.title} (${group.count} times)`;
+  }
+  return group.title;
+}
+
 function formatHumanList(items: string[]): string {
   if (items.length === 0) return "";
   if (items.length === 1) return items[0] || "";
@@ -625,20 +696,21 @@ export function formatOverviewForQuery(
   if (!looksLikeRemainingTodayOverviewQuery(query)) {
     return formatOverview(overview);
   }
-  const remainingToday = overview.owner.occurrences.filter((occurrence) =>
-    isRelevantToToday(occurrence, now),
+  const remainingTodayGroups = buildRemainingTodayGroups(
+    overview.owner.occurrences,
+    now,
   );
-  if (remainingToday.length === 0) {
+  if (remainingTodayGroups.length === 0) {
     return "You don't have any LifeOps tasks left for today.";
   }
-  const labels = remainingToday
+  const labels = remainingTodayGroups
     .slice(0, 5)
-    .map((occurrence) => occurrence.title);
-  const noun = remainingToday.length === 1 ? "task" : "tasks";
-  if (remainingToday.length <= labels.length) {
-    return `You have ${remainingToday.length} LifeOps ${noun} left for today: ${formatHumanList(labels)}.`;
+    .map((group) => formatRemainingTodayLabel(group));
+  const noun = remainingTodayGroups.length === 1 ? "task" : "tasks";
+  if (remainingTodayGroups.length <= labels.length) {
+    return `You have ${remainingTodayGroups.length} LifeOps ${noun} left for today: ${formatHumanList(labels)}.`;
   }
-  return `You have ${remainingToday.length} LifeOps ${noun} left for today. Next up: ${formatHumanList(labels)}, plus ${remainingToday.length - labels.length} more.`;
+  return `You have ${remainingTodayGroups.length} LifeOps ${noun} left for today. Next up: ${formatHumanList(labels)}, plus ${remainingTodayGroups.length - labels.length} more.`;
 }
 
 export type GoogleCapabilityStatus = {

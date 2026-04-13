@@ -1209,6 +1209,9 @@ export interface CreateLifeOpsGmailReplyDraftRequest {
   tone?: LifeOpsGmailDraftTone;
   intent?: string;
   includeQuotedOriginal?: boolean;
+  conversationContext?: string[];
+  actionHistory?: string[];
+  trajectorySummary?: string | null;
 }
 
 export interface LifeOpsGmailReplyDraft {
@@ -1234,6 +1237,9 @@ export interface CreateLifeOpsGmailBatchReplyDraftsRequest {
   intent?: string;
   includeQuotedOriginal?: boolean;
   replyNeededOnly?: boolean;
+  conversationContext?: string[];
+  actionHistory?: string[];
+  trajectorySummary?: string | null;
 }
 
 export interface LifeOpsGmailBatchReplyDraftsSummary {
@@ -1544,6 +1550,13 @@ export interface LifeOpsGoalReview {
     lastActivityAt: string | null;
     reviewState: LifeOpsGoalReviewState;
     explanation: string;
+    progressScore?: number | null;
+    confidence?: number | null;
+    evidenceSummary?: string | null;
+    missingEvidence?: string[];
+    groundingState?: string | null;
+    groundingSummary?: string | null;
+    semanticReviewedAt?: string | null;
   };
 }
 

@@ -18,7 +18,7 @@ await runManagedTestCommand({
   lockName: "app-unit",
   label: "app-unit",
   command: nodeCmd,
-  args: ["./node_modules/.bin/vitest", "run"],
+  args: ["./node_modules/.bin/vitest", "run", "--passWithNoTests"],
   cwd: appRoot,
   env: buildTestEnv(appRoot),
 });

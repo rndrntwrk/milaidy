@@ -67,13 +67,31 @@ export function useOnboardingCompat({
         dispatch({ type: "SET_REMOTE_TOKEN", value });
       },
       setOnboardingRemoteConnecting: (value: boolean): void => {
-        setRemoteStatus(value ? "connecting" : "idle");
+        if (value) {
+          setRemoteStatus("connecting");
+          return;
+        }
+        if (remote.status === "connecting") {
+          setRemoteStatus("idle");
+        }
       },
       setOnboardingRemoteError: (value: string | null): void => {
-        setRemoteStatus(value ? "error" : "idle", value);
+        if (value) {
+          setRemoteStatus("error", value);
+          return;
+        }
+        if (remote.status === "error") {
+          setRemoteStatus("idle");
+        }
       },
       setOnboardingRemoteConnected: (value: boolean): void => {
-        setRemoteStatus(value ? "connected" : "idle");
+        if (value) {
+          setRemoteStatus("connected");
+          return;
+        }
+        if (remote.status === "connected") {
+          setRemoteStatus("idle");
+        }
       },
       setOnboardingOpenRouterModel: bindField("openRouterModel") as (
         value: string,

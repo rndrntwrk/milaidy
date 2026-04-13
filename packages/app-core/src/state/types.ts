@@ -95,11 +95,7 @@ export interface NavigationEventsApi {
   scheduleAfterTabCommit: (fn: () => void) => void;
 }
 
-export type OnboardingStep =
-  | "deployment"
-  | "identity"
-  | "providers"
-  | "features";
+export type OnboardingStep = "deployment" | "providers" | "features";
 
 export interface OnboardingStepMeta {
   id: OnboardingStep;
@@ -107,17 +103,12 @@ export interface OnboardingStepMeta {
   subtitle: string;
 }
 
-/** 4-step onboarding flow — deployment absorbs the old splash page, features enables connectors. */
+/** 3-step onboarding flow — setup, provider connection, then optional features. */
 export const ONBOARDING_STEPS: OnboardingStepMeta[] = [
   {
     id: "deployment",
     name: "onboarding.stepName.deployment",
     subtitle: "onboarding.stepSub.deployment",
-  },
-  {
-    id: "identity",
-    name: "onboarding.stepName.identity",
-    subtitle: "onboarding.stepSub.identity",
   },
   {
     id: "providers",

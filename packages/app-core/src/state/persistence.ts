@@ -289,10 +289,12 @@ const ONBOARDING_STEP_STORAGE_KEY = "eliza:onboarding:step";
 function normalizeOnboardingStep(value: unknown): OnboardingStep | null {
   switch (value) {
     case "deployment":
-    case "identity":
     case "providers":
     case "features":
       return value;
+    case "identity":
+      // Identity/character selection was removed; restart at the setup step.
+      return "deployment";
     case "permissions":
     case "launch":
       // permissions/launch removed — resume at providers

@@ -319,6 +319,7 @@ export function Header({
                         title={group.description}
                         style={HEADER_BUTTON_STYLE}
                       >
+                        <group.icon className="pointer-events-none h-3.5 w-3.5 shrink-0" />
                         <span
                           data-testid={`header-nav-label-${primaryTab}`}
                           className="pointer-events-none inline"
@@ -398,6 +399,7 @@ export function Header({
                           setMobileMenuOpen(false);
                         }}
                       >
+                        <group.icon className="pointer-events-none h-4 w-4 shrink-0" />
                         <div className="pointer-events-none flex-1 text-left">
                           <div className="font-medium">
                             {t(NAV_LABEL_I18N_KEY[group.label] ?? group.label)}

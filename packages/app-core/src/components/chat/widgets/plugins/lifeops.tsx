@@ -12,7 +12,10 @@ import { CalendarDays, Mail, Plug2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { client } from "../../../../api";
-import { useGoogleLifeOpsConnector } from "../../../../hooks";
+import {
+  useGoogleLifeOpsConnector,
+  useLifeOpsAppState,
+} from "../../../../hooks";
 import { WidgetSection } from "../shared";
 import type {
   ChatSidebarWidgetDefinition,
@@ -258,6 +261,7 @@ function GoogleAccountCard({
 }
 
 export function GoogleSidebarWidget(_props: ChatSidebarWidgetProps) {
+  const lifeOpsApp = useLifeOpsAppState();
   const timeZone = useMemo(
     () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
     [],
@@ -364,6 +368,10 @@ export function GoogleSidebarWidget(_props: ChatSidebarWidgetProps) {
   const connectorError = formatGoogleConnectorError(
     ownerConnector.error ?? agentConnector.error ?? feedError ?? null,
   );
+
+  if (lifeOpsApp.loading || !lifeOpsApp.enabled) {
+    return null;
+  }
 
   if (connectedConnectors.length === 0) {
     return null;

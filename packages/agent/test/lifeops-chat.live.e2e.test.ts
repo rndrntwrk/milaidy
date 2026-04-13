@@ -12,6 +12,7 @@ import {
   req,
 } from "../../../test/helpers/http";
 import { loadElizaConfig } from "../src/config/config";
+import { judgeTextWithLlm } from "./helpers/lifeops-live-judge.ts";
 
 const LIVE_TESTS_ENABLED =
   process.env.MILADY_LIVE_TEST === "1" || process.env.ELIZA_LIVE_TEST === "1";
@@ -568,10 +569,9 @@ async function waitForDefinitionByTitle(
   return match;
 }
 
-async function waitForGoalByTitle(
+async function waitForNewGoal(
   port: number,
-  title: string,
-  predicate?: (entry: { goal?: Record<string, unknown> }) => boolean,
+  existingGoalIds: Set<string>,
 ): Promise<{
   goal?: Record<string, unknown>;
 }> {
@@ -583,16 +583,18 @@ async function waitForGoalByTitle(
     `http://127.0.0.1:${port}/api/lifeops/goals`,
     (value) =>
       Array.isArray(value.goals) &&
-      value.goals.some(
-        (entry) => entry.goal?.title === title && (predicate?.(entry) ?? true),
-      ),
+      value.goals.some((entry) => {
+        const goalId = entry.goal?.id;
+        return typeof goalId === "string" && !existingGoalIds.has(goalId);
+      }),
   );
 
-  const match = response.goals?.find(
-    (entry) => entry.goal?.title === title && (predicate?.(entry) ?? true),
-  );
+  const match = response.goals?.find((entry) => {
+    const goalId = entry.goal?.id;
+    return typeof goalId === "string" && !existingGoalIds.has(goalId);
+  });
   if (!match) {
-    throw new Error(`Timed out waiting for ${title} goal`);
+    throw new Error("Timed out waiting for a new goal");
   }
   return match;
 }
@@ -858,6 +860,33 @@ function assertNoProviderIssue(
   throw new Error(
     `${turnName} returned a provider issue reply.\nresponse=${text}\n${runtime.getLogTail()}`,
   );
+}
+
+async function expectJudgePasses(args: {
+  label: string;
+  minimumScore?: number;
+  rubric: string;
+  runtime: StartedRuntime;
+  text: string;
+  transcript?: string;
+}): Promise<void> {
+  if (!selectedLiveProvider) {
+    throw new Error("No live provider configured for response judging");
+  }
+
+  const result = await judgeTextWithLlm({
+    provider: selectedLiveProvider,
+    rubric: args.rubric,
+    text: args.text,
+    minimumScore: args.minimumScore,
+    label: args.label,
+    transcript: args.transcript,
+  });
+
+  expect(
+    result.passed,
+    `${args.label} failed judge\nscore=${result.score}\nreason=${result.reasoning}\nresponse=${args.text}\n${args.runtime.getLogTail()}`,
+  ).toBe(true);
 }
 
 function normalizePlannerResponseText(text: string): string {
@@ -1211,16 +1240,70 @@ describeIf(LIVE_CHAT_SUITE_ENABLED)(
         const { conversationId } = await createConversation(liveRuntime.port, {
           title: "Live LifeOps Sleep Goal",
         });
+        const initialGoals = await req(
+          liveRuntime.port,
+          "GET",
+          "/api/lifeops/goals",
+        );
+        expect(initialGoals.status).toBe(200);
+        const existingGoalIds = new Set(
+          Array.isArray(initialGoals.data.goals)
+            ? initialGoals.data.goals
+                .map((entry: { goal?: { id?: string } }) => entry.goal?.id)
+                .filter((entry): entry is string => typeof entry === "string")
+            : [],
+        );
 
         const requestText = "I want a goal called Stabilize sleep schedule.";
-        const previewText = await postLiveConversationMessage(
+        const clarifyText = await postLiveConversationMessage(
           liveRuntime,
           conversationId,
           requestText,
+          "sleep-goal clarify",
+        );
+        assertNoProviderIssue("sleep-goal clarify", clarifyText, liveRuntime);
+        await expectJudgePasses({
+          label: "sleep-goal clarify",
+          rubric:
+            "The assistant should not say the goal was saved or ready to save. It should explain that the sleep goal still needs evaluation details and ask for the most important missing grounding detail, such as target sleep and wake times, an allowed consistency window, or the review period.",
+          runtime: liveRuntime,
+          text: clarifyText,
+          transcript: `user: ${requestText}`,
+        });
+
+        const goalsAfterClarification = await req(
+          liveRuntime.port,
+          "GET",
+          "/api/lifeops/goals",
+        );
+        expect(goalsAfterClarification.status).toBe(200);
+        expect(
+          Array.isArray(goalsAfterClarification.data.goals)
+            ? goalsAfterClarification.data.goals.filter(
+                (entry: { goal?: { id?: string } }) =>
+                  typeof entry.goal?.id === "string" &&
+                  !existingGoalIds.has(entry.goal.id),
+              ).length
+            : 0,
+        ).toBe(0);
+
+        const groundedRequest =
+          "For the stabilize sleep schedule goal, I want to be asleep by 11:30 pm and up by 7:30 am on weekdays, within 45 minutes, for the next month.";
+        const previewText = await postLiveConversationMessage(
+          liveRuntime,
+          conversationId,
+          groundedRequest,
           "sleep-goal preview",
         );
         assertNoProviderIssue("sleep-goal preview", previewText, liveRuntime);
-        expect(previewText.trim().length).toBeGreaterThan(0);
+        await expectJudgePasses({
+          label: "sleep-goal preview",
+          rubric:
+            "The assistant should treat the goal as grounded enough to preview, summarize the evaluation contract in plain language, and ask for confirmation before saving. It should not claim the goal is already saved.",
+          runtime: liveRuntime,
+          text: previewText,
+          transcript: `user: ${requestText}\nassistant: ${clarifyText}\nuser: ${groundedRequest}`,
+        });
 
         const goalsBeforeConfirm = await req(
           liveRuntime.port,
@@ -1229,14 +1312,16 @@ describeIf(LIVE_CHAT_SUITE_ENABLED)(
         );
         expect(goalsBeforeConfirm.status).toBe(200);
         expect(
-          Array.isArray(goalsBeforeConfirm.data.goals) &&
-            goalsBeforeConfirm.data.goals.some(
-              (entry: { goal?: { title?: string } }) =>
-                entry.goal?.title === "Stabilize Sleep Schedule",
-            ),
-        ).toBe(false);
+          Array.isArray(goalsBeforeConfirm.data.goals)
+            ? goalsBeforeConfirm.data.goals.filter(
+                (entry: { goal?: { id?: string } }) =>
+                  typeof entry.goal?.id === "string" &&
+                  !existingGoalIds.has(entry.goal.id),
+              ).length
+            : 0,
+        ).toBe(0);
 
-        const confirmText = "Yes, save that goal.";
+        const confirmText = "Yes, save that grounded goal.";
         const savedText = await postLiveConversationMessage(
           liveRuntime,
           conversationId,
@@ -1244,11 +1329,26 @@ describeIf(LIVE_CHAT_SUITE_ENABLED)(
           "sleep-goal confirm",
         );
         assertNoProviderIssue("sleep-goal confirm", savedText, liveRuntime);
-        expect(savedText).toMatch(/stabilize sleep schedule/i);
+        await expectJudgePasses({
+          label: "sleep-goal confirm",
+          rubric:
+            "The assistant should clearly confirm that the grounded sleep goal has now been saved, without asking for more information.",
+          runtime: liveRuntime,
+          text: savedText,
+          transcript: `user: ${requestText}\nassistant: ${clarifyText}\nuser: ${groundedRequest}\nassistant: ${previewText}\nuser: ${confirmText}`,
+        });
 
-        const previewTrajectory = await waitForTrajectoryCall(
+        const clarifyTrajectory = await waitForTrajectoryCall(
           liveRuntime.port,
           requestText,
+        );
+        expect(clarifyTrajectory.trajectoryId.length).toBeGreaterThan(0);
+        expect(
+          String(clarifyTrajectory.llmCall.response ?? "").length,
+        ).toBeGreaterThan(0);
+        const previewTrajectory = await waitForTrajectoryCall(
+          liveRuntime.port,
+          groundedRequest,
         );
         expect(previewTrajectory.trajectoryId.length).toBeGreaterThan(0);
         expect(
@@ -1263,12 +1363,33 @@ describeIf(LIVE_CHAT_SUITE_ENABLED)(
           String(confirmTrajectory.llmCall.response ?? "").length,
         ).toBeGreaterThan(0);
 
-        const goal = await waitForGoalByTitle(
-          liveRuntime.port,
-          "Stabilize Sleep Schedule",
-        );
+        const goal = await waitForNewGoal(liveRuntime.port, existingGoalIds);
         expect(goal.goal?.status).toBe("active");
         expect(goal.goal?.reviewState).toBe("idle");
+        expect(typeof goal.goal?.description).toBe("string");
+        expect(
+          String(goal.goal?.description ?? "").trim().length,
+        ).toBeGreaterThan(0);
+        expect(goal.goal?.successCriteria).toBeTruthy();
+        expect(typeof goal.goal?.successCriteria).toBe("object");
+        expect(goal.goal?.supportStrategy).toBeTruthy();
+        expect(typeof goal.goal?.supportStrategy).toBe("object");
+        const goalMetadata = (goal.goal?.metadata ?? null) as Record<
+          string,
+          unknown
+        > | null;
+        expect(goalMetadata).toBeTruthy();
+        const goalGrounding = (goalMetadata?.goalGrounding ?? null) as Record<
+          string,
+          unknown
+        > | null;
+        expect(goalGrounding).toBeTruthy();
+        expect(goalGrounding?.groundingState).toBe("grounded");
+        expect(typeof goalGrounding?.summary).toBe("string");
+        expect(
+          String(goalGrounding?.summary ?? "").trim().length,
+        ).toBeGreaterThan(0);
+        expect(goalGrounding?.missingCriticalFields).toEqual([]);
       },
       LIVE_CHAT_TEST_TIMEOUT_MS,
     );

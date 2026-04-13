@@ -2,9 +2,18 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { expect, test } from "@playwright/test";
-import { startMockApiServer, type MockApiServer } from "../electrobun-packaged/mock-api";
+import {
+  type MockApiServer,
+  startMockApiServer,
+} from "../electrobun-packaged/mock-api";
 
-const DIST_INDEX = path.resolve(import.meta.dirname, "..", "..", "dist", "index.html");
+const DIST_INDEX = path.resolve(
+  import.meta.dirname,
+  "..",
+  "..",
+  "dist",
+  "index.html",
+);
 const DIST_INDEX_URL = pathToFileURL(DIST_INDEX).href;
 
 const STORAGE = {

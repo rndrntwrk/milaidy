@@ -8,6 +8,7 @@
 
 import type { IAgentRuntime, Plugin, ServiceClass } from "@elizaos/core";
 import { AgentEventService } from "@elizaos/core";
+import { launchAppAction, stopAppAction } from "../actions/app-control.js";
 import { calendarAction } from "../actions/calendar.js";
 import { emoteAction } from "../actions/emote.js";
 import {
@@ -15,20 +16,20 @@ import {
   searchEntityAction,
 } from "../actions/entity-actions.js";
 import { gmailAction } from "../actions/gmail.js";
+import { inboxAction } from "../actions/inbox.js";
 import { lifeAction } from "../actions/life.js";
 import { readChannelAction } from "../actions/read-channel.js";
-import { launchAppAction, stopAppAction } from "../actions/app-control.js";
 import { restartAction } from "../actions/restart.js";
 import { searchConversationsAction } from "../actions/search-conversations.js";
 import { sendAdminMessageAction } from "../actions/send-admin-message.js";
 import { setUserNameAction } from "../actions/set-user-name.js";
-import { updateOwnerProfileAction } from "../actions/update-owner-profile.js";
 import {
   addRegisteredSkillSlug,
   clearRegisteredSkillSlugs,
   skillCommandAction,
 } from "../actions/skill-command.js";
 import { terminalAction } from "../actions/terminal.ts";
+import { updateOwnerProfileAction } from "../actions/update-owner-profile.js";
 import { webSearchAction } from "../actions/web-search.js";
 import {
   ensureProactiveAgentTask,
@@ -43,6 +44,7 @@ import { activityProfileProvider } from "../providers/activity-profile.js";
 import { adminPanelProvider } from "../providers/admin-panel.js";
 import { adminTrustProvider } from "../providers/admin-trust.js";
 import { escalationTriggerProvider } from "../providers/escalation-trigger.js";
+import { inboxTriageProvider } from "../providers/inbox-triage.js";
 import { lifeOpsProvider } from "../providers/lifeops.js";
 import { recentConversationsProvider } from "../providers/recent-conversations.js";
 import { relevantConversationsProvider } from "../providers/relevant-conversations.js";
@@ -60,8 +62,6 @@ import { createUserNameProvider } from "../providers/user-name.js";
 import { resolveDefaultAgentWorkspaceDir } from "../providers/workspace.js";
 import { createWorkspaceProvider } from "../providers/workspace-provider.js";
 import { MiladyCharacterPersistenceService } from "../services/character-persistence.js";
-import { inboxAction } from "../actions/inbox.js";
-import { inboxTriageProvider } from "../providers/inbox-triage.js";
 import { createTriggerTaskAction } from "../triggers/action.js";
 import { registerTriggerTaskWorker } from "../triggers/runtime.js";
 import { setCustomActionsRuntime } from "./custom-actions.js";

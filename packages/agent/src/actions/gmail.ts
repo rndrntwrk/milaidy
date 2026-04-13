@@ -25,6 +25,14 @@ import { LifeOpsService, LifeOpsServiceError } from "../lifeops/service.js";
 import { hasContextSignalForKey } from "./context-signal.js";
 import { recentConversationTexts as collectRecentConversationTexts } from "./life-recent-context.js";
 import {
+  extractActionResultsFromState,
+  extractRecentMessageEntriesFromState,
+  extractStateDataRecords,
+  renderGroundedActionReply,
+  summarizeActiveTrajectory,
+  summarizeRecentActionHistory,
+} from "./grounded-action-reply.js";
+import {
   detailArray,
   detailBoolean,
   detailNumber,
@@ -160,6 +168,27 @@ async function collectGmailConversationContext(args: {
     combined.push(currentMessage);
   }
   return combined.slice(-GMAIL_CONTEXT_WINDOW);
+}
+
+async function buildGmailDraftGenerationContext(args: {
+  runtime: IAgentRuntime;
+  message: Memory;
+  state: State | undefined;
+}): Promise<{
+  conversationContext: string[];
+  actionHistory: string[];
+  trajectorySummary: string | null;
+}> {
+  const [conversationContext, trajectorySummary] = await Promise.all([
+    collectGmailConversationContext(args),
+    summarizeActiveTrajectory(args.runtime),
+  ]);
+
+  return {
+    conversationContext,
+    actionHistory: summarizeRecentActionHistory(args.state, 4),
+    trajectorySummary,
+  };
 }
 
 function normalizeGmailSubaction(value: unknown): GmailSubaction | null {
@@ -317,6 +346,43 @@ function buildGmailReplyOnlyFallback(subaction: GmailSubaction | null): string {
   }
 }
 
+function looksLikeReplyDraftRewriteFollowup(text: string): boolean {
+  const normalized = normalizeText(text);
+  if (!normalized) {
+    return false;
+  }
+  if (
+    /\b(search|find|look for|read|open|show me|check (?:my )?inbox|who emailed)\b/.test(
+      normalized,
+    )
+  ) {
+    return false;
+  }
+  return (
+    /\b(rewrite|edit|revise|change|update|adjust|redo|rework)\b/.test(
+      normalized,
+    ) ||
+    /\b(make it|have it|say that|say i'm|say im|say i am|say he's|say hes|mention|instead|actually|we need to)\b/.test(
+      normalized,
+    ) ||
+    /\b(let (?:him|her|them) know|tell (?:him|her|them))\b/.test(normalized)
+  );
+}
+
+function looksLikeSendReplyFollowup(text: string): boolean {
+  const normalized = normalizeText(text);
+  if (!normalized) {
+    return false;
+  }
+  return (
+    /\b(send (?:it|that|the reply|the draft|that reply|that draft))\b/.test(
+      normalized,
+    ) ||
+    /\bemail (?:it|that|them back now)\b/.test(normalized) ||
+    /^\s*send now\b/.test(normalized)
+  );
+}
+
 function buildGmailServiceErrorFallback(error: LifeOpsServiceError): string {
   const normalized = normalizeText(error.message);
   if (error.status === 429 || normalized.includes("rate limit")) {
@@ -346,71 +412,6 @@ function buildGmailTargetDisambiguationFallback(feed: GmailSearchFeed): string {
   return `${formatEmailSearch(feed)}\nTell me which email you mean by sender, subject, or message id.`;
 }
 
-function normalizeGmailReplyText(raw: string): string {
-  return raw
-    .trim()
-    .replace(/^["'`]+|["'`]+$/g, "")
-    .trim();
-}
-
-function looksLikeStructuredGmailReply(raw: string): boolean {
-  const trimmed = raw.trim();
-  if (!trimmed) {
-    return true;
-  }
-  if (/^<[^>]+>/.test(trimmed)) {
-    return true;
-  }
-  if (
-    parseJSONObjectFromText(trimmed) ||
-    parseKeyValueXml<Record<string, unknown>>(trimmed)
-  ) {
-    return true;
-  }
-  return /^(?:subaction|shouldAct|response|queries|messageId|replyNeededOnly)\s*:/m.test(
-    trimmed,
-  );
-}
-
-function buildGmailCharacterVoiceContext(runtime: IAgentRuntime): string {
-  const character = runtime.character;
-  if (!character || typeof character !== "object") {
-    return "";
-  }
-  const sections: string[] = [];
-  if (
-    typeof character.system === "string" &&
-    character.system.trim().length > 0
-  ) {
-    sections.push(`System:\n${character.system.trim()}`);
-  }
-  const bio = Array.isArray(character.bio)
-    ? character.bio.filter(
-        (entry): entry is string => typeof entry === "string",
-      )
-    : typeof character.bio === "string"
-      ? [character.bio]
-      : [];
-  if (bio.length > 0) {
-    sections.push(
-      `Bio:\n${bio.map((entry) => `- ${entry.trim()}`).join("\n")}`,
-    );
-  }
-  const style = [
-    ...(Array.isArray(character.style?.all) ? character.style.all : []),
-    ...(Array.isArray(character.style?.chat) ? character.style.chat : []),
-  ].filter(
-    (entry): entry is string =>
-      typeof entry === "string" && entry.trim().length > 0,
-  );
-  if (style.length > 0) {
-    sections.push(
-      `Style:\n${style.map((entry) => `- ${entry.trim()}`).join("\n")}`,
-    );
-  }
-  return sections.join("\n\n");
-}
-
 function shouldUseCanonicalGmailReplyFallback(scenario: string): boolean {
   return (
     scenario === "access_denied" ||
@@ -432,49 +433,22 @@ async function renderGmailActionReply(args: {
   if (shouldUseCanonicalGmailReplyFallback(scenario)) {
     return fallback;
   }
-  if (typeof runtime.useModel !== "function") {
-    return fallback;
-  }
-
-  const recentConversation = await collectGmailConversationContext({
+  return renderGroundedActionReply({
     runtime,
     message,
     state,
+    intent,
+    domain: "gmail",
+    scenario,
+    fallback,
+    context,
+    preferCharacterVoice: true,
+    additionalRules: [
+      "Mirror the user's wording for time windows, urgency, and reply intent when possible.",
+      "Preserve all concrete email facts from the context and canonical fallback.",
+      "If this is reply-only or a clarification, do not pretend you already searched, drafted, or sent something.",
+    ],
   });
-  const characterVoice =
-    buildGmailCharacterVoiceContext(runtime) || "No extra character context.";
-  const prompt = [
-    "Write the assistant's user-facing reply for a Gmail interaction.",
-    "Be natural, brief, and grounded in the provided context.",
-    "Mirror the user's tone lightly without parodying them.",
-    "Stay within the assistant's established character voice when character guidance is available.",
-    "Mirror the user's wording for time windows, urgency, and reply intent when possible.",
-    "Never mention internal schema, tool names, or JSON field names.",
-    "Preserve all concrete email facts from the context and canonical fallback.",
-    "If asking a clarifying question, ask only for the missing information.",
-    "If this is reply-only or a clarification, do not pretend you already searched, drafted, or sent something.",
-    "Return only the reply text.",
-    "",
-    `Character voice: ${JSON.stringify(characterVoice)}`,
-    `Scenario: ${scenario}`,
-    `Current user message: ${JSON.stringify(messageText(message))}`,
-    `Resolved intent: ${JSON.stringify(intent)}`,
-    `Recent conversation: ${JSON.stringify(recentConversation.join("\n"))}`,
-    `Structured context: ${JSON.stringify(context ?? {})}`,
-    `Canonical fallback: ${JSON.stringify(fallback)}`,
-  ].join("\n");
-
-  try {
-    const result = await runtime.useModel(ModelType.TEXT_LARGE, { prompt });
-    const raw = typeof result === "string" ? result : "";
-    if (looksLikeStructuredGmailReply(raw)) {
-      return fallback;
-    }
-    const text = normalizeGmailReplyText(raw);
-    return text || fallback;
-  } catch {
-    return fallback;
-  }
 }
 
 function normalizeText(value: string): string {
@@ -652,29 +626,7 @@ function coerceGmailMessageTargetContext(
 function gmailStateDataRecords(
   state: State | undefined,
 ): Record<string, unknown>[] {
-  const records: Record<string, unknown>[] = [];
-
-  for (const result of gmailStateActionResults(state)) {
-    if (result.data && typeof result.data === "object") {
-      records.push(result.data as Record<string, unknown>);
-    }
-  }
-
-  for (const entry of gmailStateRecentMessageEntries(state)) {
-    const content =
-      entry.content && typeof entry.content === "object"
-        ? (entry.content as Record<string, unknown>)
-        : null;
-    if (!content) {
-      continue;
-    }
-    if (content.data && typeof content.data === "object") {
-      records.push(content.data as Record<string, unknown>);
-    }
-    records.push(content);
-  }
-
-  return records;
+  return extractStateDataRecords(state);
 }
 
 function latestGmailReplyDraftContext(
@@ -752,130 +704,6 @@ function latestGmailMessageTargetContext(
   return null;
 }
 
-function gmailStateActionResults(state: State | undefined): ActionResult[] {
-  if (!state || typeof state !== "object") {
-    return [];
-  }
-
-  const stateRecord = state as Record<string, unknown>;
-  const data =
-    stateRecord.data && typeof stateRecord.data === "object"
-      ? (stateRecord.data as Record<string, unknown>)
-      : undefined;
-  const providers =
-    data?.providers && typeof data.providers === "object"
-      ? (data.providers as Record<string, unknown>)
-      : undefined;
-  const actionState =
-    providers?.ACTION_STATE && typeof providers.ACTION_STATE === "object"
-      ? (providers.ACTION_STATE as Record<string, unknown>)
-      : undefined;
-  const actionStateData =
-    actionState?.data && typeof actionState.data === "object"
-      ? (actionState.data as Record<string, unknown>)
-      : undefined;
-  const recentMessagesProvider =
-    providers?.RECENT_MESSAGES && typeof providers.RECENT_MESSAGES === "object"
-      ? (providers.RECENT_MESSAGES as Record<string, unknown>)
-      : undefined;
-  const recentMessagesProviderData =
-    recentMessagesProvider?.data &&
-    typeof recentMessagesProvider.data === "object"
-      ? (recentMessagesProvider.data as Record<string, unknown>)
-      : undefined;
-
-  const candidates = [
-    data?.actionResults,
-    actionStateData?.actionResults,
-    actionStateData?.recentActionMemories,
-    recentMessagesProviderData?.actionResults,
-  ].filter(Array.isArray) as unknown[][];
-
-  return candidates.flatMap((entries) =>
-    entries.flatMap((entry): ActionResult[] => {
-      if (!entry || typeof entry !== "object") {
-        return [];
-      }
-      if ("content" in entry) {
-        const content =
-          (entry as { content?: unknown }).content &&
-          typeof (entry as { content?: unknown }).content === "object"
-            ? ((entry as { content: Record<string, unknown> })
-                .content as Record<string, unknown>)
-            : null;
-        if (!content) {
-          return [];
-        }
-        const contentData =
-          content.data && typeof content.data === "object"
-            ? ({ ...(content.data as Record<string, unknown>) } as Record<
-                string,
-                unknown
-              >)
-            : {};
-        if (
-          typeof content.actionName === "string" &&
-          typeof contentData.actionName !== "string"
-        ) {
-          contentData.actionName = content.actionName;
-        }
-        return [
-          {
-            success: content.actionStatus !== "failed",
-            text: typeof content.text === "string" ? content.text : undefined,
-            data: contentData as ActionResult["data"],
-            error:
-              typeof content.error === "string" ? content.error : undefined,
-          },
-        ];
-      }
-      return [entry as ActionResult];
-    }),
-  );
-}
-
-function gmailStateRecentMessageEntries(
-  state: State | undefined,
-): Record<string, unknown>[] {
-  if (!state || typeof state !== "object") {
-    return [];
-  }
-
-  const stateRecord = state as Record<string, unknown>;
-  const data =
-    stateRecord.data && typeof stateRecord.data === "object"
-      ? (stateRecord.data as Record<string, unknown>)
-      : undefined;
-  const providers =
-    data?.providers && typeof data.providers === "object"
-      ? (data.providers as Record<string, unknown>)
-      : undefined;
-  const recentMessagesProvider =
-    providers?.RECENT_MESSAGES && typeof providers.RECENT_MESSAGES === "object"
-      ? (providers.RECENT_MESSAGES as Record<string, unknown>)
-      : undefined;
-  const recentMessagesProviderData =
-    recentMessagesProvider?.data &&
-    typeof recentMessagesProvider.data === "object"
-      ? (recentMessagesProvider.data as Record<string, unknown>)
-      : undefined;
-
-  const recentMessagesData = [
-    stateRecord.recentMessagesData,
-    stateRecord.recentMessages,
-    recentMessagesProviderData?.recentMessages,
-  ].find(Array.isArray);
-
-  if (!Array.isArray(recentMessagesData)) {
-    return [];
-  }
-
-  return recentMessagesData.filter(
-    (item): item is Record<string, unknown> =>
-      Boolean(item) && typeof item === "object",
-  );
-}
-
 function gmailComposeDraftFromMessageEntry(
   entry: Record<string, unknown>,
 ): GmailComposeDraft | null {
@@ -902,14 +730,14 @@ function latestGmailComposeDraft(
 ): GmailComposeDraft | null {
   const drafts: GmailComposeDraft[] = [];
 
-  for (const result of gmailStateActionResults(state)) {
+  for (const result of extractActionResultsFromState(state)) {
     const draft = composeDraftFromActionResult(result);
     if (draft) {
       drafts.push(draft);
     }
   }
 
-  for (const entry of gmailStateRecentMessageEntries(state)) {
+  for (const entry of extractRecentMessageEntriesFromState(state)) {
     const draft = gmailComposeDraftFromMessageEntry(entry);
     if (draft) {
       drafts.push(draft);
@@ -994,6 +822,8 @@ export async function extractGmailPlanWithLlm(
   const recentConversation = (
     await collectGmailConversationContext({ runtime, message, state })
   ).join("\n");
+  const latestReplyDraft = latestGmailReplyDraftContext(state);
+  const latestMessageTarget = latestGmailMessageTargetContext(state);
   const currentMessage = messageText(message).trim();
   const timeZone = resolveDefaultTimeZone();
   const now = new Date();
@@ -1070,6 +900,8 @@ export async function extractGmailPlanWithLlm(
     '  "did suran email me" → {"subaction":"search","shouldAct":true,"response":null,"queries":["from:suran"]}',
     '  "draft a reply to John" → {"subaction":"draft_reply","shouldAct":true,"response":null,"queries":["from:john"]}',
     '  "draft a reply to John\'s email" → {"subaction":"draft_reply","shouldAct":true,"response":null,"queries":["from:john"]}',
+    '  "what about unread ones?" with recent context about a Suran email search → {"subaction":"search","shouldAct":true,"response":null,"queries":["from:suran is:unread"]}',
+    '  "rewrite that reply to say I\'m in San Francisco, not NYC" with recent context about an existing Suran draft → {"subaction":"draft_reply","shouldAct":true,"response":null}',
     '  "send that reply now" with recent context about an existing drafted reply → {"subaction":"send_reply","shouldAct":true,"response":null}',
     '  "check my inbox" → {"subaction":"triage","shouldAct":true,"response":null}',
     '  "any emails from Sarah about the report" → {"subaction":"search","shouldAct":true,"response":null,"queries":["from:sarah subject:report"]}',
@@ -1086,6 +918,17 @@ export async function extractGmailPlanWithLlm(
           "If the active compose draft already has a recipient, subject, or body, do NOT ask for those again.",
           "Set shouldAct=true and subaction=send_message when the user provides missing fields, confirms sending, or provides a short payload like 'test' to use as subject and body.",
           "Only set shouldAct=false when genuinely no information is available from conversation context or active draft.",
+        ]
+      : []),
+    ...(latestReplyDraft || latestMessageTarget
+      ? [
+          "",
+          "Recent reply-draft context:",
+          `  ${JSON.stringify({
+            latestReplyDraft,
+            latestMessageTarget,
+          })}`,
+          "If there is a recent drafted reply or known target email and the user says rewrite, edit, revise, change, update, or 'send that reply', keep working on that same reply workflow even if they do not restate the sender or subject.",
         ]
       : []),
     "",
@@ -1585,6 +1428,7 @@ export const gmailAction: Action & {
     );
     let subaction: GmailSubaction | null =
       explicitSubaction ?? llmPlan.subaction;
+    const currentMessageText = messageText(message).trim();
 
     const composeRecipients =
       normalizeStringArray(details?.to) ??
@@ -1603,6 +1447,22 @@ export const gmailAction: Action & {
     );
     if (!explicitSubaction && composeRecoveryActivated) {
       subaction = "send_message";
+    }
+    if (
+      !explicitSubaction &&
+      !subaction &&
+      latestReplyDraft &&
+      looksLikeReplyDraftRewriteFollowup(currentMessageText)
+    ) {
+      subaction = "draft_reply";
+    }
+    if (
+      !explicitSubaction &&
+      !subaction &&
+      latestReplyDraft &&
+      looksLikeSendReplyFollowup(currentMessageText)
+    ) {
+      subaction = "send_reply";
     }
     if (
       !subaction &&
@@ -1998,6 +1858,11 @@ export const gmailAction: Action & {
             });
           }
         }
+        const draftGenerationContext = await buildGmailDraftGenerationContext({
+          runtime,
+          message,
+          state,
+        });
         const draft = await service.createGmailReplyDraft(INTERNAL_URL, {
           mode: detailString(details, "mode") as
             | "local"
@@ -2019,6 +1884,7 @@ export const gmailAction: Action & {
             details,
             "includeQuotedOriginal",
           ),
+          ...draftGenerationContext,
         } satisfies CreateLifeOpsGmailReplyDraftRequest);
         const fallback = formatGmailReplyDraft(draft);
         return respond({
@@ -2026,7 +1892,15 @@ export const gmailAction: Action & {
           text: await renderReply("draft_reply", fallback, {
             draft,
           }),
-          data: toActionData(draft),
+          data: toActionData({
+            ...draft,
+            gmailDraft: draft,
+            gmailMessage: {
+              messageId: draft.messageId,
+              subject: draft.subject,
+              query: latestMessageTarget?.query,
+            },
+          }),
         });
       }
 
@@ -2042,6 +1916,11 @@ export const gmailAction: Action & {
                 ],
                 llmPlan,
               );
+        const draftGenerationContext = await buildGmailDraftGenerationContext({
+          runtime,
+          message,
+          state,
+        });
         const request: CreateLifeOpsGmailBatchReplyDraftsRequest = {
           mode: detailString(details, "mode") as
             | "local"
@@ -2070,6 +1949,7 @@ export const gmailAction: Action & {
             detailBoolean(details, "replyNeededOnly") ??
             llmPlan.replyNeededOnly ??
             false,
+          ...draftGenerationContext,
         };
         const batch = await service.createGmailBatchReplyDrafts(
           INTERNAL_URL,

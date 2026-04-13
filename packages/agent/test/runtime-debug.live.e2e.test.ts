@@ -5,49 +5,71 @@ import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
 import { describeIf } from "../../../test/helpers/conditional-tests.ts";
-import { AgentRuntime, createCharacter, logger, ModelType, type Plugin } from "@elizaos/core";
+import { selectLiveProvider } from "../../../test/helpers/live-provider";
+import {
+  AgentRuntime,
+  createCharacter,
+  logger,
+  type Plugin,
+} from "@elizaos/core";
 
 const testDir = path.dirname(fileURLToPath(import.meta.url));
 const packageRoot = path.resolve(testDir, "..");
 dotenv.config({ path: path.resolve(packageRoot, "..", "..", ".env") });
 
-const hasOpenAI = Boolean(process.env.OPENAI_API_KEY);
 const liveModelTestsEnabled =
   process.env.MILADY_LIVE_TEST === "1" || process.env.ELIZA_LIVE_TEST === "1";
-const runRuntimeDebugE2E = process.env.ELIZA_RUN_RUNTIME_DEBUG_E2E === "1";
-const shouldRunRuntimeDebug = hasOpenAI && liveModelTestsEnabled && runRuntimeDebugE2E;
+const selectedLiveProvider = liveModelTestsEnabled
+  ? selectLiveProvider()
+  : null;
+const shouldRunRuntimeDebug =
+  liveModelTestsEnabled && selectedLiveProvider !== null;
 
 describeIf(shouldRunRuntimeDebug)("Runtime init debug", () => {
   it("find the hang in initialize()", async () => {
     logger.level = "warn";
+    if (!selectedLiveProvider) {
+      throw new Error("No live model provider configured.");
+    }
+    for (const [key, value] of Object.entries(selectedLiveProvider.env)) {
+      process.env[key] = value;
+    }
 
     const character = createCharacter({
       name: "DebugAgent",
       bio: "Debug test",
-      secrets: { OPENAI_API_KEY: process.env.OPENAI_API_KEY! },
+      secrets: { ...selectedLiveProvider.env },
     });
 
     const sqlMod = await import("@elizaos/plugin-sql");
-    const sqlPlugin = (sqlMod.default?.default || sqlMod.default || sqlMod) as Plugin;
+    const sqlPlugin = (sqlMod.default?.default ||
+      sqlMod.default ||
+      sqlMod) as Plugin;
 
-    const openaiMod = await import("@elizaos/plugin-openai");
-    const openaiPlugin = (openaiMod.default?.default || openaiMod.default || openaiMod) as Plugin;
+    const modelMod = await import(selectedLiveProvider.pluginPackage);
+    const modelPlugin = (modelMod.default?.default ||
+      modelMod.default ||
+      modelMod) as Plugin;
 
     const pgliteDir = fs.mkdtempSync(path.join(os.tmpdir(), "debug-pglite-"));
     process.env.PGLITE_DATA_DIR = pgliteDir;
 
     const t0 = Date.now();
-    const elapsed = () => `${Date.now()-t0}ms`;
+    const elapsed = () => `${Date.now() - t0}ms`;
 
     const runtime = new AgentRuntime({
       character,
-      plugins: [sqlPlugin, openaiPlugin],
+      plugins: [sqlPlugin, modelPlugin],
       logLevel: "warn",
       enableAutonomy: false,
     });
 
     // Instrument key methods
-    const wrap = (obj: Record<string, ((...a: unknown[]) => unknown) | undefined>, method: string, label: string) => {
+    const wrap = (
+      obj: Record<string, ((...a: unknown[]) => unknown) | undefined>,
+      method: string,
+      label: string,
+    ) => {
       const orig = obj[method]?.bind(obj);
       if (!orig) return;
       obj[method] = async (...args: unknown[]) => {
@@ -60,17 +82,17 @@ describeIf(shouldRunRuntimeDebug)("Runtime init debug", () => {
 
     // Wrap adapter methods
     if (runtime.adapter) {
-      wrap(runtime.adapter, 'isReady', 'adapter.isReady');
-      wrap(runtime.adapter, 'initialize', 'adapter.initialize');
+      wrap(runtime.adapter, "isReady", "adapter.isReady");
+      wrap(runtime.adapter, "initialize", "adapter.initialize");
     }
 
     // Wrap runtime methods
-    wrap(runtime, 'runPluginMigrations', 'runPluginMigrations');
-    wrap(runtime, 'ensureAgentExists', 'ensureAgentExists');
-    wrap(runtime, 'ensureEmbeddingDimension', 'ensureEmbeddingDimension');
-    wrap(runtime, 'useModel', 'useModel');
-    wrap(runtime, 'getRoom', 'getRoom');
-    wrap(runtime, 'createEntity', 'createEntity');
+    wrap(runtime, "runPluginMigrations", "runPluginMigrations");
+    wrap(runtime, "ensureAgentExists", "ensureAgentExists");
+    wrap(runtime, "ensureEmbeddingDimension", "ensureEmbeddingDimension");
+    wrap(runtime, "useModel", "useModel");
+    wrap(runtime, "getRoom", "getRoom");
+    wrap(runtime, "createEntity", "createEntity");
 
     console.log(`[${elapsed()}] Calling initialize()...`);
 

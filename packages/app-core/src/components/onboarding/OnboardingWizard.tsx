@@ -1,77 +1,22 @@
 import { LanguageDropdown } from "@miladyai/app-core/components";
-import {
-  dispatchWindowEvent,
-  ONBOARDING_VOICE_PREVIEW_AWAIT_TELEPORT_EVENT,
-  VRM_TELEPORT_COMPLETE_EVENT,
-} from "@miladyai/app-core/events";
 import type { UiLanguage } from "@miladyai/app-core/i18n";
 import { normalizeLanguage } from "@miladyai/app-core/i18n";
-import {
-  applyUiTheme,
-  getVrmPreviewUrl,
-  getVrmUrl,
-  useApp,
-} from "@miladyai/app-core/state";
-import { useEffect, useState } from "react";
-import { useBranding } from "../../config/branding";
-import { COMPANION_ENABLED } from "../../navigation";
-import { VrmStage } from "../companion/VrmStage";
+import { applyUiTheme, useApp } from "@miladyai/app-core/state";
+import { useEffect } from "react";
 import { ConnectionStep } from "./ConnectionStep";
 import { DeploymentStep } from "./DeploymentStep";
 import { FeaturesStep } from "./FeaturesStep";
-import { IdentityStep } from "./IdentityStep";
 import { OnboardingPanel } from "./OnboardingPanel";
 import { OnboardingStepNav } from "./OnboardingStepNav";
 
-const FORCE_VRM =
-  typeof window !== "undefined" &&
-  new URLSearchParams(window.location.search).get("test_force_vrm") === "1";
-
-const ONBOARDING_UI_REVEAL_FALLBACK_MS = 1200;
-
-const DISABLE_ONBOARDING_VRM =
-  !FORCE_VRM &&
-  (String(import.meta.env.VITE_E2E_DISABLE_VRM ?? "").toLowerCase() ===
-    "true" ||
-    String(import.meta.env.VITE_E2E_DISABLE_VRM ?? "") === "1");
-
 export function OnboardingWizard() {
-  const branding = useBranding();
-  const isEliza = branding.appName === "Eliza";
-  const disableVrm =
-    !FORCE_VRM && (DISABLE_ONBOARDING_VRM || isEliza || !COMPANION_ENABLED);
-  const {
-    onboardingStep,
-    selectedVrmIndex,
-    customVrmUrl,
-    uiLanguage,
-    uiTheme,
-    setState,
-    t,
-    onboardingUiRevealNonce,
-  } = useApp();
-  const revealWelcomeUiImmediately = disableVrm || onboardingUiRevealNonce > 0;
-  // After Reset Agent from chat/companion, nonce bumps: show cloud ui immediately instead
-  // of waiting for VrmStage reveal (often missing when remounting after an active session).
-  const [revealStarted, setRevealStarted] = useState(
-    () => revealWelcomeUiImmediately,
-  );
+  const { onboardingStep, uiLanguage, uiTheme, setState, t } = useApp();
 
   const setUiLanguage = (lang: UiLanguage) =>
     setState("uiLanguage", normalizeLanguage(lang));
 
-  // Use same VRM resolution logic as CompanionView for character unification
-  const safeSelectedVrmIndex = selectedVrmIndex > 0 ? selectedVrmIndex : 1;
-  const vrmPath =
-    selectedVrmIndex === 0 && customVrmUrl
-      ? customVrmUrl
-      : getVrmUrl(safeSelectedVrmIndex);
-  const fallbackPreview =
-    selectedVrmIndex > 0
-      ? getVrmPreviewUrl(safeSelectedVrmIndex)
-      : getVrmPreviewUrl(1);
   useEffect(() => {
-    // Onboarding keeps a fixed "light" chrome; companion mode owns day/night scenes.
+    // Onboarding keeps a fixed light chrome; the main app owns theme switching.
     applyUiTheme("light");
     return () => {
       applyUiTheme(uiTheme);
@@ -86,7 +31,7 @@ export function OnboardingWizard() {
     const prevBodyOverflow = body.style.overflow;
     const prevBodyOverscroll = body.style.overscrollBehavior;
 
-    // Lock page-level scroll while onboarding is active; panel handles its own scroll.
+    // Lock page-level scroll while onboarding is active; the panel handles its own scroll.
     docEl.style.overflow = "hidden";
     docEl.style.overscrollBehavior = "none";
     body.style.overflow = "hidden";
@@ -100,44 +45,10 @@ export function OnboardingWizard() {
     };
   }, []);
 
-  // Overlay stays opacity 0 until VrmStage calls onRevealStart. After Reset Milady (or
-  // any remount), the engine sometimes never emits reveal — user sees only the avatar.
-  useEffect(() => {
-    if (revealWelcomeUiImmediately) {
-      setRevealStarted(true);
-      return;
-    }
-    const id = window.setTimeout(() => {
-      setRevealStarted((prev) => (prev ? prev : true));
-    }, ONBOARDING_UI_REVEAL_FALLBACK_MS);
-    return () => window.clearTimeout(id);
-  }, [revealWelcomeUiImmediately]);
-
-  // No VrmStage: engine never emits teleport-complete; bridge roster preview to the same event.
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (!disableVrm || onboardingStep !== "identity") return;
-    const bridge = () => {
-      dispatchWindowEvent(VRM_TELEPORT_COMPLETE_EVENT);
-    };
-    window.addEventListener(
-      ONBOARDING_VOICE_PREVIEW_AWAIT_TELEPORT_EVENT,
-      bridge,
-    );
-    return () => {
-      window.removeEventListener(
-        ONBOARDING_VOICE_PREVIEW_AWAIT_TELEPORT_EVENT,
-        bridge,
-      );
-    };
-  }, [disableVrm, onboardingStep]);
-
   function renderStep() {
     switch (onboardingStep) {
       case "deployment":
         return <DeploymentStep />;
-      case "identity":
-        return <IdentityStep gateVoicePreviewOnTeleport={!disableVrm} />;
       case "providers":
         return <ConnectionStep />;
       case "features":
@@ -149,43 +60,19 @@ export function OnboardingWizard() {
 
   return (
     <div className="onboarding-screen">
-      {/* Keep browser E2E runs lightweight and deterministic by skipping VRM boot.
-          Deployment step uses a static background — no VRM needed. */}
-      {disableVrm || onboardingStep === "deployment" ? (
-        <div
-          aria-hidden="true"
-          className="absolute inset-0 z-10 pointer-events-none"
-          style={{
-            background:
-              "radial-gradient(circle at 50% 25%, rgba(255,255,255,0.16), transparent 34%), linear-gradient(180deg, rgba(17,17,17,0.08), rgba(10,10,10,0.36))",
-          }}
-        />
-      ) : (
-        <VrmStage
-          vrmPath={vrmPath}
-          environmentTheme="light"
-          fallbackPreviewUrl={fallbackPreview}
-          cameraProfile="companion"
-          initialCompanionZoomNormalized={1}
-          onRevealStart={() => setRevealStarted((prev) => (prev ? prev : true))}
-          t={t}
-        />
-      )}
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 z-10 overflow-hidden pointer-events-none"
+      >
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.14),transparent_36%),linear-gradient(180deg,rgba(11,14,20,0.18),rgba(6,7,8,0.56))]" />
+        <div className="absolute left-[-10%] top-[8%] h-[24rem] w-[24rem] rounded-full bg-[rgba(240,185,11,0.1)] blur-[110px]" />
+        <div className="absolute bottom-[-12%] right-[-8%] h-[20rem] w-[20rem] rounded-full bg-[rgba(255,255,255,0.08)] blur-[120px]" />
+      </div>
 
       <div
         data-testid="onboarding-ui-overlay"
-        style={{
-          position: "absolute",
-          inset: 0,
-          pointerEvents: "none",
-          opacity: revealStarted ? 1 : 0,
-          transition: "opacity 0.7s ease-in-out",
-          zIndex: 40,
-        }}
+        className="absolute inset-0 z-20 flex min-h-0 flex-col pointer-events-none"
       >
-        {/* Corner decorations removed to avoid gold tint artifacts on the scene. */}
-
-        {/* Language selector — top right */}
         <div
           style={{
             position: "absolute",
@@ -207,24 +94,14 @@ export function OnboardingWizard() {
           />
         </div>
 
-        {/* ── Standard overlaid UI — step nav + content panel ── */}
-        {onboardingStep === "deployment" ? (
-          <div className="absolute inset-0 z-20 flex flex-col justify-center pointer-events-none [&>*]:pointer-events-auto">
-            <DeploymentStep />
-          </div>
-        ) : onboardingStep === "identity" ? (
-          <div className="absolute inset-0 z-20 flex flex-col justify-end pointer-events-none [&>*]:pointer-events-auto">
-            <OnboardingStepNav />
-            <IdentityStep />
-          </div>
-        ) : (
-          <div className="absolute inset-0 z-20 flex flex-col justify-end pointer-events-none [&>*]:pointer-events-auto">
+        <div className="flex flex-1 items-center justify-center px-4 pb-[max(1.5rem,var(--safe-area-bottom,0px))] pt-[calc(var(--safe-area-top,0px)+3.75rem)] sm:px-6 md:px-8">
+          <div className="flex w-full max-w-[48rem] flex-col items-center gap-4 pointer-events-auto">
             <OnboardingStepNav />
             <OnboardingPanel step={onboardingStep}>
               {renderStep()}
             </OnboardingPanel>
           </div>
-        )}
+        </div>
       </div>
     </div>
   );

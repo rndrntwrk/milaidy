@@ -51,7 +51,7 @@ export function inferOnboardingResumeStep(args: {
     return "providers";
   }
 
-  return "identity";
+  return "deployment";
 }
 
 export function deriveOnboardingResumeFieldsFromConfig(

@@ -20,10 +20,9 @@ import {
   resolveOccurrenceIdByTitle,
   selectLifeOpsLiveProvider,
   startLifeOpsLiveRuntime,
-  waitForDefinitionByTitle,
-  waitForGoalByTitle,
   waitForTrajectoryCall,
 } from "./lifeops-live-harness.ts";
+import { judgeTextWithLlm } from "./lifeops-live-judge.ts";
 
 export type ScenarioRoom = {
   id: string;
@@ -48,13 +47,23 @@ export type ScenarioTurn = {
   responseIncludesAll?: string[];
   responseIncludesAny?: string[];
   responseExcludes?: string[];
+  responseJudge?: {
+    minimumScore?: number;
+    rubric: string;
+  };
   plannerIncludesAll?: string[];
   plannerIncludesAny?: string[];
   plannerExcludes?: string[];
+  plannerJudge?: {
+    minimumScore?: number;
+    rubric: string;
+  };
   attempts?: number;
   trajectoryTimeoutMs?: number;
   waitForDefinitionTitle?: string;
+  waitForDefinitionTitleAliases?: string[];
   waitForGoalTitle?: string;
+  waitForGoalTitleAliases?: string[];
 };
 
 type DefinitionCountDeltaCheck = {
@@ -91,6 +100,10 @@ type GoalCountDeltaCheck = {
   delta: number;
   expectedStatus?: string;
   expectedReviewState?: string;
+  requireDescription?: boolean;
+  requireSuccessCriteria?: boolean;
+  requireSupportStrategy?: boolean;
+  expectedGroundingState?: string;
 };
 
 export type ScenarioFinalCheck =
@@ -298,6 +311,31 @@ function assertExcludes(
         `${label} unexpectedly included "${fragment}".\nactual=${text}`,
       );
     }
+  }
+}
+
+async function assertJudgePasses(args: {
+  label: string;
+  provider: SelectedLiveProvider;
+  rubric?: { minimumScore?: number; rubric: string };
+  text: string;
+  transcript?: string;
+}): Promise<void> {
+  if (!args.rubric) {
+    return;
+  }
+  const result = await judgeTextWithLlm({
+    provider: args.provider,
+    rubric: args.rubric.rubric,
+    text: args.text,
+    minimumScore: args.rubric.minimumScore,
+    label: args.label,
+    transcript: args.transcript,
+  });
+  if (!result.passed) {
+    throw new Error(
+      `${args.label} did not satisfy judge rubric (score ${result.score}). ${result.reasoning}`,
+    );
   }
 }
 
@@ -541,14 +579,67 @@ async function waitForScenarioTurnSideEffects(args: {
   turn: ScenarioTurn;
 }): Promise<void> {
   if (args.turn.waitForDefinitionTitle) {
-    await waitForDefinitionByTitle(
-      args.runtime.port,
-      args.turn.waitForDefinitionTitle,
+    const deadline = Date.now() + FINAL_CHECK_TIMEOUT_MS;
+    while (Date.now() < deadline) {
+      const definitions = await listDefinitionEntries(args.runtime.port);
+      const match = definitions.find((entry) =>
+        definitionMatchesTitle(
+          entry,
+          args.turn.waitForDefinitionTitle!,
+          args.turn.waitForDefinitionTitleAliases,
+        ),
+      );
+      if (match) {
+        break;
+      }
+      await sleep(FINAL_CHECK_RETRY_MS);
+    }
+
+    const refreshedDefinitions = await listDefinitionEntries(args.runtime.port);
+    const definitionMatch = refreshedDefinitions.find((entry) =>
+      definitionMatchesTitle(
+        entry,
+        args.turn.waitForDefinitionTitle!,
+        args.turn.waitForDefinitionTitleAliases,
+      ),
     );
+    if (!definitionMatch) {
+      throw new Error(
+        `Timed out waiting for definition "${args.turn.waitForDefinitionTitle}"`,
+      );
+    }
   }
 
   if (args.turn.waitForGoalTitle) {
-    await waitForGoalByTitle(args.runtime.port, args.turn.waitForGoalTitle);
+    const deadline = Date.now() + FINAL_CHECK_TIMEOUT_MS;
+    while (Date.now() < deadline) {
+      const goals = await listGoalEntries(args.runtime.port);
+      const match = goals.find((entry) =>
+        goalMatchesTitle(
+          entry,
+          args.turn.waitForGoalTitle!,
+          args.turn.waitForGoalTitleAliases,
+        ),
+      );
+      if (match) {
+        break;
+      }
+      await sleep(FINAL_CHECK_RETRY_MS);
+    }
+
+    const refreshedGoals = await listGoalEntries(args.runtime.port);
+    const goalMatch = refreshedGoals.find((entry) =>
+      goalMatchesTitle(
+        entry,
+        args.turn.waitForGoalTitle!,
+        args.turn.waitForGoalTitleAliases,
+      ),
+    );
+    if (!goalMatch) {
+      throw new Error(
+        `Timed out waiting for goal "${args.turn.waitForGoalTitle}"`,
+      );
+    }
   }
 }
 
@@ -841,6 +932,59 @@ async function validateFinalChecks(args: {
             `expected goal reviewState ${check.expectedReviewState}`,
           );
         }
+        if (
+          latest &&
+          check.requireDescription &&
+          String(latest.goal?.description ?? "").trim().length === 0
+        ) {
+          throw new Error(
+            `expected goal "${check.title}" to include description`,
+          );
+        }
+        if (
+          latest &&
+          check.requireSuccessCriteria &&
+          (!latest.goal?.successCriteria ||
+            typeof latest.goal.successCriteria !== "object" ||
+            Array.isArray(latest.goal.successCriteria) ||
+            Object.keys(latest.goal.successCriteria).length === 0)
+        ) {
+          throw new Error(
+            `expected goal "${check.title}" to include success criteria`,
+          );
+        }
+        if (
+          latest &&
+          check.requireSupportStrategy &&
+          (!latest.goal?.supportStrategy ||
+            typeof latest.goal.supportStrategy !== "object" ||
+            Array.isArray(latest.goal.supportStrategy) ||
+            Object.keys(latest.goal.supportStrategy).length === 0)
+        ) {
+          throw new Error(
+            `expected goal "${check.title}" to include support strategy`,
+          );
+        }
+        if (latest && check.expectedGroundingState) {
+          const metadata =
+            latest.goal?.metadata && typeof latest.goal.metadata === "object"
+              ? (latest.goal.metadata as Record<string, unknown>)
+              : null;
+          const goalGrounding =
+            metadata?.goalGrounding &&
+            typeof metadata.goalGrounding === "object" &&
+            !Array.isArray(metadata.goalGrounding)
+              ? (metadata.goalGrounding as Record<string, unknown>)
+              : null;
+          if (
+            String(goalGrounding?.groundingState ?? "") !==
+            check.expectedGroundingState
+          ) {
+            throw new Error(
+              `expected goal groundingState ${check.expectedGroundingState} but saw ${String(goalGrounding?.groundingState ?? "")}`,
+            );
+          }
+        }
       }
 
       results.push({ label, status: "passed", detail: "ok" });
@@ -885,6 +1029,7 @@ export async function runLifeOpsLiveScenario(args: {
   onProgress?: (event: ScenarioProgressEvent) => void;
   runtime: StartedLifeOpsLiveRuntime;
   scenario: LifeOpsLiveScenario;
+  selectedProvider: SelectedLiveProvider;
 }): Promise<ScenarioReport> {
   const startedAt = new Date().toISOString();
   const startedMs = Date.now();
@@ -953,7 +1098,8 @@ export async function runLifeOpsLiveScenario(args: {
       if (
         turn.plannerIncludesAll?.length ||
         turn.plannerIncludesAny?.length ||
-        turn.plannerExcludes?.length
+        turn.plannerExcludes?.length ||
+        turn.plannerJudge
       ) {
         const trajectory = await waitForTrajectoryCall(
           args.runtime.port,
@@ -977,6 +1123,13 @@ export async function runLifeOpsLiveScenario(args: {
           plannerResponse,
           turn.plannerExcludes,
         );
+        await assertJudgePasses({
+          label: `${turn.name} planner`,
+          provider: args.selectedProvider,
+          rubric: turn.plannerJudge,
+          text: plannerResponse,
+          transcript: `User: ${text}`,
+        });
       }
 
       turns.push({
@@ -1005,6 +1158,21 @@ export async function runLifeOpsLiveScenario(args: {
         responseText,
         turn.responseExcludes,
       );
+      await assertJudgePasses({
+        label: `${turn.name} response`,
+        provider: args.selectedProvider,
+        rubric: turn.responseJudge,
+        text: responseText,
+        transcript: [
+          ...turns
+            .slice(-4)
+            .map(
+              (entry) =>
+                `${entry.source === "api" ? "API" : "User"}: ${entry.text}\nAssistant: ${entry.responseText}`,
+            ),
+          `User: ${text}`,
+        ].join("\n\n"),
+      });
       await waitForScenarioTurnSideEffects({
         runtime: args.runtime,
         turn,
@@ -1151,6 +1319,7 @@ export async function runLifeOpsScenarioMatrix(options?: {
             onProgress: options?.onProgress,
             runtime,
             scenario,
+            selectedProvider,
           }),
         );
       } finally {

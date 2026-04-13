@@ -49,6 +49,7 @@ interface SettingsSectionDef {
   label: string;
   description?: string;
   keywords?: string[];
+  keywordKeys?: string[];
 }
 
 const SETTINGS_CONTENT_CLASS =
@@ -62,6 +63,7 @@ const SETTINGS_SECTIONS: SettingsSectionDef[] = [
     label: "providerswitcher.elizaCloud",
     description: "settings.sections.cloud.desc",
     keywords: ["cloud", "billing", "credits", "auth", "subscription"],
+    keywordKeys: ["settings.keyword.cloud", "settings.keyword.billing"],
   },
   {
     id: "ai-model",
@@ -77,6 +79,12 @@ const SETTINGS_SECTIONS: SettingsSectionDef[] = [
       "api key",
       "inference",
       "llm",
+    ],
+    keywordKeys: [
+      "settings.keyword.model",
+      "settings.keyword.provider",
+      "settings.keyword.apiKey",
+      "settings.keyword.inference",
     ],
   },
   {
@@ -99,6 +107,12 @@ const SETTINGS_SECTIONS: SettingsSectionDef[] = [
       "tts",
       "avatar",
     ],
+    keywordKeys: [
+      "settings.keyword.voice",
+      "settings.keyword.audio",
+      "settings.keyword.camera",
+      "settings.keyword.microphone",
+    ],
   },
   {
     id: "appearance",
@@ -114,6 +128,11 @@ const SETTINGS_SECTIONS: SettingsSectionDef[] = [
       "color scheme",
       "skin",
       "character",
+    ],
+    keywordKeys: [
+      "settings.keyword.theme",
+      "settings.keyword.avatar",
+      "settings.keyword.appearance",
     ],
   },
   {
@@ -132,6 +151,7 @@ const SETTINGS_SECTIONS: SettingsSectionDef[] = [
       "accounts",
       "services",
     ],
+    keywordKeys: ["settings.keyword.connectors"],
   },
   {
     id: "capabilities",
@@ -145,6 +165,7 @@ const SETTINGS_SECTIONS: SettingsSectionDef[] = [
       "disable",
       "feature",
     ],
+    keywordKeys: ["settings.keyword.wallet", "settings.keyword.browser"],
   },
   {
     id: "permissions",
@@ -159,12 +180,14 @@ const SETTINGS_SECTIONS: SettingsSectionDef[] = [
       "camera permission",
       "file access",
     ],
+    keywordKeys: ["settings.keyword.permissions", "settings.keyword.security"],
   },
   {
     id: "updates",
     label: "settings.sections.updates.label",
     description: "settings.sections.updates.desc",
     keywords: ["updates", "release", "version", "download"],
+    keywordKeys: ["settings.keyword.updates"],
   },
   {
     id: "advanced",
@@ -179,6 +202,12 @@ const SETTINGS_SECTIONS: SettingsSectionDef[] = [
       "backup",
       "restore",
       "danger zone",
+    ],
+    keywordKeys: [
+      "settings.keyword.advanced",
+      "settings.keyword.export",
+      "settings.keyword.import",
+      "settings.keyword.reset",
     ],
   },
 ];
@@ -197,6 +226,9 @@ function matchesSettingsSection(
       : false) ||
     (section.keywords ?? []).some((keyword) =>
       keyword.toLowerCase().includes(normalized),
+    ) ||
+    (section.keywordKeys ?? []).some((key) =>
+      t(key).toLowerCase().includes(normalized),
     )
   );
 }

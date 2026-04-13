@@ -867,8 +867,8 @@ export function VoiceConfigView() {
                 className="h-auto min-h-14 flex-col rounded-xl py-2"
                 onClick={() => handleProviderChange(p.id)}
               >
-                <div className="font-semibold">{p.label}</div>
-                <div className="text-2xs opacity-70 mt-0.5">{p.hint}</div>
+                <div className="font-semibold">{t(p.labelKey, { defaultValue: p.label })}</div>
+                <div className="text-2xs opacity-70 mt-0.5">{t(p.hintKey, { defaultValue: p.hint })}</div>
               </Button>
             );
           })}
@@ -878,7 +878,7 @@ export function VoiceConfigView() {
         <span className="text-xs leading-5 text-txt">
           {currentProvider === "elevenlabs"
             ? `ElevenLabs — ${currentMode === "cloud" ? t("voiceconfigview.ServedViaElizaCloud") : t("voiceconfigview.RequiresApiKey")}`
-            : `${providerInfo?.label} — ${t("voiceconfigview.NoApiKeyNeeded")}`}
+            : `${providerInfo ? t(providerInfo.labelKey, { defaultValue: providerInfo.label }) : ""} — ${t("voiceconfigview.NoApiKeyNeeded")}`}
         </span>
         <span
           className={`inline-flex items-center rounded-full border px-2 py-1 text-2xs font-medium ${
@@ -960,10 +960,10 @@ export function VoiceConfigView() {
                     onClick={() => handleVoiceSelect(preset.voiceId)}
                   >
                     <div className="font-semibold text-xs truncate w-full">
-                      {preset.name}
+                      {preset.nameKey ? t(preset.nameKey, { defaultValue: preset.name }) : preset.name}
                     </div>
                     <div className="text-2xs text-muted truncate w-full">
-                      {preset.hint}
+                      {preset.hintKey ? t(preset.hintKey, { defaultValue: preset.hint }) : preset.hint}
                     </div>
                   </Button>
                 );

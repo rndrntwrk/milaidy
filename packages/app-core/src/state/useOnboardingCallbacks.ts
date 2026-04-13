@@ -418,7 +418,7 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
             topics: style?.topics,
             avatarIndex: style?.avatarIndex ?? 1,
             language: uiLanguage,
-            presetId: style?.id ?? "chen",
+            presetId: style?.id ?? getDefaultStylePreset(uiLanguage).id,
             runMode: "cloud",
             cloudProvider: "elizacloud",
             smallModel: onboardingSmallModel,
@@ -590,7 +590,9 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
           messageExamples: style?.messageExamples,
           avatarIndex: style?.avatarIndex ?? selectedVrmIndex,
           language: uiLanguage,
-          presetId: (style?.id ?? onboardingStyle) || "chen",
+          presetId:
+            (style?.id ?? onboardingStyle) ||
+            getDefaultStylePreset(uiLanguage).id,
           deploymentTarget: runtimeConfig.deploymentTarget,
           ...(runtimeConfig.linkedAccounts
             ? { linkedAccounts: runtimeConfig.linkedAccounts }
@@ -823,11 +825,6 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
     if (onboardingStep === "providers") {
       applyResetConnectionWizardToHostingStep();
     }
-    // Clear server target when reverting back to deployment so the chooser
-    // is fresh.
-    if (onboardingStep === "identity" && previousStep === "deployment") {
-      setOnboardingServerTarget("");
-    }
     setOnboardingStep(previousStep);
     setOnboardingActiveGuide(
       onboardingMode === "advanced"
@@ -840,7 +837,6 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
     onboardingStep,
     setOnboardingActiveGuide,
     setOnboardingStep,
-    setOnboardingServerTarget,
   ]);
 
   const handleOnboardingBack = revertOnboarding;

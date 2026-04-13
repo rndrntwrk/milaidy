@@ -6,6 +6,7 @@
  * Remote connection state (connecting/connected/error) collapses into one object.
  */
 
+import { getDefaultStylePreset } from "@miladyai/shared/onboarding-presets";
 import { useCallback, useReducer, useRef } from "react";
 import type { OnboardingOptions } from "../api";
 import {
@@ -185,6 +186,7 @@ function loadInitialServerSelection(): Pick<
 }
 
 function createInitialState(cloudOnly?: boolean): OnboardingState {
+  const defaultStyle = getDefaultStylePreset();
   const initialServer = loadInitialServerSelection();
   const initialServerTarget = cloudOnly
     ? "elizacloud"
@@ -196,10 +198,10 @@ function createInitialState(cloudOnly?: boolean): OnboardingState {
     deferredTasks: [],
     postChecklistDismissed: false,
     options: null,
-    name: "Chen",
+    name: defaultStyle.name,
     ownerName: "anon",
-    style: "chen",
-    avatar: 1,
+    style: defaultStyle.id,
+    avatar: defaultStyle.avatarIndex,
     serverTarget: initialServerTarget,
     cloudApiKey: "",
     provider: "",

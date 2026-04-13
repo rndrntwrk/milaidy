@@ -6,6 +6,6 @@ export * from "./life.js";
 export * from "./restart.js";
 export * from "./send-message.js";
 export * from "./stream-control.js";
-export * from "./update-owner-profile.js";
 export * from "./terminal.ts";
+export * from "./update-owner-profile.js";
 export * from "./web-search.js";

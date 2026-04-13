@@ -8,6 +8,7 @@ export * from "./useDocumentVisibility";
 export * from "./useGoogleLifeOpsConnector";
 export * from "./useKeyboardShortcuts";
 export * from "./useLifeOpsActivitySignals";
+export * from "./useLifeOpsAppState";
 export * from "./useMediaQuery";
 export * from "./useMusicPlayer";
 export * from "./useRenderGuard";

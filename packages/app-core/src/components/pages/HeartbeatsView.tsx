@@ -72,6 +72,7 @@ function useHeartbeatsViewController() {
       await loadTriggers(triggersLoaded ? { silent: true } : undefined);
     },
     t,
+    uiLanguage,
   } = useApp();
 
   const [form, setForm] = useState<TriggerFormState>(emptyForm);
@@ -746,6 +747,7 @@ function HeartbeatsLayout() {
                 <dd className="mt-1 font-medium text-txt">
                   {formatDateTime(selectedTrigger.lastRunAtIso, {
                     fallback: t("heartbeatsview.notYetRun"),
+                    locale: uiLanguage,
                   })}
                 </dd>
               </PagePanel.SummaryCard>

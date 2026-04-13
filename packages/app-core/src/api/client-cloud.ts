@@ -5,6 +5,7 @@
 
 import { MiladyClient } from "./client-base";
 import type {
+  ApiError,
   CloudBillingCheckoutRequest,
   CloudBillingCheckoutResponse,
   CloudBillingCryptoQuoteRequest,
@@ -42,6 +43,14 @@ import type {
 // ---------------------------------------------------------------------------
 
 const AGENT_TRANSFER_MIN_PASSWORD_LENGTH = 4;
+
+function isCloudRouteNotFound(error: unknown): error is ApiError {
+  return (
+    error instanceof Error &&
+    "status" in error &&
+    (error as ApiError).status === 404
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Declaration merging
@@ -518,13 +527,43 @@ MiladyClient.prototype.getCloudCompatAgentManagedGithub = async function (
 
 MiladyClient.prototype.createCloudCompatAgentManagedGithubOauth =
   async function (this: MiladyClient, agentId, request = {}) {
-    return this.fetch(
-      `/api/cloud/v1/milady/agents/${encodeURIComponent(agentId)}/github/oauth`,
-      {
-        method: "POST",
-        body: JSON.stringify(request),
-      },
-    );
+    try {
+      return await this.fetch(
+        `/api/cloud/v1/milady/agents/${encodeURIComponent(agentId)}/github/oauth`,
+        {
+          method: "POST",
+          body: JSON.stringify(request),
+        },
+      );
+    } catch (error) {
+      if (!isCloudRouteNotFound(error)) {
+        throw error;
+      }
+
+      const params = new URLSearchParams({
+        target: "agent",
+        agent_id: agentId,
+      });
+      if (request.postMessage) {
+        params.set("post_message", "1");
+      }
+      if (request.returnUrl) {
+        params.set("return_url", request.returnUrl);
+      }
+
+      const fallback = await this.initiateCloudOauth("github", {
+        redirectUrl: `/api/v1/milady/lifeops/github-complete?${params.toString()}`,
+        connectionRole: "agent",
+        scopes: request.scopes,
+      });
+
+      return {
+        success: true,
+        data: {
+          authorizeUrl: fallback.authUrl,
+        },
+      };
+    }
   };
 
 MiladyClient.prototype.linkCloudCompatAgentManagedGithub = async function (
@@ -573,13 +612,27 @@ MiladyClient.prototype.initiateCloudOauth = async function (
   platform,
   request,
 ) {
-  return this.fetch(
-    `/api/cloud/v1/oauth/${encodeURIComponent(platform)}/initiate`,
-    {
-      method: "POST",
-      body: JSON.stringify(request ?? {}),
-    },
-  );
+  try {
+    return await this.fetch(
+      `/api/cloud/v1/oauth/${encodeURIComponent(platform)}/initiate`,
+      {
+        method: "POST",
+        body: JSON.stringify(request ?? {}),
+      },
+    );
+  } catch (error) {
+    if (!isCloudRouteNotFound(error)) {
+      throw error;
+    }
+
+    return this.fetch(
+      `/api/cloud/v1/oauth/initiate?provider=${encodeURIComponent(platform)}`,
+      {
+        method: "POST",
+        body: JSON.stringify(request ?? {}),
+      },
+    );
+  }
 };
 
 MiladyClient.prototype.disconnectCloudOauthConnection = async function (

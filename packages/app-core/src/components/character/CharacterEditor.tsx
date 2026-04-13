@@ -1395,7 +1395,7 @@ export function CharacterEditor({
         {!sceneOverlay && (
           <PageLayout
             className="h-full"
-            contentInnerClassName="mx-auto flex w-full max-w-6xl min-h-0 flex-1 flex-col"
+            contentInnerClassName="mx-auto flex w-full max-w-8xl min-h-0 flex-1 flex-col"
             footer={<WidgetHost slot="character" className="pt-4" />}
             footerClassName="lg:px-8"
             sidebar={
