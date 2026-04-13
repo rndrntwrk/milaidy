@@ -132,7 +132,11 @@ import {
   resolveOnboardingNextStep,
   resolveOnboardingPreviousStep,
 } from "../onboarding/flow";
-import { buildOnboardingConnectionConfig } from "../onboarding-config";
+import type { OnboardingServerTarget } from "../onboarding/server-target";
+import {
+  buildOnboardingConnectionConfig,
+  buildOnboardingRuntimeConfig,
+} from "../onboarding-config";
 import {
   alertDesktopMessage,
   confirmDesktopAction,
@@ -5622,6 +5626,21 @@ function AppProviderInner({
             style.name ?? getDefaultStylePreset(uiLanguage).name;
 
           if (!attempt.onboardingSubmitted) {
+            const runtimeConfig = buildOnboardingRuntimeConfig({
+              onboardingServerTarget: "elizacloud",
+              onboardingCloudApiKey,
+              onboardingProvider: "elizacloud",
+              onboardingApiKey: "",
+              onboardingVoiceProvider,
+              onboardingVoiceApiKey,
+              onboardingPrimaryModel: "",
+              onboardingOpenRouterModel: "",
+              onboardingRemoteConnected: false,
+              onboardingRemoteApiBase: "",
+              onboardingRemoteToken: "",
+              onboardingSmallModel: "moonshotai/kimi-k2-turbo",
+              onboardingLargeModel: "moonshotai/kimi-k2-0905",
+            });
             setOnboardingHandoffPhase("saving");
             await client.submitOnboarding({
               name: onboardingName || defaultName,
@@ -5640,10 +5659,16 @@ function AppProviderInner({
               avatarIndex: style?.avatarIndex ?? 1,
               language: uiLanguage,
               presetId: style?.id ?? "chen",
-              runMode: "cloud",
-              cloudProvider: "elizacloud",
-              smallModel: "moonshotai/kimi-k2-turbo",
-              largeModel: "moonshotai/kimi-k2-0905",
+              deploymentTarget: runtimeConfig.deploymentTarget,
+              ...(runtimeConfig.linkedAccounts
+                ? { linkedAccounts: runtimeConfig.linkedAccounts }
+                : {}),
+              ...(runtimeConfig.serviceRouting
+                ? { serviceRouting: runtimeConfig.serviceRouting }
+                : {}),
+              ...(runtimeConfig.credentialInputs
+                ? { credentialInputs: runtimeConfig.credentialInputs }
+                : {}),
             } as unknown as Parameters<typeof client.submitOnboarding>[0]);
             attempt.onboardingSubmitted = true;
             onboardingHandoffRetryStateRef.current = attempt;
@@ -5712,6 +5737,48 @@ function AppProviderInner({
             "Your connection settings could not be restored after restart.",
           );
         }
+        let runtimeServerTarget: OnboardingServerTarget =
+          connection.onboardingServerTarget ?? "";
+        if (!runtimeServerTarget) {
+          if (
+            connection.onboardingRunMode === "cloud" &&
+            connection.onboardingCloudProvider === "remote"
+          ) {
+            runtimeServerTarget = "remote";
+          } else if (
+            connection.onboardingRunMode === "cloud" &&
+            connection.onboardingCloudProvider === "elizacloud"
+          ) {
+            runtimeServerTarget = "elizacloud";
+          } else if (connection.onboardingRunMode === "local") {
+            runtimeServerTarget = "local";
+          }
+        }
+        const runtimeConfig = buildOnboardingRuntimeConfig({
+          onboardingServerTarget: runtimeServerTarget,
+          onboardingCloudApiKey: connection.onboardingCloudApiKey ?? "",
+          onboardingProvider:
+            connection.onboardingProvider ?? onboardingProvider,
+          onboardingApiKey: connection.onboardingApiKey ?? onboardingApiKey,
+          onboardingVoiceProvider:
+            connection.onboardingVoiceProvider ?? onboardingVoiceProvider,
+          onboardingVoiceApiKey:
+            connection.onboardingVoiceApiKey ?? onboardingVoiceApiKey,
+          onboardingPrimaryModel:
+            connection.onboardingPrimaryModel ?? onboardingPrimaryModel,
+          onboardingOpenRouterModel:
+            connection.onboardingOpenRouterModel ?? onboardingOpenRouterModel,
+          onboardingRemoteConnected:
+            connection.onboardingRemoteConnected ?? onboardingRemoteConnected,
+          onboardingRemoteApiBase:
+            connection.onboardingRemoteApiBase ?? onboardingRemoteApiBase,
+          onboardingRemoteToken:
+            connection.onboardingRemoteToken ?? onboardingRemoteToken,
+          onboardingSmallModel:
+            connection.onboardingSmallModel ?? onboardingSmallModel,
+          onboardingLargeModel:
+            connection.onboardingLargeModel ?? onboardingLargeModel,
+        });
 
         const rpcSel = onboardingRpcSelections as Record<string, string>;
         const rpcK = onboardingRpcKeys as Record<string, string>;
@@ -5835,7 +5902,16 @@ function AppProviderInner({
             avatarIndex: style?.avatarIndex ?? selectedVrmIndex,
             language: uiLanguage,
             presetId: (style?.id ?? onboardingStyle) || "chen",
-            connection,
+            deploymentTarget: runtimeConfig.deploymentTarget,
+            ...(runtimeConfig.linkedAccounts
+              ? { linkedAccounts: runtimeConfig.linkedAccounts }
+              : {}),
+            ...(runtimeConfig.serviceRouting
+              ? { serviceRouting: runtimeConfig.serviceRouting }
+              : {}),
+            ...(runtimeConfig.credentialInputs
+              ? { credentialInputs: runtimeConfig.credentialInputs }
+              : {}),
             walletConfig: nextWalletConfig,
           } as Parameters<typeof client.submitOnboarding>[0]);
           attempt.onboardingSubmitted = true;

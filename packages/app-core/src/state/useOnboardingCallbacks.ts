@@ -350,6 +350,21 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
           });
           const defaultName =
             style.name ?? getDefaultStylePreset(uiLanguage).name;
+          const runtimeConfig = buildOnboardingRuntimeConfig({
+            onboardingServerTarget: "elizacloud",
+            onboardingCloudApiKey,
+            onboardingProvider: "elizacloud",
+            onboardingApiKey: "",
+            onboardingVoiceProvider,
+            onboardingVoiceApiKey,
+            onboardingPrimaryModel: "",
+            onboardingOpenRouterModel: "",
+            onboardingRemoteConnected: false,
+            onboardingRemoteApiBase: "",
+            onboardingRemoteToken: "",
+            onboardingSmallModel,
+            onboardingLargeModel,
+          });
 
           await client.submitOnboarding({
             name: onboardingName || defaultName,
@@ -368,10 +383,16 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
             avatarIndex: style?.avatarIndex ?? 1,
             language: uiLanguage,
             presetId: style?.id ?? "chen",
-            runMode: "cloud",
-            cloudProvider: "elizacloud",
-            smallModel: onboardingSmallModel,
-            largeModel: onboardingLargeModel,
+            deploymentTarget: runtimeConfig.deploymentTarget,
+            ...(runtimeConfig.linkedAccounts
+              ? { linkedAccounts: runtimeConfig.linkedAccounts }
+              : {}),
+            ...(runtimeConfig.serviceRouting
+              ? { serviceRouting: runtimeConfig.serviceRouting }
+              : {}),
+            ...(runtimeConfig.credentialInputs
+              ? { credentialInputs: runtimeConfig.credentialInputs }
+              : {}),
           } as unknown as Parameters<typeof client.submitOnboarding>[0]);
           try {
             await persistOnboardingStyleVoice({
