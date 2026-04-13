@@ -26,6 +26,18 @@
       "@miladyai/agent/*": ["./packages/agent/src/*"],
       "@miladyai/shared": ["./packages/shared/src/index.ts"],
       "@miladyai/shared/*": ["./packages/shared/src/*"],
+      "@miladyai/vrm-utils": ["./packages/vrm-utils/src/index.ts"],
+      "@miladyai/vrm-utils/*": ["./packages/vrm-utils/src/*"],
+      "@elizaos/plugin-selfcontrol": ["./packages/plugin-selfcontrol/src/index.ts"],
+      "@elizaos/plugin-selfcontrol/*": ["./packages/plugin-selfcontrol/src/*"],
+      "@elizaos/ui": ["./packages/ui/src/index.ts"],
+      "@elizaos/ui/*": ["./packages/ui/src/*"],
+      "@elizaos/agent": ["./packages/agent/src/index.ts"],
+      "@elizaos/agent/*": ["./packages/agent/src/*"],
+      "@elizaos/shared": ["./packages/shared/src/index.ts"],
+      "@elizaos/shared/*": ["./packages/shared/src/*"],
+      "@elizaos/vrm-utils": ["./packages/vrm-utils/src/index.ts"],
+      "@elizaos/vrm-utils/*": ["./packages/vrm-utils/src/*"],
       "@elizaos/core": [
         "./eliza/packages/typescript/src/index.ts"
       ],
