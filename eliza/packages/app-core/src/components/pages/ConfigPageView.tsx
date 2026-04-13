@@ -589,7 +589,7 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
                     selectedEvmRpc)
                   : selectedEvmRpc
               }
-              onSelect={setSelectedEvmRpc}
+              onSelect={(provider) => setSelectedEvmRpc(provider)}
               providerConfigs={evmRpcConfigs}
               rpcFieldValues={rpcFieldValues}
               onRpcFieldChange={handleRpcFieldChange}
@@ -610,7 +610,7 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
                     selectedBscRpc)
                   : selectedBscRpc
               }
-              onSelect={setSelectedBscRpc}
+              onSelect={(provider) => setSelectedBscRpc(provider)}
               providerConfigs={bscRpcConfigs}
               rpcFieldValues={rpcFieldValues}
               onRpcFieldChange={handleRpcFieldChange}
@@ -631,7 +631,7 @@ export function ConfigPageView({ embedded = false }: { embedded?: boolean }) {
                       ?.id ?? selectedSolanaRpc)
                   : selectedSolanaRpc
               }
-              onSelect={setSelectedSolanaRpc}
+              onSelect={(provider) => setSelectedSolanaRpc(provider)}
               providerConfigs={solanaRpcConfigs}
               rpcFieldValues={rpcFieldValues}
               onRpcFieldChange={handleRpcFieldChange}
