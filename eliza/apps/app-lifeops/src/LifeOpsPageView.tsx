@@ -11,21 +11,21 @@ import {
   Target,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { client, type CloudOAuthConnection } from "../../api";
+import { client, type CloudOAuthConnection } from "@elizaos/app-core/api";
 import {
   LIFEOPS_GITHUB_CALLBACK_EVENT,
   type LifeOpsGithubCallbackDetail,
-} from "../../events";
+} from "@elizaos/app-core/events";
 import {
   consumeQueuedLifeOpsGithubCallback,
   dispatchLifeOpsGithubCallbackFromWindowMessage,
   drainLifeOpsGithubCallbacks,
   isWebPlatform,
-} from "../../platform";
-import { useLifeOpsAppState } from "../../hooks";
-import { useApp } from "../../state";
-import { openExternalUrl } from "../../utils";
-import { LifeOpsSettingsSection } from "../settings/LifeOpsSettingsSection";
+} from "@elizaos/app-core/platform";
+import { useLifeOpsAppState } from "@elizaos/app-core/hooks";
+import { useApp } from "@elizaos/app-core/state";
+import { openExternalUrl } from "@elizaos/app-core/utils";
+import { LifeOpsSettingsSection } from "@elizaos/app-core/components/settings/LifeOpsSettingsSection";
 import {
   AgentGithubCard,
   GoalList,

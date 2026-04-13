@@ -1,4 +1,4 @@
-import type { CodingAgentSession } from "../../api";
+import type { CodingAgentSession } from "@elizaos/app-core/api";
 import { PtyConsoleBase } from "./PtyConsoleBase";
 
 interface PtyConsoleDrawerProps {

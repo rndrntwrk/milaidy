@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
-import type { CodingAgentSession } from "../../api";
-import { useApp } from "../../state";
+import type { CodingAgentSession } from "@elizaos/app-core/api";
+import { useApp } from "@elizaos/app-core/state";
 import "@xterm/xterm/css/xterm.css";
 import { PtyTerminalPane } from "./PtyTerminalPane";
 import { PULSE_STATUSES, STATUS_DOT } from "./pty-status-dots";

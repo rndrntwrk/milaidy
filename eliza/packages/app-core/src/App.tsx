@@ -39,7 +39,6 @@ import {
   HeartbeatsDesktopShell,
   HeartbeatsView,
   InventoryView,
-  LifeOpsPageView,
   LogsPageView,
   MemoryViewerView,
   PluginsPageView,
@@ -55,10 +54,11 @@ import {
   TrajectoriesView,
 } from "./app-shell-components";
 import { CompanionShell } from "@elizaos/app-companion";
+import { LifeOpsPageView } from "@elizaos/app-lifeops";
 // Register overlay apps (self-register on import)
 import "@elizaos/app-companion/register";
-import "./components/vincent/vincent-app";
-import "./components/shopify/shopify-app";
+import "@elizaos/app-vincent/register";
+import "@elizaos/app-shopify/register";
 import { getOverlayApp } from "./components/apps/overlay-app-registry";
 import { TasksEventsPanel } from "./components/chat/TasksEventsPanel";
 import { DeferredSetupChecklist } from "./components/cloud/FlaminaGuide";

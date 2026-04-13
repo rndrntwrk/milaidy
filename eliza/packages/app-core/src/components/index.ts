@@ -37,11 +37,7 @@ export * from "./chat/MessageContent";
 export * from "./chat/SaveCommandModal";
 export * from "./chat/TasksEventsPanel";
 export * from "./cloud/CloudSourceControls";
-export * from "./coding/CodingAgentSettingsSection";
-export * from "./coding/PtyConsoleBase";
-export * from "./coding/PtyConsoleDrawer";
-export * from "./coding/PtyConsoleSidePanel";
-export * from "./coding/PtyTerminalPane";
+
 export * from "./config-ui";
 export * from "./connectors/BlueBubblesStatusPanel";
 export * from "./connectors/ConnectorSetupPanel";
@@ -73,7 +69,7 @@ export * from "./pages/ElizaCloudDashboard";
 export * from "./pages/HeartbeatsView";
 export * from "./pages/InventoryView";
 export * from "./pages/KnowledgeView";
-export * from "./pages/LifeOpsPageView";
+
 export * from "./pages/LogsPageView";
 export * from "./pages/LogsView";
 export * from "./pages/MediaGalleryView";
@@ -115,4 +111,4 @@ export * from "./shell/ShellOverlays";
 export * from "./shell/ShortcutsOverlay";
 export * from "./shell/StartupFailureView";
 export * from "./shell/SystemWarningBanner";
-export * from "./steward";
+

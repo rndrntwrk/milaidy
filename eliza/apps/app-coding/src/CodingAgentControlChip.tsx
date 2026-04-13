@@ -1,7 +1,7 @@
 import { Square, Terminal } from "lucide-react";
 import { useCallback } from "react";
-import { client } from "../../api";
-import { useApp, usePtySessions } from "../../state";
+import { client } from "@elizaos/app-core/api";
+import { useApp, usePtySessions } from "@elizaos/app-core/state";
 import { Button } from "@elizaos/app-core";
 
 /**

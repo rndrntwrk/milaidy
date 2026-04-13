@@ -11,7 +11,7 @@ import type {
   CloudCompatAgent,
   CloudCompatManagedGithubStatus,
   CloudOAuthConnection,
-} from "../../api";
+} from "@elizaos/app-core/api";
 
 export type ManagedAgentGithubEntry = {
   agent: CloudCompatAgent;

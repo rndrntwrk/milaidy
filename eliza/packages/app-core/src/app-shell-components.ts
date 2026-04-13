@@ -25,7 +25,7 @@ export {
 } from "./components/pages/HeartbeatsView";
 export { InventoryView } from "./components/pages/InventoryView";
 export { KnowledgeView } from "./components/pages/KnowledgeView";
-export { LifeOpsPageView } from "./components/pages/LifeOpsPageView";
+
 export { LogsPageView } from "./components/pages/LogsPageView";
 export { MemoryViewerView } from "./components/pages/MemoryViewerView";
 export { PluginsPageView } from "./components/pages/PluginsPageView";

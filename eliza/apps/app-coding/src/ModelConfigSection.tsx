@@ -14,7 +14,7 @@ import {
   SelectValue,
   SettingsControls,
 } from "@elizaos/app-core";
-import { useApp } from "../../state";
+import { useApp } from "@elizaos/app-core/state";
 import type {
   AgentTab,
   AiderProvider,

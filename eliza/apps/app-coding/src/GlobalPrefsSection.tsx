@@ -15,7 +15,7 @@ import {
   SettingsControls,
 } from "@elizaos/app-core";
 import { useState } from "react";
-import { useApp } from "../../state";
+import { useApp } from "@elizaos/app-core/state";
 import {
   APPROVAL_PRESETS,
   type AgentSelectionStrategy,

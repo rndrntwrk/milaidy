@@ -18,7 +18,7 @@ import {
   SelectValue,
   SettingsControls,
 } from "@elizaos/app-core";
-import { useApp } from "../../state";
+import { useApp } from "@elizaos/app-core/state";
 import type { LlmProvider } from "./coding-agent-settings-shared";
 
 interface LlmProviderSectionProps {

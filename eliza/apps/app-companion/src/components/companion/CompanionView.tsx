@@ -15,7 +15,7 @@ import { CompanionHeader, type CompanionShellView } from "./CompanionHeader";
 import { CompanionSceneHost } from "./CompanionSceneHost";
 import { InferenceCloudAlertButton } from "./InferenceCloudAlertButton";
 import { resolveCompanionInferenceNotice } from "./resolve-companion-inference-notice";
-import { PtyConsoleSidePanel } from "@elizaos/app-core/components/coding/PtyConsoleSidePanel";
+import { PtyConsoleSidePanel } from "@elizaos/app-coding";
 
 const CharacterEditor = lazy(() =>
   import("@elizaos/app-core/components/character/CharacterEditor").then((m) => ({

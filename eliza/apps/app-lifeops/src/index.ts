@@ -67,4 +67,9 @@ export {
 
 export * from "./selfcontrol/index.js";
 
+// UI page views
+export * from "./LifeOpsPageView";
+export * from "./LifeOpsPageSections";
+export * from "./LifeOpsWorkspaceView";
+
 export default appLifeOpsPlugin;

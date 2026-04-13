@@ -27,9 +27,9 @@ import {
   useMemo,
   useState,
 } from "react";
-import { client } from "../../api";
-import { useGoogleLifeOpsConnector } from "../../hooks";
-import { useApp } from "../../state";
+import { client } from "@elizaos/app-core/api";
+import { useGoogleLifeOpsConnector } from "@elizaos/app-core/hooks";
+import { useApp } from "@elizaos/app-core/state";
 
 type WorkspacePane = "agenda" | "week" | "email";
 

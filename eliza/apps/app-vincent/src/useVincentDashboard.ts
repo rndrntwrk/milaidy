@@ -11,7 +11,7 @@ import type {
   WalletBalancesResponse,
 } from "@elizaos/shared/contracts/wallet";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { client } from "../../api";
+import { client } from "@elizaos/app-core/api";
 
 // ── Vincent endpoint types ──────────────────────────────────────────────
 
