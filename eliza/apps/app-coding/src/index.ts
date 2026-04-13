@@ -10,3 +10,4 @@ export * from "./GlobalPrefsSection";
 export * from "./AgentTabsSection";
 export * from "./coding-agent-settings-shared";
 export * from "./pty-status-dots";
+export * from "./session-hydration";
