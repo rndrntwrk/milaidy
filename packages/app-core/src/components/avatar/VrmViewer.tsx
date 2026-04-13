@@ -52,12 +52,16 @@ export type VrmViewerProps = {
   interactiveMode?: InteractionMode;
   /** Theme for the mathematical environment behind the avatar */
   environmentTheme?: "light" | "dark";
+  /** When true, keep Three.js scene background transparent for DOM backdrops. */
+  transparentEnvironmentBackground?: boolean;
   /** Optional Gaussian splat world behind the avatar */
   worldUrl?: string;
   /** Optional speech motion clip layered below manual emotes and above idle. */
   speechMotionPath?: string | null;
   /** Per-avatar speech capability contract for advanced face driving. */
   speechCapabilities?: AvatarSpeechCapabilities | null;
+  /** Stable key for the active avatar speech profile; consumed by test/mocked viewers. */
+  avatarSpeechKey?: string;
   /** Per-avatar camera distance multiplier (default 1). Values > 1 zoom out. */
   cameraDistanceScale?: number;
   /** User Settings: quality / balanced / efficiency for VRM power policy. */
@@ -364,6 +368,9 @@ export function VrmViewer(props: VrmViewerProps) {
     engine.setInteractionMode(interactionModeRef.current);
     engine.setInteractionEnabled(interactiveRef.current);
     engine.setPointerParallaxEnabled(pointerParallaxRef.current);
+    engine.setTransparentEnvironmentBackground(
+      props.transparentEnvironmentBackground ?? false,
+    );
     engine.setSpeechCapabilities(props.speechCapabilities ?? null);
     engine.setSpeechMotionPath(
       props.speechMotionPath ??
@@ -538,6 +545,16 @@ export function VrmViewer(props: VrmViewerProps) {
     if (!props.environmentTheme) return;
     engineRef.current?.setEnvironmentTheme(props.environmentTheme);
   }, [props.environmentTheme]);
+
+  useEffect(() => {
+    void engineRef.current?.setWorldUrl(props.worldUrl ?? null);
+  }, [props.worldUrl]);
+
+  useEffect(() => {
+    engineRef.current?.setTransparentEnvironmentBackground(
+      props.transparentEnvironmentBackground ?? false,
+    );
+  }, [props.transparentEnvironmentBackground]);
 
   const updateParallaxFromPointer = (
     clientX: number,

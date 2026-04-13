@@ -13,6 +13,7 @@ import {
   applyUiTheme,
   getCameraDistanceScale,
   getDefaultBundledVrmIndex,
+  getVrmBackgroundUrl,
   getVrmPreviewUrl,
   getVrmUrl,
   useApp,
@@ -53,6 +54,7 @@ export function OnboardingWizard() {
     onboardingStep,
     selectedVrmIndex,
     customVrmUrl,
+    customBackgroundUrl,
     uiLanguage,
     uiTheme,
     setState,
@@ -83,6 +85,8 @@ export function OnboardingWizard() {
     selectedVrmIndex > 0
       ? getVrmPreviewUrl(safeSelectedVrmIndex)
       : getVrmPreviewUrl(getDefaultBundledVrmIndex());
+  const backgroundImageUrl =
+    customBackgroundUrl || getVrmBackgroundUrl(safeSelectedVrmIndex);
   const avatarSpeech = useAvatarSpeechCapabilities({
     selectedVrmIndex,
     customVrmUrl,
@@ -187,6 +191,7 @@ export function OnboardingWizard() {
         <VrmStage
           vrmPath={vrmPath}
           worldUrl={worldUrl}
+          backgroundImageUrl={backgroundImageUrl}
           speechMotionPath={avatarSpeech.capabilities.speechMotionPath ?? null}
           speechCapabilities={avatarSpeech.capabilities}
           avatarSpeechKey={avatarSpeech.avatarKey}

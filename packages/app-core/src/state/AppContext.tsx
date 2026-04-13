@@ -8144,6 +8144,8 @@ function AppProviderInner({
     () => ({
       selectedVrmIndex,
       customVrmUrl,
+      customBackgroundUrl,
+      customWorldUrl,
       uiTheme,
       tab,
       companionVrmPowerMode,
@@ -8153,6 +8155,8 @@ function AppProviderInner({
     [
       selectedVrmIndex,
       customVrmUrl,
+      customBackgroundUrl,
+      customWorldUrl,
       uiTheme,
       tab,
       companionVrmPowerMode,

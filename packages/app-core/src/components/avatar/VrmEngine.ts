@@ -576,6 +576,7 @@ export class VrmEngine {
   private rendererPreference: RendererPreference = "auto";
   private scene: THREE.Scene | null = null;
   private mathEnvironment: MathEnvironment | null = null;
+  private transparentEnvironmentBackground = false;
   private overlayManager: SceneOverlayManager | null = null;
   private avatarRoot: THREE.Group | null = null;
   private camera: THREE.PerspectiveCamera | null = null;
@@ -1458,6 +1459,7 @@ export class VrmEngine {
         // Build construct environment (white void, floating screens, fog)
         this.mathEnvironment = new MathEnvironment();
         this.mathEnvironment.build(scene, "light");
+        this.applyTransparentEnvironmentBackground();
         const avatarRoot = new THREE.Group();
         avatarRoot.name = "AvatarRoot";
         scene.add(avatarRoot);
@@ -1995,9 +1997,21 @@ export class VrmEngine {
     // World backgrounds removed — math environment managed separately.
   }
 
+  setTransparentEnvironmentBackground(enabled: boolean): void {
+    this.transparentEnvironmentBackground = enabled;
+    this.applyTransparentEnvironmentBackground();
+  }
+
+  private applyTransparentEnvironmentBackground(): void {
+    this.mathEnvironment?.setSceneBackgroundEnabled(
+      !this.transparentEnvironmentBackground,
+    );
+  }
+
   /** Switch the mathematical environment theme. */
   setEnvironmentTheme(theme: "light" | "dark"): void {
     this.mathEnvironment?.setTheme(theme);
+    this.applyTransparentEnvironmentBackground();
   }
   async playEmote(
     path: string,

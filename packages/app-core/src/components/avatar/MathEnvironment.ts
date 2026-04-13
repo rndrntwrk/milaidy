@@ -94,6 +94,7 @@ export class MathEnvironment {
   private elapsedTime = 0;
   private theme: "light" | "dark" = "dark";
   private sceneRef: THREE.Scene | null = null;
+  private sceneBackgroundEnabled = true;
 
   /** Build and attach the environment to the given scene. */
   build(scene: THREE.Scene, theme: "light" | "dark"): void {
@@ -106,7 +107,7 @@ export class MathEnvironment {
     // White fog — everything fades to white at distance
     this.fog = new THREE.FogExp2(config.fogColor, config.fogDensity);
     scene.fog = this.fog;
-    scene.background = new THREE.Color(config.bgColor);
+    this.applySceneBackground(config);
 
     // Grid floor — faint in light mode, neon in dark mode
     this.gridMaterial = new THREE.LineBasicMaterial({
@@ -259,7 +260,7 @@ export class MathEnvironment {
       this.fog.density = config.fogDensity;
     }
     if (this.sceneRef) {
-      this.sceneRef.background = new THREE.Color(config.bgColor);
+      this.applySceneBackground(config);
     }
     if (this.gridMaterial) {
       this.gridMaterial.color.copy(config.gridColor);
@@ -289,6 +290,21 @@ export class MathEnvironment {
     for (const mat of this.scanLineMaterials) {
       mat.color.copy(config.screenEmissive);
     }
+  }
+
+  setSceneBackgroundEnabled(enabled: boolean): void {
+    this.sceneBackgroundEnabled = enabled;
+    const config = this.theme === "light" ? THEME_LIGHT : THEME_DARK;
+    this.applySceneBackground(config);
+  }
+
+  private applySceneBackground(config: ThemeConfig): void {
+    if (!this.sceneRef) return;
+    this.sceneRef.background = this.sceneBackgroundEnabled
+      ? new THREE.Color(config.bgColor)
+      : null;
+    this.sceneRef.fog = this.sceneBackgroundEnabled ? this.fog : null;
+    this.group.visible = this.sceneBackgroundEnabled;
   }
 
   /** Dispose all Three.js objects. */

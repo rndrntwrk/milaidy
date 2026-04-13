@@ -7,7 +7,7 @@
  * on unrelated state changes (WebSocket churn, chat messages, wallet updates, etc.).
  *
  * The context value is memoized in AppContext.tsx so it only propagates when
- * one of its 7 fields actually changes.
+ * one of its scene fields actually changes.
  */
 
 import { createContext, useContext } from "react";
@@ -21,6 +21,7 @@ import type {
 export interface CompanionSceneConfig {
   selectedVrmIndex: number;
   customVrmUrl: string;
+  customBackgroundUrl: string;
   customWorldUrl: string;
   uiTheme: UiTheme;
   tab: Tab;
@@ -39,6 +40,7 @@ export function useCompanionSceneConfig(): CompanionSceneConfig {
       return {
         selectedVrmIndex: 1,
         customVrmUrl: "",
+        customBackgroundUrl: "",
         customWorldUrl: "",
         uiTheme: "dark",
         tab: "chat",

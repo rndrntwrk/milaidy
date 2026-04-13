@@ -8,12 +8,14 @@ import {
 } from "@miladyai/app-core/hooks";
 import {
   getCameraDistanceScale,
+  getVrmBackgroundUrl,
   getVrmPreviewUrl,
   getVrmUrl,
   useCompanionSceneConfig,
   useTranslation,
   VRM_COUNT,
 } from "@miladyai/app-core/state";
+import { resolveAppAssetUrl } from "@miladyai/app-core/utils";
 
 import {
   memo,
@@ -165,6 +167,7 @@ function CompanionSceneSurface({
   const {
     selectedVrmIndex,
     customVrmUrl,
+    customBackgroundUrl,
     customWorldUrl,
     uiTheme,
     tab,
@@ -411,6 +414,15 @@ function CompanionSceneSurface({
     selectedVrmIndex > 0
       ? getVrmPreviewUrl(safeSelectedVrmIndex)
       : getVrmPreviewUrl(1);
+  const backgroundImageUrl =
+    customBackgroundUrl || getVrmBackgroundUrl(safeSelectedVrmIndex);
+  const worldUrl =
+    customWorldUrl ||
+    resolveAppAssetUrl(
+      uiTheme === "dark"
+        ? "worlds/companion-night.spz"
+        : "worlds/companion-day.spz",
+    );
   const avatarSpeech = useAvatarSpeechCapabilities({
     selectedVrmIndex,
     customVrmUrl,
@@ -648,10 +660,12 @@ function CompanionSceneSurface({
           <VrmStage
             active={active}
             vrmPath={vrmPath}
+            worldUrl={worldUrl}
             speechMotionPath={avatarSpeech.capabilities.speechMotionPath ?? null}
             speechCapabilities={avatarSpeech.capabilities}
             avatarSpeechKey={avatarSpeech.avatarKey}
             fallbackPreviewUrl={fallbackPreviewUrl}
+            backgroundImageUrl={backgroundImageUrl}
             environmentTheme={uiTheme === "dark" ? "dark" : "light"}
             cameraProfile="companion"
             cameraDistanceScale={getCameraDistanceScale(safeSelectedVrmIndex)}
