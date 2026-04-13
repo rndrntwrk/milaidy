@@ -4,7 +4,7 @@ sidebarTitle: "Registry"
 description: "How Milady discovers, caches, and resolves plugins from the remote registry."
 ---
 
-The plugin registry is the system that discovers, caches, and resolves plugins and apps for Milady agents. It combines a bundled local index with a remote GitHub-hosted registry, using a 3-tier cache to work offline, in Electron app bundles, and in development.
+The plugin registry is the system that discovers, caches, and resolves plugins and apps for Milady agents. It combines a bundled local index with a remote GitHub-hosted registry, using a 3-tier cache to work offline, in desktop app bundles, and in development.
 
 ## Table of Contents
 
@@ -25,7 +25,7 @@ The registry has two layers:
 
 ### Bundled Registry (`plugins.json`)
 
-A local JSON file shipped with Milady containing metadata for ~97 plugins from the ElizaOS ecosystem. Each entry includes the plugin's id, npm package name, category, environment variables, version, dependencies, and detailed parameter definitions. This file follows the `plugin-index-v1` schema.
+A local JSON file shipped with Milady containing metadata for ~97 plugins from the elizaOS ecosystem. Each entry includes the plugin's id, npm package name, category, environment variables, version, dependencies, and detailed parameter definitions. This file follows the `plugin-index-v1` schema.
 
 ```json
 {
@@ -38,7 +38,7 @@ A local JSON file shipped with Milady containing metadata for ~97 plugins from t
       "dirName": "plugin-telegram",
       "name": "Telegram",
       "npmName": "@elizaos/plugin-telegram",
-      "description": "Telegram bot connector for ElizaOS agents",
+      "description": "Telegram bot connector for elizaOS agents",
       "category": "connector",
       "envKey": "TELEGRAM_BOT_TOKEN",
       "configKeys": ["TELEGRAM_BOT_TOKEN", "TELEGRAM_BOT_USERNAME"],
@@ -176,7 +176,7 @@ Results show a match percentage based on scoring across name, description, and t
 
 ### `milady plugins info <name>`
 
-Show detailed information about a specific plugin: repository, homepage, language, stars, topics, npm versions, and supported ElizaOS versions.
+Show detailed information about a specific plugin: repository, homepage, language, stars, topics, npm versions, and supported elizaOS versions.
 
 ```bash
 milady plugins info telegram
@@ -315,10 +315,10 @@ Entries in the remote enriched registry use a different shape:
 | Field | Type | Description |
 |-------|------|-------------|
 | `git.repo` | `string` | GitHub `owner/repo` path |
-| `git.v0` / `v1` / `v2` | `{ branch: string \| null }` | Git branch for each ElizaOS version |
+| `git.v0` / `v1` / `v2` | `{ branch: string \| null }` | Git branch for each elizaOS version |
 | `npm.repo` | `string` | npm package name |
-| `npm.v0` / `v1` / `v2` | `string \| null` | Published npm version per ElizaOS version |
-| `supports` | `{ v0, v1, v2: boolean }` | Which ElizaOS versions are supported |
+| `npm.v0` / `v1` / `v2` | `string \| null` | Published npm version per elizaOS version |
+| `supports` | `{ v0, v1, v2: boolean }` | Which elizaOS versions are supported |
 | `description` | `string` | Plugin description |
 | `homepage` | `string \| null` | Homepage URL |
 | `topics` | `string[]` | GitHub topics / tags |
@@ -443,8 +443,63 @@ Results are sorted by score descending, then by star count as a tiebreaker.
 
 ---
 
+---
+
+## Plugin Ecosystem
+
+### Organization Structure
+
+Official ElizaOS plugins live in the [`elizaos-plugins`](https://github.com/elizaos-plugins) GitHub organization. The registry indexes plugins from this org automatically.
+
+| Repository | Contents |
+|-----------|----------|
+| `elizaos-plugins/registry` | Registry index (`index.json`, `generated-registry.json`), registry site |
+| `elizaos-plugins/plugin-*` | Individual official plugin packages |
+
+### Naming Conventions
+
+Follow these naming patterns for discoverability:
+
+| Scope | Pattern | Example |
+|-------|---------|---------|
+| Official | `@elizaos/plugin-<name>` | `@elizaos/plugin-telegram` |
+| Organization | `@yourorg/plugin-<name>` | `@acme/plugin-crm` |
+| Community | `elizaos-plugin-<name>` | `elizaos-plugin-weather` |
+
+The `plugin-` prefix is required for automatic discovery. The registry scanner recognizes all three patterns.
+
+### Submitting a Plugin to the Registry
+
+1. **Publish to npm** — Follow the [Publishing Guide](./publish)
+2. **Open a PR** to [`elizaos-plugins/registry`](https://github.com/elizaos-plugins/registry) adding your plugin to `index.json`:
+
+```json
+{
+  "@yourorg/plugin-weather": "github:yourorg/plugin-weather"
+}
+```
+
+3. **Include in your PR:**
+   - Plugin name, description, and category
+   - A working `elizaos.plugin.json` manifest in your package
+   - At least one passing test suite
+   - README with setup instructions
+
+4. **Registry CI** validates your plugin builds, loads, and passes tests
+5. Once merged, your plugin appears in `milady plugins search` and the registry site
+
+### Registry Site
+
+The registry has a browsable web interface hosted from `registry/site/`. Users can:
+- Browse plugins by category (Core, Model Providers, Connectors, DeFi, Features)
+- Search by name, description, or tags
+- View plugin details, install commands, and configuration
+
+---
+
 ## Next Steps
 
-- [Plugin Development Guide](./development.md) -- Create your own plugins
-- [Local Plugin Development](./local-plugins.md) -- Develop without publishing
+- [Plugin Development Guide](./development) -- Create your own plugins
+- [Local Plugin Development](./local-plugins) -- Develop without publishing
+- [Publishing Guide](./publish) -- Publish to npm and the registry
 - [Contributing Guide](/guides/contribution-guide) -- Submit plugins upstream

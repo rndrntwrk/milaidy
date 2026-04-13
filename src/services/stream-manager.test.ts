@@ -23,6 +23,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("node:child_process", () => ({
   spawn: vi.fn(),
+  execSync: vi.fn(),
 }));
 
 // Suppress logger noise in test output.
@@ -35,7 +36,7 @@ vi.mock("@elizaos/core", () => ({
   },
 }));
 
-import { spawn } from "node:child_process";
+import { execSync, spawn } from "node:child_process";
 import type { StreamConfig } from "./stream-manager";
 import { streamManager } from "./stream-manager";
 
@@ -47,16 +48,27 @@ import { streamManager } from "./stream-manager";
  * Build a minimal mock ChildProcess whose exitCode stays null so start()
  * considers FFmpeg alive after the 1500 ms probe delay.
  */
-function makeMockProc(opts: { exitCode?: number | null } = {}) {
+function makeMockProc(
+  opts: { exitCode?: number | null; withTtsPipe?: boolean } = {},
+) {
   const exitCode = opts.exitCode ?? null;
+  const stdin = { write: vi.fn(), end: vi.fn(), on: vi.fn() };
+  const stdout = { on: vi.fn() };
+  const stderr = { on: vi.fn() };
+  const pipe3 = opts.withTtsPipe
+    ? { write: vi.fn(), end: vi.fn(), on: vi.fn() }
+    : undefined;
+
+  // Node's ChildProcess exposes stdio as [stdin, stdout, stderr, ...extras]
+  const stdio = opts.withTtsPipe
+    ? [stdin, stdout, stderr, pipe3]
+    : [stdin, stdout, stderr];
+
   return {
-    stdin: {
-      write: vi.fn(),
-      end: vi.fn(),
-      on: vi.fn(),
-    },
-    stdout: { on: vi.fn() },
-    stderr: { on: vi.fn() },
+    stdin,
+    stdout,
+    stderr,
+    stdio,
     on: vi.fn(),
     kill: vi.fn(),
     killed: false,
@@ -74,20 +86,34 @@ function makeMockProc(opts: { exitCode?: number | null } = {}) {
  * second argument (i.e. the ffmpeg args including the leading "-y").
  */
 async function startWithMock(config: StreamConfig): Promise<string[]> {
-  const proc = makeMockProc();
-  // biome-ignore lint/suspicious/noExplicitAny: mock proc shape doesn't fully match ChildProcess
-  vi.mocked(spawn).mockReturnValueOnce(proc as any);
+  // Ensure singleton is stopped from any previous test leakage
+  vi.useRealTimers();
+  await streamManager.stop();
+
+  const isTts = config.audioSource === "tts";
+  const proc = makeMockProc({ withTtsPipe: isTts });
+  (spawn as unknown as ReturnType<typeof vi.fn>).mockReturnValueOnce(
+    // biome-ignore lint/suspicious/noExplicitAny: mock proc shape doesn't fully match ChildProcess
+    proc as any,
+  );
 
   vi.useFakeTimers();
+  try {
+    const startPromise = streamManager.start(config);
+    // Advance past the 1500ms probe delay — don't use runAllTimersAsync
+    // because stream-manager has a setInterval that causes infinite loop.
+    // Use sync advanceTimersByTime (bun compat) and flush microtasks.
+    vi.advanceTimersByTime(2000);
+    await startPromise;
+  } finally {
+    vi.useRealTimers();
+  }
 
-  const startPromise = streamManager.start(config);
-  await vi.runAllTimersAsync();
-  await startPromise;
-
-  vi.useRealTimers();
-
-  const calls = vi.mocked(spawn).mock.calls;
+  const calls = (spawn as unknown as ReturnType<typeof vi.fn>).mock.calls;
   const lastCall = calls[calls.length - 1];
+  if (!lastCall) {
+    throw new Error("startWithMock: spawn was never called");
+  }
   // spawn("ffmpeg", ["-y", ...ffmpegArgs], opts)  →  lastCall[1] is the args array
   return lastCall[1] as string[];
 }
@@ -97,13 +123,36 @@ async function startWithMock(config: StreamConfig): Promise<string[]> {
 // ---------------------------------------------------------------------------
 
 beforeEach(() => {
-  vi.mocked(spawn).mockReset();
+  (spawn as unknown as ReturnType<typeof vi.fn>).mockReset();
 });
 
 afterEach(async () => {
-  // stop() is a no-op when not running, so calling it unconditionally is safe.
-  await streamManager.stop();
+  // Restore real timers FIRST so stop()'s internal setTimeout can fire
   vi.useRealTimers();
+  await streamManager.stop();
+});
+
+// ===========================================================================
+// 0. FFmpeg pre-flight check
+// ===========================================================================
+
+describe("FFmpeg pre-flight check", () => {
+  afterEach(() => {
+    vi.mocked(execSync).mockReset();
+  });
+
+  it("throws a clear error when ffmpeg is not installed", async () => {
+    vi.mocked(execSync).mockImplementation(() => {
+      throw new Error("ENOENT");
+    });
+
+    await expect(
+      streamManager.start({
+        rtmpUrl: "rtmp://test",
+        rtmpKey: "key",
+      }),
+    ).rejects.toThrow(/FFmpeg not found/);
+  });
 });
 
 // ===========================================================================
@@ -180,7 +229,7 @@ describe("setVolume()", () => {
   it("does NOT call spawn when stream is not running", async () => {
     await streamManager.setVolume(40);
 
-    expect(vi.mocked(spawn)).not.toHaveBeenCalled();
+    expect(spawn).not.toHaveBeenCalled();
   });
 });
 
@@ -242,18 +291,18 @@ describe("mute() / unmute()", () => {
   });
 
   it("mute() does NOT call spawn when stream is not running", async () => {
-    vi.mocked(spawn).mockReset();
+    (spawn as unknown as ReturnType<typeof vi.fn>).mockReset();
     await streamManager.mute();
 
-    expect(vi.mocked(spawn)).not.toHaveBeenCalled();
+    expect(spawn).not.toHaveBeenCalled();
   });
 
   it("unmute() does NOT call spawn when stream is not running", async () => {
     await streamManager.mute();
-    vi.mocked(spawn).mockReset();
+    (spawn as unknown as ReturnType<typeof vi.fn>).mockReset();
     await streamManager.unmute();
 
-    expect(vi.mocked(spawn)).not.toHaveBeenCalled();
+    expect(spawn).not.toHaveBeenCalled();
   });
 });
 
@@ -626,5 +675,284 @@ describe("x11grab mode args", () => {
 
     expect(args).toContain("-video_size");
     expect(args).toContain("1920x1080");
+  });
+});
+
+// ===========================================================================
+// 8. autoRestart on unexpected FFmpeg exit
+// ===========================================================================
+
+/** Find the captured "exit" listener from the mock proc's .on() calls. */
+function getExitHandler(
+  proc: ReturnType<typeof makeMockProc>,
+): ((code: number | null, signal: string | null) => void) | undefined {
+  const calls = proc.on.mock.calls as Array<
+    [string, (code: number | null, signal: string | null) => void]
+  >;
+  const exitCall = calls.find(([event]) => event === "exit");
+  return exitCall?.[1];
+}
+
+describe("autoRestart on unexpected FFmpeg exit", () => {
+  it("exit handler is registered and fires autoRestart on unexpected exit", async () => {
+    // Start stream with a mock proc
+    vi.useRealTimers();
+    await streamManager.stop();
+
+    const proc = makeMockProc();
+    (spawn as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
+      // biome-ignore lint/suspicious/noExplicitAny: mock proc
+      proc as any,
+    );
+
+    vi.useFakeTimers();
+    try {
+      const startPromise = streamManager.start(BASE_CONFIG);
+      vi.advanceTimersByTime(2000);
+      await startPromise;
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(streamManager.isRunning()).toBe(true);
+
+    // Verify exit handler was registered
+    const exitHandler = getExitHandler(proc);
+    expect(exitHandler).toBeDefined();
+
+    // Trigger unexpected exit
+    exitHandler?.(1, null);
+
+    // After unexpected exit, _running should be false
+    expect(streamManager.isRunning()).toBe(false);
+    // Health should reflect the crashed state
+    expect(streamManager.getHealth().running).toBe(false);
+  });
+
+  it("stop() sets intentionalStop preventing restart after exit", async () => {
+    vi.useRealTimers();
+    await streamManager.stop();
+
+    const proc = makeMockProc();
+    (spawn as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
+      // biome-ignore lint/suspicious/noExplicitAny: mock proc
+      proc as any,
+    );
+
+    vi.useFakeTimers();
+    try {
+      const startPromise = streamManager.start(BASE_CONFIG);
+      vi.advanceTimersByTime(2000);
+      await startPromise;
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(streamManager.isRunning()).toBe(true);
+
+    // Stop intentionally
+    await streamManager.stop();
+    expect(streamManager.isRunning()).toBe(false);
+
+    const spawnCountBefore = (spawn as unknown as ReturnType<typeof vi.fn>).mock
+      .calls.length;
+
+    // Simulate exit event after intentional stop — should NOT trigger restart
+    const exitHandler = getExitHandler(proc);
+    if (exitHandler) exitHandler(0, "SIGTERM");
+
+    // Advance timers well past any restart backoff (10s)
+    vi.useFakeTimers();
+    try {
+      vi.advanceTimersByTime(10_000);
+    } finally {
+      vi.useRealTimers();
+    }
+
+    const spawnCountAfter = (spawn as unknown as ReturnType<typeof vi.fn>).mock
+      .calls.length;
+    // No new spawn calls — restart was prevented by intentionalStop
+    expect(spawnCountAfter).toBe(spawnCountBefore);
+  });
+
+  it("concurrent start() calls are rejected by _starting guard", async () => {
+    vi.useRealTimers();
+    await streamManager.stop();
+
+    const proc = makeMockProc();
+    (spawn as unknown as ReturnType<typeof vi.fn>).mockReturnValue(
+      // biome-ignore lint/suspicious/noExplicitAny: mock proc
+      proc as any,
+    );
+
+    vi.useFakeTimers();
+    try {
+      // Fire two concurrent start() calls
+      const start1 = streamManager.start(BASE_CONFIG);
+      const start2 = streamManager.start(BASE_CONFIG);
+      vi.advanceTimersByTime(2000);
+      await Promise.all([start1, start2]);
+    } finally {
+      vi.useRealTimers();
+    }
+
+    // spawn should only have been called once (second start was rejected)
+    const spawnCalls = (spawn as unknown as ReturnType<typeof vi.fn>).mock
+      .calls;
+    expect(spawnCalls.length).toBe(1);
+  });
+});
+
+// ===========================================================================
+// 9. TTS audio source — pipe:3 and bridge integration
+// ===========================================================================
+
+describe("buildAudioInputArgs() for TTS via spawn args", () => {
+  it("tts: args contain -f s16le, -ar 24000, -ac 1, -i pipe:3", async () => {
+    const args = await startWithMock({
+      ...BASE_CONFIG,
+      audioSource: "tts",
+    });
+
+    expect(args).toContain("-f");
+    expect(args).toContain("s16le");
+    expect(args).toContain("-ar");
+    expect(args).toContain("24000");
+    expect(args).toContain("-ac");
+    expect(args).toContain("1");
+    expect(args).toContain("-i");
+    expect(args).toContain("pipe:3");
+  });
+
+  it("tts: includes wallclock timestamps and probe tuning flags", async () => {
+    const args = await startWithMock({
+      ...BASE_CONFIG,
+      audioSource: "tts",
+    });
+
+    // -use_wallclock_as_timestamps 1 for raw PCM sync
+    expect(args).toContain("-use_wallclock_as_timestamps");
+    expect(args[args.indexOf("-use_wallclock_as_timestamps") + 1]).toBe("1");
+
+    // -probesize 32 to eliminate probe buffering
+    // There may be a video -probesize too — find the one near pipe:3
+    const pipe3Idx = args.indexOf("pipe:3");
+    // The TTS probesize should appear before pipe:3
+    let ttsProbeIdx = -1;
+    for (let i = pipe3Idx - 1; i >= 0; i--) {
+      if (args[i] === "-probesize") {
+        ttsProbeIdx = i;
+        break;
+      }
+    }
+    expect(ttsProbeIdx).toBeGreaterThan(-1);
+    expect(args[ttsProbeIdx + 1]).toBe("32");
+
+    // -analyzeduration 0 for immediate start
+    let ttsAnalyzeIdx = -1;
+    for (let i = pipe3Idx - 1; i >= 0; i--) {
+      if (args[i] === "-analyzeduration") {
+        ttsAnalyzeIdx = i;
+        break;
+      }
+    }
+    expect(ttsAnalyzeIdx).toBeGreaterThan(-1);
+    expect(args[ttsAnalyzeIdx + 1]).toBe("0");
+
+    // -thread_queue_size 512 to prevent queue overflow
+    expect(args).toContain("-thread_queue_size");
+    expect(args[args.indexOf("-thread_queue_size") + 1]).toBe("512");
+  });
+
+  it("tts: does NOT contain anullsrc (not silent)", async () => {
+    const args = await startWithMock({
+      ...BASE_CONFIG,
+      audioSource: "tts",
+    });
+
+    expect(args).not.toContain(
+      "anullsrc=channel_layout=stereo:sample_rate=44100",
+    );
+  });
+});
+
+describe("stdio array for TTS mode", () => {
+  it("tts: spawn is called with 4 stdio entries (includes pipe:3)", async () => {
+    await startWithMock({
+      ...BASE_CONFIG,
+      audioSource: "tts",
+    });
+
+    const calls = (spawn as unknown as ReturnType<typeof vi.fn>).mock.calls;
+    const lastCall = calls[calls.length - 1];
+    const opts = lastCall[2] as { stdio: unknown[] };
+
+    // Should have 4 stdio entries: [stdin, stdout, stderr, pipe:3]
+    expect(opts.stdio).toHaveLength(4);
+    expect(opts.stdio[3]).toBe("pipe");
+  });
+
+  it("non-tts: spawn is called with 3 stdio entries (no pipe:3)", async () => {
+    await startWithMock({
+      ...BASE_CONFIG,
+      audioSource: "silent",
+    });
+
+    const calls = (spawn as unknown as ReturnType<typeof vi.fn>).mock.calls;
+    const lastCall = calls[calls.length - 1];
+    const opts = lastCall[2] as { stdio: unknown[] };
+
+    expect(opts.stdio).toHaveLength(3);
+  });
+
+  it("pipe mode: spawn has 3 stdio entries when audioSource is silent", async () => {
+    await startWithMock({
+      ...BASE_CONFIG,
+      inputMode: "pipe",
+      audioSource: "silent",
+    });
+
+    const calls = (spawn as unknown as ReturnType<typeof vi.fn>).mock.calls;
+    const lastCall = calls[calls.length - 1];
+    const opts = lastCall[2] as { stdio: unknown[] };
+
+    // stdin=pipe, stdout=pipe, stderr=pipe — no pipe:3
+    expect(opts.stdio).toHaveLength(3);
+    expect(opts.stdio[0]).toBe("pipe");
+  });
+
+  it("pipe mode + tts: spawn has 4 stdio entries (stdin + pipe:3)", async () => {
+    await startWithMock({
+      ...BASE_CONFIG,
+      inputMode: "pipe",
+      audioSource: "tts",
+    });
+
+    const calls = (spawn as unknown as ReturnType<typeof vi.fn>).mock.calls;
+    const lastCall = calls[calls.length - 1];
+    const opts = lastCall[2] as { stdio: unknown[] };
+
+    expect(opts.stdio).toHaveLength(4);
+    expect(opts.stdio[0]).toBe("pipe"); // stdin for frames
+    expect(opts.stdio[3]).toBe("pipe"); // pipe:3 for TTS audio
+  });
+});
+
+describe("getTtsBridge()", () => {
+  it("returns a TTS bridge object with expected methods", () => {
+    const bridge = streamManager.getTtsBridge();
+
+    expect(bridge).toBeDefined();
+    expect(typeof bridge.attach).toBe("function");
+    expect(typeof bridge.detach).toBe("function");
+    expect(typeof bridge.isAttached).toBe("function");
+    expect(typeof bridge.isSpeaking).toBe("function");
+    expect(typeof bridge.speak).toBe("function");
+  });
+
+  it("returns the same bridge instance on repeated calls", () => {
+    const bridge1 = streamManager.getTtsBridge();
+    const bridge2 = streamManager.getTtsBridge();
+
+    expect(bridge1).toBe(bridge2);
   });
 });

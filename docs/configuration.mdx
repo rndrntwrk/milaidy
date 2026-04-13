@@ -15,7 +15,7 @@ By default, Milady stores its configuration at:
 ```
 
 <Info>
-The config directory is `~/.milady` and the config file is `milady.json` inside it. The CLI binary is `milady` and the npm package name is `milaidy`.
+The config directory is `~/.milady` and the config file is `milady.json` inside it. The CLI binary is `milady` and the npm package name is `miladyai`.
 </Info>
 
 ### Overriding the Location
@@ -211,7 +211,6 @@ Agents are defined under `agents.list`. The `agents.defaults` section provides s
         system: "You are Mila, a thoughtful assistant.",
         style: { all: ["concise", "friendly"] },
         adjectives: ["helpful", "creative"],
-        topics: ["technology", "science"],
         // Identity for display
         identity: { name: "Mila" },
         // Per-agent tool overrides
@@ -958,7 +957,7 @@ Configure Model Context Protocol (MCP) servers:
     servers: {
       filesystem: {
         type: "stdio",
-        command: "npx",
+        command: "bunx",
         args: ["-y", "@modelcontextprotocol/server-filesystem", "/home/user"],
       },
       "remote-server": {
@@ -979,7 +978,7 @@ Configure Model Context Protocol (MCP) servers:
   cloud: {
     enabled: false,
     provider: "elizacloud",
-    baseUrl: "https://www.elizacloud.ai/api/v1",
+    baseUrl: "https://elizacloud.ai/api/v1",
     inferenceMode: "byok",         // "cloud" | "byok" | "local"
     autoProvision: false,
     bridge: {

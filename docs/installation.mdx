@@ -26,7 +26,7 @@ You will also need an API key from at least one model provider (Anthropic, OpenA
 
 ## Desktop App (Recommended)
 
-The desktop app is the easiest way to get started. It packages the full Milady runtime, web dashboard, and gateway into a native Electron application with auto-updates and system tray integration.
+The desktop app is the easiest way to get started. It packages the full Milady runtime, web dashboard, and gateway into a native Electrobun application with auto-updates and system tray integration.
 
 Download from **[GitHub Releases](https://github.com/milady-ai/milady/releases/latest)**:
 
@@ -76,11 +76,20 @@ shasum -a 256 --check --ignore-missing SHA256SUMS.txt
     milady
     ```
   </Tab>
-  <Tab title="npm">
-    If you prefer npm/npx:
+  <Tab title="Bun">
+    If you have Bun installed:
 
     ```bash
-    npm install -g milaidy
+    bun install -g miladyai
+    milady setup
+    milady
+    ```
+  </Tab>
+  <Tab title="npm">
+    If you prefer npm:
+
+    ```bash
+    npm install -g miladyai
     milady setup
     milady
     ```
@@ -138,7 +147,7 @@ bun run dev
 bun run dev:ui
 ```
 
-```bash Desktop app (Electron with live reload)
+```bash Desktop app (Electrobun with live reload)
 bun run dev:desktop
 ```
 
@@ -150,12 +159,12 @@ bun run tui
 bun run tui:dev
 ```
 
-```bash All services simultaneously
-bun run dev:all
+```bash All services (backend + UI)
+bun run dev
 ```
 </CodeGroup>
 
-The `dev` script uses `scripts/dev-ui.mjs` to start the runtime with hot-reload for both the backend and the web UI. The `dev:desktop` script starts the Electron app with live reload from `apps/app/electron`.
+The `dev` script uses `scripts/dev-ui.mjs` to start the runtime with hot-reload for both the backend and the web UI. The `dev:desktop` script starts the Electrobun app with live reload.
 
 ## Mobile Builds
 
@@ -267,10 +276,6 @@ milady setup
 ```
 
 The `models` command lists all configured model providers and their status. The `setup` command runs the onboarding wizard if needed and validates your workspace.
-
-<Info>
-A `milady doctor` diagnostic command is planned but not yet implemented. See [milady doctor](/cli/doctor) for the planned behavior.
-</Info>
 
 ## Troubleshooting
 

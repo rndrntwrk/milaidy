@@ -142,6 +142,7 @@ if (!nav.userAgent) {
 // ---------------------------------------------------------------------------
 
 if (typeof globalThis.document === "undefined") {
+  const mockHead = { appendChild: vi.fn(), removeChild: vi.fn() };
   Object.defineProperty(globalThis, "document", {
     value: {
       createElement: vi.fn(() => ({
@@ -156,6 +157,11 @@ if (typeof globalThis.document === "undefined") {
         videoWidth: 1920,
         videoHeight: 1080,
       })),
+      createTextNode: vi.fn((text: string) => ({ textContent: text })),
+      getElementsByTagName: vi.fn((tagName: string) =>
+        tagName?.toLowerCase() === "head" ? [mockHead] : [],
+      ),
+      head: mockHead,
       hidden: false,
       hasFocus: vi.fn(() => true),
       documentElement: { requestFullscreen: vi.fn() },
@@ -187,14 +193,25 @@ function createMockStorage(): Storage {
   } as Storage;
 }
 
-if (typeof globalThis.localStorage === "undefined") {
+function hasStorageApi(value: unknown): value is Storage {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      typeof (value as Storage).getItem === "function" &&
+      typeof (value as Storage).setItem === "function" &&
+      typeof (value as Storage).removeItem === "function" &&
+      typeof (value as Storage).clear === "function",
+  );
+}
+
+if (!hasStorageApi(globalThis.localStorage)) {
   Object.defineProperty(globalThis, "localStorage", {
     value: createMockStorage(),
     writable: true,
     configurable: true,
   });
 }
-if (typeof globalThis.sessionStorage === "undefined") {
+if (!hasStorageApi(globalThis.sessionStorage)) {
   Object.defineProperty(globalThis, "sessionStorage", {
     value: createMockStorage(),
     writable: true,
@@ -224,16 +241,16 @@ if (typeof globalThis.window === "undefined") {
   });
 } else {
   const win = globalThis.window as unknown as Record<string, unknown>;
-  if (!win.sessionStorage) {
+  if (!hasStorageApi(win.sessionStorage)) {
     Object.defineProperty(win, "sessionStorage", {
-      value: createMockStorage(),
+      value: globalThis.sessionStorage,
       writable: true,
       configurable: true,
     });
   }
-  if (!win.localStorage) {
+  if (!hasStorageApi(win.localStorage)) {
     Object.defineProperty(win, "localStorage", {
-      value: createMockStorage(),
+      value: globalThis.localStorage,
       writable: true,
       configurable: true,
     });
@@ -245,6 +262,62 @@ if (typeof globalThis.window === "undefined") {
       configurable: true,
     });
   }
+}
+
+if (typeof globalThis.HTMLCanvasElement !== "undefined") {
+  const createCanvas2DContext = (): CanvasRenderingContext2D =>
+    ({
+      fillRect: vi.fn(),
+      clearRect: vi.fn(),
+      getImageData: vi.fn(() => ({
+        data: new Uint8ClampedArray(0),
+        width: 0,
+        height: 0,
+      })),
+      putImageData: vi.fn(),
+      drawImage: vi.fn(),
+      beginPath: vi.fn(),
+      closePath: vi.fn(),
+      moveTo: vi.fn(),
+      lineTo: vi.fn(),
+      stroke: vi.fn(),
+      fill: vi.fn(),
+      arc: vi.fn(),
+      rect: vi.fn(),
+      save: vi.fn(),
+      restore: vi.fn(),
+      translate: vi.fn(),
+      rotate: vi.fn(),
+      scale: vi.fn(),
+      transform: vi.fn(),
+      setTransform: vi.fn(),
+      resetTransform: vi.fn(),
+      fillText: vi.fn(),
+      strokeText: vi.fn(),
+      measureText: vi.fn(() => ({ width: 0 })),
+      createLinearGradient: vi.fn(() => ({ addColorStop: vi.fn() })),
+      createRadialGradient: vi.fn(() => ({ addColorStop: vi.fn() })),
+      createPattern: vi.fn(() => null),
+      canvas: document.createElement("canvas"),
+      lineWidth: 1,
+      globalAlpha: 1,
+      fillStyle: "#000",
+      strokeStyle: "#000",
+    }) as unknown as CanvasRenderingContext2D;
+
+  Object.defineProperty(globalThis.HTMLCanvasElement.prototype, "getContext", {
+    value: vi.fn((contextType: string) =>
+      contextType === "2d" ? createCanvas2DContext() : null,
+    ),
+    writable: true,
+    configurable: true,
+  });
+
+  Object.defineProperty(globalThis.HTMLCanvasElement.prototype, "toDataURL", {
+    value: vi.fn(() => "data:image/png;base64,dGVzdA=="),
+    writable: true,
+    configurable: true,
+  });
 }
 
 if (typeof globalThis.WebSocket === "undefined") {

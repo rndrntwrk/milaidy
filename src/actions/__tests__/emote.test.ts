@@ -30,12 +30,61 @@ describe("emoteAction", () => {
     expect(vi.mocked(fetch)).not.toHaveBeenCalled();
   });
 
+  it("describes PLAY_EMOTE as a chainable one-shot action", () => {
+    expect(emoteAction.description).toContain("one-shot emote animation");
+    expect(emoteAction.description).toContain(
+      "silent non-blocking visual side action",
+    );
+    expect(emoteAction.description).toContain("required emote parameter");
+    expect(emoteAction.description).toContain("before, after, or alongside");
+    expect(emoteAction.description).toContain("same turn");
+  });
+
+  it("does not infer emotes from message text when parameters are missing", async () => {
+    const result = await emoteAction.handler(
+      undefined,
+      { roomId: "room", content: { text: "please wave now" } },
+      undefined,
+      undefined,
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.text).toBe("");
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+  });
+
   it("rejects unknown emote IDs", async () => {
     const result = await emoteAction.handler(
       undefined,
       { roomId: "room", content: { text: "" } },
       undefined,
       { parameters: { emote: "does-not-exist" } },
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.text).toBe("");
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+  });
+
+  it("rejects agent-disallowed emote IDs", async () => {
+    const result = await emoteAction.handler(
+      undefined,
+      { roomId: "room", content: { text: "" } },
+      undefined,
+      { parameters: { emote: "idle" } },
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.text).toBe("");
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+  });
+
+  it("does not infer run or walk from message text", async () => {
+    const result = await emoteAction.handler(
+      undefined,
+      { roomId: "room", content: { text: "walk over there" } },
+      undefined,
+      undefined,
     );
 
     expect(result.success).toBe(false);
@@ -72,7 +121,7 @@ describe("emoteAction", () => {
     );
 
     expect(result.success).toBe(true);
-    expect(result.text).toBe("*waves*");
+    expect(result.text).toBe("");
     expect(result.data).toMatchObject({ emoteId: "wave" });
   });
 

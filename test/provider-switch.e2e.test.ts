@@ -243,13 +243,15 @@ describe("POST /api/provider/switch", () => {
         provider: "google",
         apiKey: "AIza-test-key",
       });
-      expect(process.env.GOOGLE_API_KEY).toBe("AIza-test-key");
+      expect(process.env.GOOGLE_GENERATIVE_AI_API_KEY).toBe(
+        "AIza-test-key",
+      );
 
       // Switch to cloud
       await req(port, "POST", "/api/provider/switch", {
         provider: "elizacloud",
       });
-      expect(process.env.GOOGLE_API_KEY).toBeUndefined();
+      expect(process.env.GOOGLE_GENERATIVE_AI_API_KEY).toBeUndefined();
     });
 
     it("switching to pi-ai clears direct API keys and sets flag", async () => {
@@ -264,7 +266,7 @@ describe("POST /api/provider/switch", () => {
       });
 
       expect(process.env.OPENAI_API_KEY).toBeUndefined();
-      expect(process.env.MILAIDY_USE_PI_AI).toBe("1");
+      expect(process.env.MILADY_USE_PI_AI).toBe("1");
     });
 
     it("trims whitespace from API keys before storing", async () => {

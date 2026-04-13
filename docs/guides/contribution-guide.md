@@ -57,7 +57,7 @@ bun run dev
 # Run UI development only
 bun run dev:ui
 
-# Desktop app (Electron) development
+# Desktop app (Electrobun) development
 bun run dev:desktop
 
 # Terminal UI
@@ -134,7 +134,7 @@ bun run build
 # Build using Node.js (instead of Bun runtime)
 bun run build:node
 
-# Desktop app (Electron)
+# Desktop app (Electrobun)
 bun run build:desktop
 
 # Mobile builds
@@ -313,7 +313,7 @@ Install the [Biome VS Code extension](https://marketplace.visualstudio.com/items
 milady/
 ├── apps/
 │   ├── app/                 # Desktop/mobile app (Capacitor + React)
-│   │   ├── electron/        # Electron desktop wrapper
+│   │   ├── electrobun/      # Electrobun desktop wrapper
 │   │   └── src/             # React UI components
 │   └── chrome-extension/    # Browser extension
 ├── deploy/                  # Docker deployment configs
@@ -330,7 +330,7 @@ milady/
 │   ├── hooks/               # Runtime hooks
 │   ├── plugins/             # Built-in plugins
 │   ├── providers/           # Context providers
-│   ├── runtime/             # ElizaOS runtime wrapper
+│   ├── runtime/             # elizaOS runtime wrapper
 │   ├── security/            # Security utilities
 │   ├── services/            # Background services
 │   ├── triggers/            # Trigger system
@@ -354,7 +354,7 @@ milady/
 |------|---------|
 | `src/entry.ts` | CLI entry point |
 | `src/index.ts` | Library exports |
-| `src/runtime/eliza.ts` | ElizaOS runtime initialization |
+| `src/runtime/eliza.ts` | elizaOS runtime initialization |
 | `src/runtime/milady-plugin.ts` | Main Milady plugin |
 | `milady.mjs` | npm bin entry (`"bin"` in package.json) |
 

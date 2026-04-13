@@ -9,10 +9,50 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { logger, type Plugin } from "@elizaos/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+// Mock all static plugin star-imports in eliza.ts to avoid ESM resolution
+// failure: @elizaos/plugin-ollama imports MAX_EMBEDDING_TOKENS which Vitest
+// cannot resolve from @elizaos/core at static-analysis time.
+vi.mock("@elizaos/plugin-agent-orchestrator", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-agent-skills", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-anthropic", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-browser", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-cli", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-coding-agent", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-computeruse", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-cron", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-discord", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-edge-tts", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-elevenlabs", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-elizacloud", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-experience", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-form", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-google-genai", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-groq", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-knowledge", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-local-embedding", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-ollama", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-openai", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-openrouter", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-pdf", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-personality", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-plugin-manager", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-rolodex", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-secrets-manager", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-shell", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-sql", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-telegram", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-todo", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-trajectory-logger", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-trust", () => ({ default: {} }));
+vi.mock("@elizaos/plugin-twitch", () => ({ default: {} }));
+
 import { findPluginExport } from "../cli/plugins-cli";
 import type { MiladyConfig } from "../config/config";
+import { CONNECTOR_PLUGINS } from "../config/plugin-auto-enable";
 import { CONNECTOR_IDS } from "../config/schema";
 import {
   applyCloudConfigToEnv,
@@ -24,17 +64,25 @@ import {
   CHANNEL_PLUGIN_MAP,
   CORE_PLUGINS,
   CUSTOM_PLUGINS_DIRNAME,
+  cleanStalePglitePid,
   collectPluginNames,
+  configureLocalEmbeddingPlugin,
   deduplicatePluginActions,
   findRuntimePluginExport,
+  getPgliteRecoveryAction,
   isEnvKeyAllowedForForwarding,
   isRecoverablePgliteInitError,
   mergeDropInPlugins,
   repairBrokenInstallRecord,
+  resolveMiladyPluginImportSpecifier,
   resolvePackageEntry,
   resolvePrimaryModel,
+  resolveVisionModeSetting,
   scanDropInPlugins,
+  shouldIgnoreMissingPluginExport,
+  shutdownRuntime,
 } from "./eliza";
+import { detectEmbeddingPreset } from "./embedding-presets";
 
 // ---------------------------------------------------------------------------
 // helpers
@@ -76,7 +124,8 @@ describe("collectPluginNames", () => {
     "OLLAMA_BASE_URL",
     "ELIZAOS_CLOUD_API_KEY",
     "ELIZAOS_CLOUD_ENABLED",
-    "MILAIDY_USE_PI_AI",
+    "MILADY_USE_PI_AI",
+    "MILADY_DISABLE_LOCAL_EMBEDDINGS",
     "OBSIDIAN_VAULT_PATH",
     "OBSIDAN_VAULT_PATH",
   ];
@@ -121,12 +170,50 @@ describe("collectPluginNames", () => {
       // Verify local-embedding IS in the set for offline/zero-config setups
       expect(plugins.has("@elizaos/plugin-local-embedding")).toBe(true);
     });
+
+    it("should omit @elizaos/plugin-local-embedding when explicitly disabled via env", async () => {
+      process.env.MILADY_DISABLE_LOCAL_EMBEDDINGS = "1";
+
+      const plugins = collectPluginNames({} as MiladyConfig);
+
+      expect(plugins.has("@elizaos/plugin-local-embedding")).toBe(false);
+    });
   });
   afterEach(() => snap.restore());
 
+  it("uses the hardware-adaptive embedding preset defaults when no embedding config is set", () => {
+    const detectedPreset = detectEmbeddingPreset();
+
+    delete process.env.LOCAL_EMBEDDING_MODEL;
+    delete process.env.LOCAL_EMBEDDING_MODEL_REPO;
+    delete process.env.LOCAL_EMBEDDING_DIMENSIONS;
+    delete process.env.LOCAL_EMBEDDING_CONTEXT_SIZE;
+    delete process.env.LOCAL_EMBEDDING_GPU_LAYERS;
+    delete process.env.LOCAL_EMBEDDING_USE_MMAP;
+
+    configureLocalEmbeddingPlugin({} as Plugin, {} as MiladyConfig);
+
+    expect(process.env.LOCAL_EMBEDDING_MODEL).toBe(detectedPreset.model);
+    expect(process.env.LOCAL_EMBEDDING_MODEL_REPO).toBe(
+      detectedPreset.modelRepo,
+    );
+    expect(process.env.LOCAL_EMBEDDING_DIMENSIONS).toBe(
+      String(detectedPreset.dimensions),
+    );
+    expect(process.env.LOCAL_EMBEDDING_CONTEXT_SIZE).toBe(
+      String(detectedPreset.contextSize),
+    );
+    expect(process.env.LOCAL_EMBEDDING_GPU_LAYERS).toBe(
+      String(detectedPreset.gpuLayers),
+    );
+    expect(process.env.LOCAL_EMBEDDING_USE_MMAP).toBe(
+      detectedPreset.gpuLayers === "auto" ? "false" : "true",
+    );
+  });
+
   it("includes all core plugins for an empty config", () => {
     // Guard against accidental removal from CORE_PLUGINS array
-    expect(CORE_PLUGINS).toHaveLength(13);
+    expect(CORE_PLUGINS).toHaveLength(17);
 
     const expectedCorePlugins = [
       "@elizaos/plugin-sql",
@@ -142,6 +229,10 @@ describe("collectPluginNames", () => {
       "@elizaos/plugin-agent-skills",
       "@elizaos/plugin-pdf",
       "@elizaos/plugin-secrets-manager",
+      "@elizaos/plugin-trust",
+      "@elizaos/plugin-todo",
+      "@elizaos/plugin-personality",
+      "@elizaos/plugin-experience",
     ];
     const names = collectPluginNames({} as MiladyConfig);
     for (const plugin of expectedCorePlugins) {
@@ -177,8 +268,8 @@ describe("collectPluginNames", () => {
     expect(names.has("@elizaos/plugin-groq")).toBe(false);
   });
 
-  it("adds pi-ai provider plugin when MILAIDY_USE_PI_AI is enabled", () => {
-    process.env.MILAIDY_USE_PI_AI = "1";
+  it("adds pi-ai provider plugin when MILADY_USE_PI_AI is enabled", () => {
+    process.env.MILADY_USE_PI_AI = "1";
     const names = collectPluginNames({} as MiladyConfig);
 
     expect(names.has("@elizaos/plugin-pi-ai")).toBe(true);
@@ -189,7 +280,7 @@ describe("collectPluginNames", () => {
   });
 
   it("cloud mode takes precedence over pi-ai mode", () => {
-    process.env.MILAIDY_USE_PI_AI = "1";
+    process.env.MILADY_USE_PI_AI = "1";
     const config = {
       cloud: { enabled: true },
     } as unknown as MiladyConfig;
@@ -200,7 +291,7 @@ describe("collectPluginNames", () => {
   });
 
   it("pi-ai mode overrides explicit direct-provider entries", () => {
-    process.env.MILAIDY_USE_PI_AI = "1";
+    process.env.MILADY_USE_PI_AI = "1";
     const config = {
       plugins: {
         entries: {
@@ -271,6 +362,15 @@ describe("collectPluginNames", () => {
     const names = collectPluginNames(config);
 
     expect(names.has("@elizaos/plugin-repoprompt")).toBe(true);
+  });
+
+  it("normalizes streaming-base short IDs in plugins.allow", () => {
+    const config = {
+      plugins: { allow: ["streaming-base"] },
+    } as unknown as MiladyConfig;
+    const names = collectPluginNames(config);
+
+    expect(names.has("@elizaos/plugin-streaming-base")).toBe(true);
   });
 
   it("normalizes cua short IDs in plugins.allow", () => {
@@ -367,6 +467,28 @@ describe("collectPluginNames", () => {
     } as unknown as MiladyConfig;
     const names = collectPluginNames(config);
     expect(names.has("@elizaos/plugin-telegram")).toBe(true);
+  });
+
+  it("uses the Milady streaming-base package when enabled via plugins.entries", () => {
+    const config = {
+      plugins: {
+        entries: { "streaming-base": { enabled: true } },
+      },
+    } as unknown as MiladyConfig;
+    const names = collectPluginNames(config);
+
+    expect(names.has("@elizaos/plugin-streaming-base")).toBe(true);
+  });
+
+  it("uses the Milady x-streaming package when enabled via plugins.entries", () => {
+    const config = {
+      plugins: {
+        entries: { "x-streaming": { enabled: true } },
+      },
+    } as unknown as MiladyConfig;
+    const names = collectPluginNames(config);
+
+    expect(names.has("@elizaos/plugin-x-streaming")).toBe(true);
   });
 
   it("uses @elizaos/plugin-telegram from CHANNEL_PLUGIN_MAP for connectors with plugins.entries", () => {
@@ -553,6 +675,26 @@ describe("collectPluginNames", () => {
     expect(names.has("@elizaos/plugin-vision")).toBe(false);
   });
 
+  it("defaults runtime vision mode to OFF when vision is enabled but unset", () => {
+    const config = {
+      features: { vision: true },
+    } as unknown as MiladyConfig;
+    expect(resolveVisionModeSetting(config, {} as NodeJS.ProcessEnv)).toBe(
+      "OFF",
+    );
+  });
+
+  it("preserves an explicit VISION_MODE when vision is enabled", () => {
+    const config = {
+      features: { vision: true },
+    } as unknown as MiladyConfig;
+    expect(
+      resolveVisionModeSetting(config, {
+        VISION_MODE: "SCREEN",
+      } as NodeJS.ProcessEnv),
+    ).toBe("SCREEN");
+  });
+
   it("cloud plugin is loaded independently of vision toggle", () => {
     const config = {
       cloud: { enabled: true },
@@ -579,10 +721,37 @@ describe("collectPluginNames", () => {
     expect(names.has("@elizaos/plugin-obsidian")).toBe(true);
   });
 
+  it("preserves fully-qualified optional plugin package names from plugins.allow", () => {
+    const optionalPlugins = [
+      "@elizaos/plugin-cua",
+      "@elizaos/plugin-code",
+      "@elizaos/plugin-xai",
+      "@elizaos/plugin-deepseek",
+      "@elizaos/plugin-mistral",
+      "@elizaos/plugin-together",
+      "@elizaos/plugin-claude-code-workbench",
+    ];
+    const config = {
+      plugins: { allow: optionalPlugins },
+    } as unknown as MiladyConfig;
+
+    const names = collectPluginNames(config);
+
+    for (const pluginName of optionalPlugins) {
+      expect(names.has(pluginName)).toBe(true);
+    }
+  });
+
   it("CHANNEL_PLUGIN_MAP keys match CONNECTOR_IDS from schema", () => {
     expect([...Object.keys(CHANNEL_PLUGIN_MAP)].sort()).toEqual(
       [...CONNECTOR_IDS].sort(),
     );
+  });
+
+  it("CHANNEL_PLUGIN_MAP values match CONNECTOR_PLUGINS for every connector", () => {
+    for (const id of Object.keys(CHANNEL_PLUGIN_MAP)) {
+      expect(CHANNEL_PLUGIN_MAP[id]).toBe(CONNECTOR_PLUGINS[id]);
+    }
   });
 });
 
@@ -655,7 +824,9 @@ describe("applyConnectorSecretsToEnv", () => {
     "SLACK_BOT_TOKEN",
     "SLACK_APP_TOKEN",
     "SLACK_USER_TOKEN",
-    "SIGNAL_ACCOUNT",
+    "SIGNAL_ACCOUNT_NUMBER",
+    "SIGNAL_HTTP_URL",
+    "SIGNAL_CLI_PATH",
     "MSTEAMS_APP_ID",
     "MSTEAMS_APP_PASSWORD",
     "MATTERMOST_BOT_TOKEN",
@@ -741,6 +912,22 @@ describe("applyConnectorSecretsToEnv", () => {
     } as MiladyConfig;
     applyConnectorSecretsToEnv(config);
     expect(process.env.TELEGRAM_BOT_TOKEN).toBe("legacy-tg-tok");
+  });
+
+  it("copies Signal account, httpUrl, and cliPath from config to env", () => {
+    const config = {
+      connectors: {
+        signal: {
+          account: "+14155551234",
+          httpUrl: "http://localhost:8080",
+          cliPath: "/usr/bin/signal-cli",
+        },
+      },
+    } as MiladyConfig;
+    applyConnectorSecretsToEnv(config);
+    expect(process.env.SIGNAL_ACCOUNT_NUMBER).toBe("+14155551234");
+    expect(process.env.SIGNAL_HTTP_URL).toBe("http://localhost:8080");
+    expect(process.env.SIGNAL_CLI_PATH).toBe("/usr/bin/signal-cli");
   });
 });
 
@@ -886,6 +1073,22 @@ describe("applyCloudConfigToEnv", () => {
     const config = { cloud: { apiKey: "new-key" } } as MiladyConfig;
     applyCloudConfigToEnv(config);
     expect(process.env.ELIZAOS_CLOUD_API_KEY).toBe("new-key");
+  });
+
+  it("does NOT enable cloud when apiKey present but enabled is not explicitly true", () => {
+    const config = { cloud: { apiKey: "ck-123" } } as MiladyConfig;
+    applyCloudConfigToEnv(config);
+    expect(process.env.ELIZAOS_CLOUD_ENABLED).toBeUndefined();
+    expect(process.env.ELIZAOS_CLOUD_API_KEY).toBe("ck-123");
+  });
+
+  it("clears ELIZAOS_CLOUD_ENABLED when enabled is explicitly false", () => {
+    process.env.ELIZAOS_CLOUD_ENABLED = "true";
+    const config = {
+      cloud: { enabled: false, apiKey: "ck-123" },
+    } as MiladyConfig;
+    applyCloudConfigToEnv(config);
+    expect(process.env.ELIZAOS_CLOUD_ENABLED).toBeUndefined();
   });
 
   it("handles missing cloud config gracefully", () => {
@@ -1036,7 +1239,7 @@ describe("applyDatabaseConfigToEnv", () => {
 
     applyDatabaseConfigToEnv(config);
     expect(process.env.PGLITE_DATA_DIR).toBe(
-      path.join("/tmp/milady-workspace", ".eliza", ".elizadb"),
+      path.resolve("/tmp/milady-workspace", ".eliza", ".elizadb"),
     );
   });
 
@@ -1179,6 +1382,60 @@ describe("isRecoverablePgliteInitError", () => {
   });
 });
 
+describe("shutdownRuntime", () => {
+  it("stops the runtime and then closes the database adapter", async () => {
+    const calls: string[] = [];
+    const runtime = {
+      adapter: {
+        close: vi.fn(async () => {
+          calls.push("close");
+        }),
+      },
+      stop: vi.fn(async () => {
+        calls.push("stop");
+      }),
+    } as unknown as import("@elizaos/core").AgentRuntime;
+
+    await shutdownRuntime(runtime, "test");
+
+    expect(calls).toEqual(["stop", "close"]);
+  });
+
+  it("still closes the adapter when runtime.stop throws", async () => {
+    const stopError = new Error("stop failed");
+    const close = vi.fn(async () => {});
+    const runtime = {
+      adapter: { close },
+      stop: vi.fn(async () => {
+        throw stopError;
+      }),
+    } as unknown as import("@elizaos/core").AgentRuntime;
+
+    await expect(shutdownRuntime(runtime, "test")).rejects.toThrow(
+      "stop failed",
+    );
+    expect(close).toHaveBeenCalledTimes(1);
+  });
+
+  it("propagates adapter close failures after attempting shutdown", async () => {
+    const closeError = new Error("close failed");
+    const stop = vi.fn(async () => {});
+    const runtime = {
+      adapter: {
+        close: vi.fn(async () => {
+          throw closeError;
+        }),
+      },
+      stop,
+    } as unknown as import("@elizaos/core").AgentRuntime;
+
+    await expect(shutdownRuntime(runtime, "test")).rejects.toThrow(
+      "close failed",
+    );
+    expect(stop).toHaveBeenCalledTimes(1);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // buildCharacterFromConfig
 // ---------------------------------------------------------------------------
@@ -1290,10 +1547,42 @@ describe("buildCharacterFromConfig", () => {
     const char = buildCharacterFromConfig(config);
 
     expect(char.name).toBe("Reimu");
-    // Bio and system use defaults with {{name}} placeholders
     expect(Array.isArray(char.bio)).toBe(true);
     expect((char.bio as string[])[0]).toContain("{{name}}");
     expect(char.system).toContain("{{name}}");
+    expect(char.postExamples.length).toBeGreaterThan(0);
+  });
+
+  it("backfills bundled preset posts for default named characters", () => {
+    const config = {
+      agents: { list: [{ id: "main", name: "Sakuya" }] },
+    } as MiladyConfig;
+    const char = buildCharacterFromConfig(config);
+
+    expect(char.name).toBe("Sakuya");
+    expect(char.postExamples.length).toBeGreaterThan(0);
+    expect(char.messageExamples.length).toBeGreaterThan(0);
+  });
+
+  it("hydrates username and topics from agent config", () => {
+    const config = {
+      agents: {
+        list: [
+          {
+            id: "main",
+            name: "Marisa",
+            username: "marisa-labs",
+            topics: ["magic", "research"],
+          },
+        ],
+      },
+    } as MiladyConfig;
+
+    const char = buildCharacterFromConfig(config);
+
+    expect(char.name).toBe("Marisa");
+    expect(char.username).toBe("marisa-labs");
+    expect(char.topics).toEqual(["magic", "research"]);
   });
 });
 
@@ -1757,6 +2046,66 @@ describe("mergeDropInPlugins", () => {
     });
     expect(accepted).toHaveLength(0);
     expect(skipped).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveMiladyPluginImportSpecifier
+// ---------------------------------------------------------------------------
+
+describe("resolveMiladyPluginImportSpecifier", () => {
+  it("prefers a bundled local plugin wrapper when one exists", async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "milady-plugin-"));
+    const runtimeDir = path.join(tmpDir, "runtime");
+    const pluginIndex = path.join(tmpDir, "plugins", "retake", "index.js");
+
+    await fs.mkdir(runtimeDir, { recursive: true });
+    await fs.mkdir(path.dirname(pluginIndex), { recursive: true });
+    await fs.writeFile(pluginIndex, "export default {};\n");
+
+    const specifier = resolveMiladyPluginImportSpecifier(
+      "@miladyai/plugin-retake",
+      pathToFileURL(path.join(runtimeDir, "eliza.ts")).href,
+    );
+
+    expect(specifier).toBe(pathToFileURL(pluginIndex).href);
+
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it("falls back to the bundled package when no local wrapper exists", async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "milady-plugin-"));
+    const runtimeDir = path.join(tmpDir, "runtime");
+    await fs.mkdir(runtimeDir, { recursive: true });
+
+    const specifier = resolveMiladyPluginImportSpecifier(
+      "@miladyai/plugin-x-streaming",
+      pathToFileURL(path.join(runtimeDir, "eliza.ts")).href,
+    );
+
+    expect(specifier).toBe("@miladyai/plugin-x-streaming");
+
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it("leaves non-Milady plugins unchanged", () => {
+    expect(resolveMiladyPluginImportSpecifier("@elizaos/plugin-discord")).toBe(
+      "@elizaos/plugin-discord",
+    );
+  });
+});
+
+describe("shouldIgnoreMissingPluginExport", () => {
+  it("ignores helper-only streaming-base package exports", () => {
+    expect(
+      shouldIgnoreMissingPluginExport("@elizaos/plugin-streaming-base"),
+    ).toBe(true);
+  });
+
+  it("does not ignore real plugins", () => {
+    expect(shouldIgnoreMissingPluginExport("@elizaos/plugin-x-streaming")).toBe(
+      false,
+    );
   });
 });
 
@@ -2291,5 +2640,197 @@ describe("deduplicatePluginActions", () => {
     expect(p1.actions?.map((a) => a.name)).toEqual(["SHARED"]);
     expect(p2.actions?.map((a) => a.name)).toEqual(["UNIQUE_2"]);
     expect(p3.actions?.map((a) => a.name)).toEqual(["UNIQUE_3"]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// cleanStalePglitePid
+// ---------------------------------------------------------------------------
+
+describe("cleanStalePglitePid", () => {
+  let tmpDir: string;
+
+  beforeEach(async () => {
+    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pglite-pid-test-"));
+  });
+
+  afterEach(async () => {
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it("does nothing when postmaster.pid does not exist", () => {
+    // Should not throw
+    cleanStalePglitePid(tmpDir);
+    // No pid file to check
+  });
+
+  it("removes a stale pid file when the process is not running", async () => {
+    const pidPath = path.join(tmpDir, "postmaster.pid");
+    // Use a PID that is extremely unlikely to be running
+    await fs.writeFile(pidPath, "999999999\n/tmp/pglite\n5432\n");
+
+    cleanStalePglitePid(tmpDir);
+
+    const exists = await fs
+      .access(pidPath)
+      .then(() => true)
+      .catch(() => false);
+    expect(exists).toBe(false);
+  });
+
+  it("leaves the pid file intact when the process is still running", async () => {
+    const pidPath = path.join(tmpDir, "postmaster.pid");
+    // Use our own PID — guaranteed to be running
+    await fs.writeFile(pidPath, `${process.pid}\n/tmp/pglite\n5432\n`);
+
+    cleanStalePglitePid(tmpDir);
+
+    const exists = await fs
+      .access(pidPath)
+      .then(() => true)
+      .catch(() => false);
+    expect(exists).toBe(true);
+  });
+
+  it("leaves the pid file intact on EPERM (process exists under different user)", async () => {
+    const pidPath = path.join(tmpDir, "postmaster.pid");
+    await fs.writeFile(pidPath, "12345\n/tmp/pglite\n5432\n");
+
+    // Mock process.kill to throw EPERM (process exists but different owner)
+    const origKill = process.kill;
+    process.kill = ((pid: number, signal?: number) => {
+      if (signal === 0) {
+        const err = new Error("EPERM") as NodeJS.ErrnoException;
+        err.code = "EPERM";
+        throw err;
+      }
+      return origKill.call(process, pid, signal);
+    }) as typeof process.kill;
+
+    try {
+      cleanStalePglitePid(tmpDir);
+    } finally {
+      process.kill = origKill;
+    }
+
+    const exists = await fs
+      .access(pidPath)
+      .then(() => true)
+      .catch(() => false);
+    expect(exists).toBe(true);
+  });
+
+  it("removes a malformed pid file (non-numeric)", async () => {
+    const pidPath = path.join(tmpDir, "postmaster.pid");
+    await fs.writeFile(pidPath, "not-a-number\n");
+
+    cleanStalePglitePid(tmpDir);
+
+    const exists = await fs
+      .access(pidPath)
+      .then(() => true)
+      .catch(() => false);
+    expect(exists).toBe(false);
+  });
+
+  it("removes a malformed pid file (empty)", async () => {
+    const pidPath = path.join(tmpDir, "postmaster.pid");
+    await fs.writeFile(pidPath, "");
+
+    cleanStalePglitePid(tmpDir);
+
+    const exists = await fs
+      .access(pidPath)
+      .then(() => true)
+      .catch(() => false);
+    expect(exists).toBe(false);
+  });
+});
+
+describe("getPgliteRecoveryAction", () => {
+  let tmpDir: string;
+
+  beforeEach(async () => {
+    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pglite-recovery-test-"));
+  });
+
+  afterEach(async () => {
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it("retries without reset when a lock error comes from a stale pid file", async () => {
+    const pidPath = path.join(tmpDir, "postmaster.pid");
+    await fs.writeFile(pidPath, "999999999\n/tmp/pglite\n5432\n");
+
+    const action = getPgliteRecoveryAction(
+      new Error("PGlite adapter crashed: database is locked"),
+      tmpDir,
+    );
+
+    const exists = await fs
+      .access(pidPath)
+      .then(() => true)
+      .catch(() => false);
+
+    expect(action).toBe("retry-without-reset");
+    expect(exists).toBe(false);
+  });
+
+  it("fails fast when a lock error points at a live owner process", async () => {
+    const pidPath = path.join(tmpDir, "postmaster.pid");
+    await fs.writeFile(pidPath, `${process.pid}\n/tmp/pglite\n5432\n`);
+
+    const action = getPgliteRecoveryAction(
+      new Error("PGlite adapter crashed: lock file already exists"),
+      tmpDir,
+    );
+
+    expect(action).toBe("fail-active-lock");
+  });
+
+  it("fails fast when pid ownership cannot be confirmed", async () => {
+    const pidPath = path.join(tmpDir, "postmaster.pid");
+    await fs.writeFile(pidPath, "12345\n/tmp/pglite\n5432\n");
+
+    const origKill = process.kill;
+    process.kill = ((pid: number, signal?: number) => {
+      if (signal === 0) {
+        const err = new Error("EPERM") as NodeJS.ErrnoException;
+        err.code = "EPERM";
+        throw err;
+      }
+      return origKill.call(process, pid, signal);
+    }) as typeof process.kill;
+
+    try {
+      const action = getPgliteRecoveryAction(
+        new Error("PGlite adapter crashed: database is locked"),
+        tmpDir,
+      );
+      expect(action).toBe("fail-active-lock");
+    } finally {
+      process.kill = origKill;
+    }
+  });
+
+  it("still resets for corruption errors even when a pid file exists", async () => {
+    const pidPath = path.join(tmpDir, "postmaster.pid");
+    await fs.writeFile(pidPath, `${process.pid}\n/tmp/pglite\n5432\n`);
+
+    const action = getPgliteRecoveryAction(
+      new Error("PGlite adapter crashed: database disk image is malformed"),
+      tmpDir,
+    );
+
+    expect(action).toBe("reset-data-dir");
+  });
+
+  it("returns none for unrelated startup errors", () => {
+    const action = getPgliteRecoveryAction(
+      new Error("Connection refused"),
+      tmpDir,
+    );
+
+    expect(action).toBe("none");
   });
 });

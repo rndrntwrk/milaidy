@@ -8,7 +8,7 @@ Actions are the primary way agents interact with the world. They represent discr
 
 ## Action Interface
 
-In the ElizaOS runtime, an `Action` is an object with:
+In the elizaOS runtime, an `Action` is an object with:
 
 - **name** -- Unique identifier the runtime uses to select the action (e.g., `RESTART_AGENT`).
 - **similes** -- Alternative names that help the agent match user intent (e.g., `REBOOT`, `RELOAD`).
@@ -26,7 +26,7 @@ Milady registers the following built-in actions from `src/actions/` automaticall
 
 ### Agent Lifecycle
 
-**RESTART_AGENT** -- Gracefully restarts the agent process. Stops the runtime, rebuilds if source files changed, and relaunches. Persists a "Restarting..." memory, returns the response, then schedules a restart after a 1.5-second delay so the response can flush. In CLI mode, exits with code 75 for the runner script; in Electron mode, performs an in-process hot restart. Optional `reason` parameter is logged for diagnostics.
+**RESTART_AGENT** -- Gracefully restarts the agent process. Stops the runtime, rebuilds if source files changed, and relaunches. Persists a "Restarting..." memory, returns the response, then schedules a restart after a 1.5-second delay so the response can flush. In CLI mode, exits with code 75 for the runner script; in desktop runtime mode, performs an in-process hot restart. Optional `reason` parameter is logged for diagnostics.
 
 ### Plugin Management
 
@@ -41,7 +41,7 @@ These actions provide a full plugin ejection workflow. "Ejecting" clones a plugi
 
 ### Core Ejection
 
-Similar to plugin ejection but for the ElizaOS core framework itself.
+Similar to plugin ejection but for the elizaOS core framework itself.
 
 | Action | Description |
 |--------|-------------|
@@ -169,7 +169,7 @@ Add custom actions to the `customActions` array in your `milady.json`:
 
 ### Action Discovery and Registration
 
-**Startup loading:** At plugin initialization, `loadCustomActions()` reads `milady.json`, filters to only `enabled` definitions, and converts each into an ElizaOS `Action` via `defToAction()`. The conversion builds an async handler based on the handler type, maps parameters to ElizaOS format (all typed as `string`), and sets `validate: async () => true`.
+**Startup loading:** At plugin initialization, `loadCustomActions()` reads `milady.json`, filters to only `enabled` definitions, and converts each into an elizaOS `Action` via `defToAction()`. The conversion builds an async handler based on the handler type, maps parameters to elizaOS format (all typed as `string`), and sets `validate: async () => true`.
 
 **Live registration:** Register new actions at runtime without restarting using `registerCustomActionLive(def)`. This converts the definition using the same `defToAction()` pipeline and calls `runtime.registerAction()` to make it immediately available. Returns the created `Action` or `null` if no runtime is available.
 

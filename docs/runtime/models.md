@@ -36,9 +36,9 @@ ELIZAOS_CLOUD_ENABLED          → @elizaos/plugin-elizacloud
 
 When multiple providers are configured, all are loaded. The `MODEL_PROVIDER` runtime setting (set from `agents.defaults.model.primary`) tells the agent which one to use for generation.
 
-### ElizaCloud Mode
+### Eliza Cloud Mode
 
-When ElizaCloud is active (`cloud.enabled: true` or `cloud.apiKey` is set), all direct AI provider plugins are removed from the load set. ElizaCloud handles all model calls through its gateway:
+When Eliza Cloud is active (`cloud.enabled: true` or `cloud.apiKey` is set), all direct AI provider plugins are removed from the load set. Eliza Cloud handles all model calls through its gateway:
 
 ```typescript
 if (cloudEffectivelyEnabled) {
@@ -71,7 +71,7 @@ The primary model is stored in `agents.defaults.model.primary` as a `"provider/m
 
 ## Cloud Model Defaults
 
-When ElizaCloud is enabled and no explicit model is set:
+When Eliza Cloud is enabled and no explicit model is set:
 
 ```typescript
 const small = models?.small || "openai/gpt-5-mini";

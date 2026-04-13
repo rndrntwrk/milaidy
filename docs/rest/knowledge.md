@@ -241,3 +241,97 @@ List all text fragments for a specific document, ordered by position.
   "count": 48
 }
 ```
+
+## Bulk Upload
+
+```
+POST /api/knowledge/documents/bulk
+```
+
+Uploads up to 100 knowledge documents in a single request. Each document is processed independently — partial failures do not abort the batch.
+
+**Request body:**
+```json
+{
+  "documents": [
+    {
+      "content": "Document text or base64 content",
+      "filename": "notes.pdf",
+      "contentType": "application/pdf",
+      "metadata": {}
+    }
+  ]
+}
+```
+
+| Constraint | Value |
+|------------|-------|
+| Max body size | 32 MB |
+| Max documents per request | 100 |
+
+**Response:**
+```json
+{
+  "ok": true,
+  "total": 3,
+  "successCount": 2,
+  "failureCount": 1,
+  "results": [
+    {
+      "index": 0,
+      "ok": true,
+      "filename": "notes.pdf",
+      "documentId": "550e8400-e29b-41d4-a716-446655440000",
+      "fragmentCount": 14,
+      "warnings": []
+    },
+    {
+      "index": 1,
+      "ok": false,
+      "filename": "broken.txt",
+      "error": "content and filename must be non-empty strings"
+    }
+  ]
+}
+```
+
+Top-level `ok` is `true` only when `failureCount === 0`. `warnings` is present only on successful items when the ingestion emitted warnings.
+
+**Errors:** `400` if `documents` is missing, empty, or exceeds 100 items.
+
+## Service availability
+
+All knowledge endpoints require the knowledge service to be loaded. If the service is still initializing (for example, during agent startup), requests return a `503` with a `Retry-After` header:
+
+```
+HTTP/1.1 503 Service Unavailable
+Retry-After: 5
+Content-Type: application/json
+
+{
+  "error": "Knowledge service is still loading. Please retry shortly."
+}
+```
+
+The `Retry-After` value is `5` (seconds). Clients should wait at least that long before retrying. The service typically finishes loading within 10 seconds of agent startup (configurable via the `KNOWLEDGE_SERVICE_TIMEOUT_MS` environment variable, maximum 60 seconds).
+
+If the knowledge service is unavailable for a reason other than a loading timeout (for example, the agent is not running), the response is `503` without a `Retry-After` header:
+
+```json
+{
+  "error": "Knowledge service is not available. Agent may not be running."
+}
+```
+
+## Common error codes
+
+| Status | Code | Description |
+|--------|------|-------------|
+| 400 | `INVALID_REQUEST` | Request body is malformed or missing required fields |
+| 401 | `UNAUTHORIZED` | Missing or invalid authentication token |
+| 404 | `NOT_FOUND` | Requested resource does not exist |
+| 413 | `PAYLOAD_TOO_LARGE` | Request body exceeds maximum size limit (32 MB for bulk upload) |
+| 500 | `EMBEDDING_FAILED` | Failed to generate embeddings for document content |
+| 500 | `DOCUMENT_TOO_LARGE` | Document content is too large to process |
+| 500 | `INTERNAL_ERROR` | Unexpected server error |
+| 503 | `SERVICE_UNAVAILABLE` | Knowledge service is still loading or not available — check `Retry-After` header |

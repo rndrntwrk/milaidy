@@ -46,7 +46,7 @@ const runtime = new AgentRuntime({
 
 | Setting Key | Source | Description |
 |---|---|---|
-| `VALIDATION_LEVEL` | Hardcoded | Set to `"fast"` — controls ElizaOS validation depth |
+| `VALIDATION_LEVEL` | Hardcoded | Set to `"fast"` — controls elizaOS validation depth |
 | `MODEL_PROVIDER` | `agents.defaults.model.primary` | Primary model selection (e.g., `"anthropic/claude-sonnet-4-5"`) |
 | `BUNDLED_SKILLS_DIRS` | `@elizaos/skills` package | Absolute path to bundled skills directory |
 | `WORKSPACE_SKILLS_DIR` | workspace path + `/skills` | Per-agent skills override directory |
@@ -142,7 +142,7 @@ for (const [featureName, enabled] of Object.entries(config.features ?? {})) {
 ```
 
 <Note>
-**ElizaCloud plugin exclusion**: When ElizaCloud is effectively enabled (cloud API key is set and the cloud plugin is loaded), direct AI provider plugins (e.g., `@elizaos/plugin-anthropic`, `@elizaos/plugin-openai`) are removed from the load set. The cloud plugin proxies model requests through ElizaCloud, so loading individual provider plugins would be redundant and could cause routing conflicts.
+**Eliza Cloud plugin exclusion**: When Eliza Cloud is effectively enabled (cloud API key is set and the cloud plugin is loaded), direct AI provider plugins (e.g., `@elizaos/plugin-anthropic`, `@elizaos/plugin-openai`) are removed from the load set. The cloud plugin proxies model requests through Eliza Cloud, so loading individual provider plugins would be redundant and could cause routing conflicts.
 </Note>
 
 ## Channel to Plugin Mapping

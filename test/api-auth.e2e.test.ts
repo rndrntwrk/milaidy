@@ -13,7 +13,10 @@
  *
  * NO MOCKS — all tests spin up a real HTTP server.
  */
+import fs from "node:fs";
 import http from "node:http";
+import os from "node:os";
+import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
 import { startApiServer } from "../src/api/server";
@@ -231,9 +234,16 @@ describe("Token auth gate (MILADY_API_TOKEN set)", () => {
   let close: () => Promise<void>;
   let envBackup: { restore: () => void };
 
+  const TERMINAL_TOKEN = "test-terminal-token-def456";
+
   beforeAll(async () => {
-    envBackup = saveEnv("MILADY_API_TOKEN", "MILADY_PAIRING_DISABLED");
+    envBackup = saveEnv(
+      "MILADY_API_TOKEN",
+      "MILADY_PAIRING_DISABLED",
+      "MILADY_TERMINAL_RUN_TOKEN",
+    );
     process.env.MILADY_API_TOKEN = TEST_TOKEN;
+    process.env.MILADY_TERMINAL_RUN_TOKEN = TERMINAL_TOKEN;
     delete process.env.MILADY_PAIRING_DISABLED;
 
     const server = await startApiServer({ port: 0 });
@@ -390,7 +400,7 @@ describe("Token auth gate (MILADY_API_TOKEN set)", () => {
       port,
       "POST",
       "/api/terminal/run",
-      { command: "echo auth-gate" },
+      { command: "echo auth-gate", terminalToken: TERMINAL_TOKEN },
       auth,
     );
     // shell policy may still deny execution, but auth gate must pass
@@ -429,26 +439,8 @@ describe("Token auth gate (MILADY_API_TOKEN set)", () => {
         path: "/api/connectors/auth-gate-test",
         expectedWithAuth: 200,
       },
-      {
-        method: "POST",
-        path: "/api/mcp/config/server",
-        body: {
-          name: "auth-gate-mcp",
-          config: { type: "stdio", command: "node", args: ["--version"] },
-        },
-        expectedWithAuth: 200,
-      },
-      {
-        method: "PUT",
-        path: "/api/mcp/config",
-        body: { servers: {} },
-        expectedWithAuth: 200,
-      },
-      {
-        method: "DELETE",
-        path: "/api/mcp/config/server/auth-gate-mcp",
-        expectedWithAuth: 200,
-      },
+      // Note: MCP config endpoints have additional security gates (terminal auth, URL validation)
+      // that are tested separately in server.mcp-config-validation.test.ts
     ];
 
     for (const testCase of mutationRequests) {
@@ -549,9 +541,9 @@ describe("CORS origin restrictions", () => {
     expect(status).toBe(200);
   });
 
-  it("allows capacitor-electron origin", async () => {
+  it("allows electrobun origin", async () => {
     const { status } = await req(port, "GET", "/api/status", undefined, {
-      origin: "capacitor-electron://-",
+      origin: "electrobun://-",
     });
     expect(status).toBe(200);
   });
@@ -848,10 +840,16 @@ describe("Auth + agent lifecycle", () => {
   let port: number;
   let close: () => Promise<void>;
   let envBackup: { restore: () => void };
+  let tmpConfigDir: string;
 
   beforeAll(async () => {
-    envBackup = saveEnv("MILADY_API_TOKEN");
+    envBackup = saveEnv("MILADY_API_TOKEN", "MILADY_CONFIG_PATH");
     process.env.MILADY_API_TOKEN = TEST_TOKEN;
+
+    // Isolate config writes to a temp directory so the onboarding POST
+    // never clobbers the real ~/.milady/milady.json.
+    tmpConfigDir = fs.mkdtempSync(path.join(os.tmpdir(), "milady-auth-e2e-"));
+    process.env.MILADY_CONFIG_PATH = path.join(tmpConfigDir, "milady.json");
 
     const server = await startApiServer({ port: 0 });
     port = server.port;
@@ -861,6 +859,7 @@ describe("Auth + agent lifecycle", () => {
   afterAll(async () => {
     await close();
     envBackup.restore();
+    fs.rmSync(tmpConfigDir, { recursive: true, force: true });
   });
 
   const auth = { headers: { Authorization: `Bearer lifecycle-auth-token` } };
@@ -883,6 +882,10 @@ describe("Auth + agent lifecycle", () => {
         name: "AuthTestAgent",
         bio: ["An auth test agent"],
         systemPrompt: "You are a test agent.",
+        connection: {
+          kind: "local-provider",
+          provider: "anthropic",
+        },
       },
       auth,
     );

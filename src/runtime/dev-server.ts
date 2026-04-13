@@ -3,7 +3,7 @@ const SCRIPT_START = Date.now();
 console.log(`[milady] Script starting...`);
 
 /**
- * Combined dev server — starts the ElizaOS runtime in headless mode and
+ * Combined dev server — starts the elizaOS runtime in headless mode and
  * wires it into the API server so the Control UI has a live agent to talk to.
  *
  * The MILADY_HEADLESS env var tells startEliza() to skip the interactive
@@ -16,7 +16,7 @@ import process from "node:process";
 import type { AgentRuntime } from "@elizaos/core";
 import { logger } from "@elizaos/core";
 import { startApiServer } from "../api/server";
-import { startEliza } from "./eliza";
+import { shutdownRuntime, startEliza } from "./eliza";
 import { setRestartHandler } from "./restart";
 
 console.log(`[milady] Imports complete (${Date.now() - SCRIPT_START}ms)`);
@@ -122,7 +122,7 @@ async function bootstrapRuntime(reason: string): Promise<void> {
 
     if (isShuttingDown) {
       try {
-        await rt.stop();
+        await shutdownRuntime(rt, "dev-server shutdown race");
       } catch {
         // Best effort during shutdown race.
       }
@@ -179,7 +179,7 @@ async function bootstrapRuntime(reason: string): Promise<void> {
 async function createRuntime(): Promise<AgentRuntime> {
   if (currentRuntime) {
     try {
-      await currentRuntime.stop();
+      await shutdownRuntime(currentRuntime, "dev-server createRuntime");
     } catch (err) {
       logger.warn(
         `[milady] Error stopping old runtime: ${err instanceof Error ? err.message : err}`,
@@ -270,7 +270,7 @@ async function shutdown(): Promise<void> {
   logger.info("[milady] Dev server shutting down…");
   if (currentRuntime) {
     try {
-      await currentRuntime.stop();
+      await shutdownRuntime(currentRuntime, "dev-server shutdown");
     } catch (err) {
       logger.warn(
         `[milady] Error stopping runtime during shutdown: ${err instanceof Error ? err.message : err}`,
@@ -323,7 +323,7 @@ async function main() {
     `[milady] API server ready on port ${actualPort} (${apiReady - apiStart}ms)`,
   );
 
-  // 2. Boot the ElizaOS agent runtime without blocking server readiness.
+  // 2. Boot the elizaOS agent runtime without blocking server readiness.
   scheduleRuntimeBootstrap(0, "startup");
 
   console.log(

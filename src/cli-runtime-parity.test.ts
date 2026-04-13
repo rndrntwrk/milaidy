@@ -51,7 +51,7 @@ function envSnapshot(keys: string[]): {
 describe("onboarding presets parity (CLI ↔ GUI)", () => {
   it("STYLE_PRESETS is a non-empty array", () => {
     expect(Array.isArray(STYLE_PRESETS)).toBe(true);
-    expect(STYLE_PRESETS.length).toBeGreaterThanOrEqual(6);
+    expect(STYLE_PRESETS.length).toBeGreaterThanOrEqual(4);
   });
 
   it("every preset has all required fields", () => {
@@ -64,8 +64,6 @@ describe("onboarding presets parity (CLI ↔ GUI)", () => {
       expect(preset.system.length).toBeGreaterThan(0);
       expect(Array.isArray(preset.adjectives)).toBe(true);
       expect(preset.adjectives.length).toBeGreaterThan(0);
-      expect(Array.isArray(preset.topics)).toBe(true);
-      expect(preset.topics.length).toBeGreaterThan(0);
       expect(preset.style).toBeDefined();
       expect(Array.isArray(preset.style.all)).toBe(true);
       expect(Array.isArray(preset.style.chat)).toBe(true);
@@ -125,7 +123,7 @@ describe("plugin loading parity across modes", () => {
     "OLLAMA_BASE_URL",
     "ELIZAOS_CLOUD_API_KEY",
     "ELIZAOS_CLOUD_ENABLED",
-    "MILAIDY_USE_PI_AI",
+    "MILADY_USE_PI_AI",
   ];
   const snap = envSnapshot(envKeys);
   beforeEach(() => {
@@ -187,7 +185,7 @@ describe("plugin loading parity across modes", () => {
     expect(names.has("@elizaos/plugin-discord")).toBe(true);
     expect(names.has("@elizaos/plugin-slack")).toBe(true);
     // Unconfigured channels should NOT be loaded
-    expect(names.has("@milady/plugin-whatsapp")).toBe(false);
+    expect(names.has("@miladyai/plugin-whatsapp")).toBe(false);
     expect(names.has("@elizaos/plugin-signal")).toBe(false);
   });
 

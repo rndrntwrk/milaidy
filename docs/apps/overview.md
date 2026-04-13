@@ -11,7 +11,7 @@ Milady is available on every platform you work on. Each app connects to the same
 <CardGroup cols={2}>
 
 <Card title="Desktop App" icon="desktop" href="/apps/desktop">
-  Electron-based desktop app for macOS, Windows, and Linux with native OS integration and embedded runtime.
+  Electrobun-based desktop app for macOS, Windows, and Linux with native OS integration and embedded runtime.
 </Card>
 
 <Card title="Mobile App" icon="mobile" href="/apps/mobile">
@@ -69,7 +69,7 @@ These are the five independent applications listed above. Each is a complete, pr
 
 ### Plugin Apps (Game/Experience Apps)
 
-These are ElizaOS plugins with names like `@elizaos/app-hyperscape` that are installed through the Dashboard's **Apps** browser. When launched:
+These are elizaOS plugins with names like `@elizaos/app-hyperscape` that are installed through the Dashboard's **Apps** browser. When launched:
 
 1. The plugin is installed into the agent runtime
 2. The agent connects to an external service (e.g., a metaverse, a game server)

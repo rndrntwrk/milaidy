@@ -58,8 +58,8 @@ git clone --branch 1.x https://github.com/elizaos-plugins/plugin-telegram.git \
   ~/.milady/plugins/ejected/plugin-telegram
 
 cd ~/.milady/plugins/ejected/plugin-telegram
-npm install
-npm run build
+bun install
+bun run build
 ```
 
 ### 2. Edit
@@ -77,7 +77,7 @@ After editing, rebuild the plugin:
 
 ```bash
 cd ~/.milady/plugins/ejected/plugin-telegram
-npm run build
+bun run build
 ```
 
 ### 4. Test
@@ -85,7 +85,7 @@ npm run build
 Restart Milady. The runtime auto-discovers ejected plugins and loads them instead of the npm versions:
 
 ```bash
-npm start
+milady start
 ```
 
 Look for log messages like `Loading ejected plugin:` to confirm.
@@ -104,7 +104,7 @@ Or manually:
 cd ~/.milady/plugins/ejected/plugin-telegram
 git fetch origin
 git pull --rebase origin 1.x
-npm run build
+bun run build
 ```
 
 ### 6. Reinject
@@ -126,7 +126,7 @@ rm -rf ~/.milady/plugins/ejected/plugin-telegram
 
 ## Core Eject
 
-In addition to plugins, you can eject `@elizaos/core` itself for deep customization. Core eject clones the entire ElizaOS monorepo and configures TypeScript path mapping to load the local core.
+In addition to plugins, you can eject `@elizaos/core` itself for deep customization. Core eject clones the entire elizaOS monorepo and configures TypeScript path mapping to load the local core.
 
 ### Core Eject Details
 
@@ -226,7 +226,7 @@ Every ejected plugin (and core) has a `.upstream.json` file at its root that tra
 
 ```json
 {
-  "$schema": "milaidy-upstream-v1",
+  "$schema": "milady-upstream-v1",
   "source": "github:elizaos-plugins/plugin-telegram",
   "gitUrl": "https://github.com/elizaos-plugins/plugin-telegram.git",
   "branch": "1.x",
@@ -241,7 +241,7 @@ Every ejected plugin (and core) has a `.upstream.json` file at its root that tra
 
 | Field | Description |
 |-------|-------------|
-| `$schema` | Always `"milaidy-upstream-v1"` |
+| `$schema` | Always `"milady-upstream-v1"` |
 | `source` | Short source identifier (e.g., `github:org/repo`) |
 | `gitUrl` | Full Git clone URL |
 | `branch` | Upstream branch being tracked |
@@ -289,7 +289,7 @@ git pull --ff-only origin 1.x
 git pull --rebase origin 1.x
 
 # Rebuild after sync
-npm run build
+bun run build
 ```
 
 If merge conflicts occur, resolve them manually, then `git add` the resolved files and continue.
@@ -349,13 +349,13 @@ Returns all ejected plugins with their `.upstream.json` metadata.
 
 ### Plugin not loading after eject
 
-- Verify `npm run build` succeeded and a `dist/` directory exists
+- Verify `bun run build` succeeded and a `dist/` directory exists
 - Check that `package.json` has a valid `name` field matching the expected plugin name
 - Look for `Loading ejected plugin:` messages in the runtime logs
 
 ### Build errors
 
-- Run `npm install` first -- ejected plugins have their own `node_modules/`
+- Run `bun install` first -- ejected plugins have their own `node_modules/`
 - Check the upstream repository's README for specific build requirements or peer dependencies
 
 ### Merge conflicts on sync
@@ -363,7 +363,7 @@ Returns all ejected plugins with their `.upstream.json` metadata.
 - The sync operation reports conflicted files in the `conflicts` array
 - Resolve conflicts manually in each file
 - Run `git add <resolved-file>` for each resolved file
-- Rebuild with `npm run build`
+- Rebuild with `bun run build`
 
 ### Eject fails with Git errors
 

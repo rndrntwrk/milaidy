@@ -63,7 +63,7 @@ Private keys stored here are **not** displayed in plaintext within this section.
 
 ## 4. Media Generation
 
-Controls which providers handle image, video, audio, and vision tasks. Each sub-section has an independent provider selection and, for cloud-capable providers, a mode toggle between Milady Cloud (no key required) and your own API key.
+Controls which providers handle image, video, audio, and vision tasks. Each sub-section has an independent provider selection and, for cloud-capable providers, a mode toggle between Eliza Cloud (no key required) and your own API key.
 
 ### Image
 
@@ -262,4 +262,4 @@ On iOS and Android the dashboard's storage bridge mirrors every write to Capacit
 - [Desktop App](/apps/desktop) — global keyboard shortcuts and native permission management
 - [Mobile App](/apps/mobile) — storage bridge that syncs settings to Capacitor Preferences on iOS/Android
 - [Talk Mode](/apps/dashboard/talk-mode) — voice conversation setup and Talk Mode configuration
-- [Plugins](/plugins) — how plugins register additional AI providers and capability toggles
+- [Plugins](/plugins/overview) — how plugins register additional AI providers and capability toggles

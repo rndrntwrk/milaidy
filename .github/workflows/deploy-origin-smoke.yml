@@ -26,7 +26,7 @@ permissions:
 jobs:
   smoke-api-status:
     name: Smoke /api/status on deploy origins
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 10
     env:
       MARKETING_ORIGIN: ${{ github.event.inputs.marketing_origin || github.event.client_payload.marketing_origin || 'https://milady.ai' }}
@@ -39,11 +39,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
+          check-latest: false
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: "1.3.10"
 
       - name: Run deploy smoke checks
         env:

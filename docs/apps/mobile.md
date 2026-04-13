@@ -14,8 +14,8 @@ The Milady mobile app brings the full dashboard experience to iOS and Android de
 | **Android** | API 22 (Android 5.1+) | HTTPS | Input capture enabled, mixed content disabled, WebContents debugging off in production |
 
 **App ID:** `com.miladyai.milady`
-**Package name:** `@milady/app`
-**Current version:** `2.0.0-alpha.26`
+**Package name:** `@miladyai/app`
+**Current version:** `2.0.0-alpha.87`
 
 ## Prerequisites
 
@@ -100,7 +100,7 @@ If you have already built the web assets and only need to push changes to the na
 
 ## Platform Configuration
 
-The shared Capacitor configuration lives in `capacitor.config.ts`, which re-exports from `electron/capacitor.shared.ts`. This shared config is used across all native targets (iOS, Android, Electron).
+The shared Capacitor configuration lives in `capacitor.config.ts`. Mobile targets use that shared config, while the desktop runtime is configured alongside the Electrobun app.
 
 ### Configuration Fields
 
@@ -151,7 +151,7 @@ The shared Capacitor configuration lives in `capacitor.config.ts`, which re-expo
 
 The mobile app uses 9 custom Milady Capacitor plugins plus the core Haptics plugin, each providing native capabilities with web fallbacks.
 
-### 1. Gateway (`@milady/capacitor-gateway`)
+### 1. Gateway (`@miladyai/capacitor-gateway`)
 
 Connects the mobile app to a Milady agent running elsewhere on the network.
 
@@ -161,7 +161,7 @@ Connects the mobile app to a Milady agent running elsewhere on the network.
 - **Events:** Streams `gatewayEvent`, `stateChange`, `error`, and `discovery` events.
 - On web, discovery falls back to manual connection; WebSocket works natively in the browser.
 
-### 2. Swabble (`@milady/capacitor-swabble`)
+### 2. Swabble (`@miladyai/capacitor-swabble`)
 
 Voice wake-word detection for hands-free activation.
 
@@ -171,7 +171,7 @@ Voice wake-word detection for hands-free activation.
 - **Transcript events:** Provides speech segments with timing information and confidence scores.
 - On web, falls back to the Web Speech API (`SpeechRecognition` / `webkitSpeechRecognition`) if available.
 
-### 3. Talk Mode (`@milady/capacitor-talkmode`)
+### 3. Talk Mode (`@miladyai/capacitor-talkmode`)
 
 Full speech pipeline: speech-to-text, chat with agent, text-to-speech response.
 
@@ -182,7 +182,7 @@ Full speech pipeline: speech-to-text, chat with agent, text-to-speech response.
 - **State machine:** Cycles through `idle` -> `listening` -> `processing` -> `speaking` with event listeners for each transition.
 - **Permissions:** Checks and requests microphone and speech recognition permissions.
 
-### 4. Camera (`@milady/capacitor-camera`)
+### 4. Camera (`@miladyai/capacitor-camera`)
 
 Full camera control with preview, photo capture, and video recording.
 
@@ -193,17 +193,17 @@ Full camera control with preview, photo capture, and video recording.
 - **Manual controls:** Zoom, focus point, exposure point, flash mode, white balance, and ISO.
 - On web, falls back to `navigator.mediaDevices.getUserMedia`.
 
-### 5. Location (`@milady/capacitor-location`)
+### 5. Location (`@miladyai/capacitor-location`)
 
 GPS and geolocation services.
 
 - **Accuracy levels:** best, high, medium, low, passive.
 - **Single position:** `getCurrentPosition` with cache age and timeout options.
 - **Continuous watch:** `watchPosition` with minimum distance and interval filters.
-- **Background location:** Available on iOS/Android only (not on Electron). Requires separate permission grant.
+- **Background location:** Available on iOS/Android only (not on Electrobun). Requires separate permission grant.
 - On web, uses the browser Geolocation API.
 
-### 6. Screen Capture (`@milady/capacitor-screencapture`)
+### 6. Screen Capture (`@miladyai/capacitor-screencapture`)
 
 Screenshot and screen recording.
 
@@ -212,7 +212,7 @@ Screenshot and screen recording.
 - **Pause/resume:** Recording can be paused and resumed.
 - Native platforms only for screenshots. Recording also available on web via `getDisplayMedia`.
 
-### 7. Canvas (`@milady/capacitor-canvas`)
+### 7. Canvas (`@miladyai/capacitor-canvas`)
 
 Canvas rendering and web view management. Available on all platforms (HTML Canvas API is universal).
 
@@ -223,17 +223,17 @@ Canvas rendering and web view management. Available on all platforms (HTML Canva
 - **Deep links:** Intercepts `milady://` URLs and fires `deepLink` events.
 - **Touch input:** Streams multi-touch events with force data.
 
-### 8. Agent (`@milady/capacitor-agent`)
+### 8. Agent (`@miladyai/capacitor-agent`)
 
 Agent lifecycle management.
 
-- **Cross-platform:** Uses IPC to the main-process AgentManager on Electron, and HTTP calls to the API server on iOS/Android/Web.
+- **Cross-platform:** Uses IPC to the main-process AgentManager on Electrobun, and HTTP calls to the API server on iOS/Android/Web.
 - **Lifecycle:** Start, stop, and query agent status (`not_started`, `starting`, `running`, `stopped`, `error`).
 - **Chat:** Send text messages and receive agent responses.
 
-### 9. Desktop (`@milady/capacitor-desktop`)
+### 9. Desktop (`@miladyai/capacitor-desktop`)
 
-Desktop-specific features (macOS/Electron only):
+Desktop-specific features (macOS/Electrobun only):
 
 - **System tray:** Create, update, and destroy with custom icons, tooltips, and context menus.
 - **Global shortcuts:** Register accelerator-based keyboard shortcuts with press events.
@@ -291,7 +291,7 @@ isFeatureAvailable("camera");           // true on native or with getUserMedia
 isFeatureAvailable("location");         // true if navigator.geolocation exists
 isFeatureAvailable("backgroundLocation"); // true on iOS/Android only
 isFeatureAvailable("screenCapture");    // true on native or with getDisplayMedia
-isFeatureAvailable("desktopTray");      // true on Electron only
+isFeatureAvailable("desktopTray");      // true on Electrobun only
 ```
 
 ### Plugin Wrapping
@@ -394,7 +394,7 @@ The global bridge object is exposed on `window.Milady` and provides a unified AP
 | `haptics` | object | Haptic feedback functions: `light()`, `medium()`, `heavy()`, `success()`, `warning()`, `error()`, `selectionStart()`, `selectionChanged()`, `selectionEnd()` |
 | `plugins` | `MiladyPlugins` | Access to all Milady plugins with fallback support |
 | `isFeatureAvailable(feature)` | function | Check if a specific feature is available on the current platform |
-| `platform` | object | Platform detection: `name`, `isNative`, `isIOS`, `isAndroid`, `isElectron`, `isWeb`, `isMacOS` |
+| `platform` | object | Platform detection: `name`, `isNative`, `isIOS`, `isAndroid`, `isDesktop`, `isWeb`, `isMacOS` |
 | `getPlugin(name)` | function | Get a registered plugin by name |
 | `hasPlugin(name)` | function | Check if a plugin is registered |
 | `registerPlugin(name, plugin)` | function | Register a custom plugin at runtime |

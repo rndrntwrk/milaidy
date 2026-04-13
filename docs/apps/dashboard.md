@@ -14,7 +14,7 @@ The dashboard runs as a web application served by the Milady agent runtime.
 |--------|---------|
 | **Default URL** | `http://localhost:2138` |
 | **CLI shortcut** | Run `milady dashboard` to open the dashboard in your default browser |
-| **Desktop app** | The Electron desktop app embeds the dashboard directly (no browser required) |
+| **Desktop app** | The Electrobun desktop app embeds the dashboard directly (no browser required) |
 
 On first launch you will see the **Onboarding Wizard**, which walks you through initial agent setup. If authentication is required you will see the **Pairing View** before reaching the main dashboard.
 
@@ -35,7 +35,7 @@ The header displays across all tabs and includes:
 - **Agent name** -- the name of the currently running agent, pulled from `agentStatus.agentName`.
 - **Agent status indicator** -- a color-coded dot showing the agent's runtime state (see [Agent Status Indicator](#agent-status-indicator) below).
 - **Wallet addresses** -- truncated EVM and Solana addresses with copy-to-clipboard functionality.
-- **Cloud credits** -- if Milady Cloud is enabled, the header shows credit balance with color-coded thresholds (green for OK, yellow for low, red for critical), along with a top-up link.
+- **Cloud credits** -- if Eliza Cloud is enabled, the header shows credit balance with color-coded thresholds (green for OK, yellow for low, red for critical), along with a top-up link.
 - **Lifecycle controls** -- Pause/Resume and Restart buttons for the agent runtime. These are disabled during state transitions (starting, restarting).
 - **Drop / Mint status** -- when a public mint is active and the user has not yet minted, a mint button appears.
 
@@ -70,91 +70,11 @@ Legacy paths are redirected automatically: `/game` maps to Apps, `/agent` to Cha
 
 ### Chat
 
-The default landing tab. The `ChatView` component provides the core messaging interface.
+The default landing tab — a full messaging interface with voice chat, 3D avatar, conversation management, and autonomous monitoring.
 
-**Message Area**
-
-Messages render through the `MessageContent` component, which supports:
-
-- **Plain text** -- standard chat messages with line breaks preserved.
-- **Inline plugin config** -- `[CONFIG:pluginId]` markers in agent responses render as interactive plugin configuration forms using `ConfigRenderer`.
-- **UI Spec rendering** -- fenced JSON code blocks containing UiSpec objects render as interactive UI elements via `UiRenderer`.
-- **Code blocks** -- syntax-highlighted fenced code blocks.
-- **Streaming** -- agent responses stream in token-by-token with a visible typing indicator. The `chatFirstTokenReceived` flag tracks when the first token arrives.
-
-**Input Area**
-
-The chat input area sits at the bottom of the view:
-
-- **Auto-resizing textarea** -- grows from 38 px to a maximum of 200 px as you type.
-- **Image attachments** -- attach images via the file picker button, drag-and-drop onto the chat area, or paste from clipboard. Pending images display as thumbnails above the input.
-- **File drops** -- drag and drop files into the chat area to share them with the agent. A visual drop zone indicator appears during drag.
-- **Send / Stop** -- the send button submits the message; while the agent is responding, a stop button appears to cancel generation.
-
-**Voice Chat**
-
-Built-in voice chat powered by ElevenLabs or browser TTS/STT:
-
-- Voice configuration loads automatically from the agent's config on mount.
-- The `useVoiceChat` hook manages the microphone toggle, agent voice playback, and the speaking state that drives avatar lip-sync.
-- Voice config changes in Settings or Character views are synchronized in real-time via a `milady:voice-config-updated` custom DOM event.
-
-**VRM 3D Avatar**
-
-A live 3D avatar rendered with Three.js and `@pixiv/three-vrm`:
-
-- The avatar responds to conversation with idle animations and emotes.
-- Select from 8 built-in VRM models via the `selectedVrmIndex` state.
-- Toggle avatar visibility and agent voice mute via the two control buttons in the Autonomous Panel's Chat Controls section.
-
-**Conversations Sidebar**
-
-The `ConversationsSidebar` component manages multiple conversations:
-
-- **Conversation list** -- sorted by most recently updated. Each entry shows the title, a relative timestamp (e.g., "5m ago", "2d ago"), and an unread indicator for conversations with new messages.
-- **Create new** -- a "New Chat" button at the top creates a fresh conversation thread.
-- **Rename** -- double-click a conversation title to enter inline edit mode. Press Enter to save or Escape to cancel.
-- **Delete** -- each conversation has a delete button that removes the thread permanently.
-- **Unread tracking** -- the `unreadConversations` set tracks which conversations have new messages the user has not yet viewed.
-
-**Autonomous Panel**
-
-Displayed on the right side of the Chat tab, the `AutonomousPanel` component provides real-time visibility into autonomous operations:
-
-- **Current state** -- shows the latest "Thought" (from assistant/evaluator streams) and latest "Action" (from action/tool/provider streams).
-- **Event Stream** -- a collapsible, reverse-chronological feed of the last 120 events, color-coded by type:
-
-| Event Type | Color |
-|------------|-------|
-| Heartbeat events | Accent |
-| Error events | Red (danger) |
-| Action, tool, provider events | Green (success) |
-| Assistant thoughts | Accent |
-| Other events | Muted gray |
-
-- **Workbench Tasks** -- active tasks the agent is working on, displayed as a checklist.
-- **Triggers** -- scheduled triggers (interval, cron, one-time) with their type, enabled status, and run count.
-- **Todos** -- task items tracked by the agent, displayed as a checklist.
-- **Chat Controls** -- at the bottom, avatar visibility toggle and agent voice mute toggle, plus a VRM avatar preview window (260-420 px tall depending on viewport).
-
-**Emote Picker**
-
-Trigger VRM avatar emotes with the keyboard shortcut **Cmd+E** (macOS) or **Ctrl+E** (Windows/Linux). The picker provides 29 emotes across 6 categories:
-
-| Category | Emotes |
-|----------|--------|
-| **Greeting** | Wave, Kiss |
-| **Emotion** | Crying, Sorrow, Rude Gesture, Looking Around |
-| **Dance** | Dance Happy, Dance Breaking, Dance Hip Hop, Dance Popping |
-| **Combat** | Hook Punch, Punching, Firing Gun, Sword Swing, Chopping, Spell Cast, Range, Death |
-| **Idle** | Idle, Talk, Squat, Fishing |
-| **Movement** | Float, Jump, Flip, Run, Walk, Crawling, Fall |
-
-Each emote is represented by a clickable icon button. Categories are displayed as filterable tabs within the picker.
-
-**Context Menu**
-
-Right-click messages to access a context menu for saving commands or performing custom actions.
+<Card title="Chat Documentation" icon="message" href="/dashboard/chat">
+  Full Chat tab documentation — message area, voice chat, VRM avatar, conversations sidebar, autonomous panel, emote picker, and context menu.
+</Card>
 
 ### Character
 
@@ -213,7 +133,7 @@ The active theme is highlighted. Theme selection is persisted to local storage a
 
 Provider selection and model configuration via the `ProviderSwitcher` component. This section supports:
 
-- **Milady Cloud** -- if cloud is enabled, shows connection status, credit balance (with low/critical thresholds), and a login/disconnect flow.
+- **Eliza Cloud** -- if cloud is enabled, shows connection status, credit balance (with low/critical thresholds), and a login/disconnect flow.
 - **Local/third-party providers** -- toggle AI provider plugins (e.g., Anthropic, OpenAI) and configure their API keys and model settings.
 - **Plugin config save** -- each provider plugin's settings can be saved independently.
 
@@ -240,7 +160,7 @@ The `VoiceConfigView` component configures:
 
 #### 6. Permissions & Capabilities
 
-The `PermissionsSection` component manages system permission grants for native platforms (Electron desktop app). Controls access to features like file system, microphone, camera, and notifications.
+The `PermissionsSection` component manages system permission grants for native platforms (Electrobun desktop app). Controls access to features like file system, microphone, camera, and notifications.
 
 #### 7. Software Updates
 

@@ -237,6 +237,38 @@ async function writeLocalAppPackage(
   );
 }
 
+async function writeLocalNodeModulePlugin(
+  workspaceRoot: string,
+  options: {
+    dirName: string;
+    packageName: string;
+    description: string;
+    keywords: string[];
+  },
+): Promise<void> {
+  const pluginDir = path.join(
+    workspaceRoot,
+    "node_modules",
+    "@elizaos",
+    options.dirName,
+  );
+  await fs.mkdir(pluginDir, { recursive: true });
+  await fs.writeFile(
+    path.join(pluginDir, "package.json"),
+    JSON.stringify(
+      {
+        name: options.packageName,
+        version: "1.0.0",
+        description: options.description,
+        keywords: options.keywords,
+        packageType: "plugin",
+      },
+      null,
+      2,
+    ),
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Setup
 // ---------------------------------------------------------------------------
@@ -923,11 +955,49 @@ describe("registry-client", () => {
         (app) => app.name === "@elizaos/app-hyperscape",
       );
       expect(hyperscape?.launchUrl).toBe("http://localhost:3333");
+      expect(hyperscape?.uiExtension?.detailPanelId).toBe(
+        "hyperscape-embedded-agents",
+      );
       expect(hyperscape?.viewer?.url).toBe("http://localhost:3333");
       expect(hyperscape?.viewer?.postMessageAuth).toBe(true);
 
       const pluginInfo = await getPluginInfo("@elizaos/app-hyperscape");
-      expect(pluginInfo?.localPath).toContain("plugins/app-hyperscape");
+      expect(pluginInfo?.localPath).toContain(
+        path.join("plugins", "app-hyperscape"),
+      );
+    });
+  });
+
+  describe("local node module plugin discovery", () => {
+    it("surfaces package keywords as registry topics", async () => {
+      const workspaceRoot = path.join(tmpDir, "workspace");
+      await writeLocalNodeModulePlugin(workspaceRoot, {
+        dirName: "plugin-local-tags",
+        packageName: "@elizaos/plugin-local-tags",
+        description: "Local plugin with keyword metadata",
+        keywords: ["voice", "speech-to-text", "elizaos", "plugin"],
+      });
+      process.env.MILADY_WORKSPACE_ROOT = workspaceRoot;
+
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue({
+          ok: true,
+          json: () => Promise.resolve(fakeGeneratedRegistry()),
+        }),
+      );
+
+      const { getRegistryPlugins } = await loadModule();
+      const registry = await getRegistryPlugins();
+      const localPlugin = registry.get("@elizaos/plugin-local-tags");
+
+      expect(localPlugin?.description).toBe(
+        "Local plugin with keyword metadata",
+      );
+      expect(localPlugin?.topics).toEqual(["voice", "speech-to-text"]);
+      expect(localPlugin?.localPath).toContain(
+        path.join("@elizaos", "plugin-local-tags"),
+      );
     });
   });
 

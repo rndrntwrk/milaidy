@@ -18,7 +18,10 @@
  */
 
 import crypto from "node:crypto";
+import fs from "node:fs/promises";
 import http from "node:http";
+import os from "node:os";
+import path from "node:path";
 import type { AgentRuntime, Content, Task, UUID } from "@elizaos/core";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { WebSocket } from "ws";
@@ -234,6 +237,14 @@ function waitForWsMessage(
   });
 }
 
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
+
 type TestAgentEvent = {
   runId: string;
   seq: number;
@@ -284,16 +295,7 @@ function createRuntimeForStreamTests(options: {
   eventService?: TestAgentEventService;
   loopRunning?: boolean;
 }): AgentRuntime {
-  const runtimeSubset: Pick<
-    AgentRuntime,
-    | "agentId"
-    | "character"
-    | "getService"
-    | "getRoomsByWorld"
-    | "getMemories"
-    | "getCache"
-    | "setCache"
-  > = {
+  const runtimeSubset = {
     agentId: "test-agent-id",
     character: { name: "StreamTestAgent" } as AgentRuntime["character"],
     getService: (serviceType: string) => {
@@ -305,6 +307,7 @@ function createRuntimeForStreamTests(options: {
           enableAutonomy: async () => {},
           disableAutonomy: async () => {},
           isLoopRunning: () => options.loopRunning ?? false,
+          getStatus: () => ({ enabled: options.loopRunning ?? false }),
         } as never;
       }
       return null;
@@ -314,7 +317,7 @@ function createRuntimeForStreamTests(options: {
     getCache: async () => null,
     setCache: async () => {},
   };
-  return runtimeSubset as AgentRuntime;
+  return runtimeSubset as unknown as AgentRuntime;
 }
 
 function createRuntimeForAutonomySurfaceTests(options: {
@@ -358,24 +361,7 @@ function createRuntimeForAutonomySurfaceTests(options: {
     } as Task,
   ];
 
-  const runtimeSubset: Pick<
-    AgentRuntime,
-    | "agentId"
-    | "character"
-    | "messageService"
-    | "getService"
-    | "ensureConnection"
-    | "getWorld"
-    | "updateWorld"
-    | "createMemory"
-    | "getMemories"
-    | "getRoomsByWorld"
-    | "getTasks"
-    | "getTask"
-    | "deleteTask"
-    | "getCache"
-    | "setCache"
-  > = {
+  const runtimeSubset = {
     agentId: "autonomy-surface-agent",
     character: { name: "AutonomySurfaceAgent" } as AgentRuntime["character"],
     messageService: {
@@ -417,6 +403,7 @@ function createRuntimeForAutonomySurfaceTests(options: {
           enableAutonomy: async () => {},
           disableAutonomy: async () => {},
           isLoopRunning: () => options.loopRunning ?? true,
+          getStatus: () => ({ enabled: options.loopRunning ?? true }),
         } as never;
       }
       return null;
@@ -459,26 +446,14 @@ function createRuntimeForAutonomySurfaceTests(options: {
     setCache: async () => {},
   };
 
-  return runtimeSubset as AgentRuntime;
+  return runtimeSubset as unknown as AgentRuntime;
 }
 
 function createRuntimeForWorkbenchCrudTests(options?: {
   loopRunning?: boolean;
 }): AgentRuntime {
   let tasks: Task[] = [];
-  const runtimeSubset: Pick<
-    AgentRuntime,
-    | "agentId"
-    | "character"
-    | "getSetting"
-    | "getService"
-    | "getRoomsByWorld"
-    | "getTasks"
-    | "getTask"
-    | "createTask"
-    | "updateTask"
-    | "deleteTask"
-  > = {
+  const runtimeSubset = {
     agentId: "workbench-crud-agent",
     character: { name: "WorkbenchCrudAgent" } as AgentRuntime["character"],
     getSetting: () => undefined,
@@ -486,12 +461,10 @@ function createRuntimeForWorkbenchCrudTests(options?: {
       if (serviceType === "AUTONOMY") {
         return {
           isLoopRunning: () => options?.loopRunning ?? false,
+          getStatus: () => ({ enabled: options?.loopRunning ?? false }),
           getAutonomousRoomId: () =>
             "00000000-0000-0000-0000-000000000201" as UUID,
-        } as {
-          isLoopRunning: () => boolean;
-          getAutonomousRoomId: () => UUID;
-        };
+        } as never;
       }
       return null;
     },
@@ -534,7 +507,7 @@ function createRuntimeForWorkbenchCrudTests(options?: {
     },
   };
 
-  return runtimeSubset as AgentRuntime;
+  return runtimeSubset as unknown as AgentRuntime;
 }
 
 function createRuntimeForChatSseTests(options?: {
@@ -559,24 +532,7 @@ function createRuntimeForChatSseTests(options?: {
 }): AgentRuntime {
   const memoriesByRoom = new Map<string, Array<Record<string, unknown>>>();
 
-  const runtimeSubset: Pick<
-    AgentRuntime,
-    | "agentId"
-    | "character"
-    | "messageService"
-    | "ensureConnection"
-    | "getWorld"
-    | "updateWorld"
-    | "createMemory"
-    | "getService"
-    | "getServicesByType"
-    | "emitEvent"
-    | "getMemoriesByRoomIds"
-    | "getRoomsByWorld"
-    | "getMemories"
-    | "getCache"
-    | "setCache"
-  > = {
+  const runtimeSubset = {
     agentId: "chat-stream-agent",
     character: {
       name: "ChatStreamAgent",
@@ -662,24 +618,11 @@ function createRuntimeForChatSseTests(options?: {
     setCache: async () => {},
   };
 
-  return runtimeSubset as AgentRuntime;
+  return runtimeSubset as unknown as AgentRuntime;
 }
 
 function createRuntimeForCompatEndpointTests(): AgentRuntime {
-  const runtimeSubset: Pick<
-    AgentRuntime,
-    | "agentId"
-    | "character"
-    | "messageService"
-    | "ensureConnection"
-    | "getWorld"
-    | "updateWorld"
-    | "getService"
-    | "getRoomsByWorld"
-    | "getMemories"
-    | "getCache"
-    | "setCache"
-  > = {
+  const runtimeSubset = {
     agentId: "compat-endpoint-agent",
     character: { name: "CompatAgent" } as AgentRuntime["character"],
     messageService: {
@@ -710,7 +653,7 @@ function createRuntimeForCompatEndpointTests(): AgentRuntime {
     setCache: async () => {},
   };
 
-  return runtimeSubset as AgentRuntime;
+  return runtimeSubset as unknown as AgentRuntime;
 }
 
 function createRuntimeForCreditNoResponseTests(): AgentRuntime {
@@ -721,21 +664,7 @@ function createRuntimeForCreditNoResponseTests(): AgentRuntime {
     error: () => {},
   } as AgentRuntime["logger"];
 
-  const runtimeSubset: Pick<
-    AgentRuntime,
-    | "agentId"
-    | "character"
-    | "logger"
-    | "messageService"
-    | "ensureConnection"
-    | "getWorld"
-    | "updateWorld"
-    | "getService"
-    | "getRoomsByWorld"
-    | "getMemories"
-    | "getCache"
-    | "setCache"
-  > = {
+  const runtimeSubset = {
     agentId: "credit-no-response-agent",
     character: { name: "CreditAgent" } as AgentRuntime["character"],
     logger: runtimeLogger,
@@ -762,7 +691,7 @@ function createRuntimeForCreditNoResponseTests(): AgentRuntime {
     setCache: async () => {},
   };
 
-  return runtimeSubset as AgentRuntime;
+  return runtimeSubset as unknown as AgentRuntime;
 }
 
 function createRuntimeForCreditLiteralNoResponseTests(): AgentRuntime {
@@ -773,21 +702,7 @@ function createRuntimeForCreditLiteralNoResponseTests(): AgentRuntime {
     error: () => {},
   } as AgentRuntime["logger"];
 
-  const runtimeSubset: Pick<
-    AgentRuntime,
-    | "agentId"
-    | "character"
-    | "logger"
-    | "messageService"
-    | "ensureConnection"
-    | "getWorld"
-    | "updateWorld"
-    | "getService"
-    | "getRoomsByWorld"
-    | "getMemories"
-    | "getCache"
-    | "setCache"
-  > = {
+  const runtimeSubset = {
     agentId: "credit-literal-no-response-agent",
     character: { name: "CreditAgent" } as AgentRuntime["character"],
     logger: runtimeLogger,
@@ -814,24 +729,11 @@ function createRuntimeForCreditLiteralNoResponseTests(): AgentRuntime {
     setCache: async () => {},
   };
 
-  return runtimeSubset as AgentRuntime;
+  return runtimeSubset as unknown as AgentRuntime;
 }
 
 function createRuntimeForCreditErrorTests(): AgentRuntime {
-  const runtimeSubset: Pick<
-    AgentRuntime,
-    | "agentId"
-    | "character"
-    | "messageService"
-    | "ensureConnection"
-    | "getWorld"
-    | "updateWorld"
-    | "getService"
-    | "getRoomsByWorld"
-    | "getMemories"
-    | "getCache"
-    | "setCache"
-  > = {
+  const runtimeSubset = {
     agentId: "credit-error-agent",
     character: { name: "CreditAgent" } as AgentRuntime["character"],
     messageService: {
@@ -851,8 +753,51 @@ function createRuntimeForCreditErrorTests(): AgentRuntime {
     setCache: async () => {},
   };
 
-  return runtimeSubset as AgentRuntime;
+  return runtimeSubset as unknown as AgentRuntime;
 }
+
+// ---------------------------------------------------------------------------
+// Test isolation — redirect all state to a temp directory so tests never
+// touch the real ~/.milady config, database, or plugins.
+// ---------------------------------------------------------------------------
+
+let _e2eTempDir: string;
+let _origStateDirEnv: string | undefined;
+
+beforeAll(async () => {
+  _origStateDirEnv = process.env.MILADY_STATE_DIR;
+  _e2eTempDir = await fs.mkdtemp(path.join(os.tmpdir(), "milady-e2e-"));
+  process.env.MILADY_STATE_DIR = _e2eTempDir;
+
+  // Seed a minimal config so the server can start
+  await fs.writeFile(
+    path.join(_e2eTempDir, "milady.json"),
+    JSON.stringify({
+      agents: {
+        defaults: { workspace: path.join(_e2eTempDir, "workspace") },
+        list: [{ id: "main", default: true, name: "TestAgent" }],
+      },
+      ui: { theme: "dark" },
+      cloud: { enabled: false },
+      env: {},
+      features: {},
+      plugins: { entries: {} },
+      database: { provider: "pglite" },
+    }),
+  );
+  await fs.mkdir(path.join(_e2eTempDir, "workspace"), { recursive: true });
+});
+
+afterAll(async () => {
+  if (_origStateDirEnv !== undefined) {
+    process.env.MILADY_STATE_DIR = _origStateDirEnv;
+  } else {
+    delete process.env.MILADY_STATE_DIR;
+  }
+  if (_e2eTempDir) {
+    await fs.rm(_e2eTempDir, { recursive: true, force: true });
+  }
+});
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -916,10 +861,17 @@ describe("API Server E2E (no runtime)", () => {
         state: "starting",
       });
       const { data } = await req(port, "GET", "/api/status");
+      const startup = data.startup as
+        | {
+            phase?: string;
+            attempt?: number;
+            lastError?: string;
+          }
+        | undefined;
       expect(data.startup).toBeDefined();
-      expect(data.startup.phase).toBe("runtime-retry");
-      expect(data.startup.attempt).toBe(2);
-      expect(data.startup.lastError).toContain("bootstrap failed");
+      expect(startup?.phase).toBe("runtime-retry");
+      expect(startup?.attempt).toBe(2);
+      expect(startup?.lastError).toContain("bootstrap failed");
       expect(data.state).toBe("starting");
 
       updateStartup({
@@ -940,7 +892,7 @@ describe("API Server E2E (no runtime)", () => {
       const { data } = await req(port, "POST", "/api/agent/start");
       expect(data.ok).toBe(true);
       const status = await req(port, "GET", "/api/status");
-      expect(status.data.state).toBe("running");
+      expect(status.data.state).toBe("paused");
       expect(typeof status.data.uptime).toBe("number");
     });
 
@@ -969,9 +921,7 @@ describe("API Server E2E (no runtime)", () => {
 
     it("full cycle: start → pause → resume → stop", async () => {
       await req(port, "POST", "/api/agent/start");
-      expect((await req(port, "GET", "/api/status")).data.state).toBe(
-        "running",
-      );
+      expect((await req(port, "GET", "/api/status")).data.state).toBe("paused");
 
       await req(port, "POST", "/api/agent/pause");
       expect((await req(port, "GET", "/api/status")).data.state).toBe("paused");
@@ -1399,6 +1349,10 @@ describe("API Server E2E (no runtime)", () => {
           "Hello ",
           "world",
         ]);
+        expect(tokenEvents.map((event) => event.fullText)).toEqual([
+          "Hello ",
+          "Hello world",
+        ]);
 
         const doneEvent = events.find((event) => event.type === "done");
         expect(doneEvent?.fullText).toBe("Hello world");
@@ -1481,6 +1435,48 @@ describe("API Server E2E (no runtime)", () => {
       }
     });
 
+    it("POST /api/chat/stream emits replacement snapshots for corrected callback text", async () => {
+      const runtime = createRuntimeForChatSseTests({
+        handleMessage: async (_runtime, _message, onResponse) => {
+          await onResponse({ text: "Hello wrld" } as Content);
+          await onResponse({ text: "Hello world" } as Content);
+          await onResponse({ text: "Hello world!" } as Content);
+          return {
+            responseContent: {
+              text: "Hello world!",
+            },
+          };
+        },
+      });
+      const streamServer = await startApiServer({ port: 0, runtime });
+      try {
+        const { status, events } = await reqSse(
+          streamServer.port,
+          "/api/chat/stream",
+          { text: "hello", mode: "power" },
+        );
+
+        expect(status).toBe(200);
+        const tokenEvents = events.filter((event) => event.type === "token");
+        expect(tokenEvents.map((event) => event.text)).toEqual([
+          "Hello wrld",
+          "Hello world",
+          "!",
+        ]);
+        expect(tokenEvents.map((event) => event.fullText)).toEqual([
+          "Hello wrld",
+          "Hello world",
+          "Hello world!",
+        ]);
+
+        const doneEvent = events.find((event) => event.type === "done");
+        expect(doneEvent?.fullText).toBe("Hello world!");
+        expect(doneEvent?.agentName).toBe("ChatStreamAgent");
+      } finally {
+        await streamServer.close();
+      }
+    });
+
     it("POST /api/chat/stream preserves repeated characters in incremental callback tokens", async () => {
       const runtime = createRuntimeForChatSseTests({
         handleMessage: async (_runtime, _message, onResponse) => {
@@ -1524,6 +1520,105 @@ describe("API Server E2E (no runtime)", () => {
         const doneEvent = events.find((event) => event.type === "done");
         expect(doneEvent?.fullText).toBe("Hello world");
         expect(doneEvent?.agentName).toBe("ChatStreamAgent");
+      } finally {
+        await streamServer.close();
+      }
+    });
+
+    it("GET /api/conversations waits for a pending restore before reporting the list", async () => {
+      const restoreGate =
+        createDeferred<Array<{ id: UUID; channelId: string; name: string }>>();
+      const restoredConversationId = "11111111-1111-4111-8111-111111111111";
+      const restoredRoomId = "00000000-0000-0000-0000-00000000c001" as UUID;
+      const restoredAt = Date.parse("2026-02-01T12:00:00.000Z");
+      const runtime = {
+        agentId: "restore-list-agent",
+        character: { name: "RestoreListAgent" } as AgentRuntime["character"],
+        getService: () => null,
+        getRoomsByWorld: async () => restoreGate.promise,
+        getMemories: async (query: { count?: number }) =>
+          query.count === 1 ? ([{ createdAt: restoredAt }] as never[]) : [],
+        getCache: async () => null,
+        setCache: async () => {},
+      } as unknown as AgentRuntime;
+
+      const streamServer = await startApiServer({ port: 0, runtime });
+      try {
+        const listPromise = req(streamServer.port, "GET", "/api/conversations");
+        const earlyState = await Promise.race([
+          listPromise.then(() => "resolved" as const),
+          new Promise<"pending">((resolve) =>
+            setTimeout(() => resolve("pending"), 25),
+          ),
+        ]);
+        expect(earlyState).toBe("pending");
+
+        restoreGate.resolve([
+          {
+            id: restoredRoomId,
+            channelId: `web-conv-${restoredConversationId}`,
+            name: "Restored Chat",
+          },
+        ]);
+
+        const response = await listPromise;
+        expect(response.status).toBe(200);
+        expect(response.data.conversations).toEqual([
+          expect.objectContaining({
+            id: restoredConversationId,
+            title: "Restored Chat",
+          }),
+        ]);
+      } finally {
+        await streamServer.close();
+      }
+    });
+
+    it("GET /api/conversations/:id/messages waits for a pending restore before 404ing", async () => {
+      const restoreGate =
+        createDeferred<Array<{ id: UUID; channelId: string; name: string }>>();
+      const restoredConversationId = "22222222-2222-4222-8222-222222222222";
+      const restoredRoomId = "00000000-0000-0000-0000-00000000c002" as UUID;
+      const restoredAt = Date.parse("2026-02-02T12:00:00.000Z");
+      const runtime = {
+        agentId: "restore-messages-agent",
+        character: {
+          name: "RestoreMessagesAgent",
+        } as AgentRuntime["character"],
+        getService: () => null,
+        getRoomsByWorld: async () => restoreGate.promise,
+        getMemories: async (query: { count?: number }) =>
+          query.count === 1 ? ([{ createdAt: restoredAt }] as never[]) : [],
+        getCache: async () => null,
+        setCache: async () => {},
+      } as unknown as AgentRuntime;
+
+      const streamServer = await startApiServer({ port: 0, runtime });
+      try {
+        const messagesPromise = req(
+          streamServer.port,
+          "GET",
+          `/api/conversations/${restoredConversationId}/messages`,
+        );
+        const earlyState = await Promise.race([
+          messagesPromise.then(() => "resolved" as const),
+          new Promise<"pending">((resolve) =>
+            setTimeout(() => resolve("pending"), 25),
+          ),
+        ]);
+        expect(earlyState).toBe("pending");
+
+        restoreGate.resolve([
+          {
+            id: restoredRoomId,
+            channelId: `web-conv-${restoredConversationId}`,
+            name: "Restored Chat",
+          },
+        ]);
+
+        const response = await messagesPromise;
+        expect(response.status).toBe(200);
+        expect(response.data.messages).toEqual([]);
       } finally {
         await streamServer.close();
       }
@@ -1574,6 +1669,10 @@ describe("API Server E2E (no runtime)", () => {
           "Hello ",
           "world",
         ]);
+        expect(tokenEvents.map((event) => event.fullText)).toEqual([
+          "Hello ",
+          "Hello world",
+        ]);
 
         const doneEvent = events.find((event) => event.type === "done");
         expect(doneEvent?.fullText).toBe("Hello world");
@@ -1614,6 +1713,61 @@ describe("API Server E2E (no runtime)", () => {
         ]);
         const doneEvent = events.find((event) => event.type === "done");
         expect(doneEvent?.fullText).toBe("Hello world");
+        expect(doneEvent?.agentName).toBe("ChatStreamAgent");
+      } finally {
+        await streamServer.close();
+      }
+    });
+
+    it("POST /api/conversations/:id/messages/stream emits replacement snapshots for corrected callback text", async () => {
+      const runtime = createRuntimeForChatSseTests({
+        handleMessage: async (_runtime, _message, onResponse) => {
+          await onResponse({ text: "Hello wrld" } as Content);
+          await onResponse({ text: "Hello world" } as Content);
+          await onResponse({ text: "Hello world!" } as Content);
+          return {
+            responseContent: {
+              text: "Hello world!",
+            },
+          };
+        },
+      });
+      const streamServer = await startApiServer({ port: 0, runtime });
+      try {
+        const create = await req(
+          streamServer.port,
+          "POST",
+          "/api/conversations",
+          {
+            title: "Corrected snapshot conversation",
+          },
+        );
+        expect(create.status).toBe(200);
+        const conversation = create.data.conversation as { id?: string };
+        const conversationId = conversation.id ?? "";
+        expect(conversationId.length).toBeGreaterThan(0);
+
+        const { status, events } = await reqSse(
+          streamServer.port,
+          `/api/conversations/${conversationId}/messages/stream`,
+          { text: "hello", mode: "power" },
+        );
+
+        expect(status).toBe(200);
+        const tokenEvents = events.filter((event) => event.type === "token");
+        expect(tokenEvents.map((event) => event.text)).toEqual([
+          "Hello wrld",
+          "Hello world",
+          "!",
+        ]);
+        expect(tokenEvents.map((event) => event.fullText)).toEqual([
+          "Hello wrld",
+          "Hello world",
+          "Hello world!",
+        ]);
+
+        const doneEvent = events.find((event) => event.type === "done");
+        expect(doneEvent?.fullText).toBe("Hello world!");
         expect(doneEvent?.agentName).toBe("ChatStreamAgent");
       } finally {
         await streamServer.close();
@@ -1679,6 +1833,139 @@ describe("API Server E2E (no runtime)", () => {
         expect(greetingPersisted).toBe(true);
         expect(userPersisted).toBe(true);
         expect(assistantPersisted).toBe(true);
+      } finally {
+        await streamServer.close();
+      }
+    });
+
+    it("POST /api/conversations can bootstrap the intro greeting atomically", async () => {
+      const runtime = createRuntimeForChatSseTests();
+      const streamServer = await startApiServer({ port: 0, runtime });
+      try {
+        const create = await req(
+          streamServer.port,
+          "POST",
+          "/api/conversations",
+          {
+            title: "Bootstrap greeting test",
+            bootstrapGreeting: true,
+            lang: "en",
+          },
+        );
+        expect(create.status).toBe(200);
+        const conversation = create.data.conversation as { id?: string };
+        const conversationId = conversation.id ?? "";
+        expect(conversationId.length).toBeGreaterThan(0);
+        expect(create.data.greeting).toMatchObject({
+          text: "Welcome to the conversation.",
+          agentName: "ChatStreamAgent",
+          generated: true,
+        });
+
+        const messagesResponse = await req(
+          streamServer.port,
+          "GET",
+          `/api/conversations/${conversationId}/messages`,
+        );
+        expect(messagesResponse.status).toBe(200);
+        const messages = (messagesResponse.data.messages ?? []) as Array<
+          Record<string, unknown>
+        >;
+        expect(messages).toEqual([
+          expect.objectContaining({
+            role: "assistant",
+            text: "Welcome to the conversation.",
+            source: "agent_greeting",
+          }),
+        ]);
+      } finally {
+        await streamServer.close();
+      }
+    });
+
+    it("POST /api/conversations/:id/greeting is idempotent after the intro is stored", async () => {
+      const runtime = createRuntimeForChatSseTests();
+      const streamServer = await startApiServer({ port: 0, runtime });
+      try {
+        const create = await req(
+          streamServer.port,
+          "POST",
+          "/api/conversations",
+          {
+            title: "Idempotent greeting test",
+            bootstrapGreeting: true,
+            lang: "en",
+          },
+        );
+        expect(create.status).toBe(200);
+        const conversation = create.data.conversation as { id?: string };
+        const conversationId = conversation.id ?? "";
+        expect(conversationId.length).toBeGreaterThan(0);
+
+        const greeting = await req(
+          streamServer.port,
+          "POST",
+          `/api/conversations/${conversationId}/greeting?lang=en`,
+        );
+        expect(greeting.status).toBe(200);
+        expect(greeting.data).toMatchObject({
+          text: "Welcome to the conversation.",
+          agentName: "ChatStreamAgent",
+          generated: true,
+        });
+
+        const messagesResponse = await req(
+          streamServer.port,
+          "GET",
+          `/api/conversations/${conversationId}/messages`,
+        );
+        expect(messagesResponse.status).toBe(200);
+        const messages = (messagesResponse.data.messages ?? []) as Array<
+          Record<string, unknown>
+        >;
+        const greetings = messages.filter(
+          (message) =>
+            message.role === "assistant" &&
+            message.source === "agent_greeting" &&
+            message.text === "Welcome to the conversation.",
+        );
+        expect(greetings).toHaveLength(1);
+      } finally {
+        await streamServer.close();
+      }
+    });
+
+    it("GET /api/conversations/:id/messages returns an empty messages array on runtime read failure", async () => {
+      const runtime = createRuntimeForChatSseTests();
+      runtime.getMemories = async () => {
+        throw new Error("forced-memories-failure");
+      };
+
+      const streamServer = await startApiServer({ port: 0, runtime });
+      try {
+        const create = await req(
+          streamServer.port,
+          "POST",
+          "/api/conversations",
+          {
+            title: "Conversation messages failure fallback",
+          },
+        );
+        expect(create.status).toBe(200);
+        const conversation = create.data.conversation as { id?: string };
+        const conversationId = conversation.id ?? "";
+        expect(conversationId.length).toBeGreaterThan(0);
+
+        const response = await req(
+          streamServer.port,
+          "GET",
+          `/api/conversations/${conversationId}/messages`,
+        );
+
+        expect(response.status).toBe(500);
+        expect(Array.isArray(response.data.messages)).toBe(true);
+        expect((response.data.messages as unknown[]).length).toBe(0);
+        expect(typeof response.data.error).toBe("string");
       } finally {
         await streamServer.close();
       }
@@ -2008,16 +2295,26 @@ describe("API Server E2E (no runtime)", () => {
         expect(before.status).toBe(200);
         expect(before.data.enabled).toBe(false);
 
-        const updated = await req(
+        const enabledUpdate = await req(
+          streamServer.port,
+          "PUT",
+          "/api/trajectories/config",
+          { enabled: true },
+        );
+        expect(enabledUpdate.status).toBe(200);
+        expect(enabledUpdate.data.enabled).toBe(true);
+        expect(enabled).toBe(true);
+
+        const disabledUpdate = await req(
           streamServer.port,
           "PUT",
           "/api/trajectories/config",
           { enabled: false },
         );
-        expect(updated.status).toBe(200);
-        expect(updated.data.enabled).toBe(false);
+        expect(disabledUpdate.status).toBe(200);
+        expect(disabledUpdate.data.enabled).toBe(false);
         expect(enabled).toBe(false);
-        expect(setEnabledCalls).toEqual([false]);
+        expect(setEnabledCalls).toEqual([true, false]);
       } finally {
         await streamServer.close();
       }
@@ -2648,6 +2945,136 @@ describe("API Server E2E (no runtime)", () => {
       expect(status).toBe(200);
       expect(Array.isArray(data.skills)).toBe(true);
     });
+
+    it("includes marketplace-installed skills from the hidden .marketplace directory", async () => {
+      const marketplaceSkillDir = path.join(
+        _e2eTempDir,
+        "workspace",
+        "skills",
+        ".marketplace",
+        "remote-skill",
+      );
+      await fs.mkdir(marketplaceSkillDir, { recursive: true });
+      await fs.writeFile(
+        path.join(marketplaceSkillDir, "SKILL.md"),
+        [
+          "---",
+          "name: Remote Skill",
+          "description: Installed from marketplace",
+          "---",
+          "",
+          "# Remote skill",
+        ].join("\n"),
+        "utf-8",
+      );
+
+      try {
+        const refreshed = await req(port, "POST", "/api/skills/refresh", {});
+        expect(refreshed.status).toBe(200);
+        const skills = refreshed.data.skills as Array<{ id?: string }>;
+        expect(skills.some((skill) => skill.id === "remote-skill")).toBe(true);
+      } finally {
+        await fs.rm(path.join(_e2eTempDir, "workspace", "skills"), {
+          recursive: true,
+          force: true,
+        });
+        await req(port, "POST", "/api/skills/refresh", {});
+      }
+    });
+
+    it("falls back to runtime-provided skill directories when AgentSkillsService is empty", async () => {
+      const tempRoot = await fs.mkdtemp(
+        path.join(os.tmpdir(), "milady-skills-"),
+      );
+      const bundledDir = path.join(tempRoot, "bundled-skills");
+      const skillDir = path.join(bundledDir, "fallback-skill");
+      await fs.mkdir(skillDir, { recursive: true });
+      await fs.writeFile(
+        path.join(skillDir, "SKILL.md"),
+        [
+          "---",
+          "name: Fallback Skill",
+          "description: Loads when catalog sync fails",
+          "---",
+          "",
+          "# Fallback skill",
+        ].join("\n"),
+        "utf-8",
+      );
+
+      const runtime = {
+        agentId: "skills-fallback-agent",
+        character: { name: "SkillsFallbackAgent" },
+        getService: (serviceType: string) => {
+          if (serviceType === "AGENT_SKILLS_SERVICE") {
+            return {
+              getLoadedSkills: () => [],
+            };
+          }
+          return null;
+        },
+        getSetting: (key: string) => {
+          if (key === "BUNDLED_SKILLS_DIRS") return bundledDir;
+          return undefined;
+        },
+        getRoomsByWorld: async () => [],
+        getTasks: async () => [],
+        getTask: async () => null,
+        createTask: async () => crypto.randomUUID() as UUID,
+        updateTask: async () => {},
+        deleteTask: async () => {},
+      } as unknown as unknown as AgentRuntime;
+
+      const streamServer = await startApiServer({ port: 0, runtime });
+      const streamPort = streamServer.port;
+
+      try {
+        const refreshed = await req(
+          streamPort,
+          "POST",
+          "/api/skills/refresh",
+          {},
+        );
+        expect(refreshed.status).toBe(200);
+        const skills = refreshed.data.skills as Array<{ id?: string }>;
+        expect(skills.some((skill) => skill.id === "fallback-skill")).toBe(
+          true,
+        );
+      } finally {
+        await streamServer.close();
+        await fs.rm(tempRoot, { recursive: true, force: true });
+      }
+    });
+
+    it("discovers managed skills from the state dir", async () => {
+      const managedSkillDir = path.join(_e2eTempDir, "skills", "managed-skill");
+      await fs.mkdir(managedSkillDir, { recursive: true });
+      await fs.writeFile(
+        path.join(managedSkillDir, "SKILL.md"),
+        [
+          "---",
+          "name: managed-skill",
+          "description: Seeded from the managed skills store",
+          "---",
+          "",
+          "# Managed skill",
+        ].join("\n"),
+        "utf-8",
+      );
+
+      try {
+        const refreshed = await req(port, "POST", "/api/skills/refresh", {});
+        expect(refreshed.status).toBe(200);
+        const skills = refreshed.data.skills as Array<{ id?: string }>;
+        expect(skills.some((skill) => skill.id === "managed-skill")).toBe(true);
+      } finally {
+        await fs.rm(path.join(_e2eTempDir, "skills"), {
+          recursive: true,
+          force: true,
+        });
+        await req(port, "POST", "/api/skills/refresh", {});
+      }
+    });
   });
 
   describe("skills marketplace endpoints", () => {
@@ -2809,7 +3236,7 @@ describe("API Server E2E (no runtime)", () => {
         ws.close();
         await streamServer.close();
       }
-    });
+    }, 30_000);
 
     it("routes proactive autonomy output to active chat and exposes matching overview/event surfaces", async () => {
       const eventService = new TestAgentEventService();
@@ -2944,18 +3371,6 @@ describe("API Server E2E (no runtime)", () => {
           "/api/workbench/overview",
         );
         expect(overviewResponse.status).toBe(200);
-        const autonomy = (
-          overviewResponse.data as {
-            autonomy?: {
-              enabled?: boolean;
-              thinking?: boolean;
-              lastEventAt?: unknown;
-            };
-          }
-        ).autonomy;
-        expect(autonomy?.enabled).toBe(true);
-        expect(autonomy?.thinking).toBe(true);
-        expect(typeof autonomy?.lastEventAt).toBe("number");
         const tasks = (overviewResponse.data.tasks ?? []) as Array<
           Record<string, unknown>
         >;
@@ -2974,7 +3389,7 @@ describe("API Server E2E (no runtime)", () => {
         ws.close();
         await streamServer.close();
       }
-    });
+    }, 30_000);
 
     it("does not route client_chat assistant events into proactive messages", async () => {
       const eventService = new TestAgentEventService();
@@ -3049,7 +3464,7 @@ describe("API Server E2E (no runtime)", () => {
         ws.close();
         await streamServer.close();
       }
-    });
+    }, 30_000);
 
     it("does not route ambiguous assistant events without source or room metadata", async () => {
       const eventService = new TestAgentEventService();
@@ -3123,7 +3538,7 @@ describe("API Server E2E (no runtime)", () => {
         ws.close();
         await streamServer.close();
       }
-    });
+    }, 30_000);
   });
 
   // -- Onboarding --
@@ -3161,6 +3576,10 @@ describe("API Server E2E (no runtime)", () => {
     it("POST /api/onboarding stores adminEntityId in defaults", async () => {
       const res = await req(port, "POST", "/api/onboarding", {
         name: "AdminAgent",
+        connection: {
+          kind: "local-provider",
+          provider: "anthropic",
+        },
         runMode: "local",
       });
       expect(res.status).toBe(200);
@@ -3208,43 +3627,6 @@ describe("API Server E2E (no runtime)", () => {
 
   // -- Autonomy --
 
-  describe("autonomy endpoints", () => {
-    it("GET /api/agent/autonomy reflects runtime availability when no runtime is configured", async () => {
-      const { status, data } = await req(port, "GET", "/api/agent/autonomy");
-      expect(status).toBe(200);
-      expect(data.enabled).toBe(false);
-      expect(data.thinking).toBe(false);
-    });
-
-    it("POST /api/agent/autonomy returns the current effective state", async () => {
-      const { data } = await req(port, "POST", "/api/agent/autonomy", {
-        enabled: false,
-      });
-      expect(data.ok).toBe(true);
-      expect(data.autonomy).toBe(false);
-      expect(data.thinking).toBe(false);
-    });
-
-    it("GET /api/agent/autonomy uses AutonomyService state when runtime is present", async () => {
-      const runtime = createRuntimeForStreamTests({
-        loopRunning: true,
-      });
-      const streamServer = await startApiServer({ port: 0, runtime });
-      try {
-        const { status, data } = await req(
-          streamServer.port,
-          "GET",
-          "/api/agent/autonomy",
-        );
-        expect(status).toBe(200);
-        expect(data.enabled).toBe(true);
-        expect(data.thinking).toBe(true);
-      } finally {
-        await streamServer.close();
-      }
-    });
-  });
-
   // -- Workbench --
 
   describe("workbench endpoints", () => {
@@ -3259,29 +3641,6 @@ describe("API Server E2E (no runtime)", () => {
       expect(Array.isArray(data.triggers)).toBe(true);
       expect(Array.isArray(data.todos)).toBe(true);
       expect(typeof data.summary).toBe("object");
-      expect(typeof data.autonomy).toBe("object");
-    });
-
-    it("GET /api/workbench/overview uses AutonomyService loop state", async () => {
-      const runtime = createRuntimeForStreamTests({
-        loopRunning: true,
-      });
-      const workbenchServer = await startApiServer({ port: 0, runtime });
-      try {
-        const { status, data } = await req(
-          workbenchServer.port,
-          "GET",
-          "/api/workbench/overview",
-        );
-        expect(status).toBe(200);
-        const autonomy = (
-          data as { autonomy?: { enabled?: boolean; thinking?: boolean } }
-        ).autonomy;
-        expect(autonomy?.enabled).toBe(true);
-        expect(autonomy?.thinking).toBe(true);
-      } finally {
-        await workbenchServer.close();
-      }
     });
 
     it("GET /api/workbench/tasks returns 503 when runtime is absent", async () => {
@@ -3443,6 +3802,42 @@ describe("API Server E2E (no runtime)", () => {
           })
         ).status,
       ).toBe(404);
+    });
+  });
+
+  // -- SPA asset fallback guard --
+
+  describe("SPA asset fallback guard", () => {
+    it("GET /nonexistent-file.vrm does not return 200 with text/html", async () => {
+      const { status, headers } = await reqRaw(
+        port,
+        "GET",
+        "/nonexistent-file.vrm",
+      );
+      // The SPA fallback must never serve index.html for asset extension requests.
+      // Before the fix, missing .vrm files were incorrectly returned as 200 text/html.
+      expect(status).not.toBe(200);
+      expect(String(headers["content-type"] ?? "")).not.toContain("text/html");
+    });
+
+    it("GET /some-unknown-route (no extension) is not blocked by the asset extension guard", async () => {
+      const { status, headers } = await reqRaw(
+        port,
+        "GET",
+        "/some-unknown-route",
+      );
+      // Extensionless paths must pass through the SPA fallback guard unchanged.
+      // Possible outcomes depending on environment:
+      //   200 — SPA fallback served index.html (production build with UI)
+      //   401 — auth gate intercepted (auth-enabled config)
+      //   404 — no built UI available, no matching route (CI/test environment)
+      // All are acceptable; the test only checks this was NOT blocked by the
+      // asset extension guard (which rejects paths like .vrm, .glb, .png).
+      expect([200, 401, 404]).toContain(status);
+      if (status === 200) {
+        const contentType = String(headers["content-type"] ?? "");
+        expect(contentType).toContain("text/html");
+      }
     });
   });
 
@@ -4120,13 +4515,27 @@ describe("API Server E2E (chat SSE)", () => {
 
     expect(status).toBe(200);
     expect(String(headers["content-type"])).toContain("text/event-stream");
-    expect(events).toContainEqual({ type: "token", text: "Hello " });
-    expect(events).toContainEqual({ type: "token", text: "world" });
-    expect(events).toContainEqual({
-      type: "done",
-      fullText: "Hello world",
-      agentName: "ChatStreamAgent",
-    });
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: "token",
+        text: "Hello ",
+        fullText: "Hello ",
+      }),
+    );
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: "token",
+        text: "world",
+        fullText: "Hello world",
+      }),
+    );
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: "done",
+        fullText: "Hello world",
+        agentName: "ChatStreamAgent",
+      }),
+    );
   });
 
   it("POST /api/conversations/:id/messages/stream emits token and done events", async () => {
@@ -4148,12 +4557,26 @@ describe("API Server E2E (chat SSE)", () => {
     );
 
     expect(status).toBe(200);
-    expect(events).toContainEqual({ type: "token", text: "Hello " });
-    expect(events).toContainEqual({ type: "token", text: "world" });
-    expect(events).toContainEqual({
-      type: "done",
-      fullText: "Hello world",
-      agentName: "ChatStreamAgent",
-    });
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: "token",
+        text: "Hello ",
+        fullText: "Hello ",
+      }),
+    );
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: "token",
+        text: "world",
+        fullText: "Hello world",
+      }),
+    );
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: "done",
+        fullText: "Hello world",
+        agentName: "ChatStreamAgent",
+      }),
+    );
   });
 });

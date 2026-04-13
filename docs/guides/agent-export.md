@@ -17,7 +17,7 @@ Milady provides an encrypted export/import system for migrating agents between m
 7. [Export Payload Schema](#export-payload-schema)
 8. [Version Compatibility](#version-compatibility)
 9. [Sharing Agents](#sharing-agents)
-10. [ElizaOS Compatibility](#elizaos-compatibility)
+10. [elizaOS Compatibility](#elizaos-compatibility)
 11. [API Reference](#api-reference)
 12. [Troubleshooting](#troubleshooting)
 
@@ -122,7 +122,7 @@ During export, the service follows a specific order to collect all related data:
 
 ## Character Config in Exports
 
-The export includes a `characterConfig` field separate from the main `agent` record. This exists because the ElizaOS runtime character (built by `buildCharacterFromConfig`) may contain fields that are not persisted in the database agent record, such as:
+The export includes a `characterConfig` field separate from the main `agent` record. This exists because the elizaOS runtime character (built by `buildCharacterFromConfig`) may contain fields that are not persisted in the database agent record, such as:
 
 - `style` (communication style rules for all, chat, and post contexts)
 - `topics` (knowledge areas)
@@ -470,16 +470,16 @@ Important considerations when sharing:
 
 ---
 
-## ElizaOS Compatibility
+## elizaOS Compatibility
 
-The `.eliza-agent` format uses the magic header `ELIZA_AGENT_V1`, reflecting its origin in the ElizaOS ecosystem. The format is compatible with ElizaOS instances that support the same export version.
+The `.eliza-agent` format uses the magic header `ELIZA_AGENT_V1`, reflecting its origin in the elizaOS ecosystem. The format is compatible with elizaOS instances that support the same export version.
 
 Key compatibility details:
 
 - The database schema types (`Agent`, `Memory`, `Entity`, `Component`, `Room`, `Task`, `World`, `Relationship`, `Log`) are imported from `@elizaos/core`.
-- Memory table names (`messages`, `facts`, `documents`, `fragments`, `descriptions`, `character_modifications`, `custom`) follow the ElizaOS convention.
+- Memory table names (`messages`, `facts`, `documents`, `fragments`, `descriptions`, `character_modifications`, `custom`) follow the elizaOS convention.
 - The `Task` type uses `agent_id` in the database schema but `agentId` in the TypeScript proto type. The export service handles both naming conventions when filtering tasks.
-- The `characterConfig` field is Milady-specific — ElizaOS exports may not include it, but imports handle its absence gracefully.
+- The `characterConfig` field is Milady-specific — elizaOS exports may not include it, but imports handle its absence gracefully.
 
 ---
 
@@ -494,7 +494,7 @@ Key compatibility details:
 | `/api/character` | PUT | Update character configuration (validated) |
 | `/api/character/schema` | GET | Get character field schema with types and descriptions |
 | `/api/character/random-name` | GET | Generate a random agent name |
-| `/api/character/generate` | POST | AI-generate character fields (bio, style, chat examples, post examples) |
+| `/api/character/generate` | POST | AI-generate character fields (bio, system, style, chat examples, post examples) |
 
 ### Character Generation
 
@@ -507,13 +507,14 @@ The `POST /api/character/generate` endpoint uses AI to generate character conten
     "name": "Reimu",
     "system": "A shrine maiden interested in technology",
     "bio": "Existing bio text",
+    "topics": ["technology", "spirituality"],
     "style": { "all": ["Be direct"] }
   },
   "mode": "append"
 }
 ```
 
-Supported fields: `bio`, `style`, `chatExamples`, `postExamples`. The `mode` parameter (`append` or `replace`) controls whether generated content is added to existing content or replaces it. The generation uses the `TEXT_SMALL` model with a temperature of 0.8.
+Supported fields: `bio`, `system`, `style`, `chatExamples`, `postExamples`. The `mode` parameter (`append` or `replace`) controls whether generated content is added to existing content or replaces it. The `context.topics` parameter accepts an array of topic strings to provide the agent's topic list as additional context for more relevant generation. The generation uses the `TEXT_SMALL` model with a temperature of 0.8.
 
 ---
 

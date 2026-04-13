@@ -8,7 +8,7 @@ Milady agent personality is composed from several layers at runtime. The Charact
 
 ## How Personality Is Composed
 
-At startup, `buildCharacterFromConfig()` assembles a Character object and passes it to `AgentRuntime`. The ElizaOS core then constructs the system prompt from these fields:
+At startup, `buildCharacterFromConfig()` assembles a Character object and passes it to `AgentRuntime`. The elizaOS core then constructs the system prompt from these fields:
 
 1. **`character.system`** — The base system prompt template. The `{{name}}` placeholder is replaced with the agent's actual name.
 2. **`character.bio`** — Each string in the bio array is appended to the prompt to fill out the agent's identity.
@@ -21,13 +21,13 @@ At startup, `buildCharacterFromConfig()` assembles a Character object and passes
 When no `system` field is set in the agent config, the runtime uses:
 
 ```
-You are {{name}}, an autonomous AI agent powered by ElizaOS.
+You are {{name}}, an autonomous AI agent powered by elizaOS.
 ```
 
 After template resolution this becomes:
 
 ```
-You are Luna, an autonomous AI agent powered by ElizaOS.
+You are Luna, an autonomous AI agent powered by elizaOS.
 ```
 
 ### Onboarding-Generated Prompts
@@ -117,20 +117,11 @@ Here `config` is the `MiladyPluginConfig` object passed to `createMiladyPlugin()
 
 `createAutonomousStateProvider()` injects the current autonomous mode status so the agent knows whether it's running in interactive or autonomous mode.
 
-### Emote Provider
+### Emote action
 
-The emote provider injects the list of available avatar animation IDs when the agent has a 3D avatar. This tells the model it can use the `PLAY_EMOTE` action:
+Available emote IDs are declared as an `enum` on the `PLAY_EMOTE` action's `emote` parameter. The runtime automatically includes the allowed values in the **Available Actions** section of the prompt, so a separate emote provider is no longer needed.
 
-```
-## Available Emotes
-
-You can play emote animations on your 3D avatar using the PLAY_EMOTE action.
-Use emotes sparingly and naturally during conversation to express yourself.
-
-Available emote IDs: wave, dance, sit, ...
-```
-
-Disabled by setting `character.settings.DISABLE_EMOTES = true`, which saves approximately 300 tokens per turn.
+To disable emotes entirely, set `character.settings.DISABLE_EMOTES = true`. This removes the `PLAY_EMOTE` action at plugin init time so it never appears in the prompt.
 
 ### Custom Actions Provider
 
@@ -169,7 +160,6 @@ return {
     createSessionKeyProvider({ defaultAgentId: agentId }),
     ...getSessionProviders({ storePath: sessionStorePath }),
     uiCatalogProvider,
-    emoteProvider,
     customActionsProvider,
   ],
 };

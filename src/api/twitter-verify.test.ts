@@ -1,8 +1,57 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { generateVerificationMessage, verifyTweet } from "./twitter-verify";
+/**
+ * Unit tests for twitter-verify.ts — whitelist eligibility via X/Twitter.
+ *
+ * Table-driven tests cover:
+ * - Tweet URL parsing (valid/invalid formats)
+ * - FxTwitter fetch timeout and HTTP failure handling
+ * - Verification message generation
+ * - Tweet content matching (address, hashtag, handle fallback)
+ * - Whitelist storage (load, save, mark, check, list, overwrite, persistence)
+ *
+ * Addresses: [Integration DoD][MW-10] (#475)
+ *
+ * @see twitter-verify.ts
+ */
+
+import fs from "node:fs";
+import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+// ── Mocks ────────────────────────────────────────────────────────────────
+
+// Mock @elizaos/core logger
+vi.mock("@elizaos/core", () => ({
+  logger: {
+    info: vi.fn(),
+    warn: vi.fn(),
+    debug: vi.fn(),
+    error: vi.fn(),
+  },
+}));
+
+// Mock resolveStateDir to use a temp dir
+const MOCK_STATE_DIR = path.join(__dirname, "__test_state__");
+vi.mock("../../packages/autonomous/src/config/paths.ts", () => ({
+  resolveStateDir: () => MOCK_STATE_DIR,
+}));
+
+// ── Import after mocks ──────────────────────────────────────────────────
+
+import {
+  generateVerificationMessage,
+  getVerifiedAddresses,
+  isAddressWhitelisted,
+  loadWhitelist,
+  markAddressVerified,
+  verifyTweet,
+} from "../../packages/autonomous/src/api/twitter-verify.ts";
+
+// ── Constants ────────────────────────────────────────────────────────────
 
 const WALLET = "0x1234567890abcdef1234567890abcdef12345678";
 const VALID_TWEET_URL = "https://x.com/miladyai/status/1234567890";
+
+// ── Helpers ──────────────────────────────────────────────────────────────
 
 function mockFetchResponse(params: {
   ok: boolean;
@@ -22,55 +71,83 @@ function mockFetchResponse(params: {
   return fetchMock;
 }
 
-describe("twitter-verify", () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-    vi.unstubAllGlobals();
-  });
+// ── Setup / Teardown ─────────────────────────────────────────────────────
 
-  // ── generateVerificationMessage ─────────────────────────────────────
+beforeEach(() => {
+  vi.clearAllMocks();
+  if (!fs.existsSync(MOCK_STATE_DIR)) {
+    fs.mkdirSync(MOCK_STATE_DIR, { recursive: true });
+  }
+  const wlPath = path.join(MOCK_STATE_DIR, "whitelist.json");
+  if (fs.existsSync(wlPath)) fs.unlinkSync(wlPath);
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+  const wlPath = path.join(MOCK_STATE_DIR, "whitelist.json");
+  if (fs.existsSync(wlPath)) fs.unlinkSync(wlPath);
+  if (fs.existsSync(MOCK_STATE_DIR)) {
+    try {
+      fs.rmdirSync(MOCK_STATE_DIR);
+    } catch {
+      // not empty or not found — ignore
+    }
+  }
+});
+
+// ── Tests ────────────────────────────────────────────────────────────────
+
+describe("twitter-verify (MW-10)", () => {
+  // ===================================================================
+  //  1. Verification Message Generation
+  // ===================================================================
 
   describe("generateVerificationMessage", () => {
+    it("includes agent name and shortened wallet address", () => {
+      const msg = generateVerificationMessage(
+        "TestAgent",
+        "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
+      );
+      expect(msg).toContain("TestAgent");
+      expect(msg).toContain("0xd8dA...6045");
+      expect(msg).toContain("#MiladyAgent");
+    });
+
     it.each([
-      {
-        agent: "Milady",
-        wallet: "0xAbCdEf1234567890AbCdEf1234567890AbCdEf12",
-        expected:
-          'Verifying my Milady agent "Milady" | 0xAbCd...Ef12 #MiladyAgent',
-      },
-      {
-        agent: "TestBot",
-        wallet: "0x0000000000000000000000000000000000000000",
-        expected:
-          'Verifying my Milady agent "TestBot" | 0x0000...0000 #MiladyAgent',
-      },
-      {
-        agent: "",
-        wallet: "0x1111111111111111111111111111111111111111",
-        expected: 'Verifying my Milady agent "" | 0x1111...1111 #MiladyAgent',
-      },
-    ])("formats message for agent=$agent wallet=$wallet", ({
-      agent,
-      wallet,
-      expected,
-    }) => {
-      expect(generateVerificationMessage(agent, wallet)).toBe(expected);
+      [
+        "Milady Agent",
+        "0xABCDEF1234567890abcdef1234567890ABCDEF12",
+        "0xABCD...EF12",
+      ],
+      [
+        "Agent 🤖",
+        "0x1111111111111111111111111111111111111111",
+        "0x1111...1111",
+      ],
+      ["", "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045", "0xd8dA...6045"],
+    ])("formats correctly for agent=%s addr=%s → expects %s", (agentName, addr, expectedShort) => {
+      const msg = generateVerificationMessage(agentName, addr);
+      expect(msg).toContain(expectedShort);
+      expect(msg).toContain("#MiladyAgent");
     });
   });
 
-  // ── URL parsing (table-driven) ──────────────────────────────────────
+  // ===================================================================
+  //  2. Tweet URL Parsing (table-driven)
+  // ===================================================================
 
-  describe("parseTweetUrl (via verifyTweet)", () => {
+  describe("verifyTweet — URL parsing", () => {
     it.each([
-      { url: "https://example.com/not-twitter", label: "wrong domain" },
-      { url: "https://x.com/miladyai/post/123", label: "wrong path segment" },
-      {
-        url: "https://twitter.com/miladyai/status/not-a-number",
-        label: "non-numeric status ID",
-      },
-      { url: "", label: "empty string" },
-      { url: "https://x.com//status/123", label: "missing screen name" },
-    ])("rejects invalid URL ($label): $url", async ({ url }) => {
+      "https://example.com/not-twitter",
+      "https://x.com/miladyai/post/123",
+      "https://twitter.com/miladyai/status/not-a-number",
+      "not a url at all",
+      "https://google.com/something",
+      "https://twitter.com/user",
+      "https://twitter.com/user/likes",
+      "",
+    ])("rejects invalid tweet URL format: %s", async (url) => {
       const result = await verifyTweet(url, WALLET);
       expect(result).toEqual({
         verified: false,
@@ -81,21 +158,42 @@ describe("twitter-verify", () => {
 
     it.each([
       {
-        url: "https://x.com/miladyai/status/1234567890",
-        expectedApi: "https://api.fxtwitter.com/miladyai/status/1234567890",
         label: "x.com URL",
+        url: "https://x.com/alice/status/9999",
+        expectedApi: "https://api.fxtwitter.com/alice/status/9999",
       },
       {
-        url: "https://twitter.com/miladyai/status/9876543210",
-        expectedApi: "https://api.fxtwitter.com/miladyai/status/9876543210",
         label: "twitter.com URL",
+        url: "https://twitter.com/bob/status/1111",
+        expectedApi: "https://api.fxtwitter.com/bob/status/1111",
       },
       {
-        url: "https://x.com/user_name/status/111",
-        expectedApi: "https://api.fxtwitter.com/user_name/status/111",
-        label: "underscore in screen name",
+        label: "x.com URL with long tweet ID",
+        url: "https://x.com/holder123/status/1234567890123456789",
+        expectedApi:
+          "https://api.fxtwitter.com/holder123/status/1234567890123456789",
       },
-    ])("parses valid URL ($label) and calls correct API", async ({
+      {
+        label: "URL with query params",
+        url: "https://x.com/alice/status/9999?s=20&t=xyz",
+        expectedApi: "https://api.fxtwitter.com/alice/status/9999",
+      },
+      {
+        label: "URL with fragment",
+        url: "https://x.com/alice/status/9999#m",
+        expectedApi: "https://api.fxtwitter.com/alice/status/9999",
+      },
+      {
+        label: "mobile.twitter.com URL",
+        url: "https://mobile.twitter.com/bob/status/5555",
+        expectedApi: "https://api.fxtwitter.com/bob/status/5555",
+      },
+      {
+        label: "www.x.com URL",
+        url: "https://www.x.com/carol/status/7777",
+        expectedApi: "https://api.fxtwitter.com/carol/status/7777",
+      },
+    ])("parses valid $label and calls FxTwitter API", async ({
       url,
       expectedApi,
     }) => {
@@ -105,13 +203,11 @@ describe("twitter-verify", () => {
         body: {
           tweet: {
             text: `0x1234...5678 #MiladyAgent`,
-            author: { screen_name: "miladyai" },
+            author: { screen_name: "whoever" },
           },
         },
       });
-
       await verifyTweet(url, WALLET);
-
       expect(fetchMock).toHaveBeenCalledWith(
         expectedApi,
         expect.objectContaining({
@@ -121,24 +217,17 @@ describe("twitter-verify", () => {
     });
   });
 
-  // ── Fetch / timeout failures (table-driven) ────────────────────────
+  // ===================================================================
+  //  3. Fetch Failures (table-driven)
+  // ===================================================================
 
-  describe("fetch failures", () => {
-    it.each([
-      { error: new Error("network timeout"), label: "network timeout" },
-      {
-        error: new TypeError("Failed to fetch"),
-        label: "TypeError fetch failure",
-      },
-      {
-        error: new DOMException("The operation was aborted", "AbortError"),
-        label: "AbortError (timeout)",
-      },
-    ])("returns retry message on $label", async ({ error }) => {
-      vi.stubGlobal("fetch", vi.fn().mockRejectedValue(error));
-
+  describe("verifyTweet — fetch failures", () => {
+    it("handles fetch failures with a user-facing retry message", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockRejectedValue(new Error("network timeout")),
+      );
       const result = await verifyTweet(VALID_TWEET_URL, WALLET);
-
       expect(result).toEqual({
         verified: false,
         error: "Could not reach tweet verification service. Try again later.",
@@ -146,40 +235,46 @@ describe("twitter-verify", () => {
       });
     });
 
-    it.each([
-      {
-        status: 404,
-        expected:
-          "Tweet not found. Make sure the URL is correct and the tweet is public.",
-        label: "404",
-      },
-      { status: 500, expected: "Tweet fetch failed (HTTP 500)", label: "500" },
-      { status: 503, expected: "Tweet fetch failed (HTTP 503)", label: "503" },
-      {
-        status: 429,
-        expected: "Tweet fetch failed (HTTP 429)",
-        label: "429 rate-limit",
-      },
-    ])("maps HTTP $label to appropriate error", async ({
-      status,
-      expected,
-    }) => {
-      mockFetchResponse({ ok: false, status });
-
+    it("maps 404 responses to tweet-not-found guidance", async () => {
+      mockFetchResponse({ ok: false, status: 404 });
       const result = await verifyTweet(VALID_TWEET_URL, WALLET);
-
       expect(result).toEqual({
         verified: false,
-        error: expected,
+        error:
+          "Tweet not found. Make sure the URL is correct and the tweet is public.",
+        handle: null,
+      });
+    });
+
+    it.each([
+      [500, "HTTP 500"],
+      [502, "HTTP 502"],
+      [503, "HTTP 503"],
+      [429, "HTTP 429"],
+    ])("maps non-OK HTTP %d to status-aware error", async (status, expectedSubstring) => {
+      mockFetchResponse({ ok: false, status });
+      const result = await verifyTweet(VALID_TWEET_URL, WALLET);
+      expect(result.verified).toBe(false);
+      expect(result.error).toContain(expectedSubstring);
+    });
+
+    it("handles AbortSignal timeout (AbortError)", async () => {
+      const abortErr = new DOMException(
+        "The operation was aborted",
+        "AbortError",
+      );
+      vi.stubGlobal("fetch", vi.fn().mockRejectedValue(abortErr));
+      const result = await verifyTweet(VALID_TWEET_URL, WALLET);
+      expect(result).toEqual({
+        verified: false,
+        error: "Could not reach tweet verification service. Try again later.",
         handle: null,
       });
     });
 
     it("handles invalid JSON from verification service", async () => {
       mockFetchResponse({ ok: true, status: 200, jsonReject: true });
-
       const result = await verifyTweet(VALID_TWEET_URL, WALLET);
-
       expect(result).toEqual({
         verified: false,
         error: "Invalid response from verification service",
@@ -187,11 +282,9 @@ describe("twitter-verify", () => {
       });
     });
 
-    it("fails when tweet object has no text field", async () => {
+    it("fails when tweet content is missing", async () => {
       mockFetchResponse({ ok: true, status: 200, body: { tweet: {} } });
-
       const result = await verifyTweet(VALID_TWEET_URL, WALLET);
-
       expect(result).toEqual({
         verified: false,
         error: "Could not read tweet content",
@@ -199,11 +292,9 @@ describe("twitter-verify", () => {
       });
     });
 
-    it("fails when response has no tweet object at all", async () => {
-      mockFetchResponse({ ok: true, status: 200, body: {} });
-
+    it("fails when tweet object is missing entirely", async () => {
+      mockFetchResponse({ ok: true, status: 200, body: { code: 200 } });
       const result = await verifyTweet(VALID_TWEET_URL, WALLET);
-
       expect(result).toEqual({
         verified: false,
         error: "Could not read tweet content",
@@ -212,160 +303,213 @@ describe("twitter-verify", () => {
     });
   });
 
-  // ── Message mismatch (table-driven) ────────────────────────────────
+  // ===================================================================
+  //  4. Message Content Matching (table-driven)
+  // ===================================================================
 
-  describe("message mismatch", () => {
+  describe("verifyTweet — content matching", () => {
     it.each([
       {
+        label: "missing address",
         text: "Verifying my Milady agent #MiladyAgent",
-        label: "no wallet address at all",
+        author: { screen_name: "miladyai" },
+        expected: {
+          verified: false,
+          error:
+            "Tweet does not contain your wallet address. Make sure you copied the full verification message.",
+          handle: "miladyai",
+        },
       },
       {
-        text: "Random tweet with #MiladyAgent but wrong address 0xDEAD...BEEF",
-        label: "wrong short address",
-      },
-      {
-        text: "#MiladyAgent 0xFFFF567890abcdef",
-        label: "wrong address prefix (no partial match)",
-      },
-    ])("rejects tweet missing wallet evidence ($label)", async ({ text }) => {
-      mockFetchResponse({
-        ok: true,
-        status: 200,
-        body: { tweet: { text, author: { screen_name: "user1" } } },
-      });
-
-      const result = await verifyTweet(VALID_TWEET_URL, WALLET);
-
-      expect(result).toEqual({
-        verified: false,
-        error:
-          "Tweet does not contain your wallet address. Make sure you copied the full verification message.",
-        handle: "user1",
-      });
-    });
-
-    it.each([
-      {
+        label: "missing hashtag",
         text: "Verifying wallet 0x1234...5678 without hashtag",
-        label: "short address present but no hashtag",
+        author: { screen_name: "miladyai" },
+        expected: {
+          verified: false,
+          error: "Tweet is missing #MiladyAgent hashtag.",
+          handle: "miladyai",
+        },
       },
       {
-        text: "0x1234567890 partial address present, no tag",
-        label: "partial address present but no hashtag",
+        label: "valid shortened address + hashtag",
+        text: 'Verifying my Milady agent "Milady" | 0x1234...5678 #MiladyAgent',
+        author: { screen_name: "miladyai" },
+        expected: {
+          verified: true,
+          error: null,
+          handle: "miladyai",
+        },
       },
-    ])("rejects tweet missing hashtag ($label)", async ({ text }) => {
+      {
+        label: "valid full address prefix + hashtag",
+        text: `Verifying ${WALLET.slice(0, 10)} #MiladyAgent`,
+        author: { screen_name: "holder" },
+        expected: {
+          verified: true,
+          error: null,
+          handle: "holder",
+        },
+      },
+      {
+        label: "case-insensitive address match",
+        text: `${WALLET.toUpperCase().slice(0, 10)} #MiladyAgent`,
+        author: { screen_name: "casefan" },
+        expected: {
+          verified: true,
+          error: null,
+          handle: "casefan",
+        },
+      },
+      {
+        label: "falls back to URL screenName when author.screen_name missing",
+        text: "0x1234...5678 #MiladyAgent",
+        author: {},
+        expected: {
+          verified: true,
+          error: null,
+          handle: "miladyai", // from URL
+        },
+      },
+    ])("$label", async ({ text, author, expected }) => {
       mockFetchResponse({
         ok: true,
         status: 200,
-        body: { tweet: { text, author: { screen_name: "user2" } } },
+        body: { tweet: { text, author } },
       });
-
       const result = await verifyTweet(VALID_TWEET_URL, WALLET);
-
-      expect(result).toEqual({
-        verified: false,
-        error: "Tweet is missing #MiladyAgent hashtag.",
-        handle: "user2",
-      });
+      expect(result).toEqual(expected);
     });
   });
 
-  // ── Successful verification paths ──────────────────────────────────
+  // ===================================================================
+  //  5. Whitelist Storage (CRUD)
+  // ===================================================================
 
-  describe("successful verification", () => {
-    it("verifies via short address format (0x1234...5678)", async () => {
-      const fetchMock = mockFetchResponse({
-        ok: true,
-        status: 200,
-        body: {
-          tweet: {
-            text: 'Verifying my Milady agent "Milady" | 0x1234...5678 #MiladyAgent',
-            author: { screen_name: "miladyai" },
+  describe("whitelist storage", () => {
+    it("returns empty whitelist when no file exists", () => {
+      const wl = loadWhitelist();
+      expect(wl).toEqual({ verified: {} });
+    });
+
+    it("returns empty whitelist when file contains corrupt JSON", () => {
+      fs.writeFileSync(
+        path.join(MOCK_STATE_DIR, "whitelist.json"),
+        "{{not valid json!",
+      );
+      const wl = loadWhitelist();
+      expect(wl).toEqual({ verified: {} });
+    });
+
+    it("returns parsed data when file exists", () => {
+      const data = {
+        verified: {
+          "0xabc": {
+            timestamp: "2026-01-01T00:00:00.000Z",
+            tweetUrl: "https://x.com/u/status/1",
+            handle: "testuser",
           },
         },
-      });
+      };
+      fs.writeFileSync(
+        path.join(MOCK_STATE_DIR, "whitelist.json"),
+        JSON.stringify(data),
+      );
+      const wl = loadWhitelist();
+      expect(wl).toEqual(data);
+    });
 
-      const result = await verifyTweet(VALID_TWEET_URL, WALLET);
-
-      expect(result).toEqual({
-        verified: true,
-        error: null,
-        handle: "miladyai",
-      });
-      expect(fetchMock).toHaveBeenCalledWith(
-        "https://api.fxtwitter.com/miladyai/status/1234567890",
-        expect.objectContaining({
-          headers: { "User-Agent": "MiladyVerifier/1.0" },
-        }),
+    it("creates whitelist file and stores entry with lowercase address", () => {
+      markAddressVerified(
+        "0xABCDef1234567890ABCDef1234567890ABCDef12",
+        "https://x.com/user1/status/100",
+        "user1",
+      );
+      const wl = loadWhitelist();
+      const key = "0xabcdef1234567890abcdef1234567890abcdef12";
+      expect(wl.verified[key]).toBeDefined();
+      expect(wl.verified[key].tweetUrl).toBe("https://x.com/user1/status/100");
+      expect(wl.verified[key].handle).toBe("user1");
+      expect(wl.verified[key].timestamp).toMatch(
+        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/,
       );
     });
 
-    it("verifies via partial address prefix (first 10 chars)", async () => {
-      mockFetchResponse({
-        ok: true,
-        status: 200,
-        body: {
-          tweet: {
-            text: "Check out 0x12345678 something #MiladyAgent",
-            author: { screen_name: "altuser" },
-          },
-        },
-      });
-
-      // walletAddress.toLowerCase().slice(0, 10) = "0x12345678"
-      const result = await verifyTweet(VALID_TWEET_URL, WALLET);
-
-      expect(result).toEqual({
-        verified: true,
-        error: null,
-        handle: "altuser",
-      });
-    });
-
-    it("falls back to screen name from URL when author.screen_name is absent", async () => {
-      mockFetchResponse({
-        ok: true,
-        status: 200,
-        body: {
-          tweet: {
-            text: "0x1234...5678 #MiladyAgent",
-            author: {},
-          },
-        },
-      });
-
-      const result = await verifyTweet(
-        "https://x.com/urluser/status/999",
-        WALLET,
+    it("marks address as verified and persists to disk", () => {
+      markAddressVerified(
+        "0xABCD1234567890abcdef1234567890ABCDEF1234",
+        "https://twitter.com/user/status/123",
+        "testuser",
       );
+      expect(
+        isAddressWhitelisted("0xABCD1234567890abcdef1234567890ABCDEF1234"),
+      ).toBe(true);
 
-      expect(result).toEqual({
-        verified: true,
-        error: null,
-        handle: "urluser",
-      });
+      const raw = fs.readFileSync(
+        path.join(MOCK_STATE_DIR, "whitelist.json"),
+        "utf-8",
+      );
+      const data = JSON.parse(raw);
+      expect(
+        data.verified["0xabcd1234567890abcdef1234567890abcdef1234"],
+      ).toBeDefined();
     });
 
-    it("address matching is case-insensitive", async () => {
-      mockFetchResponse({
-        ok: true,
-        status: 200,
-        body: {
-          tweet: {
-            text: "0X12345678 uppercase prefix #MiladyAgent",
-            author: { screen_name: "caseuser" },
-          },
-        },
-      });
+    it("appends to existing whitelist without overwriting other entries", () => {
+      markAddressVerified("0xAAAA", "https://x.com/a/status/1", "userA");
+      markAddressVerified("0xBBBB", "https://x.com/b/status/2", "userB");
 
-      const result = await verifyTweet(VALID_TWEET_URL, WALLET);
+      const wl = loadWhitelist();
+      expect(Object.keys(wl.verified)).toHaveLength(2);
+      expect(wl.verified["0xaaaa"]).toBeDefined();
+      expect(wl.verified["0xbbbb"]).toBeDefined();
+    });
 
-      expect(result).toEqual({
-        verified: true,
-        error: null,
-        handle: "caseuser",
-      });
+    it("overwrites entry for same address (case-insensitive)", () => {
+      markAddressVerified("0xABCD", "url1", "user1");
+      markAddressVerified("0xabcd", "url2", "user2");
+      const wl = loadWhitelist();
+      expect(Object.keys(wl.verified)).toHaveLength(1);
+      expect(wl.verified["0xabcd"].handle).toBe("user2");
+      expect(wl.verified["0xabcd"].tweetUrl).toBe("url2");
+    });
+
+    it("stores timestamp on verification", () => {
+      const before = new Date().toISOString();
+      markAddressVerified("0xTIME", "url", "user");
+      const wl = loadWhitelist();
+      const ts = wl.verified["0xtime"].timestamp;
+      expect(ts).toBeDefined();
+      expect(new Date(ts).getTime()).toBeGreaterThanOrEqual(
+        new Date(before).getTime(),
+      );
+    });
+
+    it.each([
+      { input: "0xABCD", stored: "0xabcd", label: "uppercase input" },
+      { input: "0xabcd", stored: "0xabcd", label: "lowercase input" },
+      { input: "0xAbCd", stored: "0xabcd", label: "mixed case input" },
+    ])("isAddressWhitelisted returns true ($label)", ({ input, stored }) => {
+      markAddressVerified(stored, "https://x.com/u/status/1", "u");
+      expect(isAddressWhitelisted(input)).toBe(true);
+    });
+
+    it("returns false for non-whitelisted address", () => {
+      expect(
+        isAddressWhitelisted("0x0000000000000000000000000000000000000000"),
+      ).toBe(false);
+    });
+
+    it("returns empty array when no addresses are verified", () => {
+      expect(getVerifiedAddresses()).toEqual([]);
+    });
+
+    it("lists all verified addresses as lowercase keys", () => {
+      markAddressVerified("0xAAAA", "https://x.com/a/status/1", "a");
+      markAddressVerified("0xBBBB", "https://x.com/b/status/2", "b");
+      const addrs = getVerifiedAddresses();
+      expect(addrs).toHaveLength(2);
+      expect(addrs).toContain("0xaaaa");
+      expect(addrs).toContain("0xbbbb");
     });
   });
 });

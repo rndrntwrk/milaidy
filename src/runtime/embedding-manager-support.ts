@@ -12,6 +12,8 @@ export interface EmbeddingManagerConfig {
   dimensions?: number;
   /** GPU layers: "auto" | "max" | number (default: detected hardware preset gpuLayers) */
   gpuLayers?: "auto" | "max" | number;
+  /** Model context window in tokens (default: detected hardware preset contextSize) */
+  contextSize?: number;
   /** Idle timeout in ms before unloading model (default: 1800000 = 30 min, 0 = never unload) */
   idleTimeoutMs?: number;
   /** Models directory (default: ~/.eliza/models) */
@@ -30,9 +32,11 @@ export const DEFAULT_IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 export const DEFAULT_MODELS_DIR = path.join(os.homedir(), ".eliza", "models");
 
 const EMBEDDING_META_DIR =
+  process.env.MILADY_EMBEDDING_META_DIR ??
   process.env.MILAIDY_EMBEDDING_META_DIR ??
-  path.join(os.homedir(), ".milaidy", "state");
+  path.join(os.homedir(), ".milady", "state");
 export const EMBEDDING_META_PATH =
+  process.env.MILADY_EMBEDDING_META_PATH ??
   process.env.MILAIDY_EMBEDDING_META_PATH ??
   path.join(EMBEDDING_META_DIR, "embedding-meta.json");
 
@@ -83,7 +87,7 @@ function writeEmbeddingMeta(meta: EmbeddingMeta): void {
     fs.mkdirSync(EMBEDDING_META_DIR, { recursive: true });
     fs.writeFileSync(EMBEDDING_META_PATH, JSON.stringify(meta, null, 2));
   } catch (err) {
-    getLogger().warn(`[milaidy] Failed to write embedding metadata: ${err}`);
+    getLogger().warn(`[milady] Failed to write embedding metadata: ${err}`);
   }
 }
 
@@ -96,7 +100,7 @@ export function checkDimensionMigration(
 
   if (stored && stored.dimensions !== dimensions) {
     log.warn(
-      `[milaidy] Embedding dimensions changed (${stored.dimensions} → ${dimensions}). ` +
+      `[milady] Embedding dimensions changed (${stored.dimensions} → ${dimensions}). ` +
         "Existing memory embeddings will be re-indexed on next access.",
     );
   }
@@ -238,7 +242,7 @@ function downloadFile(
         if (expectedBytes != null && bytesReceived !== expectedBytes) {
           settleError(
             new Error(
-              `[milaidy] Download failed: bytes received (${bytesReceived}) ` +
+              `[milady] Download failed: bytes received (${bytesReceived}) ` +
                 `does not match Content-Length (${expectedBytes})`,
             ),
           );
@@ -252,7 +256,7 @@ function downloadFile(
       https
         .get(
           validatedUrl.toString(),
-          { headers: { "User-Agent": "milaidy" } },
+          { headers: { "User-Agent": "milady" } },
           (res) => {
             expectedBytes = parseContentLength(res.headers["content-length"]);
             if (
@@ -329,10 +333,10 @@ export async function ensureModel(
 
   const url = `https://huggingface.co/${safeRepo}/resolve/main/${safeFilename}`;
   log.info(
-    `[milaidy] Downloading embedding model: ${safeFilename} from ${safeRepo}...`,
+    `[milady] Downloading embedding model: ${safeFilename} from ${safeRepo}...`,
   );
 
   await downloadFile(url, modelPath);
-  log.info(`[milaidy] Embedding model downloaded: ${modelPath}`);
+  log.info(`[milady] Embedding model downloaded: ${modelPath}`);
   return modelPath;
 }

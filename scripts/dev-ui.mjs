@@ -2,15 +2,15 @@
 /**
  * Development script that starts:
  * 1. The Milady dev server (runtime + API on port 31337) with restart support
- * 2. The Vite app dev server (port 2138, proxies /api and /ws to 31337)
+ * 2. The vite app dev server (port 2138, proxies /api and /ws to 31337)
  *
  * Automatically kills zombie processes on both ports before starting.
- * Waits for the API server to be ready before launching Vite so the proxy
+ * Waits for the API server to be ready before launching vite so the proxy
  * doesn't flood the terminal with ECONNREFUSED errors.
  *
  * Usage:
  *   node scripts/dev-ui.mjs            # starts both API + UI
- *   node scripts/dev-ui.mjs --ui-only  # starts only the Vite UI (API assumed running)
+ *   node scripts/dev-ui.mjs --ui-only  # starts only the vite UI (API assumed running)
  */
 import { execSync, spawn } from "node:child_process";
 import {
@@ -26,6 +26,11 @@ import path from "node:path";
 import process from "node:process";
 import { ethers } from "ethers";
 import JSON5 from "json5";
+import {
+  coerceBoolean,
+  resolveOnchainPreference,
+} from "./lib/dev-ui-onchain.mjs";
+import { buildVisionDepsFailureMessage } from "./lib/dev-ui-vision.mjs";
 
 const API_PORT = 31337;
 const UI_PORT = 2138;
@@ -37,10 +42,9 @@ const devLogLevel =
     .toLowerCase() || "info";
 const quietApiLogs = process.env.MILADY_DEV_QUIET_LOGS === "1";
 const verboseApiLogs = process.env.MILADY_DEV_VERBOSE_LOGS === "1";
-const onchainEnabled =
-  !uiOnly && coerceBoolean(process.env.MILADY_DEV_ONCHAIN) !== false;
-const anchorRequested =
-  !uiOnly && coerceBoolean(process.env.MILADY_DEV_ANCHOR) !== false;
+// These are determined interactively at startup (or from env if already set).
+let onchainEnabled = false;
+let anchorRequested = false;
 const anchorRequired = process.env.MILADY_DEV_REQUIRE_ANCHOR === "1";
 const verboseChainLogs = process.env.MILADY_DEV_CHAIN_VERBOSE === "1";
 const ANVIL_PORT = Number(process.env.MILADY_DEV_ANVIL_PORT ?? 8545);
@@ -80,36 +84,64 @@ function dim(text) {
 }
 
 // ---------------------------------------------------------------------------
-// ASCII banner — printed once at startup in cyber green (#00FF41).
-// Keep in sync with src/ascii.ts.
+// Interactive prompts — only used when stdin is a TTY (skipped in CI/pipes).
 // ---------------------------------------------------------------------------
 
-const ASCII_ART = `\
-        miladym                        iladym      
-    iladymil                                ady    
-    mil                                         ad   
-ymi                                   ladymila     
-dym                                    ila dymila    
-dy       miladymil                     ady   milady   
-    miladymilad                     ymila dymilady  
-    mi    ladymila                   dymiladymil     
-adymiladymiladymi                  l  adymila d    
-ym   iladymiladymil                 ad ymilad  y    
-m  il  adymiladym  i                  l   ad   y     
-    mi  ladymila  dy                    mi           
-    la          dy                         mil      
-        ad      ym                                   
-        iladym`;
+async function promptYesNo(question, defaultYes = false) {
+  if (!process.stdin.isTTY) return defaultYes;
+  const { createInterface } = await import("node:readline");
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolve) => {
+    rl.question(question, (answer) => {
+      rl.close();
+      const normalized = answer.trim().toLowerCase();
+      if (normalized === "") return resolve(defaultYes);
+      resolve(["y", "yes"].includes(normalized));
+    });
+  });
+}
 
-function printBanner() {
-  if (supportsColor) {
-    const colored = ASCII_ART.split("\n")
-      .map((line) => green(line))
-      .join("\n");
-    console.log(`\n${colored}\n`);
-  } else {
-    console.log(`\n${ASCII_ART}\n`);
+async function installFoundry() {
+  if (process.platform === "win32") {
+    console.log(
+      `  ${green("[milady]")} ${dim("Windows: install Foundry manually → https://book.getfoundry.sh/getting-started/installation")}`,
+    );
+    return false;
   }
+
+  console.log(`  ${green("[milady]")} Installing Foundry...`);
+  const ok = await new Promise((resolve) => {
+    const installer = spawn(
+      "sh",
+      ["-c", "curl -L https://foundry.paradigm.xyz | bash"],
+      { stdio: "inherit" },
+    );
+    installer.on("exit", (code) => resolve(code === 0));
+    installer.on("error", () => resolve(false));
+  });
+
+  if (!ok) {
+    console.error(
+      `  ${green("[milady]")} Foundry installer failed. Install manually: https://book.getfoundry.sh`,
+    );
+    return false;
+  }
+
+  // foundryup installs the actual binaries (forge, cast, anvil, …)
+  const foundryupPath = path.join(os.homedir(), ".foundry", "bin", "foundryup");
+  const ready = await new Promise((resolve) => {
+    const foundryup = spawn(foundryupPath, [], { stdio: "inherit" });
+    foundryup.on("exit", (code) => resolve(code === 0));
+    foundryup.on("error", () => resolve(false));
+  });
+
+  if (ready) {
+    // Make the new binaries visible to the current process.
+    const foundryBin = path.join(os.homedir(), ".foundry", "bin");
+    process.env.PATH = `${foundryBin}${path.delimiter}${process.env.PATH}`;
+  }
+
+  return ready;
 }
 
 // ---------------------------------------------------------------------------
@@ -163,14 +195,7 @@ if (!hasBun && !which("npx")) {
 // Stealth import config
 // ---------------------------------------------------------------------------
 
-function coerceBoolean(value) {
-  if (typeof value === "boolean") return value;
-  if (typeof value !== "string") return null;
-  const normalized = value.trim().toLowerCase();
-  if (["1", "true", "yes", "on"].includes(normalized)) return true;
-  if (["0", "false", "no", "off"].includes(normalized)) return false;
-  return null;
-}
+// coerceBoolean — imported from ./lib/dev-ui-onchain.mjs
 
 function resolveMiladyConfigPath() {
   const explicitConfigPath = process.env.MILADY_CONFIG_PATH?.trim();
@@ -742,7 +767,7 @@ async function bootstrapOnchainDev() {
 const SUPPRESS_RE = /^\s*(Info|Warn|Debug|Trace)\s/;
 const SUPPRESS_UNSTRUCTURED_RE = /^\[dotenv[@\d]/;
 const STARTUP_RE =
-  /\[milady(?:-api)?\]|runtime bootstrap|runtime ready|runtime created|api server ready|plugin.*load|startup.*complete|\d+ms|\[PTYService/i;
+  /\[milady(?:-api)?\]|runtime bootstrap|runtime ready|runtime created|api server ready|plugin.*load|startup.*complete|\d+ms|\[PTYService|\[SwarmCoordinator\]|Triage:/i;
 
 function createErrorFilter(dest) {
   let buf = "";
@@ -860,15 +885,72 @@ function waitForPort(port, { timeout = 120_000, interval = 500 } = {}) {
 }
 
 // ---------------------------------------------------------------------------
+// Orphan cleanup — kill leftover processes from a previous crash / SIGKILL
+// ---------------------------------------------------------------------------
+
+function killOrphanedWorkspaceProcesses() {
+  if (process.platform === "win32") return; // spawn-helper is Unix only
+
+  try {
+    // Kill orphaned node-pty spawn-helpers and any processes running inside
+    // .milady/workspaces (or legacy .milaidy/workspaces) that survived a crash.
+    const out = execSync(
+      `ps axo pid,command 2>/dev/null | grep -E '\\.mil(aidy|ady)/workspaces' | grep -v grep`,
+      { encoding: "utf-8", stdio: ["pipe", "pipe", "ignore"] },
+    );
+    const pids = out
+      .split("\n")
+      .map((l) => l.trim().split(/\s+/)[0])
+      .filter(Boolean);
+    if (pids.length) {
+      console.log(
+        `[dev-ui] Killing ${pids.length} orphaned workspace process(es)…`,
+      );
+      execSync(`kill -9 ${pids.join(" ")} 2>/dev/null`, { stdio: "ignore" });
+    }
+  } catch {
+    // No orphans found — clean slate
+  }
+
+  try {
+    // Kill orphaned pty-worker processes (Node workers from pty-manager)
+    const out = execSync(
+      `ps axo pid,command 2>/dev/null | grep 'pty-worker.js' | grep -v grep`,
+      { encoding: "utf-8", stdio: ["pipe", "pipe", "ignore"] },
+    );
+    const pids = out
+      .split("\n")
+      .map((l) => l.trim().split(/\s+/)[0])
+      .filter(Boolean);
+    if (pids.length) {
+      console.log(`[dev-ui] Killing ${pids.length} orphaned pty-worker(s)…`);
+      execSync(`kill -9 ${pids.join(" ")} 2>/dev/null`, { stdio: "ignore" });
+    }
+  } catch {
+    // No orphans found
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
+killOrphanedWorkspaceProcesses();
 killPort(UI_PORT);
+
+// Ensure vision dependencies are installed
+try {
+  execSync("node scripts/ensure-vision-deps.mjs", { stdio: "inherit" });
+} catch (error) {
+  process.env.MILADY_VISION_DEPS_STATUS = "degraded";
+  console.warn(
+    buildVisionDepsFailureMessage(error, "node scripts/ensure-vision-deps.mjs"),
+  );
+}
+
 if (!uiOnly) {
   killPort(API_PORT);
-  if (onchainEnabled) {
-    killPort(ANVIL_PORT);
-  }
+  // ANVIL_PORT is killed after on-chain preference is determined (in main block).
 }
 
 let apiProcess = null;
@@ -896,6 +978,11 @@ function cleanup(exitCode = 0) {
   terminateChild(anchorProcess);
   terminateChild(anvilProcess);
 
+  // Give children a moment to propagate SIGTERM, then sweep orphans
+  setTimeout(() => {
+    killOrphanedWorkspaceProcesses();
+  }, 200);
+
   if (tempOnchainDir) {
     try {
       rmSync(tempOnchainDir, { recursive: true, force: true });
@@ -906,7 +993,7 @@ function cleanup(exitCode = 0) {
 
   setTimeout(() => {
     process.exit(exitCode);
-  }, 400).unref();
+  }, 600).unref();
 }
 
 process.on("SIGINT", () => cleanup(0));
@@ -936,7 +1023,7 @@ function startVite() {
   viteProcess.on("exit", (code) => {
     if (shuttingDown) return;
     if (code !== 0) {
-      console.error(`${green("[milady]")} Vite exited with code ${code}`);
+      console.error(`${green("[milady]")} vite exited with code ${code}`);
       cleanup(code ?? 1);
     }
   });
@@ -946,7 +1033,6 @@ if (uiOnly) {
   startVite();
 } else {
   console.log(`${orange("\nmilady dev mode")}\n`);
-  printBanner();
   console.log(`  ${green("[milady]")} ${green("Starting dev server...")}\n`);
   console.log(
     `  ${green("[milady]")} ${dim(
@@ -959,6 +1045,23 @@ if (uiOnly) {
       }`,
     )}`,
   );
+
+  // Determine on-chain preference — env var wins (CI/scripts), otherwise ask.
+  if (!uiOnly) {
+    const resolved = await resolveOnchainPreference({
+      env: process.env,
+      isTTY: !!process.stdin.isTTY,
+      whichFn: (cmd) => which(cmd),
+      promptFn: (question, defaultYes) => promptYesNo(question, defaultYes),
+      installFn: () => installFoundry(),
+    });
+    onchainEnabled = resolved.onchainEnabled;
+    anchorRequested = resolved.anchorRequested;
+
+    if (onchainEnabled) {
+      killPort(ANVIL_PORT);
+    }
+  }
 
   let chainEnv = {};
   if (onchainEnabled) {

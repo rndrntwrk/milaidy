@@ -2,7 +2,6 @@
   "compilerOptions": {
     "allowImportingTsExtensions": true,
     "allowSyntheticDefaultImports": true,
-    "declaration": true,
     "esModuleInterop": true,
     "experimentalDecorators": true,
     "forceConsistentCasingInFileNames": true,
@@ -10,8 +9,6 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "noEmit": true,
-    "noEmitOnError": true,
-    "outDir": "dist",
     "resolveJsonModule": true,
     "skipLibCheck": true,
     "strict": true,
@@ -19,17 +16,21 @@
     "useDefineForClassFields": false,
     "baseUrl": ".",
     "paths": {
-      "@elizaos/plugin-*": ["./packages/plugin-*/src/index.ts"],
-      "@elizaos/*": ["./plugins/*/src/index.ts"]
+      "@elizaos/app-hyperscape/routes": [
+        "../plugins/app-hyperscape/src/routes.ts"
+      ]
     }
   },
   "include": ["src/**/*"],
   "exclude": [
     "node_modules",
     "dist",
+    "packages",
+    "plugins",
     "src/**/*.test.ts",
     "src/**/*.test.tsx",
     "src/**/test-helpers.ts",
-    "src/services/training-service.ts"
+    "src/services/training-service.ts",
+    "src/plugins/retake/**"
   ]
 }

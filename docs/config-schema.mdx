@@ -49,7 +49,7 @@ The `MiladyConfig` type defines every section available in `milady.json`. Below 
 | [`memory`](#memory) | `MemoryConfig` | Memory backend (builtin or QMD) |
 | [`embedding`](#embedding) | `EmbeddingConfig` | Local embedding model (GGUF, GPU layers, idle unload) |
 | [`database`](#database) | `DatabaseConfig` | Database provider and connection settings |
-| [`cloud`](#cloud) | `CloudConfig` | ElizaCloud integration, bridge, backup, containers |
+| [`cloud`](#cloud) | `CloudConfig` | Eliza Cloud integration, bridge, backup, containers |
 | [`x402`](#x402) | `X402Config` | x402 HTTP payment protocol |
 | [`media`](#media) | `MediaConfig` | Media generation providers (image, video, audio, vision) |
 | [`mcp`](#mcp) | `object` | MCP (Model Context Protocol) server definitions |
@@ -1266,13 +1266,13 @@ Database provider and connection configuration.
 
 ## `cloud`
 
-ElizaCloud integration for remote agent provisioning, inference proxying, and state backup.
+Eliza Cloud integration for remote agent provisioning, inference proxying, and state backup.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `enabled` | `boolean` | `false` | Enable ElizaCloud integration |
+| `enabled` | `boolean` | `false` | Enable Eliza Cloud integration |
 | `provider` | `string` | -- | Cloud provider ID (e.g. `"elizacloud"`; set during onboarding) |
-| `baseUrl` | `string` | `https://www.elizacloud.ai/api/v1` | API base URL |
+| `baseUrl` | `string` | `https://elizacloud.ai/api/v1` | API base URL |
 | `apiKey` | `string` | -- | Cached API key (stored encrypted via gateway auth) |
 | `inferenceMode` | `"cloud" \| "byok" \| "local"` | -- | Inference routing: `cloud` (proxied), `byok` (user keys), `local` (no cloud) |
 | `autoProvision` | `boolean` | `false` | Auto-deploy agents to cloud on creation |
@@ -1391,7 +1391,7 @@ MCP (Model Context Protocol) server definitions.
     "servers": {
       "my-server": {
         "type": "stdio",
-        "command": "npx",
+        "command": "bunx",
         "args": ["-y", "@some/mcp-server"],
         "env": { "API_KEY": "..." }
       },
