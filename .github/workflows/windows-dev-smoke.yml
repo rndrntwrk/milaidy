@@ -25,6 +25,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            /*
+            !eliza/packages/benchmarks/benchmark_results/**
+          sparse-checkout-cone-mode: false
 
       - name: Initialize workspace submodules
         run: node scripts/init-submodules.mjs
