@@ -20,24 +20,24 @@ import type { IAgentRuntime } from "../types/runtime.ts";
 // Eagerly import trust components so they are available to the runtime's
 // action planner, provider composition, and evaluator loop.
 import {
+	evaluateTrustAction,
+	recordTrustInteractionAction,
+	requestElevationAction,
 	updateRoleAction as trustUpdateRoleAction,
 	updateSettingsAction as trustUpdateSettingsAction,
-	recordTrustInteractionAction,
-	evaluateTrustAction,
-	requestElevationAction,
 } from "./trust/actions/index.ts";
 import {
+	securityEvaluator,
+	trustChangeEvaluator,
+	reflectionEvaluator as trustReflectionEvaluator,
+} from "./trust/evaluators/index.ts";
+import {
+	adminTrustProvider,
+	securityStatusProvider,
+	trustProfileProvider,
 	roleProvider as trustRoleProvider,
 	settingsProvider as trustSettingsProvider,
-	trustProfileProvider,
-	securityStatusProvider,
-	adminTrustProvider,
 } from "./trust/providers/index.ts";
-import {
-	securityEvaluator,
-	reflectionEvaluator as trustReflectionEvaluator,
-	trustChangeEvaluator,
-} from "./trust/evaluators/index.ts";
 
 const trustCapability = {
 	providers: [
@@ -98,19 +98,19 @@ const trustCapability = {
 // ─── Secrets Manager ──────────────────────────────────────────────────────────
 
 import {
-	setSecretAction,
 	manageSecretAction,
 	requestSecretAction,
+	setSecretAction,
 } from "./secrets/actions/index.ts";
 import {
-	secretsStatusProvider,
-	secretsInfoProvider,
-} from "./secrets/providers/index.ts";
-import {
-	updateSettingsAction as onboardingUpdateSettingsAction,
-	onboardingSettingsProvider,
 	missingSecretsProvider,
+	onboardingSettingsProvider,
+	updateSettingsAction as onboardingUpdateSettingsAction,
 } from "./secrets/onboarding/index.ts";
+import {
+	secretsInfoProvider,
+	secretsStatusProvider,
+} from "./secrets/providers/index.ts";
 
 const secretsCapability = {
 	providers: [
@@ -160,14 +160,12 @@ const secretsCapability = {
 
 import {
 	coreStatusAction,
-	searchPluginAction,
 	getPluginDetailsAction,
 	listEjectedPluginsAction,
-} from "./plugin-manager/index.ts";
-import {
 	pluginConfigurationStatusProvider,
 	pluginStateProvider,
 	registryPluginsProvider,
+	searchPluginAction,
 } from "./plugin-manager/index.ts";
 
 const pluginManagerCapability = {
@@ -206,22 +204,17 @@ const pluginManagerCapability = {
 
 // ─── Knowledge & trajectories (native RAG / run logging) ──────────────────────
 
+export type { KnowledgePluginConfig } from "./knowledge/index.ts";
 export {
 	createKnowledgePlugin,
 	documentsProvider,
+	KnowledgeService,
 	knowledgeActions,
 	knowledgePlugin,
 	knowledgePluginCore,
 	knowledgePluginHeadless,
 	knowledgeProvider,
-	KnowledgeService,
 } from "./knowledge/index.ts";
-export type { KnowledgePluginConfig } from "./knowledge/index.ts";
-
-export {
-	trajectoriesPlugin,
-	TrajectoriesService,
-} from "./trajectories/index.ts";
 export type {
 	TrajectoryExportOptions,
 	TrajectoryListItem,
@@ -232,10 +225,14 @@ export type {
 	TrajectoryZipExportOptions,
 	TrajectoryZipExportResult,
 } from "./trajectories/index.ts";
+export {
+	TrajectoriesService,
+	trajectoriesPlugin,
+} from "./trajectories/index.ts";
 
 // ─── Exports ──────────────────────────────────────────────────────────────────
 
-export { trustCapability, secretsCapability, pluginManagerCapability };
+export { pluginManagerCapability, secretsCapability, trustCapability };
 
 export const coreCapabilities = {
 	trust: trustCapability,

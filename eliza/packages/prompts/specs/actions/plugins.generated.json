@@ -16,11 +16,7 @@
       "name": "BLUEBUBBLES_SEND_REACTION",
       "description": "Add or remove a reaction on a message via BlueBubbles",
       "parameters": [],
-      "similes": [
-        "BLUEBUBBLES_REACT",
-        "BB_REACTION",
-        "IMESSAGE_REACT"
-      ]
+      "similes": ["BLUEBUBBLES_REACT", "BB_REACTION", "IMESSAGE_REACT"]
     },
     {
       "name": "CHECK_CLOUD_CREDITS",
@@ -37,20 +33,13 @@
       "name": "COMMANDS_LIST",
       "description": "List all available commands with their aliases. Only activates for /commands or /cmds slash commands.",
       "parameters": [],
-      "similes": [
-        "/commands",
-        "/cmds"
-      ]
+      "similes": ["/commands", "/cmds"]
     },
     {
       "name": "DELETE_MESSAGE",
       "description": "Delete a message from a Discord channel",
       "parameters": [],
-      "similes": [
-        "REMOVE_MESSAGE",
-        "UNSEND_MESSAGE",
-        "DELETE_DISCORD_MESSAGE"
-      ]
+      "similes": ["REMOVE_MESSAGE", "UNSEND_MESSAGE", "DELETE_DISCORD_MESSAGE"]
     },
     {
       "name": "DELETE_PLAYLIST",
@@ -63,9 +52,7 @@
           "schema": {
             "type": "string"
           },
-          "examples": [
-            "example"
-          ]
+          "examples": ["example"]
         }
       ],
       "similes": [
@@ -76,9 +63,7 @@
       "exampleCalls": [
         {
           "user": "Use DELETE_PLAYLIST with the provided parameters.",
-          "actions": [
-            "DELETE_PLAYLIST"
-          ],
+          "actions": ["DELETE_PLAYLIST"],
           "params": {
             "DELETE_PLAYLIST": {
               "data": "example"
@@ -125,10 +110,7 @@
       "name": "GET_SKILL_DETAILS",
       "description": "Get detailed information about a specific skill including version, owner, and stats.",
       "parameters": [],
-      "similes": [
-        "SKILL_INFO",
-        "SKILL_DETAILS"
-      ]
+      "similes": ["SKILL_INFO", "SKILL_DETAILS"]
     },
     {
       "name": "GET_SKILL_GUIDANCE",
@@ -148,11 +130,7 @@
       "name": "HELP_COMMAND",
       "description": "Show available commands and their descriptions. Only activates for /help, /h, or /? slash commands.",
       "parameters": [],
-      "similes": [
-        "/help",
-        "/h",
-        "/?"
-      ]
+      "similes": ["/help", "/h", "/?"]
     },
     {
       "name": "IMESSAGE_SEND_MESSAGE",
@@ -169,11 +147,7 @@
       "name": "INSTALL_SKILL",
       "description": "Install a skill from the ClawHub registry. The skill will be security-scanned before activation. ",
       "parameters": [],
-      "similes": [
-        "DOWNLOAD_SKILL",
-        "ADD_SKILL",
-        "GET_SKILL"
-      ]
+      "similes": ["DOWNLOAD_SKILL", "ADD_SKILL", "GET_SKILL"]
     },
     {
       "name": "LIST_PLAYLISTS",
@@ -186,9 +160,7 @@
           "schema": {
             "type": "string"
           },
-          "examples": [
-            "example"
-          ]
+          "examples": ["example"]
         }
       ],
       "similes": [
@@ -200,9 +172,7 @@
       "exampleCalls": [
         {
           "user": "Use LIST_PLAYLISTS with the provided parameters.",
-          "actions": [
-            "LIST_PLAYLISTS"
-          ],
+          "actions": ["LIST_PLAYLISTS"],
           "params": {
             "LIST_PLAYLISTS": {
               "data": "example"
@@ -222,9 +192,7 @@
           "schema": {
             "type": "string"
           },
-          "examples": [
-            "example"
-          ]
+          "examples": ["example"]
         }
       ],
       "similes": [
@@ -236,9 +204,7 @@
       "exampleCalls": [
         {
           "user": "Use LOAD_PLAYLIST with the provided parameters.",
-          "actions": [
-            "LOAD_PLAYLIST"
-          ],
+          "actions": ["LOAD_PLAYLIST"],
           "params": {
             "LOAD_PLAYLIST": {
               "data": "example"
@@ -251,11 +217,7 @@
       "name": "MANAGE_SHOPIFY_CUSTOMERS",
       "description": "List and search customers in a connected Shopify store.",
       "parameters": [],
-      "similes": [
-        "LIST_CUSTOMERS",
-        "FIND_CUSTOMER",
-        "SEARCH_CUSTOMERS"
-      ]
+      "similes": ["LIST_CUSTOMERS", "FIND_CUSTOMER", "SEARCH_CUSTOMERS"]
     },
     {
       "name": "MANAGE_SHOPIFY_INVENTORY",
@@ -294,20 +256,13 @@
       "name": "MODELS_COMMAND",
       "description": "List available AI models and providers. Only activates for /models slash command.",
       "parameters": [],
-      "similes": [
-        "/models"
-      ]
+      "similes": ["/models"]
     },
     {
       "name": "PAUSE_MUSIC",
       "description": "Pause the currently playing track (hold playback). Use whenever the user asks to pause music or audio. ",
       "parameters": [],
-      "similes": [
-        "PAUSE",
-        "PAUSE_AUDIO",
-        "PAUSE_SONG",
-        "PAUSE_PLAYBACK"
-      ]
+      "similes": ["PAUSE", "PAUSE_AUDIO", "PAUSE_SONG", "PAUSE_PLAYBACK"]
     },
     {
       "name": "PLAY_AUDIO",
@@ -361,23 +316,14 @@
           "schema": {
             "type": "string"
           },
-          "examples": [
-            "example"
-          ]
+          "examples": ["example"]
         }
       ],
-      "similes": [
-        "ADD_TO_QUEUE",
-        "QUEUE_SONG",
-        "QUEUE_TRACK",
-        "ADD_SONG"
-      ],
+      "similes": ["ADD_TO_QUEUE", "QUEUE_SONG", "QUEUE_TRACK", "ADD_SONG"],
       "exampleCalls": [
         {
           "user": "Use QUEUE_MUSIC with the provided parameters.",
-          "actions": [
-            "QUEUE_MUSIC"
-          ],
+          "actions": ["QUEUE_MUSIC"],
           "params": {
             "QUEUE_MUSIC": {
               "data": "example"
@@ -414,10 +360,7 @@
       "name": "RUN_SKILL_SCRIPT",
       "description": "Execute a script bundled with an installed skill. Provide skill slug and script name.",
       "parameters": [],
-      "similes": [
-        "EXECUTE_SKILL_SCRIPT",
-        "SKILL_SCRIPT"
-      ]
+      "similes": ["EXECUTE_SKILL_SCRIPT", "SKILL_SCRIPT"]
     },
     {
       "name": "SAVE_PLAYLIST",
@@ -430,9 +373,7 @@
           "schema": {
             "type": "string"
           },
-          "examples": [
-            "example"
-          ]
+          "examples": ["example"]
         }
       ],
       "similes": [
@@ -444,9 +385,7 @@
       "exampleCalls": [
         {
           "user": "Use SAVE_PLAYLIST with the provided parameters.",
-          "actions": [
-            "SAVE_PLAYLIST"
-          ],
+          "actions": ["SAVE_PLAYLIST"],
           "params": {
             "SAVE_PLAYLIST": {
               "data": "example"
@@ -459,20 +398,13 @@
       "name": "SEARCH_SHOPIFY_STORE",
       "description": "Search across products, orders, and customers in a connected Shopify store.",
       "parameters": [],
-      "similes": [
-        "SHOPIFY_SEARCH",
-        "STORE_SEARCH"
-      ]
+      "similes": ["SHOPIFY_SEARCH", "STORE_SEARCH"]
     },
     {
       "name": "SEARCH_SKILLS",
       "description": "Search the skill registry for available skills by keyword or category.",
       "parameters": [],
-      "similes": [
-        "BROWSE_SKILLS",
-        "LIST_SKILLS",
-        "FIND_SKILLS"
-      ]
+      "similes": ["BROWSE_SKILLS", "LIST_SKILLS", "FIND_SKILLS"]
     },
     {
       "name": "SEARCH_YOUTUBE",
@@ -510,9 +442,7 @@
           "schema": {
             "type": "string"
           },
-          "examples": [
-            "example"
-          ]
+          "examples": ["example"]
         }
       ],
       "similes": [
@@ -525,9 +455,7 @@
       "exampleCalls": [
         {
           "user": "Use SETUP_CREDENTIALS with the provided parameters.",
-          "actions": [
-            "SETUP_CREDENTIALS"
-          ],
+          "actions": ["SETUP_CREDENTIALS"],
           "params": {
             "SETUP_CREDENTIALS": {
               "data": "example"
@@ -540,12 +468,7 @@
       "name": "SHOW_QUEUE",
       "description": "Show the current music queue",
       "parameters": [],
-      "similes": [
-        "QUEUE",
-        "LIST_QUEUE",
-        "SHOW_PLAYLIST",
-        "QUEUE_LIST"
-      ]
+      "similes": ["QUEUE", "LIST_QUEUE", "SHOW_PLAYLIST", "QUEUE_LIST"]
     },
     {
       "name": "SIGNAL_LIST_CONTACTS",
@@ -580,9 +503,7 @@
           "schema": {
             "type": "string"
           },
-          "examples": [
-            "example"
-          ]
+          "examples": ["example"]
         }
       ],
       "similes": [
@@ -594,9 +515,7 @@
       "exampleCalls": [
         {
           "user": "Use SIGNAL_SEND_MESSAGE with the provided parameters.",
-          "actions": [
-            "SIGNAL_SEND_MESSAGE"
-          ],
+          "actions": ["SIGNAL_SEND_MESSAGE"],
           "params": {
             "SIGNAL_SEND_MESSAGE": {
               "data": "example"
@@ -616,9 +535,7 @@
           "schema": {
             "type": "string"
           },
-          "examples": [
-            "example"
-          ]
+          "examples": ["example"]
         }
       ],
       "similes": [
@@ -630,9 +547,7 @@
       "exampleCalls": [
         {
           "user": "Use SIGNAL_SEND_REACTION with the provided parameters.",
-          "actions": [
-            "SIGNAL_SEND_REACTION"
-          ],
+          "actions": ["SIGNAL_SEND_REACTION"],
           "params": {
             "SIGNAL_SEND_REACTION": {
               "data": "example"
@@ -645,31 +560,19 @@
       "name": "SKIP_TRACK",
       "description": "Skip the current track and play the next queued song. Use for skip, next track, or next song. ",
       "parameters": [],
-      "similes": [
-        "SKIP",
-        "NEXT_TRACK",
-        "SKIP_SONG",
-        "NEXT_SONG"
-      ]
+      "similes": ["SKIP", "NEXT_TRACK", "SKIP_SONG", "NEXT_SONG"]
     },
     {
       "name": "STATUS_COMMAND",
       "description": "Show session directive settings via /status slash command. Only activates for /status or /s prefix.",
       "parameters": [],
-      "similes": [
-        "/status",
-        "/s"
-      ]
+      "similes": ["/status", "/s"]
     },
     {
       "name": "STOP_COMMAND",
       "description": "Stop current operation or abort running tasks. Triggered by /stop, /abort, or /cancel slash commands only.",
       "parameters": [],
-      "similes": [
-        "/stop",
-        "/abort",
-        "/cancel"
-      ]
+      "similes": ["/stop", "/abort", "/cancel"]
     },
     {
       "name": "STOP_MUSIC",
@@ -688,10 +591,7 @@
       "name": "SYNC_SKILL_CATALOG",
       "description": "Sync the skill catalog from the registry to discover new skills.",
       "parameters": [],
-      "similes": [
-        "REFRESH_SKILLS",
-        "UPDATE_CATALOG"
-      ]
+      "similes": ["REFRESH_SKILLS", "UPDATE_CATALOG"]
     },
     {
       "name": "TOGGLE_SKILL",
@@ -710,10 +610,7 @@
       "name": "UNINSTALL_SKILL",
       "description": "Uninstall a non-bundled skill. Bundled skills cannot be removed. ",
       "parameters": [],
-      "similes": [
-        "REMOVE_SKILL",
-        "DELETE_SKILL"
-      ]
+      "similes": ["REMOVE_SKILL", "DELETE_SKILL"]
     }
   ]
 }

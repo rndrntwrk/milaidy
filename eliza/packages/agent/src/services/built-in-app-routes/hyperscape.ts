@@ -1,5 +1,5 @@
-import { logger } from "@elizaos/core";
 import type { IAgentRuntime } from "@elizaos/core";
+import { logger } from "@elizaos/core";
 import type {
   AppSessionJsonValue,
   AppSessionState,
@@ -54,7 +54,8 @@ function resolveAgentId(
   viewer: AppLaunchResult["viewer"] | null,
 ): string | null {
   const authMsg = viewer?.authMessage;
-  const fromViewer = typeof authMsg?.agentId === "string" ? authMsg.agentId : null;
+  const fromViewer =
+    typeof authMsg?.agentId === "string" ? authMsg.agentId : null;
   const fromRuntime =
     typeof runtime?.agentId === "string" && runtime.agentId.trim()
       ? runtime.agentId.trim()
@@ -133,7 +134,9 @@ async function fetchLiveData(
 }> {
   const id = encodeURIComponent(agentId);
   const [agentsRes, goalRes, quickActionsRes, thoughtsRes] = await Promise.all([
-    fetchJson<{ agents?: EmbeddedAgentRecord[] }>(`${base}/api/embedded-agents`),
+    fetchJson<{ agents?: EmbeddedAgentRecord[] }>(
+      `${base}/api/embedded-agents`,
+    ),
     fetchJson<{
       goal?: GoalRecord | null;
       goalsPaused?: boolean;
@@ -222,8 +225,7 @@ function buildSession(
       recommendedGoals as unknown as AppSessionJsonValue;
   }
   if (recentThoughts.length > 0) {
-    telemetry.recentThoughts =
-      recentThoughts as unknown as AppSessionJsonValue;
+    telemetry.recentThoughts = recentThoughts as unknown as AppSessionJsonValue;
   }
 
   return {

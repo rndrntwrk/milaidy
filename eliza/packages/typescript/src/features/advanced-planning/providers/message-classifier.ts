@@ -1,7 +1,7 @@
+import { messageClassifierTemplate } from "../../../prompts.ts";
 import type { Provider } from "../../../types/index.ts";
 import { ModelType } from "../../../types/index.ts";
 import { composePrompt } from "../../../utils.ts";
-import { messageClassifierTemplate } from "../../../prompts.ts";
 import type { JsonValue } from "../types.ts";
 
 export const messageClassifierProvider: Provider = {

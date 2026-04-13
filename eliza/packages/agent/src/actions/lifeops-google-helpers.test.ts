@@ -1,5 +1,8 @@
+import type {
+  LifeOpsOccurrenceView,
+  LifeOpsOverview,
+} from "@elizaos/shared/contracts/lifeops";
 import { describe, expect, it } from "vitest";
-import type { LifeOpsOccurrenceView, LifeOpsOverview } from "@elizaos/shared/contracts/lifeops";
 import { formatOverviewForQuery } from "./lifeops-google-helpers.js";
 
 function buildOccurrence(args: {
@@ -43,9 +46,7 @@ function buildOccurrence(args: {
   };
 }
 
-function buildOverview(
-  occurrences: LifeOpsOccurrenceView[],
-): LifeOpsOverview {
+function buildOverview(occurrences: LifeOpsOccurrenceView[]): LifeOpsOverview {
   const summary = {
     activeOccurrenceCount: occurrences.length,
     overdueOccurrenceCount: 0,

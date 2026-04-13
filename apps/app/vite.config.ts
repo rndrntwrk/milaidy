@@ -978,11 +978,17 @@ export default defineConfig({
       ...["util/types", "stream/promises", "stream/web"].flatMap((sub) => [
         {
           find: `node:${sub}`,
-          replacement: path.join(appCoreSrcRoot, "platform/empty-node-module.ts"),
+          replacement: path.join(
+            appCoreSrcRoot,
+            "platform/empty-node-module.ts",
+          ),
         },
         {
           find: sub,
-          replacement: path.join(appCoreSrcRoot, "platform/empty-node-module.ts"),
+          replacement: path.join(
+            appCoreSrcRoot,
+            "platform/empty-node-module.ts",
+          ),
         },
       ]),
       // Capacitor plugins — resolve to local plugin sources
@@ -1156,7 +1162,10 @@ export default defineConfig({
           // to an empty module so Vite never traverses the server-side tree.
           {
             find: /^@elizaos\/agent$/,
-            replacement: path.join(appCoreSrcRoot, "platform/empty-node-module.ts"),
+            replacement: path.join(
+              appCoreSrcRoot,
+              "platform/empty-node-module.ts",
+            ),
           },
           // @elizaos/core — force ALL copies (including nested ones in plugins
           // like plugin-secrets-manager that ship their own older core) to the

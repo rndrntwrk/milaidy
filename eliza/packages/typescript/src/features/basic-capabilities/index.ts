@@ -12,7 +12,6 @@
 
 import { v4 } from "uuid";
 import { withCanonicalActionDocs } from "../../action-docs.ts";
-import * as autonomy from "../autonomy/index.ts";
 import { createUniqueUuid } from "../../entities.ts";
 import { logger } from "../../logger.ts";
 import {
@@ -58,6 +57,7 @@ import {
 	getLocalServerUrl,
 	parseKeyValueXml,
 } from "../../utils.ts";
+import * as autonomy from "../autonomy/index.ts";
 
 const ROLE_OWNER: Role = "OWNER";
 
@@ -76,9 +76,9 @@ import {
 // Import core capabilities (trust, secrets, plugin-manager)
 import {
 	coreCapabilities,
-	trustCapability,
-	secretsCapability,
 	pluginManagerCapability,
+	secretsCapability,
+	trustCapability,
 } from "../index.ts";
 // Import for local use
 import * as actions from "./actions/index.ts";
@@ -96,17 +96,15 @@ export {
 	advancedServices,
 } from "../advanced-capabilities/index.ts";
 export * from "../advanced-capabilities/providers/index.ts";
-
+// Re-export autonomy
+export * from "../autonomy/index.ts";
 // Re-export core capabilities (trust, secrets, plugin-manager)
 export {
 	coreCapabilities,
-	trustCapability,
-	secretsCapability,
 	pluginManagerCapability,
+	secretsCapability,
+	trustCapability,
 } from "../index.ts";
-
-// Re-export autonomy
-export * from "../autonomy/index.ts";
 
 // ============================================================================
 // XML Response Interfaces

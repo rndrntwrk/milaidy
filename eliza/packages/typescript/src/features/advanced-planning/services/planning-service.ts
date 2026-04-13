@@ -521,11 +521,12 @@ export class PlanningService extends Service {
 		state?: State,
 	): string {
 		const availableActions = (context.availableActions || []).join(", ");
-			const constraints = (context.constraints || [])
-				.map((c: NonNullable<PlanningContext["constraints"]>[number]) =>
+		const constraints = (context.constraints || [])
+			.map(
+				(c: NonNullable<PlanningContext["constraints"]>[number]) =>
 					`${c.type}: ${c.description || c.value}`,
-				)
-				.join(", ");
+			)
+			.join(", ");
 
 		return `You are an expert AI planning system. Create a comprehensive action plan to achieve the following goal.
 
