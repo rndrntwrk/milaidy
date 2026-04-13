@@ -236,39 +236,39 @@ export function applyUiTheme(theme: UiTheme): void {
   const colorSchemeMatches =
     !root.style || root.style.colorScheme === normalizedTheme;
 
-  if (
+  const uiThemeChanged = !(
     currentTheme === normalizedTheme &&
     classMatchesTheme &&
     colorSchemeMatches
-  ) {
-    return;
-  }
+  );
 
-  suppressThemeTransitions(root);
+  if (uiThemeChanged) {
+    suppressThemeTransitions(root);
 
-  if (currentTheme !== normalizedTheme) {
-    if (typeof root.setAttribute === "function") {
-      root.setAttribute("data-theme", normalizedTheme);
-    } else if ("dataset" in root && root.dataset) {
-      root.dataset.theme = normalizedTheme;
-    } else {
-      return;
+    if (currentTheme !== normalizedTheme) {
+      if (typeof root.setAttribute === "function") {
+        root.setAttribute("data-theme", normalizedTheme);
+      } else if ("dataset" in root && root.dataset) {
+        root.dataset.theme = normalizedTheme;
+      } else {
+        return;
+      }
+    }
+
+    if (root.style && root.style.colorScheme !== normalizedTheme) {
+      root.style.colorScheme = normalizedTheme;
+    }
+
+    if (root.classList && !classMatchesTheme) {
+      if (shouldBeDark) {
+        root.classList.add("dark");
+      } else {
+        root.classList.remove("dark");
+      }
     }
   }
 
-  if (root.style && root.style.colorScheme !== normalizedTheme) {
-    root.style.colorScheme = normalizedTheme;
-  }
-
-  if (root.classList && !classMatchesTheme) {
-    if (shouldBeDark) {
-      root.classList.add("dark");
-    } else {
-      root.classList.remove("dark");
-    }
-  }
-
-  // Apply the active theme's color set for the new mode
+  // Apply the active theme's color set (must run even when only themeId changed)
   const themeId = loadThemeId();
   if (themeId && themeId !== "bsc-gold") {
     const theme = resolveBuiltinTheme(themeId);

@@ -284,6 +284,7 @@ function useHeartbeatsViewController() {
     triggerRunsById,
     triggersLoading,
     triggersSaving,
+    uiLanguage,
     userTemplates,
   };
 }
@@ -347,6 +348,7 @@ function HeartbeatsLayout() {
     triggerRunsById,
     triggersLoading,
     triggersSaving,
+    uiLanguage,
     userTemplates,
   } = useHeartbeatsViewContext();
   const [searchQuery, setSearchQuery] = useState("");
@@ -520,7 +522,7 @@ function HeartbeatsLayout() {
                     </div>
                     <div className="mt-0.5 flex items-center justify-between gap-2 text-xs-tight text-muted">
                       <span className="truncate">
-                        {scheduleLabel(trigger, t)}
+                        {scheduleLabel(trigger, t, uiLanguage)}
                       </span>
                       {trigger.lastStatus && (
                         <StatusBadge
@@ -737,7 +739,7 @@ function HeartbeatsLayout() {
                   {t("heartbeatsview.schedule")}
                 </dt>
                 <dd className="mt-1 font-medium text-txt">
-                  {scheduleLabel(selectedTrigger, t)}
+                  {scheduleLabel(selectedTrigger, t, uiLanguage)}
                 </dd>
               </PagePanel.SummaryCard>
               <PagePanel.SummaryCard className="px-4 py-4">
@@ -758,6 +760,7 @@ function HeartbeatsLayout() {
                 <dd className="mt-1 font-medium text-txt">
                   {formatDateTime(selectedTrigger.nextRunAtMs, {
                     fallback: t("heartbeatsview.notScheduled"),
+                    locale: uiLanguage,
                   })}
                 </dd>
               </PagePanel.SummaryCard>
@@ -820,11 +823,11 @@ function HeartbeatsLayout() {
                           variant={toneForLastStatus(run.status)}
                         />
                         <span className="font-mono text-xs-tight text-muted/70">
-                          {formatDateTime(run.startedAt)}
+                          {formatDateTime(run.startedAt, { locale: uiLanguage })}
                         </span>
                       </div>
                       <div className="text-xs-tight text-muted/80">
-                        {formatDurationMs(run.latencyMs)} &middot;{" "}
+                        {formatDurationMs(run.latencyMs, { t })} &middot;{" "}
                         <span className="rounded bg-bg/40 px-1 py-0.5 font-mono text-muted/60">
                           {run.source}
                         </span>

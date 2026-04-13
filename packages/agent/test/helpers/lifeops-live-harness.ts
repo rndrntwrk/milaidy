@@ -29,6 +29,10 @@ const LIVE_BOOT_HTTP_TIMEOUT_MS = 15_000;
 const LIVE_CONVERSATION_REQUEST_TIMEOUT_MS = 45_000;
 const LIVE_ENTITY_RESOLUTION_TIMEOUT_MS = 20_000;
 const LIVE_ENTITY_RESOLUTION_RETRY_MS = 500;
+const LIVE_TEST_LANGUAGE =
+  process.env.MILADY_LIVE_TEST_LANGUAGE?.trim() ||
+  process.env.ELIZA_LIVE_TEST_LANGUAGE?.trim() ||
+  "en";
 
 try {
   const { config } = await import("dotenv");
@@ -533,6 +537,10 @@ export async function startLifeOpsLiveRuntime(options?: {
           unknown
         >)
       : {};
+  const baseUi =
+    baseConfig.ui && typeof baseConfig.ui === "object"
+      ? (baseConfig.ui as Record<string, unknown>)
+      : {};
   const baseServiceRouting =
     baseConfig.serviceRouting && typeof baseConfig.serviceRouting === "object"
       ? (baseConfig.serviceRouting as Record<string, unknown>)
@@ -560,6 +568,8 @@ export async function startLifeOpsLiveRuntime(options?: {
         ...baseConfig,
         logging: { level: "info" },
         ui: {
+          ...baseUi,
+          language: LIVE_TEST_LANGUAGE,
           assistant: {
             ...assistantConfig,
             name:
@@ -624,6 +634,8 @@ export async function startLifeOpsLiveRuntime(options?: {
       PGLITE_DATA_DIR: pgliteDir,
       ELIZA_PORT: String(apiPort),
       MILADY_API_PORT: String(apiPort),
+      ENABLE_AUTONOMY: "false",
+      MILADY_DISABLE_PROACTIVE_AGENT: "1",
       ALLOW_NO_DATABASE: "",
       DISCORD_API_TOKEN: "",
       DISCORD_BOT_TOKEN: "",

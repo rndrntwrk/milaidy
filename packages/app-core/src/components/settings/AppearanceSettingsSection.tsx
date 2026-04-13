@@ -9,7 +9,7 @@
 import type { ResolvedContentPack } from "@miladyai/shared/contracts/content-pack";
 import { BUILTIN_THEMES } from "@miladyai/shared/themes/presets";
 import { Button, Card, CardContent, Input } from "@miladyai/ui";
-import { Check } from "lucide-react";
+import { Check, Moon, Sun } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   applyColorScheme,
@@ -45,6 +45,8 @@ export function AppearanceSettingsSection() {
     onboardingStyle,
     themeId,
     setThemeId,
+    uiTheme,
+    setUiTheme,
     t,
   } = useApp();
 
@@ -254,8 +256,43 @@ export function AppearanceSettingsSection() {
     [activatePack],
   );
 
+  const isDark = uiTheme === "dark";
+
   return (
     <div className="space-y-6">
+      {/* Light / Dark mode */}
+      <div className="space-y-2">
+        <p className="text-sm font-medium text-txt/70">
+          {t("settings.appearance.mode", { defaultValue: "Mode" })}
+        </p>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setUiTheme("light")}
+            className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
+              !isDark
+                ? "border-accent bg-accent/8 ring-1 ring-accent/30"
+                : "border-border hover:border-accent/40 hover:bg-bg-hover"
+            }`}
+          >
+            <Sun className="h-4 w-4" />
+            {t("settings.appearance.light", { defaultValue: "Light" })}
+          </button>
+          <button
+            type="button"
+            onClick={() => setUiTheme("dark")}
+            className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
+              isDark
+                ? "border-accent bg-accent/8 ring-1 ring-accent/30"
+                : "border-border hover:border-accent/40 hover:bg-bg-hover"
+            }`}
+          >
+            <Moon className="h-4 w-4" />
+            {t("settings.appearance.dark", { defaultValue: "Dark" })}
+          </button>
+        </div>
+      </div>
+
       {/* Theme picker */}
       <div className="space-y-2">
         <p className="text-sm font-medium text-txt/70">
@@ -264,7 +301,7 @@ export function AppearanceSettingsSection() {
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
           {BUILTIN_THEMES.map((theme) => {
             const isActive = themeId === theme.id;
-            const colors = theme.dark;
+            const colors = isDark ? theme.dark : theme.light;
             return (
               <button
                 key={theme.id}

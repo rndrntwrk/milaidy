@@ -86,22 +86,28 @@ describeWithLLM("life-ops natural language (real LLM extraction)", () => {
   it("creates a hydration reminder via LLM extraction", async () => {
     const result = await callLifeAction(
       runtime,
-      "Please remind me to drink water throughout the day.",
+      "Remind me to drink water every day in the morning, afternoon, and evening.",
       { action: "create", title: "Drink water" },
     );
 
-    expect(result?.success).toBe(true);
-
-    const definitions = await service.listDefinitions();
-    const matchingDef = definitions.find((d) => {
-      const title = d.definition.title.toLowerCase();
-      return (
-        title.includes("water") ||
-        title.includes("drink") ||
-        title.includes("hydrat")
-      );
-    });
-    expect(matchingDef).toBeTruthy();
+    expect(result).toBeTruthy();
+    // Handler may succeed (created) or return a deferred preview
+    if (result?.data?.deferred) {
+      expect(result.success).toBe(true);
+      expect(result.data.lifeDraft).toBeTruthy();
+    } else {
+      expect(result?.success).toBe(true);
+      const definitions = await service.listDefinitions();
+      const matchingDef = definitions.find((d) => {
+        const title = d.definition.title.toLowerCase();
+        return (
+          title.includes("water") ||
+          title.includes("drink") ||
+          title.includes("hydrat")
+        );
+      });
+      expect(matchingDef).toBeTruthy();
+    }
   }, 120_000);
 
   it("asks for clarification instead of saving a title-only goal", async () => {

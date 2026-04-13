@@ -117,8 +117,34 @@ export function createElizaPlugin(config?: ElizaPluginConfig): Plugin {
     init: async (_pluginConfig, runtime: IAgentRuntime) => {
       registerTriggerTaskWorker(runtime);
       registerLifeOpsTaskWorker(runtime);
-      registerProactiveTaskWorker(runtime);
       setCustomActionsRuntime(runtime);
+      const proactiveAgentDisabled = (() => {
+        const disableValue = (
+          process.env.MILADY_DISABLE_PROACTIVE_AGENT ??
+          process.env.ELIZA_DISABLE_PROACTIVE_AGENT ??
+          ""
+        )
+          .trim()
+          .toLowerCase();
+        if (
+          disableValue === "1" ||
+          disableValue === "true" ||
+          disableValue === "yes"
+        ) {
+          return true;
+        }
+        const enableValue = (process.env.ENABLE_PROACTIVE_AGENT ?? "")
+          .trim()
+          .toLowerCase();
+        return enableValue === "0" || enableValue === "false";
+      })();
+      if (!proactiveAgentDisabled) {
+        registerProactiveTaskWorker(runtime);
+      } else {
+        runtime.logger?.info(
+          "[proactive] Proactive agent task skipped — MILADY_DISABLE_PROACTIVE_AGENT=1",
+        );
+      }
       void (async () => {
         const DELAYS = [2_000, 5_000, 10_000];
         for (let attempt = 0; attempt <= DELAYS.length; attempt++) {
@@ -140,27 +166,30 @@ export function createElizaPlugin(config?: ElizaPluginConfig): Plugin {
           }
         }
       })();
-      void (async () => {
-        const DELAYS = [2_000, 5_000, 10_000];
-        for (let attempt = 0; attempt <= DELAYS.length; attempt++) {
-          try {
-            await ensureProactiveAgentTask(runtime);
-            return;
-          } catch (error) {
-            const msg = error instanceof Error ? error.message : String(error);
-            if (attempt < DELAYS.length) {
-              runtime.logger?.warn?.(
-                `[proactive] Task init failed (attempt ${attempt + 1}/${DELAYS.length + 1}), retrying in ${DELAYS[attempt]}ms: ${msg}`,
-              );
-              await new Promise((r) => setTimeout(r, DELAYS[attempt]));
-            } else {
-              runtime.logger?.error?.(
-                `[proactive] Task init failed after ${DELAYS.length + 1} attempts — proactive agent is NOT running: ${msg}`,
-              );
+      if (!proactiveAgentDisabled) {
+        void (async () => {
+          const DELAYS = [2_000, 5_000, 10_000];
+          for (let attempt = 0; attempt <= DELAYS.length; attempt++) {
+            try {
+              await ensureProactiveAgentTask(runtime);
+              return;
+            } catch (error) {
+              const msg =
+                error instanceof Error ? error.message : String(error);
+              if (attempt < DELAYS.length) {
+                runtime.logger?.warn?.(
+                  `[proactive] Task init failed (attempt ${attempt + 1}/${DELAYS.length + 1}), retrying in ${DELAYS[attempt]}ms: ${msg}`,
+                );
+                await new Promise((r) => setTimeout(r, DELAYS[attempt]));
+              } else {
+                runtime.logger?.error?.(
+                  `[proactive] Task init failed after ${DELAYS.length + 1} attempts — proactive agent is NOT running: ${msg}`,
+                );
+              }
             }
           }
-        }
-      })();
+        })();
+      }
 
       // Honour DISABLE_EMOTES: remove PLAY_EMOTE so it never appears in prompts.
       if (runtime.character?.settings?.DISABLE_EMOTES) {

@@ -116,6 +116,15 @@ type QaVoiceStats = {
   ttsFetches: QaFetchRecord[];
 };
 
+type QaRemoteSnapshot = {
+  activeServer: string | null;
+  bodyText: string;
+  connectButtonText: string | null;
+  remoteApiBase: string;
+  remoteError: string | null;
+  remoteTokenLength: number;
+};
+
 type CharacterRosterState = {
   labels: string[];
   selectedLabel: string | null;
@@ -695,6 +704,14 @@ function contentTypeFor(filePath: string): string {
   }
 }
 
+function injectQaBootScript(html: string, apiBase: string): string {
+  const bootScript = `<script>window.__MILADY_API_BASE__=${JSON.stringify(apiBase)};${API_TOKEN ? `Object.defineProperty(window,"__MILADY_API_TOKEN__",{value:${JSON.stringify(API_TOKEN)},configurable:true,writable:true,enumerable:false});` : ""}</script>`;
+  if (html.includes("</head>")) {
+    return html.replace("</head>", `${bootScript}</head>`);
+  }
+  return `${bootScript}${html}`;
+}
+
 async function readRequestBody(request: IncomingMessage): Promise<Buffer> {
   const chunks: Buffer[] = [];
   for await (const chunk of request) {
@@ -760,6 +777,13 @@ async function proxyUiRequest(args: {
   } catch {
     body = await fs.readFile(path.join(APP_DIST_DIR, "index.html"));
     filePath = path.join(APP_DIST_DIR, "index.html");
+  }
+
+  if (path.basename(filePath) === "index.html") {
+    body = Buffer.from(
+      injectQaBootScript(body.toString("utf8"), args.apiBase),
+      "utf8",
+    );
   }
 
   args.response.writeHead(200, {
@@ -1306,6 +1330,42 @@ async function qaFetches(page: Page): Promise<QaFetchRecord[]> {
   });
 }
 
+async function qaRemoteSnapshot(page: Page): Promise<QaRemoteSnapshot> {
+  return page.evaluate(() => {
+    const remoteApiBase = (
+      document.querySelector<HTMLInputElement>("#remote-api-base")?.value ?? ""
+    ).trim();
+    const remoteTokenLength =
+      document.querySelector<HTMLInputElement>("#remote-api-token")?.value
+        .length ?? 0;
+    const remoteError =
+      document
+        .querySelector("[role='alert'], [aria-live='assertive']")
+        ?.textContent?.trim() ?? null;
+    const connectButtonText =
+      Array.from(
+        document.querySelectorAll<HTMLElement>("button,[role='button']"),
+      )
+        .find((element) =>
+          (element.innerText ?? "")
+            .toLowerCase()
+            .includes("connect remote backend"),
+        )
+        ?.innerText?.trim() ?? null;
+    const body = document.body;
+    const visibleText = body?.innerText ?? "";
+    const domText = body?.textContent ?? "";
+    return {
+      activeServer: window.localStorage.getItem("milady:active-server"),
+      bodyText: `${visibleText}\n${domText}`,
+      connectButtonText,
+      remoteApiBase,
+      remoteError,
+      remoteTokenLength,
+    };
+  });
+}
+
 async function waitForVoicePlayback(
   page: Page,
   baseline: QaVoiceStats,
@@ -1704,6 +1764,19 @@ async function completeLocalGroqOnboarding(page: Page) {
       if (connectionRemoteApiBase) {
         await typeInto(page, "#remote-api-base", UI_URL);
         await clickButtonLabel(page, "Connect remote backend");
+        await waitFor(async () => {
+          const remote = await qaRemoteSnapshot(page);
+          if (remote.remoteError) {
+            throw new Error(
+              `Remote backend connect failed: ${remote.remoteError}`,
+            );
+          }
+          const bodyText = remote.bodyText.toLowerCase();
+          return bodyText.includes("choose your ai provider") ||
+            bodyText.includes("groq")
+            ? true
+            : null;
+        }, 60_000);
       }
     }
   } else {
@@ -1714,8 +1787,14 @@ async function completeLocalGroqOnboarding(page: Page) {
     }
   }
 
-  await waitForAnyText(page, ["Continue", "Chen"], 60_000);
-  await clickAnyText(page, ["Continue"]);
+  const alreadyOnProviderGrid =
+    (await pageContainsText(page, "Choose your AI provider")) ||
+    (await pageContainsText(page, "Groq"));
+
+  if (!alreadyOnProviderGrid) {
+    await waitForAnyText(page, ["Continue", "Chen"], 60_000);
+    await clickAnyText(page, ["Continue"]);
+  }
   await waitForAnyText(page, ["Choose your AI provider", "Groq"], 60_000);
   await clickAnyText(page, ["Groq"]);
 
@@ -2192,6 +2271,8 @@ async function saveFailureArtifacts(
   let url = "unavailable";
   let title = "unavailable";
   let bodyText = "unavailable";
+  let fetchSummary = "unavailable";
+  let remoteSummary = "unavailable";
   let voiceStatsSummary = "unavailable";
 
   try {
@@ -2211,6 +2292,20 @@ async function saveFailureArtifacts(
   }
 
   try {
+    const fetches = await qaFetches(page);
+    fetchSummary = JSON.stringify(fetches.slice(-80), null, 2);
+  } catch (fetchError) {
+    fetchSummary = `Unavailable: ${fetchError instanceof Error ? fetchError.message : String(fetchError)}`;
+  }
+
+  try {
+    const remote = await qaRemoteSnapshot(page);
+    remoteSummary = JSON.stringify(remote, null, 2);
+  } catch (remoteError) {
+    remoteSummary = `Unavailable: ${remoteError instanceof Error ? remoteError.message : String(remoteError)}`;
+  }
+
+  try {
     const voiceStats = await qaVoiceStats(page);
     voiceStatsSummary = JSON.stringify(voiceStats, null, 2);
   } catch (statsError) {
@@ -2223,6 +2318,12 @@ async function saveFailureArtifacts(
       `Error: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}`,
       `URL: ${url}`,
       `Title: ${title}`,
+      "",
+      "Remote snapshot:",
+      remoteSummary,
+      "",
+      "Recent fetches:",
+      fetchSummary,
       "",
       "Voice stats:",
       voiceStatsSummary,

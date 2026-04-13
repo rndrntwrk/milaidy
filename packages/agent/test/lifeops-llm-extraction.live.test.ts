@@ -1,19 +1,27 @@
 /**
  * Live LLM extraction tests for LifeOps actions.
  *
- * These tests call the extraction functions directly with a real LLM to verify
- * that the prompts produce correct subaction/operation classifications without
- * relying on regex fallbacks.
- *
- * Gate: MILADY_LIVE_TEST=1 (same as the main live e2e suite).
- * Requires at least one provider API key (OPENAI_API_KEY, GROQ_API_KEY,
- * ANTHROPIC_API_KEY, GOOGLE_GENERATIVE_AI_API_KEY, or OPENROUTER_API_KEY).
+ * These tests still exercise the extractor functions directly, but they now do
+ * so through a real AgentRuntime with the actual provider plugin registered.
+ * That keeps the surface honest: real runtime, real DB, real model, no fake
+ * useModel shim or casted runtime stub.
  */
 
 import crypto from "node:crypto";
 import path from "node:path";
-import type { IAgentRuntime, Memory, ModelType, State } from "@elizaos/core";
-import { describe, expect, it } from "vitest";
+import {
+  createMessageMemory,
+  type IAgentRuntime,
+  type Memory,
+  type State,
+  type UUID,
+} from "@elizaos/core";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import {
+  createRealTestRuntime,
+  type RealTestRuntimeResult,
+} from "../../../test/helpers/real-runtime";
+import { selectLiveProvider } from "../../../test/helpers/live-provider";
 import { extractCalendarPlanWithLlm } from "../src/actions/calendar.js";
 import { extractGmailPlanWithLlm } from "../src/actions/gmail.js";
 import { extractLifeOperationWithLlm } from "../src/actions/life.extractor.js";
@@ -30,80 +38,7 @@ try {
 
 const LIVE_ENABLED =
   process.env.MILADY_LIVE_TEST === "1" || process.env.ELIZA_LIVE_TEST === "1";
-
-// ---------------------------------------------------------------------------
-// Provider selection — pick the first available key
-// ---------------------------------------------------------------------------
-
-type ProviderConfig = {
-  name: string;
-  apiKey: string;
-  baseUrl: string;
-  model: string;
-};
-
-function selectProvider(): ProviderConfig | null {
-  const groqKey = process.env.GROQ_API_KEY?.trim();
-  if (groqKey) {
-    return {
-      name: "groq",
-      apiKey: groqKey,
-      baseUrl: "https://api.groq.com/openai/v1",
-      model: process.env.GROQ_SMALL_MODEL?.trim() || "llama-3.1-8b-instant",
-    };
-  }
-
-  const openaiKey = process.env.OPENAI_API_KEY?.trim();
-  if (openaiKey) {
-    return {
-      name: "openai",
-      apiKey: openaiKey,
-      baseUrl:
-        process.env.OPENAI_BASE_URL?.trim() || "https://api.openai.com/v1",
-      model: process.env.OPENAI_SMALL_MODEL?.trim() || "gpt-5.4-mini",
-    };
-  }
-
-  const anthropicKey = process.env.ANTHROPIC_API_KEY?.trim();
-  if (anthropicKey) {
-    return {
-      name: "anthropic",
-      apiKey: anthropicKey,
-      baseUrl: "https://api.anthropic.com",
-      model:
-        process.env.ANTHROPIC_SMALL_MODEL?.trim() ||
-        "claude-haiku-4-5-20251001",
-    };
-  }
-
-  const googleKey =
-    process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim() ||
-    process.env.GOOGLE_API_KEY?.trim();
-  if (googleKey) {
-    return {
-      name: "google",
-      apiKey: googleKey,
-      baseUrl: "https://generativelanguage.googleapis.com/v1beta",
-      model: process.env.GOOGLE_SMALL_MODEL?.trim() || "gemini-2.0-flash-001",
-    };
-  }
-
-  const openrouterKey = process.env.OPENROUTER_API_KEY?.trim();
-  if (openrouterKey) {
-    return {
-      name: "openrouter",
-      apiKey: openrouterKey,
-      baseUrl: "https://openrouter.ai/api/v1",
-      model:
-        process.env.OPENROUTER_SMALL_MODEL?.trim() ||
-        "google/gemini-2.0-flash-001",
-    };
-  }
-
-  return null;
-}
-
-const provider = selectProvider();
+const provider = LIVE_ENABLED ? selectLiveProvider() : null;
 
 if (!LIVE_ENABLED || !provider) {
   const reasons = [
@@ -115,144 +50,17 @@ if (!LIVE_ENABLED || !provider) {
   console.info(`[lifeops-llm-extraction] skipped: ${reasons}`);
 }
 
-// ---------------------------------------------------------------------------
-// Minimal useModel that calls the provider API directly
-// ---------------------------------------------------------------------------
-
-async function callOpenAICompatible(
-  config: ProviderConfig,
-  prompt: string,
-): Promise<string> {
-  const response = await fetch(`${config.baseUrl}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${config.apiKey}`,
+function makeMessage(runtime: IAgentRuntime, text: string): Memory {
+  return createMessageMemory({
+    id: crypto.randomUUID() as UUID,
+    entityId: crypto.randomUUID() as UUID,
+    roomId: crypto.randomUUID() as UUID,
+    agentId: runtime.agentId as UUID,
+    content: {
+      text,
+      source: "client_chat",
     },
-    body: JSON.stringify({
-      model: config.model,
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0,
-      max_tokens: 512,
-    }),
   });
-
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(
-      `${config.name} API error ${response.status}: ${body.slice(0, 300)}`,
-    );
-  }
-
-  const data = (await response.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
-  };
-  return data.choices?.[0]?.message?.content ?? "";
-}
-
-async function callAnthropicApi(
-  config: ProviderConfig,
-  prompt: string,
-): Promise<string> {
-  const response = await fetch(`${config.baseUrl}/v1/messages`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": config.apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: config.model,
-      max_tokens: 512,
-      messages: [{ role: "user", content: prompt }],
-    }),
-  });
-
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(
-      `anthropic API error ${response.status}: ${body.slice(0, 300)}`,
-    );
-  }
-
-  const data = (await response.json()) as {
-    content?: Array<{ text?: string }>;
-  };
-  return data.content?.[0]?.text ?? "";
-}
-
-async function callGoogleApi(
-  config: ProviderConfig,
-  prompt: string,
-): Promise<string> {
-  const url = `${config.baseUrl}/models/${config.model}:generateContent?key=${config.apiKey}`;
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0, maxOutputTokens: 512 },
-    }),
-  });
-
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(
-      `google API error ${response.status}: ${body.slice(0, 300)}`,
-    );
-  }
-
-  const data = (await response.json()) as {
-    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-  };
-  return data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-}
-
-function createUseModel(config: ProviderConfig) {
-  return async (
-    _modelType: ModelType,
-    params: { prompt?: unknown },
-  ): Promise<string> => {
-    const prompt = String(params?.prompt ?? "");
-    if (config.name === "anthropic") {
-      return callAnthropicApi(config, prompt);
-    }
-    if (config.name === "google") {
-      return callGoogleApi(config, prompt);
-    }
-    return callOpenAICompatible(config, prompt);
-  };
-}
-
-// ---------------------------------------------------------------------------
-// Minimal runtime stub
-// ---------------------------------------------------------------------------
-
-function createMinimalRuntime(config: ProviderConfig): IAgentRuntime {
-  const useModel = createUseModel(config);
-  return {
-    agentId: crypto.randomUUID(),
-    useModel,
-    logger: {
-      debug: () => {},
-      info: () => {},
-      warn: (...args: unknown[]) => console.warn("[test:warn]", ...args),
-      error: (...args: unknown[]) => console.error("[test:error]", ...args),
-    },
-    getSetting: () => undefined,
-    getService: () => null,
-  } as unknown as IAgentRuntime;
-}
-
-function makeMessage(text: string): Memory {
-  return {
-    id: crypto.randomUUID(),
-    entityId: crypto.randomUUID(),
-    roomId: crypto.randomUUID(),
-    agentId: crypto.randomUUID(),
-    content: { text },
-    createdAt: Date.now(),
-  } as unknown as Memory;
 }
 
 function makeState(recentMessages?: string): State {
@@ -263,18 +71,25 @@ function makeState(recentMessages?: string): State {
   } as State;
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
 const TEST_TIMEOUT = 30_000;
-
 const describeIfLive = LIVE_ENABLED && provider ? describe : describe.skip;
 
 describeIfLive("LLM plan extraction (live)", () => {
-  const runtime = provider
-    ? createMinimalRuntime(provider)
-    : (null as unknown as IAgentRuntime);
+  let runtimeResult: RealTestRuntimeResult | null = null;
+  let runtime: IAgentRuntime;
+
+  beforeAll(async () => {
+    runtimeResult = await createRealTestRuntime({
+      characterName: "LifeOpsExtractorLive",
+      preferredProvider: provider?.name,
+      withLLM: true,
+    });
+    runtime = runtimeResult.runtime;
+  }, 180_000);
+
+  afterAll(async () => {
+    await runtimeResult?.cleanup();
+  });
 
   describe("extractLifeOperationWithLlm", () => {
     const cases = [
@@ -307,7 +122,7 @@ describeIfLive("LLM plan extraction (live)", () => {
         async () => {
           const result = await extractLifeOperationWithLlm({
             runtime,
-            message: makeMessage(intent),
+            message: makeMessage(runtime, intent),
             state: makeState(),
             intent,
           });
@@ -357,7 +172,7 @@ describeIfLive("LLM plan extraction (live)", () => {
             runtime,
             intent: testCase.intent,
             state: makeState(),
-            message: makeMessage(testCase.intent),
+            message: makeMessage(runtime, testCase.intent),
           });
           expect(plan?.mode).toBe(testCase.expectedMode);
           expect(plan?.cadenceKind).toBe(testCase.expectedCadenceKind);
@@ -388,7 +203,7 @@ describeIfLive("LLM plan extraction (live)", () => {
           runtime,
           intent,
           state: makeState(),
-          message: makeMessage(intent),
+          message: makeMessage(runtime, intent),
         });
         expect(plan.mode).toBe("respond");
         expect(plan.groundingState).toBe("partial");
@@ -459,7 +274,7 @@ describeIfLive("LLM plan extraction (live)", () => {
         async () => {
           const plan = await extractGmailPlanWithLlm(
             runtime,
-            makeMessage(intent),
+            makeMessage(runtime, intent),
             makeState(recentMessages),
             intent,
           );
@@ -513,7 +328,7 @@ describeIfLive("LLM plan extraction (live)", () => {
         async () => {
           const plan = await extractCalendarPlanWithLlm(
             runtime,
-            makeMessage(testCase.intent),
+            makeMessage(runtime, testCase.intent),
             makeState(),
             testCase.intent,
           );

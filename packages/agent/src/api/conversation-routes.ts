@@ -394,11 +394,30 @@ async function waitForConversationRestore(
 
 function buildPersistedAssistantContent(
   text: string,
-  responseContent: Content | null | undefined,
+  result:
+    | Pick<ChatGenerationResult, "responseContent" | "responseMessages">
+    | null
+    | undefined,
 ): Content {
-  return responseContent && typeof responseContent === "object"
+  const responseContent =
+    result?.responseContent && typeof result.responseContent === "object"
+      ? result.responseContent
+      : null;
+  const responseMessageContent = Array.isArray(result?.responseMessages)
+    ? (result.responseMessages
+        .map((entry) =>
+          entry?.content && typeof entry.content === "object"
+            ? entry.content
+            : null,
+        )
+        .filter((content): content is Content => content !== null)
+        .at(-1) ?? null)
+    : null;
+
+  return responseContent || responseMessageContent
     ? {
-        ...responseContent,
+        ...(responseMessageContent ?? {}),
+        ...(responseContent ?? {}),
         text,
       }
     : { text };
@@ -834,7 +853,10 @@ export async function handleConversationRoutes(
             storedSenderProfile?.rawUserId ??
             messageAuthorProfile?.rawUserId;
           if (rawSenderId) {
-            const profile = await resolveDiscordUserProfile(runtime, rawSenderId);
+            const profile = await resolveDiscordUserProfile(
+              runtime,
+              rawSenderId,
+            );
             if (profile) {
               if (profile.displayName) {
                 message.from = profile.displayName;
@@ -1092,10 +1114,7 @@ export async function handleConversationRoutes(
             await persistAssistantConversationMemory(
               runtime,
               conv.roomId,
-              buildPersistedAssistantContent(
-                resolvedText,
-                result.responseContent,
-              ),
+              buildPersistedAssistantContent(resolvedText, result),
               channelType,
               turnStartedAt,
             );
@@ -1124,7 +1143,10 @@ export async function handleConversationRoutes(
         // generic fallback.
         if (streamedText) {
           logger.warn(
-            { err: getErrorMessage(err), streamedTextLength: streamedText.length },
+            {
+              err: getErrorMessage(err),
+              streamedTextLength: streamedText.length,
+            },
             "Post-generation error after text was already streamed — using streamed text",
           );
           try {
@@ -1295,10 +1317,7 @@ export async function handleConversationRoutes(
           await persistAssistantConversationMemory(
             runtime,
             conv.roomId,
-            buildPersistedAssistantContent(
-              resolvedText,
-              result.responseContent,
-            ),
+            buildPersistedAssistantContent(resolvedText, result),
             channelType,
             turnStartedAt,
           );

@@ -196,31 +196,31 @@ export function getTabGroups(
 
 const TAB_PATHS: Record<BuiltinTab, string> = {
   chat: "/chat",
-  lifeops: "/lifeops",
+  lifeops: "/apps/lifeops",
   browser: "/browser",
   companion: "/companion",
   stream: "/stream",
   apps: "/apps",
   character: "/character",
-  "character-select": "/character-select",
+  "character-select": "/character/select",
   triggers: "/triggers",
   inventory: "/inventory",
-  knowledge: "/knowledge",
-  connectors: "/connectors",
-  plugins: "/plugins",
-  skills: "/skills",
-  advanced: "/advanced",
-  "fine-tuning": "/fine-tuning",
-  trajectories: "/trajectories",
-  relationships: "/relationships",
-  memories: "/memories",
+  knowledge: "/character/knowledge",
+  connectors: "/settings/connectors",
+  plugins: "/apps/plugins",
+  skills: "/apps/skills",
+  advanced: "/apps/fine-tuning",
+  "fine-tuning": "/apps/fine-tuning",
+  trajectories: "/apps/trajectories",
+  relationships: "/apps/relationships",
+  memories: "/apps/memories",
   rolodex: "/rolodex",
-  voice: "/voice",
-  runtime: "/runtime",
-  database: "/database",
+  voice: "/settings/voice",
+  runtime: "/apps/runtime",
+  database: "/apps/database",
   desktop: "/desktop",
   settings: "/settings",
-  logs: "/logs",
+  logs: "/apps/logs",
 };
 
 /** Legacy path redirects — old paths that now map to new tabs. */
@@ -232,6 +232,26 @@ const LEGACY_PATHS: Record<string, Tab> = {
   "/admin": "fine-tuning",
   "/config": "settings",
   "/triggers": "triggers",
+  // Old top-level paths that moved under /character/
+  "/character-select": "character-select",
+  "/knowledge": "knowledge",
+  // Old top-level paths that moved under /apps/
+  "/lifeops": "lifeops",
+  "/plugins": "plugins",
+  "/skills": "skills",
+  "/advanced": "fine-tuning",
+  "/fine-tuning": "fine-tuning",
+  "/trajectories": "trajectories",
+  "/relationships": "relationships",
+  "/memories": "memories",
+  "/runtime": "runtime",
+  "/database": "database",
+  "/logs": "logs",
+  // Old top-level paths that moved under /settings/
+  "/connectors": "connectors",
+  "/voice": "settings",
+  // /companion stays as a legacy redirect — companion is now an overlay app at /apps/companion
+  "/companion": "chat",
 };
 
 const PATH_TO_TAB = new Map(
@@ -271,21 +291,37 @@ export function resolveInitialTabForPath(
   return tabFromPath(pathname, basePath) ?? fallbackTab;
 }
 
+/** Known apps-tool sub-paths under /apps/ (not actual app slugs). */
+const APPS_SUB_TABS: Record<string, Tab> = {
+  lifeops: "lifeops",
+  plugins: "plugins",
+  skills: "skills",
+  "fine-tuning": "fine-tuning",
+  trajectories: "trajectories",
+  relationships: "relationships",
+  memories: "memories",
+  runtime: "runtime",
+  database: "database",
+  logs: "logs",
+  // Note: "companion" is intentionally NOT here — /apps/companion is an app slug
+  // that AppsView auto-launches as an overlay, not a tool tab.
+};
+
 export function tabFromPath(pathname: string, basePath = ""): Tab | null {
   const normalized = normalizePathForLookup(pathname, basePath);
   if (normalized === "/") return "chat";
-  if (normalized === "/browser") return "browser";
-  if (normalized === "/voice") return "settings";
-  if (normalized === "/advanced" || normalized === "/admin") {
-    return "fine-tuning";
-  }
+
   // Companion disabled unless explicitly feature-flagged
   if (
     !COMPANION_ENABLED &&
-    (normalized === "/companion" || normalized === "/character-select")
+    (normalized === "/companion" ||
+      normalized === "/apps/companion" ||
+      normalized === "/character-select" ||
+      normalized === "/character/select")
   ) {
     return "chat";
   }
+
   // Apps disabled in production builds — redirect to chat
   if (
     !APPS_ENABLED &&
@@ -295,9 +331,29 @@ export function tabFromPath(pathname: string, basePath = ""): Tab | null {
   ) {
     return "chat";
   }
-  // /apps/<slug> resolves to the apps tab (slug handled by AppsView)
-  if (normalized.startsWith("/apps/")) return "apps";
-  // Stream tab (always enabled)
+
+  // /apps/<sub> — known tool tabs resolve to their tab; everything else is an app slug
+  if (normalized.startsWith("/apps/")) {
+    const sub = normalized.slice("/apps/".length);
+    return APPS_SUB_TABS[sub] ?? "apps";
+  }
+
+  // /character/<sub> — resolve nested character paths
+  if (normalized.startsWith("/character/")) {
+    const sub = normalized.slice("/character/".length);
+    if (sub === "knowledge") return "knowledge";
+    if (sub === "select") return "character-select";
+    return "character";
+  }
+
+  // /settings/<sub> — resolve nested settings paths
+  if (normalized.startsWith("/settings/")) {
+    const sub = normalized.slice("/settings/".length);
+    if (sub === "connectors") return "connectors";
+    if (sub === "voice") return "settings";
+    return "settings";
+  }
+
   // Check current paths first, then legacy redirects
   return PATH_TO_TAB.get(normalized) ?? LEGACY_PATHS[normalized] ?? null;
 }

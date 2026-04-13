@@ -21,21 +21,16 @@
     {
       "name": "brush-teeth create from context",
       "text": "Please make that into a routine named Brush teeth with reminders around 8am and 9pm. Just preview the plan for now and do not save it yet.",
-      "responseIncludesAny": [
-        "routine preview",
-        "preview",
-        "how does that look",
-        "save it when you're ready",
-        "before we save it",
-        "let me know if you'd like to tweak",
-        "let me know if you'd like any tweaks",
-        "let me know if you want to tweak"
-      ]
+      "responseJudge": {
+        "rubric": "The assistant should treat this as a preview-only step for the Brush teeth routine, not as a saved result. A passing reply keeps the routine/reminder setup in substance, makes clear the user can review, tweak, or confirm it, and does not pretend the routine is already active."
+      }
     },
     {
       "name": "brush-teeth confirm",
       "text": "That looks right. Save the Brush teeth routine.",
-      "responseIncludesAll": ["saved"],
+      "responseJudge": {
+        "rubric": "The assistant should confirm that the Brush teeth routine is now created and active with the requested morning and night reminders. A passing reply may say the routine was saved, set up, scheduled, or is now in place, but it should not ask for confirmation again or imply the routine is still only a draft."
+      },
       "waitForDefinitionTitle": "Brush teeth",
       "waitForDefinitionTitleAliases": [
         "Brush teeth 8 + 9 pm",
@@ -51,10 +46,7 @@
     {
       "type": "definitionCountDelta",
       "title": "Brush teeth",
-      "titleAliases": [
-        "Brush teeth 8 + 9 pm",
-        "Brush teeth 8 am & 9 pm"
-      ],
+      "titleAliases": ["Brush teeth 8 + 9 pm", "Brush teeth 8 am & 9 pm"],
       "delta": 1,
       "cadenceKind": "times_per_day",
       "requiredSlots": [{ "minuteOfDay": 480 }, { "minuteOfDay": 1260 }],

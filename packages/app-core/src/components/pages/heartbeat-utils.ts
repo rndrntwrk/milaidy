@@ -211,14 +211,18 @@ export function parsePositiveInteger(value: string): number | undefined {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined;
 }
 
-export function scheduleLabel(trigger: TriggerSummary, t: TranslateFn): string {
+export function scheduleLabel(
+  trigger: TriggerSummary,
+  t: TranslateFn,
+  locale?: string,
+): string {
   if (trigger.triggerType === "interval") {
     return `${t("heartbeatsview.every")} ${formatDurationMs(trigger.intervalMs, { t })}`;
   }
   if (trigger.triggerType === "once") {
     return trigger.scheduledAtIso
       ? t("heartbeatsview.onceAt", {
-          time: formatDateTime(trigger.scheduledAtIso),
+          time: formatDateTime(trigger.scheduledAtIso, { locale }),
         })
       : t("heartbeatsview.once");
   }

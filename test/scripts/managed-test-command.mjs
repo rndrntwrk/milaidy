@@ -263,6 +263,25 @@ async function cleanupStaleLock(lockPath) {
   removeLock(lockPath);
 }
 
+function isAncestorPid(candidatePid) {
+  let pid = process.ppid;
+  const visited = new Set();
+  while (Number.isInteger(pid) && pid > 1 && !visited.has(pid)) {
+    if (pid === candidatePid) return true;
+    visited.add(pid);
+    try {
+      const stat = execFileSync("ps", ["-o", "ppid=", "-p", String(pid)], {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      }).trim();
+      pid = Number.parseInt(stat, 10);
+    } catch {
+      break;
+    }
+  }
+  return false;
+}
+
 async function cleanupOtherLockFiles(lockDir, currentLockPath) {
   const activeLocks = [];
 
@@ -281,6 +300,10 @@ async function cleanupOtherLockFiles(lockDir, currentLockPath) {
     const childPid = parseLockPid(existing.childPid);
 
     if (ownerPid && isPidAlive(ownerPid)) {
+      // Skip locks held by ancestor processes (e.g. parent test-runner)
+      if (isAncestorPid(ownerPid)) {
+        continue;
+      }
       activeLocks.push({
         lockName: existing.lockName ?? path.basename(lockPath, ".json"),
         ownerPid,

@@ -729,6 +729,8 @@ export type ElizaConfig = {
     language?: string;
     /** Selected built-in character preset id. */
     presetId?: string;
+    /** Owner display name set during onboarding or via LifeOps. */
+    ownerName?: string;
   };
   knowledge?: KnowledgeConfig;
   roles?: RolesConfig;

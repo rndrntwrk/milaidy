@@ -23,6 +23,10 @@ const ENV_PATH = path.join(REPO_ROOT, ".env");
 const LIVE_CHAT_TEST_TIMEOUT_MS = 300_000;
 const LIVE_RUNTIME_BOOT_TIMEOUT_MS = 180_000;
 const LIVE_CONVERSATION_REQUEST_TIMEOUT_MS = 45_000;
+const LIVE_TEST_LANGUAGE =
+  process.env.MILADY_LIVE_TEST_LANGUAGE?.trim() ||
+  process.env.ELIZA_LIVE_TEST_LANGUAGE?.trim() ||
+  "en";
 
 try {
   const { config } = await import("dotenv");
@@ -681,6 +685,10 @@ async function startLiveRuntime(): Promise<StartedRuntime> {
           unknown
         >)
       : {};
+  const baseUi =
+    baseConfig.ui && typeof baseConfig.ui === "object"
+      ? (baseConfig.ui as Record<string, unknown>)
+      : {};
   const baseServiceRouting =
     baseConfig.serviceRouting && typeof baseConfig.serviceRouting === "object"
       ? (baseConfig.serviceRouting as Record<string, unknown>)
@@ -707,6 +715,8 @@ async function startLiveRuntime(): Promise<StartedRuntime> {
         ...baseConfig,
         logging: { level: "info" },
         ui: {
+          ...baseUi,
+          language: LIVE_TEST_LANGUAGE,
           assistant: {
             ...assistantConfig,
             name:
@@ -780,6 +790,8 @@ async function startLiveRuntime(): Promise<StartedRuntime> {
       MILADY_STATE_DIR: stateDir,
       ELIZA_PORT: String(apiPort),
       MILADY_API_PORT: String(apiPort),
+      ENABLE_AUTONOMY: "false",
+      MILADY_DISABLE_PROACTIVE_AGENT: "1",
       LOCAL_EMBEDDING_DIMENSIONS:
         process.env.LOCAL_EMBEDDING_DIMENSIONS?.trim() || "384",
       EMBEDDING_DIMENSION: process.env.EMBEDDING_DIMENSION?.trim() || "384",
