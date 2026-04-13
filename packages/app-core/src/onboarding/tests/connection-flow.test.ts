@@ -402,6 +402,27 @@ describe("connection-flow", () => {
       ).toBe(false);
     });
 
+    it("openai-subscription: disabled before OAuth connection", () => {
+      expect(
+        isProviderConfirmDisabled({
+          ...defaults,
+          provider: "openai-subscription",
+          openaiConnected: false,
+        }),
+      ).toBe(true);
+    });
+
+    it("openai-subscription: enabled after OAuth connection without API key", () => {
+      expect(
+        isProviderConfirmDisabled({
+          ...defaults,
+          provider: "openai-subscription",
+          apiKey: "",
+          openaiConnected: true,
+        }),
+      ).toBe(false);
+    });
+
     it("ollama: enabled without API key", () => {
       expect(
         isProviderConfirmDisabled({ ...defaults, provider: "ollama" }),

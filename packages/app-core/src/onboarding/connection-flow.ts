@@ -329,6 +329,7 @@ export function isProviderConfirmDisabled(opts: {
   elizaCloudTab: "login" | "apikey";
   elizaCloudConnected: boolean;
   subscriptionTab: "token" | "oauth";
+  openaiConnected?: boolean;
 }): boolean {
   const {
     provider,
@@ -336,6 +337,7 @@ export function isProviderConfirmDisabled(opts: {
     elizaCloudTab,
     elizaCloudConnected,
     subscriptionTab,
+    openaiConnected = false,
   } = opts;
   if (!provider) return true;
   if (provider === "elizacloud") {
@@ -346,6 +348,9 @@ export function isProviderConfirmDisabled(opts: {
   }
   if (provider === "anthropic-subscription") {
     return subscriptionTab === "token" && !apiKey.trim();
+  }
+  if (provider === "openai-subscription") {
+    return !openaiConnected;
   }
   if (NO_KEY_REQUIRED.has(provider)) return false;
   // All other providers require an API key

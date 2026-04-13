@@ -467,6 +467,7 @@ export function ConnectionProviderDetailScreen({
     elizaCloudTab: onboardingElizaCloudTab,
     elizaCloudConnected,
     subscriptionTab: onboardingSubscriptionTab,
+    openaiConnected,
   });
 
   useEffect(() => {

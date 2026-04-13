@@ -786,6 +786,55 @@ describe("ConnectionProviderDetailScreen", () => {
     );
   });
 
+  it("enables provider confirmation after OpenAI subscription OAuth succeeds", async () => {
+    const handleOnboardingNext = vi.fn(async () => {});
+    mockUseApp.mockReturnValue(
+      createState({
+        onboardingProvider: "openai-subscription",
+        onboardingOptions: {
+          providers: [
+            {
+              id: "openai-subscription",
+              name: "ChatGPT Subscription",
+              description: "Plus/Pro subscription",
+            },
+          ],
+          openrouterModels: [],
+          piAiModels: [],
+          piAiDefaultModel: "",
+        },
+        handleOnboardingNext,
+      }),
+    );
+
+    render(<ConnectionProviderDetailScreen dispatch={vi.fn()} />);
+
+    expect(
+      (screen.getByRole("button", { name: "Confirm" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Log in with OpenAI" }));
+    await screen.findByLabelText("Redirect URL");
+    fireEvent.change(screen.getByLabelText("Redirect URL"), {
+      target: {
+        value: "localhost:1455/auth/callback?code=openai-auth-code",
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Complete login" }));
+
+    await waitFor(() => {
+      expect(
+        (screen.getByRole("button", { name: "Confirm" }) as HTMLButtonElement)
+          .disabled,
+      ).toBe(false);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+
+    expect(handleOnboardingNext).toHaveBeenCalledTimes(1);
+  });
+
   it("rejects invalid OpenAI callback URLs before calling exchange", async () => {
     mockUseApp.mockReturnValue(
       createState({
