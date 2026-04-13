@@ -29,9 +29,9 @@ import {
 } from "@elizaos/core";
 import dotenv from "dotenv";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { itIf } from "../../../test/helpers/conditional-tests.ts";
-import { selectLiveProvider } from "../../../test/helpers/live-provider";
-import { withTimeout, sleep } from "../../../test/helpers/test-utils";
+import { itIf } from "../../../../test/helpers/conditional-tests.ts";
+import { selectLiveProvider } from "../../../../test/helpers/live-provider";
+import { withTimeout, sleep } from "../../../../test/helpers/test-utils";
 import { USER_PREFS_TABLE } from "../../../plugins/plugin-personality/typescript/src/types";
 import { startApiServer } from "../src/api/server";
 import { ensureAgentWorkspace } from "../src/providers/workspace";

@@ -4,10 +4,11 @@ import { spawn } from "node:child_process";
 import { existsSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolveRepoRootFromImportMeta } from "./lib/repo-root.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const DEFAULT_REPO_ROOT = path.resolve(__dirname, "..");
+const DEFAULT_REPO_ROOT = resolveRepoRootFromImportMeta(import.meta.url);
 
 export const BUNDLED_WORKSPACE_BUILDS = [
   {

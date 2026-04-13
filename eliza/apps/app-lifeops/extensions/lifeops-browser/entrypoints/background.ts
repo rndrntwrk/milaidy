@@ -2,7 +2,7 @@ import type {
   LifeOpsBrowserAction,
   LifeOpsBrowserSession,
   LifeOpsBrowserSettings,
-} from "../../../../eliza/packages/shared/src/contracts/lifeops";
+} from "@elizaos/shared/contracts/lifeops";
 import { LifeOpsBrowserRelayClient, RelayApiError } from "../src/api-client";
 import type {
   BackgroundState,

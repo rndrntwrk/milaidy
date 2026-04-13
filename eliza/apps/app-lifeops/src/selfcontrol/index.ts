@@ -12,9 +12,9 @@ export {
   selfControlRequestPermissionAction,
   selfControlUnblockWebsitesAction,
   unblockWebsitesAction,
-} from "./action.js";
+} from "./action.ts";
 
-export { selfControlProvider, websiteBlockerProvider } from "./provider.js";
+export { selfControlProvider, websiteBlockerProvider } from "./provider.ts";
 
 export {
   clearWebsiteBlockerExpiryTasks,
@@ -25,7 +25,7 @@ export {
   WEBSITE_BLOCKER_UNBLOCK_TASK_NAME,
   WEBSITE_BLOCKER_UNBLOCK_TASK_TAGS,
   WebsiteBlockerService,
-} from "./service.js";
+} from "./service.ts";
 
 export {
   getSelfControlPermissionState,
@@ -38,7 +38,7 @@ export {
   setSelfControlPluginConfig,
   startSelfControlBlock,
   stopSelfControlBlock,
-} from "./selfcontrol.js";
+} from "./selfcontrol.ts";
 
 export type {
   SelfControlBlockRequest,
@@ -46,10 +46,10 @@ export type {
   SelfControlPermissionState,
   SelfControlPluginConfig,
   SelfControlStatus,
-} from "./selfcontrol.js";
+} from "./selfcontrol.ts";
 
-export { getSelfControlAccess, SELFCONTROL_ACCESS_ERROR } from "./access.js";
+export { getSelfControlAccess, SELFCONTROL_ACCESS_ERROR } from "./access.ts";
 
-export { checkSenderRole } from "./roles.js";
+export { checkSenderRole } from "./roles.ts";
 
-export type { PermissionStatus } from "./permissions.js";
+export type { PermissionStatus } from "./permissions.ts";

@@ -109,4 +109,4 @@ Suites possibles (non livrées comme exigences ici) :
 - **Métadonnées** optionnelles sur le contenu du callback pour distinguer "ajout" vs "remplacement" pour les plugins exotiques (seulement si un cas d'utilisation réel apparaît).
 - **Persistance** des statuts intermédiaires (aujourd'hui le texte du tour persisté suit les règles normales de persistance du chat).
 
-Consultez `docs/ROADMAP.md` dans le dépôt pour la direction générale du produit.
+Consultez `docs/roadmap.md` dans le dépôt pour la direction générale du produit.

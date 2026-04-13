@@ -12,20 +12,18 @@
  *   node eliza/packages/app-core/scripts/dev-ui.mjs            # starts both API + UI
  *   node eliza/packages/app-core/scripts/dev-ui.mjs --ui-only  # starts only the vite UI (API assumed running)
  */
-import { execSync, spawn } from "node:child_process";
+import { execFileSync, execSync, spawn } from "node:child_process";
 import {
   existsSync,
-  mkdtempSync,
   readFileSync,
   realpathSync,
-  rmSync,
   writeFileSync,
 } from "node:fs";
 import { createConnection } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
-import { ethers } from "ethers";
+import { fileURLToPath } from "node:url";
 import * as JSON5Module from "json5";
 import {
   CAPACITOR_PLUGIN_NAMES,
@@ -37,10 +35,7 @@ import {
 } from "../../shared/src/runtime-env.ts";
 import { getBunVersionAdvisory } from "./lib/bun-version-guard.mjs";
 import { capacitorPluginsBuildNeeded } from "./lib/capacitor-plugin-build-needed.mjs";
-import {
-  coerceBoolean,
-  resolveOnchainPreference,
-} from "./lib/dev-ui-onchain.mjs";
+import { coerceBoolean } from "./lib/dev-ui-onchain.mjs";
 import { buildVisionDepsFailureMessage } from "./lib/dev-ui-vision.mjs";
 import { signalSpawnedProcessTree } from "./lib/kill-process-tree.mjs";
 import { extendNodePathEnv } from "./lib/node-path-env.mjs";
@@ -112,6 +107,9 @@ const bunAdvisory = getBunVersionAdvisory();
 if (bunAdvisory) console.warn(`${logPrefix} ${bunAdvisory}`);
 
 const cwd = process.cwd();
+const visionDepsScriptPath = fileURLToPath(
+  new URL("./ensure-vision-deps.mjs", import.meta.url),
+);
 const uiOnly = process.argv.includes("--ui-only");
 const devLogLevel =
   (process.env.ELIZA_DEV_LOG_LEVEL ?? process.env.LOG_LEVEL ?? "info")
@@ -119,23 +117,18 @@ const devLogLevel =
     .toLowerCase() || "info";
 const quietApiLogs = process.env.ELIZA_DEV_QUIET_LOGS === "1";
 const verboseApiLogs = process.env.ELIZA_DEV_VERBOSE_LOGS !== "0";
-// These are determined interactively at startup (or from env if already set).
-let onchainEnabled = false;
-let anchorRequested = false;
-const anchorRequired = process.env.ELIZA_DEV_REQUIRE_ANCHOR === "1";
-const verboseChainLogs = process.env.ELIZA_DEV_CHAIN_VERBOSE === "1";
-const ANVIL_PORT = Number(process.env.ELIZA_DEV_ANVIL_PORT ?? 8545);
-const ANVIL_CHAIN_ID = Number(process.env.ELIZA_DEV_CHAIN_ID ?? 31337);
-const ANVIL_RPC_URL = `http://127.0.0.1:${ANVIL_PORT}`;
-const ANCHOR_RPC_URL =
-  process.env.ELIZA_DEV_ANCHOR_RPC_URL ?? "http://127.0.0.1:8899";
-const DEFAULT_EVM_DEV_PRIVATE_KEY =
-  process.env.ELIZA_DEV_EVM_PRIVATE_KEY ??
-  "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d";
-const ANVIL_DEPLOYER_PRIVATE_KEY =
-  process.env.ELIZA_DEV_ANVIL_DEPLOYER_PRIVATE_KEY ??
-  "0x2a871d0798f97d79848a013d4936a73bf4cc922c825d33c1cf7073dff6d409c6";
 
+function shellQuoteArg(value) {
+  return /^[A-Za-z0-9_./:=+-]+$/.test(value) ? value : JSON.stringify(value);
+}
+
+const visionDepsRetryCommand = [
+  "node",
+  path.relative(cwd, visionDepsScriptPath) || visionDepsScriptPath,
+  `--name=${cliName}`,
+]
+  .map(shellQuoteArg)
+  .join(" ");
 // ---------------------------------------------------------------------------
 // ANSI colors — raw escape sequences so we don't need chalk in this .mjs file.
 // ---------------------------------------------------------------------------
@@ -158,67 +151,6 @@ function orange(text) {
 }
 function dim(text) {
   return `${DIM}${text}${RESET}`;
-}
-
-// ---------------------------------------------------------------------------
-// Interactive prompts — only used when stdin is a TTY (skipped in CI/pipes).
-// ---------------------------------------------------------------------------
-
-async function promptYesNo(question, defaultYes = false) {
-  if (!process.stdin.isTTY) return defaultYes;
-  const { createInterface } = await import("node:readline");
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  return new Promise((resolve) => {
-    rl.question(question, (answer) => {
-      rl.close();
-      const normalized = answer.trim().toLowerCase();
-      if (normalized === "") return resolve(defaultYes);
-      resolve(["y", "yes"].includes(normalized));
-    });
-  });
-}
-
-async function installFoundry() {
-  if (process.platform === "win32") {
-    console.log(
-      `  ${green(logPrefix)} ${dim("Windows: install Foundry manually → https://book.getfoundry.sh/getting-started/installation")}`,
-    );
-    return false;
-  }
-
-  console.log(`  ${green(logPrefix)} Installing Foundry...`);
-  const ok = await new Promise((resolve) => {
-    const installer = spawn(
-      "sh",
-      ["-c", "curl -L https://foundry.paradigm.xyz | bash"],
-      { stdio: "inherit" },
-    );
-    installer.on("exit", (code) => resolve(code === 0));
-    installer.on("error", () => resolve(false));
-  });
-
-  if (!ok) {
-    console.error(
-      `  ${green(logPrefix)} Foundry installer failed. Install manually: https://book.getfoundry.sh`,
-    );
-    return false;
-  }
-
-  // foundryup installs the actual binaries (forge, cast, anvil, …)
-  const foundryupPath = path.join(os.homedir(), ".foundry", "bin", "foundryup");
-  const ready = await new Promise((resolve) => {
-    const foundryup = spawn(foundryupPath, [], { stdio: "inherit" });
-    foundryup.on("exit", (code) => resolve(code === 0));
-    foundryup.on("error", () => resolve(false));
-  });
-
-  if (ready) {
-    // Make the new binaries visible to the current process.
-    const foundryBin = path.join(os.homedir(), ".foundry", "bin");
-    process.env.PATH = `${foundryBin}${path.delimiter}${process.env.PATH}`;
-  }
-
-  return ready;
 }
 
 // ---------------------------------------------------------------------------
@@ -436,443 +368,6 @@ function resolveStealthImportFlags() {
   return {
     openai: openaiFlag === true,
     claude: claudeFlag === true,
-  };
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}
-
-async function waitForJsonRpc(
-  rpcUrl,
-  method,
-  {
-    params = [],
-    timeoutMs = 30_000,
-    intervalMs = 250,
-    validate = (payload) => payload?.result !== undefined,
-  } = {},
-) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    try {
-      const response = await fetch(rpcUrl, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          id: 1,
-          method,
-          params,
-        }),
-      });
-      if (response.ok) {
-        const payload = await response.json();
-        if (validate(payload)) {
-          return payload;
-        }
-      }
-    } catch {
-      // Not ready yet.
-    }
-    await sleep(intervalMs);
-  }
-  throw new Error(
-    `Timed out waiting for JSON-RPC method "${method}" at ${rpcUrl}`,
-  );
-}
-
-function resolveAnchorWorkspace() {
-  const explicit = process.env.ELIZA_ANCHOR_WORKSPACE?.trim();
-  if (explicit) {
-    const resolved = path.resolve(explicit);
-    return existsSync(path.join(resolved, "Anchor.toml")) ? resolved : null;
-  }
-
-  const candidates = [
-    cwd,
-    path.join(cwd, "anchor"),
-    path.join(cwd, "solana"),
-    path.join(cwd, "programs"),
-    path.join(cwd, "test", "anchor"),
-  ];
-
-  for (const candidate of candidates) {
-    if (existsSync(path.join(candidate, "Anchor.toml"))) {
-      return candidate;
-    }
-  }
-  return null;
-}
-
-function readJson(filePath) {
-  return JSON.parse(readFileSync(filePath, "utf-8"));
-}
-
-function resolveArtifactPath(candidates) {
-  for (const candidate of candidates) {
-    if (existsSync(candidate)) return candidate;
-  }
-  return null;
-}
-
-function createOnchainDevConfig({
-  rpcUrl,
-  registryAddress,
-  collectionAddress,
-  evmPrivateKey,
-  solanaRpcUrl,
-}) {
-  const baseConfigPath = resolveElizaConfigPath();
-  const base = loadElizaConfigForDev();
-  const config =
-    base && typeof base === "object" && !Array.isArray(base) ? { ...base } : {};
-
-  const nextRegistry =
-    config.registry &&
-    typeof config.registry === "object" &&
-    !Array.isArray(config.registry)
-      ? { ...config.registry }
-      : {};
-  nextRegistry.mainnetRpc = rpcUrl;
-  nextRegistry.registryAddress = registryAddress;
-  nextRegistry.collectionAddress = collectionAddress;
-  config.registry = nextRegistry;
-
-  const nextFeatures =
-    config.features &&
-    typeof config.features === "object" &&
-    !Array.isArray(config.features)
-      ? { ...config.features }
-      : {};
-  nextFeatures.dropEnabled = true;
-  config.features = nextFeatures;
-
-  const nextEnv =
-    config.env && typeof config.env === "object" && !Array.isArray(config.env)
-      ? { ...config.env }
-      : {};
-  // Only inject the Anvil test key if the user hasn't configured their own wallet.
-  if (!nextEnv.EVM_PRIVATE_KEY) {
-    nextEnv.EVM_PRIVATE_KEY = evmPrivateKey;
-  }
-  if (solanaRpcUrl) {
-    nextEnv.SOLANA_RPC_URL = solanaRpcUrl;
-  }
-  config.env = nextEnv;
-
-  const tempDir = mkdtempSync(path.join(os.tmpdir(), "eliza-dev-onchain-"));
-  const configPath = path.join(tempDir, "eliza.json");
-  writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, "utf-8");
-  return { baseConfigPath, configPath, tempDir };
-}
-
-function spawnWithBufferedLogs(cmd, args, options = {}) {
-  const proc = spawn(cmd, args, {
-    stdio: ["ignore", "pipe", "pipe"],
-    ...options,
-  });
-
-  let stderrBuf = "";
-  if (proc.stderr) {
-    proc.stderr.on("data", (chunk) => {
-      const text = chunk.toString();
-      stderrBuf = `${stderrBuf}${text}`;
-      if (stderrBuf.length > 4000) {
-        stderrBuf = stderrBuf.slice(-4000);
-      }
-      if (verboseChainLogs) {
-        process.stderr.write(text);
-      }
-    });
-  }
-
-  if (proc.stdout && verboseChainLogs) {
-    proc.stdout.on("data", (chunk) => {
-      process.stdout.write(chunk);
-    });
-  }
-
-  return { proc, getBufferedStderr: () => stderrBuf.trim() };
-}
-
-async function bootstrapOnchainDev() {
-  if (!onchainEnabled) {
-    return {
-      env: {},
-      anvil: null,
-      anchor: null,
-      tempDir: null,
-    };
-  }
-
-  if (!which("anvil")) {
-    throw new Error(
-      "Anvil binary not found. Install Foundry or set ELIZA_DEV_ONCHAIN=0 to run without chain bootstrap.",
-    );
-  }
-
-  killPort(ANVIL_PORT);
-  const anvilArgs = [
-    "--host",
-    "127.0.0.1",
-    "--port",
-    String(ANVIL_PORT),
-    "--chain-id",
-    String(ANVIL_CHAIN_ID),
-    "--accounts",
-    "10",
-    "--balance",
-    "10000",
-  ];
-
-  const { proc: anvil, getBufferedStderr } = spawnWithBufferedLogs(
-    "anvil",
-    anvilArgs,
-    { cwd },
-  );
-
-  const anvilExit = new Promise((_, reject) => {
-    anvil.once("error", (err) => {
-      reject(err);
-    });
-    anvil.once("exit", (code, signal) => {
-      reject(
-        new Error(
-          `Anvil exited before becoming ready (code=${code ?? "null"}, signal=${signal ?? "null"})`,
-        ),
-      );
-    });
-  });
-
-  try {
-    await Promise.race([
-      waitForJsonRpc(ANVIL_RPC_URL, "eth_chainId", {
-        validate: (payload) =>
-          typeof payload?.result === "string" &&
-          Number.parseInt(payload.result, 16) === ANVIL_CHAIN_ID,
-      }),
-      anvilExit,
-    ]);
-  } catch (err) {
-    signalSpawnedProcessTree(anvil, "SIGTERM");
-    const stderr = getBufferedStderr();
-    const msg = err instanceof Error ? err.message : String(err);
-    throw new Error(
-      `Failed to start Anvil on ${ANVIL_RPC_URL}: ${msg}${stderr ? `\n${stderr}` : ""}`,
-    );
-  }
-
-  const provider = new ethers.JsonRpcProvider(ANVIL_RPC_URL);
-  const network = await provider.getNetwork();
-  if (Number(network.chainId) !== ANVIL_CHAIN_ID) {
-    signalSpawnedProcessTree(anvil, "SIGTERM");
-    throw new Error(
-      `Anvil chain id mismatch: expected ${ANVIL_CHAIN_ID}, got ${network.chainId}`,
-    );
-  }
-
-  const registryCandidates = [
-    path.join(
-      cwd,
-      "test",
-      "contracts",
-      "out",
-      "MockElizaAgentRegistry.sol",
-      "MockElizaAgentRegistry.json",
-    ),
-  ];
-  const collectionCandidates = [
-    path.join(
-      cwd,
-      "test",
-      "contracts",
-      "out",
-      "MockElizaCollection.sol",
-      "MockElizaCollection.json",
-    ),
-  ];
-  let registryArtifactPath = resolveArtifactPath(registryCandidates);
-  let collectionArtifactPath = resolveArtifactPath(collectionCandidates);
-
-  if (!registryArtifactPath || !collectionArtifactPath) {
-    if (which("forge")) {
-      try {
-        console.log(
-          `  ${green(logPrefix)} Building contract artifacts (forge build --skip Harness)...`,
-        );
-        execSync("forge build --skip Harness", {
-          cwd: path.join(cwd, "test", "contracts"),
-          stdio: "pipe",
-        });
-        registryArtifactPath = resolveArtifactPath(registryCandidates);
-        collectionArtifactPath = resolveArtifactPath(collectionCandidates);
-      } catch {
-        // Build failed; fall through to error below
-      }
-    }
-    if (!registryArtifactPath || !collectionArtifactPath) {
-      signalSpawnedProcessTree(anvil, "SIGTERM");
-      throw new Error(
-        "Missing contract artifacts under test/contracts/out. Run `cd test/contracts && forge build --skip Harness`.",
-      );
-    }
-  }
-
-  const registryArtifact = readJson(registryArtifactPath);
-  const collectionArtifact = readJson(collectionArtifactPath);
-  const deployer = new ethers.Wallet(ANVIL_DEPLOYER_PRIVATE_KEY, provider);
-
-  let nonce = await deployer.getNonce("pending");
-  const registryFactory = new ethers.ContractFactory(
-    registryArtifact.abi,
-    registryArtifact.bytecode.object,
-    deployer,
-  );
-  const registryContract = await registryFactory.deploy({ nonce });
-  await registryContract.waitForDeployment();
-  nonce += 1;
-
-  const collectionFactory = new ethers.ContractFactory(
-    collectionArtifact.abi,
-    collectionArtifact.bytecode.object,
-    deployer,
-  );
-  const collectionContract = await collectionFactory.deploy({ nonce });
-  await collectionContract.waitForDeployment();
-
-  const registryAddress = await registryContract.getAddress();
-  const collectionAddress = await collectionContract.getAddress();
-
-  const [totalAgents, collectionDetails] = await Promise.all([
-    registryContract.totalAgents(),
-    collectionContract.getCollectionDetails(),
-  ]);
-  if (Number(totalAgents) !== 0) {
-    signalSpawnedProcessTree(anvil, "SIGTERM");
-    throw new Error(
-      `Registry verification failed: expected totalAgents=0, got ${totalAgents}`,
-    );
-  }
-  if (Number(collectionDetails[1]) !== 0) {
-    signalSpawnedProcessTree(anvil, "SIGTERM");
-    throw new Error(
-      `Collection verification failed: expected currentSupply=0, got ${collectionDetails[1]}`,
-    );
-  }
-
-  const validationWallet = new ethers.Wallet(
-    DEFAULT_EVM_DEV_PRIVATE_KEY,
-    provider,
-  );
-  await registryContract
-    .connect(validationWallet)
-    .registerAgent.staticCall(
-      "ElizaDevValidation",
-      "http://localhost:31337/dev-validation",
-      ethers.id("eliza-dev"),
-      "ipfs://eliza-dev-validation",
-    );
-  await collectionContract
-    .connect(validationWallet)
-    .mint.staticCall(
-      "ElizaDevValidation",
-      "http://localhost:31337/dev-validation",
-      ethers.id("eliza-dev"),
-    );
-
-  let anchor = null;
-  let anchorConfigured = false;
-  const anchorWorkspace = resolveAnchorWorkspace();
-  if (anchorRequested) {
-    if (!anchorWorkspace) {
-      const msg =
-        "Anchor workspace not found (no Anchor.toml). Skipping anchor localnet bootstrap.";
-      if (anchorRequired) {
-        signalSpawnedProcessTree(anvil, "SIGTERM");
-        throw new Error(msg);
-      }
-      console.log(`  ${green(logPrefix)} ${dim(msg)}`);
-    } else if (!which("anchor")) {
-      const msg =
-        "Anchor CLI not found in PATH. Skipping anchor localnet bootstrap.";
-      if (anchorRequired) {
-        signalSpawnedProcessTree(anvil, "SIGTERM");
-        throw new Error(msg);
-      }
-      console.log(`  ${green(logPrefix)} ${dim(msg)}`);
-    } else {
-      const { proc: anchorProc, getBufferedStderr: getAnchorStderr } =
-        spawnWithBufferedLogs("anchor", ["localnet", "--skip-build"], {
-          cwd: anchorWorkspace,
-          env: { ...process.env },
-        });
-
-      const anchorExit = new Promise((_, reject) => {
-        anchorProc.once("error", (err) => reject(err));
-        anchorProc.once("exit", (code, signal) => {
-          reject(
-            new Error(
-              `Anchor localnet exited before readiness (code=${code ?? "null"}, signal=${signal ?? "null"})`,
-            ),
-          );
-        });
-      });
-
-      try {
-        await Promise.race([
-          waitForJsonRpc(ANCHOR_RPC_URL, "getHealth", {
-            validate: (payload) => payload?.result === "ok",
-            timeoutMs: 60_000,
-          }),
-          anchorExit,
-        ]);
-        anchor = anchorProc;
-        anchorConfigured = true;
-      } catch (err) {
-        signalSpawnedProcessTree(anchorProc, "SIGTERM");
-        const stderr = getAnchorStderr();
-        const msg = err instanceof Error ? err.message : String(err);
-        if (anchorRequired) {
-          signalSpawnedProcessTree(anvil, "SIGTERM");
-          throw new Error(
-            `Failed to start anchor localnet: ${msg}${stderr ? `\n${stderr}` : ""}`,
-          );
-        }
-        console.log(
-          `  ${green(logPrefix)} ${dim(`Anchor localnet unavailable: ${msg}`)}`,
-        );
-      }
-    }
-  }
-
-  const { baseConfigPath, configPath, tempDir } = createOnchainDevConfig({
-    rpcUrl: ANVIL_RPC_URL,
-    registryAddress,
-    collectionAddress,
-    evmPrivateKey: DEFAULT_EVM_DEV_PRIVATE_KEY,
-    solanaRpcUrl: anchorConfigured ? ANCHOR_RPC_URL : undefined,
-  });
-
-  return {
-    env: {
-      ELIZA_CONFIG_PATH: configPath,
-      ELIZA_PERSIST_CONFIG_PATH: baseConfigPath,
-      ELIZA_DEV_CHAIN_ID: String(ANVIL_CHAIN_ID),
-      ELIZA_DEV_CHAIN_RPC: ANVIL_RPC_URL,
-      ELIZA_DEV_REGISTRY_ADDRESS: registryAddress,
-      ELIZA_DEV_COLLECTION_ADDRESS: collectionAddress,
-      ELIZA_PERSIST_CONFIG_PATH: baseConfigPath,
-      ...(anchorConfigured ? { SOLANA_RPC_URL: ANCHOR_RPC_URL } : {}),
-    },
-    anvil,
-    anchor,
-    tempDir,
-    registryAddress,
-    collectionAddress,
-    anchorConfigured,
   };
 }
 
@@ -1113,7 +608,7 @@ killPort(UI_PORT);
 
 // Ensure vision dependencies are installed
 try {
-  execSync(`node scripts/ensure-vision-deps.mjs --name=${cliName}`, {
+  execFileSync("node", [visionDepsScriptPath, `--name=${cliName}`], {
     stdio: "inherit",
   });
 } catch (error) {
@@ -1121,21 +616,17 @@ try {
   console.warn(
     buildVisionDepsFailureMessage(
       error,
-      `node scripts/ensure-vision-deps.mjs --name=${cliName}`,
+      visionDepsRetryCommand,
     ),
   );
 }
 
 if (!uiOnly) {
   killPort(API_PORT);
-  // ANVIL_PORT is killed after on-chain preference is determined (in main block).
 }
 
 let apiProcess = null;
 let viteProcess = null;
-let anvilProcess = null;
-let anchorProcess = null;
-let tempOnchainDir = null;
 let shuttingDown = false;
 
 function terminateChild(proc, signal = "SIGTERM") {
@@ -1154,23 +645,11 @@ function cleanup(exitCode = 0) {
 
   terminateChild(viteProcess, "SIGTERM");
   terminateChild(apiProcess, "SIGTERM");
-  terminateChild(anchorProcess, "SIGTERM");
-  terminateChild(anvilProcess, "SIGTERM");
 
   setTimeout(() => {
     terminateChild(viteProcess, "SIGKILL");
     terminateChild(apiProcess, "SIGKILL");
-    terminateChild(anchorProcess, "SIGKILL");
-    terminateChild(anvilProcess, "SIGKILL");
   }, 1500).unref();
-
-  if (tempOnchainDir) {
-    try {
-      rmSync(tempOnchainDir, { recursive: true, force: true });
-    } catch {
-      // Ignore cleanup errors.
-    }
-  }
 
   setTimeout(() => {
     process.exit(exitCode);
@@ -1300,58 +779,11 @@ if (uiOnly) {
     )}`,
   );
 
-  // Determine on-chain preference — env var wins (CI/scripts), otherwise ask.
-  const resolved = await resolveOnchainPreference({
-    env: process.env,
-    isTTY: !!process.stdin.isTTY,
-    whichFn: (cmd) => which(cmd),
-    promptFn: (question, defaultYes) => promptYesNo(question, defaultYes),
-    installFn: () => installFoundry(),
-  });
-  onchainEnabled = resolved.onchainEnabled;
-  anchorRequested = resolved.anchorRequested;
+  const chainEnv = {};
 
-  if (onchainEnabled) {
-    killPort(ANVIL_PORT);
-  }
-
-  let chainEnv = {};
-  if (onchainEnabled) {
-    console.log(
-      `  ${green(logPrefix)} ${green("Bootstrapping local chain...")}`,
-    );
-    try {
-      const chain = await bootstrapOnchainDev();
-      chainEnv = chain.env;
-      anvilProcess = chain.anvil;
-      anchorProcess = chain.anchor;
-      tempOnchainDir = chain.tempDir;
-
-      console.log(
-        `  ${green(logPrefix)} ${dim(`Anvil ready at ${ANVIL_RPC_URL} (chainId=${ANVIL_CHAIN_ID})`)}`,
-      );
-      console.log(
-        `  ${green(logPrefix)} ${dim(`Registry deployed: ${chain.registryAddress}`)}`,
-      );
-      console.log(
-        `  ${green(logPrefix)} ${dim(`Collection deployed: ${chain.collectionAddress}`)}`,
-      );
-      if (chain.anchorConfigured) {
-        console.log(
-          `  ${green(logPrefix)} ${dim(`Anchor localnet ready at ${ANCHOR_RPC_URL}`)}`,
-        );
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error(`  ${green(logPrefix)} ${msg}`);
-      cleanup(1);
-      process.exit(1);
-    }
-  } else {
-    console.log(
-      `  ${green(logPrefix)} ${dim("On-chain bootstrap disabled (ELIZA_DEV_ONCHAIN=0)")}`,
-    );
-  }
+  console.log(
+    `  ${green(logPrefix)} ${dim("Local Anvil/forge EVM bootstrap removed — use remote RPC in config when needed.")}`,
+  );
 
   // Security default: stealth shims are disabled unless explicitly enabled
   // via env vars or plugin config in eliza.json.

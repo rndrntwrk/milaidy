@@ -1,3 +1,5 @@
+import { getBrandConfig } from "./brand-config";
+
 /**
  * Main-process "Reset Milady" menu flow — **testable** fetch/restart/poll core.
  *
@@ -105,7 +107,7 @@ export async function pollMenuResetAgentStatusJson(options: {
   } catch {
     /* fall through */
   }
-  return { state: "error", agentName: "Milady" };
+  return { state: "error", agentName: getBrandConfig().appName };
 }
 
 export type MainMenuResetPostConfirmDeps = {

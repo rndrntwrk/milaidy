@@ -3,6 +3,7 @@ import type {
   PermissionState,
   SystemPermissionId,
 } from "./native/permissions-shared";
+import { getBrandConfig } from "./brand-config";
 
 export const RUNTIME_PERMISSION_IDS = ["website-blocking"] as const;
 
@@ -30,7 +31,7 @@ export function isRuntimePermissionId(id: string): id is RuntimePermissionId {
 
 export function buildRuntimePermissionUnavailableState(
   permissionId: RuntimePermissionId,
-  reason = "Milady runtime is unavailable, so website blocking permission cannot be checked from desktop right now.",
+  reason = `${getBrandConfig().appName} runtime is unavailable, so website blocking permission cannot be checked from desktop right now.`,
 ): PermissionState {
   return {
     id: permissionId,

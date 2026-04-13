@@ -34,7 +34,7 @@ import type { CustomActionDef } from "../api";
 
 // ── Types ────────────────────────────────────────────────────────────
 
-interface QueuedChatSend {
+export interface QueuedChatSend {
   rawInput: string;
   channelType: ConversationChannelType;
   conversationId?: string | null;

@@ -18,9 +18,9 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   createRealTestRuntime,
   type RealTestRuntimeResult,
-} from "../../../test/helpers/real-runtime";
-import { selectLiveProvider } from "../../../test/helpers/live-provider";
-import { saveEnv } from "../../../test/helpers/test-utils";
+} from "../../../../test/helpers/real-runtime";
+import { selectLiveProvider } from "../../../../test/helpers/live-provider";
+import { saveEnv } from "../../../../test/helpers/test-utils";
 import { calendarAction } from "../src/actions/calendar";
 import { resolveOAuthDir } from "../src/config/paths";
 import {

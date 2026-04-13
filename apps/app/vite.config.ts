@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react-swc";
-import { defineConfig, type Plugin } from "vite";
+import { defineConfig, type Plugin, transformWithEsbuild } from "vite";
 import { colorizeDevSettingsStartupBanner } from "../../eliza/packages/shared/src/dev-settings-banner-style.ts";
 import { prependDevSubsystemFigletHeading } from "../../eliza/packages/shared/src/dev-settings-figlet-heading.ts";
 import {
@@ -17,6 +17,7 @@ import {
   resolveDesktopUiPort,
   resolveDesktopUiPortPreference,
 } from "../../eliza/packages/shared/src/runtime-env.ts";
+import { resolveViteDevServerRuntime } from "./vite-dev-origin.ts";
 
 const _require = createRequire(import.meta.url);
 
@@ -29,6 +30,7 @@ const nativePluginsRoot = path.join(
   miladyRoot,
   "eliza/packages/native-plugins",
 );
+const appCoreSrcRoot = path.join(miladyRoot, "eliza/packages/app-core/src");
 
 /**
  * Pinned @elizaos/core from the repo root (must match the agent/runtime lock).
@@ -106,17 +108,49 @@ function findElizaCoreBundleInBunStore(
   return best ? path.join(bunDir, best, rel) : null;
 }
 
+function normalizeModuleId(id: string | undefined): string {
+  return (id ?? "").split(path.sep).join("/");
+}
+
+function resolveElizaCoreSourceBrowserPath(): string | null {
+  const pkgDir = path.dirname(_require.resolve("@elizaos/core/package.json"));
+  const sourceBrowserEntry = path.join(pkgDir, "src/index.browser.ts");
+  return fs.existsSync(sourceBrowserEntry) ? sourceBrowserEntry : null;
+}
+
+function isElizaCoreBrowserDistId(id: string | undefined): boolean {
+  const normalized = normalizeModuleId(id);
+  return (
+    normalized.endsWith("/node_modules/@elizaos/core/dist/index.browser.js") ||
+    normalized.endsWith(
+      "/node_modules/@elizaos/core/dist/browser/index.browser.js",
+    ) ||
+    normalized.endsWith("/eliza/packages/typescript/dist/index.browser.js") ||
+    normalized.endsWith(
+      "/eliza/packages/typescript/dist/browser/index.browser.js",
+    )
+  );
+}
+
 /**
  * Resolved file path for bundling `@elizaos/core` in the renderer.
  * Linked eliza checkouts sometimes omit `dist/` until `bun run build`;
- * fall back to `dist/node` (Vite stubs `node:` imports via nativeModuleStubPlugin),
- * then to the bun install cache copy.
+ * prefer the source browser entry when present, otherwise fall back to
+ * built artifacts and then the bun install cache copy.
  */
 function resolveElizaCoreBundlePath(): string {
   const pkgDir = path.dirname(_require.resolve("@elizaos/core/package.json"));
+  const sourceBrowserEntry = resolveElizaCoreSourceBrowserPath();
   const browserEntry = path.join(pkgDir, "dist/browser/index.browser.js");
   const nodeEntry = path.join(pkgDir, "dist/node/index.node.js");
+  const rootBrowserEntry = path.join(pkgDir, "dist/index.browser.js");
+  const rootNodeEntry = path.join(pkgDir, "dist/index.node.js");
+  const hasBrowserShimTarget = fs.existsSync(browserEntry);
+  const hasNodeShimTarget = fs.existsSync(nodeEntry);
+  if (sourceBrowserEntry) return sourceBrowserEntry;
   if (fs.existsSync(browserEntry)) return browserEntry;
+  if (fs.existsSync(rootBrowserEntry) && hasBrowserShimTarget)
+    return rootBrowserEntry;
   if (fs.existsSync(nodeEntry)) {
     console.warn(
       "[milady][vite] @elizaos/core dist/browser is missing; using dist/node for the client bundle. " +
@@ -124,6 +158,13 @@ function resolveElizaCoreBundlePath(): string {
         "Or reinstall with ELIZA_SKIP_LOCAL_ELIZA=1 to use the published npm package.",
     );
     return nodeEntry;
+  }
+  if (fs.existsSync(rootNodeEntry) && hasNodeShimTarget) {
+    console.warn(
+      "[milady][vite] @elizaos/core dist/browser is missing; using dist/index.node.js for the client bundle. " +
+        "This usually means the local core workspace only has a flat dist/ build artifact.",
+    );
+    return rootNodeEntry;
   }
   const bunBrowser = findElizaCoreBundleInBunStore("browser");
   if (bunBrowser) {
@@ -142,14 +183,40 @@ function resolveElizaCoreBundlePath(): string {
   }
   throw new Error(
     `[milady][vite] @elizaos/core has no built artifacts under ${pkgDir} and none in node_modules/.bun. ` +
-      "Expected dist/browser/index.browser.js or dist/node/index.node.js. " +
+      "Expected src/index.browser.ts, dist/browser/index.browser.js, dist/index.browser.js, dist/node/index.node.js, or dist/index.node.js. " +
       "Build your local eliza workspace or run `ELIZA_SKIP_LOCAL_ELIZA=1 bun install`.",
   );
+}
+
+/**
+ * Some linked @elizaos/core workspaces have a flat dist/index.browser.js shim
+ * even when dist/browser/index.browser.js was never emitted. If anything in the
+ * dependency graph resolves that shim directly, redirect it back to the source
+ * browser entry so Vite never follows the missing relative import.
+ */
+function elizaCoreBrowserEntryFallbackPlugin(): Plugin {
+  return {
+    name: "eliza-core-browser-entry-fallback",
+    enforce: "pre",
+    resolveId(id, importer) {
+      const sourceBrowserEntry = resolveElizaCoreSourceBrowserPath();
+      if (!sourceBrowserEntry) return null;
+      if (isElizaCoreBrowserDistId(id)) return sourceBrowserEntry;
+      if (
+        id === "./browser/index.browser.js" &&
+        isElizaCoreBrowserDistId(importer)
+      ) {
+        return sourceBrowserEntry;
+      }
+      return null;
+    },
+  };
 }
 
 // The dev script sets MILADY_API_PORT; default to 31337 for standalone vite dev.
 const apiPort = resolveDesktopApiPort(process.env);
 const uiPort = resolveDesktopUiPort(process.env);
+const viteDevServerRuntime = resolveViteDevServerRuntime(process.env, uiPort);
 const enableAppSourceMaps = process.env.MILADY_APP_SOURCEMAP === "1";
 /** Set by eliza/packages/app-core/scripts/dev-platform.mjs for `vite build --watch` (Electrobun desktop). */
 const desktopFastDist = process.env.MILADY_DESKTOP_VITE_FAST_DIST === "1";
@@ -489,6 +556,11 @@ function nativeModuleStubPlugin(): Plugin {
     "pty-state-capture",
     "electron",
     "undici",
+    // Browser automation is server-only. If a mixed entrypoint leaks one of
+    // these packages into the renderer graph, stub it instead of letting Vite
+    // prebundle proxy-agent and other Node-only HTTP deps for the browser.
+    "puppeteer-core",
+    "@puppeteer/browsers",
     "@elizaos/plugin-local-embedding",
   ]);
   const nativeScopeRe = /^@node-llama-cpp\//;
@@ -826,6 +898,27 @@ function companionAssetsPlugin(): Plugin {
   };
 }
 
+function workspaceJsxInJsPlugin(): Plugin {
+  const normalizedAppCoreSrcRoot = appCoreSrcRoot.split(path.sep).join("/");
+
+  return {
+    name: "workspace-jsx-in-js",
+    enforce: "pre",
+    async transform(code, id) {
+      const cleanId = id.split("?")[0];
+      const normalizedId = cleanId.split(path.sep).join("/");
+      if (!cleanId.endsWith(".js")) return null;
+      if (!normalizedId.startsWith(`${normalizedAppCoreSrcRoot}/`)) return null;
+
+      return transformWithEsbuild(code, cleanId, {
+        loader: "jsx",
+        jsx: "automatic",
+        sourcemap: true,
+      });
+    },
+  };
+}
+
 export default defineConfig({
   root: here,
   base: "./",
@@ -854,9 +947,11 @@ export default defineConfig({
   },
   plugins: [
     companionAssetsPlugin(),
+    elizaCoreBrowserEntryFallbackPlugin(),
     nativeModuleStubPlugin(),
     asyncLocalStoragePatchPlugin(),
     watchWorkspacePackagesPlugin(),
+    workspaceJsxInJsPlugin(),
     tailwindcss(),
     react(),
     desktopCorsPlugin(),
@@ -1094,6 +1189,26 @@ export default defineConfig({
       target: "es2022",
       plugins: [
         {
+          name: "workspace-jsx-in-js",
+          setup(build) {
+            const normalizedAppCoreSrcRoot = appCoreSrcRoot
+              .split(path.sep)
+              .join("/");
+
+            build.onLoad({ filter: /\.js$/ }, (args) => {
+              const normalizedPath = args.path.split(path.sep).join("/");
+              if (!normalizedPath.startsWith(`${normalizedAppCoreSrcRoot}/`)) {
+                return null;
+              }
+
+              return {
+                contents: fs.readFileSync(args.path, "utf8"),
+                loader: "jsx",
+              };
+            });
+          },
+        },
+        {
           name: "node-builtins-polyfill",
           setup(build) {
             // Map node: builtins to their npm polyfill packages.
@@ -1143,6 +1258,9 @@ export default defineConfig({
       // @elizaos/plugin-secrets-manager is now built into @elizaos/core core-capabilities
       // Node-only HTTP client — crashes in browser, stub via nativeModuleStubPlugin
       "undici",
+      // Browser automation is server-only and pulls in proxy-agent/httpUtil.
+      "puppeteer-core",
+      "@puppeteer/browsers",
       // Native LLM embedding — uses node-llama-cpp, never runs in browser
       "@elizaos/plugin-local-embedding",
     ],
@@ -1194,16 +1312,14 @@ export default defineConfig({
     host: true,
     port: uiPort,
     strictPort: true,
-    // Electrobun/WKWebView runs the renderer in a null-origin context. When
-    // Vite leaves dev asset URLs relative, worker source-map lookups can turn
-    // into malformed blob://nullhttp//... requests. Pin the dev origin so
-    // worker chunks, source maps, and HMR all resolve against loopback.
-    // Keep MILADY_HMR_HOST as an override for remote HMR / VPS development.
-    origin: `http://127.0.0.1:${uiPort}`,
-    hmr: {
-      host: process.env.MILADY_HMR_HOST || "127.0.0.1",
-      port: uiPort,
-    },
+    // Only pin the dev origin when the desktop shell explicitly asks for a
+    // loopback public URL. Capacitor live reload and LAN/browser clients need
+    // Vite to keep serving the current request host instead of rewriting
+    // module URLs back to 127.0.0.1.
+    ...(viteDevServerRuntime.origin
+      ? { origin: viteDevServerRuntime.origin }
+      : {}),
+    hmr: viteDevServerRuntime.hmr,
     cors: {
       origin: true,
       credentials: true,

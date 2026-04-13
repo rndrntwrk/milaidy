@@ -5,17 +5,18 @@ import os from "node:os";
 import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { describeIf } from "../../../test/helpers/conditional-tests.ts";
-import { selectLiveProvider } from "../../../test/helpers/live-provider";
+import { describeIf } from "../../../../test/helpers/conditional-tests.ts";
+import { selectLiveProvider } from "../../../../test/helpers/live-provider";
 import {
   createConversation,
   postConversationMessage,
   req,
-} from "../../../test/helpers/http";
+} from "../../../../test/helpers/http";
+import { createLiveRuntimeChildEnv } from "../../../../test/helpers/live-child-env.ts";
 
 const LIVE_TESTS_ENABLED =
   process.env.ELIZA_LIVE_TEST === "1" || process.env.ELIZA_LIVE_TEST === "1";
-const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..", "..");
+const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..", "..", "..");
 const ENV_PATH = path.join(REPO_ROOT, ".env");
 
 try {
@@ -213,24 +214,20 @@ async function startLiveRuntime(options?: {
 
   const child = spawn("bun", ["run", "start:eliza"], {
     cwd: REPO_ROOT,
-    env: {
-      ...process.env,
+    env: createLiveRuntimeChildEnv({
       ...(selectedLiveProvider?.env ?? {}),
       ELIZA_CONFIG_PATH: configPath,
-      ELIZA_CONFIG_PATH: configPath,
-      ELIZA_STATE_DIR: stateDir,
       ELIZA_STATE_DIR: stateDir,
       ELIZA_PORT: String(apiPort),
       ELIZA_API_PORT: String(apiPort),
       WEBSITE_BLOCKER_HOSTS_FILE_PATH: hostsFilePath,
       SELFCONTROL_HOSTS_FILE_PATH: hostsFilePath,
       ELIZA_DISABLE_LOCAL_EMBEDDINGS: "1",
-      ELIZA_DISABLE_LOCAL_EMBEDDINGS: "1",
       ALLOW_NO_DATABASE: "",
       DISCORD_API_TOKEN: "",
       DISCORD_BOT_TOKEN: "",
       TELEGRAM_BOT_TOKEN: "",
-    },
+    }),
     stdio: ["pipe", "pipe", "pipe"],
   });
 

@@ -28,13 +28,21 @@ import {
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
+import { resolveRepoRootFromImportMeta } from "./lib/repo-root.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const ROOT = resolve(__dirname, "..");
+const ROOT = resolveRepoRootFromImportMeta(import.meta.url);
 const CHARACTERS_VRM = join(ROOT, "apps", "app", "characters", "vrm");
 const PUBLIC_VRMS = join(ROOT, "apps", "app", "public", "vrms");
-const PUBLIC_SRC_VRMS = join(ROOT, "eliza", "apps", "app-companion", "public_src", "vrms");
+const PUBLIC_SRC_VRMS = join(
+  ROOT,
+  "eliza",
+  "apps",
+  "app-companion",
+  "public_src",
+  "vrms",
+);
 const TAG = "[process-vrms]";
 
 // Character name -> eliza index (1-based). Order determines avatar order in UI.

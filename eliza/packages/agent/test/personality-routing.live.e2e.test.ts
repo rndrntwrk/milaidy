@@ -26,9 +26,9 @@ import {
 } from "@elizaos/core";
 import dotenv from "dotenv";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { selectLiveProvider } from "../../../test/helpers/live-provider";
+import { selectLiveProvider } from "../../../../test/helpers/live-provider";
 import { USER_PREFS_TABLE } from "../../../plugins/plugin-personality/typescript/src/types";
-import { withTimeout } from "../../../test/helpers/test-utils";
+import { withTimeout } from "../../../../test/helpers/test-utils";
 import { configureLocalEmbeddingPlugin } from "../src/runtime/eliza";
 import {
   extractPlugin,

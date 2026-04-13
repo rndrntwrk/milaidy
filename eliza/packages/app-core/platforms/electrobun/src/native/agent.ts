@@ -999,7 +999,7 @@ async function maybeReclaimPortWithSigkill(port: number): Promise<void> {
 function resolvePgliteDataDir(): string {
   return joinPortable(
     os.homedir(),
-    ".milady",
+    `.${getBrandConfig().namespace}`,
     "workspace",
     ".eliza",
     ".elizadb",
@@ -1100,7 +1100,7 @@ export class AgentManager {
       const reason =
         runtimeMode.mode === "external"
           ? `Embedded desktop runtime is disabled because ${runtimeMode.externalApi.source} points at ${runtimeMode.externalApi.base}.`
-          : "Embedded desktop runtime is disabled by MILADY_DESKTOP_SKIP_EMBEDDED_AGENT=1.";
+          : "Embedded desktop runtime is disabled by ELIZA_DESKTOP_SKIP_EMBEDDED_AGENT=1.";
       diagnosticLog(`[Agent] ${reason}`);
       this.setStartupPhase("startup_disabled", reason);
       throw new Error(reason);
@@ -1168,25 +1168,25 @@ export class AgentManager {
     this.emitStatus();
 
     try {
-      // Resolve milady-dist path
+      // Resolve the bundled runtime dist path.
       this.setStartupPhase("resolving_runtime");
-      const miladyDistPath = resolveMiladyDistPath();
-      diagnosticLog(`[Agent] Resolved milady dist: ${miladyDistPath}`);
+      const runtimeDistPath = resolveMiladyDistPath();
+      diagnosticLog(`[Agent] Resolved runtime dist: ${runtimeDistPath}`);
 
       // Packaged builds can expose the runnable entry either at the dist root
       // or under runtime/. Prefer the root file but accept both layouts.
-      const runtimeEntryPath = resolveRuntimeEntryPath(miladyDistPath);
+      const runtimeEntryPath = resolveRuntimeEntryPath(runtimeDistPath);
       if (!runtimeEntryPath) {
-        const distExists = fs.existsSync(miladyDistPath);
+        const distExists = fs.existsSync(runtimeDistPath);
         let contents = "<directory missing>";
         if (distExists) {
           try {
-            contents = fs.readdirSync(miladyDistPath).join(", ");
+            contents = fs.readdirSync(runtimeDistPath).join(", ");
           } catch {
             contents = "<unreadable>";
           }
         }
-        const errMsg = `No runnable runtime entry found in ${miladyDistPath} (checked entry.js; dist exists: ${distExists}, contents: ${contents})`;
+        const errMsg = `No runnable runtime entry found in ${runtimeDistPath} (checked entry.js; dist exists: ${distExists}, contents: ${contents})`;
         diagnosticLog(`[Agent] ${errMsg}`);
         this.status = {
           state: "error",
@@ -1217,12 +1217,12 @@ export class AgentManager {
       this.setStartupPhase("spawning_runtime");
 
       // Build NODE_PATH so the child can find node_modules
-      const nodePaths = buildChildNodePaths(miladyDistPath, {
+      const nodePaths = buildChildNodePaths(runtimeDistPath, {
         packagedRuntime,
       });
       if (packagedRuntime && nodePaths.length === 0) {
         const errMsg =
-          `Packaged runtime is missing bundle-local node_modules under ${miladyDistPath}; ` +
+          `Packaged runtime is missing bundle-local node_modules under ${runtimeDistPath}; ` +
           "refusing to inherit the parent NODE_PATH";
         diagnosticLog(`[Agent] ${errMsg}`);
         this.status = {
@@ -1249,7 +1249,7 @@ export class AgentManager {
       childEnv.MILADY_NAMESPACE =
         childEnv.MILADY_NAMESPACE?.trim() ||
         childEnv.ELIZA_NAMESPACE?.trim() ||
-        "milady";
+        getBrandConfig().namespace;
       childEnv.ELIZA_NAMESPACE =
         childEnv.ELIZA_NAMESPACE?.trim() || childEnv.MILADY_NAMESPACE;
       delete childEnv.MILADY_PORT;
@@ -1292,7 +1292,7 @@ export class AgentManager {
       const proc = Bun.spawn(
         [bunExecutable, "run", runtimeEntryPath, "start"],
         {
-          cwd: miladyDistPath,
+          cwd: runtimeDistPath,
           env: childEnv,
           stdout: "pipe",
           stderr: "pipe",
@@ -1455,7 +1455,7 @@ export class AgentManager {
 
       this.status = {
         state: "running",
-        agentName: "Milady",
+        agentName: getBrandConfig().appName,
         port: apiPort,
         startedAt,
         error: null,
@@ -1541,7 +1541,7 @@ export class AgentManager {
 
   /**
    * Used after `POST /api/agent/reset`: stop the child, delete local PGLite
-   * (conversations / agent memory under ~/.milady/workspace/.eliza/.elizadb),
+   * (conversations / agent memory under `~/.${getBrandConfig().namespace}/workspace/.eliza/.elizadb`),
    * then start fresh. Does not remove downloaded **GGUF** models (`MODELS_DIR`,
    * default ~/.eliza/models), env-backed wallet keys, or eliza.json (the API
    * reset already rewrote config on disk).
@@ -1805,7 +1805,7 @@ export class AgentManager {
 
   /**
    * Attempt to fetch the agent name from the running API server.
-   * Falls back to "Milady" if the endpoint is unavailable.
+   * Falls back to the configured desktop app name if the endpoint is unavailable.
    */
   private async fetchAgentName(port: number): Promise<string> {
     try {
@@ -1815,17 +1815,18 @@ export class AgentManager {
         signal: AbortSignal.timeout(AGENT_NAME_FETCH_TIMEOUT_MS),
       });
       if (response.ok) {
-        const data = (await response.json()) as {
-          agents?: Array<{ name?: string }>;
-        };
-        if (data.agents && data.agents.length > 0 && data.agents[0].name) {
-          return data.agents[0].name;
+        const data = (await response.json()) as
+          | { agents?: Array<{ name?: string }> }
+          | Array<{ name?: string }>;
+        const agents = Array.isArray(data) ? data : data.agents;
+        if (agents && agents.length > 0 && agents[0].name) {
+          return agents[0].name;
         }
       }
     } catch {
       diagnosticLog("[Agent] Could not fetch agent name, using default");
     }
-    return "Milady";
+    return getBrandConfig().appName;
   }
 }
 

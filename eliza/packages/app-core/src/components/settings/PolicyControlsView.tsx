@@ -38,7 +38,7 @@ import {
   isValidAddress,
   TIMEZONES,
 } from "../policy-controls";
-import { StewardLogo } from "@elizaos/app-steward";
+import { StewardLogo } from "@elizaos/app-steward/ui";
 
 const asRecord = (v: unknown) => v as unknown as Record<string, unknown>;
 

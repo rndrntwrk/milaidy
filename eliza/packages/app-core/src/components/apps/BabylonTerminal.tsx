@@ -23,63 +23,20 @@ import {
 import { useIntervalWhenDocumentVisible } from "../../hooks";
 import { useBabylonSSE } from "../../hooks/useBabylonSSE";
 import { formatTime } from "../../utils/format";
+import {
+  type BabylonAgentSummaryEnvelope,
+  type BabylonTeamConversation,
+  type BabylonTeamSummary,
+  type BabylonTeamDashboard,
+  extractAgentSummary,
+  extractChatMessages,
+  extractTeamConversations,
+  extractTeamDashboard,
+  extractTradingBalance,
+  summarizeBabylonActivity,
+} from "./babylon-data";
 
 type TabId = "overview" | "activity" | "team" | "wallet" | "logs";
-
-interface BabylonTeamSummaryTotals {
-  walletBalance: number;
-  lifetimePnL: number;
-  unrealizedPnL: number;
-  currentPnL: number;
-  openPositions: number;
-}
-
-interface BabylonTeamSummary {
-  ownerName?: string;
-  totals?: BabylonTeamSummaryTotals;
-  agentsOnlyTotals?: BabylonTeamSummaryTotals;
-  updatedAt?: string;
-}
-
-interface BabylonTeamDashboard {
-  agents: BabylonTeamAgent[];
-  summary: BabylonTeamSummary | null;
-}
-
-interface BabylonTeamConversation {
-  id: string;
-  name: string;
-  createdAt: string;
-  updatedAt: string;
-  isActive: boolean;
-}
-
-interface BabylonTeamConversationsResponse {
-  conversations: BabylonTeamConversation[];
-  activeChatId?: string | null;
-}
-
-interface BabylonAgentPortfolio {
-  totalPnL: number;
-  positions: number;
-  totalAssets: number;
-  available: number;
-  wallet: number;
-  agents: number;
-  totalPoints: number;
-}
-
-interface BabylonAgentSummaryEnvelope {
-  agent?: BabylonAgentStatus & {
-    totalDeposited?: number | null;
-    totalWithdrawn?: number | null;
-  };
-  portfolio?: BabylonAgentPortfolio;
-  positions?: {
-    predictions?: { positions?: unknown[] };
-    perpetuals?: { positions?: unknown[] };
-  };
-}
 
 type ActivityRow = BabylonActivityItem;
 
@@ -122,83 +79,6 @@ function formatCurrency(value: number): string {
 function formatPnL(value: number): string {
   const sign = value >= 0 ? "+" : "";
   return `${sign}$${value.toFixed(2)}`;
-}
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object"
-    ? (value as Record<string, unknown>)
-    : null;
-}
-
-function summarizeActivity(item: BabylonActivityItem): string {
-  if (item.summary) return item.summary;
-
-  switch (item.type) {
-    case "trade":
-      return [
-        item.action ?? item.side ?? "trade",
-        item.ticker ?? item.marketId ?? "market",
-        item.amount != null ? formatCurrency(item.amount) : "",
-      ]
-        .filter((part) => part.length > 0)
-        .join(" ");
-    case "post":
-      return item.contentPreview ?? "Published an update";
-    case "comment":
-      return item.contentPreview ?? "Left a comment";
-    case "message":
-      return item.contentPreview ?? "Sent a message";
-    default:
-      return "Activity";
-  }
-}
-
-function extractTeamDashboard(value: unknown): BabylonTeamDashboard {
-  const data = asRecord(value);
-  return {
-    agents: Array.isArray(data?.agents)
-      ? (data.agents as BabylonTeamAgent[])
-      : [],
-    summary: asRecord(data?.summary) as BabylonTeamSummary | null,
-  };
-}
-
-function extractTeamConversations(
-  value: unknown,
-): BabylonTeamConversationsResponse {
-  const data = asRecord(value);
-  return {
-    conversations: Array.isArray(data?.conversations)
-      ? (data.conversations as BabylonTeamConversation[])
-      : [],
-    activeChatId:
-      typeof data?.activeChatId === "string" ? data.activeChatId : null,
-  };
-}
-
-function extractAgentSummary(value: unknown): BabylonAgentSummaryEnvelope {
-  const data = asRecord(value);
-  return {
-    agent: (asRecord(data?.agent) ??
-      null) as unknown as BabylonAgentSummaryEnvelope["agent"],
-    portfolio: (asRecord(data?.portfolio) ??
-      null) as unknown as BabylonAgentSummaryEnvelope["portfolio"],
-    positions: (asRecord(data?.positions) ??
-      null) as unknown as BabylonAgentSummaryEnvelope["positions"],
-  };
-}
-
-function extractChatMessages(value: unknown): BabylonChatMessage[] {
-  const data = asRecord(value);
-  return Array.isArray(data?.messages)
-    ? (data.messages as BabylonChatMessage[])
-    : [];
-}
-
-function extractTradingBalance(value: unknown): number {
-  const data = asRecord(value);
-  const balance = data?.balance;
-  return typeof balance === "number" ? balance : 0;
 }
 
 function StatTile({
@@ -305,7 +185,7 @@ function ActivityFeed({
                   ) : null}
                 </div>
                 <div className="mt-0.5 break-words text-xs-tight text-txt">
-                  {summarizeActivity(item)}
+                  {summarizeBabylonActivity(item)}
                 </div>
                 {item.reasoning ? (
                   <div className="mt-1 text-2xs italic text-muted">
@@ -862,7 +742,7 @@ function OverviewPanel({
               >
                 <div className="flex items-center gap-2">
                   <span className="text-xs-tight font-semibold text-txt">
-                    {summarizeActivity(trade)}
+                    {summarizeBabylonActivity(trade)}
                   </span>
                   {trade.pnl != null ? (
                     <span

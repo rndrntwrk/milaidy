@@ -31,6 +31,7 @@
  */
 
 import { GpuWindow, WGPUView } from "electrobun/bun";
+import { getBrandConfig } from "../brand-config";
 import type { GpuViewInfo, GpuWindowInfo, WindowBounds } from "../rpc-schema";
 import type { SendToWebview } from "../types.js";
 
@@ -76,7 +77,7 @@ export class GpuWindowManager {
     }
 
     const win = new GpuWindow({
-      title: options.title ?? "Milady Companion",
+      title: options.title ?? `${getBrandConfig().appName} Companion`,
       frame: {
         x: options.x ?? 100,
         y: options.y ?? 100,

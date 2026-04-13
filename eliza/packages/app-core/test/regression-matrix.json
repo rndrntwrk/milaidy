@@ -276,7 +276,7 @@
       "name": "e2e-test-harness",
       "globs": [
         "test/**",
-        "packages/agent/test/**",
+        "eliza/packages/agent/test/**",
         "eliza/packages/app-core/test/**",
         "vitest.integration.config.ts",
         "vitest.e2e.config.ts"
@@ -303,16 +303,28 @@
   "exceptions": {
     "heavyOnlyE2E": [
       {
-        "path": "packages/agent/test/anvil-contracts.real.e2e.test.ts",
+        "path": "eliza/packages/agent/test/anvil-contracts.real.e2e.test.ts",
         "suite": "e2e-heavy",
         "tier": "heavy",
-        "rationale": "requires contract and anvil setup that stays out of the deterministic PR E2E gate"
+        "rationale": "requires contract and anvil setup that stays out of the default live API/runtime lane"
       },
       {
-        "path": "packages/agent/test/apps-e2e.e2e.test.ts",
+        "path": "eliza/packages/app-core/test/app/memory-relationships.real.e2e.test.ts",
         "suite": "e2e-heavy",
         "tier": "heavy",
-        "rationale": "exercises the broader app-packaged flow and belongs in the heavy nightly or release gate"
+        "rationale": "requires the browser QA harness and stays out of the default live API/runtime lane"
+      },
+      {
+        "path": "eliza/packages/app-core/test/app/onboarding-companion.live.e2e.test.ts",
+        "suite": "e2e-heavy",
+        "tier": "heavy",
+        "rationale": "drives the built dashboard in a browser and belongs in the heavy nightly or release gate"
+      },
+      {
+        "path": "eliza/packages/app-core/test/app/qa-checklist.real.e2e.test.ts",
+        "suite": "e2e-heavy",
+        "tier": "heavy",
+        "rationale": "validates the browser QA checklist and belongs in the heavy nightly or release gate"
       }
     ],
     "desktopHeavyInventory": [
@@ -523,7 +535,7 @@
   "guards": {
     "packageScriptDisallowlist": {
       "test:e2e": [
-        "--exclude test/apps-e2e.e2e.test.ts"
+        "apps-e2e.e2e.test.ts"
       ]
     },
     "desktopInventorySources": [

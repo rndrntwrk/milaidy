@@ -1,4 +1,4 @@
-import baseConfig from "./e2e.config";
+import baseConfig from "./real.config";
 
 export default {
   ...baseConfig,
@@ -26,6 +26,6 @@ export default {
       "eliza/packages/app-core/test/**/*-live.e2e.test.ts",
       "eliza/packages/app-core/test/**/*-live.e2e.test.tsx",
     ],
-    exclude: ["dist/**", "**/node_modules/**"],
+    exclude: [...(baseConfig.test?.exclude ?? [])],
   },
 };

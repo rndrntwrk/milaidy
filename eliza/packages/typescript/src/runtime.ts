@@ -6448,13 +6448,20 @@ ${section_end}`;
 		agentId?: UUID;
 		roomId?: UUID;
 		limit?: number;
+		count?: number;
+		offset?: number;
 		unique?: boolean;
 		tableName: string;
 		start?: number;
 		end?: number;
+		worldId?: UUID;
+		metadata?: Record<string, unknown>;
+		orderBy?: "createdAt";
+		orderDirection?: "asc" | "desc";
 	}): Promise<Memory[]> {
 		return await this.adapter.getMemories({
 			...params,
+			limit: params.limit ?? params.count,
 			tableName: params.tableName ?? "messages",
 		});
 	}

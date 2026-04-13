@@ -1,11 +1,12 @@
 /**
  * Real runtime helper for integration tests.
  *
- * Extends pglite-runtime.ts with optional real LLM and connector plugins.
+ * Same PGLite bootstrap pattern as `eliza/packages/typescript/test/helpers/pglite-runtime.ts`,
+ * plus optional real LLM and connector plugins.
  * This is the primary helper for converting mocked tests to real integration tests.
  *
  * Usage:
- *   import { createRealTestRuntime } from "../../test/helpers/real-runtime";
+ *   import { createRealTestRuntime } from "../../../../../test/helpers/real-runtime";
  *
  *   let runtime: AgentRuntime;
  *   let cleanup: () => Promise<void>;
@@ -22,7 +23,7 @@ import os from "node:os";
 import path from "node:path";
 import type { Plugin } from "@elizaos/core";
 import { AgentRuntime, createCharacter, logger } from "@elizaos/core";
-import { configureLocalEmbeddingPlugin } from "../../eliza/packages/agent/src/runtime/eliza";
+import { configureLocalEmbeddingPlugin } from "../../../agent/src/runtime/eliza";
 import {
   selectLiveProvider,
   type LiveProviderConfig,
@@ -77,7 +78,7 @@ async function flushPendingTrajectoryWrites(
 ): Promise<void> {
   try {
     const { flushTrajectoryWrites } = await import(
-      "../../eliza/agent/src/runtime/trajectory-storage"
+      "../../../agent/src/runtime/trajectory-storage"
     );
     await flushTrajectoryWrites(runtime);
   } catch {

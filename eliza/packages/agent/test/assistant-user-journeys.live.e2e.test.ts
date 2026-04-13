@@ -14,9 +14,9 @@ import {
 } from "@elizaos/core";
 import dotenv from "dotenv";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { describeIf } from "../../../test/helpers/conditional-tests.ts";
-import { selectLiveProvider as selectSharedLiveProvider } from "../../../test/helpers/live-provider";
-import { saveEnv, sleep, withTimeout } from "../../../test/helpers/test-utils";
+import { describeIf } from "../../../../test/helpers/conditional-tests.ts";
+import { selectLiveProvider as selectSharedLiveProvider } from "../../../../test/helpers/live-provider";
+import { saveEnv, sleep, withTimeout } from "../../../../test/helpers/test-utils";
 import { resolveOAuthDir } from "../src/config/paths";
 import {
   addDaysToLocalDate,

@@ -18,8 +18,8 @@ import {
 } from "@playwright/test";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { WebSocket, WebSocketServer } from "ws";
-import { describeIf } from "../../../../test/helpers/conditional-tests.ts";
-import { selectLiveProvider } from "../../../../test/helpers/live-provider";
+import { describeIf } from "../../../../../test/helpers/conditional-tests.ts";
+import { selectLiveProvider } from "../../../../../test/helpers/live-provider";
 
 const LIVE_TESTS_ENABLED = process.env.ELIZA_LIVE_TEST === "1";
 const LIVE_PROVIDER =
@@ -36,7 +36,7 @@ const LIVE_PROVIDER_LABEL = LIVE_PROVIDER
   ? LIVE_PROVIDER_LABELS[LIVE_PROVIDER.name]
   : null;
 const describeLive = describeIf(LIVE_TESTS_ENABLED && LIVE_PROVIDER !== null);
-const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..", "..", "..");
+const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..", "..", "..", "..");
 const APP_DIST_DIR = path.join(REPO_ROOT, "apps/app", "dist");
 const SCREENSHOT_DIR = path.join(REPO_ROOT, "test-results", "live-onboarding");
 const READY_TIMEOUT_MS = 120_000;

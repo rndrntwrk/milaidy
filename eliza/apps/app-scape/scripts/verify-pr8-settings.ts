@@ -11,7 +11,7 @@
 import {
     aggregateSecrets,
     discoverPluginsFromManifest,
-} from "../../../eliza/agent/src/api/plugin-discovery-helpers.js";
+} from "@elizaos/agent/api/plugin-discovery-helpers";
 
 function assertTrue(label: string, ok: boolean): void {
     if (ok) {

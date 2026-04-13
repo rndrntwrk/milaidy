@@ -13,6 +13,7 @@ import { Utils } from "electrobun/bun";
 import { setAgentReady } from "./agent-ready-state";
 import { resolveDesktopRuntimeMode } from "./api-base";
 import { showBackgroundNoticeOnce } from "./background-notice";
+import { getBrandConfig } from "./brand-config";
 import { postCloudDisconnectFromMain } from "./cloud-disconnect-from-main";
 import { getFloatingChatManager } from "./floating-chat-window";
 import { getAgentManager } from "./native/agent";
@@ -453,7 +454,7 @@ export function registerRpcHandlers(
           runtimePermission ??
           buildRuntimePermissionUnavailableState(
             params.id,
-            "Milady runtime is unavailable, so website blocking permission cannot be checked from desktop right now.",
+            `${getBrandConfig().appName} runtime is unavailable, so website blocking permission cannot be checked from desktop right now.`,
           )
         );
       }
@@ -492,7 +493,7 @@ export function registerRpcHandlers(
           runtimePermission ??
           buildRuntimePermissionUnavailableState(
             params.id,
-            "Milady runtime is unavailable, so website blocking permission cannot be requested from desktop right now.",
+            `${getBrandConfig().appName} runtime is unavailable, so website blocking permission cannot be requested from desktop right now.`,
           )
         );
       }
@@ -533,7 +534,7 @@ export function registerRpcHandlers(
           return;
         }
         throw new Error(
-          "Milady runtime is unavailable, so website blocking permission help could not be opened from desktop.",
+          `${getBrandConfig().appName} runtime is unavailable, so website blocking permission help could not be opened from desktop.`,
         );
       }
       return permissions.openSettings(params.id);

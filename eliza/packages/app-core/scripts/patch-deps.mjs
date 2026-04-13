@@ -33,6 +33,7 @@ import {
 } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolveRepoRootFromImportMeta } from "./lib/repo-root.mjs";
 import {
   patchAutonomousMiladyOnboardingPresets,
   patchBrokenElizaCoreRuntimeDists,
@@ -45,7 +46,7 @@ import {
 } from "./lib/patch-bun-exports.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const root = resolve(__dirname, "..");
+const root = resolveRepoRootFromImportMeta(import.meta.url);
 
 // ---------------------------------------------------------------------------
 // Bust stale Bun cache entries for @elizaos packages.

@@ -25,7 +25,6 @@ import {
 import { useLifeOpsAppState } from "@elizaos/app-core/hooks";
 import { useApp } from "@elizaos/app-core/state";
 import { openExternalUrl } from "@elizaos/app-core/utils";
-import { LifeOpsSettingsSection } from "@elizaos/app-core/components/settings/LifeOpsSettingsSection";
 import {
   AgentGithubCard,
   GoalList,
@@ -37,6 +36,7 @@ import {
   SummaryMetric,
 } from "./LifeOpsPageSections";
 import type { ManagedAgentGithubEntry } from "./LifeOpsPageSections";
+import { LifeOpsSettingsSection } from "./LifeOpsSettingsSection";
 import { LifeOpsWorkspaceView } from "./LifeOpsWorkspaceView";
 
 const LIFEOPS_GITHUB_COMPLETE_PATH = "/api/v1/app/lifeops/github-complete";

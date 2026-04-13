@@ -14,16 +14,46 @@ import os from "node:os";
 import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { describeIf } from "../../../test/helpers/conditional-tests.ts";
-import { req } from "../../../test/helpers/http.ts";
+import { describeIf } from "../../../../test/helpers/conditional-tests.ts";
+import { req } from "../../../../test/helpers/http.ts";
+import { createLiveRuntimeChildEnv } from "../../../../test/helpers/live-child-env.ts";
 
 const LIVE = process.env.ELIZA_LIVE_TEST === "1" || process.env.ELIZA_LIVE_TEST === "1";
-const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..", "..");
+const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..", "..", "..");
+const CONNECTOR_CASES = [
+  {
+    name: "discord",
+    pluginId: "discord",
+    tokenKeys: ["DISCORD_BOT_TOKEN", "DISCORD_API_TOKEN"],
+  },
+  {
+    name: "telegram",
+    pluginId: "telegram",
+    tokenKeys: ["TELEGRAM_BOT_TOKEN"],
+  },
+] as const;
+const CONFIGURED_CONNECTORS = CONNECTOR_CASES.filter((connector) =>
+  connector.tokenKeys.some((key) => process.env[key]?.trim()),
+);
+const LIVE_CONNECTOR_SUITE_ENABLED =
+  LIVE && CONFIGURED_CONNECTORS.length > 0;
 
 try {
   const { config } = await import("dotenv");
   config({ path: path.join(REPO_ROOT, ".env") });
 } catch { /* dotenv optional */ }
+
+if (!LIVE_CONNECTOR_SUITE_ENABLED) {
+  const warnings = [
+    !LIVE ? "set ELIZA_LIVE_TEST=1 or ELIZA_LIVE_TEST=1" : null,
+    CONFIGURED_CONNECTORS.length === 0
+      ? "provide at least one real connector token (Discord or Telegram) to run connector live tests"
+      : null,
+  ].filter((entry): entry is string => Boolean(entry));
+  console.info(
+    `[connector-health-live] suite skipped until setup is complete: ${warnings.join(" | ")}`,
+  );
+}
 
 async function getFreePort(): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -45,30 +75,24 @@ async function startRuntime(): Promise<Runtime> {
   const configPath = path.join(tmp, "eliza.json");
   const port = await getFreePort();
   const logBuf: string[] = [];
+  const allowPlugins = CONFIGURED_CONNECTORS.map((connector) => connector.pluginId);
 
   await mkdir(stateDir, { recursive: true });
   await writeFile(configPath, JSON.stringify({
     logging: { level: "info" },
-    plugins: { allow: [] },
+    plugins: { allow: allowPlugins },
   }), "utf8");
 
   const child = spawn("bun", ["run", "start:eliza"], {
     cwd: REPO_ROOT,
-    env: {
-      ...process.env,
+    env: createLiveRuntimeChildEnv({
       ELIZA_CONFIG_PATH: configPath,
-      ELIZA_CONFIG_PATH: configPath,
-      ELIZA_STATE_DIR: stateDir,
       ELIZA_STATE_DIR: stateDir,
       ELIZA_PORT: String(port),
       ELIZA_API_PORT: String(port),
       ELIZA_DISABLE_LOCAL_EMBEDDINGS: "1",
-      ELIZA_DISABLE_LOCAL_EMBEDDINGS: "1",
       ALLOW_NO_DATABASE: "",
-      DISCORD_API_TOKEN: "",
-      DISCORD_BOT_TOKEN: "",
-      TELEGRAM_BOT_TOKEN: "",
-    },
+    }),
     stdio: ["pipe", "pipe", "pipe"],
   });
 
@@ -103,38 +127,35 @@ async function startRuntime(): Promise<Runtime> {
   };
 }
 
-describeIf(LIVE)("Live: connector health endpoints", () => {
+describeIf(LIVE_CONNECTOR_SUITE_ENABLED)("Live: connector health endpoints", () => {
   let rt: Runtime;
 
   beforeAll(async () => { rt = await startRuntime(); }, 180_000);
   afterAll(async () => { if (rt) await rt.close(); });
 
-  it("connector status reports discord as disconnected without a token", async () => {
-    // Without DISCORD_BOT_TOKEN the connector should not be active
+  it("lists each configured real connector in the live runtime", async () => {
     const res = await req(rt.port, "GET", "/api/connectors");
-    // This endpoint may or may not exist depending on runtime version
-    if (res.status === 200) {
-      expect(res.data).toBeTruthy();
-    } else {
-      // Endpoint not registered = connectors not loaded, which is correct
-      expect([404, 200]).toContain(res.status);
-    }
-  });
+    expect(res.status).toBe(200);
+    const connectors = Array.isArray(res.data)
+      ? (res.data as Array<Record<string, unknown>>)
+      : Array.isArray(res.data.connectors)
+        ? (res.data.connectors as Array<Record<string, unknown>>)
+        : [];
+    expect(connectors.length).toBeGreaterThan(0);
 
-  it("telegram connector is not loaded without a token", async () => {
-    const res = await req(rt.port, "GET", "/api/connectors");
-    if (res.status === 200 && Array.isArray(res.data)) {
-      const telegram = res.data.find((c: Record<string, unknown>) =>
-        String(c.name ?? "").toLowerCase().includes("telegram"),
-      );
-      if (telegram) {
-        expect(telegram).toMatchObject({ connected: false });
-      }
+    for (const connector of CONFIGURED_CONNECTORS) {
+      expect(
+        connectors.some((entry) => {
+          const id = String(entry.id ?? entry.name ?? "").toLowerCase();
+          const label = String(entry.label ?? "").toLowerCase();
+          return id.includes(connector.name) || label.includes(connector.name);
+        }),
+      ).toBe(true);
     }
   });
 
   it("runtime does not crash when queried for unknown connector", async () => {
     const res = await req(rt.port, "GET", "/api/connectors/nonexistent-connector");
-    expect([404, 200]).toContain(res.status);
+    expect(res.status).toBe(404);
   });
 }, 300_000);

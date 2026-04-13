@@ -20,6 +20,7 @@ import {
   getAppCoreSourceRoot,
   getAutonomousSourceRoot,
   getElizaCoreEntry,
+  getInstalledPackageEntry,
   getSharedSourceRoot,
   getUiSourceRoot,
   resolveModuleEntry,
@@ -50,6 +51,100 @@ const autonomousSourceRoot = getAutonomousSourceRoot(repoRoot);
 const appCoreSourceRoot = getAppCoreSourceRoot(repoRoot);
 const sharedSourceRoot = getSharedSourceRoot(repoRoot);
 const uiSourceRoot = getUiSourceRoot(repoRoot);
+const appCompanionSourceRoot = path.join(
+  repoRoot,
+  "eliza",
+  "apps",
+  "app-companion",
+  "src",
+);
+const pluginAgentOrchestratorEntry =
+  getInstalledPackageEntry("@elizaos/core/agent-orchestrator", repoRoot) ??
+  resolveModuleEntry(
+    path.join(
+      repoRoot,
+      "eliza",
+      "packages",
+      "typescript",
+      "src",
+      "agent-orchestrator",
+      "index",
+    ),
+  );
+const pluginAgentSkillsEntry =
+  getInstalledPackageEntry("@elizaos/plugin-agent-skills", repoRoot) ??
+  resolveModuleEntry(
+    path.join(
+      repoRoot,
+      "eliza",
+      "plugins",
+      "plugin-agent-skills",
+      "typescript",
+      "src",
+      "index",
+    ),
+  );
+const pluginCommandsEntry =
+  getInstalledPackageEntry("@elizaos/plugin-commands", repoRoot) ??
+  resolveModuleEntry(
+    path.join(
+      repoRoot,
+      "eliza",
+      "plugins",
+      "plugin-commands",
+      "typescript",
+      "src",
+      "index",
+    ),
+  );
+const pluginCronEntry =
+  getInstalledPackageEntry("@elizaos/plugin-cron", repoRoot) ??
+  resolveModuleEntry(
+    path.join(
+      repoRoot,
+      "eliza",
+      "plugins",
+      "plugin-cron",
+      "typescript",
+      "src",
+      "index",
+    ),
+  );
+const pluginOpenAiEntry =
+  getInstalledPackageEntry("@elizaos/plugin-openai", repoRoot, "node") ??
+  resolveModuleEntry(
+    path.join(repoRoot, "eliza", "plugins", "plugin-openai", "typescript", "index.node"),
+  );
+const pluginAnthropicEntry =
+  getInstalledPackageEntry("@elizaos/plugin-anthropic", repoRoot, "node") ??
+  resolveModuleEntry(
+    path.join(repoRoot, "eliza", "plugins", "plugin-anthropic", "typescript", "index.node"),
+  );
+const pluginGoogleGenAiEntry =
+  getInstalledPackageEntry("@elizaos/plugin-google-genai", repoRoot, "node") ??
+  resolveModuleEntry(
+    path.join(repoRoot, "eliza", "plugins", "plugin-google-genai", "typescript", "index.node"),
+  );
+const pluginGroqEntry =
+  getInstalledPackageEntry("@elizaos/plugin-groq", repoRoot, "node") ??
+  resolveModuleEntry(
+    path.join(repoRoot, "eliza", "plugins", "plugin-groq", "typescript", "index.node"),
+  );
+const pluginOllamaEntry =
+  getInstalledPackageEntry("@elizaos/plugin-ollama", repoRoot, "node") ??
+  resolveModuleEntry(
+    path.join(repoRoot, "eliza", "plugins", "plugin-ollama", "typescript", "index.node"),
+  );
+const pluginOpenRouterEntry =
+  getInstalledPackageEntry("@elizaos/plugin-openrouter", repoRoot, "node") ??
+  resolveModuleEntry(
+    path.join(repoRoot, "eliza", "plugins", "plugin-openrouter", "typescript", "index.node"),
+  );
+const pluginElizaCloudEntry =
+  getInstalledPackageEntry("@elizaos/plugin-elizacloud", repoRoot, "node") ??
+  resolveModuleEntry(
+    path.join(repoRoot, "eliza", "plugins", "plugin-elizacloud", "typescript", "index.node"),
+  );
 
 process.env.MILADY_LIVE_TEST = "1";
 process.env.ELIZA_LIVE_TEST = "1";
@@ -149,8 +244,24 @@ export default defineConfig({
           "index.ts",
         ),
       },
+      {
+        find: /^@elizaos\/app-companion\/(.*)/,
+        replacement: path.join(appCompanionSourceRoot, "$1"),
+      },
+      {
+        find: "@elizaos/app-companion/plugin",
+        replacement: path.join(appCompanionSourceRoot, "plugin.ts"),
+      },
+      {
+        find: "@elizaos/app-companion",
+        replacement: path.join(appCompanionSourceRoot, "index.ts"),
+      },
       ...(sharedSourceRoot
         ? [
+            {
+              find: "@elizaos/shared/config",
+              replacement: path.join(sharedSourceRoot, "config", "types.ts"),
+            },
             {
               find: /^@elizaos\/shared\/(.*)/,
               replacement: path.join(sharedSourceRoot, "$1"),
@@ -166,6 +277,102 @@ export default defineConfig({
             {
               find: "@elizaos/shared",
               replacement: path.join(sharedSourceRoot, "index.ts"),
+            },
+          ]
+        : []),
+      ...(fs.existsSync(pluginAgentOrchestratorEntry)
+        ? [
+            {
+              find: "@elizaos/core/agent-orchestrator",
+              replacement: pluginAgentOrchestratorEntry,
+            },
+            {
+              find: "@elizaos/plugin-agent-orchestrator",
+              replacement: pluginAgentOrchestratorEntry,
+            },
+            {
+              find: "@elizaos/plugin-coding-agent",
+              replacement: pluginAgentOrchestratorEntry,
+            },
+          ]
+        : []),
+      ...(fs.existsSync(pluginAgentSkillsEntry)
+        ? [
+            {
+              find: "@elizaos/plugin-agent-skills",
+              replacement: pluginAgentSkillsEntry,
+            },
+          ]
+        : []),
+      ...(fs.existsSync(pluginCommandsEntry)
+        ? [
+            {
+              find: "@elizaos/plugin-commands",
+              replacement: pluginCommandsEntry,
+            },
+          ]
+        : []),
+      ...(fs.existsSync(pluginCronEntry)
+        ? [
+            {
+              find: "@elizaos/plugin-cron",
+              replacement: pluginCronEntry,
+            },
+          ]
+        : []),
+      ...(fs.existsSync(pluginOpenAiEntry)
+        ? [
+            {
+              find: "@elizaos/plugin-openai",
+              replacement: pluginOpenAiEntry,
+            },
+          ]
+        : []),
+      ...(fs.existsSync(pluginAnthropicEntry)
+        ? [
+            {
+              find: "@elizaos/plugin-anthropic",
+              replacement: pluginAnthropicEntry,
+            },
+          ]
+        : []),
+      ...(fs.existsSync(pluginGoogleGenAiEntry)
+        ? [
+            {
+              find: "@elizaos/plugin-google-genai",
+              replacement: pluginGoogleGenAiEntry,
+            },
+          ]
+        : []),
+      ...(fs.existsSync(pluginGroqEntry)
+        ? [
+            {
+              find: "@elizaos/plugin-groq",
+              replacement: pluginGroqEntry,
+            },
+          ]
+        : []),
+      ...(fs.existsSync(pluginOllamaEntry)
+        ? [
+            {
+              find: "@elizaos/plugin-ollama",
+              replacement: pluginOllamaEntry,
+            },
+          ]
+        : []),
+      ...(fs.existsSync(pluginOpenRouterEntry)
+        ? [
+            {
+              find: "@elizaos/plugin-openrouter",
+              replacement: pluginOpenRouterEntry,
+            },
+          ]
+        : []),
+      ...(fs.existsSync(pluginElizaCloudEntry)
+        ? [
+            {
+              find: "@elizaos/plugin-elizacloud",
+              replacement: pluginElizaCloudEntry,
             },
           ]
         : []),

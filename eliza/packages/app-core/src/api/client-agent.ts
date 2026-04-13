@@ -1466,7 +1466,7 @@ ElizaClient.prototype.getAgentEvents = async function (
   if (typeof opts?.fromSeq === "number")
     params.set("fromSeq", String(Math.trunc(opts.fromSeq)));
   const qs = params.toString();
-  return this.fetch(`/api@elizaos/agent/events${qs ? `?${qs}` : ""}`);
+  return this.fetch(`/api/agent/events${qs ? `?${qs}` : ""}`);
 };
 
 ElizaClient.prototype.getExtensionStatus = async function (

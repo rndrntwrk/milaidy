@@ -1,6 +1,11 @@
 import type { ServiceTypeRegistry } from "../../types/service.ts";
 
-// Extend the core service types with character management service
+declare module "../../types/service.ts" {
+  interface ServiceTypeRegistry {
+    CHARACTER_MANAGEMENT: "CHARACTER_MANAGEMENT";
+  }
+}
+
 declare module "@elizaos/core" {
   interface ServiceTypeRegistry {
     CHARACTER_MANAGEMENT: "CHARACTER_MANAGEMENT";

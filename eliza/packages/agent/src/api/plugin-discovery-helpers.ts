@@ -36,6 +36,27 @@ import { findOwnPackageRoot } from "./server.js";
 
 const require = createRequire(import.meta.url);
 
+function findPluginsManifestRoot(startDir: string): string {
+  let dir = startDir;
+  let manifestRoot: string | null = null;
+
+  for (let i = 0; i < 16; i += 1) {
+    if (fs.existsSync(path.join(dir, "plugins.json"))) {
+      // Keep walking so wrapper repos like Milady can override the nested
+      // upstream eliza checkout's package root with the outer workspace manifest.
+      manifestRoot = dir;
+    }
+
+    const parent = path.dirname(dir);
+    if (parent === dir) {
+      break;
+    }
+    dir = parent;
+  }
+
+  return manifestRoot ?? findOwnPackageRoot(startDir);
+}
+
 export interface PluginParamDef {
   key: string;
   type: string;
@@ -902,7 +923,8 @@ export function discoverPluginsFromManifest(): PluginEntry[] {
   const thisDir =
     import.meta.dirname ?? path.dirname(fileURLToPath(import.meta.url));
   const packageRoot = findOwnPackageRoot(thisDir);
-  const manifestPath = path.join(packageRoot, "plugins.json");
+  const manifestRoot = findPluginsManifestRoot(thisDir);
+  const manifestPath = path.join(manifestRoot, "plugins.json");
 
   if (fs.existsSync(manifestPath)) {
     try {

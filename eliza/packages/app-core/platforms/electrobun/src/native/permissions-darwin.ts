@@ -2,6 +2,7 @@ import { dlopen, FFIType } from "bun:ffi";
 import { existsSync, readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { getBrandConfig } from "../brand-config";
 
 import type {
   PermissionCheckResult,
@@ -24,7 +25,7 @@ type TccPermissionService =
   | "kTCCServiceAccessibility"
   | "kTCCServiceScreenCapture";
 
-const DEFAULT_APP_BUNDLE_ID = "com.miladyai.milady";
+const DEFAULT_APP_BUNDLE_ID = getBrandConfig().appId;
 const sessionPromptedPermissions = new Set<SystemPermissionId>();
 
 let nativeLib: NativePermissionsLib | null = null;

@@ -1,8 +1,8 @@
 import { type IAgentRuntime, logger, type Plugin } from "@elizaos/core";
 import { gatePluginSessionForHostedApp } from "@elizaos/agent/services/app-session-gate";
-import { manageLifeOpsBrowserAction } from "./action";
-import { lifeOpsBrowserProvider } from "./provider";
-import { LifeOpsBrowserPluginService } from "./service";
+import { manageLifeOpsBrowserAction } from "./action.ts";
+import { lifeOpsBrowserProvider } from "./provider.ts";
+import { LifeOpsBrowserPluginService } from "./service.ts";
 
 // Self-control (hosts-file website blocker) — merged in
 import {
@@ -10,14 +10,14 @@ import {
   getWebsiteBlockStatusAction,
   requestWebsiteBlockingPermissionAction,
   unblockWebsitesAction,
-} from "./selfcontrol/action.js";
-import { websiteBlockerProvider } from "./selfcontrol/provider.js";
+} from "./selfcontrol/action.ts";
+import { websiteBlockerProvider } from "./selfcontrol/provider.ts";
 import {
   type SelfControlPluginConfig,
   getSelfControlStatus,
   setSelfControlPluginConfig,
-} from "./selfcontrol/selfcontrol.js";
-import { WebsiteBlockerService } from "./selfcontrol/service.js";
+} from "./selfcontrol/selfcontrol.ts";
+import { WebsiteBlockerService } from "./selfcontrol/service.ts";
 
 const rawAppLifeOpsPlugin: Plugin = {
   name: "@elizaos/app-lifeops",
@@ -65,11 +65,14 @@ export {
   manageLifeOpsBrowserAction,
 };
 
-export * from "./selfcontrol/index.js";
+export * from "./selfcontrol/index.ts";
 
 // UI page views
-export * from "./LifeOpsPageView";
-export * from "./LifeOpsPageSections";
-export * from "./LifeOpsWorkspaceView";
+export * from "./LifeOpsBrowserSetupPanel.tsx";
+export * from "./LifeOpsPageView.tsx";
+export * from "./LifeOpsPageSections.tsx";
+export * from "./LifeOpsSettingsSection.tsx";
+export * from "./LifeOpsWorkspaceView.tsx";
+export * from "./WebsiteBlockerSettingsCard.tsx";
 
 export default appLifeOpsPlugin;

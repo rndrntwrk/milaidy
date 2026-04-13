@@ -637,6 +637,7 @@ export class InMemoryDatabaseAdapter extends DatabaseAdapter<
 		entityId?: UUID;
 		agentId?: UUID;
 		limit?: number;
+		count?: number;
 		offset?: number;
 		unique?: boolean;
 		tableName: string;
@@ -646,7 +647,7 @@ export class InMemoryDatabaseAdapter extends DatabaseAdapter<
 		worldId?: UUID;
 		metadata?: Record<string, unknown>;
 	}): Promise<Memory[]> {
-		const effectiveLimit = params.limit ?? Infinity;
+		const effectiveLimit = params.limit ?? params.count ?? Infinity;
 		const roomId = params.roomId ?? DEFAULT_UUID;
 		const tableName = params.tableName ?? "messages";
 		let all = this.memoriesByRoom.get(roomTableKey(tableName, roomId)) ?? [];

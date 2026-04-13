@@ -10,6 +10,7 @@ import crypto from "node:crypto";
 import { lookup as dnsLookup } from "node:dns/promises";
 import fs from "node:fs";
 import http from "node:http";
+import { createRequire } from "node:module";
 
 type StreamableServerResponse = Pick<
   http.ServerResponse,
@@ -65,7 +66,6 @@ import {
   type AgentEventServiceLike,
   getAgentEventService,
 } from "../runtime/agent-event-service.js";
-import * as agentOrchestratorCompat from "@elizaos/core/orchestrator";
 import { classifyRegistryPluginRelease } from "../runtime/release-plugin-policy.js";
 import {
   AUDIT_EVENT_TYPES,
@@ -311,6 +311,14 @@ import {
   maskValue,
   type PluginEntry,
 } from "./plugin-discovery-helpers.js";
+
+const nodeRequire = createRequire(import.meta.url);
+let agentOrchestratorCompat: unknown = null;
+try {
+  agentOrchestratorCompat = nodeRequire("@elizaos/core/orchestrator");
+} catch {
+  agentOrchestratorCompat = null;
+}
 
 // Re-export for downstream consumers (e.g. @elizaos/app-core)
 export {
@@ -5327,6 +5335,38 @@ async function handleRequest(
     return;
   }
 
+  // Compatibility route used by legacy health probes and desktop name lookup.
+  if (method === "GET" && pathname === "/api/agents") {
+    const runtimeAgentId =
+      typeof state.runtime?.agentId === "string" &&
+      state.runtime.agentId.trim().length > 0
+        ? state.runtime.agentId.trim()
+        : null;
+    const configuredAgentId =
+      typeof state.config.agents?.list?.[0]?.id === "string" &&
+      state.config.agents.list[0].id.trim().length > 0
+        ? state.config.agents.list[0].id.trim()
+        : null;
+    const agentName =
+      state.runtime?.character.name?.trim() ||
+      state.agentName?.trim() ||
+      "Eliza";
+
+    json(res, {
+      agents: [
+        {
+          id:
+            runtimeAgentId ??
+            configuredAgentId ??
+            "00000000-0000-0000-0000-000000000000",
+          name: agentName,
+          status: state.agentState,
+        },
+      ],
+    });
+    return;
+  }
+
   if (
     await handleModelsRoutes({
       req,
@@ -6326,8 +6366,8 @@ async function handleRequest(
     if (!handled)
       try {
         const orchestratorPlugin =
-          agentOrchestratorCompat as OrchestratorPluginFallbackModule;
-        if (orchestratorPlugin.createCodingAgentRouteHandler) {
+          agentOrchestratorCompat as OrchestratorPluginFallbackModule | null;
+        if (orchestratorPlugin?.createCodingAgentRouteHandler) {
           const coordinator = orchestratorPlugin.getCoordinator?.(
             state.runtime,
           );

@@ -393,7 +393,7 @@ export async function tryCreateVisionOcrAdapter(): Promise<LifeOpsScreenOcrAdapt
 
   for (const specifier of visionImportCandidates) {
     try {
-      const mod = await import(specifier);
+      const mod = await import(/* @vite-ignore */ specifier);
       const OCRService = mod.OCRService as
         | (new () => {
             initialize(): Promise<void>;

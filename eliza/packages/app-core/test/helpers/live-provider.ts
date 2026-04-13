@@ -6,7 +6,7 @@
  * into a single reusable module.
  *
  * Usage:
- *   import { selectLiveProvider, requireLiveProvider } from "../../test/helpers/live-provider";
+ *   import { selectLiveProvider, requireLiveProvider } from "../../../../../test/helpers/live-provider";
  *
  *   const provider = selectLiveProvider();            // null if none available
  *   const provider = requireLiveProvider();           // skips test if none
@@ -18,7 +18,14 @@ import os from "node:os";
 import path from "node:path";
 
 // Load .env from repo root if dotenv is available
-const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..");
+const REPO_ROOT = path.resolve(
+  import.meta.dirname,
+  "..",
+  "..",
+  "..",
+  "..",
+  "..",
+);
 try {
   const { config } = await import("dotenv");
   config({ path: path.join(REPO_ROOT, ".env") });

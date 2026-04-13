@@ -9,11 +9,11 @@ import {
   rmSync,
   symlinkSync,
 } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { dirname, join, relative } from "node:path";
+import { resolveRepoRootFromImportMeta } from "./lib/repo-root.mjs";
 import { collectWorkspaceMaps } from "./lib/workspace-discovery.mjs";
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const root = resolveRepoRootFromImportMeta(import.meta.url);
 const packageNames = process.argv.slice(2);
 
 if (packageNames.length === 0) {

@@ -6,6 +6,7 @@
  */
 
 import { EventEmitter } from "node:events";
+import { getBrandConfig } from "../brand-config";
 import type {
   DiscoveryOptions,
   DiscoveryResult,
@@ -81,7 +82,7 @@ export class GatewayDiscovery extends EventEmitter {
       };
     }
 
-    const serviceType = options?.serviceType ?? "_milady._tcp";
+    const serviceType = options?.serviceType ?? getBrandConfig().mdnsServiceType;
     this.discoveredGateways.clear();
     this.isDiscovering = true;
 

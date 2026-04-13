@@ -32,11 +32,12 @@ import {
 } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolveRepoRootFromImportMeta } from "./lib/repo-root.mjs";
 import { createPackageLink } from "./setup-upstreams.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const DEFAULT_REPO_ROOT = path.resolve(__dirname, "..");
+const DEFAULT_REPO_ROOT = resolveRepoRootFromImportMeta(import.meta.url);
 
 /**
  * Standalone plugin source directories to link into node_modules. Each

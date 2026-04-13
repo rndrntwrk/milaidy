@@ -712,7 +712,10 @@ function assertOrchestratorVersionPinned() {
 
 function assertCloudAgentTemplateDependenciesPinned() {
   const cloudAgentPackage = JSON.parse(
-    readFileSync("deploy/cloud-agent-template/package.json", "utf8"),
+    readFileSync(
+      "eliza/packages/app-core/deploy/cloud-agent-template/package.json",
+      "utf8",
+    ),
   ) as RootPackageJson;
   const floating = findFloatingDependencySpecs(
     cloudAgentPackage,
@@ -721,7 +724,7 @@ function assertCloudAgentTemplateDependenciesPinned() {
 
   if (floating.length > 0) {
     console.error(
-      "release-check: deploy/cloud-agent-template/package.json must pin release dependencies to exact versions.",
+      "release-check: eliza/packages/app-core/deploy/cloud-agent-template/package.json must pin release dependencies to exact versions.",
     );
     for (const dependency of floating) {
       console.error(`  - ${dependency.name}: ${dependency.specifier}`);

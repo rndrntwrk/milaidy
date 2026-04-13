@@ -5,9 +5,10 @@ import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import { resolveRepoRootFromImportMeta } from "./lib/repo-root.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(__dirname, "..");
+const repoRoot = resolveRepoRootFromImportMeta(import.meta.url);
 const appDir = path.join(repoRoot, "apps", "app");
 const iosDir = path.join(appDir, "ios", "App");
 const androidDir = path.join(appDir, "android");

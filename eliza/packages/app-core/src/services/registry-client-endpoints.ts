@@ -4,7 +4,7 @@ import { logger } from "@elizaos/core";
 import {
   isBlockedPrivateOrLinkLocalIp,
   normalizeHostLike,
-} from "@elizaos/agent";
+} from "@elizaos/agent/security/network-policy";
 import type { RegistryEndpoint } from "@elizaos/agent/config";
 import type { RegistryPluginInfo } from "./registry-client-types.js";
 

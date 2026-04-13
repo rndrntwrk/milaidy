@@ -13,7 +13,10 @@ import { ListTodo, Menu, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CloudStatusBadge } from "../cloud/CloudStatusBadge";
-import { InferenceCloudAlertButton, resolveCompanionInferenceNotice } from "@elizaos/app-companion";
+import {
+  InferenceCloudAlertButton,
+  resolveCompanionInferenceNotice,
+} from "@elizaos/app-companion/ui";
 import {
   HEADER_BUTTON_STYLE,
   HEADER_ICON_BUTTON_CLASSNAME,

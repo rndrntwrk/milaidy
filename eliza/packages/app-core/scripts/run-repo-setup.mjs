@@ -5,23 +5,32 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolveRepoRootFromImportMeta } from "./lib/repo-root.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const DEFAULT_REPO_ROOT = path.resolve(__dirname, "..");
+const DEFAULT_REPO_ROOT = resolveRepoRootFromImportMeta(import.meta.url);
+const APP_CORE_SCRIPTS_DIR = __dirname;
 
 export const repoSetupSteps = [
   "scripts/init-submodules.mjs",
-  "scripts/patch-workspace-plugins.mjs",
-  "scripts/patch-deps.mjs",
+  "patch-workspace-plugins.mjs",
+  "patch-deps.mjs",
   "scripts/setup-upstreams.mjs",
-  "scripts/ensure-bundled-workspaces.mjs",
-  "scripts/ensure-skills.mjs",
-  "scripts/ensure-avatars.mjs",
-  "scripts/link-browser-server.mjs",
-  "scripts/link-external-plugins.mjs",
-  "scripts/ensure-vision-deps.mjs",
+  "ensure-bundled-workspaces.mjs",
+  "ensure-skills.mjs",
+  "ensure-avatars.mjs",
+  "link-browser-server.mjs",
+  "link-external-plugins.mjs",
+  "ensure-vision-deps.mjs",
 ];
+
+function resolveRepoSetupStepPath(repoRoot, step) {
+  if (step.startsWith("scripts/")) {
+    return path.join(repoRoot, step);
+  }
+  return path.join(APP_CORE_SCRIPTS_DIR, step);
+}
 
 const STALE_LOCK_MS = 10 * 60 * 1000;
 const LOCK_WAIT_MS = 15 * 60 * 1000;
@@ -141,7 +150,7 @@ export async function runRepoSetup(repoRoot = DEFAULT_REPO_ROOT) {
   const release = await acquireRepoSetupLock(getRepoSetupLockPath(repoRoot));
   try {
     for (const step of repoSetupSteps) {
-      const scriptPath = path.join(repoRoot, step);
+      const scriptPath = resolveRepoSetupStepPath(repoRoot, step);
       await new Promise((resolve, reject) => {
         const child = spawn(process.execPath, [scriptPath], {
           cwd: repoRoot,

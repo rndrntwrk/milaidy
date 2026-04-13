@@ -21,6 +21,7 @@ import {
   type StewardSidecar,
   type StewardSidecarStatus,
 } from "@elizaos/app-core/services/steward-sidecar";
+import { getBrandConfig } from "../brand-config";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -212,18 +213,21 @@ export async function resetSteward(): Promise<StewardSidecarStatus> {
   const path = await import("node:path");
   const home = process.env.HOME || process.env.USERPROFILE || "";
   const dataDir =
-    process.env.STEWARD_DATA_DIR || path.join(home, ".milady", "steward");
+    process.env.STEWARD_DATA_DIR ||
+    path.join(home, `.${getBrandConfig().namespace}`, "steward");
 
-  // Safety: ensure dataDir resolves inside ~/.milady/ to prevent accidental
+  // Safety: ensure dataDir resolves inside the app namespace dir to prevent accidental
   // deletion of unrelated directories via env var manipulation.
   const resolvedDataDir = path.resolve(dataDir);
-  const miladyBase = path.resolve(path.join(home, ".milady"));
+  const stateBase = path.resolve(
+    path.join(home, `.${getBrandConfig().namespace}`),
+  );
   if (
-    !resolvedDataDir.startsWith(miladyBase + path.sep) &&
-    resolvedDataDir !== miladyBase
+    !resolvedDataDir.startsWith(stateBase + path.sep) &&
+    resolvedDataDir !== stateBase
   ) {
     throw new Error(
-      `[Steward] Refusing to delete dataDir outside ~/.milady/: ${resolvedDataDir}`,
+      `[Steward] Refusing to delete dataDir outside ~/.${getBrandConfig().namespace}/: ${resolvedDataDir}`,
     );
   }
 

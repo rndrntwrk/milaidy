@@ -8,6 +8,8 @@ import { App as CapacitorApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import { Keyboard } from "@capacitor/keyboard";
 import { StatusBar, Style } from "@capacitor/status-bar";
+import { CompanionShell } from "@elizaos/app-companion";
+import "@elizaos/app-companion/register";
 import { App } from "@elizaos/app-core/App";
 import { client } from "@elizaos/app-core/api";
 import {
@@ -54,6 +56,13 @@ import {
 } from "@elizaos/app-core/shell";
 import { AppProvider } from "@elizaos/app-core/state";
 import { applyUiTheme, loadUiTheme } from "@elizaos/app-core/state";
+import {
+  LifeOpsBrowserSetupPanel,
+  LifeOpsPageView,
+  WebsiteBlockerSettingsCard,
+} from "@elizaos/app-lifeops";
+import "@elizaos/app-shopify/register";
+import "@elizaos/app-vincent/register";
 import { Agent } from "@elizaos/capacitor-agent";
 import { Desktop } from "@elizaos/capacitor-desktop";
 import { StrictMode } from "react";
@@ -171,8 +180,12 @@ const miladyBootConfig: AppBootConfig = {
   vrmAssets: MILADY_VRM_ASSETS,
   onboardingStyles: MILADY_STYLE_PRESETS,
   characterEditor: CharacterEditor,
+  companionShell: CompanionShell,
   characterCatalog: MILADY_CHARACTER_CATALOG,
   envAliases: MILADY_ENV_ALIASES,
+  lifeOpsPageView: LifeOpsPageView,
+  lifeOpsBrowserSetupPanel: LifeOpsBrowserSetupPanel,
+  websiteBlockerSettingsCard: WebsiteBlockerSettingsCard,
   clientMiddleware: {
     forceFreshOnboarding:
       shouldInstallMainWindowOnboardingPatches(windowShellRoute),

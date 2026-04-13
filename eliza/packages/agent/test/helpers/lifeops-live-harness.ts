@@ -9,6 +9,7 @@ import {
   postConversationMessage,
   req,
 } from "../../../../../test/helpers/http.ts";
+import { createLiveRuntimeChildEnv } from "../../../../../test/helpers/live-child-env.ts";
 
 export const LIVE_TESTS_ENABLED =
   process.env.ELIZA_LIVE_TEST === "1" || process.env.ELIZA_LIVE_TEST === "1";
@@ -627,7 +628,7 @@ export async function startLifeOpsLiveRuntime(options?: {
 
   const child = spawn("bun", ["run", "start:eliza"], {
     cwd: REPO_ROOT,
-    env: {
+    env: createLiveRuntimeChildEnv({
       ...buildSelectedLiveProviderEnv(selectedProvider),
       ELIZA_CONFIG_PATH: configPath,
       ELIZA_CONFIG_PATH: configPath,
@@ -642,7 +643,7 @@ export async function startLifeOpsLiveRuntime(options?: {
       DISCORD_API_TOKEN: "",
       DISCORD_BOT_TOKEN: "",
       TELEGRAM_BOT_TOKEN: "",
-    },
+    }),
     stdio: ["pipe", "pipe", "pipe"],
   });
 

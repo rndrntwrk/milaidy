@@ -1,11 +1,11 @@
 import { BlueBubblesStatusPanel } from "./BlueBubblesStatusPanel";
 import { DiscordLocalConnectorPanel } from "./DiscordLocalConnectorPanel";
 import { IMessageStatusPanel } from "./IMessageStatusPanel";
-import { LifeOpsBrowserSetupPanel } from "./LifeOpsBrowserSetupPanel";
 import { SignalQrOverlay } from "./SignalQrOverlay";
 import { TelegramAccountConnectorPanel } from "./TelegramAccountConnectorPanel";
 import { TelegramBotSetupPanel } from "./TelegramBotSetupPanel";
 import { WhatsAppQrOverlay } from "./WhatsAppQrOverlay";
+import { getBootConfig } from "../../config";
 
 function normalizePluginId(pluginId: string): string {
   return pluginId
@@ -17,7 +17,7 @@ function normalizePluginId(pluginId: string): string {
 export function hasConnectorSetupPanel(pluginId: string): boolean {
   const normalized = normalizePluginId(pluginId);
   if (normalized.includes("lifeopsbrowser")) {
-    return true;
+    return Boolean(getBootConfig().lifeOpsBrowserSetupPanel);
   }
   if (normalized.includes("telegramaccount")) {
     return true;
@@ -41,7 +41,8 @@ export function hasConnectorSetupPanel(pluginId: string): boolean {
 export function ConnectorSetupPanel({ pluginId }: { pluginId: string }) {
   const normalized = normalizePluginId(pluginId);
   if (normalized.includes("lifeopsbrowser")) {
-    return <LifeOpsBrowserSetupPanel />;
+    const LifeOpsBrowserSetupPanel = getBootConfig().lifeOpsBrowserSetupPanel;
+    return LifeOpsBrowserSetupPanel ? <LifeOpsBrowserSetupPanel /> : null;
   }
   if (normalized.includes("telegramaccount")) {
     return <TelegramAccountConnectorPanel />;

@@ -1,4 +1,5 @@
 import type { Plugin as ElizaPlugin } from "../../types/plugin.ts";
+import type { EventPayload, EventPayloadMap } from "../../types/events.ts";
 import type { ServiceTypeName } from "../../types/service.ts";
 
 // Service type declarations for plugin manager
@@ -32,7 +33,14 @@ export interface PluginComponents {
   providers: Set<string>;
   evaluators: Set<string>;
   services: Set<string>;
-  eventHandlers: Map<string, Set<(params: Record<string, unknown>) => Promise<void>>>;
+  eventHandlers: Map<
+    string,
+    Set<
+      (
+        params: EventPayloadMap[keyof EventPayloadMap] | EventPayload,
+      ) => Promise<void>
+    >
+  >;
 }
 
 export interface ComponentRegistration {

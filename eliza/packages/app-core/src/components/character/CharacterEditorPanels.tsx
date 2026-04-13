@@ -310,7 +310,7 @@ export function CharacterIdentityPanel({
         <div className="flex items-center justify-between">
           <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted">
             {t("charactereditor.SystemPrompt", {
-              defaultValue: "System Prompt",
+              defaultValue: "Things I Should Always Remember",
             })}
           </span>
           <Button

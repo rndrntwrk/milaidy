@@ -1,12 +1,16 @@
 # syntax=docker/dockerfile:1.7
-# Milady Agent — Cloud-optimized Docker image
+# elizaOS Agent — Cloud-optimized Docker image
 # Goal: keep runtime under ~2GB by doing a production-only install,
 # flattening Bun's store-backed node_modules, and copying only the cloud runtime.
 ARG NODE_VERSION=22
 ARG BUN_VERSION=1.3.10
-ARG OCI_SOURCE="https://github.com/milady-ai/milady"
-ARG OCI_TITLE="Milady Agent (Cloud)"
-ARG OCI_DESCRIPTION="Milady agent cloud runtime with prebuilt UI/API artifacts"
+ARG APP_ENTRYPOINT=app.mjs
+ARG APP_CMD_START=""
+ARG APP_PORT=2138
+ARG APP_API_BIND=127.0.0.1
+ARG OCI_SOURCE=""
+ARG OCI_TITLE="elizaOS Agent (Cloud)"
+ARG OCI_DESCRIPTION="elizaOS cloud runtime with prebuilt UI/API artifacts"
 ARG OCI_LICENSES="MIT"
 ARG VERSION=""
 ARG VERSION_CLEAN=""
@@ -28,7 +32,7 @@ COPY plugins/plugin-selfcontrol/package.json ./plugins/plugin-selfcontrol/packag
 COPY eliza/packages/shared/package.json ./eliza/packages/shared/package.json
 COPY apps/app/package.json ./apps/app/package.json
 COPY apps/app/electrobun/package.json ./apps/app/electrobun/package.json
-COPY deploy/cloud-agent-template/package.json ./deploy/cloud-agent-template/package.json
+COPY eliza/packages/app-core/deploy/cloud-agent-template/package.json ./eliza/packages/app-core/deploy/cloud-agent-template/package.json
 
 ENV NODE_LLAMA_CPP_SKIP_DOWNLOAD=true
 RUN bun install --frozen-lockfile --ignore-scripts --no-progress
@@ -39,6 +43,7 @@ RUN npm install --prefix /opt/tsx --ignore-scripts --no-save tsx@4.21.0 \
 
 FROM node:${NODE_VERSION}-slim AS prep
 WORKDIR /src
+ARG APP_ENTRYPOINT
 ARG VERSION_CLEAN
 # Re-declare so it's in scope for this build stage.
 ARG VITE_ASSET_BASE_URL=""
@@ -51,7 +56,7 @@ COPY eliza/packages/agent ./eliza/packages/agent
 COPY eliza/packages/app-core ./eliza/packages/app-core
 COPY plugins/plugin-selfcontrol ./plugins/plugin-selfcontrol
 COPY eliza/packages/shared ./eliza/packages/shared
-COPY milady.mjs package.json plugins.json ./
+COPY ${APP_ENTRYPOINT} package.json plugins.json ./
 COPY scripts/docker-entrypoint.sh ./scripts/docker-entrypoint.sh
 
 RUN set -eux; \
@@ -71,7 +76,7 @@ RUN set -eux; \
   cp -a dist /runtime/dist; \
   cp -a apps/app/dist /runtime/apps/app/dist; \
   cp -a scripts/docker-entrypoint.sh /runtime/scripts/docker-entrypoint.sh; \
-  cp -a milady.mjs package.json plugins.json /runtime/; \
+  cp -a "${APP_ENTRYPOINT}" package.json plugins.json /runtime/; \
   sed -i 's/const stats = service.getCatalogStats();/const stats = typeof service.getCatalogStats === "function" ? service.getCatalogStats() : { loaded: 0, total: 0, storageType: "unknown" };/g' /runtime/node_modules/@elizaos/plugin-agent-skills/dist/index.js 2>/dev/null || true; \
   if [ -n "${VERSION_CLEAN}" ]; then \
     node -e "const fs=require('fs'); const v=process.argv[1]; const p='/runtime/node_modules/@elizaos/agent/package.json'; try { const pkg=JSON.parse(fs.readFileSync(p,'utf8')); pkg.version=v; fs.writeFileSync(p, JSON.stringify(pkg, null, 2)); console.log('Patched autonomous to', v); } catch (err) { console.log('skip:', err.message); }" "${VERSION_CLEAN}"; \
@@ -101,6 +106,10 @@ RUN set -eux; \
   find /runtime/node_modules -type d -name 'test' -prune -exec rm -rf {} + 2>/dev/null
 
 FROM node:${NODE_VERSION}-slim
+ARG APP_ENTRYPOINT
+ARG APP_CMD_START
+ARG APP_PORT
+ARG APP_API_BIND
 ARG OCI_SOURCE
 ARG OCI_TITLE
 ARG OCI_DESCRIPTION
@@ -124,16 +133,17 @@ COPY --from=prep /runtime/ /app/
 COPY --from=tsx /opt/tsx /opt/tsx
 
 ENV NODE_ENV=production
-# MILADY_PORT is the canonical name; ELIZA_PORT kept for backward compat
-ENV MILADY_PORT=2138
-ENV ELIZA_PORT=${MILADY_PORT}
-# Cloud images keep loopback bind by default unless overridden explicitly.
-ENV MILADY_API_BIND=127.0.0.1
+ENV APP_ENTRYPOINT=${APP_ENTRYPOINT}
+ENV APP_CMD_START=${APP_CMD_START}
+ENV APP_PORT=${APP_PORT}
+ENV APP_API_BIND=${APP_API_BIND}
+ENV ELIZA_PORT=${APP_PORT}
+ENV ELIZA_API_BIND=${APP_API_BIND}
 ENV ELIZA_ALLOWED_HOSTS=*
-EXPOSE 2138
+EXPOSE ${APP_PORT}
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
-  CMD sh -lc 'port="${PORT:-${MILADY_PORT:-2138}}"; code="$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:${port}/api/health")" && [ "$code" = "200" -o "$code" = "401" ]'
+  CMD sh -lc 'port="${PORT:-${APP_PORT:-${ELIZA_PORT:-2138}}}"; code="$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:${port}/api/health")" && [ "$code" = "200" -o "$code" = "401" ]'
 
 ENTRYPOINT ["sh", "./scripts/docker-entrypoint.sh"]
-CMD ["node", "--import", "/opt/tsx/node_modules/tsx/dist/loader.mjs", "milady.mjs", "start"]
+CMD ["sh", "-lc", "exec ${APP_CMD_START:-node --import /opt/tsx/node_modules/tsx/dist/loader.mjs ${APP_ENTRYPOINT} start}"]

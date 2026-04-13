@@ -20,17 +20,14 @@ function getRepoLocalWorkspaceRoot(
   }
 
   const relativeRoots: Record<string, string[]> = {
-    "@elizaos/agent": ["eliza/agent", "../eliza/agent"],
-    "@elizaos/agent": ["eliza/agent", "../eliza/agent"],
-    "@elizaos/app-core": [
-      "eliza/packages/app-core",
-      "../eliza/packages/app-core",
+    "@elizaos/agent": [
+      "eliza/packages/agent",
+      "../eliza/packages/agent",
     ],
     "@elizaos/app-core": [
       "eliza/packages/app-core",
       "../eliza/packages/app-core",
     ],
-    "@elizaos/shared": ["eliza/packages/shared", "../eliza/packages/shared"],
     "@elizaos/shared": ["eliza/packages/shared", "../eliza/packages/shared"],
     "@elizaos/app-companion": [
       "eliza/apps/app-companion",

@@ -5,7 +5,7 @@ import type {
   LifeOpsBrowserSettings,
   SyncLifeOpsBrowserStateRequest,
   UpdateLifeOpsBrowserSessionProgressRequest,
-} from "../../../../eliza/packages/shared/src/contracts/lifeops";
+} from "@elizaos/shared/contracts/lifeops";
 
 export type CompanionSyncRequest = SyncLifeOpsBrowserStateRequest;
 export type CompanionSession = LifeOpsBrowserSession;

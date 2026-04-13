@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { describeIf } from "../../../test/helpers/conditional-tests.ts";
+import { describeIf } from "../../../../test/helpers/conditional-tests.ts";
 import type { StartedLifeOpsLiveRuntime } from "./helpers/lifeops-live-harness.ts";
 import {
   getLifeOpsLiveSetupWarnings,

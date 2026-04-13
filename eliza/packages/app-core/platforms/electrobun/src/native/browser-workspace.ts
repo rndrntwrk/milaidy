@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { BrowserWindow } from "electrobun/bun";
+import { getBrandConfig } from "../brand-config";
 import type { SendToWebview, WebviewEvalRpc } from "../types.js";
 
 const DEFAULT_TAB_BOUNDS = {
@@ -11,7 +12,7 @@ const DEFAULT_TAB_BOUNDS = {
   height: 920,
 } as const;
 const HIDDEN_WINDOW_POSITION = -99_999;
-const DEFAULT_PARTITION = "persist:milady-browser";
+const DEFAULT_PARTITION = getBrandConfig().browserWorkspacePartition;
 
 export interface BrowserWorkspaceTabSnapshot {
   id: string;
@@ -124,7 +125,7 @@ export class BrowserWorkspaceManager {
   ): Promise<BrowserWorkspaceTabSnapshot> {
     const visible = options.show === true;
     const url = assertBrowserWorkspaceUrl(options.url ?? "about:blank");
-    const title = options.title?.trim() || "Milady Browser";
+    const title = options.title?.trim() || `${getBrandConfig().appName} Browser`;
     const partition = options.partition?.trim() || DEFAULT_PARTITION;
     const id = `btab_${++browserWorkspaceCounter}`;
     const createdAt = toIsoNow();
@@ -227,7 +228,7 @@ export class BrowserWorkspaceManager {
       const height = size.height;
       tmpPath = path.join(
         os.tmpdir(),
-        `milady-browser-workspace-${options.id}-${Date.now()}.png`,
+        `${getBrandConfig().urlScheme}-browser-workspace-${options.id}-${Date.now()}.png`,
       );
       let proc: ReturnType<typeof Bun.spawn>;
 

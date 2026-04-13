@@ -1,20 +1,12 @@
 const DEFAULT_UPSTREAM_ORIGIN = "https://www.elizacloud.ai";
-const DEFAULT_ALLOWED_ORIGINS = [
-  "https://app.milady.ai",
-  "https://milady.ai",
-  "http://localhost:5173",
-  "http://127.0.0.1:5173",
-];
-
-const PROXY_PATH_PREFIXES = [
-  "/api/auth/cli-session",
-  "/api/compat/",
-  "/api/v1/milady/launch-sessions/",
-];
+const DEFAULT_ALLOWED_ORIGINS: string[] = [];
 
 type Env = {
   ELIZA_CLOUD_ORIGIN?: string;
+  CF_ALLOWED_ORIGINS?: string;
+  CF_PROXY_PATH_PREFIXES?: string;
   ALLOWED_ORIGINS?: string;
+  PROXY_PATH_PREFIXES?: string;
 };
 
 function resolveUpstreamOrigin(env: Env): string {
@@ -25,14 +17,21 @@ function resolveUpstreamOrigin(env: Env): string {
 }
 
 function resolveAllowedOrigins(env: Env): Set<string> {
-  const configured = env.ALLOWED_ORIGINS?.split(",")
+  const configured = (env.CF_ALLOWED_ORIGINS || env.ALLOWED_ORIGINS)?.split(",")
     .map((item) => item.trim())
     .filter(Boolean);
   return new Set(configured?.length ? configured : DEFAULT_ALLOWED_ORIGINS);
 }
 
-function shouldProxyPath(pathname: string): boolean {
-  return PROXY_PATH_PREFIXES.some((prefix) =>
+function resolveProxyPathPrefixes(env: Env): string[] {
+  return (env.CF_PROXY_PATH_PREFIXES || env.PROXY_PATH_PREFIXES || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function shouldProxyPath(pathname: string, pathPrefixes: string[]): boolean {
+  return pathPrefixes.some((prefix) =>
     prefix.endsWith("/")
       ? pathname.startsWith(prefix)
       : pathname === prefix || pathname.startsWith(`${prefix}/`),
@@ -65,7 +64,8 @@ function applyCorsHeaders(
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
-    if (!shouldProxyPath(url.pathname)) {
+    const pathPrefixes = resolveProxyPathPrefixes(env);
+    if (!shouldProxyPath(url.pathname, pathPrefixes)) {
       return new Response("Not found", { status: 404 });
     }
 

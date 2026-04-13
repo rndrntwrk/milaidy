@@ -3,13 +3,16 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { InMemoryDatabaseAdapter } from "../../../../eliza/packages/typescript/src/database/inMemoryAdapter";
-import { AgentRuntime } from "../../../../eliza/packages/typescript/src/runtime";
-import type { Character } from "../../../../eliza/packages/typescript/src/types/agent";
-import type { HandlerCallback } from "../../../../eliza/packages/typescript/src/types/components";
-import { ModelType } from "../../../../eliza/packages/typescript/src/types/model";
-import type { Plugin } from "../../../../eliza/packages/typescript/src/types/plugin";
-import type { Content, UUID } from "../../../../eliza/packages/typescript/src/types/primitives";
+import {
+  AgentRuntime,
+  InMemoryDatabaseAdapter,
+  ModelType,
+  type Character,
+  type Content,
+  type HandlerCallback,
+  type Plugin,
+  type UUID,
+} from "@elizaos/core";
 
 type VoicebenchMode = {
   id: string;

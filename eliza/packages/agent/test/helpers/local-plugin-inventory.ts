@@ -35,7 +35,7 @@ export type LocalWorkspacePlugin = {
   entryUrl: string;
 };
 
-const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..", "..", "..");
+const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..", "..", "..", "..");
 const PLUGIN_MANIFEST_PATH = path.join(REPO_ROOT, "plugins.json");
 
 let cachedPluginsPromise: Promise<LocalWorkspacePlugin[]> | null = null;
@@ -46,9 +46,9 @@ function readPluginManifest(): PluginManifest {
 
 function findPackageRoot(dirName: string): string | null {
   const candidates = [
-    path.join(REPO_ROOT, "plugins", dirName, "typescript"),
-    path.join(REPO_ROOT, "plugins", dirName),
-    path.join(REPO_ROOT, "packages", dirName),
+    path.join(REPO_ROOT, "eliza", "plugins", dirName, "typescript"),
+    path.join(REPO_ROOT, "eliza", "plugins", dirName),
+    path.join(REPO_ROOT, "eliza", "packages", dirName),
   ];
 
   for (const candidate of candidates) {

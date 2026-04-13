@@ -5,7 +5,7 @@
  * connector functionality against your own accounts.
  *
  * Usage:
- *   import { createDiscordTestClient, sendDiscordDM } from "../../test/helpers/real-connector";
+ *   import { createDiscordTestClient, sendDiscordDM } from "../../../../../test/helpers/real-connector";
  *
  *   const discord = await createDiscordTestClient();
  *   await sendDiscordDM(discord.client, discord.userId, "test message");
@@ -16,7 +16,14 @@ import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 
 // Load .env
-const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..");
+const REPO_ROOT = path.resolve(
+  import.meta.dirname,
+  "..",
+  "..",
+  "..",
+  "..",
+  "..",
+);
 try {
   const { config } = await import("dotenv");
   config({ path: path.join(REPO_ROOT, ".env") });

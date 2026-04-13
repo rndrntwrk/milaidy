@@ -14,9 +14,9 @@ import {
 } from "@elizaos/core";
 import dotenv from "dotenv";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { describeIf } from "../../../test/helpers/conditional-tests.ts";
-import { selectLiveProvider as selectSharedLiveProvider } from "../../../test/helpers/live-provider";
-import { saveEnv, sleep, withTimeout } from "../../../test/helpers/test-utils";
+import { describeIf } from "../../../../test/helpers/conditional-tests.ts";
+import { selectLiveProvider as selectSharedLiveProvider } from "../../../../test/helpers/live-provider";
+import { saveEnv, sleep, withTimeout } from "../../../../test/helpers/test-utils";
 import { readLifeOpsOwnerProfile } from "../src/lifeops/owner-profile";
 import { LifeOpsService } from "../src/lifeops/service";
 import {

@@ -7,11 +7,13 @@
  */
 
 import { resolveInitialApiBase } from "../api-base";
+import { getBrandConfig } from "../brand-config";
 import type { MusicPlayerDesktopPlaybackUrls } from "../rpc-schema";
 import { getAgentManager } from "./agent";
 
 /** Default guild/room id when no Discord guild exists (desktop / web-only). */
-export const MILADY_DESKTOP_MUSIC_GUILD_ID = "milady-desktop";
+export const DEFAULT_DESKTOP_MUSIC_GUILD_ID =
+  getBrandConfig().desktopMusicGuildId;
 
 export class MusicPlayerManager {
   getDesktopPlaybackUrls(params?: {
@@ -28,11 +30,11 @@ export class MusicPlayerManager {
       return {
         ok: false,
         reason:
-          "Could not resolve agent API base (check MILADY_API_PORT / embedded agent)",
+          "Could not resolve agent API base (check ELIZA_API_PORT / embedded agent)",
       };
     }
 
-    const guildId = params?.guildId?.trim() || MILADY_DESKTOP_MUSIC_GUILD_ID;
+    const guildId = params?.guildId?.trim() || DEFAULT_DESKTOP_MUSIC_GUILD_ID;
     const g = encodeURIComponent(guildId);
     const base = apiBase.replace(/\/$/, "");
 

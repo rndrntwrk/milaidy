@@ -1,7 +1,6 @@
-import { mixamoVRMRigMap } from "../../mixamo-retarget/mixamoVRMRigMap";
 import type { VRM, VRMHumanBoneName } from "@pixiv/three-vrm";
 import * as THREE from "three";
-
+import { mixamoVRMRigMap } from "./mixamoVRMRigMap";
 function normalizeMixamoRigName(name: string): string {
   const pipe = name.lastIndexOf("|");
   const base = pipe >= 0 ? name.slice(pipe + 1) : name;

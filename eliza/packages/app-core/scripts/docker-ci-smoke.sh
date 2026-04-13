@@ -10,7 +10,7 @@ set -euo pipefail
 #   4. Optionally boots the container and probes /api/health or /api/status
 #
 # Usage:
-#   scripts/docker-ci-smoke.sh [--tag TAG] [--version VERSION] [--skip-smoke]
+#   bash eliza/packages/app-core/scripts/docker-ci-smoke.sh [--tag TAG] [--version VERSION] [--skip-smoke]
 #
 # Environment:
 #   BUN_VERSION          Bun version to install/use in CI (default: 1.3.9)
@@ -48,6 +48,16 @@ find_docker_bin() {
   return 1
 }
 
+load_env_file() {
+  local file="$1"
+  if [[ -f "$file" ]]; then
+    set -a
+    # shellcheck disable=SC1090
+    source "$file"
+    set +a
+  fi
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --tag)
@@ -76,15 +86,29 @@ REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$REPO_ROOT"
 
 [[ -f package.json ]] || fail "Run from the repo root"
-[[ -f deploy/Dockerfile.ci ]] || fail "deploy/Dockerfile.ci not found"
-[[ -f deploy/.dockerignore.ci ]] || fail "deploy/.dockerignore.ci not found"
+[[ -f eliza/packages/app-core/deploy/Dockerfile.ci ]] || fail "eliza/packages/app-core/deploy/Dockerfile.ci not found"
+[[ -f eliza/packages/app-core/deploy/.dockerignore.ci ]] || fail "eliza/packages/app-core/deploy/.dockerignore.ci not found"
+[[ -f deploy/deploy.env ]] || fail "deploy/deploy.env not found"
+
+load_env_file "eliza/packages/app-core/deploy/deploy.defaults.env"
+load_env_file "deploy/deploy.env"
+
+APP_IMAGE="${APP_IMAGE:-milady/agent}"
+APP_ENTRYPOINT="${APP_ENTRYPOINT:-app.mjs}"
+APP_CMD_START="${APP_CMD_START:-node --import ./node_modules/tsx/dist/loader.mjs ${APP_ENTRYPOINT} start}"
+APP_PORT="${APP_PORT:-2138}"
+APP_API_BIND="${APP_API_BIND:-127.0.0.1}"
+OCI_SOURCE="${OCI_SOURCE:-}"
+OCI_TITLE="${OCI_TITLE:-elizaOS Agent}"
+OCI_DESCRIPTION="${OCI_DESCRIPTION:-elizaOS agent runtime}"
+OCI_LICENSES="${OCI_LICENSES:-MIT}"
 
 if [[ -z "$VERSION" ]]; then
   VERSION="v$(node -p "require('./package.json').version")-docker-smoke"
 fi
 VERSION_CLEAN="${VERSION#v}"
 SOURCE_SHA="$(git rev-parse HEAD)"
-DOCKER_IMAGE="${DOCKER_IMAGE:-miladyai/agent:${TAG}}"
+DOCKER_IMAGE="${DOCKER_IMAGE:-${APP_IMAGE}:${TAG}}"
 CONTAINER_NAME="milady-docker-smoke-${TAG//[^a-zA-Z0-9_.-]/-}"
 mkdir -p "$REPO_ROOT/.tmp/qa"
 SMOKE_ARTIFACT_DIR="$(mktemp -d "$REPO_ROOT/.tmp/qa/docker-ci-smoke-XXXXXX")"
@@ -142,28 +166,14 @@ pushd apps/app >/dev/null
 bun scripts/plugin-build.mjs
 popd >/dev/null
 
-log "Building shared workspace"
-pushd packages/shared >/dev/null
-bun run build
-popd >/dev/null
-
 log "Building agent workspace"
-pushd packages/agent >/dev/null
+pushd eliza/packages/agent >/dev/null
 bun run build:docker-dist
 popd >/dev/null
 
-if [[ "${MILADY_SKIP_LOCAL_UPSTREAMS:-0}" != "1" && -d eliza/packages/typescript ]]; then
-  log "Building core workspace"
-  pushd eliza/packages/typescript >/dev/null
-  bun run build
-  popd >/dev/null
-else
-  log "Skipping core workspace build (published upstream mode)"
-fi
-
 log "Building @elizaos/core (includes agent-orchestrator)"
 pushd eliza/packages/typescript >/dev/null
-bun run build
+bun run build:node
 popd >/dev/null
 
 log "Building runtime dist"
@@ -177,13 +187,21 @@ NODE_ENV=production npx vite build
 popd >/dev/null
 
 log "Preparing CI dockerignore"
-cp deploy/.dockerignore.ci .dockerignore
+cp eliza/packages/app-core/deploy/.dockerignore.ci .dockerignore
 
 log "Building Docker image"
 "$DOCKER_BIN" build \
-  --file deploy/Dockerfile.ci \
+  --file eliza/packages/app-core/deploy/Dockerfile.ci \
   --tag "$DOCKER_IMAGE" \
   --build-arg "BUN_VERSION=$BUN_VERSION" \
+  --build-arg "APP_ENTRYPOINT=$APP_ENTRYPOINT" \
+  --build-arg "APP_CMD_START=$APP_CMD_START" \
+  --build-arg "APP_PORT=$APP_PORT" \
+  --build-arg "APP_API_BIND=$APP_API_BIND" \
+  --build-arg "OCI_SOURCE=$OCI_SOURCE" \
+  --build-arg "OCI_TITLE=$OCI_TITLE" \
+  --build-arg "OCI_DESCRIPTION=$OCI_DESCRIPTION" \
+  --build-arg "OCI_LICENSES=$OCI_LICENSES" \
   --build-arg "VERSION=$VERSION" \
   --build-arg "VERSION_CLEAN=$VERSION_CLEAN" \
   --build-arg "REVISION=$SOURCE_SHA" \
@@ -199,6 +217,7 @@ log "Starting container smoke boot"
 "$DOCKER_BIN" run -d \
   --name "$CONTAINER_NAME" \
   -e PORT="$CONTAINER_PORT" \
+  -e APP_API_BIND=0.0.0.0 \
   -e MILADY_DISABLE_LOCAL_EMBEDDINGS=1 \
   -e MILADY_API_BIND=0.0.0.0 \
   -p "${SMOKE_PORT}:${CONTAINER_PORT}" \

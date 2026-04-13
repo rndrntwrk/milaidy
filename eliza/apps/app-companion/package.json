@@ -14,18 +14,18 @@
   "exports": {
     "./package.json": "./package.json",
     ".": "./src/index.ts",
+    "./ui": "./src/ui.ts",
     "./plugin": "./src/plugin.ts",
     "./register": "./src/register.ts",
     "./assets.json": "./assets.json",
     "./components/*": "./src/components/*",
-    "./mixamo-retarget": "./src/mixamo-retarget/index.ts",
-    "./mixamo-retarget/*": "./src/mixamo-retarget/*",
     "./types/*": "./src/types/*",
     "./emotes": "./src/emotes/index.ts",
     "./emotes/*": "./src/emotes/*.ts"
   },
   "dependencies": {
     "@elizaos/agent": "workspace:*",
+    "@elizaos/app-coding": "workspace:*",
     "@elizaos/core": "workspace:*",
     "lucide-react": "^0.575.0"
   },

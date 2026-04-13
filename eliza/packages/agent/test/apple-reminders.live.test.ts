@@ -3,7 +3,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { setTimeout as sleep } from "node:timers/promises";
 import { describe, expect, it } from "vitest";
-import { describeIf } from "../../../test/helpers/conditional-tests.ts";
+import { describeIf } from "../../../../test/helpers/conditional-tests.ts";
 import {
   createNativeAppleReminderLikeItem,
   deleteNativeAppleReminderLikeItem,

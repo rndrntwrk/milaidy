@@ -1,10 +1,17 @@
-import type { Memory, ServiceTypeRegistry, UUID } from "@elizaos/core";
+import type { Memory } from "../../types/memory.ts";
+import type { UUID } from "../../types/primitives.ts";
+import type { ServiceTypeRegistry } from "../../types/service.ts";
 
 export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
 export type JsonObject = { [key: string]: JsonValue };
 
-// Extend the core service types with experience service
+declare module "../../types/service.ts" {
+  interface ServiceTypeRegistry {
+    EXPERIENCE: "EXPERIENCE";
+  }
+}
+
 declare module "@elizaos/core" {
   interface ServiceTypeRegistry {
     EXPERIENCE: "EXPERIENCE";

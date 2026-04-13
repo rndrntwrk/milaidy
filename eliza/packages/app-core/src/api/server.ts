@@ -983,8 +983,8 @@ async function handleCompatRoute(
   }
 
   // GET /api/agents — return the running agent's info.
-  // The app runs a single agent; this returns it as a one-element array
-  // for compatibility with the upstream elizaOS health probe convention.
+  // The app runs a single agent; expose it under an `agents` array so older
+  // health probes and desktop callers can use the same response shape.
   if (method === "GET" && url.pathname === "/api/agents") {
     if (!ensureCompatApiAuthorized(req, res)) {
       return true;
@@ -995,13 +995,15 @@ async function handleCompatRoute(
       state.current?.agentId ??
       character.id ??
       "00000000-0000-0000-0000-000000000000";
-    sendJsonResponse(res, 200, [
-      {
-        id: agentId,
-        name: character.name,
-        status: state.current ? "running" : "stopped",
-      },
-    ]);
+    sendJsonResponse(res, 200, {
+      agents: [
+        {
+          id: agentId,
+          name: character.name,
+          status: state.current ? "running" : "stopped",
+        },
+      ],
+    });
     return true;
   }
 

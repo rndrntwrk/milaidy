@@ -602,7 +602,7 @@ See **[Architecture](docs/architecture.mdx)** for the full development guide inc
 - **[Desktop main-process reset](docs/apps/desktop-main-process-reset.md)** — Why **Reset Milady…** runs HTTP in the Electrobun main process after native confirm, how the renderer syncs UI state, reachable API probing (`res.ok`), and where tests live.
 - **[Darwin vs macOS version (Electrobun WebGPU)](docs/apps/electrobun-darwin-macos-webgpu-version.md)** — Why **`uname -r` / `os.release()`** is not the macOS marketing major after Tahoe, how we map **Darwin 25 → macOS 26**, and why the WebGPU gate used to print “macOS 16.”
 - **[Changelog](docs/changelog.mdx)** — Shipped features and fixes with rationale (**WHY** bullets in each update).
-- **[Roadmap](docs/ROADMAP.md)** — Direction and follow-ups; points to changelog for what already landed.
+- **[Roadmap](docs/roadmap.md)** — Direction and follow-ups; points to changelog for what already landed.
 
 ---
 

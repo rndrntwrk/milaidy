@@ -214,6 +214,7 @@ export abstract class DatabaseAdapter<DB extends object = object>
 		entityId?: UUID;
 		agentId?: UUID;
 		limit?: number;
+		count?: number;
 		offset?: number;
 		unique?: boolean;
 		tableName: string;

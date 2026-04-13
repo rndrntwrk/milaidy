@@ -19,6 +19,7 @@
  */
 
 import { BrowserWindow } from "electrobun/bun";
+import { getBrandConfig } from "./brand-config";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -122,7 +123,7 @@ class FloatingChatWindowManager {
 
     // Electrobun BrowserWindow constructor: uses `frame` object for bounds.
     const win = new BrowserWindow({
-      title: "Milady Chat",
+      title: `${getBrandConfig().appName} Chat`,
       url,
       preload: this.preloadPath || null,
       frame: { x, y, width: FLOAT_WIDTH, height: FLOAT_HEIGHT },

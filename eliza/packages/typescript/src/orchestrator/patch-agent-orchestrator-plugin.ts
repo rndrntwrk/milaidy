@@ -23,6 +23,7 @@ import {
   getCoordinator as getCoordinatorFromPty,
   PTYService,
 } from "./services/pty-service.ts";
+import type { SwarmCoordinator } from "./services/swarm-coordinator.ts";
 import { CodingWorkspaceService } from "./services/workspace-service.ts";
 
 type AdapterId = "claude" | "codex" | "gemini" | "aider";
@@ -1880,7 +1881,7 @@ function patchPtyServiceClass(): void {
   const ptyServiceClass = PTYService;
   if (!ptyServiceClass || typeof ptyServiceClass !== "function") return;
 
-  const prototype = ptyServiceClass.prototype as Record<string, unknown>;
+  const prototype = ptyServiceClass.prototype as unknown as Record<string, unknown>;
   const originalResolveAgentType = prototype.resolveAgentType as
     | ((this: PTYServiceLike) => Promise<string>)
     | undefined;
@@ -1931,7 +1932,10 @@ export function createCodingAgentRouteHandler(
   runtime: IAgentRuntime,
   coordinator?: unknown,
 ): PatchedRouteHandler {
-  const baseHandler = baseCreateCodingAgentRouteHandler(runtime, coordinator);
+  const baseHandler = baseCreateCodingAgentRouteHandler(
+    runtime,
+    coordinator as SwarmCoordinator | undefined,
+  );
 
   return async (
     req: http.IncomingMessage,
@@ -2093,7 +2097,7 @@ export function createCodingAgentRouteHandler(
       );
       return true;
     }
-    return baseHandler ? baseHandler(req, res, pathname, method) : false;
+    return baseHandler ? baseHandler(req, res, pathname) : false;
   };
 }
 

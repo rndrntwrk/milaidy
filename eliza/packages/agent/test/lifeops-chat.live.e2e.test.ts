@@ -4,13 +4,14 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
-import { afterAll, beforeAll, expect, it } from "vitest";
-import { describeIf } from "../../../test/helpers/conditional-tests.ts";
+import { afterEach, beforeEach, expect, it } from "vitest";
+import { describeIf } from "../../../../test/helpers/conditional-tests.ts";
 import {
   createConversation,
   postConversationMessage,
   req,
-} from "../../../test/helpers/http";
+} from "../../../../test/helpers/http";
+import { createLiveRuntimeChildEnv } from "../../../../test/helpers/live-child-env.ts";
 import { loadElizaConfig } from "../src/config/config";
 import { judgeTextWithLlm } from "./helpers/lifeops-live-judge.ts";
 
@@ -18,7 +19,7 @@ const LIVE_TESTS_ENABLED =
   process.env.ELIZA_LIVE_TEST === "1" || process.env.ELIZA_LIVE_TEST === "1";
 const LIVE_PROVIDER_OVERRIDE =
   process.env.ELIZA_LIVE_PROVIDER?.trim().toLowerCase();
-const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..", "..");
+const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..", "..", "..");
 const ENV_PATH = path.join(REPO_ROOT, ".env");
 const LIVE_CHAT_TEST_TIMEOUT_MS = 300_000;
 const LIVE_RUNTIME_BOOT_TIMEOUT_MS = 180_000;
@@ -271,10 +272,17 @@ async function selectLiveProvider(): Promise<{
 
 const selectedLiveProvider = await selectLiveProvider();
 const selectedLiveProviderPlugin = selectedLiveProvider?.plugin ?? null;
+const SUPPORTED_PROVIDER_NAMES = new Set([
+  "openai",
+  "openrouter",
+  "google",
+  "anthropic",
+]);
 const LIVE_CHAT_SUITE_ENABLED =
   LIVE_TESTS_ENABLED &&
   selectedLiveProvider !== null &&
-  selectedLiveProviderPlugin !== null;
+  selectedLiveProviderPlugin !== null &&
+  SUPPORTED_PROVIDER_NAMES.has(selectedLiveProvider.name);
 
 const liveSetupWarnings = [
   !LIVE_TESTS_ENABLED ? "set ELIZA_LIVE_TEST=1 or ELIZA_LIVE_TEST=1" : null,
@@ -283,6 +291,10 @@ const liveSetupWarnings = [
     : null,
   !selectedLiveProviderPlugin
     ? "the selected provider did not map to a known plugin package"
+    : null,
+  selectedLiveProvider &&
+  !SUPPORTED_PROVIDER_NAMES.has(selectedLiveProvider.name)
+    ? `selected provider "${selectedLiveProvider.name}" does not support this suite; use OpenAI, OpenRouter, Google, or Anthropic`
     : null,
 ].filter((entry): entry is string => Boolean(entry));
 
@@ -773,7 +785,7 @@ async function startLiveRuntime(): Promise<StartedRuntime> {
 
   const child = spawn("bun", ["run", "start:eliza"], {
     cwd: REPO_ROOT,
-    env: {
+    env: createLiveRuntimeChildEnv({
       ...Object.fromEntries(
         Object.entries(process.env).filter(
           ([key]) =>
@@ -785,8 +797,6 @@ async function startLiveRuntime(): Promise<StartedRuntime> {
       ),
       ...(selectedLiveProvider?.env ?? {}),
       ELIZA_CONFIG_PATH: configPath,
-      ELIZA_CONFIG_PATH: configPath,
-      ELIZA_STATE_DIR: stateDir,
       ELIZA_STATE_DIR: stateDir,
       ELIZA_PORT: String(apiPort),
       ELIZA_API_PORT: String(apiPort),
@@ -799,7 +809,7 @@ async function startLiveRuntime(): Promise<StartedRuntime> {
       DISCORD_API_TOKEN: "",
       DISCORD_BOT_TOKEN: "",
       TELEGRAM_BOT_TOKEN: "",
-    },
+    }),
     stdio: ["pipe", "pipe", "pipe"],
   });
 
@@ -939,13 +949,16 @@ describeIf(LIVE_CHAT_SUITE_ENABLED)(
   () => {
     let runtime: StartedRuntime | undefined;
 
-    beforeAll(async () => {
+    // Each test mutates live LifeOps state. Boot a fresh runtime per test so
+    // definitions/goals from earlier cases cannot create false failures.
+    beforeEach(async () => {
       runtime = await startLiveRuntime();
     }, LIVE_RUNTIME_BOOT_TIMEOUT_MS + 30_000);
 
-    afterAll(async () => {
+    afterEach(async () => {
       if (runtime) {
         await runtime.close();
+        runtime = undefined;
       }
     });
 

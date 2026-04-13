@@ -2,7 +2,7 @@
  * Test gating utilities for real integration tests.
  *
  * Usage:
- *   import { skipWithout, skipWithoutLive, skipWithoutAnyLLM } from "../../test/helpers/skip-without";
+ *   import { skipWithout, skipWithoutLive, skipWithoutAnyLLM } from "../../../../../test/helpers/skip-without";
  *
  *   describe("Discord connector", () => {
  *     skipWithout("DISCORD_BOT_TOKEN");

@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { getBrandConfig } from "../brand-config";
 
 export interface WebGpuSupportStatus {
   /** Whether WebGPU is expected to be available in the webview renderer. */
@@ -185,7 +186,7 @@ export function checkWebGpuSupport(
     // macOS < 26 — WKWebView doesn't expose WebGPU (Milady still runs; UI uses WebGL).
     return {
       available: false,
-      reason: `WKWebView does not expose WebGPU on macOS ${macVersion ?? "unknown"} (native navigator.gpu needs macOS 26+ Tahoe). Milady still runs; companion and avatar use WebGL when WebGPU is missing. Chrome Beta is optional for separate Chromium WebGPU experiments.`,
+      reason: `WKWebView does not expose WebGPU on macOS ${macVersion ?? "unknown"} (native navigator.gpu needs macOS 26+ Tahoe). ${getBrandConfig().appName} still runs; companion and avatar use WebGL when WebGPU is missing. Chrome Beta is optional for separate Chromium WebGPU experiments.`,
       renderer: "native",
       chromeBetaPath: chromeBeta.path,
       downloadUrl: chromeBeta.downloadUrl,
@@ -201,7 +202,7 @@ export function checkWebGpuSupport(
 
     return {
       available: false,
-      reason: `CEF needs WebGPU-related Chromium flags (${flagList}); injecting them from Milady is pending upstream Electrobun support. ${chromeBeta.found ? "Chrome Beta is installed for optional WebGPU testing." : "Chrome Beta is not installed."} The Milady UI still runs on WebGL when the renderer has no WebGPU.`,
+      reason: `CEF needs WebGPU-related Chromium flags (${flagList}); injecting them from ${getBrandConfig().appName} is pending upstream Electrobun support. ${chromeBeta.found ? "Chrome Beta is installed for optional WebGPU testing." : "Chrome Beta is not installed."} The ${getBrandConfig().appName} UI still runs on WebGL when the renderer has no WebGPU.`,
       renderer: "cef",
       chromeBetaPath: chromeBeta.path,
       downloadUrl: chromeBeta.found ? null : chromeBeta.downloadUrl,
@@ -212,7 +213,7 @@ export function checkWebGpuSupport(
   return {
     available: false,
     reason:
-      "Unable to determine WebGPU support for this configuration. Milady still runs; the UI uses WebGL when WebGPU is unavailable.",
+      `Unable to determine WebGPU support for this configuration. ${getBrandConfig().appName} still runs; the UI uses WebGL when WebGPU is unavailable.`,
     renderer: "unknown",
     chromeBetaPath: chromeBeta.path,
     downloadUrl: chromeBeta.downloadUrl,

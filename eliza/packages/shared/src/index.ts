@@ -14,4 +14,3 @@ export {
 export * from "./runtime-env";
 export { sanitizeSpeechText } from "./spoken-text";
 export * from "./types";
-export * from "../../app-core/src/ui";

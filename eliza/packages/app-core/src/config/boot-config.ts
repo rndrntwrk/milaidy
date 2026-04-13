@@ -6,6 +6,9 @@
  * reaching for window globals.
  */
 import { createContext, useContext } from "react";
+import type { Tab } from "../navigation";
+import type { ActionNotice } from "../state";
+import type { WebsiteBlockerSettingsCardProps } from "../types";
 import type { BrandingConfig } from "./branding";
 
 // ---------------------------------------------------------------------------
@@ -62,6 +65,11 @@ export interface ClientMiddleware {
   desktopPermissions?: boolean;
 }
 
+export interface CompanionShellComponentProps {
+  tab: Tab;
+  actionNotice: ActionNotice | null;
+}
+
 export interface AppBootConfig {
   /** Branding overrides (product name, URLs, etc.). */
   branding: Partial<BrandingConfig>;
@@ -79,6 +87,14 @@ export interface AppBootConfig {
   onboardingStyles?: unknown[];
   /** Character editor component — replaces window.__ELIZAOS_CHARACTER_EDITOR__. */
   characterEditor?: React.ComponentType<Record<string, unknown>>;
+  /** Companion shell implementation provided by the host app. */
+  companionShell?: React.ComponentType<CompanionShellComponentProps>;
+  /** LifeOps page implementation provided by the host app. */
+  lifeOpsPageView?: React.ComponentType<Record<string, never>>;
+  /** LifeOps browser setup panel provided by the host app. */
+  lifeOpsBrowserSetupPanel?: React.ComponentType<Record<string, never>>;
+  /** Website blocker settings card provided by the host app. */
+  websiteBlockerSettingsCard?: React.ComponentType<WebsiteBlockerSettingsCardProps>;
   /** Character catalog data — replaces cross-package import of catalog.json. */
   characterCatalog?: CharacterCatalogData;
   /**

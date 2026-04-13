@@ -6,7 +6,7 @@ import path from "node:path";
 import { domainToASCII } from "node:url";
 import { promisify } from "node:util";
 import type { HandlerOptions, Memory } from "@elizaos/core";
-import type { PermissionState, PermissionStatus } from "./permissions.js";
+import type { PermissionState, PermissionStatus } from "./permissions.ts";
 
 const BLOCK_START_MARKER = "# >>> milady-selfcontrol >>>";
 const BLOCK_END_MARKER = "# <<< milady-selfcontrol <<<";

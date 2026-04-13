@@ -25,9 +25,10 @@ import {
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolveRepoRootFromImportMeta } from "./lib/repo-root.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const repoRoot = resolve(__dirname, "..");
+const repoRoot = resolveRepoRootFromImportMeta(import.meta.url);
 
 // ── Resolve plugin-browser package ───────────────────────────────────────────
 

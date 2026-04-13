@@ -29,6 +29,7 @@ import {
   parseSettingsWindowAction,
 } from "./application-menu";
 import { showBackgroundNoticeOnce } from "./background-notice";
+import { getBrandConfig } from "./brand-config";
 import { startBrowserWorkspaceBridgeServer } from "./browser-workspace-bridge-server";
 import { readNavigationEventUrl } from "./cloud-auth-window";
 import { scheduleDevtoolsLayoutRefresh } from "./devtools-layout";
@@ -98,7 +99,8 @@ type HeartbeatMenuHealthResponse = {
 };
 
 const HEARTBEAT_MENU_REFRESH_MS = 30_000;
-const CONFIG_EXPORT_FILE_NAME = "milady-config.json";
+const BRAND = getBrandConfig();
+const CONFIG_EXPORT_FILE_NAME = BRAND.configExportFileName;
 const STARTUP_CRASH_REPORT_FILE = "startup-crash-report-latest.md";
 const STARTUP_CRASH_PROMPT_MARKER_FILE = "startup-crash-last-prompted.txt";
 let heartbeatMenuSnapshot: HeartbeatMenuSnapshot =
@@ -237,7 +239,7 @@ async function resolveReachableApiBaseForMainReset(): Promise<string | null> {
  */
 async function resetMiladyFromApplicationMenu(): Promise<void> {
   console.info(
-    "[Main][reset] App menu: Reset Milady — confirm + POST /api/agent/reset + restart (main process)",
+    `[Main][reset] App menu: Reset ${BRAND.appName} — confirm + POST /api/agent/reset + restart (main process)`,
   );
   await getDesktopManager()
     .showWindow()
@@ -274,7 +276,7 @@ async function resetMiladyFromApplicationMenu(): Promise<void> {
   if (!apiBase) {
     Utils.showNotification({
       title: "Reset Failed",
-      body: "Could not reach the Milady API (tried embedded port and MILADY_DESKTOP_API_BASE / defaults). Start the agent or dev server, or fix your API base env.",
+      body: `Could not reach the ${BRAND.appName} API (tried embedded port and ELIZA_DESKTOP_API_BASE / defaults). Start the agent or dev server, or fix your API base env.`,
     });
     return;
   }
@@ -300,7 +302,11 @@ async function resetMiladyFromApplicationMenu(): Promise<void> {
                 process.env as Record<string, string | undefined>,
                 port,
               )
-            : initialApiBase;
+            : resolveHeartbeatMenuApiBase() ??
+              resolveInitialApiBase(
+                process.env as Record<string, string | undefined>,
+              ) ??
+              apiBase;
           if (base) {
             pushApiBaseToRenderer(currentWindow, base, apiToken);
           }
@@ -872,7 +878,7 @@ async function createMainWindow(): Promise<BrowserWindow> {
   let win: BrowserWindow;
   if (useIsolatedMainView) {
     win = new BrowserWindow({
-      title: "Milady",
+      title: BRAND.appName,
       // @ts-expect-error: Electrobun doesn't expose icon in JS typings yet
       icon: resolveDesktopAppIconPath(),
       url: null,
@@ -885,7 +891,6 @@ async function createMainWindow(): Promise<BrowserWindow> {
     win.webview.remove();
     const mainView = new BrowserView({
       url: rendererUrl,
-      // @ts-expect-error: BrowserView preload exists at runtime but is not typed yet.
       preload,
       renderer: forceMainWindowCef
         ? "cef"
@@ -907,7 +912,7 @@ async function createMainWindow(): Promise<BrowserWindow> {
     }
   } else {
     win = new BrowserWindow({
-      title: "Milady",
+      title: BRAND.appName,
       // @ts-expect-error: Electrobun doesn't expose icon in JS typings yet
       icon: resolveDesktopAppIconPath(),
       url: rendererUrl,
@@ -1184,7 +1189,9 @@ function trackFocusedWindow(window: ManagedWindowLike): void {
       typeof windowId === "number" &&
       macOpenedDevtoolsWindowIds.has(windowId)
     ) {
-      scheduleDevtoolsLayoutRefresh(window);
+      scheduleDevtoolsLayoutRefresh(
+        window as Parameters<typeof scheduleDevtoolsLayoutRefresh>[0],
+      );
     }
   });
   window.on("close", () => {
@@ -1211,13 +1218,17 @@ function toggleFocusedWindowDevTools(): void {
 
   if (typeof webview?.toggleDevTools === "function") {
     webview.toggleDevTools();
-    scheduleDevtoolsLayoutRefresh(targetWindow);
+    scheduleDevtoolsLayoutRefresh(
+      targetWindow as Parameters<typeof scheduleDevtoolsLayoutRefresh>[0],
+    );
     return;
   }
 
   if (typeof webview?.openDevTools === "function") {
     webview.openDevTools();
-    scheduleDevtoolsLayoutRefresh(targetWindow);
+    scheduleDevtoolsLayoutRefresh(
+      targetWindow as Parameters<typeof scheduleDevtoolsLayoutRefresh>[0],
+    );
     return;
   }
 
@@ -1431,7 +1442,7 @@ async function setupUpdater(): Promise<void> {
 
       if (notifyOnNoUpdate) {
         Utils.showNotification({
-          title: "Milady Up To Date",
+          title: `${BRAND.appName} Up To Date`,
           body: "You already have the latest release installed.",
         });
       }
@@ -1440,7 +1451,7 @@ async function setupUpdater(): Promise<void> {
       if (notifyOnNoUpdate) {
         Utils.showNotification({
           title: "Update Check Failed",
-          body: "Milady could not reach the update server.",
+          body: `${BRAND.appName} could not reach the update server.`,
         });
       }
     }
@@ -1461,7 +1472,7 @@ async function setupUpdater(): Promise<void> {
         const info = Updater.updateInfo();
         sendToActiveRenderer("desktopUpdateReady", { version: info.version });
         Utils.showNotification({
-          title: "Milady Update Ready",
+          title: `${BRAND.appName} Update Ready`,
           body: `Version ${info.version} is ready. Restart to apply.`,
         });
       }
@@ -1470,7 +1481,7 @@ async function setupUpdater(): Promise<void> {
     const triggerManualUpdateCheck = () => {
       Utils.showNotification({
         title: "Checking for Updates",
-        body: "Milady is checking for a newer release.",
+        body: `${BRAND.appName} is checking for a newer release.`,
       });
       void runUpdateCheck(true);
     };
@@ -1490,7 +1501,7 @@ async function setupUpdater(): Promise<void> {
           const updaterState = await getDesktopManager().getUpdaterState();
           const version = updaterState.currentVersion || "unknown";
           Utils.showNotification({
-            title: "About Milady",
+            title: `About ${BRAND.appName}`,
             body: `Version ${version} (${process.platform}/${process.arch})`,
           });
           void createSettingsWindow("updates");
@@ -1532,8 +1543,8 @@ async function setupUpdater(): Promise<void> {
           void getDesktopManager().unmaximizeWindow();
         } else if (action === "desktop-notify") {
           void getDesktopManager().showNotification({
-            title: "Milady Desktop",
-            body: "Native application menu actions are wired and responding.",
+            title: `${BRAND.appName} Desktop`,
+            body: `${BRAND.appName} native application menu actions are wired and responding.`,
             urgency: "normal",
           });
         } else if (action === "restart-steward") {
@@ -1710,7 +1721,7 @@ async function main(): Promise<void> {
     bundle_path: resolveStartupBundlePath(process.execPath),
   });
   await loadMiladyEnvFilesForMain();
-  console.log("[Main] Starting Milady (Electrobun)");
+  console.log(`[Main] Starting ${BRAND.appName} (Electrobun)`);
   const normalizedModuleDir = import.meta.dir.replaceAll("\\", "/");
   const runtimeResolution = resolveDesktopRuntimeMode(
     process.env as Record<string, string | undefined>,
@@ -1739,7 +1750,10 @@ async function main(): Promise<void> {
   if (process.platform === "win32") {
     try {
       const cefDir = path.join(Utils.paths.userData, "CEF");
-      const cefVersionMarker = path.join(cefDir, ".milady-version");
+      const cefVersionMarker = path.join(
+        cefDir,
+        BRAND.cefVersionMarkerFileName,
+      );
       const currentVersion =
         resolveDesktopBundleVersion(import.meta.dir) ?? "unknown";
       let previousVersion: string | null = null;
@@ -1760,7 +1774,7 @@ async function main(): Promise<void> {
         );
         // Remove everything except the version marker we're about to write.
         for (const entry of fs.readdirSync(cefDir)) {
-          if (entry === ".milady-version") continue;
+          if (entry === BRAND.cefVersionMarkerFileName) continue;
           const entryPath = path.join(cefDir, entry);
           try {
             fs.rmSync(entryPath, { recursive: true, force: true });
@@ -1883,8 +1897,8 @@ async function main(): Promise<void> {
   try {
     await desktop.createTray({
       icon: resolveDesktopAppIconPath(),
-      tooltip: "Milady",
-      title: "Milady",
+      tooltip: BRAND.appName,
+      title: BRAND.appName,
       menu: [
         { id: "tray-open-chat", label: "Open Chat", type: "normal" },
         { id: "tray-open-plugins", label: "Open Plugins", type: "normal" },
@@ -1993,7 +2007,7 @@ async function main(): Promise<void> {
         console.error("[Main] Agent auto-start failed:", err);
         const error = err instanceof Error ? err.message : String(err);
         sendToActiveRenderer("agentStartupFailed", { error });
-        console.error('title: "Milady startup failed"');
+        console.error(`title: "${BRAND.appName} startup failed"`);
       });
     }
   }
@@ -2026,7 +2040,7 @@ function buildStartupCrashDiscordReport(options: {
   const appVersion = process.env.npm_package_version?.trim() || "unknown";
   const appRuntime = `electrobun/${Bun.version}`;
   const reportLines = [
-    "Milady startup crash report",
+    `${BRAND.appName} startup crash report`,
     "",
     "Share this report in Discord and ping @iono.",
     "",
@@ -2116,7 +2130,7 @@ async function maybePromptStartupCrashReport(): Promise<void> {
 
   const dialog = await Utils.showMessageBox({
     type: "warning",
-    title: "Milady recovered after a startup failure",
+    title: `${BRAND.appName} recovered after a startup failure`,
     message:
       "The previous launch failed. A crash report is ready to share with support.",
     detail:

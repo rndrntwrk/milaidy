@@ -70,7 +70,7 @@ import {
   createPgliteInitError,
 } from "./pglite-error-compat";
 import * as pluginAppCompanion from "@elizaos/app-companion/plugin";
-import * as pluginAppLifeops from "@elizaos/app-lifeops";
+import * as pluginAppLifeops from "@elizaos/app-lifeops/plugin";
 import {
   isElizaSettingsDebugEnabled,
   settingsDebugCloudSummary,

@@ -8,28 +8,10 @@
  * - Provides API for UI viewing and export
  */
 
-import { AsyncLocalStorage } from "node:async_hooks";
 import { v4 as uuidv4 } from "uuid";
 import { logger } from "../../logger";
-import { setTrajectoryContextManager } from "../../trajectory-context";
 import type { IAgentRuntime } from "../../types";
 import { Service } from "../../types/service";
-
-const trajectoryStorage = new AsyncLocalStorage<
-	{ trajectoryStepId?: string } | undefined
->();
-
-setTrajectoryContextManager({
-	run<T>(
-		context: { trajectoryStepId?: string } | undefined,
-		fn: () => T | Promise<T>,
-	): T | Promise<T> {
-		return trajectoryStorage.run(context, fn);
-	},
-	active(): { trajectoryStepId?: string } | undefined {
-		return trajectoryStorage.getStore();
-	},
-});
 
 import type {
 	ActionAttempt,

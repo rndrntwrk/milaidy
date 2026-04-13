@@ -5,6 +5,7 @@
  */
 
 import { resolveApiToken } from "@elizaos/shared/runtime-env";
+import { getBrandConfig } from "./brand-config";
 import {
   normalizeApiBase,
   resolveDesktopRuntimeMode,
@@ -21,7 +22,7 @@ export type CloudDisconnectMainResult =
   | { ok: true }
   | { ok: false; error: string };
 
-export function buildMiladyMainApiHeaders(
+export function buildMainApiHeaders(
   contentType?: string,
   bearerTokenOverride?: string | null,
 ): Record<string, string> {
@@ -48,6 +49,8 @@ export function buildMiladyMainApiHeaders(
   }
   return headers;
 }
+
+export const buildMiladyMainApiHeaders = buildMainApiHeaders;
 
 export async function postCloudDisconnectFromMain(options?: {
   fetchImpl?: FetchLike;
@@ -76,14 +79,17 @@ export async function postCloudDisconnectFromMain(options?: {
     }
   }
   const buildHeaders = (contentType?: string) =>
-    buildMiladyMainApiHeaders(contentType, bearer);
+    buildMainApiHeaders(contentType, bearer);
   const apiBase = await pickReachableMenuResetApiBase({
     candidates,
     fetchImpl,
     buildHeaders: () => buildHeaders(),
   });
   if (!apiBase) {
-    return { ok: false, error: "Could not reach the Milady API." };
+    return {
+      ok: false,
+      error: `Could not reach the ${getBrandConfig().appName} API.`,
+    };
   }
 
   let res: Response;

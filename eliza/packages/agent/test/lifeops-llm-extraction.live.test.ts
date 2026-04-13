@@ -20,15 +20,15 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   createRealTestRuntime,
   type RealTestRuntimeResult,
-} from "../../../test/helpers/real-runtime";
-import { selectLiveProvider } from "../../../test/helpers/live-provider";
+} from "../../../../test/helpers/real-runtime";
+import { selectLiveProvider } from "../../../../test/helpers/live-provider";
 import { extractCalendarPlanWithLlm } from "../src/actions/calendar.js";
 import { extractGmailPlanWithLlm } from "../src/actions/gmail.js";
 import { extractLifeOperationWithLlm } from "../src/actions/life.extractor.js";
 import { extractGoalCreatePlanWithLlm } from "../src/actions/life-goal-extractor.js";
 import { extractTaskCreatePlanWithLlm } from "../src/actions/life-param-extractor.js";
 
-const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..", "..");
+const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..", "..", "..");
 try {
   const { config } = await import("dotenv");
   config({ path: path.join(REPO_ROOT, ".env") });

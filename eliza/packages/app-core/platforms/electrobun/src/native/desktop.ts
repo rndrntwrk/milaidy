@@ -61,6 +61,7 @@ import type {
   WindowBounds,
   WindowOptions,
 } from "../rpc-schema";
+import { getBrandConfig } from "../brand-config";
 import type { SendToWebview } from "../types.js";
 import {
   createBugReportBundle,
@@ -132,8 +133,8 @@ const PATH_NAME_MAP: Record<string, string | (() => string)> = {
   videos: Utils.paths.videos,
 };
 
-const DEFAULT_RELEASE_NOTES_URL = "https://milady.ai/releases/";
-const RELEASE_NOTES_PARTITION = "persist:milady-release-notes";
+const DEFAULT_RELEASE_NOTES_URL = getBrandConfig().releaseUrl;
+const RELEASE_NOTES_PARTITION = getBrandConfig().releaseNotesPartition;
 const MACOS_IDLE_THRESHOLD_SECONDS = 60;
 const MACOS_CGSESSION_PATH =
   "/System/Library/CoreServices/Menu Extras/User.menu/Contents/Resources/CGSession";
@@ -521,7 +522,7 @@ export class DesktopManager {
     // The event data shape is { data: { id, action, data? } }.
     // Electrobun emits ElectrobunEvent<TrayClickedData> for tray-clicked;
     // the shape carries { data: { action, id, data? } }.
-    this.contextMenuHandler = (e: { data?: { action?: string } }): void => {
+    this.contextMenuHandler = ((e: { data?: { action?: string } }): void => {
       const action = e?.data?.action;
       if (!action) return;
 
@@ -552,7 +553,7 @@ export class DesktopManager {
             menuItem.type === "checkbox" ? !menuItem.checked : menuItem.checked,
         });
       }
-    };
+    }) as ElectrobunEventHandler;
     Electrobun.events.on(
       "tray-clicked",
       this.contextMenuHandler as ElectrobunEventHandler,
@@ -571,21 +572,22 @@ export class DesktopManager {
   }
 
   private removeEventHandler(
-    target: ElectrobunEventTarget | null | undefined,
+    target: unknown,
     event: string,
     handler: ElectrobunEventHandler | null | undefined,
   ): void {
-    if (!target || !handler) {
+    const eventTarget = target as ElectrobunEventTarget | null | undefined;
+    if (!eventTarget || !handler) {
       return;
     }
 
-    if (typeof target.off === "function") {
-      target.off(event, handler);
+    if (typeof eventTarget.off === "function") {
+      eventTarget.off(event, handler);
       return;
     }
 
-    if (typeof target.removeListener === "function") {
-      target.removeListener(event, handler);
+    if (typeof eventTarget.removeListener === "function") {
+      eventTarget.removeListener(event, handler);
     }
   }
 
@@ -693,7 +695,7 @@ export class DesktopManager {
       os.homedir(),
       "Library",
       "LaunchAgents",
-      "com.miladyai.milady.plist",
+      getBrandConfig().macLaunchAgentPlist,
     );
   }
 
@@ -711,7 +713,7 @@ export class DesktopManager {
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>com.miladyai.milady</string>
+  <string>${getBrandConfig().macLaunchAgentLabel}</string>
   <key>ProgramArguments</key>
   <array>
     <string>${appPath}</string>${hiddenArg}
@@ -749,7 +751,12 @@ export class DesktopManager {
   // MARK: - Auto-launch helpers (Linux)
 
   private getLinuxAutostartPath(): string {
-    return path.join(os.homedir(), ".config", "autostart", "milady.desktop");
+    return path.join(
+      os.homedir(),
+      ".config",
+      "autostart",
+      getBrandConfig().linuxDesktopFileName,
+    );
   }
 
   private setAutoLaunchLinux(
@@ -763,7 +770,7 @@ export class DesktopManager {
       const execLine = openAsHidden ? `${appPath} --hidden` : appPath;
       const desktopContent = `[Desktop Entry]
 Type=Application
-Name=Milady
+Name=${getBrandConfig().linuxDesktopEntryName}
 Exec=${execLine}
 X-GNOME-Autostart-enabled=true
 `;
@@ -797,7 +804,7 @@ X-GNOME-Autostart-enabled=true
           "add",
           this.WIN_REG_KEY,
           "/v",
-          "Milady",
+          getBrandConfig().windowsRegistryValueName,
           "/t",
           "REG_SZ",
           "/d",
@@ -809,7 +816,14 @@ X-GNOME-Autostart-enabled=true
       await proc.exited;
     } else {
       const proc = Bun.spawn(
-        ["reg", "delete", this.WIN_REG_KEY, "/v", "Milady", "/f"],
+        [
+          "reg",
+          "delete",
+          this.WIN_REG_KEY,
+          "/v",
+          getBrandConfig().windowsRegistryValueName,
+          "/f",
+        ],
         { stdout: "pipe", stderr: "pipe" },
       );
       await proc.exited;
@@ -822,14 +836,20 @@ X-GNOME-Autostart-enabled=true
   }> {
     try {
       const proc = Bun.spawn(
-        ["reg", "query", this.WIN_REG_KEY, "/v", "Milady"],
+        [
+          "reg",
+          "query",
+          this.WIN_REG_KEY,
+          "/v",
+          getBrandConfig().windowsRegistryValueName,
+        ],
         { stdout: "pipe", stderr: "pipe" },
       );
       const [stdout] = await Promise.all([
         new Response(proc.stdout).text(),
         proc.exited,
       ]);
-      if (!stdout.includes("Milady"))
+      if (!stdout.includes(getBrandConfig().windowsRegistryValueName))
         return { enabled: false, openAsHidden: false };
       return { enabled: true, openAsHidden: stdout.includes("--hidden") };
     } catch {
@@ -1232,7 +1252,7 @@ X-GNOME-Autostart-enabled=true
 
     return {
       version,
-      name: "Milady",
+      name: getBrandConfig().appName,
       runtime: `electrobun/${Bun.version}`,
     };
   }
@@ -1478,7 +1498,8 @@ X-GNOME-Autostart-enabled=true
     title?: string;
   }): Promise<DesktopReleaseNotesWindowInfo> {
     const url = this.normalizeReleaseNotesUrl(options.url);
-    const title = options.title?.trim() || "Milady Release Notes";
+    const title =
+      options.title?.trim() || `${getBrandConfig().appName} Release Notes`;
 
     if (this.releaseNotesWindow && this.releaseNotesView) {
       this.releaseNotesWindow.setTitle(title);
@@ -1900,7 +1921,7 @@ X-GNOME-Autostart-enabled=true
         appBundlePath: null,
         canAutoUpdate: false,
         autoUpdateDisabledReason:
-          "Milady must run from an installed .app bundle to enable in-place updates.",
+          `${getBrandConfig().appName} must run from an installed .app bundle to enable in-place updates.`,
       };
     }
 

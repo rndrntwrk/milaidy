@@ -4,7 +4,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import puppeteer, { type Browser, type Page } from "puppeteer-core";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { describeIf } from "../../../../test/helpers/conditional-tests.ts";
+import { describeIf } from "../../../../../test/helpers/conditional-tests.ts";
 
 const DEFAULT_UI_URL = stripTrailingSlash(
   process.env.ELIZA_LIVE_UI_URL ??

@@ -171,6 +171,32 @@ export function isSubmoduleCheckoutReady(
   return markerPaths.every((markerPath) => exists(markerPath));
 }
 
+export function isTrackedAsGitlink(
+  submodulePath,
+  { exec = execSync, cwd = root } = {},
+) {
+  try {
+    const output = exec(`git ls-files -s -- "${submodulePath}"`, {
+      cwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    if (!output) {
+      return false;
+    }
+
+    const lines = output.split("\n").filter(Boolean);
+    if (lines.length !== 1) {
+      return false;
+    }
+
+    const [mode, , , trackedPath] = lines[0].split(/\s+/, 4);
+    return mode === "160000" && trackedPath === submodulePath;
+  } catch {
+    return false;
+  }
+}
+
 export function runInitSubmodules({
   rootDir = root,
   exists = existsSync,
@@ -223,6 +249,13 @@ export function runInitSubmodules({
     if (shouldSkipSubmodule(submodule.path)) {
       log(
         `[init-submodules] Skipping ${submodule.name} (${submodule.path}) because ${skipReason ?? "local upstreams are disabled"}`,
+      );
+      continue;
+    }
+
+    if (!isTrackedAsGitlink(submodule.path, { exec, cwd: rootDir })) {
+      log(
+        `[init-submodules] Skipping ${submodule.name} (${submodule.path}) because the parent repo tracks that path as regular files, not a gitlink`,
       );
       continue;
     }

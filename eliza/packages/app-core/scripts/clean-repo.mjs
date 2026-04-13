@@ -13,6 +13,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolveRepoRootFromImportMeta } from "./lib/repo-root.mjs";
 
 import {
   CAPACITOR_PLUGIN_NAMES,
@@ -20,7 +21,7 @@ import {
 } from "../apps/app/scripts/capacitor-plugin-names.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const root = path.resolve(__dirname, "..");
+const root = resolveRepoRootFromImportMeta(import.meta.url);
 const deep = process.argv.includes("--deep");
 const globalToolCache = process.env.MILADY_CLEAN_GLOBAL_TOOL_CACHE === "1";
 

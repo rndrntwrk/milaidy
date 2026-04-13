@@ -274,7 +274,7 @@ function installRendererLogMirror(): void {
 
   if (typeof window.fetch === "function") {
     const originalFetch = window.fetch.bind(window);
-    window.fetch = async (...args: Parameters<typeof window.fetch>) => {
+    window.fetch = (async (...args: Parameters<typeof window.fetch>) => {
       const startedAt = Date.now();
       const input = args[0];
       const init = args[1];
@@ -313,7 +313,7 @@ function installRendererLogMirror(): void {
         });
         throw error;
       }
-    };
+    }) as typeof window.fetch;
   }
 
   if (typeof XMLHttpRequest !== "undefined") {
@@ -334,7 +334,12 @@ function installRendererLogMirror(): void {
         url: String(url),
         startedAt: Date.now(),
       };
-      return open.call(this, method, url, ...(rest as []));
+      return (open as (...args: unknown[]) => unknown).call(
+        this,
+        method,
+        url,
+        ...rest,
+      );
     };
 
     XMLHttpRequest.prototype.send = function (...args: unknown[]) {

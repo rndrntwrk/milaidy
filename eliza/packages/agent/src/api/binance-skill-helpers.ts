@@ -56,7 +56,7 @@ async function resolveBuiltInFallbackAction(
   }
 
   if (!selfControlFallbackActionsPromise) {
-    selfControlFallbackActionsPromise = import("@elizaos/app-lifeops")
+    selfControlFallbackActionsPromise = import("@elizaos/app-lifeops/selfcontrol")
       .then((mod) => ({
         BLOCK_WEBSITES: mod.selfControlBlockWebsitesAction,
         REQUEST_WEBSITE_BLOCKING_PERMISSION:

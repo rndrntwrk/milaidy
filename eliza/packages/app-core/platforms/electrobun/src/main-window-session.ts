@@ -1,6 +1,8 @@
+import { getBrandConfig } from "./brand-config";
+
 export const PACKAGED_WINDOWS_BOOTSTRAP_PARTITION =
   "persist:bootstrap-isolated";
-export const MAC_DESKTOP_CEF_PARTITION = "persist:milady-desktop-cef";
+export const MAC_DESKTOP_CEF_PARTITION = getBrandConfig().cefDesktopPartition;
 
 type Renderer = "native" | "cef";
 
@@ -47,12 +49,18 @@ export function shouldForceMainWindowCef(
 export function resolveMainWindowPartition(
   env: NodeJS.ProcessEnv = process.env,
 ): string | null {
-  const explicit = trimToNull(env.MILADY_DESKTOP_TEST_PARTITION);
+  const explicit = trimToNull(
+    env.ELIZA_DESKTOP_TEST_PARTITION ?? env.MILADY_DESKTOP_TEST_PARTITION,
+  );
   if (explicit) {
     return normalizePersistentPartition(explicit);
   }
 
-  if (trimToNull(env.MILADY_DESKTOP_TEST_API_BASE)) {
+  if (
+    trimToNull(
+      env.ELIZA_DESKTOP_TEST_API_BASE ?? env.MILADY_DESKTOP_TEST_API_BASE,
+    )
+  ) {
     // The Windows smoke harness redirects APPDATA/LOCALAPPDATA before launch,
     // so the bootstrap renderer can now use a persistent isolated partition.
     return PACKAGED_WINDOWS_BOOTSTRAP_PARTITION;

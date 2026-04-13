@@ -35,10 +35,10 @@ import { logger, type Plugin } from "@elizaos/core";
 import {
   extractPlugin,
   resolveFeishuPluginImportSpecifier,
-} from "@elizaos/app-core/src/test-support/test-helpers";
+} from "@elizaos/app-core/test-support/test-helpers";
 import dotenv from "dotenv";
 import { describe, expect, it } from "vitest";
-import { describeIf } from "../../../test/helpers/conditional-tests.ts";
+import { describeIf } from "../../../../test/helpers/conditional-tests.ts";
 
 // ---------------------------------------------------------------------------
 // Environment Setup

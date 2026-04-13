@@ -6,11 +6,21 @@ import {
   type BabylonAgentStatus,
   type BabylonChatMessage,
   type BabylonPredictionMarket,
-  type BabylonTeamAgent,
   type BabylonWallet,
   client,
 } from "../../../api";
 import { useApp } from "../../../state";
+import {
+  type BabylonAgentSummaryEnvelope,
+  type BabylonTeamConversation,
+  type BabylonTeamDashboard,
+  extractAgentSummary,
+  extractChatMessages,
+  extractTeamConversations,
+  extractTeamDashboard,
+  extractTradingBalance,
+  summarizeBabylonActivity,
+} from "../babylon-data";
 import {
   formatDetailTimestamp,
   SurfaceBadge,
@@ -25,109 +35,9 @@ import {
 } from "../extensions/surface";
 import type { AppOperatorSurfaceProps } from "./types";
 
-interface BabylonTeamSummaryTotals {
-  walletBalance: number;
-  lifetimePnL: number;
-  unrealizedPnL: number;
-  currentPnL: number;
-  openPositions: number;
-}
-
-interface BabylonTeamSummary {
-  ownerName?: string;
-  totals?: BabylonTeamSummaryTotals;
-  agentsOnlyTotals?: BabylonTeamSummaryTotals;
-  updatedAt?: string;
-}
-
-interface BabylonTeamDashboard {
-  agents: BabylonTeamAgent[];
-  summary: BabylonTeamSummary | null;
-}
-
-interface BabylonTeamConversation {
-  id: string;
-  name: string;
-  createdAt: string;
-  updatedAt: string;
-  isActive: boolean;
-}
-
-interface BabylonTeamConversationsResponse {
-  conversations: BabylonTeamConversation[];
-}
-
-interface BabylonAgentPortfolio {
-  totalPnL: number;
-  positions: number;
-  totalAssets: number;
-  available: number;
-  wallet: number;
-  agents: number;
-  totalPoints: number;
-}
-
-interface BabylonAgentSummaryEnvelope {
-  agent?: BabylonAgentStatus & {
-    totalDeposited?: number | null;
-    totalWithdrawn?: number | null;
-  };
-  portfolio?: BabylonAgentPortfolio;
-}
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object"
-    ? (value as Record<string, unknown>)
-    : null;
-}
-
-function extractTeamDashboard(value: unknown): BabylonTeamDashboard {
-  const data = asRecord(value);
-  return {
-    agents: Array.isArray(data?.agents)
-      ? (data.agents as BabylonTeamAgent[])
-      : [],
-    summary: asRecord(data?.summary) as BabylonTeamSummary | null,
-  };
-}
-
-function extractTeamConversations(
-  value: unknown,
-): BabylonTeamConversationsResponse {
-  const data = asRecord(value);
-  return {
-    conversations: Array.isArray(data?.conversations)
-      ? (data.conversations as BabylonTeamConversation[])
-      : [],
-  };
-}
-
-function extractAgentSummary(value: unknown): BabylonAgentSummaryEnvelope {
-  const data = asRecord(value);
-  return {
-    agent: (asRecord(data?.agent) ??
-      null) as unknown as BabylonAgentSummaryEnvelope["agent"],
-    portfolio: (asRecord(data?.portfolio) ??
-      null) as unknown as BabylonAgentSummaryEnvelope["portfolio"],
-  };
-}
-
-function extractChatMessages(value: unknown): BabylonChatMessage[] {
-  const data = asRecord(value);
-  return Array.isArray(data?.messages)
-    ? (data.messages as BabylonChatMessage[])
-    : [];
-}
-
-function extractTradingBalance(value: unknown): number {
-  const data = asRecord(value);
-  const balance = data?.balance;
-  return typeof balance === "number" ? balance : 0;
-}
-
 function extractWallet(value: unknown): BabylonWallet | null {
-  const data = asRecord(value);
-  if (!data) return null;
+  if (!value || typeof value !== "object") return null;
+  const data = value as Record<string, unknown>;
 
   const balance = asFiniteNumber(data.balance);
   const transactions = Array.isArray(data.transactions)
@@ -178,13 +88,6 @@ function listPreview(items: BabylonPredictionMarket[]): string {
       return `${market.title} (${yesPrice}/${noPrice})`;
     })
     .join(" · ");
-}
-
-function summarizeActivity(item: BabylonActivityItem): string {
-  if (item.summary) return item.summary;
-  if (item.contentPreview) return item.contentPreview;
-  if (item.reasoning) return item.reasoning;
-  return item.type;
 }
 
 export function BabylonOperatorSurface({
@@ -495,7 +398,7 @@ export function BabylonOperatorSurface({
             {recentTrades.slice(0, 3).map((trade) => (
               <SurfaceCard
                 key={trade.id}
-                label={summarizeActivity(trade)}
+                label={summarizeBabylonActivity(trade)}
                 value={formatDetailTimestamp(trade.timestamp)}
                 subtitle={
                   trade.pnl != null ? `PnL ${formatPnL(trade.pnl)}` : undefined

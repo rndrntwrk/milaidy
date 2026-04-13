@@ -1,10 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { describeIf } from "../../../test/helpers/conditional-tests.ts";
+import { describeIf } from "../../../../test/helpers/conditional-tests.ts";
 import {
   selectLiveProvider,
   type LiveProviderConfig,
-} from "../../../test/helpers/live-provider";
-import { createRealTestRuntime } from "../../../test/helpers/real-runtime";
+} from "../../../../test/helpers/live-provider";
+import { createRealTestRuntime } from "../../../../test/helpers/real-runtime";
 
 const LIVE_TESTS_ENABLED =
   process.env.ELIZA_LIVE_TEST === "1" || process.env.ELIZA_LIVE_TEST === "1";

@@ -143,7 +143,7 @@ if (report.daemonReady && process.env.MILADY_DOCKER_REVIEW_RUN_SMOKE === "1") {
   smoke = await runCommand(
     "bash",
     [
-      "scripts/docker-ci-smoke.sh",
+      "eliza/packages/app-core/scripts/docker-ci-smoke.sh",
       ...(process.env.MILADY_DOCKER_REVIEW_FULL_SMOKE === "1"
         ? []
         : ["--skip-smoke"]),

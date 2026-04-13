@@ -109,4 +109,4 @@ Posibles seguimientos (no enviados como requisitos aquí):
 - **Metadatos** opcionales en el contenido del callback para distinguir "adición" vs "reemplazo" para plugins exóticos (solo si aparece un caso de uso real).
 - **Persistencia** de estados intermedios (hoy el texto del turno persistido sigue las reglas normales de persistencia del chat).
 
-Consulta `docs/ROADMAP.md` en el repositorio para la dirección general del producto.
+Consulta `docs/roadmap.md` en el repositorio para la dirección general del producto.

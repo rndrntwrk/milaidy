@@ -22,7 +22,7 @@
  *   3. Every workspace package.json that still pins
  *      `"@elizaos/core": "workspace:*"` must be rewritten to the same
  *      registry version that the root `overrides` block and
- *      `deploy/cloud-agent-template` already use
+ *      `eliza/packages/app-core/deploy/cloud-agent-template` already use
  *      (`@elizaos/core@2.0.0-alpha.115` at time of writing). Without
  *      this rewrite, Bun hoists a registry-resolved `@elizaos/core`
  *      for the workspace:* callers AND a separate registry-resolved
@@ -91,6 +91,9 @@ export function resolvePinnedCoreVersion(
 
   const templatePath = path.join(
     rootDir,
+    "eliza",
+    "packages",
+    "app-core",
     "deploy",
     "cloud-agent-template",
     "package.json",

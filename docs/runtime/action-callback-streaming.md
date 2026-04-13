@@ -95,4 +95,4 @@ Possible follow-ups (not shipped as requirements here):
 - Optional **metadata** on callback content to distinguish “append” vs “replace” for exotic plugins (only if a real use case appears).
 - **Persistence** of intermediate statuses (today the final persisted turn text follows normal chat persistence rules).
 
-See `docs/ROADMAP.md` in the repository for high-level product direction.
+See `docs/roadmap.md` in the repository for high-level product direction.

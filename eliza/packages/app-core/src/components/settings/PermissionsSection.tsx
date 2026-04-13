@@ -16,6 +16,7 @@ import { Button } from "@elizaos/app-core";
 import { Check } from "lucide-react";
 import { useCallback, useState } from "react";
 import type { SystemPermissionId } from "../../api";
+import { useBootConfig } from "../../config";
 import {
   hasRequiredOnboardingPermissions,
   isDesktopPlatform,
@@ -42,11 +43,12 @@ import {
   SYSTEM_PERMISSIONS,
   translateWithFallback,
 } from "./permission-types";
-import { WebsiteBlockerSettingsCard } from "./WebsiteBlockerSettingsCard";
 
 /** Mobile (Capacitor) permission UI for streaming to cloud sandbox. */
 function MobilePermissionsView() {
   const { t } = useApp();
+  const { websiteBlockerSettingsCard: WebsiteBlockerSettingsCard } =
+    useBootConfig();
   return (
     <div className="space-y-6">
       <StreamingPermissionsSettingsView
@@ -63,7 +65,9 @@ function MobilePermissionsView() {
           "Your device streams camera, microphone, and screen to your Eliza Cloud agent for processing.",
         )}
       />
-      <WebsiteBlockerSettingsCard mode="mobile" />
+      {WebsiteBlockerSettingsCard ? (
+        <WebsiteBlockerSettingsCard mode="mobile" />
+      ) : null}
     </div>
   );
 }
@@ -71,6 +75,8 @@ function MobilePermissionsView() {
 /** Web browser permission UI — uses getUserMedia. */
 function WebPermissionsView() {
   const { t } = useApp();
+  const { websiteBlockerSettingsCard: WebsiteBlockerSettingsCard } =
+    useBootConfig();
   return (
     <div className="space-y-6">
       <StreamingPermissionsSettingsView
@@ -87,7 +93,9 @@ function WebPermissionsView() {
           "Grant browser access to your camera, microphone, and screen to stream to your agent.",
         )}
       />
-      <WebsiteBlockerSettingsCard mode="web" />
+      {WebsiteBlockerSettingsCard ? (
+        <WebsiteBlockerSettingsCard mode="web" />
+      ) : null}
     </div>
   );
 }
@@ -95,6 +103,8 @@ function WebPermissionsView() {
 function DesktopPermissionsView() {
   const { t } = useApp();
   const { plugins, handlePluginToggle } = useApp();
+  const { websiteBlockerSettingsCard: WebsiteBlockerSettingsCard } =
+    useBootConfig();
   const {
     handleOpenSettings,
     handleRefresh,
@@ -272,13 +282,17 @@ function DesktopPermissionsView() {
         </div>
       </div>
 
-      <WebsiteBlockerSettingsCard
-        mode="desktop"
-        permission={permissions["website-blocking"]}
-        platform={platform}
-        onRequestPermission={() => handleRequest("website-blocking")}
-        onOpenPermissionSettings={() => handleOpenSettings("website-blocking")}
-      />
+      {WebsiteBlockerSettingsCard ? (
+        <WebsiteBlockerSettingsCard
+          mode="desktop"
+          permission={permissions["website-blocking"]}
+          platform={platform}
+          onRequestPermission={() => handleRequest("website-blocking")}
+          onOpenPermissionSettings={() =>
+            handleOpenSettings("website-blocking")
+          }
+        />
+      ) : null}
 
       {/* Capability Toggles */}
       <div>

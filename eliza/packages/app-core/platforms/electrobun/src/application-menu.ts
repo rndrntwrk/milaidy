@@ -1,4 +1,5 @@
 import type { ManagedWindowSnapshot } from "./surface-windows";
+import { getBrandConfig } from "./brand-config";
 
 /**
  * OS menu bar structure for Electrobun. Each **`action`** is emitted as
@@ -167,6 +168,7 @@ function buildSurfaceMenu(
 }
 
 function buildDesktopMenu(): ApplicationMenuItem {
+  const appName = getBrandConfig().appName;
   return {
     label: "Desktop",
     submenu: [
@@ -177,15 +179,15 @@ function buildDesktopMenu(): ApplicationMenuItem {
       { label: "Cloud Settings", action: "open-settings-cloud" },
       { label: "Settings Window", action: "open-settings" },
       { type: "separator" },
-      { label: "Show Milady", action: "show" },
-      { label: "Focus Milady", action: "focus-main-window" },
-      { label: "Hide Milady", action: "hide-main-window" },
-      { label: "Maximize Milady", action: "maximize-main-window" },
-      { label: "Restore Milady Size", action: "restore-main-window" },
+      { label: `Show ${appName}`, action: "show" },
+      { label: `Focus ${appName}`, action: "focus-main-window" },
+      { label: `Hide ${appName}`, action: "hide-main-window" },
+      { label: `Maximize ${appName}`, action: "maximize-main-window" },
+      { label: `Restore ${appName} Size`, action: "restore-main-window" },
       { type: "separator" },
       { label: "Send Test Notification", action: "desktop-notify" },
       { label: "Restart Agent", action: "restart-agent" },
-      { label: "Relaunch Milady", action: "relaunch" },
+      { label: `Relaunch ${appName}`, action: "relaunch" },
     ],
   };
 }
@@ -229,6 +231,7 @@ export function buildApplicationMenu({
   detachedWindows: ManagedWindowSnapshot[];
   agentReady?: boolean;
 }): ApplicationMenuItem[] {
+  const appName = getBrandConfig().appName;
   const visibleDetachedWindows = browserEnabled
     ? detachedWindows
     : detachedWindows.filter((window) => window.surface !== "browser");
@@ -253,12 +256,12 @@ export function buildApplicationMenu({
 
   return [
     {
-      label: "Milady",
+      label: appName,
       submenu: [
         ...(isMac
           ? ([{ role: "about" }] as ApplicationMenuItem[])
           : ([
-              { label: "About Milady", action: "open-about" },
+              { label: `About ${appName}`, action: "open-about" },
             ] as ApplicationMenuItem[])),
         { label: "Check for Updates", action: "check-for-updates" },
         { type: "separator" },
@@ -268,8 +271,8 @@ export function buildApplicationMenu({
           accelerator: isMac ? "Command+," : "Ctrl+,",
         },
         { label: "Restart Agent", action: "restart-agent" },
-        { label: "Relaunch Milady", action: "relaunch" },
-        { label: "Reset Milady...", action: "reset-milady" },
+        { label: `Relaunch ${appName}`, action: "relaunch" },
+        { label: `Reset ${appName}...`, action: "reset-milady" },
         { type: "separator" },
         ...(isMac
           ? [
@@ -352,12 +355,12 @@ export function buildApplicationMenu({
             ]
           : []),
         { type: "separator" },
-        { label: "Show Milady", action: "show" },
-        { label: "Focus Milady", action: "focus-main-window" },
-        { label: "Hide Milady", action: "hide-main-window" },
-        { label: "Maximize Milady", action: "maximize-main-window" },
+        { label: `Show ${appName}`, action: "show" },
+        { label: `Focus ${appName}`, action: "focus-main-window" },
+        { label: `Hide ${appName}`, action: "hide-main-window" },
+        { label: `Maximize ${appName}`, action: "maximize-main-window" },
         {
-          label: "Restore Milady Size",
+          label: `Restore ${appName} Size`,
           action: "restore-main-window",
         },
         ...(agentReady

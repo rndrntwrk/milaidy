@@ -3,7 +3,7 @@
 # build-image.sh — Reproducible build pipeline for milady/agent Docker image
 #
 # Usage:
-#   ./scripts/build-image.sh [OPTIONS]
+#   bash eliza/packages/app-core/scripts/build-image.sh [OPTIONS]
 #
 # Options:
 #   --version VER    Override version string (default: read from package.json)
@@ -16,10 +16,10 @@
 #   -h, --help       Show this help
 #
 # Examples:
-#   ./scripts/build-image.sh                             # Build alpha.89 locally
-#   ./scripts/build-image.sh --tag latest --push         # Build + push to server
-#   ./scripts/build-image.sh --remote                    # Build on milady-core-1
-#   ./scripts/build-image.sh --version 2.0.0-alpha.54    # Build specific version
+#   bash eliza/packages/app-core/scripts/build-image.sh                             # Build alpha.89 locally
+#   bash eliza/packages/app-core/scripts/build-image.sh --tag latest --push         # Build + push to server
+#   bash eliza/packages/app-core/scripts/build-image.sh --remote                    # Build on milady-core-1
+#   bash eliza/packages/app-core/scripts/build-image.sh --version 2.0.0-alpha.54    # Build specific version
 #
 # Context:
 #   - Repo:         $(git rev-parse --show-toplevel)
@@ -32,7 +32,7 @@
 #   2. Runs bun install --ignore-scripts
 #   3. Runs npx tsdown to compile TypeScript → dist/
 #   4. Builds the Vite UI → apps/app/dist/
-#   5. Reverts the vite.config.ts patch (git checkout)
+#   5. Reverts the vite.config.ts patch (temp backup restore)
 #   6. Runs docker build with the canonical container Dockerfile
 #   7. Tags the image as milady/agent:{tag}
 # ─────────────────────────────────────────────────────────────────────────────
@@ -80,6 +80,24 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+load_env_file() {
+  local file="$1"
+  if [[ -f "$file" ]]; then
+    set -a
+    # shellcheck disable=SC1090
+    source "$file"
+    set +a
+  fi
+}
+
+sedi() {
+  if sed --version >/dev/null 2>&1; then
+    sed -i "$@"
+  else
+    sed -i '' "$@"
+  fi
+}
+
 # ── Verify we're in the milady repo root ─────────────────────────────────
 # Look for canonical markers: package.json with "miladyai" name and apps/app/vite.config.ts
 if [[ ! -f "package.json" ]] || ! grep -q '"miladyai"' package.json 2>/dev/null; then
@@ -92,6 +110,20 @@ fi
 REPO_ROOT="$(pwd)"
 log "Repo root: ${YELLOW}${REPO_ROOT}${NC}"
 
+load_env_file "eliza/packages/app-core/deploy/deploy.defaults.env"
+load_env_file "deploy/deploy.env"
+
+APP_IMAGE="${APP_IMAGE:-milady/agent}"
+APP_ENTRYPOINT="${APP_ENTRYPOINT:-app.mjs}"
+APP_CMD_START="${APP_CMD_START:-node --import ./node_modules/tsx/dist/loader.mjs ${APP_ENTRYPOINT} start}"
+APP_PORT="${APP_PORT:-2138}"
+APP_API_BIND="${APP_API_BIND:-127.0.0.1}"
+OCI_SOURCE="${OCI_SOURCE:-}"
+OCI_TITLE="${OCI_TITLE:-elizaOS Agent}"
+OCI_DESCRIPTION="${OCI_DESCRIPTION:-elizaOS agent runtime}"
+OCI_LICENSES="${OCI_LICENSES:-MIT}"
+SOURCE_SHA="$(git rev-parse HEAD)"
+
 # ── Resolve version and tag ───────────────────────────────────────────────────
 if [[ -z "$VERSION" ]]; then
   VERSION=$(node -e "process.stdout.write(require('./package.json').version)" 2>/dev/null \
@@ -103,18 +135,18 @@ if [[ -z "$TAG" ]]; then
   TAG="v${VERSION}"
 fi
 
-IMAGE_NAME="milady/agent:${TAG}"
+IMAGE_NAME="${APP_IMAGE}:${TAG}"
 
 log "Version: ${YELLOW}${VERSION}${NC}"
 log "Tag:     ${YELLOW}${IMAGE_NAME}${NC}"
 $DRY_RUN && warn "DRY RUN mode — commands will be shown but not executed"
 
 # ── Select Dockerfile ─────────────────────────────────────────────────────────
-if [[ -f "deploy/Dockerfile.ci" ]]; then
-  DOCKERFILE="deploy/Dockerfile.ci"
+if [[ -f "eliza/packages/app-core/deploy/Dockerfile.ci" ]]; then
+  DOCKERFILE="eliza/packages/app-core/deploy/Dockerfile.ci"
   log "Dockerfile: ${YELLOW}${DOCKERFILE}${NC} (canonical production image)"
 else
-  die "No Dockerfile found. Expected deploy/Dockerfile.ci."
+  die "No Dockerfile found. Expected eliza/packages/app-core/deploy/Dockerfile.ci."
 fi
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -144,40 +176,41 @@ run() {
 # ─────────────────────────────────────────────────────────────────────────────
 hdr "Step 1: Patch vite.config.ts"
 
-# Always start from the committed version to ensure idempotency
-log "Resetting vite.config.ts to HEAD before patching..."
-run "git checkout apps/app/vite.config.ts"
-
 log "Applying node_modules resolution patch..."
+VITE_CONFIG_BACKUP=""
+if ! $DRY_RUN; then
+  VITE_CONFIG_BACKUP="$(mktemp)"
+  cp apps/app/vite.config.ts "$VITE_CONFIG_BACKUP"
+fi
 
 patch_vite() {
   local file="apps/app/vite.config.ts"
 
   # 1. elizaRoot: "../eliza" → "node_modules/@elizaos"
   #    This is the root cause — Shaw's local eliza checkout path → npm installed path
-  sed -i 's|path\.resolve(miladyRoot, "\.\./eliza")|path.resolve(miladyRoot, "node_modules/@elizaos")|g' "$file"
+  sedi 's|path\.resolve(miladyRoot, "\.\./eliza")|path.resolve(miladyRoot, "node_modules/@elizaos")|g' "$file"
 
   # 2. Remove "packages/" prefix from elizaos/agent paths
   #    Both the index and wildcard variants (multi-line and single-line)
-  sed -i 's|"packages/agent/src/index\.ts"|"agent/src/index.ts"|g' "$file"
-  sed -i 's|"packages/agent/src/\$1"|"agent/src/$1"|g' "$file"
+  sedi 's|"packages/agent/src/index\.ts"|"agent/src/index.ts"|g' "$file"
+  sedi 's|"packages/agent/src/\$1"|"agent/src/$1"|g' "$file"
   # Also handle if $1 appears without backslash (sed single-quotes make $ literal)
-  sed -i 's|packages/agent/src/\$1|agent/src/$1|g' "$file"
+  sedi 's|packages/agent/src/\$1|agent/src/$1|g' "$file"
 
   # 3. Remove "packages/" prefix from elizaos/app-core paths
-  sed -i 's|"packages/app-core/src/index\.ts"|"app-core/src/index.ts"|g' "$file"
-  sed -i 's|packages/app-core/src/\$1|app-core/src/$1|g' "$file"
+  sedi 's|"packages/app-core/src/index\.ts"|"app-core/src/index.ts"|g' "$file"
+  sedi 's|packages/app-core/src/\$1|app-core/src/$1|g' "$file"
 
   # 4. @elizaos/app-core → use dist/ (npm package ships compiled output, no src/)
   #    Target only lines that reference elizaRoot (not miladyRoot)
-  sed -i 's|path\.resolve(elizaRoot, "packages/ui/src/index\.ts")|path.resolve(elizaRoot, "ui/dist/index.js")|g' "$file"
-  sed -i 's|path\.resolve(elizaRoot, "packages/ui/src/\$1")|path.resolve(elizaRoot, "ui/dist/$1")|g' "$file"
-  sed -i 's|path\.resolve(elizaRoot, "packages/ui/src/\\\$1")|path.resolve(elizaRoot, "ui/dist/$1")|g' "$file"
+  sedi 's|path\.resolve(elizaRoot, "packages/ui/src/index\.ts")|path.resolve(elizaRoot, "ui/dist/index.js")|g' "$file"
+  sedi 's|path\.resolve(elizaRoot, "packages/ui/src/\$1")|path.resolve(elizaRoot, "ui/dist/$1")|g' "$file"
+  sedi 's|path\.resolve(elizaRoot, "packages/ui/src/\\\$1")|path.resolve(elizaRoot, "ui/dist/$1")|g' "$file"
 
   # 5. @elizaos/app-core → keep src/ (local repo source), just remove packages/ prefix
-  sed -i 's|path\.resolve(miladyRoot, "packages/ui/src/index\.ts")|path.resolve(miladyRoot, "ui/src/index.ts")|g' "$file"
-  sed -i 's|path\.resolve(miladyRoot, "packages/ui/src/\$1")|path.resolve(miladyRoot, "ui/src/$1")|g' "$file"
-  sed -i 's|path\.resolve(miladyRoot, "packages/ui/src/\\\$1")|path.resolve(miladyRoot, "ui/src/$1")|g' "$file"
+  sedi 's|path\.resolve(miladyRoot, "packages/ui/src/index\.ts")|path.resolve(miladyRoot, "ui/src/index.ts")|g' "$file"
+  sedi 's|path\.resolve(miladyRoot, "packages/ui/src/\$1")|path.resolve(miladyRoot, "ui/src/$1")|g' "$file"
+  sedi 's|path\.resolve(miladyRoot, "packages/ui/src/\\\$1")|path.resolve(miladyRoot, "ui/src/$1")|g' "$file"
 }
 
 if $DRY_RUN; then
@@ -207,9 +240,10 @@ cleanup() {
     fi
     rm -f "$DOCKERIGNORE_BACKUP" 2>/dev/null || true
   fi
-  if [[ -f "apps/app/vite.config.ts" ]] && ! $DRY_RUN; then
+  if [[ -n "$VITE_CONFIG_BACKUP" ]] && [[ -f "$VITE_CONFIG_BACKUP" ]] && ! $DRY_RUN; then
     log "Reverting vite.config.ts patch..."
-    git checkout apps/app/vite.config.ts 2>/dev/null || warn "Could not revert vite.config.ts — run: git checkout apps/app/vite.config.ts"
+    cp "$VITE_CONFIG_BACKUP" apps/app/vite.config.ts 2>/dev/null || warn "Could not restore vite.config.ts from backup"
+    rm -f "$VITE_CONFIG_BACKUP" 2>/dev/null || true
   fi
   if [[ $exit_code -ne 0 ]]; then
     err "Build failed (exit code $exit_code)"
@@ -231,6 +265,19 @@ if $DO_INSTALL; then
 else
   warn "Skipping bun install (--no-install)"
 fi
+
+hdr "Step 2b: Run postinstall patches"
+run "SKIP_AVATAR_CLONE=1 MILADY_NO_VISION_DEPS=1 bun run postinstall 2>&1 | tail -10"
+ok "Postinstall patches complete"
+
+hdr "Step 2c: Build Capacitor plugins"
+run "cd apps/app && bun scripts/plugin-build.mjs && cd ${REPO_ROOT}"
+ok "Capacitor plugins built"
+
+hdr "Step 2d: Build workspace packages"
+run "cd eliza/packages/agent && bun run build:docker-dist && cd ${REPO_ROOT}"
+run "cd eliza/packages/typescript && bun run build:node && cd ${REPO_ROOT}"
+ok "Workspace packages built"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Step 3: Build TypeScript with tsdown
@@ -270,8 +317,8 @@ ok "Vite UI built"
 hdr "Step 5: Revert vite.config.ts"
 
 if ! $DRY_RUN; then
-  git checkout apps/app/vite.config.ts
-  ok "vite.config.ts reverted to committed state"
+  cp "$VITE_CONFIG_BACKUP" apps/app/vite.config.ts
+  ok "vite.config.ts restored to original state"
 else
   warn "[dry-run] Would revert vite.config.ts"
 fi
@@ -285,12 +332,21 @@ hdr "Step 6: Docker build → ${IMAGE_NAME}"
 BUILD_ARGS=(
   "--build-arg" "VERSION=v${VERSION#v}"
   "--build-arg" "VERSION_CLEAN=${VERSION#v}"
+  "--build-arg" "REVISION=${SOURCE_SHA}"
+  "--build-arg" "APP_ENTRYPOINT=${APP_ENTRYPOINT}"
+  "--build-arg" "APP_CMD_START=${APP_CMD_START}"
+  "--build-arg" "APP_PORT=${APP_PORT}"
+  "--build-arg" "APP_API_BIND=${APP_API_BIND}"
+  "--build-arg" "OCI_SOURCE=${OCI_SOURCE}"
+  "--build-arg" "OCI_TITLE=${OCI_TITLE}"
+  "--build-arg" "OCI_DESCRIPTION=${OCI_DESCRIPTION}"
+  "--build-arg" "OCI_LICENSES=${OCI_LICENSES}"
 )
 
-if [[ "$DOCKERFILE" == "deploy/Dockerfile.ci" ]]; then
-  [[ -f "deploy/.dockerignore.ci" ]] || die "deploy/.dockerignore.ci is required for Dockerfile.ci builds"
+if [[ "$DOCKERFILE" == "eliza/packages/app-core/deploy/Dockerfile.ci" ]]; then
+  [[ -f "eliza/packages/app-core/deploy/.dockerignore.ci" ]] || die "eliza/packages/app-core/deploy/.dockerignore.ci is required for Dockerfile.ci builds"
   if $DRY_RUN; then
-    warn "[dry-run] Would copy deploy/.dockerignore.ci → .dockerignore for Dockerfile.ci"
+    warn "[dry-run] Would copy eliza/packages/app-core/deploy/.dockerignore.ci → .dockerignore for Dockerfile.ci"
   else
     DOCKERIGNORE_BACKUP="$(mktemp)"
     if [[ -f .dockerignore ]]; then
@@ -299,8 +355,8 @@ if [[ "$DOCKERFILE" == "deploy/Dockerfile.ci" ]]; then
     else
       : >"$DOCKERIGNORE_BACKUP"
     fi
-    cp deploy/.dockerignore.ci .dockerignore
-    ok "Using deploy/.dockerignore.ci for canonical image build"
+    cp eliza/packages/app-core/deploy/.dockerignore.ci .dockerignore
+    ok "Using eliza/packages/app-core/deploy/.dockerignore.ci for canonical image build"
   fi
 fi
 
@@ -335,16 +391,18 @@ if $REMOTE; then
   run "rm -f '${TARBALL}'"
 
   log "Building on remote..."
+  REMOTE_BUILD_ARGS=""
+  for arg in "${BUILD_ARGS[@]}"; do
+    REMOTE_BUILD_ARGS+=" $(printf '%q' "$arg")"
+  done
   REMOTE_SCRIPT=$(cat <<SCRIPT
 set -e
 cd ${REMOTE_BUILD_DIR}
 tar -xzf build.tar.gz
 rm build.tar.gz
 echo "[remote] Extracted build context"
-docker build -f ${DOCKERFILE} \
-  --build-arg VERSION=v${VERSION#v} \
-  --build-arg VERSION_CLEAN=${VERSION#v} \
-  -t '${IMAGE_NAME}' \
+docker build -f $(printf '%q' "${DOCKERFILE}")${REMOTE_BUILD_ARGS} \
+  -t $(printf '%q' "${IMAGE_NAME}") \
   . 2>&1 | tail -30
 echo "[remote] Build complete"
 docker images '${IMAGE_NAME}' --format 'Image ready: {{.Repository}}:{{.Tag}} ({{.Size}})'
@@ -391,13 +449,13 @@ echo -e "  Version: ${YELLOW}${VERSION}${NC}"
 if $REMOTE; then
   echo -e "  Built on: ${CYAN}${BUILD_SERVER}${NC}"
   echo ""
-  echo -e "  To deploy:  ${YELLOW}./scripts/deploy-image.sh --all --image ${IMAGE_NAME}${NC}"
+  echo -e "  To deploy:  ${YELLOW}bash eliza/packages/app-core/scripts/deploy-image.sh --all --image ${IMAGE_NAME}${NC}"
 elif $DO_PUSH; then
   echo -e "  Pushed to: ${CYAN}${BUILD_SERVER}${NC}"
   echo ""
-  echo -e "  To deploy:  ${YELLOW}./scripts/deploy-image.sh --all --image ${IMAGE_NAME}${NC}"
+  echo -e "  To deploy:  ${YELLOW}bash eliza/packages/app-core/scripts/deploy-image.sh --all --image ${IMAGE_NAME}${NC}"
 else
   echo ""
-  echo -e "  To push:    ${YELLOW}./scripts/build-image.sh --tag ${TAG} --push${NC}"
-  echo -e "  To deploy:  ${YELLOW}./scripts/deploy-image.sh --all --image ${IMAGE_NAME}${NC}"
+  echo -e "  To push:    ${YELLOW}bash eliza/packages/app-core/scripts/build-image.sh --tag ${TAG} --push${NC}"
+  echo -e "  To deploy:  ${YELLOW}bash eliza/packages/app-core/scripts/deploy-image.sh --all --image ${IMAGE_NAME}${NC}"
 fi

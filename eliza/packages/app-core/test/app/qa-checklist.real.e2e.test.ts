@@ -13,7 +13,7 @@ import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import puppeteer, { type Browser, type Page } from "puppeteer-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { describeIf } from "../../../../test/helpers/conditional-tests.ts";
+import { describeIf } from "../../../../../test/helpers/conditional-tests.ts";
 
 const envPath = path.resolve(
   import.meta.dirname,
@@ -67,7 +67,7 @@ const EXPECTED_CHEN_GREETING = "you good?";
 const EXPECTED_SARAH_VOICE_ID = "EXAVITQu4vr4xnSDxMaL";
 const KNOWLEDGE_CODEWORD = "VELVET-MOON-4821";
 const QA_ARTIFACT_DIR = path.join(os.tmpdir(), "eliza-live-qa");
-const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..", "..", "..");
+const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..", "..", "..", "..");
 const APP_DIST_DIR = path.join(REPO_ROOT, "apps/app", "dist");
 const STACK_READY_TIMEOUT_MS = 120_000;
 

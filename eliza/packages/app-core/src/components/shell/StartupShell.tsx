@@ -13,6 +13,7 @@ import { useEffect, useRef, useState } from "react";
 import { client } from "../../api";
 import { useApp } from "../../state";
 import type { StartupErrorState } from "../../state/types";
+import { resolveAppAssetUrl } from "../../utils";
 import { OnboardingWizard } from "../onboarding/OnboardingWizard";
 import { PairingView } from "./PairingView";
 import { StartupFailureView } from "./StartupFailureView";
@@ -149,7 +150,7 @@ export function StartupShell() {
   return (
     <div className="flex items-center justify-center h-full w-full bg-[#ffe600] text-black overflow-hidden">
       <img
-        src="/splash-bg.jpg"
+        src={resolveAppAssetUrl("splash-bg.jpg")}
         alt=""
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 h-full w-full object-cover"

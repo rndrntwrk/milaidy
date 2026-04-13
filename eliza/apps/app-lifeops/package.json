@@ -8,7 +8,9 @@
   "exports": {
     "./package.json": "./package.json",
     ".": "./src/index.ts",
+    "./ui": "./src/ui.ts",
     "./agent-lifeops": "./src/agent-lifeops.ts",
+    "./plugin": "./src/plugin.ts",
     "./selfcontrol": "./src/selfcontrol/index.ts",
     "./selfcontrol/selfcontrol": "./src/selfcontrol/selfcontrol.ts"
   },

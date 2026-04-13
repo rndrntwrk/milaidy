@@ -23,6 +23,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { BrowserWindow } from "electrobun/bun";
+import { getBrandConfig } from "../brand-config";
 import { DEFAULT_API_PORT } from "../constants";
 import type { SendToWebview, WebviewEvalRpc } from "../types.js";
 
@@ -485,7 +486,7 @@ $bmp.Dispose()`;
 
     try {
       const win = new BrowserWindow({
-        title: "Milady Game Capture",
+        title: `${getBrandConfig().appName} Game Capture`,
         url: gameUrl,
         frame: {
           x: -9999,

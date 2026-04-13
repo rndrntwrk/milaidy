@@ -3,18 +3,18 @@ import os from "node:os";
 import path from "node:path";
 import type { AgentRuntime } from "@elizaos/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { describeIf } from "../../../test/helpers/conditional-tests.ts";
+import { describeIf } from "../../../../test/helpers/conditional-tests.ts";
 import {
   createConversation,
   postConversationMessage,
   req,
-} from "../../../test/helpers/http";
+} from "../../../../test/helpers/http";
 import {
   isLiveTestEnabled,
   selectLiveProvider,
-} from "../../../test/helpers/live-provider";
-import { createRealTestRuntime } from "../../../test/helpers/real-runtime";
-import { saveEnv } from "../../../test/helpers/test-utils";
+} from "../../../../test/helpers/live-provider";
+import { createRealTestRuntime } from "../../../../test/helpers/real-runtime";
+import { saveEnv } from "../../../../test/helpers/test-utils";
 import { createElizaPlugin } from "../src/runtime/eliza-plugin";
 import { resolveOAuthDir } from "../src/config/paths";
 import {

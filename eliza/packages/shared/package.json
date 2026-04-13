@@ -14,7 +14,7 @@
     "clean": "rm -rf dist",
     "build": "bun run build:dist",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "build:dist": "rm -rf dist && tsc -p tsconfig.build.json && node ../../scripts/prepare-package-dist.mjs eliza/packages/shared",
+    "build:dist": "rm -rf dist && tsc -p tsconfig.build.json && node ../../scripts/prepare-package-dist.mjs packages/shared",
     "pack:dry-run": "cd dist && npm pack --dry-run"
   },
   "exports": {

@@ -16,15 +16,23 @@ import os from "node:os";
 import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { describeIf } from "../../../test/helpers/conditional-tests.ts";
+import { describeIf } from "../../../../test/helpers/conditional-tests.ts";
+import { selectLiveProvider } from "../../../../test/helpers/live-provider.ts";
 import {
   createConversation,
   postConversationMessage,
   req,
-} from "../../../test/helpers/http.ts";
+} from "../../../../test/helpers/http.ts";
+import { createLiveRuntimeChildEnv } from "../../../../test/helpers/live-child-env.ts";
 
 const LIVE = process.env.ELIZA_LIVE_TEST === "1" || process.env.ELIZA_LIVE_TEST === "1";
-const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..", "..");
+const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..", "..", "..");
+const LIVE_PROVIDER = selectLiveProvider();
+const LIVE_PROVIDER_PLUGIN_ID = LIVE_PROVIDER?.pluginPackage
+  .split("/")
+  .at(-1)
+  ?.replace(/^plugin-/, "");
+const LIVE_DB_CODEWORD = `db-live-codeword-${Date.now()}`;
 
 try {
   const { config } = await import("dotenv");
@@ -51,30 +59,31 @@ async function startRuntime(): Promise<Runtime> {
   const configPath = path.join(tmp, "eliza.json");
   const port = await getFreePort();
   const logBuf: string[] = [];
+  const allowPlugins =
+    LIVE_PROVIDER_PLUGIN_ID && LIVE_PROVIDER_PLUGIN_ID.length > 0
+      ? [LIVE_PROVIDER_PLUGIN_ID]
+      : [];
 
   await mkdir(stateDir, { recursive: true });
   await writeFile(configPath, JSON.stringify({
     logging: { level: "info" },
-    plugins: { allow: [] },
+    plugins: { allow: allowPlugins },
   }), "utf8");
 
   const child = spawn("bun", ["run", "start:eliza"], {
     cwd: REPO_ROOT,
-    env: {
-      ...process.env,
+    env: createLiveRuntimeChildEnv({
+      ...(LIVE_PROVIDER?.env ?? {}),
       ELIZA_CONFIG_PATH: configPath,
-      ELIZA_CONFIG_PATH: configPath,
-      ELIZA_STATE_DIR: stateDir,
       ELIZA_STATE_DIR: stateDir,
       ELIZA_PORT: String(port),
       ELIZA_API_PORT: String(port),
-      ELIZA_DISABLE_LOCAL_EMBEDDINGS: "1",
       ELIZA_DISABLE_LOCAL_EMBEDDINGS: "1",
       ALLOW_NO_DATABASE: "",
       DISCORD_API_TOKEN: "",
       DISCORD_BOT_TOKEN: "",
       TELEGRAM_BOT_TOKEN: "",
-    },
+    }),
     stdio: ["pipe", "pipe", "pipe"],
   });
 
@@ -84,15 +93,34 @@ async function startRuntime(): Promise<Runtime> {
   child.stderr.on("data", (c: string) => logBuf.push(c));
 
   const deadline = Date.now() + 150_000;
+  let ready = false;
   while (Date.now() < deadline) {
     try {
       const r = await fetch(`http://127.0.0.1:${port}/api/health`);
       if (r.ok) {
         const d = (await r.json()) as { ready?: boolean; runtime?: string };
-        if (d.ready === true && d.runtime === "ok") break;
+        if (d.ready === true && d.runtime === "ok") {
+          ready = true;
+          break;
+        }
       }
     } catch { /* not ready */ }
     await sleep(1_000);
+  }
+
+  if (!ready) {
+    if (child.exitCode == null) {
+      child.kill("SIGTERM");
+      await new Promise<void>((resolve) => {
+        child.once("exit", () => resolve());
+        setTimeout(() => resolve(), 10_000);
+      });
+      if (child.exitCode == null) child.kill("SIGKILL");
+    }
+    await rm(tmp, { recursive: true, force: true });
+    throw new Error(
+      `Runtime failed to become ready on port ${port}\n${logBuf.join("").slice(-8_000)}`,
+    );
   }
 
   return {
@@ -139,17 +167,43 @@ describeIf(LIVE)("Live: database & conversation roundtrip", () => {
     });
 
     const msgRes = await postConversationMessage(rt.port, conversationId, {
-      text: "Hello from the live database test",
+      text: LIVE_PROVIDER
+        ? `Reply with exactly ${LIVE_DB_CODEWORD}`
+        : "Hello from the live database test",
     });
     expect(msgRes.status).toBe(200);
+    if (LIVE_PROVIDER) {
+      const text = String(msgRes.data.text ?? "");
+      expect(text.length).toBeGreaterThan(0);
+      expect(text).toContain(LIVE_DB_CODEWORD);
+    }
 
-    // Retrieve conversation messages
     const histRes = await req(
       rt.port,
       "GET",
       `/api/conversations/${conversationId}/messages`,
     );
     expect(histRes.status).toBe(200);
+    const messages = Array.isArray(histRes.data.messages)
+      ? (histRes.data.messages as Array<{ role?: unknown; text?: unknown }>)
+      : [];
+    expect(messages.length).toBeGreaterThan(0);
+    expect(
+      messages.some(
+        (message) =>
+          message.role === "user" && typeof message.text === "string",
+      ),
+    ).toBe(true);
+    if (LIVE_PROVIDER) {
+      expect(
+        messages.some(
+          (message) =>
+            message.role === "assistant" &&
+            typeof message.text === "string" &&
+            message.text.includes(LIVE_DB_CODEWORD),
+        ),
+      ).toBe(true);
+    }
   });
 
   it("agents endpoint returns agent metadata with database state", async () => {

@@ -1,15 +1,15 @@
-import {
-  type Action,
-  type ActionExample,
-  type ActionResult,
-  createUniqueUuid,
-  type HandlerCallback,
-  type HandlerOptions,
-  type IAgentRuntime,
-  logger,
-  type Memory,
-  type State,
-} from "@elizaos/core";
+import { createUniqueUuid } from "../../../entities.ts";
+import { logger } from "../../../logger.ts";
+import type {
+  Action,
+  ActionExample,
+  ActionResult,
+  HandlerCallback,
+  HandlerOptions,
+} from "../../../types/components.ts";
+import type { Memory } from "../../../types/memory.ts";
+import type { IAgentRuntime } from "../../../types/runtime.ts";
+import type { State } from "../../../types/state.ts";
 import { requireActionSpec } from "../generated/specs/spec-helpers";
 
 const spec = requireActionSpec("RECORD_EXPERIENCE");

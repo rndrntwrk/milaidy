@@ -802,9 +802,7 @@ export async function resolvePlugins(
     const ejectedRecord = ejectedRecords[pluginName];
     const installRecord = installRecords[pluginName];
     const workspaceOverridePath = getWorkspacePluginOverridePath(pluginName);
-    const staticElizaPlugin = isOfficialElizaPlugin
-      ? await resolveStaticElizaPlugin(pluginName)
-      : null;
+    const staticElizaPlugin = await resolveStaticElizaPlugin(pluginName);
 
     const importOfficialPluginFromNodeModules =
       async (): Promise<PluginModuleShape> =>

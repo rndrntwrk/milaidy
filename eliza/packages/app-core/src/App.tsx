@@ -52,17 +52,11 @@ import {
   StreamView,
   SystemWarningBanner,
   TrajectoriesView,
-} from "./app-shell-components";
-import { CompanionShell } from "@elizaos/app-companion";
-import { LifeOpsPageView } from "@elizaos/app-lifeops";
-// Register overlay apps (self-register on import)
-import "@elizaos/app-companion/register";
-import "@elizaos/app-vincent/register";
-import "@elizaos/app-shopify/register";
+} from "./components";
 import { getOverlayApp } from "./components/apps/overlay-app-registry";
 import { TasksEventsPanel } from "./components/chat/TasksEventsPanel";
 import { DeferredSetupChecklist } from "./components/cloud/FlaminaGuide";
-
+import { useBootConfig } from "./config";
 import { MusicPlayerGlobal } from "./components/music/MusicPlayerGlobal";
 import {
   BugReportProvider,
@@ -123,15 +117,18 @@ function ViewRouter({
   onCharacterHeaderActionsChange?: (actions: ReactNode | null) => void;
 }) {
   const { tab } = useApp();
+  const { lifeOpsPageView: LifeOpsPageView } = useBootConfig();
   const view = (() => {
     switch (tab) {
       case "chat":
         return <ChatView />;
       case "lifeops":
-        return (
+        return LifeOpsPageView ? (
           <TabScrollView>
             <LifeOpsPageView />
           </TabScrollView>
+        ) : (
+          <ChatView />
         );
       case "browser":
         return (
@@ -283,6 +280,7 @@ export function App() {
     uiShellMode,
     t,
   } = useApp();
+  const { companionShell: CompanionShell } = useBootConfig();
 
   const isPopout = useIsPopout();
   const companionShellVisible = activeOverlayApp !== null;
@@ -536,7 +534,8 @@ export function App() {
     () =>
       uiShellMode === "companion" &&
       tab !== "character" &&
-      tab !== "character-select" ? (
+      tab !== "character-select" &&
+      CompanionShell ? (
         <CompanionShell tab="companion" actionNotice={actionNotice} />
       ) : isCompanionTab ? (
         // Native mode with companion tab: the overlay app renders the companion UI.
@@ -759,6 +758,7 @@ export function App() {
         </div>
       ),
     [
+      CompanionShell,
       tab,
       uiShellMode,
       isCompanionTab,
