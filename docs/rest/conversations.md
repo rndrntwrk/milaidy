@@ -119,7 +119,7 @@ Send a message and get the agent's response synchronously (non-streaming).
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `text` | string | Yes | User message text |
+| `message` | string | Yes | User message text |
 | `channelType` | string | No | Channel type override |
 | `images` | array | No | Attached image data |
 
@@ -247,7 +247,7 @@ Send a message and receive a streaming SSE response in the legacy single-room co
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `text` | string | Yes | User message text |
+| `message` | string | Yes | User message text |
 | `channelType` | string | No | Channel type override |
 
 **SSE Events**

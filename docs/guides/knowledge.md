@@ -6,25 +6,6 @@ description: Upload documents, URLs, and YouTube transcripts to build a searchab
 
 The knowledge system provides Retrieval Augmented Generation (RAG) for the Milady agent. You can upload documents, URLs, and YouTube videos to build a searchable knowledge base. When the agent responds to questions, it retrieves relevant fragments from this knowledge base to ground its answers in your specific content.
 
-For Alice-specific system grounding, the canonical governance layer is the
-[Alice Knowledge Source Register](/operators/alice-knowledge-source-register).
-That register defines which repo docs, action references, runbooks, and
-founder-note surfaces are eligible for ingestion, how they are versioned, and
-how often they must refresh.
-
-## Alice grounding rule
-
-Alice should answer system questions from registered current sources, not from
-stale memory:
-
-- system and API questions should prefer current repo docs and action references
-- operator and recovery questions should prefer runbooks
-- founder notes require corroboration before they are treated as shipped truth
-
-The register also assigns a `sourceVersion` and refresh rule to each source set
-so the agent can tell whether a knowledge answer is grounded in current docs or
-older planning material.
-
 ## Architecture Overview
 
 The knowledge system is built on three layers:
