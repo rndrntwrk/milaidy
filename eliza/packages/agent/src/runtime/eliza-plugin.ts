@@ -7,7 +7,7 @@
  */
 
 import type { IAgentRuntime, Plugin, ServiceClass } from "@elizaos/core";
-import { AgentEventService } from "@elizaos/core/node";
+import { AgentEventService } from "@elizaos/core";
 import { launchAppAction, stopAppAction } from "../actions/app-control.js";
 import {
   readEntityAction,

@@ -63,10 +63,12 @@ import * as pluginAppCompanion from "@elizaos/app-companion/plugin";
 import * as pluginAppLifeops from "@elizaos/app-lifeops/plugin";
 import {
   AgentRuntime,
+  AutonomyService,
   addLogListener,
   ChannelType,
   type Character,
   type Component,
+  createBasicCapabilitiesPlugin,
   createMessageMemory,
   type Entity,
   type LogEntry,
@@ -79,7 +81,6 @@ import {
   type TargetInfo,
   type UUID,
 } from "@elizaos/core";
-import { AutonomyService, createBasicCapabilitiesPlugin } from "@elizaos/core/node";
 import * as pluginAgentSkills from "@elizaos/plugin-agent-skills";
 import * as pluginAnthropic from "@elizaos/plugin-anthropic";
 import * as pluginLocalEmbedding from "@elizaos/plugin-local-embedding";

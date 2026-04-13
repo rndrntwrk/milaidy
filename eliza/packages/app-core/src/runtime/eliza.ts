@@ -7,13 +7,13 @@ import process from "node:process";
 import { pathToFileURL } from "node:url";
 import {
   type AgentRuntime,
+  AutonomyService,
   ChannelType,
   logger,
   ModelType,
   type Plugin,
   stringToUuid,
 } from "@elizaos/core";
-import { AutonomyService } from "@elizaos/core/node";
 
 export * from "@elizaos/agent/runtime/eliza";
 
