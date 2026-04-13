@@ -6,6 +6,8 @@ description: "Develop plugins locally without publishing to npm."
 
 This guide covers developing plugins locally without publishing to npm -- custom integrations, private plugins, rapid prototyping, and ejecting upstream plugins for modification.
 
+Maintainer note: this document is for runtime/user plugin paths under `~/.milady/plugins/*`. Milady source-checkout development of first-party packages uses the repo-local workspaces under `eliza/plugins/*` and `eliza/packages/*`.
+
 ## Table of Contents
 
 1. [Plugin Locations](#plugin-locations)
