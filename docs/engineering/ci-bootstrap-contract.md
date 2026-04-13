@@ -29,6 +29,13 @@ Rules:
 - Enable local workspace disable explicitly.
 - Ensure the job does not run commands that require local `eliza/...` filesystem paths.
 
+### CI Rewrite-Only Compatibility
+
+`scripts/disable-local-eliza-workspace.mjs` can run in rewrite-only mode (default), where it rewrites workspace dependency specifiers without renaming `eliza/` away.
+
+- Rewrite-only mode is compatible with source-present command paths.
+- Rename-away mode (`MILADY_DISABLE_LOCAL_UPSTREAMS_RENAME=1`) is not compatible with source-present command paths.
+
 ## Required Invariants
 
 - A workflow must choose one bootstrap mode per job.
@@ -48,4 +55,4 @@ Reason:
 
 ## Guardrail
 
-`scripts/validate-ci-bootstrap-contract.mjs` enforces this contract in CI by failing when workflows mix local-workspace-disable markers with source-present command markers.
+`scripts/validate-ci-bootstrap-contract.mjs` enforces this contract in CI by failing when workflows mix rename-away disable mode with source-present command markers.

@@ -14,8 +14,13 @@ const WORKFLOWS = [
 
 const DISABLE_MARKERS = [
   "scripts/disable-local-eliza-workspace.mjs",
-  "disable-local-eliza-workspace: \"true\"",
+  'disable-local-eliza-workspace: "true"',
   "disable-local-eliza-workspace: 'true'",
+];
+const RENAME_MARKERS = [
+  "MILADY_DISABLE_LOCAL_UPSTREAMS_RENAME=1",
+  'MILADY_DISABLE_LOCAL_UPSTREAMS_RENAME: "1"',
+  "MILADY_DISABLE_LOCAL_UPSTREAMS_RENAME: '1'",
 ];
 
 const SOURCE_PRESENT_MARKERS = [
@@ -35,8 +40,12 @@ for (const workflowRelPath of WORKFLOWS) {
   if (!fs.existsSync(workflowPath)) continue;
 
   const text = fs.readFileSync(workflowPath, "utf8");
-  const hasDisableStep = DISABLE_MARKERS.some((marker) => text.includes(marker));
+  const hasDisableStep = DISABLE_MARKERS.some((marker) =>
+    text.includes(marker),
+  );
   if (!hasDisableStep) continue;
+  const hasRenameMode = RENAME_MARKERS.some((marker) => text.includes(marker));
+  if (!hasRenameMode) continue;
 
   const conflicting = SOURCE_PRESENT_MARKERS.filter((marker) =>
     text.includes(marker),
@@ -53,7 +62,7 @@ if (failures.length > 0) {
   console.error("CI bootstrap contract validation failed:");
   for (const failure of failures) {
     console.error(
-      `- ${failure.workflowRelPath} mixes local-workspace disable markers with source-present commands.`,
+      `- ${failure.workflowRelPath} mixes rename-away disable mode with source-present commands.`,
     );
     for (const marker of failure.conflicting) {
       console.error(`  marker: ${marker}`);
