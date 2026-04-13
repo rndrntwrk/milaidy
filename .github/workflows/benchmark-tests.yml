@@ -29,9 +29,9 @@ jobs:
       matrix:
         include:
           - lane: benchmark-tests
-            command: bunx vitest run eliza/packages/app-core/src/benchmark/*.test.ts
+            command: cd eliza && bunx vitest run packages/app-core/src/benchmark/*.test.ts --passWithNoTests
           - lane: benchmark-lint
-            command: bunx @biomejs/biome check eliza/packages/app-core/src/benchmark
+            command: cd eliza && bunx @biomejs/biome check packages/app-core/src/benchmark
 
     env:
       MILADY_SKIP_LOCAL_UPSTREAMS: "1"
