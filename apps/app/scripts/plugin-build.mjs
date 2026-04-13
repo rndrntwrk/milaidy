@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -17,6 +17,31 @@ const pluginNames = CAPACITOR_PLUGIN_NAMES;
 // Skip plugin builds if explicitly disabled or if Capacitor core is missing
 const skipPlugins =
   process.env.SKIP_NATIVE_PLUGINS === "1" || process.env.CI === "true";
+const activeChildren = new Set();
+
+function terminateActiveChildren() {
+  for (const child of activeChildren) {
+    if (!child || child.exitCode !== null || child.killed) {
+      continue;
+    }
+    if (process.platform === "win32") {
+      spawnSync("taskkill", ["/PID", String(child.pid), "/T", "/F"], {
+        stdio: "ignore",
+      });
+      continue;
+    }
+    child.kill("SIGTERM");
+  }
+}
+
+process.on("SIGINT", () => {
+  terminateActiveChildren();
+  process.exit(130);
+});
+process.on("SIGTERM", () => {
+  terminateActiveChildren();
+  process.exit(143);
+});
 
 function run(command, args, cwd) {
   return new Promise((resolve, reject) => {
@@ -25,16 +50,31 @@ function run(command, args, cwd) {
       stdio: "inherit",
       env: process.env,
     });
-    child.on("exit", (code, signal) => {
-      if (signal) {
-        reject(new Error(`${command} exited due to signal ${signal}`));
+    activeChildren.add(child);
+    let settled = false;
+    function finish(err) {
+      if (settled) {
         return;
       }
-      if ((code ?? 1) !== 0) {
-        reject(new Error(`${command} exited with code ${code ?? 1}`));
+      settled = true;
+      activeChildren.delete(child);
+      if (err) {
+        reject(err);
         return;
       }
       resolve();
+    }
+    child.on("error", (err) => finish(err));
+    child.on("exit", (code, signal) => {
+      if (signal) {
+        finish(new Error(`${command} exited due to signal ${signal}`));
+        return;
+      }
+      if ((code ?? 1) !== 0) {
+        finish(new Error(`${command} exited with code ${code ?? 1}`));
+        return;
+      }
+      finish();
     });
   });
 }
@@ -75,4 +115,9 @@ const workers = Array.from(
   },
 );
 
-await Promise.all(workers);
+try {
+  await Promise.all(workers);
+} catch (error) {
+  terminateActiveChildren();
+  throw error;
+}

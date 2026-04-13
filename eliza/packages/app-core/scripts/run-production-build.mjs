@@ -18,6 +18,7 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 // eliza/packages/app-core/scripts — walk up to the eliza repo root.
 const rootDir = path.resolve(scriptDir, "..", "..", "..", "..");
 const appDir = path.join(rootDir, "apps", "app");
+const activeChildren = new Set();
 
 /** Real Node binary — when the script is started via `bun run`, process.execPath is Bun. */
 function resolveNodeExec() {
@@ -69,19 +70,58 @@ function run(executable, args, cwd) {
       env,
       shell: false,
     });
-    child.on("exit", (code, signal) => {
-      if (signal) {
-        reject(new Error(`process exited with signal ${signal}`));
+    activeChildren.add(child);
+    let settled = false;
+    function finish(err) {
+      if (settled) {
         return;
       }
-      if ((code ?? 1) !== 0) {
-        reject(new Error(`process exited with code ${code ?? 1}`));
+      settled = true;
+      activeChildren.delete(child);
+      if (err) {
+        reject(err);
         return;
       }
       resolve();
+    }
+    child.on("error", (err) => finish(err));
+    child.on("exit", (code, signal) => {
+      if (signal) {
+        finish(new Error(`process exited with signal ${signal}`));
+        return;
+      }
+      if ((code ?? 1) !== 0) {
+        finish(new Error(`process exited with code ${code ?? 1}`));
+        return;
+      }
+      finish();
     });
   });
 }
+
+function terminateActiveChildren() {
+  for (const child of activeChildren) {
+    if (!child || child.exitCode !== null || child.killed) {
+      continue;
+    }
+    if (process.platform === "win32") {
+      spawnSync("taskkill", ["/PID", String(child.pid), "/T", "/F"], {
+        stdio: "ignore",
+      });
+      continue;
+    }
+    child.kill("SIGTERM");
+  }
+}
+
+process.on("SIGINT", () => {
+  terminateActiveChildren();
+  process.exit(130);
+});
+process.on("SIGTERM", () => {
+  terminateActiveChildren();
+  process.exit(143);
+});
 
 function resolveTsdownCli() {
   const p = path.join(rootDir, "node_modules", "tsdown", "dist", "run.mjs");
@@ -118,26 +158,31 @@ const pruneCdnAssetsScript = path.join(
 const { appAssetBaseUrl } = resolveElizaAssetBaseUrls();
 const runSequentialBuildPhaseOne = process.platform === "win32";
 
-if (runSequentialBuildPhaseOne) {
-  await run(node, [tsdownCli], rootDir);
-  await run(node, [pluginBuildScript], appDir);
-} else {
-  await Promise.all([
-    run(node, [tsdownCli], rootDir),
-    run(node, [pluginBuildScript], appDir),
-  ]);
-}
-
-async function runWriteBuildInfo() {
-  if (bunForScripts) {
-    await run(bunForScripts, [writeBuildInfoScript], rootDir);
-    return;
+try {
+  if (runSequentialBuildPhaseOne) {
+    await run(node, [tsdownCli], rootDir);
+    await run(node, [pluginBuildScript], appDir);
+  } else {
+    await Promise.all([
+      run(node, [tsdownCli], rootDir),
+      run(node, [pluginBuildScript], appDir),
+    ]);
   }
-  await run(node, ["--import", "tsx", writeBuildInfoScript], rootDir);
-}
 
-await run(node, [viteCli, "build"], appDir);
-await runWriteBuildInfo();
-if (appAssetBaseUrl) {
-  await run(node, [pruneCdnAssetsScript], rootDir);
+  async function runWriteBuildInfo() {
+    if (bunForScripts) {
+      await run(bunForScripts, [writeBuildInfoScript], rootDir);
+      return;
+    }
+    await run(node, ["--import", "tsx", writeBuildInfoScript], rootDir);
+  }
+
+  await run(node, [viteCli, "build"], appDir);
+  await runWriteBuildInfo();
+  if (appAssetBaseUrl) {
+    await run(node, [pruneCdnAssetsScript], rootDir);
+  }
+} catch (error) {
+  terminateActiveChildren();
+  throw error;
 }
