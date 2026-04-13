@@ -36,6 +36,18 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
+      - name: Setup workspace dependencies
+        uses: ./.github/actions/setup-bun-workspace
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+          disable-local-eliza-workspace: "true"
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+          install-native-deps: "false"
+          run-postinstall: "false"
+
+      - name: Restore eliza workspace paths for repo scripts
+        run: node -e "const fs=require('node:fs');if(fs.existsSync('.eliza.ci-disabled')&&!fs.existsSync('eliza'))fs.renameSync('.eliza.ci-disabled','eliza');"
+
       - name: Validate regression matrix contract
         run: bun run test:regression-matrix:pr
 
@@ -60,10 +72,13 @@ jobs:
         uses: ./.github/actions/setup-bun-workspace
         with:
           bun-version: ${{ env.BUN_VERSION }}
-          install-command: bun install --frozen-lockfile --ignore-scripts
-          disable-local-eliza-workspace: "false"
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+          disable-local-eliza-workspace: "true"
           skip-avatar-clone: "true"
           no-vision-deps: "true"
+
+      - name: Restore eliza workspace paths for repo scripts
+        run: node -e "const fs=require('node:fs');if(fs.existsSync('.eliza.ci-disabled')&&!fs.existsSync('eliza'))fs.renameSync('.eliza.ci-disabled','eliza');"
 
       # Proto-generated types are only needed when the repo-local eliza
       # workspace is present. Published-only CI disables that checkout.
@@ -104,10 +119,13 @@ jobs:
         uses: ./.github/actions/setup-bun-workspace
         with:
           bun-version: ${{ env.BUN_VERSION }}
-          install-command: bun install --frozen-lockfile --ignore-scripts
-          disable-local-eliza-workspace: "false"
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+          disable-local-eliza-workspace: "true"
           skip-avatar-clone: "true"
           no-vision-deps: "true"
+
+      - name: Restore eliza workspace paths for repo scripts
+        run: node -e "const fs=require('node:fs');if(fs.existsSync('.eliza.ci-disabled')&&!fs.existsSync('eliza'))fs.renameSync('.eliza.ci-disabled','eliza');"
 
       # Proto-generated types are only needed when the repo-local eliza
       # workspace is present. Published-only CI disables that checkout.
@@ -191,16 +209,24 @@ jobs:
           key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
           restore-keys: bun-${{ runner.os }}-
 
+      - name: Disable repo-local eliza workspace
+        env:
+          MILADY_SKIP_LOCAL_UPSTREAMS: "1"
+        run: node scripts/disable-local-eliza-workspace.mjs
+
       - name: Install dependencies
         shell: bash
         run: |
           for i in 1 2 3; do
-            bun install --frozen-lockfile --ignore-scripts && exit 0
+            bun install --ignore-scripts --no-frozen-lockfile && exit 0
             rm -rf node_modules
             echo "Attempt $i failed, retrying in $((i * 15))s..."
             sleep $((i * 15))
           done
           exit 1
+
+      - name: Restore eliza workspace paths for repo scripts
+        run: node -e "const fs=require('node:fs');if(fs.existsSync('.eliza.ci-disabled')&&!fs.existsSync('eliza'))fs.renameSync('.eliza.ci-disabled','eliza');"
 
       - name: Run repository postinstall patches
         run: bun run postinstall
@@ -283,8 +309,16 @@ jobs:
           key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
           restore-keys: bun-${{ runner.os }}-
 
+      - name: Disable repo-local eliza workspace
+        env:
+          MILADY_SKIP_LOCAL_UPSTREAMS: "1"
+        run: node scripts/disable-local-eliza-workspace.mjs
+
       - name: Install dependencies
-        run: bun install --frozen-lockfile --ignore-scripts
+        run: bun install --ignore-scripts --no-frozen-lockfile
+
+      - name: Restore eliza workspace paths for repo scripts
+        run: node -e "const fs=require('node:fs');if(fs.existsSync('.eliza.ci-disabled')&&!fs.existsSync('eliza'))fs.renameSync('.eliza.ci-disabled','eliza');"
 
       - name: Run repository postinstall patches
         run: bun run postinstall
@@ -330,8 +364,16 @@ jobs:
       - name: Initialize tracked workspace submodules
         run: node scripts/init-submodules.mjs
 
+      - name: Disable repo-local eliza workspace
+        env:
+          MILADY_SKIP_LOCAL_UPSTREAMS: "1"
+        run: node scripts/disable-local-eliza-workspace.mjs
+
       - name: Install dependencies
-        run: bun install --frozen-lockfile --ignore-scripts
+        run: bun install --ignore-scripts --no-frozen-lockfile
+
+      - name: Restore eliza workspace paths for repo scripts
+        run: node -e "const fs=require('node:fs');if(fs.existsSync('.eliza.ci-disabled')&&!fs.existsSync('eliza'))fs.renameSync('.eliza.ci-disabled','eliza');"
 
       - name: Run repository postinstall patches
         run: bun run postinstall
@@ -398,8 +440,16 @@ jobs:
       - name: Initialize tracked workspace submodules
         run: node scripts/init-submodules.mjs
 
+      - name: Disable repo-local eliza workspace
+        env:
+          MILADY_SKIP_LOCAL_UPSTREAMS: "1"
+        run: node scripts/disable-local-eliza-workspace.mjs
+
       - name: Install dependencies
-        run: bun install --frozen-lockfile --ignore-scripts
+        run: bun install --ignore-scripts --no-frozen-lockfile
+
+      - name: Restore eliza workspace paths for repo scripts
+        run: node -e "const fs=require('node:fs');if(fs.existsSync('.eliza.ci-disabled')&&!fs.existsSync('eliza'))fs.renameSync('.eliza.ci-disabled','eliza');"
 
       - name: Run repository postinstall patches
         run: bun run postinstall
@@ -445,8 +495,16 @@ jobs:
       - name: Initialize tracked workspace submodules
         run: node scripts/init-submodules.mjs
 
+      - name: Disable repo-local eliza workspace
+        env:
+          MILADY_SKIP_LOCAL_UPSTREAMS: "1"
+        run: node scripts/disable-local-eliza-workspace.mjs
+
       - name: Install dependencies
-        run: bun install --frozen-lockfile --ignore-scripts
+        run: bun install --ignore-scripts --no-frozen-lockfile
+
+      - name: Restore eliza workspace paths for repo scripts
+        run: node -e "const fs=require('node:fs');if(fs.existsSync('.eliza.ci-disabled')&&!fs.existsSync('eliza'))fs.renameSync('.eliza.ci-disabled','eliza');"
 
       - name: Run repository postinstall patches
         run: bun run postinstall
@@ -498,10 +556,18 @@ jobs:
       - name: Initialize tracked workspace submodules
         run: node scripts/init-submodules.mjs
 
+      - name: Disable repo-local eliza workspace
+        env:
+          MILADY_SKIP_LOCAL_UPSTREAMS: "1"
+        run: node scripts/disable-local-eliza-workspace.mjs
+
       - name: Install dependencies
-        run: bun install --frozen-lockfile --ignore-scripts
+        run: bun install --ignore-scripts --no-frozen-lockfile
         env:
           npm_config_python: ${{ env.pythonLocation }}/bin/python3
+
+      - name: Restore eliza workspace paths for repo scripts
+        run: node -e "const fs=require('node:fs');if(fs.existsSync('.eliza.ci-disabled')&&!fs.existsSync('eliza'))fs.renameSync('.eliza.ci-disabled','eliza');"
 
       - name: Run repository postinstall patches
         run: bun run postinstall
@@ -544,13 +610,17 @@ jobs:
         uses: ./.github/actions/setup-bun-workspace
         with:
           bun-version: ${{ env.BUN_VERSION }}
-          disable-local-eliza-workspace: "false"
+          disable-local-eliza-workspace: "true"
           install-command: |
             for i in 1 2 3 4 5; do
-              bun install --frozen-lockfile --ignore-scripts && break
+              bun install --ignore-scripts --no-frozen-lockfile && break
               echo "Attempt $i failed, retrying in $((i * 15))s..."
               sleep $((i * 15))
             done
+
+      - name: Restore eliza workspace paths for repo scripts
+        if: steps.cloud.outputs.enabled == 'true'
+        run: node -e "const fs=require('node:fs');if(fs.existsSync('.eliza.ci-disabled')&&!fs.existsSync('eliza'))fs.renameSync('.eliza.ci-disabled','eliza');"
 
       - name: Run cloud live test
         if: steps.cloud.outputs.enabled == 'true'
@@ -574,7 +644,11 @@ jobs:
         uses: ./.github/actions/setup-bun-workspace
         with:
           bun-version: ${{ env.BUN_VERSION }}
-          install-command: bun install --frozen-lockfile --ignore-scripts
+          disable-local-eliza-workspace: "true"
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+
+      - name: Restore eliza workspace paths for repo scripts
+        run: node -e "const fs=require('node:fs');if(fs.existsSync('.eliza.ci-disabled')&&!fs.existsSync('eliza'))fs.renameSync('.eliza.ci-disabled','eliza');"
 
       - name: Build
         run: bun run build
