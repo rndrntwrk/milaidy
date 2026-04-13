@@ -683,6 +683,14 @@ async function bootstrapOnchainDev() {
       "MockElizaAgentRegistry.sol",
       "MockElizaAgentRegistry.json",
     ),
+    path.join(
+      cwd,
+      "test",
+      "contracts",
+      "out",
+      "MockMiladyAgentRegistry.sol",
+      "MockMiladyAgentRegistry.json",
+    ),
   ];
   const collectionCandidates = [
     path.join(
@@ -692,6 +700,14 @@ async function bootstrapOnchainDev() {
       "out",
       "MockElizaCollection.sol",
       "MockElizaCollection.json",
+    ),
+    path.join(
+      cwd,
+      "test",
+      "contracts",
+      "out",
+      "MockMiladyCollection.sol",
+      "MockMiladyCollection.json",
     ),
   ];
   let registryArtifactPath = resolveArtifactPath(registryCandidates);
