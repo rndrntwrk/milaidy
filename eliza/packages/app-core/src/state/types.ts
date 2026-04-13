@@ -147,7 +147,8 @@ export const ONBOARDING_PERMISSION_LABELS: Record<SystemPermissionId, string> =
     "website-blocking": "Website Blocking",
   };
 
-export type { ActionNotice } from "./action-notice";
+import type { ActionNotice } from "./action-notice";
+export type { ActionNotice };
 
 export type LifecycleAction = "start" | "stop" | "restart" | "reset";
 
