@@ -34,6 +34,25 @@ function parseHttpOrigin(raw: string | undefined): URL | null {
   }
 }
 
+function resolveOriginPort(origin: URL, fallbackPort: number): number {
+  if (origin.port) {
+    const parsedPort = Number.parseInt(origin.port, 10);
+    if (Number.isFinite(parsedPort) && parsedPort > 0) {
+      return parsedPort;
+    }
+  }
+
+  if (origin.protocol === "https:") {
+    return 443;
+  }
+
+  if (origin.protocol === "http:") {
+    return 80;
+  }
+
+  return fallbackPort;
+}
+
 export function resolveViteDevServerRuntime(
   env: Record<string, string | undefined>,
   uiPort: number,
@@ -48,15 +67,11 @@ export function resolveViteDevServerRuntime(
   ).trim();
 
   if (explicitOrigin) {
-    const parsedPort = explicitOrigin.port
-      ? Number.parseInt(explicitOrigin.port, 10)
-      : Number.NaN;
-
     return {
       origin: explicitOrigin.origin,
       hmr: {
         host: explicitHmrHost || explicitOrigin.hostname,
-        port: Number.isFinite(parsedPort) && parsedPort > 0 ? parsedPort : uiPort,
+        port: resolveOriginPort(explicitOrigin, uiPort),
         protocol: explicitOrigin.protocol === "https:" ? "wss" : "ws",
       },
     };

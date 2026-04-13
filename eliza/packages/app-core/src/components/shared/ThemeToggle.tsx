@@ -10,7 +10,7 @@ import { Button } from "@elizaos/app-core";
 import { Moon, Sun } from "lucide-react";
 import { useCallback } from "react";
 import type { UiTheme } from "../../state/persistence";
-import { SHELL_ICON_BUTTON_CLASSNAME } from "@elizaos/app-companion/ui";
+import { SHELL_ICON_BUTTON_CLASSNAME } from "@elizaos/app-companion";
 
 /** Minimal translator function type. */
 export type ThemeTranslatorFn = (key: string) => string;

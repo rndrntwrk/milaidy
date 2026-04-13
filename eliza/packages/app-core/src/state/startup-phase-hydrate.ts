@@ -33,7 +33,7 @@ import type { StartupEvent } from "./startup-coordinator";
 import type { AgentStatus, WalletAddresses } from "../api";
 import type { OnboardingMode } from "./types";
 import { getVrmUrl, getVrmCount, VRM_COUNT } from "./vrm";
-import { prefetchVrmToCache } from "@elizaos/app-companion/ui";
+import { prefetchVrmToCache } from "@elizaos/app-companion";
 
 export interface HydratingDeps {
   setStartupError: (v: null) => void;

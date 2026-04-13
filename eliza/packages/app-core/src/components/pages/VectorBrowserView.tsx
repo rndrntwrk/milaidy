@@ -41,7 +41,7 @@ import {
 import {
   createVectorBrowserRenderer,
   THREE,
-} from "@elizaos/app-companion/ui";
+} from "@elizaos/app-companion";
 import { MemoryDetailPanel } from "./MemoryDetailPanel";
 import {
   buildVectorGraph2DLayout,

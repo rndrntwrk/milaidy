@@ -16,7 +16,7 @@ import { CloudStatusBadge } from "../cloud/CloudStatusBadge";
 import {
   InferenceCloudAlertButton,
   resolveCompanionInferenceNotice,
-} from "@elizaos/app-companion/ui";
+} from "@elizaos/app-companion";
 import {
   HEADER_BUTTON_STYLE,
   HEADER_ICON_BUTTON_CLASSNAME,
