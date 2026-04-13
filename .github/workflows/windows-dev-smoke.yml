@@ -36,6 +36,7 @@ jobs:
             /bunfig.toml
             /tsconfig.json
             apps/
+            packages/
             scripts/
             eliza/apps/
             eliza/packages/app-core/
@@ -67,6 +68,12 @@ jobs:
 
       - name: Install dependencies
         run: bun install --ignore-scripts
+
+      - name: Restore eliza workspace paths for script checks
+        run: |
+          if ((Test-Path ".eliza.ci-disabled") -and -not (Test-Path "eliza")) {
+            Move-Item -LiteralPath ".eliza.ci-disabled" -Destination "eliza"
+          }
 
       - name: Verify json5 interop
         run: >

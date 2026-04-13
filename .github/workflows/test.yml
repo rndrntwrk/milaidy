@@ -147,6 +147,7 @@ jobs:
             /bunfig.toml
             /tsconfig.json
             apps/
+            packages/
             scripts/
             eliza/apps/
             eliza/packages/app-core/
@@ -238,6 +239,7 @@ jobs:
             /bunfig.toml
             /tsconfig.json
             apps/
+            packages/
             scripts/
             eliza/apps/
             eliza/packages/app-core/
