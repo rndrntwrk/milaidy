@@ -48,7 +48,7 @@ const requestedConcurrency = Number.parseInt(
 const maxConcurrency = Number.isFinite(requestedConcurrency)
   ? Math.max(1, requestedConcurrency)
   : process.platform === "win32"
-    ? 4
+    ? 1
     : pluginNames.length;
 
 if (skipPlugins) {
@@ -65,11 +65,14 @@ async function buildPlugin(name) {
 }
 
 let nextPluginIndex = 0;
-const workers = Array.from({ length: Math.min(maxConcurrency, pluginNames.length) }, async () => {
-  while (nextPluginIndex < pluginNames.length) {
-    const name = pluginNames[nextPluginIndex++];
-    await buildPlugin(name);
-  }
-});
+const workers = Array.from(
+  { length: Math.min(maxConcurrency, pluginNames.length) },
+  async () => {
+    while (nextPluginIndex < pluginNames.length) {
+      const name = pluginNames[nextPluginIndex++];
+      await buildPlugin(name);
+    }
+  },
+);
 
 await Promise.all(workers);

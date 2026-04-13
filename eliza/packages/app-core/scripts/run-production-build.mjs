@@ -116,11 +116,17 @@ const pruneCdnAssetsScript = path.join(
   "prune-cdn-local-assets.mjs",
 );
 const { appAssetBaseUrl } = resolveElizaAssetBaseUrls();
+const runSequentialBuildPhaseOne = process.platform === "win32";
 
-await Promise.all([
-  run(node, [tsdownCli], rootDir),
-  run(node, [pluginBuildScript], appDir),
-]);
+if (runSequentialBuildPhaseOne) {
+  await run(node, [tsdownCli], rootDir);
+  await run(node, [pluginBuildScript], appDir);
+} else {
+  await Promise.all([
+    run(node, [tsdownCli], rootDir),
+    run(node, [pluginBuildScript], appDir),
+  ]);
+}
 
 async function runWriteBuildInfo() {
   if (bunForScripts) {
