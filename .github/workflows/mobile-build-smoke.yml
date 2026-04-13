@@ -40,7 +40,7 @@ jobs:
           install-native-deps: "false"
           disable-local-eliza-workspace: "true"
           install-command: bun install --ignore-scripts --no-frozen-lockfile
-          run-postinstall: "true"
+          run-postinstall: "false"
           skip-avatar-clone: "true"
           no-vision-deps: "true"
 
@@ -49,6 +49,15 @@ jobs:
           if [ -d ".eliza.ci-disabled" ] && [ ! -d "eliza" ]; then
             mv .eliza.ci-disabled eliza
           fi
+
+      - name: Install app-core package dependencies
+        run: bun install --cwd eliza/packages/app-core --ignore-scripts
+
+      - name: Run repository postinstall patches
+        run: node eliza/packages/app-core/scripts/run-repo-setup.mjs
+        env:
+          SKIP_AVATAR_CLONE: "1"
+          MILADY_NO_VISION_DEPS: "1"
 
       - name: Build web assets
         working-directory: apps/app
@@ -141,7 +150,7 @@ jobs:
           disable-local-eliza-workspace: "true"
           install-command: bun install --ignore-scripts --no-frozen-lockfile
           install-native-deps: "false"
-          run-postinstall: "true"
+          run-postinstall: "false"
           skip-avatar-clone: "true"
           no-vision-deps: "true"
 
@@ -150,6 +159,15 @@ jobs:
           if [ -d ".eliza.ci-disabled" ] && [ ! -d "eliza" ]; then
             mv .eliza.ci-disabled eliza
           fi
+
+      - name: Install app-core package dependencies
+        run: bun install --cwd eliza/packages/app-core --ignore-scripts
+
+      - name: Run repository postinstall patches
+        run: node eliza/packages/app-core/scripts/run-repo-setup.mjs
+        env:
+          SKIP_AVATAR_CLONE: "1"
+          MILADY_NO_VISION_DEPS: "1"
 
       - name: Build web assets
         working-directory: apps/app
