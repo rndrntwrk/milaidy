@@ -191,6 +191,27 @@ jobs:
       - name: Run validation E2E tests
         run: bun run test:e2e:validation
 
+      - name: Run live surface audit
+        run: bun run test:audit:live:strict
+
+      - name: Install Playwright browser
+        run: bunx playwright install --with-deps chromium
+
+      - name: Check live provider secrets
+        run: |
+          if [ -z "${{ secrets.ELIZAOS_CLOUD_API_KEY }}" ]; then
+            echo "::error::UI Playwright smoke requires ELIZAOS_CLOUD_API_KEY so the suite can complete real onboarding."
+            exit 1
+          fi
+
+      - name: Run UI Playwright smoke tests
+        run: bun run test:ui:playwright
+        env:
+          MILADY_LIVE_TEST: "1"
+          ELIZA_LIVE_TEST: "1"
+          ELIZAOS_CLOUD_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY }}
+          ELIZAOS_CLOUD_BASE_URL: ${{ secrets.ELIZAOS_CLOUD_BASE_URL }}
+
       - name: Upload build artifacts for publish
         uses: actions/upload-artifact@v4
         with:

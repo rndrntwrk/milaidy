@@ -78,7 +78,6 @@ concurrency:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: milady-ai/agent
-  MILADY_SKIP_LOCAL_UPSTREAMS: "1"
 
 permissions:
   contents: read
@@ -120,11 +119,14 @@ jobs:
           restore-keys: |
             bun-store-${{ runner.os }}-
 
+      # ── 4.5. Init eliza submodule ──────────────────────────────────────────
+      # Prime the eliza checkout before init-submodules.mjs recurses into the
+      # nested cloud/steward/plugin submodules that the root workspace expects.
+      - name: Initialize eliza submodule
+        run: git submodule update --init --depth=1 eliza
+
       - name: Initialize tracked workspace submodules
         run: node scripts/init-submodules.mjs
-
-      - name: Disable repo-local eliza workspace
-        run: node scripts/disable-local-eliza-workspace.mjs
 
       # ── 5. Install dependencies ─────────────────────────────────────────────
       - name: Install dependencies
@@ -136,6 +138,21 @@ jobs:
         env:
           SKIP_AVATAR_CLONE: "1"
           MILADY_NO_VISION_DEPS: "1"
+
+      # ── 5c. Install build fallback dependencies ────────────────────────────
+      # Keep a small set of UI/runtime packages available at the repo root for
+      # nested Vite and Docker build steps.
+      - name: Install published-workspace fallback dependencies
+        run: |
+          bun add --no-save --dev \
+            react react-dom vite \
+            @types/react @types/react-dom @types/three \
+            three clsx class-variance-authority tailwind-merge sonner \
+            @radix-ui/react-checkbox @radix-ui/react-dialog @radix-ui/react-dropdown-menu @radix-ui/react-label \
+            @radix-ui/react-popover @radix-ui/react-select @radix-ui/react-separator @radix-ui/react-slider \
+            @radix-ui/react-slot @radix-ui/react-switch @radix-ui/react-tabs @radix-ui/react-tooltip \
+            @capacitor/core @capacitor/haptics @capacitor/keyboard @capacitor/preferences \
+            @xterm/xterm @xterm/addon-fit
 
       # ── 6. Build Capacitor plugins ──────────────────────────────────────────
       # The Vite UI imports @elizaos/capacitor-* workspace packages which need
@@ -151,13 +168,6 @@ jobs:
           cd eliza/packages/agent
           bun run build:docker-dist
 
-      # ── 8. Build bundled orchestrator workspace ─────────────────────────────
-      # The Docker image imports the workspace package via its published
-      # dist/index.js export, so clean checkouts must build that package first.
-      - name: Build @elizaos/core (includes agent-orchestrator)
-        run: |
-          cd eliza/packages/typescript
-          bun run build:node
 
       # ── 9. Build runtime (tsdown) ───────────────────────────────────────────
       - name: Build runtime (tsdown)

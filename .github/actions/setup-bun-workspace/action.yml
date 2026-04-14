@@ -33,7 +33,11 @@ inputs:
   disable-local-eliza-workspace:
     description: "Disable repo-local eliza workspace in CI when local upstreams are skipped"
     required: false
-    default: "true"
+    default: "false"
+  prepare-local-eliza-runtime:
+    description: "Install repo-local eliza dependencies needed by jobs that execute local eliza scripts after published-only setup"
+    required: false
+    default: "false"
 
 runs:
   using: "composite"
@@ -84,17 +88,54 @@ runs:
       shell: bash
       run: node scripts/init-submodules.mjs
 
+    - name: Initialize local eliza workspace
+      if: ${{ inputs.disable-local-eliza-workspace != 'true' }}
+      shell: bash
+      run: |
+        # Some workflows export MILADY_SKIP_LOCAL_UPSTREAMS globally even when
+        # they immediately restore eliza/ and run repo-local scripts. Clear the
+        # skip flags here so the full eliza checkout (including nested plugins)
+        # is available to Bun.
+        MILADY_SKIP_LOCAL_UPSTREAMS= ELIZA_SKIP_LOCAL_UPSTREAMS= node scripts/init-submodules.mjs
+
+    # disable-local-eliza-workspace.mjs needs eliza/ on disk to read package
+    # versions from workspace package.json files (overrides use workspace:*,
+    # not pinned versions). Shallow-init the submodule so version resolution
+    # succeeds, then the disable script rewrites workspace:* to registry versions.
+    - name: Shallow-init eliza submodule for version resolution
+      if: ${{ inputs.disable-local-eliza-workspace == 'true' }}
+      shell: bash
+      run: git submodule update --init --depth=1 eliza
+
+    # IMPORTANT: This mode is for published-only CI jobs. Do not enable it for
+    # jobs that execute repo-local paths under eliza/ after dependency setup.
     - name: Disable repo-local eliza workspace
       if: ${{ inputs.disable-local-eliza-workspace == 'true' }}
       shell: bash
       # Jobs that rewrite the workspace graph under MILADY_SKIP_LOCAL_UPSTREAMS=1 must also override install-command to --no-frozen-lockfile because this step regenerates bun.lock for the rewritten workspace shape.
       run: node scripts/disable-local-eliza-workspace.mjs
+      env:
+        MILADY_SKIP_LOCAL_UPSTREAMS: "1"
 
     - name: Install dependencies
       shell: bash
       run: ${{ inputs.install-command }}
       env:
         npm_config_python: ${{ env.pythonLocation }}/bin/python3
+
+    - name: Install published-workspace fallback dependencies
+      if: ${{ inputs.disable-local-eliza-workspace == 'true' }}
+      shell: bash
+      run: >
+        bun add --no-save --dev --ignore-scripts
+        react react-dom vite
+        @types/react @types/react-dom
+        tailwindcss three clsx class-variance-authority tailwind-merge sonner
+        @radix-ui/react-checkbox @radix-ui/react-dialog @radix-ui/react-dropdown-menu @radix-ui/react-label
+        @radix-ui/react-popover @radix-ui/react-select @radix-ui/react-separator @radix-ui/react-slider
+        @radix-ui/react-slot @radix-ui/react-switch @radix-ui/react-tabs @radix-ui/react-tooltip
+        @capacitor/core @capacitor/haptics @capacitor/keyboard @capacitor/preferences
+        @xterm/xterm @xterm/addon-fit
 
     - name: Run repository postinstall patches
       if: ${{ inputs.run-postinstall == 'true' }}
@@ -103,3 +144,18 @@ runs:
       env:
         SKIP_AVATAR_CLONE: ${{ inputs.skip-avatar-clone == 'true' && '1' || '' }}
         MILADY_NO_VISION_DEPS: ${{ inputs.no-vision-deps == 'true' && '1' || '' }}
+        MILADY_SKIP_LOCAL_UPSTREAMS: ${{ inputs.disable-local-eliza-workspace == 'true' && '1' || '' }}
+
+    - name: Install local eliza runtime dependencies
+      if: ${{ inputs.prepare-local-eliza-runtime == 'true' && inputs.disable-local-eliza-workspace == 'true' }}
+      shell: bash
+      run: bun install --cwd eliza --no-frozen-lockfile --ignore-scripts
+
+    - name: Generate local eliza keyword data
+      if: ${{ inputs.prepare-local-eliza-runtime == 'true' && inputs.disable-local-eliza-workspace == 'true' }}
+      shell: bash
+      run: |
+        if [ -f eliza/packages/shared/scripts/generate-keywords.mjs ]; then
+          cd eliza
+          node packages/shared/scripts/generate-keywords.mjs --target ts
+        fi

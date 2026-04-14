@@ -41,6 +41,9 @@ export default defineConfig({
   root: here,
   base: "/",
   publicDir: path.resolve(here, "public"),
+  esbuild: {
+    target: "es2022",
+  },
   plugins: [
     tailwindcss(),
     // MDX MUST come before @vitejs/plugin-react-swc so .mdx files are compiled
@@ -72,18 +75,27 @@ export default defineConfig({
     react(),
   ],
   resolve: {
-    alias: {
-      "@elizaos/app-core": path.resolve(
-        here,
-        "../../eliza/packages/app-core/src/index.ts",
-      ),
-    },
+    alias: [
+      {
+        find: /^@elizaos\/ui\//,
+        replacement: `${path.resolve(here, "../../eliza/packages/ui/src")}/`,
+      },
+      {
+        find: /^@elizaos\/ui$/,
+        replacement: path.resolve(here, "../../eliza/packages/ui/src/index.ts"),
+      },
+    ],
   },
   build: {
     outDir: path.resolve(here, "dist"),
     emptyOutDir: true,
     sourcemap: false,
     target: "es2022",
+  },
+  optimizeDeps: {
+    esbuildOptions: {
+      target: "es2022",
+    },
   },
   server: {
     host: true,

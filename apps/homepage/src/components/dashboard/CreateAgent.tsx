@@ -1,13 +1,13 @@
+import { STYLE_PRESETS } from "@elizaos/shared/onboarding-presets";
+import { Button } from "@elizaos/ui/components/ui/button";
 import {
-  Button,
   Field,
   FieldDescription,
   FieldLabel,
   FieldMessage,
-  Input,
-  Textarea,
-} from "@elizaos/app-core";
-import { STYLE_PRESETS } from "@elizaos/shared/onboarding-presets";
+} from "@elizaos/ui/components/ui/field";
+import { Input } from "@elizaos/ui/components/ui/input";
+import { Textarea } from "@elizaos/ui/components/ui/textarea";
 import { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AgentProvider, useAgents } from "../../lib/AgentProvider";

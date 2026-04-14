@@ -32,6 +32,7 @@ const nativePluginsRoot = path.join(
   "eliza/packages/native-plugins",
 );
 const appCoreSrcRoot = path.join(miladyRoot, "eliza/packages/app-core/src");
+const uiPkgRoot = path.join(miladyRoot, "eliza/packages/ui");
 
 // Mirror MILADY_* env into ELIZA_* before the shared runtime helpers resolve ports.
 syncElizaEnvAliases();
@@ -1075,6 +1076,48 @@ export default defineConfig({
           "websiteblocker/src/index.ts",
         ),
       },
+      // Force local @elizaos/ui source paths when the app bundles linked
+      // @elizaos/app-core sources directly.
+      {
+        find: /^@elizaos\/ui$/,
+        replacement: path.join(uiPkgRoot, "src/index.ts"),
+      },
+      {
+        find: /^@elizaos\/ui\/components\/ui\/(.*)$/,
+        replacement: `${uiPkgRoot}/src/components/ui/$1.tsx`,
+      },
+      {
+        find: /^@elizaos\/ui\/components\/composites\/([^/]+)$/,
+        replacement: `${uiPkgRoot}/src/components/composites/$1/index.ts`,
+      },
+      {
+        find: /^@elizaos\/ui\/components\/composites\/(.+)\/([^/]+)$/,
+        replacement: `${uiPkgRoot}/src/components/composites/$1/$2.tsx`,
+      },
+      {
+        find: /^@elizaos\/ui\/hooks$/,
+        replacement: path.join(uiPkgRoot, "src/hooks/index.ts"),
+      },
+      {
+        find: /^@elizaos\/ui\/hooks\/(.*)$/,
+        replacement: `${uiPkgRoot}/src/hooks/$1.ts`,
+      },
+      {
+        find: /^@elizaos\/ui\/layouts$/,
+        replacement: path.join(uiPkgRoot, "src/layouts/index.ts"),
+      },
+      {
+        find: /^@elizaos\/ui\/layouts\/([^/]+)$/,
+        replacement: `${uiPkgRoot}/src/layouts/$1/index.ts`,
+      },
+      {
+        find: /^@elizaos\/ui\/layouts\/(.+)\/([^/]+)$/,
+        replacement: `${uiPkgRoot}/src/layouts/$1/$2.tsx`,
+      },
+      {
+        find: /^@elizaos\/ui\/lib\/(.*)$/,
+        replacement: `${uiPkgRoot}/src/lib/$1.ts`,
+      },
       // Dynamic aliases for all eliza/apps/* packages
       ...(() => {
         const appsDir = path.resolve(miladyRoot, "eliza/apps");
@@ -1188,6 +1231,14 @@ export default defineConfig({
 
         return [
           ...generatedAliases,
+          // Fallback: catch any @elizaos/app-core sub-path not covered by the
+          // dynamic export-map aliases above (e.g. when the published package
+          // uses conditional exports objects and the `typeof value === "string"`
+          // guard skips them).  Maps directly to the local src/ tree.
+          {
+            find: /^@elizaos\/app-core\/(.+)$/,
+            replacement: `${appCorePkgDir}/src/$1`,
+          },
           {
             find: /^@miladyai\/ui$/,
             replacement: path.join(uiSource, "index.ts"),
@@ -1206,6 +1257,17 @@ export default defineConfig({
             replacement: path.join(
               appCoreSrcRoot,
               "platform/empty-node-module.ts",
+            ),
+          },
+          // Fallback for @elizaos/agent sub-path imports (e.g. /autonomy,
+          // /contracts/onboarding). The npm-published package may not include
+          // all export entries that the local workspace source provides, so
+          // resolve sub-paths directly from the local agent source tree.
+          {
+            find: /^@elizaos\/agent\/(.+)$/,
+            replacement: path.resolve(
+              miladyRoot,
+              "eliza/packages/agent/src/$1",
             ),
           },
           // @elizaos/core — force ALL copies (including nested ones in plugins
@@ -1308,7 +1370,7 @@ export default defineConfig({
       "node-llama-cpp",
       "@node-llama-cpp/mac-arm64-metal",
       // Contains native-only pty-state-capture import; skip pre-bundling.
-      "@elizaos/core/agent-orchestrator",
+      "@elizaos/plugin-agent-orchestrator",
       // @elizaos/plugin-secrets-manager is now built into @elizaos/core features
       // Node-only HTTP client — crashes in browser, stub via nativeModuleStubPlugin
       "undici",

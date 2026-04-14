@@ -2,7 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAgents } from "../../lib/AgentProvider";
-import type { LogEntry } from "../../lib/cloud-api";
+import {
+  isJsonObject,
+  type JsonObject,
+  type LogEntry,
+} from "../../lib/cloud-api";
+import { formatTime } from "../../lib/format";
 
 interface DisplayLine {
   id: string;
@@ -27,12 +32,15 @@ function levelColor(level: string): string {
   }
 }
 
-function formatTimestamp(ts: string): string {
-  try {
-    return new Date(ts).toLocaleTimeString();
-  } catch {
-    return ts;
+function getStringField(
+  record: JsonObject,
+  ...keys: string[]
+): string | undefined {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string") return value;
   }
+  return undefined;
 }
 
 /** Parse raw log text (newline-separated) into display lines */
@@ -43,13 +51,16 @@ function parseRawLogs(raw: string): DisplayLine[] {
     .map((line, i) => {
       // Try to detect JSON log format
       try {
-        const obj = JSON.parse(line) as Record<string, unknown>;
-        const level = String(obj.level ?? obj.lvl ?? "INFO").toUpperCase();
-        const msg = String(obj.msg ?? obj.message ?? obj.text ?? line);
-        const ts =
-          typeof obj.time === "string" || typeof obj.timestamp === "string"
-            ? formatTimestamp(String(obj.time ?? obj.timestamp))
-            : "—";
+        const parsed = JSON.parse(line);
+        if (!isJsonObject(parsed)) {
+          throw new Error("Log line was not a JSON object");
+        }
+        const level = (
+          getStringField(parsed, "level", "lvl") ?? "INFO"
+        ).toUpperCase();
+        const msg = getStringField(parsed, "msg", "message", "text") ?? line;
+        const timestamp = getStringField(parsed, "time", "timestamp");
+        const ts = timestamp ? formatTime(timestamp, timestamp) : "—";
         return { id: `raw-${i}`, time: ts, level, msg, raw: true };
       } catch {
         // Plain text line — try to extract level
@@ -65,7 +76,7 @@ function parseRawLogs(raw: string): DisplayLine[] {
 function fromLogEntries(entries: LogEntry[]): DisplayLine[] {
   return entries.map((e, i) => ({
     id: `entry-${i}`,
-    time: formatTimestamp(e.timestamp),
+    time: formatTime(e.timestamp, e.timestamp),
     level: (e.level ?? "info").toUpperCase(),
     msg: e.message,
   }));

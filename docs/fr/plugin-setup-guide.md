@@ -260,16 +260,6 @@ où obtenir les identifiants, les champs minimum requis et des conseils pour les
 - Définissez les identifiants de modèle via le bloc de configuration `providers.minimax` dans `milady.json`
 **Conseils :** Minimax fournit des modèles d'IA chinois et multilingues.
 
-<div id="pi-ai">
-
-### Pi AI
-</div>
-
-**Minimum requis :** `ELIZA_USE_PI_AI=true`
-**Variables :**
-- `ELIZA_USE_PI_AI` — Définissez sur `true` pour activer Pi AI comme fournisseur de modèles
-**Conseils :** Pi AI fournit des modèles conversationnels optimisés pour un dialogue amical et utile.
-
 <div id="zai">
 
 ### Zai

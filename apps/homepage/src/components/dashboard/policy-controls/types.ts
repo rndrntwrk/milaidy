@@ -1,7 +1,10 @@
 /**
  * Types and constants for policy controls.
  */
-import type { StewardPolicyType } from "../../../lib/cloud-api";
+import type {
+  StewardPolicyConfig,
+  StewardPolicyType,
+} from "../../../lib/cloud-api";
 
 export const POLICY_TYPE_META: Record<
   StewardPolicyType,
@@ -38,9 +41,7 @@ export function generatePolicyId(type: StewardPolicyType): string {
   return `${type}-${Date.now().toString(36)}`;
 }
 
-export function getDefaultConfig(
-  type: StewardPolicyType,
-): Record<string, unknown> {
+export function getDefaultConfig(type: StewardPolicyType): StewardPolicyConfig {
   switch (type) {
     case "spending-limit":
       return { maxPerTx: "0.1", maxPerDay: "1.0", maxPerWeek: "5.0" };

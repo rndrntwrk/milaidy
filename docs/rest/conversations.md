@@ -184,7 +184,7 @@ data: {"type":"done","fullText":"Here's what I think...","agentName":"Milady"}
 The conversation title is auto-generated in the background if it is still `"New Chat"`, and a `conversation-updated` WebSocket event is broadcast. If AI title generation fails, the title falls back to the first five words of the user's message.
 
 <Info>
-Action callbacks (e.g. from music playback, wallet flows) use **replace** semantics: each successive callback replaces the callback portion of the message rather than appending. This matches the progressive-message pattern used on Discord and Telegram. See [Action callbacks and SSE streaming](/runtime/action-callback-streaming) for details.
+Action callbacks (e.g. from music playback, wallet flows) use **replace** semantics by default: each successive callback replaces the callback portion of the message rather than appending. Callbacks can optionally set `merge: "append"` or `merge: "replace"` on the callback content when a plugin needs to override that default. See [Action callbacks and SSE streaming](/runtime/action-callback-streaming) for details.
 </Info>
 
 **Error recovery**

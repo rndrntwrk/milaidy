@@ -1,9 +1,9 @@
 /**
  * Cloud ApprovalQueue — adapts CloudApiClient to the shared
- * ApprovalQueue component from @elizaos/app-core.
+ * ApprovalQueue component from @elizaos/app-steward.
  */
 
-import { ApprovalQueue as ApprovalQueueBase } from "@elizaos/app-core";
+import { ApprovalQueue as ApprovalQueueBase } from "@elizaos/app-steward";
 import { useCallback } from "react";
 import type { CloudApiClient } from "../../lib/cloud-api";
 

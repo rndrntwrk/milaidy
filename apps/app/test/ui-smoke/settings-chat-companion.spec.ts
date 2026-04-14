@@ -1,10 +1,5 @@
 import { expect, test } from "@playwright/test";
-import {
-  installDefaultAppMocks,
-  openAppPath,
-  readLocalStorage,
-  seedAppStorage,
-} from "./helpers";
+import { openAppPath, readLocalStorage, seedAppStorage } from "./helpers";
 
 const VRM_POWER_KEY = "eliza:companion-vrm-power";
 const HALF_FRAMERATE_KEY = "eliza:companion-half-framerate";
@@ -12,7 +7,6 @@ const ANIMATE_WHEN_HIDDEN_KEY = "eliza:companion-animate-when-hidden";
 
 test.beforeEach(async ({ page }) => {
   await seedAppStorage(page);
-  await installDefaultAppMocks(page);
 });
 
 test("companion media settings persist across reloads", async ({ page }) => {

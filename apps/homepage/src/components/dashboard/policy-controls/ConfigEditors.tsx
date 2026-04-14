@@ -2,7 +2,22 @@
  * Policy config editors — specialized inputs for each policy type.
  */
 import { useCallback, useState } from "react";
-import type { StewardPolicyType } from "../../../lib/cloud-api";
+import type {
+  StewardApprovedAddressesMode,
+  StewardPolicyConfig,
+  StewardPolicyConfigKey,
+  StewardPolicyConfigValue,
+  StewardPolicyType,
+} from "../../../lib/cloud-api";
+
+interface PolicyConfigEditorProps {
+  type: StewardPolicyType;
+  config: StewardPolicyConfig;
+  onChange: (
+    key: StewardPolicyConfigKey,
+    value: StewardPolicyConfigValue,
+  ) => void;
+}
 
 // ── PolicyConfigEditor ─────────────────────────────────────────────────
 
@@ -10,11 +25,7 @@ export function PolicyConfigEditor({
   type,
   config,
   onChange,
-}: {
-  type: StewardPolicyType;
-  config: Record<string, unknown>;
-  onChange: (key: string, value: unknown) => void;
-}) {
+}: PolicyConfigEditorProps) {
   switch (type) {
     case "spending-limit":
       return (
@@ -73,8 +84,8 @@ export function PolicyConfigEditor({
     case "approved-addresses":
       return (
         <ApprovedAddressesEditor
-          addresses={(config.addresses as string[]) ?? []}
-          mode={(config.mode as string) ?? "whitelist"}
+          addresses={config.addresses ?? []}
+          mode={config.mode ?? "whitelist"}
           onAddressesChange={(v) => onChange("addresses", v)}
           onModeChange={(v) => onChange("mode", v)}
         />
@@ -86,25 +97,12 @@ export function PolicyConfigEditor({
           <div className="grid grid-cols-2 gap-3">
             <ConfigInput
               label="START HOUR (0-23)"
-              value={String(
-                (
-                  config.allowedHours as Array<{
-                    start: number;
-                    end: number;
-                  }>
-                )?.[0]?.start ?? "9",
-              )}
+              value={String(config.allowedHours?.[0]?.start ?? "9")}
               onChange={(v) =>
                 onChange("allowedHours", [
                   {
                     start: parseInt(v, 10) || 0,
-                    end:
-                      (
-                        config.allowedHours as Array<{
-                          start: number;
-                          end: number;
-                        }>
-                      )?.[0]?.end ?? 17,
+                    end: config.allowedHours?.[0]?.end ?? 17,
                   },
                 ])
               }
@@ -113,24 +111,11 @@ export function PolicyConfigEditor({
             />
             <ConfigInput
               label="END HOUR (0-23)"
-              value={String(
-                (
-                  config.allowedHours as Array<{
-                    start: number;
-                    end: number;
-                  }>
-                )?.[0]?.end ?? "17",
-              )}
+              value={String(config.allowedHours?.[0]?.end ?? "17")}
               onChange={(v) =>
                 onChange("allowedHours", [
                   {
-                    start:
-                      (
-                        config.allowedHours as Array<{
-                          start: number;
-                          end: number;
-                        }>
-                      )?.[0]?.start ?? 9,
+                    start: config.allowedHours?.[0]?.start ?? 9,
                     end: parseInt(v, 10) || 0,
                   },
                 ])
@@ -140,7 +125,7 @@ export function PolicyConfigEditor({
             />
           </div>
           <DaySelector
-            selectedDays={(config.allowedDays as number[]) ?? [1, 2, 3, 4, 5]}
+            selectedDays={config.allowedDays ?? [1, 2, 3, 4, 5]}
             onChange={(days) => onChange("allowedDays", days)}
           />
         </div>
@@ -157,19 +142,21 @@ export function PolicyConfigEditor({
 
 // ── ConfigInput ─────────────────────────────────────────────────────────
 
+interface ConfigInputProps {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  type?: string;
+}
+
 function ConfigInput({
   label,
   value,
   onChange,
   placeholder,
   type = "text",
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  placeholder?: string;
-  type?: string;
-}) {
+}: ConfigInputProps) {
   return (
     <label className="block">
       <span className="block font-mono text-[9px] tracking-wider text-text-subtle mb-1">
@@ -189,18 +176,21 @@ function ConfigInput({
 
 // ── ApprovedAddressesEditor ─────────────────────────────────────────────
 
+interface ApprovedAddressesEditorProps {
+  addresses: string[];
+  mode: StewardApprovedAddressesMode;
+  onAddressesChange: (addresses: string[]) => void;
+  onModeChange: (mode: StewardApprovedAddressesMode) => void;
+}
+
 function ApprovedAddressesEditor({
   addresses,
   mode,
   onAddressesChange,
   onModeChange,
-}: {
-  addresses: string[];
-  mode: string;
-  onAddressesChange: (addresses: string[]) => void;
-  onModeChange: (mode: string) => void;
-}) {
+}: ApprovedAddressesEditorProps) {
   const [newAddr, setNewAddr] = useState("");
+  const modes: StewardApprovedAddressesMode[] = ["whitelist", "blacklist"];
 
   const handleAdd = useCallback(() => {
     const trimmed = newAddr.trim();
@@ -224,7 +214,7 @@ function ApprovedAddressesEditor({
         <span className="font-mono text-[9px] tracking-wider text-text-subtle">
           MODE:
         </span>
-        {["whitelist", "blacklist"].map((m) => (
+        {modes.map((m) => (
           <button
             type="button"
             key={m}
@@ -304,13 +294,12 @@ function ApprovedAddressesEditor({
 
 // ── DaySelector ─────────────────────────────────────────────────────────
 
-function DaySelector({
-  selectedDays,
-  onChange,
-}: {
+interface DaySelectorProps {
   selectedDays: number[];
   onChange: (days: number[]) => void;
-}) {
+}
+
+function DaySelector({ selectedDays, onChange }: DaySelectorProps) {
   const DAYS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 
   const toggleDay = useCallback(

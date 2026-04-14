@@ -9,7 +9,13 @@ import {
   useState,
 } from "react";
 import { CLOUD_AUTH_CHANGED_EVENT, type CloudAgent, getToken } from "./auth";
-import { CloudApiClient, CloudClient } from "./cloud-api";
+import {
+  type AgentRuntimeState,
+  type CloudAgentBilling,
+  CloudApiClient,
+  CloudClient,
+  normalizeAgentState,
+} from "./cloud-api";
 import { addConnection, getConnections, removeConnection } from "./connections";
 import {
   AGENT_UI_BASE_DOMAIN,
@@ -63,7 +69,7 @@ export interface ManagedAgent {
   id: string;
   name: string;
   source: AgentSource;
-  status: "running" | "paused" | "stopped" | "provisioning" | "unknown";
+  status: AgentRuntimeState;
   model?: string;
   uptime?: number;
   memories?: number;
@@ -73,12 +79,7 @@ export interface ManagedAgent {
   client?: CloudApiClient;
   cloudClient?: CloudClient;
   cloudAgentId?: string;
-  billing?: {
-    plan?: string;
-    costPerHour?: number;
-    totalCost?: number;
-    currency?: string;
-  };
+  billing?: CloudAgentBilling;
   region?: string;
   createdAt?: string;
   nodeId?: string;
@@ -107,6 +108,31 @@ interface AgentContextValue {
   refresh: () => Promise<void>;
   addRemoteUrl: (name: string, url: string, token?: string) => void;
   removeRemote: (id: string) => void;
+}
+
+interface DiscoveredSandbox {
+  id: string;
+  agent_name: string;
+  web_ui_port: number;
+  api_token?: string;
+  node_id?: string;
+  last_heartbeat_at?: string;
+}
+
+interface ProbeTarget {
+  index: number;
+  client: CloudApiClient;
+  isCloudEnrich?: boolean;
+}
+
+interface ProbeResult {
+  index: number;
+  status?: AgentRuntimeState;
+  model?: string;
+  uptime?: number;
+  memories?: number;
+  agentName?: string;
+  avatarIndex?: number;
 }
 
 const AgentContext = createContext<AgentContextValue | null>(null);
@@ -155,7 +181,11 @@ export function AgentProvider({ children }: { children: ReactNode }) {
   const sortedAgents = useMemo(
     () =>
       [...agents].sort((a, b) => {
-        const order: Record<string, number> = { local: 0, remote: 1, cloud: 2 };
+        const order: Record<AgentSource, number> = {
+          local: 0,
+          remote: 1,
+          cloud: 2,
+        };
         return (order[a.source] ?? 3) - (order[b.source] ?? 3);
       }),
     [agents],
@@ -185,11 +215,7 @@ export function AgentProvider({ children }: { children: ReactNode }) {
     let fetchError: string | null = null;
 
     // Track agents that need health probes (for parallel enrichment)
-    const probeTargets: Array<{
-      index: number;
-      client: CloudApiClient;
-      isCloudEnrich?: boolean;
-    }> = [];
+    const probeTargets: ProbeTarget[] = [];
 
     // 1. Cloud agents (if authenticated with Eliza Cloud)
     //    Show immediately from API response, then enrich with health probes
@@ -210,7 +236,7 @@ export function AgentProvider({ children }: { children: ReactNode }) {
             id: `cloud-${ca.id}`,
             name: ca.name || ca.id,
             source: "cloud",
-            status: mapCloudStatus(ca.status),
+            status: normalizeAgentState(ca.status),
             model: ca.model,
             cloudAgent: ca,
             cloudClient: cc,
@@ -245,14 +271,7 @@ export function AgentProvider({ children }: { children: ReactNode }) {
     //    On hosted milady.ai, never use that as an unauthenticated fallback.
     //    Only use discovery there to enrich already-authenticated cloud agents.
     const discoveredIds = new Set<string>();
-    let sandboxes: Array<{
-      id: string;
-      agent_name: string;
-      web_ui_port: number;
-      api_token?: string;
-      node_id?: string;
-      last_heartbeat_at?: string;
-    }> = [];
+    let sandboxes: DiscoveredSandbox[] = [];
     const allowPublicSandboxFallback =
       shouldAllowPublicSandboxDiscoveryFallback();
     const shouldFetchSandboxes = cloudAuthOk || allowPublicSandboxFallback;
@@ -409,19 +428,9 @@ export function AgentProvider({ children }: { children: ReactNode }) {
     const semaphore = createSemaphore(MAX_CONCURRENT_PROBES);
 
     // Helper to probe a single agent
-    const probeAgent = async (target: {
-      index: number;
-      client: CloudApiClient;
-      isCloudEnrich?: boolean;
-    }): Promise<{
-      index: number;
-      status?: ManagedAgent["status"];
-      model?: string;
-      uptime?: number;
-      memories?: number;
-      agentName?: string;
-      avatarIndex?: number;
-    } | null> => {
+    const probeAgent = async (
+      target: ProbeTarget,
+    ): Promise<ProbeResult | null> => {
       await semaphore.acquire();
       try {
         const health = await target.client.health({
@@ -545,10 +554,10 @@ export function AgentProvider({ children }: { children: ReactNode }) {
           const agent = enrichedResults[index];
           if (status) agent.status = status;
           if (model && model !== "—") agent.model = model;
-          if (uptime) agent.uptime = uptime;
-          if (memories) agent.memories = memories;
+          if (uptime !== undefined) agent.uptime = uptime;
+          if (memories !== undefined) agent.memories = memories;
           if (agentName && !agent.name) agent.name = agentName;
-          if (avatarIndex) agent.avatarIndex = avatarIndex;
+          if (avatarIndex !== undefined) agent.avatarIndex = avatarIndex;
         }
       }
     }
@@ -670,18 +679,6 @@ export function AgentProvider({ children }: { children: ReactNode }) {
 
   return <AgentContext value={contextValue}>{children}</AgentContext>;
 }
-
-function mapCloudStatus(status: string): ManagedAgent["status"] {
-  const s = status?.toLowerCase() ?? "";
-  if (s === "running" || s === "active" || s === "healthy") return "running";
-  if (s === "paused" || s === "suspended") return "paused";
-  if (s === "stopped" || s === "terminated" || s === "deleted")
-    return "stopped";
-  if (s === "provisioning" || s === "creating" || s === "starting")
-    return "provisioning";
-  return "unknown";
-}
-
 export function useAgents() {
   const ctx = useContext(AgentContext);
   if (!ctx) throw new Error("useAgents must be used within AgentProvider");

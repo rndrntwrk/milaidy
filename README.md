@@ -484,7 +484,6 @@ Or use `~/.milady/.env` for secrets.
 | [Perplexity](https://perplexity.ai) | `PERPLEXITY_API_KEY` | search-augmented gen |
 | [Qwen](https://qwen.ai) | — | alibaba's qwen models (configure via plugin entry) |
 | [MiniMax](https://minimaxi.com) | — | minimax language models (configure via plugin entry) |
-| [Pi AI](https://pi.ai) | `ELIZA_USE_PI_AI` | inflection pi, conversational |
 | [Zai](https://homunculuslabs.com) | `ZAI_API_KEY` | homunculus labs zai |
 | [Vercel AI Gateway](https://sdk.vercel.ai) | `AI_GATEWAY_API_KEY` | unified gateway |
 

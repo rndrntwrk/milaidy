@@ -1,12 +1,12 @@
+import { Button } from "@elizaos/ui/components/ui/button";
 import {
-  Button,
-  cn,
   Field,
   FieldDescription,
   FieldLabel,
   FieldMessage,
-  Input,
-} from "@elizaos/app-core";
+} from "@elizaos/ui/components/ui/field";
+import { Input } from "@elizaos/ui/components/ui/input";
+import { cn } from "@elizaos/ui/lib/utils";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getToken } from "../../lib/auth";
 import { CloudClient, type JobStatus } from "../../lib/cloud-api";

@@ -47,6 +47,16 @@ function getSubmoduleSkipReason(
   return null;
 }
 
+function getNestedElizaSubmoduleSkipArgs() {
+  return [...SKIP_SUBMODULES]
+    .filter((submodulePath) => submodulePath.startsWith("eliza/"))
+    .map(
+      (submodulePath) =>
+        `-c submodule.${submodulePath.slice("eliza/".length)}.update=none`,
+    )
+    .join(" ");
+}
+
 export function shouldSkipSubmoduleInit(
   submodulePath,
   { skipLocal = skipLocalUpstreams } = {},
@@ -384,12 +394,13 @@ export function runInitSubmodules({
       "[init-submodules] Ensuring nested checkouts under eliza/ (cloud, steward-fi, plugins, …)…",
     );
     try {
+      const nestedSkipArgs = getNestedElizaSubmoduleSkipArgs();
       // Run from inside eliza/ so git reads eliza/.gitmodules directly.
       // Running `git submodule update --init --recursive -- eliza` from the
       // parent can fail when git tries to resolve nested submodule paths
       // (e.g. eliza/cloud) against the parent's .gitmodules instead of
       // eliza's own .gitmodules.
-      exec(`git submodule update --init --recursive`, {
+      exec(`git ${nestedSkipArgs} submodule update --init --recursive`.trim(), {
         cwd: resolve(rootDir, "eliza"),
         stdio: "inherit",
       });

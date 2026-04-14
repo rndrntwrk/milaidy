@@ -260,16 +260,6 @@ description: Milady 连接器、AI 提供者和直播推流插件的完整设置
 - 在 `milady.json` 的 `providers.minimax` 配置块中设置模型 ID
 **提示：** Minimax 提供中文和多语言 AI 模型。
 
-<div id="pi-ai">
-
-### Pi AI
-</div>
-
-**最少必填：** `ELIZA_USE_PI_AI=true`
-**变量：**
-- `ELIZA_USE_PI_AI` — 设置为 `true` 以启用 Pi AI 作为模型提供者
-**提示：** Pi AI 提供针对友好、有帮助的对话优化的会话模型。
-
 <div id="zai">
 
 ### Zai

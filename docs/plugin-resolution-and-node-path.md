@@ -111,20 +111,23 @@ Optional plugins (and some core-adjacent packages) can end up in the load set be
 
 ## Pack-and-test and Vendored Workspace Validation (Phase 5)
 
-As part of the Plugin Workspace architecture, we load dependencies via `workspace:*` out of the local source clones (`eliza/packages/*` and `plugins/*`). Sometimes, you need to verify that what works in a `workspace:*` context will successfully pack into tarballs and install strictly downstream as if published.
+As part of the Plugin Workspace architecture, we load dependencies via `workspace:*` out of the vendored source tree (`eliza/packages/*` and `eliza/plugins/*`). Sometimes, you need to verify that what works in a `workspace:*` context will successfully pack into tarballs and install strictly downstream as if published.
 
 We provide two scripts to validate and prevent drift:
 
 ### `scripts/pack-upstreams.mjs`
-To simulate a real publish release locally, run `pack-upstreams.mjs`. It iterates over the target vendored packages (e.g. `@elizaos/core`, `@elizaos/plugin-agent-orchestrator`), builds them, runs an `npm pack`, and places the resulting `.tgz` artifacts in the root `artifacts/` fallback directory.
+To simulate a real publish release locally, run `node scripts/pack-upstreams.mjs`. It iterates over the target vendored packages (currently `@elizaos/core`, which now includes the orchestrator runtime, plus one representative vendored plugin: `@elizaos/plugin-sql`), builds them when needed, runs `npm pack`, and places the resulting `.tgz` artifacts in the root `artifacts/` directory.
 
 ### `scripts/check-upstream-drift.mjs`
-To ensure that root-level explicitly pinned dependencies (e.g., `"@elizaos/plugin-openrouter": "2.0.0-alpha.13"`) do not drift from the source code checked into the submodule branches, run `check-upstream-drift.mjs`. The command inspects root pins against the `package.json` inside local vendor trees and fails if their explicitly pinned specifications diverge from the source.
+To ensure that root-level explicitly pinned dependencies (e.g., `"@elizaos/plugin-openrouter": "2.0.0-alpha.13"`) do not drift from the source code checked into the vendored trees, run `node scripts/check-upstream-drift.mjs`. The command inspects root pins against the `package.json` inside local vendor trees and fails if their explicitly pinned specifications diverge from source.
+
+### `scripts/sync-upstream-versions.mjs`
+This is a compatibility alias for the same drift check used by older sprint tickets. Run `node scripts/sync-upstream-versions.mjs` if you want the legacy script name; it exits with the same green/red verdict as `check-upstream-drift`.
 
 ### Vendored Source Verification (Proof of Life)
-Because all packages resolve via `workspace:*`, local modifications are live the moment you restart `bun run dev`. 
+Because all packages resolve via `workspace:*`, local modifications are live the moment you restart `bun run dev`.
 **Example proof-of-life workflow**:
-1. Open `eliza/packages/core/src/index.ts` and add a `console.log("Hello from vendored core!");`.
-2. Open `plugins/plugin-agent-orchestrator/src/index.ts` and add `console.log("Hello from vendored orchestrator!");`.
+1. Open `eliza/packages/typescript/src/index.ts` (`@elizaos/core`) and add a `console.log("Hello from vendored core!");`.
+2. Open `eliza/plugins/plugin-sql/typescript/src/index.ts` and add `console.log("Hello from vendored plugin!");`.
 3. Run `bun run dev` at the root.
 4. You will immediately see both logs without needing `npm link`, custom `NODE_PATH` patches, or cache-busting. The changes are resolved automatically by Bun workspaces.

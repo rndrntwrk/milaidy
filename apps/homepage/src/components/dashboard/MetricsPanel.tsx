@@ -87,9 +87,7 @@ export function MetricsPanel() {
             // Try cloud container metrics
             if (cloudClient && agent.nodeId) {
               try {
-                const raw = (await cloudClient.getContainerMetrics(
-                  agent.nodeId,
-                )) as Partial<MetricsData>;
+                const raw = await cloudClient.getContainerMetrics(agent.nodeId);
                 updates[agent.id] = {
                   agentId: agent.id,
                   agentName: agent.name,

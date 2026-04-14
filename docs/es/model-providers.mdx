@@ -4,7 +4,7 @@ sidebarTitle: "Proveedores de Modelos"
 description: "Backends de inferencia compatibles y cómo encajan en el modelo de enrutamiento server-target-first de Milady."
 ---
 
-Milady soporta **19 backends de inferencia** de forma nativa. Los plugins de proveedores siguen proporcionando las implementaciones concretas de modelos, pero el backend activo se selecciona a través del enrutamiento canónico del runtime en el servidor conectado, no mediante toggles ad hoc de variables de entorno en el cliente.
+Milady soporta **18 backends de inferencia** de forma nativa. Los plugins de proveedores siguen proporcionando las implementaciones concretas de modelos, pero el backend activo se selecciona a través del enrutamiento canónico del runtime en el servidor conectado, no mediante toggles ad hoc de variables de entorno en el cliente.
 
 ---
 
@@ -37,7 +37,6 @@ Los proveedores marcados como **incluidos** vienen con cada instalación de Mila
 | [Cohere](https://cohere.com) | `@elizaos/plugin-cohere` | `COHERE_API_KEY` | No | Modelos Command R+ y de embeddings. |
 | [Perplexity](https://perplexity.ai) | `@elizaos/plugin-perplexity` | `PERPLEXITY_API_KEY` | No | Generación aumentada por búsqueda. |
 | [Zai](https://homunculuslabs.com) | `@homunculuslabs/plugin-zai` | `ZAI_API_KEY` | No | Modelos Zai de Homunculus Labs. |
-| [Pi AI](https://pi.ai) | `@elizaos/plugin-pi-ai` | `ELIZA_USE_PI_AI` | No | Modelos conversacionales Inflection Pi. |
 | [Eliza Cloud](https://elizacloud.ai) | `@elizaos/plugin-elizacloud` | `ELIZAOS_CLOUD_API_KEY` | Sí | Ruta de inferencia gestionada en la nube. Se puede seleccionar independientemente de dónde se ejecute Milady. |
 
 ---
@@ -349,7 +348,6 @@ Cada variable de entorno que activa la habilitación automática, agrupada por p
 | `COHERE_API_KEY` | Cohere |
 | `PERPLEXITY_API_KEY` | Perplexity |
 | `ZAI_API_KEY` | Zai |
-| `ELIZA_USE_PI_AI` | Pi AI |
 | `ELIZAOS_CLOUD_API_KEY` | elizaOS Cloud |
 | `ELIZAOS_CLOUD_ENABLED` | elizaOS Cloud |
 

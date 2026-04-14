@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAgents } from "../../lib/AgentProvider";
 import type { CloudBackup } from "../../lib/cloud-api";
+import { formatDateTime } from "../../lib/format";
 
 interface ExportPanelProps {
   connectionId: string;
@@ -158,7 +159,7 @@ export function ExportPanel({ connectionId }: ExportPanelProps) {
                   </p>
                   <div className="flex items-center gap-3 mt-1">
                     <span className="font-mono text-[10px] text-text-subtle">
-                      {new Date(b.createdAt).toLocaleString()}
+                      {formatDateTime(b.createdAt, b.createdAt)}
                     </span>
                     {b.size && (
                       <span className="font-mono text-[10px] text-text-subtle">

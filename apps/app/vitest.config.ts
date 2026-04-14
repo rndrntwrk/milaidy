@@ -6,27 +6,23 @@ import { defineConfig } from "vitest/config";
 import {
   getAppCoreSourceRoot,
   getAutonomousSourceRoot,
-} from "../../eliza/packages/app-core/test/eliza-package-paths";
+  getUiSourceRoot,
+} from "../../test/eliza-package-paths";
+import {
+  getAppCoreBridgeStubPath,
+  getUiSourceAliases,
+} from "../../test/vitest/workspace-aliases";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(here, "../..");
 const nativePluginsRoot = path.join(
   here,
   "../../eliza/packages/native-plugins",
 );
 const appCorePackageRoot = getAppCoreSourceRoot(here);
 const agentSourceRoot = getAutonomousSourceRoot(here);
-
-const bridgeStubPath = path.join(
-  here,
-  "..",
-  "..",
-  "eliza",
-  "packages",
-  "app-core",
-  "test",
-  "stubs",
-  "app-core-bridge.ts",
-);
+const uiSourceRoot = getUiSourceRoot(here);
+const bridgeStubPath = getAppCoreBridgeStubPath(repoRoot);
 
 /**
  * Custom Vite plugin that redirects @elizaos/app-core imports to
@@ -56,12 +52,20 @@ export default defineConfig({
   resolve: {
     alias: [
       {
-        find: "react",
+        find: /^react$/,
         replacement: path.join(here, "node_modules/react"),
       },
       {
-        find: "react-dom",
+        find: /^react\/(.*)$/,
+        replacement: path.join(here, "node_modules/react", "$1"),
+      },
+      {
+        find: /^react-dom$/,
         replacement: path.join(here, "node_modules/react-dom"),
+      },
+      {
+        find: /^react-dom\/(.*)$/,
+        replacement: path.join(here, "node_modules/react-dom", "$1"),
       },
       ...(appCorePackageRoot
         ? (() => {
@@ -114,6 +118,7 @@ export default defineConfig({
             return generatedAliases;
           })()
         : []),
+      ...getUiSourceAliases(uiSourceRoot),
       // Resolve @elizaos/agent sub-path imports to the source tree
       ...(agentSourceRoot
         ? [
@@ -217,7 +222,13 @@ export default defineConfig({
     globals: true,
     server: {
       deps: {
-        inline: ["@elizaos/app-core"],
+        inline: [
+          "@elizaos/app-core",
+          "@testing-library/react",
+          "react",
+          "react-dom",
+          "react-test-renderer",
+        ],
       },
     },
   },

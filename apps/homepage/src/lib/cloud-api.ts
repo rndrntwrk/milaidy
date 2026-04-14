@@ -1,4 +1,8 @@
 import { clearToken } from "./auth";
+import type {
+  BillingSettingsResponse,
+  CreditsSummaryResponse,
+} from "./billing-types";
 import { CLOUD_BASE } from "./runtime-config";
 
 // ── Wallet types (re-exported from @elizaos/shared/contracts/wallet) ────
@@ -36,11 +40,98 @@ export type StewardPolicyType =
   | "time-window"
   | "rate-limit";
 
+export type JsonPrimitive = boolean | number | string | null;
+export type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
+export interface JsonObject {
+  [key: string]: JsonValue | undefined;
+}
+
+export const AGENT_RUNTIME_STATES = [
+  "running",
+  "paused",
+  "stopped",
+  "provisioning",
+  "unknown",
+] as const;
+
+export type AgentRuntimeState = (typeof AGENT_RUNTIME_STATES)[number];
+
+export function isJsonObject(value: unknown): value is JsonObject {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isAgentRuntimeState(value: string): value is AgentRuntimeState {
+  return AGENT_RUNTIME_STATES.includes(value as AgentRuntimeState);
+}
+
+export function normalizeAgentState(status?: string | null): AgentRuntimeState {
+  const normalized = status?.toLowerCase().trim() ?? "";
+  if (isAgentRuntimeState(normalized)) return normalized;
+  if (
+    normalized === "running" ||
+    normalized === "active" ||
+    normalized === "healthy"
+  ) {
+    return "running";
+  }
+  if (normalized === "paused" || normalized === "suspended") {
+    return "paused";
+  }
+  if (
+    normalized === "stopped" ||
+    normalized === "terminated" ||
+    normalized === "deleted"
+  ) {
+    return "stopped";
+  }
+  if (
+    normalized === "provisioning" ||
+    normalized === "creating" ||
+    normalized === "starting"
+  ) {
+    return "provisioning";
+  }
+  return "unknown";
+}
+
+export interface CloudAgentBilling {
+  plan?: string;
+  costPerHour?: number;
+  totalCost?: number;
+  currency?: string;
+}
+
+export type StewardApprovedAddressesMode = "whitelist" | "blacklist";
+
+export interface StewardAllowedHourWindow {
+  start: number;
+  end: number;
+}
+
+export interface StewardPolicyConfig {
+  maxPerTx?: string;
+  maxPerDay?: string;
+  maxPerWeek?: string;
+  addresses?: string[];
+  mode?: StewardApprovedAddressesMode;
+  threshold?: string;
+  allowedHours?: StewardAllowedHourWindow[];
+  allowedDays?: number[];
+  maxTxPerHour?: number;
+  maxTxPerDay?: number;
+}
+
+export type StewardPolicyConfigKey = keyof StewardPolicyConfig;
+export type StewardPolicyConfigValue = Exclude<
+  StewardPolicyConfig[StewardPolicyConfigKey],
+  undefined
+>;
+
 export interface StewardPolicyRule {
   id: string;
   type: StewardPolicyType;
   enabled: boolean;
-  config: Record<string, unknown>;
+  config: StewardPolicyConfig;
 }
 
 export interface CloudAgentDetail {
@@ -56,12 +147,7 @@ export interface CloudAgentDetail {
   errors?: string[];
   createdAt?: string;
   updatedAt?: string;
-  billing?: {
-    plan?: string;
-    costPerHour?: number;
-    totalCost?: number;
-    currency?: string;
-  };
+  billing?: CloudAgentBilling;
   uptime?: number;
   region?: string;
 }
@@ -80,18 +166,18 @@ export interface CreditBalance {
 export interface JobStatus {
   id: string;
   status: "pending" | "in_progress" | "completed" | "failed";
-  result?: unknown;
+  result?: JsonValue;
   error?: string;
 }
 
-export interface BridgeResponse<T = Record<string, unknown>> {
+export interface BridgeResponse<T = JsonObject> {
   result?: T;
-  error?: unknown;
-  [key: string]: unknown;
+  error?: JsonValue;
+  [key: string]: JsonValue | T | undefined;
 }
 
 export interface BridgeStatus {
-  state: string;
+  state: AgentRuntimeState;
   uptime?: number;
   memories?: number;
 }
@@ -142,12 +228,43 @@ function unwrapListResponse<T>(
   primaryKey?: "agents" | "backups" | "containers",
 ): T[] {
   if (Array.isArray(data)) return data as T[];
-  const obj = data as Record<string, unknown>;
+  if (!isJsonObject(data)) return [];
+  const obj = data;
   if (primaryKey && Array.isArray(obj[primaryKey])) {
     return obj[primaryKey] as T[];
   }
   if (Array.isArray(obj.data)) return obj.data as T[];
   return [];
+}
+
+interface CreateCloudAgentInput {
+  name: string;
+  characterId?: string;
+  config?: JsonObject;
+  environmentVars?: Record<string, string>;
+}
+
+interface CreateCloudAgentRequest {
+  agentName: string;
+  characterId?: string;
+  agentConfig?: JsonObject;
+  environmentVars?: Record<string, string>;
+}
+
+interface CreateCloudAgentResponse {
+  id: string;
+}
+
+interface CreateCloudAgentApiResponse {
+  success?: boolean;
+  data?: { id: string };
+  id?: string;
+}
+
+export interface CloudSessionSummary {
+  credits?: number;
+  requests?: number;
+  tokens?: number;
 }
 
 export class CloudAgentsNotAvailableError extends Error {
@@ -245,29 +362,26 @@ export class CloudClient {
     return this.request(`/api/v1/milady/agents/${agentId}`, { method: "GET" });
   }
 
-  async createAgent(config: {
-    name: string;
-    characterId?: string;
-    config?: object;
-    environmentVars?: Record<string, string>;
-  }): Promise<{ id: string }> {
+  async createAgent(
+    config: CreateCloudAgentInput,
+  ): Promise<CreateCloudAgentResponse> {
     // Backend expects agentName (not name) and agentConfig (not config)
-    const payload: Record<string, unknown> = {
+    const payload: CreateCloudAgentRequest = {
       agentName: config.name,
     };
     if (config.characterId) payload.characterId = config.characterId;
     if (config.config) payload.agentConfig = config.config;
-    if (config.environmentVars)
+    if (config.environmentVars) {
       payload.environmentVars = config.environmentVars;
+    }
 
-    const res = await this.request<{
-      success?: boolean;
-      data?: { id: string };
-      id?: string;
-    }>("/api/v1/milady/agents", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
+    const res = await this.request<CreateCloudAgentApiResponse>(
+      "/api/v1/milady/agents",
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+    );
     // Backend wraps response in { success, data: { id, ... } }
     const id = res.data?.id ?? res.id ?? "";
     return { id };
@@ -321,7 +435,7 @@ export class CloudClient {
   }
 
   // Bridge (JSON-RPC to sandbox)
-  async bridge<T = Record<string, unknown>>(
+  async bridge<T = JsonObject>(
     agentId: string,
     method: string,
     params?: object,
@@ -340,7 +454,9 @@ export class CloudClient {
   async getAgentBridgeStatus(agentId: string): Promise<BridgeStatus> {
     const res = await this.bridge<BridgeStatus>(agentId, "status.get");
     const payload = res.result ?? res;
-    const state = typeof payload.state === "string" ? payload.state : "unknown";
+    const state = normalizeAgentState(
+      typeof payload.state === "string" ? payload.state : undefined,
+    );
     return {
       state,
       uptime: typeof payload.uptime === "number" ? payload.uptime : undefined,
@@ -354,7 +470,7 @@ export class CloudClient {
     return this.request("/api/credits/balance", { method: "GET" });
   }
 
-  async getCreditsSummary(): Promise<object> {
+  async getCreditsSummary(): Promise<CreditsSummaryResponse> {
     return this.request("/api/v1/credits/summary", { method: "GET" });
   }
 
@@ -377,20 +493,22 @@ export class CloudClient {
   }
 
   // Containers (for container-level monitoring)
-  async listContainers(): Promise<Record<string, unknown>[]> {
+  async listContainers(): Promise<JsonObject[]> {
     const data = await this.request<unknown>("/api/v1/containers", {
       method: "GET",
     });
-    return unwrapListResponse<Record<string, unknown>>(data, "containers");
+    return unwrapListResponse<JsonObject>(data, "containers");
   }
 
-  async getContainerHealth(containerId: string): Promise<object> {
+  async getContainerHealth(containerId: string): Promise<JsonObject> {
     return this.request(`/api/v1/containers/${containerId}/health`, {
       method: "GET",
     });
   }
 
-  async getContainerMetrics(containerId: string): Promise<object> {
+  async getContainerMetrics(
+    containerId: string,
+  ): Promise<Partial<MetricsData>> {
     return this.request(`/api/v1/containers/${containerId}/metrics`, {
       method: "GET",
     });
@@ -408,7 +526,7 @@ export class CloudClient {
   }
 
   // Billing settings
-  async getBillingSettings(): Promise<object> {
+  async getBillingSettings(): Promise<BillingSettingsResponse> {
     return this.request("/api/v1/billing/settings", { method: "GET" });
   }
 
@@ -469,7 +587,7 @@ export interface ConnectionInfo {
 }
 
 export interface AgentStatus {
-  state: "running" | "paused" | "stopped" | "provisioning" | "unknown";
+  state: AgentRuntimeState;
   uptime?: number;
   memories?: number;
   agentName: string;
@@ -490,12 +608,26 @@ export interface LogEntry {
   agentName: string;
 }
 
+export interface HealthResponse {
+  status?: string;
+  ready?: boolean;
+  uptime: number;
+  memoryUsage?: JsonObject;
+  agentState?: AgentRuntimeState;
+  /** True if this is a synthetic response (agent is auth-gated but alive). */
+  _synthetic?: true;
+}
+
+interface RequestSignalOptions {
+  signal?: AbortSignal;
+}
+
 /**
  * Synthetic health response returned when an agent is auth-gated but alive.
  * The `_synthetic` flag signals to callers that no real data was retrieved,
  * so they can skip further probes (like getAgentStatus).
  */
-function makeUnauthenticatedHealthResponse() {
+function makeUnauthenticatedHealthResponse(): HealthResponse {
   return {
     status: "ok",
     ready: true,
@@ -552,15 +684,7 @@ export class CloudApiClient {
     return res.json();
   }
 
-  async health(options?: { signal?: AbortSignal }): Promise<{
-    status?: string;
-    ready?: boolean;
-    uptime: number;
-    memoryUsage?: object;
-    agentState?: string;
-    /** True if this is a synthetic response (agent is auth-gated but alive). */
-    _synthetic?: boolean;
-  }> {
+  async health(options?: RequestSignalOptions): Promise<HealthResponse> {
     const fetchOpts: RequestInit = { method: "GET" };
     if (options?.signal) fetchOpts.signal = options.signal;
 
@@ -619,7 +743,7 @@ export class CloudApiClient {
         };
         if (data.state) {
           return {
-            state: data.state as AgentStatus["state"],
+            state: normalizeAgentState(data.state),
             agentName: data.agentName ?? "Agent",
             model: data.model ?? "—",
             uptime: data.uptime,

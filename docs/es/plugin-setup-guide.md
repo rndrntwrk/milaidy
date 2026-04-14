@@ -260,16 +260,6 @@ dónde obtener las credenciales, los campos mínimos requeridos y consejos para 
 - Configura los IDs de modelo a través del bloque de configuración `providers.minimax` en `milady.json`
 **Consejos:** Minimax proporciona modelos de IA chinos y multilingües.
 
-<div id="pi-ai">
-
-### Pi AI
-</div>
-
-**Mínimo requerido:** `ELIZA_USE_PI_AI=true`
-**Variables:**
-- `ELIZA_USE_PI_AI` — Establece en `true` para habilitar Pi AI como proveedor de modelos
-**Consejos:** Pi AI proporciona modelos conversacionales optimizados para diálogos amigables y útiles.
-
 <div id="zai">
 
 ### Zai

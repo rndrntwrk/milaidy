@@ -40,7 +40,7 @@ To disable:
 
 The orchestration stack has four main pieces:
 
-- `AgentOrchestratorService`: action routing + API surface for coding tasks.
+- `CODE_TASK` compatibility service: task metadata/query surface exported by `@elizaos/plugin-agent-orchestrator`.
 - `PTYService`: launches/manages local coding-agent terminal sessions.
 - `SwarmCoordinator`: handles multi-agent supervision, turn triage, and completion.
 - `CodingWorkspaceService`: provisions per-task Git workspaces.

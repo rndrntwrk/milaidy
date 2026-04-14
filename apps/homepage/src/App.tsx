@@ -8,7 +8,7 @@ import {
   useAgents,
 } from "./lib/AgentProvider";
 import { resolveHomepageAssetUrl } from "./lib/asset-url";
-import { formatUptime } from "./lib/format";
+import { formatShortDate, formatSourceUrl, formatUptime } from "./lib/format";
 import { openWebUI, openWebUIDirect } from "./lib/open-web-ui";
 import { CLOUD_BASE, LOCAL_AGENT_BASE } from "./lib/runtime-config";
 import { useAuth } from "./lib/useAuth";
@@ -58,30 +58,6 @@ const SOURCE_ACCENTS: Record<ManagedAgent["source"], string> = {
 
 function openExternal(url: string) {
   window.open(url, "_blank", "noopener,noreferrer");
-}
-
-function formatCreatedAt(value?: string): string {
-  if (!value) return "Untracked";
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Untracked";
-
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  }).format(date);
-}
-
-function formatSourceUrl(value?: string): string {
-  if (!value) return "No endpoint published";
-
-  try {
-    const parsed = new URL(value);
-    return `${parsed.hostname}${parsed.pathname === "/" ? "" : parsed.pathname}`;
-  } catch {
-    return value;
-  }
 }
 
 async function copyToClipboard(text: string): Promise<void> {
@@ -338,7 +314,7 @@ function InstanceCard({
             Created
           </div>
           <div className="mt-2 text-sm text-white/[0.82]">
-            {formatCreatedAt(agent.createdAt)}
+            {formatShortDate(agent.createdAt, "Untracked")}
           </div>
         </div>
       </div>
@@ -473,8 +449,7 @@ function MiladyControlHub() {
   const localAgents = agents.filter((agent) => agent.source === "local");
   const cloudAgents = agents.filter((agent) => agent.source === "cloud");
   const remoteAgents = agents.filter((agent) => agent.source === "remote");
-  const stableDownloads =
-    releaseData.stableRelease?.downloads ?? releaseData.release.downloads;
+  const releaseDownloads = releaseData.release.downloads;
   const launchUrl =
     localAgents[0]?.webUiUrl ?? localAgents[0]?.sourceUrl ?? LOCAL_AGENT_BASE;
 
@@ -653,7 +628,7 @@ function MiladyControlHub() {
                 />
               </div>
 
-              {stableDownloads.length > 0 ? (
+              {releaseDownloads.length > 0 ? (
                 <div className="mt-8 rounded-[1.6rem] border border-white/10 bg-black/[0.22] p-4">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <div>
@@ -669,7 +644,7 @@ function MiladyControlHub() {
                     </div>
                   </div>
                   <div className="mt-4 grid gap-2 md:grid-cols-2">
-                    {stableDownloads.slice(0, 4).map((download) => (
+                    {releaseDownloads.slice(0, 4).map((download) => (
                       <a
                         key={download.id}
                         href={download.url}

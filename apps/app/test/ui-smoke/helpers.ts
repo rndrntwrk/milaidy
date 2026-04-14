@@ -1,11 +1,7 @@
-import { expect, type Locator, type Page, type Route } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 
 export const ROOT_TIMEOUT_MS = 20_000;
 export const NAV_TIMEOUT_MS = 12_000;
-
-type AppMockOptions = {
-  includeConfig?: boolean;
-};
 
 type ReadyCheck =
   | { selector: string; text?: never }
@@ -16,112 +12,25 @@ type EvaluatedReadyCheck = {
   passed: boolean;
 };
 
-const DEFAULT_STORAGE: Record<string, string> = {
+export const DEFAULT_APP_STORAGE: Record<string, string> = {
   "eliza:onboarding-complete": "1",
   "eliza:onboarding:step": "activate",
   "eliza:ui-shell-mode": "native",
-  "milady:active-server": JSON.stringify({
+  "elizaos:active-server": JSON.stringify({
     id: "local:embedded",
     kind: "local",
     label: "This device",
   }),
 };
 
-async function fulfillJson(route: Route, payload: unknown): Promise<void> {
-  await route.fulfill({
-    status: 200,
-    contentType: "application/json",
-    body: JSON.stringify(payload),
-  });
-}
-
-export async function installDefaultAppMocks(
-  page: Page,
-  options: AppMockOptions = {},
-): Promise<void> {
-  const includeConfig = options.includeConfig ?? true;
-  const router = page.context();
-
-  await router.route("**/auth/status", async (route) => {
-    await fulfillJson(route, {
-      required: false,
-      pairingEnabled: false,
-      expiresAt: null,
-    });
-  });
-
-  await router.route("**/api/auth/status", async (route) => {
-    await fulfillJson(route, {
-      required: false,
-      pairingEnabled: false,
-      expiresAt: null,
-    });
-  });
-
-  await router.route("**/api/status", async (route) => {
-    await fulfillJson(route, {
-      state: "running",
-      startup: { phase: "running", attempt: 0 },
-      pendingRestart: false,
-      pendingRestartReasons: [],
-    });
-  });
-
-  await router.route("**/api/onboarding/status", async (route) => {
-    await fulfillJson(route, { complete: true });
-  });
-
-  await router.route("**/api/agent/status", async (route) => {
-    await fulfillJson(route, { onboardingComplete: true, status: "running" });
-  });
-
-  await router.route("**/api/lifeops/activity-signals", async (route) => {
-    if (route.request().method() !== "POST") {
-      await route.fallback();
-      return;
-    }
-    await fulfillJson(route, { ok: true });
-  });
-
-  await router.route(
-    "**/api/lifeops/connectors/google/status",
-    async (route) => {
-      await fulfillJson(route, {
-        connected: false,
-        available: false,
-        authUrl: null,
-        lastSyncedAt: null,
-      });
-    },
-  );
-
-  await router.route("**/api/health", async (route) => {
-    await fulfillJson(route, {
-      status: "ok",
-    });
-  });
-
-  if (includeConfig) {
-    await router.route("**/api/config**", async (route) => {
-      if (route.request().method() !== "GET") {
-        await route.continue();
-        return;
-      }
-      await fulfillJson(route, { media: {} });
-    });
-  }
-}
-
 export async function seedAppStorage(
   page: Page,
   overrides: Record<string, string> = {},
 ): Promise<void> {
-  const storage = { ...DEFAULT_STORAGE, ...overrides };
+  const storage = { ...DEFAULT_APP_STORAGE, ...overrides };
   await page.addInitScript((entries: Record<string, string>) => {
     for (const [key, value] of Object.entries(entries)) {
-      if (localStorage.getItem(key) == null) {
-        localStorage.setItem(key, value);
-      }
+      localStorage.setItem(key, value);
     }
   }, storage);
 }

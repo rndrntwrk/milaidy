@@ -1,21 +1,30 @@
 /**
  * PolicyCard — individual policy toggle and config editor.
  */
-import type { StewardPolicyRule } from "../../../lib/cloud-api";
+import type {
+  StewardPolicyConfigKey,
+  StewardPolicyConfigValue,
+  StewardPolicyRule,
+} from "../../../lib/cloud-api";
 import { PolicyConfigEditor } from "./ConfigEditors";
 import { POLICY_TYPE_META } from "./types";
+
+interface PolicyCardProps {
+  policy: StewardPolicyRule;
+  onToggle: () => void;
+  onConfigChange: (
+    key: StewardPolicyConfigKey,
+    value: StewardPolicyConfigValue,
+  ) => void;
+  onRemove: () => void;
+}
 
 export function PolicyCard({
   policy,
   onToggle,
   onConfigChange,
   onRemove,
-}: {
-  policy: StewardPolicyRule;
-  onToggle: () => void;
-  onConfigChange: (key: string, value: unknown) => void;
-  onRemove: () => void;
-}) {
+}: PolicyCardProps) {
   const meta = POLICY_TYPE_META[policy.type] ?? {
     label: policy.type.toUpperCase(),
     description: "",

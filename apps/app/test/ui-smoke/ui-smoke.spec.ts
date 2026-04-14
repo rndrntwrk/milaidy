@@ -1,14 +1,8 @@
 import { expect, test } from "@playwright/test";
-import {
-  assertReadyChecks,
-  installDefaultAppMocks,
-  openAppPath,
-  seedAppStorage,
-} from "./helpers";
+import { assertReadyChecks, openAppPath, seedAppStorage } from "./helpers";
 
 test.beforeEach(async ({ page }) => {
   await seedAppStorage(page);
-  await installDefaultAppMocks(page);
 });
 
 test("chat, apps, and settings routes render through the real shell", async ({

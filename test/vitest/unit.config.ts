@@ -1,9 +1,10 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { defineConfig, mergeConfig } from "vitest/config";
-import { getElizaCoreEntry } from "../../eliza/packages/app-core/test/eliza-package-paths";
+import { getElizaCoreEntry } from "../eliza-package-paths";
 import baseConfig from "./default.config";
 import { repoRoot } from "./repo-root";
+import { getElizaCoreRolesEntry } from "./workspace-aliases";
 
 const elizaCoreEntry = getElizaCoreEntry(repoRoot);
 
@@ -31,25 +32,7 @@ const useLocalElizaCore =
 // `resolve.alias` arrays between base and extended configs the way
 // top-level config keys merge, so the alias in the default config is
 // NOT inherited by unit-test runs.
-const elizaCoreRolesSourceFile = path.join(
-  repoRoot,
-  "eliza",
-  "packages",
-  "typescript",
-  "src",
-  "roles.ts",
-);
-const elizaCoreRolesEntry = existsSync(elizaCoreRolesSourceFile)
-  ? elizaCoreRolesSourceFile
-  : path.join(
-      repoRoot,
-      "eliza",
-      "packages",
-      "app-core",
-      "scripts",
-      "lib",
-      "elizaos-core-roles-shim.js",
-    );
+const elizaCoreRolesEntry = getElizaCoreRolesEntry(repoRoot);
 
 export default mergeConfig(
   baseConfig,

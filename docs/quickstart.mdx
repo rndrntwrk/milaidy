@@ -1,245 +1,58 @@
 ---
-title: "Quick Start"
-sidebarTitle: "Quick Start"
-description: "Developer/operator quick start for getting a Milady server and client flow running."
+title: "First Launch"
+sidebarTitle: "First Launch"
+description: "What Milady asks on first run and how to get to a working chat."
 ---
 
-This guide is for developers and operators who are installing or running
-Milady themselves. It walks through the runtime-facing first-launch flow, from
-installation to the first conversation.
+On first launch, Milady asks for:
 
-<Info>
-If you are looking for the consumer-facing product walkthrough, use
-[milady.ai/docs](https://milady.ai/docs). This page documents the runtime and
-operator side of the system on [docs.milady.ai](https://docs.milady.ai).
-</Info>
+1. where the runtime should live
+2. which character to use
+3. which provider should answer messages
 
-## Install
+## 1. Pick the runtime location
 
-If you haven't installed yet, the fastest path:
+| Option | Use it when |
+|--------|-------------|
+| `Local` | Milady should run on this machine |
+| `LAN` | the runtime already exists on another machine in your network |
+| `Remote` | the runtime already exists on a VPS, homelab box, or private URL |
+| `Eliza Cloud` | you want a managed backend |
 
-<Tabs>
-  <Tab title="Desktop App">
-    Download from [GitHub Releases](https://github.com/milady-ai/milady/releases/latest) and open the `.dmg` (macOS), `.exe` (Windows), or `.AppImage` (Linux).
-  </Tab>
-  <Tab title="CLI (macOS / Linux)">
-    ```bash
-    curl -fsSL https://milady-ai.github.io/milady/install.sh | bash
-    milady setup
-    ```
-  </Tab>
-  <Tab title="CLI (Windows)">
-    ```powershell
-    irm https://milady-ai.github.io/milady/install.ps1 | iex
-    ```
-  </Tab>
-  <Tab title="Bun">
-    ```bash
-    bun install -g miladyai
-    milady setup
-    ```
-  </Tab>
-</Tabs>
+If you are not sure, pick `Local`.
 
-Then start:
+## 2. Pick the character
 
-```bash
-milady
-```
+Choose a name and a starting character. This sets the initial personality, voice, and avatar.
 
-## What Happens on First Launch
+You can change all of it later in [Change Your Character](/user/change-character).
 
-Milady now starts from a server-first flow. Instead of assuming you always want
-to create a fresh local runtime, the client asks which server you want to use
-and then completes setup only for that server.
+## 3. Connect a provider
 
-## First-Launch Flow
+Choose one of these:
 
-<Steps>
-  <Step title="Choose a server">
-    The first screen is a chooser:
+- `Cloud API`
+- `Ollama`
+- `Eliza Cloud`
 
-    - **Create one** — start a local Milady server on this machine
-    - **Discovered LAN servers** — connect to a Milady server already running on your network
-    - **Eliza Cloud** — connect to a hosted Milady server
-    - **Manually connect** — enter the URL and credentials for an existing remote server
+Milady tests the connection before continuing.
 
-    If no cloud credentials are available, the cloud-only option should be omitted.
-  </Step>
+## 4. Send a test message
 
-  <Step title="Restore or continue setup for that server">
-    Once you pick a server target, Milady checks whether that server is already
-    configured. A healthy existing server drops you straight into the dashboard
-    and chat. A new or incomplete server continues into setup for that server
-    only.
-  </Step>
+After setup, send a short message and confirm:
 
-  <Step title="Choose your chat provider only when needed">
-    Hosting target and inference provider are separate:
+- the agent responds
+- the speed is acceptable
+- the name and tone are right
+- voice works if you want speech enabled
 
-    - A **local** server can use Ollama, OpenAI, Anthropic, OpenRouter, or Eliza Cloud inference
-    - An **Eliza Cloud** server can still use direct Anthropic or OpenAI inference
-    - A **remote** server can expose whatever provider routes it has configured
+## Change it later
 
-    The active chat route lives in canonical service routing, not in the hosting choice.
-  </Step>
+- Provider: [Set Up a Provider](/user/provider-setup)
+- Character: [Change Your Character](/user/change-character)
+- Runtime location: [Connect Remotely](/user/connect-remotely)
+- Capabilities: [Add a Capability](/user/add-capability)
 
-  <Step title="Link optional services">
-    After the server target is chosen, you can link optional capabilities like
-    Eliza Cloud account access, wallets, connectors, TTS, media, and RPC
-    services without forcing them to become the active chat provider.
-  </Step>
+## If setup fails
 
-  <Step title="Open chat">
-    Milady enters chat only after both of these are resolved:
-
-    1. the selected server target
-    2. the active `llmText` route for that server
-  </Step>
-</Steps>
-
-## The Three Knobs That Matter
-
-| Field | What it answers |
-|------|------------------|
-| `deploymentTarget` | Where does this server run? |
-| `linkedAccounts` | Which accounts are available to this server? |
-| `serviceRouting` | Which backend handles chat, TTS, media, embeddings, and RPC? |
-
-This is why linking Eliza Cloud does not automatically mean “use Eliza Cloud for inference.”
-
-## Local Startup vs Existing Servers
-
-<Tabs>
-  <Tab title="Create a local server">
-    Milady boots a local runtime, writes the server's primary runtime config to
-    `~/.milady/milady.json`, and opens the dashboard when the gateway is ready.
-
-    On a local server, the dashboard is typically served from the runtime on a
-    loopback URL such as `http://localhost:2138`.
-  </Tab>
-  <Tab title="Connect to LAN or remote">
-    Milady treats LAN and remote servers as the same client concept: a reachable
-    Milady gateway. The client stores how to reconnect, while the selected
-    server keeps its own provider routing and runtime config.
-  </Tab>
-  <Tab title="Connect to Eliza Cloud">
-    Eliza Cloud is another server target. It may provide hosted runtime,
-    deployment, or optional cloud-backed services, but the selected chat
-    provider can still be something else.
-  </Tab>
-</Tabs>
-
-## Your First Conversation
-
-After you choose or connect to a server, open the Milady client and start
-chatting through that server. For a local server, the desktop or browser UI is
-usually available at `http://localhost:2138`. Try a few things:
-
-```
-you: hey, what can you do?
-you: help me write a python script that reads a CSV
-you: /status
-you: /think high
-you: explain how transformers work
-```
-
-### Useful Chat Commands
-
-| Command | What It Does |
-|---------|-------------|
-| `/status` | Show session status, token count, and cost |
-| `/new` or `/reset` | Clear memory, start a fresh session |
-| `/compact` | Compress context (the agent summarizes the conversation) |
-| `/think <level>` | Set reasoning depth: `off`, `minimal`, `low`, `medium`, `high`, `max` |
-| `/model <id>` | Switch model mid-session (e.g., `/model openai/gpt-4o`) |
-| `/verbose on\|off` | Toggle verbose responses |
-| `/usage off\|tokens\|full` | Control per-message token display |
-| `/help` | List all available commands |
-
-## Common First-Run Scenarios
-
-<Tabs>
-  <Tab title="Desktop App">
-    The desktop app packages everything — no terminal required.
-
-    1. Download and install from [Releases](https://github.com/milady-ai/milady/releases/latest).
-    2. Launch the app and choose a server target.
-    3. If the selected server needs setup, finish provider and capability setup for that server.
-    4. The dashboard opens automatically. Start chatting.
-
-    The desktop app includes auto-updates, system tray integration, and native window management.
-  </Tab>
-
-  <Tab title="Headless Server">
-    For running on a VPS or in a Docker container without a display:
-
-    ```bash
-    # Install
-    curl -fsSL https://milady-ai.github.io/milady/install.sh | bash
-
-    # Pre-configure (skip interactive onboarding)
-    mkdir -p ~/.milady
-    cat > ~/.milady/milady.json << 'EOF'
-    {
-      "agents": {
-        "list": [
-          {
-            "id": "main",
-            "name": "mila",
-            "default": true
-          }
-        ]
-      },
-      "env": {
-        "ANTHROPIC_API_KEY": "sk-ant-your-key-here"
-      }
-    }
-    EOF
-
-    # Start in server mode (no interactive chat loop)
-    milady start
-    ```
-
-    The `start` command launches the API server and gateway without entering an interactive chat loop. When stdin is not a TTY (e.g., in a container), the onboarding wizard is automatically skipped, so the pre-configured `milady.json` is used directly.
-
-    <Warning>
-    When binding to `0.0.0.0` for network access, always set `MILADY_API_TOKEN` for authentication. See the [Installation](/installation#security-api-token) page.
-    </Warning>
-  </Tab>
-
-  <Tab title="Existing elizaOS Users">
-    Milady is built on elizaOS, so the plugin system, action/provider/evaluator patterns, and character format are all compatible. Key differences:
-
-    - **Config location**: `~/.milady/milady.json` instead of an inline character file.
-    - **Gateway**: Milady adds a multiplexed WebSocket + HTTP gateway on port 18789.
-    - **Startup**: The client now starts from server selection, then configures routing for the selected server.
-    - **Plugin manager**: Install plugins via `milady plugins install <name>` -- they are tracked in config and auto-loaded.
-    - **Skills**: Markdown-based extensions via ClawHub registry, separate from the plugin system.
-
-    Existing elizaOS plugins are fully compatible. Add them to your config or install via the plugin manager.
-  </Tab>
-</Tabs>
-
-## Next Steps
-
-<CardGroup cols={2}>
-  <Card title="Configuration" icon="gear" href="/configuration">
-    Customize your agent's model, personality, ports, and plugin list
-  </Card>
-  <Card title="Autonomous Mode" icon="robot" href="/guides/autonomous-mode">
-    Set up triggers and let your agent work independently
-  </Card>
-  <Card title="Plugins & Skills" icon="puzzle-piece" href="/plugins/overview">
-    Extend capabilities with plugins or install skills from ClawHub
-  </Card>
-  <Card title="Connectors" icon="plug" href="/guides/connectors">
-    Connect to Telegram, Discord, WhatsApp, and more
-  </Card>
-  <Card title="Dashboard Guide" icon="browser" href="/cli/dashboard">
-    Learn the web UI features and session management
-  </Card>
-  <Card title="Model Providers" icon="microchip" href="/model-providers">
-    Detailed setup for each supported LLM provider
-  </Card>
-</CardGroup>
+Go to [Troubleshooting](/user/troubleshooting).
