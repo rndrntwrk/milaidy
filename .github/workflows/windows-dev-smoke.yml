@@ -31,6 +31,7 @@ jobs:
         with:
           submodules: false
           sparse-checkout: |
+            /.gitmodules
             /package.json
             /bun.lock
             /bunfig.toml
