@@ -21,8 +21,6 @@ jobs:
     name: iOS Simulator Build
     runs-on: macos-14
     timeout-minutes: 30
-    env:
-      MILADY_SKIP_LOCAL_UPSTREAMS: "1"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -38,7 +36,7 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
           install-native-deps: "false"
-          disable-local-eliza-workspace: "true"
+          disable-local-eliza-workspace: "false"
           install-command: bun install --ignore-scripts --no-frozen-lockfile
           run-postinstall: "false"
           skip-avatar-clone: "true"
@@ -52,12 +50,6 @@ jobs:
 
       - name: Install native plugin package dependencies
         run: bun install --cwd eliza/packages/native-plugins/agent --ignore-scripts
-
-      - name: Install Capacitor runtime deps for published-only web build
-        run: bun add --dev @capacitor/core@^8.0.2 @capacitor/app@^8.0.1 @capacitor/keyboard@8.0.0 @capacitor/preferences@^8.0.1 @capacitor/status-bar@^8.0.1 @capacitor/haptics@^8.0.1 --ignore-scripts
-
-      - name: Install tailwindcss for published-only web build
-        run: bun add --dev tailwindcss@^4.1.18 --ignore-scripts
 
       - name: Run repository postinstall patches
         run: node eliza/packages/app-core/scripts/run-repo-setup.mjs
@@ -131,8 +123,6 @@ jobs:
     name: Android Debug Build
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    env:
-      MILADY_SKIP_LOCAL_UPSTREAMS: "1"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -153,7 +143,7 @@ jobs:
         uses: ./.github/actions/setup-bun-workspace
         with:
           bun-version: ${{ env.BUN_VERSION }}
-          disable-local-eliza-workspace: "true"
+          disable-local-eliza-workspace: "false"
           install-command: bun install --ignore-scripts --no-frozen-lockfile
           install-native-deps: "false"
           run-postinstall: "false"
@@ -168,12 +158,6 @@ jobs:
 
       - name: Install native plugin package dependencies
         run: bun install --cwd eliza/packages/native-plugins/agent --ignore-scripts
-
-      - name: Install Capacitor runtime deps for published-only web build
-        run: bun add --dev @capacitor/core@^8.0.2 @capacitor/app@^8.0.1 @capacitor/keyboard@8.0.0 @capacitor/preferences@^8.0.1 @capacitor/status-bar@^8.0.1 @capacitor/haptics@^8.0.1 --ignore-scripts
-
-      - name: Install tailwindcss for published-only web build
-        run: bun add --dev tailwindcss@^4.1.18 --ignore-scripts
 
       - name: Run repository postinstall patches
         run: node eliza/packages/app-core/scripts/run-repo-setup.mjs

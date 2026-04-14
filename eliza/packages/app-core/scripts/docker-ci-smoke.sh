@@ -157,8 +157,6 @@ log "Installing dependencies"
 node scripts/init-submodules.mjs
 node scripts/disable-local-eliza-workspace.mjs
 bun install --ignore-scripts --no-frozen-lockfile
-# Published-only workspace rewrites can omit app web-build runtime deps.
-bun add --dev tailwindcss@^4.1.18 @capacitor/core@^8.0.2 @capacitor/app@^8.0.1 @capacitor/keyboard@8.0.0 @capacitor/preferences@^8.0.1 @capacitor/status-bar@^8.0.1 @capacitor/haptics@^8.0.1 --ignore-scripts
 if [[ -d "$REPO_ROOT/.eliza.ci-disabled" && ! -d "$REPO_ROOT/eliza" ]]; then
   log "Restoring eliza/ from .eliza.ci-disabled for downstream build steps"
   mv "$REPO_ROOT/.eliza.ci-disabled" "$REPO_ROOT/eliza"
