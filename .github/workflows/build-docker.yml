@@ -120,6 +120,15 @@ jobs:
           restore-keys: |
             bun-store-${{ runner.os }}-
 
+      # ── 4.5. Init eliza submodule ──────────────────────────────────────────
+      # disable-local-eliza-workspace.mjs needs eliza/packages/app-core/deploy/
+      # cloud-agent-template/package.json to resolve the pinned @elizaos/core
+      # registry version. Without this, it exits early and workspace:* deps are
+      # never rewritten, causing bun install to fail with
+      # "Workspace dependency not found".
+      - name: Initialize eliza submodule
+        run: git submodule update --init --depth=1 eliza
+
       - name: Initialize tracked workspace submodules
         run: node scripts/init-submodules.mjs
 

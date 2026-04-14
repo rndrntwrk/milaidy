@@ -329,11 +329,12 @@ export class PackagedDesktopHarness {
   readonly stateDir: string;
   readonly appDataDir: string;
   readonly localAppDataDir: string;
-  readonly bridgePort: number;
+  bridgePort: number;
   readonly bridgeToken: string;
-  readonly bridgeUrl: string;
+  bridgeUrl: string;
   readonly launcherPath: string;
-  readonly appEnv: NodeJS.ProcessEnv;
+  readonly apiBase: string;
+  appEnv: NodeJS.ProcessEnv;
   process: ChildProcess | null = null;
   logs: PackagedProcessLogs | null = null;
 
@@ -350,6 +351,7 @@ export class PackagedDesktopHarness {
     this.bridgeToken = randomUUID();
     this.bridgeUrl = `http://127.0.0.1:${this.bridgePort}`;
     this.launcherPath = args.launcherPath;
+    this.apiBase = args.apiBase;
     this.appEnv = createPackagedDesktopEnv({
       baseEnv: process.env,
       apiBase: args.apiBase,
@@ -404,9 +406,34 @@ export class PackagedDesktopHarness {
   }
 
   async relaunch(): Promise<void> {
+    // Trigger a no-op eval to give WKWebView a chance to flush localStorage
+    // to disk before the process is killed. Without this, SIGKILL after the
+    // 5-second grace period can prevent the WebKit persistence layer from
+    // writing seeded state, leaving localStorage empty on the next launch.
+    await this.eval<unknown>(`void 0`).catch(() => undefined);
+
     await this.stop();
     this.process = null;
     this.logs = null;
+
+    // Pick a fresh bridge port to avoid TIME_WAIT conflicts from the
+    // previous process's listener socket.
+    this.bridgePort = pickTempPort(31_500 + Math.floor(Math.random() * 500));
+    this.bridgeUrl = `http://127.0.0.1:${this.bridgePort}`;
+    this.appEnv = createPackagedDesktopEnv({
+      baseEnv: process.env,
+      apiBase: this.apiBase,
+      stateDir: this.stateDir,
+      bridgePort: this.bridgePort,
+      bridgeToken: this.bridgeToken,
+      appData: this.appDataDir,
+      localAppData: this.localAppDataDir,
+    });
+
+    // Short delay to let the OS release the old process's resources (ports,
+    // file handles, WebKit caches) before spawning the next instance.
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+
     await this.start();
   }
 

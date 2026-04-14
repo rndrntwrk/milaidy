@@ -773,6 +773,52 @@ async function withPackagedHarness(
     await seedReturningInstallState(harness);
     const requestCountBeforeRelaunch = api.requests.length;
     await harness.relaunch();
+
+    // Verify that localStorage state survived the relaunch. If not, the
+    // startup coordinator will fall back to a fresh-install probe path and
+    // may stall or show the onboarding overlay instead of the app shell.
+    const persistenceCheck = await harness
+      .eval<{
+        ok: boolean;
+        onboardingComplete: string | null;
+        activeServer: string | null;
+        apiBase: string | null;
+      }>(
+        `(() => {
+        try {
+          return {
+            ok: true,
+            onboardingComplete: localStorage.getItem("eliza:onboarding-complete"),
+            activeServer: localStorage.getItem("elizaos:active-server"),
+            apiBase: ${getApiBaseExpression()} ?? null,
+          };
+        } catch (e) {
+          return { ok: false, onboardingComplete: null, activeServer: null, apiBase: null };
+        }
+      })()`,
+      )
+      .catch(() => ({
+        ok: false,
+        onboardingComplete: null,
+        activeServer: null,
+        apiBase: null,
+      }));
+
+    if (
+      !persistenceCheck.onboardingComplete ||
+      !persistenceCheck.activeServer
+    ) {
+      console.warn(
+        `[packaged-harness] localStorage was NOT persisted across relaunch.`,
+        `onboardingComplete=${persistenceCheck.onboardingComplete}`,
+        `activeServer=${persistenceCheck.activeServer}`,
+        `apiBase=${persistenceCheck.apiBase}`,
+        `— re-seeding state for this session.`,
+      );
+      // Re-seed when WKWebView did not flush localStorage before process exit.
+      await seedReturningInstallState(harness);
+    }
+
     await expect
       .poll(
         () =>
@@ -786,6 +832,39 @@ async function withPackagedHarness(
         },
       )
       .toBe(true);
+
+    // Wait for the startup coordinator to finish transitioning past the
+    // StartupShell. Bootstrap requests prove the mock API is reachable, but
+    // the startup coordinator may still be in polling-backend → starting-runtime
+    // → hydrating phases. Poll until the root element has substantial content
+    // and the body text no longer shows startup-phase status strings.
+    await waitForEval<
+      EvalResult<{ ready: boolean; rootLength: number; bodySnippet: string }>
+    >(
+      harness,
+      `(() => {
+        try {
+          const rootHtml = document.getElementById("root")?.innerHTML ?? "";
+          const bodyText = (document.body?.innerText || "").replace(/\\s+/g, " ").trim();
+          const isStartup = /CONNECTING TO BACKEND|STARTING|INITIALIZING|LOADING/i.test(bodyText);
+          return {
+            ok: true,
+            ready: rootHtml.length > 200 && !isStartup,
+            rootLength: rootHtml.length,
+            bodySnippet: bodyText.slice(0, 120),
+          };
+        } catch (e) {
+          return { ok: false, ready: false, rootLength: 0, bodySnippet: "" };
+        }
+      })()`,
+      (r) => r.ok && r.ready,
+      {
+        timeout: process.env.CI ? 120_000 : 60_000,
+        message:
+          "Timed out waiting for the app shell to render after relaunch (startup coordinator did not reach ready state).",
+      },
+    );
+
     try {
       await fn({ api, harness, tempRoot });
     } catch (error) {

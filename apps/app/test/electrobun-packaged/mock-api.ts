@@ -1418,7 +1418,11 @@ export async function startMockApiServer(
       return;
     }
 
-    if (method === "GET" && pathname.startsWith("/api/")) {
+    if (pathname.startsWith("/api/")) {
+      // Catch-all for any unmatched API route (GET, POST, PUT, DELETE).
+      // Returning 200 prevents the startup coordinator from seeing a 404
+      // on routes that the upstream runtime adds but this mock doesn't
+      // explicitly handle (e.g. /api@elizaos/* scoped routes, /api/vincent/*).
       json(res, 200, { ok: true });
       return;
     }
