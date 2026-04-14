@@ -175,11 +175,6 @@ pushd eliza/packages/agent >/dev/null
 bun run build:docker-dist
 popd >/dev/null
 
-log "Building @elizaos/core (includes agent-orchestrator)"
-pushd eliza/packages/typescript >/dev/null
-bun run build:node
-popd >/dev/null
-
 log "Building runtime dist"
 npx tsdown
 echo '{"type":"module"}' > dist/package.json

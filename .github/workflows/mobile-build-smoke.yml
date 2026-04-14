@@ -53,6 +53,9 @@ jobs:
       - name: Install native plugin package dependencies
         run: bun install --cwd eliza/packages/native-plugins/agent --ignore-scripts
 
+      - name: Install tailwindcss for published-only web build
+        run: bun add --dev tailwindcss@^4.1.18 --ignore-scripts
+
       - name: Run repository postinstall patches
         run: node eliza/packages/app-core/scripts/run-repo-setup.mjs
         env:
@@ -162,6 +165,9 @@ jobs:
 
       - name: Install native plugin package dependencies
         run: bun install --cwd eliza/packages/native-plugins/agent --ignore-scripts
+
+      - name: Install tailwindcss for published-only web build
+        run: bun add --dev tailwindcss@^4.1.18 --ignore-scripts
 
       - name: Run repository postinstall patches
         run: node eliza/packages/app-core/scripts/run-repo-setup.mjs
