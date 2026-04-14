@@ -148,12 +148,6 @@ jobs:
         run: node packages/shared/scripts/generate-keywords.mjs --target ts
         working-directory: eliza
 
-      - name: Install typecheck fallback dependencies
-        run: |
-          # @elizaos/plugin-pdf is used by @elizaos/agent but not declared as a dep;
-          # it's resolved via workspace in local dev but needs explicit install in CI.
-          bun add --no-save --dev --ignore-scripts @elizaos/plugin-pdf
-
       - name: Run type checker
         run: bun run verify:typecheck
 
