@@ -128,6 +128,14 @@ jobs:
           bun install --cwd eliza/cloud --no-frozen-lockfile
           bun install --cwd eliza/steward-fi --no-frozen-lockfile
 
+      - name: Generate protobuf types
+        run: |
+          if [ -d eliza/packages/schemas ] && [ -f eliza/packages/schemas/buf.gen.yaml ] && [ ! -d eliza/packages/typescript/src/types/generated ]; then
+            cd eliza/packages/schemas
+            node node_modules/@bufbuild/buf/install.js 2>/dev/null || true
+            bunx @bufbuild/buf@1.67.0 generate
+          fi
+
       - name: Run type checker
         run: bun run verify:typecheck
 
