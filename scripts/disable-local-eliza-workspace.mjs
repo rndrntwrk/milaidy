@@ -62,6 +62,9 @@ export const LOCAL_ONLY_WORKSPACE_GLOBS = [
   "eliza/apps/*",
 ];
 export const LOCAL_ONLY_WORKSPACE_PATHS = ["eliza/packages/shared"];
+export const CI_OVERRIDE_SPECIFIERS = {
+  "@elizaos/plugin-wechat": "file:./scripts/ci-stubs/elizaos-plugin-wechat",
+};
 export const DEPENDENCY_FIELDS = [
   "dependencies",
   "devDependencies",
@@ -325,6 +328,31 @@ export function rewriteWorkspaceDependencySpecifiers(
   return mutated;
 }
 
+export function applyCiOnlyOverrides(pkg, { log = console.log } = {}) {
+  const overrides = pkg.overrides ?? {};
+  const injected = [];
+
+  for (const [dependencyName, specifier] of Object.entries(
+    CI_OVERRIDE_SPECIFIERS,
+  )) {
+    if (overrides[dependencyName] === specifier) {
+      continue;
+    }
+    overrides[dependencyName] = specifier;
+    injected.push(`${dependencyName} -> ${specifier}`);
+  }
+
+  if (injected.length === 0) {
+    return false;
+  }
+
+  pkg.overrides = overrides;
+  log(
+    `[disable-local-eliza-workspace] Added ${injected.length} CI-only override(s) (${injected.join(", ")})`,
+  );
+  return true;
+}
+
 export function disableLocalElizaWorkspace(
   repoRoot = DEFAULT_REPO_ROOT,
   { log = console.log, warn = console.warn, errorLog = console.error } = {},
@@ -528,6 +556,8 @@ export function disableLocalElizaWorkspace(
       );
     }
   }
+
+  applyCiOnlyOverrides(rootPkg, { log });
 
   writePackageJson(packageJsonPath, rawRootPkg, rootPkg);
 

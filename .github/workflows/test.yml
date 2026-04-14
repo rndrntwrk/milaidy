@@ -76,6 +76,7 @@ jobs:
           disable-local-eliza-workspace: "true"
           skip-avatar-clone: "true"
           no-vision-deps: "true"
+          prepare-local-eliza-runtime: "true"
 
       - name: Generate protobuf types
         run: |
@@ -116,6 +117,7 @@ jobs:
           disable-local-eliza-workspace: "true"
           skip-avatar-clone: "true"
           no-vision-deps: "true"
+          prepare-local-eliza-runtime: "true"
 
       - name: Generate protobuf types
         run: |
@@ -500,6 +502,7 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
           disable-local-eliza-workspace: "true"
           install-command: bun install --ignore-scripts --no-frozen-lockfile
+          prepare-local-eliza-runtime: "true"
 
       - name: Restore eliza workspace paths for repo scripts
         if: steps.cloud.outputs.skip != 'true'
@@ -536,6 +539,7 @@ jobs:
           disable-local-eliza-workspace: "true"
           skip-avatar-clone: "true"
           no-vision-deps: "true"
+          prepare-local-eliza-runtime: "true"
 
       - name: Generate protobuf types
         run: |
@@ -572,6 +576,7 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
           disable-local-eliza-workspace: "true"
           install-command: bun install --ignore-scripts --no-frozen-lockfile
+          prepare-local-eliza-runtime: "true"
 
       - name: Restore eliza workspace paths for repo scripts
         run: node -e "const fs=require('node:fs');if(fs.existsSync('.eliza.ci-disabled')&&!fs.existsSync('eliza'))fs.renameSync('.eliza.ci-disabled','eliza');"
@@ -606,6 +611,7 @@ jobs:
           disable-local-eliza-workspace: "true"
           skip-avatar-clone: "true"
           no-vision-deps: "true"
+          prepare-local-eliza-runtime: "true"
 
       - name: Install Playwright browser
         run: bunx playwright install --with-deps chromium

@@ -37,6 +37,8 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
           disable-local-eliza-workspace: "true"
           install-command: bun install --ignore-scripts --no-frozen-lockfile
+          prepare-local-eliza-runtime: "true"
+          prepare-local-eliza-runtime: "true"
           skip-avatar-clone: "true"
           no-vision-deps: "true"
 
@@ -76,6 +78,8 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
           disable-local-eliza-workspace: "true"
           install-command: bun install --ignore-scripts --no-frozen-lockfile
+          prepare-local-eliza-runtime: "true"
+          prepare-local-eliza-runtime: "true"
 
       - name: Restore eliza workspace paths for repo scripts
         run: |
