@@ -213,6 +213,53 @@ function getMissingOptionalElizaPlugins(
   });
 }
 
+function getPresentOptionalElizaPlugins(
+  elizaRoot,
+  { pathExists = existsSync } = {},
+) {
+  return OPTIONAL_ELIZA_PLUGIN_PACKAGES.filter(({ workspaceEntry }) => {
+    return pathExists(path.join(elizaRoot, workspaceEntry, "package.json"));
+  });
+}
+
+async function withTemporaryOptionalElizaPluginWorkspaces(
+  elizaRoot,
+  callback,
+) {
+  const packageJsonPath = path.join(elizaRoot, "package.json");
+  const raw = readFileSync(packageJsonPath, "utf8");
+  let pkg;
+  try {
+    pkg = JSON.parse(raw);
+  } catch {
+    return callback();
+  }
+
+  if (!Array.isArray(pkg.workspaces)) {
+    return callback();
+  }
+
+  const missingWorkspaceEntries = getPresentOptionalElizaPlugins(elizaRoot)
+    .map(({ workspaceEntry }) => workspaceEntry)
+    .filter((workspaceEntry) => !pkg.workspaces.includes(workspaceEntry));
+
+  if (missingWorkspaceEntries.length === 0) {
+    return callback();
+  }
+
+  pkg.workspaces = [...pkg.workspaces, ...missingWorkspaceEntries];
+  writePackageJson(packageJsonPath, raw, pkg);
+  console.log(
+    `[setup-upstreams] Temporarily enabling optional eliza plugin workspaces (${missingWorkspaceEntries.join(", ")})`,
+  );
+
+  try {
+    return await callback();
+  } finally {
+    writeFileSync(packageJsonPath, raw);
+  }
+}
+
 async function maybeInitOptionalElizaPluginSubmodules(elizaRoot) {
   const missing = getMissingOptionalElizaPlugins(elizaRoot);
   if (missing.length === 0 || !existsSync(path.join(elizaRoot, ".git"))) {
@@ -904,10 +951,12 @@ async function ensureElizaDependencies(elizaRoot) {
   console.log(
     `[setup-upstreams] Installing eliza workspace dependencies in ${toDisplayPath(elizaRoot)}`,
   );
-  await runCommand("bun", ["install"], {
-    cwd: elizaRoot,
-    label: "bun install (eliza)",
-  });
+  await withTemporaryOptionalElizaPluginWorkspaces(elizaRoot, () =>
+    runCommand("bun", ["install"], {
+      cwd: elizaRoot,
+      label: "bun install (eliza)",
+    }),
+  );
 }
 
 async function ensureElizaBuildOutputs(elizaRoot) {
