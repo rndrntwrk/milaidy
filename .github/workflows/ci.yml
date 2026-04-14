@@ -92,11 +92,12 @@ jobs:
 
       - name: Ensure biome uses correct architecture
         run: |
-          # Symlink root biome into eliza/node_modules/.bin so bunx @biomejs/biome
-          # picks up the correct Linux x64 binary installed by root bun install,
-          # preventing Exec format error (os error 8) from cached wrong-arch binaries.
-          mkdir -p eliza/node_modules/.bin
-          ln -sf "${{ github.workspace }}/node_modules/.bin/biome" eliza/node_modules/.bin/biome
+          # bunx resolves the @biomejs/biome package first, so replacing only the
+          # biome binary is not enough when eliza/node_modules contains a cached
+          # wrong-arch install. Point the whole @biomejs scope at the root install.
+          mkdir -p eliza/node_modules
+          rm -rf eliza/node_modules/@biomejs
+          ln -s "${{ github.workspace }}/node_modules/@biomejs" eliza/node_modules/@biomejs
 
       - name: Biome lint
         run: bun run verify:lint
