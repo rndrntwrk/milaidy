@@ -23,6 +23,7 @@ function run(command, args) {
 run("bunx", [
   "vitest",
   "run",
+  "--passWithNoTests",
   "scripts/asset-cdn.test.ts",
   "scripts/docker-contract.test.ts",
   "scripts/chrome-extension-release-surface.test.ts",
