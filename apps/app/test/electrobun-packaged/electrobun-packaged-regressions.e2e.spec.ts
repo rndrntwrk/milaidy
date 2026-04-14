@@ -621,6 +621,64 @@ async function waitForResetRequest(api: MockApiServer): Promise<void> {
     .toBe(1);
 }
 
+async function seedReturningInstallState(
+  harness: PackagedDesktopHarness,
+): Promise<void> {
+  const result = await harness.eval<
+    EvalResult<{
+      onboardingComplete: string | null;
+      onboardingStep: string | null;
+      uiShellMode: string | null;
+      activeServer: string | null;
+    }>
+  >(
+    `(() => {
+      try {
+        const apiBase = ${getApiBaseExpression()};
+        if (!apiBase) {
+          return {
+            ok: false,
+            error: "Desktop renderer did not expose an API base while seeding returning-install state.",
+          };
+        }
+        const label = (() => {
+          try {
+            return new URL(apiBase).host || apiBase;
+          } catch {
+            return apiBase;
+          }
+        })();
+        localStorage.setItem("eliza:onboarding-complete", "1");
+        localStorage.setItem("eliza:onboarding:step", "activate");
+        localStorage.setItem("eliza:ui-shell-mode", "native");
+        localStorage.setItem(
+          "elizaos:active-server",
+          JSON.stringify({
+            id: \`remote:\${apiBase}\`,
+            kind: "remote",
+            label,
+            apiBase,
+          }),
+        );
+        return {
+          ok: true,
+          onboardingComplete: localStorage.getItem("eliza:onboarding-complete"),
+          onboardingStep: localStorage.getItem("eliza:onboarding:step"),
+          uiShellMode: localStorage.getItem("eliza:ui-shell-mode"),
+          activeServer: localStorage.getItem("elizaos:active-server"),
+        };
+      } catch (error) {
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    })()`,
+  );
+
+  expect(result.ok, result.ok ? undefined : result.error).toBe(true);
+}
+
 async function readMainWindowEffects(harness: PackagedDesktopHarness): Promise<{
   transparent: boolean | null;
   titleBarStyle: string | null;
@@ -712,7 +770,30 @@ async function withPackagedHarness(
           "Expected the packaged renderer to reach its external API bootstrap requests before UI assertions.",
       })
       .toBe(true);
-    await fn({ api, harness, tempRoot });
+    await seedReturningInstallState(harness);
+    const requestCountBeforeRelaunch = api.requests.length;
+    await harness.relaunch();
+    await expect
+      .poll(
+        () =>
+          hasPackagedRendererBootstrapRequests(
+            api?.requests.slice(requestCountBeforeRelaunch) ?? [],
+          ),
+        {
+          timeout: process.env.CI ? 180_000 : 90_000,
+          message:
+            "Expected the seeded packaged relaunch to reach the external API bootstrap requests before UI assertions.",
+        },
+      )
+      .toBe(true);
+    try {
+      await fn({ api, harness, tempRoot });
+    } catch (error) {
+      const requestLog = api.requests.slice(-80).join("\n");
+      throw new Error(
+        `${error instanceof Error ? error.message : String(error)}\nRecent mock API requests:\n${requestLog}`,
+      );
+    }
   } finally {
     await harness?.stop().catch(() => undefined);
     await api?.close().catch(() => undefined);
@@ -722,7 +803,7 @@ async function withPackagedHarness(
   }
 }
 
-test("packaged desktop persists media, provider, and plugin state across relaunch", async (_fixtures, testInfo) => {
+test("packaged desktop persists media, provider, and plugin state across relaunch", async ({}, testInfo) => {
   test.skip(
     !isPackagedPlatform(),
     "Packaged desktop regressions require a macOS or Windows launcher.",
@@ -762,7 +843,7 @@ test("packaged desktop persists media, provider, and plugin state across relaunc
   });
 });
 
-test("packaged desktop reset from Settings returns the shell to onboarding", async (_fixtures, testInfo) => {
+test("packaged desktop reset from Settings returns the shell to onboarding", async ({}, testInfo) => {
   test.skip(
     !isPackagedPlatform(),
     "Packaged desktop regressions require a macOS or Windows launcher.",
@@ -778,7 +859,7 @@ test("packaged desktop reset from Settings returns the shell to onboarding", asy
   });
 });
 
-test("packaged desktop reset from the application menu returns the shell to onboarding", async (_fixtures, testInfo) => {
+test("packaged desktop reset from the application menu returns the shell to onboarding", async ({}, testInfo) => {
   test.skip(
     !isPackagedPlatform(),
     "Packaged desktop regressions require a macOS or Windows launcher.",
@@ -798,7 +879,7 @@ test("packaged desktop reset from the application menu returns the shell to onbo
   });
 });
 
-test("packaged macOS desktop keeps the tray alive and preserves vibrancy through resize", async (_fixtures, testInfo) => {
+test("packaged macOS desktop keeps the tray alive and preserves vibrancy through resize", async ({}, testInfo) => {
   test.skip(
     process.platform !== "darwin",
     "Tray and vibrancy regression checks are macOS-only.",

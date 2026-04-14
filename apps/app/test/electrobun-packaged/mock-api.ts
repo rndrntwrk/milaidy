@@ -168,6 +168,14 @@ function applyCors(res: http.ServerResponse): void {
       "X-Milady-Client-Id",
       "X-Milady-Terminal-Token",
       "X-Milady-UI-Language",
+      "X-ElizaOS-Token",
+      "X-Eliza-Token",
+      "X-ElizaOS-Client-Id",
+      "X-ElizaOS-UI-Language",
+      "X-ElizaOS-Export-Token",
+      "X-Eliza-Export-Token",
+      "X-ElizaOS-Terminal-Token",
+      "X-Eliza-Terminal-Token",
     ].join(", "),
   );
 }

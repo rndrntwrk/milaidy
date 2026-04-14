@@ -134,7 +134,7 @@ export function getAppCoreSourceAliases(
             ...(options.stubRootSpecifier
               ? [
                   {
-                    find: "@elizaos/app-core",
+                    find: /^@elizaos\/app-core$/,
                     replacement: options.bridgeReplacement,
                   },
                 ]

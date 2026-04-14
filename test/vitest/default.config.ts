@@ -11,6 +11,7 @@ import {
   getElizaCoreEntry,
   getInstalledPackageEntry,
   getSharedSourceRoot,
+  getUiSourceRoot,
 } from "../eliza-package-paths";
 import { repoRoot } from "./repo-root";
 import {
@@ -22,6 +23,7 @@ import {
   getElizaCoreRolesEntry,
   getOptionalPluginSdkAliases,
   getSharedSourceAliases,
+  getUiSourceAliases,
   getWorkspaceAppAliases,
 } from "./workspace-aliases";
 
@@ -30,6 +32,7 @@ const elizaCoreRolesEntry = getElizaCoreRolesEntry(repoRoot);
 const autonomousSourceRoot = getAutonomousSourceRoot(repoRoot);
 const appCoreSourceRoot = getAppCoreSourceRoot(repoRoot);
 const sharedSourceRoot = getSharedSourceRoot(repoRoot);
+const uiSourceRoot = getUiSourceRoot(repoRoot);
 const packageManifest = JSON.parse(
   fs.readFileSync(path.join(repoRoot, "package.json"), "utf8"),
 ) as {
@@ -168,6 +171,7 @@ export default defineConfig({
       ...getSharedSourceAliases(sharedSourceRoot, {
         includeMiladyAlias: true,
       }),
+      ...getUiSourceAliases(uiSourceRoot),
     ],
   },
   test: {

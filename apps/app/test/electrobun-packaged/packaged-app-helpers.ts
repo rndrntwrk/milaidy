@@ -250,6 +250,8 @@ export function createPackagedDesktopEnv(args: {
 }): NodeJS.ProcessEnv {
   const partition = args.partition ?? "persist:packaged-regression";
   const commonEnv = {
+    ELIZA_DESKTOP_TEST_API_BASE: args.apiBase,
+    ELIZA_DESKTOP_TEST_PARTITION: partition,
     MILADY_DESKTOP_TEST_API_BASE: args.apiBase,
     MILADY_DESKTOP_TEST_PARTITION: partition,
     MILADY_DESKTOP_TEST_AUTO_CONFIRM_DIALOGS: "1",
@@ -307,6 +309,19 @@ function formatLogs(logs: PackagedProcessLogs | null | undefined): string {
     "App stderr:",
     logs?.stderr.join("") ?? "",
   ].join("\n");
+}
+
+function normalizeEvalScript(script: string): string {
+  const trimmed = script.trim();
+  if (!trimmed) {
+    return script;
+  }
+  if (/^return\b/.test(trimmed)) {
+    return trimmed;
+  }
+  // Electrobun evaluates this as Function(script)(), so expression scripts need
+  // an explicit top-level return to preserve their resolved value.
+  return `return (\n${trimmed}\n);`;
 }
 
 export class PackagedDesktopHarness {
@@ -453,6 +468,7 @@ export class PackagedDesktopHarness {
   async eval<T>(script: string): Promise<T> {
     const startedAt = Date.now();
     let lastError: Error | null = null;
+    const normalizedScript = normalizeEvalScript(script);
 
     while (Date.now() - startedAt < 30_000) {
       try {
@@ -464,7 +480,7 @@ export class PackagedDesktopHarness {
               Authorization: `Bearer ${this.bridgeToken}`,
               "Content-Type": "application/json",
             },
-            body: JSON.stringify({ script }),
+            body: JSON.stringify({ script: normalizedScript }),
           },
         );
         return response.result;
