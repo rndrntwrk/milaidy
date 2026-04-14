@@ -920,10 +920,9 @@ export async function handleWalletRoutes(
       const { address: clientAddress } = await getOrCreateClientAddressKey();
       const bridge = new ElizaCloudClient(baseUrl, apiKey);
       const cachedDescriptors = readCachedCloudWalletDescriptors(config);
-      // During a refresh operation, re-fetch all chains (not just new ones)
-      // to pick up any upstream wallet address changes, rotations, or migrations.
-      // If refresh-cloud failed before persisting all chains, this helps recover.
-      const chainsToProvision = ["evm", "solana"] as const;
+      const chainsToProvision = (["evm", "solana"] as const).filter(
+        (chain) => !cachedDescriptors[chain],
+      );
       const descriptors: Partial<
         Record<WalletChainKind, CloudWalletDescriptor>
       > = { ...cachedDescriptors };

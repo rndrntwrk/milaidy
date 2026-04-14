@@ -318,6 +318,15 @@ export function disableLocalElizaWorkspace(
     log(
       `[disable-local-eliza-workspace] Disabled repo-local eliza workspace at ${elizaRoot}`,
     );
+  } else if (
+    !shouldRenameElizaWorkspace &&
+    fs.existsSync(elizaRoot) &&
+    fs.existsSync(disabledElizaRoot)
+  ) {
+    fs.rmSync(disabledElizaRoot, { recursive: true, force: true });
+    log(
+      `[disable-local-eliza-workspace] Removed stale disabled workspace at ${disabledElizaRoot}`,
+    );
   } else if (!shouldRenameElizaWorkspace && fs.existsSync(elizaRoot)) {
     log(
       "[disable-local-eliza-workspace] Keeping eliza/ on disk (rewrite-only mode)",

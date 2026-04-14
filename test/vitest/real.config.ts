@@ -27,6 +27,33 @@ import {
 } from "../eliza-package-paths";
 import { repoRoot } from "./repo-root";
 
+const elizaWorkspaceRoot = path.join(repoRoot, "eliza");
+const disabledElizaWorkspaceRoot = path.join(
+  repoRoot,
+  ".eliza.ci-disabled",
+);
+const hiddenElizaWorkspaceGlob =
+  fs.existsSync(elizaWorkspaceRoot) &&
+  fs.existsSync(disabledElizaWorkspaceRoot)
+    ? ".eliza.ci-disabled/**"
+    : undefined;
+const liveSetupFile = [
+  path.join(
+    elizaWorkspaceRoot,
+    "packages",
+    "app-core",
+    "test",
+    "live.setup.ts",
+  ),
+  path.join(
+    disabledElizaWorkspaceRoot,
+    "packages",
+    "app-core",
+    "test",
+    "live.setup.ts",
+  ),
+].find((candidate) => fs.existsSync(candidate));
+
 const elizaCoreEntry = getElizaCoreEntry(repoRoot);
 const elizaCoreRolesSource = path.join(
   repoRoot,
@@ -457,7 +484,7 @@ export default defineConfig({
     clearMocks: false,
     mockReset: false,
     execArgv: ["--max-old-space-size=4096"],
-    setupFiles: ["eliza/packages/app-core/test/live.setup.ts"],
+    setupFiles: liveSetupFile ? [liveSetupFile] : [],
     include: [
       "**/*.live.test.ts",
       "**/*.live.test.tsx",
@@ -479,6 +506,7 @@ export default defineConfig({
     exclude: [
       "dist/**",
       "**/node_modules/**",
+      ...(hiddenElizaWorkspaceGlob ? [hiddenElizaWorkspaceGlob] : []),
       "apps/app/electrobun/**",
       "apps/chrome-extension/**",
       "eliza/cloud/**",

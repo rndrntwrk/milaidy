@@ -235,11 +235,20 @@ export async function bindCloudProvider(config: ElizaConfig): Promise<void> {
   const cloud = walletSection?.cloud ?? {};
   const evmAddress = readCloudWalletAddress(config, "evm");
   const solanaAddress = readCloudWalletAddress(config, "solana");
+  const userPrimary = readUserPrimarySelection(config);
+  const shouldBindEvm = Boolean(cloud.evm) && userPrimary.evm !== "local";
+  const shouldBindSolana =
+    Boolean(cloud.solana) && userPrimary.solana !== "local";
 
-  if (evmAddress && process.env.MILADY_CLOUD_EVM_ADDRESS !== evmAddress) {
+  if (
+    shouldBindEvm &&
+    evmAddress &&
+    process.env.MILADY_CLOUD_EVM_ADDRESS !== evmAddress
+  ) {
     await persistConfigEnv("MILADY_CLOUD_EVM_ADDRESS", evmAddress);
   }
   if (
+    shouldBindSolana &&
     solanaAddress &&
     process.env.MILADY_CLOUD_SOLANA_ADDRESS !== solanaAddress
   ) {
@@ -250,19 +259,11 @@ export async function bindCloudProvider(config: ElizaConfig): Promise<void> {
   //   1. User has explicitly set it to "cloud", OR
   //   2. User has NOT made an explicit choice yet (null = auto-bind as default)
   // DO NOT bind if user has explicitly set it to "local".
-  const userPrimary = readUserPrimarySelection(config);
-
-  if (cloud.evm && process.env.WALLET_SOURCE_EVM !== "cloud") {
-    // Bind to cloud if not explicitly set to local
-    if (userPrimary.evm !== "local") {
-      await persistConfigEnv("WALLET_SOURCE_EVM", "cloud");
-    }
+  if (shouldBindEvm && process.env.WALLET_SOURCE_EVM !== "cloud") {
+    await persistConfigEnv("WALLET_SOURCE_EVM", "cloud");
   }
-  if (cloud.solana && process.env.WALLET_SOURCE_SOLANA !== "cloud") {
-    // Bind to cloud if not explicitly set to local
-    if (userPrimary.solana !== "local") {
-      await persistConfigEnv("WALLET_SOURCE_SOLANA", "cloud");
-    }
+  if (shouldBindSolana && process.env.WALLET_SOURCE_SOLANA !== "cloud") {
+    await persistConfigEnv("WALLET_SOURCE_SOLANA", "cloud");
   }
 }
 

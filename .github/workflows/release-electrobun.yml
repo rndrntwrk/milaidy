@@ -72,6 +72,10 @@ jobs:
       env: ${{ steps.version.outputs.env }}
       source_sha: ${{ steps.version.outputs.source_sha }}
     steps:
+      - name: Enable Git long paths (Windows)
+        if: runner.os == 'Windows'
+        run: git config --system core.longpaths true
+
       - name: Checkout
         uses: actions/checkout@v4
         with:

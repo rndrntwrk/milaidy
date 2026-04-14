@@ -1,9 +1,35 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const APP_CORE_ROOT = path.resolve(import.meta.dirname, "..");
-const REPO_ROOT = path.resolve(APP_CORE_ROOT, "..", "..", "..");
+const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
+const APP_CORE_ROOT = path.resolve(SCRIPT_DIR, "..");
+
+function findRepoRoot(startDir) {
+  let currentDir = startDir;
+  let matchedRoot = null;
+  while (true) {
+    if (
+      fs.existsSync(path.join(currentDir, "package.json")) &&
+      fs.existsSync(path.join(currentDir, ".github", "workflows"))
+    ) {
+      matchedRoot = currentDir;
+    }
+
+    const parentDir = path.dirname(currentDir);
+    if (parentDir === currentDir) {
+      if (matchedRoot) {
+        return matchedRoot;
+      }
+      throw new Error(`Unable to resolve repository root from ${startDir}.`);
+    }
+
+    currentDir = parentDir;
+  }
+}
+
+const REPO_ROOT = findRepoRoot(APP_CORE_ROOT);
 const MANIFEST_PATH = path.join(
   APP_CORE_ROOT,
   "test",
