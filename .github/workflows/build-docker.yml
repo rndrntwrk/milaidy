@@ -160,13 +160,6 @@ jobs:
           cd eliza/packages/agent
           bun run build:docker-dist
 
-      # ── 8. Build bundled orchestrator workspace ─────────────────────────────
-      # The Docker image imports the workspace package via its published
-      # dist/index.js export, so clean checkouts must build that package first.
-      - name: Build @elizaos/core (includes agent-orchestrator)
-        run: |
-          cd eliza/packages/typescript
-          bun run build:node
 
       # ── 9. Build runtime (tsdown) ───────────────────────────────────────────
       - name: Build runtime (tsdown)
