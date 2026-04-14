@@ -87,7 +87,7 @@ export default defineConfig({
       ...getWorkspaceAppAliases(repoRoot, [
         "app-companion",
         "app-lifeops",
-        "app-coding",
+        "app-task-coordinator",
         "app-vincent",
         "app-shopify",
         "app-steward",
@@ -147,6 +147,7 @@ export default defineConfig({
     },
     include: [
       "eliza/packages/agent/test/**/*.integration.test.ts",
+      "eliza/apps/*/test/**/*.integration.test.ts",
       "eliza/packages/app-core/test/**/*.integration.test.ts",
     ],
     setupFiles: ["eliza/packages/app-core/test/setup.ts"],

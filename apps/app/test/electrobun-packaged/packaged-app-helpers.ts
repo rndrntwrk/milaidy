@@ -51,6 +51,11 @@ export interface DesktopTestBridgeState {
   };
 }
 
+interface PackagedStartOptions {
+  bridgeHealthTimeoutMs?: number;
+  shellReadyTimeoutMs?: number;
+}
+
 function appendLog(target: string[], chunk: Buffer | string): void {
   const text = chunk.toString();
   if (!text) return;
@@ -363,7 +368,10 @@ export class PackagedDesktopHarness {
     });
   }
 
-  async start(): Promise<void> {
+  async start(options: PackagedStartOptions = {}): Promise<void> {
+    const bridgeHealthTimeoutMs = options.bridgeHealthTimeoutMs ?? 300_000;
+    const shellReadyTimeoutMs = options.shellReadyTimeoutMs ?? 60_000;
+
     await fs.mkdir(this.stateDir, { recursive: true });
     await fs.mkdir(this.appDataDir, { recursive: true });
     await fs.mkdir(this.localAppDataDir, { recursive: true });
@@ -376,11 +384,11 @@ export class PackagedDesktopHarness {
     this.process = child;
     this.logs = collectProcessLogs(child);
 
-    await this.waitForBridgeHealth(300_000);
+    await this.waitForBridgeHealth(bridgeHealthTimeoutMs);
     await this.waitForState(
       (state) => state.mainWindow.present && state.shell.trayPresent,
       "Expected packaged desktop shell to create the main window and tray",
-      60_000,
+      shellReadyTimeoutMs,
     );
   }
 
@@ -405,7 +413,7 @@ export class PackagedDesktopHarness {
     });
   }
 
-  async relaunch(): Promise<void> {
+  async relaunch(options: PackagedStartOptions = {}): Promise<void> {
     // Trigger a no-op eval to give WKWebView a chance to flush localStorage
     // to disk before the process is killed. Without this, SIGKILL after the
     // 5-second grace period can prevent the WebKit persistence layer from
@@ -434,7 +442,7 @@ export class PackagedDesktopHarness {
     // file handles, WebKit caches) before spawning the next instance.
     await new Promise((resolve) => setTimeout(resolve, 1_000));
 
-    await this.start();
+    await this.start(options);
   }
 
   private async waitForBridgeHealth(timeoutMs: number): Promise<void> {
@@ -527,14 +535,27 @@ export class PackagedDesktopHarness {
     );
   }
 
-  async screenshot(): Promise<string> {
-    const response = await fetchJson<{ data: string }>(
-      `${this.bridgeUrl}/main-window/screenshot`,
-      {
-        headers: { Authorization: `Bearer ${this.bridgeToken}` },
-      },
-    );
-    return response.data;
+  async screenshot(timeoutMs = 10_000): Promise<string> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const response = await fetchJson<{ data: string }>(
+        `${this.bridgeUrl}/main-window/screenshot`,
+        {
+          headers: { Authorization: `Bearer ${this.bridgeToken}` },
+          signal: controller.signal,
+        },
+      );
+      return response.data;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        `Timed out capturing packaged screenshot after ${timeoutMs}ms or the bridge failed.\n${message}\n${formatLogs(this.logs)}`,
+      );
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
   async menuAction(action: string): Promise<void> {

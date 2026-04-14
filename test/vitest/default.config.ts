@@ -162,11 +162,12 @@ export default defineConfig({
       }),
       ...getWorkspaceAppAliases(repoRoot, [
         "app-companion",
-        "app-coding",
+        "app-task-coordinator",
         "app-vincent",
         "app-shopify",
         "app-steward",
         "app-lifeops",
+        "app-knowledge",
       ]),
       ...getSharedSourceAliases(sharedSourceRoot, {
         includeMiladyAlias: true,
@@ -188,6 +189,10 @@ export default defineConfig({
       "eliza/packages/agent/src/**/*.test.tsx",
       "eliza/packages/agent/test/**/*.test.ts",
       "eliza/packages/agent/test/**/*.test.tsx",
+      "eliza/apps/*/test/**/*.test.ts",
+      "eliza/apps/*/test/**/*.test.tsx",
+      "eliza/packages/app-core/test/live-agent/**/*.test.ts",
+      "eliza/packages/app-core/test/live-agent/**/*.test.tsx",
       // app-core src-colocated tests run here; test/ harness suites run in
       // the app-unit config (apps/app/vitest.config.ts) which provides the
       // correct @elizaos/app-core alias resolution. Running both in parallel

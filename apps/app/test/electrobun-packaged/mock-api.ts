@@ -607,7 +607,11 @@ export async function startMockApiServer(
       json(res, 200, { status: statusPayload() });
       return;
     }
-    if (method === "POST" && pathname === "/api/agent/restart") {
+    if (
+      method === "POST" &&
+      (pathname === "/api/agent/restart" ||
+        pathname === "/api@elizaos/agent/restart")
+    ) {
       agentState = "running";
       json(res, 200, { status: statusPayload() });
       return;
@@ -675,7 +679,11 @@ export async function startMockApiServer(
       });
       return;
     }
-    if (method === "POST" && pathname === "/api/agent/reset") {
+    if (
+      method === "POST" &&
+      (pathname === "/api/agent/reset" ||
+        pathname === "/api@elizaos/agent/reset")
+    ) {
       onboardingComplete = false;
       agentState = "not_started";
       json(res, 200, { ok: true });

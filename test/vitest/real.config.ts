@@ -73,15 +73,14 @@ const appCompanionSourceRoot = path.join(
   "src",
 );
 const pluginAgentOrchestratorEntry =
-  getInstalledPackageEntry("@elizaos/core/agent-orchestrator", repoRoot) ??
+  getInstalledPackageEntry("@elizaos/plugin-agent-orchestrator", repoRoot) ??
   resolveModuleEntry(
     path.join(
       repoRoot,
       "eliza",
-      "packages",
-      "typescript",
+      "plugins",
+      "plugin-agent-orchestrator",
       "src",
-      "agent-orchestrator",
       "index",
     ),
   );
@@ -233,7 +232,11 @@ export default defineConfig({
       }),
       ...getAppCoreSourceAliases(appCoreSourceRoot),
       ...getUiSourceAliases(uiSourceRoot),
-      ...getWorkspaceAppAliases(repoRoot, ["app-lifeops"]),
+      ...getWorkspaceAppAliases(repoRoot, [
+        "app-lifeops",
+        "app-knowledge",
+        "app-task-coordinator",
+      ]),
       {
         find: /^@elizaos\/app-companion\/(.*)/,
         replacement: path.join(appCompanionSourceRoot, "$1"),
@@ -434,10 +437,6 @@ export default defineConfig({
       }),
       ...(fs.existsSync(pluginAgentOrchestratorEntry)
         ? [
-            {
-              find: "@elizaos/core/agent-orchestrator",
-              replacement: pluginAgentOrchestratorEntry,
-            },
             {
               find: "@elizaos/plugin-agent-orchestrator",
               replacement: pluginAgentOrchestratorEntry,

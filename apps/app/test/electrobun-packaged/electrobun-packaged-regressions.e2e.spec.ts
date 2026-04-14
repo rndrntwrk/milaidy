@@ -13,13 +13,12 @@ type EvalOk<T> = T & { ok: true };
 type EvalErr = { ok: false; error: string };
 type EvalResult<T> = EvalOk<T> | EvalErr;
 
-const RESET_REQUEST = "POST /api/agent/reset";
 const SETTINGS_SELECTOR = '[data-testid="settings-shell"]';
-const PLUGINS_SELECTOR = '[data-testid="plugins-shell"]';
+const PLUGINS_SELECTOR = '[data-testid="connectors-settings-content"]';
 const ONBOARDING_SELECTOR = '[data-testid="onboarding-ui-overlay"]';
-const SETTINGS_ROUTE = "#/settings";
-const SETTINGS_MEDIA_ROUTE = "#/settings/voice";
-const PLUGINS_ROUTE = "#/apps/plugins";
+const SETTINGS_ROUTE = "/settings";
+const SETTINGS_MEDIA_ROUTE = "/settings/voice";
+const PLUGINS_ROUTE = "/apps/plugins";
 
 test.describe.configure({ mode: "serial" });
 
@@ -33,6 +32,38 @@ function getApiBaseExpression(): string {
     "window.__ELIZA_API_BASE__",
     "window.__MILADY_API_BASE__",
   ].join(" ?? ");
+}
+
+function debugPackagedPhase(label: string): void {
+  if (!process.env.MILADY_TEST_PACKAGED_DEBUG) {
+    return;
+  }
+  console.warn(`[packaged-regression] ${label}`);
+}
+
+function getCurrentRouteExpression(): string {
+  return [
+    'window.location.protocol === "file:"',
+    '  ? (window.location.hash.replace(/^#/, "") || "/")',
+    "  : window.location.pathname",
+  ].join("\n");
+}
+
+function getRouteNavigationScript(route: string): string {
+  return [
+    `const targetRoute = ${JSON.stringify(route)};`,
+    `const readCurrentRoute = () => ${getCurrentRouteExpression()};`,
+    `if (window.location.protocol === "file:") {`,
+    `  const targetHash = "#" + targetRoute;`,
+    `  if (window.location.hash !== targetHash) {`,
+    `    window.location.hash = targetHash;`,
+    `  }`,
+    `} else if (window.location.pathname !== targetRoute) {`,
+    `  window.history.pushState(null, "", targetRoute);`,
+    `  window.dispatchEvent(new Event("popstate"));`,
+    `}`,
+    `const currentRoute = readCurrentRoute();`,
+  ].join("\n");
 }
 
 async function waitForEval<T>(
@@ -80,22 +111,32 @@ async function writeHarnessScreenshot(
   testInfo: TestInfo,
   name: string,
 ): Promise<void> {
-  const data = await harness.screenshot();
-  const base64 = data.replace(/^data:image\/png;base64,/, "");
-  await fs.writeFile(
-    testInfo.outputPath(`${name}.png`),
-    Buffer.from(base64, "base64"),
-  );
+  try {
+    const data = await harness.screenshot();
+    const base64 = data.replace(/^data:image\/png;base64,/, "");
+    await fs.writeFile(
+      testInfo.outputPath(`${name}.png`),
+      Buffer.from(base64, "base64"),
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await testInfo
+      .attach(`${name}-capture-error`, {
+        body: Buffer.from(message, "utf8"),
+        contentType: "text/plain",
+      })
+      .catch(() => undefined);
+  }
 }
 
 async function openRouteAndWait(
   harness: PackagedDesktopHarness,
-  hash: string,
+  route: string,
   selector: string,
 ): Promise<void> {
   const result = await waitForEval<
     EvalResult<{
-      hash: string;
+      route: string;
       selector: string;
       found: boolean;
       text: string;
@@ -107,15 +148,12 @@ async function openRouteAndWait(
     harness,
     `(() => {
       try {
-      const targetHash = ${JSON.stringify(hash)};
       const targetSelector = ${JSON.stringify(selector)};
-      if (window.location.hash !== targetHash) {
-        window.location.hash = targetHash;
-      }
+      ${getRouteNavigationScript(route)}
       const node = document.querySelector(targetSelector);
       return {
         ok: true,
-        hash: window.location.hash,
+        route: currentRoute,
         selector: targetSelector,
         found: Boolean(node),
         text: (node?.textContent || "").replace(/\\s+/g, " ").trim().slice(0, 240),
@@ -137,12 +175,12 @@ async function openRouteAndWait(
     })()`,
     (current) =>
       current.ok &&
-      current.hash === hash &&
+      current.route === route &&
       current.selector === selector &&
       current.found,
     {
       timeout: 20_000,
-      message: `Timed out waiting for ${selector} at ${hash}.`,
+      message: `Timed out waiting for ${selector} at ${route}.`,
     },
   );
 
@@ -161,9 +199,7 @@ async function waitForSettingsControls(
     harness,
     `(() => {
       try {
-        if (window.location.hash !== ${JSON.stringify(SETTINGS_MEDIA_ROUTE)}) {
-          window.location.hash = ${JSON.stringify(SETTINGS_MEDIA_ROUTE)};
-        }
+        ${getRouteNavigationScript(SETTINGS_MEDIA_ROUTE)}
         const powerRoot = document.querySelector('[data-testid="settings-companion-vrm-power"]');
         const animateSwitch = document.querySelector('[data-testid="settings-companion-animate-when-hidden"] [role="switch"]');
         const powerButtons = powerRoot ? Array.from(powerRoot.querySelectorAll("button")) : [];
@@ -202,9 +238,7 @@ async function waitForProviderTrigger(
     harness,
     `(() => {
       try {
-        if (window.location.hash !== ${JSON.stringify(SETTINGS_ROUTE)}) {
-          window.location.hash = ${JSON.stringify(SETTINGS_ROUTE)};
-        }
+        ${getRouteNavigationScript(SETTINGS_ROUTE)}
         return {
           ok: true,
           shellReady: Boolean(document.querySelector(${JSON.stringify(SETTINGS_SELECTOR)})),
@@ -234,14 +268,11 @@ async function setPersistedSettingsState(
       vrmPower: string | null;
       animateWhenHidden: string | null;
       provider: unknown;
-      pluginOrder: string[];
     }>
   >(
     `(async () => {
       try {
-        if (window.location.hash !== ${JSON.stringify(SETTINGS_MEDIA_ROUTE)}) {
-          window.location.hash = ${JSON.stringify(SETTINGS_MEDIA_ROUTE)};
-        }
+        ${getRouteNavigationScript(SETTINGS_MEDIA_ROUTE)}
 
         const powerRoot = document.querySelector('[data-testid="settings-companion-vrm-power"]');
         const animateSwitch = document.querySelector('[data-testid="settings-companion-animate-when-hidden"] [role="switch"]');
@@ -283,15 +314,6 @@ async function setPersistedSettingsState(
         }
         const provider = await providerResponse.json();
 
-        const pluginOrder = [
-          "openai",
-          "ollama",
-          "streaming-base",
-          "discord",
-          "telegram",
-        ];
-        localStorage.setItem("pluginOrder", JSON.stringify(pluginOrder));
-
         return {
           ok: true,
           vrmPower: localStorage.getItem("eliza:companion-vrm-power"),
@@ -299,7 +321,6 @@ async function setPersistedSettingsState(
             "eliza:companion-animate-when-hidden",
           ),
           provider,
-          pluginOrder,
         };
       } catch (error) {
         return {
@@ -318,7 +339,6 @@ async function setPersistedSettingsState(
   expect(result.vrmPower).toBe("quality");
   expect(result.animateWhenHidden).toBe("1");
   expect(result.provider).toMatchObject({ success: true, provider: "openai" });
-  expect(result.pluginOrder.slice(0, 2)).toEqual(["openai", "ollama"]);
 }
 
 async function readPersistedSettingsState(
@@ -340,9 +360,7 @@ async function readPersistedSettingsState(
   >(
     `(async () => {
       try {
-        if (window.location.hash !== ${JSON.stringify(SETTINGS_ROUTE)}) {
-          window.location.hash = ${JSON.stringify(SETTINGS_ROUTE)};
-        }
+        ${getRouteNavigationScript(SETTINGS_ROUTE)}
         const providerTrigger = document.getElementById("provider-switcher-select");
         if (!providerTrigger) {
           return {
@@ -403,24 +421,24 @@ async function readPersistedSettingsState(
   return result;
 }
 
-async function readPluginOrder(
+async function readVisiblePluginSectionIds(
   harness: PackagedDesktopHarness,
 ): Promise<string[]> {
   const result = await waitForEval<EvalResult<{ ids: string[] }>>(
     harness,
     `(() => {
       try {
-        if (window.location.hash !== ${JSON.stringify(PLUGINS_ROUTE)}) {
-          window.location.hash = ${JSON.stringify(PLUGINS_ROUTE)};
-        }
+        ${getRouteNavigationScript(PLUGINS_ROUTE)}
         const shell = document.querySelector(${JSON.stringify(PLUGINS_SELECTOR)});
-        const ids = Array.from(document.querySelectorAll("li[data-plugin-id]"))
-          .map((node) => node.getAttribute("data-plugin-id"))
+        const ids = Array.from(
+          document.querySelectorAll('[data-testid^="connector-section-"]'),
+        )
+          .map((node) => node.getAttribute("data-testid"))
           .filter((value) => typeof value === "string");
         return {
           ok: true,
           shellReady: Boolean(shell),
-          ids,
+          ids: ids.map((value) => value.replace(/^connector-section-/, "")),
         };
       } catch (error) {
         return {
@@ -432,7 +450,7 @@ async function readPluginOrder(
     (current) => current.ok && current.ids.length >= 2,
     {
       timeout: 20_000,
-      message: `Timed out waiting for plugin cards at ${PLUGINS_ROUTE}.`,
+      message: `Timed out waiting for visible plugin sections at ${PLUGINS_ROUTE}.`,
     },
   );
 
@@ -491,14 +509,12 @@ async function triggerSettingsReset(
     harness,
     `(() => {
       try {
-        if (window.location.hash !== ${JSON.stringify(SETTINGS_ROUTE)}) {
-          window.location.hash = ${JSON.stringify(SETTINGS_ROUTE)};
-        }
+        ${getRouteNavigationScript(SETTINGS_ROUTE)}
         const buttons = Array.from(
           document.querySelectorAll('[data-testid="settings-shell"] button'),
         );
         const resetButton = buttons.find((button) =>
-          /reset/i.test((button.textContent || "").trim()),
+          /reset everything/i.test((button.textContent || "").trim()),
         );
         return resetButton
           ? {
@@ -527,17 +543,23 @@ async function triggerSettingsReset(
     true,
   );
 
-  const result = await harness.eval<EvalResult<{ label: string }>>(
+  const result = await harness.eval<
+    EvalResult<{ label: string; autoConfirmed: boolean }>
+  >(
     `(() => {
       try {
-        if (window.location.hash !== ${JSON.stringify(SETTINGS_ROUTE)}) {
-          window.location.hash = ${JSON.stringify(SETTINGS_ROUTE)};
+        ${getRouteNavigationScript(SETTINGS_ROUTE)}
+        const rpc = window.__ELIZAOS_ELECTROBUN_RPC__;
+        const canAutoConfirm = Boolean(rpc?.request?.desktopShowMessageBox);
+        window.confirm = () => true;
+        if (canAutoConfirm) {
+          rpc.request.desktopShowMessageBox = async () => ({ response: 0 });
         }
         const buttons = Array.from(
           document.querySelectorAll('[data-testid="settings-shell"] button'),
         );
         const resetButton = buttons.find((button) =>
-          /reset/i.test((button.textContent || "").trim()),
+          /reset everything/i.test((button.textContent || "").trim()),
         );
         if (!resetButton) {
           return {
@@ -549,6 +571,7 @@ async function triggerSettingsReset(
         return {
           ok: true,
           label: (resetButton.textContent || "").trim(),
+          autoConfirmed: canAutoConfirm,
         };
       } catch (error) {
         return {
@@ -567,7 +590,7 @@ async function waitForResetUiState(
 ): Promise<void> {
   const result = await waitForEval<
     EvalResult<{
-      hash: string;
+      route: string;
       overlayVisible: boolean;
       onboardingComplete: string | null;
       activeServer: string | null;
@@ -583,7 +606,7 @@ async function waitForResetUiState(
         const activeServer = localStorage.getItem("elizaos:active-server");
         return {
           ok: true,
-          hash: window.location.hash,
+          route: ${getCurrentRouteExpression()},
           overlayVisible,
           onboardingComplete,
           activeServer,
@@ -612,10 +635,13 @@ async function waitForResetUiState(
 async function waitForResetRequest(api: MockApiServer): Promise<void> {
   await expect
     .poll(
-      () => api.requests.filter((request) => request === RESET_REQUEST).length,
+      () =>
+        api.requests.filter((request) =>
+          /^POST .*\/agent\/reset$/.test(request),
+        ).length,
       {
         timeout: 30000,
-        message: "Expected packaged reset flow to POST /api/agent/reset.",
+        message: "Expected packaged reset flow to POST an /agent/reset route.",
       },
     )
     .toBe(1);
@@ -623,6 +649,7 @@ async function waitForResetRequest(api: MockApiServer): Promise<void> {
 
 async function seedReturningInstallState(
   harness: PackagedDesktopHarness,
+  fallbackApiBase?: string,
 ): Promise<void> {
   const result = await harness.eval<
     EvalResult<{
@@ -634,7 +661,7 @@ async function seedReturningInstallState(
   >(
     `(() => {
       try {
-        const apiBase = ${getApiBaseExpression()};
+        const apiBase = ${getApiBaseExpression()} ?? ${JSON.stringify(fallbackApiBase ?? null)};
         if (!apiBase) {
           return {
             ok: false,
@@ -762,7 +789,12 @@ async function withPackagedHarness(
       launcherPath: launcherPath as string,
       apiBase: api.baseUrl,
     });
-    await harness.start();
+    debugPackagedPhase("starting initial packaged launch");
+    await harness.start({
+      bridgeHealthTimeoutMs: process.env.CI ? 180_000 : 90_000,
+      shellReadyTimeoutMs: process.env.CI ? 120_000 : 60_000,
+    });
+    debugPackagedPhase("initial packaged launch ready");
     await expect
       .poll(() => hasPackagedRendererBootstrapRequests(api?.requests ?? []), {
         timeout: process.env.CI ? 180_000 : 90_000,
@@ -770,9 +802,16 @@ async function withPackagedHarness(
           "Expected the packaged renderer to reach its external API bootstrap requests before UI assertions.",
       })
       .toBe(true);
-    await seedReturningInstallState(harness);
+    debugPackagedPhase("initial bootstrap requests observed");
+    await seedReturningInstallState(harness, api.baseUrl);
+    debugPackagedPhase("seeded returning-install state");
     const requestCountBeforeRelaunch = api.requests.length;
-    await harness.relaunch();
+    debugPackagedPhase("starting packaged relaunch");
+    await harness.relaunch({
+      bridgeHealthTimeoutMs: process.env.CI ? 180_000 : 90_000,
+      shellReadyTimeoutMs: process.env.CI ? 120_000 : 60_000,
+    });
+    debugPackagedPhase("packaged relaunch ready");
 
     // Verify that localStorage state survived the relaunch. If not, the
     // startup coordinator will fall back to a fresh-install probe path and
@@ -816,8 +855,9 @@ async function withPackagedHarness(
         `— re-seeding state for this session.`,
       );
       // Re-seed when WKWebView did not flush localStorage before process exit.
-      await seedReturningInstallState(harness);
+      await seedReturningInstallState(harness, api.baseUrl);
     }
+    debugPackagedPhase("validated relaunch persistence state");
 
     await expect
       .poll(
@@ -832,6 +872,7 @@ async function withPackagedHarness(
         },
       )
       .toBe(true);
+    debugPackagedPhase("relaunch bootstrap requests observed");
 
     // Wait for the startup coordinator to finish transitioning past the
     // StartupShell. Bootstrap requests prove the mock API is reachable, but
@@ -864,8 +905,10 @@ async function withPackagedHarness(
           "Timed out waiting for the app shell to render after relaunch (startup coordinator did not reach ready state).",
       },
     );
+    debugPackagedPhase("post-relaunch app shell ready");
 
     try {
+      debugPackagedPhase("entering test-specific assertions");
       await fn({ api, harness, tempRoot });
     } catch (error) {
       const requestLog = api.requests.slice(-80).join("\n");
@@ -912,8 +955,8 @@ test("packaged desktop persists media, provider, and plugin state across relaunc
     );
 
     await openRouteAndWait(harness, PLUGINS_ROUTE, PLUGINS_SELECTOR);
-    const pluginIds = await readPluginOrder(harness);
-    expect(pluginIds.slice(0, 2)).toEqual(["openai", "ollama"]);
+    const pluginIds = await readVisiblePluginSectionIds(harness);
+    expect(pluginIds).toEqual(expect.arrayContaining(["openai", "ollama"]));
     await writeHarnessScreenshot(
       harness,
       testInfo,

@@ -1370,7 +1370,7 @@ export default defineConfig({
       "node-llama-cpp",
       "@node-llama-cpp/mac-arm64-metal",
       // Contains native-only pty-state-capture import; skip pre-bundling.
-      "@elizaos/core/agent-orchestrator",
+      "@elizaos/plugin-agent-orchestrator",
       // @elizaos/plugin-secrets-manager is now built into @elizaos/core features
       // Node-only HTTP client — crashes in browser, stub via nativeModuleStubPlugin
       "undici",

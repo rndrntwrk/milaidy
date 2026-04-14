@@ -239,15 +239,6 @@
       "bundledAtRelease": false
     },
     {
-      "packageName": "@elizaos/plugin-pi-ai",
-      "version": "0.0.0-deprecated",
-      "sourcePath": "eliza/plugins/plugin-pi-ai",
-      "sourceType": "plugin",
-      "repoUrl": "https://github.com/elizaos-plugins/plugin-pi-ai.git",
-      "pinnedCommit": "22ce668",
-      "bundledAtRelease": false
-    },
-    {
       "packageName": "@elizaos/plugin-shell",
       "version": "2.0.0-alpha.10",
       "sourcePath": "eliza/plugins/plugin-shell/typescript",

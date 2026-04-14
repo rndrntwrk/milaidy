@@ -164,7 +164,6 @@ eliza/plugins/plugin-ollama/
 eliza/plugins/plugin-openai/
 eliza/plugins/plugin-openrouter/
 eliza/plugins/plugin-pdf/
-eliza/plugins/plugin-pi-ai/
 eliza/plugins/plugin-shell/
 eliza/plugins/plugin-shopify/
 eliza/plugins/plugin-solana/

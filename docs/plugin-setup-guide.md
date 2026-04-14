@@ -186,12 +186,6 @@ where to get the credentials, minimum required fields, and tips for optional fie
 - Set model IDs via the `providers.minimax` config block in `milady.json`
 **Tips:** Minimax provides Chinese and multilingual AI models.
 
-### Pi AI
-**Minimum required:** `ELIZA_USE_PI_AI=true`
-**Variables:**
-- `ELIZA_USE_PI_AI` — Set to `true` to enable Pi AI as a model provider
-**Tips:** Pi AI provides conversational models optimized for friendly, helpful dialogue.
-
 ### Zai
 **Get credentials:** From Homunculus Labs
 **Minimum required:** `ZAI_API_KEY`

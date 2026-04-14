@@ -174,7 +174,7 @@ switch.
 | `apiKey` | string | No | Optional new credential to store for the selected provider. Max 512 characters. |
 | `primaryModel` | string | No | Optional primary model override for local providers that support it |
 
-Canonical providers: `elizacloud`, `pi-ai`, `openai-subscription`, `anthropic-subscription`, `openai`, `anthropic`, `deepseek`, `gemini`, `groq`, `grok`, `openrouter`, `ollama`, `mistral`, `together`, `zai`.
+Canonical providers: `elizacloud`, `openai-subscription`, `anthropic-subscription`, `openai`, `anthropic`, `deepseek`, `gemini`, `groq`, `grok`, `openrouter`, `ollama`, `mistral`, `together`, `zai`.
 
 Compatibility aliases are still accepted on input and normalized before persistence, including `google`, `google-genai`, `xai`, and `openai-codex`.
 

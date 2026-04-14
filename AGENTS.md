@@ -47,11 +47,13 @@ Write the framework name as **elizaOS** in prose, comments, user-facing strings,
 
 ## Default Agent Knowledge
 
-Treat bundled skills from `@elizaos/skills` as the default knowledge base for code agents working in this repo. The canonical entry points are:
+Treat bundled skills from `@elizaos/skills` as the default knowledge base for code agents working in this repo. Repo setup mirrors those defaults into `skills/.defaults/` so task agents like Claude and Codex can open them directly from the workspace. The canonical repo-local entry points are:
 
-- `eliza/packages/skills/skills/eliza-app-development/SKILL.md` — this repo as an elizaOS app (Milady is this checkout’s product name), layout, and how local, remote, and cloud paths fit together
-- `eliza/packages/skills/skills/elizaos/SKILL.md` — elizaOS runtime concepts, plugin abstractions, and extension points
-- `eliza/packages/skills/skills/eliza-cloud/SKILL.md` — Eliza Cloud as a managed backend, app platform, deployment target, and monetization surface
+- `skills/.defaults/eliza-app-development/SKILL.md` — this repo as an elizaOS app (Milady is this checkout’s product name), layout, and how local, remote, and cloud paths fit together
+- `skills/.defaults/elizaos/SKILL.md` — elizaOS runtime concepts, plugin abstractions, and extension points
+- `skills/.defaults/eliza-cloud/SKILL.md` — Eliza Cloud as a managed backend, app platform, deployment target, and monetization surface
+
+The source of truth remains under `eliza/packages/skills/skills/`. `scripts/sync-workspace-default-skills.mjs` refreshes the repo-local mirrors during repo setup.
 
 `scripts/ensure-skills.mjs` seeds bundled skills from `@elizaos/skills` into the managed skills store on first run.
 Separately, `packages/agent/src/runtime/default-knowledge.ts` seeds bundled runtime knowledge items for Milady itself, including the baseline Eliza Cloud app/backend guidance.

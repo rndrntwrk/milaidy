@@ -400,13 +400,10 @@ export function runInitSubmodules({
       // parent can fail when git tries to resolve nested submodule paths
       // (e.g. eliza/cloud) against the parent's .gitmodules instead of
       // eliza's own .gitmodules.
-      exec(
-        `git ${nestedSkipArgs} submodule update --init --recursive`.trim(),
-        {
-          cwd: resolve(rootDir, "eliza"),
-          stdio: "inherit",
-        },
-      );
+      exec(`git ${nestedSkipArgs} submodule update --init --recursive`.trim(), {
+        cwd: resolve(rootDir, "eliza"),
+        stdio: "inherit",
+      });
     } catch (err) {
       logError(
         `[init-submodules] Nested eliza submodule update failed (fix broken plugin submodules under eliza/ if needed): ${
