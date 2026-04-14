@@ -31,9 +31,6 @@ const packageDir = path.resolve(repoRoot, packageDirArg);
 const packageJsonPath = path.join(packageDir, "package.json");
 const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8"));
 const workspaceVersions = collectWorkspaceVersions(repoRoot);
-const skipLocalUpstreams =
-  process.env.MILADY_SKIP_LOCAL_UPSTREAMS === "1" ||
-  process.env.ELIZA_SKIP_LOCAL_UPSTREAMS === "1";
 
 const publishManifest = {
   ...packageJson,
@@ -156,28 +153,20 @@ function rewriteWorkspaceDeps(section, versions) {
     return undefined;
   }
 
-  const rewrittenEntries = [];
-  for (const [name, version] of Object.entries(section)) {
-    if (typeof version === "string" && version.startsWith("workspace:")) {
-      const resolvedVersion = versions.get(name);
-      if (!resolvedVersion) {
-        if (skipLocalUpstreams) {
-          continue;
+  const rewritten = Object.fromEntries(
+    Object.entries(section).map(([name, version]) => {
+      if (typeof version === "string" && version.startsWith("workspace:")) {
+        const resolvedVersion = versions.get(name);
+        if (!resolvedVersion) {
+          throw new Error(
+            `no local version found for workspace dependency ${name}`,
+          );
         }
-        throw new Error(
-          `no local version found for workspace dependency ${name}`,
-        );
+        return [name, normalizeWorkspaceVersion(version, resolvedVersion)];
       }
-      rewrittenEntries.push([
-        name,
-        normalizeWorkspaceVersion(version, resolvedVersion),
-      ]);
-      continue;
-    }
-    rewrittenEntries.push([name, version]);
-  }
-
-  const rewritten = Object.fromEntries(rewrittenEntries);
+      return [name, version];
+    }),
+  );
 
   return rewritten;
 }

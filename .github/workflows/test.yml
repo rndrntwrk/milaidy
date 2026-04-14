@@ -31,6 +31,9 @@ jobs:
           submodules: false
           fetch-depth: 0
 
+      - name: Validate CI bootstrap contract
+        run: node scripts/validate-ci-bootstrap-contract.mjs
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
@@ -183,6 +186,10 @@ jobs:
         with:
           # Published-only CI restores the required non-eliza submodules explicitly.
           submodules: false
+          sparse-checkout: |
+            /*
+            !eliza/packages/benchmarks/benchmark_results/**
+          sparse-checkout-cone-mode: false
 
       - name: Initialize tracked workspace submodules
         run: node scripts/init-submodules.mjs
@@ -283,6 +290,10 @@ jobs:
         with:
           # Published-only CI restores the required non-eliza submodules explicitly.
           submodules: false
+          sparse-checkout: |
+            /*
+            !eliza/packages/benchmarks/benchmark_results/**
+          sparse-checkout-cone-mode: false
 
       - name: Initialize tracked workspace submodules
         run: node scripts/init-submodules.mjs
@@ -569,10 +580,14 @@ jobs:
       - name: Restore eliza workspace paths for repo scripts
         run: node -e "const fs=require('node:fs');if(fs.existsSync('.eliza.ci-disabled')&&!fs.existsSync('eliza'))fs.renameSync('.eliza.ci-disabled','eliza');"
 
+      - name: Install desktop package dependencies
+        run: |
+          bun install --cwd eliza/packages/app-core --ignore-scripts
+          bun install --cwd apps/app/electrobun --ignore-scripts
+
       - name: Run repository postinstall patches
         run: node eliza/packages/app-core/scripts/run-repo-setup.mjs
         env:
-          MILADY_SKIP_LOCAL_UPSTREAMS: "1"
           SKIP_AVATAR_CLONE: "1"
           MILADY_NO_VISION_DEPS: "1"
 
