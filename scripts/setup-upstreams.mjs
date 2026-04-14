@@ -971,6 +971,25 @@ export async function setupUpstreams(repoRoot = DEFAULT_REPO_ROOT) {
   if (skipReason) {
     if (skipReason.endsWith("=1")) {
       ensurePublishedElizaPackageLinks(repoRoot);
+      // Strip missing optional plugin workspace entries from eliza/package.json
+      // so that any subsequent `bun install --cwd eliza` doesn't fail on
+      // workspace paths that don't exist when plugin submodules are absent.
+      // Guard: eliza/ may have been renamed by disable-local-eliza-workspace.mjs.
+      const elizaRoot = getRepoElizaRoot(repoRoot);
+      if (existsSync(path.join(elizaRoot, "package.json"))) {
+        const missingPlugins = getMissingOptionalElizaPlugins(elizaRoot);
+        if (missingPlugins.length > 0) {
+          const patched = applyOptionalElizaPluginFallback(
+            elizaRoot,
+            missingPlugins,
+          );
+          if (patched > 0) {
+            console.log(
+              `[setup-upstreams] Stripped ${missingPlugins.length} missing optional plugin workspace(s) from eliza/package.json`,
+            );
+          }
+        }
+      }
     }
     console.log(`[setup-upstreams] Skipping: ${skipReason}`);
     return { skipped: true, reason: skipReason };

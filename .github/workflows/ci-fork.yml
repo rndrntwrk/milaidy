@@ -39,9 +39,12 @@ jobs:
             mv .eliza.ci-disabled eliza
           fi
 
+      - name: Strip missing optional plugin workspaces from eliza
+        run: node -e "const fs=require('fs'),p=require('path'),f=p.join('eliza','package.json');if(!fs.existsSync(f))process.exit(0);const pkg=JSON.parse(fs.readFileSync(f,'utf8'));if(!Array.isArray(pkg.workspaces))process.exit(0);const before=pkg.workspaces.length;pkg.workspaces=pkg.workspaces.filter(w=>{const d=p.join('eliza',w);return fs.existsSync(d)});if(pkg.workspaces.length<before){fs.writeFileSync(f,JSON.stringify(pkg,null,2)+'\n');console.log('Stripped '+(before-pkg.workspaces.length)+' missing workspace(s)')}"
+
       - name: Install submodule verification dependencies
         run: |
-          bun install --cwd eliza --frozen-lockfile --ignore-scripts
+          bun install --cwd eliza --no-frozen-lockfile --ignore-scripts
           bun install --cwd eliza/cloud --frozen-lockfile
           bun install --cwd eliza/steward-fi --frozen-lockfile
 
@@ -76,9 +79,12 @@ jobs:
             mv .eliza.ci-disabled eliza
           fi
 
+      - name: Strip missing optional plugin workspaces from eliza
+        run: node -e "const fs=require('fs'),p=require('path'),f=p.join('eliza','package.json');if(!fs.existsSync(f))process.exit(0);const pkg=JSON.parse(fs.readFileSync(f,'utf8'));if(!Array.isArray(pkg.workspaces))process.exit(0);const before=pkg.workspaces.length;pkg.workspaces=pkg.workspaces.filter(w=>{const d=p.join('eliza',w);return fs.existsSync(d)});if(pkg.workspaces.length<before){fs.writeFileSync(f,JSON.stringify(pkg,null,2)+'\n');console.log('Stripped '+(before-pkg.workspaces.length)+' missing workspace(s)')}"
+
       - name: Install submodule verification dependencies
         run: |
-          bun install --cwd eliza --frozen-lockfile --ignore-scripts
+          bun install --cwd eliza --no-frozen-lockfile --ignore-scripts
           bun install --cwd eliza/cloud --frozen-lockfile
           bun install --cwd eliza/steward-fi --frozen-lockfile
 
