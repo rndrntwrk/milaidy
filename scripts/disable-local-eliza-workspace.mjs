@@ -43,6 +43,7 @@
  * untouched.
  */
 
+import { execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -291,6 +292,35 @@ export function disableLocalElizaWorkspace(
     process.env.MILADY_DISABLE_LOCAL_UPSTREAMS_RENAME === "1";
   const packageJsonPath = path.join(repoRoot, "package.json");
   const removedLockfiles = [];
+
+  // Version resolution needs package.json files inside eliza/. When
+  // MILADY_SKIP_LOCAL_UPSTREAMS=1, init-submodules.mjs intentionally
+  // skips eliza, so the directory may be empty/absent. Shallow-init it
+  // here so we can read workspace package versions for the rewrite.
+  const elizaTypescriptPkg = path.join(
+    elizaRoot,
+    "packages",
+    "typescript",
+    "package.json",
+  );
+  if (
+    fs.existsSync(path.join(repoRoot, ".gitmodules")) &&
+    !fs.existsSync(elizaTypescriptPkg)
+  ) {
+    try {
+      execSync("git submodule update --init --depth=1 eliza", {
+        cwd: repoRoot,
+        stdio: "pipe",
+      });
+      log(
+        "[disable-local-eliza-workspace] Shallow-initialized eliza submodule for version resolution",
+      );
+    } catch (err) {
+      warn(
+        `[disable-local-eliza-workspace] Could not shallow-init eliza submodule: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
 
   // Resolve pinned versions BEFORE renaming eliza/ away, since the
   // cloud-agent-template and local package.json files live inside it.
