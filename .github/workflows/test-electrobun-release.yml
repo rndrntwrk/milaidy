@@ -60,6 +60,7 @@ jobs:
       - name: Install published-workspace fallback dependencies
         run: >
           bun add --no-save --dev
+          @elizaos/plugin-agent-orchestrator
           react react-dom vite
           @types/react @types/react-dom
           tailwindcss three clsx class-variance-authority tailwind-merge sonner
