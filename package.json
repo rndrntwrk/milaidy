@@ -207,7 +207,7 @@
     "test:regression-matrix:pr": "node eliza/packages/app-core/scripts/validate-regression-matrix.mjs --workflow pr",
     "test:regression-matrix:release": "node eliza/packages/app-core/scripts/validate-regression-matrix.mjs --workflow release",
     "test:regression-matrix:release-contract": "node eliza/packages/app-core/scripts/validate-regression-matrix.mjs --workflow release-contract",
-    "test:release:contract": "node eliza/packages/app-core/scripts/run-release-contract-suite.mjs",
+    "test:release:contract": "node scripts/run-release-contract-suite.mjs",
     "test:startup:contract": "bunx vitest run eliza/packages/app-core/scripts/startup-integration-script-drift.test.ts",
     "test:watch": "bunx vitest",
     "milady:doctor": "node eliza/packages/app-core/scripts/rt.mjs eliza/packages/app-core/scripts/run-node.mjs doctor",
