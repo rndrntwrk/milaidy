@@ -803,7 +803,7 @@ async function withPackagedHarness(
   }
 }
 
-test("packaged desktop persists media, provider, and plugin state across relaunch", async ({}, testInfo) => {
+test("packaged desktop persists media, provider, and plugin state across relaunch", async (_fixtures, testInfo) => {
   test.skip(
     !isPackagedPlatform(),
     "Packaged desktop regressions require a macOS or Windows launcher.",
@@ -843,7 +843,7 @@ test("packaged desktop persists media, provider, and plugin state across relaunc
   });
 });
 
-test("packaged desktop reset from Settings returns the shell to onboarding", async ({}, testInfo) => {
+test("packaged desktop reset from Settings returns the shell to onboarding", async (_fixtures, testInfo) => {
   test.skip(
     !isPackagedPlatform(),
     "Packaged desktop regressions require a macOS or Windows launcher.",
@@ -859,7 +859,7 @@ test("packaged desktop reset from Settings returns the shell to onboarding", asy
   });
 });
 
-test("packaged desktop reset from the application menu returns the shell to onboarding", async ({}, testInfo) => {
+test("packaged desktop reset from the application menu returns the shell to onboarding", async (_fixtures, testInfo) => {
   test.skip(
     !isPackagedPlatform(),
     "Packaged desktop regressions require a macOS or Windows launcher.",
@@ -879,7 +879,7 @@ test("packaged desktop reset from the application menu returns the shell to onbo
   });
 });
 
-test("packaged macOS desktop keeps the tray alive and preserves vibrancy through resize", async ({}, testInfo) => {
+test("packaged macOS desktop keeps the tray alive and preserves vibrancy through resize", async (_fixtures, testInfo) => {
   test.skip(
     process.platform !== "darwin",
     "Tray and vibrancy regression checks are macOS-only.",

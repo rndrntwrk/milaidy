@@ -580,16 +580,12 @@ jobs:
       - name: Restore eliza workspace paths for repo scripts
         run: node -e "const fs=require('node:fs');if(fs.existsSync('.eliza.ci-disabled')&&!fs.existsSync('eliza'))fs.renameSync('.eliza.ci-disabled','eliza');"
 
-      - name: Install desktop package dependencies
-        run: |
-          bun install --cwd eliza/packages/app-core --ignore-scripts
-          bun install --cwd apps/app/electrobun --ignore-scripts
-
       - name: Run repository postinstall patches
         run: node eliza/packages/app-core/scripts/run-repo-setup.mjs
         env:
           SKIP_AVATAR_CLONE: "1"
           MILADY_NO_VISION_DEPS: "1"
+          MILADY_SKIP_LOCAL_UPSTREAMS: "1"
 
       - name: Run Electrobun contract tests
         run: bun run test:desktop:contract
@@ -703,10 +699,13 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Check live provider secrets
+        id: cloud-check
         run: |
           if [ -z "${{ secrets.ELIZAOS_CLOUD_API_KEY }}" ]; then
-            echo "::error::UI Playwright smoke requires ELIZAOS_CLOUD_API_KEY so the suite can complete real onboarding."
-            exit 1
+            echo "::warning::ELIZAOS_CLOUD_API_KEY not configured — UI Playwright smoke will run without cloud onboarding coverage."
+            echo "has_cloud_key=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_cloud_key=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Checkout

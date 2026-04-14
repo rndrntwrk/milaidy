@@ -34,7 +34,7 @@ function processFile(filePath) {
   //     Foo,
   //   } from "./somewhere";
   // → move barrel line to just BEFORE the `import {`.
-  const barrelLineRe = /^(import \{[^}]*\} from "@elizaos\/ui";)$/m;
+  const _barrelLineRe = /^(import \{[^}]*\} from "@elizaos\/ui";)$/m;
   const orphanRe = /^(import \{)\n(import \{[^}]*\} from "@elizaos\/ui";)\n/m;
   if (orphanRe.test(src)) {
     src = src.replace(orphanRe, (_match, openBrace, barrelLine) => {
@@ -65,8 +65,7 @@ function processFile(filePath) {
 
   const deepLines = [];
   for (const re of deepPatterns) {
-    let m;
-    while ((m = re.exec(src)) !== null) {
+    for (let m = re.exec(src); m !== null; m = re.exec(src)) {
       deepLines.push({
         full: m[0],
         specifiers: parseSpecifiers(m[1]),
@@ -78,8 +77,7 @@ function processFile(filePath) {
   const reExportRe =
     /^export\s+\{([^}]*)\}\s+from\s+"@elizaos\/ui\/[^"]+"\s*;?/gm;
   const reExportLines = [];
-  let rm;
-  while ((rm = reExportRe.exec(src)) !== null) {
+  for (let rm = reExportRe.exec(src); rm !== null; rm = reExportRe.exec(src)) {
     reExportLines.push({ full: rm[0], specifiers: parseSpecifiers(rm[1]) });
   }
 
@@ -103,9 +101,9 @@ function processFile(filePath) {
       const pos = findLastImportEnd(src);
       const line = `export { ${dedupeSpecifiers(specifiers).join(", ")} } from "@elizaos/ui";`;
       if (pos !== null) {
-        src = src.slice(0, pos) + "\n" + line + src.slice(pos);
+        src = `${src.slice(0, pos)}\n${line}${src.slice(pos)}`;
       } else {
-        src = line + "\n" + src;
+        src = `${line}\n${src}`;
       }
     }
   }
@@ -132,9 +130,9 @@ function processFile(filePath) {
       const line = `import { ${dedupeSpecifiers(allSpecifiers).join(", ")} } from "@elizaos/ui";`;
       const pos = findLastImportEnd(src);
       if (pos !== null) {
-        src = src.slice(0, pos) + "\n" + line + src.slice(pos);
+        src = `${src.slice(0, pos)}\n${line}${src.slice(pos)}`;
       } else {
-        src = line + "\n" + src;
+        src = `${line}\n${src}`;
       }
     }
   }

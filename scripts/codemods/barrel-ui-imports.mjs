@@ -19,14 +19,11 @@ const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "../..",
 );
-const targetDir = path.join(
-  rootDir,
-  "eliza/packages/app-core/src",
-);
+const targetDir = path.join(rootDir, "eliza/packages/app-core/src");
 
 // Matches:  import { A, B, type C } from "@elizaos/ui/...";
 // Also handles multi-line imports by joining first.
-const DEEP_IMPORT_RE =
+const _DEEP_IMPORT_RE =
   /^import\s+(\{[^}]*\})\s+from\s+"@elizaos\/ui\/[^"]+"\s*;?/gm;
 
 // Also need to catch the case where the brace spans multiple lines.
@@ -60,10 +57,8 @@ function transformFile(filePath) {
 
   // Step 2: collect all specifiers from deep @elizaos/ui imports.
   const deepImportLines = [];
-  const deepRe =
-    /^import\s+\{([^}]*)\}\s+from\s+"@elizaos\/ui\/[^"]+"\s*;?/gm;
-  let m;
-  while ((m = deepRe.exec(src)) !== null) {
+  const deepRe = /^import\s+\{([^}]*)\}\s+from\s+"@elizaos\/ui\/[^"]+"\s*;?/gm;
+  for (let m = deepRe.exec(src); m !== null; m = deepRe.exec(src)) {
     deepImportLines.push({
       full: m[0],
       specifiers: parseSpecifiers(m[1]),
@@ -100,13 +95,9 @@ function transformFile(filePath) {
     // Find position after existing imports (last import line).
     const lastImportMatch = findLastImportPosition(src);
     if (lastImportMatch !== null) {
-      src =
-        src.slice(0, lastImportMatch) +
-        "\n" +
-        newImport +
-        src.slice(lastImportMatch);
+      src = `${src.slice(0, lastImportMatch)}\n${newImport}${src.slice(lastImportMatch)}`;
     } else {
-      src = newImport + "\n" + src;
+      src = `${newImport}\n${src}`;
     }
   }
 
@@ -148,8 +139,7 @@ function findLastImportPosition(src) {
   // Match all import statements (single-line only at this point).
   const re = /^import\s[^\n]*/gm;
   let last = null;
-  let match;
-  while ((match = re.exec(src)) !== null) {
+  for (let match = re.exec(src); match !== null; match = re.exec(src)) {
     last = match.index + match[0].length;
   }
   return last;
