@@ -57,10 +57,10 @@ interface CloudManagerLike {
 
 interface RuntimeLike {
   agentId: string;
-  character: {
+  character?: {
     secrets?: Record<string, string | number | boolean>;
   };
-  updateAgent: (
+  updateAgent?: (
     agentId: string,
     update: {
       secrets: Record<string, string | number | boolean>;
@@ -482,10 +482,11 @@ export async function handleCloudRoute(
       }
 
       if (state.runtime) {
-        if (!state.runtime.character.secrets) {
-          state.runtime.character.secrets = {};
+        const character = (state.runtime.character ??= {});
+        if (!character.secrets) {
+          character.secrets = {};
         }
-        const secrets = state.runtime.character.secrets as Record<
+        const secrets = character.secrets as Record<
           string,
           string
         >;
@@ -496,10 +497,16 @@ export async function handleCloudRoute(
           delete secrets.ELIZAOS_CLOUD_ENABLED;
         }
 
-        await state.runtime.updateAgent(state.runtime.agentId, {
-          secrets: { ...secrets },
-        });
-        logger.info("[cloud-login] API key persisted to agent DB record");
+        if (typeof state.runtime.updateAgent === "function") {
+          await state.runtime.updateAgent(state.runtime.agentId, {
+            secrets: { ...secrets },
+          });
+          logger.info("[cloud-login] API key persisted to agent DB record");
+        } else {
+          logger.warn(
+            "[cloud-login] runtime.updateAgent not available — agent DB secrets not persisted",
+          );
+        }
       }
 
       if (

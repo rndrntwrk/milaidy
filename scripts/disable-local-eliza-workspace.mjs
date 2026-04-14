@@ -287,6 +287,8 @@ export function disableLocalElizaWorkspace(
 ) {
   const elizaRoot = path.join(repoRoot, "eliza");
   const disabledElizaRoot = path.join(repoRoot, ".eliza.ci-disabled");
+  const shouldRenameElizaWorkspace =
+    process.env.MILADY_DISABLE_LOCAL_UPSTREAMS_RENAME === "1";
   const packageJsonPath = path.join(repoRoot, "package.json");
   const removedLockfiles = [];
 
@@ -310,11 +312,24 @@ export function disableLocalElizaWorkspace(
     }
   }
 
-  if (fs.existsSync(elizaRoot)) {
+  if (shouldRenameElizaWorkspace && fs.existsSync(elizaRoot)) {
     fs.rmSync(disabledElizaRoot, { recursive: true, force: true });
     fs.renameSync(elizaRoot, disabledElizaRoot);
     log(
       `[disable-local-eliza-workspace] Disabled repo-local eliza workspace at ${elizaRoot}`,
+    );
+  } else if (
+    !shouldRenameElizaWorkspace &&
+    fs.existsSync(elizaRoot) &&
+    fs.existsSync(disabledElizaRoot)
+  ) {
+    fs.rmSync(disabledElizaRoot, { recursive: true, force: true });
+    log(
+      `[disable-local-eliza-workspace] Removed stale disabled workspace at ${disabledElizaRoot}`,
+    );
+  } else if (!shouldRenameElizaWorkspace && fs.existsSync(elizaRoot)) {
+    log(
+      "[disable-local-eliza-workspace] Keeping eliza/ on disk (rewrite-only mode)",
     );
   } else {
     log(
@@ -373,9 +388,10 @@ export function disableLocalElizaWorkspace(
     }
   }
 
-  // Strip patchedDependencies whose patch files live inside eliza/ —
-  // the directory is gone after the rename so bun would fail to find them.
+  // Strip patchedDependencies whose patch files live inside eliza/ only when
+  // eliza/ is intentionally renamed away.
   if (
+    shouldRenameElizaWorkspace &&
     rootPkg.patchedDependencies &&
     typeof rootPkg.patchedDependencies === "object"
   ) {
@@ -397,9 +413,13 @@ export function disableLocalElizaWorkspace(
     }
   }
 
-  // Stub scripts that reference eliza/ paths (e.g. postinstall) since the
-  // directory has been renamed away and the scripts would crash.
-  if (rootPkg.scripts && typeof rootPkg.scripts === "object") {
+  // Stub scripts that reference eliza/ paths only when the directory has been
+  // renamed away.
+  if (
+    shouldRenameElizaWorkspace &&
+    rootPkg.scripts &&
+    typeof rootPkg.scripts === "object"
+  ) {
     const stubbedScripts = [];
     for (const [name, cmd] of Object.entries(rootPkg.scripts)) {
       if (typeof cmd === "string" && cmd.includes("eliza/")) {

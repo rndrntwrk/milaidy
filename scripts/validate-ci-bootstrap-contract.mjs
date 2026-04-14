@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -14,6 +16,13 @@ const files = {
     "eliza/packages/app-core/scripts/validate-regression-matrix.mjs",
 };
 
+const workflows = [
+  ".github/workflows/test.yml",
+  ".github/workflows/ci.yml",
+  ".github/workflows/ci-fork.yml",
+  ".github/workflows/docker-ci-smoke.yml",
+];
+
 const requiredWorkflowSnippets = [
   'name: Regression Matrix Contract',
   "run: node scripts/validate-ci-bootstrap-contract.mjs",
@@ -27,6 +36,28 @@ const requiredWorkflowSnippets = [
 const requiredActionSnippets = [
   "disable-local-eliza-workspace:",
   "run: node scripts/disable-local-eliza-workspace.mjs",
+];
+
+const disableMarkers = [
+  "scripts/disable-local-eliza-workspace.mjs",
+  'disable-local-eliza-workspace: "true"',
+  "disable-local-eliza-workspace: 'true'",
+];
+
+const renameMarkers = [
+  "MILADY_DISABLE_LOCAL_UPSTREAMS_RENAME=1",
+  'MILADY_DISABLE_LOCAL_UPSTREAMS_RENAME: "1"',
+  "MILADY_DISABLE_LOCAL_UPSTREAMS_RENAME: '1'",
+];
+
+const sourcePresentMarkers = [
+  "bun run test:ci:real",
+  "bun run test:desktop:contract",
+  "bun run test:selfcontrol:unit",
+  "bun run test:selfcontrol:e2e",
+  "bun run test:selfcontrol:startup",
+  "eliza/packages/app-core/scripts/docker-ci-smoke.sh",
+  "apps/app/electrobun",
 ];
 
 const failures = [];
@@ -58,6 +89,34 @@ if (
 ) {
   failures.push(
     `package.json script "test:regression-matrix:pr" must run ${files.regressionMatrixScript}`,
+  );
+}
+
+for (const workflowRelPath of workflows) {
+  const text = readText(workflowRelPath, failures);
+  if (!text) {
+    continue;
+  }
+
+  const hasDisableStep = disableMarkers.some((marker) => text.includes(marker));
+  if (!hasDisableStep) {
+    continue;
+  }
+
+  const hasRenameMode = renameMarkers.some((marker) => text.includes(marker));
+  if (!hasRenameMode) {
+    continue;
+  }
+
+  const conflicting = sourcePresentMarkers.filter((marker) =>
+    text.includes(marker),
+  );
+  if (conflicting.length === 0) {
+    continue;
+  }
+
+  failures.push(
+    `${workflowRelPath} mixes rename-away disable mode with source-present commands: ${conflicting.join(", ")}`,
   );
 }
 

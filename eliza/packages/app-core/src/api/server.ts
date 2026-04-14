@@ -731,6 +731,7 @@ async function handleCompatRoute(
     }
     return handleCloudCompatRoute(req, res, url.pathname, method, {
       config: resolveCloudConfig(state.current),
+      runtime: state.current,
     });
   }
 
@@ -743,6 +744,7 @@ async function handleCompatRoute(
     }
     return handleCloudBillingRoute(req, res, url.pathname, method, {
       config: resolveCloudConfig(state.current),
+      runtime: state.current,
     });
   }
 
@@ -993,6 +995,14 @@ async function handleCompatRoute(
 
   if (!ensureCompatApiAuthorized(req, res)) return true;
   return handleDatabaseRowsCompatRoute(req, res, state.current);
+}
+
+export async function handleMiladyCompatRoute(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  state: CompatRuntimeState,
+): Promise<boolean> {
+  return await handleCompatRoute(req, res, state);
 }
 
 export function patchHttpCreateServerForCompat(

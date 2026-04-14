@@ -60,6 +60,23 @@ declare module "./client-base" {
     updateWalletConfig(
       config: WalletConfigUpdateRequest,
     ): Promise<{ ok: boolean }>;
+    refreshCloudWallets(): Promise<{
+      ok: boolean;
+      warnings?: string[];
+    }>;
+    setWalletPrimary(params: {
+      chain: "evm" | "solana";
+      source: "local" | "cloud";
+    }): Promise<{ ok: boolean }>;
+    generateWallet(params?: {
+      chain?: "evm" | "solana" | "both";
+      source?: "local" | "steward";
+    }): Promise<{
+      ok: boolean;
+      wallets: Array<{ chain: string; address: string }>;
+      source?: string;
+      warnings?: string[];
+    }>;
     exportWalletKeys(exportToken: string): Promise<WalletExportResult>;
     getBscTradePreflight(
       tokenAddress?: string,
@@ -184,6 +201,34 @@ ElizaClient.prototype.updateWalletConfig = async function (
   return this.fetch("/api/wallet/config", {
     method: "PUT",
     body: JSON.stringify(config),
+  });
+};
+
+ElizaClient.prototype.refreshCloudWallets = async function (
+  this: ElizaClient,
+) {
+  return this.fetch("/api/wallet/refresh-cloud", {
+    method: "POST",
+  });
+};
+
+ElizaClient.prototype.setWalletPrimary = async function (
+  this: ElizaClient,
+  params,
+) {
+  return this.fetch("/api/wallet/primary", {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+};
+
+ElizaClient.prototype.generateWallet = async function (
+  this: ElizaClient,
+  params = {},
+) {
+  return this.fetch("/api/wallet/generate", {
+    method: "POST",
+    body: JSON.stringify(params),
   });
 };
 

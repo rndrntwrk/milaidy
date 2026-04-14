@@ -332,7 +332,11 @@ export function bindReadyPhase(
     },
   );
   const unbindWsReconnect = client.onWsEvent("ws-reconnected", () =>
-    hydratePty(),
+    Promise.resolve().then(() => {
+      hydratePty();
+      void depsRef.current?.loadWalletConfig();
+      void depsRef.current?.pollCloudCredits();
+    }),
   );
   const unbindSysWarn = client.onWsEvent(
     "system-warning",
@@ -365,6 +369,7 @@ export function bindReadyPhase(
           d.setPendingRestart(false);
           d.setPendingRestartReasons([]);
           void d.loadPlugins();
+          void d.loadWalletConfig();
           void d.pollCloudCredits();
           hydratePty();
           ptyHydratedViaWs = true;

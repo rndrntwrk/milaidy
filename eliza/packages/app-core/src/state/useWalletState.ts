@@ -40,6 +40,9 @@ import {
 } from "./persistence";
 import type { InventoryChainFilters } from "./types";
 
+type WalletChainKind = "evm" | "solana";
+type WalletSource = "local" | "cloud";
+
 // ── Types ──────────────────────────────────────────────────────────────
 
 interface WalletStateParams {
@@ -97,6 +100,8 @@ export function useWalletState({
     useState<WalletExportResult | null>(null);
   const [walletExportVisible, setWalletExportVisible] = useState(false);
   const [walletApiKeySaving, setWalletApiKeySaving] = useState(false);
+  const [walletPrimaryPending, setWalletPrimaryPending] = useState(false);
+  const [cloudRefreshing, setCloudRefreshing] = useState(false);
   const [inventorySort, setInventorySort] = useState<
     "chain" | "symbol" | "value"
   >("value");
@@ -140,23 +145,91 @@ export function useWalletState({
     null,
   );
 
+  const fetchWalletConfig = useCallback(async () => {
+    const cfg = await client.getWalletConfig();
+    setWalletConfig(cfg);
+    setWalletAddresses({
+      evmAddress: cfg.evmAddress,
+      solanaAddress: cfg.solanaAddress,
+    });
+    return cfg;
+  }, []);
+
+  const hasWalletSource = useCallback(
+    (
+      config: WalletConfigStatus | null | undefined,
+      chain: WalletChainKind,
+      source: WalletSource,
+    ) =>
+      Array.isArray((config as { wallets?: unknown[] } | null | undefined)?.wallets)
+        ? ((config as { wallets?: Array<Record<string, unknown>> }).wallets ?? []).some(
+            (wallet) =>
+              wallet?.chain === chain &&
+              wallet?.source === source &&
+              typeof wallet?.address === "string" &&
+              wallet.address.trim().length > 0,
+          )
+        : false,
+    [],
+  );
+
+  const normalizeCloudWalletNotice = useCallback((warning: string) => {
+    const detail = warning.replace(/^Cloud (evm|solana) wallet import failed:\s*/i, "");
+    if (/Invalid Solana address \(base58, 32–44 chars\)/i.test(detail)) {
+      return "the connected Eliza Cloud backend is still using the legacy Solana wallet contract";
+    }
+    return detail;
+  }, []);
+
+  const summarizeCloudWalletImport = useCallback(
+    (
+      config: WalletConfigStatus | null | undefined,
+      warnings: string[] | undefined,
+    ): { text: string; tone: "success" | "info" } => {
+      const evmConnected = hasWalletSource(config, "evm", "cloud");
+      const solanaConnected = hasWalletSource(config, "solana", "cloud");
+
+      if (evmConnected && solanaConnected) {
+        return { text: "Cloud wallets connected.", tone: "success" };
+      }
+
+      const solanaWarning = warnings?.find((warning) =>
+        /Cloud solana wallet import failed:/i.test(warning),
+      );
+      if (evmConnected && solanaWarning) {
+        return {
+          text: `EVM cloud wallet connected. Solana cloud wallet is unavailable because ${normalizeCloudWalletNotice(solanaWarning)}.`,
+          tone: "info",
+        };
+      }
+
+      const evmWarning = warnings?.find((warning) =>
+        /Cloud evm wallet import failed:/i.test(warning),
+      );
+      if (solanaConnected && evmWarning) {
+        return {
+          text: `Solana cloud wallet connected. EVM cloud wallet is unavailable because ${normalizeCloudWalletNotice(evmWarning)}.`,
+          tone: "info",
+        };
+      }
+
+      return { text: "Cloud wallet import queued.", tone: "success" };
+    },
+    [hasWalletSource, normalizeCloudWalletNotice],
+  );
+
   // ── Wallet callbacks ───────────────────────────────────────────────
 
   const loadWalletConfig = useCallback(async () => {
     try {
-      const cfg = await client.getWalletConfig();
-      setWalletConfig(cfg);
-      setWalletAddresses({
-        evmAddress: cfg.evmAddress,
-        solanaAddress: cfg.solanaAddress,
-      });
+      await fetchWalletConfig();
       setWalletError(null);
     } catch (err) {
       setWalletError(
         `Failed to load wallet config: ${err instanceof Error ? err.message : "network error"}`,
       );
     }
-  }, []);
+  }, [fetchWalletConfig]);
 
   const loadBalances = useCallback(async () => {
     setWalletLoading(true);
@@ -192,30 +265,120 @@ export function useWalletState({
         Object.keys(config.credentials ?? {}).length === 0 &&
         Object.keys(config.selections ?? {}).length === 0
       ) {
-        return;
+        return false;
       }
-      if (walletApiKeySavingRef.current || walletApiKeySaving) return;
+      if (walletApiKeySavingRef.current || walletApiKeySaving) return false;
       walletApiKeySavingRef.current = true;
       setWalletApiKeySaving(true);
       setWalletError(null);
       try {
         await client.updateWalletConfig(config);
-        await loadWalletConfig();
+        const selectedProviders = config.selections ?? {};
+        const shouldImportCloudWallets =
+          selectedProviders.evm === "eliza-cloud" &&
+          selectedProviders.bsc === "eliza-cloud" &&
+          selectedProviders.solana === "eliza-cloud";
+
+        let walletConfigAfterSave: WalletConfigStatus | null | undefined;
+        if (shouldImportCloudWallets) {
+          setCloudRefreshing(true);
+          try {
+            const refreshResult = await client.refreshCloudWallets();
+            walletConfigAfterSave = await fetchWalletConfig();
+            const notice = summarizeCloudWalletImport(
+              walletConfigAfterSave,
+              refreshResult?.warnings,
+            );
+            setActionNotice(notice.text, notice.tone);
+          } finally {
+            setCloudRefreshing(false);
+          }
+        } else {
+          walletConfigAfterSave = await fetchWalletConfig();
+          setActionNotice(
+            "Wallet RPC settings saved. Restart required to apply.",
+            "success",
+          );
+        }
         await loadBalances();
-        setActionNotice(
-          "Wallet RPC settings saved. Restart required to apply.",
-          "success",
-        );
+        if (!walletConfigAfterSave) {
+          await loadWalletConfig();
+        }
+        return true;
       } catch (err) {
         setWalletError(
           `Failed to save API keys: ${err instanceof Error ? err.message : "network error"}`,
         );
+        return false;
       } finally {
         walletApiKeySavingRef.current = false;
         setWalletApiKeySaving(false);
       }
     },
-    [walletApiKeySaving, loadWalletConfig, loadBalances, setActionNotice],
+    [
+      walletApiKeySaving,
+      fetchWalletConfig,
+      loadBalances,
+      loadWalletConfig,
+      setActionNotice,
+      summarizeCloudWalletImport,
+    ],
+  );
+
+  const refreshCloudWallets = useCallback(async () => {
+    setCloudRefreshing(true);
+    setWalletError(null);
+    try {
+      const result = await client.refreshCloudWallets();
+      const nextConfig = await fetchWalletConfig();
+      const notice = summarizeCloudWalletImport(nextConfig, result?.warnings);
+      setActionNotice(notice.text, notice.tone);
+      await loadBalances();
+    } catch (err) {
+      setWalletError(
+        `Failed to refresh cloud wallets: ${err instanceof Error ? err.message : "network error"}`,
+      );
+    } finally {
+      setCloudRefreshing(false);
+    }
+  }, [fetchWalletConfig, loadBalances, setActionNotice, summarizeCloudWalletImport]);
+
+  const setWalletPrimary = useCallback(
+    async (chain: WalletChainKind, source: WalletSource) => {
+      setWalletPrimaryPending(true);
+      setWalletError(null);
+      try {
+        let currentConfig = walletConfig;
+        if (!currentConfig) {
+          currentConfig = await fetchWalletConfig();
+        }
+
+        if (!hasWalletSource(currentConfig, chain, source)) {
+          if (source === "local") {
+            await client.generateWallet({ chain, source: "local" });
+          } else {
+            setCloudRefreshing(true);
+            try {
+              await client.refreshCloudWallets();
+            } finally {
+              setCloudRefreshing(false);
+            }
+          }
+          currentConfig = await fetchWalletConfig();
+        }
+
+        await client.setWalletPrimary({ chain, source });
+        await fetchWalletConfig();
+        await loadBalances();
+      } catch (err) {
+        setWalletError(
+          `Failed to switch wallet primary: ${err instanceof Error ? err.message : "network error"}`,
+        );
+      } finally {
+        setWalletPrimaryPending(false);
+      }
+    },
+    [fetchWalletConfig, hasWalletSource, loadBalances, walletConfig],
   );
 
   const handleExportKeys = useCallback(async () => {
@@ -386,6 +549,8 @@ export function useWalletState({
       walletExportData,
       walletExportVisible,
       walletApiKeySaving,
+      walletPrimaryPending,
+      cloudRefreshing,
       inventorySort,
       inventorySortDirection,
       inventoryChainFilters,
@@ -420,6 +585,9 @@ export function useWalletState({
     loadBalances,
     loadNfts,
     handleWalletApiKeySave,
+    setWalletPrimary,
+    setPrimary: setWalletPrimary,
+    refreshCloudWallets,
     handleExportKeys,
     loadRegistryStatus,
     registerOnChain,

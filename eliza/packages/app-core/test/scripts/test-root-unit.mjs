@@ -43,7 +43,7 @@ const unitShards = [
     patterns: [
       "src",
       "scripts",
-      "apps/app/electrobun/src",
+      "eliza/packages/app-core/platforms/electrobun/src",
       "apps/chrome-extension",
       "test/format-error.test.ts",
     ],

@@ -269,7 +269,8 @@ export const blockWebsitesAction: Action = {
   ],
   description:
     "Admin-only. Start a local website block by editing the system hosts file. " +
-    "Use recent conversation context to block public websites like x.com for a fixed duration or until manually unblocked.",
+    "Use recent conversation context to block public websites like x.com for a fixed duration or until manually unblocked. " +
+    "If the user confirms a block in a follow-up message without repeating the hostnames, reuse the recent conversation context.",
   validate: async (runtime, message) => {
     const access = await getSelfControlAccess(runtime, message);
     return (
@@ -378,6 +379,33 @@ export const blockWebsitesAction: Action = {
       {
         name: "{{name1}}",
         content: { text: "Block x.com and twitter.com for 2 hours." },
+      },
+      {
+        name: "{{agentName}}",
+        content: {
+          text: "Started a website block for x.com, twitter.com until 2026-04-04T13:44:54.000Z.",
+          action: "BLOCK_WEBSITES",
+        },
+      },
+    ],
+    [
+      {
+        name: "{{name1}}",
+        content: {
+          text: "The websites distracting me are x.com and twitter.com. Do not block them yet.",
+        },
+      },
+      {
+        name: "{{agentName}}",
+        content: {
+          text: "I noted those websites and will wait for your confirmation before blocking them.",
+        },
+      },
+      {
+        name: "{{name1}}",
+        content: {
+          text: "Use self control now. Actually block the websites for 1 minute instead of giving advice.",
+        },
       },
       {
         name: "{{agentName}}",

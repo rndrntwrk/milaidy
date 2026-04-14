@@ -75,6 +75,13 @@ type WalletCapableConfig = Pick<ElizaConfig, "cloud" | "env"> & {
   };
 };
 
+type CloudApiKeyRuntimeLike = {
+  getSetting?: (key: string) => unknown;
+  character?: {
+    secrets?: Record<string, unknown>;
+  } | null;
+} | null;
+
 export interface InventoryProviderOption {
   id: WalletRpcChain;
   name: string;
@@ -170,6 +177,20 @@ function normalizeSecret(value: string | null | undefined): string | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+function resolveRuntimeCloudApiKey(
+  runtime?: CloudApiKeyRuntimeLike,
+): string | null {
+  const fromSetting = runtime?.getSetting?.("ELIZAOS_CLOUD_API_KEY");
+  if (typeof fromSetting === "string") {
+    return normalizeSecret(fromSetting);
+  }
+
+  const fromSecrets = runtime?.character?.secrets?.ELIZAOS_CLOUD_API_KEY;
+  return typeof fromSecrets === "string"
+    ? normalizeSecret(fromSecrets)
+    : null;
 }
 
 export function resolveWalletNetworkMode(
@@ -294,9 +315,12 @@ export function resolveCloudApiBaseUrl(
 
 export function resolveCloudApiKey(
   config?: Pick<ElizaConfig, "cloud"> | null,
+  runtime?: CloudApiKeyRuntimeLike,
 ): string | null {
   return normalizeSecret(
-    config?.cloud?.apiKey ?? process.env.ELIZAOS_CLOUD_API_KEY,
+    config?.cloud?.apiKey ??
+      resolveRuntimeCloudApiKey(runtime) ??
+      process.env.ELIZAOS_CLOUD_API_KEY,
   );
 }
 
