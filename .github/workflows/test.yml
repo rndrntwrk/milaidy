@@ -175,7 +175,10 @@ jobs:
         run: |
           APT_ARGS=(-o Acquire::ForceIPv4=true -o Acquire::Retries=5 -o Acquire::http::Timeout=30)
           sudo apt-get "${APT_ARGS[@]}" update
-          sudo apt-get "${APT_ARGS[@]}" install -y libwebkit2gtk-4.1-0 xvfb
+          sudo apt-get "${APT_ARGS[@]}" install -y \
+            libayatana-appindicator3-1 \
+            libwebkit2gtk-4.1-0 \
+            xvfb
 
       - name: Cache Bun install
         uses: actions/cache@v4
