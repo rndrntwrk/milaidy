@@ -388,10 +388,12 @@ export function disableLocalElizaWorkspace(
     }
   }
 
-  // Strip patchedDependencies whose patch files live inside eliza/ only when
-  // eliza/ is intentionally renamed away.
+  // Strip patchedDependencies whose patch files live inside eliza/ when either:
+  // - eliza/ is intentionally renamed away (shouldRenameElizaWorkspace), OR
+  // - the patch file does not actually exist on disk (avoids bun install failure
+  //   with "Couldn't find patch file: 'eliza/packages/...'" when the submodule
+  //   is absent or not initialized).
   if (
-    shouldRenameElizaWorkspace &&
     rootPkg.patchedDependencies &&
     typeof rootPkg.patchedDependencies === "object"
   ) {
@@ -400,7 +402,10 @@ export function disableLocalElizaWorkspace(
       rootPkg.patchedDependencies,
     )) {
       if (typeof patchPath === "string" && patchPath.startsWith("eliza/")) {
-        removedPatches.push(dep);
+        const absolutePatchPath = path.join(repoRoot, patchPath);
+        if (shouldRenameElizaWorkspace || !fs.existsSync(absolutePatchPath)) {
+          removedPatches.push(dep);
+        }
       }
     }
     for (const dep of removedPatches) {
