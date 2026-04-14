@@ -32,6 +32,9 @@ jobs:
           submodules: false
           fetch-depth: 0
 
+      - name: Validate CI bootstrap contract
+        run: node scripts/validate-ci-bootstrap-contract.mjs
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
@@ -135,6 +138,10 @@ jobs:
         with:
           # Published-only CI restores the required non-eliza submodules explicitly.
           submodules: false
+          sparse-checkout: |
+            /*
+            !eliza/packages/benchmarks/benchmark_results/**
+          sparse-checkout-cone-mode: false
 
       - name: Initialize tracked workspace submodules
         run: node scripts/init-submodules.mjs
@@ -201,6 +208,10 @@ jobs:
         with:
           # Published-only CI restores the required non-eliza submodules explicitly.
           submodules: false
+          sparse-checkout: |
+            /*
+            !eliza/packages/benchmarks/benchmark_results/**
+          sparse-checkout-cone-mode: false
 
       - name: Initialize tracked workspace submodules
         run: node scripts/init-submodules.mjs

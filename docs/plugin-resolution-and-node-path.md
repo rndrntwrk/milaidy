@@ -111,7 +111,7 @@ Optional plugins (and some core-adjacent packages) can end up in the load set be
 
 ## Pack-and-test and Vendored Workspace Validation (Phase 5)
 
-As part of the Plugin Workspace architecture, we load dependencies via `workspace:*` out of the local source clones (`eliza/packages/*` and `plugins/*`). Sometimes, you need to verify that what works in a `workspace:*` context will successfully pack into tarballs and install strictly downstream as if published.
+As part of the Plugin Workspace architecture, we load dependencies via `workspace:*` out of the vendored source tree (`eliza/packages/*` and `plugins/*`). Sometimes, you need to verify that what works in a `workspace:*` context will successfully pack into tarballs and install strictly downstream as if published.
 
 We provide two scripts to validate and prevent drift:
 
@@ -119,7 +119,7 @@ We provide two scripts to validate and prevent drift:
 To simulate a real publish release locally, run `pack-upstreams.mjs`. It iterates over the target vendored packages (e.g. `@elizaos/core`, `@elizaos/plugin-agent-orchestrator`), builds them, runs an `npm pack`, and places the resulting `.tgz` artifacts in the root `artifacts/` fallback directory.
 
 ### `scripts/check-upstream-drift.mjs`
-To ensure that root-level explicitly pinned dependencies (e.g., `"@elizaos/plugin-openrouter": "2.0.0-alpha.13"`) do not drift from the source code checked into the submodule branches, run `check-upstream-drift.mjs`. The command inspects root pins against the `package.json` inside local vendor trees and fails if their explicitly pinned specifications diverge from the source.
+To ensure that root-level explicitly pinned dependencies (e.g., `"@elizaos/plugin-openrouter": "2.0.0-alpha.13"`) do not drift from the source code checked into the submodule branches, run `check-upstream-drift.mjs`. The command inspects root pins against the `package.json` inside local vendor trees and fails if their explicitly pinned specifications diverge from source.
 
 ### Vendored Source Verification (Proof of Life)
 Because all packages resolve via `workspace:*`, local modifications are live the moment you restart `bun run dev`. 

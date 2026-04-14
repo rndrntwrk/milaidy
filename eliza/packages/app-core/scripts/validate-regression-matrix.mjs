@@ -2,8 +2,13 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
-const ROOT = path.resolve(import.meta.dirname, "..");
-const MANIFEST_PATH = path.join(ROOT, "test", "regression-matrix.json");
+const APP_CORE_ROOT = path.resolve(import.meta.dirname, "..");
+const REPO_ROOT = path.resolve(APP_CORE_ROOT, "..", "..", "..");
+const MANIFEST_PATH = path.join(
+  APP_CORE_ROOT,
+  "test",
+  "regression-matrix.json",
+);
 const manifest = JSON.parse(fs.readFileSync(MANIFEST_PATH, "utf8"));
 
 function parseArgs(argv) {
@@ -43,7 +48,7 @@ function matchesAnyGlob(filePath, globs) {
 }
 
 function readText(relativePath) {
-  return fs.readFileSync(path.join(ROOT, relativePath), "utf8");
+  return fs.readFileSync(path.join(REPO_ROOT, relativePath), "utf8");
 }
 
 function expandScheduledSuites(suiteIds) {
@@ -78,7 +83,7 @@ function collectChangedFiles(args) {
   for (const command of commands) {
     try {
       const raw = execFileSync("git", command, {
-        cwd: ROOT,
+        cwd: REPO_ROOT,
         encoding: "utf8",
         stdio: ["ignore", "pipe", "pipe"],
       });
@@ -191,7 +196,7 @@ function ensurePackageScripts(failures) {
 }
 
 function ensureDesktopInventory(failures) {
-  const checklistPath = path.join(ROOT, manifest.manualChecklistDoc);
+  const checklistPath = path.join(REPO_ROOT, manifest.manualChecklistDoc);
   if (!fs.existsSync(checklistPath)) {
     failures.push(
       `Manual desktop checklist is missing: ${manifest.manualChecklistDoc}`,

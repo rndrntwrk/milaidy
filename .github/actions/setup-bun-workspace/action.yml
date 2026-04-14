@@ -33,7 +33,7 @@ inputs:
   disable-local-eliza-workspace:
     description: "Disable repo-local eliza workspace in CI when local upstreams are skipped"
     required: false
-    default: "true"
+    default: "false"
 
 runs:
   using: "composite"
