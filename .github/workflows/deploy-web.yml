@@ -7,7 +7,7 @@ on:
       - develop
     paths:
       - ".github/workflows/deploy-web.yml"
-      - "apps/web/**"
+      - "apps/homepage/**"
       - "scripts/write-homepage-release-data.mjs"
       - "install.sh"
       - "install.ps1"
@@ -84,12 +84,12 @@ jobs:
 
       - name: Stage GitHub Pages files
         run: |
-          cp install.sh apps/web/dist/install.sh
-          cp install.ps1 apps/web/dist/install.ps1
+          cp install.sh apps/homepage/dist/install.sh
+          cp install.ps1 apps/homepage/dist/install.ps1
 
       - name: Publish to gh-pages
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: gh-pages
-          publish_dir: ./apps/web/dist
+          publish_dir: ./apps/homepage/dist
