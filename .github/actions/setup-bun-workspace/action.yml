@@ -112,7 +112,6 @@ runs:
         @radix-ui/react-popover @radix-ui/react-select @radix-ui/react-separator @radix-ui/react-slider
         @radix-ui/react-slot @radix-ui/react-switch @radix-ui/react-tabs @radix-ui/react-tooltip
         @capacitor/core @capacitor/haptics @capacitor/keyboard @capacitor/preferences
-        @elizaos/app-coding @elizaos/app-steward
 
     - name: Run repository postinstall patches
       if: ${{ inputs.run-postinstall == 'true' }}
