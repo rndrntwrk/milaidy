@@ -1224,6 +1224,7 @@ export default defineConfig({
           miladyRoot,
           "eliza/packages/app-core/src/ui",
         );
+        const miladyUiSrc = path.resolve(miladyRoot, "packages/ui/src");
         const _autonomousSource = path.resolve(
           miladyRoot,
           "node_modules/@elizaos/agent/packages/agent/src",
@@ -1238,6 +1239,14 @@ export default defineConfig({
           {
             find: /^@elizaos\/app-core\/(.+)$/,
             replacement: `${appCorePkgDir}/src/$1`,
+          },
+          {
+            find: /^@milady\/ui$/,
+            replacement: path.join(miladyUiSrc, "index.ts"),
+          },
+          {
+            find: /^@milady\/ui\/(.*)$/,
+            replacement: `${miladyUiSrc}/$1`,
           },
           {
             find: /^@miladyai\/ui$/,
