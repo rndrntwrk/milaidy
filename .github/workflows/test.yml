@@ -569,9 +569,6 @@ jobs:
       - name: Restore eliza workspace paths for repo scripts
         run: node -e "const fs=require('node:fs');if(fs.existsSync('.eliza.ci-disabled')&&!fs.existsSync('eliza'))fs.renameSync('.eliza.ci-disabled','eliza');"
 
-      - name: Install desktop package dependencies
-        run: bun install --cwd apps/app/electrobun --ignore-scripts
-
       - name: Run repository postinstall patches
         run: node eliza/packages/app-core/scripts/run-repo-setup.mjs
         env:

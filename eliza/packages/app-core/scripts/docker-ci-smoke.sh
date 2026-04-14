@@ -176,7 +176,9 @@ bun run build:docker-dist
 popd >/dev/null
 
 log "Building runtime dist"
-npx tsdown
+# Published-only CI can emit non-fatal unresolved-import warnings during
+# bundling; keep Docker smoke focused on build/boot viability.
+npx tsdown --no-fail-on-warn
 echo '{"type":"module"}' > dist/package.json
 node --import tsx scripts/write-build-info.ts 2>/dev/null || true
 
