@@ -1,25 +1,27 @@
+import { ChatConversationItem } from "@elizaos/ui/components/composites/chat/chat-conversation-item";
+import { ChatSourceIcon } from "@elizaos/ui/components/composites/chat/chat-source";
+import { SidebarCollapsedActionButton } from "@elizaos/ui/components/composites/sidebar/sidebar-collapsed-rail";
+import { SidebarContent } from "@elizaos/ui/components/composites/sidebar/sidebar-content";
+import { SidebarHeader } from "@elizaos/ui/components/composites/sidebar/sidebar-header";
+import { SidebarPanel } from "@elizaos/ui/components/composites/sidebar/sidebar-panel";
+import { Sidebar } from "@elizaos/ui/components/composites/sidebar/sidebar-root";
+import { SidebarScrollRegion } from "@elizaos/ui/components/composites/sidebar/sidebar-scroll-region";
+import { Button } from "@elizaos/ui/components/ui/button";
 import {
-  Button,
-  ChatConversationItem,
-  ChatSourceIcon,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  NewActionButton,
+} from "@elizaos/ui/components/ui/dropdown-menu";
+import { NewActionButton } from "@elizaos/ui/components/ui/new-action-button";
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-  Sidebar,
-  SidebarCollapsedActionButton,
-  SidebarContent,
-  SidebarHeader,
-  SidebarPanel,
-  SidebarScrollRegion,
-  TooltipProvider,
-} from "@elizaos/app-core";
+} from "@elizaos/ui/components/ui/select";
+import { TooltipProvider } from "@elizaos/ui/components/ui/tooltip";
 import { MessagesSquare, Plus, Settings2 } from "lucide-react";
 import type React from "react";
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
@@ -469,7 +471,9 @@ export function ConversationsSidebar({
                     </span>
                     <Button
                       type="button"
-                      variant={isManageConnectionsActive ? "default" : "outline"}
+                      variant={
+                        isManageConnectionsActive ? "default" : "outline"
+                      }
                       size="sm"
                       className={`h-8 gap-1.5 rounded-xl px-2.5 text-2xs font-semibold ${
                         isManageConnectionsActive
@@ -513,9 +517,7 @@ export function ConversationsSidebar({
                       );
                     })}
                   </div>
-                  {showNewChatAction ? (
-                    <div>{newChatAction}</div>
-                  ) : null}
+                  {showNewChatAction ? <div>{newChatAction}</div> : null}
                 </div>
 
                 {sidebarModel.showWorldFilter ? (

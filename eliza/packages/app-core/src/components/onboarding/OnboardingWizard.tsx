@@ -1,7 +1,8 @@
-import { LanguageDropdown } from "@elizaos/app-core";
-import type { UiLanguage } from "@elizaos/app-core";
-import { normalizeLanguage } from "@elizaos/app-core";
-import { applyUiTheme, useApp } from "@elizaos/app-core";
+import { LanguageDropdown } from "../shared/LanguageDropdown";
+import type { UiLanguage } from "../../i18n/messages";
+import { normalizeLanguage } from "../../i18n";
+import { applyUiTheme } from "../../state/persistence";
+import { useApp } from "../../state/useApp";
 import { useEffect } from "react";
 import { ConnectionStep } from "./ConnectionStep";
 import { DeploymentStep } from "./DeploymentStep";

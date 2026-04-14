@@ -192,13 +192,19 @@ function readCloudWalletAddress(
  *  - "local": user explicitly chose local
  *  - null: user has not made an explicit choice (should auto-bind to cloud)
  */
-function readUserPrimarySelection(config: ElizaConfig): { evm: "local" | "cloud" | null; solana: "local" | "cloud" | null } {
+function readUserPrimarySelection(config: ElizaConfig): {
+  evm: "local" | "cloud" | null;
+  solana: "local" | "cloud" | null;
+} {
   const wallet = (config as unknown as { wallet?: unknown }).wallet;
   const raw =
     wallet && typeof wallet === "object"
       ? (wallet as { primary?: unknown }).primary
       : undefined;
-  const result = { evm: null as const, solana: null as const };
+  const result: {
+    evm: "local" | "cloud" | null;
+    solana: "local" | "cloud" | null;
+  } = { evm: null, solana: null };
   if (raw && typeof raw === "object" && !Array.isArray(raw)) {
     const record = raw as Record<string, unknown>;
     if (record.evm === "cloud" || record.evm === "local") {

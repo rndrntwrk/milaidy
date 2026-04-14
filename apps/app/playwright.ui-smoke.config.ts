@@ -4,28 +4,28 @@ import { defineConfig, devices } from "@playwright/test";
 
 const appDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(appDir, "../..");
-const uiSmokeApiStub = path.join(
+const uiSmokeLiveStack = path.join(
   repoRoot,
   "eliza",
   "packages",
   "app-core",
   "scripts",
-  "playwright-ui-smoke-api-stub.mjs",
+  "playwright-ui-live-stack.ts",
 );
 const uiSmokeApiPort = Number(process.env.MILADY_UI_SMOKE_API_PORT || "31337");
 const uiSmokePort = Number(process.env.MILADY_UI_SMOKE_PORT || "2138");
 
-// Keep the Vite preview proxy aligned with the smoke API stub when the suite
-// runs on non-default ports. The app's Vite config reads MILADY_API_PORT.
+// Keep the app's API port env aligned with the live stack when the suite runs
+// on non-default ports.
 if (!process.env.MILADY_API_PORT) {
   process.env.MILADY_API_PORT = String(uiSmokeApiPort);
 }
 
 export default defineConfig({
   testDir: "./test/ui-smoke",
-  timeout: 120_000,
+  timeout: 180_000,
   expect: {
-    timeout: 10_000,
+    timeout: 15_000,
   },
   fullyParallel: false,
   retries: 0,
@@ -43,20 +43,11 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"] },
     },
   ],
-  webServer: [
-    {
-      command: `node ${JSON.stringify(uiSmokeApiStub)}`,
-      cwd: repoRoot,
-      port: uiSmokeApiPort,
-      reuseExistingServer: false,
-      timeout: 30_000,
-    },
-    {
-      command: `bun run build:web && bun run preview -- --host 127.0.0.1 --port ${uiSmokePort}`,
-      cwd: appDir,
-      port: uiSmokePort,
-      reuseExistingServer: false,
-      timeout: 180_000,
-    },
-  ],
+  webServer: {
+    command: `node ${JSON.stringify(path.join(repoRoot, "eliza", "packages", "app-core", "scripts", "run-node-tsx.mjs"))} ${JSON.stringify(uiSmokeLiveStack)}`,
+    cwd: repoRoot,
+    port: uiSmokePort,
+    reuseExistingServer: false,
+    timeout: 240_000,
+  },
 });

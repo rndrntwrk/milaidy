@@ -13,15 +13,15 @@
  */
 import type http from "node:http";
 import {
+  type ElizaConfig,
   loadElizaConfig,
   saveElizaConfig,
-  type ElizaConfig,
 } from "@elizaos/agent/config/config";
-import { sendJson, sendJsonError } from "@elizaos/app-core";
-import { readCompatJsonBody } from "@elizaos/app-core";
+import { readCompatJsonBody } from "@elizaos/app-core/api/compat-route-shared";
+import { sendJson, sendJsonError } from "@elizaos/app-core/api/response";
 import {
-  handleWalletRoutes,
   DEFAULT_WALLET_ROUTE_DEPENDENCIES,
+  handleWalletRoutes,
 } from "../api/wallet-routes";
 import { resolveWalletExportRejection } from "./server-wallet-trade";
 
@@ -37,7 +37,10 @@ export async function handleWalletCoreRoutes(
   _state: unknown,
 ): Promise<boolean> {
   const method = req.method?.toUpperCase() ?? "GET";
-  const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
+  const url = new URL(
+    req.url ?? "/",
+    `http://${req.headers.host ?? "localhost"}`,
+  );
   const pathname = url.pathname;
 
   // Only handle /api/wallet/* paths (not trade/steward sub-paths handled elsewhere)

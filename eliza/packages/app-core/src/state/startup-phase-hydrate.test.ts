@@ -74,13 +74,14 @@ describe("bindReadyPhase wallet recovery", () => {
     wsHandlers.clear();
   });
 
-  it("reloads wallet config when the websocket reconnects", () => {
+  it("reloads wallet config when the websocket reconnects", async () => {
     const deps = createReadyDeps();
     const cleanup = bindReadyPhase({
       current: deps,
     });
 
     wsHandlers.get("ws-reconnected")?.({ type: "ws-reconnected" });
+    await Promise.resolve();
 
     expect(deps.loadWalletConfig).toHaveBeenCalledTimes(1);
     expect(deps.pollCloudCredits).toHaveBeenCalledTimes(1);
@@ -88,7 +89,7 @@ describe("bindReadyPhase wallet recovery", () => {
     cleanup();
   });
 
-  it("reloads wallet config after a restarted status event", () => {
+  it("reloads wallet config after a restarted status event", async () => {
     const deps = createReadyDeps();
     const cleanup = bindReadyPhase({
       current: deps,
@@ -99,6 +100,7 @@ describe("bindReadyPhase wallet recovery", () => {
       agentName: "Milady",
       restarted: true,
     });
+    await Promise.resolve();
 
     expect(deps.loadPlugins).toHaveBeenCalledTimes(1);
     expect(deps.loadWalletConfig).toHaveBeenCalledTimes(1);

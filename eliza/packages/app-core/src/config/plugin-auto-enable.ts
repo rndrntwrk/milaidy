@@ -41,10 +41,7 @@ export function applyPluginAutoEnable(
     const plugins = config.plugins as Record<string, unknown>;
     if (plugins.allow == null) plugins.allow = [];
     const allow = plugins.allow as string[];
-    if (
-      !allow.includes("elizaoswechat") &&
-      !allow.includes("wechat")
-    ) {
+    if (!allow.includes("elizaoswechat") && !allow.includes("wechat")) {
       allow.push("elizaoswechat");
     }
   }

@@ -60,6 +60,25 @@ export const ELIZA_BUILD_STEPS = [
   },
 ];
 
+const OPTIONAL_ELIZA_PLUGIN_FALLBACK_TAG = "alpha";
+const OPTIONAL_ELIZA_PLUGIN_PACKAGES = [
+  {
+    submodulePath: "plugins/plugin-sql",
+    workspaceEntry: "plugins/plugin-sql/typescript",
+    packageName: "@elizaos/plugin-sql",
+  },
+  {
+    submodulePath: "plugins/plugin-ollama",
+    workspaceEntry: "plugins/plugin-ollama/typescript",
+    packageName: "@elizaos/plugin-ollama",
+  },
+  {
+    submodulePath: "plugins/plugin-local-ai",
+    workspaceEntry: "plugins/plugin-local-ai/typescript",
+    packageName: "@elizaos/plugin-local-ai",
+  },
+];
+
 const PACKAGE_LINK_ROOTS = [
   ["node_modules"],
   ["apps", "app", "node_modules"],
@@ -121,12 +140,177 @@ function readPackageJson(packageDir) {
   }
 }
 
+function writePackageJson(packagePath, raw, nextPackageJson) {
+  const indent = raw.match(/^(\s+)"/m)?.[1] ?? "  ";
+  writeFileSync(
+    packagePath,
+    `${JSON.stringify(nextPackageJson, null, indent)}\n`,
+  );
+}
+
 function uniqueLinks(links) {
   const deduped = new Map();
   for (const link of links) {
     deduped.set(link.linkPath, link);
   }
   return [...deduped.values()];
+}
+
+function walkWorkspaceFiles(dirPath, visit) {
+  let entries;
+  try {
+    entries = readdirSync(dirPath, { withFileTypes: true });
+  } catch {
+    return;
+  }
+
+  for (const entry of entries) {
+    const entryPath = path.join(dirPath, entry.name);
+    if (entry.isDirectory()) {
+      if (
+        [
+          ".git",
+          "android",
+          "build",
+          "dist",
+          "ios",
+          "node_modules",
+          "out",
+          "target",
+        ].includes(entry.name)
+      ) {
+        continue;
+      }
+      walkWorkspaceFiles(entryPath, visit);
+      continue;
+    }
+
+    visit(entryPath);
+  }
+}
+
+function collectPackageJsonPaths(rootDir) {
+  const packageJsonPaths = [path.join(rootDir, "package.json")];
+
+  for (const rootName of ["packages", "plugins", "apps"]) {
+    walkWorkspaceFiles(path.join(rootDir, rootName), (entryPath) => {
+      if (path.basename(entryPath) === "package.json") {
+        packageJsonPaths.push(entryPath);
+      }
+    });
+  }
+
+  return packageJsonPaths;
+}
+
+function getMissingOptionalElizaPlugins(
+  elizaRoot,
+  { pathExists = existsSync } = {},
+) {
+  return OPTIONAL_ELIZA_PLUGIN_PACKAGES.filter(({ workspaceEntry }) => {
+    return !pathExists(path.join(elizaRoot, workspaceEntry, "package.json"));
+  });
+}
+
+async function maybeInitOptionalElizaPluginSubmodules(elizaRoot) {
+  const missing = getMissingOptionalElizaPlugins(elizaRoot);
+  if (missing.length === 0 || !existsSync(path.join(elizaRoot, ".git"))) {
+    return missing;
+  }
+
+  try {
+    await runCommand(
+      "git",
+      [
+        "submodule",
+        "update",
+        "--init",
+        "--recursive",
+        ...missing.map(({ submodulePath }) => submodulePath),
+      ],
+      {
+        cwd: elizaRoot,
+        label: "git submodule update (optional eliza plugins)",
+      },
+    );
+  } catch {
+    // If these optional submodules are unavailable in CI, we fall back to
+    // published packages below instead of hard-failing the whole setup.
+  }
+
+  return getMissingOptionalElizaPlugins(elizaRoot);
+}
+
+function shouldApplyOptionalElizaPluginFallback(env = process.env) {
+  const localUpstreamsDisabled = LOCAL_UPSTREAM_SKIP_ENVS.some(
+    (key) => env[key] === "1",
+  );
+  return env.CI === "true" && localUpstreamsDisabled;
+}
+
+function applyOptionalElizaPluginFallback(elizaRoot, missingPlugins) {
+  if (missingPlugins.length === 0) {
+    return 0;
+  }
+
+  const missingWorkspaceEntries = new Set(
+    missingPlugins.map(({ workspaceEntry }) => workspaceEntry),
+  );
+  const missingPackageNames = new Set(
+    missingPlugins.map(({ packageName }) => packageName),
+  );
+  let changedFiles = 0;
+
+  for (const packageJsonPath of collectPackageJsonPaths(elizaRoot)) {
+    const raw = readFileSync(packageJsonPath, "utf8");
+    let pkg;
+    try {
+      pkg = JSON.parse(raw);
+    } catch {
+      continue;
+    }
+
+    let changed = false;
+
+    if (
+      packageJsonPath === path.join(elizaRoot, "package.json") &&
+      Array.isArray(pkg.workspaces)
+    ) {
+      const nextWorkspaces = pkg.workspaces.filter(
+        (entry) => !missingWorkspaceEntries.has(entry),
+      );
+      if (nextWorkspaces.length !== pkg.workspaces.length) {
+        pkg.workspaces = nextWorkspaces;
+        changed = true;
+      }
+    }
+
+    for (const section of [
+      "dependencies",
+      "devDependencies",
+      "optionalDependencies",
+      "peerDependencies",
+    ]) {
+      if (!pkg[section] || typeof pkg[section] !== "object") {
+        continue;
+      }
+      for (const packageName of missingPackageNames) {
+        if (pkg[section][packageName] === "workspace:*") {
+          pkg[section][packageName] = OPTIONAL_ELIZA_PLUGIN_FALLBACK_TAG;
+          changed = true;
+        }
+      }
+    }
+
+    if (!changed) {
+      continue;
+    }
+
+    writePackageJson(packageJsonPath, raw, pkg);
+    changedFiles += 1;
+  }
+
+  return changedFiles;
 }
 
 function getForceEnvKey(env = process.env) {
@@ -695,6 +879,25 @@ async function ensureRepoLocalEliza(repoRoot) {
 async function ensureElizaDependencies(elizaRoot) {
   if (hasInstalledElizaDependencies(elizaRoot)) {
     return;
+  }
+
+  const missingOptionalPlugins =
+    await maybeInitOptionalElizaPluginSubmodules(elizaRoot);
+  if (
+    missingOptionalPlugins.length > 0 &&
+    shouldApplyOptionalElizaPluginFallback()
+  ) {
+    const changedFiles = applyOptionalElizaPluginFallback(
+      elizaRoot,
+      missingOptionalPlugins,
+    );
+    console.log(
+      `[setup-upstreams] Falling back to published optional eliza plugins for CI (${missingOptionalPlugins
+        .map(({ packageName }) => packageName)
+        .join(", ")}); updated ${changedFiles} package.json file${
+        changedFiles === 1 ? "" : "s"
+      }.`,
+    );
   }
 
   console.log(

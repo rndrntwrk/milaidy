@@ -149,7 +149,10 @@ export interface BscTradeExecuteResponse {
       | "rejected";
     policyResults?: StewardPolicyResult[];
   };
-  approval?: { status: "pending_approval"; policyResults?: StewardPolicyResult[] };
+  approval?: {
+    status: "pending_approval";
+    policyResults?: StewardPolicyResult[];
+  };
   error?: string;
 }
 

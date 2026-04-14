@@ -21,6 +21,15 @@ import {
 
 const ORIGINAL_FETCH = globalThis.fetch;
 
+function makeFetchMock(
+  impl: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>,
+) {
+  const fetchMock = vi.fn(impl);
+  return Object.assign(fetchMock, {
+    preconnect: ORIGINAL_FETCH.preconnect.bind(ORIGINAL_FETCH),
+  });
+}
+
 function makeResponseCollector() {
   let body = "";
   const headers = new Map<string, string>();
@@ -52,15 +61,16 @@ function makeRuntimeWithCloudAuth(apiKey: string) {
             getApiKey: () => apiKey,
           }
         : null,
-  } as CloudBillingRouteState["runtime"];
+  } as unknown as CloudBillingRouteState["runtime"];
 }
 
 function makeRuntimeWithSavedKey(apiKey: string) {
-  return {
+  const runtime: Partial<NonNullable<CloudBillingRouteState["runtime"]>> = {
     getService: () => null,
     getSetting: (key: string) =>
       key === "ELIZAOS_CLOUD_API_KEY" ? apiKey : undefined,
-  } as CloudBillingRouteState["runtime"];
+  };
+  return runtime as CloudBillingRouteState["runtime"];
 }
 
 describe("cloud proxy auth resolution", () => {
@@ -73,7 +83,7 @@ describe("cloud proxy auth resolution", () => {
   });
 
   it("uses the authenticated runtime api key for billing routes", async () => {
-    const fetchMock = vi.fn(
+    const fetchMock = makeFetchMock(
       async (input: RequestInfo | URL, _init?: RequestInit) => {
         const url = String(input);
         if (url.endsWith("/api/v1/credits/summary")) {
@@ -97,7 +107,7 @@ describe("cloud proxy auth resolution", () => {
         throw new Error(`Unexpected fetch URL: ${url}`);
       },
     );
-    globalThis.fetch = fetchMock as typeof fetch;
+    globalThis.fetch = fetchMock;
 
     const { res, readBody } = makeResponseCollector();
     const state: CloudBillingRouteState = {
@@ -137,7 +147,7 @@ describe("cloud proxy auth resolution", () => {
   });
 
   it("uses the authenticated runtime api key for compat routes", async () => {
-    const fetchMock = vi.fn(
+    const fetchMock = makeFetchMock(
       async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
         expect(url).toBe(
@@ -155,7 +165,7 @@ describe("cloud proxy auth resolution", () => {
         );
       },
     );
-    globalThis.fetch = fetchMock as typeof fetch;
+    globalThis.fetch = fetchMock;
 
     const { res, readBody } = makeResponseCollector();
     const state: CloudCompatRouteState = {
@@ -188,7 +198,7 @@ describe("cloud proxy auth resolution", () => {
   });
 
   it("uses the runtime saved api key for billing routes before CLOUD_AUTH is ready", async () => {
-    const fetchMock = vi.fn(
+    const fetchMock = makeFetchMock(
       async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = String(input);
         if (url.endsWith("/api/v1/credits/summary")) {
@@ -218,7 +228,7 @@ describe("cloud proxy auth resolution", () => {
         throw new Error(`Unexpected fetch URL: ${url}`);
       },
     );
-    globalThis.fetch = fetchMock as typeof fetch;
+    globalThis.fetch = fetchMock;
 
     const { res, readBody } = makeResponseCollector();
     const state: CloudBillingRouteState = {

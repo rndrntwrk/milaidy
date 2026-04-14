@@ -2,7 +2,10 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-const STATE_DIR_OVERRIDE_KEYS = ["MILADY_STATE_DIR", "ELIZA_STATE_DIR"] as const;
+const STATE_DIR_OVERRIDE_KEYS = [
+  "MILADY_STATE_DIR",
+  "ELIZA_STATE_DIR",
+] as const;
 const CONFIG_PATH_OVERRIDE_KEYS = [
   "MILADY_CONFIG_PATH",
   "ELIZA_CONFIG_PATH",

@@ -339,4 +339,3 @@ export function isFeatureAvailable(
       return false;
   }
 }
-

@@ -14,8 +14,8 @@ const execAsync = promisify(exec);
 const CORE_GIT_URL = "https://github.com/elizaos/eliza.git";
 const CORE_BRANCH = "develop";
 const CORE_PACKAGE_NAME = "@elizaos/core";
-const DEFAULT_CORE_PATHS = ["../packages/typescript/src/index.node.ts"];
-const DEFAULT_CORE_SUBPATHS = ["../packages/typescript/src/*"];
+const _DEFAULT_CORE_PATHS = ["../packages/typescript/src/index.node.ts"];
+const _DEFAULT_CORE_SUBPATHS = ["../packages/typescript/src/*"];
 
 const VALID_GIT_URL = /^https:\/\/[a-zA-Z0-9][\w./-]*\.git$/;
 const VALID_BRANCH = /^[a-zA-Z0-9][\w./-]*$/;
@@ -159,10 +159,11 @@ export class CoreManagerService extends Service {
 	private async resolveInstalledCoreVersion(): Promise<string> {
 		try {
 			const entry = await getRegistryEntry(CORE_PACKAGE_NAME);
-			const npmVersion =
+			const _npmVersion =
 				entry?.npm.v2Version ?? entry?.npm.v1Version ?? entry?.npm.package;
-			if (entry && (entry.npm.v2Version || entry.npm.v1Version)) {
-				return (entry.npm.v2Version || entry.npm.v1Version)!;
+			const registryVersion = entry?.npm.v2Version || entry?.npm.v1Version;
+			if (registryVersion) {
+				return registryVersion;
 			}
 		} catch {
 			// Ignored

@@ -8,7 +8,7 @@ const getCredentialsMock = vi.fn();
 const getApiBaseMock = vi.fn();
 const saveStewardCredentialsMock = vi.fn();
 
-vi.mock("@miladyai/app-core/services/steward-sidecar", () => ({
+vi.mock("@elizaos/app-core", () => ({
   createDesktopStewardSidecar: vi.fn(() => ({
     start: startMock,
     stop: stopMock,
@@ -19,7 +19,7 @@ vi.mock("@miladyai/app-core/services/steward-sidecar", () => ({
   })),
 }));
 
-vi.mock("@miladyai/app-core/services/steward-credentials", () => ({
+vi.mock("@elizaos/app-steward/services/steward-credentials", () => ({
   saveStewardCredentials: saveStewardCredentialsMock,
 }));
 
@@ -39,7 +39,8 @@ describe("native steward bootstrap", () => {
     vi.clearAllMocks();
   });
 
-  it("enables the local steward sidecar by default", async () => {
+  it("allows explicit enable via STEWARD_LOCAL=true", async () => {
+    process.env.STEWARD_LOCAL = "true";
     const module = await loadModule();
 
     expect(module.isStewardLocalEnabled()).toBe(true);

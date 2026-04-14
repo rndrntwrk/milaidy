@@ -35,11 +35,8 @@ async def _handler(
     action_results: list[ActionResult] | None = None,
 ) -> EvaluatorResult:
     """Check the latest message for security threats."""
-    security_module: SecurityModuleService | None = None
-    for svc in (runtime.services or {}).values():
-        if getattr(svc, "service_type", None) == "security_module":
-            security_module = svc  # type: ignore[assignment]
-            break
+    service = runtime.get_service("security_module")
+    security_module = service if isinstance(service, SecurityModuleService) else None
 
     if security_module is None:
         return EvaluatorResult.pass_result(

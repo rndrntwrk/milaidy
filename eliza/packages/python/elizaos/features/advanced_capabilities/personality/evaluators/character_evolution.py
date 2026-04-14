@@ -75,6 +75,23 @@ def _normalize_string_list(value: Any) -> list[str] | None:
     return delimited if delimited else None
 
 
+def _coerce_int(value: Any, default: int = 0) -> int:
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        trimmed = value.strip()
+        if trimmed:
+            try:
+                return int(trimmed)
+            except ValueError:
+                return default
+    return default
+
+
 def parse_trigger_analysis(raw: dict[str, Any]) -> dict[str, Any]:
     return {
         "hasEvolutionTrigger": _normalize_boolean(raw.get("hasEvolutionTrigger")) or False,
@@ -141,7 +158,7 @@ async def _validate(
 
     if last_check:
         try:
-            if now - int(last_check) < cooldown_ms:
+            if now - _coerce_int(last_check) < cooldown_ms:
                 return False
         except (ValueError, TypeError):
             pass
@@ -275,6 +292,8 @@ async def _handler(
             bio_list = [bio_list]
         elif not isinstance(bio_list, list):
             bio_list = []
+        current_topics = character_summary["currentTopics"]
+        topics_list = current_topics if isinstance(current_topics, list) else []
 
         evolution_prompt = f"""You are conducting a comprehensive analysis to determine if an AI agent should evolve its character definition based on measurable patterns and outcomes.
 
@@ -282,7 +301,7 @@ CURRENT CHARACTER STATE:
 Name: {character_summary['name']}
 System: {character_summary['system']}
 Bio: {'; '.join(str(b) for b in bio_list)}
-Topics: {', '.join(str(t) for t in character_summary['currentTopics'])}
+Topics: {', '.join(str(t) for t in topics_list)}
 Message Examples: {character_summary['messageExampleCount']}
 
 CONVERSATION TO ANALYZE:

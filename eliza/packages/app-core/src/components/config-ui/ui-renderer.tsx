@@ -1,24 +1,12 @@
-/**
- * ui-renderer.tsx — General-purpose json-render declarative UI renderer.
- *
- * Renders a UiSpec tree into React components. Supports:
- *   - 35+ component types (layout, typography, form, data, feedback, nav, viz, interaction)
- *   - State binding via statePath
- *   - Dynamic values via $path references
- *   - Conditional props via $cond expressions
- *   - List rendering via repeat config
- *   - Event bindings via on.press / on.change
- */
-
+import { Button } from "@elizaos/ui/components/ui/button";
+import { Checkbox } from "@elizaos/ui/components/ui/checkbox";
 import {
-  Button,
-  Checkbox,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@elizaos/app-core";
+} from "@elizaos/ui/components/ui/select";
 import React, {
   createContext,
   useCallback,
@@ -30,7 +18,6 @@ import { useApp } from "../../state";
 import { confirmDesktopAction, resolveAppAssetUrl } from "../../utils";
 import { getByPath, setByPath } from "../../config/config-catalog";
 import {
-  CONFIG_FIELD_LABEL_CLASSNAME,
   ConfigFieldErrors,
   getConfigInputClassName,
   getConfigTextareaClassName,
@@ -474,9 +461,7 @@ const InputComponent: ComponentFn = (props, _children, ctx, el) => {
   return (
     <div className="flex flex-col gap-1">
       {props.label ? (
-        <span className={CONFIG_FIELD_LABEL_CLASSNAME}>
-          {String(props.label)}
-        </span>
+        <span className="text-xs font-semibold">{String(props.label)}</span>
       ) : null}
       <input
         className={getConfigInputClassName({
@@ -516,9 +501,7 @@ const TextareaComponent: ComponentFn = (props, _children, ctx, el) => {
   return (
     <div className="flex flex-col gap-1">
       {props.label ? (
-        <span className={CONFIG_FIELD_LABEL_CLASSNAME}>
-          {String(props.label)}
-        </span>
+        <span className="text-xs font-semibold">{String(props.label)}</span>
       ) : null}
       <textarea
         className={getConfigTextareaClassName({
@@ -560,9 +543,7 @@ const SelectComponent: ComponentFn = (props, _children, ctx, el) => {
   return (
     <div className="flex flex-col gap-1">
       {props.label ? (
-        <span className={CONFIG_FIELD_LABEL_CLASSNAME}>
-          {String(props.label)}
-        </span>
+        <span className="text-xs font-semibold">{String(props.label)}</span>
       ) : null}
       <Select
         value={String(value ?? "") || "__none__"}

@@ -4,37 +4,20 @@ import type http from "node:http";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
-  getOrCreateClientAddressKeyMock,
-  persistCloudWalletCacheMock,
-  provisionCloudWalletsMock,
+  clearCloudSecretsMock,
   saveElizaConfigMock,
+  scrubCloudSecretsFromEnvMock,
 } = vi.hoisted(() => ({
-  getOrCreateClientAddressKeyMock: vi.fn(),
-  persistCloudWalletCacheMock: vi.fn(),
-  provisionCloudWalletsMock: vi.fn(),
+  clearCloudSecretsMock: vi.fn(),
   saveElizaConfigMock: vi.fn(),
+  scrubCloudSecretsFromEnvMock: vi.fn(),
 }));
 
-vi.mock("@miladyai/agent/api/cloud-routes", () => ({
+vi.mock("@elizaos/agent/api/cloud-routes", () => ({
   handleCloudRoute: vi.fn(async () => false),
 }));
 
-vi.mock("@miladyai/agent/api/config-env", () => ({
-  persistConfigEnv: vi.fn(async () => undefined),
-}));
-
-vi.mock("@miladyai/agent/cloud/bridge-client", () => ({
-  ElizaCloudClient: class ElizaCloudClientMock {},
-}));
-
-vi.mock("@miladyai/agent/cloud/cloud-wallet", () => ({
-  MILADY_CLOUD_CLIENT_ADDRESS_KEY_ENV: "MILADY_CLOUD_CLIENT_ADDRESS_KEY",
-  getOrCreateClientAddressKey: getOrCreateClientAddressKeyMock,
-  persistCloudWalletCache: persistCloudWalletCacheMock,
-  provisionCloudWallets: provisionCloudWalletsMock,
-}));
-
-vi.mock("@miladyai/agent/config/config", () => ({
+vi.mock("@elizaos/agent/config/config", () => ({
   saveElizaConfig: saveElizaConfigMock,
 }));
 
@@ -43,16 +26,13 @@ vi.mock("./cloud-connection", () => ({
 }));
 
 vi.mock("./cloud-secrets", () => ({
-  clearCloudSecrets: vi.fn(),
-  scrubCloudSecretsFromEnv: vi.fn(),
+  clearCloudSecrets: clearCloudSecretsMock,
+  scrubCloudSecretsFromEnv: scrubCloudSecretsFromEnvMock,
 }));
 
 import { handleCloudRoute } from "./cloud-routes";
 
-function makeJsonRequest(
-  url: string,
-  body: unknown,
-): http.IncomingMessage {
+function makeJsonRequest(url: string, body: unknown): http.IncomingMessage {
   const req = Readable.from([JSON.stringify(body)]) as http.IncomingMessage;
   req.method = "POST";
   req.url = url;
@@ -81,34 +61,20 @@ function makeResponse() {
 describe("handleCloudRoute /api/cloud/login/persist", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.ENABLE_CLOUD_WALLET = "1";
-    getOrCreateClientAddressKeyMock.mockResolvedValue({
-      privateKey: `0x${"11".repeat(32)}`,
-      address: "0x1234567890abcdef1234567890abcdef12345678",
-      minted: false,
-    });
-    provisionCloudWalletsMock.mockResolvedValue({
-      evm: {
-        agentWalletId: "wallet-evm",
-        walletAddress: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd",
-        walletProvider: "privy",
-        chainType: "evm",
-      },
-      solana: {
-        agentWalletId: "wallet-sol",
-        walletAddress: "8RsmpM7Ztk5H2nesQSjk8okmFTiZFk4kBUcyaygPrVxa",
-        walletProvider: "steward",
-        chainType: "solana",
-      },
-    });
+    delete process.env.ELIZAOS_CLOUD_API_KEY;
+    delete process.env.ELIZAOS_CLOUD_ENABLED;
   });
 
-  it("binds cloud wallets and restarts the runtime after persisting the api key", async () => {
+  it("persists the cloud api key to config, env, and runtime secrets", async () => {
     const { res, readBody } = makeResponse();
-    const restartRuntime = vi.fn(async () => true);
     const config = {
       cloud: { baseUrl: "https://www.elizacloud.ai" },
-      wallet: {},
+      serviceRouting: {
+        llmText: {
+          transport: "cloud-proxy" as const,
+          backend: "elizacloud",
+        },
+      },
     } as never;
     const runtime = {
       agentId: "agent-123",
@@ -127,22 +93,26 @@ describe("handleCloudRoute /api/cloud/login/persist", () => {
         config,
         runtime,
         cloudManager: null,
-        restartRuntime,
       },
     );
 
     expect(handled).toBe(true);
     expect(readBody()).toEqual({ ok: true });
-    expect(getOrCreateClientAddressKeyMock).toHaveBeenCalledTimes(1);
-    expect(provisionCloudWalletsMock).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        agentId: "agent-123",
-        clientAddress: "0x1234567890abcdef1234567890abcdef12345678",
+    expect(config.cloud?.apiKey).toBe("cloud-api-key");
+    expect(saveElizaConfigMock).toHaveBeenCalledWith(config);
+    expect(clearCloudSecretsMock).toHaveBeenCalledTimes(1);
+    expect(scrubCloudSecretsFromEnvMock).toHaveBeenCalledTimes(1);
+    expect(process.env.ELIZAOS_CLOUD_API_KEY).toBe("cloud-api-key");
+    expect(process.env.ELIZAOS_CLOUD_ENABLED).toBe("true");
+    expect(runtime.character.secrets).toMatchObject({
+      ELIZAOS_CLOUD_API_KEY: "cloud-api-key",
+      ELIZAOS_CLOUD_ENABLED: "true",
+    });
+    expect(runtime.updateAgent).toHaveBeenCalledWith("agent-123", {
+      secrets: expect.objectContaining({
+        ELIZAOS_CLOUD_API_KEY: "cloud-api-key",
+        ELIZAOS_CLOUD_ENABLED: "true",
       }),
-    );
-    expect(persistCloudWalletCacheMock).toHaveBeenCalledTimes(1);
-    expect(saveElizaConfigMock).toHaveBeenCalled();
-    expect(restartRuntime).toHaveBeenCalledWith("cloud-wallet-bound");
+    });
   });
 });

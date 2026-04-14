@@ -201,13 +201,17 @@ async def _handler(
         if add_to_clipboard:
             try:
                 service = create_task_clipboard_service(runtime)
-                from ..types import AddTaskClipboardItemInput
+                from ..types import AddTaskClipboardItemInput, TaskClipboardSourceType
 
                 entity_id = (
                     str(message.entity_id) if hasattr(message, "entity_id") and message.entity_id else None
                 )
                 ct = attachment.get("content_type") or attachment.get("contentType")
-                source_type = "image_attachment" if ct and "image" in str(ct) else "attachment"
+                source_type: TaskClipboardSourceType
+                if ct and "image" in str(ct):
+                    source_type = "image_attachment"
+                else:
+                    source_type = "attachment"
                 item, replaced, snapshot = await service.add_item(
                     AddTaskClipboardItemInput(
                         title=attachment.get("title") or attachment.get("id", ""),

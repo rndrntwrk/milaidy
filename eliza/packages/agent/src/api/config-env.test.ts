@@ -4,11 +4,7 @@ import path from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-  __testing,
-  persistConfigEnv,
-  readConfigEnv,
-} from "./config-env.js";
+import { __testing, persistConfigEnv, readConfigEnv } from "./config-env.js";
 
 const { BAK_SUFFIX, CONFIG_ENV_FILENAME } = __testing;
 
@@ -52,14 +48,14 @@ describe("persistConfigEnv", () => {
   });
 
   it("preserves unrelated entries, comments, and blank lines", async () => {
-    const preamble = [
+    const preamble = `${[
       "# managed by milady",
       "",
       "EXISTING_A=one",
       "# another comment",
       "EXISTING_B=two",
       "",
-    ].join("\n") + "\n";
+    ].join("\n")}\n`;
     await fs.writeFile(filePath, preamble, "utf8");
 
     await persistConfigEnv("EXISTING_A", "updated", { stateDir });
@@ -134,9 +130,9 @@ describe("persistConfigEnv", () => {
       .spyOn(fs, "rename")
       .mockRejectedValueOnce(new Error("simulated crash mid-rename"));
 
-    await expect(
-      persistConfigEnv("A", "two", { stateDir }),
-    ).rejects.toThrow(/simulated crash/);
+    await expect(persistConfigEnv("A", "two", { stateDir })).rejects.toThrow(
+      /simulated crash/,
+    );
 
     // Live file untouched; .bak holds the pre-image.
     const liveAfter = await fs.readFile(filePath, "utf8");
@@ -172,7 +168,7 @@ describe("readConfigEnv", () => {
     try {
       await fs.writeFile(
         filePath,
-        [
+        `${[
           "# comment",
           "",
           "NOT_A_KV_LINE",
@@ -180,7 +176,7 @@ describe("readConfigEnv", () => {
           "A=second",
           "B=plain",
           "lower=ignored",
-        ].join("\n") + "\n",
+        ].join("\n")}\n`,
         "utf8",
       );
       const result = await readConfigEnv(stateDir);

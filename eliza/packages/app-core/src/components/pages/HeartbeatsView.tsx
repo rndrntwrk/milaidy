@@ -1,18 +1,15 @@
-import {
-  Button,
-  FieldLabel,
-  NewActionButton,
-  PageLayout,
-  PagePanel,
-  Sidebar,
-  SidebarCollapsedActionButton,
-  SidebarContent,
-  SidebarHeader,
-  SidebarPanel,
-  SidebarScrollRegion,
-  StatusBadge,
-  StatusDot,
-} from "@elizaos/app-core";
+import { PagePanel } from "@elizaos/ui/components/composites/page-panel";
+import { SidebarCollapsedActionButton } from "@elizaos/ui/components/composites/sidebar/sidebar-collapsed-rail";
+import { SidebarContent } from "@elizaos/ui/components/composites/sidebar/sidebar-content";
+import { SidebarHeader } from "@elizaos/ui/components/composites/sidebar/sidebar-header";
+import { SidebarPanel } from "@elizaos/ui/components/composites/sidebar/sidebar-panel";
+import { Sidebar } from "@elizaos/ui/components/composites/sidebar/sidebar-root";
+import { SidebarScrollRegion } from "@elizaos/ui/components/composites/sidebar/sidebar-scroll-region";
+import { Button } from "@elizaos/ui/components/ui/button";
+import { FieldLabel } from "@elizaos/ui/components/ui/field";
+import { NewActionButton } from "@elizaos/ui/components/ui/new-action-button";
+import { StatusBadge, StatusDot } from "@elizaos/ui/components/ui/status-badge";
+import { PageLayout } from "@elizaos/ui/layouts/page-layout/page-layout";
 import { Plus } from "lucide-react";
 import {
   createContext,
@@ -143,7 +140,7 @@ function useHeartbeatsViewController() {
       preferredTriggerId &&
       triggers.some((trigger) => trigger.id === preferredTriggerId)
         ? preferredTriggerId
-        : triggers[0]?.id ?? null;
+        : (triggers[0]?.id ?? null);
 
     if (nextSelectedTriggerId) {
       setSelectedTriggerId(nextSelectedTriggerId);
@@ -294,7 +291,9 @@ function useHeartbeatsViewController() {
   const hasHeartbeats = triggers.length > 0;
   const showFirstRunEmptyState =
     !triggersLoading && !triggerError && !hasHeartbeats;
-  const showDetailPane = Boolean(editorOpen || editingId || resolvedSelectedTrigger);
+  const showDetailPane = Boolean(
+    editorOpen || editingId || resolvedSelectedTrigger,
+  );
   const newHeartbeatLabel = t("heartbeatsview.newHeartbeat");
 
   return {
@@ -867,7 +866,9 @@ function HeartbeatsLayout() {
                           variant={toneForLastStatus(run.status)}
                         />
                         <span className="font-mono text-xs-tight text-muted/70">
-                          {formatDateTime(run.startedAt, { locale: uiLanguage })}
+                          {formatDateTime(run.startedAt, {
+                            locale: uiLanguage,
+                          })}
                         </span>
                       </div>
                       <div className="text-xs-tight text-muted/80">

@@ -11,6 +11,8 @@
         "db-check",
         "desktop-contract",
         "validation-e2e",
+        "live-surface-audit",
+        "ui-playwright-smoke",
         "live-cloud",
         "regression-matrix-pr"
       ],
@@ -29,6 +31,8 @@
         "e2e-deterministic",
         "desktop-contract",
         "validation-e2e",
+        "live-surface-audit",
+        "ui-playwright-smoke",
         "regression-matrix-nightly",
         "desktop-heavy-matrix"
       ]
@@ -88,6 +92,14 @@
     "validation-e2e": {
       "tier": "required",
       "command": "bun run test:e2e:validation"
+    },
+    "live-surface-audit": {
+      "tier": "required",
+      "command": "bun run test:audit:live:strict"
+    },
+    "ui-playwright-smoke": {
+      "tier": "required",
+      "command": "bun run test:ui:playwright"
     },
     "live-cloud": {
       "tier": "heavy",
@@ -167,7 +179,7 @@
     {
       "name": "packages-agent",
       "globs": [
-        "packages/agent/**"
+        "eliza/packages/agent/**"
       ],
       "workflowSuites": {
         "pr": [
@@ -207,6 +219,24 @@
           "validation-e2e",
           "e2e-heavy",
           "live-cloud"
+        ]
+      }
+    },
+    {
+      "name": "app-ui-smoke",
+      "globs": [
+        "apps/app/test/ui-smoke/**",
+        "apps/app/playwright.ui-smoke.config.ts",
+        "apps/app/scripts/run-ui-playwright.mjs",
+        "eliza/packages/app-core/scripts/run-ui-smoke-playwright-suite.mjs",
+        "eliza/packages/app-core/scripts/playwright-ui-live-stack.ts"
+      ],
+      "workflowSuites": {
+        "pr": [
+          "ui-playwright-smoke"
+        ],
+        "nightly": [
+          "ui-playwright-smoke"
         ]
       }
     },

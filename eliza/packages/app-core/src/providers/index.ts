@@ -114,7 +114,9 @@ export function getProviderLogo(
   const key = providerId.toLowerCase();
 
   // Check runtime-registered logos
-  const registeredMap = isDarkMode ? _registeredLogos.dark : _registeredLogos.light;
+  const registeredMap = isDarkMode
+    ? _registeredLogos.dark
+    : _registeredLogos.light;
   const registeredLogo = registeredMap[key];
   if (registeredLogo) {
     return resolveAppAssetUrl(registeredLogo);

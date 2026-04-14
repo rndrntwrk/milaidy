@@ -9,14 +9,12 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypeGuard
 
 from elizaos.types import Action, ActionResult, Content
 
 if TYPE_CHECKING:
-    from uuid import UUID
-
-    from elizaos.types import HandlerCallback, HandlerOptions, IAgentRuntime, Memory, State
+    from elizaos.types import HandlerCallback, HandlerOptions, IAgentRuntime, Memory, State, UUID
 
 
 # ---------------------------------------------------------------------------
@@ -24,7 +22,7 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 
-def _is_setting_entry(value: Any) -> bool:
+def _is_setting_entry(value: Any) -> TypeGuard[dict[str, Any]]:
     """Check if *value* looks like a Setting dict with 'name' and 'value' keys."""
     return (
         isinstance(value, dict)
@@ -245,7 +243,12 @@ class UpdateSettingsAction:
             # Try world_id setting
             get_setting = getattr(runtime, "get_setting", None)
             if callable(get_setting):
-                server_id = get_setting("WORLD_ID") or get_setting("SERVER_ID")
+                world_id_setting = get_setting("WORLD_ID")
+                server_id_setting = get_setting("SERVER_ID")
+                if isinstance(world_id_setting, str):
+                    server_id = world_id_setting
+                elif isinstance(server_id_setting, str):
+                    server_id = server_id_setting
 
         if not server_id:
             msg = "No server context found. Settings can only be updated within a server."
@@ -305,23 +308,25 @@ class UpdateSettingsAction:
             setting = updated_settings.get(key)
             if not _is_setting_entry(setting):
                 continue
+            setting_entry = setting
 
             # Check dependencies
-            depends_on = setting.get("dependsOn") or []
-            if depends_on:
+            depends_on = setting_entry.get("dependsOn") or []
+            if isinstance(depends_on, list) and depends_on:
                 deps_met = all(
-                    _is_setting_entry(updated_settings.get(dep))
-                    and updated_settings[dep].get("value") is not None
+                    isinstance(dep, str)
+                    and _is_setting_entry(updated_settings.get(dep))
+                    and updated_settings[dep]["value"] is not None
                     for dep in depends_on
                 )
                 if not deps_met:
                     messages.append(
-                        f"Cannot update {setting['name']} -- dependencies not met"
+                        f"Cannot update {setting_entry['name']} -- dependencies not met"
                     )
                     continue
 
-            updated_settings[key] = {**setting, "value": value}
-            messages.append(f"Updated {setting['name']} successfully")
+            updated_settings[key] = {**setting_entry, "value": value}
+            messages.append(f"Updated {setting_entry['name']} successfully")
             updated_any = True
 
         if updated_any:

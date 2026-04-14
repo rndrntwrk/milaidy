@@ -73,8 +73,7 @@ class PluginActivatorService(Service):
         runtime: IAgentRuntime | None = None,
         config: PluginActivatorConfig | None = None,
     ) -> None:
-        super().__init__()
-        self.runtime = runtime
+        super().__init__(runtime)
         self._config = config or PluginActivatorConfig()
         self._secrets_service: SecretsService | None = None
         self._pending_plugins: dict[str, PendingPluginActivation] = {}
@@ -104,11 +103,9 @@ class PluginActivatorService(Service):
     async def _initialize(self) -> None:
         logger.info("[PluginActivator] Initializing")
 
-        if self.runtime is not None:
-            for svc in (self.runtime.services or {}).values():
-                if getattr(svc, "service_type", None) == "secrets":
-                    self._secrets_service = svc  # type: ignore[assignment]
-                    break
+        if self._runtime is not None:
+            service = self._runtime.get_service("secrets")
+            self._secrets_service = service if isinstance(service, SecretsService) else None
 
         if not self._secrets_service:
             await self._wait_for_secrets_service()
@@ -130,13 +127,13 @@ class PluginActivatorService(Service):
 
         for _ in range(max_attempts):
             await asyncio.sleep(delay_s)
-            if self.runtime is not None:
-                for svc in (self.runtime.services or {}).values():
-                    if getattr(svc, "service_type", None) == "secrets":
-                        self._secrets_service = svc  # type: ignore[assignment]
-                        logger.info("[PluginActivator] SecretsService now available")
-                        self._bind_to_secrets_service()
-                        return
+            if self._runtime is not None:
+                service = self._runtime.get_service("secrets")
+                if isinstance(service, SecretsService):
+                    self._secrets_service = service
+                    logger.info("[PluginActivator] SecretsService now available")
+                    self._bind_to_secrets_service()
+                    return
 
         logger.warning(
             "[PluginActivator] SecretsService not available after waiting, activation will be limited"
@@ -332,14 +329,7 @@ class PluginActivatorService(Service):
         result = await self._secrets_service.check_plugin_requirements(
             plugin_id, required_secrets
         )
-        return PluginRequirementStatus(
-            plugin_id=plugin_id,
-            ready=result.ready,
-            missing_required=result.missing_required,
-            missing_optional=result.missing_optional,
-            invalid=result.invalid,
-            message="All secrets available" if result.ready else f"Missing: {', '.join(result.missing_required)}",
-        )
+        return result
 
     def get_plugin_statuses(
         self,
@@ -536,7 +526,10 @@ class PluginActivatorService(Service):
         self._secrets_ready_listeners[plugin_id].append(callback)
 
         if plugin_id in self._activated_plugins:
-            asyncio.create_task(callback(self.runtime))
+            async def _dispatch_ready() -> None:
+                await callback(self.runtime)
+
+            asyncio.create_task(_dispatch_ready())
 
         def unsubscribe() -> None:
             listeners = self._secrets_ready_listeners.get(plugin_id, [])

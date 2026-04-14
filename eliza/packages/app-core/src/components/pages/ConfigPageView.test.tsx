@@ -15,9 +15,11 @@ vi.mock("../../state", () => ({
   useApp: () => useAppMock(),
 }));
 
-vi.mock("@miladyai/ui", async () => {
+vi.mock("@elizaos/app-core", async () => {
   const actual =
-    await vi.importActual<typeof import("@miladyai/ui")>("@miladyai/ui");
+    await vi.importActual<typeof import("@elizaos/app-core")>(
+      "@elizaos/app-core",
+    );
   const { createInlineUiMock } = await import("../../../test/app/mockInlineUi");
   return createInlineUiMock(actual);
 });

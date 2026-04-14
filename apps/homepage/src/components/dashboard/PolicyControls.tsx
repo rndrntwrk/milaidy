@@ -6,6 +6,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   CloudApiClient,
+  StewardPolicyConfigKey,
+  StewardPolicyConfigValue,
   StewardPolicyRule,
   StewardPolicyType,
 } from "../../lib/cloud-api";
@@ -72,7 +74,11 @@ export function PolicyControls({ client }: PolicyControlsProps) {
   }, []);
 
   const handleConfigChange = useCallback(
-    (index: number, key: string, value: unknown) => {
+    (
+      index: number,
+      key: StewardPolicyConfigKey,
+      value: StewardPolicyConfigValue,
+    ) => {
       setPolicies((prev) =>
         prev.map((p, i) =>
           i === index ? { ...p, config: { ...p.config, [key]: value } } : p,

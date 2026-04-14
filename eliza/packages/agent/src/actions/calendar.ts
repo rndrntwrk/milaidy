@@ -37,7 +37,6 @@ import {
   hasContextSignalSyncForKey,
 } from "./context-signal.js";
 import { renderGroundedActionReply } from "./grounded-action-reply.js";
-import { recentConversationTexts as collectRecentConversationTexts } from "./life-recent-context.js";
 import {
   calendarReadUnavailableMessage,
   calendarWriteUnavailableMessage,

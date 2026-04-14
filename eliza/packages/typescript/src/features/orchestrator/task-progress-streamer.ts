@@ -96,11 +96,12 @@ export function installTaskProgressStreamer(
 				| SessionMetadata
 				| undefined;
 			if (meta?.roomId) {
+				const roomId = meta.roomId;
 				void (async () => {
-					const room = await runtime.getRoom(meta.roomId!).catch(() => null);
+					const room = await runtime.getRoom(roomId).catch(() => null);
 					if (room?.source) {
 						sessionRooms.set(sessionId, {
-							roomId: meta.roomId!,
+							roomId,
 							channelId: room.channelId ?? room.id,
 							source: room.source,
 							serverId: room.serverId,

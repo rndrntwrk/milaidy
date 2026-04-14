@@ -115,7 +115,7 @@ import {
   saveElizaConfig,
 } from "@elizaos/agent/config/config";
 import { resolveUserPath } from "@elizaos/agent/config/paths";
-import { buildCharacterFromConfig } from "../runtime/eliza";
+import { buildCharacterFromConfig } from "../runtime/build-character-from-config";
 import { resolveDefaultAgentWorkspaceDir } from "@elizaos/agent/providers/workspace";
 import {
   isElizaSettingsDebugEnabled,
@@ -160,7 +160,9 @@ import { syncAppEnvToEliza, syncElizaEnvAliases } from "../utils/env.js";
 
 // Lazy-imported to avoid circular dependency with runtime/eliza.ts
 const lazyEnsureTTS = () =>
-  import("../runtime/eliza.js").then((m) => m.ensureTextToSpeechHandler);
+  import("../runtime/ensure-text-to-speech-handler.js").then(
+    (m) => m.ensureTextToSpeechHandler,
+  );
 
 import { getStartupEmbeddingAugmentation } from "../runtime/startup-overlay.js";
 import { hydrateWalletKeysFromNodePlatformSecureStore } from "@elizaos/app-steward/security/hydrate-wallet-keys-from-platform-store";
@@ -232,11 +234,7 @@ function resolveCompatConfigPaths(): {
 
 export function syncCompatConfigFiles(): void {
   const { elizaConfigPath, appConfigPath } = resolveCompatConfigPaths();
-  if (
-    !elizaConfigPath ||
-    !appConfigPath ||
-    elizaConfigPath === appConfigPath
-  ) {
+  if (!elizaConfigPath || !appConfigPath || elizaConfigPath === appConfigPath) {
     return;
   }
 
@@ -1094,10 +1092,7 @@ export function patchHttpCreateServerForCompat(
             return;
           }
         } catch (err) {
-          console.error(
-            "[compat] unhandled error in route handler",
-            err,
-          );
+          console.error("[compat] unhandled error in route handler", err);
           if (!res.headersSent) {
             res.statusCode = 500;
             res.setHeader("content-type", "application/json; charset=utf-8");

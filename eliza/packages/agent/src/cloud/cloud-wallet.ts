@@ -21,7 +21,7 @@ import type {
   CloudBridgeError,
   CloudChainType,
   CloudWalletDescriptor,
-  ElizaCloudClient,
+  CloudWalletProvider,
 } from "./bridge-client.js";
 
 export const MILADY_CLOUD_CLIENT_ADDRESS_KEY_ENV =
@@ -57,6 +57,22 @@ function normalizePrivateKey(raw: string): `0x${string}` {
 export interface GetOrCreateKeyOptions {
   /** Override state dir for config.env persistence. Used by tests. */
   stateDir?: string;
+}
+
+export interface CloudWalletProvisionBridge {
+  getAgentWallet(
+    agentId: string,
+    chain: CloudChainType,
+  ): Promise<CloudWalletDescriptor>;
+  provisionWallet(input: {
+    chainType: CloudChainType;
+    clientAddress: string;
+  }): Promise<{
+    walletId: string;
+    address: string;
+    chainType: CloudChainType;
+    provider: CloudWalletProvider;
+  }>;
 }
 
 /**
@@ -108,7 +124,7 @@ function inflightKey(agentId: string, chain: CloudChainType): string {
 }
 
 async function provisionOne(
-  bridge: ElizaCloudClient,
+  bridge: CloudWalletProvisionBridge,
   agentId: string,
   chain: CloudChainType,
   clientAddress: string,
@@ -189,7 +205,7 @@ function formatProvisionWarning(chain: CloudChainType, error: unknown): string {
  * promise so we never send duplicate provision requests.
  */
 export async function provisionCloudWalletsBestEffort(
-  bridge: ElizaCloudClient,
+  bridge: CloudWalletProvisionBridge,
   opts: ProvisionOptions,
 ): Promise<CloudWalletProvisionResult> {
   ensureFlag();
@@ -246,7 +262,7 @@ export async function provisionCloudWalletsBestEffort(
   const out: Partial<CloudWalletDescriptors> = {};
   const failures: CloudWalletProvisionFailure[] = [];
   for (const result of results) {
-    if (result.ok) {
+    if ("descriptor" in result) {
       out[result.chain] = result.descriptor;
       continue;
     }
@@ -263,7 +279,7 @@ export async function provisionCloudWalletsBestEffort(
 }
 
 export async function provisionCloudWallets(
-  bridge: ElizaCloudClient,
+  bridge: CloudWalletProvisionBridge,
   opts: ProvisionOptions,
 ): Promise<Partial<CloudWalletDescriptors>> {
   const result = await provisionCloudWalletsBestEffort(bridge, opts);

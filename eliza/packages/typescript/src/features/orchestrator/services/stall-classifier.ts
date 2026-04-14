@@ -255,7 +255,6 @@ export async function classifyStallOutput(
 		buffers,
 		traceEntries,
 		runtime,
-		manager,
 		metricsTracker,
 		log,
 	} = ctx;

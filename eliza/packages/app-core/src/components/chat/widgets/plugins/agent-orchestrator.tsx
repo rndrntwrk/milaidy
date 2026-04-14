@@ -1,15 +1,16 @@
-import { TERMINAL_STATUSES } from "@elizaos/app-coding";
 import {
   PULSE_STATUSES,
   STATUS_DOT,
-} from "@elizaos/app-coding/pty-status-dots";
+  TERMINAL_STATUSES,
+} from "../../../../chat/coding-agent-session-state";
 import type {
   AppRunSummary,
   CodingAgentSession,
   CodingAgentTaskThread,
   CodingAgentTaskThreadDetail,
-} from "@elizaos/app-core";
-import { Badge, Button } from "@elizaos/app-core";
+} from "../../../../api/client-types-cloud";
+import { Badge } from "@elizaos/ui/components/ui/badge";
+import { Button } from "@elizaos/ui/components/ui/button";
 import { Activity } from "lucide-react";
 import {
   type ReactNode,

@@ -1,5 +1,4 @@
-import type { IAgentRuntime, Room, UUID, World } from "@elizaos/core";
-import { logger } from "@elizaos/core";
+import type { IAgentRuntime, UUID } from "@elizaos/core";
 
 // ---------------------------------------------------------------------------
 // Per-connector deep link generation

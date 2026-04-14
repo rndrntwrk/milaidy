@@ -152,8 +152,9 @@ async def _onboarding_settings_get(
             "text": "Error: World not found",
         }
 
-    world_settings = (getattr(world, "metadata", None) or {}).get("settings")
-    if not world_settings:
+    metadata = getattr(world, "metadata", None)
+    world_settings = metadata.get("settings") if isinstance(metadata, dict) else None
+    if not isinstance(world_settings, dict) or not world_settings:
         if is_onboarding:
             return {
                 "data": {"settings": []},
@@ -189,8 +190,9 @@ async def _missing_secrets_get(
     if not world or not getattr(world, "metadata", None):
         return {"data": {"missing": []}, "values": {"missingSecrets": ""}, "text": ""}
 
-    settings = (world.metadata or {}).get("settings")
-    if not settings:
+    metadata = getattr(world, "metadata", None)
+    settings = metadata.get("settings") if isinstance(metadata, dict) else None
+    if not isinstance(settings, dict) or not settings:
         return {"data": {"missing": []}, "values": {"missingSecrets": ""}, "text": ""}
 
     entries = list(settings.items())

@@ -1,6 +1,5 @@
 import crypto from "node:crypto";
 import type { IAgentRuntime } from "@elizaos/core";
-import { logger } from "@elizaos/core";
 import {
   executeRawSql,
   getRuntimeDbCacheKey,

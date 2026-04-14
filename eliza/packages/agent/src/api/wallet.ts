@@ -169,7 +169,9 @@ function readStewardSolanaAddress(): string | null {
 }
 
 function readManagedEvmAddress(): string | null {
-  const managed = readValidatedEvmAddress(process.env[MANAGED_EVM_ADDRESS_ENV_KEY]);
+  const managed = readValidatedEvmAddress(
+    process.env[MANAGED_EVM_ADDRESS_ENV_KEY],
+  );
   if (!managed && process.env[MANAGED_EVM_ADDRESS_ENV_KEY]?.trim()) {
     logger.warn("Bad managed EVM address in env");
   }

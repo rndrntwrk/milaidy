@@ -10,38 +10,26 @@ import {
   getAutonomousSourceRoot,
   getElizaCoreEntry,
   getInstalledPackageEntry,
-  resolveModuleEntry,
-} from "../../eliza/packages/app-core/test/eliza-package-paths";
+  getSharedSourceRoot,
+} from "../eliza-package-paths";
 import { repoRoot } from "./repo-root";
+import {
+  getAgentSourceAliases,
+  getAppCoreBridgeStubPath,
+  getAppCoreModuleFallbackPath,
+  getAppCorePluginFallbackPath,
+  getAppCoreSourceAliases,
+  getElizaCoreRolesEntry,
+  getOptionalPluginSdkAliases,
+  getSharedSourceAliases,
+  getWorkspaceAppAliases,
+} from "./workspace-aliases";
 
 const elizaCoreEntry = getElizaCoreEntry(repoRoot);
-// Prefer the repo-local eliza source when it's present; fall back to the
-// committed `scripts/lib/elizaos-core-roles-shim.js` bundle when it is not.
-// CI with `MILADY_SKIP_LOCAL_UPSTREAMS=1` renames `./eliza/` to
-// `./.eliza.ci-disabled/`, so the first path does not exist there. The shim
-// is a pre-bundled ESM copy of eliza/packages/typescript/src/roles.ts with
-// its helper dependencies left as top-level imports from `@elizaos/core`.
-const elizaCoreRolesSource = path.join(
-  repoRoot,
-  "eliza",
-  "packages",
-  "typescript",
-  "src",
-  "roles.ts",
-);
-const elizaCoreRolesEntry = fs.existsSync(elizaCoreRolesSource)
-  ? elizaCoreRolesSource
-  : path.join(
-      repoRoot,
-      "eliza",
-      "packages",
-      "app-core",
-      "scripts",
-      "lib",
-      "elizaos-core-roles-shim.js",
-    );
+const elizaCoreRolesEntry = getElizaCoreRolesEntry(repoRoot);
 const autonomousSourceRoot = getAutonomousSourceRoot(repoRoot);
 const appCoreSourceRoot = getAppCoreSourceRoot(repoRoot);
+const sharedSourceRoot = getSharedSourceRoot(repoRoot);
 const packageManifest = JSON.parse(
   fs.readFileSync(path.join(repoRoot, "package.json"), "utf8"),
 ) as {
@@ -99,6 +87,9 @@ const isCI = process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
 const isWindows = process.platform === "win32";
 const localWorkers = 2;
 const ciWorkers = isWindows ? 2 : 3;
+const appCoreModuleFallbackPath = getAppCoreModuleFallbackPath(repoRoot);
+const appCoreBridgeStubPath = getAppCoreBridgeStubPath(repoRoot);
+const appCorePluginFallbackPath = getAppCorePluginFallbackPath(repoRoot);
 
 export default defineConfig({
   resolve: {
@@ -108,20 +99,9 @@ export default defineConfig({
         // App-core unit tests mock this plugin, but the specifier still has to
         // resolve during module graph construction under the root Vitest config.
         find: "@elizaos/capacitor-agent",
-        replacement: path.join(
-          repoRoot,
-          "eliza",
-          "packages",
-          "app-core",
-          "test",
-          "stubs",
-          "module-fallback.mjs",
-        ),
+        replacement: appCoreModuleFallbackPath,
       },
-      {
-        find: "milady/plugin-sdk",
-        replacement: path.join(repoRoot, "src", "plugin-sdk", "index.ts"),
-      },
+      ...getOptionalPluginSdkAliases(repoRoot),
       // The `@elizaos/core/roles` alias is always applied — the shim
       // fallback in `scripts/lib/elizaos-core-roles-shim.js` is always
       // present, even when the local eliza checkout is absent (CI
@@ -166,290 +146,28 @@ export default defineConfig({
           ]
         : []),
       ...(autonomousSourceRoot
-        ? [
-            {
-              find: /^@elizaos\/agent\/(.*)/,
-              replacement: path.join(autonomousSourceRoot, "$1"),
-            },
-            {
-              find: "@elizaos/agent",
-              replacement: resolveModuleEntry(
-                path.join(autonomousSourceRoot, "index"),
-              ),
-            },
-          ]
-        : [
-            {
-              // Stub @elizaos/agent sub-path imports when the package is absent
-              // so transitive imports (e.g. contracts/wallet) don't break tests.
-              find: /^@elizaos\/agent(\/.*)?$/,
-              replacement: path.join(
-                repoRoot,
-                "eliza",
-                "packages",
-                "app-core",
-                "test",
-                "stubs",
-                "module-fallback.mjs",
-              ),
-            },
-          ]),
-      ...(appCoreSourceRoot
-        ? [
-            {
-              find: "@elizaos/app-core/electrobun-rpc.js",
-              replacement: path.join(
-                repoRoot,
-                "eliza",
-                "packages",
-                "app-core",
-                "test",
-                "stubs",
-                "app-core-bridge.ts",
-              ),
-            },
-            {
-              find: "@elizaos/app-core/electrobun-rpc",
-              replacement: path.join(
-                repoRoot,
-                "eliza",
-                "packages",
-                "app-core",
-                "test",
-                "stubs",
-                "app-core-bridge.ts",
-              ),
-            },
-            {
-              find: "@elizaos/app-core/electrobun-runtime",
-              replacement: path.join(
-                repoRoot,
-                "eliza",
-                "packages",
-                "app-core",
-                "test",
-                "stubs",
-                "app-core-bridge.ts",
-              ),
-            },
-            {
-              find: "@elizaos/app-core",
-              replacement: path.join(
-                repoRoot,
-                "eliza",
-                "packages",
-                "app-core",
-                "test",
-                "stubs",
-                "app-core-bridge.ts",
-              ),
-            },
-            {
-              find: /^@elizaos\/app-core\/(.*)/,
-              replacement: path.join(appCoreSourceRoot, "$1"),
-            },
-            {
-              find: /^@miladyai\/app-core\/src\/(.*)/,
-              replacement: path.join(appCoreSourceRoot, "$1"),
-            },
-            {
-              find: /^@miladyai\/app-core\/(.*)/,
-              replacement: path.join(appCoreSourceRoot, "$1"),
-            },
-            {
-              find: "@elizaos/app-core",
-              replacement: resolveModuleEntry(
-                path.join(appCoreSourceRoot, "index"),
-              ),
-            },
-          ]
-        : [
-            {
-              // Stub app-core when workspace is absent — its npm dist has
-              // extensionless JS imports that break under vitest/vite.
-              find: /^@elizaos\/app-core(\/.*)?$/,
-              replacement: path.join(
-                repoRoot,
-                "eliza",
-                "packages",
-                "app-core",
-                "test",
-                "stubs",
-                "plugin-fallback-module.mjs",
-              ),
-            },
-          ]),
-      // @elizaos/app-companion — resolve subpath imports from source
-      {
-        find: /^@elizaos\/app-companion\/(.*)/,
-        replacement: path.join(
-          repoRoot,
-          "eliza",
-          "apps",
-          "app-companion",
-          "src",
-          "$1",
-        ),
-      },
-      {
-        find: "@elizaos/app-companion",
-        replacement: path.join(
-          repoRoot,
-          "eliza",
-          "apps",
-          "app-companion",
-          "src",
-          "index.ts",
-        ),
-      },
-      // @elizaos/app-coding
-      {
-        find: /^@elizaos\/app-coding\/(.*)/,
-        replacement: path.join(
-          repoRoot,
-          "eliza",
-          "apps",
-          "app-coding",
-          "src",
-          "$1",
-        ),
-      },
-      {
-        find: "@elizaos/app-coding",
-        replacement: path.join(
-          repoRoot,
-          "eliza",
-          "apps",
-          "app-coding",
-          "src",
-          "index.ts",
-        ),
-      },
-      // @elizaos/app-vincent
-      {
-        find: /^@elizaos\/app-vincent\/(.*)/,
-        replacement: path.join(
-          repoRoot,
-          "eliza",
-          "apps",
-          "app-vincent",
-          "src",
-          "$1",
-        ),
-      },
-      {
-        find: "@elizaos/app-vincent",
-        replacement: path.join(
-          repoRoot,
-          "eliza",
-          "apps",
-          "app-vincent",
-          "src",
-          "index.ts",
-        ),
-      },
-      // @elizaos/app-shopify
-      {
-        find: /^@elizaos\/app-shopify\/(.*)/,
-        replacement: path.join(
-          repoRoot,
-          "eliza",
-          "apps",
-          "app-shopify",
-          "src",
-          "$1",
-        ),
-      },
-      {
-        find: "@elizaos/app-shopify",
-        replacement: path.join(
-          repoRoot,
-          "eliza",
-          "apps",
-          "app-shopify",
-          "src",
-          "index.ts",
-        ),
-      },
-      // @elizaos/app-steward
-      {
-        find: /^@elizaos\/app-steward\/(.*)/,
-        replacement: path.join(
-          repoRoot,
-          "eliza",
-          "apps",
-          "app-steward",
-          "src",
-          "$1",
-        ),
-      },
-      {
-        find: "@elizaos/app-steward",
-        replacement: path.join(
-          repoRoot,
-          "eliza",
-          "apps",
-          "app-steward",
-          "src",
-          "index.ts",
-        ),
-      },
-      // @elizaos/app-lifeops and @elizaos/shared
-      {
-        find: /^@elizaos\/app-lifeops\/(.*)/,
-        replacement: path.join(
-          repoRoot,
-          "eliza",
-          "apps",
-          "app-lifeops",
-          "src",
-          "$1",
-        ),
-      },
-      {
-        find: "@elizaos/app-lifeops",
-        replacement: path.join(
-          repoRoot,
-          "eliza",
-          "apps",
-          "app-lifeops",
-          "src",
-          "index.ts",
-        ),
-      },
-      {
-        find: /^@miladyai\/shared\/(.*)/,
-        replacement: path.join(
-          repoRoot,
-          "eliza",
-          "packages",
-          "shared",
-          "src",
-          "$1",
-        ),
-      },
-      {
-        find: /^@elizaos\/shared\/(.*)/,
-        replacement: path.join(
-          repoRoot,
-          "eliza",
-          "packages",
-          "shared",
-          "src",
-          "$1",
-        ),
-      },
-      {
-        find: "@elizaos/shared",
-        replacement: path.join(
-          repoRoot,
-          "eliza",
-          "packages",
-          "shared",
-          "src",
-          "index.ts",
-        ),
-      },
+        ? getAgentSourceAliases(autonomousSourceRoot)
+        : getAgentSourceAliases(undefined, {
+            // Stub @elizaos/agent sub-path imports when the package is absent
+            // so transitive imports (e.g. contracts/wallet) don't break tests.
+            fallbackReplacement: appCoreModuleFallbackPath,
+          })),
+      ...getAppCoreSourceAliases(appCoreSourceRoot, {
+        bridgeReplacement: appCoreBridgeStubPath,
+        fallbackReplacement: appCorePluginFallbackPath,
+        stubRootSpecifier: true,
+      }),
+      ...getWorkspaceAppAliases(repoRoot, [
+        "app-companion",
+        "app-coding",
+        "app-vincent",
+        "app-shopify",
+        "app-steward",
+        "app-lifeops",
+      ]),
+      ...getSharedSourceAliases(sharedSourceRoot, {
+        includeMiladyAlias: true,
+      }),
     ],
   },
   test: {

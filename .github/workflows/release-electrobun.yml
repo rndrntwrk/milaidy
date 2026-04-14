@@ -188,6 +188,8 @@ jobs:
         env:
           MILADY_RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
           MILADY_VALIDATE_CDN: "1"
+          ELIZA_RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+          ELIZA_VALIDATE_CDN: "1"
         run: bun run release:check
 
   build-browser-companions:
@@ -202,6 +204,7 @@ jobs:
         shell: bash -euo pipefail {0}
     env:
       MILADY_RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+      ELIZA_RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -538,6 +541,7 @@ jobs:
           ELECTROBUN_SKIP_CODESIGN: ${{ steps.macos-keychain.outputs.skip_codesign }}
           ELECTROBUN_REAL_HDIUTIL: /usr/bin/hdiutil
           MILADY_ELECTROBUN_NOTARIZE: 0
+          ELIZA_ELECTROBUN_NOTARIZE: 0
           ELECTROBUN_REAL_XCRUN: /usr/bin/xcrun
           ELECTROBUN_REAL_ZIP: /usr/bin/zip
 
@@ -735,18 +739,23 @@ jobs:
           # automatically; we also set it here so the ENTIRE process tree
           # (including the PowerShell parent and any subprocesses) inherits it.
           MILADY_DISABLE_LOCAL_EMBEDDINGS: "1"
+          ELIZA_DISABLE_LOCAL_EMBEDDINGS: "1"
           # The runtime requires at least one AI provider plugin to fully
           # initialize — without it, startApiServer() can fail before
           # server.listen() and the health endpoint never becomes reachable.
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           MILADY_WINDOWS_SMOKE_REQUIRE_INSTALLER: "1"
+          ELIZA_WINDOWS_SMOKE_REQUIRE_INSTALLER: "1"
           # Use a short path under runner.temp to avoid MAX_PATH issues with
           # deeply nested node_modules while staying in a user-writable location.
           # Previous C:\mi (root of C:\) broke with exit code -1 on newer Windows
           # Server 2025 runners that restrict non-elevated writes to the root.
           MILADY_TEST_WINDOWS_INSTALL_DIR: ${{ runner.temp }}\mi
+          ELIZA_TEST_WINDOWS_INSTALL_DIR: ${{ runner.temp }}\mi
           MILADY_TEST_WINDOWS_LAUNCHER_DIR: ${{ runner.temp }}\milady-windows-ui-launcher
+          ELIZA_TEST_WINDOWS_LAUNCHER_DIR: ${{ runner.temp }}\milady-windows-ui-launcher
           MILADY_TEST_WINDOWS_LAUNCHER_PATH_FILE: ${{ runner.temp }}\milady-windows-ui-launcher.txt
+          ELIZA_TEST_WINDOWS_LAUNCHER_PATH_FILE: ${{ runner.temp }}\milady-windows-ui-launcher.txt
         run: |
           Remove-Item $env:MILADY_TEST_WINDOWS_INSTALL_DIR -Recurse -Force -ErrorAction SilentlyContinue
           Remove-Item $env:MILADY_TEST_WINDOWS_LAUNCHER_DIR -Recurse -Force -ErrorAction SilentlyContinue
@@ -779,8 +788,10 @@ jobs:
           # Keep behavior aligned with packaged smoke: agent runtime should not
           # fail waiting on local embedding model setup in CI.
           MILADY_DISABLE_LOCAL_EMBEDDINGS: "1"
+          ELIZA_DISABLE_LOCAL_EMBEDDINGS: "1"
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           MILADY_TEST_WINDOWS_PROOF_INSTALL_DIR: ${{ runner.temp }}\mi-proof
+          ELIZA_TEST_WINDOWS_PROOF_INSTALL_DIR: ${{ runner.temp }}\mi-proof
         run: |
           Remove-Item $env:MILADY_TEST_WINDOWS_PROOF_INSTALL_DIR -Recurse -Force -ErrorAction SilentlyContinue
           pwsh -File apps/app/electrobun/scripts/verify-windows-installer-proof.ps1 `
@@ -1348,6 +1359,7 @@ jobs:
       - name: Attach LifeOps Browser assets to GitHub release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
           find lifeops-browser-release -type f \
             \( \
@@ -1355,4 +1367,4 @@ jobs:
               -name "lifeops-browser-safari-v*.zip" -o \
               -name "lifeops-browser-release-manifest-v*.json" \
             \) \
-            -print0 | xargs -0 -r gh release upload "${{ needs.prepare.outputs.tag }}" --clobber
+            -print0 | xargs -0 -r gh release upload "${{ needs.prepare.outputs.tag }}" --repo "$GH_REPO" --clobber

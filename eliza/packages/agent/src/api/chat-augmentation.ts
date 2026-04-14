@@ -20,7 +20,10 @@ import { normalizeCharacterLanguage } from "../onboarding-presets.js";
 import { detectRuntimeModel, resolveProviderFromModel } from "./agent-model.js";
 import { isCloudProvisionedContainer } from "./cloud-provisioning.js";
 import { extractCompatTextContent } from "./compat-utils.js";
-import { getKnowledgeService } from "./knowledge-service-loader.js";
+import {
+  getKnowledgeService,
+  type KnowledgeServiceResult,
+} from "./knowledge-service-loader.js";
 import { getWalletAddresses } from "./wallet.js";
 import { resolvePluginEvmLoaded } from "./wallet-capability.js";
 
@@ -323,7 +326,8 @@ export async function maybeAugmentChatMessageWithKnowledge(
   }
 
   try {
-    const knowledge = await getKnowledgeService(runtime);
+    const knowledge: KnowledgeServiceResult =
+      await getKnowledgeService(runtime);
     if (!knowledge.service) {
       return message;
     }

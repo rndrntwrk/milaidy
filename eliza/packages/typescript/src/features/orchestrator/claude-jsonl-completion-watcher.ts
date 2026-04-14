@@ -194,7 +194,7 @@ class Poller {
 		}
 
 		const entry = readLatestAssistantEntry(content);
-		if (!entry || !entry.isEndTurn) return;
+		if (!entry?.isEndTurn) return;
 
 		this.fired = true;
 		// onFired adds to firedSessions and stops this poller. Call it

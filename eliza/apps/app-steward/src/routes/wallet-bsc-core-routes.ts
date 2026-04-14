@@ -11,20 +11,17 @@
  *   POST /api/wallet/production-defaults
  */
 import type http from "node:http";
-import {
-  loadElizaConfig,
-  saveElizaConfig,
-} from "@elizaos/agent/config/config";
-import { sendJson, sendJsonError } from "@elizaos/app-core";
-import { readCompatJsonBody } from "@elizaos/app-core";
-import { handleWalletBscRoutes } from "../api/wallet-bsc-routes";
-import { getWalletAddresses } from "../api/wallet";
-import { resolveWalletRpcReadiness } from "../api/wallet-rpc";
+import { loadElizaConfig, saveElizaConfig } from "@elizaos/agent/config/config";
+import { readCompatJsonBody } from "@elizaos/app-core/api/compat-route-shared";
+import { sendJson, sendJsonError } from "@elizaos/app-core/api/response";
 import {
   buildBscTradePreflight,
   buildBscTradeQuote,
   resolvePrimaryBscRpcUrl,
 } from "../api/bsc-trade";
+import { getWalletAddresses } from "../api/wallet";
+import { handleWalletBscRoutes } from "../api/wallet-bsc-routes";
+import { resolveWalletRpcReadiness } from "../api/wallet-rpc";
 import {
   loadWalletTradingProfile,
   updateWalletTradeLedgerEntryStatus,
@@ -44,7 +41,10 @@ export async function handleWalletBscCoreRoutes(
   _state: unknown,
 ): Promise<boolean> {
   const method = req.method?.toUpperCase() ?? "GET";
-  const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
+  const url = new URL(
+    req.url ?? "/",
+    `http://${req.headers.host ?? "localhost"}`,
+  );
   const pathname = url.pathname;
 
   const config = loadElizaConfig();

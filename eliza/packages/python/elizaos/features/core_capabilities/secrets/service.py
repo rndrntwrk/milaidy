@@ -9,8 +9,9 @@ Ported from plugin-secrets-manager TypeScript ``SecretsService``.
 
 from __future__ import annotations
 
+import builtins
 import time
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, Callable, ClassVar
 
 from elizaos.types import Service
 
@@ -31,6 +32,7 @@ from .types import (
     SecretContext,
     SecretLevel,
     SecretMetadata,
+    PluginRequirementStatus,
     SecretsError,
     SecretsServiceConfig,
     ValidationResult,
@@ -232,7 +234,7 @@ class SecretsService(Service):
         self,
         plugin_id: str,
         requirements: dict[str, PluginSecretRequirement],
-    ) -> dict[str, Any]:
+    ) -> PluginRequirementStatus:
         """Check which secrets are missing for a plugin."""
         missing_required: list[str] = []
         missing_optional: list[str] = []
@@ -247,18 +249,21 @@ class SecretsService(Service):
                     missing_optional.append(key)
                 continue
 
-        return {
-            "ready": len(missing_required) == 0 and len(invalid) == 0,
-            "missing_required": missing_required,
-            "missing_optional": missing_optional,
-            "invalid": invalid,
-        }
+        ready = len(missing_required) == 0 and len(invalid) == 0
+        return PluginRequirementStatus(
+            plugin_id=plugin_id,
+            ready=ready,
+            missing_required=missing_required,
+            missing_optional=missing_optional,
+            invalid=invalid,
+            message="All secrets available" if ready else f"Missing: {', '.join(missing_required)}",
+        )
 
     async def get_missing_secrets(
-        self, keys: list[str], level: str = "global"
-    ) -> list[str]:
+        self, keys: builtins.list[str], level: str = "global"
+    ) -> builtins.list[str]:
         """Get missing secrets for a set of keys."""
-        missing: list[str] = []
+        missing: builtins.list[str] = []
         for key in keys:
             ctx = SecretContext(level=SecretLevel(level), agent_id=str(self.runtime.agent_id))
             if not await self.exists(key, ctx):
@@ -269,12 +274,27 @@ class SecretsService(Service):
     # Change notifications
     # ------------------------------------------------------------------
 
-    def on_secret_changed(self, key: str, callback: SecretChangeCallback) -> None:
+    def on_secret_changed(
+        self, key: str, callback: SecretChangeCallback
+    ) -> Callable[[], None]:
         cbs = self._change_callbacks.setdefault(key, [])
         cbs.append(callback)
+        def unsubscribe() -> None:
+            callbacks = self._change_callbacks.get(key, [])
+            if callback in callbacks:
+                callbacks.remove(callback)
+            if not callbacks:
+                self._change_callbacks.pop(key, None)
+        return unsubscribe
 
-    def on_any_secret_changed(self, callback: SecretChangeCallback) -> None:
+    def on_any_secret_changed(
+        self, callback: SecretChangeCallback
+    ) -> Callable[[], None]:
         self._global_change_callbacks.append(callback)
+        def unsubscribe() -> None:
+            if callback in self._global_change_callbacks:
+                self._global_change_callbacks.remove(callback)
+        return unsubscribe
 
     async def _emit_change_event(self, event: SecretChangeEvent) -> None:
         for cb in self._change_callbacks.get(event.key, []):
@@ -316,8 +336,8 @@ class SecretsService(Service):
         key: str | None = None,
         action: str | None = None,
         since: float | None = None,
-    ) -> list[SecretAccessLog]:
-        logs = list(self._access_logs)
+    ) -> builtins.list[SecretAccessLog]:
+        logs = builtins.list(self._access_logs)
         if key:
             logs = [l for l in logs if l.secret_key == key]
         if action:

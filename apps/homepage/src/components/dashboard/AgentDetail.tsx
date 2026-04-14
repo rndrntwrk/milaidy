@@ -1,8 +1,12 @@
 import { useCallback, useMemo, useState } from "react";
 import type { ManagedAgent } from "../../lib/AgentProvider";
-import type { AgentStatus } from "../../lib/cloud-api";
+import type { AgentRuntimeState, AgentStatus } from "../../lib/cloud-api";
 import { CloudApiClient } from "../../lib/cloud-api";
-import { formatUptime as formatUptimeShared } from "../../lib/format";
+import {
+  formatDateTime,
+  formatNumber,
+  formatUptime as formatUptimeShared,
+} from "../../lib/format";
 import { openWebUI } from "../../lib/open-web-ui";
 import { CLOUD_BASE } from "../../lib/runtime-config";
 import { ApprovalQueue } from "./ApprovalQueue";
@@ -36,22 +40,7 @@ function formatUptime(seconds?: number): string {
   return formatUptimeShared(seconds, true);
 }
 
-function formatDate(dateStr?: string): string {
-  if (!dateStr) return "—";
-  try {
-    return new Date(dateStr).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return dateStr;
-  }
-}
-
-const STATE_COLORS: Record<string, { text: string; bg: string }> = {
+const STATE_COLORS: Record<AgentRuntimeState, { text: string; bg: string }> = {
   running: { text: "text-status-running", bg: "bg-status-running" },
   paused: { text: "text-brand", bg: "bg-brand" },
   stopped: { text: "text-status-stopped", bg: "bg-status-stopped" },
@@ -149,7 +138,7 @@ export function AgentDetail({
     [managedAgent, agent.agentName],
   );
 
-  const stateColors = STATE_COLORS[agent.state] ?? STATE_COLORS.unknown;
+  const stateColors = STATE_COLORS[agent.state];
 
   return (
     <div className="border border-border bg-surface overflow-hidden">
@@ -298,7 +287,7 @@ function OverviewTab({
   actionError: string | null;
 }) {
   const isCloud = managedAgent.source === "cloud";
-  const stateColors = STATE_COLORS[agent.state] ?? STATE_COLORS.unknown;
+  const stateColors = STATE_COLORS[agent.state];
 
   return (
     <div className="space-y-6">
@@ -324,9 +313,7 @@ function OverviewTab({
         </DataBlock>
         <DataBlock label="MEMORIES">
           <span className="font-mono text-text-light tabular-nums">
-            {agent.memories !== undefined
-              ? agent.memories.toLocaleString()
-              : "—"}
+            {formatNumber(agent.memories)}
           </span>
         </DataBlock>
       </div>
@@ -344,7 +331,10 @@ function OverviewTab({
           </DataBlock>
           <DataBlock label="CREATED">
             <span className="font-mono text-text-light text-xs">
-              {formatDate(managedAgent.createdAt)}
+              {formatDateTime(
+                managedAgent.createdAt,
+                managedAgent.createdAt || "—",
+              )}
             </span>
           </DataBlock>
           {managedAgent.billing && (

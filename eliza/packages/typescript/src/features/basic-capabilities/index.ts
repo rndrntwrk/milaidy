@@ -75,7 +75,6 @@ import {
 } from "../advanced-capabilities/index.ts";
 // Import core capabilities (trust, secrets, plugin-manager)
 import {
-	coreCapabilities,
 	pluginManagerCapability,
 	secretsCapability,
 	trustCapability,

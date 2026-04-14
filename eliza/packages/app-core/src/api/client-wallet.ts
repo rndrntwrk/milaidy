@@ -15,9 +15,14 @@ import type {
   BscTransferExecuteRequest,
   BscTransferExecuteResponse,
   StewardApprovalActionResponse,
+  StewardBalanceResponse,
   StewardHistoryResponse,
   StewardPendingResponse,
   StewardStatusResponse,
+  StewardTokenBalancesResponse,
+  StewardWalletAddressesResponse,
+  StewardWebhookEventsResponse,
+  StewardWebhookEventType,
   WalletAddresses,
   WalletBalancesResponse,
   WalletConfigStatus,
@@ -92,6 +97,13 @@ declare module "./client-base" {
     ): Promise<BscTransferExecuteResponse>;
     getBscTradeTxStatus(hash: string): Promise<BscTradeTxStatusResponse>;
     getStewardStatus(): Promise<StewardStatusResponse>;
+    getStewardAddresses(): Promise<StewardWalletAddressesResponse>;
+    getStewardBalance(chainId?: number): Promise<StewardBalanceResponse>;
+    getStewardTokens(chainId?: number): Promise<StewardTokenBalancesResponse>;
+    getStewardWebhookEvents(opts?: {
+      event?: StewardWebhookEventType;
+      since?: number;
+    }): Promise<StewardWebhookEventsResponse>;
     getStewardPolicies(): Promise<
       Array<{
         id: string;
@@ -176,9 +188,7 @@ declare module "./client-base" {
 // Prototype augmentation
 // ---------------------------------------------------------------------------
 
-ElizaClient.prototype.getWalletAddresses = async function (
-  this: ElizaClient,
-) {
+ElizaClient.prototype.getWalletAddresses = async function (this: ElizaClient) {
   return this.fetch("/api/wallet/addresses");
 };
 
@@ -204,9 +214,7 @@ ElizaClient.prototype.updateWalletConfig = async function (
   });
 };
 
-ElizaClient.prototype.refreshCloudWallets = async function (
-  this: ElizaClient,
-) {
+ElizaClient.prototype.refreshCloudWallets = async function (this: ElizaClient) {
   return this.fetch("/api/wallet/refresh-cloud", {
     method: "POST",
   });
@@ -297,9 +305,40 @@ ElizaClient.prototype.getStewardStatus = async function (this: ElizaClient) {
   return this.fetch("/api/wallet/steward-status");
 };
 
-ElizaClient.prototype.getStewardPolicies = async function (
+ElizaClient.prototype.getStewardAddresses = async function (this: ElizaClient) {
+  return this.fetch("/api/wallet/steward-addresses");
+};
+
+ElizaClient.prototype.getStewardBalance = async function (
   this: ElizaClient,
+  chainId?,
 ) {
+  const qs =
+    chainId == null ? "" : `?chainId=${encodeURIComponent(String(chainId))}`;
+  return this.fetch(`/api/wallet/steward-balances${qs}`);
+};
+
+ElizaClient.prototype.getStewardTokens = async function (
+  this: ElizaClient,
+  chainId?,
+) {
+  const qs =
+    chainId == null ? "" : `?chainId=${encodeURIComponent(String(chainId))}`;
+  return this.fetch(`/api/wallet/steward-tokens${qs}`);
+};
+
+ElizaClient.prototype.getStewardWebhookEvents = async function (
+  this: ElizaClient,
+  opts?,
+) {
+  const params = new URLSearchParams();
+  if (opts?.event) params.set("event", opts.event);
+  if (opts?.since != null) params.set("since", String(opts.since));
+  const qs = params.toString();
+  return this.fetch(`/api/wallet/steward-webhook-events${qs ? `?${qs}` : ""}`);
+};
+
+ElizaClient.prototype.getStewardPolicies = async function (this: ElizaClient) {
   return this.fetch("/api/wallet/steward-policies");
 };
 
@@ -450,10 +489,7 @@ ElizaClient.prototype.getDropStatus = async function (this: ElizaClient) {
   return this.fetch("/api/drop/status");
 };
 
-ElizaClient.prototype.mintAgent = async function (
-  this: ElizaClient,
-  params?,
-) {
+ElizaClient.prototype.mintAgent = async function (this: ElizaClient, params?) {
   return this.fetch("/api/drop/mint", {
     method: "POST",
     body: JSON.stringify(params ?? {}),
@@ -470,9 +506,7 @@ ElizaClient.prototype.mintAgentWhitelist = async function (
   });
 };
 
-ElizaClient.prototype.getWhitelistStatus = async function (
-  this: ElizaClient,
-) {
+ElizaClient.prototype.getWhitelistStatus = async function (this: ElizaClient) {
   return this.fetch("/api/whitelist/status");
 };
 

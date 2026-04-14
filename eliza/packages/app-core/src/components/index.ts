@@ -1,29 +1,12 @@
-// Re-exported from ../ui (same package; avoids barrel cycles via the main entry)
+// Re-export selected reusable UI from @elizaos/ui while keeping app-core's
+// higher-level component surface intact.
 export {
   ConfirmDialog as ConfirmModal,
   type ConfirmDialogProps as ConfirmModalProps,
-  type ConfirmOptions,
-  ErrorBoundary,
   PromptDialog as PromptModal,
   type PromptDialogProps as PromptModalProps,
-  type PromptOptions,
   SaveFooter as ConfigSaveFooter,
-  Skeleton,
-  SkeletonCard,
-  SkeletonChat,
-  SkeletonLine,
-  SkeletonMessage,
-  SkeletonSidebar,
-  SkeletonText,
-  StatCard,
-  StatusBadge,
-  StatusDot,
-  type StatusVariant,
-  Switch,
-  statusToneForBoolean,
-  useConfirm,
-  usePrompt,
-} from "../ui";
+} from "@elizaos/ui";
 export * from "../utils/knowledge-upload-image";
 export * from "../utils/labels";
 export * from "../utils/trajectory-format";

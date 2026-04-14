@@ -7,39 +7,39 @@
  *   GET  /api/wallet/keys      — EVM + Solana keys (loopback + onboarding gate)
  *   GET  /api/wallet/nfts      — EVM NFT fetch
  */
-import http from "node:http";
-import { logger } from "@elizaos/core";
-import { getWalletAddresses } from "../api/wallet";
-import { fetchEvmNfts } from "../api/wallet-evm-balance";
-import { resolveWalletRpcReadiness } from "../api/wallet-rpc";
+import type http from "node:http";
 import {
   type ElizaConfig,
   loadElizaConfig,
 } from "@elizaos/agent/config/config";
-import { deriveAgentVaultId } from "@elizaos/app-core";
-import {
-  createNodePlatformSecureStore,
-  isWalletOsStoreReadEnabled,
-} from "@elizaos/app-core";
-import {
-  deleteWalletSecretsFromOsStore,
-  migrateWalletPrivateKeysToOsStore,
-} from "../security/wallet-os-store-actions";
 import {
   ensureCompatApiAuthorized,
   ensureCompatSensitiveRouteAuthorized,
   getCompatApiToken,
   isDevEnvironment,
-} from "@elizaos/app-core";
-import {
-  sendJsonError as sendJsonErrorResponse,
-  sendJson as sendJsonResponse,
-} from "@elizaos/app-core";
+} from "@elizaos/app-core/api/auth";
+import type { CompatRuntimeState } from "@elizaos/app-core/api/compat-route-shared";
 import {
   isLoopbackRemoteAddress,
   readCompatJsonBody,
-  type CompatRuntimeState,
-} from "@elizaos/app-core";
+} from "@elizaos/app-core/api/compat-route-shared";
+import {
+  sendJsonError as sendJsonErrorResponse,
+  sendJson as sendJsonResponse,
+} from "@elizaos/app-core/api/response";
+import { deriveAgentVaultId } from "@elizaos/app-core/security/agent-vault-id";
+import {
+  createNodePlatformSecureStore,
+  isWalletOsStoreReadEnabled,
+} from "@elizaos/app-core/security/platform-secure-store-node";
+import { logger } from "@elizaos/core";
+import { getWalletAddresses } from "../api/wallet";
+import { fetchEvmNfts } from "../api/wallet-evm-balance";
+import { resolveWalletRpcReadiness } from "../api/wallet-rpc";
+import {
+  deleteWalletSecretsFromOsStore,
+  migrateWalletPrivateKeysToOsStore,
+} from "../security/wallet-os-store-actions";
 import { getStewardBridgeStatus, isStewardConfigured } from "./steward-bridge";
 
 export async function handleWalletCompatRoutes(

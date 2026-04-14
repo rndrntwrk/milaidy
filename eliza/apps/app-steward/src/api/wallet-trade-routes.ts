@@ -1,11 +1,11 @@
-import type { ethers } from "ethers";
+import type { RouteRequestContext } from "@elizaos/agent/api/route-helpers";
 import type { ElizaConfig } from "@elizaos/agent/config/config";
 import type {
   BscTradeQuoteResponse,
   BscUnsignedApprovalTx,
   BscUnsignedTradeTx,
 } from "@elizaos/shared/contracts/wallet";
-import type { RouteRequestContext } from "@elizaos/agent/api/route-helpers";
+import type { ethers } from "ethers";
 import type { TradePermissionMode } from "./trade-safety";
 import type { WalletTradeLedgerRecordInput } from "./wallet-trading-profile";
 

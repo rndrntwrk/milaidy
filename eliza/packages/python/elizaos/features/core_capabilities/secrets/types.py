@@ -232,7 +232,7 @@ class PendingPluginActivation:
 
     plugin_id: str
     required_secrets: list[str]
-    callback: Callable[[], Awaitable[None]]
+    callback: Callable[[], Awaitable[bool]]
     registered_at: float
 
 

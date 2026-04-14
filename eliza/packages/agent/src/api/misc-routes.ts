@@ -4,7 +4,7 @@ import {
   EMOTE_BY_ID,
   EMOTE_CATALOG,
 } from "@elizaos/app-companion/emotes/catalog";
-import { type AgentRuntime, logger, ModelType, type UUID } from "@elizaos/core";
+import { type AgentRuntime, logger, ModelType } from "@elizaos/core";
 import type { ElizaConfig } from "../config/config.js";
 import { loadElizaConfig, saveElizaConfig } from "../config/config.js";
 import type { CustomActionDef } from "../config/types.eliza.js";
@@ -192,7 +192,7 @@ export async function handleMiscRoutes(
       data?: Record<string, unknown>;
       roomId?: string;
     }>(req, res);
-    if (!body || !body.stream) {
+    if (!body?.stream) {
       error(res, "Missing 'stream' field");
       return true;
     }
@@ -458,7 +458,7 @@ export async function handleMiscRoutes(
 
     const handler = body.handler as CustomActionDef["handler"] | undefined;
     const validHandlerTypes = new Set(["http", "shell", "code"]);
-    if (!handler || !handler.type || !validHandlerTypes.has(handler.type)) {
+    if (!handler?.type || !validHandlerTypes.has(handler.type)) {
       error(
         res,
         "handler with valid type (http, shell, code) is required",

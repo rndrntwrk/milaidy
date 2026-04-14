@@ -23,11 +23,8 @@ async def get_security_status(
     state: State | None = None,
 ) -> ProviderResult:
     """Provide current security status including recent events."""
-    security_module: SecurityModuleService | None = None
-    for svc in (runtime.services or {}).values():
-        if getattr(svc, "service_type", None) == "security_module":
-            security_module = svc  # type: ignore[assignment]
-            break
+    service = runtime.get_service("security_module")
+    security_module = service if isinstance(service, SecurityModuleService) else None
 
     if security_module is None:
         return ProviderResult(

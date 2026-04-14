@@ -1,11 +1,7 @@
-/**
- * Knowledge upload zone — file picker, drag-and-drop, URL import.
- *
- * Extracted from KnowledgeView.tsx to keep individual files under ~500 LOC.
- */
-
-import { useApp } from "@elizaos/app-core";
-import { Button, Checkbox, Input } from "@elizaos/app-core";
+import { useApp } from "../../state/useApp";
+import { Button } from "@elizaos/ui/components/ui/button";
+import { Checkbox } from "@elizaos/ui/components/ui/checkbox";
+import { Input } from "@elizaos/ui/components/ui/input";
 import { useCallback, useRef, useState } from "react";
 
 export const MAX_UPLOAD_REQUEST_BYTES = 32 * 1_048_576; // Must match server knowledge route limit
@@ -259,7 +255,9 @@ export function UploadZone({
           <Checkbox
             id="knowledge-upload-image-descriptions"
             checked={includeImageDescriptions}
-            onCheckedChange={(checked) => setIncludeImageDescriptions(!!checked)}
+            onCheckedChange={(checked) =>
+              setIncludeImageDescriptions(!!checked)
+            }
             disabled={uploading}
           />
           <label

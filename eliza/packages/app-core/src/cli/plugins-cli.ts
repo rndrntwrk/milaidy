@@ -689,9 +689,7 @@ export function registerPluginsCli(program: Command): void {
       try {
         const _nodePath = await import("node:path");
         const nodeFs = await import("node:fs");
-        const { resolveUserPath } = await import(
-          "@elizaos/agent/config/paths"
-        );
+        const { resolveUserPath } = await import("@elizaos/agent/config/paths");
         const { loadElizaConfig, saveElizaConfig } = await import(
           "../config/config"
         );

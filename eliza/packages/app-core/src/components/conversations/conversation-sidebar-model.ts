@@ -1,4 +1,4 @@
-import { getChatSourceMeta } from "@elizaos/app-core";
+import { getChatSourceMeta } from "@elizaos/ui/components/composites/chat/chat-source";
 import { normalizeConnectorSource } from "@elizaos/shared/connectors";
 import type * as React from "react";
 

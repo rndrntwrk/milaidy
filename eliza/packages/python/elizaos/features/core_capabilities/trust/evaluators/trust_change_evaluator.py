@@ -42,11 +42,8 @@ async def _handler(
             score=50, reason="No entity to evaluate"
         )
 
-    trust_engine: TrustEngineService | None = None
-    for svc in (runtime.services or {}).values():
-        if getattr(svc, "service_type", None) == "trust_engine":
-            trust_engine = svc  # type: ignore[assignment]
-            break
+    service = runtime.get_service("trust_engine")
+    trust_engine = service if isinstance(service, TrustEngineService) else None
 
     if trust_engine is None:
         return EvaluatorResult.pass_result(

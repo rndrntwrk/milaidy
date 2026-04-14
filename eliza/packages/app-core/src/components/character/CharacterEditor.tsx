@@ -1,25 +1,17 @@
-/**
- * Full-width character editor — replaces the narrow notebook-style CharacterView.
- *
- * Two-panel layout: left panel has roster + identity + bio + system prompt,
- * right panel has style rules + examples. Save/export actions live in the
- * editor header so the content area stays self-contained.
- */
-
+import { SidebarContent } from "@elizaos/ui/components/composites/sidebar/sidebar-content";
+import { SidebarPanel } from "@elizaos/ui/components/composites/sidebar/sidebar-panel";
+import { Sidebar } from "@elizaos/ui/components/composites/sidebar/sidebar-root";
+import { SidebarScrollRegion } from "@elizaos/ui/components/composites/sidebar/sidebar-scroll-region";
+import { Button } from "@elizaos/ui/components/ui/button";
 import {
-  Button,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  PageLayout,
-  Sidebar,
-  SidebarContent,
-  SidebarPanel,
-  SidebarScrollRegion,
-} from "@elizaos/app-core";
+} from "@elizaos/ui/components/ui/dialog";
+import { PageLayout } from "@elizaos/ui/layouts/page-layout/page-layout";
 import { getStylePresets } from "@elizaos/shared/onboarding-presets";
 import { client } from "../../api/client";
 import {
@@ -133,13 +125,6 @@ const idleSaveBtnStyle = {
 
 const pageTabsBoxShadow =
   "0 10px 26px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.05)";
-
-const CHARACTER_EDITOR_TABLIST_CLASSNAME =
-  "flex shrink-0 items-center gap-1 rounded-lg border border-border bg-elevated p-1";
-const CHARACTER_EDITOR_TAB_CLASSNAME =
-  "flex-initial cursor-pointer rounded-md border border-transparent bg-transparent px-[0.6rem] py-1.5 text-center text-2xs font-bold uppercase tracking-[0.1em] text-txt transition-[background,border-color,color,box-shadow] duration-150 hover:border-border hover:bg-bg-hover hover:text-txt-strong";
-const CHARACTER_EDITOR_FOOTER_ACTION_CLASSNAME =
-  "h-9 rounded-xl px-6 text-sm font-bold tracking-[0.05em] transition-[background-color,border-color,color,box-shadow,transform] duration-200 disabled:opacity-50";
 
 /* ── Constants ─────────────────────────────────────────────────────── */
 
@@ -1064,7 +1049,7 @@ export function CharacterEditor({
       </Button>
       <Button
         size="sm"
-        className={CHARACTER_EDITOR_FOOTER_ACTION_CLASSNAME}
+        className="h-9 rounded-xl px-6 text-sm font-bold tracking-[0.05em] transition-[background-color,border-color,color,box-shadow,transform] duration-200 disabled:opacity-50"
         style={hasPendingChanges ? accentGradientStyle : idleSaveBtnStyle}
         disabled={
           characterSaving ||
@@ -1313,7 +1298,7 @@ export function CharacterEditor({
           >
             <div className="flex flex-wrap items-center gap-3 shrink-0">
               <div
-                className={CHARACTER_EDITOR_TABLIST_CLASSNAME}
+                className="flex shrink-0 items-center gap-1 rounded-lg border border-border bg-elevated p-1"
                 style={{ boxShadow: pageTabsBoxShadow }}
                 role="tablist"
                 aria-label={t("charactereditor.TabbedEditorGroupLabel", {
@@ -1329,7 +1314,7 @@ export function CharacterEditor({
                     aria-selected={activePage === page}
                     aria-controls={`character-editor-panel-${page}`}
                     tabIndex={activePage === page ? 0 : -1}
-                    className={CHARACTER_EDITOR_TAB_CLASSNAME}
+                    className="flex-initial cursor-pointer rounded-md border border-transparent bg-transparent px-[0.6rem] py-1.5 text-center text-2xs font-bold uppercase tracking-[0.1em] text-txt transition-[background,border-color,color,box-shadow] duration-150 hover:border-border hover:bg-bg-hover hover:text-txt-strong"
                     style={
                       activePage === page ? accentGradientStyle : undefined
                     }
@@ -1674,7 +1659,7 @@ export function CharacterEditor({
               type="button"
               variant="default"
               size="sm"
-              className={CHARACTER_EDITOR_FOOTER_ACTION_CLASSNAME}
+              className="h-9 rounded-xl px-6 text-sm font-bold tracking-[0.05em] transition-[background-color,border-color,color,box-shadow,transform] duration-200 disabled:opacity-50"
               style={accentGradientStyle}
               onClick={() => {
                 if (customizing) {

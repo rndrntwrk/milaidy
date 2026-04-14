@@ -10,6 +10,7 @@ import { logger } from "@elizaos/core";
 import { normalizeCloudSiteUrl } from "../cloud/base-url.js";
 import {
   type CloudWalletDescriptor,
+  type CloudWalletProvider,
   ElizaCloudClient,
 } from "../cloud/bridge-client.js";
 import {
@@ -34,6 +35,7 @@ import {
   generateWalletForChain,
   getWalletAddresses,
   importWallet,
+  setSolanaWalletEnv,
   validatePrivateKey,
   type WalletBalancesResponse,
   type WalletChain,
@@ -237,7 +239,7 @@ function readPrimaryMap(config: ElizaConfig): WalletPrimaryMap {
   return out;
 }
 
-function coerceCloudProvider(value: unknown): WalletProviderKind {
+function coerceCloudProvider(value: unknown): CloudWalletProvider {
   return value === "privy" || value === "steward" ? value : "privy";
 }
 
@@ -383,7 +385,9 @@ async function triggerWalletRuntimeReload(
   ctx: WalletRouteContext,
   reason: string,
 ): Promise<boolean> {
-  const restarted = ctx.restartRuntime ? await ctx.restartRuntime(reason) : false;
+  const restarted = ctx.restartRuntime
+    ? await ctx.restartRuntime(reason)
+    : false;
   if (!restarted) {
     ctx.scheduleRuntimeRestart?.(reason);
   }
@@ -955,7 +959,7 @@ export async function handleWalletRoutes(
           warnings.push(
             provisionResult.warnings[index] ??
               `Cloud ${failure.chain} wallet import failed`,
-            );
+          );
         }
       }
       if (!descriptors.evm && !descriptors.solana) {

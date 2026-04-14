@@ -41,10 +41,10 @@ describe("loadElizaConfig", () => {
     );
     await fs.writeFile(
       path.join(stateDir, "config.env"),
-      [
+      `${[
         "WALLET_SOURCE_EVM=cloud",
         "MILADY_CLOUD_EVM_ADDRESS=0x1234567890abcdef1234567890abcdef12345678",
-      ].join("\n") + "\n",
+      ].join("\n")}\n`,
       "utf8",
     );
 

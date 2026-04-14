@@ -262,7 +262,7 @@ export function requireLiveProvider(
  */
 export function isLiveTestEnabled(): boolean {
   return (
-    process.env.ELIZA_LIVE_TEST === "1" ||
+    process.env.MILADY_LIVE_TEST === "1" ||
     process.env.ELIZA_LIVE_TEST === "1" ||
     process.env.LIVE === "1"
   );

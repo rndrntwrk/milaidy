@@ -1,8 +1,3 @@
-/**
- * Quick-trade panel — token address input, amount presets, buy/sell,
- * quote display, execution confirmation, and tx status tracking.
- */
-
 import type {
   BscTradeExecuteRequest,
   BscTradeExecuteResponse,
@@ -11,13 +6,14 @@ import type {
   BscTradeQuoteResponse,
   BscTradeTxStatusResponse,
   StewardPolicyResult,
-} from "@elizaos/app-core";
-import { useApp } from "@elizaos/app-core";
-import { Button, Input } from "@elizaos/app-core";
+} from "@elizaos/shared/contracts/wallet";
+import { useApp } from "../../state/useApp";
+import { Button } from "@elizaos/ui/components/ui/button";
+import { Input } from "@elizaos/ui/components/ui/input";
 import { useCallback, useState } from "react";
-import { HEX_ADDRESS_RE } from "@elizaos/app-companion/ui";
+import { HEX_ADDRESS_RE } from "./constants";
 import { formatBalance, type TrackedToken } from "./constants";
-import { StewardLogo } from "@elizaos/app-steward/ui";
+import { StewardLogo } from "@elizaos/app-steward/StewardLogo";
 
 /* ── Constants ─────────────────────────────────────────────────────── */
 

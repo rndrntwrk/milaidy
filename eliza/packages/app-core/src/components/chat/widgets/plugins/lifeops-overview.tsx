@@ -1,4 +1,5 @@
-import { Badge, Button } from "@elizaos/app-core";
+import { Badge } from "@elizaos/ui/components/ui/badge";
+import { Button } from "@elizaos/ui/components/ui/button";
 import type {
   LifeOpsActiveReminderView,
   LifeOpsCadence,

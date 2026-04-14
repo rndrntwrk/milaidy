@@ -1,17 +1,17 @@
+import { client } from "@elizaos/app-core/api/client";
+import type { AgentPreflightResult } from "@elizaos/app-core/api/client-types-cloud";
+import { useApp } from "@elizaos/app-core/state/useApp";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { AgentPreflightResult } from "@elizaos/app-core";
-import { client } from "@elizaos/app-core";
-import { useApp } from "@elizaos/app-core";
 import { AgentTabsSection } from "./AgentTabsSection";
 import {
   ADAPTER_NAME_TO_TAB,
   AGENT_LABELS,
   AGENT_PROVIDER_MAP,
   AGENT_TABS,
-  AIDER_MODELS,
-  AIDER_PROVIDER_MAP,
   type AgentSelectionStrategy,
   type AgentTab,
+  AIDER_MODELS,
+  AIDER_PROVIDER_MAP,
   type AiderProvider,
   type ApprovalPreset,
   type AuthResult,

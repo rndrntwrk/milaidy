@@ -1,5 +1,5 @@
-import type { WorkbenchTodo } from "@elizaos/app-core";
-import { Badge } from "@elizaos/app-core";
+import type { WorkbenchTodo } from "../../../../api/client-types-config";
+import { Badge } from "@elizaos/ui/components/ui/badge";
 import { ListTodo } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { client } from "../../../../api";

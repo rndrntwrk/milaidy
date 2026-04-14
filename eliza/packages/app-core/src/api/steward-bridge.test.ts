@@ -68,26 +68,29 @@ vi.mock("@stwd/sdk", () => ({
   StewardClient: MockStewardClient,
 }));
 
-vi.mock("../services/steward-credentials", () => ({
-  loadStewardCredentials: vi.fn(() => null),
-  resolveEffectiveStewardConfig: resolveEffectiveStewardConfigMock,
-  saveStewardCredentials: saveStewardCredentialsMock,
-}));
+vi.mock(
+  "../../../../apps/app-steward/src/services/steward-credentials.ts",
+  () => ({
+    loadStewardCredentials: vi.fn(() => null),
+    resolveEffectiveStewardConfig: resolveEffectiveStewardConfigMock,
+    saveStewardCredentials: saveStewardCredentialsMock,
+  }),
+);
 
-vi.mock("@miladyai/agent/api/wallet", () => ({
+vi.mock("../../../../apps/app-steward/src/api/wallet.ts", () => ({
   fetchSolanaBalances: fetchSolanaBalancesMock,
   fetchSolanaNativeBalanceViaRpc: fetchSolanaNativeBalanceViaRpcMock,
 }));
 
-vi.mock("@miladyai/agent/api/wallet-evm-balance", () => ({
+vi.mock("../../../../apps/app-steward/src/api/wallet-evm-balance.ts", () => ({
   fetchEvmNativeBalanceViaRpc: fetchEvmNativeBalanceViaRpcMock,
 }));
 
-vi.mock("@miladyai/agent/api/wallet-rpc", () => ({
+vi.mock("../../../../apps/app-steward/src/api/wallet-rpc.ts", () => ({
   resolveWalletRpcReadiness: resolveWalletRpcReadinessMock,
 }));
 
-vi.mock("@miladyai/agent/config/config", () => ({
+vi.mock("@elizaos/agent/config/config", () => ({
   loadElizaConfig: loadElizaConfigMock,
 }));
 
@@ -98,7 +101,7 @@ import {
   getStewardBridgeStatus,
   getStewardTokenBalances,
   isStewardConfigured,
-} from "./steward-bridge";
+} from "../../../../apps/app-steward/src/routes/steward-bridge";
 
 describe("steward-bridge persisted credential fallback", () => {
   const originalFetch = globalThis.fetch;

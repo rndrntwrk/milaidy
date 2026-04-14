@@ -17,6 +17,12 @@
  */
 
 import { useCallback, useRef, useState } from "react";
+import type {
+  WalletChainKind,
+  WalletEntry,
+  WalletPrimaryMap,
+  WalletSource,
+} from "@elizaos/shared/contracts/wallet";
 import {
   type DropStatus,
   type MintResult,
@@ -30,7 +36,7 @@ import {
   type WhitelistStatus,
   client,
 } from "../api";
-import type { PromptOptions } from "@elizaos/app-core";
+import type { PromptOptions } from "@elizaos/ui/components/ui/confirm-dialog";
 import { confirmDesktopAction } from "../utils";
 import {
   loadBrowserEnabled,
@@ -39,9 +45,6 @@ import {
   saveWalletEnabled,
 } from "./persistence";
 import type { InventoryChainFilters } from "./types";
-
-type WalletChainKind = "evm" | "solana";
-type WalletSource = "local" | "cloud";
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -100,7 +103,15 @@ export function useWalletState({
     useState<WalletExportResult | null>(null);
   const [walletExportVisible, setWalletExportVisible] = useState(false);
   const [walletApiKeySaving, setWalletApiKeySaving] = useState(false);
-  const [walletPrimaryPending, setWalletPrimaryPending] = useState(false);
+  const [wallets, setWallets] = useState<WalletEntry[]>([]);
+  const [walletPrimary, setWalletPrimaryMap] =
+    useState<WalletPrimaryMap | null>(null);
+  const [walletPrimaryRestarting] = useState<
+    Partial<Record<WalletChainKind, boolean>>
+  >({});
+  const [walletPrimaryPending, setWalletPrimaryPending] = useState<
+    Partial<Record<WalletChainKind, boolean>>
+  >({});
   const [cloudRefreshing, setCloudRefreshing] = useState(false);
   const [inventorySort, setInventorySort] = useState<
     "chain" | "symbol" | "value"
@@ -152,6 +163,8 @@ export function useWalletState({
       evmAddress: cfg.evmAddress,
       solanaAddress: cfg.solanaAddress,
     });
+    setWallets(Array.isArray(cfg.wallets) ? cfg.wallets : []);
+    setWalletPrimaryMap(cfg.primary ?? null);
     return cfg;
   }, []);
 
@@ -161,20 +174,21 @@ export function useWalletState({
       chain: WalletChainKind,
       source: WalletSource,
     ) =>
-      Array.isArray((config as { wallets?: unknown[] } | null | undefined)?.wallets)
-        ? ((config as { wallets?: Array<Record<string, unknown>> }).wallets ?? []).some(
-            (wallet) =>
-              wallet?.chain === chain &&
-              wallet?.source === source &&
-              typeof wallet?.address === "string" &&
-              wallet.address.trim().length > 0,
-          )
-        : false,
+      (config?.wallets ?? []).some(
+        (wallet) =>
+          wallet.chain === chain &&
+          wallet.source === source &&
+          typeof wallet.address === "string" &&
+          wallet.address.trim().length > 0,
+      ),
     [],
   );
 
   const normalizeCloudWalletNotice = useCallback((warning: string) => {
-    const detail = warning.replace(/^Cloud (evm|solana) wallet import failed:\s*/i, "");
+    const detail = warning.replace(
+      /^Cloud (evm|solana) wallet import failed:\s*/i,
+      "",
+    );
     if (/Invalid Solana address \(base58, 32–44 chars\)/i.test(detail)) {
       return "the connected Eliza Cloud backend is still using the legacy Solana wallet contract";
     }
@@ -273,7 +287,7 @@ export function useWalletState({
       setWalletError(null);
       try {
         await client.updateWalletConfig(config);
-        const selectedProviders = config.selections ?? {};
+        const selectedProviders = config.selections;
         const shouldImportCloudWallets =
           selectedProviders.evm === "eliza-cloud" &&
           selectedProviders.bsc === "eliza-cloud" &&
@@ -341,11 +355,16 @@ export function useWalletState({
     } finally {
       setCloudRefreshing(false);
     }
-  }, [fetchWalletConfig, loadBalances, setActionNotice, summarizeCloudWalletImport]);
+  }, [
+    fetchWalletConfig,
+    loadBalances,
+    setActionNotice,
+    summarizeCloudWalletImport,
+  ]);
 
   const setWalletPrimary = useCallback(
     async (chain: WalletChainKind, source: WalletSource) => {
-      setWalletPrimaryPending(true);
+      setWalletPrimaryPending((prev) => ({ ...prev, [chain]: true }));
       setWalletError(null);
       try {
         let currentConfig = walletConfig;
@@ -375,7 +394,11 @@ export function useWalletState({
           `Failed to switch wallet primary: ${err instanceof Error ? err.message : "network error"}`,
         );
       } finally {
-        setWalletPrimaryPending(false);
+        setWalletPrimaryPending((prev) => {
+          const next = { ...prev };
+          delete next[chain];
+          return next;
+        });
       }
     },
     [fetchWalletConfig, hasWalletSource, loadBalances, walletConfig],
@@ -549,6 +572,9 @@ export function useWalletState({
       walletExportData,
       walletExportVisible,
       walletApiKeySaving,
+      wallets,
+      walletPrimary,
+      walletPrimaryRestarting,
       walletPrimaryPending,
       cloudRefreshing,
       inventorySort,
@@ -587,6 +613,7 @@ export function useWalletState({
     handleWalletApiKeySave,
     setWalletPrimary,
     setPrimary: setWalletPrimary,
+    refreshCloud: refreshCloudWallets,
     refreshCloudWallets,
     handleExportKeys,
     loadRegistryStatus,

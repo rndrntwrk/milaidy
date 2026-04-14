@@ -31,6 +31,11 @@ const packageDir = path.resolve(repoRoot, packageDirArg);
 const packageJsonPath = path.join(packageDir, "package.json");
 const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8"));
 const workspaceVersions = collectWorkspaceVersions(repoRoot);
+const OPTIONAL_PLUGIN_FALLBACK_VERSIONS = new Map([
+  ["@elizaos/plugin-sql", "alpha"],
+  ["@elizaos/plugin-ollama", "alpha"],
+  ["@elizaos/plugin-local-ai", "alpha"],
+]);
 
 const publishManifest = {
   ...packageJson,
@@ -158,6 +163,10 @@ function rewriteWorkspaceDeps(section, versions) {
       if (typeof version === "string" && version.startsWith("workspace:")) {
         const resolvedVersion = versions.get(name);
         if (!resolvedVersion) {
+          const fallbackVersion = resolveWorkspaceFallbackVersion(name);
+          if (fallbackVersion) {
+            return [name, fallbackVersion];
+          }
           throw new Error(
             `no local version found for workspace dependency ${name}`,
           );
@@ -169,6 +178,16 @@ function rewriteWorkspaceDeps(section, versions) {
   );
 
   return rewritten;
+}
+
+function resolveWorkspaceFallbackVersion(name) {
+  const localUpstreamsDisabled =
+    process.env.MILADY_SKIP_LOCAL_UPSTREAMS === "1" ||
+    process.env.ELIZA_SKIP_LOCAL_UPSTREAMS === "1";
+  if (!localUpstreamsDisabled) {
+    return null;
+  }
+  return OPTIONAL_PLUGIN_FALLBACK_VERSIONS.get(name) ?? null;
 }
 
 function normalizeWorkspaceVersion(spec, resolvedVersion) {

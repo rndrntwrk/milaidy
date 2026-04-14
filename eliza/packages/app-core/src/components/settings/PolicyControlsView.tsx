@@ -1,18 +1,10 @@
-/**
- * PolicyControlsView — wallet policy settings for Steward.
- * All monetary values are in USD for cross-chain compatibility.
- * Simple settings rows that match the rest of the Settings page.
- */
-
-import {
-  Button,
-  ConfirmDialog,
-  Input,
-  Label,
-  Slider,
-  Spinner,
-  Switch,
-} from "@elizaos/app-core";
+import { Button } from "@elizaos/ui/components/ui/button";
+import { ConfirmDialog } from "@elizaos/ui/components/ui/confirm-dialog";
+import { Input } from "@elizaos/ui/components/ui/input";
+import { Label } from "@elizaos/ui/components/ui/label";
+import { Slider } from "@elizaos/ui/components/ui/slider";
+import { Spinner } from "@elizaos/ui/components/ui/spinner";
+import { Switch } from "@elizaos/ui/components/ui/switch";
 import { AlertTriangle } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -38,7 +30,7 @@ import {
   isValidAddress,
   TIMEZONES,
 } from "../policy-controls";
-import { StewardLogo } from "@elizaos/app-steward/ui";
+import { StewardLogo } from "@elizaos/app-steward/StewardLogo";
 
 const asRecord = (v: unknown) => v as unknown as Record<string, unknown>;
 

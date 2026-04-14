@@ -399,7 +399,7 @@ function shortError(err: unknown, maxLen = 280): string {
   return `${oneLine.slice(0, maxLen)}... (see logs for full details)`;
 }
 
-function redactSensitiveDiagnostics(input: string): string {
+export function redactSensitiveDiagnostics(input: string): string {
   return input
     .replace(
       /(authorization\s*[:=]\s*bearer\s+)([a-z0-9._-]+)/gi,

@@ -46,7 +46,9 @@ function readPrimaryWalletSource(
   }
 
   const envKey =
-    chain === "evm" ? process.env.WALLET_SOURCE_EVM : process.env.WALLET_SOURCE_SOLANA;
+    chain === "evm"
+      ? process.env.WALLET_SOURCE_EVM
+      : process.env.WALLET_SOURCE_SOLANA;
   return envKey === "local" || envKey === "cloud" ? envKey : null;
 }
 
@@ -121,7 +123,9 @@ export function resolveWalletCapabilityStatus(state: {
   const rpcReadiness = resolveWalletRpcReadiness(state.config);
   const automationMode = resolveWalletAutomationMode(state.config);
   const localSignerAvailable = Boolean(process.env.EVM_PRIVATE_KEY?.trim());
-  const localSolanaSignerAvailable = Boolean(process.env.SOLANA_PRIVATE_KEY?.trim());
+  const localSolanaSignerAvailable = Boolean(
+    process.env.SOLANA_PRIVATE_KEY?.trim(),
+  );
   const hasWallet = Boolean(addrs.evmAddress || addrs.solanaAddress);
   const hasEvm = Boolean(addrs.evmAddress);
   const pluginEvmLoaded = resolvePluginEvmLoaded(state.runtime);

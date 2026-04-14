@@ -10,9 +10,9 @@ from __future__ import annotations
 import math
 import time
 from typing import TYPE_CHECKING, ClassVar
-from uuid import UUID
 
 from elizaos.types import Service, ServiceType
+from elizaos.types.primitives import UUID
 
 from .types import (
     SecurityActionResponse,

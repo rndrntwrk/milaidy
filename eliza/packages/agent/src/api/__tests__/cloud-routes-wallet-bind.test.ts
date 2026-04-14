@@ -40,6 +40,16 @@ import { type CloudRouteState, handleCloudRoute } from "../cloud-routes.js";
 import { persistConfigEnv } from "../config-env.js";
 
 const ORIGINAL_ENV = { ...process.env };
+const ORIGINAL_FETCH = globalThis.fetch;
+
+function makeFetchMock(
+  impl: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>,
+) {
+  const fetchMock = vi.fn(impl);
+  return Object.assign(fetchMock, {
+    preconnect: ORIGINAL_FETCH.preconnect.bind(ORIGINAL_FETCH),
+  });
+}
 
 function makeResponseCollector() {
   let body = "";
@@ -134,7 +144,7 @@ describe("handleCloudRoute cloud wallet binding", () => {
       restartRuntime,
     };
 
-    globalThis.fetch = vi.fn(
+    globalThis.fetch = makeFetchMock(
       async () =>
         new Response(
           JSON.stringify({
@@ -144,7 +154,7 @@ describe("handleCloudRoute cloud wallet binding", () => {
           }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         ),
-    ) as typeof fetch;
+    );
 
     const handled = await handleCloudRoute(
       {
@@ -265,7 +275,7 @@ describe("handleCloudRoute cloud wallet binding", () => {
       restartRuntime,
     };
 
-    globalThis.fetch = vi.fn(
+    globalThis.fetch = makeFetchMock(
       async () =>
         new Response(
           JSON.stringify({
@@ -275,7 +285,7 @@ describe("handleCloudRoute cloud wallet binding", () => {
           }),
           { status: 200, headers: { "Content-Type": "application/json" } },
         ),
-    ) as typeof fetch;
+    );
 
     await handleCloudRoute(
       {
@@ -335,7 +345,11 @@ describe("handleCloudRoute cloud wallet binding", () => {
             executeRpc: vi.fn(),
           }) as never,
         init: vi.fn(),
-      } as CloudRouteState["cloudManager"],
+        connect: vi.fn(async () => ({ agentName: "rollback-agent" })),
+        disconnect: vi.fn(async () => undefined),
+        getStatus: () => "idle",
+        getActiveAgentId: () => null,
+      },
       saveConfig(config) {
         savedConfigs.push(structuredClone(config));
       },
@@ -344,14 +358,17 @@ describe("handleCloudRoute cloud wallet binding", () => {
 
     // Drive the route — cloud-login poll returning authenticated
     const originalFetch = globalThis.fetch;
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        status: "authenticated",
-        apiKey: "rollback-key",
-        user: { id: "u-rollback" },
-      }),
-    }) as typeof fetch;
+    globalThis.fetch = makeFetchMock(
+      async () =>
+        new Response(
+          JSON.stringify({
+            status: "authenticated",
+            apiKey: "rollback-key",
+            user: { id: "u-rollback" },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+    );
 
     await handleCloudRoute(
       {

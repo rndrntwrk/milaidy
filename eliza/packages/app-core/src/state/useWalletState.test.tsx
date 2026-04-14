@@ -360,7 +360,6 @@ describe("useWalletState cloud wallet import", () => {
     const { result } = renderHook(() => useWalletState(params));
 
     await act(async () => {
-      await result.current.loadWalletConfig();
       await result.current.setPrimary("evm", "local");
     });
 
@@ -470,7 +469,6 @@ describe("useWalletState cloud wallet import", () => {
     const { result } = renderHook(() => useWalletState(params));
 
     await act(async () => {
-      await result.current.loadWalletConfig();
       await result.current.setPrimary("solana", "cloud");
     });
 

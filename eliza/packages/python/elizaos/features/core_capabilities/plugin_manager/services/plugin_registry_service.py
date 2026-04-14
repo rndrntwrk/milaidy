@@ -129,7 +129,7 @@ def _to_metadata(plugin: RegistryPlugin) -> PluginMetadata:
 async def _fetch_json(url: str) -> Any:
     """Fetch JSON from *url* using httpx if available, falling back to urllib."""
     try:
-        import httpx  # type: ignore[import-untyped]
+        httpx = __import__("httpx")
 
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.get(url)

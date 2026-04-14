@@ -198,22 +198,22 @@ export class PluginManagerService extends Service implements PluginRegistry {
 
 			if (plugin.actions) {
 				for (const action of plugin.actions) {
-					state.components!.actions.add(action.name);
+					state.components?.actions.add(action.name);
 				}
 			}
 			if (plugin.providers) {
 				for (const provider of plugin.providers) {
-					state.components!.providers.add(provider.name);
+					state.components?.providers.add(provider.name);
 				}
 			}
 			if (plugin.evaluators) {
 				for (const evaluator of plugin.evaluators) {
-					state.components!.evaluators.add(evaluator.name);
+					state.components?.evaluators.add(evaluator.name);
 				}
 			}
 			if (plugin.services) {
 				for (const service of plugin.services) {
-					state.components!.services.add(service.serviceType);
+					state.components?.services.add(service.serviceType);
 				}
 			}
 
@@ -394,7 +394,7 @@ export class PluginManagerService extends Service implements PluginRegistry {
 		if (!this.componentRegistry.has(pluginId)) {
 			this.componentRegistry.set(pluginId, []);
 		}
-		this.componentRegistry.get(pluginId)!.push(registration);
+		this.componentRegistry.get(pluginId)?.push(registration);
 	}
 
 	private async registerPluginComponents(plugin: ElizaPlugin): Promise<void> {
@@ -408,7 +408,7 @@ export class PluginManagerService extends Service implements PluginRegistry {
 		if (plugin.actions) {
 			for (const action of plugin.actions) {
 				await this.runtime.registerAction(action);
-				pluginState.components!.actions.add(action.name);
+				pluginState.components?.actions.add(action.name);
 				this.trackComponentRegistration(pluginState.id, "action", action.name);
 			}
 		}
@@ -416,7 +416,7 @@ export class PluginManagerService extends Service implements PluginRegistry {
 		if (plugin.providers) {
 			for (const provider of plugin.providers) {
 				await this.runtime.registerProvider(provider);
-				pluginState.components!.providers.add(provider.name);
+				pluginState.components?.providers.add(provider.name);
 				this.trackComponentRegistration(
 					pluginState.id,
 					"provider",
@@ -428,7 +428,7 @@ export class PluginManagerService extends Service implements PluginRegistry {
 		if (plugin.evaluators) {
 			for (const evaluator of plugin.evaluators) {
 				await this.runtime.registerEvaluator(evaluator);
-				pluginState.components!.evaluators.add(evaluator.name);
+				pluginState.components?.evaluators.add(evaluator.name);
 				this.trackComponentRegistration(
 					pluginState.id,
 					"evaluator",
@@ -440,17 +440,17 @@ export class PluginManagerService extends Service implements PluginRegistry {
 		if (plugin.events) {
 			for (const [eventName, eventHandlers] of Object.entries(plugin.events)) {
 				if (!eventHandlers) continue;
-				if (!pluginState.components!.eventHandlers.has(eventName)) {
-					pluginState.components!.eventHandlers.set(eventName, new Set());
+				if (!pluginState.components?.eventHandlers.has(eventName)) {
+					pluginState.components?.eventHandlers.set(eventName, new Set());
 				}
 				for (const eventHandler of eventHandlers) {
 					this.runtime.registerEvent(
 						eventName,
 						eventHandler as (params: EventPayload) => Promise<void>,
 					);
-					pluginState
-						.components!.eventHandlers.get(eventName)!
-						.add(
+					pluginState.components?.eventHandlers
+						.get(eventName)
+						?.add(
 							eventHandler as unknown as (
 								params: EventPayload,
 							) => Promise<void>,
@@ -468,7 +468,7 @@ export class PluginManagerService extends Service implements PluginRegistry {
 			for (const ServiceClass of plugin.services) {
 				await this.runtime.registerService(ServiceClass);
 				const serviceType = ServiceClass.serviceType as ServiceTypeName;
-				pluginState.components!.services.add(serviceType);
+				pluginState.components?.services.add(serviceType);
 				this.trackComponentRegistration(pluginState.id, "service", serviceType);
 			}
 		}

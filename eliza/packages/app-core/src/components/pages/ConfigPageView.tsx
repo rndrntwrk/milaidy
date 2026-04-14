@@ -7,13 +7,13 @@
  */
 
 import type { WalletRpcSelections } from "@elizaos/shared/contracts/wallet";
+import { Button } from "@elizaos/ui/components/ui/button";
 import {
-  Button,
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-} from "@elizaos/app-core";
+} from "@elizaos/ui/components/ui/dialog";
 import { useCallback, useEffect, useState } from "react";
 import { useApp } from "../../state";
 import {

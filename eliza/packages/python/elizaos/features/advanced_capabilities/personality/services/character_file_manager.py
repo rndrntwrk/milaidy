@@ -15,7 +15,10 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from google.protobuf.json_format import MessageToDict, ParseDict
+
 from elizaos.types import MemoryType, Service
+from elizaos.types.agent import CharacterSettings, StyleGuides
 
 from ..types import PERSONALITY_SERVICE_TYPE
 
@@ -270,20 +273,28 @@ class CharacterFileManager(Service):
                 character.message_examples = current_examples + modification["message_examples"]
 
             if "style" in modification:
-                current_style = getattr(character, "style", {}) or {}
-                if isinstance(current_style, dict) and isinstance(modification["style"], dict):
-                    for key, value in modification["style"].items():
-                        if key in current_style and isinstance(current_style[key], list):
-                            current_style[key] = current_style[key] + (value if isinstance(value, list) else [value])
-                        else:
-                            current_style[key] = value
-                    character.style = current_style
+                style_update = modification["style"]
+                if isinstance(style_update, dict):
+                    current_style = MessageToDict(
+                        character.style, preserving_proto_field_name=True
+                    )
+                    for key, value in style_update.items():
+                        existing = current_style.get(key, [])
+                        existing_list = existing if isinstance(existing, list) else []
+                        incoming_list = value if isinstance(value, list) else [value]
+                        current_style[key] = existing_list + incoming_list
+                    character.style.CopyFrom(ParseDict(current_style, StyleGuides()))
 
             if "settings" in modification:
-                current_settings = getattr(character, "settings", {}) or {}
-                if isinstance(current_settings, dict):
-                    current_settings.update(modification["settings"])
-                    character.settings = current_settings
+                settings_update = modification["settings"]
+                if isinstance(settings_update, dict):
+                    current_settings = MessageToDict(
+                        character.settings, preserving_proto_field_name=True
+                    )
+                    current_settings.update(settings_update)
+                    character.settings.CopyFrom(
+                        ParseDict(current_settings, CharacterSettings())
+                    )
 
             # Write to file if available
             if self._character_file_path:

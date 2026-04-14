@@ -5,8 +5,18 @@
  *   POST /api/wallet/trade/execute    — BSC DEX trade execution
  *   POST /api/wallet/transfer/execute — token / BNB transfer execution
  */
-import http from "node:http";
+import type http from "node:http";
+import { loadElizaConfig } from "@elizaos/agent/config/config";
+import { ensureCompatApiAuthorized } from "@elizaos/app-core/api/auth";
+import type { CompatRuntimeState } from "@elizaos/app-core/api/compat-route-shared";
+import { readCompatJsonBody } from "@elizaos/app-core/api/compat-route-shared";
+import {
+  sendJsonError as sendJsonErrorResponse,
+  sendJson as sendJsonResponse,
+} from "@elizaos/app-core/api/response";
 import { logger } from "@elizaos/core";
+import { type PolicyResult, StewardApiError } from "@stwd/sdk";
+import { ethers } from "ethers";
 import {
   buildBscApproveUnsignedTx,
   buildBscBuyUnsignedTx,
@@ -18,8 +28,6 @@ import {
 import { getWalletAddresses } from "../api/wallet";
 import { resolveWalletRpcReadiness } from "../api/wallet-rpc";
 import { recordWalletTradeLedgerEntry } from "../api/wallet-trading-profile";
-import { type PolicyResult, StewardApiError } from "@stwd/sdk";
-import { ethers } from "ethers";
 import {
   canUseLocalTradeExecution as _canUseLocalTradeExecution,
   resolveTradePermissionMode as _resolveTradePermissionMode,
@@ -28,16 +36,6 @@ import {
   isStewardConfigured,
   signTransactionWithOptionalSteward,
 } from "./steward-bridge";
-import { ensureCompatApiAuthorized } from "@elizaos/app-core";
-import {
-  sendJson as sendJsonResponse,
-  sendJsonError as sendJsonErrorResponse,
-} from "@elizaos/app-core";
-import {
-  readCompatJsonBody,
-  type CompatRuntimeState,
-} from "@elizaos/app-core";
-import { loadElizaConfig } from "@elizaos/agent/config/config";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -149,7 +147,7 @@ function isStewardPolicyRejection(error: unknown): error is StewardApiError {
 export async function handleWalletTradeCompatRoutes(
   req: http.IncomingMessage,
   res: http.ServerResponse,
-  state: CompatRuntimeState,
+  _state: CompatRuntimeState,
 ): Promise<boolean> {
   const method = (req.method ?? "GET").toUpperCase();
   const url = new URL(req.url ?? "/", "http://localhost");

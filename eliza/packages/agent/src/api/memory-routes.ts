@@ -9,7 +9,10 @@ import {
   type UUID,
 } from "@elizaos/core";
 import { parsePositiveInteger } from "../utils/number-parsing.js";
-import { getKnowledgeService } from "./knowledge-service-loader.js";
+import {
+  getKnowledgeService,
+  type KnowledgeServiceResult,
+} from "./knowledge-service-loader.js";
 import type { RouteRequestContext } from "./route-helpers.js";
 
 const HASH_MEMORY_SOURCE = "hash_memory";
@@ -154,7 +157,7 @@ async function searchKnowledge(
   query: string,
   limit: number,
 ): Promise<KnowledgeSearchHit[]> {
-  const knowledge = await getKnowledgeService(runtime);
+  const knowledge: KnowledgeServiceResult = await getKnowledgeService(runtime);
   const knowledgeService = knowledge.service;
   if (!knowledgeService || !runtime.agentId) return [];
 

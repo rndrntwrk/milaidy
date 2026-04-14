@@ -1,4 +1,4 @@
-import { PagePanel } from "@elizaos/app-core";
+import { PagePanel } from "@elizaos/ui/components/composites/page-panel";
 import { useApp } from "../../state";
 import { CodingAgentTasksPanel } from "../chat/widgets/plugins/agent-orchestrator";
 

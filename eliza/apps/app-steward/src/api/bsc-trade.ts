@@ -7,7 +7,6 @@
  */
 
 import { logger } from "@elizaos/core";
-import { ethers } from "ethers";
 import type {
   BscTradePreflightResponse,
   BscTradeQuoteRequest,
@@ -18,6 +17,7 @@ import type {
   BscUnsignedApprovalTx,
   BscUnsignedTradeTx,
 } from "@elizaos/shared/contracts/wallet";
+import { ethers } from "ethers";
 import {
   normalizeRpcUrl,
   resolveBscRpcUrls as resolveWalletBscRpcUrls,

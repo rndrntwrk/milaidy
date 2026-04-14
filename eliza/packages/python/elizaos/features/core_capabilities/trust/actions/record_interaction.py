@@ -15,9 +15,7 @@ from elizaos.types import Action, ActionResult, Content
 from ..types import TrustEvidenceType, TrustInteraction
 
 if TYPE_CHECKING:
-    from uuid import UUID
-
-    from elizaos.types import HandlerCallback, HandlerOptions, IAgentRuntime, Memory, State
+    from elizaos.types import HandlerCallback, HandlerOptions, IAgentRuntime, Memory, State, UUID
 
     from ..service import TrustEngineService
 
@@ -57,11 +55,8 @@ class RecordInteractionAction:
             )
 
         # Retrieve trust engine service
-        trust_engine: TrustEngineService | None = None
-        for svc in (runtime.services or {}).values():
-            if getattr(svc, "service_type", None) == "trust_engine":
-                trust_engine = svc  # type: ignore[assignment]
-                break
+        service = runtime.get_service("trust_engine")
+        trust_engine = service if isinstance(service, TrustEngineService) else None
 
         if trust_engine is None:
             return ActionResult(

@@ -23,7 +23,6 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { handleKnowledgeRoutes } from "@elizaos/app-knowledge/routes";
-import { getKnowledgeService } from "@elizaos/app-knowledge/service-loader";
 import { handleLifeOpsRoutes } from "@elizaos/app-lifeops/routes/lifeops-routes";
 // import { handleWalletTradeExecuteRoute } from "./wallet-trade-routes.js";
 // import {
@@ -34,19 +33,14 @@ import { handleLifeOpsRoutes } from "@elizaos/app-lifeops/routes/lifeops-routes"
 import { handleWebsiteBlockerRoutes } from "@elizaos/app-lifeops/routes/website-blocker-routes";
 import { handleTrainingRoutes } from "@elizaos/app-training/routes/training";
 import { handleTrajectoryRoute } from "@elizaos/app-training/routes/trajectory";
-import type { TrainingServiceWithRuntime } from "@elizaos/app-training/services";
 import {
   type AgentRuntime,
   ChannelType,
-  type Content,
-  ContentType,
   createMessageMemory,
   logger,
-  type Media,
   stringToUuid,
   type UUID,
 } from "@elizaos/core";
-import { ethers } from "ethers";
 import { type WebSocket, WebSocketServer } from "ws";
 import { getGlobalAwarenessRegistry } from "../awareness/registry.js";
 import { CharacterSchema } from "../config/character-schema.js";
@@ -111,7 +105,6 @@ import {
   ensurePrivyWalletsForCustomUser,
   isPrivyWalletProvisioningEnabled,
 } from "../services/privy-wallets.js";
-import type { SandboxManager } from "../services/sandbox-manager.js";
 // signal-pairing: SignalPairingSession, sanitizeAccountId, signalLogout extracted to @elizaos/plugin-signal
 import { signalAuthExists } from "../services/signal-pairing.js";
 import { streamManager } from "../services/stream-manager.js";
@@ -166,7 +159,6 @@ import { isCloudProvisionedContainer } from "./cloud-provisioning.js";
 import { handleCloudRelayRoute } from "./cloud-relay-routes.js";
 import { type CloudRouteState, handleCloudRoute } from "./cloud-routes.js";
 import { handleCloudStatusRoutes } from "./cloud-status-routes.js";
-import { extractCompatTextContent } from "./compat-utils.js";
 import { handleConfigRoutes } from "./config-routes.js";
 import { ConnectorHealthMonitor } from "./connector-health.js";
 import { handleConnectorRoutes } from "./connector-routes.js";
@@ -199,7 +191,6 @@ import { handleMemoryRoutes } from "./memory-routes.js";
 import { handleMiscRoutes } from "./misc-routes.js";
 import { handleModelsRoutes } from "./models-routes.js";
 import { tryHandleMusicPlayerStatusFallback } from "./music-player-route-fallback.js";
-import { handleNfaRoutes } from "./nfa-routes.js";
 import { handleOnboardingRoutes } from "./onboarding-routes.js";
 import type {
   CoordinationLLMResponse,
@@ -215,28 +206,14 @@ import { handleRelationshipsRoutes } from "./relationships-routes.js";
 import { tryHandleRuntimePluginRoute } from "./runtime-plugin-routes.js";
 import { handleSandboxRoute } from "./sandbox-routes.js";
 import {
-  buildChatAttachments,
-  buildUserMessages,
   cloneWithoutBlockedObjectKeys,
   decodePathComponent,
   getErrorMessage,
   hasBlockedObjectKeyDeep,
   hasPersistedOnboardingState,
-  IMAGE_ONLY_CHAT_FALLBACK_PROMPT,
   isUuidLike,
-  isWalletActionRequiredIntent,
-  maybeAugmentChatMessageWithKnowledge,
-  maybeAugmentChatMessageWithLanguage,
-  maybeAugmentChatMessageWithWalletContext,
-  normalizeIncomingChatPrompt,
   patchTouchesProviderSelection,
-  persistConversationRoomTitle,
   resolveAppUserName,
-  resolveConversationGreetingText,
-  resolveWalletModeGuidanceReply,
-  validateChatImages,
-  WALLET_EXECUTION_INTENT_RE,
-  WALLET_PROGRESS_ONLY_RE,
 } from "./server-helpers.js";
 // signal-routes: handleSignalRoute dispatch extracted to @elizaos/plugin-signal (setup-routes.ts)
 import { applySignalQrOverride } from "./signal-routes.js";
@@ -244,8 +221,6 @@ import { discoverSkills } from "./skill-discovery-helpers.js";
 import { handleSkillsRoutes } from "./skills-routes.js";
 import { handleSubscriptionRoutes } from "./subscription-routes.js";
 import { routeTaskAgentTextToConnector } from "./task-agent-message-routing.js";
-// Telegram account routes: moved to @elizaos/plugin-telegram (account-setup-routes).
-import { handleTelegramSetupRoute } from "./telegram-setup-routes.js";
 import { handleTriggerRoutes } from "./trigger-routes.js";
 import { handleTtsRoutes } from "./tts-routes.js";
 import { TxService } from "./tx-service.js";
@@ -264,10 +239,9 @@ import {
 import {
   EVM_PLUGIN_PACKAGE,
   resolveWalletAutomationMode as resolveAgentAutomationModeFromConfig,
-  resolvePluginEvmLoaded,
   resolveWalletCapabilityStatus,
 } from "./wallet-capability.js";
-// import { handleWalletRoutes } from "./wallet-routes.js";
+import { handleWalletRoutes } from "./wallet-routes.js";
 import { resolveWalletRpcReadiness } from "./wallet-rpc.js";
 // handleWhatsAppRoute moved to @elizaos/plugin-whatsapp setup-routes.
 // applyWhatsAppQrOverride is still used by plugin-status routes.
@@ -284,6 +258,20 @@ export {
   parseFallbackActionBlocks,
   shouldForceCheckBalanceFallback,
 } from "./binance-skill-helpers.js";
+
+type OnboardingRouteArg = Parameters<typeof handleOnboardingRoutes>[0];
+type AgentStatusRouteArg = Parameters<typeof handleAgentStatusRoutes>[0];
+type DropRouteArg = Parameters<typeof handleDropRoutes>[0];
+type TtsRouteArg = Parameters<typeof handleTtsRoutes>[0];
+type PermissionsExtraRouteArg = Parameters<
+  typeof handlePermissionsExtraRoutes
+>[0];
+type ConversationRouteArg = Parameters<typeof handleConversationRoutes>[0];
+type ChatRouteArg = Parameters<typeof handleChatRoutes>[0];
+type WorkbenchRouteArg = Parameters<typeof handleWorkbenchRoutes>[0];
+type LifeOpsRouteArg = Parameters<typeof handleLifeOpsRoutes>[0];
+type MiscRouteArg = Parameters<typeof handleMiscRoutes>[0];
+
 export {
   isClientVisibleNoResponse,
   isNoResponsePlaceholder,
@@ -490,7 +478,7 @@ function readDeletedConversationIdsFromState(): Set<string> {
   }
 }
 
-function persistDeletedConversationIdsToState(ids: Set<string>): void {
+function _persistDeletedConversationIdsToState(ids: Set<string>): void {
   const dir = resolveStateDir();
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
@@ -559,12 +547,7 @@ export type {
   StreamEventType,
 } from "./server-types.js";
 
-import type {
-  LogEntry,
-  ShareIngestItem,
-  SkillEntry,
-  StreamEventEnvelope,
-} from "./server-types.js";
+import type { StreamEventEnvelope } from "./server-types.js";
 
 // ---------------------------------------------------------------------------
 // Package root resolution (for reading bundled plugins.json)
@@ -807,6 +790,23 @@ function isModuleResolutionFailure(err: unknown): boolean {
   );
 }
 
+function isWalletBridgeImportFailure(err: unknown): boolean {
+  if (isModuleResolutionFailure(err)) {
+    return true;
+  }
+  if (typeof err !== "object" || err === null) {
+    return false;
+  }
+  const code = "code" in err ? (err as NodeJS.ErrnoException).code : undefined;
+  if (code === "ERR_UNKNOWN_FILE_EXTENSION") {
+    return true;
+  }
+  if (!("message" in err) || typeof err.message !== "string") {
+    return false;
+  }
+  return err.message.includes('Unknown file extension ".css"');
+}
+
 // ---------------------------------------------------------------------------
 // Static UI serving — extracted to static-file-server.ts
 // ---------------------------------------------------------------------------
@@ -819,27 +819,12 @@ import {
 export { injectApiBaseIntoHtml };
 
 // Preserved for backward-compat — unused locally after extraction.
-const STATIC_MIME: Record<string, string> = {};
+const _STATIC_MIME: Record<string, string> = {};
 
 // (static file serving functions moved to static-file-server.ts)
 
-interface ChatGenerationResult {
-  text: string;
-  agentName: string;
-  usage?: {
-    promptTokens: number;
-    completionTokens: number;
-    totalTokens: number;
-    model?: string;
-  };
-}
-
-interface ChatGenerateOptions {
-  onChunk?: (chunk: string) => void;
-  onSnapshot?: (text: string) => void;
-  isAborted?: () => boolean;
-  resolveNoResponseText?: () => string;
-  preferredLanguage?: string;
+function coerce<T>(value: unknown): T {
+  return value as T;
 }
 
 // maybeAugmentChatMessageWithLanguage and getErrorMessage moved to server-helpers.ts;
@@ -852,8 +837,6 @@ interface ChatGenerateOptions {
 // and buildUserMessages moved to server-helpers.ts; re-exported in the top-level block
 // ChatAttachmentWithData re-exported from server-types.ts
 export type { ChatAttachmentWithData } from "./server-types.js";
-
-import type { ChatAttachmentWithData } from "./server-types.js";
 
 // buildChatAttachments, buildUserMessages, etc. imported in the consolidated import at the top
 
@@ -995,7 +978,7 @@ function stripRedactedPlaceholderValuesDeep(value: unknown): void {
  */
 const SAFE_SKILL_ID_RE = /^[a-zA-Z0-9._-]+$/;
 
-function validateSkillId(
+function _validateSkillId(
   skillId: string,
   res: http.ServerResponse,
 ): string | null {
@@ -1353,8 +1336,6 @@ import {
   getStylePresets,
   normalizeCharacterLanguage,
   resolveStylePresetByAvatarIndex,
-  resolveStylePresetById,
-  resolveStylePresetByName,
 } from "../onboarding-presets.js";
 
 import { pickRandomNames } from "../runtime/onboarding-names.js";
@@ -1615,7 +1596,6 @@ export function resolveTradePermissionMode(
  */
 // Trade safety utilities (defined in trade-safety.ts for testability)
 import {
-  assertQuoteFresh,
   canUseLocalTradeExecution,
   type TradePermissionMode,
 } from "./trade-safety.js";
@@ -1651,7 +1631,7 @@ function parseAgentAutomationMode(value: unknown): AgentAutomationMode | null {
   return normalized as AgentAutomationMode;
 }
 
-function isAgentAutomationRequest(req: http.IncomingMessage): boolean {
+function _isAgentAutomationRequest(req: http.IncomingMessage): boolean {
   const raw = req.headers[AGENT_AUTOMATION_HEADER];
   if (typeof raw !== "string") return false;
   return /^(1|true|yes|agent)$/i.test(raw.trim());
@@ -1742,7 +1722,7 @@ function buildPluginEvmDiagnosticEntry(
 
 // "send" alone is too broad — "send a slack message" shouldn't trigger wallet
 // mode.  Require "send" to appear near a crypto/wallet keyword within 40 chars.
-const WALLET_CHAT_INTENT_RE =
+const _WALLET_CHAT_INTENT_RE =
   /\b(wallet|privy|onchain|on-chain|address|balance|swap|trade|transfer|token|bnb|t?bnb|eth|sol)\b|(?:\bsend\b(?=[\s\S]{0,40}\b(?:token|eth|sol|t?bnb|wallet|crypto|coin)\b))/i;
 
 // WALLET_EXECUTION_INTENT_RE, WALLET_PROGRESS_ONLY_RE, isWalletActionRequiredIntent
@@ -1751,12 +1731,12 @@ const WALLET_CHAT_INTENT_RE =
 // isWalletActionRequiredIntent, WALLET_EXECUTION_INTENT_RE, WALLET_PROGRESS_ONLY_RE
 // imported in the consolidated import at the top
 
-const WALLET_IDENTITY_INTENT_RE = /\b(wallet\s*address|address)\b/i;
+const _WALLET_IDENTITY_INTENT_RE = /\b(wallet\s*address|address)\b/i;
 
-const WALLET_ACTION_REQUIRED_INTENT_RE =
+const _WALLET_ACTION_REQUIRED_INTENT_RE =
   /\b(balance|portfolio|holdings|funds|swap|trade|transfer|send|buy|sell|execute|approve)\b/i;
 
-const WALLET_PROGRESS_PREFIX_RE =
+const _WALLET_PROGRESS_PREFIX_RE =
   /^\s*(?:let me|i(?:'ll| will)|checking|fetching|looking up|pulling|one moment|just a second|hold on)[\s\S]{0,120}?(?:now|\.{3}|…)?\s*/i;
 
 const EVM_ADDRESS_CAPTURE_RE = /\b0x[a-fA-F0-9]{40}\b/g;
@@ -4085,7 +4065,7 @@ async function handleRequest(
         : undefined,
     });
   const isAuthProtectedPath = isAuthProtectedRoute(pathname);
-  const registryService = state.registryService;
+  const _registryService = state.registryService;
   const dropService = state.dropService;
 
   const canonicalizeRestartReason = (reason: string): string => {
@@ -4234,14 +4214,17 @@ async function handleRequest(
   }
 
   // ── Provider inference helpers ────────────────────────────────────────
-  const disableCloudInference = (): void => {
+  const _disableCloudInference = (): void => {
     delete process.env.ANTHROPIC_BASE_URL;
     delete process.env.OPENAI_BASE_URL;
     delete process.env.ANTHROPIC_API_KEY;
     delete process.env.OPENAI_API_KEY;
   };
 
-  const enableCloudInference = (cloudApiKey: string, baseUrl: string): void => {
+  const _enableCloudInference = (
+    cloudApiKey: string,
+    baseUrl: string,
+  ): void => {
     // Configure coding agent CLIs to proxy through ElizaCloud /api/v1
     process.env.ANTHROPIC_BASE_URL = `${baseUrl}/api/v1`;
     process.env.ANTHROPIC_API_KEY = cloudApiKey;
@@ -4340,25 +4323,41 @@ async function handleRequest(
       method,
       pathname,
       url,
-      state: state as any,
+      state: coerce<OnboardingRouteArg["state"]>(state),
       json,
       error,
       readJsonBody,
       isCloudProvisionedContainer,
       hasPersistedOnboardingState,
       ensureWalletKeysInEnvAndConfig,
-      getWalletAddresses: getWalletAddresses as any,
+      getWalletAddresses:
+        coerce<OnboardingRouteArg["getWalletAddresses"]>(getWalletAddresses),
       pickRandomNames,
-      getStylePresets: getStylePresets as any,
-      getProviderOptions: getProviderOptions as any,
-      getCloudProviderOptions: getCloudProviderOptions as any,
-      getModelOptions: getModelOptions as any,
-      getInventoryProviderOptions: getInventoryProviderOptions as any,
-      resolveConfiguredCharacterLanguage:
-        resolveConfiguredCharacterLanguage as any,
-      normalizeCharacterLanguage: normalizeCharacterLanguage as any,
-      readUiLanguageHeader: readUiLanguageHeader as any,
-      applyOnboardingVoicePreset: applyOnboardingVoicePreset as any,
+      getStylePresets:
+        coerce<OnboardingRouteArg["getStylePresets"]>(getStylePresets),
+      getProviderOptions:
+        coerce<OnboardingRouteArg["getProviderOptions"]>(getProviderOptions),
+      getCloudProviderOptions: coerce<
+        OnboardingRouteArg["getCloudProviderOptions"]
+      >(getCloudProviderOptions),
+      getModelOptions:
+        coerce<OnboardingRouteArg["getModelOptions"]>(getModelOptions),
+      getInventoryProviderOptions: coerce<
+        OnboardingRouteArg["getInventoryProviderOptions"]
+      >(getInventoryProviderOptions),
+      resolveConfiguredCharacterLanguage: coerce<
+        OnboardingRouteArg["resolveConfiguredCharacterLanguage"]
+      >(resolveConfiguredCharacterLanguage),
+      normalizeCharacterLanguage: coerce<
+        OnboardingRouteArg["normalizeCharacterLanguage"]
+      >(normalizeCharacterLanguage),
+      readUiLanguageHeader:
+        coerce<OnboardingRouteArg["readUiLanguageHeader"]>(
+          readUiLanguageHeader,
+        ),
+      applyOnboardingVoicePreset: coerce<
+        OnboardingRouteArg["applyOnboardingVoicePreset"]
+      >(applyOnboardingVoicePreset),
       saveElizaConfig,
     })
   ) {
@@ -4716,24 +4715,60 @@ async function handleRequest(
   // so the API server exposes them without requiring plugin registration.
   // ═══════════════════════════════════════════════════════════════════════
   if (pathname.startsWith("/api/wallet/")) {
+    let stewardWalletCoreRoutes:
+      | ((
+          req: http.IncomingMessage,
+          res: http.ServerResponse,
+          state: unknown,
+        ) => Promise<boolean>)
+      | null = null;
     try {
       const { handleWalletCoreRoutes } = await import(
         "@elizaos/app-steward/routes/wallet-core-routes"
       );
-      if (await handleWalletCoreRoutes(req, res, state)) {
-        return;
-      }
+      stewardWalletCoreRoutes = handleWalletCoreRoutes;
     } catch (err) {
-      if (isModuleResolutionFailure(err)) {
+      if (isWalletBridgeImportFailure(err)) {
         logger.debug(
           { err },
-          "[eliza-api] Wallet core routes unavailable from @elizaos/app-steward",
+          "[eliza-api] Wallet core routes unavailable from @elizaos/app-steward; falling back to local bridge",
         );
       } else {
         logger.error({ err }, "[eliza-api] Wallet core route bridge failed");
         error(res, getErrorMessage(err), 500);
         return;
       }
+    }
+    if (stewardWalletCoreRoutes) {
+      try {
+        if (await stewardWalletCoreRoutes(req, res, state)) {
+          return;
+        }
+      } catch (err) {
+        logger.error({ err }, "[eliza-api] Wallet core route bridge failed");
+        error(res, getErrorMessage(err), 500);
+        return;
+      }
+    }
+    if (
+      await handleWalletRoutes({
+        req,
+        res,
+        method,
+        pathname,
+        config: loadElizaConfig(),
+        saveConfig: saveElizaConfig,
+        ensureWalletKeysInEnvAndConfig,
+        resolveWalletExportRejection,
+        restartRuntime,
+        scheduleRuntimeRestart,
+        readJsonBody,
+        json,
+        error,
+        runtime: state.runtime ?? null,
+      })
+    ) {
+      return;
     }
   }
 
@@ -4747,21 +4782,34 @@ async function handleRequest(
       method,
       pathname,
       url,
-      state: state as any,
+      state: coerce<AgentStatusRouteArg["state"]>(state),
       json,
       error,
       readJsonBody,
       deps: {
         getWalletAddresses,
-        resolveWalletCapabilityStatus: resolveWalletCapabilityStatus as any,
-        resolveWalletRpcReadiness: resolveWalletRpcReadiness as any,
+        resolveWalletCapabilityStatus: coerce<
+          AgentStatusRouteArg["deps"]["resolveWalletCapabilityStatus"]
+        >(resolveWalletCapabilityStatus),
+        resolveWalletRpcReadiness: coerce<
+          AgentStatusRouteArg["deps"]["resolveWalletRpcReadiness"]
+        >(resolveWalletRpcReadiness),
         resolveTradePermissionMode,
-        canUseLocalTradeExecution: canUseLocalTradeExecution as any,
-        detectRuntimeModel: detectRuntimeModel as any,
+        canUseLocalTradeExecution: coerce<
+          AgentStatusRouteArg["deps"]["canUseLocalTradeExecution"]
+        >(canUseLocalTradeExecution),
+        detectRuntimeModel:
+          coerce<AgentStatusRouteArg["deps"]["detectRuntimeModel"]>(
+            detectRuntimeModel,
+          ),
         resolveProviderFromModel,
-        getGlobalAwarenessRegistry: getGlobalAwarenessRegistry as any,
+        getGlobalAwarenessRegistry: coerce<
+          AgentStatusRouteArg["deps"]["getGlobalAwarenessRegistry"]
+        >(getGlobalAwarenessRegistry),
         isPrivyWalletProvisioningEnabled,
-        ensurePrivyWalletsForCustomUser: ensurePrivyWalletsForCustomUser as any,
+        ensurePrivyWalletsForCustomUser: coerce<
+          AgentStatusRouteArg["deps"]["ensurePrivyWalletsForCustomUser"]
+        >(ensurePrivyWalletsForCustomUser),
         RegistryService,
       },
     })
@@ -4784,7 +4832,8 @@ async function handleRequest(
       readJsonBody,
       dropService,
       agentName: state.agentName,
-      getWalletAddresses: getWalletAddresses as any,
+      getWalletAddresses:
+        coerce<DropRouteArg["getWalletAddresses"]>(getWalletAddresses),
       readOGCodeFromState,
     })
   ) {
@@ -4927,7 +4976,9 @@ async function handleRequest(
       readJsonBody,
       isRedactedSecretValue,
       fetchWithTimeoutGuard,
-      streamResponseBodyWithByteLimit: streamResponseBodyWithByteLimit as any,
+      streamResponseBodyWithByteLimit: coerce<
+        TtsRouteArg["streamResponseBodyWithByteLimit"]
+      >(streamResponseBodyWithByteLimit),
       responseContentLength,
       isAbortError,
       ELEVENLABS_FETCH_TIMEOUT_MS: 30_000,
@@ -4987,15 +5038,21 @@ async function handleRequest(
       res,
       method,
       pathname,
-      state: state as any,
+      state: coerce<PermissionsExtraRouteArg["state"]>(state),
       json,
       error,
       readJsonBody,
       saveElizaConfig,
-      resolveTradePermissionMode: resolveTradePermissionMode as any,
-      canUseLocalTradeExecution: canUseLocalTradeExecution as any,
+      resolveTradePermissionMode: coerce<
+        PermissionsExtraRouteArg["resolveTradePermissionMode"]
+      >(resolveTradePermissionMode),
+      canUseLocalTradeExecution: coerce<
+        PermissionsExtraRouteArg["canUseLocalTradeExecution"]
+      >(canUseLocalTradeExecution),
       parseAgentAutomationMode,
-      persistAgentAutomationMode: persistAgentAutomationMode as any,
+      persistAgentAutomationMode: coerce<
+        PermissionsExtraRouteArg["persistAgentAutomationMode"]
+      >(persistAgentAutomationMode),
     })
   ) {
     return;
@@ -5142,7 +5199,7 @@ async function handleRequest(
       readJsonBody,
       json,
       error,
-      state: state as any,
+      state: coerce<ConversationRouteArg["state"]>(state),
     });
     if (handled) return;
   }
@@ -5161,7 +5218,7 @@ async function handleRequest(
       readJsonBody,
       json,
       error,
-      state: state as any,
+      state: coerce<ChatRouteArg["state"]>(state),
     });
     if (handled) return;
   }
@@ -5391,20 +5448,26 @@ async function handleRequest(
         method,
         pathname,
         url,
-        state: state as any,
+        state: coerce<WorkbenchRouteArg["state"]>(state),
         json,
         error,
         readJsonBody,
-        toWorkbenchTask: toWorkbenchTask as any,
-        toWorkbenchTodo: toWorkbenchTodo as any,
+        toWorkbenchTask:
+          coerce<WorkbenchRouteArg["toWorkbenchTask"]>(toWorkbenchTask),
+        toWorkbenchTodo:
+          coerce<WorkbenchRouteArg["toWorkbenchTodo"]>(toWorkbenchTodo),
         normalizeTags,
         readTaskMetadata,
         readTaskCompleted,
         parseNullableNumber,
         asObject,
         decodePathComponent,
-        taskToTriggerSummary: taskToTriggerSummary as any,
-        listTriggerTasks: listTriggerTasks as any,
+        taskToTriggerSummary:
+          coerce<WorkbenchRouteArg["taskToTriggerSummary"]>(
+            taskToTriggerSummary,
+          ),
+        listTriggerTasks:
+          coerce<WorkbenchRouteArg["listTriggerTasks"]>(listTriggerTasks),
       })
     ) {
       return;
@@ -5422,7 +5485,7 @@ async function handleRequest(
         method,
         pathname,
         url,
-        state: state as any,
+        state: coerce<LifeOpsRouteArg["state"]>(state),
         json,
         error,
         readJsonBody,
@@ -5471,7 +5534,7 @@ async function handleRequest(
       method,
       pathname,
       url,
-      state: state as any,
+      state: coerce<MiscRouteArg["state"]>(state),
       json,
       error,
       readJsonBody,
@@ -6146,7 +6209,7 @@ export async function startApiServer(opts?: {
           | undefined;
 
         // Build destination registry — all configured destinations
-        const connectors = state.config.connectors ?? {};
+        const _connectors = state.config.connectors ?? {};
         const streaming = (state.config as Record<string, unknown>).streaming as
           | Record<string, unknown>
           | undefined;

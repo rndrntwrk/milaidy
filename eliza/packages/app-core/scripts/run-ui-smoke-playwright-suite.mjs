@@ -32,7 +32,10 @@ const specGroups = [
     "test/ui-smoke/apps-session.spec.ts",
     "test/ui-smoke/browser-workspace.spec.ts",
   ],
-  ["test/ui-smoke/ui-smoke.spec.ts"],
+  [
+    "test/ui-smoke/ui-smoke.spec.ts",
+    "test/ui-smoke/settings-chat-companion.spec.ts",
+  ],
 ];
 
 function getFreePort() {

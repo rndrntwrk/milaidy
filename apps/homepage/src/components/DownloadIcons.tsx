@@ -131,7 +131,7 @@ const platformDefs = [
   },
   { id: "android", label: "Coming", store: "Soon", assetId: "" },
   { id: "ios", label: "Coming", store: "Soon", assetId: "" },
-  { id: "github", label: "All", store: "Releases", assetId: "github" },
+  { id: "github", label: "View", store: "Release", assetId: "github" },
 ];
 
 type InstallMethod = "shell" | "powershell" | "brew";
@@ -207,19 +207,15 @@ export function DownloadIcons() {
             assets: Array<{ name: string; browser_download_url: string }>;
           }>,
         ) => {
-          // Prefer stable (non-prerelease) releases for default downloads
           const stableRelease = releases.find(
             (r) => !r.draft && !r.prerelease && r.assets.length > 0,
           );
-          const release =
-            stableRelease ??
-            releases.find((r) => !r.draft && r.assets.length > 0);
-          if (!release) return;
+          if (!stableRelease) return;
 
-          setReleasePageUrl(release.html_url);
+          setReleasePageUrl(stableRelease.html_url);
 
           const freshUrls: Record<string, string> = {};
-          for (const asset of release.assets) {
+          for (const asset of stableRelease.assets) {
             const id = matchAsset(asset.name);
             if (id && !freshUrls[id]) {
               freshUrls[id] = asset.browser_download_url;

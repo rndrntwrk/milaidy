@@ -12,19 +12,53 @@
     "noEmit": true,
     "jsx": "react-jsx",
     "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true,
     "forceConsistentCasingInFileNames": true,
     "experimentalDecorators": true,
     "useUnknownInCatchVariables": true,
-    "types": ["vite/client"]
+    "types": ["vite/client", "bun", "react", "react-dom"],
+    "baseUrl": "../..",
+    "paths": {
+      "@elizaos/app-core": ["./eliza/packages/app-core/src/index.ts"],
+      "@elizaos/app-core/*": ["./eliza/packages/app-core/src/*"],
+      "@elizaos/app-coding": ["./eliza/apps/app-coding/src/index.ts"],
+      "@elizaos/app-coding/*": ["./eliza/apps/app-coding/src/*"],
+      "@elizaos/app-companion": ["./eliza/apps/app-companion/src/index.ts"],
+      "@elizaos/app-companion/*": ["./eliza/apps/app-companion/src/*"],
+      "@elizaos/app-lifeops": ["./eliza/apps/app-lifeops/src/index.ts"],
+      "@elizaos/app-lifeops/*": ["./eliza/apps/app-lifeops/src/*"],
+      "@elizaos/app-shopify": ["./eliza/apps/app-shopify/src/index.ts"],
+      "@elizaos/app-shopify/*": ["./eliza/apps/app-shopify/src/*"],
+      "@elizaos/app-steward": ["./eliza/apps/app-steward/src/index.ts"],
+      "@elizaos/app-steward/*": ["./eliza/apps/app-steward/src/*"],
+      "@elizaos/app-vincent": ["./eliza/apps/app-vincent/src/index.ts"],
+      "@elizaos/app-vincent/*": ["./eliza/apps/app-vincent/src/*"],
+      "@elizaos/agent": ["./eliza/packages/agent/src/index.ts"],
+      "@elizaos/agent/*": ["./eliza/packages/agent/src/*"],
+      "@elizaos/core": ["./eliza/packages/typescript/src/index.ts"],
+      "@elizaos/core/*": ["./eliza/packages/typescript/src/*"],
+      "@elizaos/shared": ["./eliza/packages/shared/src/index.ts"],
+      "@elizaos/shared/*": ["./eliza/packages/shared/src/*"],
+      "@elizaos/ui": ["./eliza/packages/ui/src/index.ts"],
+      "@elizaos/ui/*": ["./eliza/packages/ui/src/*"],
+      "react": ["./apps/app/node_modules/@types/react/index.d.ts"],
+      "react/jsx-runtime": [
+        "./apps/app/node_modules/@types/react/jsx-runtime.d.ts"
+      ],
+      "react/jsx-dev-runtime": [
+        "./apps/app/node_modules/@types/react/jsx-dev-runtime.d.ts"
+      ],
+      "react-dom": ["./apps/app/node_modules/@types/react-dom/index.d.ts"],
+      "@elizaos/*": ["./node_modules/@elizaos/*"]
+    }
   },
   "include": [
     "src/**/*.ts",
     "src/**/*.tsx",
     "../../eliza/packages/app-core/src/ambient-modules.d.ts",
-    "../../eliza/agent/src/external-modules.d.ts"
+    "../../eliza/packages/agent/src/external-modules.d.ts"
   ],
   "exclude": ["node_modules", "dist", "ios", "android", "electrobun"]
 }

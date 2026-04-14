@@ -779,12 +779,6 @@ if (uiOnly) {
     )}`,
   );
 
-  const chainEnv = {};
-
-  console.log(
-    `  ${green(logPrefix)} ${dim("Local Anvil/forge EVM bootstrap removed — use remote RPC in config when needed.")}`,
-  );
-
   // Security default: stealth shims are disabled unless explicitly enabled
   // via env vars or plugin config in eliza.json.
   const stealth = resolveStealthImportFlags();
@@ -825,7 +819,6 @@ if (uiOnly) {
       {
         ...process.env,
         NODE_ENV: "development",
-        ...chainEnv,
         ELIZA_NAMESPACE: cliName,
         ELIZA_NAMESPACE: cliName,
         ELIZA_API_PORT: String(API_PORT),

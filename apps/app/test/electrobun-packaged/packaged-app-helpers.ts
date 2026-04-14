@@ -1,0 +1,479 @@
+import { type ChildProcess, execFile, spawn } from "node:child_process";
+import fs from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import os from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
+import { createPackagedWindowsAppEnv } from "./windows-test-env";
+
+const execFileAsync = promisify(execFile);
+const here = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(here, "../../../..");
+const electrobunArtifactsDir = path.join(
+  repoRoot,
+  "apps",
+  "app",
+  "electrobun",
+  "artifacts",
+);
+const electrobunBuildDir = path.join(
+  repoRoot,
+  "apps",
+  "app",
+  "electrobun",
+  "build",
+);
+
+export interface PackagedProcessLogs {
+  stdout: string[];
+  stderr: string[];
+}
+
+export interface DesktopTestBridgeState {
+  mainWindow: {
+    present: boolean;
+    windowId: number | null;
+    webviewId: number | null;
+    url: string | null;
+    titleBarStyle: string | null;
+    transparent: boolean | null;
+    vibrancyEnabled: boolean | null;
+    shadowEnabled: boolean | null;
+    bounds: { x: number; y: number; width: number; height: number } | null;
+  };
+  shell: {
+    trayPresent: boolean;
+    mainWindowPresent: boolean;
+    windowVisible: boolean;
+    windowFocused: boolean;
+  };
+}
+
+function appendLog(target: string[], chunk: Buffer | string): void {
+  const text = chunk.toString();
+  if (!text) return;
+  target.push(text);
+  if (target.length > 2000) {
+    target.splice(0, target.length - 2000);
+  }
+}
+
+export function collectProcessLogs(child: ChildProcess): PackagedProcessLogs {
+  const stdout: string[] = [];
+  const stderr: string[] = [];
+  child.stdout?.on("data", (chunk: Buffer) => appendLog(stdout, chunk));
+  child.stderr?.on("data", (chunk: Buffer) => appendLog(stderr, chunk));
+  return { stdout, stderr };
+}
+
+async function findFiles(
+  root: string,
+  matcher: (fullPath: string) => boolean,
+): Promise<string[]> {
+  const found: string[] = [];
+  async function walk(currentDir: string): Promise<void> {
+    const entries = await fs
+      .readdir(currentDir, { withFileTypes: true })
+      .catch(() => []);
+    for (const entry of entries) {
+      const fullPath = path.join(currentDir, entry.name);
+      if (entry.isDirectory()) {
+        await walk(fullPath);
+      } else if (entry.isFile() && matcher(fullPath)) {
+        found.push(fullPath);
+      }
+    }
+  }
+  if (existsSync(root)) {
+    await walk(root);
+  }
+  return found;
+}
+
+async function findMacLauncher(): Promise<string | null> {
+  const explicit = process.env.MILADY_TEST_PACKAGED_LAUNCHER_PATH?.trim();
+  if (explicit) {
+    await fs.access(explicit);
+    return await fs.realpath(explicit);
+  }
+
+  const candidates = [
+    ...(await findFiles(
+      electrobunBuildDir,
+      (fullPath) =>
+        fullPath.endsWith(`${path.sep}Contents${path.sep}MacOS${path.sep}launcher`),
+    )),
+    ...(await findFiles(
+      electrobunArtifactsDir,
+      (fullPath) =>
+        fullPath.endsWith(`${path.sep}Contents${path.sep}MacOS${path.sep}launcher`),
+    )),
+  ];
+
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  const withStats = await Promise.all(
+    candidates.map(async (candidate) => ({
+      path: candidate,
+      stat: await fs.stat(candidate),
+    })),
+  );
+  withStats.sort((left, right) => right.stat.mtimeMs - left.stat.mtimeMs);
+  return await fs.realpath(withStats[0].path);
+}
+
+async function findWindowsLauncherExe(dir: string): Promise<string | null> {
+  const matches = await findFiles(
+    dir,
+    (fullPath) => path.basename(fullPath).toLowerCase() === "launcher.exe",
+  );
+  if (matches.length === 0) {
+    return null;
+  }
+  const withStats = await Promise.all(
+    matches.map(async (candidate) => ({
+      path: candidate,
+      stat: await fs.stat(candidate),
+    })),
+  );
+  withStats.sort((left, right) => right.stat.mtimeMs - left.stat.mtimeMs);
+  return await fs.realpath(withStats[0].path);
+}
+
+async function resolveWindowsLauncher(tempExtractDir: string): Promise<string> {
+  const explicit =
+    process.env.MILADY_TEST_PACKAGED_LAUNCHER_PATH?.trim() ||
+    process.env.MILADY_TEST_WINDOWS_LAUNCHER_PATH?.trim();
+  if (explicit) {
+    await fs.access(explicit);
+    return await fs.realpath(explicit);
+  }
+
+  let launcher = await findWindowsLauncherExe(electrobunBuildDir);
+  if (launcher) {
+    return launcher;
+  }
+
+  launcher = await findWindowsLauncherExe(electrobunArtifactsDir);
+  if (launcher) {
+    return launcher;
+  }
+
+  const artifactEntries = await fs
+    .readdir(electrobunArtifactsDir, { withFileTypes: true })
+    .catch(() => []);
+  const tarballs = artifactEntries
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".tar.zst"))
+    .map((entry) => path.join(electrobunArtifactsDir, entry.name));
+  if (tarballs.length === 0) {
+    throw new Error(
+      `No Windows packaged artifacts found in ${electrobunArtifactsDir}.`,
+    );
+  }
+
+  const stats = await Promise.all(
+    tarballs.map(async (candidate) => ({
+      path: candidate,
+      stat: await fs.stat(candidate),
+    })),
+  );
+  stats.sort((left, right) => right.stat.mtimeMs - left.stat.mtimeMs);
+  const archivePath = await fs.realpath(stats[0].path);
+
+  await fs.mkdir(tempExtractDir, { recursive: true });
+  await execFileAsync("tar", [
+    "--force-local",
+    "-xf",
+    archivePath,
+    "-C",
+    tempExtractDir,
+  ]);
+
+  launcher = await findWindowsLauncherExe(tempExtractDir);
+  if (!launcher) {
+    throw new Error(
+      `Failed to find launcher.exe after extracting ${archivePath}.`,
+    );
+  }
+  return launcher;
+}
+
+export async function resolvePackagedLauncher(
+  tempExtractDir: string,
+): Promise<string | null> {
+  if (process.platform === "darwin") {
+    return await findMacLauncher();
+  }
+  if (process.platform === "win32") {
+    return await resolveWindowsLauncher(tempExtractDir);
+  }
+  return null;
+}
+
+function pickTempPort(seed: number): number {
+  return seed;
+}
+
+function buildMinimalMacEnv(baseEnv: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const user =
+    baseEnv.USER || baseEnv.LOGNAME || process.env.USER || process.env.LOGNAME;
+  const lang = baseEnv.LANG || process.env.LANG || "en_US.UTF-8";
+  const pathValue =
+    baseEnv.PATH || process.env.PATH || "/usr/bin:/bin:/usr/sbin:/sbin";
+
+  return {
+    HOME: baseEnv.HOME || process.env.HOME,
+    PATH: pathValue,
+    SHELL: baseEnv.SHELL || process.env.SHELL || "/bin/zsh",
+    USER: user,
+    LOGNAME: user,
+    TMPDIR: baseEnv.TMPDIR || process.env.TMPDIR || os.tmpdir(),
+    LANG: lang,
+    LC_ALL: baseEnv.LC_ALL || process.env.LC_ALL || lang,
+    TERM: baseEnv.TERM || process.env.TERM || "dumb",
+  };
+}
+
+export function createPackagedDesktopEnv(args: {
+  baseEnv: NodeJS.ProcessEnv;
+  apiBase: string;
+  stateDir: string;
+  bridgePort: number;
+  bridgeToken: string;
+  partition?: string;
+  appData?: string;
+  localAppData?: string;
+}): NodeJS.ProcessEnv {
+  const partition = args.partition ?? "persist:packaged-regression";
+  const commonEnv = {
+    MILADY_DESKTOP_TEST_API_BASE: args.apiBase,
+    MILADY_DESKTOP_TEST_PARTITION: partition,
+    MILADY_DESKTOP_TEST_AUTO_CONFIRM_DIALOGS: "1",
+    MILADY_DISABLE_LOCAL_EMBEDDINGS: "1",
+    ELIZA_DISABLE_LOCAL_EMBEDDINGS: "1",
+    ELIZA_DESKTOP_TEST_BRIDGE_ENABLED: "1",
+    ELIZA_DESKTOP_TEST_BRIDGE_PORT: String(args.bridgePort),
+    ELIZA_DESKTOP_TEST_BRIDGE_TOKEN: args.bridgeToken,
+    MILADY_STATE_DIR: args.stateDir,
+    ELIZA_STATE_DIR: args.stateDir,
+    ELECTROBUN_CONSOLE: "1",
+  };
+
+  if (process.platform === "win32") {
+    return {
+      ...createPackagedWindowsAppEnv({
+        baseEnv: args.baseEnv,
+        apiBase: args.apiBase,
+        appData: args.appData ?? args.stateDir,
+        localAppData: args.localAppData ?? args.stateDir,
+      }),
+      ...commonEnv,
+      APPDATA: args.appData ?? args.stateDir,
+      LOCALAPPDATA: args.localAppData ?? args.stateDir,
+    };
+  }
+
+  return {
+    ...buildMinimalMacEnv(args.baseEnv),
+    ...commonEnv,
+  };
+}
+
+async function fetchJson<T>(
+  url: string,
+  options: RequestInit = {},
+): Promise<T> {
+  const response = await fetch(url, options);
+  if (!response.ok) {
+    throw new Error(`${options.method ?? "GET"} ${url} failed (${response.status})`);
+  }
+  return (await response.json()) as T;
+}
+
+function formatLogs(logs: PackagedProcessLogs | null | undefined): string {
+  return [
+    "App stdout:",
+    logs?.stdout.join("") ?? "",
+    "",
+    "App stderr:",
+    logs?.stderr.join("") ?? "",
+  ].join("\n");
+}
+
+export class PackagedDesktopHarness {
+  readonly tempRoot: string;
+  readonly stateDir: string;
+  readonly appDataDir: string;
+  readonly localAppDataDir: string;
+  readonly bridgePort: number;
+  readonly bridgeToken: string;
+  readonly bridgeUrl: string;
+  readonly launcherPath: string;
+  readonly appEnv: NodeJS.ProcessEnv;
+  process: ChildProcess | null = null;
+  logs: PackagedProcessLogs | null = null;
+
+  constructor(args: {
+    tempRoot: string;
+    launcherPath: string;
+    apiBase: string;
+  }) {
+    this.tempRoot = args.tempRoot;
+    this.stateDir = path.join(args.tempRoot, "state");
+    this.appDataDir = path.join(args.tempRoot, "appdata");
+    this.localAppDataDir = path.join(args.tempRoot, "localappdata");
+    this.bridgePort = pickTempPort(31_500 + Math.floor(Math.random() * 500));
+    this.bridgeToken = randomUUID();
+    this.bridgeUrl = `http://127.0.0.1:${this.bridgePort}`;
+    this.launcherPath = args.launcherPath;
+    this.appEnv = createPackagedDesktopEnv({
+      baseEnv: process.env,
+      apiBase: args.apiBase,
+      stateDir: this.stateDir,
+      bridgePort: this.bridgePort,
+      bridgeToken: this.bridgeToken,
+      appData: this.appDataDir,
+      localAppData: this.localAppDataDir,
+    });
+  }
+
+  async start(): Promise<void> {
+    await fs.mkdir(this.stateDir, { recursive: true });
+    await fs.mkdir(this.appDataDir, { recursive: true });
+    await fs.mkdir(this.localAppDataDir, { recursive: true });
+
+    const child = spawn(this.launcherPath, [], {
+      cwd: path.dirname(this.launcherPath),
+      env: this.appEnv,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    this.process = child;
+    this.logs = collectProcessLogs(child);
+
+    await this.waitForBridgeHealth(120_000);
+    await this.waitForState(
+      (state) => state.mainWindow.present && state.shell.trayPresent,
+      "Expected packaged desktop shell to create the main window and tray",
+      60_000,
+    );
+  }
+
+  async stop(): Promise<void> {
+    if (!this.process || this.process.exitCode !== null || this.process.killed) {
+      return;
+    }
+    this.process.kill("SIGTERM");
+    await new Promise<void>((resolve) => {
+      const timeout = setTimeout(() => {
+        this.process?.kill("SIGKILL");
+        resolve();
+      }, 5_000);
+      this.process?.once("exit", () => {
+        clearTimeout(timeout);
+        resolve();
+      });
+    });
+  }
+
+  async relaunch(): Promise<void> {
+    await this.stop();
+    this.process = null;
+    this.logs = null;
+    await this.start();
+  }
+
+  private async waitForBridgeHealth(timeoutMs: number): Promise<void> {
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < timeoutMs) {
+      if (this.process && this.process.exitCode !== null) {
+        throw new Error(
+          `Packaged app exited before the desktop test bridge became ready.\n${formatLogs(this.logs)}`,
+        );
+      }
+      try {
+        await fetchJson<{ ok: boolean }>(`${this.bridgeUrl}/health`, {
+          headers: { Authorization: `Bearer ${this.bridgeToken}` },
+        });
+        return;
+      } catch {
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+    }
+
+    throw new Error(
+      `Timed out waiting for ${this.bridgeUrl}/health.\n${formatLogs(this.logs)}`,
+    );
+  }
+
+  async getState(): Promise<DesktopTestBridgeState> {
+    return await fetchJson<DesktopTestBridgeState>(`${this.bridgeUrl}/state`, {
+      headers: { Authorization: `Bearer ${this.bridgeToken}` },
+    });
+  }
+
+  async waitForState(
+    predicate: (state: DesktopTestBridgeState) => boolean,
+    message: string,
+    timeoutMs = 30_000,
+  ): Promise<DesktopTestBridgeState> {
+    const startedAt = Date.now();
+    let lastState: DesktopTestBridgeState | null = null;
+
+    while (Date.now() - startedAt < timeoutMs) {
+      if (this.process && this.process.exitCode !== null) {
+        throw new Error(
+          `${message}\nPackaged app exited early.\n${formatLogs(this.logs)}`,
+        );
+      }
+      lastState = await this.getState();
+      if (predicate(lastState)) {
+        return lastState;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+
+    throw new Error(
+      `${message}\nLast state:\n${JSON.stringify(lastState, null, 2)}\n${formatLogs(this.logs)}`,
+    );
+  }
+
+  async eval<T>(script: string): Promise<T> {
+    const response = await fetchJson<{ result: T }>(
+      `${this.bridgeUrl}/main-window/eval`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${this.bridgeToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ script }),
+      },
+    );
+    return response.result;
+  }
+
+  async screenshot(): Promise<string> {
+    const response = await fetchJson<{ data: string }>(
+      `${this.bridgeUrl}/main-window/screenshot`,
+      {
+        headers: { Authorization: `Bearer ${this.bridgeToken}` },
+      },
+    );
+    return response.data;
+  }
+
+  async menuAction(action: string): Promise<void> {
+    await fetchJson<{ ok: boolean }>(`${this.bridgeUrl}/menu-action`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.bridgeToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ action }),
+    });
+  }
+}

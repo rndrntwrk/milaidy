@@ -55,14 +55,12 @@ describe("cloud-connection", () => {
     });
   });
 
-  it("accepts runtime cloud credentials when rpc cloud routing is selected", () => {
+  it("does not revive runtime credentials when only rpc cloud routing is selected", () => {
     const runtime = {
       getSetting: (key: string) =>
         key === "ELIZAOS_CLOUD_API_KEY" ? "runtime-setting-key" : undefined,
     };
 
-    expect(resolveCloudApiKey(cloudRpcConfig, runtime)).toBe(
-      "runtime-setting-key",
-    );
+    expect(resolveCloudApiKey(cloudRpcConfig, runtime)).toBeUndefined();
   });
 });

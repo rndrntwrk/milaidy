@@ -13,9 +13,9 @@ const requiredPaths = [
   "dist/index.js",
   "dist/entry.js",
   "dist/build-info.json",
-  "scripts/run-repo-setup.mjs",
+  "eliza/packages/app-core/scripts",
   "scripts/setup-upstreams.mjs",
-  "scripts/ensure-vision-deps.mjs",
+  "scripts/init-submodules.mjs",
 ];
 const forbiddenPrefixes = ["dist/Eliza.app/"];
 const orchestratorBrokenLifecycleTarget = "./scripts/ensure-node-pty.mjs";
@@ -27,11 +27,11 @@ const coreTypescriptPackageJsonPath = resolve(
 );
 const autonomousServerPathCandidates = [
   "node_modules/@elizaos/agent/src/api/server.js",
-  "eliza/agent/src/api/server.ts",
+  "eliza/packages/agent/src/api/server.ts",
 ] as const;
 const autonomousElizaPathCandidates = [
   "node_modules/@elizaos/agent/src/runtime/eliza.js",
-  "eliza/agent/src/runtime/eliza.ts",
+  "eliza/packages/agent/src/runtime/eliza.ts",
 ] as const;
 const homepageReleaseDataPathCandidates = [
   "apps/homepage/src/generated/release-data.ts",
@@ -64,11 +64,13 @@ const requiredWorkflowSnippets = [
   "publish-browser-companions:",
   "name: Publish LifeOps Browser companions",
   "name: Attach LifeOps Browser assets to GitHub release",
+  "GH_REPO: ${{ github.repository }}",
   "gh release upload",
+  '--repo "$GH_REPO"',
   "for attempt in 1 2 3; do",
   `bun install failed on attempt \${attempt}; retrying in 15 seconds`,
   "name: Ensure avatar assets",
-  "node scripts/ensure-avatars.mjs",
+  "node eliza/packages/app-core/scripts/ensure-avatars.mjs",
   "name: Prepare Whisper model artifact",
   "bash apps/app/electrobun/scripts/ensure-whisper-model.sh base.en",
   "name: Upload Whisper model artifact",
@@ -86,7 +88,7 @@ const requiredWorkflowSnippets = [
   "node eliza/packages/app-core/scripts/desktop-build.mjs stage --variant=base --build-whisper",
   "Inject version.json into bundle (Windows)",
   "Inject version.json into bundle (macOS / Linux)",
-  '"identifier":"com.elizaai.eliza"',
+  '"identifier":"com.miladyai.milady"',
   "Stage standard macOS release app",
   "apps/app/electrobun/scripts/stage-macos-release-artifacts.sh",
   "retry_stapler_validate()",
@@ -102,29 +104,29 @@ const requiredWorkflowSnippets = [
   "Start-Process -FilePath $installer",
   "Extract Windows app bundle for Inno Setup",
   '$extractDir = "C:\\m"',
-  "eliza-dist/entry.js found",
+  "milady-dist/entry.js found",
   "Build Inno Setup installer",
   "packaging/inno/build-inno.ps1",
   '-BuildDir "C:\\m"',
   "Verify Windows public installer looks complete",
-  'Get-ChildItem -Path "apps/app/electrobun/artifacts" -File -Filter "Eliza-Setup-*.exe"',
+  'Get-ChildItem -Path "apps/app/electrobun/artifacts" -File -Filter "Milady-Setup-*.exe"',
   "$minimumBytes = 50MB",
   "apps/app/electrobun/artifacts/*.exe",
   "name: Prepare public canary Windows installer artifact",
   "needs.prepare.outputs.env == 'canary'",
   '$publicCanaryDir = Join-Path $artifactsDir "public-canary-installer"',
-  '$canonicalInstallers = Get-ChildItem -Path $artifactsDir -File -Filter "Eliza-Setup-*.exe"',
+  '$canonicalInstallers = Get-ChildItem -Path $artifactsDir -File -Filter "Milady-Setup-*.exe"',
   "Copy-Item $canonicalInstaller.FullName -Destination $publicCanaryDir -Force",
-  '$canonicalInstallerZips = Get-ChildItem -Path $artifactsDir -File -Filter "Eliza-Setup-*.exe.zip"',
+  '$canonicalInstallerZips = Get-ChildItem -Path $artifactsDir -File -Filter "Milady-Setup-*.exe.zip"',
   "No canonical Windows installer (or zip fallback) found for canary artifact publishing.",
   "Expand-Archive -Path $canonicalInstallerZip.FullName -DestinationPath $publicCanaryDir -Force",
   "Prepared public canary installer artifact:",
   "name: Upload public canary installer artifact",
   "name: electrobun-$" + "{{ matrix.platform.artifact-name }}-public-installer",
-  "path: apps/app/electrobun/artifacts/public-canary-installer/Eliza-Setup-*.exe",
+  "path: apps/app/electrobun/artifacts/public-canary-installer/Milady-Setup-*.exe",
   "name: Collect public release files",
-  '-name "Eliza-Setup-*.exe" -o \\',
-  '-name "Eliza-Setup-*.exe.zip" -o \\',
+  '-name "Milady-Setup-*.exe" -o \\',
+  '-name "Milady-Setup-*.exe.zip" -o \\',
   '-name "*Setup*.tar.gz" -o \\',
   "name: Collect update channel files",
   "pattern: lifeops-browser-*",
@@ -141,7 +143,7 @@ const requiredWorkflowSnippets = [
   'echo "cache-dir=$package_dir/.cache" >> "$GITHUB_OUTPUT"',
   "path: $" + "{{ steps.resolve-electrobun.outputs.cache-dir }}",
   "name: Build patched Electrobun CLI for Windows",
-  'node scripts/build-patched-electrobun-cli.mjs "$' +
+  'node eliza/packages/app-core/scripts/build-patched-electrobun-cli.mjs "$' +
     '{{ steps.resolve-electrobun.outputs.package-dir }}"',
   "node eliza/packages/app-core/scripts/desktop-build.mjs package --env=$" +
     "{{ needs.prepare.outputs.env }}",
@@ -234,9 +236,9 @@ const forbiddenElectrobunPrWorkflowSnippets = [
 const requiredElectrobunConfigSnippets = [
   'postBuild: "scripts/postwrap-sign-runtime-macos.ts"',
   'postWrap: "scripts/postwrap-diagnostics.ts"',
-  'process.env.ELIZA_ELECTROBUN_NOTARIZE !== "0"',
-  '"../../../plugins.json": "eliza-dist/plugins.json"',
-  '"../../../package.json": "eliza-dist/package.json"',
+  "process.env.ELIZA_ELECTROBUN_NOTARIZE ??",
+  '"../../../plugins.json": `${runtimeDistDir}/plugins.json`',
+  '"../../../package.json": `${runtimeDistDir}/package.json`',
 ];
 const localPackHotspotPaths = [
   "dist/node_modules",
@@ -491,6 +493,20 @@ export function isPackPathCoveredByFilesList(
   });
 }
 
+export function doesPackedOutputContainPath(
+  requiredPath: string,
+  packedPaths: string[],
+): boolean {
+  const normalizedRequiredPath = requiredPath.replaceAll("\\", "/");
+  return packedPaths.some((entry) => {
+    const normalizedEntry = entry.replaceAll("\\", "/").replace(/\/$/, "");
+    return (
+      normalizedEntry === normalizedRequiredPath ||
+      normalizedEntry.startsWith(`${normalizedRequiredPath}/`)
+    );
+  });
+}
+
 export function bundlesDependency(
   pkg: RootPackageJson,
   dependencyName: string,
@@ -738,7 +754,7 @@ function assertAgentDependenciesAlignedWithRootPins() {
     readFileSync("package.json", "utf8"),
   ) as RootPackageJson;
   const agentPackage = JSON.parse(
-    readFileSync("eliza/agent/package.json", "utf8"),
+    readFileSync("eliza/packages/agent/package.json", "utf8"),
   ) as RootPackageJson;
   const mismatches = findMismatchedSharedAgentDependencySpecs(
     rootPackage,
@@ -779,7 +795,7 @@ function assertReleaseWorkflowHasNotaryWrapper() {
   }
 
   const patchedCliHelper = readFileSync(
-    "scripts/build-patched-electrobun-cli.mjs",
+    "eliza/packages/app-core/scripts/build-patched-electrobun-cli.mjs",
     "utf8",
   );
   const missingPatchedCli =
@@ -1017,7 +1033,10 @@ function assertWindowsInstallerProofScript() {
 }
 
 function assertInnoBuildScriptHasTimeoutAndHeartbeat() {
-  const script = readFileSync("packaging/inno/build-inno.ps1", "utf8");
+  const script = readFileSync(
+    "eliza/packages/app-core/packaging/inno/build-inno.ps1",
+    "utf8",
+  );
   const requiredSnippets = [
     "$isccTimeout = [TimeSpan]::FromMinutes(25)",
     "$isccHeartbeatInterval = [TimeSpan]::FromSeconds(30)",
@@ -1043,10 +1062,13 @@ function assertInnoBuildScriptHasTimeoutAndHeartbeat() {
 }
 
 function assertInnoTemplateTargetsBundledLauncher() {
-  const template = readFileSync("packaging/inno/Eliza.iss", "utf8");
+  const template = readFileSync(
+    "eliza/packages/app-core/packaging/inno/ElizaOSApp.iss",
+    "utf8",
+  );
   const requiredSnippets = [
     '#define MyAppExeName "bin\\launcher.exe"',
-    '#define MyAppIconFile "Eliza.ico"',
+    '#define MyAppIconFile "ElizaOSApp.ico"',
     'Source: "{#MySetupIconFile}"; DestDir: "{app}"; DestName: "{#MyAppIconFile}"; Flags: ignoreversion',
     "UninstallDisplayIcon={app}\\{#MyAppIconFile}",
     'Name: "{autoprograms}\\{#MyDefaultGroupName}\\{#MyAppName}"; Filename: "{app}\\{#MyAppExeName}"; IconFilename: "{app}\\{#MyAppIconFile}"',
@@ -1281,10 +1303,12 @@ function main() {
   }
   const results = runPackDry();
   const files = results.flatMap((entry) => entry.files ?? []);
-  const paths = new Set(files.map((file) => file.path));
+  const packedPaths = files.map((file) => file.path);
 
-  const missing = requiredPaths.filter((path) => !paths.has(path));
-  const forbidden = [...paths].filter((path) =>
+  const missing = requiredPaths.filter(
+    (path) => !doesPackedOutputContainPath(path, packedPaths),
+  );
+  const forbidden = packedPaths.filter((path) =>
     forbiddenPrefixes.some((prefix) => path.startsWith(prefix)),
   );
 

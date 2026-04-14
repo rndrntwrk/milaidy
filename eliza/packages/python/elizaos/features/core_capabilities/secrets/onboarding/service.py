@@ -62,8 +62,7 @@ class OnboardingService(Service):
     capability_description: str = "Manage secrets onboarding across chat platforms"
 
     def __init__(self, runtime: IAgentRuntime | None = None) -> None:
-        super().__init__()
-        self.runtime = runtime
+        super().__init__(runtime)
         self._secrets_service: SecretsService | None = None
         self._sessions: dict[str, OnboardingSession] = {}
 
@@ -76,11 +75,9 @@ class OnboardingService(Service):
 
     async def _initialize(self) -> None:
         logger.info("[OnboardingService] Starting")
-        if self.runtime is not None:
-            for svc in (self.runtime.services or {}).values():
-                if getattr(svc, "service_type", None) == "secrets":
-                    self._secrets_service = svc  # type: ignore[assignment]
-                    break
+        if self._runtime is not None:
+            service = self._runtime.get_service("secrets")
+            self._secrets_service = service if isinstance(service, SecretsService) else None
         logger.info("[OnboardingService] Started")
 
     async def stop(self) -> None:
@@ -383,8 +380,9 @@ class OnboardingService(Service):
                 "missing_required": [],
             }
 
-        settings = (world.metadata or {}).get("settings")
-        if not settings:
+        metadata = getattr(world, "metadata", None)
+        settings = metadata.get("settings") if isinstance(metadata, dict) else None
+        if not isinstance(settings, dict) or not settings:
             return {
                 "initialized": False,
                 "complete": False,

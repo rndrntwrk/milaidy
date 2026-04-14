@@ -1,11 +1,7 @@
-/**
- * Tab panel components for the CharacterEditor.
- *
- * Extracted from the main CharacterEditor render to reduce file size.
- * Each panel renders the content for one tab in the character editor.
- */
-
-import { Button, Input, Textarea, ThemedSelect } from "@elizaos/app-core";
+import { Button } from "@elizaos/ui/components/ui/button";
+import { Input } from "@elizaos/ui/components/ui/input";
+import { Textarea } from "@elizaos/ui/components/ui/textarea";
+import { ThemedSelect } from "@elizaos/ui/components/ui/themed-select";
 import type { MessageExampleGroup } from "@elizaos/core";
 import type { ChangeEvent, KeyboardEvent } from "react";
 import type { CharacterData } from "../../api/client-types-config";
@@ -43,19 +39,6 @@ const SparklesIcon = ({ className }: { className?: string }) => (
     <path d="M19 13l.9 2.7L22 16l-2.1.3L19 19l-.9-2.7L16 16l2.1-.3L19 13z" />
   </svg>
 );
-
-/* ── Shared class names ──────────────────────────────────────────── */
-export const CHARACTER_EDITOR_SECTION_CLASSNAME = "flex flex-col gap-3";
-export const CHARACTER_EDITOR_TEXTAREA_CLASSNAME =
-  "flex-1 min-h-12 resize-none overflow-y-auto rounded-lg border-border bg-white/[0.04] px-3 py-2 font-mono text-xs leading-relaxed text-txt";
-export const CHARACTER_EDITOR_INLINE_RULE_CLASSNAME =
-  "group flex items-start gap-2";
-export const CHARACTER_EDITOR_INLINE_FIELD_CLASSNAME =
-  "h-7 flex-1 rounded-md border border-border bg-white/[0.03] px-2 font-mono text-xs-tight text-txt outline-none focus:border-accent";
-export const CHARACTER_EDITOR_SMALL_GOLD_ACTION_CLASSNAME =
-  "h-6 px-2 text-2xs font-bold text-accent";
-export const CHARACTER_EDITOR_ICON_GHOST_CLASSNAME =
-  "mt-0.5 h-auto w-auto shrink-0 p-0 text-muted opacity-0 transition-[opacity,color,box-shadow] duration-150 hover:text-danger group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-danger/40";
 
 /* ── Inline close icon used by multiple panels ───────────────────── */
 const CloseIconSvg = () => (
@@ -172,7 +155,7 @@ export function CharacterIdentityPanel({
   return (
     <div className="flex flex-1 min-h-0 flex-col gap-5">
       {/* Name + Voice (50/50 split) */}
-      <section className={CHARACTER_EDITOR_SECTION_CLASSNAME}>
+      <section className="flex flex-col gap-3">
         <div className="grid grid-cols-2 gap-3">
           <div className="flex flex-col gap-2 min-w-0">
             <div className="flex items-center justify-between">
@@ -270,9 +253,7 @@ export function CharacterIdentityPanel({
       </section>
 
       {/* Bio / About Me */}
-      <section
-        className={`${CHARACTER_EDITOR_SECTION_CLASSNAME} flex flex-1 min-h-[15rem] flex-col`}
-      >
+      <section className="flex flex-1 min-h-[15rem] flex-col gap-3">
         <div className="flex items-center justify-between">
           <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted">
             {t("charactereditor.AboutMe", {
@@ -308,14 +289,12 @@ export function CharacterIdentityPanel({
           onChange={(e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
             handleFieldEdit("bio", e.target.value)
           }
-          className={`${CHARACTER_EDITOR_TEXTAREA_CLASSNAME} h-full min-h-[14rem] max-h-none`}
+          className="flex-1 min-h-12 resize-none overflow-y-auto rounded-lg border-border bg-white/[0.04] px-3 py-2 font-mono text-xs leading-relaxed text-txt h-full min-h-[14rem] max-h-none"
         />
       </section>
 
       {/* System Prompt / Directions */}
-      <section
-        className={`${CHARACTER_EDITOR_SECTION_CLASSNAME} flex flex-1 min-h-[15rem] flex-col`}
-      >
+      <section className="flex flex-1 min-h-[15rem] flex-col gap-3">
         <div className="flex items-center justify-between">
           <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted">
             {t("charactereditor.SystemPrompt", {
@@ -352,7 +331,7 @@ export function CharacterIdentityPanel({
           onChange={(e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
             handleFieldEdit("system", e.target.value)
           }
-          className={`${CHARACTER_EDITOR_TEXTAREA_CLASSNAME} h-full min-h-[14rem] max-h-none`}
+          className="flex-1 min-h-12 resize-none overflow-y-auto rounded-lg border-border bg-white/[0.04] px-3 py-2 font-mono text-xs leading-relaxed text-txt h-full min-h-[14rem] max-h-none"
         />
       </section>
     </div>
@@ -377,7 +356,7 @@ export function CharacterStylePanel({
   const style = d.style;
 
   return (
-    <section className={CHARACTER_EDITOR_SECTION_CLASSNAME}>
+    <section className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <Button
           variant="ghost"
@@ -413,7 +392,7 @@ export function CharacterStylePanel({
                   items.map((item, index) => (
                     <div
                       key={`${key}:${item}`}
-                      className={CHARACTER_EDITOR_INLINE_RULE_CLASSNAME}
+                      className="group flex items-start gap-2"
                     >
                       <span className="mt-0.5 shrink-0 text-2xs font-bold text-accent">
                         {index + 1}
@@ -441,7 +420,7 @@ export function CharacterStylePanel({
                       <Button
                         variant="ghost"
                         size="icon"
-                        className={CHARACTER_EDITOR_ICON_GHOST_CLASSNAME}
+                        className="mt-0.5 h-auto w-auto shrink-0 p-0 text-muted opacity-0 transition-[opacity,color,box-shadow] duration-150 hover:text-danger group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-danger/40"
                         onClick={() => handleRemoveStyleEntry(key, index)}
                         title={t("common.remove")}
                         aria-label={`${t("common.remove")} ${t(
@@ -480,12 +459,12 @@ export function CharacterStylePanel({
                       handleAddStyleEntry(key);
                     }
                   }}
-                  className={`min-w-0 text-xs ${CHARACTER_EDITOR_INLINE_FIELD_CLASSNAME}`}
+                  className="min-w-0 text-xs h-7 flex-1 rounded-md border border-border bg-white/[0.03] px-2 font-mono text-xs-tight text-txt outline-none focus:border-accent"
                 />
                 <Button
                   variant="ghost"
                   size="sm"
-                  className={CHARACTER_EDITOR_SMALL_GOLD_ACTION_CLASSNAME}
+                  className="h-6 px-2 text-2xs font-bold text-accent"
                   onClick={() => handleAddStyleEntry(key)}
                   disabled={!pendingStyleEntries[key].trim()}
                 >
@@ -515,7 +494,7 @@ export function CharacterExamplesPanel({
   return (
     <>
       {/* Chat Examples */}
-      <section className={CHARACTER_EDITOR_SECTION_CLASSNAME}>
+      <section className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted">
             {t("charactereditor.ChatExamples", {
@@ -594,7 +573,7 @@ export function CharacterExamplesPanel({
                         updated[ci] = convoClone;
                         handleFieldEdit("messageExamples", updated);
                       }}
-                      className={CHARACTER_EDITOR_INLINE_FIELD_CLASSNAME}
+                      className="h-7 flex-1 rounded-md border border-border bg-white/[0.03] px-2 font-mono text-xs-tight text-txt outline-none focus:border-accent"
                     />
                   </div>
                 ))}
@@ -612,7 +591,7 @@ export function CharacterExamplesPanel({
       </section>
 
       {/* Post Examples */}
-      <section className={CHARACTER_EDITOR_SECTION_CLASSNAME}>
+      <section className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted">
             {t("charactereditor.PostExamples", {
@@ -653,12 +632,12 @@ export function CharacterExamplesPanel({
                   updated[pi] = e.target.value;
                   handleFieldEdit("postExamples", updated);
                 }}
-                className={CHARACTER_EDITOR_INLINE_FIELD_CLASSNAME}
+                className="h-7 flex-1 rounded-md border border-border bg-white/[0.03] px-2 font-mono text-xs-tight text-txt outline-none focus:border-accent"
               />
               <Button
                 variant="ghost"
                 size="icon"
-                className={CHARACTER_EDITOR_ICON_GHOST_CLASSNAME}
+                className="mt-0.5 h-auto w-auto shrink-0 p-0 text-muted opacity-0 transition-[opacity,color,box-shadow] duration-150 hover:text-danger group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-danger/40"
                 onClick={() => {
                   const updated = [...(d.postExamples ?? [])];
                   updated.splice(pi, 1);

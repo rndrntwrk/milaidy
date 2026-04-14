@@ -18,14 +18,14 @@
  */
 
 import type http from "node:http";
+import type { CompatRuntimeState } from "@elizaos/app-core/api/compat-route-shared";
 import type { Plugin, Route } from "@elizaos/core";
-import { handleWalletCoreRoutes } from "./routes/wallet-core-routes";
+import { handleStewardCompatRoutes } from "./routes/steward-compat-routes";
+import { handleWalletBrowserCompatRoutes } from "./routes/wallet-browser-compat-routes";
 import { handleWalletBscCoreRoutes } from "./routes/wallet-bsc-core-routes";
 import { handleWalletCompatRoutes } from "./routes/wallet-compat-routes";
-import { handleWalletBrowserCompatRoutes } from "./routes/wallet-browser-compat-routes";
-import { handleStewardCompatRoutes } from "./routes/steward-compat-routes";
+import { handleWalletCoreRoutes } from "./routes/wallet-core-routes";
 import { handleWalletTradeCompatRoutes } from "./routes/wallet-trade-compat-routes";
-import type { CompatRuntimeState } from "@elizaos/app-core";
 
 // ---------------------------------------------------------------------------
 // Helper: build a CompatRuntimeState stub.  The compat handlers need a `state`
@@ -52,7 +52,11 @@ type CompatHandler = (
 ) => Promise<boolean>;
 
 function stewardRouteHandler(handler: CompatHandler) {
-  return async (req: unknown, res: unknown, runtime: unknown): Promise<void> => {
+  return async (
+    req: unknown,
+    res: unknown,
+    runtime: unknown,
+  ): Promise<void> => {
     const httpReq = req as http.IncomingMessage;
     const httpRes = res as http.ServerResponse;
     await handler(httpReq, httpRes, buildCompatState(runtime));
@@ -67,7 +71,11 @@ type CoreHandler = (
 ) => Promise<boolean>;
 
 function coreRouteHandler(handler: CoreHandler) {
-  return async (req: unknown, res: unknown, runtime: unknown): Promise<void> => {
+  return async (
+    req: unknown,
+    res: unknown,
+    runtime: unknown,
+  ): Promise<void> => {
     const httpReq = req as http.IncomingMessage;
     const httpRes = res as http.ServerResponse;
     await handler(httpReq, httpRes, runtime);

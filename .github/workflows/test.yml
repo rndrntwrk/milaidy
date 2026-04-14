@@ -674,10 +674,71 @@ jobs:
         env:
           NODE_OPTIONS: "--max-old-space-size=4096"
 
+  live-surface-audit:
+    name: Live Surface Audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Setup workspace dependencies
+        uses: ./.github/actions/setup-bun-workspace
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+          disable-local-eliza-workspace: "true"
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+
+      - name: Restore eliza workspace paths for repo scripts
+        run: node -e "const fs=require('node:fs');if(fs.existsSync('.eliza.ci-disabled')&&!fs.existsSync('eliza'))fs.renameSync('.eliza.ci-disabled','eliza');"
+
+      - name: Run live surface audit
+        run: bun run test:audit:live:strict
+
+  ui-playwright-smoke:
+    name: UI Playwright Smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check live provider secrets
+        run: |
+          if [ -z "${{ secrets.ELIZAOS_CLOUD_API_KEY }}" ]; then
+            echo "::error::UI Playwright smoke requires ELIZAOS_CLOUD_API_KEY so the suite can complete real onboarding."
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Setup workspace dependencies
+        uses: ./.github/actions/setup-bun-workspace
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+          disable-local-eliza-workspace: "true"
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+
+      - name: Restore eliza workspace paths for repo scripts
+        run: node -e "const fs=require('node:fs');if(fs.existsSync('.eliza.ci-disabled')&&!fs.existsSync('eliza'))fs.renameSync('.eliza.ci-disabled','eliza');"
+
+      - name: Install Playwright browser
+        run: bunx playwright install --with-deps chromium
+
+      - name: Run UI Playwright smoke tests
+        run: bun run test:ui:playwright
+        env:
+          MILADY_LIVE_TEST: "1"
+          ELIZA_LIVE_TEST: "1"
+          ELIZAOS_CLOUD_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY }}
+          ELIZAOS_CLOUD_BASE_URL: ${{ secrets.ELIZAOS_CLOUD_BASE_URL }}
+
   test-status:
     name: All Tests Passed
     if: always()
-    needs: [regression-matrix, unit-tests, db-check, website-blocker-cross-platform, website-blocker-startup-smoke, website-blocker-desktop-smoke, website-blocker-mobile-android, website-blocker-mobile-ios, desktop-contract, cloud-live-e2e, validation-e2e]
+    needs: [regression-matrix, unit-tests, db-check, website-blocker-cross-platform, website-blocker-startup-smoke, website-blocker-desktop-smoke, website-blocker-mobile-android, website-blocker-mobile-ios, desktop-contract, cloud-live-e2e, validation-e2e, live-surface-audit, ui-playwright-smoke]
     runs-on: ubuntu-24.04
     steps:
       - name: Check test results
@@ -697,6 +758,8 @@ jobs:
           echo "desktop-contract:   ${{ needs.desktop-contract.result }}"
           echo "cloud-live-e2e:     ${{ needs.cloud-live-e2e.result }}"
           echo "validation-e2e:     ${{ needs.validation-e2e.result }}"
+          echo "live-surface-audit: ${{ needs.live-surface-audit.result }}"
+          echo "ui-playwright-smoke:${{ needs.ui-playwright-smoke.result }}"
           echo "==================================="
           bad=0
           for pair in \
@@ -710,7 +773,9 @@ jobs:
             "website-blocker-mobile-ios:${{ needs.website-blocker-mobile-ios.result }}" \
             "desktop-contract:${{ needs.desktop-contract.result }}" \
             "cloud-live-e2e:${{ needs.cloud-live-e2e.result }}" \
-            "validation-e2e:${{ needs.validation-e2e.result }}"; do
+            "validation-e2e:${{ needs.validation-e2e.result }}" \
+            "live-surface-audit:${{ needs.live-surface-audit.result }}" \
+            "ui-playwright-smoke:${{ needs.ui-playwright-smoke.result }}"; do
             name="${pair%%:*}"
             result="${pair##*:}"
             if [[ "$result" != "success" ]]; then

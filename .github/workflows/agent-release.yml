@@ -514,7 +514,7 @@ jobs:
             mv .eliza.ci-disabled eliza
           fi
       - name: Generate release metadata
-        run: node eliza/packages/app-core/scripts/write-homepage-release-data.mjs || echo "::warning::Release metadata gen failed"
+        run: node scripts/write-homepage-release-data.mjs || echo "::warning::Release metadata gen failed"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Build homepage

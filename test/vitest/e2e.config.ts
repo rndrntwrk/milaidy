@@ -7,11 +7,20 @@ export const heavyOnlyE2EPaths = [
   "eliza/packages/app-core/test/app/qa-checklist.real.e2e.test.ts",
 ];
 
+export const checkoutDependentE2EPaths = [
+  // These suites reach into plugin source trees that are not present in every
+  // checkout of this repo, so keep them out of the default lane until those
+  // plugin repos are vendored or the tests switch to package imports.
+  "eliza/packages/agent/test/agent-runtime.live.e2e.test.ts",
+  "eliza/packages/agent/test/personality-routing.live.e2e.test.ts",
+  "eliza/packages/agent/test/quicksort-coding-agent.live.e2e.test.ts",
+];
+
 export const defaultE2EInclude = [
-  "eliza/packages/agent/test/cloud-auth.live.e2e.test.ts",
-  "eliza/packages/agent/test/database-conversation.live.e2e.test.ts",
-  "eliza/packages/agent/test/plugin-lifecycle.live.e2e.test.ts",
-  "eliza/packages/agent/test/wallet-live.e2e.test.ts",
+  "eliza/apps/**/*.live.e2e.test.ts",
+  "eliza/apps/**/*.real.e2e.test.ts",
+  "eliza/packages/**/*.live.e2e.test.ts",
+  "eliza/packages/**/*.real.e2e.test.ts",
 ];
 
 export default {
@@ -19,6 +28,10 @@ export default {
   test: {
     ...baseConfig.test,
     include: defaultE2EInclude,
-    exclude: [...(baseConfig.test?.exclude ?? []), ...heavyOnlyE2EPaths],
+    exclude: [
+      ...(baseConfig.test?.exclude ?? []),
+      ...heavyOnlyE2EPaths,
+      ...checkoutDependentE2EPaths,
+    ],
   },
 };

@@ -3,10 +3,12 @@
  * guards, and wallet export rejection wrappers.
  */
 import type http from "node:http";
-import { resolveWalletExportRejection as upstreamResolveWalletExportRejection } from "@elizaos/agent/api/server";
-import { syncAppEnvToEliza, syncElizaEnvAliases } from "@elizaos/app-core";
-
-import { mirrorCompatHeaders } from "@elizaos/app-core";
+import { resolveWalletExportRejection as upstreamResolveWalletExportRejection } from "@elizaos/agent/api/server-auth";
+import {
+  mirrorCompatHeaders,
+  syncAppEnvToEliza,
+  syncElizaEnvAliases,
+} from "@elizaos/app-core";
 import {
   type WalletExportRejection as CompatWalletExportRejection,
   createHardenedExportGuard,
@@ -56,9 +58,9 @@ export function runWithCompatAuthContext<T>(
 function resolveCompatWalletExportRejection(
   ...args: Parameters<typeof upstreamResolveWalletExportRejection>
 ): CompatWalletExportRejection | null {
-  const [req] = args;
+  const [req, body] = args;
   return runWithCompatAuthContext(req, () =>
-    normalizeCompatRejection(upstreamResolveWalletExportRejection(...args)),
+    normalizeCompatRejection(upstreamResolveWalletExportRejection(req, body)),
   );
 }
 
@@ -112,8 +114,8 @@ export function canUseLocalTradeExecution(
 export function resolveWalletExportRejection(
   ...args: Parameters<typeof upstreamResolveWalletExportRejection>
 ): CompatWalletExportRejection | null {
-  const [req] = args;
+  const [req, body] = args;
   return runWithCompatAuthContext(req, () =>
-    normalizeCompatRejection(hardenedGuard(...args)),
+    normalizeCompatRejection(hardenedGuard(req, body)),
   );
 }

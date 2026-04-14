@@ -180,12 +180,10 @@ export function resolveCloudApiBaseUrl(rawBaseUrl?: string): string {
 
 export function resolveCloudApiKey(
   config: Pick<ElizaConfig, "cloud"> | Record<string, unknown>,
-  runtime?:
-    | {
-        character?: { secrets?: Record<string, unknown> };
-        getSetting?: (key: string) => unknown;
-      }
-    | null,
+  runtime?: {
+    character?: { secrets?: Record<string, unknown> };
+    getSetting?: (key: string) => unknown;
+  } | null,
 ): string | undefined {
   migrateLegacyRuntimeConfig(config as Record<string, unknown>);
   // 1. Config file (disk)

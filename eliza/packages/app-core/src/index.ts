@@ -2,7 +2,7 @@
  * Public entry point for @elizaos/app-core — import from `@elizaos/app-core` only.
  */
 
-export * from "./ui";
+export * from "@elizaos/ui";
 export type { RestartHandler } from "@elizaos/shared/restart";
 export {
   RESTART_EXIT_CODE,
@@ -26,7 +26,22 @@ export * from "./bridge/index";
 export * from "./config/index";
 export * from "./types/index";
 export * from "./events/index";
-export * from "./hooks/index";
+export * from "./hooks/useActivityEvents";
+export * from "./hooks/useBugReport";
+export * from "./hooks/useChatAvatarVoiceBridge";
+export * from "./hooks/useCanvasWindow";
+export * from "./hooks/useContextMenu";
+export * from "./hooks/useGoogleLifeOpsConnector";
+export { COMMON_SHORTCUTS, useShortcutsHelp } from "./hooks/useKeyboardShortcuts";
+export * from "./hooks/useLifeOpsActivitySignals";
+export * from "./hooks/useLifeOpsAppState";
+export * from "./hooks/useMediaQuery";
+export * from "./hooks/useMusicPlayer";
+export * from "./hooks/useRenderGuard";
+export * from "./hooks/useSignalPairing";
+export * from "./hooks/useStreamPopoutNavigation";
+export * from "./hooks/useVoiceChat";
+export * from "./hooks/useWhatsAppPairing";
 export * from "./i18n/index";
 export * from "./navigation/index";
 export * from "./platform/index";

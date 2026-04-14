@@ -334,6 +334,7 @@ export interface BscTradeExecuteRequest {
   tokenAddress: string;
   amount: string;
   slippageBps?: number;
+  routeProvider?: BscTradeRoutePreference;
   confirm?: boolean;
   deadlineSeconds?: number;
 }

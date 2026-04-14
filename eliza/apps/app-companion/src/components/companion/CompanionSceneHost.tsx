@@ -1,16 +1,16 @@
+import { resolveCharacterGreetingAnimation } from "@elizaos/app-core/components/character/character-greeting";
 import {
   dispatchAppEmoteEvent,
   VRM_TELEPORT_COMPLETE_EVENT,
-} from "@elizaos/app-core";
-import { useRenderGuard } from "@elizaos/app-core";
+} from "@elizaos/app-core/events";
+import { useRenderGuard } from "@elizaos/app-core/hooks/useRenderGuard";
+import { useCompanionSceneConfig } from "@elizaos/app-core/state/CompanionSceneConfigContext";
+import { useTranslation } from "@elizaos/app-core/state/TranslationContext";
 import {
   getVrmPreviewUrl,
   getVrmUrl,
-  useCompanionSceneConfig,
-  useTranslation,
   VRM_COUNT,
-} from "@elizaos/app-core";
-
+} from "@elizaos/app-core/state/vrm";
 import {
   memo,
   type ReactNode,
@@ -23,7 +23,6 @@ import {
 } from "react";
 import type { VrmEngine } from "../avatar/VrmEngine";
 import { prefetchVrmToCache } from "../avatar/VrmEngine";
-import { resolveCharacterGreetingAnimation } from "@elizaos/app-core";
 import { CompanionSceneStatusContext } from "./companion-scene-status-context";
 import { SharedCompanionSceneContext } from "./shared-companion-scene-context";
 import { VrmStage } from "./VrmStage";
@@ -159,7 +158,6 @@ function CompanionSceneSurface({
   const {
     selectedVrmIndex,
     customVrmUrl,
-    customWorldUrl,
     uiTheme,
     tab,
     companionVrmPowerMode,

@@ -15,7 +15,7 @@
 import type { Action, HandlerOptions, Memory, State } from "@elizaos/core";
 import { logger } from "@elizaos/core";
 import { hasRoleAccess } from "../security/access.js";
-import { hasContextSignalSyncForKey, messageText } from "./context-signal.js";
+import { hasContextSignalSyncForKey } from "./context-signal.js";
 
 // ---------------------------------------------------------------------------
 // Brave Search API types
@@ -65,7 +65,7 @@ function resolveMaxResults(runtime: unknown): number {
   const raw = rt.getSetting?.("WEB_SEARCH_MAX_RESULTS");
   if (typeof raw === "string") {
     const n = parseInt(raw, 10);
-    if (!isNaN(n) && n > 0 && n <= 20) return n;
+    if (!Number.isNaN(n) && n > 0 && n <= 20) return n;
   }
   return 5;
 }

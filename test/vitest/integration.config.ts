@@ -6,32 +6,24 @@ import {
   getAutonomousSourceRoot,
   getElizaCoreEntry,
   getInstalledPackageEntry,
+  getSharedSourceRoot,
   resolveModuleEntry,
-} from "../../eliza/packages/app-core/test/eliza-package-paths";
+} from "../eliza-package-paths";
 import { repoRoot } from "./repo-root";
+import {
+  getAgentSourceAliases,
+  getAppCoreSourceAliases,
+  getElizaCoreRolesEntry,
+  getOptionalPluginSdkAliases,
+  getSharedSourceAliases,
+  getWorkspaceAppAliases,
+} from "./workspace-aliases";
 
 const elizaCoreEntry = getElizaCoreEntry(repoRoot);
-const elizaCoreRolesSource = path.join(
-  repoRoot,
-  "eliza",
-  "packages",
-  "typescript",
-  "src",
-  "roles.ts",
-);
-const elizaCoreRolesEntry = fs.existsSync(elizaCoreRolesSource)
-  ? elizaCoreRolesSource
-  : path.join(
-      repoRoot,
-      "eliza",
-      "packages",
-      "app-core",
-      "scripts",
-      "lib",
-      "elizaos-core-roles-shim.js",
-    );
+const elizaCoreRolesEntry = getElizaCoreRolesEntry(repoRoot);
 const autonomousSourceRoot = getAutonomousSourceRoot(repoRoot);
 const appCoreSourceRoot = getAppCoreSourceRoot(repoRoot);
+const sharedSourceRoot = getSharedSourceRoot(repoRoot);
 const pluginPersonalityEntry =
   getInstalledPackageEntry("@elizaos/plugin-personality", repoRoot, "node") ??
   resolveModuleEntry(
@@ -77,10 +69,7 @@ const pluginWhatsappEntry =
 export default defineConfig({
   resolve: {
     alias: [
-      {
-        find: "milady/plugin-sdk",
-        replacement: path.join(repoRoot, "src", "plugin-sdk", "index.ts"),
-      },
+      ...getOptionalPluginSdkAliases(repoRoot),
       {
         find: "@elizaos/core/roles",
         replacement: elizaCoreRolesEntry,
@@ -93,196 +82,17 @@ export default defineConfig({
             },
           ]
         : []),
-      ...(autonomousSourceRoot
-        ? [
-            {
-              find: /^@elizaos\/agent\/(.*)/,
-              replacement: path.join(autonomousSourceRoot, "$1"),
-            },
-            {
-              find: "@elizaos/agent",
-              replacement: resolveModuleEntry(
-                path.join(autonomousSourceRoot, "index"),
-              ),
-            },
-          ]
-        : []),
-      ...(appCoreSourceRoot
-        ? [
-            {
-              find: /^@elizaos\/app-core\/(.*)/,
-              replacement: path.join(appCoreSourceRoot, "$1"),
-            },
-            {
-              find: /^@miladyai\/app-core\/src\/(.*)/,
-              replacement: path.join(appCoreSourceRoot, "$1"),
-            },
-            {
-              find: /^@miladyai\/app-core\/(.*)/,
-              replacement: path.join(appCoreSourceRoot, "$1"),
-            },
-            {
-              find: "@elizaos/app-core",
-              replacement: resolveModuleEntry(
-                path.join(appCoreSourceRoot, "index"),
-              ),
-            },
-          ]
-        : []),
-      {
-        find: /^@elizaos\/app-companion\/(.*)/,
-        replacement: path.join(
-          repoRoot,
-          "eliza",
-          "apps",
-          "app-companion",
-          "src",
-          "$1",
-        ),
-      },
-      {
-        find: "@elizaos/app-companion",
-        replacement: path.join(
-          repoRoot,
-          "eliza",
-          "apps",
-          "app-companion",
-          "src",
-          "index.ts",
-        ),
-      },
-      {
-        find: /^@elizaos\/app-lifeops\/(.*)/,
-        replacement: path.join(
-          repoRoot,
-          "eliza",
-          "apps",
-          "app-lifeops",
-          "src",
-          "$1",
-        ),
-      },
-      {
-        find: "@elizaos/app-lifeops",
-        replacement: path.join(
-          repoRoot,
-          "eliza",
-          "apps",
-          "app-lifeops",
-          "src",
-          "index.ts",
-        ),
-      },
-      {
-        find: /^@elizaos\/app-coding\/(.*)/,
-        replacement: path.join(
-          repoRoot,
-          "eliza",
-          "apps",
-          "app-coding",
-          "src",
-          "$1",
-        ),
-      },
-      {
-        find: "@elizaos/app-coding",
-        replacement: path.join(
-          repoRoot,
-          "eliza",
-          "apps",
-          "app-coding",
-          "src",
-          "index.ts",
-        ),
-      },
-      {
-        find: /^@elizaos\/app-vincent\/(.*)/,
-        replacement: path.join(
-          repoRoot,
-          "eliza",
-          "apps",
-          "app-vincent",
-          "src",
-          "$1",
-        ),
-      },
-      {
-        find: "@elizaos/app-vincent",
-        replacement: path.join(
-          repoRoot,
-          "eliza",
-          "apps",
-          "app-vincent",
-          "src",
-          "index.ts",
-        ),
-      },
-      {
-        find: /^@elizaos\/app-shopify\/(.*)/,
-        replacement: path.join(
-          repoRoot,
-          "eliza",
-          "apps",
-          "app-shopify",
-          "src",
-          "$1",
-        ),
-      },
-      {
-        find: "@elizaos/app-shopify",
-        replacement: path.join(
-          repoRoot,
-          "eliza",
-          "apps",
-          "app-shopify",
-          "src",
-          "index.ts",
-        ),
-      },
-      {
-        find: /^@elizaos\/app-steward\/(.*)/,
-        replacement: path.join(
-          repoRoot,
-          "eliza",
-          "apps",
-          "app-steward",
-          "src",
-          "$1",
-        ),
-      },
-      {
-        find: "@elizaos/app-steward",
-        replacement: path.join(
-          repoRoot,
-          "eliza",
-          "apps",
-          "app-steward",
-          "src",
-          "index.ts",
-        ),
-      },
-      {
-        find: /^@elizaos\/shared\/(.*)/,
-        replacement: path.join(
-          repoRoot,
-          "eliza",
-          "packages",
-          "shared",
-          "src",
-          "$1",
-        ),
-      },
-      {
-        find: "@elizaos/shared",
-        replacement: path.join(
-          repoRoot,
-          "eliza",
-          "packages",
-          "shared",
-          "src",
-          "index.ts",
-        ),
-      },
+      ...getAgentSourceAliases(autonomousSourceRoot),
+      ...getAppCoreSourceAliases(appCoreSourceRoot),
+      ...getWorkspaceAppAliases(repoRoot, [
+        "app-companion",
+        "app-lifeops",
+        "app-coding",
+        "app-vincent",
+        "app-shopify",
+        "app-steward",
+      ]),
+      ...getSharedSourceAliases(sharedSourceRoot),
       ...(fs.existsSync(pluginPersonalityEntry)
         ? [
             {

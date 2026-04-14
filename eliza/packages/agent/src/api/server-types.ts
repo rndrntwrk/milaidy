@@ -5,7 +5,6 @@
  */
 
 import type http from "node:http";
-import type { TrainingServiceWithRuntime } from "@elizaos/app-training/services";
 import type { AgentRuntime, Media, UUID } from "@elizaos/core";
 import type { ElizaConfig } from "../config/config.js";
 import type { AppManager } from "../services/app-manager.js";
@@ -105,7 +104,10 @@ export type AgentAutomationMode = "connectors-only" | "full";
 export type TradePermissionMode =
   import("./trade-safety.js").TradePermissionMode;
 
-export type TrainingServiceLike = TrainingServiceWithRuntime;
+export interface TrainingServiceLike {
+  subscribe(listener: (event: unknown) => void): () => void;
+  initialize(): Promise<void>;
+}
 
 // ---------------------------------------------------------------------------
 // Plugin entry types (canonical definitions — re-exported by plugin-discovery-helpers)

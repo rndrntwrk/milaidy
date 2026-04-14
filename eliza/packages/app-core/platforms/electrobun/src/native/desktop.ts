@@ -231,6 +231,20 @@ export class DesktopManager {
     this.setupWindowEvents();
   }
 
+  async getShellDiagnosticsState(): Promise<{
+    trayPresent: boolean;
+    mainWindowPresent: boolean;
+    windowVisible: boolean;
+    windowFocused: boolean;
+  }> {
+    return {
+      trayPresent: Boolean(this.tray),
+      mainWindowPresent: Boolean(this.mainWindow),
+      windowVisible: (await this.isWindowVisible()).visible,
+      windowFocused: this._windowFocused,
+    };
+  }
+
   /**
    * Set the callback used to push messages to the webview renderer.
    */
@@ -1725,6 +1739,12 @@ X-GNOME-Autostart-enabled=true
   // MARK: - Message Box
 
   async showMessageBox(options: MessageBoxOptions): Promise<MessageBoxResult> {
+    const autoConfirm =
+      process.env.MILADY_DESKTOP_TEST_AUTO_CONFIRM_DIALOGS === "1" ||
+      process.env.MILADY_DESKTOP_TEST_AUTO_CONFIRM_RESET === "1";
+    if (autoConfirm) {
+      return { response: options.defaultId ?? 0 };
+    }
     const result = await Utils.showMessageBox({
       type: options.type ?? "info",
       title: options.title,

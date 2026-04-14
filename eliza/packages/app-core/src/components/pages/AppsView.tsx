@@ -1,11 +1,4 @@
-/**
- * Apps View — browse and launch agent games/experiences.
- *
- * Fetches apps from the registry API and shows them as cards.
- * Clicking a card immediately launches the app (no detail pane).
- */
-
-import { PagePanel } from "@elizaos/app-core";
+import { PagePanel } from "@elizaos/ui/components/composites/page-panel";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type AppRunSummary, client, type RegistryAppInfo } from "../../api";
 import { getAppSlugFromPath } from "../../navigation";

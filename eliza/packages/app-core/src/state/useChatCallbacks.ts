@@ -70,10 +70,7 @@ function greetingDebugEnabled(): boolean {
   }
 }
 
-function traceGreeting(
-  phase: string,
-  detail?: Record<string, unknown>,
-): void {
+function traceGreeting(phase: string, detail?: Record<string, unknown>): void {
   if (!greetingDebugEnabled()) return;
   if (detail && Object.keys(detail).length > 0) {
     console.info(`[eliza][greeting] ${phase}`, detail);
@@ -1024,9 +1021,9 @@ export function useChatCallbacks(deps: UseChatCallbacksDeps) {
               conversationId: fallbackId,
             });
             const fallbackLoaded = await loadConversationMessages(fallbackId);
-        if (fallbackLoaded.ok === false) {
-          setActionNotice(
-            `Failed to load fallback conversation: ${fallbackLoaded.message}`,
+            if (fallbackLoaded.ok === false) {
+              setActionNotice(
+                `Failed to load fallback conversation: ${fallbackLoaded.message}`,
                 "error",
                 4200,
               );

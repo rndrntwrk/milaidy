@@ -1,4 +1,4 @@
-import { Button } from "@elizaos/app-core";
+import { Button } from "@elizaos/ui/components/ui/button";
 import { useCallback, useEffect, useState } from "react";
 import { useAgents } from "../../lib/AgentProvider";
 import { openWebUI } from "../../lib/open-web-ui";

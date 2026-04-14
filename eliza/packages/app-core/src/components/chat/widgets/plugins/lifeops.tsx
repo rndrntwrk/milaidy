@@ -1,4 +1,4 @@
-import { Badge } from "@elizaos/app-core";
+import { Badge } from "@elizaos/ui/components/ui/badge";
 import type {
   LifeOpsCalendarEvent,
   LifeOpsCalendarFeed,

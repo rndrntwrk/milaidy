@@ -12,7 +12,7 @@ import {
   type StreamEventEnvelope,
   client,
 } from "../api";
-import { mapServerTasksToSessions } from "@elizaos/app-coding";
+import { mapServerTasksToSessions } from "../chat/coding-agent-session-state";
 import { type AppEmoteEventDetail, dispatchAppEmoteEvent } from "../events";
 import {
   loadAvatarIndex,
@@ -33,7 +33,7 @@ import type { StartupEvent } from "./startup-coordinator";
 import type { AgentStatus, WalletAddresses } from "../api";
 import type { OnboardingMode } from "./types";
 import { getVrmUrl, getVrmCount, VRM_COUNT } from "./vrm";
-import { prefetchVrmToCache } from "@elizaos/app-companion/ui";
+import { prefetchVrmToCache } from "@elizaos/app-companion/components/avatar/VrmEngine";
 
 export interface HydratingDeps {
   setStartupError: (v: null) => void;
@@ -94,6 +94,7 @@ export interface ReadyPhaseDeps {
   notifyAssistantEvent: (event: StreamEventEnvelope) => void;
   notifyHeartbeatEvent: (event: StreamEventEnvelope) => void;
   loadPlugins: () => Promise<void>;
+  loadWalletConfig: () => Promise<void>;
   pollCloudCredits: () => void;
   activeConversationIdRef: React.RefObject<string | null>;
   elizaCloudPollInterval: React.MutableRefObject<number | null>;

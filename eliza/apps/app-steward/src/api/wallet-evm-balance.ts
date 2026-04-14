@@ -610,6 +610,13 @@ async function fetchNativeBalanceViaRpc(
   return formatWei(wei, 18);
 }
 
+export async function fetchEvmNativeBalanceViaRpc(
+  rpcUrl: string,
+  address: string,
+): Promise<string> {
+  return fetchNativeBalanceViaRpc(rpcUrl, address);
+}
+
 /**
  * Query ERC-20 balanceOf, symbol, and decimals for a single token via RPC.
  * Returns null if the token has zero balance or the call fails.

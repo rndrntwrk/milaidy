@@ -112,6 +112,7 @@ async def read_file_from_action_input(
     explicit_input: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Read a file and return its content with metadata."""
+    inferred: dict[str, Any] | None
     if explicit_input and explicit_input.get("file_path"):
         inferred = explicit_input
     else:

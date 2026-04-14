@@ -37,7 +37,9 @@ function hashString(value: string): number {
   return Math.abs(hash);
 }
 
-export function iconImageSource(icon: string | null | undefined): string | null {
+export function iconImageSource(
+  icon: string | null | undefined,
+): string | null {
   const value = icon?.trim();
   if (!value) return null;
   if (
@@ -85,7 +87,11 @@ function getAppCategoryIcon(app: AppIdentitySource): LucideIcon {
   if (/finance|wallet|shop|commerce|trade|market|billing|invoice/.test(blob)) {
     return Wallet;
   }
-  if (/utility|debug|runtime|viewer|plugin|memory|log|database|settings/.test(blob)) {
+  if (
+    /utility|debug|runtime|viewer|plugin|memory|log|database|settings/.test(
+      blob,
+    )
+  ) {
     return Wrench;
   }
   if (/world|browser|web|network|global|platform/.test(blob)) {
@@ -131,7 +137,11 @@ export function AppIdentityTile({
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_18%,rgba(255,255,255,0.32),transparent_30%),radial-gradient(circle_at_82%_20%,rgba(255,255,255,0.18),transparent_26%),radial-gradient(circle_at_50%_100%,rgba(0,0,0,0.16),transparent_35%)]" />
       {iconSrc ? (
         <>
-          <img src={iconSrc} alt="" className="absolute inset-0 h-full w-full object-cover" />
+          <img
+            src={iconSrc}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover"
+          />
           <div className="absolute inset-0 bg-black/10" />
         </>
       ) : (

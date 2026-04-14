@@ -2,7 +2,7 @@ import type {
   WalletConfigStatus,
   WalletEntry,
   WalletPrimaryMap,
-} from "@miladyai/shared/contracts/wallet";
+} from "@elizaos/shared/contracts/wallet";
 
 interface InventoryWalletAddressState {
   walletAddresses?: {

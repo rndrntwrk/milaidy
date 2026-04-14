@@ -206,17 +206,16 @@ class PluginManagerService(Service):
         if self._runtime is None:
             return []
 
-        core_mgr = None
-        for svc in (self._runtime.services or {}).values():
-            if getattr(svc, "service_type", None) == "core_manager":
-                core_mgr = svc
-                break
+        core_mgr = self._runtime.get_service("core_manager")
 
         if core_mgr is None:
             return []
 
         try:
-            status = await core_mgr.get_core_status()
+            get_core_status = getattr(core_mgr, "get_core_status", None)
+            if not callable(get_core_status):
+                return []
+            status = await get_core_status()
             if status.ejected:
                 return [
                     EjectedPluginInfo(

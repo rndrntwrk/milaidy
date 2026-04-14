@@ -1,7 +1,7 @@
 import type { AgentSource } from "../../lib/AgentProvider";
 import { resolveHomepageAssetUrl } from "../../lib/asset-url";
-import type { AgentStatus } from "../../lib/cloud-api";
-import { formatUptime } from "../../lib/format";
+import type { AgentRuntimeState, AgentStatus } from "../../lib/cloud-api";
+import { formatRelativeTime, formatUptime } from "../../lib/format";
 
 interface AgentCardProps {
   agent: AgentStatus;
@@ -32,7 +32,7 @@ interface AgentCardProps {
 }
 
 const STATE_CONFIG: Record<
-  string,
+  AgentRuntimeState,
   { color: string; bg: string; bgLight: string; label: string; border: string }
 > = {
   running: {
@@ -78,23 +78,11 @@ function getAvatarIndex(name: string): number {
   return (hash % 8) + 1;
 }
 
-const SOURCE_ICON: Record<string, string> = {
+const SOURCE_ICON: Record<AgentSource, string> = {
   cloud: "\u2601",
   local: "\u25C9",
   remote: "\u2B21",
 };
-
-function formatRelativeTime(isoString?: string): string {
-  if (!isoString) return "";
-  const diff = Date.now() - new Date(isoString).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "now";
-  if (mins < 60) return `${mins}m`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h`;
-  const days = Math.floor(hours / 24);
-  return `${days}d`;
-}
 
 function stopProp(handler: () => void) {
   return (e: React.MouseEvent) => {
@@ -163,7 +151,7 @@ export function AgentCard({
   selected,
   busy = false,
 }: AgentCardProps) {
-  const stateConfig = STATE_CONFIG[agent.state] ?? STATE_CONFIG.unknown;
+  const stateConfig = STATE_CONFIG[agent.state];
   const canOpenUI = agent.state === "running";
   const uiUrl = webUiUrl || sourceUrl;
   const resolvedAvatarIndex =

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAgents } from "../../lib/AgentProvider";
 import { CloudClient, type CreditBalance } from "../../lib/cloud-api";
+import { formatNumber } from "../../lib/format";
 import { useAuth } from "../../lib/useAuth";
 
 const SECTIONS = [
@@ -102,7 +103,7 @@ export function Sidebar({ active, onChange }: SidebarProps) {
                   BALANCE
                 </p>
                 <p className="font-mono text-lg font-semibold text-brand tabular-nums">
-                  {credits?.balance?.toLocaleString() ?? "—"}
+                  {formatNumber(credits?.balance)}
                 </p>
               </div>
               <svg
@@ -171,7 +172,7 @@ export function Sidebar({ active, onChange }: SidebarProps) {
           ))}
           {authed && credits && (
             <span className="flex-shrink-0 ml-auto px-2.5 py-1.5 font-mono text-xs text-brand tabular-nums">
-              {credits.balance?.toLocaleString()}
+              {formatNumber(credits.balance)}
             </span>
           )}
           {authed && (

@@ -50,7 +50,7 @@ import {
   invokeDesktopBridgeRequestWithTimeout,
   isElectrobunRuntime,
 } from "../bridge";
-import { mapServerTasksToSessions } from "@elizaos/app-coding";
+import { mapServerTasksToSessions } from "../chat/coding-agent-session-state";
 import { BrandingContext, DEFAULT_BRANDING } from "../config/branding";
 import {
   dispatchAppEmoteEvent,
@@ -246,20 +246,16 @@ export {
   VRM_COUNT,
 } from "./internal";
 export { AGENT_READY_TIMEOUT_MS } from "./types";
-
 import {
   ConfirmDialog,
   PromptDialog,
   useConfirm,
   usePrompt,
-} from "@elizaos/app-core";
+} from "@elizaos/ui/components/ui/confirm-dialog";
 
 const DEFAULT_LANDING_TAB: Tab = COMPANION_ENABLED ? "companion" : "chat";
 
-function traceGreeting(
-  phase: string,
-  detail?: Record<string, unknown>,
-): void {
+function traceGreeting(phase: string, detail?: Record<string, unknown>): void {
   try {
     if (
       typeof localStorage !== "undefined" &&
@@ -1760,7 +1756,7 @@ function AppProviderInner({
   // all derive from its reducer state, so state is the only dep we need.
   // biome-ignore lint/correctness/useExhaustiveDependencies: coordinator fields all derive from state
   const stableStartupCoordinator = useMemo(
-    () => startupCoordinator,
+    () => startupCoordinator as AppContextValue["startupCoordinator"],
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [startupCoordinator.state],
   );

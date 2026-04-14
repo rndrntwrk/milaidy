@@ -121,9 +121,7 @@ export interface AppConfig {
  * Resolve a full BrandingConfig from an AppConfig.
  * Merges app-specific overrides with the framework defaults.
  */
-export function resolveAppBranding(
-  appConfig: AppConfig,
-): BrandingConfig {
+export function resolveAppBranding(appConfig: AppConfig): BrandingConfig {
   const { DEFAULT_BRANDING } = require("./branding");
   return {
     ...DEFAULT_BRANDING,

@@ -121,11 +121,12 @@ export function classifyByHeuristic(ctx: TriageContext): TriageTier | null {
 
 	// 3. For turn completions, check output patterns
 	if (ctx.eventType === "turn_complete" && ctx.recentOutput) {
+		const recentOutput = ctx.recentOutput;
 		const isTerminal = TERMINAL_OUTPUT_PATTERNS.some((r) =>
-			r.test(ctx.recentOutput!),
+			r.test(recentOutput),
 		);
 		const isIntermediate = INTERMEDIATE_OUTPUT_PATTERNS.some((r) =>
-			r.test(ctx.recentOutput!),
+			r.test(recentOutput),
 		);
 
 		if (isTerminal || isIntermediate) return "routine";

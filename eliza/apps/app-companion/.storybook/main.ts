@@ -3,7 +3,6 @@ import path from "node:path";
 
 const companionRoot = path.resolve(import.meta.dirname, "..");
 const elizaRoot = path.resolve(companionRoot, "../..");
-const elizaRoot = path.resolve(elizaRoot, "../..");
 
 const config: StorybookConfig = {
   stories: ["../src/**/*.stories.@(ts|tsx)"],

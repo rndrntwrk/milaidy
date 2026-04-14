@@ -133,6 +133,21 @@ def _get_number_setting(runtime: IAgentRuntime, key: str, fallback: float) -> fl
     return fallback
 
 
+def _coerce_int(value: object | None, default: int = 0) -> int:
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(value.strip())
+        except ValueError:
+            return default
+    return default
+
+
 async def _validate_experience_evaluator(
     runtime: IAgentRuntime,
     message: Memory,
@@ -146,7 +161,7 @@ async def _validate_experience_evaluator(
     # Check cooldown - only extract experiences every 25 messages to reduce token cost
     last_extraction_key = "experience-extraction:last-message-count"
     current_count_raw = await runtime.get_cache(last_extraction_key)
-    current_count = int(current_count_raw) if current_count_raw else 0
+    current_count = _coerce_int(current_count_raw)
     new_message_count = current_count + 1
 
     await runtime.set_cache(last_extraction_key, str(new_message_count))

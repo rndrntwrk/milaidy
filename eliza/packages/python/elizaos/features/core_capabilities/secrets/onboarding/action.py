@@ -226,11 +226,16 @@ async def _validate(
     if not world or not getattr(world, "metadata", None):
         return False
 
-    settings = (world.metadata or {}).get("settings")
-    if not settings:
+    metadata = getattr(world, "metadata", None)
+    settings_value = metadata.get("settings") if isinstance(metadata, dict) else None
+    if not isinstance(settings_value, dict) or not settings_value:
         return False
 
-    return any(s.value is None for s in settings.values() if isinstance(s, OnboardingSetting))
+    return any(
+        s.value is None
+        for s in settings_value.values()
+        if isinstance(s, OnboardingSetting)
+    )
 
 
 async def _handler(
@@ -269,7 +274,17 @@ async def _handler(
             success=False,
         )
 
-    settings: dict[str, OnboardingSetting] = (world.metadata or {}).get("settings", {})
+    metadata = getattr(world, "metadata", None)
+    settings_value = metadata.get("settings") if isinstance(metadata, dict) else None
+    settings: dict[str, OnboardingSetting] = (
+        {
+            key: setting
+            for key, setting in settings_value.items()
+            if isinstance(key, str) and isinstance(setting, OnboardingSetting)
+        }
+        if isinstance(settings_value, dict)
+        else {}
+    )
 
     # Get secrets service
     secrets_service: SecretsService | None = None
@@ -290,9 +305,17 @@ async def _handler(
 
     # Get updated settings
     updated_world = await runtime.get_world(room.world_id)
+    updated_metadata = getattr(updated_world, "metadata", None) if updated_world else None
+    updated_settings_value = (
+        updated_metadata.get("settings") if isinstance(updated_metadata, dict) else None
+    )
     updated_settings: dict[str, OnboardingSetting] = (
-        (updated_world.metadata or {}).get("settings", settings)
-        if updated_world and getattr(updated_world, "metadata", None)
+        {
+            key: setting
+            for key, setting in updated_settings_value.items()
+            if isinstance(key, str) and isinstance(setting, OnboardingSetting)
+        }
+        if isinstance(updated_settings_value, dict)
         else settings
     )
 

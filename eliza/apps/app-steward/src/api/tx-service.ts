@@ -6,9 +6,9 @@
  * Used by the registry and drop services for on-chain operations.
  */
 
+import { createIntegrationTelemetrySpan } from "@elizaos/agent/diagnostics/integration-observability";
 import { logger } from "@elizaos/core";
 import { ethers } from "ethers";
-import { createIntegrationTelemetrySpan } from "@elizaos/agent/diagnostics/integration-observability";
 
 /**
  * Validate that a private key is a valid 32-byte hex string.

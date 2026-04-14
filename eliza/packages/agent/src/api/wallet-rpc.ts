@@ -166,7 +166,7 @@ const WALLET_RPC_CONFIG_KEYS = [
   "SOLANA_RPC_URL",
 ] as const satisfies readonly WalletRpcCredentialKey[];
 
-function resolveWalletNetwork(): "mainnet" | "testnet" {
+function _resolveWalletNetwork(): "mainnet" | "testnet" {
   const explicit = process.env.ELIZA_WALLET_NETWORK?.trim().toLowerCase();
   if (explicit === "testnet") return "testnet";
   if (explicit === "mainnet") return "mainnet";
@@ -188,9 +188,7 @@ function resolveRuntimeCloudApiKey(
   }
 
   const fromSecrets = runtime?.character?.secrets?.ELIZAOS_CLOUD_API_KEY;
-  return typeof fromSecrets === "string"
-    ? normalizeSecret(fromSecrets)
-    : null;
+  return typeof fromSecrets === "string" ? normalizeSecret(fromSecrets) : null;
 }
 
 export function resolveWalletNetworkMode(

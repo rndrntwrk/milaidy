@@ -5,7 +5,7 @@
  * that require Node APIs or server-only runtime state.
  */
 
-export * from "./ui/index.ts";
+export * from "@elizaos/ui";
 export type { RestartHandler } from "@elizaos/shared/restart";
 export {
   RESTART_EXIT_CODE,
@@ -19,7 +19,25 @@ export * from "./bridge/index.ts";
 export * from "./config/index.ts";
 export * from "./types/index.ts";
 export * from "./events/index.ts";
-export * from "./hooks/index.ts";
+export * from "./hooks/useActivityEvents.ts";
+export * from "./hooks/useBugReport.ts";
+export * from "./hooks/useChatAvatarVoiceBridge.ts";
+export * from "./hooks/useCanvasWindow.ts";
+export * from "./hooks/useContextMenu.ts";
+export * from "./hooks/useGoogleLifeOpsConnector.ts";
+export {
+  COMMON_SHORTCUTS,
+  useShortcutsHelp,
+} from "./hooks/useKeyboardShortcuts.ts";
+export * from "./hooks/useLifeOpsActivitySignals.ts";
+export * from "./hooks/useLifeOpsAppState.ts";
+export * from "./hooks/useMediaQuery.ts";
+export * from "./hooks/useMusicPlayer.ts";
+export * from "./hooks/useRenderGuard.ts";
+export * from "./hooks/useSignalPairing.ts";
+export * from "./hooks/useStreamPopoutNavigation.ts";
+export * from "./hooks/useVoiceChat.ts";
+export * from "./hooks/useWhatsAppPairing.ts";
 export * from "./i18n/index.ts";
 export * from "./navigation/index.ts";
 export * from "./platform/index.ts";

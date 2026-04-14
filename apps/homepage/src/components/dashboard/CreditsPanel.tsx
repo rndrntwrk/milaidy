@@ -6,6 +6,7 @@ import {
   formatMoney,
 } from "../../lib/billing-types";
 import { CloudClient, type CreditBalance } from "../../lib/cloud-api";
+import { formatNumber } from "../../lib/format";
 import {
   MIN_DEPOSIT_DISPLAY,
   PRICE_IDLE_HR_VALUE,
@@ -64,8 +65,8 @@ export function CreditsPanel() {
       .then(([creds, sess, settings, summary]) => {
         if (creds) setCredits(creds);
         if (sess) setSession(sess);
-        if (settings) setBillingSettings(settings as BillingSettingsResponse);
-        if (summary) setCreditsSummary(summary as CreditsSummaryResponse);
+        if (settings) setBillingSettings(settings);
+        if (summary) setCreditsSummary(summary);
         if (!creds && !settings && !summary) {
           setError("Could not load credit data");
         }
@@ -223,10 +224,7 @@ export function CreditsPanel() {
                 : "text-brand"
           }`}
         >
-          {balance?.toLocaleString(undefined, {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          }) ?? "—"}
+          {formatMoney(balance)}
         </p>
         <p className="font-mono text-xs text-text-muted mt-1">
           {credits?.currency ?? "credits"}
@@ -808,7 +806,7 @@ function MiniDataCell({ label, value }: { label: string; value?: number }) {
         {label}
       </p>
       <p className="font-mono text-xl font-semibold text-text-light tabular-nums">
-        {value?.toLocaleString() ?? "—"}
+        {formatNumber(value)}
       </p>
     </div>
   );

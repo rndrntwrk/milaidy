@@ -20,7 +20,7 @@ import type {
 export function applyTriageRules(
   message: InboundMessage,
   rules: InboxTriageRules | undefined,
-  config: InboxTriageConfig | undefined,
+  _config: InboxTriageConfig | undefined,
 ): TriageClassification | null {
   if (!rules) return null;
 

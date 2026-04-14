@@ -3,16 +3,16 @@
  */
 
 import { Keyboard } from "@capacitor/keyboard";
-import { subscribeDesktopBridgeEvent } from "@elizaos/app-core";
-import { isIOS, isNative } from "@elizaos/app-core";
+import { Button } from "@elizaos/ui/components/ui/button";
 import {
-  Button,
   DrawerSheet,
   DrawerSheetContent,
   DrawerSheetHeader,
   DrawerSheetTitle,
-  ErrorBoundary,
-} from "@elizaos/app-core";
+} from "@elizaos/ui/components/ui/drawer-sheet";
+import { ErrorBoundary } from "@elizaos/ui/components/ui/error-boundary";
+import { subscribeDesktopBridgeEvent } from "./bridge/electrobun-rpc";
+import { isIOS, isNative } from "./platform/init";
 import {
   type ReactNode,
   useCallback,
@@ -331,11 +331,7 @@ export function App() {
         /* ignore */
       });
     };
-  }, [
-    activeOverlayApp,
-    backendConnection?.state,
-    startupCoordinator.phase,
-  ]);
+  }, [activeOverlayApp, backendConnection?.state, startupCoordinator.phase]);
 
   const [customActionsPanelOpen, setCustomActionsPanelOpen] = useState(false);
   const [customActionsEditorOpen, setCustomActionsEditorOpen] = useState(false);

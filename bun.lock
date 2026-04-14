@@ -35,7 +35,7 @@
         "@elizaos/plugin-sql": "workspace:*",
         "@elizaos/plugin-telegram": "workspace:*",
         "@elizaos/plugin-whatsapp": "workspace:*",
-        "@elizaos/prompts": "2.0.0-alpha.127",
+        "@elizaos/prompts": "2.0.0-alpha.139",
         "@elizaos/skills": "workspace:*",
         "@hapi/boom": "^10.0.1",
         "@noble/curves": "^2.0.1",
@@ -81,6 +81,7 @@
         "@vitest/coverage-v8": "^4.1.0",
         "fs-extra": "^11.3.4",
         "jsdom": "^28.1.0",
+        "playwright-core": "^1.59.1",
         "react": "^19.2.4",
         "react-dom": "^19.2.4",
         "react-test-renderer": "^19.2.4",
@@ -145,14 +146,32 @@
       "dependencies": {
         "@elizaos/app-core": "workspace:*",
         "@elizaos/shared": "workspace:*",
+        "@elizaos/ui": "workspace:*",
         "@pixiv/three-vrm": "^3.5.0",
+        "@radix-ui/react-checkbox": "^1.3.3",
+        "@radix-ui/react-dialog": "^1.1.15",
+        "@radix-ui/react-dropdown-menu": "^2.1.16",
+        "@radix-ui/react-label": "^2.1.8",
+        "@radix-ui/react-popover": "^1.1.15",
+        "@radix-ui/react-select": "^2.2.6",
+        "@radix-ui/react-separator": "^1.1.8",
+        "@radix-ui/react-slider": "^1.3.6",
+        "@radix-ui/react-slot": "^1.2.4",
+        "@radix-ui/react-switch": "^1.2.6",
+        "@radix-ui/react-tabs": "^1.1.13",
+        "@radix-ui/react-tooltip": "^1.2.8",
         "@react-three/fiber": "^9.5.0",
+        "class-variance-authority": "^0.7.1",
+        "clsx": "^2.1.1",
         "framer-motion": "^12.34.4",
+        "lucide-react": "^0.575.0",
         "mermaid": "^11.14.0",
         "qrcode": "^1.5.4",
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
         "react-router-dom": "^7.13.1",
+        "sonner": "^2.0.7",
+        "tailwind-merge": "^2.6.0",
         "three": "^0.183.2",
       },
       "devDependencies": {
@@ -220,6 +239,7 @@
       "name": "@elizaos/app-coding",
       "version": "0.0.0",
       "dependencies": {
+        "@elizaos/ui": "workspace:*",
         "@xterm/addon-fit": "^0.10.0",
         "@xterm/xterm": "^5.5.0",
       },
@@ -231,6 +251,7 @@
         "@elizaos/agent": "workspace:*",
         "@elizaos/app-coding": "workspace:*",
         "@elizaos/core": "workspace:*",
+        "@elizaos/ui": "workspace:*",
         "lucide-react": "^0.575.0",
       },
       "devDependencies": {
@@ -320,6 +341,7 @@
       "dependencies": {
         "@elizaos/app-core": "workspace:*",
         "@elizaos/core": "workspace:*",
+        "@elizaos/ui": "workspace:*",
         "viem": "^2.21.0",
       },
     },
@@ -414,6 +436,7 @@
         "@elizaos/core": "workspace:*",
         "@elizaos/plugin-wechat": "github:milady-ai/plugin-wechat",
         "@elizaos/shared": "workspace:*",
+        "@elizaos/ui": "workspace:*",
         "@radix-ui/react-checkbox": "^1.3.3",
         "@radix-ui/react-dialog": "^1.1.15",
         "@radix-ui/react-dropdown-menu": "^2.1.16",
@@ -690,6 +713,10 @@
         "@capacitor/core": "^8.0.0",
       },
     },
+    "eliza/packages/prompts": {
+      "name": "@elizaos/prompts",
+      "version": "2.0.0-alpha.139",
+    },
     "eliza/packages/python": {
       "name": "@elizaos/python",
       "version": "2.0.0-alpha.93",
@@ -784,6 +811,39 @@
         "sharp": "^0.34.5",
         "typescript": "^5.9.3",
         "vitest": "^4.0.0",
+      },
+    },
+    "eliza/packages/ui": {
+      "name": "@elizaos/ui",
+      "version": "2.0.0-alpha.83",
+      "dependencies": {
+        "@radix-ui/react-checkbox": "^1.3.3",
+        "@radix-ui/react-dialog": "^1.1.15",
+        "@radix-ui/react-dropdown-menu": "^2.1.16",
+        "@radix-ui/react-label": "^2.1.8",
+        "@radix-ui/react-popover": "^1.1.15",
+        "@radix-ui/react-select": "^2.2.6",
+        "@radix-ui/react-separator": "^1.1.8",
+        "@radix-ui/react-slider": "^1.3.6",
+        "@radix-ui/react-slot": "^1.2.4",
+        "@radix-ui/react-switch": "^1.2.6",
+        "@radix-ui/react-tabs": "^1.1.13",
+        "@radix-ui/react-tooltip": "^1.2.8",
+        "class-variance-authority": "^0.7.1",
+        "clsx": "^2.1.1",
+        "lucide-react": "^0.575.0",
+        "sonner": "^2.0.7",
+        "tailwind-merge": "^2.6.0",
+      },
+      "devDependencies": {
+        "@types/react": "^19.0.0",
+        "@types/react-dom": "^19.0.0",
+        "typescript": "^5.9.3",
+        "vitest": "^4.0.18",
+      },
+      "peerDependencies": {
+        "react": "^19.0.0",
+        "react-dom": "^19.0.0",
       },
     },
     "eliza/plugins/plugin-agent-skills": {
@@ -1657,10 +1717,11 @@
     "@ai-sdk/groq": "3.0.31",
     "@elizaos/core": "workspace:*",
     "@elizaos/plugin-anthropic": "workspace:*",
-    "@elizaos/plugin-cli": "workspace:*",
+    "@elizaos/plugin-cli": "2.0.0-alpha.9",
     "@elizaos/plugin-discord": "workspace:*",
     "@elizaos/plugin-elizacloud": "workspace:*",
     "@elizaos/plugin-knowledge": "workspace:*",
+    "@elizaos/plugin-rolodex": "2.0.0-alpha.10",
     "@elizaos/plugin-sql": "workspace:*",
     "@elizaos/plugin-telegram": "workspace:*",
     "@stwd/sdk": "^0.3.0",
@@ -2054,7 +2115,7 @@
 
     "@elizaos/plugin-whatsapp-root": ["@elizaos/plugin-whatsapp-root@workspace:eliza/plugins/plugin-whatsapp"],
 
-    "@elizaos/prompts": ["@elizaos/prompts@2.0.0-alpha.127", "", {}, "sha512-VQ3FPzmyVSNa2+iDVVJ5F0haRxJcboy3knJjHJPr3a+Cv7jwRQ/uiMcGRV5BCAb/di+FyUi0Qc407OGo49GKFg=="],
+    "@elizaos/prompts": ["@elizaos/prompts@workspace:eliza/packages/prompts"],
 
     "@elizaos/python": ["@elizaos/python@workspace:eliza/packages/python"],
 
@@ -2067,6 +2128,8 @@
     "@elizaos/shared": ["@elizaos/shared@workspace:eliza/packages/shared"],
 
     "@elizaos/skills": ["@elizaos/skills@workspace:eliza/packages/skills"],
+
+    "@elizaos/ui": ["@elizaos/ui@workspace:eliza/packages/ui"],
 
     "@emnapi/core": ["@emnapi/core@1.9.2", "", { "dependencies": { "@emnapi/wasi-threads": "1.2.1", "tslib": "^2.4.0" } }, "sha512-UC+ZhH3XtczQYfOlu3lNEkdW/p4dsJ1r/bP7H8+rhao3TTTMO1ATq/4DdIi23XuGoFY+Cz0JmCbdVl0hz9jZcA=="],
 
@@ -5546,6 +5609,8 @@
 
     "@elizaos/plugin-whatsapp-root/vitest": ["vitest@3.2.4", "", { "dependencies": { "@types/chai": "^5.2.2", "@vitest/expect": "3.2.4", "@vitest/mocker": "3.2.4", "@vitest/pretty-format": "^3.2.4", "@vitest/runner": "3.2.4", "@vitest/snapshot": "3.2.4", "@vitest/spy": "3.2.4", "@vitest/utils": "3.2.4", "chai": "^5.2.0", "debug": "^4.4.1", "expect-type": "^1.2.1", "magic-string": "^0.30.17", "pathe": "^2.0.3", "picomatch": "^4.0.2", "std-env": "^3.9.0", "tinybench": "^2.9.0", "tinyexec": "^0.3.2", "tinyglobby": "^0.2.14", "tinypool": "^1.1.1", "tinyrainbow": "^2.0.0", "vite": "^5.0.0 || ^6.0.0 || ^7.0.0-0", "vite-node": "3.2.4", "why-is-node-running": "^2.3.0" }, "peerDependencies": { "@edge-runtime/vm": "*", "@types/debug": "^4.1.12", "@types/node": "^18.0.0 || ^20.0.0 || >=22.0.0", "@vitest/browser": "3.2.4", "@vitest/ui": "3.2.4", "happy-dom": "*", "jsdom": "*" }, "optionalPeers": ["@edge-runtime/vm", "@types/debug", "@types/node", "@vitest/browser", "@vitest/ui", "happy-dom", "jsdom"], "bin": { "vitest": "vitest.mjs" } }, "sha512-LUCP5ev3GURDysTWiP47wRRUpLKMOfPh+yKTx3kVIEiu5KOMeqzpnYNsKyOoVrULivR8tLcks4+lga33Whn90A=="],
 
+    "@elizaos/ui/lucide-react": ["lucide-react@0.575.0", "", { "peerDependencies": { "react": "^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0" } }, "sha512-VuXgKZrk0uiDlWjGGXmKV6MSk9Yy4l10qgVvzGn2AWBx1Ylt0iBexKOAoA6I7JO3m+M9oeovJd3yYENfkUbOeg=="],
+
     "@emnapi/core/tslib": ["tslib@2.8.1", "", {}, "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w=="],
 
     "@emnapi/runtime/tslib": ["tslib@2.8.1", "", {}, "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w=="],
@@ -5617,6 +5682,8 @@
     "@miladyai/homepage/@types/three": ["@types/three@0.183.1", "", { "dependencies": { "@dimforge/rapier3d-compat": "~0.12.0", "@tweenjs/tween.js": "~23.1.3", "@types/stats.js": "*", "@types/webxr": ">=0.5.17", "@webgpu/types": "*", "fflate": "~0.8.2", "meshoptimizer": "~1.0.1" } }, "sha512-f2Pu5Hrepfgavttdye3PsH5RWyY/AvdZQwIVhrc4uNtvF7nOWJacQKcoVJn0S4f0yYbmAE6AR+ve7xDcuYtMGw=="],
 
     "@miladyai/homepage/jsdom": ["jsdom@29.0.2", "", { "dependencies": { "@asamuzakjp/css-color": "^5.1.5", "@asamuzakjp/dom-selector": "^7.0.6", "@bramus/specificity": "^2.4.2", "@csstools/css-syntax-patches-for-csstree": "^1.1.1", "@exodus/bytes": "^1.15.0", "css-tree": "^3.2.1", "data-urls": "^7.0.0", "decimal.js": "^10.6.0", "html-encoding-sniffer": "^6.0.0", "is-potential-custom-element-name": "^1.0.1", "lru-cache": "^11.2.7", "parse5": "^8.0.0", "saxes": "^6.0.0", "symbol-tree": "^3.2.4", "tough-cookie": "^6.0.1", "undici": "^7.24.5", "w3c-xmlserializer": "^5.0.0", "webidl-conversions": "^8.0.1", "whatwg-mimetype": "^5.0.0", "whatwg-url": "^16.0.1", "xml-name-validator": "^5.0.0" }, "peerDependencies": { "canvas": "^3.0.0" }, "optionalPeers": ["canvas"] }, "sha512-9VnGEBosc/ZpwyOsJBCQ/3I5p7Q5ngOY14a9bf5btenAORmZfDse1ZEheMiWcJ3h81+Fv7HmJFdS0szo/waF2w=="],
+
+    "@miladyai/homepage/lucide-react": ["lucide-react@0.575.0", "", { "peerDependencies": { "react": "^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0" } }, "sha512-VuXgKZrk0uiDlWjGGXmKV6MSk9Yy4l10qgVvzGn2AWBx1Ylt0iBexKOAoA6I7JO3m+M9oeovJd3yYENfkUbOeg=="],
 
     "@miladyai/homepage/three": ["three@0.183.2", "", {}, "sha512-di3BsL2FEQ1PA7Hcvn4fyJOlxRRgFYBpMTcyOgkwJIaDOdJMebEFPA+t98EvjuljDx4hNulAGwF6KIjtwI5jgQ=="],
 

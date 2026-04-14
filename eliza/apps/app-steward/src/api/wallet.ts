@@ -12,8 +12,6 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { logger } from "@elizaos/core";
-import { secp256k1 } from "@noble/curves/secp256k1.js";
-import { ethers } from "ethers";
 import type {
   KeyValidationResult,
   SolanaTokenBalance,
@@ -23,6 +21,8 @@ import type {
   WalletImportResult,
   WalletKeys,
 } from "@elizaos/shared/contracts/wallet";
+import { secp256k1 } from "@noble/curves/secp256k1.js";
+import { ethers } from "ethers";
 
 // ── Re-exports from contracts/wallet ──────────────────────────────────
 

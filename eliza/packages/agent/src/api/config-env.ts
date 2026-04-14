@@ -144,10 +144,7 @@ async function readIfExists(filePath: string): Promise<string | null> {
   }
 }
 
-async function writeAtomic(
-  filePath: string,
-  contents: string,
-): Promise<void> {
+async function writeAtomic(filePath: string, contents: string): Promise<void> {
   const tmpPath = `${filePath}${TMP_SUFFIX}`;
   const handle = await fs.open(tmpPath, "w", 0o600);
   try {
@@ -199,9 +196,7 @@ export async function readConfigEnv(
  * Synchronous variant for early startup paths such as `loadElizaConfig()`.
  * Missing file → empty record. Does NOT touch `process.env`.
  */
-export function readConfigEnvSync(
-  stateDir?: string,
-): Record<string, string> {
+export function readConfigEnvSync(stateDir?: string): Record<string, string> {
   const filePath = resolveConfigEnvPath(stateDir);
   let raw: string;
   try {
@@ -228,7 +223,11 @@ function decodeValue(raw: string): string {
   const trimmed = raw.trim();
   if (trimmed.length === 0) return "";
   const first = trimmed[0];
-  if ((first === '"' || first === "'") && trimmed.endsWith(first) && trimmed.length >= 2) {
+  if (
+    (first === '"' || first === "'") &&
+    trimmed.endsWith(first) &&
+    trimmed.length >= 2
+  ) {
     const inner = trimmed.slice(1, -1);
     if (first === '"') {
       return inner

@@ -1,28 +1,24 @@
-/**
- * Settings view — two-panel layout with section navigator and active section.
- */
-
+import { PagePanel } from "@elizaos/ui/components/composites/page-panel";
+import { SidebarContent } from "@elizaos/ui/components/composites/sidebar/sidebar-content";
+import { SidebarHeader } from "@elizaos/ui/components/composites/sidebar/sidebar-header";
+import { SidebarPanel } from "@elizaos/ui/components/composites/sidebar/sidebar-panel";
+import { Sidebar } from "@elizaos/ui/components/composites/sidebar/sidebar-root";
+import { SidebarScrollRegion } from "@elizaos/ui/components/composites/sidebar/sidebar-scroll-region";
+import { Button } from "@elizaos/ui/components/ui/button";
+import { Checkbox } from "@elizaos/ui/components/ui/checkbox";
 import {
-  Button,
-  Checkbox,
-  cn,
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  Input,
-  Label,
-  PageLayout,
-  PagePanel,
-  Sidebar,
-  SidebarContent,
-  SidebarHeader,
-  SidebarPanel,
-  SidebarScrollRegion,
-  Spinner,
-  Switch,
-  useLinkedSidebarSelection,
-} from "@elizaos/app-core";
+} from "@elizaos/ui/components/ui/dialog";
+import { Input } from "@elizaos/ui/components/ui/input";
+import { Label } from "@elizaos/ui/components/ui/label";
+import { Spinner } from "@elizaos/ui/components/ui/spinner";
+import { Switch } from "@elizaos/ui/components/ui/switch";
+import { useLinkedSidebarSelection } from "@elizaos/ui/hooks/useLinkedSidebarSelection";
+import { PageLayout } from "@elizaos/ui/layouts/page-layout/page-layout";
+import { cn } from "@elizaos/ui/lib/utils";
 import { AlertTriangle, Download, Upload } from "lucide-react";
 import {
   type ComponentPropsWithoutRef,

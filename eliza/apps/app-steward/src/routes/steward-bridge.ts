@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { loadElizaConfig } from "@elizaos/agent/config/config";
 import type {
   StewardSignRequest,
   StewardSignResponse,
@@ -11,12 +12,14 @@ import {
   StewardClient,
   type TxRecord,
 } from "@stwd/sdk";
+import { fetchSolanaNativeBalanceViaRpc } from "../api/wallet";
+import { fetchEvmNativeBalanceViaRpc } from "../api/wallet-evm-balance";
+import { resolveWalletRpcReadiness } from "../api/wallet-rpc";
 import {
   loadStewardCredentials,
   resolveEffectiveStewardConfig,
   saveStewardCredentials,
 } from "../services/steward-credentials";
-import { normalizeEnvValueOrNull } from "@elizaos/app-core";
 
 export interface StewardBridgeOptions {
   env?: NodeJS.ProcessEnv;
@@ -54,20 +57,108 @@ export type StewardExecutionResult =
   | StewardPendingApprovalResult
   | StewardSignedTransactionResult;
 
-/** Alias for steward-specific env resolution. */
-const normalizeEnvValue = normalizeEnvValueOrNull;
+function normalizeEnvValue(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed || null;
+}
+
+type StewardConnectionDetails = {
+  baseUrl: string | null;
+  apiKey: string | null;
+  tenantId: string | null;
+  bearerToken: string | null;
+  agentId: string | null;
+};
+
+function resolveStewardConnection(
+  env: NodeJS.ProcessEnv = process.env,
+): StewardConnectionDetails {
+  const persisted = resolveEffectiveStewardConfig(env);
+  const baseUrl =
+    normalizeEnvValue(env.STEWARD_API_URL) ??
+    normalizeEnvValue(persisted?.apiUrl) ??
+    null;
+  const apiKey =
+    normalizeEnvValue(env.STEWARD_API_KEY) ??
+    normalizeEnvValue(persisted?.apiKey) ??
+    null;
+  const tenantId =
+    normalizeEnvValue(env.STEWARD_TENANT_ID) ??
+    normalizeEnvValue(persisted?.tenantId) ??
+    null;
+  const agentId =
+    normalizeEnvValue(env.STEWARD_AGENT_ID) ??
+    normalizeEnvValue(env.ELIZA_STEWARD_AGENT_ID) ??
+    normalizeEnvValue(persisted?.agentId) ??
+    null;
+  const agentToken =
+    normalizeEnvValue(env.STEWARD_AGENT_TOKEN) ??
+    normalizeEnvValue(persisted?.agentToken) ??
+    null;
+
+  return {
+    baseUrl,
+    apiKey,
+    tenantId,
+    bearerToken: apiKey ? null : agentToken,
+    agentId,
+  };
+}
+
+function resolveStewardRpcReadinessSafe(): ReturnType<
+  typeof resolveWalletRpcReadiness
+> | null {
+  try {
+    return resolveWalletRpcReadiness(loadElizaConfig());
+  } catch {
+    return null;
+  }
+}
+
+function firstRpcUrl(urls: string[]): string | null {
+  return (
+    urls
+      .find((candidate) => typeof candidate === "string" && candidate.trim())
+      ?.trim() ?? null
+  );
+}
+
+function resolveEvmNativeBalanceFallback(
+  chainId: number,
+  readiness: ReturnType<typeof resolveWalletRpcReadiness>,
+): { rpcUrl: string; symbol: string; chainId: number } | null {
+  switch (chainId) {
+    case 1: {
+      const rpcUrl = firstRpcUrl(readiness.ethereumRpcUrls);
+      return rpcUrl ? { rpcUrl, symbol: "ETH", chainId } : null;
+    }
+    case 8453: {
+      const rpcUrl = firstRpcUrl(readiness.baseRpcUrls);
+      return rpcUrl ? { rpcUrl, symbol: "ETH", chainId } : null;
+    }
+    case 56:
+    case 97: {
+      const rpcUrl = firstRpcUrl(readiness.bscRpcUrls);
+      return rpcUrl ? { rpcUrl, symbol: "BNB", chainId } : null;
+    }
+    case 43114: {
+      const rpcUrl = firstRpcUrl(readiness.avalancheRpcUrls);
+      return rpcUrl ? { rpcUrl, symbol: "AVAX", chainId } : null;
+    }
+    default:
+      return null;
+  }
+}
 
 export function resolveStewardAgentId(
   env: NodeJS.ProcessEnv = process.env,
   evmAddress?: string | null,
 ): string | null {
-  return (
-    normalizeEnvValue(env.STEWARD_AGENT_ID) ??
-    normalizeEnvValue(env.ELIZA_STEWARD_AGENT_ID) ??
-    normalizeEnvValue(env.ELIZA_STEWARD_AGENT_ID) ??
-    evmAddress?.trim() ??
-    null
-  );
+  return resolveStewardConnection(env).agentId ?? evmAddress?.trim() ?? null;
 }
 
 export function createStewardClient(
@@ -78,16 +169,17 @@ export function createStewardClient(
   }
 
   const env = options.env ?? process.env;
-  const baseUrl = normalizeEnvValue(env.STEWARD_API_URL);
+  const connection = resolveStewardConnection(env);
+  const baseUrl = connection.baseUrl;
   if (!baseUrl) {
     return null;
   }
 
   return new StewardClient({
     baseUrl,
-    bearerToken: normalizeEnvValue(env.STEWARD_AGENT_TOKEN) ?? undefined,
-    apiKey: normalizeEnvValue(env.STEWARD_API_KEY) ?? undefined,
-    tenantId: normalizeEnvValue(env.STEWARD_TENANT_ID) ?? undefined,
+    bearerToken: connection.bearerToken ?? undefined,
+    apiKey: connection.apiKey ?? undefined,
+    tenantId: connection.tenantId ?? undefined,
   });
 }
 
@@ -103,7 +195,7 @@ export async function getStewardBridgeStatus(
   if (!baseUrl || !client) {
     // Check persisted credentials as fallback
     const persisted = resolveEffectiveStewardConfig(env);
-    if (!persisted || !persisted.apiUrl) {
+    if (!persisted?.apiUrl) {
       return {
         configured: false,
         available: false,
@@ -272,9 +364,8 @@ export async function getStewardBridgeStatus(
 export function isStewardConfigured(
   env: NodeJS.ProcessEnv = process.env,
 ): boolean {
-  const url = normalizeEnvValue(env.STEWARD_API_URL);
-  const agentId = resolveStewardAgentId(env);
-  return Boolean(url && agentId);
+  const connection = resolveStewardConnection(env);
+  return Boolean(connection.baseUrl && connection.agentId);
 }
 
 export function formatStewardError(error: unknown): string {
@@ -401,13 +492,58 @@ export async function getStewardBalance(
   const client = createStewardClient(options);
   if (!client) throw new Error("Steward not configured");
 
-  const result = await client.getBalance(agentId, chainId);
-  return {
-    balance: result.balances.native,
-    formatted: result.balances.nativeFormatted,
-    symbol: result.balances.symbol,
-    chainId: result.balances.chainId,
-  };
+  try {
+    const result = await client.getBalance(agentId, chainId);
+    return {
+      balance: result.balances.native,
+      formatted: result.balances.nativeFormatted,
+      symbol: result.balances.symbol,
+      chainId: result.balances.chainId,
+    };
+  } catch (error) {
+    const readiness = resolveStewardRpcReadinessSafe();
+    const walletAddresses = await getStewardWalletAddresses({
+      ...options,
+      agentId,
+    });
+
+    if (
+      chainId === 101 &&
+      walletAddresses.solanaAddress &&
+      readiness &&
+      readiness.solanaRpcUrls.length > 0
+    ) {
+      const result = await fetchSolanaNativeBalanceViaRpc(
+        walletAddresses.solanaAddress,
+        readiness.solanaRpcUrls,
+      );
+      return {
+        balance: result.solBalance,
+        formatted: result.solBalance,
+        symbol: "SOL",
+        chainId,
+      };
+    }
+
+    const evmFallback =
+      readiness && chainId != null
+        ? resolveEvmNativeBalanceFallback(chainId, readiness)
+        : null;
+    if (evmFallback && walletAddresses.evmAddress) {
+      const balance = await fetchEvmNativeBalanceViaRpc(
+        evmFallback.rpcUrl,
+        walletAddresses.evmAddress,
+      );
+      return {
+        balance,
+        formatted: balance,
+        symbol: evmFallback.symbol,
+        chainId: evmFallback.chainId,
+      };
+    }
+
+    throw error;
+  }
 }
 
 export interface StewardTokenBalancesResult {
@@ -440,38 +576,89 @@ export async function getStewardTokenBalances(
   options: StewardBridgeOptions = {},
 ): Promise<StewardTokenBalancesResult> {
   const env = options.env ?? process.env;
-  const baseUrl = normalizeEnvValue(env.STEWARD_API_URL);
+  const baseUrl = getStewardBaseUrl(env);
   if (!baseUrl) throw new Error("Steward not configured");
 
   const headers = buildStewardHeaders(env);
   const qs = chainId != null ? `?chainId=${encodeURIComponent(chainId)}` : "";
-  const res = await fetch(
-    `${baseUrl}/agents/${encodeURIComponent(agentId)}/tokens${qs}`,
-    { headers },
-  );
-
-  if (!res.ok) {
-    const errText = await res.text().catch(() => "Unknown error");
-    throw new Error(
-      `Steward token balances failed (${res.status}): ${errText}`,
+  try {
+    const res = await fetch(
+      `${baseUrl}/agents/${encodeURIComponent(agentId)}/tokens${qs}`,
+      { headers },
     );
-  }
 
-  const body = (await res.json()) as {
-    ok?: boolean;
-    data?: StewardTokenBalancesResult;
-  };
-  return (
-    body.data ?? {
-      native: {
-        balance: "0",
-        formatted: "0",
-        symbol: "???",
-        chainId: chainId ?? 0,
-      },
-      tokens: [],
+    if (!res.ok) {
+      const errText = await res.text().catch(() => "Unknown error");
+      throw new Error(
+        `Steward token balances failed (${res.status}): ${errText}`,
+      );
     }
-  );
+
+    const body = (await res.json()) as {
+      ok?: boolean;
+      data?: StewardTokenBalancesResult;
+    };
+    return (
+      body.data ?? {
+        native: {
+          balance: "0",
+          formatted: "0",
+          symbol: "???",
+          chainId: chainId ?? 0,
+        },
+        tokens: [],
+      }
+    );
+  } catch (error) {
+    const readiness = resolveStewardRpcReadinessSafe();
+    const walletAddresses = await getStewardWalletAddresses({
+      ...options,
+      agentId,
+    });
+
+    if (
+      chainId === 101 &&
+      walletAddresses.solanaAddress &&
+      readiness &&
+      readiness.solanaRpcUrls.length > 0
+    ) {
+      const native = await fetchSolanaNativeBalanceViaRpc(
+        walletAddresses.solanaAddress,
+        readiness.solanaRpcUrls,
+      );
+      return {
+        native: {
+          balance: native.solBalance,
+          formatted: native.solBalance,
+          symbol: "SOL",
+          chainId,
+        },
+        tokens: [],
+      };
+    }
+
+    const evmFallback =
+      readiness && chainId != null
+        ? resolveEvmNativeBalanceFallback(chainId, readiness)
+        : null;
+    if (evmFallback && walletAddresses.evmAddress) {
+      const nativeBalance = await fetchEvmNativeBalanceViaRpc(
+        evmFallback.rpcUrl,
+        walletAddresses.evmAddress,
+      );
+      return {
+        native: {
+          balance: nativeBalance,
+          formatted: nativeBalance,
+          symbol: evmFallback.symbol,
+          chainId: evmFallback.chainId,
+        },
+        tokens: [],
+      };
+    }
+
+    throw error;
+  }
 }
 
 // ── Extended steward operations (not yet in @stwd/sdk) ───────────────────────
@@ -487,9 +674,10 @@ export function buildStewardHeaders(
   headers.set("Content-Type", "application/json");
   headers.set("Accept", "application/json");
 
-  const bearerToken = normalizeEnvValue(env.STEWARD_AGENT_TOKEN);
-  const apiKey = normalizeEnvValue(env.STEWARD_API_KEY);
-  const tenantId = normalizeEnvValue(env.STEWARD_TENANT_ID);
+  const connection = resolveStewardConnection(env);
+  const bearerToken = connection.bearerToken;
+  const apiKey = connection.apiKey;
+  const tenantId = connection.tenantId;
 
   if (bearerToken) {
     headers.set("Authorization", `Bearer ${bearerToken}`);
@@ -505,7 +693,7 @@ export function buildStewardHeaders(
 function getStewardBaseUrl(
   env: NodeJS.ProcessEnv = process.env,
 ): string | null {
-  return normalizeEnvValue(env.STEWARD_API_URL);
+  return resolveStewardConnection(env).baseUrl;
 }
 
 export interface StewardPendingEntry {

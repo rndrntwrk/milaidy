@@ -21,6 +21,7 @@ import {
   type StewardSidecar,
   type StewardSidecarStatus,
 } from "@elizaos/app-core";
+import { saveStewardCredentials } from "@elizaos/app-steward/services/steward-credentials";
 import { getBrandConfig } from "../brand-config";
 
 // ---------------------------------------------------------------------------
@@ -115,6 +116,22 @@ function configureStewardEnvFromCredentials(): void {
     // Set agent ID
     if (credentials.agentId) {
       process.env.STEWARD_AGENT_ID = credentials.agentId;
+    }
+
+    try {
+      saveStewardCredentials({
+        apiUrl: apiBase,
+        tenantId: credentials.tenantId ?? "",
+        agentId: credentials.agentId ?? "",
+        apiKey: credentials.tenantApiKey ?? "",
+        agentToken: credentials.agentToken ?? "",
+        walletAddresses: {
+          evm: credentials.walletAddress ?? undefined,
+        },
+        agentName: credentials.agentId ?? undefined,
+      });
+    } catch (err) {
+      console.warn("[Steward] Failed to persist credentials:", err);
     }
 
     console.log(

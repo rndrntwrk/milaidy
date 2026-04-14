@@ -14,39 +14,134 @@ declare module "@elizaos/signal-native";
 declare module "qrcode";
 
 declare module "@elizaos/app-knowledge/routes" {
-  export type KnowledgeRouteContext = any;
-  export type KnowledgeRouteHelpers = any;
+  export type KnowledgeRouteContext = unknown;
+  export type KnowledgeRouteHelpers = unknown;
   export const handleKnowledgeRoutes: (
-    context: any,
+    context: unknown,
   ) => Promise<boolean> | boolean;
 }
 
 declare module "@elizaos/app-knowledge/service-loader" {
-  export type KnowledgeLoadFailReason = any;
-  export type KnowledgeServiceLike = any;
-  export type KnowledgeServiceResult = any;
-  export const getKnowledgeService: (runtime: any) => Promise<any>;
-  export const getKnowledgeTimeoutMs: (...args: any[]) => number;
+  import type { AgentRuntime, Memory, UUID } from "@elizaos/core";
+
+  export type KnowledgeLoadFailReason =
+    | "timeout"
+    | "runtime_unavailable"
+    | "not_registered";
+  export interface KnowledgeServiceLike {
+    addKnowledge(options: {
+      agentId?: UUID;
+      worldId: UUID;
+      roomId: UUID;
+      entityId: UUID;
+      clientDocumentId: UUID;
+      contentType: string;
+      originalFilename: string;
+      content: string;
+      metadata?: Record<string, unknown>;
+    }): Promise<{
+      clientDocumentId: string;
+      storedDocumentMemoryId: UUID;
+      fragmentCount: number;
+    }>;
+    getKnowledge(
+      message: Memory,
+      options?: { roomId?: UUID; worldId?: UUID; entityId?: UUID },
+    ): Promise<
+      Array<{
+        id: UUID;
+        content: { text?: string };
+        similarity?: number;
+        metadata?: Record<string, unknown>;
+      }>
+    >;
+    getMemories(params: {
+      tableName: string;
+      roomId?: UUID;
+      count?: number;
+      offset?: number;
+      end?: number;
+    }): Promise<Memory[]>;
+    countMemories(params: {
+      tableName: string;
+      roomId?: UUID;
+      unique?: boolean;
+    }): Promise<number>;
+    deleteMemory(memoryId: UUID): Promise<void>;
+  }
+  export interface KnowledgeServiceResult {
+    service: KnowledgeServiceLike | null;
+    reason?: KnowledgeLoadFailReason;
+  }
+  export const getKnowledgeService: (
+    runtime: AgentRuntime | null,
+  ) => Promise<KnowledgeServiceResult>;
+  export const getKnowledgeTimeoutMs: () => number;
 }
 
 declare module "@elizaos/app-training/routes/trajectory" {
   export const handleTrajectoryRoute: (
-    ...args: any[]
+    ...args: unknown[]
   ) => Promise<boolean> | boolean;
 }
 
 declare module "@elizaos/app-training/services" {
-  export type BackendAvailability = any;
-  export type TrainingServiceLike = any;
-  export type TrainingServiceWithRuntime = any;
-  export const detectAvailableBackends: (...args: any[]) => Promise<any>;
-  export const clearBackendCache: (...args: any[]) => void;
+  export type BackendAvailability = Record<string, unknown>;
+  export interface TrainingServiceLike {
+    getStatus(): Record<string, unknown>;
+    listTrajectories(options: {
+      limit?: number;
+      offset?: number;
+    }): Promise<Record<string, unknown>>;
+    getTrajectoryById(
+      trajectoryId: string,
+    ): Promise<Record<string, unknown> | null>;
+    listDatasets(): Record<string, unknown>[];
+    buildDataset(options: {
+      limit?: number;
+      minLlmCallsPerTrajectory?: number;
+    }): Promise<Record<string, unknown>>;
+    listJobs(): Record<string, unknown>[];
+    startTrainingJob(options: {
+      datasetId?: string;
+      maxTrajectories?: number;
+      backend?: "mlx" | "cuda" | "cpu";
+      model?: string;
+      iterations?: number;
+      batchSize?: number;
+      learningRate?: number;
+    }): Promise<Record<string, unknown>>;
+    getJob(jobId: string): Record<string, unknown> | null;
+    cancelJob(jobId: string): Promise<Record<string, unknown>>;
+    listModels(): Record<string, unknown>[];
+    importModelToOllama(
+      modelId: string,
+      body: {
+        modelName?: string;
+        baseModel?: string;
+        ollamaUrl?: string;
+      },
+    ): Promise<Record<string, unknown>>;
+    activateModel(
+      modelId: string,
+      providerModel?: string,
+    ): Promise<Record<string, unknown>>;
+    benchmarkModel(modelId: string): Promise<Record<string, unknown>>;
+    subscribe(listener: (event: unknown) => void): () => void;
+  }
+  export interface TrainingServiceWithRuntime extends TrainingServiceLike {
+    initialize(): Promise<void>;
+  }
+  export const detectAvailableBackends: (
+    ...args: unknown[]
+  ) => Promise<BackendAvailability>;
+  export const clearBackendCache: (...args: unknown[]) => void;
 }
 
 declare module "@elizaos/app-training/routes/training" {
-  export type TrainingRouteHelpers = any;
+  export type TrainingRouteHelpers = unknown;
   export const handleTrainingRoutes: (
-    ...args: any[]
+    ...args: unknown[]
   ) => Promise<boolean> | boolean;
 }
 
@@ -62,13 +157,13 @@ declare module "@elizaos/app-training/core/context-catalog" {
   export const ACTION_CONTEXT_MAP: Record<string, AgentContext[]>;
   export const PROVIDER_CONTEXT_MAP: Record<string, AgentContext[]>;
   export const ALL_CONTEXTS: AgentContext[];
-  export const resolveActionContexts: (...args: any[]) => AgentContext[];
-  export const resolveProviderContexts: (...args: any[]) => AgentContext[];
-  export const resolveActionContextResolution: (...args: any[]) => {
+  export const resolveActionContexts: (...args: unknown[]) => AgentContext[];
+  export const resolveProviderContexts: (...args: unknown[]) => AgentContext[];
+  export const resolveActionContextResolution: (...args: unknown[]) => {
     contexts: AgentContext[];
     source: ContextResolutionSource;
   };
-  export const resolveProviderContextResolution: (...args: any[]) => {
+  export const resolveProviderContextResolution: (...args: unknown[]) => {
     contexts: AgentContext[];
     source: ContextResolutionSource;
   };
@@ -157,9 +252,7 @@ declare module "@elizaos/core/roles" {
     targetCurrentRole: RoleName,
     newRole: RoleName,
   ): boolean;
-  export function getConfiguredOwnerEntityIds(
-    runtime: IAgentRuntime,
-  ): string[];
+  export function getConfiguredOwnerEntityIds(runtime: IAgentRuntime): string[];
   export function getConnectorAdminWhitelist(
     runtime: IAgentRuntime,
   ): ConnectorAdminWhitelist;
@@ -178,10 +271,10 @@ declare module "@elizaos/core/roles" {
   export function findWorldsForOwner(
     runtime: IAgentRuntime,
     entityId: string,
-  ): Promise<Array<Awaited<ReturnType<IAgentRuntime["getAllWorlds"]>>[number]> | null>;
-  export function hasConfiguredCanonicalOwner(
-    runtime: IAgentRuntime,
-  ): boolean;
+  ): Promise<Array<
+    Awaited<ReturnType<IAgentRuntime["getAllWorlds"]>>[number]
+  > | null>;
+  export function hasConfiguredCanonicalOwner(runtime: IAgentRuntime): boolean;
   export function matchEntityToConnectorAdminWhitelist(
     entityMetadata: Record<string, unknown> | null | undefined,
     whitelist: ConnectorAdminWhitelist | Record<string, unknown> | undefined,

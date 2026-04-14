@@ -1,11 +1,11 @@
-import type { BscTradeTxStatusResponse } from "@elizaos/app-core";
-import { getExplorerTokenUrl } from "@elizaos/app-core";
+import { getExplorerTokenUrl } from "@elizaos/app-core/components/inventory/chainConfig";
 import {
   BSC_GAS_READY_THRESHOLD,
   HEX_ADDRESS_RE,
   isAvaxChainName,
   isBscChainName,
-} from "@elizaos/app-core";
+} from "@elizaos/app-core/components/inventory/constants";
+import type { BscTradeTxStatusResponse } from "@elizaos/shared/contracts/wallet";
 
 export {
   BSC_GAS_READY_THRESHOLD,

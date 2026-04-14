@@ -1,5 +1,5 @@
-import type { AgentRuntime } from "@elizaos/core";
 import type { ElizaConfig } from "@elizaos/agent/config/config";
+import type { AgentRuntime } from "@elizaos/core";
 import { isStewardEvmBridgeActive } from "../services/steward-evm-bridge";
 import { getWalletAddresses } from "./wallet";
 import { resolveWalletRpcReadiness } from "./wallet-rpc";

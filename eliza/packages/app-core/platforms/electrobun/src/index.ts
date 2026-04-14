@@ -28,9 +28,11 @@ import {
   type HeartbeatMenuSnapshot,
   parseSettingsWindowAction,
 } from "./application-menu";
+import { setApplicationMenuActionHandler } from "./application-menu-action-registry";
 import { showBackgroundNoticeOnce } from "./background-notice";
 import { getBrandConfig } from "./brand-config";
 import { startBrowserWorkspaceBridgeServer } from "./browser-workspace-bridge-server";
+import { startDesktopTestBridgeServer } from "./desktop-test-bridge-server";
 import { readNavigationEventUrl } from "./cloud-auth-window";
 import { scheduleDevtoolsLayoutRefresh } from "./devtools-layout";
 import { getFloatingChatManager } from "./floating-chat-window";
@@ -112,6 +114,11 @@ import {
   onAgentReadyChange,
   setAgentReady,
 } from "./agent-ready-state";
+import {
+  clearCurrentMainWindow,
+  setCurrentMainWindow,
+  updateCurrentMainWindowEffectsState,
+} from "./main-window-runtime";
 import {
   isStewardLocalEnabled,
   onStewardStatusChange,
@@ -237,7 +244,7 @@ async function resolveReachableApiBaseForMainReset(): Promise<string | null> {
  *
  * @see `docs/apps/desktop-main-process-reset.md`
  */
-async function resetthe appFromApplicationMenu(): Promise<void> {
+async function resetTheAppFromApplicationMenu(): Promise<void> {
   console.info(
     `[Main][reset] App menu: Reset ${BRAND.appName} — confirm + POST /api/agent/reset + restart (main process)`,
   );
@@ -250,23 +257,28 @@ async function resetthe appFromApplicationMenu(): Promise<void> {
       );
     });
 
-  const box = await Utils.showMessageBox({
-    type: "warning",
-    title: "Reset Agent",
-    message:
-      "This will reset the agent: config, cloud keys, and local agent database (conversations / memory).",
-    detail:
-      "Downloaded GGUF embedding models are kept. You will return to the onboarding wizard.",
-    buttons: ["Reset", "Cancel"],
-    defaultId: 0,
-    cancelId: 1,
-  });
-  const response =
-    box && typeof box === "object" && "response" in box
-      ? (box as { response: number }).response
-      : typeof box === "number"
-        ? box
-        : 1;
+  const autoConfirm =
+    process.env.MILADY_DESKTOP_TEST_AUTO_CONFIRM_DIALOGS === "1" ||
+    process.env.MILADY_DESKTOP_TEST_AUTO_CONFIRM_RESET === "1";
+  const response = autoConfirm
+    ? 0
+    : await Utils.showMessageBox({
+        type: "warning",
+        title: "Reset Agent",
+        message:
+          "This will reset the agent: config, cloud keys, and local agent database (conversations / memory).",
+        detail:
+          "Downloaded GGUF embedding models are kept. You will return to the onboarding wizard.",
+        buttons: ["Reset", "Cancel"],
+        defaultId: 0,
+        cancelId: 1,
+      }).then((box) =>
+        box && typeof box === "object" && "response" in box
+          ? (box as { response: number }).response
+          : typeof box === "number"
+            ? box
+            : 1,
+      );
   if (response !== 0) {
     console.info("[Main][reset] User cancelled native confirm");
     return;
@@ -477,8 +489,14 @@ function applyMacOSWindowEffects(win: BrowserWindow): void {
     return;
   }
 
-  enableVibrancy(ptr as Parameters<typeof enableVibrancy>[0]);
-  ensureShadow(ptr as Parameters<typeof ensureShadow>[0]);
+  const vibrancyEnabled = enableVibrancy(
+    ptr as Parameters<typeof enableVibrancy>[0],
+  );
+  const shadowEnabled = ensureShadow(ptr as Parameters<typeof ensureShadow>[0]);
+  updateCurrentMainWindowEffectsState({
+    vibrancyEnabled,
+    shadowEnabled,
+  });
 
   const alignButtons = () =>
     setTrafficLightsPosition(
@@ -952,6 +970,10 @@ function attachMainWindow(win: BrowserWindow): BrowserWindow {
   const sendToWebview = wireRpcAndModules(win);
   currentWindow = win;
   currentSendToWebview = sendToWebview;
+  setCurrentMainWindow(win, {
+    titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
+    transparent: process.platform === "darwin",
+  });
   trackFocusedWindow(win);
 
   win.webview.on("dom-ready", () => {
@@ -998,6 +1020,7 @@ function attachMainWindow(win: BrowserWindow): BrowserWindow {
       currentWindow = null;
       currentSendToWebview = null;
     }
+    clearCurrentMainWindow(win);
     getDesktopManager().clearMainWindow(win);
 
     if (!isQuitting) {
@@ -1486,102 +1509,106 @@ async function setupUpdater(): Promise<void> {
       void runUpdateCheck(true);
     };
 
+    const handleApplicationMenuAction = async (
+      action: string | undefined,
+    ): Promise<void> => {
+      if (!currentWindow && action && !action.startsWith("focus-window:")) {
+        await restoreWindow();
+      }
+      if (action === "check-for-updates") {
+        triggerManualUpdateCheck();
+      } else if (action === "open-about") {
+        const updaterState = await getDesktopManager().getUpdaterState();
+        const version = updaterState.currentVersion || "unknown";
+        Utils.showNotification({
+          title: `About ${BRAND.appName}`,
+          body: `Version ${version} (${process.platform}/${process.arch})`,
+        });
+        void createSettingsWindow("updates");
+      } else if (action === "export-config") {
+        void exportConfigFromMenu();
+      } else if (action === "import-config") {
+        void importConfigFromMenu();
+      } else if (action === "toggle-devtools") {
+        toggleFocusedWindowDevTools();
+      } else if (action === "refresh-heartbeats") {
+        void refreshHeartbeatMenuSnapshot();
+      } else if (action === "relaunch") {
+        void getDesktopManager().relaunch();
+      } else if (action === "reset-app") {
+        void resetTheAppFromApplicationMenu();
+      } else if (
+        action === "open-settings" ||
+        action?.startsWith("open-settings-")
+      ) {
+        void createSettingsWindow(parseSettingsWindowAction(action));
+      } else if (action?.startsWith("new-window:")) {
+        const surface = action.slice("new-window:".length);
+        if (surfaceWindowManager && isDetachedSurface(surface)) {
+          void surfaceWindowManager.openSurfaceWindow(surface);
+        }
+      } else if (action?.startsWith("focus-window:")) {
+        const windowId = action.slice("focus-window:".length);
+        surfaceWindowManager?.focusWindow(windowId);
+      } else if (action?.startsWith("show-main:")) {
+        const surface = action.slice("show-main:".length);
+        showMainSurface(surface);
+      } else if (action === "focus-main-window") {
+        void getDesktopManager().focusWindow();
+      } else if (action === "hide-main-window") {
+        void getDesktopManager().hideWindow();
+      } else if (action === "maximize-main-window") {
+        void getDesktopManager().maximizeWindow();
+      } else if (action === "restore-main-window") {
+        void getDesktopManager().unmaximizeWindow();
+      } else if (action === "desktop-notify") {
+        void getDesktopManager().showNotification({
+          title: `${BRAND.appName} Desktop`,
+          body: `${BRAND.appName} native application menu actions are wired and responding.`,
+          urgency: "normal",
+        });
+      } else if (action === "restart-steward") {
+        if (isStewardLocalEnabled()) {
+          restartSteward().catch((err: unknown) => {
+            console.error("[Main] Steward restart failed:", err);
+            Utils.showNotification({
+              title: "Steward Restart Failed",
+              body: err instanceof Error ? err.message : "Unknown error",
+            });
+          });
+        }
+      } else if (action === "reset-steward") {
+        if (isStewardLocalEnabled()) {
+          resetSteward().catch((err: unknown) => {
+            console.error("[Main] Steward reset failed:", err);
+            Utils.showNotification({
+              title: "Steward Reset Failed",
+              body: err instanceof Error ? err.message : "Unknown error",
+            });
+          });
+        }
+      } else if (action === "restart-agent") {
+        getAgentManager()
+          .restart()
+          .catch((err: unknown) => {
+            console.error("[Main] Agent restart failed:", err);
+          });
+      } else if (action === "quit") {
+        void getDesktopManager().quit();
+      } else if (action === "show") {
+        void getDesktopManager().showWindow();
+      } else if (action?.startsWith("navigate-")) {
+        void getDesktopManager().showWindow();
+        sendToActiveRenderer("desktopTrayMenuClick", { itemId: action });
+      }
+    };
+
+    setApplicationMenuActionHandler(handleApplicationMenuAction);
+
     Electrobun.events.on(
       "application-menu-clicked",
-      async (e: { data?: { action?: string } }) => {
-        const action = e?.data?.action;
-
-        // If the main window is gone and the action targets it, restore first.
-        if (!currentWindow && action && !action.startsWith("focus-window:")) {
-          await restoreWindow();
-        }
-        if (action === "check-for-updates") {
-          triggerManualUpdateCheck();
-        } else if (action === "open-about") {
-          const updaterState = await getDesktopManager().getUpdaterState();
-          const version = updaterState.currentVersion || "unknown";
-          Utils.showNotification({
-            title: `About ${BRAND.appName}`,
-            body: `Version ${version} (${process.platform}/${process.arch})`,
-          });
-          void createSettingsWindow("updates");
-        } else if (action === "export-config") {
-          void exportConfigFromMenu();
-        } else if (action === "import-config") {
-          void importConfigFromMenu();
-        } else if (action === "toggle-devtools") {
-          toggleFocusedWindowDevTools();
-        } else if (action === "refresh-heartbeats") {
-          void refreshHeartbeatMenuSnapshot();
-        } else if (action === "relaunch") {
-          void getDesktopManager().relaunch();
-        } else if (action === "reset-app") {
-          void resetthe appFromApplicationMenu();
-        } else if (
-          action === "open-settings" ||
-          action?.startsWith("open-settings-")
-        ) {
-          void createSettingsWindow(parseSettingsWindowAction(action));
-        } else if (action?.startsWith("new-window:")) {
-          const surface = action.slice("new-window:".length);
-          if (surfaceWindowManager && isDetachedSurface(surface)) {
-            void surfaceWindowManager.openSurfaceWindow(surface);
-          }
-        } else if (action?.startsWith("focus-window:")) {
-          const windowId = action.slice("focus-window:".length);
-          surfaceWindowManager?.focusWindow(windowId);
-        } else if (action?.startsWith("show-main:")) {
-          const surface = action.slice("show-main:".length);
-          showMainSurface(surface);
-        } else if (action === "focus-main-window") {
-          void getDesktopManager().focusWindow();
-        } else if (action === "hide-main-window") {
-          void getDesktopManager().hideWindow();
-        } else if (action === "maximize-main-window") {
-          void getDesktopManager().maximizeWindow();
-        } else if (action === "restore-main-window") {
-          void getDesktopManager().unmaximizeWindow();
-        } else if (action === "desktop-notify") {
-          void getDesktopManager().showNotification({
-            title: `${BRAND.appName} Desktop`,
-            body: `${BRAND.appName} native application menu actions are wired and responding.`,
-            urgency: "normal",
-          });
-        } else if (action === "restart-steward") {
-          if (isStewardLocalEnabled()) {
-            restartSteward().catch((err: unknown) => {
-              console.error("[Main] Steward restart failed:", err);
-              Utils.showNotification({
-                title: "Steward Restart Failed",
-                body: err instanceof Error ? err.message : "Unknown error",
-              });
-            });
-          }
-        } else if (action === "reset-steward") {
-          if (isStewardLocalEnabled()) {
-            resetSteward().catch((err: unknown) => {
-              console.error("[Main] Steward reset failed:", err);
-              Utils.showNotification({
-                title: "Steward Reset Failed",
-                body: err instanceof Error ? err.message : "Unknown error",
-              });
-            });
-          }
-        } else if (action === "restart-agent") {
-          getAgentManager()
-            .restart()
-            .catch((err: unknown) => {
-              console.error("[Main] Agent restart failed:", err);
-            });
-        } else if (action === "quit") {
-          void getDesktopManager().quit();
-        } else if (action === "show") {
-          void getDesktopManager().showWindow();
-        } else if (action?.startsWith("navigate-")) {
-          // Show main window + push tab change to renderer
-          void getDesktopManager().showWindow();
-          sendToActiveRenderer("desktopTrayMenuClick", { itemId: action });
-        }
+      (e: { data?: { action?: string } }) => {
+        void handleApplicationMenuAction(e?.data?.action);
       },
     );
 
@@ -1640,7 +1667,7 @@ function setupShutdown(): void {
  * ELIZA_DESKTOP_API_BASE and related overrides that switch the packaged app
  * into external mode and make launcher startup appear dead.
  */
-async function loadthe appEnvFilesForMain(): Promise<void> {
+async function loadTheAppEnvFilesForMain(): Promise<void> {
   const normalizedModuleDir = import.meta.dir.replaceAll("\\", "/");
   const isPackagedBuild = !normalizedModuleDir.includes("/src/");
   if (isPackagedBuild) {
@@ -1720,7 +1747,7 @@ async function main(): Promise<void> {
     exec_path: process.execPath,
     bundle_path: resolveStartupBundlePath(process.execPath),
   });
-  await loadthe appEnvFilesForMain();
+  await loadTheAppEnvFilesForMain();
   console.log(`[Main] Starting ${BRAND.appName} (Electrobun)`);
   const normalizedModuleDir = import.meta.dir.replaceAll("\\", "/");
   const runtimeResolution = resolveDesktopRuntimeMode(
@@ -1797,6 +1824,10 @@ async function main(): Promise<void> {
   checkWebGpuBrowserSupport();
   cleanupFns.length = 0;
   cleanupFns.push(await startBrowserWorkspaceBridgeServer());
+  const stopDesktopTestBridgeServer = await startDesktopTestBridgeServer();
+  if (stopDesktopTestBridgeServer) {
+    cleanupFns.push(stopDesktopTestBridgeServer);
+  }
 
   // WHY push API base on every status tick with a port: embedded startup can
   // settle on a different loopback port than env/static HTML (allocation + stdout).

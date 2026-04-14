@@ -6,6 +6,7 @@ stored in the clipboard directory.
 
 from __future__ import annotations
 
+import builtins
 import logging
 import os
 import re
@@ -51,7 +52,7 @@ def _resolve_clipboard_config(
         if isinstance(bp, str) and bp.strip():
             base.base_path = bp.strip()
         mfs = runtime.get_setting("CLIPBOARD_MAX_FILE_SIZE") if hasattr(runtime, "get_setting") else None
-        if mfs is not None:
+        if isinstance(mfs, (str, int, float)) and not isinstance(mfs, bool):
             try:
                 base.max_file_size = int(mfs)
             except (ValueError, TypeError):
@@ -250,7 +251,7 @@ class ClipboardService:
         self,
         query: str,
         options: ClipboardSearchOptions | None = None,
-    ) -> list[ClipboardSearchResult]:
+    ) -> builtins.list[ClipboardSearchResult]:
         """Search clipboard entries using text matching."""
         options = options or ClipboardSearchOptions()
         entries = await self.list()

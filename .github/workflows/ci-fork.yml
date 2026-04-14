@@ -39,6 +39,12 @@ jobs:
             mv .eliza.ci-disabled eliza
           fi
 
+      - name: Install submodule verification dependencies
+        run: |
+          bun install --cwd eliza --frozen-lockfile --ignore-scripts
+          bun install --cwd eliza/cloud --frozen-lockfile
+          bun install --cwd eliza/steward-fi --frozen-lockfile
+
       - name: Biome lint
         run: bun run verify:lint
 
@@ -69,6 +75,12 @@ jobs:
           if [ -d ".eliza.ci-disabled" ] && [ ! -d "eliza" ]; then
             mv .eliza.ci-disabled eliza
           fi
+
+      - name: Install submodule verification dependencies
+        run: |
+          bun install --cwd eliza --frozen-lockfile --ignore-scripts
+          bun install --cwd eliza/cloud --frozen-lockfile
+          bun install --cwd eliza/steward-fi --frozen-lockfile
 
       - name: Run type checker
         run: bun run verify:typecheck

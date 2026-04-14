@@ -34,8 +34,11 @@ const DEFAULT_SANDBOX_DISCOVERY_URL = "https://sandboxes.waifu.fun/agents";
 const DEFAULT_AGENT_UI_BASE_DOMAIN = "milady.ai";
 const CLOUD_TOKEN_STORAGE_PREFIX = "milady-cloud-token";
 
-function normalizeUrl(value: string | undefined, fallback: string): string {
-  const candidate = value?.trim();
+function normalizeUrl(
+  value: string | boolean | undefined,
+  fallback: string,
+): string {
+  const candidate = typeof value === "string" ? value.trim() : undefined;
   return (candidate && candidate.length > 0 ? candidate : fallback).replace(
     /\/+$/,
     "",
@@ -43,13 +46,13 @@ function normalizeUrl(value: string | undefined, fallback: string): string {
 }
 
 function normalizeHostname(
-  value: string | undefined,
+  value: string | boolean | undefined,
   fallback: string,
 ): string {
-  const candidate = value
-    ?.trim()
-    .replace(/^https?:\/\//, "")
-    .replace(/\/+$/, "");
+  const candidate =
+    typeof value === "string"
+      ? value.trim().replace(/^https?:\/\//, "").replace(/\/+$/, "")
+      : undefined;
   return candidate && candidate.length > 0 ? candidate : fallback;
 }
 

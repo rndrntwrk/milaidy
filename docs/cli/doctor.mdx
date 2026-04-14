@@ -7,7 +7,7 @@ description: "Diagnose environment, ports, and common misconfigurations."
 
 Runs static checks: Node/Bun version, config presence, port availability, and other fast sanity tests.
 
-For maintainers working from a source checkout, `doctor` also checks local upstream workspace health (`./eliza` and `./plugins`) and reports whether `@elizaos/*` links point at local vendored sources or published installs.
+For maintainers working from a source checkout, `doctor` also checks the repo-local vendored workspace under `./eliza` and reports whether `@elizaos/core` resolves to vendored source or a published install. The orchestrator runtime now ships through `@elizaos/core`, so there is no separate standalone orchestrator package to validate here.
 
 ## Examples
 

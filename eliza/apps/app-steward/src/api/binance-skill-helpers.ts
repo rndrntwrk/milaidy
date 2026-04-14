@@ -5,6 +5,7 @@
  * (meme-rush, trading-signal, token-info, etc.) and fallback action parsing.
  */
 
+import { extractCompatTextContent } from "@elizaos/agent/api/compat-utils";
 import {
   type Action,
   type ActionParameters,
@@ -13,7 +14,6 @@ import {
   type createMessageMemory,
   ModelType,
 } from "@elizaos/core";
-import { extractCompatTextContent } from "@elizaos/agent/api/compat-utils";
 
 const EXPOSED_BINANCE_SKILL_IDS = new Set([
   "binance-crypto-market-rank",

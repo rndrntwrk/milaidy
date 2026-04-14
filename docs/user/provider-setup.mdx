@@ -1,0 +1,79 @@
+---
+title: "Set Up a Provider"
+sidebarTitle: "Provider Setup"
+description: "Choose a provider for Milady and connect it."
+---
+
+A provider is the model service that answers your agent's messages.
+
+## Choose a route
+
+| Route | Use it when |
+|-------|-------------|
+| `Cloud API` | you already have an API key and want the shortest setup path |
+| `Ollama` | you want Milady fully local |
+| `Eliza Cloud` | you want a managed backend |
+
+Common cloud providers:
+
+- OpenAI
+- Anthropic
+- OpenRouter
+- Gemini
+- Groq
+- xAI
+
+## Connect it in Milady
+
+1. Open `Settings`.
+2. Open the provider or AI model section.
+3. Pick the provider.
+4. Paste the API key, sign in, or enter the local server URL.
+5. Run the connection test.
+6. Pick a model if needed.
+
+## Ollama
+
+Make sure Ollama is running before you test it. If the model is not downloaded yet, pull it first.
+
+```bash
+ollama pull llama3.1
+```
+
+## Remote backends
+
+If you are connected to a remote Milady backend, that backend may already own provider routing. In that case, changing a local key may do nothing. See [Connect Remotely](/user/connect-remotely).
+
+## Switching later
+
+You can change providers later if you need a different balance of:
+
+- cost
+- speed
+- privacy
+- model quality
+
+Milady keeps the same chats and agent state while the route changes.
+
+## Common problems
+
+### Messages hang
+
+Check:
+
+- the API key
+- provider status
+- Ollama process status
+- the selected model name
+
+### Voice works but chat does not
+
+Chat and voice can use different providers. Fix the chat route separately.
+
+### A remote or cloud backend ignores your local key
+
+Confirm which machine owns provider routing.
+
+## Next
+
+[Change Your Character](/user/change-character)

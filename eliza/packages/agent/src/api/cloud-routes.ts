@@ -7,6 +7,11 @@ import {
   migrateLegacyRuntimeConfig,
 } from "@elizaos/shared/contracts/onboarding";
 import { normalizeCloudSiteUrl } from "../cloud/base-url.js";
+import type {
+  CloudChainType,
+  CloudWalletDescriptor,
+  CloudWalletProvider,
+} from "../cloud/bridge-client.js";
 import {
   getOrCreateClientAddressKey,
   MILADY_CLOUD_CLIENT_ADDRESS_KEY_ENV,
@@ -40,6 +45,19 @@ interface CloudClientLike {
     environmentVars?: Record<string, string>;
   }) => Promise<unknown>;
   deleteAgent: (agentId: string) => Promise<unknown>;
+  getAgentWallet: (
+    agentId: string,
+    chain: CloudChainType,
+  ) => Promise<CloudWalletDescriptor>;
+  provisionWallet: (input: {
+    chainType: CloudChainType;
+    clientAddress: string;
+  }) => Promise<{
+    walletId: string;
+    address: string;
+    chainType: CloudChainType;
+    provider: CloudWalletProvider;
+  }>;
 }
 
 interface ConnectedCloudAgentLike {
@@ -482,14 +500,12 @@ export async function handleCloudRoute(
       }
 
       if (state.runtime) {
-        const character = (state.runtime.character ??= {});
+        const character = state.runtime.character ?? {};
+        state.runtime.character = character;
         if (!character.secrets) {
           character.secrets = {};
         }
-        const secrets = character.secrets as Record<
-          string,
-          string
-        >;
+        const secrets = character.secrets as Record<string, string>;
         secrets.ELIZAOS_CLOUD_API_KEY = data.apiKey;
         if (cloudInferenceSelected) {
           secrets.ELIZAOS_CLOUD_ENABLED = "true";
@@ -840,18 +856,26 @@ export async function handleCloudRoute(
     delete process.env.ELIZAOS_CLOUD_ENABLED;
 
     if (state.runtime) {
-      if (!state.runtime.character.secrets) {
-        state.runtime.character.secrets = {};
+      const character = state.runtime.character ?? {};
+      state.runtime.character = character;
+      if (!character.secrets) {
+        character.secrets = {};
       }
-      const secrets = state.runtime.character.secrets as Record<
+      const secrets = character.secrets as Record<
         string,
         string | number | boolean
       >;
       delete secrets.ELIZAOS_CLOUD_API_KEY;
       delete secrets.ELIZAOS_CLOUD_ENABLED;
-      await state.runtime.updateAgent(state.runtime.agentId, {
-        secrets: { ...secrets },
-      });
+      if (typeof state.runtime.updateAgent === "function") {
+        await state.runtime.updateAgent(state.runtime.agentId, {
+          secrets: { ...secrets },
+        });
+      } else {
+        logger.warn(
+          "[cloud-disconnect] updateAgent not available — runtime secrets not persisted",
+        );
+      }
     }
 
     sendJson(res, { ok: true, status: "disconnected" });

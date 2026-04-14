@@ -1,4 +1,4 @@
-import { Button } from "@elizaos/app-core";
+import { Button } from "@elizaos/ui/components/ui/button";
 import { useMemo } from "react";
 import type { AppRunSummary, RegistryAppInfo } from "../../api";
 import { useApp } from "../../state";

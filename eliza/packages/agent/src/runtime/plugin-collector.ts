@@ -226,7 +226,7 @@ export function collectPluginNames(
   const cloudHandlesInference =
     cloudTopology.services.inference ||
     (isCloudContainer && Boolean(process.env.ELIZAOS_CLOUD_API_KEY?.trim()));
-  const configEnv = config.env as
+  const _configEnv = config.env as
     | (Record<string, unknown> & { vars?: Record<string, unknown> })
     | undefined;
   const pluginEntries = (config.plugins as Record<string, unknown> | undefined)

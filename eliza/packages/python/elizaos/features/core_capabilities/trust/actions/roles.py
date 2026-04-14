@@ -13,9 +13,7 @@ from typing import TYPE_CHECKING, Any
 from elizaos.types import Action, ActionResult, Content
 
 if TYPE_CHECKING:
-    from uuid import UUID
-
-    from elizaos.types import HandlerCallback, HandlerOptions, IAgentRuntime, Memory, State
+    from elizaos.types import HandlerCallback, HandlerOptions, IAgentRuntime, Memory, State, UUID
 
 
 class Role(str, Enum):
@@ -112,7 +110,9 @@ class UpdateRoleAction:
         if world_id is None:
             world_id_setting = getattr(runtime, "get_setting", lambda _: None)
             if callable(world_id_setting):
-                world_id = world_id_setting("WORLD_ID")
+                candidate = world_id_setting("WORLD_ID")
+                if isinstance(candidate, str):
+                    world_id = candidate
 
         world: Any = None
         if world_id is not None:

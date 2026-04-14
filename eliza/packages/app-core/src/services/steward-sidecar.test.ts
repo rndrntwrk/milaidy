@@ -4,28 +4,37 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("./steward-sidecar/health-check", () => ({
-  waitForHealthy: vi.fn(async () => undefined),
-}));
+vi.mock(
+  "../../../../apps/app-steward/src/services/steward-sidecar/health-check.ts",
+  () => ({
+    waitForHealthy: vi.fn(async () => undefined),
+  }),
+);
 
-vi.mock("./steward-sidecar/process-management", () => ({
-  ensureStewardWorkspaceReady: vi.fn(async () => undefined),
-  findStewardEntryPoint: vi.fn(
-    async () => "/Users/home/milady/steward-fi/packages/api/src/embedded.ts",
-  ),
-  pipeOutput: vi.fn(async () => undefined),
-}));
+vi.mock(
+  "../../../../apps/app-steward/src/services/steward-sidecar/process-management.ts",
+  () => ({
+    ensureStewardWorkspaceReady: vi.fn(async () => undefined),
+    findStewardEntryPoint: vi.fn(
+      async () => "/Users/home/milady/steward-fi/packages/api/src/embedded.ts",
+    ),
+    pipeOutput: vi.fn(async () => undefined),
+  }),
+);
 
-vi.mock("./steward-sidecar/wallet-setup", () => ({
-  ensureWalletSetup: vi.fn(async () => ({
-    tenantId: "milady-desktop",
-    tenantApiKey: "tenant-key",
-    agentId: "milady-wallet",
-    agentToken: "agent-token",
-    walletAddress: "0x1234567890abcdef1234567890abcdef12345678",
-    masterPassword: "",
-  })),
-}));
+vi.mock(
+  "../../../../apps/app-steward/src/services/steward-sidecar/wallet-setup.ts",
+  () => ({
+    ensureWalletSetup: vi.fn(async () => ({
+      tenantId: "milady-desktop",
+      tenantApiKey: "tenant-key",
+      agentId: "milady-wallet",
+      agentToken: "agent-token",
+      walletAddress: "0x1234567890abcdef1234567890abcdef12345678",
+      masterPassword: "",
+    })),
+  }),
+);
 
 describe("StewardSidecar", () => {
   const originalHome = process.env.HOME;
@@ -71,7 +80,9 @@ describe("StewardSidecar", () => {
       spawn: spawnMock,
     };
 
-    const { StewardSidecar } = await import("./steward-sidecar");
+    const { StewardSidecar } = await import(
+      "../../../../apps/app-steward/src/services/steward-sidecar"
+    );
 
     const dataDir = path.join(homeDir, ".milady", "steward");
     const sidecar = new StewardSidecar({ dataDir });
@@ -124,7 +135,9 @@ describe("StewardSidecar", () => {
       spawn: spawnMock,
     };
 
-    const { StewardSidecar } = await import("./steward-sidecar");
+    const { StewardSidecar } = await import(
+      "../../../../apps/app-steward/src/services/steward-sidecar"
+    );
 
     const dataDir = path.join(homeDir, ".milady", "steward");
     const sidecar = new StewardSidecar({

@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@elizaos/app-core": "workspace:*",
+    "@elizaos/ui": "workspace:*",
     "@elizaos/core": "workspace:*",
     "viem": "^2.21.0"
   }

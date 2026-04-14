@@ -3,8 +3,9 @@ import type {
   WalletEntry,
   WalletPrimaryMap,
   WalletSource,
-} from "@miladyai/shared/contracts/wallet";
+} from "@elizaos/shared/contracts/wallet";
 import type { Dispatch, SetStateAction } from "react";
+import type { AgentProfile } from "./agent-profile-types";
 import type {
   AgentStatus,
   AppRunSummary,
@@ -235,6 +236,40 @@ export interface StartupErrorState {
   path?: string;
 }
 
+export interface StartupCoordinatorView {
+  state: {
+    phase:
+      | "splash"
+      | "restoring-session"
+      | "resolving-target"
+      | "polling-backend"
+      | "pairing-required"
+      | "onboarding-required"
+      | "starting-runtime"
+      | "hydrating"
+      | "ready"
+      | "error";
+    [key: string]: unknown;
+  };
+  dispatch: (event: { type: string; [key: string]: unknown }) => void;
+  retry: () => void;
+  reset: () => void;
+  pairingSuccess: () => void;
+  onboardingComplete: () => void;
+  policy: {
+    supportsLocalRuntime: boolean;
+    backendTimeoutMs: number;
+    agentReadyTimeoutMs: number;
+    probeForExistingInstall: boolean;
+    defaultTarget: "embedded-local" | "remote-backend" | "cloud-managed" | null;
+  };
+  legacyPhase: StartupPhase;
+  loading: boolean;
+  terminal: boolean;
+  target: "embedded-local" | "remote-backend" | "cloud-managed" | null;
+  phase: StartupCoordinatorView["state"]["phase"];
+}
+
 export interface ApiLikeError {
   kind?: string;
   status?: number;
@@ -284,7 +319,7 @@ export interface AppState {
   startupPhase: StartupPhase;
   startupError: StartupErrorState | null;
   /** StartupCoordinator handle — the sole startup authority. */
-  startupCoordinator: import("./useStartupCoordinator").StartupCoordinatorHandle;
+  startupCoordinator: StartupCoordinatorView;
   authRequired: boolean;
   actionNotice: ActionNotice | null;
   lifecycleBusy: boolean;
@@ -467,7 +502,7 @@ export interface AppState {
   elizaCloudDisconnecting: boolean;
 
   // Multi-agent profiles
-  activeAgentProfile: import("./agent-profiles").AgentProfile | null;
+  activeAgentProfile: AgentProfile | null;
 
   // Updates
   updateStatus: UpdateStatus | null;

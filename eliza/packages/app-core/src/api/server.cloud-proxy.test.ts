@@ -7,15 +7,15 @@ const { billingRouteMock, compatRouteMock } = vi.hoisted(() => ({
   compatRouteMock: vi.fn(async () => true),
 }));
 
-vi.mock("@miladyai/agent/api/cloud-billing-routes", () => ({
+vi.mock("@elizaos/agent/api/cloud-billing-routes", () => ({
   handleCloudBillingRoute: billingRouteMock,
 }));
 
-vi.mock("@miladyai/agent/api/cloud-compat-routes", () => ({
+vi.mock("@elizaos/agent/api/cloud-compat-routes", () => ({
   handleCloudCompatRoute: compatRouteMock,
 }));
 
-vi.mock("@miladyai/agent/config/config", () => ({
+vi.mock("@elizaos/agent/config/config", () => ({
   loadElizaConfig: vi.fn(() => ({})),
   saveElizaConfig: vi.fn(),
 }));
@@ -27,7 +27,7 @@ vi.mock("./auth", () => ({
 }));
 
 import { handleMiladyCompatRoute } from "./server";
-import { loadElizaConfig } from "@miladyai/agent/config/config";
+import { loadElizaConfig } from "@elizaos/agent/config/config";
 
 function makeRes() {
   return {
@@ -92,19 +92,8 @@ describe("handleMiladyCompatRoute cloud proxy wrappers", () => {
     );
   });
 
-  it("backfills the cloud api key even when linkedAccounts is stale-unlinked", async () => {
+  it("backfills the cloud api key from runtime secrets when disk config is missing it", async () => {
     vi.mocked(loadElizaConfig).mockReturnValue({
-      linkedAccounts: {
-        elizacloud: {
-          status: "unlinked",
-        },
-      },
-      serviceRouting: {
-        rpc: {
-          transport: "cloud-proxy",
-          backend: "elizacloud",
-        },
-      },
       cloud: {
         apiKey: null,
       },
@@ -112,9 +101,11 @@ describe("handleMiladyCompatRoute cloud proxy wrappers", () => {
 
     const runtime = {
       agentId: "agent-123",
-      character: { secrets: {} },
-      getSetting: (key: string) =>
-        key === "ELIZAOS_CLOUD_API_KEY" ? "runtime-setting-key" : undefined,
+      character: {
+        secrets: {
+          ELIZAOS_CLOUD_API_KEY: "runtime-setting-key",
+        },
+      },
     };
 
     await handleMiladyCompatRoute(

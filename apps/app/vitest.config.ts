@@ -6,27 +6,18 @@ import { defineConfig } from "vitest/config";
 import {
   getAppCoreSourceRoot,
   getAutonomousSourceRoot,
-} from "../../eliza/packages/app-core/test/eliza-package-paths";
+} from "../../test/eliza-package-paths";
+import { getAppCoreBridgeStubPath } from "../../test/vitest/workspace-aliases";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(here, "../..");
 const nativePluginsRoot = path.join(
   here,
   "../../eliza/packages/native-plugins",
 );
 const appCorePackageRoot = getAppCoreSourceRoot(here);
 const agentSourceRoot = getAutonomousSourceRoot(here);
-
-const bridgeStubPath = path.join(
-  here,
-  "..",
-  "..",
-  "eliza",
-  "packages",
-  "app-core",
-  "test",
-  "stubs",
-  "app-core-bridge.ts",
-);
+const bridgeStubPath = getAppCoreBridgeStubPath(repoRoot);
 
 /**
  * Custom Vite plugin that redirects @elizaos/app-core imports to

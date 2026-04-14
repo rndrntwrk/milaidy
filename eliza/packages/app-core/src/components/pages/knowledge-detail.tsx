@@ -1,11 +1,11 @@
-/**
- * Knowledge document detail viewer — preview, metadata, and fragment list.
- *
- * Extracted from KnowledgeView.tsx to keep individual files under ~500 LOC.
- */
-
-import type { KnowledgeDocument, KnowledgeFragment } from "@elizaos/app-core";
-import { client, formatByteSize, PagePanel, useApp } from "@elizaos/app-core";
+import type {
+  KnowledgeDocument,
+  KnowledgeFragment,
+} from "../../api/client-types-chat";
+import { client } from "../../api/client";
+import { useApp } from "../../state/useApp";
+import { PagePanel } from "@elizaos/ui/components/composites/page-panel";
+import { formatByteSize } from "../../utils/format";
 import { useEffect, useState } from "react";
 
 export function getKnowledgeTypeLabel(contentType?: string): string {

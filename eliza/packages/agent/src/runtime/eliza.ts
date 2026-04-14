@@ -1696,7 +1696,7 @@ export function isRecoverablePgliteInitError(err: unknown): boolean {
 
   const hasAbort = haystack.includes("aborted(). build with -sassertions");
   const hasPglite = haystack.includes("pglite");
-  const hasSqlite = haystack.includes("sqlite");
+  const _hasSqlite = haystack.includes("sqlite");
   const hasMigrationsSchema =
     haystack.includes("create schema if not exists migrations") ||
     haystack.includes("failed query: create schema if not exists migrations");

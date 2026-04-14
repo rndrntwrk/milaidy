@@ -9,7 +9,6 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import type http from "node:http";
 import path from "node:path";
-import { getKnowledgeService } from "@elizaos/app-knowledge/service-loader";
 import {
   type AgentRuntime,
   type ChannelType,
@@ -46,6 +45,10 @@ import {
 import { isPrivyWalletProvisioningEnabled } from "../services/privy-wallets.js";
 import { extractCompatTextContent } from "./compat-utils.js";
 import { sendJsonError } from "./http-helpers.js";
+import {
+  getKnowledgeService,
+  type KnowledgeServiceResult,
+} from "./knowledge-service-loader.js";
 import type { ChatAttachmentWithData, ServerState } from "./server-types.js";
 import { getWalletAddresses } from "./wallet.js";
 import {
@@ -801,7 +804,8 @@ export async function maybeAugmentChatMessageWithKnowledge(
   }
 
   try {
-    const knowledge = await getKnowledgeService(runtime);
+    const knowledge: KnowledgeServiceResult =
+      await getKnowledgeService(runtime);
     if (!knowledge.service) {
       return message;
     }

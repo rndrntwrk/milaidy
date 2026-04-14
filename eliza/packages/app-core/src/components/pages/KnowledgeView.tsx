@@ -1,28 +1,14 @@
-/**
- * Knowledge management view — upload, search, and manage knowledge documents.
- *
- * Features:
- * - Stats display (document count, fragment count)
- * - Document upload (file picker + drag-and-drop)
- * - URL upload (with YouTube auto-transcription)
- * - Search across knowledge base
- * - Document list with delete functionality
- * - Document detail view with fragments
- */
-
 import type {
   KnowledgeDocument,
   KnowledgeSearchResult,
-} from "@elizaos/app-core";
-import {
-  Button,
-  ConfirmDeleteControl,
-  client,
-  confirmDesktopAction,
-  formatByteSize,
-  PagePanel,
-  useApp,
-} from "@elizaos/app-core";
+} from "../../api/client-types-chat";
+import { client } from "../../api/client";
+import { useApp } from "../../state/useApp";
+import { PagePanel } from "@elizaos/ui/components/composites/page-panel";
+import { Button } from "@elizaos/ui/components/ui/button";
+import { confirmDesktopAction } from "../../utils/desktop-dialogs";
+import { formatByteSize } from "../../utils/format";
+import { ConfirmDeleteControl } from "../shared/confirm-delete-control";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   isKnowledgeImageFile,

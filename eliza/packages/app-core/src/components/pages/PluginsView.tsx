@@ -1,20 +1,12 @@
-/**
- * Plugins view — tag-filtered plugin management.
- *
- * Renders a unified plugin list with searchable/filterable cards and per-plugin settings.
- */
-
-import {
-  Button,
-  PageLayout,
-  PageLayoutHeader,
-  PagePanel,
-  Sidebar,
-  SidebarContent,
-  SidebarPanel,
-  SidebarScrollRegion,
-  useLinkedSidebarSelection,
-} from "@elizaos/app-core";
+import { PagePanel } from "@elizaos/ui/components/composites/page-panel";
+import { SidebarContent } from "@elizaos/ui/components/composites/sidebar/sidebar-content";
+import { SidebarPanel } from "@elizaos/ui/components/composites/sidebar/sidebar-panel";
+import { Sidebar } from "@elizaos/ui/components/composites/sidebar/sidebar-root";
+import { SidebarScrollRegion } from "@elizaos/ui/components/composites/sidebar/sidebar-scroll-region";
+import { Button } from "@elizaos/ui/components/ui/button";
+import { useLinkedSidebarSelection } from "@elizaos/ui/hooks/useLinkedSidebarSelection";
+import { PageLayout } from "@elizaos/ui/layouts/page-layout/page-layout";
+import { PageLayoutHeader } from "@elizaos/ui/layouts/page-layout/page-layout-header";
 import { Package } from "lucide-react";
 import {
   type ReactNode,

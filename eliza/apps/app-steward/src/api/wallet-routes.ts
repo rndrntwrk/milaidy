@@ -1,14 +1,17 @@
 import type http from "node:http";
+import type {
+  RouteHelpers,
+  RouteRequestMeta,
+} from "@elizaos/agent/api/route-helpers";
+import type { ElizaConfig } from "@elizaos/agent/config/config";
+import { createIntegrationTelemetrySpan } from "@elizaos/agent/diagnostics/integration-observability";
 import type { AgentRuntime } from "@elizaos/core";
 import { logger } from "@elizaos/core";
-import type { ElizaConfig } from "@elizaos/agent/config/config";
 import {
   normalizeWalletRpcSelections,
   type WalletConfigUpdateRequest,
   type WalletRpcSelections,
 } from "@elizaos/shared/contracts/wallet";
-import { createIntegrationTelemetrySpan } from "@elizaos/agent/diagnostics/integration-observability";
-import type { RouteHelpers, RouteRequestMeta } from "@elizaos/agent/api/route-helpers";
 import {
   fetchEvmBalances,
   fetchSolanaBalances,
