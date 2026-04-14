@@ -25,7 +25,6 @@
     "@elizaos/plugin-agent-orchestrator"
   ],
   "workspaces": [
-    "packages/*",
     "apps/*",
     "eliza/packages/native-plugins/*",
     "eliza/packages/app-core/platforms/electrobun",
