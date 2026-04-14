@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 import { defineConfig } from "vitest/config";
 import {
@@ -39,6 +40,13 @@ const packageManifest = JSON.parse(
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
 };
+const elizaWorkspaceRequire = createRequire(
+  path.join(repoRoot, "eliza", "package.json"),
+);
+const elizaReactEntry = elizaWorkspaceRequire.resolve("react");
+const elizaReactDomEntry = elizaWorkspaceRequire.resolve("react-dom");
+const elizaReactDir = path.dirname(elizaReactEntry);
+const elizaReactDomDir = path.dirname(elizaReactDomEntry);
 const workspacePluginPackageNames = Object.keys({
   ...(packageManifest.dependencies ?? {}),
   ...(packageManifest.devDependencies ?? {}),
@@ -98,6 +106,24 @@ export default defineConfig({
   resolve: {
     dedupe: ["react", "react-dom", "ethers", "@elizaos/core"],
     alias: [
+      {
+        // Pin React to one installed copy so jsdom tests don't mix the root
+        // package with Bun's hoisted peer copies under nested workspaces.
+        find: /^react$/,
+        replacement: elizaReactEntry,
+      },
+      {
+        find: /^react\/(.*)$/,
+        replacement: path.join(elizaReactDir, "$1"),
+      },
+      {
+        find: /^react-dom$/,
+        replacement: elizaReactDomEntry,
+      },
+      {
+        find: /^react-dom\/(.*)$/,
+        replacement: path.join(elizaReactDomDir, "$1"),
+      },
       {
         // App-core unit tests mock this plugin, but the specifier still has to
         // resolve during module graph construction under the root Vitest config.
@@ -263,9 +289,13 @@ export default defineConfig({
     },
     deps: {
       inline: [
+        "@testing-library/react",
         "@elizaos/core",
         "@elizaos/agent",
         "@elizaos/app-core",
+        "react",
+        "react-dom",
+        "react-test-renderer",
         /^@miladyai\/shared/,
         /^@elizaos\/plugin-/,
         /^@elizaos\/shared/,
@@ -275,9 +305,13 @@ export default defineConfig({
     server: {
       deps: {
         inline: [
+          "@testing-library/react",
           "@elizaos/core",
           "@elizaos/agent",
           "@elizaos/app-core",
+          "react",
+          "react-dom",
+          "react-test-renderer",
           /^@miladyai\/shared/,
           /^@elizaos\/plugin-/,
           /^@elizaos\/shared/,

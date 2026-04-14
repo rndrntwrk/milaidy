@@ -52,12 +52,20 @@ export default defineConfig({
   resolve: {
     alias: [
       {
-        find: "react",
+        find: /^react$/,
         replacement: path.join(here, "node_modules/react"),
       },
       {
-        find: "react-dom",
+        find: /^react\/(.*)$/,
+        replacement: path.join(here, "node_modules/react", "$1"),
+      },
+      {
+        find: /^react-dom$/,
         replacement: path.join(here, "node_modules/react-dom"),
+      },
+      {
+        find: /^react-dom\/(.*)$/,
+        replacement: path.join(here, "node_modules/react-dom", "$1"),
       },
       ...(appCorePackageRoot
         ? (() => {
@@ -214,7 +222,13 @@ export default defineConfig({
     globals: true,
     server: {
       deps: {
-        inline: ["@elizaos/app-core"],
+        inline: [
+          "@elizaos/app-core",
+          "@testing-library/react",
+          "react",
+          "react-dom",
+          "react-test-renderer",
+        ],
       },
     },
   },
