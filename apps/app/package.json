@@ -42,7 +42,6 @@
     "@capacitor/preferences": "^8.0.1",
     "@capacitor/status-bar": "^8.0.1",
     "@elizaos/app-core": "workspace:*",
-    "@milady/ui": "workspace:*",
     "@elizaos/shared": "workspace:*",
     "@elizaos/capacitor-agent": "workspace:*",
     "@elizaos/capacitor-camera": "workspace:*",

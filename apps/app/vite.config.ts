@@ -5,7 +5,6 @@ import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react-swc";
 import { defineConfig, type Plugin, transformWithEsbuild } from "vite";
-import { syncElizaEnvAliases } from "../../eliza/packages/app-core/scripts/lib/sync-eliza-env-aliases.mjs";
 // Keep workspace-relative TS imports in this config so Vite transpiles them
 // while bundling the config instead of asking Node to load package-exported
 // .ts files directly in CI.
@@ -21,6 +20,7 @@ import {
   resolveDesktopUiPort,
   resolveDesktopUiPortPreference,
 } from "../../eliza/packages/shared/src/runtime-env.ts";
+import { syncElizaEnvAliases } from "../../scripts/lib/sync-eliza-env-aliases.mjs";
 import { resolveViteDevServerRuntime } from "./vite-dev-origin.ts";
 
 const _require = createRequire(import.meta.url);
@@ -1224,7 +1224,6 @@ export default defineConfig({
           miladyRoot,
           "eliza/packages/app-core/src/ui",
         );
-        const miladyUiSrc = path.resolve(miladyRoot, "packages/ui/src");
         const _autonomousSource = path.resolve(
           miladyRoot,
           "node_modules/@elizaos/agent/packages/agent/src",
@@ -1239,14 +1238,6 @@ export default defineConfig({
           {
             find: /^@elizaos\/app-core\/(.+)$/,
             replacement: `${appCorePkgDir}/src/$1`,
-          },
-          {
-            find: /^@milady\/ui$/,
-            replacement: path.join(miladyUiSrc, "index.ts"),
-          },
-          {
-            find: /^@milady\/ui\/(.*)$/,
-            replacement: `${miladyUiSrc}/$1`,
           },
           {
             find: /^@miladyai\/ui$/,

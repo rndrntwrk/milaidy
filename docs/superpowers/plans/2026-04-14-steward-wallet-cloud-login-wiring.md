@@ -128,7 +128,7 @@ export async function GET(req: NextRequest) {
 - [ ] **Step 3: Commit**
 
 ```bash
-cd /Users/home/milady/eliza
+cd "$(git rev-parse --show-toplevel)/eliza"
 git add cloud/app/api/v1/steward/tenants/credentials/route.ts
 git commit -m "feat: add GET /api/v1/steward/tenants/credentials endpoint
 
@@ -371,7 +371,7 @@ Expected: `export interface EnsureStewardAgentResult` at ~line 878.
 - [ ] **Step 4: Commit**
 
 ```bash
-cd /Users/home/milady/eliza
+cd "$(git rev-parse --show-toplevel)/eliza"
 git add packages/app-core/src/api/cloud-routes.ts
 git commit -m "feat: add provisionStewardFromCloud orchestration function
 
@@ -454,7 +454,7 @@ Replace with:
 - [ ] **Step 2: Verify build**
 
 ```bash
-cd /Users/home/milady
+cd "$(git rev-parse --show-toplevel)"
 bun run verify 2>&1 | grep -E "(cloud-routes|error TS)" | head -20
 ```
 
@@ -463,7 +463,7 @@ Expected: no new TypeScript errors in `cloud-routes.ts`. Pre-existing errors in 
 - [ ] **Step 3: Commit**
 
 ```bash
-cd /Users/home/milady/eliza
+cd "$(git rev-parse --show-toplevel)/eliza"
 git add packages/app-core/src/api/cloud-routes.ts
 git commit -m "feat: wire steward provisioning into cloud login success path
 
@@ -477,7 +477,7 @@ Response now includes stewardProvisioned boolean for the UI."
 ### Task 4: Clean Up CLAUDE.md Env Vars
 
 **Files:**
-- Modify: `/Users/home/milady/CLAUDE.md`
+- Modify: `$(git rev-parse --show-toplevel)/CLAUDE.md`
 
 Remove phantom env vars from the abandoned cloud-wallet plan and add the real Steward ones.
 
@@ -505,7 +505,7 @@ Add these rows to the env var table:
 - [ ] **Step 3: Commit**
 
 ```bash
-cd /Users/home/milady
+cd "$(git rev-parse --show-toplevel)"
 git add CLAUDE.md
 git commit -m "docs: replace phantom cloud-wallet env vars with real Steward ones
 
@@ -524,7 +524,7 @@ env vars that are actually used by the cloud login provisioning flow."
 - [ ] **Step 1: Delete stale files**
 
 ```bash
-cd /Users/home/milady
+cd "$(git rev-parse --show-toplevel)"
 rm -f COMPLETE_FIXES.md FIXES_APPLIED.md FIX_SUMMARY.md ONBOARDING_COMPLETE_MAP.md
 ```
 
@@ -558,7 +558,7 @@ grep -i steward ~/.milady/milady.json || echo "Clean — no steward config"
 - [ ] **Step 2: Start dev environment**
 
 ```bash
-cd /Users/home/milady
+cd "$(git rev-parse --show-toplevel)"
 bun run dev
 ```
 

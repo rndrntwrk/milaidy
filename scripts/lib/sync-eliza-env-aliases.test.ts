@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 // @ts-expect-error — .mjs module, no declaration file
 import { syncElizaEnvAliases } from "./sync-eliza-env-aliases.mjs";
 
