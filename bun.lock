@@ -86,6 +86,7 @@
         "react-dom": "^19.2.4",
         "react-test-renderer": "^19.2.4",
         "rimraf": "^5.0.10",
+        "tailwindcss": "^4.1.18",
         "tsdown": "^0.20.3",
         "tsup": "^8.3.5",
         "tsx": "^4.21.0",
