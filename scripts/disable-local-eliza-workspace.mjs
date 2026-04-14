@@ -56,9 +56,12 @@ export const DISABLED_WORKSPACE_GLOBS = [
   ELIZA_WORKSPACE_GLOB,
   PLUGIN_ROOT_WORKSPACE_GLOB,
   PLUGIN_TYPESCRIPT_WORKSPACE_GLOB,
+];
+export const LOCAL_ONLY_WORKSPACE_GLOBS = [
   "eliza/packages/native-plugins/*",
   "eliza/apps/*",
 ];
+export const LOCAL_ONLY_WORKSPACE_PATHS = ["eliza/packages/shared"];
 export const DEPENDENCY_FIELDS = [
   "dependencies",
   "devDependencies",
@@ -259,12 +262,52 @@ export function resolvePinnedWorkspaceVersions(
   return pinnedVersions;
 }
 
-export function rewriteWorkspaceDependencySpecifiers(pkg, pinnedVersions) {
+export function resolveLocalOnlyWorkspacePackageNames(
+  rootDir,
+  {
+    localOnlyWorkspaceGlobs = LOCAL_ONLY_WORKSPACE_GLOBS,
+    localOnlyWorkspacePaths = LOCAL_ONLY_WORKSPACE_PATHS,
+  } = {},
+) {
+  const localOnlyPackages = new Set();
+  for (const glob of localOnlyWorkspaceGlobs) {
+    for (const wsRel of expandGlob(glob, { rootDir })) {
+      const pkgPath = path.join(rootDir, wsRel, "package.json");
+      if (!fs.existsSync(pkgPath)) continue;
+      try {
+        const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+        if (typeof pkg?.name === "string") localOnlyPackages.add(pkg.name);
+      } catch {
+        /* skip */
+      }
+    }
+  }
+  for (const wsRel of localOnlyWorkspacePaths) {
+    const pkgPath = path.join(rootDir, wsRel, "package.json");
+    if (!fs.existsSync(pkgPath)) continue;
+    try {
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+      if (typeof pkg?.name === "string") localOnlyPackages.add(pkg.name);
+    } catch {
+      /* skip */
+    }
+  }
+  return localOnlyPackages;
+}
+
+export function rewriteWorkspaceDependencySpecifiers(
+  pkg,
+  pinnedVersions,
+  { localOnlyPackages = new Set() } = {},
+) {
   let mutated = false;
   for (const field of [...DEPENDENCY_FIELDS, "overrides"]) {
     const deps = pkg?.[field];
     if (!deps || typeof deps !== "object") continue;
     for (const [dependencyName, specifier] of Object.entries(deps)) {
+      if (localOnlyPackages.has(dependencyName)) {
+        continue;
+      }
       if (!isWorkspaceProtocolSpecifier(specifier)) {
         continue;
       }
@@ -292,6 +335,7 @@ export function disableLocalElizaWorkspace(
     process.env.MILADY_DISABLE_LOCAL_UPSTREAMS_RENAME === "1";
   const packageJsonPath = path.join(repoRoot, "package.json");
   const removedLockfiles = [];
+  const localOnlyPackages = resolveLocalOnlyWorkspacePackageNames(repoRoot);
 
   // Version resolution needs package.json files inside eliza/. When
   // MILADY_SKIP_LOCAL_UPSTREAMS=1, init-submodules.mjs intentionally
@@ -399,12 +443,27 @@ export function disableLocalElizaWorkspace(
       }
       // Also strip any explicit eliza/ paths (e.g. electrobun, cloud-agent-template)
       // that would vanish when eliza/ is renamed to .eliza.ci-disabled/
-      if (typeof entry === "string" && entry.startsWith("eliza/")) {
+      if (
+        typeof entry === "string" &&
+        entry.startsWith("eliza/") &&
+        !LOCAL_ONLY_WORKSPACE_GLOBS.includes(entry) &&
+        !LOCAL_ONLY_WORKSPACE_PATHS.includes(entry)
+      ) {
         removedWorkspaceGlobs.push(entry);
         return false;
       }
       return true;
     });
+
+    for (const workspacePath of LOCAL_ONLY_WORKSPACE_PATHS) {
+      const absoluteWorkspacePath = path.join(repoRoot, workspacePath);
+      if (
+        fs.existsSync(path.join(absoluteWorkspacePath, "package.json")) &&
+        !filteredWorkspaces.includes(workspacePath)
+      ) {
+        filteredWorkspaces.push(workspacePath);
+      }
+    }
 
     if (removedWorkspaceGlobs.length === 0) {
       log(
@@ -520,7 +579,11 @@ export function disableLocalElizaWorkspace(
   }
 
   let rewrites = 0;
-  if (rewriteWorkspaceDependencySpecifiers(rootPkg, pinnedWorkspaceVersions)) {
+  if (
+    rewriteWorkspaceDependencySpecifiers(rootPkg, pinnedWorkspaceVersions, {
+      localOnlyPackages,
+    })
+  ) {
     writePackageJson(packageJsonPath, rawRootPkg, rootPkg);
     rewrites++;
     log("[disable-local-eliza-workspace]   patched .");
@@ -542,7 +605,11 @@ export function disableLocalElizaWorkspace(
       continue;
     }
 
-    if (!rewriteWorkspaceDependencySpecifiers(pkg, pinnedWorkspaceVersions)) {
+    if (
+      !rewriteWorkspaceDependencySpecifiers(pkg, pinnedWorkspaceVersions, {
+        localOnlyPackages,
+      })
+    ) {
       continue;
     }
     if (writePackageJson(pkgPath, originalRaw, pkg)) {
