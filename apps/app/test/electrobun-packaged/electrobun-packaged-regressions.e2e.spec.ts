@@ -16,6 +16,9 @@ const RESET_REQUEST = "POST /api/agent/reset";
 const SETTINGS_SELECTOR = '[data-testid="settings-shell"]';
 const PLUGINS_SELECTOR = '[data-testid="plugins-shell"]';
 const ONBOARDING_SELECTOR = '[data-testid="onboarding-ui-overlay"]';
+const SETTINGS_ROUTE = "#/settings";
+const SETTINGS_MEDIA_ROUTE = "#/settings/voice";
+const PLUGINS_ROUTE = "#/apps/plugins";
 
 test.describe.configure({ mode: "serial" });
 
@@ -29,6 +32,46 @@ function getApiBaseExpression(): string {
     "window.__ELIZA_API_BASE__",
     "window.__MILADY_API_BASE__",
   ].join(" ?? ");
+}
+
+async function waitForEval<T>(
+  harness: PackagedDesktopHarness,
+  script: string,
+  predicate: (result: T) => boolean,
+  options: {
+    timeout: number;
+    message: string;
+  },
+): Promise<T> {
+  let lastResult: T | undefined;
+  try {
+    await expect
+      .poll(
+        async () => {
+          lastResult = await harness.eval<T>(script);
+          return predicate(lastResult);
+        },
+        {
+          timeout: options.timeout,
+          message: options.message,
+        },
+      )
+      .toBe(true);
+  } catch (error) {
+    const suffix =
+      typeof lastResult === "undefined"
+        ? "No renderer result was captured."
+        : `Last renderer result: ${JSON.stringify(lastResult)}`;
+    throw new Error(
+      `${options.message}\n${suffix}\n${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+
+  if (typeof lastResult === "undefined") {
+    throw new Error(options.message);
+  }
+
+  return lastResult;
 }
 
 async function writeHarnessScreenshot(
@@ -49,59 +92,131 @@ async function openRouteAndWait(
   hash: string,
   selector: string,
 ): Promise<void> {
-  const result = await harness.eval<
+  const result = await waitForEval<
     EvalResult<{
       hash: string;
       selector: string;
+      found: boolean;
       text: string;
     }>
   >(
-    `(() => new Promise((resolve) => {
+    harness,
+    `(() => {
+      try {
       const targetHash = ${JSON.stringify(hash)};
       const targetSelector = ${JSON.stringify(selector)};
-      const deadline = Date.now() + 20000;
-      const finish = (payload) => resolve(payload);
-      const check = () => {
-        try {
-          if (window.location.hash !== targetHash) {
-            window.location.hash = targetHash;
-          }
-          const node = document.querySelector(targetSelector);
-          if (node) {
-            finish({
-              ok: true,
-              hash: window.location.hash,
-              selector: targetSelector,
-              text: (node.textContent || "").replace(/\\s+/g, " ").trim().slice(0, 240),
-            });
-            return;
-          }
-        } catch (error) {
-          finish({
-            ok: false,
-            error: error instanceof Error ? error.message : String(error),
-          });
-          return;
-        }
-        if (Date.now() > deadline) {
-          finish({
-            ok: false,
-            error: \`Timed out waiting for \${targetSelector} at \${targetHash}; current hash=\${window.location.hash}\`,
-          });
-          return;
-        }
-        setTimeout(check, 120);
+      if (window.location.hash !== targetHash) {
+        window.location.hash = targetHash;
+      }
+      const node = document.querySelector(targetSelector);
+      return {
+        ok: true,
+        hash: window.location.hash,
+        selector: targetSelector,
+        found: Boolean(node),
+        text: (node?.textContent || "").replace(/\\s+/g, " ").trim().slice(0, 240),
       };
-      check();
-    }))()`,
+      } catch (error) {
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    })()`,
+    (current) =>
+      current.ok &&
+      current.hash === hash &&
+      current.selector === selector &&
+      current.found,
+    {
+      timeout: 20_000,
+      message: `Timed out waiting for ${selector} at ${hash}.`,
+    },
   );
 
   expect(result.ok, result.ok ? undefined : result.error).toBe(true);
 }
 
+async function waitForSettingsControls(
+  harness: PackagedDesktopHarness,
+): Promise<void> {
+  await waitForEval<
+    EvalResult<{
+      powerReady: boolean;
+      animateReady: boolean;
+    }>
+  >(
+    harness,
+    `(() => {
+      try {
+        if (window.location.hash !== ${JSON.stringify(SETTINGS_MEDIA_ROUTE)}) {
+          window.location.hash = ${JSON.stringify(SETTINGS_MEDIA_ROUTE)};
+        }
+        const powerRoot = document.querySelector('[data-testid="settings-companion-vrm-power"]');
+        const animateSwitch = document.querySelector('[data-testid="settings-companion-animate-when-hidden"] [role="switch"]');
+        const powerButtons = powerRoot ? Array.from(powerRoot.querySelectorAll("button")) : [];
+        const qualityButton = powerButtons.find((button) =>
+          /always quality/i.test((button.textContent || "").trim()),
+        );
+        return {
+          ok: true,
+          powerReady: Boolean(qualityButton),
+          animateReady: Boolean(animateSwitch),
+        };
+      } catch (error) {
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    })()`,
+    (current) => current.ok && current.powerReady && current.animateReady,
+    {
+      timeout: 20_000,
+      message: `Timed out waiting for media settings controls at ${SETTINGS_MEDIA_ROUTE}.`,
+    },
+  );
+}
+
+async function waitForProviderTrigger(
+  harness: PackagedDesktopHarness,
+): Promise<void> {
+  await waitForEval<
+    EvalResult<{
+      shellReady: boolean;
+      providerReady: boolean;
+    }>
+  >(
+    harness,
+    `(() => {
+      try {
+        if (window.location.hash !== ${JSON.stringify(SETTINGS_ROUTE)}) {
+          window.location.hash = ${JSON.stringify(SETTINGS_ROUTE)};
+        }
+        return {
+          ok: true,
+          shellReady: Boolean(document.querySelector(${JSON.stringify(SETTINGS_SELECTOR)})),
+          providerReady: Boolean(document.getElementById("provider-switcher-select")),
+        };
+      } catch (error) {
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    })()`,
+    (current) => current.ok && current.shellReady && current.providerReady,
+    {
+      timeout: 20_000,
+      message: `Timed out waiting for provider switcher at ${SETTINGS_ROUTE}.`,
+    },
+  );
+}
+
 async function setPersistedSettingsState(
   harness: PackagedDesktopHarness,
 ): Promise<void> {
+  await waitForSettingsControls(harness);
   const result = await harness.eval<
     EvalResult<{
       vrmPower: string | null;
@@ -110,89 +225,77 @@ async function setPersistedSettingsState(
       pluginOrder: string[];
     }>
   >(
-    `(() => new Promise((resolve) => {
-      const deadline = Date.now() + 20000;
-      const finish = (payload) => resolve(payload);
-      const check = async () => {
-        try {
-          if (window.location.hash !== "#voice") {
-            window.location.hash = "#voice";
-          }
-
-          const powerRoot = document.querySelector('[data-testid="settings-companion-vrm-power"]');
-          const animateSwitch = document.querySelector('[data-testid="settings-companion-animate-when-hidden"] [role="switch"]');
-          const powerButtons = powerRoot ? Array.from(powerRoot.querySelectorAll("button")) : [];
-          const qualityButton = powerButtons.find((button) =>
-            /always quality/i.test((button.textContent || "").trim()),
-          );
-
-          if (!qualityButton || !animateSwitch) {
-            if (Date.now() > deadline) {
-              finish({
-                ok: false,
-                error: "Timed out waiting for media settings controls in #voice.",
-              });
-              return;
-            }
-            setTimeout(check, 120);
-            return;
-          }
-
-          qualityButton.click();
-          if (animateSwitch.getAttribute("aria-checked") !== "true") {
-            animateSwitch.click();
-          }
-
-          const apiBase = ${getApiBaseExpression()};
-          if (!apiBase) {
-            finish({ ok: false, error: "Desktop renderer did not expose an API base." });
-            return;
-          }
-
-          const providerResponse = await fetch(\`\${apiBase}/api/provider/switch\`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              provider: "openai",
-              primaryModel: "gpt-5.4-nano",
-            }),
-          });
-          if (!providerResponse.ok) {
-            finish({
-              ok: false,
-              error: \`Provider switch failed (\${providerResponse.status})\`,
-            });
-            return;
-          }
-          const provider = await providerResponse.json();
-
-          const pluginOrder = [
-            "openai",
-            "ollama",
-            "streaming-base",
-            "discord",
-            "telegram",
-          ];
-          localStorage.setItem("pluginOrder", JSON.stringify(pluginOrder));
-
-          finish({
-            ok: true,
-            vrmPower: localStorage.getItem("eliza:companion-vrm-power"),
-            animateWhenHidden: localStorage.getItem(
-              "eliza:companion-animate-when-hidden",
-            ),
-            provider,
-            pluginOrder,
-          });
-        } catch (error) {
-          finish({
-            ok: false,
-            error: error instanceof Error ? error.message : String(error),
-          });
+    `(async () => {
+      try {
+        if (window.location.hash !== ${JSON.stringify(SETTINGS_MEDIA_ROUTE)}) {
+          window.location.hash = ${JSON.stringify(SETTINGS_MEDIA_ROUTE)};
         }
-      };
-      void check();
-    }))()`,
+
+        const powerRoot = document.querySelector('[data-testid="settings-companion-vrm-power"]');
+        const animateSwitch = document.querySelector('[data-testid="settings-companion-animate-when-hidden"] [role="switch"]');
+        const powerButtons = powerRoot ? Array.from(powerRoot.querySelectorAll("button")) : [];
+        const qualityButton = powerButtons.find((button) =>
+          /always quality/i.test((button.textContent || "").trim()),
+        );
+
+        if (!qualityButton || !animateSwitch) {
+          return {
+            ok: false,
+            error: "Media settings controls were not ready when applying persisted state.",
+          };
+        }
+
+        qualityButton.click();
+        if (animateSwitch.getAttribute("aria-checked") !== "true") {
+          animateSwitch.click();
+        }
+
+        const apiBase = ${getApiBaseExpression()};
+        if (!apiBase) {
+          return { ok: false, error: "Desktop renderer did not expose an API base." };
+        }
+
+        const providerResponse = await fetch(\`\${apiBase}/api/provider/switch\`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            provider: "openai",
+            primaryModel: "gpt-5.4-nano",
+          }),
+        });
+        if (!providerResponse.ok) {
+          return {
+            ok: false,
+            error: \`Provider switch failed (\${providerResponse.status})\`,
+          };
+        }
+        const provider = await providerResponse.json();
+
+        const pluginOrder = [
+          "openai",
+          "ollama",
+          "streaming-base",
+          "discord",
+          "telegram",
+        ];
+        localStorage.setItem("pluginOrder", JSON.stringify(pluginOrder));
+
+        return {
+          ok: true,
+          vrmPower: localStorage.getItem("eliza:companion-vrm-power"),
+          animateWhenHidden: localStorage.getItem(
+            "eliza:companion-animate-when-hidden",
+          ),
+          provider,
+          pluginOrder,
+        };
+      } catch (error) {
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    })()`,
   );
 
   expect(result.ok, result.ok ? undefined : result.error).toBe(true);
@@ -214,6 +317,7 @@ async function readPersistedSettingsState(
   providerLabel: string | null;
   backend: string | null;
 }> {
+  await waitForProviderTrigger(harness);
   const result = await harness.eval<
     EvalResult<{
       vrmPower: string | null;
@@ -222,74 +326,61 @@ async function readPersistedSettingsState(
       backend: string | null;
     }>
   >(
-    `(() => new Promise((resolve) => {
-      const deadline = Date.now() + 20000;
-      const finish = (payload) => resolve(payload);
-      const check = async () => {
-        try {
-          if (window.location.hash !== "#settings") {
-            window.location.hash = "#settings";
-          }
-          const shell = document.querySelector(${JSON.stringify(SETTINGS_SELECTOR)});
-          const providerTrigger = document.getElementById("provider-switcher-select");
-          if (!shell || !providerTrigger) {
-            if (Date.now() > deadline) {
-              finish({
-                ok: false,
-                error: "Timed out waiting for provider switcher in #settings.",
-              });
-              return;
-            }
-            setTimeout(check, 120);
-            return;
-          }
-
-          const apiBase = ${getApiBaseExpression()};
-          if (!apiBase) {
-            finish({ ok: false, error: "Desktop renderer did not expose an API base." });
-            return;
-          }
-
-          const configResponse = await fetch(\`\${apiBase}/api/config\`);
-          if (!configResponse.ok) {
-            finish({
-              ok: false,
-              error: \`Config fetch failed (\${configResponse.status})\`,
-            });
-            return;
-          }
-          const config = await configResponse.json();
-          const backend =
-            config &&
-            typeof config === "object" &&
-            config.serviceRouting &&
-            typeof config.serviceRouting === "object" &&
-            config.serviceRouting.llmText &&
-            typeof config.serviceRouting.llmText === "object" &&
-            typeof config.serviceRouting.llmText.backend === "string"
-              ? config.serviceRouting.llmText.backend
-              : null;
-
-          finish({
-            ok: true,
-            vrmPower: localStorage.getItem("eliza:companion-vrm-power"),
-            animateWhenHidden: localStorage.getItem(
-              "eliza:companion-animate-when-hidden",
-            ),
-            providerLabel: (providerTrigger.textContent || "")
-              .replace(/\\s+/g, " ")
-              .trim(),
-            backend,
-          });
-        } catch (error) {
-          finish({
-            ok: false,
-            error: error instanceof Error ? error.message : String(error),
-          });
+    `(async () => {
+      try {
+        if (window.location.hash !== ${JSON.stringify(SETTINGS_ROUTE)}) {
+          window.location.hash = ${JSON.stringify(SETTINGS_ROUTE)};
         }
-      };
-      void check();
-    }))()`,
+        const providerTrigger = document.getElementById("provider-switcher-select");
+        if (!providerTrigger) {
+          return {
+            ok: false,
+            error: "Provider switcher was not ready when reading persisted settings.",
+          };
+        }
+
+        const apiBase = ${getApiBaseExpression()};
+        if (!apiBase) {
+          return { ok: false, error: "Desktop renderer did not expose an API base." };
+        }
+
+        const configResponse = await fetch(\`\${apiBase}/api/config\`);
+        if (!configResponse.ok) {
+          return {
+            ok: false,
+            error: \`Config fetch failed (\${configResponse.status})\`,
+          };
+        }
+        const config = await configResponse.json();
+        const backend =
+          config &&
+          typeof config === "object" &&
+          config.serviceRouting &&
+          typeof config.serviceRouting === "object" &&
+          config.serviceRouting.llmText &&
+          typeof config.serviceRouting.llmText === "object" &&
+          typeof config.serviceRouting.llmText.backend === "string"
+            ? config.serviceRouting.llmText.backend
+            : null;
+
+        return {
+          ok: true,
+          vrmPower: localStorage.getItem("eliza:companion-vrm-power"),
+          animateWhenHidden: localStorage.getItem(
+            "eliza:companion-animate-when-hidden",
+          ),
+          providerLabel: (providerTrigger.textContent || "")
+            .replace(/\\s+/g, " ")
+            .trim(),
+          backend,
+        };
+      } catch (error) {
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    })()`,
   );
 
   expect(result.ok, result.ok ? undefined : result.error).toBe(true);
@@ -303,41 +394,34 @@ async function readPersistedSettingsState(
 async function readPluginOrder(
   harness: PackagedDesktopHarness,
 ): Promise<string[]> {
-  const result = await harness.eval<EvalResult<{ ids: string[] }>>(
-    `(() => new Promise((resolve) => {
-      const deadline = Date.now() + 20000;
-      const finish = (payload) => resolve(payload);
-      const check = () => {
-        try {
-          if (window.location.hash !== "#plugins") {
-            window.location.hash = "#plugins";
-          }
-          const shell = document.querySelector(${JSON.stringify(PLUGINS_SELECTOR)});
-          const ids = Array.from(document.querySelectorAll("li[data-plugin-id]"))
-            .map((node) => node.getAttribute("data-plugin-id"))
-            .filter((value) => typeof value === "string");
-          if (shell && ids.length >= 2) {
-            finish({ ok: true, ids });
-            return;
-          }
-        } catch (error) {
-          finish({
-            ok: false,
-            error: error instanceof Error ? error.message : String(error),
-          });
-          return;
+  const result = await waitForEval<EvalResult<{ ids: string[] }>>(
+    harness,
+    `(() => {
+      try {
+        if (window.location.hash !== ${JSON.stringify(PLUGINS_ROUTE)}) {
+          window.location.hash = ${JSON.stringify(PLUGINS_ROUTE)};
         }
-        if (Date.now() > deadline) {
-          finish({
-            ok: false,
-            error: "Timed out waiting for plugin cards in #plugins.",
-          });
-          return;
-        }
-        setTimeout(check, 120);
-      };
-      check();
-    }))()`,
+        const shell = document.querySelector(${JSON.stringify(PLUGINS_SELECTOR)});
+        const ids = Array.from(document.querySelectorAll("li[data-plugin-id]"))
+          .map((node) => node.getAttribute("data-plugin-id"))
+          .filter((value) => typeof value === "string");
+        return {
+          ok: true,
+          shellReady: Boolean(shell),
+          ids,
+        };
+      } catch (error) {
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    })()`,
+    (current) => current.ok && current.ids.length >= 2,
+    {
+      timeout: 20_000,
+      message: `Timed out waiting for plugin cards at ${PLUGINS_ROUTE}.`,
+    },
   );
 
   expect(result.ok, result.ok ? undefined : result.error).toBe(true);
@@ -391,47 +475,76 @@ async function seedResettableState(
 async function triggerSettingsReset(
   harness: PackagedDesktopHarness,
 ): Promise<void> {
-  const result = await harness.eval<EvalResult<{ label: string }>>(
-    `(() => new Promise((resolve) => {
-      const deadline = Date.now() + 20000;
-      const finish = (payload) => resolve(payload);
-      const check = () => {
-        try {
-          if (window.location.hash !== "#settings") {
-            window.location.hash = "#settings";
-          }
-          const buttons = Array.from(
-            document.querySelectorAll('[data-testid="settings-shell"] button'),
-          );
-          const resetButton = buttons.find((button) =>
-            /reset/i.test((button.textContent || "").trim()),
-          );
-          if (resetButton) {
-            resetButton.click();
-            finish({
+  const buttonState = await waitForEval<EvalResult<{ label: string }>>(
+    harness,
+    `(() => {
+      try {
+        if (window.location.hash !== ${JSON.stringify(SETTINGS_ROUTE)}) {
+          window.location.hash = ${JSON.stringify(SETTINGS_ROUTE)};
+        }
+        const buttons = Array.from(
+          document.querySelectorAll('[data-testid="settings-shell"] button'),
+        );
+        const resetButton = buttons.find((button) =>
+          /reset/i.test((button.textContent || "").trim()),
+        );
+        return resetButton
+          ? {
               ok: true,
               label: (resetButton.textContent || "").trim(),
-            });
-            return;
-          }
-        } catch (error) {
-          finish({
-            ok: false,
-            error: error instanceof Error ? error.message : String(error),
-          });
-          return;
+            }
+          : {
+              ok: false,
+              error: "Timed out waiting for the Settings reset button.",
+            };
+      } catch (error) {
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    })()`,
+    (current) => current.ok,
+    {
+      timeout: 20_000,
+      message: "Timed out waiting for the Settings reset button.",
+    },
+  );
+
+  expect(buttonState.ok, buttonState.ok ? undefined : buttonState.error).toBe(
+    true,
+  );
+
+  const result = await harness.eval<EvalResult<{ label: string }>>(
+    `(() => {
+      try {
+        if (window.location.hash !== ${JSON.stringify(SETTINGS_ROUTE)}) {
+          window.location.hash = ${JSON.stringify(SETTINGS_ROUTE)};
         }
-        if (Date.now() > deadline) {
-          finish({
+        const buttons = Array.from(
+          document.querySelectorAll('[data-testid="settings-shell"] button'),
+        );
+        const resetButton = buttons.find((button) =>
+          /reset/i.test((button.textContent || "").trim()),
+        );
+        if (!resetButton) {
+          return {
             ok: false,
-            error: "Timed out waiting for the Settings reset button.",
-          });
-          return;
+            error: "Settings reset button disappeared before click.",
+          };
         }
-        setTimeout(check, 120);
-      };
-      check();
-    }))()`,
+        resetButton.click();
+        return {
+          ok: true,
+          label: (resetButton.textContent || "").trim(),
+        };
+      } catch (error) {
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    })()`,
   );
 
   expect(result.ok, result.ok ? undefined : result.error).toBe(true);
@@ -440,50 +553,45 @@ async function triggerSettingsReset(
 async function waitForResetUiState(
   harness: PackagedDesktopHarness,
 ): Promise<void> {
-  const result = await harness.eval<
+  const result = await waitForEval<
     EvalResult<{
       hash: string;
+      overlayVisible: boolean;
       onboardingComplete: string | null;
       activeServer: string | null;
     }>
   >(
-    `(() => new Promise((resolve) => {
-      const deadline = Date.now() + 90000;
-      const finish = (payload) => resolve(payload);
-      const check = () => {
-        try {
-          const overlayVisible = Boolean(
-            document.querySelector(${JSON.stringify(ONBOARDING_SELECTOR)}),
-          );
-          const onboardingComplete = localStorage.getItem("eliza:onboarding-complete");
-          const activeServer = localStorage.getItem("elizaos:active-server");
-          if (overlayVisible && onboardingComplete !== "1" && activeServer == null) {
-            finish({
-              ok: true,
-              hash: window.location.hash,
-              onboardingComplete,
-              activeServer,
-            });
-            return;
-          }
-          if (Date.now() > deadline) {
-            finish({
-              ok: false,
-              error: \`Timed out waiting for onboarding reset overlay; hash=\${window.location.hash} onboardingComplete=\${onboardingComplete} activeServer=\${activeServer}\`,
-            });
-            return;
-          }
-        } catch (error) {
-          finish({
-            ok: false,
-            error: error instanceof Error ? error.message : String(error),
-          });
-          return;
-        }
-        setTimeout(check, 200);
-      };
-      check();
-    }))()`,
+    harness,
+    `(() => {
+      try {
+        const overlayVisible = Boolean(
+          document.querySelector(${JSON.stringify(ONBOARDING_SELECTOR)}),
+        );
+        const onboardingComplete = localStorage.getItem("eliza:onboarding-complete");
+        const activeServer = localStorage.getItem("elizaos:active-server");
+        return {
+          ok: true,
+          hash: window.location.hash,
+          overlayVisible,
+          onboardingComplete,
+          activeServer,
+        };
+      } catch (error) {
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    })()`,
+    (current) =>
+      current.ok &&
+      current.overlayVisible === true &&
+      current.onboardingComplete !== "1" &&
+      current.activeServer == null,
+    {
+      timeout: 90_000,
+      message: "Timed out waiting for onboarding reset overlay.",
+    },
   );
 
   expect(result.ok, result.ok ? undefined : result.error).toBe(true);
@@ -602,7 +710,7 @@ test("packaged desktop persists media, provider, and plugin state across relaunc
   );
 
   await withPackagedHarness(async ({ harness }) => {
-    await openRouteAndWait(harness, "#voice", SETTINGS_SELECTOR);
+    await openRouteAndWait(harness, SETTINGS_MEDIA_ROUTE, SETTINGS_SELECTOR);
     await setPersistedSettingsState(harness);
     await writeHarnessScreenshot(
       harness,
@@ -612,7 +720,7 @@ test("packaged desktop persists media, provider, and plugin state across relaunc
 
     await harness.relaunch();
 
-    await openRouteAndWait(harness, "#settings", SETTINGS_SELECTOR);
+    await openRouteAndWait(harness, SETTINGS_ROUTE, SETTINGS_SELECTOR);
     const settingsState = await readPersistedSettingsState(harness);
     expect(settingsState.vrmPower).toBe("quality");
     expect(settingsState.animateWhenHidden).toBe("1");
@@ -624,7 +732,7 @@ test("packaged desktop persists media, provider, and plugin state across relaunc
       "persistence-settings-after-relaunch",
     );
 
-    await openRouteAndWait(harness, "#plugins", PLUGINS_SELECTOR);
+    await openRouteAndWait(harness, PLUGINS_ROUTE, PLUGINS_SELECTOR);
     const pluginIds = await readPluginOrder(harness);
     expect(pluginIds.slice(0, 2)).toEqual(["openai", "ollama"]);
     await writeHarnessScreenshot(
@@ -642,7 +750,7 @@ test("packaged desktop reset from Settings returns the shell to onboarding", asy
   );
 
   await withPackagedHarness(async ({ api, harness }) => {
-    await openRouteAndWait(harness, "#settings", SETTINGS_SELECTOR);
+    await openRouteAndWait(harness, SETTINGS_ROUTE, SETTINGS_SELECTOR);
     await seedResettableState(harness);
     await triggerSettingsReset(harness);
     await waitForResetRequest(api);
@@ -658,7 +766,7 @@ test("packaged desktop reset from the application menu returns the shell to onbo
   );
 
   await withPackagedHarness(async ({ api, harness }) => {
-    await openRouteAndWait(harness, "#settings", SETTINGS_SELECTOR);
+    await openRouteAndWait(harness, SETTINGS_ROUTE, SETTINGS_SELECTOR);
     await seedResettableState(harness);
     await harness.menuAction("reset-app");
     await waitForResetRequest(api);
