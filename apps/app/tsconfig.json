@@ -59,6 +59,7 @@
     }
   },
   "include": [
+    "src/**/*.d.ts",
     "src/**/*.ts",
     "src/**/*.tsx",
     "../../eliza/packages/app-core/src/ambient-modules.d.ts",
