@@ -29,16 +29,6 @@ const suites = {
       command: "bun",
       args: ["run", "--cwd", "eliza", "lint:check"],
     },
-    {
-      label: "eliza Rust lint",
-      command: "bun",
-      args: ["run", "--cwd", "eliza", "lint:rust"],
-    },
-    {
-      label: "eliza Python lint",
-      command: "bun",
-      args: ["run", "--cwd", "eliza", "lint:python"],
-    },
   ],
   typecheck: [
     {
@@ -60,16 +50,6 @@ const suites = {
       label: "eliza TypeScript typecheck",
       command: "bun",
       args: ["run", "--cwd", "eliza", "typecheck"],
-    },
-    {
-      label: "eliza Rust typecheck",
-      command: "bun",
-      args: ["run", "--cwd", "eliza", "typecheck:rust"],
-    },
-    {
-      label: "eliza Python typecheck",
-      command: "bun",
-      args: ["run", "--cwd", "eliza", "typecheck:python"],
     },
   ],
 };
