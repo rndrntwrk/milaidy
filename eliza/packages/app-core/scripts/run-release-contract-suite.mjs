@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
+const REPO_ROOT = path.resolve(ROOT, "..", "..", "..", "..");
 
 function run(command, args) {
   const result = spawnSync(command, args, {
@@ -33,7 +34,7 @@ run("bunx", [
   "scripts/release-check.test.ts",
   "scripts/static-asset-manifest.test.ts",
 ]);
-run("bun", ["run", "test:startup:contract"]);
+run("bun", ["run", "test:startup:contract"], REPO_ROOT);
 
 run("bunx", ["tsdown"]);
 fs.mkdirSync(path.join(ROOT, "dist"), { recursive: true });
@@ -45,4 +46,4 @@ run("node", ["--import", "tsx", "scripts/write-build-info.ts"]);
 // Regenerate static asset manifest from the CI build output so hashes
 // match what release:check will validate.
 run("node", ["scripts/generate-static-asset-manifest.mjs"]);
-run("bun", ["run", "release:check"]);
+run("bun", ["run", "release:check"], REPO_ROOT);
