@@ -226,9 +226,7 @@ export async function installCloudWalletImportApiOverrides(
     }
     if (req.method() === "PUT") {
       const raw = req.postData();
-      lastWalletPut = raw
-        ? (JSON.parse(raw) as Record<string, unknown>)
-        : null;
+      lastWalletPut = raw ? (JSON.parse(raw) as Record<string, unknown>) : null;
       const selections = lastWalletPut?.selections as
         | typeof walletConfigState.selectedRpcProviders
         | undefined;
