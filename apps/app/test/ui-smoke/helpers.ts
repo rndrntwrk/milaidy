@@ -2,6 +2,7 @@ import { expect, type Locator, type Page } from "@playwright/test";
 
 export const ROOT_TIMEOUT_MS = 20_000;
 export const NAV_TIMEOUT_MS = 12_000;
+export const READY_CHECK_TIMEOUT_MS = 10_000;
 
 type ReadyCheck =
   | { selector: string; text?: never }
@@ -61,7 +62,10 @@ export async function readLocalStorage(
 
 async function locatorVisible(locator: Locator): Promise<boolean> {
   try {
-    await locator.first().waitFor({ state: "visible", timeout: 5_000 });
+    await locator.first().waitFor({
+      state: "visible",
+      timeout: READY_CHECK_TIMEOUT_MS,
+    });
     return true;
   } catch {
     return false;

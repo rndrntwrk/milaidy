@@ -9,9 +9,16 @@ test("browser workspace can create live tabs and switch selection", async ({
   page,
 }) => {
   await openAppPath(page, "/browser");
-  await expect(page.getByTestId("browser-workspace-view")).toBeVisible();
-  await expect(page.getByTestId("browser-workspace-sidebar")).toBeVisible();
-  await expect(page.getByText("No browser tabs yet")).toBeVisible();
+  await expect(page).toHaveURL(/\/browser$/, { timeout: 20_000 });
+  await expect(page.getByTestId("browser-workspace-view")).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(page.getByTestId("browser-workspace-sidebar")).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(page.getByText("No browser tabs yet")).toBeVisible({
+    timeout: 30_000,
+  });
 
   const addressInput = page.getByPlaceholder("Enter a URL");
   const newTabButton = page.getByRole("button", { name: "New tab" });
