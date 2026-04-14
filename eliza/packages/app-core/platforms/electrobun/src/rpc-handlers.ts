@@ -90,19 +90,10 @@ type ElectrobunRpcWithHandlers = {
   setRequestHandler?: (handlers: Record<string, (params: any) => any>) => void;
 };
 
-export function formatRendererDiagnosticLine(params?: {
-  source?: string;
-  message?: string;
-  details?: unknown;
-} | null): string {
-  const source = params?.source ?? "renderer";
-  const message = params?.message?.trim() || "(no message)";
-  const details =
-    typeof params?.details === "undefined"
-      ? ""
-      : ` ${JSON.stringify(params.details)}`;
-  return `[Renderer:${source}] ${message}${details}`;
-}
+export {
+  formatRendererDiagnosticLine,
+  redactDiagnosticUrl,
+} from "./diagnostic-format";
 
 /**
  * Register all RPC request handlers on the given rpc instance.

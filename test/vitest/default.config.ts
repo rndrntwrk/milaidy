@@ -189,6 +189,12 @@ export default defineConfig({
       // correct @elizaos/app-core alias resolution. Running both in parallel
       // causes file-system race conditions on shared test fixtures.
       "eliza/packages/app-core/src/**/*.test.ts",
+      // Platform-colocated tests that don't depend on native Electrobun bindings.
+      // rpc-handlers.test.ts and native/agent.test.ts require the full Electrobun
+      // runtime and run only in the desktop-contract suite.
+      "eliza/packages/app-core/platforms/electrobun/src/menu-reset-from-main.test.ts",
+      "eliza/packages/app-core/platforms/electrobun/src/diagnostic-format.test.ts",
+      "eliza/packages/app-core/platforms/electrobun/src/native/steward.test.ts",
       "eliza/packages/shared/src/**/*.test.ts",
       "eliza/packages/app-core/src/**/*.test.tsx",
       "eliza/packages/agent/src/runtime/roles/test/**/*.test.ts",
