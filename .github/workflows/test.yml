@@ -43,7 +43,7 @@ jobs:
         uses: ./.github/actions/setup-bun-workspace
         with:
           bun-version: ${{ env.BUN_VERSION }}
-          disable-local-eliza-workspace: "false"
+          disable-local-eliza-workspace: "true"
           install-command: bun install --ignore-scripts --no-frozen-lockfile
           install-native-deps: "false"
           run-postinstall: "false"
@@ -73,6 +73,7 @@ jobs:
         uses: ./.github/actions/setup-bun-workspace
         with:
           bun-version: ${{ env.BUN_VERSION }}
+          disable-local-eliza-workspace: "true"
           skip-avatar-clone: "true"
           no-vision-deps: "true"
 
@@ -112,6 +113,7 @@ jobs:
         uses: ./.github/actions/setup-bun-workspace
         with:
           bun-version: ${{ env.BUN_VERSION }}
+          disable-local-eliza-workspace: "true"
           skip-avatar-clone: "true"
           no-vision-deps: "true"
 
@@ -496,7 +498,7 @@ jobs:
         uses: ./.github/actions/setup-bun-workspace
         with:
           bun-version: ${{ env.BUN_VERSION }}
-          disable-local-eliza-workspace: "false"
+          disable-local-eliza-workspace: "true"
           install-command: bun install --ignore-scripts --no-frozen-lockfile
 
       - name: Restore eliza workspace paths for repo scripts
@@ -531,6 +533,7 @@ jobs:
         uses: ./.github/actions/setup-bun-workspace
         with:
           bun-version: ${{ env.BUN_VERSION }}
+          disable-local-eliza-workspace: "true"
           skip-avatar-clone: "true"
           no-vision-deps: "true"
 
@@ -567,7 +570,7 @@ jobs:
         uses: ./.github/actions/setup-bun-workspace
         with:
           bun-version: ${{ env.BUN_VERSION }}
-          disable-local-eliza-workspace: "false"
+          disable-local-eliza-workspace: "true"
           install-command: bun install --ignore-scripts --no-frozen-lockfile
 
       - name: Restore eliza workspace paths for repo scripts
@@ -600,6 +603,7 @@ jobs:
         uses: ./.github/actions/setup-bun-workspace
         with:
           bun-version: ${{ env.BUN_VERSION }}
+          disable-local-eliza-workspace: "true"
           skip-avatar-clone: "true"
           no-vision-deps: "true"
 
