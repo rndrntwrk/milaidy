@@ -37,6 +37,11 @@ test("inventory Import from Eliza Cloud sends eliza-cloud RPC and hits steward-s
     solana: "eliza-cloud",
   });
 
-  // Mount loads steward once; saving wallet RPC triggers another refresh.
+  // steward-status is fetched at least twice:
+  //   1. On mount — WalletView polls /api/steward/status to show connection state.
+  //   2. After "Import from Eliza Cloud" save — the wallet-config PUT triggers a
+  //      re-fetch so the UI reflects the newly-provisioned Steward bridge.
+  // ≥2 (not exactly 2) because React strict-mode double-mounts in dev add an
+  // extra call, and future UI additions may add more legitimate fetches.
   expect(api.stewardStatusRequestCount()).toBeGreaterThanOrEqual(2);
 });
