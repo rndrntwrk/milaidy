@@ -60,11 +60,14 @@ export async function readLocalStorage(
   return page.evaluate((storageKey) => localStorage.getItem(storageKey), key);
 }
 
-async function locatorVisible(locator: Locator): Promise<boolean> {
+async function locatorVisible(
+  locator: Locator,
+  timeoutMs: number = READY_CHECK_TIMEOUT_MS,
+): Promise<boolean> {
   try {
     await locator.first().waitFor({
       state: "visible",
-      timeout: READY_CHECK_TIMEOUT_MS,
+      timeout: timeoutMs,
     });
     return true;
   } catch {
@@ -93,6 +96,7 @@ async function evaluateReadyChecks(
   page: Page,
   checks: ReadyCheck[],
   mode: "any" | "all" = "any",
+  timeoutMs: number = READY_CHECK_TIMEOUT_MS,
 ): Promise<{
   passed: boolean;
   results: EvaluatedReadyCheck[];
@@ -103,13 +107,13 @@ async function evaluateReadyChecks(
     if ("selector" in check) {
       results.push({
         check,
-        passed: await locatorVisible(page.locator(check.selector)),
+        passed: await locatorVisible(page.locator(check.selector), timeoutMs),
       });
       continue;
     }
     results.push({
       check,
-      passed: await locatorVisible(page.getByText(check.text)),
+      passed: await locatorVisible(page.getByText(check.text), timeoutMs),
     });
   }
 
@@ -124,8 +128,9 @@ export async function assertReadyChecks(
   label: string,
   checks: ReadyCheck[],
   mode: "any" | "all" = "any",
+  timeoutMs: number = READY_CHECK_TIMEOUT_MS,
 ): Promise<void> {
-  const evaluation = await evaluateReadyChecks(page, checks, mode);
+  const evaluation = await evaluateReadyChecks(page, checks, mode, timeoutMs);
   const summary = evaluation.results
     .map(
       (result) =>
@@ -144,8 +149,9 @@ export async function runSoftReadyChecks(
   label: string,
   checks: ReadyCheck[],
   mode: "any" | "all" = "any",
+  timeoutMs: number = READY_CHECK_TIMEOUT_MS,
 ): Promise<void> {
-  const evaluation = await evaluateReadyChecks(page, checks, mode);
+  const evaluation = await evaluateReadyChecks(page, checks, mode, timeoutMs);
   if (evaluation.passed) {
     return;
   }

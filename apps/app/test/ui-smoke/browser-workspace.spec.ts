@@ -13,14 +13,21 @@ test("browser workspace can create live tabs and switch selection", async ({
   await expect(page.getByTestId("browser-workspace-view")).toBeVisible({
     timeout: 30_000,
   });
-  await expect(page.getByTestId("browser-workspace-sidebar")).toBeVisible({
-    timeout: 30_000,
-  });
+
+  const addressInput = page.getByPlaceholder("Enter a URL");
+  if (!(await addressInput.isVisible())) {
+    const expandToggle = page.getByTestId(
+      "browser-workspace-sidebar-expand-toggle",
+    );
+    if (await expandToggle.isVisible()) {
+      await expandToggle.click();
+    }
+  }
+
+  await expect(addressInput).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText("No browser tabs yet")).toBeVisible({
     timeout: 30_000,
   });
-
-  const addressInput = page.getByPlaceholder("Enter a URL");
   const newTabButton = page.getByRole("button", { name: "New tab" });
 
   await addressInput.fill("example.com");
