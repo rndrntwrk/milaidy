@@ -1231,6 +1231,14 @@ export default defineConfig({
 
         return [
           ...generatedAliases,
+          // Fallback: catch any @elizaos/app-core sub-path not covered by the
+          // dynamic export-map aliases above (e.g. when the published package
+          // uses conditional exports objects and the `typeof value === "string"`
+          // guard skips them).  Maps directly to the local src/ tree.
+          {
+            find: /^@elizaos\/app-core\/(.+)$/,
+            replacement: `${appCorePkgDir}/src/$1`,
+          },
           {
             find: /^@miladyai\/ui$/,
             replacement: path.join(uiSource, "index.ts"),

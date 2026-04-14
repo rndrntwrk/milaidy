@@ -16,12 +16,6 @@
       "autoPort": true
     },
     {
-      "name": "home",
-      "runtimeExecutable": "/bin/zsh",
-      "runtimeArgs": ["-l", "-c", "cd apps/home && npx vite --port 2140"],
-      "port": 2140
-    },
-    {
       "name": "homepage",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev:homepage"],
