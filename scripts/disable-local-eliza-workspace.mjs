@@ -750,8 +750,15 @@ export function disableLocalElizaWorkspace(
 
   const seen = new Set();
   const pendingWorkspaceDirs = [];
+  const rewriteWorkspaceEntries = [
+    ...(rootPkg.workspaces ?? []),
+    ...removedWorkspaceGlobs,
+  ];
 
-  for (const entry of rootPkg.workspaces ?? []) {
+  // In rewrite-only CI the eliza/ checkout stays on disk even after we remove
+  // its globs from the root workspace graph. Keep rewriting those package.json
+  // files too, because release-check still validates their pinned specs.
+  for (const entry of rewriteWorkspaceEntries) {
     const expanded = expandGlob(entry, { rootDir: repoRoot });
     for (const match of expanded) {
       if (!seen.has(match)) {
