@@ -19,19 +19,32 @@ jobs:
     name: desktop preload preflight (windows)
     runs-on: windows-latest
     steps:
+      - name: Enable long paths (Windows)
+        run: git config --system core.longpaths true
+
       - uses: actions/checkout@v4
         with:
           submodules: false
           sparse-checkout: |
-            /*
-            !eliza/packages/benchmarks/benchmark_results/**
+            /package.json
+            /bun.lock
+            /bunfig.toml
+            /tsconfig.json
+            apps/
+            packages/
+            scripts/
+            eliza/apps/
+            eliza/packages/app-core/
+            eliza/packages/native-plugins/
+            eliza/packages/typescript/
+            eliza/packages/shared/
+            eliza/packages/agent/
+            eliza/packages/server/
+            eliza/plugins/
           sparse-checkout-cone-mode: false
 
       - name: Initialize workspace submodules
         run: node scripts/init-submodules.mjs
-
-      - name: Enable long paths (Windows)
-        run: git config --global core.longpaths true
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -44,13 +57,26 @@ jobs:
           bun-version: "1.3.11"
 
       - name: Disable repo-local eliza workspace
+        env:
+          MILADY_SKIP_LOCAL_UPSTREAMS: "1"
         run: node scripts/disable-local-eliza-workspace.mjs
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile --ignore-scripts
+        run: bun install --ignore-scripts --no-frozen-lockfile
+
+      - name: Restore eliza workspace paths for build scripts
+        run: |
+          if ((Test-Path ".eliza.ci-disabled") -and -not (Test-Path "eliza")) {
+            Move-Item -LiteralPath ".eliza.ci-disabled" -Destination "eliza"
+          }
+
+      - name: Install desktop package dependencies
+        run: |
+          bun install --cwd eliza/packages/app-core --ignore-scripts
+          bun install --cwd apps/app/electrobun --ignore-scripts
 
       - name: Run repository postinstall patches
-        run: bun run postinstall
+        run: node eliza/packages/app-core/scripts/run-repo-setup.mjs
         env:
           MILADY_SKIP_LOCAL_UPSTREAMS: "1"
           SKIP_AVATAR_CLONE: "1"

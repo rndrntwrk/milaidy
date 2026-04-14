@@ -246,6 +246,14 @@ jobs:
         with:
           submodules: false
       - uses: ./.github/actions/setup-bun-workspace
+        with:
+          disable-local-eliza-workspace: "true"
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+      - name: Restore eliza workspace paths for release scripts
+        run: |
+          if [ -d ".eliza.ci-disabled" ] && [ ! -d "eliza" ]; then
+            mv .eliza.ci-disabled eliza
+          fi
       - name: Build
         run: |
           bunx tsdown
@@ -497,6 +505,14 @@ jobs:
         with:
           submodules: false
       - uses: ./.github/actions/setup-bun-workspace
+        with:
+          disable-local-eliza-workspace: "true"
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+      - name: Restore eliza workspace paths for homepage scripts
+        run: |
+          if [ -d ".eliza.ci-disabled" ] && [ ! -d "eliza" ]; then
+            mv .eliza.ci-disabled eliza
+          fi
       - name: Generate release metadata
         run: node eliza/packages/app-core/scripts/write-homepage-release-data.mjs || echo "::warning::Release metadata gen failed"
         env:

@@ -30,7 +30,14 @@ jobs:
         uses: ./.github/actions/setup-bun-workspace
         with:
           bun-version: ${{ env.BUN_VERSION }}
-          install-command: bun install --frozen-lockfile --ignore-scripts
+          disable-local-eliza-workspace: "true"
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+
+      - name: Restore eliza workspace paths for repo scripts
+        run: |
+          if [ -d ".eliza.ci-disabled" ] && [ ! -d "eliza" ]; then
+            mv .eliza.ci-disabled eliza
+          fi
 
       - name: Biome lint
         run: bun run verify:lint
@@ -54,7 +61,14 @@ jobs:
         uses: ./.github/actions/setup-bun-workspace
         with:
           bun-version: ${{ env.BUN_VERSION }}
-          install-command: bun install --frozen-lockfile --ignore-scripts
+          disable-local-eliza-workspace: "true"
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+
+      - name: Restore eliza workspace paths for repo scripts
+        run: |
+          if [ -d ".eliza.ci-disabled" ] && [ ! -d "eliza" ]; then
+            mv .eliza.ci-disabled eliza
+          fi
 
       - name: Run type checker
         run: bun run verify:typecheck
@@ -75,10 +89,17 @@ jobs:
         uses: ./.github/actions/setup-bun-workspace
         with:
           bun-version: ${{ env.BUN_VERSION }}
-          install-command: bun install --frozen-lockfile --ignore-scripts
+          disable-local-eliza-workspace: "true"
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+
+      - name: Restore eliza workspace paths for repo scripts
+        run: |
+          if [ -d ".eliza.ci-disabled" ] && [ ! -d "eliza" ]; then
+            mv .eliza.ci-disabled eliza
+          fi
 
       - name: Run onboarding voice regression tests
-        run: bunx vitest run eliza/packages/app-core/src/components/onboarding/identity-preview-tts.test.ts
+        run: bunx vitest run eliza/packages/app-core/src/onboarding/tests/flow.test.ts
         env:
           NODE_NO_WARNINGS: "1"
 
@@ -98,7 +119,14 @@ jobs:
         uses: ./.github/actions/setup-bun-workspace
         with:
           bun-version: ${{ env.BUN_VERSION }}
-          install-command: bun install --frozen-lockfile --ignore-scripts
+          disable-local-eliza-workspace: "true"
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+
+      - name: Restore eliza workspace paths for repo scripts
+        run: |
+          if [ -d ".eliza.ci-disabled" ] && [ ! -d "eliza" ]; then
+            mv .eliza.ci-disabled eliza
+          fi
 
       - name: Build project
         run: bun run build

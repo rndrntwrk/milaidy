@@ -156,10 +156,19 @@ trap cleanup EXIT
 log "Installing dependencies"
 node scripts/init-submodules.mjs
 node scripts/disable-local-eliza-workspace.mjs
-bun install --ignore-scripts
+bun install --ignore-scripts --no-frozen-lockfile
+if [[ -d "$REPO_ROOT/.eliza.ci-disabled" && ! -d "$REPO_ROOT/eliza" ]]; then
+  log "Restoring eliza/ from .eliza.ci-disabled for downstream build steps"
+  mv "$REPO_ROOT/.eliza.ci-disabled" "$REPO_ROOT/eliza"
+fi
+
+log "Installing restored workspace package dependencies"
+bun install --cwd eliza/packages/app-core --ignore-scripts
+bun install --cwd eliza/packages/agent --ignore-scripts
+bun install --cwd eliza/packages/typescript --ignore-scripts
 
 log "Running repository postinstall"
-SKIP_AVATAR_CLONE=1 ELIZA_NO_VISION_DEPS=1 bun run postinstall
+SKIP_AVATAR_CLONE=1 ELIZA_NO_VISION_DEPS=1 node eliza/packages/app-core/scripts/run-repo-setup.mjs
 
 log "Building Capacitor plugins"
 pushd apps/app >/dev/null
