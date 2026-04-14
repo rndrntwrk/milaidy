@@ -5,9 +5,9 @@ import path from "node:path";
 const ROOT = path.resolve(import.meta.dirname, "..");
 const REPO_ROOT = path.resolve(ROOT, "..", "..", "..", "..");
 
-function run(command, args) {
+function run(command, args, cwd = ROOT) {
   const result = spawnSync(command, args, {
-    cwd: ROOT,
+    cwd,
     stdio: "inherit",
     env: {
       ...process.env,
