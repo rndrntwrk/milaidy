@@ -87,8 +87,8 @@ jobs:
       - name: Install submodule verification dependencies
         run: |
           bun install --cwd eliza --no-frozen-lockfile --ignore-scripts
-          bun install --cwd eliza/cloud --no-frozen-lockfile
-          bun install --cwd eliza/steward-fi --no-frozen-lockfile
+          bun install --cwd eliza/cloud --no-frozen-lockfile --ignore-scripts
+          bun install --cwd eliza/steward-fi --no-frozen-lockfile --ignore-scripts
 
       - name: Biome lint
         run: bun run verify:lint
@@ -126,8 +126,8 @@ jobs:
       - name: Install submodule verification dependencies
         run: |
           bun install --cwd eliza --no-frozen-lockfile --ignore-scripts
-          bun install --cwd eliza/cloud --no-frozen-lockfile
-          bun install --cwd eliza/steward-fi --no-frozen-lockfile
+          bun install --cwd eliza/cloud --no-frozen-lockfile --ignore-scripts
+          bun install --cwd eliza/steward-fi --no-frozen-lockfile --ignore-scripts
 
       - name: Generate protobuf types
         run: |

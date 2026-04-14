@@ -1259,6 +1259,17 @@ export default defineConfig({
               "platform/empty-node-module.ts",
             ),
           },
+          // Fallback for @elizaos/agent sub-path imports (e.g. /autonomy,
+          // /contracts/onboarding). The npm-published package may not include
+          // all export entries that the local workspace source provides, so
+          // resolve sub-paths directly from the local agent source tree.
+          {
+            find: /^@elizaos\/agent\/(.+)$/,
+            replacement: path.resolve(
+              miladyRoot,
+              "eliza/packages/agent/src/$1",
+            ),
+          },
           // @elizaos/core — force ALL copies (including nested ones in plugins
           // like plugin-secrets-manager that ship their own older core) to the
           // main workspace copy's browser entry.  The browser entry has all
