@@ -1,6 +1,6 @@
 {
   "$schema": "plugin-index-v1",
-  "generatedAt": "2026-04-11T01:55:50.795Z",
+  "generatedAt": "2026-04-14T22:56:49.107477Z",
   "count": 110,
   "plugins": [
     {
@@ -18,7 +18,29 @@
         "STREAM555_AGENT_API_KEY",
         "STREAM555_AGENT_TOKEN",
         "STREAM555_DEFAULT_SESSION_ID",
-        "STREAM555_REQUIRE_APPROVALS"
+        "STREAM555_REQUIRE_APPROVALS",
+        "STREAM555_DEST_SYNC_ON_GO_LIVE",
+        "STREAM555_DEST_PUMPFUN_ENABLED",
+        "STREAM555_DEST_PUMPFUN_RTMP_URL",
+        "STREAM555_DEST_PUMPFUN_STREAM_KEY",
+        "STREAM555_DEST_X_ENABLED",
+        "STREAM555_DEST_X_RTMP_URL",
+        "STREAM555_DEST_X_STREAM_KEY",
+        "STREAM555_DEST_TWITCH_ENABLED",
+        "STREAM555_DEST_TWITCH_RTMP_URL",
+        "STREAM555_DEST_TWITCH_STREAM_KEY",
+        "STREAM555_DEST_KICK_ENABLED",
+        "STREAM555_DEST_KICK_RTMP_URL",
+        "STREAM555_DEST_KICK_STREAM_KEY",
+        "STREAM555_DEST_YOUTUBE_ENABLED",
+        "STREAM555_DEST_YOUTUBE_RTMP_URL",
+        "STREAM555_DEST_YOUTUBE_STREAM_KEY",
+        "STREAM555_DEST_FACEBOOK_ENABLED",
+        "STREAM555_DEST_FACEBOOK_RTMP_URL",
+        "STREAM555_DEST_FACEBOOK_STREAM_KEY",
+        "STREAM555_DEST_CUSTOM_ENABLED",
+        "STREAM555_DEST_CUSTOM_RTMP_URL",
+        "STREAM555_DEST_CUSTOM_STREAM_KEY"
       ],
       "version": "0.1.0-beta.1",
       "pluginParameters": {
@@ -58,6 +80,115 @@
           "type": "boolean",
           "description": "Require approval for dangerous actions (start/stop stream, etc.)",
           "default": true
+        },
+        "STREAM555_DEST_SYNC_ON_GO_LIVE": {
+          "type": "string",
+          "description": "Automatically sync enabled channels before go-live",
+          "default": "true"
+        },
+        "STREAM555_DEST_PUMPFUN_ENABLED": {
+          "type": "string",
+          "description": "Enable Pump.fun channel",
+          "default": "false"
+        },
+        "STREAM555_DEST_PUMPFUN_RTMP_URL": {
+          "type": "string",
+          "description": "Pump.fun RTMPS endpoint URL",
+          "default": "rtmps://pump-prod-tg2x8veh.rtmp.livekit.cloud/x"
+        },
+        "STREAM555_DEST_PUMPFUN_STREAM_KEY": {
+          "type": "string",
+          "description": "Pump.fun stream key",
+          "sensitive": true
+        },
+        "STREAM555_DEST_X_ENABLED": {
+          "type": "string",
+          "description": "Enable X channel",
+          "default": "false"
+        },
+        "STREAM555_DEST_X_RTMP_URL": {
+          "type": "string",
+          "description": "X RTMPS endpoint URL",
+          "default": "rtmps://or.pscp.tv:443/x"
+        },
+        "STREAM555_DEST_X_STREAM_KEY": {
+          "type": "string",
+          "description": "X stream key",
+          "sensitive": true
+        },
+        "STREAM555_DEST_TWITCH_ENABLED": {
+          "type": "string",
+          "description": "Enable Twitch channel",
+          "default": "false"
+        },
+        "STREAM555_DEST_TWITCH_RTMP_URL": {
+          "type": "string",
+          "description": "Twitch RTMPS endpoint URL",
+          "default": "rtmps://ingest.global-contribute.live-video.net/app"
+        },
+        "STREAM555_DEST_TWITCH_STREAM_KEY": {
+          "type": "string",
+          "description": "Twitch stream key",
+          "sensitive": true
+        },
+        "STREAM555_DEST_KICK_ENABLED": {
+          "type": "string",
+          "description": "Enable Kick channel",
+          "default": "false"
+        },
+        "STREAM555_DEST_KICK_RTMP_URL": {
+          "type": "string",
+          "description": "Kick RTMPS endpoint URL",
+          "default": "rtmps://fa723fc1b171.global-contribute.live-video.net"
+        },
+        "STREAM555_DEST_KICK_STREAM_KEY": {
+          "type": "string",
+          "description": "Kick stream key",
+          "sensitive": true
+        },
+        "STREAM555_DEST_YOUTUBE_ENABLED": {
+          "type": "string",
+          "description": "Enable YouTube channel",
+          "default": "false"
+        },
+        "STREAM555_DEST_YOUTUBE_RTMP_URL": {
+          "type": "string",
+          "description": "YouTube RTMPS endpoint URL",
+          "default": "rtmps://a.rtmp.youtube.com/live2"
+        },
+        "STREAM555_DEST_YOUTUBE_STREAM_KEY": {
+          "type": "string",
+          "description": "YouTube stream key",
+          "sensitive": true
+        },
+        "STREAM555_DEST_FACEBOOK_ENABLED": {
+          "type": "string",
+          "description": "Enable Facebook channel",
+          "default": "false"
+        },
+        "STREAM555_DEST_FACEBOOK_RTMP_URL": {
+          "type": "string",
+          "description": "Facebook RTMPS endpoint URL",
+          "default": "rtmps://live-api-s.facebook.com:443/rtmp/"
+        },
+        "STREAM555_DEST_FACEBOOK_STREAM_KEY": {
+          "type": "string",
+          "description": "Facebook stream key",
+          "sensitive": true
+        },
+        "STREAM555_DEST_CUSTOM_ENABLED": {
+          "type": "string",
+          "description": "Enable custom channel",
+          "default": "false"
+        },
+        "STREAM555_DEST_CUSTOM_RTMP_URL": {
+          "type": "string",
+          "description": "Custom RTMP/RTMPS endpoint URL"
+        },
+        "STREAM555_DEST_CUSTOM_STREAM_KEY": {
+          "type": "string",
+          "description": "Custom stream key",
+          "sensitive": true
         }
       },
       "repository": "https://github.com/rndrntwrk/stream-plugin",
@@ -1087,7 +1218,7 @@
       "dirName": "app-clawbal",
       "name": "Clawbal Chat",
       "npmName": "@iqlabs-official/plugin-clawbal",
-      "description": "On-chain AI chatrooms on Solana — agents chat, trade, launch tokens, and compete on PnL leaderboards",
+      "description": "On-chain AI chatrooms on Solana \u2014 agents chat, trade, launch tokens, and compete on PnL leaderboards",
       "category": "app",
       "envKey": "SOLANA_PRIVATE_KEY",
       "configKeys": [
@@ -2487,7 +2618,7 @@
       "dirName": "plugin-gmail-watch",
       "name": "Gmail Watch",
       "npmName": "@elizaos/plugin-gmail-watch",
-      "description": "Gmail Pub/Sub watcher – spawns gog gmail watch serve and auto-renews",
+      "description": "Gmail Pub/Sub watcher \u2013 spawns gog gmail watch serve and auto-renews",
       "tags": [
         "gmail-watch",
         "gmail",
@@ -4422,7 +4553,7 @@
       "dirName": "plugin-mysticism",
       "name": "Mysticism",
       "npmName": "@elizaos/plugin-mysticism",
-      "description": "Mystical divination engines for ElizaOS — Tarot, I Ching, and Astrology readings",
+      "description": "Mystical divination engines for ElizaOS \u2014 Tarot, I Ching, and Astrology readings",
       "tags": [
         "mysticism",
         "tarot",
@@ -5493,7 +5624,7 @@
       "dirName": "app-scape",
       "name": "'scape",
       "npmName": "@elizaos/app-scape",
-      "description": "'scape — first-class agent integration for xRSPS. Autonomous RuneScape-alike agent with TOON-encoded state, Scape Journal, and directed-prompt operator control.",
+      "description": "'scape \u2014 first-class agent integration for xRSPS. Autonomous RuneScape-alike agent with TOON-encoded state, Scape Journal, and directed-prompt operator control.",
       "tags": [
         "game",
         "runescape",
@@ -5527,7 +5658,7 @@
         },
         "SCAPE_AGENT_PASSWORD": {
           "type": "string",
-          "description": "Password for the agent's xRSPS account. Leave blank to auto-generate a 24-char random password on first launch (persisted to ~/.milady/scape-agent-identity.json and reused on every subsequent run). Only set this if you want to pin a specific existing account — and note that whatever value you set will be written to the identity file in plaintext, so do not reuse a production password.",
+          "description": "Password for the agent's xRSPS account. Leave blank to auto-generate a 24-char random password on first launch (persisted to ~/.milady/scape-agent-identity.json and reused on every subsequent run). Only set this if you want to pin a specific existing account \u2014 and note that whatever value you set will be written to the identity file in plaintext, so do not reuse a production password.",
           "required": false,
           "sensitive": true
         },
@@ -5540,7 +5671,7 @@
         },
         "SCAPE_CLIENT_URL": {
           "type": "string",
-          "description": "URL the /viewer iframe loads — the xRSPS React client. Defaults to the production 'scape deployment at https://scape-client-2sqyc.kinsta.page. Override to http://localhost:3000 for local dev against the craco server.",
+          "description": "URL the /viewer iframe loads \u2014 the xRSPS React client. Defaults to the production 'scape deployment at https://scape-client-2sqyc.kinsta.page. Override to http://localhost:3000 for local dev against the craco server.",
           "required": false,
           "sensitive": false,
           "default": "https://scape-client-2sqyc.kinsta.page"
@@ -5962,7 +6093,7 @@
       "dirName": "plugin-social-alpha",
       "name": "Social Alpha",
       "npmName": "@elizaos/plugin-social-alpha",
-      "description": "Social Alpha Plugin — Tracks token recommendations (shills/FUD), builds trust scores based on P&L outcomes, and exposes a Social Alpha Provider with win rate, rank, and recommender analytics.",
+      "description": "Social Alpha Plugin \u2014 Tracks token recommendations (shills/FUD), builds trust scores based on P&L outcomes, and exposes a Social Alpha Provider with win rate, rank, and recommender analytics.",
       "tags": [
         "social-alpha",
         "trust-score",
@@ -6140,7 +6271,7 @@
       "dirName": "plugin-streaming-base",
       "name": "Streaming",
       "npmName": "@elizaos/plugin-streaming-base",
-      "description": "Enable live streaming controls — adds the Stream tab for managing RTMP destinations",
+      "description": "Enable live streaming controls \u2014 adds the Stream tab for managing RTMP destinations",
       "category": "streaming",
       "envKey": null,
       "configKeys": [],
