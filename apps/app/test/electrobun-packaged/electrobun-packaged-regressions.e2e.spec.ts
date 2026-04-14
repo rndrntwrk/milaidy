@@ -7,6 +7,7 @@ import {
   PackagedDesktopHarness,
   resolvePackagedLauncher,
 } from "./packaged-app-helpers";
+import { hasPackagedRendererBootstrapRequests } from "./windows-bootstrap";
 
 type EvalOk<T> = T & { ok: true };
 type EvalErr = { ok: false; error: string };
@@ -98,6 +99,9 @@ async function openRouteAndWait(
       selector: string;
       found: boolean;
       text: string;
+      onboardingFound: boolean;
+      rootHtmlLength: number;
+      bodyText: string;
     }>
   >(
     harness,
@@ -115,6 +119,14 @@ async function openRouteAndWait(
         selector: targetSelector,
         found: Boolean(node),
         text: (node?.textContent || "").replace(/\\s+/g, " ").trim().slice(0, 240),
+        onboardingFound: Boolean(
+          document.querySelector(${JSON.stringify(ONBOARDING_SELECTOR)}),
+        ),
+        rootHtmlLength: document.getElementById("root")?.innerHTML.length ?? 0,
+        bodyText: (document.body?.innerText || "")
+          .replace(/\\s+/g, " ")
+          .trim()
+          .slice(0, 240),
       };
       } catch (error) {
         return {
@@ -693,6 +705,13 @@ async function withPackagedHarness(
       apiBase: api.baseUrl,
     });
     await harness.start();
+    await expect
+      .poll(() => hasPackagedRendererBootstrapRequests(api?.requests ?? []), {
+        timeout: process.env.CI ? 180_000 : 90_000,
+        message:
+          "Expected the packaged renderer to reach its external API bootstrap requests before UI assertions.",
+      })
+      .toBe(true);
     await fn({ api, harness, tempRoot });
   } finally {
     await harness?.stop().catch(() => undefined);
@@ -703,7 +722,7 @@ async function withPackagedHarness(
   }
 }
 
-test("packaged desktop persists media, provider, and plugin state across relaunch", async ({}, testInfo) => {
+test("packaged desktop persists media, provider, and plugin state across relaunch", async (_fixtures, testInfo) => {
   test.skip(
     !isPackagedPlatform(),
     "Packaged desktop regressions require a macOS or Windows launcher.",
@@ -743,7 +762,7 @@ test("packaged desktop persists media, provider, and plugin state across relaunc
   });
 });
 
-test("packaged desktop reset from Settings returns the shell to onboarding", async ({}, testInfo) => {
+test("packaged desktop reset from Settings returns the shell to onboarding", async (_fixtures, testInfo) => {
   test.skip(
     !isPackagedPlatform(),
     "Packaged desktop regressions require a macOS or Windows launcher.",
@@ -759,7 +778,7 @@ test("packaged desktop reset from Settings returns the shell to onboarding", asy
   });
 });
 
-test("packaged desktop reset from the application menu returns the shell to onboarding", async ({}, testInfo) => {
+test("packaged desktop reset from the application menu returns the shell to onboarding", async (_fixtures, testInfo) => {
   test.skip(
     !isPackagedPlatform(),
     "Packaged desktop regressions require a macOS or Windows launcher.",
@@ -779,7 +798,7 @@ test("packaged desktop reset from the application menu returns the shell to onbo
   });
 });
 
-test("packaged macOS desktop keeps the tray alive and preserves vibrancy through resize", async ({}, testInfo) => {
+test("packaged macOS desktop keeps the tray alive and preserves vibrancy through resize", async (_fixtures, testInfo) => {
   test.skip(
     process.platform !== "darwin",
     "Tray and vibrancy regression checks are macOS-only.",
