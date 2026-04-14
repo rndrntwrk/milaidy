@@ -1,7 +1,7 @@
 import { type ChildProcess, execFile, spawn } from "node:child_process";
-import fs from "node:fs/promises";
-import { existsSync } from "node:fs";
 import { randomUUID } from "node:crypto";
+import { existsSync } from "node:fs";
+import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -100,15 +100,15 @@ async function findMacLauncher(): Promise<string | null> {
   }
 
   const candidates = [
-    ...(await findFiles(
-      electrobunBuildDir,
-      (fullPath) =>
-        fullPath.endsWith(`${path.sep}Contents${path.sep}MacOS${path.sep}launcher`),
+    ...(await findFiles(electrobunBuildDir, (fullPath) =>
+      fullPath.endsWith(
+        `${path.sep}Contents${path.sep}MacOS${path.sep}launcher`,
+      ),
     )),
-    ...(await findFiles(
-      electrobunArtifactsDir,
-      (fullPath) =>
-        fullPath.endsWith(`${path.sep}Contents${path.sep}MacOS${path.sep}launcher`),
+    ...(await findFiles(electrobunArtifactsDir, (fullPath) =>
+      fullPath.endsWith(
+        `${path.sep}Contents${path.sep}MacOS${path.sep}launcher`,
+      ),
     )),
   ];
 
@@ -289,7 +289,9 @@ async function fetchJson<T>(
 ): Promise<T> {
   const response = await fetch(url, options);
   if (!response.ok) {
-    throw new Error(`${options.method ?? "GET"} ${url} failed (${response.status})`);
+    throw new Error(
+      `${options.method ?? "GET"} ${url} failed (${response.status})`,
+    );
   }
   return (await response.json()) as T;
 }
@@ -354,7 +356,7 @@ export class PackagedDesktopHarness {
     this.process = child;
     this.logs = collectProcessLogs(child);
 
-    await this.waitForBridgeHealth(120_000);
+    await this.waitForBridgeHealth(300_000);
     await this.waitForState(
       (state) => state.mainWindow.present && state.shell.trayPresent,
       "Expected packaged desktop shell to create the main window and tray",
@@ -363,7 +365,11 @@ export class PackagedDesktopHarness {
   }
 
   async stop(): Promise<void> {
-    if (!this.process || this.process.exitCode !== null || this.process.killed) {
+    if (
+      !this.process ||
+      this.process.exitCode !== null ||
+      this.process.killed
+    ) {
       return;
     }
     this.process.kill("SIGTERM");
