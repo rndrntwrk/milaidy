@@ -73,12 +73,8 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
           install-command: bun install --ignore-scripts --no-frozen-lockfile
-          disable-local-eliza-workspace: "true"
           skip-avatar-clone: "true"
           no-vision-deps: "true"
-
-      - name: Restore eliza workspace paths for repo scripts
-        run: node -e "const fs=require('node:fs');if(fs.existsSync('.eliza.ci-disabled')&&!fs.existsSync('eliza'))fs.renameSync('.eliza.ci-disabled','eliza');"
 
       # Proto-generated types are only needed when the repo-local eliza
       # workspace is present. Published-only CI disables that checkout.
@@ -120,12 +116,8 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
           install-command: bun install --ignore-scripts --no-frozen-lockfile
-          disable-local-eliza-workspace: "true"
           skip-avatar-clone: "true"
           no-vision-deps: "true"
-
-      - name: Restore eliza workspace paths for repo scripts
-        run: node -e "const fs=require('node:fs');if(fs.existsSync('.eliza.ci-disabled')&&!fs.existsSync('eliza'))fs.renameSync('.eliza.ci-disabled','eliza');"
 
       # Proto-generated types are only needed when the repo-local eliza
       # workspace is present. Published-only CI disables that checkout.
@@ -568,11 +560,6 @@ jobs:
 
       - name: Restore eliza workspace paths for repo scripts
         run: node -e "const fs=require('node:fs');if(fs.existsSync('.eliza.ci-disabled')&&!fs.existsSync('eliza'))fs.renameSync('.eliza.ci-disabled','eliza');"
-
-      - name: Install desktop package dependencies
-        run: |
-          bun install --cwd eliza/packages/app-core --ignore-scripts
-          bun install --cwd apps/app/electrobun --ignore-scripts
 
       - name: Run repository postinstall patches
         run: node eliza/packages/app-core/scripts/run-repo-setup.mjs

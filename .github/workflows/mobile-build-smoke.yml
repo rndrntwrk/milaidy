@@ -50,8 +50,8 @@ jobs:
             mv .eliza.ci-disabled eliza
           fi
 
-      - name: Install app-core package dependencies
-        run: bun install --cwd eliza/packages/app-core --ignore-scripts
+      - name: Install tailwindcss for published-only web build
+        run: bun add --dev tailwindcss@^4.1.18 --ignore-scripts
 
       - name: Run repository postinstall patches
         run: node eliza/packages/app-core/scripts/run-repo-setup.mjs
@@ -160,8 +160,8 @@ jobs:
             mv .eliza.ci-disabled eliza
           fi
 
-      - name: Install app-core package dependencies
-        run: bun install --cwd eliza/packages/app-core --ignore-scripts
+      - name: Install tailwindcss for published-only web build
+        run: bun add --dev tailwindcss@^4.1.18 --ignore-scripts
 
       - name: Run repository postinstall patches
         run: node eliza/packages/app-core/scripts/run-repo-setup.mjs
