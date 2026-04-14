@@ -3,26 +3,52 @@ import { resolveWidgetsForSlot } from "../../src/widgets/registry";
 import type { PluginWidgetDeclaration } from "../../src/widgets/types";
 
 describe("resolveWidgetsForSlot", () => {
-  it("keeps bundled chat widgets available when unrelated plugins are loaded", () => {
+  it("keeps compat-backed bundled widgets available when unrelated plugins are loaded", () => {
     const resolved = resolveWidgetsForSlot("chat-sidebar", [
       { id: "openai", enabled: true, isActive: true },
     ]);
 
-    expect(
-      resolved.map(
-        (widget) =>
-          `${widget.declaration.pluginId}/${widget.declaration.id}`,
-      ),
-    ).toEqual(
+    const widgetIds = resolved.map(
+      (widget) => `${widget.declaration.pluginId}/${widget.declaration.id}`,
+    );
+
+    expect(widgetIds).toEqual(
       expect.arrayContaining([
         "lifeops/lifeops.overview",
         "lifeops/lifeops.google",
-        "todo/todo.items",
         "agent-orchestrator/agent-orchestrator.apps",
         "agent-orchestrator/agent-orchestrator.tasks",
         "agent-orchestrator/agent-orchestrator.activity",
       ]),
     );
+    expect(widgetIds).not.toContain("todo/todo.items");
+  });
+
+  it("renders the generic todo widget only when a plugin explicitly declares it", () => {
+    const serverWidget: PluginWidgetDeclaration = {
+      id: "todo.items",
+      pluginId: "todo",
+      slot: "chat-sidebar",
+      label: "Tasks",
+      defaultEnabled: true,
+      uiSpec: {
+        type: "section",
+        title: "Tasks",
+        body: [],
+      },
+    };
+
+    const resolved = resolveWidgetsForSlot("chat-sidebar", [
+      { id: "todo", enabled: true, isActive: true },
+    ], [serverWidget]);
+
+    expect(
+      resolved.some(
+        (widget) =>
+          widget.declaration.pluginId === "todo" &&
+          widget.declaration.id === "todo.items",
+      ),
+    ).toBe(true);
   });
 
   it(
