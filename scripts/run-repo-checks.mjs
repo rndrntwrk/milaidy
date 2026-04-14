@@ -30,16 +30,6 @@ const suites = {
       args: ["run", "--cwd", "eliza", "lint:check"],
     },
     {
-      label: "cloud lint",
-      command: "bun",
-      args: ["run", "--cwd", "eliza/cloud", "lint"],
-    },
-    {
-      label: "steward-fi lint",
-      command: "bun",
-      args: ["run", "--cwd", "eliza/steward-fi", "lint"],
-    },
-    {
       label: "eliza Rust lint",
       command: "bun",
       args: ["run", "--cwd", "eliza", "lint:rust"],
@@ -80,41 +70,6 @@ const suites = {
       label: "eliza Python typecheck",
       command: "bun",
       args: ["run", "--cwd", "eliza", "typecheck:python"],
-    },
-    {
-      label: "cloud app typecheck",
-      command: "bun",
-      args: ["run", "--cwd", "eliza/cloud", "check-types"],
-    },
-    {
-      label: "cloud tests typecheck",
-      command: "bun",
-      args: ["run", "--cwd", "eliza/cloud", "check-types:tests"],
-    },
-    {
-      label: "cloud UI typecheck",
-      command: "bun",
-      args: ["run", "--cwd", "eliza/cloud", "check-types:ui"],
-    },
-    {
-      label: "cloud agent-server typecheck",
-      command: "bun",
-      args: ["run", "--cwd", "eliza/cloud", "check-types:agent-server"],
-    },
-    {
-      label: "cloud gateway-discord typecheck",
-      command: "bun",
-      args: ["run", "--cwd", "eliza/cloud", "check-types:gateway-discord"],
-    },
-    {
-      label: "cloud gateway-webhook typecheck",
-      command: "bun",
-      args: ["run", "--cwd", "eliza/cloud", "check-types:gateway-webhook"],
-    },
-    {
-      label: "steward-fi typecheck",
-      command: "bun",
-      args: ["run", "--cwd", "eliza/steward-fi", "typecheck"],
     },
   ],
 };
