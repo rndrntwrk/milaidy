@@ -56,11 +56,6 @@ jobs:
         with:
           node-version: 22
 
-      - name: Disable repo-local eliza workspace
-        env:
-          MILADY_SKIP_LOCAL_UPSTREAMS: "1"
-        run: node scripts/disable-local-eliza-workspace.mjs
-
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
