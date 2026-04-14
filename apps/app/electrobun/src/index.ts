@@ -19,6 +19,7 @@ import Electrobun, {
 import {
   pushApiBaseToRenderer,
   resolveDesktopRuntimeMode,
+  resolveExternalApiBase,
   resolveInitialApiBase,
   resolveRendererFacingApiBase,
 } from "./api-base";
@@ -300,7 +301,7 @@ async function resetMiladyFromApplicationMenu(): Promise<void> {
                 process.env as Record<string, string | undefined>,
                 port,
               )
-            : initialApiBase;
+            : resolveInitialApiBase(process.env);
           if (base) {
             pushApiBaseToRenderer(currentWindow, base, apiToken);
           }
@@ -650,6 +651,20 @@ function sendToActiveRenderer(message: string, payload?: unknown): void {
 }
 
 /**
+ * Module-scope renderer self-base — set by startRendererServer() when the
+ * electrobun shell serves its own static dist (packaged builds and dev runs
+ * that don't have MILADY_RENDERER_URL / VITE_DEV_SERVER_URL pointing at
+ * Vite). While set, injectApiBase() prefers this over the raw agent URL so
+ * the renderer stays on a single origin and WKWebView doesn't block
+ * /api/* requests — the reverse proxy in the Bun.serve handler below
+ * forwards those requests to the real agent.
+ *
+ * Null in Vite dev mode (alice's dev-platform.mjs sets MILADY_RENDERER_URL,
+ * so startRendererServer is never called — Vite's own proxy handles /api).
+ */
+let rendererSelfBase: string | null = null;
+
+/**
  * Serve the renderer dist over HTTP so WKWebView can load it without
  * file:// CORS restrictions (crossorigin ES modules break over file://).
  * Returns the base URL e.g. "http://localhost:5174".
@@ -691,14 +706,23 @@ async function startRendererServer(): Promise<string> {
     ".vrm": "model/gltf-binary",
   };
 
-  // Determine the expected agent API base URL so we can inject it into the
-  // HTML before the renderer JS runs. This prevents a 404 fatal-error loop
-  // where the renderer fetches /api/auth/status relative to the static server.
-  // If the agent falls back to a dynamic port, apiBaseUpdate messages will
-  // update window.__MILADY_API_BASE__ and the client will pick it up lazily.
-  const initialApiBase = resolveInitialApiBase(
-    process.env as Record<string, string | undefined>,
-  );
+  // The renderer server now reverse-proxies /api/* and /ws to the agent
+  // backend (see the Bun.serve fetch handler below), so the frontend can
+  // use relative paths on a single origin. We inject window.__MILADY_API_BASE__
+  // pointing at the renderer itself so legacy code that reads the global
+  // keeps working — every /api/* fetch off that base still lands on the
+  // proxy, which forwards to the real agent. Keeping the API base same-origin
+  // avoids the WKWebView 404 fatal-error loop on /api/auth/status.
+  //
+  // We also stash selfBase on a module-scope binding so injectApiBase(win)
+  // can prefer it over the raw agent URL later in the startup flow — without
+  // that, the real agent base gets pushed via apiBaseUpdate and overwrites
+  // __MILADY_API_BASE__, putting the renderer back on cross-origin fetches.
+  //
+  // Alice's resolveInitialApiBase is still called in heartbeat-menu and
+  // launch-config paths above; it is intentionally no longer used here.
+  const selfBase = `http://127.0.0.1:${port}`;
+  rendererSelfBase = selfBase;
   const initialApiToken =
     resolveDesktopRuntimeMode(process.env as Record<string, string | undefined>)
       .mode === "local"
@@ -707,10 +731,7 @@ async function startRendererServer(): Promise<string> {
 
   // Inject the API base into index.html so it's available before React mounts.
   function injectApiBaseIntoHtml(html: string): string {
-    if (!initialApiBase) {
-      return html;
-    }
-    const script = `<script>window.__MILADY_API_BASE__=${JSON.stringify(initialApiBase)};${initialApiToken ? `Object.defineProperty(window,"__MILADY_API_TOKEN__",{value:${JSON.stringify(initialApiToken)},configurable:true,writable:true,enumerable:false});` : ""}</script>`;
+    const script = `<script>window.__MILADY_API_BASE__=${JSON.stringify(selfBase)};${initialApiToken ? `Object.defineProperty(window,"__MILADY_API_TOKEN__",{value:${JSON.stringify(initialApiToken)},configurable:true,writable:true,enumerable:false});` : ""}</script>`;
     // Inject before </head> if present, otherwise before <body>
     if (html.includes("</head>")) {
       return html.replace("</head>", `${script}</head>`);
@@ -755,13 +776,93 @@ async function startRendererServer(): Promise<string> {
     return "public, max-age=0, must-revalidate";
   };
 
+  // Reverse-proxy target for /api/* and /ws so the renderer and the agent
+  // share the same origin (WKWebView will block cross-origin fetches that
+  // don't explicitly opt in).
+  //
+  // Alice convention: MILADY_PORT = UI dev port (Vite), MILADY_API_PORT /
+  // ELIZA_API_PORT / ELIZA_PORT = API server port. resolveDesktopApiPort
+  // reads the API-port env precedence — falling back to DEFAULT_API_PORT
+  // when none are set (packaged-agent default). This is the opposite of
+  // main's assumption where MILADY_PORT meant API port; that would route
+  // the proxy to Vite on alice and break everything.
+  //
+  // Resolve per-request (not captured at setup time) so agent restarts on
+  // a new port (alice's AgentManager can reallocate) still route correctly.
+  // Precedence: live AgentManager.getPort() → external API base from env →
+  // resolveDesktopApiPort default.
+  const resolveAgentBase = (): string => {
+    try {
+      const livePort = getAgentManager().getPort();
+      if (livePort) return `http://127.0.0.1:${livePort}`;
+    } catch {
+      /* agent manager not initialised yet */
+    }
+    const external = resolveExternalApiBase(
+      process.env as Record<string, string | undefined>,
+    ).base;
+    if (external && isLoopbackBase(external)) {
+      return external;
+    }
+    return `http://127.0.0.1:${resolveDesktopApiPort(process.env)}`;
+  };
+
   Bun.serve({
     port,
     hostname: "127.0.0.1",
-    fetch(req) {
+    async fetch(req) {
+      const url = new URL(req.url);
+
+      // Reverse-proxy /api/* and /ws to the agent backend. Alice still
+      // uses the pushApiBaseToRenderer / apiBaseUpdate channel for dynamic
+      // base updates; this proxy is only for renderer-side relative fetches
+      // against window.__MILADY_API_BASE__ which now equals selfBase.
+      if (url.pathname.startsWith("/api/") || url.pathname === "/ws") {
+        try {
+          const target = `${resolveAgentBase()}${url.pathname}${url.search}`;
+          const proxyRes = await fetch(target, {
+            method: req.method,
+            headers: req.headers,
+            body:
+              req.method !== "GET" && req.method !== "HEAD"
+                ? req.body
+                : undefined,
+            redirect: "manual",
+          });
+          const resHeaders = new Headers(proxyRes.headers);
+          resHeaders.set("Access-Control-Allow-Origin", "*");
+          return new Response(proxyRes.body, {
+            status: proxyRes.status,
+            statusText: proxyRes.statusText,
+            headers: resHeaders,
+          });
+        } catch {
+          return new Response(JSON.stringify({ error: "Agent unavailable" }), {
+            status: 502,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+      }
+
+      // Handle CORS preflight for /api/* so renderer code that accidentally
+      // fires a cross-origin request (e.g., an explicit origin override)
+      // still gets a sane response.
+      if (req.method === "OPTIONS") {
+        return new Response(null, {
+          status: 204,
+          headers: {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+            "Access-Control-Allow-Headers":
+              "Content-Type, Authorization, X-Milady-Token, X-Api-Key",
+            "Access-Control-Max-Age": "86400",
+          },
+        });
+      }
+
       const { filePath, isGzipped, mimeExt } = resolveRendererAsset({
         rendererDir,
-        urlPath: new URL(req.url).pathname,
+        urlPath: url.pathname,
         existsSync: fs.existsSync,
         statSync: fs.statSync,
       });
@@ -783,10 +884,7 @@ async function startRendererServer(): Promise<string> {
         const headers: Record<string, string> = {
           "Content-Type": mimeTypes[mimeExt] ?? "application/octet-stream",
           "Access-Control-Allow-Origin": "*",
-          "Cache-Control": resolveRendererCacheControl(
-            new URL(req.url).pathname,
-            mimeExt,
-          ),
+          "Cache-Control": resolveRendererCacheControl(url.pathname, mimeExt),
         };
 
         if (isGzipped) {
@@ -1295,6 +1393,26 @@ function wireSettingsRpc(win: BrowserWindow): void {
   registerRpcHandlers(rpc, sendToWebview);
 }
 
+/**
+ * True when the given base URL lives on loopback (127.0.0.1, ::1,
+ * localhost). The reverse-proxy same-origin strategy only works for
+ * loopback because the Bun.serve forwarder dials 127.0.0.1:<port>; a
+ * remote API base has to stay cross-origin and rely on CORS.
+ */
+function isLoopbackBase(base: string): boolean {
+  try {
+    const host = new URL(base).hostname.toLowerCase();
+    return (
+      host === "127.0.0.1" ||
+      host === "localhost" ||
+      host === "::1" ||
+      host === "[::1]"
+    );
+  } catch {
+    return false;
+  }
+}
+
 function injectApiBase(win: BrowserWindow): void {
   const runtimeResolution = resolveDesktopRuntimeMode(
     process.env as Record<string, string | undefined>,
@@ -1310,9 +1428,20 @@ function injectApiBase(win: BrowserWindow): void {
     runtimeResolution.mode === "external" &&
     runtimeResolution.externalApi.base
   ) {
+    // If the external API is loopback AND we're serving the renderer from
+    // our own Bun.serve (rendererSelfBase set), push selfBase instead —
+    // the reverse proxy in startRendererServer routes /api/* to the real
+    // external port, keeping the renderer on a single origin so WKWebView
+    // doesn't block /api/auth/status. For non-loopback external APIs the
+    // proxy isn't applicable (it only dials 127.0.0.1), so push the real
+    // cross-origin base as before.
+    const base =
+      rendererSelfBase && isLoopbackBase(runtimeResolution.externalApi.base)
+        ? rendererSelfBase
+        : runtimeResolution.externalApi.base;
     pushApiBaseToRenderer(
       win,
-      runtimeResolution.externalApi.base,
+      base,
       resolveApiToken(process.env) ?? undefined,
     );
     setAgentReady(true);
@@ -1322,14 +1451,17 @@ function injectApiBase(win: BrowserWindow): void {
   const agent = getAgentManager();
   const port = agent.getPort() ?? resolveDesktopApiPort(process.env);
   const apiToken = configureDesktopLocalApiAuth();
-  pushApiBaseToRenderer(
-    win,
+  // Same same-origin override for local-mode: if we're serving the renderer
+  // from Bun.serve, prefer selfBase so the reverse proxy handles /api/*.
+  // Otherwise fall through to alice's resolveRendererFacingApiBase (which
+  // picks up Vite dev server origin when MILADY_RENDERER_URL is loopback).
+  const localBase =
+    rendererSelfBase ??
     resolveRendererFacingApiBase(
       process.env as Record<string, string | undefined>,
       port,
-    ),
-    apiToken,
-  );
+    );
+  pushApiBaseToRenderer(win, localBase, apiToken);
   setAgentReady(true);
 }
 
@@ -1981,20 +2113,38 @@ async function main(): Promise<void> {
   // embedded agent first — injectApiBaseIntoHtml already set the initial
   // window.__MILADY_API_BASE__ but _startAgent will push the actual port
   // once the agent reports it.
+  //
+  // MILADY_DESKTOP_SKIP_AGENT=1 is a defensive panic-button override for
+  // cases where an external API server is running but the normal
+  // detection path (MILADY_DESKTOP_API_BASE / MILADY_API_BASE_URL /
+  // resolveDesktopRuntimeMode → "external") didn't fire. In practice
+  // alice's dev-platform.mjs already sets MILADY_DESKTOP_API_BASE, which
+  // makes runtime mode "external" and takes the injectApiBase path below,
+  // so this short-circuit is typically unused on alice. Kept so scripts
+  // that set only MILADY_DESKTOP_SKIP_AGENT (main's convention) still
+  // Do The Right Thing.
   if (currentWindow) {
-    const rt = resolveDesktopRuntimeMode(
-      process.env as Record<string, string | undefined>,
-    );
-    if (rt.mode === "external") {
-      injectApiBase(currentWindow);
-    } else if (rt.mode === "local") {
-      console.log("[Main] Starting embedded agent (local mode).");
-      _startAgent(currentWindow).catch((err) => {
-        console.error("[Main] Agent auto-start failed:", err);
-        const error = err instanceof Error ? err.message : String(err);
-        sendToActiveRenderer("agentStartupFailed", { error });
-        console.error('title: "Milady startup failed"');
-      });
+    if (process.env.MILADY_DESKTOP_SKIP_AGENT === "1") {
+      const apiPort = resolveDesktopApiPort(process.env);
+      console.log(
+        `[Main] Skipping embedded agent (MILADY_DESKTOP_SKIP_AGENT=1), using external API on port ${apiPort}`,
+      );
+      pushApiBaseToRenderer(currentWindow, `http://127.0.0.1:${apiPort}`);
+    } else {
+      const rt = resolveDesktopRuntimeMode(
+        process.env as Record<string, string | undefined>,
+      );
+      if (rt.mode === "external") {
+        injectApiBase(currentWindow);
+      } else if (rt.mode === "local") {
+        console.log("[Main] Starting embedded agent (local mode).");
+        _startAgent(currentWindow).catch((err) => {
+          console.error("[Main] Agent auto-start failed:", err);
+          const error = err instanceof Error ? err.message : String(err);
+          sendToActiveRenderer("agentStartupFailed", { error });
+          console.error('title: "Milady startup failed"');
+        });
+      }
     }
   }
 
