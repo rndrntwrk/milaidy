@@ -257,6 +257,25 @@ jobs:
           VITE_ASSET_BASE_URL: ${{ steps.version.outputs.is_release == 'true' && format('https://raw.githubusercontent.com/milady-ai/milady/{0}/apps/app/public/', steps.version.outputs.version) || '' }}
           NODE_ENV: production
 
+      # ── 11.5. Re-add eliza/packages/agent to workspaces for Docker relink ─────
+      # disable-local-eliza-workspace.mjs strips eliza/packages/* from workspaces
+      # so bun install uses npm-published packages. However, Dockerfile.ci runs
+      # relink-workspace-packages-to-dist.mjs which needs @elizaos/agent to be
+      # a workspace package so it can find eliza/packages/agent/dist to relink.
+      # Re-add the agent package only to the workspaces array (no dep changes).
+      - name: Re-add eliza/packages/agent to workspaces for Docker relink
+        run: |
+          node -e "
+          const fs = require('fs');
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          if (!pkg.workspaces) pkg.workspaces = [];
+          if (!pkg.workspaces.includes('eliza/packages/agent')) {
+            pkg.workspaces.push('eliza/packages/agent');
+          }
+          fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          console.log('Re-added eliza/packages/agent to workspaces');
+          "
+
       # ── 12. Override dockerignore to include pre-built dist/ ────────────────
       # The repo's .dockerignore excludes dist/ to keep developer Docker builds clean.
       # For CI, dist/ is pre-built by GHA so we need it in the build context.
