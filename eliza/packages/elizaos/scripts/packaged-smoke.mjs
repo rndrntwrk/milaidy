@@ -6,15 +6,43 @@ import { fileURLToPath } from "node:url";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const packageDir = path.resolve(scriptDir, "..");
-const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "elizaos-packaged-smoke-"));
+const tmpBaseDir =
+  process.env.ELIZAOS_SMOKE_TMPDIR ||
+  (fs.existsSync("/tmp") ? "/tmp" : os.tmpdir());
+const tmpRoot = fs.mkdtempSync(
+  path.join(tmpBaseDir, "elizaos-packaged-smoke-"),
+);
 const shouldKeepTemp = process.env.ELIZAOS_SMOKE_KEEP_TEMP === "1";
+const shouldInstallGeneratedFullstack =
+  process.env.ELIZAOS_SMOKE_FULLSTACK_INSTALL === "1";
+const shouldUseRemoteUpstream =
+  process.env.ELIZAOS_SMOKE_REMOTE_UPSTREAM === "1";
 const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
 const elizaosBinName = process.platform === "win32" ? "elizaos.cmd" : "elizaos";
+const localUpstreamRepo = path.resolve(packageDir, "..", "..");
+const cliEnv =
+  !shouldUseRemoteUpstream &&
+  fs.existsSync(
+    path.join(localUpstreamRepo, "packages", "app-core", "package.json"),
+  )
+    ? {
+        ...process.env,
+        ELIZAOS_UPSTREAM_BRANCH: process.env.ELIZAOS_UPSTREAM_BRANCH ?? "",
+        ELIZAOS_UPSTREAM_REPO:
+          process.env.ELIZAOS_UPSTREAM_REPO || localUpstreamRepo,
+      }
+    : process.env;
+const fullstackInstallEnv = {
+  ...process.env,
+  MILADY_NO_VISION_DEPS: process.env.MILADY_NO_VISION_DEPS || "1",
+  SKIP_AVATAR_CLONE: process.env.SKIP_AVATAR_CLONE || "1",
+};
 
 function run(command, args, options = {}) {
   return execFileSync(command, args, {
     cwd: options.cwd,
     encoding: "utf8",
+    env: options.env,
     stdio: ["ignore", "pipe", "pipe"],
   });
 }
@@ -26,7 +54,9 @@ function getTarballName(output) {
     .filter(Boolean);
   const tarball = [...lines].reverse().find((line) => line.endsWith(".tgz"));
   if (!tarball) {
-    throw new Error(`Unable to determine tarball name from npm pack output:\n${output}`);
+    throw new Error(
+      `Unable to determine tarball name from npm pack output:\n${output}`,
+    );
   }
   return tarball;
 }
@@ -48,7 +78,7 @@ function assertPathMissing(targetPath) {
 }
 
 function runCli(smokeDir, cwd, args) {
-  return run(getInstalledCli(smokeDir), args, { cwd });
+  return run(getInstalledCli(smokeDir), args, { cwd, env: cliEnv });
 }
 
 function main() {
@@ -57,7 +87,12 @@ function main() {
   try {
     run("bun", ["run", "build"], { cwd: packageDir });
 
-    const packOutput = run(npmCommand, ["pack", packageDir, "--pack-destination", tmpRoot]);
+    const packOutput = run(npmCommand, [
+      "pack",
+      packageDir,
+      "--pack-destination",
+      tmpRoot,
+    ]);
     const tarballName = getTarballName(packOutput);
     const tarballPath = path.join(tmpRoot, tarballName);
     const smokeDir = path.join(tmpRoot, "smoke");
@@ -99,6 +134,9 @@ function main() {
     assertPathExists(path.join(fullstackDir, ".elizaos", "template.json"));
     assertPathExists(path.join(fullstackDir, "apps", "app", "package.json"));
     assertPathExists(path.join(fullstackDir, "eliza"));
+    if (shouldInstallGeneratedFullstack) {
+      run("bun", ["install"], { cwd: fullstackDir, env: fullstackInstallEnv });
+    }
     runCli(smokeDir, fullstackDir, ["upgrade", "--check"]);
 
     runCli(smokeDir, workspaceDir, [
@@ -120,10 +158,7 @@ function main() {
   } finally {
     if (!shouldKeepTemp && passed) {
       fs.rmSync(tmpRoot, { force: true, recursive: true });
-      return;
-    }
-
-    if (!passed || shouldKeepTemp) {
+    } else if (!passed || shouldKeepTemp) {
       console.log(`elizaos packaged smoke temp dir: ${tmpRoot}`);
     }
   }

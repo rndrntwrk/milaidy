@@ -1,13 +1,15 @@
-import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 import type {
   FullstackTemplateValues,
   PluginTemplateValues,
   ProjectTemplateMetadata,
   TemplateDefinition,
+  TemplateUpstream,
 } from "./types.js";
 
 const SKIP_NAMES = new Set([
@@ -52,6 +54,32 @@ function ensureGitRepository(projectRoot: string): void {
   }
 }
 
+function isLocalRepoSpec(repo: string): boolean {
+  return (
+    path.isAbsolute(repo) ||
+    repo.startsWith("./") ||
+    repo.startsWith("../") ||
+    repo.startsWith("file://")
+  );
+}
+
+function withOptionalFileProtocol(repo: string, args: string[]): string[] {
+  if (!isLocalRepoSpec(repo)) {
+    return args;
+  }
+  return ["-c", "protocol.file.allow=always", ...args];
+}
+
+function resolveLocalRepoRoot(repo: string): string | undefined {
+  if (!isLocalRepoSpec(repo)) {
+    return undefined;
+  }
+  if (repo.startsWith("file://")) {
+    return fileURLToPath(repo);
+  }
+  return path.resolve(repo);
+}
+
 function isBinaryFile(filePath: string, buffer: Buffer): boolean {
   if (BINARY_EXTENSIONS.has(path.extname(filePath).toLowerCase())) {
     return true;
@@ -59,9 +87,14 @@ function isBinaryFile(filePath: string, buffer: Buffer): boolean {
   return buffer.includes(0);
 }
 
-function replaceAll(text: string, replacements: Array<[string, string]>): string {
+function replaceAll(
+  text: string,
+  replacements: Array<[string, string]>,
+): string {
   let next = text;
-  for (const [from, to] of replacements.sort((a, b) => b[0].length - a[0].length)) {
+  for (const [from, to] of replacements.sort(
+    (a, b) => b[0].length - a[0].length,
+  )) {
     next = next.split(from).join(to);
   }
   return next;
@@ -102,7 +135,9 @@ export function buildPluginTemplateValues(input: {
   };
 }
 
-export function buildFullstackTemplateValues(projectName: string): FullstackTemplateValues {
+export function buildFullstackTemplateValues(
+  projectName: string,
+): FullstackTemplateValues {
   const projectSlug = normalizeKebabCase(projectName);
   const packageScope = projectSlug.replace(/[^a-z0-9]/g, "");
   const appName = toDisplayName(projectSlug);
@@ -130,10 +165,10 @@ export function getPluginReplacementEntries(
   const pythonPluginName = `python-${values.pluginBaseName}`;
   const pythonSnake = `python_${values.pluginSnake}`;
   return [
-    ["${PLUGINNAME}", values.pluginBaseName],
-    ["${PLUGINDESCRIPTION}", values.pluginDescription],
-    ["${GITHUB_USERNAME}", values.githubUsername],
-    ["${REPO_URL}", values.repoUrl],
+    [`\${PLUGINNAME}`, values.pluginBaseName],
+    [`\${PLUGINDESCRIPTION}`, values.pluginDescription],
+    [`\${GITHUB_USERNAME}`, values.githubUsername],
+    [`\${REPO_URL}`, values.repoUrl],
     ["@elizaos/rust-plugin-starter", `@elizaos/${rustPluginName}`],
     ["@elizaos/plugin-starter", `@elizaos/${values.pluginBaseName}`],
     ["elizaos_plugin_starter", `elizaos_${values.pluginSnake}`],
@@ -146,7 +181,10 @@ export function getPluginReplacementEntries(
     ["plugin-starter", values.pluginBaseName],
     ["Plugin starter", `${values.displayName} plugin`],
     ["plugin starter", `${values.displayName.toLowerCase()} plugin`],
-    ["plugin starter template", `${values.displayName.toLowerCase()} plugin template`],
+    [
+      "plugin starter template",
+      `${values.displayName.toLowerCase()} plugin template`,
+    ],
   ];
 }
 
@@ -156,20 +194,18 @@ export function getFullstackReplacementEntries(
   return [
     ["__PROJECT_SLUG__", values.projectSlug],
     ["__APP_NAME__", values.appName],
-    ["@elizaos/electrobun", `${values.projectSlug}-electrobun`],
-    ["@elizaos/app", `${values.projectSlug}-app`],
-    ["https://github.com/elizaos/eliza/issues/new?template=bug_report.yml", values.bugReportUrl],
-    ["https://docs.eliza.app", values.docsUrl],
-    ["https://app.eliza.app", values.appUrl],
-    ["https://eliza.app/releases/", values.releaseBaseUrl],
-    ["https://eliza.app/", `${values.appUrl}/`],
-    ['orgName: "eliza-ai"', `orgName: "${values.orgName}"`],
-    ['repoName: "eliza"', `repoName: "${values.repoName}"`],
-    ['packageScope: "elizaos"', `packageScope: "${values.packageScope}"`],
-    ['fileExtension: ".eliza-agent"', `fileExtension: "${values.fileExtension}"`],
-    ['hashtag: "#ElizaAgent"', `hashtag: "${values.hashtag}"`],
-    ["com.elizaos.eliza", values.bundleId],
-    ["Eliza", values.appName],
+    ["__APP_PACKAGE_NAME__", `${values.projectSlug}-app`],
+    ["__ELECTROBUN_PACKAGE_NAME__", `${values.projectSlug}-electrobun`],
+    ["__APP_URL__", values.appUrl],
+    ["__BUG_REPORT_URL__", values.bugReportUrl],
+    ["__BUNDLE_ID__", values.bundleId],
+    ["__DOCS_URL__", values.docsUrl],
+    ["__FILE_EXTENSION__", values.fileExtension],
+    ["__HASHTAG__", values.hashtag],
+    ["__ORG_NAME__", values.orgName],
+    ["__PACKAGE_SCOPE__", values.packageScope],
+    ["__RELEASE_BASE_URL__", values.releaseBaseUrl],
+    ["__REPO_NAME__", values.repoName],
   ];
 }
 
@@ -271,6 +307,54 @@ export function createRenderedTempDir(options: {
   return { dir, managedFiles };
 }
 
+export function resolveTemplateUpstream(
+  upstream: TemplateUpstream,
+): TemplateUpstream {
+  const hasEnvBranch = Object.hasOwn(process.env, "ELIZAOS_UPSTREAM_BRANCH");
+  const envRepo = process.env.ELIZAOS_UPSTREAM_REPO?.trim();
+  const envBranch = process.env.ELIZAOS_UPSTREAM_BRANCH?.trim();
+  return {
+    ...upstream,
+    branch: hasEnvBranch ? envBranch || undefined : upstream.branch,
+    repo: envRepo || upstream.repo,
+  };
+}
+
+export function ensurePackageJsonWorkspaces(
+  packageJsonPath: string,
+  workspaceEntries: string[],
+): boolean {
+  if (workspaceEntries.length === 0 || !fs.existsSync(packageJsonPath)) {
+    return false;
+  }
+
+  const raw = fs.readFileSync(packageJsonPath, "utf8");
+  const pkg = JSON.parse(raw) as { workspaces?: string[] };
+  if (!Array.isArray(pkg.workspaces)) {
+    return false;
+  }
+
+  let changed = false;
+  for (const entry of workspaceEntries) {
+    if (!pkg.workspaces.includes(entry)) {
+      pkg.workspaces.push(entry);
+      changed = true;
+    }
+  }
+
+  if (!changed) {
+    return false;
+  }
+
+  const indent = raw.match(/^(\s+)"/m)?.[1] || "  ";
+  fs.writeFileSync(
+    packageJsonPath,
+    `${JSON.stringify(pkg, null, indent)}\n`,
+    "utf8",
+  );
+  return true;
+}
+
 export function buildMetadata(options: {
   cliVersion: string;
   language?: string;
@@ -325,7 +409,9 @@ export function updateManagedFiles(options: {
     const nextHash = options.renderedManagedFiles[relativePath];
     const hasCurrentFile = fs.existsSync(projectPath);
     const hasRenderedFile = fs.existsSync(renderedPath);
-    const currentHash = hasCurrentFile ? sha256(fs.readFileSync(projectPath)) : "";
+    const currentHash = hasCurrentFile
+      ? sha256(fs.readFileSync(projectPath))
+      : "";
 
     if (previousHash && !hasRenderedFile) {
       if (currentHash && currentHash !== previousHash) {
@@ -386,6 +472,58 @@ export function updateManagedFiles(options: {
   };
 }
 
+export function hydrateGitSubmoduleWorkspace(options: {
+  dryRun?: boolean;
+  projectRoot: string;
+  upstream: TemplateUpstream;
+}): void {
+  if (options.dryRun) {
+    return;
+  }
+
+  const submoduleRoot = path.join(options.projectRoot, options.upstream.path);
+  if (!fs.existsSync(submoduleRoot)) {
+    return;
+  }
+
+  const requiredSubmodules = options.upstream.requiredSubmodules ?? [];
+  const localRepoRoot = resolveLocalRepoRoot(options.upstream.repo);
+
+  for (const submodulePath of requiredSubmodules) {
+    const command = ["submodule", "update", "--init", "--recursive"];
+    let localSubmoduleRoot: string | undefined;
+
+    if (localRepoRoot) {
+      const candidate = path.join(localRepoRoot, submodulePath);
+      if (fs.existsSync(candidate)) {
+        execFileSync(
+          "git",
+          ["config", `submodule.${submodulePath}.url`, candidate],
+          { cwd: submoduleRoot, stdio: "inherit" },
+        );
+        localSubmoduleRoot = candidate;
+      }
+    }
+
+    if (localSubmoduleRoot) {
+      command.push("--reference", localSubmoduleRoot);
+    }
+    command.push(submodulePath);
+    execFileSync(
+      "git",
+      localSubmoduleRoot
+        ? withOptionalFileProtocol(localSubmoduleRoot, command)
+        : command,
+      { cwd: submoduleRoot, stdio: "inherit" },
+    );
+  }
+
+  ensurePackageJsonWorkspaces(
+    path.join(submoduleRoot, "package.json"),
+    options.upstream.requiredWorkspaces ?? [],
+  );
+}
+
 export function initializeGitSubmodule(options: {
   branch?: string;
   projectRoot: string;
@@ -400,11 +538,18 @@ export function initializeGitSubmodule(options: {
   }
 
   const args = ["submodule", "add", "--depth", "1"];
+  const localRepoRoot = resolveLocalRepoRoot(options.repo);
+  if (localRepoRoot) {
+    args.push("--reference", localRepoRoot);
+  }
   if (options.branch?.trim()) {
     args.push("-b", options.branch.trim());
   }
   args.push(options.repo, options.submodulePath);
-  execFileSync("git", args, { cwd: options.projectRoot, stdio: "inherit" });
+  execFileSync("git", withOptionalFileProtocol(options.repo, args), {
+    cwd: options.projectRoot,
+    stdio: "inherit",
+  });
 }
 
 export function updateGitSubmodule(options: {
@@ -430,9 +575,17 @@ export function updateGitSubmodule(options: {
     return;
   }
 
+  const localRepoRoot = resolveLocalRepoRoot(options.repo);
   execFileSync(
     "git",
-    ["submodule", "update", "--init", "--remote", options.submodulePath],
+    withOptionalFileProtocol(options.repo, [
+      "submodule",
+      "update",
+      "--init",
+      "--remote",
+      ...(localRepoRoot ? ["--reference", localRepoRoot] : []),
+      options.submodulePath,
+    ]),
     { cwd: options.projectRoot, stdio: "inherit" },
   );
 }

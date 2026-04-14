@@ -1,8 +1,8 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
-  appId: "com.elizaos.eliza",
-  appName: "Eliza",
+  appId: "__BUNDLE_ID__",
+  appName: "__APP_NAME__",
   webDir: "dist",
   server: {
     androidScheme: "https",

@@ -19,7 +19,7 @@
  * have the sibling checkout.
  *
  * This file intentionally reuses `createPackageLink` from
- * setup-eliza-workspace.mjs so the same symlink semantics (relative
+ * setup-upstreams.mjs so the same symlink semantics (relative
  * symlink on POSIX, junction on Windows, idempotent replace) apply.
  */
 
@@ -62,7 +62,7 @@ export const EXTERNAL_PLUGIN_SOURCES = [
 /**
  * The three node_modules locations where Eliza expects `@elizaos/*`
  * packages to resolve from — matches the list used by
- * setup-eliza-workspace.mjs so dynamic imports work from every entry
+ * setup-upstreams.mjs so dynamic imports work from every entry
  * point (root CLI, apps/app Vite shell, apps/home dashboard).
  */
 function linkTargetsFor(repoRoot, scope, basename) {

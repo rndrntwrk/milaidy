@@ -1358,8 +1358,8 @@ X-GNOME-Autostart-enabled=true
     try {
       const result = await Updater.checkForUpdate();
       if (result?.updateAvailable) {
-        void Updater.downloadUpdate().catch((error: unknown) => {
-          console.warn("[Desktop] Failed to download update:", error);
+        void this.downloadUpdateWithRetry().catch((error: unknown) => {
+          console.warn("[Desktop] Update download failed after retries:", error);
         });
       }
       return await this.getUpdaterState();
@@ -1370,6 +1370,27 @@ X-GNOME-Autostart-enabled=true
 
   async getUpdaterState(): Promise<DesktopUpdaterSnapshot> {
     return this.buildUpdaterSnapshot();
+  }
+
+  private async downloadUpdateWithRetry(
+    maxAttempts = 3,
+    baseDelayMs = 2_000,
+  ): Promise<void> {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        await Updater.downloadUpdate();
+        return;
+      } catch (error) {
+        const isLastAttempt = attempt === maxAttempts;
+        if (isLastAttempt) throw error;
+        const delay = baseDelayMs * 2 ** (attempt - 1);
+        console.warn(
+          `[Desktop] Update download attempt ${attempt}/${maxAttempts} failed, retrying in ${delay}ms:`,
+          error,
+        );
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
   }
 
   async applyUpdate(): Promise<void> {

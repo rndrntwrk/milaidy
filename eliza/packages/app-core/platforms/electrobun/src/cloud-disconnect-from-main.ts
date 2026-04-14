@@ -50,7 +50,7 @@ export function buildMainApiHeaders(
   return headers;
 }
 
-export const buildthe appMainApiHeaders = buildMainApiHeaders;
+export const buildAppMainApiHeaders = buildMainApiHeaders;
 
 export async function postCloudDisconnectFromMain(options?: {
   fetchImpl?: FetchLike;

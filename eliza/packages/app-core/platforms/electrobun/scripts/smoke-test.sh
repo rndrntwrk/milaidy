@@ -26,12 +26,15 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ELECTROBUN_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 APP_DIR="$(cd "$ELECTROBUN_DIR/.." && pwd)"
 REPO_ROOT="$(cd "$ELECTROBUN_DIR/../../.." && pwd)"
+APP_CORE_SCRIPTS_DIR="$REPO_ROOT/eliza/packages/app-core/scripts"
+PACKAGED_DIST_DIR="$REPO_ROOT/dist"
 BUILD_ENV="${BUILD_ENV:-canary}"
 SKIP_SIGNATURE_CHECK="${SKIP_SIGNATURE_CHECK:-0}"
 SKIP_BUILD="${SKIP_BUILD:-0}"
 STARTUP_TIMEOUT="${STARTUP_TIMEOUT:-180}"
 LIVENESS_TIMEOUT="${LIVENESS_TIMEOUT:-8}"
 PACKAGED_HANDOFF_GRACE_SECONDS="${PACKAGED_HANDOFF_GRACE_SECONDS:-90}"
+RUN_PACKAGED_PLAYWRIGHT="${RUN_PACKAGED_PLAYWRIGHT:-1}"
 BUILD_SKIP_CODESIGN="${ELECTROBUN_SKIP_CODESIGN:-}"
 BUILD_DEVELOPER_ID="${ELECTROBUN_DEVELOPER_ID:-}"
 ARTIFACTS_DIR_OVERRIDE="${ARTIFACTS_DIR:-}"
@@ -739,12 +742,12 @@ if [[ "$SKIP_BUILD" == "1" ]]; then
   echo "[1/7] Reusing existing packaged artifact (SKIP_BUILD=1)..."
 else
   echo "[1/7] Building core dist + renderer assets..."
-  (cd "$REPO_ROOT" && bunx tsdown && echo '{"type":"module"}' > dist/package.json && node --import tsx scripts/write-build-info.ts)
+  (cd "$REPO_ROOT" && bunx tsdown && echo '{"type":"module"}' > "$PACKAGED_DIST_DIR/package.json" && node --import tsx "$APP_CORE_SCRIPTS_DIR/write-build-info.ts")
   (cd "$APP_DIR" && npx vite build)
   echo ""
 
   echo "[2/7] Bundling runtime node_modules into dist/..."
-  (cd "$REPO_ROOT" && node --import tsx scripts/copy-runtime-node-modules.ts --scan-dir dist --target-dist dist)
+  (cd "$REPO_ROOT" && node --import tsx "$APP_CORE_SCRIPTS_DIR/copy-runtime-node-modules.ts" --scan-dir "$PACKAGED_DIST_DIR" --target-dist "$PACKAGED_DIST_DIR")
   echo ""
 
   if [[ "$(uname)" == "Darwin" ]]; then
@@ -1063,6 +1066,19 @@ else
   cat "$LAUNCHER_STDERR" 2>/dev/null || true
   dump_failure_diagnostics "packaged app process did not stay alive"
   exit 1
+fi
+
+if [[ "$RUN_PACKAGED_PLAYWRIGHT" != "0" ]]; then
+  echo "Running packaged desktop regression assertions..."
+  kill_stale_processes
+  (
+    cd "$APP_DIR"
+    bunx playwright test \
+      --config playwright.electrobun.packaged.config.ts \
+      test/electrobun-packaged/electrobun-packaged-regressions.e2e.spec.ts
+  )
+  kill_stale_processes
+  echo "Packaged desktop regression assertions PASSED."
 fi
 
 echo ""

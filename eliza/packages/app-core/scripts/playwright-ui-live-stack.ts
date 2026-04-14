@@ -502,9 +502,9 @@ async function startRealStack(): Promise<StartedStack> {
     (status) => status.complete === true,
     READY_TIMEOUT_MS,
   );
-  await waitForJsonPredicate<{ onboardingComplete?: boolean; status?: string }>(
-    `${apiBase}/api/agent/status`,
-    (status) => status.onboardingComplete === true,
+  await waitForJsonPredicate<{ state?: string }>(
+    `${apiBase}/api/status`,
+    (status) => status.state === "running",
     READY_TIMEOUT_MS,
   );
 

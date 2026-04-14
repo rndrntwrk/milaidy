@@ -798,6 +798,7 @@ if (uiOnly) {
   const apiCmd = hasBun
     ? [
         "bun",
+        "--no-install",
         ...resolvedStealthImports.flatMap((filePath) => [
           "--preload",
           filePath,

@@ -1,5 +1,6 @@
 export * from "./app-config";
 export * from "./boot-config";
+export * from "./boot-config-react";
 export * from "./branding";
 export * from "./cloud-only";
 export * from "./config-catalog";

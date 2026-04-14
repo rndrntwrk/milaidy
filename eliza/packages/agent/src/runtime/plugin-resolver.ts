@@ -14,7 +14,7 @@ import crypto from "node:crypto";
 import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { pathToFileURL } from "node:url";
 
 import { logger, type Plugin } from "@elizaos/core";
 
@@ -108,15 +108,11 @@ function resolveWorkspaceRoots(): string[] {
     return uniquePaths([envRoot]);
   }
 
-  const moduleDir = path.dirname(fileURLToPath(import.meta.url));
-  const cwd = process.cwd();
-  return uniquePaths([
-    cwd,
-    path.resolve(cwd, ".."),
-    path.resolve(cwd, "..", ".."),
-    path.resolve(moduleDir, "..", "..", "..", ".."),
-    path.resolve(moduleDir, "..", "..", ".."),
-  ]);
+  // Phase 3: only search cwd — parent-directory and module-relative fallbacks
+  // removed. Repo-local ./eliza submodule + setup:upstreams symlinks handle
+  // plugin resolution for development. Set ELIZA_WORKSPACE_ROOT explicitly
+  // for external override scenarios.
+  return uniquePaths([process.cwd()]);
 }
 
 function getWorkspacePluginOverridePath(pluginName: string): string | null {

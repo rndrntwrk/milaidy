@@ -1,5 +1,5 @@
 {
-  "name": "@elizaos/electrobun",
+  "name": "__ELECTROBUN_PACKAGE_NAME__",
   "version": "2.0.0-alpha.87",
   "private": true,
   "type": "module",

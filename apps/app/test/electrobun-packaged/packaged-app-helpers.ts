@@ -289,8 +289,11 @@ async function fetchJson<T>(
 ): Promise<T> {
   const response = await fetch(url, options);
   if (!response.ok) {
+    const responseText = (await response.text().catch(() => "")).trim();
     throw new Error(
-      `${options.method ?? "GET"} ${url} failed (${response.status})`,
+      `${options.method ?? "GET"} ${url} failed (${response.status})${
+        responseText ? `: ${responseText.slice(0, 400)}` : ""
+      }`,
     );
   }
   return (await response.json()) as T;
@@ -448,18 +451,37 @@ export class PackagedDesktopHarness {
   }
 
   async eval<T>(script: string): Promise<T> {
-    const response = await fetchJson<{ result: T }>(
-      `${this.bridgeUrl}/main-window/eval`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${this.bridgeToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ script }),
-      },
+    const startedAt = Date.now();
+    let lastError: Error | null = null;
+
+    while (Date.now() - startedAt < 30_000) {
+      try {
+        const response = await fetchJson<{ result: T }>(
+          `${this.bridgeUrl}/main-window/eval`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${this.bridgeToken}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ script }),
+          },
+        );
+        return response.result;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (!message.includes("/main-window/eval failed (500)")) {
+          throw error;
+        }
+        lastError = error instanceof Error ? error : new Error(message);
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+    }
+
+    throw (
+      lastError ??
+      new Error("Timed out waiting for main-window/eval to become ready")
     );
-    return response.result;
   }
 
   async screenshot(): Promise<string> {

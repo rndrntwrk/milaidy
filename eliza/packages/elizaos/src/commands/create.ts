@@ -10,11 +10,17 @@ import {
   buildMetadata,
   buildPluginTemplateValues,
   getTemplateReplacementEntries,
+  hydrateGitSubmoduleWorkspace,
   initializeGitSubmodule,
   renderTemplateTree,
   resolveTemplateSourceDir,
+  resolveTemplateUpstream,
 } from "../scaffold.js";
-import type { CreateOptions, FullstackTemplateValues, PluginTemplateValues } from "../types.js";
+import type {
+  CreateOptions,
+  FullstackTemplateValues,
+  PluginTemplateValues,
+} from "../types.js";
 
 const LANGUAGE_NAMES: Record<string, string> = {
   python: "Python",
@@ -46,7 +52,8 @@ function unwrapPromptResult<T>(value: T, message = "Operation cancelled."): T {
 function validateProjectDirectory(name: string): string | undefined {
   const normalized = normalizeProjectName(name);
   if (!normalized) return "Project name is required";
-  if (fs.existsSync(normalized)) return `Directory '${normalized}' already exists`;
+  if (fs.existsSync(normalized))
+    return `Directory '${normalized}' already exists`;
   return undefined;
 }
 
@@ -239,12 +246,17 @@ export async function create(
   });
 
   if (template.upstream && !options.skipUpstream) {
+    const upstream = resolveTemplateUpstream(template.upstream);
     spinner.message("Initializing upstream eliza checkout...");
     initializeGitSubmodule({
-      branch: template.upstream.branch,
+      branch: upstream.branch,
       projectRoot: destinationDir,
-      repo: template.upstream.repo,
-      submodulePath: template.upstream.path,
+      repo: upstream.repo,
+      submodulePath: upstream.path,
+    });
+    hydrateGitSubmoduleWorkspace({
+      projectRoot: destinationDir,
+      upstream,
     });
   }
 

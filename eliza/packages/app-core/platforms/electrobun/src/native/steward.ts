@@ -20,7 +20,7 @@ import {
   createDesktopStewardSidecar,
   type StewardSidecar,
   type StewardSidecarStatus,
-} from "@elizaos/app-core";
+} from "@elizaos/app-core/services/steward-sidecar";
 import { saveStewardCredentials } from "@elizaos/app-steward/services/steward-credentials";
 import { getBrandConfig } from "../brand-config";
 

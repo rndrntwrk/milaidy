@@ -6,8 +6,12 @@ import { defineConfig } from "vitest/config";
 import {
   getAppCoreSourceRoot,
   getAutonomousSourceRoot,
+  getUiSourceRoot,
 } from "../../test/eliza-package-paths";
-import { getAppCoreBridgeStubPath } from "../../test/vitest/workspace-aliases";
+import {
+  getAppCoreBridgeStubPath,
+  getUiSourceAliases,
+} from "../../test/vitest/workspace-aliases";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "../..");
@@ -17,6 +21,7 @@ const nativePluginsRoot = path.join(
 );
 const appCorePackageRoot = getAppCoreSourceRoot(here);
 const agentSourceRoot = getAutonomousSourceRoot(here);
+const uiSourceRoot = getUiSourceRoot(here);
 const bridgeStubPath = getAppCoreBridgeStubPath(repoRoot);
 
 /**
@@ -105,6 +110,7 @@ export default defineConfig({
             return generatedAliases;
           })()
         : []),
+      ...getUiSourceAliases(uiSourceRoot),
       // Resolve @elizaos/agent sub-path imports to the source tree
       ...(agentSourceRoot
         ? [

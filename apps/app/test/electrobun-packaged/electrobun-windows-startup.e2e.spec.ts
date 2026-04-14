@@ -44,10 +44,14 @@ test("packaged Windows app bootstraps the renderer against the external API over
     expect(api.requests.length).toBeGreaterThan(0);
     expect(
       `${harness.logs?.stdout.join("") ?? ""}\n${harness.logs?.stderr.join("") ?? ""}`,
-    ).not.toMatch(/Fatal error during startup|startup failure|Cannot find module/i);
+    ).not.toMatch(
+      /Fatal error during startup|startup failure|Cannot find module/i,
+    );
   } finally {
     await harness?.stop().catch(() => undefined);
     await api?.close().catch(() => undefined);
-    await fs.rm(tempRoot, { recursive: true, force: true }).catch(() => undefined);
+    await fs
+      .rm(tempRoot, { recursive: true, force: true })
+      .catch(() => undefined);
   }
 });

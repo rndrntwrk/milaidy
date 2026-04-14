@@ -51,7 +51,10 @@ function normalizeHostname(
 ): string {
   const candidate =
     typeof value === "string"
-      ? value.trim().replace(/^https?:\/\//, "").replace(/\/+$/, "")
+      ? value
+          .trim()
+          .replace(/^https?:\/\//, "")
+          .replace(/\/+$/, "")
       : undefined;
   return candidate && candidate.length > 0 ? candidate : fallback;
 }

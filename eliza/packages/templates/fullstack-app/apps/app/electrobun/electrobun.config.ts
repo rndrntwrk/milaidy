@@ -12,8 +12,8 @@ const libMacWindowEffectsDylib = path.join(
 
 export default {
   app: {
-    name: "Eliza",
-    identifier: "com.elizaos.eliza",
+    name: "__APP_NAME__",
+    identifier: "__BUNDLE_ID__",
     version: "2.0.0-alpha.87",
     description: "Cute AI agents for the desktop",
     urlSchemes: ["eliza"],
@@ -151,7 +151,7 @@ export default {
     },
   },
   release: {
-    baseUrl: "https://eliza.app/releases/",
+    baseUrl: "__RELEASE_BASE_URL__",
     generatePatch: true,
   },
 } satisfies ElectrobunConfig;

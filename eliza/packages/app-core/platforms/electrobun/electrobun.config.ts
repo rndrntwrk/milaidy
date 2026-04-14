@@ -4,6 +4,44 @@ import { fileURLToPath } from "node:url";
 import type { ElectrobunConfig } from "electrobun/bun";
 
 const electrobunDir = path.dirname(fileURLToPath(import.meta.url));
+function findMiladyRepoRoot(startDir: string): string {
+  let current = path.resolve(startDir);
+  while (true) {
+    if (
+      fs.existsSync(path.join(current, "bun.lock")) &&
+      fs.existsSync(path.join(current, "package.json")) &&
+      fs.existsSync(path.join(current, "apps/app/electrobun/package.json")) &&
+      fs.existsSync(path.join(current, "eliza/packages/app-core/package.json"))
+    ) {
+      return current;
+    }
+    const parent = path.dirname(current);
+    if (parent === current) {
+      throw new Error(
+        `Could not locate monorepo root from Electrobun config at ${startDir}`,
+      );
+    }
+    current = parent;
+  }
+}
+
+const repoRoot = findMiladyRepoRoot(process.cwd());
+const rendererDistDir = path.relative(
+  electrobunDir,
+  path.join(repoRoot, "apps/app/dist"),
+);
+const runtimeBundleDistDir = path.relative(
+  electrobunDir,
+  path.join(repoRoot, "dist"),
+);
+const repoPluginsJsonPath = path.relative(
+  electrobunDir,
+  path.join(repoRoot, "plugins.json"),
+);
+const repoPackageJsonPath = path.relative(
+  electrobunDir,
+  path.join(repoRoot, "package.json"),
+);
 const libMacWindowEffectsDylib = path.join(
   electrobunDir,
   "src",
@@ -70,11 +108,11 @@ export function createElectrobunConfig(): ElectrobunConfig {
       // 2. Electrobun-native Dawn for Bun-side GpuWindow / <electrobun-wgpu>
       //    surfaces and future native compute workloads.
       copy: {
-        "../dist": "renderer",
+        [rendererDistDir]: "renderer",
         "src/preload.js": "bun/preload.js",
-        "../../../dist": runtimeDistDir,
-        "../../../plugins.json": `${runtimeDistDir}/plugins.json`,
-        "../../../package.json": `${runtimeDistDir}/package.json`,
+        [runtimeBundleDistDir]: runtimeDistDir,
+        [repoPluginsJsonPath]: `${runtimeDistDir}/plugins.json`,
+        [repoPackageJsonPath]: `${runtimeDistDir}/package.json`,
         "assets/appIcon.png": "assets/appIcon.png",
         "assets/appIcon.ico": "assets/appIcon.ico",
         ...(process.platform === "darwin" &&

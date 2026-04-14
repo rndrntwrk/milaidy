@@ -5,6 +5,8 @@ export interface TemplateUpstream {
   repo: string;
   branch?: string;
   mode: "git-submodule";
+  requiredSubmodules?: string[];
+  requiredWorkspaces?: string[];
 }
 
 export interface TemplateDefinition {

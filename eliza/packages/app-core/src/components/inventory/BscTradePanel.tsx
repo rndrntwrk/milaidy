@@ -240,6 +240,7 @@ export function TradePanel({
         side: latestQuote.side,
         tokenAddress: pendingTrade.token,
         amount: pendingTrade.amount,
+        routeProvider: latestQuote.routeProvider,
       });
       setLatestExecution(result);
       if (result?.executed && result?.execution) {
@@ -621,6 +622,21 @@ export function TradePanel({
               {latestQuote.quoteOut?.amount ?? ""}{" "}
               {latestQuote.quoteOut?.symbol ?? ""}
             </div>
+            {latestQuote.routeProvider && (
+              <div className="text-2xs text-muted mt-0.5">
+                Route: {latestQuote.routeProvider}
+                {latestQuote.routeProviderFallbackUsed && (
+                  <span className="text-[color:var(--warn,var(--accent))] ml-1">
+                    (fallback from {latestQuote.routeProviderRequested})
+                  </span>
+                )}
+              </div>
+            )}
+            {latestQuote.routeProviderNotes?.length ? (
+              <div className="text-2xs text-muted mt-0.5">
+                {latestQuote.routeProviderNotes.join("; ")}
+              </div>
+            ) : null}
             {pendingTrade ? (
               <div className="mt-1 flex items-center gap-2">
                 <span className="font-bold text-[color:var(--warn,var(--accent))]">

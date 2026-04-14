@@ -20,7 +20,7 @@ export * from "./config/index.ts";
 export * from "./types/index.ts";
 export * from "./events/index.ts";
 export * from "./hooks/useActivityEvents.ts";
-export * from "./hooks/useBugReport.ts";
+export * from "./hooks/useBugReport.tsx";
 export * from "./hooks/useChatAvatarVoiceBridge.ts";
 export * from "./hooks/useCanvasWindow.ts";
 export * from "./hooks/useContextMenu.ts";

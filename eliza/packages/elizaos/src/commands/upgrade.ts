@@ -3,12 +3,17 @@ import * as clack from "@clack/prompts";
 import pc from "picocolors";
 import { getTemplateById, getTemplatesDir } from "../manifest.js";
 import { getCliVersion } from "../package-info.js";
-import { readProjectMetadata, writeProjectMetadata } from "../project-metadata.js";
+import {
+  readProjectMetadata,
+  writeProjectMetadata,
+} from "../project-metadata.js";
 import {
   buildMetadata,
   createRenderedTempDir,
   getTemplateReplacementEntries,
+  hydrateGitSubmoduleWorkspace,
   resolveTemplateSourceDir,
+  resolveTemplateUpstream,
   updateGitSubmodule,
   updateManagedFiles,
 } from "../scaffold.js";
@@ -26,7 +31,9 @@ export async function upgrade(options: UpgradeOptions): Promise<void> {
 
   const template = getTemplateById(metadata.templateId);
   if (!template) {
-    clack.cancel(`Template '${metadata.templateId}' is not available in this CLI build.`);
+    clack.cancel(
+      `Template '${metadata.templateId}' is not available in this CLI build.`,
+    );
     process.exit(1);
   }
 
@@ -58,34 +65,41 @@ export async function upgrade(options: UpgradeOptions): Promise<void> {
   });
 
   if (template.upstream && !options.skipUpstream) {
+    const upstream = resolveTemplateUpstream(template.upstream);
     spinner.message("Updating upstream eliza checkout...");
     updateGitSubmodule({
-      branch: template.upstream.branch,
+      branch: upstream.branch,
       dryRun: options.check || options.dryRun,
       projectRoot,
-      repo: template.upstream.repo,
-      submodulePath: template.upstream.path,
+      repo: upstream.repo,
+      submodulePath: upstream.path,
+    });
+    hydrateGitSubmoduleWorkspace({
+      dryRun: options.check || options.dryRun,
+      projectRoot,
+      upstream,
     });
   }
 
-  spinner.stop(options.check || options.dryRun ? "Upgrade check complete." : "Upgrade complete.");
+  spinner.stop(
+    options.check || options.dryRun
+      ? "Upgrade check complete."
+      : "Upgrade complete.",
+  );
 
   fs.rmSync(rendered.dir, { force: true, recursive: true });
 
   if (!(options.check || options.dryRun)) {
-    writeProjectMetadata(
-      projectRoot,
-      {
-        ...buildMetadata({
-          cliVersion: getCliVersion(),
-          language: metadata.language,
-          managedFiles: result.nextManagedFiles,
-          template,
-          values: metadata.values,
-        }),
-        createdAt: metadata.createdAt,
-      },
-    );
+    writeProjectMetadata(projectRoot, {
+      ...buildMetadata({
+        cliVersion: getCliVersion(),
+        language: metadata.language,
+        managedFiles: result.nextManagedFiles,
+        template,
+        values: metadata.values,
+      }),
+      createdAt: metadata.createdAt,
+    });
   }
 
   console.log();

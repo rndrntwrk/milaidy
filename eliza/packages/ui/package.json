@@ -27,6 +27,12 @@
   "exports": {
     ".": "./src/index.ts",
     "./components/*": "./src/components/*",
+    "./components/*/*": "./src/components/*/*",
+    "./components/*/*/*": "./src/components/*/*/*",
+    "./components/ui/*": "./src/components/ui/*.tsx",
+    "./components/composites/page-panel": "./src/components/composites/page-panel/index.ts",
+    "./components/composites/*": "./src/components/composites/*",
+    "./components/composites/*/*": "./src/components/composites/*/*.tsx",
     "./hooks": "./src/hooks/index.ts",
     "./hooks/*": "./src/hooks/*",
     "./layouts": "./src/layouts/index.ts",

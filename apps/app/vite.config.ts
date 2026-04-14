@@ -32,6 +32,7 @@ const nativePluginsRoot = path.join(
   "eliza/packages/native-plugins",
 );
 const appCoreSrcRoot = path.join(miladyRoot, "eliza/packages/app-core/src");
+const uiPkgRoot = path.join(miladyRoot, "eliza/packages/ui");
 
 // Mirror MILADY_* env into ELIZA_* before the shared runtime helpers resolve ports.
 syncElizaEnvAliases();
@@ -1074,6 +1075,48 @@ export default defineConfig({
           nativePluginsRoot,
           "websiteblocker/src/index.ts",
         ),
+      },
+      // Force local @elizaos/ui source paths when the app bundles linked
+      // @elizaos/app-core sources directly.
+      {
+        find: /^@elizaos\/ui$/,
+        replacement: path.join(uiPkgRoot, "src/index.ts"),
+      },
+      {
+        find: /^@elizaos\/ui\/components\/ui\/(.*)$/,
+        replacement: `${uiPkgRoot}/src/components/ui/$1.tsx`,
+      },
+      {
+        find: /^@elizaos\/ui\/components\/composites\/([^/]+)$/,
+        replacement: `${uiPkgRoot}/src/components/composites/$1/index.ts`,
+      },
+      {
+        find: /^@elizaos\/ui\/components\/composites\/(.+)\/([^/]+)$/,
+        replacement: `${uiPkgRoot}/src/components/composites/$1/$2.tsx`,
+      },
+      {
+        find: /^@elizaos\/ui\/hooks$/,
+        replacement: path.join(uiPkgRoot, "src/hooks/index.ts"),
+      },
+      {
+        find: /^@elizaos\/ui\/hooks\/(.*)$/,
+        replacement: `${uiPkgRoot}/src/hooks/$1.ts`,
+      },
+      {
+        find: /^@elizaos\/ui\/layouts$/,
+        replacement: path.join(uiPkgRoot, "src/layouts/index.ts"),
+      },
+      {
+        find: /^@elizaos\/ui\/layouts\/([^/]+)$/,
+        replacement: `${uiPkgRoot}/src/layouts/$1/index.ts`,
+      },
+      {
+        find: /^@elizaos\/ui\/layouts\/(.+)\/([^/]+)$/,
+        replacement: `${uiPkgRoot}/src/layouts/$1/$2.tsx`,
+      },
+      {
+        find: /^@elizaos\/ui\/lib\/(.*)$/,
+        replacement: `${uiPkgRoot}/src/lib/$1.ts`,
       },
       // Dynamic aliases for all eliza/apps/* packages
       ...(() => {

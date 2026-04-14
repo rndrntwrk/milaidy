@@ -575,7 +575,7 @@ export function getRuntimeDistFallbackCandidates(
 }
 
 /** @deprecated Use getRuntimeDistFallbackCandidates instead. */
-export const getthe appDistFallbackCandidates = getRuntimeDistFallbackCandidates;
+export const getAppDistFallbackCandidates = getRuntimeDistFallbackCandidates;
 
 export function isPackagedDesktopRuntime(
   moduleDir: string = getDefaultModuleDir(),
@@ -766,7 +766,7 @@ export function resolveRuntimeDistPath(opts?: {
 }
 
 /** @deprecated Use resolveRuntimeDistPath instead. */
-export const resolvethe appDistPath = resolveRuntimeDistPath;
+export const resolveAppDistPath = resolveRuntimeDistPath;
 
 export function buildChildNodePaths(
   runtimeDistPath: string,
@@ -1170,7 +1170,7 @@ export class AgentManager {
     try {
       // Resolve the bundled runtime dist path.
       this.setStartupPhase("resolving_runtime");
-      const runtimeDistPath = resolvethe appDistPath();
+      const runtimeDistPath = resolveAppDistPath();
       diagnosticLog(`[Agent] Resolved runtime dist: ${runtimeDistPath}`);
 
       // Packaged builds can expose the runnable entry either at the dist root

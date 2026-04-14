@@ -6,6 +6,7 @@ import { afterEach, describe, expect, test } from "vitest";
 import {
   buildFullstackTemplateValues,
   buildPluginTemplateValues,
+  ensurePackageJsonWorkspaces,
   getFullstackReplacementEntries,
   getPluginReplacementEntries,
   updateManagedFiles,
@@ -48,25 +49,80 @@ describe("template value builders", () => {
     expect(values.appName).toBe("Cool App");
     expect(
       getFullstackReplacementEntries(values).some(
-        ([from, to]) => from === "Eliza" && to === "Cool App",
+        ([from, to]) =>
+          from === "__APP_PACKAGE_NAME__" && to === "cool-app-app",
+      ),
+    ).toBe(true);
+    expect(
+      getFullstackReplacementEntries(values).some(
+        ([from, to]) =>
+          from === "__ELECTROBUN_PACKAGE_NAME__" &&
+          to === "cool-app-electrobun",
       ),
     ).toBe(true);
   });
 });
 
 describe("managed file upgrades", () => {
+  test("adds missing workspace entries without duplicating existing ones", () => {
+    const projectRoot = fs.mkdtempSync(
+      path.join(os.tmpdir(), "elizaos-workspaces-"),
+    );
+    tempDirs.push(projectRoot);
+
+    const packageJsonPath = path.join(projectRoot, "package.json");
+    fs.writeFileSync(
+      packageJsonPath,
+      `${JSON.stringify(
+        {
+          name: "fixture",
+          private: true,
+          workspaces: ["packages/*", "plugins/plugin-sql/typescript"],
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    expect(
+      ensurePackageJsonWorkspaces(packageJsonPath, [
+        "plugins/plugin-sql/typescript",
+        "plugins/plugin-elizacloud/typescript",
+      ]),
+    ).toBe(true);
+
+    const next = JSON.parse(fs.readFileSync(packageJsonPath, "utf8")) as {
+      workspaces: string[];
+    };
+    expect(next.workspaces).toEqual([
+      "packages/*",
+      "plugins/plugin-sql/typescript",
+      "plugins/plugin-elizacloud/typescript",
+    ]);
+  });
+
   test("updates untouched managed files and reports conflicts", () => {
-    const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), "elizaos-upgrade-project-"));
-    const renderedDir = fs.mkdtempSync(path.join(os.tmpdir(), "elizaos-upgrade-render-"));
+    const projectRoot = fs.mkdtempSync(
+      path.join(os.tmpdir(), "elizaos-upgrade-project-"),
+    );
+    const renderedDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "elizaos-upgrade-render-"),
+    );
     tempDirs.push(projectRoot, renderedDir);
 
     fs.mkdirSync(path.join(projectRoot, "config"), { recursive: true });
     fs.writeFileSync(path.join(projectRoot, "config", "safe.txt"), "old\n");
-    fs.writeFileSync(path.join(projectRoot, "config", "conflict.txt"), "local\n");
+    fs.writeFileSync(
+      path.join(projectRoot, "config", "conflict.txt"),
+      "local\n",
+    );
 
     fs.mkdirSync(path.join(renderedDir, "config"), { recursive: true });
     fs.writeFileSync(path.join(renderedDir, "config", "safe.txt"), "new\n");
-    fs.writeFileSync(path.join(renderedDir, "config", "conflict.txt"), "upstream\n");
+    fs.writeFileSync(
+      path.join(renderedDir, "config", "conflict.txt"),
+      "upstream\n",
+    );
     fs.writeFileSync(path.join(renderedDir, "config", "added.txt"), "added\n");
 
     const metadata: ProjectTemplateMetadata = {

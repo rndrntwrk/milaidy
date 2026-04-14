@@ -54,6 +54,45 @@ const root = resolveRepoRootFromImportMeta(import.meta.url);
 // ---------------------------------------------------------------------------
 warnStaleBunCache(root);
 
+// ---------------------------------------------------------------------------
+// Bun auto-installs @types/* packages into node_modules/.bun/ and can resolve
+// them at runtime instead of the real packages. The .d.ts files use
+// TypeScript-only syntax like `export as namespace X;` which causes
+// "Unexpected as" parse errors in Bun. Remove ALL @types entries from the
+// .bun cache and node_modules/@types so Bun resolves real packages instead.
+// ---------------------------------------------------------------------------
+{
+  let removedCount = 0;
+  for (const nmDir of [
+    resolve(root, "node_modules/.bun"),
+    resolve(root, "eliza/node_modules/.bun"),
+  ]) {
+    if (existsSync(nmDir)) {
+      try {
+        for (const entry of readdirSync(nmDir)) {
+          if (entry.startsWith("@types+")) {
+            rmSync(resolve(nmDir, entry), { recursive: true, force: true });
+            removedCount++;
+          }
+        }
+      } catch {}
+    }
+  }
+  // Also remove @types directories from node_modules root
+  for (const nmDir of [
+    resolve(root, "node_modules/@types"),
+    resolve(root, "eliza/node_modules/@types"),
+  ]) {
+    if (existsSync(nmDir)) {
+      rmSync(nmDir, { recursive: true, force: true });
+      removedCount++;
+    }
+  }
+  if (removedCount > 0) {
+    console.log(`[patch-deps] Removed ${removedCount} @types entries from Bun cache (prevents runtime .d.ts parse errors)`);
+  }
+}
+
 // @noble/hashes only exports subpaths with explicit ".js" suffixes (for
 // example "./sha3.js"), but ethers imports "@noble/hashes/sha3". Add
 // extensionless aliases so Bun resolves the published package at runtime.

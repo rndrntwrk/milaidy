@@ -8,21 +8,21 @@ import { App as CapacitorApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import { Keyboard } from "@capacitor/keyboard";
 import { StatusBar, Style } from "@capacitor/status-bar";
-import { App } from "@elizaos/app-core";
-import { client } from "@elizaos/app-core";
+import { App } from "@elizaos/app-core/App";
+import { client } from "@elizaos/app-core/api";
 import {
   initializeCapacitorBridge,
   subscribeDesktopBridgeEvent,
   initializeStorageBridge,
   isElectrobunRuntime,
-} from "@elizaos/app-core";
-import { CharacterEditor } from "@elizaos/app-core";
-import type { BrandingConfig } from "@elizaos/app-core";
+} from "@elizaos/app-core/bridge";
+import { CharacterEditor } from "@elizaos/app-core/components/character/CharacterEditor";
+import type { AppBootConfig, BrandingConfig } from "@elizaos/app-core/config";
 import {
-  type AppBootConfig,
   getBootConfig,
   setBootConfig,
-} from "@elizaos/app-core";
+  shouldUseCloudOnlyBranding,
+} from "@elizaos/app-core/config";
 import {
   AGENT_READY_EVENT,
   APP_PAUSE_EVENT,
@@ -32,7 +32,7 @@ import {
   dispatchAppEvent,
   SHARE_TARGET_EVENT,
   TRAY_ACTION_EVENT,
-} from "@elizaos/app-core";
+} from "@elizaos/app-core/events";
 import {
   applyForceFreshOnboardingReset,
   applyLaunchConnectionFromUrl,
@@ -44,35 +44,32 @@ import {
   resolveWindowShellRoute,
   shouldInstallMainWindowOnboardingPatches,
   syncDetachedShellLocation,
-} from "@elizaos/app-core";
+} from "@elizaos/app-core/platform";
 import {
   DESKTOP_TRAY_MENU_ITEMS,
   DesktopOnboardingRuntime,
   DesktopSurfaceNavigationRuntime,
   DesktopTrayRuntime,
   DetachedShellRoot,
-} from "@elizaos/app-core";
-import { AppProvider } from "@elizaos/app-core";
-import { applyUiTheme, loadUiTheme } from "@elizaos/app-core";
+} from "@elizaos/app-core/shell";
+import { AppProvider, applyUiTheme, loadUiTheme } from "@elizaos/app-core/state";
 import { Agent } from "@elizaos/capacitor-agent";
 import { Desktop } from "@elizaos/capacitor-desktop";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { ELIZA_ENV_ALIASES } from "./brand-env";
 import { ELIZA_CHARACTER_CATALOG } from "./character-catalog";
-import { shouldUseCloudOnlyBranding } from "@elizaos/app-core";
 
 const ELIZA_BRANDING: Partial<BrandingConfig> = {
-  appName: "Eliza",
-  orgName: "eliza-ai",
-  repoName: "eliza",
-  docsUrl: "https://docs.eliza.app",
-  appUrl: "https://app.eliza.app",
-  bugReportUrl:
-    "https://github.com/elizaos/eliza/issues/new?template=bug_report.yml",
-  hashtag: "#ElizaAgent",
-  fileExtension: ".eliza-agent",
-  packageScope: "elizaos",
+  appName: "__APP_NAME__",
+  orgName: "__ORG_NAME__",
+  repoName: "__REPO_NAME__",
+  docsUrl: "__DOCS_URL__",
+  appUrl: "__APP_URL__",
+  bugReportUrl: "__BUG_REPORT_URL__",
+  hashtag: "__HASHTAG__",
+  fileExtension: "__FILE_EXTENSION__",
+  packageScope: "__PACKAGE_SCOPE__",
   // The hosted web bundle stays cloud-only in production. Desktop shells and
   // other hosts inject an explicit API base before React boots, and that host
   // backend should control onboarding capabilities instead.
@@ -388,7 +385,7 @@ async function initializeDesktopShell(): Promise<void> {
   subscribeDesktopBridgeEvent({
     rpcMessage: "shareTargetReceived",
     ipcChannel: "desktop:shareTargetReceived",
-    listener: (payload) => {
+    listener: (payload: unknown) => {
       const url = (payload as { url?: string } | null | undefined)?.url;
       if (typeof url !== "string" || url.trim().length === 0) {
         return;

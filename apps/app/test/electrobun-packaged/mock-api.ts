@@ -609,6 +609,64 @@ export async function startMockApiServer(
       json(res, 200, { ok: true });
       return;
     }
+    if (method === "POST" && pathname === "/api/provider/switch") {
+      const body = await readJson(req);
+      const provider =
+        typeof body.provider === "string" ? body.provider.trim() : "";
+      const primaryModel =
+        typeof body.primaryModel === "string" ? body.primaryModel.trim() : "";
+
+      if (!provider) {
+        json(res, 400, { error: "provider is required" });
+        return;
+      }
+
+      if (provider === "openai") {
+        config = {
+          ...config,
+          serviceRouting: {
+            llmText: {
+              transport: "direct",
+              backend: "openai",
+              primaryModel: primaryModel || "gpt-5.4-nano",
+            },
+          },
+        };
+      } else if (provider === "ollama") {
+        config = {
+          ...config,
+          serviceRouting: {
+            llmText: {
+              transport: "direct",
+              backend: "ollama",
+              primaryModel: primaryModel || "llama3.2",
+            },
+          },
+        };
+      } else if (provider === "elizacloud") {
+        config = {
+          ...config,
+          serviceRouting: {
+            llmText: {
+              transport: "cloud-proxy",
+              backend: "elizacloud",
+              smallModel: "small-model",
+              largeModel: "large-model",
+            },
+          },
+        };
+      } else {
+        json(res, 400, { error: `Unsupported provider: ${provider}` });
+        return;
+      }
+
+      json(res, 200, {
+        success: true,
+        provider,
+        restarting: false,
+      });
+      return;
+    }
     if (method === "POST" && pathname === "/api/agent/reset") {
       onboardingComplete = false;
       agentState = "not_started";

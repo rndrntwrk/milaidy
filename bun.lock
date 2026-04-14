@@ -76,6 +76,8 @@
         "@types/fs-extra": "^11.0.4",
         "@types/node": "^25.5.0",
         "@types/pg": "^8.18.0",
+        "@types/react": "^19.2.14",
+        "@types/react-dom": "^19.2.3",
         "@types/react-test-renderer": "^19.1.0",
         "@types/ws": "^8.18.1",
         "@vitest/coverage-v8": "^4.1.0",
