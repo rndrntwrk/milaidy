@@ -50,9 +50,6 @@ jobs:
             mv .eliza.ci-disabled eliza
           fi
 
-      - name: Install app-core package dependencies
-        run: bun install --cwd eliza/packages/app-core --ignore-scripts
-
       - name: Install native plugin package dependencies
         run: bun install --cwd eliza/packages/native-plugins/agent --ignore-scripts
 
@@ -162,9 +159,6 @@ jobs:
           if [ -d ".eliza.ci-disabled" ] && [ ! -d "eliza" ]; then
             mv .eliza.ci-disabled eliza
           fi
-
-      - name: Install app-core package dependencies
-        run: bun install --cwd eliza/packages/app-core --ignore-scripts
 
       - name: Install native plugin package dependencies
         run: bun install --cwd eliza/packages/native-plugins/agent --ignore-scripts
