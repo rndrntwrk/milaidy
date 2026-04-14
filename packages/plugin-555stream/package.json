@@ -69,6 +69,115 @@
         "type": "boolean",
         "description": "Require approval for dangerous actions (start/stop stream, etc.)",
         "default": true
+      },
+      "STREAM555_DEST_SYNC_ON_GO_LIVE": {
+        "type": "string",
+        "description": "Automatically sync enabled channels before go-live",
+        "default": "true"
+      },
+      "STREAM555_DEST_PUMPFUN_ENABLED": {
+        "type": "string",
+        "description": "Enable Pump.fun channel",
+        "default": "false"
+      },
+      "STREAM555_DEST_PUMPFUN_RTMP_URL": {
+        "type": "string",
+        "description": "Pump.fun RTMPS endpoint URL",
+        "default": "rtmps://pump-prod-tg2x8veh.rtmp.livekit.cloud/x"
+      },
+      "STREAM555_DEST_PUMPFUN_STREAM_KEY": {
+        "type": "string",
+        "description": "Pump.fun stream key",
+        "sensitive": true
+      },
+      "STREAM555_DEST_X_ENABLED": {
+        "type": "string",
+        "description": "Enable X channel",
+        "default": "false"
+      },
+      "STREAM555_DEST_X_RTMP_URL": {
+        "type": "string",
+        "description": "X RTMPS endpoint URL",
+        "default": "rtmps://or.pscp.tv:443/x"
+      },
+      "STREAM555_DEST_X_STREAM_KEY": {
+        "type": "string",
+        "description": "X stream key",
+        "sensitive": true
+      },
+      "STREAM555_DEST_TWITCH_ENABLED": {
+        "type": "string",
+        "description": "Enable Twitch channel",
+        "default": "false"
+      },
+      "STREAM555_DEST_TWITCH_RTMP_URL": {
+        "type": "string",
+        "description": "Twitch RTMPS endpoint URL",
+        "default": "rtmps://ingest.global-contribute.live-video.net/app"
+      },
+      "STREAM555_DEST_TWITCH_STREAM_KEY": {
+        "type": "string",
+        "description": "Twitch stream key",
+        "sensitive": true
+      },
+      "STREAM555_DEST_KICK_ENABLED": {
+        "type": "string",
+        "description": "Enable Kick channel",
+        "default": "false"
+      },
+      "STREAM555_DEST_KICK_RTMP_URL": {
+        "type": "string",
+        "description": "Kick RTMPS endpoint URL",
+        "default": "rtmps://fa723fc1b171.global-contribute.live-video.net"
+      },
+      "STREAM555_DEST_KICK_STREAM_KEY": {
+        "type": "string",
+        "description": "Kick stream key",
+        "sensitive": true
+      },
+      "STREAM555_DEST_YOUTUBE_ENABLED": {
+        "type": "string",
+        "description": "Enable YouTube channel",
+        "default": "false"
+      },
+      "STREAM555_DEST_YOUTUBE_RTMP_URL": {
+        "type": "string",
+        "description": "YouTube RTMPS endpoint URL",
+        "default": "rtmps://a.rtmp.youtube.com/live2"
+      },
+      "STREAM555_DEST_YOUTUBE_STREAM_KEY": {
+        "type": "string",
+        "description": "YouTube stream key",
+        "sensitive": true
+      },
+      "STREAM555_DEST_FACEBOOK_ENABLED": {
+        "type": "string",
+        "description": "Enable Facebook channel",
+        "default": "false"
+      },
+      "STREAM555_DEST_FACEBOOK_RTMP_URL": {
+        "type": "string",
+        "description": "Facebook RTMPS endpoint URL",
+        "default": "rtmps://live-api-s.facebook.com:443/rtmp/"
+      },
+      "STREAM555_DEST_FACEBOOK_STREAM_KEY": {
+        "type": "string",
+        "description": "Facebook stream key",
+        "sensitive": true
+      },
+      "STREAM555_DEST_CUSTOM_ENABLED": {
+        "type": "string",
+        "description": "Enable custom channel",
+        "default": "false"
+      },
+      "STREAM555_DEST_CUSTOM_RTMP_URL": {
+        "type": "string",
+        "description": "Custom RTMP/RTMPS endpoint URL"
+      },
+      "STREAM555_DEST_CUSTOM_STREAM_KEY": {
+        "type": "string",
+        "description": "Custom stream key",
+        "sensitive": true
       }
     }
   },
