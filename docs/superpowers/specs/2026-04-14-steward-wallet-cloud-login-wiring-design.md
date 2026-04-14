@@ -116,6 +116,11 @@ Key implementation details:
 - **Steward URL derivation**: `cloudBaseUrl + "/steward"` — assumes the cloud
   deployment proxies Steward behind this path. If not available, falls back to
   `process.env.STEWARD_API_URL` (for self-hosted setups).
+  > **SSRF concern**: `cloudBaseUrl` originates from user-controlled cloud config.
+  > Before using it to make server-side requests, validate it against an allowlist
+  > of known Eliza Cloud hostnames (e.g. `*.elizaos.ai`) or at minimum reject
+  > private/loopback IPs to prevent the runtime from being pointed at internal
+  > services via a malicious config.
 
 - **Tenant provisioning**: Uses the existing `POST /api/v1/steward/tenants`
   endpoint which is idempotent. Needs `organizationId` — fetch from
