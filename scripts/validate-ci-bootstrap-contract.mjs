@@ -65,6 +65,8 @@ const failures = [];
 for (const relativePath of Object.values(files).filter((value) =>
   value.endsWith(".mjs"),
 )) {
+  // Skip files inside eliza/ submodule — not present in CI when submodules: false
+  if (relativePath.startsWith("eliza/")) continue;
   if (!fs.existsSync(path.join(repoRoot, relativePath))) {
     failures.push(`Missing bootstrap dependency: ${relativePath}`);
   }

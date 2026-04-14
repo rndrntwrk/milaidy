@@ -244,8 +244,6 @@
     "@elizaos/plugin-sql": "workspace:*",
     "@elizaos/plugin-telegram": "workspace:*",
     "@elizaos/plugin-whatsapp": "workspace:*",
-    "@elizaos/plugin-music-library": "workspace:*",
-    "@elizaos/plugin-music-player": "workspace:*",
     "@elizaos/prompts": "2.0.0-alpha.139",
     "@elizaos/skills": "workspace:*",
     "@hapi/boom": "^10.0.1",

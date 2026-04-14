@@ -453,6 +453,18 @@ export function disableLocalElizaWorkspace(
     warn(
       "[disable-local-eliza-workspace] Could not resolve a pinned @elizaos/core version from overrides or cloud-agent-template; leaving workspace:* specifiers in place",
     );
+    // Still remove lockfiles so Bun regenerates without stale workspace entries
+    for (const lockfileName of CI_LOCKFILES) {
+      const lockfilePath = path.join(repoRoot, lockfileName);
+      if (!fs.existsSync(lockfilePath)) continue;
+      fs.rmSync(lockfilePath, { force: true });
+      removedLockfiles.push(lockfileName);
+    }
+    if (removedLockfiles.length > 0) {
+      log(
+        `[disable-local-eliza-workspace] Removed ${removedLockfiles.join(", ")} so Bun regenerates the lockfile against the rewritten workspace graph`,
+      );
+    }
     return {
       rewrites: 0,
       removedWorkspaceGlobs,
