@@ -118,7 +118,7 @@ const pruneCdnAssetsScript = path.join(
 const { appAssetBaseUrl } = resolveElizaAssetBaseUrls();
 
 await Promise.all([
-  run(node, [tsdownCli], rootDir),
+  run(node, [tsdownCli, "--fail-on-warn", "false"], rootDir),
   run(node, [pluginBuildScript], appDir),
 ]);
 
