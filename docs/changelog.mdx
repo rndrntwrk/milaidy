@@ -3,6 +3,36 @@ title: Changelog
 description: What's new in Milady — features, improvements, and fixes.
 ---
 
+<Update label="2026-04-13" description="Week of April 13; life-ops goal grounding, Gmail compose, calendar editing, cloud Docker improvements" tags={["Feature", "Update", "Fix"]}>
+
+## Life-ops goal grounding
+
+Your agent now understands your life goals and uses them to guide its actions. When you set goals through the [life-ops system](/rest/lifeops), a semantic evaluator scores how well each action aligns with what you're working toward — so your agent's suggestions and task prioritization reflect your actual priorities, not just the immediate request.
+
+## Gmail compose and send
+
+The [life-ops](/rest/lifeops) Gmail integration can now compose and send outbound emails, not just read and triage. Ask your agent to draft and send a message and it handles recipient, subject, and body extraction from natural language. HTML entities in email snippets and subjects are now decoded correctly, and sender names display cleanly alongside addresses.
+
+## Calendar event editing
+
+Google Calendar actions now support updating and deleting events through conversation. Ask your agent to rename, reschedule, or cancel a meeting and it handles the right operation automatically. Far-future and "all events" lookups now force-sync with Google to catch events outside the local cache, and time detection skips unnecessary LLM extraction on pure renames so dates in event titles aren't misinterpreted.
+
+## Updates
+
+- **Onboarding streamlined** — Unused onboarding steps have been removed and the setup chooser screen has been restyled for better readability on dark backgrounds. Each setup option now includes a description, and character selection includes a back button so you can revisit earlier choices.
+- **Action context deduplication** — Your agent's LLM context no longer includes duplicate action results. Action state is now the sole source with a generous token budget, which means faster responses and more room for conversation history.
+- **Music player stream reliability** — The [music player](/rest/apps) audio streaming fallback has been hardened to recover more gracefully when the primary stream source is unavailable.
+- **Knowledge view improvements** — The [knowledge](/guides/knowledge) detail view has been updated with a cleaner layout for browsing and managing uploaded documents.
+- **Cloud deployment improvements** — Cloud Docker images now build with all runtime patches applied in a single pipeline, making cloud container provisioning faster and more reliable.
+
+## Bug fixes
+
+- Fixed Gmail compose failing to parse unquoted subject and body fields — the action now handles both quoted and unquoted input formats
+- Fixed calendar event updates producing Google API errors when end time was missing — the system now auto-derives end time from start time
+- Fixed smart quote characters in Gmail regex patterns causing parse failures on certain runtimes
+
+</Update>
+
 <Update label="2026-04-12" description="Week of April 12; Shopify plugin, inbox actions, connector setup, companion overlay, provider switcher" tags={["Feature", "Update", "Fix"]}>
 
 ## Shopify plugin
