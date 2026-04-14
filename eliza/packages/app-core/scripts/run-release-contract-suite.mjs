@@ -34,7 +34,12 @@ run("bunx", [
   "scripts/release-check.test.ts",
   "scripts/static-asset-manifest.test.ts",
 ]);
-run("bun", ["run", "test:startup:contract"], REPO_ROOT);
+run("bunx", [
+  "vitest",
+  "run",
+  "--passWithNoTests",
+  "scripts/startup-integration-script-drift.test.ts",
+]);
 
 run("bunx", ["tsdown"]);
 fs.mkdirSync(path.join(ROOT, "dist"), { recursive: true });

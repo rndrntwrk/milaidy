@@ -43,7 +43,7 @@ jobs:
         run: bun run verify:lint
 
       - name: Biome format check
-        run: bunx @biomejs/biome format scripts apps
+        run: bun run format
 
   typecheck:
     name: Type Check

@@ -162,16 +162,10 @@ if [[ -d "$REPO_ROOT/.eliza.ci-disabled" && ! -d "$REPO_ROOT/eliza" ]]; then
   mv "$REPO_ROOT/.eliza.ci-disabled" "$REPO_ROOT/eliza"
 fi
 
-log "Installing published-workspace fallback dependencies"
-bun add --no-save --dev \
-  react react-dom vite \
-  @types/react @types/react-dom \
-  tailwindcss three clsx class-variance-authority tailwind-merge sonner \
-  @radix-ui/react-checkbox @radix-ui/react-dialog @radix-ui/react-dropdown-menu @radix-ui/react-label \
-  @radix-ui/react-popover @radix-ui/react-select @radix-ui/react-separator @radix-ui/react-slider \
-  @radix-ui/react-slot @radix-ui/react-switch @radix-ui/react-tabs @radix-ui/react-tooltip \
-  @capacitor/core @capacitor/haptics @capacitor/keyboard @capacitor/preferences \
-  @elizaos/app-coding @elizaos/app-steward
+log "Installing restored workspace package dependencies"
+bun install --cwd eliza/packages/app-core --ignore-scripts
+bun install --cwd eliza/packages/agent --ignore-scripts
+bun install --cwd eliza/packages/typescript --ignore-scripts
 
 log "Running repository postinstall"
 SKIP_AVATAR_CLONE=1 ELIZA_NO_VISION_DEPS=1 node eliza/packages/app-core/scripts/run-repo-setup.mjs
@@ -186,10 +180,13 @@ pushd eliza/packages/agent >/dev/null
 bun run build:docker-dist
 popd >/dev/null
 
+log "Building @elizaos/core (includes agent-orchestrator)"
+pushd eliza/packages/typescript >/dev/null
+bun run build:node
+popd >/dev/null
+
 log "Building runtime dist"
-# Published-only CI can emit non-fatal unresolved-import warnings during
-# bundling; keep Docker smoke focused on build/boot viability.
-npx tsdown --no-fail-on-warn
+npx tsdown
 echo '{"type":"module"}' > dist/package.json
 node --import tsx scripts/write-build-info.ts 2>/dev/null || true
 

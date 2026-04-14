@@ -50,13 +50,12 @@ jobs:
             mv .eliza.ci-disabled eliza
           fi
 
-      - name: Install native plugin package dependencies
-        run: bun install --cwd eliza/packages/native-plugins/agent --ignore-scripts
+      - name: Install app-core package dependencies
+        run: bun install --cwd eliza/packages/app-core --ignore-scripts
 
       - name: Run repository postinstall patches
         run: node eliza/packages/app-core/scripts/run-repo-setup.mjs
         env:
-          MILADY_SKIP_LOCAL_UPSTREAMS: "1"
           SKIP_AVATAR_CLONE: "1"
           MILADY_NO_VISION_DEPS: "1"
 
@@ -161,13 +160,12 @@ jobs:
             mv .eliza.ci-disabled eliza
           fi
 
-      - name: Install native plugin package dependencies
-        run: bun install --cwd eliza/packages/native-plugins/agent --ignore-scripts
+      - name: Install app-core package dependencies
+        run: bun install --cwd eliza/packages/app-core --ignore-scripts
 
       - name: Run repository postinstall patches
         run: node eliza/packages/app-core/scripts/run-repo-setup.mjs
         env:
-          MILADY_SKIP_LOCAL_UPSTREAMS: "1"
           SKIP_AVATAR_CLONE: "1"
           MILADY_NO_VISION_DEPS: "1"
 

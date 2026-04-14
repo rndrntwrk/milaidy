@@ -238,7 +238,6 @@ jobs:
       - name: Run repository postinstall patches
         run: bun run postinstall
         env:
-          MILADY_SKIP_LOCAL_UPSTREAMS: "1"
           SKIP_AVATAR_CLONE: "1"
           MILADY_NO_VISION_DEPS: "1"
 
@@ -335,7 +334,6 @@ jobs:
       - name: Run repository postinstall patches
         run: bun run postinstall
         env:
-          MILADY_SKIP_LOCAL_UPSTREAMS: "1"
           SKIP_AVATAR_CLONE: "1"
           MILADY_NO_VISION_DEPS: "1"
 
@@ -391,7 +389,6 @@ jobs:
       - name: Run repository postinstall patches
         run: bun run postinstall
         env:
-          MILADY_SKIP_LOCAL_UPSTREAMS: "1"
           SKIP_AVATAR_CLONE: "1"
           MILADY_NO_VISION_DEPS: "1"
 
@@ -468,7 +465,6 @@ jobs:
       - name: Run repository postinstall patches
         run: bun run postinstall
         env:
-          MILADY_SKIP_LOCAL_UPSTREAMS: "1"
           SKIP_AVATAR_CLONE: "1"
           MILADY_NO_VISION_DEPS: "1"
 
@@ -524,7 +520,6 @@ jobs:
       - name: Run repository postinstall patches
         run: bun run postinstall
         env:
-          MILADY_SKIP_LOCAL_UPSTREAMS: "1"
           SKIP_AVATAR_CLONE: "1"
           MILADY_NO_VISION_DEPS: "1"
 
@@ -593,7 +588,6 @@ jobs:
       - name: Run repository postinstall patches
         run: node eliza/packages/app-core/scripts/run-repo-setup.mjs
         env:
-          MILADY_SKIP_LOCAL_UPSTREAMS: "1"
           SKIP_AVATAR_CLONE: "1"
           MILADY_NO_VISION_DEPS: "1"
 
