@@ -222,10 +222,7 @@ function getPresentOptionalElizaPlugins(
   });
 }
 
-async function withTemporaryOptionalElizaPluginWorkspaces(
-  elizaRoot,
-  callback,
-) {
+async function withTemporaryOptionalElizaPluginWorkspaces(elizaRoot, callback) {
   const packageJsonPath = path.join(elizaRoot, "package.json");
   const raw = readFileSync(packageJsonPath, "utf8");
   let pkg;
@@ -959,7 +956,35 @@ async function ensureElizaDependencies(elizaRoot) {
   );
 }
 
+async function ensureElizaGeneratedKeywordData(elizaRoot) {
+  const generatedKeywordDataPath = path.join(
+    elizaRoot,
+    "packages",
+    "typescript",
+    "src",
+    "i18n",
+    "generated",
+    "validation-keyword-data.ts",
+  );
+
+  if (existsSync(generatedKeywordDataPath)) {
+    return;
+  }
+
+  console.log("[setup-upstreams] Generating eliza i18n keyword data");
+  await runCommand(
+    "node",
+    ["packages/shared/scripts/generate-keywords.mjs", "--target", "ts"],
+    {
+      cwd: elizaRoot,
+      label: "node packages/shared/scripts/generate-keywords.mjs --target ts",
+    },
+  );
+}
+
 async function ensureElizaBuildOutputs(elizaRoot) {
+  await ensureElizaGeneratedKeywordData(elizaRoot);
+
   for (const step of ELIZA_BUILD_STEPS) {
     if (existsSync(path.join(elizaRoot, step.check))) {
       continue;
