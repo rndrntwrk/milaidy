@@ -45,6 +45,12 @@ jobs:
       - name: Initialize tracked workspace submodules
         run: bun run scripts/init-submodules.mjs
 
+      - name: Initialize release-check plugin version source
+        run: |
+          if [ -f eliza/.gitmodules ]; then
+            git -C eliza submodule update --init plugins/plugin-agent-orchestrator
+          fi
+
       - name: Disable repo-local eliza workspace
         run: bun run scripts/disable-local-eliza-workspace.mjs
 
