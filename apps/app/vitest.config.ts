@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Plugin } from "vite";
@@ -15,6 +16,7 @@ import {
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "../..");
+const _require = createRequire(import.meta.url);
 const nativePluginsRoot = path.join(
   here,
   "../../eliza/packages/native-plugins",
@@ -23,6 +25,7 @@ const appCorePackageRoot = getAppCoreSourceRoot(here);
 const agentSourceRoot = getAutonomousSourceRoot(here);
 const uiSourceRoot = getUiSourceRoot(here);
 const bridgeStubPath = getAppCoreBridgeStubPath(repoRoot);
+const capacitorCoreEntry = _require.resolve("@capacitor/core");
 
 /**
  * Redirects `@elizaos/app-core` bridge entrypoints to the test shim (matches
@@ -69,6 +72,10 @@ export default defineConfig({
       {
         find: /^react-dom\/(.*)$/,
         replacement: path.join(here, "node_modules/react-dom", "$1"),
+      },
+      {
+        find: /^@capacitor\/core$/,
+        replacement: capacitorCoreEntry,
       },
       ...(appCorePackageRoot
         ? (() => {
@@ -207,6 +214,10 @@ export default defineConfig({
       "@elizaos/capacitor-canvas": path.join(
         nativePluginsRoot,
         "canvas/src/index.ts",
+      ),
+      "@elizaos/capacitor-appblocker": path.join(
+        nativePluginsRoot,
+        "appblocker/src/index.ts",
       ),
       "@elizaos/capacitor-desktop": path.join(
         nativePluginsRoot,

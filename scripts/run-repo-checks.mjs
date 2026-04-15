@@ -67,7 +67,8 @@ const suites = {
     {
       label: "eliza TypeScript typecheck",
       command: "bun",
-      args: ["run", "--cwd", "eliza", "typecheck"],
+      args: ["x", "turbo", "run", "typecheck", "--force", "--concurrency=1"],
+      cwd: `${repoRoot}/eliza`,
     },
     {
       label: "eliza Rust typecheck",
@@ -131,7 +132,7 @@ if (!suiteName || !(suiteName in suites)) {
 for (const step of suites[suiteName]) {
   console.log(`\n[repo-checks] ${step.label}`);
   const result = spawnSync(step.command, step.args, {
-    cwd: repoRoot,
+    cwd: step.cwd ?? repoRoot,
     stdio: "inherit",
     env: process.env,
     shell: process.platform === "win32",

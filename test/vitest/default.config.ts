@@ -1,3 +1,19 @@
+/**
+ * Test naming convention:
+ *
+ * *.test.ts            — Unit tests (run by this config / turbo test)
+ * *.integration.test.ts — Integration tests (run by integration.config)
+ * *.e2e.test.ts        — E2E tests (run by e2e.config)
+ * *.real.test.ts       — Real infra tests (run by real.config, needs env vars)
+ * *.live.test.ts       — Live tests (run by real.config, needs running services)
+ * *.live.e2e.test.ts   — Live E2E (run by live-e2e.config, needs services + env)
+ * *.real.e2e.test.ts   — Real E2E (run by e2e.config, needs env vars)
+ * *.spec.ts            — Playwright specs (run by playwright configs)
+ *
+ * Test locations: src/, __tests__/, test/ — all are auto-discovered.
+ * Subsystems with their own runners: eliza/cloud, eliza/steward-fi,
+ * eliza/packages/examples, eliza/packages/templates, eliza/packages/benchmarks.
+ */
 import fs from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
@@ -209,62 +225,48 @@ export default defineConfig({
     restoreMocks: true,
     // Give worker forks more heap to survive jsdom-heavy suites.
     execArgv: ["--max-old-space-size=4096"],
+    // Auto-discovery: broad globs replace hand-curated paths.
+    // New root-owned test files in any of these locations are picked up automatically.
+    // eliza/, cloud/, and steward-fi have their own package/subrepo runners under bun run test.
     include: [
-      "eliza/packages/agent/src/**/*.test.ts",
-      "eliza/packages/agent/src/**/*.test.tsx",
-      "eliza/packages/agent/test/**/*.test.ts",
-      "eliza/packages/agent/test/**/*.test.tsx",
-      "eliza/apps/*/test/**/*.test.ts",
-      "eliza/apps/*/test/**/*.test.tsx",
-      "eliza/packages/app-core/test/live-agent/**/*.test.ts",
-      "eliza/packages/app-core/test/live-agent/**/*.test.tsx",
-      // Keep colocated app-core source tests here; the app harness has its own config.
-      "eliza/packages/app-core/src/**/*.test.ts",
-      // Platform-colocated tests that do not need the full Electrobun runtime.
-      "eliza/packages/app-core/platforms/electrobun/src/menu-reset-from-main.test.ts",
-      "eliza/packages/app-core/platforms/electrobun/src/diagnostic-format.test.ts",
-      "eliza/packages/app-core/platforms/electrobun/src/native/steward.test.ts",
-      // Only include standalone app-core script tests here.
-      "eliza/packages/app-core/scripts/startup-integration-script-drift.test.ts",
-      "eliza/packages/shared/src/**/*.test.ts",
-      "eliza/packages/app-core/src/**/*.test.tsx",
-      "eliza/packages/agent/src/runtime/roles/test/**/*.test.ts",
-      "eliza/apps/app-lifeops/src/website-blocker/**/*.test.ts",
-      "eliza/apps/app-vincent/src/**/*.test.ts",
-      "eliza/apps/app-shopify/src/**/*.test.ts",
-      "eliza/apps/app-steward/src/**/*.test.ts",
-      "eliza/apps/app-lifeops/src/**/*.test.ts",
-      "packages/plugin-wechat/src/**/*.test.ts",
-      "eliza/plugins/plugin-music-player/src/**/*.test.ts",
-      "eliza/plugins/plugin-discord/typescript/__tests__/*.test.ts",
-      "eliza/plugins/plugin-anthropic/typescript/__tests__/*.test.ts",
-      "eliza/plugins/plugin-telegram/__tests__/*.test.ts",
-      "eliza/plugins/plugin-ollama/typescript/__tests__/*.test.ts",
-      "eliza/plugins/plugin-groq/typescript/__tests__/*.test.ts",
-      "eliza/packages/shared/__tests__/*.test.ts",
-      "eliza/packages/ui/__tests__/*.test.ts",
-      "src/**/*.test.ts",
-      "scripts/**/*.test.ts",
-      "apps/chrome-extension/**/*.test.ts",
-      "apps/chrome-extension/**/*.test.tsx",
+      // --- root packages ---
+      "packages/**/src/**/*.test.{ts,tsx}",
+      "packages/**/__tests__/**/*.test.{ts,tsx}",
+      // --- root apps ---
+      "apps/**/__tests__/**/*.test.{ts,tsx}",
+      "apps/**/src/**/*.test.{ts,tsx}",
+      // --- root scripts and tests ---
+      "src/**/*.test.{ts,tsx}",
+      "scripts/**/*.test.{ts,tsx}",
+      "test/**/*.test.{ts,tsx}",
     ],
     setupFiles: ["eliza/packages/app-core/test/setup.ts"],
     exclude: [
       "dist/**",
       "**/node_modules/**",
-      "**/*-live.test.ts",
-      "**/*-live.test.tsx",
-      "**/*.live.test.ts",
-      "**/*.live.test.tsx",
-      "**/*-real.test.ts",
-      "**/*-real.test.tsx",
-      "**/*.real.test.ts",
-      "**/*.real.test.tsx",
-      "**/*.integration.test.ts",
-      "**/*.integration.test.tsx",
-      // E2E runs via test/vitest/e2e.config.ts.
-      "**/*.e2e.test.ts",
-      "**/*.e2e.test.tsx",
+      // --- live/real/integration/e2e tests have their own configs ---
+      "**/*-live.test.{ts,tsx}",
+      "**/*.live.test.{ts,tsx}",
+      "**/*-real.test.{ts,tsx}",
+      "**/*.real.test.{ts,tsx}",
+      "**/*.integration.test.{ts,tsx}",
+      "**/*.e2e.test.{ts,tsx}",
+      "**/*.e2e.spec.{ts,tsx}",
+      "**/*.live.e2e.test.{ts,tsx}",
+      "**/*.real.e2e.test.{ts,tsx}",
+      // --- subsystems with their own test runners ---
+      "eliza/cloud/**",
+      "eliza/steward-fi/**",
+      // --- wired via turbo, not root vitest ---
+      "eliza/packages/examples/**",
+      "eliza/packages/templates/**",
+      "eliza/packages/benchmarks/**",
+      // Template plugin tests need a scaffolded environment to run.
+      "eliza/packages/elizaos/templates/**",
+      // Skills tests use their own package-level runner.
+      "eliza/packages/skills/test/**",
+      // Homepage tests need jsdom environment (run via apps/homepage vitest config).
+      "apps/homepage/**",
       // Requires the built plugin-training dist from `bun run build`.
       "**/training-service.import-ollama.test.ts",
     ],
