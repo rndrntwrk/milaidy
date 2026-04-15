@@ -342,16 +342,24 @@ jobs:
           } >> "$GITHUB_ENV"
 
       # ── 7b. Ensure tailwindcss is resolvable from inside the eliza submodule
-      - name: Install tailwindcss in eliza/packages/app-core
+      - name: Inject tailwindcss into eliza/packages/app-core/node_modules
         run: |
           # @tailwindcss/vite resolves 'tailwindcss' starting from the CSS file path inside
           # the eliza submodule (eliza/packages/app-core/src/styles/styles.css).
-          # Bun workspaces don't always hoist tailwindcss to root node_modules,
-          # so we install it directly into app-core's node_modules.
+          # Bun workspaces don't hoist it to root node_modules; npm install fails with
+          # EOVERRIDE due to app-core's package.json overrides. Use tarball extraction instead.
+          mkdir -p eliza/packages/app-core/node_modules
           if [ ! -d "eliza/packages/app-core/node_modules/tailwindcss" ]; then
-            echo "Installing tailwindcss into eliza/packages/app-core/node_modules..."
-            cd eliza/packages/app-core
-            npm install tailwindcss tailwind-merge --no-save --no-package-lock 2>&1 | tail -5
+            echo "Fetching tailwindcss tarball..."
+            TAILWIND_URL=$(npm view tailwindcss dist.tarball 2>/dev/null)
+            if [ -n "$TAILWIND_URL" ]; then
+              mkdir -p /tmp/tw_extract
+              curl -sL "$TAILWIND_URL" | tar xz -C /tmp/tw_extract
+              mv /tmp/tw_extract/package eliza/packages/app-core/node_modules/tailwindcss
+              echo "+ tailwindcss $(cat eliza/packages/app-core/node_modules/tailwindcss/package.json | node -e 'process.stdin.resume();let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>console.log(JSON.parse(d).version))')"
+            else
+              echo "WARN: could not resolve tailwindcss tarball URL"
+            fi
           else
             echo "tailwindcss already present in app-core/node_modules"
           fi
