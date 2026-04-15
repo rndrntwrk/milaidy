@@ -99,6 +99,16 @@ jobs:
             cd eliza && git apply ../cloud/patches/cloud-runtime-patches.patch && cd ..
             echo "Cloud patches applied successfully"
           fi
+          # AppBlockerSettingsCard alias — not in upstream eliza yet, add inline
+          # milady develop main.tsx imports it; alias to WebsiteBlockerSettingsCard until merged upstream
+          LIFEOPS_UI=eliza/apps/app-lifeops/src/ui.ts
+          if [ -f "$LIFEOPS_UI" ] && ! grep -q 'AppBlockerSettingsCard' "$LIFEOPS_UI"; then
+            if grep -q 'WebsiteBlockerSettingsCard' "$LIFEOPS_UI"; then
+              WBSC_PATH=$(grep 'WebsiteBlockerSettingsCard' "$LIFEOPS_UI" | grep 'export \*' | sed 's/export \* from "//;s/";$//')
+              echo "export { WebsiteBlockerSettingsCard as AppBlockerSettingsCard } from \"${WBSC_PATH:-./components/WebsiteBlockerSettingsCard.tsx}\";" >> "$LIFEOPS_UI"
+              echo "AppBlockerSettingsCard alias added to $LIFEOPS_UI"
+            fi
+          fi
           ls eliza/package.json && echo "eliza submodule OK" || echo "WARN: eliza submodule missing"
           # Init other submodules (skip local upstreams to avoid nested plugin submodules)
           MILADY_SKIP_LOCAL_UPSTREAMS=1 node scripts/init-submodules.mjs || echo "Some submodules failed, continuing"
