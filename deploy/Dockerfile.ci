@@ -112,34 +112,57 @@ RUN for pkg_dir in eliza/packages/typescript eliza/packages/shared eliza/package
       fi; \
     done
 
-# Ensure @elizaos/plugin-agent-skills is installed
-# The eliza submodule defines it as workspace:* but the plugin dir may be empty (new, uncommitted).
-# Fall back to the npm version via tarball extraction using node's built-in https (no curl in slim).
-RUN if [ ! -f "node_modules/@elizaos/plugin-agent-skills/package.json" ]; then \
-    echo "Fetching @elizaos/plugin-agent-skills from npm..."; \
-    node -e " \
-      const https = require('https'); \
-      const fs = require('fs'); \
-      const { execSync } = require('child_process'); \
-      const url = execSync('npm view @elizaos/plugin-agent-skills dist.tarball', {encoding:'utf8'}).trim(); \
-      https.get(url, res => { \
-        const chunks = []; \
-        res.on('data', c => chunks.push(c)); \
-        res.on('end', () => { \
-          fs.mkdirSync('/tmp/pas_ext', {recursive:true}); \
-          fs.writeFileSync('/tmp/pas.tgz', Buffer.concat(chunks)); \
-          execSync('tar xz -C /tmp/pas_ext -f /tmp/pas.tgz'); \
-          fs.mkdirSync('node_modules/@elizaos', {recursive:true}); \
-          execSync('rm -rf node_modules/@elizaos/plugin-agent-skills'); \
-          execSync('mv /tmp/pas_ext/package node_modules/@elizaos/plugin-agent-skills'); \
-          const v = JSON.parse(fs.readFileSync('node_modules/@elizaos/plugin-agent-skills/package.json','utf8')).version; \
-          console.log('Installed @elizaos/plugin-agent-skills@' + v); \
-        }); \
-      }).on('error', e => { console.error('WARN:', e.message); }); \
-    " ; \
-  else \
-    echo "@elizaos/plugin-agent-skills already present"; \
-  fi
+# Ensure workspace-declared plugins with empty dirs are installed from npm.
+# These are declared as workspace:* in bun.lock but the plugin dirs are empty/uncommitted.
+# node:slim has no curl, so use Node's built-in https module for tarball extraction.
+RUN node -e "
+  const https = require('https');
+  const fs = require('fs');
+  const { execSync } = require('child_process');
+
+  function installPkg(name, cb) {
+    const pkgDir = 'node_modules/' + name;
+    if (fs.existsSync(pkgDir + '/package.json')) {
+      console.log('already installed: ' + name);
+      return cb && cb();
+    }
+    const url = execSync('npm view ' + name + ' dist.tarball 2>/dev/null', {encoding:'utf8'}).trim();
+    if (!url) { console.log('WARN: no tarball for ' + name); return cb && cb(); }
+    const tmp = '/tmp/pkg_' + name.replace(/[^a-z0-9]/gi,'_');
+    const tgz = tmp + '.tgz';
+    https.get(url, res => {
+      const chunks = [];
+      res.on('data', c => chunks.push(c));
+      res.on('end', () => {
+        try {
+          fs.writeFileSync(tgz, Buffer.concat(chunks));
+          fs.mkdirSync(tmp, {recursive:true});
+          execSync('tar xz -C ' + tmp + ' -f ' + tgz);
+          const scope = name.includes('/') ? name.split('/')[0] : null;
+          if (scope) fs.mkdirSync('node_modules/' + scope, {recursive:true});
+          execSync('rm -rf ' + pkgDir);
+          execSync('mv ' + tmp + '/package ' + pkgDir);
+          const v = JSON.parse(fs.readFileSync(pkgDir + '/package.json','utf8')).version;
+          console.log('+ ' + name + '@' + v);
+        } catch(e) { console.error('WARN ' + name + ':', e.message); }
+        cb && cb();
+      });
+    }).on('error', e => { console.error('WARN ' + name + ':', e.message); cb && cb(); });
+  }
+
+  // Plugins that are empty workspace dirs in the eliza submodule
+  const missing = [
+    '@elizaos/plugin-agent-skills',
+    '@elizaos/plugin-anthropic',
+    '@elizaos/plugin-local-embedding',
+    '@elizaos/plugin-pdf',
+    '@elizaos/plugin-sql',
+  ];
+  (function next(i) {
+    if (i >= missing.length) return;
+    installPkg(missing[i], () => next(i + 1));
+  })(0);
+"
 
 # Patch plugin-agent-skills getCatalogStats crash (alpha.11 vs alpha.66 interface mismatch)
 RUN sed -i 's/const stats = service.getCatalogStats();/const stats = typeof service.getCatalogStats === "function" ? service.getCatalogStats() : { loaded: 0, total: 0, storageType: "unknown" };/g' node_modules/@elizaos/plugin-agent-skills/dist/index.js 2>/dev/null || true
