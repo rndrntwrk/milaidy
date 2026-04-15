@@ -208,6 +208,7 @@ jobs:
         run: bun run test:selfcontrol:unit
 
       - name: Run website blocker E2E suites
+        shell: bash
         run: |
           if [ "${{ runner.os }}" = "Linux" ]; then
             xvfb-run -a bun run test:selfcontrol:e2e
