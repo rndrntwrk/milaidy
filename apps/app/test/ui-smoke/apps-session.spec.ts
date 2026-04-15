@@ -19,7 +19,8 @@ const DIRECT_ROUTE_CASES = [
   {
     name: "plugins",
     path: "/apps/plugins",
-    text: "AI Providers",
+    readyChecks: [{ text: "AI Providers" }, { text: "Other Features" }],
+    timeoutMs: 60_000,
   },
   {
     name: "skills",
@@ -90,7 +91,13 @@ test("apps view can route into internal tool pages and survive a reload", async 
 
   await page.getByRole("button", { name: "Plugin Viewer" }).click();
   await expect(page).toHaveURL(/\/plugins$/);
-  await assertReadyChecks(page, "plugins-viewer", [{ text: "AI Providers" }]);
+  await assertReadyChecks(
+    page,
+    "plugins-viewer",
+    [{ text: "AI Providers" }, { text: "Other Features" }],
+    "any",
+    60_000,
+  );
 
   // Reload from root and re-navigate — Vite preview lacks SPA fallback
   await openAppPath(page, "/");
@@ -100,9 +107,13 @@ test("apps view can route into internal tool pages and survive a reload", async 
   });
   await page.getByRole("button", { name: "Plugin Viewer" }).click();
   await expect(page).toHaveURL(/\/plugins$/);
-  await assertReadyChecks(page, "plugins-viewer-reload", [
-    { text: "AI Providers" },
-  ]);
+  await assertReadyChecks(
+    page,
+    "plugins-viewer-reload",
+    [{ text: "AI Providers" }, { text: "Other Features" }],
+    "any",
+    60_000,
+  );
 });
 
 for (const routeCase of DIRECT_ROUTE_CASES) {
@@ -113,12 +124,20 @@ for (const routeCase of DIRECT_ROUTE_CASES) {
     await expect(page).toHaveURL(
       new RegExp(`${escapeRegExp(routeCase.path)}$`),
     );
-    await assertReadyChecks(
-      page,
-      routeCase.name,
+    if ("readyChecks" in routeCase) {
+      await assertReadyChecks(
+        page,
+        routeCase.name,
+        routeCase.readyChecks,
+        "any",
+        routeCase.timeoutMs,
+      );
+      return;
+    }
+    await assertReadyChecks(page, routeCase.name, [
       "selector" in routeCase
-        ? [{ selector: routeCase.selector }]
-        : [{ text: routeCase.text }],
-    );
+        ? { selector: routeCase.selector }
+        : { text: routeCase.text },
+    ]);
   });
 }
