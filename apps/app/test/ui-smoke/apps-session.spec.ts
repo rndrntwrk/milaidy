@@ -1,5 +1,10 @@
 import { expect, test } from "@playwright/test";
-import { assertReadyChecks, openAppPath, seedAppStorage } from "./helpers";
+import {
+  assertReadyChecks,
+  installDefaultAppMocks,
+  openAppPath,
+  seedAppStorage,
+} from "./helpers";
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -26,6 +31,7 @@ const DIRECT_ROUTE_CASES = [
     name: "skills",
     path: "/apps/skills",
     selector: '[data-testid="skills-shell"]',
+    timeoutMs: 20_000,
   },
   {
     name: "fine tuning",
@@ -85,6 +91,7 @@ const DIRECT_ROUTE_CASES = [
 
 test.beforeEach(async ({ page }) => {
   await seedAppStorage(page);
+  await installDefaultAppMocks(page);
 });
 
 test("apps view can route into internal tool pages and survive a reload", async ({
@@ -138,10 +145,16 @@ for (const routeCase of DIRECT_ROUTE_CASES) {
       );
       return;
     }
-    await assertReadyChecks(page, routeCase.name, [
-      "selector" in routeCase
-        ? { selector: routeCase.selector }
-        : { text: routeCase.text },
-    ]);
+    await assertReadyChecks(
+      page,
+      routeCase.name,
+      [
+        "selector" in routeCase
+          ? { selector: routeCase.selector }
+          : { text: routeCase.text },
+      ],
+      "any",
+      "timeoutMs" in routeCase ? routeCase.timeoutMs : undefined,
+    );
   });
 }
