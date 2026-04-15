@@ -8,7 +8,9 @@ import { ensureLegacyElectrobunCompatDir } from "./run-release-contract-suite.mj
 const tempDirs: string[] = [];
 
 function makeTempDir() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "milady-electrobun-compat-"));
+  const dir = fs.mkdtempSync(
+    path.join(os.tmpdir(), "milady-electrobun-compat-"),
+  );
   tempDirs.push(dir);
   return dir;
 }
@@ -37,8 +39,14 @@ describe("ensure-legacy-electrobun-compat", () => {
     );
     const legacyDir = path.join(repoRoot, "apps", "app", "electrobun");
 
-    writeFile(path.join(canonicalDir, "package.json"), '{"name":"electrobun"}\n');
-    writeFile(path.join(canonicalDir, "scripts", "stage-macos-release-artifacts.sh"), "#!/usr/bin/env bash\n");
+    writeFile(
+      path.join(canonicalDir, "package.json"),
+      '{"name":"electrobun"}\n',
+    );
+    writeFile(
+      path.join(canonicalDir, "scripts", "stage-macos-release-artifacts.sh"),
+      "#!/usr/bin/env bash\n",
+    );
 
     expect(
       ensureLegacyElectrobunCompatDir({
@@ -50,7 +58,11 @@ describe("ensure-legacy-electrobun-compat", () => {
     ).toBe(true);
 
     expect(fs.existsSync(path.join(legacyDir, "package.json"))).toBe(true);
-    expect(fs.existsSync(path.join(legacyDir, "scripts", "stage-macos-release-artifacts.sh"))).toBe(true);
+    expect(
+      fs.existsSync(
+        path.join(legacyDir, "scripts", "stage-macos-release-artifacts.sh"),
+      ),
+    ).toBe(true);
     expect(
       fs.readFileSync(path.join(legacyDir, "electrobun.config.ts"), "utf8"),
     ).toContain(
@@ -70,7 +82,10 @@ describe("ensure-legacy-electrobun-compat", () => {
     );
     const legacyDir = path.join(repoRoot, "apps", "app", "electrobun");
 
-    writeFile(path.join(canonicalDir, "package.json"), '{"name":"electrobun"}\n');
+    writeFile(
+      path.join(canonicalDir, "package.json"),
+      '{"name":"electrobun"}\n',
+    );
     writeFile(path.join(legacyDir, "package.json"), '{"name":"electrobun"}\n');
 
     expect(ensureLegacyElectrobunCompatDir({ canonicalDir, legacyDir })).toBe(
