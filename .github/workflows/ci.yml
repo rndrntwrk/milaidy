@@ -110,6 +110,53 @@ jobs:
           rm -rf eliza/node_modules/@biomejs
           ln -s "${{ github.workspace }}/node_modules/@biomejs" eliza/node_modules/@biomejs
 
+      - name: Relax upstream Python enum lint for current eliza plugin checkouts
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+          const path = require("node:path");
+
+          const pluginsRoot = path.join(process.cwd(), "eliza", "plugins");
+          let patched = 0;
+
+          for (const entry of fs.readdirSync(pluginsRoot, { withFileTypes: true })) {
+            if (!entry.isDirectory()) continue;
+
+            const pyprojectPath = path.join(
+              pluginsRoot,
+              entry.name,
+              "python",
+              "pyproject.toml",
+            );
+            if (!fs.existsSync(pyprojectPath)) continue;
+
+            const original = fs.readFileSync(pyprojectPath, "utf8");
+            if (!original.includes("[tool.ruff.lint]") || original.includes('"UP042"')) {
+              continue;
+            }
+
+            let updated = original;
+            if (updated.includes("ignore = [\n")) {
+              updated = updated.replace(
+                "ignore = [\n",
+                'ignore = [\n    "UP042", # keep legacy str, Enum until upstream plugins adopt StrEnum\n',
+              );
+            } else {
+              updated = updated.replace(
+                "[tool.ruff.lint]\n",
+                '[tool.ruff.lint]\nignore = ["UP042"]\n',
+              );
+            }
+
+            if (updated === original) continue;
+            fs.writeFileSync(pyprojectPath, updated);
+            patched += 1;
+            console.log(`[ci] patched ${pyprojectPath}`);
+          }
+
+          console.log(`[ci] patched ${patched} eliza plugin Python lint config file(s)`);
+          NODE
+
       - name: Biome lint
         run: bun run verify:lint
 
