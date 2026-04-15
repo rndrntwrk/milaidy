@@ -341,6 +341,20 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_ENV"
 
+      # ── 7b. Symlink eliza-scoped CSS deps so @tailwindcss/vite resolver can find them
+      - name: Symlink CSS build deps into eliza/node_modules
+        run: |
+          # @tailwindcss/vite resolves 'tailwindcss' starting from the CSS file path inside
+          # the eliza submodule (eliza/packages/app-core/src/styles/). Without a visible
+          # node_modules in the eliza tree, enhanced-resolve never finds root node_modules.
+          mkdir -p eliza/node_modules
+          for dep in tailwindcss; do
+            if [ -d "node_modules/$dep" ] && [ ! -e "eliza/node_modules/$dep" ]; then
+              ln -sf "$(realpath node_modules/$dep)" "eliza/node_modules/$dep"
+              echo "symlinked: eliza/node_modules/$dep"
+            fi
+          done
+
       # ── 8. Build UI (vite) ──────────────────────────────────────────────────
       - name: Build UI (vite)
         run: |
