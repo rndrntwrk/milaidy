@@ -341,19 +341,20 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_ENV"
 
-      # ── 7b. Symlink eliza-scoped CSS deps so @tailwindcss/vite resolver can find them
-      - name: Symlink CSS build deps into eliza/node_modules
+      # ── 7b. Ensure tailwindcss is resolvable from inside the eliza submodule
+      - name: Install tailwindcss in eliza/packages/app-core
         run: |
           # @tailwindcss/vite resolves 'tailwindcss' starting from the CSS file path inside
-          # the eliza submodule (eliza/packages/app-core/src/styles/). Without a visible
-          # node_modules in the eliza tree, enhanced-resolve never finds root node_modules.
-          mkdir -p eliza/node_modules
-          for dep in tailwindcss; do
-            if [ -d "node_modules/$dep" ] && [ ! -e "eliza/node_modules/$dep" ]; then
-              ln -sf "$(realpath node_modules/$dep)" "eliza/node_modules/$dep"
-              echo "symlinked: eliza/node_modules/$dep"
-            fi
-          done
+          # the eliza submodule (eliza/packages/app-core/src/styles/styles.css).
+          # Bun workspaces don't always hoist tailwindcss to root node_modules,
+          # so we install it directly into app-core's node_modules.
+          if [ ! -d "eliza/packages/app-core/node_modules/tailwindcss" ]; then
+            echo "Installing tailwindcss into eliza/packages/app-core/node_modules..."
+            cd eliza/packages/app-core
+            npm install tailwindcss tailwind-merge --no-save --no-package-lock 2>&1 | tail -5
+          else
+            echo "tailwindcss already present in app-core/node_modules"
+          fi
 
       # ── 8. Build UI (vite) ──────────────────────────────────────────────────
       - name: Build UI (vite)
