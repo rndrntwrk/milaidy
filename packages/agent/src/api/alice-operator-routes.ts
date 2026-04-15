@@ -209,13 +209,23 @@ async function executeOperatorStep(
     };
   }
 
+  // Pass options in BOTH shapes so action handlers that read flat
+  // `options[key]` (e.g., plugin-555stream/legacyCompat.ts:713 reading
+  // `options.inputType` directly) AND handlers that read
+  // `options.parameters[key]` (e.g., bsc-trade.ts reading
+  // `options.parameters?.toAddress`) both resolve correctly. Without
+  // this dual shape, STREAM555_GO_LIVE sees `options.inputType ===
+  // undefined` and falls back to 'screen', which skips the capture job
+  // submission path in control-plane (screen is not in the
+  // avatar/capture/composition list).
+  const paramsRecord = step.params ?? {};
   let callbackPayload: Content | Record<string, unknown> | undefined;
   const rawResult = await Promise.resolve(
     action.handler(
       runtime,
       message,
       state,
-      { parameters: step.params ?? {} },
+      { ...paramsRecord, parameters: paramsRecord },
       async (content: unknown) => {
         if (content && typeof content === "object") {
           callbackPayload = content as Content;
