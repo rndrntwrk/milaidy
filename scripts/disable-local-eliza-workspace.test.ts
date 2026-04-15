@@ -199,6 +199,78 @@ describe("disable-local-eliza-workspace", () => {
     });
   });
 
+  it("rewrites nested installable package manifests under app-core platforms", () => {
+    const repoRoot = makeTempDir();
+    writeJson(path.join(repoRoot, "package.json"), {
+      name: "milady-test",
+      workspaces: ["eliza/packages/*"],
+      overrides: {
+        "@elizaos/core": "2.0.0-alpha.163",
+        "@elizaos/shared": "2.0.0-alpha.163",
+      },
+    });
+    writeJson(
+      path.join(repoRoot, "eliza", "packages", "typescript", "package.json"),
+      {
+        name: "@elizaos/typescript",
+        version: "2.0.0-alpha.163",
+      },
+    );
+    writeJson(
+      path.join(repoRoot, "eliza", "packages", "shared", "package.json"),
+      {
+        name: "@elizaos/shared",
+        version: "2.0.0-alpha.0",
+      },
+    );
+    writeJson(
+      path.join(
+        repoRoot,
+        "eliza",
+        "packages",
+        "app-core",
+        "platforms",
+        "electrobun",
+        "package.json",
+      ),
+      {
+        name: "@elizaos/electrobun",
+        dependencies: {
+          "@elizaos/shared": "workspace:*",
+          electrobun: "^1.16.0",
+        },
+      },
+    );
+
+    disableLocalElizaWorkspace(repoRoot, {
+      log: () => {},
+      warn: () => {},
+      errorLog: () => {},
+    });
+
+    const electrobunPackageRaw: unknown = JSON.parse(
+      fs.readFileSync(
+        path.join(
+          repoRoot,
+          "eliza",
+          "packages",
+          "app-core",
+          "platforms",
+          "electrobun",
+          "package.json",
+        ),
+        "utf8",
+      ),
+    );
+    if (!isPackageWithDependencies(electrobunPackageRaw)) {
+      throw new Error(
+        "electrobun package.json fixture is missing dependencies",
+      );
+    }
+    expect(electrobunPackageRaw.dependencies).toMatchObject({
+      "@elizaos/shared": "file:../../../shared",
+    });
+  });
   it("injects the renamed-workspace @elizaos/ui override for CI rewrites", () => {
     const repoRoot = makeTempDir();
     const originalRenameSetting =
@@ -217,13 +289,10 @@ describe("disable-local-eliza-workspace", () => {
         version: "2.0.0-alpha.163",
       },
     );
-    writeJson(
-      path.join(repoRoot, "eliza", "packages", "ui", "package.json"),
-      {
-        name: "@elizaos/ui",
-        version: "2.0.0-alpha.163",
-      },
-    );
+    writeJson(path.join(repoRoot, "eliza", "packages", "ui", "package.json"), {
+      name: "@elizaos/ui",
+      version: "2.0.0-alpha.163",
+    });
 
     try {
       process.env.MILADY_DISABLE_LOCAL_UPSTREAMS_RENAME = "1";
@@ -267,13 +336,10 @@ describe("disable-local-eliza-workspace", () => {
         version: "2.0.0-alpha.163",
       },
     );
-    writeJson(
-      path.join(repoRoot, "eliza", "packages", "ui", "package.json"),
-      {
-        name: "@elizaos/ui",
-        version: "2.0.0-alpha.163",
-      },
-    );
+    writeJson(path.join(repoRoot, "eliza", "packages", "ui", "package.json"), {
+      name: "@elizaos/ui",
+      version: "2.0.0-alpha.163",
+    });
 
     disableLocalElizaWorkspace(repoRoot, {
       log: () => {},
