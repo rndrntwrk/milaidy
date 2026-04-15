@@ -143,6 +143,7 @@ import { handleAgentLifecycleRoutes } from "./agent-lifecycle-routes.js";
 import { detectRuntimeModel, resolveProviderFromModel } from "./agent-model.js";
 import { handleAgentStatusRoutes } from "./agent-status-routes.js";
 import { handleAgentTransferRoutes } from "./agent-transfer-routes.js";
+import { handleAliceOperatorRoutes } from "./alice-operator-routes.js";
 import { handleAppPackageRoutes } from "./app-package-routes.js";
 import { handleAppsRoutes } from "./apps-routes.js";
 import { handleAuthRoutes } from "./auth-routes.js";
@@ -5924,6 +5925,26 @@ async function handleRequest(
       pathname,
       json,
       error,
+    })
+  ) {
+    return;
+  }
+
+  // ── Alice operator routes (extracted to alice-operator-routes.ts) ───
+  // Drives POST /api/alice/operator/execute — the action bridge used by
+  // CompanionGoLiveModal and useCompanionStageOperator.executePlan to
+  // dispatch STREAM555_GO_LIVE and related operator actions through the
+  // agent runtime. Without this wiring the client 404s on go-live.
+  if (
+    await handleAliceOperatorRoutes({
+      req,
+      res,
+      method,
+      pathname,
+      json,
+      error,
+      readJsonBody,
+      runtime: state.runtime,
     })
   ) {
     return;
