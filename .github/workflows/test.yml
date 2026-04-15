@@ -68,6 +68,15 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
+      - name: Install Linux desktop runtime dependencies
+        run: |
+          APT_ARGS=(-o Acquire::ForceIPv4=true -o Acquire::Retries=5 -o Acquire::http::Timeout=30)
+          sudo apt-get "${APT_ARGS[@]}" update
+          sudo apt-get "${APT_ARGS[@]}" install -y \
+            libayatana-appindicator3-1 \
+            libwebkit2gtk-4.1-0 \
+            xvfb
+
       - name: Setup workspace dependencies
         uses: ./.github/actions/setup-bun-workspace
         with:
@@ -91,7 +100,7 @@ jobs:
         run: bun run build
 
       - name: Run real integration tests (live/real suite)
-        run: bun run test:ci:real
+        run: xvfb-run -a bun run test:ci:real
 
       - name: Run startup script drift guard
         run: bun run test:startup:contract
@@ -175,7 +184,10 @@ jobs:
         run: |
           APT_ARGS=(-o Acquire::ForceIPv4=true -o Acquire::Retries=5 -o Acquire::http::Timeout=30)
           sudo apt-get "${APT_ARGS[@]}" update
-          sudo apt-get "${APT_ARGS[@]}" install -y libwebkit2gtk-4.1-0 libayatana-appindicator3-1
+          sudo apt-get "${APT_ARGS[@]}" install -y \
+            libayatana-appindicator3-1 \
+            libwebkit2gtk-4.1-0 \
+            xvfb
 
       - name: Cache Bun install
         uses: actions/cache@v4
@@ -205,7 +217,13 @@ jobs:
         run: bun run test:selfcontrol:unit
 
       - name: Run website blocker E2E suites
-        run: bun run test:selfcontrol:e2e
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            xvfb-run -a bun run test:selfcontrol:e2e
+          else
+            bun run test:selfcontrol:e2e
+          fi
 
   website-blocker-startup-smoke:
     name: Website Blocker Startup Smoke (${{ matrix.os }})
@@ -599,35 +617,21 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Check live provider secrets
-        id: provider-check
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          ELIZAOS_CLOUD_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY }}
+        id: cloud-check
         run: |
-          if [ -z "${OPENAI_API_KEY}" ] && \
-             [ -z "${GROQ_API_KEY}" ] && \
-             [ -z "${ANTHROPIC_API_KEY}" ] && \
-             [ -z "${GOOGLE_GENERATIVE_AI_API_KEY}" ] && \
-             [ -z "${OPENROUTER_API_KEY}" ] && \
-             [ -z "${ELIZAOS_CLOUD_API_KEY}" ]; then
-            echo "::warning::No live provider secret configured — skipping UI Playwright smoke."
-            echo "skip=true" >> "$GITHUB_OUTPUT"
+          if [ -z "${{ secrets.ELIZAOS_CLOUD_API_KEY }}" ]; then
+            echo "::warning::ELIZAOS_CLOUD_API_KEY not configured — UI Playwright smoke will run without cloud onboarding coverage."
+            echo "has_cloud_key=false" >> "$GITHUB_OUTPUT"
           else
-            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "has_cloud_key=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Checkout
-        if: steps.provider-check.outputs.skip != 'true'
         uses: actions/checkout@v4
         with:
           submodules: false
 
       - name: Setup workspace dependencies
-        if: steps.provider-check.outputs.skip != 'true'
         uses: ./.github/actions/setup-bun-workspace
         with:
           bun-version: ${{ env.BUN_VERSION }}
@@ -636,22 +640,18 @@ jobs:
           no-vision-deps: "true"
 
       - name: Restore eliza workspace paths for repo scripts
-        if: steps.provider-check.outputs.skip != 'true'
         run: node -e "const fs=require('node:fs');if(fs.existsSync('.eliza.ci-disabled')&&!fs.existsSync('eliza'))fs.renameSync('.eliza.ci-disabled','eliza');"
 
       - name: Install Electrobun runtime dependencies
-        if: steps.provider-check.outputs.skip != 'true'
         run: |
           APT_ARGS=(-o Acquire::ForceIPv4=true -o Acquire::Retries=5 -o Acquire::http::Timeout=30)
           sudo apt-get "${APT_ARGS[@]}" update
-          sudo apt-get "${APT_ARGS[@]}" install -y libwebkit2gtk-4.1-0 libayatana-appindicator3-1
+          sudo apt-get "${APT_ARGS[@]}" install -y libwebkit2gtk-4.1-0
 
       - name: Install Playwright browser
-        if: steps.provider-check.outputs.skip != 'true'
         run: bunx playwright install --with-deps chromium
 
       - name: Run UI Playwright smoke tests
-        if: steps.provider-check.outputs.skip != 'true'
         run: bun run test:ui:playwright
         env:
           MILADY_LIVE_TEST: "1"

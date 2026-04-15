@@ -18,7 +18,7 @@
     "forceConsistentCasingInFileNames": true,
     "experimentalDecorators": true,
     "useUnknownInCatchVariables": true,
-    "types": ["vite/client", "bun"],
+    "types": ["vite/client", "bun-types"],
     "baseUrl": "../..",
     "paths": {
       "@elizaos/app-core": ["./eliza/packages/app-core/src/index.ts"],
@@ -59,7 +59,6 @@
     }
   },
   "include": [
-    "src/**/*.d.ts",
     "src/**/*.ts",
     "src/**/*.tsx",
     "../../eliza/packages/app-core/src/ambient-modules.d.ts",
