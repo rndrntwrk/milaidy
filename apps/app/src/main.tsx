@@ -588,6 +588,40 @@ async function runMain(): Promise<void> {
         window as unknown as { __agentShowControl?: Record<string, unknown> }
       ).__agentShowControl = { source: "broadcast-boot" };
     }
+
+    // Teach the startup coordinator that onboarding is already complete.
+    //
+    // milaidy's StartupCoordinator seeds its `onboardingComplete` flag
+    // from `localStorage["eliza:onboarding-complete"]` (see
+    // packages/app-core/src/state/persistence.ts:417 +
+    // useLifecycleState.ts:48). A fresh headless Chromium has empty
+    // localStorage, so the coordinator transitions to
+    // `onboarding-required` and App.tsx renders StartupShell →
+    // OnboardingWizard — the character-select screen with the EN
+    // language chip that was appearing on stream instead of the
+    // companion view.
+    //
+    // For alice-bot specifically this is an architectural mismatch:
+    // milaidy's SPA treats each browser as a personal install to
+    // onboard, but alice-bot is a server-side, always-on, single-
+    // tenant agent whose state lives in /home/node/.milaidy/milaidy.json
+    // on the PVC. Every browser that connects should behave like an
+    // already-onboarded viewer.
+    //
+    // For broadcast captures specifically we force the marker so the
+    // coordinator skips onboarding and goes straight through
+    // `starting-runtime` → `hydrating` → `ready`, at which point
+    // BroadcastShell mounts CompanionSceneHost with whatever character
+    // AppContext resolves. The proper long-term fix is to have the
+    // coordinator consult a server-side `/api/agent/v1/onboarding-state`
+    // endpoint before falling back to localStorage — tracked as a
+    // follow-up.
+    try {
+      localStorage.setItem("eliza:onboarding-complete", "1");
+    } catch {
+      /* storage unavailable — the coordinator's own try/catch handles this */
+    }
+
     injectPopoutApiBase();
     mountReactApp();
     return;

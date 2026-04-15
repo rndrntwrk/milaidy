@@ -763,24 +763,28 @@ export function App() {
 
   // Broadcast mode — render only the CompanionSceneHost (VRM stage + chat
   // and action overlays) full-screen, with no Header, sidebar, hub nav, or
-  // settings chrome. Wait for the startup coordinator to reach "ready"
-  // first so the avatar stack has access to the resolved character
-  // catalog and AppContext state before VrmEngine boots; the loader is
-  // rendered behind the same StartupShell as the rest of the app.
+  // settings chrome.
   //
   // This is the URL the capture-service's headless Chromium navigates to
   // when STREAM555_GO_LIVE is invoked with `inputType: avatar` —
   // replacing the legacy parallel agent-show static page so the broadcast
   // frame is byte-for-byte the live companion view.
+  //
+  // IMPORTANT: unlike the regular app shell we do NOT gate on
+  // `startupCoordinator.phase === "ready"` here. alice-bot is a
+  // single-tenant, server-side, always-on agent whose state lives in
+  // /home/node/.milaidy/milaidy.json on the PVC — the broadcast view
+  // should behave like an already-onboarded viewer and render
+  // CompanionSceneHost immediately. Popout mode above does the same
+  // for StreamView. main.tsx's broadcast boot path seeds
+  // localStorage["eliza:onboarding-complete"] = "1" before React mounts
+  // so the coordinator never flips to `onboarding-required`; this is
+  // defense-in-depth for the case where the coordinator is still in an
+  // earlier phase (splash/restoring-session/polling-backend) when the
+  // capture worker's first frame grab fires — the VRM scene still
+  // renders via AppContext defaults, which AppProvider hydrates
+  // independently of the coordinator state machine.
   if (isBroadcast) {
-    if (startupCoordinator.phase !== "ready") {
-      return (
-        <BugReportProvider value={bugReport}>
-          <StartupShell />
-          <BugReportModal />
-        </BugReportProvider>
-      );
-    }
     return <BroadcastShell />;
   }
 
