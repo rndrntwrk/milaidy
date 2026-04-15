@@ -37,6 +37,16 @@ const suites = {
       args: ["run", "verify:typecheck:workspace"],
     },
     {
+      label: "@elizaos/app-core typecheck",
+      command: "bun",
+      args: ["run", "--cwd", "eliza/packages/app-core", "typecheck"],
+    },
+    {
+      label: "@elizaos/ui typecheck",
+      command: "bun",
+      args: ["run", "--cwd", "eliza/packages/ui", "typecheck"],
+    },
+    {
       label: "apps/app typecheck",
       command: "bun",
       args: ["run", "--cwd", "apps/app", "typecheck"],

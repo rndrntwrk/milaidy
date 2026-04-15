@@ -41,10 +41,7 @@ jobs:
           no-vision-deps: "true"
 
       - name: Restore eliza workspace paths for repo scripts
-        run: |
-          if [ -d ".eliza.ci-disabled" ] && [ ! -d "eliza" ]; then
-            mv .eliza.ci-disabled eliza
-          fi
+        run: node scripts/restore-local-eliza-workspace.mjs
 
       - name: Fetch upstream develop for pre-review base
         run: |
@@ -78,10 +75,7 @@ jobs:
           prepare-local-eliza-runtime: "true"
 
       - name: Restore eliza workspace paths for repo scripts
-        run: |
-          if [ -d ".eliza.ci-disabled" ] && [ ! -d "eliza" ]; then
-            mv .eliza.ci-disabled eliza
-          fi
+        run: node scripts/restore-local-eliza-workspace.mjs
 
       - name: Install submodule verification dependencies
         run: |
@@ -125,10 +119,7 @@ jobs:
           install-command: bun install --ignore-scripts --no-frozen-lockfile
 
       - name: Restore eliza workspace paths for repo scripts
-        run: |
-          if [ -d ".eliza.ci-disabled" ] && [ ! -d "eliza" ]; then
-            mv .eliza.ci-disabled eliza
-          fi
+        run: node scripts/restore-local-eliza-workspace.mjs
 
       - name: Install submodule verification dependencies
         run: |
@@ -172,10 +163,7 @@ jobs:
           install-command: bun install --ignore-scripts --no-frozen-lockfile
 
       - name: Restore eliza workspace paths for repo scripts
-        run: |
-          if [ -d ".eliza.ci-disabled" ] && [ ! -d "eliza" ]; then
-            mv .eliza.ci-disabled eliza
-          fi
+        run: node scripts/restore-local-eliza-workspace.mjs
 
       - name: Build
         run: bun run build
@@ -206,10 +194,7 @@ jobs:
           install-command: bun install --ignore-scripts --no-frozen-lockfile
 
       - name: Restore eliza workspace paths for repo scripts
-        run: |
-          if [ -d ".eliza.ci-disabled" ] && [ ! -d "eliza" ]; then
-            mv .eliza.ci-disabled eliza
-          fi
+        run: node scripts/restore-local-eliza-workspace.mjs
 
       - name: Build project
         run: bun run build
