@@ -114,20 +114,29 @@ RUN for pkg_dir in eliza/packages/typescript eliza/packages/shared eliza/package
 
 # Ensure @elizaos/plugin-agent-skills is installed
 # The eliza submodule defines it as workspace:* but the plugin dir may be empty (new, uncommitted).
-# Fall back to the npm version via tarball extraction.
+# Fall back to the npm version via tarball extraction using node's built-in https (no curl in slim).
 RUN if [ ! -f "node_modules/@elizaos/plugin-agent-skills/package.json" ]; then \
     echo "Fetching @elizaos/plugin-agent-skills from npm..."; \
-    TARBALL_URL=$(npm view @elizaos/plugin-agent-skills dist.tarball 2>/dev/null); \
-    if [ -n "$TARBALL_URL" ]; then \
-      mkdir -p /tmp/pas_extract && \
-      curl -sL "$TARBALL_URL" | tar xz -C /tmp/pas_extract && \
-      mkdir -p node_modules/@elizaos && \
-      rm -rf node_modules/@elizaos/plugin-agent-skills && \
-      mv /tmp/pas_extract/package node_modules/@elizaos/plugin-agent-skills && \
-      echo "Installed @elizaos/plugin-agent-skills $(cat node_modules/@elizaos/plugin-agent-skills/package.json | node -e 'process.stdin.resume();let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>console.log(JSON.parse(d).version))')"; \
-    else \
-      echo "WARN: could not resolve @elizaos/plugin-agent-skills tarball URL"; \
-    fi; \
+    node -e " \
+      const https = require('https'); \
+      const fs = require('fs'); \
+      const { execSync } = require('child_process'); \
+      const url = execSync('npm view @elizaos/plugin-agent-skills dist.tarball', {encoding:'utf8'}).trim(); \
+      https.get(url, res => { \
+        const chunks = []; \
+        res.on('data', c => chunks.push(c)); \
+        res.on('end', () => { \
+          fs.mkdirSync('/tmp/pas_ext', {recursive:true}); \
+          fs.writeFileSync('/tmp/pas.tgz', Buffer.concat(chunks)); \
+          execSync('tar xz -C /tmp/pas_ext -f /tmp/pas.tgz'); \
+          fs.mkdirSync('node_modules/@elizaos', {recursive:true}); \
+          execSync('rm -rf node_modules/@elizaos/plugin-agent-skills'); \
+          execSync('mv /tmp/pas_ext/package node_modules/@elizaos/plugin-agent-skills'); \
+          const v = JSON.parse(fs.readFileSync('node_modules/@elizaos/plugin-agent-skills/package.json','utf8')).version; \
+          console.log('Installed @elizaos/plugin-agent-skills@' + v); \
+        }); \
+      }).on('error', e => { console.error('WARN:', e.message); }); \
+    " ; \
   else \
     echo "@elizaos/plugin-agent-skills already present"; \
   fi
