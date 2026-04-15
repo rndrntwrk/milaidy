@@ -75,4 +75,3 @@ jobs:
       - name: Verify bun-version-guard
         run: >
           bun -e "import { getBunVersionAdvisory } from './eliza/packages/app-core/scripts/lib/bun-version-guard.mjs'; const result = getBunVersionAdvisory(); console.log('bun-version-guard:', result ?? 'OK (no advisory)');"
-

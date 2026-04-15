@@ -17,6 +17,7 @@ const files = {
   action: ".github/actions/setup-bun-workspace/action.yml",
   packageJson: "package.json",
   disableScript: "scripts/disable-local-eliza-workspace.mjs",
+  restoreScript: "scripts/restore-local-eliza-workspace.mjs",
   regressionMatrixScript:
     "eliza/packages/app-core/scripts/validate-regression-matrix.mjs",
 };
@@ -34,14 +35,17 @@ const requiredWorkflowSnippets = [
   "uses: ./.github/actions/setup-bun-workspace",
   'disable-local-eliza-workspace: "true"',
   "install-command: bun install --ignore-scripts --no-frozen-lockfile",
-  `run: node -e "const fs=require('node:fs');if(fs.existsSync('.eliza.ci-disabled')&&!fs.existsSync('eliza'))fs.renameSync('.eliza.ci-disabled','eliza');"`,
+  "run: node scripts/restore-local-eliza-workspace.mjs",
   "run: bun run test:regression-matrix:pr",
 ];
 
 const requiredActionSnippets = [
   "disable-local-eliza-workspace:",
   "run: node scripts/disable-local-eliza-workspace.mjs",
+  "run: bash scripts/install-published-workspace-fallback-deps.sh",
 ];
+
+const forbiddenActionSnippets = ["bun add --no-save --dev"];
 
 const disableMarkers = [
   "scripts/disable-local-eliza-workspace.mjs",
@@ -88,6 +92,7 @@ assertContainsAll(
   failures,
 );
 assertContainsAll(actionText, files.action, requiredActionSnippets, failures);
+assertContainsNone(actionText, files.action, forbiddenActionSnippets, failures);
 
 const regressionMatrixCommand =
   packageJson?.scripts?.["test:regression-matrix:pr"];
@@ -196,6 +201,16 @@ function assertContainsAll(text, relativePath, snippets, targetFailures) {
     if (!text.includes(snippet)) {
       targetFailures.push(
         `${relativePath} is missing required bootstrap snippet: ${snippet}`,
+      );
+    }
+  }
+}
+
+function assertContainsNone(text, relativePath, snippets, targetFailures) {
+  for (const snippet of snippets) {
+    if (text.includes(snippet)) {
+      targetFailures.push(
+        `${relativePath} still contains forbidden bootstrap snippet: ${snippet}`,
       );
     }
   }

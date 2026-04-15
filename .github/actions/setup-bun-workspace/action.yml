@@ -47,9 +47,9 @@ runs:
       with:
         python-version: ${{ inputs.python-version }}
 
-    - name: Install Python CI tooling
+    - name: Install setuptools for distutils (Python 3.12+)
       shell: bash
-      run: python -m pip install --upgrade pip setuptools ruff mypy
+      run: pip install setuptools
 
     - name: Install native dependencies
       if: ${{ inputs.install-native-deps == 'true' }}
@@ -62,7 +62,7 @@ runs:
           if sudo apt-get "${APT_ARGS[@]}" update && \
              sudo apt-get "${APT_ARGS[@]}" install -y --fix-missing \
                build-essential libcairo2-dev libpango1.0-dev libjpeg-dev \
-               libgif-dev libpixman-1-dev librsvg2-dev; then
+               libgif-dev libpixman-1-dev librsvg2-dev protobuf-compiler; then
             break
           fi
           if [ "$attempt" -eq 3 ]; then
@@ -105,7 +105,9 @@ runs:
     - name: Shallow-init eliza submodule for version resolution
       if: ${{ inputs.disable-local-eliza-workspace == 'true' }}
       shell: bash
-      run: git submodule update --init --depth=1 eliza
+      run: |
+        git submodule sync -- eliza
+        git submodule update --init --depth=1 eliza
 
     # IMPORTANT: This mode is for published-only CI jobs. Do not enable it for
     # jobs that execute repo-local paths under eliza/ after dependency setup.
@@ -126,16 +128,7 @@ runs:
     - name: Install published-workspace fallback dependencies
       if: ${{ inputs.disable-local-eliza-workspace == 'true' }}
       shell: bash
-      run: >
-        bun add --no-save --dev --ignore-scripts
-        react react-dom vite
-        @types/react @types/react-dom
-        tailwindcss three clsx class-variance-authority tailwind-merge sonner
-        @radix-ui/react-checkbox @radix-ui/react-dialog @radix-ui/react-dropdown-menu @radix-ui/react-label
-        @radix-ui/react-popover @radix-ui/react-select @radix-ui/react-separator @radix-ui/react-slider
-        @radix-ui/react-slot @radix-ui/react-switch @radix-ui/react-tabs @radix-ui/react-tooltip
-        @capacitor/core @capacitor/haptics @capacitor/keyboard @capacitor/preferences
-        @xterm/xterm @xterm/addon-fit
+      run: bash scripts/install-published-workspace-fallback-deps.sh
 
     - name: Run repository postinstall patches
       if: ${{ inputs.run-postinstall == 'true' }}

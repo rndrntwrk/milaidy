@@ -115,8 +115,8 @@ export function writeLegacyElectrobunWrapper(
 // release-check legacy marker: "postBuild: "scripts/postwrap-sign-runtime-macos.ts""
 // release-check legacy marker: "postWrap: "scripts/postwrap-diagnostics.ts""
 // release-check legacy marker: "process.env.ELIZA_ELECTROBUN_NOTARIZE ??"
-// release-check legacy marker: ""../../../plugins.json": \`${"${runtimeDistDir}"}/plugins.json\`"
-// release-check legacy marker: ""../../../package.json": \`${"${runtimeDistDir}"}/package.json\`"
+// release-check legacy marker: ""../../../plugins.json": \`\${runtimeDistDir}/plugins.json\`"
+// release-check legacy marker: ""../../../package.json": \`\${runtimeDistDir}/package.json\`"
 export default canonicalConfig;
 `;
   fs.writeFileSync(wrapperPath, wrapperSource);
@@ -126,33 +126,41 @@ export function ensureLegacyElectrobunCompatDir({
   legacyDir = legacyElectrobunDir,
   canonicalDir = canonicalElectrobunDir,
   canonicalConfigImportPath = "../../../eliza/packages/app-core/platforms/electrobun/electrobun.config.ts",
+  copyEntry = symlinkOrCopy,
+  copyScriptsDir = copyLegacyScriptsCompatDir,
+  writeWrapper = writeLegacyElectrobunWrapper,
 } = {}) {
   if (fs.existsSync(legacyDir) || !fs.existsSync(canonicalDir)) {
     return false;
   }
 
   fs.mkdirSync(legacyDir, { recursive: true });
-  for (const entry of fs.readdirSync(canonicalDir, { withFileTypes: true })) {
-    const sourcePath = path.join(canonicalDir, entry.name);
-    const targetPath = path.join(legacyDir, entry.name);
+  try {
+    for (const entry of fs.readdirSync(canonicalDir, { withFileTypes: true })) {
+      const sourcePath = path.join(canonicalDir, entry.name);
+      const targetPath = path.join(legacyDir, entry.name);
 
-    if (entry.name === "electrobun.config.ts") {
-      continue;
+      if (entry.name === "electrobun.config.ts") {
+        continue;
+      }
+
+      if (entry.name === "scripts") {
+        copyScriptsDir(sourcePath, targetPath);
+        continue;
+      }
+
+      copyEntry(sourcePath, targetPath);
     }
 
-    if (entry.name === "scripts") {
-      copyLegacyScriptsCompatDir(sourcePath, targetPath);
-      continue;
-    }
-
-    symlinkOrCopy(sourcePath, targetPath);
+    writeWrapper(
+      path.join(legacyDir, "electrobun.config.ts"),
+      canonicalConfigImportPath,
+    );
+    return true;
+  } catch (error) {
+    fs.rmSync(legacyDir, { force: true, recursive: true });
+    throw error;
   }
-
-  writeLegacyElectrobunWrapper(
-    path.join(legacyDir, "electrobun.config.ts"),
-    canonicalConfigImportPath,
-  );
-  return true;
 }
 
 export function cleanupLegacyElectrobunCompatDir(
