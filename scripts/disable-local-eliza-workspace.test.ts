@@ -1,11 +1,34 @@
-import { describe, expect, it, vi } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   collectWorkspaceProtocolDependencyNames,
+  disableLocalElizaWorkspace,
   PINNED_VERSION_SOURCE_OVERRIDE,
   PINNED_VERSION_SOURCE_TEMPLATE,
   PINNED_VERSION_SOURCE_WORKSPACE,
   resolvePublishSafePinnedVersions,
 } from "./disable-local-eliza-workspace.mjs";
+
+const tempDirs: string[] = [];
+
+function makeTempDir() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "milady-disable-eliza-"));
+  tempDirs.push(dir);
+  return dir;
+}
+
+function writeJson(filePath: string, value: unknown) {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+}
+
+afterEach(() => {
+  for (const dir of tempDirs.splice(0)) {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 describe("disable-local-eliza-workspace", () => {
   it("falls back unpublished workspace-derived versions to the latest published alpha", () => {
@@ -77,5 +100,77 @@ describe("disable-local-eliza-workspace", () => {
     expect(dependencyNames).toEqual(
       new Set(["@elizaos/core", "@elizaos/agent"]),
     );
+  });
+
+  it("rewrites disabled eliza workspace packages that stay on disk in rewrite-only CI", () => {
+    const repoRoot = makeTempDir();
+    writeJson(path.join(repoRoot, "package.json"), {
+      name: "milady-test",
+      workspaces: ["eliza/packages/*", "eliza/plugins/*", "packages/*"],
+      dependencies: {
+        "@elizaos/core": "workspace:*",
+        "@elizaos/plugin-agent-orchestrator": "workspace:*",
+        "@elizaos/skills": "workspace:*",
+      },
+      overrides: {
+        "@elizaos/core": "2.0.0-alpha.163",
+      },
+    });
+    writeJson(
+      path.join(repoRoot, "eliza", "packages", "typescript", "package.json"),
+      {
+        name: "@elizaos/typescript",
+        version: "2.0.0-alpha.163",
+      },
+    );
+    writeJson(
+      path.join(repoRoot, "eliza", "packages", "skills", "package.json"),
+      {
+        name: "@elizaos/skills",
+        version: "2.0.0-alpha.163",
+      },
+    );
+    writeJson(
+      path.join(
+        repoRoot,
+        "eliza",
+        "plugins",
+        "plugin-agent-orchestrator",
+        "package.json",
+      ),
+      {
+        name: "@elizaos/plugin-agent-orchestrator",
+        version: "0.6.2-alpha.0",
+      },
+    );
+    writeJson(
+      path.join(repoRoot, "eliza", "packages", "agent", "package.json"),
+      {
+        name: "@elizaos/agent",
+        dependencies: {
+          "@elizaos/core": "workspace:*",
+          "@elizaos/plugin-agent-orchestrator": "workspace:*",
+          "@elizaos/skills": "workspace:*",
+        },
+      },
+    );
+
+    disableLocalElizaWorkspace(repoRoot, {
+      log: () => {},
+      warn: () => {},
+      errorLog: () => {},
+    });
+
+    const agentPackage = JSON.parse(
+      fs.readFileSync(
+        path.join(repoRoot, "eliza", "packages", "agent", "package.json"),
+        "utf8",
+      ),
+    );
+    expect(agentPackage.dependencies).toMatchObject({
+      "@elizaos/core": "2.0.0-alpha.163",
+      "@elizaos/plugin-agent-orchestrator": "0.6.2-alpha.0",
+      "@elizaos/skills": "2.0.0-alpha.163",
+    });
   });
 });

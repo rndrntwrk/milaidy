@@ -216,9 +216,9 @@ jobs:
             ### 4. Apply the universal gates (every PR, no exceptions)
 
             **A. Universal invariants (hard block on any violation):**
-            1. **NODE_PATH** set in all three sites: `eliza/packages/agent/src/runtime/eliza.ts`, `eliza/packages/app-core/scripts/run-node.mjs`, `apps/app/electrobun/src/native/agent.ts`.
+            1. **NODE_PATH** set in all three sites: `eliza/packages/agent/src/runtime/eliza.ts`, `eliza/packages/app-core/scripts/run-node.mjs`, `eliza/packages/app-core/platforms/electrobun/src/native/agent.ts`.
             2. **`scripts/patch-deps.mjs`** bun-exports patch preserved (deletes dead `exports["."].bun` keys in `@elizaos/*`).
-            3. **Electrobun startup try/catch guards** in `apps/app/electrobun/src/native/agent.ts` intact.
+            3. **Electrobun startup try/catch guards** in `eliza/packages/app-core/platforms/electrobun/src/native/agent.ts` intact.
             4. **Namespace `milady`** — state dir `~/.milady/`, config `milady.json`, `MILADY_*` env precedence over `ELIZA_*`.
             5. **No hardcoded port numbers** — use `MILADY_API_PORT` (31337), `MILADY_PORT` (2138), `MILADY_GATEWAY_PORT` (18789), `MILADY_HOME_PORT` (2142), `MILADY_WECHAT_WEBHOOK_PORT` (18790).
             6. **Dynamic `@elizaos/plugin-*` imports only** — no top-level `import "@elizaos/plugin-*"`.
@@ -351,9 +351,9 @@ jobs:
             ### 4. Apply the universal gates (every PR, no exceptions)
 
             **A. Universal invariants (hard block on any violation):**
-            1. NODE_PATH set in all three sites: `eliza/packages/agent/src/runtime/eliza.ts`, `eliza/packages/app-core/scripts/run-node.mjs`, `apps/app/electrobun/src/native/agent.ts`.
+            1. NODE_PATH set in all three sites: `eliza/packages/agent/src/runtime/eliza.ts`, `eliza/packages/app-core/scripts/run-node.mjs`, `eliza/packages/app-core/platforms/electrobun/src/native/agent.ts`.
             2. `scripts/patch-deps.mjs` bun-exports patch preserved.
-            3. Electrobun startup try/catch guards in `apps/app/electrobun/src/native/agent.ts` intact.
+            3. Electrobun startup try/catch guards in `eliza/packages/app-core/platforms/electrobun/src/native/agent.ts` intact.
             4. Namespace `milady` — state dir `~/.milady/`, config `milady.json`, `MILADY_*` env precedence.
             5. No hardcoded port numbers — use `MILADY_API_PORT` (31337), `MILADY_PORT` (2138), `MILADY_GATEWAY_PORT` (18789), `MILADY_HOME_PORT` (2142), `MILADY_WECHAT_WEBHOOK_PORT` (18790).
             6. Dynamic `@elizaos/plugin-*` imports only — no top-level imports.

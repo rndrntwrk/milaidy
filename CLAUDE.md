@@ -92,7 +92,7 @@ Cloud monetization is a first-class product constraint. App creators can earn th
 Dynamic plugin imports (`import("@elizaos/plugin-foo")`) need NODE_PATH set to the repo root's `node_modules`. This is set in three places — all three are required:
 1. `packages/agent/src/runtime/eliza.ts` — module-level, before dynamic imports
 2. `eliza/packages/app-core/scripts/run-node.mjs` — child process env
-3. `apps/app/electrobun/src/native/agent.ts` — Electrobun main process
+3. `eliza/packages/app-core/platforms/electrobun/src/native/agent.ts` — Electrobun main process
 
 See `docs/plugin-resolution-and-node-path.md`.
 
@@ -100,7 +100,7 @@ See `docs/plugin-resolution-and-node-path.md`.
 `scripts/patch-deps.mjs` removes dead `exports["."].bun` entries from `@elizaos` packages that point to missing `src/` paths. Without this, Bun fails to resolve plugins at runtime.
 
 ### Electrobun startup guards (do not remove)
-The try/catch blocks in `apps/app/electrobun/src/native/agent.ts` keep the desktop window usable when the runtime fails.
+The try/catch blocks in `eliza/packages/app-core/platforms/electrobun/src/native/agent.ts` keep the desktop window usable when the runtime fails.
 
 ### Dashboard SSE: action callbacks replace in place
 In `packages/agent/src/api/chat-routes.ts`, **`HandlerCallback`** text from actions uses **`replaceCallbackText`**: each new callback replaces the previous callback’s segment after a frozen **`preCallbackText`** (the LLM stream so far). **Why:** Matches Discord-style progressive messages; the old path concatenated unrelated status strings in one bubble. The elizaOS callback contract is unchanged. See **`docs/runtime/action-callback-streaming.md`**.
@@ -205,7 +205,8 @@ bun run milady start              # run-node.mjs
 | `MILADY_ACTION_COMPACTION` | Context-aware action param stripping | `1` (enabled) |
 | `MILADY_PROMPT_OPT_MODE` | Prompt optimization mode (`baseline` or `compact`) | `baseline` |
 | `PARALLAX_LLM_PROVIDER` | Coding-agent LLM provider mode: `subscription` (each CLI's built-in login), `api_keys` (user-provided per-provider keys), or `cloud` (route through Eliza Cloud). Set via the Coding Agents settings UI; consumed by `packages/agent/src/runtime/agent-orchestrator-compat.ts`. | `subscription` |
-| `ENABLE_CLOUD_WALLET` | Enable the Eliza Cloud remote-signing wallet bridge. When `1`, cloud login provisions a cloud-held wallet (Privy/Steward custody), writes `WALLET_SOURCE_*`, and the wallet UI exposes a dual-wallet (local \| cloud) picker. When `0`, all cloud-wallet code paths are inert. Read via `isCloudWalletEnabled()` in `packages/agent/src/config/feature-flags.ts`. | `0` |
-| `MILADY_CLOUD_CLIENT_ADDRESS_KEY` | Sensitive. Local secp256k1 private key that signs cloud RPC requests (`POST /api/v1/user/wallets/rpc`). Generated on first cloud login and persisted to `config.env`; never returned by any API response. Treat as a wallet-tier secret — it authenticates RPC execution against the custodial cloud wallet. Listed in `BLOCKED_STARTUP_ENV_KEYS` so it cannot leak into `milady.json`. | — |
-| `WALLET_SOURCE_EVM` / `WALLET_SOURCE_SOLANA` | `local` or `cloud`. Selects which provider `plugin-evm` / `plugin-solana` bind at startup. Defaults to `cloud` on first cloud login, `local` otherwise. Toggled by `POST /api/wallet/primary`. | `local` |
-| `ENABLE_EVM_PLUGIN` | Explicit opt-in to load `@elizaos/plugin-evm`. Gated because `CROSS_CHAIN_TRANSFER` action crashes on missing `BRIDGE` action spec. Auto-set to `1` on cloud login when `ENABLE_CLOUD_WALLET=1`. | `0` |
+| `STEWARD_API_URL` | Steward vault API base URL. Auto-provisioned on Eliza Cloud login; set manually for self-hosted Steward. | — |
+| `STEWARD_TENANT_ID` | Steward tenant identifier. Auto-provisioned on cloud login. Persisted to `config.env`. | — |
+| `STEWARD_API_KEY` | Steward tenant API key. Auto-provisioned on cloud login. Persisted to `config.env`. | — |
+| `STEWARD_AGENT_TOKEN` | Steward agent bearer token. Generated during agent provisioning, persisted to `~/.milady/steward-credentials.json`. | — |
+| `STEWARD_AGENT_ID` | Steward agent identifier. Defaults to the runtime `agentId`. | — |
