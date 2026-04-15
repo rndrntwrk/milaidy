@@ -38,6 +38,7 @@ export { StreamView } from "./components/pages/StreamView";
 export { TrajectoriesView } from "./components/pages/TrajectoriesView";
 export { DesktopWorkspaceSection } from "./components/settings/DesktopWorkspaceSection";
 export { FineTuningView } from "./components/settings/FineTuningView";
+export { BroadcastShell } from "./components/shell/BroadcastShell";
 export { BugReportModal } from "./components/shell/BugReportModal";
 export { CompanionShell } from "./components/shell/CompanionShell";
 export { ConnectionFailedBanner } from "./components/shell/ConnectionFailedBanner";
