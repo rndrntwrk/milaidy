@@ -225,3 +225,9 @@ bun run milady start              # run-node.mjs
 | `MILADY_CAPTURE_PROMPTS` | Dump raw prompts to `.tmp/prompt-captures/` (dev-only, contains user messages) | `0` |
 | `MILADY_ACTION_COMPACTION` | Context-aware action param stripping | `1` (enabled) |
 | `MILADY_PROMPT_OPT_MODE` | Prompt optimization mode (`baseline` or `compact`) | `baseline` |
+
+## Learned Workspace Facts
+
+- `POST /api/onboarding` rejects legacy keys (`runMode`, `cloudProvider`, `smallModel`, `largeModel`); onboarding submits must use the canonical deployment/routing payload (`deploymentTarget`, `linkedAccounts`, `serviceRouting`, `credentialInputs`, e.g. via `buildOnboardingRuntimeConfig`) for cloud fast-track and the main wizard alike.
+- With repo-local `./eliza` linked (`bun run setup:upstreams`), many app-core fixes apply under `eliza/packages/app-core/`; confirm which package tree the running build resolves before editing only root `packages/app-core/`.
+- Compat `ensureCompatApiAuthorized` advances the per-IP lockout counter only when a token was provided but did not match; requests with no `Authorization`/`x-eliza-token` still get 401 but do not consume the failed-auth budget. Runtime plugin HTTP routes call `isAuthorized()` only when `route.public === false` (missing or `true` is not treated as protected).

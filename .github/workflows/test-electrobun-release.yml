@@ -45,6 +45,15 @@ jobs:
       - name: Initialize tracked workspace submodules
         run: bun run scripts/init-submodules.mjs
 
+      - name: Initialize eliza submodule for version resolution
+        run: git submodule update --init --depth=1 eliza
+
+      - name: Initialize release-check plugin version source
+        run: |
+          if [ -f eliza/.gitmodules ]; then
+            git -C eliza submodule update --init plugins/plugin-agent-orchestrator
+          fi
+
       - name: Disable repo-local eliza workspace
         run: bun run scripts/disable-local-eliza-workspace.mjs
 
@@ -54,6 +63,7 @@ jobs:
       - name: Install published-workspace fallback dependencies
         run: >
           bun add --no-save --dev
+          @elizaos/plugin-agent-orchestrator
           react react-dom vite
           @types/react @types/react-dom
           tailwindcss three clsx class-variance-authority tailwind-merge sonner

@@ -57,7 +57,7 @@ const sourcePresentMarkers = [
   "bun run test:selfcontrol:e2e",
   "bun run test:selfcontrol:startup",
   "eliza/packages/app-core/scripts/docker-ci-smoke.sh",
-  "apps/app/electrobun",
+  "eliza/packages/app-core/platforms/electrobun",
 ];
 
 const failures = [];

@@ -227,9 +227,9 @@ jobs:
                - If the disagreement is about judgment (better/worse, too complex, duplication), lean toward the more cautious verdict.
                - Call out the disagreement explicitly in your final comment.
             6. **Verify coverage of Milady universal invariants** — at least one reviewer should have checked each relevant invariant for the files touched:
-               1. NODE_PATH at all three sites (`eliza/packages/agent/src/runtime/eliza.ts`, `eliza/packages/app-core/scripts/run-node.mjs`, `apps/app/electrobun/src/native/agent.ts`)
+               1. NODE_PATH at all three sites (`eliza/packages/agent/src/runtime/eliza.ts`, `eliza/packages/app-core/scripts/run-node.mjs`, `eliza/packages/app-core/platforms/electrobun/src/native/agent.ts`)
                2. `scripts/patch-deps.mjs` preserved
-               3. Electrobun startup try/catch guards in `apps/app/electrobun/src/native/agent.ts`
+               3. Electrobun startup try/catch guards in `eliza/packages/app-core/platforms/electrobun/src/native/agent.ts`
                4. Namespace `milady` (state dir `~/.milady/`, config `milady.json`, `MILADY_*` env precedence)
                5. No hardcoded port numbers
                6. Dynamic `@elizaos/plugin-*` imports only

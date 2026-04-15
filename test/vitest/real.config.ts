@@ -567,7 +567,7 @@ export default defineConfig({
       "dist/**",
       "**/node_modules/**",
       ...(hiddenElizaWorkspaceGlob ? [hiddenElizaWorkspaceGlob] : []),
-      "apps/app/electrobun/**",
+      "eliza/packages/app-core/platforms/electrobun/**",
       "apps/chrome-extension/**",
       "eliza/cloud/**",
     ],
