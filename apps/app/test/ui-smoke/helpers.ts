@@ -318,6 +318,44 @@ export async function installCloudWalletImportApiOverrides(
   };
 }
 
+/**
+ * Install default API mocks that prevent the app from hitting real endpoints.
+ * Call in `beforeEach` before any page navigation so Playwright route handlers
+ * are registered before the first network request.
+ */
+export async function installDefaultAppMocks(page: Page): Promise<void> {
+  // Stub the runtime /api endpoints the app shell fetches on mount so the
+  // UI renders without a live backend.
+  await page.route("**/api/agents", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ agents: [] }),
+    });
+  });
+
+  await page.route("**/api/cloud/status", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        connected: false,
+        enabled: false,
+        cloudVoiceProxyAvailable: false,
+        hasApiKey: false,
+      }),
+    });
+  });
+}
+
 export async function runSoftReadyChecks(
   page: Page,
   label: string,

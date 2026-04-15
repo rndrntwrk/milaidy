@@ -230,7 +230,11 @@ export default defineConfig({
       "eliza/packages/app-core/platforms/electrobun/src/menu-reset-from-main.test.ts",
       "eliza/packages/app-core/platforms/electrobun/src/diagnostic-format.test.ts",
       "eliza/packages/app-core/platforms/electrobun/src/native/steward.test.ts",
-      "eliza/packages/app-core/scripts/**/*.test.ts",
+      // Release-contract tests (asset-cdn, docker-contract, release-check,
+      // static-asset-manifest, etc.) run in a controlled, sequenced fashion via
+      // scripts/run-release-contract-suite.mjs with prerequisite setup steps.
+      // Only include app-core script tests that are safe to run standalone.
+      "eliza/packages/app-core/scripts/startup-integration-script-drift.test.ts",
       "eliza/packages/shared/src/**/*.test.ts",
       "eliza/packages/app-core/src/**/*.test.tsx",
       "eliza/packages/agent/src/runtime/roles/test/**/*.test.ts",
@@ -245,8 +249,6 @@ export default defineConfig({
       "eliza/plugins/plugin-discord/typescript/__tests__/slash-command-roles.test.ts",
       "src/**/*.test.ts",
       "scripts/**/*.test.ts",
-      "eliza/packages/app-core/platforms/electrobun/src/**/*.test.ts",
-      "eliza/packages/app-core/platforms/electrobun/src/**/*.test.tsx",
       "apps/chrome-extension/**/*.test.ts",
       "apps/chrome-extension/**/*.test.tsx",
     ],
