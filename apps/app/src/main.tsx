@@ -562,6 +562,32 @@ async function runMain(): Promise<void> {
     // shell only needs the React app, AppContext, and CompanionSceneHost
     // to come up. App.tsx's `useIsBroadcast()` gate routes the render to
     // BroadcastShell once the startup coordinator reaches "ready".
+    //
+    // Set the 555stream capture-service "React mounted" handshake marker
+    // SYNCHRONOUSLY here, before the React app even mounts. The capture
+    // worker uses
+    //   page.waitForFunction(
+    //     () => typeof window.__agentShowControl !== 'undefined',
+    //     { timeout: 20000 }
+    //   )
+    // as its primary "is the page ready" gate (see
+    // services/capture-service/src/worker.js:2161). Setting the global at
+    // the boot path means the worker's first poll catches it within
+    // ~100ms of the page loading — eliminating any race window between
+    // the React commit phase and the worker's 20s timeout, which is the
+    // failure mode that was making the worker fall back to its legacy
+    // DOM-injected agent-show standalone page.
+    //
+    // BroadcastShell's <CaptureHandshake/> child still runs the same
+    // assignment from a useEffect for the in-React lifecycle (and adds
+    // the .avatar-ready class once useCompanionSceneStatus().avatarReady
+    // flips true), but the boot-path assignment is the primary path
+    // because it can't race with React commit timing.
+    if (typeof window !== "undefined") {
+      (
+        window as unknown as { __agentShowControl?: Record<string, unknown> }
+      ).__agentShowControl = { source: "broadcast-boot" };
+    }
     injectPopoutApiBase();
     mountReactApp();
     return;
