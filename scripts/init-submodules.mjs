@@ -18,7 +18,8 @@ const SUBMODULE_READINESS_MARKERS = {
 // checkout until elizaos-plugins/plugin-openrouter#25 is merged.
 const SKIP_SUBMODULES = new Set(["eliza/plugins/plugin-openrouter"]);
 
-const NO_RECURSE_SUBMODULES = new Set([]);
+// Submodules whose own nested submodules should NOT be recursively initialized.
+const NO_RECURSE_SUBMODULES = new Set(["eliza"]);
 
 const LEGACY_ROOT_SUBMODULE_PATHS = ["cloud", "steward-fi"];
 
@@ -306,6 +307,12 @@ export function runInitSubmodules({
       const recurseFlag = NO_RECURSE_SUBMODULES.has(submodule.path)
         ? ""
         : " --recursive";
+      try {
+        exec(`git submodule sync -- "${submodule.path}"`, {
+          cwd: rootDir,
+          stdio: "inherit",
+        });
+      } catch {}
       try {
         exec(`git submodule update --init${recurseFlag} "${submodule.path}"`, {
           cwd: rootDir,

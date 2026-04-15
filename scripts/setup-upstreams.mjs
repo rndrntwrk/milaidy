@@ -86,6 +86,21 @@ const PACKAGE_LINK_ROOTS = [
   ["apps", "app", "node_modules"],
   ["apps", "home", "node_modules"],
 ];
+const INBOX_REPLY_HINT_LEGACY =
+  "Sent through the connected {{source}} account on this Mac.";
+const INBOX_REPLY_HINT_PLATFORM_NEUTRAL =
+  "Sent through the connected {{source}} account on this device.";
+const MILADY_COPY_PATCH_RELATIVE_PATHS = [
+  path.join(
+    "packages",
+    "app-core",
+    "src",
+    "components",
+    "pages",
+    "ChatView.tsx",
+  ),
+  path.join("packages", "app-core", "src", "i18n", "locales", "en.json"),
+];
 
 function toDisplayPath(targetPath) {
   return path.normalize(targetPath);
@@ -138,6 +153,47 @@ function writePackageJson(packagePath, raw, nextPackageJson) {
     packagePath,
     `${JSON.stringify(nextPackageJson, null, indent)}\n`,
   );
+}
+
+export function applyMiladyCopyPatches(elizaRoot) {
+  let patchedFiles = 0;
+  let staleFiles = 0;
+
+  for (const relativePath of MILADY_COPY_PATCH_RELATIVE_PATHS) {
+    const filePath = path.join(elizaRoot, relativePath);
+    if (!existsSync(filePath)) {
+      continue;
+    }
+
+    const raw = readFileSync(filePath, "utf8");
+    if (raw.includes(INBOX_REPLY_HINT_PLATFORM_NEUTRAL)) {
+      continue;
+    }
+
+    const next = raw
+      .split(INBOX_REPLY_HINT_LEGACY)
+      .join(INBOX_REPLY_HINT_PLATFORM_NEUTRAL);
+
+    if (next === raw) {
+      staleFiles += 1;
+      continue;
+    }
+
+    writeFileSync(filePath, next);
+    patchedFiles += 1;
+  }
+
+  if (patchedFiles > 0) {
+    console.log(
+      `[setup-upstreams] Applied ${patchedFiles} Milady copy patch(es) for inbox reply hint`,
+    );
+  } else if (staleFiles > 0) {
+    console.warn(
+      "[setup-upstreams] WARNING: inbox reply hint legacy string not found — patch may need updating",
+    );
+  }
+
+  return patchedFiles;
 }
 
 function uniqueLinks(links) {
@@ -920,6 +976,7 @@ async function ensureRepoLocalEliza(repoRoot) {
 
 async function ensureElizaDependencies(elizaRoot) {
   if (hasInstalledElizaDependencies(elizaRoot)) {
+    await bootstrapBundledBunInstall(elizaRoot);
     return;
   }
 
@@ -945,12 +1002,57 @@ async function ensureElizaDependencies(elizaRoot) {
   console.log(
     `[setup-upstreams] Installing eliza workspace dependencies in ${toDisplayPath(elizaRoot)}`,
   );
-  await withTemporaryOptionalElizaPluginWorkspaces(elizaRoot, () =>
-    runCommand("bun", ["install"], {
+  await withTemporaryOptionalElizaPluginWorkspaces(elizaRoot, async () => {
+    const installArgs = getElizaInstallArgs();
+    await runCommand("bun", installArgs, {
       cwd: elizaRoot,
       label: "bun install (eliza)",
-    }),
+    });
+    await bootstrapBundledBunInstall(elizaRoot);
+  });
+}
+
+export function getElizaInstallArgs(env = process.env) {
+  return env.MILADY_NO_VISION_DEPS === "1"
+    ? ["install", "--ignore-scripts"]
+    : ["install"];
+}
+
+export async function bootstrapBundledBunInstall(
+  workspaceRoot,
+  {
+    env = process.env,
+    pathExists = existsSync,
+    runCommandImpl = runCommand,
+  } = {},
+) {
+  if (env.MILADY_NO_VISION_DEPS !== "1") {
+    return false;
+  }
+
+  const bunInstallScriptRelativePath = path.join(
+    "node_modules",
+    "bun",
+    "install.js",
   );
+  const bunInstallScriptPath = path.join(
+    workspaceRoot,
+    bunInstallScriptRelativePath,
+  );
+
+  if (!pathExists(bunInstallScriptPath)) {
+    throw new Error(
+      `[setup-upstreams] Expected ${bunInstallScriptRelativePath} after bun install --ignore-scripts in ${toDisplayPath(
+        workspaceRoot,
+      )}, but it was missing.`,
+    );
+  }
+
+  await runCommandImpl("node", [bunInstallScriptRelativePath], {
+    cwd: workspaceRoot,
+    label: "node node_modules/bun/install.js (eliza bun bootstrap)",
+  });
+  return true;
 }
 
 async function ensureElizaGeneratedKeywordData(elizaRoot) {
@@ -1061,6 +1163,7 @@ export async function setupUpstreams(repoRoot = DEFAULT_REPO_ROOT) {
             );
           }
         }
+        applyMiladyCopyPatches(elizaRoot);
       }
     }
     console.log(`[setup-upstreams] Skipping: ${skipReason}`);
@@ -1080,6 +1183,7 @@ export async function setupUpstreams(repoRoot = DEFAULT_REPO_ROOT) {
   }
 
   const elizaRoot = await ensureRepoLocalEliza(repoRoot);
+  applyMiladyCopyPatches(elizaRoot);
   await ensureElizaDependencies(elizaRoot);
   await ensureElizaBuildOutputs(elizaRoot);
 

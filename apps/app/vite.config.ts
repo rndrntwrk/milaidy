@@ -34,6 +34,10 @@ const nativePluginsRoot = path.join(
   "eliza/packages/native-plugins",
 );
 const appCoreSrcRoot = path.join(miladyRoot, "eliza/packages/app-core/src");
+const appCoreNativePluginEntrypoints = path.join(
+  appCoreSrcRoot,
+  "platform/native-plugin-entrypoints.ts",
+);
 const uiPkgRoot = path.join(miladyRoot, "eliza/packages/ui");
 const capacitorCoreEntry = _require.resolve("@capacitor/core");
 
@@ -1111,6 +1115,16 @@ export default defineConfig({
       // events is pre-bundled via optimizeDeps.
       { find: /^path$/, replacement: "pathe" },
       { find: /^@capacitor\/core$/, replacement: capacitorCoreEntry },
+      // Keep this subpath on the concrete source file so Docker/Vite builds
+      // do not fall back to the extensionless tsconfig wildcard rewrite.
+      {
+        find: /^@elizaos\/app-core\/platform\/native-plugin-entrypoints$/,
+        replacement: appCoreNativePluginEntrypoints,
+      },
+      {
+        find: /^@elizaos\/app-core\/platform\/native-plugin-entrypoints\.js$/,
+        replacement: appCoreNativePluginEntrypoints,
+      },
       // Node built-in subpaths that browser polyfills don't provide.
       // Server-only code imports these but they're never executed in-browser.
       ...["util/types", "stream/promises", "stream/web"].flatMap((sub) => [
@@ -1141,10 +1155,6 @@ export default defineConfig({
       {
         find: /^@elizaos\/capacitor-canvas$/,
         replacement: path.join(nativePluginsRoot, "canvas/src/index.ts"),
-      },
-      {
-        find: /^@elizaos\/capacitor-appblocker$/,
-        replacement: path.join(nativePluginsRoot, "appblocker/src/index.ts"),
       },
       {
         find: /^@elizaos\/capacitor-desktop$/,

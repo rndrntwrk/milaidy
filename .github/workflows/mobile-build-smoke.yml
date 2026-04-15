@@ -42,63 +42,21 @@ jobs:
           no-vision-deps: "true"
 
       - name: Restore eliza workspace paths for build scripts
+        run: node scripts/restore-local-eliza-workspace.mjs
+
+      - name: Generate protobuf types
         run: |
-          if [ -d ".eliza.ci-disabled" ] && [ ! -d "eliza" ]; then
-            mv .eliza.ci-disabled eliza
+          if [ -d eliza/packages/schemas ] && [ -f eliza/packages/schemas/buf.gen.yaml ] && [ ! -d eliza/packages/typescript/src/types/generated ]; then
+            cd eliza/packages/schemas
+            node node_modules/@bufbuild/buf/install.js 2>/dev/null || true
+            bunx @bufbuild/buf@1.67.0 generate
           fi
 
-      - name: Run repository postinstall patches
-        run: node eliza/packages/app-core/scripts/run-repo-setup.mjs
-        env:
-          SKIP_AVATAR_CLONE: "1"
-          MILADY_NO_VISION_DEPS: "1"
-
-      - name: Build web assets
+      - name: Build iOS simulator app
         working-directory: apps/app
-        run: |
-          bun scripts/plugin-build.mjs
-          bun run build:web
-
-      - name: Prepare CocoaPods trunk repo
-        run: bash eliza/packages/app-core/scripts/prepare-ios-cocoapods.sh
+        run: bun run build:ios
         env:
           LANG: en_US.UTF-8
-
-      - name: Capacitor sync iOS
-        working-directory: apps/app
-        run: bun run cap:sync:ios
-        env:
-          LANG: en_US.UTF-8
-
-      - name: Build for iOS Simulator
-        # No `| tail -20` on the xcodebuild output: swallowing the tail
-        # hides the real Swift compile errors (we had a TalkModePlugin
-        # compile failure surface as "App.app not found in DerivedData"
-        # because the tailed output cut before the error lines). Pipe
-        # to `xcbeautify` if it's available for a tidier view, but let
-        # the full log through on failure.
-        run: |
-          set -o pipefail
-          if command -v xcbeautify >/dev/null 2>&1; then
-            xcodebuild \
-              -workspace apps/app/ios/App/App.xcworkspace \
-              -scheme App \
-              -configuration Debug \
-              -destination "generic/platform=iOS Simulator" \
-              -sdk iphonesimulator \
-              CODE_SIGNING_ALLOWED=NO \
-              build 2>&1 | xcbeautify --renderer github-actions
-          else
-            xcodebuild \
-              -workspace apps/app/ios/App/App.xcworkspace \
-              -scheme App \
-              -configuration Debug \
-              -destination "generic/platform=iOS Simulator" \
-              -sdk iphonesimulator \
-              CODE_SIGNING_ALLOWED=NO \
-              build
-          fi
-          echo "iOS simulator build succeeded"
 
       - name: Verify .app exists
         run: |
@@ -146,30 +104,19 @@ jobs:
           no-vision-deps: "true"
 
       - name: Restore eliza workspace paths for build scripts
+        run: node scripts/restore-local-eliza-workspace.mjs
+
+      - name: Generate protobuf types
         run: |
-          if [ -d ".eliza.ci-disabled" ] && [ ! -d "eliza" ]; then
-            mv .eliza.ci-disabled eliza
+          if [ -d eliza/packages/schemas ] && [ -f eliza/packages/schemas/buf.gen.yaml ] && [ ! -d eliza/packages/typescript/src/types/generated ]; then
+            cd eliza/packages/schemas
+            node node_modules/@bufbuild/buf/install.js 2>/dev/null || true
+            bunx @bufbuild/buf@1.67.0 generate
           fi
 
-      - name: Run repository postinstall patches
-        run: node eliza/packages/app-core/scripts/run-repo-setup.mjs
-        env:
-          SKIP_AVATAR_CLONE: "1"
-          MILADY_NO_VISION_DEPS: "1"
-
-      - name: Build web assets
+      - name: Build Android debug app
         working-directory: apps/app
-        run: |
-          bun scripts/plugin-build.mjs
-          bun run build:web
-
-      - name: Capacitor sync Android
-        working-directory: apps/app
-        run: bunx cap sync android
-
-      - name: Build debug APK
-        working-directory: apps/app/android
-        run: ./gradlew assembleDebug
+        run: bun run build:android
 
       - name: Verify APK exists
         run: |
