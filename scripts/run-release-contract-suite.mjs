@@ -41,10 +41,13 @@ function run(command, args, cwd = repoRoot) {
   });
 
   if (result.status !== 0) {
-    process.exit(result.status ?? 1);
+    throw new Error(
+      `Command failed with exit code ${result.status ?? 1}: ${command} ${args.join(" ")}`,
+    );
   }
 }
 
+let exitCode = 0;
 try {
   if (
     !fs.existsSync(legacyElectrobunDir) &&
@@ -77,6 +80,9 @@ try {
   run("node", ["--import", "tsx", "scripts/write-build-info.ts"]);
   run("node", ["scripts/generate-static-asset-manifest.mjs"], appCoreRoot);
   run("bun", ["run", "release:check"]);
+} catch (err) {
+  console.error(err.message ?? err);
+  exitCode = 1;
 } finally {
   if (createdCompatLink) {
     if (fs.existsSync(legacyElectrobunDir)) {
@@ -90,3 +96,5 @@ try {
     }
   }
 }
+
+process.exit(exitCode);

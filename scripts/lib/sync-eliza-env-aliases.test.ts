@@ -19,7 +19,7 @@ describe("syncElizaEnvAliases", () => {
     "ELIZA_API_TOKEN",
     "ELIZA_CLOUD_MANAGED_AGENTS_API_SEGMENT",
   ];
-  const saved = {};
+  const saved: Record<string, string | undefined> = {};
 
   beforeEach(() => {
     for (const k of touchedKeys) {
