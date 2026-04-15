@@ -921,6 +921,40 @@ function nativeModuleStubPlugin(): Plugin {
         ].join("\n");
       }
 
+      // Capacitor native plugins — mobile-only, cloud builds stub them.
+      // Must export the exact named identifiers used in app-core sources.
+      if (capacitorNativeScopeRe.test(strippedId)) {
+        const capPkg = strippedId.split("/").slice(0, 2).join("/");
+        if (capPkg === "@capacitor/haptics") {
+          return [
+            "const noop = () => {};const noopObj = new Proxy({}, { get: () => noop });",
+            "export const Haptics = noopObj;",
+            "export const ImpactStyle = Object.freeze({ Heavy: 'HEAVY', Medium: 'MEDIUM', Light: 'LIGHT' });",
+            "export const NotificationType = Object.freeze({ Success: 'SUCCESS', Warning: 'WARNING', Error: 'ERROR' });",
+            "export default noopObj;",
+          ].join("\n");
+        }
+        if (capPkg === "@capacitor/keyboard") {
+          return [
+            "const noop = () => {};const noopObj = new Proxy({}, { get: () => noop });",
+            "export const Keyboard = noopObj;",
+            "export default noopObj;",
+          ].join("\n");
+        }
+        if (capPkg === "@capacitor/preferences") {
+          return [
+            "const noop = () => Promise.resolve({ value: null });const noopObj = new Proxy({}, { get: () => noop });",
+            "export const Preferences = noopObj;",
+            "export default noopObj;",
+          ].join("\n");
+        }
+        // Generic Capacitor plugin stub
+        return [
+          "const noop = () => {};const stub = new Proxy({}, { get: () => noop });",
+          "export default stub;",
+        ].join("\n");
+      }
+
       // Generic fallback for other native modules
       return "export default {};\n";
     },
