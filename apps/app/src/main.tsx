@@ -467,6 +467,24 @@ function isPopoutWindow(): boolean {
 }
 
 /**
+ * Broadcast window detection — see app-core/platform/init.ts for the
+ * full justification. Mirrors `isPopoutWindow()` but matches `?broadcast`
+ * (any value other than `false`/`0`). Used by the boot path to skip the
+ * heavy native platform init while still mounting the React app, so the
+ * capture-service's headless Chromium gets a clean CompanionSceneHost
+ * render instead of the full app shell.
+ */
+function isBroadcastWindow(): boolean {
+  if (typeof window === "undefined") return false;
+  const params = new URLSearchParams(
+    window.location.search || window.location.hash.split("?")[1] || "",
+  );
+  if (!params.has("broadcast")) return false;
+  const value = params.get("broadcast");
+  return value !== "false" && value !== "0";
+}
+
+/**
  * Validates an apiBase string and applies it to the boot config.
  * Allows localhost, loopback, HTTPS, and private-network HTTP hosts.
  */
@@ -533,6 +551,17 @@ async function runMain(): Promise<void> {
   }
 
   if (isPopoutWindow()) {
+    injectPopoutApiBase();
+    mountReactApp();
+    return;
+  }
+
+  if (isBroadcastWindow()) {
+    // Broadcast mode reuses the popout apiBase injection (same query
+    // semantics) and skips the heavy native platform init: the broadcast
+    // shell only needs the React app, AppContext, and CompanionSceneHost
+    // to come up. App.tsx's `useIsBroadcast()` gate routes the render to
+    // BroadcastShell once the startup coordinator reaches "ready".
     injectPopoutApiBase();
     mountReactApp();
     return;

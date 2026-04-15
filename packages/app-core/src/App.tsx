@@ -22,6 +22,7 @@ import {
 } from "react";
 import {
   AppsPageView,
+  BroadcastShell,
   BrowserWorkspaceView,
   BugReportModal,
   CharacterEditor,
@@ -90,6 +91,31 @@ function useIsPopout(): boolean {
     return params.has("popout") && params.get("popout") !== "false";
   });
   return popout;
+}
+
+/**
+ * Check if we're in broadcast mode (CompanionSceneHost only, no chrome).
+ *
+ * Activated by `?broadcast` (any non-`false`/`0` value) on the URL.
+ * Used by the capture-service's headless Chromium to grab the live
+ * companion view as the camera frame for streaming. Unlike popout
+ * (StreamView operator panel), broadcast mode mounts the same
+ * CompanionSceneHost the user sees on the companion tab — so the VRM
+ * model, scene, idle animations, and chat/action overlays stay in
+ * lockstep with the live app state. No double-maintenance against a
+ * parallel renderer.
+ */
+function useIsBroadcast(): boolean {
+  const [broadcast] = useState(() => {
+    if (typeof window === "undefined") return false;
+    const params = new URLSearchParams(
+      window.location.search || window.location.hash.split("?")[1] || "",
+    );
+    if (!params.has("broadcast")) return false;
+    const value = params.get("broadcast");
+    return value !== "false" && value !== "0";
+  });
+  return broadcast;
 }
 
 function TabScrollView({
@@ -279,6 +305,7 @@ export function App() {
   } = useApp();
 
   const isPopout = useIsPopout();
+  const isBroadcast = useIsBroadcast();
   const companionShellVisible = activeOverlayApp !== null;
   // Don't initialize the 3D scene while the system is still booting — this
   // prevents VrmEngine's Three.js setup from blocking the JS thread and
@@ -732,6 +759,29 @@ export function App() {
         <StreamView />
       </div>
     );
+  }
+
+  // Broadcast mode — render only the CompanionSceneHost (VRM stage + chat
+  // and action overlays) full-screen, with no Header, sidebar, hub nav, or
+  // settings chrome. Wait for the startup coordinator to reach "ready"
+  // first so the avatar stack has access to the resolved character
+  // catalog and AppContext state before VrmEngine boots; the loader is
+  // rendered behind the same StartupShell as the rest of the app.
+  //
+  // This is the URL the capture-service's headless Chromium navigates to
+  // when STREAM555_GO_LIVE is invoked with `inputType: avatar` —
+  // replacing the legacy parallel agent-show static page so the broadcast
+  // frame is byte-for-byte the live companion view.
+  if (isBroadcast) {
+    if (startupCoordinator.phase !== "ready") {
+      return (
+        <BugReportProvider value={bugReport}>
+          <StartupShell />
+          <BugReportModal />
+        </BugReportProvider>
+      );
+    }
+    return <BroadcastShell />;
   }
 
   // StartupCoordinator gate — the coordinator is the sole startup authority.

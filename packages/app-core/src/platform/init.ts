@@ -193,6 +193,43 @@ export function isPopoutWindow(): boolean {
   return params.has("popout");
 }
 
+// ── Broadcast helpers ───────────────────────────────────────────────
+//
+// Broadcast mode is a chrome-free render of CompanionSceneHost (VRM stage
+// + chat/action overlays) intended for the capture-service's headless
+// Chromium to grab as the "camera" frame when Alice goes live. Unlike the
+// popout (which renders only the StreamView operator panel), broadcast
+// mode renders the same VRM stage you see on the companion tab — so
+// model, scene, animations, and overlays stay in lockstep with whatever
+// the user has configured in the live app.
+//
+// Activation: any non-empty `broadcast` URL parameter on `window.location`,
+// for example `http://alice-bot:3000/?broadcast=1` or
+// `https://alice.rndrntwrk.com/?broadcast=alice-cam`. The value is treated
+// as opaque so future capture pipelines can pass a tag without breaking
+// the gate. `broadcast=false` is rejected (mirroring the popout convention)
+// so the URL flag can be cleanly toggled off.
+
+export function isBroadcastWindow(): boolean {
+  if (typeof window === "undefined") return false;
+  const params = new URLSearchParams(
+    window.location.search || window.location.hash.split("?")[1] || "",
+  );
+  if (!params.has("broadcast")) return false;
+  const value = params.get("broadcast");
+  return value !== "false" && value !== "0";
+}
+
+export function injectBroadcastApiBase(): void {
+  // Broadcast windows live inside capture-service's headless Chromium.
+  // They reach back through the same hostname they were navigated to
+  // (e.g. http://alice-bot:3000) so apiBase defaults are correct
+  // already. The optional ?apiBase= query (validated identically to the
+  // popout helper) lets external capturers point at a different runtime
+  // for testing without recompiling.
+  injectPopoutApiBase();
+}
+
 export function injectPopoutApiBase(): void {
   const params = new URLSearchParams(
     window.location.search || window.location.hash.split("?")[1] || "",
