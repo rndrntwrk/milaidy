@@ -703,6 +703,9 @@ function nativeModuleStubPlugin(): Plugin {
     "@elizaos/plugin-local-embedding",
   ]);
   const nativeScopeRe = /^@node-llama-cpp\//;
+  // Capacitor native plugins — mobile-only, must never run in the browser.
+  // Stubbing prevents Rollup from failing when bun workspaces don't hoist them.
+  const capacitorNativeScopeRe = /^@capacitor\/(?!core)(.+)$/;
 
   return {
     name: "native-module-stub",
@@ -752,6 +755,8 @@ function nativeModuleStubPlugin(): Plugin {
         : id.split("/")[0];
       // Scoped: @node-llama-cpp/*
       if (nativeScopeRe.test(id)) return VIRTUAL_PREFIX + id;
+      // Capacitor native plugins (@capacitor/* except @capacitor/core)
+      if (capacitorNativeScopeRe.test(id)) return VIRTUAL_PREFIX + id;
       // sharp's optional platform packages (@img/sharp-wasm32, etc.)
       if (
         id.startsWith("@img/sharp") ||
