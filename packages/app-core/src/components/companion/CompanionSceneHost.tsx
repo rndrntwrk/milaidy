@@ -27,9 +27,15 @@ import {
   useRef,
   useState,
 } from "react";
+import { client } from "../../api";
 import type { VrmEngine } from "../avatar/VrmEngine";
 import { prefetchVrmToCache } from "../avatar/VrmEngine";
 import { resolveCharacterGreetingAnimation } from "../character/character-greeting";
+import type {
+  CompanionStageState,
+  PartialCompanionStageState,
+} from "./companion-stage-state";
+import { DEFAULT_COMPANION_STAGE_STATE } from "./companion-stage-state";
 import { CompanionSceneStatusContext } from "./companion-scene-status-context";
 import { SharedCompanionSceneContext } from "./shared-companion-scene-context";
 import { VrmStage } from "./VrmStage";
@@ -38,8 +44,7 @@ export { useSharedCompanionScene } from "./shared-companion-scene-context";
 
 const COMPANION_ZOOM_WHEEL_SENSITIVITY = 1 / 720;
 const COMPANION_ZOOM_PINCH_SENSITIVITY = 2.35;
-const COMPANION_ZOOM_STORAGE_KEY = "milady.companion.zoom.v1";
-const DEFAULT_COMPANION_ZOOM = 0.95;
+const DEFAULT_COMPANION_ZOOM = DEFAULT_COMPANION_STAGE_STATE.camera.zoom;
 const COMPANION_TELEPORT_GREETING_DELAY_MS = 400;
 const CAMERA_DRAG_IGNORE_SELECTOR =
   'button, a, label, input, textarea, select, option, [role="button"], [role="listbox"], [role="tab"], [aria-expanded], [aria-haspopup], [contenteditable="true"], [data-no-camera-drag="true"]';
@@ -124,34 +129,28 @@ function clampCompanionZoom(value: number): number {
   return Math.max(0, Math.min(1, value));
 }
 
-function loadStoredCompanionZoom(): number {
-  if (typeof localStorage === "undefined") return DEFAULT_COMPANION_ZOOM;
-  try {
-    const raw = localStorage.getItem(COMPANION_ZOOM_STORAGE_KEY);
-    if (raw === null) return DEFAULT_COMPANION_ZOOM;
-    const parsed = Number(raw);
-    return Number.isFinite(parsed)
-      ? clampCompanionZoom(parsed)
-      : DEFAULT_COMPANION_ZOOM;
-  } catch (err) {
+/**
+ * Fire-and-forget the companion stage patch to the alice-bot server.
+ * The server deep-merges the patch into `$ELIZA_DATA_DIR/companion/stage.json`
+ * and broadcasts the new full state as a `"companion-stage-state"` WS
+ * event to every connected browser (this operator, any other operator
+ * tabs, and the 555stream capture-service's headless Chromium). On
+ * the caller's own browser the echo is a no-op because the optimistic
+ * local apply at the call site already committed the same values.
+ *
+ * We don't await the promise. Network latency is ~30-80ms on the
+ * same pod; blocking `setCompanionZoom` on that round-trip would make
+ * wheel scrolling feel laggy. Failures are logged as warnings — the
+ * operator's local view is already correct via the optimistic apply,
+ * so a failed commit just means the stream won't mirror it this time.
+ */
+function commitCompanionStagePatch(patch: PartialCompanionStageState): void {
+  void client.setCompanionStageState(patch).catch((err) => {
     console.warn(
-      "[CompanionSceneHost] Failed to load stored companion zoom:",
-      err,
+      "[CompanionSceneHost] Failed to commit stage patch:",
+      err instanceof Error ? err.message : err,
     );
-    return DEFAULT_COMPANION_ZOOM;
-  }
-}
-
-function persistCompanionZoom(value: number): void {
-  if (typeof localStorage === "undefined") return;
-  try {
-    localStorage.setItem(
-      COMPANION_ZOOM_STORAGE_KEY,
-      String(clampCompanionZoom(value)),
-    );
-  } catch (err) {
-    console.warn("[CompanionSceneHost] Failed to persist companion zoom:", err);
-  }
+  });
 }
 
 function CompanionSceneSurface({
@@ -203,11 +202,6 @@ function CompanionSceneSurface({
     startZoom: 0,
   });
 
-  if (!companionZoomHydratedRef.current) {
-    companionZoomRef.current = loadStoredCompanionZoom();
-    companionZoomHydratedRef.current = true;
-  }
-
   // Lazy-mount VrmStage: only initialize the 3D engine once the scene is
   // actually needed (first time active becomes true). This prevents the WebGL
   // context and asset loads from firing in native/chat mode on startup.
@@ -215,13 +209,84 @@ function CompanionSceneSurface({
   if (active) hasEverBeenActiveRef.current = true;
   const shouldMountVrm = hasEverBeenActiveRef.current;
 
+  // Apply a full `CompanionStageState` snapshot to the local refs and
+  // every VrmEngine currently on stage. Used both by the initial REST
+  // hydration and by the `"companion-stage-state"` WS echo handler so
+  // the stream stays in lock-step with whatever authority (operator
+  // action, another operator tab, runtime-triggered mutation) pushed
+  // the update.
+  const applyCompanionStageState = useCallback(
+    (next: CompanionStageState) => {
+      companionZoomRef.current = clampCompanionZoom(next.camera.zoom);
+      for (const engine of stageEnginesRef.current) {
+        engine.setCompanionZoomNormalized(companionZoomRef.current);
+      }
+    },
+    [],
+  );
+  const applyCompanionStageStateRef = useRef(applyCompanionStageState);
+  applyCompanionStageStateRef.current = applyCompanionStageState;
+
+  // Server-authoritative hydration: on first mount, pull the current
+  // persistent stage state from the alice-bot server and subscribe to
+  // WS `"companion-stage-state"` echoes for subsequent mutations.
+  //
+  // This effect runs in BOTH the operator's browser AND the
+  // 555stream capture-service's headless Chromium — both load the
+  // same SPA, both open `/ws`, and both receive every echo. The echo
+  // handler in the operator's own browser is effectively a no-op
+  // because the optimistic apply at the call site already committed
+  // the same values; in the capture-service's Chromium the echo is
+  // the first time those values are seen, and it applies them to its
+  // own VrmEngine so the stream mirrors the operator's camera
+  // framing within a single WS round-trip.
+  useEffect(() => {
+    if (companionZoomHydratedRef.current) return;
+    companionZoomHydratedRef.current = true;
+
+    let cancelled = false;
+    void client
+      .getCompanionStageState()
+      .then((response) => {
+        if (cancelled) return;
+        if (response?.state) {
+          applyCompanionStageStateRef.current(response.state);
+        }
+      })
+      .catch((err) => {
+        console.warn(
+          "[CompanionSceneHost] Failed to hydrate stage state:",
+          err instanceof Error ? err.message : err,
+        );
+      });
+
+    const unsubscribe = client.onWsEvent(
+      "companion-stage-state",
+      (data: Record<string, unknown>) => {
+        const next = data?.state;
+        if (!next || typeof next !== "object") return;
+        applyCompanionStageStateRef.current(next as CompanionStageState);
+      },
+    );
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, []);
+
   const setCompanionZoom = useCallback((value: number) => {
     const nextZoom = clampCompanionZoom(value);
+    // Optimistic local apply — no round-trip latency for the operator.
     companionZoomRef.current = nextZoom;
-    persistCompanionZoom(nextZoom);
     for (const engine of stageEnginesRef.current) {
       engine.setCompanionZoomNormalized(nextZoom);
     }
+    // Fire-and-forget commit — server persists and broadcasts the
+    // new state to every other subscriber (notably the 555stream
+    // capture-service's headless Chromium) via the
+    // `"companion-stage-state"` WS event.
+    commitCompanionStagePatch({ camera: { zoom: nextZoom } });
   }, []);
 
   const handleStageEngineReady = useCallback((engine: VrmEngine) => {

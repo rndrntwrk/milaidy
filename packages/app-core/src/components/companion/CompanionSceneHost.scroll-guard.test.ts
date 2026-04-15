@@ -36,7 +36,26 @@ vi.mock("./VrmStage", () => ({
 
 import { CompanionSceneHost } from "./CompanionSceneHost";
 
-const COMPANION_ZOOM_STORAGE_KEY = "milady.companion.zoom.v1";
+const COMPANION_STAGE_ENDPOINT = "/api/companion/stage";
+
+function stageSetCalls(fetchMock: unknown) {
+  const mock = fetchMock as { mock?: { calls: unknown[][] } };
+  return (
+    mock.mock?.calls.filter((callArgs) => {
+      const url =
+        typeof callArgs[0] === "string"
+          ? callArgs[0]
+          : callArgs[0] instanceof URL
+            ? callArgs[0].toString()
+            : "";
+      const init = callArgs[1] as { method?: string } | undefined;
+      return (
+        url.includes(COMPANION_STAGE_ENDPOINT) &&
+        (init?.method ?? "GET") === "POST"
+      );
+    }) ?? []
+  );
+}
 
 function createContext(overrides: Record<string, unknown> = {}) {
   return {
@@ -168,11 +187,13 @@ describe("CompanionSceneHost scroll guard", () => {
       target: nestedTarget,
     } as WheelEvent);
 
-    expect(globalThis.localStorage.setItem).not.toHaveBeenCalled();
+    // No POST to the companion-stage endpoint — the wheel event was
+    // ignored because it came from inside a `data-no-camera-zoom` region.
+    expect(stageSetCalls(globalThis.fetch)).toHaveLength(0);
     expect(preventDefault).not.toHaveBeenCalled();
   });
 
-  it("persists zoom when wheel input comes from the scene surface", async () => {
+  it("persists zoom through the companion stage endpoint when wheel input comes from the scene surface", async () => {
     const rootMock = createCompanionRootMock();
     await act(async () => {
       renderSceneHost(rootMock);
@@ -189,10 +210,12 @@ describe("CompanionSceneHost scroll guard", () => {
       target: document.createElement("div"),
     } as WheelEvent);
 
-    expect(globalThis.localStorage.setItem).toHaveBeenCalledWith(
-      COMPANION_ZOOM_STORAGE_KEY,
-      expect.any(String),
-    );
+    // The commit goes through `client.setCompanionStageState(...)` which
+    // eventually calls `fetch("/api/companion/stage", { method: "POST", ... })`.
+    // We don't assert the exact zoom value because it depends on the
+    // wheel-to-zoom sensitivity constant — just that a POST fired.
+    const calls = stageSetCalls(globalThis.fetch);
+    expect(calls.length).toBeGreaterThan(0);
     expect(preventDefault).toHaveBeenCalledOnce();
   });
 });

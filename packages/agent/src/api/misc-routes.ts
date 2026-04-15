@@ -1,5 +1,7 @@
 import crypto from "node:crypto";
+import fs from "node:fs";
 import type http from "node:http";
+import path from "node:path";
 import { logger, ModelType, type AgentRuntime, type UUID } from "@elizaos/core";
 import type { ElizaConfig } from "../config/config.js";
 import { loadElizaConfig, saveElizaConfig } from "../config/config.js";
@@ -15,6 +17,137 @@ import {
   isPrivyWalletProvisioningEnabled,
 } from "../services/privy-wallets.js";
 import type { ReadJsonBodyOptions } from "./http-helpers.js";
+
+// ---------------------------------------------------------------------------
+// Companion stage state — persistent scene state shared between the
+// operator's browser and the 555stream capture-service's headless
+// Chromium so both views render identically.
+//
+// Phase 1 only persists camera framing (zoom / yaw / pitch / pan). The
+// shape must agree with
+// `packages/app-core/src/components/companion/companion-stage-state.ts`
+// on the client — if you change one, update the other. Inlined here
+// (rather than imported) because `packages/agent` doesn't import from
+// `packages/app-core` as a runtime dep.
+// ---------------------------------------------------------------------------
+
+interface CompanionStageCamera {
+  zoom: number;
+  yaw: number;
+  pitch: number;
+  pan: number;
+}
+
+interface CompanionStageState {
+  camera: CompanionStageCamera;
+}
+
+interface PartialCompanionStageState {
+  camera?: Partial<CompanionStageCamera>;
+}
+
+const DEFAULT_COMPANION_STAGE_STATE: CompanionStageState = {
+  camera: {
+    zoom: 0.95,
+    yaw: 0,
+    pitch: 0,
+    pan: 0,
+  },
+};
+
+const COMPANION_STAGE_DIR = path.join(
+  process.env.ELIZA_DATA_DIR || path.join(process.cwd(), "data"),
+  "companion",
+);
+const COMPANION_STAGE_FILE = path.join(COMPANION_STAGE_DIR, "stage.json");
+
+function clamp01(value: unknown, fallback: number): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
+  if (value < 0) return 0;
+  if (value > 1) return 1;
+  return value;
+}
+
+function clampFinite(
+  value: unknown,
+  fallback: number,
+  min: number,
+  max: number,
+): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
+  if (value < min) return min;
+  if (value > max) return max;
+  return value;
+}
+
+function sanitizeCompanionStageState(
+  raw: unknown,
+): CompanionStageState {
+  const candidate =
+    raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const rawCamera =
+    candidate.camera && typeof candidate.camera === "object"
+      ? (candidate.camera as Record<string, unknown>)
+      : {};
+  return {
+    camera: {
+      zoom: clamp01(
+        rawCamera.zoom,
+        DEFAULT_COMPANION_STAGE_STATE.camera.zoom,
+      ),
+      yaw: clampFinite(rawCamera.yaw, 0, -Math.PI, Math.PI),
+      pitch: clampFinite(rawCamera.pitch, 0, -Math.PI / 2, Math.PI / 2),
+      pan: clampFinite(rawCamera.pan, 0, -5, 5),
+    },
+  };
+}
+
+function readCompanionStageState(): CompanionStageState {
+  try {
+    if (fs.existsSync(COMPANION_STAGE_FILE)) {
+      const raw = JSON.parse(
+        fs.readFileSync(COMPANION_STAGE_FILE, "utf-8"),
+      );
+      return sanitizeCompanionStageState(raw);
+    }
+  } catch (err) {
+    logger.warn(
+      `[companion-stage] Failed to read ${COMPANION_STAGE_FILE}: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+  }
+  return { ...DEFAULT_COMPANION_STAGE_STATE };
+}
+
+function writeCompanionStageState(next: CompanionStageState): void {
+  try {
+    fs.mkdirSync(COMPANION_STAGE_DIR, { recursive: true });
+    fs.writeFileSync(
+      COMPANION_STAGE_FILE,
+      JSON.stringify(next, null, 2),
+      "utf-8",
+    );
+  } catch (err) {
+    logger.warn(
+      `[companion-stage] Failed to persist ${COMPANION_STAGE_FILE}: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+  }
+}
+
+function mergeCompanionStagePatch(
+  base: CompanionStageState,
+  patch: PartialCompanionStageState,
+): CompanionStageState {
+  return {
+    camera: {
+      ...base.camera,
+      ...(patch.camera ?? {}),
+    },
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -176,6 +309,58 @@ export async function handleMiscRoutes(
       loop: false,
     });
     json(res, { ok: true });
+    return true;
+  }
+
+  // ── GET /api/companion/stage ─────────────────────────────────────────
+  //
+  // Return the current persistent companion stage state so a newly
+  // connected browser (operator's tab OR the 555stream capture-service
+  // headless Chromium) can hydrate its local camera/orbit refs to
+  // match the authoritative server state before the first WS push
+  // arrives. This avoids the "first frame shows default zoom, second
+  // frame snaps to the operator's zoom" glitch on reconnect.
+  if (method === "GET" && pathname === "/api/companion/stage") {
+    json(res, { ok: true, state: readCompanionStageState() });
+    return true;
+  }
+
+  // ── POST /api/companion/stage ────────────────────────────────────────
+  //
+  // Mutate the persistent companion stage state. Body is a patch of
+  // the form `{ patch: { camera: { zoom?: number, yaw?: ... } } }`.
+  // The route deep-merges the patch into the current state, sanitizes
+  // the result (defensive clamping against NaN/Infinity and
+  // out-of-range values), persists the merged state to
+  // `$ELIZA_DATA_DIR/companion/stage.json`, and broadcasts the new
+  // full state to every connected `/ws` client as a
+  // `"companion-stage-state"` message.
+  //
+  // The operator's own browser receives the echo and it's a no-op
+  // (the local optimistic update already applied the same values).
+  // The capture-service's headless Chromium receives the echo and
+  // applies it to its own VrmEngine, so the stream mirrors the
+  // operator's camera framing within a single WS round-trip.
+  if (method === "POST" && pathname === "/api/companion/stage") {
+    const body = await readJsonBody<{ patch?: PartialCompanionStageState }>(
+      req,
+      res,
+    );
+    if (!body) return true;
+    if (!body.patch || typeof body.patch !== "object") {
+      error(res, "Missing 'patch' field", 400);
+      return true;
+    }
+    const current = readCompanionStageState();
+    const merged = sanitizeCompanionStageState(
+      mergeCompanionStagePatch(current, body.patch),
+    );
+    writeCompanionStageState(merged);
+    state.broadcastWs?.({
+      type: "companion-stage-state",
+      state: merged,
+    });
+    json(res, { ok: true, state: merged });
     return true;
   }
 
