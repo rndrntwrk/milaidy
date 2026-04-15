@@ -79,7 +79,6 @@ describe("syncElizaEnvAliases", () => {
   });
 
   it("skips copy when MILADY_* is not set", () => {
-    // No MILADY_* set at all
     syncElizaEnvAliases();
 
     expect(process.env.ELIZA_NAMESPACE).toBeUndefined();
@@ -88,7 +87,6 @@ describe("syncElizaEnvAliases", () => {
   });
 
   it("handles all alias pairs without throwing", () => {
-    // Set every MILADY_* key to a value
     process.env.MILADY_NAMESPACE = "m";
     process.env.MILADY_STATE_DIR = "/s";
     process.env.MILADY_CONFIG_PATH = "/c";

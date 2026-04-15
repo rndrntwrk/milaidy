@@ -47,7 +47,6 @@ function run(command, args, cwd = repoRoot) {
   }
 }
 
-let exitCode = 0;
 try {
   if (
     !fs.existsSync(legacyElectrobunDir) &&
@@ -62,15 +61,13 @@ try {
     createdCompatLink = true;
   }
 
-  run("bunx", ["vitest", "run", "--passWithNoTests", ...releaseContractTests]);
+  run("bunx", ["vitest", "run", ...releaseContractTests]);
   run("bunx", [
     "vitest",
     "run",
-    "--passWithNoTests",
     "eliza/packages/app-core/scripts/startup-integration-script-drift.test.ts",
   ]);
 
-  // tsdown and release:check resolve repo-root-relative entries/config.
   run("bunx", ["tsdown", "--fail-on-warn", "false"]);
   fs.mkdirSync(path.join(repoRoot, "dist"), { recursive: true });
   fs.writeFileSync(
@@ -80,9 +77,6 @@ try {
   run("node", ["--import", "tsx", "scripts/write-build-info.ts"]);
   run("node", ["scripts/generate-static-asset-manifest.mjs"], appCoreRoot);
   run("bun", ["run", "release:check"]);
-} catch (err) {
-  console.error(err.message ?? err);
-  exitCode = 1;
 } finally {
   if (createdCompatLink) {
     if (fs.existsSync(legacyElectrobunDir)) {
@@ -96,5 +90,3 @@ try {
     }
   }
 }
-
-process.exit(exitCode);

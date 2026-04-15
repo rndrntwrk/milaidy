@@ -1224,10 +1224,6 @@ export default defineConfig({
           miladyRoot,
           "eliza/packages/app-core/src/ui",
         );
-        const _autonomousSource = path.resolve(
-          miladyRoot,
-          "node_modules/@elizaos/agent/packages/agent/src",
-        );
 
         return [
           ...generatedAliases,
@@ -1247,11 +1243,10 @@ export default defineConfig({
             find: /^@miladyai\/ui\/(.*)$/,
             replacement: `${uiSource}/$1/index.ts`, // assumes subpaths are directories
           },
-          // NOTE: @elizaos/agent barrel re-exports server-only code (eliza.ts,
-          // server.ts) that imports native modules (node-llama-cpp, node:module).
-          // Nothing in the browser needs the barrel — only subpath imports like
-          // @elizaos/agent/contracts/onboarding are used.  Map the bare import
-          // to an empty module so Vite never traverses the server-side tree.
+          // NOTE: App and UI code should import `@elizaos/agent/<subpath>` only.
+          // The package root still resolves to `./src/index.ts`, which pulls in
+          // server-only modules. Map the bare specifier to a no-op so the client
+          // bundle never traverses that graph.
           {
             find: /^@elizaos\/agent$/,
             replacement: path.join(

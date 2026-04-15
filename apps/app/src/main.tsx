@@ -42,6 +42,11 @@ import {
   shouldInstallMainWindowOnboardingPatches,
   syncDetachedShellLocation,
 } from "@elizaos/app-core";
+import type {
+  CloudPreferenceClientLike,
+  OnboardingClientLike,
+  PermissionsClientLike,
+} from "@elizaos/app-core";
 import {
   DESKTOP_TRAY_MENU_ITEMS,
   DesktopOnboardingRuntime,
@@ -106,18 +111,7 @@ function isWebPlatform(): boolean {
   return platform === "web" && !isElectrobunRuntime();
 }
 
-interface ShareTargetFile {
-  name: string;
-  path?: string;
-}
-
-interface ShareTargetPayload {
-  source?: string;
-  title?: string;
-  text?: string;
-  url?: string;
-  files?: ShareTargetFile[];
-}
+import type { ShareTargetPayload } from "@elizaos/app-core/platform";
 
 declare global {
   interface Window {
@@ -150,10 +144,16 @@ if (shouldEnableElectrobunMacWindowDrag()) {
 // persisted state and temporarily suppressing stale backend resume config.
 if (shouldInstallMainWindowOnboardingPatches(windowShellRoute)) {
   applyForceFreshOnboardingReset();
-  installForceFreshOnboardingClientPatch(client as never);
+  installForceFreshOnboardingClientPatch(
+    client as unknown as OnboardingClientLike,
+  );
 }
-installLocalProviderCloudPreferencePatch(client as never);
-installDesktopPermissionsClientPatch(client as never);
+installLocalProviderCloudPreferencePatch(
+  client as unknown as CloudPreferenceClientLike,
+);
+installDesktopPermissionsClientPatch(
+  client as unknown as PermissionsClientLike,
+);
 
 // Register custom character editor for app-core's ViewRouter to pick up
 window.__MILADY_CHARACTER_EDITOR__ = CharacterEditor;

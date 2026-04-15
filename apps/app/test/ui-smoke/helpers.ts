@@ -1,8 +1,8 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 
-export const ROOT_TIMEOUT_MS = 20_000;
-export const NAV_TIMEOUT_MS = 12_000;
-export const READY_CHECK_TIMEOUT_MS = 10_000;
+const ROOT_TIMEOUT_MS = 20_000;
+const NAV_TIMEOUT_MS = 12_000;
+const READY_CHECK_TIMEOUT_MS = 10_000;
 
 type ReadyCheck =
   | { selector: string; text?: never }
@@ -13,7 +13,7 @@ type EvaluatedReadyCheck = {
   passed: boolean;
 };
 
-export const DEFAULT_APP_STORAGE: Record<string, string> = {
+const DEFAULT_APP_STORAGE: Record<string, string> = {
   "eliza:onboarding-complete": "1",
   "eliza:onboarding:step": "activate",
   "eliza:ui-shell-mode": "native",
@@ -36,11 +36,11 @@ export async function seedAppStorage(
   }, storage);
 }
 
-export async function expectRootReady(page: Page): Promise<void> {
+async function expectRootReady(page: Page): Promise<void> {
   await expect(page.locator("#root")).toBeVisible({ timeout: ROOT_TIMEOUT_MS });
 }
 
-export async function expectNoOnboardingRedirect(page: Page): Promise<void> {
+async function expectNoOnboardingRedirect(page: Page): Promise<void> {
   await expect(page).not.toHaveURL(/onboarding/, { timeout: NAV_TIMEOUT_MS });
 }
 
@@ -354,27 +354,4 @@ export async function installDefaultAppMocks(page: Page): Promise<void> {
       }),
     });
   });
-}
-
-export async function runSoftReadyChecks(
-  page: Page,
-  label: string,
-  checks: ReadyCheck[],
-  mode: "any" | "all" = "any",
-  timeoutMs: number = READY_CHECK_TIMEOUT_MS,
-): Promise<void> {
-  const evaluation = await evaluateReadyChecks(page, checks, mode, timeoutMs);
-  if (evaluation.passed) {
-    return;
-  }
-
-  const summary = evaluation.results
-    .map(
-      (result) =>
-        `${result.passed ? "pass" : "fail"}:${formatReadyCheck(result.check)}`,
-    )
-    .join(", ");
-  console.warn(
-    `[playwright-ui-smoke] ${label}: ready checks failed (${summary}).`,
-  );
 }

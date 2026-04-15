@@ -50,7 +50,11 @@ const DIRECT_ROUTE_CASES = [
   {
     name: "runtime",
     path: "/apps/runtime",
-    selector: '[data-testid="runtime-view"]',
+    readyChecks: [
+      { selector: '[data-testid="runtime-view"]' },
+      { selector: '[data-testid="runtime-sidebar"]' },
+    ],
+    timeoutMs: 15_000,
   },
   {
     name: "database",

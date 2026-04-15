@@ -1,11 +1,9 @@
 #!/usr/bin/env node
 
 import { spawnSync } from "node:child_process";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { resolveRepoRoot } from "./lib/repo-root.mjs";
 
-const scriptDir = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(scriptDir, "..");
+const repoRoot = resolveRepoRoot(import.meta.url);
 
 const suites = {
   lint: [

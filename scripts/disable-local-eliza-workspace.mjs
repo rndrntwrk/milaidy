@@ -80,6 +80,121 @@ const ELIZAOS_CORE_NAME = "@elizaos/core";
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const DEFAULT_REPO_ROOT = process.cwd();
 
+/**
+ * @typedef {import("./lib/package-types.d.ts").PackageJsonRecord} PackageJsonRecord
+ */
+
+/**
+ * @typedef {object} RegistryPackageInfo
+ * @property {string[] | string=} versions
+ * @property {{ alpha?: string, latest?: string }=} dist-tags
+ * @property {string=} version
+ */
+
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parseJsonObject(rawValue) {
+  try {
+    const parsed = JSON.parse(rawValue);
+    return isRecord(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function isStringRecord(value) {
+  return (
+    isRecord(value) &&
+    Object.values(value).every((entry) => typeof entry === "string")
+  );
+}
+
+function isStringArray(value) {
+  return (
+    Array.isArray(value) && value.every((entry) => typeof entry === "string")
+  );
+}
+
+function isWorkspacesValue(value) {
+  return (
+    isStringArray(value) ||
+    (isRecord(value) &&
+      (value.packages === undefined || isStringArray(value.packages)))
+  );
+}
+
+/**
+ * @param {unknown} value
+ * @returns {value is PackageJsonRecord}
+ */
+function isPackageJsonRecord(value) {
+  return (
+    isRecord(value) &&
+    (value.name === undefined || typeof value.name === "string") &&
+    (value.version === undefined || typeof value.version === "string") &&
+    (value.dependencies === undefined || isStringRecord(value.dependencies)) &&
+    (value.devDependencies === undefined ||
+      isStringRecord(value.devDependencies)) &&
+    (value.peerDependencies === undefined ||
+      isStringRecord(value.peerDependencies)) &&
+    (value.optionalDependencies === undefined ||
+      isStringRecord(value.optionalDependencies)) &&
+    (value.overrides === undefined || isStringRecord(value.overrides)) &&
+    (value.scripts === undefined || isStringRecord(value.scripts)) &&
+    (value.patchedDependencies === undefined ||
+      isStringRecord(value.patchedDependencies)) &&
+    (value.bundleDependencies === undefined ||
+      value.bundleDependencies === false ||
+      value.bundleDependencies === true ||
+      isStringArray(value.bundleDependencies)) &&
+    (value.workspaces === undefined || isWorkspacesValue(value.workspaces))
+  );
+}
+
+function isDistTags(value) {
+  return (
+    isRecord(value) &&
+    (value.alpha === undefined || typeof value.alpha === "string") &&
+    (value.latest === undefined || typeof value.latest === "string")
+  );
+}
+
+function isRegistryPackageInfo(value) {
+  return (
+    isRecord(value) &&
+    (value.versions === undefined ||
+      typeof value.versions === "string" ||
+      isStringArray(value.versions)) &&
+    (value["dist-tags"] === undefined || isDistTags(value["dist-tags"])) &&
+    (value.version === undefined || typeof value.version === "string")
+  );
+}
+
+/**
+ * Remove stale lockfiles so Bun regenerates against the rewritten workspace graph.
+ * Returns the list of lockfile names that were actually removed.
+ */
+function removeStaleLockfiles(
+  repoRoot,
+  { lockfileNames = CI_LOCKFILES, log = console.log } = {},
+) {
+  const removed = [];
+  for (const lockfileName of lockfileNames) {
+    const lockfilePath = path.join(repoRoot, lockfileName);
+    if (!fs.existsSync(lockfilePath)) continue;
+    fs.rmSync(lockfilePath, { force: true });
+    removed.push(lockfileName);
+  }
+  if (removed.length > 0) {
+    log(
+      `[disable-local-eliza-workspace] Removed ${removed.join(", ")} so Bun regenerates the lockfile against the rewritten workspace graph`,
+    );
+  }
+  return removed;
+}
+
 function isExactRegistryVersion(specifier) {
   return typeof specifier === "string" && /^\d+\.\d+\.\d+/.test(specifier);
 }
@@ -88,20 +203,26 @@ export function isWorkspaceProtocolSpecifier(specifier) {
   return typeof specifier === "string" && specifier.startsWith("workspace:");
 }
 
+/**
+ * @param {string} filePath
+ * @returns {PackageJsonRecord | null}
+ */
 export function readPackageJson(filePath) {
-  return JSON.parse(fs.readFileSync(filePath, "utf8"));
+  const parsed = parseJsonObject(fs.readFileSync(filePath, "utf8"));
+  return isPackageJsonRecord(parsed) ? parsed : null;
 }
 
+/**
+ * @param {string | null | undefined} rawValue
+ * @returns {RegistryPackageInfo | null}
+ */
 export function parseRegistryPackageInfo(rawValue) {
   if (!rawValue) {
     return null;
   }
 
-  try {
-    return JSON.parse(rawValue);
-  } catch {
-    return null;
-  }
+  const parsed = parseJsonObject(rawValue);
+  return isRegistryPackageInfo(parsed) ? parsed : null;
 }
 
 export function readRegistryPackageInfo(
@@ -118,6 +239,11 @@ export function readRegistryPackageInfo(
   return parseRegistryPackageInfo(rawValue);
 }
 
+/**
+ * @param {string} preferredVersion
+ * @param {RegistryPackageInfo | null} registryInfo
+ * @returns {string}
+ */
 export function selectPublishedRegistryVersion(preferredVersion, registryInfo) {
   if (!isExactRegistryVersion(preferredVersion)) {
     return preferredVersion;
@@ -151,6 +277,15 @@ export function selectPublishedRegistryVersion(preferredVersion, registryInfo) {
   return preferredVersion;
 }
 
+/**
+ * @param {string} rootDir
+ * @param {{
+ *   rootPackage?: PackageJsonRecord | null;
+ *   readJson?: (filePath: string) => PackageJsonRecord | null;
+ *   versionSources?: Map<string, string>;
+ * }} [options]
+ * @returns {string | null}
+ */
 export function resolvePinnedCoreVersion(
   rootDir,
   { rootPackage, readJson = readPackageJson, versionSources = undefined } = {},
@@ -200,6 +335,12 @@ export function resolvePinnedCoreVersion(
 
 // Persist root package.json mutations before touching sub-packages so
 // the workspaces patch is written even if the core-rewrite step bails.
+/**
+ * @param {string} filePath
+ * @param {string} originalRaw
+ * @param {PackageJsonRecord} pkg
+ * @returns {boolean}
+ */
 export function writePackageJson(filePath, originalRaw, pkg) {
   const hasTrailingNewline = originalRaw.endsWith("\n");
   const serialized =
@@ -262,6 +403,16 @@ export function expandGlob(glob, { rootDir = DEFAULT_REPO_ROOT } = {}) {
   return matches.filter((match) => fs.existsSync(path.join(rootDir, match)));
 }
 
+/**
+ * @param {string} rootDir
+ * @param {{
+ *   disabledWorkspaceGlobs?: string[];
+ *   rootPackage?: PackageJsonRecord | null;
+ *   versionSources?: Map<string, string>;
+ *   pinnedCore?: string | null;
+ * }} [options]
+ * @returns {Map<string, string>}
+ */
 export function resolvePinnedWorkspaceVersions(
   rootDir,
   {
@@ -294,10 +445,13 @@ export function resolvePinnedWorkspaceVersions(
       const pkgPath = path.join(rootDir, workspaceRel, "package.json");
       if (!fs.existsSync(pkgPath)) continue;
       try {
-        const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+        const pkg = readPackageJson(pkgPath);
+        if (!pkg) {
+          continue;
+        }
         if (
-          typeof pkg?.name === "string" &&
-          isExactRegistryVersion(pkg?.version)
+          typeof pkg.name === "string" &&
+          isExactRegistryVersion(pkg.version)
         ) {
           pinnedVersions.set(pkg.name, pkg.version);
           versionSources?.set(pkg.name, PINNED_VERSION_SOURCE_WORKSPACE);
@@ -310,22 +464,7 @@ export function resolvePinnedWorkspaceVersions(
 
   // Collect names of packages from workspace paths known to be local-only
   // (not published to npm). These deps must be removed, not pinned.
-  const localOnlyPackages = new Set();
-  const localOnlyGlobs = ["eliza/packages/native-plugins/*", "eliza/apps/*"];
-  for (const glob of localOnlyGlobs) {
-    for (const wsRel of expandGlob(glob, { rootDir })) {
-      const pkgPath = path.join(rootDir, wsRel, "package.json");
-      if (!fs.existsSync(pkgPath)) continue;
-      try {
-        const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
-        if (typeof pkg?.name === "string") localOnlyPackages.add(pkg.name);
-      } catch {
-        /* skip */
-      }
-    }
-  }
-  // Also mark @elizaos/shared as local-only (not published to npm)
-  localOnlyPackages.add("@elizaos/shared");
+  const localOnlyPackages = resolveLocalOnlyWorkspacePackageNames(rootDir);
 
   // Remove local-only packages from pinned map so they get deleted instead of pinned
   for (const name of localOnlyPackages) {
@@ -335,6 +474,11 @@ export function resolvePinnedWorkspaceVersions(
   return pinnedVersions;
 }
 
+/**
+ * @param {PackageJsonRecord} pkg
+ * @param {{ localOnlyPackages?: Set<string> }} [options]
+ * @returns {Set<string>}
+ */
 export function collectWorkspaceProtocolDependencyNames(
   pkg,
   { localOnlyPackages = new Set() } = {},
@@ -342,7 +486,7 @@ export function collectWorkspaceProtocolDependencyNames(
   const dependencyNames = new Set();
   for (const field of [...DEPENDENCY_FIELDS, "overrides"]) {
     const deps = pkg?.[field];
-    if (!deps || typeof deps !== "object") continue;
+    if (!isStringRecord(deps)) continue;
     for (const [dependencyName, specifier] of Object.entries(deps)) {
       if (localOnlyPackages.has(dependencyName)) {
         continue;
@@ -356,6 +500,17 @@ export function collectWorkspaceProtocolDependencyNames(
   return dependencyNames;
 }
 
+/**
+ * @param {Map<string, string>} pinnedVersions
+ * @param {{
+ *   dependencyNames?: Set<string>;
+ *   versionSources?: Map<string, string>;
+ *   readRegistryInfo?: typeof readRegistryPackageInfo;
+ *   log?: typeof console.log;
+ *   warn?: typeof console.warn;
+ * }} [options]
+ * @returns {Map<string, string>}
+ */
 export function resolvePublishSafePinnedVersions(
   pinnedVersions,
   {
@@ -412,6 +567,14 @@ export function resolvePublishSafePinnedVersions(
   return resolvedVersions;
 }
 
+/**
+ * @param {string} rootDir
+ * @param {{
+ *   localOnlyWorkspaceGlobs?: string[];
+ *   localOnlyWorkspacePaths?: string[];
+ * }} [options]
+ * @returns {Set<string>}
+ */
 export function resolveLocalOnlyWorkspacePackageNames(
   rootDir,
   {
@@ -425,7 +588,7 @@ export function resolveLocalOnlyWorkspacePackageNames(
       const pkgPath = path.join(rootDir, wsRel, "package.json");
       if (!fs.existsSync(pkgPath)) continue;
       try {
-        const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+        const pkg = readPackageJson(pkgPath);
         if (typeof pkg?.name === "string") localOnlyPackages.add(pkg.name);
       } catch {
         /* skip */
@@ -436,7 +599,7 @@ export function resolveLocalOnlyWorkspacePackageNames(
     const pkgPath = path.join(rootDir, wsRel, "package.json");
     if (!fs.existsSync(pkgPath)) continue;
     try {
-      const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+      const pkg = readPackageJson(pkgPath);
       if (typeof pkg?.name === "string") localOnlyPackages.add(pkg.name);
     } catch {
       /* skip */
@@ -445,6 +608,12 @@ export function resolveLocalOnlyWorkspacePackageNames(
   return localOnlyPackages;
 }
 
+/**
+ * @param {PackageJsonRecord} pkg
+ * @param {Map<string, string>} [pinnedVersions]
+ * @param {{ localOnlyPackages?: Set<string> }} [options]
+ * @returns {boolean}
+ */
 export function rewriteWorkspaceDependencySpecifiers(
   pkg,
   pinnedVersions,
@@ -453,7 +622,7 @@ export function rewriteWorkspaceDependencySpecifiers(
   let mutated = false;
   for (const field of [...DEPENDENCY_FIELDS, "overrides"]) {
     const deps = pkg?.[field];
-    if (!deps || typeof deps !== "object") continue;
+    if (!isStringRecord(deps)) continue;
     for (const [dependencyName, specifier] of Object.entries(deps)) {
       if (localOnlyPackages.has(dependencyName)) {
         continue;
@@ -475,8 +644,13 @@ export function rewriteWorkspaceDependencySpecifiers(
   return mutated;
 }
 
+/**
+ * @param {PackageJsonRecord} pkg
+ * @param {{ log?: typeof console.log }} [options]
+ * @returns {boolean}
+ */
 export function applyCiOnlyOverrides(pkg, { log = console.log } = {}) {
-  const overrides = pkg.overrides ?? {};
+  const overrides = isStringRecord(pkg.overrides) ? pkg.overrides : {};
   const injected = [];
 
   for (const [dependencyName, specifier] of Object.entries(
@@ -548,7 +722,7 @@ export function disableLocalElizaWorkspace(
   const earlyPinnedVersionSources = new Map();
   if (fs.existsSync(packageJsonPath)) {
     try {
-      earlyRootPkg = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
+      earlyRootPkg = readPackageJson(packageJsonPath);
       earlyPinnedVersions = resolvePinnedWorkspaceVersions(repoRoot, {
         rootPackage: earlyRootPkg,
         versionSources: earlyPinnedVersionSources,
@@ -600,12 +774,19 @@ export function disableLocalElizaWorkspace(
   }
 
   const rawRootPkg = fs.readFileSync(packageJsonPath, "utf8");
+  /** @type {PackageJsonRecord} */
   let rootPkg;
   try {
-    rootPkg = JSON.parse(rawRootPkg);
+    const parsedRootPkg = JSON.parse(rawRootPkg);
+    if (!isPackageJsonRecord(parsedRootPkg)) {
+      throw new Error(
+        `expected a package.json object with string-valued dependency maps`,
+      );
+    }
+    rootPkg = parsedRootPkg;
   } catch (error) {
     errorLog(
-      `[disable-local-eliza-workspace] Failed to parse ${packageJsonPath}: ${error.message}`,
+      `[disable-local-eliza-workspace] Failed to parse ${packageJsonPath}: ${error instanceof Error ? error.message : String(error)}`,
     );
     throw error;
   }
@@ -659,10 +840,7 @@ export function disableLocalElizaWorkspace(
   // - the patch file does not actually exist on disk (avoids bun install failure
   //   with "Couldn't find patch file: 'eliza/packages/...'" when the submodule
   //   is absent or not initialized).
-  if (
-    rootPkg.patchedDependencies &&
-    typeof rootPkg.patchedDependencies === "object"
-  ) {
+  if (isStringRecord(rootPkg.patchedDependencies)) {
     const removedPatches = [];
     for (const [dep, patchPath] of Object.entries(
       rootPkg.patchedDependencies,
@@ -686,11 +864,7 @@ export function disableLocalElizaWorkspace(
 
   // Stub scripts that reference eliza/ paths only when the directory has been
   // renamed away.
-  if (
-    shouldRenameElizaWorkspace &&
-    rootPkg.scripts &&
-    typeof rootPkg.scripts === "object"
-  ) {
+  if (shouldRenameElizaWorkspace && isStringRecord(rootPkg.scripts)) {
     const stubbedScripts = [];
     for (const [name, cmd] of Object.entries(rootPkg.scripts)) {
       if (typeof cmd === "string" && cmd.includes("eliza/")) {
@@ -730,17 +904,7 @@ export function disableLocalElizaWorkspace(
       "[disable-local-eliza-workspace] Could not resolve a pinned @elizaos/core version from overrides or cloud-agent-template; leaving workspace:* specifiers in place",
     );
     // Still remove lockfiles so Bun regenerates without stale workspace entries
-    for (const lockfileName of CI_LOCKFILES) {
-      const lockfilePath = path.join(repoRoot, lockfileName);
-      if (!fs.existsSync(lockfilePath)) continue;
-      fs.rmSync(lockfilePath, { force: true });
-      removedLockfiles.push(lockfileName);
-    }
-    if (removedLockfiles.length > 0) {
-      log(
-        `[disable-local-eliza-workspace] Removed ${removedLockfiles.join(", ")} so Bun regenerates the lockfile against the rewritten workspace graph`,
-      );
-    }
+    removedLockfiles.push(...removeStaleLockfiles(repoRoot, { log }));
     return {
       rewrites: 0,
       removedWorkspaceGlobs,
@@ -774,7 +938,13 @@ export function disableLocalElizaWorkspace(
     const pkgPath = path.join(repoRoot, workspaceRel, "package.json");
     if (!fs.existsSync(pkgPath)) continue;
     try {
-      const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+      const pkg = readPackageJson(pkgPath);
+      if (!pkg) {
+        warn(
+          `[disable-local-eliza-workspace]   skipped dependency scan for ${workspaceRel}: package.json is missing or malformed`,
+        );
+        continue;
+      }
       for (const dependencyName of collectWorkspaceProtocolDependencyNames(
         pkg,
         {
@@ -824,16 +994,23 @@ export function disableLocalElizaWorkspace(
     if (!fs.existsSync(pkgPath)) continue;
 
     let originalRaw;
-    let pkg;
+    let parsedPkg;
     try {
       originalRaw = fs.readFileSync(pkgPath, "utf8");
-      pkg = JSON.parse(originalRaw);
+      parsedPkg = parseJsonObject(originalRaw);
     } catch (error) {
       warn(
-        `[disable-local-eliza-workspace]   skipped ${workspaceRel}: ${error.message}`,
+        `[disable-local-eliza-workspace]   skipped ${workspaceRel}: ${error instanceof Error ? error.message : String(error)}`,
       );
       continue;
     }
+    if (!isPackageJsonRecord(parsedPkg)) {
+      warn(
+        `[disable-local-eliza-workspace]   skipped ${workspaceRel}: package.json is malformed`,
+      );
+      continue;
+    }
+    const pkg = parsedPkg;
 
     if (
       !rewriteWorkspaceDependencySpecifiers(
@@ -862,18 +1039,7 @@ export function disableLocalElizaWorkspace(
     );
   }
 
-  for (const lockfileName of CI_LOCKFILES) {
-    const lockfilePath = path.join(repoRoot, lockfileName);
-    if (!fs.existsSync(lockfilePath)) continue;
-    fs.rmSync(lockfilePath, { force: true });
-    removedLockfiles.push(lockfileName);
-  }
-
-  if (removedLockfiles.length > 0) {
-    log(
-      `[disable-local-eliza-workspace] Removed ${removedLockfiles.join(", ")} so Bun regenerates the lockfile against the rewritten workspace graph`,
-    );
-  }
+  removedLockfiles.push(...removeStaleLockfiles(repoRoot, { log }));
 
   return {
     rewrites,
@@ -898,9 +1064,5 @@ if (isMain) {
     process.exit(0);
   }
 
-  try {
-    disableLocalElizaWorkspace();
-  } catch {
-    process.exit(1);
-  }
+  disableLocalElizaWorkspace();
 }
