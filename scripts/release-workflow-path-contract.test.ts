@@ -48,5 +48,24 @@ describe("release workflow path contract", () => {
     expect(workflow).toContain(
       "bun install --cwd eliza/packages/app-core/platforms/electrobun --ignore-scripts",
     );
+    expect(workflow).toContain(
+      "System git config failed; falling back to --global.",
+    );
+  });
+
+  it("normalizes runner root ownership before snap builds", () => {
+    const snapBuild = readWorkflow("snap-build-test.yml");
+    const publishPackages = readWorkflow("publish-packages.yml");
+    const agentRelease = readWorkflow("agent-release.yml");
+
+    for (const workflow of [snapBuild, publishPackages, agentRelease]) {
+      expect(workflow).toContain(
+        "Normalize runner root ownership for snapd",
+      );
+      expect(workflow).toContain("sudo chown root:root /");
+      expect(workflow).toContain(
+        "test \"$(stat -c '%u:%g' /)\" = \"0:0\"",
+      );
+    }
   });
 });
