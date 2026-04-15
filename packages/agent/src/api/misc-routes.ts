@@ -55,8 +55,31 @@ const DEFAULT_COMPANION_STAGE_STATE: CompanionStageState = {
   },
 };
 
+/**
+ * Persistence root for the companion stage state file.
+ *
+ * Resolution order:
+ *   1. `MILAIDY_HOME` — the alice-bot k8s deployment mounts its PVC at
+ *      `/home/node/.milaidy` and exports this env var to every process
+ *      in the container. This is the ONLY path that survives pod
+ *      rollouts and restarts.
+ *   2. `ELIZA_DATA_DIR` — legacy fallback used by `stream-persistence.ts`
+ *      and other persistence modules. Not currently set on the
+ *      alice-bot pod (both variables are resolved, but the first wins).
+ *   3. `process.cwd() + "/data"` — final fallback for local development
+ *      (where neither env var is set). Lands in the repo checkout, not
+ *      in a shared volume — fine for dev, wrong for production.
+ *
+ * Phase 1 of the companion stage service shipped with only options
+ * (2) and (3). On the alice-bot pod that put the file at
+ * `/app/milaidy/data/companion/stage.json`, inside the container's
+ * ephemeral writable layer — functional within a session but wiped on
+ * every deploy. Fixed here by preferring `MILAIDY_HOME` first.
+ */
 const COMPANION_STAGE_DIR = path.join(
-  process.env.ELIZA_DATA_DIR || path.join(process.cwd(), "data"),
+  process.env.MILAIDY_HOME ||
+    process.env.ELIZA_DATA_DIR ||
+    path.join(process.cwd(), "data"),
   "companion",
 );
 const COMPANION_STAGE_FILE = path.join(COMPANION_STAGE_DIR, "stage.json");
