@@ -13,16 +13,6 @@ type EvaluatedReadyCheck = {
   passed: boolean;
 };
 
-const DEFAULT_STUB_SKILLS = [
-  {
-    id: "github",
-    name: "GitHub",
-    description: "Repository and pull request helpers for smoke coverage.",
-    enabled: true,
-    scanStatus: "clean",
-  },
-];
-
 export const DEFAULT_APP_STORAGE: Record<string, string> = {
   "eliza:onboarding-complete": "1",
   "eliza:onboarding:step": "activate",
@@ -68,32 +58,6 @@ export async function readLocalStorage(
   key: string,
 ): Promise<string | null> {
   return page.evaluate((storageKey) => localStorage.getItem(storageKey), key);
-}
-
-export async function installDefaultAppMocks(page: Page): Promise<void> {
-  await page.route("**/api/skills", async (route) => {
-    if (route.request().method() !== "GET") {
-      await route.fallback();
-      return;
-    }
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ skills: DEFAULT_STUB_SKILLS }),
-    });
-  });
-
-  await page.route("**/api/skills/refresh", async (route) => {
-    if (route.request().method() !== "POST") {
-      await route.fallback();
-      return;
-    }
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ skills: DEFAULT_STUB_SKILLS }),
-    });
-  });
 }
 
 async function locatorVisible(

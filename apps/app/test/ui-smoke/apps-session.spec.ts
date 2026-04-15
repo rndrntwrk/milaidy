@@ -1,10 +1,5 @@
 import { expect, test } from "@playwright/test";
-import {
-  assertReadyChecks,
-  installDefaultAppMocks,
-  openAppPath,
-  seedAppStorage,
-} from "./helpers";
+import { assertReadyChecks, openAppPath, seedAppStorage } from "./helpers";
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -91,7 +86,6 @@ const DIRECT_ROUTE_CASES = [
 
 test.beforeEach(async ({ page }) => {
   await seedAppStorage(page);
-  await installDefaultAppMocks(page);
 });
 
 test("apps view can route into internal tool pages and survive a reload", async ({
