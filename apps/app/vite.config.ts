@@ -40,6 +40,19 @@ const appCoreNativePluginEntrypoints = path.join(
 );
 const uiPkgRoot = path.join(miladyRoot, "eliza/packages/ui");
 const capacitorCoreEntry = _require.resolve("@capacitor/core");
+// Other Capacitor packages imported by eliza/packages/app-core sources.
+// Resolved here (apps/app scope) so Rollup can find them when bundling
+// files from within the eliza submodule tree where bun may not hoist them.
+function tryResolve(id: string): string | undefined {
+  try {
+    return _require.resolve(id);
+  } catch {
+    return undefined;
+  }
+}
+const capacitorKeyboardEntry = tryResolve("@capacitor/keyboard");
+const capacitorPreferencesEntry = tryResolve("@capacitor/preferences");
+const capacitorAppEntry = tryResolve("@capacitor/app");
 
 // Mirror MILADY_* env into ELIZA_* before the shared runtime helpers resolve ports.
 syncElizaEnvAliases();
@@ -1133,6 +1146,17 @@ export default defineConfig({
       // events is pre-bundled via optimizeDeps.
       { find: /^path$/, replacement: "pathe" },
       { find: /^@capacitor\/core$/, replacement: capacitorCoreEntry },
+      // Aliases for Capacitor packages that may not be hoisted to root node_modules
+      // by bun workspaces. Apps/app resolves them; eliza submodule sources cannot.
+      ...(capacitorKeyboardEntry
+        ? [{ find: /^@capacitor\/keyboard$/, replacement: capacitorKeyboardEntry }]
+        : []),
+      ...(capacitorPreferencesEntry
+        ? [{ find: /^@capacitor\/preferences$/, replacement: capacitorPreferencesEntry }]
+        : []),
+      ...(capacitorAppEntry
+        ? [{ find: /^@capacitor\/app$/, replacement: capacitorAppEntry }]
+        : []),
       // Keep this subpath on the concrete source file so Docker/Vite builds
       // do not fall back to the extensionless tsconfig wildcard rewrite.
       {
