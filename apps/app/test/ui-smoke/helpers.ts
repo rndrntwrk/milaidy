@@ -144,6 +144,180 @@ export async function assertReadyChecks(
   ).toBe(true);
 }
 
+/** Handles returned by {@link installCloudWalletImportApiOverrides}. */
+export type CloudWalletImportMockApi = {
+  lastWalletConfigPut: () => Record<string, unknown> | null;
+  stewardStatusRequestCount: () => number;
+};
+
+/**
+ * Playwright routes that override the ui-smoke API stub for the cloud wallet import flow.
+ * Register **after** {@link installDefaultAppMocks} so these take precedence for matching URLs.
+ */
+export async function installCloudWalletImportApiOverrides(
+  page: Page,
+): Promise<CloudWalletImportMockApi> {
+  let lastWalletPut: Record<string, unknown> | null = null;
+  let stewardStatusHits = 0;
+
+  const initialWalletConfig = {
+    selectedRpcProviders: {
+      evm: "alchemy",
+      bsc: "alchemy",
+      solana: "helius-birdeye",
+    },
+    walletNetwork: "mainnet",
+    legacyCustomChains: [],
+    alchemyKeySet: true,
+    infuraKeySet: false,
+    ankrKeySet: false,
+    nodeRealBscRpcSet: false,
+    quickNodeBscRpcSet: false,
+    managedBscRpcReady: false,
+    cloudManagedAccess: false,
+    heliusKeySet: true,
+    birdeyeKeySet: false,
+    evmChains: ["ethereum", "base"],
+    evmAddress: null,
+    solanaAddress: null,
+  };
+
+  let walletConfigState: typeof initialWalletConfig = {
+    ...initialWalletConfig,
+    legacyCustomChains: [...initialWalletConfig.legacyCustomChains],
+    evmChains: [...initialWalletConfig.evmChains],
+  };
+
+  await page.route("**/api/cloud/status", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        connected: true,
+        enabled: true,
+        cloudVoiceProxyAvailable: true,
+        hasApiKey: true,
+        userId: "playwright-smoke-user",
+      }),
+    });
+  });
+
+  await page.route("**/api/cloud/credits", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        balance: 100,
+        low: false,
+        critical: false,
+        authRejected: false,
+      }),
+    });
+  });
+
+  await page.route("**/api/wallet/config", async (route) => {
+    const req = route.request();
+    if (req.method() === "GET") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(walletConfigState),
+      });
+      return;
+    }
+    if (req.method() === "PUT") {
+      const raw = req.postData();
+      lastWalletPut = raw ? (JSON.parse(raw) as Record<string, unknown>) : null;
+      const selections = lastWalletPut?.selections as
+        | typeof walletConfigState.selectedRpcProviders
+        | undefined;
+      if (selections) {
+        walletConfigState = {
+          ...walletConfigState,
+          selectedRpcProviders: selections,
+          cloudManagedAccess: true,
+        };
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: true }),
+      });
+      return;
+    }
+    await route.fallback();
+  });
+
+  await page.route("**/api/wallet/steward-status", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+    stewardStatusHits += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        configured: false,
+        available: false,
+        connected: false,
+      }),
+    });
+  });
+
+  await page.route("**/api/wallet/addresses", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ evmAddress: null, solanaAddress: null }),
+    });
+  });
+
+  await page.route("**/api/wallet/balances", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        evm: null,
+        solana: null,
+      }),
+    });
+  });
+
+  await page.route("**/api/wallet/nfts", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ evm: [], solana: null }),
+    });
+  });
+
+  return {
+    lastWalletConfigPut: () => lastWalletPut,
+    stewardStatusRequestCount: () => stewardStatusHits,
+  };
+}
+
 export async function runSoftReadyChecks(
   page: Page,
   label: string,
