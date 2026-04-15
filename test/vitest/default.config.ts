@@ -238,7 +238,7 @@ export default defineConfig({
       "eliza/packages/shared/src/**/*.test.ts",
       "eliza/packages/app-core/src/**/*.test.tsx",
       "eliza/packages/agent/src/runtime/roles/test/**/*.test.ts",
-      "eliza/apps/app-lifeops/src/selfcontrol/**/*.test.ts",
+      "eliza/apps/app-lifeops/src/website-blocker/**/*.test.ts",
       "eliza/apps/app-vincent/src/**/*.test.ts",
       "eliza/apps/app-shopify/src/**/*.test.ts",
       "eliza/apps/app-steward/src/**/*.test.ts",
