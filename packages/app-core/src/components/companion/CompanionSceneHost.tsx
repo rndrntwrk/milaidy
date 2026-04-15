@@ -27,9 +27,15 @@ import {
   useRef,
   useState,
 } from "react";
+import { client } from "../../api";
 import type { VrmEngine } from "../avatar/VrmEngine";
 import { prefetchVrmToCache } from "../avatar/VrmEngine";
 import { resolveCharacterGreetingAnimation } from "../character/character-greeting";
+import type {
+  CompanionStageState,
+  PartialCompanionStageState,
+} from "./companion-stage-state";
+import { DEFAULT_COMPANION_STAGE_STATE } from "./companion-stage-state";
 import { CompanionSceneStatusContext } from "./companion-scene-status-context";
 import { SharedCompanionSceneContext } from "./shared-companion-scene-context";
 import { VrmStage } from "./VrmStage";
@@ -38,8 +44,7 @@ export { useSharedCompanionScene } from "./shared-companion-scene-context";
 
 const COMPANION_ZOOM_WHEEL_SENSITIVITY = 1 / 720;
 const COMPANION_ZOOM_PINCH_SENSITIVITY = 2.35;
-const COMPANION_ZOOM_STORAGE_KEY = "milady.companion.zoom.v1";
-const DEFAULT_COMPANION_ZOOM = 0.95;
+const DEFAULT_COMPANION_ZOOM = DEFAULT_COMPANION_STAGE_STATE.camera.zoom;
 const COMPANION_TELEPORT_GREETING_DELAY_MS = 400;
 const CAMERA_DRAG_IGNORE_SELECTOR =
   'button, a, label, input, textarea, select, option, [role="button"], [role="listbox"], [role="tab"], [aria-expanded], [aria-haspopup], [contenteditable="true"], [data-no-camera-drag="true"]';
@@ -124,34 +129,28 @@ function clampCompanionZoom(value: number): number {
   return Math.max(0, Math.min(1, value));
 }
 
-function loadStoredCompanionZoom(): number {
-  if (typeof localStorage === "undefined") return DEFAULT_COMPANION_ZOOM;
-  try {
-    const raw = localStorage.getItem(COMPANION_ZOOM_STORAGE_KEY);
-    if (raw === null) return DEFAULT_COMPANION_ZOOM;
-    const parsed = Number(raw);
-    return Number.isFinite(parsed)
-      ? clampCompanionZoom(parsed)
-      : DEFAULT_COMPANION_ZOOM;
-  } catch (err) {
+/**
+ * Fire-and-forget the companion stage patch to the alice-bot server.
+ * The server deep-merges the patch into `$ELIZA_DATA_DIR/companion/stage.json`
+ * and broadcasts the new full state as a `"companion-stage-state"` WS
+ * event to every connected browser (this operator, any other operator
+ * tabs, and the 555stream capture-service's headless Chromium). On
+ * the caller's own browser the echo is a no-op because the optimistic
+ * local apply at the call site already committed the same values.
+ *
+ * We don't await the promise. Network latency is ~30-80ms on the
+ * same pod; blocking `setCompanionZoom` on that round-trip would make
+ * wheel scrolling feel laggy. Failures are logged as warnings — the
+ * operator's local view is already correct via the optimistic apply,
+ * so a failed commit just means the stream won't mirror it this time.
+ */
+function commitCompanionStagePatch(patch: PartialCompanionStageState): void {
+  void client.setCompanionStageState(patch).catch((err) => {
     console.warn(
-      "[CompanionSceneHost] Failed to load stored companion zoom:",
-      err,
+      "[CompanionSceneHost] Failed to commit stage patch:",
+      err instanceof Error ? err.message : err,
     );
-    return DEFAULT_COMPANION_ZOOM;
-  }
-}
-
-function persistCompanionZoom(value: number): void {
-  if (typeof localStorage === "undefined") return;
-  try {
-    localStorage.setItem(
-      COMPANION_ZOOM_STORAGE_KEY,
-      String(clampCompanionZoom(value)),
-    );
-  } catch (err) {
-    console.warn("[CompanionSceneHost] Failed to persist companion zoom:", err);
-  }
+  });
 }
 
 function CompanionSceneSurface({
@@ -179,7 +178,25 @@ function CompanionSceneSurface({
   const rootRef = useRef<HTMLDivElement | null>(null);
   const stageEnginesRef = useRef(new Set<VrmEngine>());
   const companionZoomRef = useRef(DEFAULT_COMPANION_ZOOM);
-  const companionZoomHydratedRef = useRef(false);
+  /**
+   * Race guard for the hydration / WS reconciliation loop. Flipped to
+   * true by the first authoritative state application (either the GET
+   * hydration response OR an early WS echo). Subsequent GET responses
+   * drop if it's already true — this prevents a slow GET from
+   * overwriting a fresh WS push that raced it. Reset to false when
+   * `ws-reconnected` fires so the reconnect re-hydration is allowed
+   * to apply.
+   */
+  const authoritativeAppliedRef = useRef(false);
+  /**
+   * Trailing-edge debounce state for commits. Scroll wheel and pinch
+   * fire ~60 events/sec and each one carried a standalone POST in the
+   * first cut of this code, which floods the server's fs.writeFileSync
+   * path. We now accumulate the latest patch into `pendingPatchRef`
+   * and only flush after 120ms of quiescence.
+   */
+  const commitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingPatchRef = useRef<PartialCompanionStageState | null>(null);
   const dragOrbitRef = useRef({ yaw: 0, pitch: 0 });
   const dragStateRef = useRef<{
     active: boolean;
@@ -203,11 +220,6 @@ function CompanionSceneSurface({
     startZoom: 0,
   });
 
-  if (!companionZoomHydratedRef.current) {
-    companionZoomRef.current = loadStoredCompanionZoom();
-    companionZoomHydratedRef.current = true;
-  }
-
   // Lazy-mount VrmStage: only initialize the 3D engine once the scene is
   // actually needed (first time active becomes true). This prevents the WebGL
   // context and asset loads from firing in native/chat mode on startup.
@@ -215,14 +227,179 @@ function CompanionSceneSurface({
   if (active) hasEverBeenActiveRef.current = true;
   const shouldMountVrm = hasEverBeenActiveRef.current;
 
-  const setCompanionZoom = useCallback((value: number) => {
-    const nextZoom = clampCompanionZoom(value);
-    companionZoomRef.current = nextZoom;
-    persistCompanionZoom(nextZoom);
-    for (const engine of stageEnginesRef.current) {
-      engine.setCompanionZoomNormalized(nextZoom);
+  // Apply a full `CompanionStageState` snapshot to the local refs and
+  // every VrmEngine currently on stage. Used both by the initial REST
+  // hydration and by the `"companion-stage-state"` WS echo handler so
+  // the stream stays in lock-step with whatever authority (operator
+  // action, another operator tab, runtime-triggered mutation) pushed
+  // the update.
+  const applyCompanionStageState = useCallback(
+    (next: CompanionStageState) => {
+      companionZoomRef.current = clampCompanionZoom(next.camera.zoom);
+      for (const engine of stageEnginesRef.current) {
+        engine.setCompanionZoomNormalized(companionZoomRef.current);
+      }
+    },
+    [],
+  );
+  const applyCompanionStageStateRef = useRef(applyCompanionStageState);
+  applyCompanionStageStateRef.current = applyCompanionStageState;
+
+  /**
+   * Synchronously flush any pending stage patch through the server
+   * commit path, clearing the debounce timer. Called by the timer
+   * callback itself (normal path) and by the unmount cleanup effect
+   * so the final value isn't silently dropped when the operator
+   * navigates away mid-scroll.
+   */
+  const flushPendingCommit = useCallback(() => {
+    if (commitTimerRef.current != null) {
+      clearTimeout(commitTimerRef.current);
+      commitTimerRef.current = null;
+    }
+    const pending = pendingPatchRef.current;
+    pendingPatchRef.current = null;
+    if (pending) {
+      commitCompanionStagePatch(pending);
     }
   }, []);
+
+  /**
+   * Schedule a trailing-edge-debounced commit of the given patch.
+   * Multiple calls within the debounce window accumulate into a
+   * single patch (the most recent value for each field wins), so a
+   * sustained scroll produces exactly one POST after the operator
+   * stops moving the wheel. The local VrmEngine is already caught up
+   * via the synchronous apply at the call site — the debounce only
+   * affects how often the stream (and other subscribers) receive
+   * updates, not how responsive the operator's own view feels.
+   */
+  const scheduleCompanionStageCommit = useCallback(
+    (patch: PartialCompanionStageState) => {
+      pendingPatchRef.current = {
+        camera: {
+          ...pendingPatchRef.current?.camera,
+          ...patch.camera,
+        },
+      };
+      if (commitTimerRef.current != null) {
+        clearTimeout(commitTimerRef.current);
+      }
+      commitTimerRef.current = setTimeout(flushPendingCommit, 120);
+    },
+    [flushPendingCommit],
+  );
+
+  // Server-authoritative hydration: on first mount, pull the current
+  // persistent stage state from the alice-bot server and subscribe to
+  // WS `"companion-stage-state"` echoes for subsequent mutations.
+  //
+  // This effect runs in BOTH the operator's browser AND the
+  // 555stream capture-service's headless Chromium — both load the
+  // same SPA, both open `/ws`, and both receive every echo. The echo
+  // handler in the operator's own browser is effectively a no-op
+  // because the optimistic apply at the call site already committed
+  // the same values; in the capture-service's Chromium the echo is
+  // the first time those values are seen, and it applies them to its
+  // own VrmEngine so the stream mirrors the operator's camera
+  // framing within a single WS round-trip.
+  //
+  // The effect intentionally has no mount-time dedupe. Earlier
+  // revisions of this code used a `companionZoomHydratedRef` to avoid
+  // re-firing the GET in strict-mode's double-invoke, but that breaks
+  // strict mode — on the second mount the ref is still true (refs
+  // persist across strict mode's mount/cleanup/remount) so the early
+  // return fires and the WS handler is never re-registered, leaving
+  // the dev-mode browser without any reconciliation subscription.
+  // Letting the effect run cleanly on every mount is correct: `fetch`
+  // is idempotent, the cleanup properly unsubscribes the previous
+  // handler, and the second mount re-subscribes.
+  useEffect(() => {
+    let cancelled = false;
+
+    const hydrateFromServer = () => {
+      void client
+        .getCompanionStageState()
+        .then((response) => {
+          if (cancelled || !response?.state) return;
+          // Race guard: if a WS push already applied authoritative
+          // state while this GET was in flight, the GET is stale by
+          // definition. Drop it so we don't overwrite fresher data.
+          if (authoritativeAppliedRef.current) return;
+          authoritativeAppliedRef.current = true;
+          applyCompanionStageStateRef.current(response.state);
+        })
+        .catch((err) => {
+          console.warn(
+            "[CompanionSceneHost] Failed to hydrate stage state:",
+            err instanceof Error ? err.message : err,
+          );
+        });
+    };
+
+    // Initial hydration on mount.
+    hydrateFromServer();
+
+    // Subscribe to persistent state updates. This is the primary way
+    // the broadcast Chromium learns about operator-originated zoom
+    // changes, and the way any operator tab learns about agent- or
+    // other-tab-originated mutations.
+    const unsubscribeState = client.onWsEvent(
+      "companion-stage-state",
+      (data: Record<string, unknown>) => {
+        const next = data?.state;
+        if (!next || typeof next !== "object") return;
+        authoritativeAppliedRef.current = true;
+        applyCompanionStageStateRef.current(next as CompanionStageState);
+      },
+    );
+
+    // Subscribe to WS reconnect signal. Messages sent during a
+    // disconnect gap are lost, so we re-fetch the canonical state
+    // from REST to close the gap. Mirrors the pattern
+    // AppContext.tsx:7564 uses for PTY sessions. Reset the race
+    // guard first so the re-hydration GET is allowed to apply.
+    const unsubscribeReconnect = client.onWsEvent("ws-reconnected", () => {
+      authoritativeAppliedRef.current = false;
+      hydrateFromServer();
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribeState();
+      unsubscribeReconnect();
+    };
+  }, []);
+
+  // Flush any pending debounced commit on unmount so the final zoom
+  // value isn't silently dropped when the operator navigates away
+  // mid-scroll. The POST fires fire-and-forget via the module-level
+  // `client` singleton and doesn't depend on any component state.
+  useEffect(() => {
+    return () => {
+      flushPendingCommit();
+    };
+  }, [flushPendingCommit]);
+
+  const setCompanionZoom = useCallback(
+    (value: number) => {
+      const nextZoom = clampCompanionZoom(value);
+      // Optimistic local apply — no round-trip latency for the operator.
+      companionZoomRef.current = nextZoom;
+      for (const engine of stageEnginesRef.current) {
+        engine.setCompanionZoomNormalized(nextZoom);
+      }
+      // Trailing-edge debounced commit — server persists and
+      // broadcasts the new state to every other subscriber (notably
+      // the 555stream capture-service's headless Chromium) via the
+      // `"companion-stage-state"` WS event. Debouncing collapses a
+      // sustained scroll into a single POST after 120ms of
+      // quiescence, which keeps the stream in sync without flooding
+      // `fs.writeFileSync` on the server.
+      scheduleCompanionStageCommit({ camera: { zoom: nextZoom } });
+    },
+    [scheduleCompanionStageCommit],
+  );
 
   const handleStageEngineReady = useCallback((engine: VrmEngine) => {
     stageEnginesRef.current.add(engine);

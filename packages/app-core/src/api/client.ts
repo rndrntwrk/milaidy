@@ -97,6 +97,10 @@ import {
   sanitizeForSettingsDebug,
   settingsDebugCloudSummary,
 } from "@miladyai/shared";
+import type {
+  CompanionStageState,
+  PartialCompanionStageState,
+} from "../components/companion/companion-stage-state";
 import type { ConfigUiHint } from "../types";
 import { stripAssistantStageDirections } from "../utils/assistant-text";
 import { getElizaApiBase, getElizaApiToken } from "../utils/eliza-globals";
@@ -2592,6 +2596,39 @@ export class MiladyClient {
 
   async getEmotes(): Promise<{ emotes: EmoteInfo[] }> {
     return this.fetch("/api/emotes");
+  }
+
+  /**
+   * Hydrate the current companion stage state from the alice-bot server.
+   * Called on mount by the operator's browser and the 555stream
+   * capture-service headless Chromium to align their local camera refs
+   * with the persistent server state before the first WS push arrives.
+   */
+  async getCompanionStageState(): Promise<{
+    ok: boolean;
+    state: CompanionStageState;
+  }> {
+    return this.fetch("/api/companion/stage");
+  }
+
+  /**
+   * Request a persistent mutation to the companion stage state. The
+   * server deep-merges the patch, sanitizes, persists to
+   * `$ELIZA_DATA_DIR/companion/stage.json`, and broadcasts the merged
+   * state to every connected `/ws` subscriber as
+   * `"companion-stage-state"`. Both the caller's own browser and the
+   * capture-service's headless Chromium receive the echo and apply it.
+   *
+   * Callers should apply the patch optimistically before awaiting this
+   * promise to keep local input (scroll wheel, drag) latency-free.
+   */
+  async setCompanionStageState(
+    patch: PartialCompanionStageState,
+  ): Promise<{ ok: boolean; state: CompanionStageState }> {
+    return this.fetch("/api/companion/stage", {
+      method: "POST",
+      body: JSON.stringify({ patch }),
+    });
   }
 
   async runTerminalCommand(command: string): Promise<{ ok: boolean }> {
