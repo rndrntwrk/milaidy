@@ -44,6 +44,7 @@ import { useRenderGuard } from "@miladyai/app-core/hooks";
 import { memo, useEffect } from "react";
 import { CompanionSceneHost } from "../companion/CompanionSceneHost";
 import { useCompanionSceneStatus } from "../companion/companion-scene-status-context";
+import { SceneOverlayDataBridge } from "../companion/scene-overlay-bridge";
 
 declare global {
   interface Window {
@@ -99,6 +100,17 @@ export const BroadcastShell = memo(function BroadcastShell() {
       <CompanionSceneHost active interactive={false}>
         <CaptureHandshake />
       </CompanionSceneHost>
+      {/*
+        SceneOverlayDataBridge is a leaf that subscribes to React state
+        (conversationMessages, agentStatus, triggers) and pushes it into
+        the SceneOverlayManager via the VrmEngine debug registry. It must
+        be mounted OUTSIDE CompanionSceneHost so it doesn't trigger
+        re-renders of the 3D host on every chat / status / trigger update.
+        Without this, the chat / status / heartbeat billboards inside the
+        scene render but never receive any data, which is why the live
+        capture had no chat bubbles after PR #68.
+      */}
+      <SceneOverlayDataBridge />
     </div>
   );
 });

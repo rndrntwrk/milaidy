@@ -65,6 +65,7 @@ import { TasksEventsPanel } from "./components/chat/TasksEventsPanel";
 import { DeferredSetupChecklist } from "./components/cloud/FlaminaGuide";
 
 import { MusicPlayerGlobal } from "./components/music/MusicPlayerGlobal";
+import { SceneOverlayDataBridge } from "./components/companion/scene-overlay-bridge";
 import {
   BugReportProvider,
   useBugReportState,
@@ -822,6 +823,20 @@ export function App() {
         />
       )}
       <MusicPlayerGlobal />
+
+      {/*
+        SceneOverlayDataBridge — leaf that subscribes to app state
+        (conversationMessages, agentStatus, triggers) and pushes it into
+        the VrmEngine's SceneOverlayManager so the in-scene chat / status
+        / heartbeat billboards get data. Mounted at the App level so it
+        doesn't re-render CompanionSceneHost on every chat update, and
+        so the companion view shows the same bubbles regardless of which
+        tab the user is looking at. This is also the fix for the
+        "action bubbles regressed" report — operator actions are inline
+        ConversationMessages, so they appear in the chat panel once the
+        bridge is mounted.
+      */}
+      <SceneOverlayDataBridge />
 
       {/* Persistent game overlay — stays visible across all tabs */}
       {activeGameViewerUrl && gameOverlayEnabled && tab !== "apps" && (
