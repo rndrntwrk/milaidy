@@ -102,4 +102,4 @@ jobs:
         run: bun eliza/packages/app-core/scripts/desktop-build.mjs preflight --variant=base
       - name: Build preload bridge
         working-directory: eliza/packages/app-core/platforms/electrobun
-        run: bun run build:preload
+        run: node ../../scripts/build-electrobun-preload.mjs
