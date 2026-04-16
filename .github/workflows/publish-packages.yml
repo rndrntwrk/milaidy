@@ -156,9 +156,9 @@ jobs:
         working-directory: eliza/packages/app-core/packaging/pypi
         run: |
           pip install dist/*.whl
-          python -c "import milady; print(f'milady {milady.__version__} loaded OK')"
+          python -c "import elizaos_app; print(f'elizaos_app {elizaos_app.__version__} loaded OK')"
           python -c "
-          from milady.loader import _parse_version
+          from elizaos_app.loader import _parse_version
           assert _parse_version('v22.12.0') == (22, 12, 0)
           print('Loader tests passed')
           "
