@@ -4,7 +4,9 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   applyMiladyCopyPatches,
+  applyPluginAnthropicCliUsagePatch,
   bootstrapBundledBunInstall,
+  findInstalledPackageDir,
   getElizaInstallArgs,
   getTemporaryElizaWorkspaceEntries,
 } from "./setup-upstreams.mjs";
@@ -74,6 +76,29 @@ describe("getTemporaryElizaWorkspaceEntries", () => {
       "plugins/plugin-sql/typescript",
       "../scripts/ci-stubs/elizaos-plugin-wechat",
     ]);
+  });
+});
+
+describe("findInstalledPackageDir", () => {
+  it("falls back to eliza workspace installs for nested plugin dependencies", () => {
+    const repoRoot = makeTempDir();
+    const elizaRoot = path.join(repoRoot, "eliza");
+    const elizaInstall = path.join(
+      elizaRoot,
+      "node_modules",
+      "@types",
+      "bun",
+      "package.json",
+    );
+
+    writeFile(elizaInstall, '{"name":"@types/bun"}');
+
+    expect(findInstalledPackageDir(repoRoot, "@types/bun")).toBeNull();
+    expect(
+      findInstalledPackageDir(repoRoot, "@types/bun", undefined, null, {
+        searchRoots: [repoRoot, elizaRoot],
+      }),
+    ).toBe(path.dirname(elizaInstall));
   });
 });
 
@@ -207,5 +232,52 @@ describe("applyMiladyCopyPatches", () => {
     );
 
     warnSpy.mockRestore();
+  });
+});
+
+describe("applyPluginAnthropicCliUsagePatch", () => {
+  it("normalizes Claude CLI usage fields to prompt/completion tokens", () => {
+    const elizaRoot = makeTempDir();
+    const claudeCliPath = path.join(
+      elizaRoot,
+      "plugins",
+      "plugin-anthropic",
+      "typescript",
+      "utils",
+      "claude-cli.ts",
+    );
+
+    writeFile(
+      claudeCliPath,
+      [
+        "const usage = {",
+        "    inputTokens: number;",
+        "    outputTokens: number;",
+        "};",
+        "const mapped = {",
+        "    inputTokens: entry.inputTokens,",
+        "    outputTokens: entry.outputTokens,",
+        "};",
+        "emitModelUsageEvent(runtime, modelType, prompt, {",
+        "      promptTokens: usage.inputTokens,",
+        "      completionTokens: usage.outputTokens,",
+        "});",
+        "emitModelUsageEvent(runtime, modelType, prompt, {",
+        "                promptTokens: usage.inputTokens,",
+        "                completionTokens: usage.outputTokens,",
+        "});",
+      ].join("\n"),
+    );
+
+    expect(applyPluginAnthropicCliUsagePatch(elizaRoot)).toBe(4);
+    const patched = fs.readFileSync(claudeCliPath, "utf8");
+    expect(patched).toContain("promptTokens: number;");
+    expect(patched).toContain("completionTokens: number;");
+    expect(patched).toContain("promptTokens: entry.inputTokens,");
+    expect(patched).toContain("completionTokens: entry.outputTokens,");
+    expect(patched).toContain("promptTokens: usage.promptTokens,");
+    expect(patched).toContain("completionTokens: usage.completionTokens,");
+    expect(patched).not.toContain("usage.inputTokens");
+    expect(patched).not.toContain("usage.outputTokens");
   });
 });

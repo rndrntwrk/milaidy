@@ -114,6 +114,31 @@ const MILADY_COPY_PATCH_RELATIVE_PATHS = [
   ),
   path.join("packages", "app-core", "src", "i18n", "locales", "en.json"),
 ];
+const PLUGIN_ANTHROPIC_CLAUDE_CLI_RELATIVE_PATH = path.join(
+  "plugins",
+  "plugin-anthropic",
+  "typescript",
+  "utils",
+  "claude-cli.ts",
+);
+const PLUGIN_ANTHROPIC_CLAUDE_CLI_REPLACEMENTS = [
+  [
+    "    inputTokens: number;\n    outputTokens: number;\n",
+    "    promptTokens: number;\n    completionTokens: number;\n",
+  ],
+  [
+    "    inputTokens: entry.inputTokens,\n    outputTokens: entry.outputTokens,\n",
+    "    promptTokens: entry.inputTokens,\n    completionTokens: entry.outputTokens,\n",
+  ],
+  [
+    "      promptTokens: usage.inputTokens,\n      completionTokens: usage.outputTokens,\n",
+    "      promptTokens: usage.promptTokens,\n      completionTokens: usage.completionTokens,\n",
+  ],
+  [
+    "                promptTokens: usage.inputTokens,\n                completionTokens: usage.outputTokens,\n",
+    "                promptTokens: usage.promptTokens,\n                completionTokens: usage.completionTokens,\n",
+  ],
+];
 
 function toDisplayPath(targetPath) {
   return path.normalize(targetPath);
@@ -207,6 +232,46 @@ export function applyMiladyCopyPatches(elizaRoot) {
   }
 
   return patchedFiles;
+}
+
+export function applyPluginAnthropicCliUsagePatch(elizaRoot) {
+  const filePath = path.join(
+    elizaRoot,
+    PLUGIN_ANTHROPIC_CLAUDE_CLI_RELATIVE_PATH,
+  );
+  if (!existsSync(filePath)) {
+    return 0;
+  }
+
+  const raw = readFileSync(filePath, "utf8");
+  let next = raw;
+  let patchedReplacements = 0;
+  let staleReplacements = 0;
+
+  for (const [from, to] of PLUGIN_ANTHROPIC_CLAUDE_CLI_REPLACEMENTS) {
+    if (next.includes(to)) {
+      continue;
+    }
+    if (!next.includes(from)) {
+      staleReplacements += 1;
+      continue;
+    }
+    next = next.replace(from, to);
+    patchedReplacements += 1;
+  }
+
+  if (next !== raw) {
+    writeFileSync(filePath, next);
+    console.log(
+      `[setup-upstreams] Applied plugin-anthropic Claude CLI usage patch (${patchedReplacements} replacement${patchedReplacements === 1 ? "" : "s"})`,
+    );
+  } else if (staleReplacements > 0) {
+    console.warn(
+      "[setup-upstreams] WARNING: plugin-anthropic Claude CLI usage patch no longer matches upstream source",
+    );
+  }
+
+  return patchedReplacements;
 }
 
 function uniqueLinks(links) {
@@ -811,31 +876,33 @@ function ensurePackageBinLinks(
   return linkedBins;
 }
 
-function findInstalledPackageDir(
+export function findInstalledPackageDir(
   repoRoot,
   packageName,
   preferredVersion,
   localTargetPath = null,
+  { searchRoots = [repoRoot] } = {},
 ) {
-  const directPackagePath = path.join(
-    repoRoot,
-    "node_modules",
-    ...packageName.split("/"),
-  );
-  try {
-    const resolved = realpathSync(directPackagePath);
-    const resolvedLocalTarget =
-      localTargetPath && existsSync(localTargetPath)
-        ? realpathSync(localTargetPath)
-        : null;
-    if (existsSync(resolved) && resolved !== resolvedLocalTarget) {
-      return directPackagePath;
-    }
-  } catch {}
+  const resolvedLocalTarget =
+    localTargetPath && existsSync(localTargetPath)
+      ? realpathSync(localTargetPath)
+      : null;
+  const uniqueSearchRoots = [
+    ...new Set(searchRoots.map((root) => path.resolve(root))),
+  ];
 
-  const bunCacheRoot = path.join(repoRoot, "node_modules", ".bun");
-  if (!existsSync(bunCacheRoot)) {
-    return null;
+  for (const searchRoot of uniqueSearchRoots) {
+    const directPackagePath = path.join(
+      searchRoot,
+      "node_modules",
+      ...packageName.split("/"),
+    );
+    try {
+      const resolved = realpathSync(directPackagePath);
+      if (existsSync(resolved) && resolved !== resolvedLocalTarget) {
+        return directPackagePath;
+      }
+    } catch {}
   }
 
   const packagePrefix = `${packageName.replace("/", "+")}@`;
@@ -843,34 +910,46 @@ function findInstalledPackageDir(
     preferredVersion === undefined
       ? null
       : `${packageName.replace("/", "+")}@${preferredVersion}+`;
-  const matches = [];
 
-  for (const entry of readdirSync(bunCacheRoot, { withFileTypes: true })) {
-    if (!entry.isDirectory() || !entry.name.startsWith(packagePrefix)) {
+  for (const searchRoot of uniqueSearchRoots) {
+    const bunCacheRoot = path.join(searchRoot, "node_modules", ".bun");
+    if (!existsSync(bunCacheRoot)) {
       continue;
     }
 
-    const candidate = path.join(
-      bunCacheRoot,
-      entry.name,
-      "node_modules",
-      ...packageName.split("/"),
+    const matches = [];
+
+    for (const entry of readdirSync(bunCacheRoot, { withFileTypes: true })) {
+      if (!entry.isDirectory() || !entry.name.startsWith(packagePrefix)) {
+        continue;
+      }
+
+      const candidate = path.join(
+        bunCacheRoot,
+        entry.name,
+        "node_modules",
+        ...packageName.split("/"),
+      );
+      if (!existsSync(candidate)) {
+        continue;
+      }
+
+      matches.push({
+        candidate,
+        preferred:
+          preferredPrefix !== null && entry.name.startsWith(preferredPrefix),
+      });
+    }
+
+    matches.sort(
+      (left, right) => Number(right.preferred) - Number(left.preferred),
     );
-    if (!existsSync(candidate)) {
-      continue;
+    if (matches[0]?.candidate) {
+      return matches[0].candidate;
     }
-
-    matches.push({
-      candidate,
-      preferred:
-        preferredPrefix !== null && entry.name.startsWith(preferredPrefix),
-    });
   }
 
-  matches.sort(
-    (left, right) => Number(right.preferred) - Number(left.preferred),
-  );
-  return matches[0]?.candidate ?? null;
+  return null;
 }
 
 export function ensurePluginDependencyLinks(
@@ -878,6 +957,7 @@ export function ensurePluginDependencyLinks(
   pluginsRoot = getRepoPluginsRoot(repoRoot),
 ) {
   let linkedDependencies = 0;
+  const searchRoots = [repoRoot, getRepoElizaRoot(repoRoot)];
 
   for (const packageDir of discoverPluginPackageDirs(pluginsRoot)) {
     const packageJson = readPackageJson(packageDir);
@@ -906,6 +986,9 @@ export function ensurePluginDependencyLinks(
       const installedDependencyDir = findInstalledPackageDir(
         repoRoot,
         dependencyName,
+        undefined,
+        null,
+        { searchRoots },
       );
       if (!installedDependencyDir) {
         continue;
@@ -1293,6 +1376,7 @@ export async function setupUpstreams(repoRoot = DEFAULT_REPO_ROOT) {
 
   const pluginsRoot = getRepoPluginsRoot(repoRoot);
   ensurePluginDependencyLinks(repoRoot, pluginsRoot);
+  applyPluginAnthropicCliUsagePatch(elizaRoot);
   await ensurePluginBuildOutputs(pluginsRoot);
   const updatedLinks = linkUpstreamPackages(repoRoot, {
     elizaRoot,
