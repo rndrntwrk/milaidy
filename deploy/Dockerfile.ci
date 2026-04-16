@@ -389,6 +389,27 @@ if (!fs.existsSync(knDir + '/package.json')) {
   }));
   console.log('stubbed: @elizaos/app-knowledge');
 }
+// app-task-coordinator: imported by dist/api/server.js for coordinator wiring
+const tcDir = 'node_modules/@elizaos/app-task-coordinator';
+if (!fs.existsSync(tcDir + '/package.json')) {
+  fs.mkdirSync(tcDir + '/api', { recursive: true });
+  const typesStub = `export const CoordinatorMessageType = {};
+export default {};`;
+  const wiringStub = `export async function wireCoordinatorBridgesWhenReady() { return null; }
+export default {};`;
+  fs.writeFileSync(tcDir + '/api/coordinator-types.mjs', typesStub);
+  fs.writeFileSync(tcDir + '/api/coordinator-wiring.mjs', wiringStub);
+  fs.writeFileSync(tcDir + '/index.mjs', 'export * from "./api/coordinator-types.mjs"; export * from "./api/coordinator-wiring.mjs";');
+  fs.writeFileSync(tcDir + '/package.json', JSON.stringify({
+    name: '@elizaos/app-task-coordinator', version: '0.0.0-cloud-stub', type: 'module',
+    exports: {
+      '.': './index.mjs',
+      './api/coordinator-types': './api/coordinator-types.mjs',
+      './api/coordinator-wiring': './api/coordinator-wiring.mjs',
+    }
+  }));
+  console.log('stubbed: @elizaos/app-task-coordinator');
+}
 __APP_STUBS__
 
 # Fix @ai-sdk/provider-utils version conflict:
