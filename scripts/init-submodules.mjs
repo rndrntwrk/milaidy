@@ -378,11 +378,6 @@ export function runInitSubmodules({
         cwd: elizaRoot,
         stdio: "inherit",
       });
-      const nestedSkipArgs = getNestedElizaSubmoduleSkipArgs();
-      exec(`git ${nestedSkipArgs} submodule update --init --recursive`.trim(), {
-        cwd: elizaRoot,
-        stdio: "inherit",
-      });
 
       const nestedSubmodules = loadTrackedSubmodules({
         exec,

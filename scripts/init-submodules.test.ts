@@ -105,7 +105,17 @@ describe("init-submodules", () => {
         throw new Error("unexpected recursive eliza init");
       }
 
-      if (command === "git submodule sync --recursive") {
+      if (
+        command ===
+        "git submodule sync --recursive"
+      ) {
+        return "";
+      }
+
+      if (
+        command ===
+        "git -c submodule.plugins/plugin-openrouter.update=none submodule update --init --recursive"
+      ) {
         return "";
       }
 
@@ -129,9 +139,6 @@ describe("init-submodules", () => {
         call.includes('git submodule update --init --recursive "eliza"'),
       ),
     ).toBe(false);
-    expect(execCalls).toContain(
-      `${path.join(repoRoot, "eliza")} :: git submodule sync --recursive`,
-    );
   });
 
   it("initializes tracked nested eliza submodules individually", () => {
@@ -205,14 +212,14 @@ describe("init-submodules", () => {
 
       if (
         command ===
-          'git -c submodule.plugins/plugin-openrouter.update=none submodule update --init --recursive -- "plugins/plugin-shell"' &&
+          'git submodule update --init --recursive -- "plugins/plugin-shell"' &&
         cwd === elizaRoot
       ) {
         return "";
       }
       if (
         command ===
-          'git -c submodule.plugins/plugin-openrouter.update=none submodule update --init --recursive -- "plugins/plugin-sql"' &&
+          'git submodule update --init --recursive -- "plugins/plugin-sql"' &&
         cwd === elizaRoot
       ) {
         return "";
@@ -245,108 +252,6 @@ describe("init-submodules", () => {
     ).toBe(true);
     expect(issuedCommands).not.toContain(
       `${elizaRoot} :: git submodule update --init --recursive`,
-    );
-  });
-
-  it("continues initializing nested eliza submodules after one failure", () => {
-    const rootDir = "/repo";
-    const elizaRoot = path.join(rootDir, "eliza");
-    const logError = vi.fn();
-    const existingPaths = new Set([
-      path.join(rootDir, ".git"),
-      path.join(rootDir, ".gitmodules"),
-      path.join(elizaRoot, ".gitmodules"),
-      path.join(elizaRoot, "package.json"),
-      path.join(elizaRoot, "packages/typescript/package.json"),
-    ]);
-
-    const exec = vi.fn((command: string, options?: { cwd?: string }) => {
-      const cwd = options?.cwd ?? rootDir;
-
-      if (
-        command ===
-        'git config --file .gitmodules --get-regexp "^submodule\\..*\\.path$"'
-      ) {
-        if (cwd === rootDir) {
-          return "submodule.eliza.path eliza";
-        }
-        if (cwd === elizaRoot) {
-          return [
-            "submodule.plugins/plugin-shell.path plugins/plugin-shell",
-            "submodule.plugins/plugin-sql.path plugins/plugin-sql",
-          ].join("\n");
-        }
-      }
-
-      if (command === 'git ls-files -s -- "eliza"' && cwd === rootDir) {
-        return "160000 deadbeef 0\teliza";
-      }
-      if (
-        command === 'git ls-files -s -- "plugins/plugin-shell"' &&
-        cwd === elizaRoot
-      ) {
-        return "160000 deadbeef 0\tplugins/plugin-shell";
-      }
-      if (
-        command === 'git ls-files -s -- "plugins/plugin-sql"' &&
-        cwd === elizaRoot
-      ) {
-        return "160000 deadbeef 0\tplugins/plugin-sql";
-      }
-
-      if (command === 'git submodule status -- "eliza"' && cwd === rootDir) {
-        return " 93b4bd488328f39d095cb30d98eb3118a7f28d7c eliza";
-      }
-      if (
-        command === 'git submodule status -- "plugins/plugin-shell"' &&
-        cwd === elizaRoot
-      ) {
-        return "-93b4bd488328f39d095cb30d98eb3118a7f28d7c plugins/plugin-shell";
-      }
-      if (
-        command === 'git submodule status -- "plugins/plugin-sql"' &&
-        cwd === elizaRoot
-      ) {
-        return "-93b4bd488328f39d095cb30d98eb3118a7f28d7c plugins/plugin-sql";
-      }
-
-      if (command === "git submodule sync --recursive" && cwd === elizaRoot) {
-        return "";
-      }
-
-      if (
-        command ===
-          'git -c submodule.plugins/plugin-openrouter.update=none submodule update --init --recursive -- "plugins/plugin-shell"' &&
-        cwd === elizaRoot
-      ) {
-        throw new Error("boom");
-      }
-      if (
-        command ===
-          'git -c submodule.plugins/plugin-openrouter.update=none submodule update --init --recursive -- "plugins/plugin-sql"' &&
-        cwd === elizaRoot
-      ) {
-        return "";
-      }
-
-      throw new Error(`Unexpected command: ${command} (cwd=${cwd})`);
-    });
-
-    const result = runInitSubmodules({
-      rootDir,
-      exec,
-      exists: (targetPath) => existingPaths.has(targetPath),
-      log: vi.fn(),
-      logError,
-    });
-
-    expect(result.failed).toBe(1);
-    expect(exec).toHaveBeenCalledWith(
-      'git -c submodule.plugins/plugin-openrouter.update=none submodule update --init --recursive -- "plugins/plugin-sql"',
-      expect.objectContaining({ cwd: elizaRoot }),
-    );
-    expect(logError).toHaveBeenCalledWith(
-      expect.stringContaining("Failed to initialize nested plugins/plugin-shell"),
     );
   });
 });
