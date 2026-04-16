@@ -349,10 +349,27 @@ for (const name of apps) {
   if (fs.existsSync(dir + '/package.json')) { console.log('present: ' + name); continue; }
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(dir + '/plugin.mjs', emptyPlugin);
-  fs.writeFileSync(dir + '/package.json', JSON.stringify({
-    name, version: '0.0.0-cloud-stub', type: 'module',
-    exports: { './plugin': './plugin.mjs', '.': './plugin.mjs' }
-  }));
+  // app-steward has extra subpath imports from dist/api/server.js
+  if (name === '@elizaos/app-steward') {
+    const routeStub = `export async function resolveWalletExportRejection() { return null; }\nexport default {};`;
+    const secStub = `export async function hydrateWalletKeysFromNodePlatformSecureStore() { return null; }\nexport async function deleteWalletSecretsFromOsStore() { return null; }\nexport default {};`;
+    fs.writeFileSync(dir + '/routes-stub.mjs', routeStub);
+    fs.writeFileSync(dir + '/security-stub.mjs', secStub);
+    fs.writeFileSync(dir + '/package.json', JSON.stringify({
+      name, version: '0.0.0-cloud-stub', type: 'module',
+      exports: {
+        './plugin': './plugin.mjs', '.': './plugin.mjs',
+        './routes/server-wallet-trade': './routes-stub.mjs',
+        './security/hydrate-wallet-keys-from-platform-store': './security-stub.mjs',
+        './security/wallet-os-store-actions': './security-stub.mjs',
+      }
+    }));
+  } else {
+    fs.writeFileSync(dir + '/package.json', JSON.stringify({
+      name, version: '0.0.0-cloud-stub', type: 'module',
+      exports: { './plugin': './plugin.mjs', '.': './plugin.mjs' }
+    }));
+  }
   console.log('stubbed: ' + name);
 }
 // app-knowledge with subpath exports
