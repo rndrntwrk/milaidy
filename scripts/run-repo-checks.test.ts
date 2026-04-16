@@ -116,7 +116,7 @@ describe("run-repo-checks", () => {
       "cloud gateway-webhook typecheck",
     ]) {
       expect(
-        suites["typecheck:extended"].find((step) => step.label === label),
+        suites.typecheck.find((step) => step.label === label),
       ).toBeUndefined();
     }
   });
@@ -127,9 +127,7 @@ describe("run-repo-checks", () => {
       suites.lint.find((step) => step.label === "steward-fi lint"),
     ).toBeUndefined();
     expect(
-      suites["typecheck:extended"].find(
-        (step) => step.label === "steward-fi typecheck",
-      ),
+      suites.typecheck.find((step) => step.label === "steward-fi typecheck"),
     ).toBeUndefined();
   });
 });

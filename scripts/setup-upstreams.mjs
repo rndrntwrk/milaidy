@@ -403,14 +403,15 @@ export function getTemporaryElizaWorkspaceEntries(
     { pathExists },
   ).map(({ workspaceEntry }) => workspaceEntry);
 
-  const unpublishedStubWorkspaceEntries = UNPUBLISHED_ELIZA_PLUGIN_CI_STUBS
-    .filter(({ stubRelativePath, workspaceEntry }) => {
-      return (
-        pathExists(path.join(elizaRoot, stubRelativePath, "package.json")) &&
-        !pathExists(path.join(elizaRoot, workspaceEntry, "package.json"))
-      );
-    })
-    .map(({ stubRelativePath }) => stubRelativePath);
+  const unpublishedStubWorkspaceEntries =
+    UNPUBLISHED_ELIZA_PLUGIN_CI_STUBS.filter(
+      ({ stubRelativePath, workspaceEntry }) => {
+        return (
+          pathExists(path.join(elizaRoot, stubRelativePath, "package.json")) &&
+          !pathExists(path.join(elizaRoot, workspaceEntry, "package.json"))
+        );
+      },
+    ).map(({ stubRelativePath }) => stubRelativePath);
 
   return [
     ...optionalPluginWorkspaceEntries,
@@ -610,7 +611,8 @@ export function applyUnpublishedPluginStubOverrides(
     );
     const specifier = `file:${stubRelativePath}`;
     const shouldUseStub =
-      pathExists(stubPackageJsonPath) && !pathExists(realWorkspacePackageJsonPath);
+      pathExists(stubPackageJsonPath) &&
+      !pathExists(realWorkspacePackageJsonPath);
 
     if (!shouldUseStub) {
       if (overrides[packageName] === specifier) {
