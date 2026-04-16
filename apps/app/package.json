@@ -40,7 +40,7 @@
     "@capacitor/ios": "8.0.2",
     "@capacitor/keyboard": "8.0.0",
     "@capacitor/preferences": "8.0.1",
-    "@elizaos/app-core": "workspace:*",
+    "@elizaos/app-core": "2.0.0-alpha.173",
     "@elizaos/shared": "workspace:*",
     "@elizaos/capacitor-agent": "workspace:*",
     "@elizaos/capacitor-appblocker": "workspace:*",
