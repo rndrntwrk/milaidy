@@ -88,6 +88,16 @@ append_versioned_package \
 # the manifest isn't available.
 packages+=("coding-agent-adapters@0.16.3")
 
+# viem is a transitive dep of eliza/packages/agent's cloud/cloud-wallet.ts
+# (imports viem/accounts). Same pattern as coding-agent-adapters: dropped from
+# the root install by disable-local-eliza-workspace but still bundled by the
+# Docker CI smoke through the apps/app alias, producing "Rolldown failed to
+# resolve import viem/accounts".
+append_versioned_package \
+  "viem" \
+  "eliza/packages/agent/package.json" \
+  ".eliza.ci-disabled/packages/agent/package.json"
+
 for attempt in 1 2 3; do
   if bun add --no-save --dev --ignore-scripts "${packages[@]}"; then
     exit 0
