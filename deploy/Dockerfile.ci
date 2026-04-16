@@ -80,10 +80,39 @@ RUN find eliza -path '*/node_modules/@elizaos/core' -not -path '*/node_modules/.
 
 # Delete raw TypeScript source from eliza workspace packages.
 # tsx prefers .ts over compiled .js, causing cascading dep resolution failures.
-# Only dist/ is needed at runtime.
-# Only remove @elizaos/core src (the one that causes @noble/ciphers import failures).
-# Keep agent and shared src because tsdown dist has hardcoded .ts import paths into them.
-RUN rm -rf eliza/packages/typescript/src 2>/dev/null || true
+# eliza/packages/typescript/src is kept because tsx resolves @elizaos/core imports via
+# tsconfig paths that point here (e.g. @elizaos/core/utils/context-catalog). Removing it
+# breaks agent startup even though the compiled dist is also present.
+
+# Patch @noble/ciphers: add extensionless export aliases (./aes, ./chacha, etc.)
+# crypto-compat.ts imports '@noble/ciphers/aes' but the package only exports './aes.js'.
+# Same pattern as the @noble/hashes patch in patch-deps.mjs.
+RUN node - <<'__NOBLE_PATCH__'
+const fs = require('fs');
+const path = require('path');
+function patchExtensionlessExports(dir) {
+  const pkgPath = path.join(dir, 'package.json');
+  if (!fs.existsSync(pkgPath)) return;
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+  if (!pkg.exports) return;
+  let changed = false;
+  const entries = Object.entries(pkg.exports);
+  for (const [key, val] of entries) {
+    if (key.endsWith('.js')) {
+      const stripped = key.slice(0, -3);
+      if (!pkg.exports[stripped]) {
+        pkg.exports[stripped] = val;
+        changed = true;
+      }
+    }
+  }
+  if (changed) {
+    fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2));
+    console.log('[patch-deps] Patched ' + pkg.name + ' exports: added extensionless aliases.');
+  }
+}
+patchExtensionlessExports('node_modules/@noble/ciphers');
+__NOBLE_PATCH__
 
 # Fix dist layout: package.json says dist/index.node.js but build creates dist/node/index.node.js
 RUN CORE_DIR="node_modules/@elizaos/core"; \
