@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "@elizaos/shared": "workspace:*",
-    "@elizaos/app-core": "workspace:*",
+    "@elizaos/app-core": "2.0.0-alpha.173",
     "mermaid": "^11.14.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
