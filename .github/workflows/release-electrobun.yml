@@ -163,6 +163,7 @@ jobs:
 
       - name: Restore legacy electrobun compatibility path
         run: node scripts/ensure-legacy-electrobun-compat.mjs
+
       - name: Run repository postinstall patches
         run: bun run postinstall
 
@@ -386,6 +387,7 @@ jobs:
 
       - name: Restore legacy electrobun compatibility path
         run: node scripts/ensure-legacy-electrobun-compat.mjs
+
       - name: Run repository postinstall patches
         run: bun run postinstall
 

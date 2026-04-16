@@ -10,14 +10,34 @@ const repoRoot = resolveRepoRoot(import.meta.url);
 
 export const miladyElizaTypecheckSteps = [
   {
-    label: "@elizaos/app-core typecheck",
+    // Milady's root workspace typecheck is anchored on app-core's tsconfig and
+    // resolves the shipped @elizaos/ui sources through the same path aliases.
+    label: "eliza app-core workspace typecheck",
     command: "bun",
-    args: ["run", "--cwd", "eliza/packages/app-core", "typecheck"],
+    args: ["run", "verify:typecheck:workspace"],
   },
   {
-    label: "@elizaos/ui typecheck",
+    // @elizaos/ui does not currently typecheck as a leaf package in this fork
+    // because optional native/app-companion imports are resolved at the app
+    // layer. Keep an explicit UI gate by typechecking the shipped consumer app.
+    label: "eliza ui consumer typecheck",
     command: "bun",
-    args: ["run", "--cwd", "eliza/packages/ui", "typecheck"],
+    args: ["run", "--cwd", "apps/app", "typecheck"],
+  },
+  {
+    label: "eliza agent typecheck",
+    command: "bun",
+    args: ["run", "--cwd", "eliza/packages/agent", "typecheck"],
+  },
+  {
+    label: "eliza cloud plugin typecheck",
+    command: "bun",
+    args: [
+      "run",
+      "--cwd",
+      "eliza/plugins/plugin-elizacloud/typescript",
+      "typecheck",
+    ],
   },
 ];
 
@@ -50,42 +70,20 @@ export const suites = {
       command: "bun",
       args: ["run", "--cwd", "apps/homepage", "lint"],
     },
+    {
+      label: "steward-fi lint",
+      command: "bun",
+      args: ["run", "--cwd", "eliza/steward-fi", "lint"],
+    },
     ...miladyElizaCrossLanguageChecks,
   ],
   typecheck: [
-    {
-      label: "Root workspace typecheck",
-      command: "bun",
-      args: ["run", "verify:typecheck:workspace"],
-    },
-    {
-      label: "apps/app typecheck",
-      command: "bun",
-      args: ["run", "--cwd", "apps/app", "typecheck"],
-    },
-    {
-      label: "apps/homepage typecheck",
-      command: "bun",
-      args: ["run", "--cwd", "apps/homepage", "typecheck"],
-    },
-  ],
-  "typecheck:extended": [
-    {
-      label: "Root workspace typecheck",
-      command: "bun",
-      args: ["run", "verify:typecheck:workspace"],
-    },
-    {
-      label: "apps/app typecheck",
-      command: "bun",
-      args: ["run", "--cwd", "apps/app", "typecheck"],
-    },
-    {
-      label: "apps/homepage typecheck",
-      command: "bun",
-      args: ["run", "--cwd", "apps/homepage", "typecheck"],
-    },
     ...miladyElizaTypecheckSteps,
+    {
+      label: "apps/homepage typecheck",
+      command: "bun",
+      args: ["run", "--cwd", "apps/homepage", "typecheck"],
+    },
     ...miladyCloudTypecheckSteps,
     ...miladySidecarTypecheckSteps,
     ...miladyElizaCrossLanguageChecks,

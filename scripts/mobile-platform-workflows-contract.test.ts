@@ -44,21 +44,18 @@ describe("mobile platform workflow contract", () => {
     expect(workflow).not.toContain(
       "bun install --cwd eliza/packages/app-core --ignore-scripts",
     );
-    expect(workflow).not.toContain(
+    expect(workflow).toContain(
       "bun install --cwd eliza/packages/app-core/platforms/electrobun --ignore-scripts",
     );
+    expect(workflow).toContain(
+      "System git config failed; falling back to --global.",
+    );
     expect(workflow).toContain('prepare-local-eliza-runtime: "true"');
-    expect(workflow).not.toContain(
+    expect(workflow).toContain(
       "node eliza/packages/app-core/scripts/run-repo-setup.mjs",
     );
     expect(workflow).toContain(
-      "node eliza/packages/app-core/scripts/patch-workspace-plugins.mjs",
-    );
-    expect(workflow).toContain(
-      "node eliza/packages/app-core/scripts/patch-deps.mjs",
-    );
-    expect(workflow).toContain(
-      "node eliza/packages/app-core/scripts/ensure-type-package-aliases.mjs",
+      "node scripts/ensure-legacy-electrobun-compat.mjs",
     );
   });
 });
