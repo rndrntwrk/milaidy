@@ -126,13 +126,22 @@ const path = require('path');
 const { execSync } = require('child_process');
 const https = require('https');
 
-// pathExists uses lstatSync (not existsSync) to detect broken symlinks too
-function pathExists(p) { try { fs.lstatSync(p); return true; } catch(e) { return false; } }
+// isAccessible: follows symlinks, returns false for broken symlinks
+function isAccessible(p) { return fs.existsSync(p); }
+// symlinkExists: uses lstatSync, returns true even for broken symlinks
+function symlinkExists(p) { try { fs.lstatSync(p); return true; } catch(e) { return false; } }
+// ensureDst: removes broken symlinks so cp -r can proceed cleanly
+function ensureDst(dst) {
+  if (isAccessible(dst)) return false; // real dir/file exists, skip
+  if (symlinkExists(dst)) fs.unlinkSync(dst); // delete broken symlink
+  return true; // proceed with copy
+}
 
 // --- Phase 1: Hoist .bun/ -> node_modules/ ---
 // bun stores packages in .bun/<name@ver>/node_modules/<scope>/<pkg>/ but
-// sometimes doesn't create root-level node_modules symlinks for workspace:*
-// packages whose plugin dirs are empty. Copy them directly.
+// doesn't create root-level node_modules symlinks when workspace:* entries
+// have empty plugin dirs. Also, bun may create broken relative symlinks for
+// packages in the CI workspace that don't resolve inside Docker. Replace both.
 const bunDir = 'node_modules/.bun';
 let hoisted = 0;
 if (fs.existsSync(bunDir)) {
@@ -148,7 +157,7 @@ if (fs.existsSync(bunDir)) {
           const src = path.join(scopeDir, sub);
           const dst = path.join('node_modules', pkg, sub);
           try {
-            if (!pathExists(dst) && fs.statSync(src).isDirectory()) {
+            if (ensureDst(dst) && fs.statSync(src).isDirectory()) {
               execSync('cp -r "' + src + '" "' + dst + '"');
               hoisted++;
             }
@@ -158,7 +167,7 @@ if (fs.existsSync(bunDir)) {
         const src = path.join(nmPath, pkg);
         const dst = path.join('node_modules', pkg);
         try {
-          if (!pathExists(dst) && fs.statSync(src).isDirectory()) {
+          if (ensureDst(dst) && fs.statSync(src).isDirectory()) {
             execSync('cp -r "' + src + '" "' + dst + '"');
             hoisted++;
           }
