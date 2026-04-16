@@ -730,6 +730,7 @@ function nativeModuleStubPlugin(): Plugin {
     "node-llama-cpp",
     "fs-extra",
     "pty-state-capture",
+    "pty-console",
     "electron",
     "undici",
     // Image native bindings — never load in the renderer; if a server-only
@@ -1056,7 +1057,7 @@ function watchWorkspacePackagesPlugin(): Plugin {
             server.restart();
           } else {
             // Force a full reload on any other package file change (e.g. ts/tsx files)
-            server.ws.send({ type: "full-reload" });
+            server.hot.send({ type: "full-reload" });
           }
         }
       });
@@ -1511,8 +1512,9 @@ export default defineConfig({
     exclude: [
       "node-llama-cpp",
       "@node-llama-cpp/mac-arm64-metal",
-      // Contains native-only pty-state-capture import; skip pre-bundling.
+      // Contains native-only pty-state-capture / pty-console imports; skip pre-bundling.
       "@elizaos/plugin-agent-orchestrator",
+      "pty-console",
       // @elizaos/plugin-secrets-manager is now built into @elizaos/core features
       // Node-only HTTP client — crashes in browser, stub via nativeModuleStubPlugin
       "undici",
@@ -1546,6 +1548,7 @@ export default defineConfig({
         if (
           [
             "pty-state-capture",
+            "pty-console",
             "electron",
             "node-llama-cpp",
             "pty-manager",

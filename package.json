@@ -156,7 +156,7 @@
     "test:desktop:packaged:windows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File eliza/packages/app-core/scripts/run-windows-smoke-launcher.ps1 eliza/packages/app-core/platforms/electrobun/scripts/smoke-test-windows.ps1",
     "test:desktop:playwright": "node eliza/packages/app-core/scripts/run-desktop-playwright.mjs",
     "test:desktop:playwright:windows": "cd apps/app && bunx playwright test --config playwright.electrobun.packaged.config.ts test/electrobun-packaged/electrobun-windows-startup.e2e.spec.ts",
-    "test:e2e": "node eliza/packages/app-core/scripts/run-with-env.mjs MILADY_LIVE_TEST=1 ELIZA_LIVE_TEST=1 -- bunx vitest run --config test/vitest/e2e.config.ts --exclude eliza/apps/app-steward/test/anvil-contracts.real.e2e.test.ts --exclude eliza/packages/app-core/test/app/memory-relationships.real.e2e.test.ts --exclude eliza/packages/app-core/test/app/onboarding-companion.live.e2e.test.ts --exclude eliza/packages/app-core/test/app/qa-checklist.real.e2e.test.ts",
+    "test:e2e": "node eliza/packages/app-core/scripts/run-with-env.mjs MILADY_LIVE_TEST=1 ELIZA_LIVE_TEST=1 -- bunx vitest run --config test/vitest/e2e.config.ts --no-cache --exclude eliza/apps/app-steward/test/anvil-contracts.real.e2e.test.ts --exclude eliza/packages/app-core/test/app/memory-relationships.real.e2e.test.ts --exclude eliza/packages/app-core/test/app/onboarding-companion.live.e2e.test.ts --exclude eliza/packages/app-core/test/app/qa-checklist.real.e2e.test.ts",
     "test:integration": "bunx vitest run --config test/vitest/integration.config.ts",
     "test:audit:server": "node eliza/packages/app-core/scripts/audit-server-test-surface.mjs",
     "test:audit:server:strict": "node eliza/packages/app-core/scripts/audit-server-test-surface.mjs --fail-on-violations",
@@ -342,7 +342,8 @@
     "undici": "7.24.6",
     "axios": "1.14.0",
     "defu": "6.1.6",
-    "esbuild": "0.28.0"
+    "esbuild": "0.28.0",
+    "dompurify": "3.4.0"
   },
   "patchedDependencies": {
     "@noble/curves@2.0.1": "eliza/packages/app-core/patches/@noble%2Fcurves@2.0.1.patch",
