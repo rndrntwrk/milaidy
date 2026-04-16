@@ -278,22 +278,41 @@ RUN if [ -n "${VERSION_CLEAN}" ]; then \
 # Create no-op stubs so the import succeeds without crashing the agent.
 RUN node - <<'__STUBS__'
 const fs = require('fs');
-const noop = 'const stub = new Proxy({}, { get: () => new Proxy(()=>{},{get:()=>new Proxy(()=>{},{apply:()=>Promise.resolve({}),get:()=>()=>{}})}) }); module.exports = stub; module.exports.default = stub;';
+// ESM stub: exports a Proxy default + common named exports so both
+// `import pkg` and `import { AutoTokenizer }` resolve without crashing.
+const esmStub = `
+const handler = { get: () => new Proxy(() => {}, { get: () => new Proxy(() => {}, { apply: () => Promise.resolve({}), get: () => () => {} }) }) };
+const stub = new Proxy({}, handler);
+export default stub;
+export const AutoTokenizer = stub;
+export const PreTrainedTokenizer = stub;
+export const env = stub;
+`;
+// CJS stub for packages that don't need named ESM exports
+const cjsNoop = 'const stub = new Proxy({}, { get: () => new Proxy(()=>{},{get:()=>new Proxy(()=>{},{apply:()=>Promise.resolve({}),get:()=>()=>{}})}) }); module.exports = stub; module.exports.default = stub;';
 const pkgs = [
-  ['@huggingface/transformers', noop],
-  ['@huggingface/tokenizers', noop],
-  ['onnxruntime-node', noop],
-  ['onnxruntime-web', noop],
+  ['@huggingface/transformers', esmStub, true],
+  ['@huggingface/tokenizers', esmStub, true],
+  ['onnxruntime-node', cjsNoop, false],
+  ['onnxruntime-web', cjsNoop, false],
 ];
-for (const [name, code] of pkgs) {
+for (const [name, code, esm] of pkgs) {
   const dir = 'node_modules/' + name;
   if (!fs.existsSync(dir + '/package.json')) {
     const scope = name.startsWith('@') ? name.split('/')[0] : null;
     if (scope) fs.mkdirSync('node_modules/' + scope, {recursive:true});
     fs.mkdirSync(dir, {recursive:true});
-    fs.writeFileSync(dir + '/package.json', JSON.stringify({name,version:'0.0.0-cloud-stub',main:'index.js'}));
-    fs.writeFileSync(dir + '/index.js', code);
-    console.log('stubbed: ' + name);
+    const pkg = {name, version:'0.0.0-cloud-stub'};
+    if (esm) {
+      pkg.type = 'module';
+      pkg.main = 'index.mjs';
+      fs.writeFileSync(dir + '/index.mjs', code);
+    } else {
+      pkg.main = 'index.js';
+      fs.writeFileSync(dir + '/index.js', code);
+    }
+    fs.writeFileSync(dir + '/package.json', JSON.stringify(pkg));
+    console.log('stubbed: ' + name + (esm ? ' (esm)' : ' (cjs)'));
   } else {
     console.log('present: ' + name);
   }
