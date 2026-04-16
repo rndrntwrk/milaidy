@@ -108,6 +108,29 @@ describe("release workflow path contract", () => {
     ).toBeGreaterThanOrEqual(4);
   });
 
+  it("initializes tracked workspace submodules before packing JS tarballs", () => {
+    const testPackaging = readWorkflow("test-packaging.yml");
+
+    expect(testPackaging).toContain(
+      "pack-and-test-js:\n    name: Pack & Test JS Tarballs",
+    );
+    expect(testPackaging).toContain("run: node scripts/init-submodules.mjs");
+  });
+
+  it("hydrates eliza before nested submodule recursion in the release contract workflow", () => {
+    const releaseContract = readWorkflow("test-electrobun-release.yml");
+    const elizaInit = releaseContract.indexOf(
+      "git submodule update --init --depth=1 eliza",
+    );
+    const trackedInit = releaseContract.indexOf(
+      "run: node scripts/init-submodules.mjs",
+    );
+
+    expect(elizaInit).toBeGreaterThanOrEqual(0);
+    expect(trackedInit).toBeGreaterThanOrEqual(0);
+    expect(elizaInit).toBeLessThan(trackedInit);
+  });
+
   it("keeps plugin-agent-orchestrator submodule init as the published release-check version source", () => {
     const releaseContract = readWorkflow("test-electrobun-release.yml");
 
