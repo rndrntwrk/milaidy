@@ -250,6 +250,7 @@ export default defineConfig({
       "eliza/packages/app-core/platforms/electrobun/src/menu-reset-from-main.test.ts",
       "eliza/packages/app-core/platforms/electrobun/src/diagnostic-format.test.ts",
       "eliza/packages/app-core/platforms/electrobun/src/native/steward.test.ts",
+      "eliza/packages/app-core/platforms/electrobun/src/application-menu.test.ts",
       "eliza/packages/app-core/scripts/**/*.test.ts",
       "eliza/packages/shared/src/**/*.test.ts",
       "eliza/packages/app-core/src/**/*.test.tsx",
