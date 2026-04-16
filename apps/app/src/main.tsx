@@ -78,7 +78,7 @@ import {
   ApprovalQueue,
   StewardLogo,
   TransactionHistory,
-} from "@elizaos/app-steward";
+} from "@elizaos/app-steward/ui";
 import {
   CodingAgentControlChip,
   CodingAgentSettingsSection,
