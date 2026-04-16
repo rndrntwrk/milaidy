@@ -80,6 +80,24 @@ describe("patch-release-check-pack-fallback", () => {
     expect(patched).toContain('  "apps/app/dist",');
   });
 
+  it("patches hotspot blocks that drifted from the original upstream shape", () => {
+    const driftedHotspotBlock = `const localPackHotspotPaths = [
+  "apps/app/dist/animations",
+  "dist/node_modules",
+  "custom/local/hotspot",
+];`;
+    const source = `function runBunPackDry(): PackResult[] { return []; }\nfunction runPackDry(): PackResult[] { return []; }\n${driftedHotspotBlock}\n`;
+
+    const patched = applyReleaseCheckPackFallback(source);
+
+    expect(patched).toContain('  "dist",');
+    expect(patched).toContain('  "dist/node_modules",');
+    expect(patched).toContain('  "apps/app/dist",');
+    expect(patched).toContain('  "apps/app/dist/vrms",');
+    expect(patched).toContain('  "apps/app/dist/animations",');
+    expect(patched).toContain('  "custom/local/hotspot",');
+  });
+
   it("treats hotspot blocks with the new entries in a different order as already patched", () => {
     const reorderedHotspotBlock = `const localPackHotspotPaths = [
   "dist",

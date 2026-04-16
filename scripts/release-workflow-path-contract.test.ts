@@ -86,6 +86,26 @@ describe("release workflow path contract", () => {
     }
   });
 
+  it("checks out the eliza submodule before packaging workflows use submodule paths", () => {
+    const testPackaging = readWorkflow("test-packaging.yml");
+    const publishPackages = readWorkflow("publish-packages.yml");
+    const agentRelease = readWorkflow("agent-release.yml");
+    const checkoutWithRecursiveSubmodules =
+      /uses: actions\/checkout@v4\s+with:\s+submodules: recursive/g;
+
+    expect(
+      Array.from(testPackaging.matchAll(checkoutWithRecursiveSubmodules))
+        .length,
+    ).toBeGreaterThanOrEqual(4);
+    expect(
+      Array.from(publishPackages.matchAll(checkoutWithRecursiveSubmodules))
+        .length,
+    ).toBeGreaterThanOrEqual(4);
+    expect(
+      Array.from(agentRelease.matchAll(checkoutWithRecursiveSubmodules)).length,
+    ).toBeGreaterThanOrEqual(4);
+  });
+
   it("keeps plugin-agent-orchestrator submodule init as the published release-check version source", () => {
     const releaseContract = readWorkflow("test-electrobun-release.yml");
 

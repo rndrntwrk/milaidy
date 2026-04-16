@@ -62,6 +62,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          submodules: recursive
+        with:
           fetch-depth: 0
       - name: Decide whether to release
         id: decision
@@ -162,6 +164,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          submodules: recursive
+        with:
           fetch-depth: 0
       - name: Compute next version
         id: ver
@@ -243,6 +247,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          submodules: recursive
+        with:
           submodules: false
       - uses: ./.depot/actions/setup-bun-workspace
         with:
@@ -267,6 +273,8 @@ jobs:
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
         with:
           submodules: false
       - uses: actions/setup-java@v4

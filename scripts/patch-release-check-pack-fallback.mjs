@@ -120,22 +120,52 @@ function runPackDry(): PackResult[] {
   });
 }`;
 
-const oldLocalPackHotspotPathsBlock = `const localPackHotspotPaths = [
-  "dist/node_modules",
-  "apps/app/dist/vrms",
-  "apps/app/dist/animations",
-];`;
-
-const patchedLocalPackHotspotPathsBlock = `const localPackHotspotPaths = [
+const canonicalLocalPackHotspotPaths = [
   "dist",
-  "apps/app/dist",
   "dist/node_modules",
+  "apps/app/dist",
   "apps/app/dist/vrms",
   "apps/app/dist/animations",
-];`;
+];
 
 function getLocalPackHotspotPathsBlock(source) {
   return source.match(/const localPackHotspotPaths = \[[\s\S]*?\];/)?.[0];
+}
+
+function parseQuotedEntries(block) {
+  return Array.from(block.matchAll(/"([^"]+)"/g), ([, entry]) => entry);
+}
+
+function buildLocalPackHotspotPathsBlock(entries) {
+  return `const localPackHotspotPaths = [
+${entries.map((entry) => `  "${entry}",`).join("\n")}
+];`;
+}
+
+function patchLocalPackHotspotPathsBlock(source) {
+  const block = getLocalPackHotspotPathsBlock(source);
+  if (!block) {
+    throw new Error(
+      "patch-release-check-pack-fallback: upstream localPackHotspotPaths block not found",
+    );
+  }
+
+  const existingEntries = parseQuotedEntries(block);
+  const seen = new Set();
+  const extras = existingEntries.filter(
+    (entry) => !canonicalLocalPackHotspotPaths.includes(entry),
+  );
+  const patchedEntries = [...canonicalLocalPackHotspotPaths, ...extras].filter(
+    (entry) => {
+      if (seen.has(entry)) {
+        return false;
+      }
+      seen.add(entry);
+      return true;
+    },
+  );
+
+  return source.replace(block, buildLocalPackHotspotPathsBlock(patchedEntries));
 }
 
 function hasRequiredLocalPackHotspots(source) {
@@ -144,7 +174,8 @@ function hasRequiredLocalPackHotspots(source) {
     return false;
   }
 
-  return block.includes('"dist"') && block.includes('"apps/app/dist"');
+  const entries = parseQuotedEntries(block);
+  return entries.includes("dist") && entries.includes("apps/app/dist");
 }
 
 export function applyReleaseCheckPackFallback(source) {
@@ -161,16 +192,7 @@ export function applyReleaseCheckPackFallback(source) {
   }
 
   if (!hasRequiredLocalPackHotspots(patched)) {
-    if (!patched.includes(oldLocalPackHotspotPathsBlock)) {
-      throw new Error(
-        "patch-release-check-pack-fallback: upstream localPackHotspotPaths block not found",
-      );
-    }
-
-    patched = patched.replace(
-      oldLocalPackHotspotPathsBlock,
-      patchedLocalPackHotspotPathsBlock,
-    );
+    patched = patchLocalPackHotspotPathsBlock(patched);
   }
 
   return patched;
