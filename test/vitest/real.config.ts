@@ -4,13 +4,14 @@
  * This config deliberately avoids the default unit/e2e stub graph and includes
  * only files that are already marked `live` or `real`.
  *
- * Browser-driven QA flows remain opt-in inside the test files themselves
- * (`MILADY_LIVE_BROWSER_SUITE=1`) so `bun run test:real` can pass in
- * environments that have provider credentials but not a launched local UI/API
- * stack.
+ * Browser-driven QA flows stay out of this baseline config. Dedicated
+ * live/e2e lanes cover browser and long-running orchestration scenarios so the
+ * required CI real suite stays focused on repo-supported non-mock integration
+ * coverage.
  *
- * `bun run test:ci:real` sets `MILADY_CI_REAL=1` and loads `test/live-ci.setup.ts`
- * first; Vitest mock auto-restore is disabled so suites exercise real modules.
+ * `bun run test:ci:real` sets `MILADY_CI_REAL=1`, which additionally excludes
+ * upstream-only or credential-gated real tests that Milady does not provision
+ * in its required PR workflow.
  */
 
 import fs from "node:fs";
@@ -123,6 +124,49 @@ const pluginCronEntry =
       "index",
     ),
   );
+const pluginSqlEntry =
+  getInstalledPackageEntry("@elizaos/plugin-sql", repoRoot) ??
+  resolveModuleEntry(
+    path.join(
+      repoRoot,
+      "eliza",
+      "plugins",
+      "plugin-sql",
+      "typescript",
+      "src",
+      "index",
+    ),
+  );
+const pluginLocalEmbeddingEntry =
+  getInstalledPackageEntry("@elizaos/plugin-local-embedding", repoRoot) ??
+  resolveModuleEntry(
+    path.join(
+      repoRoot,
+      "eliza",
+      "plugins",
+      "plugin-local-embedding",
+      "src",
+      "index",
+    ),
+  );
+const pluginDiscordEntry =
+  getInstalledPackageEntry("@elizaos/plugin-discord", repoRoot) ??
+  resolveModuleEntry(
+    path.join(
+      repoRoot,
+      "eliza",
+      "plugins",
+      "plugin-discord",
+      "typescript",
+      "src",
+      "index",
+    ),
+  );
+const pluginTelegramEntry =
+  getInstalledPackageEntry("@elizaos/plugin-telegram", repoRoot) ??
+  resolveModuleEntry(
+    path.join(repoRoot, "eliza", "plugins", "plugin-telegram", "src", "index"),
+  );
 const pluginOpenAiEntry =
   getInstalledPackageEntry("@elizaos/plugin-openai", repoRoot, "node") ??
   resolveModuleEntry(
@@ -207,6 +251,20 @@ const pluginElizaCloudEntry =
       "index.node",
     ),
   );
+const isCiReal = process.env.MILADY_CI_REAL === "1";
+const ciExcludedRealPaths = [
+  // These surfaces are covered by dedicated workflows or upstream package
+  // suites instead of Milady's required PR real-test lane.
+  "eliza/packages/benchmarks/app-eval/evaluate.real.test.ts",
+  "eliza/apps/app-form/src/tests/toon-integration.live.test.ts",
+  "eliza/apps/app-lifeops/test/lifeops-life-chat.real.test.ts",
+  "eliza/apps/app-lifeops/test/lifeops-llm-extraction.live.test.ts",
+  "eliza/packages/agent/src/providers/media-provider.real.test.ts",
+  "eliza/packages/agent/src/actions/life-param-extractor-real.test.ts",
+  "eliza/plugins/plugin-evm/typescript/__tests__/integration/rpc-providers.live.test.ts",
+  "eliza/plugins/plugin-evm/typescript/__tests__/integration/transfer.live.test.ts",
+  "eliza/plugins/plugin-shell/typescript/__tests__/shell.real.test.ts",
+];
 
 process.env.MILADY_LIVE_TEST = "1";
 process.env.ELIZA_LIVE_TEST = "1";
@@ -236,6 +294,7 @@ export default defineConfig({
         "app-lifeops",
         "app-knowledge",
         "app-task-coordinator",
+        "app-vincent",
       ]),
       {
         find: /^@elizaos\/app-companion\/(.*)/,
@@ -471,6 +530,38 @@ export default defineConfig({
             },
           ]
         : []),
+      ...(fs.existsSync(pluginSqlEntry)
+        ? [
+            {
+              find: "@elizaos/plugin-sql",
+              replacement: pluginSqlEntry,
+            },
+          ]
+        : []),
+      ...(fs.existsSync(pluginLocalEmbeddingEntry)
+        ? [
+            {
+              find: "@elizaos/plugin-local-embedding",
+              replacement: pluginLocalEmbeddingEntry,
+            },
+          ]
+        : []),
+      ...(fs.existsSync(pluginDiscordEntry)
+        ? [
+            {
+              find: "@elizaos/plugin-discord",
+              replacement: pluginDiscordEntry,
+            },
+          ]
+        : []),
+      ...(fs.existsSync(pluginTelegramEntry)
+        ? [
+            {
+              find: "@elizaos/plugin-telegram",
+              replacement: pluginTelegramEntry,
+            },
+          ]
+        : []),
       ...(fs.existsSync(pluginOpenAiEntry)
         ? [
             {
@@ -550,18 +641,10 @@ export default defineConfig({
       "**/*.live.test.tsx",
       "**/*-live.test.ts",
       "**/*-live.test.tsx",
-      "**/*.live.e2e.test.ts",
-      "**/*.live.e2e.test.tsx",
-      "**/*-live.e2e.test.ts",
-      "**/*-live.e2e.test.tsx",
       "**/*.real.test.ts",
       "**/*.real.test.tsx",
       "**/*-real.test.ts",
       "**/*-real.test.tsx",
-      "**/*.real.e2e.test.ts",
-      "**/*.real.e2e.test.tsx",
-      "**/*-real.e2e.test.ts",
-      "**/*-real.e2e.test.tsx",
     ],
     exclude: [
       "dist/**",
@@ -570,6 +653,7 @@ export default defineConfig({
       "eliza/packages/app-core/platforms/electrobun/**",
       "apps/chrome-extension/**",
       "eliza/cloud/**",
+      ...(isCiReal ? ciExcludedRealPaths : []),
     ],
     server: {
       deps: {

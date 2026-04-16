@@ -13,6 +13,10 @@ function readWorkflow(name: string) {
   );
 }
 
+function readElizaScript(relativePath: string) {
+  return fs.readFileSync(path.join(repoRoot, "eliza", relativePath), "utf8");
+}
+
 describe("release workflow path contract", () => {
   it("hydrates the legacy electrobun compatibility dir in release workflows", () => {
     const releaseElectrobun = readWorkflow("release-electrobun.yml");
@@ -24,6 +28,9 @@ describe("release workflow path contract", () => {
 
   it("uses the mobile build helper for release Android and iOS validation jobs", () => {
     const agentRelease = readWorkflow("agent-release.yml");
+    const mobileBuildHelper = readElizaScript(
+      path.join("packages", "app-core", "scripts", "run-mobile-build.mjs"),
+    );
 
     expect(agentRelease).toContain(
       "node eliza/packages/app-core/scripts/run-mobile-build.mjs android",
@@ -34,6 +41,11 @@ describe("release workflow path contract", () => {
     expect(agentRelease).not.toContain(
       "Build web assets\n        run: |\n          bun install --ignore-scripts\n          bun run postinstall\n          bun run build",
     );
+    expect(mobileBuildHelper).toContain(
+      'console.error("Usage: node scripts/run-mobile-build.mjs <android|ios>");',
+    );
+    expect(mobileBuildHelper).toContain('if (target === "android") {');
+    expect(mobileBuildHelper).toContain("await buildIos();");
   });
 
   it("does not reinstall eliza/packages/app-core directly in the windows preload smoke job", () => {
@@ -63,5 +75,14 @@ describe("release workflow path contract", () => {
       expect(workflow).toContain("sudo chown root:root /");
       expect(workflow).toContain('test "$(stat -c \'%u:%g\' /)" = "0:0"');
     }
+  });
+
+  it("keeps plugin-agent-orchestrator submodule init as the published release-check version source", () => {
+    const releaseContract = readWorkflow("test-electrobun-release.yml");
+
+    expect(releaseContract).toContain(
+      "git -C eliza submodule update --init plugins/plugin-agent-orchestrator",
+    );
+    expect(releaseContract).toContain("published fallback install does not");
   });
 });
