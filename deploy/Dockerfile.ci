@@ -69,6 +69,13 @@ RUN for app_dir in eliza/apps/app-coding eliza/apps/app-shopify; do \
         fi; \
       fi; \
     done
+# Remove broken nested @elizaos/core entries in eliza subdirs.
+# bun creates workspace symlinks like eliza/apps/app-lifeops/node_modules/@elizaos/core
+# that resolve correctly in CI but point nowhere in Docker. Removing them forces
+# Node's module resolution to walk up to root node_modules/@elizaos/core instead.
+RUN find eliza -path '*/node_modules/@elizaos/core' -not -path '*/node_modules/.bun/*' \
+    | while read p; do rm -rf "$p" && echo "Removed nested: $p"; done; true
+
 # ===== End symlink replacement =====
 
 # Delete raw TypeScript source from eliza workspace packages.
