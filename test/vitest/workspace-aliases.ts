@@ -349,7 +349,10 @@ export function getSharedSourceAliases(
     return [];
   }
 
+  const packageRoot = path.dirname(sourceRoot);
+
   return [
+    ...getWorkspacePackageExportAliases("shared", packageRoot),
     ...(options.includeConfigAlias
       ? [
           {

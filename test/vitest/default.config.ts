@@ -282,6 +282,11 @@ export default defineConfig({
       "**/*.e2e.spec.{ts,tsx}",
       "**/*.live.e2e.test.{ts,tsx}",
       "**/*.real.e2e.test.{ts,tsx}",
+      // --- server/runtime route tests must live in the live/real lane ---
+      "eliza/packages/app-core/src/api/**/*.test.{ts,tsx}",
+      "eliza/packages/app-core/src/services/**/*.test.{ts,tsx}",
+      "eliza/apps/*/src/**/*routes.test.{ts,tsx}",
+      "eliza/apps/*/src/services/**/*.test.{ts,tsx}",
       // --- subsystems with their own test runners ---
       "eliza/cloud/**",
       "eliza/steward-fi/**",
