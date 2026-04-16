@@ -396,16 +396,18 @@ if (!fs.existsSync(tcDir + '/package.json')) {
   fs.mkdirSync(tcDir + '/evals', { recursive: true });
   const noopStub = `export default {};`;
   // All subpaths get a no-op stub exporting the known named exports
+  // Known named exports per the real @elizaos/app-task-coordinator src.
+  // All functions are no-ops; classes/types get empty Proxies.
   const stubs = {
-    'api/coordinator-types': `export const CoordinatorMessageType = {};\nexport default {};`,
-    'api/coordinator-wiring': `export async function wireCoordinatorBridgesWhenReady() { return null; }\nexport default {};`,
-    'api/task-agent-message-routing': `export function routeTaskAgentMessage() { return null; }\nexport default {};`,
-    'api/coding-agents-auth-sanitize': `export function sanitizeCodingAgentAuth() { return {}; }\nexport default {};`,
-    'api/coding-agents-preflight-normalize': `export function normalizeCodingAgentPreflight() { return {}; }\nexport default {};`,
-    'evals/coordinator-eval-client': noopStub,
-    'evals/coordinator-live-runner': noopStub,
-    'evals/coordinator-preflight': noopStub,
-    'evals/coordinator-scenarios': noopStub,
+    'api/coordinator-types': `export const coordinatorTypes = {};\nexport default {};`,
+    'api/coordinator-wiring': `export async function wireCoordinatorBridgesWhenReady() { return { disposed: true, dispose: () => {} }; }\nexport default {};`,
+    'api/task-agent-message-routing': `export async function routeTaskAgentTextToConnector() { return false; }\nexport async function routeTaskAgentMessage() { return null; }\nexport default {};`,
+    'api/coding-agents-auth-sanitize': `export function sanitizeAuthResult(input) { return { ok: false, redacted: null }; }\nexport default {};`,
+    'api/coding-agents-preflight-normalize': `export function normalizePreflightAuth() { return { status: 'unknown' }; }\nexport default {};`,
+    'evals/coordinator-eval-client': `export function resolveCoordinatorEvalBaseUrl() { return ''; }\nexport class CoordinatorEvalClient {}\nexport default {};`,
+    'evals/coordinator-live-runner': `export async function runCoordinatorLiveScenarios() { return { checks: [] }; }\nexport default {};`,
+    'evals/coordinator-preflight': `export async function runCoordinatorPreflight() { return { checks: [], channels: [] }; }\nexport default {};`,
+    'evals/coordinator-scenarios': `export const coordinatorScenarios = [];\nexport const coordinatorScenarioById = new Map();\nexport function listCoordinatorScenarios() { return []; }\nexport function countCoordinatorScenariosByFamily() { return {}; }\nexport default {};`,
   };
   const exportsMap = { '.': './index.mjs' };
   for (const [subpath, code] of Object.entries(stubs)) {
