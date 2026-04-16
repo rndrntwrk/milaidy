@@ -159,10 +159,6 @@ function isDesktopPlatform(): boolean {
   return isElectrobunRuntime();
 }
 
-function isWebPlatform(): boolean {
-  return platform === "web" && !isElectrobunRuntime();
-}
-
 const windowShellRoute = resolveWindowShellRoute();
 
 /**
@@ -648,6 +644,5 @@ export {
   isDesktopPlatform as isDesktop,
   isIOS,
   isNative,
-  isWebPlatform as isWeb,
   platform,
 };

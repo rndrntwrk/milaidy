@@ -157,7 +157,6 @@ function createBridgeMock(extraExports: Record<string, unknown> = {}) {
 vi.mock("@elizaos/app-core", () =>
   createBridgeMock({
     platform: "web",
-    isWeb: () => true,
     isNative: false,
     isIOS: false,
     isAndroid: false,
