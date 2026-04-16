@@ -124,6 +124,9 @@ describe("run-repo-checks", () => {
   it("skips unrelated sidecar workspace typechecks", () => {
     expect(miladySidecarTypecheckSteps).toEqual([]);
     expect(
+      suites.lint.find((step) => step.label === "steward-fi lint"),
+    ).toBeUndefined();
+    expect(
       suites["typecheck:extended"].find(
         (step) => step.label === "steward-fi typecheck",
       ),

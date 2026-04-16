@@ -50,11 +50,6 @@ export const suites = {
       command: "bun",
       args: ["run", "--cwd", "apps/homepage", "lint"],
     },
-    {
-      label: "steward-fi lint",
-      command: "bun",
-      args: ["run", "--cwd", "eliza/steward-fi", "lint"],
-    },
     ...miladyElizaCrossLanguageChecks,
   ],
   typecheck: [
