@@ -113,48 +113,42 @@ RUN for pkg_dir in eliza/packages/typescript eliza/packages/shared eliza/package
     done
 
 # Ensure workspace-declared plugins with empty dirs are installed from npm.
-# These are declared as workspace:* in bun.lock but the plugin dirs are empty/uncommitted.
-# node:slim has no curl, so use Node's built-in https module for tarball extraction.
-# Uses Dockerfile heredoc (syntax 1.4+) to avoid Docker misreading JS keywords as instructions.
-RUN node - <<'__NODESCRIPT__'
-const https = require('https');
-const fs = require('fs');
-const { execSync } = require('child_process');
-function installPkg(name, cb) {
-  const pkgDir = 'node_modules/' + name;
-  if (fs.existsSync(pkgDir + '/package.json')) { console.log('present: ' + name); return cb && cb(); }
-  const url = execSync('npm view ' + name + ' dist.tarball 2>/dev/null', {encoding:'utf8'}).trim();
-  if (!url) { console.log('WARN: no tarball for ' + name); return cb && cb(); }
-  const tmp = '/tmp/pkg_' + name.replace(/[^a-z0-9]/gi,'_');
-  const tgz = tmp + '.tgz';
-  https.get(url, res => {
-    const chunks = [];
-    res.on('data', c => chunks.push(c));
-    res.on('end', () => {
-      try {
-        fs.writeFileSync(tgz, Buffer.concat(chunks));
-        fs.mkdirSync(tmp, {recursive:true});
-        execSync('tar xz -C ' + tmp + ' -f ' + tgz);
-        const scope = name.startsWith('@') ? name.split('/')[0] : null;
-        if (scope) fs.mkdirSync('node_modules/' + scope, {recursive:true});
-        execSync('rm -rf ' + pkgDir);
-        execSync('mv ' + tmp + '/package ' + pkgDir);
-        const v = JSON.parse(fs.readFileSync(pkgDir + '/package.json','utf8')).version;
-        console.log('+ ' + name + '@' + v);
-      } catch(e) { console.error('WARN ' + name + ': ' + e.message); }
-      cb && cb();
-    });
-  }).on('error', e => { console.error('WARN ' + name + ': ' + e.message); cb && cb(); });
-}
-const missing = [
-  '@elizaos/plugin-agent-skills',
-  '@elizaos/plugin-anthropic',
-  '@elizaos/plugin-local-embedding',
-  '@elizaos/plugin-pdf',
-  '@elizaos/plugin-sql',
-];
-(function next(i) { if (i >= missing.length) return; installPkg(missing[i], () => next(i+1)); })(0);
-__NODESCRIPT__
+# These are declared as workspace:* in bun.lock but eliza/plugins/ dirs are empty.
+# Install in /tmp with empty package.json (avoids EOVERRIDE from root overrides),
+# then bulk-copy all installed packages (including transitive deps) to /app/node_modules.
+RUN mkdir -p /tmp/plugin-install && \
+    cd /tmp/plugin-install && \
+    echo '{}' > package.json && \
+    npm install --no-save --no-package-lock --ignore-scripts \
+      @elizaos/plugin-agent-skills \
+      @elizaos/plugin-anthropic \
+      @elizaos/plugin-local-embedding \
+      @elizaos/plugin-pdf \
+      @elizaos/plugin-sql \
+      2>&1 | grep -E 'added|warn|error' | grep -v 'npm warn' || true && \
+    cd /app && \
+    node -e " \
+      const fs = require('fs'); \
+      const src = '/tmp/plugin-install/node_modules'; \
+      const dst = '/app/node_modules'; \
+      let copied = 0; \
+      function copyMissing(srcDir, dstDir) { \
+        if (!fs.existsSync(srcDir)) return; \
+        for (const entry of fs.readdirSync(srcDir)) { \
+          const s = srcDir + '/' + entry; \
+          const d = dstDir + '/' + entry; \
+          if (entry.startsWith('@')) { \
+            fs.mkdirSync(d, {recursive:true}); \
+            copyMissing(s, d); \
+          } else if (!fs.existsSync(d) && fs.statSync(s).isDirectory()) { \
+            require('child_process').execSync('cp -r ' + s + ' ' + d); \
+            copied++; \
+          } \
+        } \
+      } \
+      copyMissing(src, dst); \
+      console.log('Merged ' + copied + ' missing packages from plugin-install'); \
+    "
 
 # Patch plugin-agent-skills getCatalogStats crash (alpha.11 vs alpha.66 interface mismatch)
 RUN sed -i 's/const stats = service.getCatalogStats();/const stats = typeof service.getCatalogStats === "function" ? service.getCatalogStats() : { loaded: 0, total: 0, storageType: "unknown" };/g' node_modules/@elizaos/plugin-agent-skills/dist/index.js 2>/dev/null || true
