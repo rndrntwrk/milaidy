@@ -1,10 +1,41 @@
 name: Publish Packages
 
-# Runs automatically after the main release workflow creates a GitHub Release,
-# or can be triggered manually for any version.
+# Post-release package distribution. Called by release-orchestrator.yml or
+# manually dispatched for retries / ad-hoc republish operations.
 on:
-  release:
-    types: [published]
+  workflow_call:
+    inputs:
+      version:
+        description: "Version to publish (e.g. 2.0.0-alpha.7)"
+        required: true
+        type: string
+      pypi:
+        description: "Publish to PyPI"
+        required: false
+        type: boolean
+        default: true
+      snap:
+        description: "Publish to Snap Store"
+        required: false
+        type: boolean
+        default: true
+      flatpak:
+        description: "Publish Flatpak"
+        required: false
+        type: boolean
+        default: true
+      apt:
+        description: "Build Debian package"
+        required: false
+        type: boolean
+        default: true
+    secrets:
+      SNAP_STORE_CREDENTIALS:
+        required: false
+      APT_REPO_TOKEN:
+        required: false
+      PYPI_API_TOKEN:
+        required: false
   workflow_dispatch:
     inputs:
       version:
@@ -50,12 +81,7 @@ jobs:
       - name: Determine versions
         id: ver
         run: |
-          if [[ -n "${{ inputs.version }}" ]]; then
-            VERSION="${{ inputs.version }}"
-          else
-            VERSION="${{ github.event.release.tag_name }}"
-            VERSION="${VERSION#v}"
-          fi
+          VERSION="${{ inputs.version }}"
 
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "npm_version=$VERSION" >> "$GITHUB_OUTPUT"
@@ -84,9 +110,7 @@ jobs:
   publish-pypi:
     name: Publish to PyPI
     needs: prepare
-    if: |
-      (github.event_name == 'release') ||
-      (github.event_name == 'workflow_dispatch' && inputs.pypi)
+    if: inputs.pypi
     runs-on: ubuntu-24.04
     permissions:
       id-token: write  # OIDC trusted publishing
@@ -103,7 +127,7 @@ jobs:
           python-version: "3.12"
 
       - name: Update version in source
-        working-directory: packaging/pypi
+        working-directory: eliza/packages/app-core/packaging/pypi
         run: |
           PYPI_VERSION="${{ needs.prepare.outputs.pypi_version }}"
           sed -i "s/^version = .*/version = \"$PYPI_VERSION\"/" pyproject.toml
@@ -113,7 +137,7 @@ jobs:
           grep "__version__" milady/__init__.py
 
       - name: Build package
-        working-directory: packaging/pypi
+        working-directory: eliza/packages/app-core/packaging/pypi
         run: |
           pip install build
           python -m build
@@ -121,13 +145,13 @@ jobs:
           ls -lh dist/
 
       - name: Validate package
-        working-directory: packaging/pypi
+        working-directory: eliza/packages/app-core/packaging/pypi
         run: |
           pip install twine
           twine check dist/*
 
       - name: Test package installs
-        working-directory: packaging/pypi
+        working-directory: eliza/packages/app-core/packaging/pypi
         run: |
           pip install dist/*.whl
           python -c "import milady; print(f'milady {milady.__version__} loaded OK')"
@@ -140,7 +164,7 @@ jobs:
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages-dir: packaging/pypi/dist/
+          packages-dir: eliza/packages/app-core/packaging/pypi/dist/
           # Falls back to API token when OIDC trusted publishing is not
           # configured (e.g. first publish before the project exists on PyPI).
           password: ${{ secrets.PYPI_API_TOKEN }}
@@ -153,9 +177,7 @@ jobs:
   publish-snap:
     name: Build & Publish Snap
     needs: prepare
-    if: |
-      (github.event_name == 'release') ||
-      (github.event_name == 'workflow_dispatch' && inputs.snap)
+    if: inputs.snap
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
@@ -164,7 +186,7 @@ jobs:
       - name: Prepare snapcraft.yaml
         run: |
           mkdir -p snap
-          cp packaging/snap/snapcraft.yaml snap/snapcraft.yaml
+          cp eliza/packages/app-core/packaging/snap/snapcraft.yaml snap/snapcraft.yaml
           VERSION="${{ needs.prepare.outputs.version }}"
           sed -i "s/^version: .*/version: '${VERSION}'/" snap/snapcraft.yaml
           echo "Snap version: $VERSION"
@@ -191,9 +213,7 @@ jobs:
   build-deb:
     name: Build Debian Package
     needs: prepare
-    if: |
-      (github.event_name == 'release') ||
-      (github.event_name == 'workflow_dispatch' && inputs.apt)
+    if: inputs.apt
     runs-on: ubuntu-24.04
     permissions:
       contents: write  # gh release upload
@@ -219,7 +239,7 @@ jobs:
       - name: Prepare debian packaging
         run: |
           # Copy debian directory into project root
-          cp -r packaging/debian .
+          cp -r eliza/packages/app-core/packaging/debian .
 
           # Update changelog version
           DEB_VERSION="${{ needs.prepare.outputs.deb_version }}"
@@ -261,13 +281,17 @@ jobs:
           retention-days: 90
 
       - name: Attach .deb to GitHub Release
-        if: github.event_name == 'release'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          TAG="v${{ needs.prepare.outputs.version }}"
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            echo "No GitHub release found for $TAG; skipping .deb attachment."
+            exit 0
+          fi
           for deb in deb-output/*.deb; do
             echo "Uploading $deb to release..."
-            gh release upload "${{ github.event.release.tag_name }}" "$deb" --clobber
+            gh release upload "$TAG" "$deb" --clobber
           done
 
       - name: Trigger APT repository update
@@ -282,11 +306,7 @@ jobs:
           DEB_FILE=$(ls deb-output/*.deb | head -1)
           DEB_BASENAME=$(basename "$DEB_FILE")
 
-          if [[ "${{ github.event_name }}" == "release" ]]; then
-            TAG="${{ github.event.release.tag_name }}"
-          else
-            TAG="v${VERSION}"
-          fi
+          TAG="v${VERSION}"
 
           DEB_URL="https://github.com/milady-ai/milady/releases/download/${TAG}/${DEB_BASENAME}"
 
@@ -301,9 +321,7 @@ jobs:
   build-flatpak:
     name: Build Flatpak
     needs: prepare
-    if: |
-      (github.event_name == 'release' && needs.prepare.outputs.is_prerelease == 'false') ||
-      (github.event_name == 'workflow_dispatch' && inputs.flatpak)
+    if: inputs.flatpak
     runs-on: ubuntu-24.04
     permissions:
       contents: write  # gh release upload
@@ -320,13 +338,13 @@ jobs:
           flatpak install -y --user flathub org.freedesktop.Sdk//24.08
 
       - name: Build Flatpak
-        working-directory: packaging/flatpak
+        working-directory: eliza/packages/app-core/packaging/flatpak
         run: |
           flatpak-builder --repo=repo --force-clean build-dir ai.milady.Milady.yml
           flatpak build-bundle repo milady.flatpak ai.milady.Milady
 
       - name: Test Flatpak
-        working-directory: packaging/flatpak
+        working-directory: eliza/packages/app-core/packaging/flatpak
         run: |
           flatpak --user install -y milady.flatpak
           flatpak run ai.milady.Milady --version || echo "Version check completed"
@@ -335,16 +353,19 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: flatpak-bundle
-          path: packaging/flatpak/milady.flatpak
+          path: eliza/packages/app-core/packaging/flatpak/milady.flatpak
           retention-days: 90
 
       - name: Attach Flatpak to GitHub Release
-        if: github.event_name == 'release'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload "${{ github.event.release.tag_name }}" \
-            packaging/flatpak/milady.flatpak --clobber
+          TAG="v${{ needs.prepare.outputs.version }}"
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            echo "No GitHub release found for $TAG; skipping Flatpak attachment."
+            exit 0
+          fi
+          gh release upload "$TAG" eliza/packages/app-core/packaging/flatpak/milady.flatpak --clobber
 
   # ── Summary ────────────────────────────────────────────────────────────
   publish-summary:

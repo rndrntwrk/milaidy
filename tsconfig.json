@@ -17,34 +17,32 @@
     "useDefineForClassFields": false,
     "baseUrl": ".",
     "paths": {
-      "@miladyai/plugin-selfcontrol": [
-        "./packages/plugin-selfcontrol/src/index.ts"
-      ],
-      "@miladyai/plugin-selfcontrol/*": ["./packages/plugin-selfcontrol/src/*"],
-      "@miladyai/ui": ["./packages/ui/src/index.ts"],
-      "@miladyai/ui/*": ["./packages/ui/src/*"],
-      "@miladyai/agent/*": ["./packages/agent/src/*"],
-      "@miladyai/shared": ["./packages/shared/src/index.ts"],
-      "@miladyai/shared/*": ["./packages/shared/src/*"],
-      "@elizaos/core": [
-        "./eliza/packages/typescript/src/index.ts"
-      ],
-      "@elizaos/core/*": ["./eliza/packages/typescript/src/*"]
+      "@elizaos/app-lifeops": ["./eliza/apps/app-lifeops/src/index.ts"],
+      "@elizaos/app-lifeops/*": ["./eliza/apps/app-lifeops/src/*"],
+      "@elizaos/app-companion": ["./eliza/apps/app-companion/src/index.ts"],
+      "@elizaos/app-companion/*": ["./eliza/apps/app-companion/src/*"],
+      "@elizaos/app-shopify": ["./eliza/apps/app-shopify/src/index.ts"],
+      "@elizaos/app-shopify/*": ["./eliza/apps/app-shopify/src/*"],
+      "@elizaos/app-vincent": ["./eliza/apps/app-vincent/src/index.ts"],
+      "@elizaos/app-vincent/*": ["./eliza/apps/app-vincent/src/*"],
+      "@elizaos/app-core": ["./eliza/packages/app-core/src/index.ts"],
+      "@elizaos/app-core/*": ["./eliza/packages/app-core/src/*"],
+      "@elizaos/shared": ["./eliza/packages/shared/src/index.ts"],
+      "@elizaos/shared/*": ["./eliza/packages/shared/src/*"],
+      "@elizaos/core": ["./eliza/packages/typescript/src/index.ts"],
+      "@elizaos/core/*": ["./eliza/packages/typescript/src/*"],
+      "@elizaos/agent": ["./eliza/packages/agent/src/index.ts"],
+      "@elizaos/agent/*": ["./eliza/packages/agent/src/*"]
     }
   },
-  "include": [
-    "packages/app-core/src/**/*",
-    "packages/agent/src/external-modules.d.ts"
-  ],
+  "include": ["eliza/packages/app-core/src/**/*"],
   "exclude": [
     "node_modules",
-    "node_modules/.bun",
     "dist",
-    "eliza",
-    "plugins",
-    "packages/app-core/src/**/*.test.ts",
-    "packages/app-core/src/**/*.test.tsx",
-    "packages/app-core/src/**/test-helpers.ts",
-    "packages/app-core/src/services/training-service.ts"
+    "eliza/plugins",
+    "eliza/packages/app-core/src/**/*.test.ts",
+    "eliza/packages/app-core/src/**/*.test.tsx",
+    "eliza/packages/app-core/src/**/test-helpers.ts",
+    "eliza/packages/app-core/src/services/training-service.ts"
   ]
 }

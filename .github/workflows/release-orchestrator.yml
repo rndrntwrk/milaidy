@@ -3,141 +3,234 @@ name: Release Orchestrator
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to distribute (e.g. 2.0.0-alpha.87)"
+        required: true
+        type: string
+      publish_npm:
+        description: "Publish npm package"
+        required: false
+        type: boolean
+        default: true
+      publish_packages:
+        description: "Publish PyPI / Snap / Debian / Flatpak"
+        required: false
+        type: boolean
+        default: true
+      publish_android:
+        description: "Publish Android build"
+        required: false
+        type: boolean
+        default: true
+      publish_apple:
+        description: "Publish Apple builds"
+        required: false
+        type: boolean
+        default: true
+      update_homebrew:
+        description: "Update Homebrew tap"
+        required: false
+        type: boolean
+        default: true
+      deploy_homepage:
+        description: "Deploy homepage"
+        required: false
+        type: boolean
+        default: true
 
 permissions:
   contents: read
-  issues: write
 
 jobs:
-  orchestrate:
-    name: Create Release Status Tracker
+  prepare:
+    name: Resolve release metadata
     runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      tag: ${{ steps.meta.outputs.tag }}
+      is_prerelease: ${{ steps.meta.outputs.is_prerelease }}
+      npm_dist_tag: ${{ steps.meta.outputs.npm_dist_tag }}
+      android_track: ${{ steps.meta.outputs.android_track }}
+      apple_track: ${{ steps.meta.outputs.apple_track }}
+      publish_npm: ${{ steps.meta.outputs.publish_npm }}
+      publish_packages: ${{ steps.meta.outputs.publish_packages }}
+      publish_flatpak: ${{ steps.meta.outputs.publish_flatpak }}
+      publish_android: ${{ steps.meta.outputs.publish_android }}
+      publish_apple: ${{ steps.meta.outputs.publish_apple }}
+      update_homebrew: ${{ steps.meta.outputs.update_homebrew }}
+      deploy_homepage: ${{ steps.meta.outputs.deploy_homepage }}
     steps:
-      - name: Checkout .github directory
-        uses: actions/checkout@v4
-        with:
-          sparse-checkout: .github
-          sparse-checkout-cone-mode: false
-          fetch-depth: 1
-
-      - name: Determine release info
-        id: info
+      - name: Determine routing policy
+        id: meta
+        shell: bash -euo pipefail {0}
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          TAG_NAME: ${{ github.event.release.tag_name || '' }}
         run: |
-          TAG="${{ github.event.release.tag_name }}"
-          VERSION="${TAG#v}"
-          IS_PRERELEASE="${{ github.event.release.prerelease }}"
-          if [[ "$IS_PRERELEASE" == "true" ]]; then
-            RELEASE_TYPE="prerelease"
+          if [[ -n "$INPUT_VERSION" ]]; then
+            VERSION="$INPUT_VERSION"
           else
-            RELEASE_TYPE="stable"
+            VERSION="${TAG_NAME#v}"
           fi
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+          TAG="v${VERSION}"
+          IS_PRERELEASE="false"
+          NPM_DIST_TAG="latest"
+          ANDROID_TRACK="production"
+          APPLE_TRACK="app-store"
+
+          if echo "$VERSION" | grep -qiE '(alpha|beta|rc|nightly)'; then
+            IS_PRERELEASE="true"
+            ANDROID_TRACK="internal"
+            APPLE_TRACK="testflight"
+            if echo "$VERSION" | grep -qi 'nightly'; then
+              NPM_DIST_TAG="nightly"
+            elif echo "$VERSION" | grep -qi 'beta'; then
+              NPM_DIST_TAG="beta"
+            else
+              NPM_DIST_TAG="next"
+            fi
+          fi
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            PUBLISH_NPM="${{ inputs.publish_npm }}"
+            PUBLISH_PACKAGES="${{ inputs.publish_packages }}"
+            PUBLISH_ANDROID="${{ inputs.publish_android }}"
+            PUBLISH_APPLE="${{ inputs.publish_apple }}"
+            UPDATE_HOMEBREW="${{ inputs.update_homebrew }}"
+            DEPLOY_HOMEPAGE="${{ inputs.deploy_homepage }}"
+          else
+            PUBLISH_NPM="true"
+            PUBLISH_PACKAGES="true"
+            PUBLISH_ANDROID="true"
+            PUBLISH_APPLE="true"
+            UPDATE_HOMEBREW="true"
+            DEPLOY_HOMEPAGE="true"
+          fi
+
+          PUBLISH_FLATPAK="$PUBLISH_PACKAGES"
+          if [[ "$IS_PRERELEASE" == "true" ]]; then
+            PUBLISH_FLATPAK="false"
+            UPDATE_HOMEBREW="false"
+          fi
+
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "release_type=$RELEASE_TYPE" >> "$GITHUB_OUTPUT"
-          echo "Release: $VERSION ($RELEASE_TYPE)"
-
-      - name: Check trust gate
-        id: trust
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const actor = context.actor;
-
-            // Check org membership first
-            try {
-              const membership = await github.rest.orgs.checkMembershipForUser({
-                org: 'milady-ai',
-                username: actor,
-              });
-              if (membership.status === 204 || membership.status === 302) {
-                core.info(`${actor} is a milady-ai org member — trust gate passed`);
-                core.setOutput('allowed', 'true');
-                return;
-              }
-            } catch (e) {
-              core.info(`${actor} is not a milady-ai org member (${e.status}) — checking trust score`);
-            }
-
-            // Fall back to trust scoring
-            try {
-              const { data: fileData } = await github.rest.repos.getContent({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                path: '.github/contributor-trust.json',
-                ref: context.ref,
-              });
-              const allStates = JSON.parse(Buffer.from(fileData.content, 'base64').toString());
-              if (allStates[actor]) {
-                const { computeTrustScore, DEFAULT_CONFIG, expandState } = require('./.github/trust-scoring.cjs');
-                const state = expandState(allStates[actor]);
-                const result = computeTrustScore(state, DEFAULT_CONFIG);
-                core.info(`Trust score for ${actor}: ${result.score}/100 (${result.tier})`);
-                if (result.tier === 'legendary' || result.score >= 75) {
-                  core.setOutput('allowed', 'true');
-                  return;
-                }
-              }
-            } catch (e) {
-              core.warning(`Could not evaluate trust score: ${e.message}`);
-            }
-
-            core.setOutput('allowed', 'false');
-            core.warning(`Actor ${actor} did not pass trust gate — skipping tracker issue creation`);
-
-      - name: Create release tracker issue
-        if: steps.trust.outputs.allowed == 'true'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const version = '${{ steps.info.outputs.version }}';
-            const releaseType = '${{ steps.info.outputs.release_type }}';
-            const tag = '${{ steps.info.outputs.tag }}';
-
-            const body = [
-              `## Release ${version} (${releaseType})`,
-              '',
-              `**Tag:** \`${tag}\``,
-              `**Published by:** @${context.actor}`,
-              `**Release URL:** ${context.payload.release.html_url}`,
-              '',
-              '### Artifact Checklist',
-              '',
-              '- [ ] npm publish',
-              '- [ ] Docker image',
-              '- [ ] Electrobun — macOS ARM',
-              '- [ ] Electrobun — macOS Intel',
-              '- [ ] Electrobun — Windows',
-              '- [ ] Electrobun — Linux',
-              '- [ ] Android AAB',
-              '- [ ] iOS App Store',
-              '- [ ] macOS App Store',
-              '- [ ] Snap',
-              '- [ ] Flatpak',
-              '- [ ] Debian',
-              '- [ ] Homebrew',
-              '- [ ] Homepage',
-              '',
-              '---',
-              `Opened automatically by the [release orchestrator](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}).`,
-            ].join('\n');
-
-            const issue = await github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: `Release ${version} — Status Tracker`,
-              body: body,
-              labels: ['release-tracker'],
-            });
-
-            core.info(`Created tracker issue: ${issue.data.html_url}`);
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "is_prerelease=$IS_PRERELEASE" >> "$GITHUB_OUTPUT"
+          echo "npm_dist_tag=$NPM_DIST_TAG" >> "$GITHUB_OUTPUT"
+          echo "android_track=$ANDROID_TRACK" >> "$GITHUB_OUTPUT"
+          echo "apple_track=$APPLE_TRACK" >> "$GITHUB_OUTPUT"
+          echo "publish_npm=$PUBLISH_NPM" >> "$GITHUB_OUTPUT"
+          echo "publish_packages=$PUBLISH_PACKAGES" >> "$GITHUB_OUTPUT"
+          echo "publish_flatpak=$PUBLISH_FLATPAK" >> "$GITHUB_OUTPUT"
+          echo "publish_android=$PUBLISH_ANDROID" >> "$GITHUB_OUTPUT"
+          echo "publish_apple=$PUBLISH_APPLE" >> "$GITHUB_OUTPUT"
+          echo "update_homebrew=$UPDATE_HOMEBREW" >> "$GITHUB_OUTPUT"
+          echo "deploy_homepage=$DEPLOY_HOMEPAGE" >> "$GITHUB_OUTPUT"
 
       - name: Summary
-        if: always()
         run: |
-          echo "## Release Orchestrator" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Version:** ${{ steps.info.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Type:** ${{ steps.info.outputs.release_type }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Trust gate:** ${{ steps.trust.outputs.allowed }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Individual release workflows (Electrobun, Android, publish-packages, etc.) trigger independently on \`release: [published]\`." >> $GITHUB_STEP_SUMMARY
+          echo "## Release distribution plan" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Field | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-------|-------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Version | \`${{ steps.meta.outputs.version }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Tag | \`${{ steps.meta.outputs.tag }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Pre-release | \`${{ steps.meta.outputs.is_prerelease }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| npm dist-tag | \`${{ steps.meta.outputs.npm_dist_tag }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Android track | \`${{ steps.meta.outputs.android_track }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Apple track | \`${{ steps.meta.outputs.apple_track }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Homebrew enabled | \`${{ steps.meta.outputs.update_homebrew }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Flatpak enabled | \`${{ steps.meta.outputs.publish_flatpak }}\` |" >> "$GITHUB_STEP_SUMMARY"
+
+  publish-npm:
+    name: npm
+    needs: prepare
+    if: needs.prepare.outputs.publish_npm == 'true'
+    uses: ./.github/workflows/publish-npm.yml
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+      dist_tag: ${{ needs.prepare.outputs.npm_dist_tag }}
+    secrets: inherit
+
+  publish-packages:
+    name: Package registries
+    needs: prepare
+    if: needs.prepare.outputs.publish_packages == 'true'
+    uses: ./.github/workflows/publish-packages.yml
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+      pypi: true
+      snap: true
+      flatpak: ${{ needs.prepare.outputs.publish_flatpak == 'true' }}
+      apt: true
+    secrets: inherit
+
+  publish-android:
+    name: Android
+    needs: prepare
+    if: needs.prepare.outputs.publish_android == 'true'
+    uses: ./.github/workflows/android-release.yml
+    with:
+      version_name: ${{ needs.prepare.outputs.version }}
+      track: ${{ needs.prepare.outputs.android_track }}
+    secrets: inherit
+
+  publish-apple:
+    name: Apple Stores
+    needs: prepare
+    if: needs.prepare.outputs.publish_apple == 'true'
+    uses: ./.github/workflows/apple-store-release.yml
+    with:
+      platform: both
+      track: ${{ needs.prepare.outputs.apple_track }}
+      version: ${{ needs.prepare.outputs.version }}
+    secrets: inherit
+
+  update-homebrew:
+    name: Homebrew
+    needs: prepare
+    if: needs.prepare.outputs.update_homebrew == 'true'
+    uses: ./.github/workflows/update-homebrew.yml
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+    secrets: inherit
+
+  deploy-homepage:
+    name: Homepage
+    needs: prepare
+    if: needs.prepare.outputs.deploy_homepage == 'true'
+    uses: ./.github/workflows/deploy-web.yml
+    with:
+      release_version: ${{ needs.prepare.outputs.tag }}
+    secrets: inherit
+
+  summary:
+    name: Distribution summary
+    needs:
+      [
+        prepare,
+        publish-npm,
+        publish-packages,
+        publish-android,
+        publish-apple,
+        update-homebrew,
+        deploy-homepage,
+      ]
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Summary
+        run: |
+          echo "## Release Orchestrator" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Target | Result |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|--------|--------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| npm | ${{ needs.publish-npm.result || 'skipped' }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Package registries | ${{ needs.publish-packages.result || 'skipped' }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Android | ${{ needs.publish-android.result || 'skipped' }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Apple Stores | ${{ needs.publish-apple.result || 'skipped' }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Homebrew | ${{ needs.update-homebrew.result || 'skipped' }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Homepage | ${{ needs.deploy-homepage.result || 'skipped' }} |" >> "$GITHUB_STEP_SUMMARY"

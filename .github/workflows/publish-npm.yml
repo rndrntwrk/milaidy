@@ -12,8 +12,19 @@ name: Publish npm
 #   - Manual dispatch for ad-hoc publishes
 
 on:
-  release:
-    types: [published]
+  workflow_call:
+    inputs:
+      version:
+        description: "Version to publish (e.g. 2.0.0, 2.0.0-beta.1)"
+        required: true
+        type: string
+      dist_tag:
+        description: "npm dist-tag override"
+        required: true
+        type: string
+    secrets:
+      NPM_TOKEN:
+        required: true
   workflow_dispatch:
     inputs:
       version:
@@ -49,27 +60,17 @@ jobs:
       - name: Determine version and dist-tag
         id: meta
         run: |
-          # Resolve version
-          if [[ -n "${{ inputs.version }}" ]]; then
-            VERSION="${{ inputs.version }}"
-          elif [[ "${{ github.event_name }}" == "release" ]]; then
-            VERSION="${{ github.event.release.tag_name }}"
-            VERSION="${VERSION#v}"
-          else
-            VERSION=$(node -p "require('./package.json').version")
-          fi
+          VERSION="${{ inputs.version }}"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
-          # Resolve dist-tag
-          if [[ -n "${{ inputs.dist_tag }}" ]]; then
-            DIST_TAG="${{ inputs.dist_tag }}"
-          elif echo "$VERSION" | grep -qE 'nightly'; then
+          DIST_TAG="${{ inputs.dist_tag }}"
+          if [[ -z "$DIST_TAG" ]] && echo "$VERSION" | grep -qE 'nightly'; then
             DIST_TAG="nightly"
-          elif echo "$VERSION" | grep -qE 'beta'; then
+          elif [[ -z "$DIST_TAG" ]] && echo "$VERSION" | grep -qE 'beta'; then
             DIST_TAG="beta"
-          elif echo "$VERSION" | grep -qE 'alpha|rc'; then
+          elif [[ -z "$DIST_TAG" ]] && echo "$VERSION" | grep -qE 'alpha|rc'; then
             DIST_TAG="next"
-          else
+          elif [[ -z "$DIST_TAG" ]]; then
             DIST_TAG="latest"
           fi
           echo "dist_tag=$DIST_TAG" >> "$GITHUB_OUTPUT"

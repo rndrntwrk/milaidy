@@ -1,18 +1,15 @@
 #!/usr/bin/env node
 
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { buildRawGitHubAssetBase } from "./lib/asset-cdn.mjs";
+import { resolveRepoRoot } from "./lib/repo-root.mjs";
 
 const REPOSITORY = "milady-ai/milady";
-const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = path.resolve(SCRIPT_DIR, "..");
+const REPO_ROOT = resolveRepoRoot(import.meta.url);
 const OUTPUT_PATH = path.resolve(
   REPO_ROOT,
-  "apps/web/src/generated/release-data.ts",
+  "apps/homepage/src/generated/release-data.ts",
 );
 const RELEASES_URL = `https://api.github.com/repos/${REPOSITORY}/releases?per_page=20`;
 const RELEASES_PAGE_URL = `https://github.com/${REPOSITORY}/releases`;
@@ -34,6 +31,33 @@ const publishedAtFormatter = new Intl.DateTimeFormat("en-US", {
   day: "numeric",
   year: "numeric",
 });
+
+function buildRawGitHubAssetBase({ repository, releaseTag, assetRoot }) {
+  if (!repository || !releaseTag || !assetRoot) {
+    return "";
+  }
+
+  const normalizedRoot = assetRoot.replace(/^\/+|\/+$/g, "");
+  return `https://raw.githubusercontent.com/${repository}/${releaseTag}/${normalizedRoot}/`;
+}
+
+function normalizeReleaseTag(value) {
+  const normalized = value?.trim();
+  if (!normalized || !/^[vV]?\d+\.\d+\.\d+(?:[-.][\w.-]+)?$/.test(normalized)) {
+    return null;
+  }
+
+  return normalized.startsWith("v") ? normalized : `v${normalized}`;
+}
+
+function resolveRequestedReleaseTag() {
+  return normalizeReleaseTag(
+    process.env.MILADY_RELEASE_TAG ||
+      process.env.ELIZA_RELEASE_TAG ||
+      process.env.RELEASE_TAG ||
+      process.env.GITHUB_REF_NAME,
+  );
+}
 
 function formatBytes(bytes) {
   if (!Number.isFinite(bytes) || bytes <= 0) {
@@ -88,30 +112,11 @@ function sortReleasesByRecency(releases) {
     });
 }
 
-function pickRelease(releases) {
-  const published = sortReleasesByRecency(releases);
-  // Pick the most recent release that has downloadable assets
-  return (
-    published.find((r) => Array.isArray(r.assets) && r.assets.length > 0) ??
-    published[0] ??
-    null
-  );
-}
-
 function pickStableRelease(releases) {
   const stable = sortReleasesByRecency(releases).filter((r) => !r.prerelease);
   return (
     stable.find((r) => Array.isArray(r.assets) && r.assets.length > 0) ??
     stable[0] ??
-    null
-  );
-}
-
-function pickCanaryRelease(releases) {
-  const canary = sortReleasesByRecency(releases).filter((r) => r.prerelease);
-  return (
-    canary.find((r) => Array.isArray(r.assets) && r.assets.length > 0) ??
-    canary[0] ??
     null
   );
 }
@@ -148,7 +153,7 @@ function pickAssetFromReleases(releases, matchers) {
   return null;
 }
 
-function buildRelease(release, allReleases = []) {
+function buildRelease(release, stableReleases = []) {
   if (!release) {
     return {
       tagName: "unavailable",
@@ -161,11 +166,10 @@ function buildRelease(release, allReleases = []) {
   }
 
   const assets = Array.isArray(release.assets) ? release.assets : [];
-  const releasesByRecency = sortReleasesByRecency(allReleases);
-  const prioritizedReleases = [
-    release,
-    ...releasesByRecency.filter((candidate) => candidate !== release),
-  ].filter(Boolean);
+  const releasesByRecency = sortReleasesByRecency(stableReleases).filter(
+    (candidate) => candidate.tag_name !== release.tag_name,
+  );
+  const prioritizedReleases = [release, ...releasesByRecency].filter(Boolean);
 
   const downloads = [
     {
@@ -225,7 +229,7 @@ function buildRelease(release, allReleases = []) {
     publishedAtLabel: release.published_at
       ? publishedAtFormatter.format(new Date(release.published_at))
       : "unavailable",
-    prerelease: Boolean(release.prerelease),
+    prerelease: false,
     url: release.html_url ?? RELEASES_PAGE_URL,
     downloads,
     checksum: checksumAsset
@@ -237,7 +241,7 @@ function buildRelease(release, allReleases = []) {
   };
 }
 
-function buildPayload(release, allReleases = [], canaryRelease = null) {
+function buildPayload(release, stableReleases = []) {
   const tagName = release?.tag_name ?? "unavailable";
   return {
     generatedAt: new Date().toISOString(),
@@ -248,6 +252,7 @@ function buildPayload(release, allReleases = [], canaryRelease = null) {
         tagName === "unavailable"
           ? ""
           : buildRawGitHubAssetBase({
+              repository: REPOSITORY,
               releaseTag: tagName,
               assetRoot: "apps/app/public",
             }),
@@ -255,15 +260,12 @@ function buildPayload(release, allReleases = [], canaryRelease = null) {
         tagName === "unavailable"
           ? ""
           : buildRawGitHubAssetBase({
+              repository: REPOSITORY,
               releaseTag: tagName,
-              assetRoot: "apps/web/public",
+              assetRoot: "apps/homepage/public",
             }),
     },
-    release: buildRelease(release, allReleases),
-    stableRelease: buildRelease(release, allReleases),
-    canaryRelease: canaryRelease
-      ? buildRelease(canaryRelease, allReleases)
-      : null,
+    release: buildRelease(release, stableReleases),
   };
 }
 
@@ -271,10 +273,10 @@ function toModule(payload) {
   return `export const releaseData = ${JSON.stringify(payload, null, 2)} as const;\n`;
 }
 
-async function fetchReleases() {
+function buildHeaders() {
   const headers = {
     Accept: "application/vnd.github+json",
-    "User-Agent": "eliza-homepage-release-data",
+    "User-Agent": "milady-homepage-release-data",
   };
 
   const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
@@ -282,7 +284,11 @@ async function fetchReleases() {
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const response = await fetch(RELEASES_URL, { headers });
+  return headers;
+}
+
+async function fetchReleases() {
+  const response = await fetch(RELEASES_URL, { headers: buildHeaders() });
   if (!response.ok) {
     throw new Error(
       `GitHub API returned ${response.status} ${response.statusText}`,
@@ -290,6 +296,51 @@ async function fetchReleases() {
   }
 
   return response.json();
+}
+
+async function fetchReleaseByTag(tag) {
+  const response = await fetch(
+    `https://api.github.com/repos/${REPOSITORY}/releases/tags/${tag}`,
+    {
+      headers: buildHeaders(),
+    },
+  );
+
+  if (response.status === 404) {
+    return null;
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      `GitHub API returned ${response.status} ${response.statusText} for tag ${tag}`,
+    );
+  }
+
+  return response.json();
+}
+
+async function resolveStableRelease(stableReleases) {
+  const requestedTag = resolveRequestedReleaseTag();
+  if (!requestedTag) {
+    return pickStableRelease(stableReleases);
+  }
+
+  const requestedRelease = await fetchReleaseByTag(requestedTag);
+  if (!requestedRelease) {
+    console.warn(
+      `homepage release data: requested release ${requestedTag} not found, using latest stable`,
+    );
+    return pickStableRelease(stableReleases);
+  }
+
+  if (requestedRelease.draft || requestedRelease.prerelease) {
+    console.warn(
+      `homepage release data: requested release ${requestedTag} is not stable, using latest stable`,
+    );
+    return pickStableRelease(stableReleases);
+  }
+
+  return requestedRelease;
 }
 
 async function writePayload(payload) {
@@ -313,31 +364,21 @@ async function writePayload(payload) {
 }
 
 async function main() {
-  try {
-    const releases = await fetchReleases();
-    const stableRelease = pickStableRelease(releases);
-    const canaryRelease = pickCanaryRelease(releases);
-    // Use stable release as primary; fall back to any release if no stable exists
-    const primaryRelease = stableRelease ?? pickRelease(releases);
-    await writePayload(buildPayload(primaryRelease, releases, canaryRelease));
-    const tag = primaryRelease?.tag_name ?? "no published release";
-    const canaryTag = canaryRelease?.tag_name;
-    console.log(
-      `homepage release data: stable=${tag}${canaryTag ? `, canary=${canaryTag}` : ""}`,
-    );
-  } catch (error) {
-    if (existsSync(OUTPUT_PATH)) {
-      console.warn(
-        `homepage release data refresh failed, keeping existing file: ${error instanceof Error ? error.message : String(error)}`,
-      );
-      return;
-    }
-
-    await writePayload(buildPayload(null));
-    console.warn(
-      `homepage release data refresh failed, wrote fallback file: ${error instanceof Error ? error.message : String(error)}`,
-    );
-  }
+  const releases = await fetchReleases();
+  const stableReleases = sortReleasesByRecency(releases).filter(
+    (release) => !release.prerelease,
+  );
+  const stableRelease = await resolveStableRelease(stableReleases);
+  const releasePool =
+    stableRelease &&
+    !stableReleases.some(
+      (release) => release.tag_name === stableRelease.tag_name,
+    )
+      ? [stableRelease, ...stableReleases]
+      : stableReleases;
+  await writePayload(buildPayload(stableRelease, releasePool));
+  const tag = stableRelease?.tag_name ?? "no published stable release";
+  console.log(`homepage release data: stable=${tag}`);
 }
 
 await main();

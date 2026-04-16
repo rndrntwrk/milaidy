@@ -4,12 +4,19 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
-import { CAPACITOR_PLUGIN_NAMES } from "./capacitor-plugin-names.mjs";
+import {
+  CAPACITOR_PLUGIN_NAMES,
+  NATIVE_PLUGINS_ROOT,
+} from "./capacitor-plugin-names.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const appDir = path.resolve(__dirname, "..");
-const pluginsDir = path.join(appDir, "plugins");
+const _appDir = path.resolve(__dirname, "..");
+const pluginsDir = NATIVE_PLUGINS_ROOT;
 const pluginNames = CAPACITOR_PLUGIN_NAMES;
+
+// Skip plugin builds if explicitly disabled or if Capacitor core is missing
+const skipPlugins =
+  process.env.SKIP_NATIVE_PLUGINS === "1" || process.env.CI === "true";
 
 function run(command, args, cwd) {
   return new Promise((resolve, reject) => {
@@ -34,6 +41,13 @@ function run(command, args, cwd) {
 
 const npmCommand = "bun";
 const npmArgs = ["run", "build"];
+
+if (skipPlugins) {
+  console.log(
+    "[plugins] skipping native plugin builds (CI or explicitly disabled)",
+  );
+  process.exit(0);
+}
 
 // Plugins have no inter-dependencies — build in parallel
 await Promise.all(

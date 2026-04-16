@@ -445,13 +445,11 @@ Override in `milady.json`:
 
 ## Starter Template
 
-The fastest way to start a new plugin is the TypeScript starter template:
+The fastest way to start a new plugin is with the `elizaos` CLI:
 
 ```bash
-# Copy the starter
-cp -r examples/_plugin/typescript/ my-plugin
-cd my-plugin
-bun install
+# Create a TypeScript starter
+npx elizaos create my-plugin --template plugin --language typescript
 ```
 
 The template includes:

@@ -1,5 +1,10 @@
 const STRIPPED_ENV_KEYS = [
+  "ELIZA_API_BASE",
+  "ELIZA_API_BASE_URL",
   "ELIZA_API_PORT",
+  "ELIZA_DESKTOP_API_BASE",
+  "ELIZA_DESKTOP_TEST_API_BASE",
+  "ELIZA_DESKTOP_TEST_PARTITION",
   "ELIZA_PORT",
   "MILADY_API_BASE",
   "MILADY_API_BASE_URL",
@@ -35,6 +40,8 @@ export function createPackagedWindowsAppEnv(args: {
 
   return {
     ...env,
+    ELIZA_DESKTOP_TEST_API_BASE: args.apiBase,
+    ELIZA_DESKTOP_TEST_PARTITION: "persist:bootstrap-isolated",
     MILADY_DESKTOP_TEST_API_BASE: args.apiBase,
     MILADY_DESKTOP_TEST_PARTITION: "persist:bootstrap-isolated",
     MILADY_DISABLE_LOCAL_EMBEDDINGS: "1",

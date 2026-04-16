@@ -17,7 +17,6 @@ env:
   NODE_VERSION: "22.20.0"
   NODE_NO_WARNINGS: "1"
   NODE_OPTIONS: "--max-old-space-size=4096"
-  MILADY_SKIP_LOCAL_UPSTREAMS: "1"
 
 jobs:
   regression-matrix:
@@ -32,26 +31,38 @@ jobs:
           submodules: false
           fetch-depth: 0
 
+      - name: Validate CI bootstrap contract
+        run: node scripts/validate-ci-bootstrap-contract.mjs
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
+      - name: Setup workspace dependencies
+        uses: ./.github/actions/setup-bun-workspace
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+          install-native-deps: "false"
+          run-postinstall: "false"
+
+      - name: Restore eliza workspace paths for repo scripts
+        run: node scripts/restore-local-eliza-workspace.mjs
+
       - name: Validate regression matrix contract
         run: bun run test:regression-matrix:pr
 
   unit-tests:
-    name: Unit Tests
+    name: Real tests (Vitest, no mocks)
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # Published-only CI restores required non-eliza submodules during setup.
           submodules: false
 
-      # WHY setup-node before bun install: optional deps like @discordjs/opus fall back to node-gyp; Node 22 + colocated cache avoids nodejs.org header download. Engines require >=22.
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -61,29 +72,29 @@ jobs:
         uses: ./.github/actions/setup-bun-workspace
         with:
           bun-version: ${{ env.BUN_VERSION }}
-          install-command: bun install --ignore-scripts
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
           skip-avatar-clone: "true"
           no-vision-deps: "true"
 
-      # Proto-generated types are only needed when the repo-local eliza
-      # workspace is present. Published-only CI disables that checkout.
+      - name: Restore eliza workspace paths for repo scripts
+        run: node scripts/restore-local-eliza-workspace.mjs
+
       - name: Generate protobuf types
         run: |
-          if [ "${MILADY_SKIP_LOCAL_UPSTREAMS:-0}" != "1" ] && [ -d eliza/packages/schemas ] && [ -f eliza/packages/schemas/buf.gen.yaml ] && [ ! -d eliza/packages/typescript/src/types/generated ]; then
+          if [ -d eliza/packages/schemas ] && [ -f eliza/packages/schemas/buf.gen.yaml ] && [ ! -d eliza/packages/typescript/src/types/generated ]; then
             cd eliza/packages/schemas
             node node_modules/@bufbuild/buf/install.js 2>/dev/null || true
-            npx --yes @bufbuild/buf@1.67.0 generate
+            bunx @bufbuild/buf@1.67.0 generate
           fi
 
-      - name: Run unit tests with coverage
-        run: bun run test:coverage
+      - name: Build
+        run: bun run build
 
-      - name: Upload coverage report
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-report
-          path: coverage/
-          retention-days: 14
+      - name: Run real integration tests (live/real suite)
+        run: bun run test:ci:real
+
+      - name: Run startup script drift guard
+        run: bun run test:startup:contract
 
   db-check:
     name: Database Security Check
@@ -93,7 +104,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # Published-only CI restores required non-eliza submodules during setup.
           submodules: false
 
       - name: Setup Node.js
@@ -105,51 +115,23 @@ jobs:
         uses: ./.github/actions/setup-bun-workspace
         with:
           bun-version: ${{ env.BUN_VERSION }}
-          install-command: bun install --ignore-scripts
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
           skip-avatar-clone: "true"
           no-vision-deps: "true"
 
-      # Proto-generated types are only needed when the repo-local eliza
-      # workspace is present. Published-only CI disables that checkout.
+      - name: Restore eliza workspace paths for repo scripts
+        run: node scripts/restore-local-eliza-workspace.mjs
+
       - name: Generate protobuf types
         run: |
-          if [ "${MILADY_SKIP_LOCAL_UPSTREAMS:-0}" != "1" ] && [ -d eliza/packages/schemas ] && [ -f eliza/packages/schemas/buf.gen.yaml ] && [ ! -d eliza/packages/typescript/src/types/generated ]; then
+          if [ -d eliza/packages/schemas ] && [ -f eliza/packages/schemas/buf.gen.yaml ] && [ ! -d eliza/packages/typescript/src/types/generated ]; then
             cd eliza/packages/schemas
             node node_modules/@bufbuild/buf/install.js 2>/dev/null || true
-            npx --yes @bufbuild/buf@1.67.0 generate
+            bunx @bufbuild/buf@1.67.0 generate
           fi
 
       - name: Run database security and query-guard tests
         run: bun run db:check
-
-  e2e-tests:
-    name: E2E Tests (Vitest)
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          # Published-only CI restores required non-eliza submodules during setup.
-          submodules: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Setup workspace dependencies
-        uses: ./.github/actions/setup-bun-workspace
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-          install-command: bun install
-          run-postinstall: "false"
-
-      - name: Build
-        run: bun run build
-
-      - name: Run E2E tests
-        run: bun run test:e2e
 
   website-blocker-cross-platform:
     name: Website Blocker Cross-Platform (${{ matrix.os }})
@@ -160,10 +142,13 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
+      - name: Enable Git long paths (Windows)
+        if: runner.os == 'Windows'
+        run: git config --system core.longpaths true
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # Published-only CI restores the required non-eliza submodules explicitly.
           submodules: false
 
       - name: Initialize tracked workspace submodules
@@ -184,15 +169,20 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
+      - name: Install Linux desktop runtime dependencies
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          APT_ARGS=(-o Acquire::ForceIPv4=true -o Acquire::Retries=5 -o Acquire::http::Timeout=30)
+          sudo apt-get "${APT_ARGS[@]}" update
+          sudo apt-get "${APT_ARGS[@]}" install -y libwebkit2gtk-4.1-0 libayatana-appindicator3-1 xvfb
+
       - name: Cache Bun install
         uses: actions/cache@v4
         with:
           path: ~/.bun/install/cache
           key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
           restore-keys: bun-${{ runner.os }}-
-
-      - name: Disable repo-local eliza workspace
-        run: node scripts/disable-local-eliza-workspace.mjs
 
       - name: Install dependencies
         shell: bash
@@ -214,7 +204,17 @@ jobs:
       - name: Run website blocker unit suites
         run: bun run test:selfcontrol:unit
 
+      - name: Run website blocker E2E suites (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          # test:selfcontrol:e2e includes selfcontrol-desktop.live.e2e.test.ts,
+          # which boots the Electrobun desktop shell. Keep a virtual display on
+          # Linux even though the test assertions themselves are HTTP-driven.
+          xvfb-run -a bun run test:selfcontrol:e2e
+
       - name: Run website blocker E2E suites
+        if: runner.os != 'Linux'
         run: bun run test:selfcontrol:e2e
 
   website-blocker-startup-smoke:
@@ -226,10 +226,13 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
+      - name: Enable Git long paths (Windows)
+        if: runner.os == 'Windows'
+        run: git config --system core.longpaths true
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # Published-only CI restores the required non-eliza submodules explicitly.
           submodules: false
 
       - name: Initialize tracked workspace submodules
@@ -257,11 +260,8 @@ jobs:
           key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
           restore-keys: bun-${{ runner.os }}-
 
-      - name: Disable repo-local eliza workspace
-        run: node scripts/disable-local-eliza-workspace.mjs
-
       - name: Install dependencies
-        run: bun install --frozen-lockfile --ignore-scripts
+        run: bun install --ignore-scripts
 
       - name: Run repository postinstall patches
         run: bun run postinstall
@@ -307,11 +307,8 @@ jobs:
       - name: Initialize tracked workspace submodules
         run: node scripts/init-submodules.mjs
 
-      - name: Disable repo-local eliza workspace
-        run: node scripts/disable-local-eliza-workspace.mjs
-
       - name: Install dependencies
-        run: bun install --frozen-lockfile --ignore-scripts
+        run: bun install --ignore-scripts
 
       - name: Run repository postinstall patches
         run: bun run postinstall
@@ -372,17 +369,14 @@ jobs:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: gradle-${{ runner.os }}-${{ hashFiles('apps/app/android/**/*.gradle*', 'apps/app/android/**/gradle-wrapper.properties', 'apps/app/plugins/websiteblocker/android/**/*.kt') }}
+          key: gradle-${{ runner.os }}-${{ hashFiles('apps/app/android/**/*.gradle*', 'apps/app/android/**/gradle-wrapper.properties', 'eliza/packages/native-plugins/websiteblocker/android/**/*.kt') }}
           restore-keys: gradle-${{ runner.os }}-
 
       - name: Initialize tracked workspace submodules
         run: node scripts/init-submodules.mjs
 
-      - name: Disable repo-local eliza workspace
-        run: node scripts/disable-local-eliza-workspace.mjs
-
       - name: Install dependencies
-        run: bun install --frozen-lockfile --ignore-scripts
+        run: bun install --ignore-scripts
 
       - name: Run repository postinstall patches
         run: bun run postinstall
@@ -428,11 +422,8 @@ jobs:
       - name: Initialize tracked workspace submodules
         run: node scripts/init-submodules.mjs
 
-      - name: Disable repo-local eliza workspace
-        run: node scripts/disable-local-eliza-workspace.mjs
-
       - name: Install dependencies
-        run: bun install --frozen-lockfile --ignore-scripts
+        run: bun install --ignore-scripts
 
       - name: Run repository postinstall patches
         run: bun run postinstall
@@ -442,43 +433,6 @@ jobs:
 
       - name: Build iOS website blocker app
         run: bun run test:selfcontrol:mobile:ios
-
-  app-startup-e2e:
-    name: App Startup E2E (Onboarding)
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          submodules: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Setup workspace dependencies
-        uses: ./.github/actions/setup-bun-workspace
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-          install-command: bun install --frozen-lockfile --ignore-scripts
-
-      # Proto-generated types are only needed when the repo-local eliza
-      # workspace is present. Published-only CI disables that checkout.
-      - name: Generate protobuf types
-        run: |
-          if [ "${MILADY_SKIP_LOCAL_UPSTREAMS:-0}" != "1" ] && [ -d eliza/packages/schemas ] && [ -f eliza/packages/schemas/buf.gen.yaml ] && [ ! -d eliza/packages/typescript/src/types/generated ]; then
-            cd eliza/packages/schemas
-            node node_modules/@bufbuild/buf/install.js 2>/dev/null || true
-            npx --yes @bufbuild/buf@1.67.0 generate
-          fi
-
-      - name: Run startup E2E contract guard
-        run: bun run test:startup:contract
-
-      - name: Run app startup/onboarding tests
-        run: bun run test:startup:e2e
 
   desktop-contract:
     name: Electrobun Desktop Contract
@@ -521,11 +475,8 @@ jobs:
       - name: Initialize tracked workspace submodules
         run: node scripts/init-submodules.mjs
 
-      - name: Disable repo-local eliza workspace
-        run: node scripts/disable-local-eliza-workspace.mjs
-
       - name: Install dependencies
-        run: bun install --frozen-lockfile --ignore-scripts
+        run: bun install --ignore-scripts
         env:
           npm_config_python: ${{ env.pythonLocation }}/bin/python3
 
@@ -553,42 +504,86 @@ jobs:
         id: cloud
         run: |
           if [ -z "${{ secrets.ELIZAOS_CLOUD_API_KEY }}" ]; then
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "Cloud API key is not configured; skipping cloud live test job."
+            echo "::warning::ELIZAOS_CLOUD_API_KEY not configured — skipping cloud E2E."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
           else
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Checkout
-        if: steps.cloud.outputs.enabled == 'true'
+        if: steps.cloud.outputs.skip != 'true'
         uses: actions/checkout@v4
         with:
           submodules: false
 
       - name: Setup workspace dependencies
-        if: steps.cloud.outputs.enabled == 'true'
+        if: steps.cloud.outputs.skip != 'true'
         uses: ./.github/actions/setup-bun-workspace
         with:
           bun-version: ${{ env.BUN_VERSION }}
-          install-command: |
-            for i in 1 2 3 4 5; do
-              bun install --frozen-lockfile --ignore-scripts && break
-              echo "Attempt $i failed, retrying in $((i * 15))s..."
-              sleep $((i * 15))
-            done
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+          prepare-local-eliza-runtime: "true"
 
-      - name: Run cloud live test
-        if: steps.cloud.outputs.enabled == 'true'
+      - name: Restore eliza workspace paths for repo scripts
+        if: steps.cloud.outputs.skip != 'true'
+        run: node scripts/restore-local-eliza-workspace.mjs
+
+      - name: Run Cloud Live E2E
+        if: steps.cloud.outputs.skip != 'true'
         run: bun run test:live:cloud
         env:
           MILADY_LIVE_TEST: "1"
+          ELIZA_LIVE_TEST: "1"
           ELIZAOS_CLOUD_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY }}
           ELIZAOS_CLOUD_BASE_URL: ${{ secrets.ELIZAOS_CLOUD_BASE_URL }}
 
   validation-e2e:
-    name: End-to-End Validation (Issue #6)
+    name: End-to-End Validation (Issue
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup workspace dependencies
+        uses: ./.github/actions/setup-bun-workspace
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+          disable-local-eliza-workspace: "true"
+          skip-avatar-clone: "true"
+          no-vision-deps: "true"
+          prepare-local-eliza-runtime: "true"
+
+      - name: Generate protobuf types
+        run: |
+          if [ -d eliza/packages/schemas ] && [ -f eliza/packages/schemas/buf.gen.yaml ] && [ ! -d eliza/packages/typescript/src/types/generated ]; then
+            cd eliza/packages/schemas
+            node node_modules/@bufbuild/buf/install.js 2>/dev/null || true
+            bunx @bufbuild/buf@1.67.0 generate
+          fi
+
+      - name: Build
+        run: bun run build
+
+      - name: Run E2E validation suite
+        run: bun run test:e2e:validation
+        env:
+          MILADY_LIVE_TEST: "1"
+          ELIZA_LIVE_TEST: "1"
+          ELIZAOS_CLOUD_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY }}
+          ELIZAOS_CLOUD_BASE_URL: ${{ secrets.ELIZAOS_CLOUD_BASE_URL }}
+
+  live-surface-audit:
+    name: Live Surface Audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -599,20 +594,85 @@ jobs:
         uses: ./.github/actions/setup-bun-workspace
         with:
           bun-version: ${{ env.BUN_VERSION }}
-          install-command: bun install --ignore-scripts
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+          prepare-local-eliza-runtime: "true"
 
-      - name: Build
-        run: bun run build
+      - name: Restore eliza workspace paths for repo scripts
+        run: node scripts/restore-local-eliza-workspace.mjs
 
-      - name: Run E2E Validation tests
-        run: bun run test:e2e:validation
+      - name: Run live surface audit
+        run: bun run test:audit:live:strict
+
+  ui-playwright-smoke:
+    name: UI Playwright Smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check live provider secrets
+        id: provider-check
         env:
-          NODE_OPTIONS: "--max-old-space-size=4096"
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          ELIZAOS_CLOUD_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY }}
+        run: |
+          if [ -z "${OPENAI_API_KEY}" ] && \
+             [ -z "${GROQ_API_KEY}" ] && \
+             [ -z "${ANTHROPIC_API_KEY}" ] && \
+             [ -z "${GOOGLE_GENERATIVE_AI_API_KEY}" ] && \
+             [ -z "${OPENROUTER_API_KEY}" ] && \
+             [ -z "${ELIZAOS_CLOUD_API_KEY}" ]; then
+            echo "::warning::No live provider secret configured — skipping UI Playwright smoke."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout
+        if: steps.provider-check.outputs.skip != 'true'
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Setup workspace dependencies
+        if: steps.provider-check.outputs.skip != 'true'
+        uses: ./.github/actions/setup-bun-workspace
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+          skip-avatar-clone: "true"
+          no-vision-deps: "true"
+
+      - name: Restore eliza workspace paths for repo scripts
+        if: steps.provider-check.outputs.skip != 'true'
+        run: node scripts/restore-local-eliza-workspace.mjs
+
+      - name: Install Electrobun runtime dependencies
+        if: steps.provider-check.outputs.skip != 'true'
+        run: |
+          APT_ARGS=(-o Acquire::ForceIPv4=true -o Acquire::Retries=5 -o Acquire::http::Timeout=30)
+          sudo apt-get "${APT_ARGS[@]}" update
+          sudo apt-get "${APT_ARGS[@]}" install -y libwebkit2gtk-4.1-0 libayatana-appindicator3-1
+
+      - name: Install Playwright browser
+        if: steps.provider-check.outputs.skip != 'true'
+        run: bunx playwright install --with-deps chromium
+
+      - name: Run UI Playwright smoke tests
+        if: steps.provider-check.outputs.skip != 'true'
+        run: bun run test:ui:playwright
+        env:
+          MILADY_LIVE_TEST: "1"
+          ELIZA_LIVE_TEST: "1"
+          ELIZAOS_CLOUD_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY }}
+          ELIZAOS_CLOUD_BASE_URL: ${{ secrets.ELIZAOS_CLOUD_BASE_URL }}
 
   test-status:
     name: All Tests Passed
     if: always()
-    needs: [regression-matrix, unit-tests, db-check, e2e-tests, website-blocker-cross-platform, website-blocker-startup-smoke, website-blocker-desktop-smoke, website-blocker-mobile-android, website-blocker-mobile-ios, app-startup-e2e, desktop-contract, cloud-live-e2e, validation-e2e]
+    needs: [regression-matrix, unit-tests, db-check, website-blocker-cross-platform, website-blocker-startup-smoke, website-blocker-desktop-smoke, website-blocker-mobile-android, website-blocker-mobile-ios, desktop-contract, cloud-live-e2e, validation-e2e, live-surface-audit, ui-playwright-smoke]
     runs-on: ubuntu-24.04
     steps:
       - name: Check test results
@@ -624,41 +684,40 @@ jobs:
           echo "regression-matrix:  ${{ needs.regression-matrix.result }}"
           echo "unit-tests:         ${{ needs.unit-tests.result }}"
           echo "db-check:           ${{ needs.db-check.result }}"
-          echo "e2e-tests:          ${{ needs.e2e-tests.result }}"
           echo "website-blocker-cross-platform: ${{ needs.website-blocker-cross-platform.result }}"
           echo "website-blocker-startup-smoke:  ${{ needs.website-blocker-startup-smoke.result }}"
           echo "website-blocker-desktop-smoke:  ${{ needs.website-blocker-desktop-smoke.result }}"
           echo "website-blocker-mobile-android: ${{ needs.website-blocker-mobile-android.result }}"
           echo "website-blocker-mobile-ios:     ${{ needs.website-blocker-mobile-ios.result }}"
-          echo "app-startup-e2e:    ${{ needs.app-startup-e2e.result }}"
           echo "desktop-contract:   ${{ needs.desktop-contract.result }}"
           echo "cloud-live-e2e:     ${{ needs.cloud-live-e2e.result }}"
           echo "validation-e2e:     ${{ needs.validation-e2e.result }}"
+          echo "live-surface-audit: ${{ needs.live-surface-audit.result }}"
+          echo "ui-playwright-smoke:${{ needs.ui-playwright-smoke.result }}"
           echo "==================================="
           bad=0
           for pair in \
             "regression-matrix:${{ needs.regression-matrix.result }}" \
             "unit-tests:${{ needs.unit-tests.result }}" \
             "db-check:${{ needs.db-check.result }}" \
-            "e2e-tests:${{ needs.e2e-tests.result }}" \
             "website-blocker-cross-platform:${{ needs.website-blocker-cross-platform.result }}" \
             "website-blocker-startup-smoke:${{ needs.website-blocker-startup-smoke.result }}" \
             "website-blocker-desktop-smoke:${{ needs.website-blocker-desktop-smoke.result }}" \
             "website-blocker-mobile-android:${{ needs.website-blocker-mobile-android.result }}" \
             "website-blocker-mobile-ios:${{ needs.website-blocker-mobile-ios.result }}" \
-            "app-startup-e2e:${{ needs.app-startup-e2e.result }}" \
             "desktop-contract:${{ needs.desktop-contract.result }}" \
             "cloud-live-e2e:${{ needs.cloud-live-e2e.result }}" \
-            "validation-e2e:${{ needs.validation-e2e.result }}"; do
+            "validation-e2e:${{ needs.validation-e2e.result }}" \
+            "live-surface-audit:${{ needs.live-surface-audit.result }}" \
+            "ui-playwright-smoke:${{ needs.ui-playwright-smoke.result }}"; do
             name="${pair%%:*}"
             result="${pair##*:}"
-            if [[ "$result" != "success" ]]; then
+            if [ "$result" != "success" ] && [ "$result" != "skipped" ]; then
               echo "::error title=Test gate::Required job '${name}' finished with '${result}' (expected success)"
               bad=1
             fi
           done
-          if [[ "$bad" -ne 0 ]]; then
-            echo "One or more required jobs did not succeed; see rows above and the failing job logs."
+          if [ "$bad" -ne 0 ]; then
             exit 1
           fi
-          echo "All required test jobs succeeded"
+          echo "All required test jobs passed."

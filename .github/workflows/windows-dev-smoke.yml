@@ -4,8 +4,9 @@ on:
   pull_request:
     branches: [develop]
     paths:
-      - "scripts/**"
+      - "eliza/packages/app-core/scripts/**"
       - "apps/app/electrobun/**"
+      - "eliza/packages/app-core/platforms/electrobun/**"
       - "package.json"
       - "bun.lock"
   workflow_dispatch:
@@ -24,7 +25,31 @@ jobs:
         bun-version: ["1.3.10", "canary"]
 
     steps:
+      - name: Enable long paths (Windows)
+        run: git config --system core.longpaths true
+
       - uses: actions/checkout@v4
+        with:
+          submodules: false
+          sparse-checkout: |
+            /.gitmodules
+            /package.json
+            /bun.lock
+            /bunfig.toml
+            /tsconfig.json
+            /.github/actions/setup-bun-workspace/**
+            apps/
+            packages/
+            scripts/
+            eliza/apps/
+            eliza/packages/app-core/
+            eliza/packages/native-plugins/
+            eliza/packages/typescript/
+            eliza/packages/shared/
+            eliza/packages/agent/
+            eliza/packages/server/
+            eliza/plugins/
+          sparse-checkout-cone-mode: false
 
       - name: Initialize workspace submodules
         run: node scripts/init-submodules.mjs
@@ -34,16 +59,17 @@ jobs:
         with:
           node-version: 22
 
-      - name: Disable repo-local eliza workspace
-        run: node scripts/disable-local-eliza-workspace.mjs
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+      - name: Setup Bun workspace
+        uses: ./.github/actions/setup-bun-workspace
         with:
           bun-version: ${{ matrix.bun-version }}
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+          install-native-deps: "false"
+          run-postinstall: "false"
+          disable-local-eliza-workspace: "true"
 
-      - name: Install dependencies
-        run: bun install --ignore-scripts
+      - name: Restore eliza workspace paths for script checks
+        run: node scripts/restore-local-eliza-workspace.mjs
 
       - name: Verify json5 interop
         run: >
@@ -54,6 +80,6 @@ jobs:
 
       - name: Verify bun-version-guard
         run: >
-          bun -e "import { getBunVersionAdvisory } from './scripts/lib/bun-version-guard.mjs';
+          bun -e "import { getBunVersionAdvisory } from './eliza/packages/app-core/scripts/lib/bun-version-guard.mjs';
           const result = getBunVersionAdvisory();
           console.log('bun-version-guard:', result ?? 'OK (no advisory)');"

@@ -1,11 +1,10 @@
-import { expect, type Locator, type Page, type Route } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 
 export const ROOT_TIMEOUT_MS = 20_000;
 export const NAV_TIMEOUT_MS = 12_000;
-
-type AppMockOptions = {
-  includeConfig?: boolean;
-};
+// These "ready" checks only look for mocked/static UI markers after navigation.
+// Full backend/bootstrap waits use the longer per-test and Playwright defaults.
+const READY_CHECK_TIMEOUT_MS = 5_000;
 
 type ReadyCheck =
   | { selector: string; text?: never }
@@ -16,121 +15,34 @@ type EvaluatedReadyCheck = {
   passed: boolean;
 };
 
-const DEFAULT_STORAGE: Record<string, string> = {
+const DEFAULT_APP_STORAGE: Record<string, string> = {
   "eliza:onboarding-complete": "1",
   "eliza:onboarding:step": "activate",
   "eliza:ui-shell-mode": "native",
-  "milady:active-server": JSON.stringify({
+  "elizaos:active-server": JSON.stringify({
     id: "local:embedded",
     kind: "local",
     label: "This device",
   }),
 };
 
-async function fulfillJson(route: Route, payload: unknown): Promise<void> {
-  await route.fulfill({
-    status: 200,
-    contentType: "application/json",
-    body: JSON.stringify(payload),
-  });
-}
-
-export async function installDefaultAppMocks(
-  page: Page,
-  options: AppMockOptions = {},
-): Promise<void> {
-  const includeConfig = options.includeConfig ?? true;
-  const router = page.context();
-
-  await router.route("**/auth/status", async (route) => {
-    await fulfillJson(route, {
-      required: false,
-      pairingEnabled: false,
-      expiresAt: null,
-    });
-  });
-
-  await router.route("**/api/auth/status", async (route) => {
-    await fulfillJson(route, {
-      required: false,
-      pairingEnabled: false,
-      expiresAt: null,
-    });
-  });
-
-  await router.route("**/api/status", async (route) => {
-    await fulfillJson(route, {
-      state: "running",
-      startup: { phase: "running", attempt: 0 },
-      pendingRestart: false,
-      pendingRestartReasons: [],
-    });
-  });
-
-  await router.route("**/api/onboarding/status", async (route) => {
-    await fulfillJson(route, { complete: true });
-  });
-
-  await router.route("**/api/agent/status", async (route) => {
-    await fulfillJson(route, { onboardingComplete: true, status: "running" });
-  });
-
-  await router.route("**/api/lifeops/activity-signals", async (route) => {
-    if (route.request().method() !== "POST") {
-      await route.fallback();
-      return;
-    }
-    await fulfillJson(route, { ok: true });
-  });
-
-  await router.route(
-    "**/api/lifeops/connectors/google/status",
-    async (route) => {
-      await fulfillJson(route, {
-        connected: false,
-        available: false,
-        authUrl: null,
-        lastSyncedAt: null,
-      });
-    },
-  );
-
-  await router.route("**/api/health", async (route) => {
-    await fulfillJson(route, {
-      status: "ok",
-    });
-  });
-
-  if (includeConfig) {
-    await router.route("**/api/config**", async (route) => {
-      if (route.request().method() !== "GET") {
-        await route.continue();
-        return;
-      }
-      await fulfillJson(route, { media: {} });
-    });
-  }
-}
-
 export async function seedAppStorage(
   page: Page,
   overrides: Record<string, string> = {},
 ): Promise<void> {
-  const storage = { ...DEFAULT_STORAGE, ...overrides };
+  const storage = { ...DEFAULT_APP_STORAGE, ...overrides };
   await page.addInitScript((entries: Record<string, string>) => {
     for (const [key, value] of Object.entries(entries)) {
-      if (localStorage.getItem(key) == null) {
-        localStorage.setItem(key, value);
-      }
+      localStorage.setItem(key, value);
     }
   }, storage);
 }
 
-export async function expectRootReady(page: Page): Promise<void> {
+async function expectRootReady(page: Page): Promise<void> {
   await expect(page.locator("#root")).toBeVisible({ timeout: ROOT_TIMEOUT_MS });
 }
 
-export async function expectNoOnboardingRedirect(page: Page): Promise<void> {
+async function expectNoOnboardingRedirect(page: Page): Promise<void> {
   await expect(page).not.toHaveURL(/onboarding/, { timeout: NAV_TIMEOUT_MS });
 }
 
@@ -150,9 +62,12 @@ export async function readLocalStorage(
   return page.evaluate((storageKey) => localStorage.getItem(storageKey), key);
 }
 
-async function locatorVisible(locator: Locator): Promise<boolean> {
+async function locatorVisible(
+  locator: Locator,
+  timeoutMs: number = READY_CHECK_TIMEOUT_MS,
+): Promise<boolean> {
   try {
-    await locator.first().waitFor({ state: "visible", timeout: 5_000 });
+    await locator.first().waitFor({ state: "visible", timeout: timeoutMs });
     return true;
   } catch {
     return false;
@@ -178,8 +93,9 @@ function readyChecksPassed(
 
 async function evaluateReadyChecks(
   page: Page,
-  checks: ReadyCheck[],
+  checks: readonly ReadyCheck[],
   mode: "any" | "all" = "any",
+  timeoutMs: number = READY_CHECK_TIMEOUT_MS,
 ): Promise<{
   passed: boolean;
   results: EvaluatedReadyCheck[];
@@ -190,13 +106,13 @@ async function evaluateReadyChecks(
     if ("selector" in check) {
       results.push({
         check,
-        passed: await locatorVisible(page.locator(check.selector)),
+        passed: await locatorVisible(page.locator(check.selector), timeoutMs),
       });
       continue;
     }
     results.push({
       check,
-      passed: await locatorVisible(page.getByText(check.text)),
+      passed: await locatorVisible(page.getByText(check.text), timeoutMs),
     });
   }
 
@@ -209,10 +125,11 @@ async function evaluateReadyChecks(
 export async function assertReadyChecks(
   page: Page,
   label: string,
-  checks: ReadyCheck[],
+  checks: readonly ReadyCheck[],
   mode: "any" | "all" = "any",
+  timeoutMs: number = READY_CHECK_TIMEOUT_MS,
 ): Promise<void> {
-  const evaluation = await evaluateReadyChecks(page, checks, mode);
+  const evaluation = await evaluateReadyChecks(page, checks, mode, timeoutMs);
   const summary = evaluation.results
     .map(
       (result) =>
@@ -226,13 +143,232 @@ export async function assertReadyChecks(
   ).toBe(true);
 }
 
+/**
+ * Baseline API stubs every smoke test that touches the network should install.
+ * Call in `beforeEach` before any flow-specific overrides so those can
+ * `route.fallback()` through to these defaults for URLs they don't care about.
+ */
+export async function installDefaultAppRoutes(page: Page): Promise<void> {
+  await page.route("**/api/health", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ ok: true }),
+    });
+  });
+
+  await page.route("**/api/agents", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ agents: [] }),
+    });
+  });
+
+  await page.route("**/api/cloud/status", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        connected: false,
+        enabled: false,
+        cloudVoiceProxyAvailable: false,
+        hasApiKey: false,
+      }),
+    });
+  });
+}
+
+/** Handles returned by {@link installCloudWalletImportApiOverrides}. */
+export type CloudWalletImportMockApi = {
+  lastWalletConfigPut: () => Record<string, unknown> | null;
+  stewardStatusRequestCount: () => number;
+};
+
+/**
+ * Playwright routes that override the ui-smoke API stub for the cloud wallet import flow.
+ * Register **after** {@link installDefaultAppRoutes} so these take precedence for matching URLs.
+ */
+export async function installCloudWalletImportApiOverrides(
+  page: Page,
+): Promise<CloudWalletImportMockApi> {
+  let lastWalletPut: Record<string, unknown> | null = null;
+  let stewardStatusHits = 0;
+
+  const initialWalletConfig = {
+    selectedRpcProviders: {
+      evm: "alchemy",
+      bsc: "alchemy",
+      solana: "helius-birdeye",
+    },
+    walletNetwork: "mainnet",
+    legacyCustomChains: [],
+    alchemyKeySet: true,
+    infuraKeySet: false,
+    ankrKeySet: false,
+    nodeRealBscRpcSet: false,
+    quickNodeBscRpcSet: false,
+    managedBscRpcReady: false,
+    cloudManagedAccess: false,
+    heliusKeySet: true,
+    birdeyeKeySet: false,
+    evmChains: ["ethereum", "base"],
+    evmAddress: null,
+    solanaAddress: null,
+  };
+
+  let walletConfigState: typeof initialWalletConfig = {
+    ...initialWalletConfig,
+    legacyCustomChains: [...initialWalletConfig.legacyCustomChains],
+    evmChains: [...initialWalletConfig.evmChains],
+  };
+
+  await page.route("**/api/cloud/status", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        connected: true,
+        enabled: true,
+        cloudVoiceProxyAvailable: true,
+        hasApiKey: true,
+        userId: "playwright-smoke-user",
+      }),
+    });
+  });
+
+  await page.route("**/api/cloud/credits", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        balance: 100,
+        low: false,
+        critical: false,
+        authRejected: false,
+      }),
+    });
+  });
+
+  await page.route("**/api/wallet/config", async (route) => {
+    const req = route.request();
+    if (req.method() === "GET") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(walletConfigState),
+      });
+      return;
+    }
+    if (req.method() === "PUT") {
+      const raw = req.postData();
+      lastWalletPut = raw ? (JSON.parse(raw) as Record<string, unknown>) : null;
+      const selections = lastWalletPut?.selections as
+        | typeof walletConfigState.selectedRpcProviders
+        | undefined;
+      if (selections) {
+        walletConfigState = {
+          ...walletConfigState,
+          selectedRpcProviders: selections,
+          cloudManagedAccess: true,
+        };
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: true }),
+      });
+      return;
+    }
+    await route.fallback();
+  });
+
+  await page.route("**/api/wallet/steward-status", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+    stewardStatusHits += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        configured: false,
+        available: false,
+        connected: false,
+      }),
+    });
+  });
+
+  await page.route("**/api/wallet/addresses", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ evmAddress: null, solanaAddress: null }),
+    });
+  });
+
+  await page.route("**/api/wallet/balances", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        evm: null,
+        solana: null,
+      }),
+    });
+  });
+
+  await page.route("**/api/wallet/nfts", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ evm: [], solana: null }),
+    });
+  });
+
+  return {
+    lastWalletConfigPut: () => lastWalletPut,
+    stewardStatusRequestCount: () => stewardStatusHits,
+  };
+}
+
 export async function runSoftReadyChecks(
   page: Page,
   label: string,
   checks: ReadyCheck[],
   mode: "any" | "all" = "any",
+  timeoutMs: number = READY_CHECK_TIMEOUT_MS,
 ): Promise<void> {
-  const evaluation = await evaluateReadyChecks(page, checks, mode);
+  const evaluation = await evaluateReadyChecks(page, checks, mode, timeoutMs);
   if (evaluation.passed) {
     return;
   }

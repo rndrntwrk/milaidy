@@ -7,7 +7,7 @@ This doc explains **why** dynamic plugin imports fail without `NODE_PATH` and **
 The runtime (`src/runtime/eliza.ts`) loads plugins via dynamic import:
 
 ```ts
-import("@elizaos/plugin-coding-agent")
+import("@elizaos/plugin-sql")
 ```
 
 Node resolves this by walking up from the **importing file's directory**. When eliza runs from different locations, resolution can fail:
@@ -40,7 +40,7 @@ if (existsSync(_rootModules)) {
 
 **Note on `Module._initPaths()`:** It is a private Node.js API but widely used for exactly this purpose (runtime NODE_PATH mutation). Node caches resolution paths at startup; after we set `process.env.NODE_PATH` we must call it so the next `import()` sees the new paths.
 
-### 2. `scripts/run-node.mjs` (child process env)
+### 2. `eliza/packages/app-core/scripts/run-node.mjs` (child process env)
 
 ```js
 const rootModules = path.join(cwd, "node_modules");
@@ -49,7 +49,7 @@ env.NODE_PATH = ...;
 
 **Why here:** The CLI runner spawns a child process that runs `milady.mjs` → `dist/entry.js` → `dist/eliza.js`. Setting `NODE_PATH` in the child's env ensures the child resolves from root even though `dist/` doesn't have its own `node_modules`.
 
-### 3. `apps/app/electrobun/src/native/agent.ts` (Electrobun native runtime)
+### 3. `eliza/packages/app-core/platforms/electrobun/src/native/agent.ts` (Electrobun native runtime)
 
 ```ts
 // Dev: walk up from __dirname to find node_modules
@@ -68,11 +68,11 @@ In the packaged `.app`, `eliza.js` lives at `app.asar.unpacked/milady-dist/eliza
 
 ## Bun and published package exports
 
-Some `@elizaos` packages (e.g. `@elizaos/plugin-coding-agent`) publish a `package.json` with `exports["."].bun = "./src/index.ts"`. **Why they do that:** In the upstream monorepo, Bun can run TypeScript directly, so pointing to `src/` avoids a build step. The published npm tarball, however, only includes `dist/` — `src/` is not shipped. When we install from npm, the `"bun"` condition points to a path that does not exist.
+Some `@elizaos` packages (e.g. `@elizaos/plugin-sql`) publish a `package.json` with `exports["."].bun = "./src/index.ts"`. **Why they do that:** In the upstream monorepo, Bun can run TypeScript directly, so pointing to `src/` avoids a build step. The published npm tarball, however, only includes `dist/` — `src/` is not shipped. When we install from npm, the `"bun"` condition points to a path that does not exist.
 
 **What happens:** Bun's resolver prefers the `"bun"` export condition. It tries to load `./src/index.ts`, the file is missing, and we get "Cannot find module … from …/src/runtime/eliza.ts" even though the package is in `node_modules`. Bun does not fall back to the `"import"` condition when the `"bun"` target is missing.
 
-**Our fix:** `scripts/patch-deps.mjs` runs after `bun install` via `scripts/run-repo-setup.mjs` (used by `postinstall` and the app build bootstrap). It finds `@elizaos/plugin-coding-agent` (and any other package we add) and, if `exports["."].bun` points to `./src/index.ts` and that file does not exist, removes the `"bun"` and `"default"` conditions that reference `src/`. After the patch, only `"import"` (and similar) remain, so Bun resolves to `./dist/index.js`. **Why we only patch when the file is missing:** In a development workspace where the plugin is checked out with `src/` present, we leave the package unchanged so upstream workflows still work.
+**Our fix:** `scripts/patch-deps.mjs` runs after `bun install` via `scripts/run-repo-setup.mjs` (used by `postinstall` and the app build bootstrap). It finds affected `@elizaos` packages (including any we add to the allowlist) and, if `exports["."].bun` points to `./src/index.ts` and that file does not exist, removes the `"bun"` and `"default"` conditions that reference `src/`. After the patch, only `"import"` (and similar) remain, so Bun resolves to `./dist/index.js`. **Why we only patch when the file is missing:** In a development workspace where the plugin is checked out with `src/` present, we leave the package unchanged so upstream workflows still work.
 
 ## Pinned: `@elizaos/plugin-openrouter`
 
@@ -108,3 +108,26 @@ Optional plugins (and some core-adjacent packages) can end up in the load set be
 **Why we record provenance:** `collectPluginNames()` optionally fills a **`PluginLoadReasons`** map (first source wins per package). `resolvePlugins()` passes it through; benign optional failures are summarized as **`Optional plugins not installed: … (added by: …)`**. That answers “what should I change?” — edit config, unset env, install the package, or add a plugin checkout — instead of chasing a false “eliza is broken” hypothesis.
 
 **Browser / stagehand:** `@elizaos/plugin-browser` expects a **stagehand-server** tree that is **not** in the npm tarball. Milady discovers `plugins/plugin-browser/stagehand-server` by **walking parents** from the runtime so both flat Milady checkouts and **`eliza/` submodule** layouts resolve. See **[Developer diagnostics and workspace](guides/developer-diagnostics-and-workspace.md)**.
+
+## Pack-and-test and Vendored Workspace Validation (Phase 5)
+
+As part of the Plugin Workspace architecture, we load dependencies via `workspace:*` out of the vendored source tree (`eliza/packages/*` and `eliza/plugins/*`). Sometimes, you need to verify that what works in a `workspace:*` context will successfully pack into tarballs and install strictly downstream as if published.
+
+We provide two scripts to validate and prevent drift:
+
+### `scripts/pack-upstreams.mjs`
+To simulate a real publish release locally, run `node scripts/pack-upstreams.mjs`. It iterates over the target vendored packages (currently `@elizaos/core`, which now includes the orchestrator runtime, plus one representative vendored plugin: `@elizaos/plugin-sql`), builds them when needed, runs `npm pack`, and places the resulting `.tgz` artifacts in the root `artifacts/` directory.
+
+### `scripts/check-upstream-drift.mjs`
+To ensure that root-level explicitly pinned dependencies (e.g., `"@elizaos/plugin-openrouter": "2.0.0-alpha.13"`) do not drift from the source code checked into the vendored trees, run `node scripts/check-upstream-drift.mjs`. The command inspects root pins against the `package.json` inside local vendor trees and fails if their explicitly pinned specifications diverge from source.
+
+### `scripts/sync-upstream-versions.mjs`
+This is a compatibility alias for the same drift check used by older sprint tickets. Run `node scripts/sync-upstream-versions.mjs` if you want the legacy script name; it exits with the same green/red verdict as `check-upstream-drift`.
+
+### Vendored Source Verification (Proof of Life)
+Because all packages resolve via `workspace:*`, local modifications are live the moment you restart `bun run dev`.
+**Example proof-of-life workflow**:
+1. Open `eliza/packages/typescript/src/index.ts` (`@elizaos/core`) and add a `console.log("Hello from vendored core!");`.
+2. Open `eliza/plugins/plugin-sql/typescript/src/index.ts` and add `console.log("Hello from vendored plugin!");`.
+3. Run `bun run dev` at the root.
+4. You will immediately see both logs without needing `npm link`, custom `NODE_PATH` patches, or cache-busting. The changes are resolved automatically by Bun workspaces.

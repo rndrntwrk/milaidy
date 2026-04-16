@@ -6,13 +6,10 @@
 # continuing. Workflow syntax errors must not ship silently, so this is
 # intentional.
 #
-# We suppress shellcheck findings via `-ignore 'shellcheck reported issue'`
-# so pre-existing style/info nits (SC2086, SC2129, SC2162, etc.) in shell
-# scripts inside `run:` blocks do not block unrelated edits. actionlint
-# emits shellcheck findings with rc=1 otherwise, which would make every
-# edit of a workflow file alongside an old style nit block until the
-# unrelated shell script was cleaned up. Real workflow errors are still
-# surfaced; shellcheck wants a separate, non-blocking cleanup pass.
+# We suppress only a short allowlist of pre-existing shellcheck style/info
+# nits (SC2086, SC2129, SC2162) so unrelated workflow edits do not block on
+# those specific noisy findings. Other shellcheck-backed actionlint findings
+# still surface and block as real review items.
 #
 # Triggered on: Edit | Write | MultiEdit
 # Scope filter: only runs when the touched file is a GitHub Actions workflow
@@ -60,13 +57,13 @@ fi
 repo_root="$(cd "$(dirname "$0")/../.." && pwd)"
 config="$repo_root/.github/actionlint.yaml"
 
-# -ignore 'shellcheck reported issue' suppresses shellcheck findings so
-# only real actionlint workflow-schema errors remain. Any non-empty
-# output is therefore a real error worth blocking on.
+# Suppress only a narrow set of known style-only shellcheck findings. Any
+# other non-empty output is treated as a real actionlint error worth blocking.
+shellcheck_ignore='shellcheck reported issue.*SC(2086|2129|2162)\b'
 if [ -f "$config" ]; then
-  output="$(actionlint -config-file "$config" -ignore 'shellcheck reported issue' "$file_path" 2>&1 || true)"
+  output="$(actionlint -config-file "$config" -ignore "$shellcheck_ignore" "$file_path" 2>&1 || true)"
 else
-  output="$(actionlint -ignore 'shellcheck reported issue' "$file_path" 2>&1 || true)"
+  output="$(actionlint -ignore "$shellcheck_ignore" "$file_path" 2>&1 || true)"
 fi
 
 if [ -n "$output" ]; then
