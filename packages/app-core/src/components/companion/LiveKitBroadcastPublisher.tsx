@@ -60,12 +60,17 @@
 
 import { memo, useEffect, useRef, useState } from "react";
 import {
+  DataPacket_Kind,
   LocalVideoTrack,
   Room,
+  RoomEvent,
   Track,
   VideoPresets,
+  type RemoteParticipant,
   type RoomConnectOptions,
 } from "livekit-client";
+import { dispatchAppEmoteEvent } from "../../events";
+import type { AppEmoteEventDetail } from "../../events";
 
 interface InjectedLiveKitConfig {
   url?: string;
@@ -130,11 +135,107 @@ type PublisherStatus =
   | "error"
   | "disconnected";
 
+/**
+ * Shape of every message sent by the CP via
+ * `POST /api/agent/v1/sessions/:id/livekit/broadcast-event` and
+ * `LiveKitService.sendDataToRoom()`. The CP guarantees `topic` is a
+ * non-empty string; everything else is opaque JSON.
+ */
+interface BroadcastDataMessage {
+  topic: string;
+  payload?: unknown;
+  ts?: number;
+}
+
+/**
+ * Decode a LiveKit DataReceived payload (Uint8Array of UTF-8 JSON)
+ * into our `{topic,payload,ts}` envelope. Returns `null` if the
+ * message is malformed — protects the renderer from crashing on
+ * garbage from a misbehaving publisher.
+ */
+function decodeBroadcastDataMessage(
+  payload: Uint8Array,
+): BroadcastDataMessage | null {
+  try {
+    const text = new TextDecoder().decode(payload);
+    const parsed = JSON.parse(text) as unknown;
+    if (
+      !parsed ||
+      typeof parsed !== "object" ||
+      typeof (parsed as Record<string, unknown>).topic !== "string"
+    ) {
+      return null;
+    }
+    return parsed as BroadcastDataMessage;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Route an incoming data message to the correct window CustomEvent
+ * so the existing GlobalEmoteOverlay / VrmStage / ChatAvatar listeners
+ * pick it up. Adding a new topic means (a) declaring its payload
+ * shape here and (b) dispatching the matching event — the operator
+ * UI remains the source of truth for what topics exist.
+ *
+ * Topics currently handled:
+ *   - "emote"           → window "eliza:app-emote" (AppEmoteEventDetail)
+ *   - "trigger"         → window "eliza:app-trigger" (forward-compat; not yet consumed)
+ *   - "scene-update"    → window "eliza:scene-update" (forward-compat; not yet consumed)
+ *
+ * Unknown topics are logged once at debug level and dropped so an
+ * operator adding a new topic can see it land in the headless
+ * Chromium without the renderer throwing.
+ */
+function dispatchBroadcastDataMessage(msg: BroadcastDataMessage): void {
+  if (typeof window === "undefined") return;
+
+  switch (msg.topic) {
+    case "emote": {
+      const detail = msg.payload as AppEmoteEventDetail | undefined;
+      if (
+        !detail ||
+        typeof detail.emoteId !== "string" ||
+        typeof detail.path !== "string" ||
+        typeof detail.duration !== "number" ||
+        typeof detail.loop !== "boolean"
+      ) {
+        console.warn(
+          "[LiveKitBroadcastPublisher] emote payload missing required fields",
+          detail,
+        );
+        return;
+      }
+      dispatchAppEmoteEvent(detail);
+      return;
+    }
+    case "trigger": {
+      window.dispatchEvent(
+        new CustomEvent("eliza:app-trigger", { detail: msg.payload }),
+      );
+      return;
+    }
+    case "scene-update": {
+      window.dispatchEvent(
+        new CustomEvent("eliza:scene-update", { detail: msg.payload }),
+      );
+      return;
+    }
+    default: {
+      console.debug(
+        `[LiveKitBroadcastPublisher] unhandled data topic "${msg.topic}"`,
+      );
+    }
+  }
+}
+
 export const LiveKitBroadcastPublisher = memo(function LiveKitBroadcastPublisher(): null {
   const [status, setStatus] = useState<PublisherStatus>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const roomRef = useRef<Room | null>(null);
   const trackRef = useRef<LocalVideoTrack | null>(null);
+  const dataListenerDetachRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     const config = readInjectedLiveKitConfig();
@@ -175,7 +276,12 @@ export const LiveKitBroadcastPublisher = memo(function LiveKitBroadcastPublisher
         roomRef.current = room;
 
         const connectOptions: RoomConnectOptions = {
-          autoSubscribe: false,
+          // autoSubscribe=true so the room delivers server-pushed data
+          // messages (emote / trigger / scene-update pushed by the CP
+          // via sendDataToRoom). We don't actually receive any
+          // participant-published AV tracks in the alice broadcast
+          // (single-publisher room), so this doesn't cost bandwidth.
+          autoSubscribe: true,
         };
         await room.connect(config.url, config.token, connectOptions);
         if (cancelled) {
@@ -185,6 +291,39 @@ export const LiveKitBroadcastPublisher = memo(function LiveKitBroadcastPublisher
         console.log(
           `[LiveKitBroadcastPublisher] connected to ${config.url} room=${config.roomName} participant=${room.localParticipant.identity}`,
         );
+
+        // Wire operator→stream event propagation. The CP pushes JSON
+        // envelopes via RoomServiceClient.sendData; we re-dispatch
+        // them as window CustomEvents so GlobalEmoteOverlay / VrmStage
+        // / overlays pick them up without knowing anything about
+        // LiveKit. This is the piece that makes "operator clicks
+        // WAVE" visible on the stream in real time.
+        const onData = (
+          payload: Uint8Array,
+          _participant?: RemoteParticipant,
+          _kind?: DataPacket_Kind,
+        ) => {
+          const msg = decodeBroadcastDataMessage(payload);
+          if (!msg) {
+            console.warn(
+              "[LiveKitBroadcastPublisher] DataReceived: malformed payload, dropping",
+            );
+            return;
+          }
+          dispatchBroadcastDataMessage(msg);
+        };
+        room.on(RoomEvent.DataReceived, onData);
+        // Stash the unsubscribe so cleanup can detach it explicitly —
+        // room.disconnect() also clears listeners, but detaching
+        // first guards against a late post-unmount message leaking
+        // into the window event bus.
+        dataListenerDetachRef.current = () => {
+          try {
+            room.off(RoomEvent.DataReceived, onData);
+          } catch {
+            /* ignore — room may already be disposed */
+          }
+        };
 
         setStatus("awaiting-canvas");
         const canvas = await waitForVrmCanvas(abortController.signal);
@@ -234,6 +373,10 @@ export const LiveKitBroadcastPublisher = memo(function LiveKitBroadcastPublisher
       abortController.abort();
       const room = roomRef.current;
       const track = trackRef.current;
+      const detachData = dataListenerDetachRef.current;
+      if (detachData) {
+        detachData();
+      }
       void (async () => {
         try {
           if (track) {
@@ -250,6 +393,7 @@ export const LiveKitBroadcastPublisher = memo(function LiveKitBroadcastPublisher
       })();
       roomRef.current = null;
       trackRef.current = null;
+      dataListenerDetachRef.current = null;
     };
   }, []);
 

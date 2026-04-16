@@ -324,13 +324,48 @@ export async function handleMiscRoutes(
       error(res, `Unknown emote: ${body.emoteId ?? "(none)"}`);
       return true;
     }
-    state.broadcastWs?.({
-      type: "emote",
+    const emotePayload = {
       emoteId: emote.id,
       path: emote.path,
       duration: emote.duration,
       loop: false,
-    });
+    };
+    // Existing operator-UI path: browser clients listening on the WS
+    // receive the emote and dispatch it to their local VrmStage. This
+    // is how the operator's tab sees an emote when they click it.
+    state.broadcastWs?.({ type: "emote", ...emotePayload });
+
+    // New broadcast path: when a 555stream session is currently live
+    // with the LiveKit broadcast flag, forward the emote as a LiveKit
+    // data message so the capture-service's headless Chromium
+    // (subscribing via LiveKitBroadcastPublisher's DataReceived
+    // handler) dispatches the same `eliza:app-emote` window event and
+    // VrmStage plays the animation on the rendered video track going
+    // to Cloudflare → Twitch/Kick. Fire-and-forget: if the 555stream
+    // plugin isn't installed, isn't initialized, or the call fails,
+    // the operator UI still gets the emote via the WS path above.
+    // Service name matches StreamControlService.serviceType in
+    // 555stream's plugin-555stream package.
+    const streamControl =
+      (state.runtime?.getService?.("stream555") as
+        | {
+            broadcastEvent?: (
+              topic: string,
+              payload: unknown,
+            ) => Promise<unknown>;
+          }
+        | undefined) ?? undefined;
+    if (streamControl && typeof streamControl.broadcastEvent === "function") {
+      void streamControl
+        .broadcastEvent("emote", emotePayload)
+        .catch((err: unknown) => {
+          logger.debug?.(
+            "[misc-routes] LiveKit emote broadcast failed (non-fatal):",
+            err instanceof Error ? err.message : err,
+          );
+        });
+    }
+
     json(res, { ok: true });
     return true;
   }
