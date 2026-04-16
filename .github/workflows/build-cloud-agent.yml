@@ -55,7 +55,7 @@ permissions:
 jobs:
   build:
     name: Build cloud agent image
-    runs-on: depot-ubuntu-24.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
 
     steps:
