@@ -622,6 +622,48 @@ async function runMain(): Promise<void> {
       /* storage unavailable — the coordinator's own try/catch handles this */
     }
 
+    // Bridge the alice-bot's auth token into the SPA's API client.
+    //
+    // The broadcast Chromium needs the alice-bot's ELIZA_SERVER_AUTH_TOKEN
+    // to authenticate REST calls (/api/status, /api/companion/stage) and
+    // the WS handshake ({type:"auth", token}). Without it, AppContext's
+    // setup effect hits 401, never reaches client.connectWs(), and no WS
+    // events (emotes, face frames, zoom sync) reach the stream.
+    //
+    // Token resolution:
+    //   1. URL param ?apiToken= — primary. The go-live flow runs inside
+    //      the alice-bot pod and appends ELIZA_SERVER_AUTH_TOKEN to the
+    //      broadcast URL. Secure: alice-bot:3000 is ClusterIP, internal.
+    //   2. __injectedShowConfig.wsToken — fallback. Currently a 555stream
+    //      JWT (wrong token type), kept for forward-compat if the capture-
+    //      service is updated to inject the correct token here.
+    {
+      const params = new URLSearchParams(
+        window.location.search || window.location.hash.split("?")[1] || "",
+      );
+      const urlToken = params.get("apiToken");
+      if (urlToken) {
+        setBootConfig({ ...getBootConfig(), apiToken: urlToken });
+      }
+      if (!urlToken) {
+        try {
+          const injectedConfig = (
+            window as unknown as {
+              __injectedShowConfig?: { wsToken?: string };
+            }
+          ).__injectedShowConfig;
+          if (injectedConfig?.wsToken) {
+            setBootConfig({
+              ...getBootConfig(),
+              apiToken: injectedConfig.wsToken,
+            });
+          }
+        } catch {
+          /* injectedShowConfig not available */
+        }
+      }
+    }
+
     injectPopoutApiBase();
     mountReactApp();
     return;
