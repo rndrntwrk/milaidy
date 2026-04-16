@@ -59,13 +59,9 @@ describe("release workflow path contract", () => {
     const agentRelease = readWorkflow("agent-release.yml");
 
     for (const workflow of [snapBuild, publishPackages, agentRelease]) {
-      expect(workflow).toContain(
-        "Normalize runner root ownership for snapd",
-      );
+      expect(workflow).toContain("Normalize runner root ownership for snapd");
       expect(workflow).toContain("sudo chown root:root /");
-      expect(workflow).toContain(
-        "test \"$(stat -c '%u:%g' /)\" = \"0:0\"",
-      );
+      expect(workflow).toContain('test "$(stat -c \'%u:%g\' /)" = "0:0"');
     }
   });
 });

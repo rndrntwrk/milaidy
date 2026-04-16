@@ -24,11 +24,6 @@ const suites = {
       command: "bun",
       args: ["run", "--cwd", "apps/homepage", "lint"],
     },
-    {
-      label: "eliza TypeScript lint",
-      command: "bun",
-      args: ["run", "--cwd", "eliza", "lint:check"],
-    },
   ],
   typecheck: [
     {
@@ -55,11 +50,6 @@ const suites = {
       label: "apps/homepage typecheck",
       command: "bun",
       args: ["run", "--cwd", "apps/homepage", "typecheck"],
-    },
-    {
-      label: "eliza TypeScript typecheck",
-      command: "bun",
-      args: ["run", "--cwd", "eliza", "typecheck"],
     },
   ],
 };

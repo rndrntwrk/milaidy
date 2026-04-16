@@ -16,5 +16,18 @@ describe("run-repo-checks", () => {
     expect(source).toContain(
       'args: ["run", "--cwd", "eliza/packages/ui", "typecheck"]',
     );
+    expect(source).not.toContain('label: "eliza TypeScript typecheck"');
+    expect(source).not.toContain(
+      'args: ["run", "--cwd", "eliza", "typecheck"]',
+    );
+  });
+
+  it("does not reintroduce the full upstream eliza lint sweep", () => {
+    const source = fs.readFileSync(scriptPath, "utf8");
+
+    expect(source).not.toContain('label: "eliza TypeScript lint"');
+    expect(source).not.toContain(
+      'args: ["run", "--cwd", "eliza", "lint:check"]',
+    );
   });
 });
