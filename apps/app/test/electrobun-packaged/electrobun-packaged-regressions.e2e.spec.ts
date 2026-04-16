@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { expect, type TestInfo, test } from "@playwright/test";
-import { type MockApiServer, startMockApiServer } from "./mock-api";
+import { type TestApiServer, startLiveApiServer } from "./live-api";
 import {
   PackagedDesktopHarness,
   resolvePackagedLauncher,
@@ -779,11 +779,11 @@ async function withPackagedHarness(
     "Packaged launcher is required for packaged desktop regressions.",
   ).toBeTruthy();
 
-  let api: MockApiServer | null = null;
+  let api: TestApiServer | null = null;
   let harness: PackagedDesktopHarness | null = null;
 
   try {
-    api = await startMockApiServer({ onboardingComplete: true, port: 0 });
+    api = await startLiveApiServer({ onboardingComplete: true, port: 0 });
     harness = new PackagedDesktopHarness({
       tempRoot,
       launcherPath: launcherPath as string,
@@ -875,7 +875,7 @@ async function withPackagedHarness(
     debugPackagedPhase("relaunch bootstrap requests observed");
 
     // Wait for the startup coordinator to finish transitioning past the
-    // StartupShell. Bootstrap requests prove the mock API is reachable, but
+    // StartupShell. Bootstrap requests prove the live API is reachable, but
     // the startup coordinator may still be in polling-backend → starting-runtime
     // → hydrating phases. Poll until the root element has substantial content
     // and the body text no longer shows startup-phase status strings.
@@ -913,7 +913,7 @@ async function withPackagedHarness(
     } catch (error) {
       const requestLog = api.requests.slice(-80).join("\n");
       throw new Error(
-        `${error instanceof Error ? error.message : String(error)}\nRecent mock API requests:\n${requestLog}`,
+        `${error instanceof Error ? error.message : String(error)}\nRecent packaged API requests:\n${requestLog}`,
       );
     }
   } finally {

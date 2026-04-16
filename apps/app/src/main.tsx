@@ -144,15 +144,13 @@ if (shouldEnableElectrobunMacWindowDrag()) {
 // persisted state and temporarily suppressing stale backend resume config.
 if (shouldInstallMainWindowOnboardingPatches(windowShellRoute)) {
   applyForceFreshOnboardingReset();
-  installForceFreshOnboardingClientPatch(
-    client as unknown as OnboardingClientLike,
-  );
+  installForceFreshOnboardingClientPatch(client as OnboardingClientLike);
 }
 installLocalProviderCloudPreferencePatch(
-  client as unknown as CloudPreferenceClientLike,
+  client as CloudPreferenceClientLike,
 );
 installDesktopPermissionsClientPatch(
-  client as unknown as PermissionsClientLike,
+  client as PermissionsClientLike,
 );
 
 // Register custom character editor for app-core's ViewRouter to pick up
