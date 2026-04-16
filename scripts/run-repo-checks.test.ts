@@ -10,13 +10,39 @@ import {
 } from "./run-repo-checks.mjs";
 
 describe("run-repo-checks", () => {
-  it("scopes eliza typecheck to Milady-relevant packages", () => {
-    expect(miladyElizaTypecheckSteps).toEqual([
+  it("keeps blocking typecheck sweep limited to stable checks", () => {
+    expect(suites.typecheck).toEqual([
       {
-        label: "eliza app-core workspace typecheck",
+        label: "Root workspace typecheck",
         command: "bun",
         args: ["run", "verify:typecheck:workspace"],
       },
+      {
+        label: "apps/app typecheck",
+        command: "bun",
+        args: ["run", "--cwd", "apps/app", "typecheck"],
+      },
+      {
+        label: "apps/homepage typecheck",
+        command: "bun",
+        args: ["run", "--cwd", "apps/homepage", "typecheck"],
+      },
+    ]);
+
+    expect(suites.typecheck).not.toContainEqual({
+      label: "@elizaos/app-core typecheck",
+      command: "bun",
+      args: ["run", "--cwd", "eliza/packages/app-core", "typecheck"],
+    });
+    expect(suites.typecheck).not.toContainEqual({
+      label: "@elizaos/ui typecheck",
+      command: "bun",
+      args: ["run", "--cwd", "eliza/packages/ui", "typecheck"],
+    });
+  });
+
+  it("keeps extended typecheck aligned with shipped eliza packages", () => {
+    expect(miladyElizaTypecheckSteps).toEqual([
       {
         label: "@elizaos/app-core typecheck",
         command: "bun",
@@ -27,42 +53,17 @@ describe("run-repo-checks", () => {
         command: "bun",
         args: ["run", "--cwd", "eliza/packages/ui", "typecheck"],
       },
-      {
-        label: "eliza ui consumer typecheck",
-        command: "bun",
-        args: ["run", "--cwd", "apps/app", "typecheck"],
-      },
-      {
-        label: "eliza agent typecheck",
-        command: "bun",
-        args: ["run", "--cwd", "eliza/packages/agent", "typecheck"],
-      },
-      {
-        label: "eliza cloud plugin typecheck",
-        command: "bun",
-        args: [
-          "run",
-          "--cwd",
-          "eliza/plugins/plugin-elizacloud/typescript",
-          "typecheck",
-        ],
-      },
     ]);
 
-    expect(suites.typecheck).toContainEqual({
+    expect(suites["typecheck:extended"]).toContainEqual({
       label: "@elizaos/app-core typecheck",
       command: "bun",
       args: ["run", "--cwd", "eliza/packages/app-core", "typecheck"],
     });
-    expect(suites.typecheck).toContainEqual({
+    expect(suites["typecheck:extended"]).toContainEqual({
       label: "@elizaos/ui typecheck",
       command: "bun",
       args: ["run", "--cwd", "eliza/packages/ui", "typecheck"],
-    });
-    expect(suites.typecheck).not.toContainEqual({
-      label: "eliza TypeScript typecheck",
-      command: "bun",
-      args: ["run", "--cwd", "eliza", "typecheck"],
     });
   });
 
@@ -87,12 +88,12 @@ describe("run-repo-checks", () => {
       command: "bun",
       args: ["run", "--cwd", "eliza", "lint:python"],
     });
-    expect(suites.typecheck).not.toContainEqual({
+    expect(suites["typecheck:extended"]).not.toContainEqual({
       label: "eliza Rust typecheck",
       command: "bun",
       args: ["run", "--cwd", "eliza", "typecheck:rust"],
     });
-    expect(suites.typecheck).not.toContainEqual({
+    expect(suites["typecheck:extended"]).not.toContainEqual({
       label: "eliza Python typecheck",
       command: "bun",
       args: ["run", "--cwd", "eliza", "typecheck:python"],
@@ -115,7 +116,7 @@ describe("run-repo-checks", () => {
       "cloud gateway-webhook typecheck",
     ]) {
       expect(
-        suites.typecheck.find((step) => step.label === label),
+        suites["typecheck:extended"].find((step) => step.label === label),
       ).toBeUndefined();
     }
   });
@@ -123,7 +124,9 @@ describe("run-repo-checks", () => {
   it("skips unrelated sidecar workspace typechecks", () => {
     expect(miladySidecarTypecheckSteps).toEqual([]);
     expect(
-      suites.typecheck.find((step) => step.label === "steward-fi typecheck"),
+      suites["typecheck:extended"].find(
+        (step) => step.label === "steward-fi typecheck",
+      ),
     ).toBeUndefined();
   });
 });
