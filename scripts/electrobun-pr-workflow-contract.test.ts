@@ -16,7 +16,7 @@ function workflowText() {
 }
 
 describe("electrobun PR workflow contract", () => {
-  it("hydrates the orchestrator plugin before disabling local eliza workspaces", () => {
+  it("hydrates the orchestrator plugin before and after disabling local eliza workspaces", () => {
     const workflow = workflowText();
     const elizaInitIndex = workflow.indexOf(
       "- name: Initialize eliza submodule for version resolution",
@@ -27,15 +27,17 @@ describe("electrobun PR workflow contract", () => {
     const disableIndex = workflow.indexOf(
       "- name: Disable repo-local eliza workspace",
     );
+    const initIndex = workflow.indexOf(
+      "- name: Initialize release-check plugin checkout",
+    );
 
     expect(elizaInitIndex).toBeGreaterThanOrEqual(0);
     expect(versionSourceIndex).toBeGreaterThanOrEqual(0);
     expect(disableIndex).toBeGreaterThanOrEqual(0);
+    expect(initIndex).toBeGreaterThanOrEqual(0);
     expect(elizaInitIndex).toBeLessThan(versionSourceIndex);
     expect(versionSourceIndex).toBeLessThan(disableIndex);
-    expect(workflow).not.toContain(
-      "- name: Initialize release-check plugin checkout",
-    );
+    expect(initIndex).toBeGreaterThan(disableIndex);
     expect(workflow).toContain("git submodule update --init --depth=1 eliza");
     expect(workflow).toContain(
       "git -C eliza submodule update --init plugins/plugin-agent-orchestrator",
