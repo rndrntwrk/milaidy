@@ -329,6 +329,15 @@ export const shopifyPlugin = { name: 'shopify-stub', routes: [] };
 export const stewardPlugin = { name: 'steward-stub', routes: [] };
 export default { routes: [] };
 `;
+// app-knowledge: stub for routes + service-loader subpaths
+const knowledgeRoutes = `export async function handleKnowledgeRoutes() { return false; }
+export default { handleKnowledgeRoutes };
+`;
+const knowledgeServiceLoader = `export function getKnowledgeService() { return null; }
+export function getKnowledgeTimeoutMs() { return 30000; }
+export default { getKnowledgeService, getKnowledgeTimeoutMs };
+`;
+// Generic plugin-style apps (vincent/shopify/steward)
 const apps = [
   '@elizaos/app-vincent',
   '@elizaos/app-shopify',
@@ -338,13 +347,29 @@ for (const name of apps) {
   const dir = 'node_modules/' + name;
   if (fs.existsSync(dir + '/package.json')) { console.log('present: ' + name); continue; }
   fs.mkdirSync(dir, { recursive: true });
-  // Each app is imported as @elizaos/app-NAME/plugin, so create plugin.mjs
   fs.writeFileSync(dir + '/plugin.mjs', emptyPlugin);
   fs.writeFileSync(dir + '/package.json', JSON.stringify({
     name, version: '0.0.0-cloud-stub', type: 'module',
     exports: { './plugin': './plugin.mjs', '.': './plugin.mjs' }
   }));
   console.log('stubbed: ' + name);
+}
+// app-knowledge with subpath exports
+const knDir = 'node_modules/@elizaos/app-knowledge';
+if (!fs.existsSync(knDir + '/package.json')) {
+  fs.mkdirSync(knDir, { recursive: true });
+  fs.writeFileSync(knDir + '/routes.mjs', knowledgeRoutes);
+  fs.writeFileSync(knDir + '/service-loader.mjs', knowledgeServiceLoader);
+  fs.writeFileSync(knDir + '/index.mjs', 'export * from "./routes.mjs"; export * from "./service-loader.mjs";');
+  fs.writeFileSync(knDir + '/package.json', JSON.stringify({
+    name: '@elizaos/app-knowledge', version: '0.0.0-cloud-stub', type: 'module',
+    exports: {
+      '.': './index.mjs',
+      './routes': './routes.mjs',
+      './service-loader': './service-loader.mjs'
+    }
+  }));
+  console.log('stubbed: @elizaos/app-knowledge');
 }
 __APP_STUBS__
 
