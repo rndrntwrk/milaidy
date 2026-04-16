@@ -210,6 +210,19 @@ export const LiveKitBroadcastSubscriber = memo(function LiveKitBroadcastSubscrib
 
         const onDisconnected = () => {
           if (cancelled) return;
+          // Clear the track ref so we don't hold a reference to a
+          // dead track until the component unmounts. The video
+          // element's `srcObject` is also reset here so the frozen
+          // last frame doesn't linger on screen under the placeholder.
+          const videoEl = videoRef.current;
+          if (attachedTrackRef.current && videoEl) {
+            try {
+              attachedTrackRef.current.detach(videoEl);
+            } catch {
+              /* ignore */
+            }
+          }
+          attachedTrackRef.current = null;
           setStatus("disconnected");
           onStatusChangeRef.current?.("disconnected");
         };

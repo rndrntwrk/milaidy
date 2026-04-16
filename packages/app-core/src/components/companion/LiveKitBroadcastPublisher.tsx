@@ -333,13 +333,11 @@ export const LiveKitBroadcastPublisher = memo(function LiveKitBroadcastPublisher
         }
 
         const mediaStream = canvas.captureStream(30);
-        const videoTracks = mediaStream.getVideoTracks();
-        if (videoTracks.length === 0) {
-          throw new Error("[LiveKitBroadcastPublisher] captureStream produced no video tracks");
-        }
-        const mediaStreamTrack = videoTracks[0];
+        const mediaStreamTrack = mediaStream.getVideoTracks()[0];
         if (!mediaStreamTrack) {
-          throw new Error("[LiveKitBroadcastPublisher] captureStream produced no video tracks");
+          throw new Error(
+            "[LiveKitBroadcastPublisher] captureStream produced no video tracks",
+          );
         }
         const localVideoTrack = new LocalVideoTrack(mediaStreamTrack, undefined, false);
         trackRef.current = localVideoTrack;
