@@ -877,25 +877,32 @@ async function withPackagedHarness(
     // Wait for the startup coordinator to finish transitioning past the
     // StartupShell. Bootstrap requests prove the live API is reachable, but
     // the startup coordinator may still be in polling-backend → starting-runtime
-    // → hydrating phases. Poll until the root element has substantial content
-    // and the body text no longer shows startup-phase status strings.
+    // → hydrating phases. Poll until the startup shell DOM element is gone
+    // and the root element has substantial content.
+    //
+    // Previous approach used a regex on body text (/LOADING/i etc.) which
+    // false-positived on app-shell "Loading messages…" text in ChatView,
+    // causing the relaunch to stall even though the coordinator reached ready.
     await waitForEval<
-      EvalResult<{ ready: boolean; rootLength: number; bodySnippet: string }>
+      EvalResult<{ ready: boolean; rootLength: number; bodySnippet: string; startupPhase: string | null }>
     >(
       harness,
       `(() => {
         try {
           const rootHtml = document.getElementById("root")?.innerHTML ?? "";
+          const startupShell = document.querySelector('[data-testid="startup-shell-loading"]');
+          const onboardingOverlay = document.querySelector('[data-testid="onboarding-ui-overlay"]');
+          const startupPhase = startupShell?.getAttribute("data-startup-phase") ?? null;
           const bodyText = (document.body?.innerText || "").replace(/\\s+/g, " ").trim();
-          const isStartup = /CONNECTING TO BACKEND|STARTING|INITIALIZING|LOADING/i.test(bodyText);
           return {
             ok: true,
-            ready: rootHtml.length > 200 && !isStartup,
+            ready: rootHtml.length > 200 && !startupShell && !onboardingOverlay,
             rootLength: rootHtml.length,
             bodySnippet: bodyText.slice(0, 120),
+            startupPhase,
           };
         } catch (e) {
-          return { ok: false, ready: false, rootLength: 0, bodySnippet: "" };
+          return { ok: false, ready: false, rootLength: 0, bodySnippet: "", startupPhase: null };
         }
       })()`,
       (r) => r.ok && r.ready,
