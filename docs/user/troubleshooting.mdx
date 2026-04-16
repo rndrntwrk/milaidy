@@ -1,0 +1,101 @@
+---
+title: "Troubleshooting"
+sidebarTitle: "Troubleshooting"
+description: "Fix common Milady issues with startup, providers, voice, connectors, and remote access."
+---
+
+Most failures come from one of these areas:
+
+1. app launch
+2. provider setup
+3. voice setup
+4. connector credentials
+5. remote URL or token configuration
+
+## Milady will not open
+
+### macOS
+
+Re-download from the official [GitHub releases](https://github.com/milady-ai/milady/releases/latest) page if Gatekeeper or notarization warnings look suspicious.
+
+### Windows
+
+If SmartScreen appears, use `More info` and confirm you downloaded the official installer.
+
+### Linux
+
+If the AppImage will not start:
+
+```bash
+chmod +x Milady.AppImage
+```
+
+## The first message hangs
+
+Check:
+
+- the API key
+- whether Ollama is running
+- whether the selected model exists
+- whether a remote backend owns provider routing
+
+## Voice is silent
+
+Test voice preview first.
+
+- if preview fails, fix the voice provider or audio output
+- if preview works but replies stay silent, fix the speech provider
+- if talk mode fails, check microphone permissions
+
+## Discord or Telegram does not reply
+
+### Discord
+
+- token wrong
+- Message Content Intent disabled
+- missing channel permissions
+
+### Telegram
+
+- token wrong
+- connector offline
+- privacy mode blocking group behavior
+
+Guides:
+
+- [Connect Discord](/user/connect-discord)
+- [Connect Telegram](/user/connect-telegram)
+
+## Remote connection fails
+
+Check:
+
+- the URL
+- the token
+- whether the backend is running
+- whether the backend listens outside localhost
+- whether the current device can reach that network
+
+## Milady is slow
+
+- slow before the first token: choose a faster model or provider
+- slow throughout: check network limits or local model size
+
+## Start over
+
+Quit Milady, rename the state directory, and relaunch:
+
+- macOS / Linux: `~/.milady`
+- Windows: `%USERPROFILE%\\.milady\\`
+
+## File a bug
+
+Include:
+
+- OS
+- local, remote, or Eliza Cloud
+- selected provider
+- expected behavior
+- actual behavior
+
+Issue tracker: [milady-ai/milady issues](https://github.com/milady-ai/milady/issues)

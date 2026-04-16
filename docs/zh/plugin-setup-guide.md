@@ -260,16 +260,6 @@ description: Milady 连接器、AI 提供者和直播推流插件的完整设置
 - 在 `milady.json` 的 `providers.minimax` 配置块中设置模型 ID
 **提示：** Minimax 提供中文和多语言 AI 模型。
 
-<div id="pi-ai">
-
-### Pi AI
-</div>
-
-**最少必填：** `ELIZA_USE_PI_AI=true`
-**变量：**
-- `ELIZA_USE_PI_AI` — 设置为 `true` 以启用 Pi AI 作为模型提供者
-**提示：** Pi AI 提供针对友好、有帮助的对话优化的会话模型。
-
 <div id="zai">
 
 ### Zai
@@ -489,7 +479,7 @@ description: Milady 连接器、AI 提供者和直播推流插件的完整设置
 1. 从微信代理服务获取 API 密钥
 2. 在 milady.json 中配置 `connectors.wechat`，设置 `apiKey` 和 `proxyUrl`
 3. 启动 Milady——用微信扫描终端中显示的二维码
-**提示：** 微信使用第三方代理服务，而非官方 API。只使用您信任的代理——它能看到所有消息流量。通过 `accounts` 映射支持多账户。插件包：`@miladyai/plugin-wechat`。
+**提示：** 微信使用第三方代理服务，而非官方 API。只使用您信任的代理——它能看到所有消息流量。通过 `accounts` 映射支持多账户。插件包：`@elizaos/plugin-wechat`。
 
 <div id="github">
 

@@ -3,6 +3,95 @@ title: Changelog
 description: What's new in Milady — features, improvements, and fixes.
 ---
 
+<Update label="2026-04-16" description="Week of April 16; desktop cloud login, onboarding polish, connector icons, cross-platform fixes" tags={["Update", "Fix"]}>
+
+## Updates
+
+- **Desktop cloud login reliability** — OAuth login popups on the desktop app now open and complete reliably across all platforms. A series of fixes resolved cross-origin popup handling, pre-opened window routing, and Electrobun RPC bridge mismatches that could cause the cloud login flow to hang or fail silently.
+- **Onboarding flow polish** — The desktop [onboarding wizard](/guides/beginners-user-guide) now skips the hosting selection screen automatically, since the desktop app always runs locally. Back navigation properly resets provider and model choices so you see consistent UI when revisiting steps. Provider auto-detection has been expanded to cover more configurations out of the box.
+- **Real connector icons** — The [connector](/guides/connectors) setup panels now display official Telegram and Discord brand icons instead of generic placeholders, making it easier to identify each platform at a glance.
+- **Steward wallet cloud provisioning** — When you log in to [Eliza Cloud](/guides/cloud), your agent can now automatically provision Steward wallet credentials for EVM and Solana — no manual environment variable setup required.
+
+## Bug fixes
+
+- Fixed inbox reply hints displaying "on this Mac" on Windows and Linux — the text now reads "on this device" across all platforms
+- Fixed onboarding showing inconsistent UI when navigating back to the providers step — tab state and cloud selection are now properly cleared on back navigation
+- Fixed the desktop app window briefly maximizing on launch before settling to its configured size
+
+</Update>
+
+<Update label="2026-04-15" description="Week of April 15; Steward Vault managed wallets, agent training, character catalog, coding agent sessions, companion emotes" tags={["Feature", "Update", "Fix"]}>
+
+## Steward Vault managed wallets
+
+Your agent now supports a dual-wallet architecture with [Steward Vault](/guides/wallet) integration. When connected, transactions route through a managed vault that evaluates spending policies — including per-transaction, daily, and weekly USD-denominated caps — before signing. You can switch between local and cloud wallets at any time, and your primary wallet selection persists across restarts. Both EVM and Solana chains are supported, with automatic RPC fallbacks when balance lookups fail.
+
+## Agent training
+
+A new [training system](/guides/training) lets you shape your agent's behavior with custom examples and feedback. Provide training data through the dashboard and the training engine processes it into actionable patterns your agent applies in conversation. Training runs are visible in the dashboard so you can track progress and refine results over time.
+
+## Character catalog in desktop
+
+The desktop app now includes an expanded character catalog for browsing and selecting agent personalities. Character previews load faster and the selection flow integrates directly with the [onboarding wizard](/guides/beginners-user-guide) and character editor, so you can explore available characters without leaving the setup process.
+
+## Updates
+
+- **Coding agent session hydration** — [Coding agent](/guides/coding-swarms) sessions now persist their state and restore it when you return, so you pick up where you left off instead of starting a fresh session. The coding agent settings and model configuration panels have also been refreshed.
+- **Companion emote picker** — The [companion](/dashboard/apps) overlay now includes an emote picker, letting you trigger VRM avatar expressions and gestures on demand. The emote system is integrated with the companion chat and shell.
+- **Homepage approval queue and transaction history** — The cloud [dashboard](/guides/cloud) now shows a cleaner approval queue and formatted transaction history, making it easier to review pending actions and past activity at a glance.
+- **Life-ops sidebar cleanup** — The stale todo sidebar widget has been removed from the life-ops section, reducing clutter for users who manage tasks through conversation instead.
+- **Plugin config reconciliation** — Plugin enabled states are now reconciled automatically on startup. If your config file was edited externally or a migration only updated one location, the runtime detects the drift and corrects it — so plugins stay in sync without manual intervention.
+- **Desktop diagnostic redaction** — Bug reports submitted from the desktop app now automatically redact API keys, tokens, and secrets from URLs before they leave your machine, preventing accidental credential exposure in diagnostic logs.
+
+## Bug fixes
+
+- Fixed shell header buttons (voice toggle, new chat, save) appearing as unresponsive when their handlers were unavailable — they are now hidden until functional
+- Fixed Windows desktop builds failing under heavy native plugin compilation by limiting spawn concurrency and terminating stalled child processes
+
+</Update>
+
+<Update label="2026-04-15" description="Week of April 15; Steward wallet follow-ups and CI hardening" tags={["Update", "Fix", "Docs"]}>
+
+## Steward wallet plugin 0.3.0
+
+Milady now targets `@stwd/eliza-plugin` 0.3.0 instead of 0.2.0. The published 0.3.0 package upgrades its Steward SDK dependency from `@stwd/sdk` 0.3.0 to 0.4.0, adds explicit spend-summary and approval-queue actions (`STEWARD_CHECK_SPEND`, `STEWARD_LIST_APPROVALS`), and updates signing flows so pending approvals and signed-but-not-broadcast transactions are surfaced as distinct outcomes.
+
+## Updates
+
+- **Published-only CI restore flow** — CI jobs that temporarily rename `eliza/` now restore it through a shared Node script with an explicit rename failure path, so Windows and cross-platform follow-on failures stop collapsing into vague downstream build errors.
+
+</Update>
+
+<Update label="2026-04-13" description="Week of April 13; life-ops goal grounding, Gmail compose, calendar editing, cloud Docker improvements" tags={["Feature", "Update", "Fix"]}>
+
+## Life-ops goal grounding
+
+Your agent now understands your life goals and uses them to guide its actions. When you set goals through the [life-ops system](/rest/lifeops), a semantic evaluator scores how well each action aligns with what you're working toward — so your agent's suggestions and task prioritization reflect your actual priorities, not just the immediate request.
+
+## Gmail compose and send
+
+The [life-ops](/rest/lifeops) Gmail integration can now compose and send outbound emails, not just read and triage. Ask your agent to draft and send a message and it handles recipient, subject, and body extraction from natural language. HTML entities in email snippets and subjects are now decoded correctly, and sender names display cleanly alongside addresses.
+
+## Calendar event editing
+
+Google Calendar actions now support updating and deleting events through conversation. Ask your agent to rename, reschedule, or cancel a meeting and it handles the right operation automatically. Far-future and "all events" lookups now force-sync with Google to catch events outside the local cache, and time detection skips unnecessary LLM extraction on pure renames so dates in event titles aren't misinterpreted.
+
+## Updates
+
+- **Onboarding streamlined** — Unused onboarding steps have been removed and the setup chooser screen has been restyled for better readability on dark backgrounds. Each setup option now includes a description, and character selection includes a back button so you can revisit earlier choices.
+- **Action context deduplication** — Your agent's LLM context no longer includes duplicate action results. Action state is now the sole source with a generous token budget, which means faster responses and more room for conversation history.
+- **Music player stream reliability** — The [music player](/rest/apps) audio streaming fallback has been hardened to recover more gracefully when the primary stream source is unavailable.
+- **Knowledge view improvements** — The [knowledge](/guides/knowledge) detail view has been updated with a cleaner layout for browsing and managing uploaded documents.
+- **Cloud deployment improvements** — Cloud Docker images now build with all runtime patches applied in a single pipeline, making cloud container provisioning faster and more reliable.
+
+## Bug fixes
+
+- Fixed Gmail compose failing to parse unquoted subject and body fields — the action now handles both quoted and unquoted input formats
+- Fixed calendar event updates producing Google API errors when end time was missing — the system now auto-derives end time from start time
+- Fixed smart quote characters in Gmail regex patterns causing parse failures on certain runtimes
+
+</Update>
+
 <Update label="2026-04-12" description="Week of April 12; Shopify plugin, inbox actions, connector setup, companion overlay, provider switcher" tags={["Feature", "Update", "Fix"]}>
 
 ## Shopify plugin
@@ -42,7 +131,6 @@ The [Apps view](/dashboard/apps) now includes Vincent trading profile and strate
 - Fixed a dev-mode startup crash caused by barrel file resolution in the Rollup bundler
 
 </Update>
-
 <Update label="2026-04-11" description="Week of April 11; 'Scape game app, Shopify plugin, Vincent trading, inbox actions, companion overlay, coding agent streaming" tags={["Feature", "Update", "Fix"]}>
 
 ## 'Scape game app
@@ -490,7 +578,7 @@ Milady now automatically reduces prompt sizes by around 36% for general chat. Th
 
 **Why a hard pin in `package.json`:** A caret range (`^2.0.0-alpha.10`) allowed the resolver to pick **`alpha.12`**, breaking fresh installs and lockfile updates. The fix is version selection, not a small dist patch (the plugin body is missing entirely).
 
-**Docs:** [Plugin resolution — pinned OpenRouter](/plugin-resolution-and-node-path#pinned-elizaosplugin-openrouter), [OpenRouter registry page](/plugin-registry/llm/openrouter#milady-pinned-version-and-upstream-bundle-bug), root `README.md` (upstream note), and `docs/ROADMAP.md` (done item).
+**Docs:** [Plugin resolution — pinned OpenRouter](/plugin-resolution-and-node-path#pinned-elizaosplugin-openrouter), [OpenRouter registry page](/plugin-registry/llm/openrouter#milady-pinned-version-and-upstream-bundle-bug), root `README.md` (upstream note), and `docs/roadmap.md` (done item).
 
 </Update>
 
@@ -727,7 +815,7 @@ Docs: [Environment variables](/cli/environment#runtime-behavior), [TTS plugin](/
 
 ## Vitest: `packages/app-core/test/**` and `*.test.tsx` under `src/`
 
-Root **`vitest.config.ts`** now includes **`packages/app-core/test/**/*.test.ts(x)`** and **`packages/app-core/src/**/*.test.tsx`**, and excludes **`packages/app-core/test/**/*.e2e.test.*`** from the default unit job (e2e still uses **`vitest.e2e.config.ts`**). **Why:** harness tests under `test/state`, `test/runtime`, etc. were skipped; a single explicit `OnboardingWizard.test.tsx` path was brittle for future colocated TSX tests.
+Root **`vitest.config.ts`** now includes **`packages/app-core/test/**/*.test.ts(x)`** and **`packages/app-core/src/**/*.test.tsx`**, and excludes **`packages/app-core/test/**/*.e2e.test.*`** from the default unit job (e2e still uses **`test/vitest/e2e.config.ts`**). **Why:** harness tests under `test/state`, `test/runtime`, etc. were skipped; a single explicit `OnboardingWizard.test.tsx` path was brittle for future colocated TSX tests.
 
 See [Contributing — Testing](/guides/contributing) (subsection *`packages/app-core` in the root Vitest config*).
 
@@ -740,7 +828,7 @@ See [Contributing — Testing](/guides/contributing) (subsection *`packages/app-
 <Update label="2026-03-21" description="App onboarding architecture" tags={["Update"]}>
 ## Data-driven onboarding UI (app-core)
 
-The dashboard onboarding wizard now derives **step order**, **back navigation**, and the **sidebar step list** from a small pure module (`@miladyai/app-core/onboarding/flow`) instead of duplicating arrays in `AppContext` and the nav component. **Why:** duplicate lists drifted and made “go back” hard to keep consistent.
+The dashboard onboarding wizard now derives **step order**, **back navigation**, and the **sidebar step list** from a small pure module (`@elizaos/app-core/onboarding/flow`) instead of duplicating arrays in `AppContext` and the nav component. **Why:** duplicate lists drifted and made “go back” hard to keep consistent.
 
 - **Forward motion** is still orchestrated in `AppProvider` as `advanceOnboarding` (wrapped by `handleOnboardingNext`) so cloud login, `handleOnboardingFinish`, and provider auto-fill run in the correct order before the step index changes.
 - **Back** uses `resolveOnboardingPreviousStep` (including **connection → welcome**, even though `welcome` is not listed in the custom-flow sidebar).
@@ -751,7 +839,7 @@ Developer guide: [Onboarding UI flow](/guides/onboarding-ui-flow).
 
 ## Connection step: pure subflow + view registry
 
-Inside the **`connection`** wizard step (hosting, remote backend, Eliza Cloud, neural link, provider detail), routing and navigation patches now live in **`@miladyai/app-core/onboarding/connection-flow`** — still **pure** (no React), with Vitest table coverage. **Why:** the old single file mixed a large `if` tree with OAuth and API calls, so branch order and `setState` clusters were hard to test and easy to break.
+Inside the **`connection`** wizard step (hosting, remote backend, Eliza Cloud, neural link, provider detail), routing and navigation patches now live in **`@elizaos/app-core/onboarding/connection-flow`** — still **pure** (no React), with Vitest table coverage. **Why:** the old single file mixed a large `if` tree with OAuth and API calls, so branch order and `setState` clusters were hard to test and easy to break.
 
 - **`deriveConnectionScreen`** and **`resolveConnectionUiSpec`** answer “which shell to show” from a snapshot (including steady-state **`forceCloud`** routing so tests match post-bootstrap UI).
 - **`applyConnectionTransition`** returns either a **patch** (applied via `setState` in `ConnectionStep`) or an **effect** token for **`useLocalBackend`** — **why:** disconnecting the remote client and `retryStartup` are not pure and must stay in `AppContext`.
@@ -1433,10 +1521,6 @@ The Telegram connector now automatically splits long agent responses into proper
 ## Agent activity box
 
 A sticky activity indicator now shows real-time per-task progress in the chat view. Routine coding-agent status messages are filtered from chat history to reduce noise. See the [coding swarms guide](/guides/coding-swarms) for details.
-
-## Pi AI model provider
-
-You can now use Pi AI as a model provider with streaming support. Configure it in the [model providers](/model-providers) settings alongside your existing providers.
 
 ## Opinion markets plugin
 

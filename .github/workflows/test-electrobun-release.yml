@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 env:
-  BUN_VERSION: "1.3.9"
+  BUN_VERSION: "1.3.11"
   NODE_NO_WARNINGS: "1"
   MILADY_SKIP_LOCAL_UPSTREAMS: "1"
 
@@ -45,11 +45,29 @@ jobs:
       - name: Initialize tracked workspace submodules
         run: bun run scripts/init-submodules.mjs
 
+      - name: Initialize eliza submodule for version resolution
+        run: git submodule update --init --depth=1 eliza
+
+      - name: Initialize release-check plugin version source
+        run: |
+          if [ -f eliza/.gitmodules ]; then
+            git -C eliza submodule update --init plugins/plugin-agent-orchestrator
+          fi
+
       - name: Disable repo-local eliza workspace
         run: bun run scripts/disable-local-eliza-workspace.mjs
 
+      - name: Initialize release-check plugin checkout
+        run: |
+          if [ -f eliza/.gitmodules ]; then
+            git -C eliza submodule update --init plugins/plugin-agent-orchestrator
+          fi
+
       - name: Install root dependencies
         run: bun install --ignore-scripts
+
+      - name: Install published-workspace fallback dependencies
+        run: bash scripts/install-published-workspace-fallback-deps.sh
 
       - name: Run repository postinstall patches
         run: bun run postinstall

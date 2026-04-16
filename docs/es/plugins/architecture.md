@@ -177,7 +177,6 @@ const AUTH_PROVIDER_PLUGINS = {
   PERPLEXITY_API_KEY:             "@elizaos/plugin-perplexity",
   ELIZAOS_CLOUD_API_KEY:          "@elizaos/plugin-elizacloud",
   ELIZAOS_CLOUD_ENABLED:          "@elizaos/plugin-elizacloud",
-  ELIZA_USE_PI_AI:                "@elizaos/plugin-pi-ai",
   CUA_API_KEY:                    "@elizaos/plugin-cua",
   CUA_HOST:                       "@elizaos/plugin-cua",
   OBSIDIAN_VAULT_PATH:            "@elizaos/plugin-obsidian",
@@ -207,11 +206,11 @@ const CONNECTOR_PLUGINS = {
   nostr:       "@elizaos/plugin-nostr",
   blooio:      "@elizaos/plugin-blooio",
   twitch:      "@elizaos/plugin-twitch",
-  wechat:      "@miladyai/plugin-wechat",  // Milady-specific (added in app-core)
+  wechat:      "@elizaos/plugin-wechat",  // Milady-specific (added in app-core)
 };
 ```
 
-> **Nota:** El paquete upstream `packages/agent` define todos los conectores `@elizaos/*`. El `packages/app-core` de Milady extiende este mapa con la entrada `wechat` apuntando a `@miladyai/plugin-wechat`.
+> **Nota:** El paquete upstream `packages/agent` define todos los conectores `@elizaos/*`. El `packages/app-core` de Milady extiende este mapa con la entrada `wechat` apuntando a `@elizaos/plugin-wechat`.
 
 **Flags de funcionalidades** — La sección `features` de `milady.json` habilita automáticamente los plugins de funcionalidades. Una funcionalidad puede habilitarse con `features.<name>: true` o `features.<name>.enabled: true`:
 

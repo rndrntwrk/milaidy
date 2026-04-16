@@ -186,12 +186,6 @@ where to get the credentials, minimum required fields, and tips for optional fie
 - Set model IDs via the `providers.minimax` config block in `milady.json`
 **Tips:** Minimax provides Chinese and multilingual AI models.
 
-### Pi AI
-**Minimum required:** `ELIZA_USE_PI_AI=true`
-**Variables:**
-- `ELIZA_USE_PI_AI` — Set to `true` to enable Pi AI as a model provider
-**Tips:** Pi AI provides conversational models optimized for friendly, helpful dialogue.
-
 ### Zai
 **Get credentials:** From Homunculus Labs
 **Minimum required:** `ZAI_API_KEY`
@@ -364,7 +358,7 @@ where to get the credentials, minimum required fields, and tips for optional fie
 1. Get API key from your WeChat proxy service
 2. Configure `connectors.wechat` in milady.json with `apiKey` and `proxyUrl`
 3. Start Milady — scan the QR code displayed in terminal with WeChat
-**Tips:** WeChat uses a third-party proxy service, not an official API. Only use a proxy you trust — it sees all message traffic. Multi-account supported via `accounts` map. Package: `@miladyai/plugin-wechat`.
+**Tips:** WeChat uses a third-party proxy service, not an official API. Only use a proxy you trust — it sees all message traffic. Multi-account supported via `accounts` map. Package: `@elizaos/plugin-wechat`.
 
 ### GitHub
 **Get credentials:** https://github.com/settings/tokens → Fine-grained or Classic

@@ -32,7 +32,7 @@ That is correct for **token deltas** that extend the same answer, but wrong for 
 
 ## The Milady behavior
 
-Inside `generateChatResponse` (`packages/agent/src/api/chat-routes.ts`):
+Inside `generateChatResponse` (`eliza/packages/agent/src/api/chat-routes.ts`):
 
 - **LLM chunks** still use **append** semantics via `appendIncomingText` → `resolveStreamingUpdate` → `onChunk`.
 - **Action callbacks** use **`replaceCallbackText`**:
@@ -60,7 +60,17 @@ await callback({ text: "🔍 Searching…", source: message.content.source });
 await callback({ text: "Now playing: **Track**", source: message.content.source });
 ```
 
-No extra fields, no Milady-specific APIs, no runtime attachment. Helpers like `ProgressiveMessage` in `plugin-music-player` remain a thin wrapper over `callback`.
+The default remains **replace** semantics for callback text. Plugins can now opt into explicit merge behavior with `merge?: "append" | "replace"` when they need to be precise:
+
+```typescript
+await callback({
+  text: "🔍 Searching…",
+  source: message.content.source,
+  merge: "replace",
+});
+```
+
+`eliza/plugins/plugin-music-player` now does this explicitly through its `ProgressiveMessage` helper. Most plugins do not need to set `merge`; omitting it preserves the existing behavior.
 
 **Why preserve the contract:** Discord and other connectors already rely on this API; Milady’s job is to interpret repeated callbacks correctly in the **API chat** path, not to fork the plugin surface.
 
@@ -79,10 +89,52 @@ No extra fields, no Milady-specific APIs, no runtime attachment. Helpers like `P
 
 ---
 
+## Persisted callback history
+
+Reloading a conversation now preserves the **full progressive callback trail**, not just the final callback text.
+
+### Schema decision
+
+The persisted assistant content can include:
+
+```ts
+{
+  text: "Now playing: **Track**",
+  actionCallbackHistory: [
+    "🔍 Looking up track...",
+    "🔍 Searching for track...",
+    "✨ Setting up playback...",
+    "Now playing: **Track**"
+  ]
+}
+```
+
+**Why this shape:** it keeps the normal `text` field backward-compatible for existing clients while adding one optional field that captures the historical callback states in order.
+
+### Write path
+
+- `generateChatResponse()` records each callback snapshot into `actionCallbackHistory`.
+- If the turn already created a visible assistant memory during action execution (for example an `action_result` memory), the conversation route updates that recent assistant memory **in place** with the callback history.
+- If no assistant memory exists yet, the normal persisted assistant turn carries the same `actionCallbackHistory` field.
+
+**Why update in place:** action callbacks already create the visible assistant turn for many runtime flows; attaching the history there avoids duplicate assistant bubbles.
+
+### Read path
+
+When `/api/conversations/:id/messages` reloads persisted messages, it reconstructs the visible transcript by:
+
+1. taking every historical callback line except a trailing duplicate of the final `text`
+2. appending the final `text` as the last visible paragraph
+
+That means a reloaded conversation shows the same **status trail + final outcome** users saw while the callback stream was live.
+
+---
+
 ## Related code and docs
 
-- **Implementation:** `packages/agent/src/api/chat-routes.ts` — `replaceCallbackText`, `preCallbackText`.
-- **Example helper:** `packages/plugin-music-player/src/utils/progressiveMessage.ts`.
+- **Implementation:** `eliza/packages/agent/src/api/chat-routes.ts` — `replaceCallbackText`, `preCallbackText`, `actionCallbackHistory`.
+- **Persistence + replay:** `eliza/packages/agent/src/api/conversation-routes.ts`.
+- **Example helper:** `eliza/plugins/plugin-music-player/src/utils/progressiveMessage.ts`.
 - **UI streaming:** [Dashboard — Chat](/dashboard/chat) (SSE / typing indicator).
 - **Changelog:** [Changelog](/changelog) — search for “action callback” or the ship date.
 
@@ -90,9 +142,8 @@ No extra fields, no Milady-specific APIs, no runtime attachment. Helpers like `P
 
 ## Future / roadmap
 
-Possible follow-ups (not shipped as requirements here):
+Possible follow-ups:
 
-- Optional **metadata** on callback content to distinguish “append” vs “replace” for exotic plugins (only if a real use case appears).
-- **Persistence** of intermediate statuses (today the final persisted turn text follows normal chat persistence rules).
+- Optional metadata to distinguish **replace** vs **append** callback semantics if a real plugin needs both within one turn.
 
-See `docs/ROADMAP.md` in the repository for high-level product direction.
+See `docs/roadmap.md` in the repository for high-level product direction.

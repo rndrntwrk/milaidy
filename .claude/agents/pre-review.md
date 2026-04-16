@@ -35,13 +35,13 @@ Report type errors. Focus on files in the current diff.
 
 **NODE_PATH invariant**: Verify all 3 locations still set NODE_PATH correctly:
 ```bash
-grep -n "NODE_PATH" scripts/run-node.mjs packages/agent/src/runtime/eliza.ts apps/app/electrobun/src/native/agent.ts
+grep -n "NODE_PATH" eliza/packages/app-core/scripts/run-node.mjs packages/agent/src/runtime/eliza.ts apps/app/electrobun/src/native/agent.ts
 ```
 All 3 files must have NODE_PATH assignments.
 
 **Coverage floor**: If tests were modified, run them:
 ```bash
-bunx vitest run --config vitest.unit.config.ts --reporter=verbose 2>&1 | tail -20
+bunx vitest run --config test/vitest/unit.config.ts --reporter=verbose 2>&1 | tail -20
 ```
 Coverage must meet: 25% lines, 15% branches.
 

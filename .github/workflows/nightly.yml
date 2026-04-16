@@ -164,7 +164,7 @@ jobs:
       - name: Build
         run: |
           bunx tsdown
-          node --import tsx scripts/write-build-info.ts
+          node --import tsx eliza/packages/app-core/scripts/write-build-info.ts
           echo '{"type":"module"}' > dist/package.json
 
       - name: Run unit tests with coverage
@@ -177,19 +177,40 @@ jobs:
         run: bun run build
 
       - name: Run deterministic E2E tests
+        run: bun run test:integration
+
+      - name: Run real local E2E tests
         run: bun run test:e2e
 
       - name: Run startup E2E contract guard
         run: bun run test:startup:contract
-
-      - name: Run startup E2E tests
-        run: bun run test:startup:e2e
 
       - name: Run desktop contract tests
         run: bun run test:desktop:contract
 
       - name: Run validation E2E tests
         run: bun run test:e2e:validation
+
+      - name: Run live surface audit
+        run: bun run test:audit:live:strict
+
+      - name: Install Playwright browser
+        run: bunx playwright install --with-deps chromium
+
+      - name: Check live provider secrets
+        run: |
+          if [ -z "${{ secrets.ELIZAOS_CLOUD_API_KEY }}" ]; then
+            echo "::error::UI Playwright smoke requires ELIZAOS_CLOUD_API_KEY so the suite can complete real onboarding."
+            exit 1
+          fi
+
+      - name: Run UI Playwright smoke tests
+        run: bun run test:ui:playwright
+        env:
+          MILADY_LIVE_TEST: "1"
+          ELIZA_LIVE_TEST: "1"
+          ELIZAOS_CLOUD_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY }}
+          ELIZAOS_CLOUD_BASE_URL: ${{ secrets.ELIZAOS_CLOUD_BASE_URL }}
 
       - name: Upload build artifacts for publish
         uses: actions/upload-artifact@v4
@@ -225,6 +246,7 @@ jobs:
     with:
       tag: ${{ needs.build-and-test.outputs.nightly_tag }}
       draft: false
+      publish_docker: false
       publish_release: false
     secrets: inherit
 
