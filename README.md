@@ -456,7 +456,7 @@ Lives at `~/.milady/milady.json` (override with `MILADY_CONFIG_PATH` or `MILADY_
     model: "anthropic/claude-opus-4-5",
   },
   env: {
-    ANTHROPIC_API_KEY: "sk-ant-...",
+    ANTHROPIC_API_KEY: "<ANTHROPIC_API_KEY>",
   },
 }
 ```
