@@ -11,7 +11,7 @@ import {
   createMemoryStorage,
   hasStorageApi,
   suppressReactTestConsoleErrors,
-} from "../../../test/helpers/browser-mocks";
+} from "@elizaos/app-core/test/helpers/browser-mocks";
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
