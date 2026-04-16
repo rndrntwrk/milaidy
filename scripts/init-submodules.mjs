@@ -16,12 +16,7 @@ const SUBMODULE_READINESS_MARKERS = {
 
 // plugin-openrouter contains Windows-incompatible PGlite fixture paths; skip
 // checkout until elizaos-plugins/plugin-openrouter#25 is merged.
-// plugin-elizacloud commit 9f9121a is not accessible on the remote; skip until
-// the eliza submodule pin is updated to a reachable commit.
-const SKIP_SUBMODULES = new Set([
-  "eliza/plugins/plugin-openrouter",
-  "eliza/plugins/plugin-elizacloud",
-]);
+const SKIP_SUBMODULES = new Set(["eliza/plugins/plugin-openrouter"]);
 
 // Initialize nested eliza submodules in a second pass from inside eliza/ so
 // nested skip rules (for example plugin-openrouter on Windows) actually apply.
