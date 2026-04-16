@@ -41,6 +41,7 @@ const appCoreNativePluginEntrypoints = path.join(
 );
 const uiPkgRoot = path.join(miladyRoot, "eliza/packages/ui");
 const capacitorCoreEntry = _require.resolve("@capacitor/core");
+const patheEntry = _require.resolve("pathe");
 
 function ensureTrailingSlash(value: string): string {
   return value.endsWith("/") ? value : `${value}/`;
@@ -1185,7 +1186,7 @@ export default defineConfig({
     alias: [
       // Bare Node built-in polyfills for browser — pathe provides ESM path,
       // events is pre-bundled via optimizeDeps.
-      { find: /^path$/, replacement: "pathe" },
+      { find: /^path$/, replacement: patheEntry },
       { find: /^@capacitor\/core$/, replacement: capacitorCoreEntry },
       // Keep this subpath on the concrete source file so Docker/Vite builds
       // do not fall back to the extensionless tsconfig wildcard rewrite.
