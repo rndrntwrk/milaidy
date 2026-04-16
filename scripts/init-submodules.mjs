@@ -16,7 +16,12 @@ const SUBMODULE_READINESS_MARKERS = {
 
 // plugin-openrouter contains Windows-incompatible PGlite fixture paths; skip
 // checkout until elizaos-plugins/plugin-openrouter#25 is merged.
-const SKIP_SUBMODULES = new Set(["eliza/plugins/plugin-openrouter"]);
+// plugin-elizacloud commit 9f9121a is not accessible on the remote; skip until
+// the eliza submodule pin is updated to a reachable commit.
+const SKIP_SUBMODULES = new Set([
+  "eliza/plugins/plugin-openrouter",
+  "eliza/plugins/plugin-elizacloud",
+]);
 
 // Initialize nested eliza submodules in a second pass from inside eliza/ so
 // nested skip rules (for example plugin-openrouter on Windows) actually apply.
@@ -428,17 +433,25 @@ export function runInitSubmodules({
         }
 
         const nestedSkipArgs = getNestedElizaSubmoduleSkipArgs();
-        exec(
-          `git ${nestedSkipArgs} submodule update --init --recursive -- "${nestedSubmodule.path}"`.trim(),
-          {
-            cwd: elizaRoot,
-            stdio: "inherit",
-          },
-        );
+        try {
+          exec(
+            `git ${nestedSkipArgs} submodule update --init --recursive -- "${nestedSubmodule.path}"`.trim(),
+            {
+              cwd: elizaRoot,
+              stdio: "inherit",
+            },
+          );
+        } catch (subErr) {
+          logError(
+            `[init-submodules] Nested eliza submodule update failed (fix broken plugin submodules under eliza/ if needed): ${
+              subErr instanceof Error ? subErr.message : String(subErr)
+            }`,
+          );
+        }
       }
     } catch (err) {
       logError(
-        `[init-submodules] Nested eliza submodule update failed (fix broken plugin submodules under eliza/ if needed): ${
+        `[init-submodules] Unexpected error initializing nested eliza submodules: ${
           err instanceof Error ? err.message : String(err)
         }`,
       );
