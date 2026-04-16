@@ -410,6 +410,25 @@ export default {};`;
   }));
   console.log('stubbed: @elizaos/app-task-coordinator');
 }
+// app-training: imported by agent/src/api/server.ts for training/trajectory routes
+const trDir = 'node_modules/@elizaos/app-training';
+if (!fs.existsSync(trDir + '/package.json')) {
+  fs.mkdirSync(trDir + '/routes', { recursive: true });
+  const trainingStub = `export default function trainingRoutes() { return []; }\nexport const trainingRoutes_ = [];`;
+  const trajectoryStub = `export default function trajectoryRoutes() { return []; }\nexport const trajectoryRoutes_ = [];`;
+  fs.writeFileSync(trDir + '/routes/training.mjs', trainingStub);
+  fs.writeFileSync(trDir + '/routes/trajectory.mjs', trajectoryStub);
+  fs.writeFileSync(trDir + '/index.mjs', 'export default {};');
+  fs.writeFileSync(trDir + '/package.json', JSON.stringify({
+    name: '@elizaos/app-training', version: '0.0.0-cloud-stub', type: 'module',
+    exports: {
+      '.': './index.mjs',
+      './routes/training': './routes/training.mjs',
+      './routes/trajectory': './routes/trajectory.mjs',
+    }
+  }));
+  console.log('stubbed: @elizaos/app-training');
+}
 __APP_STUBS__
 
 # Fix @ai-sdk/provider-utils version conflict:
