@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   applyMiladyCopyPatches,
+  applyPluginAnthropicBunRuntimePatch,
   applyPluginAnthropicCliUsagePatch,
   bootstrapBundledBunInstall,
   findInstalledPackageDir,
@@ -279,5 +280,75 @@ describe("applyPluginAnthropicCliUsagePatch", () => {
     expect(patched).toContain("completionTokens: usage.completionTokens,");
     expect(patched).not.toContain("usage.inputTokens");
     expect(patched).not.toContain("usage.outputTokens");
+  });
+});
+
+describe("applyPluginAnthropicBunRuntimePatch", () => {
+  it("rewrites plugin-anthropic Bun globals to a typed globalThis fallback", () => {
+    const elizaRoot = makeTempDir();
+    const initPath = path.join(
+      elizaRoot,
+      "plugins",
+      "plugin-anthropic",
+      "typescript",
+      "init.ts",
+    );
+    const claudeCliPath = path.join(
+      elizaRoot,
+      "plugins",
+      "plugin-anthropic",
+      "typescript",
+      "utils",
+      "claude-cli.ts",
+    );
+
+    writeFile(
+      initPath,
+      [
+        'if (authMode === "cli") {',
+        "  try {",
+        '        const result = Bun.spawnSync(["claude", "--version"], {',
+        '          stdout: "pipe",',
+        '          stderr: "pipe",',
+        "        });",
+        '        if (result.exitCode !== 0) throw new Error("claude not found");',
+        "  } catch {}",
+        "}",
+      ].join("\n"),
+    );
+    writeFile(
+      claudeCliPath,
+      [
+        "function parseUsage(",
+        "  modelUsage: Record<string, ClaudeCliModelUsage> | undefined,",
+        '): CliGenerateResult["usage"] {',
+        "  const entry = modelUsage ? Object.values(modelUsage)[0] : undefined;",
+        "  if (!entry) return null;",
+        "  return {",
+        "    promptTokens: entry.inputTokens,",
+        "    completionTokens: entry.outputTokens,",
+        "    totalTokens: entry.inputTokens + entry.outputTokens,",
+        "  };",
+        "}",
+        "",
+        "/**",
+        " * Run a prompt through `claude -p` (non-streaming).",
+        " */",
+        'const proc = Bun.spawn(args, { stdout: "pipe", stderr: "pipe" });',
+        'const proc = Bun.spawn(args, { stdout: "pipe", stderr: "pipe" });',
+      ].join("\n"),
+    );
+
+    expect(applyPluginAnthropicBunRuntimePatch(elizaRoot)).toBe(4);
+    const patchedInit = fs.readFileSync(initPath, "utf8");
+    const patchedCli = fs.readFileSync(claudeCliPath, "utf8");
+
+    expect(patchedInit).toContain(
+      "const bunRuntime = (globalThis as typeof globalThis",
+    );
+    expect(patchedInit).toContain("if (!result || result.exitCode !== 0)");
+    expect(patchedCli).toContain("function getBunRuntime()");
+    expect(patchedCli).toContain("const proc = getBunRuntime().spawn");
+    expect(patchedCli).not.toContain("Bun.spawn(");
   });
 });

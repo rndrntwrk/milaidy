@@ -121,6 +121,12 @@ const PLUGIN_ANTHROPIC_CLAUDE_CLI_RELATIVE_PATH = path.join(
   "utils",
   "claude-cli.ts",
 );
+const PLUGIN_ANTHROPIC_INIT_RELATIVE_PATH = path.join(
+  "plugins",
+  "plugin-anthropic",
+  "typescript",
+  "init.ts",
+);
 const PLUGIN_ANTHROPIC_CLAUDE_CLI_REPLACEMENTS = [
   [
     "    inputTokens: number;\n    outputTokens: number;\n",
@@ -137,6 +143,22 @@ const PLUGIN_ANTHROPIC_CLAUDE_CLI_REPLACEMENTS = [
   [
     "                promptTokens: usage.inputTokens,\n                completionTokens: usage.outputTokens,\n",
     "                promptTokens: usage.promptTokens,\n                completionTokens: usage.completionTokens,\n",
+  ],
+];
+const PLUGIN_ANTHROPIC_INIT_BUN_REPLACEMENTS = [
+  [
+    `        const result = Bun.spawnSync(["claude", "--version"], {\n          stdout: "pipe",\n          stderr: "pipe",\n        });\n        if (result.exitCode !== 0) throw new Error("claude not found");\n`,
+    `        const bunRuntime = (globalThis as typeof globalThis & {\n          Bun?: {\n            spawnSync(\n              args: string[],\n              options: { stdout: "pipe"; stderr: "pipe" },\n            ): { exitCode: number };\n          };\n        }).Bun;\n        const result = bunRuntime?.spawnSync(["claude", "--version"], {\n          stdout: "pipe",\n          stderr: "pipe",\n        });\n        if (!result || result.exitCode !== 0) throw new Error("claude not found");\n`,
+  ],
+];
+const PLUGIN_ANTHROPIC_CLAUDE_CLI_BUN_REPLACEMENTS = [
+  [
+    `function parseUsage(\n  modelUsage: Record<string, ClaudeCliModelUsage> | undefined,\n): CliGenerateResult["usage"] {\n  const entry = modelUsage ? Object.values(modelUsage)[0] : undefined;\n  if (!entry) return null;\n  return {\n    promptTokens: entry.inputTokens,\n    completionTokens: entry.outputTokens,\n    totalTokens: entry.inputTokens + entry.outputTokens,\n  };\n}\n\n/**\n * Run a prompt through \`claude -p\` (non-streaming).\n */\n`,
+    `function parseUsage(\n  modelUsage: Record<string, ClaudeCliModelUsage> | undefined,\n): CliGenerateResult["usage"] {\n  const entry = modelUsage ? Object.values(modelUsage)[0] : undefined;\n  if (!entry) return null;\n  return {\n    promptTokens: entry.inputTokens,\n    completionTokens: entry.outputTokens,\n    totalTokens: entry.inputTokens + entry.outputTokens,\n  };\n}\n\nfunction getBunRuntime() {\n  const bunRuntime = (globalThis as typeof globalThis & {\n    Bun?: {\n      spawn(\n        args: string[],\n        options: { stdout: "pipe"; stderr: "pipe" },\n      ): {\n        stdout: ReadableStream<Uint8Array>;\n        stderr: ReadableStream<Uint8Array>;\n        exited: Promise<number>;\n      };\n    };\n  }).Bun;\n\n  if (!bunRuntime) {\n    throw new Error("[Anthropic CLI] Bun runtime is required for CLI mode");\n  }\n\n  return bunRuntime;\n}\n\n/**\n * Run a prompt through \`claude -p\` (non-streaming).\n */\n`,
+  ],
+  [
+    `const proc = Bun.spawn(args, { stdout: "pipe", stderr: "pipe" });`,
+    `const proc = getBunRuntime().spawn(args, { stdout: "pipe", stderr: "pipe" });`,
   ],
 ];
 
@@ -234,11 +256,7 @@ export function applyMiladyCopyPatches(elizaRoot) {
   return patchedFiles;
 }
 
-export function applyPluginAnthropicCliUsagePatch(elizaRoot) {
-  const filePath = path.join(
-    elizaRoot,
-    PLUGIN_ANTHROPIC_CLAUDE_CLI_RELATIVE_PATH,
-  );
+function applyTextReplacements(filePath, replacements, { label }) {
   if (!existsSync(filePath)) {
     return 0;
   }
@@ -248,7 +266,7 @@ export function applyPluginAnthropicCliUsagePatch(elizaRoot) {
   let patchedReplacements = 0;
   let staleReplacements = 0;
 
-  for (const [from, to] of PLUGIN_ANTHROPIC_CLAUDE_CLI_REPLACEMENTS) {
+  for (const [from, to] of replacements) {
     if (next.includes(to)) {
       continue;
     }
@@ -256,22 +274,46 @@ export function applyPluginAnthropicCliUsagePatch(elizaRoot) {
       staleReplacements += 1;
       continue;
     }
-    next = next.replace(from, to);
-    patchedReplacements += 1;
+    const replacementsApplied = next.split(from).length - 1;
+    next = next.split(from).join(to);
+    patchedReplacements += replacementsApplied;
   }
 
   if (next !== raw) {
     writeFileSync(filePath, next);
     console.log(
-      `[setup-upstreams] Applied plugin-anthropic Claude CLI usage patch (${patchedReplacements} replacement${patchedReplacements === 1 ? "" : "s"})`,
+      `[setup-upstreams] Applied ${label} (${patchedReplacements} replacement${patchedReplacements === 1 ? "" : "s"})`,
     );
   } else if (staleReplacements > 0) {
     console.warn(
-      "[setup-upstreams] WARNING: plugin-anthropic Claude CLI usage patch no longer matches upstream source",
+      `[setup-upstreams] WARNING: ${label} no longer matches upstream source`,
     );
   }
 
   return patchedReplacements;
+}
+
+export function applyPluginAnthropicBunRuntimePatch(elizaRoot) {
+  let patchedReplacements = 0;
+  patchedReplacements += applyTextReplacements(
+    path.join(elizaRoot, PLUGIN_ANTHROPIC_INIT_RELATIVE_PATH),
+    PLUGIN_ANTHROPIC_INIT_BUN_REPLACEMENTS,
+    { label: "plugin-anthropic Bun runtime init patch" },
+  );
+  patchedReplacements += applyTextReplacements(
+    path.join(elizaRoot, PLUGIN_ANTHROPIC_CLAUDE_CLI_RELATIVE_PATH),
+    PLUGIN_ANTHROPIC_CLAUDE_CLI_BUN_REPLACEMENTS,
+    { label: "plugin-anthropic Bun runtime CLI patch" },
+  );
+  return patchedReplacements;
+}
+
+export function applyPluginAnthropicCliUsagePatch(elizaRoot) {
+  return applyTextReplacements(
+    path.join(elizaRoot, PLUGIN_ANTHROPIC_CLAUDE_CLI_RELATIVE_PATH),
+    PLUGIN_ANTHROPIC_CLAUDE_CLI_REPLACEMENTS,
+    { label: "plugin-anthropic Claude CLI usage patch" },
+  );
 }
 
 function uniqueLinks(links) {
@@ -1376,6 +1418,7 @@ export async function setupUpstreams(repoRoot = DEFAULT_REPO_ROOT) {
 
   const pluginsRoot = getRepoPluginsRoot(repoRoot);
   ensurePluginDependencyLinks(repoRoot, pluginsRoot);
+  applyPluginAnthropicBunRuntimePatch(elizaRoot);
   applyPluginAnthropicCliUsagePatch(elizaRoot);
   await ensurePluginBuildOutputs(pluginsRoot);
   const updatedLinks = linkUpstreamPackages(repoRoot, {
