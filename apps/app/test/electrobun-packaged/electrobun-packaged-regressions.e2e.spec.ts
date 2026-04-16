@@ -884,7 +884,12 @@ async function withPackagedHarness(
     // false-positived on app-shell "Loading messages…" text in ChatView,
     // causing the relaunch to stall even though the coordinator reached ready.
     await waitForEval<
-      EvalResult<{ ready: boolean; rootLength: number; bodySnippet: string; startupPhase: string | null }>
+      EvalResult<{
+        ready: boolean;
+        rootLength: number;
+        bodySnippet: string;
+        startupPhase: string | null;
+      }>
     >(
       harness,
       `(() => {
