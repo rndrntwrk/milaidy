@@ -1223,7 +1223,7 @@ export function ensurePluginAnthropicBunTypes(
     ? compilerOptions.types
     : null;
 
-  if (existingTypes && existingTypes.includes("bun")) {
+  if (existingTypes?.includes("bun")) {
     return false;
   }
 
