@@ -237,6 +237,33 @@ RUN if [ -n "${VERSION_CLEAN}" ]; then \
   "; \
   fi
 
+# Stub heavy native ML deps that plugin-local-embedding imports at boot.
+# onnxruntime-node is a large native binary (~100MB) not needed in cloud.
+# Create no-op stubs so the import succeeds without crashing the agent.
+RUN node - <<'__STUBS__'
+const fs = require('fs');
+const noop = 'const stub = new Proxy({}, { get: () => new Proxy(()=>{},{get:()=>new Proxy(()=>{},{apply:()=>Promise.resolve({}),get:()=>()=>{}})}) }); module.exports = stub; module.exports.default = stub;';
+const pkgs = [
+  ['@huggingface/transformers', noop],
+  ['@huggingface/tokenizers', noop],
+  ['onnxruntime-node', noop],
+  ['onnxruntime-web', noop],
+];
+for (const [name, code] of pkgs) {
+  const dir = 'node_modules/' + name;
+  if (!fs.existsSync(dir + '/package.json')) {
+    const scope = name.startsWith('@') ? name.split('/')[0] : null;
+    if (scope) fs.mkdirSync('node_modules/' + scope, {recursive:true});
+    fs.mkdirSync(dir, {recursive:true});
+    fs.writeFileSync(dir + '/package.json', JSON.stringify({name,version:'0.0.0-cloud-stub',main:'index.js'}));
+    fs.writeFileSync(dir + '/index.js', code);
+    console.log('stubbed: ' + name);
+  } else {
+    console.log('present: ' + name);
+  }
+}
+__STUBS__
+
 # Remove unbuilt orchestrator (desktop-only, crashes tsx if dist/ missing)
 RUN rm -rf \
   node_modules/@elizaos/plugin-agent-orchestrator \
