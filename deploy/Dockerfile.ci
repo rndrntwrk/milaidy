@@ -423,8 +423,8 @@ if (!fs.existsSync(tcDir + '/package.json')) {
 const trDir = 'node_modules/@elizaos/app-training';
 if (!fs.existsSync(trDir + '/package.json')) {
   fs.mkdirSync(trDir + '/routes', { recursive: true });
-  const trainingStub = `export default function trainingRoutes() { return []; }\nexport const trainingRoutes_ = [];`;
-  const trajectoryStub = `export default function trajectoryRoutes() { return []; }\nexport const trajectoryRoutes_ = [];`;
+  const trainingStub = `export function handleTrainingRoutes() { return null; }\nexport default {};`;
+  const trajectoryStub = `export function handleTrajectoryRoute() { return null; }\nexport default {};`;
   fs.writeFileSync(trDir + '/routes/training.mjs', trainingStub);
   fs.writeFileSync(trDir + '/routes/trajectory.mjs', trajectoryStub);
   fs.writeFileSync(trDir + '/index.mjs', 'export default {};');
