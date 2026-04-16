@@ -2,7 +2,9 @@ import { expect, type Locator, type Page } from "@playwright/test";
 
 export const ROOT_TIMEOUT_MS = 20_000;
 export const NAV_TIMEOUT_MS = 12_000;
-export const READY_CHECK_TIMEOUT_MS = 10_000;
+// These "ready" checks only look for mocked/static UI markers after navigation.
+// Full backend/bootstrap waits use the longer per-test and Playwright defaults.
+const READY_CHECK_TIMEOUT_MS = 5_000;
 
 type ReadyCheck =
   | { selector: string; text?: never }
@@ -13,7 +15,7 @@ type EvaluatedReadyCheck = {
   passed: boolean;
 };
 
-export const DEFAULT_APP_STORAGE: Record<string, string> = {
+const DEFAULT_APP_STORAGE: Record<string, string> = {
   "eliza:onboarding-complete": "1",
   "eliza:onboarding:step": "activate",
   "eliza:ui-shell-mode": "native",
@@ -36,11 +38,11 @@ export async function seedAppStorage(
   }, storage);
 }
 
-export async function expectRootReady(page: Page): Promise<void> {
+async function expectRootReady(page: Page): Promise<void> {
   await expect(page.locator("#root")).toBeVisible({ timeout: ROOT_TIMEOUT_MS });
 }
 
-export async function expectNoOnboardingRedirect(page: Page): Promise<void> {
+async function expectNoOnboardingRedirect(page: Page): Promise<void> {
   await expect(page).not.toHaveURL(/onboarding/, { timeout: NAV_TIMEOUT_MS });
 }
 
@@ -65,10 +67,7 @@ async function locatorVisible(
   timeoutMs: number = READY_CHECK_TIMEOUT_MS,
 ): Promise<boolean> {
   try {
-    await locator.first().waitFor({
-      state: "visible",
-      timeout: timeoutMs,
-    });
+    await locator.first().waitFor({ state: "visible", timeout: timeoutMs });
     return true;
   } catch {
     return false;
@@ -94,7 +93,7 @@ function readyChecksPassed(
 
 async function evaluateReadyChecks(
   page: Page,
-  checks: ReadyCheck[],
+  checks: readonly ReadyCheck[],
   mode: "any" | "all" = "any",
   timeoutMs: number = READY_CHECK_TIMEOUT_MS,
 ): Promise<{
@@ -126,7 +125,7 @@ async function evaluateReadyChecks(
 export async function assertReadyChecks(
   page: Page,
   label: string,
-  checks: ReadyCheck[],
+  checks: readonly ReadyCheck[],
   mode: "any" | "all" = "any",
   timeoutMs: number = READY_CHECK_TIMEOUT_MS,
 ): Promise<void> {
@@ -142,6 +141,224 @@ export async function assertReadyChecks(
     evaluation.passed,
     `[playwright-ui-smoke] ${label}: ready checks failed (${summary})`,
   ).toBe(true);
+}
+
+/**
+ * Baseline API stubs every smoke test that touches the network should install.
+ * Call in `beforeEach` before any flow-specific overrides so those can
+ * `route.fallback()` through to these defaults for URLs they don't care about.
+ */
+export async function installDefaultAppRoutes(page: Page): Promise<void> {
+  await page.route("**/api/health", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ ok: true }),
+    });
+  });
+
+  await page.route("**/api/agents", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ agents: [] }),
+    });
+  });
+
+  await page.route("**/api/cloud/status", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        connected: false,
+        enabled: false,
+        cloudVoiceProxyAvailable: false,
+        hasApiKey: false,
+      }),
+    });
+  });
+}
+
+/** Handles returned by {@link installCloudWalletImportApiOverrides}. */
+export type CloudWalletImportMockApi = {
+  lastWalletConfigPut: () => Record<string, unknown> | null;
+  stewardStatusRequestCount: () => number;
+};
+
+/**
+ * Playwright routes that override the ui-smoke API stub for the cloud wallet import flow.
+ * Register **after** {@link installDefaultAppRoutes} so these take precedence for matching URLs.
+ */
+export async function installCloudWalletImportApiOverrides(
+  page: Page,
+): Promise<CloudWalletImportMockApi> {
+  let lastWalletPut: Record<string, unknown> | null = null;
+  let stewardStatusHits = 0;
+
+  const initialWalletConfig = {
+    selectedRpcProviders: {
+      evm: "alchemy",
+      bsc: "alchemy",
+      solana: "helius-birdeye",
+    },
+    walletNetwork: "mainnet",
+    legacyCustomChains: [],
+    alchemyKeySet: true,
+    infuraKeySet: false,
+    ankrKeySet: false,
+    nodeRealBscRpcSet: false,
+    quickNodeBscRpcSet: false,
+    managedBscRpcReady: false,
+    cloudManagedAccess: false,
+    heliusKeySet: true,
+    birdeyeKeySet: false,
+    evmChains: ["ethereum", "base"],
+    evmAddress: null,
+    solanaAddress: null,
+  };
+
+  let walletConfigState: typeof initialWalletConfig = {
+    ...initialWalletConfig,
+    legacyCustomChains: [...initialWalletConfig.legacyCustomChains],
+    evmChains: [...initialWalletConfig.evmChains],
+  };
+
+  await page.route("**/api/cloud/status", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        connected: true,
+        enabled: true,
+        cloudVoiceProxyAvailable: true,
+        hasApiKey: true,
+        userId: "playwright-smoke-user",
+      }),
+    });
+  });
+
+  await page.route("**/api/cloud/credits", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        balance: 100,
+        low: false,
+        critical: false,
+        authRejected: false,
+      }),
+    });
+  });
+
+  await page.route("**/api/wallet/config", async (route) => {
+    const req = route.request();
+    if (req.method() === "GET") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(walletConfigState),
+      });
+      return;
+    }
+    if (req.method() === "PUT") {
+      const raw = req.postData();
+      lastWalletPut = raw ? (JSON.parse(raw) as Record<string, unknown>) : null;
+      const selections = lastWalletPut?.selections as
+        | typeof walletConfigState.selectedRpcProviders
+        | undefined;
+      if (selections) {
+        walletConfigState = {
+          ...walletConfigState,
+          selectedRpcProviders: selections,
+          cloudManagedAccess: true,
+        };
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: true }),
+      });
+      return;
+    }
+    await route.fallback();
+  });
+
+  await page.route("**/api/wallet/steward-status", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+    stewardStatusHits += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        configured: false,
+        available: false,
+        connected: false,
+      }),
+    });
+  });
+
+  await page.route("**/api/wallet/addresses", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ evmAddress: null, solanaAddress: null }),
+    });
+  });
+
+  await page.route("**/api/wallet/balances", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        evm: null,
+        solana: null,
+      }),
+    });
+  });
+
+  await page.route("**/api/wallet/nfts", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ evm: [], solana: null }),
+    });
+  });
+
+  return {
+    lastWalletConfigPut: () => lastWalletPut,
+    stewardStatusRequestCount: () => stewardStatusHits,
+  };
 }
 
 export async function runSoftReadyChecks(
