@@ -16,4 +16,19 @@ describe("root package workspace config", () => {
     expect(Array.isArray(pkg.workspaces)).toBe(true);
     expect(pkg.workspaces).not.toContain("scripts/ci-stubs/*");
   });
+
+  it("keeps the root workspace typecheck scoped to root config files", () => {
+    const packageJsonPath = path.join(
+      import.meta.dirname,
+      "..",
+      "package.json",
+    );
+    const pkg = JSON.parse(fs.readFileSync(packageJsonPath, "utf8")) as {
+      scripts?: Record<string, string>;
+    };
+
+    expect(pkg.scripts?.["verify:typecheck:workspace"]).toBe(
+      "tsc --noEmit -p tsconfig.workspace.json",
+    );
+  });
 });

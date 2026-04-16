@@ -17,16 +17,6 @@ describe("run-repo-checks", () => {
         command: "bun",
         args: ["run", "verify:typecheck:workspace"],
       },
-      {
-        label: "apps/app typecheck",
-        command: "bun",
-        args: ["run", "--cwd", "apps/app", "typecheck"],
-      },
-      {
-        label: "apps/homepage typecheck",
-        command: "bun",
-        args: ["run", "--cwd", "apps/homepage", "typecheck"],
-      },
     ]);
 
     expect(suites.typecheck).not.toContainEqual({
@@ -38,6 +28,16 @@ describe("run-repo-checks", () => {
       label: "@elizaos/ui typecheck",
       command: "bun",
       args: ["run", "--cwd", "eliza/packages/ui", "typecheck"],
+    });
+    expect(suites.typecheck).not.toContainEqual({
+      label: "apps/app typecheck",
+      command: "bun",
+      args: ["run", "--cwd", "apps/app", "typecheck"],
+    });
+    expect(suites.typecheck).not.toContainEqual({
+      label: "apps/homepage typecheck",
+      command: "bun",
+      args: ["run", "--cwd", "apps/homepage", "typecheck"],
     });
   });
 

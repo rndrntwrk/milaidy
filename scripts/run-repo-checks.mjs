@@ -33,6 +33,9 @@ export const miladySidecarTypecheckSteps = [];
 // Keep repo-wide checks focused on the upstream packages Milady actually ships
 // against; the full eliza workspace includes unrelated plugin packages that can
 // fail independently and should not block this repo's CI.
+// The app and homepage build jobs already compile their TypeScript entrypoints;
+// raw tsc on those app tsconfigs follows repo-local source aliases deep into
+// the vendored eliza tree and turns CI into an upstream monorepo sweep.
 export const suites = {
   lint: [
     {
@@ -57,16 +60,6 @@ export const suites = {
       label: "Root workspace typecheck",
       command: "bun",
       args: ["run", "verify:typecheck:workspace"],
-    },
-    {
-      label: "apps/app typecheck",
-      command: "bun",
-      args: ["run", "--cwd", "apps/app", "typecheck"],
-    },
-    {
-      label: "apps/homepage typecheck",
-      command: "bun",
-      args: ["run", "--cwd", "apps/homepage", "typecheck"],
     },
   ],
   "typecheck:extended": [
