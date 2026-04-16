@@ -224,9 +224,10 @@ export default defineConfig({
       // correct @elizaos/app-core alias resolution. Running both in parallel
       // causes file-system race conditions on shared test fixtures.
       "eliza/packages/app-core/src/**/*.test.ts",
-      // Platform-colocated tests that don't depend on native Electrobun bindings.
-      // rpc-handlers.test.ts and native/agent.test.ts require the full Electrobun
-      // runtime and run only in the desktop-contract suite.
+      // Keep the standalone-safe Electrobun tests in the default unit suite.
+      // native/agent.test.ts requires the full desktop runtime, so it runs only
+      // via `bun run test:desktop:contract` in `.github/workflows/test.yml`
+      // (and the matching nightly desktop-contract job).
       "eliza/packages/app-core/platforms/electrobun/src/menu-reset-from-main.test.ts",
       "eliza/packages/app-core/platforms/electrobun/src/diagnostic-format.test.ts",
       "eliza/packages/app-core/platforms/electrobun/src/native/steward.test.ts",
@@ -245,8 +246,6 @@ export default defineConfig({
       "eliza/plugins/plugin-discord/typescript/__tests__/slash-command-roles.test.ts",
       "src/**/*.test.ts",
       "scripts/**/*.test.ts",
-      "eliza/packages/app-core/platforms/electrobun/src/**/*.test.ts",
-      "eliza/packages/app-core/platforms/electrobun/src/**/*.test.tsx",
       "apps/chrome-extension/**/*.test.ts",
       "apps/chrome-extension/**/*.test.tsx",
     ],

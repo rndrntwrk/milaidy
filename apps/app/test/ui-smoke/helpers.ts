@@ -135,6 +135,50 @@ export async function assertReadyChecks(
   ).toBe(true);
 }
 
+/**
+ * Baseline API stubs every smoke test that touches the network should install.
+ * Call in `beforeEach` before any flow-specific overrides so those can
+ * `route.fallback()` through to these defaults for URLs they don't care about.
+ */
+export async function installDefaultAppRoutes(page: Page): Promise<void> {
+  await page.route("**/api/health", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ ok: true }),
+    });
+  });
+
+  await page.route("**/api/agents", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ agents: [] }),
+    });
+  });
+
+  await page.route("**/api/cloud/status", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        connected: false,
+        enabled: false,
+        cloudVoiceProxyAvailable: false,
+        hasApiKey: false,
+      }),
+    });
+  });
+}
+
 /** Handles returned by {@link installCloudWalletImportApiOverrides}. */
 export type CloudWalletImportMockApi = {
   lastWalletConfigPut: () => Record<string, unknown> | null;
@@ -143,7 +187,7 @@ export type CloudWalletImportMockApi = {
 
 /**
  * Playwright routes that override the ui-smoke API stub for the cloud wallet import flow.
- * Register **after** {@link installDefaultAppMocks} so these take precedence for matching URLs.
+ * Register **after** {@link installDefaultAppRoutes} so these take precedence for matching URLs.
  */
 export async function installCloudWalletImportApiOverrides(
   page: Page,

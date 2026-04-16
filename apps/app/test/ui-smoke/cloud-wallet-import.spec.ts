@@ -1,14 +1,14 @@
 import { expect, test } from "@playwright/test";
 import {
   installCloudWalletImportApiOverrides,
-  installDefaultAppMocks,
+  installDefaultAppRoutes,
   openAppPath,
   seedAppStorage,
 } from "./helpers";
 
 test.beforeEach(async ({ page }) => {
   await seedAppStorage(page);
-  await installDefaultAppMocks(page);
+  await installDefaultAppRoutes(page);
 });
 
 test("inventory Import from Eliza Cloud sends eliza-cloud RPC and hits steward-status", async ({
@@ -38,10 +38,12 @@ test("inventory Import from Eliza Cloud sends eliza-cloud RPC and hits steward-s
   });
 
   // steward-status is fetched at least twice:
-  //   1. On mount — WalletView polls /api/steward/status to show connection state.
+  //   1. On mount — WalletView polls /api/wallet/steward-status to show connection state.
   //   2. After "Import from Eliza Cloud" save — the wallet-config PUT triggers a
   //      re-fetch so the UI reflects the newly-provisioned Steward bridge.
   // ≥2 (not exactly 2) because React strict-mode double-mounts in dev add an
   // extra call, and future UI additions may add more legitimate fetches.
-  expect(api.stewardStatusRequestCount()).toBeGreaterThanOrEqual(2);
+  await expect
+    .poll(() => api.stewardStatusRequestCount(), { timeout: 15_000 })
+    .toBeGreaterThanOrEqual(2);
 });
