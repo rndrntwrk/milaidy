@@ -16,10 +16,7 @@ describe("root package workspace config", () => {
     expect(Array.isArray(pkg.workspaces)).toBe(true);
     const workspaces = pkg.workspaces as string[];
 
-    expect(workspaces).toContain("scripts/ci-stubs/*");
-    expect(workspaces.indexOf("scripts/ci-stubs/*")).toBeGreaterThan(
-      workspaces.indexOf("eliza/packages/*"),
-    );
+    expect(workspaces).not.toContain("scripts/ci-stubs/*");
   });
 
   it("keeps the root workspace typecheck scoped to root config files", () => {

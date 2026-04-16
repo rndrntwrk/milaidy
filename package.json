@@ -31,7 +31,6 @@
     "eliza/plugins/*",
     "eliza/plugins/plugin-*/typescript",
     "eliza/packages/*",
-    "scripts/ci-stubs/*",
     "eliza/packages/shared"
   ],
   "type": "module",

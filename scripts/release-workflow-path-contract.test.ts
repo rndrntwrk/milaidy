@@ -72,7 +72,9 @@ describe("release workflow path contract", () => {
     expect(workflow).toContain(
       "System git config failed; falling back to --global.",
     );
-    expect(workflow).toContain("node ../../scripts/build-electrobun-preload.mjs");
+    expect(workflow).toContain(
+      "node ../../scripts/build-electrobun-preload.mjs",
+    );
     expect(workflow).not.toContain("run: bun run build:preload");
   });
 
