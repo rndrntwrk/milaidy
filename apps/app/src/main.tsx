@@ -622,41 +622,39 @@ async function runMain(): Promise<void> {
       /* storage unavailable — the coordinator's own try/catch handles this */
     }
 
-    // Bridge the capture-service's auth token into the SPA's API client.
+    // Bridge the alice-bot's auth token into the SPA's API client.
     //
-    // The 555stream capture-service worker injects
-    //   window.__injectedShowConfig = { wsToken: "...", ... }
-    // into the page via page.evaluateOnNewDocument() before navigating
-    // to the broadcast URL. The wsToken is the same ELIZA_SERVER_AUTH_TOKEN
-    // the server uses — it proves to the alice-bot API that this browser
-    // is authorized.
-    //
-    // Without this bridge, the SPA's API client has no token. REST calls
-    // to /api/status fail with 401, the AppContext setup effect returns
-    // early before reaching client.connectWs(), and the WS connection is
-    // never established. Result: broadcastWs() iterates zero clients, no
-    // emotes / face frames / companion-stage-state / status events ever
-    // reach the broadcast Chromium, and the stream shows a static avatar
-    // that never reacts to operator actions.
-    //
-    // By setting the token here (before mountReactApp), it's available to
-    // the API client's first getStatus() call and to the subsequent
-    // connectWs() → {type:"auth", token} handshake. This unblocks EVERY
-    // WS event type at once: emote, avatar-face-frame,
-    // companion-stage-state, status, proactive-message, heartbeat_event.
-    try {
-      const injectedConfig = (
-        window as unknown as {
-          __injectedShowConfig?: { wsToken?: string };
-        }
-      ).__injectedShowConfig;
-      if (injectedConfig?.wsToken) {
-        setBootConfig({ ...getBootConfig(), apiToken: injectedConfig.wsToken });
+    // The broadcast Chromium needs ELIZA_SERVER_AUTH_TOKEN to authenticate
+    // REST + WS. Token resolution:
+    //   1. URL param ?apiToken= — primary. The go-live flow appends the
+    //      alice-bot's own token. Secure: ClusterIP, internal only.
+    //   2. __injectedShowConfig.wsToken — fallback. Currently a 555stream
+    //      JWT (wrong type), kept for forward-compat.
+    {
+      const params = new URLSearchParams(
+        window.location.search || window.location.hash.split("?")[1] || "",
+      );
+      const urlToken = params.get("apiToken");
+      if (urlToken) {
+        setBootConfig({ ...getBootConfig(), apiToken: urlToken });
       }
-    } catch {
-      /* injectedShowConfig not available — capture-service may not have
-         injected it (local dev, direct browser access to ?broadcast). The
-         SPA falls back to its normal token resolution chain. */
+      if (!urlToken) {
+        try {
+          const injectedConfig = (
+            window as unknown as {
+              __injectedShowConfig?: { wsToken?: string };
+            }
+          ).__injectedShowConfig;
+          if (injectedConfig?.wsToken) {
+            setBootConfig({
+              ...getBootConfig(),
+              apiToken: injectedConfig.wsToken,
+            });
+          }
+        } catch {
+          /* injectedShowConfig not available */
+        }
+      }
     }
 
     injectPopoutApiBase();
