@@ -73,6 +73,7 @@
     "clean:deep": "node eliza/packages/app-core/scripts/clean-repo.mjs --deep",
     "verify": "bun run verify:typecheck && bun run verify:lint",
     "verify:typecheck": "node scripts/run-repo-checks.mjs typecheck",
+    "verify:typecheck:extended": "node scripts/run-repo-checks.mjs typecheck:extended",
     "verify:typecheck:workspace": "tsc --noEmit -p eliza/packages/app-core/tsconfig.json",
     "verify:lint": "node scripts/run-repo-checks.mjs lint",
     "verify:lint:workspace": "node eliza/packages/app-core/scripts/run-biome-check.mjs",

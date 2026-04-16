@@ -32,14 +32,21 @@ const suites = {
       args: ["run", "verify:typecheck:workspace"],
     },
     {
-      label: "@elizaos/app-core typecheck",
+      label: "apps/app typecheck",
       command: "bun",
-      args: ["run", "--cwd", "eliza/packages/app-core", "typecheck"],
+      args: ["run", "--cwd", "apps/app", "typecheck"],
     },
     {
-      label: "@elizaos/ui typecheck",
+      label: "apps/homepage typecheck",
       command: "bun",
-      args: ["run", "--cwd", "eliza/packages/ui", "typecheck"],
+      args: ["run", "--cwd", "apps/homepage", "typecheck"],
+    },
+  ],
+  "typecheck:extended": [
+    {
+      label: "Root workspace typecheck",
+      command: "bun",
+      args: ["run", "verify:typecheck:workspace"],
     },
     {
       label: "apps/app typecheck",
@@ -50,6 +57,16 @@ const suites = {
       label: "apps/homepage typecheck",
       command: "bun",
       args: ["run", "--cwd", "apps/homepage", "typecheck"],
+    },
+    {
+      label: "@elizaos/app-core typecheck",
+      command: "bun",
+      args: ["run", "--cwd", "eliza/packages/app-core", "typecheck"],
+    },
+    {
+      label: "@elizaos/ui typecheck",
+      command: "bun",
+      args: ["run", "--cwd", "eliza/packages/ui", "typecheck"],
     },
   ],
 };
