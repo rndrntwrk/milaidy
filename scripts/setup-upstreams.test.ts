@@ -6,6 +6,7 @@ import {
   applyMiladyCopyPatches,
   bootstrapBundledBunInstall,
   getElizaInstallArgs,
+  getTemporaryElizaWorkspaceEntries,
 } from "./setup-upstreams.mjs";
 
 const tempDirs: string[] = [];
@@ -40,6 +41,38 @@ describe("getElizaInstallArgs", () => {
     expect(getElizaInstallArgs({ MILADY_NO_VISION_DEPS: "1" })).toEqual([
       "install",
       "--ignore-scripts",
+    ]);
+  });
+});
+
+describe("getTemporaryElizaWorkspaceEntries", () => {
+  it("includes the root CI stub workspace for unpublished eliza plugins", () => {
+    const elizaRoot = "/repo/eliza";
+    const existingPaths = new Set([
+      path.join(
+        elizaRoot,
+        "plugins",
+        "plugin-sql",
+        "typescript",
+        "package.json",
+      ),
+      path.join(
+        elizaRoot,
+        "..",
+        "scripts",
+        "ci-stubs",
+        "elizaos-plugin-wechat",
+        "package.json",
+      ),
+    ]);
+
+    expect(
+      getTemporaryElizaWorkspaceEntries(elizaRoot, {
+        pathExists: (targetPath) => existingPaths.has(targetPath),
+      }),
+    ).toEqual([
+      "plugins/plugin-sql/typescript",
+      "../scripts/ci-stubs/elizaos-plugin-wechat",
     ]);
   });
 });

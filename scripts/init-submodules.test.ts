@@ -105,10 +105,7 @@ describe("init-submodules", () => {
         throw new Error("unexpected recursive eliza init");
       }
 
-      if (
-        command ===
-        "git submodule sync --recursive"
-      ) {
+      if (command === "git submodule sync --recursive") {
         return "";
       }
 

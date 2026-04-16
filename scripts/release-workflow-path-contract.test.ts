@@ -57,7 +57,7 @@ describe("release workflow path contract", () => {
     expect(workflow).not.toContain(
       "bun install --cwd eliza/packages/app-core --ignore-scripts",
     );
-    expect(workflow).not.toContain(
+    expect(workflow).toContain(
       "bun install --cwd eliza/packages/app-core/platforms/electrobun --ignore-scripts",
     );
     expect(workflow).toContain(

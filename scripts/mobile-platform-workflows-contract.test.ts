@@ -51,11 +51,20 @@ describe("mobile platform workflow contract", () => {
       "System git config failed; falling back to --global.",
     );
     expect(workflow).toContain('prepare-local-eliza-runtime: "true"');
-    expect(workflow).toContain(
+    expect(workflow).not.toContain(
       "node eliza/packages/app-core/scripts/run-repo-setup.mjs",
     );
     expect(workflow).toContain(
       "node scripts/ensure-legacy-electrobun-compat.mjs",
+    );
+    expect(workflow).toContain(
+      "node eliza/packages/app-core/scripts/patch-workspace-plugins.mjs",
+    );
+    expect(workflow).toContain(
+      "node eliza/packages/app-core/scripts/patch-deps.mjs",
+    );
+    expect(workflow).toContain(
+      "node eliza/packages/app-core/scripts/ensure-type-package-aliases.mjs",
     );
   });
 });

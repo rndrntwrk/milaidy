@@ -282,6 +282,26 @@ function getPresentOptionalElizaPlugins(
   });
 }
 
+export function getTemporaryElizaWorkspaceEntries(
+  elizaRoot,
+  { pathExists = existsSync } = {},
+) {
+  const optionalPluginWorkspaceEntries = getPresentOptionalElizaPlugins(
+    elizaRoot,
+    { pathExists },
+  ).map(({ workspaceEntry }) => workspaceEntry);
+
+  const unpublishedStubWorkspaceEntries =
+    UNPUBLISHED_ELIZA_PLUGIN_CI_STUBS.filter(({ stubRelativePath }) => {
+      return pathExists(path.join(elizaRoot, stubRelativePath, "package.json"));
+    }).map(({ stubRelativePath }) => stubRelativePath);
+
+  return [
+    ...optionalPluginWorkspaceEntries,
+    ...unpublishedStubWorkspaceEntries,
+  ];
+}
+
 async function withTemporaryOptionalElizaPluginWorkspaces(elizaRoot, callback) {
   const packageJsonPath = path.join(elizaRoot, "package.json");
   const raw = readFileSync(packageJsonPath, "utf8");
@@ -299,9 +319,9 @@ async function withTemporaryOptionalElizaPluginWorkspaces(elizaRoot, callback) {
     return callback();
   }
 
-  const missingWorkspaceEntries = getPresentOptionalElizaPlugins(elizaRoot)
-    .map(({ workspaceEntry }) => workspaceEntry)
-    .filter((workspaceEntry) => !pkg.workspaces.includes(workspaceEntry));
+  const missingWorkspaceEntries = getTemporaryElizaWorkspaceEntries(
+    elizaRoot,
+  ).filter((workspaceEntry) => !pkg.workspaces.includes(workspaceEntry));
 
   if (missingWorkspaceEntries.length === 0) {
     return callback();
@@ -310,7 +330,7 @@ async function withTemporaryOptionalElizaPluginWorkspaces(elizaRoot, callback) {
   pkg.workspaces = [...pkg.workspaces, ...missingWorkspaceEntries];
   writePackageJson(packageJsonPath, raw, pkg);
   console.log(
-    `[setup-upstreams] Temporarily enabling optional eliza plugin workspaces (${missingWorkspaceEntries.join(", ")})`,
+    `[setup-upstreams] Temporarily enabling eliza workspace entries (${missingWorkspaceEntries.join(", ")})`,
   );
 
   try {
