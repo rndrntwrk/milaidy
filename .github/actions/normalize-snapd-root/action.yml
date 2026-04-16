@@ -1,0 +1,15 @@
+name: Normalize Snapd Root Ownership
+description: Repair root ownership on ephemeral runners before invoking snapd-based build steps.
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        set -euo pipefail
+        ROOT_OWNER="$(stat -c '%u:%g' /)"
+        echo "Runner root owner: ${ROOT_OWNER}"
+        if [ "${ROOT_OWNER}" != "0:0" ]; then
+          echo "Repairing / ownership so snapd/systemd path canonicalization accepts this runner"
+          sudo chown root:root /
+        fi
+        test "$(stat -c '%u:%g' /)" = "0:0"

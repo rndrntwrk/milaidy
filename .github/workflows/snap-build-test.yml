@@ -54,6 +54,9 @@ jobs:
           sed -i "s/^version: .*/version: '${VERSION}'/" snap/snapcraft.yaml
           echo "Building snap version: $VERSION"
 
+      - name: Normalize runner root ownership for snapd
+        uses: ./.github/actions/normalize-snapd-root
+
       - name: Build snap
         uses: snapcore/action-build@v1
         id: snapcraft
