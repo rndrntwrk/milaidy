@@ -60,12 +60,12 @@
 
 import { memo, useEffect, useRef, useState } from "react";
 import {
-  DataPacket_Kind,
   LocalVideoTrack,
   Room,
   RoomEvent,
   Track,
   VideoPresets,
+  type DataPacket_Kind,
   type RemoteParticipant,
   type RoomConnectOptions,
 } from "livekit-client";

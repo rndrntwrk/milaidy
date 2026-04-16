@@ -127,6 +127,15 @@ export const LiveKitBroadcastSubscriber = memo(function LiveKitBroadcastSubscrib
     onStatusChangeRef.current = onStatusChange;
   }, [onStatusChange]);
 
+  // Same pattern for the token fetcher — if the parent passes a fresh
+  // function literal every render (common React footgun), we don't
+  // want the effect below to tear down the room + reconnect every
+  // time. The only thing that should drive reconnection is sessionId.
+  const fetchSubscriberTokenRef = useRef(fetchSubscriberToken);
+  useEffect(() => {
+    fetchSubscriberTokenRef.current = fetchSubscriberToken;
+  }, [fetchSubscriberToken]);
+
   useEffect(() => {
     // No session → stay idle with placeholder. Don't even touch the
     // network.
@@ -145,7 +154,7 @@ export const LiveKitBroadcastSubscriber = memo(function LiveKitBroadcastSubscrib
       onStatusChangeRef.current?.("connecting");
 
       try {
-        const tokenResp = await fetchSubscriberToken(sessionId);
+        const tokenResp = await fetchSubscriberTokenRef.current(sessionId);
         if (cancelled) return;
         if (!tokenResp?.ok || !tokenResp.token || !tokenResp.url) {
           throw new Error("subscriber token response missing required fields");
@@ -272,7 +281,11 @@ export const LiveKitBroadcastSubscriber = memo(function LiveKitBroadcastSubscrib
       void roomRef.current?.disconnect().catch(() => {});
       roomRef.current = null;
     };
-  }, [sessionId, fetchSubscriberToken]);
+    // Intentionally exclude fetchSubscriberToken — we read it via
+    // fetchSubscriberTokenRef so a new function identity on re-render
+    // doesn't tear down the room. Only sessionId should drive reconnect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId]);
 
   return (
     <div
