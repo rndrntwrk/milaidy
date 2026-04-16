@@ -351,4 +351,49 @@ describe("applyPluginAnthropicBunRuntimePatch", () => {
     expect(patchedCli).toContain("const proc = getBunRuntime().spawn");
     expect(patchedCli).not.toContain("Bun.spawn(");
   });
+
+  it("patches the original upstream Claude CLI source before the usage rewrite runs", () => {
+    const elizaRoot = makeTempDir();
+    const claudeCliPath = path.join(
+      elizaRoot,
+      "plugins",
+      "plugin-anthropic",
+      "typescript",
+      "utils",
+      "claude-cli.ts",
+    );
+
+    writeFile(
+      claudeCliPath,
+      [
+        "function parseUsage(",
+        "  modelUsage: Record<string, ClaudeCliModelUsage> | undefined,",
+        '): CliGenerateResult["usage"] {',
+        "  const entry = modelUsage ? Object.values(modelUsage)[0] : undefined;",
+        "  if (!entry) return null;",
+        "  return {",
+        "    inputTokens: entry.inputTokens,",
+        "    outputTokens: entry.outputTokens,",
+        "    totalTokens: entry.inputTokens + entry.outputTokens,",
+        "  };",
+        "}",
+        "",
+        "/**",
+        " * Run a prompt through `claude -p` (non-streaming).",
+        " */",
+        'const proc = Bun.spawn(args, { stdout: "pipe", stderr: "pipe" });',
+      ].join("\n"),
+    );
+
+    expect(applyPluginAnthropicBunRuntimePatch(elizaRoot)).toBe(2);
+    expect(applyPluginAnthropicCliUsagePatch(elizaRoot)).toBe(0);
+
+    const patchedCli = fs.readFileSync(claudeCliPath, "utf8");
+    expect(patchedCli).toContain("function getBunRuntime()");
+    expect(patchedCli).toContain("promptTokens: entry.inputTokens");
+    expect(patchedCli).toContain("completionTokens: entry.outputTokens");
+    expect(patchedCli).toContain("const proc = getBunRuntime().spawn");
+    expect(patchedCli).not.toContain("inputTokens: entry.inputTokens,");
+    expect(patchedCli).not.toContain("outputTokens: entry.outputTokens,");
+  });
 });
