@@ -23,6 +23,26 @@ const releaseCheckCandidates = [
     "release-check.ts",
   ),
 ];
+const releaseCheckPackDryRunCandidates = [
+  path.join(
+    repoRoot,
+    "eliza",
+    "packages",
+    "app-core",
+    "scripts",
+    "lib",
+    "release-check-pack-dry-run.ts",
+  ),
+  path.join(
+    repoRoot,
+    ".eliza.ci-disabled",
+    "packages",
+    "app-core",
+    "scripts",
+    "lib",
+    "release-check-pack-dry-run.ts",
+  ),
+];
 
 const oldRunPackDryBlock = `function runPackDry(): PackResult[] {
   return withSanitizedNpmOverrides(() => {
@@ -145,9 +165,7 @@ ${entries.map((entry) => `  "${entry}",`).join("\n")}
 function patchLocalPackHotspotPathsBlock(source) {
   const block = getLocalPackHotspotPathsBlock(source);
   if (!block) {
-    throw new Error(
-      "patch-release-check-pack-fallback: upstream localPackHotspotPaths block not found",
-    );
+    return source;
   }
 
   const existingEntries = parseQuotedEntries(block);
@@ -212,6 +230,41 @@ export function findReleaseCheckFile(candidates = releaseCheckCandidates) {
   return candidates.find((candidate) => fs.existsSync(candidate)) ?? null;
 }
 
+export function findReleaseCheckPackDryRunFile(
+  candidates = releaseCheckPackDryRunCandidates,
+) {
+  return candidates.find((candidate) => fs.existsSync(candidate)) ?? null;
+}
+
+export function patchReleaseCheckPackFallbackFiles({
+  releaseCheckFilePath,
+  packDryRunFilePath,
+}) {
+  let changed = false;
+
+  if (releaseCheckFilePath) {
+    changed = patchReleaseCheckFile(releaseCheckFilePath) || changed;
+  }
+
+  const hotspotSources = [releaseCheckFilePath, packDryRunFilePath]
+    .filter((candidate) => typeof candidate === "string")
+    .map((candidate) => fs.readFileSync(candidate, "utf8"));
+  const hotspotsAlreadyPatched = hotspotSources.some((source) =>
+    hasRequiredLocalPackHotspots(source),
+  );
+
+  if (!hotspotsAlreadyPatched && packDryRunFilePath) {
+    const original = fs.readFileSync(packDryRunFilePath, "utf8");
+    const patched = patchLocalPackHotspotPathsBlock(original);
+    if (patched !== original) {
+      fs.writeFileSync(packDryRunFilePath, patched);
+      changed = true;
+    }
+  }
+
+  return changed;
+}
+
 export function isDirectRun(
   moduleUrl = import.meta.url,
   argv1 = process.argv[1],
@@ -225,18 +278,22 @@ export function isDirectRun(
 }
 
 function main() {
-  const filePath = findReleaseCheckFile();
-  if (!filePath) {
+  const releaseCheckFilePath = findReleaseCheckFile();
+  const packDryRunFilePath = findReleaseCheckPackDryRunFile();
+  if (!releaseCheckFilePath) {
     throw new Error(
       "patch-release-check-pack-fallback: could not find release-check.ts",
     );
   }
 
-  const changed = patchReleaseCheckFile(filePath);
+  const changed = patchReleaseCheckPackFallbackFiles({
+    releaseCheckFilePath,
+    packDryRunFilePath,
+  });
   console.log(
     changed
-      ? `patch-release-check-pack-fallback: patched ${path.relative(repoRoot, filePath)}`
-      : `patch-release-check-pack-fallback: ${path.relative(repoRoot, filePath)} already patched`,
+      ? `patch-release-check-pack-fallback: patched ${path.relative(repoRoot, releaseCheckFilePath)}`
+      : `patch-release-check-pack-fallback: ${path.relative(repoRoot, releaseCheckFilePath)} already patched`,
   );
 }
 

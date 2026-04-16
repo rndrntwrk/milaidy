@@ -1,8 +1,13 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import {
   applyReleaseCheckPackFallback,
   isDirectRun,
+  patchReleaseCheckPackFallbackFiles,
 } from "./patch-release-check-pack-fallback.mjs";
 
 const upstreamRunPackDryBlock = `function runPackDry(): PackResult[] {
@@ -119,6 +124,49 @@ describe("patch-release-check-pack-fallback", () => {
     );
 
     expect(applyReleaseCheckPackFallback(alreadyPatched)).toBe(alreadyPatched);
+  });
+
+  it("does not throw when the hotspot block moved to the pack-dry-run helper", () => {
+    const source = `before\n${upstreamRunPackDryBlock}\nafter\n`;
+
+    expect(() => applyReleaseCheckPackFallback(source)).not.toThrow();
+    expect(applyReleaseCheckPackFallback(source)).toContain(
+      "function runBunPackDry(): PackResult[]",
+    );
+  });
+
+  it("patches hotspot paths in the pack-dry-run helper when release-check no longer defines them inline", () => {
+    const tempDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "patch-release-check-pack-fallback-"),
+    );
+    const releaseCheckPath = path.join(tempDir, "release-check.ts");
+    const packDryRunPath = path.join(tempDir, "release-check-pack-dry-run.ts");
+
+    try {
+      fs.writeFileSync(
+        releaseCheckPath,
+        `before\n${upstreamRunPackDryBlock}\nafter\n`,
+      );
+      fs.writeFileSync(
+        packDryRunPath,
+        `${upstreamLocalPackHotspotPathsBlock}\n`,
+      );
+
+      const changed = patchReleaseCheckPackFallbackFiles({
+        releaseCheckFilePath: releaseCheckPath,
+        packDryRunFilePath: packDryRunPath,
+      });
+
+      expect(changed).toBe(true);
+      expect(fs.readFileSync(releaseCheckPath, "utf8")).toContain(
+        "function runBunPackDry(): PackResult[]",
+      );
+      const patchedPackDryRun = fs.readFileSync(packDryRunPath, "utf8");
+      expect(patchedPackDryRun).toContain('  "dist",');
+      expect(patchedPackDryRun).toContain('  "apps/app/dist",');
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 
   it("matches direct-run detection with injected path/url helpers", () => {
