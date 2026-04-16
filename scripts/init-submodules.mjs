@@ -428,13 +428,22 @@ export function runInitSubmodules({
         }
 
         const nestedSkipArgs = getNestedElizaSubmoduleSkipArgs();
-        exec(
-          `git ${nestedSkipArgs} submodule update --init --recursive -- "${nestedSubmodule.path}"`.trim(),
-          {
-            cwd: elizaRoot,
-            stdio: "inherit",
-          },
-        );
+        try {
+          exec(
+            `git ${nestedSkipArgs} submodule update --init --recursive -- "${nestedSubmodule.path}"`.trim(),
+            {
+              cwd: elizaRoot,
+              stdio: "inherit",
+            },
+          );
+        } catch (err) {
+          failed++;
+          logError(
+            `[init-submodules] Failed to initialize nested ${nestedSubmodule.name} (${rootRelativePath}): ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+          );
+        }
       }
     } catch (err) {
       logError(
