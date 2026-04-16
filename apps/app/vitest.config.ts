@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Plugin } from "vite";
@@ -12,9 +13,11 @@ import {
   getAppCoreBridgeStubPath,
   getUiSourceAliases,
 } from "../../test/vitest/workspace-aliases";
+import { CAPACITOR_PLUGIN_NAMES } from "./scripts/capacitor-plugin-names.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "../..");
+const _require = createRequire(import.meta.url);
 const nativePluginsRoot = path.join(
   here,
   "../../eliza/packages/native-plugins",
@@ -23,23 +26,33 @@ const appCorePackageRoot = getAppCoreSourceRoot(here);
 const agentSourceRoot = getAutonomousSourceRoot(here);
 const uiSourceRoot = getUiSourceRoot(here);
 const bridgeStubPath = getAppCoreBridgeStubPath(repoRoot);
+const capacitorCoreEntry = _require.resolve("@capacitor/core");
+const nativePluginAliasMap = Object.fromEntries(
+  CAPACITOR_PLUGIN_NAMES.map((name) => [
+    `@elizaos/capacitor-${name}`,
+    path.join(nativePluginsRoot, `${name}/src/index.ts`),
+  ]),
+);
 
 /**
- * Custom Vite plugin that redirects @elizaos/app-core imports to
- * the test shim before Vite's built-in resolver tries to resolve through
- * the package's exports map (which may reference native bindings that are
- * unavailable in the test environment).
+ * Redirects `@elizaos/app-core` bridge entrypoints to the test shim (matches
+ * package exports: `./bridge`, `./bridge/electrobun-rpc`, `./bridge/electrobun-runtime`).
+ * Legacy specifiers without `/bridge/` are still stubbed for older call sites.
  */
 function appCoreBridgeStubPlugin(): Plugin {
+  const stubbed = new Set([
+    "@elizaos/app-core",
+    "@elizaos/app-core/bridge",
+    "@elizaos/app-core/bridge/electrobun-rpc",
+    "@elizaos/app-core/bridge/electrobun-runtime",
+    "@elizaos/app-core/electrobun-rpc",
+    "@elizaos/app-core/electrobun-runtime",
+  ]);
   return {
     name: "app-core-bridge-stub",
     enforce: "pre",
     resolveId(source) {
-      if (
-        source === "@elizaos/app-core/electrobun-rpc" ||
-        source === "@elizaos/app-core/electrobun-runtime" ||
-        source === "@elizaos/app-core"
-      ) {
+      if (stubbed.has(source)) {
         return bridgeStubPath;
       }
       return null;
@@ -66,6 +79,10 @@ export default defineConfig({
       {
         find: /^react-dom\/(.*)$/,
         replacement: path.join(here, "node_modules/react-dom", "$1"),
+      },
+      {
+        find: /^@capacitor\/core$/,
+        replacement: capacitorCoreEntry,
       },
       ...(appCorePackageRoot
         ? (() => {
@@ -131,6 +148,8 @@ export default defineConfig({
     ],
   },
   test: {
+    // apps/app test/vite/** alias/bridge regressions live here; the root
+    // default Vitest config intentionally does not glob apps/app/**.
     // Use POSIX-style relative globs so test discovery works on Windows too.
     include: [
       "test/**/*.test.ts",
@@ -177,46 +196,7 @@ export default defineConfig({
         "doubles",
         "elizaos-skills.ts",
       ),
-      "@elizaos/capacitor-gateway": path.join(
-        nativePluginsRoot,
-        "gateway/src/index.ts",
-      ),
-      "@elizaos/capacitor-swabble": path.join(
-        nativePluginsRoot,
-        "swabble/src/index.ts",
-      ),
-      "@elizaos/capacitor-talkmode": path.join(
-        nativePluginsRoot,
-        "talkmode/src/index.ts",
-      ),
-      "@elizaos/capacitor-camera": path.join(
-        nativePluginsRoot,
-        "camera/src/index.ts",
-      ),
-      "@elizaos/capacitor-location": path.join(
-        nativePluginsRoot,
-        "location/src/index.ts",
-      ),
-      "@elizaos/capacitor-screencapture": path.join(
-        nativePluginsRoot,
-        "screencapture/src/index.ts",
-      ),
-      "@elizaos/capacitor-canvas": path.join(
-        nativePluginsRoot,
-        "canvas/src/index.ts",
-      ),
-      "@elizaos/capacitor-desktop": path.join(
-        nativePluginsRoot,
-        "desktop/src/index.ts",
-      ),
-      "@elizaos/capacitor-agent": path.join(
-        nativePluginsRoot,
-        "agent/src/index.ts",
-      ),
-      "@elizaos/capacitor-websiteblocker": path.join(
-        nativePluginsRoot,
-        "websiteblocker/src/index.ts",
-      ),
+      ...nativePluginAliasMap,
     },
     testTimeout: 30000,
     globals: true,

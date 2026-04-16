@@ -57,8 +57,17 @@ describe("release workflow path contract", () => {
     expect(workflow).not.toContain(
       "bun install --cwd eliza/packages/app-core --ignore-scripts",
     );
-    expect(workflow).toContain(
+    expect(workflow).not.toContain(
       "bun install --cwd eliza/packages/app-core/platforms/electrobun --ignore-scripts",
+    );
+    expect(workflow).toContain(
+      "node eliza/packages/app-core/scripts/patch-workspace-plugins.mjs",
+    );
+    expect(workflow).toContain(
+      "node eliza/packages/app-core/scripts/patch-deps.mjs",
+    );
+    expect(workflow).toContain(
+      "node eliza/packages/app-core/scripts/ensure-type-package-aliases.mjs",
     );
     expect(workflow).toContain(
       "System git config failed; falling back to --global.",
