@@ -71,6 +71,7 @@ const OPTIONAL_ELIZA_PLUGIN_FALLBACK_TAG = "alpha";
 const UNPUBLISHED_ELIZA_PLUGIN_CI_STUBS = [
   {
     packageName: "@elizaos/plugin-wechat",
+    workspaceEntry: "plugins/plugin-wechat",
     /** Relative from eliza/ to the CI stub directory. */
     stubRelativePath: "../scripts/ci-stubs/elizaos-plugin-wechat",
   },
@@ -402,10 +403,14 @@ export function getTemporaryElizaWorkspaceEntries(
     { pathExists },
   ).map(({ workspaceEntry }) => workspaceEntry);
 
-  const unpublishedStubWorkspaceEntries =
-    UNPUBLISHED_ELIZA_PLUGIN_CI_STUBS.filter(({ stubRelativePath }) => {
-      return pathExists(path.join(elizaRoot, stubRelativePath, "package.json"));
-    }).map(({ stubRelativePath }) => stubRelativePath);
+  const unpublishedStubWorkspaceEntries = UNPUBLISHED_ELIZA_PLUGIN_CI_STUBS
+    .filter(({ stubRelativePath, workspaceEntry }) => {
+      return (
+        pathExists(path.join(elizaRoot, stubRelativePath, "package.json")) &&
+        !pathExists(path.join(elizaRoot, workspaceEntry, "package.json"))
+      );
+    })
+    .map(({ stubRelativePath }) => stubRelativePath);
 
   return [
     ...optionalPluginWorkspaceEntries,
@@ -564,9 +569,12 @@ function applyOptionalElizaPluginFallback(elizaRoot, missingPlugins) {
  *
  * The overrides are idempotent: re-running is safe if they are already present.
  */
-function applyUnpublishedPluginStubOverrides(elizaRoot) {
+export function applyUnpublishedPluginStubOverrides(
+  elizaRoot,
+  { pathExists = existsSync } = {},
+) {
   const packageJsonPath = path.join(elizaRoot, "package.json");
-  if (!existsSync(packageJsonPath)) {
+  if (!pathExists(packageJsonPath)) {
     return 0;
   }
 
@@ -591,12 +599,27 @@ function applyUnpublishedPluginStubOverrides(elizaRoot) {
   for (const {
     packageName,
     stubRelativePath,
+    workspaceEntry,
   } of UNPUBLISHED_ELIZA_PLUGIN_CI_STUBS) {
     const stubAbsolutePath = path.resolve(elizaRoot, stubRelativePath);
-    if (!existsSync(path.join(stubAbsolutePath, "package.json"))) {
+    const stubPackageJsonPath = path.join(stubAbsolutePath, "package.json");
+    const realWorkspacePackageJsonPath = path.join(
+      elizaRoot,
+      workspaceEntry,
+      "package.json",
+    );
+    const specifier = `file:${stubRelativePath}`;
+    const shouldUseStub =
+      pathExists(stubPackageJsonPath) && !pathExists(realWorkspacePackageJsonPath);
+
+    if (!shouldUseStub) {
+      if (overrides[packageName] === specifier) {
+        delete overrides[packageName];
+        changed = true;
+      }
       continue;
     }
-    const specifier = `file:${stubRelativePath}`;
+
     if (overrides[packageName] === specifier) {
       continue;
     }
@@ -608,7 +631,11 @@ function applyUnpublishedPluginStubOverrides(elizaRoot) {
     return 0;
   }
 
-  pkg.overrides = overrides;
+  if (Object.keys(overrides).length === 0) {
+    delete pkg.overrides;
+  } else {
+    pkg.overrides = overrides;
+  }
   writePackageJson(packageJsonPath, raw, pkg);
   return UNPUBLISHED_ELIZA_PLUGIN_CI_STUBS.length;
 }

@@ -6,6 +6,7 @@ import {
   applyMiladyCopyPatches,
   applyPluginAnthropicBunRuntimePatch,
   applyPluginAnthropicCliUsagePatch,
+  applyUnpublishedPluginStubOverrides,
   bootstrapBundledBunInstall,
   findInstalledPackageDir,
   getElizaInstallArgs,
@@ -77,6 +78,67 @@ describe("getTemporaryElizaWorkspaceEntries", () => {
       "plugins/plugin-sql/typescript",
       "../scripts/ci-stubs/elizaos-plugin-wechat",
     ]);
+  });
+
+  it("skips the wechat CI stub when the real plugin workspace exists", () => {
+    const elizaRoot = "/repo/eliza";
+    const existingPaths = new Set([
+      path.join(
+        elizaRoot,
+        "..",
+        "scripts",
+        "ci-stubs",
+        "elizaos-plugin-wechat",
+        "package.json",
+      ),
+      path.join(elizaRoot, "plugins", "plugin-wechat", "package.json"),
+    ]);
+
+    expect(
+      getTemporaryElizaWorkspaceEntries(elizaRoot, {
+        pathExists: (targetPath) => existingPaths.has(targetPath),
+      }),
+    ).toEqual([]);
+  });
+});
+
+describe("applyUnpublishedPluginStubOverrides", () => {
+  it("removes stale CI stub overrides when the real plugin workspace exists", () => {
+    const elizaRoot = makeTempDir();
+    writeFile(
+      path.join(elizaRoot, "package.json"),
+      JSON.stringify(
+        {
+          name: "eliza",
+          overrides: {
+            "@elizaos/plugin-wechat":
+              "file:../scripts/ci-stubs/elizaos-plugin-wechat",
+          },
+        },
+        null,
+        2,
+      ),
+    );
+    writeFile(
+      path.join(
+        elizaRoot,
+        "..",
+        "scripts",
+        "ci-stubs",
+        "elizaos-plugin-wechat",
+        "package.json",
+      ),
+      '{"name":"@elizaos/plugin-wechat"}\n',
+    );
+    writeFile(
+      path.join(elizaRoot, "plugins", "plugin-wechat", "package.json"),
+      '{"name":"@elizaos/plugin-wechat"}\n',
+    );
+
+    expect(applyUnpublishedPluginStubOverrides(elizaRoot)).toBe(1);
+    expect(
+      JSON.parse(fs.readFileSync(path.join(elizaRoot, "package.json"), "utf8")),
+    ).not.toHaveProperty("overrides");
   });
 });
 
