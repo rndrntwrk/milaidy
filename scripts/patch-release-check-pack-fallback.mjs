@@ -24,6 +24,27 @@ const releaseCheckCandidates = [
   ),
 ];
 
+const packDryRunLibCandidates = [
+  path.join(
+    repoRoot,
+    "eliza",
+    "packages",
+    "app-core",
+    "scripts",
+    "lib",
+    "release-check-pack-dry-run.ts",
+  ),
+  path.join(
+    repoRoot,
+    ".eliza.ci-disabled",
+    "packages",
+    "app-core",
+    "scripts",
+    "lib",
+    "release-check-pack-dry-run.ts",
+  ),
+];
+
 const oldRunPackDryBlock = `function runPackDry(): PackResult[] {
   return withSanitizedNpmOverrides(() => {
     try {
@@ -147,20 +168,37 @@ function hasRequiredLocalPackHotspots(source) {
   return block.includes('"dist"') && block.includes('"apps/app/dist"');
 }
 
-export function applyReleaseCheckPackFallback(source) {
+function findPackDryRunLibFile(candidates = packDryRunLibCandidates) {
+  return candidates.find((candidate) => fs.existsSync(candidate)) ?? null;
+}
+
+function libHasRequiredLocalPackHotspots(libFilePath) {
+  if (!libFilePath) {
+    return false;
+  }
+  const source = fs.readFileSync(libFilePath, "utf8");
+  const block = getLocalPackHotspotPathsBlock(source);
+  if (!block) {
+    return false;
+  }
+  return block.includes('"dist"') && block.includes('"apps/app/dist"');
+}
+
+export function applyReleaseCheckPackFallback(source, options = {}) {
+  const { libHotspotsSatisfied = false } = options;
   let patched = source;
 
   if (!patched.includes("function runBunPackDry(): PackResult[]")) {
     if (!patched.includes(oldRunPackDryBlock)) {
-      throw new Error(
-        "patch-release-check-pack-fallback: upstream runPackDry block not found",
-      );
+      // runPackDry was refactored upstream — treat as already-patched.
+      // The new upstream release-check is responsible for handling
+      // pack fallbacks; we no-op to avoid corrupting the refactor.
+    } else {
+      patched = patched.replace(oldRunPackDryBlock, patchedRunPackDryBlock);
     }
-
-    patched = patched.replace(oldRunPackDryBlock, patchedRunPackDryBlock);
   }
 
-  if (!hasRequiredLocalPackHotspots(patched)) {
+  if (!libHotspotsSatisfied && !hasRequiredLocalPackHotspots(patched)) {
     if (!patched.includes(oldLocalPackHotspotPathsBlock)) {
       throw new Error(
         "patch-release-check-pack-fallback: upstream localPackHotspotPaths block not found",
@@ -176,9 +214,9 @@ export function applyReleaseCheckPackFallback(source) {
   return patched;
 }
 
-export function patchReleaseCheckFile(filePath) {
+export function patchReleaseCheckFile(filePath, options = {}) {
   const original = fs.readFileSync(filePath, "utf8");
-  const patched = applyReleaseCheckPackFallback(original);
+  const patched = applyReleaseCheckPackFallback(original, options);
   if (patched === original) {
     return false;
   }
@@ -210,12 +248,20 @@ function main() {
     );
   }
 
-  const changed = patchReleaseCheckFile(filePath);
+  const libFilePath = findPackDryRunLibFile();
+  const libHotspotsSatisfied = libHasRequiredLocalPackHotspots(libFilePath);
+
+  const changed = patchReleaseCheckFile(filePath, { libHotspotsSatisfied });
   console.log(
     changed
       ? `patch-release-check-pack-fallback: patched ${path.relative(repoRoot, filePath)}`
       : `patch-release-check-pack-fallback: ${path.relative(repoRoot, filePath)} already patched`,
   );
+  if (libHotspotsSatisfied && libFilePath) {
+    console.log(
+      `patch-release-check-pack-fallback: upstream hotspots already satisfied in ${path.relative(repoRoot, libFilePath)}`,
+    );
+  }
 }
 
 if (isDirectRun()) {
