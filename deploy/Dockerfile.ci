@@ -300,6 +300,30 @@ for (const [name, code] of pkgs) {
 }
 __STUBS__
 
+# Fix @ai-sdk/provider-utils version conflict:
+# @ai-sdk/google@3.x needs provider-utils@4.x (exports convertToBase64),
+# but bun hoisted provider-utils@2.x to top-level. Replace with the 4.x copy.
+RUN node - <<'__AISDK_FIX__'
+const fs = require('fs');
+const path = require('path');
+const bunDir = 'node_modules/.bun';
+const target = 'node_modules/@ai-sdk/provider-utils';
+if (fs.existsSync(bunDir)) {
+  const entries = fs.readdirSync(bunDir).filter(e => e.startsWith('@ai-sdk+provider-utils@4.'));
+  if (entries.length > 0) {
+    // Pick the latest 4.x
+    entries.sort();
+    const src = path.join(bunDir, entries[entries.length - 1], 'node_modules/@ai-sdk/provider-utils');
+    if (fs.existsSync(src)) {
+      fs.rmSync(target, { recursive: true, force: true });
+      fs.cpSync(src, target, { recursive: true });
+      const ver = JSON.parse(fs.readFileSync(path.join(target, 'package.json'), 'utf8')).version;
+      console.log('Upgraded @ai-sdk/provider-utils to ' + ver);
+    }
+  }
+}
+__AISDK_FIX__
+
 # Remove unbuilt orchestrator (desktop-only, crashes tsx if dist/ missing)
 RUN rm -rf \
   node_modules/@elizaos/plugin-agent-orchestrator \
