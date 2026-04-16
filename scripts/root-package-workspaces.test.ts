@@ -3,7 +3,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 describe("root package workspace config", () => {
-  it("does not register CI stubs as first-class workspaces", () => {
+  it("keeps CI stubs after the primary shipped workspaces", () => {
     const packageJsonPath = path.join(
       import.meta.dirname,
       "..",
@@ -14,7 +14,12 @@ describe("root package workspace config", () => {
     };
 
     expect(Array.isArray(pkg.workspaces)).toBe(true);
-    expect(pkg.workspaces).not.toContain("scripts/ci-stubs/*");
+    const workspaces = pkg.workspaces as string[];
+
+    expect(workspaces).toContain("scripts/ci-stubs/*");
+    expect(workspaces.indexOf("scripts/ci-stubs/*")).toBeGreaterThan(
+      workspaces.indexOf("eliza/packages/*"),
+    );
   });
 
   it("keeps the root workspace typecheck scoped to root config files", () => {
