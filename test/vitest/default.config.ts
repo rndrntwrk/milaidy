@@ -225,20 +225,48 @@ export default defineConfig({
     restoreMocks: true,
     // Give worker forks more heap to survive jsdom-heavy suites.
     execArgv: ["--max-old-space-size=4096"],
-    // Auto-discovery: broad globs replace hand-curated paths.
-    // New root-owned test files in any of these locations are picked up automatically.
-    // eliza/, cloud/, and steward-fi have their own package/subrepo runners under bun run test.
     include: [
-      // --- root packages ---
-      "packages/**/src/**/*.test.{ts,tsx}",
-      "packages/**/__tests__/**/*.test.{ts,tsx}",
-      // --- root apps ---
-      "apps/**/__tests__/**/*.test.{ts,tsx}",
-      "apps/**/src/**/*.test.{ts,tsx}",
-      // --- root scripts and tests ---
+      // Keep this list explicit. New root/eliza package tests do not auto-join
+      // the default suite; add them here when that package is meant to run in
+      // the shared root Vitest job. apps/app test/vite/** lives under
+      // apps/app/vitest.config.ts instead of this root config.
+      "eliza/packages/agent/src/**/*.test.ts",
+      "eliza/packages/agent/src/**/*.test.tsx",
+      "eliza/packages/agent/test/**/*.test.ts",
+      "eliza/packages/agent/test/**/*.test.tsx",
+      "eliza/apps/*/test/**/*.test.ts",
+      "eliza/apps/*/test/**/*.test.tsx",
+      "eliza/packages/app-core/test/live-agent/**/*.test.ts",
+      "eliza/packages/app-core/test/live-agent/**/*.test.tsx",
+      // app-core src-colocated tests run here; test/ harness suites run in
+      // the app-unit config (apps/app/vitest.config.ts) which provides the
+      // correct @elizaos/app-core alias resolution. Running both in parallel
+      // causes file-system race conditions on shared test fixtures.
+      "eliza/packages/app-core/src/**/*.test.ts",
+      // Keep the standalone-safe Electrobun tests in the default unit suite.
+      // native/agent.test.ts requires the full desktop runtime, so it runs only
+      // via `bun run test:desktop:contract` in `.github/workflows/test.yml`
+      // (and the matching nightly desktop-contract job).
+      "eliza/packages/app-core/platforms/electrobun/src/menu-reset-from-main.test.ts",
+      "eliza/packages/app-core/platforms/electrobun/src/diagnostic-format.test.ts",
+      "eliza/packages/app-core/platforms/electrobun/src/native/steward.test.ts",
+      "eliza/packages/app-core/scripts/**/*.test.ts",
+      "eliza/packages/shared/src/**/*.test.ts",
+      "eliza/packages/app-core/src/**/*.test.tsx",
+      "eliza/packages/agent/src/runtime/roles/test/**/*.test.ts",
+      "eliza/apps/app-lifeops/src/selfcontrol/**/*.test.ts",
+      "eliza/apps/app-vincent/src/**/*.test.ts",
+      "eliza/apps/app-shopify/src/**/*.test.ts",
+      "eliza/apps/app-steward/src/**/*.test.ts",
+      "eliza/apps/app-lifeops/src/**/*.test.ts",
+      "packages/plugin-wechat/src/**/*.test.ts",
+      "eliza/plugins/plugin-music-player/src/**/*.test.ts",
+      "eliza/plugins/plugin-discord/typescript/__tests__/identity.test.ts",
+      "eliza/plugins/plugin-discord/typescript/__tests__/slash-command-roles.test.ts",
       "src/**/*.test.{ts,tsx}",
       "scripts/**/*.test.{ts,tsx}",
-      "test/**/*.test.{ts,tsx}",
+      "apps/chrome-extension/**/*.test.ts",
+      "apps/chrome-extension/**/*.test.tsx",
     ],
     setupFiles: ["eliza/packages/app-core/test/setup.ts"],
     exclude: [

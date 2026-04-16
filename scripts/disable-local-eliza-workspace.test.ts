@@ -3,11 +3,14 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createTempDirManager } from "../test/helpers/temp-dir";
 import {
+  CI_OVERRIDE_SPECIFIERS,
   collectWorkspaceProtocolDependencyNames,
   disableLocalElizaWorkspace,
+  ELIZA_RUNTIME_CI_OVERRIDE_SPECIFIERS,
   PINNED_VERSION_SOURCE_OVERRIDE,
   PINNED_VERSION_SOURCE_TEMPLATE,
   PINNED_VERSION_SOURCE_WORKSPACE,
+  resolveCiOverrideSpecifiers,
   resolvePublishSafePinnedVersions,
 } from "./disable-local-eliza-workspace.mjs";
 
@@ -194,5 +197,234 @@ describe("disable-local-eliza-workspace", () => {
       "@elizaos/plugin-agent-orchestrator": "0.6.2-alpha.0",
       "@elizaos/skills": "2.0.0-alpha.163",
     });
+  });
+
+  it("rewrites nested installable package manifests under app-core platforms", () => {
+    const repoRoot = makeTempDir();
+    writeJson(path.join(repoRoot, "package.json"), {
+      name: "milady-test",
+      workspaces: ["eliza/packages/*"],
+      overrides: {
+        "@elizaos/core": "2.0.0-alpha.163",
+        "@elizaos/shared": "2.0.0-alpha.163",
+      },
+    });
+    writeJson(
+      path.join(repoRoot, "eliza", "packages", "typescript", "package.json"),
+      {
+        name: "@elizaos/typescript",
+        version: "2.0.0-alpha.163",
+      },
+    );
+    writeJson(
+      path.join(repoRoot, "eliza", "packages", "shared", "package.json"),
+      {
+        name: "@elizaos/shared",
+        version: "2.0.0-alpha.0",
+      },
+    );
+    writeJson(
+      path.join(
+        repoRoot,
+        "eliza",
+        "packages",
+        "app-core",
+        "platforms",
+        "electrobun",
+        "package.json",
+      ),
+      {
+        name: "@elizaos/electrobun",
+        dependencies: {
+          "@elizaos/shared": "workspace:*",
+          electrobun: "^1.16.0",
+        },
+      },
+    );
+
+    disableLocalElizaWorkspace(repoRoot, {
+      log: () => {},
+      warn: () => {},
+      errorLog: () => {},
+    });
+
+    const electrobunPackageRaw: unknown = JSON.parse(
+      fs.readFileSync(
+        path.join(
+          repoRoot,
+          "eliza",
+          "packages",
+          "app-core",
+          "platforms",
+          "electrobun",
+          "package.json",
+        ),
+        "utf8",
+      ),
+    );
+    if (!isPackageWithDependencies(electrobunPackageRaw)) {
+      throw new Error(
+        "electrobun package.json fixture is missing dependencies",
+      );
+    }
+    expect(electrobunPackageRaw.dependencies).toMatchObject({
+      "@elizaos/shared": "file:../../../shared",
+    });
+  });
+  it("injects the renamed-workspace @elizaos/ui override for CI rewrites", () => {
+    const repoRoot = makeTempDir();
+    const originalRenameSetting =
+      process.env.MILADY_DISABLE_LOCAL_UPSTREAMS_RENAME;
+    writeJson(path.join(repoRoot, "package.json"), {
+      name: "milady-test",
+      workspaces: ["eliza/packages/*"],
+      overrides: {
+        "@elizaos/core": "2.0.0-alpha.163",
+      },
+    });
+    writeJson(
+      path.join(repoRoot, "eliza", "packages", "typescript", "package.json"),
+      {
+        name: "@elizaos/typescript",
+        version: "2.0.0-alpha.163",
+      },
+    );
+    writeJson(path.join(repoRoot, "eliza", "packages", "ui", "package.json"), {
+      name: "@elizaos/ui",
+      version: "2.0.0-alpha.163",
+    });
+
+    try {
+      process.env.MILADY_DISABLE_LOCAL_UPSTREAMS_RENAME = "1";
+      disableLocalElizaWorkspace(repoRoot, {
+        log: () => {},
+        warn: () => {},
+        errorLog: () => {},
+      });
+    } finally {
+      if (originalRenameSetting === undefined) {
+        delete process.env.MILADY_DISABLE_LOCAL_UPSTREAMS_RENAME;
+      } else {
+        process.env.MILADY_DISABLE_LOCAL_UPSTREAMS_RENAME =
+          originalRenameSetting;
+      }
+    }
+
+    const rootPackage = JSON.parse(
+      fs.readFileSync(path.join(repoRoot, "package.json"), "utf8"),
+    );
+    expect(rootPackage.overrides).toMatchObject({
+      "@elizaos/ui": resolveCiOverrideSpecifiers(repoRoot)["@elizaos/ui"],
+      "@elizaos/plugin-wechat":
+        CI_OVERRIDE_SPECIFIERS["@elizaos/plugin-wechat"],
+    });
+  });
+
+  it("injects the live-workspace @elizaos/ui override when eliza stays on disk", () => {
+    const repoRoot = makeTempDir();
+    writeJson(path.join(repoRoot, "package.json"), {
+      name: "milady-test",
+      workspaces: ["eliza/packages/*"],
+      overrides: {
+        "@elizaos/core": "2.0.0-alpha.163",
+      },
+    });
+    writeJson(
+      path.join(repoRoot, "eliza", "packages", "typescript", "package.json"),
+      {
+        name: "@elizaos/typescript",
+        version: "2.0.0-alpha.163",
+      },
+    );
+    writeJson(path.join(repoRoot, "eliza", "packages", "ui", "package.json"), {
+      name: "@elizaos/ui",
+      version: "2.0.0-alpha.163",
+    });
+
+    disableLocalElizaWorkspace(repoRoot, {
+      log: () => {},
+      warn: () => {},
+      errorLog: () => {},
+    });
+
+    const rootPackage = JSON.parse(
+      fs.readFileSync(path.join(repoRoot, "package.json"), "utf8"),
+    );
+    expect(rootPackage.overrides).toMatchObject({
+      "@elizaos/ui": resolveCiOverrideSpecifiers(repoRoot)["@elizaos/ui"],
+      "@elizaos/plugin-wechat":
+        CI_OVERRIDE_SPECIFIERS["@elizaos/plugin-wechat"],
+    });
+  });
+
+  it("injects runtime install overrides into eliza/package.json for published-only CI", () => {
+    const repoRoot = makeTempDir();
+    writeJson(path.join(repoRoot, "package.json"), {
+      name: "milady-test",
+      workspaces: ["eliza/packages/*"],
+      overrides: {
+        "@elizaos/core": "2.0.0-alpha.163",
+      },
+    });
+    writeJson(path.join(repoRoot, "eliza", "package.json"), {
+      name: "eliza",
+      workspaces: ["packages/*", "plugins/*"],
+    });
+    writeJson(
+      path.join(repoRoot, "eliza", "packages", "typescript", "package.json"),
+      {
+        name: "@elizaos/typescript",
+        version: "2.0.0-alpha.163",
+      },
+    );
+
+    disableLocalElizaWorkspace(repoRoot, {
+      log: () => {},
+      warn: () => {},
+      errorLog: () => {},
+    });
+
+    const elizaPackage = JSON.parse(
+      fs.readFileSync(path.join(repoRoot, "eliza", "package.json"), "utf8"),
+    );
+    expect(elizaPackage.overrides).toMatchObject({
+      "@elizaos/ui": ELIZA_RUNTIME_CI_OVERRIDE_SPECIFIERS["@elizaos/ui"],
+      "@elizaos/plugin-wechat":
+        ELIZA_RUNTIME_CI_OVERRIDE_SPECIFIERS["@elizaos/plugin-wechat"],
+    });
+  });
+
+  it("skips malformed eliza/package.json when injecting runtime overrides", () => {
+    const repoRoot = makeTempDir();
+    const warnings: string[] = [];
+    writeJson(path.join(repoRoot, "package.json"), {
+      name: "milady-test",
+      workspaces: ["eliza/packages/*"],
+      overrides: {
+        "@elizaos/core": "2.0.0-alpha.163",
+      },
+    });
+    fs.mkdirSync(path.join(repoRoot, "eliza"), { recursive: true });
+    fs.writeFileSync(path.join(repoRoot, "eliza", "package.json"), "null\n");
+    writeJson(
+      path.join(repoRoot, "eliza", "packages", "typescript", "package.json"),
+      {
+        name: "@elizaos/typescript",
+        version: "2.0.0-alpha.163",
+      },
+    );
+
+    disableLocalElizaWorkspace(repoRoot, {
+      log: () => {},
+      warn: (message) => warnings.push(message),
+      errorLog: () => {},
+    });
+
+    expect(
+      fs.readFileSync(path.join(repoRoot, "eliza", "package.json"), "utf8"),
+    ).toBe("null\n");
+    expect(warnings).toContain(
+      `[disable-local-eliza-workspace] Skipping ${path.join(repoRoot, "eliza", "package.json")}: package.json is malformed`,
+    );
   });
 });

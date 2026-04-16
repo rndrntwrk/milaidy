@@ -62,8 +62,17 @@ export const LOCAL_ONLY_WORKSPACE_GLOBS = [
   "eliza/apps/*",
 ];
 export const LOCAL_ONLY_WORKSPACE_PATHS = ["eliza/packages/shared"];
+export const NESTED_INSTALLABLE_PACKAGE_GLOBS = [
+  // These package.json files are installed directly by CI/build scripts even
+  // though they do not participate in the root workspace graph.
+  "eliza/packages/app-core/platforms/*",
+];
 export const CI_OVERRIDE_SPECIFIERS = {
   "@elizaos/plugin-wechat": "file:./scripts/ci-stubs/elizaos-plugin-wechat",
+};
+export const ELIZA_RUNTIME_CI_OVERRIDE_SPECIFIERS = {
+  "@elizaos/plugin-wechat": "file:../scripts/ci-stubs/elizaos-plugin-wechat",
+  "@elizaos/ui": "file:./packages/ui",
 };
 export const DEPENDENCY_FIELDS = [
   "dependencies",
@@ -79,6 +88,29 @@ export const PINNED_VERSION_SOURCE_WORKSPACE = "workspace";
 const ELIZAOS_CORE_NAME = "@elizaos/core";
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const DEFAULT_REPO_ROOT = process.cwd();
+
+export function resolveRootUiOverrideSpecifier(repoRoot = DEFAULT_REPO_ROOT) {
+  const disabledUiPackageJsonPath = path.join(
+    repoRoot,
+    ".eliza.ci-disabled",
+    "packages",
+    "ui",
+    "package.json",
+  );
+
+  if (fs.existsSync(disabledUiPackageJsonPath)) {
+    return "file:./.eliza.ci-disabled/packages/ui";
+  }
+
+  return "file:./eliza/packages/ui";
+}
+
+export function resolveCiOverrideSpecifiers(repoRoot = DEFAULT_REPO_ROOT) {
+  return {
+    ...CI_OVERRIDE_SPECIFIERS,
+    "@elizaos/ui": resolveRootUiOverrideSpecifier(repoRoot),
+  };
+}
 
 /**
  * @typedef {import("./lib/package-types.d.ts").PackageJsonRecord} PackageJsonRecord
@@ -609,6 +641,51 @@ export function resolveLocalOnlyWorkspacePackageNames(
 }
 
 /**
+ * @param {string} rootDir
+ * @param {{
+ *   localOnlyWorkspaceGlobs?: string[];
+ *   localOnlyWorkspacePaths?: string[];
+ * }} [options]
+ * @returns {Map<string, string>}
+ */
+export function resolveLocalOnlyWorkspacePackagePaths(
+  rootDir,
+  {
+    localOnlyWorkspaceGlobs = LOCAL_ONLY_WORKSPACE_GLOBS,
+    localOnlyWorkspacePaths = LOCAL_ONLY_WORKSPACE_PATHS,
+  } = {},
+) {
+  const localOnlyPackagePaths = new Map();
+  for (const glob of localOnlyWorkspaceGlobs) {
+    for (const wsRel of expandGlob(glob, { rootDir })) {
+      const pkgPath = path.join(rootDir, wsRel, "package.json");
+      if (!fs.existsSync(pkgPath)) continue;
+      try {
+        const pkg = readPackageJson(pkgPath);
+        if (typeof pkg?.name === "string") {
+          localOnlyPackagePaths.set(pkg.name, wsRel);
+        }
+      } catch {
+        /* skip */
+      }
+    }
+  }
+  for (const wsRel of localOnlyWorkspacePaths) {
+    const pkgPath = path.join(rootDir, wsRel, "package.json");
+    if (!fs.existsSync(pkgPath)) continue;
+    try {
+      const pkg = readPackageJson(pkgPath);
+      if (typeof pkg?.name === "string") {
+        localOnlyPackagePaths.set(pkg.name, wsRel);
+      }
+    } catch {
+      /* skip */
+    }
+  }
+  return localOnlyPackagePaths;
+}
+
+/**
  * @param {PackageJsonRecord} pkg
  * @param {Map<string, string>} [pinnedVersions]
  * @param {{ localOnlyPackages?: Set<string> }} [options]
@@ -644,17 +721,47 @@ export function rewriteWorkspaceDependencySpecifiers(
   return mutated;
 }
 
-/**
- * @param {PackageJsonRecord} pkg
- * @param {{ log?: typeof console.log }} [options]
- * @returns {boolean}
- */
-export function applyCiOnlyOverrides(pkg, { log = console.log } = {}) {
+function toPosixRelativePath(relativePath) {
+  return relativePath.split(path.sep).join("/");
+}
+
+export function rewriteNestedLocalFileDependencySpecifiers(
+  pkg,
+  packageDirRel,
+  localOnlyPackagePaths,
+) {
+  let mutated = false;
+  for (const field of DEPENDENCY_FIELDS) {
+    const deps = pkg?.[field];
+    if (!isStringRecord(deps)) continue;
+    for (const [dependencyName, specifier] of Object.entries(deps)) {
+      const targetWorkspaceRel = localOnlyPackagePaths.get(dependencyName);
+      if (!targetWorkspaceRel) {
+        continue;
+      }
+      if (!isWorkspaceProtocolSpecifier(specifier)) {
+        continue;
+      }
+      const relativeTargetPath = path.relative(
+        packageDirRel,
+        targetWorkspaceRel,
+      );
+      deps[dependencyName] = `file:${toPosixRelativePath(relativeTargetPath)}`;
+      mutated = true;
+    }
+  }
+  return mutated;
+}
+export function applyOverrideSpecifiers(
+  pkg,
+  overrideSpecifiers,
+  { log = console.log, label = "CI-only override" } = {},
+) {
   const overrides = isStringRecord(pkg.overrides) ? pkg.overrides : {};
   const injected = [];
 
   for (const [dependencyName, specifier] of Object.entries(
-    CI_OVERRIDE_SPECIFIERS,
+    overrideSpecifiers,
   )) {
     if (overrides[dependencyName] === specifier) {
       continue;
@@ -669,9 +776,24 @@ export function applyCiOnlyOverrides(pkg, { log = console.log } = {}) {
 
   pkg.overrides = overrides;
   log(
-    `[disable-local-eliza-workspace] Added ${injected.length} CI-only override(s) (${injected.join(", ")})`,
+    `[disable-local-eliza-workspace] Added ${injected.length} ${label}(s) (${injected.join(", ")})`,
   );
   return true;
+}
+
+/**
+ * @param {PackageJsonRecord} pkg
+ * @param {{ log?: typeof console.log, repoRoot?: string }} [options]
+ * @returns {boolean}
+ */
+export function applyCiOnlyOverrides(
+  pkg,
+  { log = console.log, repoRoot = DEFAULT_REPO_ROOT } = {},
+) {
+  return applyOverrideSpecifiers(pkg, resolveCiOverrideSpecifiers(repoRoot), {
+    log,
+    label: "CI-only override",
+  });
 }
 
 export function disableLocalElizaWorkspace(
@@ -683,8 +805,8 @@ export function disableLocalElizaWorkspace(
   const shouldRenameElizaWorkspace =
     process.env.MILADY_DISABLE_LOCAL_UPSTREAMS_RENAME === "1";
   const packageJsonPath = path.join(repoRoot, "package.json");
+  const elizaPackageJsonPath = path.join(elizaRoot, "package.json");
   const removedLockfiles = [];
-  const localOnlyPackages = resolveLocalOnlyWorkspacePackageNames(repoRoot);
 
   // Version resolution needs package.json files inside eliza/. When
   // MILADY_SKIP_LOCAL_UPSTREAMS=1, init-submodules.mjs intentionally
@@ -714,6 +836,9 @@ export function disableLocalElizaWorkspace(
       );
     }
   }
+
+  const localOnlyPackagePaths = resolveLocalOnlyWorkspacePackagePaths(repoRoot);
+  const localOnlyPackages = new Set(localOnlyPackagePaths.keys());
 
   // Resolve pinned versions BEFORE renaming eliza/ away, since the
   // cloud-agent-template and local package.json files live inside it.
@@ -880,9 +1005,36 @@ export function disableLocalElizaWorkspace(
     }
   }
 
-  applyCiOnlyOverrides(rootPkg, { log });
+  applyCiOnlyOverrides(rootPkg, { log, repoRoot });
 
   writePackageJson(packageJsonPath, rawRootPkg, rootPkg);
+
+  if (fs.existsSync(elizaPackageJsonPath)) {
+    try {
+      const rawElizaPkg = fs.readFileSync(elizaPackageJsonPath, "utf8");
+      const elizaPkg = parseJsonObject(rawElizaPkg);
+      if (!isPackageJsonRecord(elizaPkg)) {
+        warn(
+          `[disable-local-eliza-workspace] Skipping ${elizaPackageJsonPath}: package.json is malformed`,
+        );
+      } else if (
+        applyOverrideSpecifiers(
+          elizaPkg,
+          ELIZA_RUNTIME_CI_OVERRIDE_SPECIFIERS,
+          {
+            log,
+            label: "local eliza runtime override",
+          },
+        )
+      ) {
+        writePackageJson(elizaPackageJsonPath, rawElizaPkg, elizaPkg);
+      }
+    } catch (error) {
+      warn(
+        `[disable-local-eliza-workspace] Failed to patch ${elizaPackageJsonPath}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
 
   // Use early-resolved versions (captured before eliza/ was renamed away).
   // Fall back to a post-rename resolution attempt for robustness.
@@ -914,9 +1066,15 @@ export function disableLocalElizaWorkspace(
 
   const seen = new Set();
   const pendingWorkspaceDirs = [];
+  const nestedInstallablePackageDirs = new Set(
+    NESTED_INSTALLABLE_PACKAGE_GLOBS.flatMap((glob) =>
+      expandGlob(glob, { rootDir: repoRoot }),
+    ),
+  );
   const rewriteWorkspaceEntries = [
     ...(rootPkg.workspaces ?? []),
     ...removedWorkspaceGlobs,
+    ...NESTED_INSTALLABLE_PACKAGE_GLOBS,
   ];
 
   // In rewrite-only CI the eliza/ checkout stays on disk even after we remove
@@ -1012,15 +1170,22 @@ export function disableLocalElizaWorkspace(
     }
     const pkg = parsedPkg;
 
-    if (
-      !rewriteWorkspaceDependencySpecifiers(
+    const rewrotePublishedWorkspaceDeps = rewriteWorkspaceDependencySpecifiers(
+      pkg,
+      publishSafePinnedWorkspaceVersions,
+      {
+        localOnlyPackages,
+      },
+    );
+    const rewroteNestedLocalFileDeps =
+      nestedInstallablePackageDirs.has(workspaceRel) &&
+      rewriteNestedLocalFileDependencySpecifiers(
         pkg,
-        publishSafePinnedWorkspaceVersions,
-        {
-          localOnlyPackages,
-        },
-      )
-    ) {
+        workspaceRel,
+        localOnlyPackagePaths,
+      );
+
+    if (!rewrotePublishedWorkspaceDeps && !rewroteNestedLocalFileDeps) {
       continue;
     }
     if (writePackageJson(pkgPath, originalRaw, pkg)) {

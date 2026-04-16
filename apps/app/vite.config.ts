@@ -34,6 +34,10 @@ const nativePluginsRoot = path.join(
   "eliza/packages/native-plugins",
 );
 const appCoreSrcRoot = path.join(miladyRoot, "eliza/packages/app-core/src");
+const appCoreNativePluginEntrypoints = path.join(
+  appCoreSrcRoot,
+  "platform/native-plugin-entrypoints.ts",
+);
 const uiPkgRoot = path.join(miladyRoot, "eliza/packages/ui");
 const capacitorCoreEntry = _require.resolve("@capacitor/core");
 
@@ -165,6 +169,24 @@ function getMiladyPinnedElizaCoreVersion(): string {
 function elizaCoreAlphaPrerelease(dir: string): number {
   const m = dir.match(/@elizaos\+core@[\d.]+-alpha\.(\d+)/);
   return m?.[1] ? parseInt(m[1], 10) : -1;
+}
+
+function resolveExistingUiSourceModule(id: string) {
+  if (fs.existsSync(id)) {
+    return id;
+  }
+
+  const alternate = id.endsWith(".tsx")
+    ? `${id.slice(0, -4)}.ts`
+    : id.endsWith(".ts")
+      ? `${id.slice(0, -3)}.tsx`
+      : null;
+
+  if (alternate && fs.existsSync(alternate)) {
+    return alternate;
+  }
+
+  return id;
 }
 
 /**
@@ -1111,6 +1133,16 @@ export default defineConfig({
       // events is pre-bundled via optimizeDeps.
       { find: /^path$/, replacement: "pathe" },
       { find: /^@capacitor\/core$/, replacement: capacitorCoreEntry },
+      // Keep this subpath on the concrete source file so Docker/Vite builds
+      // do not fall back to the extensionless tsconfig wildcard rewrite.
+      {
+        find: /^@elizaos\/app-core\/platform\/native-plugin-entrypoints$/,
+        replacement: appCoreNativePluginEntrypoints,
+      },
+      {
+        find: /^@elizaos\/app-core\/platform\/native-plugin-entrypoints\.js$/,
+        replacement: appCoreNativePluginEntrypoints,
+      },
       // Node built-in subpaths that browser polyfills don't provide.
       // Server-only code imports these but they're never executed in-browser.
       ...["util/types", "stream/promises", "stream/web"].flatMap((sub) => [
@@ -1141,10 +1173,6 @@ export default defineConfig({
       {
         find: /^@elizaos\/capacitor-canvas$/,
         replacement: path.join(nativePluginsRoot, "canvas/src/index.ts"),
-      },
-      {
-        find: /^@elizaos\/capacitor-appblocker$/,
-        replacement: path.join(nativePluginsRoot, "appblocker/src/index.ts"),
       },
       {
         find: /^@elizaos\/capacitor-desktop$/,
@@ -1193,6 +1221,7 @@ export default defineConfig({
       {
         find: /^@elizaos\/ui\/components\/ui\/(.*)$/,
         replacement: `${uiPkgRoot}/src/components/ui/$1.tsx`,
+        customResolver: resolveExistingUiSourceModule,
       },
       {
         find: /^@elizaos\/ui\/components\/composites\/([^/]+)$/,
@@ -1201,10 +1230,12 @@ export default defineConfig({
       {
         find: /^@elizaos\/ui\/components\/composites\/(.+)\/([^/]+)$/,
         replacement: `${uiPkgRoot}/src/components/composites/$1/$2.tsx`,
+        customResolver: resolveExistingUiSourceModule,
       },
       {
         find: /^@elizaos\/ui\/components\/(.+)\/([^/]+)$/,
         replacement: `${uiPkgRoot}/src/components/$1/$2.tsx`,
+        customResolver: resolveExistingUiSourceModule,
       },
       {
         find: /^@elizaos\/ui\/hooks$/,
