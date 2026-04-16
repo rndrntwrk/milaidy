@@ -319,6 +319,35 @@ for (const [name, code, esm] of pkgs) {
 }
 __STUBS__
 
+# Stub missing @elizaos/app-* packages used by registerAppRoutePlugins.
+# They are dynamically imported for optional route registration; empty plugin stubs
+# prevent the import from throwing.
+RUN node - <<'__APP_STUBS__'
+const fs = require('fs');
+const emptyPlugin = `export const vincentPlugin = { name: 'vincent-stub', routes: [] };
+export const shopifyPlugin = { name: 'shopify-stub', routes: [] };
+export const stewardPlugin = { name: 'steward-stub', routes: [] };
+export default { routes: [] };
+`;
+const apps = [
+  '@elizaos/app-vincent',
+  '@elizaos/app-shopify',
+  '@elizaos/app-steward',
+];
+for (const name of apps) {
+  const dir = 'node_modules/' + name;
+  if (fs.existsSync(dir + '/package.json')) { console.log('present: ' + name); continue; }
+  fs.mkdirSync(dir, { recursive: true });
+  // Each app is imported as @elizaos/app-NAME/plugin, so create plugin.mjs
+  fs.writeFileSync(dir + '/plugin.mjs', emptyPlugin);
+  fs.writeFileSync(dir + '/package.json', JSON.stringify({
+    name, version: '0.0.0-cloud-stub', type: 'module',
+    exports: { './plugin': './plugin.mjs', '.': './plugin.mjs' }
+  }));
+  console.log('stubbed: ' + name);
+}
+__APP_STUBS__
+
 # Fix @ai-sdk/provider-utils version conflict:
 # @ai-sdk/google@3.x needs provider-utils@4.x (exports convertToBase64),
 # but bun hoisted provider-utils@2.x to top-level. Replace with the 4.x copy.
@@ -400,6 +429,7 @@ COPY --from=pruner /app /app
 # when tsx's loader spawns esbuild service processes.
 
 ENV NODE_ENV=production
+ENV ELIZA_DISABLE_EDGE_TTS=1
 ENV APP_ENTRYPOINT=${APP_ENTRYPOINT}
 ENV APP_CMD_START=${APP_CMD_START}
 ENV APP_PORT=${APP_PORT}
