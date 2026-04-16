@@ -357,6 +357,51 @@ describe("disable-local-eliza-workspace", () => {
     });
   });
 
+  it("injects the published-workspace shared package overrides for CI rewrites", () => {
+    const repoRoot = makeTempDir();
+    writeJson(path.join(repoRoot, "package.json"), {
+      name: "milady-test",
+      workspaces: ["eliza/packages/*"],
+      overrides: {
+        "@elizaos/core": "2.0.0-alpha.163",
+      },
+    });
+    writeJson(
+      path.join(repoRoot, "eliza", "packages", "typescript", "package.json"),
+      {
+        name: "@elizaos/typescript",
+        version: "2.0.0-alpha.163",
+      },
+    );
+    writeJson(
+      path.join(repoRoot, "eliza", "packages", "shared", "package.json"),
+      {
+        name: "@elizaos/shared",
+        version: "2.0.0-alpha.163",
+      },
+    );
+    writeJson(path.join(repoRoot, "eliza", "packages", "ui", "package.json"), {
+      name: "@elizaos/ui",
+      version: "2.0.0-alpha.163",
+    });
+
+    disableLocalElizaWorkspace(repoRoot, {
+      log: () => {},
+      warn: () => {},
+      errorLog: () => {},
+    });
+
+    const rootPackage = JSON.parse(
+      fs.readFileSync(path.join(repoRoot, "package.json"), "utf8"),
+    );
+    expect(rootPackage.overrides).toMatchObject({
+      "@elizaos/shared": CI_OVERRIDE_SPECIFIERS["@elizaos/shared"],
+      "@elizaos/ui": CI_OVERRIDE_SPECIFIERS["@elizaos/ui"],
+      "@elizaos/plugin-wechat":
+        CI_OVERRIDE_SPECIFIERS["@elizaos/plugin-wechat"],
+    });
+  });
+
   it("injects runtime install overrides into eliza/package.json for published-only CI", () => {
     const repoRoot = makeTempDir();
     writeJson(path.join(repoRoot, "package.json"), {

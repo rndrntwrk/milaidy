@@ -49,7 +49,6 @@ The desktop app now includes an expanded character catalog for browsing and sele
 - Fixed Windows desktop builds failing under heavy native plugin compilation by limiting spawn concurrency and terminating stalled child processes
 
 </Update>
-
 <Update label="2026-04-15" description="Week of April 15; Steward wallet follow-ups and CI hardening" tags={["Update", "Fix", "Docs"]}>
 
 ## Steward wallet plugin 0.3.0
@@ -59,6 +58,7 @@ Milady now targets `@stwd/eliza-plugin` 0.3.0 instead of 0.2.0. The published 0.
 ## Updates
 
 - **Published-only CI restore flow** — CI jobs that temporarily rename `eliza/` now restore it through a shared Node script with an explicit rename failure path, so Windows and cross-platform follow-on failures stop collapsing into vague downstream build errors.
+- **Fork alpha lockfile note** — Any `alpha.0` entries now visible in `bun.lock` come from fork-local version field resets during the Milady/eliza workspace split, not from rolling shipped code back to older upstream releases.
 
 </Update>
 

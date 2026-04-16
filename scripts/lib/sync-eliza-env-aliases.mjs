@@ -14,7 +14,9 @@ function normalizeBrandedPrefix(prefix) {
     .toUpperCase();
 
   if (!normalized) {
-    throw new Error("Branded env prefix must resolve to a non-empty identifier");
+    throw new Error(
+      "Branded env prefix must resolve to a non-empty identifier",
+    );
   }
 
   return normalized;
@@ -29,7 +31,10 @@ function buildEnvPairs(brandedPrefix) {
     [prefixed("OAUTH_DIR"), "ELIZA_OAUTH_DIR"],
     [prefixed("AGENT_ORCHESTRATOR"), "ELIZA_AGENT_ORCHESTRATOR"],
     [prefixed("CLOUD_PROVISIONED"), "ELIZA_CLOUD_PROVISIONED"],
-    [prefixed("CHAT_GENERATION_TIMEOUT_MS"), "ELIZA_CHAT_GENERATION_TIMEOUT_MS"],
+    [
+      prefixed("CHAT_GENERATION_TIMEOUT_MS"),
+      "ELIZA_CHAT_GENERATION_TIMEOUT_MS",
+    ],
     [prefixed("USE_PI_AI"), "ELIZA_USE_PI_AI"],
     [prefixed("SKIP_LOCAL_PLUGIN_ROLES"), "ELIZA_SKIP_LOCAL_PLUGIN_ROLES"],
     [prefixed("SETTINGS_DEBUG"), "ELIZA_SETTINGS_DEBUG"],

@@ -5,13 +5,6 @@ import type {
 } from "./billing-types";
 import { CLOUD_BASE } from "./runtime-config";
 
-// ── Wallet types ───────────────────────────────────────────────────────
-export type {
-  EvmChainBalance,
-  EvmTokenBalance,
-  SolanaTokenBalance,
-  WalletBalancesResponse,
-} from "@elizaos/shared/contracts/wallet";
 export type {
   StewardApprovalActionResponse,
   StewardPendingApproval,
@@ -20,6 +13,13 @@ export type {
   StewardTxRecord,
   StewardTxStatus,
 } from "@elizaos/app-steward/types";
+// ── Wallet types ───────────────────────────────────────────────────────
+export type {
+  EvmChainBalance,
+  EvmTokenBalance,
+  SolanaTokenBalance,
+  WalletBalancesResponse,
+} from "@elizaos/shared/contracts/wallet";
 
 import type {
   StewardApprovalActionResponse,

@@ -47,20 +47,6 @@ function getNestedElizaSubmoduleSkipArgs() {
     .join(" ");
 }
 
-function buildNestedElizaSubmoduleUpdateCommand(
-  submodulePath,
-  nestedSkipArgs = getNestedElizaSubmoduleSkipArgs(),
-) {
-  return [
-    "git",
-    nestedSkipArgs,
-    "submodule update --init --recursive",
-    submodulePath ? `-- "${submodulePath}"` : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
-}
-
 export function shouldSkipSubmoduleInit(
   submodulePath,
   { skipLocal = skipLocalUpstreams } = {},
@@ -386,7 +372,14 @@ export function runInitSubmodules({
       "[init-submodules] Ensuring nested checkouts under eliza/ (cloud, steward-fi, plugins, …)…",
     );
     try {
+      // Sync nested config first so git does not keep stale URLs from older
+      // eliza merges around in .git/config.
       exec("git submodule sync --recursive", {
+        cwd: elizaRoot,
+        stdio: "inherit",
+      });
+      const nestedSkipArgs = getNestedElizaSubmoduleSkipArgs();
+      exec(`git ${nestedSkipArgs} submodule update --init --recursive`.trim(), {
         cwd: elizaRoot,
         stdio: "inherit",
       });
@@ -395,7 +388,6 @@ export function runInitSubmodules({
         exec,
         cwd: elizaRoot,
       });
-      let nestedFailed = 0;
 
       for (const nestedSubmodule of nestedSubmodules) {
         const rootRelativePath = `eliza/${nestedSubmodule.path}`;
@@ -440,22 +432,15 @@ export function runInitSubmodules({
           continue;
         }
 
-        try {
-          exec(buildNestedElizaSubmoduleUpdateCommand(nestedSubmodule.path), {
+        const nestedSkipArgs = getNestedElizaSubmoduleSkipArgs();
+        exec(
+          `git ${nestedSkipArgs} submodule update --init --recursive -- "${nestedSubmodule.path}"`.trim(),
+          {
             cwd: elizaRoot,
             stdio: "inherit",
-          });
-        } catch (err) {
-          nestedFailed++;
-          logError(
-            `[init-submodules] Failed to initialize nested ${nestedSubmodule.name} (${rootRelativePath}): ${
-              err instanceof Error ? err.message : String(err)
-            }`,
-          );
-        }
+          },
+        );
       }
-
-      failed += nestedFailed;
     } catch (err) {
       logError(
         `[init-submodules] Nested eliza submodule update failed (fix broken plugin submodules under eliza/ if needed): ${

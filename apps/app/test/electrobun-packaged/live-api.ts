@@ -1,8 +1,8 @@
 import http from "node:http";
 import type { AddressInfo } from "node:net";
-import { useIsolatedConfigEnv } from "../../../../eliza/packages/app-core/test/helpers/isolated-config.ts";
-import { createRealTestRuntime } from "../../../../eliza/packages/app-core/test/helpers/real-runtime.ts";
 import { startApiServer } from "../../../../eliza/packages/app-core/src/api/server.ts";
+import { useIsolatedConfigEnv as isolatedConfigEnv } from "../../../../eliza/packages/app-core/test/helpers/isolated-config.ts";
+import { createRealTestRuntime } from "../../../../eliza/packages/app-core/test/helpers/real-runtime.ts";
 
 export interface TestApiServerOptions {
   port?: number;
@@ -15,7 +15,9 @@ export interface TestApiServer {
   close: () => Promise<void>;
 }
 
-async function readBody(req: http.IncomingMessage): Promise<Buffer | undefined> {
+async function readBody(
+  req: http.IncomingMessage,
+): Promise<Buffer | undefined> {
   const chunks: Buffer[] = [];
   for await (const chunk of req) {
     chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
@@ -45,7 +47,7 @@ function closeServer(server: http.Server): Promise<void> {
 export async function startLiveApiServer(
   options: TestApiServerOptions = {},
 ): Promise<TestApiServer> {
-  const configEnv = useIsolatedConfigEnv("milady-packaged-live-api-");
+  const configEnv = isolatedConfigEnv("milady-packaged-live-api-");
   let runtimeResult: Awaited<ReturnType<typeof createRealTestRuntime>> | null =
     null;
   let upstream: Awaited<ReturnType<typeof startApiServer>> | null = null;

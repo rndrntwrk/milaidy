@@ -5,13 +5,13 @@
  * are created here with vi.fn() stubs so tests can vi.spyOn() them freely.
  */
 
-import React from "react";
-import { vi } from "vitest";
 import {
   createMemoryStorage,
   hasStorageApi,
   suppressReactTestConsoleErrors,
 } from "@elizaos/app-core/test/helpers/browser-mocks";
+import React from "react";
+import { vi } from "vitest";
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;

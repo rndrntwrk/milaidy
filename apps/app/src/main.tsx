@@ -254,7 +254,9 @@ function getShareQueue(): ShareTargetPayload[] {
   const brandedQueue = appWindow[BRANDED_WINDOW_KEYS.shareQueue];
   const existing =
     appWindow.__ELIZA_APP_SHARE_QUEUE__ ??
-    (Array.isArray(brandedQueue) ? (brandedQueue as ShareTargetPayload[]) : undefined);
+    (Array.isArray(brandedQueue)
+      ? (brandedQueue as ShareTargetPayload[])
+      : undefined);
   if (existing) {
     appWindow.__ELIZA_APP_SHARE_QUEUE__ = existing;
     appWindow[BRANDED_WINDOW_KEYS.shareQueue] = existing;

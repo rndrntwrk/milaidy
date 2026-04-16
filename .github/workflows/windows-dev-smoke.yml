@@ -26,7 +26,6 @@ jobs:
 
     steps:
       - name: Enable long paths (Windows)
-        if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"

@@ -88,7 +88,10 @@ jobs:
                 const commitCount = parseInt(execSync(`git rev-list --count ${latestTag}..HEAD`).toString().trim(), 10);
                 const changedFiles = execSync(`git diff --name-only ${latestTag}..HEAD`).toString().trim().split('\n').filter(Boolean);
                 const srcChanges = changedFiles.filter(f => /^(packages\/|apps\/|scripts\/)/.test(f)).length;
-                const hasElectrobun = changedFiles.filter(f => f.startsWith('apps/app/electrobun/')).length;
+                const hasElectrobun = changedFiles.filter(f =>
+                  f.startsWith('apps/app/electrobun/') ||
+                  f.startsWith('eliza/packages/app-core/platforms/electrobun/')
+                ).length;
                 const docOnly = srcChanges === 0;
 
                 if (docOnly) { reason = `Doc-only since ${latestTag}`; }
@@ -323,7 +326,15 @@ jobs:
           mkdir -p snap
           cp eliza/packages/app-core/packaging/snap/snapcraft.yaml snap/snapcraft.yaml
       - name: Normalize runner root ownership for snapd
-        uses: ./.github/actions/normalize-snapd-root
+        run: |
+          set -euo pipefail
+          ROOT_OWNER="$(stat -c '%u:%g' /)"
+          echo "Runner root owner: ${ROOT_OWNER}"
+          if [ "${ROOT_OWNER}" != "0:0" ]; then
+            echo "Repairing / ownership so snapd/systemd path canonicalization accepts this runner"
+            sudo chown root:root /
+          fi
+          test "$(stat -c '%u:%g' /)" = "0:0"
       - uses: snapcore/action-build@v1
         id: snap
       - name: Verify snap

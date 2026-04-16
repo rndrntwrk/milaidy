@@ -34,7 +34,9 @@ test("onboarding exposes computer use feature and permissions step", async ({
 
   const onboarding = page.getByTestId("onboarding-ui-overlay");
   await expect(onboarding).toBeVisible();
-  await expect(onboarding.getByText("Computer Use", { exact: true })).toBeVisible();
+  await expect(
+    onboarding.getByText("Computer Use", { exact: true }),
+  ).toBeVisible();
 
   const featureCard = onboarding
     .locator("div")
@@ -42,10 +44,16 @@ test("onboarding exposes computer use feature and permissions step", async ({
     .first();
 
   await featureCard.getByRole("button", { name: "Enable" }).click();
-  await expect(featureCard.getByRole("button", { name: "Disable" })).toBeVisible();
+  await expect(
+    featureCard.getByRole("button", { name: "Disable" }),
+  ).toBeVisible();
 
   await onboarding.getByRole("button", { name: "Continue" }).click();
 
-  await expect(onboarding.getByText("System Permissions", { exact: true })).toBeVisible();
-  await expect(onboarding.getByText("Computer Use", { exact: true })).toBeVisible();
+  await expect(
+    onboarding.getByText("System Permissions", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    onboarding.getByText("Computer Use", { exact: true }),
+  ).toBeVisible();
 });

@@ -4,13 +4,14 @@
  * This config deliberately avoids the default unit/e2e stub graph and includes
  * only files that are already marked `live` or `real`.
  *
- * Browser-driven QA flows remain opt-in inside the test files themselves
- * (`MILADY_LIVE_BROWSER_SUITE=1`) so `bun run test:real` can pass in
- * environments that have provider credentials but not a launched local UI/API
- * stack.
+ * Browser-driven QA flows stay out of this baseline config. Dedicated
+ * live/e2e lanes cover browser and long-running orchestration scenarios so the
+ * required CI real suite stays focused on repo-supported non-mock integration
+ * coverage.
  *
- * `bun run test:ci:real` sets `MILADY_CI_REAL=1` and loads `test/live-ci.setup.ts`
- * first; Vitest mock auto-restore is disabled so suites exercise real modules.
+ * `bun run test:ci:real` sets `MILADY_CI_REAL=1`, which additionally excludes
+ * upstream-only or credential-gated real tests that Milady does not provision
+ * in its required PR workflow.
  */
 
 import fs from "node:fs";
@@ -41,15 +42,21 @@ const hiddenElizaWorkspaceGlob =
   fs.existsSync(elizaWorkspaceRoot) && fs.existsSync(disabledElizaWorkspaceRoot)
     ? ".eliza.ci-disabled/**"
     : undefined;
-const ciOnlyExcludedTests =
-  process.env.MILADY_CI_REAL === "1"
-    ? [
-        // The CI real lane is intentionally browserless and does not provision
-        // the Python benchmark evaluator extras.
-        "eliza/packages/app-core/test/app/onboarding-companion.live.e2e.test.ts",
-        "eliza/packages/benchmarks/app-eval/evaluate.real.test.ts",
-      ]
-    : [];
+const isCiReal = process.env.MILADY_CI_REAL === "1";
+const ciExcludedRealPaths = [
+  // These surfaces are covered by dedicated workflows or upstream package
+  // suites instead of Milady's required PR real-test lane.
+  "eliza/packages/app-core/test/app/onboarding-companion.live.e2e.test.ts",
+  "eliza/packages/benchmarks/app-eval/evaluate.real.test.ts",
+  "eliza/apps/app-form/src/tests/toon-integration.live.test.ts",
+  "eliza/apps/app-lifeops/test/lifeops-life-chat.real.test.ts",
+  "eliza/apps/app-lifeops/test/lifeops-llm-extraction.live.test.ts",
+  "eliza/packages/agent/src/providers/media-provider.real.test.ts",
+  "eliza/packages/agent/src/actions/life-param-extractor-real.test.ts",
+  "eliza/plugins/plugin-evm/typescript/__tests__/integration/rpc-providers.live.test.ts",
+  "eliza/plugins/plugin-evm/typescript/__tests__/integration/transfer.live.test.ts",
+  "eliza/plugins/plugin-shell/typescript/__tests__/shell.real.test.ts",
+];
 const liveSetupFile = [
   path.join(
     elizaWorkspaceRoot,
@@ -108,6 +115,7 @@ export default defineConfig({
         "app-lifeops",
         "app-knowledge",
         "app-task-coordinator",
+        "app-vincent",
       ]),
       {
         find: /^@elizaos\/app-companion\/(.*)/,
@@ -382,6 +390,64 @@ export default defineConfig({
           },
         },
         {
+          find: "@elizaos/plugin-sql",
+          packageName: "@elizaos/plugin-sql",
+          options: {
+            fallbackPath: path.join(
+              repoRoot,
+              "eliza",
+              "plugins",
+              "plugin-sql",
+              "typescript",
+              "src",
+              "index",
+            ),
+          },
+        },
+        {
+          find: "@elizaos/plugin-local-embedding",
+          packageName: "@elizaos/plugin-local-embedding",
+          options: {
+            fallbackPath: path.join(
+              repoRoot,
+              "eliza",
+              "plugins",
+              "plugin-local-embedding",
+              "src",
+              "index",
+            ),
+          },
+        },
+        {
+          find: "@elizaos/plugin-discord",
+          packageName: "@elizaos/plugin-discord",
+          options: {
+            fallbackPath: path.join(
+              repoRoot,
+              "eliza",
+              "plugins",
+              "plugin-discord",
+              "typescript",
+              "src",
+              "index",
+            ),
+          },
+        },
+        {
+          find: "@elizaos/plugin-telegram",
+          packageName: "@elizaos/plugin-telegram",
+          options: {
+            fallbackPath: path.join(
+              repoRoot,
+              "eliza",
+              "plugins",
+              "plugin-telegram",
+              "src",
+              "index",
+            ),
+          },
+        },
+        {
           find: "@elizaos/plugin-openai",
           packageName: "@elizaos/plugin-openai",
           options: {
@@ -510,18 +576,10 @@ export default defineConfig({
       "**/*.live.test.tsx",
       "**/*-live.test.ts",
       "**/*-live.test.tsx",
-      "**/*.live.e2e.test.ts",
-      "**/*.live.e2e.test.tsx",
-      "**/*-live.e2e.test.ts",
-      "**/*-live.e2e.test.tsx",
       "**/*.real.test.ts",
       "**/*.real.test.tsx",
       "**/*-real.test.ts",
       "**/*-real.test.tsx",
-      "**/*.real.e2e.test.ts",
-      "**/*.real.e2e.test.tsx",
-      "**/*-real.e2e.test.ts",
-      "**/*-real.e2e.test.tsx",
     ],
     exclude: [
       "dist/**",
@@ -533,7 +591,7 @@ export default defineConfig({
       "eliza/packages/app-core/platforms/electrobun/**",
       "apps/chrome-extension/**",
       "eliza/cloud/**",
-      ...ciOnlyExcludedTests,
+      ...(isCiReal ? ciExcludedRealPaths : []),
     ],
     server: {
       deps: {
