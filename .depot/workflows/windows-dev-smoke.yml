@@ -29,7 +29,25 @@ jobs:
         bun-version: ["1.3.10", "canary"]
     steps:
       - name: Enable long paths (Windows)
-        run: git config --system core.longpaths true
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          function Set-GitLongPaths([string]$Scope) {
+            & git config $Scope core.longpaths true
+            if ($LASTEXITCODE -ne 0) {
+              throw "git config $Scope core.longpaths true failed with exit code $LASTEXITCODE"
+            }
+          }
+
+          try {
+            Set-GitLongPaths "--system"
+            Write-Host "Enabled Git long paths in system config."
+          } catch {
+            Write-Warning "System git config failed; falling back to --global. $($_.Exception.Message)"
+            Set-GitLongPaths "--global"
+            Write-Host "Enabled Git long paths in global config."
+          }
       - uses: actions/checkout@v4
         with:
           submodules: false
@@ -75,4 +93,3 @@ jobs:
       - name: Verify bun-version-guard
         run: >
           bun -e "import { getBunVersionAdvisory } from './eliza/packages/app-core/scripts/lib/bun-version-guard.mjs'; const result = getBunVersionAdvisory(); console.log('bun-version-guard:', result ?? 'OK (no advisory)');"
-
