@@ -389,26 +389,35 @@ if (!fs.existsSync(knDir + '/package.json')) {
   }));
   console.log('stubbed: @elizaos/app-knowledge');
 }
-// app-task-coordinator: imported by dist/api/server.js for coordinator wiring
+// app-task-coordinator: 9 subpaths imported across agent/src/api/*
 const tcDir = 'node_modules/@elizaos/app-task-coordinator';
 if (!fs.existsSync(tcDir + '/package.json')) {
   fs.mkdirSync(tcDir + '/api', { recursive: true });
-  const typesStub = `export const CoordinatorMessageType = {};
-export default {};`;
-  const wiringStub = `export async function wireCoordinatorBridgesWhenReady() { return null; }
-export default {};`;
-  fs.writeFileSync(tcDir + '/api/coordinator-types.mjs', typesStub);
-  fs.writeFileSync(tcDir + '/api/coordinator-wiring.mjs', wiringStub);
-  fs.writeFileSync(tcDir + '/index.mjs', 'export * from "./api/coordinator-types.mjs"; export * from "./api/coordinator-wiring.mjs";');
+  fs.mkdirSync(tcDir + '/evals', { recursive: true });
+  const noopStub = `export default {};`;
+  // All subpaths get a no-op stub exporting the known named exports
+  const stubs = {
+    'api/coordinator-types': `export const CoordinatorMessageType = {};\nexport default {};`,
+    'api/coordinator-wiring': `export async function wireCoordinatorBridgesWhenReady() { return null; }\nexport default {};`,
+    'api/task-agent-message-routing': `export function routeTaskAgentMessage() { return null; }\nexport default {};`,
+    'api/coding-agents-auth-sanitize': `export function sanitizeCodingAgentAuth() { return {}; }\nexport default {};`,
+    'api/coding-agents-preflight-normalize': `export function normalizeCodingAgentPreflight() { return {}; }\nexport default {};`,
+    'evals/coordinator-eval-client': noopStub,
+    'evals/coordinator-live-runner': noopStub,
+    'evals/coordinator-preflight': noopStub,
+    'evals/coordinator-scenarios': noopStub,
+  };
+  const exportsMap = { '.': './index.mjs' };
+  for (const [subpath, code] of Object.entries(stubs)) {
+    fs.writeFileSync(tcDir + '/' + subpath + '.mjs', code);
+    exportsMap['./' + subpath] = './' + subpath + '.mjs';
+  }
+  fs.writeFileSync(tcDir + '/index.mjs', 'export * from "./api/coordinator-types.mjs";');
   fs.writeFileSync(tcDir + '/package.json', JSON.stringify({
     name: '@elizaos/app-task-coordinator', version: '0.0.0-cloud-stub', type: 'module',
-    exports: {
-      '.': './index.mjs',
-      './api/coordinator-types': './api/coordinator-types.mjs',
-      './api/coordinator-wiring': './api/coordinator-wiring.mjs',
-    }
+    exports: exportsMap
   }));
-  console.log('stubbed: @elizaos/app-task-coordinator');
+  console.log('stubbed: @elizaos/app-task-coordinator (9 subpaths)');
 }
 // app-training: imported by agent/src/api/server.ts for training/trajectory routes
 const trDir = 'node_modules/@elizaos/app-training';
