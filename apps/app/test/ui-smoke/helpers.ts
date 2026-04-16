@@ -2,6 +2,9 @@ import { expect, type Locator, type Page } from "@playwright/test";
 
 export const ROOT_TIMEOUT_MS = 20_000;
 export const NAV_TIMEOUT_MS = 12_000;
+// These "ready" checks only look for mocked/static UI markers after navigation.
+// Full backend/bootstrap waits use the longer per-test and Playwright defaults.
+const READY_CHECK_TIMEOUT_MS = 5_000;
 
 type ReadyCheck =
   | { selector: string; text?: never }
@@ -12,7 +15,7 @@ type EvaluatedReadyCheck = {
   passed: boolean;
 };
 
-export const DEFAULT_APP_STORAGE: Record<string, string> = {
+const DEFAULT_APP_STORAGE: Record<string, string> = {
   "eliza:onboarding-complete": "1",
   "eliza:onboarding:step": "activate",
   "eliza:ui-shell-mode": "native",
@@ -35,11 +38,11 @@ export async function seedAppStorage(
   }, storage);
 }
 
-export async function expectRootReady(page: Page): Promise<void> {
+async function expectRootReady(page: Page): Promise<void> {
   await expect(page.locator("#root")).toBeVisible({ timeout: ROOT_TIMEOUT_MS });
 }
 
-export async function expectNoOnboardingRedirect(page: Page): Promise<void> {
+async function expectNoOnboardingRedirect(page: Page): Promise<void> {
   await expect(page).not.toHaveURL(/onboarding/, { timeout: NAV_TIMEOUT_MS });
 }
 
@@ -59,9 +62,12 @@ export async function readLocalStorage(
   return page.evaluate((storageKey) => localStorage.getItem(storageKey), key);
 }
 
-async function locatorVisible(locator: Locator): Promise<boolean> {
+async function locatorVisible(
+  locator: Locator,
+  timeoutMs: number = READY_CHECK_TIMEOUT_MS,
+): Promise<boolean> {
   try {
-    await locator.first().waitFor({ state: "visible", timeout: 5_000 });
+    await locator.first().waitFor({ state: "visible", timeout: timeoutMs });
     return true;
   } catch {
     return false;
@@ -87,8 +93,9 @@ function readyChecksPassed(
 
 async function evaluateReadyChecks(
   page: Page,
-  checks: ReadyCheck[],
+  checks: readonly ReadyCheck[],
   mode: "any" | "all" = "any",
+  timeoutMs: number = READY_CHECK_TIMEOUT_MS,
 ): Promise<{
   passed: boolean;
   results: EvaluatedReadyCheck[];
@@ -99,13 +106,13 @@ async function evaluateReadyChecks(
     if ("selector" in check) {
       results.push({
         check,
-        passed: await locatorVisible(page.locator(check.selector)),
+        passed: await locatorVisible(page.locator(check.selector), timeoutMs),
       });
       continue;
     }
     results.push({
       check,
-      passed: await locatorVisible(page.getByText(check.text)),
+      passed: await locatorVisible(page.getByText(check.text), timeoutMs),
     });
   }
 
@@ -118,10 +125,11 @@ async function evaluateReadyChecks(
 export async function assertReadyChecks(
   page: Page,
   label: string,
-  checks: ReadyCheck[],
+  checks: readonly ReadyCheck[],
   mode: "any" | "all" = "any",
+  timeoutMs: number = READY_CHECK_TIMEOUT_MS,
 ): Promise<void> {
-  const evaluation = await evaluateReadyChecks(page, checks, mode);
+  const evaluation = await evaluateReadyChecks(page, checks, mode, timeoutMs);
   const summary = evaluation.results
     .map(
       (result) =>
@@ -358,8 +366,9 @@ export async function runSoftReadyChecks(
   label: string,
   checks: ReadyCheck[],
   mode: "any" | "all" = "any",
+  timeoutMs: number = READY_CHECK_TIMEOUT_MS,
 ): Promise<void> {
-  const evaluation = await evaluateReadyChecks(page, checks, mode);
+  const evaluation = await evaluateReadyChecks(page, checks, mode, timeoutMs);
   if (evaluation.passed) {
     return;
   }

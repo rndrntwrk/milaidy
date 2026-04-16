@@ -19,7 +19,7 @@ describe("syncElizaEnvAliases", () => {
     "ELIZA_API_TOKEN",
     "ELIZA_CLOUD_MANAGED_AGENTS_API_SEGMENT",
   ];
-  const saved = {};
+  const saved: Record<string, string | undefined> = {};
 
   beforeEach(() => {
     for (const k of touchedKeys) {
@@ -56,6 +56,15 @@ describe("syncElizaEnvAliases", () => {
     expect(process.env.ELIZA_NAMESPACE).toBe("eliza-original");
   });
 
+  it("treats an empty ELIZA_* value as intentional and does not overwrite it", () => {
+    process.env.MILADY_API_TOKEN = "milady-token";
+    process.env.ELIZA_API_TOKEN = "";
+
+    syncElizaEnvAliases();
+
+    expect(process.env.ELIZA_API_TOKEN).toBe("");
+  });
+
   it("maps MILADY_PORT to ELIZA_UI_PORT (asymmetric alias)", () => {
     process.env.MILADY_PORT = "2138";
 
@@ -79,7 +88,6 @@ describe("syncElizaEnvAliases", () => {
   });
 
   it("skips copy when MILADY_* is not set", () => {
-    // No MILADY_* set at all
     syncElizaEnvAliases();
 
     expect(process.env.ELIZA_NAMESPACE).toBeUndefined();
@@ -88,7 +96,6 @@ describe("syncElizaEnvAliases", () => {
   });
 
   it("handles all alias pairs without throwing", () => {
-    // Set every MILADY_* key to a value
     process.env.MILADY_NAMESPACE = "m";
     process.env.MILADY_STATE_DIR = "/s";
     process.env.MILADY_CONFIG_PATH = "/c";

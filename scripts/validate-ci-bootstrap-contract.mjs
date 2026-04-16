@@ -2,10 +2,15 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { resolveRepoRoot } from "./lib/repo-root.mjs";
 
-const scriptDir = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(scriptDir, "..");
+const repoRoot = resolveRepoRoot(import.meta.url);
+
+/**
+ * @typedef {import("./lib/package-types.d.ts").PackageJsonRecord & {
+ *   scripts?: Record<string, string>;
+ * }} BootstrapPackageJson
+ */
 
 const files = {
   workflow: ".github/workflows/test.yml",
@@ -39,7 +44,10 @@ const requiredWorkflowSnippets = [
 const requiredActionSnippets = [
   "disable-local-eliza-workspace:",
   "run: node scripts/disable-local-eliza-workspace.mjs",
+  "run: bash scripts/install-published-workspace-fallback-deps.sh",
 ];
+
+const forbiddenActionSnippets = ["bun add --no-save --dev"];
 
 const disableMarkers = [
   "scripts/disable-local-eliza-workspace.mjs",
@@ -86,6 +94,7 @@ assertContainsAll(
   failures,
 );
 assertContainsAll(actionText, files.action, requiredActionSnippets, failures);
+assertContainsNone(actionText, files.action, forbiddenActionSnippets, failures);
 
 const regressionMatrixCommand =
   packageJson?.scripts?.["test:regression-matrix:pr"];
@@ -147,6 +156,11 @@ function readText(relativePath, targetFailures) {
   }
 }
 
+/**
+ * @param {string} relativePath
+ * @param {string[]} targetFailures
+ * @returns {BootstrapPackageJson | null}
+ */
 function readJson(relativePath, targetFailures) {
   const raw = readText(relativePath, targetFailures);
   if (!raw) {
@@ -154,7 +168,28 @@ function readJson(relativePath, targetFailures) {
   }
 
   try {
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      targetFailures.push(
+        `Unable to parse ${relativePath}: expected a package.json object`,
+      );
+      return null;
+    }
+
+    const scripts = parsed.scripts;
+    if (
+      scripts !== undefined &&
+      (typeof scripts !== "object" ||
+        Array.isArray(scripts) ||
+        !Object.values(scripts).every((value) => typeof value === "string"))
+    ) {
+      targetFailures.push(
+        `Unable to parse ${relativePath}: scripts must be a string map`,
+      );
+      return null;
+    }
+
+    return parsed;
   } catch (error) {
     targetFailures.push(
       `Unable to parse ${relativePath}: ${error instanceof Error ? error.message : String(error)}`,
@@ -168,6 +203,16 @@ function assertContainsAll(text, relativePath, snippets, targetFailures) {
     if (!text.includes(snippet)) {
       targetFailures.push(
         `${relativePath} is missing required bootstrap snippet: ${snippet}`,
+      );
+    }
+  }
+}
+
+function assertContainsNone(text, relativePath, snippets, targetFailures) {
+  for (const snippet of snippets) {
+    if (text.includes(snippet)) {
+      targetFailures.push(
+        `${relativePath} still contains forbidden bootstrap snippet: ${snippet}`,
       );
     }
   }
