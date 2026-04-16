@@ -7273,6 +7273,7 @@ function AppProviderInner({
           }
           setOnboardingComplete(sessionOnboardingComplete);
           onboardingNeedsOptions = !sessionOnboardingComplete;
+          console.log(`[broadcast-diag] onboarding check: sessionComplete=${sessionOnboardingComplete} needsOptions=${onboardingNeedsOptions}`);
           break;
         } catch (err) {
           const apiErr = asApiLikeError(err);
@@ -7310,6 +7311,7 @@ function AppProviderInner({
 
       // On fresh installs, unblock to onboarding as soon as options are available.
       if (onboardingNeedsOptions) {
+        console.log("[broadcast-diag] ENTERING onboarding options loop — WS will NOT be set up on this path");
         const optionsStartedAt = Date.now();
         let optionsError: unknown = null;
         while (!cancelled) {
@@ -7425,6 +7427,7 @@ function AppProviderInner({
         return;
       }
 
+      console.log("[broadcast-diag] past onboarding gate — entering agent-status loop");
       setStartupPhase("initializing-agent");
 
       // Existing installs: keep loading until the runtime reports ready.
@@ -7538,7 +7541,10 @@ function AppProviderInner({
       }, 5_000);
 
       // Connect WebSocket
+      console.log("[broadcast-diag] agent ready — calling client.connectWs()");
       client.connectWs();
+
+      console.log("[broadcast-diag] WS connected — registering event handlers");
 
       unbindEmotes = client.onWsEvent(
         "emote",
