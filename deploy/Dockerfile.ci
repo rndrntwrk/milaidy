@@ -126,7 +126,13 @@ const path = require('path');
 const { execSync } = require('child_process');
 const https = require('https');
 
+// pathExists uses lstatSync (not existsSync) to detect broken symlinks too
+function pathExists(p) { try { fs.lstatSync(p); return true; } catch(e) { return false; } }
+
 // --- Phase 1: Hoist .bun/ -> node_modules/ ---
+// bun stores packages in .bun/<name@ver>/node_modules/<scope>/<pkg>/ but
+// sometimes doesn't create root-level node_modules symlinks for workspace:*
+// packages whose plugin dirs are empty. Copy them directly.
 const bunDir = 'node_modules/.bun';
 let hoisted = 0;
 if (fs.existsSync(bunDir)) {
@@ -136,23 +142,27 @@ if (fs.existsSync(bunDir)) {
     for (const pkg of fs.readdirSync(nmPath)) {
       if (pkg.startsWith('@')) {
         const scopeDir = path.join(nmPath, pkg);
-        if (!fs.statSync(scopeDir).isDirectory()) continue;
+        try { if (!fs.statSync(scopeDir).isDirectory()) continue; } catch(e) { continue; }
         fs.mkdirSync(path.join('node_modules', pkg), {recursive:true});
         for (const sub of fs.readdirSync(scopeDir)) {
           const src = path.join(scopeDir, sub);
           const dst = path.join('node_modules', pkg, sub);
-          if (!fs.existsSync(dst) && fs.statSync(src).isDirectory()) {
-            execSync('cp -r "' + src + '" "' + dst + '"');
-            hoisted++;
-          }
+          try {
+            if (!pathExists(dst) && fs.statSync(src).isDirectory()) {
+              execSync('cp -r "' + src + '" "' + dst + '"');
+              hoisted++;
+            }
+          } catch(e) { /* skip broken .bun entries */ }
         }
       } else {
         const src = path.join(nmPath, pkg);
         const dst = path.join('node_modules', pkg);
-        if (!fs.existsSync(dst) && fs.statSync(src).isDirectory()) {
-          execSync('cp -r "' + src + '" "' + dst + '"');
-          hoisted++;
-        }
+        try {
+          if (!pathExists(dst) && fs.statSync(src).isDirectory()) {
+            execSync('cp -r "' + src + '" "' + dst + '"');
+            hoisted++;
+          }
+        } catch(e) { /* skip */ }
       }
     }
   }
