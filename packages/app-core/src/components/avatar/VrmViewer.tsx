@@ -580,6 +580,12 @@ export function VrmViewer(props: VrmViewerProps) {
   return (
     <canvas
       ref={canvasRef}
+      // Stable marker so the broadcast-mode LiveKit publisher can find
+      // this canvas via `document.querySelector("canvas[data-vrm-canvas]")`.
+      // Without this, the publisher would rely on tag-name queries which
+      // match other canvases (MathEnvironment shadow canvas, blend-shape
+      // debug canvas, etc.).
+      data-vrm-canvas="true"
       onPointerDown={(event) => {
         if (!pointerParallaxRef.current) return;
         pointerStateRef.current = {
