@@ -207,8 +207,12 @@ describe("release workflow path contract", () => {
     expect(fallbackScript).toContain('"@types/bun"');
     expect(fallbackScript).toContain('"@types/fast-redact"');
     expect(fallbackScript).toContain('"@types/markdown-it"');
-    expect(fallbackScript).toContain("eliza/packages/typescript/node_modules/@types/uuid");
-    expect(fallbackScript).toContain(".eliza.ci-disabled/packages/typescript/node_modules/@types/uuid");
+    expect(fallbackScript).toContain(
+      "eliza/packages/typescript/node_modules/@types/uuid",
+    );
+    expect(fallbackScript).toContain(
+      ".eliza.ci-disabled/packages/typescript/node_modules/@types/uuid",
+    );
   });
 
   it("re-installs @elizaos/core's third-party deps after the workspace is disabled", () => {
