@@ -7018,6 +7018,58 @@ function AppProviderInner({
       console.log(
         "[AppProvider] Public broadcast mode — skipping authenticated startup probes",
       );
+      // Hydrate the server-selected scene config from the public
+      // /api/broadcast/:channel/scene endpoint so the public viewer
+      // renders the SAME avatar + background the capture transport
+      // is rendering. Without this step, public viewers would fall
+      // back to localStorage/bundled defaults and drift from the
+      // authoritative stream whenever alice-bot is configured with a
+      // custom VRM or background.
+      //
+      // Fire-and-forget from the effect's perspective — we mark
+      // `ready` immediately so BroadcastShell mounts and can display
+      // a bundled default while the scene config is being fetched;
+      // when the fetch resolves, the setState calls apply the real
+      // config and the renderer re-renders.
+      const publicChannel = (() => {
+        const match = window.location.pathname.match(
+          /^\/broadcast\/([a-zA-Z0-9-]+)\/?$/,
+        );
+        return match ? match[1] : null;
+      })();
+      if (publicChannel) {
+        void client
+          .getBroadcastScene(publicChannel)
+          .then((resp) => {
+            if (cancelled || !resp?.scene) return;
+            const { selectedVrmIndex, hasCustomVrm, hasCustomBackground } =
+              resp.scene;
+            // If the server has a custom VRM, point the local state at
+            // the public file-serve endpoint (same on-disk file as
+            // /api/avatar/vrm but reachable without auth). The VRM
+            // loader reads this URL and fetches the binary.
+            if (hasCustomVrm) {
+              setCustomVrmUrl(`/api/broadcast/${publicChannel}/vrm?t=${Date.now()}`);
+              setSelectedVrmIndex(0); // 0 = custom
+            } else if (
+              typeof selectedVrmIndex === "number" &&
+              Number.isFinite(selectedVrmIndex)
+            ) {
+              setSelectedVrmIndex(normalizeAvatarIndex(selectedVrmIndex));
+            }
+            if (hasCustomBackground) {
+              setCustomBackgroundUrl(
+                `/api/broadcast/${publicChannel}/background?t=${Date.now()}`,
+              );
+            }
+          })
+          .catch((err) => {
+            console.warn(
+              "[AppProvider] Public broadcast scene hydration failed — rendering bundled defaults:",
+              err instanceof Error ? err.message : err,
+            );
+          });
+      }
       setStartupPhase("ready");
       setOnboardingComplete(true);
       setOnboardingLoading(false);

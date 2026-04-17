@@ -618,6 +618,24 @@ async function runMain(): Promise<void> {
       // REST need credentials so scene-state sync + emote replay
       // work. Public viewers never authenticate — any apiToken
       // query on the public URL is rejected here explicitly.
+      //
+      // KNOWN GAP — capture auth vs alice-bot auth enforcement.
+      // The URL `?apiToken=` path is the canonical credential. The
+      // `__injectedShowConfig.wsToken` fallback is a control-plane-
+      // issued renderer JWT, which alice-bot's auth middleware does
+      // NOT validate — it only accepts the static API token set via
+      // ELIZA_SERVER_AUTH_TOKEN. With alice-bot running with
+      // MILAIDY_AUTH_DISABLED=1 (current prod state) any token is
+      // accepted and this distinction doesn't matter. The day
+      // MILAIDY_AUTH_DISABLED flips off, the capture transport will
+      // start hitting 401s on /api/companion/stage and the WS handshake
+      // unless one of these lands first:
+      //   (a) CP injects the real alice-bot API token (k8s secret
+      //       mirrored to both the CP and capture-service), OR
+      //   (b) alice-bot's auth middleware learns to accept renderer-
+      //       scoped JWTs signed by the CP.
+      // Tracked as a follow-up; do not enable alice-bot auth until
+      // one of those ships.
       {
         const params = new URLSearchParams(
           window.location.search || window.location.hash.split("?")[1] || "",

@@ -2615,6 +2615,27 @@ export class MiladyClient {
    * endpoint so the same token powers both reads and subsequent
    * POSTs (mutation is not exposed on the public path).
    */
+  /**
+   * Fetch public scene configuration for a broadcast channel. Used by
+   * AppProvider's public-broadcast short-circuit to restore the
+   * server-selected avatar + background before marking the renderer
+   * ready. Unauthenticated — served by the milaidy agent under
+   * `/api/broadcast/:channel/scene`. Payload is intentionally minimal
+   * (just what the 3D scene needs): the operator's character bio,
+   * persona, etc. are never exposed on this path.
+   */
+  async getBroadcastScene(channel: string): Promise<{
+    ok: boolean;
+    channel: string;
+    scene: {
+      selectedVrmIndex: number | null;
+      hasCustomVrm: boolean;
+      hasCustomBackground: boolean;
+    };
+  }> {
+    return this.fetch(`/api/broadcast/${encodeURIComponent(channel)}/scene`);
+  }
+
   async getCompanionStageState(): Promise<{
     ok: boolean;
     state: CompanionStageState;
