@@ -1,45 +1,40 @@
 import { releaseData } from "../../generated/release-data";
-import { resolveHomepageAssetUrl } from "../../lib/asset-url";
 
 export interface BrandHeroProps {
   onOpenLocal: () => void;
   onAttachRemote: () => void;
-  onSignIntoCloud: () => void;
-  cloudAuthed: boolean;
-  cloudSigningIn?: boolean;
-  /** Visible heroart VRM index 1-8. */
-  heroAvatarIndex?: number;
 }
 
 /**
- * Zone 1 of the dashboard: the narrative hero. One eyebrow, one display
- * headline, one supporting paragraph, three CTAs in priority order, and
- * the VRM hero asset on the right at lg+.
+ * Zone 1 — narrative hero. Typography-dominant, full-width. No image slot
+ * (agents don't have profile assets in the data model). A single soft gold
+ * gradient accent sits behind the headline as atmosphere, never as content.
+ *
+ * Two CTAs only: the primary gold "Open Milady" and a ghost "Attach remote".
+ * Cloud sign-in lives in the sidebar SessionTile — no need to nag here.
  */
-export function BrandHero({
-  onOpenLocal,
-  onAttachRemote,
-  onSignIntoCloud,
-  cloudAuthed,
-  cloudSigningIn,
-  heroAvatarIndex = 3,
-}: BrandHeroProps) {
-  const avatarUrl = resolveHomepageAssetUrl(
-    `vrms/previews/milady-${heroAvatarIndex}.png`,
-  );
-
+export function BrandHero({ onOpenLocal, onAttachRemote }: BrandHeroProps) {
   return (
-    <section className="grid gap-10 lg:grid-cols-[1.4fr_1fr] lg:items-center">
-      <div>
+    <section className="relative isolate">
+      {/* Ambient gold blob — atmosphere, pointer-events-none, never a content
+          slot. Bottom-right so the headline sits left-aligned with weight. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -right-16 -top-10 h-[360px] w-[360px] opacity-[0.55] blur-3xl"
+        style={{
+          background:
+            "radial-gradient(circle at center, rgba(240,185,11,0.14) 0%, transparent 60%)",
+        }}
+      />
+
+      <div className="relative max-w-[56ch]">
         <div className="font-mono text-[11px] uppercase tracking-[0.22em] text-brand/75">
           milady frontend
-          <span className="ml-2 text-white/30">·</span>
-          <span className="ml-2 text-white/45">
-            {releaseData.release.tagName}
-          </span>
+          <span className="mx-2 text-white/25">·</span>
+          <span className="text-white/45">{releaseData.release.tagName}</span>
         </div>
 
-        <h1 className="mt-5 max-w-[16ch] text-[44px] font-extrabold leading-[1.04] tracking-[-0.035em] text-white sm:text-[56px] lg:text-[68px]">
+        <h1 className="mt-6 text-[44px] font-extrabold leading-[1.02] tracking-[-0.035em] text-white sm:text-[60px] lg:text-[76px]">
           Milady is the frontend
           <br />
           <span
@@ -53,12 +48,12 @@ export function BrandHero({
           </span>
         </h1>
 
-        <p className="mt-5 max-w-[52ch] text-[15px] leading-7 text-white/65 sm:text-[16px]">
-          Open local runtimes, attach remotes, sign into Eliza Cloud. One
+        <p className="mt-6 max-w-[54ch] text-[15px] leading-7 text-white/65 sm:text-[17px] sm:leading-8">
+          Open local runtimes, attach remotes, manage cloud instances. One
           surface for every agent you run, without the provisioning theater.
         </p>
 
-        <div className="mt-8 flex flex-wrap items-center gap-3">
+        <div className="mt-9 flex flex-wrap items-center gap-3">
           <button
             type="button"
             onClick={onOpenLocal}
@@ -80,35 +75,7 @@ export function BrandHero({
           >
             Attach remote
           </button>
-          <button
-            type="button"
-            onClick={onSignIntoCloud}
-            className="rounded-md px-5 py-3 text-[13px] font-medium text-white/70 transition hover:text-white"
-          >
-            {cloudAuthed
-              ? "Open cloud"
-              : cloudSigningIn
-                ? "Waiting for sign-in…"
-                : "Sign into cloud"}
-          </button>
         </div>
-      </div>
-
-      {/* VRM hero — right side on lg+, below on mobile */}
-      <div className="relative mx-auto w-full max-w-[280px] lg:max-w-none">
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 scale-90 rounded-full blur-3xl"
-          style={{
-            background:
-              "radial-gradient(circle, rgba(240,185,11,0.28) 0%, transparent 60%)",
-          }}
-        />
-        <img
-          src={avatarUrl}
-          alt="Milady"
-          className="relative mx-auto aspect-[3/4] w-full max-w-[280px] rounded-[20px] border border-white/10 object-cover object-top shadow-[0_30px_80px_rgba(0,0,0,0.5)] lg:max-w-[320px]"
-        />
       </div>
     </section>
   );

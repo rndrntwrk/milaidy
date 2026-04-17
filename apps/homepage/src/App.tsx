@@ -183,10 +183,6 @@ function MiladyControlHub() {
         <BrandHero
           onOpenLocal={handleOpenLocal}
           onAttachRemote={() => setShowConnectModal(true)}
-          onSignIntoCloud={handleSignInToCloud}
-          cloudAuthed={isAuthenticated}
-          cloudSigningIn={loginState === "polling"}
-          heroAvatarIndex={localAgent?.avatarIndex ?? 3}
         />
 
         <InstanceGrid
