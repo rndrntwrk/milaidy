@@ -742,7 +742,16 @@ function nativeModuleStubPlugin(): Plugin {
     // prebundle proxy-agent and other Node-only HTTP deps for the browser.
     "puppeteer-core",
     "@puppeteer/browsers",
+    // Server-only plugins statically imported from the @elizaos/agent runtime.
+    // Their exports maps nest browser/node conditional exports that Vite 6's
+    // commonjs--resolver cannot walk. Stubbing returns an empty Proxy virtual
+    // module so the browser bundle never tries to execute server-only code.
     "@elizaos/plugin-local-embedding",
+    "@elizaos/plugin-anthropic",
+    "@elizaos/plugin-pdf",
+    "@elizaos/plugin-sql",
+    "@elizaos/plugin-agent-skills",
+    "@elizaos/plugin-agent-orchestrator",
   ]);
   const nativeScopeRe = /^@node-llama-cpp\//;
 
@@ -1553,19 +1562,6 @@ export default defineConfig({
             "electron",
             "node-llama-cpp",
             "pty-manager",
-            // Server-only static/dynamic imports from @elizaos/agent
-            // runtime/api. Their exports maps either declare only the
-            // `import` condition, or nest browser/node conditional exports
-            // that Vite 6's commonjs--resolver fails to walk — packageEntry
-            // lookup errors with "Failed to resolve entry for package ...".
-            // The browser bundle never executes these code paths (plugins
-            // load server-side via NODE_PATH); externalize so Rollup leaves
-            // the imports unresolved without affecting runtime.
-            "@elizaos/plugin-agent-orchestrator",
-            "@elizaos/plugin-anthropic",
-            "@elizaos/plugin-pdf",
-            "@elizaos/plugin-sql",
-            "@elizaos/plugin-agent-skills",
           ].includes(id)
         )
           return true;
