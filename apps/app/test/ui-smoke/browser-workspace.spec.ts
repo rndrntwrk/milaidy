@@ -33,7 +33,7 @@ test("browser workspace can create live tabs and switch selection", async ({
   await addressInput.fill("example.com");
   await newTabButton.click();
 
-  const exampleTabButton = page.getByRole("button", {
+  const exampleTabButton = page.getByRole("tab", {
     name: /example\.com https:\/\/example\.com\//,
   });
   await expect(exampleTabButton).toBeVisible();
@@ -42,7 +42,7 @@ test("browser workspace can create live tabs and switch selection", async ({
   await addressInput.fill("about:blank");
   await newTabButton.click();
 
-  const blankTabButton = page.getByRole("button", {
+  const blankTabButton = page.getByRole("tab", {
     name: /about:blank/i,
   });
   await expect(blankTabButton).toBeVisible();
