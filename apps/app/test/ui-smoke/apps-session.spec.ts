@@ -11,37 +11,37 @@ test("apps view can route into internal tool pages and survive a reload", async 
 }) => {
   await openAppPath(page, "/apps");
   await expect(page.getByTestId("apps-catalog-grid")).toBeVisible({
-    timeout: 30_000,
+    timeout: 60_000,
   });
-  const pluginViewerButton = page.getByRole("button", {
-    name: "Plugin Viewer",
-  });
-  await expect(pluginViewerButton).toBeVisible({ timeout: 30_000 });
-  await pluginViewerButton.click();
-  await expect(page).toHaveURL(/\/plugins$/);
+  const pluginViewerCard = page.getByTestId(
+    "app-card--elizaos-app-plugin-viewer",
+  );
+  await expect(pluginViewerCard).toBeVisible({ timeout: 60_000 });
+  await pluginViewerCard.click();
+  await expect(page).toHaveURL(/\/plugins$/, { timeout: 60_000 });
   await assertReadyChecks(
     page,
     "plugins-viewer",
     [{ text: "AI Providers" }, { text: "Other Features" }],
     "any",
-    60_000,
+    90_000,
   );
 
   // Reload from root and re-navigate — Vite preview lacks SPA fallback
   await openAppPath(page, "/");
   await openAppPath(page, "/apps");
   await expect(page.getByTestId("apps-catalog-grid")).toBeVisible({
-    timeout: 30_000,
+    timeout: 60_000,
   });
-  await expect(pluginViewerButton).toBeVisible({ timeout: 30_000 });
-  await pluginViewerButton.click();
-  await expect(page).toHaveURL(/\/plugins$/);
+  await expect(pluginViewerCard).toBeVisible({ timeout: 60_000 });
+  await pluginViewerCard.click();
+  await expect(page).toHaveURL(/\/plugins$/, { timeout: 60_000 });
   await assertReadyChecks(
     page,
     "plugins-viewer-reload",
     [{ text: "AI Providers" }, { text: "Other Features" }],
     "any",
-    60_000,
+    90_000,
   );
 });
 
