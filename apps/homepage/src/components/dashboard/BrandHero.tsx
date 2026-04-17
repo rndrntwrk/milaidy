@@ -1,7 +1,14 @@
 import { releaseData } from "../../generated/release-data";
 
 export interface BrandHeroProps {
+  /** Whether a local Milady runtime responded to the last health probe. */
+  isLocalReady: boolean;
+  /** True during the first few probes, before we give up on local. */
+  isLocalProbing: boolean;
+  /** Click handler when local is live. Launches the runtime. */
   onOpenLocal: () => void;
+  /** Click handler when local is NOT live. Opens install / help surface. */
+  onStartLocal: () => void;
   onAttachRemote: () => void;
 }
 
@@ -13,7 +20,25 @@ export interface BrandHeroProps {
  * Two CTAs only: the primary gold "Open Milady" and a ghost "Attach remote".
  * Cloud sign-in lives in the sidebar SessionTile — no need to nag here.
  */
-export function BrandHero({ onOpenLocal, onAttachRemote }: BrandHeroProps) {
+export function BrandHero({
+  isLocalReady,
+  isLocalProbing,
+  onOpenLocal,
+  onStartLocal,
+  onAttachRemote,
+}: BrandHeroProps) {
+  const primaryLabel = isLocalReady
+    ? "Open Milady"
+    : isLocalProbing
+      ? "Looking for local Milady\u2026"
+      : "Install Milady";
+  const primaryHandler = isLocalReady ? onOpenLocal : onStartLocal;
+  const primaryHint = isLocalReady
+    ? "local \u00b7 running"
+    : isLocalProbing
+      ? "probing localhost"
+      : "no local runtime detected";
+
   return (
     <section className="relative isolate">
       {/* Ambient gold blob — atmosphere, pointer-events-none, never a content
@@ -54,20 +79,49 @@ export function BrandHero({ onOpenLocal, onAttachRemote }: BrandHeroProps) {
         </p>
 
         <div className="mt-9 flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            onClick={onOpenLocal}
-            className="group inline-flex items-center gap-2 rounded-md px-5 py-3 text-[13px] font-semibold text-black shadow-[0_0_40px_rgba(240,185,11,0.28)] transition hover:-translate-y-0.5"
-            style={{ background: "var(--gold-gradient-primary)" }}
-          >
-            <span>Open Milady</span>
-            <span
-              aria-hidden="true"
-              className="transition group-hover:translate-x-0.5"
+          {isLocalReady ? (
+            <button
+              type="button"
+              onClick={primaryHandler}
+              aria-label="Open local Milady runtime"
+              className="group inline-flex items-center gap-2 rounded-md px-5 py-3 text-[13px] font-semibold text-black shadow-[0_0_40px_rgba(240,185,11,0.28)] transition hover:-translate-y-0.5"
+              style={{ background: "var(--gold-gradient-primary)" }}
             >
-              →
-            </span>
-          </button>
+              <span>{primaryLabel}</span>
+              <span
+                aria-hidden="true"
+                className="transition group-hover:translate-x-0.5"
+              >
+                →
+              </span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={primaryHandler}
+              disabled={isLocalProbing}
+              aria-label={
+                isLocalProbing
+                  ? "Probing for local Milady"
+                  : "No local runtime detected. Open install instructions."
+              }
+              className="group inline-flex items-center gap-2 rounded-md border border-white/12 bg-white/[0.04] px-5 py-3 text-[13px] font-medium text-white transition hover:border-brand/40 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isLocalProbing ? (
+                <span
+                  aria-hidden="true"
+                  className="h-2 w-2 animate-pulse rounded-full bg-brand/80"
+                />
+              ) : null}
+              <span>{primaryLabel}</span>
+              <span
+                aria-hidden="true"
+                className="text-white/45 transition group-hover:translate-x-0.5 group-hover:text-white"
+              >
+                →
+              </span>
+            </button>
+          )}
           <button
             type="button"
             onClick={onAttachRemote}
@@ -75,6 +129,12 @@ export function BrandHero({ onOpenLocal, onAttachRemote }: BrandHeroProps) {
           >
             Attach remote
           </button>
+          <span
+            aria-live="polite"
+            className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/35"
+          >
+            {primaryHint}
+          </span>
         </div>
       </div>
     </section>

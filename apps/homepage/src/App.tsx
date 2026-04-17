@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { BrandHero } from "./components/dashboard/BrandHero";
 import { ConnectionModal } from "./components/dashboard/ConnectionModal";
 import { InstanceGrid } from "./components/dashboard/InstanceGrid";
+import { ProvisionAgentModal } from "./components/dashboard/ProvisionAgentModal";
 import { QuickOpsStrip } from "./components/dashboard/QuickOpsStrip";
 import { useCloudLogin } from "./components/dashboard/useCloudLogin";
 import { DashboardShell } from "./components/layout/DashboardShell";
@@ -56,6 +57,7 @@ function MiladyControlHub() {
     refresh,
     addRemoteUrl,
     removeRemote,
+    cloudClient,
   } = useAgents();
   const {
     state: loginState,
@@ -66,6 +68,7 @@ function MiladyControlHub() {
     onAuthenticated: () => void refresh(),
   });
   const [showConnectModal, setShowConnectModal] = useState(false);
+  const [showProvisionModal, setShowProvisionModal] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
 
   useEffect(() => {
@@ -80,6 +83,23 @@ function MiladyControlHub() {
   );
   const launchUrl =
     localAgent?.webUiUrl ?? localAgent?.sourceUrl ?? LOCAL_AGENT_BASE;
+
+  // Local runtime readiness: ready if a local agent was discovered AND its
+  // status isn't "stopped" / "unknown". During the initial probe window
+  // (loading) we surface a "probing…" state instead of a hard "install" CTA.
+  const isLocalReady =
+    !!localAgent &&
+    localAgent.status !== "stopped" &&
+    localAgent.status !== "unknown";
+  const isLocalProbing = loading && !localAgent;
+
+  const scrollToInstall = () => {
+    if (typeof document === "undefined") return;
+    const anchor = document.getElementById("quickops-heading");
+    if (anchor) {
+      anchor.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
 
   const handleOpenAgent = (agent: ManagedAgent) => {
     const url = agent.webUiUrl ?? agent.sourceUrl;
@@ -161,6 +181,15 @@ function MiladyControlHub() {
     openWebUIDirect(launchUrl);
   };
 
+  const handleStartLocal = () => {
+    // No running local runtime. Drop the user at the install instructions.
+    scrollToInstall();
+    setNotice({
+      tone: "info",
+      text: "No local Milady runtime detected. Install and start it below.",
+    });
+  };
+
   const handleSignInToCloud = () => {
     if (isAuthenticated) {
       openExternal(CLOUD_BASE);
@@ -181,7 +210,10 @@ function MiladyControlHub() {
     >
       <div className="space-y-16">
         <BrandHero
+          isLocalReady={isLocalReady}
+          isLocalProbing={isLocalProbing}
           onOpenLocal={handleOpenLocal}
+          onStartLocal={handleStartLocal}
           onAttachRemote={() => setShowConnectModal(true)}
         />
 
@@ -196,6 +228,8 @@ function MiladyControlHub() {
           onDisconnect={handleDisconnect}
           onAttachRemote={() => setShowConnectModal(true)}
           onOpenLocal={handleOpenLocal}
+          onProvisionAgent={() => setShowProvisionModal(true)}
+          canProvision={isAuthenticated && !!cloudClient}
         />
 
         <QuickOpsStrip
@@ -264,6 +298,20 @@ function MiladyControlHub() {
               text: `${data.name} attached.`,
             });
           }}
+        />
+      ) : null}
+
+      {showProvisionModal ? (
+        <ProvisionAgentModal
+          cloudClient={cloudClient}
+          onClose={() => setShowProvisionModal(false)}
+          onProvisioned={(result) => {
+            setNotice({
+              tone: "success",
+              text: `agent ready: ${result.name}`,
+            });
+          }}
+          onRefreshList={() => void refresh()}
         />
       ) : null}
     </DashboardShell>
