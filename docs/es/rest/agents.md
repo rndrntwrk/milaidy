@@ -259,7 +259,7 @@ Obtener un resumen estructurado del estado actual del agente, sus capacidades, e
   },
   "plugins": {
     "totalActive": 12,
-    "active": ["@elizaos/plugin-bootstrap", "..."],
+    "active": ["..."],
     "aiProviders": ["@elizaos/plugin-anthropic"],
     "connectors": ["@elizaos/plugin-discord"]
   },

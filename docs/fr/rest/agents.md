@@ -259,7 +259,7 @@ Obtenir un résumé structuré de l'état actuel de l'agent, de ses capacités, 
   },
   "plugins": {
     "totalActive": 12,
-    "active": ["@elizaos/plugin-bootstrap", "..."],
+    "active": ["..."],
     "aiProviders": ["@elizaos/plugin-anthropic"],
     "connectors": ["@elizaos/plugin-discord"]
   },

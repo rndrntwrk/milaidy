@@ -256,7 +256,7 @@ Get a structured summary of the agent's current state, capabilities, wallet stat
   },
   "plugins": {
     "totalActive": 12,
-    "active": ["@elizaos/plugin-bootstrap", "..."],
+    "active": ["..."],
     "aiProviders": ["@elizaos/plugin-anthropic"],
     "connectors": ["@elizaos/plugin-discord"]
   },
