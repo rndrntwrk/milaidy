@@ -23,7 +23,7 @@ declare module "@elizaos/scenario-schema" {
     | string
     | void
     | undefined
-    | Promise<string | undefined | void>;
+    | Promise<string | undefined>;
 
   export type ScenarioAssertResponse =
     | ((text: string) => ScenarioCheckResult)

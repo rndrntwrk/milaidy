@@ -231,7 +231,9 @@ async function main() {
   for (const entry of targets) {
     const appDir = path.join(APPS_ROOT, entry.packageDir);
     if (!(await directoryExists(appDir))) {
-      console.log(`  skip  ${entry.slug} (package ${entry.packageDir} missing)`);
+      console.log(
+        `  skip  ${entry.slug} (package ${entry.packageDir} missing)`,
+      );
       skipped += 1;
       continue;
     }
