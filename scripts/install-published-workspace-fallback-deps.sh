@@ -124,6 +124,7 @@ packages=(
   @capacitor/preferences
   @xterm/xterm
   @xterm/addon-fit
+  playwright-core
 )
 
 # Published-only CI rewrites the workspace graph before install, which can leave

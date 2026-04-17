@@ -108,6 +108,9 @@ jobs:
       - name: Install dependencies
         run: bun install --ignore-scripts
 
+      - name: Install published-workspace fallback dependencies
+        run: bash scripts/install-published-workspace-fallback-deps.sh
+
       - name: Run postinstall patches
         run: bun run postinstall
         env:
@@ -124,9 +127,17 @@ jobs:
           cd eliza/packages/agent
           bun run build:docker-dist
 
+      - name: Install buf CLI
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          version: "1.50.0"
+
       - name: Build @elizaos/core (includes agent-orchestrator)
         run: |
+          cd eliza/packages/schemas
+          buf dep update && buf generate
           cd eliza/packages/typescript
+          node ../shared/scripts/generate-keywords.mjs --target ts 2>/dev/null || echo "keyword gen skipped"
           bun run build:node
 
       - name: Build runtime (tsdown)
@@ -134,6 +145,25 @@ jobs:
           npx tsdown
           echo '{"type":"module"}' > dist/package.json
           node --import tsx eliza/packages/app-core/scripts/write-build-info.ts 2>/dev/null || true
+
+      - name: Inject tailwindcss into eliza/packages/app-core/node_modules
+        run: |
+          mkdir -p eliza/packages/app-core/node_modules
+          if [ ! -d "eliza/packages/app-core/node_modules/tailwindcss" ]; then
+            echo "Fetching tailwindcss tarball..."
+            TAILWIND_URL=$(npm view tailwindcss dist.tarball 2>/dev/null)
+            if [ -n "$TAILWIND_URL" ]; then
+              rm -rf /tmp/tw_extract
+              mkdir -p /tmp/tw_extract
+              curl -sL "$TAILWIND_URL" | tar xz -C /tmp/tw_extract
+              mv /tmp/tw_extract/package eliza/packages/app-core/node_modules/tailwindcss
+              echo "+ tailwindcss $(cat eliza/packages/app-core/node_modules/tailwindcss/package.json | node -e 'process.stdin.resume();let d=\"\";process.stdin.on(\"data\",c=>d+=c);process.stdin.on(\"end\",()=>console.log(JSON.parse(d).version))')"
+            else
+              echo "WARN: could not resolve tailwindcss tarball URL"
+            fi
+          else
+            echo "tailwindcss already present in app-core/node_modules"
+          fi
 
       - name: Build UI (vite)
         run: |

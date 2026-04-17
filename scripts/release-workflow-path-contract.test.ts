@@ -99,6 +99,10 @@ describe("release workflow path contract", () => {
     );
 
     expect(snapcraft).toContain(
+      "Inject tailwindcss into eliza/packages/app-core/node_modules",
+    );
+    expect(snapcraft).toContain("npm view tailwindcss dist.tarball");
+    expect(snapcraft).toContain(
       "node eliza/packages/app-core/scripts/ensure-shared-i18n-data.mjs",
     );
     expect(snapcraft).toContain(
@@ -169,5 +173,34 @@ describe("release workflow path contract", () => {
       "git -C eliza submodule update --init plugins/plugin-agent-orchestrator",
     );
     expect(releaseContract).toContain("published fallback install does not");
+  });
+
+  it("keeps cloud image builds aligned with the published-workspace release path", () => {
+    const buildCloudImage = readWorkflow("build-cloud-image.yml");
+
+    expect(buildCloudImage).toContain(
+      "bash scripts/install-published-workspace-fallback-deps.sh",
+    );
+    expect(buildCloudImage).toContain("uses: bufbuild/buf-setup-action@v1");
+    expect(buildCloudImage).toContain("buf dep update && buf generate");
+    expect(buildCloudImage).toContain(
+      "node ../shared/scripts/generate-keywords.mjs --target ts",
+    );
+    expect(buildCloudImage).toContain(
+      "Inject tailwindcss into eliza/packages/app-core/node_modules",
+    );
+  });
+
+  it("installs browser automation deps in the published-workspace fallback shim", () => {
+    const fallbackScript = fs.readFileSync(
+      path.join(
+        repoRoot,
+        "scripts",
+        "install-published-workspace-fallback-deps.sh",
+      ),
+      "utf8",
+    );
+
+    expect(fallbackScript).toContain("playwright-core");
   });
 });
