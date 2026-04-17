@@ -308,7 +308,10 @@ jobs:
 
   website-blocker-desktop-smoke:
     name: Website Blocker Desktop Smoke (macOS)
-    runs-on: macos-latest
+    # Pinned to macos-14: Depot passes through macOS labels to GitHub-hosted
+    # runners unchanged. `macos-latest` is auto-rewritten to depot-ubuntu by
+    # the mirror generator, which breaks Xcode/Electron-dependent jobs.
+    runs-on: macos-14
     timeout-minutes: 40
     steps:
       - name: Checkout
@@ -358,7 +361,7 @@ jobs:
 
   website-blocker-mobile-android:
     name: Website Blocker Android Build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
       - name: Checkout
@@ -423,7 +426,10 @@ jobs:
 
   website-blocker-mobile-ios:
     name: Website Blocker iOS Build
-    runs-on: macos-latest
+    # Pinned to macos-14: requires Xcode. Depot passes macOS labels through
+    # to GitHub-hosted runners; `macos-latest` gets auto-rewritten by the
+    # mirror generator.
+    runs-on: macos-14
     timeout-minutes: 50
     steps:
       - name: Checkout

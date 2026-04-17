@@ -1,0 +1,26 @@
+# .depot/migrate-config.yaml
+#
+# Advisory config — Depot's `depot ci migrate workflows` CLI does NOT read this
+# file (as of depot CLI v2.101.x). It exists as the canonical source-of-truth
+# for which `.github/workflows/*.yml` files should NOT have a Depot mirror in
+# `.depot/workflows/`, and is consumed by `scripts/depot-ci-sync.mjs` to
+# re-delete opt-outs after a regeneration run.
+#
+# Why opt a workflow out of Depot:
+#   - Fast-running jobs (<3min): Depot's cold-start and runner provisioning
+#     overhead outweighs its cache/speed benefits.
+#   - Auth-sensitive release jobs: stay on canonical GHA runners to keep
+#     `GITHUB_TOKEN` / OIDC permission behavior predictable.
+#   - Bot/label/review jobs: thin glue around `gh` CLI — no compute wins.
+#
+# If you add a workflow here, also delete its mirror at `.depot/workflows/<name>`.
+
+skip:
+  # Thin/fast jobs — no Depot benefit
+  - ci.yml
+  - auto-label.yml
+  - run-prr.yml
+  - agent-review.yml
+  - agent-fix-ci.yml
+  # Release-credential workflows — keep on GHA to avoid OIDC/secret drift
+  - publish-npm.yml
