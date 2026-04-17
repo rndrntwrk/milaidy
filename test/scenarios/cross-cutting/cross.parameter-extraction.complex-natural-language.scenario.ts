@@ -39,6 +39,44 @@ export default scenario({
 
   isolation: "per-scenario",
 
+  seed: [
+    {
+      type: "custom",
+      name: "seed-alex-rodriguez-contact",
+      apply: async (ctx) => {
+        const runtime = ctx.runtime as {
+          agentId: string;
+          createEntity: (entity: {
+            id: string;
+            agentId: string;
+            names: string[];
+            metadata: Record<string, unknown>;
+          }) => Promise<unknown>;
+          getService: (name: string) => unknown;
+        };
+        // Deterministic UUID for the seeded contact.
+        const entityId = "11111111-aaaa-4aaa-8aaa-111111111111";
+        await runtime.createEntity({
+          id: entityId,
+          agentId: runtime.agentId,
+          names: ["Alex Rodriguez", "Alex"],
+          metadata: { source: "scenario-seed" },
+        });
+        const svc = runtime.getService("relationships") as {
+          addContact: (
+            entityId: string,
+            categories?: string[],
+          ) => Promise<unknown>;
+        } | null;
+        if (!svc || typeof svc.addContact !== "function") {
+          return "relationships service unavailable — cannot seed contact";
+        }
+        await svc.addContact(entityId, ["colleague"]);
+        return undefined;
+      },
+    },
+  ],
+
   rooms: [
     {
       id: "main",
