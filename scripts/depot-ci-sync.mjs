@@ -53,7 +53,9 @@ console.log(`[depot-ci-sync] skip list (${skip.length} entries):`);
 for (const file of skip) console.log(`  - ${file}`);
 
 if (!DRY_RUN) {
-  console.log("[depot-ci-sync] running: depot ci migrate workflows --overwrite --yes");
+  console.log(
+    "[depot-ci-sync] running: depot ci migrate workflows --overwrite --yes",
+  );
   execSync("depot ci migrate workflows --overwrite --yes", {
     cwd: REPO_ROOT,
     stdio: "inherit",
@@ -74,4 +76,6 @@ for (const file of skip) {
   }
 }
 
-console.log(`[depot-ci-sync] ${DRY_RUN ? "would remove" : "removed"} ${removed} opt-out mirror(s)`);
+console.log(
+  `[depot-ci-sync] ${DRY_RUN ? "would remove" : "removed"} ${removed} opt-out mirror(s)`,
+);
