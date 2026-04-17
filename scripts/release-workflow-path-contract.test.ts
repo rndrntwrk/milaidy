@@ -183,6 +183,7 @@ describe("release workflow path contract", () => {
     );
     expect(buildCloudImage).toContain("uses: bufbuild/buf-setup-action@v1");
     expect(buildCloudImage).toContain("buf dep update && buf generate");
+    expect(buildCloudImage).toContain("cd ../typescript");
     expect(buildCloudImage).toContain(
       "node ../shared/scripts/generate-keywords.mjs --target ts",
     );

@@ -136,7 +136,7 @@ jobs:
         run: |
           cd eliza/packages/schemas
           buf dep update && buf generate
-          cd eliza/packages/typescript
+          cd ../typescript
           node ../shared/scripts/generate-keywords.mjs --target ts 2>/dev/null || echo "keyword gen skipped"
           bun run build:node
 
