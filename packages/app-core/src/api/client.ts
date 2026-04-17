@@ -2599,15 +2599,46 @@ export class MiladyClient {
   }
 
   /**
-   * Hydrate the current companion stage state from the alice-bot server.
-   * Called on mount by the operator's browser and the 555stream
-   * capture-service headless Chromium to align their local camera refs
-   * with the persistent server state before the first WS push arrives.
+   * Hydrate the current companion stage state from the alice-bot
+   * server. Called on mount by all renderer surfaces to align their
+   * local camera refs with the persistent server state before the
+   * first WS push arrives.
+   *
+   * Routes to the PUBLIC endpoint when the current window is the
+   * public broadcast transport (alice.rndrntwrk.com/broadcast/:channel)
+   * — the authenticated `/api/companion/stage` is Cloudflare-Access-
+   * gated and public viewers cannot reach it. The public variant at
+   * `/api/broadcast/:channel/stage` returns the same payload shape
+   * with no auth required (camera framing only; no PII).
+   *
+   * The CAPTURE transport and operator surfaces use the authenticated
+   * endpoint so the same token powers both reads and subsequent
+   * POSTs (mutation is not exposed on the public path).
    */
   async getCompanionStageState(): Promise<{
     ok: boolean;
     state: CompanionStageState;
   }> {
+    // Inlined detection to avoid a cross-package import cycle (client
+    // is in api/, the platform helpers are in platform/). The shape
+    // mirrors BROADCAST_CHANNEL_ALLOWLIST in platform/init.ts — if you
+    // add a channel there, add it here too.
+    if (typeof window !== "undefined") {
+      const pathMatch = window.location.pathname.match(
+        /^\/broadcast\/([a-zA-Z0-9-]+)\/?$/,
+      );
+      const hasInjectedConfig = !!(
+        window as unknown as { __injectedShowConfig?: unknown }
+      ).__injectedShowConfig;
+      if (pathMatch && !hasInjectedConfig) {
+        const channel = pathMatch[1];
+        if (channel === "alice-cam") {
+          return this.fetch(
+            `/api/broadcast/${encodeURIComponent(channel)}/stage`,
+          );
+        }
+      }
+    }
     return this.fetch("/api/companion/stage");
   }
 

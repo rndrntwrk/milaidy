@@ -90,6 +90,7 @@ import {
   markPendingAutonomyGapsPartial,
   mergeAutonomyEvents,
 } from "../autonomy";
+import { getBroadcastMode } from "../platform/init";
 import {
   getBackendStartupTimeoutMs,
   inspectExistingElizaInstall,
@@ -6989,6 +6990,40 @@ function AppProviderInner({
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: t is stable but defined later
   useEffect(() => {
+    // PUBLIC BROADCAST SHORT-CIRCUIT — defense-in-depth for the path-
+    // based public surface at alice.rndrntwrk.com/broadcast/:channel.
+    //
+    // The public transport must not hit authenticated APIs at all:
+    //   - /api/auth/status            (auth probe)
+    //   - /api/onboarding/status      (onboarding probe)
+    //   - /api/config                 (character/config hydration)
+    //   - /ws                         (websocket connect)
+    //
+    // The normal startup effect below performs all of those. Without
+    // this early return, a public viewer would fire 401s against each
+    // endpoint as Cloudflare Access rejects the unauthenticated call,
+    // spamming error logs and leaving the viewer with stale defaults.
+    //
+    // In public broadcast mode we skip the entire startup effect and
+    // transition directly to `ready`. CompanionSceneHost hydrates
+    // stage state via the public GET /api/broadcast/:channel/stage
+    // endpoint (see client.getCompanionStageState() mode-aware
+    // routing below).
+    //
+    // The CAPTURE transport (http://alice-bot:3000/broadcast/...)
+    // correctly falls through to the authenticated startup — its
+    // apiToken is injected via __injectedShowConfig so the probes
+    // succeed.
+    if (getBroadcastMode() === "public") {
+      console.log(
+        "[AppProvider] Public broadcast mode — skipping authenticated startup probes",
+      );
+      setStartupPhase("ready");
+      setOnboardingComplete(true);
+      setOnboardingLoading(false);
+      return;
+    }
+
     const startupRunId = startupRetryNonce;
     let unbindStatus: (() => void) | null = null;
     let unbindAgentEvents: (() => void) | null = null;
