@@ -98,7 +98,7 @@ export function InstanceGrid({
                   ? "Create a new cloud agent"
                   : "Sign in to cloud to create an agent"
               }
-              className="group/new inline-flex h-8 items-center gap-1.5 rounded-full border border-brand/30 bg-brand/[0.06] px-3 font-mono text-[11px] lowercase tracking-[0.06em] text-brand/90 transition duration-200 hover:border-brand/55 hover:bg-brand/[0.12] hover:text-brand hover:shadow-[inset_0_0_0_1px_rgba(240,185,11,0.18)] active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed"
+              className="group/new inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-white/[0.02] px-3 font-mono text-[11px] lowercase tracking-[0.06em] text-white/70 transition duration-200 hover:border-brand/40 hover:bg-brand/[0.05] hover:text-brand active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <span
                 aria-hidden="true"
@@ -227,51 +227,45 @@ function EmptyState({
     { title: string; body: string; cta?: ReactCTA }
   > = {
     all: {
-      title: "No runtimes yet.",
-      body: "Open local Milady to begin, or attach a remote runtime by URL.",
-      cta: { label: "Open local Milady", onClick: onOpenLocal, primary: true },
+      title: "no runtimes yet.",
+      body: "open local milady, or attach a remote runtime by url.",
+      cta: { label: "open local", onClick: onOpenLocal, primary: true },
     },
     local: {
-      title: "No local runtime responded.",
-      body: "Launch Milady locally, then refresh. We scan common local ports and any configured sandboxes.",
-      cta: { label: "Open local Milady", onClick: onOpenLocal, primary: true },
+      title: "no local runtime responded.",
+      body: "launch milady locally, then refresh. we scan common local ports and configured sandboxes.",
+      cta: { label: "open local", onClick: onOpenLocal, primary: true },
     },
     cloud: {
-      title: canProvision ? "No cloud runtimes yet." : "No cloud runtimes.",
+      title: canProvision ? "no cloud runtimes yet." : "no cloud runtimes.",
       body: canProvision
-        ? "Spin up your first cloud agent and it'll show up here."
-        : "Sign into Eliza Cloud to discover hosted Milady instances attached to your account.",
+        ? "spin up your first cloud agent and it'll show up here."
+        : "sign in to Eliza Cloud to discover hosted milady instances attached to your account.",
       cta: cloudCta,
     },
     remote: {
-      title: "No remote connections.",
-      body: "Attach a VPS, LAN box, or any Milady/elizaOS runtime by URL.",
-      cta: { label: "Attach remote", onClick: onAttachRemote },
+      title: "no remote connections.",
+      body: "attach a vps, lan box, or any milady or elizaOS runtime by url.",
+      cta: { label: "attach remote", onClick: onAttachRemote },
     },
   };
   const state = copy[filter];
   return (
-    <div className="flex flex-col items-center justify-center gap-5 rounded-xl border border-dashed border-white/15 bg-[radial-gradient(ellipse_at_top,rgba(240,185,11,0.04),transparent_60%)] px-6 py-14 text-center">
-      <div
-        aria-hidden="true"
-        className="flex h-14 w-14 items-center justify-center rounded-xl border border-brand/40 bg-brand/[0.08] font-mono text-[11px] uppercase tracking-[0.22em] text-brand shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
-      >
-        {filter === "all" ? "M" : filter.charAt(0).toUpperCase()}
-      </div>
-      <div className="max-w-md space-y-2">
-        <h3 className="text-[18px] font-semibold tracking-tight text-white">
+    <div className="flex flex-col items-start gap-4 rounded-xl border border-dashed border-white/12 bg-white/[0.015] px-6 py-10 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+      <div className="max-w-md space-y-1.5">
+        <h3 className="text-[15px] font-medium tracking-tight text-white/90">
           {state.title}
         </h3>
-        <p className="text-[14px] leading-6 text-white/70">{state.body}</p>
+        <p className="text-[13px] leading-6 text-white/55">{state.body}</p>
       </div>
       {state.cta ? (
         <button
           type="button"
           onClick={state.cta.onClick}
-          className={`rounded-md px-4 py-2 text-[12px] font-semibold transition duration-200 active:scale-[0.98] ${
+          className={`shrink-0 rounded-md px-4 py-2 text-[12px] font-medium transition duration-200 active:scale-[0.98] ${
             state.cta.primary
-              ? "bg-brand text-black shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_6px_16px_-8px_rgba(240,185,11,0.45)] hover:-translate-y-0.5 hover:bg-[var(--color-gold-300)]"
-              : "border border-border text-white hover:-translate-y-0.5 hover:border-white/25"
+              ? "bg-brand text-black shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_6px_16px_-8px_rgba(240,185,11,0.4)] hover:-translate-y-0.5 hover:bg-[var(--color-gold-300)]"
+              : "border border-border text-white/85 hover:-translate-y-0.5 hover:border-white/25 hover:text-white"
           }`}
         >
           {state.cta.label}

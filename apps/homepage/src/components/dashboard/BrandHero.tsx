@@ -28,10 +28,10 @@ export function BrandHero({
   onAttachRemote,
 }: BrandHeroProps) {
   const primaryLabel = isLocalReady
-    ? "Open local"
+    ? "open local"
     : isLocalProbing
       ? "looking for local\u2026"
-      : "Install milady";
+      : "install milady";
   const primaryHandler = isLocalReady ? onOpenLocal : onStartLocal;
   const primaryHint = isLocalReady
     ? "local \u00b7 running"
@@ -112,9 +112,9 @@ export function BrandHero({
           <button
             type="button"
             onClick={onAttachRemote}
-            className="rounded-md border border-border bg-white/[0.04] px-5 py-3 text-[13px] font-medium text-white transition duration-200 hover:-translate-y-0.5 hover:border-white/25 hover:bg-white/[0.06] active:translate-y-0 active:scale-[0.98]"
+            className="rounded-md border border-border bg-white/[0.04] px-5 py-3 text-[13px] font-medium text-white/85 transition duration-200 hover:-translate-y-0.5 hover:border-white/25 hover:bg-white/[0.06] hover:text-white active:translate-y-0 active:scale-[0.98]"
           >
-            Attach remote
+            attach remote
           </button>
           <span
             aria-live="polite"
