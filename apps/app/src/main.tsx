@@ -613,29 +613,18 @@ async function runMain(): Promise<void> {
         /* storage unavailable — coordinator has its own try/catch */
       }
 
-      // Bridge alice-bot's auth token into the SPA's API client.
+      // Bridge alice-bot auth into the SPA's API client.
       // Only meaningful under the capture transport: WS + privileged
       // REST need credentials so scene-state sync + emote replay
       // work. Public viewers never authenticate — any apiToken
       // query on the public URL is rejected here explicitly.
       //
-      // KNOWN GAP — capture auth vs alice-bot auth enforcement.
-      // The URL `?apiToken=` path is the canonical credential. The
-      // `__injectedShowConfig.wsToken` fallback is a control-plane-
-      // issued renderer JWT, which alice-bot's auth middleware does
-      // NOT validate — it only accepts the static API token set via
-      // ELIZA_SERVER_AUTH_TOKEN. With alice-bot running with
-      // MILAIDY_AUTH_DISABLED=1 (current prod state) any token is
-      // accepted and this distinction doesn't matter. The day
-      // MILAIDY_AUTH_DISABLED flips off, the capture transport will
-      // start hitting 401s on /api/companion/stage and the WS handshake
-      // unless one of these lands first:
-      //   (a) CP injects the real alice-bot API token (k8s secret
-      //       mirrored to both the CP and capture-service), OR
-      //   (b) alice-bot's auth middleware learns to accept renderer-
-      //       scoped JWTs signed by the CP.
-      // Tracked as a follow-up; do not enable alice-bot auth until
-      // one of those ships.
+      // Precedence:
+      //   1. `?apiToken=` — explicit override for internal debugging
+      //   2. `__injectedShowConfig.apiToken` — the real alice-bot API token
+      //      injected by capture-service/control-plane
+      //   3. `__injectedShowConfig.wsToken` — legacy renderer JWT fallback
+      //      kept only for auth-disabled migrations
       {
         const params = new URLSearchParams(
           window.location.search || window.location.hash.split("?")[1] || "",
@@ -647,10 +636,15 @@ async function runMain(): Promise<void> {
           try {
             const injectedConfig = (
               window as unknown as {
-                __injectedShowConfig?: { wsToken?: string };
+                __injectedShowConfig?: { apiToken?: string; wsToken?: string };
               }
             ).__injectedShowConfig;
-            if (injectedConfig?.wsToken) {
+            if (injectedConfig?.apiToken) {
+              setBootConfig({
+                ...getBootConfig(),
+                apiToken: injectedConfig.apiToken,
+              });
+            } else if (injectedConfig?.wsToken) {
               setBootConfig({
                 ...getBootConfig(),
                 apiToken: injectedConfig.wsToken,
