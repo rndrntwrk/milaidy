@@ -85,9 +85,11 @@ describe("release workflow path contract", () => {
 
     for (const workflow of [snapBuild, publishPackages, agentRelease]) {
       expect(workflow).toContain("Normalize runner root ownership for snapd");
-      expect(workflow).toContain('ROOT_OWNER="$(stat -c \'%u:%g\' /)"');
-      expect(workflow).toContain('if [ "${ROOT_OWNER}" = "0:0" ]; then');
-      expect(workflow).toContain("if sudo -n chown root:root / 2>/dev/null; then");
+      expect(workflow).toContain("ROOT_OWNER=\"$(stat -c '%u:%g' /)\"");
+      expect(workflow).toContain(`if [ "\${ROOT_OWNER}" = "0:0" ]; then`);
+      expect(workflow).toContain(
+        "if sudo -n chown root:root / 2>/dev/null; then",
+      );
     }
   });
 
