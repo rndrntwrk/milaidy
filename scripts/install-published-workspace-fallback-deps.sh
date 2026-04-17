@@ -79,6 +79,25 @@ append_versioned_package \
   "eliza/plugins/plugin-agent-orchestrator/package.json" \
   ".eliza.ci-disabled/plugins/plugin-agent-orchestrator/package.json"
 
+# coding-agent-adapters is a transitive dep of eliza/packages/agent's server.ts.
+# After disable-local-eliza-workspace drops eliza/packages/agent from the
+# workspace, its transitive deps don't get installed — but the Docker CI smoke
+# still bundles eliza/packages/agent/src/api/server.ts via the apps/app alias,
+# which fails with "Rolldown failed to resolve import coding-agent-adapters".
+# Pin at the version eliza/packages/agent declares; falls back to latest if
+# the manifest isn't available.
+packages+=("coding-agent-adapters@0.16.3")
+
+# viem is a transitive dep of eliza/packages/agent's cloud/cloud-wallet.ts
+# (imports viem/accounts). Same pattern as coding-agent-adapters: dropped from
+# the root install by disable-local-eliza-workspace but still bundled by the
+# Docker CI smoke through the apps/app alias, producing "Rolldown failed to
+# resolve import viem/accounts".
+append_versioned_package \
+  "viem" \
+  "eliza/packages/agent/package.json" \
+  ".eliza.ci-disabled/packages/agent/package.json"
+
 for attempt in 1 2 3; do
   if bun add --no-save --dev --ignore-scripts "${packages[@]}"; then
     exit 0

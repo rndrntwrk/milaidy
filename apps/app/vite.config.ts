@@ -41,6 +41,7 @@ const appCoreNativePluginEntrypoints = path.join(
 );
 const uiPkgRoot = path.join(miladyRoot, "eliza/packages/ui");
 const capacitorCoreEntry = _require.resolve("@capacitor/core");
+const patheEntry = _require.resolve("pathe");
 
 function ensureTrailingSlash(value: string): string {
   return value.endsWith("/") ? value : `${value}/`;
@@ -741,7 +742,16 @@ function nativeModuleStubPlugin(): Plugin {
     // prebundle proxy-agent and other Node-only HTTP deps for the browser.
     "puppeteer-core",
     "@puppeteer/browsers",
+    // Server-only plugins statically imported from the @elizaos/agent runtime.
+    // Their exports maps nest browser/node conditional exports that Vite 6's
+    // commonjs--resolver cannot walk. Stubbing returns an empty Proxy virtual
+    // module so the browser bundle never tries to execute server-only code.
     "@elizaos/plugin-local-embedding",
+    "@elizaos/plugin-anthropic",
+    "@elizaos/plugin-pdf",
+    "@elizaos/plugin-sql",
+    "@elizaos/plugin-agent-skills",
+    "@elizaos/plugin-agent-orchestrator",
   ]);
   const nativeScopeRe = /^@node-llama-cpp\//;
 
@@ -1185,7 +1195,7 @@ export default defineConfig({
     alias: [
       // Bare Node built-in polyfills for browser — pathe provides ESM path,
       // events is pre-bundled via optimizeDeps.
-      { find: /^path$/, replacement: "pathe" },
+      { find: /^path$/, replacement: patheEntry },
       { find: /^@capacitor\/core$/, replacement: capacitorCoreEntry },
       // Keep this subpath on the concrete source file so Docker/Vite builds
       // do not fall back to the extensionless tsconfig wildcard rewrite.
