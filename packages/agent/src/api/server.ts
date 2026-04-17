@@ -1016,6 +1016,7 @@ function error(res: http.ServerResponse, message: string, status = 400): void {
 import {
   injectApiBaseIntoHtml,
   isAuthProtectedRoute,
+  isPublicBroadcastUiPath,
   serveStaticUi,
 } from "./static-file-server.js";
 
@@ -4891,6 +4892,9 @@ async function handleRequest(
     method === "GET" &&
     pathname === "/api/onboarding/status" &&
     isCloudProvisioned;
+  const isPublicBroadcastUiEndpoint =
+    (method === "GET" || method === "HEAD") &&
+    isPublicBroadcastUiPath(pathname);
   const isPublicBroadcastApiEndpoint =
     (method === "GET" || method === "HEAD") &&
     pathname.startsWith("/api/broadcast/");
@@ -5013,6 +5017,7 @@ async function handleRequest(
     !isAuthEndpoint &&
     !isHealthEndpoint &&
     !isCloudOnboardingStatusEndpoint &&
+    !isPublicBroadcastUiEndpoint &&
     !isPublicBroadcastApiEndpoint &&
     !isWhatsAppWebhookEndpoint &&
     !isBlueBubblesWebhookEndpoint &&
@@ -5029,6 +5034,7 @@ async function handleRequest(
     !isAuthEndpoint &&
     !isHealthEndpoint &&
     !isCloudOnboardingStatusEndpoint &&
+    !isPublicBroadcastUiEndpoint &&
     !isPublicBroadcastApiEndpoint &&
     !isWhatsAppWebhookEndpoint &&
     !isBlueBubblesWebhookEndpoint &&

@@ -327,6 +327,11 @@ describe("Cloud-provisioned containers bypass local onboarding", () => {
     expect(status).not.toBe(401);
   });
 
+  it("keeps the public broadcast shell unauthenticated", async () => {
+    const { status } = await req(port, "GET", "/broadcast/alice-cam");
+    expect(status).toBe(200);
+  });
+
   it("/api/auth/status does not advertise local pairing auth", async () => {
     const { status, data } = await req(port, "GET", "/api/auth/status");
     expect(status).toBe(200);
