@@ -72,6 +72,10 @@ describe("release workflow path contract", () => {
     expect(workflow).toContain(
       "System git config failed; falling back to --global.",
     );
+    expect(workflow).toContain(
+      "node ../../scripts/build-electrobun-preload.mjs",
+    );
+    expect(workflow).not.toContain("run: bun run build:preload");
   });
 
   it("normalizes runner root ownership before snap builds", () => {
@@ -84,6 +88,49 @@ describe("release workflow path contract", () => {
       expect(workflow).toContain("sudo chown root:root /");
       expect(workflow).toContain('test "$(stat -c \'%u:%g\' /)" = "0:0"');
     }
+  });
+
+  it("checks out the eliza submodule before packaging workflows use submodule paths", () => {
+    const testPackaging = readWorkflow("test-packaging.yml");
+    const publishPackages = readWorkflow("publish-packages.yml");
+    const agentRelease = readWorkflow("agent-release.yml");
+    const checkoutWithRecursiveSubmodules =
+      /uses: actions\/checkout@v4\s+with:\s+submodules: recursive/g;
+
+    expect(
+      Array.from(testPackaging.matchAll(checkoutWithRecursiveSubmodules))
+        .length,
+    ).toBeGreaterThanOrEqual(4);
+    expect(
+      Array.from(publishPackages.matchAll(checkoutWithRecursiveSubmodules))
+        .length,
+    ).toBeGreaterThanOrEqual(4);
+    expect(
+      Array.from(agentRelease.matchAll(checkoutWithRecursiveSubmodules)).length,
+    ).toBeGreaterThanOrEqual(4);
+  });
+
+  it("initializes tracked workspace submodules before packing JS tarballs", () => {
+    const testPackaging = readWorkflow("test-packaging.yml");
+
+    expect(testPackaging).toContain(
+      "pack-and-test-js:\n    name: Pack & Test JS Tarballs",
+    );
+    expect(testPackaging).toContain("run: node scripts/init-submodules.mjs");
+  });
+
+  it("hydrates eliza before nested submodule recursion in the release contract workflow", () => {
+    const releaseContract = readWorkflow("test-electrobun-release.yml");
+    const elizaInit = releaseContract.indexOf(
+      "git submodule update --init --depth=1 eliza",
+    );
+    const trackedInit = releaseContract.indexOf(
+      "run: node scripts/init-submodules.mjs",
+    );
+
+    expect(elizaInit).toBeGreaterThanOrEqual(0);
+    expect(trackedInit).toBeGreaterThanOrEqual(0);
+    expect(elizaInit).toBeLessThan(trackedInit);
   });
 
   it("keeps plugin-agent-orchestrator submodule init as the published release-check version source", () => {
