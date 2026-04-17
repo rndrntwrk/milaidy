@@ -157,6 +157,29 @@ export default defineConfig({
         find: "@elizaos/capacitor-agent",
         replacement: appCoreModuleFallbackPath,
       },
+      {
+        // Transitively imported via app-lifeops; resolve to source so subpath imports work.
+        find: "@elizaos/plugin-telegram/account-auth-service",
+        replacement: path.join(
+          repoRoot,
+          "eliza",
+          "plugins",
+          "plugin-telegram",
+          "src",
+          "account-auth-service.ts",
+        ),
+      },
+      {
+        find: "@elizaos/plugin-telegram",
+        replacement: path.join(
+          repoRoot,
+          "eliza",
+          "plugins",
+          "plugin-telegram",
+          "src",
+          "index.ts",
+        ),
+      },
       ...getOptionalPluginSdkAliases(repoRoot),
       // Keep the roles shim here so Vitest resolves it when the local eliza checkout is absent.
       {
@@ -268,6 +291,7 @@ export default defineConfig({
       "scripts/**/*.test.{ts,tsx}",
       "apps/chrome-extension/**/*.test.ts",
       "apps/chrome-extension/**/*.test.tsx",
+      "test/helpers/**/*.test.ts",
     ],
     setupFiles: ["eliza/packages/app-core/test/setup.ts"],
     exclude: [
