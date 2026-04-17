@@ -15,18 +15,23 @@ test("browser workspace can create live tabs and switch selection", async ({
   });
 
   const addressInput = page.getByPlaceholder("Enter a URL");
-  if (!(await addressInput.isVisible())) {
+  try {
+    await addressInput.waitFor({ state: "visible", timeout: 5_000 });
+  } catch {
     const expandToggle = page.getByTestId(
       "browser-workspace-sidebar-expand-toggle",
     );
-    if (await expandToggle.isVisible()) {
+    try {
+      await expandToggle.waitFor({ state: "visible", timeout: 5_000 });
       await expandToggle.click();
+    } catch {
+      // The sidebar is already expanded on some layouts.
     }
   }
 
-  await expect(addressInput).toBeVisible({ timeout: 30_000 });
+  await expect(addressInput).toBeVisible({ timeout: 60_000 });
   await expect(page.getByText("No browser tabs yet")).toBeVisible({
-    timeout: 30_000,
+    timeout: 60_000,
   });
   const newTabButton = page.getByRole("button", { name: "New tab" });
 

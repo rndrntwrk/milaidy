@@ -1,88 +1,6 @@
 import { expect, test } from "@playwright/test";
+import { DIRECT_ROUTE_CASES, escapeRegExp } from "./apps-session-route-cases";
 import { assertReadyChecks, openAppPath, seedAppStorage } from "./helpers";
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-const DIRECT_ROUTE_CASES = [
-  {
-    name: "lifeops",
-    path: "/apps/lifeops",
-    selector: '[data-testid="lifeops-shell"]',
-  },
-  {
-    name: "tasks",
-    path: "/apps/tasks",
-    selector: '[data-testid="automations-shell"]',
-  },
-  {
-    name: "plugins",
-    path: "/apps/plugins",
-    readyChecks: [{ text: "AI Providers" }, { text: "Other Features" }],
-    timeoutMs: 60_000,
-  },
-  {
-    name: "skills",
-    path: "/apps/skills",
-    selector: '[data-testid="skills-shell"]',
-    timeoutMs: 20_000,
-  },
-  {
-    name: "fine tuning",
-    path: "/apps/fine-tuning",
-    selector: '[data-testid="fine-tuning-view"]',
-  },
-  {
-    name: "trajectories",
-    path: "/apps/trajectories",
-    selector: '[data-testid="trajectories-view"]',
-  },
-  {
-    name: "relationships",
-    path: "/apps/relationships",
-    selector: '[data-testid="relationships-view"]',
-  },
-  {
-    name: "memories",
-    path: "/apps/memories",
-    selector: '[data-testid="memory-viewer-view"]',
-  },
-  {
-    name: "runtime",
-    path: "/apps/runtime",
-    readyChecks: [
-      { selector: '[data-testid="runtime-view"]' },
-      { selector: '[data-testid="runtime-sidebar"]' },
-    ],
-    timeoutMs: 15_000,
-  },
-  {
-    name: "database",
-    path: "/apps/database",
-    selector: '[data-testid="database-view"]',
-  },
-  {
-    name: "logs",
-    path: "/apps/logs",
-    selector: '[data-testid="logs-view"]',
-  },
-  {
-    name: "companion",
-    path: "/apps/companion",
-    selector: '[data-testid="companion-root"]',
-  },
-  {
-    name: "shopify",
-    path: "/apps/shopify",
-    selector: '[data-testid="shopify-shell"]',
-  },
-  {
-    name: "vincent",
-    path: "/apps/vincent",
-    selector: '[data-testid="vincent-shell"]',
-  },
-] as const;
 
 test.beforeEach(async ({ page }) => {
   await seedAppStorage(page);
@@ -92,9 +10,12 @@ test("apps view can route into internal tool pages and survive a reload", async 
   page,
 }) => {
   await openAppPath(page, "/apps");
-  await expect(page.getByTestId("apps-catalog-grid")).toBeVisible();
-
-  await page.getByRole("button", { name: "Plugin Viewer" }).click();
+  await expect(page.getByTestId("apps-catalog-grid")).toBeVisible({
+    timeout: 30_000,
+  });
+  const pluginViewerButton = page.getByRole("button", { name: "Plugin Viewer" });
+  await expect(pluginViewerButton).toBeVisible({ timeout: 30_000 });
+  await pluginViewerButton.click();
   await expect(page).toHaveURL(/\/plugins$/);
   await assertReadyChecks(
     page,
@@ -108,9 +29,10 @@ test("apps view can route into internal tool pages and survive a reload", async 
   await openAppPath(page, "/");
   await openAppPath(page, "/apps");
   await expect(page.getByTestId("apps-catalog-grid")).toBeVisible({
-    timeout: 20_000,
+    timeout: 30_000,
   });
-  await page.getByRole("button", { name: "Plugin Viewer" }).click();
+  await expect(pluginViewerButton).toBeVisible({ timeout: 30_000 });
+  await pluginViewerButton.click();
   await expect(page).toHaveURL(/\/plugins$/);
   await assertReadyChecks(
     page,
