@@ -1,29 +1,31 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import type { Alias } from "vite";
 import {
   getInstalledPackageEntry,
   resolveModuleEntry,
 } from "../eliza-package-paths";
 
-export type ModuleAlias = {
-  find: string | RegExp;
-  replacement: string;
+export type ModuleAlias = Alias;
+
+type FallbackAliasOptions = {
+  fallbackReplacement?: string;
 };
 
-export type AgentSourceAliasOptions = {
-  fallbackReplacement?: string;
+type MiladyAliasOptions = {
   includeMiladyAlias?: boolean;
 };
 
-export type AppCoreSourceAliasOptions = {
+export type AgentSourceAliasOptions = FallbackAliasOptions &
+  MiladyAliasOptions;
+
+export type AppCoreSourceAliasOptions = FallbackAliasOptions & {
   bridgeReplacement?: string;
-  fallbackReplacement?: string;
   stubRootSpecifier?: boolean;
 };
 
-export type SharedSourceAliasOptions = {
+export type SharedSourceAliasOptions = MiladyAliasOptions & {
   includeConfigAlias?: boolean;
-  includeMiladyAlias?: boolean;
 };
 
 export type InstalledPackageAliasOptions = {
