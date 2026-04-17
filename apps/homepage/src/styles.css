@@ -268,6 +268,17 @@ body {
   }
 }
 
+/* Utility: hide scrollbar while preserving scroll. Used for horizontal
+   overflow rows (filter chips, tabs) so touch scroll is possible without
+   a visible bar cluttering the row. */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* ── Custom Scrollbars ─────────────────────────────────────────────── */
 
 .custom-scrollbar::-webkit-scrollbar {
