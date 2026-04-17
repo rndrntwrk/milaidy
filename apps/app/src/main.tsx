@@ -174,9 +174,30 @@ const MILADY_VRM_ASSETS = MILADY_STYLE_PRESETS.slice()
     ...(p.avatarIndex === 9 ? { cameraDistanceScale: 1.3 } : {}),
   }));
 
+// When the SPA is served at `/broadcast/:channel` (no trailing slash), the
+// document base URL is `<origin>/broadcast/`, and `resolveAppAssetUrl()`'s
+// runtime fallback would build asset URLs like
+// `<origin>/broadcast/vrm-decoders/draco/...` — which 404 because public
+// assets live at `<origin>/<asset>`. Pin the asset base to the document
+// root so DRACO / Meshopt decoders, fonts, VRMs, and any other
+// `resolveAppAssetUrl()` consumer load from `/<asset>` instead of
+// `/broadcast/<asset>`. The companion `<base href="/">` injection in
+// static-file-server only fixes HTML-level relative URLs (script src,
+// link href); JS code that resolves relative paths against
+// `window.location.href` (e.g. via `import.meta.env.BASE_URL`, which is
+// `"./"` for this Vite build) bypasses `<base>` and needs this override.
+// Same SPA bundle ships across desktop / mobile / web, so this only
+// kicks in for the web broadcast surface.
+const broadcastAssetBaseOverride =
+  typeof window !== "undefined" &&
+  window.location.pathname.startsWith("/broadcast/")
+    ? `${window.location.origin}/`
+    : undefined;
+
 const miladyBootConfig: AppBootConfig = {
   branding: MILADY_BRANDING,
   assetBaseUrl:
+    broadcastAssetBaseOverride ||
     (import.meta.env.VITE_ASSET_BASE_URL as string | undefined)?.trim() ||
     undefined,
   cloudApiBase:
