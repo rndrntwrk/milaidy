@@ -53,11 +53,11 @@ export function BrandHero({
       />
 
       <div className="relative max-w-[56ch]">
-        <h1 className="text-[34px] font-semibold leading-[1.08] tracking-[-0.025em] text-white/95 sm:text-[42px] lg:text-[48px]">
+        <h1 className="text-[30px] font-semibold leading-[1.08] tracking-[-0.025em] text-white/95 sm:text-[40px] md:text-[48px] lg:text-[56px]">
           your agents, in one place.
         </h1>
 
-        <div className="mt-6 flex flex-wrap items-center gap-3">
+        <div className="mt-5 flex flex-wrap items-center gap-2.5 sm:mt-6 sm:gap-3">
           {isLocalReady ? (
             <button
               type="button"
@@ -65,7 +65,7 @@ export function BrandHero({
               aria-label="Open local Milady runtime"
               // Press feedback per taste-skill rule 5 (tactile: -1px on
               // active). Softer tinted shadow replaces the neon outer glow.
-              className="group inline-flex items-center gap-2 rounded-md px-5 py-3 text-[13px] font-semibold text-black shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_10px_24px_-10px_rgba(240,185,11,0.55)] transition duration-200 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98]"
+              className="group inline-flex min-h-[44px] items-center gap-2 rounded-md px-4 py-2.5 text-[13px] font-semibold text-black shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_10px_24px_-10px_rgba(240,185,11,0.55)] transition duration-200 active:translate-y-0 active:scale-[0.98] sm:px-5 sm:py-3 [@media(hover:hover)]:hover:-translate-y-0.5"
               style={{ background: "var(--gold-gradient-primary)" }}
             >
               <span>{primaryLabel}</span>
@@ -85,7 +85,7 @@ export function BrandHero({
                   ? "Probing for local Milady"
                   : "No local runtime detected. Open install instructions."
               }
-              className="group inline-flex items-center gap-2 rounded-md border border-white/12 bg-white/[0.04] px-5 py-3 text-[13px] font-medium text-white transition duration-200 hover:-translate-y-0.5 hover:border-brand/40 hover:bg-white/[0.06] active:translate-y-0 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+              className="group inline-flex min-h-[44px] items-center gap-2 rounded-md border border-white/12 bg-white/[0.04] px-4 py-2.5 text-[13px] font-medium text-white transition duration-200 hover:border-brand/40 hover:bg-white/[0.06] active:translate-y-0 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 sm:px-5 sm:py-3 [@media(hover:hover)]:hover:-translate-y-0.5"
             >
               {isLocalProbing ? (
                 <span
@@ -105,7 +105,7 @@ export function BrandHero({
           <button
             type="button"
             onClick={onAttachRemote}
-            className="rounded-md border border-border bg-white/[0.04] px-5 py-3 text-[13px] font-medium text-white/85 transition duration-200 hover:-translate-y-0.5 hover:border-white/25 hover:bg-white/[0.06] hover:text-white active:translate-y-0 active:scale-[0.98]"
+            className="inline-flex min-h-[44px] items-center rounded-md border border-border bg-white/[0.04] px-4 py-2.5 text-[13px] font-medium text-white/85 transition duration-200 hover:border-white/25 hover:bg-white/[0.06] hover:text-white active:translate-y-0 active:scale-[0.98] sm:px-5 sm:py-3 [@media(hover:hover)]:hover:-translate-y-0.5"
           >
             attach remote
           </button>
