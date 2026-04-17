@@ -203,6 +203,7 @@ describe("release workflow path contract", () => {
     );
 
     expect(fallbackScript).toContain("playwright-core");
+    expect(fallbackScript).toContain('"@types/bun"');
   });
 
   it("re-installs @elizaos/core's third-party deps after the workspace is disabled", () => {

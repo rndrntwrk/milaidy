@@ -209,6 +209,14 @@ append_third_party_dependencies_from_manifest \
 append_third_party_dependencies_from_manifest \
   ".eliza.ci-disabled/packages/typescript/package.json"
 
+# @elizaos/core's declaration build expects the Bun ambient types via the
+# `bun-types` tsconfig entry, which is provided by the @types/bun package.
+# Those devDependencies are also dropped when the local workspace is disabled.
+append_dependency_spec_package \
+  "@types/bun" \
+  "eliza/packages/typescript/package.json" \
+  ".eliza.ci-disabled/packages/typescript/package.json"
+
 for attempt in 1 2 3; do
   if bun add --no-save --dev --ignore-scripts "${packages[@]}"; then
     exit 0
