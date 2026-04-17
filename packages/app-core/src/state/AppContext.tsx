@@ -7083,7 +7083,16 @@ function AppProviderInner({
       setStartupPhase("ready");
       setOnboardingComplete(true);
       setOnboardingLoading(false);
-      return;
+      // Return a cleanup that flips `cancelled` so the in-flight
+      // getBroadcastScene .then callback no-ops if the component
+      // unmounts OR this effect re-runs (e.g. startupRetryNonce
+      // changes). Without this, the public branch would skip the
+      // shared cleanup at the bottom of the effect, leaving the
+      // cancellation guard inert and the setState calls racing with
+      // a later re-mount.
+      return () => {
+        cancelled = true;
+      };
     }
 
     const startupRunId = startupRetryNonce;
