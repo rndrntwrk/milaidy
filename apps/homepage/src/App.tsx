@@ -279,7 +279,7 @@ function MiladyControlHub() {
             <button
               type="button"
               onClick={clearError}
-              className="shrink-0 rounded-md border border-rose-200/25 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-rose-50 transition hover:border-rose-200/40"
+              className="shrink-0 rounded-md border border-rose-200/25 px-2 py-0.5 font-mono text-[10px] lowercase tracking-wider text-rose-50 transition hover:border-rose-200/40"
             >
               dismiss
             </button>

@@ -28,59 +28,42 @@ export function BrandHero({
   onAttachRemote,
 }: BrandHeroProps) {
   const primaryLabel = isLocalReady
-    ? "Open Milady"
+    ? "Open local"
     : isLocalProbing
-      ? "Looking for local Milady\u2026"
-      : "Install Milady";
+      ? "looking for local\u2026"
+      : "Install milady";
   const primaryHandler = isLocalReady ? onOpenLocal : onStartLocal;
   const primaryHint = isLocalReady
     ? "local \u00b7 running"
     : isLocalProbing
       ? "probing localhost"
-      : "no local runtime detected";
+      : "no local runtime";
 
   return (
     <section className="relative isolate">
-      {/* Ambient gold blob — atmosphere, pointer-events-none, never a content
-          slot. Bottom-right so the headline sits left-aligned with weight.
-          Softer opacity + larger radius so it reads as a field rather than
-          a detached orb (taste-skill §7 subdued atmospherics). */}
+      {/* Ambient gold wash — further off-screen, lower opacity, wider
+          falloff. Reads as weather, not as a glow. */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -right-24 -top-20 h-[440px] w-[440px] opacity-[0.4] blur-3xl"
+        className="pointer-events-none absolute -right-40 -top-28 h-[520px] w-[520px] opacity-[0.22] blur-3xl"
         style={{
           background:
-            "radial-gradient(circle at center, rgba(240,185,11,0.14) 0%, transparent 70%)",
+            "radial-gradient(circle at center, rgba(240,185,11,0.12) 0%, transparent 72%)",
         }}
       />
 
       <div className="relative max-w-[56ch]">
-        <div className="font-mono text-[11px] uppercase tracking-[0.22em] text-brand/85">
-          milady frontend
-          <span className="mx-2 text-white/30">·</span>
-          <span className="text-white/55">{releaseData.release.tagName}</span>
+        <div className="font-mono text-[11px] lowercase tracking-[0.14em] text-white/45">
+          milady
+          <span className="mx-1.5 text-white/25">·</span>
+          <span>{releaseData.release.tagName}</span>
         </div>
 
-        <h1 className="mt-6 text-[44px] font-extrabold leading-[1.02] tracking-[-0.035em] text-white sm:text-[60px] lg:text-[76px]">
-          Milady is the frontend
-          <br />
-          <span
-            className="bg-clip-text text-transparent"
-            style={{
-              backgroundImage: "var(--gold-gradient-primary)",
-              WebkitBackgroundClip: "text",
-            }}
-          >
-            for your agents.
-          </span>
+        <h1 className="mt-5 text-[34px] font-semibold leading-[1.08] tracking-[-0.025em] text-white/95 sm:text-[44px] lg:text-[52px]">
+          your agents, in one place.
         </h1>
 
-        <p className="mt-6 max-w-[54ch] text-[15px] leading-7 text-white/65 sm:text-[17px] sm:leading-8">
-          Open local runtimes, attach remotes, manage cloud instances. One
-          surface for every agent you run, without the provisioning theater.
-        </p>
-
-        <div className="mt-9 flex flex-wrap items-center gap-3">
+        <div className="mt-7 flex flex-wrap items-center gap-3">
           {isLocalReady ? (
             <button
               type="button"
@@ -135,7 +118,7 @@ export function BrandHero({
           </button>
           <span
             aria-live="polite"
-            className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/55"
+            className="font-mono text-[11px] lowercase tracking-[0.06em] text-white/50"
           >
             {primaryHint}
           </span>
