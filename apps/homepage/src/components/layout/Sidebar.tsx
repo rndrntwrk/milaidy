@@ -132,7 +132,7 @@ export function Sidebar({
 function NavGroup({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div>
-      <div className="mb-1.5 px-2 font-mono text-[10px] lowercase tracking-[0.18em] text-white/40">
+      <div className="mb-1.5 px-2 font-mono text-[10px] lowercase tracking-[0.18em] text-white/55">
         {title}
       </div>
       <div className="flex flex-col gap-0.5">{children}</div>
@@ -157,13 +157,13 @@ function NavItem({
     return (
       <div
         aria-disabled="true"
-        className="flex items-center justify-between rounded-md px-2 py-1.5 text-[13px] text-white/45"
+        className="flex items-center justify-between rounded-md px-2 py-1.5 text-[13px] text-white/55"
       >
         <span>{label}</span>
         {typeof count === "number" ? (
-          <span className="font-mono text-[10px] text-white/35">{count}</span>
+          <span className="font-mono text-[10px] text-white/45">{count}</span>
         ) : (
-          <span className="font-mono text-[9px] lowercase tracking-wider text-white/35">
+          <span className="font-mono text-[9px] lowercase tracking-wider text-white/40">
             soon
           </span>
         )}
@@ -179,8 +179,8 @@ function NavItem({
       className={({ isActive }) =>
         `group flex items-center justify-between rounded-md px-2 py-1.5 text-[13px] transition ${
           isActive
-            ? "bg-white/[0.06] text-brand"
-            : "text-white/70 hover:bg-white/[0.04] hover:text-white"
+            ? "bg-white/[0.08] text-brand shadow-[inset_2px_0_0_var(--color-gold-500)]"
+            : "text-white/80 hover:bg-white/[0.04] hover:text-white"
         }`
       }
     >
