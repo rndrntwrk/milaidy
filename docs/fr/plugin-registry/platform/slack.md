@@ -157,6 +157,6 @@ Par défaut, les réponses sont publiées sous forme de réponses en fil de disc
 ## Associé
 </div>
 
-- [Plugin Discord](/fr/plugin-registry/platform/discord) — Intégration du bot Discord
-- [Plugin Telegram](/fr/plugin-registry/platform/telegram) — Intégration du bot Telegram
+- [Plugin Discord](/plugin-registry/platform/discord) — Intégration du bot Discord
+- [Plugin Telegram](/plugin-registry/platform/telegram) — Intégration du bot Telegram
 - [Guide des connecteurs](/fr/guides/connectors) — Documentation générale des connecteurs

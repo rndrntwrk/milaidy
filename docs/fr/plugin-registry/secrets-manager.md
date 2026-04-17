@@ -150,6 +150,6 @@ La valeur réelle du secret n'est jamais journalisée.
 ## Associé
 </div>
 
-- [Plugin SQL](/fr/plugin-registry/sql) — Backend de base de données pour le stockage chiffré des secrets
+- [Plugin SQL](/plugin-registry/sql) — Backend de base de données pour le stockage chiffré des secrets
 - [Guide de Configuration](/fr/configuration) — Référence complète de configuration
 - [Architecture des Plugins](/fr/plugins/architecture) — Comment les secrets sont injectés au démarrage

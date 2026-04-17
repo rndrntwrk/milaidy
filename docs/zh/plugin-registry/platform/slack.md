@@ -157,6 +157,6 @@ AgentRuntime 处理消息
 ## 相关
 </div>
 
-- [Discord 插件](/zh/plugin-registry/platform/discord) — Discord 机器人集成
-- [Telegram 插件](/zh/plugin-registry/platform/telegram) — Telegram 机器人集成
+- [Discord 插件](/plugin-registry/platform/discord) — Discord 机器人集成
+- [Telegram 插件](/plugin-registry/platform/telegram) — Telegram 机器人集成
 - [连接器指南](/zh/guides/connectors) — 连接器通用文档

@@ -150,6 +150,6 @@ El valor real del secreto nunca se registra.
 ## Relacionado
 </div>
 
-- [Plugin SQL](/es/plugin-registry/sql) — Backend de base de datos para almacenamiento cifrado de secretos
+- [Plugin SQL](/plugin-registry/sql) — Backend de base de datos para almacenamiento cifrado de secretos
 - [Guía de Configuración](/es/configuration) — Referencia completa de configuración
 - [Arquitectura de Plugins](/es/plugins/architecture) — Cómo se inyectan los secretos al inicio

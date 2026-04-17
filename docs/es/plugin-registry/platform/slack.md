@@ -157,6 +157,6 @@ Por defecto, las respuestas se publican como respuestas en hilos para mantener l
 ## Relacionado
 </div>
 
-- [Plugin de Discord](/es/plugin-registry/platform/discord) — Integración con bot de Discord
-- [Plugin de Telegram](/es/plugin-registry/platform/telegram) — Integración con bot de Telegram
+- [Plugin de Discord](/plugin-registry/platform/discord) — Integración con bot de Discord
+- [Plugin de Telegram](/plugin-registry/platform/telegram) — Integración con bot de Telegram
 - [Guía de conectores](/es/guides/connectors) — Documentación general de conectores
