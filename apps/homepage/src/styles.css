@@ -21,6 +21,15 @@
   --font-mono: "JetBrains Mono", "Cascadia Code", "Courier New", monospace;
   --font-display: "DM Sans", "Helvetica Neue", Arial, sans-serif;
 
+  /* ── Dashboard redesign (2026-04-16): Binance gold, one accent ──
+     All gold tints derive from --accent (#f0b90b, already in base.css).
+     No competing indigo/sky/violet accents. */
+  --color-gold-300: #f7cf4a;
+  --color-gold-500: #f0b90b;
+  --color-gold-600: #d8a000;
+  --color-gold-700: #b07c00;
+  --color-gold-900: #6b4b00;
+
   /* Map to shared tokens */
   --color-dark: var(--bg);
   --color-dark-secondary: var(--bg-elevated);
@@ -44,6 +53,46 @@
   --color-status-paused: var(--warn);
   --color-status-stopped: var(--danger);
   --color-status-provisioning: var(--warn);
+}
+
+/* ── Dashboard gold gradients & glows ───────────────────────────────
+   Used sparingly: primary CTA, Milady APP tile, brand seal. */
+:root {
+  --gold-gradient-primary: linear-gradient(
+    135deg,
+    #f0b90b 0%,
+    #f7cf4a 55%,
+    #ffd966 100%
+  );
+  --gold-gradient-seal: radial-gradient(
+    circle at 30% 30%,
+    #ffd966 0%,
+    #f0b90b 40%,
+    #8a5a00 100%
+  );
+  --gold-glow: 0 0 48px rgba(240, 185, 11, 0.22);
+  --gold-glow-soft: 0 0 32px rgba(240, 185, 11, 0.14);
+}
+
+/* ── Sidebar breathing avatar (used in MiladyAppTile) ─────────────── */
+@keyframes sol-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+}
+
+.sol-breathe {
+  animation: sol-breathe 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sol-breathe {
+    animation: none;
+  }
 }
 
 html {
