@@ -63,6 +63,7 @@ export const ELIZA_BUILD_STEPS = [
 ];
 
 const OPTIONAL_ELIZA_PLUGIN_FALLBACK_TAG = "alpha";
+const ELIZA_INSTALL_RETRY_DELAY_MS = 3_000;
 
 // Plugins referenced as @elizaos/* workspace:* inside the eliza workspace but
 // provided by a CI stub in the root repo rather than published on npm. Before
@@ -1259,11 +1260,7 @@ async function ensureElizaDependencies(elizaRoot) {
     `[setup-upstreams] Installing eliza workspace dependencies in ${toDisplayPath(elizaRoot)}`,
   );
   await withTemporaryOptionalElizaPluginWorkspaces(elizaRoot, async () => {
-    const installArgs = getElizaInstallArgs();
-    await runCommand("bun", installArgs, {
-      cwd: elizaRoot,
-      label: "bun install (eliza)",
-    });
+    await runElizaInstallWithRetry(elizaRoot);
     await bootstrapBundledBunInstall(elizaRoot);
   });
 }
@@ -1272,6 +1269,37 @@ export function getElizaInstallArgs(env = process.env) {
   return env.MILADY_NO_VISION_DEPS === "1"
     ? ["install", "--ignore-scripts"]
     : ["install"];
+}
+
+export async function runElizaInstallWithRetry(
+  elizaRoot,
+  {
+    env = process.env,
+    retryDelayMs = ELIZA_INSTALL_RETRY_DELAY_MS,
+    runCommandImpl = runCommand,
+    wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  } = {},
+) {
+  const installArgs = getElizaInstallArgs(env);
+
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      await runCommandImpl("bun", installArgs, {
+        cwd: elizaRoot,
+        label: "bun install (eliza)",
+      });
+      return;
+    } catch (error) {
+      if (attempt >= 2) {
+        throw error;
+      }
+
+      console.warn(
+        `[setup-upstreams] bun install (eliza) failed on attempt ${attempt}; retrying once after ${retryDelayMs}ms to recover from transient dependency fetch errors`,
+      );
+      await wait(retryDelayMs);
+    }
+  }
 }
 
 export async function bootstrapBundledBunInstall(

@@ -12,6 +12,7 @@ import {
   findInstalledPackageDir,
   getElizaInstallArgs,
   getTemporaryElizaWorkspaceEntries,
+  runElizaInstallWithRetry,
 } from "./setup-upstreams.mjs";
 
 const tempDirs: string[] = [];
@@ -217,6 +218,76 @@ describe("bootstrapBundledBunInstall", () => {
         runCommandImpl: vi.fn(),
       }),
     ).rejects.toThrow("node_modules/bun/install.js");
+  });
+});
+
+describe("runElizaInstallWithRetry", () => {
+  it("retries bun install once after a transient failure", async () => {
+    const runCommandImpl = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new Error("bun install (eliza) exited with code 1"),
+      )
+      .mockResolvedValueOnce(undefined);
+    const wait = vi.fn().mockResolvedValue(undefined);
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    await expect(
+      runElizaInstallWithRetry("/repo/eliza", {
+        env: { MILADY_NO_VISION_DEPS: "1" },
+        runCommandImpl,
+        wait,
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(runCommandImpl).toHaveBeenNthCalledWith(
+      1,
+      "bun",
+      ["install", "--ignore-scripts"],
+      {
+        cwd: "/repo/eliza",
+        label: "bun install (eliza)",
+      },
+    );
+    expect(runCommandImpl).toHaveBeenNthCalledWith(
+      2,
+      "bun",
+      ["install", "--ignore-scripts"],
+      {
+        cwd: "/repo/eliza",
+        label: "bun install (eliza)",
+      },
+    );
+    expect(wait).toHaveBeenCalledWith(3000);
+    expect(warnSpy).toHaveBeenCalledWith(
+      "[setup-upstreams] bun install (eliza) failed on attempt 1; retrying once after 3000ms to recover from transient dependency fetch errors",
+    );
+
+    warnSpy.mockRestore();
+  });
+
+  it("rethrows the final install failure after the retry", async () => {
+    const secondError = new Error("bun install (eliza) exited with code 1");
+    const runCommandImpl = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new Error("bun install (eliza) exited with code 1"),
+      )
+      .mockRejectedValueOnce(secondError);
+    const wait = vi.fn().mockResolvedValue(undefined);
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    await expect(
+      runElizaInstallWithRetry("/repo/eliza", {
+        runCommandImpl,
+        wait,
+      }),
+    ).rejects.toBe(secondError);
+
+    expect(runCommandImpl).toHaveBeenCalledTimes(2);
+    expect(wait).toHaveBeenCalledTimes(1);
+
+    warnSpy.mockRestore();
   });
 });
 
