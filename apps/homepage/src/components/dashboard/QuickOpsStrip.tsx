@@ -1,9 +1,6 @@
 import { useState } from "react";
 import { releaseData } from "../../generated/release-data";
 
-const DOCS_URL = "/docs";
-const GITHUB_URL = "https://github.com/milady-ai/milady";
-
 export interface QuickOpsStripProps {
   onCopy: (command: string, label: string) => void;
 }
@@ -36,7 +33,7 @@ export function QuickOpsStrip({ onCopy }: QuickOpsStripProps) {
         </span>
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-[1.4fr_1fr_0.8fr]">
+      <div className="grid gap-3 lg:grid-cols-[1.4fr_1fr]">
         {/* Install command */}
         <div className="rounded-lg border border-border bg-[#0a0a0d] p-4">
           <div className="mb-2.5 flex items-center justify-between">
@@ -79,7 +76,7 @@ export function QuickOpsStrip({ onCopy }: QuickOpsStripProps) {
           <div className="flex flex-col gap-1.5">
             {downloads.length === 0 ? (
               <span className="text-[12px] text-white/40">
-                No desktop builds available yet.
+                no desktop builds available yet.
               </span>
             ) : (
               downloads.map((download) => (
@@ -102,34 +99,6 @@ export function QuickOpsStrip({ onCopy }: QuickOpsStripProps) {
           </div>
         </div>
 
-        {/* Docs + GitHub */}
-        <div className="rounded-lg border border-border bg-[#0a0a0d] p-4">
-          <div className="mb-2.5 font-mono text-[11px] lowercase tracking-[0.12em] text-white/45">
-            more
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <a
-              href={DOCS_URL}
-              className="flex items-center justify-between rounded-md border border-border bg-transparent px-3 py-2 text-[12px] text-white transition hover:border-white/25 hover:bg-white/[0.03]"
-            >
-              <span>docs</span>
-              <span aria-hidden="true" className="text-white/40">
-                →
-              </span>
-            </a>
-            <a
-              href={GITHUB_URL}
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center justify-between rounded-md border border-border bg-transparent px-3 py-2 text-[12px] text-white transition hover:border-white/25 hover:bg-white/[0.03]"
-            >
-              <span>github</span>
-              <span aria-hidden="true" className="text-white/40">
-                ↗
-              </span>
-            </a>
-          </div>
-        </div>
       </div>
     </section>
   );

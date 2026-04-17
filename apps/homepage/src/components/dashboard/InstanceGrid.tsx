@@ -58,81 +58,91 @@ export function InstanceGrid({
     [filter, agents],
   );
 
+  // When there are no runtimes yet, hide the filter/refresh/new-agent
+  // cluster entirely — those controls are irrelevant before the first
+  // runtime appears, and showing them adds a second row of visual noise
+  // above an already-quiet empty banner.
+  const showControls = agents.length > 0 || loading;
+
   return (
     <section aria-labelledby="runtimes-heading" className="space-y-5">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <h2
           id="runtimes-heading"
-          className="text-[17px] font-semibold tracking-tight text-white/90"
+          className="text-[15px] font-medium tracking-tight text-white/80"
         >
           runtimes
-          <span className="ml-2 font-mono text-[11px] font-normal text-white/35">
-            {counts.all}
-          </span>
+          {counts.all > 0 ? (
+            <span className="ml-2 font-mono text-[11px] font-normal text-white/35">
+              {counts.all}
+            </span>
+          ) : null}
         </h2>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <FilterChips
-            ariaLabel="Filter runtimes by source"
-            value={filter}
-            onChange={setFilter}
-            options={[
-              { value: "all", label: "all", count: counts.all },
-              { value: "local", label: "local", count: counts.local },
-              { value: "cloud", label: "cloud", count: counts.cloud },
-              { value: "remote", label: "remote", count: counts.remote },
-            ]}
-          />
-          {onProvisionAgent ? (
+        {showControls ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <FilterChips
+              ariaLabel="Filter runtimes by source"
+              value={filter}
+              onChange={setFilter}
+              options={[
+                { value: "all", label: "all", count: counts.all },
+                { value: "local", label: "local", count: counts.local },
+                { value: "cloud", label: "cloud", count: counts.cloud },
+                { value: "remote", label: "remote", count: counts.remote },
+              ]}
+            />
+            {onProvisionAgent ? (
+              <button
+                type="button"
+                onClick={onProvisionAgent}
+                disabled={!canProvision}
+                aria-label={
+                  canProvision
+                    ? "Create new cloud agent"
+                    : "Sign in to cloud to create an agent"
+                }
+                title={
+                  canProvision
+                    ? "Create a new cloud agent"
+                    : "Sign in to cloud to create an agent"
+                }
+                className="group/new inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-white/[0.02] px-3 font-mono text-[11px] lowercase tracking-[0.06em] text-white/70 transition duration-200 hover:border-brand/40 hover:bg-brand/[0.05] hover:text-brand active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <span
+                  aria-hidden="true"
+                  className="inline-block transition duration-200 group-hover/new:rotate-90"
+                >
+                  +
+                </span>
+                <span>new agent</span>
+              </button>
+            ) : null}
             <button
               type="button"
-              onClick={onProvisionAgent}
-              disabled={!canProvision}
-              aria-label={
-                canProvision
-                  ? "Create new cloud agent"
-                  : "Sign in to cloud to create an agent"
-              }
-              title={
-                canProvision
-                  ? "Create a new cloud agent"
-                  : "Sign in to cloud to create an agent"
-              }
-              className="group/new inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-white/[0.02] px-3 font-mono text-[11px] lowercase tracking-[0.06em] text-white/70 transition duration-200 hover:border-brand/40 hover:bg-brand/[0.05] hover:text-brand active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed"
+              onClick={onRefresh}
+              disabled={isRefreshing}
+              aria-label="Refresh runtimes"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border text-white/70 transition hover:border-white/25 hover:text-white disabled:opacity-50"
             >
-              <span
+              <svg
+                viewBox="0 0 24 24"
+                width="14"
+                height="14"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
                 aria-hidden="true"
-                className="inline-block transition duration-200 group-hover/new:rotate-90"
+                className={isRefreshing ? "animate-spin" : ""}
               >
-                +
-              </span>
-              <span>new agent</span>
+                <polyline points="23 4 23 10 17 10" />
+                <path d="M20.49 15a9 9 0 11-2.12-9.36L23 10" />
+              </svg>
             </button>
-          ) : null}
-          <button
-            type="button"
-            onClick={onRefresh}
-            disabled={isRefreshing}
-            aria-label="Refresh runtimes"
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border text-white/70 transition hover:border-white/25 hover:text-white disabled:opacity-50"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              width="14"
-              height="14"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-              className={isRefreshing ? "animate-spin" : ""}
-            >
-              <polyline points="23 4 23 10 17 10" />
-              <path d="M20.49 15a9 9 0 11-2.12-9.36L23 10" />
-            </svg>
-          </button>
-        </div>
+          </div>
+        ) : null}
       </header>
 
       {loading ? (
