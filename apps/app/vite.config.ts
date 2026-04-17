@@ -381,11 +381,9 @@ function resolveManualChunk(id: string): string | undefined {
       return "vendor-vrm";
     }
 
-    if (normalizedId.includes("/three/examples/")) {
-      return "vendor-three-extras";
-    }
-
-    if (pathIncludesAny(normalizedId, ["/three/build/", "/three/src/"])) {
+    // Collapse all three.js code into one chunk to avoid cross-chunk TDZ
+    // init ordering bugs with WebGPU/TSL enums (see fix/three-chunk-tdz).
+    if (normalizedId.includes("/three/")) {
       return "vendor-three";
     }
   }
