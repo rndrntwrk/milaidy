@@ -13,7 +13,9 @@ test("apps view can route into internal tool pages and survive a reload", async 
   await expect(page.getByTestId("apps-catalog-grid")).toBeVisible({
     timeout: 30_000,
   });
-  const pluginViewerButton = page.getByRole("button", { name: "Plugin Viewer" });
+  const pluginViewerButton = page.getByRole("button", {
+    name: "Plugin Viewer",
+  });
   await expect(pluginViewerButton).toBeVisible({ timeout: 30_000 });
   await pluginViewerButton.click();
   await expect(page).toHaveURL(/\/plugins$/);
