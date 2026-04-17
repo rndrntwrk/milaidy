@@ -35,7 +35,7 @@ export function QuickOpsStrip({ onCopy }: QuickOpsStripProps) {
 
       <div className="grid gap-3 lg:grid-cols-[1.4fr_1fr]">
         {/* Install command */}
-        <div className="min-w-0 rounded-lg border border-border bg-[#0a0a0d] p-4">
+        <div className="min-w-0 rounded-lg border border-border bg-[#0a0a0d] p-3.5 sm:p-4">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <div className="font-mono text-[11px] lowercase tracking-[0.12em] text-white/45">
               one-line
@@ -61,7 +61,7 @@ export function QuickOpsStrip({ onCopy }: QuickOpsStripProps) {
               type="button"
               onClick={() => onCopy(command, label)}
               aria-label={`Copy ${label} install command`}
-              className="shrink-0 rounded border border-border px-2 py-0.5 font-mono text-[10px] lowercase tracking-wider text-white/65 transition hover:border-white/25 hover:text-white"
+              className="shrink-0 rounded-md border border-border px-2.5 py-1.5 font-mono text-[10px] lowercase tracking-wider text-white/65 transition hover:border-white/25 hover:text-white"
             >
               copy
             </button>
@@ -69,7 +69,7 @@ export function QuickOpsStrip({ onCopy }: QuickOpsStripProps) {
         </div>
 
         {/* Downloads */}
-        <div className="min-w-0 rounded-lg border border-border bg-[#0a0a0d] p-4">
+        <div className="min-w-0 rounded-lg border border-border bg-[#0a0a0d] p-3.5 sm:p-4">
           <div className="mb-3 font-mono text-[11px] lowercase tracking-[0.12em] text-white/45">
             desktop
           </div>
@@ -85,7 +85,7 @@ export function QuickOpsStrip({ onCopy }: QuickOpsStripProps) {
                   href={download.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex items-center justify-between gap-2 rounded-md border border-border bg-transparent px-3 py-2 text-[12px] text-white transition hover:border-white/25 hover:bg-white/[0.03]"
+                  className="flex min-h-[44px] items-center justify-between gap-2 rounded-md border border-border bg-transparent px-3 py-2.5 text-[12px] text-white transition hover:border-white/25 hover:bg-white/[0.03]"
                 >
                   <span className="min-w-0 flex-1 truncate">
                     {download.label}
@@ -118,7 +118,7 @@ function PlatformToggle({
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`rounded-sm px-2 py-0.5 font-mono text-[10px] lowercase tracking-wider transition ${
+      className={`rounded-sm px-2.5 py-1 font-mono text-[10px] lowercase tracking-wider transition ${
         active ? "bg-brand text-black" : "text-white/50 hover:text-white"
       }`}
     >
