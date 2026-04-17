@@ -164,6 +164,55 @@ export function injectApiBaseIntoHtml(
   ]);
 }
 
+/**
+ * Inject `<base href="...">` as the first child of `<head>` so the document's
+ * relative URL resolution uses `href` as the base instead of the document URL.
+ *
+ * The SPA bundle (apps/app) is built with Vite `base: "./"` for desktop +
+ * mobile compatibility, which emits relative asset URLs like
+ * `<script src="./assets/main.js">`. When that HTML is served at a non-root
+ * URL such as `/broadcast/alice-cam` (no trailing slash), the browser
+ * resolves `./assets/main.js` relative to the document directory — i.e.
+ * `/broadcast/assets/main.js` — but the actual built assets live at
+ * `/assets/*` on the server. Without `<base>`, the SPA bundle 404s and the
+ * page renders blank.
+ *
+ * Injecting `<base href="/">` for broadcast HTML re-anchors all relative
+ * URLs to the document root, so `./assets/main.js` resolves to
+ * `/assets/main.js` regardless of the served path. The base tag is inserted
+ * immediately after the opening `<head>` tag — required by the spec to
+ * affect URLs that appear later in the document (which includes the entire
+ * `<head>` and `<body>`).
+ */
+export function injectBaseHrefIntoHtml(html: Buffer, href: string): Buffer {
+  const trimmed = href.trim();
+  if (!trimmed) return html;
+
+  const headOpenStart = html.indexOf("<head");
+  if (headOpenStart < 0) return html;
+  const headOpenEnd = html.indexOf(">", headOpenStart);
+  if (headOpenEnd < 0) return html;
+
+  // HTML-attribute encode the href so that no caller (or future regression)
+  // can inject extra attributes or markup by passing a string containing
+  // `"`, `<`, `>`, or `&`. Backslash escapes from JSON encoding are NOT
+  // honored by HTML parsers, so JSON.stringify alone is unsafe here.
+  const escaped = trimmed
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+
+  const insertAt = headOpenEnd + 1;
+  const baseTag = Buffer.from(`\n  <base href="${escaped}" />`);
+
+  return Buffer.concat([
+    html.subarray(0, insertAt),
+    baseTag,
+    html.subarray(insertAt),
+  ]);
+}
+
 // ---------------------------------------------------------------------------
 // SPA serving
 // ---------------------------------------------------------------------------
@@ -264,15 +313,29 @@ export function serveStaticUi(
   // Do NOT inject the API token into the public broadcast surface:
   // alice.rndrntwrk.com/broadcast/* is intentionally public and the capture
   // transport now receives its token through injected boot config instead.
+  const isBroadcastPath = isPublicBroadcastUiPath(pathname);
   const cloudToken =
-    isCloudProvisionedContainer() && !isPublicBroadcastUiPath(pathname)
+    isCloudProvisionedContainer() && !isBroadcastPath
       ? resolveApiToken(process.env)
       : null;
-  const html = injectApiBaseIntoHtml(
+  let html = injectApiBaseIntoHtml(
     uiIndexHtml,
     process.env.ELIZA_EXTERNAL_BASE_URL,
     cloudToken ? { apiToken: cloudToken } : undefined,
   );
+
+  // SPA is built with Vite `base: "./"` for Electrobun + Capacitor
+  // compatibility. When served at `/broadcast/:channel` (no trailing slash),
+  // relative asset URLs in the bundled HTML — `<script src="./assets/...">`
+  // and friends — resolve against the document directory and end up at
+  // `/broadcast/assets/...`, which 404s. The actual assets are at `/assets/*`
+  // on the same host, so re-anchor to the root with `<base href="/">` for
+  // broadcast HTML responses. This keeps the desktop / mobile builds (which
+  // need `./` to load from `electrobun://` or `file://`) untouched while
+  // making the same bundled HTML work as a web SPA at a sub-path.
+  if (isBroadcastPath) {
+    html = injectBaseHrefIntoHtml(html, "/");
+  }
 
   sendStaticResponse(
     req,
