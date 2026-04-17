@@ -64,16 +64,14 @@ export function InstanceCard({
       {/* Row 1 — inline meta strip */}
       <header className="flex items-center justify-between gap-3">
         <StatusDot status={agent.status} />
-        <div className="flex items-center gap-3 font-mono text-[10px] uppercase tracking-[0.18em] text-white/45">
+        <div className="flex items-center gap-3 font-mono text-[10px] lowercase tracking-[0.14em] text-white/40">
           <span>{SOURCE_LABEL[agent.source]}</span>
           {uptimeLabel ? (
             <>
               <span aria-hidden="true" className="text-white/20">
                 ·
               </span>
-              <span className="normal-case tracking-[0.12em]">
-                up {uptimeLabel}
-              </span>
+              <span>up {uptimeLabel}</span>
             </>
           ) : null}
         </div>
@@ -106,7 +104,7 @@ export function InstanceCard({
             >
               <path d="M8 5v14l11-7z" />
             </svg>
-            <span>Open</span>
+            <span>open</span>
           </span>
           <span
             aria-hidden="true"

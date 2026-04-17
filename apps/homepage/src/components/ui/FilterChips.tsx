@@ -28,10 +28,10 @@ export function FilterChips<T extends string>({
             type="button"
             aria-pressed={active}
             onClick={() => onChange(option.value)}
-            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.16em] transition active:scale-[0.97] ${
+            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 font-mono text-[11px] lowercase tracking-[0.06em] transition active:scale-[0.97] ${
               active
-                ? "bg-brand text-black shadow-[inset_0_0_0_1px_rgba(255,255,255,0.18),0_6px_14px_-6px_rgba(240,185,11,0.55)]"
-                : "text-white/60 hover:text-white"
+                ? "bg-brand text-black shadow-[inset_0_0_0_1px_rgba(255,255,255,0.18)]"
+                : "text-white/55 hover:text-white"
             }`}
           >
             <span>{option.label}</span>

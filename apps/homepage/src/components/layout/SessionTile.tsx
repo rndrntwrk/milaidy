@@ -23,10 +23,10 @@ export function SessionTile({
           }`}
         />
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[12px] font-medium text-white">
+          <div className="truncate text-[12px] font-medium text-white/90">
             {isAuthenticated ? "cloud user" : "not signed in"}
           </div>
-          <div className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.12em] text-white/45">
+          <div className="mt-0.5 font-mono text-[10px] lowercase tracking-[0.08em] text-white/45">
             {isAuthenticated
               ? "cloud: connected"
               : isSigningIn
@@ -42,7 +42,7 @@ export function SessionTile({
             onClick={signOut}
             className="w-full rounded-md border border-border px-2.5 py-1.5 text-[11px] text-white/60 transition hover:border-white/20 hover:text-white/90 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-white/30"
           >
-            Sign out
+            sign out
           </button>
         ) : (
           <button
@@ -50,7 +50,7 @@ export function SessionTile({
             onClick={onSignIn}
             className="w-full rounded-md bg-brand px-2.5 py-1.5 text-[11px] font-medium text-black transition duration-200 hover:bg-[var(--color-gold-300)] active:scale-[0.98]"
           >
-            Sign in to cloud
+            sign in to cloud
           </button>
         )}
       </div>

@@ -24,15 +24,15 @@ export function QuickOpsStrip({ onCopy }: QuickOpsStripProps) {
 
   return (
     <section aria-labelledby="quickops-heading" className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between border-b border-border/60 pb-3">
         <h2
           id="quickops-heading"
-          className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/40"
+          className="font-mono text-[11px] lowercase tracking-[0.14em] text-white/45"
         >
-          get started
+          install
         </h2>
-        <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/30">
-          {releaseData.release.publishedAtLabel}
+        <span className="font-mono text-[10px] lowercase tracking-[0.08em] text-white/30">
+          released · {releaseData.release.publishedAtLabel.toLowerCase()}
         </span>
       </div>
 
@@ -40,8 +40,8 @@ export function QuickOpsStrip({ onCopy }: QuickOpsStripProps) {
         {/* Install command */}
         <div className="rounded-lg border border-border bg-[#0a0a0d] p-4">
           <div className="mb-2.5 flex items-center justify-between">
-            <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-white/50">
-              install
+            <div className="font-mono text-[11px] lowercase tracking-[0.12em] text-white/45">
+              one-line
             </div>
             <div className="inline-flex items-center gap-0.5 rounded-md border border-border p-0.5">
               <PlatformToggle
@@ -64,7 +64,7 @@ export function QuickOpsStrip({ onCopy }: QuickOpsStripProps) {
               type="button"
               onClick={() => onCopy(command, label)}
               aria-label={`Copy ${label} install command`}
-              className="shrink-0 rounded border border-border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-white/70 transition hover:border-white/25 hover:text-white"
+              className="shrink-0 rounded border border-border px-2 py-0.5 font-mono text-[10px] lowercase tracking-wider text-white/65 transition hover:border-white/25 hover:text-white"
             >
               copy
             </button>
@@ -73,8 +73,8 @@ export function QuickOpsStrip({ onCopy }: QuickOpsStripProps) {
 
         {/* Downloads */}
         <div className="rounded-lg border border-border bg-[#0a0a0d] p-4">
-          <div className="mb-2.5 font-mono text-[11px] uppercase tracking-[0.18em] text-white/50">
-            download
+          <div className="mb-2.5 font-mono text-[11px] lowercase tracking-[0.12em] text-white/45">
+            desktop
           </div>
           <div className="flex flex-col gap-1.5">
             {downloads.length === 0 ? (
@@ -104,15 +104,15 @@ export function QuickOpsStrip({ onCopy }: QuickOpsStripProps) {
 
         {/* Docs + GitHub */}
         <div className="rounded-lg border border-border bg-[#0a0a0d] p-4">
-          <div className="mb-2.5 font-mono text-[11px] uppercase tracking-[0.18em] text-white/50">
-            resources
+          <div className="mb-2.5 font-mono text-[11px] lowercase tracking-[0.12em] text-white/45">
+            more
           </div>
           <div className="flex flex-col gap-1.5">
             <a
               href={DOCS_URL}
               className="flex items-center justify-between rounded-md border border-border bg-transparent px-3 py-2 text-[12px] text-white transition hover:border-white/25 hover:bg-white/[0.03]"
             >
-              <span>Docs</span>
+              <span>docs</span>
               <span aria-hidden="true" className="text-white/40">
                 →
               </span>
@@ -123,7 +123,7 @@ export function QuickOpsStrip({ onCopy }: QuickOpsStripProps) {
               rel="noreferrer"
               className="flex items-center justify-between rounded-md border border-border bg-transparent px-3 py-2 text-[12px] text-white transition hover:border-white/25 hover:bg-white/[0.03]"
             >
-              <span>GitHub</span>
+              <span>github</span>
               <span aria-hidden="true" className="text-white/40">
                 ↗
               </span>
@@ -149,7 +149,7 @@ function PlatformToggle({
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`rounded-sm px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider transition ${
+      className={`rounded-sm px-2 py-0.5 font-mono text-[10px] lowercase tracking-wider transition ${
         active ? "bg-brand text-black" : "text-white/50 hover:text-white"
       }`}
     >

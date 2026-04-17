@@ -60,18 +60,16 @@ export function InstanceGrid({
 
   return (
     <section aria-labelledby="runtimes-heading" className="space-y-5">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/55">
-            control surface
-          </div>
-          <h2
-            id="runtimes-heading"
-            className="mt-2 text-[28px] font-bold tracking-[-0.02em] text-white sm:text-[32px]"
-          >
-            Your runtimes
-          </h2>
-        </div>
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <h2
+          id="runtimes-heading"
+          className="text-[17px] font-semibold tracking-tight text-white/90"
+        >
+          runtimes
+          <span className="ml-2 font-mono text-[11px] font-normal text-white/35">
+            {counts.all}
+          </span>
+        </h2>
 
         <div className="flex flex-wrap items-center gap-2">
           <FilterChips
@@ -100,7 +98,7 @@ export function InstanceGrid({
                   ? "Create a new cloud agent"
                   : "Sign in to cloud to create an agent"
               }
-              className="group/new inline-flex h-8 items-center gap-1.5 rounded-full border border-brand/45 bg-brand/[0.08] px-3 font-mono text-[10px] uppercase tracking-[0.18em] text-brand transition duration-200 hover:border-brand/75 hover:bg-brand/[0.16] hover:shadow-[inset_0_0_0_1px_rgba(240,185,11,0.25)] active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed"
+              className="group/new inline-flex h-8 items-center gap-1.5 rounded-full border border-brand/30 bg-brand/[0.06] px-3 font-mono text-[11px] lowercase tracking-[0.06em] text-brand/90 transition duration-200 hover:border-brand/55 hover:bg-brand/[0.12] hover:text-brand hover:shadow-[inset_0_0_0_1px_rgba(240,185,11,0.18)] active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <span
                 aria-hidden="true"

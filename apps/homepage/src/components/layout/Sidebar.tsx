@@ -93,12 +93,12 @@ export function Sidebar({
 
       {/* Nav groups */}
       <nav className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto">
-        <NavGroup title="Agents">
-          <NavItem to="/dashboard" label="Dashboard" onClick={onClose} />
-          <NavItem to="/agents" label="Agents" onClick={onClose} disabled />
-          <NavItem to="/cloud" label="Cloud" onClick={onClose} disabled />
+        <NavGroup title="agents">
+          <NavItem to="/dashboard" label="dashboard" onClick={onClose} />
+          <NavItem to="/agents" label="agents" onClick={onClose} disabled />
+          <NavItem to="/cloud" label="cloud" onClick={onClose} disabled />
           <NavItemButton
-            label="Attach remote"
+            label="attach remote"
             onClick={() => {
               onClose?.();
               onAttachRemote();
@@ -108,17 +108,17 @@ export function Sidebar({
           />
         </NavGroup>
 
-        <NavGroup title="Account">
-          <NavItem to="/billing" label="Billing" onClick={onClose} disabled />
-          <NavItem to="/settings" label="Settings" onClick={onClose} disabled />
+        <NavGroup title="account">
+          <NavItem to="/billing" label="billing" onClick={onClose} disabled />
+          <NavItem to="/settings" label="settings" onClick={onClose} disabled />
         </NavGroup>
 
-        <NavGroup title="Resources">
-          <NavItem to="/docs" label="Docs" onClick={onClose} />
-          <NavItemExternal href={GITHUB_URL} label="GitHub" />
+        <NavGroup title="resources">
+          <NavItem to="/docs" label="docs" onClick={onClose} />
+          <NavItemExternal href={GITHUB_URL} label="github" />
           <NavItemExternal
             href={releaseData.release.url}
-            label={`Release ${releaseData.release.tagName}`}
+            label={`release ${releaseData.release.tagName}`}
           />
         </NavGroup>
       </nav>
@@ -132,7 +132,7 @@ export function Sidebar({
 function NavGroup({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div>
-      <div className="mb-1.5 px-2 font-mono text-[10px] uppercase tracking-[0.18em] text-white/45">
+      <div className="mb-1.5 px-2 font-mono text-[10px] lowercase tracking-[0.18em] text-white/40">
         {title}
       </div>
       <div className="flex flex-col gap-0.5">{children}</div>
@@ -163,7 +163,7 @@ function NavItem({
         {typeof count === "number" ? (
           <span className="font-mono text-[10px] text-white/35">{count}</span>
         ) : (
-          <span className="font-mono text-[9px] uppercase tracking-wider text-white/35">
+          <span className="font-mono text-[9px] lowercase tracking-wider text-white/35">
             soon
           </span>
         )}
