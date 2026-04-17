@@ -260,11 +260,14 @@ export function serveStaticUi(
 
   // When served behind a reverse proxy that rewrites the app under a path prefix,
   // inject the API base so the UI client sends requests to the correct path prefix.
-  // For cloud-provisioned containers, also inject the API token so the browser
-  // client can authenticate without requiring a pairing flow.
-  const cloudToken = isCloudProvisionedContainer()
-    ? resolveApiToken(process.env)
-    : null;
+  //
+  // Do NOT inject the API token into the public broadcast surface:
+  // alice.rndrntwrk.com/broadcast/* is intentionally public and the capture
+  // transport now receives its token through injected boot config instead.
+  const cloudToken =
+    isCloudProvisionedContainer() && !isPublicBroadcastUiPath(pathname)
+      ? resolveApiToken(process.env)
+      : null;
   const html = injectApiBaseIntoHtml(
     uiIndexHtml,
     process.env.ELIZA_EXTERNAL_BASE_URL,
@@ -288,6 +291,10 @@ export function serveStaticUi(
 // ---------------------------------------------------------------------------
 // Route classification
 // ---------------------------------------------------------------------------
+
+export function isPublicBroadcastUiPath(pathname: string): boolean {
+  return /^\/broadcast(?:\/[a-zA-Z0-9-]+)?\/?$/.test(pathname);
+}
 
 export function isAuthProtectedRoute(pathname: string): boolean {
   return (

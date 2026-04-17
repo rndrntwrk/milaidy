@@ -346,6 +346,17 @@ describe("Cloud-provisioned containers bypass local onboarding", () => {
     });
   });
 
+  it("keeps the public broadcast scene route unauthenticated", async () => {
+    const { status, data } = await req(
+      port,
+      "GET",
+      "/api/broadcast/alice-cam/scene",
+    );
+    expect(status).toBe(200);
+    expect(data.ok).toBe(true);
+    expect(data.channel).toBe("alice-cam");
+  });
+
   it("/api/auth/pair stays disabled", async () => {
     const { status, data } = await req(port, "POST", "/api/auth/pair", {
       code: "ABCD-1234",

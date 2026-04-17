@@ -4891,6 +4891,9 @@ async function handleRequest(
     method === "GET" &&
     pathname === "/api/onboarding/status" &&
     isCloudProvisioned;
+  const isPublicBroadcastApiEndpoint =
+    (method === "GET" || method === "HEAD") &&
+    pathname.startsWith("/api/broadcast/");
   const isWhatsAppWebhookEndpoint = pathname === "/api/whatsapp/webhook";
   const isBlueBubblesWebhookEndpoint =
     pathname ===
@@ -5010,6 +5013,7 @@ async function handleRequest(
     !isAuthEndpoint &&
     !isHealthEndpoint &&
     !isCloudOnboardingStatusEndpoint &&
+    !isPublicBroadcastApiEndpoint &&
     !isWhatsAppWebhookEndpoint &&
     !isBlueBubblesWebhookEndpoint &&
     !pathname.startsWith("/api/lifeops/browser/companions/") &&
@@ -5025,6 +5029,7 @@ async function handleRequest(
     !isAuthEndpoint &&
     !isHealthEndpoint &&
     !isCloudOnboardingStatusEndpoint &&
+    !isPublicBroadcastApiEndpoint &&
     !isWhatsAppWebhookEndpoint &&
     !isBlueBubblesWebhookEndpoint &&
     !pathname.startsWith("/api/lifeops/browser/companions/") &&
