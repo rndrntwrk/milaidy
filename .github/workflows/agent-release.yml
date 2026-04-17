@@ -38,6 +38,7 @@ permissions:
   pull-requests: read
   issues: write
   packages: write
+  id-token: write
 
 env:
   BUN_VERSION: "1.3.10"
