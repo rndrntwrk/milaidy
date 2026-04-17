@@ -94,7 +94,7 @@ export function InstanceCard({
         <button
           type="button"
           onClick={onOpen}
-          className="group/btn flex flex-1 items-center justify-between rounded-md bg-brand/90 px-3 py-2 text-[12px] font-semibold text-black transition hover:bg-brand"
+          className="group/btn flex flex-1 items-center justify-between rounded-md bg-brand/90 px-3 py-2 text-[12px] font-semibold text-black transition hover:bg-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand/70"
         >
           <span className="inline-flex items-center gap-1.5">
             <svg
@@ -120,7 +120,7 @@ export function InstanceCard({
           onClick={onCopyUrl}
           aria-label={`Copy ${agent.name} URL`}
           title="Copy URL"
-          className="rounded-md border border-border bg-transparent p-2 text-white/60 transition hover:border-white/25 hover:text-white"
+          className="rounded-md border border-border bg-transparent p-2 text-white/60 transition hover:border-white/25 hover:text-white focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-white/30"
         >
           <svg
             viewBox="0 0 24 24"
@@ -144,7 +144,7 @@ export function InstanceCard({
             aria-label="More actions"
             aria-haspopup="menu"
             aria-expanded={menuOpen}
-            className="rounded-md border border-border bg-transparent p-2 text-white/60 transition hover:border-white/25 hover:text-white"
+            className="rounded-md border border-border bg-transparent p-2 text-white/60 transition hover:border-white/25 hover:text-white focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-white/30"
           >
             <svg
               viewBox="0 0 24 24"

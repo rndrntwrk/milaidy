@@ -32,11 +32,11 @@ export function ConnectionModal({ onSubmit, onClose }: ConnectionModalProps) {
       role="presentation"
     >
       {/* Overlay — click outside to close */}
-      <div
-        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
-        role="none"
+      <button
+        type="button"
+        aria-label="Close attach runtime dialog"
+        className="absolute inset-0 cursor-default bg-black/70 backdrop-blur-sm"
         onClick={onClose}
-        onKeyDown={() => {}}
       />
 
       {/* Modal */}
@@ -135,7 +135,7 @@ export function ConnectionModal({ onSubmit, onClose }: ConnectionModalProps) {
             <button
               type="submit"
               disabled={connectDisabled}
-              className="rounded-md px-5 py-2.5 text-[12px] font-semibold text-black transition hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="rounded-md px-5 py-2.5 text-[12px] font-semibold text-black transition hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand/60"
               style={{
                 background: connectDisabled
                   ? "var(--accent-muted)"
@@ -147,7 +147,7 @@ export function ConnectionModal({ onSubmit, onClose }: ConnectionModalProps) {
             <button
               type="button"
               onClick={onClose}
-              className="rounded-md px-5 py-2.5 text-[12px] text-text-muted transition hover:text-text-light"
+              className="rounded-md px-5 py-2.5 text-[12px] text-text-muted transition hover:text-text-light focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-white/30"
             >
               cancel
             </button>
