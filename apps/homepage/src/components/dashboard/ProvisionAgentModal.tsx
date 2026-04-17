@@ -221,24 +221,24 @@ export function ProvisionAgentModal({
       >
         <form className="space-y-5 p-6" onSubmit={handleSubmit}>
           <div className="space-y-1">
-            <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-brand/80">
+            <div className="font-mono text-[10px] lowercase tracking-[0.18em] text-white/45">
               new cloud agent
             </div>
             <h2
               id="provision-modal-title"
-              className="text-[18px] font-semibold tracking-tight text-white"
+              className="text-[17px] font-semibold tracking-tight text-white/95"
             >
-              Spin up an agent on Milady Cloud.
+              spin up an agent on milady cloud.
             </h2>
             <p className="text-[12px] leading-5 text-text-muted">
-              Takes about 45 seconds. We create the record, provision a sandbox,
+              takes about 45 seconds. we create the record, provision a sandbox,
               and attach it to your dashboard.
             </p>
           </div>
 
           {!isAuthed ? (
             <div className="rounded-md border border-brand/25 bg-brand/[0.06] px-3 py-2 text-[12px] leading-5 text-brand/90">
-              Sign in to Eliza Cloud first. Use the sidebar sign-in button.
+              sign in to eliza cloud first. use the sidebar sign-in button.
             </div>
           ) : null}
 
@@ -246,9 +246,9 @@ export function ProvisionAgentModal({
           <div className="space-y-1.5">
             <label
               htmlFor="provision-name"
-              className="font-mono text-[10px] tracking-wider text-text-subtle"
+              className="font-mono text-[10px] lowercase tracking-wider text-text-subtle"
             >
-              NAME
+              name
             </label>
             <input
               id="provision-name"
@@ -261,7 +261,7 @@ export function ProvisionAgentModal({
               className="w-full h-10 px-3 font-mono text-sm bg-dark border border-border text-text-light placeholder:text-text-muted/50 focus:outline-none focus:border-brand/50 disabled:opacity-60"
             />
             <p className="text-[11px] leading-4 text-text-muted/70">
-              Lowercase, a-z 0-9 and dashes work best.
+              lowercase, a-z 0-9 and dashes work best.
             </p>
           </div>
 
@@ -269,9 +269,9 @@ export function ProvisionAgentModal({
           <div className="space-y-1.5">
             <label
               htmlFor="provision-prompt"
-              className="font-mono text-[10px] tracking-wider text-text-subtle"
+              className="font-mono text-[10px] lowercase tracking-wider text-text-subtle"
             >
-              SYSTEM PROMPT{" "}
+              system prompt{" "}
               <span className="text-text-muted/50">(optional)</span>
             </label>
             <textarea
@@ -298,7 +298,7 @@ export function ProvisionAgentModal({
               }`}
             >
               {phase === "error"
-                ? (error ?? "Something went wrong.")
+                ? (error ?? "something went wrong.")
                 : statusLine}
             </div>
           ) : null}
@@ -331,7 +331,7 @@ export function ProvisionAgentModal({
               {isDone ? "close" : "cancel"}
             </button>
             {isDone ? (
-              <span className="ml-auto font-mono text-[10px] uppercase tracking-[0.18em] text-emerald-300/90">
+              <span className="ml-auto font-mono text-[10px] lowercase tracking-[0.14em] text-emerald-300/80">
                 ready
               </span>
             ) : null}
@@ -347,14 +347,14 @@ function buildStatusLine(
   phase: Phase,
   jobStatus: JobStatus["status"] | null,
 ): string {
-  if (phase === "creating") return "Creating agent record\u2026";
+  if (phase === "creating") return "creating agent record\u2026";
   if (phase === "provisioning") {
     if (jobStatus === "pending")
-      return "Job queued, waiting for a worker\u2026";
-    if (jobStatus === "in_progress") return "Booting container\u2026 (~45s)";
-    if (jobStatus === "completed") return "Wrapping up\u2026";
-    return "Provisioning sandbox\u2026 (~45s)";
+      return "job queued, waiting for a worker\u2026";
+    if (jobStatus === "in_progress") return "booting container\u2026 (~45s)";
+    if (jobStatus === "completed") return "wrapping up\u2026";
+    return "provisioning sandbox\u2026 (~45s)";
   }
-  if (phase === "done") return "Agent is live.";
+  if (phase === "done") return "agent is live.";
   return "";
 }

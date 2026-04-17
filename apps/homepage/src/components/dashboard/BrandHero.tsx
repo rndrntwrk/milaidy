@@ -1,5 +1,3 @@
-import { releaseData } from "../../generated/release-data";
-
 export interface BrandHeroProps {
   /** Whether a local Milady runtime responded to the last health probe. */
   isLocalReady: boolean;
@@ -53,17 +51,11 @@ export function BrandHero({
       />
 
       <div className="relative max-w-[56ch]">
-        <div className="font-mono text-[11px] lowercase tracking-[0.14em] text-white/45">
-          milady
-          <span className="mx-1.5 text-white/25">·</span>
-          <span>{releaseData.release.tagName}</span>
-        </div>
-
-        <h1 className="mt-5 text-[34px] font-semibold leading-[1.08] tracking-[-0.025em] text-white/95 sm:text-[44px] lg:text-[52px]">
+        <h1 className="text-[34px] font-semibold leading-[1.08] tracking-[-0.025em] text-white/95 sm:text-[42px] lg:text-[48px]">
           your agents, in one place.
         </h1>
 
-        <div className="mt-7 flex flex-wrap items-center gap-3">
+        <div className="mt-6 flex flex-wrap items-center gap-3">
           {isLocalReady ? (
             <button
               type="button"
@@ -116,12 +108,14 @@ export function BrandHero({
           >
             attach remote
           </button>
-          <span
-            aria-live="polite"
-            className="font-mono text-[11px] lowercase tracking-[0.06em] text-white/50"
-          >
-            {primaryHint}
-          </span>
+          {isLocalProbing ? (
+            <span
+              aria-live="polite"
+              className="font-mono text-[11px] lowercase tracking-[0.06em] text-white/45"
+            >
+              {primaryHint}
+            </span>
+          ) : null}
         </div>
       </div>
     </section>

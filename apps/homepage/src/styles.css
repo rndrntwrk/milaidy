@@ -64,35 +64,8 @@
     #f7cf4a 55%,
     #ffd966 100%
   );
-  --gold-gradient-seal: radial-gradient(
-    circle at 30% 30%,
-    #ffd966 0%,
-    #f0b90b 40%,
-    #8a5a00 100%
-  );
   --gold-glow: 0 0 48px rgba(240, 185, 11, 0.22);
   --gold-glow-soft: 0 0 32px rgba(240, 185, 11, 0.14);
-}
-
-/* ── Sidebar breathing avatar (used in MiladyAppTile) ─────────────── */
-@keyframes sol-breathe {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.02);
-  }
-}
-
-.sol-breathe {
-  animation: sol-breathe 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .sol-breathe {
-    animation: none;
-  }
 }
 
 html {
@@ -271,34 +244,6 @@ body {
   .skeleton-shimmer {
     animation: none;
     background: rgba(255, 255, 255, 0.06);
-  }
-}
-
-/* Cinematic brand seal — very slow spin + opacity breathe. Fixed size,
-   fixed bottom-right. Decorative only (aria-hidden on the node). */
-@keyframes seal-orbit {
-  0% {
-    transform: rotate(0deg);
-    opacity: 0.22;
-  }
-  50% {
-    opacity: 0.36;
-  }
-  100% {
-    transform: rotate(360deg);
-    opacity: 0.22;
-  }
-}
-
-.seal-orbit {
-  animation: seal-orbit 48s linear infinite;
-  will-change: transform, opacity;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .seal-orbit {
-    animation: none;
-    opacity: 0.3;
   }
 }
 

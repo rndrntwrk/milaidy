@@ -60,17 +60,17 @@ export function ConnectionModal({ onSubmit, onClose }: ConnectionModalProps) {
         >
           {/* Header */}
           <div className="space-y-1">
-            <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-brand/80">
+            <div className="font-mono text-[10px] lowercase tracking-[0.18em] text-white/45">
               attach runtime
             </div>
             <h2
               id="connect-modal-title"
-              className="text-[18px] font-semibold tracking-tight text-white"
+              className="text-[17px] font-semibold tracking-tight text-white/95"
             >
-              Paste any Milady, elizaOS, or agent runtime URL.
+              paste any milady, elizaOS, or agent runtime url.
             </h2>
             <p className="text-[12px] text-text-muted">
-              Attach an existing runtime by URL and an optional access key.
+              attach an existing runtime by url and an optional access key.
             </p>
           </div>
 
@@ -78,15 +78,15 @@ export function ConnectionModal({ onSubmit, onClose }: ConnectionModalProps) {
           <div className="space-y-1.5">
             <label
               htmlFor="connect-name"
-              className="font-mono text-[10px] tracking-wider text-text-subtle"
+              className="font-mono text-[10px] lowercase tracking-wider text-text-subtle"
             >
-              NAME
+              name
             </label>
             <input
               id="connect-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="My Remote Agent"
+              placeholder="my remote agent"
               autoComplete="off"
               className="w-full h-10 px-3 font-mono text-sm bg-dark border border-border text-text-light placeholder:text-text-muted/50 focus:outline-none focus:border-brand/50"
             />
@@ -96,9 +96,9 @@ export function ConnectionModal({ onSubmit, onClose }: ConnectionModalProps) {
           <div className="space-y-1.5">
             <label
               htmlFor="connect-url"
-              className="font-mono text-[10px] tracking-wider text-text-subtle"
+              className="font-mono text-[10px] lowercase tracking-wider text-text-subtle"
             >
-              URL
+              url
             </label>
             <input
               id="connect-url"
@@ -115,9 +115,9 @@ export function ConnectionModal({ onSubmit, onClose }: ConnectionModalProps) {
           <div className="space-y-1.5">
             <label
               htmlFor="connect-token"
-              className="font-mono text-[10px] tracking-wider text-text-subtle"
+              className="font-mono text-[10px] lowercase tracking-wider text-text-subtle"
             >
-              ACCESS KEY <span className="text-text-muted/50">(optional)</span>
+              access key <span className="text-text-muted/50">(optional)</span>
             </label>
             <input
               id="connect-token"

@@ -1,5 +1,11 @@
 import { useAuth } from "../../lib/useAuth";
 
+/**
+ * SessionTile — sidebar footer. De-carded per taste-skill Rule 4
+ * (anti-card overuse): a status line doesn't need a container to earn
+ * its hierarchy, a border-top is enough. Steady-state is a single quiet
+ * row; the sign-in CTA only shows when unauthenticated.
+ */
 export function SessionTile({
   onSignIn,
   isSigningIn = false,
@@ -9,51 +15,47 @@ export function SessionTile({
 }) {
   const { isAuthenticated, signOut } = useAuth();
 
+  const metaLabel = isAuthenticated
+    ? "cloud · connected"
+    : isSigningIn
+      ? "waiting for sign-in"
+      : "cloud · offline";
+
   return (
-    <div className="rounded-lg border border-border bg-black/30 p-3">
-      <div className="flex items-center gap-2.5">
-        <div
+    <div className="border-t border-border pt-3">
+      <div className="flex items-center gap-2.5 px-2">
+        <span
           aria-hidden="true"
-          className={`h-2 w-2 rounded-full ${
+          className={`h-1.5 w-1.5 shrink-0 rounded-full ${
             isAuthenticated
               ? "bg-emerald-400 shadow-[0_0_6px_rgba(16,185,129,0.35)]"
               : isSigningIn
                 ? "bg-brand animate-pulse"
-                : "bg-white/25"
+                : "bg-white/20"
           }`}
         />
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-[12px] font-medium text-white/90">
-            {isAuthenticated ? "cloud user" : "not signed in"}
-          </div>
-          <div className="mt-0.5 font-mono text-[10px] lowercase tracking-[0.08em] text-white/45">
-            {isAuthenticated
-              ? "cloud: connected"
-              : isSigningIn
-                ? "waiting for sign-in"
-                : "cloud: offline"}
-          </div>
-        </div>
-      </div>
-      <div className="mt-2.5">
+        <span className="min-w-0 flex-1 truncate font-mono text-[11px] lowercase tracking-[0.04em] text-white/65">
+          {metaLabel}
+        </span>
         {isAuthenticated ? (
           <button
             type="button"
             onClick={signOut}
-            className="w-full rounded-md border border-border px-2.5 py-1.5 text-[11px] text-white/60 transition hover:border-white/20 hover:text-white/90 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-white/30"
+            className="rounded-md px-1.5 py-0.5 text-[11px] text-white/40 transition hover:text-white/80 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-white/30"
           >
             sign out
           </button>
-        ) : (
-          <button
-            type="button"
-            onClick={onSignIn}
-            className="w-full rounded-md bg-brand px-2.5 py-1.5 text-[11px] font-medium text-black transition duration-200 hover:bg-[var(--color-gold-300)] active:scale-[0.98]"
-          >
-            sign in to cloud
-          </button>
-        )}
+        ) : null}
       </div>
+      {!isAuthenticated ? (
+        <button
+          type="button"
+          onClick={onSignIn}
+          className="mt-2 w-full rounded-md bg-brand/90 px-2.5 py-1.5 text-[11px] font-medium text-black transition duration-200 hover:bg-brand active:scale-[0.98]"
+        >
+          sign in to cloud
+        </button>
+      ) : null}
     </div>
   );
 }
