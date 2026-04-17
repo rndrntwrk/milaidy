@@ -25,7 +25,13 @@ export default scenario({
       name: "request-ios-app-block",
       room: "main",
       text: "Use my iPhone companion to block Instagram and TikTok until 6pm tonight.",
-      responseIncludesAny: ["iphone", "companion", "instagram", "tiktok", "block"],
+      responseIncludesAny: [
+        "iphone",
+        "companion",
+        "instagram",
+        "tiktok",
+        "block",
+      ],
     },
   ],
   finalChecks: [

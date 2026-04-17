@@ -39,7 +39,10 @@ export const greetTestPlugin: Plugin = {
           { name: "{{user1}}", content: { text: "hey there" } },
           {
             name: "{{agent}}",
-            content: { text: "Hello! Great to meet you.", action: "GREET_USER" },
+            content: {
+              text: "Hello! Great to meet you.",
+              action: "GREET_USER",
+            },
           },
         ],
         [

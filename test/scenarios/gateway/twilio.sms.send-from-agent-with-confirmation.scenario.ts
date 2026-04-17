@@ -4,7 +4,13 @@ export default scenario({
   id: "twilio.sms.send-from-agent-with-confirmation",
   title: "Agent sends outbound SMS via Twilio after confirmation",
   domain: "gateway",
-  tags: ["gateway", "twilio", "sms", "confirms-destructive-edge", "not-yet-implemented"],
+  tags: [
+    "gateway",
+    "twilio",
+    "sms",
+    "confirms-destructive-edge",
+    "not-yet-implemented",
+  ],
   description:
     "Agent proposes sending an SMS via Twilio, user confirms, then outbound message is delivered. Requires T9e (Twilio gateway outbound SMS action).",
   isolation: "per-scenario",

@@ -4,7 +4,13 @@ export default scenario({
   id: "bluebubbles.imessage.send-blue",
   title: "Agent sends outbound iMessage (blue bubble) with confirmation",
   domain: "gateway",
-  tags: ["gateway", "imessage", "bluebubbles", "confirms-destructive-edge", "not-yet-implemented"],
+  tags: [
+    "gateway",
+    "imessage",
+    "bluebubbles",
+    "confirms-destructive-edge",
+    "not-yet-implemented",
+  ],
   description:
     "Agent proposes sending an outbound iMessage to an Apple contact (blue bubble); after user confirmation, BlueBubbles delivers it. Requires T5e (BlueBubbles outbound send action).",
   isolation: "per-scenario",

@@ -2,7 +2,8 @@ import { scenario } from "@elizaos/scenario-schema";
 
 export default scenario({
   id: "calendar.defend-time.overlap-refuses",
-  title: "Agent refuses to schedule during a blackout and suggests alternatives",
+  title:
+    "Agent refuses to schedule during a blackout and suggests alternatives",
   domain: "calendar",
   tags: ["lifeops", "calendar", "not-yet-implemented"],
   isolation: "per-scenario",
@@ -30,7 +31,13 @@ export default scenario({
       kind: "message",
       name: "request-during-blackout",
       text: "Schedule a meeting with Alex tomorrow at 10am.",
-      responseIncludesAny: ["blackout", "deep work", "protect", "alternative", "instead"],
+      responseIncludesAny: [
+        "blackout",
+        "deep work",
+        "protect",
+        "alternative",
+        "instead",
+      ],
     },
   ],
   finalChecks: [

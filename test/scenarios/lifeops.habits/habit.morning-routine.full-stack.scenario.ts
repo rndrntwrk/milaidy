@@ -27,13 +27,7 @@ export default scenario({
       kind: "message",
       name: "morning-routine preview",
       text: "Set up my morning routine: brush my teeth, stretch, drink water, and take my vitamins.",
-      responseIncludesAny: [
-        "brush",
-        "stretch",
-        "water",
-        "vitamins",
-        "routine",
-      ],
+      responseIncludesAny: ["brush", "stretch", "water", "vitamins", "routine"],
     },
     {
       kind: "message",

@@ -36,7 +36,8 @@ function asRuntime(value: unknown): AgentRuntime {
 
 export default scenario({
   id: "convo.greeting-dynamic",
-  title: "Convo framework: greeting triggers non-empty response (scripted port)",
+  title:
+    "Convo framework: greeting triggers non-empty response (scripted port)",
   domain: "convo",
   tags: ["smoke", "convo", "greeting"],
   description:

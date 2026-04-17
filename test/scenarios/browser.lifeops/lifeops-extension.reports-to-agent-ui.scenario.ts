@@ -37,7 +37,12 @@ export default scenario({
       name: "extension-status-query",
       room: "main",
       text: "Is the LifeOps browser extension connected and sending data to the agent UI right now?",
-      responseIncludesAny: [/extension/i, /connected/i, /reporting/i, /not.*install/i],
+      responseIncludesAny: [
+        /extension/i,
+        /connected/i,
+        /reporting/i,
+        /not.*install/i,
+      ],
     },
   ],
 

@@ -9,11 +9,7 @@
 
 import { scenario } from "@elizaos/scenario-schema";
 
-const ACCEPTED_REMINDER_ACTIONS = [
-  "CREATE_TASK",
-  "SCHEDULE_FOLLOW_UP",
-  "LIFE",
-];
+const ACCEPTED_REMINDER_ACTIONS = ["CREATE_TASK", "SCHEDULE_FOLLOW_UP", "LIFE"];
 
 export default scenario({
   id: "cross.action-selection.wrong-action-fails",
@@ -50,7 +46,8 @@ export default scenario({
           ACCEPTED_REMINDER_ACTIONS.includes(a.actionName),
         );
         if (!hit) {
-          const fired = turn.actionsCalled.map((a) => a.actionName).join(", ") || "(none)";
+          const fired =
+            turn.actionsCalled.map((a) => a.actionName).join(", ") || "(none)";
           return `Expected one of [${ACCEPTED_REMINDER_ACTIONS.join(", ")}] but got: ${fired}`;
         }
       },

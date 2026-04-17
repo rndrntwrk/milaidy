@@ -34,7 +34,13 @@ export default scenario({
       room: "main",
       text: "No, don't block that. I'll just close the tab.",
       forbiddenActions: ["BLOCK_WEBSITES"],
-      responseIncludesAny: [/ok/i, /sure/i, /understood/i, /won't/i, /no problem/i],
+      responseIncludesAny: [
+        /ok/i,
+        /sure/i,
+        /understood/i,
+        /won't/i,
+        /no problem/i,
+      ],
     },
   ],
   finalChecks: [

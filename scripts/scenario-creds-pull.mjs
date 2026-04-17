@@ -58,14 +58,46 @@ const MAPPING = [
   ["llm / anthropic-api-key", "credential", "MILADY_E2E_ANTHROPIC_API_KEY"],
 
   // Gmail test-owner
-  ["gmail / test-owner / client-id", "credential", "MILADY_E2E_GMAIL_TESTOWNER_CLIENT_ID"],
-  ["gmail / test-owner / client-secret", "credential", "MILADY_E2E_GMAIL_TESTOWNER_CLIENT_SECRET"],
-  ["gmail / test-owner / refresh-token", "credential", "MILADY_E2E_GMAIL_TESTOWNER_REFRESH_TOKEN"],
-  ["gmail / test-owner / address", "value", "MILADY_E2E_GMAIL_TESTOWNER_ADDRESS"],
-  ["gmail / test-agent / client-id", "credential", "MILADY_E2E_GMAIL_TESTAGENT_CLIENT_ID"],
-  ["gmail / test-agent / client-secret", "credential", "MILADY_E2E_GMAIL_TESTAGENT_CLIENT_SECRET"],
-  ["gmail / test-agent / refresh-token", "credential", "MILADY_E2E_GMAIL_TESTAGENT_REFRESH_TOKEN"],
-  ["gmail / test-agent / address", "value", "MILADY_E2E_GMAIL_TESTAGENT_ADDRESS"],
+  [
+    "gmail / test-owner / client-id",
+    "credential",
+    "MILADY_E2E_GMAIL_TESTOWNER_CLIENT_ID",
+  ],
+  [
+    "gmail / test-owner / client-secret",
+    "credential",
+    "MILADY_E2E_GMAIL_TESTOWNER_CLIENT_SECRET",
+  ],
+  [
+    "gmail / test-owner / refresh-token",
+    "credential",
+    "MILADY_E2E_GMAIL_TESTOWNER_REFRESH_TOKEN",
+  ],
+  [
+    "gmail / test-owner / address",
+    "value",
+    "MILADY_E2E_GMAIL_TESTOWNER_ADDRESS",
+  ],
+  [
+    "gmail / test-agent / client-id",
+    "credential",
+    "MILADY_E2E_GMAIL_TESTAGENT_CLIENT_ID",
+  ],
+  [
+    "gmail / test-agent / client-secret",
+    "credential",
+    "MILADY_E2E_GMAIL_TESTAGENT_CLIENT_SECRET",
+  ],
+  [
+    "gmail / test-agent / refresh-token",
+    "credential",
+    "MILADY_E2E_GMAIL_TESTAGENT_REFRESH_TOKEN",
+  ],
+  [
+    "gmail / test-agent / address",
+    "value",
+    "MILADY_E2E_GMAIL_TESTAGENT_ADDRESS",
+  ],
 
   // Discord
   ["discord / bot-token", "credential", "MILADY_E2E_DISCORD_BOT_TOKEN"],
@@ -73,35 +105,75 @@ const MAPPING = [
   ["discord / client-secret", "credential", "MILADY_E2E_DISCORD_CLIENT_SECRET"],
   ["discord / qa-guild-id", "value", "MILADY_E2E_DISCORD_QA_GUILD_ID"],
   ["discord / qa-channel-id", "value", "MILADY_E2E_DISCORD_QA_CHANNEL_ID"],
-  ["discord / user-relay-token", "credential", "MILADY_E2E_DISCORD_USER_RELAY_TOKEN"],
+  [
+    "discord / user-relay-token",
+    "credential",
+    "MILADY_E2E_DISCORD_USER_RELAY_TOKEN",
+  ],
 
   // Telegram
   ["telegram / bot-token", "credential", "MILADY_E2E_TELEGRAM_BOT_TOKEN"],
   ["telegram / app-id", "value", "MILADY_E2E_TELEGRAM_APP_ID"],
   ["telegram / app-hash", "credential", "MILADY_E2E_TELEGRAM_APP_HASH"],
-  ["telegram / userbot-phone-number", "value", "MILADY_E2E_TELEGRAM_USERBOT_PHONE_NUMBER"],
-  ["telegram / userbot-session-string", "credential", "MILADY_E2E_TELEGRAM_USERBOT_SESSION_STRING"],
+  [
+    "telegram / userbot-phone-number",
+    "value",
+    "MILADY_E2E_TELEGRAM_USERBOT_PHONE_NUMBER",
+  ],
+  [
+    "telegram / userbot-session-string",
+    "credential",
+    "MILADY_E2E_TELEGRAM_USERBOT_SESSION_STRING",
+  ],
   ["telegram / chat-id", "value", "MILADY_E2E_TELEGRAM_CHAT_ID"],
 
   // Twitter / X
   ["twitter / client-id", "credential", "MILADY_E2E_TWITTER_CLIENT_ID"],
   ["twitter / client-secret", "credential", "MILADY_E2E_TWITTER_CLIENT_SECRET"],
-  ["twitter / user-refresh-token", "credential", "MILADY_E2E_TWITTER_USER_REFRESH_TOKEN"],
-  ["twitter / friend-refresh-token", "credential", "MILADY_E2E_TWITTER_FRIEND_REFRESH_TOKEN"],
+  [
+    "twitter / user-refresh-token",
+    "credential",
+    "MILADY_E2E_TWITTER_USER_REFRESH_TOKEN",
+  ],
+  [
+    "twitter / friend-refresh-token",
+    "credential",
+    "MILADY_E2E_TWITTER_FRIEND_REFRESH_TOKEN",
+  ],
   ["twitter / user-handle", "value", "MILADY_E2E_TWITTER_USER_HANDLE"],
   ["twitter / friend-handle", "value", "MILADY_E2E_TWITTER_FRIEND_HANDLE"],
 
   // Signal
   ["signal / phone-number", "value", "MILADY_E2E_SIGNAL_PHONE_NUMBER"],
-  ["signal / recipient-phone-number", "value", "MILADY_E2E_SIGNAL_RECIPIENT_PHONE_NUMBER"],
+  [
+    "signal / recipient-phone-number",
+    "value",
+    "MILADY_E2E_SIGNAL_RECIPIENT_PHONE_NUMBER",
+  ],
   ["signal / data-dir", "value", "MILADY_E2E_SIGNAL_DATA_DIR"],
 
   // WhatsApp
   ["whatsapp / access-token", "credential", "MILADY_E2E_WHATSAPP_ACCESS_TOKEN"],
-  ["whatsapp / phone-number-id", "value", "MILADY_E2E_WHATSAPP_PHONE_NUMBER_ID"],
-  ["whatsapp / business-account-id", "value", "MILADY_E2E_WHATSAPP_BUSINESS_ACCOUNT_ID"],
-  ["whatsapp / webhook-verify-token", "credential", "MILADY_E2E_WHATSAPP_WEBHOOK_VERIFY_TOKEN"],
-  ["whatsapp / recipient-phone-number", "value", "MILADY_E2E_WHATSAPP_RECIPIENT_PHONE_NUMBER"],
+  [
+    "whatsapp / phone-number-id",
+    "value",
+    "MILADY_E2E_WHATSAPP_PHONE_NUMBER_ID",
+  ],
+  [
+    "whatsapp / business-account-id",
+    "value",
+    "MILADY_E2E_WHATSAPP_BUSINESS_ACCOUNT_ID",
+  ],
+  [
+    "whatsapp / webhook-verify-token",
+    "credential",
+    "MILADY_E2E_WHATSAPP_WEBHOOK_VERIFY_TOKEN",
+  ],
+  [
+    "whatsapp / recipient-phone-number",
+    "value",
+    "MILADY_E2E_WHATSAPP_RECIPIENT_PHONE_NUMBER",
+  ],
 
   // Twilio
   ["twilio / account-sid", "credential", "MILADY_E2E_TWILIO_ACCOUNT_SID"],
@@ -109,13 +181,21 @@ const MAPPING = [
   ["twilio / api-key-secret", "credential", "MILADY_E2E_TWILIO_API_KEY_SECRET"],
   ["twilio / sms-from-number", "value", "MILADY_E2E_TWILIO_SMS_FROM"],
   ["twilio / voice-from-number", "value", "MILADY_E2E_TWILIO_VOICE_FROM"],
-  ["twilio / messaging-service-sid", "credential", "MILADY_E2E_TWILIO_MESSAGING_SERVICE_SID"],
+  [
+    "twilio / messaging-service-sid",
+    "credential",
+    "MILADY_E2E_TWILIO_MESSAGING_SERVICE_SID",
+  ],
   ["twilio / recipient-number", "value", "MILADY_E2E_TWILIO_RECIPIENT"],
 
   // BlueBubbles
   ["bluebubbles / server-url", "value", "MILADY_E2E_BLUEBUBBLES_SERVER_URL"],
   ["bluebubbles / password", "credential", "MILADY_E2E_BLUEBUBBLES_PASSWORD"],
-  ["bluebubbles / recipient-handle", "value", "MILADY_E2E_BLUEBUBBLES_RECIPIENT_HANDLE"],
+  [
+    "bluebubbles / recipient-handle",
+    "value",
+    "MILADY_E2E_BLUEBUBBLES_RECIPIENT_HANDLE",
+  ],
 
   // Calendly
   ["calendly / access-token", "credential", "MILADY_E2E_CALENDLY_ACCESS_TOKEN"],
@@ -129,7 +209,11 @@ const MAPPING = [
   ["github / template-repo", "value", "MILADY_E2E_GITHUB_TEMPLATE_REPO"],
 
   // 1Password autofill vault
-  ["1password-autofill / service-account-token", "credential", "MILADY_E2E_ONEPASS_SA_TOKEN"],
+  [
+    "1password-autofill / service-account-token",
+    "credential",
+    "MILADY_E2E_ONEPASS_SA_TOKEN",
+  ],
   ["1password-autofill / vault-id", "value", "MILADY_E2E_ONEPASS_VAULT_ID"],
 
   // Eliza Cloud
@@ -151,7 +235,7 @@ function opRead(itemTitle, fieldLabel) {
   const ref = `op://${vault}/${itemTitle}/${fieldLabel}`;
   try {
     return execFileSync("op", ["read", ref], { encoding: "utf8" }).trim();
-  } catch (err) {
+  } catch (_err) {
     return null;
   }
 }
@@ -172,7 +256,7 @@ async function main() {
 
   const lines = [
     "# Generated by scripts/scenario-creds-pull.mjs — do not edit by hand.",
-    "# Source of truth: 1Password vault `" + vault + "`.",
+    `# Source of truth: 1Password vault \`${vault}\`.`,
     `# Generated at: ${new Date().toISOString()}`,
     "",
   ];
@@ -182,7 +266,9 @@ async function main() {
   for (const [itemTitle, fieldLabel, envVarName] of MAPPING) {
     const value = opRead(itemTitle, fieldLabel);
     if (value === null || value.length === 0) {
-      console.warn(`[warn] ${envVarName}: not found (${itemTitle}/${fieldLabel})`);
+      console.warn(
+        `[warn] ${envVarName}: not found (${itemTitle}/${fieldLabel})`,
+      );
       missing += 1;
       continue;
     }
@@ -191,7 +277,7 @@ async function main() {
     pulled += 1;
   }
 
-  await fs.writeFile(outFile, lines.join("\n") + "\n", { mode: 0o600 });
+  await fs.writeFile(outFile, `${lines.join("\n")}\n`, { mode: 0o600 });
   console.log(`\n✅ Wrote ${pulled} env vars to ${outFile}`);
   if (missing > 0) {
     console.log(`⚠️  ${missing} vault items were missing — see warnings above.`);

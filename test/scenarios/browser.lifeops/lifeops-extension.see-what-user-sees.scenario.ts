@@ -37,7 +37,13 @@ export default scenario({
       name: "see-page-query",
       room: "main",
       text: "What am I looking at in my browser right now?",
-      responseIncludesAny: [/page/i, /tab/i, /url/i, /extension/i, /not.*install/i],
+      responseIncludesAny: [
+        /page/i,
+        /tab/i,
+        /url/i,
+        /extension/i,
+        /not.*install/i,
+      ],
     },
   ],
 

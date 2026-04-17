@@ -34,7 +34,12 @@ export default scenario({
       name: "list-upcoming",
       text: "What's coming up this week?",
       expectedActions: ["LIFE"],
-      responseIncludesAny: ["team review", "finalize slides", "slides", "review"],
+      responseIncludesAny: [
+        "team review",
+        "finalize slides",
+        "slides",
+        "review",
+      ],
     },
   ],
   finalChecks: [

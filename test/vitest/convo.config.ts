@@ -23,9 +23,6 @@ export default defineConfig({
     ...(base.test ?? {}),
     testTimeout: 600_000,
     hookTimeout: 300_000,
-    include: [
-      "**/*.convo.test.ts",
-      "**/*.convo.test.tsx",
-    ],
+    include: ["**/*.convo.test.ts", "**/*.convo.test.tsx"],
   },
 });

@@ -434,6 +434,20 @@ export default defineConfig({
           },
         },
         {
+          find: "@elizaos/plugin-telegram/account-auth-service",
+          packageName: "@elizaos/plugin-telegram",
+          options: {
+            fallbackPath: path.join(
+              repoRoot,
+              "eliza",
+              "plugins",
+              "plugin-telegram",
+              "src",
+              "account-auth-service",
+            ),
+          },
+        },
+        {
           find: "@elizaos/plugin-telegram",
           packageName: "@elizaos/plugin-telegram",
           options: {

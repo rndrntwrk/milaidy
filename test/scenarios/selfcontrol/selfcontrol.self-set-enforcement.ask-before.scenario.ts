@@ -27,13 +27,7 @@ export default scenario({
       room: "main",
       text: "I think I need to block some distractions today.",
       forbiddenActions: ["BLOCK_WEBSITES"],
-      responseIncludesAny: [
-        /which/i,
-        /what/i,
-        /how long/i,
-        /confirm/i,
-        /\?/,
-      ],
+      responseIncludesAny: [/which/i, /what/i, /how long/i, /confirm/i, /\?/],
     },
   ],
   finalChecks: [

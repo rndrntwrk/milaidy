@@ -34,7 +34,7 @@ async function walk(dir) {
 
 const paths = await walk(reportDir).catch(() => []);
 if (paths.length === 0) {
-  console.log("## Scenario Matrix\n\nNo reports found under " + reportDir + ".");
+  console.log(`## Scenario Matrix\n\nNo reports found under ${reportDir}.`);
   process.exit(0);
 }
 
@@ -46,7 +46,11 @@ for (const p of paths) {
     const data = JSON.parse(text);
     if (data && typeof data === "object" && Array.isArray(data.scenarios)) {
       matrixReports.push({ path: p, ...data });
-    } else if (data && typeof data === "object" && typeof data.id === "string") {
+    } else if (
+      data &&
+      typeof data === "object" &&
+      typeof data.id === "string"
+    ) {
       scenarioReports.push({ path: p, ...data });
     }
   } catch {
@@ -54,7 +58,14 @@ for (const p of paths) {
   }
 }
 
-let totals = { total: 0, passed: 0, failed: 0, flakyPassed: 0, skipped: 0, costUsd: 0 };
+const totals = {
+  total: 0,
+  passed: 0,
+  failed: 0,
+  flakyPassed: 0,
+  skipped: 0,
+  costUsd: 0,
+};
 for (const m of matrixReports) {
   totals.total += Number(m.totalCount ?? 0);
   totals.passed += Number(m.passedCount ?? 0);

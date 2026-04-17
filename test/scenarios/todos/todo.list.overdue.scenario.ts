@@ -29,7 +29,12 @@ export default scenario({
       name: "list-overdue",
       text: "Anything overdue?",
       expectedActions: ["LIFE"],
-      responseIncludesAny: ["file expense report", "expense", "overdue", "past due"],
+      responseIncludesAny: [
+        "file expense report",
+        "expense",
+        "overdue",
+        "past due",
+      ],
     },
   ],
   finalChecks: [

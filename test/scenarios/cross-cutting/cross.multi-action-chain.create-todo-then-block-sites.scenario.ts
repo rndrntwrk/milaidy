@@ -41,7 +41,8 @@ export default scenario({
           TODO_CREATE_ACTIONS.includes(a.actionName),
         );
         if (!hit) {
-          const fired = turn.actionsCalled.map((a) => a.actionName).join(", ") || "(none)";
+          const fired =
+            turn.actionsCalled.map((a) => a.actionName).join(", ") || "(none)";
           return `Expected one of [${TODO_CREATE_ACTIONS.join(", ")}] but got: ${fired}`;
         }
       },
@@ -56,7 +57,8 @@ export default scenario({
           (a) => a.actionName === "BLOCK_WEBSITES",
         );
         if (!blocked) {
-          const fired = turn.actionsCalled.map((a) => a.actionName).join(", ") || "(none)";
+          const fired =
+            turn.actionsCalled.map((a) => a.actionName).join(", ") || "(none)";
           return `Expected BLOCK_WEBSITES action but got: ${fired}`;
         }
       },

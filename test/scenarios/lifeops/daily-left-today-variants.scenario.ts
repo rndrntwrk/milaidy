@@ -10,7 +10,7 @@ function assertApiBody(options: {
   includesAll?: ReadonlyArray<string>;
   includesAny?: ReadonlyArray<string>;
   excludes?: ReadonlyArray<string>;
-}): (status: number, body: unknown) => string | void {
+}): (status: number, body: unknown) => string | undefined {
   return (_status, body) => {
     const serialized =
       typeof body === "string" ? body : JSON.stringify(body ?? "");

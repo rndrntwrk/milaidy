@@ -4,7 +4,12 @@ export default scenario({
   id: "billing.20-percent-markup-applied",
   title: "Gateway SMS usage is billed with 20% markup",
   domain: "gateway",
-  tags: ["gateway", "billing", "credentials-missing-edge", "not-yet-implemented"],
+  tags: [
+    "gateway",
+    "billing",
+    "credentials-missing-edge",
+    "not-yet-implemented",
+  ],
   description:
     "Agent sends an SMS through the Twilio gateway and the resulting usage charge is recorded with the 20% Eliza Cloud markup. Requires T9d (billing markup) and T9e (Twilio gateway outbound).",
   isolation: "per-scenario",

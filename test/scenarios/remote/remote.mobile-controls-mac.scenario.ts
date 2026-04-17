@@ -4,7 +4,12 @@ export default scenario({
   id: "remote.mobile-controls-mac",
   title: "iOS companion sends input events to Mac",
   domain: "remote",
-  tags: ["remote", "mobile", "cross-platform-inconsistency-edge", "not-yet-implemented"],
+  tags: [
+    "remote",
+    "mobile",
+    "cross-platform-inconsistency-edge",
+    "not-yet-implemented",
+  ],
   description:
     "iOS companion app sends click/keystroke events to the paired Mac agent. Requires T9c iOS remote companion UX plus T9a data plane for input event delivery.",
   isolation: "per-scenario",

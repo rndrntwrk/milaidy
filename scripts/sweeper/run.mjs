@@ -49,7 +49,9 @@ const servicesToRun =
 
 for (const s of servicesToRun) {
   if (!KNOWN_SERVICES.includes(s)) {
-    console.error(`❌ Unknown service: ${s}. Known: ${KNOWN_SERVICES.join(", ")}`);
+    console.error(
+      `❌ Unknown service: ${s}. Known: ${KNOWN_SERVICES.join(", ")}`,
+    );
     process.exit(2);
   }
 }
@@ -65,7 +67,9 @@ for (const svc of servicesToRun) {
     const mod = await import(modulePath);
     const sweepFn = mod.default ?? mod.sweep;
     if (typeof sweepFn !== "function") {
-      console.error(`❌ ${svc}: ${modulePath} does not export a default function`);
+      console.error(
+        `❌ ${svc}: ${modulePath} does not export a default function`,
+      );
       anyHardFailure = true;
       continue;
     }
@@ -82,7 +86,11 @@ for (const svc of servicesToRun) {
     const durationMs = Date.now() - started;
     results.push({ service: svc, status: "ok", ...res, durationMs });
   } catch (err) {
-    if (err && typeof err === "object" && err.name === "NotYetImplementedError") {
+    if (
+      err &&
+      typeof err === "object" &&
+      err.name === "NotYetImplementedError"
+    ) {
       results.push({
         service: svc,
         status: "not-yet-implemented",

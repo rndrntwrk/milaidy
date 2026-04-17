@@ -4,7 +4,13 @@ export default scenario({
   id: "twilio.call.outbound-with-confirmation",
   title: "Agent places outbound Twilio call after confirmation",
   domain: "gateway",
-  tags: ["gateway", "twilio", "call", "confirms-destructive-edge", "not-yet-implemented"],
+  tags: [
+    "gateway",
+    "twilio",
+    "call",
+    "confirms-destructive-edge",
+    "not-yet-implemented",
+  ],
   description:
     "Agent proposes placing a phone call via Twilio, user confirms, then the call is initiated. Requires T9e (Twilio calling gateway outbound + confirmation UX).",
   isolation: "per-scenario",

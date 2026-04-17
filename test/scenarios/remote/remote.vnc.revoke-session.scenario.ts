@@ -25,7 +25,13 @@ export default scenario({
       name: "revoke-vnc",
       room: "main",
       text: "End the remote session now.",
-      responseIncludesAny: ["end", "revoke", "closed", "disconnected", "terminated"],
+      responseIncludesAny: [
+        "end",
+        "revoke",
+        "closed",
+        "disconnected",
+        "terminated",
+      ],
     },
   ],
   finalChecks: [

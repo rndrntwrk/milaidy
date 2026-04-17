@@ -4,7 +4,12 @@ export default scenario({
   id: "telegram-gateway.bot-routes-to-user-agent",
   title: "Telegram gateway bot routes DM to user's agent",
   domain: "gateway",
-  tags: ["gateway", "telegram", "cross-platform-inconsistency-edge", "not-yet-implemented"],
+  tags: [
+    "gateway",
+    "telegram",
+    "cross-platform-inconsistency-edge",
+    "not-yet-implemented",
+  ],
   description:
     "A shared Telegram bot receives a DM and routes it to the specific user's agent. Requires T5c (Telegram gateway bot with per-user routing).",
   isolation: "per-scenario",

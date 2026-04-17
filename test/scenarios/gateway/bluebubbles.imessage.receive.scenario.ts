@@ -4,7 +4,13 @@ export default scenario({
   id: "bluebubbles.imessage.receive",
   title: "Incoming iMessage routes to the agent via BlueBubbles",
   domain: "gateway",
-  tags: ["gateway", "imessage", "bluebubbles", "cross-platform-inconsistency-edge", "not-yet-implemented"],
+  tags: [
+    "gateway",
+    "imessage",
+    "bluebubbles",
+    "cross-platform-inconsistency-edge",
+    "not-yet-implemented",
+  ],
   description:
     "Inbound iMessage hits the BlueBubbles bridge and is delivered to the user's agent. Requires T5e (BlueBubbles iMessage connector).",
   isolation: "per-scenario",

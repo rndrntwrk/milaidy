@@ -59,7 +59,8 @@ export default scenario({
           ACCEPTED_ACTIONS.includes(a.actionName),
         );
         if (!hit) {
-          const fired = turn.actionsCalled.map((a) => a.actionName).join(", ") || "(none)";
+          const fired =
+            turn.actionsCalled.map((a) => a.actionName).join(", ") || "(none)";
           return `Expected one of [${ACCEPTED_ACTIONS.join(", ")}] but got: ${fired}`;
         }
         const blob = extractParamText(hit);

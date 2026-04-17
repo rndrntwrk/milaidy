@@ -42,13 +42,7 @@ export default scenario({
       room: "main",
       text: "Delete all my todos",
       forbiddenActions: ["DELETE_TASK"],
-      responseIncludesAny: [
-        /confirm/i,
-        /sure/i,
-        /really/i,
-        /undone/i,
-        "?",
-      ],
+      responseIncludesAny: [/confirm/i, /sure/i, /really/i, /undone/i, "?"],
     },
     {
       kind: "message",

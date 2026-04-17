@@ -29,7 +29,12 @@ export default scenario({
       kind: "message",
       name: "greeting-prompts-reminder",
       text: "hey",
-      responseIncludesAny: ["vitamins", "take vitamins", "overdue", "still need"],
+      responseIncludesAny: [
+        "vitamins",
+        "take vitamins",
+        "overdue",
+        "still need",
+      ],
     },
   ],
   finalChecks: [

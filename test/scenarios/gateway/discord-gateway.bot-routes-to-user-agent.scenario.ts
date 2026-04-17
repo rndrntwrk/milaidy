@@ -4,7 +4,12 @@ export default scenario({
   id: "discord-gateway.bot-routes-to-user-agent",
   title: "Discord gateway bot routes DM to user's agent",
   domain: "gateway",
-  tags: ["gateway", "discord", "cross-platform-inconsistency-edge", "not-yet-implemented"],
+  tags: [
+    "gateway",
+    "discord",
+    "cross-platform-inconsistency-edge",
+    "not-yet-implemented",
+  ],
   description:
     "A shared Discord bot receives a DM and routes it to the specific user's agent. Requires T5b (Discord gateway bot with per-user routing).",
   isolation: "per-scenario",

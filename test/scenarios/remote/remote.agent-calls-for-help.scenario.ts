@@ -4,7 +4,12 @@ export default scenario({
   id: "remote.agent-calls-for-help",
   title: "Agent escalates to user via phone call when stuck",
   domain: "remote",
-  tags: ["remote", "escalation", "retry-after-failure-edge", "not-yet-implemented"],
+  tags: [
+    "remote",
+    "escalation",
+    "retry-after-failure-edge",
+    "not-yet-implemented",
+  ],
   description:
     "Agent hits a blocking condition and escalates by triggering an outbound call/push to the user. Requires T9a (remote-control data plane) plus T9e (Twilio calling gateway).",
   isolation: "per-scenario",

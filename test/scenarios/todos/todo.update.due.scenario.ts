@@ -29,7 +29,12 @@ export default scenario({
       name: "update-due",
       text: "Push the renew passport todo to tomorrow.",
       expectedActions: ["LIFE"],
-      responseIncludesAny: ["tomorrow", "renew passport", "passport", "rescheduled"],
+      responseIncludesAny: [
+        "tomorrow",
+        "renew passport",
+        "passport",
+        "rescheduled",
+      ],
     },
   ],
   finalChecks: [

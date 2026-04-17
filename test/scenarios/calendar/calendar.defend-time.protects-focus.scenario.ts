@@ -30,7 +30,13 @@ export default scenario({
       kind: "message",
       name: "request-during-focus",
       text: "Add a 30-minute call with Sam tomorrow during my focus block.",
-      responseIncludesAny: ["focus", "protect", "block", "alternative", "prefer"],
+      responseIncludesAny: [
+        "focus",
+        "protect",
+        "block",
+        "alternative",
+        "prefer",
+      ],
     },
   ],
   finalChecks: [

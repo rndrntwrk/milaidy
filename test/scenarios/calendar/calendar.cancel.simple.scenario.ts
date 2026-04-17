@@ -2,7 +2,8 @@ import { scenario } from "@elizaos/scenario-schema";
 
 export default scenario({
   id: "calendar.cancel.simple",
-  title: "Cancel a seeded calendar event with two-turn destructive confirmation",
+  title:
+    "Cancel a seeded calendar event with two-turn destructive confirmation",
   domain: "calendar",
   tags: ["lifeops", "calendar", "destructive-confirmation"],
   isolation: "per-scenario",

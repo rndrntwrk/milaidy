@@ -30,7 +30,12 @@ export default scenario({
       name: "deprioritize",
       text: "Move reorganize closet to low priority.",
       expectedActions: ["LIFE"],
-      responseIncludesAny: ["low priority", "reorganize closet", "closet", "priority"],
+      responseIncludesAny: [
+        "low priority",
+        "reorganize closet",
+        "closet",
+        "priority",
+      ],
     },
   ],
   finalChecks: [

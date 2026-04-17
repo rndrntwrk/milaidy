@@ -40,7 +40,11 @@ export default scenario({
       name: "github-login-request",
       room: "main",
       text: "Log me into GitHub.",
-      responseIncludesAny: [/github/i, /login|log in|sign in/i, /autofill|fill/i],
+      responseIncludesAny: [
+        /github/i,
+        /login|log in|sign in/i,
+        /autofill|fill/i,
+      ],
       assertTurn: (turn) => {
         const hit = turn.actionsCalled.find((a) =>
           AUTOFILL_ACTIONS.includes(a.actionName),

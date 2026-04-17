@@ -39,7 +39,11 @@ export default scenario({
       name: "gmail-login-request",
       room: "main",
       text: "Log me into Gmail.",
-      responseIncludesAny: [/gmail/i, /login|log in|sign in/i, /autofill|fill/i],
+      responseIncludesAny: [
+        /gmail/i,
+        /login|log in|sign in/i,
+        /autofill|fill/i,
+      ],
       assertTurn: (turn) => {
         const hit = turn.actionsCalled.find((a) =>
           AUTOFILL_ACTIONS.includes(a.actionName),

@@ -4,7 +4,7 @@ function assertApiBody(options: {
   includesAll?: ReadonlyArray<string>;
   includesAny?: ReadonlyArray<string>;
   excludes?: ReadonlyArray<string>;
-}): (status: number, body: unknown) => string | void {
+}): (status: number, body: unknown) => string | undefined {
   return (_status, body) => {
     const serialized =
       typeof body === "string" ? body : JSON.stringify(body ?? "");
@@ -158,11 +158,7 @@ export default scenario({
       path: "/api/lifeops/definitions/{{definitionId:Call dentist}}",
       expectedStatus: 200,
       assertResponse: assertApiBody({
-        includesAll: [
-          "totalCompletedCount",
-          "1",
-          "currentOccurrenceStreak",
-        ],
+        includesAll: ["totalCompletedCount", "1", "currentOccurrenceStreak"],
       }),
     },
   ],
