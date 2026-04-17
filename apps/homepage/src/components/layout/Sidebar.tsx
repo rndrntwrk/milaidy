@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { NavLink } from "react-router-dom";
 import { releaseData } from "../../generated/release-data";
 import type { ManagedAgent } from "../../lib/AgentProvider";
 import { resolveHomepageAssetUrl } from "../../lib/asset-url";
@@ -7,30 +6,30 @@ import { SessionTile } from "./SessionTile";
 
 const GITHUB_URL = "https://github.com/milady-ai/milady";
 
+export type LocalRuntimeState = "ready" | "probing" | "offline";
+
 export interface SidebarProps {
   /** All known agents (used for counts). */
   agents: ManagedAgent[];
-  /** First local agent, if any. Drives the Milady APP tile. */
-  localAgent: ManagedAgent | null;
-  /** Fallback URL when there's no local agent. */
-  fallbackLaunchUrl: string;
-  /** Called when user activates the Milady APP tile. */
-  onOpenMiladyApp: (url: string) => void;
+  /** Current state of the local Milady runtime probe. */
+  localState: LocalRuntimeState;
+  /** Called when user activates the open-local row. Smart dispatcher
+   * decides whether to launch, warn, or guide to install. */
+  onOpenLocal: () => void;
   /** Called when user clicks "Attach remote". */
   onAttachRemote: () => void;
   /** Called when user clicks "Sign in to cloud" in session tile. */
   onSignIn: () => void;
   /** Current sign-in poll state (drives session tile dot animation). */
   isSigningIn?: boolean;
-  /** Optional close handler \u2014 present on mobile drawer to dismiss. */
+  /** Optional close handler — present on mobile drawer to dismiss. */
   onClose?: () => void;
 }
 
 export function Sidebar({
   agents,
-  localAgent,
-  fallbackLaunchUrl,
-  onOpenMiladyApp,
+  localState,
+  onOpenLocal,
   onAttachRemote,
   onSignIn,
   isSigningIn,
@@ -83,20 +82,18 @@ export function Sidebar({
         ) : null}
       </div>
 
-      {/* Nav groups */}
-      <nav className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto">
-        <NavGroup title="agents">
+      {/* Nav groups. Kept intentionally thin — items earn their spot by
+          doing something. Former dashboard self-link + SOON placeholders
+          are gone (see wave-h5). */}
+      <nav className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
+        <div className="flex flex-col gap-0.5">
           <OpenLocalRow
-            localAgent={localAgent}
-            fallbackUrl={fallbackLaunchUrl}
-            onOpen={(url) => {
+            state={localState}
+            onClick={() => {
               onClose?.();
-              onOpenMiladyApp(url);
+              onOpenLocal();
             }}
           />
-          <NavItem to="/dashboard" label="dashboard" onClick={onClose} />
-          <NavItem to="/agents" label="agents" onClick={onClose} disabled />
-          <NavItem to="/cloud" label="cloud" onClick={onClose} disabled />
           <NavItemButton
             label="attach remote"
             onClick={() => {
@@ -106,15 +103,10 @@ export function Sidebar({
             prefix="+"
             count={remoteCount > 0 ? remoteCount : undefined}
           />
-        </NavGroup>
-
-        <NavGroup title="account">
-          <NavItem to="/billing" label="billing" onClick={onClose} disabled />
-          <NavItem to="/settings" label="settings" onClick={onClose} disabled />
-        </NavGroup>
+        </div>
 
         <NavGroup title="resources">
-          <NavItem to="/docs" label="docs" onClick={onClose} />
+          <NavItemExternal href="/docs" label="docs" internal />
           <NavItemExternal href={GITHUB_URL} label="github" />
           <NavItemExternal
             href={releaseData.release.url}
@@ -137,70 +129,6 @@ function NavGroup({ title, children }: { title: string; children: ReactNode }) {
       </div>
       <div className="flex flex-col gap-0.5">{children}</div>
     </div>
-  );
-}
-
-function NavItem({
-  to,
-  label,
-  onClick,
-  count,
-  disabled,
-}: {
-  to: string;
-  label: string;
-  onClick?: () => void;
-  count?: number;
-  disabled?: boolean;
-}) {
-  if (disabled) {
-    return (
-      <div
-        aria-disabled="true"
-        className="flex items-center justify-between rounded-md px-2 py-1.5 text-[13px] text-white/55"
-      >
-        <span>{label}</span>
-        {typeof count === "number" ? (
-          <span className="font-mono text-[10px] text-white/45">{count}</span>
-        ) : (
-          <span className="font-mono text-[9px] lowercase tracking-wider text-white/40">
-            soon
-          </span>
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <NavLink
-      to={to}
-      end
-      onClick={onClick}
-      className={({ isActive }) =>
-        `group flex items-center justify-between rounded-md px-2 py-1.5 text-[13px] transition ${
-          isActive
-            ? "bg-white/[0.08] text-brand shadow-[inset_2px_0_0_var(--color-gold-500)]"
-            : "text-white/80 hover:bg-white/[0.04] hover:text-white"
-        }`
-      }
-    >
-      {({ isActive }) => (
-        <>
-          <span className="flex items-center gap-2">
-            <span
-              aria-hidden="true"
-              className={`h-1.5 w-1.5 rounded-full ${
-                isActive ? "bg-brand" : "bg-transparent"
-              }`}
-            />
-            {label}
-          </span>
-          {typeof count === "number" ? (
-            <span className="font-mono text-[10px] text-white/40">{count}</span>
-          ) : null}
-        </>
-      )}
-    </NavLink>
   );
 }
 
@@ -236,60 +164,96 @@ function NavItemButton({
   );
 }
 
-function NavItemExternal({ href, label }: { href: string; label: string }) {
+function NavItemExternal({
+  href,
+  label,
+  internal = false,
+}: {
+  href: string;
+  label: string;
+  /** Same-origin link — no target="_blank", no arrow glyph. */
+  internal?: boolean;
+}) {
   return (
     <a
       href={href}
-      target="_blank"
-      rel="noreferrer"
+      target={internal ? undefined : "_blank"}
+      rel={internal ? undefined : "noreferrer"}
       className="flex items-center justify-between rounded-md px-2 py-1.5 text-[13px] text-white/70 transition hover:bg-white/[0.04] hover:text-white"
     >
       <span>{label}</span>
-      <span aria-hidden="true" className="text-[11px] text-white/30">
-        ↗
-      </span>
+      {internal ? null : (
+        <span aria-hidden="true" className="text-[11px] text-white/30">
+          ↗
+        </span>
+      )}
     </a>
   );
 }
 
 /**
- * OpenLocalRow — quiet replacement for the retired gold MiladyAppTile.
- * Inline with the rest of nav. When local is running, it's a real link
- * with a gold dot. When not, it shows a muted 'no local runtime' status.
- * Gold now lives only on the hero's primary CTA.
+ * OpenLocalRow — state-aware launch row. All three states route through
+ * the same click handler; the smart dispatcher upstream decides whether
+ * to launch the runtime, ack the probe, or guide the user to install.
+ *
+ * - ready   → gold dot, crisp affordance, opens local ui
+ * - probing → pulsing dot, "looking…" copy, disabled while we wait
+ * - offline → dim dot, "start local" copy, click triggers install guidance
+ *
+ * Before: offline state was an inert div reading "no local runtime". Now
+ * it's a helpful button — see wave-h5.
  */
 function OpenLocalRow({
-  localAgent,
-  fallbackUrl,
-  onOpen,
+  state,
+  onClick,
 }: {
-  localAgent: ManagedAgent | null;
-  fallbackUrl: string;
-  onOpen: (url: string) => void;
+  state: LocalRuntimeState;
+  onClick: () => void;
 }) {
-  const hasLocal = Boolean(localAgent);
-  const launchUrl =
-    localAgent?.webUiUrl ?? localAgent?.sourceUrl ?? fallbackUrl;
-
-  if (!hasLocal) {
+  if (state === "probing") {
     return (
       <div
         aria-disabled="true"
-        className="flex items-center gap-2 rounded-md px-2 py-1.5 text-[13px] text-white/45"
+        className="flex items-center gap-2 rounded-md px-2 py-1.5 text-[13px] text-white/55"
       >
         <span
           aria-hidden="true"
-          className="h-1.5 w-1.5 rounded-full bg-white/20"
+          className="h-1.5 w-1.5 animate-pulse rounded-full bg-brand/70"
         />
-        <span>no local runtime</span>
+        <span>looking for local…</span>
       </div>
+    );
+  }
+
+  if (state === "offline") {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label="No local Milady running. Open install guidance."
+        className="group flex items-center justify-between rounded-md px-2 py-1.5 text-[13px] text-white/55 transition hover:bg-white/[0.04] hover:text-white/85"
+      >
+        <span className="flex items-center gap-2">
+          <span
+            aria-hidden="true"
+            className="h-1.5 w-1.5 rounded-full bg-white/25"
+          />
+          <span>start local</span>
+        </span>
+        <span
+          aria-hidden="true"
+          className="font-mono text-[10px] tracking-wider text-white/30 transition group-hover:text-white/50"
+        >
+          offline
+        </span>
+      </button>
     );
   }
 
   return (
     <button
       type="button"
-      onClick={() => onOpen(launchUrl)}
+      onClick={onClick}
       className="group flex items-center justify-between rounded-md px-2 py-1.5 text-[13px] text-white/85 transition hover:bg-white/[0.04] hover:text-white"
     >
       <span className="flex items-center gap-2">

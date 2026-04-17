@@ -1,13 +1,13 @@
 import { type ReactNode, useEffect, useState } from "react";
 import type { ManagedAgent } from "../../lib/AgentProvider";
+import type { LocalRuntimeState } from "./Sidebar";
 import { Sidebar } from "./Sidebar";
 
 export interface DashboardShellProps {
   children: ReactNode;
   agents: ManagedAgent[];
-  localAgent: ManagedAgent | null;
-  fallbackLaunchUrl: string;
-  onOpenMiladyApp: (url: string) => void;
+  localState: LocalRuntimeState;
+  onOpenLocal: () => void;
   onAttachRemote: () => void;
   onSignIn: () => void;
   isSigningIn?: boolean;
@@ -21,9 +21,8 @@ export interface DashboardShellProps {
 export function DashboardShell({
   children,
   agents,
-  localAgent,
-  fallbackLaunchUrl,
-  onOpenMiladyApp,
+  localState,
+  onOpenLocal,
   onAttachRemote,
   onSignIn,
   isSigningIn,
@@ -55,9 +54,8 @@ export function DashboardShell({
       <div className="fixed inset-y-0 left-0 z-30 hidden w-[240px] lg:block">
         <Sidebar
           agents={agents}
-          localAgent={localAgent}
-          fallbackLaunchUrl={fallbackLaunchUrl}
-          onOpenMiladyApp={onOpenMiladyApp}
+          localState={localState}
+          onOpenLocal={onOpenLocal}
           onAttachRemote={onAttachRemote}
           onSignIn={onSignIn}
           isSigningIn={isSigningIn}
@@ -75,9 +73,8 @@ export function DashboardShell({
           <div className="fixed inset-y-0 left-0 z-50 w-[280px] max-w-[85vw] lg:hidden">
             <Sidebar
               agents={agents}
-              localAgent={localAgent}
-              fallbackLaunchUrl={fallbackLaunchUrl}
-              onOpenMiladyApp={onOpenMiladyApp}
+              localState={localState}
+              onOpenLocal={onOpenLocal}
               onAttachRemote={onAttachRemote}
               onSignIn={onSignIn}
               isSigningIn={isSigningIn}

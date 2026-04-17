@@ -177,18 +177,35 @@ function MiladyControlHub() {
     }
   };
 
+  // Single smart dispatcher for every "open local" entry point in the
+  // app (hero CTA, sidebar row, empty-state CTA). Behavior branches on
+  // the current probe state so users never get a blind navigate to a
+  // dead port. See wave-h5.
   const handleOpenLocal = () => {
-    openWebUIDirect(launchUrl);
-  };
-
-  const handleStartLocal = () => {
-    // No running local runtime. Drop the user at the install instructions.
+    if (isLocalReady) {
+      openWebUIDirect(launchUrl);
+      return;
+    }
+    if (isLocalProbing) {
+      setNotice({
+        tone: "info",
+        text: "still looking for local milady\u2026 give it a moment.",
+      });
+      return;
+    }
+    // Offline — scroll to install block and tell the user what to do.
     scrollToInstall();
     setNotice({
       tone: "info",
-      text: "No local Milady runtime detected. Install and start it below.",
+      text: "no local milady running. install below, then start the desktop app.",
     });
   };
+
+  const localState: "ready" | "probing" | "offline" = isLocalReady
+    ? "ready"
+    : isLocalProbing
+      ? "probing"
+      : "offline";
 
   const handleSignInToCloud = () => {
     if (isAuthenticated) {
@@ -201,9 +218,8 @@ function MiladyControlHub() {
   return (
     <DashboardShell
       agents={agents}
-      localAgent={localAgent}
-      fallbackLaunchUrl={launchUrl}
-      onOpenMiladyApp={(url) => openWebUIDirect(url)}
+      localState={localState}
+      onOpenLocal={handleOpenLocal}
       onAttachRemote={() => setShowConnectModal(true)}
       onSignIn={handleSignInToCloud}
       isSigningIn={loginState === "polling"}
@@ -213,7 +229,6 @@ function MiladyControlHub() {
           isLocalReady={isLocalReady}
           isLocalProbing={isLocalProbing}
           onOpenLocal={handleOpenLocal}
-          onStartLocal={handleStartLocal}
           onAttachRemote={() => setShowConnectModal(true)}
         />
 

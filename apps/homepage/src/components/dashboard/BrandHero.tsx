@@ -3,10 +3,13 @@ export interface BrandHeroProps {
   isLocalReady: boolean;
   /** True during the first few probes, before we give up on local. */
   isLocalProbing: boolean;
-  /** Click handler when local is live. Launches the runtime. */
+  /**
+   * Single smart handler for the primary CTA regardless of state.
+   * App.tsx routes "ready" to launch, "probing" to a soft toast,
+   * and "offline" to install guidance. Keeps the click behavior
+   * coherent with the sidebar open-local row and the empty-state CTA.
+   */
   onOpenLocal: () => void;
-  /** Click handler when local is NOT live. Opens install / help surface. */
-  onStartLocal: () => void;
   onAttachRemote: () => void;
 }
 
@@ -22,7 +25,6 @@ export function BrandHero({
   isLocalReady,
   isLocalProbing,
   onOpenLocal,
-  onStartLocal,
   onAttachRemote,
 }: BrandHeroProps) {
   const primaryLabel = isLocalReady
@@ -30,7 +32,6 @@ export function BrandHero({
     : isLocalProbing
       ? "looking for local\u2026"
       : "install milady";
-  const primaryHandler = isLocalReady ? onOpenLocal : onStartLocal;
   const primaryHint = isLocalReady
     ? "local \u00b7 running"
     : isLocalProbing
@@ -59,7 +60,7 @@ export function BrandHero({
           {isLocalReady ? (
             <button
               type="button"
-              onClick={primaryHandler}
+              onClick={onOpenLocal}
               aria-label="Open local Milady runtime"
               // Press feedback per taste-skill rule 5 (tactile: -1px on
               // active). Softer tinted shadow replaces the neon outer glow.
@@ -77,8 +78,7 @@ export function BrandHero({
           ) : (
             <button
               type="button"
-              onClick={primaryHandler}
-              disabled={isLocalProbing}
+              onClick={onOpenLocal}
               aria-label={
                 isLocalProbing
                   ? "Probing for local Milady"
