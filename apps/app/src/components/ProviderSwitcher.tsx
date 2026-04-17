@@ -66,7 +66,6 @@ export function ProviderSwitcher({
   miladyCloudCreditsLow,
   miladyCloudCreditsCritical,
   miladyCloudTopUpUrl,
-  miladyCloudUserId,
   miladyCloudLoginBusy,
   miladyCloudLoginError,
   miladyCloudDisconnecting: cloudDisconnecting,
@@ -541,40 +540,17 @@ export function ProviderSwitcher({
 
       {/* Cloud settings */}
       {isCloudSelected && (
-        <div className="mt-4 pt-4 border-t border-[var(--border)]">
+        <div className="mt-3 pt-3 border-t border-[var(--border)] space-y-3">
+          {/* Connection status row */}
           {miladyCloudConnected ? (
-            <div>
-              <div className="flex justify-between items-center mb-3">
-                <div className="flex items-center gap-2">
-                  <span className="inline-block w-2 h-2 rounded-full bg-[var(--ok,#16a34a)]" />
-                  <span className="text-xs font-semibold">
-                    {t("providerswitcher.LoggedIntoMiladyC")}
-                  </span>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="!mt-0"
-                  onClick={() => void handleCloudDisconnect()}
-                  disabled={cloudDisconnecting}
-                >
-                  {cloudDisconnecting ? "Disconnecting..." : "Disconnect"}
-                </Button>
-              </div>
-
-              <div className="text-xs mb-4">
-                {miladyCloudUserId && (
-                  <span className="text-[var(--muted)] mr-3">
-                    <code className="font-[var(--mono)] text-[11px]">
-                      {miladyCloudUserId}
-                    </code>
-                  </span>
-                )}
+            <div className="flex items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="inline-block w-2 h-2 rounded-full bg-[var(--ok,#16a34a)] shrink-0" />
+                <span className="font-semibold">
+                  {t("providerswitcher.LoggedIntoMiladyC")}
+                </span>
                 {miladyCloudCredits !== null && (
-                  <span>
-                    <span className="text-[var(--muted)]">
-                      {t("providerswitcher.Credits")}
-                    </span>{" "}
+                  <span className="text-[var(--muted)] ml-1">
                     <span
                       className={
                         miladyCloudCreditsCritical
@@ -597,101 +573,33 @@ export function ProviderSwitcher({
                   </span>
                 )}
               </div>
-
-              {modelOptions &&
-                (() => {
-                  const modelSchema = {
-                    type: "object" as const,
-                    properties: {
-                      small: {
-                        type: "string",
-                        enum: modelOptions.small.map((m) => m.id),
-                        description: "Fast model for simple tasks",
-                      },
-                      large: {
-                        type: "string",
-                        enum: modelOptions.large.map((m) => m.id),
-                        description: "Powerful model for complex reasoning",
-                      },
-                    },
-                    required: [] as string[],
-                  };
-                  const modelHints: Record<string, ConfigUiHint> = {
-                    small: { label: "Small Model", width: "half" },
-                    large: { label: "Large Model", width: "half" },
-                  };
-                  const modelValues: Record<string, unknown> = {};
-                  const modelSetKeys = new Set<string>();
-                  if (currentSmallModel) {
-                    modelValues.small = currentSmallModel;
-                    modelSetKeys.add("small");
-                  }
-                  if (currentLargeModel) {
-                    modelValues.large = currentLargeModel;
-                    modelSetKeys.add("large");
-                  }
-
-                  return (
-                    <ConfigRenderer
-                      schema={modelSchema as JsonSchemaObject}
-                      hints={modelHints}
-                      values={modelValues}
-                      setKeys={modelSetKeys}
-                      registry={defaultRegistry}
-                      onChange={(key, value) => {
-                        const val = String(value);
-                        if (key === "small") setCurrentSmallModel(val);
-                        if (key === "large") setCurrentLargeModel(val);
-                        const updated = {
-                          small: key === "small" ? val : currentSmallModel,
-                          large: key === "large" ? val : currentLargeModel,
-                        };
-                        void (async () => {
-                          setModelSaving(true);
-                          try {
-                            await client.updateConfig({ models: updated });
-                            setModelSaveSuccess(true);
-                            setTimeout(() => setModelSaveSuccess(false), 2000);
-                            await client.restartAgent();
-                          } catch (err) {
-                            console.warn(
-                              "[milady] Failed to save cloud model config",
-                              err,
-                            );
-                          }
-                          setModelSaving(false);
-                        })();
-                      }}
-                    />
-                  );
-                })()}
-
-              <div className="flex items-center justify-end gap-2 mt-3">
-                {modelSaving && (
-                  <span className="text-[11px] text-[var(--muted)]">
-                    {t("providerswitcher.SavingAmpRestart")}
-                  </span>
-                )}
-                {modelSaveSuccess && (
-                  <span className="text-[11px] text-[var(--ok,#16a34a)]">
-                    {t("providerswitcher.SavedRestartingA")}
-                  </span>
-                )}
-              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="!mt-0"
+                onClick={() => void handleCloudDisconnect()}
+                disabled={cloudDisconnecting}
+              >
+                {cloudDisconnecting ? "Disconnecting..." : "Disconnect"}
+              </Button>
             </div>
           ) : (
-            <div>
+            <div className="flex items-center justify-between gap-3">
               {miladyCloudLoginBusy ? (
-                <div className="text-xs text-[var(--muted)]">
+                <span className="text-xs text-[var(--muted)]">
                   {t("providerswitcher.WaitingForBrowser")}
-                </div>
+                </span>
               ) : (
                 <>
-                  {miladyCloudLoginError && (
-                    <div className="text-xs text-[var(--danger,#e74c3c)] mb-2">
-                      {miladyCloudLoginError}
-                    </div>
-                  )}
+                  <span className="text-xs text-[var(--muted)]">
+                    {miladyCloudLoginError ? (
+                      <span className="text-[var(--danger,#e74c3c)]">
+                        {miladyCloudLoginError}
+                      </span>
+                    ) : (
+                      t("providerswitcher.OpensABrowserWind")
+                    )}
+                  </span>
                   <Button
                     variant="default"
                     size="sm"
@@ -700,11 +608,98 @@ export function ProviderSwitcher({
                   >
                     {t("providerswitcher.LogInToMiladyClo")}
                   </Button>
-                  <div className="text-[11px] text-[var(--muted)] mt-1.5">
-                    {t("providerswitcher.OpensABrowserWind")}
-                  </div>
                 </>
               )}
+            </div>
+          )}
+
+          {/* Model dropdowns — render whenever options are loaded */}
+          {modelOptions ? (
+            (() => {
+              const modelSchema = {
+                type: "object" as const,
+                properties: {
+                  small: {
+                    type: "string",
+                    enum: modelOptions.small.map((m) => m.id),
+                    description: "Fast model for simple tasks",
+                  },
+                  large: {
+                    type: "string",
+                    enum: modelOptions.large.map((m) => m.id),
+                    description: "Powerful model for complex reasoning",
+                  },
+                },
+                required: [] as string[],
+              };
+              const modelHints: Record<string, ConfigUiHint> = {
+                small: { label: "Small Model", width: "half" },
+                large: { label: "Large Model", width: "half" },
+              };
+              const modelValues: Record<string, unknown> = {};
+              const modelSetKeys = new Set<string>();
+              if (currentSmallModel) {
+                modelValues.small = currentSmallModel;
+                modelSetKeys.add("small");
+              }
+              if (currentLargeModel) {
+                modelValues.large = currentLargeModel;
+                modelSetKeys.add("large");
+              }
+
+              return (
+                <div className="space-y-2">
+                  <ConfigRenderer
+                    schema={modelSchema as JsonSchemaObject}
+                    hints={modelHints}
+                    values={modelValues}
+                    setKeys={modelSetKeys}
+                    registry={defaultRegistry}
+                    onChange={(key, value) => {
+                      const val = String(value);
+                      if (key === "small") setCurrentSmallModel(val);
+                      if (key === "large") setCurrentLargeModel(val);
+                      const updated = {
+                        small: key === "small" ? val : currentSmallModel,
+                        large: key === "large" ? val : currentLargeModel,
+                      };
+                      void (async () => {
+                        setModelSaving(true);
+                        try {
+                          await client.updateConfig({ models: updated });
+                          setModelSaveSuccess(true);
+                          setTimeout(() => setModelSaveSuccess(false), 2000);
+                          await client.restartAgent();
+                        } catch (err) {
+                          console.warn(
+                            "[milady] Failed to save cloud model config",
+                            err,
+                          );
+                        }
+                        setModelSaving(false);
+                      })();
+                    }}
+                  />
+                  {(modelSaving || modelSaveSuccess) && (
+                    <div className="text-[11px] text-right">
+                      {modelSaving && (
+                        <span className="text-[var(--muted)]">
+                          {t("providerswitcher.SavingAmpRestart")}
+                        </span>
+                      )}
+                      {modelSaveSuccess && (
+                        <span className="text-[var(--ok,#16a34a)]">
+                          {t("providerswitcher.SavedRestartingA")}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })()
+          ) : (
+            <div className="text-[11px] text-[var(--muted)] italic">
+              Loading available models…
             </div>
           )}
         </div>

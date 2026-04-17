@@ -725,7 +725,7 @@ export function SettingsView({
           id="appearance"
           title={t("settings.appearance")}
           description={t("settings.languageHint")}
-          className="p-4 sm:p-5 lg:p-6"
+          className="rounded-lg"
         >
           <div className="mb-5">
             <div className="text-xs font-semibold text-txt-strong mb-2">
@@ -764,7 +764,7 @@ export function SettingsView({
           id="ai-model"
           title={t("settings.aiModel")}
           description={t("settings.aiModelDescription")}
-          className="p-4 sm:p-5 lg:p-6"
+          className="rounded-lg"
         >
           <ProviderSwitcher
             miladyCloudEnabled={miladyCloudEnabled}
@@ -796,19 +796,21 @@ export function SettingsView({
           id="coding-agents"
           title={t("settingsview.CodingAgents")}
           description="Configure AI coding agents for multi-agent task execution."
-          className="p-4 sm:p-5 lg:p-6"
+          className="rounded-lg"
         >
           <CodingAgentSettingsSection />
         </SectionCard>
       )}
 
       {visibleSectionIds.has("cloud") && (
-        <section
+        <SectionCard
           id="cloud"
-          className="bg-bg rounded-2xl border border-border/50 overflow-hidden relative"
+          title={t("miladyclouddashboard.CloudDashboard")}
+          description={t("miladyclouddashboard.ManageInstance")}
+          className="!p-0 [&>div:last-child]:p-0"
         >
           <CloudDashboard />
-        </section>
+        </SectionCard>
       )}
 
       {visibleSectionIds.has("wallet-rpc") && (
@@ -816,7 +818,7 @@ export function SettingsView({
           id="wallet-rpc"
           title={t("settingsview.WalletRPC")}
           description="Configure chain RPC providers for trading and market data."
-          className="p-4 sm:p-5 lg:p-6"
+          className="rounded-lg"
         >
           <ConfigPageView embedded />
         </SectionCard>
@@ -827,7 +829,7 @@ export function SettingsView({
           id="media"
           title={t("settings.mediaGeneration")}
           description={t("settings.mediaDescription")}
-          className="p-4 sm:p-5 lg:p-6"
+          className="rounded-lg"
         >
           <MediaSettingsSection />
         </SectionCard>
@@ -838,7 +840,7 @@ export function SettingsView({
           id="voice"
           title={t("settings.speechInterface")}
           description={t("settings.speechDescription")}
-          className="p-4 sm:p-5 lg:p-6"
+          className="rounded-lg"
         >
           <VoiceConfigView />
         </SectionCard>
@@ -849,7 +851,7 @@ export function SettingsView({
           id="permissions"
           title={t("settings.permissionsCapabilities")}
           description={t("settings.permissionsDescription")}
-          className="p-4 sm:p-5 lg:p-6"
+          className="rounded-lg"
         >
           <PermissionsSection />
         </SectionCard>
@@ -860,7 +862,7 @@ export function SettingsView({
           id="updates"
           title={t("settings.softwareUpdates")}
           description={t("settings.updatesDescription")}
-          className="p-4 sm:p-5 lg:p-6"
+          className="rounded-lg"
         >
           <UpdatesSection />
         </SectionCard>
@@ -871,7 +873,7 @@ export function SettingsView({
           id="advanced"
           title={t("settings.advancedSettings")}
           description={t("settings.advancedDescription")}
-          className="p-4 sm:p-5 lg:p-6"
+          className="rounded-lg"
         >
           <AdvancedSection />
         </SectionCard>
@@ -882,7 +884,7 @@ export function SettingsView({
           id="settings-empty"
           title={t("settingsview.NoMatchingSettings")}
           description="Try a broader search or clear the current filter."
-          className="p-4 sm:p-5 lg:p-6"
+          className="rounded-lg"
         >
           <button
             type="button"
@@ -908,21 +910,16 @@ export function SettingsView({
 
       <div
         ref={contentRef}
-        className={`flex-1 min-h-0 overflow-y-auto scroll-smooth ${inModal ? "px-4 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-6" : "px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8"}`}
+        className={`flex-1 min-h-0 overflow-y-auto scroll-smooth ${inModal ? "px-4 py-3 sm:px-5 sm:py-4 lg:px-6" : "px-4 py-3 sm:px-5 sm:py-4 lg:px-6"}`}
       >
-        <div className={`${inModal ? "max-w-5xl" : "max-w-4xl"} mx-auto`}>
-          <div className="flex items-start justify-between gap-4 border-b border-border/70 pb-4 sm:pb-6">
-            <div className="min-w-0">
-              <h1 className="text-balance text-xl font-bold text-txt-strong sm:text-2xl">
-                {t("nav.settings")}
-              </h1>
-              <p className="mt-1 max-w-2xl text-pretty text-sm text-muted">
-                {t("settings.customizeExperience")}
-              </p>
-            </div>
+        <div className={`${inModal ? "max-w-6xl" : "max-w-5xl"} mx-auto`}>
+          <div className="flex items-center justify-between gap-4 border-b border-border/70 pb-3">
+            <h1 className="text-lg font-semibold text-txt-strong">
+              {t("nav.settings")}
+            </h1>
             <button
               type="button"
-              className="inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-border bg-card text-muted transition-all hover:border-accent hover:text-txt hover:shadow-sm"
+              className="inline-flex size-8 shrink-0 items-center justify-center rounded-full border border-border bg-card text-muted transition-all hover:border-accent hover:text-txt"
               onClick={handleClose}
               aria-label="Close settings"
               title={t("settingsview.CloseSettings")}
@@ -931,20 +928,18 @@ export function SettingsView({
             </button>
           </div>
 
-          <div className="relative mt-4 lg:hidden">
+          <div className="relative mt-3 lg:hidden">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
             <input
               type="text"
               placeholder={t("settings.searchPlaceholder")}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full rounded-lg border border-border bg-bg py-2.5 pl-10 pr-3 text-sm transition-all placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/50"
+              className="w-full rounded-lg border border-border bg-bg py-2 pl-10 pr-3 text-sm transition-all placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/50"
             />
           </div>
 
-          <div className="space-y-6 pb-20 pt-6 sm:space-y-8">
-            {sectionsContent}
-          </div>
+          <div className="space-y-3 pb-12 pt-4">{sectionsContent}</div>
         </div>
       </div>
     </div>
