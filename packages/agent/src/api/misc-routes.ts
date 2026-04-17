@@ -378,9 +378,48 @@ export async function handleMiscRoutes(
   // match the authoritative server state before the first WS push
   // arrives. This avoids the "first frame shows default zoom, second
   // frame snaps to the operator's zoom" glitch on reconnect.
+  //
+  // Lives under `/api/*` which is Cloudflare-Access-gated for operator
+  // surfaces. Public broadcast viewers hitting
+  // `alice.rndrntwrk.com/broadcast/*` cannot reach this — they use
+  // `/api/broadcast/:channel/stage` below instead.
   if (method === "GET" && pathname === "/api/companion/stage") {
     json(res, { ok: true, state: readCompanionStageState() });
     return true;
+  }
+
+  // ── GET /api/broadcast/:channel/stage ────────────────────────────────
+  //
+  // Public, read-only variant of `/api/companion/stage`. Served under
+  // the `/api/broadcast/*` prefix which — paired with Cloudflare Access
+  // bypass on the same prefix — is reachable by unauthenticated
+  // broadcast viewers at `alice.rndrntwrk.com/broadcast/:channel`.
+  //
+  // Payload is identical: camera zoom/yaw/pitch/pan framing state.
+  // That's viewport configuration, not user data — safe to expose
+  // publicly. POST/DELETE on this path is intentionally NOT added:
+  // mutations stay on the authenticated `/api/companion/stage` path.
+  //
+  // Channel is only used for routing validation today. Multi-channel
+  // support (separate per-channel stages) is a future extension.
+  {
+    const publicStageMatch = pathname.match(
+      /^\/api\/broadcast\/([a-zA-Z0-9-]+)\/stage$/,
+    );
+    if (method === "GET" && publicStageMatch) {
+      // Hardcoded allowlist mirror of
+      // packages/app-core/src/platform/init.ts BROADCAST_CHANNEL_ALLOWLIST.
+      // Keep these two in sync — adding a new channel requires a change
+      // in both files. An unknown channel 404s instead of leaking.
+      const allowed = new Set(["alice-cam"]);
+      const channel = publicStageMatch[1];
+      if (!allowed.has(channel)) {
+        error(res, "Unknown broadcast channel", 404);
+        return true;
+      }
+      json(res, { ok: true, channel, state: readCompanionStageState() });
+      return true;
+    }
   }
 
   // ── POST /api/companion/stage ────────────────────────────────────────

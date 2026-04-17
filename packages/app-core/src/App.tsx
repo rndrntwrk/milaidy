@@ -4,7 +4,12 @@
 
 import { Keyboard } from "@capacitor/keyboard";
 import { subscribeDesktopBridgeEvent } from "@miladyai/app-core/bridge";
-import { isIOS, isNative } from "@miladyai/app-core/platform";
+import {
+  isBroadcastWindow as isBroadcastWindowShared,
+  isIOS,
+  isNative,
+  isUnknownBroadcastRoute as isUnknownBroadcastRouteShared,
+} from "@miladyai/app-core/platform";
 import {
   Button,
   DrawerSheet,
@@ -107,16 +112,25 @@ function useIsPopout(): boolean {
  * parallel renderer.
  */
 function useIsBroadcast(): boolean {
-  const [broadcast] = useState(() => {
-    if (typeof window === "undefined") return false;
-    const params = new URLSearchParams(
-      window.location.search || window.location.hash.split("?")[1] || "",
-    );
-    if (!params.has("broadcast")) return false;
-    const value = params.get("broadcast");
-    return value !== "false" && value !== "0";
-  });
+  // Delegate to the shared detector in `@miladyai/app-core/platform`
+  // so path-based `/broadcast/:channel`, allowlist enforcement, and
+  // the query-param rollback fallback are in exactly one place. This
+  // hook's only job now is snapshotting the boot-time value so React
+  // renders stay stable across effects.
+  const [broadcast] = useState(() => isBroadcastWindowShared());
   return broadcast;
+}
+
+/**
+ * True if the URL is under `/broadcast/*` but the channel is NOT in
+ * the allowlist. Used to render an explicit 404 surface below instead
+ * of falling through to the normal app under a Cloudflare-Access-
+ * bypassed path. Without this, `/broadcast/anything` would boot the
+ * full operator app unauthenticated — a real exposure risk.
+ */
+function useIsUnknownBroadcastRoute(): boolean {
+  const [unknown] = useState(() => isUnknownBroadcastRouteShared());
+  return unknown;
 }
 
 function TabScrollView({
@@ -307,6 +321,7 @@ export function App() {
 
   const isPopout = useIsPopout();
   const isBroadcast = useIsBroadcast();
+  const isUnknownBroadcast = useIsUnknownBroadcastRoute();
   const companionShellVisible = activeOverlayApp !== null;
   // Don't initialize the 3D scene while the system is still booting — this
   // prevents VrmEngine's Three.js setup from blocking the JS thread and
@@ -785,6 +800,37 @@ export function App() {
   // capture worker's first frame grab fires — the VRM scene still
   // renders via AppContext defaults, which AppProvider hydrates
   // independently of the coordinator state machine.
+  // Broadcast namespace but unknown channel → explicit 404.
+  // `/broadcast/*` is Access-bypassed at Cloudflare, so ANY React code
+  // served under that prefix is reachable unauthenticated. We must not
+  // fall through to the full app here — render a minimal 404 and stop.
+  if (isUnknownBroadcast) {
+    return (
+      <div
+        style={{
+          position: "fixed",
+          inset: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "#08080a",
+          color: "#e2e8f0",
+          fontFamily:
+            "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+          fontSize: 14,
+          letterSpacing: 0.25,
+        }}
+      >
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: 48, fontWeight: 700, marginBottom: 8 }}>
+            404
+          </div>
+          <div>broadcast channel not found</div>
+        </div>
+      </div>
+    );
+  }
+
   if (isBroadcast) {
     return <BroadcastShell />;
   }

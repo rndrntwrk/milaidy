@@ -71,11 +71,20 @@ import {
 } from "livekit-client";
 import { dispatchAppEmoteEvent } from "../../events";
 import type { AppEmoteEventDetail } from "../../events";
+import { getBroadcastMode } from "../../platform/init";
 
 interface InjectedLiveKitConfig {
   url?: string;
   roomName?: string;
   token?: string;
+  /**
+   * Transport signal set by CP's alice VRM broadcast path (stream.js
+   * when STREAM555_ALICE_LIVEKIT_BROADCAST=true). Must equal
+   * 'publisher' for this component to do anything. Any other value
+   * (including undefined) is a Hedra subscriber context or a misuse
+   * and we stay idle.
+   */
+  mode?: "publisher" | "subscriber";
 }
 
 interface InjectedShowConfig {
@@ -84,18 +93,31 @@ interface InjectedShowConfig {
 
 /**
  * Read the LiveKit config injected by the capture-service worker.
- * Returns null if this window isn't running in the capture context
- * (e.g., a developer opening the broadcast URL directly in their own
- * browser without the Puppeteer injection).
+ * Returns null if this window isn't running in the capture context,
+ * doesn't have all three credentials, or isn't marked publisher mode.
+ *
+ * Defense-in-depth: the CALL-SITE in BroadcastShell already gates on
+ * `getBroadcastMode() === "capture"` before mounting this component.
+ * The publisher itself STILL refuses to activate unless every gate
+ * agrees — if any future caller mounts this component in a non-capture
+ * context, we no-op instead of publishing into the room.
  */
 function readInjectedLiveKitConfig(): InjectedLiveKitConfig | null {
   if (typeof window === "undefined") return null;
+  // Hard gate: only run under the internal capture transport. The
+  // public broadcast transport on alice.rndrntwrk.com/broadcast/* MUST
+  // never reach this branch.
+  if (getBroadcastMode() !== "capture") return null;
   const injected = (window as unknown as { __injectedShowConfig?: InjectedShowConfig })
     .__injectedShowConfig;
   if (!injected?.liveKit) return null;
-  const { url, roomName, token } = injected.liveKit;
+  const { url, roomName, token, mode } = injected.liveKit;
   if (!url || !roomName || !token) return null;
-  return { url, roomName, token };
+  // Hedra subscriber path also populates liveKit config. Without
+  // explicit `mode === "publisher"`, stay idle so we don't fight
+  // that flow over publishing rights.
+  if (mode !== "publisher") return null;
+  return { url, roomName, token, mode };
 }
 
 /**

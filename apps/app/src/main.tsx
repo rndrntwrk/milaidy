@@ -37,9 +37,12 @@ import {
   applyForceFreshOnboardingReset,
   applyLaunchConnectionFromUrl,
   dispatchQueuedLifeOpsGithubCallbackFromUrl,
+  getBroadcastChannel,
+  getBroadcastMode,
   installDesktopPermissionsClientPatch,
   installForceFreshOnboardingClientPatch,
   installLocalProviderCloudPreferencePatch,
+  isBroadcastWindow as isBroadcastWindowShared,
   isDetachedWindowShell,
   resolveWindowShellRoute,
   shouldInstallMainWindowOnboardingPatches,
@@ -467,21 +470,14 @@ function isPopoutWindow(): boolean {
 }
 
 /**
- * Broadcast window detection — see app-core/platform/init.ts for the
- * full justification. Mirrors `isPopoutWindow()` but matches `?broadcast`
- * (any value other than `false`/`0`). Used by the boot path to skip the
- * heavy native platform init while still mounting the React app, so the
- * capture-service's headless Chromium gets a clean CompanionSceneHost
- * render instead of the full app shell.
+ * Broadcast window detection is shared across the codebase via
+ * `@miladyai/app-core/platform` — `isBroadcastWindowShared` wraps the
+ * canonical path-aware + query-fallback detector so this file doesn't
+ * maintain its own duplicate. Use `getBroadcastMode()` to distinguish
+ * public viewer from internal capture below.
  */
 function isBroadcastWindow(): boolean {
-  if (typeof window === "undefined") return false;
-  const params = new URLSearchParams(
-    window.location.search || window.location.hash.split("?")[1] || "",
-  );
-  if (!params.has("broadcast")) return false;
-  const value = params.get("broadcast");
-  return value !== "false" && value !== "0";
+  return isBroadcastWindowShared();
 }
 
 /**
@@ -557,107 +553,110 @@ async function runMain(): Promise<void> {
   }
 
   if (isBroadcastWindow()) {
-    // Broadcast mode reuses the popout apiBase injection (same query
-    // semantics) and skips the heavy native platform init: the broadcast
-    // shell only needs the React app, AppContext, and CompanionSceneHost
-    // to come up. App.tsx's `useIsBroadcast()` gate routes the render to
-    // BroadcastShell once the startup coordinator reaches "ready".
+    // Broadcast mode is served by two transports that share the same
+    // renderer code (BroadcastShell → CompanionSceneHost) but have
+    // opposite trust levels:
     //
-    // Set the 555stream capture-service "React mounted" handshake marker
-    // SYNCHRONOUSLY here, before the React app even mounts. The capture
-    // worker uses
-    //   page.waitForFunction(
-    //     () => typeof window.__agentShowControl !== 'undefined',
-    //     { timeout: 20000 }
-    //   )
-    // as its primary "is the page ready" gate (see
-    // services/capture-service/src/worker.js:2161). Setting the global at
-    // the boot path means the worker's first poll catches it within
-    // ~100ms of the page loading — eliminating any race window between
-    // the React commit phase and the worker's 20s timeout, which is the
-    // failure mode that was making the worker fall back to its legacy
-    // DOM-injected agent-show standalone page.
+    //   PUBLIC  — alice.rndrntwrk.com/broadcast/:channel
+    //     Unauthenticated. Cloudflare Access bypass on /broadcast/*.
+    //     Must not mount LiveKitBroadcastPublisher, must not call
+    //     mutation APIs, must not consume apiToken (there is no
+    //     intended auth for this surface), must not mark onboarding
+    //     complete via the shared localStorage flag.
     //
-    // BroadcastShell's <CaptureHandshake/> child still runs the same
-    // assignment from a useEffect for the in-React lifecycle (and adds
-    // the .avatar-ready class once useCompanionSceneStatus().avatarReady
-    // flips true), but the boot-path assignment is the primary path
-    // because it can't race with React commit timing.
-    if (typeof window !== "undefined") {
+    //   CAPTURE — http://alice-bot:3000/broadcast/:channel
+    //     Internal-only. Never reaches Cloudflare. Puppeteer injects
+    //     `window.__injectedShowConfig` before navigation.
+    //     Needs the onboarding-skip marker, the __agentShowControl
+    //     handshake global, and the apiToken bridge so LiveKit
+    //     publishing and WS-backed scene sync work.
+    //
+    // `getBroadcastMode()` distinguishes them purely by the presence
+    // of `window.__injectedShowConfig` (which the browser runtime
+    // sets before any script runs when Puppeteer calls
+    // evaluateOnNewDocument). A public viewer cannot spoof it —
+    // document content and query params have no way to produce a
+    // pre-script global.
+    const broadcastMode = getBroadcastMode();
+    console.log(
+      `[boot] broadcast mode=${broadcastMode} channel=${getBroadcastChannel() ?? "(none)"}`,
+    );
+
+    if (broadcastMode === "capture") {
+      // Set the 555stream capture-service "React mounted" handshake
+      // marker SYNCHRONOUSLY, before React mounts. The capture worker
+      // uses `page.waitForFunction(() => typeof window.__agentShowControl
+      // !== 'undefined')` as its primary ready gate. Setting the
+      // global here eliminates the race between React commit and the
+      // worker's 20s timeout.
+      //
+      // Only the capture transport sets this — a public viewer has no
+      // capture-service on the other side waiting for a handshake.
       (
         window as unknown as { __agentShowControl?: Record<string, unknown> }
       ).__agentShowControl = { source: "broadcast-boot" };
-    }
 
-    // Teach the startup coordinator that onboarding is already complete.
-    //
-    // milaidy's StartupCoordinator seeds its `onboardingComplete` flag
-    // from `localStorage["eliza:onboarding-complete"]` (see
-    // packages/app-core/src/state/persistence.ts:417 +
-    // useLifecycleState.ts:48). A fresh headless Chromium has empty
-    // localStorage, so the coordinator transitions to
-    // `onboarding-required` and App.tsx renders StartupShell →
-    // OnboardingWizard — the character-select screen with the EN
-    // language chip that was appearing on stream instead of the
-    // companion view.
-    //
-    // For alice-bot specifically this is an architectural mismatch:
-    // milaidy's SPA treats each browser as a personal install to
-    // onboard, but alice-bot is a server-side, always-on, single-
-    // tenant agent whose state lives in /home/node/.milaidy/milaidy.json
-    // on the PVC. Every browser that connects should behave like an
-    // already-onboarded viewer.
-    //
-    // For broadcast captures specifically we force the marker so the
-    // coordinator skips onboarding and goes straight through
-    // `starting-runtime` → `hydrating` → `ready`, at which point
-    // BroadcastShell mounts CompanionSceneHost with whatever character
-    // AppContext resolves. The proper long-term fix is to have the
-    // coordinator consult a server-side `/api/agent/v1/onboarding-state`
-    // endpoint before falling back to localStorage — tracked as a
-    // follow-up.
-    try {
-      localStorage.setItem("eliza:onboarding-complete", "1");
-    } catch {
-      /* storage unavailable — the coordinator's own try/catch handles this */
-    }
-
-    // Bridge the alice-bot's auth token into the SPA's API client.
-    //
-    // The broadcast Chromium needs ELIZA_SERVER_AUTH_TOKEN to authenticate
-    // REST + WS. Token resolution:
-    //   1. URL param ?apiToken= — primary. The go-live flow appends the
-    //      alice-bot's own token. Secure: ClusterIP, internal only.
-    //   2. __injectedShowConfig.wsToken — fallback. Currently a 555stream
-    //      JWT (wrong type), kept for forward-compat.
-    {
-      const params = new URLSearchParams(
-        window.location.search || window.location.hash.split("?")[1] || "",
-      );
-      const urlToken = params.get("apiToken");
-      if (urlToken) {
-        setBootConfig({ ...getBootConfig(), apiToken: urlToken });
+      // Teach the startup coordinator that onboarding is already
+      // complete. milaidy's SPA treats each browser as a personal
+      // install to onboard, but alice-bot is server-side/single-
+      // tenant/always-on — a fresh Chromium in the capture-service
+      // pod has empty localStorage, so the coordinator would
+      // transition to `onboarding-required` and render the character-
+      // select screen instead of the companion.
+      //
+      // Only the capture transport flips this flag — public viewers
+      // are non-operator surfaces and we don't want writing to the
+      // browser's own localStorage under a user-visible URL.
+      try {
+        localStorage.setItem("eliza:onboarding-complete", "1");
+      } catch {
+        /* storage unavailable — coordinator has its own try/catch */
       }
-      if (!urlToken) {
-        try {
-          const injectedConfig = (
-            window as unknown as {
-              __injectedShowConfig?: { wsToken?: string };
+
+      // Bridge alice-bot's auth token into the SPA's API client.
+      // Only meaningful under the capture transport: WS + privileged
+      // REST need credentials so scene-state sync + emote replay
+      // work. Public viewers never authenticate — any apiToken
+      // query on the public URL is rejected here explicitly.
+      {
+        const params = new URLSearchParams(
+          window.location.search || window.location.hash.split("?")[1] || "",
+        );
+        const urlToken = params.get("apiToken");
+        if (urlToken) {
+          setBootConfig({ ...getBootConfig(), apiToken: urlToken });
+        } else {
+          try {
+            const injectedConfig = (
+              window as unknown as {
+                __injectedShowConfig?: { wsToken?: string };
+              }
+            ).__injectedShowConfig;
+            if (injectedConfig?.wsToken) {
+              setBootConfig({
+                ...getBootConfig(),
+                apiToken: injectedConfig.wsToken,
+              });
             }
-          ).__injectedShowConfig;
-          if (injectedConfig?.wsToken) {
-            setBootConfig({
-              ...getBootConfig(),
-              apiToken: injectedConfig.wsToken,
-            });
+          } catch {
+            /* injectedShowConfig not available */
           }
-        } catch {
-          /* injectedShowConfig not available */
         }
       }
+
+      injectPopoutApiBase();
+    } else {
+      // PUBLIC broadcast viewer. Intentionally skip the capture-only
+      // side-effects above. No apiToken bridge even if the URL carries
+      // one — any `?apiToken=` on the public surface is refused by
+      // ignoring it here, which closes one obvious exfiltration shape.
+      //
+      // Still call the apiBase injector for development flexibility
+      // (it only accepts same-origin / private-network / HTTPS bases
+      // per its own allowlist, so this is safe for a public URL).
+      injectPopoutApiBase();
     }
 
-    injectPopoutApiBase();
     mountReactApp();
     return;
   }

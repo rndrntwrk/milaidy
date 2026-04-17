@@ -196,28 +196,126 @@ export function isPopoutWindow(): boolean {
 // ── Broadcast helpers ───────────────────────────────────────────────
 //
 // Broadcast mode is a chrome-free render of CompanionSceneHost (VRM stage
-// + chat/action overlays) intended for the capture-service's headless
-// Chromium to grab as the "camera" frame when Alice goes live. Unlike the
-// popout (which renders only the StreamView operator panel), broadcast
-// mode renders the same VRM stage you see on the companion tab — so
-// model, scene, animations, and overlays stay in lockstep with whatever
-// the user has configured in the live app.
+// + chat/action overlays). Two transports share the same renderer:
 //
-// Activation: any non-empty `broadcast` URL parameter on `window.location`,
-// for example `http://alice-bot:3000/?broadcast=1` or
-// `https://alice.rndrntwrk.com/?broadcast=alice-cam`. The value is treated
-// as opaque so future capture pipelines can pass a tag without breaking
-// the gate. `broadcast=false` is rejected (mirroring the popout convention)
-// so the URL flag can be cleanly toggled off.
+//   1. PUBLIC  — `https://alice.rndrntwrk.com/broadcast/:channel`
+//      Read-only. Unauthenticated (Cloudflare Access bypass for
+//      /broadcast/*). No operator controls, no WS write, no publish.
+//      Public viewers see the same scene the capture browser sees,
+//      minus mutation rights.
+//
+//   2. CAPTURE — `http://alice-bot:3000/broadcast/:channel`
+//      Internal cluster URL only. Never reaches Cloudflare. Navigated
+//      by the capture-service's headless Chromium, which injects
+//      `window.__injectedShowConfig` via `evaluateOnNewDocument`
+//      before navigation. This is the sole signal that distinguishes
+//      a capture session from a public viewer — we do NOT rely on
+//      hostname sniffing or query params a public viewer could spoof.
+//
+// Activation is path-based: `/broadcast/alice-cam` (path takes
+// precedence). An allowlist of known channels rejects unknown paths
+// — `/broadcast/attacker-controlled` will NOT activate broadcast mode.
+//
+// Legacy `?broadcast=...` query activation is retained for rollback
+// during migration. It will be removed after path-based broadcast has
+// proven stable per the burn-in criteria.
 
-export function isBroadcastWindow(): boolean {
-  if (typeof window === "undefined") return false;
+/**
+ * Channels allowed to activate broadcast mode. Adding a channel here is
+ * the only way to enable a new broadcast route. The ingress and Access
+ * bypass also need corresponding updates.
+ */
+const BROADCAST_CHANNEL_ALLOWLIST = new Set<string>(["alice-cam"]);
+
+/**
+ * Broadcast transport mode. `null` = not a broadcast window.
+ *
+ *   public  — unauthenticated viewer on alice.rndrntwrk.com/broadcast/*.
+ *             Must not mount publisher, must not call mutation APIs.
+ *   capture — headless Chromium under capture-service. Has
+ *             `window.__injectedShowConfig` pre-seeded by Puppeteer.
+ *             Mounts LiveKitBroadcastPublisher, publishes canvas to
+ *             the LiveKit room pointed to by the injected config.
+ */
+export type BroadcastMode = "public" | "capture" | null;
+
+function readBroadcastChannelFromPath(pathname: string): string | null {
+  // Exact match on /broadcast/:channel (trailing slash tolerated). The
+  // regex refuses extra segments so /broadcast/foo/bar does not leak
+  // through — cleaner than consumers having to validate.
+  const match = pathname.match(/^\/broadcast\/([a-zA-Z0-9-]+)\/?$/);
+  if (!match) return null;
+  const channel = match[1];
+  return BROADCAST_CHANNEL_ALLOWLIST.has(channel) ? channel : null;
+}
+
+function readBroadcastChannelFromQuery(): string | null {
+  // Legacy fallback. Accepts any non-empty, non-`false`, non-`0` value
+  // and maps it to 'alice-cam' (the only legal channel today). This
+  // preserves the old `?broadcast=1` behavior during rollback without
+  // expanding the allowlist.
   const params = new URLSearchParams(
     window.location.search || window.location.hash.split("?")[1] || "",
   );
-  if (!params.has("broadcast")) return false;
+  if (!params.has("broadcast")) return null;
   const value = params.get("broadcast");
-  return value !== "false" && value !== "0";
+  if (!value || value === "false" || value === "0") return null;
+  return "alice-cam";
+}
+
+/**
+ * Resolve the active broadcast channel. Path-based detection takes
+ * precedence; query fallback is a rollback hatch only.
+ *
+ * @returns channel string (e.g. 'alice-cam') or null if not broadcasting
+ */
+export function getBroadcastChannel(): string | null {
+  if (typeof window === "undefined") return null;
+  const fromPath = readBroadcastChannelFromPath(window.location.pathname);
+  if (fromPath) return fromPath;
+  return readBroadcastChannelFromQuery();
+}
+
+/**
+ * Resolve the broadcast transport mode. The split is what makes a
+ * single renderer safe for both public viewers and internal capture
+ * under the same URL shape.
+ *
+ * Capture detection keys SOLELY off `window.__injectedShowConfig`
+ * existence. Puppeteer's evaluateOnNewDocument runs before any page
+ * script, so the capture context always has this set before our code
+ * runs. A public viewer cannot spoof it because the field is set by
+ * the browser runtime injecting the script, not by document content
+ * or query params.
+ */
+export function getBroadcastMode(): BroadcastMode {
+  if (!getBroadcastChannel()) return null;
+  const w = window as unknown as { __injectedShowConfig?: unknown };
+  return w.__injectedShowConfig ? "capture" : "public";
+}
+
+/**
+ * Back-compat: `isBroadcastWindow()` used to be a single bool for
+ * "render BroadcastShell." Keep it as a thin wrapper over the new
+ * helpers so existing call sites don't need to change today. New
+ * code should prefer `getBroadcastChannel()` + `getBroadcastMode()`.
+ */
+export function isBroadcastWindow(): boolean {
+  return getBroadcastChannel() !== null;
+}
+
+/**
+ * True if the request URL matches the broadcast path namespace
+ * (`/broadcast/*`) but the channel is NOT in the allowlist. Used by
+ * the boot path to render an explicit 404 instead of falling through
+ * to the normal app (which would load operator bundles under a
+ * URL that's Access-bypassed — a real leak risk).
+ */
+export function isUnknownBroadcastRoute(): boolean {
+  if (typeof window === "undefined") return false;
+  const path = window.location.pathname;
+  if (!/^\/broadcast\/?/.test(path)) return false;
+  return readBroadcastChannelFromPath(path) === null;
 }
 
 export function injectBroadcastApiBase(): void {

@@ -45,6 +45,7 @@ import { memo, useEffect } from "react";
 import { CompanionSceneHost } from "../companion/CompanionSceneHost";
 import { useCompanionSceneStatus } from "../companion/companion-scene-status-context";
 import { LiveKitBroadcastPublisher } from "../companion/LiveKitBroadcastPublisher";
+import { getBroadcastMode } from "../../platform/init";
 import { SceneOverlayDataBridge } from "../companion/scene-overlay-bridge";
 
 declare global {
@@ -113,16 +114,17 @@ export const BroadcastShell = memo(function BroadcastShell() {
       */}
       <SceneOverlayDataBridge />
       {/*
-        LiveKitBroadcastPublisher captures the VRM canvas via
-        `canvas.captureStream(30)` and publishes it as a WebRTC video
-        track to the LiveKit room provisioned by the control-plane. The
-        capture-service worker injects the room URL + publish token as
-        `window.__injectedShowConfig.liveKit` before navigation.
-        Control-plane Egress picks up the published track and forwards
-        it to Cloudflare → Twitch/Kick. No-op if the injected config
-        is absent (e.g., developer opens the broadcast URL directly).
+        LiveKitBroadcastPublisher captures the VRM canvas and publishes
+        it as a WebRTC track. Mount ONLY when the transport is the
+        internal capture context — `getBroadcastMode() === "capture"`
+        keys off `window.__injectedShowConfig`, which Puppeteer injects
+        before any page script runs. Public viewers at
+        `alice.rndrntwrk.com/broadcast/*` don't have that global and
+        this component is not mounted, so there is no publishTrack
+        call, no LocalAudioTrack tap, and no way for an unauthenticated
+        viewer to become a publisher.
       */}
-      <LiveKitBroadcastPublisher />
+      {getBroadcastMode() === "capture" ? <LiveKitBroadcastPublisher /> : null}
     </div>
   );
 });
