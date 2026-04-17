@@ -88,10 +88,12 @@ export function QuickOpsStrip({ onCopy }: QuickOpsStripProps) {
                   href={download.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex items-center justify-between rounded-md border border-border bg-transparent px-3 py-2 text-[12px] text-white transition hover:border-white/25 hover:bg-white/[0.03]"
+                  className="flex items-center justify-between gap-2 rounded-md border border-border bg-transparent px-3 py-2 text-[12px] text-white transition hover:border-white/25 hover:bg-white/[0.03]"
                 >
-                  <span className="truncate">{download.label}</span>
-                  <span className="ml-2 font-mono text-[10px] text-white/40">
+                  <span className="min-w-0 flex-1 truncate">
+                    {download.label}
+                  </span>
+                  <span className="shrink-0 font-mono text-[10px] text-white/50">
                     {download.sizeLabel}
                   </span>
                 </a>
