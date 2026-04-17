@@ -122,6 +122,45 @@ append_third_party_dependencies_from_manifest() {
   done <<< "$entries"
 }
 
+symlink_installed_packages_into_manifest_node_modules() {
+  local manifest="$1"
+  [[ -f "$manifest" ]] || return 0
+
+  local package_dir target_node_modules entries
+  package_dir="$(dirname "$manifest")"
+  target_node_modules="$package_dir/node_modules"
+  mkdir -p "$target_node_modules"
+
+  entries="$(node -e '
+    const fs = require("node:fs");
+    const pkg = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+    const dependencyFields = ["dependencies", "devDependencies"];
+    const seen = new Set();
+
+    for (const field of dependencyFields) {
+      for (const [name, spec] of Object.entries(pkg[field] ?? {})) {
+        if (typeof spec !== "string" || spec.length === 0) continue;
+        if (spec.startsWith("workspace:") || spec.startsWith("file:")) continue;
+        if (seen.has(name)) continue;
+        seen.add(name);
+        process.stdout.write(name + "\n");
+      }
+    }
+  ' "$manifest")"
+
+  while IFS= read -r package_name; do
+    [[ -z "$package_name" ]] && continue
+
+    local source_path="node_modules/$package_name"
+    local target_path="$target_node_modules/$package_name"
+    [[ -e "$source_path" || -L "$source_path" ]] || continue
+
+    mkdir -p "$(dirname "$target_path")"
+    rm -rf "$target_path"
+    ln -sfn "$(pwd)/$source_path" "$target_path"
+  done <<< "$entries"
+}
+
 packages=(
   react
   react-dom
@@ -232,6 +271,11 @@ append_dependency_spec_package \
 
 for attempt in 1 2 3; do
   if bun add --no-save --dev --ignore-scripts "${packages[@]}"; then
+    symlink_installed_packages_into_manifest_node_modules \
+      "eliza/packages/typescript/package.json"
+    symlink_installed_packages_into_manifest_node_modules \
+      ".eliza.ci-disabled/packages/typescript/package.json"
+
     # @types/uuid shadows uuid@13's bundled types and makes TS report that
     # v4/v5 do not exist. Remove the stale package anywhere the core build can
     # resolve it so the runtime package supplies its own declarations instead.

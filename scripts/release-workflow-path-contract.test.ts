@@ -123,6 +123,15 @@ describe("release workflow path contract", () => {
     expect(snapBuild).not.toContain("elizaos-app --version");
   });
 
+  it("generates snap protobuf types with buf instead of reinstalling the schemas workspace", () => {
+    const snapBuild = readWorkflow("snap-build-test.yml");
+
+    expect(snapBuild).toContain("uses: bufbuild/buf-setup-action@v1");
+    expect(snapBuild).toContain("buf dep update");
+    expect(snapBuild).toContain("buf generate");
+    expect(snapBuild).not.toContain("bun install --ignore-scripts");
+  });
+
   it("checks out the eliza submodule before packaging workflows use submodule paths", () => {
     const testPackaging = readWorkflow("test-packaging.yml");
     const publishPackages = readWorkflow("publish-packages.yml");
@@ -233,6 +242,9 @@ describe("release workflow path contract", () => {
     );
     expect(fallbackScript).toContain(
       '".eliza.ci-disabled/packages/typescript/package.json"',
+    );
+    expect(fallbackScript).toContain(
+      "symlink_installed_packages_into_manifest_node_modules",
     );
   });
 });
