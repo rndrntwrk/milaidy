@@ -11,6 +11,8 @@ import {
   registerCustomActionLive,
 } from "../runtime/custom-actions.js";
 import { EMOTE_BY_ID, EMOTE_CATALOG } from "../emotes/catalog.js";
+import { resolveStateDir } from "../config/paths.js";
+import { readStreamSettings } from "./stream-persistence.js";
 import { resolveTerminalRunLimits } from "./terminal-run-limits.js";
 import {
   ensurePrivyWalletsForCustomUser,
@@ -378,9 +380,234 @@ export async function handleMiscRoutes(
   // match the authoritative server state before the first WS push
   // arrives. This avoids the "first frame shows default zoom, second
   // frame snaps to the operator's zoom" glitch on reconnect.
+  //
+  // Lives under `/api/*` which is Cloudflare-Access-gated for operator
+  // surfaces. Public broadcast viewers hitting
+  // `alice.rndrntwrk.com/broadcast/*` cannot reach this — they use
+  // `/api/broadcast/:channel/stage` below instead.
   if (method === "GET" && pathname === "/api/companion/stage") {
     json(res, { ok: true, state: readCompanionStageState() });
     return true;
+  }
+
+  // ── GET /api/broadcast/:channel/stage ────────────────────────────────
+  //
+  // Public, read-only variant of `/api/companion/stage`. Served under
+  // the `/api/broadcast/*` prefix which — paired with Cloudflare Access
+  // bypass on the same prefix — is reachable by unauthenticated
+  // broadcast viewers at `alice.rndrntwrk.com/broadcast/:channel`.
+  //
+  // Payload is identical: camera zoom/yaw/pitch/pan framing state.
+  // That's viewport configuration, not user data — safe to expose
+  // publicly. POST/DELETE on this path is intentionally NOT added:
+  // mutations stay on the authenticated `/api/companion/stage` path.
+  //
+  // Channel is only used for routing validation today. Multi-channel
+  // support (separate per-channel stages) is a future extension.
+  {
+    const publicStageMatch = pathname.match(
+      /^\/api\/broadcast\/([a-zA-Z0-9-]+)\/stage$/,
+    );
+    if (method === "GET" && publicStageMatch) {
+      // Hardcoded allowlist mirror of
+      // packages/app-core/src/platform/init.ts BROADCAST_CHANNEL_ALLOWLIST.
+      // Keep these two in sync — adding a new channel requires a change
+      // in both files. An unknown channel 404s instead of leaking.
+      const allowed = new Set(["alice-cam"]);
+      const channel = publicStageMatch[1];
+      if (!allowed.has(channel)) {
+        error(res, "Unknown broadcast channel", 404);
+        return true;
+      }
+      json(res, { ok: true, channel, state: readCompanionStageState() });
+      return true;
+    }
+  }
+
+  // ── GET /api/broadcast/:channel/scene ────────────────────────────────
+  //
+  // Public, read-only scene configuration for the broadcast renderer.
+  // Mirrors the subset of data that `GET /api/stream/settings` +
+  // `GET /api/avatar/vrm` + `GET /api/avatar/background` (all auth-gated)
+  // expose to the operator surface. Without this, public viewers would
+  // fall back to localStorage/bundled defaults and drift from the
+  // capture renderer whenever the server was configured with a custom
+  // VRM or background.
+  //
+  // Returns:
+  //   selectedVrmIndex     — server-selected bundled VRM index, or 0 if custom
+  //   hasCustomVrm         — true if `avatars/custom.vrm` exists
+  //   hasCustomBackground  — true if `avatars/custom-background.{png,jpg,webp}` exists
+  //
+  // When `hasCustomVrm` / `hasCustomBackground` is true, the client
+  // should hit `/api/broadcast/:channel/vrm` and
+  // `/api/broadcast/:channel/background` (public file-serve routes
+  // below) to load the assets — the authenticated
+  // `/api/avatar/{vrm,background}` endpoints are unreachable from the
+  // Cloudflare-Access-bypassed public surface.
+  //
+  // Payload is intentionally minimal: no character bio, persona, or
+  // any other operator-private configuration. Just what the 3D scene
+  // needs to render.
+  {
+    const publicSceneMatch = pathname.match(
+      /^\/api\/broadcast\/([a-zA-Z0-9-]+)\/scene$/,
+    );
+    if (method === "GET" && publicSceneMatch) {
+      const allowed = new Set(["alice-cam"]);
+      const channel = publicSceneMatch[1];
+      if (!allowed.has(channel)) {
+        error(res, "Unknown broadcast channel", 404);
+        return true;
+      }
+      const settings = readStreamSettings();
+      // Share the same avatar root resolution as /api/avatar/*
+      // (avatar-routes.ts) so the public surface reports the exact
+      // same custom-asset presence the authenticated/capture path
+      // sees. resolveStateDir honors MILADY_STATE_DIR / ELIZA_STATE_DIR
+      // (the canonical state-dir env vars); a divergent inline env
+      // chain here would make public hasCustomVrm=false while the
+      // authed path still serves the file correctly.
+      const avatarDir = path.join(resolveStateDir(), "avatars");
+      let hasCustomVrm = false;
+      try {
+        hasCustomVrm = fs.statSync(path.join(avatarDir, "custom.vrm")).isFile();
+      } catch {
+        /* no custom VRM */
+      }
+      let hasCustomBackground = false;
+      for (const ext of ["png", "jpg", "webp"]) {
+        try {
+          if (
+            fs
+              .statSync(path.join(avatarDir, `custom-background.${ext}`))
+              .isFile()
+          ) {
+            hasCustomBackground = true;
+            break;
+          }
+        } catch {
+          /* none at this extension */
+        }
+      }
+      json(res, {
+        ok: true,
+        channel,
+        scene: {
+          selectedVrmIndex:
+            typeof settings.avatarIndex === "number"
+              ? settings.avatarIndex
+              : null,
+          hasCustomVrm,
+          hasCustomBackground,
+        },
+      });
+      return true;
+    }
+  }
+
+  // ── GET /api/broadcast/:channel/vrm ──────────────────────────────────
+  //
+  // Public, read-only variant of `/api/avatar/vrm`. Serves the same
+  // `avatars/custom.vrm` file so public broadcast viewers can render
+  // the server-selected custom avatar. HEAD is also supported so the
+  // client can check existence without downloading.
+  {
+    const publicVrmMatch = pathname.match(
+      /^\/api\/broadcast\/([a-zA-Z0-9-]+)\/vrm$/,
+    );
+    if ((method === "GET" || method === "HEAD") && publicVrmMatch) {
+      const allowed = new Set(["alice-cam"]);
+      const channel = publicVrmMatch[1];
+      if (!allowed.has(channel)) {
+        error(res, "Unknown broadcast channel", 404);
+        return true;
+      }
+      // Share the same avatar root resolution as /api/avatar/vrm —
+      // see note on the /scene handler above.
+      const vrmPath = path.join(resolveStateDir(), "avatars", "custom.vrm");
+      try {
+        const stat = fs.statSync(vrmPath);
+        if (!stat.isFile()) {
+          error(res, "VRM not found", 404);
+          return true;
+        }
+        res.writeHead(200, {
+          "Content-Type": "model/gltf-binary",
+          "Content-Length": stat.size,
+          "Cache-Control": "public, max-age=60",
+        });
+        if (method === "HEAD") {
+          res.end();
+          return true;
+        }
+        fs.createReadStream(vrmPath).pipe(res);
+        return true;
+      } catch {
+        error(res, "VRM not found", 404);
+        return true;
+      }
+    }
+  }
+
+  // ── GET /api/broadcast/:channel/background ───────────────────────────
+  //
+  // Public, read-only variant of `/api/avatar/background`. Finds the
+  // custom-background.{png,jpg,webp} file the operator uploaded and
+  // serves it with the correct MIME type.
+  {
+    const publicBgMatch = pathname.match(
+      /^\/api\/broadcast\/([a-zA-Z0-9-]+)\/background$/,
+    );
+    if ((method === "GET" || method === "HEAD") && publicBgMatch) {
+      const allowed = new Set(["alice-cam"]);
+      const channel = publicBgMatch[1];
+      if (!allowed.has(channel)) {
+        error(res, "Unknown broadcast channel", 404);
+        return true;
+      }
+      // Share the same avatar root resolution as /api/avatar/*
+      // (avatar-routes.ts) so the public surface reports the exact
+      // same custom-asset presence the authenticated/capture path
+      // sees. resolveStateDir honors MILADY_STATE_DIR / ELIZA_STATE_DIR
+      // (the canonical state-dir env vars); a divergent inline env
+      // chain here would make public hasCustomVrm=false while the
+      // authed path still serves the file correctly.
+      const avatarDir = path.join(resolveStateDir(), "avatars");
+      const MIME: Record<string, string> = {
+        png: "image/png",
+        jpg: "image/jpeg",
+        webp: "image/webp",
+      };
+      let found: { filePath: string; ext: string } | null = null;
+      for (const ext of ["png", "jpg", "webp"]) {
+        const filePath = path.join(avatarDir, `custom-background.${ext}`);
+        try {
+          if (fs.statSync(filePath).isFile()) {
+            found = { filePath, ext };
+            break;
+          }
+        } catch {
+          /* none at this extension */
+        }
+      }
+      if (!found) {
+        error(res, "Background not found", 404);
+        return true;
+      }
+      const stat = fs.statSync(found.filePath);
+      res.writeHead(200, {
+        "Content-Type": MIME[found.ext],
+        "Content-Length": stat.size,
+        "Cache-Control": "public, max-age=60",
+      });
+      if (method === "HEAD") {
+        res.end();
+        return true;
+      }
+      fs.createReadStream(found.filePath).pipe(res);
+      return true;
+    }
   }
 
   // ── POST /api/companion/stage ────────────────────────────────────────

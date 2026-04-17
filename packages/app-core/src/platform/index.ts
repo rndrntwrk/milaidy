@@ -38,8 +38,11 @@ export { applyLaunchConnectionFromUrl } from "./browser-launch";
 export * from "./cloud-preference-patch";
 export * from "./desktop-permissions-client";
 export {
+  type BroadcastMode,
   type DeepLinkHandlers,
   dispatchShareTarget,
+  getBroadcastChannel,
+  getBroadcastMode,
   handleDeepLink,
   injectBroadcastApiBase,
   injectPopoutApiBase,
@@ -49,6 +52,7 @@ export {
   isIOS,
   isNative,
   isPopoutWindow,
+  isUnknownBroadcastRoute,
   isWebPlatform,
   platform,
   type ShareTargetFile,
