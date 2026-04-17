@@ -28,19 +28,25 @@ test("browser workspace can create live tabs and switch selection", async ({
   await addressInput.fill("example.com");
   await newTabButton.click();
 
-  const exampleTabButton = page.getByRole("tab", {
-    name: /example\.com https:\/\/example\.com\//,
-  });
+  const exampleTabButton = browserWorkspaceView.locator(
+    '[role="tab"][title="https://example.com/"]',
+  );
   await expect(exampleTabButton).toBeVisible();
+  await expect(exampleTabButton).toContainText("example.com");
+  await expect(exampleTabButton).toHaveAttribute(
+    "title",
+    "https://example.com/",
+  );
   await expect(addressInput).toHaveValue("https://example.com/");
 
   await addressInput.fill("about:blank");
   await newTabButton.click();
 
-  const blankTabButton = page.getByRole("tab", {
-    name: /about:blank/i,
-  });
+  const blankTabButton = browserWorkspaceView.locator(
+    '[role="tab"][title="about:blank"]',
+  );
   await expect(blankTabButton).toBeVisible();
+  await expect(blankTabButton).toHaveAttribute("title", "about:blank");
   await expect(addressInput).toHaveValue("about:blank");
 
   await exampleTabButton.click();
