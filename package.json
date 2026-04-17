@@ -159,7 +159,7 @@
     "test:desktop:playwright": "node eliza/packages/app-core/scripts/run-desktop-playwright.mjs",
     "test:desktop:playwright:windows": "cd apps/app && bunx playwright test --config playwright.electrobun.packaged.config.ts test/electrobun-packaged/electrobun-windows-startup.e2e.spec.ts",
     "test:e2e": "node eliza/packages/app-core/scripts/run-with-env.mjs MILADY_LIVE_TEST=1 ELIZA_LIVE_TEST=1 -- bunx vitest run --config test/vitest/e2e.config.ts --no-cache --exclude eliza/apps/app-steward/test/anvil-contracts.real.e2e.test.ts --exclude eliza/packages/app-core/test/app/memory-relationships.real.e2e.test.ts --exclude eliza/packages/app-core/test/app/onboarding-companion.live.e2e.test.ts --exclude eliza/packages/app-core/test/app/qa-checklist.real.e2e.test.ts",
-    "test:action-e2e": "MILADY_LIVE_TEST=1 ELIZA_LIVE_TEST=1 bunx vitest run --config test/vitest/real.config.ts eliza/packages/app-core/test/live-agent/action-invocation.live.e2e.test.ts",
+    "test:action-e2e": "MILADY_LIVE_TEST=1 ELIZA_LIVE_TEST=1 bunx vitest run --config test/vitest/live-e2e.config.ts eliza/packages/app-core/test/live-agent/action-invocation.live.e2e.test.ts",
     "test:benchmark:actions": "MILADY_LIVE_TEST=1 ELIZA_LIVE_TEST=1 bunx vitest run --config test/vitest/real.config.ts eliza/packages/app-core/test/benchmarks/action-selection.bench.ts",
     "test:integration": "bunx vitest run --config test/vitest/integration.config.ts",
     "test:audit:server": "node eliza/packages/app-core/scripts/audit-server-test-surface.mjs",
