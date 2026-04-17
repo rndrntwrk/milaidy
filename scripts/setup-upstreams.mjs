@@ -63,6 +63,19 @@ export const ELIZA_BUILD_STEPS = [
 ];
 
 const OPTIONAL_ELIZA_PLUGIN_FALLBACK_TAG = "alpha";
+
+// Plugins referenced as @elizaos/* workspace:* inside the eliza workspace but
+// provided by a CI stub in the root repo rather than published on npm. Before
+// `bun install --cwd eliza`, we inject an override into eliza/package.json so
+// the workspace:* specifier resolves to the stub instead of failing.
+const UNPUBLISHED_ELIZA_PLUGIN_CI_STUBS = [
+  {
+    packageName: "@elizaos/plugin-wechat",
+    /** Relative from eliza/ to the CI stub directory. */
+    stubRelativePath: "../scripts/ci-stubs/elizaos-plugin-wechat",
+  },
+];
+
 const OPTIONAL_ELIZA_PLUGIN_PACKAGES = [
   {
     submodulePath: "plugins/plugin-sql",
@@ -409,6 +422,64 @@ function applyOptionalElizaPluginFallback(elizaRoot, missingPlugins) {
   }
 
   return changedFiles;
+}
+
+/**
+ * Inject overrides into `eliza/package.json` for @elizaos/* plugins that live
+ * in the root repo's CI stub directory but are not published on npm. Without
+ * these overrides, `bun install --cwd eliza` fails to resolve the workspace:*
+ * specifiers in eliza/packages/agent and eliza/packages/app-core because the
+ * local plugin package uses a different npm scope (@miladyai/*).
+ *
+ * The overrides are idempotent: re-running is safe if they are already present.
+ */
+function applyUnpublishedPluginStubOverrides(elizaRoot) {
+  const packageJsonPath = path.join(elizaRoot, "package.json");
+  if (!existsSync(packageJsonPath)) {
+    return 0;
+  }
+
+  const raw = readFileSync(packageJsonPath, "utf8");
+  let pkg;
+  try {
+    pkg = JSON.parse(raw);
+  } catch {
+    return 0;
+  }
+
+  if (typeof pkg !== "object" || pkg === null) {
+    return 0;
+  }
+
+  const overrides =
+    typeof pkg.overrides === "object" && pkg.overrides !== null
+      ? pkg.overrides
+      : {};
+  let changed = false;
+
+  for (const {
+    packageName,
+    stubRelativePath,
+  } of UNPUBLISHED_ELIZA_PLUGIN_CI_STUBS) {
+    const stubAbsolutePath = path.resolve(elizaRoot, stubRelativePath);
+    if (!existsSync(path.join(stubAbsolutePath, "package.json"))) {
+      continue;
+    }
+    const specifier = `file:${stubRelativePath}`;
+    if (overrides[packageName] === specifier) {
+      continue;
+    }
+    overrides[packageName] = specifier;
+    changed = true;
+  }
+
+  if (!changed) {
+    return 0;
+  }
+
+  pkg.overrides = overrides;
+  writePackageJson(packageJsonPath, raw, pkg);
+  return UNPUBLISHED_ELIZA_PLUGIN_CI_STUBS.length;
 }
 
 function getForceEnvKey(env = process.env) {
@@ -999,6 +1070,13 @@ async function ensureElizaDependencies(elizaRoot) {
     );
   }
 
+  const stubOverrides = applyUnpublishedPluginStubOverrides(elizaRoot);
+  if (stubOverrides > 0) {
+    console.log(
+      `[setup-upstreams] Added ${stubOverrides} unpublished plugin stub override(s) to eliza/package.json`,
+    );
+  }
+
   console.log(
     `[setup-upstreams] Installing eliza workspace dependencies in ${toDisplayPath(elizaRoot)}`,
   );
@@ -1097,10 +1175,88 @@ async function ensureElizaBuildOutputs(elizaRoot) {
   }
 }
 
+/**
+ * Ensure plugin-anthropic's tsconfig.build.json explicitly loads @types/bun.
+ *
+ * When tsc runs `bun run build` for plugin-anthropic on fresh CI checkouts,
+ * it reports TS2868 "Cannot find name 'Bun'" on init.ts / utils/claude-cli.ts
+ * because the build config extends tsconfig.json but does not carry the
+ * `compilerOptions.types` array forward deterministically. We force the
+ * setting in-place so every CI/dev checkout sees a build config that
+ * resolves @types/bun without relying on extends inheritance.
+ *
+ * Idempotent: only writes when the desired types list is not already present.
+ */
+export function ensurePluginAnthropicBunTypes(
+  pluginsRoot,
+  { pathExists = existsSync } = {},
+) {
+  const buildConfigPath = path.join(
+    pluginsRoot,
+    "plugin-anthropic",
+    "typescript",
+    "tsconfig.build.json",
+  );
+
+  if (!pathExists(buildConfigPath)) {
+    return false;
+  }
+
+  const raw = readFileSync(buildConfigPath, "utf8");
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    console.warn(
+      `[setup-upstreams] Could not parse ${toDisplayPath(buildConfigPath)}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+    return false;
+  }
+
+  const compilerOptions =
+    parsed && typeof parsed === "object" && parsed.compilerOptions
+      ? parsed.compilerOptions
+      : {};
+  const existingTypes = Array.isArray(compilerOptions.types)
+    ? compilerOptions.types
+    : null;
+
+  if (existingTypes && existingTypes.includes("bun")) {
+    return false;
+  }
+
+  const nextTypes = existingTypes ? [...existingTypes] : ["node"];
+  if (!nextTypes.includes("bun")) {
+    nextTypes.push("bun");
+  }
+
+  const nextCompilerOptions = {
+    ...compilerOptions,
+    types: nextTypes,
+  };
+  const nextParsed = {
+    ...parsed,
+    compilerOptions: nextCompilerOptions,
+  };
+
+  const indent = raw.match(/^(\s+)"/m)?.[1] ?? "\t";
+  writeFileSync(
+    buildConfigPath,
+    `${JSON.stringify(nextParsed, null, indent)}\n`,
+  );
+  console.log(
+    `[setup-upstreams] Patched ${toDisplayPath(buildConfigPath)} to load @types/bun`,
+  );
+  return true;
+}
+
 export async function ensurePluginBuildOutputs(
   pluginsRoot,
   { pathExists = existsSync, runCommandImpl = runCommand } = {},
 ) {
+  ensurePluginAnthropicBunTypes(pluginsRoot, { pathExists });
   for (const packageDir of discoverPluginPackageDirs(pluginsRoot)) {
     const packageJson = readPackageJson(packageDir);
     if (!packageJson?.name?.startsWith("@elizaos/")) {
@@ -1162,6 +1318,12 @@ export async function setupUpstreams(repoRoot = DEFAULT_REPO_ROOT) {
               `[setup-upstreams] Stripped ${missingPlugins.length} missing optional plugin workspace(s) from eliza/package.json`,
             );
           }
+        }
+        const stubOverrides = applyUnpublishedPluginStubOverrides(elizaRoot);
+        if (stubOverrides > 0) {
+          console.log(
+            `[setup-upstreams] Added ${stubOverrides} unpublished plugin stub override(s) to eliza/package.json`,
+          );
         }
         applyMiladyCopyPatches(elizaRoot);
       }
