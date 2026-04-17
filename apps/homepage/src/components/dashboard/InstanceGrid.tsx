@@ -16,6 +16,10 @@ export interface InstanceGridProps {
   onDisconnect: (agent: ManagedAgent) => void;
   onAttachRemote: () => void;
   onOpenLocal: () => void;
+  /** Opens the ProvisionAgentModal. Only rendered when signed in to cloud. */
+  onProvisionAgent?: () => void;
+  /** True when the user has an authenticated cloud client. */
+  canProvision: boolean;
 }
 
 /**
@@ -33,6 +37,8 @@ export function InstanceGrid({
   onDisconnect,
   onAttachRemote,
   onOpenLocal,
+  onProvisionAgent,
+  canProvision,
 }: InstanceGridProps) {
   const [filter, setFilter] = useState<GridFilter>("all");
 
@@ -79,6 +85,27 @@ export function InstanceGrid({
               { value: "remote", label: "remote", count: counts.remote },
             ]}
           />
+          {onProvisionAgent ? (
+            <button
+              type="button"
+              onClick={onProvisionAgent}
+              disabled={!canProvision}
+              aria-label={
+                canProvision
+                  ? "Create new cloud agent"
+                  : "Sign in to cloud to create an agent"
+              }
+              title={
+                canProvision
+                  ? "Create a new cloud agent"
+                  : "Sign in to cloud to create an agent"
+              }
+              className="inline-flex h-8 items-center gap-1.5 rounded-full border border-brand/45 bg-brand/[0.08] px-3 font-mono text-[10px] uppercase tracking-[0.18em] text-brand transition hover:border-brand/70 hover:bg-brand/[0.14] disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <span aria-hidden="true">+</span>
+              <span>new agent</span>
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={onRefresh}
@@ -112,6 +139,8 @@ export function InstanceGrid({
           filter={filter}
           onAttachRemote={onAttachRemote}
           onOpenLocal={onOpenLocal}
+          onProvisionAgent={onProvisionAgent}
+          canProvision={canProvision}
         />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -166,11 +195,19 @@ function EmptyState({
   filter,
   onAttachRemote,
   onOpenLocal,
+  onProvisionAgent,
+  canProvision,
 }: {
   filter: GridFilter;
   onAttachRemote: () => void;
   onOpenLocal: () => void;
+  onProvisionAgent?: () => void;
+  canProvision: boolean;
 }) {
+  const cloudCta: ReactCTA | undefined =
+    canProvision && onProvisionAgent
+      ? { label: "+ new cloud agent", onClick: onProvisionAgent, primary: true }
+      : undefined;
   const copy: Record<
     GridFilter,
     { title: string; body: string; cta?: ReactCTA }
@@ -186,8 +223,11 @@ function EmptyState({
       cta: { label: "Open local Milady", onClick: onOpenLocal, primary: true },
     },
     cloud: {
-      title: "No cloud runtimes.",
-      body: "Sign into Eliza Cloud to discover hosted Milady instances attached to your account.",
+      title: canProvision ? "No cloud runtimes yet." : "No cloud runtimes.",
+      body: canProvision
+        ? "Spin up your first cloud agent and it'll show up here."
+        : "Sign into Eliza Cloud to discover hosted Milady instances attached to your account.",
+      cta: cloudCta,
     },
     remote: {
       title: "No remote connections.",
