@@ -115,7 +115,7 @@ function handleNotification(
     logger.debug("[push] non-session intent ignored", { intent });
     return;
   }
-  const encoded = data["pairing"];
+  const encoded = data.pairing;
   if (typeof encoded !== "string") {
     const error = new Error(
       "[push] session.start missing `pairing` payload field",

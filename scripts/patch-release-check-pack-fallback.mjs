@@ -44,27 +44,6 @@ const releaseCheckPackDryRunCandidates = [
   ),
 ];
 
-const packDryRunLibCandidates = [
-  path.join(
-    repoRoot,
-    "eliza",
-    "packages",
-    "app-core",
-    "scripts",
-    "lib",
-    "release-check-pack-dry-run.ts",
-  ),
-  path.join(
-    repoRoot,
-    ".eliza.ci-disabled",
-    "packages",
-    "app-core",
-    "scripts",
-    "lib",
-    "release-check-pack-dry-run.ts",
-  ),
-];
-
 const oldRunPackDryBlock = `function runPackDry(): PackResult[] {
   return withSanitizedNpmOverrides(() => {
     try {
@@ -217,24 +196,7 @@ function hasRequiredLocalPackHotspots(source) {
   return entries.includes("dist") && entries.includes("apps/app/dist");
 }
 
-function findPackDryRunLibFile(candidates = packDryRunLibCandidates) {
-  return candidates.find((candidate) => fs.existsSync(candidate)) ?? null;
-}
-
-function libHasRequiredLocalPackHotspots(libFilePath) {
-  if (!libFilePath) {
-    return false;
-  }
-  const source = fs.readFileSync(libFilePath, "utf8");
-  const block = getLocalPackHotspotPathsBlock(source);
-  if (!block) {
-    return false;
-  }
-  return block.includes('"dist"') && block.includes('"apps/app/dist"');
-}
-
-export function applyReleaseCheckPackFallback(source, options = {}) {
-  const { libHotspotsSatisfied = false } = options;
+export function applyReleaseCheckPackFallback(source) {
   let patched = source;
 
   if (!patched.includes("function runBunPackDry(): PackResult[]")) {
@@ -254,9 +216,9 @@ export function applyReleaseCheckPackFallback(source, options = {}) {
   return patched;
 }
 
-export function patchReleaseCheckFile(filePath, options = {}) {
+export function patchReleaseCheckFile(filePath) {
   const original = fs.readFileSync(filePath, "utf8");
-  const patched = applyReleaseCheckPackFallback(original, options);
+  const patched = applyReleaseCheckPackFallback(original);
   if (patched === original) {
     return false;
   }

@@ -56,6 +56,15 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+function getSocket(index: number): FakeWebSocket {
+  const socket = FakeWebSocket.instances[index];
+  expect(socket).toBeDefined();
+  if (!socket) {
+    throw new Error(`expected FakeWebSocket instance at index ${index}`);
+  }
+  return socket;
+}
+
 describe("AgentChannel", () => {
   it("buffers messages sent before the socket opens and drains on open", () => {
     const channel = new AgentChannel({ url: "ws://127.0.0.1:31339/ext" });
@@ -66,12 +75,16 @@ describe("AgentChannel", () => {
     };
     channel.send(message);
 
-    const socket = FakeWebSocket.instances[0];
-    expect(socket).toBeDefined();
-    expect(socket?.sent).toEqual([]);
-    socket?.open();
-    expect(socket?.sent).toHaveLength(1);
-    const parsed = JSON.parse(socket!.sent[0]!);
+    const socket = getSocket(0);
+    expect(socket.sent).toEqual([]);
+    socket.open();
+    expect(socket.sent).toHaveLength(1);
+    const sent = socket.sent[0];
+    expect(sent).toBeDefined();
+    if (!sent) {
+      throw new Error("expected queued message to be sent after socket open");
+    }
+    const parsed = JSON.parse(sent);
     expect(parsed).toEqual(message);
   });
 
@@ -82,7 +95,7 @@ describe("AgentChannel", () => {
       onMessage: (m) => received.push(m),
     });
     channel.start();
-    const socket = FakeWebSocket.instances[0]!;
+    const socket = getSocket(0);
     socket.open();
     socket.emit("message", { data: JSON.stringify({ type: "ack" }) });
     expect(received).toEqual([{ type: "ack" }]);
@@ -95,7 +108,7 @@ describe("AgentChannel", () => {
       onMessage: (m) => received.push(m),
     });
     channel.start();
-    const socket = FakeWebSocket.instances[0]!;
+    const socket = getSocket(0);
     socket.open();
     socket.emit("message", { data: "not json" });
     socket.emit("message", { data: JSON.stringify({ type: "unknown" }) });
@@ -106,7 +119,7 @@ describe("AgentChannel", () => {
     vi.useFakeTimers();
     const channel = new AgentChannel({ url: "ws://127.0.0.1:31339/ext" });
     channel.start();
-    const first = FakeWebSocket.instances[0]!;
+    const first = getSocket(0);
     first.open();
     first.close();
     vi.advanceTimersByTime(5_001);
