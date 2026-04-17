@@ -89,8 +89,8 @@ export function DashboardShell({
 
       {/* Main canvas */}
       <div className="relative z-10 lg:pl-[240px]">
-        {/* Mobile topbar */}
-        <div className="flex items-center justify-between border-b border-border bg-[#08090d]/80 px-4 py-3 backdrop-blur lg:hidden">
+        {/* Mobile topbar — sticky so drawer button stays reachable on long scrolls */}
+        <div className="sticky top-0 z-30 flex items-center justify-between border-b border-border bg-[#08090d]/85 px-4 py-3 backdrop-blur-md lg:hidden">
           <button
             type="button"
             onClick={() => setDrawerOpen(true)}
