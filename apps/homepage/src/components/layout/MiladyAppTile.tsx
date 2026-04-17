@@ -33,9 +33,12 @@ export function MiladyAppTile({
       onClick={() => onOpen(launchUrl)}
       disabled={!hasLocal}
       aria-label={hasLocal ? "Open Milady APP" : "Start local Milady"}
-      className={`group relative flex w-full items-center gap-3 overflow-hidden rounded-xl border p-3 text-left transition ${
+      // Gold tile is the loudest element on the page but still restrained:
+      // an inner white-edge highlight simulates refraction, and the outer
+      // shadow is low-opacity + short-radius (taste-skill §7 NO-NEON-GLOWS).
+      className={`group relative flex w-full items-center gap-3 overflow-hidden rounded-xl border p-3 text-left transition active:scale-[0.99] ${
         hasLocal
-          ? "border-brand/60 shadow-[0_0_48px_rgba(240,185,11,0.22)]"
+          ? "border-brand/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_10px_30px_-14px_rgba(240,185,11,0.45)]"
           : "border-white/10 opacity-55 hover:opacity-80"
       }`}
       style={
@@ -65,7 +68,7 @@ export function MiladyAppTile({
         {hasLocal ? (
           <span
             aria-hidden="true"
-            className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-black bg-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.9)]"
+            className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-black bg-emerald-400 shadow-[0_0_6px_rgba(16,185,129,0.35)]"
           />
         ) : null}
       </div>

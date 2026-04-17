@@ -16,7 +16,7 @@ export function SessionTile({
           aria-hidden="true"
           className={`h-2 w-2 rounded-full ${
             isAuthenticated
-              ? "bg-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.8)]"
+              ? "bg-emerald-400 shadow-[0_0_6px_rgba(16,185,129,0.35)]"
               : isSigningIn
                 ? "bg-brand animate-pulse"
                 : "bg-white/25"
@@ -48,7 +48,7 @@ export function SessionTile({
           <button
             type="button"
             onClick={onSignIn}
-            className="w-full rounded-md bg-brand px-2.5 py-1.5 text-[11px] font-medium text-black transition hover:bg-[var(--color-gold-300)]"
+            className="w-full rounded-md bg-brand px-2.5 py-1.5 text-[11px] font-medium text-black transition duration-200 hover:bg-[var(--color-gold-300)] active:scale-[0.98]"
           >
             Sign in to cloud
           </button>

@@ -8,9 +8,12 @@ const LABELS: Record<ManagedAgent["status"], string> = {
   unknown: "unknown",
 };
 
+// Status-indicator glows use tinted shadows at ~30% opacity per taste-skill
+// §7 (no neon outer glows). Tightened blur radius keeps them legible on
+// small dots without bleeding into adjacent copy.
 const COLORS: Record<ManagedAgent["status"], string> = {
-  running: "bg-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.6)]",
-  paused: "bg-brand shadow-[0_0_12px_rgba(240,185,11,0.5)]",
+  running: "bg-emerald-400 shadow-[0_0_6px_rgba(16,185,129,0.35)]",
+  paused: "bg-brand shadow-[0_0_6px_rgba(240,185,11,0.32)]",
   stopped: "bg-rose-400",
   provisioning: "bg-brand animate-pulse",
   unknown: "bg-white/30",

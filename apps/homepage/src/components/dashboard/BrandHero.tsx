@@ -84,7 +84,9 @@ export function BrandHero({
               type="button"
               onClick={primaryHandler}
               aria-label="Open local Milady runtime"
-              className="group inline-flex items-center gap-2 rounded-md px-5 py-3 text-[13px] font-semibold text-black shadow-[0_0_40px_rgba(240,185,11,0.28)] transition hover:-translate-y-0.5"
+              // Press feedback per taste-skill rule 5 (tactile: -1px on
+              // active). Softer tinted shadow replaces the neon outer glow.
+              className="group inline-flex items-center gap-2 rounded-md px-5 py-3 text-[13px] font-semibold text-black shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_10px_24px_-10px_rgba(240,185,11,0.55)] transition duration-200 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98]"
               style={{ background: "var(--gold-gradient-primary)" }}
             >
               <span>{primaryLabel}</span>
@@ -105,7 +107,7 @@ export function BrandHero({
                   ? "Probing for local Milady"
                   : "No local runtime detected. Open install instructions."
               }
-              className="group inline-flex items-center gap-2 rounded-md border border-white/12 bg-white/[0.04] px-5 py-3 text-[13px] font-medium text-white transition hover:border-brand/40 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-60"
+              className="group inline-flex items-center gap-2 rounded-md border border-white/12 bg-white/[0.04] px-5 py-3 text-[13px] font-medium text-white transition duration-200 hover:-translate-y-0.5 hover:border-brand/40 hover:bg-white/[0.06] active:translate-y-0 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isLocalProbing ? (
                 <span
@@ -125,7 +127,7 @@ export function BrandHero({
           <button
             type="button"
             onClick={onAttachRemote}
-            className="rounded-md border border-border bg-white/[0.04] px-5 py-3 text-[13px] font-medium text-white transition hover:border-white/25 hover:bg-white/[0.06]"
+            className="rounded-md border border-border bg-white/[0.04] px-5 py-3 text-[13px] font-medium text-white transition duration-200 hover:-translate-y-0.5 hover:border-white/25 hover:bg-white/[0.06] active:translate-y-0 active:scale-[0.98]"
           >
             Attach remote
           </button>
