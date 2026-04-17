@@ -221,9 +221,20 @@ append_dependency_spec_package \
   "@types/bun" \
   "eliza/packages/typescript/package.json" \
   ".eliza.ci-disabled/packages/typescript/package.json"
+append_dependency_spec_package \
+  "@types/fast-redact" \
+  "eliza/packages/typescript/package.json" \
+  ".eliza.ci-disabled/packages/typescript/package.json"
+append_dependency_spec_package \
+  "@types/markdown-it" \
+  "eliza/packages/typescript/package.json" \
+  ".eliza.ci-disabled/packages/typescript/package.json"
 
 for attempt in 1 2 3; do
   if bun add --no-save --dev --ignore-scripts "${packages[@]}"; then
+    # @types/uuid shadows uuid@13's bundled types and makes TS report that
+    # v4/v5 do not exist. Let the runtime package supply its own declarations.
+    rm -rf node_modules/@types/uuid
     exit 0
   fi
 
