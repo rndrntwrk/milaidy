@@ -113,6 +113,7 @@
         "@elizaos/capacitor-canvas": "workspace:*",
         "@elizaos/capacitor-desktop": "workspace:*",
         "@elizaos/capacitor-gateway": "workspace:*",
+        "@elizaos/capacitor-llama": "workspace:*",
         "@elizaos/capacitor-location": "workspace:*",
         "@elizaos/capacitor-mobile-signals": "workspace:*",
         "@elizaos/capacitor-screencapture": "workspace:*",
@@ -729,10 +730,11 @@
     "eliza/packages/native-plugins/llama": {
       "name": "@elizaos/capacitor-llama",
       "version": "0.1.0",
+      "dependencies": {
+        "llama-cpp-capacitor": "^0.1.5",
+      },
       "devDependencies": {
-        "@capacitor/android": "^8.0.0",
         "@capacitor/core": "^8.0.0",
-        "@capacitor/ios": "^8.0.0",
         "@rollup/plugin-node-resolve": "^16.0.0",
         "rimraf": "^5.0.0",
         "rollup": "^4.0.0",
@@ -4720,6 +4722,8 @@
     "lines-and-columns": ["lines-and-columns@1.2.4", "", {}, "sha512-7ylylesZQ/PV29jhEDl3Ufjo6ZX7gCqJr5F7PKrqc93v7fzSymt1BpwEU8nAUXs8qzzvqhbjhK5QZg6Mt/HkBg=="],
 
     "linkify-it": ["linkify-it@5.0.0", "", { "dependencies": { "uc.micro": "^2.0.0" } }, "sha512-5aHCbzQRADcdP+ATqnDuhhJ/MRIqDkZX5pyjFHRRysS8vZ5AbqGEoFIb6pYHPZ+L/OC2Lc+xT8uHVVR5CAK/wQ=="],
+
+    "llama-cpp-capacitor": ["llama-cpp-capacitor@0.1.5", "", { "peerDependencies": { "@capacitor/core": ">=8.0.0" } }, "sha512-81u2ydsd4nO70jrv4XnxgqiPekm4IJD4xX5gVlTKwROpfV8NyQBpBs+7ywG4i0eKQmGuvCkFepaixheJ6FeOgQ=="],
 
     "load-tsconfig": ["load-tsconfig@0.2.5", "", {}, "sha512-IXO6OCs9yg8tMKzfPZ1YmheJbZCiEsnBdcB03l0OcfK9prKnJb96siuHCr5Fl37/yo9DnKU+TLpxzTUspw9shg=="],
 

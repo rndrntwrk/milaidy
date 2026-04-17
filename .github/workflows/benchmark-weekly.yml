@@ -88,10 +88,10 @@ jobs:
           install-command: bun install --ignore-scripts --no-frozen-lockfile
           prepare-local-eliza-runtime: "true"
 
-      - name: Verify upstream runner present
+      - name: Verify scenario-runner CLI present
         run: |
-          test -f eliza/packages/app-core/scripts/lifeops-scenario-runner.ts || \
-            { echo "upstream lifeops-scenario-runner missing"; exit 1; }
+          test -f eliza/packages/scenario-runner/src/cli.ts || \
+            { echo "scenario-runner CLI missing"; exit 1; }
 
       - name: Run benchmark harness
         id: run

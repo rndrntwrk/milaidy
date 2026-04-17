@@ -1,22 +1,22 @@
 #!/usr/bin/env node
 /**
- * Milady-side wrapper around the upstream lifeops scenario runner.
+ * Milady-side wrapper around the unified `@elizaos/scenario-runner` CLI.
  *
  * Responsibilities:
  *   1. Ensure SKIP_REASON gating: when scenarios are filtered/skipped via
  *      SCENARIO_SKIP, an explicit SKIP_REASON env var must be set or this
  *      wrapper exits non-zero.
- *   2. Forward to the upstream runner located in the eliza submodule.
- *   3. Fail loudly if the upstream runner reports `failedCount > 0`.
+ *   2. Forward to the unified scenario CLI at
+ *      `eliza/packages/scenario-runner/src/cli.ts`.
+ *   3. Fail loudly if the CLI reports failure.
  *
  * Required env:
  *   - MILADY_LIVE_TEST=1 and ELIZA_LIVE_TEST=1 (asserted)
- *   - At least one provider key (OPENAI_API_KEY, OPENROUTER_API_KEY, etc.) —
- *     the upstream runner will throw if none are present.
+ *   - At least one LLM provider key (OPENAI_API_KEY, OPENROUTER_API_KEY, etc.)
  *
  * Optional env:
  *   - LIFEOPS_JUDGE_THRESHOLD: minimum LLM judge score (default 0.8). Forwarded
- *     to the upstream runner via LIFEOPS_LIVE_JUDGE_MIN_SCORE.
+ *     to the CLI via LIFEOPS_LIVE_JUDGE_MIN_SCORE.
  *   - SCENARIO_FILTER: comma-separated scenario IDs (forwards as --scenario).
  *   - SKIP_REASON: required when any scenario is intentionally skipped.
  *   - REPORT_PATH: where to write the JSON report (default: artifacts/lifeops-scenario-report.json).
@@ -34,18 +34,19 @@ const REPO_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
 );
-const UPSTREAM_RUNNER = path.join(
+const SCENARIO_CLI = path.join(
   REPO_ROOT,
   "eliza",
   "packages",
-  "app-core",
-  "scripts",
-  "lifeops-scenario-runner.ts",
+  "scenario-runner",
+  "src",
+  "cli.ts",
 );
+const SCENARIO_ROOT = path.join(REPO_ROOT, "test", "scenarios");
 
-if (!existsSync(UPSTREAM_RUNNER)) {
+if (!existsSync(SCENARIO_CLI)) {
   console.error(
-    `[run-live-scenarios] upstream runner missing at ${UPSTREAM_RUNNER}. ` +
+    `[run-live-scenarios] scenario-runner CLI missing at ${SCENARIO_CLI}. ` +
       `Did you run 'bun run setup:upstreams' or initialize the eliza submodule?`,
   );
   process.exit(2);
@@ -83,7 +84,9 @@ mkdirSync(path.dirname(reportPath), { recursive: true });
 
 const args = [
   "run",
-  UPSTREAM_RUNNER,
+  SCENARIO_CLI,
+  "run",
+  SCENARIO_ROOT,
   "--report",
   reportPath,
   ...process.argv.slice(2),

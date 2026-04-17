@@ -1,12 +1,13 @@
 #!/usr/bin/env node
+
 /**
  * Weekly benchmark harness for the 22 executive-assistant scenarios and 15
  * connector certification scenarios.
  *
  * Loads scenario ids from the filesystem (test/scenarios/executive-assistant/
- * and test/scenarios/connector-certification/), invokes the upstream lifeops
- * scenario runner through scripts/run-live-scenarios.mjs (which enforces
- * SKIP_REASON + judge thresholds), and emits a markdown report to
+ * and test/scenarios/connector-certification/), invokes the unified
+ * `@elizaos/scenario-runner` CLI through scripts/run-live-scenarios.mjs (which
+ * enforces SKIP_REASON + judge thresholds), and emits a markdown report to
  * artifacts/benchmark-report.md plus the raw JSON at
  * artifacts/lifeops-scenario-report.json.
  *
@@ -17,9 +18,9 @@
  *   BENCHMARK_REPORT_PATH   (default: artifacts/benchmark-report.md)
  */
 
-import { readdirSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
-import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = path.resolve(
@@ -94,7 +95,7 @@ const runnerEnv = {
 };
 
 console.log(
-  `[benchmark] invoking upstream runner for ${scenariosToRun.length} scenarios (threshold=${runnerEnv.LIFEOPS_JUDGE_THRESHOLD})`,
+  `[benchmark] invoking scenario-runner for ${scenariosToRun.length} scenarios (threshold=${runnerEnv.LIFEOPS_JUDGE_THRESHOLD})`,
 );
 
 const result = spawnSync("node", ["scripts/run-live-scenarios.mjs"], {

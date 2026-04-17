@@ -24,7 +24,6 @@ export const specializedLiveE2EPaths = [
   "eliza/apps/app-lifeops/test/lifeops-chat.live.e2e.test.ts",
   "eliza/apps/app-lifeops/test/lifeops-gmail-chat.live.e2e.test.ts",
   "eliza/apps/app-lifeops/test/lifeops-memory.live.e2e.test.ts",
-  "eliza/apps/app-lifeops/test/lifeops-scenarios.live.e2e.test.ts",
   "eliza/apps/app-lifeops/test/selfcontrol-chat.live.e2e.test.ts",
   "eliza/apps/app-lifeops/test/selfcontrol-desktop.live.e2e.test.ts",
   "eliza/apps/app-lifeops/test/selfcontrol-dev.live.e2e.test.ts",

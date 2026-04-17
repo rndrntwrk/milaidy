@@ -742,6 +742,9 @@ function nativeModuleStubPlugin(): Plugin {
   // parsed by Vite's dev pipeline.
   const nativePackages = new Set([
     "node-llama-cpp",
+    // Mobile-only Capacitor llama.cpp runtime. Never loads in web/Electrobun;
+    // stub so Vite doesn't try to bundle its native pods/JNI metadata.
+    "llama-cpp-capacitor",
     "fs-extra",
     "pty-state-capture",
     "pty-console",
