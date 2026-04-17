@@ -19,13 +19,13 @@ export {
 } from "../../eliza/packages/app-core/test/benchmarks/action-selection-cases";
 
 export {
-  runActionSelectionBenchmark,
-  formatBenchmarkReportMarkdown,
+  type ActionBenchmarkLatencyStats,
   type ActionBenchmarkReport,
   type ActionBenchmarkResult,
   type ActionBenchmarkRunOptions,
-  type ActionBenchmarkLatencyStats,
   type ActionBenchmarkTagStats,
+  formatBenchmarkReportMarkdown,
+  runActionSelectionBenchmark,
 } from "../../eliza/packages/app-core/test/benchmarks/action-selection-runner";
 
 import type { AgentRuntime } from "@elizaos/core";
@@ -34,8 +34,8 @@ import {
   type ActionBenchmarkCase,
 } from "../../eliza/packages/app-core/test/benchmarks/action-selection-cases";
 import {
-  runActionSelectionBenchmark,
   type ActionBenchmarkReport,
+  runActionSelectionBenchmark,
 } from "../../eliza/packages/app-core/test/benchmarks/action-selection-runner";
 
 // ---------------------------------------------------------------------------
@@ -55,24 +55,105 @@ export interface BenchmarkCase {
  */
 export const QUICK_BENCHMARK_CASES: BenchmarkCase[] = [
   // Negative — should NOT trigger actions
-  { id: "greeting", userMessage: "Hey, good morning!", expectedAction: null, tags: ["negative", "basic"] },
-  { id: "factual", userMessage: "What is the capital of France?", expectedAction: null, tags: ["negative", "basic"] },
-  { id: "opinion", userMessage: "What do you think about remote work?", expectedAction: null, tags: ["negative", "basic"] },
-  { id: "thanks", userMessage: "thanks, that was helpful", expectedAction: null, tags: ["negative", "basic"] },
-  { id: "neg-email-vent", userMessage: "I hate email, it's such a time sink", expectedAction: null, tags: ["negative", "near-miss"] },
-  { id: "neg-calendar-vent", userMessage: "my calendar has been crazy this quarter", expectedAction: null, tags: ["negative", "near-miss"] },
+  {
+    id: "greeting",
+    userMessage: "Hey, good morning!",
+    expectedAction: null,
+    tags: ["negative", "basic"],
+  },
+  {
+    id: "factual",
+    userMessage: "What is the capital of France?",
+    expectedAction: null,
+    tags: ["negative", "basic"],
+  },
+  {
+    id: "opinion",
+    userMessage: "What do you think about remote work?",
+    expectedAction: null,
+    tags: ["negative", "basic"],
+  },
+  {
+    id: "thanks",
+    userMessage: "thanks, that was helpful",
+    expectedAction: null,
+    tags: ["negative", "basic"],
+  },
+  {
+    id: "neg-email-vent",
+    userMessage: "I hate email, it's such a time sink",
+    expectedAction: null,
+    tags: ["negative", "near-miss"],
+  },
+  {
+    id: "neg-calendar-vent",
+    userMessage: "my calendar has been crazy this quarter",
+    expectedAction: null,
+    tags: ["negative", "near-miss"],
+  },
 
   // Positive — SHOULD trigger actions
-  { id: "todo-create", userMessage: "Add buy groceries to my to-do list", expectedAction: "LIFE", tags: ["todos", "critical"] },
-  { id: "todo-list", userMessage: "What's on my todo list today?", expectedAction: "LIFE", tags: ["todos", "critical"] },
-  { id: "goal-set", userMessage: "Set a goal to save $5,000 by the end of the year", expectedAction: "LIFE", tags: ["goals", "critical"] },
-  { id: "cal-schedule", userMessage: "Schedule a dentist appointment next Tuesday at 3pm", expectedAction: "CALENDAR_ACTION", tags: ["calendar", "critical"] },
-  { id: "cal-check", userMessage: "What's my next meeting?", expectedAction: "CALENDAR_ACTION", tags: ["calendar", "critical"] },
-  { id: "email-triage", userMessage: "Triage my gmail inbox", expectedAction: "GMAIL_ACTION", tags: ["email", "critical"] },
-  { id: "personality-change", userMessage: "Change your personality to be more casual and funny", expectedAction: "MODIFY_CHARACTER", tags: ["personality", "critical"] },
-  { id: "send-telegram", userMessage: "Send a telegram message to Jane saying I'm running late", expectedAction: "CROSS_CHANNEL_SEND", tags: ["messaging", "critical"] },
-  { id: "block-sites", userMessage: "Block twitter and reddit for the next 2 hours", expectedAction: "BLOCK_WEBSITES", tags: ["focus", "critical"] },
-  { id: "habit-create", userMessage: "I want to start a daily habit of meditating for 10 minutes each morning", expectedAction: "LIFE", tags: ["habits", "critical"] },
+  {
+    id: "todo-create",
+    userMessage: "Add buy groceries to my to-do list",
+    expectedAction: "LIFE",
+    tags: ["todos", "critical"],
+  },
+  {
+    id: "todo-list",
+    userMessage: "What's on my todo list today?",
+    expectedAction: "LIFE",
+    tags: ["todos", "critical"],
+  },
+  {
+    id: "goal-set",
+    userMessage: "Set a goal to save $5,000 by the end of the year",
+    expectedAction: "LIFE",
+    tags: ["goals", "critical"],
+  },
+  {
+    id: "cal-schedule",
+    userMessage: "Schedule a dentist appointment next Tuesday at 3pm",
+    expectedAction: "CALENDAR_ACTION",
+    tags: ["calendar", "critical"],
+  },
+  {
+    id: "cal-check",
+    userMessage: "What's my next meeting?",
+    expectedAction: "CALENDAR_ACTION",
+    tags: ["calendar", "critical"],
+  },
+  {
+    id: "email-triage",
+    userMessage: "Triage my gmail inbox",
+    expectedAction: "GMAIL_ACTION",
+    tags: ["email", "critical"],
+  },
+  {
+    id: "personality-change",
+    userMessage: "Change your personality to be more casual and funny",
+    expectedAction: "MODIFY_CHARACTER",
+    tags: ["personality", "critical"],
+  },
+  {
+    id: "send-telegram",
+    userMessage: "Send a telegram message to Jane saying I'm running late",
+    expectedAction: "CROSS_CHANNEL_SEND",
+    tags: ["messaging", "critical"],
+  },
+  {
+    id: "block-sites",
+    userMessage: "Block twitter and reddit for the next 2 hours",
+    expectedAction: "BLOCK_WEBSITES",
+    tags: ["focus", "critical"],
+  },
+  {
+    id: "habit-create",
+    userMessage:
+      "I want to start a daily habit of meditating for 10 minutes each morning",
+    expectedAction: "LIFE",
+    tags: ["habits", "critical"],
+  },
 ];
 
 // ---------------------------------------------------------------------------

@@ -71,19 +71,21 @@ export async function getActionInvocations(
   );
 
   return actionMemories
-    .map((m): ActionInvocation => ({
-      actionName: String(m.content.actionName ?? "UNKNOWN"),
-      actionStatus: String(m.content.actionStatus ?? "unknown"),
-      params:
-        m.content.data && typeof m.content.data === "object"
-          ? (m.content.data as Record<string, unknown>)
-          : undefined,
-      result: m.content.data,
-      runId:
-        typeof m.content.runId === "string" ? m.content.runId : undefined,
-      timestamp: m.createdAt,
-      _raw: m,
-    }))
+    .map(
+      (m): ActionInvocation => ({
+        actionName: String(m.content.actionName ?? "UNKNOWN"),
+        actionStatus: String(m.content.actionStatus ?? "unknown"),
+        params:
+          m.content.data && typeof m.content.data === "object"
+            ? (m.content.data as Record<string, unknown>)
+            : undefined,
+        result: m.content.data,
+        runId:
+          typeof m.content.runId === "string" ? m.content.runId : undefined,
+        timestamp: m.createdAt,
+        _raw: m,
+      }),
+    )
     .sort((a, b) => (a.timestamp ?? 0) - (b.timestamp ?? 0));
 }
 

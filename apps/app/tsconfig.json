@@ -58,6 +58,9 @@
       "@elizaos/capacitor-desktop": [
         "./eliza/packages/native-plugins/desktop/src/index.ts"
       ],
+      "@elizaos/native-activity-tracker": [
+        "./eliza/packages/native-plugins/activity-tracker/src/index.ts"
+      ],
       "@elizaos/ui": ["./eliza/packages/ui/src/index.ts"],
       "@elizaos/ui/*": ["./eliza/packages/ui/src/*"],
       "react": ["./eliza/node_modules/@types/react/index.d.ts"],

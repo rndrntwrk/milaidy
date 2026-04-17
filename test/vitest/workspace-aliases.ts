@@ -139,7 +139,9 @@ function getPackageSourceAliases(
     ...(includeMiladyAlias
       ? [
           {
-            find: new RegExp(`^@miladyai/${escapeRegExp(packageName)}/(.*)\\.js$`),
+            find: new RegExp(
+              `^@miladyai/${escapeRegExp(packageName)}/(.*)\\.js$`,
+            ),
             replacement: path.join(sourceRoot, "$1.ts"),
           },
           {

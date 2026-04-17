@@ -10,8 +10,8 @@
  * it requires a real runtime with persisted memories.
  */
 
-import { describe, expect, it } from "vitest";
 import type { Memory } from "@elizaos/core";
+import { describe, expect, it } from "vitest";
 import type { ActionInvocation } from "./action-assertions";
 import {
   expectActionCalled,
@@ -71,9 +71,7 @@ describe("action assertion helpers", () => {
     });
 
     it("throws when invocations list is empty", () => {
-      expect(() => expectActionCalled([], "ANY_ACTION")).toThrow(
-        /\(none\)/,
-      );
+      expect(() => expectActionCalled([], "ANY_ACTION")).toThrow(/\(none\)/);
     });
 
     it("validates status when provided", () => {
@@ -166,9 +164,9 @@ describe("action assertion helpers", () => {
         inv("SECOND", "success", { timestamp: 1000 }),
         inv("FIRST", "success", { timestamp: 2000 }),
       ];
-      expect(() =>
-        expectActionOrder(invocations, ["FIRST", "SECOND"]),
-      ).toThrow(/Expected action order violated/);
+      expect(() => expectActionOrder(invocations, ["FIRST", "SECOND"])).toThrow(
+        /Expected action order violated/,
+      );
     });
 
     it("throws when an action is missing entirely", () => {
@@ -229,9 +227,9 @@ describe("action assertion helpers", () => {
     });
 
     it("throws on empty invocations", () => {
-      expect(() =>
-        expectAnyActionCalled([], ["GMAIL_ACTION"]),
-      ).toThrow(/\(none\)/);
+      expect(() => expectAnyActionCalled([], ["GMAIL_ACTION"])).toThrow(
+        /\(none\)/,
+      );
     });
 
     it("uses fuzzy matching", () => {
