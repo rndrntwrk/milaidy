@@ -203,6 +203,7 @@ describe("release workflow path contract", () => {
     );
 
     expect(fallbackScript).toContain("playwright-core");
+    expect(fallbackScript).toContain('"bun-types"');
     expect(fallbackScript).toContain('"@types/bun"');
   });
 
