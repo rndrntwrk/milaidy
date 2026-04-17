@@ -193,7 +193,7 @@ function GridSkeleton() {
       {[0, 1, 2].map((i) => (
         <div
           key={i}
-          className="flex flex-col gap-4 rounded-xl border border-border bg-white/[0.02] p-5"
+          className="flex flex-col gap-4 rounded-lg border border-border bg-white/[0.02] p-5"
           style={{ animationDelay: `${i * 90}ms` }}
         >
           <div className="flex items-center justify-between gap-3">
@@ -261,7 +261,7 @@ function EmptyState({
   };
   const state = copy[filter];
   return (
-    <div className="flex flex-col items-start gap-4 rounded-xl border border-dashed border-white/12 bg-white/[0.015] px-6 py-10 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+    <div className="flex flex-col items-start gap-4 rounded-lg border border-border bg-white/[0.015] px-5 py-8 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:px-6">
       <div className="max-w-md space-y-1.5">
         <h3 className="text-[15px] font-medium tracking-tight text-white/90">
           {state.title}

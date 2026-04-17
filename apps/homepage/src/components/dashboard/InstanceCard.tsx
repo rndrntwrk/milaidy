@@ -60,7 +60,7 @@ export function InstanceCard({
   const runtimeLabel = agent.model ?? "milady runtime";
 
   return (
-    <article className="group relative flex flex-col gap-4 rounded-xl border border-border bg-[#0b0b10] p-5 transition hover:-translate-y-0.5 hover:border-brand/40 hover:shadow-[0_0_0_1px_rgba(240,185,11,0.12),0_18px_40px_-20px_rgba(240,185,11,0.25)]">
+    <article className="group relative flex flex-col gap-4 rounded-lg border border-border bg-[#0b0b10] p-5 transition hover:-translate-y-0.5 hover:border-brand/35 hover:shadow-[0_0_0_1px_rgba(240,185,11,0.08),0_12px_30px_-18px_rgba(240,185,11,0.18)]">
       {/* Row 1 — inline meta strip */}
       <header className="flex items-center justify-between gap-3">
         <StatusDot status={agent.status} />
