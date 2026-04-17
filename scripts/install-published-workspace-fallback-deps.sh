@@ -233,8 +233,16 @@ append_dependency_spec_package \
 for attempt in 1 2 3; do
   if bun add --no-save --dev --ignore-scripts "${packages[@]}"; then
     # @types/uuid shadows uuid@13's bundled types and makes TS report that
-    # v4/v5 do not exist. Let the runtime package supply its own declarations.
-    rm -rf node_modules/@types/uuid
+    # v4/v5 do not exist. Remove the stale package anywhere the core build can
+    # resolve it so the runtime package supplies its own declarations instead.
+    for uuid_types_dir in \
+      node_modules/@types/uuid \
+      eliza/node_modules/@types/uuid \
+      eliza/packages/typescript/node_modules/@types/uuid \
+      .eliza.ci-disabled/node_modules/@types/uuid \
+      .eliza.ci-disabled/packages/typescript/node_modules/@types/uuid; do
+      rm -rf "$uuid_types_dir"
+    done
     exit 0
   fi
 
