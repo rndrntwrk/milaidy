@@ -592,7 +592,10 @@ export default defineConfig({
     clearMocks: false,
     mockReset: false,
     execArgv: ["--max-old-space-size=4096"],
-    setupFiles: liveSetupFile ? [liveSetupFile] : [],
+    setupFiles: [
+      ...(liveSetupFile ? [liveSetupFile] : []),
+      path.join(repoRoot, "test", "vitest", "fail-on-silent-skip.setup.ts"),
+    ],
     include: [
       "**/*.live.test.ts",
       "**/*.live.test.tsx",
