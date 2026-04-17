@@ -30,5 +30,11 @@ describe("action e2e workflow contract", () => {
     expect(workflow).toContain(
       "OPENAI_BASE_URL: ${{ secrets.ELIZAOS_CLOUD_API_KEY != '' && 'https://elizacloud.ai/api/v1' || 'https://api.openai.com/v1' }}",
     );
+    expect(workflow).toContain(
+      "Action Invocation E2E skipped because the configured live provider is unavailable.",
+    );
+    expect(workflow).toContain(
+      "grep -Eiq 'exceeded your current quota|insufficient[_ -]?quota|billing details|credit balance|invalid api key|unauthorized|authentication|status code: 429|too many requests' \"$log_file\"",
+    );
   });
 });
