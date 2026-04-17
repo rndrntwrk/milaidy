@@ -3,7 +3,6 @@ import { NavLink } from "react-router-dom";
 import { releaseData } from "../../generated/release-data";
 import type { ManagedAgent } from "../../lib/AgentProvider";
 import { resolveHomepageAssetUrl } from "../../lib/asset-url";
-import { MiladyAppTile } from "./MiladyAppTile";
 import { SessionTile } from "./SessionTile";
 
 const GITHUB_URL = "https://github.com/milady-ai/milady";
@@ -84,16 +83,17 @@ export function Sidebar({
         ) : null}
       </div>
 
-      {/* Milady APP tile (pinned) */}
-      <MiladyAppTile
-        localAgent={localAgent}
-        fallbackUrl={fallbackLaunchUrl}
-        onOpen={onOpenMiladyApp}
-      />
-
       {/* Nav groups */}
       <nav className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto">
         <NavGroup title="agents">
+          <OpenLocalRow
+            localAgent={localAgent}
+            fallbackUrl={fallbackLaunchUrl}
+            onOpen={(url) => {
+              onClose?.();
+              onOpenMiladyApp(url);
+            }}
+          />
           <NavItem to="/dashboard" label="dashboard" onClick={onClose} />
           <NavItem to="/agents" label="agents" onClick={onClose} disabled />
           <NavItem to="/cloud" label="cloud" onClick={onClose} disabled />
@@ -249,5 +249,62 @@ function NavItemExternal({ href, label }: { href: string; label: string }) {
         ↗
       </span>
     </a>
+  );
+}
+
+/**
+ * OpenLocalRow — quiet replacement for the retired gold MiladyAppTile.
+ * Inline with the rest of nav. When local is running, it's a real link
+ * with a gold dot. When not, it shows a muted 'no local runtime' status.
+ * Gold now lives only on the hero's primary CTA.
+ */
+function OpenLocalRow({
+  localAgent,
+  fallbackUrl,
+  onOpen,
+}: {
+  localAgent: ManagedAgent | null;
+  fallbackUrl: string;
+  onOpen: (url: string) => void;
+}) {
+  const hasLocal = Boolean(localAgent);
+  const launchUrl =
+    localAgent?.webUiUrl ?? localAgent?.sourceUrl ?? fallbackUrl;
+
+  if (!hasLocal) {
+    return (
+      <div
+        aria-disabled="true"
+        className="flex items-center gap-2 rounded-md px-2 py-1.5 text-[13px] text-white/45"
+      >
+        <span
+          aria-hidden="true"
+          className="h-1.5 w-1.5 rounded-full bg-white/20"
+        />
+        <span>no local runtime</span>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(launchUrl)}
+      className="group flex items-center justify-between rounded-md px-2 py-1.5 text-[13px] text-white/85 transition hover:bg-white/[0.04] hover:text-white"
+    >
+      <span className="flex items-center gap-2">
+        <span
+          aria-hidden="true"
+          className="h-1.5 w-1.5 rounded-full bg-brand shadow-[0_0_6px_rgba(240,185,11,0.4)]"
+        />
+        <span>open local</span>
+      </span>
+      <span
+        aria-hidden="true"
+        className="text-[11px] text-white/30 transition group-hover:translate-x-0.5 group-hover:text-brand"
+      >
+        →
+      </span>
+    </button>
   );
 }
