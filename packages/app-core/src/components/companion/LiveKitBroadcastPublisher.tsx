@@ -127,10 +127,52 @@ async function waitForVrmCanvas(
   throw new Error("[LiveKitBroadcastPublisher] aborted waiting for canvas");
 }
 
+/**
+ * Wait for the VRM avatar to finish loading and rendering its first
+ * real frame. BroadcastShell adds `.avatar-ready` to
+ * `document.documentElement` only after `useCompanionSceneStatus()
+ * .avatarReady` flips true — the same signal the capture-service's
+ * FFmpeg path waits for via `page.waitForSelector('.avatar-ready')`
+ * (worker.js:2174).
+ *
+ * Without this gate, canvas.captureStream + publishTrack start
+ * delivering frames to the LiveKit room as soon as the Three.js
+ * renderer paints the first frame — which is an empty scene with
+ * just the clear color. Egress picks those frames up and pushes them
+ * to Cloudflare, and viewers on Twitch see a gray/black background
+ * for several seconds before the VRM model appears.
+ *
+ * Falls through after 30s so a broken scene-status signal can't
+ * permanently stall the broadcast — the existing FFmpeg path has
+ * the same timeout semantics (see worker.js:2174-2178 where it
+ * force-adds .avatar-ready after 20s).
+ */
+async function waitForAvatarReady(
+  abortSignal: AbortSignal,
+  timeoutMs = 30_000,
+  pollMs = 250,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!abortSignal.aborted) {
+    if (document.documentElement.classList.contains("avatar-ready")) {
+      return;
+    }
+    if (Date.now() > deadline) {
+      console.warn(
+        `[LiveKitBroadcastPublisher] .avatar-ready not detected within ${timeoutMs}ms — publishing anyway to avoid stalling the broadcast`,
+      );
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, pollMs));
+  }
+  throw new Error("[LiveKitBroadcastPublisher] aborted waiting for avatar-ready");
+}
+
 type PublisherStatus =
   | "idle"
   | "connecting"
   | "awaiting-canvas"
+  | "awaiting-avatar"
   | "publishing"
   | "error"
   | "disconnected";
@@ -327,6 +369,22 @@ export const LiveKitBroadcastPublisher = memo(function LiveKitBroadcastPublisher
 
         setStatus("awaiting-canvas");
         const canvas = await waitForVrmCanvas(abortController.signal);
+        if (cancelled) {
+          await room.disconnect();
+          return;
+        }
+
+        // Gate on avatar-ready BEFORE publishing the track. The CP's
+        // checkRoomPublisher poll only confirms "video track exists in
+        // room" — if we publish before the VRM model is loaded, the
+        // first frames are an empty Three.js scene (gray/black).
+        // Egress picks those up immediately and viewers see a blank
+        // background for several seconds. Matching the FFmpeg path's
+        // .avatar-ready gate (capture-service/worker.js:2174) means
+        // the very first frame on the wire already has the avatar
+        // rendered.
+        setStatus("awaiting-avatar");
+        await waitForAvatarReady(abortController.signal);
         if (cancelled) {
           await room.disconnect();
           return;
