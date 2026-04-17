@@ -1,7 +1,9 @@
 import { scenario } from "@elizaos/scenario-schema";
 import {
+  expectMemoryWrite,
   expectScenarioToCallAction,
   expectTurnToCallAction,
+  judgeRubric,
 } from "../_helpers/action-assertions.ts";
 
 export default scenario({
@@ -41,6 +43,11 @@ export default scenario({
         "every time",
         "seat",
       ],
+      responseJudge: {
+        minimumScore: 0.7,
+        rubric:
+          "The reply must enumerate the preference fields it will capture (class, seat, luggage, budget, distance tolerance, trip extension) and commit to storing them on the owner profile so they are reused. A vague 'sure' fails.",
+      },
     },
   ],
   finalChecks: [
@@ -49,13 +56,33 @@ export default scenario({
       actionName: ["UPDATE_OWNER_PROFILE", "LIFE"],
     },
     {
+      type: "memoryWriteOccurred",
+      table: ["facts", "components"],
+    },
+    {
       type: "custom",
-      name: "ea-capture-booking-preferences-action-coverage",
+      name: "ea-travel-prefs-action-coverage",
       predicate: expectScenarioToCallAction({
         acceptedActions: ["UPDATE_OWNER_PROFILE", "LIFE"],
         description: "travel preference capture",
         includesAny: ["flight", "hotel", "preferences", "every time"],
       }),
     },
+    {
+      type: "custom",
+      name: "ea-travel-prefs-profile-write",
+      predicate: expectMemoryWrite({
+        table: ["facts", "components"],
+        description:
+          "preferences are persisted on the owner profile, not just acknowledged in chat",
+        contentIncludesAny: ["flight", "hotel", "preference"],
+      }),
+    },
+    judgeRubric({
+      name: "ea-travel-prefs-rubric",
+      threshold: 0.7,
+      description:
+        "End-to-end: the assistant captured the requested set of travel preference fields and persisted them on the owner profile so the next booking flow can reuse them without re-asking.",
+    }),
   ],
 });

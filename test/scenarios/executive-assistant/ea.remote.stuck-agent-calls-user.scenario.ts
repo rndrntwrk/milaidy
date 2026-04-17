@@ -1,7 +1,9 @@
 import { scenario } from "@elizaos/scenario-schema";
 import {
+  expectConnectorDispatch,
   expectScenarioToCallAction,
   expectTurnToCallAction,
+  judgeRubric,
 } from "../_helpers/action-assertions.ts";
 
 export default scenario({
@@ -35,9 +37,18 @@ export default scenario({
         includesAny: ["call", "stuck", "browser", "computer", "unblock"],
       }),
       responseIncludesAny: ["call", "stuck", "browser", "computer", "unblock"],
+      responseJudge: {
+        minimumScore: 0.7,
+        rubric:
+          "The reply must commit to escalating via a real call when browser/computer automation is blocked, not by silently retrying. The escalation channel must be named (phone/voice).",
+      },
     },
   ],
   finalChecks: [
+    {
+      type: "selectedAction",
+      actionName: ["CALL_USER", "LIFEOPS_COMPUTER_USE"],
+    },
     {
       type: "interventionRequestExists",
       expected: true,
@@ -47,13 +58,34 @@ export default scenario({
       channel: "phone_call",
     },
     {
+      type: "connectorDispatchOccurred",
+      channel: "phone_call",
+      actionName: ["CALL_USER"],
+    },
+    {
       type: "custom",
-      name: "ea-remote-stuck-agent-calls-user-action-coverage",
+      name: "ea-stuck-agent-action-coverage",
       predicate: expectScenarioToCallAction({
         acceptedActions: ["CALL_USER", "LIFEOPS_COMPUTER_USE"],
         description: "stuck-agent escalation",
         includesAny: ["call", "stuck", "browser", "computer", "unblock"],
       }),
     },
+    {
+      type: "custom",
+      name: "ea-stuck-agent-call-dispatch",
+      predicate: expectConnectorDispatch({
+        channel: "phone_call",
+        actionName: ["CALL_USER"],
+        description:
+          "stuck-agent escalation goes through the voice/phone dispatcher",
+      }),
+    },
+    judgeRubric({
+      name: "ea-stuck-agent-rubric",
+      threshold: 0.7,
+      description:
+        "End-to-end: when computer-use stalled, the assistant placed a real voice call escalation rather than silently failing or retrying forever.",
+    }),
   ],
 });

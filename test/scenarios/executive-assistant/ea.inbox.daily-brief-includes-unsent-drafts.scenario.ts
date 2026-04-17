@@ -1,7 +1,9 @@
 import { scenario } from "@elizaos/scenario-schema";
 import {
+  expectApprovalRequest,
   expectScenarioToCallAction,
   expectTurnToCallAction,
+  judgeRubric,
 } from "../_helpers/action-assertions.ts";
 
 export default scenario({
@@ -35,12 +37,22 @@ export default scenario({
         includesAny: ["draft", "sign-off", "approval", "brief"],
       }),
       responseIncludesAny: ["draft", "sign-off", "approval", "brief", "unsent"],
+      responseJudge: {
+        minimumScore: 0.7,
+        rubric:
+          "The reply must surface the actual approval-queue contents — at least the count of pending drafts plus a per-draft summary that names the recipient or topic. A vague 'check your drafts' fails.",
+      },
     },
   ],
   finalChecks: [
     {
+      type: "selectedAction",
+      actionName: ["INBOX", "GMAIL_ACTION"],
+    },
+    {
       type: "approvalRequestExists",
       expected: true,
+      state: "pending",
     },
     {
       type: "draftExists",
@@ -48,12 +60,27 @@ export default scenario({
     },
     {
       type: "custom",
-      name: "ea-daily-brief-includes-unsent-drafts-action-coverage",
+      name: "ea-daily-brief-drafts-action-coverage",
       predicate: expectScenarioToCallAction({
         acceptedActions: ["INBOX", "GMAIL_ACTION"],
         description: "daily brief approval queue review",
         includesAny: ["draft", "sign-off", "approval", "brief"],
       }),
     },
+    {
+      type: "custom",
+      name: "ea-daily-brief-drafts-pending-approvals",
+      predicate: expectApprovalRequest({
+        description:
+          "brief reflects pending approval entries from the queue, not stale text",
+        state: "pending",
+      }),
+    },
+    judgeRubric({
+      name: "ea-daily-brief-drafts-rubric",
+      threshold: 0.7,
+      description:
+        "End-to-end: the brief lists the actual pending drafts in the approval queue with enough context (recipient/topic) for the user to decide whether to send them.",
+    }),
   ],
 });

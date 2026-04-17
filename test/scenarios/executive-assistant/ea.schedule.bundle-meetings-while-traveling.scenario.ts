@@ -1,7 +1,9 @@
 import { scenario } from "@elizaos/scenario-schema";
 import {
+  expectMemoryWrite,
   expectScenarioToCallAction,
   expectTurnToCallAction,
+  judgeRubric,
 } from "../_helpers/action-assertions.ts";
 
 export default scenario({
@@ -41,6 +43,11 @@ export default scenario({
         ],
       }),
       responseIncludesAny: ["Tokyo", "Ryan", "same time", "bundle", "schedule"],
+      responseJudge: {
+        minimumScore: 0.7,
+        rubric:
+          "The reply must propose concrete time slots in Tokyo's local time that bundle PendingReality and Ryan together (or explain why bundling isn't feasible). It must name both counterparties.",
+      },
     },
   ],
   finalChecks: [
@@ -49,8 +56,12 @@ export default scenario({
       actionName: ["PROPOSE_MEETING_TIMES", "CALENDAR_ACTION"],
     },
     {
+      type: "memoryWriteOccurred",
+      table: ["messages", "facts"],
+    },
+    {
       type: "custom",
-      name: "ea-bundle-meetings-while-traveling-action-coverage",
+      name: "ea-bundle-meetings-action-coverage",
       predicate: expectScenarioToCallAction({
         acceptedActions: ["PROPOSE_MEETING_TIMES", "CALENDAR_ACTION"],
         description: "city-limited meeting bundling",
@@ -63,5 +74,20 @@ export default scenario({
         ],
       }),
     },
+    {
+      type: "custom",
+      name: "ea-bundle-meetings-memory",
+      predicate: expectMemoryWrite({
+        table: ["messages", "facts"],
+        description:
+          "the bundle plan is stored so follow-up turns can reuse it",
+      }),
+    },
+    judgeRubric({
+      name: "ea-bundle-meetings-rubric",
+      threshold: 0.7,
+      description:
+        "End-to-end: the assistant proposed bundled time slots in Tokyo time covering both counterparties, anchored to actual calendar availability.",
+    }),
   ],
 });

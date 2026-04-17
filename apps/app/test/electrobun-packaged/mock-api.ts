@@ -1125,6 +1125,7 @@ export async function startMockApiServer(
           launchType: "viewer",
           launchUrl: null,
           icon: null,
+          heroImage: null,
           capabilities: [],
           stars: 100,
           repository: "https://github.com/HyperscapeAI/hyperscape",

@@ -1,7 +1,9 @@
 import { scenario } from "@elizaos/scenario-schema";
 import {
+  expectConnectorDispatch,
   expectScenarioToCallAction,
   expectTurnToCallAction,
+  judgeRubric,
 } from "../_helpers/action-assertions.ts";
 
 export default scenario({
@@ -46,16 +48,34 @@ export default scenario({
         "workflow",
         "continue",
       ],
+      responseJudge: {
+        minimumScore: 0.7,
+        rubric:
+          "The reply must explicitly ask the user for an updated ID copy and explain that the workflow is blocked because the on-file ID is expired. A vague acknowledgement that does not solicit the new artifact fails.",
+      },
     },
   ],
   finalChecks: [
+    {
+      type: "selectedAction",
+      actionName: [
+        "PUBLISH_DEVICE_INTENT",
+        "CALL_USER",
+        "CROSS_CHANNEL_SEND",
+        "INBOX",
+      ],
+    },
     {
       type: "interventionRequestExists",
       expected: true,
     },
     {
+      type: "connectorDispatchOccurred",
+      channel: ["desktop", "mobile", "dashboard"],
+    },
+    {
       type: "custom",
-      name: "ea-collect-id-copy-for-workflow-action-coverage",
+      name: "ea-collect-id-copy-action-coverage",
       predicate: expectScenarioToCallAction({
         acceptedActions: [
           "PUBLISH_DEVICE_INTENT",
@@ -67,5 +87,20 @@ export default scenario({
         includesAny: ["id", "expired", "workflow", "copy"],
       }),
     },
+    {
+      type: "custom",
+      name: "ea-collect-id-copy-intervention-dispatch",
+      predicate: expectConnectorDispatch({
+        channel: ["desktop", "mobile", "dashboard", "phone_call"],
+        description:
+          "intervention reaches the user through at least one device or channel",
+      }),
+    },
+    judgeRubric({
+      name: "ea-collect-id-copy-rubric",
+      threshold: 0.7,
+      description:
+        "End-to-end: the assistant detected the expired-ID block, escalated for an updated copy, and the request reached the user via an actual notification channel rather than only being logged.",
+    }),
   ],
 });

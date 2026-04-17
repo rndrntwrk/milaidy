@@ -1,7 +1,9 @@
 import { scenario } from "@elizaos/scenario-schema";
 import {
+  expectMemoryWrite,
   expectScenarioToCallAction,
   expectTurnToCallAction,
+  judgeRubric,
 } from "../_helpers/action-assertions.ts";
 
 export default scenario({
@@ -40,6 +42,11 @@ export default scenario({
         includesAny: ["jill", "daily", "hour", "sleep"],
       }),
       responseIncludesAny: ["Jill", "hour", "daily", "before bed", "schedule"],
+      responseJudge: {
+        minimumScore: 0.7,
+        rubric:
+          "The reply must commit to creating a recurring 1-hour daily block with Jill, ideally placed before the user's sleep window. A one-off booking or a generic 'I'll find a time' fails.",
+      },
     },
   ],
   finalChecks: [
@@ -48,13 +55,37 @@ export default scenario({
       actionName: ["CALENDAR_ACTION", "PROPOSE_MEETING_TIMES"],
     },
     {
+      type: "selectedActionArguments",
+      actionName: ["CALENDAR_ACTION", "PROPOSE_MEETING_TIMES"],
+      includesAny: ["jill", "daily", "hour", "recurring"],
+    },
+    {
+      type: "memoryWriteOccurred",
+      table: ["messages", "facts"],
+    },
+    {
       type: "custom",
-      name: "ea-daily-jill-time-block-action-coverage",
+      name: "ea-jill-time-block-action-coverage",
       predicate: expectScenarioToCallAction({
         acceptedActions: ["CALENDAR_ACTION", "PROPOSE_MEETING_TIMES"],
         description: "recurring Jill time block",
         includesAny: ["jill", "daily", "hour", "sleep"],
       }),
     },
+    {
+      type: "custom",
+      name: "ea-jill-time-block-memory",
+      predicate: expectMemoryWrite({
+        table: ["messages", "facts"],
+        description: "the recurring policy is persisted",
+        contentIncludesAny: ["jill", "daily", "hour"],
+      }),
+    },
+    judgeRubric({
+      name: "ea-jill-time-rubric",
+      threshold: 0.7,
+      description:
+        "End-to-end: the assistant created or proposed a recurring daily one-hour block with Jill placed before the user's protected sleep window.",
+    }),
   ],
 });

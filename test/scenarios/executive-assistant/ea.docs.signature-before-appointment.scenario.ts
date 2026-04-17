@@ -1,7 +1,9 @@
 import { scenario } from "@elizaos/scenario-schema";
 import {
+  expectConnectorDispatch,
   expectScenarioToCallAction,
   expectTurnToCallAction,
+  judgeRubric,
 } from "../_helpers/action-assertions.ts";
 
 export default scenario({
@@ -35,21 +37,49 @@ export default scenario({
         includesAny: ["sign", "appointment", "clinic", "docs"],
       }),
       responseIncludesAny: ["sign", "docs", "appointment", "before", "clinic"],
+      responseJudge: {
+        minimumScore: 0.7,
+        rubric:
+          "The reply must commit to reminding the user to sign the clinic docs before the appointment, and indicate that a reminder or nudge is scheduled on the user's device(s). Acknowledgements without a reminder plan fail.",
+      },
     },
   ],
   finalChecks: [
+    {
+      type: "selectedAction",
+      actionName: ["PUBLISH_DEVICE_INTENT", "LIFE", "CALENDAR_ACTION"],
+    },
     {
       type: "pushSent",
       channel: ["desktop", "mobile"],
     },
     {
+      type: "connectorDispatchOccurred",
+      channel: ["desktop", "mobile"],
+      actionName: ["PUBLISH_DEVICE_INTENT"],
+    },
+    {
       type: "custom",
-      name: "ea-signature-before-appointment-action-coverage",
+      name: "ea-signature-action-coverage",
       predicate: expectScenarioToCallAction({
         acceptedActions: ["PUBLISH_DEVICE_INTENT", "LIFE", "CALENDAR_ACTION"],
         description: "signature reminder scheduling",
         includesAny: ["sign", "appointment", "clinic", "docs"],
       }),
     },
+    {
+      type: "custom",
+      name: "ea-signature-device-dispatch",
+      predicate: expectConnectorDispatch({
+        channel: ["desktop", "mobile"],
+        description: "signature reminder landed on a user device",
+      }),
+    },
+    judgeRubric({
+      name: "ea-signature-rubric",
+      threshold: 0.7,
+      description:
+        "End-to-end: the assistant detected the signature-before-appointment task and scheduled at least one device reminder tied to the appointment time. No silent pass.",
+    }),
   ],
 });

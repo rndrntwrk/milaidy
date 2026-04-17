@@ -1,7 +1,10 @@
 import { scenario } from "@elizaos/scenario-schema";
 import {
+  expectConnectorDispatch,
   expectScenarioToCallAction,
+  expectStateTransition,
   expectTurnToCallAction,
+  judgeRubric,
 } from "../_helpers/action-assertions.ts";
 
 export default scenario({
@@ -10,7 +13,7 @@ export default scenario({
   domain: "executive-assistant",
   tags: ["executive-assistant", "push", "reminders", "transcript-derived"],
   description:
-    "Transcript-derived case: remind on desktop and phone at one hour, ten minutes, and start time.",
+    "Transcript-derived case: remind on desktop and phone at one hour, ten minutes, and start time, and stop the ladder once the user acknowledges on either device.",
   isolation: "per-scenario",
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
@@ -35,9 +38,18 @@ export default scenario({
         includesAny: ["hour", "ten minutes", "mac", "phone", "meeting"],
       }),
       responseIncludesAny: ["hour", "ten minutes", "Mac", "phone", "meeting"],
+      responseJudge: {
+        minimumScore: 0.7,
+        rubric:
+          "The reply must commit to a three-step ladder (1h → 10m → start) on both Mac and phone, and indicate that acknowledging on one device suppresses the rest. A vague 'I'll remind you' fails.",
+      },
     },
   ],
   finalChecks: [
+    {
+      type: "selectedAction",
+      actionName: ["PUBLISH_DEVICE_INTENT", "CALENDAR_ACTION"],
+    },
     {
       type: "pushSent",
       channel: ["desktop", "mobile"],
@@ -51,13 +63,45 @@ export default scenario({
       expected: true,
     },
     {
+      type: "connectorDispatchOccurred",
+      channel: ["desktop", "mobile"],
+      actionName: ["PUBLISH_DEVICE_INTENT"],
+      minCount: 2,
+    },
+    {
       type: "custom",
-      name: "ea-multi-device-meeting-ladder-action-coverage",
+      name: "ea-meeting-ladder-action-coverage",
       predicate: expectScenarioToCallAction({
         acceptedActions: ["PUBLISH_DEVICE_INTENT", "CALENDAR_ACTION"],
         description: "multi-device meeting reminder ladder",
         includesAny: ["hour", "ten minutes", "mac", "phone", "meeting"],
       }),
     },
+    {
+      type: "custom",
+      name: "ea-meeting-ladder-multi-device-dispatch",
+      predicate: expectConnectorDispatch({
+        channel: ["desktop", "mobile"],
+        description:
+          "ladder fires on both desktop and mobile in the expected order",
+        minCount: 2,
+      }),
+    },
+    {
+      type: "custom",
+      name: "ea-meeting-ladder-ack-suppression",
+      predicate: expectStateTransition({
+        subject: "deviceIntent",
+        to: "acknowledged",
+        description:
+          "device intent transitions to acknowledged so the remaining ladder rungs are suppressed",
+      }),
+    },
+    judgeRubric({
+      name: "ea-meeting-ladder-rubric",
+      threshold: 0.7,
+      description:
+        "End-to-end: the assistant fired three reminders on both desktop and mobile in order (1h, 10m, start) and stopped sending after acknowledgement on either device.",
+    }),
   ],
 });

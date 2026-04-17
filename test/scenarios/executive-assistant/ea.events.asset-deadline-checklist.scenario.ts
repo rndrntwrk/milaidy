@@ -1,7 +1,9 @@
 import { scenario } from "@elizaos/scenario-schema";
 import {
+  expectMemoryWrite,
   expectScenarioToCallAction,
   expectTurnToCallAction,
+  judgeRubric,
 } from "../_helpers/action-assertions.ts";
 
 export default scenario({
@@ -35,6 +37,11 @@ export default scenario({
         includesAny: ["slides", "bio", "title", "portal", "event"],
       }),
       responseIncludesAny: ["slides", "bio", "title", "portal", "owe"],
+      responseJudge: {
+        minimumScore: 0.7,
+        rubric:
+          "The reply must enumerate the asset types the user still owes before the event (slides, bio, title, portal entry, etc.) with event-anchored deadlines. A generic summary that does not name the outstanding artifacts fails.",
+      },
     },
   ],
   finalChecks: [
@@ -43,13 +50,32 @@ export default scenario({
       actionName: ["INBOX", "CALENDAR_ACTION", "LIFEOPS_COMPUTER_USE"],
     },
     {
+      type: "memoryWriteOccurred",
+      table: ["messages", "facts"],
+    },
+    {
       type: "custom",
-      name: "ea-asset-deadline-checklist-action-coverage",
+      name: "ea-asset-deadline-action-coverage",
       predicate: expectScenarioToCallAction({
         acceptedActions: ["INBOX", "CALENDAR_ACTION", "LIFEOPS_COMPUTER_USE"],
         description: "event asset checklist generation",
         includesAny: ["slides", "bio", "title", "portal", "event"],
       }),
     },
+    {
+      type: "custom",
+      name: "ea-asset-deadline-checklist-memory",
+      predicate: expectMemoryWrite({
+        table: ["messages", "facts"],
+        description:
+          "asset checklist is persisted so the assistant can reason about it later",
+      }),
+    },
+    judgeRubric({
+      name: "ea-asset-deadline-rubric",
+      threshold: 0.7,
+      description:
+        "End-to-end: the assistant produced a real outstanding-assets checklist with event-anchored deadlines and stored it for later reference.",
+    }),
   ],
 });

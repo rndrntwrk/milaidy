@@ -90,6 +90,7 @@
     "format:fix": "bun run verify:format:fix",
     "knip": "bunx knip",
     "knip:fix": "bunx knip --fix",
+    "generate:app-heroes": "bun run scripts/generate-app-heroes.mjs",
     "find-dupes": "node eliza/packages/app-core/scripts/find-duplicate-components.mjs",
     "db:check": "node eliza/packages/app-core/scripts/run-with-env.mjs MILADY_LIVE_TEST=1 ELIZA_LIVE_TEST=1 -- bunx vitest run --config test/vitest/live-e2e.config.ts eliza/packages/app-core/test/live-agent/database-conversation.live.e2e.test.ts",
     "dev": "node eliza/packages/app-core/scripts/rt.mjs eliza/packages/app-core/scripts/dev-ui.mjs --name=milady",

@@ -1,7 +1,10 @@
 import { scenario } from "@elizaos/scenario-schema";
 import {
+  expectApprovalRequest,
+  expectConnectorDispatch,
   expectScenarioToCallAction,
   expectTurnToCallAction,
+  judgeRubric,
 } from "../_helpers/action-assertions.ts";
 
 export default scenario({
@@ -10,7 +13,7 @@ export default scenario({
   domain: "executive-assistant",
   tags: ["executive-assistant", "push", "risk", "transcript-derived"],
   description:
-    "Transcript-derived case: the assistant warns the user that a late cancellation may cost money and offers to act immediately.",
+    "Transcript-derived case: the assistant warns the user that a late cancellation may cost money and offers to act immediately. Action requires approval before any side-effect (e.g., contacting the venue).",
   isolation: "per-scenario",
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
@@ -39,16 +42,34 @@ export default scenario({
         includesAny: ["fee", "cancellation", "warn", "handle"],
       }),
       responseIncludesAny: ["fee", "warn", "handle", "now", "cancellation"],
+      responseJudge: {
+        minimumScore: 0.7,
+        rubric:
+          "The reply must clearly warn that a cancellation fee is at risk, offer to act now, and queue the action behind explicit approval. Hidden auto-execution or a non-actionable warning both fail.",
+      },
     },
   ],
   finalChecks: [
+    {
+      type: "selectedAction",
+      actionName: ["PUBLISH_DEVICE_INTENT", "CALL_USER", "CALENDAR_ACTION"],
+    },
     {
       type: "pushSent",
       channel: ["desktop", "mobile", "sms"],
     },
     {
+      type: "approvalRequestExists",
+      expected: true,
+      actionName: ["PUBLISH_DEVICE_INTENT", "CALENDAR_ACTION"],
+    },
+    {
+      type: "noSideEffectOnReject",
+      actionName: ["PUBLISH_DEVICE_INTENT", "CALENDAR_ACTION"],
+    },
+    {
       type: "custom",
-      name: "ea-cancellation-fee-warning-action-coverage",
+      name: "ea-cancellation-fee-action-coverage",
       predicate: expectScenarioToCallAction({
         acceptedActions: [
           "PUBLISH_DEVICE_INTENT",
@@ -59,5 +80,28 @@ export default scenario({
         includesAny: ["fee", "cancellation", "warn", "handle"],
       }),
     },
+    {
+      type: "custom",
+      name: "ea-cancellation-fee-warning-dispatch",
+      predicate: expectConnectorDispatch({
+        channel: ["desktop", "mobile", "sms"],
+        description: "warning landed on at least one user device or sms",
+      }),
+    },
+    {
+      type: "custom",
+      name: "ea-cancellation-fee-approval-required",
+      predicate: expectApprovalRequest({
+        description:
+          "the offered fix is gated on approval rather than executed silently",
+        actionName: ["PUBLISH_DEVICE_INTENT", "CALENDAR_ACTION"],
+      }),
+    },
+    judgeRubric({
+      name: "ea-cancellation-fee-rubric",
+      threshold: 0.7,
+      description:
+        "End-to-end: the assistant warned the user about the fee on a real device channel and queued the remediation behind explicit approval — no autonomous execution, no silent skip.",
+    }),
   ],
 });

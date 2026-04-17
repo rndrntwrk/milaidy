@@ -1,7 +1,9 @@
 import { scenario } from "@elizaos/scenario-schema";
 import {
+  expectMemoryWrite,
   expectScenarioToCallAction,
   expectTurnToCallAction,
+  judgeRubric,
 } from "../_helpers/action-assertions.ts";
 
 export default scenario({
@@ -41,6 +43,11 @@ export default scenario({
         "first",
         "inbound",
       ],
+      responseJudge: {
+        minimumScore: 0.7,
+        rubric:
+          "The reply must explicitly separate urgent blockers from low-priority inbound, listing the urgent items first. The two buckets must not be merged into a single chronological dump. If no urgent items exist the reply must state that explicitly.",
+      },
     },
   ],
   finalChecks: [
@@ -54,13 +61,31 @@ export default scenario({
       includesAny: ["urgent", "low", "priority", "blocker"],
     },
     {
+      type: "memoryWriteOccurred",
+      table: ["messages", "facts"],
+    },
+    {
       type: "custom",
-      name: "ea-priority-ranks-urgent-before-low-action-coverage",
+      name: "ea-priority-action-coverage",
       predicate: expectScenarioToCallAction({
         acceptedActions: ["INBOX", "GMAIL_ACTION"],
         description: "priority-ranked inbox brief",
         includesAny: ["urgent", "low", "priority", "blocker"],
       }),
     },
+    {
+      type: "custom",
+      name: "ea-priority-memory-write",
+      predicate: expectMemoryWrite({
+        table: ["messages", "facts"],
+        description: "ranked brief is persisted for follow-up",
+      }),
+    },
+    judgeRubric({
+      name: "ea-priority-rubric",
+      threshold: 0.7,
+      description:
+        "End-to-end: the assistant produced a two-bucket prioritised brief (urgent vs low) reflecting actual inbox state, not just a generic prompt for triage.",
+    }),
   ],
 });

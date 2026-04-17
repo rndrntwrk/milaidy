@@ -29,10 +29,62 @@ declare module "@elizaos/scenario-schema" {
     | ((text: string) => ScenarioCheckResult)
     | ((status: number, body: unknown) => ScenarioCheckResult);
 
+  /**
+   * Approval queue lifecycle states. Mirrors the shape WS6 is formalizing in
+   * `apps/app-lifeops/src/lifeops/approval-queue.types.ts`. Kept here as a
+   * narrow string-literal union so scenario assertions can assert without a
+   * runtime dependency on WS6 source.
+   */
+  export type ApprovalRequestState =
+    | "pending"
+    | "approved"
+    | "executing"
+    | "done"
+    | "rejected"
+    | "expired";
+
+  export type CapturedApprovalRequest = {
+    id: string;
+    state: ApprovalRequestState;
+    actionName: string;
+    channel?: string;
+    payload?: unknown;
+    createdAt?: string;
+    decidedAt?: string;
+  };
+
+  export type CapturedConnectorDispatch = {
+    channel: string;
+    actionName?: string;
+    payload?: unknown;
+    sentAt?: string;
+    delivered?: boolean;
+  };
+
+  export type CapturedMemoryWrite = {
+    table: string;
+    entityId?: string;
+    roomId?: string;
+    worldId?: string;
+    content?: unknown;
+    createdAt?: string;
+  };
+
+  export type CapturedStateTransition = {
+    subject: string;
+    from?: string;
+    to: string;
+    at?: string;
+  };
+
   export type ScenarioContext = {
     runtime?: unknown;
     actionsCalled: CapturedAction[];
     turns?: ScenarioTurnExecution[];
+    approvalRequests?: CapturedApprovalRequest[];
+    connectorDispatches?: CapturedConnectorDispatch[];
+    memoryWrites?: CapturedMemoryWrite[];
+    stateTransitions?: CapturedStateTransition[];
   };
 
   export type ScenarioSeedStep = {
@@ -49,12 +101,20 @@ declare module "@elizaos/scenario-schema" {
     [key: string]: unknown;
   };
 
+  export type ScenarioJudgeRubric = {
+    rubric: string;
+    minimumScore?: number;
+    label?: string;
+  };
+
   export type ScenarioTurn = {
     kind?: string;
     name: string;
     text?: string;
     assertResponse?: ScenarioAssertResponse;
     assertTurn?: (turn: ScenarioTurnExecution) => ScenarioCheckResult;
+    responseJudge?: ScenarioJudgeRubric;
+    plannerJudge?: ScenarioJudgeRubric;
     [key: string]: unknown;
   };
 
@@ -112,6 +172,20 @@ declare module "@elizaos/scenario-schema" {
     | {
         type: "approvalRequestExists";
         expected?: boolean;
+        actionName?: string | string[];
+        state?: ApprovalRequestState | ApprovalRequestState[];
+        [key: string]: unknown;
+      }
+    | {
+        type: "approvalStateTransition";
+        from: ApprovalRequestState;
+        to: ApprovalRequestState;
+        actionName?: string | string[];
+        [key: string]: unknown;
+      }
+    | {
+        type: "noSideEffectOnReject";
+        actionName: string | string[];
         [key: string]: unknown;
       }
     | {
@@ -139,6 +213,26 @@ declare module "@elizaos/scenario-schema" {
     | {
         type: "uploadedAssetExists";
         expected?: boolean;
+        [key: string]: unknown;
+      }
+    | {
+        type: "connectorDispatchOccurred";
+        channel: string | string[];
+        actionName?: string | string[];
+        minCount?: number;
+        [key: string]: unknown;
+      }
+    | {
+        type: "memoryWriteOccurred";
+        table: string | string[];
+        minCount?: number;
+        [key: string]: unknown;
+      }
+    | {
+        type: "judgeRubric";
+        name: string;
+        rubric: string;
+        minimumScore?: number;
         [key: string]: unknown;
       }
     | {

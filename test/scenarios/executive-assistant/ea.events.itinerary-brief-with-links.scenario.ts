@@ -1,7 +1,9 @@
 import { scenario } from "@elizaos/scenario-schema";
 import {
+  expectConnectorDispatch,
   expectScenarioToCallAction,
   expectTurnToCallAction,
+  judgeRubric,
 } from "../_helpers/action-assertions.ts";
 
 export default scenario({
@@ -35,6 +37,11 @@ export default scenario({
         includesAny: ["itinerary", "links", "location", "time"],
       }),
       responseIncludesAny: ["itinerary", "links", "locations", "time", "today"],
+      responseJudge: {
+        minimumScore: 0.7,
+        rubric:
+          "The reply must be a structured itinerary listing today's events with their times, locations, and join/meeting links. A paragraph summary without concrete times or links fails.",
+      },
     },
   ],
   finalChecks: [
@@ -43,13 +50,31 @@ export default scenario({
       actionName: ["CALENDAR_ACTION", "DOSSIER"],
     },
     {
+      type: "connectorDispatchOccurred",
+      channel: ["dashboard", "desktop"],
+    },
+    {
       type: "custom",
-      name: "ea-itinerary-brief-with-links-action-coverage",
+      name: "ea-itinerary-action-coverage",
       predicate: expectScenarioToCallAction({
         acceptedActions: ["CALENDAR_ACTION", "DOSSIER"],
         description: "event itinerary briefing",
         includesAny: ["itinerary", "links", "location", "time"],
       }),
     },
+    {
+      type: "custom",
+      name: "ea-itinerary-dispatch-side-effect",
+      predicate: expectConnectorDispatch({
+        channel: ["dashboard", "desktop"],
+        description: "itinerary delivered to the requesting surface",
+      }),
+    },
+    judgeRubric({
+      name: "ea-itinerary-rubric",
+      threshold: 0.7,
+      description:
+        "End-to-end: the assistant produced a real itinerary with concrete times, locations, and meeting links and surfaced it back on the requesting channel.",
+    }),
   ],
 });
