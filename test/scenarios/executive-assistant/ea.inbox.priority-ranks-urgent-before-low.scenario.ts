@@ -1,4 +1,8 @@
 import { scenario } from "@elizaos/scenario-schema";
+import {
+  expectScenarioToCallAction,
+  expectTurnToCallAction,
+} from "../_helpers/action-assertions.ts";
 
 export default scenario({
   id: "ea.inbox.priority-ranks-urgent-before-low",
@@ -25,6 +29,11 @@ export default scenario({
       name: "priority-brief",
       room: "main",
       text: "Show me the urgent blockers first and separate them from low-priority inbound.",
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: ["INBOX", "GMAIL_ACTION"],
+        description: "priority-ranked inbox brief",
+        includesAny: ["urgent", "low", "priority", "blocker"],
+      }),
       responseIncludesAny: [
         "urgent",
         "low priority",
@@ -36,10 +45,22 @@ export default scenario({
   ],
   finalChecks: [
     {
+      type: "selectedAction",
+      actionName: ["INBOX", "GMAIL_ACTION"],
+    },
+    {
+      type: "selectedActionArguments",
+      actionName: ["INBOX", "GMAIL_ACTION"],
+      includesAny: ["urgent", "low", "priority", "blocker"],
+    },
+    {
       type: "custom",
-      name: "ea-priority-ranks-urgent-before-low-not-yet-implemented",
-      predicate: async () =>
-        "NotYetImplemented: priority-ranked executive-assistant briefs are not yet deterministic across inbox, docs, and scheduling blockers.",
+      name: "ea-priority-ranks-urgent-before-low-action-coverage",
+      predicate: expectScenarioToCallAction({
+        acceptedActions: ["INBOX", "GMAIL_ACTION"],
+        description: "priority-ranked inbox brief",
+        includesAny: ["urgent", "low", "priority", "blocker"],
+      }),
     },
   ],
 });

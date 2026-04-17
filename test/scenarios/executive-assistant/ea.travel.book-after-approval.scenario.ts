@@ -1,4 +1,8 @@
 import { scenario } from "@elizaos/scenario-schema";
+import {
+  expectScenarioToCallAction,
+  expectTurnToCallAction,
+} from "../_helpers/action-assertions.ts";
 
 export default scenario({
   id: "ea.travel.book-after-approval",
@@ -25,6 +29,15 @@ export default scenario({
       name: "offer-booking",
       room: "main",
       text: "I can go ahead and start booking the flights and hotel today if that's good with you.",
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: [
+          "CALENDAR_ACTION",
+          "CROSS_CHANNEL_SEND",
+          "CALL_EXTERNAL",
+        ],
+        description: "travel booking proposal",
+        includesAny: ["book", "flight", "hotel", "approve"],
+      }),
       responseIncludesAny: [
         "book",
         "flights",
@@ -38,15 +51,41 @@ export default scenario({
       name: "confirm-booking",
       room: "main",
       text: "Yes, go ahead and book it.",
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: [
+          "CALENDAR_ACTION",
+          "CROSS_CHANNEL_SEND",
+          "CALL_EXTERNAL",
+        ],
+        description: "travel booking confirmation",
+        includesAny: ["book", "flight", "hotel", "confirm"],
+      }),
       responseIncludesAny: ["book", "confirmed", "travel", "hotel", "flight"],
     },
   ],
   finalChecks: [
     {
+      type: "approvalRequestExists",
+      expected: true,
+    },
+    {
+      type: "messageDelivered",
+      channel: ["email", "sms"],
+      expected: true,
+    },
+    {
       type: "custom",
-      name: "ea-book-after-approval-not-yet-implemented",
-      predicate: async () =>
-        "NotYetImplemented: approval-gated travel booking and itinerary sync are not yet wired through LifeOps as an end-to-end travel workflow.",
+      name: "ea-book-after-approval-action-coverage",
+      predicate: expectScenarioToCallAction({
+        acceptedActions: [
+          "CALENDAR_ACTION",
+          "CROSS_CHANNEL_SEND",
+          "CALL_EXTERNAL",
+        ],
+        description: "travel booking proposal and confirmation",
+        includesAny: ["book", "flight", "hotel", "confirm"],
+        minCount: 1,
+      }),
     },
   ],
 });

@@ -1,4 +1,8 @@
 import { scenario } from "@elizaos/scenario-schema";
+import {
+  expectScenarioToCallAction,
+  expectTurnToCallAction,
+} from "../_helpers/action-assertions.ts";
 
 export default scenario({
   id: "ea.events.itinerary-brief-with-links",
@@ -25,15 +29,27 @@ export default scenario({
       name: "request-itinerary",
       room: "main",
       text: "Give me today's itinerary with all the event links, locations, and time slots.",
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: ["CALENDAR_ACTION", "DOSSIER"],
+        description: "event itinerary briefing",
+        includesAny: ["itinerary", "links", "location", "time"],
+      }),
       responseIncludesAny: ["itinerary", "links", "locations", "time", "today"],
     },
   ],
   finalChecks: [
     {
+      type: "selectedAction",
+      actionName: ["CALENDAR_ACTION", "DOSSIER"],
+    },
+    {
       type: "custom",
-      name: "ea-itinerary-brief-with-links-not-yet-implemented",
-      predicate: async () =>
-        "NotYetImplemented: event-day itinerary briefs with consolidated links and logistics are not yet generated as a first-class assistant artifact.",
+      name: "ea-itinerary-brief-with-links-action-coverage",
+      predicate: expectScenarioToCallAction({
+        acceptedActions: ["CALENDAR_ACTION", "DOSSIER"],
+        description: "event itinerary briefing",
+        includesAny: ["itinerary", "links", "location", "time"],
+      }),
     },
   ],
 });

@@ -1,4 +1,8 @@
 import { scenario } from "@elizaos/scenario-schema";
+import {
+  expectScenarioToCallAction,
+  expectTurnToCallAction,
+} from "../_helpers/action-assertions.ts";
 
 export default scenario({
   id: "ea.travel.capture-booking-preferences",
@@ -25,6 +29,11 @@ export default scenario({
       name: "capture-travel-preferences",
       room: "main",
       text: "Set up a list of my flight and hotel preferences so you don't have to ask every time.",
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: ["UPDATE_OWNER_PROFILE", "LIFE"],
+        description: "travel preference capture",
+        includesAny: ["flight", "hotel", "preferences", "every time"],
+      }),
       responseIncludesAny: [
         "flight",
         "hotel",
@@ -36,10 +45,17 @@ export default scenario({
   ],
   finalChecks: [
     {
+      type: "selectedAction",
+      actionName: ["UPDATE_OWNER_PROFILE", "LIFE"],
+    },
+    {
       type: "custom",
-      name: "ea-capture-booking-preferences-not-yet-implemented",
-      predicate: async () =>
-        "NotYetImplemented: reusable travel preference capture exists in planning docs but is not yet implemented as durable assistant state.",
+      name: "ea-capture-booking-preferences-action-coverage",
+      predicate: expectScenarioToCallAction({
+        acceptedActions: ["UPDATE_OWNER_PROFILE", "LIFE"],
+        description: "travel preference capture",
+        includesAny: ["flight", "hotel", "preferences", "every time"],
+      }),
     },
   ],
 });

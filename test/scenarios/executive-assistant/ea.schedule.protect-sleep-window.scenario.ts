@@ -1,4 +1,8 @@
 import { scenario } from "@elizaos/scenario-schema";
+import {
+  expectScenarioToCallAction,
+  expectTurnToCallAction,
+} from "../_helpers/action-assertions.ts";
 
 export default scenario({
   id: "ea.schedule.protect-sleep-window",
@@ -30,6 +34,11 @@ export default scenario({
       name: "sleep-window-preference",
       room: "main",
       text: "No calls between 11pm and 8am unless I explicitly say it's okay.",
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: ["UPDATE_MEETING_PREFERENCES", "CALENDAR_ACTION"],
+        description: "sleep-window preference capture",
+        includesAny: ["11pm", "8am", "sleep", "calls"],
+      }),
       responseIncludesAny: ["11pm", "8am", "sleep", "protect", "explicitly"],
     },
     {
@@ -37,15 +46,35 @@ export default scenario({
       name: "request-early-call",
       room: "main",
       text: "Can you schedule a 7am call tomorrow, or should we move it?",
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: ["CALENDAR_ACTION", "PROPOSE_MEETING_TIMES"],
+        description: "sleep-window conflict resolution",
+        includesAny: ["7am", "move", "sleep", "override"],
+      }),
       responseIncludesAny: ["7am", "sleep", "okay", "move", "override"],
     },
   ],
   finalChecks: [
     {
+      type: "selectedAction",
+      actionName: [
+        "UPDATE_MEETING_PREFERENCES",
+        "CALENDAR_ACTION",
+        "PROPOSE_MEETING_TIMES",
+      ],
+    },
+    {
       type: "custom",
-      name: "ea-protect-sleep-window-not-yet-implemented",
-      predicate: async () =>
-        "NotYetImplemented: sleep-window enforcement plus override handling is not yet wired into executive-assistant scheduling preferences.",
+      name: "ea-protect-sleep-window-action-coverage",
+      predicate: expectScenarioToCallAction({
+        acceptedActions: [
+          "UPDATE_MEETING_PREFERENCES",
+          "CALENDAR_ACTION",
+          "PROPOSE_MEETING_TIMES",
+        ],
+        description: "sleep-window preference capture and conflict resolution",
+        includesAny: ["11pm", "8am", "sleep", "7am", "move"],
+      }),
     },
   ],
 });

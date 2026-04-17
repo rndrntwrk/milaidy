@@ -1,4 +1,8 @@
 import { scenario } from "@elizaos/scenario-schema";
+import {
+  expectScenarioToCallAction,
+  expectTurnToCallAction,
+} from "../_helpers/action-assertions.ts";
 
 export default scenario({
   id: "ea.schedule.bundle-meetings-while-traveling",
@@ -25,15 +29,39 @@ export default scenario({
       name: "bundle-city-meetings",
       room: "main",
       text: "I'm in Tokyo for limited time, so schedule PendingReality and Ryan at the same time if possible.",
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: ["PROPOSE_MEETING_TIMES", "CALENDAR_ACTION"],
+        description: "city-limited meeting bundling",
+        includesAny: [
+          "tokyo",
+          "same time",
+          "schedule",
+          "ryan",
+          "pendingreality",
+        ],
+      }),
       responseIncludesAny: ["Tokyo", "Ryan", "same time", "bundle", "schedule"],
     },
   ],
   finalChecks: [
     {
+      type: "selectedAction",
+      actionName: ["PROPOSE_MEETING_TIMES", "CALENDAR_ACTION"],
+    },
+    {
       type: "custom",
-      name: "ea-bundle-meetings-while-traveling-not-yet-implemented",
-      predicate: async () =>
-        "NotYetImplemented: city-limited bundling of adjacent meetings is not yet implemented as a dedicated scheduling strategy.",
+      name: "ea-bundle-meetings-while-traveling-action-coverage",
+      predicate: expectScenarioToCallAction({
+        acceptedActions: ["PROPOSE_MEETING_TIMES", "CALENDAR_ACTION"],
+        description: "city-limited meeting bundling",
+        includesAny: [
+          "tokyo",
+          "same time",
+          "schedule",
+          "ryan",
+          "pendingreality",
+        ],
+      }),
     },
   ],
 });

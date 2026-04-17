@@ -1,4 +1,8 @@
 import { scenario } from "@elizaos/scenario-schema";
+import {
+  expectScenarioToCallAction,
+  expectTurnToCallAction,
+} from "../_helpers/action-assertions.ts";
 
 export default scenario({
   id: "ea.docs.signature-before-appointment",
@@ -25,15 +29,27 @@ export default scenario({
       name: "signature-before-appointment",
       room: "main",
       text: "The clinic sent docs for me to sign before the appointment. Keep me on top of that.",
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: ["PUBLISH_DEVICE_INTENT", "LIFE", "CALENDAR_ACTION"],
+        description: "signature reminder scheduling",
+        includesAny: ["sign", "appointment", "clinic", "docs"],
+      }),
       responseIncludesAny: ["sign", "docs", "appointment", "before", "clinic"],
     },
   ],
   finalChecks: [
     {
+      type: "pushSent",
+      channel: ["desktop", "mobile"],
+    },
+    {
       type: "custom",
-      name: "ea-signature-before-appointment-not-yet-implemented",
-      predicate: async () =>
-        "NotYetImplemented: document-request tracking tied to appointment timing is not yet fully wired into LifeOps.",
+      name: "ea-signature-before-appointment-action-coverage",
+      predicate: expectScenarioToCallAction({
+        acceptedActions: ["PUBLISH_DEVICE_INTENT", "LIFE", "CALENDAR_ACTION"],
+        description: "signature reminder scheduling",
+        includesAny: ["sign", "appointment", "clinic", "docs"],
+      }),
     },
   ],
 });

@@ -1,4 +1,8 @@
 import { scenario } from "@elizaos/scenario-schema";
+import {
+  expectScenarioToCallAction,
+  expectTurnToCallAction,
+} from "../_helpers/action-assertions.ts";
 
 export default scenario({
   id: "ea.inbox.propose-group-chat-handoff",
@@ -25,6 +29,11 @@ export default scenario({
       name: "propose-group-handoff",
       room: "main",
       text: "If direct relaying gets messy here, suggest making a group chat handoff instead.",
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: ["INBOX", "CROSS_CHANNEL_SEND"],
+        description: "group chat handoff planning",
+        includesAny: ["group", "chat", "handoff", "relay"],
+      }),
       responseIncludesAny: [
         "group chat",
         "handoff",
@@ -36,10 +45,17 @@ export default scenario({
   ],
   finalChecks: [
     {
+      type: "selectedAction",
+      actionName: ["INBOX", "CROSS_CHANNEL_SEND"],
+    },
+    {
       type: "custom",
-      name: "ea-propose-group-chat-handoff-not-yet-implemented",
-      predicate: async () =>
-        "NotYetImplemented: proactive group-chat handoff suggestions are not yet wired into the messaging orchestration layer.",
+      name: "ea-propose-group-chat-handoff-action-coverage",
+      predicate: expectScenarioToCallAction({
+        acceptedActions: ["INBOX", "CROSS_CHANNEL_SEND"],
+        description: "group chat handoff planning",
+        includesAny: ["group", "chat", "handoff", "relay"],
+      }),
     },
   ],
 });

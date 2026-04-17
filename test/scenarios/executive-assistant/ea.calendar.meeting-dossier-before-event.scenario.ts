@@ -1,4 +1,8 @@
 import { scenario } from "@elizaos/scenario-schema";
+import {
+  expectScenarioToCallAction,
+  expectTurnToCallAction,
+} from "../_helpers/action-assertions.ts";
 
 export default scenario({
   id: "ea.calendar.meeting-dossier-before-event",
@@ -25,15 +29,27 @@ export default scenario({
       name: "request-dossier",
       room: "main",
       text: "Give me the dossier for my next meeting or event.",
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: ["DOSSIER", "CALENDAR_ACTION"],
+        description: "meeting dossier planning",
+        includesAny: ["meeting", "event", "brief", "dossier"],
+      }),
       responseIncludesAny: ["dossier", "meeting", "event", "brief", "context"],
     },
   ],
   finalChecks: [
     {
+      type: "selectedAction",
+      actionName: ["DOSSIER", "CALENDAR_ACTION"],
+    },
+    {
       type: "custom",
-      name: "ea-meeting-dossier-before-event-not-yet-implemented",
-      predicate: async () =>
-        "NotYetImplemented: dossier generation exists as a planned surface but is not yet composed from contacts, inbox, and calendar context in executive-assistant mode.",
+      name: "ea-meeting-dossier-before-event-action-coverage",
+      predicate: expectScenarioToCallAction({
+        acceptedActions: ["DOSSIER", "CALENDAR_ACTION"],
+        description: "meeting dossier planning",
+        includesAny: ["meeting", "event", "brief", "dossier"],
+      }),
     },
   ],
 });

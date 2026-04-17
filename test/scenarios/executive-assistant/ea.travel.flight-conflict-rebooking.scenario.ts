@@ -1,4 +1,8 @@
 import { scenario } from "@elizaos/scenario-schema";
+import {
+  expectScenarioToCallAction,
+  expectTurnToCallAction,
+} from "../_helpers/action-assertions.ts";
 
 export default scenario({
   id: "ea.travel.flight-conflict-rebooking",
@@ -25,15 +29,35 @@ export default scenario({
       name: "flight-conflict-warning",
       room: "main",
       text: "Flag the conflict before my flight later and, if needed, help rebook the other thing.",
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: [
+          "CALENDAR_ACTION",
+          "CROSS_CHANNEL_SEND",
+          "CALL_EXTERNAL",
+        ],
+        description: "flight conflict repair planning",
+        includesAny: ["flight", "conflict", "rebook", "later"],
+      }),
       responseIncludesAny: ["flight", "conflict", "rebook", "later", "handle"],
     },
   ],
   finalChecks: [
     {
+      type: "selectedAction",
+      actionName: ["CALENDAR_ACTION", "CROSS_CHANNEL_SEND", "CALL_EXTERNAL"],
+    },
+    {
       type: "custom",
-      name: "ea-flight-conflict-rebooking-not-yet-implemented",
-      predicate: async () =>
-        "NotYetImplemented: pre-flight conflict detection plus coordinated rebooking is not yet a dedicated executive-assistant workflow.",
+      name: "ea-flight-conflict-rebooking-action-coverage",
+      predicate: expectScenarioToCallAction({
+        acceptedActions: [
+          "CALENDAR_ACTION",
+          "CROSS_CHANNEL_SEND",
+          "CALL_EXTERNAL",
+        ],
+        description: "flight conflict repair planning",
+        includesAny: ["flight", "conflict", "rebook", "later"],
+      }),
     },
   ],
 });

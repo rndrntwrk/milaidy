@@ -1,4 +1,8 @@
 import { scenario } from "@elizaos/scenario-schema";
+import {
+  expectScenarioToCallAction,
+  expectTurnToCallAction,
+} from "../_helpers/action-assertions.ts";
 
 export default scenario({
   id: "ea.docs.collect-id-copy-for-workflow",
@@ -25,6 +29,16 @@ export default scenario({
       name: "request-id-copy",
       room: "main",
       text: "If the only ID on file is expired, ask me for an updated copy so the workflow can continue.",
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: [
+          "PUBLISH_DEVICE_INTENT",
+          "CALL_USER",
+          "CROSS_CHANNEL_SEND",
+          "INBOX",
+        ],
+        description: "expired ID workflow escalation",
+        includesAny: ["id", "expired", "workflow", "copy"],
+      }),
       responseIncludesAny: [
         "ID",
         "expired",
@@ -36,10 +50,22 @@ export default scenario({
   ],
   finalChecks: [
     {
+      type: "interventionRequestExists",
+      expected: true,
+    },
+    {
       type: "custom",
-      name: "ea-collect-id-copy-for-workflow-not-yet-implemented",
-      predicate: async () =>
-        "NotYetImplemented: sensitive artifact collection for downstream workflows is not yet handled as a dedicated assistant flow.",
+      name: "ea-collect-id-copy-for-workflow-action-coverage",
+      predicate: expectScenarioToCallAction({
+        acceptedActions: [
+          "PUBLISH_DEVICE_INTENT",
+          "CALL_USER",
+          "CROSS_CHANNEL_SEND",
+          "INBOX",
+        ],
+        description: "expired ID workflow escalation",
+        includesAny: ["id", "expired", "workflow", "copy"],
+      }),
     },
   ],
 });

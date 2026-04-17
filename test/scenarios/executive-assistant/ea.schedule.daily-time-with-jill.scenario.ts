@@ -1,4 +1,8 @@
 import { scenario } from "@elizaos/scenario-schema";
+import {
+  expectScenarioToCallAction,
+  expectTurnToCallAction,
+} from "../_helpers/action-assertions.ts";
 
 export default scenario({
   id: "ea.schedule.daily-time-with-jill",
@@ -30,15 +34,27 @@ export default scenario({
       name: "create-jill-time-block",
       room: "main",
       text: "Need to book 1 hour per day for time with Jill. Any time is fine, ideally before sleep.",
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: ["CALENDAR_ACTION", "PROPOSE_MEETING_TIMES"],
+        description: "recurring Jill time block",
+        includesAny: ["jill", "daily", "hour", "sleep"],
+      }),
       responseIncludesAny: ["Jill", "hour", "daily", "before bed", "schedule"],
     },
   ],
   finalChecks: [
     {
+      type: "selectedAction",
+      actionName: ["CALENDAR_ACTION", "PROPOSE_MEETING_TIMES"],
+    },
+    {
       type: "custom",
-      name: "ea-daily-jill-time-block-not-yet-implemented",
-      predicate: async () =>
-        "NotYetImplemented: recurring relationship-aware decompression blocks are not yet wired as a first-class executive-assistant scheduling flow.",
+      name: "ea-daily-jill-time-block-action-coverage",
+      predicate: expectScenarioToCallAction({
+        acceptedActions: ["CALENDAR_ACTION", "PROPOSE_MEETING_TIMES"],
+        description: "recurring Jill time block",
+        includesAny: ["jill", "daily", "hour", "sleep"],
+      }),
     },
   ],
 });

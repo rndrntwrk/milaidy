@@ -1,4 +1,8 @@
 import { scenario } from "@elizaos/scenario-schema";
+import {
+  expectScenarioToCallAction,
+  expectTurnToCallAction,
+} from "../_helpers/action-assertions.ts";
 
 export default scenario({
   id: "ea.followup.repair-missed-call-and-reschedule",
@@ -25,15 +29,47 @@ export default scenario({
       name: "repair-missed-call",
       room: "main",
       text: "I missed a call with the Frontier Tower guys today. Need to repair that and reschedule if possible asap.",
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: [
+          "INBOX",
+          "GMAIL_ACTION",
+          "CALENDAR_ACTION",
+          "CROSS_CHANNEL_SEND",
+        ],
+        description: "missed-call repair workflow",
+        includesAny: ["repair", "reschedule", "call", "Frontier Tower"],
+      }),
       responseIncludesAny: ["repair", "reschedule", "apology", "asap", "call"],
     },
   ],
   finalChecks: [
     {
+      type: "draftExists",
+      channel: "gmail",
+      expected: true,
+    },
+    {
+      type: "selectedAction",
+      actionName: [
+        "INBOX",
+        "GMAIL_ACTION",
+        "CALENDAR_ACTION",
+        "CROSS_CHANNEL_SEND",
+      ],
+    },
+    {
       type: "custom",
-      name: "ea-repair-missed-call-not-yet-implemented",
-      predicate: async () =>
-        "NotYetImplemented: missed-commitment repair with apology drafting plus fast reschedule is not yet a dedicated executive-assistant workflow.",
+      name: "ea-repair-missed-call-action-coverage",
+      predicate: expectScenarioToCallAction({
+        acceptedActions: [
+          "INBOX",
+          "GMAIL_ACTION",
+          "CALENDAR_ACTION",
+          "CROSS_CHANNEL_SEND",
+        ],
+        description: "missed-call repair workflow",
+        includesAny: ["repair", "reschedule", "call", "Frontier Tower"],
+      }),
     },
   ],
 });

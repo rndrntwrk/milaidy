@@ -1,4 +1,8 @@
 import { scenario } from "@elizaos/scenario-schema";
+import {
+  expectScenarioToCallAction,
+  expectTurnToCallAction,
+} from "../_helpers/action-assertions.ts";
 
 export default scenario({
   id: "ea.followup.bump-unanswered-decision",
@@ -11,6 +15,12 @@ export default scenario({
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
   },
+  seed: [
+    {
+      type: "advanceClock",
+      by: "48h",
+    },
+  ],
   rooms: [
     {
       id: "main",
@@ -25,15 +35,32 @@ export default scenario({
       name: "create-bump-policy",
       room: "main",
       text: "If I still haven't answered about those three events, bump me again with context instead of starting over.",
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: ["INBOX", "LIFE"],
+        description: "decision follow-up tracking",
+        includesAny: ["bump", "context", "events", "follow"],
+      }),
       responseIncludesAny: ["bump", "again", "context", "events", "follow up"],
     },
   ],
   finalChecks: [
     {
+      type: "selectedAction",
+      actionName: ["INBOX", "LIFE"],
+    },
+    {
+      type: "selectedActionArguments",
+      actionName: ["INBOX", "LIFE"],
+      includesAny: ["bump", "context", "events"],
+    },
+    {
       type: "custom",
-      name: "ea-bump-unanswered-decision-not-yet-implemented",
-      predicate: async () =>
-        "NotYetImplemented: pending-decision nudging with preserved context is not yet fully wired into the executive-assistant follow-up loop.",
+      name: "ea-bump-unanswered-decision-action-coverage",
+      predicate: expectScenarioToCallAction({
+        acceptedActions: ["INBOX", "LIFE"],
+        description: "decision follow-up tracking",
+        includesAny: ["bump", "context", "events", "follow"],
+      }),
     },
   ],
 });

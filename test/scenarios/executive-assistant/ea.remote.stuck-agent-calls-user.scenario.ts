@@ -1,4 +1,8 @@
 import { scenario } from "@elizaos/scenario-schema";
+import {
+  expectScenarioToCallAction,
+  expectTurnToCallAction,
+} from "../_helpers/action-assertions.ts";
 
 export default scenario({
   id: "ea.remote.stuck-agent-calls-user",
@@ -25,15 +29,31 @@ export default scenario({
       name: "remote-help-policy",
       room: "main",
       text: "If you get stuck in the browser or on my computer, call me and let me jump in to unblock it.",
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: ["CALL_USER", "LIFEOPS_COMPUTER_USE"],
+        description: "stuck-agent escalation",
+        includesAny: ["call", "stuck", "browser", "computer", "unblock"],
+      }),
       responseIncludesAny: ["call", "stuck", "browser", "computer", "unblock"],
     },
   ],
   finalChecks: [
     {
+      type: "interventionRequestExists",
+      expected: true,
+    },
+    {
+      type: "pushSent",
+      channel: "phone_call",
+    },
+    {
       type: "custom",
-      name: "ea-remote-stuck-agent-calls-user-not-yet-implemented",
-      predicate: async () =>
-        "NotYetImplemented: stuck-agent phone escalation plus remote-control handoff is not yet fully wired end-to-end.",
+      name: "ea-remote-stuck-agent-calls-user-action-coverage",
+      predicate: expectScenarioToCallAction({
+        acceptedActions: ["CALL_USER", "LIFEOPS_COMPUTER_USE"],
+        description: "stuck-agent escalation",
+        includesAny: ["call", "stuck", "browser", "computer", "unblock"],
+      }),
     },
   ],
 });

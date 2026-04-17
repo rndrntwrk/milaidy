@@ -1,4 +1,8 @@
 import { scenario } from "@elizaos/scenario-schema";
+import {
+  expectScenarioToCallAction,
+  expectTurnToCallAction,
+} from "../_helpers/action-assertions.ts";
 
 export default scenario({
   id: "ea.schedule.travel-blackout-reschedule",
@@ -25,6 +29,15 @@ export default scenario({
       name: "bulk-push-meetings",
       room: "main",
       text: "We're gonna cancel some stuff and push everything back until next month. All partnership meetings.",
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: [
+          "CALENDAR_ACTION",
+          "CROSS_CHANNEL_SEND",
+          "GMAIL_ACTION",
+        ],
+        description: "bulk partnership reschedule",
+        includesAny: ["cancel", "push", "next month", "partnership"],
+      }),
       responseIncludesAny: [
         "cancel",
         "push",
@@ -36,10 +49,21 @@ export default scenario({
   ],
   finalChecks: [
     {
+      type: "selectedAction",
+      actionName: ["CALENDAR_ACTION", "CROSS_CHANNEL_SEND", "GMAIL_ACTION"],
+    },
+    {
       type: "custom",
-      name: "ea-travel-blackout-reschedule-not-yet-implemented",
-      predicate: async () =>
-        "NotYetImplemented: bulk reschedule by meeting class plus linked outbound repair messaging is not yet a first-class executive-assistant flow.",
+      name: "ea-travel-blackout-reschedule-action-coverage",
+      predicate: expectScenarioToCallAction({
+        acceptedActions: [
+          "CALENDAR_ACTION",
+          "CROSS_CHANNEL_SEND",
+          "GMAIL_ACTION",
+        ],
+        description: "bulk partnership reschedule",
+        includesAny: ["cancel", "push", "next month", "partnership"],
+      }),
     },
   ],
 });

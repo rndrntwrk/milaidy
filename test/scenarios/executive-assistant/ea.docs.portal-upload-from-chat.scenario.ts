@@ -1,4 +1,8 @@
 import { scenario } from "@elizaos/scenario-schema";
+import {
+  expectScenarioToCallAction,
+  expectTurnToCallAction,
+} from "../_helpers/action-assertions.ts";
 
 export default scenario({
   id: "ea.docs.portal-upload-from-chat",
@@ -25,15 +29,31 @@ export default scenario({
       name: "portal-upload-request",
       room: "main",
       text: "When I send over the deck, upload it to the portal for me.",
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: ["LIFEOPS_COMPUTER_USE", "PUBLISH_DEVICE_INTENT"],
+        description: "portal upload task setup",
+        includesAny: ["portal", "upload", "deck"],
+      }),
       responseIncludesAny: ["deck", "upload", "portal", "send over", "for me"],
     },
   ],
   finalChecks: [
     {
+      type: "browserTaskCompleted",
+      expected: true,
+    },
+    {
+      type: "uploadedAssetExists",
+      expected: true,
+    },
+    {
       type: "custom",
-      name: "ea-portal-upload-from-chat-not-yet-implemented",
-      predicate: async () =>
-        "NotYetImplemented: browser-driven portal upload from chat plus approval and credential handling is not yet fully implemented.",
+      name: "ea-portal-upload-from-chat-action-coverage",
+      predicate: expectScenarioToCallAction({
+        acceptedActions: ["LIFEOPS_COMPUTER_USE", "PUBLISH_DEVICE_INTENT"],
+        description: "portal upload task setup",
+        includesAny: ["portal", "upload", "deck"],
+      }),
     },
   ],
 });

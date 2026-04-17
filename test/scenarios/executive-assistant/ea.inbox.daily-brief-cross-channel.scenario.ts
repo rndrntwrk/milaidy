@@ -1,4 +1,8 @@
 import { scenario } from "@elizaos/scenario-schema";
+import {
+  expectScenarioToCallAction,
+  expectTurnToCallAction,
+} from "../_helpers/action-assertions.ts";
 
 export default scenario({
   id: "ea.inbox.daily-brief-cross-channel",
@@ -25,6 +29,11 @@ export default scenario({
       name: "request-daily-brief",
       room: "main",
       text: "Give me the daily brief with actions first, then reminders, then unread messages across channels.",
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: ["INBOX", "CALENDAR_ACTION"],
+        description: "cross-channel daily brief generation",
+        includesAny: ["brief", "actions", "reminders", "unread"],
+      }),
       responseIncludesAny: [
         "actions",
         "reminders",
@@ -36,10 +45,22 @@ export default scenario({
   ],
   finalChecks: [
     {
+      type: "selectedAction",
+      actionName: ["INBOX", "CALENDAR_ACTION"],
+    },
+    {
+      type: "selectedActionArguments",
+      actionName: ["INBOX", "CALENDAR_ACTION"],
+      includesAny: ["brief", "actions", "reminders", "unread"],
+    },
+    {
       type: "custom",
-      name: "ea-daily-brief-cross-channel-not-yet-implemented",
-      predicate: async () =>
-        "NotYetImplemented: structured executive-assistant daily briefs across inbox, reminders, calendar, and actions are not yet wired as one composed output.",
+      name: "ea-daily-brief-cross-channel-action-coverage",
+      predicate: expectScenarioToCallAction({
+        acceptedActions: ["INBOX", "CALENDAR_ACTION"],
+        description: "cross-channel daily brief generation",
+        includesAny: ["brief", "actions", "reminders", "unread"],
+      }),
     },
   ],
 });

@@ -1,4 +1,8 @@
 import { scenario } from "@elizaos/scenario-schema";
+import {
+  expectScenarioToCallAction,
+  expectTurnToCallAction,
+} from "../_helpers/action-assertions.ts";
 
 export default scenario({
   id: "ea.inbox.daily-brief-includes-unsent-drafts",
@@ -25,15 +29,31 @@ export default scenario({
       name: "request-daily-brief-with-drafts",
       room: "main",
       text: "In the daily brief, also tell me which drafts still need my sign-off.",
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: ["INBOX", "GMAIL_ACTION"],
+        description: "daily brief approval queue review",
+        includesAny: ["draft", "sign-off", "approval", "brief"],
+      }),
       responseIncludesAny: ["draft", "sign-off", "approval", "brief", "unsent"],
     },
   ],
   finalChecks: [
     {
+      type: "approvalRequestExists",
+      expected: true,
+    },
+    {
+      type: "draftExists",
+      expected: true,
+    },
+    {
       type: "custom",
-      name: "ea-daily-brief-includes-unsent-drafts-not-yet-implemented",
-      predicate: async () =>
-        "NotYetImplemented: draft approval queue is not yet integrated into the executive-assistant daily brief surface.",
+      name: "ea-daily-brief-includes-unsent-drafts-action-coverage",
+      predicate: expectScenarioToCallAction({
+        acceptedActions: ["INBOX", "GMAIL_ACTION"],
+        description: "daily brief approval queue review",
+        includesAny: ["draft", "sign-off", "approval", "brief"],
+      }),
     },
   ],
 });
