@@ -62,7 +62,7 @@ export function InstanceGrid({
     <section aria-labelledby="runtimes-heading" className="space-y-5">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/40">
+          <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/55">
             control surface
           </div>
           <h2
@@ -253,10 +253,10 @@ function EmptyState({
   };
   const state = copy[filter];
   return (
-    <div className="flex flex-col items-center justify-center gap-5 rounded-xl border border-dashed border-border bg-black/[0.2] px-6 py-16 text-center">
+    <div className="flex flex-col items-center justify-center gap-5 rounded-xl border border-dashed border-white/15 bg-[radial-gradient(ellipse_at_top,rgba(240,185,11,0.04),transparent_60%)] px-6 py-14 text-center">
       <div
         aria-hidden="true"
-        className="flex h-14 w-14 items-center justify-center rounded-xl border border-brand/30 bg-brand/[0.06] font-mono text-[11px] uppercase tracking-[0.22em] text-brand"
+        className="flex h-14 w-14 items-center justify-center rounded-xl border border-brand/40 bg-brand/[0.08] font-mono text-[11px] uppercase tracking-[0.22em] text-brand shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
       >
         {filter === "all" ? "M" : filter.charAt(0).toUpperCase()}
       </div>
@@ -264,16 +264,16 @@ function EmptyState({
         <h3 className="text-[18px] font-semibold tracking-tight text-white">
           {state.title}
         </h3>
-        <p className="text-[14px] leading-6 text-white/60">{state.body}</p>
+        <p className="text-[14px] leading-6 text-white/70">{state.body}</p>
       </div>
       {state.cta ? (
         <button
           type="button"
           onClick={state.cta.onClick}
-          className={`rounded-md px-4 py-2 text-[12px] font-semibold transition ${
+          className={`rounded-md px-4 py-2 text-[12px] font-semibold transition duration-200 active:scale-[0.98] ${
             state.cta.primary
-              ? "bg-brand text-black hover:bg-[var(--color-gold-300)]"
-              : "border border-border text-white hover:border-white/25"
+              ? "bg-brand text-black shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_6px_16px_-8px_rgba(240,185,11,0.45)] hover:-translate-y-0.5 hover:bg-[var(--color-gold-300)]"
+              : "border border-border text-white hover:-translate-y-0.5 hover:border-white/25"
           }`}
         >
           {state.cta.label}

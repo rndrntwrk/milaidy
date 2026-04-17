@@ -132,7 +132,7 @@ export function Sidebar({
 function NavGroup({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div>
-      <div className="mb-1.5 px-2 font-mono text-[10px] uppercase tracking-[0.18em] text-white/30">
+      <div className="mb-1.5 px-2 font-mono text-[10px] uppercase tracking-[0.18em] text-white/45">
         {title}
       </div>
       <div className="flex flex-col gap-0.5">{children}</div>
@@ -157,13 +157,13 @@ function NavItem({
     return (
       <div
         aria-disabled="true"
-        className="flex items-center justify-between rounded-md px-2 py-1.5 text-[13px] text-white/30"
+        className="flex items-center justify-between rounded-md px-2 py-1.5 text-[13px] text-white/45"
       >
         <span>{label}</span>
         {typeof count === "number" ? (
-          <span className="font-mono text-[10px] text-white/25">{count}</span>
+          <span className="font-mono text-[10px] text-white/35">{count}</span>
         ) : (
-          <span className="font-mono text-[9px] uppercase tracking-wider text-white/20">
+          <span className="font-mono text-[9px] uppercase tracking-wider text-white/35">
             soon
           </span>
         )}

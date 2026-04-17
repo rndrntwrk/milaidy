@@ -55,10 +55,10 @@ export function BrandHero({
       />
 
       <div className="relative max-w-[56ch]">
-        <div className="font-mono text-[11px] uppercase tracking-[0.22em] text-brand/75">
+        <div className="font-mono text-[11px] uppercase tracking-[0.22em] text-brand/85">
           milady frontend
-          <span className="mx-2 text-white/25">·</span>
-          <span className="text-white/45">{releaseData.release.tagName}</span>
+          <span className="mx-2 text-white/30">·</span>
+          <span className="text-white/55">{releaseData.release.tagName}</span>
         </div>
 
         <h1 className="mt-6 text-[44px] font-extrabold leading-[1.02] tracking-[-0.035em] text-white sm:text-[60px] lg:text-[76px]">
