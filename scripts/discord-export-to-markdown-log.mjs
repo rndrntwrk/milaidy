@@ -82,7 +82,9 @@ function toMessage(rawMessage) {
       rawMessage.author?.id ||
       "Unknown",
     content: sanitizeContent(rawMessage.content ?? ""),
-    attachments: attachments.map((attachment) => attachment.fileName || "attachment"),
+    attachments: attachments.map(
+      (attachment) => attachment.fileName || "attachment",
+    ),
   };
 }
 
@@ -96,7 +98,8 @@ function splitIntoChunks(messages, chunkHours, maxMessagesPerChunk) {
     const shouldStartNewChunk =
       currentChunk.length === 0 ||
       currentChunk.length >= maxMessagesPerChunk ||
-      (previous && message.timestamp.getTime() - previous.timestamp.getTime() >= chunkMs);
+      (previous &&
+        message.timestamp.getTime() - previous.timestamp.getTime() >= chunkMs);
 
     if (shouldStartNewChunk && currentChunk.length > 0) {
       chunks.push(currentChunk);
@@ -199,7 +202,9 @@ function main() {
   const raw = JSON.parse(fs.readFileSync(options.inputPath, "utf8"));
   const messages = (raw.messages ?? [])
     .map((message) => toMessage(message))
-    .sort((left, right) => left.timestamp.getTime() - right.timestamp.getTime());
+    .sort(
+      (left, right) => left.timestamp.getTime() - right.timestamp.getTime(),
+    );
   const chunks = splitIntoChunks(
     messages,
     options.chunkHours,
