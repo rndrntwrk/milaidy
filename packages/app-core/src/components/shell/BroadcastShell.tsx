@@ -44,6 +44,7 @@ import { useRenderGuard } from "@miladyai/app-core/hooks";
 import { memo, useEffect } from "react";
 import { CompanionSceneHost } from "../companion/CompanionSceneHost";
 import { useCompanionSceneStatus } from "../companion/companion-scene-status-context";
+import { LiveKitBroadcastPublisher } from "../companion/LiveKitBroadcastPublisher";
 import { SceneOverlayDataBridge } from "../companion/scene-overlay-bridge";
 
 declare global {
@@ -111,6 +112,17 @@ export const BroadcastShell = memo(function BroadcastShell() {
         capture had no chat bubbles after PR #68.
       */}
       <SceneOverlayDataBridge />
+      {/*
+        LiveKitBroadcastPublisher captures the VRM canvas via
+        `canvas.captureStream(30)` and publishes it as a WebRTC video
+        track to the LiveKit room provisioned by the control-plane. The
+        capture-service worker injects the room URL + publish token as
+        `window.__injectedShowConfig.liveKit` before navigation.
+        Control-plane Egress picks up the published track and forwards
+        it to Cloudflare → Twitch/Kick. No-op if the injected config
+        is absent (e.g., developer opens the broadcast URL directly).
+      */}
+      <LiveKitBroadcastPublisher />
     </div>
   );
 });
