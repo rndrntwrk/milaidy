@@ -11,6 +11,7 @@ import {
   registerCustomActionLive,
 } from "../runtime/custom-actions.js";
 import { EMOTE_BY_ID, EMOTE_CATALOG } from "../emotes/catalog.js";
+import { resolveStateDir } from "../config/paths.js";
 import { readStreamSettings } from "./stream-persistence.js";
 import { resolveTerminalRunLimits } from "./terminal-run-limits.js";
 import {
@@ -460,12 +461,14 @@ export async function handleMiscRoutes(
         return true;
       }
       const settings = readStreamSettings();
-      const avatarDir = path.join(
-        process.env.MILAIDY_HOME ||
-          process.env.ELIZA_DATA_DIR ||
-          path.join(process.cwd(), "data"),
-        "avatars",
-      );
+      // Share the same avatar root resolution as /api/avatar/*
+      // (avatar-routes.ts) so the public surface reports the exact
+      // same custom-asset presence the authenticated/capture path
+      // sees. resolveStateDir honors MILADY_STATE_DIR / ELIZA_STATE_DIR
+      // (the canonical state-dir env vars); a divergent inline env
+      // chain here would make public hasCustomVrm=false while the
+      // authed path still serves the file correctly.
+      const avatarDir = path.join(resolveStateDir(), "avatars");
       let hasCustomVrm = false;
       try {
         hasCustomVrm = fs.statSync(path.join(avatarDir, "custom.vrm")).isFile();
@@ -520,13 +523,9 @@ export async function handleMiscRoutes(
         error(res, "Unknown broadcast channel", 404);
         return true;
       }
-      const vrmPath = path.join(
-        process.env.MILAIDY_HOME ||
-          process.env.ELIZA_DATA_DIR ||
-          path.join(process.cwd(), "data"),
-        "avatars",
-        "custom.vrm",
-      );
+      // Share the same avatar root resolution as /api/avatar/vrm —
+      // see note on the /scene handler above.
+      const vrmPath = path.join(resolveStateDir(), "avatars", "custom.vrm");
       try {
         const stat = fs.statSync(vrmPath);
         if (!stat.isFile()) {
@@ -567,12 +566,14 @@ export async function handleMiscRoutes(
         error(res, "Unknown broadcast channel", 404);
         return true;
       }
-      const avatarDir = path.join(
-        process.env.MILAIDY_HOME ||
-          process.env.ELIZA_DATA_DIR ||
-          path.join(process.cwd(), "data"),
-        "avatars",
-      );
+      // Share the same avatar root resolution as /api/avatar/*
+      // (avatar-routes.ts) so the public surface reports the exact
+      // same custom-asset presence the authenticated/capture path
+      // sees. resolveStateDir honors MILADY_STATE_DIR / ELIZA_STATE_DIR
+      // (the canonical state-dir env vars); a divergent inline env
+      // chain here would make public hasCustomVrm=false while the
+      // authed path still serves the file correctly.
+      const avatarDir = path.join(resolveStateDir(), "avatars");
       const MIME: Record<string, string> = {
         png: "image/png",
         jpg: "image/jpeg",

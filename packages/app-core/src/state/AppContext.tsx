@@ -6990,6 +6990,16 @@ function AppProviderInner({
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: t is stable but defined later
   useEffect(() => {
+    // Hoisted above the public broadcast short-circuit because the
+    // scene-hydration `.then` closure captures this binding. Leaving
+    // the declaration in its original position below the short-circuit
+    // would put `cancelled` in TDZ when the public branch's async
+    // callback resolves — reading it would throw ReferenceError and
+    // silently swallow the hydration. Keep the single source-of-truth
+    // declaration here; do not reintroduce a second `let cancelled`
+    // further down.
+    let cancelled = false;
+
     // PUBLIC BROADCAST SHORT-CIRCUIT — defense-in-depth for the path-
     // based public surface at alice.rndrntwrk.com/broadcast/:channel.
     //
@@ -7088,7 +7098,8 @@ function AppProviderInner({
     let unbindSystemWarnings: (() => void) | null = null;
     let unbindRestartRequired: (() => void) | null = null;
     let ptyPollInterval: ReturnType<typeof setInterval> | null = null;
-    let cancelled = false;
+    // `cancelled` hoisted to the top of this effect — see comment
+    // above the public broadcast short-circuit. Not redeclared here.
     const describeBackendFailure = (
       err: unknown,
       timedOut: boolean,
