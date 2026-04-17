@@ -249,6 +249,59 @@ body {
   }
 }
 
+/* Skeleton placeholder shimmer — taste-skill §8 (Skeleton Shimmer).
+   Linear sheen moving across a low-contrast neutral. Hardware-accelerated
+   via background-position translation, respects prefers-reduced-motion. */
+.skeleton-shimmer {
+  background-image: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04) 0%,
+    rgba(255, 255, 255, 0.10) 40%,
+    rgba(240, 185, 11, 0.06) 50%,
+    rgba(255, 255, 255, 0.10) 60%,
+    rgba(255, 255, 255, 0.04) 100%
+  );
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  animation: shimmer 2.4s linear infinite;
+  will-change: background-position;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-shimmer {
+    animation: none;
+    background: rgba(255, 255, 255, 0.06);
+  }
+}
+
+/* Cinematic brand seal — very slow spin + opacity breathe. Fixed size,
+   fixed bottom-right. Decorative only (aria-hidden on the node). */
+@keyframes seal-orbit {
+  0% {
+    transform: rotate(0deg);
+    opacity: 0.22;
+  }
+  50% {
+    opacity: 0.36;
+  }
+  100% {
+    transform: rotate(360deg);
+    opacity: 0.22;
+  }
+}
+
+.seal-orbit {
+  animation: seal-orbit 48s linear infinite;
+  will-change: transform, opacity;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .seal-orbit {
+    animation: none;
+    opacity: 0.3;
+  }
+}
+
 @keyframes status-pulse {
   0%,
   100% {

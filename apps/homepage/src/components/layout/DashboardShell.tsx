@@ -121,13 +121,15 @@ export function DashboardShell({
           {children}
         </main>
 
-        {/* Brand seal — bottom-right, fixed, discreet */}
+        {/* Brand seal — bottom-right, fixed, discreet. Slow orbit + opacity
+            breathe give the gold a cinematic presence per taste-skill §4
+            (Perpetual Micro-Interactions) without pulling focus. */}
         <div
           aria-hidden="true"
           className="pointer-events-none fixed bottom-4 right-4 z-10 hidden lg:block"
         >
           <div
-            className="h-6 w-6 rounded-full opacity-30"
+            className="seal-orbit h-6 w-6 rounded-full"
             style={{
               background: "var(--gold-gradient-seal)",
               boxShadow: "var(--gold-glow-soft)",

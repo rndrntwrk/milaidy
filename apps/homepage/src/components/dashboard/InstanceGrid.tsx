@@ -164,26 +164,37 @@ export function InstanceGrid({
   );
 }
 
+/**
+ * GridSkeleton — taste-skill §5 (Skeletal loaders matching layout sizes).
+ * The card shape/spacing mirrors `InstanceCard` exactly so the layout
+ * doesn't jump when real data resolves. Shimmer sweep replaces generic
+ * opacity pulse per taste-skill §8 (Skeleton Shimmer).
+ */
 function GridSkeleton() {
   return (
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+    <div
+      role="status"
+      aria-label="Loading runtimes"
+      className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
+    >
       {[0, 1, 2].map((i) => (
         <div
           key={i}
           className="flex flex-col gap-4 rounded-xl border border-border bg-white/[0.02] p-5"
+          style={{ animationDelay: `${i * 90}ms` }}
         >
           <div className="flex items-center justify-between gap-3">
-            <div className="h-3 w-20 animate-pulse rounded bg-white/10" />
-            <div className="h-3 w-24 animate-pulse rounded bg-white/5" />
+            <div className="skeleton-shimmer h-3 w-20 rounded" />
+            <div className="skeleton-shimmer h-3 w-24 rounded opacity-60" />
           </div>
           <div className="space-y-2">
-            <div className="h-5 w-2/3 animate-pulse rounded bg-white/10" />
-            <div className="h-3 w-1/3 animate-pulse rounded bg-white/5" />
+            <div className="skeleton-shimmer h-5 w-2/3 rounded" />
+            <div className="skeleton-shimmer h-3 w-1/3 rounded opacity-60" />
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="h-8 flex-1 animate-pulse rounded-md bg-white/10" />
-            <div className="h-8 w-8 animate-pulse rounded-md bg-white/5" />
-            <div className="h-8 w-8 animate-pulse rounded-md bg-white/5" />
+            <div className="skeleton-shimmer h-8 flex-1 rounded-md" />
+            <div className="skeleton-shimmer h-8 w-8 rounded-md opacity-60" />
+            <div className="skeleton-shimmer h-8 w-8 rounded-md opacity-60" />
           </div>
         </div>
       ))}
