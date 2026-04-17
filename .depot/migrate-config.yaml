@@ -6,12 +6,19 @@
 # `.depot/workflows/`, and is consumed by `scripts/depot-ci-sync.mjs` to
 # re-delete opt-outs after a regeneration run.
 #
-# Why opt a workflow out of Depot:
-#   - Fast-running jobs (<3min): Depot's cold-start and runner provisioning
-#     overhead outweighs its cache/speed benefits.
-#   - Auth-sensitive release jobs: stay on canonical GHA runners to keep
-#     `GITHUB_TOKEN` / OIDC permission behavior predictable.
-#   - Bot/label/review jobs: thin glue around `gh` CLI — no compute wins.
+# Strategy:
+#   - Depot CI mirror is opt-in and only kept for Linux-heavy compute workflows
+#     where Depot's runner cache + faster machines outweigh the duplicate
+#     execution cost.
+#   - Docker builds use `depot/build-push-action@v1` directly in the canonical
+#     GHA workflow — no CI mirror needed.
+#   - All macOS / Windows / iOS / Android workflows MUST be skipped because
+#     Depot CI remaps every non-`depot-*` `runs-on` label (including
+#     `macos-14`, `macos-15`, `windows-latest`) to `depot-ubuntu-latest`,
+#     which breaks Xcode/Android SDK/Windows SDK requirements.
+#   - Release-credential workflows stay on canonical GHA so OIDC + secrets
+#     behave predictably.
+#   - Bot/label/review thin-glue workflows have no compute wins.
 #
 # If you add a workflow here, also delete its mirror at `.depot/workflows/<name>`.
 
@@ -22,5 +29,40 @@ skip:
   - run-prr.yml
   - agent-review.yml
   - agent-fix-ci.yml
+  - integration-dod-gap-issues.yml
+  - task-agent-cross-platform-review.yml
+
+  # Cross-platform / macOS / Windows / mobile — Depot remaps all labels
+  # to depot-ubuntu-latest, which lacks Xcode, Android SDK, Windows SDK
+  - agent-release.yml
+  - android-release.yml
+  - apple-store-release.yml
+  - mobile-build-smoke.yml
+  - release-electrobun.yml
+  - test-electrobun-release.yml
+  - test-packaging.yml
+  - test-flatpak.yml
+  - update-homebrew.yml
+  - windows-desktop-preload-smoke.yml
+  - windows-dev-smoke.yml
+
+  # Tests — full matrix uses init-submodules and cloud-live-e2e step
+  # ordering that doesn't survive Depot mirror's checkout reordering
+  - test.yml
+
+  # Docker builds — use depot/build-push-action@v1 in canonical GHA, no mirror
+  - build-docker.yml
+  - build-cloud-agent.yml
+  - build-cloud-image.yml
+  - docker-ci-smoke.yml
+
   # Release-credential workflows — keep on GHA to avoid OIDC/secret drift
   - publish-npm.yml
+  - publish-packages.yml
+  - publish-plugin-elizacloud.yml
+  - reusable-npm-publish.yml
+  - release-orchestrator.yml
+  - snap-build-test.yml
+  - deploy-origin-smoke.yml
+  - deploy-web.yml
+  - ci-fork.yml

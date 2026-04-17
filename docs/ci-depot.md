@@ -56,16 +56,32 @@ node scripts/depot-ci-sync.mjs --dry-run
 node scripts/depot-ci-sync.mjs
 ```
 
-The skip list currently opts these workflows out of Depot CI:
+### Current strategy
 
-| Workflow | Reason |
-|---|---|
-| `ci.yml` | Fast lint/typecheck/format jobs (<3min); Depot overhead not worth it |
-| `auto-label.yml` | Thin `gh` CLI glue |
-| `run-prr.yml` | Thin `gh` CLI glue |
-| `agent-review.yml` | Bot-triggered review workflow |
-| `agent-fix-ci.yml` | Bot-triggered fix workflow |
-| `publish-npm.yml` | Release-credential workflow — keep on canonical GHA for OIDC/secret predictability |
+Depot CI mirror is **opt-in**, not default. We only keep mirrors for
+Linux-heavy compute workflows. Everything else stays on canonical GHA:
+
+**Kept on Depot CI** (compute-heavy Linux-only):
+- `benchmark-tests.yml`, `nightly.yml`
+
+**Docker builds** use `depot/build-push-action@v1` directly in the canonical
+GHA workflow — no CI mirror needed, no 2× execution:
+- `build-docker.yml`, `build-cloud-agent.yml`, `build-cloud-image.yml`,
+  `docker-ci-smoke.yml`
+
+**Skipped from Depot CI** (remap failures, fast jobs, or release-auth):
+
+| Category | Workflows | Reason |
+|---|---|---|
+| Thin/fast | `ci.yml`, `auto-label.yml`, `run-prr.yml`, `agent-review.yml`, `agent-fix-ci.yml`, `integration-dod-gap-issues.yml`, `task-agent-cross-platform-review.yml` | <3min jobs; no Depot compute win |
+| Cross-platform / macOS / Windows / mobile | `agent-release.yml`, `android-release.yml`, `apple-store-release.yml`, `mobile-build-smoke.yml`, `release-electrobun.yml`, `test-electrobun-release.yml`, `test-packaging.yml`, `test-flatpak.yml`, `update-homebrew.yml`, `windows-*.yml` | Depot CI remaps **every** non-`depot-*` label (`macos-14`, `windows-latest`, etc.) to `depot-ubuntu-latest`, which lacks Xcode / Android SDK / Windows SDK |
+| Tests matrix | `test.yml` | `cloud-live-e2e` step ordering doesn't survive Depot mirror's checkout reordering |
+| Release credentials | `publish-npm.yml`, `publish-packages.yml`, `publish-plugin-elizacloud.yml`, `reusable-npm-publish.yml`, `release-orchestrator.yml`, `snap-build-test.yml`, `deploy-origin-smoke.yml`, `deploy-web.yml`, `ci-fork.yml` | Keep on canonical GHA for OIDC/secret predictability |
+
+> **Depot runner-label gotcha**: the [Depot compatibility doc](https://depot.dev/docs/github-actions/quickstart#migration-compatibility)
+> states all non-Depot labels become `depot-ubuntu-latest`. macOS labels do
+> **not** pass through to GitHub-hosted runners — any macOS/Windows workflow
+> MUST be in the skip list or it will run on Linux and fail.
 
 If you want to add or remove an entry, edit `skip:` in
 `.depot/migrate-config.yaml` and re-run the sync script.
