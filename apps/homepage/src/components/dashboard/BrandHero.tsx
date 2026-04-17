@@ -39,12 +39,13 @@ export function BrandHero({
       : "no local runtime";
 
   return (
-    <section className="relative isolate">
+    <section className="relative isolate overflow-hidden">
       {/* Ambient gold wash — further off-screen, lower opacity, wider
-          falloff. Reads as weather, not as a glow. */}
+          falloff. Reads as weather, not as a glow. Clipped by parent so
+          it never drives horizontal scroll on narrow viewports. */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -right-40 -top-28 h-[520px] w-[520px] opacity-[0.22] blur-3xl"
+        className="pointer-events-none absolute -right-20 -top-24 h-[320px] w-[320px] opacity-[0.16] blur-3xl sm:-right-32 sm:-top-28 sm:h-[420px] sm:w-[420px] sm:opacity-[0.18] md:-right-40 md:h-[520px] md:w-[520px] md:opacity-[0.22]"
         style={{
           background:
             "radial-gradient(circle at center, rgba(240,185,11,0.12) 0%, transparent 72%)",

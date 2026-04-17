@@ -35,7 +35,7 @@ export function QuickOpsStrip({ onCopy }: QuickOpsStripProps) {
 
       <div className="grid gap-3 lg:grid-cols-[1.4fr_1fr]">
         {/* Install command */}
-        <div className="rounded-lg border border-border bg-[#0a0a0d] p-4">
+        <div className="min-w-0 rounded-lg border border-border bg-[#0a0a0d] p-4">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <div className="font-mono text-[11px] lowercase tracking-[0.12em] text-white/45">
               one-line
@@ -54,7 +54,7 @@ export function QuickOpsStrip({ onCopy }: QuickOpsStripProps) {
             </div>
           </div>
           <div className="flex items-center gap-2 rounded-md border border-border bg-black/40 px-3 py-2">
-            <code className="flex-1 overflow-x-auto whitespace-nowrap font-mono text-[12px] text-brand">
+            <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono text-[11px] text-brand sm:text-[12px]">
               {command}
             </code>
             <button
@@ -69,7 +69,7 @@ export function QuickOpsStrip({ onCopy }: QuickOpsStripProps) {
         </div>
 
         {/* Downloads */}
-        <div className="rounded-lg border border-border bg-[#0a0a0d] p-4">
+        <div className="min-w-0 rounded-lg border border-border bg-[#0a0a0d] p-4">
           <div className="mb-3 font-mono text-[11px] lowercase tracking-[0.12em] text-white/45">
             desktop
           </div>
