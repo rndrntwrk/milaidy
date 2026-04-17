@@ -37,7 +37,6 @@ export function Sidebar({
   isSigningIn,
   onClose,
 }: SidebarProps) {
-  const cloudCount = agents.filter((a) => a.source === "cloud").length;
   const remoteCount = agents.filter((a) => a.source === "remote").length;
 
   return (
@@ -96,20 +95,8 @@ export function Sidebar({
       <nav className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto">
         <NavGroup title="Agents">
           <NavItem to="/dashboard" label="Dashboard" onClick={onClose} />
-          <NavItem
-            to="/agents"
-            label="Agents"
-            onClick={onClose}
-            count={agents.length}
-            disabled
-          />
-          <NavItem
-            to="/cloud"
-            label="Cloud"
-            onClick={onClose}
-            count={cloudCount}
-            disabled
-          />
+          <NavItem to="/agents" label="Agents" onClick={onClose} disabled />
+          <NavItem to="/cloud" label="Cloud" onClick={onClose} disabled />
           <NavItemButton
             label="Attach remote"
             onClick={() => {

@@ -40,7 +40,7 @@ export function SessionTile({
           <button
             type="button"
             onClick={signOut}
-            className="w-full rounded-md border border-border px-2.5 py-1.5 text-[11px] text-white/70 transition hover:border-white/25 hover:text-white"
+            className="w-full rounded-md border border-border px-2.5 py-1.5 text-[11px] text-white/60 transition hover:border-white/20 hover:text-white/90 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-white/30"
           >
             Sign out
           </button>
