@@ -28,7 +28,7 @@ describe("action e2e workflow contract", () => {
       "OPENAI_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY != '' && secrets.ELIZAOS_CLOUD_API_KEY || secrets.OPENAI_API_KEY }}",
     );
     expect(workflow).toContain(
-      "OPENAI_BASE_URL: ${{ secrets.ELIZAOS_CLOUD_API_KEY != '' && 'https://elizacloud.ai/api/v1' || '' }}",
+      "OPENAI_BASE_URL: ${{ secrets.ELIZAOS_CLOUD_API_KEY != '' && 'https://elizacloud.ai/api/v1' || 'https://api.openai.com/v1' }}",
     );
   });
 });

@@ -587,7 +587,7 @@ jobs:
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       ELIZAOS_CLOUD_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY }}
       OPENAI_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY != '' && secrets.ELIZAOS_CLOUD_API_KEY || secrets.OPENAI_API_KEY }}
-      OPENAI_BASE_URL: ${{ secrets.ELIZAOS_CLOUD_API_KEY != '' && 'https://elizacloud.ai/api/v1' || '' }}
+      OPENAI_BASE_URL: ${{ secrets.ELIZAOS_CLOUD_API_KEY != '' && 'https://elizacloud.ai/api/v1' || 'https://api.openai.com/v1' }}
       NODE_NO_WARNINGS: "1"
       NODE_OPTIONS: "--max-old-space-size=4096"
     steps:
