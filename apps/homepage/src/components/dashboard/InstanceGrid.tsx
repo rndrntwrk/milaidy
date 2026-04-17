@@ -100,9 +100,14 @@ export function InstanceGrid({
                   ? "Create a new cloud agent"
                   : "Sign in to cloud to create an agent"
               }
-              className="inline-flex h-8 items-center gap-1.5 rounded-full border border-brand/45 bg-brand/[0.08] px-3 font-mono text-[10px] uppercase tracking-[0.18em] text-brand transition hover:border-brand/70 hover:bg-brand/[0.14] disabled:opacity-40 disabled:cursor-not-allowed"
+              className="group/new inline-flex h-8 items-center gap-1.5 rounded-full border border-brand/45 bg-brand/[0.08] px-3 font-mono text-[10px] uppercase tracking-[0.18em] text-brand transition duration-200 hover:border-brand/75 hover:bg-brand/[0.16] hover:shadow-[inset_0_0_0_1px_rgba(240,185,11,0.25)] active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              <span aria-hidden="true">+</span>
+              <span
+                aria-hidden="true"
+                className="inline-block transition duration-200 group-hover/new:rotate-90"
+              >
+                +
+              </span>
               <span>new agent</span>
             </button>
           ) : null}
