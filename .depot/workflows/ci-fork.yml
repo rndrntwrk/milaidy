@@ -38,7 +38,6 @@ jobs:
           bun install --cwd eliza --no-frozen-lockfile --ignore-scripts
           bun install --cwd eliza/cloud --no-frozen-lockfile --ignore-scripts
           bun install --cwd eliza/steward-fi --no-frozen-lockfile --ignore-scripts
-          node eliza/packages/app-core/scripts/patch-deps.mjs
       - name: Biome lint
         run: bun run verify:lint
       - name: Biome format check
@@ -65,7 +64,6 @@ jobs:
           bun install --cwd eliza --no-frozen-lockfile --ignore-scripts
           bun install --cwd eliza/cloud --no-frozen-lockfile --ignore-scripts
           bun install --cwd eliza/steward-fi --no-frozen-lockfile --ignore-scripts
-          node eliza/packages/app-core/scripts/patch-deps.mjs
       - name: Run type checker
         run: bun run verify:typecheck
   test:
