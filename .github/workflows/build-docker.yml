@@ -78,10 +78,12 @@ concurrency:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: milady-ai/agent
+  DEPOT_PROJECT_ID: m89t0f0p08
 
 permissions:
   contents: read
   packages: write
+  id-token: write
 
 jobs:
   build:
@@ -257,9 +259,11 @@ jobs:
       - name: Set up CI dockerignore
         run: cp eliza/packages/app-core/deploy/.dockerignore.ci .dockerignore
 
-      # ── 13. Set up Docker Buildx ────────────────────────────────────────────
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      # ── 13. Set up Depot CLI ────────────────────────────────────────────────
+      # Docker builds run on Depot infrastructure (persistent cache, no GHA
+      # docker-daemon fragility). `DEPOT_TOKEN` secret must be set on the repo.
+      - name: Set up Depot CLI
+        uses: depot/setup-action@v1
 
       # ── 14. Login to GHCR ───────────────────────────────────────────────────
       - name: Login to GHCR
@@ -281,10 +285,15 @@ jobs:
             type=raw,value=latest,enable=${{ steps.version.outputs.tag_latest == 'true' }}
             type=raw,value=dev,enable=${{ steps.version.outputs.is_release == 'false' }}
 
-      # ── 14. Build and push ──────────────────────────────────────────────────
+      # ── 14. Build and push (on Depot) ───────────────────────────────────────
+      # depot/build-push-action builds on Depot's BuildKit workers (persistent
+      # layer cache, no GHA daemon). Push goes directly from Depot to GHCR,
+      # sidestepping the GHA → GHCR 403 class of failures on restricted tokens.
       - name: Build and push Docker image
-        uses: docker/build-push-action@v6
+        uses: depot/build-push-action@v1
         with:
+          project: ${{ env.DEPOT_PROJECT_ID }}
+          token: ${{ secrets.DEPOT_TOKEN }}
           context: .
           file: eliza/packages/app-core/deploy/Dockerfile.ci
           platforms: linux/amd64
@@ -304,8 +313,6 @@ jobs:
             VERSION_CLEAN=${{ steps.version.outputs.version_clean }}
             REVISION=${{ github.sha }}
             MILADY_RELEASE_TAG=${{ steps.version.outputs.is_release == 'true' && steps.version.outputs.version || '' }}
-          cache-from: type=gha,scope=milady-docker
-          cache-to: type=gha,scope=milady-docker,mode=max,ignore-error=true
           provenance: false
 
       # ── 15. Build summary ───────────────────────────────────────────────────

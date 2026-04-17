@@ -47,10 +47,12 @@ env:
   IMAGE_NAME: milady-ai/agent
   SOURCE_REF: ${{ github.event_name == 'push' && github.ref_name || (github.ref_name == 'cloud/staging' && 'cloud/staging' || 'cloud/main') }}
   CLOUD_DEPLOY_WEBHOOK_URL: http://89.167.63.246:9876/deploy
+  DEPOT_PROJECT_ID: m89t0f0p08
 
 permissions:
   contents: read
   packages: write
+  id-token: write
 
 jobs:
   build:
@@ -380,9 +382,9 @@ jobs:
           echo '!eliza/apps/app-companion' >> .dockerignore
           echo '!eliza/apps/app-lifeops' >> .dockerignore
 
-      # ── 10. Set up Docker builder ────────────────────────────────
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      # ── 10. Set up Depot builder ────────────────────────────────
+      - name: Set up Depot CLI
+        uses: depot/setup-action@v1
 
       # ── 11. Login to GHCR ──────────────────────────────────────────────────
       - name: Login to GHCR
@@ -392,10 +394,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # ── 12. Build and push with Docker layer cache ────────────────────────────
+      # ── 12. Build and push via Depot (persistent layer cache + Depot infra) ──
       - name: Build and push Docker image
-        uses: docker/build-push-action@v6
+        uses: depot/build-push-action@v1
         with:
+          project: ${{ env.DEPOT_PROJECT_ID }}
+          token: ${{ secrets.DEPOT_TOKEN }}
           context: .
           file: deploy/Dockerfile.ci
           platforms: linux/amd64
