@@ -47,7 +47,7 @@
         "commander": "^14.0.3",
         "cross-spawn": "^7.0.6",
         "dotenv": "^17.3.1",
-        "drizzle-orm": "0.45.1",
+        "drizzle-orm": "0.45.2",
         "ethers": "^6.16.0",
         "glob": "^13.0.6",
         "json5": "^2.2.3",
@@ -146,6 +146,7 @@
       "dependencies": {
         "@elizaos/app-core": "workspace:*",
         "@elizaos/shared": "workspace:*",
+        "dompurify": "^3.4.0",
         "mermaid": "^11.14.0",
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
@@ -180,8 +181,10 @@
       "version": "0.1.0",
       "dependencies": {
         "@elizaos/agent": "workspace:*",
+        "@elizaos/app-core": "workspace:*",
         "@elizaos/core": "workspace:*",
         "@elizaos/shared": "workspace:*",
+        "@elizaos/ui": "workspace:*",
       },
       "peerDependencies": {
         "@elizaos/core": "workspace:*",
@@ -191,8 +194,10 @@
       "name": "@elizaos/app-babylon",
       "version": "0.0.0",
       "dependencies": {
+        "@elizaos/app-core": "workspace:*",
         "@elizaos/core": "workspace:*",
         "@elizaos/shared": "workspace:*",
+        "@elizaos/ui": "workspace:*",
       },
     },
     "eliza/apps/app-browser": {
@@ -246,8 +251,20 @@
       "name": "@elizaos/app-defense-of-the-agents",
       "version": "0.0.0",
       "dependencies": {
+        "@elizaos/app-core": "workspace:*",
         "@elizaos/core": "workspace:*",
         "@elizaos/shared": "workspace:*",
+        "@elizaos/ui": "workspace:*",
+      },
+    },
+    "eliza/apps/app-elizamaker": {
+      "name": "@elizaos/app-elizamaker",
+      "version": "0.0.0",
+      "dependencies": {
+        "@elizaos/agent": "workspace:*",
+        "@elizaos/app-steward": "workspace:*",
+        "@elizaos/core": "workspace:*",
+        "ethers": "^6.15.0",
       },
     },
     "eliza/apps/app-form": {
@@ -262,8 +279,10 @@
       "name": "@elizaos/app-hyperscape",
       "version": "0.1.0",
       "dependencies": {
+        "@elizaos/app-core": "workspace:*",
         "@elizaos/core": "workspace:*",
         "@elizaos/shared": "workspace:*",
+        "@elizaos/ui": "workspace:*",
       },
       "peerDependencies": {
         "@elizaos/core": "workspace:*",
@@ -299,8 +318,10 @@
       "version": "0.1.0",
       "dependencies": {
         "@elizaos/agent": "workspace:*",
+        "@elizaos/app-core": "workspace:*",
         "@elizaos/core": "workspace:*",
         "@elizaos/shared": "workspace:*",
+        "@elizaos/ui": "workspace:*",
         "@toon-format/toon": "2.1.0",
       },
     },
@@ -317,6 +338,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@elizaos/core": "workspace:*",
+        "@elizaos/shared": "workspace:*",
         "@elizaos/ui": "workspace:*",
         "@noble/curves": "^2.0.1",
         "@stwd/sdk": "^0.3.0",
@@ -361,6 +383,7 @@
       "dependencies": {
         "@clack/prompts": "^1.0.0",
         "@elizaos/app-companion": "workspace:*",
+        "@elizaos/app-elizamaker": "workspace:*",
         "@elizaos/app-knowledge": "workspace:*",
         "@elizaos/app-lifeops": "workspace:*",
         "@elizaos/app-steward": "workspace:*",
@@ -372,7 +395,6 @@
         "@elizaos/plugin-pdf": "workspace:*",
         "@elizaos/plugin-solana": "1.2.6",
         "@elizaos/plugin-sql": "workspace:*",
-        "@elizaos/plugin-wechat": "workspace:*",
         "@elizaos/shared": "workspace:*",
         "@elizaos/skills": "workspace:*",
         "@hapi/boom": "^10.0.1",
@@ -432,13 +454,14 @@
         "@clack/prompts": "^1.0.0",
         "@elizaos/agent": "workspace:*",
         "@elizaos/app-companion": "workspace:*",
+        "@elizaos/app-elizamaker": "workspace:*",
+        "@elizaos/app-lifeops": "workspace:*",
         "@elizaos/app-shopify": "workspace:*",
         "@elizaos/app-steward": "workspace:*",
         "@elizaos/app-task-coordinator": "workspace:*",
         "@elizaos/app-training": "workspace:*",
         "@elizaos/app-vincent": "workspace:*",
         "@elizaos/core": "workspace:*",
-        "@elizaos/plugin-wechat": "workspace:*",
         "@elizaos/shared": "workspace:*",
         "@elizaos/ui": "workspace:*",
         "@radix-ui/react-checkbox": "^1.3.3",
@@ -758,18 +781,6 @@
     "eliza/packages/rust": {
       "name": "@elizaos/rust",
       "version": "2.0.0-alpha.0",
-    },
-    "eliza/packages/scenario-schema": {
-      "name": "@elizaos/scenario-schema",
-      "version": "0.0.1",
-      "dependencies": {
-        "zod": "^4.3.6",
-      },
-      "devDependencies": {
-        "@types/node": "^22.10.1",
-        "typescript": "^5.7.2",
-        "vitest": "^2.1.8",
-      },
     },
     "eliza/packages/schemas": {
       "name": "@elizaos/schemas",
@@ -1834,10 +1845,6 @@
         "@elizaos/core": "2.0.0-alpha.173",
       },
     },
-    "scripts/ci-stubs/elizaos-plugin-wechat": {
-      "name": "@elizaos/plugin-wechat",
-      "version": "0.0.0-ci-stub",
-    },
   },
   "patchedDependencies": {
     "pty-manager@1.11.0": "eliza/packages/app-core/patches/pty-manager@1.11.0.patch",
@@ -1871,7 +1878,7 @@
     "crypto-browserify": "3.12.1",
     "defu": "6.1.6",
     "dompurify": "3.4.0",
-    "drizzle-orm": "0.45.1",
+    "drizzle-orm": "0.45.2",
     "esbuild": "0.28.0",
     "libsignal": "git+https://github.com/whiskeysockets/libsignal-node.git#1c30d7d7e76a3b0aa120b04dc6a26f5a12dccf67",
     "lodash": "4.18.1",
@@ -2101,6 +2108,8 @@
 
     "@elizaos/app-defense-of-the-agents": ["@elizaos/app-defense-of-the-agents@workspace:eliza/apps/app-defense-of-the-agents"],
 
+    "@elizaos/app-elizamaker": ["@elizaos/app-elizamaker@workspace:eliza/apps/app-elizamaker"],
+
     "@elizaos/app-form": ["@elizaos/app-form@workspace:eliza/apps/app-form"],
 
     "@elizaos/app-hyperscape": ["@elizaos/app-hyperscape@workspace:eliza/apps/app-hyperscape"],
@@ -2261,8 +2270,6 @@
 
     "@elizaos/plugin-twitter": ["@elizaos/plugin-twitter@workspace:eliza/plugins/plugin-twitter"],
 
-    "@elizaos/plugin-wechat": ["@elizaos/plugin-wechat@workspace:scripts/ci-stubs/elizaos-plugin-wechat"],
-
     "@elizaos/plugin-whatsapp": ["@elizaos/plugin-whatsapp@workspace:eliza/plugins/plugin-whatsapp/typescript"],
 
     "@elizaos/plugin-whatsapp-root": ["@elizaos/plugin-whatsapp-root@workspace:eliza/plugins/plugin-whatsapp"],
@@ -2272,8 +2279,6 @@
     "@elizaos/python": ["@elizaos/python@workspace:eliza/packages/python"],
 
     "@elizaos/rust": ["@elizaos/rust@workspace:eliza/packages/rust"],
-
-    "@elizaos/scenario-schema": ["@elizaos/scenario-schema@workspace:eliza/packages/scenario-schema"],
 
     "@elizaos/schemas": ["@elizaos/schemas@workspace:eliza/packages/schemas"],
 
@@ -3921,7 +3926,7 @@
 
     "drizzle-kit": ["drizzle-kit@0.31.10", "", { "dependencies": { "@drizzle-team/brocli": "^0.10.2", "@esbuild-kit/esm-loader": "^2.5.5", "esbuild": "^0.25.4", "tsx": "^4.21.0" }, "bin": { "drizzle-kit": "bin.cjs" } }, "sha512-7OZcmQUrdGI+DUNNsKBn1aW8qSoKuTH7d0mYgSP8bAzdFzKoovxEFnoGQp2dVs82EOJeYycqRtciopszwUf8bw=="],
 
-    "drizzle-orm": ["drizzle-orm@0.45.1", "", { "peerDependencies": { "@aws-sdk/client-rds-data": ">=3", "@cloudflare/workers-types": ">=4", "@electric-sql/pglite": ">=0.2.0", "@libsql/client": ">=0.10.0", "@libsql/client-wasm": ">=0.10.0", "@neondatabase/serverless": ">=0.10.0", "@op-engineering/op-sqlite": ">=2", "@opentelemetry/api": "^1.4.1", "@planetscale/database": ">=1.13", "@prisma/client": "*", "@tidbcloud/serverless": "*", "@types/better-sqlite3": "*", "@types/pg": "*", "@types/sql.js": "*", "@upstash/redis": ">=1.34.7", "@vercel/postgres": ">=0.8.0", "@xata.io/client": "*", "better-sqlite3": ">=7", "bun-types": "*", "expo-sqlite": ">=14.0.0", "gel": ">=2", "knex": "*", "kysely": "*", "mysql2": ">=2", "pg": ">=8", "postgres": ">=3", "sql.js": ">=1", "sqlite3": ">=5" }, "optionalPeers": ["@aws-sdk/client-rds-data", "@cloudflare/workers-types", "@electric-sql/pglite", "@libsql/client", "@libsql/client-wasm", "@neondatabase/serverless", "@op-engineering/op-sqlite", "@opentelemetry/api", "@planetscale/database", "@prisma/client", "@tidbcloud/serverless", "@types/better-sqlite3", "@types/pg", "@types/sql.js", "@upstash/redis", "@vercel/postgres", "@xata.io/client", "better-sqlite3", "bun-types", "expo-sqlite", "gel", "knex", "kysely", "mysql2", "pg", "postgres", "sql.js", "sqlite3"] }, "sha512-Te0FOdKIistGNPMq2jscdqngBRfBpC8uMFVwqjf6gtTVJHIQ/dosgV/CLBU2N4ZJBsXL5savCba9b0YJskKdcA=="],
+    "drizzle-orm": ["drizzle-orm@0.45.2", "", { "peerDependencies": { "@aws-sdk/client-rds-data": ">=3", "@cloudflare/workers-types": ">=4", "@electric-sql/pglite": ">=0.2.0", "@libsql/client": ">=0.10.0", "@libsql/client-wasm": ">=0.10.0", "@neondatabase/serverless": ">=0.10.0", "@op-engineering/op-sqlite": ">=2", "@opentelemetry/api": "^1.4.1", "@planetscale/database": ">=1.13", "@prisma/client": "*", "@tidbcloud/serverless": "*", "@types/better-sqlite3": "*", "@types/pg": "*", "@types/sql.js": "*", "@upstash/redis": ">=1.34.7", "@vercel/postgres": ">=0.8.0", "@xata.io/client": "*", "better-sqlite3": ">=7", "bun-types": "*", "expo-sqlite": ">=14.0.0", "gel": ">=2", "knex": "*", "kysely": "*", "mysql2": ">=2", "pg": ">=8", "postgres": ">=3", "sql.js": ">=1", "sqlite3": ">=5" }, "optionalPeers": ["@aws-sdk/client-rds-data", "@cloudflare/workers-types", "@electric-sql/pglite", "@libsql/client", "@libsql/client-wasm", "@neondatabase/serverless", "@op-engineering/op-sqlite", "@opentelemetry/api", "@planetscale/database", "@prisma/client", "@tidbcloud/serverless", "@types/better-sqlite3", "@types/pg", "@types/sql.js", "@upstash/redis", "@vercel/postgres", "@xata.io/client", "better-sqlite3", "bun-types", "expo-sqlite", "gel", "knex", "kysely", "mysql2", "pg", "postgres", "sql.js", "sqlite3"] }, "sha512-kY0BSaTNYWnoDMVoyY8uxmyHjpJW1geOmBMdSSicKo9CIIWkSxMIj2rkeSR51b8KAPB7m+qysjuHme5nKP+E5Q=="],
 
     "dts-resolver": ["dts-resolver@2.1.3", "", { "peerDependencies": { "oxc-resolver": ">=11.0.0" }, "optionalPeers": ["oxc-resolver"] }, "sha512-bihc7jPC90VrosXNzK0LTE2cuLP6jr0Ro8jk+kMugHReJVLIpHz/xadeq3MhuwyO4TD4OA3L1Q8pBBFRc08Tsw=="],
 
@@ -5911,10 +5916,6 @@
 
     "@elizaos/plugin-whatsapp-root/vitest": ["vitest@3.2.4", "", { "dependencies": { "@types/chai": "^5.2.2", "@vitest/expect": "3.2.4", "@vitest/mocker": "3.2.4", "@vitest/pretty-format": "^3.2.4", "@vitest/runner": "3.2.4", "@vitest/snapshot": "3.2.4", "@vitest/spy": "3.2.4", "@vitest/utils": "3.2.4", "chai": "^5.2.0", "debug": "^4.4.1", "expect-type": "^1.2.1", "magic-string": "^0.30.17", "pathe": "^2.0.3", "picomatch": "^4.0.2", "std-env": "^3.9.0", "tinybench": "^2.9.0", "tinyexec": "^0.3.2", "tinyglobby": "^0.2.14", "tinypool": "^1.1.1", "tinyrainbow": "^2.0.0", "vite": "^5.0.0 || ^6.0.0 || ^7.0.0-0", "vite-node": "3.2.4", "why-is-node-running": "^2.3.0" }, "peerDependencies": { "@edge-runtime/vm": "*", "@types/debug": "^4.1.12", "@types/node": "^18.0.0 || ^20.0.0 || >=22.0.0", "@vitest/browser": "3.2.4", "@vitest/ui": "3.2.4", "happy-dom": "*", "jsdom": "*" }, "optionalPeers": ["@edge-runtime/vm", "@types/debug", "@types/node", "@vitest/browser", "@vitest/ui", "happy-dom", "jsdom"], "bin": { "vitest": "vitest.mjs" } }, "sha512-LUCP5ev3GURDysTWiP47wRRUpLKMOfPh+yKTx3kVIEiu5KOMeqzpnYNsKyOoVrULivR8tLcks4+lga33Whn90A=="],
 
-    "@elizaos/scenario-schema/@types/node": ["@types/node@22.19.17", "", { "dependencies": { "undici-types": "~6.21.0" } }, "sha512-wGdMcf+vPYM6jikpS/qhg6WiqSV/OhG+jeeHT/KlVqxYfD40iYJf9/AE1uQxVWFvU7MipKRkRv8NSHiCGgPr8Q=="],
-
-    "@elizaos/scenario-schema/vitest": ["vitest@2.1.9", "", { "dependencies": { "@vitest/expect": "2.1.9", "@vitest/mocker": "2.1.9", "@vitest/pretty-format": "^2.1.9", "@vitest/runner": "2.1.9", "@vitest/snapshot": "2.1.9", "@vitest/spy": "2.1.9", "@vitest/utils": "2.1.9", "chai": "^5.1.2", "debug": "^4.3.7", "expect-type": "^1.1.0", "magic-string": "^0.30.12", "pathe": "^1.1.2", "std-env": "^3.8.0", "tinybench": "^2.9.0", "tinyexec": "^0.3.1", "tinypool": "^1.0.1", "tinyrainbow": "^1.2.0", "vite": "^5.0.0", "vite-node": "2.1.9", "why-is-node-running": "^2.3.0" }, "peerDependencies": { "@edge-runtime/vm": "*", "@types/node": "^18.0.0 || >=20.0.0", "@vitest/browser": "2.1.9", "@vitest/ui": "2.1.9", "happy-dom": "*", "jsdom": "*" }, "optionalPeers": ["@edge-runtime/vm", "@types/node", "@vitest/browser", "@vitest/ui", "happy-dom", "jsdom"], "bin": { "vitest": "vitest.mjs" } }, "sha512-MSmPM9REYqDGBI8439mA4mWhV5sKmDlBKWIYbA3lRb2PTHACE0mgKwA8yQ2xq9vxDTuk4iPrECBAEW2aoFXY0Q=="],
-
     "@elizaos/ui/lucide-react": ["lucide-react@0.575.0", "", { "peerDependencies": { "react": "^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0" } }, "sha512-VuXgKZrk0uiDlWjGGXmKV6MSk9Yy4l10qgVvzGn2AWBx1Ylt0iBexKOAoA6I7JO3m+M9oeovJd3yYENfkUbOeg=="],
 
     "@emnapi/core/tslib": ["tslib@2.8.1", "", {}, "sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w=="],
@@ -7062,32 +7063,6 @@
     "@elizaos/plugin-whatsapp/vitest/tinyrainbow": ["tinyrainbow@2.0.0", "", {}, "sha512-op4nsTR47R6p0vMUUoYl/a+ljLFVtlfaXkLQmqfLR1qHma1h/ysYk4hEXZ880bf2CYgTskvTa/e196Vd5dDQXw=="],
 
     "@elizaos/plugin-whatsapp/vitest/vite-node": ["vite-node@3.2.4", "", { "dependencies": { "cac": "^6.7.14", "debug": "^4.4.1", "es-module-lexer": "^1.7.0", "pathe": "^2.0.3", "vite": "^5.0.0 || ^6.0.0 || ^7.0.0-0" }, "bin": { "vite-node": "vite-node.mjs" } }, "sha512-EbKSKh+bh1E1IFxeO0pg1n4dvoOTt0UDiXMd/qn++r98+jPO1xtJilvXldeuQ8giIB5IkpjCgMleHMNEsGH6pg=="],
-
-    "@elizaos/scenario-schema/@types/node/undici-types": ["undici-types@6.21.0", "", {}, "sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ=="],
-
-    "@elizaos/scenario-schema/vitest/@vitest/expect": ["@vitest/expect@2.1.9", "", { "dependencies": { "@vitest/spy": "2.1.9", "@vitest/utils": "2.1.9", "chai": "^5.1.2", "tinyrainbow": "^1.2.0" } }, "sha512-UJCIkTBenHeKT1TTlKMJWy1laZewsRIzYighyYiJKZreqtdxSos/S1t+ktRMQWu2CKqaarrkeszJx1cgC5tGZw=="],
-
-    "@elizaos/scenario-schema/vitest/@vitest/mocker": ["@vitest/mocker@2.1.9", "", { "dependencies": { "@vitest/spy": "2.1.9", "estree-walker": "^3.0.3", "magic-string": "^0.30.12" }, "peerDependencies": { "msw": "^2.4.9", "vite": "^5.0.0" }, "optionalPeers": ["msw", "vite"] }, "sha512-tVL6uJgoUdi6icpxmdrn5YNo3g3Dxv+IHJBr0GXHaEdTcw3F+cPKnsXFhli6nO+f/6SDKPHEK1UN+k+TQv0Ehg=="],
-
-    "@elizaos/scenario-schema/vitest/@vitest/pretty-format": ["@vitest/pretty-format@2.1.9", "", { "dependencies": { "tinyrainbow": "^1.2.0" } }, "sha512-KhRIdGV2U9HOUzxfiHmY8IFHTdqtOhIzCpd8WRdJiE7D/HUcZVD0EgQCVjm+Q9gkUXWgBvMmTtZgIG48wq7sOQ=="],
-
-    "@elizaos/scenario-schema/vitest/@vitest/runner": ["@vitest/runner@2.1.9", "", { "dependencies": { "@vitest/utils": "2.1.9", "pathe": "^1.1.2" } }, "sha512-ZXSSqTFIrzduD63btIfEyOmNcBmQvgOVsPNPe0jYtESiXkhd8u2erDLnMxmGrDCwHCCHE7hxwRDCT3pt0esT4g=="],
-
-    "@elizaos/scenario-schema/vitest/@vitest/snapshot": ["@vitest/snapshot@2.1.9", "", { "dependencies": { "@vitest/pretty-format": "2.1.9", "magic-string": "^0.30.12", "pathe": "^1.1.2" } }, "sha512-oBO82rEjsxLNJincVhLhaxxZdEtV0EFHMK5Kmx5sJ6H9L183dHECjiefOAdnqpIgT5eZwT04PoggUnW88vOBNQ=="],
-
-    "@elizaos/scenario-schema/vitest/@vitest/spy": ["@vitest/spy@2.1.9", "", { "dependencies": { "tinyspy": "^3.0.2" } }, "sha512-E1B35FwzXXTs9FHNK6bDszs7mtydNi5MIfUWpceJ8Xbfb1gBMscAnwLbEu+B44ed6W3XjL9/ehLPHR1fkf1KLQ=="],
-
-    "@elizaos/scenario-schema/vitest/@vitest/utils": ["@vitest/utils@2.1.9", "", { "dependencies": { "@vitest/pretty-format": "2.1.9", "loupe": "^3.1.2", "tinyrainbow": "^1.2.0" } }, "sha512-v0psaMSkNJ3A2NMrUEHFRzJtDPFn+/VWZ5WxImB21T9fjucJRmS7xCS3ppEnARb9y11OAzaD+P2Ps+b+BGX5iQ=="],
-
-    "@elizaos/scenario-schema/vitest/pathe": ["pathe@1.1.2", "", {}, "sha512-whLdWMYL2TwI08hn8/ZqAbrVemu0LNaNNJZX73O6qaIdCTfXutsLhMkjdENX0qhsQ9uIimo4/aQOmXkoon2nDQ=="],
-
-    "@elizaos/scenario-schema/vitest/std-env": ["std-env@3.10.0", "", {}, "sha512-5GS12FdOZNliM5mAOxFRg7Ir0pWz8MdpYm6AY6VPkGpbA7ZzmbzNcBJQ0GPvvyWgcY7QAhCgf9Uy89I03faLkg=="],
-
-    "@elizaos/scenario-schema/vitest/tinyexec": ["tinyexec@0.3.2", "", {}, "sha512-KQQR9yN7R5+OSwaK0XQoj22pwHoTlgYqmUscPYoknOoWCWfj/5/ABTMRi69FrKU5ffPVh5QcFikpWJI/P1ocHA=="],
-
-    "@elizaos/scenario-schema/vitest/tinyrainbow": ["tinyrainbow@1.2.0", "", {}, "sha512-weEDEq7Z5eTHPDh4xjX789+fHfF+P8boiFB+0vbWzpbnbsEr/GRaohi/uMKxg8RZMXnl1ItAi/IUHWMsjDV7kQ=="],
-
-    "@elizaos/scenario-schema/vitest/vite": ["vite@5.4.21", "", { "dependencies": { "esbuild": "^0.21.3", "postcss": "^8.4.43", "rollup": "^4.20.0" }, "optionalDependencies": { "fsevents": "~2.3.3" }, "peerDependencies": { "@types/node": "^18.0.0 || >=20.0.0", "less": "*", "lightningcss": "^1.21.0", "sass": "*", "sass-embedded": "*", "stylus": "*", "sugarss": "*", "terser": "^5.4.0" }, "optionalPeers": ["@types/node", "less", "lightningcss", "sass", "sass-embedded", "stylus", "sugarss", "terser"], "bin": { "vite": "bin/vite.js" } }, "sha512-o5a9xKjbtuhY6Bi5S3+HvbRERmouabWbyUcpXXUA1u+GNUKoROi9byOJ8M0nHbHYHkYICiMlqxkg1KkYmm25Sw=="],
 
     "@eslint/config-array/minimatch/brace-expansion": ["brace-expansion@1.1.14", "", { "dependencies": { "balanced-match": "^1.0.0", "concat-map": "0.0.1" } }, "sha512-MWPGfDxnyzKU7rNOW9SP/c50vi3xrmrua/+6hfPbCS2ABNWfx24vPidzvC7krjU/RTo235sV776ymlsMtGKj8g=="],
 
