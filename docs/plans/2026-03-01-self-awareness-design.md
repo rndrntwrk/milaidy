@@ -15,7 +15,7 @@ The Milady agent has full API access to wallet, permissions, plugins, cloud, and
 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
-| Token strategy | Layered lazy-load | ~300 tokens always-on summary + on-demand detail. Matches OpenClaw's approach |
+| Token strategy | Layered lazy-load | ~300 tokens always-on summary + on-demand detail |
 | Registration model | Declarative | Plugins declare `AwarenessContributor` interface. Zero core code changes for new modules |
 | Documentation | CLAUDE.md + contracts | Mirrors the agent's own layered lazy-load pattern for AI-assisted development |
 
@@ -147,16 +147,6 @@ Located at `src/awareness/registry.ts`.
 3. Register in plugin: `plugin.awarenessContributors = [myContributor]`
 4. If event-driven invalidation needed, call `awarenessRegistry.invalidate('event')` from relevant API route
 5. Done — no core provider/registry/CLAUDE.md changes needed
-
-## OpenClaw Comparison
-
-| Aspect | OpenClaw | Milady (this design) |
-|--------|----------|---------------------|
-| Context injection | `buildAgentSystemPrompt()` + `buildRuntimeLine()` | `composeSummary()` via `agentSelfStatus` provider |
-| Extensibility | Skills YAML frontmatter + `agent:bootstrap` plugin hook | `AwarenessContributor` interface + plugin auto-discovery |
-| Token efficiency | Per-file caps (20k), lazy skill loading | Per-contributor caps (80 chars), global cap (1200 chars) |
-| Proactive refresh | Heartbeat daemon (30min interval) | Event-driven invalidation + TTL |
-| Trust model | Skill requirements gating | `trusted` field + output sanitization |
 
 ## File Map
 
