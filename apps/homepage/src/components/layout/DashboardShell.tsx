@@ -114,7 +114,7 @@ export function DashboardShell({
           <span className="h-9 w-9" aria-hidden="true" />
         </div>
 
-        <main className="mx-auto min-h-[100dvh] max-w-[1152px] px-5 py-10 sm:px-8 lg:px-10">
+        <main className="mx-auto min-h-[100dvh] max-w-[1152px] px-4 py-7 sm:px-6 sm:py-9 md:px-8 lg:px-10 lg:py-10">
           {children}
         </main>
       </div>

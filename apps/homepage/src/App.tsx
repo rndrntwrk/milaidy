@@ -224,7 +224,7 @@ function MiladyControlHub() {
       onSignIn={handleSignInToCloud}
       isSigningIn={loginState === "polling"}
     >
-      <div className="space-y-12">
+      <div className="space-y-10 sm:space-y-12">
         <BrandHero
           isLocalReady={isLocalReady}
           isLocalProbing={isLocalProbing}
