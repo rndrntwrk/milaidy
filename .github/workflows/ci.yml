@@ -82,6 +82,11 @@ jobs:
           bun install --cwd eliza --no-frozen-lockfile --ignore-scripts
           bun install --cwd eliza/cloud --no-frozen-lockfile --ignore-scripts
           bun install --cwd eliza/steward-fi --no-frozen-lockfile --ignore-scripts
+          # Inline eliza installs ran after bun run postinstall (patch-deps),
+          # so eliza/node_modules/.bun/@types+* got repopulated. Re-run patch-deps
+          # to clean .d.ts files that Bun would parse at runtime / tsc would see
+          # as a second React type identity.
+          node eliza/packages/app-core/scripts/patch-deps.mjs
 
       - name: Ensure biome uses correct architecture
         run: |
@@ -126,6 +131,11 @@ jobs:
           bun install --cwd eliza --no-frozen-lockfile --ignore-scripts
           bun install --cwd eliza/cloud --no-frozen-lockfile --ignore-scripts
           bun install --cwd eliza/steward-fi --no-frozen-lockfile --ignore-scripts
+          # Inline eliza installs ran after bun run postinstall (patch-deps),
+          # so eliza/node_modules/.bun/@types+* got repopulated. Re-run patch-deps
+          # to clean .d.ts files that Bun would parse at runtime / tsc would see
+          # as a second React type identity.
+          node eliza/packages/app-core/scripts/patch-deps.mjs
 
       - name: Generate protobuf types
         run: |
