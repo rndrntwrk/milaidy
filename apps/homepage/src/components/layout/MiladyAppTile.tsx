@@ -1,5 +1,4 @@
 import type { ManagedAgent } from "../../lib/AgentProvider";
-import { resolveHomepageAssetUrl } from "../../lib/asset-url";
 
 export interface MiladyAppTileProps {
   /** First local agent, if present. Drives the tile state + launch URL. */
@@ -14,6 +13,9 @@ export interface MiladyAppTileProps {
  * The pinned "Milady APP" tile at the top of the sidebar. Gold-gradient,
  * the single loudest element on the page. Dims to a ghost state when no
  * local agent is reachable.
+ *
+ * Typographic mark only — agents don't have profile images, so the mark is
+ * a stylized "M" that breathes when a live local runtime is connected.
  */
 export function MiladyAppTile({
   localAgent,
@@ -21,10 +23,6 @@ export function MiladyAppTile({
   onOpen,
 }: MiladyAppTileProps) {
   const hasLocal = Boolean(localAgent);
-  const avatarIndex = localAgent?.avatarIndex ?? 1;
-  const avatarUrl = resolveHomepageAssetUrl(
-    `vrms/previews/milady-${avatarIndex}.png`,
-  );
   const launchUrl =
     localAgent?.webUiUrl ?? localAgent?.sourceUrl ?? fallbackUrl;
   const statusLabel = hasLocal ? "local · running" : "start local milady";
@@ -48,20 +46,22 @@ export function MiladyAppTile({
           : undefined
       }
     >
-      {/* Avatar */}
+      {/* Typographic mark */}
       <div
-        className={`relative h-12 w-12 shrink-0 overflow-hidden rounded-lg border ${
-          hasLocal ? "border-black/20" : "border-white/10"
-        } bg-black/30`}
+        className={`relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border ${
+          hasLocal
+            ? "border-black/25 bg-black/15"
+            : "border-white/10 bg-white/[0.03]"
+        }`}
       >
-        <img
-          src={avatarUrl}
-          alt=""
+        <span
           aria-hidden="true"
-          className={`h-full w-full object-cover object-top ${
-            hasLocal ? "sol-breathe" : ""
+          className={`font-mono text-[20px] font-bold leading-none tracking-tight ${
+            hasLocal ? "text-black sol-breathe" : "text-white/70"
           }`}
-        />
+        >
+          M
+        </span>
         {hasLocal ? (
           <span
             aria-hidden="true"
