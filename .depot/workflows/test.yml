@@ -264,7 +264,7 @@ jobs:
         run: bun run test:selfcontrol:startup
   website-blocker-desktop-smoke:
     name: Website Blocker Desktop Smoke (macOS)
-    runs-on: depot-ubuntu-latest # was: macos-latest. Nonstandard GitHub runner label detected, changed to default Depot runner.
+    runs-on: macos-14 # Requires macOS for Electrobun/GTK desktop stack; passes through Depot to GitHub-hosted runner.
     timeout-minutes: 40
     steps:
       - name: Checkout
@@ -357,7 +357,7 @@ jobs:
         run: bun run test:selfcontrol:mobile:android
   website-blocker-mobile-ios:
     name: Website Blocker iOS Build
-    runs-on: depot-ubuntu-latest # was: macos-latest. Nonstandard GitHub runner label detected, changed to default Depot runner.
+    runs-on: macos-14 # Requires macOS + Xcode; passes through Depot to GitHub-hosted runner.
     timeout-minutes: 50
     steps:
       - name: Checkout

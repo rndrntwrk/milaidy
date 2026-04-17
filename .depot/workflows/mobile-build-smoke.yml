@@ -23,7 +23,7 @@ env:
 jobs:
   build-ios:
     name: iOS Simulator Build
-    runs-on: depot-ubuntu-latest # was: macos-15. Nonstandard GitHub runner label detected, changed to default Depot runner.
+    runs-on: macos-15 # Requires macOS + Xcode; passes through Depot to GitHub-hosted runner.
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
