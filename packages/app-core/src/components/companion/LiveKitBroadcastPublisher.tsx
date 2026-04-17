@@ -142,14 +142,25 @@ async function waitForVrmCanvas(
  * to Cloudflare, and viewers on Twitch see a gray/black background
  * for several seconds before the VRM model appears.
  *
- * Falls through after 30s so a broken scene-status signal can't
- * permanently stall the broadcast — the existing FFmpeg path has
- * the same timeout semantics (see worker.js:2174-2178 where it
- * force-adds .avatar-ready after 20s).
+ * ## Why the 20s cap (not 30s)
+ *
+ * The control-plane's Egress-start path
+ * (stream.js post-ready-gate) polls checkRoomPublisher for exactly 30
+ * one-second iterations — ~30s wall-clock total — before giving up
+ * and skipping Egress for this session. If this client-side wait
+ * also capped at 30s, a slow-loading VRM could publish AT t=30s,
+ * after the CP's final poll completed and the loop exited: the
+ * publish lands in a dead room and Egress never starts.
+ *
+ * Matching the FFmpeg path's 20s cap at capture-service/worker.js:2174
+ * leaves a clear ~10-second margin for publishTrack + the CP's next
+ * poll to catch the late-published track. Same semantics as FFmpeg:
+ * after 20s we force-publish whatever's in the canvas (blank avatar
+ * is better than no stream).
  */
 async function waitForAvatarReady(
   abortSignal: AbortSignal,
-  timeoutMs = 30_000,
+  timeoutMs = 20_000,
   pollMs = 250,
 ): Promise<void> {
   const deadline = Date.now() + timeoutMs;
