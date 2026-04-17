@@ -92,6 +92,36 @@ append_dependency_spec_package() {
   packages+=("$package_name")
 }
 
+# Append every third-party dependency from a manifest's `dependencies` section,
+# preserving the manifest's pinned spec. Used to keep package builds (e.g.
+# eliza/packages/typescript) functional after disable-local-eliza-workspace
+# drops them from the root workspace graph: their transitive third-party deps
+# are no longer installed at root, but the build still bundles them.
+#
+# Skips any spec that starts with `workspace:` or `file:` since those only
+# resolve in-workspace.
+append_third_party_dependencies_from_manifest() {
+  local manifest="$1"
+  [[ -f "$manifest" ]] || return 0
+
+  local entries
+  entries="$(node -e '
+    const fs = require("node:fs");
+    const pkg = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+    const deps = pkg.dependencies ?? {};
+    for (const [name, spec] of Object.entries(deps)) {
+      if (typeof spec !== "string" || spec.length === 0) continue;
+      if (spec.startsWith("workspace:") || spec.startsWith("file:")) continue;
+      process.stdout.write(name + "\t" + spec + "\n");
+    }
+  ' "$manifest")"
+
+  while IFS=$'\t' read -r name spec; do
+    [[ -z "$name" ]] && continue
+    packages+=("${name}@${spec}")
+  done <<< "$entries"
+}
+
 packages=(
   react
   react-dom
@@ -166,6 +196,18 @@ append_dependency_spec_package \
   "viem" \
   "eliza/packages/agent/package.json" \
   ".eliza.ci-disabled/packages/agent/package.json"
+
+# eliza/packages/typescript (@elizaos/core) is rebuilt from source in the
+# cloud-image and snap pipelines so the local agent-orchestrator override is
+# included. After disable-local-eliza-workspace removes the package from the
+# root workspace, its third-party dependencies (handlebars, dedent, @noble/*,
+# @ai-sdk/*, etc.) are no longer installed at root, and the bundle fails with
+# "Could not resolve: <pkg>. Maybe you need to bun install?".
+append_third_party_dependencies_from_manifest \
+  "eliza/packages/typescript/package.json"
+# Fallback path used after disable-local-eliza-workspace renames the dir.
+append_third_party_dependencies_from_manifest \
+  ".eliza.ci-disabled/packages/typescript/package.json"
 
 for attempt in 1 2 3; do
   if bun add --no-save --dev --ignore-scripts "${packages[@]}"; then

@@ -203,4 +203,25 @@ describe("release workflow path contract", () => {
 
     expect(fallbackScript).toContain("playwright-core");
   });
+
+  it("re-installs @elizaos/core's third-party deps after the workspace is disabled", () => {
+    const fallbackScript = fs.readFileSync(
+      path.join(
+        repoRoot,
+        "scripts",
+        "install-published-workspace-fallback-deps.sh",
+      ),
+      "utf8",
+    );
+
+    expect(fallbackScript).toContain(
+      "append_third_party_dependencies_from_manifest",
+    );
+    expect(fallbackScript).toContain(
+      '"eliza/packages/typescript/package.json"',
+    );
+    expect(fallbackScript).toContain(
+      '".eliza.ci-disabled/packages/typescript/package.json"',
+    );
+  });
 });
