@@ -1553,6 +1553,12 @@ export default defineConfig({
             "electron",
             "node-llama-cpp",
             "pty-manager",
+            // Server-only dynamic import from @elizaos/agent runtime/api.
+            // The package's exports map declares only the `import` condition,
+            // so Vite 6's commonjs--resolver fails packageEntry lookup. The
+            // browser bundle never executes this code path; externalize it
+            // so Rollup leaves the dynamic import unresolved.
+            "@elizaos/plugin-agent-orchestrator",
           ].includes(id)
         )
           return true;
