@@ -66,6 +66,7 @@
         "./eliza/node_modules/@types/react/jsx-dev-runtime.d.ts"
       ],
       "react-dom": ["./eliza/node_modules/@types/react-dom/index.d.ts"],
+      "react-dom/client": ["./eliza/node_modules/@types/react-dom/client.d.ts"],
       "@elizaos/*": ["./node_modules/@elizaos/*"]
     }
   },
