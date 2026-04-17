@@ -42,22 +42,44 @@ export function ProvisionAgentModal({
   const [error, setError] = useState<string | null>(null);
   const [jobStatus, setJobStatus] = useState<JobStatus["status"] | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isAuthed = !!cloudClient;
   const isWorking = phase === "creating" || phase === "provisioning";
-  const canSubmit = isAuthed && name.trim().length > 0 && !isWorking;
+  const isDone = phase === "done";
+  const canSubmit = isAuthed && name.trim().length > 0 && !isWorking && !isDone;
 
-  // Cleanup polling on unmount
+  // Cleanup polling + auto-close timers on unmount
   useEffect(() => {
     return () => {
       if (pollTimerRef.current !== null) {
         clearTimeout(pollTimerRef.current);
         pollTimerRef.current = null;
       }
+      if (autoCloseTimerRef.current !== null) {
+        clearTimeout(autoCloseTimerRef.current);
+        autoCloseTimerRef.current = null;
+      }
     };
   }, []);
 
-  // Close on Escape (unless mid-flight)
+  // After success, auto-close the modal. The agent is already in the grid
+  // (onRefreshList fired) and the shell toasted success — no need to
+  // keep the user parked on an empty form.
+  useEffect(() => {
+    if (phase !== "done") return;
+    autoCloseTimerRef.current = setTimeout(() => {
+      onClose();
+    }, 2500);
+    return () => {
+      if (autoCloseTimerRef.current !== null) {
+        clearTimeout(autoCloseTimerRef.current);
+        autoCloseTimerRef.current = null;
+      }
+    };
+  }, [phase, onClose]);
+
+  // Close on Escape (unless mid-flight). After success, Esc closes immediately.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape" && !isWorking) onClose();
@@ -110,7 +132,9 @@ export function ProvisionAgentModal({
   const handleSubmit = useCallback(
     async (event: React.FormEvent) => {
       event.preventDefault();
-      if (!canSubmit || !cloudClient) return;
+      // Hard gate: if a job already resolved, never submit again. Prevents
+      // Enter-key and stray-click double provisions.
+      if (!canSubmit || !cloudClient || isDone || isWorking) return;
       setError(null);
       setPhase("creating");
 
@@ -161,6 +185,8 @@ export function ProvisionAgentModal({
     [
       canSubmit,
       cloudClient,
+      isDone,
+      isWorking,
       name,
       systemPrompt,
       pollJob,
@@ -282,15 +308,16 @@ export function ProvisionAgentModal({
             <button
               type="submit"
               disabled={!canSubmit}
-              className="rounded-md px-5 py-2.5 text-[12px] font-semibold text-black transition hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-40 disabled:cursor-not-allowed"
+              aria-disabled={!canSubmit}
+              className="rounded-md px-5 py-2.5 text-[12px] font-semibold text-black transition hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand/60"
               style={{
                 background: canSubmit
                   ? "var(--gold-gradient-primary)"
                   : "var(--accent-muted)",
               }}
             >
-              {phase === "done"
-                ? "provisioned"
+              {isDone
+                ? "done"
                 : isWorking
                   ? "provisioning\u2026"
                   : "create agent"}
@@ -299,11 +326,11 @@ export function ProvisionAgentModal({
               type="button"
               onClick={onClose}
               disabled={isWorking}
-              className="rounded-md px-5 py-2.5 text-[12px] text-text-muted transition hover:text-text-light disabled:opacity-40 disabled:cursor-not-allowed"
+              className="rounded-md px-5 py-2.5 text-[12px] text-text-muted transition hover:text-text-light disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-white/30"
             >
-              {phase === "done" ? "close" : "cancel"}
+              {isDone ? "close" : "cancel"}
             </button>
-            {phase === "done" ? (
+            {isDone ? (
               <span className="ml-auto font-mono text-[10px] uppercase tracking-[0.18em] text-emerald-300/90">
                 ready
               </span>
@@ -328,7 +355,6 @@ function buildStatusLine(
     if (jobStatus === "completed") return "Wrapping up\u2026";
     return "Provisioning sandbox\u2026 (~45s)";
   }
-  if (phase === "done")
-    return "Agent is live. It will appear in your runtimes shortly.";
+  if (phase === "done") return "Agent is live.";
   return "";
 }
