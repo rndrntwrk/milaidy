@@ -129,11 +129,19 @@ function getPackageSourceAliases(
 ): ModuleAlias[] {
   return [
     {
+      find: new RegExp(`^@elizaos/${escapeRegExp(packageName)}/(.*)\\.js$`),
+      replacement: path.join(sourceRoot, "$1.ts"),
+    },
+    {
       find: new RegExp(`^@elizaos/${escapeRegExp(packageName)}/(.*)`),
       replacement: path.join(sourceRoot, "$1"),
     },
     ...(includeMiladyAlias
       ? [
+          {
+            find: new RegExp(`^@miladyai/${escapeRegExp(packageName)}/(.*)\\.js$`),
+            replacement: path.join(sourceRoot, "$1.ts"),
+          },
           {
             find: new RegExp(`^@miladyai/${escapeRegExp(packageName)}/(.*)`),
             replacement: path.join(sourceRoot, "$1"),
@@ -295,7 +303,7 @@ export function getAppCoreSourceAliases(
       ...(bridgeReplacement
         ? [
             ...bridgeSpecifiers.map((find) => ({
-              find,
+              find: new RegExp(`^${escapeRegExp(find)}$`),
               replacement: bridgeReplacement,
             })),
             ...(options.stubRootSpecifier

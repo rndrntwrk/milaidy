@@ -416,9 +416,15 @@ if (typeof globalThis.window === "undefined") {
   Object.defineProperty(globalThis, "window", {
     value: {
       close: vi.fn(),
+      encodeURIComponent,
       focus: vi.fn(),
       open: vi.fn(),
-      location: { reload: vi.fn() },
+      location: {
+        href: "http://localhost/",
+        origin: "http://localhost",
+        pathname: "/",
+        reload: vi.fn(),
+      },
       screenX: 0,
       screenY: 0,
       outerWidth: 1920,
