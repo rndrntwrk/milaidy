@@ -42,13 +42,15 @@ export function BrandHero({
   return (
     <section className="relative isolate">
       {/* Ambient gold blob — atmosphere, pointer-events-none, never a content
-          slot. Bottom-right so the headline sits left-aligned with weight. */}
+          slot. Bottom-right so the headline sits left-aligned with weight.
+          Softer opacity + larger radius so it reads as a field rather than
+          a detached orb (taste-skill §7 subdued atmospherics). */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -right-16 -top-10 h-[360px] w-[360px] opacity-[0.55] blur-3xl"
+        className="pointer-events-none absolute -right-24 -top-20 h-[440px] w-[440px] opacity-[0.4] blur-3xl"
         style={{
           background:
-            "radial-gradient(circle at center, rgba(240,185,11,0.14) 0%, transparent 60%)",
+            "radial-gradient(circle at center, rgba(240,185,11,0.14) 0%, transparent 70%)",
         }}
       />
 
@@ -133,7 +135,7 @@ export function BrandHero({
           </button>
           <span
             aria-live="polite"
-            className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/35"
+            className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/55"
           >
             {primaryHint}
           </span>
