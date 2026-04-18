@@ -220,6 +220,30 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_ENV"
 
+      - name: Stage Dockerfile-expected paths
+        # Dockerfile.cloud was authored against the eliza-monorepo layout where
+        # patches/, plugins/plugin-selfcontrol/, and scripts/docker-entrypoint.sh
+        # all live at repo root. In milady they live at eliza/... and packages/...
+        # so we materialize the expected paths into the build context here.
+        run: |
+          set -eu
+          # patches/ — copy from eliza/packages/app-core/patches
+          if [ ! -e patches ] && [ -d eliza/packages/app-core/patches ]; then
+            cp -R eliza/packages/app-core/patches patches
+          fi
+          # scripts/docker-entrypoint.sh — copy from eliza/packages/app-core/scripts
+          mkdir -p scripts
+          if [ ! -e scripts/docker-entrypoint.sh ] && [ -f eliza/packages/app-core/scripts/docker-entrypoint.sh ]; then
+            cp eliza/packages/app-core/scripts/docker-entrypoint.sh scripts/docker-entrypoint.sh
+            chmod +x scripts/docker-entrypoint.sh
+          fi
+          # plugins/plugin-selfcontrol — copy from packages/plugin-selfcontrol
+          mkdir -p plugins
+          if [ ! -e plugins/plugin-selfcontrol ] && [ -d packages/plugin-selfcontrol ]; then
+            cp -R packages/plugin-selfcontrol plugins/plugin-selfcontrol
+          fi
+          ls -la patches scripts/docker-entrypoint.sh plugins/plugin-selfcontrol 2>&1 | head -20
+
       - name: Set up CI dockerignore
         run: cp eliza/packages/app-core/deploy/Dockerfile.cloud.dockerignore .dockerignore
 
