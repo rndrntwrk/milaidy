@@ -8,6 +8,7 @@
 
 import { useApp, usePtySessions } from "@miladyai/app-core/state";
 import { useCallback, useEffect, useRef } from "react";
+import { getBroadcastMode } from "../../platform/init";
 import type { SceneOverlayManager } from "../avatar/SceneOverlayManager";
 import type {
   AgentStatusOverlay,
@@ -62,12 +63,20 @@ export function SceneOverlayDataBridge(): null {
     manager.setChatMessages(mapped);
   }, [conversationMessages, getManager]);
 
+  // SYS: panels (agent status, heartbeats/triggers) are operator-facing
+  // diagnostics — useful in the personal companion view but noise on the
+  // Twitch/Kick broadcast. Suppress them when the SPA is running inside
+  // capture-service so viewers see a clean scene without the SYS:STATUS
+  // chrome. Chat messages are still propagated because viewers DO want
+  // to see the live chat bubbles.
+  const isBroadcastCapture = getBroadcastMode() === "capture";
+
   // Agent status + coding sessions
   useEffect(() => {
     const manager = getManager();
     if (!manager) return;
 
-    if (!agentStatus) {
+    if (isBroadcastCapture || !agentStatus) {
       manager.setAgentStatus(null);
       return;
     }
@@ -83,12 +92,17 @@ export function SceneOverlayDataBridge(): null {
       })),
     };
     manager.setAgentStatus(status);
-  }, [agentStatus, ptySessions, getManager]);
+  }, [agentStatus, ptySessions, getManager, isBroadcastCapture]);
 
   // Heartbeats / triggers
   useEffect(() => {
     const manager = getManager();
     if (!manager) return;
+
+    if (isBroadcastCapture) {
+      manager.setHeartbeats([]);
+      return;
+    }
 
     const mapped: TriggerOverlay[] = triggers.map((t) => ({
       id: t.id,
@@ -100,7 +114,7 @@ export function SceneOverlayDataBridge(): null {
       intervalMs: t.intervalMs,
     }));
     manager.setHeartbeats(mapped);
-  }, [triggers, getManager]);
+  }, [triggers, getManager, isBroadcastCapture]);
 
   return null;
 }
