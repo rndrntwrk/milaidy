@@ -27,6 +27,7 @@ env:
 
 permissions:
   contents: write
+  packages: write
 
 jobs:
   # ── Check for new commits ───────────────────────────────────────────────
