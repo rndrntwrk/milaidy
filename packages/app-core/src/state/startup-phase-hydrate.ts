@@ -27,7 +27,6 @@ import {
   tabFromPath,
   type Tab,
 } from "../navigation";
-import { shouldStartAtCharacterSelectOnLaunch } from "./shell-routing";
 import { resolveApiUrl } from "../utils";
 import type { StartupEvent } from "./startup-coordinator";
 import type { AgentStatus, WalletAddresses } from "../api";
@@ -256,21 +255,18 @@ export async function runHydrating(
   const navPath = getNavigationPathFromWindow();
   const urlTab = tabFromPath(navPath);
   const isRoot = isRouteRootPath(navPath);
-  const shouldCharSelect =
-    deps.onboardingCompletionCommittedRef.current ||
-    shouldStartAtCharacterSelectOnLaunch({
-      onboardingNeedsOptions: false,
-      onboardingMode: deps.onboardingMode,
-      navPath,
-      urlTab,
-    });
+  // For the single-character alice surface, the post-onboarding character
+  // picker is obsolete — there is only ever one persona (Alice) and the
+  // scene already renders her. Showing the picker at launch confused users
+  // into thinking onboarding was restarting. Clear the committed ref and
+  // always land on the default tab; never trigger the character-select
+  // redirect automatically. The character-select tab is still reachable
+  // via explicit URL navigation (`/character-select`) — see the urlTab
+  // handling below — so the dedicated settings flow is unaffected.
   if (!deps.initialTabSetRef.current) {
     deps.initialTabSetRef.current = true;
-    if (shouldCharSelect) {
-      deps.onboardingCompletionCommittedRef.current = false;
-      deps.setTab("character-select");
-      void deps.loadCharacter();
-    } else if (isRoot) deps.setTab(DEFAULT_LANDING_TAB);
+    deps.onboardingCompletionCommittedRef.current = false;
+    if (isRoot) deps.setTab(DEFAULT_LANDING_TAB);
   }
   if (urlTab && urlTab !== "chat" && urlTab !== "companion") {
     deps.setTabRaw(urlTab);
