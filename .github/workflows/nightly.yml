@@ -165,7 +165,7 @@ jobs:
       - name: Build
         run: |
           bunx tsdown
-          node --import tsx eliza/packages/app-core/scripts/write-build-info.ts
+          node --import tsx scripts/write-build-info.ts
           echo '{"type":"module"}' > dist/package.json
 
       - name: Run unit tests with coverage
