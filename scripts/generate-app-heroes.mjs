@@ -1,25 +1,18 @@
 #!/usr/bin/env bun
 /**
- * Generate hero images for each curated app using fal.ai and write them
- * into each app's own package at `eliza/apps/app-<slug>/assets/hero.webp`.
+ * Generate hero images for the visible apps catalog using fal.ai.
  *
- * Each app declares its hero path in its own `package.json`:
- *     "elizaos": { "app": { "heroImage": "assets/hero.webp" } }
+ * Package-backed apps write into their own package at
+ * `eliza/apps/app-<name>/assets/hero.png`.
  *
- * The runtime (see `apps-routes.ts` → `/api/apps/hero/:slug`) resolves
- * relative paths to absolute disk paths inside the app's package dir and
- * streams the file to the browser. The apps page `AppHero` component
- * renders `RegistryAppInfo.heroImage` directly and falls back to the
- * procedural visual when the file is missing.
+ * Internal tool cards write to static assets under
+ * `apps/app/public/app-heroes/<name>.png`.
  *
  * Usage:
- *   FAL_KEY=... bun run scripts/generate-app-heroes.mjs            # skip apps that already have an image
- *   FAL_KEY=... bun run scripts/generate-app-heroes.mjs --force    # regenerate everything
- *   FAL_KEY=... bun run scripts/generate-app-heroes.mjs --only=babylon,vincent
- *   FAL_KEY=... bun run scripts/generate-app-heroes.mjs --model=fal-ai/flux/dev
- *
- * Default model is `fal-ai/flux/schnell` (fast + cheap). Switch to
- * `fal-ai/flux/dev` or `fal-ai/flux-pro/new` via --model for higher quality.
+ *   FAL_KEY=... bun run scripts/generate-app-heroes.mjs
+ *   FAL_KEY=... bun run scripts/generate-app-heroes.mjs --force
+ *   FAL_KEY=... bun run scripts/generate-app-heroes.mjs --only=companion,lifeops,plugin-viewer
+ *   FAL_KEY=... bun run scripts/generate-app-heroes.mjs --model=fal-ai/flux-2-pro
  */
 
 import { mkdir, stat, writeFile } from "node:fs/promises";
@@ -29,79 +22,129 @@ import { fileURLToPath } from "node:url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const REPO_ROOT = path.resolve(__dirname, "..");
-const APPS_ROOT = path.join(REPO_ROOT, "eliza/apps");
 
-const DEFAULT_MODEL = "fal-ai/flux/schnell";
-const IMAGE_SIZE = "square_hd"; // fal presets: 1024×1024 is a good square hero.
-const DEFAULT_HERO_RELATIVE_PATH = "assets/hero.webp";
+const DEFAULT_MODEL = "fal-ai/flux-2-pro";
+const IMAGE_SIZE = "square_hd";
+const OUTPUT_FORMAT = "png";
+
+const INTERNAL_HERO_PUBLIC_DIR = "apps/app/public/app-heroes";
 
 /**
- * Prompt seeds per curated app. Each entry targets an app package under
- * `eliza/apps/app-<dir>`; the generated file lands at `assets/hero.webp`
- * inside that package. Prompts intentionally describe stylized abstract
- * scenes rather than literal product screenshots — the card overlays the
- * name and monogram on top of the image.
+ * Catalog prompt seeds. Each slug maps to one visible app card on `/apps`.
+ * Some entries write to multiple destinations so the same hero can back both
+ * the visible catalog card and the package metadata used by the registry.
  */
 const APP_HEROES = [
   {
     slug: "companion",
-    packageDir: "app-companion",
+    outputs: [{ file: "eliza/apps/app-companion/assets/hero.png" }],
     prompt:
-      "A glowing 3D anime-style companion robot floating in a dreamy pastel cloud space, soft volumetric lighting, vaporwave holographic reflections, delicate sakura petals drifting, high detail digital illustration, no text, cinematic composition.",
+      "Milady Companion key art, cute futuristic anime companion avatar hovering inside a dreamy entertainment lounge, luminous holograms, soft chrome details, warm neon peach and aqua palette, cinematic digital illustration, no text, no UI, premium app hero image.",
   },
   {
     slug: "hyperscape",
-    packageDir: "app-hyperscape",
+    outputs: [{ file: "eliza/apps/app-hyperscape/assets/hero.png" }],
     prompt:
-      "A vast low-poly 3D sci-fi landscape at dusk with neon plateaus and a distant luminous tower, volumetric fog, cinematic wide vista, vibrant cyan and magenta palette, painterly digital art, no text.",
+      "A sweeping multiplayer sci-fi world with floating plateaus, luminous portals, and distant towers under a cyan sunset, immersive 3D game key art, vibrant atmosphere, no text, premium app hero image.",
   },
   {
     slug: "babylon",
-    packageDir: "app-babylon",
+    outputs: [{ file: "eliza/apps/app-babylon/assets/hero.png" }],
     prompt:
-      "An abstract futuristic prediction market visualization: layered glass panels with floating candlestick charts, ancient Babylonian ziggurat silhouette in the background fused with neon data streams, deep navy and gold palette, cinematic, no text.",
+      "Prediction market fantasy key art, neon financial data streams wrapping around an ancient ziggurat skyline, glass panels, gold and midnight blue palette, polished cinematic illustration, no text, premium app hero image.",
   },
   {
     slug: "2004scape",
-    packageDir: "app-2004scape",
+    outputs: [{ file: "eliza/apps/app-2004scape/assets/hero.png" }],
     prompt:
-      "A nostalgic early-2000s fantasy MMO landscape scene, stylized medieval village with a gleaming sword on a hilltop, painterly digital art, warm golden-hour light, loosely inspired by classic RuneScape aesthetic, no text.",
+      "Nostalgic early-2000s fantasy MMO landscape with a cozy medieval town, broad green hills, and an iconic quest path at golden hour, painterly adventure game art, no text, premium app hero image.",
   },
   {
     slug: "scape",
-    packageDir: "app-scape",
+    outputs: [{ file: "eliza/apps/app-scape/assets/hero.png" }],
     prompt:
-      "A painterly fantasy vista with a lone adventurer silhouetted against rolling green hills and distant castles, soft cinematic light, adventure MMO feel, stylized concept art, no text.",
+      "Stylized fantasy MMO adventure scene with a lone agent explorer overlooking rolling hills, distant ruins, and a glowing route marker, painterly concept art, no text, premium app hero image.",
   },
   {
     slug: "defense-of-the-agents",
-    packageDir: "app-defense-of-the-agents",
+    outputs: [{ file: "eliza/apps/app-defense-of-the-agents/assets/hero.png" }],
     prompt:
-      "Epic MOBA key art: three glowing arcane champions silhouetted on a three-lane battlefield under a stormy neon sky, fiery vortex overhead, rich saturated fantasy illustration, cinematic tension, no text.",
+      "High-energy MOBA splash art with three agent champions on a neon battlefield, storm-lit sky, magical lane effects, rich cinematic contrast, no text, premium app hero image.",
   },
   {
     slug: "vincent",
-    packageDir: "app-vincent",
+    outputs: [{ file: "eliza/apps/app-vincent/assets/hero.png" }],
     prompt:
-      "A polished DeFi vault visualization: a glowing holographic strongbox wrapped in flowing chart ribbons and liquid gold streams, deep navy backdrop with subtle blockchain lattice, clean premium fintech illustration, no text.",
+      "Luxury DeFi hero illustration with a glowing digital vault, elegant liquidity ribbons, and precise chart motifs in deep navy, emerald, and gold, polished fintech visual, no text, premium app hero image.",
   },
   {
     slug: "shopify",
-    packageDir: "app-shopify",
+    outputs: [{ file: "eliza/apps/app-shopify/assets/hero.png" }],
     prompt:
-      "A vibrant abstract commerce flow: floating product parcels, shopping bags, and receipts orbiting a luminous orb, soft mint green and cream palette, premium brand-safe editorial illustration, no text.",
+      "Modern commerce key art with premium product boxes, receipts, and storefront motion trails orbiting a central glow, clean mint and cream palette, editorial illustration, no text, premium app hero image.",
   },
   {
     slug: "clawville",
-    packageDir: "app-clawville",
+    outputs: [{ file: "eliza/apps/app-clawville/assets/hero.png" }],
     prompt:
-      "A whimsical neon-lit arcade claw-machine cabinet filled with plush agent creatures, warm carnival lights, retro Y2K toyland vibe, playful stylized illustration, no text.",
+      "Playful arcade fantasy scene with a neon claw machine full of plush agent creatures, retro toy-store lighting, glossy Y2K atmosphere, whimsical illustration, no text, premium app hero image.",
   },
   {
     slug: "lifeops",
-    packageDir: "app-lifeops",
+    outputs: [
+      { file: `${INTERNAL_HERO_PUBLIC_DIR}/lifeops.png` },
+      { file: "eliza/apps/app-lifeops/assets/hero.png" },
+    ],
     prompt:
-      "A calm abstract desk scene at dawn: a translucent hovering calendar, sticky notes, checkmarks, and a soft routine clock, muted indigo and peach palette, editorial flat illustration, no text.",
+      "Calm operational dashboard illustration with translucent calendar cards, reminders, routines, and inbox signals floating above a serene desk at dawn, soft indigo and apricot palette, no text, premium app hero image.",
+  },
+  {
+    slug: "plugin-viewer",
+    outputs: [{ file: `${INTERNAL_HERO_PUBLIC_DIR}/plugin-viewer.png` }],
+    prompt:
+      "Developer tools key art showing modular software blocks snapping together in midair with luminous connector lines, crisp technical illustration, teal and graphite palette, no text, premium app hero image.",
+  },
+  {
+    slug: "skills-viewer",
+    outputs: [{ file: `${INTERNAL_HERO_PUBLIC_DIR}/skills-viewer.png` }],
+    prompt:
+      "A curated library of glowing skill cards and tiny workflow glyphs arranged in a clean futuristic atelier, warm brass and electric blue accents, editorial illustration, no text, premium app hero image.",
+  },
+  {
+    slug: "trajectory-viewer",
+    outputs: [{ file: `${INTERNAL_HERO_PUBLIC_DIR}/trajectory-viewer.png` }],
+    prompt:
+      "Elegant observability artwork with layered conversation arcs, execution traces, and event timelines streaming through space, high clarity technical illustration, no text, premium app hero image.",
+  },
+  {
+    slug: "relationship-viewer",
+    outputs: [{ file: `${INTERNAL_HERO_PUBLIC_DIR}/relationship-viewer.png` }],
+    prompt:
+      "Abstract social graph visualization with luminous portraits, links, and trust constellations suspended in a dark airy scene, refined editorial illustration, no text, premium app hero image.",
+  },
+  {
+    slug: "memory-viewer",
+    outputs: [{ file: `${INTERNAL_HERO_PUBLIC_DIR}/memory-viewer.png` }],
+    prompt:
+      "Atmospheric memory archive with glowing note cards, facts, and image fragments stored in translucent shelves of light, deep cobalt and amber palette, no text, premium app hero image.",
+  },
+  {
+    slug: "runtime-debugger",
+    outputs: [{ file: `${INTERNAL_HERO_PUBLIC_DIR}/runtime-debugger.png` }],
+    prompt:
+      "Sophisticated runtime debugger art featuring an exposed AI engine core surrounded by diagnostic overlays, signal paths, and system gauges, polished technical concept art, no text, premium app hero image.",
+  },
+  {
+    slug: "database-viewer",
+    outputs: [{ file: `${INTERNAL_HERO_PUBLIC_DIR}/database-viewer.png` }],
+    prompt:
+      "High-end data platform illustration with stacked translucent tables, vectors, and storage cubes in a luminous grid room, precise and minimal, no text, premium app hero image.",
+  },
+  {
+    slug: "log-viewer",
+    outputs: [{ file: `${INTERNAL_HERO_PUBLIC_DIR}/log-viewer.png` }],
+    prompt:
+      "Cinematic log monitoring scene with cascading terminal ribbons, signal pulses, and alert markers moving through a dark observability tunnel, crisp technical illustration, no text, premium app hero image.",
   },
 ];
 
@@ -122,7 +165,7 @@ function parseArgs(argv) {
       args.model = token.slice("--model=".length).trim() || DEFAULT_MODEL;
     } else if (token === "--help" || token === "-h") {
       console.log(
-        "Usage: bun run scripts/generate-app-heroes.mjs [--force] [--only=slug1,slug2] [--model=fal-ai/flux/dev]",
+        "Usage: bun run scripts/generate-app-heroes.mjs [--force] [--only=slug1,slug2] [--model=fal-ai/flux-2-pro]",
       );
       process.exit(0);
     } else {
@@ -150,11 +193,6 @@ async function directoryExists(dir) {
   }
 }
 
-/**
- * Submit a generation request to fal.ai and return the first image URL.
- * Uses the synchronous `fal.run` endpoint so we don't have to manage
- * queue state for a short-running batch script.
- */
 async function falGenerate({ apiKey, model, prompt }) {
   const endpoint = `https://fal.run/${model}`;
   const response = await fetch(endpoint, {
@@ -167,7 +205,7 @@ async function falGenerate({ apiKey, model, prompt }) {
       prompt,
       image_size: IMAGE_SIZE,
       num_images: 1,
-      output_format: "webp",
+      output_format: OUTPUT_FORMAT,
       enable_safety_checker: true,
     }),
   });
@@ -189,15 +227,14 @@ async function falGenerate({ apiKey, model, prompt }) {
   return imageUrl;
 }
 
-async function downloadToFile(url, destination) {
+async function download(url) {
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error(
       `Failed to download image (${response.status} ${response.statusText}) from ${url}`,
     );
   }
-  const buffer = new Uint8Array(await response.arrayBuffer());
-  await writeFile(destination, buffer);
+  return new Uint8Array(await response.arrayBuffer());
 }
 
 async function main() {
@@ -215,13 +252,13 @@ async function main() {
   );
   if (args.only && targets.length === 0) {
     console.error(
-      `No matching slugs in --only=${[...args.only].join(",")}. Available: ${APP_HEROES.map((e) => e.slug).join(", ")}`,
+      `No matching slugs in --only=${[...args.only].join(",")}. Available: ${APP_HEROES.map((entry) => entry.slug).join(", ")}`,
     );
     process.exit(1);
   }
 
   console.log(
-    `Generating ${targets.length} hero image(s) with ${args.model} into eliza/apps/app-*/assets/hero.webp`,
+    `Generating ${targets.length} hero image(s) with ${args.model} into package assets and apps/app/public/app-heroes`,
   );
 
   let generated = 0;
@@ -229,24 +266,38 @@ async function main() {
   const failures = [];
 
   for (const entry of targets) {
-    const appDir = path.join(APPS_ROOT, entry.packageDir);
-    if (!(await directoryExists(appDir))) {
-      console.log(
-        `  skip  ${entry.slug} (package ${entry.packageDir} missing)`,
-      );
-      skipped += 1;
-      continue;
+    const outputFiles = entry.outputs.map((output) =>
+      path.join(REPO_ROOT, output.file),
+    );
+    const missingParents = [];
+    for (let index = 0; index < outputFiles.length; index += 1) {
+      const outFile = outputFiles[index];
+      const requiredDir = entry.outputs[index]?.requiredDir
+        ? path.join(REPO_ROOT, entry.outputs[index].requiredDir)
+        : path.dirname(path.dirname(outFile));
+      if (!(await directoryExists(requiredDir))) {
+        missingParents.push(path.relative(REPO_ROOT, requiredDir));
+      }
     }
-    const outFile = path.join(appDir, DEFAULT_HERO_RELATIVE_PATH);
-    if (!args.force && (await fileExists(outFile))) {
+    if (missingParents.length > 0) {
       console.log(
-        `  skip  ${entry.slug} (${path.relative(REPO_ROOT, outFile)} already exists)`,
+        `  skip  ${entry.slug} (missing directories: ${missingParents.join(", ")})`,
       );
       skipped += 1;
       continue;
     }
 
-    await mkdir(path.dirname(outFile), { recursive: true });
+    const allOutputsExist = (
+      await Promise.all(outputFiles.map((outFile) => fileExists(outFile)))
+    ).every(Boolean);
+    if (!args.force && allOutputsExist) {
+      console.log(
+        `  skip  ${entry.slug} (${entry.outputs.map((output) => output.file).join(", ")} already exist)`,
+      );
+      skipped += 1;
+      continue;
+    }
+
     process.stdout.write(`  gen   ${entry.slug} … `);
     try {
       const imageUrl = await falGenerate({
@@ -254,8 +305,14 @@ async function main() {
         model: args.model,
         prompt: entry.prompt,
       });
-      await downloadToFile(imageUrl, outFile);
-      console.log(`ok → ${path.relative(REPO_ROOT, outFile)}`);
+      const buffer = await download(imageUrl);
+
+      for (const outFile of outputFiles) {
+        await mkdir(path.dirname(outFile), { recursive: true });
+        await writeFile(outFile, buffer);
+      }
+
+      console.log(`ok → ${entry.outputs.map((output) => output.file).join(", ")}`);
       generated += 1;
     } catch (error) {
       console.log(

@@ -68,10 +68,10 @@ const totals = {
 };
 for (const m of matrixReports) {
   totals.total += Number(m.totalCount ?? 0);
-  totals.passed += Number(m.passedCount ?? 0);
+  totals.passed += Number(m.passedCount ?? m.totals?.passed ?? 0);
   totals.failed += Number(m.failedCount ?? 0);
   totals.flakyPassed += Number(m.flakyPassedCount ?? 0);
-  totals.skipped += Number(m.skippedCount ?? 0);
+  totals.skipped += Number(m.skippedCount ?? m.totals?.skipped ?? 0);
   totals.costUsd += Number(m.totalCostUsd ?? 0);
 }
 

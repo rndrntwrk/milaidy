@@ -1,0 +1,169 @@
+import type { Plugin } from "@elizaos/core";
+import {
+  createRealTestRuntime,
+  type RealTestRuntimeOptions,
+  type RealTestRuntimeResult,
+} from "../../helpers/real-runtime.ts";
+import {
+  MOCK_ENVIRONMENTS,
+  type MockEnvironmentName,
+  startMocks,
+  type StartedMocks,
+} from "../scripts/start-mocks.ts";
+import { seedBenchmarkLifeOpsFixtures } from "./seed-benchmark-fixtures.ts";
+import { seedGoogleConnectorGrant, seedXConnectorGrant } from "./seed-grants.ts";
+
+export interface MockedTestRuntime {
+  runtime: RealTestRuntimeResult["runtime"];
+  mocks: StartedMocks;
+  cleanup(): Promise<void>;
+}
+
+export interface MockedTestEnvironment {
+  mocks: StartedMocks;
+  envVars: Record<string, string>;
+  cleanup(): Promise<void>;
+}
+
+export interface MockedTestRuntimeOptions {
+  /** Subset of mocks to enable. Defaults to all. */
+  envs?: readonly MockEnvironmentName[];
+  /**
+   * Whether to seed a fake Google connector grant. Defaults to true when the
+   * `google` environment is enabled.
+   */
+  seedGoogle?: boolean;
+  /**
+   * Whether to seed a fake X connector grant. Defaults to true when the
+   * `x-twitter` environment is enabled.
+   */
+  seedX?: boolean;
+  /**
+   * Whether to seed local LifeOps benchmark fixtures such as relationships and
+   * screen-time history. Defaults to true.
+   */
+  seedBenchmarkFixtures?: boolean;
+  /** Pass-through to the underlying real-runtime factory. */
+  withLLM?: boolean;
+  plugins?: Plugin[];
+  preferredProvider?: RealTestRuntimeOptions["preferredProvider"];
+  sharedEnvironment?: MockedTestEnvironment;
+}
+
+const FAKE_CREDS: Readonly<Record<string, string>> = {
+  // Twilio
+  TWILIO_ACCOUNT_SID: "ACtest1234567890123456789012345678",
+  TWILIO_AUTH_TOKEN: "fake-auth-token",
+  TWILIO_PHONE_NUMBER: "+15555550000",
+  // WhatsApp
+  ELIZA_WHATSAPP_ACCESS_TOKEN: "fake-whatsapp-token",
+  ELIZA_WHATSAPP_PHONE_NUMBER_ID: "1234567890",
+  ELIZA_WHATSAPP_API_VERSION: "v21.0",
+  // Calendly
+  ELIZA_CALENDLY_TOKEN: "fake-calendly-token",
+  // X / Twitter
+  TWITTER_API_KEY: "fake-x-key",
+  TWITTER_API_SECRET_KEY: "fake-x-secret",
+  TWITTER_ACCESS_TOKEN: "fake-x-access-token",
+  TWITTER_ACCESS_TOKEN_SECRET: "fake-x-access-secret",
+  TWITTER_USER_ID: "1234567890",
+};
+
+function snapshotAndApply(
+  vars: Record<string, string>,
+): Record<string, string | undefined> {
+  const previous: Record<string, string | undefined> = {};
+  for (const [k, v] of Object.entries(vars)) {
+    previous[k] = process.env[k];
+    process.env[k] = v;
+  }
+  return previous;
+}
+
+function restore(previous: Record<string, string | undefined>): void {
+  for (const [k, v] of Object.entries(previous)) {
+    if (v === undefined) {
+      delete process.env[k];
+    } else {
+      process.env[k] = v;
+    }
+  }
+}
+
+export async function prepareMockedTestEnvironment(
+  opts?: Pick<MockedTestRuntimeOptions, "envs">,
+): Promise<MockedTestEnvironment> {
+  const envs = opts?.envs ?? MOCK_ENVIRONMENTS;
+  const mocks = await startMocks({ envs });
+  const envVars = { ...mocks.envVars, ...FAKE_CREDS };
+  const previous = snapshotAndApply(envVars);
+
+  return {
+    mocks,
+    envVars,
+    cleanup: async () => {
+      try {
+        await mocks.stop();
+      } finally {
+        restore(previous);
+      }
+    },
+  };
+}
+
+export async function createMockedTestRuntime(
+  opts?: MockedTestRuntimeOptions,
+): Promise<MockedTestRuntime> {
+  const envs = opts?.envs ?? MOCK_ENVIRONMENTS;
+  const sharedEnvironment = opts?.sharedEnvironment;
+  const localEnvironment = sharedEnvironment
+    ? null
+    : await prepareMockedTestEnvironment({ envs });
+  const mocks = sharedEnvironment?.mocks ?? localEnvironment!.mocks;
+
+  let real: RealTestRuntimeResult;
+  try {
+    real = await createRealTestRuntime({
+      withLLM: opts?.withLLM ?? false,
+      plugins: opts?.plugins,
+      preferredProvider: opts?.preferredProvider,
+    });
+  } catch (err) {
+    await localEnvironment?.cleanup();
+    throw err;
+  }
+
+  const shouldSeedGoogle =
+    (opts?.seedGoogle ?? true) && envs.includes("google");
+  const shouldSeedX = (opts?.seedX ?? true) && envs.includes("x-twitter");
+  const shouldSeedBenchmarkFixtures = opts?.seedBenchmarkFixtures ?? true;
+  if (shouldSeedGoogle || shouldSeedX || shouldSeedBenchmarkFixtures) {
+    try {
+      if (shouldSeedGoogle) {
+        await seedGoogleConnectorGrant(real.runtime);
+      }
+      if (shouldSeedX) {
+        await seedXConnectorGrant(real.runtime);
+      }
+      if (shouldSeedBenchmarkFixtures) {
+        await seedBenchmarkLifeOpsFixtures(real.runtime);
+      }
+    } catch (err) {
+      await real.cleanup();
+      await localEnvironment?.cleanup();
+      throw err;
+    }
+  }
+
+  return {
+    runtime: real.runtime,
+    mocks,
+    cleanup: async () => {
+      try {
+        await real.cleanup();
+      } finally {
+        await localEnvironment?.cleanup();
+      }
+    },
+  };
+}

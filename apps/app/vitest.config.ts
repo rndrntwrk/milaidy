@@ -192,10 +192,19 @@ export default defineConfig({
     // Live/real QA browser checks are opt-in and should not run as part of the
     // default app suite, even if the developer shell exports live-test env.
     exclude: [
+      "../../eliza/packages/app-core/test/benchmarks/**",
       "../../eliza/packages/app-core/test/**/*.e2e.test.ts",
       "../../eliza/packages/app-core/test/**/*.e2e.test.tsx",
+      "../../eliza/packages/app-core/test/**/*-real.test.ts",
+      "../../eliza/packages/app-core/test/**/*-real.test.tsx",
+      "../../eliza/packages/app-core/test/**/*.real.test.ts",
+      "../../eliza/packages/app-core/test/**/*.real.test.tsx",
       "../../eliza/packages/app-core/test/**/*.live.e2e.test.ts",
       "../../eliza/packages/app-core/test/**/*.live.e2e.test.tsx",
+      "../../eliza/packages/app-core/test/**/*-live.test.ts",
+      "../../eliza/packages/app-core/test/**/*-live.test.tsx",
+      "../../eliza/packages/app-core/test/**/*.live.test.ts",
+      "../../eliza/packages/app-core/test/**/*.live.test.tsx",
       "../../eliza/packages/app-core/test/**/*.real.e2e.test.ts",
       "../../eliza/packages/app-core/test/**/*.real.e2e.test.tsx",
       "test/**/*-live.test.ts",

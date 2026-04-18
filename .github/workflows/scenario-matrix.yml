@@ -188,6 +188,7 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
           install-command: bun install --ignore-scripts --no-frozen-lockfile
+          install-native-deps: "false"
 
       - name: Restore eliza workspace paths
         run: node scripts/restore-local-eliza-workspace.mjs
@@ -196,6 +197,7 @@ jobs:
         id: run
         run: |
           bun run milady-scenarios run \
+            test/scenarios \
             --report-dir reports/scenarios/${{ github.run_id }}-${{ matrix.shard.name }} \
             --runId "${{ github.run_id }}-${{ matrix.shard.name }}" \
             ${{ matrix.shard.globs }}
