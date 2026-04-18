@@ -32,7 +32,7 @@ export default scenario({
       id: "main",
       source: "dashboard",
       channelType: "DM",
-      title: "Subscription needs login",
+      title: "Fixture Login Required subscription",
     },
   ],
   turns: [
@@ -40,7 +40,7 @@ export default scenario({
       kind: "message",
       name: "cancel-login-required",
       room: "main",
-      text: "Cancel my Fixture Access Wall subscription.",
+      text: "Cancel my Fixture Login Required subscription.",
       responseIncludesAny: ["needs", "sign in", "cancellation"],
       assertTurn: (turn) => {
         const hit = turn.actionsCalled.find(
