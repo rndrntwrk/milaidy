@@ -15,6 +15,7 @@ vi.mock("../bridge", () => ({
   inspectExistingElizaInstall: vi.fn(async () => null),
   invokeDesktopBridgeRequest: vi.fn(async () => {}),
   isElectrobunRuntime: vi.fn(() => false),
+  isWeb: vi.fn(() => true),
   scanProviderCredentials: vi.fn(async () => []),
 }));
 
@@ -38,6 +39,7 @@ import {
   inspectExistingElizaInstall,
   invokeDesktopBridgeRequest,
   isElectrobunRuntime,
+  isWeb,
 } from "../bridge";
 import { detectExistingOnboardingConnection } from "./onboarding-bootstrap";
 import {
@@ -193,6 +195,7 @@ describe("runRestoringSession", () => {
     // no prior onboarding evidence, and the onboarding probe fails/returns
     // null (e.g. CF cold-start timed out the 3.5s budget).
     vi.mocked(isElectrobunRuntime).mockReturnValue(false);
+    vi.mocked(isWeb).mockReturnValue(true);
     vi.mocked(loadPersistedActiveServer).mockReturnValue(null);
     vi.mocked(loadPersistedOnboardingComplete).mockReturnValue(false);
     vi.mocked(inspectExistingElizaInstall).mockResolvedValue(null);
@@ -238,6 +241,7 @@ describe("runRestoringSession", () => {
 
   it("keeps the desktop onboarding fallback when no install is detected", async () => {
     vi.mocked(isElectrobunRuntime).mockReturnValue(true);
+    vi.mocked(isWeb).mockReturnValue(false);
     vi.mocked(loadPersistedActiveServer).mockReturnValue(null);
     vi.mocked(loadPersistedOnboardingComplete).mockReturnValue(false);
     vi.mocked(inspectExistingElizaInstall).mockResolvedValue(null);
@@ -261,6 +265,48 @@ describe("runRestoringSession", () => {
 
     await runRestoringSession(deps, dispatch, ctxRef, { current: false });
 
+    expect(deps.setOnboardingOptions).toHaveBeenCalledOnce();
+    expect(deps.setOnboardingComplete).toHaveBeenCalledWith(false);
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "NO_SESSION",
+      hadPriorOnboarding: false,
+    });
+  });
+
+  it("keeps the onboarding fallback on native cloud-only runtimes (iOS/Android)", async () => {
+    // Native Capacitor apps report platform !== "web" and are not Electrobun.
+    // They are cloud-only — there is no embedded-local runtime to fall back
+    // to. The web short-circuit must not fire here; the original NO_SESSION
+    // path should take over so the onboarding/connection wizard renders.
+    vi.mocked(isElectrobunRuntime).mockReturnValue(false);
+    vi.mocked(isWeb).mockReturnValue(false);
+    vi.mocked(loadPersistedActiveServer).mockReturnValue(null);
+    vi.mocked(loadPersistedOnboardingComplete).mockReturnValue(false);
+    vi.mocked(inspectExistingElizaInstall).mockResolvedValue(null);
+    vi.mocked(detectExistingOnboardingConnection).mockResolvedValue(null);
+
+    const dispatch = vi.fn();
+    const ctxRef = { current: null };
+    const deps = {
+      setStartupError: vi.fn(),
+      setAuthRequired: vi.fn(),
+      setConnected: vi.fn(),
+      setOnboardingExistingInstallDetected: vi.fn(),
+      setOnboardingOptions: vi.fn(),
+      setOnboardingComplete: vi.fn(),
+      setOnboardingLoading: vi.fn(),
+      applyDetectedProviders: vi.fn(),
+      forceLocalBootstrapRef: { current: false },
+      onboardingCompletionCommittedRef: { current: false },
+      uiLanguage: "en",
+    };
+
+    await runRestoringSession(deps, dispatch, ctxRef, { current: false });
+
+    // Must not synthesize a local target the native runtime cannot satisfy.
+    expect(dispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: "SESSION_RESTORED" }),
+    );
     expect(deps.setOnboardingOptions).toHaveBeenCalledOnce();
     expect(deps.setOnboardingComplete).toHaveBeenCalledWith(false);
     expect(dispatch).toHaveBeenCalledWith({
