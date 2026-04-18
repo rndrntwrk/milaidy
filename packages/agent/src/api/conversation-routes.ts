@@ -417,6 +417,41 @@ type OperatorActionBlock = {
   detail?: string;
 };
 
+/**
+ * Validate a single persisted content block pulled from the memory store.
+ * Returns the sanitized block, or null if the entry doesn't match a known
+ * shape. The DB is trusted-ish but the serializer still normalizes so the
+ * client never receives unexpected fields or types.
+ */
+function sanitizePersistedBlock(value: unknown): OperatorActionBlock | null {
+  if (!value || typeof value !== "object") return null;
+  const v = value as Record<string, unknown>;
+  if (v.type !== "action-pill") return null;
+  if (typeof v.label !== "string" || v.label.length === 0) return null;
+  if (v.kind !== "stream" && v.kind !== "avatar" && v.kind !== "launch") {
+    return null;
+  }
+  const out: OperatorActionBlock = {
+    type: "action-pill",
+    label: v.label,
+    kind: v.kind,
+  };
+  if (typeof v.detail === "string" && v.detail.trim().length > 0) {
+    out.detail = v.detail.trim();
+  }
+  return out;
+}
+
+function sanitizePersistedBlocks(
+  value: unknown,
+): OperatorActionBlock[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const blocks = value
+    .map((entry) => sanitizePersistedBlock(entry))
+    .filter((entry): entry is OperatorActionBlock => entry !== null);
+  return blocks.length > 0 ? blocks : undefined;
+}
+
 async function getConversationWithRestore(
   state: ConversationRouteState,
   convId: string,
@@ -740,11 +775,18 @@ export async function handleConversationRoutes(
             contentSource !== "client_chat"
               ? contentSource
               : undefined;
+          // Persisted content blocks (currently only action-pill) are
+          // serialized back so that action bubbles survive page reload.
+          // Without this, the pill renders via the immediate WS
+          // `proactive-message` event but vanishes on refresh because
+          // the transcript history fetch returns `text` only.
+          const persistedBlocks = sanitizePersistedBlocks(content.blocks);
           return {
             id: m.id ?? "",
             role: m.entityId === agentId ? "assistant" : "user",
             text: (m.content as { text?: string })?.text ?? "",
             timestamp: m.createdAt ?? 0,
+            ...(persistedBlocks ? { blocks: persistedBlocks } : {}),
             source: normalizedSource,
             from:
               typeof entityName === "string" && entityName.length > 0

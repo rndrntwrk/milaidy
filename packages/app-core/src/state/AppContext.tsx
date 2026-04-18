@@ -7804,10 +7804,14 @@ function AppProviderInner({
           }
 
           // Synthesize agent_event for non-client_chat sources (e.g. discord)
-          // so they appear in the StreamView activity feed
+          // so they appear in the StreamView activity feed. Operator-action
+          // pills are internal control actions (Go Live, change avatar, etc.)
+          // and stay chat-only — they must not leak into the inbound-event
+          // feed or the activity log fills up with the operator's own clicks.
           if (
             msg.source &&
             msg.source !== "client_chat" &&
+            msg.source !== "operator_action" &&
             msg.role === "user"
           ) {
             appendAutonomousEvent({
