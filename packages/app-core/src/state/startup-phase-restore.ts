@@ -12,6 +12,7 @@ import {
   inspectExistingElizaInstall,
   invokeDesktopBridgeRequest,
   isElectrobunRuntime,
+  isWeb,
   scanProviderCredentials,
 } from "../bridge";
 import { ONBOARDING_PROVIDER_CATALOG } from "@miladyai/shared/contracts/onboarding";
@@ -149,14 +150,19 @@ export async function runRestoringSession(
   );
 
   if (!restoredActiveServer) {
-    // No saved backend. On web/mobile the backend lives at the same origin,
-    // so the probe's 3.5s budget is too tight for CF cold-starts, transient
-    // network hiccups, or Access cookie churn. Fall through to polling-backend
-    // with a default local target — that phase has a 30s budget with retry
-    // and will authoritatively determine whether onboarding is complete.
-    // Desktop keeps the original "no install found → show onboarding" path
-    // because there's no same-origin backend to probe further.
-    if (!isDesktop) {
+    // Web only: the backend always lives at the same origin, so the probe's
+    // 3.5s budget is too tight for CF cold-starts, transient network hiccups,
+    // or Access cookie churn. Fall through to polling-backend with a default
+    // local target — that phase has a 30s budget with retry and will
+    // authoritatively determine whether onboarding is complete.
+    //
+    // Native (iOS/Android Capacitor) is explicitly cloud-only: there is no
+    // same-origin embedded runtime to reach, so defaulting to "local" here
+    // would park the UI on a 30s poll against a backend that will never
+    // exist. Desktop (Electrobun) has an embedded runtime but no same-origin
+    // guarantee without an install on disk. Both keep the original
+    // "no session → show onboarding" path.
+    if (isWeb()) {
       const fallbackLocal = createPersistedActiveServer({ kind: "local" });
       await applyRestoredConnection({
         restoredActiveServer: fallbackLocal,
@@ -175,7 +181,7 @@ export async function runRestoringSession(
       return;
     }
 
-    // Desktop: let the user (re-)onboard.
+    // Desktop / native: let the user (re-)onboard.
     deps.setOnboardingOptions({
       names: [],
       styles: getStylePresets(deps.uiLanguage),
