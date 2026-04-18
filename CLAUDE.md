@@ -26,6 +26,33 @@ Optional — link a local elizaOS source checkout for live package development:
 bun run setup:upstreams   # initializes repo-local ./eliza and links local @elizaos/* packages
 ```
 
+## Environment variables
+
+Runtime knobs that affect training, skills, code execution, and state placement. Defaults listed are what ships with the repo.
+
+- `MILADY_STATE_DIR` / `ELIZA_STATE_DIR` — root for per-user state (curated skills, training state, trigger counters, optimized prompts). Default `~/.milady`.
+- `MILADY_CONFIG_PATH` / `MILADY_STATE_DIR` / `ELIZA_CONFIG_PATH` / `ELIZA_STATE_DIR` — resolution order for the config file (`milady.json`).
+- `ELIZA_DISABLE_TRAJECTORY_LOGGING` — set to `1` to opt out of trajectory persistence. Default: off (trajectories are written).
+- `NODE_ENV=test` — also disables trajectory persistence (same effect as `ELIZA_DISABLE_TRAJECTORY_LOGGING=1`).
+- `MILADY_DISABLE_AUTO_BOOTSTRAP` — set to `1` to skip the one-shot native optimization bootstrap at runtime boot. Default: bootstrap runs when trajectory counters are over threshold and no artifact exists.
+- `MILADY_ENABLE_CHILD_SKILL_CALLBACK` — set to `0` to disable the child→parent `USE_SKILL` bridge for spawned coding agents. Default: enabled.
+- `EXECUTECODE_TIMEOUT_MS` — default script timeout for the `EXECUTE_CODE` action, in ms. Default: 30000.
+- `EXECUTECODE_DISABLE` — set to `true` / `1` to disable the `EXECUTE_CODE` action entirely. Default: enabled.
+- `ATROPOS_DATA_DIR` — staging directory used by the atropos training backend for dataset files.
+- `ATROPOS_BIN` — override path to the atropos binary when dispatching to that backend.
+
+Port env vars (never hardcoded — the dev orchestrator auto-shifts to the next free port and syncs env):
+- `MILADY_API_PORT` (31337), `MILADY_PORT` (2138), `MILADY_GATEWAY_PORT` (18789), `MILADY_HOME_PORT` (2142), `MILADY_WECHAT_WEBHOOK_PORT` (18790).
+
+## Skills + Training Architecture
+
+- `USE_SKILL` is the canonical entry point for invoking an enabled skill. `RUN_SKILL_SCRIPT` and `GET_SKILL_GUIDANCE` exist as similes for back-compat; new work should use `USE_SKILL` directly.
+- The `enabled_skills` provider runs at position `-10` and surfaces enabled + eligible skills to the planner on every turn.
+- Trajectory persistence is on by default. Every turn lands in the `trajectories` table unless `ELIZA_DISABLE_TRAJECTORY_LOGGING=1` (see above).
+- Native optimization (`--backend native`) is the default training backend: MIPRO / GEPA / bootstrap-fewshot run against trajectory data, and outputs land as prompt artifacts under `~/.milady/optimized-prompts/<task>/`. `OptimizedPromptService` auto-loads those at boot.
+- Auto-training thresholds: default 100 trajectories accumulated per task with a 12h cooldown. Adjust via `/api/training/auto/config` or Settings → Auto-Training.
+- The privacy filter (`eliza/apps/app-training/src/core/privacy-filter.ts`) is mandatory on every write path that touches real user trajectories — both the nightly export cron and the on-demand training orchestrator run it before any JSONL is written.
+
 ## Build & Test
 
 ```bash
