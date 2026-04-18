@@ -167,31 +167,36 @@ jobs:
       - name: Run repository postinstall patches
         run: bun run postinstall
 
-      - name: Build local plugin-telegram and overlay node_modules
+      - name: Build local plugin-telegram and overlay node_modules (best-effort)
         # lifeops/telegram-auth.ts imports @elizaos/plugin-telegram/account-auth-service
         # which exists as src in the workspace but the npm-published alpha.12
-        # tarball doesn't ship dist/account-auth-service.js. Init the nested
-        # submodule, build the workspace copy, then overlay it into the installed
-        # node_modules path so the subpath import resolves at runtime.
+        # tarball doesn't ship dist/account-auth-service.js. This step is
+        # best-effort — if the install fails (workspace context broken when
+        # MILADY_SKIP_LOCAL_UPSTREAMS=1), the cloud live regression suite
+        # itself is gated on ELIZAOS_CLOUD_API_KEY anyway. Never fails the job.
+        continue-on-error: true
         run: |
-          set -eu
-          # Init nested submodule (eliza/plugins/plugin-telegram is a submodule of eliza)
+          set +e
           git submodule update --init --depth=1 eliza/plugins/plugin-telegram 2>/dev/null || true
-          if [ -f eliza/plugins/plugin-telegram/package.json ] && grep -q '"build"' eliza/plugins/plugin-telegram/package.json; then
-            (cd eliza/plugins/plugin-telegram && bun install --ignore-scripts && bun run build)
-            INSTALLED_DIR="node_modules/@elizaos/plugin-telegram"
-            if [ -d "$INSTALLED_DIR" ] && [ -d eliza/plugins/plugin-telegram/dist ]; then
-              echo "Overlaying $INSTALLED_DIR with workspace dist + package.json"
-              rm -rf "$INSTALLED_DIR/dist"
-              cp -r eliza/plugins/plugin-telegram/dist "$INSTALLED_DIR/dist"
-              cp eliza/plugins/plugin-telegram/package.json "$INSTALLED_DIR/package.json"
-              ls "$INSTALLED_DIR/dist" | head -10
-            else
-              echo "Installed plugin-telegram or workspace dist missing; skip overlay"
-            fi
-          else
-            echo "plugin-telegram submodule not available; subpath import may fail at runtime"
+          if [ ! -f eliza/plugins/plugin-telegram/package.json ]; then
+            echo "plugin-telegram submodule not available; skipping (subpath import may fail at runtime)"
+            exit 0
           fi
+          (cd eliza/plugins/plugin-telegram && bun install --ignore-scripts && bun run build) || {
+            echo "::warning::plugin-telegram workspace build failed; subpath import will rely on npm tarball"
+            exit 0
+          }
+          INSTALLED_DIR="node_modules/@elizaos/plugin-telegram"
+          if [ -d "$INSTALLED_DIR" ] && [ -d eliza/plugins/plugin-telegram/dist ]; then
+            echo "Overlaying $INSTALLED_DIR with workspace dist + package.json"
+            rm -rf "$INSTALLED_DIR/dist"
+            cp -r eliza/plugins/plugin-telegram/dist "$INSTALLED_DIR/dist"
+            cp eliza/plugins/plugin-telegram/package.json "$INSTALLED_DIR/package.json"
+            find "$INSTALLED_DIR/dist" -maxdepth 1 -type f -printf '%f\n' 2>/dev/null | head -10 || true
+          else
+            echo "Installed plugin-telegram or workspace dist missing; skip overlay"
+          fi
+          exit 0
 
       - name: Regression matrix contract
         run: bun run test:regression-matrix:release
@@ -1361,7 +1366,7 @@ jobs:
       - name: Generate checksums
         run: |
           cd release-files
-          sha256sum * > SHA256SUMS.txt
+          sha256sum -- * > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       - name: Create GitHub Release
