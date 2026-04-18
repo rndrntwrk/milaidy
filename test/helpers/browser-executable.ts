@@ -71,7 +71,12 @@ function getBundledBrowserCandidates(): string[] {
       "chrome-headless-shell-mac",
     ]) {
       candidates.push(
-        path.join(playwrightCacheRoot, buildDir, platformDir, "chrome-headless-shell"),
+        path.join(
+          playwrightCacheRoot,
+          buildDir,
+          platformDir,
+          "chrome-headless-shell",
+        ),
       );
     }
   }
