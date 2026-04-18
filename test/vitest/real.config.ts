@@ -64,6 +64,8 @@ const ciExcludedRealPaths = [
   "eliza/plugins/plugin-evm/typescript/__tests__/integration/rpc-providers.live.test.ts",
   "eliza/plugins/plugin-evm/typescript/__tests__/integration/transfer.live.test.ts",
   "eliza/plugins/plugin-shell/typescript/__tests__/shell.real.test.ts",
+  // plugin-openrouter sdk nested workspace deps don't resolve in this CI lane.
+  "eliza/plugins/plugin-openrouter/typescript/__tests__/models.live.test.ts",
 ];
 const liveSetupFile = [
   path.join(
