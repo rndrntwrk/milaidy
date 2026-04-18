@@ -23,7 +23,11 @@ vi.mock("./onboarding-bootstrap", () => ({
 }));
 
 vi.mock("./persistence", () => ({
-  createPersistedActiveServer: vi.fn(),
+  createPersistedActiveServer: vi.fn(({ kind }: { kind: string }) => ({
+    id: "local:embedded",
+    kind,
+    label: "This device",
+  })),
   loadPersistedActiveServer: vi.fn(() => null),
   loadPersistedOnboardingComplete: vi.fn(() => false),
 }));
@@ -33,6 +37,7 @@ import {
   getDesktopRuntimeMode,
   inspectExistingElizaInstall,
   invokeDesktopBridgeRequest,
+  isElectrobunRuntime,
 } from "../bridge";
 import { detectExistingOnboardingConnection } from "./onboarding-bootstrap";
 import {
@@ -180,6 +185,87 @@ describe("runRestoringSession", () => {
     expect(dispatch).toHaveBeenCalledWith({
       type: "SESSION_RESTORED",
       target: "embedded-local",
+    });
+  });
+
+  it("falls through to polling-backend on web when probe returns null", async () => {
+    // Simulate fresh web browser: no Electrobun runtime, no persisted server,
+    // no prior onboarding evidence, and the onboarding probe fails/returns
+    // null (e.g. CF cold-start timed out the 3.5s budget).
+    vi.mocked(isElectrobunRuntime).mockReturnValue(false);
+    vi.mocked(loadPersistedActiveServer).mockReturnValue(null);
+    vi.mocked(loadPersistedOnboardingComplete).mockReturnValue(false);
+    vi.mocked(inspectExistingElizaInstall).mockResolvedValue(null);
+    vi.mocked(detectExistingOnboardingConnection).mockResolvedValue(null);
+
+    const dispatch = vi.fn();
+    const ctxRef = { current: null };
+    const deps = {
+      setStartupError: vi.fn(),
+      setAuthRequired: vi.fn(),
+      setConnected: vi.fn(),
+      setOnboardingExistingInstallDetected: vi.fn(),
+      setOnboardingOptions: vi.fn(),
+      setOnboardingComplete: vi.fn(),
+      setOnboardingLoading: vi.fn(),
+      applyDetectedProviders: vi.fn(),
+      forceLocalBootstrapRef: { current: false },
+      onboardingCompletionCommittedRef: { current: false },
+      uiLanguage: "en",
+    };
+
+    await runRestoringSession(deps, dispatch, ctxRef, { current: false });
+
+    // We must NOT show the onboarding wizard — the backend authoritative
+    // check happens in polling-backend which has a generous budget.
+    expect(dispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: "NO_SESSION" }),
+    );
+    expect(deps.setOnboardingOptions).not.toHaveBeenCalled();
+    expect(deps.setOnboardingComplete).not.toHaveBeenCalled();
+
+    // Instead we should restore a default local target and proceed.
+    expect(ctxRef.current).toMatchObject({
+      persistedActiveServer: null,
+      restoredActiveServer: { kind: "local" },
+      hadPriorOnboarding: false,
+    });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "SESSION_RESTORED",
+      target: "embedded-local",
+    });
+  });
+
+  it("keeps the desktop onboarding fallback when no install is detected", async () => {
+    vi.mocked(isElectrobunRuntime).mockReturnValue(true);
+    vi.mocked(loadPersistedActiveServer).mockReturnValue(null);
+    vi.mocked(loadPersistedOnboardingComplete).mockReturnValue(false);
+    vi.mocked(inspectExistingElizaInstall).mockResolvedValue(null);
+    vi.mocked(detectExistingOnboardingConnection).mockResolvedValue(null);
+
+    const dispatch = vi.fn();
+    const ctxRef = { current: null };
+    const deps = {
+      setStartupError: vi.fn(),
+      setAuthRequired: vi.fn(),
+      setConnected: vi.fn(),
+      setOnboardingExistingInstallDetected: vi.fn(),
+      setOnboardingOptions: vi.fn(),
+      setOnboardingComplete: vi.fn(),
+      setOnboardingLoading: vi.fn(),
+      applyDetectedProviders: vi.fn(),
+      forceLocalBootstrapRef: { current: false },
+      onboardingCompletionCommittedRef: { current: false },
+      uiLanguage: "en",
+    };
+
+    await runRestoringSession(deps, dispatch, ctxRef, { current: false });
+
+    expect(deps.setOnboardingOptions).toHaveBeenCalledOnce();
+    expect(deps.setOnboardingComplete).toHaveBeenCalledWith(false);
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "NO_SESSION",
+      hadPriorOnboarding: false,
     });
   });
 });
