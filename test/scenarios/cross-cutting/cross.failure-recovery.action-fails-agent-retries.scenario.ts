@@ -41,7 +41,7 @@ export default scenario({
       kind: "message",
       name: "show-todos",
       room: "main",
-      text: "Show me my todos",
+      text: "Please list my todos and reply with the list (or tell me if there are none).",
       responseJudge: {
         rubric:
           "Agent responds conversationally about todos (listing them, saying there are none, or acknowledging the request). Any response that does not leak raw stack traces or internal error details counts as a pass. The agent does not have to explicitly mention data issues.",
