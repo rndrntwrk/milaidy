@@ -86,6 +86,30 @@ export function ensureNestedElizaSubmodules(
   }
 }
 
+function restoreRootPackageJson(repoRoot, { log, errorLog }) {
+  const backupPath = path.join(repoRoot, "package.json.pre-disable-backup");
+  if (!fs.existsSync(backupPath)) {
+    return false;
+  }
+  const packageJsonPath = path.join(repoRoot, "package.json");
+  try {
+    const original = fs.readFileSync(backupPath, "utf8");
+    fs.writeFileSync(packageJsonPath, original);
+    fs.unlinkSync(backupPath);
+    log(
+      "restore-local-eliza-workspace: restored root package.json from pre-disable backup.",
+    );
+    return true;
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    const message =
+      "restore-local-eliza-workspace: failed to restore root package.json from backup: " +
+      detail;
+    errorLog(message);
+    throw new Error(message, { cause: error });
+  }
+}
+
 export function restoreLocalElizaWorkspace(
   repoRoot = process.cwd(),
   { log = console.log, errorLog = console.error } = {},
@@ -98,9 +122,11 @@ export function restoreLocalElizaWorkspace(
       log(
         "restore-local-eliza-workspace: .eliza.ci-disabled not present and eliza/ is missing; skipping restore.",
       );
+      restoreRootPackageJson(repoRoot, { log, errorLog });
       return false;
     }
     ensureNestedElizaSubmodules(repoRoot, { log, errorLog });
+    restoreRootPackageJson(repoRoot, { log, errorLog });
     log(
       "restore-local-eliza-workspace: eliza/ already present; nothing to restore.",
     );
@@ -109,6 +135,7 @@ export function restoreLocalElizaWorkspace(
 
   if (fs.existsSync(elizaRoot)) {
     ensureNestedElizaSubmodules(repoRoot, { log, errorLog });
+    restoreRootPackageJson(repoRoot, { log, errorLog });
     log("restore-local-eliza-workspace: eliza/ already present; skipping.");
     return false;
   }
@@ -116,6 +143,7 @@ export function restoreLocalElizaWorkspace(
   try {
     fs.renameSync(disabledElizaRoot, elizaRoot);
     ensureNestedElizaSubmodules(repoRoot, { log, errorLog });
+    restoreRootPackageJson(repoRoot, { log, errorLog });
     log(
       "restore-local-eliza-workspace: restored eliza/ from .eliza.ci-disabled/.",
     );

@@ -901,6 +901,23 @@ export function disableLocalElizaWorkspace(
   }
 
   const rawRootPkg = fs.readFileSync(packageJsonPath, "utf8");
+
+  // Back up the original root package.json so the restore script can put it
+  // back after the disable→install→restore cycle. Without this, mutations
+  // (e.g. dropping workspace:* deps with no pinned version) persist past
+  // restore, and downstream checks like release-check that read root
+  // dependencies see a stripped manifest and exit 1.
+  const rootPackageBackupPath = path.join(
+    repoRoot,
+    "package.json.pre-disable-backup",
+  );
+  if (!fs.existsSync(rootPackageBackupPath)) {
+    fs.writeFileSync(rootPackageBackupPath, rawRootPkg);
+    log(
+      `[disable-local-eliza-workspace] Wrote original package.json backup to ${path.relative(repoRoot, rootPackageBackupPath)}`,
+    );
+  }
+
   /** @type {PackageJsonRecord} */
   let rootPkg;
   try {
