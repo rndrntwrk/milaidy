@@ -231,13 +231,21 @@ jobs:
       - name: Run heavy E2E regression suite
         run: bun run test:e2e:heavy
 
-      - name: Run cloud live regression suite
+      - name: Probe cloud live regression key
+        id: probe-cloud-live-key
+        env:
+          ELIZAOS_CLOUD_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY }}
         run: |
-          if [ -z "${ELIZAOS_CLOUD_API_KEY:-}" ]; then
+          if [ -n "${ELIZAOS_CLOUD_API_KEY:-}" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
             echo "::warning::ELIZAOS_CLOUD_API_KEY not set; skipping cloud live regression suite"
-            exit 0
+            echo "available=false" >> "$GITHUB_OUTPUT"
           fi
-          bun run test:live:cloud
+
+      - name: Run cloud live regression suite
+        if: steps.probe-cloud-live-key.outputs.available == 'true'
+        run: bun run test:live:cloud
         env:
           MILADY_LIVE_TEST: "1"
           ELIZAOS_CLOUD_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY }}
