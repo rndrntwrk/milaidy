@@ -10,6 +10,10 @@ import {
   startMocks,
   type StartedMocks,
 } from "../scripts/start-mocks.ts";
+import {
+  createBenchmarkRuntimeFixturesEnvironment,
+  type BenchmarkRuntimeFixturesEnvironment,
+} from "./benchmark-runtime-fixtures.ts";
 import { seedBenchmarkLifeOpsFixtures } from "./seed-benchmark-fixtures.ts";
 import { seedGoogleConnectorGrant, seedXConnectorGrant } from "./seed-grants.ts";
 
@@ -22,6 +26,9 @@ export interface MockedTestRuntime {
 export interface MockedTestEnvironment {
   mocks: StartedMocks;
   envVars: Record<string, string>;
+  applyRuntimeFixtures?(runtime: RealTestRuntimeResult["runtime"]): Promise<
+    (() => Promise<void> | void) | void
+  >;
   cleanup(): Promise<void>;
 }
 
@@ -95,14 +102,21 @@ export async function prepareMockedTestEnvironment(
 ): Promise<MockedTestEnvironment> {
   const envs = opts?.envs ?? MOCK_ENVIRONMENTS;
   const mocks = await startMocks({ envs });
-  const envVars = { ...mocks.envVars, ...FAKE_CREDS };
+  const benchmarkFixtures = await createBenchmarkRuntimeFixturesEnvironment();
+  const envVars = {
+    ...mocks.envVars,
+    ...benchmarkFixtures.envVars,
+    ...FAKE_CREDS,
+  };
   const previous = snapshotAndApply(envVars);
 
   return {
     mocks,
     envVars,
+    applyRuntimeFixtures: benchmarkFixtures.applyRuntimeFixtures,
     cleanup: async () => {
       try {
+        await benchmarkFixtures.cleanup();
         await mocks.stop();
       } finally {
         restore(previous);
@@ -120,6 +134,7 @@ export async function createMockedTestRuntime(
     ? null
     : await prepareMockedTestEnvironment({ envs });
   const mocks = sharedEnvironment?.mocks ?? localEnvironment!.mocks;
+  let cleanupRuntimeFixtures: (() => Promise<void> | void) | void;
 
   let real: RealTestRuntimeResult;
   try {
@@ -128,6 +143,10 @@ export async function createMockedTestRuntime(
       plugins: opts?.plugins,
       preferredProvider: opts?.preferredProvider,
     });
+    cleanupRuntimeFixtures = await (
+      sharedEnvironment?.applyRuntimeFixtures ??
+      localEnvironment?.applyRuntimeFixtures
+    )?.(real.runtime);
   } catch (err) {
     await localEnvironment?.cleanup();
     throw err;
@@ -160,6 +179,7 @@ export async function createMockedTestRuntime(
     mocks,
     cleanup: async () => {
       try {
+        await cleanupRuntimeFixtures?.();
         await real.cleanup();
       } finally {
         await localEnvironment?.cleanup();
