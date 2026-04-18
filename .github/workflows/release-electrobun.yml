@@ -167,6 +167,16 @@ jobs:
       - name: Run repository postinstall patches
         run: bun run postinstall
 
+      - name: Build local plugin-telegram (workspace dist)
+        # lifeops/telegram-auth.ts imports @elizaos/plugin-telegram/account-auth-service
+        # which exists as src in the workspace but the npm-published alpha.12
+        # tarball doesn't ship dist/account-auth-service.js. Build the workspace
+        # copy so the subpath import resolves during regression-matrix.
+        run: |
+          if [ -d eliza/plugins/plugin-telegram ]; then
+            bun run --cwd eliza/plugins/plugin-telegram build
+          fi
+
       - name: Regression matrix contract
         run: bun run test:regression-matrix:release
 
