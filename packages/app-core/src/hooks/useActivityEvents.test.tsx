@@ -118,6 +118,46 @@ describe("useActivityEvents", () => {
     expect(wsMocks.unsubscribers.get("agent_event")).toHaveBeenCalledTimes(1);
   });
 
+  it("ignores proactive-message payloads from operator_action", () => {
+    act(() => {
+      TestRenderer.create(React.createElement(Harness));
+    });
+
+    // Real operator click — the server broadcasts the full message object
+    // with source=operator_action. This must NOT show up in the activity
+    // rail; the pill is already rendered as a chat bubble and the activity
+    // rail is reserved for inbound/external signals.
+    act(() => {
+      wsMocks.handlers.get("proactive-message")?.({
+        conversationId: "conv-1",
+        message: {
+          id: "msg-1",
+          role: "user",
+          text: "Alice kicked off the stream.",
+          source: "operator_action",
+          blocks: [
+            { type: "action-pill", label: "Go Live", kind: "stream" },
+          ],
+        },
+      });
+    });
+
+    expect(latestState?.events).toEqual([]);
+
+    // A genuine proactive message (no operator_action source) still records.
+    act(() => {
+      wsMocks.handlers.get("proactive-message")?.({
+        message: "Follow-up issue created",
+      });
+    });
+
+    expect(latestState?.events).toHaveLength(1);
+    expect(latestState?.events[0]).toMatchObject({
+      eventType: "proactive-message",
+      summary: "Follow-up issue created",
+    });
+  });
+
   it("caps the ring buffer at 200 entries", () => {
     act(() => {
       TestRenderer.create(React.createElement(Harness));

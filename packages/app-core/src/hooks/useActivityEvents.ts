@@ -118,6 +118,19 @@ export function useActivityEvents() {
     const unbindProactive = client.onWsEvent(
       "proactive-message",
       (data: Record<string, unknown>) => {
+        // Operator-action pills (Go Live, Change Avatar, Launch) are
+        // broadcast as proactive-message so the chat bubble renders
+        // immediately, but they are internal control actions and must
+        // not populate the global activity rail. Skip them here in
+        // addition to the synthetic-event filters in AppContext and
+        // startup-phase-hydrate.
+        const payload =
+          data.message && typeof data.message === "object"
+            ? (data.message as Record<string, unknown>)
+            : null;
+        if (payload && payload.source === "operator_action") {
+          return;
+        }
         const message =
           typeof data.message === "string"
             ? data.message.slice(0, 120)
