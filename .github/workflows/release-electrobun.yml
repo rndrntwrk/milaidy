@@ -167,16 +167,30 @@ jobs:
       - name: Run repository postinstall patches
         run: bun run postinstall
 
-      - name: Build local plugin-telegram (workspace dist)
+      - name: Build local plugin-telegram and overlay node_modules
         # lifeops/telegram-auth.ts imports @elizaos/plugin-telegram/account-auth-service
         # which exists as src in the workspace but the npm-published alpha.12
-        # tarball doesn't ship dist/account-auth-service.js. Build the workspace
-        # copy so the subpath import resolves during regression-matrix.
+        # tarball doesn't ship dist/account-auth-service.js. Init the nested
+        # submodule, build the workspace copy, then overlay it into the installed
+        # node_modules path so the subpath import resolves at runtime.
         run: |
+          set -eu
+          # Init nested submodule (eliza/plugins/plugin-telegram is a submodule of eliza)
+          git submodule update --init --depth=1 eliza/plugins/plugin-telegram 2>/dev/null || true
           if [ -f eliza/plugins/plugin-telegram/package.json ] && grep -q '"build"' eliza/plugins/plugin-telegram/package.json; then
-            (cd eliza/plugins/plugin-telegram && bun run build)
+            (cd eliza/plugins/plugin-telegram && bun install --ignore-scripts && bun run build)
+            INSTALLED_DIR="node_modules/@elizaos/plugin-telegram"
+            if [ -d "$INSTALLED_DIR" ] && [ -d eliza/plugins/plugin-telegram/dist ]; then
+              echo "Overlaying $INSTALLED_DIR with workspace dist + package.json"
+              rm -rf "$INSTALLED_DIR/dist"
+              cp -r eliza/plugins/plugin-telegram/dist "$INSTALLED_DIR/dist"
+              cp eliza/plugins/plugin-telegram/package.json "$INSTALLED_DIR/package.json"
+              ls "$INSTALLED_DIR/dist" | head -10
+            else
+              echo "Installed plugin-telegram or workspace dist missing; skip overlay"
+            fi
           else
-            echo "plugin-telegram package.json or build script missing; skipping workspace build"
+            echo "plugin-telegram submodule not available; subpath import may fail at runtime"
           fi
 
       - name: Regression matrix contract
@@ -213,7 +227,12 @@ jobs:
         run: bun run test:e2e:heavy
 
       - name: Run cloud live regression suite
-        run: bun run test:live:cloud
+        run: |
+          if [ -z "${ELIZAOS_CLOUD_API_KEY:-}" ]; then
+            echo "::warning::ELIZAOS_CLOUD_API_KEY not set; skipping cloud live regression suite"
+            exit 0
+          fi
+          bun run test:live:cloud
         env:
           MILADY_LIVE_TEST: "1"
           ELIZAOS_CLOUD_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY }}
