@@ -441,7 +441,15 @@ export function bindReadyPhase(
         d.setUnreadConversations(
           (prev: Set<string>) => new Set([...prev, cid]),
         );
-      if (msg.source && msg.source !== "client_chat" && msg.role === "user")
+      // Keep operator_action pills out of the synthetic inbound-event feed
+      // — they are internal control actions (Go Live, change avatar, etc.),
+      // not real inbound messages.
+      if (
+        msg.source &&
+        msg.source !== "client_chat" &&
+        msg.source !== "operator_action" &&
+        msg.role === "user"
+      )
         d.appendAutonomousEvent({
           type: "agent_event",
           version: 1,

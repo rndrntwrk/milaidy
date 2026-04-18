@@ -8,6 +8,7 @@
  *   POST   /api/conversations/:id/messages/truncate – truncate
  *   POST   /api/conversations/:id/messages/stream   – stream message
  *   POST   /api/conversations/:id/messages           – send message
+ *   POST   /api/conversations/:id/operator-action    – log operator action pill
  *   POST   /api/conversations/:id/greeting            – get/store greeting
  *   PATCH  /api/conversations/:id         – update/rename
  *   DELETE /api/conversations/:id         – delete
@@ -404,6 +405,53 @@ function buildPersistedAssistantContent(
     : { text };
 }
 
+/**
+ * Operator-action pill block persisted with the user-turn memory so the SPA
+ * renders an action badge (Go Live, Change Avatar, Launch) for moderator
+ * actions that bypass the normal chat input.
+ */
+type OperatorActionBlock = {
+  type: "action-pill";
+  label: string;
+  kind: "stream" | "avatar" | "launch";
+  detail?: string;
+};
+
+/**
+ * Validate a single persisted content block pulled from the memory store.
+ * Returns the sanitized block, or null if the entry doesn't match a known
+ * shape. The DB is trusted-ish but the serializer still normalizes so the
+ * client never receives unexpected fields or types.
+ */
+function sanitizePersistedBlock(value: unknown): OperatorActionBlock | null {
+  if (!value || typeof value !== "object") return null;
+  const v = value as Record<string, unknown>;
+  if (v.type !== "action-pill") return null;
+  if (typeof v.label !== "string" || v.label.length === 0) return null;
+  if (v.kind !== "stream" && v.kind !== "avatar" && v.kind !== "launch") {
+    return null;
+  }
+  const out: OperatorActionBlock = {
+    type: "action-pill",
+    label: v.label,
+    kind: v.kind,
+  };
+  if (typeof v.detail === "string" && v.detail.trim().length > 0) {
+    out.detail = v.detail.trim();
+  }
+  return out;
+}
+
+function sanitizePersistedBlocks(
+  value: unknown,
+): OperatorActionBlock[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const blocks = value
+    .map((entry) => sanitizePersistedBlock(entry))
+    .filter((entry): entry is OperatorActionBlock => entry !== null);
+  return blocks.length > 0 ? blocks : undefined;
+}
+
 async function getConversationWithRestore(
   state: ConversationRouteState,
   convId: string,
@@ -727,11 +775,18 @@ export async function handleConversationRoutes(
             contentSource !== "client_chat"
               ? contentSource
               : undefined;
+          // Persisted content blocks (currently only action-pill) are
+          // serialized back so that action bubbles survive page reload.
+          // Without this, the pill renders via the immediate WS
+          // `proactive-message` event but vanishes on refresh because
+          // the transcript history fetch returns `text` only.
+          const persistedBlocks = sanitizePersistedBlocks(content.blocks);
           return {
             id: m.id ?? "",
             role: m.entityId === agentId ? "assistant" : "user",
             text: (m.content as { text?: string })?.text ?? "",
             timestamp: m.createdAt ?? 0,
+            ...(persistedBlocks ? { blocks: persistedBlocks } : {}),
             source: normalizedSource,
             from:
               typeof entityName === "string" && entityName.length > 0
@@ -1177,6 +1232,107 @@ export async function handleConversationRoutes(
     } finally {
       clearInterval(heartbeatInterval);
       res.end();
+    }
+    return true;
+  }
+
+  // ── POST /api/conversations/:id/operator-action ────────────────────
+  // Logs a moderator action (Go Live, change avatar, launch) as a user-turn
+  // memory with an `action-pill` block. The SPA's WebSocket listener receives
+  // a `proactive-message` event and renders the pill bubble immediately.
+  if (
+    method === "POST" &&
+    /^\/api\/conversations\/[^/]+\/operator-action$/.test(pathname)
+  ) {
+    const convId = decodeURIComponent(pathname.split("/")[3]);
+    const conv = await getConversationWithRestore(state, convId);
+    if (!conv) {
+      error(res, "Conversation not found", 404);
+      return true;
+    }
+    const runtime = state.runtime;
+    if (!runtime) {
+      error(res, "Agent is not running", 503);
+      return true;
+    }
+
+    const body = await readJsonBody<{
+      label?: string;
+      kind?: string;
+      detail?: string;
+      fallbackText?: string;
+    }>(req, res);
+    if (!body) return true;
+
+    const label = typeof body.label === "string" ? body.label.trim() : "";
+    if (!label) {
+      error(res, "label is required", 400);
+      return true;
+    }
+    if (
+      body.kind !== "stream" &&
+      body.kind !== "avatar" &&
+      body.kind !== "launch"
+    ) {
+      error(res, "kind must be 'stream', 'avatar', or 'launch'", 400);
+      return true;
+    }
+
+    try {
+      const userId = ensureAdminEntityId(state);
+      await ensureConversationRoom(state, conv);
+
+      const actionBlock: OperatorActionBlock = {
+        type: "action-pill",
+        label,
+        kind: body.kind,
+      };
+      if (typeof body.detail === "string" && body.detail.trim().length > 0) {
+        actionBlock.detail = body.detail.trim();
+      }
+
+      const fallbackText =
+        typeof body.fallbackText === "string" &&
+        body.fallbackText.trim().length > 0
+          ? body.fallbackText.trim()
+          : label;
+
+      const message = createMessageMemory({
+        id: crypto.randomUUID() as UUID,
+        entityId: userId,
+        roomId: conv.roomId,
+        content: {
+          text: fallbackText,
+          blocks: [actionBlock],
+          source: "operator_action",
+          channelType: ChannelType.DM,
+        },
+      });
+
+      await runtime.createMemory(message, "messages");
+      conv.updatedAt = new Date().toISOString();
+
+      const responseMessage = {
+        id: message.id ?? (crypto.randomUUID() as UUID),
+        role: "user" as const,
+        text: fallbackText,
+        timestamp: message.createdAt ?? Date.now(),
+        blocks: [actionBlock],
+        source: "operator_action",
+      };
+
+      state.broadcastWs?.({
+        type: "proactive-message",
+        conversationId: conv.id,
+        message: responseMessage,
+      });
+
+      json(res, { message: responseMessage });
+    } catch (err) {
+      logger.warn(
+        `[conversations] POST /operator-action failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      error(res, getErrorMessage(err), 500);
     }
     return true;
   }
