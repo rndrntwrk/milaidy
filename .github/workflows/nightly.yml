@@ -1,6 +1,6 @@
 name: Nightly Build
 
-# Automated nightly builds from the main branch.
+# Automated nightly builds from the default branch.
 # Publishes to npm with the "nightly" dist-tag and creates a GitHub pre-release.
 # Skips if no new commits since the last nightly.
 on:
@@ -40,7 +40,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ github.event.repository.default_branch }}
           submodules: false
           fetch-depth: 0
 
@@ -90,7 +90,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ github.event.repository.default_branch }}
           submodules: false
 
       - name: Setup Node.js
@@ -246,7 +246,6 @@ jobs:
     with:
       tag: ${{ needs.build-and-test.outputs.nightly_tag }}
       draft: false
-      publish_docker: false
       publish_release: false
     secrets: inherit
 
@@ -262,7 +261,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ github.event.repository.default_branch }}
           submodules: false
 
       - name: Setup Node.js
@@ -312,7 +311,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ github.event.repository.default_branch }}
           submodules: false
           fetch-depth: 0
 
@@ -351,7 +350,7 @@ jobs:
             milady update --channel nightly
             ```
 
-            > This is an automated nightly build from the `main` branch.
+            > This is an automated nightly build from the default branch.
             > It may contain experimental features and known issues.
             > For stable releases, use `npm install -g miladyai@latest`.
         env:
