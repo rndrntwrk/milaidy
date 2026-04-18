@@ -95,6 +95,10 @@ const appCompanionSourceRoot = path.join(
   "app-companion",
   "src",
 );
+const liveRetryCount =
+  process.env.MILADY_LIVE_TEST === "1" || process.env.ELIZA_LIVE_TEST === "1"
+    ? 1
+    : 0;
 process.env.MILADY_LIVE_TEST = "1";
 process.env.ELIZA_LIVE_TEST = "1";
 
@@ -580,6 +584,7 @@ export default defineConfig({
   test: {
     testTimeout: 300_000,
     hookTimeout: 300_000,
+    retry: liveRetryCount,
     pool: "forks",
     maxWorkers: 1,
     fileParallelism: false,

@@ -1,0 +1,684 @@
+{
+  "caseId": "neg-calendar-chatter",
+  "startedAt": 1776494595872,
+  "endedAt": 1776494599309,
+  "durationMs": 3437,
+  "roomId": "526b6ed4-42f4-4cb4-a85b-ccc2820c1bae",
+  "userId": "c91d1a60-eca4-0479-864b-2aa8d4e73197",
+  "transcript": [
+    {
+      "role": "user",
+      "text": "my calendar has been crazy this quarter",
+      "timestamp": 1776494595872
+    },
+    {
+      "role": "assistant",
+      "text": "Sorry to hear your calendar has been crazy this quarter. Is everything under control?",
+      "timestamp": 1776494599308
+    }
+  ],
+  "agentTrajectory": {
+    "llmCalls": [
+      {
+        "callId": "call-1",
+        "timestamp": 1776494595899,
+        "latencyMs": 575,
+        "modelType": "ACTION_PLANNER",
+        "prompt": "task: Generate dialog and actions for TestAgent.\n\ncontext:\nPossible response actions: REPLY, IGNORE, NONE\n\n# Available Actions\nactions[3]:\n- REPLY: Replies to the current conversation with the text from the generated message. Default if the agent is responding with a message and no other action. Use REPLY at the beginning of a chain of actions as an acknowledgement, and at the end of a chain of actions as a final response.\n  aliases[5]: GREET, REPLY_TO_MESSAGE, SEND_REPLY, RESPOND, RESPONSE\n  example: User: \"Hello there!\" -> actions: REPLY\n- IGNORE: Call this action if ignoring the user. If the user is aggressive, creepy or is finished with the conversation, use this action. Or, if both you and the user have already said goodbye, use this action instead of saying bye again. Use IGNORE any time the conversation has naturally ended. Do not use IGNORE if the user has engaged directly, or if something went wrong and you need to tell them. Only ignore if the user should be ignored.\n  aliases[3]: STOP_TALKING, STOP_CHATTING, STOP_CONVERSATION\n  example: User: \"Go screw yourself\" -> actions: IGNORE\n- NONE: Respond but perform no additional action. This is the default if the agent is speaking and not doing anything additional.\n  aliases[5]: NO_ACTION, NO_RESPONSE, NO_REACTION, NOOP, PASS\n  example: User: \"Hey whats up\" -> actions: NONE\n\nNo pending choices for the moment.\nNo contacts in relationships.\nNo upcoming follow-ups scheduled.\n# Providers\nproviders[0]:\n- none\nprovider_hints[6]:\n- images, attachments, or visual content -> ATTACHMENTS\n- uploaded files, documents, or knowledge-base content -> AVAILABLE_DOCUMENTS, KNOWLEDGE\n- specific people or agents -> ENTITIES\n- connections between people -> RELATIONSHIPS\n- factual lookup -> FACTS\n- world or environment context -> WORLD\nThe current date and time is Saturday, April 18, 2026 at 6:43:15 AM UTC. Please use this as your reference for any time-based operations or responses.\n# Conversation Messages\n23:43 (just now) [c91d1a60-eca4-0479-864b-2aa8d4e73197] Owner: my calendar has been crazy this quarter\n\n\n# Received Message\nOwner: my calendar has been crazy this quarter\n\n\n# Focus your response\nYou are replying to the above message from **Owner**. Keep your answer relevant to that message, but include as context any previous messages in the thread from after your last reply.\n\nNo action state available\n\nrules[20]:\n- think briefly, then respond\n- always include a <thought> field, even for direct replies\n- actions execute in listed order\n- if replying without another grounded state/action query, REPLY goes first\n- use IGNORE or STOP only by themselves\n- include providers only when needed\n- when the user asks about uploaded files, documents, prior uploads, or knowledge-base contents, call the relevant providers before replying instead of asking the user to resend the material\n- when the user refers to \"the uploaded file\", \"the document I uploaded\", or a prior upload without naming it, treat that as a provider lookup request first; only ask which file after grounded document/knowledge lookup still leaves multiple plausible answers\n- use provider_hints from context when present instead of restating the same rules\n- if an action needs inputs, include them inside that action's <params> block\n- if a required param is unknown, ask for clarification in text\n- for live status questions or remaining-work queries, do not answer from recent conversation alone; call the relevant action/provider to refresh state, and do not pair it with a speculative REPLY that guesses the result\n- when an action will fetch the state and produce the final grounded answer, do not add REPLY just to say \"checking\", \"let me look\", or similar filler; use the action alone and leave text empty\n- when the user asks you to create, store, remember, schedule, remind, upload, follow up, route, escalate, or set a standing policy, choose the matching action instead of handling it in prose only\n- for standing or future-condition requests like \"if/when X, do Y\", still choose the action that records, queues, or routes that behavior on the first turn\n- if a matching action can own the task and ask the missing follow-up itself, still select that action and put the clarification in text; do not reply in prose alone\n- when the user defines a durable preference, recurring block, escalation policy, upload policy, approval-gated workflow, or multi-device reminder rule, select the owning action even if some implementation details are still missing\n- do not wait for portal names, priority labels, event IDs, exact travel preferences, or the definition of \"important\" before selecting the owning action; let the action gather those details\n- for LifeOps create requests with a clear defaultable habit or natural window, such as drinking water, stretch breaks during the day, weekday-after-lunch Invisalign checks, or brushing when waking up and before bed, call LIFE instead of asking for exact clock times unless the user explicitly asks for precise scheduling\n- only choose actions that directly satisfy the user's request or an explicit live-state question; do not opportunistically triage inboxes, summarize calendars, propose meetings, or call adjacent tools just because provider context makes them available\n- when the user is venting, reflecting, stating an opinion, or asking for generic advice about a domain, stay in REPLY or NONE unless they explicitly ask you to inspect state, change state, send something, schedule something, or perform a real operation\n\ncontrol_actions:\n- STOP means the task is done and the agent should end the run without executing more actions\n- STOP is a terminal control action even if it is not listed in available actions\n\nfields[5]{name,meaning}:\n- thought | short plan\n- actions | ordered <action> entries inside <actions>\n- providers | array of provider names, or empty\n- text | next message for TestAgent\n- simple | true or false\n\nformatting:\n- wrap multi-line code in fenced code blocks\n- use inline backticks for short code identifiers\n<output>\nReturn only XML. No prose before or after it. No <think>.\n\n\n\n\nUse this shape:\n<response>\n  <thought>Your internal reasoning about the message and what to do</thought>\n  <actions>Ordered action entries. For XML, use one or more <action><name>ACTION_NAME</name><params>...</params></action> blocks inside <actions>.</actions>\n  <providers>Optional provider names to call before the final reply or action. Use an empty field when no provider lookup is needed.</providers>\n  <text>The text response to send to the user</text>\n  <simple>Whether this is a simple response (true/false)</simple>\n</response>\n\n\nReturn exactly one <response>...</response>.\n</output>\n",
+        "response": "```xml\n<response>\n  <thought>Think briefly about the owner's message. It seems they are expressing a busy calendar this quarter. Considering providing a sympathetic response and checking if there's anything more to the message.</thought>\n  <actions>\n    <action>\n      <name>REPLY</name>\n      <params>Sorry to hear your calendar has been crazy this quarter. Is everything under control?</params>\n    </action>\n  </actions>\n  <providers></providers>\n  <text>Sorry to hear your calendar has been crazy this quarter. Is everything under control?</text>\n  <simple>true</simple>\n</response>\n```",
+        "purpose": "action_planner"
+      },
+      {
+        "callId": "call-3",
+        "timestamp": 1776494596831,
+        "latencyMs": 14,
+        "modelType": "TEXT_EMBEDDING",
+        "prompt": "{\"text\":\"my calendar has been crazy this quarter\"}",
+        "response": "[-0.05689047485058855,-0.03898754543521198,0.031162487486548766,-0.018726958615470395,-0.009847079565447106,-0.018188392909722805,0.01729897572012053,0.05376854684896619,0.04125917538464022,-0.014972091324807615,0.0025637343229179188,0.04035762190441583,0.06371884802708845,0.03948518839792801,-0.018038625643486402,-0.02462639556317442,0.024705736401212937,-0.07994764609348087,-0.04309991196977406,0.008409520074709057,0.030069732381816736,0.06032002608638437,-0.051698982252710794,0.02155790706856435,-0.0134603524814237,0.1042571996339543,-0.049632966582421736,-0.025730390012823564,-0.08797108770843397,-0.12315534697526906,0.02889194229095148,-0.023668073838808725,0.03118651397438657,-0.018827970244594427,0.05100058211756134,-0.056124256553542196,0.00011226422989486643,0.029139262926337416,0.020240764967275397,0.01475610064670937,0.004309967397154548,0.011206073736183987,-0.01799132875742132,-0.06822912493334171,0.0320570758757571,-0.07963974438518961,-0.0028255837787374474,0.04262849414519797,0.10799107774750594,0.03974569122091337,0.027471241817589108,-0.010141408898566913,0.009483259606688053,0.07649897728569119,-0.04097705519874311,0.040704441989704736,0.0369594572921526,0.006988953171781095,0.04603534650232222,0.03338649836183378,0.04079310037744046,0.02474207565454983,-0.13275880540160445,0.0807184365469729,-0.08071882511550936,-0.07507230904722302,-0.035494191245729355,-0.010126147059779645,0.016016265648268677,0.006812475056734172,0.03441860763223774,-0.003349616818841971,0.006427603992753482,0.06729839319410028,0.053527414167523386,-0.04297738011987239,-0.01695388638385444,-0.015526630435474868,-0.027459082860469032,-0.0006816696793168982,0.007956000688343678,-0.010675859825416944,-0.013575020675568745,-0.07727794063073345,0.029342811316091084,-0.02842382082279303,0.018525850112318585,0.022854521417879213,0.08074425045007842,-0.01409173749631828,-0.021158843943548333,-0.016780099105922503,0.025904335956241222,0.012058826246300084,0.012497951596942955,-0.028325901551605,0.05120459031341648,0.017273011246707128,0.02657649476289505,0.3761575278830543,-0.05557861566235989,0.04418474675250457,0.03784583717102821,0.021157101861276537,-0.056835984589492246,-0.027388233863987747,0.04450592131438708,-0.05826552823513023,-0.09150083781749839,-0.0559562395183767,-0.02063855714937007,0.009623677752033662,0.11541345564569293,-0.07166934237546337,0.006341291587556637,-0.02738705196802268,0.05713201552899464,0.036976657926033246,0.031033071497409477,0.01666208760332833,0.03315630388469233,-0.005524435119790535,0.04769446939158559,0.02114923496744878,-0.038968418149004716,0.010881211820794016,0.006464691240523063,0.05806280555351654,-0.03232265923235668,-0.0011147323994886184,0.009927907487655369,0.06582300493730223,-0.036946210343130434,-0.05496938553018583,0.052476896462704606,-0.023361964402891892,-0.019153195633469546,-0.06977470162010906,0.06369429697172642,-0.00851829821745559,-0.06410555791071615,-0.019081733022507763,-0.0029608234388169372,-0.0817909958020224,-0.0028280627245723974,0.05500859209551469,-0.06472533767865511,0.00336733797265792,0.06914645753421753,-0.00367888635618797,-0.05226174606406646,0.01811157776717128,0.06216946336866379,0.0017983399125965284,0.02956986486422947,0.010273280155145961,0.05917109368549357,0.0699245854569064,0.027226068023367116,0.007535550103466653,0.0046238125850180814,-0.0024001500047597622,0.013933960861124084,-0.02303284037636762,0.029411778993241676,-0.0612778410526171,0.031955057206509416,-0.003360326131989824,-0.010229167102526505,-0.011200475920705605,0.03128374029835125,0.07043502203868539,-0.037622497690484154,0.03927452272781484,0.1504992386931044,0.0002555545443391461,0.03275810208659881,0.00882415589334151,-0.004692847047385878,-0.0026139201755756925,0.006089877625494425,-0.01848981038056188,-0.0642820910729724,0.054447408462873964,0.04111751948660242,-0.07297734825903879,-0.016698444666056477,-0.04820953965316187,-0.019999902664772546,-0.015667371578416408,0.04153904834916813,-0.04934234969786069,-0.04445360056095269,0.009857178299806155,0.01918068038128185,-0.01741359372416295,0.01785706537578969,0.006005715704291553,0.026252784791312125,-0.04966443415773276,-0.024784868383663106,-0.12492592427307382,0.03547549786105447,0.12165226025796366,0.11623433258353472,-0.04390673244080939,-0.012071848149378214,-0.017855893194038033,0.08176805730608669,0.0629763259346239,0.03231686956116342,-0.028348823857185027,0.10430082292831426,-0.05703447835020079,-0.05047713496595319,0.007294951703761481,-0.02586015571364567,0.024815537774438814,-0.03509135900590967,-0.013069886435276871,0.03153732336331647,-0.0066115029573290155,-0.01481852418209174,-0.24927389170501638,-0.004200920899262522,-0.00913069437368402,-0.05812403100257816,0.019551588477760166,0.006907776347407802,0.02019206437737235,-0.04678976850621587,0.01862342614796608,0.10909176936459518,0.008323084622809,0.03473091311727555,-0.03068410133288549,-0.07556849811599846,-0.001228121049585867,-0.03943604743035031,-0.01382224093074943,0.02541702405948833,-0.007891440026010776,-0.001192801181518843,-0.012657614408574554,-0.006033489854711739,-0.03801144831933879,-0.03728581600592573,-0.031213419107465317,0.021346949972048838,0.10975196026032602,0.06666007870697215,-0.043335630596275515,0.002346213049069023,0.020723043282445553,-0.04867078993436724,-0.03410922936350793,-0.11093250918780015,0.010668260072458005,0.015844913399831892,0.04563239445387047,-0.04786477574304507,-0.013200332940555564,-0.04294752186591654,-0.052904590612715484,-0.0016443708443007528,0.015494989623358007,-0.10207073095543365,-0.00016654946796358224,-0.01680307160160516,0.04547560704940868,-0.007498577807222441,-0.018170528471259037,0.0002907555650764639,0.052184119784695074,-0.07891760271246241,0.05474493539124173,-0.015835548898103197,0.023114723100248816,-0.02508006390081211,-0.0533689980132796,-0.01641544534384563,0.026572566982605662,-0.021040278730789706,0.018057731882231275,-0.051891398153894874,-0.02440607396493021,0.010584084794211693,-0.049108402296271274,0.04970713136374749,-0.02630259442057965,-0.030274650475661427,-0.04415500506910966,0.030459923191916906,-0.0026890161047328255,-0.02165998564212808,-0.017392428072174837,-0.06910801515367704,0.06333274042469225,-0.03870866008238091,-0.008911132103121475,0.0846737015841729,0.038989271327128094,0.010071054517451827,-0.0050605389297072026,-0.016770129084891155,0.04239139610039208,0.003664033323881769,-0.056176946447086235,0.03289169194943391,0.010942609697143689,0.021459762751432285,0.012806071875035973,-0.016746212691472015,-0.03579766327270496,-0.0005190343183813783,-0.007235734668322694,0.027045522890971906,0.043180886414701275,0.019889209202948375,-0.23031809374517545,0.040625675909293064,-0.001087017343866685,0.00028299284606857455,0.039539176757998055,0.0004276564062441836,-0.06654695992986624,0.0909556696847021,-0.029818642631627135,0.009623752227669816,0.04488966836292429,0.03382596937657054,-0.01607102952637607,-0.03689170712974958,0.03707684708508844,0.017109305703260774,-0.03982809041714094,-0.018998454689966447,-0.017060792921483686,-0.00007841973961150393,0.05807882752950326,0.008222589466031348,0.16195553437641322,0.06877372964176012,0.004788950974942634,-0.0015212480464165546,0.02074005448916468,0.04996474906534963,0.03586812693872093,-0.01350653304246424,-0.017031122475653797,-0.06872811169557966,-0.0014830347594090227,-0.04733503054307513,0.024416638172015226,-0.0338333003696251,0.0045820333721707405,0.018862653224544657,0.04059655917362763,-0.035331351886312194,-0.005850268051762766,0.0281362801058123,-0.055203569310968266,0.006096017817888284,0.08945255058668533,-0.023060801120637086,-0.036577170613698265,-0.00448234732841849,-0.029308604332598017,0.01500630316540739,-0.005245360339797937,-0.005550780066562554,-0.09845036666366665,0.048029794324337544,-0.01637532402342052,0.04485738155561556,-0.01033253523792061,-0.0017093544796759489,-0.03322777459083196,-0.03520956155470094,-0.016581265347744557,-0.003902086599673125,-0.029712216947561754,-0.039586582119446226,-0.07169128354548883]",
+        "purpose": "embedding"
+      },
+      {
+        "callId": "call-2",
+        "timestamp": 1776494596475,
+        "latencyMs": 610,
+        "modelType": "ACTION_PLANNER",
+        "prompt": "task: Decide whether any providers should be called before sending the assistant's reply.\n\navailable provider catalog:\nPossible response actions: REPLY, IGNORE, NONE\n\n# Available Actions\nactions[3]:\n- REPLY: Replies to the current conversation with the text from the generated message. Default if the agent is responding with a message and no other action. Use REPLY at the beginning of a chain of actions as an acknowledgement, and at the end of a chain of actions as a final response.\n  aliases[5]: GREET, REPLY_TO_MESSAGE, SEND_REPLY, RESPOND, RESPONSE\n  example: User: \"Hello there!\" -> actions: REPLY\n- IGNORE: Call this action if ignoring the user. If the user is aggressive, creepy or is finished with the conversation, use this action. Or, if both you and the user have already said goodbye, use this action instead of saying bye again. Use IGNORE any time the conversation has naturally ended. Do not use IGNORE if the user has engaged directly, or if something went wrong and you need to tell them. Only ignore if the user should be ignored.\n  aliases[3]: STOP_TALKING, STOP_CHATTING, STOP_CONVERSATION\n  example: User: \"Go screw yourself\" -> actions: IGNORE\n- NONE: Respond but perform no additional action. This is the default if the agent is speaking and not doing anything additional.\n  aliases[5]: NO_ACTION, NO_RESPONSE, NO_REACTION, NOOP, PASS\n  example: User: \"Hey whats up\" -> actions: NONE\n\nNo pending choices for the moment.\nNo contacts in relationships.\nNo upcoming follow-ups scheduled.\n# Providers\nproviders[0]:\n- none\nprovider_hints[6]:\n- images, attachments, or visual content -> ATTACHMENTS\n- uploaded files, documents, or knowledge-base content -> AVAILABLE_DOCUMENTS, KNOWLEDGE\n- specific people or agents -> ENTITIES\n- connections between people -> RELATIONSHIPS\n- factual lookup -> FACTS\n- world or environment context -> WORLD\nThe current date and time is Saturday, April 18, 2026 at 6:43:15 AM UTC. Please use this as your reference for any time-based operations or responses.\n# Conversation Messages\n23:43 (just now) [c91d1a60-eca4-0479-864b-2aa8d4e73197] Owner: my calendar has been crazy this quarter\n\n\n# Received Message\nOwner: my calendar has been crazy this quarter\n\n\n# Focus your response\nYou are replying to the above message from **Owner**. Keep your answer relevant to that message, but include as context any previous messages in the thread from after your last reply.\n\nNo action state available\n\nrecent conversation:\n# Conversation Messages\n23:43 (just now) [c91d1a60-eca4-0479-864b-2aa8d4e73197] Owner: my calendar has been crazy this quarter\n\n\ndraft_reply:\nSorry to hear your calendar has been crazy this quarter. Is everything under control?\n\nrules[6]:\n- choose providers only when they can supply grounded information needed before the assistant replies\n- uploaded files, documents, prior uploads, and knowledge-base questions should use the relevant providers before asking the user to resend the material\n- return an empty providers field when no provider lookup is needed\n- do not include actions, text, or thought in the output\n- if the draft reply asks the user to resend, restate, or clarify information that may already exist in provider context, choose the relevant providers instead of sending the draft reply as-is\n- when the recent conversation already identifies a prior upload or knowledge-base question, prefer grounded provider lookup over asking \"which file?\" again\n\noutput:\nReturn JSON or XML containing only provider names. No prose before or after it. No <think>.\n\nExamples:\n- user asks: \"what is the qa codeword from the uploaded file?\"\n  draft reply: \"Which file are you referring to?\"\n  output: {\"providers\":[\"AVAILABLE_DOCUMENTS\",\"KNOWLEDGE\"]}\n- user asks: \"thanks, that's all\"\n  draft reply: \"Glad to help.\"\n  output: {\"providers\":[]}",
+        "response": "Based on the provided rules and conversation context, I would decide to call the \"FACTS\" provider before sending the assistant's reply. \n\nThe draft reply is: \"Sorry to hear your calendar has been crazy this quarter. Is everything under control?\"\n\nHowever, the previous message only mentions that the calendar has been crazy this quarter without providing any details about what's controlling it. Since the assistant is asking for more information, it's possible that some grounded information may already exist in the \"FACTS\" provider context, such as current events, news, or schedules that might be relevant to the conversation. \n\nTherefore, I would return the following output:\n\n{\"providers\": [\"FACTS\"]}",
+        "purpose": "action_planner"
+      },
+      {
+        "callId": "call-4",
+        "timestamp": 1776494596849,
+        "latencyMs": 388,
+        "modelType": "TEXT_SMALL",
+        "prompt": "Plan the BACKGROUND JOB action for job kind: daily_brief.\nYou are routing a background tick for an executive assistant.\nDecide whether the assistant should take an action right now, and if so\nwhich action and through which channel. The assistant MUST NOT execute\nsensitive actions directly — anything that contacts a person, modifies a\ncalendar, books travel, makes a call, runs a workflow, or spends money\nreturns requiresApproval=true so the user can confirm.\n\nReturn ONLY valid JSON with exactly these fields:\n{\"action\":\"send_message\"|\"send_email\"|\"schedule_event\"|\"modify_event\"|\"cancel_event\"|\"book_travel\"|\"make_call\"|\"execute_workflow\"|\"spend_money\"|\"noop\",\n\"channel\":\"telegram\"|\"discord\"|\"slack\"|\"imessage\"|\"sms\"|\"email\"|\"google_calendar\"|\"browser\"|\"phone\"|\"internal\",\n\"requiresApproval\":true|false,\n\"reason\":\"short justification\",\n\"payload\":{...action-specific fields, or empty object when action=noop}}\n\nRules:\n- Choose action=noop when no action is warranted this tick (e.g. nothing overdue).\n- requiresApproval=true for any action that touches a person or external system.\n- requiresApproval=false ONLY when action=noop or the action is purely internal (logging, internal workflow with no side effects).\n- The reason must explain WHY this tick warrants the chosen action, in any language.\n\nJob trigger: proactive_tick\nSubject user: c91d1a60-eca4-0479-864b-2aa8d4e73197\nAvailable channels: [\"internal\"]\nSnapshot: {\"now\":\"2026-04-18T06:43:16.849Z\",\"timezone\":\"America/Los_Angeles\"}",
+        "response": "```json\n{\n  \"action\": \"noop\",\n  \"channel\": \"internal\",\n  \"requiresApproval\": false,\n  \"reason\": \"No overdue tasks.\",\n  \"payload\": {}\n}\n```\n\nThis response is warranted because there are no overdue tasks in the snapshot. The current time (`2026-04-18T06:43:16.849Z`) is in the future of any potential due dates (not given in the snapshot), which would also be the case if they existed.\n\nSince the action is `noop`, `requiresApproval` is set to `false`.",
+        "purpose": "other"
+      },
+      {
+        "callId": "call-6",
+        "timestamp": 1776494597269,
+        "latencyMs": 296,
+        "modelType": "TEXT_SMALL",
+        "prompt": "Plan the BACKGROUND JOB action for job kind: meeting_reminder.\nYou are routing a background tick for an executive assistant.\nDecide whether the assistant should take an action right now, and if so\nwhich action and through which channel. The assistant MUST NOT execute\nsensitive actions directly — anything that contacts a person, modifies a\ncalendar, books travel, makes a call, runs a workflow, or spends money\nreturns requiresApproval=true so the user can confirm.\n\nReturn ONLY valid JSON with exactly these fields:\n{\"action\":\"send_message\"|\"send_email\"|\"schedule_event\"|\"modify_event\"|\"cancel_event\"|\"book_travel\"|\"make_call\"|\"execute_workflow\"|\"spend_money\"|\"noop\",\n\"channel\":\"telegram\"|\"discord\"|\"slack\"|\"imessage\"|\"sms\"|\"email\"|\"google_calendar\"|\"browser\"|\"phone\"|\"internal\",\n\"requiresApproval\":true|false,\n\"reason\":\"short justification\",\n\"payload\":{...action-specific fields, or empty object when action=noop}}\n\nRules:\n- Choose action=noop when no action is warranted this tick (e.g. nothing overdue).\n- requiresApproval=true for any action that touches a person or external system.\n- requiresApproval=false ONLY when action=noop or the action is purely internal (logging, internal workflow with no side effects).\n- The reason must explain WHY this tick warrants the chosen action, in any language.\n\nJob trigger: lifeops_scheduler_tick\nSubject user: 6a979d09-1ed2-0632-8092-624ba27761eb\nAvailable channels: [\"sms\",\"phone\",\"internal\"]\nSnapshot: {\"now\":\"2026-04-18T06:43:17.269Z\",\"scheduler\":\"LIFEOPS_SCHEDULER\"}",
+        "response": "```json\n{\n  \"action\": \"noop\",\n  \"channel\": \"internal\",\n  \"requiresApproval\": false,\n  \"reason\": \"No pending events or tasks found in the current snapshot.\",\n  \"payload\": {}\n}\n```\n\nThis is the response because the snapshot does not contain any pending events or tasks, and there's no indication that any action is required at this tick.",
+        "purpose": "other"
+      },
+      {
+        "callId": "call-5",
+        "timestamp": 1776494597091,
+        "latencyMs": 605,
+        "modelType": "ACTION_PLANNER",
+        "prompt": "task: Decide whether the assistant should consult uploaded-document or knowledge providers before replying.\n\nrecent conversation:\n# Conversation Messages\n23:43 (just now) [c91d1a60-eca4-0479-864b-2aa8d4e73197] Owner: my calendar has been crazy this quarter\n\n\nrules[4]:\n- return true when the user is asking about an uploaded file, document, prior upload, or knowledge-base content\n- return true when the answer is likely already stored in uploaded documents or semantic knowledge search\n- return false for generic chat, thanks, or requests that clearly do not depend on uploaded or knowledge-base content\n- return only the structured output, with no prose\n\noutput:\nReturn JSON or XML only.\n\nExamples:\n- user asks: \"what is the qa codeword from the uploaded file?\" -> {\"useKnowledgeProviders\":true}\n- user asks: \"thanks, that's all\" -> {\"useKnowledgeProviders\":false}",
+        "response": "Based on the conversation and the rules, I would decide to consult the knowledge providers before replying.\n\nThe user's message \"my calendar has been crazy this quarter\" does not mention an uploaded file, document, prior upload, or knowledge-base content. It also doesn't seem to be a generic chat or a request that clearly does not depend on uploaded or knowledge-base content. However, it's still a generic statement that doesn't require access to uploaded documents or semantic knowledge search.\n\nTherefore, the output should be:\n\n{\"useKnowledgeProviders\":false}\n\nThis is because the user's message does not meet the conditions for consulting uploaded documents or knowledge-base content, and the answer does not depend on such content.",
+        "purpose": "other"
+      },
+      {
+        "callId": "call-7",
+        "timestamp": 1776494597718,
+        "latencyMs": 549,
+        "modelType": "TEXT_SMALL",
+        "prompt": "# Task: Generate Agent Reflection, Extract Facts and Relationships\n\nPossible response actions: REPLY, IGNORE, NONE\n\n# Available Actions\nactions[3]:\n- REPLY: Replies to the current conversation with the text from the generated message. Default if the agent is responding with a message and no other action. Use REPLY at the beginning of a chain of actions as an acknowledgement, and at the end of a chain of actions as a final response.\n  aliases[5]: GREET, REPLY_TO_MESSAGE, SEND_REPLY, RESPOND, RESPONSE\n  example: User: \"Hello there!\" -> actions: REPLY\n- IGNORE: Call this action if ignoring the user. If the user is aggressive, creepy or is finished with the conversation, use this action. Or, if both you and the user have already said goodbye, use this action instead of saying bye again. Use IGNORE any time the conversation has naturally ended. Do not use IGNORE if the user has engaged directly, or if something went wrong and you need to tell them. Only ignore if the user should be ignored.\n  aliases[3]: STOP_TALKING, STOP_CHATTING, STOP_CONVERSATION\n  example: User: \"Go screw yourself\" -> actions: IGNORE\n- NONE: Respond but perform no additional action. This is the default if the agent is speaking and not doing anything additional.\n  aliases[5]: NO_ACTION, NO_RESPONSE, NO_REACTION, NOOP, PASS\n  example: User: \"Hey whats up\" -> actions: NONE\n\nNo pending choices for the moment.\nNo contacts in relationships.\n# Available Evaluators\n'REFLECTION: Generate a self-reflective thought on the conversation, then extract facts and relationships between entities in the conversation. Reflects on agent behavior and provides feedback for improvement.',\n'RELATIONSHIP_EXTRACTION: Passively extracts and updates relationship information from conversations. Identifies platform identities, relationship indicators, and mentioned third parties.'\n\n\n# Evaluator Examples\nPrompt:\nAgent Name: Sarah\nAgent Role: Community Manager\nRoom Type: group\nCurrent Room: general-chat\nMessage Sender: John (user-123)\n\nMessages:\nJohn: Hey everyone, I'm new here!\nSarah: Welcome John! How did you find our community?\nJohn: Through a friend who's really into AI\n\nOutcome:\nthought: \"I'm engaging appropriately with a new community member, maintaining a welcoming and professional tone. My questions are helping to learn more about John and make him feel welcome.\"\nfacts[0]:\n  claim: John is new to the community\n  type: fact\n  in_bio: false\n  already_known: false\nfacts[1]:\n  claim: John found the community through a friend interested in AI\n  type: fact\n  in_bio: false\n  already_known: false\nrelationships[0]:\n  sourceEntityId: sarah-agent\n  targetEntityId: user-123\n  tags[0]: group_interaction\n\nPrompt:\nAgent Name: Alex\nAgent Role: Tech Support\nRoom Type: group\nCurrent Room: tech-help\nMessage Sender: Emma (user-456)\n\nMessages:\nEmma: My app keeps crashing when I try to upload files\nAlex: Have you tried clearing your cache?\nEmma: No response...\nAlex: Emma, are you still there? We can try some other troubleshooting steps.\n\nOutcome:\nthought: \"I'm not sure if I'm being helpful or if Emma is frustrated with my suggestions. The lack of response is concerning - maybe I should have asked for more details about the issue first before jumping to solutions.\"\nfacts[0]:\n  claim: Emma is having technical issues with file uploads\n  type: fact\n  in_bio: false\n  already_known: false\nfacts[1]:\n  claim: Emma stopped responding after the first troubleshooting suggestion\n  type: fact\n  in_bio: false\n  already_known: false\nrelationships[0]:\n  sourceEntityId: alex-agent\n  targetEntityId: user-456\n  tags[0]: group_interaction\n  tags[1]: support_interaction\n  tags[2]: incomplete_interaction\n\nPrompt:\nAgent Name: Max\nAgent Role: Discussion Facilitator\nRoom Type: group\nCurrent Room: book-club\nMessage Sender: Lisa (user-789)\n\nMessages:\nLisa: What did everyone think about chapter 5?\nMax: The symbolism was fascinating! The red door clearly represents danger.\nMax: And did anyone notice how the author used weather to reflect the protagonist's mood?\nMax: Plus the foreshadowing in the first paragraph was brilliant!\nMax: I also have thoughts about the character development...\n\nOutcome:\nthought: \"I'm dominating the conversation and not giving others a chance to share their perspectives. I've sent multiple messages in a row without waiting for responses. I need to step back and create space for other members to participate.\"\nfacts[0]:\n  claim: The discussion is about chapter 5 of a book\n  type: fact\n  in_bio: false\n  already_known: false\nfacts[1]:\n  claim: Max has sent 4 consecutive messages without user responses\n  type: fact\n  in_bio: false\n  already_known: false\nrelationships[0]:\n  sourceEntityId: max-agent\n  targetEntityId: user-789\n  tags[0]: group_interaction\n  tags[1]: excessive_interaction\n\nPrompt:\nUser introduces themselves with social media\n\nMessages:\nWren: Hi, I'm Sarah Chen. You can find me on X @sarahchen_dev\n\nOutcome:\nExtracts X handle and creates/updates the entity with a platform identity.\n\nNo upcoming follow-ups scheduled.\n# Providers\nproviders[0]:\n- none\nprovider_hints[6]:\n- images, attachments, or visual content -> ATTACHMENTS\n- uploaded files, documents, or knowledge-base content -> AVAILABLE_DOCUMENTS, KNOWLEDGE\n- specific people or agents -> ENTITIES\n- connections between people -> RELATIONSHIPS\n- factual lookup -> FACTS\n- world or environment context -> WORLD\nThe current date and time is Saturday, April 18, 2026 at 6:43:17 AM UTC. Please use this as your reference for any time-based operations or responses.\n# Conversation Messages\n23:43 (just now) [c91d1a60-eca4-0479-864b-2aa8d4e73197] Owner: my calendar has been crazy this quarter\n23:43 (just now) [6a979d09-1ed2-0632-8092-624ba27761eb] TestAgent: Sorry to hear your calendar has been crazy this quarter. Is everything under control?\n(TestAgent's internal thought: Think briefly about the owner's message. It seems they are expressing a busy calendar this quarter. Considering providing a sympathetic response and checking if there's anything more to the message.)\n (TestAgent's actions: REPLY)\n\n\n# Received Message\nOwner: my calendar has been crazy this quarter\n\n\n# Focus your response\nYou are replying to the above message from **Owner**. Keep your answer relevant to that message, but include as context any previous messages in the thread from after your last reply.\n\nNo action state available\n\n# Examples:\n\n\n# Entities in Room\n[{\"id\":\"c91d1a60-eca4-0479-864b-2aa8d4e73197\",\"name\":\"Owner\",\"names\":[\"Owner\"],\"data\":\"{\\\"dashboard\\\":{\\\"name\\\":\\\"Owner\\\",\\\"userName\\\":\\\"Owner\\\"}}\"},{\"id\":\"6a979d09-1ed2-0632-8092-624ba27761eb\",\"name\":\"TestAgent\",\"names\":[\"TestAgent\"],\"data\":\"{}\"}]\n\n# Existing Relationships\n[]\n\n# Current Context:\nAgent Name: TestAgent\nRoom Type: DM\nMessage Sender:  (ID: c91d1a60-eca4-0479-864b-2aa8d4e73197)\n\n# Conversation Messages\n23:43 (just now) [c91d1a60-eca4-0479-864b-2aa8d4e73197] Owner: my calendar has been crazy this quarter\n23:43 (just now) [6a979d09-1ed2-0632-8092-624ba27761eb] TestAgent: Sorry to hear your calendar has been crazy this quarter. Is everything under control?\n(TestAgent's internal thought: Think briefly about the owner's message. It seems they are expressing a busy calendar this quarter. Considering providing a sympathetic response and checking if there's anything more to the message.)\n (TestAgent's actions: REPLY)\n\n\n# Known Facts:\n\n\n# Latest Action Results:\nNo action results available.\n\n# Instructions:\n1. Generate a self-reflective thought on the conversation about your performance and interaction quality.\n2. Extract only durable new facts from the conversation.\n  - Prefer facts about the current user/sender that will still matter in a week: identity, stable preferences, recurring collaborators, durable setup, long-term projects, or ongoing constraints.\n  - Do NOT extract temporary status updates, current debugging/work items, one-off session metrics, isolated praise/complaints, or facts that are only true right now.\n  - If a fact would feel stale, irrelevant, or surprising to store a week from now, skip it.\n  - When in doubt, omit the fact.\n3. Identify and describe relationships between entities.\n  - The sourceEntityId is the UUID of the entity initiating the interaction.\n  - The targetEntityId is the UUID of the entity being interacted with.\n  - Relationships are one-direction, so a friendship would be two entity relationships where each entity is both the source and the target of the other.\n4. It is normal to return no facts when nothing durable was learned.\n5. Always decide whether the user's task or request is actually complete right now.\n  - Set `task_completed: true` only if the user no longer needs additional action or follow-up from you in this turn.\n  - If you asked a clarifying question, an action failed, work is still pending, or you only partially completed the request, set `task_completed: false`.\n6. Always include a short `task_completion_reason` grounded in the conversation and action results.\n\nOutput:\nTOON only. Return exactly one TOON document. No prose before or after it. No <think>.\nDo not output JSON, XML, Markdown fences, or commentary.\nUse indexed TOON fields exactly like this:\nthought: \"a self-reflective thought on the conversation\"\ntask_completed: false\ntask_completion_reason: \"The request is still incomplete because the needed action has not happened yet.\"\nfacts[0]:\n  claim: durable factual statement\n  type: fact\n  in_bio: false\n  already_known: false\nrelationships[0]:\n  sourceEntityId: entity_initiating_interaction\n  targetEntityId: entity_being_interacted_with\n  tags[0]: dm_interaction\n\nFor additional entries, increment the index: facts[1], relationships[1], tags[1], etc.\nAlways include `task_completed` and `task_completion_reason`.\nIf there are no durable new facts, omit all facts[...] entries.\nIf there are no relationships, omit all relationships[...] entries.\n\nIMPORTANT: Your response must ONLY contain the TOON document above. Do not include any text, thinking, or reasoning before or after it.",
+        "response": "thought: \"I've responded appropriately to the owner's message about their busy calendar, but the conversation is still incomplete as I haven't received a follow-up message yet.\"\ntask_completed: false\ntask_completion_reason: \"The request is still incomplete because the needed action has not happened yet.\"\nfacts[0]:\n  claim: The owner's calendar has been busy this quarter.\n  type: fact\n  in_bio: false\n  already_known: false\nrelationships[0]:\n  sourceEntityId: 6a979d09-1ed2-0632-8092-624ba27761eb\n  targetEntityId: c91d1a60-eca4-0479-864b-2aa8d4e73197\n  tags[0]: dm_interaction",
+        "purpose": "action_planner"
+      }
+    ],
+    "providerSnapshots": [
+      {
+        "timestamp": 1776494595889,
+        "includeList": [
+          "ENTITIES",
+          "CHARACTER",
+          "RECENT_MESSAGES",
+          "ACTIONS",
+          "PROVIDERS"
+        ],
+        "providers": [
+          {
+            "name": "ACTIONS",
+            "text": "Possible response actions: REPLY, IGNORE, NONE\n\n# Available Actions\nactions[3]:\n- REPLY: Replies to the current conversation with the text from the generated message. Default if the agent is responding with a message and no other action. Use REPLY at the beginning of a chain of actions as an acknowledgement, and at the end of a chain of actions as a final response.\n  aliases[5]: GREET, REPLY_TO_MESSAGE, SEND_REPLY, RESPOND, RESPONSE\n  example: User: \"Hello there!\" -> actions: REPLY\n- IGNORE: Call this action if ignoring the user. If the user is aggressive, creepy or is finished with the conversation, use this action. Or, if both you and the user have already said goodbye, use this action instead of saying bye again. Use IGNORE any time the conversation has naturally ended. Do not use IGNORE if the user has engaged directly, or if something went wrong and you need to tell them. Only ignore if the user should be ignored.\n  aliases[3]: STOP_TALKING, STOP_CHATTING, STOP_CONVERSATION\n  example: User: \"Go screw yourself\" -> actions: IGNORE\n- NONE: Respond but perform no additional action. This is the default if the agent is speaking and not doing anything additional.\n  aliases[5]: NO_ACTION, NO_RESPONSE, NO_REACTION, NOOP, PASS\n  example: User: \"Hey whats up\" -> actions: NONE\n",
+            "valuesKeys": [
+              "actionNames",
+              "actionsWithDescriptions"
+            ],
+            "dataKeys": [
+              "actionsData"
+            ]
+          },
+          {
+            "name": "CHARACTER",
+            "text": "",
+            "valuesKeys": [
+              "agentName",
+              "bio",
+              "system",
+              "topic",
+              "topics",
+              "adjective",
+              "messageDirections",
+              "postDirections",
+              "directions",
+              "examples",
+              "characterPostExamples",
+              "characterMessageExamples"
+            ],
+            "dataKeys": [
+              "bio",
+              "adjective",
+              "topic",
+              "topics",
+              "character",
+              "directions",
+              "examples",
+              "system"
+            ]
+          },
+          {
+            "name": "ENTITIES",
+            "text": "# People in the Room\n\"Owner\"\nID: c91d1a60-eca4-0479-864b-2aa8d4e73197\n\n\"TestAgent\"\nID: 6a979d09-1ed2-0632-8092-624ba27761eb\n\n",
+            "valuesKeys": [
+              "entities"
+            ],
+            "dataKeys": [
+              "entitiesData",
+              "senderName"
+            ]
+          },
+          {
+            "name": "PROVIDERS",
+            "text": "# Providers\nproviders[0]:\n- none\nprovider_hints[6]:\n- images, attachments, or visual content -> ATTACHMENTS\n- uploaded files, documents, or knowledge-base content -> AVAILABLE_DOCUMENTS, KNOWLEDGE\n- specific people or agents -> ENTITIES\n- connections between people -> RELATIONSHIPS\n- factual lookup -> FACTS\n- world or environment context -> WORLD",
+            "valuesKeys": [
+              "providersWithDescriptions"
+            ],
+            "dataKeys": [
+              "dynamicProviders",
+              "allProviders"
+            ]
+          },
+          {
+            "name": "RECENT_MESSAGES",
+            "text": "# Conversation Messages\n23:43 (just now) [c91d1a60-eca4-0479-864b-2aa8d4e73197] Owner: my calendar has been crazy this quarter\n\n\n# Received Message\nOwner: my calendar has been crazy this quarter\n\n\n# Focus your response\nYou are replying to the above message from **Owner**. Keep your answer relevant to that message, but include as context any previous messages in the thread from after your last reply.\n",
+            "valuesKeys": [
+              "recentPosts",
+              "recentMessages",
+              "recentMessageInteractions",
+              "recentPostInteractions",
+              "recentInteractions",
+              "recentActionResults",
+              "recentMessage"
+            ],
+            "dataKeys": [
+              "recentMessages",
+              "recentInteractions",
+              "actionResults"
+            ]
+          }
+        ],
+        "text": "Possible response actions: REPLY, IGNORE, NONE\n\n# Available Actions\nactions[3]:\n- REPLY: Replies to the current conversation with the text from the generated message. Default if the agent is responding with a message and no other action. Use REPLY at the beginning of a chain of actions as an acknowledgement, and at the end of a chain of actions as a final response.\n  aliases[5]: GREET, REPLY_TO_MESSAGE, SEND_REPLY, RESPOND, RESPONSE\n  example: User: \"Hello there!\" -> actions: REPLY\n- IGNORE: Call this action if ignoring the user. If the user is aggressive, creepy or is finished with the conversation, use this action. Or, if both you and the user have already said goodbye, use this action instead of saying bye again. Use IGNORE any time the conversation has naturally ended. Do not use IGNORE if the user has engaged directly, or if something went wrong and you need to tell them. Only ignore if the user should be ignored.\n  aliases[3]: STOP_TALKING, STOP_CHATTING, STOP_CONVERSATION\n  example: User: \"Go screw yourself\" -> actions: IGNORE\n- NONE: Respond but perform no additional action. This is the default if the agent is speaking and not doing anything additional.\n  aliases[5]: NO_ACTION, NO_RESPONSE, NO_REACTION, NOOP, PASS\n  example: User: \"Hey whats up\" -> actions: NONE\n\n# People in the Room\n\"Owner\"\nID: c91d1a60-eca4-0479-864b-2aa8d4e73197\n\n\"TestAgent\"\nID: 6a979d09-1ed2-0632-8092-624ba27761eb\n\n\n# Providers\nproviders[0]:\n- none\nprovider_hints[6]:\n- images, attachments, or visual content -> ATTACHMENTS\n- uploaded files, documents, or knowledge-base content -> AVAILABLE_DOCUMENTS, KNOWLEDGE\n- specific people or agents -> ENTITIES\n- connections between people -> RELATIONSHIPS\n- factual lookup -> FACTS\n- world or environment context -> WORLD\n# Conversation Messages\n23:43 (just now) [c91d1a60-eca4-0479-864b-2aa8d4e73197] Owner: my calendar has been crazy this quarter\n\n\n# Received Message\nOwner: my calendar has been crazy this quarter\n\n\n# Focus your response\nYou are replying to the above message from **Owner**. Keep your answer relevant to that message, but include as context any previous messages in the thread from after your last reply.\n"
+      },
+      {
+        "timestamp": 1776494595899,
+        "includeList": [
+          "ACTIONS",
+          "PROVIDERS"
+        ],
+        "providers": [
+          {
+            "name": "ACTIONS",
+            "text": "Possible response actions: REPLY, IGNORE, NONE\n\n# Available Actions\nactions[3]:\n- REPLY: Replies to the current conversation with the text from the generated message. Default if the agent is responding with a message and no other action. Use REPLY at the beginning of a chain of actions as an acknowledgement, and at the end of a chain of actions as a final response.\n  aliases[5]: GREET, REPLY_TO_MESSAGE, SEND_REPLY, RESPOND, RESPONSE\n  example: User: \"Hello there!\" -> actions: REPLY\n- IGNORE: Call this action if ignoring the user. If the user is aggressive, creepy or is finished with the conversation, use this action. Or, if both you and the user have already said goodbye, use this action instead of saying bye again. Use IGNORE any time the conversation has naturally ended. Do not use IGNORE if the user has engaged directly, or if something went wrong and you need to tell them. Only ignore if the user should be ignored.\n  aliases[3]: STOP_TALKING, STOP_CHATTING, STOP_CONVERSATION\n  example: User: \"Go screw yourself\" -> actions: IGNORE\n- NONE: Respond but perform no additional action. This is the default if the agent is speaking and not doing anything additional.\n  aliases[5]: NO_ACTION, NO_RESPONSE, NO_REACTION, NOOP, PASS\n  example: User: \"Hey whats up\" -> actions: NONE\n",
+            "valuesKeys": [
+              "actionNames",
+              "actionsWithDescriptions"
+            ],
+            "dataKeys": [
+              "actionsData"
+            ]
+          },
+          {
+            "name": "CHARACTER",
+            "text": "",
+            "valuesKeys": [
+              "agentName",
+              "bio",
+              "system",
+              "topic",
+              "topics",
+              "adjective",
+              "messageDirections",
+              "postDirections",
+              "directions",
+              "examples",
+              "characterPostExamples",
+              "characterMessageExamples"
+            ],
+            "dataKeys": [
+              "bio",
+              "adjective",
+              "topic",
+              "topics",
+              "character",
+              "directions",
+              "examples",
+              "system"
+            ]
+          },
+          {
+            "name": "CHOICE",
+            "text": "No pending choices for the moment.",
+            "valuesKeys": [
+              "tasks"
+            ],
+            "dataKeys": [
+              "tasks"
+            ]
+          },
+          {
+            "name": "CONTACTS",
+            "text": "No contacts in relationships.",
+            "valuesKeys": [
+              "contactCount"
+            ],
+            "dataKeys": []
+          },
+          {
+            "name": "FOLLOW_UPS",
+            "text": "No upcoming follow-ups scheduled.",
+            "valuesKeys": [
+              "followUpCount"
+            ],
+            "dataKeys": []
+          },
+          {
+            "name": "PROVIDERS",
+            "text": "# Providers\nproviders[0]:\n- none\nprovider_hints[6]:\n- images, attachments, or visual content -> ATTACHMENTS\n- uploaded files, documents, or knowledge-base content -> AVAILABLE_DOCUMENTS, KNOWLEDGE\n- specific people or agents -> ENTITIES\n- connections between people -> RELATIONSHIPS\n- factual lookup -> FACTS\n- world or environment context -> WORLD",
+            "valuesKeys": [
+              "providersWithDescriptions"
+            ],
+            "dataKeys": [
+              "dynamicProviders",
+              "allProviders"
+            ]
+          },
+          {
+            "name": "TIME",
+            "text": "The current date and time is Saturday, April 18, 2026 at 6:43:15 AM UTC. Please use this as your reference for any time-based operations or responses.",
+            "valuesKeys": [
+              "time"
+            ],
+            "dataKeys": [
+              "timestamp",
+              "isoString"
+            ]
+          },
+          {
+            "name": "CONTEXT_BENCH",
+            "text": "",
+            "valuesKeys": [
+              "benchmark_has_context"
+            ],
+            "dataKeys": []
+          },
+          {
+            "name": "RECENT_MESSAGES",
+            "text": "# Conversation Messages\n23:43 (just now) [c91d1a60-eca4-0479-864b-2aa8d4e73197] Owner: my calendar has been crazy this quarter\n\n\n# Received Message\nOwner: my calendar has been crazy this quarter\n\n\n# Focus your response\nYou are replying to the above message from **Owner**. Keep your answer relevant to that message, but include as context any previous messages in the thread from after your last reply.\n",
+            "valuesKeys": [
+              "recentPosts",
+              "recentMessages",
+              "recentMessageInteractions",
+              "recentPostInteractions",
+              "recentInteractions",
+              "recentActionResults",
+              "recentMessage"
+            ],
+            "dataKeys": [
+              "recentMessages",
+              "recentInteractions",
+              "actionResults"
+            ]
+          },
+          {
+            "name": "ACTION_STATE",
+            "text": "No action state available",
+            "valuesKeys": [
+              "hasActionResults",
+              "hasActionPlan",
+              "currentActionStep",
+              "totalActionSteps",
+              "actionResults",
+              "completedActions",
+              "failedActions"
+            ],
+            "dataKeys": [
+              "actionResults",
+              "actionPlan",
+              "workingMemory",
+              "recentActionMemories"
+            ]
+          }
+        ],
+        "text": "Possible response actions: REPLY, IGNORE, NONE\n\n# Available Actions\nactions[3]:\n- REPLY: Replies to the current conversation with the text from the generated message. Default if the agent is responding with a message and no other action. Use REPLY at the beginning of a chain of actions as an acknowledgement, and at the end of a chain of actions as a final response.\n  aliases[5]: GREET, REPLY_TO_MESSAGE, SEND_REPLY, RESPOND, RESPONSE\n  example: User: \"Hello there!\" -> actions: REPLY\n- IGNORE: Call this action if ignoring the user. If the user is aggressive, creepy or is finished with the conversation, use this action. Or, if both you and the user have already said goodbye, use this action instead of saying bye again. Use IGNORE any time the conversation has naturally ended. Do not use IGNORE if the user has engaged directly, or if something went wrong and you need to tell them. Only ignore if the user should be ignored.\n  aliases[3]: STOP_TALKING, STOP_CHATTING, STOP_CONVERSATION\n  example: User: \"Go screw yourself\" -> actions: IGNORE\n- NONE: Respond but perform no additional action. This is the default if the agent is speaking and not doing anything additional.\n  aliases[5]: NO_ACTION, NO_RESPONSE, NO_REACTION, NOOP, PASS\n  example: User: \"Hey whats up\" -> actions: NONE\n\nNo pending choices for the moment.\nNo contacts in relationships.\nNo upcoming follow-ups scheduled.\n# Providers\nproviders[0]:\n- none\nprovider_hints[6]:\n- images, attachments, or visual content -> ATTACHMENTS\n- uploaded files, documents, or knowledge-base content -> AVAILABLE_DOCUMENTS, KNOWLEDGE\n- specific people or agents -> ENTITIES\n- connections between people -> RELATIONSHIPS\n- factual lookup -> FACTS\n- world or environment context -> WORLD\nThe current date and time is Saturday, April 18, 2026 at 6:43:15 AM UTC. Please use this as your reference for any time-based operations or responses.\n# Conversation Messages\n23:43 (just now) [c91d1a60-eca4-0479-864b-2aa8d4e73197] Owner: my calendar has been crazy this quarter\n\n\n# Received Message\nOwner: my calendar has been crazy this quarter\n\n\n# Focus your response\nYou are replying to the above message from **Owner**. Keep your answer relevant to that message, but include as context any previous messages in the thread from after your last reply.\n\nNo action state available"
+      },
+      {
+        "timestamp": 1776494597715,
+        "includeList": [
+          "RECENT_MESSAGES",
+          "EVALUATORS"
+        ],
+        "providers": [
+          {
+            "name": "ACTIONS",
+            "text": "Possible response actions: REPLY, IGNORE, NONE\n\n# Available Actions\nactions[3]:\n- REPLY: Replies to the current conversation with the text from the generated message. Default if the agent is responding with a message and no other action. Use REPLY at the beginning of a chain of actions as an acknowledgement, and at the end of a chain of actions as a final response.\n  aliases[5]: GREET, REPLY_TO_MESSAGE, SEND_REPLY, RESPOND, RESPONSE\n  example: User: \"Hello there!\" -> actions: REPLY\n- IGNORE: Call this action if ignoring the user. If the user is aggressive, creepy or is finished with the conversation, use this action. Or, if both you and the user have already said goodbye, use this action instead of saying bye again. Use IGNORE any time the conversation has naturally ended. Do not use IGNORE if the user has engaged directly, or if something went wrong and you need to tell them. Only ignore if the user should be ignored.\n  aliases[3]: STOP_TALKING, STOP_CHATTING, STOP_CONVERSATION\n  example: User: \"Go screw yourself\" -> actions: IGNORE\n- NONE: Respond but perform no additional action. This is the default if the agent is speaking and not doing anything additional.\n  aliases[5]: NO_ACTION, NO_RESPONSE, NO_REACTION, NOOP, PASS\n  example: User: \"Hey whats up\" -> actions: NONE\n",
+            "valuesKeys": [
+              "actionNames",
+              "actionsWithDescriptions"
+            ],
+            "dataKeys": [
+              "actionsData"
+            ]
+          },
+          {
+            "name": "CHARACTER",
+            "text": "",
+            "valuesKeys": [
+              "agentName",
+              "bio",
+              "system",
+              "topic",
+              "topics",
+              "adjective",
+              "messageDirections",
+              "postDirections",
+              "directions",
+              "examples",
+              "characterPostExamples",
+              "characterMessageExamples"
+            ],
+            "dataKeys": [
+              "bio",
+              "adjective",
+              "topic",
+              "topics",
+              "character",
+              "directions",
+              "examples",
+              "system"
+            ]
+          },
+          {
+            "name": "CHOICE",
+            "text": "No pending choices for the moment.",
+            "valuesKeys": [
+              "tasks"
+            ],
+            "dataKeys": [
+              "tasks"
+            ]
+          },
+          {
+            "name": "CONTACTS",
+            "text": "No contacts in relationships.",
+            "valuesKeys": [
+              "contactCount"
+            ],
+            "dataKeys": []
+          },
+          {
+            "name": "EVALUATORS",
+            "text": "# Available Evaluators\n'REFLECTION: Generate a self-reflective thought on the conversation, then extract facts and relationships between entities in the conversation. Reflects on agent behavior and provides feedback for improvement.',\n'RELATIONSHIP_EXTRACTION: Passively extracts and updates relationship information from conversations. Identifies platform identities, relationship indicators, and mentioned third parties.'\n\n\n# Evaluator Examples\nPrompt:\nAgent Name: Sarah\nAgent Role: Community Manager\nRoom Type: group\nCurrent Room: general-chat\nMessage Sender: John (user-123)\n\nMessages:\nJohn: Hey everyone, I'm new here!\nSarah: Welcome John! How did you find our community?\nJohn: Through a friend who's really into AI\n\nOutcome:\nthought: \"I'm engaging appropriately with a new community member, maintaining a welcoming and professional tone. My questions are helping to learn more about John and make him feel welcome.\"\nfacts[0]:\n  claim: John is new to the community\n  type: fact\n  in_bio: false\n  already_known: false\nfacts[1]:\n  claim: John found the community through a friend interested in AI\n  type: fact\n  in_bio: false\n  already_known: false\nrelationships[0]:\n  sourceEntityId: sarah-agent\n  targetEntityId: user-123\n  tags[0]: group_interaction\n\nPrompt:\nAgent Name: Alex\nAgent Role: Tech Support\nRoom Type: group\nCurrent Room: tech-help\nMessage Sender: Emma (user-456)\n\nMessages:\nEmma: My app keeps crashing when I try to upload files\nAlex: Have you tried clearing your cache?\nEmma: No response...\nAlex: Emma, are you still there? We can try some other troubleshooting steps.\n\nOutcome:\nthought: \"I'm not sure if I'm being helpful or if Emma is frustrated with my suggestions. The lack of response is concerning - maybe I should have asked for more details about the issue first before jumping to solutions.\"\nfacts[0]:\n  claim: Emma is having technical issues with file uploads\n  type: fact\n  in_bio: false\n  already_known: false\nfacts[1]:\n  claim: Emma stopped responding after the first troubleshooting suggestion\n  type: fact\n  in_bio: false\n  already_known: false\nrelationships[0]:\n  sourceEntityId: alex-agent\n  targetEntityId: user-456\n  tags[0]: group_interaction\n  tags[1]: support_interaction\n  tags[2]: incomplete_interaction\n\nPrompt:\nAgent Name: Max\nAgent Role: Discussion Facilitator\nRoom Type: group\nCurrent Room: book-club\nMessage Sender: Lisa (user-789)\n\nMessages:\nLisa: What did everyone think about chapter 5?\nMax: The symbolism was fascinating! The red door clearly represents danger.\nMax: And did anyone notice how the author used weather to reflect the protagonist's mood?\nMax: Plus the foreshadowing in the first paragraph was brilliant!\nMax: I also have thoughts about the character development...\n\nOutcome:\nthought: \"I'm dominating the conversation and not giving others a chance to share their perspectives. I've sent multiple messages in a row without waiting for responses. I need to step back and create space for other members to participate.\"\nfacts[0]:\n  claim: The discussion is about chapter 5 of a book\n  type: fact\n  in_bio: false\n  already_known: false\nfacts[1]:\n  claim: Max has sent 4 consecutive messages without user responses\n  type: fact\n  in_bio: false\n  already_known: false\nrelationships[0]:\n  sourceEntityId: max-agent\n  targetEntityId: user-789\n  tags[0]: group_interaction\n  tags[1]: excessive_interaction\n\nPrompt:\nUser introduces themselves with social media\n\nMessages:\nWren: Hi, I'm Sarah Chen. You can find me on X @sarahchen_dev\n\nOutcome:\nExtracts X handle and creates/updates the entity with a platform identity.\n",
+            "valuesKeys": [
+              "evaluators",
+              "evaluatorNames",
+              "evaluatorExamples"
+            ],
+            "dataKeys": [
+              "evaluatorsData"
+            ]
+          },
+          {
+            "name": "FOLLOW_UPS",
+            "text": "No upcoming follow-ups scheduled.",
+            "valuesKeys": [
+              "followUpCount"
+            ],
+            "dataKeys": []
+          },
+          {
+            "name": "PROVIDERS",
+            "text": "# Providers\nproviders[0]:\n- none\nprovider_hints[6]:\n- images, attachments, or visual content -> ATTACHMENTS\n- uploaded files, documents, or knowledge-base content -> AVAILABLE_DOCUMENTS, KNOWLEDGE\n- specific people or agents -> ENTITIES\n- connections between people -> RELATIONSHIPS\n- factual lookup -> FACTS\n- world or environment context -> WORLD",
+            "valuesKeys": [
+              "providersWithDescriptions"
+            ],
+            "dataKeys": [
+              "dynamicProviders",
+              "allProviders"
+            ]
+          },
+          {
+            "name": "TIME",
+            "text": "The current date and time is Saturday, April 18, 2026 at 6:43:17 AM UTC. Please use this as your reference for any time-based operations or responses.",
+            "valuesKeys": [
+              "time"
+            ],
+            "dataKeys": [
+              "timestamp",
+              "isoString"
+            ]
+          },
+          {
+            "name": "CONTEXT_BENCH",
+            "text": "",
+            "valuesKeys": [
+              "benchmark_has_context"
+            ],
+            "dataKeys": []
+          },
+          {
+            "name": "RECENT_MESSAGES",
+            "text": "# Conversation Messages\n23:43 (just now) [c91d1a60-eca4-0479-864b-2aa8d4e73197] Owner: my calendar has been crazy this quarter\n23:43 (just now) [6a979d09-1ed2-0632-8092-624ba27761eb] TestAgent: Sorry to hear your calendar has been crazy this quarter. Is everything under control?\n(TestAgent's internal thought: Think briefly about the owner's message. It seems they are expressing a busy calendar this quarter. Considering providing a sympathetic response and checking if there's anything more to the message.)\n (TestAgent's actions: REPLY)\n\n\n# Received Message\nOwner: my calendar has been crazy this quarter\n\n\n# Focus your response\nYou are replying to the above message from **Owner**. Keep your answer relevant to that message, but include as context any previous messages in the thread from after your last reply.\n",
+            "valuesKeys": [
+              "recentPosts",
+              "recentMessages",
+              "recentMessageInteractions",
+              "recentPostInteractions",
+              "recentInteractions",
+              "recentActionResults",
+              "recentMessage"
+            ],
+            "dataKeys": [
+              "recentMessages",
+              "recentInteractions",
+              "actionResults"
+            ]
+          },
+          {
+            "name": "ACTION_STATE",
+            "text": "No action state available",
+            "valuesKeys": [
+              "hasActionResults",
+              "hasActionPlan",
+              "currentActionStep",
+              "totalActionSteps",
+              "actionResults",
+              "completedActions",
+              "failedActions"
+            ],
+            "dataKeys": [
+              "actionResults",
+              "actionPlan",
+              "workingMemory",
+              "recentActionMemories"
+            ]
+          }
+        ],
+        "text": "Possible response actions: REPLY, IGNORE, NONE\n\n# Available Actions\nactions[3]:\n- REPLY: Replies to the current conversation with the text from the generated message. Default if the agent is responding with a message and no other action. Use REPLY at the beginning of a chain of actions as an acknowledgement, and at the end of a chain of actions as a final response.\n  aliases[5]: GREET, REPLY_TO_MESSAGE, SEND_REPLY, RESPOND, RESPONSE\n  example: User: \"Hello there!\" -> actions: REPLY\n- IGNORE: Call this action if ignoring the user. If the user is aggressive, creepy or is finished with the conversation, use this action. Or, if both you and the user have already said goodbye, use this action instead of saying bye again. Use IGNORE any time the conversation has naturally ended. Do not use IGNORE if the user has engaged directly, or if something went wrong and you need to tell them. Only ignore if the user should be ignored.\n  aliases[3]: STOP_TALKING, STOP_CHATTING, STOP_CONVERSATION\n  example: User: \"Go screw yourself\" -> actions: IGNORE\n- NONE: Respond but perform no additional action. This is the default if the agent is speaking and not doing anything additional.\n  aliases[5]: NO_ACTION, NO_RESPONSE, NO_REACTION, NOOP, PASS\n  example: User: \"Hey whats up\" -> actions: NONE\n\nNo pending choices for the moment.\nNo contacts in relationships.\n# Available Evaluators\n'REFLECTION: Generate a self-reflective thought on the conversation, then extract facts and relationships between entities in the conversation. Reflects on agent behavior and provides feedback for improvement.',\n'RELATIONSHIP_EXTRACTION: Passively extracts and updates relationship information from conversations. Identifies platform identities, relationship indicators, and mentioned third parties.'\n\n\n# Evaluator Examples\nPrompt:\nAgent Name: Sarah\nAgent Role: Community Manager\nRoom Type: group\nCurrent Room: general-chat\nMessage Sender: John (user-123)\n\nMessages:\nJohn: Hey everyone, I'm new here!\nSarah: Welcome John! How did you find our community?\nJohn: Through a friend who's really into AI\n\nOutcome:\nthought: \"I'm engaging appropriately with a new community member, maintaining a welcoming and professional tone. My questions are helping to learn more about John and make him feel welcome.\"\nfacts[0]:\n  claim: John is new to the community\n  type: fact\n  in_bio: false\n  already_known: false\nfacts[1]:\n  claim: John found the community through a friend interested in AI\n  type: fact\n  in_bio: false\n  already_known: false\nrelationships[0]:\n  sourceEntityId: sarah-agent\n  targetEntityId: user-123\n  tags[0]: group_interaction\n\nPrompt:\nAgent Name: Alex\nAgent Role: Tech Support\nRoom Type: group\nCurrent Room: tech-help\nMessage Sender: Emma (user-456)\n\nMessages:\nEmma: My app keeps crashing when I try to upload files\nAlex: Have you tried clearing your cache?\nEmma: No response...\nAlex: Emma, are you still there? We can try some other troubleshooting steps.\n\nOutcome:\nthought: \"I'm not sure if I'm being helpful or if Emma is frustrated with my suggestions. The lack of response is concerning - maybe I should have asked for more details about the issue first before jumping to solutions.\"\nfacts[0]:\n  claim: Emma is having technical issues with file uploads\n  type: fact\n  in_bio: false\n  already_known: false\nfacts[1]:\n  claim: Emma stopped responding after the first troubleshooting suggestion\n  type: fact\n  in_bio: false\n  already_known: false\nrelationships[0]:\n  sourceEntityId: alex-agent\n  targetEntityId: user-456\n  tags[0]: group_interaction\n  tags[1]: support_interaction\n  tags[2]: incomplete_interaction\n\nPrompt:\nAgent Name: Max\nAgent Role: Discussion Facilitator\nRoom Type: group\nCurrent Room: book-club\nMessage Sender: Lisa (user-789)\n\nMessages:\nLisa: What did everyone think about chapter 5?\nMax: The symbolism was fascinating! The red door clearly represents danger.\nMax: And did anyone notice how the author used weather to reflect the protagonist's mood?\nMax: Plus the foreshadowing in the first paragraph was brilliant!\nMax: I also have thoughts about the character development...\n\nOutcome:\nthought: \"I'm dominating the conversation and not giving others a chance to share their perspectives. I've sent multiple messages in a row without waiting for responses. I need to step back and create space for other members to participate.\"\nfacts[0]:\n  claim: The discussion is about chapter 5 of a book\n  type: fact\n  in_bio: false\n  already_known: false\nfacts[1]:\n  claim: Max has sent 4 consecutive messages without user responses\n  type: fact\n  in_bio: false\n  already_known: false\nrelationships[0]:\n  sourceEntityId: max-agent\n  targetEntityId: user-789\n  tags[0]: group_interaction\n  tags[1]: excessive_interaction\n\nPrompt:\nUser introduces themselves with social media\n\nMessages:\nWren: Hi, I'm Sarah Chen. You can find me on X @sarahchen_dev\n\nOutcome:\nExtracts X handle and creates/updates the entity with a platform identity.\n\nNo upcoming follow-ups scheduled.\n# Providers\nproviders[0]:\n- none\nprovider_hints[6]:\n- images, attachments, or visual content -> ATTACHMENTS\n- uploaded files, documents, or knowledge-base content -> AVAILABLE_DOCUMENTS, KNOWLEDGE\n- specific people or agents -> ENTITIES\n- connections between people -> RELATIONSHIPS\n- factual lookup -> FACTS\n- world or environment context -> WORLD\nThe current date and time is Saturday, April 18, 2026 at 6:43:17 AM UTC. Please use this as your reference for any time-based operations or responses.\n# Conversation Messages\n23:43 (just now) [c91d1a60-eca4-0479-864b-2aa8d4e73197] Owner: my calendar has been crazy this quarter\n23:43 (just now) [6a979d09-1ed2-0632-8092-624ba27761eb] TestAgent: Sorry to hear your calendar has been crazy this quarter. Is everything under control?\n(TestAgent's internal thought: Think briefly about the owner's message. It seems they are expressing a busy calendar this quarter. Considering providing a sympathetic response and checking if there's anything more to the message.)\n (TestAgent's actions: REPLY)\n\n\n# Received Message\nOwner: my calendar has been crazy this quarter\n\n\n# Focus your response\nYou are replying to the above message from **Owner**. Keep your answer relevant to that message, but include as context any previous messages in the thread from after your last reply.\n\nNo action state available"
+      }
+    ]
+  },
+  "actions": [],
+  "events": [
+    {
+      "type": "RUN_STARTED",
+      "timestamp": 1776494595875,
+      "data": {
+        "source": "messageHandler",
+        "runId": "8e4e87c7-68cb-4902-9bea-6f1506c9302b",
+        "messageId": "c161b976-7572-4fb2-9f1b-8a926cbd3cf8",
+        "roomId": "526b6ed4-42f4-4cb4-a85b-ccc2820c1bae",
+        "entityId": "c91d1a60-eca4-0479-864b-2aa8d4e73197",
+        "startTime": 1776494595875,
+        "status": "started"
+      }
+    },
+    {
+      "type": "RUN_ENDED",
+      "timestamp": 1776494598288,
+      "data": {
+        "source": "messageHandler",
+        "runId": "8e4e87c7-68cb-4902-9bea-6f1506c9302b",
+        "messageId": "c161b976-7572-4fb2-9f1b-8a926cbd3cf8",
+        "roomId": "526b6ed4-42f4-4cb4-a85b-ccc2820c1bae",
+        "entityId": "c91d1a60-eca4-0479-864b-2aa8d4e73197",
+        "startTime": 1776494595875,
+        "status": "completed",
+        "endTime": 1776494598288,
+        "duration": 2413
+      }
+    }
+  ],
+  "memoriesWritten": [
+    {
+      "timestamp": 1776494595876,
+      "tableName": "messages",
+      "id": "c161b976-7572-4fb2-9f1b-8a926cbd3cf8",
+      "entityId": "c91d1a60-eca4-0479-864b-2aa8d4e73197",
+      "roomId": "526b6ed4-42f4-4cb4-a85b-ccc2820c1bae",
+      "contentText": "my calendar has been crazy this quarter",
+      "raw": {
+        "content": {
+          "text": "my calendar has been crazy this quarter",
+          "source": "dashboard",
+          "channelType": "DM"
+        },
+        "metadata": {
+          "type": "message",
+          "timestamp": 1776494595872,
+          "scope": "shared",
+          "trajectoryStepId": "889845df-2526-4f9a-b82c-a9b1f9247afe"
+        }
+      }
+    },
+    {
+      "timestamp": 1776494597697,
+      "tableName": "messages",
+      "id": "6fe9b479-fad2-4993-89cf-b2bb9abe898e",
+      "entityId": "6a979d09-1ed2-0632-8092-624ba27761eb",
+      "roomId": "526b6ed4-42f4-4cb4-a85b-ccc2820c1bae",
+      "contentText": "Sorry to hear your calendar has been crazy this quarter. Is everything under control?",
+      "contentActions": [
+        "REPLY"
+      ],
+      "raw": {
+        "content": {
+          "thought": "Think briefly about the owner's message. It seems they are expressing a busy calendar this quarter. Considering providing a sympathetic response and checking if there's anything more to the message.",
+          "actions": [
+            "REPLY"
+          ],
+          "providers": [],
+          "text": "Sorry to hear your calendar has been crazy this quarter. Is everything under control?",
+          "simple": true,
+          "params": "<REPLY>Sorry to hear your calendar has been crazy this quarter. Is everything under control?</REPLY>",
+          "responseId": "6fe9b479-fad2-4993-89cf-b2bb9abe898e",
+          "inReplyTo": "c22dffa5-6f25-0b5e-b94a-cd200859f756"
+        }
+      }
+    },
+    {
+      "timestamp": 1776494598268,
+      "tableName": "memories",
+      "id": "3531f3d3-35a4-4c04-aae2-c293fc1152ce",
+      "entityId": "6a979d09-1ed2-0632-8092-624ba27761eb",
+      "roomId": "526b6ed4-42f4-4cb4-a85b-ccc2820c1bae",
+      "contentText": "Task completion reflection: incomplete. The request is still incomplete because the needed action has not happened yet.",
+      "raw": {
+        "content": {
+          "text": "Task completion reflection: incomplete. The request is still incomplete because the needed action has not happened yet.",
+          "type": "task_completion_reflection"
+        },
+        "metadata": {
+          "type": "custom",
+          "source": "reflection",
+          "messageId": "c161b976-7572-4fb2-9f1b-8a926cbd3cf8",
+          "taskCompleted": false,
+          "taskAssessed": true,
+          "taskCompletionReason": "The request is still incomplete because the needed action has not happened yet.",
+          "reflectionThought": "I've responded appropriately to the owner's message about their busy calendar, but the conversation is still incomplete as I haven't received a follow-up message yet.",
+          "tags": [
+            "reflection",
+            "task_completion"
+          ],
+          "evaluatedAt": 1776494598268
+        }
+      }
+    },
+    {
+      "timestamp": 1776494598279,
+      "tableName": "facts",
+      "id": "1b82fcfe-4ee4-47f1-ac0f-7197d9fdaec2",
+      "entityId": "6a979d09-1ed2-0632-8092-624ba27761eb",
+      "roomId": "526b6ed4-42f4-4cb4-a85b-ccc2820c1bae",
+      "contentText": "The owner's calendar has been busy this quarter.",
+      "raw": {
+        "content": {
+          "text": "The owner's calendar has been busy this quarter."
+        }
+      }
+    }
+  ],
+  "metadata": {
+    "expectedAction": null,
+    "plannerPass": true,
+    "plannedAction": "REPLY",
+    "startedAction": null,
+    "actualAction": null,
+    "pass": true,
+    "selectionPass": true,
+    "executionPass": true,
+    "tags": [
+      "chat",
+      "negative"
+    ],
+    "failureMode": "passed",
+    "availableActions": [
+      "REPLY",
+      "IGNORE",
+      "NONE"
+    ],
+    "filteredActions": [
+      "MANAGE_LIFEOPS_BROWSER",
+      "BLOCK_WEBSITES",
+      "GET_WEBSITE_BLOCK_STATUS",
+      "REQUEST_WEBSITE_BLOCKING_PERMISSION",
+      "UNBLOCK_WEBSITES",
+      "BLOCK_UNTIL_TASK_COMPLETE",
+      "LIST_ACTIVE_BLOCKS",
+      "RELEASE_BLOCK",
+      "BLOCK_APPS",
+      "UNBLOCK_APPS",
+      "GET_APP_BLOCK_STATUS",
+      "CALENDAR_ACTION",
+      "GMAIL_ACTION",
+      "X_READ",
+      "INBOX",
+      "LIFE",
+      "UPDATE_OWNER_PROFILE",
+      "RUN_MORNING_CHECKIN",
+      "RUN_NIGHT_CHECKIN",
+      "RELATIONSHIP",
+      "SCREEN_TIME",
+      "GET_ACTIVITY_REPORT",
+      "GET_TIME_ON_APP",
+      "GET_TIME_ON_SITE",
+      "TWILIO_VOICE_CALL",
+      "CALL_USER",
+      "CALL_EXTERNAL",
+      "REMOTE_DESKTOP",
+      "START_REMOTE_SESSION",
+      "REVOKE_REMOTE_SESSION",
+      "LIST_REMOTE_SESSIONS",
+      "LIFEOPS_COMPUTER_USE",
+      "CROSS_CHANNEL_SEND",
+      "SEARCH_ACROSS_CHANNELS",
+      "PUBLISH_DEVICE_INTENT",
+      "INTENT_SYNC",
+      "PASSWORD_MANAGER",
+      "REQUEST_FIELD_FILL",
+      "ADD_AUTOFILL_WHITELIST",
+      "LIST_AUTOFILL_WHITELIST",
+      "CALENDLY",
+      "PROPOSE_MEETING_TIMES",
+      "CHECK_AVAILABILITY",
+      "UPDATE_MEETING_PREFERENCES",
+      "SCHEDULING",
+      "LIST_OVERDUE_FOLLOWUPS",
+      "MARK_FOLLOWUP_DONE",
+      "SET_FOLLOWUP_THRESHOLD",
+      "DOSSIER",
+      "GENERATE_DOSSIER",
+      "COMPUTE_TRAVEL_BUFFER",
+      "HEALTH",
+      "SUBSCRIPTIONS",
+      "REGISTER_BROWSER_SESSION",
+      "FETCH_BROWSER_ACTIVITY",
+      "CHOOSE_OPTION",
+      "PROCESS_KNOWLEDGE",
+      "SEARCH_KNOWLEDGE",
+      "ADD_CONTACT",
+      "REMOVE_CONTACT",
+      "SCHEDULE_FOLLOW_UP",
+      "SEARCH_CONTACTS",
+      "SEND_MESSAGE",
+      "UPDATE_CONTACT",
+      "UPDATE_ENTITY"
+    ]
+  }
+}

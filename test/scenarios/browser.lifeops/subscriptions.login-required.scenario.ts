@@ -17,7 +17,9 @@ export default scenario({
       type: "custom",
       name: "attach-fake-computeruse",
       apply: (ctx) => {
-        const runtime = ctx.runtime as { getService?: (serviceType: string) => unknown };
+        const runtime = ctx.runtime as {
+          getService?: (serviceType: string) => unknown;
+        };
         attachFakeSubscriptionComputerUse(
           runtime,
           new FakeSubscriptionComputerUseService("fixture_login_required"),
@@ -38,7 +40,7 @@ export default scenario({
       kind: "message",
       name: "cancel-login-required",
       room: "main",
-      text: "Cancel my Fixture Login Required subscription.",
+      text: "Cancel my Fixture Access Wall subscription.",
       responseIncludesAny: ["needs", "sign in", "cancellation"],
       assertTurn: (turn) => {
         const hit = turn.actionsCalled.find(
