@@ -149,7 +149,33 @@ export async function runRestoringSession(
   );
 
   if (!restoredActiveServer) {
-    // No saved backend found — let the user (re-)onboard.
+    // No saved backend. On web/mobile the backend lives at the same origin,
+    // so the probe's 3.5s budget is too tight for CF cold-starts, transient
+    // network hiccups, or Access cookie churn. Fall through to polling-backend
+    // with a default local target — that phase has a 30s budget with retry
+    // and will authoritatively determine whether onboarding is complete.
+    // Desktop keeps the original "no install found → show onboarding" path
+    // because there's no same-origin backend to probe further.
+    if (!isDesktop) {
+      const fallbackLocal = createPersistedActiveServer({ kind: "local" });
+      await applyRestoredConnection({
+        restoredActiveServer: fallbackLocal,
+        clientRef: client,
+      });
+      ctxRef.current = {
+        persistedActiveServer: null,
+        restoredActiveServer: fallbackLocal,
+        shouldPreserveCompletedOnboarding: preserveCompleted,
+        hadPriorOnboarding: hadPrior,
+      };
+      dispatch({
+        type: "SESSION_RESTORED",
+        target: activeServerToTarget(fallbackLocal.kind),
+      });
+      return;
+    }
+
+    // Desktop: let the user (re-)onboard.
     deps.setOnboardingOptions({
       names: [],
       styles: getStylePresets(deps.uiLanguage),
