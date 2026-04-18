@@ -173,8 +173,10 @@ jobs:
         # tarball doesn't ship dist/account-auth-service.js. Build the workspace
         # copy so the subpath import resolves during regression-matrix.
         run: |
-          if [ -d eliza/plugins/plugin-telegram ]; then
-            bun run --cwd eliza/plugins/plugin-telegram build
+          if [ -f eliza/plugins/plugin-telegram/package.json ] && grep -q '"build"' eliza/plugins/plugin-telegram/package.json; then
+            (cd eliza/plugins/plugin-telegram && bun run build)
+          else
+            echo "plugin-telegram package.json or build script missing; skipping workspace build"
           fi
 
       - name: Regression matrix contract

@@ -162,7 +162,7 @@ jobs:
               mkdir -p /tmp/tw_extract
               curl -sL "$TAILWIND_URL" | tar xz -C /tmp/tw_extract
               mv /tmp/tw_extract/package eliza/packages/app-core/node_modules/tailwindcss
-              echo "+ tailwindcss $(cat eliza/packages/app-core/node_modules/tailwindcss/package.json | node -e 'process.stdin.resume();let d=\"\";process.stdin.on(\"data\",c=>d+=c);process.stdin.on(\"end\",()=>console.log(JSON.parse(d).version))')"
+              echo "+ tailwindcss $(node -p "require('./eliza/packages/app-core/node_modules/tailwindcss/package.json').version")"
             else
               echo "WARN: could not resolve tailwindcss tarball URL"
             fi
