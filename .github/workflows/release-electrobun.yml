@@ -741,15 +741,15 @@ jobs:
           Write-Host "Extracted top-level structure:"
           Get-ChildItem -Path $extractDir -Recurse -Depth 3 | ForEach-Object { Write-Host "  $($_.FullName)" }
 
-          # Verify the expected milady-dist entry point exists
+          # Verify the expected eliza-dist entry point exists
           $appRoot = Get-ChildItem -Path $extractDir -Directory | Select-Object -First 1
           if ($appRoot) {
-            $entryCheck = Join-Path $appRoot.FullName "Resources\app\milady-dist\entry.js"
+            $entryCheck = Join-Path $appRoot.FullName "Resources\app\eliza-dist\entry.js"
             Write-Host "Checking for: $entryCheck"
             if (Test-Path $entryCheck) {
-              Write-Host "milady-dist/entry.js found"
+              Write-Host "eliza-dist/entry.js found"
             } else {
-              Write-Host "WARNING: milady-dist/entry.js NOT found"
+              Write-Host "WARNING: eliza-dist/entry.js NOT found"
               Write-Host "Resources/app contents:"
               $resApp = Join-Path $appRoot.FullName "Resources\app"
               if (Test-Path $resApp) {
