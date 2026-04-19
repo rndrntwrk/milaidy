@@ -1174,16 +1174,60 @@ jobs:
         shell: pwsh
         run: |
           $diagnosticsDir = Join-Path $PWD "apps/app/electrobun/artifacts/windows-smoke-diagnostics"
-          $startupLog = Join-Path $env:APPDATA "Milady\\milady-startup.log"
-          $wrapperRoot = Join-Path $env:LOCALAPPDATA "com.miladyai.milady"
+          $appDataRoot = if ($env:MILADY_TEST_WINDOWS_APPDATA_PATH) { $env:MILADY_TEST_WINDOWS_APPDATA_PATH } else { $env:APPDATA }
+          $localAppDataRoot = if ($env:MILADY_TEST_WINDOWS_LOCALAPPDATA_PATH) { $env:MILADY_TEST_WINDOWS_LOCALAPPDATA_PATH } else { $env:LOCALAPPDATA }
+          $startupLog = Join-Path $appDataRoot "Milady\milady-startup.log"
+          $wrapperRoot = Join-Path $localAppDataRoot "com.miladyai.milady"
+
+          Write-Host "Diagnostics roots:"
+          Write-Host "  appDataRoot      = $appDataRoot"
+          Write-Host "  localAppDataRoot = $localAppDataRoot"
+          Write-Host "  startupLog       = $startupLog"
+          Write-Host "  wrapperRoot      = $wrapperRoot"
 
           Remove-Item $diagnosticsDir -Recurse -Force -ErrorAction SilentlyContinue
           New-Item -ItemType Directory -Force -Path $diagnosticsDir | Out-Null
 
           if (Test-Path $startupLog) {
             Copy-Item $startupLog -Destination (Join-Path $diagnosticsDir "milady-startup.log") -Force
+            Write-Host "--- milady-startup.log ---"
+            Get-Content $startupLog -Tail 200 | ForEach-Object { Write-Host $_ }
+            Write-Host "--- end milady-startup.log ---"
           } else {
             Write-Warning "Windows startup log not found at $startupLog"
+            $miladyDir = Join-Path $appDataRoot "Milady"
+            if (Test-Path $miladyDir) {
+              Write-Host "Contents of $miladyDir :"
+              Get-ChildItem -Path $miladyDir -Recurse -File -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $($_.FullName)" }
+            }
+          }
+
+          foreach ($pattern in @("eliza-windows-smoke-*.state.json", "eliza-windows-smoke-*.events.jsonl", "milady-startup-trace-*.state.json")) {
+            $traceGlob = Join-Path $env:RUNNER_TEMP $pattern
+            $traceFiles = Get-ChildItem -Path $traceGlob -ErrorAction SilentlyContinue
+            if ($traceFiles) {
+              foreach ($f in $traceFiles) {
+                $dest = Join-Path $diagnosticsDir $f.Name
+                Copy-Item $f.FullName -Destination $dest -Force
+                Write-Host "--- startup-trace: $($f.Name) ---"
+                Get-Content $f.FullName -Tail 400 | ForEach-Object { Write-Host $_ }
+                Write-Host "--- end $($f.Name) ---"
+              }
+            }
+          }
+
+          # Also capture any startup-session.json bootstrap files inside the install root.
+          foreach ($root in @($wrapperRoot, "C:\\mi", "D:\\a\\_temp\\mi")) {
+            if (Test-Path $root) {
+              Get-ChildItem -Path $root -Recurse -File -Filter "startup-session.json" -ErrorAction SilentlyContinue |
+                ForEach-Object {
+                  $dest = Join-Path $diagnosticsDir ("startup-session-" + ($_.FullName -replace '[\\:]', '_') + ".json")
+                  Copy-Item $_.FullName -Destination $dest -Force
+                  Write-Host "--- $($_.FullName) ---"
+                  Get-Content $_.FullName | ForEach-Object { Write-Host $_ }
+                  Write-Host "--- end ---"
+                }
+            }
           }
 
           if (Test-Path $wrapperRoot) {
