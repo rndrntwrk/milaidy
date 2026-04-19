@@ -1,18 +1,39 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(here, "..");
 const target = path.resolve(
-  here,
-  "..",
+  repoRoot,
   "eliza",
   "packages",
   "app-core",
   "scripts",
   "copy-runtime-node-modules.ts",
 );
+
+const elizaAppCoreDir = path.resolve(
+  repoRoot,
+  "eliza",
+  "packages",
+  "app-core",
+);
+const elizaAppCoreNodeModules = path.join(elizaAppCoreDir, "node_modules");
+const miladyRootNodeModules = path.join(repoRoot, "node_modules");
+
+if (
+  !fs.existsSync(elizaAppCoreNodeModules) &&
+  fs.existsSync(miladyRootNodeModules) &&
+  fs.existsSync(elizaAppCoreDir)
+) {
+  fs.symlinkSync(miladyRootNodeModules, elizaAppCoreNodeModules, "dir");
+  console.log(
+    `[copy-runtime-node-modules wrapper] linked ${elizaAppCoreNodeModules} -> ${miladyRootNodeModules}`,
+  );
+}
 
 const cwd = process.cwd();
 const pathFlags = new Set(["--scan-dir", "--target-dist"]);
