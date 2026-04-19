@@ -629,6 +629,11 @@ jobs:
           ELIZA_ELECTROBUN_NOTARIZE: 0
           ELECTROBUN_REAL_XCRUN: /usr/bin/xcrun
           ELECTROBUN_REAL_ZIP: /usr/bin/zip
+          # Flat release root rsynced to releases@milady.ai:/var/www/releases/
+          # by the upload step below. Env is encoded in the platform prefix
+          # (canary-macos-arm64-update.json etc.), so the baseUrl has no env
+          # subdir. Enables Electrobun's release.generatePatch flow.
+          ELIZA_RELEASE_URL: https://releases.milady.ai/
 
       # Inject version.json into the packaged Resources directory.
       # The bun entry getVersionInfo() reads ../Resources/version.json and
