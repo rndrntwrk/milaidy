@@ -92,6 +92,10 @@ export function copyLegacyScriptsCompatDir(sourceDir, targetDir) {
     const sourcePath = path.join(sourceDir, entry.name);
     const targetPath = path.join(targetDir, entry.name);
 
+    if (fs.existsSync(targetPath)) {
+      continue;
+    }
+
     if (entry.name === "smoke-test-windows.ps1") {
       writeLegacyWindowsSmokeScript(sourcePath, targetPath);
       continue;
@@ -151,12 +155,17 @@ export function ensureLegacyElectrobunCompatDir({
         continue;
       }
 
-      if (fs.existsSync(targetPath)) {
+      // The scripts dir often already exists (because ensure-whisper-model.sh
+      // is git-tracked under apps/app/electrobun/scripts/), but its other
+      // wrapper files (hdiutil-wrapper.sh, xcrun-wrapper.sh, zip-wrapper.sh)
+      // are NOT tracked and must be merged in. copyScriptsDir handles a
+      // pre-existing target dir and skips already-present entries.
+      if (entry.name === "scripts") {
+        copyScriptsDir(sourcePath, targetPath);
         continue;
       }
 
-      if (entry.name === "scripts") {
-        copyScriptsDir(sourcePath, targetPath);
+      if (fs.existsSync(targetPath)) {
         continue;
       }
 
