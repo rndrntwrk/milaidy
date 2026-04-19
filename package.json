@@ -123,6 +123,8 @@
     "workspace:prepare": "bun eliza/packages/app-core/scripts/workspace-prepare.mjs",
     "milady": "bun eliza/packages/app-core/scripts/run-node.mjs",
     "train": "bun eliza/apps/app-training/src/cli/train.ts",
+    "action:trajectories-to-dataset": "node scripts/benchmark-to-training-dataset.mjs",
+    "action:optimize-planner": "node scripts/optimize-action-planner.mjs",
     "postinstall": "node eliza/packages/app-core/scripts/run-repo-setup.mjs",
     "setup:sync": "node eliza/packages/app-core/scripts/run-repo-setup.mjs",
     "pre-review:local": "bun eliza/packages/app-core/scripts/pre-review-local.mjs",

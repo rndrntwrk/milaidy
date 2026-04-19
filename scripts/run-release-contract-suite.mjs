@@ -182,7 +182,10 @@ export function ensureLegacyElectrobunCompatDir({
     // canonical paths, the legacy paths resolve correctly.
     for (const dirName of ["build", "artifacts"]) {
       const link = path.join(legacyDir, dirName);
-      if (fs.existsSync(link) || fs.lstatSync(link, { throwIfNoEntry: false })) {
+      if (
+        fs.existsSync(link) ||
+        fs.lstatSync(link, { throwIfNoEntry: false })
+      ) {
         continue;
       }
       const canonical = path.join(canonicalDir, dirName);

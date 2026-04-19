@@ -15,12 +15,7 @@ const target = path.resolve(
   "copy-runtime-node-modules.ts",
 );
 
-const elizaAppCoreDir = path.resolve(
-  repoRoot,
-  "eliza",
-  "packages",
-  "app-core",
-);
+const elizaAppCoreDir = path.resolve(repoRoot, "eliza", "packages", "app-core");
 const elizaPackagesDir = path.resolve(repoRoot, "eliza", "packages");
 const elizaAppCoreNodeModules = path.join(elizaAppCoreDir, "node_modules");
 const elizaPackagesNodeModules = path.join(elizaPackagesDir, "node_modules");
@@ -34,7 +29,9 @@ const miladyRootNodeModules = path.join(repoRoot, "node_modules");
 // symlinks rather than a single bulk symlink so that:
 //   - enhanced-resolve walking up from src/styles/ finds tailwindcss et al.
 //   - copy-runtime-node-modules can stat .bun and per-package dirs directly.
-function populateNodeModules(targetDir: string): { directCount: number; scopedCount: number } | null {
+function populateNodeModules(
+  targetDir: string,
+): { directCount: number; scopedCount: number } | null {
   const stat = fs.lstatSync(targetDir, { throwIfNoEntry: false });
   if (stat?.isSymbolicLink()) {
     fs.unlinkSync(targetDir);
@@ -44,7 +41,9 @@ function populateNodeModules(targetDir: string): { directCount: number; scopedCo
 
   fs.mkdirSync(targetDir, { recursive: true });
 
-  const entries = fs.readdirSync(miladyRootNodeModules, { withFileTypes: true });
+  const entries = fs.readdirSync(miladyRootNodeModules, {
+    withFileTypes: true,
+  });
   let scopedCount = 0;
   let directCount = 0;
   for (const entry of entries) {
@@ -67,7 +66,11 @@ function populateNodeModules(targetDir: string): { directCount: number; scopedCo
       const dest = path.join(targetDir, entry.name);
       if (fs.existsSync(dest)) continue;
       try {
-        fs.symlinkSync(path.join(miladyRootNodeModules, entry.name), dest, "dir");
+        fs.symlinkSync(
+          path.join(miladyRootNodeModules, entry.name),
+          dest,
+          "dir",
+        );
         directCount += 1;
       } catch {
         // entry already exists or perms; skip silently
