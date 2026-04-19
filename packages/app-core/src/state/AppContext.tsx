@@ -97,6 +97,7 @@ import {
   invokeDesktopBridgeRequest,
   invokeDesktopBridgeRequestWithTimeout,
   isElectrobunRuntime,
+  isWeb,
   scanProviderCredentials,
 } from "../bridge";
 import {
@@ -7250,10 +7251,21 @@ function AppProviderInner({
       if (cancelled) {
         return;
       }
+      // Web browsers always target the same-origin backend — there is no
+      // filesystem to inspect, no install to detect. If persistence/probe
+      // didn't resolve anything, default to a local target so the backend
+      // poll below gets to call /api/onboarding/status (30s budget, retries)
+      // instead of the legacy short-circuit that bails straight to the
+      // onboarding wizard. Cloud/remote targets are established via the
+      // persisted path, so this only kicks in for fresh browser visits.
+      // Desktop (Electrobun) already flips via shouldPreferLocalBootstrap.
+      // Native (iOS/Android Capacitor) is cloud-only and keeps the original
+      // "show onboarding when no connection" path since there is no
+      // embedded-local runtime to reach.
       const restoredConnection =
         persistedConnection ??
         probedConnection?.connection ??
-        (shouldPreferLocalBootstrap ? { runMode: "local" } : null);
+        (shouldPreferLocalBootstrap || isWeb() ? { runMode: "local" } : null);
       const shouldPreserveCompletedOnboarding =
         persistedOnboardingCompleteAtStartup &&
         !onboardingCompletionCommittedRef.current;
