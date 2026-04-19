@@ -52,14 +52,20 @@ jobs:
             bun-${{ runner.os }}-
 
       - name: Run Docker CI smoke path
+        timeout-minutes: 45
         run: bash eliza/packages/app-core/scripts/docker-ci-smoke.sh --tag gha-${{ github.run_id }}
 
-      - name: Upload container logs + inspect on failure
-        if: failure()
+      # always() ensures artifacts upload even when the previous step times
+      # out or is cancelled — previously we lost container logs every time
+      # because the upload step was skipped on timeout.
+      - name: Upload container logs + inspect
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: docker-ci-smoke-artifacts-${{ github.run_id }}
-          path: .tmp/qa/docker-ci-smoke-*
+          path: |
+            .tmp/qa/docker-ci-smoke-*
+            /tmp/milady-docker-*.txt
           if-no-files-found: warn
           retention-days: 7
 
