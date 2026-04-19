@@ -303,6 +303,11 @@ jobs:
       - name: Build @elizaos/core dist (required by dev-stack imports)
         shell: bash
         run: |
+          # Run bun's own postinstall (skipped by --ignore-scripts) so its
+          # runtime-embedded build plugins can execute.
+          if [ -d node_modules/bun ] && [ -f node_modules/bun/install.js ]; then
+            (cd node_modules/bun && node install.js) || true
+          fi
           if [ -d eliza/packages/schemas ] && [ -f eliza/packages/schemas/buf.gen.yaml ] && [ ! -d eliza/packages/typescript/src/types/generated ]; then
             cd eliza/packages/schemas
             bunx @bufbuild/buf@1.67.0 generate
@@ -353,6 +358,11 @@ jobs:
       - name: Build @elizaos/core dist (required by dev-stack imports)
         shell: bash
         run: |
+          # Run bun's own postinstall (skipped by --ignore-scripts) so its
+          # runtime-embedded build plugins can execute.
+          if [ -d node_modules/bun ] && [ -f node_modules/bun/install.js ]; then
+            (cd node_modules/bun && node install.js) || true
+          fi
           if [ -d eliza/packages/schemas ] && [ -f eliza/packages/schemas/buf.gen.yaml ] && [ ! -d eliza/packages/typescript/src/types/generated ]; then
             cd eliza/packages/schemas
             bunx @bufbuild/buf@1.67.0 generate
