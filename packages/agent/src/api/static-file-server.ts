@@ -142,7 +142,6 @@ export function injectApiBaseIntoHtml(
 ): Buffer {
   const trimmedBase = externalBase?.trim();
   const trimmedToken = opts?.apiToken?.trim();
-  if (!trimmedBase && !trimmedToken) return html;
 
   const headCloseTag = "</head>";
   const headCloseIndex = html.indexOf(headCloseTag);
@@ -150,11 +149,27 @@ export function injectApiBaseIntoHtml(
 
   const parts: string[] = [];
   if (trimmedBase) {
+    // Explicit reverse-proxy base — pin both namespaces to the injected URL.
     parts.push(`window.__ELIZA_API_BASE__=${JSON.stringify(trimmedBase)};`);
+    parts.push(`window.__MILADY_API_BASE__=${JSON.stringify(trimmedBase)};`);
+  } else {
+    // No reverse-proxy base but the SPA is being served by the agent itself,
+    // which means the /api/* endpoints are colocated at the same origin as
+    // this HTML. Set __MILADY_API_BASE__ to window.location.origin so
+    // shouldUseCloudOnlyBranding() (apps/app/src/cloud-only.ts) sees an
+    // injected API base and flips branding.cloudOnly to false. Without this
+    // marker, the SPA defaults to the cloud-only hosted-web posture and
+    // routes fresh visitors into the onboarding wizard instead of hitting
+    // /api/onboarding/status same-origin — the bug that kept showing up on
+    // alice.rndrntwrk.com fresh incognito sessions.
+    parts.push(
+      "window.__MILADY_API_BASE__=window.__MILADY_API_BASE__||window.location.origin;",
+    );
   }
   if (trimmedToken) {
     parts.push(`window.__ELIZA_API_TOKEN__=${JSON.stringify(trimmedToken)};`);
   }
+  if (parts.length === 0) return html;
   const injection = Buffer.from(`<script>${parts.join("")}</script>`);
 
   return Buffer.concat([

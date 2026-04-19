@@ -7250,10 +7250,29 @@ function AppProviderInner({
       if (cancelled) {
         return;
       }
+      // When the host has declared a same-origin backend (branding.cloudOnly
+      // === false, which shouldUseCloudOnlyBranding flips when an API base is
+      // injected by the shell), default to a local target so the backend poll
+      // below gets to call /api/onboarding/status (30s budget, retries)
+      // instead of the legacy short-circuit that bails straight to the
+      // onboarding wizard. This handles agent-colocated SPAs like alice-bot
+      // where the /api/* endpoints always exist at the same origin as the
+      // served HTML.
+      //
+      // The cloud-only web bundle (app.milady.ai style hosted distribution)
+      // keeps its original behavior: branding.cloudOnly stays true (no API
+      // base injected), restoredConnection stays null on fresh visits, and
+      // the onboarding/connection flow runs so the user can wire up a cloud
+      // or remote backend. Same for iOS/Android Capacitor (always cloud-only).
+      //
+      // Desktop (Electrobun) is unaffected — shouldPreferLocalBootstrap
+      // already covers it.
       const restoredConnection =
         persistedConnection ??
         probedConnection?.connection ??
-        (shouldPreferLocalBootstrap ? { runMode: "local" } : null);
+        (shouldPreferLocalBootstrap || brandingOverride?.cloudOnly === false
+          ? { runMode: "local" }
+          : null);
       const shouldPreserveCompletedOnboarding =
         persistedOnboardingCompleteAtStartup &&
         !onboardingCompletionCommittedRef.current;
