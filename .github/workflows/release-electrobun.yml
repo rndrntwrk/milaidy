@@ -867,6 +867,14 @@ jobs:
           ELIZA_TEST_WINDOWS_LAUNCHER_DIR: ${{ runner.temp }}\milady-windows-ui-launcher
           MILADY_TEST_WINDOWS_LAUNCHER_PATH_FILE: ${{ runner.temp }}\milady-windows-ui-launcher.txt
           ELIZA_TEST_WINDOWS_LAUNCHER_PATH_FILE: ${{ runner.temp }}\milady-windows-ui-launcher.txt
+          # Inno installer (ElizaOSApp-Setup-*.exe) is built into apps/app/electrobun/artifacts;
+          # the smoke script's default path points to eliza/packages/app-core/platforms/electrobun/artifacts
+          # which only contains the legacy electrobun-built zip. Steer the script at the canonical
+          # Inno installer dir so the right .exe is selected for the install/launch test.
+          MILADY_TEST_WINDOWS_ARTIFACTS_DIR: ${{ github.workspace }}\apps\app\electrobun\artifacts
+          ELIZA_TEST_WINDOWS_ARTIFACTS_DIR: ${{ github.workspace }}\apps\app\electrobun\artifacts
+          MILADY_TEST_WINDOWS_BUILD_DIR: ${{ github.workspace }}\apps\app\electrobun\build
+          ELIZA_TEST_WINDOWS_BUILD_DIR: ${{ github.workspace }}\apps\app\electrobun\build
         run: |
           Remove-Item $env:MILADY_TEST_WINDOWS_INSTALL_DIR -Recurse -Force -ErrorAction SilentlyContinue
           Remove-Item $env:MILADY_TEST_WINDOWS_LAUNCHER_DIR -Recurse -Force -ErrorAction SilentlyContinue
