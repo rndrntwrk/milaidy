@@ -52,14 +52,30 @@ jobs:
             bun-${{ runner.os }}-
 
       - name: Run Docker CI smoke path
-        timeout-minutes: 45
+        timeout-minutes: 30
         run: bash eliza/packages/app-core/scripts/docker-ci-smoke.sh --tag gha-${{ github.run_id }}
 
-      # always() ensures artifacts upload even when the previous step times
-      # out or is cancelled — previously we lost container logs every time
-      # because the upload step was skipped on timeout.
+      # Inline log capture runs even when the main step hit SIGTERM.
+      # Use !cancelled() so it fires on normal failure + timeout but not on
+      # an explicit workflow cancellation.
+      - name: Dump container log + inspect (inline)
+        if: ${{ !cancelled() && failure() }}
+        timeout-minutes: 2
+        run: |
+          echo "::group::Docker containers"
+          docker ps -a
+          echo "::endgroup::"
+          for C in $(docker ps -a --format '{{.Names}}' | grep '^eliza-docker-smoke-' || true); do
+            echo "::group::docker logs $C"
+            timeout 30 docker logs "$C" 2>&1 || echo "(docker logs timed out)"
+            echo "::endgroup::"
+            echo "::group::docker inspect $C (state)"
+            timeout 15 docker inspect "$C" --format '{{json .State}}' 2>&1 | python3 -m json.tool || true
+            echo "::endgroup::"
+          done
+
       - name: Upload container logs + inspect
-        if: always()
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
           name: docker-ci-smoke-artifacts-${{ github.run_id }}
