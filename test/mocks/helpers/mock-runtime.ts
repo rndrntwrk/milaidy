@@ -10,10 +10,7 @@ import {
   type StartedMocks,
   startMocks,
 } from "../scripts/start-mocks.ts";
-import {
-  type BenchmarkRuntimeFixturesEnvironment,
-  createBenchmarkRuntimeFixturesEnvironment,
-} from "./benchmark-runtime-fixtures.ts";
+import { createBenchmarkRuntimeFixturesEnvironment } from "./benchmark-runtime-fixtures.ts";
 import { seedBenchmarkLifeOpsFixtures } from "./seed-benchmark-fixtures.ts";
 import {
   seedGoogleConnectorGrant,
