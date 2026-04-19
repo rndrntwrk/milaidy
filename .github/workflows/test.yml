@@ -296,6 +296,21 @@ jobs:
       - name: Restore eliza workspace paths for repo scripts
         run: node scripts/restore-local-eliza-workspace.mjs
 
+      - name: Re-link workspace after restore (ensures @elizaos/* symlinks in eliza/)
+        shell: bash
+        run: bun install --no-frozen-lockfile --ignore-scripts
+
+      - name: Build @elizaos/core dist (required by dev-stack imports)
+        shell: bash
+        run: |
+          if [ -d eliza/packages/schemas ] && [ -f eliza/packages/schemas/buf.gen.yaml ] && [ ! -d eliza/packages/typescript/src/types/generated ]; then
+            cd eliza/packages/schemas
+            bunx @bufbuild/buf@1.67.0 generate
+            cd -
+          fi
+          cd eliza/packages/typescript
+          bun run build:node
+
       - name: Run website blocker startup smokes
         run: bun run test:selfcontrol:startup
 
@@ -330,6 +345,21 @@ jobs:
 
       - name: Restore eliza workspace paths for repo scripts
         run: node scripts/restore-local-eliza-workspace.mjs
+
+      - name: Re-link workspace after restore (ensures @elizaos/* symlinks)
+        shell: bash
+        run: bun install --no-frozen-lockfile --ignore-scripts
+
+      - name: Build @elizaos/core dist (required by dev-stack imports)
+        shell: bash
+        run: |
+          if [ -d eliza/packages/schemas ] && [ -f eliza/packages/schemas/buf.gen.yaml ] && [ ! -d eliza/packages/typescript/src/types/generated ]; then
+            cd eliza/packages/schemas
+            bunx @bufbuild/buf@1.67.0 generate
+            cd -
+          fi
+          cd eliza/packages/typescript
+          bun run build:node
 
       - name: Build
         run: bun run build
@@ -735,6 +765,23 @@ jobs:
       - name: Restore eliza workspace paths for repo scripts
         if: steps.provider-check.outputs.skip != 'true'
         run: node scripts/restore-local-eliza-workspace.mjs
+
+      - name: Re-link workspace after restore (ensures @elizaos/* symlinks)
+        if: steps.provider-check.outputs.skip != 'true'
+        shell: bash
+        run: bun install --no-frozen-lockfile --ignore-scripts
+
+      - name: Build @elizaos/core dist (required by dev-stack imports)
+        if: steps.provider-check.outputs.skip != 'true'
+        shell: bash
+        run: |
+          if [ -d eliza/packages/schemas ] && [ -f eliza/packages/schemas/buf.gen.yaml ] && [ ! -d eliza/packages/typescript/src/types/generated ]; then
+            cd eliza/packages/schemas
+            bunx @bufbuild/buf@1.67.0 generate
+            cd -
+          fi
+          cd eliza/packages/typescript
+          bun run build:node
 
       - name: Install Electrobun runtime dependencies
         if: steps.provider-check.outputs.skip != 'true'
