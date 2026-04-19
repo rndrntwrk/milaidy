@@ -298,7 +298,10 @@ jobs:
 
       - name: Re-link workspace after restore (ensures @elizaos/* symlinks in eliza/)
         shell: bash
-        run: bun install --no-frozen-lockfile --ignore-scripts
+        env:
+          SKIP_AVATAR_CLONE: "1"
+          MILADY_NO_VISION_DEPS: "1"
+        run: bun install --no-frozen-lockfile
 
       - name: Build @elizaos/core dist (required by dev-stack imports)
         shell: bash
@@ -353,7 +356,10 @@ jobs:
 
       - name: Re-link workspace after restore (ensures @elizaos/* symlinks)
         shell: bash
-        run: bun install --no-frozen-lockfile --ignore-scripts
+        env:
+          SKIP_AVATAR_CLONE: "1"
+          MILADY_NO_VISION_DEPS: "1"
+        run: bun install --no-frozen-lockfile
 
       - name: Build @elizaos/core dist (required by dev-stack imports)
         shell: bash
@@ -779,7 +785,10 @@ jobs:
       - name: Re-link workspace after restore (ensures @elizaos/* symlinks)
         if: steps.provider-check.outputs.skip != 'true'
         shell: bash
-        run: bun install --no-frozen-lockfile --ignore-scripts
+        env:
+          SKIP_AVATAR_CLONE: "1"
+          MILADY_NO_VISION_DEPS: "1"
+        run: bun install --no-frozen-lockfile
 
       - name: Build @elizaos/core dist (required by dev-stack imports)
         if: steps.provider-check.outputs.skip != 'true'
