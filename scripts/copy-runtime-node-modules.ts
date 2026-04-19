@@ -21,7 +21,9 @@ const elizaAppCoreDir = path.resolve(
   "packages",
   "app-core",
 );
+const elizaPackagesDir = path.resolve(repoRoot, "eliza", "packages");
 const elizaAppCoreNodeModules = path.join(elizaAppCoreDir, "node_modules");
+const elizaPackagesNodeModules = path.join(elizaPackagesDir, "node_modules");
 const miladyRootNodeModules = path.join(repoRoot, "node_modules");
 
 // In disable-local-eliza-workspace mode the eliza/ tree is restored *after*
@@ -32,22 +34,15 @@ const miladyRootNodeModules = path.join(repoRoot, "node_modules");
 // symlinks rather than a single bulk symlink so that:
 //   - enhanced-resolve walking up from src/styles/ finds tailwindcss et al.
 //   - copy-runtime-node-modules can stat .bun and per-package dirs directly.
-function ensureAppCoreNodeModules() {
-  if (
-    !fs.existsSync(miladyRootNodeModules) ||
-    !fs.existsSync(elizaAppCoreDir)
-  ) {
-    return;
-  }
-
-  const stat = fs.lstatSync(elizaAppCoreNodeModules, { throwIfNoEntry: false });
+function populateNodeModules(targetDir: string): { directCount: number; scopedCount: number } | null {
+  const stat = fs.lstatSync(targetDir, { throwIfNoEntry: false });
   if (stat?.isSymbolicLink()) {
-    fs.unlinkSync(elizaAppCoreNodeModules);
+    fs.unlinkSync(targetDir);
   } else if (stat?.isDirectory()) {
-    return;
+    return null;
   }
 
-  fs.mkdirSync(elizaAppCoreNodeModules, { recursive: true });
+  fs.mkdirSync(targetDir, { recursive: true });
 
   const entries = fs.readdirSync(miladyRootNodeModules, { withFileTypes: true });
   let scopedCount = 0;
@@ -55,7 +50,7 @@ function ensureAppCoreNodeModules() {
   for (const entry of entries) {
     if (entry.name.startsWith("@")) {
       const scopeSrc = path.join(miladyRootNodeModules, entry.name);
-      const scopeDest = path.join(elizaAppCoreNodeModules, entry.name);
+      const scopeDest = path.join(targetDir, entry.name);
       fs.mkdirSync(scopeDest, { recursive: true });
       const scopeEntries = fs.readdirSync(scopeSrc, { withFileTypes: true });
       for (const sub of scopeEntries) {
@@ -69,7 +64,7 @@ function ensureAppCoreNodeModules() {
         }
       }
     } else {
-      const dest = path.join(elizaAppCoreNodeModules, entry.name);
+      const dest = path.join(targetDir, entry.name);
       if (fs.existsSync(dest)) continue;
       try {
         fs.symlinkSync(path.join(miladyRootNodeModules, entry.name), dest, "dir");
@@ -79,12 +74,29 @@ function ensureAppCoreNodeModules() {
       }
     }
   }
-  console.log(
-    `[copy-runtime-node-modules wrapper] populated ${elizaAppCoreNodeModules} with ${directCount} top-level + ${scopedCount} scoped symlinks from ${miladyRootNodeModules}`,
-  );
+  return { directCount, scopedCount };
 }
 
-ensureAppCoreNodeModules();
+function ensureMirroredNodeModules() {
+  if (!fs.existsSync(miladyRootNodeModules)) {
+    return;
+  }
+
+  for (const [containerDir, target] of [
+    [elizaAppCoreDir, elizaAppCoreNodeModules],
+    [elizaPackagesDir, elizaPackagesNodeModules],
+  ] as const) {
+    if (!fs.existsSync(containerDir)) continue;
+    const result = populateNodeModules(target);
+    if (result) {
+      console.log(
+        `[copy-runtime-node-modules wrapper] populated ${target} with ${result.directCount} top-level + ${result.scopedCount} scoped symlinks from ${miladyRootNodeModules}`,
+      );
+    }
+  }
+}
+
+ensureMirroredNodeModules();
 
 const cwd = process.cwd();
 const pathFlags = new Set(["--scan-dir", "--target-dist"]);
