@@ -172,19 +172,23 @@ export function ensureLegacyElectrobunCompatDir({
       copyEntry(sourcePath, targetPath);
     }
 
-    // The build/ dir doesn't exist yet (electrobun creates it during the
-    // build step), but release-electrobun.yml hard-codes
-    // `apps/app/electrobun/build` in its post-build steps (find Resources,
-    // sign-windows.ps1, MSIX, version.json injection). Pre-create a
-    // dangling symlink so once electrobun writes to canonical/build,
-    // those paths resolve correctly. Skip if anything is already there
-    // (build dir from a prior run, or an existing symlink).
-    const buildLink = path.join(legacyDir, "build");
-    if (!fs.existsSync(buildLink) && !fs.lstatSync(buildLink, { throwIfNoEntry: false })) {
-      const canonicalBuild = path.join(canonicalDir, "build");
+    // The build/ and artifacts/ dirs don't exist yet (electrobun creates
+    // them during the build / artifact-staging steps), but
+    // release-electrobun.yml hard-codes `apps/app/electrobun/build` and
+    // `apps/app/electrobun/artifacts` in its post-build steps (find
+    // Resources, sign-windows.ps1, MSIX, version.json injection,
+    // stage-macos-release-artifacts.sh, upload-artifact globs).
+    // Pre-create dangling symlinks so once electrobun writes to the
+    // canonical paths, the legacy paths resolve correctly.
+    for (const dirName of ["build", "artifacts"]) {
+      const link = path.join(legacyDir, dirName);
+      if (fs.existsSync(link) || fs.lstatSync(link, { throwIfNoEntry: false })) {
+        continue;
+      }
+      const canonical = path.join(canonicalDir, dirName);
       fs.symlinkSync(
-        path.relative(legacyDir, canonicalBuild),
-        buildLink,
+        path.relative(legacyDir, canonical),
+        link,
         process.platform === "win32" ? "junction" : "dir",
       );
     }
