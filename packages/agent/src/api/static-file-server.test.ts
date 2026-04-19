@@ -30,6 +30,36 @@ describe("injectApiBaseIntoHtml", () => {
     expect(injected).toContain("window.__ELIZA_API_TOKEN__");
     expect(withoutToken).not.toContain("window.__ELIZA_API_TOKEN__");
   });
+
+  it("declares same-origin as the API base when no explicit base is provided", () => {
+    // Agent-colocated SPA (e.g. alice-bot): /api/* lives at the same origin
+    // as the served HTML. The injected marker tells shouldUseCloudOnlyBranding
+    // the SPA is not cloud-only, so the startup path calls the same-origin
+    // /api/onboarding/status instead of routing fresh visitors to onboarding.
+    const html = Buffer.from("<html><head></head><body></body></html>");
+    const out = injectApiBaseIntoHtml(html, null).toString("utf8");
+    expect(out).toContain("window.__MILADY_API_BASE__");
+    expect(out).toContain("window.location.origin");
+    // Uses a `||` guard so an already-set value (e.g. from a shell preload)
+    // is not clobbered.
+    expect(out).toContain("window.__MILADY_API_BASE__||window.location.origin");
+  });
+
+  it("pins both namespaces when an explicit base is provided", () => {
+    const html = Buffer.from("<html><head></head><body></body></html>");
+    const out = injectApiBaseIntoHtml(
+      html,
+      "https://proxy.example.com/p/42",
+    ).toString("utf8");
+    expect(out).toContain(
+      'window.__ELIZA_API_BASE__="https://proxy.example.com/p/42"',
+    );
+    expect(out).toContain(
+      'window.__MILADY_API_BASE__="https://proxy.example.com/p/42"',
+    );
+    // Same-origin default does NOT fire when an explicit base is given.
+    expect(out).not.toContain("window.location.origin");
+  });
 });
 
 describe("injectBaseHrefIntoHtml", () => {
