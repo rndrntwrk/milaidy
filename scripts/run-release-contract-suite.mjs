@@ -172,6 +172,23 @@ export function ensureLegacyElectrobunCompatDir({
       copyEntry(sourcePath, targetPath);
     }
 
+    // The build/ dir doesn't exist yet (electrobun creates it during the
+    // build step), but release-electrobun.yml hard-codes
+    // `apps/app/electrobun/build` in its post-build steps (find Resources,
+    // sign-windows.ps1, MSIX, version.json injection). Pre-create a
+    // dangling symlink so once electrobun writes to canonical/build,
+    // those paths resolve correctly. Skip if anything is already there
+    // (build dir from a prior run, or an existing symlink).
+    const buildLink = path.join(legacyDir, "build");
+    if (!fs.existsSync(buildLink) && !fs.lstatSync(buildLink, { throwIfNoEntry: false })) {
+      const canonicalBuild = path.join(canonicalDir, "build");
+      fs.symlinkSync(
+        path.relative(legacyDir, canonicalBuild),
+        buildLink,
+        process.platform === "win32" ? "junction" : "dir",
+      );
+    }
+
     writeWrapper(
       path.join(legacyDir, "electrobun.config.ts"),
       canonicalConfigImportPath,
