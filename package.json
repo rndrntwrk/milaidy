@@ -162,7 +162,7 @@
     "test:e2e:all": "node eliza/packages/app-core/scripts/run-with-env.mjs MILADY_LIVE_TEST=1 ELIZA_LIVE_TEST=1 -- bunx vitest run --config test/vitest/live-e2e.config.ts --no-cache",
     "test:action-e2e": "MILADY_LIVE_TEST=1 ELIZA_LIVE_TEST=1 bunx vitest run --config test/vitest/live-e2e.config.ts eliza/packages/app-core/test/live-agent/action-invocation.live.e2e.test.ts",
     "test:benchmark:actions": "MILADY_LIVE_TEST=1 ELIZA_LIVE_TEST=1 bunx vitest run --config test/vitest/real.config.ts eliza/packages/app-core/test/benchmarks/action-selection.real.test.ts",
-    "test:benchmark:actions:mocked": "MILADY_LIVE_TEST=1 ELIZA_LIVE_TEST=1 MILADY_BENCHMARK_USE_MOCKS=1 MILADY_DUMP_TRAJECTORIES=1 bunx vitest run --config test/vitest/real.config.ts eliza/packages/app-core/test/benchmarks/action-selection.real.test.ts",
+    "test:benchmark:actions:mocked": "MILADY_LIVE_TEST=1 ELIZA_LIVE_TEST=1 MILADY_BENCHMARK_USE_MOCKS=1 MILADY_DUMP_TRAJECTORIES=1 MILADY_BENCHMARK_CASE_PAUSE_MS=1500 bunx vitest run --config test/vitest/real.config.ts eliza/packages/app-core/test/benchmarks/action-selection.real.test.ts",
     "lifeops:benchmark:prompts": "bun eliza/packages/app-core/scripts/run-node-tsx.mjs eliza/packages/app-core/scripts/lifeops-prompt-benchmark.ts",
     "lifeops:benchmark:prompts:self-care": "bun eliza/packages/app-core/scripts/run-node-tsx.mjs eliza/packages/app-core/scripts/lifeops-prompt-benchmark.ts --suite self-care",
     "lifeops:benchmark:prompts:executive-assistant": "bun eliza/packages/app-core/scripts/run-node-tsx.mjs eliza/packages/app-core/scripts/lifeops-prompt-benchmark.ts --suite executive-assistant",
