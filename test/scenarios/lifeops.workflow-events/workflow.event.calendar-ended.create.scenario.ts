@@ -77,9 +77,9 @@ export default scenario({
       expectedStatus: 201,
       assertResponse: assertApiBody({
         includesAll: [
-          "\"triggerType\":\"event\"",
-          "\"kind\":\"event\"",
-          "\"eventKind\":\"calendar.event.ended\"",
+          '"triggerType":"event"',
+          '"kind":"event"',
+          '"eventKind":"calendar.event.ended"',
         ],
       }),
     },
@@ -90,10 +90,7 @@ export default scenario({
       path: "/api/lifeops/workflows",
       expectedStatus: 200,
       assertResponse: assertApiBody({
-        includesAll: [
-          "Post-meeting summary",
-          "calendar.event.ended",
-        ],
+        includesAll: ["Post-meeting summary", "calendar.event.ended"],
       }),
     },
   ],

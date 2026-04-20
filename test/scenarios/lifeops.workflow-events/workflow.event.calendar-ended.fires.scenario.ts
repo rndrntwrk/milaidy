@@ -48,7 +48,8 @@ interface RuntimeLike {
 
 export default scenario({
   id: "workflow.event.calendar-ended.fires",
-  title: "Event-triggered workflow fires when a synced event's end time has passed",
+  title:
+    "Event-triggered workflow fires when a synced event's end time has passed",
   domain: "lifeops.workflow-events",
   tags: ["lifeops", "workflow", "event-trigger"],
   isolation: "per-scenario",

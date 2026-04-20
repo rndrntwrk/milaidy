@@ -18,7 +18,7 @@
  * found (so CI can gate on it).
  */
 
-import { readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -220,7 +220,7 @@ function findViolations(action, source) {
   // Required fields
   for (const field of ["description", "similes", "handler", "validate"]) {
     // Match both `field:` (explicit) and `field,` / `field\n}` (shorthand
-     // where the property name equals the local variable name).
+    // where the property name equals the local variable name).
     if (!new RegExp(`\\b${field}\\s*[:,}\\n]`).test(block)) {
       violations.push({
         severity: field === "validate" ? "medium" : "high",
@@ -311,7 +311,9 @@ function findViolations(action, source) {
   }
 
   // Regex on handler-local text.
-  const regexOnText = block.match(/\/[^\n/]+\/[gimsuy]*\s*\.\s*(test|match|exec)\s*\(/);
+  const regexOnText = block.match(
+    /\/[^\n/]+\/[gimsuy]*\s*\.\s*(test|match|exec)\s*\(/,
+  );
   if (regexOnText) {
     violations.push({
       severity: "medium",
@@ -352,10 +354,14 @@ function main() {
 
   rows.sort((a, b) => {
     const aMax = Math.min(
-      ...(a.violations.length ? a.violations.map((v) => severityRank(v.severity)) : [4]),
+      ...(a.violations.length
+        ? a.violations.map((v) => severityRank(v.severity))
+        : [4]),
     );
     const bMax = Math.min(
-      ...(b.violations.length ? b.violations.map((v) => severityRank(v.severity)) : [4]),
+      ...(b.violations.length
+        ? b.violations.map((v) => severityRank(v.severity))
+        : [4]),
     );
     if (aMax !== bMax) return aMax - bMax;
     return a.name.localeCompare(b.name);
