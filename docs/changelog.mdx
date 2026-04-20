@@ -3,6 +3,26 @@ title: Changelog
 description: What's new in Milady — features, improvements, and fixes.
 ---
 
+<Update label="2026-04-20" description="Week of April 20; smarter action routing, cross-channel messaging accuracy, training optimizer improvements" tags={["Update", "Fix"]}>
+
+## Smarter action routing
+
+Your agent now picks the right action more reliably when you give it natural-language commands. Asking your agent to "post this to Discord" no longer accidentally triggers scheduling, and relationship queries like "how long since I talked to Sarah?" now resolve correctly regardless of phrasing. Cross-channel send, relationship lookup, and device intent-sync actions all have sharper descriptions that help the action planner distinguish between similar-sounding requests.
+
+## Updates
+
+- **Training optimizer accuracy** — The [training system](/guides/training) now scores action planner outputs using strict action-name matching instead of fuzzy token overlap, so optimization runs produce more meaningful improvements to your agent's behavior.
+- **Skill actions consolidated** — Legacy skill invocation methods have been retired. `USE_SKILL` is now the single way to trigger [skills](/plugins/skills), with all previous aliases (`RUN_SKILL`, `INVOKE_SKILL`) redirecting to it automatically.
+- **Skills API streamlined** — The [skills](/plugins/skills) enable/disable endpoint has been consolidated to a single toggle surface, making skill management more predictable for integrations and automations.
+- **Graceful health-connector recovery** — If a connector's health check is temporarily unreachable, the runtime now degrades gracefully instead of blocking other actions from running.
+
+## Bug fixes
+
+- Fixed the Windows desktop installer failing on systems with long file paths — the build now enables extended path support automatically
+- Fixed the desktop app icon not displaying correctly in the Windows installer
+
+</Update>
+
 <Update label="2026-04-19" description="Week of April 19; dashboard redesign, n8n workflow automations, life-ops connector UI, mobile responsiveness" tags={["Feature", "Update", "Fix"]}>
 
 ## Dashboard redesign
