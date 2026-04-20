@@ -9,7 +9,9 @@ Travel features (`travel.search_flight`, `travel.search_hotel`,
 `travel.book_flight`, `travel.book_hotel`, and `cloud.duffel`) are
 **enabled by default** when the user is signed into Eliza Cloud. Each
 metered Duffel call is billed against the user's Cloud credit balance
-with a **5% Eliza Cloud service fee** applied server-side. When the
+with a **20% Eliza Cloud service fee** applied server-side (matches the
+platform-wide `DEFAULT_MARKUP_RATE = 0.2` in
+`eliza/cloud/packages/services/billing/src/markup.ts`). When the
 balance can't cover a call, the relay returns **HTTP 402** with an
 **x402 payment-requirements** envelope so the local agent can route the
 user to the existing wallet top-up flow.
@@ -32,12 +34,15 @@ defaults. The runtime resolves `cloudLinked` from the
 
 `cloud-features-routes` `POST /api/cloud/features/sync` promotes the
 Cloud-default-on travel keys into rows with `source = 'cloud'` so the UI
-can render the "Enabled via Eliza Cloud · 5% service fee" tag and the
+can render the "Enabled via Eliza Cloud · 20% service fee" tag and the
 audit trail reflects how the feature was activated.
 
-## 5% service fee
+## 20% service fee
 
-The markup is computed Cloud-side. Local code never recomputes it
+The markup is the platform-wide rate (`DEFAULT_MARKUP_RATE = 0.2` in
+`eliza/cloud/packages/services/billing/src/markup.ts`) applied uniformly
+across all metered Cloud passthrough services (Twilio SMS, Duffel travel,
+etc). The markup is computed Cloud-side. Local code never recomputes it
 (commandment 2 / 4): the relay returns a typed `_meta.cost` envelope,
 and the lifeops Duffel adapter exposes:
 
