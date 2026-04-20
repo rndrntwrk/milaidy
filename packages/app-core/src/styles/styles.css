@@ -168,6 +168,19 @@
   --go-live-text-soft: rgba(255, 255, 255, 0.68);
   --go-live-text-muted: rgba(255, 255, 255, 0.46);
   --go-live-accent-soft: rgba(var(--accent-rgb), 0.14);
+
+  /* shadcn DialogContent is `display: grid` by default. Inside a grid cell,
+     the nested flex-column height chain (shell → body flex:1 → overflow-y
+     scroll) is ambiguous because the grid track auto-sizes to content.
+     Force flex at the DialogContent level so the shell's `height: 100%`
+     resolves against the fixed modal height, body's `min-height: 0` /
+     `flex: 1 1 auto` kicks in, and overflow-y:auto on the body actually
+     has a bounded height to compare against — which is what makes the
+     scroll bar appear when content exceeds the body. Without this the
+     channels step (7 cards in a 2-col grid → 4 rows) rendered off the
+     bottom with no way to reach them. */
+  display: flex !important;
+  flex-direction: column;
 }
 
 .go-live-modal__shell {
@@ -301,6 +314,14 @@
   flex: 1 1 auto;
   min-height: 0;
   padding: 1.5rem;
+  /* Explicit overflow rules so the scroll container is not subject to
+     Tailwind class-purge ordering or specificity surprises. overscroll-
+     behavior: contain prevents the page scroll from taking over once the
+     body bottoms out — on desktop with a trackpad that otherwise bubbles
+     the remaining scroll up to the chat dock behind the modal. */
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
 }
 
 .go-live-modal__mode-grid {
