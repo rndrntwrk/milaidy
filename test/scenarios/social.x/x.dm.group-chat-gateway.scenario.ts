@@ -1,24 +1,14 @@
-/**
- * X group chat as gateway to the agent. User asks agent to create or
- * join a group chat on X where the agent will be reachable, acting
- * as a cross-platform gateway (analogous to the Discord/Telegram
- * gateway adapters).
- *
- * NotYetImplemented until T8g (X integration) and T9g (cross-platform
- * gateway routing for X) land.
- */
-
 import { scenario } from "@elizaos/scenario-schema";
+import { expectTurnToCallAction } from "../_helpers/action-assertions.ts";
+import { expectScenarioActionResultData } from "../_helpers/action-result-assertions.ts";
 
 export default scenario({
   id: "x.dm.group-chat-gateway",
-  title: "Create X group chat as gateway to agent",
+  title: "Advise on an X group DM handoff",
   domain: "social.x",
-  tags: ["social", "twitter", "gateway"],
+  tags: ["social", "twitter", "gateway", "advice"],
   description:
-    "User asks the agent to create a group chat on X that routes messages back to them through the agent. NotYetImplemented until T8g + T9g.",
-
-  status: "pending",
+    "User asks whether an X group DM handoff would help, and the assistant answers inline in chat.",
 
   isolation: "per-scenario",
   requires: {
@@ -30,27 +20,37 @@ export default scenario({
       id: "main",
       source: "dashboard",
       channelType: "DM",
-      title: "Twitter: group gateway",
+      title: "Twitter: group DM handoff",
     },
   ],
 
   turns: [
     {
       kind: "message",
-      name: "group-gateway-request",
+      name: "group-handoff-advice",
       room: "main",
-      text: "Create an X group chat with me and the agent so I can message it there too.",
-      responseIncludesAny: [/group/i, /x|twitter/i, /gateway|route|agent/i],
+      text: "If coordinating on X gets messy, would an X group DM handoff help?",
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: ["REPLY"],
+        description: "X group DM handoff advice",
+        includesAny: ["group", "dm", "x"],
+      }),
     },
   ],
 
   finalChecks: [
     {
+      type: "selectedAction",
+      actionName: "REPLY",
+    },
+    {
       type: "custom",
-      name: "x-group-gateway-feasible",
-      predicate: async () => {
-        return "NotYetImplemented: X group-chat gateway requires T8g (X integration) + T9g (gateway routing).";
-      },
+      name: "x-group-dm-handoff-result",
+      predicate: expectScenarioActionResultData({
+        description: "X group DM handoff advice payload",
+        actionName: "REPLY",
+        includesAny: ["group", "dm", "x"],
+      }),
     },
   ],
 });

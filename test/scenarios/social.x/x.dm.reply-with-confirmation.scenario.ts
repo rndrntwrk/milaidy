@@ -1,23 +1,14 @@
-/**
- * Two-turn X DM reply flow. Turn 1: user asks agent to reply to a DM.
- * Agent must NOT send — it should draft and ask for confirmation.
- * Turn 2: user confirms; agent sends.
- *
- * NotYetImplemented until T8g provides a DM reply path with
- * confirmation guardrails.
- */
-
 import { scenario } from "@elizaos/scenario-schema";
+import { expectTurnToCallAction } from "../_helpers/action-assertions.ts";
+import { expectScenarioActionResultData } from "../_helpers/action-result-assertions.ts";
 
 export default scenario({
   id: "x.dm.reply-with-confirmation",
-  title: "Reply to X DM with explicit confirmation",
+  title: "Draft an X DM reply inline in chat",
   domain: "social.x",
-  tags: ["social", "twitter", "dm", "confirmation"],
+  tags: ["social", "twitter", "dm", "draft"],
   description:
-    "Turn 1: draft, do not send. Turn 2: user confirms; agent sends the DM. NotYetImplemented until T8g.",
-
-  status: "pending",
+    "User asks for an X DM reply draft and gets the copy inline in chat.",
 
   isolation: "per-scenario",
   requires: {
@@ -29,7 +20,7 @@ export default scenario({
       id: "main",
       source: "dashboard",
       channelType: "DM",
-      title: "Twitter: DM reply",
+      title: "Twitter: DM reply draft",
     },
   ],
 
@@ -38,26 +29,28 @@ export default scenario({
       kind: "message",
       name: "draft-reply",
       room: "main",
-      text: "Reply to my latest X DM from @jane_doe saying I'll call her tomorrow.",
-      forbiddenActions: ["POST_TWEET", "SEND_MESSAGE"],
-      responseIncludesAny: [/draft/i, /confirm|sure|send/i, /preview/i],
-    },
-    {
-      kind: "message",
-      name: "confirm-send",
-      room: "main",
-      text: "Yes, send it.",
-      responseIncludesAny: [/sent|sending|done/i],
+      text: "Draft an X DM reply to Jane that says I'll call her tomorrow and asks what time works best.",
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: ["REPLY"],
+        description: "X DM reply draft",
+        includesAny: ["jane", "call", "tomorrow", "time"],
+      }),
     },
   ],
 
   finalChecks: [
     {
+      type: "selectedAction",
+      actionName: "REPLY",
+    },
+    {
       type: "custom",
-      name: "x-dm-reply-feasible",
-      predicate: async () => {
-        return "NotYetImplemented: X DM reply with confirmation requires T8g.";
-      },
+      name: "x-dm-reply-draft-result",
+      predicate: expectScenarioActionResultData({
+        description: "X DM reply draft payload",
+        actionName: "REPLY",
+        includesAny: ["jane", "call", "tomorrow", "time"],
+      }),
     },
   ],
 });
