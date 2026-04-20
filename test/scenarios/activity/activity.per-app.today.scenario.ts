@@ -55,7 +55,11 @@ export default scenario({
       room: "main",
       text: "Which apps did I use most today?",
       assertTurn: expectTurnToCallAction({
-        acceptedActions: ["OWNER_SCREEN_TIME", "SCREEN_TIME", "GET_ACTIVITY_REPORT"],
+        acceptedActions: [
+          "OWNER_SCREEN_TIME",
+          "SCREEN_TIME",
+          "GET_ACTIVITY_REPORT",
+        ],
         description: "per-app usage lookup",
       }),
       responseIncludesAny: [/vs code|safari/i, /today/i, /minute|hour|time/i],
@@ -70,7 +74,11 @@ export default scenario({
       type: "custom",
       name: "per-app-today-action-coverage",
       predicate: expectScenarioToCallAction({
-        acceptedActions: ["OWNER_SCREEN_TIME", "SCREEN_TIME", "GET_ACTIVITY_REPORT"],
+        acceptedActions: [
+          "OWNER_SCREEN_TIME",
+          "SCREEN_TIME",
+          "GET_ACTIVITY_REPORT",
+        ],
         description: "per-app usage lookup",
       }),
     },
