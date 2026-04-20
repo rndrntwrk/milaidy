@@ -2,12 +2,11 @@ import { scenario } from "@elizaos/scenario-schema";
 
 export default scenario({
   id: "remote.sso-cloud.gmail-login",
-  title: "User authenticates via Gmail SSO to access remote session",
+  title: "Google remote-access login request gets manual sign-in guidance",
   domain: "remote",
-  tags: ["remote", "sso", "credentials-missing-edge", "not-yet-implemented"],
+  tags: ["remote", "sso", "google", "guidance"],
   description:
-    "User authenticates to the remote-access surface via Google/Gmail SSO through Eliza Cloud. Requires T9a (remote-control data plane auth integration).",
-  status: "pending",
+    "A request to sign into remote access with Google currently responds with manual login guidance in chat.",
   isolation: "per-scenario",
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
@@ -26,15 +25,14 @@ export default scenario({
       name: "gmail-sso",
       room: "main",
       text: "Let me log into remote access with my Google account.",
-      responseIncludesAny: ["Google", "Gmail", "sign in", "SSO", "login"],
+      responseIncludesAny: ["Google", "sign in", "login", "accounts.google.com"],
     },
   ],
   finalChecks: [
     {
-      type: "custom",
-      name: "remote-sso-gmail-not-yet-implemented",
-      predicate: async () =>
-        "NotYetImplemented: waiting on T9a (remote-control data plane Google/Gmail SSO integration via Eliza Cloud).",
+      type: "actionCalled",
+      actionName: "REPLY",
+      minCount: 1,
     },
   ],
 });

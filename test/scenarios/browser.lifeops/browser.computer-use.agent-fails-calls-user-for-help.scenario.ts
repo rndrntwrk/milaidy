@@ -1,12 +1,10 @@
-/**
- * General failure-mode: the agent's browser action fails (site layout
- * changed, selector not found, auth challenge, etc.) and it must
- * escalate to the user rather than loop, silently fail, or fabricate.
- *
- * NotYetImplemented until T9a lands the escalate-to-user data plane.
- */
-
 import { scenario } from "@elizaos/scenario-schema";
+import {
+  expectConnectorDispatch,
+  expectScenarioToCallAction,
+  expectTurnToCallAction,
+  judgeRubric,
+} from "../_helpers/action-assertions.ts";
 
 export default scenario({
   id: "browser.computer-use.agent-fails-calls-user-for-help",
@@ -14,15 +12,11 @@ export default scenario({
   domain: "browser.lifeops",
   tags: ["browser", "computer-use", "escalation", "failure"],
   description:
-    "Agent's browser action fails; it must escalate to the user rather than silently retry or fabricate success. NotYetImplemented until T9a.",
-
-  status: "pending",
-
+    "When browser/computer-use automation fails, the assistant should escalate through a real intervention or phone path instead of silently retrying or fabricating success.",
   isolation: "per-scenario",
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
   },
-
   rooms: [
     {
       id: "main",
@@ -31,32 +25,67 @@ export default scenario({
       title: "Computer-use: failure escalation",
     },
   ],
-
   turns: [
     {
       kind: "message",
       name: "failure-escalation",
       room: "main",
-      text: "Keep going with that browser task — I want it done today.",
-      responseIncludesAny: [
-        /couldn.t|could not|failed|stuck/i,
-        /help|you|manual/i,
-      ],
+      text: "If that browser task gets stuck on auth or page layout issues, call me for help instead of pretending it worked.",
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: ["CALL_USER", "LIFEOPS_COMPUTER_USE"],
+        description: "failed browser-task escalation",
+        includesAny: ["call", "browser", "stuck", "auth", "layout"],
+      }),
+      responseIncludesAny: ["call", "stuck", "help", "browser", "unblock"],
       responseJudge: {
-        rubric:
-          "Response surfaces the failure clearly and asks the user for guidance or offers a remote handoff — does not pretend the action succeeded.",
         minimumScore: 0.7,
+        rubric:
+          "The reply must surface the browser-task failure mode clearly and commit to escalating through a real intervention path rather than pretending success.",
       },
     },
   ],
-
   finalChecks: [
     {
-      type: "custom",
-      name: "failure-escalation-registered",
-      predicate: async () => {
-        return "NotYetImplemented: failure escalation path requires T9a (remote-control data plane).";
-      },
+      type: "selectedAction",
+      actionName: ["CALL_USER", "LIFEOPS_COMPUTER_USE"],
     },
+    {
+      type: "interventionRequestExists",
+      expected: true,
+    },
+    {
+      type: "pushSent",
+      channel: "phone_call",
+    },
+    {
+      type: "connectorDispatchOccurred",
+      channel: "phone_call",
+      actionName: ["CALL_USER"],
+    },
+    {
+      type: "custom",
+      name: "browser-failure-escalation-action-coverage",
+      predicate: expectScenarioToCallAction({
+        acceptedActions: ["CALL_USER", "LIFEOPS_COMPUTER_USE"],
+        description: "failed browser-task escalation",
+        includesAny: ["call", "browser", "stuck", "auth", "layout"],
+      }),
+    },
+    {
+      type: "custom",
+      name: "browser-failure-escalation-dispatch",
+      predicate: expectConnectorDispatch({
+        channel: "phone_call",
+        actionName: ["CALL_USER"],
+        description:
+          "failed browser automation escalates through the phone dispatcher",
+      }),
+    },
+    judgeRubric({
+      name: "browser-failure-escalation-rubric",
+      threshold: 0.7,
+      description:
+        "End-to-end: failed browser automation escalated through a real call/intervention path instead of silently failing or fabricating completion.",
+    }),
   ],
 });

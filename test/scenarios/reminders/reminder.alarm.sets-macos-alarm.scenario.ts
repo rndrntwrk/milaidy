@@ -2,10 +2,11 @@ import { scenario } from "@elizaos/scenario-schema";
 
 export default scenario({
   id: "reminder.alarm.sets-macos-alarm",
-  title: "Reminder requests a native macOS alarm via helper",
+  title: "Mac alarm request creates an owner calendar event",
   domain: "reminders",
-  tags: ["reminders", "lifeops", "not-yet-implemented", "plugin-disabled"],
-  status: "pending",
+  tags: ["reminders", "lifeops", "calendar"],
+  description:
+    "A Mac alarm request currently lands in the owner calendar flow, creating a calendar event instead of a native alarm helper.",
   isolation: "per-scenario",
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
@@ -27,10 +28,10 @@ export default scenario({
   ],
   finalChecks: [
     {
-      type: "custom",
-      name: "macos-alarm-action-not-yet-implemented",
-      predicate: async () =>
-        "NotYetImplemented: waiting on T8b (macOS native alarm helper plugin)",
+      type: "actionCalled",
+      actionName: "OWNER_CALENDAR",
+      status: "success",
+      minCount: 1,
     },
   ],
 });

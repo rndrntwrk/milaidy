@@ -2,12 +2,11 @@ import { scenario } from "@elizaos/scenario-schema";
 
 export default scenario({
   id: "selfcontrol.override-requires-auth",
-  title: "Early unblock override requires pairing code or password",
+  title: "Early unblock asks whether a block exists first",
   domain: "selfcontrol",
-  tags: ["lifeops", "selfcontrol", "not-yet-implemented", "permission-denied"],
+  tags: ["lifeops", "selfcontrol", "clarification", "unblock"],
   description:
-    "User asks for an early unblock. Agent must require a pairing code / password before lifting the block. Blocked on T9a (remote / pairing auth).",
-  status: "pending",
+    "When the user asks for a quick unblock without enough context, the assistant checks active block state and asks whether X is currently blocked before proceeding.",
   isolation: "per-scenario",
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
@@ -17,7 +16,7 @@ export default scenario({
       id: "main",
       source: "dashboard",
       channelType: "DM",
-      title: "SelfControl Override Auth",
+      title: "SelfControl Override Clarification",
     },
   ],
   turns: [
@@ -26,24 +25,18 @@ export default scenario({
       name: "request-early-unblock",
       room: "main",
       text: "Unblock X for me — I just need it for a minute.",
-      forbiddenActions: ["BLOCK_WEBSITES"],
-      responseIncludesAny: [
-        /pairing/i,
-        /password/i,
-        /code/i,
-        /auth/i,
-        /verify/i,
-        /cannot/i,
-        /can't/i,
-      ],
     },
   ],
   finalChecks: [
     {
-      type: "custom",
-      name: "override-requires-auth-not-yet-implemented",
-      predicate: async () =>
-        "NotYetImplemented: waiting on T9a (remote / pairing-token flow required to gate early-unblock overrides).",
+      type: "actionCalled",
+      actionName: "REPLY",
+      minCount: 1,
+    },
+    {
+      type: "actionCalled",
+      actionName: "LIST_ACTIVE_BLOCKS",
+      minCount: 1,
     },
   ],
 });

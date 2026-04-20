@@ -1,10 +1,9 @@
-/**
- * Cross-platform follow-up draft (Telegram): user asks to draft a
- * Telegram message to Alice. DRAFT_REPLY not yet in catalog for
- * Telegram — part of message triage v2 (T7d). NotYetImplemented.
- */
-
 import { scenario } from "@elizaos/scenario-schema";
+import {
+  expectScenarioToCallAction,
+  expectTurnToCallAction,
+  judgeRubric,
+} from "../_helpers/action-assertions.ts";
 
 export default scenario({
   id: "followup.draft-cross-platform.telegram",
@@ -12,9 +11,7 @@ export default scenario({
   domain: "relationships",
   tags: ["lifeops", "relationships", "cross-platform"],
   description:
-    "User asks the agent to draft a follow-up Telegram message to Alice. Cross-platform draft action not yet in catalog.",
-
-  status: "pending",
+    "User asks the assistant to draft a Telegram follow-up to a known contact and hold it for approval instead of sending immediately.",
 
   isolation: "per-scenario",
   requires: {
@@ -44,16 +41,45 @@ export default scenario({
       kind: "message",
       name: "draft-telegram-followup",
       room: "main",
-      text: "Draft a follow-up Telegram message to Alice.",
+      text: "Draft a follow-up Telegram message to Alice Chen about the Acme Inc partnership update, but hold it for approval.",
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: ["INBOX", "CROSS_CHANNEL_SEND"],
+        description: "telegram follow-up draft",
+        includesAny: ["Alice", "telegram", "follow-up", "approval"],
+      }),
+      responseIncludesAny: ["Alice", "draft", "approval", "Telegram"],
+      responseJudge: {
+        minimumScore: 0.7,
+        rubric:
+          "The reply must draft a Telegram follow-up to Alice Chen and explicitly hold it for approval instead of claiming it was already sent.",
+      },
     },
   ],
 
   finalChecks: [
     {
-      type: "custom",
-      name: "draft-telegram-nyi",
-      predicate: async () =>
-        "NotYetImplemented: message triage v2 (T7d) — cross-platform DRAFT_REPLY / DRAFT_FOLLOWUP action not yet in catalog for Telegram",
+      type: "selectedAction",
+      actionName: ["INBOX", "CROSS_CHANNEL_SEND"],
     },
+    {
+      type: "draftExists",
+      channel: "telegram",
+      expected: true,
+    },
+    {
+      type: "custom",
+      name: "followup-draft-telegram-action-coverage",
+      predicate: expectScenarioToCallAction({
+        acceptedActions: ["INBOX", "CROSS_CHANNEL_SEND"],
+        description: "telegram follow-up draft",
+        includesAny: ["Alice", "telegram", "follow-up", "approval"],
+      }),
+    },
+    judgeRubric({
+      name: "followup-draft-telegram-rubric",
+      threshold: 0.7,
+      description:
+        "End-to-end: the assistant drafted the Telegram follow-up to Alice Chen and held it for approval instead of sending it blindly.",
+    }),
   ],
 });

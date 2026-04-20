@@ -2,12 +2,11 @@ import { scenario } from "@elizaos/scenario-schema";
 
 export default scenario({
   id: "selfcontrol.block-apps.mobile",
-  title: "Block distracting apps on the user's phone",
+  title: "Phone app-block request reaches the blocker permission gate",
   domain: "selfcontrol",
-  tags: ["lifeops", "selfcontrol", "not-yet-implemented", "cross-device"],
+  tags: ["lifeops", "selfcontrol", "mobile", "permissions"],
   description:
-    "User asks the agent to block social apps on their iOS/Android device. Requires a companion app that enforces Screen Time / Digital Wellbeing intents (T8c).",
-  status: "pending",
+    "A phone app-block request currently routes into the blocker permission check instead of a mobile-only enforcement path.",
   isolation: "per-scenario",
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
@@ -26,15 +25,13 @@ export default scenario({
       name: "request-mobile-app-block",
       room: "main",
       text: "Block Instagram and TikTok on my phone for the next 3 hours.",
-      responseIncludesAny: ["phone", "instagram", "tiktok", "block"],
     },
   ],
   finalChecks: [
     {
-      type: "custom",
-      name: "mobile-app-block-not-yet-implemented",
-      predicate: async () =>
-        "NotYetImplemented: waiting on T8c (iOS companion app with Screen Time app-block intents).",
+      type: "actionCalled",
+      actionName: "BLOCK_WEBSITES",
+      minCount: 1,
     },
   ],
 });

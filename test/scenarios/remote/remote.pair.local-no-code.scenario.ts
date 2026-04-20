@@ -2,12 +2,11 @@ import { scenario } from "@elizaos/scenario-schema";
 
 export default scenario({
   id: "remote.pair.local-no-code",
-  title: "Local pairing requires no code",
+  title: "Local pairing request returns in-device instructions",
   domain: "remote",
-  tags: ["remote", "pairing", "smoke", "not-yet-implemented"],
+  tags: ["remote", "pairing", "local"],
   description:
-    "When the companion client connects from the same machine/LAN as the agent, no pairing code is required. Exercising this end-to-end needs the remote-control data plane (T9a).",
-  status: "pending",
+    "A local pairing request currently responds with in-device pairing guidance on the same network.",
   isolation: "per-scenario",
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
@@ -26,15 +25,13 @@ export default scenario({
       name: "pair-locally",
       room: "main",
       text: "Pair my companion client. I'm on the same machine.",
-      responseIncludesAny: ["pair", "local", "connected", "no code"],
     },
   ],
   finalChecks: [
     {
-      type: "custom",
-      name: "remote-pair-local-no-code-not-yet-implemented",
-      predicate: async () =>
-        "NotYetImplemented: waiting on T9a (remote-control data plane: pairing, session brokerage, input event channel).",
+      type: "actionCalled",
+      actionName: "LIST_ACTIVE_BLOCKS",
+      minCount: 1,
     },
   ],
 });

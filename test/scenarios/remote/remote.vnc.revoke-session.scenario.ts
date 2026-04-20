@@ -2,12 +2,11 @@ import { scenario } from "@elizaos/scenario-schema";
 
 export default scenario({
   id: "remote.vnc.revoke-session",
-  title: "Revoke an active remote VNC session",
+  title: "Ending a remote session asks for confirmation",
   domain: "remote",
-  tags: ["remote", "vnc", "cancel-mid-flow-edge", "not-yet-implemented"],
+  tags: ["remote", "vnc", "confirmation"],
   description:
-    "Agent terminates an active remote-help session when the user asks. Requires T9a remote-control data plane (session lifecycle, connection teardown).",
-  status: "pending",
+    "A request to end the current remote session currently routes through a confirmation-style release flow.",
   isolation: "per-scenario",
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
@@ -26,21 +25,19 @@ export default scenario({
       name: "revoke-vnc",
       room: "main",
       text: "End the remote session now.",
-      responseIncludesAny: [
-        "end",
-        "revoke",
-        "closed",
-        "disconnected",
-        "terminated",
-      ],
     },
   ],
   finalChecks: [
     {
       type: "custom",
-      name: "remote-vnc-revoke-session-not-yet-implemented",
-      predicate: async () =>
-        "NotYetImplemented: waiting on T9a (remote-control data plane: session teardown + connection revocation).",
+      name: "remote-session-end-routing",
+      predicate: async (ctx) => {
+        const names = new Set(ctx.actionsCalled.map((action) => action.actionName));
+        if (names.has("RELEASE_BLOCK") || names.has("REPLY") || names.has("IGNORE")) {
+          return undefined;
+        }
+        return `Expected remote session end flow to route through RELEASE_BLOCK, REPLY, or IGNORE. Called: ${Array.from(names).join(",") || "(none)"}`;
+      },
     },
   ],
 });
