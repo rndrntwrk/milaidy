@@ -20,7 +20,12 @@ const DialogOverlay = React.forwardRef<
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
-      `fixed inset-0 z-[${Z_DIALOG_OVERLAY}] bg-black/80 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0`,
+      // Backdrop blur is intentional: the operator companion view puts chat
+      // bubbles, the VRM avatar, and live scene overlays *behind* modals, and
+      // bg-black/80 alone let bright scene content (speech bubbles, avatar
+      // colors) read through the dim. The blur turns the leftover 20% of the
+      // scene into unreadable shapes so the modal content wins visually.
+      `fixed inset-0 z-[${Z_DIALOG_OVERLAY}] bg-black/80 backdrop-blur-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0`,
       className,
     )}
     {...props}

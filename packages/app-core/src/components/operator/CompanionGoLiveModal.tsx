@@ -667,7 +667,7 @@ export function CompanionGoLiveModal({
             </ol>
           </div>
 
-          <div className="go-live-modal__body overflow-y-auto">
+          <div className="go-live-modal__body">
           {step === "setup-required" ? (
             <div className="space-y-5">
               {renderInlineNotice()}
