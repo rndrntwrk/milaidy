@@ -6,12 +6,12 @@ import {
 import { seedScreenTimeSessions } from "../_helpers/lifeops-seeds.ts";
 
 export default scenario({
-  id: "lifeops-extension.time-tracking.social-breakdown",
-  title: "Social-media time breakdown",
+  id: "lifeops-extension.daily-report",
+  title: "Daily screen time report",
   domain: "browser.lifeops",
   tags: ["browser", "activity", "happy-path"],
   description:
-    "User asks for a social-media breakdown. Seeded website sessions must surface through the screen-time website view.",
+    "User asks for a daily screen-time report. Seeded app and website sessions must surface through the screen-time summary path.",
   isolation: "per-scenario",
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
@@ -19,29 +19,29 @@ export default scenario({
   seed: [
     {
       type: "custom",
-      name: "seed-social-breakdown-screen-time",
+      name: "seed-daily-screen-time",
       apply: seedScreenTimeSessions({
         sessions: [
           {
-            source: "website",
-            identifier: "x.com",
-            displayName: "x.com",
-            offsetMinutes: 12,
-            durationMinutes: 31,
+            source: "app",
+            identifier: "com.apple.Safari",
+            displayName: "Safari",
+            offsetMinutes: 20,
+            durationMinutes: 54,
           },
           {
             source: "website",
-            identifier: "instagram.com",
-            displayName: "instagram.com",
-            offsetMinutes: 70,
-            durationMinutes: 19,
+            identifier: "github.com",
+            displayName: "github.com",
+            offsetMinutes: 85,
+            durationMinutes: 22,
           },
           {
             source: "website",
-            identifier: "facebook.com",
-            displayName: "facebook.com",
-            offsetMinutes: 115,
-            durationMinutes: 11,
+            identifier: "docs.google.com",
+            displayName: "docs.google.com",
+            offsetMinutes: 130,
+            durationMinutes: 14,
           },
         ],
       }),
@@ -52,23 +52,23 @@ export default scenario({
       id: "main",
       source: "dashboard",
       channelType: "DM",
-      title: "Browser extension: social breakdown",
+      title: "Browser extension: daily report",
     },
   ],
   turns: [
     {
       kind: "message",
-      name: "social-breakdown-query",
+      name: "daily-report-request",
       room: "main",
-      text: "Break down my social media time today across X, Instagram, and Facebook.",
+      text: "Give me my daily screen time report.",
       assertTurn: expectTurnToCallAction({
         acceptedActions: ["OWNER_SCREEN_TIME", "SCREEN_TIME"],
-        description: "social-media website breakdown",
+        description: "daily screen-time summary",
       }),
       responseIncludesAny: [
-        /social/i,
-        /x\.com|instagram\.com|facebook\.com/i,
-        /time|minutes|hours/i,
+        /today|daily/i,
+        /screen time|report|total/i,
+        /safari|github\.com|docs\.google\.com/i,
       ],
     },
   ],
@@ -79,15 +79,15 @@ export default scenario({
     },
     {
       type: "custom",
-      name: "social-breakdown-action-coverage",
+      name: "daily-report-action-coverage",
       predicate: expectScenarioToCallAction({
         acceptedActions: ["OWNER_SCREEN_TIME", "SCREEN_TIME"],
-        description: "social-media website breakdown",
+        description: "daily screen-time summary",
       }),
     },
     {
       type: "custom",
-      name: "social-breakdown-result",
+      name: "daily-report-result",
       predicate: async (ctx) => {
         const hit = ctx.actionsCalled.find((action) =>
           ["OWNER_SCREEN_TIME", "SCREEN_TIME"].includes(action.actionName),
@@ -97,14 +97,14 @@ export default scenario({
         }
         const payload = JSON.stringify(hit.result?.data ?? {}).toLowerCase();
         if (
-          !payload.includes("x.com") ||
-          !payload.includes("instagram.com") ||
-          !payload.includes("facebook.com")
+          !payload.includes("safari") ||
+          !payload.includes("github.com") ||
+          !payload.includes("docs.google.com")
         ) {
-          return "expected seeded social domains in result payload";
+          return "expected seeded daily screen-time sources in result payload";
         }
         if (!/totalseconds|summary|daily/.test(payload)) {
-          return "expected quantitative website totals in result payload";
+          return "expected daily quantitative screen-time data in result payload";
         }
         return undefined;
       },
