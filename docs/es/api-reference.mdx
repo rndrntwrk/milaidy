@@ -379,7 +379,9 @@ La bandeja de entrada agrega mensajes de todas las plataformas conectadas (iMess
 | `POST` | `/api/skills/:id/open` | Abrir el directorio de un skill |
 | `GET` | `/api/skills/:id/source` | Obtener el código fuente de un skill |
 | `PUT` | `/api/skills/:id/source` | Actualizar el código fuente de un skill |
-| `PUT` | `/api/skills/:id` | Actualizar la configuración de un skill (habilitar/deshabilitar) |
+| `POST` | `/api/skills/:id/enable` | Habilitar un skill (respeta las confirmaciones de escaneo de seguridad) |
+| `POST` | `/api/skills/:id/disable` | Deshabilitar un skill |
+| `PUT` | `/api/skills/:id` | **Obsoleto** — use `POST /api/skills/:id/enable` o `POST /api/skills/:id/disable` |
 | `DELETE` | `/api/skills/:id` | Eliminar un skill |
 
 <div id="skills-catalog-marketplace">

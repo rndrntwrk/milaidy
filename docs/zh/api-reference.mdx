@@ -379,7 +379,9 @@ curl -X POST http://localhost:2138/api/agent/autonomy \
 | `POST` | `/api/skills/:id/open` | 打开技能目录 |
 | `GET` | `/api/skills/:id/source` | 获取技能源代码 |
 | `PUT` | `/api/skills/:id/source` | 更新技能源代码 |
-| `PUT` | `/api/skills/:id` | 更新技能配置（启用/禁用） |
+| `POST` | `/api/skills/:id/enable` | 启用技能（遵守安全扫描确认） |
+| `POST` | `/api/skills/:id/disable` | 禁用技能 |
+| `PUT` | `/api/skills/:id` | **已弃用** — 请使用 `POST /api/skills/:id/enable` 或 `POST /api/skills/:id/disable` |
 | `DELETE` | `/api/skills/:id` | 删除技能 |
 
 <div id="skills-catalog-marketplace">
