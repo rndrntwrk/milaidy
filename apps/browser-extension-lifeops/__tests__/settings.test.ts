@@ -13,7 +13,10 @@ interface FakeStorageArea {
 }
 
 function makeFakeStorage(): {
-  storage: { local: FakeStorageArea; onChanged: { addListener: () => void; removeListener: () => void } };
+  storage: {
+    local: FakeStorageArea;
+    onChanged: { addListener: () => void; removeListener: () => void };
+  };
   data: Map<string, unknown>;
 } {
   const data = new Map<string, unknown>();
@@ -93,8 +96,11 @@ describe("loadSettings", () => {
   });
 
   it("repairs a stored invalid wsUrl on read", async () => {
-    const chromeMock = (globalThis as unknown as { chrome: { storage: { local: FakeStorageArea } } })
-      .chrome;
+    const chromeMock = (
+      globalThis as unknown as {
+        chrome: { storage: { local: FakeStorageArea } };
+      }
+    ).chrome;
     await chromeMock.storage.local.set({
       "lifeops.extension.settings": {
         wsUrl: "not a valid url",

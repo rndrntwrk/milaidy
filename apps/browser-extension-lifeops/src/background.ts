@@ -82,7 +82,9 @@ async function bootstrap(): Promise<RuntimeState> {
   return bootstrapPromise;
 }
 
-async function handleSettingsUpdate(settings: ExtensionSettings): Promise<void> {
+async function handleSettingsUpdate(
+  settings: ExtensionSettings,
+): Promise<void> {
   if (!state) return;
   const urlChanged = state.settings.wsUrl !== settings.wsUrl;
   state.settings = settings;

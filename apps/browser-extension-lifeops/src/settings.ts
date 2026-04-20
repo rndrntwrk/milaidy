@@ -45,18 +45,14 @@ export class InvalidSettingsError extends Error {
 
 export async function saveSettings(settings: ExtensionSettings): Promise<void> {
   if (!isValidWsUrl(settings.wsUrl)) {
-    throw new InvalidSettingsError(
-      "wsUrl must be a ws:// or wss:// URL",
-    );
+    throw new InvalidSettingsError("wsUrl must be a ws:// or wss:// URL");
   }
   if (
     typeof settings.flushIntervalMs !== "number" ||
     !Number.isFinite(settings.flushIntervalMs) ||
     settings.flushIntervalMs < 1_000
   ) {
-    throw new InvalidSettingsError(
-      "flushIntervalMs must be a number ≥ 1000",
-    );
+    throw new InvalidSettingsError("flushIntervalMs must be a number ≥ 1000");
   }
   await chrome.storage.local.set({ [STORAGE_KEY]: settings });
 }
