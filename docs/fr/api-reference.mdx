@@ -379,7 +379,9 @@ La boîte de réception agrège les messages de toutes les plateformes connecté
 | `POST` | `/api/skills/:id/open` | Ouvrir le répertoire d'une compétence |
 | `GET` | `/api/skills/:id/source` | Obtenir le code source d'une compétence |
 | `PUT` | `/api/skills/:id/source` | Mettre à jour le code source d'une compétence |
-| `PUT` | `/api/skills/:id` | Mettre à jour la configuration d'une compétence (activer/désactiver) |
+| `POST` | `/api/skills/:id/enable` | Activer une compétence (respecte les confirmations d'analyse de sécurité) |
+| `POST` | `/api/skills/:id/disable` | Désactiver une compétence |
+| `PUT` | `/api/skills/:id` | **Obsolète** — utilisez `POST /api/skills/:id/enable` ou `POST /api/skills/:id/disable` |
 | `DELETE` | `/api/skills/:id` | Supprimer une compétence |
 
 <div id="skills-catalog-marketplace">

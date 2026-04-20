@@ -170,7 +170,7 @@ When two skills share the same name, the higher-precedence source wins. The full
 
 Whether a skill is active is determined by this cascade (highest priority first):
 
-1. **Database preferences** -- per-agent toggle set via the API (`PUT /api/skills/:id`)
+1. **Database preferences** -- per-agent toggle set via the API (`POST /api/skills/:id/enable` or `POST /api/skills/:id/disable`)
 2. **`skills.denyBundled`** -- config deny list, always blocks
 3. **`skills.entries[id].enabled`** -- per-skill config flag
 4. **`skills.allowBundled`** -- config allow list (whitelist mode: only listed skills load)
@@ -761,7 +761,9 @@ apt install my-tool   # Linux
 |----------|--------|-------------|
 | `/api/skills` | GET | List all discovered skills with enabled state |
 | `/api/skills/refresh` | POST | Re-scan skill directories and refresh the list |
-| `/api/skills/:id` | PUT | Enable or disable a skill (persisted per-agent) |
+| `/api/skills/:id/enable` | POST | Enable a skill (persisted per-agent, honors scan acknowledgments) |
+| `/api/skills/:id/disable` | POST | Disable a skill (persisted per-agent) |
+| `/api/skills/:id` | PUT | **Deprecated** — use `POST /api/skills/:id/enable` or `POST /api/skills/:id/disable` instead |
 | `/api/skills/:id/scan` | GET | Get the security scan report for a skill |
 | `/api/skills/catalog` | GET | Browse the full skill catalog |
 | `/api/skills/catalog/search` | GET | Search the catalog |
@@ -833,7 +835,7 @@ apt install my-tool   # Linux
 - Custom skill not appearing in `/api/skills`:
   Confirm the skill directory contains a valid `SKILL.md` with name/description frontmatter. Check that the directory is in a scanned location (bundled, managed, workspace, or marketplace). Run `POST /api/skills/refresh` to re-scan.
 - Skill loads but is disabled:
-  Check the enable/disable cascade: database preferences override config, `denyBundled` blocks unconditionally, `allowBundled` acts as a whitelist. Use `PUT /api/skills/:id` with `{ "enabled": true }` to force-enable.
+  Check the enable/disable cascade: database preferences override config, `denyBundled` blocks unconditionally, `allowBundled` acts as a whitelist. Use `POST /api/skills/:id/enable` to force-enable.
 - Required binary or env var missing:
   Skills with `required-bins` or `required-env` frontmatter are skipped if dependencies are absent. Install the required CLI tool or set the environment variable.
 
