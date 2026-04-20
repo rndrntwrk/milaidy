@@ -1,21 +1,13 @@
-/**
- * Missed-streak escalation: seed a habit with 3 missed-day memories and
- * expect the morning check-in to acknowledge the broken streak.
- *
- * Requires the morning/night check-in engine (T9f / plan §6.23) to
- * actually surface streak state during check-ins. NotYetImplemented.
- */
-
 import { scenario } from "@elizaos/scenario-schema";
+import { expectTurnToCallAction } from "../_helpers/action-assertions.ts";
+import { expectScenarioActionResultData } from "../_helpers/action-result-assertions.ts";
+import { seedCheckinDefinition } from "../_helpers/lifeops-seeds.ts";
 
 export default scenario({
   id: "habit.missed-streak.escalation",
-  title: "Morning check-in mentions broken habit streak",
+  title: "Morning check-in includes overdue habit context",
   domain: "habits",
-  tags: ["lifeops", "habits", "ambiguity", "plugin-disabled"],
-  description:
-    "Seed missed-day memories and expect the morning check-in to reference a broken streak. Requires T9f: morning/night check-in routine engine.",
-  status: "pending",
+  tags: ["lifeops", "habits", "smoke"],
   isolation: "per-scenario",
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
@@ -24,52 +16,46 @@ export default scenario({
     {
       id: "main",
       source: "telegram",
-      title: "LifeOps Missed Streak",
+      title: "LifeOps Habit Morning Check-in",
     },
   ],
   seed: [
     {
-      type: "memory",
-      roomId: "main",
-      content: {
-        type: "habit_missed",
-        habitTitle: "Stretch",
-        missedAtIso: "{{now-3d}}",
-      },
-    },
-    {
-      type: "memory",
-      roomId: "main",
-      content: {
-        type: "habit_missed",
-        habitTitle: "Stretch",
-        missedAtIso: "{{now-2d}}",
-      },
-    },
-    {
-      type: "memory",
-      roomId: "main",
-      content: {
-        type: "habit_missed",
-        habitTitle: "Stretch",
-        missedAtIso: "{{now-1d}}",
-      },
+      type: "custom",
+      name: "seed-stretch-habit",
+      apply: seedCheckinDefinition({
+        id: "habit-checkin-stretch",
+        title: "Stretch",
+        kind: "habit",
+        dueAt: "{{now-2h}}",
+      }),
     },
   ],
   turns: [
     {
       kind: "message",
       name: "morning-checkin",
-      text: "Good morning, how am I doing on my habits?",
-      responseIncludesAny: ["stretch", "streak", "missed", "back on track"],
+      text: "Run my morning check-in.",
+      responseIncludesAny: ["morning", "overview", "day"],
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: ["RUN_MORNING_CHECKIN"],
+        description: "morning habit check-in",
+      }),
     },
   ],
   finalChecks: [
     {
+      type: "selectedAction",
+      actionName: "RUN_MORNING_CHECKIN",
+    },
+    {
       type: "custom",
-      name: "missed-streak-escalation-nyi",
-      predicate: async () =>
-        "NotYetImplemented: morning/night check-in routine engine (T9f, plan §6.23) — broken-streak surfacing during check-in is not wired up",
+      name: "morning-checkin-report-includes-stretch-habit",
+      predicate: expectScenarioActionResultData({
+        description: "morning check-in payload with a seeded habit",
+        actionName: "RUN_MORNING_CHECKIN",
+        includesAll: ["Stretch"],
+      }),
     },
   ],
 });

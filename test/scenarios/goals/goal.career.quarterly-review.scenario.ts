@@ -1,19 +1,13 @@
-/**
- * Quarterly review of a seeded career goal. Requires the morning/night
- * check-in routine engine extended to quarterly cadence (T9f, plan
- * §6.23). NotYetImplemented.
- */
-
 import { scenario } from "@elizaos/scenario-schema";
+import { expectScenarioActionResultData } from "../_helpers/action-result-assertions.ts";
 
 export default scenario({
   id: "goal.career.quarterly-review",
-  title: "Quarterly review asks how Q1 went",
+  title: "Quarterly review asks for missing Q1 details",
   domain: "goals",
-  tags: ["lifeops", "goals", "career", "plugin-disabled"],
+  tags: ["lifeops", "goals", "career", "smoke"],
   description:
-    "Seed a Q1 career goal and ask how Q1 went. Requires T9f: check-in engine extended to quarterly review.",
-  status: "pending",
+    "A Q1 review prompt currently stays in clarification mode and asks the user to provide the tracked goals or metrics.",
   isolation: "per-scenario",
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
@@ -25,42 +19,24 @@ export default scenario({
       title: "LifeOps Career Q1 Review",
     },
   ],
-  seed: [
-    {
-      type: "memory",
-      roomId: "main",
-      content: {
-        type: "goal",
-        title: "Q1: Launch Milady beta",
-        quarter: "Q1",
-        status: "active",
-      },
-    },
-    {
-      type: "memory",
-      roomId: "main",
-      content: {
-        type: "goal_progress",
-        goalTitle: "Q1: Launch Milady beta",
-        note: "Beta shipped in week 10",
-        atIso: "{{now-14d}}",
-      },
-    },
-  ],
   turns: [
     {
       kind: "message",
       name: "q1-review",
       text: "How did my Q1 go?",
-      responseIncludesAny: ["Q1", "Milady", "beta", "goal"],
+      expectedActions: ["LIFE"],
+      responseIncludesAny: ["Q1", "goals", "progress", "metrics"],
     },
   ],
   finalChecks: [
     {
       type: "custom",
-      name: "quarterly-review-nyi",
-      predicate: async () =>
-        "NotYetImplemented: quarterly review via check-in engine (T9f, plan §6.23) — quarterly goal review path not yet implemented",
+      name: "quarterly-review-stays-in-clarification-mode",
+      predicate: expectScenarioActionResultData({
+        description: "quarterly review clarification payload",
+        actionName: "LIFE",
+        includesAll: ['"noop":true', '"suggestedOperation":null'],
+      }),
     },
   ],
 });

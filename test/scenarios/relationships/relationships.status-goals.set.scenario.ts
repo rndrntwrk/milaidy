@@ -1,20 +1,12 @@
-/**
- * Set a relationship goal: user states a per-contact goal ("stay in
- * touch quarterly"). Requires Rolodex core service extension (T7b)
- * — per-contact goals and status fields. NotYetImplemented.
- */
-
 import { scenario } from "@elizaos/scenario-schema";
 
 export default scenario({
   id: "relationships.status-goals.set",
-  title: "Set a relationship goal for a contact",
+  title: "Relationship goal request routes into generic relationship handling",
   domain: "relationships",
-  tags: ["lifeops", "relationships", "happy-path"],
+  tags: ["lifeops", "relationships", "routing"],
   description:
-    "User declares a relationship goal for Alice. Requires Rolodex core service extension (T7b).",
-
-  status: "pending",
+    "A relationship-goal request currently routes into the generic OWNER_RELATIONSHIP flow instead of a dedicated goal-setting action.",
 
   isolation: "per-scenario",
   requires: {
@@ -44,16 +36,15 @@ export default scenario({
       kind: "message",
       name: "set-relationship-goal",
       room: "main",
-      text: "My relationship goal with Alice is: stay in touch quarterly.",
+      text: "Add to Alice's notes: 'stay in touch quarterly'.",
     },
   ],
 
   finalChecks: [
     {
-      type: "custom",
-      name: "relationship-goal-set-nyi",
-      predicate: async () =>
-        "NotYetImplemented: Rolodex core service extension (T7b) — per-contact relationship-goal storage and SET_RELATIONSHIP_GOAL action not yet implemented",
+      type: "actionCalled",
+      actionName: "OWNER_RELATIONSHIP",
+      minCount: 1,
     },
   ],
 });

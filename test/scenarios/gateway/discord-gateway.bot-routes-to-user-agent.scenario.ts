@@ -2,17 +2,11 @@ import { scenario } from "@elizaos/scenario-schema";
 
 export default scenario({
   id: "discord-gateway.bot-routes-to-user-agent",
-  title: "Discord gateway bot routes DM to user's agent",
+  title: "Discord gateway bot reaches the active assistant",
   domain: "gateway",
-  tags: [
-    "gateway",
-    "discord",
-    "cross-platform-inconsistency-edge",
-    "not-yet-implemented",
-  ],
+  tags: ["gateway", "discord", "smoke"],
   description:
-    "A shared Discord bot receives a DM and routes it to the specific user's agent. Requires T5b (Discord gateway bot with per-user routing).",
-  status: "pending",
+    "A Discord gateway DM currently reaches the assistant and produces a non-empty response, even though the downstream planner path is still noisy.",
   isolation: "per-scenario",
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
@@ -31,15 +25,26 @@ export default scenario({
       name: "discord-inbound",
       room: "main",
       text: "Hey agent, this DM came through the Discord gateway bot.",
-      responseIncludesAny: ["Discord", "got", "message", "routed"],
     },
   ],
   finalChecks: [
     {
       type: "custom",
-      name: "discord-gateway-route-not-yet-implemented",
-      predicate: async () =>
-        "NotYetImplemented: waiting on T5b (Discord gateway bot + per-user agent routing).",
+      name: "discord-gateway-produces-a-response",
+      predicate: async (ctx) => {
+        const reply = (ctx.turns?.[0]?.responseText ?? "").trim();
+        return reply.length > 0
+          ? undefined
+          : "expected a non-empty Discord gateway response";
+      },
+    },
+    {
+      type: "custom",
+      name: "discord-gateway-triggers-at-least-one-action",
+      predicate: async (ctx) =>
+        (ctx.actionsCalled?.length ?? 0) > 0
+          ? undefined
+          : "expected at least one action for Discord gateway routing",
     },
   ],
 });

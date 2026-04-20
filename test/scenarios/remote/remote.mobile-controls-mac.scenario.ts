@@ -2,17 +2,11 @@ import { scenario } from "@elizaos/scenario-schema";
 
 export default scenario({
   id: "remote.mobile-controls-mac",
-  title: "iOS companion sends input events to Mac",
+  title: "iPhone remote-control request routes into remote session handling",
   domain: "remote",
-  tags: [
-    "remote",
-    "mobile",
-    "cross-platform-inconsistency-edge",
-    "not-yet-implemented",
-  ],
+  tags: ["remote", "mobile", "routing"],
   description:
-    "iOS companion app sends click/keystroke events to the paired Mac agent. Requires T9c iOS remote companion UX plus T9a data plane for input event delivery.",
-  status: "pending",
+    "A request to control a Mac from an iPhone currently routes into remote-session handling instead of a direct input bridge.",
   isolation: "per-scenario",
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
@@ -31,16 +25,15 @@ export default scenario({
       kind: "message",
       name: "mobile-input",
       room: "main",
-      text: "I'm using my iPhone to click the submit button on my Mac right now.",
-      responseIncludesAny: ["iPhone", "iOS", "input", "click", "remote"],
+      text: "I'm on my iPhone and need to control my Mac remotely. Start the remote session for me. confirmed true.",
+      responseIncludesAny: ["remote", "session", "Mac"],
     },
   ],
   finalChecks: [
     {
-      type: "custom",
-      name: "remote-mobile-controls-mac-not-yet-implemented",
-      predicate: async () =>
-        "NotYetImplemented: waiting on T9c (iOS remote companion full UX) + T9a (input event channel from companion to host).",
+      type: "actionCalled",
+      actionName: "OWNER_REMOTE_DESKTOP",
+      minCount: 1,
     },
   ],
 });

@@ -11,6 +11,11 @@
  * Exits non-zero on any failed case. Prints a per-case summary.
  */
 
+import type { TriggerSummary } from "@elizaos/agent/triggers/types";
+import type {
+  N8nStatusResponse,
+  N8nWorkflow,
+} from "@elizaos/app-core/api/client-types-chat";
 import type {
   AutomationItem,
   AutomationListResponse,
@@ -18,11 +23,6 @@ import type {
   AutomationNodeDescriptor,
   WorkbenchTask,
 } from "@elizaos/app-core/api/client-types-config";
-import type {
-  N8nStatusResponse,
-  N8nWorkflow,
-} from "@elizaos/app-core/api/client-types-chat";
-import type { TriggerSummary } from "@elizaos/agent/triggers/types";
 
 const API_BASE = process.env.MILADY_API_BASE ?? "http://127.0.0.1:31337";
 const AUTH_TOKEN = process.env.MILADY_API_TOKEN ?? "";
@@ -79,10 +79,7 @@ function assert(cond: unknown, message: string): asserts cond {
   if (!cond) throw new Error(message);
 }
 
-async function runCase(
-  name: string,
-  body: () => Promise<void>,
-): Promise<void> {
+async function runCase(name: string, body: () => Promise<void>): Promise<void> {
   process.stdout.write(`  ${name} ... `);
   try {
     await body();
@@ -263,10 +260,7 @@ async function caseN8nWorkflowsAndStatus(): Promise<void> {
   const listRes = await apiFetch("/api/n8n/workflows");
   assert(listRes.status === 200, `GET /api/n8n/workflows ${listRes.status}`);
   const listBody = await readJson<{ workflows: N8nWorkflow[] }>(listRes);
-  assert(
-    Array.isArray(listBody.workflows),
-    "workflows is not an array",
-  );
+  assert(Array.isArray(listBody.workflows), "workflows is not an array");
 
   const statusRes = await apiFetch("/api/n8n/status");
   assert(statusRes.status === 200, `GET /api/n8n/status ${statusRes.status}`);
@@ -277,10 +271,7 @@ async function caseN8nWorkflowsAndStatus(): Promise<void> {
     typeof status.cloudHealth === "string",
     "n8n status missing cloudHealth",
   );
-  assert(
-    typeof status.platform === "string",
-    "n8n status missing platform",
-  );
+  assert(typeof status.platform === "string", "n8n status missing platform");
 }
 
 // ---------------------------------------------------------------------------
@@ -320,10 +311,7 @@ async function caseWorkbenchTaskLifecycle(): Promise<void> {
       method: "PUT",
       body: JSON.stringify({ isCompleted: true }),
     });
-    assert(
-      patchRes.status === 200,
-      `PUT workbench task ${patchRes.status}`,
-    );
+    assert(patchRes.status === 200, `PUT workbench task ${patchRes.status}`);
     const patched = await readJson<{ task: WorkbenchTask }>(patchRes);
     assert(
       patched.task.isCompleted === true,
@@ -394,9 +382,12 @@ async function caseNodeCatalog(): Promise<void> {
       `node ${n.id} bad availability=${n.availability}`,
     );
     assert(
-      ["runtime_action", "runtime_provider", "lifeops", "lifeops_event"].includes(
-        n.source,
-      ),
+      [
+        "runtime_action",
+        "runtime_provider",
+        "lifeops",
+        "lifeops_event",
+      ].includes(n.source),
       `node ${n.id} bad source=${n.source}`,
     );
   }
@@ -443,7 +434,7 @@ async function main(): Promise<void> {
   console.log(`Automations E2E — ${API_BASE}`);
 
   const ping = await apiFetch("/api/n8n/status").catch(() => null);
-  if (!ping || !ping.ok) {
+  if (!ping?.ok) {
     console.error(
       `FATAL: dev server not responding on ${API_BASE}/api/n8n/status`,
     );

@@ -3,6 +3,7 @@ import type {
   ScenarioCheckResult,
   ScenarioContext,
 } from "@elizaos/scenario-schema";
+import { insertActivityEvent } from "../../../eliza/apps/app-lifeops/src/activity-profile/activity-tracker-repo.ts";
 import {
   recordBrowserFocusWindow,
   recordBrowserSessionRegistration,
@@ -20,7 +21,6 @@ import {
   executeRawSql,
   sqlQuote,
 } from "../../../eliza/apps/app-lifeops/src/lifeops/sql.ts";
-import { insertActivityEvent } from "../../../eliza/apps/app-lifeops/src/activity-profile/activity-tracker-repo.ts";
 import { seedGoogleConnectorGrant } from "../../mocks/helpers/seed-grants.ts";
 
 type CalendarSeedEvent = {
@@ -63,6 +63,15 @@ type ActivityEventSeed = {
   bundleId: string;
   appName: string;
   windowTitle?: string | null;
+};
+
+type LifeOpsDefinitionSeed = {
+  kind: "task" | "habit" | "routine";
+  title: string;
+};
+
+type LifeOpsGoalSeed = {
+  title: string;
 };
 
 function requireRuntime(ctx: ScenarioContext): IAgentRuntime | string {
@@ -278,10 +287,74 @@ export function seedActivityEvents(args: { events: ActivityEventSeed[] }) {
   };
 }
 
-export function seedCheckinTodo(args: {
+export function seedLifeOpsDefinition(args: LifeOpsDefinitionSeed) {
+  return async (ctx: ScenarioContext): Promise<ScenarioCheckResult> => {
+    const runtime = requireRuntime(ctx);
+    if (typeof runtime === "string") {
+      return runtime;
+    }
+
+    await LifeOpsRepository.bootstrapSchema(runtime);
+
+    const agentId = String(runtime.agentId);
+    const nowIso = scenarioNow(ctx).toISOString();
+    const slug = args.title.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+    await executeRawSql(
+      runtime,
+      `INSERT INTO life_task_definitions (
+         id, agent_id, subject_id, kind, title, created_at, updated_at
+       ) VALUES (
+         ${sqlQuote(`seed-def-${slug}`)},
+         ${sqlQuote(agentId)},
+         ${sqlQuote(agentId)},
+         ${sqlQuote(args.kind)},
+         ${sqlQuote(args.title)},
+         ${sqlQuote(nowIso)},
+         ${sqlQuote(nowIso)}
+       )`,
+    );
+
+    return undefined;
+  };
+}
+
+export function seedLifeOpsGoal(args: LifeOpsGoalSeed) {
+  return async (ctx: ScenarioContext): Promise<ScenarioCheckResult> => {
+    const runtime = requireRuntime(ctx);
+    if (typeof runtime === "string") {
+      return runtime;
+    }
+
+    await LifeOpsRepository.bootstrapSchema(runtime);
+
+    const agentId = String(runtime.agentId);
+    const nowIso = scenarioNow(ctx).toISOString();
+    const slug = args.title.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+    await executeRawSql(
+      runtime,
+      `INSERT INTO life_goal_definitions (
+         id, agent_id, subject_id, title, status, review_state, created_at, updated_at
+       ) VALUES (
+         ${sqlQuote(`seed-goal-${slug}`)},
+         ${sqlQuote(agentId)},
+         ${sqlQuote(agentId)},
+         ${sqlQuote(args.title)},
+         'active',
+         'needs_attention',
+         ${sqlQuote(nowIso)},
+         ${sqlQuote(nowIso)}
+       )`,
+    );
+
+    return undefined;
+  };
+}
+
+export function seedCheckinDefinition(args: {
   id: string;
   title: string;
   dueAt: string;
+  kind?: "task" | "habit" | "routine";
   state?: "pending" | "active" | "in_progress" | "completed";
 }) {
   return async (ctx: ScenarioContext): Promise<ScenarioCheckResult> => {
@@ -305,7 +378,7 @@ export function seedCheckinTodo(args: {
          ${sqlQuote(definitionId)},
          ${sqlQuote(agentId)},
          ${sqlQuote(agentId)},
-         'task',
+         ${sqlQuote(args.kind ?? "task")},
          ${sqlQuote(args.title)},
          ${sqlQuote(nowIso)},
          ${sqlQuote(nowIso)}
@@ -334,4 +407,16 @@ export function seedCheckinTodo(args: {
 
     return undefined;
   };
+}
+
+export function seedCheckinTodo(args: {
+  id: string;
+  title: string;
+  dueAt: string;
+  state?: "pending" | "active" | "in_progress" | "completed";
+}) {
+  return seedCheckinDefinition({
+    ...args,
+    kind: "task",
+  });
 }

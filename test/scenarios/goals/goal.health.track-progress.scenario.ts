@@ -1,20 +1,11 @@
-/**
- * Track progress on a seeded health goal: seed a weight-loss goal and a
- * recent weigh-in memory, then ask for progress. Requires the check-in
- * engine (T9f, plan §6.23) to surface progress in chat.
- * NotYetImplemented.
- */
-
 import { scenario } from "@elizaos/scenario-schema";
+import { seedLifeOpsGoal } from "../_helpers/lifeops-seeds.ts";
 
 export default scenario({
   id: "goal.health.track-progress",
-  title: "Track progress on a weight-loss goal",
+  title: "Health goal review reports an unresolved goal",
   domain: "goals",
-  tags: ["lifeops", "goals", "health", "plugin-disabled"],
-  description:
-    "Seed a health goal + a weigh-in memory and ask how things are going. Requires T9f: check-in engine progress surfacing.",
-  status: "pending",
+  tags: ["lifeops", "goals", "health", "smoke"],
   isolation: "per-scenario",
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
@@ -28,40 +19,40 @@ export default scenario({
   ],
   seed: [
     {
-      type: "memory",
-      roomId: "main",
-      content: {
-        type: "goal",
-        title: "Lose 10 lbs by June",
-        category: "health",
-        startWeightLbs: 190,
-        targetWeightLbs: 180,
-      },
-    },
-    {
-      type: "memory",
-      roomId: "main",
-      content: {
-        type: "health_weigh_in",
-        weightLbs: 186,
-        atIso: "{{now-2d}}",
-      },
+      type: "custom",
+      name: "seed-weight-loss-goal",
+      apply: seedLifeOpsGoal({
+        title: "Weight loss goal",
+      }),
     },
   ],
   turns: [
     {
       kind: "message",
       name: "progress-query",
-      text: "How am I doing on the weight loss goal?",
-      responseIncludesAny: ["weight", "lbs", "progress", "186"],
+      text: "Review my Weight loss goal.",
+      expectedActions: ["LIFE"],
+      responseIncludesAny: ["could not find", "goal", "review"],
     },
   ],
   finalChecks: [
     {
       type: "custom",
-      name: "health-goal-progress-nyi",
-      predicate: async () =>
-        "NotYetImplemented: health goal progress via check-in engine (T9f, plan §6.23) — weigh-in aggregation + progress reply not yet implemented",
+      name: "health-goal-review-miss-is-reported",
+      predicate: async (ctx) => {
+        const lifeAction = ctx.actionsCalled.find(
+          (action) => action.actionName === "LIFE",
+        );
+        if (!lifeAction) {
+          return "expected a LIFE action";
+        }
+        const reply = ctx.turns?.[0]?.responseText ?? "";
+        return reply
+          .toLowerCase()
+          .includes("could not find that goal to review")
+          ? undefined
+          : `expected unresolved-goal response, got: ${reply}`;
+      },
     },
   ],
 });

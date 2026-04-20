@@ -103,7 +103,10 @@ function normalizeChannelKey(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
 
-function channelMatches(candidate: string | undefined, filters: string[]): boolean {
+function channelMatches(
+  candidate: string | undefined,
+  filters: string[],
+): boolean {
   if (filters.length === 0) {
     return true;
   }

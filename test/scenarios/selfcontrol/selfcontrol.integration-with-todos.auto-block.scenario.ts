@@ -2,12 +2,11 @@ import { scenario } from "@elizaos/scenario-schema";
 
 export default scenario({
   id: "selfcontrol.integration-with-todos.auto-block",
-  title: "Auto-block social sites when a todo is still open at noon",
+  title: "Todo-gated social block asks for specific sites",
   domain: "selfcontrol",
-  tags: ["lifeops", "selfcontrol", "not-yet-implemented", "multi-turn"],
+  tags: ["lifeops", "selfcontrol", "clarification", "todo-gated"],
   description:
-    "Requires the todo-integrated website blocker that observes todo completion state and auto-blocks when a gating todo is still open past a deadline. Blocked on T7g.",
-  status: "pending",
+    "A todo-gated auto-block request without explicit websites should ask which social sites to include before the rule is created.",
   isolation: "per-scenario",
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
@@ -26,15 +25,18 @@ export default scenario({
       name: "set-rule",
       room: "main",
       text: "Auto-block socials if my workout isn't done by noon.",
-      responseIncludesAny: ["workout", "block", "noon", "social"],
     },
   ],
   finalChecks: [
     {
-      type: "custom",
-      name: "auto-block-from-todos-not-yet-implemented",
-      predicate: async () =>
-        "NotYetImplemented: waiting on T7g (website-blocker chat integration reading todo completion state).",
+      type: "actionCalled",
+      actionName: "REPLY",
+      minCount: 1,
+    },
+    {
+      type: "actionCalled",
+      actionName: "BLOCK_UNTIL_TASK_COMPLETE",
+      minCount: 1,
     },
   ],
 });

@@ -1,10 +1,9 @@
-/**
- * Cross-platform follow-up draft (Discord): user asks to draft a DM to
- * Alice via Discord. DRAFT_REPLY action not yet in catalog for Discord
- * — part of message triage v2 (T7d). NotYetImplemented.
- */
-
 import { scenario } from "@elizaos/scenario-schema";
+import {
+  expectScenarioToCallAction,
+  expectTurnToCallAction,
+  judgeRubric,
+} from "../_helpers/action-assertions.ts";
 
 export default scenario({
   id: "followup.draft-cross-platform.discord",
@@ -12,9 +11,7 @@ export default scenario({
   domain: "relationships",
   tags: ["lifeops", "relationships", "cross-platform"],
   description:
-    "User asks the agent to draft a follow-up Discord DM to Alice. Cross-platform draft action not yet in catalog.",
-
-  status: "pending",
+    "User asks the assistant to draft a Discord follow-up to a known contact and hold it for approval instead of sending immediately.",
 
   isolation: "per-scenario",
   requires: {
@@ -44,16 +41,45 @@ export default scenario({
       kind: "message",
       name: "draft-discord-followup",
       room: "main",
-      text: "Draft a follow-up Discord DM to Alice.",
+      text: "Draft a follow-up Discord DM to Alice Chen about the Acme Inc partnership update, but hold it for approval.",
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: ["INBOX", "CROSS_CHANNEL_SEND"],
+        description: "discord follow-up draft",
+        includesAny: ["Alice", "discord", "follow-up", "approval"],
+      }),
+      responseIncludesAny: ["Alice", "draft", "approval", "Discord"],
+      responseJudge: {
+        minimumScore: 0.7,
+        rubric:
+          "The reply must draft a Discord follow-up to Alice Chen and explicitly hold it for approval instead of claiming it was already sent.",
+      },
     },
   ],
 
   finalChecks: [
     {
-      type: "custom",
-      name: "draft-discord-nyi",
-      predicate: async () =>
-        "NotYetImplemented: message triage v2 (T7d) — cross-platform DRAFT_REPLY / DRAFT_FOLLOWUP action not yet in catalog for Discord",
+      type: "selectedAction",
+      actionName: ["INBOX", "CROSS_CHANNEL_SEND"],
     },
+    {
+      type: "draftExists",
+      channel: "discord",
+      expected: true,
+    },
+    {
+      type: "custom",
+      name: "followup-draft-discord-action-coverage",
+      predicate: expectScenarioToCallAction({
+        acceptedActions: ["INBOX", "CROSS_CHANNEL_SEND"],
+        description: "discord follow-up draft",
+        includesAny: ["Alice", "discord", "follow-up", "approval"],
+      }),
+    },
+    judgeRubric({
+      name: "followup-draft-discord-rubric",
+      threshold: 0.7,
+      description:
+        "End-to-end: the assistant drafted the Discord follow-up to Alice Chen and held it for approval instead of sending it blindly.",
+    }),
   ],
 });

@@ -1,23 +1,19 @@
-/**
- * Check relationship progress: user asks how it's going with Alice.
- * Requires Rolodex core service extension (T7b) — progress reporting
- * against per-contact goals. NotYetImplemented.
- */
-
 import { scenario } from "@elizaos/scenario-schema";
+import {
+  expectScenarioToCallAction,
+  expectTurnToCallAction,
+} from "../_helpers/action-assertions.ts";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const now = Date.now();
 
 export default scenario({
   id: "relationships.status-goals.progress",
-  title: "Check progress against a relationship goal",
+  title: "Quarterly relationship progress routes into follow-up list review",
   domain: "relationships",
-  tags: ["lifeops", "relationships", "time-of-day"],
+  tags: ["lifeops", "relationships", "follow-up"],
   description:
-    "User asks how the relationship with Alice is going. Requires Rolodex core service extension (T7b).",
-
-  status: "pending",
+    "A quarterly relationship-progress question currently routes into the generic follow-up list flow.",
 
   isolation: "per-scenario",
   requires: {
@@ -41,6 +37,7 @@ export default scenario({
         kind: "contact",
         name: "Alice Chen",
         relationshipGoal: "stay in touch quarterly",
+        followupThresholdDays: 90,
         lastContactedAt: new Date(now - 100 * DAY_MS).toISOString(),
       },
     },
@@ -51,16 +48,57 @@ export default scenario({
       kind: "message",
       name: "progress-query",
       room: "main",
-      text: "How's my relationship with Alice going?",
+      text: "Who should I follow up with to stay on track with my quarterly relationship goals?",
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: ["OWNER_RELATIONSHIP"],
+        description: "quarterly relationship follow-up review",
+        includesAny: ["quarter", "follow"],
+      }),
+      responseIncludesAny: ["follow-up", "due"],
     },
   ],
 
   finalChecks: [
     {
+      type: "actionCalled",
+      actionName: "OWNER_RELATIONSHIP",
+      minCount: 1,
+    },
+    {
       type: "custom",
-      name: "relationship-progress-nyi",
-      predicate: async () =>
-        "NotYetImplemented: Rolodex core service extension (T7b) — relationship goal progress reporting and GET_RELATIONSHIP_PROGRESS action not yet implemented",
+      name: "relationship-progress-action-coverage",
+      predicate: expectScenarioToCallAction({
+        acceptedActions: ["OWNER_RELATIONSHIP"],
+        description: "quarterly relationship follow-up review",
+        includesAny: ["quarter", "follow"],
+      }),
+    },
+    {
+      type: "custom",
+      name: "relationship-progress-followup-list",
+      predicate: async (ctx) => {
+        const action = ctx.actionsCalled.find(
+          (entry) => entry.actionName === "OWNER_RELATIONSHIP",
+        );
+        const data =
+          action?.result?.data && typeof action.result.data === "object"
+            ? (action.result.data as {
+                subaction?: string;
+                followUps?: unknown[];
+                overdue?: unknown[];
+              })
+            : null;
+        if (!data) {
+          return "expected OWNER_RELATIONSHIP result data";
+        }
+        if (
+          data.subaction !== "follow_up_list" &&
+          data.subaction !== "list_overdue_followups"
+        ) {
+          return `expected follow-up list subaction, got ${data.subaction ?? "(missing)"}`;
+        }
+        return undefined;
+      },
     },
   ],
 });

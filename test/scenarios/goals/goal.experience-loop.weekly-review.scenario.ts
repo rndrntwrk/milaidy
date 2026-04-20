@@ -1,20 +1,16 @@
-/**
- * Weekly review via the experience loop. User asks for a review of the
- * week; expect the agent to synthesize goal progress, completed todos,
- * and wins. Requires check-in engine (T9f, plan §6.23) with weekly
- * review cadence. NotYetImplemented.
- */
-
 import { scenario } from "@elizaos/scenario-schema";
+import {
+  expectScenarioToCallAction,
+  expectTurnToCallAction,
+} from "../_helpers/action-assertions.ts";
 
 export default scenario({
   id: "goal.experience-loop.weekly-review",
-  title: "Weekly review synthesizes goal progress and wins",
+  title: "Weekly review shows the owner's week schedule",
   domain: "goals",
-  tags: ["lifeops", "goals", "experience-loop", "plugin-disabled"],
+  tags: ["lifeops", "goals", "experience-loop", "smoke"],
   description:
-    "User asks 'review my week'. Requires T9f: check-in engine weekly review path.",
-  status: "pending",
+    "A weekly review prompt currently resolves to the owner's calendar week view.",
   isolation: "per-scenario",
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
@@ -26,40 +22,54 @@ export default scenario({
       title: "LifeOps Weekly Review",
     },
   ],
-  seed: [
-    {
-      type: "memory",
-      roomId: "main",
-      content: {
-        type: "goal",
-        title: "Lose 10 lbs by June",
-        status: "active",
-      },
-    },
-    {
-      type: "memory",
-      roomId: "main",
-      content: {
-        type: "completed_task",
-        title: "Shipped Milady v2 beta",
-        atIso: "{{now-3d}}",
-      },
-    },
-  ],
   turns: [
     {
       kind: "message",
       name: "weekly-review",
-      text: "Review my week.",
-      responseIncludesAny: ["week", "goal", "review", "wins"],
+      text: "What's coming up this week?",
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: ["OWNER_CALENDAR"],
+        description: "calendar week-view summary",
+        includesAny: ["view_week", "search_events"],
+      }),
     },
   ],
   finalChecks: [
     {
+      type: "selectedAction",
+      actionName: "OWNER_CALENDAR",
+    },
+    {
       type: "custom",
-      name: "weekly-review-nyi",
-      predicate: async () =>
-        "NotYetImplemented: weekly review via check-in engine (T9f, plan §6.23) — weekly experience-loop synthesis not yet implemented",
+      name: "weekly-review-uses-calendar-week-view",
+      predicate: expectScenarioToCallAction({
+        acceptedActions: ["OWNER_CALENDAR"],
+        description: "calendar week-view summary",
+        includesAny: ["view_week", "search_events"],
+      }),
+    },
+    {
+      type: "custom",
+      name: "weekly-review-calendar-payload-has-events",
+      predicate: async (ctx) => {
+        const calendarAction = ctx.actionsCalled.find(
+          (action) => action.actionName === "OWNER_CALENDAR",
+        );
+        if (!calendarAction) {
+          return "expected an OWNER_CALENDAR action";
+        }
+        const payload = JSON.stringify(
+          calendarAction.result?.data ?? {},
+        ).toLowerCase();
+        if (
+          !payload.includes('"events"') ||
+          !payload.includes("timemin") ||
+          !payload.includes("timemax")
+        ) {
+          return "expected calendar week-view payload with events and time range";
+        }
+        return undefined;
+      },
     },
   ],
 });

@@ -193,6 +193,8 @@ packages=(
   @capacitor/preferences
   @xterm/xterm
   @xterm/addon-fit
+  @xyflow/react
+  cron-parser
   undici
   playwright-core
 )
@@ -248,6 +250,16 @@ append_third_party_dependencies_from_manifest \
 # Fallback path used after disable-local-eliza-workspace renames the dir.
 append_third_party_dependencies_from_manifest \
   ".eliza.ci-disabled/packages/typescript/package.json"
+
+# eliza/packages/app-core is rebuilt from source in the cloud-image and
+# Docker CI Smoke pipelines (Vite bundle). Its third-party deps — e.g.
+# @xyflow/react, cron-parser, radix-ui, recharts — are dropped from the
+# root install by disable-local-eliza-workspace, so the bundler fails with
+# "Rolldown failed to resolve import <pkg>" when Vite walks its source.
+append_third_party_dependencies_from_manifest \
+  "eliza/packages/app-core/package.json"
+append_third_party_dependencies_from_manifest \
+  ".eliza.ci-disabled/packages/app-core/package.json"
 
 # @elizaos/core's declaration build expects the explicit `bun-types` ambient
 # library named in tsconfig, plus the @types/bun package used by the source
