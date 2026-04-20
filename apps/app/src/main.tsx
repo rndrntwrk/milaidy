@@ -15,6 +15,7 @@ import {
   isElectrobunRuntime,
 } from "@elizaos/app-core";
 import { CharacterEditor } from "@elizaos/app-core";
+import { PhoneCompanionApp } from "@elizaos/app-core";
 import type { BrandingConfig } from "@elizaos/app-core";
 import {
   type AppBootConfig,
@@ -519,15 +520,27 @@ function setupPlatformStyles(): void {
   root.style.setProperty("--keyboard-height", "0px");
 }
 
+function isPhoneCompanionMode(): boolean {
+  if (typeof window === "undefined") return false;
+  const params = new URLSearchParams(
+    window.location.search || window.location.hash.split("?")[1] || "",
+  );
+  return params.get("mode") === "companion";
+}
+
 function mountReactApp(): void {
   const rootEl = document.getElementById("root");
   if (!rootEl) throw new Error("Root element #root not found");
+
+  const phoneCompanion = isPhoneCompanionMode();
 
   createRoot(rootEl).render(
     <ErrorBoundary>
       <StrictMode>
         <AppProvider branding={APP_BRANDING}>
-          {isDetachedWindowShell(windowShellRoute) ? (
+          {phoneCompanion ? (
+            <PhoneCompanionApp />
+          ) : isDetachedWindowShell(windowShellRoute) ? (
             <div className="flex h-screen min-h-0 w-screen flex-col overflow-hidden">
               <DetachedShellRoot route={windowShellRoute} />
             </div>
