@@ -2,11 +2,12 @@ import { scenario } from "@elizaos/scenario-schema";
 
 export default scenario({
   id: "telegram.local.mute-chat",
-  title: "Telegram mute request falls into website-block state handling",
+  title: "Telegram mute request stays blocked until Telegram mute exists",
   domain: "messaging.telegram-local",
-  tags: ["messaging", "telegram", "routing"],
+  tags: ["messaging", "telegram", "routing", "not-yet-implemented"],
   description:
-    "A Telegram mute request currently routes into the owner website-block action and reports the existing block state.",
+    "Telegram local mute has no real runtime control yet. Do not route it through website blocking or generic room mute fallbacks.",
+  status: "pending",
   isolation: "per-scenario",
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
@@ -25,7 +26,6 @@ export default scenario({
       name: "mute chat",
       room: "main",
       text: "Mute the 'crypto signals' Telegram group for 24 hours.",
-      responseIncludesAny: ["website block", "running"],
     },
   ],
   finalChecks: [
@@ -33,27 +33,17 @@ export default scenario({
       type: "custom",
       name: "telegram-mute-routing",
       predicate: async (ctx) => {
-        const action = ctx.actionsCalled.find(
-          (entry) => entry.actionName === "OWNER_WEBSITE_BLOCK",
-        );
-        const data =
-          action?.result?.data && typeof action.result.data === "object"
-            ? (action.result.data as {
-                active?: boolean;
-                endsAt?: string;
-                websites?: string[];
-              })
-            : null;
-        if (!data) {
-          return "expected OWNER_WEBSITE_BLOCK result";
+        const fallbackActions = ctx.actionsCalled
+          .map((entry) => entry.actionName)
+          .filter((actionName) =>
+            ["OWNER_WEBSITE_BLOCK", "MUTE_ROOM", "OWNER_INBOX"].includes(
+              actionName,
+            ),
+          );
+        if (fallbackActions.length > 0) {
+          return `unexpected fallback action(s) used for Telegram mute: ${fallbackActions.join(", ")}`;
         }
-        if (data.active !== true) {
-          return "expected website-block action to report an active block";
-        }
-        if (!Array.isArray(data.websites) || data.websites.length === 0) {
-          return "expected active website list in website-block result";
-        }
-        return undefined;
+        return "NotYetImplemented: Telegram local mute has no real connector/runtime control yet. Keep this blocked until a Telegram mute action exists.";
       },
     },
   ],

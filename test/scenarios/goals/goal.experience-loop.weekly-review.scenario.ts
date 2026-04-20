@@ -1,16 +1,14 @@
 import { scenario } from "@elizaos/scenario-schema";
-import {
-  expectScenarioToCallAction,
-  expectTurnToCallAction,
-} from "../_helpers/action-assertions.ts";
+import { expectTurnToCallAction } from "../_helpers/action-assertions.ts";
 
 export default scenario({
   id: "goal.experience-loop.weekly-review",
-  title: "Weekly review shows the owner's week schedule",
+  title: "Weekly review cadence remains pending",
   domain: "goals",
   tags: ["lifeops", "goals", "experience-loop", "smoke"],
   description:
-    "A weekly review prompt currently resolves to the owner's calendar week view.",
+    "Pending until the runtime has a typed weekly review cadence path for goal experience loops.",
+  status: "pending",
   isolation: "per-scenario",
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
@@ -41,35 +39,9 @@ export default scenario({
     },
     {
       type: "custom",
-      name: "weekly-review-uses-calendar-week-view",
-      predicate: expectScenarioToCallAction({
-        acceptedActions: ["OWNER_CALENDAR"],
-        description: "calendar week-view summary",
-        includesAny: ["view_week", "search_events"],
-      }),
-    },
-    {
-      type: "custom",
-      name: "weekly-review-calendar-payload-has-events",
-      predicate: async (ctx) => {
-        const calendarAction = ctx.actionsCalled.find(
-          (action) => action.actionName === "OWNER_CALENDAR",
-        );
-        if (!calendarAction) {
-          return "expected an OWNER_CALENDAR action";
-        }
-        const payload = JSON.stringify(
-          calendarAction.result?.data ?? {},
-        ).toLowerCase();
-        if (
-          !payload.includes('"events"') ||
-          !payload.includes("timemin") ||
-          !payload.includes("timemax")
-        ) {
-          return "expected calendar week-view payload with events and time range";
-        }
-        return undefined;
-      },
+      name: "weekly-review-cadence-is-still-unimplemented",
+      predicate: async () =>
+        "NotYetImplemented: waiting on a typed weekly review cadence and typed experience-loop retrieval.",
     },
   ],
 });

@@ -6,11 +6,11 @@ import {
 
 export default scenario({
   id: "whatsapp-gateway.bot-routes-to-user-agent",
-  title: "WhatsApp gateway bot replies in the user room",
+  title: "WhatsApp gateway bot routes to the active assistant",
   domain: "gateway",
   tags: ["gateway", "whatsapp", "smoke"],
   description:
-    "A WhatsApp gateway DM currently produces a direct reply in the WhatsApp room that acknowledges the gateway bot.",
+    "A WhatsApp gateway DM resolves to the owning user agent and returns inbox-grounded context from the same WhatsApp chat.",
   isolation: "per-scenario",
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
@@ -28,41 +28,52 @@ export default scenario({
       kind: "message",
       name: "whatsapp-inbound",
       room: "main",
-      text: "Please confirm you received this WhatsApp gateway bot DM.",
+      text: "What's in this WhatsApp gateway DM? Summarize it back to me.",
       assertTurn: expectTurnToCallAction({
-        acceptedActions: ["REPLY", "OWNER_INBOX"],
-        description: "WhatsApp gateway acknowledgement path",
+        acceptedActions: ["INBOX"],
+        description: "WhatsApp gateway inbox read",
+        includesAny: ["whatsapp", "chat", "message"],
       }),
     },
   ],
   finalChecks: [
     {
+      type: "selectedAction",
+      actionName: ["INBOX", "OWNER_INBOX"],
+    },
+    {
+      type: "selectedActionArguments",
+      actionName: ["INBOX", "OWNER_INBOX"],
+      includesAny: ["whatsapp", "chat", "message", "room"],
+    },
+    {
       type: "custom",
-      name: "whatsapp-gateway-hits-supported-path",
+      name: "whatsapp-gateway-inbox-context-is-real",
       predicate: expectScenarioToCallAction({
-        acceptedActions: ["REPLY", "OWNER_INBOX"],
-        description: "WhatsApp gateway acknowledgement path",
+        acceptedActions: ["INBOX"],
+        description: "WhatsApp gateway inbox read",
+        includesAny: ["whatsapp", "chat", "message"],
       }),
     },
     {
       type: "custom",
-      name: "whatsapp-gateway-result-is-an-ack-or-inbox-noop",
+      name: "whatsapp-gateway-response-is-grounded",
       predicate: async (ctx) => {
-        const replyAction = ctx.actionsCalled.find(
-          (action) => action.actionName === "REPLY",
-        );
-        if (replyAction) {
-          const reply = (ctx.turns?.[0]?.responseText ?? "").trim();
-          return reply.length > 0
-            ? undefined
-            : "expected a non-empty WhatsApp reply";
+        const reply = (ctx.turns?.[0]?.responseText ?? "").trim();
+        if (!reply) {
+          return "expected a non-empty WhatsApp response";
         }
 
-        const inboxAction = ctx.actionsCalled.find(
-          (action) => action.actionName === "OWNER_INBOX",
+        const hit = ctx.actionsCalled.find((action) =>
+          ["INBOX", "OWNER_INBOX"].includes(action.actionName),
         );
-        if (!inboxAction) {
-          return "expected either REPLY or OWNER_INBOX";
+        if (!hit) {
+          return "expected an INBOX action";
+        }
+
+        const blob = JSON.stringify(hit).toLowerCase();
+        if (!blob.includes("whatsapp") || (!blob.includes("chat") && !blob.includes("message"))) {
+          return "expected WhatsApp chat metadata in the inbox action payload";
         }
         return undefined;
       },

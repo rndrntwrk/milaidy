@@ -1,19 +1,16 @@
 import { scenario } from "@elizaos/scenario-schema";
+import {
+  expectMemoryWrite,
+  expectTurnToCallAction,
+} from "../_helpers/action-assertions.ts";
 
 export default scenario({
   id: "bluebubbles.imessage.send-blue",
-  title: "Agent sends outbound iMessage (blue bubble) with confirmation",
+  title: "Agent confirms then sends a BlueBubbles iMessage",
   domain: "gateway",
-  tags: [
-    "gateway",
-    "imessage",
-    "bluebubbles",
-    "confirms-destructive-edge",
-    "not-yet-implemented",
-  ],
+  tags: ["gateway", "imessage", "bluebubbles", "smoke"],
   description:
-    "Agent proposes sending an outbound iMessage to an Apple contact (blue bubble); after user confirmation, BlueBubbles delivers it. Requires T5e (BlueBubbles outbound send action).",
-  status: "pending",
+    "The first turn must ask for confirmation. After the explicit yes, the BlueBubbles send action should fire and persist the outbound message.",
   isolation: "per-scenario",
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
@@ -34,21 +31,85 @@ export default scenario({
       room: "main",
       text: "iMessage Sarah that I'll be there in 10 minutes.",
       responseIncludesAny: ["iMessage", "Sarah", "confirm", "10"],
+      forbiddenActions: ["SEND_BLUEBUBBLES_MESSAGE", "AGENT_SEND_MESSAGE"],
     },
     {
       kind: "message",
       name: "confirm-imessage",
       room: "main",
       text: "Yes, send it.",
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: ["SEND_BLUEBUBBLES_MESSAGE"],
+        description: "BlueBubbles send after confirmation",
+      }),
       responseIncludesAny: ["sent", "delivered", "iMessage"],
     },
   ],
   finalChecks: [
     {
+      type: "selectedAction",
+      actionName: "SEND_BLUEBUBBLES_MESSAGE",
+    },
+    {
+      type: "actionCalled",
+      actionName: "SEND_BLUEBUBBLES_MESSAGE",
+      status: "success",
+    },
+    {
       type: "custom",
-      name: "bluebubbles-send-blue-not-yet-implemented",
-      predicate: async () =>
-        "NotYetImplemented: waiting on T5e (BlueBubbles outbound iMessage action + confirmation UX).",
+      name: "bluebubbles-send-writes-outbound-memory",
+      predicate: async (ctx) => {
+        const outboundWrite = (ctx.memoryWrites ?? []).find((write) => {
+          if (write.table !== "messages") {
+            return false;
+          }
+          const blob = JSON.stringify(write.content ?? {});
+          return blob.includes('"source":"bluebubbles"');
+        });
+
+        if (!outboundWrite) {
+          return "expected the BlueBubbles send action to persist an outbound message memory";
+        }
+
+        return undefined;
+      },
+    },
+    {
+      type: "custom",
+      name: "bluebubbles-send-confirmation-gate",
+      predicate: async (ctx) => {
+        const firstTurnActions = ctx.turns?.[0]?.actionsCalled ?? [];
+        const secondTurnActions = ctx.turns?.[1]?.actionsCalled ?? [];
+
+        if (
+          firstTurnActions.some((action) =>
+            ["SEND_BLUEBUBBLES_MESSAGE", "AGENT_SEND_MESSAGE"].includes(
+              action.actionName,
+            ),
+          )
+        ) {
+          return "first turn sent a message before confirmation";
+        }
+
+        if (
+          !secondTurnActions.some(
+            (action) => action.actionName === "SEND_BLUEBUBBLES_MESSAGE",
+          )
+        ) {
+          return "second turn did not call the BlueBubbles send action";
+        }
+
+        return undefined;
+      },
+    },
+    {
+      type: "custom",
+      name: "bluebubbles-send-memory-coverage",
+      predicate: expectMemoryWrite({
+        description: "BlueBubbles outbound message memory",
+        table: "messages",
+        contentIncludesAny: [/bluebubbles/i],
+      }),
     },
   ],
 });

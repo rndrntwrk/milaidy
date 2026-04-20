@@ -1,12 +1,16 @@
 import { scenario } from "@elizaos/scenario-schema";
+import {
+  expectScenarioToCallAction,
+  expectTurnToCallAction,
+} from "../_helpers/action-assertions.ts";
 
 export default scenario({
   id: "discord-gateway.bot-routes-to-user-agent",
-  title: "Discord gateway bot reaches the active assistant",
+  title: "Discord gateway bot routes to the active assistant",
   domain: "gateway",
   tags: ["gateway", "discord", "smoke"],
   description:
-    "A Discord gateway DM currently reaches the assistant and produces a non-empty response, even though the downstream planner path is still noisy.",
+    "A Discord gateway DM resolves to the owning user agent and returns inbox-grounded context from the same Discord room.",
   isolation: "per-scenario",
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
@@ -24,27 +28,79 @@ export default scenario({
       kind: "message",
       name: "discord-inbound",
       room: "main",
-      text: "Hey agent, this DM came through the Discord gateway bot.",
+      text: "What's in this Discord gateway DM? Summarize it back to me.",
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: ["INBOX"],
+        description: "Discord gateway inbox read",
+        includesAny: ["discord", "dm", "message"],
+      }),
     },
   ],
   finalChecks: [
     {
+      type: "selectedAction",
+      actionName: ["INBOX", "OWNER_INBOX"],
+    },
+    {
+      type: "selectedActionArguments",
+      actionName: ["INBOX", "OWNER_INBOX"],
+      includesAny: ["discord", "dm", "message", "channel", "guild"],
+    },
+    {
       type: "custom",
-      name: "discord-gateway-produces-a-response",
+      name: "discord-gateway-inbox-context-is-real",
+      predicate: expectScenarioToCallAction({
+        acceptedActions: ["INBOX"],
+        description: "Discord gateway inbox read",
+        includesAny: ["discord", "dm", "message"],
+      }),
+    },
+    {
+      type: "custom",
+      name: "discord-gateway-response-is-grounded",
       predicate: async (ctx) => {
         const reply = (ctx.turns?.[0]?.responseText ?? "").trim();
-        return reply.length > 0
-          ? undefined
-          : "expected a non-empty Discord gateway response";
+        if (!reply) {
+          return "expected a non-empty Discord gateway response";
+        }
+
+        const hit = ctx.actionsCalled.find((action) =>
+          ["INBOX", "OWNER_INBOX"].includes(action.actionName),
+        );
+        if (!hit) {
+          return "expected an INBOX action";
+        }
+
+        const blob = JSON.stringify(hit).toLowerCase();
+        if (!blob.includes("discord") || (!blob.includes("dm") && !blob.includes("channel"))) {
+          return "expected Discord room metadata in the inbox action payload";
+        }
+        return undefined;
       },
     },
     {
       type: "custom",
-      name: "discord-gateway-triggers-at-least-one-action",
-      predicate: async (ctx) =>
-        (ctx.actionsCalled?.length ?? 0) > 0
-          ? undefined
-          : "expected at least one action for Discord gateway routing",
+      name: "discord-gateway-room-ownership-is-real",
+      predicate: async (ctx) => {
+        const hit = ctx.actionsCalled.find((action) =>
+          ["INBOX", "OWNER_INBOX"].includes(action.actionName),
+        );
+        if (!hit) {
+          return "expected an INBOX action";
+        }
+
+        const blob = JSON.stringify(hit).toLowerCase();
+        if (!blob.includes("roomid")) {
+          return "expected the Discord inbox payload to include roomId";
+        }
+        if (!blob.includes("discord-dm:") && !blob.includes("discord-guild:")) {
+          return "expected a namespaced Discord roomId";
+        }
+        if (!blob.includes("channelid")) {
+          return "expected Discord channel metadata in the inbox payload";
+        }
+        return undefined;
+      },
     },
   ],
 });

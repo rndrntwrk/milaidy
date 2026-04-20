@@ -6,7 +6,7 @@ export default scenario({
   domain: "gateway",
   tags: ["gateway", "twilio", "call", "smoke", "not-yet-implemented"],
   description:
-    "Inbound phone call hits the Twilio voice webhook and is handled by the user's agent (transcription + response). Requires T9e (Twilio calling gateway).",
+    "Inbound phone call hits the Twilio voice webhook and records the call envelope, but the real voice handoff path is still blocked. Requires T9e (Twilio calling gateway).",
   status: "pending",
   isolation: "per-scenario",
   requires: {
@@ -34,7 +34,7 @@ export default scenario({
       type: "custom",
       name: "twilio-call-receive-not-yet-implemented",
       predicate: async () =>
-        "NotYetImplemented: waiting on T9e (Twilio calling gateway: voice webhook + transcription + agent routing).",
+        "NotYetImplemented: waiting on T9e (Twilio calling gateway: real voice handoff, transcription, and agent routing).",
     },
   ],
 });

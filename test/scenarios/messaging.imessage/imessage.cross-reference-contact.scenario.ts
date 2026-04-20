@@ -1,12 +1,16 @@
 import { scenario } from "@elizaos/scenario-schema";
+import {
+  expectScenarioToCallAction,
+  expectTurnToCallAction,
+} from "../_helpers/action-assertions.ts";
 
 export default scenario({
   id: "imessage.cross-reference-contact",
-  title: "Unknown phone lookup falls into generic fallback tooling",
+  title: "Unknown phone lookup must use Rolodex search or entity read",
   domain: "messaging.imessage",
   tags: ["messaging", "imessage", "routing"],
   description:
-    "An unknown iMessage sender lookup currently falls into unrelated fallback tooling instead of a real iMessage or contacts lookup.",
+    "An unknown iMessage sender lookup must resolve through SEARCH_ENTITY or READ_ENTITY, not generic fallback tooling.",
   isolation: "per-scenario",
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
@@ -25,10 +29,24 @@ export default scenario({
       kind: "message",
       name: "cross reference",
       room: "main",
-      text: "Who is +14155551234?",
+      text: "Search the Rolodex for +14155551234 and tell me who it is.",
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: ["SEARCH_ENTITY", "READ_ENTITY"],
+        description: "iMessage contact lookup",
+        includesAny: ["14155551234", "+14155551234"],
+      }),
     },
   ],
   finalChecks: [
+    {
+      type: "selectedAction",
+      actionName: ["SEARCH_ENTITY", "READ_ENTITY"],
+    },
+    {
+      type: "selectedActionArguments",
+      actionName: ["SEARCH_ENTITY", "READ_ENTITY"],
+      includesAny: ["14155551234", "+14155551234"],
+    },
     {
       type: "custom",
       name: "imessage-cross-ref-routing",
@@ -37,15 +55,31 @@ export default scenario({
           ctx.actionsCalled.map((entry) => entry.actionName),
         );
         if (
-          actionNames.has("HEALTH") ||
-          actionNames.has("CALL_EXTERNAL") ||
-          actionNames.has("OWNER_INBOX") ||
-          actionNames.has("OWNER_RELATIONSHIP")
+          actionNames.has("SEARCH_ENTITY") ||
+          actionNames.has("READ_ENTITY")
         ) {
+          const fallbackActions = [
+            "HEALTH",
+            "CALL_EXTERNAL",
+            "OWNER_INBOX",
+            "OWNER_RELATIONSHIP",
+          ].filter((actionName) => actionNames.has(actionName));
+          if (fallbackActions.length > 0) {
+            return `unexpected fallback action(s) used alongside Rolodex lookup: ${fallbackActions.join(", ")}`;
+          }
           return undefined;
         }
-        return `expected unknown phone lookup to route through HEALTH, CALL_EXTERNAL, OWNER_INBOX, or OWNER_RELATIONSHIP. Called: ${Array.from(actionNames).join(",") || "(none)"}`;
+        return `expected a real Rolodex lookup via SEARCH_ENTITY or READ_ENTITY. Called: ${Array.from(actionNames).join(",") || "(none)"}`;
       },
+    },
+    {
+      type: "custom",
+      name: "imessage-cross-ref-action-coverage",
+      predicate: expectScenarioToCallAction({
+        acceptedActions: ["SEARCH_ENTITY", "READ_ENTITY"],
+        description: "iMessage contact lookup",
+        includesAny: ["14155551234", "+14155551234"],
+      }),
     },
   ],
 });
