@@ -490,12 +490,17 @@ The runner selects the cheapest available provider from its fallback chain. Prov
 - `milady-e2e / llm / openai-api-key`
 - `milady-e2e / llm / anthropic-api-key`
 
-**Env vars**
+**Vault secrets (GitHub Actions secret names)**
 - `MILADY_E2E_GROQ_API_KEY`
 - `MILADY_E2E_OPENAI_API_KEY`
 - `MILADY_E2E_ANTHROPIC_API_KEY`
 
-The runner also accepts the unscoped versions (`GROQ_API_KEY`, etc.) for local dev convenience — the broker prefers the `MILADY_E2E_*` form when set.
+**Env vars exposed to the runner** (upstream-scoped; set from the vault secrets in `scenario-matrix.yml`):
+- `ELIZA_E2E_GROQ_API_KEY`
+- `ELIZA_E2E_OPENAI_API_KEY`
+- `ELIZA_E2E_ANTHROPIC_API_KEY`
+
+The runner also accepts the unscoped versions (`GROQ_API_KEY`, etc.) for local dev convenience. The canonical unscoped form wins when both are set; the `ELIZA_E2E_*` alias is used only when the canonical is unset.
 
 **Rotation** — Groq every 60 days, OpenAI/Anthropic every 90 days.
 
@@ -559,8 +564,10 @@ Sweeper reports counts to the workflow's `GITHUB_STEP_SUMMARY`. Non-zero exit if
 ## `.env.scenarios` example (local dev)
 
 ```bash
-# LLM (at least one required)
-MILADY_E2E_GROQ_API_KEY=...
+# LLM (at least one required). Upstream-scoped alias — the scenario runner
+# also accepts the canonical unscoped names (`GROQ_API_KEY`, etc.), which
+# win if both are set.
+ELIZA_E2E_GROQ_API_KEY=...
 
 # Gmail
 MILADY_E2E_GMAIL_TESTOWNER_CLIENT_ID=...

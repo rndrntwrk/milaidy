@@ -81,10 +81,12 @@ jobs:
     timeout-minutes: 60
 
     env:
-      # LLM providers
-      MILADY_E2E_GROQ_API_KEY: ${{ secrets.MILADY_E2E_GROQ_API_KEY }}
-      MILADY_E2E_OPENAI_API_KEY: ${{ secrets.MILADY_E2E_OPENAI_API_KEY }}
-      MILADY_E2E_ANTHROPIC_API_KEY: ${{ secrets.MILADY_E2E_ANTHROPIC_API_KEY }}
+      # LLM providers. Exposed under upstream `ELIZA_E2E_*` alias names that
+      # the scenario-runner's live-provider helper checks. Milady-scoped
+      # secret names (MILADY_E2E_*) stay the source of truth in the vault.
+      ELIZA_E2E_GROQ_API_KEY: ${{ secrets.MILADY_E2E_GROQ_API_KEY }}
+      ELIZA_E2E_OPENAI_API_KEY: ${{ secrets.MILADY_E2E_OPENAI_API_KEY }}
+      ELIZA_E2E_ANTHROPIC_API_KEY: ${{ secrets.MILADY_E2E_ANTHROPIC_API_KEY }}
 
       # Gmail / Google Workspace
       MILADY_E2E_GMAIL_TESTOWNER_CLIENT_ID: ${{ secrets.MILADY_E2E_GMAIL_TESTOWNER_CLIENT_ID }}

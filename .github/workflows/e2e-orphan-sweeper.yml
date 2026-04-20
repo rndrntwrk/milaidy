@@ -49,8 +49,10 @@ jobs:
     runs-on: ${{ matrix.service == 'imessage' && fromJson('["self-hosted","milady-e2e-macos"]') || 'ubuntu-24.04' }}
     timeout-minutes: 15
     env:
-      # Shared LLM creds (judge may need them for dry-run verification)
-      MILADY_E2E_GROQ_API_KEY: ${{ secrets.MILADY_E2E_GROQ_API_KEY }}
+      # Shared LLM creds (judge may need them for dry-run verification).
+      # Exposed under the upstream `ELIZA_E2E_*` alias name that the
+      # scenario-runner's live-provider helper checks.
+      ELIZA_E2E_GROQ_API_KEY: ${{ secrets.MILADY_E2E_GROQ_API_KEY }}
 
       # Gmail
       MILADY_E2E_GMAIL_TESTOWNER_CLIENT_ID: ${{ secrets.MILADY_E2E_GMAIL_TESTOWNER_CLIENT_ID }}

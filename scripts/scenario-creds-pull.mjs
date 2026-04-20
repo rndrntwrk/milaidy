@@ -52,10 +52,12 @@ const outFile = path.resolve(REPO_ROOT, getFlag("--out", ".env.scenarios"));
  * envVarName is the target env var.
  */
 const MAPPING = [
-  // LLM providers
-  ["llm / groq-api-key", "credential", "MILADY_E2E_GROQ_API_KEY"],
-  ["llm / openai-api-key", "credential", "MILADY_E2E_OPENAI_API_KEY"],
-  ["llm / anthropic-api-key", "credential", "MILADY_E2E_ANTHROPIC_API_KEY"],
+  // LLM providers. Written under the upstream-scoped `ELIZA_E2E_*` names so
+  // the scenario-runner's live-provider helper picks them up via alias
+  // discovery (canonical `GROQ_API_KEY` in the shell still wins if set).
+  ["llm / groq-api-key", "credential", "ELIZA_E2E_GROQ_API_KEY"],
+  ["llm / openai-api-key", "credential", "ELIZA_E2E_OPENAI_API_KEY"],
+  ["llm / anthropic-api-key", "credential", "ELIZA_E2E_ANTHROPIC_API_KEY"],
 
   // Gmail test-owner
   [
