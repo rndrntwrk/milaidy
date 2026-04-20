@@ -686,7 +686,7 @@ jobs:
         run: |
           VERSION="$(node -p "require('./apps/app/electrobun/package.json').version")"
           ENV_NAME="${{ needs.prepare.outputs.env }}"
-          find apps/app/electrobun/build -type d -name "Resources" | while read -r res_dir; do
+          find -L apps/app/electrobun/build -type d -name "Resources" | while read -r res_dir; do
             dest="$res_dir/version.json"
             printf '{"identifier":"com.miladyai.milady","channel":"%s","name":"milady","version":"%s"}' \
               "$ENV_NAME" "$VERSION" > "$dest"
@@ -696,7 +696,7 @@ jobs:
       - name: List build output
         run: |
           echo "=== Electrobun artifacts ==="
-          find apps/app/electrobun/artifacts -type f 2>/dev/null | sort || echo "(no artifacts directory)"
+          find -L apps/app/electrobun/artifacts -type f 2>/dev/null | sort || echo "(no artifacts directory)"
 
       - name: Stage standard macOS release app
         if: matrix.platform.os == 'macos'
@@ -1103,7 +1103,7 @@ jobs:
           apps=()
           while IFS= read -r app; do
             apps+=("$app")
-          done < <(find apps/app/electrobun/artifacts -maxdepth 1 -type d -name "*.app" | sort)
+          done < <(find -L apps/app/electrobun/artifacts -maxdepth 1 -type d -name "*.app" | sort)
           mounted_volume=""
           if [ "${#apps[@]}" -eq 0 ]; then
             dmgs=(apps/app/electrobun/artifacts/*.dmg)
@@ -1170,7 +1170,7 @@ jobs:
               exit 1
             }
             retry_stapler_validate "$dmg"
-          done < <(find apps/app/electrobun/artifacts -maxdepth 1 -type f -name "*.dmg" | sort)
+          done < <(find -L apps/app/electrobun/artifacts -maxdepth 1 -type f -name "*.dmg" | sort)
           if [ "$found_dmg" -eq 0 ]; then
             echo "::error::No DMG found in apps/app/electrobun/artifacts"
             exit 1
