@@ -780,7 +780,11 @@ jobs:
               }
             }
             $entryCheck = Join-Path $miladyDist "entry.js"
+            $entryCheckEliza = Join-Path $elizaDist "entry.js"
             Write-Host "Checking for: $entryCheck"
+            if (Test-Path $entryCheckEliza) {
+              Write-Host "eliza-dist/entry.js found"
+            }
             if (Test-Path $entryCheck) {
               Write-Host "milady-dist/entry.js found"
             } else {
