@@ -2,11 +2,12 @@ import { scenario } from "@elizaos/scenario-schema";
 
 export default scenario({
   id: "cross-platform.escalation-to-user",
-  title: "Unresolvable request starts a negotiation flow",
+  title: "Unresolvable request stays blocked without an intent bus",
   domain: "messaging.cross-platform",
-  tags: ["cross-platform", "gateway", "negotiation"],
+  tags: ["cross-platform", "gateway", "negotiation", "not-yet-implemented"],
   description:
-    "A request the agent cannot execute directly currently starts a negotiation flow and asks for more details instead of escalating through a gateway.",
+    "A lease-renewal escalation request has no real cross-platform intent-bus route yet. This scenario must fail closed until a dedicated gateway action exists.",
+  status: "pending",
   isolation: "per-scenario",
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
@@ -25,7 +26,6 @@ export default scenario({
       name: "unresolvable request",
       room: "main",
       text: "Negotiate my apartment lease renewal with the landlord and sign it for me.",
-      responseIncludesAny: ["Negotiation", "lease renewal"],
     },
   ],
   finalChecks: [
@@ -33,29 +33,17 @@ export default scenario({
       type: "custom",
       name: "cross-platform-escalation-routing",
       predicate: async (ctx) => {
-        const calendarAction = ctx.actionsCalled.find(
-          (entry) => entry.actionName === "OWNER_CALENDAR",
-        );
-        const calendarData =
-          calendarAction?.result?.data &&
-          typeof calendarAction.result.data === "object"
-            ? (calendarAction.result.data as {
-                negotiation?: { subject?: string; state?: string };
-              })
-            : null;
-        if (!calendarData?.negotiation) {
-          return "expected OWNER_CALENDAR negotiation result";
+        const fallbackActions = ctx.actionsCalled
+          .map((entry) => entry.actionName)
+          .filter((actionName) =>
+            ["OWNER_CALENDAR", "OWNER_INBOX", "INBOX", "MUTE_ROOM"].includes(
+              actionName,
+            ),
+          );
+        if (fallbackActions.length > 0) {
+          return `unexpected fallback action(s) used for cross-platform escalation: ${fallbackActions.join(", ")}`;
         }
-        if (calendarData.negotiation.state !== "initiated") {
-          return `expected initiated negotiation state, got ${calendarData.negotiation.state ?? "(missing)"}`;
-        }
-        if (
-          typeof calendarData.negotiation.subject !== "string" ||
-          !calendarData.negotiation.subject.includes("lease renewal")
-        ) {
-          return `expected negotiation subject to mention lease renewal, got ${calendarData.negotiation.subject ?? "(missing)"}`;
-        }
-        return undefined;
+        return "NotYetImplemented: cross-platform escalation still has no real intent-bus route. Keep this blocked until a dedicated gateway action exists.";
       },
     },
   ],

@@ -1,12 +1,16 @@
 import { scenario } from "@elizaos/scenario-schema";
+import {
+  expectScenarioToCallAction,
+  expectTurnToCallAction,
+} from "../_helpers/action-assertions.ts";
 
 export default scenario({
   id: "telegram-gateway.bot-routes-to-user-agent",
-  title: "Telegram gateway bot reaches the active assistant",
+  title: "Telegram gateway bot routes to the active assistant",
   domain: "gateway",
   tags: ["gateway", "telegram", "smoke"],
   description:
-    "A Telegram gateway DM currently reaches the assistant and produces a non-empty response, even though the planner path is still noisy.",
+    "A Telegram gateway DM resolves to the owning user agent and returns inbox-grounded context from the same Telegram chat.",
   isolation: "per-scenario",
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
@@ -24,27 +28,55 @@ export default scenario({
       kind: "message",
       name: "telegram-inbound",
       room: "main",
-      text: "Hey agent, this DM came through the Telegram gateway bot.",
+      text: "What's in this Telegram gateway DM? Summarize it back to me.",
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: ["INBOX"],
+        description: "Telegram gateway inbox read",
+        includesAny: ["telegram", "chat", "message"],
+      }),
     },
   ],
   finalChecks: [
     {
-      type: "custom",
-      name: "telegram-gateway-produces-a-response",
-      predicate: async (ctx) => {
-        const reply = (ctx.turns?.[0]?.responseText ?? "").trim();
-        return reply.length > 0
-          ? undefined
-          : "expected a non-empty Telegram gateway response";
-      },
+      type: "selectedAction",
+      actionName: ["INBOX", "OWNER_INBOX"],
+    },
+    {
+      type: "selectedActionArguments",
+      actionName: ["INBOX", "OWNER_INBOX"],
+      includesAny: ["telegram", "chat", "message", "room"],
     },
     {
       type: "custom",
-      name: "telegram-gateway-triggers-at-least-one-action",
-      predicate: async (ctx) =>
-        (ctx.actionsCalled?.length ?? 0) > 0
-          ? undefined
-          : "expected at least one action for Telegram gateway routing",
+      name: "telegram-gateway-inbox-context-is-real",
+      predicate: expectScenarioToCallAction({
+        acceptedActions: ["INBOX"],
+        description: "Telegram gateway inbox read",
+        includesAny: ["telegram", "chat", "message"],
+      }),
+    },
+    {
+      type: "custom",
+      name: "telegram-gateway-response-is-grounded",
+      predicate: async (ctx) => {
+        const reply = (ctx.turns?.[0]?.responseText ?? "").trim();
+        if (!reply) {
+          return "expected a non-empty Telegram gateway response";
+        }
+
+        const hit = ctx.actionsCalled.find((action) =>
+          ["INBOX", "OWNER_INBOX"].includes(action.actionName),
+        );
+        if (!hit) {
+          return "expected an INBOX action";
+        }
+
+        const blob = JSON.stringify(hit).toLowerCase();
+        if (!blob.includes("telegram") || (!blob.includes("chat") && !blob.includes("message"))) {
+          return "expected Telegram chat metadata in the inbox action payload";
+        }
+        return undefined;
+      },
     },
   ],
 });

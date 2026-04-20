@@ -48,6 +48,21 @@ type BrowserTelemetrySeed = {
   windows: BrowserTelemetryWindow[];
 };
 
+type BrowserPageContextSeed = {
+  browser: "chrome" | "safari";
+  profileId: string;
+  windowId: string;
+  tabId: string;
+  url: string;
+  title: string;
+  selectionText?: string | null;
+  mainText?: string | null;
+  headings?: string[];
+  links?: Array<{ text: string; href: string }>;
+  forms?: Array<{ action: string | null; fields: string[] }>;
+  metadata?: Record<string, unknown>;
+};
+
 type ScreenTimeSeedSession = {
   source: "app" | "website";
   identifier: string;
@@ -223,6 +238,87 @@ export function seedBrowserExtensionTelemetry(args: BrowserTelemetrySeed) {
       if (!recorded) {
         return `failed to record browser focus window for ${window.url}`;
       }
+    }
+
+    return undefined;
+  };
+}
+
+export function seedBrowserCurrentPageContext(args: BrowserPageContextSeed) {
+  return async (ctx: ScenarioContext): Promise<ScenarioCheckResult> => {
+    const runtime = requireRuntime(ctx);
+    if (typeof runtime === "string") {
+      return runtime;
+    }
+
+    await LifeOpsRepository.bootstrapSchema(runtime);
+
+    const nowIso = scenarioNow(ctx).toISOString();
+    const service = new LifeOpsService(runtime);
+    await service.updateBrowserSettings({
+      enabled: true,
+      allowBrowserControl: true,
+    });
+
+    const syncResult = await service.syncBrowserState({
+      companion: {
+        browser: args.browser,
+        profileId: args.profileId,
+        profileLabel: args.profileId,
+        label: `LifeOps Browser ${args.browser} ${args.profileId}`,
+        connectionState: "connected",
+        permissions: {
+          tabs: true,
+          scripting: true,
+          activeTab: true,
+          allOrigins: true,
+          grantedOrigins: [new URL(args.url).origin],
+          incognitoEnabled: false,
+        },
+      },
+      tabs: [
+        {
+          browser: args.browser,
+          profileId: args.profileId,
+          windowId: args.windowId,
+          tabId: args.tabId,
+          url: args.url,
+          title: args.title,
+          activeInWindow: true,
+          focusedWindow: true,
+          focusedActive: true,
+          lastSeenAt: nowIso,
+          lastFocusedAt: nowIso,
+        },
+      ],
+      pageContexts: [
+        {
+          browser: args.browser,
+          profileId: args.profileId,
+          windowId: args.windowId,
+          tabId: args.tabId,
+          url: args.url,
+          title: args.title,
+          selectionText: args.selectionText ?? null,
+          mainText: args.mainText ?? null,
+          headings: args.headings ?? [],
+          links: args.links ?? [],
+          forms: args.forms ?? [],
+          capturedAt: nowIso,
+          metadata: args.metadata ?? {},
+        },
+      ],
+    });
+
+    const currentPage = syncResult.currentPage;
+    if (!currentPage) {
+      return "failed to seed current browser page context";
+    }
+    if (currentPage.url !== args.url) {
+      return `seeded current browser page context mismatch: expected ${args.url}, got ${currentPage.url}`;
+    }
+    if (currentPage.title !== args.title) {
+      return `seeded current browser page context title mismatch: expected ${args.title}, got ${currentPage.title}`;
     }
 
     return undefined;

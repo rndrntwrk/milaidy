@@ -29,6 +29,7 @@
     "eliza/packages/native-plugins/*",
     "eliza/packages/app-core/platforms/electrobun",
     "eliza/apps/*",
+    "eliza/cloud/packages/services/*",
     "eliza/plugins/*",
     "eliza/plugins/plugin-*/typescript",
     "eliza/packages/*"
@@ -223,6 +224,7 @@
     "test:live:selfcontrol:desktop": "node eliza/packages/app-core/scripts/run-with-env.mjs MILADY_LIVE_TEST=1 MILADY_LIVE_DESKTOP_TEST=1 -- bunx vitest run --config test/vitest/live-e2e.config.ts eliza/apps/app-lifeops/test/selfcontrol-desktop.live.e2e.test.ts",
     "test:live:browser-workspace": "node apps/app/scripts/run-ui-playwright.mjs --config playwright.ui-smoke.config.ts test/ui-smoke/browser-workspace.spec.ts",
     "test:lifeops:browser-extension": "cd eliza/apps/app-lifeops/extensions/lifeops-browser && bun run test:ci",
+    "test:lifeops:browser-extension:safari": "cd eliza/apps/app-lifeops/extensions/lifeops-browser && bun run test:smoke:safari",
     "test:live:identity": "bun run test:discord:runtime:roundtrip",
     "test:live:knowledge": "node eliza/packages/app-core/scripts/run-with-env.mjs MILADY_LIVE_TEST=1 ELIZA_LIVE_TEST=1 MILADY_LIVE_KNOWLEDGE_TEST=1 -- bunx vitest run --config test/vitest/live-e2e.config.ts eliza/apps/app-knowledge/test/knowledge-live.e2e.test.ts",
     "test:live:plugins": "node eliza/packages/app-core/scripts/run-with-env.mjs MILADY_LIVE_TEST=1 -- bunx vitest run --config test/vitest/live-e2e.config.ts eliza/packages/app-core/test/live-agent/plugin-lifecycle.live.e2e.test.ts",

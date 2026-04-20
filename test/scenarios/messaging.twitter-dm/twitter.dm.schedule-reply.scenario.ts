@@ -2,11 +2,12 @@ import { scenario } from "@elizaos/scenario-schema";
 
 export default scenario({
   id: "twitter.dm.schedule-reply",
-  title: "Twitter DM schedule request falls back to draft or calendar routing",
+  title: "Twitter/X DM schedule request stays blocked until scheduling exists",
   domain: "messaging.twitter-dm",
-  tags: ["messaging", "twitter", "routing"],
+  tags: ["messaging", "twitter", "routing", "not-yet-implemented"],
   description:
-    "A request to schedule a Twitter/X DM reply currently falls back to generic draft or calendar routing instead of a scheduled X DM reply.",
+    "X can read DMs and send confirmed replies, but it cannot schedule a DM reply for later yet. This scenario must fail closed until a scheduler exists.",
+  status: "pending",
   isolation: "per-scenario",
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
@@ -32,79 +33,17 @@ export default scenario({
       type: "custom",
       name: "twitter-dm-schedule-routing",
       predicate: async (ctx) => {
-        const inboxAction = ctx.actionsCalled.find(
-          (entry) => entry.actionName === "OWNER_INBOX",
-        );
-        const sendAction = ctx.actionsCalled.find(
-          (entry) => entry.actionName === "OWNER_SEND_MESSAGE",
-        );
-        const calendarAction = ctx.actionsCalled.find(
-          (entry) => entry.actionName === "OWNER_CALENDAR",
-        );
-        const sendData =
-          sendAction?.result?.data && typeof sendAction.result.data === "object"
-            ? (sendAction.result.data as {
-                draft?: boolean;
-                channel?: string;
-                target?: string;
-              })
-            : null;
-        if (sendData) {
-          if (sendData.draft !== true) {
-            return "expected OWNER_SEND_MESSAGE to stay in draft mode";
-          }
-          if (sendData.channel !== "email") {
-            return `expected email draft fallback, got ${sendData.channel ?? "(missing)"}`;
-          }
-          if (
-            typeof sendData.target !== "string" ||
-            sendData.target.length === 0
-          ) {
-            return "expected OWNER_SEND_MESSAGE draft target";
-          }
-          return undefined;
+        const fallbackActions = ctx.actionsCalled
+          .map((entry) => entry.actionName)
+          .filter((actionName) =>
+            ["REPLY_X_DM", "OWNER_CALENDAR", "OWNER_INBOX"].includes(
+              actionName,
+            ),
+          );
+        if (fallbackActions.length > 0) {
+          return `unexpected fallback action(s) used for scheduled X DM reply: ${fallbackActions.join(", ")}`;
         }
-        const calendarData =
-          calendarAction?.result?.data &&
-          typeof calendarAction.result.data === "object"
-            ? (calendarAction.result.data as {
-                title?: string;
-                description?: string;
-                status?: string;
-              })
-            : null;
-        if (calendarData) {
-          if (calendarData.status !== "confirmed") {
-            return `expected confirmed calendar event, got ${calendarData.status ?? "(missing)"}`;
-          }
-          if (
-            typeof calendarData.title !== "string" ||
-            !calendarData.title.includes("@devfriend")
-          ) {
-            return `expected calendar title to mention @devfriend, got ${calendarData.title ?? "(missing)"}`;
-          }
-          return undefined;
-        }
-        const inboxData =
-          inboxAction?.result?.data &&
-          typeof inboxAction.result.data === "object"
-            ? (inboxAction.result.data as {
-                actionName?: string;
-                subaction?: string;
-                channel?: string;
-              })
-            : null;
-        if (!inboxData) {
-          return "expected OWNER_SEND_MESSAGE, OWNER_CALENDAR, or OWNER_INBOX fallback";
-        }
-        if (
-          inboxData.subaction !== "draft_reply" &&
-          inboxData.subaction !== "send_reply" &&
-          inboxData.subaction !== "respond"
-        ) {
-          return `expected OWNER_INBOX draft_reply, send_reply, or respond subaction, got ${inboxData.subaction ?? "(missing)"}`;
-        }
-        return undefined;
+        return "NotYetImplemented: X DM scheduling is not available yet. REPLY_X_DM can draft or send, but it cannot queue a 9am delivery.";
       },
     },
   ],

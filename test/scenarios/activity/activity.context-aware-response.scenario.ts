@@ -1,13 +1,40 @@
-/**
- * Context-aware responses: the agent should know which app the user
- * is currently focused in and reference that in conversation without
- * the user telling it.
- *
- * NotYetImplemented until T8d (activity tracker) exposes a
- * current-focus activityProvider.
- */
-
 import { scenario } from "@elizaos/scenario-schema";
+import {
+  setScreenContextSamplerForTesting,
+} from "../../../eliza/apps/app-lifeops/src/activity-profile/service.ts";
+import {
+  LifeOpsScreenContextSampler,
+  type LifeOpsScreenContextSummary,
+} from "../../../eliza/apps/app-lifeops/src/lifeops/screen-context.ts";
+
+class FixedScreenContextSampler extends LifeOpsScreenContextSampler {
+  override async sample(
+    nowMs = Date.now(),
+  ): Promise<LifeOpsScreenContextSummary> {
+    return {
+      sampledAtMs: nowMs,
+      source: "vision",
+      available: true,
+      throttled: false,
+      stale: false,
+      busy: true,
+      framePath: "scenario://activity-context",
+      capturedAtMs: nowMs,
+      width: 1440,
+      height: 900,
+      byteLength: 1,
+      averageLuma: 0.42,
+      lumaStdDev: 0.11,
+      ocrAvailable: true,
+      ocrText: "Slack docs terminal calendar",
+      focus: "work",
+      contextTags: ["work", "screen-active", "text-heavy"],
+      cues: ["slack", "docs", "terminal", "calendar"],
+      confidence: 0.96,
+      disabledReason: null,
+    };
+  }
+}
 
 export default scenario({
   id: "activity.context-aware-response",
@@ -15,7 +42,7 @@ export default scenario({
   domain: "activity",
   tags: ["activity", "context", "happy-path"],
   description:
-    "User asks a question that benefits from knowing what app they're in; the agent references it. NotYetImplemented until T8d exposes activityProvider.",
+    "User asks a question that benefits from knowing the current screen focus; the agent references the seeded focus context.",
 
   status: "pending",
 
@@ -23,6 +50,17 @@ export default scenario({
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
   },
+
+  seed: [
+    {
+      type: "custom",
+      name: "seed-current-screen-context",
+      apply: async () => {
+        setScreenContextSamplerForTesting(new FixedScreenContextSampler());
+        return undefined;
+      },
+    },
+  ],
 
   rooms: [
     {
@@ -39,16 +77,27 @@ export default scenario({
       name: "context-aware-query",
       room: "main",
       text: "What am I working on right now?",
-      responseIncludesAny: [/app|window|focus|current/i],
+      responseIncludesAny: [/work/i, /focus/i, /screen/i, /slack/i],
     },
   ],
 
   finalChecks: [
     {
       type: "custom",
-      name: "context-aware-feasible",
-      predicate: async () => {
-        return "NotYetImplemented: current-app context requires T8d (activity tracker) activityProvider.";
+      name: "context-aware-response-uses-current-focus",
+      predicate: async (ctx) => {
+        try {
+          const reply = String(ctx.turns?.[0]?.responseText ?? "");
+          if (!reply.trim()) {
+            return "expected a response text from the context-aware turn";
+          }
+          if (!/work|focus|screen|slack/i.test(reply)) {
+            return `expected the reply to reference the seeded screen context; got: ${reply}`;
+          }
+          return undefined;
+        } finally {
+          setScreenContextSamplerForTesting(null);
+        }
       },
     },
   ],
