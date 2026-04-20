@@ -193,6 +193,7 @@ packages=(
   @capacitor/preferences
   @xterm/xterm
   @xterm/addon-fit
+  @xyflow/react
   undici
   playwright-core
 )
