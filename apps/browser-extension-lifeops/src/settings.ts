@@ -1,13 +1,20 @@
 /**
  * Persistent extension settings stored in chrome.storage.local.
- *
- * Settings are loaded once at service-worker start and re-read on demand
- * when the options page writes an update.
  */
 
 import { DEFAULT_SETTINGS, type ExtensionSettings } from "./types.js";
 
 const STORAGE_KEY = "lifeops.extension.settings";
+
+export function isValidWsUrl(value: unknown): value is string {
+  if (typeof value !== "string" || value.length === 0) return false;
+  try {
+    const u = new URL(value);
+    return u.protocol === "ws:" || u.protocol === "wss:";
+  } catch {
+    return false;
+  }
+}
 
 export async function loadSettings(): Promise<ExtensionSettings> {
   const record = await chrome.storage.local.get(STORAGE_KEY);
@@ -17,10 +24,7 @@ export async function loadSettings(): Promise<ExtensionSettings> {
   }
   const s = stored as Partial<ExtensionSettings>;
   return {
-    wsUrl:
-      typeof s.wsUrl === "string" && s.wsUrl.length > 0
-        ? s.wsUrl
-        : DEFAULT_SETTINGS.wsUrl,
+    wsUrl: isValidWsUrl(s.wsUrl) ? s.wsUrl : DEFAULT_SETTINGS.wsUrl,
     flushIntervalMs:
       typeof s.flushIntervalMs === "number" && s.flushIntervalMs >= 1_000
         ? s.flushIntervalMs
@@ -32,7 +36,28 @@ export async function loadSettings(): Promise<ExtensionSettings> {
   };
 }
 
+export class InvalidSettingsError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InvalidSettingsError";
+  }
+}
+
 export async function saveSettings(settings: ExtensionSettings): Promise<void> {
+  if (!isValidWsUrl(settings.wsUrl)) {
+    throw new InvalidSettingsError(
+      "wsUrl must be a ws:// or wss:// URL",
+    );
+  }
+  if (
+    typeof settings.flushIntervalMs !== "number" ||
+    !Number.isFinite(settings.flushIntervalMs) ||
+    settings.flushIntervalMs < 1_000
+  ) {
+    throw new InvalidSettingsError(
+      "flushIntervalMs must be a number ≥ 1000",
+    );
+  }
   await chrome.storage.local.set({ [STORAGE_KEY]: settings });
 }
 

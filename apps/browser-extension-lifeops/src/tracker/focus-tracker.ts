@@ -10,7 +10,7 @@
  */
 
 import { createLogger } from "../logger.js";
-import { registrableDomain, type TimeAggregator } from "./time-on-site.js";
+import { hostnameFromUrl, type TimeAggregator } from "./time-on-site.js";
 
 const log = createLogger("focus-tracker");
 
@@ -25,7 +25,7 @@ export function installFocusTracker(deps: FocusTrackerDeps): void {
   chrome.tabs.onActivated.addListener(async (info) => {
     const tab = await chrome.tabs.get(info.tabId).catch(() => null);
     const url = tab?.url ?? "";
-    const domain = registrableDomain(url);
+    const domain = hostnameFromUrl(url);
     log.debug("tab activated", { tabId: info.tabId, domain });
     aggregator.recordFocusChange(domain, true, now());
   });
@@ -37,7 +37,7 @@ export function installFocusTracker(deps: FocusTrackerDeps): void {
     if (!changeInfo.url && changeInfo.status !== "complete") {
       return;
     }
-    const domain = registrableDomain(tab.url ?? "");
+    const domain = hostnameFromUrl(tab.url ?? "");
     log.debug("tab updated", { tabId: _tabId, domain });
     aggregator.recordFocusChange(domain, true, now());
   });
@@ -49,7 +49,7 @@ export function installFocusTracker(deps: FocusTrackerDeps): void {
       return;
     }
     const [tab] = await chrome.tabs.query({ active: true, windowId });
-    const domain = registrableDomain(tab?.url ?? "");
+    const domain = hostnameFromUrl(tab?.url ?? "");
     log.debug("window focused", { windowId, domain });
     aggregator.recordFocusChange(domain, true, now());
   });

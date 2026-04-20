@@ -1,13 +1,18 @@
 /**
- * Pure time-aggregation logic for per-domain focus time.
+ * Pure time-aggregation logic for per-hostname focus time.
  *
  * The background service worker feeds focus-change events into a single
- * TimeAggregator. The aggregator maintains one open session per domain,
- * then folds closed sessions into per-domain buckets that are flushed
+ * TimeAggregator. The aggregator maintains one open session per host,
+ * then folds closed sessions into per-host buckets that are flushed
  * to the agent on a fixed cadence.
  *
  * This module is deliberately side-effect free so the logic can be
  * exhaustively unit-tested without spinning up a browser.
+ *
+ * NOTE on domain granularity: buckets key on the full lowercase hostname,
+ * not an eTLD+1 registrable domain. `mail.google.com` and `drive.google.com`
+ * are tracked as distinct domains. Correct eTLD+1 extraction requires the
+ * public-suffix list and is out of scope for this file.
  */
 
 import type { DomainBucket, TimeReport } from "../types.js";
@@ -37,7 +42,7 @@ export class TimeAggregator {
   /**
    * Record a focus transition.
    *
-   * `domain` should be the registrable domain (empty string is allowed
+   * `domain` should be the lowercase hostname (empty string is allowed
    * and means "no active tab", which closes any open session).
    */
   recordFocusChange(domain: string, visible: boolean, now: number): void {
@@ -123,11 +128,11 @@ export class TimeAggregator {
 }
 
 /**
- * Extract a registrable domain from a URL string. Returns an empty
- * string for about:, chrome://, extension:, or unparseable URLs —
- * those should not contribute to focus time.
+ * Extract a lowercase hostname from a URL string. Returns an empty string
+ * for about:, chrome://, extension:, or unparseable URLs — those must not
+ * contribute to focus time.
  */
-export function registrableDomain(url: string): string {
+export function hostnameFromUrl(url: string): string {
   const parsed = safeParse(url);
   if (!parsed) {
     return "";
@@ -135,11 +140,7 @@ export function registrableDomain(url: string): string {
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
     return "";
   }
-  const host = parsed.hostname.toLowerCase();
-  if (host.length === 0) {
-    return "";
-  }
-  return host;
+  return parsed.hostname.toLowerCase();
 }
 
 function safeParse(url: string): URL | null {

@@ -1,11 +1,13 @@
 import { scenario } from "@elizaos/scenario-schema";
+import { expectTurnToCallAction } from "../_helpers/action-assertions.ts";
+import { expectScenarioActionResultData } from "../_helpers/action-result-assertions.ts";
+import { seedCheckinTodo } from "../_helpers/lifeops-seeds.ts";
 
 export default scenario({
   id: "todo.forceful-reminder.morning-routine",
-  title: "Morning routine pushes several overdue todos forcefully",
+  title: "Morning check-in reports several overdue routine todos",
   domain: "todos",
-  tags: ["lifeops", "todos", "plugin-disabled"],
-  status: "pending",
+  tags: ["lifeops", "todos"],
   isolation: "per-scenario",
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
@@ -19,45 +21,58 @@ export default scenario({
   ],
   seed: [
     {
-      type: "todo",
-      name: "Brush teeth",
-      dueIso: "{{now-30m}}",
-      isUrgent: true,
+      type: "custom",
+      name: "seed-brush-teeth",
+      apply: seedCheckinTodo({
+        id: "forceful-routine-brush-teeth",
+        title: "Brush teeth",
+        dueAt: "{{now-30m}}",
+      }),
     },
     {
-      type: "todo",
-      name: "Stretch",
-      dueIso: "{{now-45m}}",
-      isUrgent: true,
+      type: "custom",
+      name: "seed-stretch",
+      apply: seedCheckinTodo({
+        id: "forceful-routine-stretch",
+        title: "Stretch",
+        dueAt: "{{now-45m}}",
+      }),
     },
     {
-      type: "todo",
-      name: "Take vitamins",
-      dueIso: "{{now-1h}}",
-      isUrgent: true,
+      type: "custom",
+      name: "seed-vitamins",
+      apply: seedCheckinTodo({
+        id: "forceful-routine-vitamins",
+        title: "Take vitamins",
+        dueAt: "{{now-1h}}",
+      }),
     },
   ],
   turns: [
     {
       kind: "message",
       name: "morning-routine-push",
-      text: "Good morning.",
-      responseJudge: {
-        rubric:
-          "Agent names multiple overdue morning-routine items (brush teeth, stretch, take vitamins) and presses the user to complete them.",
-        minimumScore: 0.6,
-      },
+      text: "Run my morning check-in.",
+      responseIncludesAny: ["morning", "overview", "day"],
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: ["RUN_MORNING_CHECKIN"],
+        description: "morning check-in with multiple overdue todos",
+      }),
     },
   ],
   finalChecks: [
     {
+      type: "selectedAction",
+      actionName: "RUN_MORNING_CHECKIN",
+    },
+    {
       type: "custom",
-      name: "morning-routine-engine-ready",
-      predicate: async () => {
-        throw new Error(
-          "NotYetImplemented: morning-routine forceful reminder engine (T9f: Morning/night check-in routine engine, plan §6.23)",
-        );
-      },
+      name: "morning-checkin-includes-all-overdue-routine-todos",
+      predicate: expectScenarioActionResultData({
+        description: "morning check-in payload with multiple overdue todos",
+        actionName: "RUN_MORNING_CHECKIN",
+        includesAll: ["Brush teeth", "Stretch", "Take vitamins"],
+      }),
     },
   ],
 });

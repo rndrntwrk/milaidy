@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  registrableDomain,
+  hostnameFromUrl,
   TimeAggregator,
 } from "../src/tracker/time-on-site.js";
 
@@ -74,15 +74,31 @@ describe("TimeAggregator", () => {
   });
 });
 
-describe("registrableDomain", () => {
+describe("hostnameFromUrl", () => {
   it("extracts lowercase hostnames from http(s) URLs", () => {
-    expect(registrableDomain("https://Example.COM/path")).toBe("example.com");
-    expect(registrableDomain("http://foo.example.com")).toBe("foo.example.com");
+    expect(hostnameFromUrl("https://Example.COM/path")).toBe("example.com");
+    expect(hostnameFromUrl("http://foo.example.com")).toBe("foo.example.com");
+  });
+
+  it("keeps subdomains distinct — does NOT extract eTLD+1", () => {
+    expect(hostnameFromUrl("https://mail.google.com/")).toBe("mail.google.com");
+    expect(hostnameFromUrl("https://drive.google.com/")).toBe(
+      "drive.google.com",
+    );
+  });
+
+  it("handles multi-label TLDs without clobbering", () => {
+    // Contrast with a naive "last two labels" implementation, which would
+    // collapse these to `co.uk` / `com.au`.
+    expect(hostnameFromUrl("https://example.co.uk/")).toBe("example.co.uk");
+    expect(hostnameFromUrl("https://sub.example.com.au/")).toBe(
+      "sub.example.com.au",
+    );
   });
 
   it("rejects non-http schemes", () => {
-    expect(registrableDomain("chrome://extensions")).toBe("");
-    expect(registrableDomain("about:blank")).toBe("");
-    expect(registrableDomain("not a url")).toBe("");
+    expect(hostnameFromUrl("chrome://extensions")).toBe("");
+    expect(hostnameFromUrl("about:blank")).toBe("");
+    expect(hostnameFromUrl("not a url")).toBe("");
   });
 });

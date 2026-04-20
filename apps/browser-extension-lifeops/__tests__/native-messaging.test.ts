@@ -70,8 +70,13 @@ describe("AgentChannel", () => {
     const channel = new AgentChannel({ url: "ws://127.0.0.1:31339/ext" });
     channel.start();
     const message: OutboundMessage = {
-      type: "heartbeat",
-      payload: { deviceId: "d1", ts: "2026-04-17T00:00:00.000Z" },
+      type: "register-session",
+      payload: {
+        deviceId: "d1",
+        userAgent: "ua",
+        extensionVersion: "0.1.0",
+        browserVendor: "chrome",
+      },
     };
     channel.send(message);
 

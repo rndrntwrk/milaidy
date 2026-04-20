@@ -2,10 +2,19 @@
  * WebSocket client used by the background service worker to talk to the
  * local Milady / LifeOps agent.
  *
- * The name "native-messaging" reflects the file's role (host-side
- * channel to the native agent) even though we use a loopback WebSocket
- * instead of Chrome's native-messaging host protocol — the plan calls
- * out native messaging as a follow-up.
+ * TODO(lifeops-browser-extension): no agent-side WebSocket handler for
+ * `ws://127.0.0.1:31339/ext` exists today. Until one is added, this
+ * channel reconnects forever and every `send()` buffers or drops. Two
+ * resolutions are on the table, neither done:
+ *
+ *   (a) Add a WebSocket upgrade route in the app-lifeops runtime.
+ *   (b) Switch this client to either REST
+ *       (`/api/lifeops/browser/companions/sync`, which the older
+ *       `eliza/apps/app-lifeops/extensions/lifeops-browser/` already
+ *       uses) or Chrome native-messaging (hence the file name).
+ *
+ * The module is kept behaviorally correct in isolation so the decision
+ * can be made without churn.
  */
 
 import { createLogger } from "../logger.js";

@@ -1,16 +1,9 @@
 {
   "manifest_version": 3,
   "name": "LifeOps",
-  "description": "Tracks per-domain focus time and provides agent context to the local Milady / LifeOps agent.",
+  "description": "Tracks per-hostname focus time and provides agent context to the local Milady / LifeOps agent.",
   "version": "0.1.0",
-  "permissions": [
-    "tabs",
-    "storage",
-    "alarms",
-    "activeTab",
-    "scripting",
-    "privacy"
-  ],
+  "permissions": ["tabs", "storage", "alarms", "activeTab"],
   "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background.js",
@@ -31,10 +24,5 @@
   "options_ui": {
     "page": "options/index.html",
     "open_in_tab": true
-  },
-  "icons": {
-    "16": "icons/icon-16.png",
-    "48": "icons/icon-48.png",
-    "128": "icons/icon-128.png"
   }
 }

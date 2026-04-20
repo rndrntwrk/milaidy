@@ -15,6 +15,10 @@ import {
   createLifeOpsCalendarSyncState,
   LifeOpsRepository,
 } from "../../../eliza/apps/app-lifeops/src/lifeops/repository.ts";
+import {
+  executeRawSql,
+  sqlQuote,
+} from "../../../eliza/apps/app-lifeops/src/lifeops/sql.ts";
 import { seedGoogleConnectorGrant } from "../../mocks/helpers/seed-grants.ts";
 
 type CalendarSeedEvent = {
@@ -51,6 +55,31 @@ function scenarioNow(ctx: ScenarioContext): Date {
   return typeof ctx.now === "string" && Number.isFinite(Date.parse(ctx.now))
     ? new Date(ctx.now)
     : new Date();
+}
+
+const NOW_TEMPLATE_RE = /^\{\{now(?:([+-])(\d+)([mhdw]))?\}\}$/;
+
+function resolveScenarioIsoDate(value: string, ctx: ScenarioContext): string {
+  const trimmed = value.trim();
+  const match = NOW_TEMPLATE_RE.exec(trimmed);
+  if (!match) {
+    return trimmed;
+  }
+  const now = scenarioNow(ctx);
+  const [, sign, amountRaw, unitRaw] = match;
+  if (!sign || !amountRaw || !unitRaw) {
+    return now.toISOString();
+  }
+  const amount = Number.parseInt(amountRaw, 10);
+  const multipliers: Record<string, number> = {
+    m: 60_000,
+    h: 60 * 60_000,
+    d: 24 * 60 * 60_000,
+    w: 7 * 24 * 60 * 60_000,
+  };
+  const multiplier = multipliers[unitRaw.toLowerCase()];
+  const delta = amount * multiplier * (sign === "-" ? -1 : 1);
+  return new Date(now.getTime() + delta).toISOString();
 }
 
 export function seedMeetingPreferences(patch: LifeOpsMeetingPreferencesPatch) {
@@ -167,6 +196,64 @@ export function seedBrowserExtensionTelemetry(args: BrowserTelemetrySeed) {
         return `failed to record browser focus window for ${window.url}`;
       }
     }
+
+    return undefined;
+  };
+}
+
+export function seedCheckinTodo(args: {
+  id: string;
+  title: string;
+  dueAt: string;
+  state?: "pending" | "active" | "in_progress" | "completed";
+}) {
+  return async (ctx: ScenarioContext): Promise<ScenarioCheckResult> => {
+    const runtime = requireRuntime(ctx);
+    if (typeof runtime === "string") {
+      return runtime;
+    }
+
+    await LifeOpsRepository.bootstrapSchema(runtime);
+
+    const agentId = String(runtime.agentId);
+    const nowIso = scenarioNow(ctx).toISOString();
+    const dueAtIso = resolveScenarioIsoDate(args.dueAt, ctx);
+    const definitionId = `seed-def-${args.id}`;
+
+    await executeRawSql(
+      runtime,
+      `INSERT INTO life_task_definitions (
+         id, agent_id, subject_id, kind, title, created_at, updated_at
+       ) VALUES (
+         ${sqlQuote(definitionId)},
+         ${sqlQuote(agentId)},
+         ${sqlQuote(agentId)},
+         'task',
+         ${sqlQuote(args.title)},
+         ${sqlQuote(nowIso)},
+         ${sqlQuote(nowIso)}
+       )`,
+    );
+
+    await executeRawSql(
+      runtime,
+      `INSERT INTO life_task_occurrences (
+         id, agent_id, subject_id, definition_id, occurrence_key, due_at,
+         relevance_start_at, relevance_end_at, state, created_at, updated_at
+       ) VALUES (
+         ${sqlQuote(args.id)},
+         ${sqlQuote(agentId)},
+         ${sqlQuote(agentId)},
+         ${sqlQuote(definitionId)},
+         ${sqlQuote(`seed:${args.id}`)},
+         ${sqlQuote(dueAtIso)},
+         ${sqlQuote(dueAtIso)},
+         ${sqlQuote(new Date(Date.parse(dueAtIso) + 6 * 60 * 60_000).toISOString())},
+         ${sqlQuote(args.state ?? "pending")},
+         ${sqlQuote(nowIso)},
+         ${sqlQuote(nowIso)}
+       )`,
+    );
 
     return undefined;
   };

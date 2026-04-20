@@ -1,11 +1,13 @@
 import { scenario } from "@elizaos/scenario-schema";
+import { expectTurnToCallAction } from "../_helpers/action-assertions.ts";
+import { expectScenarioActionResultData } from "../_helpers/action-result-assertions.ts";
+import { seedCheckinTodo } from "../_helpers/lifeops-seeds.ts";
 
 export default scenario({
   id: "todo.routine.morning-checkin",
-  title: "Morning check-in surfaces today's todos",
+  title: "Morning check-in surfaces overdue todo context",
   domain: "todos",
-  tags: ["lifeops", "todos", "smoke", "plugin-disabled"],
-  status: "pending",
+  tags: ["lifeops", "todos", "smoke"],
   isolation: "per-scenario",
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
@@ -19,28 +21,40 @@ export default scenario({
   ],
   seed: [
     {
-      type: "todo",
-      name: "Drink water",
-      dueIso: "{{now+2h}}",
+      type: "custom",
+      name: "seed-overdue-checkin-todo",
+      apply: seedCheckinTodo({
+        id: "morning-checkin-drink-water",
+        title: "Drink water",
+        dueAt: "{{now-2h}}",
+      }),
     },
   ],
   turns: [
     {
       kind: "message",
       name: "morning-checkin",
-      text: "Good morning, what should I do today?",
-      responseIncludesAny: ["morning", "today", "drink water", "water"],
+      text: "Run my morning check-in.",
+      responseIncludesAny: ["morning", "overview", "day"],
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: ["RUN_MORNING_CHECKIN"],
+        description: "morning check-in",
+      }),
     },
   ],
   finalChecks: [
     {
+      type: "selectedAction",
+      actionName: "RUN_MORNING_CHECKIN",
+    },
+    {
       type: "custom",
-      name: "morning-checkin-engine-ready",
-      predicate: async () => {
-        throw new Error(
-          "NotYetImplemented: morning check-in engine (T9f: Morning/night check-in routine engine, plan §6.23)",
-        );
-      },
+      name: "morning-checkin-report-includes-overdue-todo",
+      predicate: expectScenarioActionResultData({
+        description: "morning check-in report payload",
+        actionName: "RUN_MORNING_CHECKIN",
+        includesAll: ["morning", "Drink water"],
+      }),
     },
   ],
 });

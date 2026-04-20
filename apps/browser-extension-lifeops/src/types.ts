@@ -6,23 +6,18 @@
  */
 
 export interface DomainBucket {
+  /** Lowercase hostname — not an eTLD+1. `mail.google.com` and `drive.google.com` are distinct buckets. */
   readonly domain: string;
-  /** Cumulative focus time in milliseconds. */
   readonly focusMs: number;
-  /** Number of distinct focus sessions folded into this bucket. */
   readonly sessionCount: number;
-  /** ISO timestamp of the first observation folded into this bucket. */
   readonly firstObservedAt: string;
-  /** ISO timestamp of the most recent observation folded into this bucket. */
   readonly lastObservedAt: string;
 }
 
 export interface TimeReport {
   readonly deviceId: string;
   readonly generatedAt: string;
-  /** ISO timestamp marking the start of the reporting window. */
   readonly windowStart: string;
-  /** ISO timestamp marking the end of the reporting window. */
   readonly windowEnd: string;
   readonly domains: readonly DomainBucket[];
 }
@@ -39,11 +34,7 @@ export type OutboundMessage =
       readonly type: "register-session";
       readonly payload: RegisterBrowserSessionPayload;
     }
-  | { readonly type: "time-report"; readonly payload: TimeReport }
-  | {
-      readonly type: "heartbeat";
-      readonly payload: { readonly deviceId: string; readonly ts: string };
-    };
+  | { readonly type: "time-report"; readonly payload: TimeReport };
 
 export type InboundMessage =
   | { readonly type: "ack"; readonly correlationId?: string }
@@ -52,9 +43,8 @@ export type InboundMessage =
 export interface ExtensionSettings {
   /** WebSocket URL for the desktop Milady agent endpoint. */
   readonly wsUrl: string;
-  /** Flush interval in milliseconds. */
+  /** Flush interval in milliseconds. Clamped to chrome.alarms' 1-minute minimum at runtime. */
   readonly flushIntervalMs: number;
-  /** Opt-in flag for the privacy-controlled activity reporting. */
   readonly activityReportingEnabled: boolean;
 }
 
@@ -65,23 +55,11 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
 };
 
 /** Internal messages between content scripts and the background worker. */
-export type InternalMessage =
-  | {
-      readonly kind: "focus-changed";
-      readonly payload: {
-        readonly domain: string;
-        readonly visible: boolean;
-        readonly observedAt: number;
-      };
-    }
-  | {
-      readonly kind: "field-probe-result";
-      readonly payload: {
-        readonly domain: string;
-        readonly fields: readonly {
-          readonly name: string;
-          readonly type: string;
-          readonly autocomplete: string | null;
-        }[];
-      };
-    };
+export type InternalMessage = {
+  readonly kind: "focus-changed";
+  readonly payload: {
+    readonly domain: string;
+    readonly visible: boolean;
+    readonly observedAt: number;
+  };
+};

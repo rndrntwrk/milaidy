@@ -7,7 +7,6 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "build:chrome": "node scripts/build.mjs --target=chrome",
-    "build:safari": "node scripts/build.mjs --target=safari",
     "package:chrome": "node scripts/package-chrome.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"

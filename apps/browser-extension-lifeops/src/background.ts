@@ -5,9 +5,15 @@
  *   1. Maintain the WebSocket channel to the local agent.
  *   2. Listen to focus signals (tab/window/visibility) and feed them into
  *      the TimeAggregator.
- *   3. Flush per-domain focus time to the agent every `flushIntervalMs`.
- *   4. Respect `chrome.privacy` — if activity reporting is disabled the
- *      flush loop stays idle.
+ *   3. Flush per-hostname focus time to the agent every `flushIntervalMs`.
+ *   4. Stay idle when `activityReportingEnabled` is false.
+ *
+ * NOTE (unwired backend): the default wsUrl `ws://127.0.0.1:31339/ext` is a
+ * placeholder. No agent-side WebSocket handler exists for this extension
+ * yet — the existing companion extension at
+ * `eliza/apps/app-lifeops/extensions/lifeops-browser/` uses REST at
+ * `/api/lifeops/browser/companions/sync` instead. Until a server is wired
+ * the channel will reconnect-loop and telemetry is buffered in-memory only.
  */
 
 import { createLogger } from "./logger.js";
@@ -18,7 +24,7 @@ import {
   subscribeToSettings,
 } from "./settings.js";
 import { installFocusTracker } from "./tracker/focus-tracker.js";
-import { registrableDomain, TimeAggregator } from "./tracker/time-on-site.js";
+import { TimeAggregator } from "./tracker/time-on-site.js";
 import type {
   ExtensionSettings,
   InternalMessage,
@@ -36,39 +42,58 @@ interface RuntimeState {
 }
 
 let state: RuntimeState | null = null;
+let bootstrapPromise: Promise<RuntimeState> | null = null;
 
 async function bootstrap(): Promise<RuntimeState> {
-  const settings = await loadSettings();
-  const deviceId = await getOrCreateDeviceId();
-  const aggregator = new TimeAggregator(Date.now());
-  const channel = new AgentChannel({ url: settings.wsUrl });
+  if (state) return state;
+  if (bootstrapPromise) return bootstrapPromise;
 
-  const next: RuntimeState = { aggregator, channel, deviceId, settings };
+  bootstrapPromise = (async () => {
+    const settings = await loadSettings();
+    const deviceId = await getOrCreateDeviceId();
+    const aggregator = new TimeAggregator(Date.now());
+    const channel = new AgentChannel({ url: settings.wsUrl });
 
-  installFocusTracker({ aggregator, now: () => Date.now() });
-  channel.start();
+    installFocusTracker({ aggregator, now: () => Date.now() });
+    channel.start();
 
-  // Announce our presence to the agent.
-  const vendor = detectBrowserVendor();
-  const manifest = chrome.runtime.getManifest();
-  const registration: OutboundMessage = {
-    type: "register-session",
-    payload: {
-      deviceId,
-      userAgent: navigator.userAgent,
-      extensionVersion: manifest.version,
-      browserVendor: vendor,
-    },
-  };
-  channel.send(registration);
+    const vendor = detectBrowserVendor();
+    const manifest = chrome.runtime.getManifest();
+    const registration: OutboundMessage = {
+      type: "register-session",
+      payload: {
+        deviceId,
+        userAgent: navigator.userAgent,
+        extensionVersion: manifest.version,
+        browserVendor: vendor,
+      },
+    };
+    channel.send(registration);
 
+    await ensureFlushAlarm(settings.flushIntervalMs);
+    subscribeToSettings(handleSettingsUpdate);
+
+    const next: RuntimeState = { aggregator, channel, deviceId, settings };
+    state = next;
+    log.info("bootstrapped", { deviceId, wsUrl: settings.wsUrl });
+    return next;
+  })();
+
+  return bootstrapPromise;
+}
+
+async function handleSettingsUpdate(settings: ExtensionSettings): Promise<void> {
+  if (!state) return;
+  const urlChanged = state.settings.wsUrl !== settings.wsUrl;
+  state.settings = settings;
+  if (urlChanged) {
+    state.channel.setUrl(settings.wsUrl);
+  }
   await ensureFlushAlarm(settings.flushIntervalMs);
-  log.info("bootstrapped", { deviceId, wsUrl: settings.wsUrl });
-
-  return next;
 }
 
 async function ensureFlushAlarm(flushIntervalMs: number): Promise<void> {
+  // chrome.alarms enforces a 1-minute minimum period.
   const periodInMinutes = Math.max(1, Math.round(flushIntervalMs / 60_000));
   await chrome.alarms.clear(FLUSH_ALARM);
   chrome.alarms.create(FLUSH_ALARM, { periodInMinutes });
@@ -85,53 +110,19 @@ function detectBrowserVendor(): "chrome" | "safari" | "unknown" {
   return "unknown";
 }
 
-async function isPrivacyAllowed(): Promise<boolean> {
-  if (!state) {
-    return false;
-  }
-  if (!state.settings.activityReportingEnabled) {
-    return false;
-  }
-  // chrome.privacy is only present in desktop Chromium; Safari lacks it.
-  // When present, honor the global "do not track" signal as a soft opt-out.
-  const networkPredictionEnabled =
-    chrome.privacy?.network?.networkPredictionEnabled;
-  if (!networkPredictionEnabled) {
-    return true;
-  }
-  const details = await new Promise<chrome.types.ChromeSettingGetResultDetails>(
-    (resolve) => {
-      networkPredictionEnabled.get({}, (d) =>
-        resolve(d as chrome.types.ChromeSettingGetResultDetails),
-      );
-    },
-  );
-  // If the user has explicitly disabled network prediction, treat it as a
-  // signal to be conservative — reporting stays off.
-  return (details as { value?: unknown }).value !== false;
-}
-
 async function flush(): Promise<void> {
-  if (!state) {
-    return;
-  }
-  if (!(await isPrivacyAllowed())) {
-    log.debug("flush skipped due to privacy opt-out");
+  if (!state) return;
+  if (!state.settings.activityReportingEnabled) {
+    log.debug("flush skipped: reporting disabled");
     return;
   }
   const report = state.aggregator.flush(state.deviceId, Date.now());
   state.channel.send({ type: "time-report", payload: report });
-  state.channel.send({
-    type: "heartbeat",
-    payload: { deviceId: state.deviceId, ts: new Date().toISOString() },
-  });
   log.debug("flushed", { domains: report.domains.length });
 }
 
 function handleInternalMessage(msg: InternalMessage): void {
-  if (!state) {
-    return;
-  }
+  if (!state) return;
   if (msg.kind === "focus-changed") {
     const domain = msg.payload.visible ? msg.payload.domain : "";
     state.aggregator.recordFocusChange(
@@ -159,48 +150,21 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 });
 
 chrome.runtime.onInstalled.addListener(() => {
-  void bootstrap().then((next) => {
-    state = next;
-  });
+  void bootstrap();
 });
 
 chrome.runtime.onStartup.addListener(() => {
-  void bootstrap().then((next) => {
-    state = next;
-  });
+  void bootstrap();
 });
 
-// Service workers may be evicted and re-instantiated; ensure we bootstrap on
-// the first tick when state is absent.
-void bootstrap().then((next) => {
-  state = next;
-  // React to settings changes (options page writes).
-  subscribeToSettings(async (settings) => {
-    if (!state) {
-      return;
-    }
-    const changed = state.settings.wsUrl !== settings.wsUrl;
-    state.settings = settings;
-    if (changed) {
-      state.channel.setUrl(settings.wsUrl);
-    }
-    await ensureFlushAlarm(settings.flushIntervalMs);
-  });
-});
-
-chrome.tabs.onActivated.addListener(async (info) => {
-  const tab = await chrome.tabs.get(info.tabId).catch(() => null);
-  if (!tab?.url) {
-    return;
-  }
-  const domain = registrableDomain(tab.url);
-  log.debug("active tab domain", { domain });
-});
+// Service workers may be evicted and re-instantiated; bootstrap on first
+// tick too. The idempotent promise cache prevents duplicate listeners.
+void bootstrap();
 
 function isInternalMessage(value: unknown): value is InternalMessage {
   if (!value || typeof value !== "object") {
     return false;
   }
   const kind = (value as { kind?: unknown }).kind;
-  return kind === "focus-changed" || kind === "field-probe-result";
+  return kind === "focus-changed";
 }

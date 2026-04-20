@@ -2,10 +2,9 @@ import { scenario } from "@elizaos/scenario-schema";
 
 export default scenario({
   id: "todo.cross-device.create-and-query",
-  title: "Create a todo on the dashboard, query it from mobile",
+  title: "Create a todo on the dashboard, confirm it, then query it from mobile",
   domain: "todos",
-  tags: ["lifeops", "todos", "smoke", "cross-platform-inconsistency"],
-  status: "pending",
+  tags: ["lifeops", "todos", "smoke"],
   isolation: "per-scenario",
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
@@ -29,7 +28,15 @@ export default scenario({
       room: "main",
       text: "Create a todo: pick up dry cleaning tomorrow.",
       expectedActions: ["LIFE"],
-      responseIncludesAny: ["dry cleaning", "todo", "tomorrow"],
+      responseIncludesAny: ["dry cleaning", "confirm", "save"],
+    },
+    {
+      kind: "message",
+      name: "confirm-on-dashboard",
+      room: "main",
+      text: "Yes, save it.",
+      expectedActions: ["LIFE"],
+      responseIncludesAny: ["saved", "dry cleaning", "tomorrow"],
     },
     {
       kind: "message",
@@ -41,13 +48,10 @@ export default scenario({
   ],
   finalChecks: [
     {
-      type: "custom",
-      name: "cross-device-intent-bus-ready",
-      predicate: async () => {
-        throw new Error(
-          "NotYetImplemented: cross-device intent bus (T9g: Cross-device intent bus, plan §6.24)",
-        );
-      },
+      type: "actionCalled",
+      actionName: "LIFE",
+      status: "success",
+      minCount: 3,
     },
   ],
 });

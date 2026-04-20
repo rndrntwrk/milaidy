@@ -1,17 +1,14 @@
 #!/usr/bin/env node
 
 /**
- * Build the extension for Chrome (MV3) and/or Safari.
+ * Build the extension for Chrome (MV3).
  *
  * Output:
  *   dist/chrome/  — loadable unpacked MV3 extension
- *   dist/safari/  — identical bundle staged into the ios-wrapper Xcode
- *                   project's Resources directory
  *
- * Usage:
- *   node scripts/build.mjs                  # builds both
- *   node scripts/build.mjs --target=chrome  # chrome only
- *   node scripts/build.mjs --target=safari  # safari only
+ * Safari support is not wired: there is no committed Xcode wrapper project
+ * and the repo's iOS platform only ships a Content Blocker (different
+ * extension type). Re-add a `safari` target when a real wrapper exists.
  */
 
 import { existsSync } from "node:fs";
@@ -25,14 +22,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, "..");
 const srcDir = resolve(root, "src");
 
-const args = new Set(process.argv.slice(2));
-const onlyChrome = Array.from(args).some((a) => a === "--target=chrome");
-const onlySafari = Array.from(args).some((a) => a === "--target=safari");
-const targets = onlySafari
-  ? ["safari"]
-  : onlyChrome
-    ? ["chrome"]
-    : ["chrome", "safari"];
+const targets = ["chrome"];
 
 await Promise.all(targets.map((t) => buildTarget(t)));
 console.log(`[build] targets=${targets.join(",")} complete`);
@@ -79,10 +69,6 @@ async function buildTarget(target) {
   const manifestDst = resolve(outDir, "manifest.json");
   const raw = await readFile(manifestSrc, "utf8");
   const manifest = JSON.parse(raw);
-  if (target === "safari") {
-    // Safari ignores the `privacy` permission; strip it for cleanliness.
-    manifest.permissions = manifest.permissions.filter((p) => p !== "privacy");
-  }
   await writeFile(manifestDst, JSON.stringify(manifest, null, 2));
 
   const iconsSrc = resolve(root, "icons");

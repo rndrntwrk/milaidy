@@ -1,20 +1,39 @@
 import type { ReactElement } from "react";
 import { useEffect, useState } from "react";
-import { loadSettings, saveSettings } from "../settings.js";
+import {
+  InvalidSettingsError,
+  isValidWsUrl,
+  loadSettings,
+  saveSettings,
+} from "../settings.js";
 import { DEFAULT_SETTINGS, type ExtensionSettings } from "../types.js";
 
 export function App(): ReactElement {
   const [settings, setSettings] = useState<ExtensionSettings>(DEFAULT_SETTINGS);
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     void loadSettings().then(setSettings);
   }, []);
 
+  const wsUrlValid = isValidWsUrl(settings.wsUrl);
+
   const onSave = async (): Promise<void> => {
-    await saveSettings(settings);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 1_500);
+    setError(null);
+    try {
+      await saveSettings(settings);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1_500);
+    } catch (e) {
+      setError(
+        e instanceof InvalidSettingsError
+          ? e.message
+          : e instanceof Error
+            ? e.message
+            : "failed to save settings",
+      );
+    }
   };
 
   return (
@@ -32,6 +51,11 @@ export function App(): ReactElement {
         value={settings.wsUrl}
         onChange={(e) => setSettings({ ...settings, wsUrl: e.target.value })}
       />
+      {!wsUrlValid ? (
+        <div style={{ color: "crimson", fontSize: 12 }}>
+          Must be a ws:// or wss:// URL.
+        </div>
+      ) : null}
 
       <label htmlFor="flushIntervalMs">Flush interval (ms, min 1000)</label>
       <input
@@ -47,6 +71,10 @@ export function App(): ReactElement {
           })
         }
       />
+      <div style={{ fontSize: 12, color: "#666" }}>
+        Note: chrome.alarms enforces a 1-minute minimum; values under 60000ms
+        are effectively rounded up.
+      </div>
 
       <label>
         <input
@@ -63,11 +91,14 @@ export function App(): ReactElement {
       </label>
 
       <div>
-        <button type="button" onClick={onSave}>
+        <button type="button" onClick={onSave} disabled={!wsUrlValid}>
           Save
         </button>
         {saved ? (
           <span style={{ marginLeft: 12, color: "green" }}>Saved</span>
+        ) : null}
+        {error ? (
+          <span style={{ marginLeft: 12, color: "crimson" }}>{error}</span>
         ) : null}
       </div>
     </div>

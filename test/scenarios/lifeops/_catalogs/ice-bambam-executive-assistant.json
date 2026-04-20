@@ -317,6 +317,7 @@
         "booking confirmation final check"
       ],
       "approvalMode": "always ask first",
+      "benchmarkPrompt": "Jill confirmed it will just be me for LA and Toronto. Put together the flights and hotel and hold it for my approval before you book anything.",
       "examplePrompt": "Jill confirmed it would be just you for LA and Toronto. I can start booking flights and hotel today if that's good with you."
     },
     {

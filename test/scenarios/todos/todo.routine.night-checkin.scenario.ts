@@ -1,11 +1,13 @@
 import { scenario } from "@elizaos/scenario-schema";
+import { expectTurnToCallAction } from "../_helpers/action-assertions.ts";
+import { expectScenarioActionResultData } from "../_helpers/action-result-assertions.ts";
+import { seedCheckinTodo } from "../_helpers/lifeops-seeds.ts";
 
 export default scenario({
   id: "todo.routine.night-checkin",
-  title: "Night check-in reviews today's todos",
+  title: "Night check-in reports outstanding overdue todo context",
   domain: "todos",
-  tags: ["lifeops", "todos", "plugin-disabled"],
-  status: "pending",
+  tags: ["lifeops", "todos"],
   isolation: "per-scenario",
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
@@ -19,28 +21,40 @@ export default scenario({
   ],
   seed: [
     {
-      type: "todo",
-      name: "Journal",
-      dueIso: "{{now+1h}}",
+      type: "custom",
+      name: "seed-overdue-checkin-todo",
+      apply: seedCheckinTodo({
+        id: "night-checkin-journal",
+        title: "Journal",
+        dueAt: "{{now-1h}}",
+      }),
     },
   ],
   turns: [
     {
       kind: "message",
       name: "night-checkin",
-      text: "Good night, how did today go?",
-      responseIncludesAny: ["night", "today", "journal", "tomorrow"],
+      text: "Give me my night check-in.",
+      responseIncludesAny: ["summary", "day"],
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: ["RUN_NIGHT_CHECKIN"],
+        description: "night check-in",
+      }),
     },
   ],
   finalChecks: [
     {
+      type: "selectedAction",
+      actionName: "RUN_NIGHT_CHECKIN",
+    },
+    {
       type: "custom",
-      name: "night-checkin-engine-ready",
-      predicate: async () => {
-        throw new Error(
-          "NotYetImplemented: night check-in engine (T9f: Morning/night check-in routine engine, plan §6.23)",
-        );
-      },
+      name: "night-checkin-report-includes-overdue-todo",
+      predicate: expectScenarioActionResultData({
+        description: "night check-in report payload",
+        actionName: "RUN_NIGHT_CHECKIN",
+        includesAll: ["night", "Journal"],
+      }),
     },
   ],
 });

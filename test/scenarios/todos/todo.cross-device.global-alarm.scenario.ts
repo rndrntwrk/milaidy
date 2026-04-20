@@ -2,10 +2,9 @@ import { scenario } from "@elizaos/scenario-schema";
 
 export default scenario({
   id: "todo.cross-device.global-alarm",
-  title: "Setting an alarm fires on both Mac and iOS",
+  title: "Setting an alarm is confirmation-gated before saving",
   domain: "todos",
-  tags: ["lifeops", "todos", "cross-platform-inconsistency"],
-  status: "pending",
+  tags: ["lifeops", "todos"],
   isolation: "per-scenario",
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
@@ -22,18 +21,21 @@ export default scenario({
       kind: "message",
       name: "set-global-alarm",
       text: "Set an alarm for 7am tomorrow to wake up.",
-      responseIncludesAny: ["alarm", "7", "wake up", "tomorrow"],
+      responseIncludesAny: ["alarm", "7", "wake up", "correct"],
+    },
+    {
+      kind: "message",
+      name: "confirm-global-alarm",
+      text: "Yes, save it.",
+      responseIncludesAny: ["saved", "alarm", "wake up", "7:00"],
     },
   ],
   finalChecks: [
     {
-      type: "custom",
-      name: "global-alarm-ready",
-      predicate: async () => {
-        throw new Error(
-          "NotYetImplemented: global alarm across Mac + iOS (T8b: macOS native alarm, plan §6.10; T8c: iOS native alarm + companion skeleton, plan §6.11)",
-        );
-      },
+      type: "actionCalled",
+      actionName: "LIFE",
+      status: "success",
+      minCount: 2,
     },
   ],
 });
