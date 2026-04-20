@@ -1,13 +1,15 @@
 # Action Audit
 
-Scanned **72** actions across **83** files.
+Scanned **74** actions across **91** files.
 **High:** 0 · **Medium:** 0 · **Low:** 0
 
-## Clean (72)
+## Clean (74)
 
 | Action | File |
 | --- | --- |
 | `ADD_AUTOFILL_WHITELIST` | `eliza/apps/app-lifeops/src/actions/autofill.ts` |
+| `AGENT_INBOX` | `eliza/packages/agent/src/actions/agent-inbox.ts` |
+| `AGENT_SEND_MESSAGE` | `eliza/packages/agent/src/actions/send-message.ts` |
 | `ANALYZE_IMAGE` | `eliza/packages/agent/src/actions/media.ts` |
 | `APPROVE_REQUEST` | `eliza/apps/app-lifeops/src/actions/approval.ts` |
 | `BLOCK_APPS` | `eliza/apps/app-lifeops/src/actions/app-blocker.ts` |
@@ -46,6 +48,8 @@ Scanned **72** actions across **83** files.
 | `LIST_OVERDUE_FOLLOWUPS` | `eliza/apps/app-lifeops/src/followup/actions/listOverdueFollowups.ts` |
 | `LOG_LEVEL` | `eliza/packages/agent/src/actions/log-level.ts` |
 | `MARK_FOLLOWUP_DONE` | `eliza/apps/app-lifeops/src/followup/actions/markFollowupDone.ts` |
+| `OWNER_CALENDAR` | `eliza/apps/app-lifeops/src/actions/owner-calendar.ts` |
+| `OWNER_RELATIONSHIP` | `eliza/apps/app-lifeops/src/actions/relationships.ts` |
 | `PASSWORD_MANAGER` | `eliza/apps/app-lifeops/src/actions/password-manager.ts` |
 | `PROPOSE_MEETING_TIMES` | `eliza/apps/app-lifeops/src/actions/scheduling.ts` |
 | `PUBLISH_DEVICE_INTENT` | `eliza/apps/app-lifeops/src/actions/device-bus.ts` |
@@ -54,7 +58,6 @@ Scanned **72** actions across **83** files.
 | `READ_MESSAGES` | `eliza/packages/agent/src/actions/read-messages.ts` |
 | `REINJECT_PLUGIN` | `eliza/packages/agent/src/actions/reinject-plugin.ts` |
 | `REJECT_REQUEST` | `eliza/apps/app-lifeops/src/actions/approval.ts` |
-| `RELATIONSHIP` | `eliza/apps/app-lifeops/src/actions/relationships.ts` |
 | `RELEASE_BLOCK` | `eliza/apps/app-lifeops/src/website-blocker/chat-integration/actions/releaseBlock.ts` |
 | `REQUEST_FIELD_FILL` | `eliza/apps/app-lifeops/src/actions/autofill.ts` |
 | `REQUEST_WEBSITE_BLOCKING_PERMISSION` | `eliza/apps/app-lifeops/src/actions/website-blocker.ts` |
@@ -66,7 +69,6 @@ Scanned **72** actions across **83** files.
 | `SEARCH_CONVERSATIONS` | `eliza/packages/agent/src/actions/search-conversations.ts` |
 | `SEARCH_ENTITY` | `eliza/packages/agent/src/actions/entity-actions.ts` |
 | `SEND_ADMIN_MESSAGE` | `eliza/packages/agent/src/actions/send-admin-message.ts` |
-| `SEND_MESSAGE` | `eliza/packages/agent/src/actions/send-message.ts` |
 | `SET_FOLLOWUP_THRESHOLD` | `eliza/apps/app-lifeops/src/followup/actions/setFollowupThreshold.ts` |
 | `SET_USER_NAME` | `eliza/packages/agent/src/actions/set-user-name.ts` |
 | `SHELL_COMMAND` | `eliza/packages/agent/src/actions/terminal.ts` |
