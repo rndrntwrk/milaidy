@@ -99,6 +99,23 @@ function matchesPattern(value: string, pattern: Pattern): boolean {
   return pattern.test(value);
 }
 
+function normalizeChannelKey(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function channelMatches(candidate: string | undefined, filters: string[]): boolean {
+  if (filters.length === 0) {
+    return true;
+  }
+  if (!candidate) {
+    return false;
+  }
+  const normalizedCandidate = normalizeChannelKey(candidate);
+  return filters.some(
+    (filter) => normalizeChannelKey(filter) === normalizedCandidate,
+  );
+}
+
 function describeActionSet(actions: CapturedAction[]): string {
   return actions.map((action) => action.actionName).join(", ") || "(none)";
 }
@@ -241,7 +258,7 @@ export function expectConnectorDispatch(
     const channels = toArray(expectation.channel);
     const actionFilters = toArray(expectation.actionName);
     const matched = dispatches.filter((dispatch: CapturedConnectorDispatch) => {
-      if (channels.length > 0 && !channels.includes(dispatch.channel)) {
+      if (!channelMatches(dispatch.channel, channels)) {
         return false;
       }
       if (!actionMatches(dispatch.actionName, actionFilters)) {
@@ -359,7 +376,7 @@ export function expectNoSideEffectOnReject(
       }
       if (
         expectation.channels?.length &&
-        !expectation.channels.includes(dispatch.channel)
+        !channelMatches(dispatch.channel, expectation.channels)
       ) {
         return false;
       }

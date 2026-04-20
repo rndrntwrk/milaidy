@@ -1,14 +1,9 @@
-/**
- * Per-site social-media activity query, driven by the browser
- * extension (T8e) feeding per-origin data into the activity tracker
- * (T8d).
- *
- * NotYetImplemented until T8d + T8e.
- */
-
 import { scenario } from "@elizaos/scenario-schema";
-
-const ACTIVITY_ACTIONS = ["GET_TIME_ON_SITE", "GET_ACTIVITY_REPORT"];
+import {
+  expectScenarioToCallAction,
+  expectTurnToCallAction,
+} from "../_helpers/action-assertions.ts";
+import { seedScreenTimeSessions } from "../_helpers/lifeops-seeds.ts";
 
 export default scenario({
   id: "activity.per-site.social",
@@ -16,15 +11,42 @@ export default scenario({
   domain: "activity",
   tags: ["activity", "browser", "happy-path"],
   description:
-    "User asks which social sites took the most time. Requires T8d + T8e.",
-
-  status: "pending",
-
+    "User asks which social sites took the most time. Seeded website sessions must surface through the screen-time query path.",
   isolation: "per-scenario",
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
   },
-
+  seed: [
+    {
+      type: "custom",
+      name: "seed-social-site-screen-time",
+      apply: seedScreenTimeSessions({
+        sessions: [
+          {
+            source: "website",
+            identifier: "x.com",
+            displayName: "x.com",
+            offsetMinutes: 15,
+            durationMinutes: 42,
+          },
+          {
+            source: "website",
+            identifier: "instagram.com",
+            displayName: "instagram.com",
+            offsetMinutes: 72,
+            durationMinutes: 28,
+          },
+          {
+            source: "website",
+            identifier: "facebook.com",
+            displayName: "facebook.com",
+            offsetMinutes: 121,
+            durationMinutes: 13,
+          },
+        ],
+      }),
+    },
+  ],
   rooms: [
     {
       id: "main",
@@ -33,33 +55,58 @@ export default scenario({
       title: "Activity: per-site social",
     },
   ],
-
   turns: [
     {
       kind: "message",
       name: "per-site-social-query",
       room: "main",
       text: "Which social sites did I spend the most time on this week?",
-      responseIncludesAny: [/social/i, /site/i, /time|minutes|hours/i],
-      assertTurn: (turn) => {
-        const hit = turn.actionsCalled.find((a) =>
-          ACTIVITY_ACTIONS.includes(a.actionName),
-        );
-        if (!hit) {
-          throw new Error(
-            "NotYetImplemented: no per-site action fired — see tasks T8d + T8e.",
-          );
-        }
-      },
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: ["OWNER_SCREEN_TIME", "SCREEN_TIME"],
+        description: "social website breakdown",
+      }),
+      responseIncludesAny: [
+        /social/i,
+        /x\.com|instagram\.com|facebook\.com/i,
+        /time|minutes|hours/i,
+      ],
     },
   ],
-
   finalChecks: [
     {
+      type: "selectedAction",
+      actionName: ["OWNER_SCREEN_TIME", "SCREEN_TIME"],
+    },
+    {
       type: "custom",
-      name: "per-site-social-feasible",
-      predicate: async () => {
-        return "NotYetImplemented: per-site social activity requires T8d (activity tracker) + T8e (browser extension).";
+      name: "per-site-social-action-coverage",
+      predicate: expectScenarioToCallAction({
+        acceptedActions: ["OWNER_SCREEN_TIME", "SCREEN_TIME"],
+        description: "social website breakdown",
+      }),
+    },
+    {
+      type: "custom",
+      name: "per-site-social-result",
+      predicate: async (ctx) => {
+        const hit = ctx.actionsCalled.find((action) =>
+          ["OWNER_SCREEN_TIME", "SCREEN_TIME"].includes(action.actionName),
+        );
+        if (!hit) {
+          return "expected screen-time action result";
+        }
+        const payload = JSON.stringify(hit.result?.data ?? {}).toLowerCase();
+        if (
+          !payload.includes("x.com") ||
+          !payload.includes("instagram.com") ||
+          !payload.includes("facebook.com")
+        ) {
+          return "expected seeded social-site domains in result payload";
+        }
+        if (!/totalseconds|summary|daily/.test(payload)) {
+          return "expected quantitative website totals in result payload";
+        }
+        return undefined;
       },
     },
   ],

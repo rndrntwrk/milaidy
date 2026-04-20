@@ -15,10 +15,12 @@ import {
   createLifeOpsCalendarSyncState,
   LifeOpsRepository,
 } from "../../../eliza/apps/app-lifeops/src/lifeops/repository.ts";
+import { LifeOpsService } from "../../../eliza/apps/app-lifeops/src/lifeops/service.ts";
 import {
   executeRawSql,
   sqlQuote,
 } from "../../../eliza/apps/app-lifeops/src/lifeops/sql.ts";
+import { insertActivityEvent } from "../../../eliza/apps/app-lifeops/src/activity-profile/activity-tracker-repo.ts";
 import { seedGoogleConnectorGrant } from "../../mocks/helpers/seed-grants.ts";
 
 type CalendarSeedEvent = {
@@ -44,6 +46,23 @@ type BrowserTelemetrySeed = {
   extensionVersion?: string;
   userAgent?: string;
   windows: BrowserTelemetryWindow[];
+};
+
+type ScreenTimeSeedSession = {
+  source: "app" | "website";
+  identifier: string;
+  displayName?: string;
+  offsetMinutes: number;
+  durationMinutes: number;
+  metadata?: Record<string, unknown>;
+};
+
+type ActivityEventSeed = {
+  offsetMinutes: number;
+  eventKind: "activate" | "deactivate";
+  bundleId: string;
+  appName: string;
+  windowTitle?: string | null;
 };
 
 function requireRuntime(ctx: ScenarioContext): IAgentRuntime | string {
@@ -195,6 +214,64 @@ export function seedBrowserExtensionTelemetry(args: BrowserTelemetrySeed) {
       if (!recorded) {
         return `failed to record browser focus window for ${window.url}`;
       }
+    }
+
+    return undefined;
+  };
+}
+
+export function seedScreenTimeSessions(args: {
+  sessions: ScreenTimeSeedSession[];
+}) {
+  return async (ctx: ScenarioContext): Promise<ScenarioCheckResult> => {
+    const runtime = requireRuntime(ctx);
+    if (typeof runtime === "string") {
+      return runtime;
+    }
+
+    const service = new LifeOpsService(runtime);
+    const now = scenarioNow(ctx);
+    for (const session of args.sessions) {
+      const endAt = new Date(now.getTime() - session.offsetMinutes * 60_000);
+      const startAt = new Date(
+        endAt.getTime() - session.durationMinutes * 60_000,
+      );
+      await service.recordScreenTimeEvent({
+        source: session.source,
+        identifier: session.identifier,
+        displayName: session.displayName ?? session.identifier,
+        startAt: startAt.toISOString(),
+        endAt: endAt.toISOString(),
+        durationSeconds: Math.round(session.durationMinutes * 60),
+        metadata: session.metadata ?? {},
+      });
+    }
+
+    return undefined;
+  };
+}
+
+export function seedActivityEvents(args: { events: ActivityEventSeed[] }) {
+  return async (ctx: ScenarioContext): Promise<ScenarioCheckResult> => {
+    const runtime = requireRuntime(ctx);
+    if (typeof runtime === "string") {
+      return runtime;
+    }
+
+    const now = scenarioNow(ctx);
+    const agentId = String(runtime.agentId);
+    for (const event of args.events) {
+      const observedAt = new Date(
+        now.getTime() - event.offsetMinutes * 60_000,
+      ).toISOString();
+      await insertActivityEvent(runtime, {
+        agentId,
+        observedAt,
+        eventKind: event.eventKind,
+        bundleId: event.bundleId,
+        appName: event.appName,
+        windowTitle: event.windowTitle ?? null,
+      });
     }
 
     return undefined;

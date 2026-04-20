@@ -1,14 +1,9 @@
-/**
- * Verifies the end-to-end path: browser extension emits per-site
- * events → collector ingests → agent can query per-site data. This
- * scenario specifically tests the extension-as-data-source.
- *
- * NotYetImplemented until T8e (browser extension) is built.
- */
-
 import { scenario } from "@elizaos/scenario-schema";
-
-const ACTIVITY_ACTIONS = ["GET_TIME_ON_SITE", "GET_ACTIVITY_REPORT"];
+import {
+  expectScenarioToCallAction,
+  expectTurnToCallAction,
+} from "../_helpers/action-assertions.ts";
+import { seedBrowserExtensionTelemetry } from "../_helpers/lifeops-seeds.ts";
 
 export default scenario({
   id: "activity.browser-extension-feeds-data",
@@ -16,15 +11,33 @@ export default scenario({
   domain: "activity",
   tags: ["activity", "browser", "happy-path"],
   description:
-    "Tests the extension → collector → agent query path. NotYetImplemented until T8e.",
-
-  status: "pending",
-
+    "Tests the browser extension -> runtime cache -> agent query path using seeded per-domain telemetry.",
   isolation: "per-scenario",
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
   },
-
+  seed: [
+    {
+      type: "custom",
+      name: "seed-browser-extension-data",
+      apply: seedBrowserExtensionTelemetry({
+        deviceId: "browser-extension-feed",
+        browserVendor: "chrome",
+        windows: [
+          {
+            url: "https://github.com/elizaOS/milady",
+            offsetMinutes: 7,
+            durationMinutes: 16,
+          },
+          {
+            url: "https://docs.google.com/document/d/ops-brief",
+            offsetMinutes: 29,
+            durationMinutes: 11,
+          },
+        ],
+      }),
+    },
+  ],
   rooms: [
     {
       id: "main",
@@ -33,33 +46,53 @@ export default scenario({
       title: "Activity: extension pipeline",
     },
   ],
-
   turns: [
     {
       kind: "message",
       name: "extension-feed-check",
       room: "main",
       text: "What's the latest per-site data the LifeOps extension has sent you?",
-      responseIncludesAny: [/extension/i, /site/i, /data/i, /not.*install/i],
-      assertTurn: (turn) => {
-        const hit = turn.actionsCalled.find((a) =>
-          ACTIVITY_ACTIONS.includes(a.actionName),
-        );
-        if (!hit) {
-          throw new Error(
-            "NotYetImplemented: extension → collector path missing — see task T8e.",
-          );
-        }
-      },
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: ["FETCH_BROWSER_ACTIVITY"],
+        description: "browser extension activity snapshot",
+      }),
+      responseIncludesAny: [/extension/i, /github/i, /docs\.google\.com/i],
     },
   ],
-
   finalChecks: [
     {
+      type: "selectedAction",
+      actionName: "FETCH_BROWSER_ACTIVITY",
+    },
+    {
       type: "custom",
-      name: "extension-feed-present",
-      predicate: async () => {
-        return "NotYetImplemented: browser extension data feed requires T8e.";
+      name: "extension-feed-action-coverage",
+      predicate: expectScenarioToCallAction({
+        acceptedActions: ["FETCH_BROWSER_ACTIVITY"],
+        description: "browser extension activity snapshot",
+      }),
+    },
+    {
+      type: "custom",
+      name: "extension-feed-result",
+      predicate: async (ctx) => {
+        const hit = ctx.actionsCalled.find(
+          (action) => action.actionName === "FETCH_BROWSER_ACTIVITY",
+        );
+        if (!hit) {
+          return "expected FETCH_BROWSER_ACTIVITY action result";
+        }
+        const payload = JSON.stringify(hit.result?.data ?? {});
+        if (!payload.includes("browser-extension-feed")) {
+          return "expected seeded browser device id in activity payload";
+        }
+        if (!payload.includes("github.com")) {
+          return "expected github.com in activity payload";
+        }
+        if (!payload.includes("docs.google.com")) {
+          return "expected docs.google.com in activity payload";
+        }
+        return undefined;
       },
     },
   ],

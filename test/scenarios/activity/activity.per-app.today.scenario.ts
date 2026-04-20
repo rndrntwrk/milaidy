@@ -1,14 +1,9 @@
-/**
- * Per-app usage query. User asks which apps they used most today.
- * Requires the WakaTime-like activity collector (T8d) hooked into
- * NSWorkspace (macOS) focus events.
- *
- * NotYetImplemented until T8d.
- */
-
 import { scenario } from "@elizaos/scenario-schema";
-
-const ACTIVITY_ACTIONS = ["GET_ACTIVITY_REPORT", "GET_TIME_ON_SITE"];
+import {
+  expectScenarioToCallAction,
+  expectTurnToCallAction,
+} from "../_helpers/action-assertions.ts";
+import { seedScreenTimeSessions } from "../_helpers/lifeops-seeds.ts";
 
 export default scenario({
   id: "activity.per-app.today",
@@ -16,15 +11,35 @@ export default scenario({
   domain: "activity",
   tags: ["activity", "smoke", "happy-path"],
   description:
-    "User asks 'Which apps did I use most today?'. NotYetImplemented until T8d (activity tracker).",
-
-  status: "pending",
-
+    "User asks which apps they used most today. Seeded app sessions must flow through the screen-time / activity surface.",
   isolation: "per-scenario",
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
   },
-
+  seed: [
+    {
+      type: "custom",
+      name: "seed-app-screen-time",
+      apply: seedScreenTimeSessions({
+        sessions: [
+          {
+            source: "app",
+            identifier: "com.microsoft.VSCode",
+            displayName: "VS Code",
+            offsetMinutes: 25,
+            durationMinutes: 95,
+          },
+          {
+            source: "app",
+            identifier: "com.apple.Safari",
+            displayName: "Safari",
+            offsetMinutes: 135,
+            durationMinutes: 48,
+          },
+        ],
+      }),
+    },
+  ],
   rooms: [
     {
       id: "main",
@@ -33,33 +48,52 @@ export default scenario({
       title: "Activity: per-app today",
     },
   ],
-
   turns: [
     {
       kind: "message",
       name: "per-app-today",
       room: "main",
       text: "Which apps did I use most today?",
-      responseIncludesAny: [/app/i, /today/i, /time|minutes|hours/i],
-      assertTurn: (turn) => {
-        const hit = turn.actionsCalled.find((a) =>
-          ACTIVITY_ACTIONS.includes(a.actionName),
-        );
-        if (!hit) {
-          throw new Error(
-            "NotYetImplemented: no GET_ACTIVITY_REPORT fired — see task T8d.",
-          );
-        }
-      },
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: ["OWNER_SCREEN_TIME", "SCREEN_TIME", "GET_ACTIVITY_REPORT"],
+        description: "per-app usage lookup",
+      }),
+      responseIncludesAny: [/vs code|safari/i, /today/i, /minute|hour|time/i],
     },
   ],
-
   finalChecks: [
     {
+      type: "selectedAction",
+      actionName: ["OWNER_SCREEN_TIME", "SCREEN_TIME", "GET_ACTIVITY_REPORT"],
+    },
+    {
       type: "custom",
-      name: "per-app-feasible",
-      predicate: async () => {
-        return "NotYetImplemented: per-app activity query requires T8d (activity tracker).";
+      name: "per-app-today-action-coverage",
+      predicate: expectScenarioToCallAction({
+        acceptedActions: ["OWNER_SCREEN_TIME", "SCREEN_TIME", "GET_ACTIVITY_REPORT"],
+        description: "per-app usage lookup",
+      }),
+    },
+    {
+      type: "custom",
+      name: "per-app-today-results",
+      predicate: async (ctx) => {
+        const hit = ctx.actionsCalled.find((action) =>
+          ["OWNER_SCREEN_TIME", "SCREEN_TIME", "GET_ACTIVITY_REPORT"].includes(
+            action.actionName,
+          ),
+        );
+        if (!hit) {
+          return "expected a screen-time or activity action result";
+        }
+        const payload = JSON.stringify(hit.result?.data ?? {}).toLowerCase();
+        if (!payload.includes("vs code") || !payload.includes("safari")) {
+          return "expected seeded Safari and VS Code app usage in result payload";
+        }
+        if (!/totalms|totalseconds|summary|apps|daily/.test(payload)) {
+          return "expected quantitative usage data in result payload";
+        }
+        return undefined;
       },
     },
   ],
