@@ -312,7 +312,12 @@ export function CompanionStageOperatorOverlay({
   return (
     <>
       <aside
-        className="pointer-events-none absolute left-4 top-1/2 z-20 hidden -translate-y-1/2 md:block xl:left-6"
+        // `companion-stage-overlay` is a stable hook the shared DialogContent
+        // effect uses to hide the stage rail (Action Log launcher + any
+        // bubble/tooltip children) while a Dialog is open. Without this, the
+        // rail sits in its own stacking context above the Dialog overlay on
+        // the companion view.
+        className="companion-stage-overlay pointer-events-none absolute left-4 top-1/2 z-20 hidden -translate-y-1/2 md:block xl:left-6"
         data-no-camera-drag="true"
         data-no-camera-zoom="true"
       >

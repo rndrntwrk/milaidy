@@ -162,6 +162,31 @@
   overflow-y: auto;
 }
 
+/* ── Scene chrome suppression while a Dialog is open ───────────────────
+ * The companion view mounts the chat dock and stage rail as direct children
+ * of the VRM scene. Both create their own stacking contexts above the
+ * DialogOverlay (via `position: absolute` on a z-10 ancestor in the
+ * companion stacking context), so without this rule chat bubbles and the
+ * compose bar remain legible in front of the modal.
+ *
+ * The body attribute is set by a ref-counted effect inside our shared
+ * DialogContent (see packages/ui/.../dialog.tsx) so nested Dialogs keep
+ * the flag on until the last one closes. We deliberately do NOT key off
+ * Radix's generic `data-scroll-locked` — other primitives set it too and
+ * would cause unrelated hides.
+ *
+ * Scoped to the two known leaking surfaces only — we rely on the overlay
+ * dim + blur (set on DialogOverlay) to cover the VRM avatar and
+ * background so the companion scene as a whole does not need to be
+ * hidden. That keeps the overlay blur read-through subtle (you can
+ * tell a scene is there) without letting readable UI chrome compete with
+ * the dialog content.
+ */
+body[data-milady-dialog-open="true"] .companion-chat-dock,
+body[data-milady-dialog-open="true"] .companion-stage-overlay {
+  display: none !important;
+}
+
 .go-live-modal {
   --go-live-border: rgba(255, 255, 255, 0.1);
   --go-live-border-strong: rgba(255, 255, 255, 0.16);
