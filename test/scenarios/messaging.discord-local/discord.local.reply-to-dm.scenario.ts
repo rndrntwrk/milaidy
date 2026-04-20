@@ -69,10 +69,13 @@ export default scenario({
       predicate: async (ctx) => {
         const firstBlob = JSON.stringify(ctx.turns?.[0]?.actionsCalled ?? []);
         const secondBlob = JSON.stringify(ctx.turns?.[1]?.actionsCalled ?? []);
-        if (/send|\"confirmed\":true/i.test(firstBlob) && !/draft/i.test(firstBlob)) {
+        if (
+          /send|"confirmed":true/i.test(firstBlob) &&
+          !/draft/i.test(firstBlob)
+        ) {
           return "first turn appears to have sent the Discord reply instead of drafting it";
         }
-        if (!/send|\"confirmed\":true/i.test(secondBlob)) {
+        if (!/send|"confirmed":true/i.test(secondBlob)) {
           const responseText = String(ctx.turns?.[1]?.responseText ?? "");
           if (!/\bsent\b|\bsending\b/i.test(responseText)) {
             return "second turn did not clearly send the Discord reply after confirmation";

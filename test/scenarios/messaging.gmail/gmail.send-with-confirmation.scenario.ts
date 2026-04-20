@@ -70,12 +70,12 @@ export default scenario({
       predicate: async (ctx) => {
         const firstBlob = JSON.stringify(ctx.turns?.[0]?.actionsCalled ?? []);
         const secondBlob = JSON.stringify(ctx.turns?.[1]?.actionsCalled ?? []);
-        if (/send_reply|send_message|\"confirmed\":true/i.test(firstBlob)) {
+        if (/send_reply|send_message|"confirmed":true/i.test(firstBlob)) {
           return "first turn executed or confirmed a Gmail send instead of stopping at a draft";
         }
         const secondTurnText = String(ctx.turns?.[1]?.responseText ?? "");
         if (
-          !/send_reply|send_message|\"confirmed\":true/i.test(secondBlob) &&
+          !/send_reply|send_message|"confirmed":true/i.test(secondBlob) &&
           !/\bsent\b|\bsending\b/i.test(secondTurnText)
         ) {
           return "second turn did not clearly execute the send after explicit confirmation";

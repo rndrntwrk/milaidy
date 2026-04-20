@@ -63,7 +63,11 @@ export default scenario({
         includesAny: ["search", "OpenAI"],
       }),
       responseExcludes: [/go to x\.com/i, /open twitter/i, /visit x\.com/i],
-      responseIncludesAny: [/openai/i, /people are saying|thread|launch/i, /@/i],
+      responseIncludesAny: [
+        /openai/i,
+        /people are saying|thread|launch/i,
+        /@/i,
+      ],
     },
   ],
 

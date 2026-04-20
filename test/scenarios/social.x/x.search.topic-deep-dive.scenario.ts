@@ -84,7 +84,9 @@ export default scenario({
       type: "custom",
       name: "x-search-result-items",
       predicate: async (ctx) => {
-        const hit = ctx.actionsCalled.find((action) => action.actionName === "X_READ");
+        const hit = ctx.actionsCalled.find(
+          (action) => action.actionName === "X_READ",
+        );
         const data = (hit?.result?.data ?? {}) as {
           subaction?: string;
           query?: string;

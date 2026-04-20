@@ -60,7 +60,11 @@ export default scenario({
         description: "X DM read",
         includesAny: ["read_dms"],
       }),
-      responseIncludesAny: [/x dms|dm/i, /jane_doe|milady_art/i, /call|sketch|feedback/i],
+      responseIncludesAny: [
+        /x dms|dm/i,
+        /jane_doe|milady_art/i,
+        /call|sketch|feedback/i,
+      ],
     },
   ],
 
@@ -82,7 +86,9 @@ export default scenario({
       type: "custom",
       name: "x-dm-read-results",
       predicate: async (ctx) => {
-        const hit = ctx.actionsCalled.find((action) => action.actionName === "X_READ");
+        const hit = ctx.actionsCalled.find(
+          (action) => action.actionName === "X_READ",
+        );
         const data = (hit?.result?.data ?? {}) as {
           subaction?: string;
           items?: Array<{ senderHandle?: string; text?: string }>;

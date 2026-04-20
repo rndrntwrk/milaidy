@@ -70,7 +70,8 @@ export function seedXReadFixtures(args: {
         agentId,
         externalDmId: dm.externalDmId,
         conversationId:
-          dm.conversationId ?? `conversation:${dm.senderHandle.replace(/^@/, "")}`,
+          dm.conversationId ??
+          `conversation:${dm.senderHandle.replace(/^@/, "")}`,
         senderHandle: dm.senderHandle.replace(/^@/, ""),
         senderId: dm.senderId ?? dm.senderHandle.replace(/^@/, ""),
         isInbound: dm.isInbound ?? true,
