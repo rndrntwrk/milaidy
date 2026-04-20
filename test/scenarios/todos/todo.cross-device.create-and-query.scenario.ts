@@ -2,7 +2,8 @@ import { scenario } from "@elizaos/scenario-schema";
 
 export default scenario({
   id: "todo.cross-device.create-and-query",
-  title: "Create a todo on the dashboard, confirm it, then query it from mobile",
+  title:
+    "Create a todo on the dashboard, confirm it, then query it from mobile",
   domain: "todos",
   tags: ["lifeops", "todos", "smoke"],
   isolation: "per-scenario",

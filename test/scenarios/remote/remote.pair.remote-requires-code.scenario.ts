@@ -32,8 +32,14 @@ export default scenario({
       type: "custom",
       name: "remote-pair-guidance-routing",
       predicate: async (ctx) => {
-        const names = new Set(ctx.actionsCalled.map((action) => action.actionName));
-        if (names.has("REPLY") || names.has("THINK") || names.has("USE_SKILL")) {
+        const names = new Set(
+          ctx.actionsCalled.map((action) => action.actionName),
+        );
+        if (
+          names.has("REPLY") ||
+          names.has("THINK") ||
+          names.has("USE_SKILL")
+        ) {
           return undefined;
         }
         return `Expected remote pairing flow to route through REPLY, THINK, or USE_SKILL. Called: ${Array.from(names).join(",") || "(none)"}`;

@@ -49,7 +49,10 @@ export default scenario({
         );
         const data =
           action?.result?.data && typeof action.result.data === "object"
-            ? (action.result.data as { subaction?: string; contacts?: unknown[] })
+            ? (action.result.data as {
+                subaction?: string;
+                contacts?: unknown[];
+              })
             : null;
         if (!data) {
           return "expected OWNER_RELATIONSHIP result data";

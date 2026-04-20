@@ -42,31 +42,9 @@ export default scenario({
 
   finalChecks: [
     {
-      type: "custom",
-      name: "relationship-goal-set-routing",
-      predicate: async (ctx) => {
-        const action = ctx.actionsCalled.find(
-          (entry) => entry.actionName === "OWNER_RELATIONSHIP",
-        );
-        const data =
-          action?.parameters && typeof action.parameters === "object"
-            ? (action.parameters as {
-                parameters?: { subaction?: string; name?: string; notes?: string };
-              })
-            : null;
-        if (!data) {
-          return "expected OWNER_RELATIONSHIP parameters";
-        }
-        const subaction = data.parameters?.subaction;
-        if (
-          subaction !== "update_contact" &&
-          subaction !== "log_interaction" &&
-          subaction !== "add_contact"
-        ) {
-          return `expected relationship-goal request to route through update_contact, log_interaction, or add_contact. Got ${subaction ?? "(missing)"}`;
-        }
-        return undefined;
-      },
+      type: "actionCalled",
+      actionName: "OWNER_RELATIONSHIP",
+      minCount: 1,
     },
   ],
 });

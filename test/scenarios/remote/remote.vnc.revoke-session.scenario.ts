@@ -32,8 +32,14 @@ export default scenario({
       type: "custom",
       name: "remote-session-end-routing",
       predicate: async (ctx) => {
-        const names = new Set(ctx.actionsCalled.map((action) => action.actionName));
-        if (names.has("RELEASE_BLOCK") || names.has("REPLY") || names.has("IGNORE")) {
+        const names = new Set(
+          ctx.actionsCalled.map((action) => action.actionName),
+        );
+        if (
+          names.has("RELEASE_BLOCK") ||
+          names.has("REPLY") ||
+          names.has("IGNORE")
+        ) {
           return undefined;
         }
         return `Expected remote session end flow to route through RELEASE_BLOCK, REPLY, or IGNORE. Called: ${Array.from(names).join(",") || "(none)"}`;

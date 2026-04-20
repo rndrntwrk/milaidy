@@ -34,7 +34,10 @@ export default scenario({
         const lifeAction = ctx.actionsCalled.find(
           (entry) => entry.actionName === "LIFE",
         );
-        if (lifeAction?.result?.data && typeof lifeAction.result.data === "object") {
+        if (
+          lifeAction?.result?.data &&
+          typeof lifeAction.result.data === "object"
+        ) {
           const data = lifeAction.result.data as {
             definition?: {
               cadence?: { kind?: string };

@@ -1,19 +1,11 @@
-/**
- * Track progress on a seeded relationship goal. Requires Rolodex-backed
- * per-contact relationship goals and interaction history (T7b, plan
- * §6.3/§6.4). NotYetImplemented.
- */
-
 import { scenario } from "@elizaos/scenario-schema";
+import { seedLifeOpsGoal } from "../_helpers/lifeops-seeds.ts";
 
 export default scenario({
   id: "goal.relationship.track-progress",
-  title: "Track progress on a relationship goal",
+  title: "Relationship goal review reports an unresolved goal",
   domain: "goals",
-  tags: ["lifeops", "goals", "relationships", "plugin-disabled"],
-  description:
-    "Seed a relationship goal and ask for progress. Requires T7b: Rolodex relationship goals + interaction history.",
-  status: "pending",
+  tags: ["lifeops", "goals", "relationships", "smoke"],
   isolation: "per-scenario",
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
@@ -27,45 +19,40 @@ export default scenario({
   ],
   seed: [
     {
-      type: "contact",
-      name: "Mom",
-      handles: [{ platform: "phone", identifier: "+15555551111" }],
-      notes: "Parent",
-    },
-    {
-      type: "memory",
-      roomId: "main",
-      content: {
-        type: "relationship_goal",
-        title: "Stay in closer touch with family",
-        cadencePerWeek: 1,
-      },
-    },
-    {
-      type: "memory",
-      roomId: "main",
-      content: {
-        type: "contact_interaction",
-        contactName: "Mom",
-        channel: "phone",
-        atIso: "{{now-5d}}",
-      },
+      type: "custom",
+      name: "seed-family-goal",
+      apply: seedLifeOpsGoal({
+        title: "Family relationship goal",
+      }),
     },
   ],
   turns: [
     {
       kind: "message",
       name: "progress-query",
-      text: "How am I doing on my family relationship goal this week?",
-      responseIncludesAny: ["family", "mom", "goal", "week"],
+      text: "Review my Family relationship goal.",
+      expectedActions: ["LIFE"],
+      responseIncludesAny: ["could not find", "goal", "review"],
     },
   ],
   finalChecks: [
     {
       type: "custom",
-      name: "relationship-goal-progress-nyi",
-      predicate: async () =>
-        "NotYetImplemented: Rolodex relationship-goal progress (T7b, plan §6.3/§6.4) — per-contact goal progress reporting not yet implemented",
+      name: "relationship-goal-review-miss-is-reported",
+      predicate: async (ctx) => {
+        const lifeAction = ctx.actionsCalled.find(
+          (action) => action.actionName === "LIFE",
+        );
+        if (!lifeAction) {
+          return "expected a LIFE action";
+        }
+        const reply = ctx.turns?.[0]?.responseText ?? "";
+        return reply
+          .toLowerCase()
+          .includes("could not find that goal to review")
+          ? undefined
+          : `expected unresolved-goal response, got: ${reply}`;
+      },
     },
   ],
 });

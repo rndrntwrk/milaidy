@@ -32,7 +32,9 @@ export default scenario({
       type: "custom",
       name: "discord-login-routing",
       predicate: async (ctx) => {
-        const names = new Set(ctx.actionsCalled.map((action) => action.actionName));
+        const names = new Set(
+          ctx.actionsCalled.map((action) => action.actionName),
+        );
         if (
           names.has("REPLY") ||
           names.has("THINK") ||

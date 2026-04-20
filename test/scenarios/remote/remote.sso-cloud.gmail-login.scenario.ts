@@ -25,7 +25,12 @@ export default scenario({
       name: "gmail-sso",
       room: "main",
       text: "Let me log into remote access with my Google account.",
-      responseIncludesAny: ["Google", "sign in", "login", "accounts.google.com"],
+      responseIncludesAny: [
+        "Google",
+        "sign in",
+        "login",
+        "accounts.google.com",
+      ],
     },
   ],
   finalChecks: [

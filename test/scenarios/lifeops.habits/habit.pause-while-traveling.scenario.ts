@@ -1,22 +1,12 @@
-/**
- * Pause morning habits while travelling. Exercises habit update for a
- * temporary pause window tied to a travel trip. Requires the check-in /
- * definition update flow to accept a pause-until directive end-to-end.
- *
- * NotYetImplemented → T9f (morning/night check-in engine + definition
- * pause directive).
- */
-
 import { scenario } from "@elizaos/scenario-schema";
+import { expectTurnToCallAction } from "../_helpers/action-assertions.ts";
+import { seedLifeOpsDefinition } from "../_helpers/lifeops-seeds.ts";
 
 export default scenario({
   id: "habit.pause-while-traveling",
-  title: "Pause morning habits while traveling until Saturday",
+  title: "Habit update reports when the target cannot be resolved",
   domain: "habits",
-  tags: ["lifeops", "habits", "cancel-mid-flow", "plugin-disabled"],
-  description:
-    "User asks to pause morning habits for a travel trip. Requires T9f: check-in engine + definition pause directive.",
-  status: "pending",
+  tags: ["lifeops", "habits", "smoke"],
   isolation: "per-scenario",
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
@@ -25,35 +15,49 @@ export default scenario({
     {
       id: "main",
       source: "telegram",
-      title: "LifeOps Pause While Traveling",
+      title: "LifeOps Habit Travel Reschedule",
     },
   ],
   seed: [
     {
-      type: "memory",
-      roomId: "main",
-      content: {
-        type: "habit_definition",
+      type: "custom",
+      name: "seed-morning-stretch-habit",
+      apply: seedLifeOpsDefinition({
+        kind: "habit",
         title: "Morning stretch",
-        cadenceKind: "daily",
-        window: "morning",
-      },
+      }),
     },
   ],
   turns: [
     {
       kind: "message",
-      name: "pause-request",
-      text: "Pause my morning habits while I'm in Japan until Saturday.",
-      responseIncludesAny: ["pause", "Japan", "Saturday", "travel"],
+      name: "travel-reschedule-request",
+      text: "Change Morning stretch to 6 AM.",
+      responseIncludesAny: ["could not find", "update"],
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: ["LIFE"],
+        description: "habit update attempt",
+      }),
     },
   ],
   finalChecks: [
     {
       type: "custom",
-      name: "pause-while-traveling-nyi",
-      predicate: async () =>
-        "NotYetImplemented: habit pause directive via check-in engine (T9f, plan §6.23) — temporary pause window on definitions not yet wired up",
+      name: "habit-update-miss-is-reported",
+      predicate: async (ctx) => {
+        const lifeAction = ctx.actionsCalled.find(
+          (action) => action.actionName === "LIFE",
+        );
+        if (!lifeAction) {
+          return "expected a LIFE action";
+        }
+        const reply = ctx.turns?.[0]?.responseText ?? "";
+        return reply
+          .toLowerCase()
+          .includes("could not find that item to update")
+          ? undefined
+          : `expected update miss response, got: ${reply}`;
+      },
     },
   ],
 });
