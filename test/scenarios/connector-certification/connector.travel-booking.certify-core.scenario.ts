@@ -4,6 +4,7 @@ export default buildConnectorCertificationScenario({
   id: "connector.travel-booking.certify-core",
   title: "Certify travel booking adapter search and approval gating",
   connector: "travel-booking",
+  axis: "core",
   description:
     "Connector certification for travel search, hold/book approval gating, itinerary sync, and rebooking coordination on conflicts.",
   turns: [

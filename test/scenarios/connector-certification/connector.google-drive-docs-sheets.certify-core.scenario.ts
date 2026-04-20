@@ -4,6 +4,7 @@ export default buildConnectorCertificationScenario({
   id: "connector.google-drive-docs-sheets.certify-core",
   title: "Certify Google Drive, Docs, and Sheets document ops",
   connector: "google-drive-docs-sheets",
+  axis: "core",
   description:
     "Connector certification for document fetch, upload, share, provenance, and degraded-auth intervention across Drive, Docs, and Sheets.",
   turns: [

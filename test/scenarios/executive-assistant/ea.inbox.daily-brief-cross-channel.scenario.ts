@@ -9,11 +9,12 @@ import {
 
 export default scenario({
   id: "ea.inbox.daily-brief-cross-channel",
-  title: "Build a daily brief across channels, meetings, and actions",
+  title:
+    "Build a daily brief with actions, schedule, unread channels, follow-ups, and docs",
   domain: "executive-assistant",
   tags: ["executive-assistant", "briefing", "messaging", "transcript-derived"],
   description:
-    "Transcript-derived case: the assistant produces a structured daily brief with actions, reminders, and channel-specific inbox summaries. Depends on WS1 cross-channel search and WS3 canonical identity merging so a single person across platforms surfaces once.",
+    "Transcript-derived case: the assistant produces a structured morning brief with actions first, today's schedule, unread items grouped by channel, overdue follow-ups, and document blockers surfaced from real inbox state.",
   isolation: "per-scenario",
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
@@ -31,35 +32,64 @@ export default scenario({
       kind: "message",
       name: "request-daily-brief",
       room: "main",
-      text: "Give me the daily brief with actions first, then reminders, then unread messages across channels.",
+      text: "Give me the daily brief with these sections in order: Actions First, Today's Schedule, Unread By Channel, Overdue Follow-Ups, Documents And Forms. Use my connected inbox and calendar plus the recent cross-channel context already in scope.",
       assertTurn: expectTurnToCallAction({
-        acceptedActions: ["INBOX", "CALENDAR_ACTION", "SEARCH_ACROSS_CHANNELS"],
-        description: "cross-channel daily brief generation",
-        includesAny: ["brief", "actions", "reminders", "unread"],
+        acceptedActions: [
+          "INBOX",
+          "CALENDAR_ACTION",
+          "SEARCH_ACROSS_CHANNELS",
+          "OWNER_RELATIONSHIP",
+        ],
+        description: "strict cross-channel morning brief generation",
+        includesAny: [
+          "brief",
+          "actions",
+          "schedule",
+          "unread",
+          "follow-up",
+          "document",
+        ],
       }),
       responseIncludesAny: [
-        "actions",
-        "reminders",
-        "unread",
-        "brief",
-        "channels",
+        "Actions First",
+        "Today's Schedule",
+        "Unread By Channel",
+        "Overdue Follow-Ups",
+        "Documents And Forms",
       ],
       responseJudge: {
         minimumScore: 0.7,
         rubric:
-          "The reply must be a structured brief with (1) an actions-first section, (2) a reminders section, and (3) an unread-per-channel summary. Items from different connectors (gmail, discord, telegram, etc.) should be grouped by canonical person when relevant. A single-channel or text-blob summary fails.",
+          "The reply must be a structured morning brief with ordered sections for actions first, schedule, unread by channel, overdue follow-ups, and documents/forms. It must name concrete seeded items from at least two channels and at least one follow-up or document blocker. A generic summary blob fails.",
       },
     },
   ],
   finalChecks: [
     {
       type: "selectedAction",
-      actionName: ["INBOX", "CALENDAR_ACTION", "SEARCH_ACROSS_CHANNELS"],
+      actionName: [
+        "INBOX",
+        "CALENDAR_ACTION",
+        "SEARCH_ACROSS_CHANNELS",
+        "OWNER_RELATIONSHIP",
+      ],
     },
     {
       type: "selectedActionArguments",
-      actionName: ["INBOX", "CALENDAR_ACTION", "SEARCH_ACROSS_CHANNELS"],
-      includesAny: ["brief", "actions", "reminders", "unread"],
+      actionName: [
+        "INBOX",
+        "CALENDAR_ACTION",
+        "SEARCH_ACROSS_CHANNELS",
+        "OWNER_RELATIONSHIP",
+      ],
+      includesAny: [
+        "brief",
+        "actions",
+        "schedule",
+        "unread",
+        "follow",
+        "document",
+      ],
     },
     {
       type: "memoryWriteOccurred",
@@ -73,9 +103,21 @@ export default scenario({
       type: "custom",
       name: "ea-daily-brief-cross-channel-action-coverage",
       predicate: expectScenarioToCallAction({
-        acceptedActions: ["INBOX", "CALENDAR_ACTION", "SEARCH_ACROSS_CHANNELS"],
-        description: "cross-channel daily brief generation",
-        includesAny: ["brief", "actions", "reminders", "unread"],
+        acceptedActions: [
+          "INBOX",
+          "CALENDAR_ACTION",
+          "SEARCH_ACROSS_CHANNELS",
+          "OWNER_RELATIONSHIP",
+        ],
+        description: "strict cross-channel morning brief generation",
+        includesAny: [
+          "brief",
+          "actions",
+          "schedule",
+          "unread",
+          "follow",
+          "document",
+        ],
       }),
     },
     {
@@ -100,7 +142,7 @@ export default scenario({
       name: "ea-daily-brief-rubric",
       threshold: 0.7,
       description:
-        "End-to-end: the assistant ran a cross-channel search, merged items by canonical identity, and produced a prioritised brief (actions > reminders > unread) that reflects real seeded data across at least two channels.",
+        "End-to-end: the assistant produced an ordered morning brief covering actions first, today's schedule, unread-by-channel context, overdue follow-ups, and document blockers from real seeded state across multiple channels.",
     }),
   ],
 });

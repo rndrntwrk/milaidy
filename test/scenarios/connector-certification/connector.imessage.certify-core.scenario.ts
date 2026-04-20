@@ -4,6 +4,7 @@ export default buildConnectorCertificationScenario({
   id: "connector.imessage.certify-core",
   title: "Certify iMessage bridge health and delivery",
   connector: "imessage",
+  axis: "core",
   description:
     "Connector certification for iMessage bridge health, outbound message delivery, and reconnect-aware behavior.",
   turns: [

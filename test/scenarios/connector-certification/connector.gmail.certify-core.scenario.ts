@@ -4,6 +4,7 @@ export default buildConnectorCertificationScenario({
   id: "connector.gmail.certify-core",
   title: "Certify Gmail read, draft, and send-after-approval",
   connector: "gmail",
+  axis: "core",
   description:
     "Connector certification for Gmail inbox reads, reply draft creation against a real unread message, explicit approval before send, and successful reply dispatch.",
   turns: [

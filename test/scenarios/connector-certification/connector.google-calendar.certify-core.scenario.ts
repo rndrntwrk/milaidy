@@ -4,6 +4,7 @@ export default buildConnectorCertificationScenario({
   id: "connector.google-calendar.certify-core",
   title: "Certify Google Calendar availability and lifecycle actions",
   connector: "google-calendar",
+  axis: "core",
   description:
     "Connector certification for availability checks, event creation, reschedule, cancel, and conflict-aware calendar reads.",
   turns: [

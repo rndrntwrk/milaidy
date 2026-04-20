@@ -1,10 +1,31 @@
-import type { ScenarioFinalCheck } from "@elizaos/scenario-schema";
+import type {
+  ScenarioFinalCheck,
+  ScenarioSeedStep,
+} from "@elizaos/scenario-schema";
 import { scenario } from "@elizaos/scenario-schema";
 import {
   expectScenarioToCallAction,
   expectTurnToCallAction,
   judgeRubric,
 } from "../_helpers/action-assertions.ts";
+
+export const CONNECTOR_CERTIFICATION_AXES = [
+  "core",
+  "missing-scope",
+  "rate-limited",
+  "disconnected",
+  "auth-expired",
+  "session-revoked",
+  "delivery-degraded",
+  "helper-disconnected",
+  "retry-idempotent",
+  "hold-expired",
+  "transport-offline",
+  "blocked-resume",
+] as const;
+
+export type ConnectorCertificationAxis =
+  (typeof CONNECTOR_CERTIFICATION_AXES)[number];
 
 type ConnectorTurnConfig = {
   name: string;
@@ -24,9 +45,11 @@ type ConnectorCertificationScenarioConfig = {
   id: string;
   title: string;
   connector: string;
+  axis: ConnectorCertificationAxis;
   tags?: string[];
   description: string;
   roomSource?: string;
+  seed?: ScenarioSeedStep[];
   turns: ConnectorTurnConfig[];
   finalChecks?: ScenarioFinalCheck[];
 };
@@ -40,14 +63,11 @@ export function buildConnectorCertificationScenario(
   const includesAny = config.turns.flatMap((turn) => turn.includesAny ?? []);
 
   function buildCertificationTurnText(turn: ConnectorTurnConfig): string {
-    const [primaryAction, ...secondaryActions] = turn.acceptedActions;
     return [
       `Connector certification run for ${config.connector}.`,
-      `Perform the requested workflow now and do not ask which action to use.`,
-      `Use ${primaryAction} as the primary action.`,
-      secondaryActions.length > 0
-        ? `Use ${secondaryActions.join(" / ")} only when the workflow explicitly needs them as part of the same task.`
-        : "",
+      config.axis === "core"
+        ? "Perform the requested workflow now using the real connector path that best matches the request."
+        : `Perform the requested workflow now, but respect the seeded ${config.axis} connector state instead of pretending the connector is healthy.`,
       turn.text,
     ]
       .filter((part) => part.length > 0)
@@ -58,12 +78,19 @@ export function buildConnectorCertificationScenario(
     id: config.id,
     title: config.title,
     domain: "connector-certification",
-    tags: ["connector-certification", config.connector, ...(config.tags ?? [])],
+    tags: [
+      "connector-certification",
+      config.connector,
+      `connector-certification-axis:${config.axis}`,
+      ...(config.axis === "core" ? [] : ["connector-certification-degraded"]),
+      ...(config.tags ?? []),
+    ],
     description: config.description,
     isolation: "per-scenario",
     requires: {
       plugins: ["@elizaos/plugin-agent-skills"],
     },
+    seed: config.seed,
     rooms: [
       {
         id: "main",
@@ -82,6 +109,7 @@ export function buildConnectorCertificationScenario(
         description: `${config.connector} connector step "${turn.name}"`,
         includesAny: turn.includesAny,
       }),
+      responseIncludesAny: turn.responseIncludesAny,
       responseJudge: turn.responseJudge,
     })),
     finalChecks: [

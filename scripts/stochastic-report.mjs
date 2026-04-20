@@ -79,7 +79,9 @@ if (records.length === 0) {
 }
 
 const tierOrder = (tier) => {
-  const [passed, runs] = tier.split("/").map((value) => Number.parseInt(value, 10));
+  const [passed, runs] = tier
+    .split("/")
+    .map((value) => Number.parseInt(value, 10));
   if (!Number.isFinite(passed) || !Number.isFinite(runs)) return -1;
   return passed * 1000 + runs;
 };
@@ -124,8 +126,7 @@ if (!flagWeakOnly) {
   console.log(`\nStochastic test quality (${totalTests} tests):`);
   for (const [tier, count] of sortedTiers) {
     const [passed, runs] = tier.split("/").map(Number);
-    const bar =
-      "●".repeat(passed) + "○".repeat(Math.max(0, runs - passed));
+    const bar = "●".repeat(passed) + "○".repeat(Math.max(0, runs - passed));
     console.log(
       `  ${bar.padEnd(5)} ${tier.padEnd(4)} ${String(count).padStart(5)}  (${formatPct(count)}%)`,
     );
@@ -141,7 +142,9 @@ if (focus.length === 0) {
   console.log("\nNo tests below 2/3. Remaining work: push 2/3 tests to 3/3.");
   if (!flagWeakOnly) {
     const flaky = records
-      .filter((r) => r.passed < r.runs && r.passed >= Math.ceil((r.runs * 2) / 3))
+      .filter(
+        (r) => r.passed < r.runs && r.passed >= Math.ceil((r.runs * 2) / 3),
+      )
       .sort((a, b) => a.passed - b.passed);
     if (flaky.length > 0) {
       console.log("\nFlaky (but above min-pass threshold):");
@@ -160,9 +163,7 @@ if (focus.length === 0) {
 
 console.log(`\nFocus list — below 2/3 (${focus.length}):`);
 for (const record of focus) {
-  console.log(
-    `  ${record.tier}  ${record.label}\n        ${record.file}`,
-  );
+  console.log(`  ${record.tier}  ${record.label}\n        ${record.file}`);
   if (record.errors.length > 0) {
     console.log(`        └─ ${record.errors[0]}`);
   }

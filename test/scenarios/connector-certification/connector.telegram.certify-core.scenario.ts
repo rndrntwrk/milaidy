@@ -4,6 +4,7 @@ export default buildConnectorCertificationScenario({
   id: "connector.telegram.certify-core",
   title: "Certify Telegram inbound and reply delivery",
   connector: "telegram",
+  axis: "core",
   roomSource: "telegram",
   description:
     "Connector certification for Telegram inbound fetch, draft/reply flows, thread context, and delivered outbound messages.",

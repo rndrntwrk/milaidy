@@ -4,6 +4,7 @@ export default buildConnectorCertificationScenario({
   id: "connector.calendly.certify-core",
   title: "Certify Calendly availability and booking-link flows",
   connector: "calendly",
+  axis: "core",
   description:
     "Connector certification for Calendly availability lookups, booking-link handoff, and reconciliation-friendly booking flows.",
   turns: [

@@ -4,6 +4,7 @@ export default buildConnectorCertificationScenario({
   id: "connector.twilio-sms.certify-core",
   title: "Certify Twilio SMS send-after-approval",
   connector: "twilio-sms",
+  axis: "core",
   description:
     "Connector certification for approval-gated Twilio SMS sends, delivery state, and retry-safe dispatch behavior.",
   turns: [

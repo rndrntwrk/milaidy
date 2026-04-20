@@ -8,11 +8,11 @@ import {
 
 export default scenario({
   id: "ea.inbox.daily-brief-includes-unsent-drafts",
-  title: "Daily brief includes unsent drafts still waiting for approval",
+  title: "Morning brief includes pending drafts still waiting for sign-off",
   domain: "executive-assistant",
   tags: ["executive-assistant", "briefing", "drafts", "transcript-derived"],
   description:
-    "Transcript-derived case: unsent drafts that still need sign-off appear in the assistant's daily brief.",
+    "Transcript-derived case: pending drafts in the approval queue appear in the morning brief with enough context for the owner to approve or revise them.",
   isolation: "per-scenario",
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
@@ -30,17 +30,29 @@ export default scenario({
       kind: "message",
       name: "request-daily-brief-with-drafts",
       room: "main",
-      text: "In the daily brief, also tell me which drafts still need my sign-off.",
+      text: "In the morning brief, add a Pending Drafts section that lists which drafts still need my sign-off and who they are for.",
       assertTurn: expectTurnToCallAction({
         acceptedActions: ["INBOX", "GMAIL_ACTION"],
-        description: "daily brief approval queue review",
-        includesAny: ["draft", "sign-off", "approval", "brief"],
+        description: "morning brief approval queue review",
+        includesAny: [
+          "draft",
+          "sign-off",
+          "approval",
+          "brief",
+          "pending drafts",
+        ],
       }),
-      responseIncludesAny: ["draft", "sign-off", "approval", "brief", "unsent"],
+      responseIncludesAny: [
+        "Pending Drafts",
+        "draft",
+        "sign-off",
+        "approval",
+        "brief",
+      ],
       responseJudge: {
         minimumScore: 0.7,
         rubric:
-          "The reply must surface the actual approval-queue contents — at least the count of pending drafts plus a per-draft summary that names the recipient or topic. A vague 'check your drafts' fails.",
+          "The reply must surface the actual approval-queue contents in a Pending Drafts section, including the draft count and enough per-draft context to identify the recipient or topic. A vague 'check your drafts' fails.",
       },
     },
   ],
@@ -48,6 +60,11 @@ export default scenario({
     {
       type: "selectedAction",
       actionName: ["INBOX", "GMAIL_ACTION"],
+    },
+    {
+      type: "selectedActionArguments",
+      actionName: ["INBOX", "GMAIL_ACTION"],
+      includesAny: ["draft", "sign-off", "approval", "pending"],
     },
     {
       type: "approvalRequestExists",
@@ -63,8 +80,8 @@ export default scenario({
       name: "ea-daily-brief-drafts-action-coverage",
       predicate: expectScenarioToCallAction({
         acceptedActions: ["INBOX", "GMAIL_ACTION"],
-        description: "daily brief approval queue review",
-        includesAny: ["draft", "sign-off", "approval", "brief"],
+        description: "morning brief approval queue review",
+        includesAny: ["draft", "sign-off", "approval", "brief", "pending"],
       }),
     },
     {
@@ -80,7 +97,7 @@ export default scenario({
       name: "ea-daily-brief-drafts-rubric",
       threshold: 0.7,
       description:
-        "End-to-end: the brief lists the actual pending drafts in the approval queue with enough context (recipient/topic) for the user to decide whether to send them.",
+        "End-to-end: the morning brief lists the actual pending drafts in the approval queue with enough context (recipient/topic) for the owner to decide whether to send them.",
     }),
   ],
 });

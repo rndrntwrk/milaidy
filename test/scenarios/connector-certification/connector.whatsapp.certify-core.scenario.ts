@@ -4,6 +4,7 @@ export default buildConnectorCertificationScenario({
   id: "connector.whatsapp.certify-core",
   title: "Certify WhatsApp inbound and delivery behavior",
   connector: "whatsapp",
+  axis: "core",
   description:
     "Connector certification for WhatsApp inbound reads, response drafting, send attempts, and degraded delivery handling.",
   turns: [

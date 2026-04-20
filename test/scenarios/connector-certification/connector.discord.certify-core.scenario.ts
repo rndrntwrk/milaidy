@@ -4,6 +4,7 @@ export default buildConnectorCertificationScenario({
   id: "connector.discord.certify-core",
   title: "Certify Discord inbound and reply delivery",
   connector: "discord",
+  axis: "core",
   roomSource: "discord",
   description:
     "Connector certification for Discord inbound fetch, draft/reply flows, thread context, and delivered outbound messages.",

@@ -4,6 +4,7 @@ export default buildConnectorCertificationScenario({
   id: "connector.signal.certify-core",
   title: "Certify Signal inbound and delivery behavior",
   connector: "signal",
+  axis: "core",
   description:
     "Connector certification for Signal inbound reads, response drafting, send attempts, and degraded delivery handling.",
   turns: [

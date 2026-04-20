@@ -31,7 +31,10 @@ export default scenario({
         if (!service) {
           return "LifeOps service is not registered on the runtime";
         }
-        const now = Date.now();
+        const now =
+          typeof ctx.now === "string" && Number.isFinite(Date.parse(ctx.now))
+            ? Date.parse(ctx.now)
+            : Date.now();
         const endAt = new Date(now - 2 * 60_000).toISOString();
         const startAt = new Date(now - 20 * 60_000).toISOString();
         await service.repository.upsertCalendarEvent({
@@ -97,13 +100,12 @@ export default scenario({
       expectedStatus: 201,
     },
     {
-      kind: "api",
+      kind: "tick",
       name: "tick scheduler — workflow should NOT fire",
-      method: "POST",
-      path: "/api/lifeops/reminders/process",
-      body: {
+      worker: "lifeops_scheduler",
+      options: {
         now: "{{now}}",
-        limit: 10,
+        workflowLimit: 10,
       },
       expectedStatus: 200,
       assertResponse: (_status, body) => {

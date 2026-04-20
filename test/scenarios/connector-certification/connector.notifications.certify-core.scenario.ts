@@ -4,6 +4,7 @@ export default buildConnectorCertificationScenario({
   id: "connector.notifications.certify-core",
   title: "Certify desktop and mobile notification synchronization",
   connector: "notifications",
+  axis: "core",
   description:
     "Connector certification for desktop/mobile push dispatch, acknowledgement sync, and suppression after acknowledgement.",
   turns: [

@@ -4,6 +4,7 @@ export default buildConnectorCertificationScenario({
   id: "connector.x-dm.certify-core",
   title: "Certify X DM inbox reads and response drafting",
   connector: "x-dm",
+  axis: "core",
   description:
     "Connector certification for X DM reads, response drafting, and message-context handling through the X surface.",
   turns: [

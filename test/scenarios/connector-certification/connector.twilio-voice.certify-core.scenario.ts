@@ -4,6 +4,7 @@ export default buildConnectorCertificationScenario({
   id: "connector.twilio-voice.certify-core",
   title: "Certify Twilio voice approval and outcome tracking",
   connector: "twilio-voice",
+  axis: "core",
   description:
     "Connector certification for approval-gated Twilio voice calls, outcome state, and escalation-ladder integration.",
   turns: [
