@@ -1,9 +1,9 @@
 # Action Audit
 
-Scanned **74** actions across **91** files.
+Scanned **73** actions across **91** files.
 **High:** 0 · **Medium:** 0 · **Low:** 0
 
-## Clean (74)
+## Clean (73)
 
 | Action | File |
 | --- | --- |
@@ -48,7 +48,6 @@ Scanned **74** actions across **91** files.
 | `LIST_OVERDUE_FOLLOWUPS` | `eliza/apps/app-lifeops/src/followup/actions/listOverdueFollowups.ts` |
 | `LOG_LEVEL` | `eliza/packages/agent/src/actions/log-level.ts` |
 | `MARK_FOLLOWUP_DONE` | `eliza/apps/app-lifeops/src/followup/actions/markFollowupDone.ts` |
-| `OWNER_CALENDAR` | `eliza/apps/app-lifeops/src/actions/owner-calendar.ts` |
 | `OWNER_RELATIONSHIP` | `eliza/apps/app-lifeops/src/actions/relationships.ts` |
 | `PASSWORD_MANAGER` | `eliza/apps/app-lifeops/src/actions/password-manager.ts` |
 | `PROPOSE_MEETING_TIMES` | `eliza/apps/app-lifeops/src/actions/scheduling.ts` |
