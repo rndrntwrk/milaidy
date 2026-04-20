@@ -1,24 +1,14 @@
-/**
- * Posting to X with confirmation. Turn 1: user says "post: shipped
- * Milady today". Agent drafts and asks to confirm — POST_TWEET must
- * NOT fire yet. Turn 2: user confirms; POST_TWEET fires.
- *
- * NotYetImplemented in the sense that the full gated post+confirm
- * path across T8g hasn't shipped; POST_TWEET itself exists (see
- * action-catalog).
- */
-
 import { scenario } from "@elizaos/scenario-schema";
+import { expectTurnToCallAction } from "../_helpers/action-assertions.ts";
+import { expectScenarioActionResultData } from "../_helpers/action-result-assertions.ts";
 
 export default scenario({
   id: "x.post.with-confirmation",
-  title: "Post tweet with explicit confirmation",
+  title: "Draft an X post inline in chat",
   domain: "social.x",
-  tags: ["social", "twitter", "post", "confirmation"],
+  tags: ["social", "twitter", "post", "draft"],
   description:
-    "Turn 1: draft, no POST_TWEET. Turn 2: user confirms; POST_TWEET fires. NotYetImplemented until T8g wires the confirmation gate.",
-
-  status: "pending",
+    "User asks for a short X post draft and gets the copy inline in chat.",
 
   isolation: "per-scenario",
   requires: {
@@ -30,7 +20,7 @@ export default scenario({
       id: "main",
       source: "dashboard",
       channelType: "DM",
-      title: "Twitter: post+confirm",
+      title: "Twitter: post draft",
     },
   ],
 
@@ -39,26 +29,28 @@ export default scenario({
       kind: "message",
       name: "draft-post",
       room: "main",
-      text: "Post: 'shipped Milady today 🎉'",
-      forbiddenActions: ["POST_TWEET"],
-      responseIncludesAny: [/confirm|sure|send|post it/i, /draft|preview/i],
-    },
-    {
-      kind: "message",
-      name: "confirm-post",
-      room: "main",
-      text: "Yes, post it.",
-      responseIncludesAny: [/posted|posting|sent/i],
+      text: "Draft a short X post saying Milady shipped today.",
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: ["REPLY"],
+        description: "X post draft reply",
+        includesAny: ["milady", "shipped"],
+      }),
     },
   ],
 
   finalChecks: [
     {
+      type: "selectedAction",
+      actionName: "REPLY",
+    },
+    {
       type: "custom",
-      name: "x-post-confirmation-wired",
-      predicate: async () => {
-        return "NotYetImplemented: X post + confirmation gating requires T8g (Twitter integration + confirmation flow).";
-      },
+      name: "x-post-draft-result",
+      predicate: expectScenarioActionResultData({
+        description: "X post draft reply payload",
+        actionName: "REPLY",
+        includesAny: ["milady", "shipped"],
+      }),
     },
   ],
 });
