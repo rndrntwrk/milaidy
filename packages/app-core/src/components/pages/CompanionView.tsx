@@ -326,7 +326,12 @@ const CompanionViewOverlay = memo(function CompanionViewOverlay() {
 
       {avatarReady && companionView === "companion" && (
         <div
-          className="pointer-events-auto absolute inset-x-0 bottom-0 z-20 flex justify-center px-1.5 sm:px-4"
+          // `companion-chat-dock` class is a stable hook used by the
+          // shared DialogContent effect (packages/ui/.../dialog.tsx) to
+          // hide the chat dock while any Dialog is open — the dock's
+          // stacking context otherwise renders chat bubbles and the
+          // compose bar above the Dialog overlay on the companion view.
+          className="companion-chat-dock pointer-events-auto absolute inset-x-0 bottom-0 z-20 flex justify-center px-1.5 sm:px-4"
           style={{
             paddingBottom: "calc(var(--safe-area-bottom, 0px) + 0.75rem)",
           }}
