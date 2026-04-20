@@ -53,13 +53,18 @@ jobs:
 
       - name: Run Docker CI smoke path
         timeout-minutes: 30
-        run: bash eliza/packages/app-core/scripts/docker-ci-smoke.sh --tag gha-${{ github.run_id }}
+        # Wrap with 'timeout --preserve-status --kill-after' so bash gets
+        # SIGTERM 2 minutes before GHA's own kill, giving the script's
+        # EXIT trap time to dump logs and remove the container. Without
+        # this, GHA's step-level SIGTERM → SIGKILL sequence leaves the
+        # subsequent 'Dump container log' step skipped as 'cancelled'.
+        run: |
+          timeout --preserve-status --kill-after=15s 28m \
+            bash eliza/packages/app-core/scripts/docker-ci-smoke.sh --tag gha-${{ github.run_id }}
 
-      # Inline log capture runs even when the main step hit SIGTERM.
-      # Use !cancelled() so it fires on normal failure + timeout but not on
-      # an explicit workflow cancellation.
+      # Inline log capture runs on failure (not cancelled).
       - name: Dump container log + inspect (inline)
-        if: ${{ !cancelled() && failure() }}
+        if: failure()
         timeout-minutes: 2
         run: |
           echo "::group::Docker containers"
@@ -75,7 +80,7 @@ jobs:
           done
 
       - name: Upload container logs + inspect
-        if: ${{ !cancelled() }}
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: docker-ci-smoke-artifacts-${{ github.run_id }}
