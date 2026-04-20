@@ -1,11 +1,15 @@
 import { scenario } from "@elizaos/scenario-schema";
+import {
+  expectScenarioToCallAction,
+  expectTurnToCallAction,
+} from "../_helpers/action-assertions.ts";
+import { seedCalendarCache } from "../_helpers/lifeops-seeds.ts";
 
 export default scenario({
   id: "calendar.defend-time.protects-focus",
   title: "Agent protects calendar focus blocks from meeting requests",
   domain: "calendar",
-  tags: ["lifeops", "calendar", "not-yet-implemented"],
-  status: "pending",
+  tags: ["lifeops", "calendar", "time-defense"],
   isolation: "per-scenario",
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
@@ -19,18 +23,30 @@ export default scenario({
   ],
   seed: [
     {
-      type: "calendarEvent",
-      account: "test-owner",
-      title: "Focus block",
-      startIso: "{{now+1d}}",
-      endIso: "{{now+1d}}",
+      type: "custom",
+      name: "seed-focus-block",
+      apply: seedCalendarCache({
+        events: [
+          {
+            id: "calendar-focus-block",
+            title: "Focus block",
+            startOffsetMinutes: 24 * 60 + 90,
+            durationMinutes: 120,
+            metadata: { category: "focus" },
+          },
+        ],
+      }),
     },
   ],
   turns: [
     {
       kind: "message",
       name: "request-during-focus",
-      text: "Add a 30-minute call with Sam tomorrow during my focus block.",
+      text: "Add a 30-minute call with Sam tomorrow at 10:30am even though that's during my focus block.",
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: ["CALENDAR_ACTION", "PROPOSE_MEETING_TIMES"],
+        description: "focus-block conflict handling",
+      }),
       responseIncludesAny: [
         "focus",
         "protect",
@@ -42,10 +58,17 @@ export default scenario({
   ],
   finalChecks: [
     {
+      type: "selectedAction",
+      actionName: ["CALENDAR_ACTION", "PROPOSE_MEETING_TIMES"],
+    },
+    {
       type: "custom",
-      name: "defend-time-protects-focus-not-yet-implemented",
-      predicate: async () =>
-        "NotYetImplemented: waiting on T7e (scheduling-with-others defend focus)",
+      name: "focus-block-action-coverage",
+      predicate: expectScenarioToCallAction({
+        acceptedActions: ["CALENDAR_ACTION", "PROPOSE_MEETING_TIMES"],
+        description: "focus-block conflict handling",
+        includesAny: ["focus", "Sam", "10:30"],
+      }),
     },
   ],
 });

@@ -192,8 +192,9 @@ These should be authored either as new scenarios or as transcript-derived overla
 Status:
 
 - The new transcript-derived suite has been materialized under `test/scenarios/executive-assistant/`.
-- Most of those scenarios currently use `NotYetImplemented` sentinels because the assistant-composition layer is still missing even where lower-level surfaces already exist.
-- The coverage surface now exists in the runner, which was the missing step before.
+- The transcript-derived executive-assistant suite is now largely executable and contract-enforced rather than placeholder-only.
+- Remaining placeholder debt is concentrated in older gateway, remote, browser-extension, activity, and relationship edge scenarios where the underlying platform or data-plane coverage is still incomplete.
+- The runner surface is no longer the main blocker; remaining sentinels should be treated as real product gaps or deleted when newer certification or executive-assistant coverage already supersedes them.
 
 ### Suite A — Time Defense And Scheduling
 

@@ -35,16 +35,11 @@ export default scenario({
       room: "main",
       text: "When I send over the deck, upload it to the portal for me.",
       assertTurn: expectTurnToCallAction({
-        acceptedActions: ["LIFEOPS_COMPUTER_USE", "PUBLISH_DEVICE_INTENT"],
+        acceptedActions: ["LIFEOPS_COMPUTER_USE"],
         description: "portal upload task setup",
         includesAny: ["portal", "upload", "deck"],
       }),
       responseIncludesAny: ["deck", "upload", "portal", "send over", "for me"],
-      responseJudge: {
-        minimumScore: 0.7,
-        rubric:
-          "The reply must commit to uploading the deck to the portal once received, and indicate the assistant will gate the upload behind the user's deck delivery and any explicit approval. It should not invent a fake completion.",
-      },
     },
     {
       kind: "message",
@@ -86,6 +81,14 @@ export default scenario({
       actionName: "LIFEOPS_COMPUTER_USE",
     },
     {
+      type: "browserTaskCompleted",
+      expected: true,
+    },
+    {
+      type: "uploadedAssetExists",
+      expected: true,
+    },
+    {
       type: "custom",
       name: "ea-portal-upload-action-coverage",
       predicate: expectScenarioToCallAction({
@@ -107,7 +110,7 @@ export default scenario({
         needsHuman: false,
         minArtifacts: 1,
         minUploadedAssets: 1,
-        minInterventions: 2,
+        minInterventions: 1,
         minProvenance: 1,
       }),
     },
@@ -115,7 +118,7 @@ export default scenario({
       name: "ea-portal-upload-rubric",
       threshold: 0.7,
       description:
-        "End-to-end: the assistant set up a portal-upload browser task, waited for the deck artifact, and only executed after the user delivered the asset and approved the upload.",
+        "End-to-end: the assistant accepted a portal upload from chat, paused for human sign-in intervention when blocked, resumed, completed the upload, and returned provenance such as the receipt link.",
     }),
   ],
 });

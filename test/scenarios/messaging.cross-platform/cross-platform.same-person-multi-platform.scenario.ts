@@ -1,10 +1,28 @@
+import type { AgentRuntime } from "@elizaos/core";
 import { scenario } from "@elizaos/scenario-schema";
+import {
+  acceptCanonicalIdentityMerge,
+  assertCanonicalIdentityMerged,
+  seedCanonicalIdentityFixture,
+} from "../../../eliza/apps/app-lifeops/test/helpers/lifeops-identity-merge-fixtures.ts";
+import {
+  expectScenarioToCallAction,
+  expectTurnToCallAction,
+  judgeRubric,
+} from "../_helpers/action-assertions.ts";
+
+const PERSON_NAME = "Priya Rao";
 
 export default scenario({
   id: "cross-platform.same-person-multi-platform",
-  title: "Recognize same person across Gmail, Discord, and Telegram handles",
+  title: "Recognize one person across Gmail, Signal, Telegram, and WhatsApp",
   domain: "messaging.cross-platform",
-  tags: ["cross-platform", "messaging", "parameter-extraction"],
+  tags: [
+    "cross-platform",
+    "messaging",
+    "identity-merge",
+    "parameter-extraction",
+  ],
   status: "pending",
   isolation: "per-scenario",
   requires: {
@@ -20,31 +38,81 @@ export default scenario({
   ],
   seed: [
     {
-      type: "contact",
-      name: "Alice Example",
-      handles: [
-        { platform: "gmail", identifier: "alice@example.com" },
-        { platform: "discord", identifier: "alice#1234" },
-        { platform: "telegram", identifier: "@alice_tg" },
-      ],
-      notes: "Collaborator across three platforms; recognize as one person.",
+      type: "custom",
+      name: "seed-canonical-identity-merge",
+      apply: async (ctx) => {
+        const runtime = ctx.runtime as AgentRuntime | undefined;
+        if (!runtime) {
+          return "scenario runtime unavailable";
+        }
+        const fixture = await seedCanonicalIdentityFixture({
+          runtime,
+          seedKey: "scenario-same-person",
+          personName: PERSON_NAME,
+        });
+        await acceptCanonicalIdentityMerge(runtime, fixture);
+        return undefined;
+      },
     },
   ],
   turns: [
     {
       kind: "message",
-      name: "ask about alice",
+      name: "ask about priyas cross-platform messages",
       room: "main",
-      text: "Show me everywhere Alice has messaged me recently.",
-      responseIncludesAny: ["alice", "gmail", "discord", "telegram"],
+      text: "Show me everywhere Priya Rao has messaged me recently. She is the same person across Gmail, Signal, Telegram, and WhatsApp.",
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: [
+          "READ_MESSAGES",
+          "SEARCH_ACROSS_CHANNELS",
+          "OWNER_INBOX",
+        ],
+        description:
+          "cross-platform conversation lookup for one canonical person",
+        includesAny: ["priya", "gmail", "signal", "telegram", "whatsapp"],
+      }),
+      responseIncludesAny: ["Priya", "Gmail", "Signal", "Telegram", "WhatsApp"],
+      responseJudge: {
+        minimumScore: 0.75,
+        rubric:
+          "The assistant must treat Priya Rao as one person, not multiple disconnected contacts, and summarize cross-platform message context across Gmail, Signal, Telegram, and WhatsApp.",
+      },
     },
   ],
   finalChecks: [
     {
       type: "custom",
-      name: "cross-platform-same-person-not-yet-implemented",
-      predicate: async () =>
-        "NotYetImplemented: waiting on T7b (Rolodex extension for cross-platform contact merging)",
+      name: "cross-platform-same-person-canonical-merge",
+      predicate: async (ctx) => {
+        const runtime = ctx.runtime as AgentRuntime | undefined;
+        if (!runtime) {
+          return "scenario runtime unavailable";
+        }
+        return assertCanonicalIdentityMerged({
+          runtime,
+          personName: PERSON_NAME,
+        });
+      },
     },
+    {
+      type: "custom",
+      name: "cross-platform-same-person-action-coverage",
+      predicate: expectScenarioToCallAction({
+        acceptedActions: [
+          "READ_MESSAGES",
+          "SEARCH_ACROSS_CHANNELS",
+          "OWNER_INBOX",
+        ],
+        description:
+          "cross-platform conversation lookup for one canonical person",
+        includesAny: ["priya", "gmail", "signal", "telegram", "whatsapp"],
+      }),
+    },
+    judgeRubric({
+      name: "cross-platform-same-person-rubric",
+      threshold: 0.75,
+      description:
+        "End-to-end: Priya Rao is handled as one canonical person whose conversation context spans Gmail, Signal, Telegram, and WhatsApp.",
+    }),
   ],
 });

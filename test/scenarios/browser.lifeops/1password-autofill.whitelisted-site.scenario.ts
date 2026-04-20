@@ -3,11 +3,13 @@
  * the agent to log them in; the agent should invoke the autofill
  * action through the browser extension, scoped to sites in the
  * autofill whitelist.
- *
- * NotYetImplemented until T8f (1Password autofill integration) lands.
  */
 
 import { scenario } from "@elizaos/scenario-schema";
+import {
+  expectScenarioToCallAction,
+  expectTurnToCallAction,
+} from "../_helpers/action-assertions.ts";
 
 const AUTOFILL_ACTIONS = ["AUTOFILL_FIELD", "REQUEST_FIELD_FILL"];
 
@@ -17,10 +19,7 @@ export default scenario({
   domain: "browser.lifeops",
   tags: ["browser", "autofill", "happy-path"],
   description:
-    "User asks the agent to log into GitHub. Agent should autofill credentials via 1Password through the extension. NotYetImplemented until T8f.",
-
-  status: "pending",
-
+    "User asks the agent to log into GitHub. The request should route to the whitelisted browser-extension autofill action and target github.com without exposing credentials to the model.",
   isolation: "per-scenario",
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
@@ -41,31 +40,55 @@ export default scenario({
       kind: "message",
       name: "github-login-request",
       room: "main",
-      text: "Log me into GitHub.",
-      responseIncludesAny: [
-        /github/i,
-        /login|log in|sign in/i,
-        /autofill|fill/i,
-      ],
-      assertTurn: (turn) => {
-        const hit = turn.actionsCalled.find((a) =>
-          AUTOFILL_ACTIONS.includes(a.actionName),
-        );
-        if (!hit) {
-          throw new Error(
-            "NotYetImplemented: no AUTOFILL_FIELD / REQUEST_FIELD_FILL fired — see task T8f (1Password autofill).",
-          );
-        }
-      },
+      text: "Use 1Password through the browser extension to fill my password on https://github.com/login.",
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: AUTOFILL_ACTIONS,
+        description: "whitelisted GitHub autofill request",
+      }),
+      responseIncludesAny: [/github/i, /autofill|fill/i, /browser extension/i],
     },
   ],
 
   finalChecks: [
     {
+      type: "selectedAction",
+      actionName: AUTOFILL_ACTIONS,
+    },
+    {
+      type: "selectedActionArguments",
+      actionName: AUTOFILL_ACTIONS,
+      includesAny: ["github.com", "password"],
+    },
+    {
       type: "custom",
-      name: "autofill-action-registered",
-      predicate: async () => {
-        return "NotYetImplemented: 1Password whitelisted-site autofill requires T8f.";
+      name: "autofill-github-action-coverage",
+      predicate: expectScenarioToCallAction({
+        acceptedActions: AUTOFILL_ACTIONS,
+        description: "whitelisted GitHub autofill request",
+        includesAny: ["github.com", "password"],
+      }),
+    },
+    {
+      type: "custom",
+      name: "autofill-github-result",
+      predicate: async (ctx) => {
+        const hit = ctx.actionsCalled.find((action) =>
+          AUTOFILL_ACTIONS.includes(action.actionName),
+        );
+        if (!hit) {
+          return "expected whitelisted GitHub autofill action result";
+        }
+        const data = (hit.result?.data ?? {}) as {
+          registrableDomain?: string;
+          fieldPurpose?: string;
+        };
+        if (data.registrableDomain !== "github.com") {
+          return "expected github.com registrableDomain in autofill result";
+        }
+        if (data.fieldPurpose !== "password") {
+          return "expected password fieldPurpose in autofill result";
+        }
+        return undefined;
       },
     },
   ],

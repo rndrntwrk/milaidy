@@ -1,14 +1,9 @@
-/**
- * Twitter/X topic search. User asks for recent tweets about a topic.
- * Agent should call SEARCH_X (or similar) and return a concise
- * deep-dive summary of matches.
- *
- * NotYetImplemented until T8g.
- */
-
 import { scenario } from "@elizaos/scenario-schema";
-
-const X_SEARCH_ACTIONS = ["SEARCH_X", "FETCH_FEED_TOP", "SUMMARIZE_FEED"];
+import {
+  expectScenarioToCallAction,
+  expectTurnToCallAction,
+} from "../_helpers/action-assertions.ts";
+import { seedXReadFixtures } from "../_helpers/x-seeds.ts";
 
 export default scenario({
   id: "x.search.topic-deep-dive",
@@ -16,14 +11,36 @@ export default scenario({
   domain: "social.x",
   tags: ["social", "twitter", "happy-path"],
   description:
-    "User asks for recent tweets about elizaOS; agent returns a summary. NotYetImplemented until T8g.",
-
-  status: "pending",
+    "User asks for recent posts about elizaOS on X and receives an in-chat summary backed by seeded X search data.",
 
   isolation: "per-scenario",
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
   },
+  seed: [
+    {
+      type: "custom",
+      name: "seed-x-search-results",
+      apply: seedXReadFixtures({
+        feedItems: [
+          {
+            externalTweetId: "x-search-elizaos-1",
+            feedType: "search",
+            authorHandle: "eliza_builder",
+            text: "elizaOS just shipped a cleaner plugin runtime and the dev loop is much faster now.",
+            offsetMinutes: 12,
+          },
+          {
+            externalTweetId: "x-search-elizaos-2",
+            feedType: "search",
+            authorHandle: "agent_ops",
+            text: "People are using elizaOS to wire X DMs, Discord, and Telegram into one assistant.",
+            offsetMinutes: 25,
+          },
+        ],
+      }),
+    },
+  ],
 
   rooms: [
     {
@@ -39,27 +56,50 @@ export default scenario({
       kind: "message",
       name: "topic-search-request",
       room: "main",
-      text: "Find recent tweets about elizaOS.",
-      responseIncludesAny: [/elizaos|eliza/i, /tweet/i, /recent/i],
-      assertTurn: (turn) => {
-        const hit = turn.actionsCalled.find((a) =>
-          X_SEARCH_ACTIONS.includes(a.actionName),
-        );
-        if (!hit) {
-          throw new Error(
-            "NotYetImplemented: no SEARCH_X fired — see task T8g (Twitter feed summarization).",
-          );
-        }
-      },
+      text: "Search Twitter for posts about elizaOS and summarize what people are saying.",
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: ["X_READ"],
+        description: "X search for elizaOS",
+        includesAny: ["search", "elizaOS"],
+      }),
+      responseIncludesAny: [/elizaos|eliza/i, /@/i, /x search/i],
     },
   ],
 
   finalChecks: [
     {
+      type: "selectedAction",
+      actionName: "X_READ",
+    },
+    {
       type: "custom",
-      name: "x-search-feasible",
-      predicate: async () => {
-        return "NotYetImplemented: X topic search requires T8g.";
+      name: "x-search-action-coverage",
+      predicate: expectScenarioToCallAction({
+        acceptedActions: ["X_READ"],
+        description: "X search for elizaOS",
+        includesAny: ["search", "elizaOS"],
+      }),
+    },
+    {
+      type: "custom",
+      name: "x-search-result-items",
+      predicate: async (ctx) => {
+        const hit = ctx.actionsCalled.find((action) => action.actionName === "X_READ");
+        const data = (hit?.result?.data ?? {}) as {
+          subaction?: string;
+          query?: string;
+          items?: Array<{ text?: string }>;
+        };
+        if (data.subaction !== "search") {
+          return "expected X_READ search subaction";
+        }
+        if (data.query?.toLowerCase() !== "elizaos") {
+          return "expected elizaOS query in X search result";
+        }
+        if (!Array.isArray(data.items) || data.items.length < 2) {
+          return "expected seeded X search items";
+        }
+        return undefined;
       },
     },
   ],

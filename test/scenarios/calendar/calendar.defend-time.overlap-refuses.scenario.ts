@@ -1,12 +1,16 @@
 import { scenario } from "@elizaos/scenario-schema";
+import {
+  expectScenarioToCallAction,
+  expectTurnToCallAction,
+} from "../_helpers/action-assertions.ts";
+import { seedCalendarCache } from "../_helpers/lifeops-seeds.ts";
 
 export default scenario({
   id: "calendar.defend-time.overlap-refuses",
   title:
     "Agent refuses to schedule during a blackout and suggests alternatives",
   domain: "calendar",
-  tags: ["lifeops", "calendar", "not-yet-implemented"],
-  status: "pending",
+  tags: ["lifeops", "calendar", "time-defense"],
   isolation: "per-scenario",
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
@@ -20,11 +24,19 @@ export default scenario({
   ],
   seed: [
     {
-      type: "calendarEvent",
-      account: "test-owner",
-      title: "Deep work blackout",
-      startIso: "{{now+1d}}",
-      endIso: "{{now+1d}}",
+      type: "custom",
+      name: "seed-deep-work-blackout",
+      apply: seedCalendarCache({
+        events: [
+          {
+            id: "calendar-deep-work-blackout",
+            title: "Deep work blackout",
+            startOffsetMinutes: 24 * 60 + 60,
+            durationMinutes: 90,
+            metadata: { category: "deep-work" },
+          },
+        ],
+      }),
     },
   ],
   turns: [
@@ -32,6 +44,10 @@ export default scenario({
       kind: "message",
       name: "request-during-blackout",
       text: "Schedule a meeting with Alex tomorrow at 10am.",
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: ["CALENDAR_ACTION", "PROPOSE_MEETING_TIMES"],
+        description: "blackout conflict handling",
+      }),
       responseIncludesAny: [
         "blackout",
         "deep work",
@@ -43,10 +59,17 @@ export default scenario({
   ],
   finalChecks: [
     {
+      type: "selectedAction",
+      actionName: ["CALENDAR_ACTION", "PROPOSE_MEETING_TIMES"],
+    },
+    {
       type: "custom",
-      name: "defend-time-overlap-not-yet-implemented",
-      predicate: async () =>
-        "NotYetImplemented: waiting on T7e (scheduling-with-others defend time)",
+      name: "blackout-conflict-action-coverage",
+      predicate: expectScenarioToCallAction({
+        acceptedActions: ["CALENDAR_ACTION", "PROPOSE_MEETING_TIMES"],
+        description: "blackout conflict handling",
+        includesAny: ["Alex", "10am", "deep work"],
+      }),
     },
   ],
 });

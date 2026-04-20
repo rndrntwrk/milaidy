@@ -1,11 +1,15 @@
 import { scenario } from "@elizaos/scenario-schema";
+import {
+  expectScenarioToCallAction,
+  expectTurnToCallAction,
+  judgeRubric,
+} from "../_helpers/action-assertions.ts";
 
 export default scenario({
   id: "whatsapp.reply",
   title: "Reply to WhatsApp message with confirmation",
   domain: "messaging.whatsapp",
   tags: ["messaging", "whatsapp", "confirmation"],
-  status: "pending",
   isolation: "per-scenario",
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
@@ -24,23 +28,73 @@ export default scenario({
       name: "draft whatsapp reply",
       room: "main",
       text: "Reply on WhatsApp to Eve saying see you at 7.",
-      forbiddenActions: ["SEND_MESSAGE"],
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: ["INBOX", "CROSS_CHANNEL_SEND"],
+        description: "whatsapp draft reply",
+        includesAny: ["whatsapp", "Eve", "draft", "reply"],
+      }),
       responseIncludesAny: ["whatsapp", "eve", "draft"],
+      responseJudge: {
+        minimumScore: 0.7,
+        rubric:
+          "Turn 1 must produce a WhatsApp draft reply to Eve and keep it unsent until confirmation.",
+      },
     },
     {
       kind: "message",
       name: "confirm send",
       room: "main",
       text: "Send it.",
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: ["INBOX", "CROSS_CHANNEL_SEND"],
+        description: "whatsapp send after confirmation",
+        includesAny: ["send", "whatsapp", "reply"],
+      }),
       responseIncludesAny: ["sent", "sending", "send"],
+      responseJudge: {
+        minimumScore: 0.7,
+        rubric:
+          "Turn 2 must reflect that the drafted WhatsApp reply is now being sent because the user explicitly confirmed it.",
+      },
     },
   ],
   finalChecks: [
     {
-      type: "custom",
-      name: "whatsapp-reply-not-yet-implemented",
-      predicate: async () =>
-        "NotYetImplemented: waiting on T5g (plugin-whatsapp integration in new schema surface)",
+      type: "selectedAction",
+      actionName: ["INBOX", "CROSS_CHANNEL_SEND"],
     },
+    {
+      type: "custom",
+      name: "whatsapp-reply-two-step-gate",
+      predicate: async (ctx) => {
+        const firstBlob = JSON.stringify(ctx.turns?.[0]?.actionsCalled ?? []);
+        const secondBlob = JSON.stringify(ctx.turns?.[1]?.actionsCalled ?? []);
+        if (/send|\"confirmed\":true/i.test(firstBlob) && !/draft/i.test(firstBlob)) {
+          return "first turn appears to have sent the WhatsApp reply instead of drafting it";
+        }
+        if (!/send|\"confirmed\":true/i.test(secondBlob)) {
+          const responseText = String(ctx.turns?.[1]?.responseText ?? "");
+          if (!/\bsent\b|\bsending\b/i.test(responseText)) {
+            return "second turn did not clearly send the WhatsApp reply after confirmation";
+          }
+        }
+      },
+    },
+    {
+      type: "custom",
+      name: "whatsapp-reply-action-coverage",
+      predicate: expectScenarioToCallAction({
+        acceptedActions: ["INBOX", "CROSS_CHANNEL_SEND"],
+        description: "whatsapp draft then send",
+        includesAny: ["whatsapp", "draft", "send", "reply"],
+        minCount: 2,
+      }),
+    },
+    judgeRubric({
+      name: "whatsapp-reply-rubric",
+      threshold: 0.7,
+      description:
+        "End-to-end: the assistant drafted a WhatsApp reply first and only sent it after the explicit confirmation turn.",
+    }),
   ],
 });

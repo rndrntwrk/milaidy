@@ -1,32 +1,50 @@
 /**
- * Per-site time-tracking query via the (not-yet-built) LifeOps browser
- * extension backed by a WakaTime-like activity collector. The user asks
- * how much time they spent on a specific site today; the agent should
- * return a per-site breakdown via GET_TIME_ON_SITE (or equivalent
- * activity-provider action).
- *
- * Flagged NotYetImplemented via custom finalCheck until T8d (activity
- * tracker) and T8e (browser extension) land. See plan §4.9, §6.12, §6.13.
+ * Per-site time-tracking query via the LifeOps browser extension backed
+ * by the activity collector. The user asks how much time they spent on
+ * a specific site today; the agent should return a per-site breakdown
+ * via GET_TIME_ON_SITE.
  */
 
 import { scenario } from "@elizaos/scenario-schema";
-
-const ACTIVITY_ACTIONS = ["GET_TIME_ON_SITE", "GET_ACTIVITY_REPORT"];
+import {
+  expectScenarioToCallAction,
+  expectTurnToCallAction,
+} from "../_helpers/action-assertions.ts";
+import { seedBrowserExtensionTelemetry } from "../_helpers/lifeops-seeds.ts";
 
 export default scenario({
   id: "lifeops-extension.time-tracking.per-site",
-  title: "Per-site time tracking query (twitter.com today)",
+  title: "Per-site time tracking query (x.com today)",
   domain: "browser.lifeops",
   tags: ["browser", "activity", "smoke", "happy-path"],
   description:
-    "User asks 'How much time did I spend on twitter.com today?'. Requires the LifeOps browser extension to feed per-site data to the activity collector. NotYetImplemented until T8d + T8e.",
-
-  status: "pending",
-
+    "User asks how much time they spent on x.com today. Seeded browser-extension telemetry should flow through GET_TIME_ON_SITE with a non-zero result.",
   isolation: "per-scenario",
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
   },
+  seed: [
+    {
+      type: "custom",
+      name: "seed-x-domain-activity",
+      apply: seedBrowserExtensionTelemetry({
+        deviceId: "browser-activity-primary",
+        browserVendor: "chrome",
+        windows: [
+          {
+            url: "https://x.com/shawmakesmagic",
+            offsetMinutes: 8,
+            durationMinutes: 18,
+          },
+          {
+            url: "https://github.com/elizaOS/milady",
+            offsetMinutes: 45,
+            durationMinutes: 6,
+          },
+        ],
+      }),
+    },
+  ],
 
   rooms: [
     {
@@ -42,27 +60,49 @@ export default scenario({
       kind: "message",
       name: "per-site-time-query",
       room: "main",
-      text: "How much time did I spend on twitter.com today?",
-      responseIncludesAny: [/twitter/i, /minute/i, /hour/i, /time/i],
-      assertTurn: (turn) => {
-        const hit = turn.actionsCalled.find((a) =>
-          ACTIVITY_ACTIONS.includes(a.actionName),
-        );
-        if (!hit) {
-          throw new Error(
-            "NotYetImplemented: no GET_TIME_ON_SITE / GET_ACTIVITY_REPORT fired — see tasks T8d (activity tracker) and T8e (browser extension).",
-          );
-        }
-      },
+      text: "How much time did I spend on x.com today?",
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: ["GET_TIME_ON_SITE"],
+        description: "per-site time lookup for x.com",
+      }),
+      responseIncludesAny: [/x\.com/i, /minute|hour|m\./i, /time/i],
     },
   ],
 
   finalChecks: [
     {
+      type: "selectedAction",
+      actionName: "GET_TIME_ON_SITE",
+    },
+    {
       type: "custom",
-      name: "activity-collector-available",
-      predicate: async () => {
-        return "NotYetImplemented: activity collector (T8d) and browser extension (T8e) are not implemented yet; per-site time tracking cannot be answered from real data.";
+      name: "per-site-time-action-coverage",
+      predicate: expectScenarioToCallAction({
+        acceptedActions: ["GET_TIME_ON_SITE"],
+        description: "per-site time lookup for x.com",
+      }),
+    },
+    {
+      type: "custom",
+      name: "per-site-time-result",
+      predicate: async (ctx) => {
+        const hit = ctx.actionsCalled.find(
+          (action) => action.actionName === "GET_TIME_ON_SITE",
+        );
+        if (!hit) {
+          return "expected GET_TIME_ON_SITE action result";
+        }
+        const data = (hit.result?.data ?? {}) as {
+          domain?: string;
+          totalMs?: number;
+        };
+        if (data.domain !== "x.com") {
+          return "expected x.com domain in GET_TIME_ON_SITE result";
+        }
+        if (typeof data.totalMs !== "number" || data.totalMs <= 0) {
+          return "expected positive totalMs in GET_TIME_ON_SITE result";
+        }
+        return undefined;
       },
     },
   ],

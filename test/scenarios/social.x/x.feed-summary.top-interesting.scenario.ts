@@ -1,15 +1,9 @@
-/**
- * Twitter/X feed summarization. User asks for the top 5 interesting
- * tweets in their feed today. The agent should call a
- * FETCH_FEED_TOP / SUMMARIZE_FEED action that returns tweet content
- * summaries without surfacing the user to X.
- *
- * NotYetImplemented until T8g (Twitter feed summarization).
- */
-
 import { scenario } from "@elizaos/scenario-schema";
-
-const X_FEED_ACTIONS = ["FETCH_FEED_TOP", "SUMMARIZE_FEED", "SEARCH_X"];
+import {
+  expectScenarioToCallAction,
+  expectTurnToCallAction,
+} from "../_helpers/action-assertions.ts";
+import { seedXReadFixtures } from "../_helpers/x-seeds.ts";
 
 export default scenario({
   id: "x.feed-summary.top-interesting",
@@ -17,14 +11,43 @@ export default scenario({
   domain: "social.x",
   tags: ["social", "twitter", "smoke", "happy-path"],
   description:
-    "User asks for a summary of the top 5 tweets in their feed today. NotYetImplemented until T8g.",
-
-  status: "pending",
+    "User asks for a summary of the top posts in their X feed today and gets an inline summary from seeded timeline data.",
 
   isolation: "per-scenario",
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
   },
+  seed: [
+    {
+      type: "custom",
+      name: "seed-x-home-feed",
+      apply: seedXReadFixtures({
+        feedItems: [
+          {
+            externalTweetId: "x-home-1",
+            feedType: "home_timeline",
+            authorHandle: "builder_one",
+            text: "Shipped a cleaner workflow for connector certifications today.",
+            offsetMinutes: 18,
+          },
+          {
+            externalTweetId: "x-home-2",
+            feedType: "home_timeline",
+            authorHandle: "milady_ai",
+            text: "Milady dev loop feels dramatically better after trimming dead paths.",
+            offsetMinutes: 22,
+          },
+          {
+            externalTweetId: "x-home-3",
+            feedType: "home_timeline",
+            authorHandle: "agenticdev",
+            text: "A good assistant summarizes the feed instead of punting you back to the site.",
+            offsetMinutes: 31,
+          },
+        ],
+      }),
+    },
+  ],
 
   rooms: [
     {
@@ -40,27 +63,50 @@ export default scenario({
       kind: "message",
       name: "feed-summary-request",
       room: "main",
-      text: "Summarize the top 5 tweets in my feed today.",
-      responseIncludesAny: [/tweet/i, /feed/i, /top/i],
-      assertTurn: (turn) => {
-        const hit = turn.actionsCalled.find((a) =>
-          X_FEED_ACTIONS.includes(a.actionName),
-        );
-        if (!hit) {
-          throw new Error(
-            "NotYetImplemented: no FETCH_FEED_TOP / SUMMARIZE_FEED fired — see task T8g (Twitter feed summarization).",
-          );
-        }
-      },
+      text: "What's on my X timeline today? Summarize the top 5 posts for me.",
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: ["X_READ"],
+        description: "X home timeline read",
+        includesAny: ["read_feed", "home_timeline"],
+      }),
+      responseIncludesAny: [/feed/i, /@/i, /x home_timeline/i],
     },
   ],
 
   finalChecks: [
     {
+      type: "selectedAction",
+      actionName: "X_READ",
+    },
+    {
       type: "custom",
-      name: "x-feed-summary-feasible",
-      predicate: async () => {
-        return "NotYetImplemented: Twitter/X feed summarization requires T8g.";
+      name: "x-feed-summary-coverage",
+      predicate: expectScenarioToCallAction({
+        acceptedActions: ["X_READ"],
+        description: "X home timeline read",
+        includesAny: ["read_feed", "home_timeline"],
+      }),
+    },
+    {
+      type: "custom",
+      name: "x-feed-summary-results",
+      predicate: async (ctx) => {
+        const hit = ctx.actionsCalled.find((action) => action.actionName === "X_READ");
+        const data = (hit?.result?.data ?? {}) as {
+          subaction?: string;
+          feedType?: string;
+          items?: Array<{ text?: string }>;
+        };
+        if (data.subaction !== "read_feed") {
+          return "expected X_READ feed subaction";
+        }
+        if (data.feedType !== "home_timeline") {
+          return "expected home_timeline feed type";
+        }
+        if (!Array.isArray(data.items) || data.items.length < 3) {
+          return "expected seeded home timeline items";
+        }
+        return undefined;
       },
     },
   ],

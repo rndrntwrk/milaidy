@@ -1,13 +1,9 @@
-/**
- * Reading unread Twitter/X DMs. Agent should fetch and summarize
- * unread DM threads without requiring the user to open X.
- *
- * NotYetImplemented until T8g.
- */
-
 import { scenario } from "@elizaos/scenario-schema";
-
-const X_DM_ACTIONS = ["FETCH_FEED_TOP", "SUMMARIZE_FEED", "SEARCH_X"];
+import {
+  expectScenarioToCallAction,
+  expectTurnToCallAction,
+} from "../_helpers/action-assertions.ts";
+import { seedXReadFixtures } from "../_helpers/x-seeds.ts";
 
 export default scenario({
   id: "x.dm.read-unread",
@@ -15,14 +11,34 @@ export default scenario({
   domain: "social.x",
   tags: ["social", "twitter", "dm", "happy-path"],
   description:
-    "User asks 'Any unread X DMs?'. Agent summarizes unread DMs without redirecting to X. NotYetImplemented until T8g.",
-
-  status: "pending",
+    "User asks for unread X DMs and receives an inline summary from seeded X DM data.",
 
   isolation: "per-scenario",
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
   },
+  seed: [
+    {
+      type: "custom",
+      name: "seed-x-dms",
+      apply: seedXReadFixtures({
+        dms: [
+          {
+            externalDmId: "x-dm-1",
+            senderHandle: "jane_doe",
+            text: "Can you hop on a quick call tomorrow morning?",
+            offsetMinutes: 9,
+          },
+          {
+            externalDmId: "x-dm-2",
+            senderHandle: "milady_art",
+            text: "Sent over the concept sketch. Want feedback today?",
+            offsetMinutes: 21,
+          },
+        ],
+      }),
+    },
+  ],
 
   rooms: [
     {
@@ -38,27 +54,46 @@ export default scenario({
       kind: "message",
       name: "unread-dm-query",
       room: "main",
-      text: "Any unread X DMs?",
-      responseIncludesAny: [/dm|message/i, /unread|new/i, /x|twitter/i],
-      assertTurn: (turn) => {
-        const hit = turn.actionsCalled.find((a) =>
-          X_DM_ACTIONS.includes(a.actionName),
-        );
-        if (!hit) {
-          throw new Error(
-            "NotYetImplemented: no X DM action fired — see task T8g.",
-          );
-        }
-      },
+      text: "Check my X DMs and tell me what's unread.",
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: ["X_READ"],
+        description: "X DM read",
+        includesAny: ["read_dms"],
+      }),
+      responseIncludesAny: [/x dms|dm/i, /jane_doe|milady_art/i, /call|sketch|feedback/i],
     },
   ],
 
   finalChecks: [
     {
+      type: "selectedAction",
+      actionName: "X_READ",
+    },
+    {
       type: "custom",
-      name: "x-dm-read-feasible",
-      predicate: async () => {
-        return "NotYetImplemented: X DM reading requires T8g.";
+      name: "x-dm-read-coverage",
+      predicate: expectScenarioToCallAction({
+        acceptedActions: ["X_READ"],
+        description: "X DM read",
+        includesAny: ["read_dms"],
+      }),
+    },
+    {
+      type: "custom",
+      name: "x-dm-read-results",
+      predicate: async (ctx) => {
+        const hit = ctx.actionsCalled.find((action) => action.actionName === "X_READ");
+        const data = (hit?.result?.data ?? {}) as {
+          subaction?: string;
+          items?: Array<{ senderHandle?: string; text?: string }>;
+        };
+        if (data.subaction !== "read_dms") {
+          return "expected X_READ DM subaction";
+        }
+        if (!Array.isArray(data.items) || data.items.length < 2) {
+          return "expected seeded X DM items";
+        }
+        return undefined;
       },
     },
   ],

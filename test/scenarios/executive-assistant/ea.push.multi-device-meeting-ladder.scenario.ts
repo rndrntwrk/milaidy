@@ -25,6 +25,12 @@ export default scenario({
       channelType: "DM",
       title: "EA Multi-Device Meeting Ladder",
     },
+    {
+      id: "mac",
+      source: "discord",
+      channelType: "DM",
+      title: "EA Multi-Device Meeting Ladder Mac Ack",
+    },
   ],
   turns: [
     {
@@ -42,6 +48,18 @@ export default scenario({
         minimumScore: 0.7,
         rubric:
           "The reply must commit to a three-step ladder (1h → 10m → start) on both Mac and phone, and indicate that acknowledging on one device suppresses the rest. A vague 'I'll remind you' fails.",
+      },
+    },
+    {
+      kind: "message",
+      name: "acknowledge-first-rung-on-mac",
+      room: "mac",
+      text: "I saw the first reminder on my Mac. Clear the remaining phone reminders too.",
+      responseIncludesAny: ["Mac", "phone", "clear", "acknowledged"],
+      responseJudge: {
+        minimumScore: 0.7,
+        rubric:
+          "The reply must treat the Mac acknowledgement as suppressing the remaining ladder on both devices. A reply that only says 'okay' without confirming suppression fails.",
       },
     },
   ],

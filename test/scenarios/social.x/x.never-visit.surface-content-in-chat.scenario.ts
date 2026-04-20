@@ -1,14 +1,9 @@
-/**
- * The "never visit X" requirement: the user should not be redirected
- * to x.com; the agent must surface relevant tweet content directly
- * in chat (links optional but content primary).
- *
- * NotYetImplemented until T8g.
- */
-
 import { scenario } from "@elizaos/scenario-schema";
-
-const X_FEED_ACTIONS = ["FETCH_FEED_TOP", "SUMMARIZE_FEED", "SEARCH_X"];
+import {
+  expectScenarioToCallAction,
+  expectTurnToCallAction,
+} from "../_helpers/action-assertions.ts";
+import { seedXReadFixtures } from "../_helpers/x-seeds.ts";
 
 export default scenario({
   id: "x.never-visit.surface-content-in-chat",
@@ -16,14 +11,36 @@ export default scenario({
   domain: "social.x",
   tags: ["social", "twitter", "happy-path"],
   description:
-    "User should never be redirected to X; tweet content must appear in the response. NotYetImplemented until T8g.",
-
-  status: "pending",
+    "User should not be redirected to X; the assistant should surface seeded X content directly in chat.",
 
   isolation: "per-scenario",
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
   },
+  seed: [
+    {
+      type: "custom",
+      name: "seed-openai-launch-search-results",
+      apply: seedXReadFixtures({
+        feedItems: [
+          {
+            externalTweetId: "x-openai-1",
+            feedType: "search",
+            authorHandle: "launch_watch",
+            text: "People are saying the latest OpenAI launch made coding agents much more reliable.",
+            offsetMinutes: 11,
+          },
+          {
+            externalTweetId: "x-openai-2",
+            feedType: "search",
+            authorHandle: "shipfast",
+            text: "The launch thread is mostly about agent speed, evals, and better tool use.",
+            offsetMinutes: 19,
+          },
+        ],
+      }),
+    },
+  ],
 
   rooms: [
     {
@@ -39,28 +56,40 @@ export default scenario({
       kind: "message",
       name: "no-redirect-request",
       room: "main",
-      text: "What are people saying about the latest OpenAI launch on X? Don't just send me a link — tell me here.",
+      text: "Search X for posts about the latest OpenAI launch and tell me the highlights here, not a link.",
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: ["X_READ"],
+        description: "inline X search summary",
+        includesAny: ["search", "OpenAI"],
+      }),
       responseExcludes: [/go to x\.com/i, /open twitter/i, /visit x\.com/i],
-      responseIncludesAny: [/tweet|said|posting|writing|thread/i],
-      assertTurn: (turn) => {
-        const hit = turn.actionsCalled.find((a) =>
-          X_FEED_ACTIONS.includes(a.actionName),
-        );
-        if (!hit) {
-          throw new Error(
-            "NotYetImplemented: no X feed action fired — see task T8g.",
-          );
-        }
-      },
+      responseIncludesAny: [/openai/i, /people are saying|thread|launch/i, /@/i],
     },
   ],
 
   finalChecks: [
     {
+      type: "selectedAction",
+      actionName: "X_READ",
+    },
+    {
       type: "custom",
-      name: "never-visit-x-feasible",
-      predicate: async () => {
-        return "NotYetImplemented: inline X content surfacing requires T8g.";
+      name: "never-visit-x-coverage",
+      predicate: expectScenarioToCallAction({
+        acceptedActions: ["X_READ"],
+        description: "inline X search summary",
+        includesAny: ["search", "OpenAI"],
+      }),
+    },
+    {
+      type: "custom",
+      name: "never-visit-x-no-linkout",
+      predicate: async (ctx) => {
+        const responseText = ctx.turns?.[0]?.responseText ?? "";
+        if (/x\.com|twitter\.com/i.test(responseText)) {
+          return "expected in-chat content instead of an X/Twitter URL";
+        }
+        return undefined;
       },
     },
   ],

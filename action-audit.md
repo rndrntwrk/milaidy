@@ -1,9 +1,9 @@
 # Action Audit
 
-Scanned **73** actions across **91** files.
+Scanned **75** actions across **93** files.
 **High:** 0 · **Medium:** 0 · **Low:** 0
 
-## Clean (73)
+## Clean (75)
 
 | Action | File |
 | --- | --- |
@@ -15,6 +15,7 @@ Scanned **73** actions across **91** files.
 | `BLOCK_APPS` | `eliza/apps/app-lifeops/src/actions/app-blocker.ts` |
 | `BLOCK_UNTIL_TASK_COMPLETE` | `eliza/apps/app-lifeops/src/website-blocker/chat-integration/actions/blockUntilTaskComplete.ts` |
 | `BLOCK_WEBSITES` | `eliza/apps/app-lifeops/src/actions/website-blocker.ts` |
+| `BOOK_TRAVEL` | `eliza/apps/app-lifeops/src/actions/book-travel.ts` |
 | `BROWSER_SESSION` | `eliza/packages/agent/src/actions/browser-session.ts` |
 | `CALENDAR_ACTION` | `eliza/apps/app-lifeops/src/actions/calendar.ts` |
 | `CALL_EXTERNAL` | `eliza/apps/app-lifeops/src/actions/twilio-call.ts` |
@@ -49,6 +50,7 @@ Scanned **73** actions across **91** files.
 | `LOG_LEVEL` | `eliza/packages/agent/src/actions/log-level.ts` |
 | `MARK_FOLLOWUP_DONE` | `eliza/apps/app-lifeops/src/followup/actions/markFollowupDone.ts` |
 | `OWNER_RELATIONSHIP` | `eliza/apps/app-lifeops/src/actions/relationships.ts` |
+| `OWNER_SCHEDULE` | `eliza/apps/app-lifeops/src/actions/owner-schedule.ts` |
 | `PASSWORD_MANAGER` | `eliza/apps/app-lifeops/src/actions/password-manager.ts` |
 | `PROPOSE_MEETING_TIMES` | `eliza/apps/app-lifeops/src/actions/scheduling.ts` |
 | `PUBLISH_DEVICE_INTENT` | `eliza/apps/app-lifeops/src/actions/device-bus.ts` |

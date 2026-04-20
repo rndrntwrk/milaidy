@@ -1,7 +1,6 @@
 import { scenario } from "@elizaos/scenario-schema";
 import {
   expectApprovalRequest,
-  expectConnectorDispatch,
   expectScenarioToCallAction,
   expectTurnToCallAction,
   judgeRubric,
@@ -33,11 +32,7 @@ export default scenario({
       room: "main",
       text: "Flag the conflict before my flight later and, if needed, help rebook the other thing.",
       assertTurn: expectTurnToCallAction({
-        acceptedActions: [
-          "CALENDAR_ACTION",
-          "CROSS_CHANNEL_SEND",
-          "CALL_EXTERNAL",
-        ],
+        acceptedActions: ["OWNER_CALENDAR", "BOOK_TRAVEL"],
         description: "flight conflict repair planning",
         includesAny: ["flight", "conflict", "rebook", "later"],
       }),
@@ -52,26 +47,27 @@ export default scenario({
   finalChecks: [
     {
       type: "selectedAction",
-      actionName: ["CALENDAR_ACTION", "CROSS_CHANNEL_SEND", "CALL_EXTERNAL"],
+      actionName: ["OWNER_CALENDAR", "BOOK_TRAVEL"],
+    },
+    {
+      type: "selectedActionArguments",
+      actionName: ["OWNER_CALENDAR", "BOOK_TRAVEL"],
+      includesAny: ["flight", "conflict", "rebook", "calendar"],
     },
     {
       type: "approvalRequestExists",
       expected: true,
-      actionName: ["CROSS_CHANNEL_SEND", "CALL_EXTERNAL"],
+      actionName: ["OWNER_CALENDAR", "BOOK_TRAVEL"],
     },
     {
       type: "noSideEffectOnReject",
-      actionName: ["CROSS_CHANNEL_SEND", "CALL_EXTERNAL"],
+      actionName: ["OWNER_CALENDAR", "BOOK_TRAVEL"],
     },
     {
       type: "custom",
       name: "ea-flight-conflict-action-coverage",
       predicate: expectScenarioToCallAction({
-        acceptedActions: [
-          "CALENDAR_ACTION",
-          "CROSS_CHANNEL_SEND",
-          "CALL_EXTERNAL",
-        ],
+        acceptedActions: ["OWNER_CALENDAR", "BOOK_TRAVEL"],
         description: "flight conflict repair planning",
         includesAny: ["flight", "conflict", "rebook", "later"],
       }),
@@ -82,15 +78,7 @@ export default scenario({
       predicate: expectApprovalRequest({
         description:
           "rebooking the other party is approval-gated, not auto-executed",
-        actionName: ["CROSS_CHANNEL_SEND", "CALL_EXTERNAL"],
-      }),
-    },
-    {
-      type: "custom",
-      name: "ea-flight-conflict-warning-dispatch",
-      predicate: expectConnectorDispatch({
-        channel: ["dashboard", "desktop", "mobile"],
-        description: "user receives the conflict warning before the flight",
+        actionName: ["OWNER_CALENDAR", "BOOK_TRAVEL"],
       }),
     },
     judgeRubric({

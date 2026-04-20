@@ -32,7 +32,7 @@ export default scenario({
       room: "main",
       text: "In the morning brief, add a Pending Drafts section that lists which drafts still need my sign-off and who they are for.",
       assertTurn: expectTurnToCallAction({
-        acceptedActions: ["INBOX", "GMAIL_ACTION"],
+        acceptedActions: ["RUN_MORNING_CHECKIN", "INBOX", "GMAIL_ACTION"],
         description: "morning brief approval queue review",
         includesAny: [
           "draft",
@@ -59,7 +59,7 @@ export default scenario({
   finalChecks: [
     {
       type: "selectedAction",
-      actionName: ["INBOX", "GMAIL_ACTION"],
+      actionName: ["RUN_MORNING_CHECKIN", "INBOX", "GMAIL_ACTION"],
     },
     {
       type: "selectedActionArguments",
@@ -79,7 +79,7 @@ export default scenario({
       type: "custom",
       name: "ea-daily-brief-drafts-action-coverage",
       predicate: expectScenarioToCallAction({
-        acceptedActions: ["INBOX", "GMAIL_ACTION"],
+        acceptedActions: ["RUN_MORNING_CHECKIN", "INBOX", "GMAIL_ACTION"],
         description: "morning brief approval queue review",
         includesAny: ["draft", "sign-off", "approval", "brief", "pending"],
       }),

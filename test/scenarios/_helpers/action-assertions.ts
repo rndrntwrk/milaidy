@@ -9,6 +9,10 @@ import type {
   ScenarioContext,
   ScenarioTurnExecution,
 } from "@elizaos/scenario-schema";
+import {
+  actionMatchesScenarioExpectation,
+  actionsAreScenarioEquivalent,
+} from "../../../eliza/packages/scenario-runner/src/action-families.ts";
 
 type Pattern = string | RegExp;
 
@@ -116,7 +120,7 @@ function actionMatches(
   if (!candidate) {
     return false;
   }
-  return filters.includes(candidate);
+  return actionMatchesScenarioExpectation(candidate, filters);
 }
 
 function validateActionExpectation(
@@ -124,7 +128,10 @@ function validateActionExpectation(
   expectation: ActionExpectation,
 ): ScenarioCheckResult {
   const matched = actions.filter((action) =>
-    expectation.acceptedActions.includes(action.actionName),
+    actionMatchesScenarioExpectation(
+      action.actionName,
+      expectation.acceptedActions,
+    ),
   );
   const minCount = expectation.minCount ?? 1;
   if (matched.length < minCount) {
@@ -358,8 +365,10 @@ export function expectNoSideEffectOnReject(
       }
       const dispatchAction = dispatch.actionName ?? "";
       return (
-        actionFilters.includes(dispatchAction) &&
-        rejectedActions.has(dispatchAction)
+        actionMatchesScenarioExpectation(dispatchAction, actionFilters) &&
+        Array.from(rejectedActions).some((actionName) =>
+          actionsAreScenarioEquivalent(dispatchAction, actionName),
+        )
       );
     });
     if (offending.length > 0) {

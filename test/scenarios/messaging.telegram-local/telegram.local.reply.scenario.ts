@@ -1,11 +1,15 @@
 import { scenario } from "@elizaos/scenario-schema";
+import {
+  expectScenarioToCallAction,
+  expectTurnToCallAction,
+  judgeRubric,
+} from "../_helpers/action-assertions.ts";
 
 export default scenario({
   id: "telegram.local.reply",
   title: "Reply to Telegram chat with confirmation",
   domain: "messaging.telegram-local",
   tags: ["messaging", "telegram", "confirmation"],
-  status: "pending",
   isolation: "per-scenario",
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
@@ -24,23 +28,73 @@ export default scenario({
       name: "draft telegram reply",
       room: "main",
       text: "Reply to the last Telegram message from Carol saying I'm on my way.",
-      forbiddenActions: ["SEND_MESSAGE"],
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: ["INBOX", "CROSS_CHANNEL_SEND"],
+        description: "telegram draft reply",
+        includesAny: ["telegram", "Carol", "draft", "reply"],
+      }),
       responseIncludesAny: ["draft", "carol", "telegram"],
+      responseJudge: {
+        minimumScore: 0.7,
+        rubric:
+          "Turn 1 must produce a Telegram draft reply to Carol and keep it unsent until confirmation.",
+      },
     },
     {
       kind: "message",
       name: "confirm send",
       room: "main",
       text: "Send it.",
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: ["INBOX", "CROSS_CHANNEL_SEND"],
+        description: "telegram send after confirmation",
+        includesAny: ["send", "telegram", "reply"],
+      }),
       responseIncludesAny: ["sent", "sending", "send"],
+      responseJudge: {
+        minimumScore: 0.7,
+        rubric:
+          "Turn 2 must reflect that the drafted Telegram reply is now being sent because the user explicitly confirmed it.",
+      },
     },
   ],
   finalChecks: [
     {
-      type: "custom",
-      name: "telegram-local-reply-not-yet-implemented",
-      predicate: async () =>
-        "NotYetImplemented: waiting on T5c (plugin-telegram local integration in new schema surface)",
+      type: "selectedAction",
+      actionName: ["INBOX", "CROSS_CHANNEL_SEND"],
     },
+    {
+      type: "custom",
+      name: "telegram-local-reply-two-step-gate",
+      predicate: async (ctx) => {
+        const firstBlob = JSON.stringify(ctx.turns?.[0]?.actionsCalled ?? []);
+        const secondBlob = JSON.stringify(ctx.turns?.[1]?.actionsCalled ?? []);
+        if (/send|\"confirmed\":true/i.test(firstBlob) && !/draft/i.test(firstBlob)) {
+          return "first turn appears to have sent the Telegram reply instead of drafting it";
+        }
+        if (!/send|\"confirmed\":true/i.test(secondBlob)) {
+          const responseText = String(ctx.turns?.[1]?.responseText ?? "");
+          if (!/\bsent\b|\bsending\b/i.test(responseText)) {
+            return "second turn did not clearly send the Telegram reply after confirmation";
+          }
+        }
+      },
+    },
+    {
+      type: "custom",
+      name: "telegram-local-reply-action-coverage",
+      predicate: expectScenarioToCallAction({
+        acceptedActions: ["INBOX", "CROSS_CHANNEL_SEND"],
+        description: "telegram draft then send",
+        includesAny: ["telegram", "draft", "send", "reply"],
+        minCount: 2,
+      }),
+    },
+    judgeRubric({
+      name: "telegram-local-reply-rubric",
+      threshold: 0.7,
+      description:
+        "End-to-end: the assistant drafted a Telegram reply first and only sent it after the explicit confirmation turn.",
+    }),
   ],
 });

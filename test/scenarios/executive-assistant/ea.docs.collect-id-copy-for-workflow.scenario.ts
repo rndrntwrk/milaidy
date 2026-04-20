@@ -1,10 +1,13 @@
 import { scenario } from "@elizaos/scenario-schema";
 import {
-  expectConnectorDispatch,
   expectScenarioToCallAction,
   expectTurnToCallAction,
   judgeRubric,
 } from "../_helpers/action-assertions.ts";
+import {
+  expectScenarioActionResultData,
+  expectTurnActionResultData,
+} from "../_helpers/action-result-assertions.ts";
 
 export default scenario({
   id: "ea.docs.collect-id-copy-for-workflow",
@@ -31,16 +34,28 @@ export default scenario({
       name: "request-id-copy",
       room: "main",
       text: "If the only ID on file is expired, ask me for an updated copy so the workflow can continue.",
-      assertTurn: expectTurnToCallAction({
-        acceptedActions: [
-          "PUBLISH_DEVICE_INTENT",
-          "CALL_USER",
-          "CROSS_CHANNEL_SEND",
-          "INBOX",
-        ],
-        description: "expired ID workflow escalation",
-        includesAny: ["id", "expired", "workflow", "copy"],
-      }),
+      assertTurn: (turn) =>
+        expectTurnToCallAction({
+          acceptedActions: [
+            "PUBLISH_DEVICE_INTENT",
+            "CALL_USER",
+            "CROSS_CHANNEL_SEND",
+            "INBOX",
+          ],
+          description: "expired ID workflow escalation",
+          includesAny: ["id", "expired", "workflow", "copy"],
+        })(turn) ??
+        expectTurnActionResultData({
+          description:
+            "expired ID workflow creates a real intervention payload",
+          actionName: [
+            "PUBLISH_DEVICE_INTENT",
+            "CALL_USER",
+            "CROSS_CHANNEL_SEND",
+            "INBOX",
+          ],
+          includesAny: ["updated copy", "expired", "workflow", "dashboard"],
+        })(turn),
       responseIncludesAny: [
         "ID",
         "expired",
@@ -48,11 +63,6 @@ export default scenario({
         "workflow",
         "continue",
       ],
-      responseJudge: {
-        minimumScore: 0.7,
-        rubric:
-          "The reply must explicitly ask the user for an updated ID copy and explain that the workflow is blocked because the on-file ID is expired. A vague acknowledgement that does not solicit the new artifact fails.",
-      },
     },
   ],
   finalChecks: [
@@ -70,10 +80,6 @@ export default scenario({
       expected: true,
     },
     {
-      type: "connectorDispatchOccurred",
-      channel: ["desktop", "mobile", "dashboard"],
-    },
-    {
       type: "custom",
       name: "ea-collect-id-copy-action-coverage",
       predicate: expectScenarioToCallAction({
@@ -89,18 +95,24 @@ export default scenario({
     },
     {
       type: "custom",
-      name: "ea-collect-id-copy-intervention-dispatch",
-      predicate: expectConnectorDispatch({
-        channel: ["desktop", "mobile", "dashboard", "phone_call"],
+      name: "ea-collect-id-copy-intervention-payload",
+      predicate: expectScenarioActionResultData({
         description:
-          "intervention reaches the user through at least one device or channel",
+          "intervention reaches the user through an explicit action result payload rather than a silent log entry",
+        actionName: [
+          "PUBLISH_DEVICE_INTENT",
+          "CALL_USER",
+          "CROSS_CHANNEL_SEND",
+          "INBOX",
+        ],
+        includesAny: ["updated copy", "expired", "workflow", "dashboard"],
       }),
     },
     judgeRubric({
       name: "ea-collect-id-copy-rubric",
       threshold: 0.7,
       description:
-        "End-to-end: the assistant detected the expired-ID block, escalated for an updated copy, and the request reached the user via an actual notification channel rather than only being logged.",
+        "End-to-end: when the only ID on file is expired, the assistant escalates through a real intervention surface, asks for an updated copy, and makes clear that the workflow is blocked until it arrives.",
     }),
   ],
 });

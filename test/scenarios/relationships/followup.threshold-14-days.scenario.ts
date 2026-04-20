@@ -1,12 +1,9 @@
-/**
- * Follow-up threshold check: specific 14-day threshold. One contact
- * crosses the threshold exactly, another is just below. Agent should
- * surface only the overdue one.
- *
- * Requires follow-up tracker service (T7c). NotYetImplemented.
- */
-
 import { scenario } from "@elizaos/scenario-schema";
+import {
+  expectScenarioToCallAction,
+  expectTurnToCallAction,
+  judgeRubric,
+} from "../_helpers/action-assertions.ts";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const now = Date.now();
@@ -17,9 +14,7 @@ export default scenario({
   domain: "relationships",
   tags: ["lifeops", "relationships", "time-of-day"],
   description:
-    "Contacts cross a 14-day threshold. The agent should respect the rule. Requires follow-up tracker service (T7c).",
-
-  status: "pending",
+    "Contacts cross a 14-day threshold. The assistant should respect the per-contact rule instead of applying a generic month-long cadence.",
 
   isolation: "per-scenario",
   requires: {
@@ -64,15 +59,44 @@ export default scenario({
       name: "check-14-day-threshold",
       room: "main",
       text: "Anyone I haven't talked to in over 14 days?",
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: ["OWNER_RELATIONSHIP"],
+        description: "14-day threshold review",
+        includesAny: ["14", "days", "follow", "talked"],
+      }),
+      responseIncludesAny: ["Dana"],
+      responseJudge: {
+        minimumScore: 0.7,
+        rubric:
+          "The reply must identify Dana Park as overdue and must not incorrectly mark Evan Holt overdue. A generic 'nobody' or a vague follow-up suggestion fails.",
+      },
     },
   ],
 
   finalChecks: [
     {
-      type: "custom",
-      name: "followup-threshold-nyi",
-      predicate: async () =>
-        "NotYetImplemented: follow-up tracker service (T7c) — per-contact followupThresholdDays rule evaluation not yet implemented",
+      type: "selectedAction",
+      actionName: "OWNER_RELATIONSHIP",
     },
+    {
+      type: "selectedActionArguments",
+      actionName: "OWNER_RELATIONSHIP",
+      includesAny: ["14", "days", "follow"],
+    },
+    {
+      type: "custom",
+      name: "followup-threshold-action-coverage",
+      predicate: expectScenarioToCallAction({
+        acceptedActions: ["OWNER_RELATIONSHIP"],
+        description: "14-day threshold review",
+        includesAny: ["14", "days", "follow", "talked"],
+      }),
+    },
+    judgeRubric({
+      name: "followup-threshold-rubric",
+      threshold: 0.7,
+      description:
+        "End-to-end: the assistant respected the 14-day threshold and surfaced only the contact who actually crossed it.",
+    }),
   ],
 });

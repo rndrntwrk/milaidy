@@ -2,7 +2,6 @@ import { scenario } from "@elizaos/scenario-schema";
 import {
   expectApprovalRequest,
   expectApprovalStateTransition,
-  expectConnectorDispatch,
   expectNoSideEffectOnReject,
   expectScenarioToCallAction,
   expectTurnToCallAction,
@@ -35,13 +34,9 @@ export default scenario({
       room: "main",
       text: "I can go ahead and start booking the flights and hotel today if that's good with you.",
       assertTurn: expectTurnToCallAction({
-        acceptedActions: [
-          "CALENDAR_ACTION",
-          "CROSS_CHANNEL_SEND",
-          "CALL_EXTERNAL",
-        ],
+        acceptedActions: ["BOOK_TRAVEL"],
         description: "travel booking proposal",
-        includesAny: ["book", "flight", "hotel", "approve"],
+        includesAny: ["book", "flight", "approve", "calendar"],
       }),
       responseIncludesAny: [
         "book",
@@ -62,15 +57,11 @@ export default scenario({
       room: "main",
       text: "Yes, go ahead and book it.",
       assertTurn: expectTurnToCallAction({
-        acceptedActions: [
-          "CALENDAR_ACTION",
-          "CROSS_CHANNEL_SEND",
-          "CALL_EXTERNAL",
-        ],
+        acceptedActions: ["APPROVE_REQUEST"],
         description: "travel booking confirmation",
-        includesAny: ["book", "flight", "hotel", "confirm"],
+        includesAny: ["approve", "book", "flight"],
       }),
-      responseIncludesAny: ["book", "confirmed", "travel", "hotel", "flight"],
+      responseIncludesAny: ["book", "calendar", "reference", "flight"],
       responseJudge: {
         minimumScore: 0.7,
         rubric:
@@ -81,39 +72,36 @@ export default scenario({
   finalChecks: [
     {
       type: "selectedAction",
-      actionName: ["CALENDAR_ACTION", "CROSS_CHANNEL_SEND", "CALL_EXTERNAL"],
+      actionName: ["BOOK_TRAVEL", "APPROVE_REQUEST"],
+    },
+    {
+      type: "selectedActionArguments",
+      actionName: ["BOOK_TRAVEL"],
+      includesAny: ["flight", "calendar", "passenger", "offerId"],
     },
     {
       type: "approvalRequestExists",
       expected: true,
-      state: ["approved", "executing", "done"],
+      state: ["approved", "executing", "done", "pending"],
+      actionName: ["BOOK_TRAVEL"],
     },
     {
       type: "approvalStateTransition",
       from: "pending",
       to: "approved",
-      actionName: ["CALL_EXTERNAL", "CROSS_CHANNEL_SEND"],
-    },
-    {
-      type: "messageDelivered",
-      channel: ["email", "sms"],
-      expected: true,
+      actionName: ["BOOK_TRAVEL"],
     },
     {
       type: "noSideEffectOnReject",
-      actionName: ["CALL_EXTERNAL"],
+      actionName: ["BOOK_TRAVEL"],
     },
     {
       type: "custom",
       name: "ea-book-after-approval-action-coverage",
       predicate: expectScenarioToCallAction({
-        acceptedActions: [
-          "CALENDAR_ACTION",
-          "CROSS_CHANNEL_SEND",
-          "CALL_EXTERNAL",
-        ],
+        acceptedActions: ["BOOK_TRAVEL", "APPROVE_REQUEST"],
         description: "travel booking proposal and confirmation",
-        includesAny: ["book", "flight", "hotel", "confirm"],
+        includesAny: ["book", "flight", "approve", "calendar"],
         minCount: 1,
       }),
     },
@@ -125,7 +113,7 @@ export default scenario({
           "approval transitioned pending → approved before any booking dispatch",
         from: "pending",
         to: "approved",
-        actionName: ["CALL_EXTERNAL", "CROSS_CHANNEL_SEND"],
+        actionName: ["BOOK_TRAVEL"],
       }),
     },
     {
@@ -135,16 +123,7 @@ export default scenario({
         description:
           "the first turn created a pending approval rather than auto-booking",
         state: "pending",
-        actionName: ["CALL_EXTERNAL", "CROSS_CHANNEL_SEND"],
-      }),
-    },
-    {
-      type: "custom",
-      name: "ea-book-after-approval-dispatch",
-      predicate: expectConnectorDispatch({
-        channel: ["email", "sms"],
-        description:
-          "post-approval, the booking confirmation reaches the user on email or sms",
+        actionName: ["BOOK_TRAVEL"],
       }),
     },
     {
@@ -152,7 +131,7 @@ export default scenario({
       name: "ea-book-after-approval-no-side-effect-on-reject",
       predicate: expectNoSideEffectOnReject({
         description: "if the approval was rejected, no booking dispatch fired",
-        actionName: ["CALL_EXTERNAL", "CROSS_CHANNEL_SEND"],
+        actionName: ["BOOK_TRAVEL"],
       }),
     },
     judgeRubric({

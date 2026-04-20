@@ -3,6 +3,7 @@ import {
   attachFakeSubscriptionComputerUse,
   FakeSubscriptionComputerUseService,
 } from "../../helpers/subscription-computer-use-fixture";
+import { expectScenarioBrowserTask } from "../_helpers/browser-task-assertions.ts";
 
 export default scenario({
   id: "subscriptions.cancel-google-play",
@@ -24,6 +25,7 @@ export default scenario({
           runtime,
           new FakeSubscriptionComputerUseService("google_play"),
         );
+        return undefined;
       },
     },
   ],
@@ -57,5 +59,17 @@ export default scenario({
     { type: "selectedAction", actionName: "SUBSCRIPTIONS" },
     { type: "browserTaskCompleted", expected: true },
     { type: "uploadedAssetExists", expected: true },
+    {
+      type: "custom",
+      name: "subscriptions-google-play-browser-task-shape",
+      predicate: expectScenarioBrowserTask({
+        description:
+          "google play cancellation completes with at least one artifact captured for the browser flow",
+        actionName: "SUBSCRIPTIONS",
+        completed: true,
+        needsHuman: false,
+        minArtifacts: 1,
+      }),
+    },
   ],
 });

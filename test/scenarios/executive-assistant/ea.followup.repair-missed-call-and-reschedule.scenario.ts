@@ -1,5 +1,7 @@
 import { scenario } from "@elizaos/scenario-schema";
 import {
+  expectApprovalRequest,
+  expectApprovalStateTransition,
   expectConnectorDispatch,
   expectScenarioToCallAction,
   expectTurnToCallAction,
@@ -12,7 +14,7 @@ export default scenario({
   domain: "executive-assistant",
   tags: ["executive-assistant", "followup", "calendar", "transcript-derived"],
   description:
-    "Transcript-derived case: the user missed a call and asks the assistant to repair the relationship and reschedule ASAP.",
+    "Transcript-derived case: the user missed a call, the assistant drafts a repair note behind approval, the user approves the send, and the follow-up is explicitly closed once the reschedule lands.",
   isolation: "per-scenario",
   requires: {
     plugins: ["@elizaos/plugin-agent-skills"],
@@ -30,7 +32,7 @@ export default scenario({
       kind: "message",
       name: "repair-missed-call",
       room: "main",
-      text: "I missed a call with the Frontier Tower guys today. Need to repair that and reschedule if possible asap.",
+      text: "I missed a call with the Frontier Tower guys today. Need to repair that and reschedule if possible asap, but hold the note for my approval first.",
       assertTurn: expectTurnToCallAction({
         acceptedActions: [
           "INBOX",
@@ -38,36 +40,101 @@ export default scenario({
           "CALENDAR_ACTION",
           "CROSS_CHANNEL_SEND",
         ],
-        description: "missed-call repair workflow",
-        includesAny: ["repair", "reschedule", "call", "Frontier Tower"],
+        description: "missed-call repair draft",
+        includesAny: [
+          "repair",
+          "reschedule",
+          "call",
+          "Frontier Tower",
+          "approval",
+        ],
       }),
-      responseIncludesAny: ["repair", "reschedule", "apology", "asap", "call"],
+      responseIncludesAny: [
+        "repair",
+        "reschedule",
+        "apology",
+        "approval",
+        "draft",
+      ],
       responseJudge: {
         minimumScore: 0.7,
         rubric:
-          "The reply must draft an apology-style repair note to Frontier Tower and propose a concrete reschedule path, not a vague 'I'll look into it'. Must name the counterparty and the reschedule intent.",
+          "The reply must draft an apology-style repair note to Frontier Tower, propose a concrete reschedule path, and make clear that the outbound send is being held for approval. A vague 'I'll look into it' fails.",
+      },
+    },
+    {
+      kind: "message",
+      name: "approve-repair-note",
+      room: "main",
+      text: "Yes, approve that repair note and send it now.",
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: [
+          "INBOX",
+          "APPROVE_REQUEST",
+          "CROSS_CHANNEL_SEND",
+          "GMAIL_ACTION",
+        ],
+        description: "repair approval and dispatch",
+        includesAny: ["approve", "send", "repair", "Frontier Tower"],
+      }),
+      responseIncludesAny: ["approved", "sent", "repair", "Frontier Tower"],
+      responseJudge: {
+        minimumScore: 0.7,
+        rubric:
+          "After approval, the reply must acknowledge the approval and confirm the repair message was sent or is actively being delivered. A second draft preview or a fresh request for confirmation fails.",
+      },
+    },
+    {
+      kind: "message",
+      name: "close-loop-after-reschedule",
+      room: "main",
+      text: "They confirmed Thursday at 2pm works. Mark the Frontier Tower follow-up done and close the loop.",
+      assertTurn: expectTurnToCallAction({
+        acceptedActions: ["OWNER_RELATIONSHIP", "CALENDAR_ACTION", "INBOX"],
+        description: "follow-up loop closure",
+        includesAny: [
+          "Frontier Tower",
+          "follow-up",
+          "done",
+          "Thursday",
+          "close",
+        ],
+      }),
+      responseIncludesAny: ["Frontier Tower", "follow", "done", "Thursday"],
+      responseJudge: {
+        minimumScore: 0.7,
+        rubric:
+          "The final reply must acknowledge the Thursday reschedule outcome and explicitly close the follow-up loop, not leave the relationship task hanging open.",
       },
     },
   ],
   finalChecks: [
     {
       type: "draftExists",
-      channel: "gmail",
+      channel: ["gmail", "telegram", "discord", "signal"],
       expected: true,
     },
     {
       type: "selectedAction",
       actionName: [
         "INBOX",
+        "OWNER_RELATIONSHIP",
+        "APPROVE_REQUEST",
         "GMAIL_ACTION",
         "CALENDAR_ACTION",
         "CROSS_CHANNEL_SEND",
       ],
     },
     {
+      type: "approvalRequestExists",
+      expected: true,
+      state: ["approved", "executing", "done"],
+      actionName: ["CROSS_CHANNEL_SEND", "GMAIL_ACTION", "INBOX"],
+    },
+    {
       type: "connectorDispatchOccurred",
-      channel: "gmail",
-      actionName: ["GMAIL_ACTION", "CROSS_CHANNEL_SEND"],
+      channel: ["gmail", "telegram", "discord", "signal"],
+      actionName: ["INBOX", "GMAIL_ACTION", "CROSS_CHANNEL_SEND"],
     },
     {
       type: "custom",
@@ -75,27 +142,55 @@ export default scenario({
       predicate: expectScenarioToCallAction({
         acceptedActions: [
           "INBOX",
+          "OWNER_RELATIONSHIP",
+          "APPROVE_REQUEST",
           "GMAIL_ACTION",
           "CALENDAR_ACTION",
           "CROSS_CHANNEL_SEND",
         ],
-        description: "missed-call repair workflow",
-        includesAny: ["repair", "reschedule", "call", "Frontier Tower"],
+        description: "missed-call repair lifecycle",
+        includesAny: [
+          "repair",
+          "reschedule",
+          "call",
+          "Frontier Tower",
+          "follow-up",
+        ],
+        minCount: 3,
       }),
     },
     {
       type: "custom",
-      name: "ea-repair-missed-call-gmail-dispatch",
+      name: "ea-repair-missed-call-approval",
+      predicate: expectApprovalRequest({
+        description:
+          "repair note is queued behind approval before the outbound send happens",
+        actionName: ["CROSS_CHANNEL_SEND", "GMAIL_ACTION", "INBOX"],
+      }),
+    },
+    {
+      type: "custom",
+      name: "ea-repair-missed-call-approval-transition",
+      predicate: expectApprovalStateTransition({
+        description: "repair approval moved pending → approved before dispatch",
+        from: "pending",
+        to: "approved",
+        actionName: ["CROSS_CHANNEL_SEND", "GMAIL_ACTION", "INBOX"],
+      }),
+    },
+    {
+      type: "custom",
+      name: "ea-repair-missed-call-dispatch",
       predicate: expectConnectorDispatch({
-        channel: "gmail",
-        description: "repair note goes through the gmail dispatcher",
+        channel: ["gmail", "telegram", "discord", "signal"],
+        description: "repair note reaches the counterparty on a real channel",
       }),
     },
     judgeRubric({
       name: "ea-repair-missed-call-rubric",
       threshold: 0.7,
       description:
-        "End-to-end: the assistant drafted an apology to Frontier Tower and either proposed or queued a reschedule attempt. The gmail dispatcher was exercised and the counterparty was addressed by name.",
+        "End-to-end: the assistant drafted the apology, held it for approval, dispatched it after explicit approval, and then marked the Frontier Tower follow-up closed once the reschedule was confirmed.",
     }),
   ],
 });
