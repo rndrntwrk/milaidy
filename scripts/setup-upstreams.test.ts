@@ -253,6 +253,35 @@ describe("getUpstreamPackageLinks", () => {
       links.some((link) => link.linkPath.includes("plugin-agent-skills-root")),
     ).toBe(false);
   });
+
+  it("links local eliza packages into app workspace node_modules", () => {
+    const repoRoot = makeTempDir();
+    const elizaRoot = path.join(repoRoot, "eliza");
+    const agentPackage = path.join(elizaRoot, "packages", "agent");
+    const lifeopsPackage = path.join(elizaRoot, "apps", "app-lifeops");
+
+    writeFile(
+      path.join(agentPackage, "package.json"),
+      '{"name":"@elizaos/agent"}\n',
+    );
+    writeFile(
+      path.join(lifeopsPackage, "package.json"),
+      '{"name":"@elizaos/app-lifeops"}\n',
+    );
+    fs.mkdirSync(path.join(lifeopsPackage, "node_modules"), {
+      recursive: true,
+    });
+
+    const links = getUpstreamPackageLinks(repoRoot, {
+      elizaRoot,
+      pluginsRoot: path.join(elizaRoot, "plugins"),
+    });
+
+    expect(links).toContainEqual({
+      linkPath: path.join(lifeopsPackage, "node_modules", "@elizaos", "agent"),
+      targetPath: agentPackage,
+    });
+  });
 });
 
 describe("ensureElizaAgentSkillsPluginBuild", () => {

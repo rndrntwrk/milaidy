@@ -23,4 +23,15 @@ describe("docker CI smoke contract", () => {
     );
     expect(script).not.toContain("bun add --no-save --dev");
   });
+
+  it("boots the smoke container with isolated runtime state and live log dumps", () => {
+    const script = fs.readFileSync(dockerSmokeScriptPath, "utf8");
+
+    expect(script).toContain(
+      "-e ELIZA_WORKSPACE_DIR=/tmp/milady-smoke/workspace",
+    );
+    expect(script).toContain("-e PGLITE_DATA_DIR=/tmp/milady-smoke/pglite");
+    expect(script).toContain("Container still booting; recent logs follow");
+    expect(script).toContain('"$DOCKER_BIN" logs --tail 80 "$CONTAINER_NAME"');
+  });
 });

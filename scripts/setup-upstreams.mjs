@@ -368,6 +368,10 @@ function uniqueLinks(links) {
   return [...deduped.values()];
 }
 
+function uniquePaths(paths) {
+  return [...new Set(paths.map((targetPath) => path.resolve(targetPath)))];
+}
+
 function walkWorkspaceFiles(dirPath, visit) {
   let entries;
   try {
@@ -759,7 +763,37 @@ export function hasInstalledElizaDependencies(
   );
 }
 
-function getPackageLinkEntries(repoRoot, packageName, targetPath) {
+function getPackageLinkRootPaths(
+  repoRoot,
+  {
+    elizaRoot = getRepoElizaRoot(repoRoot),
+    pluginsRoot = getRepoPluginsRoot(repoRoot),
+  } = {},
+) {
+  const roots = PACKAGE_LINK_ROOTS.map((segments) =>
+    path.join(repoRoot, ...segments),
+  );
+  const packageDirs = [
+    ...discoverElizaPackageDirs(elizaRoot),
+    ...discoverPluginPackageDirs(pluginsRoot),
+  ];
+
+  for (const packageDir of packageDirs) {
+    const packageNodeModules = path.join(packageDir, "node_modules");
+    if (existsSync(packageNodeModules)) {
+      roots.push(packageNodeModules);
+    }
+  }
+
+  return uniquePaths(roots);
+}
+
+function getPackageLinkEntries(
+  repoRoot,
+  packageName,
+  targetPath,
+  linkRootPaths = getPackageLinkRootPaths(repoRoot),
+) {
   if (typeof packageName !== "string" || packageName.length === 0) {
     return [];
   }
@@ -775,15 +809,15 @@ function getPackageLinkEntries(repoRoot, packageName, targetPath) {
     return [];
   }
 
-  return PACKAGE_LINK_ROOTS.map((segments) => ({
-    linkPath: path.join(repoRoot, ...segments, ...packageSegments),
+  return linkRootPaths.map((rootPath) => ({
+    linkPath: path.join(rootPath, ...packageSegments),
     targetPath,
   }));
 }
 
 function discoverElizaPackageDirs(elizaRoot) {
   const packageDirs = [];
-  for (const parentDir of ["packages", "plugins"]) {
+  for (const parentDir of ["apps", "packages", "plugins"]) {
     const searchRoot = path.join(elizaRoot, parentDir);
     if (!existsSync(searchRoot)) {
       continue;
@@ -859,12 +893,18 @@ function discoverPluginPackageDirs(pluginsRoot) {
 export function getElizaPackageLinks(
   repoRoot = DEFAULT_REPO_ROOT,
   elizaRoot = getRepoElizaRoot(repoRoot),
+  linkRootPaths = getPackageLinkRootPaths(repoRoot, { elizaRoot }),
 ) {
   const links = [];
   for (const packageDir of discoverElizaPackageDirs(elizaRoot)) {
     const packageJson = readPackageJson(packageDir);
     links.push(
-      ...getPackageLinkEntries(repoRoot, packageJson?.name, packageDir),
+      ...getPackageLinkEntries(
+        repoRoot,
+        packageJson?.name,
+        packageDir,
+        linkRootPaths,
+      ),
     );
   }
   return uniqueLinks(links);
@@ -873,12 +913,18 @@ export function getElizaPackageLinks(
 export function getPluginPackageLinks(
   repoRoot = DEFAULT_REPO_ROOT,
   pluginsRoot = getRepoPluginsRoot(repoRoot),
+  linkRootPaths = getPackageLinkRootPaths(repoRoot, { pluginsRoot }),
 ) {
   const links = [];
   for (const packageDir of discoverPluginPackageDirs(pluginsRoot)) {
     const packageJson = readPackageJson(packageDir);
     links.push(
-      ...getPackageLinkEntries(repoRoot, packageJson?.name, packageDir),
+      ...getPackageLinkEntries(
+        repoRoot,
+        packageJson?.name,
+        packageDir,
+        linkRootPaths,
+      ),
     );
   }
   return uniqueLinks(links);
@@ -892,12 +938,20 @@ export function getUpstreamPackageLinks(
   } = {},
 ) {
   const combinedByTarget = new Map();
+  const linkRootPaths = getPackageLinkRootPaths(repoRoot, {
+    elizaRoot,
+    pluginsRoot,
+  });
 
-  for (const link of getElizaPackageLinks(repoRoot, elizaRoot)) {
+  for (const link of getElizaPackageLinks(repoRoot, elizaRoot, linkRootPaths)) {
     combinedByTarget.set(link.linkPath, link);
   }
 
-  for (const link of getPluginPackageLinks(repoRoot, pluginsRoot)) {
+  for (const link of getPluginPackageLinks(
+    repoRoot,
+    pluginsRoot,
+    linkRootPaths,
+  )) {
     combinedByTarget.set(link.linkPath, link);
   }
 
