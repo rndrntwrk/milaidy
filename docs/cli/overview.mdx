@@ -16,7 +16,8 @@ The `milady` binary (also published as `milady-ai` / `miladyai`) is the primary 
 
 | Command | Purpose |
 |---------|---------|
-| [`milady start`](/cli/start) | Run the API server (embedded runtime) |
+| `milady` | Interactive TUI — live activity log, hotkeys, opens dashboard (default when no subcommand given) |
+| [`milady start`](/cli/start) | Server-only mode (API server, no interactive TUI) |
 | [`milady setup`](/cli/setup) | First-time wizard (keys, basics) |
 | [`milady configure`](/cli/configure) | Interactive configuration |
 | [`milady config`](/cli/config) | Print or validate config |
@@ -26,6 +27,31 @@ The `milady` binary (also published as `milady-ai` / `miladyai`) is the primary 
 | [`milady update`](/cli/update) | Update tooling |
 | [`milady doctor`](/cli/doctor) | Health and environment checks |
 | [`milady db`](/cli/db) | Database utilities |
+
+## Interactive TUI vs server-only mode
+
+Running `milady` with no subcommand launches the interactive terminal UI with a live activity log, token/cost counters, and hotkeys:
+
+| Key | Action |
+|-----|--------|
+| `q` | Quit gracefully |
+| `r` | Restart gateway |
+| `d` | Open dashboard in browser |
+| `l` | Toggle log view |
+| `c` | Compact/clear activity |
+| `?` | Show help |
+| `↑/↓` | Scroll activity |
+
+Running `milady start` runs in server-only mode — logs go to stdout/stderr with no interactive UI. Use this for daemonized deployments or when running under a process manager.
+
+## Global flags
+
+| Flag | Purpose |
+|------|---------|
+| `--verbose` | Enable informational runtime logs |
+| `--debug` | Enable debug-level runtime logs |
+| `--version` | Print version and exit |
+| `--help` | Print help |
 
 ## Help
 

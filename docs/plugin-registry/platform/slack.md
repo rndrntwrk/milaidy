@@ -108,6 +108,24 @@ AgentRuntime processes message
 Response posted to Slack channel/DM
 ```
 
+## Transport Modes
+
+The default transport is **Socket Mode** (outbound WebSocket — no public URL needed), which requires both `botToken` and `appToken`. For production deployments behind a public URL, you can use **HTTP webhook mode** instead:
+
+```json
+{
+  "connectors": {
+    "slack": {
+      "botToken": "<SLACK_BOT_TOKEN>",
+      "signingSecret": "<SLACK_SIGNING_SECRET>",
+      "mode": "http"
+    }
+  }
+}
+```
+
+HTTP mode does not require `appToken` but does require a public HTTPS endpoint and `signingSecret` for request verification.
+
 ## Auto-Enable
 
 The plugin auto-enables when `connectors.slack.botToken` is set.
@@ -129,6 +147,7 @@ By default, responses are posted as thread replies to keep channels clean. To po
 
 ## Related
 
+- [Slack Connector Reference](/connectors/slack) — Full configuration reference (multi-account, DM policies, tools governance, slash commands)
 - [Discord Plugin](/plugin-registry/platform/discord) — Discord bot integration
 - [Telegram Plugin](/plugin-registry/platform/telegram) — Telegram bot integration
 - [Connectors Guide](/guides/connectors) — General connector documentation

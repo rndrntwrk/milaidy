@@ -40,7 +40,7 @@ milady plugins install discord
 {
   "connectors": {
     "discord": {
-      "botToken": "YOUR_BOT_TOKEN"
+      "token": "YOUR_BOT_TOKEN"
     }
   }
 }
@@ -49,14 +49,14 @@ milady plugins install discord
 Or via environment variable:
 
 ```bash
-export DISCORD_BOT_TOKEN=YOUR_BOT_TOKEN
+export DISCORD_API_TOKEN=YOUR_BOT_TOKEN
 ```
 
 ## Configuration
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `botToken` | Yes | Discord bot token |
+| `token` | Yes | Discord bot token (the Discord config schema uses strict validation — use `token`, not `botToken`) |
 | `enabled` | No | Set `false` to disable (default: `true`) |
 | `allowedChannels` | No | Array of channel IDs to respond in |
 | `ignoredChannels` | No | Array of channel IDs to ignore |
@@ -66,7 +66,7 @@ export DISCORD_BOT_TOKEN=YOUR_BOT_TOKEN
 {
   "connectors": {
     "discord": {
-      "botToken": "YOUR_BOT_TOKEN",
+      "token": "YOUR_BOT_TOKEN",
       "allowedChannels": ["1234567890123456789"],
       "prefix": "!"
     }
@@ -104,13 +104,13 @@ Response sent back to Discord channel/DM
 
 ## Auto-Enable
 
-The plugin auto-enables when the `connectors.discord` block contains a `botToken`:
+The plugin auto-enables when the `connectors.discord` block contains a `token` (or `botToken` / `apiKey` — these trigger auto-enable detection but `token` is the validated schema field):
 
 ```json
 {
   "connectors": {
     "discord": {
-      "botToken": "YOUR_BOT_TOKEN"
+      "token": "YOUR_BOT_TOKEN"
     }
   }
 }
@@ -121,11 +121,14 @@ The plugin auto-enables when the `connectors.discord` block contains a `botToken
 The bot token can also be set via:
 
 ```bash
-export DISCORD_BOT_TOKEN=YOUR_BOT_TOKEN
+export DISCORD_API_TOKEN=YOUR_BOT_TOKEN
 ```
+
+Both `DISCORD_API_TOKEN` and `DISCORD_BOT_TOKEN` environment variables are recognized (the runtime sets both for compatibility).
 
 ## Related
 
+- [Discord Connector Reference](/connectors/discord) — Full configuration reference (intents, PluralKit, streaming modes, per-guild tools, exec approvals)
 - [Telegram Plugin](/plugin-registry/platform/telegram) — Telegram bot integration
 - [Slack Plugin](/plugin-registry/platform/slack) — Slack workspace integration
 - [Connectors Guide](/guides/connectors) — General connector documentation

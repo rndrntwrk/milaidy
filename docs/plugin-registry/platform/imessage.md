@@ -85,5 +85,6 @@ The default iMessage database is at `~/Library/Messages/chat.db`. If using a non
 
 ## Related
 
+- [iMessage Connector Reference](/connectors/imessage) — Full configuration reference (per-contact config, remote SSH access, attachment options)
 - [Signal Plugin](/plugin-registry/platform/signal) — Signal messaging integration
 - [Connectors Guide](/guides/connectors) — General connector documentation

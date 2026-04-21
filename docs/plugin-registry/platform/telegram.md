@@ -125,6 +125,7 @@ The plugin auto-enables when `connectors.telegram.botToken` is set.
 
 ## Related
 
+- [Telegram Connector Reference](/connectors/telegram) — Full configuration reference (streaming modes, custom commands, webhook setup, per-group topics, DM history)
 - [Discord Plugin](/plugin-registry/platform/discord) — Discord bot integration
 - [WhatsApp Plugin](/plugin-registry/platform/whatsapp) — WhatsApp integration
 - [Connectors Guide](/guides/connectors) — General connector documentation
