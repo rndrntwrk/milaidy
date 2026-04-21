@@ -64,6 +64,357 @@
             ]
           }
         ]
+      },
+      {
+        "tab": "Guides",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "guides/beginners-user-guide",
+              "guides/beginners-development-guide",
+              "guides/developer-playbook"
+            ]
+          },
+          {
+            "group": "Tutorials",
+            "pages": [
+              "guides/tutorial-discord-bot",
+              "guides/tutorial-telegram-bot",
+              "guides/tutorial-autonomous-agent",
+              "guides/first-extension-walkthrough"
+            ]
+          },
+          {
+            "group": "Agent Features",
+            "pages": [
+              "guides/connectors",
+              "guides/knowledge",
+              "guides/custom-actions",
+              "guides/training",
+              "guides/media-generation",
+              "guides/emotes",
+              "guides/triggers",
+              "guides/autonomous-mode",
+              "guides/hooks",
+              "guides/coding-swarms",
+              "guides/sandbox",
+              "guides/wallet",
+              "guides/wallet-basics",
+              "guides/mcp-marketplace"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "guides/config-includes",
+              "guides/config-templates",
+              "guides/cloud-provider-routing",
+              "guides/local-models",
+              "guides/themes"
+            ]
+          },
+          {
+            "group": "Operations",
+            "pages": [
+              "guides/cloud",
+              "guides/agent-export",
+              "guides/developer-diagnostics-and-workspace",
+              "guides/onboarding-and-support",
+              "guides/onboarding-ui-flow",
+              "guides/platform-secure-store",
+              "guides/whatsapp"
+            ]
+          },
+          {
+            "group": "Contributing",
+            "pages": [
+              "guides/contributing",
+              "guides/contribution-guide"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Plugins",
+        "groups": [
+          {
+            "group": "Plugin System",
+            "pages": [
+              "plugins/overview",
+              "plugins/architecture",
+              "plugins/registry",
+              "plugins/decision-guide",
+              "plugins/create-a-plugin",
+              "plugins/development",
+              "plugins/patterns",
+              "plugins/schemas",
+              "plugins/testing",
+              "plugins/local-plugins",
+              "plugins/publish",
+              "plugins/plugin-eject",
+              "plugins/skills"
+            ]
+          },
+          {
+            "group": "Model Providers",
+            "pages": [
+              "model-providers",
+              "plugin-registry/llm/anthropic",
+              "plugin-registry/llm/openai",
+              "plugin-registry/llm/google-genai",
+              "plugin-registry/llm/google-antigravity",
+              "plugin-registry/llm/groq",
+              "plugin-registry/llm/ollama",
+              "plugin-registry/llm/openrouter",
+              "plugin-registry/llm/xai",
+              "plugin-registry/llm/deepseek",
+              "plugin-registry/llm/mistral",
+              "plugin-registry/llm/cohere",
+              "plugin-registry/llm/together",
+              "plugin-registry/llm/perplexity",
+              "plugin-registry/llm/qwen",
+              "plugin-registry/llm/minimax",
+              "plugin-registry/llm/zai",
+              "plugin-registry/llm/vercel-ai-gateway"
+            ]
+          },
+          {
+            "group": "Platform Connectors",
+            "pages": [
+              "plugin-registry/platform/discord",
+              "plugin-registry/platform/telegram",
+              "plugin-registry/platform/slack",
+              "plugin-registry/platform/whatsapp",
+              "plugin-registry/platform/signal",
+              "plugin-registry/platform/imessage",
+              "plugin-registry/platform/blooio",
+              "plugin-registry/platform/msteams",
+              "plugin-registry/platform/googlechat",
+              "plugin-registry/platform/twitter",
+              "plugin-registry/platform/farcaster",
+              "plugin-registry/platform/bluesky",
+              "plugin-registry/platform/instagram",
+              "plugin-registry/platform/twitch",
+              "plugin-registry/platform/mattermost",
+              "plugin-registry/platform/wechat",
+              "plugin-registry/platform/matrix",
+              "plugin-registry/platform/feishu",
+              "plugin-registry/platform/nostr",
+              "plugin-registry/platform/lens",
+              "plugin-registry/platform/line",
+              "plugin-registry/platform/zalo",
+              "plugin-registry/platform/twilio",
+              "plugin-registry/platform/github",
+              "plugin-registry/platform/gmail-watch",
+              "plugin-registry/platform/nextcloud-talk",
+              "plugin-registry/platform/tlon"
+            ]
+          },
+          {
+            "group": "Feature Plugins",
+            "pages": [
+              "plugin-registry/browser",
+              "plugin-registry/computeruse",
+              "plugin-registry/cron",
+              "plugin-registry/fal",
+              "plugin-registry/image-generation",
+              "plugin-registry/knowledge",
+              "plugin-registry/obsidian",
+              "plugin-registry/secrets-manager",
+              "plugin-registry/sql",
+              "plugin-registry/stt",
+              "plugin-registry/suno",
+              "plugin-registry/tts",
+              "plugin-registry/vision",
+              "plugin-registry/webhooks",
+              "plugin-registry/x402"
+            ]
+          },
+          {
+            "group": "DeFi & Blockchain",
+            "pages": [
+              "plugin-registry/defi/evm",
+              "plugin-registry/defi/solana"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Reference",
+        "groups": [
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration",
+              "config-schema",
+              "chat-commands",
+              "websocket-events"
+            ]
+          },
+          {
+            "group": "CLI",
+            "pages": [
+              "cli/overview",
+              "cli/start",
+              "cli/setup",
+              "cli/configure",
+              "cli/config",
+              "cli/dashboard",
+              "cli/models",
+              "cli/plugins",
+              "cli/update",
+              "cli/doctor",
+              "cli/db",
+              "cli/environment"
+            ]
+          },
+          {
+            "group": "Agents",
+            "pages": [
+              "agents/runtime-and-lifecycle",
+              "agents/character-interface",
+              "agents/personality-and-behavior",
+              "agents/memory-and-state"
+            ]
+          },
+          {
+            "group": "Runtime",
+            "pages": [
+              "runtime/core",
+              "runtime/models",
+              "runtime/providers",
+              "runtime/services",
+              "runtime/memory",
+              "runtime/events",
+              "runtime/types",
+              "runtime/action-callback-streaming"
+            ]
+          },
+          {
+            "group": "REST API",
+            "pages": [
+              "api-reference",
+              "rest/agents",
+              "rest/auth",
+              "rest/conversations",
+              "rest/memory",
+              "rest/knowledge",
+              "rest/plugins",
+              "rest/connectors",
+              "rest/models",
+              "rest/skills",
+              "rest/training",
+              "rest/trajectories",
+              "rest/autonomy",
+              "rest/character",
+              "rest/cloud",
+              "rest/coding-agents",
+              "rest/custom-actions",
+              "rest/diagnostics",
+              "rest/drop",
+              "rest/emotes",
+              "rest/inbox",
+              "rest/lifeops",
+              "rest/mcp",
+              "rest/nfa",
+              "rest/onboarding",
+              "rest/permissions",
+              "rest/sandbox",
+              "rest/secrets",
+              "rest/stream",
+              "rest/subscriptions",
+              "rest/system",
+              "rest/triggers",
+              "rest/update",
+              "rest/wallet",
+              "rest/workbench",
+              "rest/apps",
+              "rest/avatar",
+              "rest/bug-report",
+              "rest/whatsapp-pairing",
+              "rest/whitelist",
+              "rest/v1-compat"
+            ]
+          },
+          {
+            "group": "Apps & Dashboard",
+            "pages": [
+              "apps/overview",
+              "apps/desktop",
+              "apps/desktop-local-development",
+              "apps/mobile",
+              "apps/dashboard",
+              "apps/dashboard/settings",
+              "apps/dashboard/talk-mode",
+              "apps/desktop/deep-linking",
+              "apps/desktop/native-modules",
+              "apps/mobile/build-guide",
+              "apps/mobile/capacitor-plugins",
+              "dashboard/apps",
+              "dashboard/chat",
+              "dashboard/pairing",
+              "dashboard/stream"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "advanced/database",
+              "advanced/logs",
+              "advanced/trajectories",
+              "architecture",
+              "deployment",
+              "deployment-bare-metal",
+              "security",
+              "plugin-resolution-and-node-path"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Connectors",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "guides/connectors"
+            ]
+          },
+          {
+            "group": "Connector Guides",
+            "pages": [
+              "connectors/discord",
+              "connectors/telegram",
+              "connectors/slack",
+              "connectors/whatsapp",
+              "connectors/signal",
+              "connectors/imessage",
+              "connectors/bluebubbles",
+              "connectors/blooio",
+              "connectors/msteams",
+              "connectors/googlechat",
+              "connectors/twitter",
+              "connectors/farcaster",
+              "connectors/bluesky",
+              "connectors/instagram",
+              "connectors/twitch",
+              "connectors/mattermost",
+              "connectors/wechat",
+              "connectors/matrix",
+              "connectors/feishu",
+              "connectors/nostr",
+              "connectors/lens",
+              "connectors/line",
+              "connectors/zalo",
+              "connectors/twilio",
+              "connectors/github",
+              "connectors/gmail-watch",
+              "connectors/nextcloud-talk",
+              "connectors/tlon"
+            ]
+          }
+        ]
       }
     ]
   }
