@@ -777,7 +777,7 @@ Se connecte à la messagerie iMessage et SMS via le service Blooio avec des webh
 }
 ```
 
-**Variables d'environnement :** `MATTERMOST_BOT_TOKEN`, `MATTERMOST_BASE_URL`
+**Variables d'environnement :** `MATTERMOST_BOT_TOKEN`, `MATTERMOST_SERVER_URL`
 
 <div id="features-14">
 ### Fonctionnalités

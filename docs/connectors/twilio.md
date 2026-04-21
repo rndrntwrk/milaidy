@@ -37,17 +37,37 @@ The Twilio connector is an elizaOS plugin that bridges your agent to Twilio's co
 
 ## Environment Variables
 
+### SMS
+
 | Variable | Description |
 |----------|-------------|
 | `TWILIO_ACCOUNT_SID` | Twilio Account SID |
 | `TWILIO_AUTH_TOKEN` | Twilio Auth Token |
 | `TWILIO_PHONE_NUMBER` | Twilio phone number for sending/receiving |
 
+### Voice Calls
+
+| Variable | Description |
+|----------|-------------|
+| `VOICE_CALL_ENABLED` | Enable voice call support (`true`/`false`) |
+| `VOICE_CALL_PROVIDER` | Voice provider (e.g. `twilio`) |
+| `VOICE_CALL_TO_NUMBER` | Default outbound number |
+| `VOICE_CALL_FROM_NUMBER` | Caller ID number |
+| `VOICE_CALL_PUBLIC_URL` | Public URL for webhook callbacks |
+| `VOICE_CALL_WEBHOOK_PATH` | Webhook path for inbound calls |
+| `VOICE_CALL_WEBHOOK_PORT` | Port for voice webhook server |
+| `VOICE_CALL_ALLOW_FROM` | Comma-separated allowlist of inbound caller numbers |
+| `VOICE_CALL_INBOUND_POLICY` | Policy for inbound calls (`allow`, `reject`, `allowlist`) |
+| `VOICE_CALL_INBOUND_GREETING` | Greeting message for inbound calls |
+| `VOICE_CALL_MAX_CONCURRENT_CALLS` | Max simultaneous calls |
+| `VOICE_CALL_MAX_DURATION_SECONDS` | Max call duration in seconds |
+
 ## Features
 
 - SMS messaging (send and receive)
-- Voice call capabilities
-- Webhook-based inbound message handling
+- Voice call capabilities (inbound and outbound)
+- Webhook-based inbound message and call handling
+- Configurable inbound call policies and allowlists
 
 ## Related
 

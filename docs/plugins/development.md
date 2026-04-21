@@ -124,7 +124,7 @@ my-plugin/
     "dev": "tsc --watch"
   },
   "dependencies": {
-    "@elizaos/core": "^2.0.0"
+    "@elizaos/core": "alpha"
   },
   "devDependencies": {
     "typescript": "^5.0.0"
@@ -821,10 +821,10 @@ Plugins can include an `elizaos.plugin.json` manifest file for rich metadata:
 
 | Kind | Description |
 |------|-------------|
-| `memory` | Memory/storage adapters |
-| `channel` | Messaging platform connectors |
-| `provider` | Context/data providers |
-| `skill` | Skill-based extensions |
+| `ai-provider` | AI/LLM model providers |
+| `app` | Application plugins |
+| `connector` | Messaging platform connectors |
+| `feature` | Feature extensions and skills |
 | `database` | Database adapters |
 
 ### PluginOrigin Types

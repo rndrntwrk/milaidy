@@ -38,10 +38,10 @@ Your plugin's `package.json` must include these fields:
     "url": "https://github.com/yourorg/plugin-my-feature"
   },
   "peerDependencies": {
-    "@elizaos/core": "workspace:*"
+    "@elizaos/core": ">=2.0.0-alpha"
   },
   "devDependencies": {
-    "@elizaos/core": "workspace:*",
+    "@elizaos/core": "alpha",
     "typescript": "^5.0.0"
   }
 }
@@ -183,7 +183,7 @@ Include an `elizaos.plugin.json` at the package root for rich UI integration in 
 
 **Compatibility:**
 - Test against the current `next` release of `@elizaos/core`.
-- Declare your `peerDependencies` version range conservatively: `"@elizaos/core": ">=2.0.0"`.
+- Declare your `peerDependencies` version range conservatively: `"@elizaos/core": ">=2.0.0-alpha"`.
 - Export a `Plugin` type-compatible default export — do not use default exports for other purposes.
 
 **Quality:**

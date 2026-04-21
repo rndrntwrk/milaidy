@@ -699,9 +699,9 @@ description: Milady 连接器、AI 提供者和直播推流插件的完整设置
 </div>
 
 **获取凭据：** 您的 Mattermost 实例 → 系统控制台 → 集成 → Bot 账户
-**最少必填：** `MATTERMOST_BASE_URL` + `MATTERMOST_BOT_TOKEN`
+**最少必填：** `MATTERMOST_SERVER_URL` + `MATTERMOST_BOT_TOKEN`
 **变量：**
-- `MATTERMOST_BASE_URL` — 例如 `https://mattermost.yourcompany.com`
+- `MATTERMOST_SERVER_URL` — 例如 `https://mattermost.yourcompany.com`
 - `MATTERMOST_BOT_TOKEN` — 来自系统控制台 → Bot 账户 → 添加 Bot 账户
 - `MATTERMOST_TEAM_ID` — 您的团队 ID（来自团队 URL 或 API）
 - `MATTERMOST_DM_POLICY` / `MATTERMOST_GROUP_POLICY` — `allow-all` 或 `allow-from`

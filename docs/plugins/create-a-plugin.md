@@ -338,20 +338,18 @@ Every published plugin should include an `elizaos.plugin.json` manifest at its p
     },
     "required": ["apiKey"]
   },
-  "uiHints": [
-    {
-      "key": "apiKey",
+  "uiHints": {
+    "apiKey": {
       "label": "API Key",
       "type": "password",
-      "helpText": "Get one at openweathermap.org/appid"
+      "help": "Get one at openweathermap.org/appid"
     },
-    {
-      "key": "units",
+    "units": {
       "label": "Temperature Units",
       "type": "select",
       "advanced": false
     }
-  ],
+  },
   "requiredSecrets": ["WEATHER_API_KEY"],
   "channels": ["chat", "telegram", "discord"],
   "dependencies": ["knowledge"]
@@ -365,9 +363,9 @@ Every published plugin should include an `elizaos.plugin.json` manifest at its p
 | `id` | `string` | Unique plugin identifier (kebab-case) |
 | `name` | `string` | Human-readable display name |
 | `version` | `string` | Semver version |
-| `kind` | `PluginKind` | One of: `memory`, `channel`, `provider`, `skill`, `database`, `feature` |
+| `kind` | `PluginKind` | One of: `ai-provider`, `app`, `connector`, `feature`, `database` |
 | `configSchema` | `JsonSchema` | JSON Schema for plugin configuration |
-| `uiHints` | `PluginConfigUiHint[]` | Hints for admin panel rendering |
+| `uiHints` | `Record<string, UiHint>` | Hints for admin panel rendering (keyed by config property name) |
 | `requiredSecrets` | `string[]` | Environment variables that must be set |
 | `channels` | `string[]` | Supported communication channels |
 | `dependencies` | `string[]` | Other plugins this depends on |
