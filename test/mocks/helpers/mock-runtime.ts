@@ -1,3 +1,7 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { appLifeOpsPlugin } from "@elizaos/app-lifeops/plugin";
 import type { Plugin } from "@elizaos/core";
 import {
   createRealTestRuntime,
@@ -30,6 +34,11 @@ export interface MockedTestEnvironment {
   applyRuntimeFixtures?(
     runtime: RealTestRuntimeResult["runtime"],
   ): Promise<(() => Promise<void> | void) | void>;
+  cleanup(): Promise<void>;
+}
+
+interface MockRuntimeStateEnvironment {
+  envVars: Record<string, string>;
   cleanup(): Promise<void>;
 }
 
@@ -77,6 +86,17 @@ const FAKE_CREDS: Readonly<Record<string, string>> = {
   TWITTER_USER_ID: "1234567890",
 };
 
+function mockRuntimePlugins(plugins: readonly Plugin[] | undefined): Plugin[] {
+  const out: Plugin[] = [appLifeOpsPlugin];
+  const seen = new Set(out.map((plugin) => plugin.name));
+  for (const plugin of plugins ?? []) {
+    if (seen.has(plugin.name)) continue;
+    seen.add(plugin.name);
+    out.push(plugin);
+  }
+  return out;
+}
+
 function snapshotAndApply(
   vars: Record<string, string>,
 ): Record<string, string | undefined> {
@@ -98,15 +118,39 @@ function restore(previous: Record<string, string | undefined>): void {
   }
 }
 
+function createMockRuntimeStateEnvironment(): MockRuntimeStateEnvironment {
+  const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "milady-mock-state-"));
+  const configPath = path.join(stateDir, "milady.json");
+  fs.writeFileSync(
+    configPath,
+    JSON.stringify({ ui: { ownerName: "admin" } }, null, 2),
+    "utf8",
+  );
+
+  return {
+    envVars: {
+      MILADY_STATE_DIR: stateDir,
+      MILADY_CONFIG_PATH: configPath,
+      MILADY_PERSIST_CONFIG_PATH: configPath,
+      API_PORT: "0",
+    },
+    cleanup: async () => {
+      fs.rmSync(stateDir, { recursive: true, force: true });
+    },
+  };
+}
+
 export async function prepareMockedTestEnvironment(
   opts?: Pick<MockedTestRuntimeOptions, "envs">,
 ): Promise<MockedTestEnvironment> {
   const envs = opts?.envs ?? MOCK_ENVIRONMENTS;
   const mocks = await startMocks({ envs });
   const benchmarkFixtures = await createBenchmarkRuntimeFixturesEnvironment();
+  const mockRuntimeState = createMockRuntimeStateEnvironment();
   const envVars = {
     ...mocks.envVars,
     ...benchmarkFixtures.envVars,
+    ...mockRuntimeState.envVars,
     ...FAKE_CREDS,
   };
   const previous = snapshotAndApply(envVars);
@@ -121,6 +165,7 @@ export async function prepareMockedTestEnvironment(
         await mocks.stop();
       } finally {
         restore(previous);
+        await mockRuntimeState.cleanup();
       }
     },
   };
@@ -144,7 +189,7 @@ export async function createMockedTestRuntime(
   try {
     real = await createRealTestRuntime({
       withLLM: opts?.withLLM ?? false,
-      plugins: opts?.plugins,
+      plugins: mockRuntimePlugins(opts?.plugins),
       preferredProvider: opts?.preferredProvider,
     });
     cleanupRuntimeFixtures = await (
