@@ -361,12 +361,15 @@ for (const name of apps) {
   if (name === '@elizaos/app-steward') {
     const routeStub = `export async function resolveWalletExportRejection() { return null; }\nexport default {};`;
     const secStub = `export async function hydrateWalletKeysFromNodePlatformSecureStore() { return null; }\nexport async function deleteWalletSecretsFromOsStore() { return null; }\nexport default {};`;
+    const txServiceStub = `export class TxService {}\nexport default {};`;
     fs.writeFileSync(dir + '/routes-stub.mjs', routeStub);
     fs.writeFileSync(dir + '/security-stub.mjs', secStub);
+    fs.writeFileSync(dir + '/tx-service-stub.mjs', txServiceStub);
     fs.writeFileSync(dir + '/package.json', JSON.stringify({
       name, version: '0.0.0-cloud-stub', type: 'module',
       exports: {
         './plugin': './plugin.mjs', '.': './plugin.mjs',
+        './api/tx-service': './tx-service-stub.mjs',
         './routes/server-wallet-trade': './routes-stub.mjs',
         './security/hydrate-wallet-keys-from-platform-store': './security-stub.mjs',
         './security/wallet-os-store-actions': './security-stub.mjs',
@@ -532,11 +535,11 @@ for (const { name, exportName, extraEsm = '', extraCjs = '' } of plugins) {
   fs.mkdirSync(dir, { recursive: true });
   const shortName = name.split('/').pop().replace(/^plugin-/, '');
   const stubName = shortName + '-stub';
-  const esm = `const stub = { name: '${stubName}', routes: [], actions: [], providers: [], evaluators: [], services: [] };
+  const esm = `const stub = { name: '${stubName}', description: '${stubName} cloud fallback', routes: [], actions: [], providers: [], evaluators: [], services: [] };
 export const ${exportName} = stub;
 export default stub;
 ${extraEsm}`;
-  const cjs = `const stub = { name: '${stubName}', routes: [], actions: [], providers: [], evaluators: [], services: [] };
+  const cjs = `const stub = { name: '${stubName}', description: '${stubName} cloud fallback', routes: [], actions: [], providers: [], evaluators: [], services: [] };
 module.exports = stub;
 module.exports.default = stub;
 module.exports.${exportName} = stub;
