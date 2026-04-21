@@ -1,19 +1,20 @@
 # LifeOps External API Mocks
 
-This directory contains [Mockoon](https://mockoon.com/) environment files that
-emulate the external HTTP APIs LifeOps integrates with. Tests point the
-LifeOps clients at these mocks via env vars instead of hitting real services.
+This directory contains Mockoon-compatible environment files that emulate the
+external HTTP APIs LifeOps integrates with. Tests serve these files through the
+in-process fixture runner in `scripts/start-mocks.ts` and point LifeOps clients
+at those local URLs via env vars instead of hitting real services.
 
 ## Files
 
-| File                                | Mocks                                | Default port | Env var                      |
-| ----------------------------------- | ------------------------------------ | ------------ | ---------------------------- |
-| `environments/twilio.json`          | Twilio Programmable Messaging/Voice  | 3001         | `MILADY_MOCK_TWILIO_BASE`    |
-| `environments/whatsapp.json`        | WhatsApp Business Cloud (Meta Graph) | 3002         | `MILADY_MOCK_WHATSAPP_BASE`  |
-| `environments/calendly.json`        | Calendly v2                          | 3003         | `MILADY_MOCK_CALENDLY_BASE`  |
-| `environments/x-twitter.json`       | X (Twitter) v2                       | 3004         | `MILADY_MOCK_X_BASE`         |
-| `environments/google.json`          | Gmail / Calendar / OAuth token       | 3005         | `MILADY_MOCK_GOOGLE_BASE`    |
-| `environments/cloud-managed.json`   | Eliza Cloud managed-Google endpoints | 3006         | (set Eliza Cloud `apiBaseUrl`) |
+| File                                | Mocks                                | Env var                      |
+| ----------------------------------- | ------------------------------------ | ---------------------------- |
+| `environments/twilio.json`          | Twilio Programmable Messaging/Voice  | `MILADY_MOCK_TWILIO_BASE`    |
+| `environments/whatsapp.json`        | WhatsApp Business Cloud (Meta Graph) | `MILADY_MOCK_WHATSAPP_BASE`  |
+| `environments/calendly.json`        | Calendly v2                          | `MILADY_MOCK_CALENDLY_BASE`  |
+| `environments/x-twitter.json`       | X (Twitter) v2                       | `MILADY_MOCK_X_BASE`         |
+| `environments/google.json`          | Gmail / Calendar / OAuth token       | `MILADY_MOCK_GOOGLE_BASE`    |
+| `environments/cloud-managed.json`   | Eliza Cloud managed-Google endpoints | `ELIZA_CLOUD_BASE_URL`       |
 
 Each LifeOps client reads its env var on import and falls back to the real URL
 when unset. See the patched files in
@@ -24,15 +25,24 @@ when unset. See the patched files in
 - `google-fetch.ts` (rewrites all `*.googleapis.com` + `accounts.google.com`)
 - `google-oauth.ts` (token + userinfo go through the same rewrite helper)
 
-## Install Mockoon CLI
+## Run mocks in tests
 
-```bash
-bun add -d @mockoon/cli
+```ts
+import { startMocks } from "./scripts/start-mocks.ts";
+
+const mocks = await startMocks({ envs: ["google", "twilio"] });
+process.env.MILADY_MOCK_GOOGLE_BASE = mocks.baseUrls.google;
+process.env.MILADY_MOCK_TWILIO_BASE = mocks.baseUrls.twilio;
+await mocks.stop();
 ```
 
-Or invoke ad hoc with `bunx @mockoon/cli ...`.
+Ports are auto-assigned on `127.0.0.1`. The fixture runner supports the subset
+of Mockoon templating used by these files: `{{body 'field'}}`,
+`{{urlParam 'id'}}`, `{{faker '...'}}`, and `{{now '...'}}`.
 
-## Run mocks manually
+## Run with Mockoon manually
+
+Mockoon is optional for editing or manual inspection of the same JSON files.
 
 ```bash
 bunx @mockoon/cli start --data test/mocks/environments/twilio.json
@@ -58,14 +68,15 @@ export MILADY_MOCK_GOOGLE_BASE=http://127.0.0.1:3005
 
 ## Test usage
 
-Tests use `createMockedTestRuntime` (built by a separate task) which boots the
-mocks and sets the env vars before constructing the LifeOps runtime. Existing
-unit tests that use `vi.stubGlobal('fetch', ...)` continue to work and do not
-require the Mockoon servers.
+Tests use `createMockedTestRuntime`, which boots the fixture servers, isolates
+Milady state/config in a temporary directory, sets the mock env vars, and then
+constructs the LifeOps runtime. Existing unit tests that use
+`vi.stubGlobal('fetch', ...)` continue to work and do not require fixture
+servers.
 
 ## Add or edit mocks
 
 Open the JSON files directly, or use the [Mockoon desktop
 app](https://mockoon.com/download/) (it loads the same JSON format).
-Templating syntax (`{{body 'field'}}`, `{{urlParam 'id'}}`, `{{faker '...'}}`)
-is documented at https://mockoon.com/docs/latest/templating/overview/.
+The full Mockoon templating syntax is documented at
+https://mockoon.com/docs/latest/templating/overview/.
