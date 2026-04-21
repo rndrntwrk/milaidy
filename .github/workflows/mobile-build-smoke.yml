@@ -86,6 +86,35 @@ jobs:
               ;;
           esac
 
+      - name: Verify required Info.plist keys for background HealthKit
+        run: |
+          APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "App.app" -path "*/Debug-iphonesimulator/*" | head -1)
+          INFO_PLIST="$APP_PATH/Info.plist"
+          for key in NSHealthShareUsageDescription BGTaskSchedulerPermittedIdentifiers UIBackgroundModes; do
+            if ! /usr/libexec/PlistBuddy -c "Print :$key" "$INFO_PLIST" >/dev/null 2>&1; then
+              echo "ERROR: Info.plist missing required key: $key"
+              /usr/libexec/PlistBuddy -c "Print" "$INFO_PLIST" | head -80
+              exit 1
+            fi
+          done
+          # Confirm the sleep-refresh task identifier is whitelisted so
+          # BGTaskScheduler.register actually succeeds on device.
+          if ! /usr/libexec/PlistBuddy -c "Print :BGTaskSchedulerPermittedIdentifiers" "$INFO_PLIST" \
+            | grep -q "ai.eliza.mobile-signals.sleep-refresh"; then
+            echo "ERROR: BGTaskSchedulerPermittedIdentifiers missing ai.eliza.mobile-signals.sleep-refresh"
+            exit 1
+          fi
+
+      - name: Verify Fastlane config landed in apps/app/ios
+        run: |
+          for f in apps/app/ios/Gemfile apps/app/ios/fastlane/Fastfile apps/app/ios/fastlane/Appfile apps/app/ios/fastlane/Matchfile; do
+            if [ ! -f "$f" ]; then
+              echo "ERROR: $f missing. overlayIosNativeFiles() should have copied Fastlane config here so CI can call `fastlane beta|release`."
+              exit 1
+            fi
+          done
+          echo "Fastlane config present at apps/app/ios/."
+
   build-android:
     name: Android Debug Build
     runs-on: ubuntu-24.04

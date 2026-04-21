@@ -42,6 +42,10 @@ on:
         required: false
       MAS_INSTALLER_KEY_PASSWORD:
         required: false
+      APP_STORE_API_KEY_ID:
+        required: false
+      APP_STORE_API_ISSUER_ID:
+        required: false
   workflow_dispatch:
     inputs:
       platform:
@@ -200,6 +204,11 @@ jobs:
         env:
           LANG: en_US.UTF-8
 
+      - name: Overlay iOS native files (Fastlane, AppDelegate, entitlements)
+        run: node eliza/packages/app-core/scripts/run-mobile-build.mjs ios-overlay
+        env:
+          LANG: en_US.UTF-8
+
       - name: Update Xcode project version
         working-directory: apps/app/ios/App/App.xcodeproj
         run: |
@@ -219,9 +228,34 @@ jobs:
           bundler-cache: true
           working-directory: apps/app/ios
 
+      - name: Resolve app identifiers
+        working-directory: apps/app
+        run: |
+          # Read the runtime bundle id straight from pbxproj (the overlay step
+          # has already rewritten it to the Milady-specific id).
+          APP_ID=$(grep -m1 -E 'PRODUCT_BUNDLE_IDENTIFIER = [^.]+\.' ios/App/App.xcodeproj/project.pbxproj \
+            | grep -v WebsiteBlockerContentExtension \
+            | awk '{print $3}' | tr -d ';')
+          if [[ -z "$APP_ID" ]]; then
+            echo "::error::Could not resolve iOS bundle id from pbxproj"
+            exit 1
+          fi
+          APP_ID_EXTRA="${APP_ID}.WebsiteBlockerContentExtension"
+          echo "APP_IDENTIFIER=$APP_ID" >> "$GITHUB_ENV"
+          echo "APP_IDENTIFIER_EXTRA=$APP_ID_EXTRA" >> "$GITHUB_ENV"
+          echo "Resolved: APP_IDENTIFIER=$APP_ID, APP_IDENTIFIER_EXTRA=$APP_ID_EXTRA"
+
       - name: Build and upload
         working-directory: apps/app/ios
+        env:
+          APP_IDENTIFIER: ${{ env.APP_IDENTIFIER }}
+          APP_IDENTIFIER_EXTRA: ${{ env.APP_IDENTIFIER_EXTRA }}
         run: |
+          if [[ ! -f fastlane/Fastfile ]]; then
+            echo "::error::fastlane/Fastfile missing at apps/app/ios/. cap:sync:ios or run-mobile-build.mjs should have copied it."
+            ls -la fastlane/ || true
+            exit 1
+          fi
           TRACK="${{ inputs.track || 'testflight' }}"
           if [[ "$TRACK" == "app-store" ]]; then
             bundle exec fastlane release
