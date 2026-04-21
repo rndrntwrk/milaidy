@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import {
   Dialog,
   DialogTrigger,
@@ -16,6 +16,9 @@ describe("Dialog", () => {
 
   afterEach(() => {
     delete (globalThis as Record<string, unknown>).__TEST_RENDERER__;
+    delete document.body.dataset.miladyDialogOpen;
+    delete (window as Window & { __MILADY_OPEN_DIALOG_COUNT__?: number })
+      .__MILADY_OPEN_DIALOG_COUNT__;
   });
 
   it("renders trigger button", () => {
@@ -89,5 +92,46 @@ describe("Dialog", () => {
       </Dialog>,
     );
     expect(screen.queryByText("Close")).toBeNull();
+  });
+
+  it("does not mark the body when content is mounted closed", async () => {
+    render(
+      <Dialog open={false}>
+        <DialogContent forceMount>
+          <DialogHeader>
+            <DialogTitle>Closed Title</DialogTitle>
+          </DialogHeader>
+        </DialogContent>
+      </Dialog>,
+    );
+
+    await waitFor(() => {
+      expect(document.body.dataset.miladyDialogOpen).toBeUndefined();
+    });
+  });
+
+  it("marks the body only while the dialog is open", async () => {
+    render(
+      <Dialog>
+        <DialogTrigger>Open</DialogTrigger>
+        <DialogContent forceMount>
+          <DialogHeader>
+            <DialogTitle>Tracked Title</DialogTitle>
+          </DialogHeader>
+        </DialogContent>
+      </Dialog>,
+    );
+
+    expect(document.body.dataset.miladyDialogOpen).toBeUndefined();
+
+    fireEvent.click(screen.getByText("Open"));
+    await waitFor(() => {
+      expect(document.body.dataset.miladyDialogOpen).toBe("true");
+    });
+
+    fireEvent.click(screen.getByText("Close"));
+    await waitFor(() => {
+      expect(document.body.dataset.miladyDialogOpen).toBeUndefined();
+    });
   });
 });
