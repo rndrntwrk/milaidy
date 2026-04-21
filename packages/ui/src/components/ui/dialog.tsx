@@ -48,25 +48,78 @@ type MiladyDialogTrackingWindow = typeof window & {
   __MILADY_OPEN_DIALOG_COUNT__?: number;
 };
 
-function useDialogOpenBodyAttr(): void {
+function incrementDialogOpenCount(): void {
+  const w = window as MiladyDialogTrackingWindow;
+  const next = (w.__MILADY_OPEN_DIALOG_COUNT__ ?? 0) + 1;
+  w.__MILADY_OPEN_DIALOG_COUNT__ = next;
+  document.body.dataset.miladyDialogOpen = "true";
+}
+
+function decrementDialogOpenCount(): void {
+  const w = window as MiladyDialogTrackingWindow;
+  const remaining = Math.max(0, (w.__MILADY_OPEN_DIALOG_COUNT__ ?? 0) - 1);
+  w.__MILADY_OPEN_DIALOG_COUNT__ = remaining;
+  if (remaining === 0) {
+    delete document.body.dataset.miladyDialogOpen;
+  }
+}
+
+function useDialogOpenBodyAttr(
+  contentEl: HTMLElement | null,
+): void {
   React.useEffect(() => {
-    if (typeof window === "undefined" || typeof document === "undefined") {
+    if (
+      !contentEl ||
+      typeof window === "undefined" ||
+      typeof document === "undefined"
+    ) {
       return;
     }
-    const w = window as MiladyDialogTrackingWindow;
-    const prev = w.__MILADY_OPEN_DIALOG_COUNT__ ?? 0;
-    const next = prev + 1;
-    w.__MILADY_OPEN_DIALOG_COUNT__ = next;
-    document.body.dataset.miladyDialogOpen = "true";
+
+    let countedAsOpen = false;
+
+    const syncBodyAttr = () => {
+      const isOpen = contentEl.getAttribute("data-state") === "open";
+      if (isOpen === countedAsOpen) {
+        return;
+      }
+      if (isOpen) {
+        incrementDialogOpenCount();
+        countedAsOpen = true;
+        return;
+      }
+      decrementDialogOpenCount();
+      countedAsOpen = false;
+    };
+
+    syncBodyAttr();
+
+    const observer = new MutationObserver(syncBodyAttr);
+    observer.observe(contentEl, {
+      attributes: true,
+      attributeFilter: ["data-state"],
+    });
+
     return () => {
-      const current = w.__MILADY_OPEN_DIALOG_COUNT__ ?? 0;
-      const remaining = Math.max(0, current - 1);
-      w.__MILADY_OPEN_DIALOG_COUNT__ = remaining;
-      if (remaining === 0) {
-        delete document.body.dataset.miladyDialogOpen;
+      observer.disconnect();
+      if (countedAsOpen) {
+        decrementDialogOpenCount();
       }
     };
-  }, []);
+  }, [contentEl]);
+}
+
+function assignRef<T>(
+  ref: React.ForwardedRef<T>,
+  value: T,
+): void {
+  if (typeof ref === "function") {
+    ref(value);
+    return;
+  }
+  if (ref) {
+    ref.current = value;
+  }
 }
 
 const DialogContent = React.forwardRef<
@@ -78,16 +131,22 @@ const DialogContent = React.forwardRef<
     showCloseButton?: boolean;
   }
 >(({ className, children, container, showCloseButton = true, ...props }, ref) => {
-  // Effect runs for the lifetime of this DialogContent — which maps to the
-  // Dialog being open (DialogContent is only mounted when Radix's Portal is
-  // open, so we don't need to thread open-state through props).
-  useDialogOpenBodyAttr();
+  const [contentEl, setContentEl] = React.useState<HTMLElement | null>(null);
+  useDialogOpenBodyAttr(contentEl);
+
+  const handleContentRef = React.useCallback(
+    (node: React.ElementRef<typeof DialogPrimitive.Content> | null) => {
+      setContentEl(node);
+      assignRef(ref, node);
+    },
+    [ref],
+  );
 
   return (
     <DialogPortal container={container}>
       <DialogOverlay />
       <DialogPrimitive.Content
-        ref={ref}
+        ref={handleContentRef}
         className={cn(
           `fixed left-[50%] top-[50%] z-[${Z_DIALOG}] grid w-[min(calc(100vw-1.5rem),42rem)] max-h-[min(calc(100dvh-1.5rem-var(--safe-area-top,0px)-var(--safe-area-bottom,0px)),44rem)] translate-x-[-50%] translate-y-[-50%] gap-4 overflow-hidden rounded-[1.125rem] border border-border/70 bg-bg p-5 shadow-[0_24px_70px_rgba(2,8,23,0.24)] duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:p-6`,
           "max-sm:left-1/2 max-sm:top-auto max-sm:bottom-[max(0.75rem,var(--safe-area-bottom,0px))] max-sm:max-h-[min(calc(100dvh-1rem-var(--safe-area-top,0px)-var(--safe-area-bottom,0px)),42rem)] max-sm:w-[min(calc(100vw-1rem),42rem)] max-sm:translate-y-0 max-sm:rounded-[1.25rem] max-sm:data-[state=closed]:slide-out-to-bottom-6 max-sm:data-[state=open]:slide-in-from-bottom-6",
