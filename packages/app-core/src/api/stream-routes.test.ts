@@ -633,7 +633,7 @@ describe("handleStreamRoute", () => {
         getPlatformStatusOverview: vi.fn(async () => ({
           platforms: [
             { platformId: "kick", enabled: true, status: "live" },
-            { platformId: "twitch", enabled: true, status: "connected" },
+            { platformId: "twitch", enabled: true, status: "live" },
           ],
         })),
         createOrResumeSession: vi.fn(async () => ({ sessionId: "session-recovered" })),
@@ -712,6 +712,59 @@ describe("handleStreamRoute", () => {
           audioSource: "555stream",
           inputMode: "screen",
           destination: { id: "555stream", name: "555 Stream" },
+        }),
+      );
+    });
+
+    it("reclaims an already-live 555stream session after restart when outputs are still live", async () => {
+      const { res, getJson } = createMockHttpResponse();
+      const req = createMockIncomingMessage({
+        method: "GET",
+        url: "/api/stream/status",
+      });
+      const service = mockStream555Service({
+        getPlatformStatusOverview: vi.fn(async () => ({
+          platforms: [
+            { platformId: "kick", enabled: true, status: "live" },
+            { platformId: "twitch", enabled: true, status: "connected" },
+          ],
+        })),
+        createOrResumeSession: vi.fn(async () => ({ sessionId: "session-recovered" })),
+        getStreamStatus: vi.fn(async () => ({
+          sessionId: "session-recovered",
+          active: true,
+          cfSessionId: "cf_recovered",
+          cloudflare: { isConnected: true, state: "connected" },
+          startTime: Date.now() - 5_000,
+          serverFallbackActive: false,
+          platforms: {
+            twitch: { enabled: true, status: "live" },
+            kick: { enabled: true, status: "live" },
+          },
+          jobStatus: { state: "live" },
+        })),
+      });
+
+      await handleStreamRoute(
+        req,
+        res,
+        "/api/stream/status",
+        "GET",
+        mockState({ runtime: { getService: vi.fn(() => service) } }),
+      );
+
+      expect(service.getPlatformStatusOverview).toHaveBeenCalledOnce();
+      expect(service.createOrResumeSession).toHaveBeenCalledOnce();
+      expect(service.bindWebSocket).toHaveBeenCalledWith("session-recovered");
+      expect(service.getStreamStatus).toHaveBeenCalledWith("session-recovered");
+      expect(getJson()).toEqual(
+        expect.objectContaining({
+          ok: true,
+          running: true,
+          ffmpegAlive: true,
+          audioSource: "555stream",
+          inputMode: "screen",
+          destination: { id: "555stream", name: "Twitch, Kick" },
         }),
       );
     });
