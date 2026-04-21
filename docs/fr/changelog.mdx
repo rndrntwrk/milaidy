@@ -3,6 +3,76 @@ title: Journal des modifications
 description: Nouveautés de Milady — fonctionnalités, améliorations et correctifs.
 ---
 
+<Update label="2026-04-20" description="Semaine du 20 avril ; routage d'actions plus intelligent, précision de la messagerie multi-canal, améliorations de l'optimiseur d'entraînement" tags={["Update", "Fix"]}>
+
+<div id="smarter-action-routing">
+## Routage d'actions plus intelligent
+</div>
+
+Votre agent choisit désormais la bonne action de manière plus fiable lorsque vous lui donnez des commandes en langage naturel. Demander à votre agent de "publier ceci sur Discord" ne déclenche plus accidentellement la planification, et les requêtes relationnelles comme "depuis combien de temps n'ai-je pas parlé à Sarah ?" se résolvent maintenant correctement quelle que soit la formulation. Les actions d'envoi multi-canal, de recherche de relations et de synchronisation d'intentions de périphérique ont des descriptions plus précises qui aident le planificateur d'actions à distinguer les requêtes similaires.
+
+<div id="updates">
+## Mises à jour
+</div>
+
+- **Précision de l'optimiseur d'entraînement** — Le [système d'entraînement](/fr/guides/training) évalue désormais les sorties du planificateur d'actions en utilisant une correspondance stricte des noms d'actions au lieu d'un chevauchement flou de tokens, de sorte que les exécutions d'optimisation produisent des améliorations plus significatives du comportement de votre agent.
+- **Actions de compétences consolidées** — Les méthodes héritées d'invocation de compétences ont été retirées. `USE_SKILL` est désormais le seul moyen de déclencher les [compétences](/fr/plugins/skills), tous les alias précédents (`RUN_SKILL`, `INVOKE_SKILL`) étant automatiquement redirigés vers celui-ci.
+- **API de compétences simplifiée** — Le point de terminaison d'activation/désactivation des [compétences](/fr/plugins/skills) a été consolidé en une seule surface de bascule, rendant la gestion des compétences plus prévisible pour les intégrations et les automatisations.
+- **Récupération gracieuse du connecteur de santé** — Si la vérification de santé d'un connecteur est temporairement inaccessible, le runtime se dégrade désormais gracieusement au lieu de bloquer l'exécution d'autres actions.
+
+<div id="bug-fixes">
+## Corrections de bugs
+</div>
+
+- Correction de l'échec de l'installateur de bureau Windows sur les systèmes avec des chemins de fichiers longs — la compilation active désormais automatiquement la prise en charge des chemins étendus
+- Correction de l'icône de l'application de bureau qui ne s'affichait pas correctement dans l'installateur Windows
+
+</Update>
+
+<Update label="2026-04-19" description="Semaine du 19 avril ; refonte du tableau de bord, automatisations de workflows n8n, interface du connecteur life-ops, réactivité mobile" tags={["Feature", "Update", "Fix"]}>
+
+<div id="dashboard-redesign">
+## Refonte du tableau de bord
+</div>
+
+La page d'accueil du [tableau de bord cloud](/fr/guides/cloud) a été entièrement repensée. Les cartes d'agents utilisent désormais une mise en page axée sur les données avec des grilles d'instances plus propres et des puces de filtre pour une navigation rapide. Une nouvelle barre latérale persistante avec des onglets verticaux remplace la navigation précédente, et la section héro est désormais axée sur la typographie pour une expérience de lecture plus calme et plus lisible. Vous pouvez provisionner de nouveaux agents cloud directement depuis le tableau de bord avec une modale en ligne — plus besoin de naviguer ailleurs pour créer un agent. La suppression des agents cloud et la gestion des actions de cartes sont également restaurées.
+
+<div id="n8n-workflow-automations">
+## Automatisations de workflows n8n
+</div>
+
+Votre agent prend désormais en charge les automatisations de workflows [n8n](https://n8n.io) via un nouveau plugin. Un volet Workflows dédié dans la vue Automatisations vous permet de parcourir, activer, désactiver et supprimer des workflows. Le sidecar n8n démarre automatiquement lorsque le plugin est activé, et les mises à jour de statut sont interrogées en temps réel. L'ancien plugin n8n a été retiré au profit de cette nouvelle intégration.
+
+<div id="life-ops-connector-ui-overhaul">
+## Refonte de l'interface du connecteur life-ops
+</div>
+
+Les panneaux de configuration du connecteur [life-ops](/fr/rest/lifeops) ont été repensés avec une disposition de cartes plate et sans bordure. Chaque connecteur — Signal, Discord, Telegram et iMessage — affiche désormais un bouton de connexion clair et un panneau de permissions adapté à la plateforme. Les bordures redondantes et les conteneurs de cartes ont été supprimés, et la bannière d'avertissement cloud a été rétrogradée en texte en ligne atténué pour que l'interface reste propre et facile à parcourir.
+
+<div id="updates">
+## Mises à jour
+</div>
+
+- **Page d'accueil responsive mobile** — La page d'accueil du tableau de bord est désormais entièrement responsive sur les téléphones et tablettes. La barre supérieure est fixe pour que le bouton de menu reste accessible sur les pages longues, les puces de filtre défilent horizontalement sur les écrans étroits, les cibles tactiles respectent les tailles adaptées au toucher, et le débordement horizontal est éliminé sur toutes les largeurs de fenêtre.
+- **Panneaux de paramètres compactés** — Les panneaux de paramètres Cloud et Modèle IA ont été simplifiés. Les éléments d'interface comme la grille d'agents, les métriques d'utilisation et les liens externes morts ont été supprimés. Les menus déroulants de sélection de modèle apparaissent désormais correctement même avant de se connecter explicitement au cloud.
+- **SDK OpenRouter mis à jour** — Le plugin OpenRouter a été mis à jour vers `@openrouter/ai-sdk-provider` v2.0.0 pour un meilleur routage des modèles et une meilleure compatibilité.
+- **Nettoyage de l'agent de tâches Discord** — Les messages de l'[agent de codage](/fr/guides/coding-swarms) dans Discord sont désormais beaucoup plus propres. Les mises à jour de battement de cœur affichent le temps réel écoulé au lieu des noms d'outils internes, et les messages de niveau débogage comme l'état de session et l'analyse du validateur ne fuient plus dans le canal.
+- **Accessibilité de la page d'accueil** — Les modales et les cartes de runtime respectent désormais les standards de parité d'accessibilité avec des attributs ARIA appropriés, et le contraste a été amélioré sur les micro-labels, les indicateurs de statut et les lignes de la barre latérale.
+
+<div id="bug-fixes">
+## Corrections de bugs
+</div>
+
+- Correction de l'interface web de l'agent affichant un écran blanc dans les navigateurs sans support WebGPU (Chrome sans flag, Safari, Chromium headless) — un polyfill empêche désormais le crash d'initialisation de three.js
+- Correction de l'interface web de l'agent affichant un écran blanc à cause d'une erreur "require is not defined" lorsque le bundle navigateur tentait de résoudre les valeurs par défaut de marque
+- Correction de l'API de solde du portefeuille cloud retournant des erreurs 500 car le stub de route du portefeuille Steward manquait une exportation de sous-chemin
+- Correction du bouton "Ouvrir Milady" sur la page d'accueil naviguant vers un port mort quand aucun runtime local n'était en cours d'exécution — il affiche désormais des instructions d'installation à la place
+- Correction de la modale de provisionnement d'agents cloud permettant la création d'agents en double quand le bouton d'envoi se réactivait après le succès
+- Correction des cartes de connecteur life-ops n'affichant pas les boutons de connexion
+- Correction des builds navigateur Vite 6 plantant à cause d'importations de plugins serveur uniquement non résolues — celles-ci sont désormais correctement stubbées
+
+</Update>
+
 <Update label="2026-04-17" description="Semaine du 17 avril ; connecteurs de comptes personnels life-ops, Google multi-comptes, provisionnement de portefeuille Steward dans le cloud" tags={["Feature", "Update", "Fix"]}>
 
 <div id="life-ops-personal-account-connectors">
