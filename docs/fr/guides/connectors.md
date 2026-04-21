@@ -1,7 +1,7 @@
 ---
 title: "Connecteurs de plateforme"
 sidebarTitle: "Connectors"
-description: "Passerelles de plateforme pour 27 plateformes de messagerie — 18 activées automatiquement depuis la configuration (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Twitter, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, Lens, WeChat) plus 9 installables depuis le registre (Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
+description: "Passerelles de plateforme pour 28 plateformes de messagerie — 19 activées automatiquement depuis la configuration (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, BlueBubbles, Blooio, MS Teams, Google Chat, Twitter, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, Lens, WeChat) plus 9 installables depuis le registre (Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
 ---
 
 Les connecteurs sont des passerelles de plateforme qui permettent à votre agent de communiquer à travers les plateformes de messagerie et les réseaux sociaux. Chaque connecteur gère l'authentification, le routage des messages, la gestion des sessions et les fonctionnalités spécifiques à la plateforme.
@@ -18,8 +18,9 @@ Les connecteurs sont des passerelles de plateforme qui permettent à votre agent
 6. [WhatsApp](#whatsapp)
 7. [Signal](#signal)
 8. [iMessage](#imessage)
-9. [Blooio](#blooio)
-10. [Microsoft Teams](#microsoft-teams)
+9. [BlueBubbles](#bluebubbles)
+10. [Blooio](#blooio)
+11. [Microsoft Teams](#microsoft-teams)
 11. [Google Chat](#google-chat)
 12. [Twitter](#twitter)
 13. [Farcaster](#farcaster)
@@ -59,6 +60,7 @@ Les connecteurs marqués **Auto** se chargent automatiquement lorsque leur confi
 | WhatsApp | Code QR (Baileys) ou Cloud API | Oui | Oui | Oui | Auto |
 | Signal | API HTTP signal-cli | Oui | Oui | Oui | Auto |
 | iMessage | CLI natif (macOS) | Oui | Oui | Oui | Auto |
+| BlueBubbles | Mot de passe serveur | Oui | Oui | Non | Auto |
 | Blooio | Clé API + webhook | Oui | Oui | Non | Auto |
 | Microsoft Teams | ID d'app + mot de passe | Oui | Oui (équipes/salons) | Non | Auto |
 | Google Chat | Compte de service | Oui | Oui (espaces) | Oui | Auto |
@@ -401,6 +403,47 @@ Consultez le [Guide d'intégration WhatsApp](/fr/guides/whatsapp) pour des instr
 - Configuration de la région
 - Basculement de l'inclusion des pièces jointes
 - Configuration des mentions et des outils par groupe
+
+---
+
+<div id="bluebubbles">
+## BlueBubbles
+</div>
+
+Se connecte à iMessage via un serveur [BlueBubbles](https://bluebubbles.app) local sur macOS. Contrairement au connecteur iMessage direct, BlueBubbles est accessible par réseau — l'agent n'a pas besoin de tourner sur le même Mac qu'iMessage.
+
+### Prérequis d'installation
+
+- Un Mac avec iMessage connecté et le [serveur BlueBubbles](https://bluebubbles.app) installé
+- Le mot de passe du serveur et l'URL accessible depuis la machine exécutant Milady
+
+### Configuration clé
+
+```json
+{
+  "connectors": {
+    "bluebubbles": {
+      "password": "VOTRE_MOT_DE_PASSE_BLUEBUBBLES",
+      "serverUrl": "http://192.168.1.50:1234"
+    }
+  }
+}
+```
+
+**Variables d'environnement :** `BLUEBUBBLES_PASSWORD`, `BLUEBUBBLES_SERVER_URL`
+
+### Fonctionnalités
+
+- Envoyer et recevoir des iMessages et SMS via un serveur BlueBubbles local
+- Réactions tapback (ajout et suppression)
+- Répondre à des messages spécifiques dans des fils
+- Modifier et annuler des messages envoyés (dépendant de la version macOS)
+- Envoyer des pièces jointes avec légendes et effets iMessage
+- Gestion des participants de discussions de groupe
+- Support des accusés de lecture
+- Gestion des messages entrants basée sur les webhooks
+
+Consultez la [référence du connecteur BlueBubbles](/connectors/bluebubbles) pour la référence complète de configuration.
 
 ---
 

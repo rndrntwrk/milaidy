@@ -1,7 +1,7 @@
 ---
 title: "Platform Connectors"
 sidebarTitle: "Connectors"
-description: "Platform bridges for 27 messaging platforms — 18 auto-enabled from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Twitter, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, Lens, WeChat) plus 9 installable from the registry (Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
+description: "Platform bridges for 28 messaging platforms — 19 auto-enabled from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, BlueBubbles, Blooio, MS Teams, Google Chat, Twitter, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, Lens, WeChat) plus 9 installable from the registry (Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
 ---
 
 Connectors are platform bridges that allow your agent to communicate across messaging platforms and social networks. Each connector handles authentication, message routing, session management, and platform-specific features.
@@ -16,8 +16,9 @@ Connectors are platform bridges that allow your agent to communicate across mess
 6. [WhatsApp](#whatsapp)
 7. [Signal](#signal)
 8. [iMessage](#imessage)
-9. [Blooio](#blooio)
-10. [Microsoft Teams](#microsoft-teams)
+9. [BlueBubbles](#bluebubbles)
+10. [Blooio](#blooio)
+11. [Microsoft Teams](#microsoft-teams)
 11. [Google Chat](#google-chat)
 12. [Twitter](#twitter)
 13. [Farcaster](#farcaster)
@@ -55,6 +56,7 @@ Connectors marked **Auto** load automatically when their config is present in `m
 | WhatsApp | QR code (Baileys) or Cloud API | Yes | Yes | Yes | Auto |
 | Signal | signal-cli HTTP API | Yes | Yes | Yes | Auto |
 | iMessage | Native CLI (macOS) | Yes | Yes | Yes | Auto |
+| BlueBubbles | Server password | Yes | Yes | No | Auto |
 | Blooio | API key + webhook | Yes | Yes | No | Auto |
 | Microsoft Teams | App ID + password | Yes | Yes (teams/channels) | No | Auto |
 | Google Chat | Service account | Yes | Yes (spaces) | Yes | Auto |
@@ -347,6 +349,45 @@ See the [WhatsApp Integration Guide](/guides/whatsapp) for detailed setup instru
 - Region configuration
 - Attachment inclusion toggle
 - Per-group mention and tool configuration
+
+---
+
+## BlueBubbles
+
+Connects to iMessage through a self-hosted [BlueBubbles](https://bluebubbles.app) server running on macOS. Unlike the direct iMessage connector, BlueBubbles is network-accessible — the agent does not need to run on the same Mac as iMessage.
+
+### Setup Requirements
+
+- A Mac with iMessage signed in and [BlueBubbles server](https://bluebubbles.app) installed
+- The server password and URL reachable from the machine running Milady
+
+### Key Configuration
+
+```json
+{
+  "connectors": {
+    "bluebubbles": {
+      "password": "YOUR_BLUEBUBBLES_PASSWORD",
+      "serverUrl": "http://192.168.1.50:1234"
+    }
+  }
+}
+```
+
+**Environment variables:** `BLUEBUBBLES_PASSWORD`, `BLUEBUBBLES_SERVER_URL`
+
+### Features
+
+- Send and receive iMessages and SMS through a local BlueBubbles server
+- Tapback reactions (add and remove)
+- Reply to specific messages in threads
+- Edit and unsend sent messages (macOS version dependent)
+- Send attachments with captions and iMessage effects
+- Group chat participant management
+- Read receipt support
+- Webhook-based inbound message handling
+
+See the [BlueBubbles connector reference](/connectors/bluebubbles) for the full configuration reference.
 
 ---
 
@@ -1195,6 +1236,13 @@ The `dmPolicy` options are:
 
 - CLI path not found:
   Requires `cliPath` pointing to a valid iMessage CLI tool. macOS-only — Accessibility permissions are required.
+
+**BlueBubbles:**
+
+- Connection refused or timeout:
+  Confirm the BlueBubbles server is running on the target Mac and the `serverUrl` is reachable from the agent machine. Check firewall rules if connecting across the network.
+- Password rejected:
+  Confirm `connectors.bluebubbles.password` matches the password configured in the BlueBubbles server app on macOS.
 
 **Farcaster:**
 

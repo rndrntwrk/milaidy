@@ -475,6 +475,21 @@ where to get the credentials, minimum required fields, and tips for optional fie
 - `IMESSAGE_ENABLED` — `true` to enable
 **Tips:** macOS only. Requires Full Disk Access permission for the app to read the Messages database. Only works on the machine that has iMessage configured.
 
+### BlueBubbles (iMessage via local server)
+**Get credentials:** Install [BlueBubbles server](https://bluebubbles.app) on a Mac with iMessage
+**Minimum required:** `BLUEBUBBLES_PASSWORD`
+**Variables:**
+- `BLUEBUBBLES_PASSWORD` — Password set in the BlueBubbles server app
+- `BLUEBUBBLES_SERVER_URL` — BlueBubbles server URL (e.g. `http://192.168.1.50:1234`)
+- `BLUEBUBBLES_WEBHOOK_PATH` — Custom webhook endpoint path
+- `BLUEBUBBLES_DM_POLICY` — `allow`, `deny`, or `allowlist`
+- `BLUEBUBBLES_ALLOW_FROM` — Comma-separated allowed senders
+- `BLUEBUBBLES_GROUP_POLICY` — Group message policy
+- `BLUEBUBBLES_GROUP_ALLOW_FROM` — Comma-separated allowed groups
+- `BLUEBUBBLES_SEND_READ_RECEIPTS` — `true` to send read receipts
+- `BLUEBUBBLES_ENABLED` — `true` to enable
+**Tips:** Unlike direct iMessage, BlueBubbles works over the network — the agent doesn't need to run on the same Mac. Supports rich actions: tapbacks, edit/unsend, effects, attachments, and group management.
+
 ### Blooio (SMS via API)
 **Get credentials:** https://bloo.io
 **Minimum required:** `BLOOIO_API_KEY`
