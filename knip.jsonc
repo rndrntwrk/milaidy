@@ -91,9 +91,18 @@
         "src/lifeops/index.ts",
         "src/widgets/index.ts",
         "src/api/client-lifeops.ts",
-        "src/routes/plugin.ts"
+        "src/routes/plugin.ts",
+        "src/components/AppBlockerSettingsCard.tsx",
+        "src/components/LifeOpsBrowserSetupPanel.tsx",
+        "src/components/LifeOpsPageSections.tsx",
+        "src/components/LifeOpsPageView.tsx",
+        "src/components/LifeOpsSettingsSection.tsx",
+        "src/components/LifeOpsWorkspaceView.tsx",
+        "src/components/WebsiteBlockerSettingsCard.tsx",
+        "src/components/chat/widgets/plugins/*.tsx"
       ],
       "project": ["src/**/*.{ts,tsx}"],
+      "ignoreDependencies": ["@elizaos/ui", "lucide-react"],
       "ignore": [
         "dist/**",
         "build/**",
