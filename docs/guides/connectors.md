@@ -21,25 +21,25 @@ Connectors are platform bridges that allow your agent to communicate across mess
 11. [Google Chat](#google-chat)
 12. [Twitter](#twitter)
 13. [Farcaster](#farcaster)
-14. [Twitch](#twitch)
-15. [Mattermost](#mattermost)
-16. [WeChat](#wechat)
-17. [Matrix](#matrix)
-18. [Feishu / Lark](#feishu--lark)
-19. [Nostr](#nostr)
-21. [Lens](#lens)
-22. [Bluesky](#bluesky)
-23. [Instagram](#instagram)
-24. [LINE](#line)
-25. [Zalo](#zalo)
-26. [Twilio](#twilio)
-27. [GitHub](#github)
-28. [Gmail Watch](#gmail-watch)
-29. [Nextcloud Talk](#nextcloud-talk)
-30. [Tlon](#tlon)
-31. [Connector Lifecycle](#connector-lifecycle)
-32. [Multi-Account Support](#multi-account-support)
-33. [Session Management](#session-management)
+14. [Bluesky](#bluesky)
+15. [Instagram](#instagram)
+16. [Twitch](#twitch)
+17. [Mattermost](#mattermost)
+18. [WeChat](#wechat)
+19. [Matrix](#matrix)
+20. [Feishu / Lark](#feishu--lark)
+21. [Nostr](#nostr)
+22. [LINE](#line)
+23. [Zalo](#zalo)
+24. [Twilio](#twilio)
+25. [GitHub](#github)
+26. [Gmail Watch](#gmail-watch)
+27. [Nextcloud Talk](#nextcloud-talk)
+28. [Tlon](#tlon)
+29. [Lens](#lens)
+30. [Connector Lifecycle](#connector-lifecycle)
+31. [Multi-Account Support](#multi-account-support)
+32. [Session Management](#session-management)
 
 ---
 
@@ -1135,7 +1135,7 @@ The `dmPolicy` options are:
 **General connector failures:**
 
 - Connector plugin not loading:
-  Check connector ID mapping in `src/config/plugin-auto-enable.ts`, plugin availability, and `plugins.entries` overrides. The auto-enable layer maps connector config keys to plugin package names — a mismatch means the plugin is silently skipped.
+  Check connector ID mapping in `packages/agent/src/config/plugin-auto-enable.ts` (in the `eliza` submodule), plugin availability, and `plugins.entries` overrides. The auto-enable layer maps connector config keys to plugin package names — a mismatch means the plugin is silently skipped.
 - Auth succeeds but no messages arrive:
   Check platform webhook/socket settings and policy gates (`dmPolicy`, `groupPolicy`). For webhook-based connectors, confirm the callback URL is publicly reachable.
 - Misrouted connector secrets:
@@ -1274,19 +1274,14 @@ The `dmPolicy` options are:
 
 ### Verification Commands
 
+These test paths reference files in the `eliza` submodule. Run `bun run setup:upstreams` first to initialize it.
+
 ```bash
-# Connector auto-enable and runtime loading
-bunx vitest run src/config/plugin-auto-enable.test.ts src/runtime/eliza.test.ts
+# Full test suite (from repo root)
+bun run test
 
-# Platform-specific connector tests
-bunx vitest run src/connectors/discord-connector.test.ts
-
-# Connector e2e tests
-bunx vitest run --config test/vitest/live-e2e.config.ts packages/agent/test/discord-connector.live.e2e.test.ts
-bunx vitest run --config test/vitest/integration.config.ts packages/agent/test/signal-connector.integration.test.ts
-
-# WhatsApp pairing
-bunx vitest run src/services/__tests__/whatsapp-pairing.test.ts src/api/__tests__/whatsapp-routes.test.ts
+# End-to-end tests
+bun run test:e2e
 
 bun run typecheck
 ```

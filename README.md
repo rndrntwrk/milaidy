@@ -96,7 +96,7 @@ shasum -a 256 --check --ignore-missing SHA256SUMS.txt
 **Milady → Reset Milady…** (menu bar) confirms in the **native** dialog, then the **main process** calls **`POST /api/agent/reset`**, restarts the agent (embedded or external API), and tells the renderer to apply the **same local state wipe** as the end of Settings reset (onboarding, API client, cloud UI, conversations). **Why main does HTTP:** on macOS/WKWebView, the webview can fail to run **`fetch`** immediately after a native dialog, so a renderer-only reset looked stuck. **Why the renderer still runs teardown:** one implementation of “clear UI + `MiladyClient`” avoids duplicating logic in TypeScript main vs React.
 
 - **Docs:** [Desktop app](docs/apps/desktop.md) (native application menu section), [Main-process reset — WHYs](docs/apps/desktop-main-process-reset.md)
-- **Optional network / TTS:** with the agent orchestrator loaded, Edge TTS may call **Microsoft’s cloud** unless you set **`MILADY_DISABLE_EDGE_TTS=1`** — see [Environment variables](docs/cli/environment.md#runtime-behavior) and [TTS plugin](docs/plugin-registry/tts.md)
+- **Optional network / TTS:** with the agent orchestrator loaded, Edge TTS may call **Microsoft’s cloud** unless you set **`MILADY_DISABLE_EDGE_TTS=1`** — see [Environment variables](docs/cli/environment.mdx#runtime-behavior) and [TTS plugin](docs/plugin-registry/tts.md)
 
 ---
 
