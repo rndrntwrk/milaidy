@@ -976,4 +976,4 @@ bun run milady --config ./config.json5 > startup.log 2>&1
 5. **Test locally** before deploying to production
 6. **Deploy** using your hosting platform's deployment process
 
-See the [Configuration Reference](/docs/reference/config-reference) for complete option documentation.
+See the [Configuration Reference](/configuration) for complete option documentation.

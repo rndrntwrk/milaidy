@@ -16,7 +16,7 @@ Milady uses the Discord plugin to interact with Discord servers. This guide assu
 
 Before starting, ensure you have:
 - A Discord account with a server where you have admin permissions
-- Milady installed on your system (see [Getting Started](/getting-started))
+- Milady installed on your system (see [Installation](/installation))
 - Node.js 22+ installed
 - A code editor for modifying configuration files
 
