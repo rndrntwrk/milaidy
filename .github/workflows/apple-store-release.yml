@@ -181,16 +181,26 @@ jobs:
 
       - name: Validate iOS secrets
         run: |
+          # Secrets required for signing the IPA. Without these the build
+          # itself cannot produce a signed artifact.
           missing=()
           [[ -z "$MATCH_GIT_URL" ]] && missing+=("MATCH_GIT_URL")
           [[ -z "$MATCH_PASSWORD" ]] && missing+=("MATCH_PASSWORD")
           [[ -z "$MATCH_GIT_BASIC_AUTHORIZATION" ]] && missing+=("MATCH_GIT_BASIC_AUTHORIZATION")
           [[ -z "$ITC_TEAM_ID" ]] && missing+=("ITC_TEAM_ID")
-          [[ -z "$APP_STORE_APP_ID" ]] && missing+=("APP_STORE_APP_ID")
           if [[ ${#missing[@]} -gt 0 ]]; then
             echo "::error::Missing required iOS signing secrets: ${missing[*]}"
             echo "Configure these secrets in the repo settings to enable iOS App Store builds."
             exit 1
+          fi
+
+          # Upload-only secret. When missing we still produce and upload the
+          # IPA artifact, but the TestFlight delivery step becomes a no-op
+          # with a clear warning. Surfaced here so the log line stays
+          # prominent rather than hidden inside a Fastlane run.
+          if [[ -z "$APP_STORE_APP_ID" ]]; then
+            echo "::warning::APP_STORE_APP_ID is not set; TestFlight upload will be skipped."
+            echo "Set APP_STORE_APP_ID to your App Store Connect numeric app id to enable TestFlight delivery."
           fi
 
       - name: Prepare CocoaPods trunk repo
