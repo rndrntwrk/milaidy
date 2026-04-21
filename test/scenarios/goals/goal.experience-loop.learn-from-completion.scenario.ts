@@ -1,5 +1,5 @@
-import { scenario } from "@elizaos/scenario-schema";
 import type { IAgentRuntime } from "@elizaos/core";
+import { scenario } from "@elizaos/scenario-schema";
 import { LifeOpsRepository } from "../../../eliza/apps/app-lifeops/src/lifeops/repository.ts";
 import { LifeOpsService } from "../../../eliza/apps/app-lifeops/src/lifeops/service.ts";
 
@@ -128,10 +128,15 @@ export default scenario({
         if (!data.experienceLoop?.summary) {
           return "expected a typed experienceLoop summary on the goal preview";
         }
-        if (data.experienceLoop.similarGoals?.[0]?.title !== "Lose 5 lbs by March") {
+        if (
+          data.experienceLoop.similarGoals?.[0]?.title !== "Lose 5 lbs by March"
+        ) {
           return `expected the similar completed goal to be Lose 5 lbs by March, got ${data.experienceLoop.similarGoals?.[0]?.title ?? "(missing)"}`;
         }
-        if (data.experienceLoop.suggestedCarryForward?.[0]?.title !== "Weekly weigh-in") {
+        if (
+          data.experienceLoop.suggestedCarryForward?.[0]?.title !==
+          "Weekly weigh-in"
+        ) {
           return `expected Weekly weigh-in as the carry-forward suggestion, got ${data.experienceLoop.suggestedCarryForward?.[0]?.title ?? "(missing)"}`;
         }
         return undefined;
@@ -156,7 +161,10 @@ export default scenario({
         if (data?.goal?.title !== "lose another 5 lbs this quarter") {
           return `expected the new goal title to be saved, got ${data?.goal?.title ?? "(missing)"}`;
         }
-        if (data.experienceLoop?.similarGoals?.[0]?.title !== "Lose 5 lbs by March") {
+        if (
+          data.experienceLoop?.similarGoals?.[0]?.title !==
+          "Lose 5 lbs by March"
+        ) {
           return `expected the saved goal payload to keep the experience loop reference, got ${data.experienceLoop?.similarGoals?.[0]?.title ?? "(missing)"}`;
         }
         return undefined;

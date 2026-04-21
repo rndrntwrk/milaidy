@@ -1,9 +1,9 @@
-import type { AgentRuntime } from "@elizaos/core";
-import { scenario } from "@elizaos/scenario-schema";
 import {
   listTriggerTasks,
   readTriggerConfig,
 } from "@elizaos/agent/triggers/runtime";
+import type { AgentRuntime } from "@elizaos/core";
+import { scenario } from "@elizaos/scenario-schema";
 import {
   expectScenarioToCallAction,
   expectTurnToCallAction,

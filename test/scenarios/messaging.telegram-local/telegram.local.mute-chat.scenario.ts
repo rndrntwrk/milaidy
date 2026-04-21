@@ -1,10 +1,10 @@
-import type { AgentRuntime, ChannelType, UUID } from "@elizaos/core";
-import { scenario } from "@elizaos/scenario-schema";
-import { stringToUuid } from "@elizaos/core";
 import {
   listTriggerTasks,
   readTriggerConfig,
 } from "@elizaos/agent/triggers/runtime";
+import type { AgentRuntime, UUID } from "@elizaos/core";
+import { ChannelType, stringToUuid } from "@elizaos/core";
+import { scenario } from "@elizaos/scenario-schema";
 import {
   expectScenarioToCallAction,
   expectTurnToCallAction,

@@ -133,7 +133,14 @@ export async function createMockedTestRuntime(
   const localEnvironment = sharedEnvironment
     ? null
     : await prepareMockedTestEnvironment({ envs });
-  const mocks = sharedEnvironment?.mocks ?? localEnvironment!.mocks;
+  if (!sharedEnvironment && !localEnvironment) {
+    throw new Error(
+      "createMockedTestRuntime: expected local mocked environment",
+    );
+  }
+  const mocks = sharedEnvironment
+    ? sharedEnvironment.mocks
+    : localEnvironment.mocks;
   let cleanupRuntimeFixtures: (() => Promise<void> | void) | void;
 
   let real: RealTestRuntimeResult;
