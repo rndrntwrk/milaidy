@@ -60,27 +60,19 @@ describe("real test config contract", () => {
     );
   });
 
-  it("runs the deterministic E2E lane from bun run test", () => {
+  it("runs the full live/real E2E matrix from bun run test", () => {
     const packageJson = JSON.parse(
       fs.readFileSync(packageJsonPath, "utf8"),
     ) as {
       scripts?: Record<string, string>;
     };
     const rootTestScript = packageJson.scripts?.test;
-    const deterministicE2E = packageJson.scripts?.["test:e2e"];
-    const heavyE2E = packageJson.scripts?.["test:e2e:heavy"];
     const runnerSource = fs.readFileSync(rootTestRunnerPath, "utf8");
 
     expect(rootTestScript).toContain(
       "eliza/packages/app-core/test/scripts/test-runner.mjs",
     );
-    expect(runnerSource).toContain('args: ["run", "test:e2e"]');
-    expect(runnerSource).not.toContain('args: ["run", "test:e2e:all"]');
-    expect(deterministicE2E).toContain(
-      "--exclude eliza/packages/app-core/test/app/qa-checklist.real.e2e.test.ts",
-    );
-    expect(heavyE2E).toContain(
-      "eliza/packages/app-core/test/app/qa-checklist.real.e2e.test.ts",
-    );
+    expect(runnerSource).toContain('args: ["run", "test:e2e:all"]');
+    expect(runnerSource).not.toContain('args: ["run", "test:e2e"]');
   });
 });
