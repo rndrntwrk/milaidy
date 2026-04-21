@@ -519,7 +519,7 @@ Edit `~/.milady/milady.json`:
 
 This routes through the OpenAI plugin instead of the broken Ollama plugin. Works with any Ollama model — just make sure `ollama serve` is running.
 
-> **OpenRouter (`@elizaos/plugin-openrouter`):** Milady pins the dependency to **`2.0.0-alpha.10`**. **Why:** npm **`2.0.0-alpha.12`** published **truncated** JavaScript bundles: the files export `openrouterPlugin` / default but never define them (the main plugin chunk is missing), so Bun fails when loading the plugin. A caret range would allow that broken version again. See [Plugin resolution — pinned OpenRouter](docs/plugin-resolution-and-node-path.md#pinned-elizaosplugin-openrouter) and [OpenRouter plugin doc](docs/plugin-registry/llm/openrouter.md#milady-pinned-version-and-upstream-bundle-bug).
+> **OpenRouter (`@elizaos/plugin-openrouter`):** Milady pins the dependency to **`2.0.0-alpha.13`**. **Why:** npm **`2.0.0-alpha.12`** published **truncated** JavaScript bundles: the files export `openrouterPlugin` / default but never define them (the main plugin chunk is missing), so Bun fails when loading the plugin. A caret range would allow that broken version again. See [Plugin resolution — pinned OpenRouter](docs/plugin-resolution-and-node-path.md#pinned-elizaosplugin-openrouter) and [OpenRouter plugin doc](docs/plugin-registry/llm/openrouter.md#milady-pinned-version-and-upstream-bundle-bug).
 
 **Recommended models for local use:**
 

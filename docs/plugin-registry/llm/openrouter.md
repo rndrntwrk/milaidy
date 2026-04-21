@@ -10,7 +10,7 @@ The OpenRouter plugin connects Milady agents to OpenRouter's unified inference g
 
 ## Milady: pinned version and upstream bundle bug
 
-In the Milady monorepo, **`@elizaos/plugin-openrouter` is pinned to `2.0.0-alpha.10`** (exact version in root `package.json`, reflected in `bun.lock`).
+In the Milady monorepo, **`@elizaos/plugin-openrouter` is pinned to `2.0.0-alpha.13`** (exact version in root `package.json`, reflected in `bun.lock`).
 
 **Why pin**
 
