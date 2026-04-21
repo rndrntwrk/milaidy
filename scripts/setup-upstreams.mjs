@@ -255,10 +255,17 @@ const TS_IGNORE_DEPRECATIONS_COMPAT_FILES = [
   path.join("packages", "typescript", "tsconfig.declarations.json"),
   path.join("packages", "shared", "tsconfig.json"),
   path.join("packages", "interop", "tsconfig.json"),
-  path.join("plugins", "plugin-shopify", "tsconfig.json"),
 ];
 const TS_IGNORE_DEPRECATIONS_COMPAT_REPLACEMENTS = [
   ['"ignoreDeprecations": "5.0"', '"ignoreDeprecations": "6.0"'],
+];
+const TSUP_IGNORE_DEPRECATIONS_COMPAT_FILES = [
+  path.join("plugins", "plugin-calendly", "tsconfig.json"),
+  path.join("plugins", "plugin-github", "tsconfig.json"),
+  path.join("plugins", "plugin-shopify", "tsconfig.json"),
+];
+const TSUP_IGNORE_DEPRECATIONS_COMPAT_REPLACEMENTS = [
+  ['"ignoreDeprecations": "6.0"', '"ignoreDeprecations": "5.0"'],
 ];
 const LIFEOPS_SETTINGS_SECTION_RELATIVE_PATH = path.join(
   "apps",
@@ -440,6 +447,15 @@ export function applyTypeScriptIgnoreDeprecationsCompatPatch(elizaRoot) {
       TS_IGNORE_DEPRECATIONS_COMPAT_REPLACEMENTS,
       {
         label: `TypeScript ignoreDeprecations compatibility patch (${relativePath})`,
+      },
+    );
+  }
+  for (const relativePath of TSUP_IGNORE_DEPRECATIONS_COMPAT_FILES) {
+    patchedReplacements += applyTextReplacements(
+      path.join(elizaRoot, relativePath),
+      TSUP_IGNORE_DEPRECATIONS_COMPAT_REPLACEMENTS,
+      {
+        label: `tsup ignoreDeprecations compatibility patch (${relativePath})`,
       },
     );
   }

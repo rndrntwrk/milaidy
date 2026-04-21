@@ -851,6 +851,26 @@ describe("applyTypeScriptIgnoreDeprecationsCompatPatch", () => {
       '"ignoreDeprecations": "6.0"',
     );
   });
+
+  it("downgrades tsup plugin configs to TypeScript 5-compatible deprecation silencing", () => {
+    const elizaRoot = makeTempDir();
+    const calendlyPath = path.join(
+      elizaRoot,
+      "plugins",
+      "plugin-calendly",
+      "tsconfig.json",
+    );
+
+    writeFile(
+      calendlyPath,
+      '{\n  "compilerOptions": {\n    "ignoreDeprecations": "6.0",\n    "baseUrl": "./src"\n  }\n}\n',
+    );
+
+    expect(applyTypeScriptIgnoreDeprecationsCompatPatch(elizaRoot)).toBe(1);
+    expect(fs.readFileSync(calendlyPath, "utf8")).toContain(
+      '"ignoreDeprecations": "5.0"',
+    );
+  });
 });
 
 describe("applyPluginAnthropicCliUsagePatch", () => {
