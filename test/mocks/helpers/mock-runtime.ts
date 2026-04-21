@@ -184,7 +184,11 @@ export async function createMockedTestRuntime(
       "createMockedTestRuntime: expected local mocked environment",
     );
   }
-  const mocks = sharedEnvironment?.mocks ?? localEnvironment.mocks;
+  const environment = sharedEnvironment ?? localEnvironment;
+  if (!environment) {
+    throw new Error("createMockedTestRuntime: mocked environment missing");
+  }
+  const mocks = environment.mocks;
   let cleanupRuntimeFixtures: (() => Promise<void> | void) | void;
 
   let real: RealTestRuntimeResult;
@@ -194,10 +198,9 @@ export async function createMockedTestRuntime(
       plugins: mockRuntimePlugins(opts?.plugins),
       preferredProvider: opts?.preferredProvider,
     });
-    cleanupRuntimeFixtures = await (
-      sharedEnvironment?.applyRuntimeFixtures ??
-      localEnvironment?.applyRuntimeFixtures
-    )?.(real.runtime);
+    cleanupRuntimeFixtures = await environment.applyRuntimeFixtures?.(
+      real.runtime,
+    );
   } catch (err) {
     await localEnvironment?.cleanup();
     throw err;
