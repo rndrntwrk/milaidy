@@ -151,7 +151,9 @@ function readEnvironment(dataPath: string): MockoonEnvironmentFile {
   };
 }
 
-async function readRequestBody(req: http.IncomingMessage): Promise<RequestBody> {
+async function readRequestBody(
+  req: http.IncomingMessage,
+): Promise<RequestBody> {
   const chunks: Buffer[] = [];
   for await (const chunk of req) {
     chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
@@ -269,14 +271,11 @@ function renderBodyTemplate(
   requestBody: RequestBody,
 ): string {
   return body
-    .replace(
-      /\{\{urlParam '([^']+)'\}\}/g,
-      (_, key: string) => escapeTemplateString(params[key] ?? ""),
+    .replace(/\{\{urlParam '([^']+)'\}\}/g, (_, key: string) =>
+      escapeTemplateString(params[key] ?? ""),
     )
-    .replace(
-      /\{\{body '([^']+)'\}\}/g,
-      (_, key: string) =>
-        escapeTemplateString(valueAsTemplateString(requestBody[key])),
+    .replace(/\{\{body '([^']+)'\}\}/g, (_, key: string) =>
+      escapeTemplateString(valueAsTemplateString(requestBody[key])),
     )
     .replace(
       /\{\{faker '([^']+)'(?: length=(\d+))?\}\}/g,
