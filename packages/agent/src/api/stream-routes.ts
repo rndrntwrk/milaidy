@@ -298,7 +298,7 @@ function stream555OverviewShowsLiveOutputs(
     ) {
       return false;
     }
-    return isStream555PlatformDisplayableStatus(platform.status ?? undefined);
+    return isStream555PlatformLiveStatus(platform.status ?? undefined);
   });
 }
 
@@ -490,6 +490,11 @@ function isStream555PlatformDisplayableStatus(
     normalized.startsWith("connected") ||
     normalized.startsWith("active")
   );
+}
+
+function isStream555PlatformLiveStatus(status: string | undefined): boolean {
+  const normalized = status?.trim().toLowerCase() ?? "";
+  return normalized.startsWith("live") || normalized.startsWith("active");
 }
 
 function deriveStream555Destination(
@@ -1220,18 +1225,18 @@ export async function handleStreamRoute(
   if (method === "GET" && pathname === "/api/stream/status") {
     const stream555 = getStream555Service(state);
     if (stream555) {
-      const sessionId =
-        getConfiguredStream555SessionId(stream555) ??
-        (await recoverActiveStream555SessionId(stream555));
-      if (!sessionId) {
-        json(res, {
-          ok: true,
-          ...mapStream555StatusToHealth(null),
-          destination: deriveStream555Destination(null),
-        });
-        return true;
-      }
       try {
+        const sessionId =
+          getConfiguredStream555SessionId(stream555) ??
+          (await recoverActiveStream555SessionId(stream555));
+        if (!sessionId) {
+          json(res, {
+            ok: true,
+            ...mapStream555StatusToHealth(null),
+            destination: deriveStream555Destination(null),
+          });
+          return true;
+        }
         const status = await stream555.getStreamStatus(sessionId);
         json(res, {
           ok: true,
