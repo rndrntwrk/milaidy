@@ -16,7 +16,11 @@ import {
   getPinnedStageEmotes,
   groupStageEmotes,
 } from "./alice-operator-catalog";
-import { isStream555PrimaryPlugin, type Stream555LaunchMode } from "./stream555-setup";
+import {
+  isStream555PrimaryPlugin,
+  titleForStream555LaunchMode,
+  type Stream555LaunchMode,
+} from "./stream555-setup";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const ALICE_ARCADE_PLUGIN_IDS = new Set(["five55-games"]);
@@ -618,13 +622,13 @@ export function useCompanionStageOperator() {
 
       try {
         await recordOperatorAction({
-          label: titleForMode(config.launchMode, t),
+          label: titleForStream555LaunchMode(config.launchMode, t),
           kind: "launch",
           detail:
             config.launchMode === "play-games" && selectedGameLabel
               ? `${selectedGameLabel} · ${selectedChannels.join(", ")}`
               : selectedChannels.join(", "),
-          fallbackText: titleForMode(config.launchMode, t),
+          fallbackText: titleForStream555LaunchMode(config.launchMode, t),
         });
 
         if (config.launchMode === "camera") {
