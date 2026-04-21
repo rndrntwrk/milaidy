@@ -15,7 +15,6 @@ import {
   isElectrobunRuntime,
 } from "@elizaos/app-core";
 import { CharacterEditor } from "@elizaos/app-core";
-import { PhoneCompanionApp } from "@elizaos/app-core";
 import type { BrandingConfig } from "@elizaos/app-core";
 import {
   type AppBootConfig,
@@ -539,7 +538,7 @@ function mountReactApp(): void {
       <StrictMode>
         <AppProvider branding={APP_BRANDING}>
           {phoneCompanion ? (
-            <PhoneCompanionApp />
+            <App />
           ) : isDetachedWindowShell(windowShellRoute) ? (
             <div className="flex h-screen min-h-0 w-screen flex-col overflow-hidden">
               <DetachedShellRoot route={windowShellRoute} />
