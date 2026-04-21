@@ -71,8 +71,14 @@ jobs:
         run: |
           if [ -d eliza/packages/schemas ] && [ -f eliza/packages/schemas/buf.gen.yaml ] && [ ! -d eliza/packages/typescript/src/types/generated ]; then
             cd eliza/packages/schemas
-            buf dep update
-            buf generate
+            if command -v buf >/dev/null 2>&1; then
+              buf dep update
+              buf generate
+            else
+              bun install --ignore-scripts
+              node node_modules/@bufbuild/buf/install.js 2>/dev/null || true
+              bunx @bufbuild/buf@1.67.0 generate
+            fi
           fi
 
       - name: Mirror milady.mjs → elizaos-app.mjs for snapcraft entry
