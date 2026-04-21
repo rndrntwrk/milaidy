@@ -1,7 +1,7 @@
 {
   "$schema": "plugin-index-v1",
   "generatedAt": "2026-04-11T01:55:50.795Z",
-  "count": 97,
+  "count": 98,
   "plugins": [
     {
       "id": "acp",
@@ -276,6 +276,22 @@
       "homepage": "https://github.com/elizaos-plugins/plugin-anthropic#readme",
       "repository": "https://github.com/elizaos-plugins/plugin-anthropic",
       "setupGuideUrl": "https://docs.eliza.ai/plugin-setup-guide#anthropic"
+    },
+    {
+      "id": "app-control",
+      "dirName": "plugin-app-control",
+      "name": "App Control",
+      "npmName": "@elizaos/plugin-app-control",
+      "description": "Launch, close, and list running Milady apps from agent chat. Backed by the /api/apps/* HTTP surface.",
+      "tags": [
+        "apps",
+        "control",
+        "core-addon"
+      ],
+      "category": "feature",
+      "envKey": null,
+      "configKeys": [],
+      "version": "2.0.0-alpha.1"
     },
     {
       "id": "auto-trader",

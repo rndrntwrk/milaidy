@@ -256,6 +256,7 @@
     "@elizaos/plugin-agent-skills": "workspace:*",
     "@elizaos/plugin-commands": "workspace:*",
     "@elizaos/plugin-anthropic": "workspace:*",
+    "@elizaos/plugin-app-control": "workspace:*",
     "@elizaos/plugin-cron": "workspace:*",
     "@elizaos/plugin-edge-tts": "workspace:*",
     "@elizaos/plugin-elizacloud": "workspace:*",
