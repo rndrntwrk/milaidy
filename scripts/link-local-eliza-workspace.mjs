@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 
 import {
-  ensureElizaAgentSkillsPluginBuild,
+  ensureRequiredElizaPluginBuilds,
   linkUpstreamPackages,
 } from "./setup-upstreams.mjs";
 
 const repoRoot = process.cwd();
-await ensureElizaAgentSkillsPluginBuild(repoRoot);
+await ensureRequiredElizaPluginBuilds(repoRoot);
 
 const linkedEntries = linkUpstreamPackages(repoRoot);
 

@@ -10,6 +10,7 @@ import {
   bootstrapBundledBunInstall,
   ensureElizaAgentSkillsPluginBuild,
   ensurePluginAnthropicBunTypes,
+  ensureRequiredElizaPluginBuilds,
   findInstalledPackageDir,
   getElizaInstallArgs,
   getTemporaryElizaWorkspaceEntries,
@@ -373,6 +374,56 @@ describe("ensureElizaAgentSkillsPluginBuild", () => {
     ).resolves.toBe(false);
 
     expect(runCommandImpl).not.toHaveBeenCalled();
+  });
+});
+
+describe("ensureRequiredElizaPluginBuilds", () => {
+  it("builds plugin-telegram when the account auth subpath artifact is missing", async () => {
+    const repoRoot = makeTempDir();
+    const agentSkillsPackage = path.join(
+      repoRoot,
+      "eliza",
+      "plugins",
+      "plugin-agent-skills",
+      "typescript",
+    );
+    const telegramPackage = path.join(
+      repoRoot,
+      "eliza",
+      "plugins",
+      "plugin-telegram",
+    );
+    writeFile(path.join(agentSkillsPackage, "package.json"), "{}\n");
+    writeFile(
+      path.join(agentSkillsPackage, "dist", "index.js"),
+      "export {};\n",
+    );
+    writeFile(path.join(telegramPackage, "package.json"), "{}\n");
+
+    const runCommandImpl = vi.fn().mockResolvedValue(undefined);
+    const log = vi.fn();
+
+    await expect(
+      ensureRequiredElizaPluginBuilds(repoRoot, {
+        pathExists: (targetPath) =>
+          targetPath.endsWith(path.join("package.json")) ||
+          targetPath.endsWith(
+            path.join("plugin-agent-skills", "typescript", "dist", "index.js"),
+          ),
+        stat: () => ({ mtimeMs: 1 }) as fs.Stats,
+        runCommandImpl,
+        log,
+      }),
+    ).resolves.toBe(true);
+
+    expect(runCommandImpl).toHaveBeenCalledTimes(1);
+    expect(runCommandImpl).toHaveBeenCalledWith("bun", ["run", "build"], {
+      cwd: telegramPackage,
+      label: "bun run build (@elizaos/plugin-telegram)",
+    });
+    expect(log).toHaveBeenCalledWith(
+      expect.stringContaining("@elizaos/plugin-telegram"),
+    );
   });
 });
 

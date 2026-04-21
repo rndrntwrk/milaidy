@@ -307,9 +307,6 @@ jobs:
           MILADY_NO_VISION_DEPS: "1"
         run: bun install --cwd eliza --no-frozen-lockfile --ignore-scripts
 
-      - name: Link restored eliza workspaces into root node_modules
-        run: node scripts/link-local-eliza-workspace.mjs
-
       - name: Build @elizaos/core dist (required by dev-stack imports)
         shell: bash
         run: |
@@ -327,6 +324,9 @@ jobs:
           fi
           cd eliza/packages/typescript
           bun run build:node
+
+      - name: Link restored eliza workspaces into root node_modules
+        run: node scripts/link-local-eliza-workspace.mjs
 
       - name: Run website blocker startup smokes
         run: bun run test:selfcontrol:startup
@@ -376,9 +376,6 @@ jobs:
           MILADY_NO_VISION_DEPS: "1"
         run: bun install --cwd eliza --no-frozen-lockfile --ignore-scripts
 
-      - name: Link restored eliza workspaces into root node_modules
-        run: node scripts/link-local-eliza-workspace.mjs
-
       - name: Build @elizaos/core dist (required by dev-stack imports)
         shell: bash
         run: |
@@ -396,6 +393,9 @@ jobs:
           fi
           cd eliza/packages/typescript
           bun run build:node
+
+      - name: Link restored eliza workspaces into root node_modules
+        run: node scripts/link-local-eliza-workspace.mjs
 
       - name: Build
         run: bun run build
@@ -810,10 +810,6 @@ jobs:
           MILADY_NO_VISION_DEPS: "1"
         run: bun install --no-frozen-lockfile
 
-      - name: Link restored eliza workspaces into root node_modules
-        if: steps.provider-check.outputs.skip != 'true'
-        run: node scripts/link-local-eliza-workspace.mjs
-
       - name: Build @elizaos/core dist (required by dev-stack imports)
         if: steps.provider-check.outputs.skip != 'true'
         shell: bash
@@ -830,6 +826,10 @@ jobs:
           fi
           cd eliza/packages/typescript
           bun run build:node
+
+      - name: Link restored eliza workspaces into root node_modules
+        if: steps.provider-check.outputs.skip != 'true'
+        run: node scripts/link-local-eliza-workspace.mjs
 
       - name: Install Electrobun runtime dependencies
         if: steps.provider-check.outputs.skip != 'true'
