@@ -347,6 +347,7 @@ export default { getKnowledgeService, getKnowledgeTimeoutMs };
 `;
 // Generic plugin-style apps (vincent/shopify/steward)
 const apps = [
+  '@elizaos/app-elizamaker',
   '@elizaos/app-vincent',
   '@elizaos/app-shopify',
   '@elizaos/app-steward',
@@ -476,6 +477,89 @@ export default { TelegramAccountAuthSession, loadTelegramAccountSessionString, d
   console.log('stubbed: @elizaos/plugin-telegram');
 }
 __APP_STUBS__
+
+# Stub workspace-only plugins that are referenced via guarded runtime require().
+# Cloud builds can omit their workspace symlinks entirely, and some published
+# tarballs have incomplete dist/ output, so provide a dual ESM/CJS no-op module.
+RUN node - <<'__PLUGIN_STUBS__'
+const fs = require('fs');
+const plugins = [
+  {
+    name: '@elizaos/plugin-cron',
+    exportName: 'cronPlugin',
+    extraEsm: `export class CronService {}\n`,
+    extraCjs: `module.exports.CronService = class CronService {};\n`,
+  },
+  {
+    name: '@elizaos/plugin-shell',
+    exportName: 'shellPlugin',
+    extraEsm: `export class ShellService {}\n`,
+    extraCjs: `module.exports.ShellService = class ShellService {};\n`,
+  },
+  {
+    name: '@elizaos/plugin-commands',
+    exportName: 'commandsPlugin',
+    extraEsm: `
+const commandStore = new Map();
+export function registerCommand(cmd) {
+  if (!cmd || typeof cmd !== 'object') return;
+  const key = typeof cmd.key === 'string' ? cmd.key : String(commandStore.size);
+  commandStore.set(key, cmd);
+}
+export function initForRuntime() {}
+export function getRegisteredCommands() { return Array.from(commandStore.values()); }
+`,
+    extraCjs: `
+const commandStore = new Map();
+module.exports.registerCommand = function registerCommand(cmd) {
+  if (!cmd || typeof cmd !== 'object') return;
+  const key = typeof cmd.key === 'string' ? cmd.key : String(commandStore.size);
+  commandStore.set(key, cmd);
+};
+module.exports.initForRuntime = function initForRuntime() {};
+module.exports.getRegisteredCommands = function getRegisteredCommands() { return Array.from(commandStore.values()); };
+`,
+  },
+];
+for (const { name, exportName, extraEsm = '', extraCjs = '' } of plugins) {
+  const dir = 'node_modules/' + name;
+  if (fs.existsSync(dir + '/package.json')) {
+    console.log('present: ' + name);
+    continue;
+  }
+  const scope = name.startsWith('@') ? name.split('/')[0] : null;
+  if (scope) fs.mkdirSync('node_modules/' + scope, { recursive: true });
+  fs.mkdirSync(dir, { recursive: true });
+  const shortName = name.split('/').pop().replace(/^plugin-/, '');
+  const stubName = shortName + '-stub';
+  const esm = `const stub = { name: '${stubName}', routes: [], actions: [], providers: [], evaluators: [], services: [] };
+export const ${exportName} = stub;
+export default stub;
+${extraEsm}`;
+  const cjs = `const stub = { name: '${stubName}', routes: [], actions: [], providers: [], evaluators: [], services: [] };
+module.exports = stub;
+module.exports.default = stub;
+module.exports.${exportName} = stub;
+${extraCjs}`;
+  fs.writeFileSync(dir + '/index.mjs', esm);
+  fs.writeFileSync(dir + '/index.cjs', cjs);
+  fs.writeFileSync(dir + '/package.json', JSON.stringify({
+    name,
+    version: '0.0.0-cloud-stub',
+    type: 'module',
+    main: './index.cjs',
+    module: './index.mjs',
+    exports: {
+      '.': {
+        import: './index.mjs',
+        require: './index.cjs',
+        default: './index.mjs'
+      }
+    }
+  }));
+  console.log('stubbed: ' + name);
+}
+__PLUGIN_STUBS__
 
 # Fix @ai-sdk/provider-utils version conflict:
 # @ai-sdk/google@3.x needs provider-utils@4.x (exports convertToBase64),
