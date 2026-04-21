@@ -258,7 +258,7 @@ const TS_IGNORE_DEPRECATIONS_COMPAT_FILES = [
   path.join("plugins", "plugin-shopify", "tsconfig.json"),
 ];
 const TS_IGNORE_DEPRECATIONS_COMPAT_REPLACEMENTS = [
-  ['"ignoreDeprecations": "6.0"', '"ignoreDeprecations": "5.0"'],
+  ['"ignoreDeprecations": "5.0"', '"ignoreDeprecations": "6.0"'],
 ];
 const LIFEOPS_SETTINGS_SECTION_RELATIVE_PATH = path.join(
   "apps",

@@ -6,6 +6,7 @@ import {
   applyMiladyCopyPatches,
   applyPluginAnthropicBunRuntimePatch,
   applyPluginAnthropicCliUsagePatch,
+  applyTypeScriptIgnoreDeprecationsCompatPatch,
   applyUnpublishedPluginStubOverrides,
   bootstrapBundledBunInstall,
   ensureElizaAgentSkillsPluginBuild,
@@ -807,6 +808,48 @@ describe("applyMiladyCopyPatches", () => {
     );
 
     warnSpy.mockRestore();
+  });
+});
+
+describe("applyTypeScriptIgnoreDeprecationsCompatPatch", () => {
+  it("upgrades TypeScript 5 deprecation silencing to TypeScript 6", () => {
+    const elizaRoot = makeTempDir();
+    const declarationsPath = path.join(
+      elizaRoot,
+      "packages",
+      "typescript",
+      "tsconfig.declarations.json",
+    );
+
+    writeFile(
+      declarationsPath,
+      '{\n  "compilerOptions": {\n    "ignoreDeprecations": "5.0",\n    "baseUrl": "./src"\n  }\n}\n',
+    );
+
+    expect(applyTypeScriptIgnoreDeprecationsCompatPatch(elizaRoot)).toBe(1);
+    expect(fs.readFileSync(declarationsPath, "utf8")).toContain(
+      '"ignoreDeprecations": "6.0"',
+    );
+  });
+
+  it("does not downgrade TypeScript 6 deprecation silencing", () => {
+    const elizaRoot = makeTempDir();
+    const declarationsPath = path.join(
+      elizaRoot,
+      "packages",
+      "typescript",
+      "tsconfig.declarations.json",
+    );
+
+    writeFile(
+      declarationsPath,
+      '{\n  "compilerOptions": {\n    "ignoreDeprecations": "6.0",\n    "baseUrl": "./src"\n  }\n}\n',
+    );
+
+    expect(applyTypeScriptIgnoreDeprecationsCompatPatch(elizaRoot)).toBe(0);
+    expect(fs.readFileSync(declarationsPath, "utf8")).toContain(
+      '"ignoreDeprecations": "6.0"',
+    );
   });
 });
 
