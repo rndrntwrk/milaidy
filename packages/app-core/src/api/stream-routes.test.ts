@@ -577,6 +577,52 @@ describe("handleStreamRoute", () => {
       );
     });
 
+    it("does not recover a session from cached connected output statuses", async () => {
+      const { res, getStatus, getJson } = createMockHttpResponse();
+      const req = createMockIncomingMessage({
+        method: "GET",
+        url: "/api/stream/status",
+      });
+      const service = mockStream555Service({
+        getPlatformStatusOverview: vi.fn(async () => ({
+          platforms: [
+            {
+              platformId: "kick",
+              enabled: false,
+              status: "connected_cached",
+            },
+            {
+              platformId: "twitch",
+              enabled: false,
+              status: "connected",
+            },
+          ],
+        })),
+      });
+
+      const handled = await handleStreamRoute(
+        req,
+        res,
+        "/api/stream/status",
+        "GET",
+        mockState({ runtime: { getService: vi.fn(() => service) } }),
+      );
+
+      expect(handled).toBe(true);
+      expect(getStatus()).toBe(200);
+      expect(service.getPlatformStatusOverview).toHaveBeenCalledOnce();
+      expect(service.createOrResumeSession).not.toHaveBeenCalled();
+      expect(service.getStreamStatus).not.toHaveBeenCalled();
+      expect(getJson()).toEqual(
+        expect.objectContaining({
+          ok: true,
+          running: false,
+          ffmpegAlive: false,
+          destination: { id: "555stream", name: "555 Stream" },
+        }),
+      );
+    });
+
     it("reclaims an already-live 555stream session after restart when outputs are still live", async () => {
       const { res, getJson } = createMockHttpResponse();
       const req = createMockIncomingMessage({
@@ -626,6 +672,46 @@ describe("handleStreamRoute", () => {
           audioSource: "555stream",
           inputMode: "screen",
           destination: { id: "555stream", name: "Twitch, Kick" },
+        }),
+      );
+    });
+
+    it("falls back to an inactive payload when live-session recovery fails", async () => {
+      const { res, getStatus, getJson } = createMockHttpResponse();
+      const req = createMockIncomingMessage({
+        method: "GET",
+        url: "/api/stream/status",
+      });
+      const service = mockStream555Service({
+        getPlatformStatusOverview: vi.fn(async () => ({
+          platforms: [{ platformId: "twitch", enabled: true, status: "live" }],
+        })),
+        createOrResumeSession: vi.fn(async () => {
+          throw new Error("recovery upstream timeout");
+        }),
+      });
+
+      const handled = await handleStreamRoute(
+        req,
+        res,
+        "/api/stream/status",
+        "GET",
+        mockState({ runtime: { getService: vi.fn(() => service) } }),
+      );
+
+      expect(handled).toBe(true);
+      expect(getStatus()).toBe(200);
+      expect(service.getPlatformStatusOverview).toHaveBeenCalledOnce();
+      expect(service.createOrResumeSession).toHaveBeenCalledOnce();
+      expect(service.getStreamStatus).not.toHaveBeenCalled();
+      expect(getJson()).toEqual(
+        expect.objectContaining({
+          ok: true,
+          running: false,
+          ffmpegAlive: false,
+          audioSource: "555stream",
+          inputMode: "screen",
+          destination: { id: "555stream", name: "555 Stream" },
         }),
       );
     });
