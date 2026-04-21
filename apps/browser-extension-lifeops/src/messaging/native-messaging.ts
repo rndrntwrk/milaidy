@@ -1,20 +1,6 @@
 /**
- * WebSocket client used by the background service worker to talk to the
- * local Milady / LifeOps agent.
- *
- * TODO(lifeops-browser-extension): no agent-side WebSocket handler for
- * `ws://127.0.0.1:31339/ext` exists today. Until one is added, this
- * channel reconnects forever and every `send()` buffers or drops. Two
- * resolutions are on the table, neither done:
- *
- *   (a) Add a WebSocket upgrade route in the app-lifeops runtime.
- *   (b) Switch this client to either REST
- *       (`/api/lifeops/browser/companions/sync`, which the older
- *       `eliza/apps/app-lifeops/extensions/lifeops-browser/` already
- *       uses) or Chrome native-messaging (hence the file name).
- *
- * The module is kept behaviorally correct in isolation so the decision
- * can be made without churn.
+ * WebSocket client used by the background service worker to talk to a
+ * configured LifeOps agent endpoint.
  */
 
 import { createLogger } from "../logger.js";
@@ -25,7 +11,10 @@ const log = createLogger("agent-ws");
 export interface AgentChannelOptions {
   readonly url: string;
   readonly onMessage?: (message: InboundMessage) => void;
+  readonly maxPendingMessages?: number;
 }
+
+export type AgentSendStatus = "sent" | "queued" | "dropped";
 
 export class AgentChannel {
   private socket: WebSocket | null = null;
@@ -33,11 +22,13 @@ export class AgentChannel {
   private readonly pending: OutboundMessage[] = [];
   private url: string;
   private readonly onMessage: ((message: InboundMessage) => void) | undefined;
+  private readonly maxPendingMessages: number;
   private closed = false;
 
   constructor(options: AgentChannelOptions) {
     this.url = options.url;
     this.onMessage = options.onMessage;
+    this.maxPendingMessages = options.maxPendingMessages ?? 100;
   }
 
   start(): void {
@@ -71,12 +62,26 @@ export class AgentChannel {
     }
   }
 
-  send(message: OutboundMessage): void {
+  send(message: OutboundMessage): AgentSendStatus {
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-      this.socket.send(JSON.stringify(message));
-      return;
+      try {
+        this.socket.send(JSON.stringify(message));
+        return "sent";
+      } catch (error) {
+        log.warn("send failed", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+    if (this.pending.length >= this.maxPendingMessages) {
+      log.warn("dropping message because pending queue is full", {
+        maxPendingMessages: this.maxPendingMessages,
+        type: message.type,
+      });
+      return "dropped";
     }
     this.pending.push(message);
+    return "queued";
   }
 
   private connect(): void {

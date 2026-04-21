@@ -51,7 +51,7 @@ export interface ExtensionSettings {
 export const DEFAULT_SETTINGS: ExtensionSettings = {
   wsUrl: "ws://127.0.0.1:31339/ext",
   flushIntervalMs: 60_000,
-  activityReportingEnabled: true,
+  activityReportingEnabled: false,
 };
 
 /** Internal messages between content scripts and the background worker. */
