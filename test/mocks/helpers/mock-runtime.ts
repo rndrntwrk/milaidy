@@ -16,6 +16,7 @@ import {
   seedGoogleConnectorGrant,
   seedXConnectorGrant,
 } from "./seed-grants.ts";
+import { seedTestUserProfile } from "./seed-test-user-profile.ts";
 
 export interface MockedTestRuntime {
   runtime: RealTestRuntimeResult["runtime"];
@@ -133,7 +134,10 @@ export async function createMockedTestRuntime(
   const localEnvironment = sharedEnvironment
     ? null
     : await prepareMockedTestEnvironment({ envs });
-  const mocks = sharedEnvironment?.mocks ?? localEnvironment!.mocks;
+  if (!sharedEnvironment && !localEnvironment) {
+    throw new Error("[mock-runtime] failed to prepare mock environment");
+  }
+  const mocks = sharedEnvironment?.mocks ?? localEnvironment.mocks;
   let cleanupRuntimeFixtures: (() => Promise<void> | void) | void;
 
   let real: RealTestRuntimeResult;
@@ -167,6 +171,16 @@ export async function createMockedTestRuntime(
       if (shouldSeedBenchmarkFixtures) {
         await seedBenchmarkLifeOpsFixtures(real.runtime);
       }
+    } catch (err) {
+      await real.cleanup();
+      await localEnvironment?.cleanup();
+      throw err;
+    }
+  }
+
+  if (process.env.LOAD_TEST_USER_PROFILE === "1") {
+    try {
+      await seedTestUserProfile(real.runtime);
     } catch (err) {
       await real.cleanup();
       await localEnvironment?.cleanup();
