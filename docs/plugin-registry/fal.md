@@ -24,9 +24,45 @@ milady plugins install fal
 }
 ```
 
+## Configuration
+
+Set your FAL API key:
+
+```json
+{
+  "env": {
+    "FAL_KEY": "<YOUR_FAL_KEY>"
+  },
+  "features": {
+    "fal": true
+  },
+  "media": {
+    "image": {
+      "enabled": true,
+      "mode": "own-key",
+      "provider": "fal",
+      "fal": { "model": "flux/schnell" }
+    },
+    "video": {
+      "enabled": true,
+      "mode": "own-key",
+      "provider": "fal"
+    }
+  }
+}
+```
+
+**Get credentials:** [fal.ai/dashboard/keys](https://fal.ai/dashboard/keys)
+
+| Variable | Description |
+|----------|-------------|
+| `FAL_KEY` | FAL.ai API key |
+
+The FAL plugin also auto-enables when `media.image.provider` or `media.video.provider` is set to `"fal"` with `mode: "own-key"`.
+
 ## Features
 
-- Image generation via FAL.ai models
+- Image generation via FAL.ai models (Flux, Stable Diffusion, etc.)
 - Video generation
 - Audio generation
 - Fast inference on serverless GPU infrastructure
