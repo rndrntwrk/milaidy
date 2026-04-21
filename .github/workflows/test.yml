@@ -307,6 +307,9 @@ jobs:
           MILADY_NO_VISION_DEPS: "1"
         run: bun install --cwd eliza --no-frozen-lockfile --ignore-scripts
 
+      - name: Link restored eliza workspaces into root node_modules
+        run: node scripts/link-local-eliza-workspace.mjs
+
       - name: Build @elizaos/core dist (required by dev-stack imports)
         shell: bash
         run: |
@@ -372,6 +375,9 @@ jobs:
           SKIP_AVATAR_CLONE: "1"
           MILADY_NO_VISION_DEPS: "1"
         run: bun install --cwd eliza --no-frozen-lockfile --ignore-scripts
+
+      - name: Link restored eliza workspaces into root node_modules
+        run: node scripts/link-local-eliza-workspace.mjs
 
       - name: Build @elizaos/core dist (required by dev-stack imports)
         shell: bash
@@ -803,6 +809,10 @@ jobs:
           SKIP_AVATAR_CLONE: "1"
           MILADY_NO_VISION_DEPS: "1"
         run: bun install --no-frozen-lockfile
+
+      - name: Link restored eliza workspaces into root node_modules
+        if: steps.provider-check.outputs.skip != 'true'
+        run: node scripts/link-local-eliza-workspace.mjs
 
       - name: Build @elizaos/core dist (required by dev-stack imports)
         if: steps.provider-check.outputs.skip != 'true'
