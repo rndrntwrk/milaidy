@@ -67,11 +67,13 @@ describe("real test config contract", () => {
       scripts?: Record<string, string>;
     };
     const rootTestScript = packageJson.scripts?.test;
+    const fullE2E = packageJson.scripts?.["test:e2e:all"];
     const runnerSource = fs.readFileSync(rootTestRunnerPath, "utf8");
 
     expect(rootTestScript).toContain(
       "eliza/packages/app-core/test/scripts/test-runner.mjs",
     );
+    expect(fullE2E).toContain("MILADY_LIVE_BROWSER_SUITE=1");
     expect(runnerSource).toContain('args: ["run", "test:e2e:all"]');
     expect(runnerSource).not.toContain('args: ["run", "test:e2e"]');
   });
