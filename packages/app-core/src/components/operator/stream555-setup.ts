@@ -238,6 +238,15 @@ export function labelForStream555LaunchMode(
   }
 }
 
+export function titleForStream555LaunchMode(
+  mode: Stream555LaunchMode,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  return t(`aliceoperator.mode.${mode}.title`, {
+    defaultValue: labelForStream555LaunchMode(mode),
+  });
+}
+
 export function serializeStream555ConfigValue(
   value: unknown,
 ): string | null {

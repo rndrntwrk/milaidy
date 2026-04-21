@@ -33,8 +33,8 @@ import {
   buildStream555SetupSummary,
   filterStream555SetupParams,
   findStream555Plugin,
-  labelForStream555LaunchMode,
   serializeStream555ConfigValue,
+  titleForStream555LaunchMode,
   type Stream555LaunchMode,
 } from "./stream555-setup";
 import type { useCompanionStageOperator } from "./useCompanionStageOperator";
@@ -83,15 +83,6 @@ function labelForDestinationReadiness(
         defaultValue: "Disabled",
       });
   }
-}
-
-function titleForMode(
-  mode: Stream555LaunchMode,
-  t: (key: string, options?: Record<string, unknown>) => string,
-) {
-  return t(`aliceoperator.mode.${mode}.title`, {
-    defaultValue: labelForStream555LaunchMode(mode),
-  });
 }
 
 function descriptionForMode(
@@ -531,7 +522,7 @@ export function CompanionGoLiveModal({
       (["camera", "radio", "screen-share", "play-games", "reaction"] as const).map(
         (mode) => ({
           value: mode,
-          title: titleForMode(mode, t),
+          title: titleForStream555LaunchMode(mode, t),
           description: descriptionForMode(mode, t),
           availability: availabilityLabelForMode(mode, t),
           support: supportLabelForMode(mode, operator, t),
@@ -547,7 +538,7 @@ export function CompanionGoLiveModal({
         label: t("aliceoperator.review.launchMode", {
           defaultValue: "Launch mode",
         }),
-        value: titleForMode(launchMode, t),
+        value: titleForStream555LaunchMode(launchMode, t),
       },
       {
         label: t("aliceoperator.review.channels", {
@@ -1080,7 +1071,7 @@ export function CompanionGoLiveModal({
           <div className="go-live-modal__footer">
             <div className="go-live-modal__footer-status">
               <OperatorPill tone="accent">
-                {titleForMode(launchMode, t)}
+                {titleForStream555LaunchMode(launchMode, t)}
               </OperatorPill>
               <OperatorPill>
                 {selectedChannels.length > 0
