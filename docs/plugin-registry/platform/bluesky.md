@@ -10,6 +10,8 @@ The Bluesky plugin connects Milady agents to the Bluesky social network via the 
 
 ## Installation
 
+This connector auto-enables when its configuration is present in `milady.json`. You can also install it explicitly:
+
 ```bash
 milady plugins install bluesky
 ```
@@ -56,10 +58,15 @@ export BLUESKY_HANDLE=YOUR_HANDLE
 ## Environment Variables
 
 ```bash
-export BLUESKY_USERNAME=YOUR_USERNAME
 export BLUESKY_PASSWORD=YOUR_PASSWORD
 export BLUESKY_HANDLE=YOUR_HANDLE
+export BLUESKY_ENABLED=true
+export BLUESKY_DRY_RUN=false
+export BLUESKY_ENABLE_POSTING=true
+export BLUESKY_ENABLE_DMS=true
 ```
+
+See the [Bluesky Connector reference](/connectors/bluesky) for the full list of 15 environment variables.
 
 ## Related
 

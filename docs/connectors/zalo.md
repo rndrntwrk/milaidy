@@ -8,7 +8,7 @@ Connect your agent to Zalo for Official Account messaging and support workflows.
 
 ## Overview
 
-The Zalo connector is an elizaOS plugin that bridges your agent to the Zalo platform via the Official Account API. This connector is available from the plugin registry. A personal-account variant is also available as `@elizaos/plugin-zalouser`.
+The Zalo connector is an elizaOS plugin that bridges your agent to the Zalo platform via the Official Account API. This connector is **auto-enabled** when its configuration is present in `milady.json`. A personal-account variant is also available as `@elizaos/plugin-zalouser`.
 
 ## Package Info
 
@@ -16,7 +16,7 @@ The Zalo connector is an elizaOS plugin that bridges your agent to the Zalo plat
 |-------|-------|
 | Package | `@elizaos/plugin-zalo` |
 | Config key | `connectors.zalo` |
-| Install | `milady plugins install zalo` |
+| Category | Auto-enabled connector |
 
 ## Setup Requirements
 
@@ -41,7 +41,13 @@ The Zalo connector is an elizaOS plugin that bridges your agent to the Zalo plat
 | `ZALO_ACCESS_TOKEN` | OA access token |
 | `ZALO_REFRESH_TOKEN` | Token refresh credential |
 | `ZALO_APP_ID` | Application ID |
-| `ZALO_APP_SECRET` | Application secret |
+| `ZALO_SECRET_KEY` | Application secret key |
+| `ZALO_ENABLED` | Set to `true` to enable |
+| `ZALO_PROXY_URL` | Proxy URL for Zalo API requests |
+| `ZALO_USE_POLLING` | Use polling instead of webhooks |
+| `ZALO_WEBHOOK_URL` | Webhook callback URL |
+| `ZALO_WEBHOOK_PATH` | Custom webhook path |
+| `ZALO_WEBHOOK_PORT` | Webhook listener port |
 
 ## Features
 

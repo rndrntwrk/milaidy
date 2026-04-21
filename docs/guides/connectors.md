@@ -1,7 +1,7 @@
 ---
 title: "Platform Connectors"
 sidebarTitle: "Connectors"
-description: "Platform bridges for 27 messaging platforms — 18 auto-enabled from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Twitter, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, Lens, WeChat) plus 9 installable from the registry (Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
+description: "Platform bridges for 27 messaging platforms — 23 auto-enabled from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Twitter, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, Lens, WeChat, Bluesky, Instagram, LINE, Zalo, Tlon) plus 4 installable from the registry (Twilio, GitHub, Gmail Watch, Nextcloud Talk)."
 ---
 
 Connectors are platform bridges that allow your agent to communicate across messaging platforms and social networks. Each connector handles authentication, message routing, session management, and platform-specific features.
@@ -67,15 +67,15 @@ Connectors marked **Auto** load automatically when their config is present in `m
 | Feishu / Lark | App ID + secret | Yes | Yes (group chats) | No | Auto |
 | Nostr | Private key (nsec/hex) | Yes (NIP-04) | N/A | No | Auto |
 | Lens | API key | Yes | N/A | No | Auto |
-| Bluesky | Account credentials | Posts | N/A | No | Registry |
-| Instagram | Username + password | DMs | N/A | No | Registry |
-| LINE | Channel access token + secret | Yes | Yes | No | Registry |
-| Zalo | Access token | Yes | Yes | No | Registry |
+| Bluesky | Account credentials | Posts | N/A | No | Auto |
+| Instagram | Username + password | DMs | N/A | No | Auto |
+| LINE | Channel access token + secret | Yes | Yes | No | Auto |
+| Zalo | Access token | Yes | Yes | No | Auto |
+| Tlon | Ship credentials | Yes | Yes (Urbit chats) | No | Auto |
 | Twilio | Account SID + auth token | SMS/Voice | N/A | No | Registry |
 | GitHub | API token | Issues/PRs | Yes (repos) | No | Registry |
 | Gmail Watch | Service account / OAuth | N/A | N/A | No | Registry |
 | Nextcloud Talk | Server credentials | Yes | Yes (rooms) | No | Registry |
-| Tlon | Ship credentials | Yes | Yes (Urbit chats) | No | Registry |
 
 ---
 
@@ -564,7 +564,7 @@ Connects to iMessage and SMS messaging via the Blooio service with signed webhoo
 - Dry run mode for testing
 - AT Protocol-based decentralized social networking
 
-**Note:** This connector is available from the plugin registry. Install it with `milady plugins install @elizaos/plugin-bluesky`.
+This connector auto-enables when its configuration is present in `milady.json`.
 
 ---
 
@@ -596,7 +596,7 @@ Connects to iMessage and SMS messaging via the Blooio service with signed webhoo
 - Dry run mode for testing
 - Configurable posting and polling intervals
 
-**Note:** This connector is available from the plugin registry. Install it with `milady plugins install @elizaos/plugin-instagram`.
+This connector auto-enables when its configuration is present in `milady.json`.
 
 ---
 
@@ -856,7 +856,7 @@ operate yourself or explicitly trust for that message flow.
 - Group chat support
 - Webhook-based event handling
 
-**Note:** This connector is available from the plugin registry. Install it with `milady plugins install @elizaos/plugin-line`.
+This connector auto-enables when its configuration is present in `milady.json`.
 
 ---
 
@@ -888,7 +888,7 @@ operate yourself or explicitly trust for that message flow.
 
 A personal-account variant is also available as `@elizaos/plugin-zalouser` for one-to-one messaging outside of the Official Account system.
 
-**Note:** This connector is available from the plugin registry. Install it with `milady plugins install @elizaos/plugin-zalo`.
+This connector auto-enables when its configuration is present in `milady.json`.
 
 ---
 
@@ -1028,7 +1028,7 @@ Gmail Watch is enabled via the `features.gmailWatch` flag or environment variabl
 - Ship-to-ship messaging
 - Group chat participation
 
-**Note:** This connector is available from the plugin registry. Install it with `milady plugins install @elizaos/plugin-tlon`.
+This connector auto-enables when its configuration is present in `milady.json`.
 
 ---
 

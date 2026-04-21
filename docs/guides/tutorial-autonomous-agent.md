@@ -61,45 +61,34 @@ Enabling autonomous mode for an agent is straightforward through the Milady dash
 
 ### Via API
 
-You can also enable and configure autonomous mode programmatically using the Milady API:
+You can also enable autonomous mode programmatically using the local Milady API:
 
 <CodeGroup>
 ```bash curl
-curl -X POST https://api.milady.ai/agents/autonomous-config \
-  -H "Authorization: Bearer YOUR_API_KEY" \
+# Enable autonomous operation (local API, default port 31337 in dev)
+curl -X POST http://localhost:31337/api/agent/autonomy \
   -H "Content-Type: application/json" \
   -d '{
-    "agentId": "agent_xyz123",
-    "enabled": true,
-    "triggerType": "interval",
-    "triggerConfig": {
-      "intervalSeconds": 3600,
-      "timezone": "UTC"
-    },
-    "safetyControls": {
-      "maxRunsPerDay": 24,
-      "maxConcurrentRuns": 1,
-      "timeoutSeconds": 300,
-      "resourceLimits": {
-        "maxMemoryMB": 512,
-        "maxCpuPercent": 50
-      }
-    },
-    "notificationChannels": ["email", "slack"]
+    "enabled": true
   }'
 ```
 
 ```json JSON Response
 {
-  "success": true,
-  "configId": "config_abc789",
-  "agentId": "agent_xyz123",
-  "status": "active",
-  "nextExecutionTime": "2026-03-18T15:00:00Z",
-  "createdAt": "2026-03-18T14:23:45Z"
+  "ok": true,
+  "autonomy": true,
+  "thinking": false
 }
 ```
 </CodeGroup>
+
+To check the current autonomy state:
+
+```bash
+curl http://localhost:31337/api/agent/autonomy
+```
+
+See the [Autonomy API reference](/rest/autonomy) for full endpoint documentation.
 
 <Warning>
 Always use environment variables or secure secret management for your API keys. Never hardcode credentials in your code or configuration files.
@@ -318,22 +307,18 @@ You can disable autonomous mode at any time through the dashboard or API:
 
 <CodeGroup>
 ```bash curl
-curl -X POST https://api.milady.ai/agents/autonomous-config/disable \
-  -H "Authorization: Bearer YOUR_API_KEY" \
+curl -X POST http://localhost:31337/api/agent/autonomy \
   -H "Content-Type: application/json" \
   -d '{
-    "agentId": "agent_xyz123",
-    "reason": "Maintenance window"
+    "enabled": false
   }'
 ```
 
 ```json JSON Response
 {
-  "success": true,
-  "agentId": "agent_xyz123",
-  "autonomyStatus": "disabled",
-  "disabledAt": "2026-03-18T14:45:00Z",
-  "previousNextExecution": "2026-03-18T15:00:00Z"
+  "ok": true,
+  "autonomy": false,
+  "thinking": false
 }
 ```
 </CodeGroup>

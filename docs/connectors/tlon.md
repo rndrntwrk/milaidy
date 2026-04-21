@@ -8,7 +8,7 @@ Connect your agent to the Urbit network via Tlon for ship-to-ship messaging.
 
 ## Overview
 
-The Tlon connector is an elizaOS plugin that bridges your agent to the Urbit network. It supports ship-to-ship messaging and group chat participation. This connector is available from the plugin registry.
+The Tlon connector is an elizaOS plugin that bridges your agent to the Urbit network. It supports ship-to-ship messaging and group chat participation. This connector is **auto-enabled** when its configuration is present in `milady.json`.
 
 ## Package Info
 
@@ -16,7 +16,7 @@ The Tlon connector is an elizaOS plugin that bridges your agent to the Urbit net
 |-------|-------|
 | Package | `@elizaos/plugin-tlon` |
 | Config key | `connectors.tlon` |
-| Install | `milady plugins install tlon` |
+| Category | Auto-enabled connector |
 
 ## Setup Requirements
 
@@ -41,6 +41,10 @@ The Tlon connector is an elizaOS plugin that bridges your agent to the Urbit net
 | `TLON_SHIP` | Urbit ship name |
 | `TLON_CODE` | Ship access code |
 | `TLON_URL` | Ship URL |
+| `TLON_ENABLED` | Set to `true` to enable |
+| `TLON_DM_ALLOWLIST` | Comma-separated list of allowed DM senders |
+| `TLON_GROUP_CHANNELS` | Comma-separated list of group channels to join |
+| `TLON_AUTO_DISCOVER_CHANNELS` | Auto-discover and join available channels |
 
 ## Features
 
