@@ -79,10 +79,9 @@ These services are available but not loaded by default — enable via admin pane
 | `@elizaos/plugin-vision` | Visual understanding (feature-gated) |
 | `@elizaos/plugin-edge-tts` | Text-to-speech (Microsoft Edge TTS) |
 | `@elizaos/plugin-elevenlabs` | ElevenLabs text-to-speech |
+| `@elizaos/plugin-cli` | CLI interface |
 | `@elizaos/plugin-secrets-manager` | Encrypted credential storage (statically imported, may be re-enabled as core) |
 | `relationships` | Contact graph, relationship memory (statically imported, may be re-enabled as core) |
-| `@elizaos/plugin-plugin-manager` | Dynamic plugin install/uninstall at runtime (now a core plugin, always loaded) |
-| `@elizaos/plugin-computeruse` | Computer use automation (requires platform binaries) |
 | `@elizaos/plugin-x402` | x402 HTTP micropayment protocol |
 
 ## Trajectory Logger Service

@@ -89,70 +89,70 @@ bun run dev
 
 ## Monorepo Structure
 
-Milady is a monorepo managed with Turborepo and Bun workspaces.
+Milady is a monorepo managed with Bun workspaces. The core elizaOS runtime and all plugins live inside the `eliza/` git submodule. Run `bun install` to initialize it.
 
 ```
 milady/
-├── packages/                # Shared packages
-│   ├── typescript/          # @elizaos/core — Core TypeScript SDK
-│   ├── elizaos/             # CLI tool (milady command)
-│   ├── skills/              # Skills system and bundled skills
-│   ├── docs/                # Documentation site (Mintlify)
-│   ├── schemas/             # Protobuf schemas
-│   └── tui/                 # Terminal UI (disabled)
-├── plugins/                 # Official plugins (100+)
-│   ├── plugin-anthropic/    # Anthropic model provider
-│   ├── plugin-telegram/     # Telegram connector
-│   ├── plugin-discord/      # Discord connector
-│   └── ...
+├── eliza/                       # Git submodule — elizaOS runtime + plugins
+│   ├── packages/
+│   │   ├── app-core/            # Main application package (runtime source of truth)
+│   │   │   └── src/
+│   │   │       ├── entry.ts     # CLI bootstrap
+│   │   │       ├── cli/         # Commander CLI (milady command)
+│   │   │       ├── runtime/     # Agent loader, plugin resolution
+│   │   │       ├── api/         # Dashboard API server
+│   │   │       ├── config/      # Plugin auto-enable, config schemas
+│   │   │       ├── connectors/  # Connector integration code
+│   │   │       └── services/    # Business logic
+│   │   ├── agent/               # Upstream elizaOS agent (core plugins, auto-enable maps)
+│   │   ├── typescript/          # @elizaos/core — Core TypeScript SDK
+│   │   └── skills/              # Skills system and bundled skills
+│   └── plugins/                 # Official plugins (100+)
+│       ├── plugin-anthropic/    # Anthropic model provider
+│       ├── plugin-telegram/     # Telegram connector
+│       ├── plugin-discord/      # Discord connector
+│       └── ...
 ├── apps/
-│   ├── app/                 # Desktop/mobile app (Capacitor + React)
-│   └── ...                  # No shipped chrome-extension app in this release checkout
-├── src/                     # Milady runtime
-│   ├── runtime/             # elizaOS runtime bootstrap
-│   ├── plugins/             # Built-in Milady plugins
-│   ├── config/              # Configuration loading
-│   ├── services/            # Registry client, plugin manager
-│   └── api/                 # REST API server
-├── skills/                  # Workspace skills
-├── docs/                    # Documentation (this site)
-├── scripts/                 # Build and utility scripts
-├── test/                    # Test setup, helpers, e2e
-├── AGENTS.md                # Repository guidelines
-├── plugins.json             # Plugin registry manifest
-└── tsdown.config.ts         # Build config
+│   ├── app/                     # Desktop (Electrobun) + mobile (Capacitor) + web UI
+│   └── homepage/                # Marketing site
+├── skills/                      # Workspace skills
+├── docs/                        # Documentation (this site)
+├── scripts/                     # Build, dev, and utility scripts
+├── test/                        # Test setup, helpers, e2e
+├── plugins.json                 # Plugin registry manifest (98 plugins)
+├── AGENTS.md                    # Repository guidelines
+└── tsdown.config.ts             # Build config
 ```
 
-### Turbo Build System
+> **Important:** All source code paths like `packages/app-core/src/...` refer to files inside the `eliza/` submodule. When navigating the filesystem, prefix with `eliza/` (e.g., `eliza/packages/app-core/src/entry.ts`).
 
-Turborepo orchestrates builds across all packages with dependency-aware caching:
+### Build System
+
+Bun workspaces manage the monorepo. Common build commands:
 
 ```bash
-# Build everything (with caching)
-turbo run build
+# Build everything
+bun run build
 
-# Build a specific package
-turbo run build --filter=@elizaos/core
+# Run all tests
+bun run test
 
-# Build a package and all its dependencies
-turbo run build --filter=@elizaos/plugin-telegram...
+# Typecheck + lint
+bun run check
 
-# Run tests across all packages
-turbo run test
-
-# Lint all packages
-turbo run lint
+# Development mode (API on :31337, UI on :2138)
+bun run dev
 ```
 
 ### Key Entry Points
 
 | File | Purpose |
 |------|---------|
-| `src/entry.ts` | CLI entry point |
-| `src/index.ts` | Library exports |
-| `src/runtime/eliza.ts` | elizaOS runtime initialization |
-| `src/runtime/milady-plugin.ts` | Main Milady plugin |
-| `milady.mjs` | npm bin entry |
+| `milady.mjs` | npm bin entry (top-level) |
+| `eliza/packages/app-core/src/entry.ts` | CLI process bootstrap |
+| `eliza/packages/app-core/src/index.ts` | Library exports |
+| `eliza/packages/app-core/src/runtime/eliza.ts` | elizaOS runtime initialization |
+| `eliza/packages/app-core/src/cli/run-main.ts` | Commander CLI + error handling |
 
 ---
 

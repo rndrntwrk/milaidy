@@ -308,51 +308,57 @@ Install the [Biome VS Code extension](https://marketplace.visualstudio.com/items
 
 ```
 milady/
+├── eliza/                       # Git submodule — elizaOS runtime + plugins
+│   ├── packages/
+│   │   ├── app-core/            # Main application package (runtime source of truth)
+│   │   │   └── src/
+│   │   │       ├── entry.ts     # CLI bootstrap
+│   │   │       ├── cli/         # Commander CLI (milady command)
+│   │   │       ├── runtime/     # Agent loader, plugin resolution
+│   │   │       ├── api/         # Dashboard API server
+│   │   │       ├── config/      # Plugin auto-enable, config schemas
+│   │   │       ├── connectors/  # Connector integration code
+│   │   │       └── services/    # Business logic
+│   │   ├── agent/               # Upstream elizaOS agent (core plugins, auto-enable maps)
+│   │   ├── typescript/          # @elizaos/core — Core TypeScript SDK
+│   │   └── skills/              # Skills system and bundled skills
+│   └── plugins/                 # Official plugins (100+)
+│       ├── plugin-anthropic/    # Anthropic model provider
+│       ├── plugin-telegram/     # Telegram connector
+│       ├── plugin-discord/      # Discord connector
+│       └── ...
 ├── apps/
-│   ├── app/                 # Desktop/mobile app (Capacitor + React)
-│   │   ├── electrobun/      # Electrobun desktop wrapper
-│   │   └── src/             # React UI components
-├── deploy/                  # Docker deployment configs
-├── docs/                    # Documentation site
-├── packages/                # Workspace packages
-├── plugins/                 # Workspace plugin packages
-├── scripts/                 # Build, dev, and release tooling
-├── skills/                  # Skill catalog cache
-├── src/                     # Core source code
-│   ├── actions/             # Agent actions
-│   ├── api/                 # HTTP API routes
-│   ├── cli/                 # CLI command definitions
-│   ├── config/              # Configuration handling
-│   ├── hooks/               # Runtime hooks
-│   ├── plugins/             # Built-in plugins
-│   ├── providers/           # Context providers
-│   ├── runtime/             # elizaOS runtime wrapper
-│   ├── security/            # Security utilities
-│   ├── services/            # Background services
-│   ├── triggers/            # Trigger system
-│   ├── tui/                 # Terminal UI (disabled)
-│   └── utils/               # Helper utilities
-├── test/                    # Test setup, helpers, e2e scripts
-├── AGENTS.md                # Repository guidelines for agents
-├── CONTRIBUTING.md          # Contribution philosophy
-├── package.json             # Root package config
-├── plugins.json             # Plugin registry manifest
-├── biome.json               # Biome linter/formatter config
-├── tsconfig.json            # TypeScript config
-├── tsdown.config.ts         # Build config (tsdown bundler)
-├── vitest.config.ts         # Vitest test config
-└── milady.mjs               # npm bin entry point
+│   ├── app/                     # Desktop (Electrobun) + mobile (Capacitor) + web UI
+│   │   ├── electrobun/          # Electrobun desktop wrapper
+│   │   └── src/                 # React UI components
+│   └── homepage/                # Marketing site
+├── deploy/                      # Docker deployment configs
+├── docs/                        # Documentation site
+├── scripts/                     # Build, dev, and release tooling
+├── skills/                      # Workspace skills
+├── test/                        # Test setup, helpers, e2e scripts
+├── AGENTS.md                    # Repository guidelines for agents
+├── CONTRIBUTING.md              # Contribution philosophy
+├── package.json                 # Root package config
+├── plugins.json                 # Plugin registry manifest (98 plugins)
+├── biome.json                   # Biome linter/formatter config
+├── tsconfig.json                # TypeScript config
+├── tsdown.config.ts             # Build config (tsdown bundler)
+├── vitest.config.ts             # Vitest test config
+└── milady.mjs                   # npm bin entry point
 ```
+
+> **Important:** All source code paths like `packages/app-core/src/...` refer to files inside the `eliza/` submodule. When navigating the filesystem, prefix with `eliza/` (e.g., `eliza/packages/app-core/src/entry.ts`).
 
 ### Key Entry Points
 
 | File | Purpose |
 |------|---------|
-| `src/entry.ts` | CLI entry point |
-| `src/index.ts` | Library exports |
-| `src/runtime/eliza.ts` | elizaOS runtime initialization |
-| `src/runtime/milady-plugin.ts` | Main Milady plugin |
 | `milady.mjs` | npm bin entry (`"bin"` in package.json) |
+| `eliza/packages/app-core/src/entry.ts` | CLI process bootstrap |
+| `eliza/packages/app-core/src/index.ts` | Library exports |
+| `eliza/packages/app-core/src/runtime/eliza.ts` | elizaOS runtime initialization |
+| `eliza/packages/app-core/src/cli/run-main.ts` | Commander CLI + error handling |
 
 ---
 

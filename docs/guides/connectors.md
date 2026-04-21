@@ -1,7 +1,7 @@
 ---
 title: "Platform Connectors"
 sidebarTitle: "Connectors"
-description: "Platform bridges for 27 messaging platforms — 18 auto-enabled from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Twitter, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, Lens, WeChat) plus 9 installable from the registry (Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
+description: "Platform bridges for 24+ messaging platforms — auto-enabled from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr) plus registry connectors (Bluesky, Instagram, LINE, Zalo, BlueBubbles, Nextcloud Talk, Tlon, Zalouser) and auto-enable-mapped connectors that require separate installation (Twitter, Lens, WeChat)."
 ---
 
 Connectors are platform bridges that allow your agent to communicate across messaging platforms and social networks. Each connector handles authentication, message routing, session management, and platform-specific features.
@@ -37,7 +37,10 @@ Connectors are platform bridges that allow your agent to communicate across mess
 27. [Nextcloud Talk](#nextcloud-talk)
 28. [Tlon](#tlon)
 29. [Lens](#lens)
-30. [Connector Lifecycle](#connector-lifecycle)
+30. [BlueBubbles](#bluebubbles)
+31. [Zalouser](#zalouser)
+32. [ACP](#acp)
+33. [Connector Lifecycle](#connector-lifecycle)
 31. [Multi-Account Support](#multi-account-support)
 32. [Session Management](#session-management)
 
@@ -58,15 +61,15 @@ Connectors marked **Auto** load automatically when their config is present in `m
 | Blooio | API key + webhook | Yes | Yes | No | Auto |
 | Microsoft Teams | App ID + password | Yes | Yes (teams/channels) | No | Auto |
 | Google Chat | Service account | Yes | Yes (spaces) | Yes | Auto |
-| Twitter | API keys + tokens | DMs | N/A | No | Auto |
+| Twitter | API keys + tokens | DMs | N/A | No | Auto* |
 | Farcaster | Neynar API key + signer | Casts | Yes (channels) | No | Auto |
 | Twitch | Client ID + access token | Yes (chat) | Yes (channels) | No | Auto |
 | Mattermost | Bot token | Yes | Yes (channels) | No | Auto |
-| WeChat | Proxy API key + QR code | Yes | Yes | Yes | Auto |
+| WeChat | Proxy API key + QR code | Yes | Yes | Yes | Auto* |
 | Matrix | Access token | Yes | Yes (rooms) | No | Auto |
 | Feishu / Lark | App ID + secret | Yes | Yes (group chats) | No | Auto |
 | Nostr | Private key (nsec/hex) | Yes (NIP-04) | N/A | No | Auto |
-| Lens | API key | Yes | N/A | No | Auto |
+| Lens | API key | Yes | N/A | No | Auto* |
 | Bluesky | Account credentials | Posts | N/A | No | Registry |
 | Instagram | Username + password | DMs | N/A | No | Registry |
 | LINE | Channel access token + secret | Yes | Yes | No | Registry |
@@ -76,6 +79,11 @@ Connectors marked **Auto** load automatically when their config is present in `m
 | Gmail Watch | Service account / OAuth | N/A | N/A | No | Registry |
 | Nextcloud Talk | Server credentials | Yes | Yes (rooms) | No | Registry |
 | Tlon | Ship credentials | Yes | Yes (Urbit chats) | No | Registry |
+| BlueBubbles | Server credentials | Yes | Yes | No | Registry |
+| Zalouser | Personal account credentials | Yes | No | No | Registry |
+| ACP | Gateway token | Yes (agent-to-agent) | N/A | No | Feature |
+
+**Auto\*:** These connectors are in the runtime auto-enable map (they auto-load when config is present) but are not in the `plugins.json` registry. They may require manual npm installation (`npm install @elizaos/plugin-<name>`) or, in the case of WeChat, are provided as a workspace package in this repository.
 
 ---
 
@@ -494,6 +502,8 @@ Connects to iMessage and SMS messaging via the Blooio service with signed webhoo
 - Dry run mode for testing
 - Configurable max tweet length (default: 4000)
 
+> **Note:** This connector is in the auto-enable map but not in `plugins.json`. You may need to install the package manually with `npm install @elizaos/plugin-twitter`.
+
 ---
 
 ## Farcaster
@@ -715,6 +725,8 @@ operate yourself or explicitly trust for that message flow.
 - Image send/receive (enable with `features.images: true`)
 - QR code login with automatic session persistence
 - Multi-account support via accounts map
+
+> **Note:** This connector is in the auto-enable map but not in `plugins.json`. It is provided as a workspace package (`@elizaos/plugin-wechat`) within this repository. If running from a published install, you may need to install it manually.
 
 ---
 
@@ -1056,6 +1068,96 @@ Gmail Watch is enabled via the `features.gmailWatch` flag or environment variabl
 - Lens Protocol social interactions
 - Post publishing and engagement
 
+> **Note:** This connector is in the auto-enable map but not in `plugins.json`. You may need to install the package manually with `npm install @elizaos/plugin-lens`.
+
+---
+
+## BlueBubbles
+
+### Setup Requirements
+
+- BlueBubbles server running on macOS
+- Server URL and password
+
+### Key Configuration
+
+```json
+{
+  "connectors": {
+    "bluebubbles": {
+      "enabled": true
+    }
+  }
+}
+```
+
+### Features
+
+- iMessage bridge via BlueBubbles server
+- DM and group messaging
+- Alternative to the native iMessage connector for non-direct setups
+
+**Note:** This connector is available from the plugin registry. Install it with `milady plugins install @elizaos/plugin-bluebubbles`.
+
+---
+
+## Zalouser
+
+### Setup Requirements
+
+- Zalo personal account credentials
+
+### Key Configuration
+
+```json
+{
+  "connectors": {
+    "zalouser": {
+      "enabled": true
+    }
+  }
+}
+```
+
+### Features
+
+- Personal Zalo account messaging (as opposed to the Official Account connector `@elizaos/plugin-zalo`)
+- One-to-one messaging outside the Official Account system
+
+**Note:** This connector is available from the plugin registry. Install it with `milady plugins install @elizaos/plugin-zalouser`.
+
+---
+
+## ACP
+
+Agent Communication Protocol — connects agents through an ACP gateway for agent-to-agent communication.
+
+### Setup Requirements
+
+- ACP gateway URL and authentication token
+
+### Key Configuration
+
+```json
+{
+  "connectors": {
+    "acp": {
+      "enabled": true
+    }
+  }
+}
+```
+
+**Environment variables:** `ACP_GATEWAY_TOKEN`, `ACP_GATEWAY_URL`, `ACP_GATEWAY_PASSWORD`
+
+### Features
+
+- Agent-to-agent communication via ACP gateway
+- Session management with configurable persistence
+- Client mode and version identification
+
+**Note:** This connector is available from the plugin registry. Install it with `milady plugins install @elizaos/plugin-acp`.
+
 ---
 
 ## Connector Lifecycle
@@ -1135,7 +1237,7 @@ The `dmPolicy` options are:
 **General connector failures:**
 
 - Connector plugin not loading:
-  Check connector ID mapping in `packages/agent/src/config/plugin-auto-enable.ts` (in the `eliza` submodule), plugin availability, and `plugins.entries` overrides. The auto-enable layer maps connector config keys to plugin package names — a mismatch means the plugin is silently skipped.
+  Check connector ID mapping in `eliza/packages/agent/src/config/plugin-auto-enable.ts` (in the `eliza` submodule), plugin availability, and `plugins.entries` overrides. The auto-enable layer maps connector config keys to plugin package names — a mismatch means the plugin is silently skipped.
 - Auth succeeds but no messages arrive:
   Check platform webhook/socket settings and policy gates (`dmPolicy`, `groupPolicy`). For webhook-based connectors, confirm the callback URL is publicly reachable.
 - Misrouted connector secrets:
