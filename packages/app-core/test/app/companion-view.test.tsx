@@ -823,6 +823,80 @@ describe("CompanionView", () => {
     ).toHaveLength(1);
   });
 
+  it("surfaces live destination state in the header control and ends live on click", async () => {
+    mockClientFns.streamStatus.mockResolvedValue({
+      running: true,
+      ffmpegAlive: true,
+      uptime: 12,
+      frameCount: 48,
+      destination: { id: "twitch", name: "Twitch" },
+    });
+    mockClientFns.executeAliceOperatorPlan.mockResolvedValue({
+      ok: true,
+      allSucceeded: true,
+      results: [
+        {
+          action: "STREAM555_END_LIVE",
+          success: true,
+          message: "ended",
+          data: null,
+        },
+      ],
+    });
+    mockUseApp.mockReturnValue(
+      createContext({
+        onboardingHandoffPhase: "bootstrapping",
+        selectedVrmIndex: 9,
+        t: (key: string, options?: Record<string, unknown>) => {
+          if (typeof options?.defaultValue === "string") {
+            return options.defaultValue.replace(
+              "{{destination}}",
+              String(options.destination ?? ""),
+            );
+          }
+          return key;
+        },
+      }),
+    );
+
+    let tree: TestRenderer.ReactTestRenderer | undefined;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(CompanionView));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const liveButton = tree?.root.findByProps({
+      "data-testid": "companion-header-go-live",
+    });
+
+    expect(text(liveButton)).toContain("LIVE");
+    expect(liveButton?.props.title).toBe("Live on Twitch. Click to end live.");
+    expect(liveButton?.props["aria-label"]).toBe("End Live");
+    expect(
+      text(
+        tree?.root.findByProps({
+          "data-testid": "companion-header-live-destination",
+        }),
+      ),
+    ).toContain("Twitch");
+
+    await act(async () => {
+      await liveButton?.props.onClick();
+      await Promise.resolve();
+    });
+
+    expect(mockClientFns.executeAliceOperatorPlan).toHaveBeenCalledWith(
+      expect.objectContaining({
+        steps: [
+          expect.objectContaining({
+            action: "STREAM555_END_LIVE",
+          }),
+        ],
+      }),
+    );
+  });
+
   it("plays the greeting emote only after teleport completion", async () => {
     vi.useFakeTimers();
     window.setTimeout = globalThis.setTimeout.bind(globalThis);
