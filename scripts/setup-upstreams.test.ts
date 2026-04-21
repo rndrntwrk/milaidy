@@ -264,6 +264,9 @@ describe("getUpstreamPackageLinks", () => {
       path.join(agentPackage, "package.json"),
       '{"name":"@elizaos/agent"}\n',
     );
+    fs.mkdirSync(path.join(agentPackage, "node_modules"), {
+      recursive: true,
+    });
     writeFile(
       path.join(lifeopsPackage, "package.json"),
       '{"name":"@elizaos/app-lifeops"}\n',
@@ -281,6 +284,11 @@ describe("getUpstreamPackageLinks", () => {
       linkPath: path.join(lifeopsPackage, "node_modules", "@elizaos", "agent"),
       targetPath: agentPackage,
     });
+    expect(
+      links.some((link) =>
+        link.linkPath.includes(path.join("packages", "agent", "node_modules")),
+      ),
+    ).toBe(false);
   });
 });
 

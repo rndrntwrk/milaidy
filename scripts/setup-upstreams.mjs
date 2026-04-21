@@ -765,20 +765,12 @@ export function hasInstalledElizaDependencies(
 
 function getPackageLinkRootPaths(
   repoRoot,
-  {
-    elizaRoot = getRepoElizaRoot(repoRoot),
-    pluginsRoot = getRepoPluginsRoot(repoRoot),
-  } = {},
+  { elizaRoot = getRepoElizaRoot(repoRoot) } = {},
 ) {
   const roots = PACKAGE_LINK_ROOTS.map((segments) =>
     path.join(repoRoot, ...segments),
   );
-  const packageDirs = [
-    ...discoverElizaPackageDirs(elizaRoot),
-    ...discoverPluginPackageDirs(pluginsRoot),
-  ];
-
-  for (const packageDir of packageDirs) {
+  for (const packageDir of discoverElizaAppPackageDirs(elizaRoot)) {
     const packageNodeModules = path.join(packageDir, "node_modules");
     if (existsSync(packageNodeModules)) {
       roots.push(packageNodeModules);
@@ -815,9 +807,9 @@ function getPackageLinkEntries(
   }));
 }
 
-function discoverElizaPackageDirs(elizaRoot) {
+function discoverElizaPackageDirsForParents(elizaRoot, parentDirs) {
   const packageDirs = [];
-  for (const parentDir of ["apps", "packages", "plugins"]) {
+  for (const parentDir of parentDirs) {
     const searchRoot = path.join(elizaRoot, parentDir);
     if (!existsSync(searchRoot)) {
       continue;
@@ -847,6 +839,18 @@ function discoverElizaPackageDirs(elizaRoot) {
   }
 
   return packageDirs;
+}
+
+function discoverElizaAppPackageDirs(elizaRoot) {
+  return discoverElizaPackageDirsForParents(elizaRoot, ["apps"]);
+}
+
+function discoverElizaPackageDirs(elizaRoot) {
+  return discoverElizaPackageDirsForParents(elizaRoot, [
+    "apps",
+    "packages",
+    "plugins",
+  ]);
 }
 
 function discoverPluginPackageDirs(pluginsRoot) {
