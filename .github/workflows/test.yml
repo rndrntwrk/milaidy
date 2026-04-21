@@ -312,9 +312,11 @@ jobs:
         run: |
           # Run bun's own postinstall (skipped by --ignore-scripts) so its
           # runtime-embedded build plugins can execute.
-          if [ -d node_modules/bun ] && [ -f node_modules/bun/install.js ]; then
-            (cd node_modules/bun && node install.js) || true
-          fi
+          for bun_package_dir in node_modules/bun eliza/node_modules/bun; do
+            if [ -f "${bun_package_dir}/install.js" ]; then
+              (cd "${bun_package_dir}" && node install.js)
+            fi
+          done
           if [ -d eliza/packages/schemas ] && [ -f eliza/packages/schemas/buf.gen.yaml ] && [ ! -d eliza/packages/typescript/src/types/generated ]; then
             cd eliza/packages/schemas
             bunx @bufbuild/buf@1.67.0 generate
@@ -376,9 +378,11 @@ jobs:
         run: |
           # Run bun's own postinstall (skipped by --ignore-scripts) so its
           # runtime-embedded build plugins can execute.
-          if [ -d node_modules/bun ] && [ -f node_modules/bun/install.js ]; then
-            (cd node_modules/bun && node install.js) || true
-          fi
+          for bun_package_dir in node_modules/bun eliza/node_modules/bun; do
+            if [ -f "${bun_package_dir}/install.js" ]; then
+              (cd "${bun_package_dir}" && node install.js)
+            fi
+          done
           if [ -d eliza/packages/schemas ] && [ -f eliza/packages/schemas/buf.gen.yaml ] && [ ! -d eliza/packages/typescript/src/types/generated ]; then
             cd eliza/packages/schemas
             bunx @bufbuild/buf@1.67.0 generate
@@ -804,6 +808,11 @@ jobs:
         if: steps.provider-check.outputs.skip != 'true'
         shell: bash
         run: |
+          for bun_package_dir in node_modules/bun eliza/node_modules/bun; do
+            if [ -f "${bun_package_dir}/install.js" ]; then
+              (cd "${bun_package_dir}" && node install.js)
+            fi
+          done
           if [ -d eliza/packages/schemas ] && [ -f eliza/packages/schemas/buf.gen.yaml ] && [ ! -d eliza/packages/typescript/src/types/generated ]; then
             cd eliza/packages/schemas
             bunx @bufbuild/buf@1.67.0 generate
