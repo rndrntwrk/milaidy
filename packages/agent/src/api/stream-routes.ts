@@ -128,6 +128,14 @@ interface Stream555SessionLike {
   sessionId: string;
 }
 
+interface Stream555PlatformOverviewLike {
+  platforms?: Array<{
+    platformId?: string;
+    enabled?: boolean;
+    status?: string | null;
+  }>;
+}
+
 interface Stream555ConfigLike {
   defaultSessionId?: string;
 }
@@ -135,6 +143,7 @@ interface Stream555ConfigLike {
 interface Stream555ServiceLike {
   getBoundSessionId(): string | null;
   getConfig(): Stream555ConfigLike | null;
+  getPlatformStatusOverview?(): Promise<Stream555PlatformOverviewLike>;
   createOrResumeSession(sessionId?: string): Promise<Stream555SessionLike>;
   bindWebSocket(sessionId: string): Promise<void>;
   getStreamStatus(sessionId?: string): Promise<Stream555StatusLike>;
@@ -267,6 +276,73 @@ function getConfiguredStream555SessionId(
   if (bound) return bound;
   const configured = service.getConfig()?.defaultSessionId?.trim();
   return configured || undefined;
+}
+
+function stream555OverviewShowsLiveOutputs(
+  overview?: Stream555PlatformOverviewLike | null,
+): boolean {
+  if (!overview || !Array.isArray(overview.platforms)) {
+    return false;
+  }
+
+  return overview.platforms.some((platform) => {
+    const platformId =
+      typeof platform?.platformId === "string"
+        ? platform.platformId.trim().toLowerCase()
+        : "";
+    if (
+      !platformId ||
+      !STREAM555_DESTINATION_MAPPINGS.some(
+        (mapping) => mapping.platformId === platformId,
+      )
+    ) {
+      return false;
+    }
+    return isStream555PlatformDisplayableStatus(platform.status ?? undefined);
+  });
+}
+
+async function recoverActiveStream555SessionId(
+  service: Stream555ServiceLike,
+): Promise<string | undefined> {
+  const existing = getConfiguredStream555SessionId(service);
+  if (existing) {
+    return existing;
+  }
+
+  if (typeof service.getPlatformStatusOverview !== "function") {
+    return undefined;
+  }
+
+  let overview: Stream555PlatformOverviewLike | undefined;
+  try {
+    overview = await service.getPlatformStatusOverview();
+  } catch (err) {
+    logger.warn(
+      `[stream] 555stream platform overview unavailable during recovery: ${formatErrorMessage(
+        err,
+      )}`,
+    );
+    return undefined;
+  }
+
+  if (!stream555OverviewShowsLiveOutputs(overview)) {
+    return undefined;
+  }
+
+  const recovered = await service.createOrResumeSession();
+  const sessionId = recovered.sessionId?.trim();
+  if (!sessionId) {
+    throw new Error("555stream did not return a session id during recovery");
+  }
+
+  try {
+    await service.bindWebSocket(sessionId);
+  } catch {
+    // HTTP status/stop calls still work with explicit session ids.
+  }
+
+  return sessionId;
 }
 
 async function ensureStream555SessionId(
@@ -1018,7 +1094,9 @@ export async function handleStreamRoute(
     const stream555 = getStream555Service(state);
     if (stream555) {
       try {
-        const sessionId = getConfiguredStream555SessionId(stream555);
+        const sessionId =
+          getConfiguredStream555SessionId(stream555) ??
+          (await recoverActiveStream555SessionId(stream555));
         if (!sessionId) {
           json(res, { ok: true, live: false });
           return true;
@@ -1142,7 +1220,9 @@ export async function handleStreamRoute(
   if (method === "GET" && pathname === "/api/stream/status") {
     const stream555 = getStream555Service(state);
     if (stream555) {
-      const sessionId = getConfiguredStream555SessionId(stream555);
+      const sessionId =
+        getConfiguredStream555SessionId(stream555) ??
+        (await recoverActiveStream555SessionId(stream555));
       if (!sessionId) {
         json(res, {
           ok: true,
