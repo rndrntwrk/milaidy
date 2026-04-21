@@ -102,6 +102,25 @@ describe("getTemporaryElizaWorkspaceEntries", () => {
       }),
     ).toEqual([]);
   });
+
+  it("includes cloud billing workspace when the nested package exists", () => {
+    const elizaRoot = "/repo/eliza";
+    const billingPkg = path.join(
+      elizaRoot,
+      "cloud",
+      "packages",
+      "services",
+      "billing",
+      "package.json",
+    );
+    const existingPaths = new Set([billingPkg]);
+
+    expect(
+      getTemporaryElizaWorkspaceEntries(elizaRoot, {
+        pathExists: (targetPath) => existingPaths.has(targetPath),
+      }),
+    ).toEqual(["cloud/packages/services/billing"]);
+  });
 });
 
 describe("applyUnpublishedPluginStubOverrides", () => {

@@ -414,9 +414,23 @@ export function getTemporaryElizaWorkspaceEntries(
       },
     ).map(({ stubRelativePath }) => stubRelativePath);
 
+  const cloudBillingWorkspace = "cloud/packages/services/billing";
+  const cloudBillingPackageJson = path.join(
+    elizaRoot,
+    cloudBillingWorkspace,
+    "package.json",
+  );
+  const cloudBillingWorkspaceEntry =
+    pathExists(cloudBillingPackageJson) &&
+    !optionalPluginWorkspaceEntries.includes(cloudBillingWorkspace) &&
+    !unpublishedStubWorkspaceEntries.includes(cloudBillingWorkspace)
+      ? [cloudBillingWorkspace]
+      : [];
+
   return [
     ...optionalPluginWorkspaceEntries,
     ...unpublishedStubWorkspaceEntries,
+    ...cloudBillingWorkspaceEntry,
   ];
 }
 
