@@ -3,6 +3,76 @@ title: Registro de cambios
 description: Novedades en Milady — funcionalidades, mejoras y correcciones.
 ---
 
+<Update label="2026-04-20" description="Semana del 20 de abril; enrutamiento de acciones más inteligente, precisión en mensajería multicanal, mejoras en el optimizador de entrenamiento" tags={["Update", "Fix"]}>
+
+<div id="smarter-action-routing">
+## Enrutamiento de acciones más inteligente
+</div>
+
+Tu agente ahora elige la acción correcta de manera más confiable cuando le das comandos en lenguaje natural. Pedirle a tu agente que "publique esto en Discord" ya no activa accidentalmente la programación, y las consultas de relaciones como "¿cuánto tiempo hace que hablé con Sarah?" ahora se resuelven correctamente independientemente de la formulación. Las acciones de envío multicanal, búsqueda de relaciones y sincronización de intenciones de dispositivo tienen descripciones más precisas que ayudan al planificador de acciones a distinguir entre solicitudes que suenan similares.
+
+<div id="updates">
+## Actualizaciones
+</div>
+
+- **Precisión del optimizador de entrenamiento** — El [sistema de entrenamiento](/es/guides/training) ahora califica las salidas del planificador de acciones usando coincidencia estricta de nombres de acción en lugar de superposición difusa de tokens, por lo que las ejecuciones de optimización producen mejoras más significativas en el comportamiento de tu agente.
+- **Acciones de skills consolidadas** — Los métodos heredados de invocación de skills han sido retirados. `USE_SKILL` es ahora la única forma de activar [skills](/es/plugins/skills), con todos los alias anteriores (`RUN_SKILL`, `INVOKE_SKILL`) redirigiendo a él automáticamente.
+- **API de skills simplificada** — El endpoint de habilitar/deshabilitar de [skills](/es/plugins/skills) se ha consolidado en una única superficie de alternancia, haciendo que la gestión de skills sea más predecible para integraciones y automatizaciones.
+- **Recuperación elegante del conector de salud** — Si la verificación de salud de un conector es temporalmente inalcanzable, el runtime ahora degrada elegantemente en lugar de bloquear la ejecución de otras acciones.
+
+<div id="bug-fixes">
+## Correcciones de errores
+</div>
+
+- Se corrigió que el instalador de escritorio de Windows fallara en sistemas con rutas de archivo largas — la compilación ahora habilita automáticamente el soporte de rutas extendidas
+- Se corrigió que el ícono de la aplicación de escritorio no se mostrara correctamente en el instalador de Windows
+
+</Update>
+
+<Update label="2026-04-19" description="Semana del 19 de abril; rediseño del panel de control, automatizaciones de flujos de trabajo n8n, interfaz del conector life-ops, responsividad móvil" tags={["Feature", "Update", "Fix"]}>
+
+<div id="dashboard-redesign">
+## Rediseño del panel de control
+</div>
+
+La página principal del [panel de control en la nube](/es/guides/cloud) ha sido completamente rediseñada. Las tarjetas de agentes ahora usan un diseño centrado en datos con cuadrículas de instancias más limpias y chips de filtro para una navegación rápida. Una nueva barra lateral persistente con pestañas verticales reemplaza la navegación anterior, y la sección principal ahora está enfocada en tipografía para una experiencia de lectura más tranquila y legible. Puedes aprovisionar nuevos agentes en la nube directamente desde el panel de control con un modal en línea — ya no necesitas navegar a otra página para crear un agente. La eliminación de agentes en la nube y la gestión de acciones de tarjetas también se han restaurado.
+
+<div id="n8n-workflow-automations">
+## Automatizaciones de flujos de trabajo n8n
+</div>
+
+Tu agente ahora admite automatizaciones de flujos de trabajo [n8n](https://n8n.io) a través de un nuevo plugin. Un panel dedicado de Flujos de Trabajo en la vista de Automatizaciones te permite explorar, activar, desactivar y eliminar flujos de trabajo. El sidecar de n8n se inicia automáticamente cuando el plugin está habilitado, y las actualizaciones de estado se consultan en tiempo real. El plugin heredado de n8n ha sido retirado en favor de esta nueva integración.
+
+<div id="life-ops-connector-ui-overhaul">
+## Rediseño de la interfaz del conector life-ops
+</div>
+
+Los paneles de configuración del conector de [life-ops](/es/rest/lifeops) han sido rediseñados con un diseño de tarjetas plano y sin bordes. Cada conector — Signal, Discord, Telegram e iMessage — ahora muestra un botón de conexión claro y un panel de permisos adaptado a la plataforma. Los bordes redundantes y los contenedores de tarjetas se han eliminado, y el banner de advertencia de la nube se ha degradado a texto en línea atenuado para que la interfaz se mantenga limpia y escaneable.
+
+<div id="updates">
+## Actualizaciones
+</div>
+
+- **Página principal responsiva para móviles** — La página principal del panel de control ahora es completamente responsiva en teléfonos y tabletas. La barra superior es fija para que el botón de menú permanezca accesible en páginas largas, los chips de filtro se desplazan horizontalmente en pantallas estrechas, los objetivos táctiles cumplen con el tamaño adecuado para tacto, y el desbordamiento horizontal se elimina en todos los anchos de ventana.
+- **Paneles de configuración compactados** — Los paneles de configuración de Nube y Modelo de IA se han simplificado. Se eliminaron elementos de UI como la cuadrícula de agentes, métricas de uso y enlaces externos muertos. Los menús desplegables de selección de modelo ahora aparecen correctamente incluso antes de conectarse explícitamente a la nube.
+- **SDK de OpenRouter actualizado** — El plugin de OpenRouter se ha actualizado a `@openrouter/ai-sdk-provider` v2.0.0 para mejorar el enrutamiento de modelos y la compatibilidad.
+- **Limpieza del agente de tareas de Discord** — Los mensajes del [agente de codificación](/es/guides/coding-swarms) en Discord ahora son mucho más limpios. Las actualizaciones de latido muestran el tiempo real transcurrido en lugar de nombres internos de herramientas, y los mensajes de nivel de depuración como el estado de sesión y el análisis del validador ya no se filtran al canal.
+- **Accesibilidad de la página principal** — Los modales y las tarjetas de runtime ahora cumplen con los estándares de paridad de accesibilidad con atributos ARIA adecuados, y el contraste se ha mejorado en micro-etiquetas, indicadores de estado y filas de la barra lateral.
+
+<div id="bug-fixes">
+## Correcciones de errores
+</div>
+
+- Se corrigió que la interfaz web del agente mostrara una pantalla en blanco en navegadores sin soporte WebGPU (Chrome sin flag, Safari, Chromium headless) — un polyfill ahora previene el fallo de inicialización de three.js
+- Se corrigió que la interfaz web del agente mostrara una pantalla en blanco debido a un error "require is not defined" cuando el bundle del navegador intentaba resolver valores predeterminados de marca
+- Se corrigió que la API de saldo de billetera en la nube devolviera errores 500 porque el stub de ruta de billetera Steward no tenía una exportación de subruta
+- Se corrigió que el botón "Abrir Milady" en la página principal navegara a un puerto muerto cuando no había un runtime local en ejecución — ahora muestra guía de instalación en su lugar
+- Se corrigió que el modal de aprovisionamiento de agentes en la nube permitiera la creación duplicada de agentes cuando el botón de envío se rehabilitaba después del éxito
+- Se corrigió que las tarjetas del conector life-ops no mostraran botones de conexión
+- Se corrigió que las compilaciones de navegador con Vite 6 fallaran por importaciones de plugins solo del servidor no resueltas — ahora se stubean correctamente
+
+</Update>
+
 <Update label="2026-04-17" description="Semana del 17 de abril; conectores de cuentas personales para life-ops, Google multi-cuenta, aprovisionamiento de billetera en la nube con Steward" tags={["Feature", "Update", "Fix"]}>
 
 <div id="life-ops-personal-account-connectors">
