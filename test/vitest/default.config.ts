@@ -215,6 +215,18 @@ export default defineConfig({
         replacement: appCoreModuleFallbackPath,
       },
       {
+        find: "@elizaos/capacitor-llama",
+        replacement: path.join(
+          repoRoot,
+          "eliza",
+          "packages",
+          "native-plugins",
+          "llama",
+          "src",
+          "index.ts",
+        ),
+      },
+      {
         // Transitively imported via app-lifeops; resolve to source so subpath imports work.
         find: "@elizaos/plugin-telegram/account-auth-service",
         replacement: path.join(
@@ -336,6 +348,7 @@ export default defineConfig({
       "eliza/packages/app-core/platforms/electrobun/src/native/steward.test.ts",
       "eliza/packages/app-core/platforms/electrobun/src/application-menu.test.ts",
       "eliza/packages/app-core/scripts/**/*.test.ts",
+      "eliza/packages/native-plugins/llama/src/**/*.test.ts",
       "eliza/packages/shared/src/**/*.test.ts",
       "eliza/packages/app-core/src/**/*.test.tsx",
       "eliza/packages/agent/src/runtime/roles/test/**/*.test.ts",

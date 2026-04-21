@@ -55,6 +55,7 @@
     "@elizaos/capacitor-swabble": "workspace:*",
     "@elizaos/capacitor-talkmode": "workspace:*",
     "@elizaos/capacitor-websiteblocker": "workspace:*",
+    "llama-cpp-capacitor": "^0.1.5",
     "@pixiv/three-vrm": "^3.4.5",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
