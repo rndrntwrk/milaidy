@@ -393,12 +393,24 @@ describe("ensureRequiredElizaPluginBuilds", () => {
       "plugins",
       "plugin-telegram",
     );
+    const edgeTtsPackage = path.join(
+      repoRoot,
+      "eliza",
+      "plugins",
+      "plugin-edge-tts",
+      "typescript",
+    );
     writeFile(path.join(agentSkillsPackage, "package.json"), "{}\n");
     writeFile(
       path.join(agentSkillsPackage, "dist", "index.js"),
       "export {};\n",
     );
     writeFile(path.join(telegramPackage, "package.json"), "{}\n");
+    writeFile(path.join(edgeTtsPackage, "package.json"), "{}\n");
+    writeFile(
+      path.join(edgeTtsPackage, "dist", "node", "index.node.js"),
+      "export {};\n",
+    );
 
     const runCommandImpl = vi.fn().mockResolvedValue(undefined);
     const log = vi.fn();
@@ -409,6 +421,15 @@ describe("ensureRequiredElizaPluginBuilds", () => {
           targetPath.endsWith(path.join("package.json")) ||
           targetPath.endsWith(
             path.join("plugin-agent-skills", "typescript", "dist", "index.js"),
+          ) ||
+          targetPath.endsWith(
+            path.join(
+              "plugin-edge-tts",
+              "typescript",
+              "dist",
+              "node",
+              "index.node.js",
+            ),
           ),
         stat: () => ({ mtimeMs: 1 }) as fs.Stats,
         runCommandImpl,
@@ -423,6 +444,69 @@ describe("ensureRequiredElizaPluginBuilds", () => {
     });
     expect(log).toHaveBeenCalledWith(
       expect.stringContaining("@elizaos/plugin-telegram"),
+    );
+  });
+
+  it("builds plugin-edge-tts when the node export artifact is missing", async () => {
+    const repoRoot = makeTempDir();
+    const agentSkillsPackage = path.join(
+      repoRoot,
+      "eliza",
+      "plugins",
+      "plugin-agent-skills",
+      "typescript",
+    );
+    const edgeTtsPackage = path.join(
+      repoRoot,
+      "eliza",
+      "plugins",
+      "plugin-edge-tts",
+      "typescript",
+    );
+    const telegramPackage = path.join(
+      repoRoot,
+      "eliza",
+      "plugins",
+      "plugin-telegram",
+    );
+    writeFile(path.join(agentSkillsPackage, "package.json"), "{}\n");
+    writeFile(
+      path.join(agentSkillsPackage, "dist", "index.js"),
+      "export {};\n",
+    );
+    writeFile(path.join(edgeTtsPackage, "package.json"), "{}\n");
+    writeFile(path.join(telegramPackage, "package.json"), "{}\n");
+    writeFile(
+      path.join(telegramPackage, "dist", "account-auth-service.js"),
+      "export {};\n",
+    );
+
+    const runCommandImpl = vi.fn().mockResolvedValue(undefined);
+    const log = vi.fn();
+
+    await expect(
+      ensureRequiredElizaPluginBuilds(repoRoot, {
+        pathExists: (targetPath) =>
+          targetPath.endsWith(path.join("package.json")) ||
+          targetPath.endsWith(
+            path.join("plugin-agent-skills", "typescript", "dist", "index.js"),
+          ) ||
+          targetPath.endsWith(
+            path.join("plugin-telegram", "dist", "account-auth-service.js"),
+          ),
+        stat: () => ({ mtimeMs: 1 }) as fs.Stats,
+        runCommandImpl,
+        log,
+      }),
+    ).resolves.toBe(true);
+
+    expect(runCommandImpl).toHaveBeenCalledTimes(1);
+    expect(runCommandImpl).toHaveBeenCalledWith("bun", ["run", "build"], {
+      cwd: edgeTtsPackage,
+      label: "bun run build (@elizaos/plugin-edge-tts)",
+    });
+    expect(log).toHaveBeenCalledWith(
+      expect.stringContaining("@elizaos/plugin-edge-tts"),
     );
   });
 });

@@ -152,9 +152,31 @@ const ELIZA_TELEGRAM_PLUGIN_BUILD = {
   ),
   args: ["run", "build"],
 };
+const ELIZA_EDGE_TTS_PLUGIN_BUILD = {
+  label: "@elizaos/plugin-edge-tts",
+  cwd: path.join("eliza", "plugins", "plugin-edge-tts", "typescript"),
+  manifest: path.join(
+    "eliza",
+    "plugins",
+    "plugin-edge-tts",
+    "typescript",
+    "package.json",
+  ),
+  artifact: path.join(
+    "eliza",
+    "plugins",
+    "plugin-edge-tts",
+    "typescript",
+    "dist",
+    "node",
+    "index.node.js",
+  ),
+  args: ["run", "build"],
+};
 const ELIZA_REQUIRED_PLUGIN_BUILDS = [
   ELIZA_AGENT_SKILLS_PLUGIN_BUILD,
   ELIZA_TELEGRAM_PLUGIN_BUILD,
+  ELIZA_EDGE_TTS_PLUGIN_BUILD,
 ];
 const INBOX_REPLY_HINT_LEGACY =
   "Sent through the connected {{source}} account on this Mac.";
