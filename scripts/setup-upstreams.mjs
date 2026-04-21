@@ -8,6 +8,7 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -98,9 +99,46 @@ const OPTIONAL_ELIZA_PLUGIN_PACKAGES = [
 
 const PACKAGE_LINK_ROOTS = [
   ["node_modules"],
+  ["eliza", "node_modules"],
   ["apps", "app", "node_modules"],
   ["apps", "home", "node_modules"],
 ];
+const ELIZA_AGENT_SKILLS_PLUGIN_BUILD = {
+  label: "@elizaos/plugin-agent-skills",
+  cwd: path.join("eliza", "plugins", "plugin-agent-skills", "typescript"),
+  manifest: path.join(
+    "eliza",
+    "plugins",
+    "plugin-agent-skills",
+    "typescript",
+    "package.json",
+  ),
+  artifact: path.join(
+    "eliza",
+    "plugins",
+    "plugin-agent-skills",
+    "typescript",
+    "dist",
+    "index.js",
+  ),
+  args: [
+    "build",
+    "./src/index.ts",
+    "--outdir",
+    "./dist",
+    "--target",
+    "node",
+    "--format",
+    "esm",
+    "--sourcemap=linked",
+    "--external",
+    "node:*",
+    "--external",
+    "@elizaos/core",
+    "--external",
+    "fflate",
+  ],
+};
 const INBOX_REPLY_HINT_LEGACY =
   "Sent through the connected {{source}} account on this Mac.";
 const INBOX_REPLY_HINT_PLATFORM_NEUTRAL =
@@ -764,7 +802,11 @@ function discoverElizaPackageDirs(elizaRoot) {
       }
       const packageDir = path.join(searchRoot, entry.name);
       const packageJson = readPackageJson(packageDir);
-      if (packageJson?.name?.startsWith("@elizaos/")) {
+      const packageName = packageJson?.name;
+      if (
+        packageName?.startsWith("@elizaos/") &&
+        !packageName.endsWith("-root")
+      ) {
         packageDirs.push(packageDir);
       }
     }
@@ -860,6 +902,64 @@ export function getUpstreamPackageLinks(
   }
 
   return [...combinedByTarget.values()];
+}
+
+function isBuildArtifactStale(
+  manifestPath,
+  artifactPath,
+  { pathExists = existsSync, stat = statSync } = {},
+) {
+  if (!pathExists(artifactPath)) {
+    return true;
+  }
+
+  try {
+    return stat(manifestPath).mtimeMs > stat(artifactPath).mtimeMs;
+  } catch {
+    return true;
+  }
+}
+
+export async function ensureElizaAgentSkillsPluginBuild(
+  repoRoot = DEFAULT_REPO_ROOT,
+  {
+    pathExists = existsSync,
+    stat = statSync,
+    runCommandImpl = runCommand,
+    log = console.log,
+  } = {},
+) {
+  const manifestPath = path.join(
+    repoRoot,
+    ELIZA_AGENT_SKILLS_PLUGIN_BUILD.manifest,
+  );
+  if (!pathExists(manifestPath)) {
+    return false;
+  }
+
+  const artifactPath = path.join(
+    repoRoot,
+    ELIZA_AGENT_SKILLS_PLUGIN_BUILD.artifact,
+  );
+  const stale = isBuildArtifactStale(manifestPath, artifactPath, {
+    pathExists,
+    stat,
+  });
+  if (!stale) {
+    return false;
+  }
+
+  const reason = !pathExists(artifactPath)
+    ? `${ELIZA_AGENT_SKILLS_PLUGIN_BUILD.artifact} is missing`
+    : `${ELIZA_AGENT_SKILLS_PLUGIN_BUILD.artifact} is older than ${ELIZA_AGENT_SKILLS_PLUGIN_BUILD.manifest}`;
+  log(
+    `[setup-upstreams] Building ${ELIZA_AGENT_SKILLS_PLUGIN_BUILD.label} because ${reason}`,
+  );
+  await runCommandImpl("bun", ELIZA_AGENT_SKILLS_PLUGIN_BUILD.args, {
+    cwd: path.join(repoRoot, ELIZA_AGENT_SKILLS_PLUGIN_BUILD.cwd),
+    label: `bun ${ELIZA_AGENT_SKILLS_PLUGIN_BUILD.args.join(" ")} (${ELIZA_AGENT_SKILLS_PLUGIN_BUILD.label})`,
+  });
+  return true;
 }
 
 export function isPackageLinkCurrent(linkPath, targetPath) {

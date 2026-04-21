@@ -8,10 +8,12 @@ import {
   applyPluginAnthropicCliUsagePatch,
   applyUnpublishedPluginStubOverrides,
   bootstrapBundledBunInstall,
+  ensureElizaAgentSkillsPluginBuild,
   ensurePluginAnthropicBunTypes,
   findInstalledPackageDir,
   getElizaInstallArgs,
   getTemporaryElizaWorkspaceEntries,
+  getUpstreamPackageLinks,
   runElizaInstallWithRetry,
 } from "./setup-upstreams.mjs";
 
@@ -213,6 +215,127 @@ describe("findInstalledPackageDir", () => {
         searchRoots: [repoRoot, elizaRoot],
       }),
     ).toBe(path.dirname(elizaInstall));
+  });
+});
+
+describe("getUpstreamPackageLinks", () => {
+  it("links nested eliza plugin workspaces into eliza node_modules", () => {
+    const repoRoot = makeTempDir();
+    const elizaRoot = path.join(repoRoot, "eliza");
+    const pluginRoot = path.join(elizaRoot, "plugins", "plugin-agent-skills");
+    const pluginPackage = path.join(pluginRoot, "typescript");
+
+    writeFile(
+      path.join(pluginRoot, "package.json"),
+      '{"name":"@elizaos/plugin-agent-skills-root"}\n',
+    );
+    writeFile(
+      path.join(pluginPackage, "package.json"),
+      '{"name":"@elizaos/plugin-agent-skills"}\n',
+    );
+
+    const links = getUpstreamPackageLinks(repoRoot, {
+      elizaRoot,
+      pluginsRoot: path.join(elizaRoot, "plugins"),
+    });
+
+    expect(links).toContainEqual({
+      linkPath: path.join(
+        repoRoot,
+        "eliza",
+        "node_modules",
+        "@elizaos",
+        "plugin-agent-skills",
+      ),
+      targetPath: pluginPackage,
+    });
+    expect(
+      links.some((link) => link.linkPath.includes("plugin-agent-skills-root")),
+    ).toBe(false);
+  });
+});
+
+describe("ensureElizaAgentSkillsPluginBuild", () => {
+  it("builds the nested agent-skills artifact when it is missing", async () => {
+    const repoRoot = makeTempDir();
+    const pluginPackage = path.join(
+      repoRoot,
+      "eliza",
+      "plugins",
+      "plugin-agent-skills",
+      "typescript",
+    );
+    writeFile(path.join(pluginPackage, "package.json"), "{}\n");
+
+    const runCommandImpl = vi.fn().mockResolvedValue(undefined);
+    const log = vi.fn();
+
+    await expect(
+      ensureElizaAgentSkillsPluginBuild(repoRoot, {
+        runCommandImpl,
+        log,
+      }),
+    ).resolves.toBe(true);
+
+    expect(runCommandImpl).toHaveBeenCalledWith(
+      "bun",
+      [
+        "build",
+        "./src/index.ts",
+        "--outdir",
+        "./dist",
+        "--target",
+        "node",
+        "--format",
+        "esm",
+        "--sourcemap=linked",
+        "--external",
+        "node:*",
+        "--external",
+        "@elizaos/core",
+        "--external",
+        "fflate",
+      ],
+      {
+        cwd: pluginPackage,
+        label:
+          "bun build ./src/index.ts --outdir ./dist --target node --format esm --sourcemap=linked --external node:* --external @elizaos/core --external fflate (@elizaos/plugin-agent-skills)",
+      },
+    );
+    expect(log).toHaveBeenCalledWith(
+      expect.stringContaining("@elizaos/plugin-agent-skills"),
+    );
+  });
+
+  it("skips the nested agent-skills build when the artifact is current", async () => {
+    const repoRoot = makeTempDir();
+    const pluginPackage = path.join(
+      repoRoot,
+      "eliza",
+      "plugins",
+      "plugin-agent-skills",
+      "typescript",
+    );
+    const manifestPath = path.join(pluginPackage, "package.json");
+    const artifactPath = path.join(pluginPackage, "dist", "index.js");
+    writeFile(manifestPath, "{}\n");
+    writeFile(artifactPath, "export {};\n");
+
+    const runCommandImpl = vi.fn();
+
+    await expect(
+      ensureElizaAgentSkillsPluginBuild(repoRoot, {
+        pathExists: (targetPath) =>
+          targetPath === manifestPath || targetPath === artifactPath,
+        stat: (targetPath) =>
+          ({
+            mtimeMs: targetPath === manifestPath ? 1 : 2,
+          }) as fs.Stats,
+        runCommandImpl,
+      }),
+    ).resolves.toBe(false);
+
+    expect(runCommandImpl).not.toHaveBeenCalled();
   });
 });
 
