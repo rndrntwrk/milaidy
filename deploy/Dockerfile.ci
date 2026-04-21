@@ -362,7 +362,7 @@ for (const name of apps) {
   fs.writeFileSync(dir + '/plugin.mjs', emptyPlugin);
   // app-steward has extra subpath imports from dist/api/server.js
   if (name === '@elizaos/app-steward') {
-    const routeStub = `export async function resolveWalletExportRejection() { return null; }\nexport default {};`;
+    const routeStub = `export async function resolveWalletExportRejection() { return null; }\nexport async function handleWalletCoreRoutes() { return false; }\nexport default {};`;
     const secStub = `export async function hydrateWalletKeysFromNodePlatformSecureStore() { return null; }\nexport async function deleteWalletSecretsFromOsStore() { return null; }\nexport default {};`;
     const txServiceStub = `export class TxService {}\nexport default {};`;
     fs.writeFileSync(dir + '/routes-stub.mjs', routeStub);
@@ -374,6 +374,7 @@ for (const name of apps) {
         './plugin': './plugin.mjs', '.': './plugin.mjs',
         './api/tx-service': './tx-service-stub.mjs',
         './routes/server-wallet-trade': './routes-stub.mjs',
+        './routes/wallet-core-routes': './routes-stub.mjs',
         './security/hydrate-wallet-keys-from-platform-store': './security-stub.mjs',
         './security/wallet-os-store-actions': './security-stub.mjs',
       }
