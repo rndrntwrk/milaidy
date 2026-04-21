@@ -23,6 +23,7 @@ import { InferenceCloudAlertButton } from "../companion/InferenceCloudAlertButto
 import { resolveCompanionInferenceNotice } from "../companion/resolve-companion-inference-notice";
 import { PtyConsoleSidePanel } from "../coding/PtyConsoleSidePanel";
 import { CompanionGoLiveModal } from "../operator/CompanionGoLiveModal";
+import { OperatorPill } from "../operator/OperatorPrimitives";
 import { CompanionStageOperatorOverlay } from "../operator/CompanionStageOperatorOverlay";
 import { useCompanionStageOperator } from "../operator/useCompanionStageOperator";
 
@@ -44,6 +45,8 @@ const ALICE_GO_LIVE_IDLE_CLASSNAME =
   "border-accent/40 bg-[linear-gradient(180deg,rgba(var(--accent-rgb),0.22),rgba(var(--accent-rgb),0.12))] text-txt-strong hover:border-accent/65 hover:bg-[linear-gradient(180deg,rgba(var(--accent-rgb),0.28),rgba(var(--accent-rgb),0.16))]";
 const ALICE_GO_LIVE_LIVE_CLASSNAME =
   "border-danger/45 bg-[linear-gradient(180deg,rgba(239,68,68,0.92),rgba(220,38,38,0.86))] text-white hover:border-danger/70 hover:bg-[linear-gradient(180deg,rgba(239,68,68,0.98),rgba(220,38,38,0.92))]";
+const ALICE_GO_LIVE_DESTINATION_PILL_CLASSNAME =
+  "pointer-events-none max-w-[10rem] shrink truncate normal-case tracking-[0.08em]";
 
 function AliceConnectionIcon(props: SVGProps<SVGSVGElement>) {
   return (
@@ -64,23 +67,6 @@ function AliceConnectionIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
-function AliceStopIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      {...props}
-    >
-      <rect x="7" y="7" width="10" height="10" rx="2" />
-    </svg>
-  );
-}
-
 const AliceGoLiveHeaderControl = memo(function AliceGoLiveHeaderControl({
   operator,
 }: {
@@ -90,11 +76,23 @@ const AliceGoLiveHeaderControl = memo(function AliceGoLiveHeaderControl({
   const [open, setOpen] = useState(false);
   const [preferredMode, setPreferredMode] = useState<"camera" | "screen-share" | "play-games" | "reaction" | "radio">("camera");
   const isMobileViewport = useMediaQuery(SHELL_MODE_MOBILE_MEDIA_QUERY);
-  const liveActionLabel = operator.stream.live
-    ? t("aliceoperator.action.endLive", { defaultValue: "End Live" })
-    : t("statusbar.GoLive");
+  const liveDestinationName = operator.stream.activeDestination?.name?.trim() || null;
+  const liveStateLabel = t("statusbar.LiveShort", { defaultValue: "LIVE" });
+  const goLiveLabel = t("statusbar.GoLive");
+  const endLiveLabel = t("aliceoperator.action.endLive", {
+    defaultValue: "End Live",
+  });
+  const liveActionLabel = operator.stream.live ? liveStateLabel : goLiveLabel;
+  const actionAriaLabel = operator.stream.live ? endLiveLabel : goLiveLabel;
   const buttonTitle = operator.stream.live
-    ? liveActionLabel
+    ? liveDestinationName
+      ? t("aliceoperator.headerLiveDestinationTitle", {
+          destination: liveDestinationName,
+          defaultValue: `Live on ${liveDestinationName}. Click to end live.`,
+        })
+      : t("aliceoperator.headerLiveTitle", {
+          defaultValue: "Alice is live. Click to end live.",
+        })
     : operator.stream.available
       ? liveActionLabel
       : t("statusbar.InstallStreamingPlugin");
@@ -123,7 +121,7 @@ const AliceGoLiveHeaderControl = memo(function AliceGoLiveHeaderControl({
           type="button"
           size="sm"
           variant={operator.stream.live ? "destructive" : "secondary"}
-          aria-label={liveActionLabel}
+          aria-label={actionAriaLabel}
           title={buttonTitle}
           className={buttonClassName}
           onClick={handleClick}
@@ -134,7 +132,7 @@ const AliceGoLiveHeaderControl = memo(function AliceGoLiveHeaderControl({
           data-testid="companion-header-go-live"
         >
           {operator.stream.live ? (
-            <AliceStopIcon className="pointer-events-none h-3.5 w-3.5 shrink-0" />
+            <span className="pointer-events-none inline-flex h-2.5 w-2.5 shrink-0 rounded-full bg-white shadow-[0_0_0_4px_rgba(255,255,255,0.14)]" />
           ) : (
             <AliceConnectionIcon className="pointer-events-none h-3.5 w-3.5 shrink-0" />
           )}
@@ -142,6 +140,16 @@ const AliceGoLiveHeaderControl = memo(function AliceGoLiveHeaderControl({
             <span className="pointer-events-none">{liveActionLabel}</span>
           )}
         </Button>
+        {operator.stream.live && liveDestinationName && !isMobileViewport ? (
+          <OperatorPill
+            tone="accent"
+            className={ALICE_GO_LIVE_DESTINATION_PILL_CLASSNAME}
+            title={liveDestinationName}
+            data-testid="companion-header-live-destination"
+          >
+            {liveDestinationName}
+          </OperatorPill>
+        ) : null}
       </div>
       <CompanionGoLiveModal
         open={open}

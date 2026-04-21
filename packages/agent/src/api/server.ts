@@ -7420,6 +7420,9 @@ export async function startApiServer(opts?: {
               );
             }
           },
+          get runtime() {
+            return state.runtime;
+          },
           get config() {
             const cfg = state.config as Record<string, unknown> | undefined;
             const msgs = cfg?.messages as Record<string, unknown> | undefined;

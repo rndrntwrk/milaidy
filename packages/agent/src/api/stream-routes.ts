@@ -159,6 +159,7 @@ interface Stream555ServiceLike {
 
 interface Stream555DestinationMapping {
   platformId: string;
+  displayName: string;
   rtmpUrlEnv: string;
   streamKeyEnv: string;
   enabledEnv: string;
@@ -172,42 +173,49 @@ const STREAM555_DESTINATION = {
 const STREAM555_DESTINATION_MAPPINGS: Stream555DestinationMapping[] = [
   {
     platformId: "pumpfun",
+    displayName: "Pump.fun",
     rtmpUrlEnv: "STREAM555_DEST_PUMPFUN_RTMP_URL",
     streamKeyEnv: "STREAM555_DEST_PUMPFUN_STREAM_KEY",
     enabledEnv: "STREAM555_DEST_PUMPFUN_ENABLED",
   },
   {
     platformId: "x",
+    displayName: "X",
     rtmpUrlEnv: "STREAM555_DEST_X_RTMP_URL",
     streamKeyEnv: "STREAM555_DEST_X_STREAM_KEY",
     enabledEnv: "STREAM555_DEST_X_ENABLED",
   },
   {
     platformId: "twitch",
+    displayName: "Twitch",
     rtmpUrlEnv: "STREAM555_DEST_TWITCH_RTMP_URL",
     streamKeyEnv: "STREAM555_DEST_TWITCH_STREAM_KEY",
     enabledEnv: "STREAM555_DEST_TWITCH_ENABLED",
   },
   {
     platformId: "kick",
+    displayName: "Kick",
     rtmpUrlEnv: "STREAM555_DEST_KICK_RTMP_URL",
     streamKeyEnv: "STREAM555_DEST_KICK_STREAM_KEY",
     enabledEnv: "STREAM555_DEST_KICK_ENABLED",
   },
   {
     platformId: "youtube",
+    displayName: "YouTube",
     rtmpUrlEnv: "STREAM555_DEST_YOUTUBE_RTMP_URL",
     streamKeyEnv: "STREAM555_DEST_YOUTUBE_STREAM_KEY",
     enabledEnv: "STREAM555_DEST_YOUTUBE_ENABLED",
   },
   {
     platformId: "facebook",
+    displayName: "Facebook",
     rtmpUrlEnv: "STREAM555_DEST_FACEBOOK_RTMP_URL",
     streamKeyEnv: "STREAM555_DEST_FACEBOOK_STREAM_KEY",
     enabledEnv: "STREAM555_DEST_FACEBOOK_ENABLED",
   },
   {
     platformId: "custom",
+    displayName: "Custom",
     rtmpUrlEnv: "STREAM555_DEST_CUSTOM_RTMP_URL",
     streamKeyEnv: "STREAM555_DEST_CUSTOM_STREAM_KEY",
     enabledEnv: "STREAM555_DEST_CUSTOM_ENABLED",
@@ -395,6 +403,53 @@ function isStream555Ready(status: Stream555StatusLike): boolean {
   return Boolean(
     status.active && status.cfSessionId && status.cloudflare?.isConnected,
   );
+}
+
+function isStream555PlatformDisplayableStatus(
+  status: string | undefined,
+): boolean {
+  const normalized = status?.trim().toLowerCase() ?? "";
+  return (
+    normalized.startsWith("live") ||
+    normalized.startsWith("connected") ||
+    normalized.startsWith("active")
+  );
+}
+
+function deriveStream555Destination(
+  status?: Stream555StatusLike | null,
+): { id: string; name: string } {
+  const platformEntries =
+    status?.platforms != null &&
+    typeof status.platforms === "object" &&
+    !Array.isArray(status.platforms)
+      ? status.platforms
+      : null;
+
+  if (!platformEntries) {
+    return STREAM555_DESTINATION;
+  }
+
+  const names = STREAM555_DESTINATION_MAPPINGS.flatMap((mapping) => {
+    const platform = platformEntries[mapping.platformId];
+    if (!platform) return [];
+    if (
+      platform.enabled === true ||
+      isStream555PlatformDisplayableStatus(platform.status)
+    ) {
+      return [mapping.displayName];
+    }
+    return [];
+  });
+
+  if (names.length === 0) {
+    return STREAM555_DESTINATION;
+  }
+
+  return {
+    id: STREAM555_DESTINATION.id,
+    name: names.join(", "),
+  };
 }
 
 async function waitForStream555Readiness(
@@ -1092,7 +1147,7 @@ export async function handleStreamRoute(
         json(res, {
           ok: true,
           ...mapStream555StatusToHealth(null),
-          destination: STREAM555_DESTINATION,
+          destination: deriveStream555Destination(null),
         });
         return true;
       }
@@ -1101,7 +1156,7 @@ export async function handleStreamRoute(
         json(res, {
           ok: true,
           ...mapStream555StatusToHealth(status),
-          destination: STREAM555_DESTINATION,
+          destination: deriveStream555Destination(status),
         });
       } catch (err) {
         logger.warn(
@@ -1112,7 +1167,7 @@ export async function handleStreamRoute(
         json(res, {
           ok: true,
           ...mapStream555StatusToHealth(null),
-          destination: STREAM555_DESTINATION,
+          destination: deriveStream555Destination(null),
         });
       }
       return true;
