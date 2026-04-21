@@ -7375,6 +7375,7 @@ export async function startApiServer(opts?: {
           port,
           screenCapture,
           captureUrl: undefined as string | undefined,
+          runtime: state.runtime,
           destinations,
           activeDestinationId,
           activeStreamSource: { type: "stream-tab" as const },
