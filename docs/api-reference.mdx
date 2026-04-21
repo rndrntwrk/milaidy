@@ -151,12 +151,20 @@ Example `GET /api/status` response:
 
 ```json
 {
-  "name": "Milady",
-  "status": "running",
-  "model": "anthropic/claude-sonnet-4-6",
-  "uptime": 3600,
-  "autonomy": { "enabled": true },
-  "pendingRestart": false
+  "state": "running",
+  "agentName": "Milady",
+  "model": "@elizaos/plugin-anthropic",
+  "uptime": 3600000,
+  "startup": {
+    "phase": "ready",
+    "attempt": 1
+  },
+  "cloud": {
+    "connectionStatus": "disconnected",
+    "activeAgentId": null
+  },
+  "pendingRestart": false,
+  "pendingRestartReasons": []
 }
 ```
 
@@ -198,7 +206,7 @@ Example `GET /api/status` response:
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/api/agent/autonomy` | Get autonomy state (enabled, thinking) |
+| `GET` | `/api/agent/autonomy` | Get autonomy state (enabled) |
 | `POST` | `/api/agent/autonomy` | Enable or disable autonomy (`{ enabled: boolean }`) |
 
 ---

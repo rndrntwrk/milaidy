@@ -8,7 +8,7 @@ Connect your agent to Lens Protocol for decentralized social interactions.
 
 ## Overview
 
-The Lens connector is an external elizaOS plugin that bridges your agent to the Lens Protocol decentralized social graph. It is auto-enabled when an API key is configured.
+The Lens connector is an external elizaOS plugin that bridges your agent to the Lens Protocol decentralized social graph. Install it with `milady plugins install @elizaos/plugin-lens`. Once installed, it is auto-enabled when an API key is configured.
 
 ## Package Info
 

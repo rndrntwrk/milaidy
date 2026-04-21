@@ -119,7 +119,7 @@ où obtenir les identifiants, les champs minimum requis et des conseils pour les
 </div>
 
 **Obtenir les identifiants :** Aucune clé API nécessaire — installez Ollama localement
-**Installation :** https://ollama.ai — exécutez `ollama pull llama3.2` pour télécharger un modèle
+**Installation :** https://ollama.com — exécutez `ollama pull llama3.2` pour télécharger un modèle
 **Minimum requis :** `OLLAMA_BASE_URL` = `http://localhost:11434` (déclencheur d'activation automatique) ou `OLLAMA_API_ENDPOINT` = `http://localhost:11434/api`
 **Variables :**
 - `OLLAMA_BASE_URL` — Déclencheur d'activation automatique. Par défaut : `http://localhost:11434`

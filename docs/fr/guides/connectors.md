@@ -1,7 +1,7 @@
 ---
 title: "Connecteurs de plateforme"
 sidebarTitle: "Connectors"
-description: "Passerelles de plateforme pour 27 plateformes de messagerie — 18 activées automatiquement depuis la configuration (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Twitter, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, Lens, WeChat) plus 9 installables depuis le registre (Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
+description: "Passerelles de plateforme pour plus de 30 plateformes de messagerie — 16 activées automatiquement depuis la configuration (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, ACP) plus d'autres installables depuis le registre (Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon, Twitter, WeChat, Lens, Bluebubbles)."
 ---
 
 Les connecteurs sont des passerelles de plateforme qui permettent à votre agent de communiquer à travers les plateformes de messagerie et les réseaux sociaux. Chaque connecteur gère l'authentification, le routage des messages, la gestion des sessions et les fonctionnalités spécifiques à la plateforme.
@@ -62,15 +62,15 @@ Les connecteurs marqués **Auto** se chargent automatiquement lorsque leur confi
 | Blooio | Clé API + webhook | Oui | Oui | Non | Auto |
 | Microsoft Teams | ID d'app + mot de passe | Oui | Oui (équipes/salons) | Non | Auto |
 | Google Chat | Compte de service | Oui | Oui (espaces) | Oui | Auto |
-| Twitter | Clés API + tokens | MP | N/A | Non | Auto |
+| Twitter | Clés API + tokens | MP | N/A | Non | Registry |
 | Farcaster | Clé API Neynar + signataire | Casts | Oui (canaux) | Non | Auto |
 | Twitch | ID client + token d'accès | Oui (chat) | Oui (canaux) | Non | Auto |
 | Mattermost | Token de bot | Oui | Oui (salons) | Non | Auto |
-| WeChat | Clé API proxy + code QR | Oui | Oui | Oui | Auto |
+| WeChat | Clé API proxy + code QR | Oui | Oui | Oui | Registry |
 | Matrix | Token d'accès | Oui | Oui (salons) | Non | Auto |
 | Feishu / Lark | ID d'app + secret | Oui | Oui (discussions de groupe) | Non | Auto |
 | Nostr | Clé privée (nsec/hex) | Oui (NIP-04) | N/A | Non | Auto |
-| Lens | Clé API | Oui | N/A | Non | Auto |
+| Lens | Clé API | Oui | N/A | Non | Registry |
 | Bluesky | Identifiants de compte | Publications | N/A | Non | Registry |
 | Instagram | Nom d'utilisateur + mot de passe | MP | N/A | Non | Registry |
 | LINE | Token d'accès + secret du canal | Oui | Oui | Non | Registry |
