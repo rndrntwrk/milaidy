@@ -289,11 +289,18 @@ export const AutoTokenizer = stub;
 export const PreTrainedTokenizer = stub;
 export const env = stub;
 `;
+const nativeActivityTrackerStub = `
+export function isSupportedPlatform() { return false; }
+export function startActivityCollector() { throw new Error('[activity-tracker] Native collector only runs on Darwin.'); }
+export const __internal = { parseEventLine: () => null };
+export default { isSupportedPlatform, startActivityCollector, __internal };
+`;
 // CJS stub for packages that don't need named ESM exports
 const cjsNoop = 'const stub = new Proxy({}, { get: () => new Proxy(()=>{},{get:()=>new Proxy(()=>{},{apply:()=>Promise.resolve({}),get:()=>()=>{}})}) }); module.exports = stub; module.exports.default = stub;';
 const pkgs = [
   ['@huggingface/transformers', esmStub, true],
   ['@huggingface/tokenizers', esmStub, true],
+  ['@elizaos/native-activity-tracker', nativeActivityTrackerStub, true],
   ['onnxruntime-node', cjsNoop, false],
   ['onnxruntime-web', cjsNoop, false],
 ];
