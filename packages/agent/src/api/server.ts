@@ -7375,7 +7375,6 @@ export async function startApiServer(opts?: {
           port,
           screenCapture,
           captureUrl: undefined as string | undefined,
-          runtime: state.runtime,
           destinations,
           activeDestinationId,
           activeStreamSource: { type: "stream-tab" as const },
@@ -7420,6 +7419,9 @@ export async function startApiServer(opts?: {
                 }`,
               );
             }
+          },
+          get runtime() {
+            return state.runtime;
           },
           get config() {
             const cfg = state.config as Record<string, unknown> | undefined;
