@@ -76,6 +76,7 @@ vendor/
 .local/
 .vscode/
 .claude/settings.local.json
+.claude/scheduled_tasks.lock
 .claude/skills/
 .git-workspace/
 IDENTITY.md

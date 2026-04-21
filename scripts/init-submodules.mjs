@@ -14,12 +14,8 @@ const SUBMODULE_READINESS_MARKERS = {
   eliza: ["package.json", "packages/typescript/package.json"],
 };
 
-// plugin-openrouter contains Windows-incompatible PGlite fixture paths; skip
-// checkout until elizaos-plugins/plugin-openrouter#25 is merged.
-const SKIP_SUBMODULES = new Set(["eliza/plugins/plugin-openrouter"]);
-
 // Initialize nested eliza submodules in a second pass from inside eliza/ so
-// nested skip rules (for example plugin-openrouter on Windows) actually apply.
+// per-submodule state (gitlink vs regular files) is evaluated correctly.
 const NO_RECURSE_SUBMODULES = new Set(["eliza"]);
 
 const LEGACY_ROOT_SUBMODULE_PATHS = ["cloud", "steward-fi"];
@@ -28,23 +24,10 @@ function getSubmoduleSkipReason(
   submodulePath,
   { skipLocal = skipLocalUpstreams } = {},
 ) {
-  if (SKIP_SUBMODULES.has(submodulePath)) {
-    return "it is in the explicit skip list";
-  }
   if (skipLocal && submodulePath === "eliza") {
     return "local upstreams are disabled";
   }
   return null;
-}
-
-function getNestedElizaSubmoduleSkipArgs() {
-  return [...SKIP_SUBMODULES]
-    .filter((submodulePath) => submodulePath.startsWith("eliza/"))
-    .map(
-      (submodulePath) =>
-        `-c submodule.${submodulePath.slice("eliza/".length)}.update=none`,
-    )
-    .join(" ");
 }
 
 export function shouldSkipSubmoduleInit(
@@ -402,9 +385,6 @@ export function runInitSubmodules({
             cwd: elizaRoot,
           })
         ) {
-          log(
-            `[init-submodules] Skipping nested ${nestedSubmodule.name} (${rootRelativePath}) because eliza tracks that path as regular files, not a gitlink`,
-          );
           continue;
         }
 
@@ -427,10 +407,9 @@ export function runInitSubmodules({
           continue;
         }
 
-        const nestedSkipArgs = getNestedElizaSubmoduleSkipArgs();
         try {
           exec(
-            `git ${nestedSkipArgs} submodule update --init --recursive -- "${nestedSubmodule.path}"`.trim(),
+            `git submodule update --init --recursive -- "${nestedSubmodule.path}"`,
             {
               cwd: elizaRoot,
               stdio: "inherit",
