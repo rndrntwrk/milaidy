@@ -843,7 +843,9 @@ function nativeModuleStubPlugin(): Plugin {
       // Scoped: @node-llama-cpp/*
       if (nativeScopeRe.test(id)) return VIRTUAL_PREFIX + id;
       // Capacitor native plugins (@capacitor/* except @capacitor/core)
-      if (capacitorNativeScopeRe.test(id)) return VIRTUAL_PREFIX + id;
+      if (capacitorNativeScopeRe.test(id) && !IS_CAPACITOR_MOBILE_BUILD) {
+        return VIRTUAL_PREFIX + id;
+      }
       // sharp's optional platform packages (@img/sharp-wasm32, etc.)
       if (
         id.startsWith("@img/sharp") ||
