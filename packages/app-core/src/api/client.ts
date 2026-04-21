@@ -2247,6 +2247,7 @@ const GENERIC_NO_RESPONSE_TEXT =
   "Sorry, I couldn't generate a response right now. Please try again.";
 const AGENT_TRANSFER_MIN_PASSWORD_LENGTH = 4;
 const DEFAULT_FETCH_TIMEOUT_MS = 10_000;
+const ALICE_OPERATOR_EXECUTE_TIMEOUT_MS = 45_000;
 const SESSION_STORAGE_API_BASE_KEY = "milady_api_base";
 
 function miladyClientSettingsDebug(): boolean {
@@ -2410,7 +2411,7 @@ export class MiladyClient {
   private async rawRequest(
     path: string,
     init?: RequestInit,
-    options?: { allowNonOk?: boolean },
+    options?: { allowNonOk?: boolean; timeoutMs?: number },
   ): Promise<Response> {
     if (!this.apiAvailable) {
       throw new ApiError({
@@ -2420,6 +2421,7 @@ export class MiladyClient {
       });
     }
     const makeRequest = async (token: string | null): Promise<Response> => {
+      const timeoutMs = options?.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS;
       let timeoutId: ReturnType<typeof setTimeout> | undefined;
       let abortListener: (() => void) | undefined;
       const requestInit: RequestInit = {
@@ -2444,10 +2446,10 @@ export class MiladyClient {
               new ApiError({
                 kind: "timeout",
                 path,
-                message: `Request timed out after ${DEFAULT_FETCH_TIMEOUT_MS}ms`,
+                message: `Request timed out after ${timeoutMs}ms`,
               }),
             );
-          }, DEFAULT_FETCH_TIMEOUT_MS);
+          }, timeoutMs);
         }),
       );
 
@@ -2528,14 +2530,18 @@ export class MiladyClient {
     return res;
   }
 
-  private async fetch<T>(path: string, init?: RequestInit): Promise<T> {
+  private async fetch<T>(
+    path: string,
+    init?: RequestInit,
+    options?: { allowNonOk?: boolean; timeoutMs?: number },
+  ): Promise<T> {
     const res = await this.rawRequest(path, {
       ...init,
       headers: {
         "Content-Type": "application/json",
         ...init?.headers,
       },
-    });
+    }, options);
     return res.json() as Promise<T>;
   }
 
@@ -4297,15 +4303,19 @@ export class MiladyClient {
     steps: AliceOperatorActionStep[];
     stopOnFailure?: boolean;
   }): Promise<AliceOperatorPlanResponse> {
-    return this.fetch("/api/alice/operator/execute", {
-      method: "POST",
-      body: JSON.stringify({
-        steps: input.steps,
-        ...(input.stopOnFailure !== undefined
-          ? { stopOnFailure: input.stopOnFailure }
-          : {}),
-      }),
-    });
+    return this.fetch(
+      "/api/alice/operator/execute",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          steps: input.steps,
+          ...(input.stopOnFailure !== undefined
+            ? { stopOnFailure: input.stopOnFailure }
+            : {}),
+        }),
+      },
+      { timeoutMs: ALICE_OPERATOR_EXECUTE_TIMEOUT_MS },
+    );
   }
   async listRegistryPlugins(): Promise<RegistryPluginItem[]> {
     return this.fetch("/api/apps/plugins");
