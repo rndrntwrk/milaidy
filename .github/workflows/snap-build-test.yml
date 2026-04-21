@@ -71,14 +71,8 @@ jobs:
         run: |
           if [ -d eliza/packages/schemas ] && [ -f eliza/packages/schemas/buf.gen.yaml ] && [ ! -d eliza/packages/typescript/src/types/generated ]; then
             cd eliza/packages/schemas
-            if command -v buf >/dev/null 2>&1; then
-              buf dep update
-              buf generate
-            else
-              bun install --ignore-scripts
-              node node_modules/@bufbuild/buf/install.js 2>/dev/null || true
-              bunx @bufbuild/buf@1.67.0 generate
-            fi
+            buf dep update
+            buf generate
           fi
 
       - name: Mirror milady.mjs → elizaos-app.mjs for snapcraft entry
@@ -130,13 +124,13 @@ jobs:
         run: |
           sudo snap install ${{ steps.snapcraft.outputs.snap }} --dangerous
           echo "=== Installed snap ==="
-          snap list elizaos-app
+          snap list milady
 
           echo "=== Version check ==="
-          elizaos-app --version || echo "Version check completed (exit $?)"
+          milady --version || echo "Version check completed (exit $?)"
 
           echo "=== Help check ==="
-          elizaos-app --help 2>&1 | head -20 || echo "Help check completed (exit $?)"
+          milady --help 2>&1 | head -20 || echo "Help check completed (exit $?)"
 
       - name: Upload snap artifact
         uses: actions/upload-artifact@v4
