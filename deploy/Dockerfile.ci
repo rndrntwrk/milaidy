@@ -335,6 +335,9 @@ const fs = require('fs');
 const emptyPlugin = `export const vincentPlugin = { name: 'vincent-stub', routes: [] };
 export const shopifyPlugin = { name: 'shopify-stub', routes: [] };
 export const stewardPlugin = { name: 'steward-stub', routes: [] };
+export const elizamakerPlugin = { name: 'elizamaker-stub', routes: [] };
+export class DropService {}
+export async function handleDropRoutes() { return false; }
 export default { routes: [] };
 `;
 // app-knowledge: stub for routes + service-loader subpaths
