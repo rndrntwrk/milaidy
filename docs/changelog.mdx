@@ -3,6 +3,41 @@ title: Changelog
 description: What's new in Milady — features, improvements, and fixes.
 ---
 
+<Update label="2026-04-21" description="Week of April 21; cloud travel booking, feature toggles, automations UX overhaul, action surface consolidation" tags={["Feature", "Update", "Fix"]}>
+
+## Cloud travel booking
+
+Your agent can now search and book flights and hotels through conversation when connected to [Eliza Cloud](/guides/cloud). Travel features — including flight search, hotel search, and booking — are enabled by default for cloud users. Billing is handled automatically against your cloud credit balance with a service fee applied server-side. If your balance is insufficient, the agent routes you to the wallet top-up flow.
+
+## Feature toggles
+
+A new feature toggles panel in [settings](/user/provider-setup) gives you granular control over sensitive agent capabilities. You can independently enable or disable travel booking, push notifications, cross-channel escalation, browser automation, and email sending. Cloud-linked features show their source clearly in the UI, and cloud-default settings sync automatically when you log in.
+
+## Automations UX overhaul
+
+The [automations](/guides/cloud) view has been redesigned with a smoother getting-started experience. A new workflow templates modal offers six starter recipes — Daily Email Digest, Slack-to-Discord Bridge, RSS to Summary, Calendar to Slack, GitHub Issue Triage, and Email to Notion — so you can spin up common workflows in one click. A zero-state onboarding screen guides new users with clear calls to action. The schedule editor now shows a live preview of your next three trigger times for interval, one-time, and cron schedules, with inline validation for cron expressions.
+
+## Visual workflow graph
+
+Workflow details now render as an interactive node graph instead of a plain list. When your agent generates a workflow, edges stream in live with a pulsing "Building workflow…" overlay. Click any node to open a detail drawer showing its parameters and a link to edit in the n8n editor. A dedicated Nodes tab lets you browse the full node catalog across all available integrations.
+
+## Updates
+
+- **Action surface consolidated** — Twenty-six legacy actions have been collapsed into seven owner-scoped umbrellas (`OWNER_INBOX`, `OWNER_CALENDAR`, `OWNER_SEND_MESSAGE`, etc.) and two agent-scoped entry points. Each umbrella routes to the same underlying handler, so behavior is unchanged — but the cleaner surface helps the action planner pick the right tool more reliably. Old action names still work as aliases.
+- **Action selection accuracy** — The action planner now achieves 100% selection accuracy across a 69-case benchmark suite covering all 27 action categories. Improved action descriptions and rate-limit-aware retry logic contribute to more reliable routing, especially for health, calendar, and cross-channel actions.
+- **iOS companion consolidated** — The separate iOS companion app has been merged into the main Milady iOS bundle. Companion mode — pairing, chat mirroring, and remote sessions — is now accessible within the main app, eliminating the need to install a second app.
+- **Life-ops onboarding polish** — The [life-ops](/rest/lifeops) page now shows a welcome card with capability tiles and friendlier empty states when no data is connected yet, making it easier to discover and set up integrations.
+- **Inbound message readers expanded** — Signal, WhatsApp, and X (Twitter) DM readers are now available for pulling recent messages into your agent's unified inbox, broadening cross-platform message aggregation.
+- **n8n error visibility** — If the n8n sidecar fails to start, the error is now surfaced in the automations UI instead of being silently swallowed, so you can diagnose and fix the issue directly.
+- **Cloud container reliability** — Cloud Docker image builds now pin dependencies to exact versions and correctly restore workspace references during pruning, preventing intermittent build failures when provisioning cloud agents.
+
+## Bug fixes
+
+- Fixed coding agent synthesis occasionally hanging when a subagent session ended without signaling turn completion — the orchestrator now reads end-of-turn signals correctly
+- Fixed the [life-ops](/rest/lifeops) action planner sometimes routing "create a task" or "complete a task" requests to the wrong handler due to stale simile entries
+
+</Update>
+
 <Update label="2026-04-20" description="Week of April 20; smarter action routing, cross-channel messaging accuracy, training optimizer improvements" tags={["Update", "Fix"]}>
 
 ## Smarter action routing
