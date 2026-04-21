@@ -1035,6 +1035,27 @@ function nativeModuleStubPlugin(): Plugin {
             "export default noopObj;",
           ].join("\n");
         }
+        if (capPkg === "@capacitor/push-notifications") {
+          return [
+            "const asyncNoop = async () => {};",
+            "const listenerHandle = { remove: asyncNoop };",
+            "export const PushNotifications = {",
+            "  requestPermissions: async () => ({ receive: 'denied' }),",
+            "  addListener: async () => listenerHandle,",
+            "  register: asyncNoop,",
+            "  removeAllListeners: asyncNoop,",
+            "};",
+            "export default PushNotifications;",
+          ].join("\n");
+        }
+        if (capPkg === "@capacitor/barcode-scanner") {
+          return [
+            "const asyncNoop = async () => ({ ScanResult: '' });",
+            "export const CapacitorBarcodeScanner = { scanBarcode: asyncNoop };",
+            "export const CapacitorBarcodeScannerTypeHint = Object.freeze({ QR_CODE: 'QR_CODE' });",
+            "export default CapacitorBarcodeScanner;",
+          ].join("\n");
+        }
         // Generic Capacitor plugin stub
         return [
           "const noop = () => {};const stub = new Proxy({}, { get: () => noop });",
