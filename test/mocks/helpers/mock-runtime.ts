@@ -180,7 +180,9 @@ export async function createMockedTestRuntime(
     ? null
     : await prepareMockedTestEnvironment({ envs });
   if (!sharedEnvironment && !localEnvironment) {
-    throw new Error("[mock-runtime] failed to prepare mock environment");
+    throw new Error(
+      "createMockedTestRuntime: expected local mocked environment",
+    );
   }
   const mocks = sharedEnvironment?.mocks ?? localEnvironment.mocks;
   let cleanupRuntimeFixtures: (() => Promise<void> | void) | void;

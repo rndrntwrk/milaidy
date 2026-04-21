@@ -1,5 +1,5 @@
-import { scenario } from "@elizaos/scenario-schema";
 import type { IAgentRuntime } from "@elizaos/core";
+import { scenario } from "@elizaos/scenario-schema";
 import { LifeOpsRepository } from "../../../eliza/apps/app-lifeops/src/lifeops/repository.ts";
 import { LifeOpsService } from "../../../eliza/apps/app-lifeops/src/lifeops/service.ts";
 
@@ -93,7 +93,8 @@ async function seedWeeklyGoalReview(ctx: {
     return "seeded at-risk occurrence not found";
   }
 
-  return atRiskOccurrence.state === "visible" || atRiskOccurrence.state === "snoozed"
+  return atRiskOccurrence.state === "visible" ||
+    atRiskOccurrence.state === "snoozed"
     ? undefined
     : "expected at-risk occurrence to remain active and overdue";
 }
@@ -143,7 +144,9 @@ export default scenario({
       type: "custom",
       name: "weekly-review-returns-typed-goal-buckets",
       predicate: async (ctx) => {
-        const action = ctx.actionsCalled.find((entry) => entry.actionName === "LIFE");
+        const action = ctx.actionsCalled.find(
+          (entry) => entry.actionName === "LIFE",
+        );
         const data =
           action?.result?.data && typeof action.result.data === "object"
             ? (action.result.data as {
