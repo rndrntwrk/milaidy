@@ -567,7 +567,7 @@ describe("handleStreamRoute", () => {
       );
     });
 
-    it("maps active 555stream status through the generic status route", async () => {
+    it("maps a single active 555stream platform through the generic status route", async () => {
       const { res, getJson } = createMockHttpResponse();
       const req = createMockIncomingMessage({
         method: "GET",
@@ -602,6 +602,79 @@ describe("handleStreamRoute", () => {
           ok: true,
           running: true,
           ffmpegAlive: true,
+          audioSource: "555stream",
+          inputMode: "screen",
+          destination: { id: "555stream", name: "Twitch" },
+        }),
+      );
+    });
+
+    it("maps multiple enabled and connected 555stream platforms in canonical order", async () => {
+      const { res, getJson } = createMockHttpResponse();
+      const req = createMockIncomingMessage({
+        method: "GET",
+        url: "/api/stream/status",
+      });
+      const service = mockStream555Service({
+        getBoundSessionId: vi.fn(() => "session-555"),
+        getStreamStatus: vi.fn(async () => ({
+          sessionId: "session-555",
+          active: false,
+          serverFallbackActive: false,
+          platforms: {
+            kick: { enabled: false, status: "connected_cached" },
+            twitch: { enabled: true, status: "idle" },
+          },
+          jobStatus: { state: "idle" },
+        })),
+      });
+
+      await handleStreamRoute(
+        req,
+        res,
+        "/api/stream/status",
+        "GET",
+        mockState({ runtime: { getService: vi.fn(() => service) } }),
+      );
+
+      expect(getJson()).toEqual(
+        expect.objectContaining({
+          ok: true,
+          audioSource: "555stream",
+          inputMode: "screen",
+          destination: { id: "555stream", name: "Twitch, Kick" },
+        }),
+      );
+    });
+
+    it("falls back to the generic 555stream destination when status fetch fails", async () => {
+      const { res, getStatus, getJson } = createMockHttpResponse();
+      const req = createMockIncomingMessage({
+        method: "GET",
+        url: "/api/stream/status",
+      });
+      const service = mockStream555Service({
+        getBoundSessionId: vi.fn(() => "session-555"),
+        getStreamStatus: vi.fn(async () => {
+          throw new Error("status unavailable");
+        }),
+      });
+
+      const handled = await handleStreamRoute(
+        req,
+        res,
+        "/api/stream/status",
+        "GET",
+        mockState({ runtime: { getService: vi.fn(() => service) } }),
+      );
+
+      expect(handled).toBe(true);
+      expect(getStatus()).toBe(200);
+      expect(getJson()).toEqual(
+        expect.objectContaining({
+          ok: true,
+          running: false,
+          ffmpegAlive: false,
           audioSource: "555stream",
           inputMode: "screen",
           destination: { id: "555stream", name: "555 Stream" },
