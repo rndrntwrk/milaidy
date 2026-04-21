@@ -95,6 +95,22 @@ const STREAM555_CHANNEL_RUNTIME_SPECS = [
   },
 ] as const;
 
+interface PlatformStatusOverviewPlatform {
+  platformId: string;
+  enabled: boolean;
+  status?: string | null;
+  configured?: boolean;
+  rtmpUrl?: string;
+  error?: string | null;
+  connectedAt?: number | null;
+}
+
+interface PlatformStatusOverview {
+  userId?: string;
+  platforms: PlatformStatusOverviewPlatform[];
+  requestId?: string;
+}
+
 function parseBooleanEnv(value: string | undefined): boolean {
   if (!value) return false;
   switch (value.trim().toLowerCase()) {
@@ -439,6 +455,26 @@ export class StreamControlService implements Service {
    */
   getConfig(): Stream555Config | null {
     return this.config;
+  }
+
+  /**
+   * Get the caller's configured platform statuses without binding a session.
+   * This is the only side-effect-free way to see whether outputs are already live.
+   */
+  async getPlatformStatusOverview(): Promise<PlatformStatusOverview> {
+    if (!this.httpClient) {
+      throw new Error('[555stream] Service not initialized');
+    }
+
+    const response = await this.httpClient.get<PlatformStatusOverview>(
+      '/api/agent/v1/sessions'
+    );
+
+    if (!response.success || !response.data) {
+      throw new Error(response.error || 'Failed to get platform status overview');
+    }
+
+    return response.data;
   }
 
   /**
