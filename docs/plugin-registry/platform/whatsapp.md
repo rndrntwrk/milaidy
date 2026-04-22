@@ -52,7 +52,7 @@ The session is saved to `authDir` and persists across restarts.
 |-------|----------|-------------|
 | `authDir` | Yes (Baileys) | Directory path for Baileys session files |
 | `enabled` | No | Set `false` to disable (default: `true`) |
-| `dmPolicy` | No | DM acceptance policy: `"pairing"` (default), `"open"`, or `"closed"` |
+| `dmPolicy` | No | DM acceptance policy: `"pairing"` (default), `"allowlist"`, `"open"`, or `"disabled"` |
 | `allowFrom` | No | Allowlist of phone numbers (required when `dmPolicy` is `"open"`, must include `"*"`) |
 | `groupPolicy` | No | Group message policy: `"open"`, `"disabled"`, or `"allowlist"` (default: `"allowlist"`) |
 | `groupAllowFrom` | No | Allowlist of group JIDs |
