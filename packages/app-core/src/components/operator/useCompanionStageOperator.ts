@@ -291,7 +291,7 @@ export function useCompanionStageOperator() {
       setStreamCapabilityResolved(true);
       setStreamAvailable(true);
       setStreamError(null);
-      setStreamLive(Boolean(status.running));
+      setStreamLive(Boolean(status.running && status.ffmpegAlive));
       setUptime(status.uptime ?? 0);
       setFrameCount(status.frameCount ?? 0);
       setActiveDestination(status.destination ?? null);
