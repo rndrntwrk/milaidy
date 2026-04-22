@@ -232,7 +232,7 @@ export type HookHandler = (event: HookEvent) => Promise<void> | void;
 export interface Hook {
   name: string;
   description: string;
-  source: "milady-bundled" | "milady-managed" | "milady-workspace" | "milady-plugin";
+  source: "eliza-bundled" | "eliza-managed" | "eliza-workspace" | "eliza-plugin";
   pluginId?: string;
   filePath: string;
   baseDir: string;

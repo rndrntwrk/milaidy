@@ -124,7 +124,7 @@ Each plugin is wrapped with an error boundary so a crash in one plugin cannot ha
 let runtime = new AgentRuntime({
   character,
   actionPlanning: true,
-  plugins: [miladyPlugin, ...otherPlugins.map((p) => p.plugin)],
+  plugins: [elizaPlugin, ...otherPlugins.map((p) => p.plugin)],
   logLevel: runtimeLogLevel,
   settings: {
     VALIDATION_LEVEL: "fast",
@@ -162,7 +162,7 @@ After initialization:
 ## Plugin Loading Order
 
 ```
-1. miladyPlugin                    (passed first in the plugins array to AgentRuntime constructor)
+1. elizaPlugin                     (passed first in the plugins array to AgentRuntime constructor)
 2. @elizaos/plugin-sql             (pre-registered via registerSqlPluginWithRecovery() before runtime.initialize())
 3. @elizaos/plugin-local-embedding (pre-registered so TEXT_EMBEDDING handler at priority 10 is available)
 4. All other plugins               (registered during runtime.initialize() in parallel)

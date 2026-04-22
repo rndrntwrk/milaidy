@@ -12,7 +12,7 @@ The `AgentRuntime` class from `@elizaos/core` is the central object that manages
 const runtime = new AgentRuntime({
   character,
   actionPlanning: true,
-  plugins: [miladyPlugin, ...resolvedPlugins],
+  plugins: [elizaPlugin, ...resolvedPlugins],
   logLevel: "error",
   // sandboxMode and sandboxAuditHandler are only included when sandbox is active
   ...(isSandboxActive && {

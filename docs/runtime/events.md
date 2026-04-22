@@ -131,7 +131,7 @@ const result = await loadHooks({
   bundledDir: "/path/to/bundled-hooks",
   extraDirs: [],
   internalConfig: config.hooks?.internal,
-  miladyConfig: config,
+  elizaConfig: config,
 });
 
 console.log(`Registered: ${result.registered}/${result.discovered}`);

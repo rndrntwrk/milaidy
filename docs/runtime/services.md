@@ -133,7 +133,7 @@ const sandboxManager = new SandboxManager({
   mode: "standard",
   image: dockerSettings?.image ?? undefined,  // no default image — must be configured
   browser: dockerSettings?.browser ?? undefined,
-  containerPrefix: "milady-sandbox-",
+  containerPrefix: "eliza-sandbox",
   network: "bridge",
   memory: "512m",
   cpus: 0.5,
