@@ -78,7 +78,10 @@ function envVarsFor(
   baseUrls: Record<MockEnvironmentName, string>,
 ): Record<string, string> {
   const out: Record<string, string> = {};
-  if (envs.includes("google")) out.MILADY_MOCK_GOOGLE_BASE = baseUrls.google;
+  if (envs.includes("google")) {
+    out.MILADY_MOCK_GOOGLE_BASE = baseUrls.google;
+    out.MILADY_BLOCK_REAL_GMAIL_WRITES = "1";
+  }
   if (envs.includes("twilio")) out.MILADY_MOCK_TWILIO_BASE = baseUrls.twilio;
   if (envs.includes("whatsapp"))
     out.MILADY_MOCK_WHATSAPP_BASE = baseUrls.whatsapp;
