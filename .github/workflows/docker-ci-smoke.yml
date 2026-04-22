@@ -58,6 +58,17 @@ jobs:
         run: |
           set -euo pipefail
 
+          stop_smoke() {
+            if [[ -n "${smoke_pid:-}" ]] && kill -0 "$smoke_pid" 2>/dev/null; then
+              kill -TERM "-$smoke_pid" 2>/dev/null || kill -TERM "$smoke_pid" 2>/dev/null || true
+              sleep 10
+              kill -KILL "-$smoke_pid" 2>/dev/null || kill -KILL "$smoke_pid" 2>/dev/null || true
+            fi
+          }
+
+          trap 'stop_smoke; exit 130' INT
+          trap 'stop_smoke; exit 143' TERM
+
           setsid bash eliza/packages/app-core/scripts/docker-ci-smoke.sh --tag gha-${{ github.run_id }} &
           smoke_pid=$!
           deadline=$((SECONDS + 40 * 60))
