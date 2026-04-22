@@ -580,28 +580,37 @@ The monorepo uses Bun workspaces:
 
 ```
 milady/
-  packages/
-    app-core/       # Core runtime, CLI, API, services (source of truth)
-      src/
-        cli/        # Commander CLI commands
-        api/        # Dashboard API server
-        runtime/    # Agent loader, plugin system
-        config/     # Plugin auto-enable, config schemas
-        connectors/ # Connector integration code
-        services/   # Business logic (plugin installer, updater, etc.)
-    agent/          # Upstream elizaOS agent (core plugins, auto-enable maps)
-    plugin-wechat/  # WeChat connector plugin (@elizaos/plugin-wechat)
-    ui/             # Shared UI component library
-    shared/         # Shared utilities
+  eliza/              # elizaOS submodule (contains all packages)
+    packages/
+      app-core/       # Frontend UI, platform shells (Electrobun, Capacitor)
+        src/
+          api/        # Dashboard API server (main server.ts)
+          services/   # Business logic (plugin installer, updater, etc.)
+          runtime/    # Dev server, embedding presets
+          config/     # App-level config, branding
+          hooks/      # React hooks (UI)
+      agent/          # Runtime agent package (core plugins, providers, actions)
+        src/
+          cli/        # Commander CLI commands
+          runtime/    # Agent loader (eliza.ts), plugin system (eliza-plugin.ts)
+          config/     # Config schemas, type definitions
+          providers/  # Context providers (workspace, admin-trust, skills, etc.)
+          actions/    # Agent actions (restart, send-message, skills, etc.)
+          hooks/      # Event hooks system (discovery, registry, dispatch)
+          triggers/   # Trigger task types and scheduling
+          api/        # Chat routes, conversation routes
+      shared/         # Shared utilities, config types, onboarding presets
+      ui/             # Shared UI component library
+    plugins/          # elizaOS plugin submodules
+    apps/
+      app-training/   # Training orchestration (privacy filter, native backend)
   apps/
-    app/            # React SPA frontend (Vite)
-      electrobun/   # Electrobun desktop wrapper
-    homepage/       # Marketing site
-  deploy/
-    cloud-agent-template/  # Cloud deployment template
-  docs/             # Mintlify documentation
-  scripts/          # Build, dev, and utility scripts
-  test/             # E2E and integration tests
+    app/              # React SPA frontend (Vite)
+      electrobun/     # Electrobun desktop wrapper
+    homepage/         # Marketing site
+  docs/               # Mintlify documentation
+  scripts/            # Build, dev, and utility scripts
+  test/               # E2E and integration tests
 ```
 
 ### Build Pipeline
