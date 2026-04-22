@@ -4,7 +4,7 @@ sidebarTitle: "Types"
 description: "Key TypeScript type definitions: ElizaConfig, AgentConfig, AgentRuntime interfaces, Character, Plugin, Provider, Hook, Trigger, and more."
 ---
 
-This page is a quick reference for the key TypeScript types used across the Milady codebase. Types from `@elizaos/core` are noted as such; types defined in `src/` are Milady-specific.
+This page is a quick reference for the key TypeScript types used across the Milady codebase. Types from `@elizaos/core` are noted as such; types defined in the `eliza/packages/` source tree are Milady-specific.
 
 ## ElizaConfig
 
