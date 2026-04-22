@@ -13,7 +13,7 @@ The root configuration type for the config file (defaults to `milady.json` in th
 ```typescript
 // eliza/packages/shared/src/config/types.eliza.ts
 export type ElizaConfig = {
-  meta?:         { lastTouchedVersion?: string; lastTouchedAt?: string };
+  meta?:         { onboardingComplete?: boolean; lastTouchedVersion?: string; lastTouchedAt?: string };
   auth?:         AuthConfig;
   env?:          {
     shellEnv?: { enabled?: boolean; timeoutMs?: number };
@@ -30,9 +30,15 @@ export type ElizaConfig = {
   browser?:      BrowserConfig;
   ui?:           {
     seamColor?: string;
-    theme?: "milady" | "qt314" | "web2000" | "programmer" | "haxor" | "psycho";
+    theme?: "eliza" | "qt314" | "web2000" | "programmer" | "haxor" | "psycho";
     assistant?: { name?: string; avatar?: string };
+    avatarIndex?: number;
+    language?: string;
+    presetId?: string;
+    ownerName?: string;
   };
+  knowledge?:    KnowledgeConfig;
+  roles?:        RolesConfig;
   skills?:       SkillsConfig;
   plugins?:      PluginsConfig;
   models?:       ModelsConfig;
@@ -281,6 +287,8 @@ export type PluginsConfig = {
 export type PluginInstallRecord = {
   source: "npm" | "archive" | "path";
   spec?: string;
+  requestedVersion?: string;
+  releaseStream?: "latest" | "alpha";
   sourcePath?: string;
   installPath?: string;
   version?: string;
