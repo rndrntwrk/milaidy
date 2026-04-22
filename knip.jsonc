@@ -116,7 +116,7 @@
         "**/*.e2e.test.ts"
       ]
     },
-    "eliza/apps/app-lifeops/extensions/lifeops-browser": {
+    "apps/browser-bridge": {
       "entry": [
         "entrypoints/*.ts",
         "scripts/*.mjs",
