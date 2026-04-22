@@ -191,7 +191,7 @@ export function requestRestart(reason?: string): void | Promise<void> {
 
 | Environment | Restart strategy |
 |---|---|
-| CLI | Exits with code 75; `scripts/run-node.mjs` catches this, rebuilds if needed, relaunches |
+| CLI | Exits with code 75; `eliza/packages/app-core/scripts/run-node.mjs` catches this, rebuilds if needed, relaunches |
 | Dev server | Host calls `setRestartHandler()` to hot-swap the runtime in-process |
 | API endpoint | `POST /api/agent/restart` calls `requestRestart()` |
 
