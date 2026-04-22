@@ -580,7 +580,7 @@ export class VrmEngine {
   private overlayManager: SceneOverlayManager | null = null;
   private avatarRoot: THREE.Group | null = null;
   private camera: THREE.PerspectiveCamera | null = null;
-  private clock = new THREE.Clock();
+  private clock = new THREE.Timer();
   private vrm: VRM | null = null;
   private mixer: THREE.AnimationMixer | null = null;
   private idleAction: THREE.AnimationAction | null = null;
@@ -985,7 +985,7 @@ export class VrmEngine {
       }
       this.animationFrameId = null;
     }
-    this.clock.stop();
+    this.clock.reset();
   }
 
   /**
@@ -1027,7 +1027,7 @@ export class VrmEngine {
 
   private resumeLoop(): void {
     if (!this.initialized || this.paused) return;
-    this.clock.start();
+    this.clock.reset();
     this.scheduleNextFrame();
   }
 
@@ -1443,7 +1443,7 @@ export class VrmEngine {
         if (backend === "webgl") {
           const webglRenderer = renderer as THREE.WebGLRenderer;
           webglRenderer.shadowMap.enabled = true;
-          webglRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
+          webglRenderer.shadowMap.type = THREE.PCFShadowMap;
           webglRenderer.toneMapping = THREE.NoToneMapping;
           webglRenderer.toneMappingExposure = 1.0;
           webglRenderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -2684,6 +2684,7 @@ ${isOutgoing ? "if (teleportNoise >= teleportRatio) discard;" : "if (teleportNoi
     if (this.baseCameraPosition.lengthSq() > 1e-6) {
       camera.position.copy(this.baseCameraPosition);
     }
+    this.clock.update();
     const rawDelta = this.clock.getDelta();
     const stableDelta = Math.min(rawDelta, 1 / 30);
     this.elapsedTime += rawDelta;

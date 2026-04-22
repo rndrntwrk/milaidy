@@ -4811,23 +4811,45 @@ export class MiladyClient {
   // WebSocket
 
   connectWs(): void {
-    if (this.ws?.readyState === WebSocket.OPEN) return;
+    if (
+      this.ws?.readyState === WebSocket.OPEN ||
+      this.ws?.readyState === WebSocket.CONNECTING
+    ) {
+      return;
+    }
 
     let host: string;
+    let wsProtocol: "ws:" | "wss:";
     if (this.baseUrl) {
-      host = new URL(this.baseUrl).host;
+      const parsed = new URL(this.baseUrl);
+      host = parsed.host;
+      wsProtocol = parsed.protocol === "https:" ? "wss:" : "ws:";
     } else {
       // In non-HTTP environments (electrobun://, file://, etc.)
       // window.location.host may be empty or a non-routable placeholder like "-".
       const loc = window.location;
       if (loc.protocol !== "http:" && loc.protocol !== "https:") return;
       host = loc.host;
+      wsProtocol = loc.protocol === "https:" ? "wss:" : "ws:";
     }
 
     if (!host) return;
 
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    let url = `${protocol}//${host}/ws`;
+    // On native bundle hosts without an explicit base URL, the location host
+    // can be a non-routable placeholder such as localhost with no backend
+    // attached. Keep same-origin WS available for real web hosts.
+    if (!this.baseUrl && typeof host === "string") {
+      const normalizedHost = host.trim().toLowerCase();
+      const hasPort = normalizedHost.includes(":");
+      const isNativePlaceholderHost =
+        normalizedHost === "-" ||
+        normalizedHost === "localhost" ||
+        normalizedHost === "127.0.0.1" ||
+        normalizedHost === "[::1]";
+      if (isNativePlaceholderHost && !hasPort) return;
+    }
+
+    let url = `${wsProtocol}//${host}/ws`;
     const params = new URLSearchParams({ clientId: this.clientId });
     url += `?${params.toString()}`;
 

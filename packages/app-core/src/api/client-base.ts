@@ -356,14 +356,17 @@ export class MiladyClient {
     if (!host) return;
 
     // On Capacitor native (iosScheme/androidScheme = "https"), the origin host
-    // is a dummy bundle host (e.g. "localhost" with no server behind it).
-    // Skip WS if we have no explicit baseUrl and the host doesn't look like a
-    // real backend (no port, not an IP, not a known API domain).
+    // can be a dummy bundle host (e.g. "localhost" with no server behind it).
+    // Keep same-origin WS available for real web hosts.
     if (!this.baseUrl && typeof host === "string") {
-      const hasPort = host.includes(":");
-      const isLoopback =
-        host.startsWith("127.") || host.startsWith("localhost:");
-      if (!hasPort && !isLoopback) return;
+      const normalizedHost = host.trim().toLowerCase();
+      const hasPort = normalizedHost.includes(":");
+      const isNativePlaceholderHost =
+        normalizedHost === "-" ||
+        normalizedHost === "localhost" ||
+        normalizedHost === "127.0.0.1" ||
+        normalizedHost === "[::1]";
+      if (isNativePlaceholderHost && !hasPort) return;
     }
 
     let url = `${wsProtocol}//${host}/ws`;
