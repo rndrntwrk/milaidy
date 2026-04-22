@@ -26,11 +26,10 @@ export ANTHROPIC_API_KEY=sk-ant-...
 
 | Environment Variable | Required | Description |
 |---------------------|----------|-------------|
-| `ANTHROPIC_API_KEY` | Yes* | Anthropic API key from [console.anthropic.com](https://console.anthropic.com) |
-| `CLAUDE_API_KEY` | Yes* | Alias for `ANTHROPIC_API_KEY` |
-| `ANTHROPIC_API_URL` | No | Custom base URL |
-
-*Either `ANTHROPIC_API_KEY` or `CLAUDE_API_KEY` is required.
+| `ANTHROPIC_API_KEY` | Yes | Anthropic API key from [console.anthropic.com](https://console.anthropic.com) |
+| `CLAUDE_API_KEY` | No | Alias that also triggers auto-enable (resolved to `ANTHROPIC_API_KEY` internally) |
+| `ANTHROPIC_SMALL_MODEL` | No | Override the small model identifier (default: `claude-haiku-4-5-20251001`) |
+| `ANTHROPIC_LARGE_MODEL` | No | Override the large model identifier (default: `claude-sonnet-4-6`) |
 
 ### milady.json Example
 

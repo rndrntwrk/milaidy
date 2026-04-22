@@ -27,7 +27,7 @@ Providers marked **bundled** are pre-installed with every Milady release and loa
 | [Groq](https://groq.com) | `@elizaos/plugin-groq` | `GROQ_API_KEY` | Bundled | Ultra-fast inference (LPU). |
 | [xAI](https://x.ai) | `@elizaos/plugin-xai` | `XAI_API_KEY` or `GROK_API_KEY` | On demand | Grok models. |
 | [DeepSeek](https://deepseek.com) | `@elizaos/plugin-deepseek` | `DEEPSEEK_API_KEY` | On demand | Reasoning and code models. |
-| [Ollama](https://ollama.ai) | `@elizaos/plugin-ollama` | `OLLAMA_BASE_URL` | Bundled | **Local models.** No API key needed. Requires a running [Ollama](https://ollama.ai) server. |
+| [Ollama](https://ollama.com) | `@elizaos/plugin-ollama` | `OLLAMA_BASE_URL` | Bundled | **Local models.** No API key needed. Requires a running [Ollama](https://ollama.com) server. |
 | [Qwen](https://qwen.ai) | `@elizaos/plugin-qwen` | — | On demand | Alibaba's Qwen models. Configure via plugin entry. |
 | [MiniMax](https://minimaxi.com) | `@elizaos/plugin-minimax` | — | On demand | MiniMax language models. Configure via plugin entry. |
 | [Together AI](https://together.ai) | `@elizaos/plugin-together` | `TOGETHER_API_KEY` | On demand | Open-source model hosting. |
@@ -256,7 +256,7 @@ Ollama lets you run models locally with no API key and full privacy. It is the o
 <Steps>
   <Step title="Install Ollama">
     ```bash
-    curl -fsSL https://ollama.ai/install.sh | sh
+    curl -fsSL https://ollama.com/install.sh | sh
     ```
   </Step>
   <Step title="Pull a model">

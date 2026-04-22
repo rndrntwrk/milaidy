@@ -31,7 +31,7 @@ Les fournisseurs marqués **bundled** sont pré-installés et se chargent instan
 | [Groq](https://groq.com) | `@elizaos/plugin-groq` | `GROQ_API_KEY` | Inclus | Inférence ultra-rapide (LPU). |
 | [xAI](https://x.ai) | `@elizaos/plugin-xai` | `XAI_API_KEY` ou `GROK_API_KEY` | À la demande | Modèles Grok. |
 | [DeepSeek](https://deepseek.com) | `@elizaos/plugin-deepseek` | `DEEPSEEK_API_KEY` | À la demande | Modèles de raisonnement et de code. |
-| [Ollama](https://ollama.ai) | `@elizaos/plugin-ollama` | `OLLAMA_BASE_URL` | Inclus | **Modèles locaux.** Aucune clé API nécessaire. Nécessite un serveur [Ollama](https://ollama.ai) en cours d'exécution. |
+| [Ollama](https://ollama.com) | `@elizaos/plugin-ollama` | `OLLAMA_BASE_URL` | Inclus | **Modèles locaux.** Aucune clé API nécessaire. Nécessite un serveur [Ollama](https://ollama.com) en cours d'exécution. |
 | [Qwen](https://qwen.ai) | `@elizaos/plugin-qwen` | — | À la demande | Modèles Qwen d'Alibaba. Configuration via l'entrée du plugin. |
 | [MiniMax](https://minimaxi.com) | `@elizaos/plugin-minimax` | — | À la demande | Modèles de langage MiniMax. Configuration via l'entrée du plugin. |
 | [Together AI](https://together.ai) | `@elizaos/plugin-together` | `TOGETHER_API_KEY` | À la demande | Hébergement de modèles open source. |
@@ -316,7 +316,7 @@ Ollama vous permet d'exécuter des modèles localement sans clé API et avec une
 <Steps>
   <Step title="Installer Ollama">
     ```bash
-    curl -fsSL https://ollama.ai/install.sh | sh
+    curl -fsSL https://ollama.com/install.sh | sh
     ```
   </Step>
   <Step title="Télécharger un modèle">

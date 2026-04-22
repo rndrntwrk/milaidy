@@ -43,6 +43,11 @@ export OPENROUTER_API_KEY=sk-or-...
 | Environment Variable | Required | Description |
 |---------------------|----------|-------------|
 | `OPENROUTER_API_KEY` | Yes | OpenRouter API key from [openrouter.ai](https://openrouter.ai) |
+| `OPENROUTER_BASE_URL` | No | Custom base URL for the OpenRouter API |
+| `OPENROUTER_SMALL_MODEL` | No | Override the small model identifier |
+| `OPENROUTER_LARGE_MODEL` | No | Override the large model identifier |
+| `OPENROUTER_EMBEDDING_MODEL` | No | Override the embedding model identifier |
+| `OPENROUTER_IMAGE_GENERATION_MODEL` | No | Override the image generation model |
 
 ### milady.json Example
 
