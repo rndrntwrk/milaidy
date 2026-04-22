@@ -4,6 +4,10 @@ sidebarTitle: "Lens"
 description: "Lens Protocol connector for Milady — decentralized social interactions on the Lens social graph."
 ---
 
+<Warning>
+**Not available.** The `@elizaos/plugin-lens` package is not currently in the Milady plugin registry. This page describes a plugin that may be added in a future release.
+</Warning>
+
 The Lens plugin connects Milady agents to the Lens Protocol, enabling social interactions on the decentralized social graph built on Polygon.
 
 **Package:** `@elizaos/plugin-lens`

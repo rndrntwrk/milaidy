@@ -1,7 +1,7 @@
 ---
 title: "Platform Connectors"
 sidebarTitle: "Connectors"
-description: "Platform bridges for 28 messaging platforms — 18 auto-enabled from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Twitter, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, Lens, WeChat) plus 10 installable from the registry (BlueBubbles, Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
+description: "Platform bridges for messaging platforms — auto-enabled from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, ACP) plus installable from the registry (BlueBubbles, Bluesky, Instagram, LINE, Zalo, Zalo Personal, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
 ---
 
 Connectors are platform bridges that allow your agent to communicate across messaging platforms and social networks. Each connector handles authentication, message routing, session management, and platform-specific features.
@@ -38,7 +38,9 @@ Connectors are platform bridges that allow your agent to communicate across mess
 28. [Nextcloud Talk](#nextcloud-talk)
 29. [Tlon](#tlon)
 30. [Lens](#lens)
-31. [Connector Lifecycle](#connector-lifecycle)
+31. [Zalo Personal (Zalouser)](#zalo-personal-zalouser)
+32. [ACP (Agent Communication Protocol)](#acp-agent-communication-protocol)
+33. [Connector Lifecycle](#connector-lifecycle)
 32. [Multi-Account Support](#multi-account-support)
 33. [Session Management](#session-management)
 
@@ -59,20 +61,22 @@ Connectors marked **Auto** load automatically when their config is present in `m
 | Blooio | API key + webhook | Yes | Yes | No | Auto |
 | Microsoft Teams | App ID + password | Yes | Yes (teams/channels) | No | Auto |
 | Google Chat | Service account | Yes | Yes (spaces) | Yes | Auto |
-| Twitter | API keys + tokens | DMs | N/A | No | Auto |
+| Twitter | API keys + tokens | DMs | N/A | No | Not available |
 | Farcaster | Neynar API key + signer | Casts | Yes (channels) | No | Auto |
 | Twitch | Client ID + access token | Yes (chat) | Yes (channels) | No | Auto |
 | Mattermost | Bot token | Yes | Yes (channels) | No | Auto |
-| WeChat | Proxy API key + QR code | Yes | Yes | Yes | Auto |
+| WeChat | Proxy API key + QR code | Yes | Yes | Yes | Not available |
 | Matrix | Access token | Yes | Yes (rooms) | No | Auto |
 | Feishu / Lark | App ID + secret | Yes | Yes (group chats) | No | Auto |
 | Nostr | Private key (nsec/hex) | Yes (NIP-04) | N/A | No | Auto |
-| Lens | API key | Yes | N/A | No | Auto |
+| Lens | API key | Yes | N/A | No | Not available |
 | BlueBubbles | Server password | Yes | Yes | No | Registry |
 | Bluesky | Account credentials | Posts | N/A | No | Registry |
 | Instagram | Username + password | DMs | N/A | No | Registry |
 | LINE | Channel access token + secret | Yes | Yes | No | Registry |
 | Zalo | Access token | Yes | Yes | No | Registry |
+| Zalo Personal | Cookie/session | Yes | Yes | No | Registry |
+| ACP | Gateway token | N/A | N/A | No | Auto |
 | Twilio | Account SID + auth token | SMS/Voice | N/A | No | Registry |
 | GitHub | API token | Issues/PRs | Yes (repos) | No | Registry |
 | Gmail Watch | Service account / OAuth | N/A | N/A | No | Registry |
@@ -462,6 +466,10 @@ Connects to iMessage and SMS messaging via the Blooio service with signed webhoo
 
 ## Twitter
 
+<Warning>
+**Not available.** The `@elizaos/plugin-twitter` package is not currently in the Milady plugin registry. This section describes a connector that may be added in a future release.
+</Warning>
+
 ### Setup Requirements
 
 - Twitter API v2 credentials (API key, API secret key, access token, access token secret)
@@ -704,6 +712,10 @@ Connects to iMessage and SMS messaging via the Blooio service with signed webhoo
 ---
 
 ## WeChat
+
+<Warning>
+**Not available.** The `@elizaos/plugin-wechat` package is not currently in the Milady plugin registry. This section describes a connector that may be added in a future release.
+</Warning>
 
 Connects to WeChat via a third-party proxy service using personal account login.
 
@@ -1072,6 +1084,10 @@ Gmail Watch is enabled via the `features.gmailWatch` flag or environment variabl
 
 ## Lens
 
+<Warning>
+**Not available.** The `@elizaos/plugin-lens` package is not currently in the Milady plugin registry. This section describes a connector that may be added in a future release.
+</Warning>
+
 **Plugin:** `@elizaos/plugin-lens`
 
 ```json5
@@ -1093,6 +1109,70 @@ Gmail Watch is enabled via the `features.gmailWatch` flag or environment variabl
 **Features:**
 - Lens Protocol social interactions
 - Post publishing and engagement
+
+---
+
+## Zalo Personal (Zalouser)
+
+**Plugin:** `@elizaos/plugin-zalouser`
+
+The Zalouser connector bridges your agent to Zalo via a personal account (as opposed to an Official Account). For OA workflows, see the [Zalo](#zalo) section above.
+
+```json
+{
+  "connectors": {
+    "zalouser": {
+      "enabled": true
+    }
+  }
+}
+```
+
+| Env Variable | Description |
+|-------------|-------------|
+| `ZALOUSER_IMEI` | Device IMEI identifier |
+| `ZALOUSER_COOKIE_PATH` | Path to cookie/session file |
+| `ZALOUSER_DM_POLICY` | DM policy (`allow`, `deny`, `allowlist`) |
+| `ZALOUSER_GROUP_POLICY` | Group message policy (`allow`, `deny`) |
+| `ZALOUSER_ALLOWED_THREADS` | Comma-separated list of allowed channel/room IDs |
+
+**Features:**
+- Personal-account one-to-one messaging
+- Group chat support with configurable policies
+- Thread allowlisting for selective engagement
+
+---
+
+## ACP (Agent Communication Protocol)
+
+**Plugin:** `@elizaos/plugin-acp`
+
+The ACP connector bridges your agent to an ACP gateway for real-time agent-to-agent communication.
+
+```json
+{
+  "connectors": {
+    "acp": {
+      "enabled": true
+    }
+  }
+}
+```
+
+| Env Variable | Description |
+|-------------|-------------|
+| `ACP_GATEWAY_URL` | URL for the ACP gateway |
+| `ACP_GATEWAY_TOKEN` | Authentication token for the gateway |
+| `ACP_GATEWAY_PASSWORD` | Password for the gateway (required) |
+| `ACP_AGENT_ID` | Agent identifier |
+| `ACP_CLIENT_NAME` | Client display name |
+
+**Auto-enable trigger:** `ACP_GATEWAY_TOKEN` environment variable.
+
+**Features:**
+- Real-time agent-to-agent messaging via ACP gateway
+- Session persistence and management
+- Multi-agent orchestration workflows
 
 ---
 

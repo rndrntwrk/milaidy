@@ -41,7 +41,7 @@ The Zalo connector is an elizaOS plugin that bridges your agent to the Zalo plat
 | `ZALO_ACCESS_TOKEN` | OA access token |
 | `ZALO_REFRESH_TOKEN` | Token refresh credential |
 | `ZALO_APP_ID` | Application ID |
-| `ZALO_APP_SECRET` | Application secret |
+| `ZALO_SECRET_KEY` | Application secret key |
 
 ## Features
 
