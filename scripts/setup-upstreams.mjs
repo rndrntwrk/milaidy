@@ -348,14 +348,24 @@ function parseFirstNumericVersionSegment(versionSpecifier) {
 
 export function resolveTypeScriptIgnoreDeprecationsTarget(
   repoRoot = DEFAULT_REPO_ROOT,
+  { fallbackRoot } = {},
 ) {
-  const rootPackageJson = readPackageJson(repoRoot);
-  const versionSpecifier =
-    rootPackageJson?.devDependencies?.typescript ??
-    rootPackageJson?.dependencies?.typescript;
-  const major = parseFirstNumericVersionSegment(versionSpecifier);
+  const candidateRoots = [repoRoot, fallbackRoot].filter(
+    (candidate) => typeof candidate === "string" && candidate.length > 0,
+  );
 
-  return major !== null && major >= 6 ? "6.0" : "5.0";
+  for (const candidateRoot of candidateRoots) {
+    const rootPackageJson = readPackageJson(candidateRoot);
+    const versionSpecifier =
+      rootPackageJson?.devDependencies?.typescript ??
+      rootPackageJson?.dependencies?.typescript;
+    const major = parseFirstNumericVersionSegment(versionSpecifier);
+    if (major !== null) {
+      return major >= 6 ? "6.0" : "5.0";
+    }
+  }
+
+  return "5.0";
 }
 
 function buildIgnoreDeprecationsCompatibilityReplacements(targetVersion) {
@@ -474,7 +484,9 @@ export function applyTypeScriptIgnoreDeprecationsCompatPatch(
   { repoRoot = DEFAULT_REPO_ROOT } = {},
 ) {
   let patchedReplacements = 0;
-  const targetVersion = resolveTypeScriptIgnoreDeprecationsTarget(repoRoot);
+  const targetVersion = resolveTypeScriptIgnoreDeprecationsTarget(elizaRoot, {
+    fallbackRoot: repoRoot,
+  });
   const tsConfigReplacements =
     buildIgnoreDeprecationsCompatibilityReplacements(targetVersion);
   for (const relativePath of TS_IGNORE_DEPRECATIONS_COMPAT_FILES) {

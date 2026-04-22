@@ -907,6 +907,26 @@ describe("resolveTypeScriptIgnoreDeprecationsTarget", () => {
 
     expect(resolveTypeScriptIgnoreDeprecationsTarget(repoRoot)).toBe("6.0");
   });
+
+  it("prefers the nested workspace TypeScript pin before falling back to the root repo", () => {
+    const repoRoot = makeTempDir();
+    const elizaRoot = makeTempDir();
+
+    writeFile(
+      path.join(repoRoot, "package.json"),
+      JSON.stringify({ devDependencies: { typescript: "^5.9.3" } }, null, 2),
+    );
+    writeFile(
+      path.join(elizaRoot, "package.json"),
+      JSON.stringify({ devDependencies: { typescript: "^6.0.0" } }, null, 2),
+    );
+
+    expect(
+      resolveTypeScriptIgnoreDeprecationsTarget(elizaRoot, {
+        fallbackRoot: repoRoot,
+      }),
+    ).toBe("6.0");
+  });
 });
 
 describe("applyPluginAnthropicCliUsagePatch", () => {
