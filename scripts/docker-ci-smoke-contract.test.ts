@@ -38,6 +38,16 @@ const localPackageLinkerPath = path.join(
   "scripts",
   "link-docker-local-app-packages.mjs",
 );
+const cronStoragePath = path.join(
+  repoRoot,
+  "eliza",
+  "plugins",
+  "plugin-cron",
+  "typescript",
+  "src",
+  "storage",
+  "cron-storage.ts",
+);
 
 describe("docker CI smoke contract", () => {
   it("delegates published-workspace fallback dependencies to the shared helper", () => {
@@ -113,6 +123,7 @@ describe("docker CI smoke contract", () => {
     expect(dockerignore).toContain("!eliza/apps/app-task-coordinator/src/**");
     expect(linker).toContain("eliza/packages/plugin-browser-bridge");
     expect(linker).toContain("eliza/packages/native-plugins/activity-tracker");
+    expect(linker).toContain("eliza/plugins/plugin-cron/typescript");
     expect(linker).toContain("eliza/plugins/plugin-telegram");
     expect(linker).toContain("collectWorkspaceMaps");
     expect(linker).toContain(
@@ -125,6 +136,13 @@ describe("docker CI smoke contract", () => {
     expect(linker).toContain("linkPackageTarget");
     expect(linker).toContain("linkPackageContents");
     expect(linker).not.toContain("fs.writeFileSync(packageJsonPath");
+  });
+
+  it("uses cron storage that keeps agent-scoped jobs out of worlds", () => {
+    const cronStorage = fs.readFileSync(cronStoragePath, "utf8");
+
+    expect(cronStorage).toContain("worldId: null as unknown as UUID");
+    expect(cronStorage).toContain("components_world_id_worlds_id_fk");
   });
 
   it("keeps Docker helper scripts parseable by Node", () => {
