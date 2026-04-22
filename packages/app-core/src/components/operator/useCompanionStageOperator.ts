@@ -77,6 +77,12 @@ function choosePrimaryHyperscapeAgent(
   );
 }
 
+type StreamStatusSnapshot = Awaited<ReturnType<typeof client.streamStatus>>;
+type StreamStatusRefreshResult = {
+  status: StreamStatusSnapshot | null;
+  error: string | null;
+};
+
 function getPhaseLabel(
   phase: string | null | undefined,
   t: (key: string, options?: Record<string, unknown>) => string,
@@ -283,38 +289,49 @@ export function useCompanionStageOperator() {
     [clearPendingEmoteReset],
   );
 
-  const refreshStreamStatus = useCallback(async () => {
-    if (streamLoadingRef.current) return;
-    try {
-      const status = await client.streamStatus();
-      setStreamCapabilityPresent(true);
-      setStreamCapabilityResolved(true);
-      setStreamAvailable(true);
-      setStreamError(null);
-      setStreamLive(Boolean(status.running && status.ffmpegAlive));
-      setUptime(status.uptime ?? 0);
-      setFrameCount(status.frameCount ?? 0);
-      setActiveDestination(status.destination ?? null);
-    } catch (err) {
-      if (isApiError(err) && err.status === 404) {
-        setStreamCapabilityPresent(false);
-        setStreamCapabilityResolved(true);
-        setStreamAvailable(false);
-        setStreamError(null);
-        return;
+  const refreshStreamStatus = useCallback(
+    async ({
+      force = false,
+    }: {
+      force?: boolean;
+    } = {}): Promise<StreamStatusRefreshResult> => {
+      if (streamLoadingRef.current && !force) {
+        return { status: null, error: null };
       }
-      setStreamCapabilityPresent(true);
-      setStreamCapabilityResolved(true);
-      setStreamAvailable(true);
-      setStreamError(
-        err instanceof Error
-          ? err.message
-          : t("aliceoperator.streamStatusFailed", {
-              defaultValue: "Stream status is temporarily unavailable.",
-            }),
-      );
-    }
-  }, [t]);
+      try {
+        const status = await client.streamStatus();
+        setStreamCapabilityPresent(true);
+        setStreamCapabilityResolved(true);
+        setStreamAvailable(true);
+        setStreamError(null);
+        setStreamLive(Boolean(status.running && status.ffmpegAlive));
+        setUptime(status.uptime ?? 0);
+        setFrameCount(status.frameCount ?? 0);
+        setActiveDestination(status.destination ?? null);
+        return { status, error: null };
+      } catch (err) {
+        if (isApiError(err) && err.status === 404) {
+          setStreamCapabilityPresent(false);
+          setStreamCapabilityResolved(true);
+          setStreamAvailable(false);
+          setStreamError(null);
+          return { status: null, error: null };
+        }
+        const errorMessage =
+          err instanceof Error
+            ? err.message
+            : t("aliceoperator.streamStatusFailed", {
+                defaultValue: "Stream status is temporarily unavailable.",
+              });
+        setStreamCapabilityPresent(true);
+        setStreamCapabilityResolved(true);
+        setStreamAvailable(true);
+        setStreamError(errorMessage);
+        return { status: null, error: errorMessage };
+      }
+    },
+    [t],
+  );
 
   useEffect(() => {
     let mounted = true;
@@ -655,7 +672,24 @@ export function useCompanionStageOperator() {
           }
           // STREAM555_GO_LIVE already waits for Cloudflare readiness on the
           // control-plane path; a second local delivery poll only adds lag.
-          await refreshStreamStatus();
+          const refreshed = await refreshStreamStatus({ force: true });
+          if (refreshed.error) {
+            return failed(refreshed.error);
+          }
+          if (!refreshed.status?.running || !refreshed.status.ffmpegAlive) {
+            return partial(
+              t("aliceoperator.cameraLaunchPending", {
+                defaultValue:
+                  "Camera launch started, but delivery is still warming up.",
+              }),
+              t("aliceoperator.deliveryStatus", {
+                defaultValue: "Delivery status",
+              }),
+              t("aliceoperator.deliveryPending", {
+                defaultValue: "Stream delivery has not reached live state yet.",
+              }),
+            );
+          }
           return success(
             t("aliceoperator.cameraLive", {
               defaultValue: "Camera is live and delivering.",

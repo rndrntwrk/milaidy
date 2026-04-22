@@ -8,10 +8,12 @@ const {
   mockUseApp,
   mockStreamStatus,
   mockGetStreamingDestinations,
+  mockExecuteAliceOperatorPlan,
 } = vi.hoisted(() => ({
   mockUseApp: vi.fn(),
   mockStreamStatus: vi.fn(),
   mockGetStreamingDestinations: vi.fn(),
+  mockExecuteAliceOperatorPlan: vi.fn(),
 }));
 
 vi.mock("@miladyai/app-core/state", () => ({
@@ -27,6 +29,8 @@ vi.mock("@miladyai/app-core/api", () => ({
     streamStatus: (...args: unknown[]) => mockStreamStatus(...args),
     getStreamingDestinations: (...args: unknown[]) =>
       mockGetStreamingDestinations(...args),
+    executeAliceOperatorPlan: (...args: unknown[]) =>
+      mockExecuteAliceOperatorPlan(...args),
     getArcade555GamesCatalog: vi.fn(async () => ({ games: [] })),
     getArcade555GameState: vi.fn(async () => ({
       sessionId: null,
@@ -60,8 +64,15 @@ function createContext(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function Harness() {
+function Harness({
+  onOperator,
+}: {
+  onOperator?: (operator: ReturnType<typeof useCompanionStageOperator>) => void;
+}) {
   const operator = useCompanionStageOperator();
+  React.useEffect(() => {
+    onOperator?.(operator);
+  }, [onOperator, operator]);
   return (
     <div
       data-testid="operator-stream"
@@ -77,6 +88,7 @@ describe("useCompanionStageOperator stream health", () => {
     mockUseApp.mockReset();
     mockStreamStatus.mockReset();
     mockGetStreamingDestinations.mockReset();
+    mockExecuteAliceOperatorPlan.mockReset();
     mockUseApp.mockReturnValue(createContext());
     mockGetStreamingDestinations.mockResolvedValue({
       destinations: [{ id: "twitch", name: "Twitch" }],
@@ -107,5 +119,76 @@ describe("useCompanionStageOperator stream health", () => {
     expect(status?.props["data-available"]).toBe("true");
     expect(status?.props["data-live"]).toBe("false");
     expect(status?.props["data-destination"]).toBe("Twitch");
+  });
+
+  it("returns a partial result when camera launch starts but delivery is not yet live", async () => {
+    const operatorRef: {
+      current: ReturnType<typeof useCompanionStageOperator> | null;
+    } = { current: null };
+    mockUseApp.mockReturnValue(
+      createContext({
+        plugins: [{ id: "@rndrntwrk/plugin-555stream", enabled: true }],
+      }),
+    );
+    mockStreamStatus.mockResolvedValue({
+      ok: true,
+      running: true,
+      ffmpegAlive: false,
+      uptime: 12,
+      frameCount: 48,
+      volume: 80,
+      muted: false,
+      audioSource: "555stream",
+      inputMode: "screen",
+      destination: { id: "twitch", name: "Twitch" },
+    });
+    mockExecuteAliceOperatorPlan.mockResolvedValue({
+      results: [
+        {
+          action: "STREAM555_GO_LIVE",
+          success: true,
+          message: "Launch accepted.",
+        },
+      ],
+    });
+
+    await act(async () => {
+      TestRenderer.create(
+        <Harness
+          onOperator={(operator) => {
+            operatorRef.current = operator;
+          }}
+        />,
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    mockStreamStatus.mockClear();
+
+    let result:
+      | Awaited<
+          ReturnType<ReturnType<typeof useCompanionStageOperator>["performGuidedGoLive"]>
+        >
+      | undefined;
+    await act(async () => {
+      result = await operatorRef.current?.performGuidedGoLive({
+        channels: ["twitch"],
+        launchMode: "camera",
+      });
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        state: "partial",
+        tone: "warning",
+        message: "Camera launch started, but delivery is still warming up.",
+        followUp: {
+          label: "Delivery status",
+          detail: "Stream delivery has not reached live state yet.",
+        },
+      }),
+    );
+    expect(mockStreamStatus).toHaveBeenCalledOnce();
   });
 });
