@@ -21,6 +21,14 @@ const dockerfilePath = path.join(
   "deploy",
   "Dockerfile.ci",
 );
+const dockerignorePath = path.join(
+  repoRoot,
+  "eliza",
+  "packages",
+  "app-core",
+  "deploy",
+  ".dockerignore.ci",
+);
 
 describe("docker CI smoke contract", () => {
   it("delegates published-workspace fallback dependencies to the shared helper", () => {
@@ -68,5 +76,17 @@ describe("docker CI smoke contract", () => {
     expect(dockerfile).toContain(
       "node eliza/packages/app-core/scripts/ensure-generated-core-proto-js.mjs",
     );
+  });
+
+  it("ships local app packages required by runtime static imports", () => {
+    const dockerfile = fs.readFileSync(dockerfilePath, "utf8");
+    const dockerignore = fs.readFileSync(dockerignorePath, "utf8");
+
+    expect(dockerfile).toContain(
+      "node eliza/packages/app-core/scripts/link-docker-local-app-packages.mjs",
+    );
+    expect(dockerignore).toContain("!eliza/apps/app-companion/src/**");
+    expect(dockerignore).toContain("!eliza/apps/app-lifeops/src/**");
+    expect(dockerignore).toContain("!eliza/apps/app-task-coordinator/src/**");
   });
 });
