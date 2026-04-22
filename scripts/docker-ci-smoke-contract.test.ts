@@ -60,16 +60,17 @@ describe("docker CI smoke contract", () => {
     );
   });
 
-  it("builds local plugin exports required by source imports", () => {
+  it("uses source-export shims for local plugin exports", () => {
     const script = fs.readFileSync(dockerSmokeScriptPath, "utf8");
+    const linker = fs.readFileSync(localPackageLinkerPath, "utf8");
 
-    expect(script).toContain(
-      "eliza/plugins/plugin-telegram/dist/account-auth-service.js",
+    expect(script).not.toContain(
+      "Building Telegram plugin account-auth export",
     );
-    expect(script).toContain("Building Telegram plugin account-auth export");
-    expect(script).toContain("pushd eliza/plugins/plugin-telegram");
-    expect(script).toContain("bunx tsup src/index.ts src/account-auth-service.ts");
-    expect(script).toContain("--no-dts");
+    expect(script).not.toContain("pushd eliza/plugins/plugin-telegram");
+    expect(linker).toContain("rewriteDistExportsToSource");
+    expect(linker).toContain('replace("./dist/", "./src/")');
+    expect(linker).toContain("linkPackageTarget");
   });
 
   it("boots the smoke container with isolated runtime state and live log dumps", () => {
