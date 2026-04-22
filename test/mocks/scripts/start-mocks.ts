@@ -56,7 +56,18 @@ interface CompiledRoute {
 interface StartedFixtureServer {
   port: number;
   baseUrl: string;
+  requests: MockRequestLedgerEntry[];
+  clearRequests(): void;
   stop(): Promise<void>;
+}
+
+export interface MockRequestLedgerEntry {
+  environment: string;
+  method: string;
+  path: string;
+  query: string;
+  body: RequestBody;
+  createdAt: string;
 }
 
 interface DynamicFixtureResponse {
@@ -70,6 +81,8 @@ export interface StartedMocks {
   baseUrls: Record<MockEnvironmentName, string>;
   /** Convenience env vars to set on process.env */
   envVars: Record<string, string>;
+  requestLedger(): MockRequestLedgerEntry[];
+  clearRequestLedger(): void;
   stop(): Promise<void>;
 }
 
@@ -574,12 +587,33 @@ async function startFixtureServer(
 ): Promise<StartedFixtureServer> {
   const environment = readEnvironment(dataPath);
   const routes = compileRoutes(environment);
+  const requests: MockRequestLedgerEntry[] = [];
   let stopped = false;
 
   const server = http.createServer(async (req, res) => {
     try {
       const requestUrl = new URL(req.url ?? "/", "http://127.0.0.1");
       const method = (req.method ?? "GET").toUpperCase();
+      const requestBody = await readRequestBody(req);
+      if (method === "GET" && requestUrl.pathname === "/__mock/requests") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ requests }));
+        return;
+      }
+      if (method === "DELETE" && requestUrl.pathname === "/__mock/requests") {
+        requests.splice(0, requests.length);
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true }));
+        return;
+      }
+      requests.push({
+        environment: environment.name ?? dataPath,
+        method,
+        path: requestUrl.pathname,
+        query: requestUrl.search,
+        body: requestBody,
+        createdAt: new Date().toISOString(),
+      });
       const matched = findRoute(routes, method, requestUrl.pathname);
       if (!matched) {
         const dynamicResponse =
@@ -600,7 +634,6 @@ async function startFixtureServer(
         return;
       }
 
-      const requestBody = await readRequestBody(req);
       const response = matched.route.response;
       const headers = Object.fromEntries(
         (response.headers ?? []).map((header) => [header.key, header.value]),
@@ -636,6 +669,10 @@ async function startFixtureServer(
   return {
     port,
     baseUrl: `http://127.0.0.1:${port}`,
+    requests,
+    clearRequests: () => {
+      requests.splice(0, requests.length);
+    },
     stop: async () => {
       if (stopped) return;
       stopped = true;
@@ -678,6 +715,13 @@ export async function startMocks(opts?: {
     portMap,
     baseUrls,
     envVars: envVarsFor(envs, baseUrls),
+    requestLedger: () =>
+      servers.flatMap((server) => server.requests.map((entry) => ({ ...entry }))),
+    clearRequestLedger: () => {
+      for (const server of servers) {
+        server.clearRequests();
+      }
+    },
     stop: async () => {
       await Promise.all(servers.map((server) => server.stop()));
     },

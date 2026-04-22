@@ -86,6 +86,8 @@ USER.md
 .eliza.broken.*/
 .milady-repo-setup.lock
 .milady/desktop-dev-console.log
+.milady/gmail-fixtures/
+test/mocks/fixtures/*.raw.json
 .turbo/
 skills/.cache/
 apps/app/electron/.eliza

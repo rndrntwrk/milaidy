@@ -86,6 +86,15 @@ describe("Google mock Gmail fidelity surface", () => {
       },
     );
     expect(batchModify.status).toBe(200);
+    expect(
+      mocks
+        .requestLedger()
+        .some(
+          (entry) =>
+            entry.method === "POST" &&
+            entry.path === "/gmail/v1/users/me/messages/batchModify",
+        ),
+    ).toBe(true);
 
     const batchDelete = await fetch(
       `${baseUrl}/gmail/v1/users/me/messages/batchDelete`,
