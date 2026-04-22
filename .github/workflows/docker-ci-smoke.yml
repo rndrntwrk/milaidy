@@ -68,9 +68,10 @@ jobs:
         timeout-minutes: 2
         run: |
           echo "::group::Docker containers"
-          docker ps -a
+          timeout 15 docker ps -a || echo "(docker ps timed out)"
           echo "::endgroup::"
-          for C in $(docker ps -a --format '{{.Names}}' | grep '^eliza-docker-smoke-' || true); do
+          timeout 15 docker ps -a --format '{{.Names}}' > /tmp/milady-docker-containers.txt || true
+          for C in $(grep '^eliza-docker-smoke-' /tmp/milady-docker-containers.txt || true); do
             echo "::group::docker logs $C"
             timeout 30 docker logs "$C" 2>&1 || echo "(docker logs timed out)"
             echo "::endgroup::"
