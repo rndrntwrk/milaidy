@@ -50,4 +50,15 @@ describe("docker CI smoke contract", () => {
     expect(dockerfile).not.toContain("/usr/local/bin/esbuild");
     expect(dockerfile).toContain("ENV ELIZA_DISABLE_EDGE_TTS=1");
   });
+
+  it("ships generated core proto runtime files for source-resolution paths", () => {
+    const dockerfile = fs.readFileSync(dockerfilePath, "utf8");
+
+    expect(dockerfile).toContain(
+      "eliza/packages/agent/dist/packages/typescript/src/types/generated",
+    );
+    expect(dockerfile).toContain(
+      "eliza/packages/typescript/src/types/generated",
+    );
+  });
 });
