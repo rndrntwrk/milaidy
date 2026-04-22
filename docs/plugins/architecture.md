@@ -6,6 +6,8 @@ description: "Deep dive into Milady's plugin system — registration lifecycle, 
 
 The Milady plugin system is built on elizaOS core. Every capability beyond the base runtime — model providers, platform connectors, DeFi integrations, scheduling, and custom features — is delivered as a plugin.
 
+> **Path convention:** Paths like `packages/agent/` and `packages/app-core/` below refer to directories inside the `eliza/` git submodule.
+
 ## System Design
 
 Plugins are isolated modules that register capabilities with the `AgentRuntime`. The runtime orchestrates plugin loading, dependency resolution, initialization, and shutdown.
