@@ -1,7 +1,7 @@
 ---
 title: "Platform Connectors"
 sidebarTitle: "Connectors"
-description: "Platform bridges for 27 messaging platforms — 18 auto-enabled from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Twitter, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, Lens, WeChat) plus 9 installable from the registry (Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
+description: "Platform bridges for 24 messaging platforms — 15 auto-enabled from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr) plus 9 installable from the registry (Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon). Twitter, Lens, and WeChat plugins are not currently available."
 ---
 
 Connectors are platform bridges that allow your agent to communicate across messaging platforms and social networks. Each connector handles authentication, message routing, session management, and platform-specific features.
@@ -58,15 +58,15 @@ Connectors marked **Auto** load automatically when their config is present in `m
 | Blooio | API key + webhook | Yes | Yes | No | Auto |
 | Microsoft Teams | App ID + password | Yes | Yes (teams/channels) | No | Auto |
 | Google Chat | Service account | Yes | Yes (spaces) | Yes | Auto |
-| Twitter | API keys + tokens | DMs | N/A | No | Auto |
+| ~~Twitter~~ | ~~API keys + tokens~~ | ~~DMs~~ | ~~N/A~~ | ~~No~~ | **Unavailable** |
 | Farcaster | Neynar API key + signer | Casts | Yes (channels) | No | Auto |
 | Twitch | Client ID + access token | Yes (chat) | Yes (channels) | No | Auto |
 | Mattermost | Bot token | Yes | Yes (channels) | No | Auto |
-| WeChat | Proxy API key + QR code | Yes | Yes | Yes | Auto |
+| ~~WeChat~~ | ~~Proxy API key + QR code~~ | ~~Yes~~ | ~~Yes~~ | ~~Yes~~ | **Unavailable** |
 | Matrix | Access token | Yes | Yes (rooms) | No | Auto |
 | Feishu / Lark | App ID + secret | Yes | Yes (group chats) | No | Auto |
 | Nostr | Private key (nsec/hex) | Yes (NIP-04) | N/A | No | Auto |
-| Lens | API key | Yes | N/A | No | Auto |
+| ~~Lens~~ | ~~API key~~ | ~~Yes~~ | ~~N/A~~ | ~~No~~ | **Unavailable** |
 | Bluesky | Account credentials | Posts | N/A | No | Registry |
 | Instagram | Username + password | DMs | N/A | No | Registry |
 | LINE | Channel access token + secret | Yes | Yes | No | Registry |
@@ -460,6 +460,10 @@ Connects to iMessage and SMS messaging via the Blooio service with signed webhoo
 
 ## Twitter
 
+<Warning>
+**Not currently available.** The `@elizaos/plugin-twitter` package is not present in the Milady plugin registry. This section is retained for reference only.
+</Warning>
+
 ### Setup Requirements
 
 - Twitter API v2 credentials (API key, API secret key, access token, access token secret)
@@ -666,6 +670,10 @@ Connects to iMessage and SMS messaging via the Blooio service with signed webhoo
 ---
 
 ## WeChat
+
+<Warning>
+**Not currently available.** The `@elizaos/plugin-wechat` package is not present in the Milady plugin registry. This section is retained for reference only.
+</Warning>
 
 Connects to WeChat via a third-party proxy service using personal account login.
 
@@ -1033,6 +1041,10 @@ Gmail Watch is enabled via the `features.gmailWatch` flag or environment variabl
 ---
 
 ## Lens
+
+<Warning>
+**Not currently available.** The `@elizaos/plugin-lens` package is not present in the Milady plugin registry. This section is retained for reference only.
+</Warning>
 
 **Plugin:** `@elizaos/plugin-lens`
 

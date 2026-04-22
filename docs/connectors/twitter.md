@@ -1,14 +1,16 @@
 ---
 title: Twitter/X Connector
 sidebarTitle: Twitter/X
-description: Connect your agent to Twitter/X using the @elizaos/plugin-twitter package.
+description: The @elizaos/plugin-twitter package is not currently available in the Milady plugin registry.
 ---
 
-Connect your agent to Twitter/X for social media engagement.
+<Warning>
+**Not currently available.** The `@elizaos/plugin-twitter` package is not present in the Milady plugin registry. The documentation below is retained for reference in case the plugin is restored in a future release. Do not attempt to configure this connector — it will not load.
+</Warning>
 
 ## Overview
 
-The Twitter connector is an external elizaOS plugin that bridges your agent to Twitter/X. It is auto-enabled by the runtime when a valid token is detected in your connector configuration.
+The Twitter connector was an external elizaOS plugin that bridged your agent to Twitter/X.
 
 ## Package Info
 
