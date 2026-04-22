@@ -54,7 +54,7 @@ Provider results are concatenated in registration order.
 
 ## Built-in Milady Providers
 
-The Milady plugin (`createMiladyPlugin()`) registers the following providers:
+The Eliza plugin (`createElizaPlugin()`) registers the following providers:
 
 ### Channel Profile Provider
 

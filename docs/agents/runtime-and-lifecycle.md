@@ -44,7 +44,7 @@ addLogListener(logToChatListener);
 `milady.json` is loaded from the state directory (`~/.milady/milady.json`). If the file does not exist, an empty config is used with defaults:
 
 ```typescript
-config = loadMiladyConfig();
+config = loadElizaConfig();
 // Falls back to {} if ENOENT
 ```
 
