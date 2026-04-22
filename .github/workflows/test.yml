@@ -195,9 +195,19 @@ jobs:
         if: runner.os == 'Linux'
         shell: bash
         run: |
-          APT_ARGS=(-o Acquire::ForceIPv4=true -o Acquire::Retries=5 -o Acquire::http::Timeout=30)
-          sudo apt-get "${APT_ARGS[@]}" update
-          sudo apt-get "${APT_ARGS[@]}" install -y libwebkit2gtk-4.1-0 libayatana-appindicator3-1 xvfb
+          APT_ARGS=(-o Acquire::ForceIPv4=true -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o DPkg::Lock::Timeout=120)
+          for attempt in 1 2 3; do
+            if sudo env DEBIAN_FRONTEND=noninteractive timeout 5m apt-get "${APT_ARGS[@]}" update && \
+               sudo env DEBIAN_FRONTEND=noninteractive timeout 12m apt-get "${APT_ARGS[@]}" install -y --no-install-recommends \
+                 libwebkit2gtk-4.1-0 libayatana-appindicator3-1 xvfb; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "Linux desktop dependency install failed after ${attempt} attempts"
+              exit 1
+            fi
+            sleep $((attempt * 10))
+          done
 
       - name: Cache Bun install
         uses: actions/cache@v4
@@ -834,9 +844,19 @@ jobs:
       - name: Install Electrobun runtime dependencies
         if: steps.provider-check.outputs.skip != 'true'
         run: |
-          APT_ARGS=(-o Acquire::ForceIPv4=true -o Acquire::Retries=5 -o Acquire::http::Timeout=30)
-          sudo apt-get "${APT_ARGS[@]}" update
-          sudo apt-get "${APT_ARGS[@]}" install -y libwebkit2gtk-4.1-0 libayatana-appindicator3-1
+          APT_ARGS=(-o Acquire::ForceIPv4=true -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o DPkg::Lock::Timeout=120)
+          for attempt in 1 2 3; do
+            if sudo env DEBIAN_FRONTEND=noninteractive timeout 5m apt-get "${APT_ARGS[@]}" update && \
+               sudo env DEBIAN_FRONTEND=noninteractive timeout 12m apt-get "${APT_ARGS[@]}" install -y --no-install-recommends \
+                 libwebkit2gtk-4.1-0 libayatana-appindicator3-1; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "Electrobun runtime dependency install failed after ${attempt} attempts"
+              exit 1
+            fi
+            sleep $((attempt * 10))
+          done
 
       - name: Install Playwright browser
         if: steps.provider-check.outputs.skip != 'true'
