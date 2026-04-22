@@ -55,10 +55,7 @@ describe("docker CI smoke contract", () => {
     const dockerfile = fs.readFileSync(dockerfilePath, "utf8");
 
     expect(dockerfile).toContain(
-      "eliza/packages/agent/dist/packages/typescript/src/types/generated",
-    );
-    expect(dockerfile).toContain(
-      "eliza/packages/typescript/src/types/generated",
+      "node eliza/packages/app-core/scripts/ensure-generated-core-proto-js.mjs",
     );
   });
 });
