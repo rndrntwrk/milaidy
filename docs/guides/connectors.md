@@ -19,27 +19,24 @@ Connectors are platform bridges that allow your agent to communicate across mess
 9. [Blooio](#blooio)
 10. [Microsoft Teams](#microsoft-teams)
 11. [Google Chat](#google-chat)
-12. [Twitter](#twitter)
-13. [Farcaster](#farcaster)
-14. [Bluesky](#bluesky)
-15. [Instagram](#instagram)
-16. [Twitch](#twitch)
-17. [Mattermost](#mattermost)
-18. [WeChat](#wechat)
-19. [Matrix](#matrix)
-20. [Feishu / Lark](#feishu--lark)
-21. [Nostr](#nostr)
-22. [LINE](#line)
-23. [Zalo](#zalo)
-24. [Twilio](#twilio)
-25. [GitHub](#github)
-26. [Gmail Watch](#gmail-watch)
-27. [Nextcloud Talk](#nextcloud-talk)
-28. [Tlon](#tlon)
-29. [Lens](#lens)
-30. [Connector Lifecycle](#connector-lifecycle)
-31. [Multi-Account Support](#multi-account-support)
-32. [Session Management](#session-management)
+12. [Farcaster](#farcaster)
+13. [Bluesky](#bluesky)
+14. [Instagram](#instagram)
+15. [Twitch](#twitch)
+16. [Mattermost](#mattermost)
+17. [Matrix](#matrix)
+18. [Feishu / Lark](#feishu--lark)
+19. [Nostr](#nostr)
+20. [LINE](#line)
+21. [Zalo](#zalo)
+22. [Twilio](#twilio)
+23. [GitHub](#github)
+24. [Gmail Watch](#gmail-watch)
+25. [Nextcloud Talk](#nextcloud-talk)
+26. [Tlon](#tlon)
+27. [Connector Lifecycle](#connector-lifecycle)
+28. [Multi-Account Support](#multi-account-support)
+29. [Session Management](#session-management)
 
 ---
 
@@ -55,22 +52,21 @@ Connectors marked **Auto** load automatically when their config is present in `m
 | WhatsApp | QR code (Baileys) or Cloud API | Yes | Yes | Yes | Auto |
 | Signal | signal-cli HTTP API | Yes | Yes | Yes | Auto |
 | iMessage | Native CLI (macOS) | Yes | Yes | Yes | Auto |
+| BlueBubbles | iMessage via BlueBubbles server | Yes | Yes | No | Auto |
 | Blooio | API key + webhook | Yes | Yes | No | Auto |
 | Microsoft Teams | App ID + password | Yes | Yes (teams/channels) | No | Auto |
 | Google Chat | Service account | Yes | Yes (spaces) | Yes | Auto |
-| Twitter | API keys + tokens | DMs | N/A | No | Auto |
 | Farcaster | Neynar API key + signer | Casts | Yes (channels) | No | Auto |
 | Twitch | Client ID + access token | Yes (chat) | Yes (channels) | No | Auto |
 | Mattermost | Bot token | Yes | Yes (channels) | No | Auto |
-| WeChat | Proxy API key + QR code | Yes | Yes | Yes | Auto |
 | Matrix | Access token | Yes | Yes (rooms) | No | Auto |
 | Feishu / Lark | App ID + secret | Yes | Yes (group chats) | No | Auto |
 | Nostr | Private key (nsec/hex) | Yes (NIP-04) | N/A | No | Auto |
-| Lens | API key | Yes | N/A | No | Auto |
 | Bluesky | Account credentials | Posts | N/A | No | Registry |
 | Instagram | Username + password | DMs | N/A | No | Registry |
 | LINE | Channel access token + secret | Yes | Yes | No | Registry |
 | Zalo | Access token | Yes | Yes | No | Registry |
+| Zalo (Personal) | Cookie-based auth | Yes | Yes | No | Registry |
 | Twilio | Account SID + auth token | SMS/Voice | N/A | No | Registry |
 | GitHub | API token | Issues/PRs | Yes (repos) | No | Registry |
 | Gmail Watch | Service account / OAuth | N/A | N/A | No | Registry |
@@ -455,44 +451,6 @@ Connects to iMessage and SMS messaging via the Blooio service with signed webhoo
 - Per-group configuration with mention requirements
 - Typing indicator modes (`none`, `message`, `reaction`)
 - DM policy with group chat support
-
----
-
-## Twitter
-
-### Setup Requirements
-
-- Twitter API v2 credentials (API key, API secret key, access token, access token secret)
-
-### Key Configuration
-
-```json
-{
-  "connectors": {
-    "twitter": {
-      "enabled": true,
-      "apiKey": "...",
-      "apiSecretKey": "...",
-      "accessToken": "...",
-      "accessTokenSecret": "...",
-      "postEnable": true,
-      "postIntervalMin": 90,
-      "postIntervalMax": 180
-    }
-  }
-}
-```
-
-### Features
-
-- Automated posting with configurable intervals and variance
-- Post immediately option
-- Search and mention monitoring
-- Timeline algorithm selection (`weighted` or `latest`)
-- Auto-respond to mentions
-- Action processing toggle
-- Dry run mode for testing
-- Configurable max tweet length (default: 4000)
 
 ---
 
