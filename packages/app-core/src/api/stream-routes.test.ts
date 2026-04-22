@@ -811,6 +811,49 @@ describe("handleStreamRoute", () => {
       );
     });
 
+    it("does not report 555stream as live when the session is active but outputs are not live", async () => {
+      const { res, getJson } = createMockHttpResponse();
+      const req = createMockIncomingMessage({
+        method: "GET",
+        url: "/api/stream/status",
+      });
+      const service = mockStream555Service({
+        getBoundSessionId: vi.fn(() => "session-555"),
+        getStreamStatus: vi.fn(async () => ({
+          sessionId: "session-555",
+          active: true,
+          cfSessionId: "cf_123",
+          cloudflare: { isConnected: true, state: "connected" },
+          startTime: Date.now() - 3_000,
+          serverFallbackActive: false,
+          platforms: {
+            twitch: { enabled: true, status: "connected" },
+            kick: { enabled: true, status: "idle" },
+          },
+          jobStatus: { state: "running" },
+        })),
+      });
+
+      await handleStreamRoute(
+        req,
+        res,
+        "/api/stream/status",
+        "GET",
+        mockState({ runtime: { getService: vi.fn(() => service) } }),
+      );
+
+      expect(getJson()).toEqual(
+        expect.objectContaining({
+          ok: true,
+          running: true,
+          ffmpegAlive: false,
+          audioSource: "555stream",
+          inputMode: "screen",
+          destination: { id: "555stream", name: "Twitch, Kick" },
+        }),
+      );
+    });
+
     it("maps multiple enabled and connected 555stream platforms in canonical order", async () => {
       const { res, getJson } = createMockHttpResponse();
       const req = createMockIncomingMessage({

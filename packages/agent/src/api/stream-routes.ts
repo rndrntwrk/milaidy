@@ -452,11 +452,17 @@ function mapStream555StatusToHealth(status?: Stream555StatusLike | null): {
   inputMode: "screen";
 } {
   const running = Boolean(status?.active);
-  const jobState = status?.jobStatus?.state?.trim().toLowerCase() ?? "";
-  const ffmpegAlive =
-    running ||
-    (jobState.length > 0 &&
-      !/(stopped|failed|error|terminated|offline)/.test(jobState));
+  const platformEntries =
+    status?.platforms != null &&
+    typeof status.platforms === "object" &&
+    !Array.isArray(status.platforms)
+      ? status.platforms
+      : null;
+  const ffmpegAlive = STREAM555_DESTINATION_MAPPINGS.some((mapping) => {
+    const platform = platformEntries?.[mapping.platformId];
+    if (!platform) return false;
+    return isStream555PlatformLiveStatus(platform.status);
+  });
   const startTime = status?.startTime;
   const uptime =
     typeof startTime === "number" && Number.isFinite(startTime) && startTime > 0
