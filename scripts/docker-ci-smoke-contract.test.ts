@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -99,5 +100,16 @@ describe("docker CI smoke contract", () => {
     expect(dockerignore).toContain("!eliza/apps/app-task-coordinator/src/**");
     expect(linker).toContain("eliza/packages/plugin-browser-bridge");
     expect(linker).toContain("eliza/packages/native-plugins/activity-tracker");
+    expect(linker).toContain("eliza/plugins/plugin-telegram");
+    expect(linker).toContain("collectWorkspaceMaps");
+    expect(linker).toContain(
+      'path.join(workspaceDir, "node_modules", "@elizaos")',
+    );
+  });
+
+  it("keeps Docker helper scripts parseable by Node", () => {
+    execFileSync(process.execPath, ["--check", localPackageLinkerPath], {
+      stdio: "pipe",
+    });
   });
 });
