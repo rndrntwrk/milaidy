@@ -133,6 +133,18 @@ jobs:
         env:
           npm_config_python: ${{ env.pythonLocation }}/bin/python3
 
+      - name: Install published-workspace fallback dependencies
+        run: bash scripts/install-published-workspace-fallback-deps.sh
+
+      - name: Restore eliza workspace paths for repo-local tests
+        run: node scripts/restore-local-eliza-workspace.mjs
+
+      - name: Install local eliza test dependencies
+        run: |
+          bun install --cwd eliza --no-frozen-lockfile --ignore-scripts
+          bun install --cwd eliza/cloud --no-frozen-lockfile --ignore-scripts
+          bun install --cwd eliza/steward-fi --no-frozen-lockfile --ignore-scripts
+
       - name: Run repository postinstall patches
         run: bun run postinstall
 
@@ -296,6 +308,9 @@ jobs:
 
       - name: Install dependencies (for npm publish file resolution)
         run: bun install --ignore-scripts
+
+      - name: Install published-workspace fallback dependencies
+        run: bash scripts/install-published-workspace-fallback-deps.sh
 
       - name: Publish with nightly dist-tag
         run: npm publish --tag nightly --access public
