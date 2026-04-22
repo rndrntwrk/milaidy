@@ -10,6 +10,9 @@ Connectors are platform bridges that allow your agent to communicate across mess
 
 1. [Supported Platforms](#supported-platforms)
 2. [General Configuration](#general-configuration)
+
+**Auto-enabled connectors** (load when config is present):
+
 3. [Discord](#discord)
 4. [Telegram](#telegram)
 5. [Slack](#slack)
@@ -21,22 +24,28 @@ Connectors are platform bridges that allow your agent to communicate across mess
 11. [Google Chat](#google-chat)
 12. [Twitter](#twitter)
 13. [Farcaster](#farcaster)
-14. [Bluesky](#bluesky)
-15. [Instagram](#instagram)
-16. [Twitch](#twitch)
-17. [Mattermost](#mattermost)
-18. [WeChat](#wechat)
-19. [Matrix](#matrix)
-20. [Feishu / Lark](#feishu--lark)
-21. [Nostr](#nostr)
-22. [LINE](#line)
-23. [Zalo](#zalo)
-24. [Twilio](#twilio)
-25. [GitHub](#github)
-26. [Gmail Watch](#gmail-watch)
-27. [Nextcloud Talk](#nextcloud-talk)
-28. [Tlon](#tlon)
-29. [Lens](#lens)
+14. [Twitch](#twitch)
+15. [Mattermost](#mattermost)
+16. [WeChat](#wechat)
+17. [Matrix](#matrix)
+18. [Feishu / Lark](#feishu--lark)
+19. [Nostr](#nostr)
+20. [Lens](#lens)
+
+**Registry connectors** (install with `milady plugins install <name>`):
+
+21. [Bluesky](#bluesky)
+22. [Instagram](#instagram)
+23. [LINE](#line)
+24. [Zalo](#zalo)
+25. [Twilio](#twilio)
+26. [GitHub](#github)
+27. [Gmail Watch](#gmail-watch)
+28. [Nextcloud Talk](#nextcloud-talk)
+29. [Tlon](#tlon)
+
+**Reference:**
+
 30. [Connector Lifecycle](#connector-lifecycle)
 31. [Multi-Account Support](#multi-account-support)
 32. [Session Management](#session-management)

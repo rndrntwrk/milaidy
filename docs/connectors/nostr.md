@@ -20,7 +20,22 @@ The Nostr connector is an external elizaOS plugin that bridges your agent to the
 
 ## Minimal Configuration
 
-The connector auto-enables when one of the generic trigger fields (`token`, `botToken`, or `apiKey`) is present in the connector config. Environment variables alone do not trigger auto-enable.
+The actual private key is set via the `NOSTR_PRIVATE_KEY` environment variable. However, auto-enable detection requires one of the generic trigger fields (`token`, `botToken`, or `apiKey`) in the connector config — environment variables alone do not trigger auto-enable.
+
+The recommended approach is to add the plugin to `plugins.allow` explicitly, which avoids needing a placeholder token:
+
+```json
+{
+  "env": {
+    "NOSTR_PRIVATE_KEY": "nsec1your_private_key_here"
+  },
+  "plugins": {
+    "allow": ["@elizaos/plugin-nostr"]
+  }
+}
+```
+
+Alternatively, set a placeholder token to trigger auto-enable:
 
 ```json
 {
@@ -31,19 +46,6 @@ The connector auto-enables when one of the generic trigger fields (`token`, `bot
     "nostr": {
       "token": "placeholder"
     }
-  }
-}
-```
-
-Alternatively, add the plugin to `plugins.allow` explicitly:
-
-```json
-{
-  "env": {
-    "NOSTR_PRIVATE_KEY": "nsec1your_private_key_here"
-  },
-  "plugins": {
-    "allow": ["@elizaos/plugin-nostr"]
   }
 }
 ```
