@@ -458,11 +458,11 @@ function mapStream555StatusToHealth(status?: Stream555StatusLike | null): {
     !Array.isArray(status.platforms)
       ? status.platforms
       : null;
-  const ffmpegAlive = STREAM555_DESTINATION_MAPPINGS.some((mapping) => {
-    const platform = platformEntries?.[mapping.platformId];
-    if (!platform) return false;
-    return isStream555PlatformLiveStatus(platform.status);
-  });
+  const ffmpegAlive = Object.values(platformEntries ?? {}).some(
+    (platform) =>
+      platform?.enabled !== false &&
+      isStream555PlatformLiveStatus(platform?.status),
+  );
   const startTime = status?.startTime;
   const uptime =
     typeof startTime === "number" && Number.isFinite(startTime) && startTime > 0

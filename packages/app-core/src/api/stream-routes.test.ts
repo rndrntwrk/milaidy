@@ -854,6 +854,48 @@ describe("handleStreamRoute", () => {
       );
     });
 
+    it("treats a live non-mapped platform as sufficient stream health", async () => {
+      const { res, getJson } = createMockHttpResponse();
+      const req = createMockIncomingMessage({
+        method: "GET",
+        url: "/api/stream/status",
+      });
+      const service = mockStream555Service({
+        getBoundSessionId: vi.fn(() => "session-555"),
+        getStreamStatus: vi.fn(async () => ({
+          sessionId: "session-555",
+          active: true,
+          cfSessionId: "cf_123",
+          cloudflare: { isConnected: true, state: "connected" },
+          startTime: Date.now() - 3_000,
+          serverFallbackActive: false,
+          platforms: {
+            zora: { enabled: true, status: "live" },
+          },
+          jobStatus: { state: "running" },
+        })),
+      });
+
+      await handleStreamRoute(
+        req,
+        res,
+        "/api/stream/status",
+        "GET",
+        mockState({ runtime: { getService: vi.fn(() => service) } }),
+      );
+
+      expect(getJson()).toEqual(
+        expect.objectContaining({
+          ok: true,
+          running: true,
+          ffmpegAlive: true,
+          audioSource: "555stream",
+          inputMode: "screen",
+          destination: { id: "555stream", name: "555 Stream" },
+        }),
+      );
+    });
+
     it("maps multiple enabled and connected 555stream platforms in canonical order", async () => {
       const { res, getJson } = createMockHttpResponse();
       const req = createMockIncomingMessage({
