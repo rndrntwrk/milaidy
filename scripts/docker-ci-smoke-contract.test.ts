@@ -38,7 +38,9 @@ describe("docker CI smoke contract", () => {
     expect(script).toContain(
       "eliza/packages/typescript/src/types/generated/eliza/v1/agent_pb.ts",
     );
-    expect(script).toContain("bunx @bufbuild/buf@1.67.0 generate");
+    expect(script).toContain(
+      "bunx --package @bufbuild/buf@1.68.3 buf generate",
+    );
   });
 
   it("boots the smoke container with isolated runtime state and live log dumps", () => {
