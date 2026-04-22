@@ -118,8 +118,8 @@ The `startEliza()` function in `eliza/packages/agent/src/runtime/eliza.ts` orche
   <Step title="Prepare Workspace">
     Ensure `~/.milady/workspace/` exists with bootstrap files. Create the `~/.milady/plugins/custom/` directory for drop-in plugins.
   </Step>
-  <Step title="Create Milady Plugin">
-    Instantiate the bridge plugin that provides workspace context, session keys, emotes, custom actions, trigger tasks, and autonomous state tracking to the elizaOS runtime.
+  <Step title="Create Eliza Plugin">
+    Instantiate the bridge plugin via `createElizaPlugin()` that provides workspace context, session keys, custom actions, trigger tasks, and lifecycle actions to the elizaOS runtime.
   </Step>
   <Step title="Resolve and Load Plugins">
     Run the full plugin resolution pipeline (detailed below). Plugins are loaded in parallel for faster startup.
@@ -163,7 +163,7 @@ Restart is pluggable via `setRestartHandler()`:
 
 | Environment | Handler | Behavior |
 |-------------|---------|----------|
-| CLI (default) | Exit with code 75 | The runner script (`scripts/run-node.mjs`) catches exit code 75, optionally rebuilds if sources changed, and relaunches |
+| CLI (default) | Exit with code 75 | The runner script (`eliza/packages/app-core/scripts/run-node.mjs`) catches exit code 75, optionally rebuilds if sources changed, and relaunches |
 | Dev-server / API | Hot-swap | Stops the current runtime, reloads config from disk, creates a new `AgentRuntime`, and swaps the reference in the API server |
 | Electrobun | `AgentManager.restart()` | Uses the Electrobun app's native restart mechanism |
 
