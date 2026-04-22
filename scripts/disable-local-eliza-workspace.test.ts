@@ -357,8 +357,96 @@ describe("disable-local-eliza-workspace", () => {
       "@elizaos/ui": resolveCiOverrideSpecifiers(repoRoot)["@elizaos/ui"],
       "@elizaos/plugin-app-control":
         CI_OVERRIDE_SPECIFIERS["@elizaos/plugin-app-control"],
+      "@elizaos/plugin-browser-bridge":
+        resolveCiOverrideSpecifiers(repoRoot)["@elizaos/plugin-browser-bridge"],
       "@elizaos/plugin-wechat":
         CI_OVERRIDE_SPECIFIERS["@elizaos/plugin-wechat"],
+    });
+  });
+
+  it("keeps the local browser bridge package resolvable in published-only CI", () => {
+    const repoRoot = makeTempDir();
+    writeJson(path.join(repoRoot, "package.json"), {
+      name: "milady-test",
+      workspaces: ["eliza/packages/*", "eliza/apps/*"],
+      dependencies: {
+        "@elizaos/core": "workspace:*",
+        "@elizaos/plugin-browser-bridge": "workspace:*",
+      },
+      overrides: {
+        "@elizaos/core": "2.0.0-alpha.163",
+      },
+    });
+    writeJson(
+      path.join(repoRoot, "eliza", "packages", "typescript", "package.json"),
+      {
+        name: "@elizaos/typescript",
+        version: "2.0.0-alpha.163",
+      },
+    );
+    writeJson(
+      path.join(
+        repoRoot,
+        "eliza",
+        "packages",
+        "plugin-browser-bridge",
+        "package.json",
+      ),
+      {
+        name: "@elizaos/plugin-browser-bridge",
+        version: "0.1.0",
+        private: true,
+        dependencies: {
+          "@elizaos/app-lifeops": "workspace:*",
+          "@elizaos/core": "workspace:*",
+        },
+      },
+    );
+    writeJson(
+      path.join(repoRoot, "eliza", "apps", "app-lifeops", "package.json"),
+      {
+        name: "@elizaos/app-lifeops",
+        version: "0.1.0",
+        private: true,
+      },
+    );
+
+    disableLocalElizaWorkspace(repoRoot, {
+      log: () => {},
+      warn: () => {},
+      errorLog: () => {},
+    });
+
+    const rootPackage = JSON.parse(
+      fs.readFileSync(path.join(repoRoot, "package.json"), "utf8"),
+    );
+    expect(rootPackage.workspaces).toContain(
+      "eliza/packages/plugin-browser-bridge",
+    );
+    expect(rootPackage.dependencies).toMatchObject({
+      "@elizaos/core": "2.0.0-alpha.163",
+      "@elizaos/plugin-browser-bridge": "workspace:*",
+    });
+    expect(rootPackage.overrides).toMatchObject({
+      "@elizaos/plugin-browser-bridge":
+        resolveCiOverrideSpecifiers(repoRoot)["@elizaos/plugin-browser-bridge"],
+    });
+
+    const browserBridgePackage = JSON.parse(
+      fs.readFileSync(
+        path.join(
+          repoRoot,
+          "eliza",
+          "packages",
+          "plugin-browser-bridge",
+          "package.json",
+        ),
+        "utf8",
+      ),
+    );
+    expect(browserBridgePackage.dependencies).toMatchObject({
+      "@elizaos/app-lifeops": "workspace:*",
+      "@elizaos/core": "2.0.0-alpha.163",
     });
   });
 
@@ -396,6 +484,8 @@ describe("disable-local-eliza-workspace", () => {
       "@elizaos/ui": ELIZA_RUNTIME_CI_OVERRIDE_SPECIFIERS["@elizaos/ui"],
       "@elizaos/plugin-app-control":
         ELIZA_RUNTIME_CI_OVERRIDE_SPECIFIERS["@elizaos/plugin-app-control"],
+      "@elizaos/plugin-browser-bridge":
+        ELIZA_RUNTIME_CI_OVERRIDE_SPECIFIERS["@elizaos/plugin-browser-bridge"],
       "@elizaos/plugin-wechat":
         ELIZA_RUNTIME_CI_OVERRIDE_SPECIFIERS["@elizaos/plugin-wechat"],
     });
