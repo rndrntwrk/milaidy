@@ -117,8 +117,11 @@ describe("docker CI smoke contract", () => {
       'path.join(workspaceDir, "node_modules", "@elizaos")',
     );
     expect(linker).toContain("rewriteDistExportsToSource");
-    expect(linker).toContain("pathExists(path.join(packageDir, exportPath))");
+    expect(linker).toContain("pathExists(path.join(packageDir, sourcePath))");
     expect(linker).toContain('replace("./dist/", "./src/")');
+    expect(linker).toContain("linkPackageTarget");
+    expect(linker).toContain("linkPackageContents");
+    expect(linker).not.toContain("fs.writeFileSync(packageJsonPath");
   });
 
   it("keeps Docker helper scripts parseable by Node", () => {
