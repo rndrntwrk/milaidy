@@ -8,6 +8,10 @@ The Twitter plugin connects Milady agents to Twitter/X, enabling autonomous post
 
 **Package:** `@elizaos/plugin-twitter`
 
+<Warning>
+`@elizaos/plugin-twitter` is an upstream elizaOS package and is **not currently in the bundled Milady plugin registry**. It is referenced in the `CONNECTOR_PLUGINS` auto-enable map and will be resolved at runtime if the package is available. For X/Twitter posting via the xAI API, see the bundled [`@elizaos/plugin-xai`](/plugin-registry/llm/xai) plugin instead.
+</Warning>
+
 ## Installation
 
 ```bash

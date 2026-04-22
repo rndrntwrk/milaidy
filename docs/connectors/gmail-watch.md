@@ -41,6 +41,11 @@ Gmail Watch is enabled via the `features` section:
 - Auto-renewal of watch subscriptions
 - Inbound email event handling
 
+## Important
+
+Unlike most connectors, Gmail Watch is configured via the `features` section of `milady.json`, **not** the `connectors` section. It must be installed from the registry before use.
+
 ## Related
 
+- [Gmail Watch plugin reference](/plugin-registry/platform/gmail-watch)
 - [Connectors overview](/guides/connectors#gmail-watch)
