@@ -1283,7 +1283,7 @@ The `dmPolicy` options are:
 **Bluesky:**
 
 - Authentication fails:
-  Confirm `BLUESKY_USERNAME` and `BLUESKY_PASSWORD` environment variables are set. Bluesky uses app passwords, not your main account password.
+  Confirm `BLUESKY_HANDLE` and `BLUESKY_PASSWORD` environment variables are set. Bluesky uses app passwords, not your main account password. Generate an app password at bsky.app/settings/app-passwords.
 
 **Instagram:**
 
