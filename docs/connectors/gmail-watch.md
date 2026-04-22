@@ -35,6 +35,10 @@ Gmail Watch is enabled via the `features` section:
 }
 ```
 
+## Environment Variables
+
+Gmail Watch reads credentials from `hooks.gmail.account` in `milady.json` or from Google Cloud service account credentials. Refer to the [configuration reference](/configuration) for details on the `hooks` section.
+
 ## Features
 
 - Gmail Pub/Sub message watching

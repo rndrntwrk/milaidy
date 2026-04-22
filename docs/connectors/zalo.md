@@ -36,17 +36,23 @@ The Zalo connector is an elizaOS plugin that bridges your agent to the Zalo plat
 
 ## Environment Variables
 
-| Variable | Description |
-|----------|-------------|
-| `ZALO_ACCESS_TOKEN` | OA access token |
-| `ZALO_REFRESH_TOKEN` | Token refresh credential |
-| `ZALO_APP_ID` | Application ID |
-| `ZALO_APP_SECRET` | Application secret |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `ZALO_ACCESS_TOKEN` | Yes | OA access token |
+| `ZALO_SECRET_KEY` | Yes | Zalo secret key |
+| `ZALO_APP_ID` | No | Application/client ID |
+| `ZALO_REFRESH_TOKEN` | No | Token refresh credential |
+| `ZALO_ENABLED` | No | Enable or disable the connector |
+| `ZALO_USE_POLLING` | No | Use polling instead of webhooks |
+| `ZALO_WEBHOOK_URL` | No | Webhook URL |
+| `ZALO_WEBHOOK_PATH` | No | Custom webhook path |
+| `ZALO_WEBHOOK_PORT` | No | Port for the webhook server |
+| `ZALO_PROXY_URL` | No | Proxy URL |
 
 ## Features
 
 - Official Account messaging and support workflows
-- Webhook-based message handling
+- Webhook-based message handling (or polling mode)
 - Customer interaction management
 
 ## Related
