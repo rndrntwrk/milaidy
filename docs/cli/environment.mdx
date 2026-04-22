@@ -18,11 +18,13 @@ These variables are read by the CLI wrapper (`run-node.mjs`) and the embedded ru
 
 ## Ports and networking
 
-| Variable | Purpose |
-|----------|---------|
-| `MILADY_API_PORT` / `ELIZA_PORT` | HTTP API bind port. |
-| `MILADY_PORT` | Dashboard / Vite dev port in orchestrated dev flows. |
-| `MILADY_GATEWAY_PORT`, `MILADY_HOME_PORT`, … | Other local services — see **Ports** under [Environment setup](/installation). |
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `MILADY_API_PORT` / `ELIZA_PORT` | `31337` | HTTP API bind port (dev). In production, the API runs on port 2138. |
+| `MILADY_PORT` | `2138` | Dashboard / Vite dev port in orchestrated dev flows. |
+| `MILADY_GATEWAY_PORT` | `18789` | Gateway WebSocket + HTTP port. |
+| `MILADY_HOME_PORT` | `2142` | Home dashboard port. |
+| `MILADY_WECHAT_WEBHOOK_PORT` | `18790` | WeChat webhook listener port. |
 
 ## Development
 

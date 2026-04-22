@@ -57,6 +57,28 @@ The `plugin-auto-enable.ts` module checks `connectors.farcaster` in your config.
 
 No environment variable is required to trigger auto-enable — it is driven entirely by the connector config object.
 
+## Environment Variables
+
+All settings can alternatively be set via environment variables. The primary env var trigger is `FARCASTER_NEYNAR_API_KEY`.
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `FARCASTER_NEYNAR_API_KEY` | Yes | Neynar API key (sensitive) |
+| `FARCASTER_SIGNER_UUID` | Yes | Neynar signer UUID for the agent account |
+| `FARCASTER_FID` | Yes | Farcaster ID of the agent account |
+| `FARCASTER_HUB_URL` | No | Farcaster hub URL (default: `hub.pinata.cloud`) |
+| `FARCASTER_POLL_INTERVAL` | No | Polling interval in seconds (default: `120`) |
+| `FARCASTER_MODE` | No | Operation mode: `polling` or `webhook` (default: `polling`) |
+| `FARCASTER_DRY_RUN` | No | Simulate operations without executing |
+| `ENABLE_CAST` | No | Enable/disable casting (default: `true`) |
+| `CAST_INTERVAL_MIN` | No | Minimum minutes between autonomous casts (default: `90`) |
+| `CAST_INTERVAL_MAX` | No | Maximum minutes between autonomous casts (default: `180`) |
+| `CAST_IMMEDIATELY` | No | Publish casts immediately instead of scheduling |
+| `MAX_CAST_LENGTH` | No | Max characters per cast (default: `320`) |
+| `ENABLE_ACTION_PROCESSING` | No | Enable automated action processing |
+| `ACTION_INTERVAL` | No | Minutes between action-processing cycles (default: `5`) |
+| `MAX_ACTIONS_PROCESSING` | No | Max actions per batch (default: `1`) |
+
 ## Full Configuration Reference
 
 All fields are defined under `connectors.farcaster` in `milady.json`.

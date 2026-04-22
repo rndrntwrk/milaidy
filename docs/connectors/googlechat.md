@@ -77,6 +77,23 @@ The `plugin-auto-enable.ts` module checks `connectors.googlechat` in your config
 
 No environment variable is required to trigger auto-enable — it is driven entirely by the connector config object.
 
+## Environment Variables
+
+All settings can alternatively be set via environment variables:
+
+| Variable | Description |
+|----------|-------------|
+| `GOOGLE_CHAT_SERVICE_ACCOUNT_FILE` | Path to service account JSON key file |
+| `GOOGLE_CHAT_SERVICE_ACCOUNT` | Inline service account JSON |
+| `GOOGLE_APPLICATION_CREDENTIALS` | Google Cloud application credentials path |
+| `GOOGLE_CHAT_AUDIENCE_TYPE` | Authentication audience type (`app-url` or `project-number`) |
+| `GOOGLE_CHAT_AUDIENCE` | App URL or project number |
+| `GOOGLE_CHAT_BOT_USER` | Bot user identifier |
+| `GOOGLE_CHAT_ENABLED` | Enable or disable the connector |
+| `GOOGLE_CHAT_WEBHOOK_PATH` | Webhook endpoint path |
+| `GOOGLE_CHAT_SPACES` | Spaces/rooms to join |
+| `GOOGLE_CHAT_REQUIRE_MENTION` | Only respond when @mentioned |
+
 ## Full Configuration Reference
 
 All fields are defined under `connectors.googlechat` in `milady.json`.
