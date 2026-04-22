@@ -68,7 +68,8 @@ describe("docker CI smoke contract", () => {
     );
     expect(script).toContain("Building Telegram plugin account-auth export");
     expect(script).toContain("pushd eliza/plugins/plugin-telegram");
-    expect(script).toContain("bun run build");
+    expect(script).toContain("bunx tsup src/index.ts src/account-auth-service.ts");
+    expect(script).toContain("--no-dts");
   });
 
   it("boots the smoke container with isolated runtime state and live log dumps", () => {
@@ -118,6 +119,7 @@ describe("docker CI smoke contract", () => {
     );
     expect(linker).toContain("rewriteDistExportsToSource");
     expect(linker).toContain("pathExists(path.join(packageDir, sourcePath))");
+    expect(linker).toContain('key === "types"');
     expect(linker).toContain('replace("./dist/", "./src/")');
     expect(linker).toContain("linkPackageTarget");
     expect(linker).toContain("linkPackageContents");
