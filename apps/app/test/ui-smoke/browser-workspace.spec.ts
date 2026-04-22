@@ -71,13 +71,13 @@ test("browser workspace can create live tabs and switch selection", async ({
   }
   expect(chatSidebarBox.y).toBeLessThan(addressInputBox.y);
 
-  const blankTabButtons = browserWorkspaceView.locator(
-    '[role="tab"][title="about:blank"]',
+  const initialHomeTabButtons = browserWorkspaceView.locator(
+    '[role="tab"][title="https://milady.ai/"]',
   );
-  await expect(blankTabButtons.first()).toBeVisible({
+  await expect(initialHomeTabButtons.first()).toBeVisible({
     timeout: 120_000,
   });
-  await expect(addressInput).toHaveValue("about:blank");
+  await expect(addressInput).toHaveValue("https://milady.ai/");
   await expect(newTabButton).toBeEnabled();
 
   await addressInput.fill("");
@@ -96,6 +96,9 @@ test("browser workspace can create live tabs and switch selection", async ({
   );
   await expect(addressInput).toHaveValue("https://example.com/");
 
+  const blankTabButtons = browserWorkspaceView.locator(
+    '[role="tab"][title="about:blank"]',
+  );
   const blankTabCount = await blankTabButtons.count();
   await addressInput.fill("about:blank");
   await expect(addressInput).toHaveValue("about:blank");
