@@ -6,13 +6,23 @@ description: Deploy Milady using Docker, Docker Compose, or cloud containers. Co
 
 Milady supports multiple deployment strategies: standalone Docker containers, Docker Compose orchestration, and cloud-managed containers for Eliza Cloud (AWS ECS).
 
+<Warning>
+The Docker deployment files (Dockerfile, docker-compose.yml, docker-setup.sh) live in the elizaOS submodule at `eliza/packages/app-core/deploy/`. Initialize the submodule first:
+
+```bash
+bun run setup:upstreams
+```
+
+Then run deploy commands from the `deploy/` directory, which delegates to the submodule scripts.
+</Warning>
+
 ## Quick Start with Docker Compose
 
 The fastest way to deploy Milady is using the included setup script, which builds the image, generates authentication tokens, runs interactive onboarding, and starts the gateway.
 
 ```bash
 cd deploy
-./docker-setup.sh
+bash ../eliza/packages/app-core/deploy/docker-setup.sh
 ```
 
 The setup script performs the following steps:
