@@ -84,7 +84,7 @@ import "@elizaos/app-2004scape/ui";
 import "@elizaos/app-defense-of-the-agents/ui";
 import {
   AppBlockerSettingsCard,
-  LifeOpsBrowserSetupPanel,
+  LifeOpsBrowserSetupPanel as BrowserBridgeSetupPanel,
   LifeOpsPageView,
   WebsiteBlockerSettingsCard,
 } from "@elizaos/app-lifeops/ui";
@@ -247,7 +247,7 @@ const appBootConfig: AppBootConfig = {
   characterCatalog: APP_CHARACTER_CATALOG,
   envAliases: APP_ENV_ALIASES,
   lifeOpsPageView: LifeOpsPageView,
-  lifeOpsBrowserSetupPanel: LifeOpsBrowserSetupPanel,
+  lifeOpsBrowserSetupPanel: BrowserBridgeSetupPanel,
   appBlockerSettingsCard: AppBlockerSettingsCard,
   websiteBlockerSettingsCard: WebsiteBlockerSettingsCard,
   clientMiddleware: {
