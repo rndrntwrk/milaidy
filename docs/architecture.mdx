@@ -6,6 +6,10 @@ description: High-level overview of the Milady AI system architecture, layers, p
 
 Milady is a cross-platform AI agent runtime built on top of [elizaOS](https://elizaos.ai). It delivers the same backend across CLI, web, desktop (Electrobun), and mobile (Capacitor) through a layered architecture. This page covers the full system from entry points through runtime lifecycle, plugin loading, API surface, and build tooling.
 
+<Info>
+Source paths like `packages/app-core/src/...` and `packages/agent/src/...` live in the `eliza/` git submodule. Initialize it with `bun run setup:upstreams` or `git submodule update --init --recursive` to browse these files locally.
+</Info>
+
 ## High-Level Diagram
 
 ```
@@ -28,7 +32,7 @@ Milady is a cross-platform AI agent runtime built on top of [elizaOS](https://el
 +---------------------------------------------------------------+
 |                    Runtime Layer (elizaOS)                     |
 |  AgentRuntime + Plugin system                                 |
-|  9 core plugins + optional plugins + Milady plugin            |
+|  12 core plugins + optional plugins + Milady plugin           |
 |  Providers, Actions, Services, Evaluators                     |
 +----------------------------+----------------------------------+
                              |
@@ -220,7 +224,7 @@ Plugin resolution (`resolvePlugins()`) handles three tiers of plugins through a 
 
 `collectPluginNames()` builds a `Set<string>` of package names to load:
 
-1. Start with all 9 **core plugins** (`CORE_PLUGINS`)
+1. Start with all 12 **core plugins** (`CORE_PLUGINS`)
 2. Add plugins from the **allow list** (`config.plugins.allow`) -- these are additive, not exclusive
 3. Add **connector plugins** for any configured channels (Discord, Telegram, Slack, etc.) using the `CHANNEL_PLUGIN_MAP`
 4. Add **model-provider plugins** when their API key environment variables are detected (e.g., `ANTHROPIC_API_KEY` triggers `@elizaos/plugin-anthropic`)
