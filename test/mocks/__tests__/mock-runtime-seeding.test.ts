@@ -41,7 +41,7 @@ describe("mock runtime seeding", () => {
     }
   });
 
-  it("seeds a connected Google grant with canonical capabilities and realistic feeds", async () => {
+  it("seeds a connected Google grant with canonical capabilities and an empty calendar by default", async () => {
     const mocked = await createMockedTestRuntime({
       envs: ["google"],
       seedX: false,
@@ -92,14 +92,7 @@ describe("mock runtime seeding", () => {
         "Can you review the product brief?",
       ]),
     );
-    expect(
-      (calendarResponse.items ?? []).map((event) => event.summary),
-    ).toEqual(
-      expect.arrayContaining([
-        "Intro meeting with Julia Chen",
-        "1:1 with Alex",
-      ]),
-    );
+    expect(calendarResponse.items ?? []).toEqual([]);
   });
 
   it("seeds an X connector grant when the X mock is enabled", async () => {

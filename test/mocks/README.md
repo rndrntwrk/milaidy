@@ -17,7 +17,9 @@ at those local URLs via env vars instead of hitting real services.
 | `environments/cloud-managed.json` | Eliza Cloud managed-Google endpoints | `ELIZA_CLOUD_BASE_URL`      |
 
 Each LifeOps client reads its env var on import and falls back to the real URL
-when unset. See the patched files in
+when unset. These env vars are test-only: the normal `bun run dev` launcher now
+strips inherited `MILADY_MOCK_*` values so local development keeps using real
+Google/Twilio/etc. unless you opt back in explicitly. See the patched files in
 `eliza/apps/app-lifeops/src/lifeops/`:
 
 - `twilio.ts`, `whatsapp-client.ts`, `calendly-client.ts`
@@ -35,6 +37,24 @@ process.env.MILADY_MOCK_GOOGLE_BASE = mocks.baseUrls.google;
 process.env.MILADY_MOCK_TWILIO_BASE = mocks.baseUrls.twilio;
 await mocks.stop();
 ```
+
+Use the dedicated test helpers or test commands for this. Do not export
+`MILADY_MOCK_GOOGLE_BASE` in your regular shell before running `bun run dev`
+unless you are intentionally debugging the mock path.
+
+## Clean up a polluted dev profile
+
+If the chat sidebar already shows old synthetic Google Calendar rows from a
+past mock run:
+
+1. Start the app normally with `bun run dev` so the dev launcher strips any
+   leaked `MILADY_MOCK_*` vars.
+2. In the app, disconnect the Google LifeOps connector once.
+3. Reconnect Google so LifeOps clears the cached mock rows and resyncs from the
+   real account.
+
+The Google disconnect flow already clears cached calendar events, Gmail cache,
+and sync state for the disconnected connector.
 
 Ports are auto-assigned on `127.0.0.1`. The fixture runner supports the subset
 of Mockoon templating used by these files: `{{body 'field'}}`,
