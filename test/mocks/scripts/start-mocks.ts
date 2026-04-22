@@ -59,6 +59,12 @@ interface StartedFixtureServer {
   stop(): Promise<void>;
 }
 
+interface DynamicFixtureResponse {
+  statusCode: number;
+  body: JsonValue;
+  headers?: Record<string, string>;
+}
+
 export interface StartedMocks {
   portMap: Record<MockEnvironmentName, number>;
   baseUrls: Record<MockEnvironmentName, string>;
@@ -310,6 +316,256 @@ function findRoute(
   return null;
 }
 
+function jsonFixture(
+  body: JsonValue,
+  statusCode = 200,
+): DynamicFixtureResponse {
+  return { statusCode, body, headers: { "Content-Type": "application/json" } };
+}
+
+function routeParam(pathname: string, pattern: RegExp): string | null {
+  const match = pattern.exec(pathname);
+  return match ? decodeURIComponent(match[1] ?? "") : null;
+}
+
+function gmailMessage(id: string, labelIds: string[]): MessageResponse {
+  return {
+    id,
+    threadId: "thr-mock",
+    labelIds,
+  };
+}
+
+type MessageResponse = {
+  id: string;
+  threadId: string;
+  labelIds?: string[];
+};
+
+function googleDynamicFixture(
+  method: string,
+  pathname: string,
+): DynamicFixtureResponse | null {
+  if (!pathname.startsWith("/gmail/v1/users/me/")) return null;
+
+  if (method === "GET" && pathname === "/gmail/v1/users/me/labels") {
+    return jsonFixture({
+      labels: [
+        { id: "INBOX", name: "INBOX", type: "system" },
+        { id: "SENT", name: "SENT", type: "system" },
+        { id: "DRAFT", name: "DRAFT", type: "system" },
+        { id: "SPAM", name: "SPAM", type: "system" },
+        { id: "TRASH", name: "TRASH", type: "system" },
+        { id: "UNREAD", name: "UNREAD", type: "system" },
+        { id: "IMPORTANT", name: "IMPORTANT", type: "system" },
+        { id: "STARRED", name: "STARRED", type: "system" },
+        {
+          id: "CATEGORY_PROMOTIONS",
+          name: "CATEGORY_PROMOTIONS",
+          type: "system",
+        },
+        { id: "Label_1", name: "milady-e2e", type: "user" },
+      ],
+    });
+  }
+
+  if (
+    method === "POST" &&
+    pathname === "/gmail/v1/users/me/messages/batchModify"
+  ) {
+    return jsonFixture({});
+  }
+
+  if (
+    method === "POST" &&
+    pathname === "/gmail/v1/users/me/messages/batchDelete"
+  ) {
+    return jsonFixture({});
+  }
+
+  const trashMessageId = routeParam(
+    pathname,
+    /^\/gmail\/v1\/users\/me\/messages\/([^/]+)\/trash\/?$/,
+  );
+  if (method === "POST" && trashMessageId) {
+    return jsonFixture(gmailMessage(trashMessageId, ["TRASH"]));
+  }
+
+  const untrashMessageId = routeParam(
+    pathname,
+    /^\/gmail\/v1\/users\/me\/messages\/([^/]+)\/untrash\/?$/,
+  );
+  if (method === "POST" && untrashMessageId) {
+    return jsonFixture(gmailMessage(untrashMessageId, ["INBOX"]));
+  }
+
+  const deleteMessageId = routeParam(
+    pathname,
+    /^\/gmail\/v1\/users\/me\/messages\/([^/]+)\/?$/,
+  );
+  if (method === "DELETE" && deleteMessageId) {
+    return jsonFixture({});
+  }
+
+  if (method === "POST" && pathname === "/gmail/v1/users/me/drafts") {
+    return jsonFixture({
+      id: `draft-${crypto.randomUUID()}`,
+      message: {
+        id: `draft-message-${randomFromAlphabet("abcdefghijklmnopqrstuvwxyz", 8)}`,
+        threadId: "thr-draft",
+        labelIds: ["DRAFT"],
+      },
+    });
+  }
+
+  if (method === "GET" && pathname === "/gmail/v1/users/me/drafts") {
+    return jsonFixture({
+      drafts: [
+        {
+          id: "draft-mock",
+          message: { id: "draft-message-mock", threadId: "thr-draft" },
+        },
+      ],
+      resultSizeEstimate: 1,
+    });
+  }
+
+  const draftId = routeParam(
+    pathname,
+    /^\/gmail\/v1\/users\/me\/drafts\/([^/]+)\/?$/,
+  );
+  if (method === "GET" && draftId) {
+    return jsonFixture({
+      id: draftId,
+      message: {
+        id: "draft-message-mock",
+        threadId: "thr-draft",
+        labelIds: ["DRAFT"],
+        snippet: "Mock Gmail draft",
+      },
+    });
+  }
+  if (method === "DELETE" && draftId) {
+    return jsonFixture({});
+  }
+
+  if (method === "POST" && pathname === "/gmail/v1/users/me/drafts/send") {
+    return jsonFixture({
+      id: `sent-draft-${crypto.randomUUID()}`,
+      threadId: "thr-draft",
+      labelIds: ["SENT"],
+    });
+  }
+
+  if (method === "POST" && pathname === "/gmail/v1/users/me/watch") {
+    return jsonFixture({
+      historyId: "123456",
+      expiration: String(Date.now() + 60 * 60 * 1000),
+    });
+  }
+
+  if (method === "GET" && pathname === "/gmail/v1/users/me/history") {
+    return jsonFixture({
+      history: [
+        {
+          id: "123456",
+          messagesAdded: [
+            { message: { id: "msg-finance", threadId: "thr-finance" } },
+          ],
+          labelsAdded: [
+            {
+              message: { id: "msg-finance", threadId: "thr-finance" },
+              labelIds: ["INBOX", "UNREAD"],
+            },
+          ],
+        },
+      ],
+      historyId: "123457",
+    });
+  }
+
+  if (method === "GET" && pathname === "/gmail/v1/users/me/threads") {
+    return jsonFixture({
+      threads: [
+        {
+          id: "thr-finance",
+          historyId: "123456",
+          snippet: "Please confirm receipt of invoice 4831.",
+        },
+        {
+          id: "thr-sarah",
+          historyId: "123455",
+          snippet: "Could you review the product brief?",
+        },
+      ],
+      resultSizeEstimate: 2,
+    });
+  }
+
+  const threadId = routeParam(
+    pathname,
+    /^\/gmail\/v1\/users\/me\/threads\/([^/]+)\/?$/,
+  );
+  if (method === "GET" && threadId) {
+    return jsonFixture({
+      id: threadId,
+      historyId: "123456",
+      messages: [
+        { id: "msg-finance", threadId, labelIds: ["INBOX", "UNREAD"] },
+      ],
+    });
+  }
+
+  const modifyThreadId = routeParam(
+    pathname,
+    /^\/gmail\/v1\/users\/me\/threads\/([^/]+)\/modify\/?$/,
+  );
+  if (method === "POST" && modifyThreadId) {
+    return jsonFixture({ id: modifyThreadId, historyId: "123458" });
+  }
+
+  const trashThreadId = routeParam(
+    pathname,
+    /^\/gmail\/v1\/users\/me\/threads\/([^/]+)\/trash\/?$/,
+  );
+  if (method === "POST" && trashThreadId) {
+    return jsonFixture({
+      id: trashThreadId,
+      historyId: "123459",
+      messages: [
+        { id: "msg-finance", threadId: trashThreadId, labelIds: ["TRASH"] },
+      ],
+    });
+  }
+
+  const untrashThreadId = routeParam(
+    pathname,
+    /^\/gmail\/v1\/users\/me\/threads\/([^/]+)\/untrash\/?$/,
+  );
+  if (method === "POST" && untrashThreadId) {
+    return jsonFixture({
+      id: untrashThreadId,
+      historyId: "123460",
+      messages: [
+        { id: "msg-finance", threadId: untrashThreadId, labelIds: ["INBOX"] },
+      ],
+    });
+  }
+
+  if (method === "POST" && pathname === "/gmail/v1/users/me/settings/filters") {
+    return jsonFixture({
+      id: `filter-${randomFromAlphabet(
+        "abcdefghijklmnopqrstuvwxyz0123456789",
+        8,
+      )}`,
+      criteria: { from: "*@example.com" },
+      action: { removeLabelIds: ["INBOX"] },
+    });
+  }
+
+  return null;
+}
+
 async function startFixtureServer(
   dataPath: string,
 ): Promise<StartedFixtureServer> {
@@ -323,6 +579,19 @@ async function startFixtureServer(
       const method = (req.method ?? "GET").toUpperCase();
       const matched = findRoute(routes, method, requestUrl.pathname);
       if (!matched) {
+        const dynamicResponse =
+          environment.name === "Google APIs"
+            ? googleDynamicFixture(method, requestUrl.pathname)
+            : null;
+        if (dynamicResponse) {
+          res.writeHead(dynamicResponse.statusCode, {
+            "Content-Type": "application/json",
+            ...(dynamicResponse.headers ?? {}),
+          });
+          res.end(JSON.stringify(dynamicResponse.body));
+          return;
+        }
+
         res.writeHead(404, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "not_found" }));
         return;

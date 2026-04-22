@@ -226,16 +226,16 @@
     {
       "uuid": "0000000d-0000-4000-8000-00000google00",
       "type": "http",
-      "documentation": "Gmail get generic message fallback",
+      "documentation": "Gmail unknown message",
       "method": "get",
       "endpoint": "gmail/v1/users/me/messages/:id",
       "responses": [
         {
           "uuid": "0000000e-0000-4000-8000-00000google00",
-          "body": "{\"id\":\"{{urlParam 'id'}}\",\"threadId\":\"thr-generic\",\"labelIds\":[\"INBOX\"],\"snippet\":\"Mock Gmail message\",\"payload\":{\"mimeType\":\"text/plain\",\"headers\":[{\"name\":\"From\",\"value\":\"Mock Sender <mock@example.com>\"},{\"name\":\"To\",\"value\":\"Owner <owner@example.test>\"},{\"name\":\"Subject\",\"value\":\"Mock Gmail message\"},{\"name\":\"Date\",\"value\":\"{{now 'ddd, DD MMM YYYY HH:mm:ss [GMT]'}}\"}],\"body\":{\"data\":\"SGVsbG8gd29ybGQ=\",\"size\":11}},\"internalDate\":\"{{now 'x'}}\"}",
+          "body": "{\"error\":{\"code\":404,\"message\":\"Requested entity was not found.\",\"status\":\"NOT_FOUND\"}}",
           "latency": 0,
-          "statusCode": 200,
-          "label": "OK",
+          "statusCode": 404,
+          "label": "Not found",
           "headers": [
             {
               "key": "Content-Type",
