@@ -5,15 +5,25 @@ description: "Diagnose environment, ports, and common misconfigurations."
 
 # `milady doctor`
 
-Runs static checks: Node/Bun version, config presence, port availability, and other fast sanity tests.
+Runs health checks grouped by category: **System** (runtime version, node_modules, build artifacts, local upstreams), **Configuration** (config file, model API key, host binding), **Storage** (state directory, database, disk space), and **Network** (port availability).
 
 For maintainers working from a source checkout, `doctor` also checks the repo-local vendored workspace under `./eliza` and reports whether `@elizaos/core` resolves to vendored source or a published install. The orchestrator runtime now ships through `@elizaos/core`, so there is no separate standalone orchestrator package to validate here.
+
+## Flags
+
+| Flag | Description |
+|------|-------------|
+| `--no-ports` | Skip port availability checks. |
+| `--fix` | Automatically fix issues where possible (runs auto-fixable `milady` sub-commands). |
+| `--json` | Output results as JSON (CI-friendly). Exits with code 1 if any check fails. |
 
 ## Examples
 
 ```bash
 milady doctor
-milady doctor --help
+milady doctor --fix
+milady doctor --json
+milady doctor --no-ports
 ```
 
 Use the output when filing issues or after moving state directories.

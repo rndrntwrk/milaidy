@@ -1,17 +1,31 @@
 ---
 title: "milady db"
-description: "Database maintenance and inspection for the local PGlite store."
+description: "Database management for the local agent database."
 ---
 
 # `milady db`
 
-Low-level database utilities (backup hints, migrations status, or repair flows — exact subcommands vary by version).
+Database management commands.
+
+## Subcommands
+
+| Subcommand | Description |
+|------------|-------------|
+| `milady db reset` | Delete the local agent database. It will be re-created on next start. |
+
+### `milady db reset` flags
+
+| Flag | Description |
+|------|-------------|
+| `--yes` | Skip the confirmation prompt. |
+
+The database is located at `~/.milady/workspace/.eliza/.elizadb` (or under the path configured by `MILADY_STATE_DIR` / `ELIZA_STATE_DIR`). All agent memory and conversation history will be lost on reset.
 
 ## Examples
 
 ```bash
-milady db
-milady db --help
+milady db reset
+milady db reset --yes
 ```
 
 Avoid running destructive operations while the API server holds the database lock.
@@ -19,4 +33,4 @@ Avoid running destructive operations while the API server holds the database loc
 ## Related
 
 - [Database](/advanced/database)
-- [REST — diagnostics](/rest/diagnostics)
+- [REST -- diagnostics](/rest/diagnostics)

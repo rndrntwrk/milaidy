@@ -7,20 +7,28 @@ description: "Start the Milady API server (embedded elizaOS runtime, server-only
 
 Starts the HTTP + WebSocket API without an interactive REPL. Use this for local development, desktop shells, and headless deployments.
 
+`milady run` is an alias for `milady start`.
+
 ## Behavior
 
 - Loads the configured agent runtime and plugins.
 - Binds to the API port from environment (see [CLI environment](/cli/environment)).
-- May print a **connection key** when binding on a non-loopback address and no token is set.
+- Auto-generates a **connection key** when binding on a non-loopback address and no token is already set.
+
+## Flags
+
+| Flag | Description |
+|------|-------------|
+| `--connection-key [key]` | Set an explicit connection key for remote access, or pass without a value to auto-generate one. |
 
 ## Examples
 
 ```bash
 milady start
+milady start --connection-key my-secret-token
+milady start --connection-key
 MILADY_API_PORT=31437 milady start
 ```
-
-Run `milady start --help` for bind, token, and logging flags.
 
 ## Related
 

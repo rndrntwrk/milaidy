@@ -57,6 +57,26 @@ The `plugin-auto-enable.ts` module checks `connectors.farcaster` in your config.
 
 No environment variable is required to trigger auto-enable — it is driven entirely by the connector config object.
 
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `FARCASTER_NEYNAR_API_KEY` | Yes | API key for the Neynar Farcaster API |
+| `FARCASTER_SIGNER_UUID` | Yes | UUID of the Neynar signer associated with the Farcaster account |
+| `FARCASTER_FID` | Yes | Farcaster user identifier (FID) |
+| `FARCASTER_MODE` | No | Operation mode: `polling` or `webhook` |
+| `FARCASTER_HUB_URL` | No | Base URL for the Farcaster hub |
+| `FARCASTER_POLL_INTERVAL` | No | Polling interval in seconds |
+| `FARCASTER_DRY_RUN` | No | Simulate operations without executing them |
+| `ENABLE_CAST` | No | Enable or disable posting casts |
+| `CAST_IMMEDIATELY` | No | Post immediately instead of waiting for a schedule |
+| `CAST_INTERVAL_MIN` | No | Minimum interval in minutes between automated casts |
+| `CAST_INTERVAL_MAX` | No | Maximum interval in minutes between automated casts |
+| `MAX_CAST_LENGTH` | No | Maximum characters per cast |
+| `ACTION_INTERVAL` | No | Interval in minutes between action-processing cycles |
+| `MAX_ACTIONS_PROCESSING` | No | Maximum actions to process per batch |
+| `ENABLE_ACTION_PROCESSING` | No | Enable or disable automated action processing |
+
 ## Full Configuration Reference
 
 All fields are defined under `connectors.farcaster` in `milady.json`.

@@ -54,7 +54,7 @@ Milady is a cross-platform AI agent runtime built on top of [elizaOS](https://el
 
 Milady has two primary entry points, plus a dev-server variant:
 
-### CLI Entry (`packages/app-core/src/entry.ts`)
+### CLI Entry (`eliza/packages/app-core/src/entry.ts`)
 
 The CLI entry point is the bootstrap for all Milady operations. Built by `tsdown` into `dist/entry.js` and invoked by the `milady.mjs` wrapper script.
 
@@ -67,7 +67,7 @@ The boot sequence is:
 5. **Delegate to Commander** -- dynamically import `src/cli/run-main.ts` and call `runCli(process.argv)`
 
 ```typescript
-// packages/app-core/src/entry.ts — simplified bootstrap
+// eliza/packages/app-core/src/entry.ts — simplified bootstrap
 process.title = "milady";
 const parsed = parseCliProfileArgs(process.argv);
 if (parsed.profile) applyCliProfileEnv({ profile: parsed.profile });
@@ -77,16 +77,16 @@ import("./cli/run-main")
 
 `run-main.ts` continues by loading `.env` files via dotenv, normalizing API key environment variables (e.g., `Z_AI_API_KEY` to `ZAI_API_KEY`), building the Commander program tree, and dispatching to the requested subcommand.
 
-### Library Entry (`packages/app-core/src/index.ts`)
+### Library Entry (`eliza/packages/app-core/src/index.ts`)
 
 The public API surface exported by the `miladyai` npm package. It re-exports:
 
-- **Config types** from `packages/app-core/src/config/types.ts` -- the full `MiladyConfig` type and its nested schemas
+- **Config types** from `eliza/packages/shared/src/config/types.eliza.ts` -- the full `ElizaConfig` type and its nested schemas
 - **Restart infrastructure** -- `RESTART_EXIT_CODE`, `requestRestart()`, `setRestartHandler()`, and the `RestartHandler` type
 
 This allows other packages (e.g., the Electrobun app, the dev-server) to programmatically control the runtime without importing internal modules.
 
-### Dev-Server Entry (`packages/app-core/src/runtime/dev-server.ts`)
+### Dev-Server Entry (`eliza/packages/app-core/src/runtime/dev-server.ts`)
 
 A combined dev server that starts the elizaOS runtime in headless mode and wires it into the API server. Used during development (`bun run dev`):
 
@@ -98,13 +98,13 @@ A combined dev server that starts the elizaOS runtime in headless mode and wires
 
 ## Runtime Lifecycle
 
-The `startEliza()` function in `packages/app-core/src/runtime/eliza.ts` orchestrates the full lifecycle from config loading through agent operation.
+The `startEliza()` function in `eliza/packages/agent/src/runtime/eliza.ts` orchestrates the full lifecycle from config loading through agent operation.
 
 ### Initialization Phase
 
 <Steps>
   <Step title="Load Configuration">
-    Read `~/.milady/milady.json` via `loadMiladyConfig()`. If no config exists, fall back to an empty `MiladyConfig` object with all-optional fields.
+    Read the config file (defaults to `~/.milady/milady.json` in this product) via `loadElizaConfig()`. If no config exists, fall back to an empty `ElizaConfig` object with all-optional fields.
   </Step>
   <Step title="Startup / First-Run Selection">
     If no server target has been established yet, the app surfaces a chooser-first startup flow: create a local server, connect to a discovered LAN server, connect to Eliza Cloud, or manually connect to a remote server. Provider routing happens after server selection rather than being implied by hosting mode.
@@ -173,7 +173,7 @@ Milady extends elizaOS through several integration points:
 
 ### Plugin System Bridge
 
-The `createMiladyPlugin()` function (`packages/app-core/src/runtime/eliza-plugin.ts`) creates a standard elizaOS `Plugin` that bridges Milady-specific functionality into the runtime:
+The `createElizaPlugin()` function (`eliza/packages/agent/src/runtime/eliza-plugin.ts`) creates a standard elizaOS `Plugin` that bridges Milady-specific functionality into the runtime:
 
 **Providers** (injected into every LLM context):
 - `channelProfileProvider` -- channel-specific personality profiles
@@ -333,7 +333,7 @@ The trajectory logger (`trajectories`) records agent decision paths for debuggin
 
 ## API Server Architecture
 
-The API server (`packages/app-core/src/api/server.ts`) is a raw Node.js `http.createServer()` instance -- no Express or framework overhead.
+The API server (`eliza/packages/app-core/src/api/server.ts`) is a raw Node.js `http.createServer()` instance -- no Express or framework overhead.
 
 ### Server State
 
@@ -429,7 +429,7 @@ Events are buffered in a ring buffer on the server so newly connected clients ca
 
 ## Service Architecture
 
-Milady's `packages/app-core/src/services/` directory contains standalone service modules:
+Milady's `eliza/packages/app-core/src/services/` directory contains standalone service modules:
 
 | Service | File | Purpose |
 |---------|------|---------|

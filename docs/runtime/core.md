@@ -4,7 +4,7 @@ sidebarTitle: "Core"
 description: "AgentRuntime class, constructor parameters, plugin registration, and the Milady configuration cascade."
 ---
 
-The `AgentRuntime` class from `@elizaos/core` is the central object that manages plugin registration, message processing, provider context assembly, and service lifecycle. Milady wraps it with additional bootstrap logic in `src/runtime/eliza.ts`.
+The `AgentRuntime` class from `@elizaos/core` is the central object that manages plugin registration, message processing, provider context assembly, and service lifecycle. Milady wraps it with additional bootstrap logic in `eliza/packages/agent/src/runtime/eliza.ts`.
 
 ## AgentRuntime Constructor
 
@@ -88,7 +88,7 @@ await runtime.initialize();
 
 ## Plugin Export Detection
 
-`findRuntimePluginExport()` in `src/runtime/eliza.ts` locates the Plugin export from a dynamically-imported module using a priority order:
+`findRuntimePluginExport()` in `eliza/packages/agent/src/runtime/eliza.ts` locates the Plugin export from a dynamically-imported module using a priority order:
 
 ```
 1. module.default   (ES module default export)

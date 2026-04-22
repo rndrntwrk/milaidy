@@ -58,11 +58,15 @@ No environment variable is required to trigger auto-enable — it is driven enti
 
 When the connector is loaded, the runtime pushes the following secrets from your config into `process.env` for the plugin to consume:
 
-| Variable | Source | Description |
-|----------|--------|-------------|
-| `SLACK_BOT_TOKEN` | `botToken` | Bot token (`xoxb-...`) |
-| `SLACK_APP_TOKEN` | `appToken` | App-level token (`xapp-...`) for Socket Mode |
-| `SLACK_USER_TOKEN` | `userToken` | User token (`xoxp-...`) for user-scoped actions |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `SLACK_BOT_TOKEN` | Yes | Bot token (`xoxb-...`) for API authentication |
+| `SLACK_APP_TOKEN` | Yes | App-level token (`xapp-...`) for Socket Mode connections |
+| `SLACK_USER_TOKEN` | No | User token (`xoxp-...`) for enhanced permissions |
+| `SLACK_CHANNEL_IDS` | No | Comma-separated list of channel IDs to restrict the bot to |
+| `SLACK_SIGNING_SECRET` | No | Signing secret for verifying requests |
+| `SLACK_SHOULD_IGNORE_BOT_MESSAGES` | No | Ignore messages from other bots |
+| `SLACK_SHOULD_RESPOND_ONLY_TO_MENTIONS` | No | Only respond when mentioned |
 
 ## Transport Modes
 

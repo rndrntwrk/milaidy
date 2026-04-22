@@ -37,6 +37,7 @@ Returns the agent's current state, name, model, uptime, cloud connection status,
   "state": "running",
   "agentName": "Milady",
   "model": "@elizaos/plugin-anthropic",
+  "startedAt": 1718000000000,
   "uptime": 3600000,
   "startup": {
     "phase": "ready",
@@ -44,7 +45,9 @@ Returns the agent's current state, name, model, uptime, cloud connection status,
   },
   "cloud": {
     "connectionStatus": "disconnected",
-    "activeAgentId": null
+    "activeAgentId": null,
+    "cloudProvisioned": false,
+    "hasApiKey": false
   },
   "pendingRestart": false,
   "pendingRestartReasons": []
@@ -56,6 +59,7 @@ Returns the agent's current state, name, model, uptime, cloud connection status,
 | `state` | string | `not_started`, `starting`, `running`, `paused`, `stopped`, `restarting`, or `error` |
 | `agentName` | string | Current agent display name |
 | `model` | string\|undefined | Active model/plugin identifier |
+| `startedAt` | number\|undefined | Unix timestamp (ms) when the agent started |
 | `uptime` | number\|undefined | Milliseconds since the agent started |
 | `startup` | object | Startup diagnostics with `phase`, `attempt`, and optional error fields |
 | `pendingRestart` | boolean | Whether configuration changes require a restart |
@@ -115,10 +119,10 @@ Deep runtime introspection endpoint for advanced debugging. Returns detailed inf
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `depth` | number | 3 | Max object nesting depth |
-| `maxArrayLength` | number | 20 | Max array elements to include |
-| `maxObjectEntries` | number | 50 | Max object entries to include |
-| `maxStringLength` | number | 500 | Max string truncation length |
+| `depth` | number | 10 | Max object nesting depth (capped at 24) |
+| `maxArrayLength` | number | 1000 | Max array elements to include |
+| `maxObjectEntries` | number | 1000 | Max object entries to include |
+| `maxStringLength` | number | 8000 | Max string truncation length |
 
 **Response**
 

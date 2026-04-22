@@ -18,30 +18,28 @@ AgentRuntime
 └── Local            (from plugins/ directory)
 ```
 
-The source of truth for which plugins are always loaded lives in `packages/agent/src/runtime/core-plugins.ts` (re-exported by `packages/app-core/src/runtime/core-plugins.ts`):
+The source of truth for which plugins are always loaded lives in `eliza/packages/agent/src/runtime/core-plugins.ts` (re-exported by `eliza/packages/app-core/src/runtime/core-plugins.ts`):
 
 ```typescript
 export const CORE_PLUGINS: readonly string[] = [
   "@elizaos/plugin-sql",               // database adapter — required
   "@elizaos/plugin-local-embedding",   // local embeddings — required for memory
-  "@elizaos/plugin-form",              // form handling for guided user journeys
-  "knowledge",         // RAG knowledge management — required for knowledge tab
-  "trajectories", // trajectory logging for debugging and RL training
-  "@elizaos/plugin-agent-orchestrator",// multi-agent orchestration (PTY, SwarmCoordinator, workspace provisioning)
+  "@elizaos/app-companion",            // VRM companion emotes; actions gated until app session is active
   "@elizaos/plugin-cron",              // scheduled jobs and automation
+  "@elizaos/plugin-app-control",       // launch, close, and list running Milady apps from agent chat
   "@elizaos/plugin-shell",             // shell command execution
   "@elizaos/plugin-agent-skills",      // skill execution and marketplace runtime
   "@elizaos/plugin-commands",          // slash command handling (skills auto-register as /commands)
-  "@elizaos/plugin-plugin-manager",    // dynamic plugin management for registry/plugin installs
-  "roles",                            // internal role-based access control (OWNER/ADMIN/NONE)
+  "@elizaos/app-lifeops",             // LifeOps: personal ops — tasks, goals, calendar, inbox, website blocking
+  "@elizaos/plugin-browser-bridge",    // Agent Browser Bridge: Chrome/Safari companion pairing, tab + page context sync
 ];
 ```
 
-> **Note:** `@elizaos/plugin-secrets-manager`, `relationships`, `@elizaos/plugin-trust`, `@elizaos/plugin-personality`, and `@elizaos/plugin-experience` are statically imported for fast resolution but commented out of the core list. They may be re-enabled in a future release. Milady does not ship `@elizaos/plugin-todo`; todo functionality is handled by the workbench API and LifeOps-related runtime tasks.
+> **Note:** Several capabilities that were previously separate plugins are now built-in to the runtime: `knowledge`, `relationships`, `trajectories`, and `roles` are native features; `form`, `experience`, `clipboard`, and `personality` are advanced capabilities enabled via `advancedCapabilities: true`; `plugin-manager`, `secrets-manager`, and `trust` are core capabilities enabled via character settings. `@elizaos/plugin-agent-orchestrator` is opt-in via the `ELIZA_AGENT_ORCHESTRATOR` env var (the Eliza app enables it by default).
 
 ### Optional Core Plugins
 
-A separate list of optional core plugins can be enabled from the admin panel. These are not loaded by default due to packaging or specification constraints. The list lives in `packages/agent/src/runtime/core-plugins.ts`:
+A separate list of optional core plugins can be enabled from the admin panel. These are not loaded by default due to packaging or specification constraints. The list lives in `eliza/packages/agent/src/runtime/core-plugins.ts`:
 
 ```typescript
 export const OPTIONAL_CORE_PLUGINS: readonly string[] = [
@@ -49,17 +47,22 @@ export const OPTIONAL_CORE_PLUGINS: readonly string[] = [
   "@elizaos/plugin-cua",                   // CUA computer-use agent (cloud sandbox automation)
   "@elizaos/plugin-obsidian",              // Obsidian vault CLI integration
   "@elizaos/plugin-code",                  // code writing and file operations
-  "@elizaos/plugin-repoprompt",            // RepoPrompt CLI integration
-  "@elizaos/plugin-claude-code-workbench", // Claude Code companion workflows
-  "@elizaos/plugin-computeruse",           // computer use automation (platform-specific)
+  "@elizaos/plugin-repoprompt",            // RepoPrompt CLI integration and workflow orchestration
+  "@elizaos/plugin-claude-code-workbench", // Claude Code companion workflows for this monorepo
+  "@elizaos/plugin-computeruse",           // computer use automation (requires platform-specific binaries)
   "@elizaos/plugin-browser",              // browser automation (requires stagehand-server)
   "@elizaos/plugin-vision",               // vision/image understanding (feature-gated)
   "@elizaos/plugin-cli",                  // CLI interface
   "@elizaos/plugin-discord",              // Discord bot integration
+  "@elizaos/plugin-discord-local",        // Local Discord desktop integration for macOS
+  "@elizaos/plugin-bluebubbles",          // BlueBubbles-backed iMessage integration for macOS
   "@elizaos/plugin-telegram",             // Telegram bot integration
+  "@elizaos/plugin-signal",               // Signal user-account integration
   "@elizaos/plugin-twitch",               // Twitch integration
   "@elizaos/plugin-edge-tts",             // text-to-speech (Microsoft Edge TTS)
   "@elizaos/plugin-elevenlabs",           // ElevenLabs text-to-speech
+  "@elizaos/plugin-music-library",        // music metadata, library, playlists, YouTube search
+  "@elizaos/plugin-music-player",         // music playback engine + streaming routes
 ];
 ```
 
@@ -120,7 +123,7 @@ interface Plugin {
 
 ## Auto-Enable Mechanism
 
-Plugins are automatically enabled when their required configuration is detected. This logic lives in `packages/agent/src/config/plugin-auto-enable.ts` (extended by `packages/app-core/src/config/plugin-auto-enable.ts` for Eliza-specific connectors like WeChat) and runs before runtime initialization.
+Plugins are automatically enabled when their required configuration is detected. This logic lives in `eliza/packages/agent/src/config/plugin-auto-enable.ts` (extended by `eliza/packages/app-core/src/config/plugin-auto-enable.ts` for Eliza-specific connectors like WeChat) and runs before runtime initialization.
 
 ### Trigger Sources
 
@@ -152,8 +155,16 @@ const AUTH_PROVIDER_PLUGINS = {
   CUA_API_KEY:                    "@elizaos/plugin-cua",
   CUA_HOST:                       "@elizaos/plugin-cua",
   OBSIDIAN_VAULT_PATH:            "@elizaos/plugin-obsidian",
+  OBSIDAN_VAULT_PATH:             "@elizaos/plugin-obsidian",
   REPOPROMPT_CLI_PATH:            "@elizaos/plugin-repoprompt",
   CLAUDE_CODE_WORKBENCH_ENABLED:  "@elizaos/plugin-claude-code-workbench",
+  SOLANA_PRIVATE_KEY:             "@elizaos/plugin-solana",
+  LASTFM_API_KEY:                 "@elizaos/plugin-music-library",
+  GENIUS_API_KEY:                 "@elizaos/plugin-music-library",
+  THEAUDIODB_API_KEY:             "@elizaos/plugin-music-library",
+  SPOTIFY_CLIENT_ID:              "@elizaos/plugin-music-library",
+  SPOTIFY_CLIENT_SECRET:          "@elizaos/plugin-music-library",
+  SHOPIFY_ACCESS_TOKEN:           "@elizaos/plugin-shopify",
 };
 ```
 
@@ -161,8 +172,10 @@ const AUTH_PROVIDER_PLUGINS = {
 
 ```typescript
 const CONNECTOR_PLUGINS = {
+  bluebubbles: "@elizaos/plugin-bluebubbles",
   telegram:    "@elizaos/plugin-telegram",
   discord:     "@elizaos/plugin-discord",
+  discordLocal:"@elizaos/plugin-discord-local",
   slack:       "@elizaos/plugin-slack",
   twitter:     "@elizaos/plugin-twitter",
   whatsapp:    "@elizaos/plugin-whatsapp",
@@ -178,11 +191,11 @@ const CONNECTOR_PLUGINS = {
   nostr:       "@elizaos/plugin-nostr",
   blooio:      "@elizaos/plugin-blooio",
   twitch:      "@elizaos/plugin-twitch",
-  wechat:      "@elizaos/plugin-wechat",  // Milady-specific (added in app-core)
+  wechat:      "elizaoswechat",  // Milady-specific (added in app-core)
 };
 ```
 
-> **Note:** The upstream `packages/agent` defines all `@elizaos/*` connectors. Milady's `packages/app-core` extends this map with the `wechat` entry pointing to `@elizaos/plugin-wechat`.
+> **Note:** The upstream `eliza/packages/agent` defines all `@elizaos/*` connectors. Milady's `eliza/packages/app-core` extends this map with the `wechat` entry pointing to `elizaoswechat` (the Milady-local WeChat plugin package name).
 
 **Feature flags** — The `features` section of `milady.json` auto-enables feature plugins. A feature can be enabled with `features.<name>: true` or `features.<name>.enabled: true`:
 
@@ -205,26 +218,28 @@ const FEATURE_PLUGINS = {
   obsidian:             "@elizaos/plugin-obsidian",
   cron:                 "@elizaos/plugin-cron",
   shell:                "@elizaos/plugin-shell",
+  executeCode:          "@elizaos/plugin-executecode",
   imageGen:             "@elizaos/plugin-image-generation",
-  tts:                  "@elizaos/plugin-tts",
+  tts:                  "@elizaos/plugin-edge-tts",
   stt:                  "@elizaos/plugin-stt",
   agentSkills:          "@elizaos/plugin-agent-skills",
   commands:             "@elizaos/plugin-commands",
   diagnosticsOtel:      "@elizaos/plugin-diagnostics-otel",
   webhooks:             "@elizaos/plugin-webhooks",
   gmailWatch:           "@elizaos/plugin-gmail-watch",
-  personality:          "@elizaos/plugin-personality",
-  experience:           "@elizaos/plugin-experience",
-  form:                 "@elizaos/plugin-form",
   x402:                 "@elizaos/plugin-x402",
   fal:                  "@elizaos/plugin-fal",
   suno:                 "@elizaos/plugin-suno",
+  musicLibrary:         "@elizaos/plugin-music-library",
+  musicPlayer:          "@elizaos/plugin-music-player",
   vision:               "@elizaos/plugin-vision",
   computeruse:          "@elizaos/plugin-computeruse",
   repoprompt:           "@elizaos/plugin-repoprompt",
   claudeCodeWorkbench:  "@elizaos/plugin-claude-code-workbench",
 };
 ```
+
+> **Note:** `personality`, `experience`, and `form` are no longer separate feature plugins -- they are now built-in advanced capabilities enabled via `advancedCapabilities: true` in the character settings.
 
 **Streaming destinations** — The `streaming` section of config auto-enables streaming plugins for live video platforms:
 

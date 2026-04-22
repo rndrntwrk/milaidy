@@ -169,7 +169,7 @@ bun run dev:desktop:watch
 
 ### Testing
 
-Coverage thresholds are enforced from `scripts/coverage-policy.mjs`: 25% lines/functions/statements, 15% branches. CI fails when coverage falls below these floors.
+Coverage thresholds are enforced from `eliza/packages/app-core/scripts/coverage-policy.mjs`: 25% lines/functions/statements, 15% branches. CI fails when coverage falls below these floors.
 
 ```bash
 # Run all tests (parallel)
@@ -186,9 +186,6 @@ bun run test:e2e
 
 # Live tests (requires API keys)
 MILADY_LIVE_TEST=1 bun run test:live
-
-# Docker-based tests
-bun run test:docker:all
 ```
 
 ### Runtime fallback for Bun crashes
@@ -196,7 +193,7 @@ bun run test:docker:all
 If Bun segfaults on your platform during long-running sessions, run Milady on Node runtime:
 
 ```bash
-MILADY_RUNTIME=node bun run milady start
+ELIZA_RUNTIME=node bun run milady start
 ```
 
 ### Test File Conventions
@@ -208,14 +205,14 @@ MILADY_RUNTIME=node bun run milady start
 | `*.live.test.ts` | Live API tests |
 | `test/**/*.test.ts` | Integration tests |
 
-### `packages/app-core` in the root Vitest config
+### `eliza/packages/app-core` in the root Vitest config
 
 The repo root **`vitest.config.ts`** (used by **`bun run test`** → unit shard) includes:
 
-- **`packages/app-core/src/**/*.test.ts`** and **`packages/app-core/src/**/*.test.tsx`** — colocated tests, including TSX, without listing each file.
-- **`packages/app-core/test/**/*.test.ts`** and **`.../test/**/*.test.tsx`** — shared harness tests (e.g. `test/state`, `test/runtime`).
+- **`eliza/packages/app-core/src/**/*.test.ts`** and **`eliza/packages/app-core/src/**/*.test.tsx`** — colocated tests, including TSX, without listing each file.
+- **`eliza/packages/app-core/test/**/*.test.ts`** and **`.../test/**/*.test.tsx`** — shared harness tests (e.g. `test/state`, `test/runtime`).
 
-**Why:** those directories were previously omitted, so new suites never ran in CI. **`packages/app-core/test/**/*.e2e.test.ts(x)`** is excluded from this job so e2e stays on **`test/vitest/e2e.config.ts`**. **`test/vitest/unit.config.ts`** still omits **`packages/app-core/test/app/**`** (heavy renderer harness) from the coverage-focused unit pass—**why:** those are run in targeted app workspaces or separate jobs.
+**Why:** those directories were previously omitted, so new suites never ran in CI. **`eliza/packages/app-core/test/**/*.e2e.test.ts(x)`** is excluded from this job so e2e stays on **`test/vitest/e2e.config.ts`**. **`test/vitest/unit.config.ts`** still omits **`eliza/packages/app-core/test/app/**`** (heavy renderer harness) from the coverage-focused unit pass—**why:** those are run in targeted app workspaces or separate jobs.
 
 ---
 

@@ -143,7 +143,7 @@ cat > package.json << 'EOF'
     "dev": "tsc --watch"
   },
   "dependencies": {
-    "@elizaos/core": "^2.0.0"
+    "@elizaos/core": "alpha"
   }
 }
 EOF
@@ -619,7 +619,7 @@ bun run tsc --noEmit  # Type-check without emitting
 
 ## Environment Variables
 
-These environment variables affect plugin paths and behavior. They are defined in `src/config/paths.ts`.
+These environment variables affect plugin paths and behavior. They are defined in `eliza/packages/agent/src/config/paths.ts`.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -657,7 +657,7 @@ When your plugin is ready for distribution:
     "prepublishOnly": "bun run build"
   },
   "peerDependencies": {
-    "@elizaos/core": "^2.0.0"
+    "@elizaos/core": ">=2.0.0"
   }
 }
 ```

@@ -1,20 +1,29 @@
 ---
 title: "milady models"
-description: "CLI helpers for model and provider discovery or checks."
+description: "Show which model providers are configured in the current environment."
 ---
 
 # `milady models`
 
-Subcommands for listing models, probing providers, or aligning CLI output with dashboard model settings (varies by version).
+Lists all supported model providers and whether each has an API key or URL configured in the environment.
+
+Checked providers: Anthropic (Claude), OpenAI (GPT), Vercel AI Gateway, Google (Gemini), Google Vertex AI, Groq, xAI (Grok), OpenRouter, DeepSeek, Together AI, Mistral, Cohere, Perplexity, Zai, Ollama (local), elizaOS Cloud.
 
 ## Examples
 
 ```bash
 milady models
-milady models --help
+```
+
+```
+Model providers:
+  Anthropic (Claude): configured
+  OpenAI (GPT): not set
+  Ollama (local): configured
+  ...
 ```
 
 ## Related
 
 - [Model providers](/model-providers)
-- [REST — models](/rest/models)
+- [REST -- models](/rest/models)

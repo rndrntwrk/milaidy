@@ -1,7 +1,7 @@
 ---
 title: "Platform Connectors"
 sidebarTitle: "Connectors"
-description: "Platform bridges for 28 messaging platforms — 18 auto-enabled from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Twitter, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, Lens, WeChat) plus 10 installable from the registry (BlueBubbles, Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
+description: "Platform bridges for 28 messaging platforms — 19 auto-enabled from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, BlueBubbles, Blooio, MS Teams, Google Chat, Twitter, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, Lens, WeChat) plus 9 installable from the registry (Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
 ---
 
 Connectors are platform bridges that allow your agent to communicate across messaging platforms and social networks. Each connector handles authentication, message routing, session management, and platform-specific features.
@@ -68,7 +68,7 @@ Connectors marked **Auto** load automatically when their config is present in `m
 | Feishu / Lark | App ID + secret | Yes | Yes (group chats) | No | Auto |
 | Nostr | Private key (nsec/hex) | Yes (NIP-04) | N/A | No | Auto |
 | Lens | API key | Yes | N/A | No | Auto |
-| BlueBubbles | Server password | Yes | Yes | No | Registry |
+| BlueBubbles | Server password | Yes | Yes | No | Auto |
 | Bluesky | Account credentials | Posts | N/A | No | Registry |
 | Instagram | Username + password | DMs | N/A | No | Registry |
 | LINE | Channel access token + secret | Yes | Yes | No | Registry |
@@ -341,6 +341,8 @@ See the [WhatsApp Integration Guide](/guides/whatsapp) for detailed setup instru
 
 > **Auto-enable note:** The connector auto-enables when `cliPath` is set. Without it, the plugin will not load.
 
+**Environment variables:** `IMESSAGE_CLI_PATH`, `IMESSAGE_DB_PATH`, `IMESSAGE_ENABLED`, `IMESSAGE_DM_POLICY`, `IMESSAGE_ALLOW_FROM`, `IMESSAGE_GROUP_POLICY`, `IMESSAGE_POLL_INTERVAL_MS`
+
 ### Features
 
 - Service selection: `imessage`, `sms`, or `auto`
@@ -375,7 +377,7 @@ Connects to iMessage and SMS messaging via the Blooio service with signed webhoo
 }
 ```
 
-**Environment variables:** `BLOOIO_API_KEY`, `BLOOIO_WEBHOOK_URL`
+**Environment variables:** `BLOOIO_API_KEY`, `BLOOIO_WEBHOOK_URL`, `BLOOIO_BASE_URL`, `BLOOIO_FROM_NUMBER`, `BLOOIO_WEBHOOK_PATH`, `BLOOIO_WEBHOOK_PORT`, `BLOOIO_WEBHOOK_SECRET`, `BLOOIO_SIGNATURE_TOLERANCE_SEC`
 
 ### Features
 
@@ -411,6 +413,8 @@ Connects to iMessage and SMS messaging via the Blooio service with signed webhoo
 ```
 
 > **Auto-enable note:** The connector auto-enables when `botToken`, `token`, or `apiKey` is present in the config. Set `botToken` to the app password to trigger auto-enable.
+
+**Environment variables:** `MSTEAMS_APP_ID`, `MSTEAMS_APP_PASSWORD`, `MSTEAMS_TENANT_ID`, `MSTEAMS_ENABLED`, `MSTEAMS_MEDIA_MAX_MB`, `MSTEAMS_WEBHOOK_PATH`, `MSTEAMS_WEBHOOK_PORT`, `MSTEAMS_ALLOWED_TENANTS`, `MSTEAMS_SHAREPOINT_SITE_ID`
 
 ### Features
 
@@ -448,6 +452,8 @@ Connects to iMessage and SMS messaging via the Blooio service with signed webhoo
 ```
 
 > **Auto-enable note:** Google Chat uses service-account auth, not a traditional API key. Include `"apiKey": "placeholder"` to trigger auto-enable — the actual authentication uses the service account file.
+
+**Environment variables:** `GOOGLE_APPLICATION_CREDENTIALS`, `GOOGLE_CHAT_SERVICE_ACCOUNT`, `GOOGLE_CHAT_SERVICE_ACCOUNT_FILE`, `GOOGLE_CHAT_AUDIENCE`, `GOOGLE_CHAT_AUDIENCE_TYPE`, `GOOGLE_CHAT_BOT_USER`, `GOOGLE_CHAT_SPACES`, `GOOGLE_CHAT_ENABLED`, `GOOGLE_CHAT_WEBHOOK_PATH`, `GOOGLE_CHAT_REQUIRE_MENTION`
 
 ### Features
 
@@ -524,6 +530,8 @@ Connects to iMessage and SMS messaging via the Blooio service with signed webhoo
 }
 ```
 
+**Environment variables:** `FARCASTER_NEYNAR_API_KEY`, `FARCASTER_SIGNER_UUID`, `FARCASTER_FID`, `FARCASTER_MODE`, `FARCASTER_HUB_URL`, `FARCASTER_POLL_INTERVAL`, `FARCASTER_DRY_RUN`, `ENABLE_CAST`, `CAST_IMMEDIATELY`, `CAST_INTERVAL_MIN`, `CAST_INTERVAL_MAX`, `MAX_CAST_LENGTH`, `ACTION_INTERVAL`, `MAX_ACTIONS_PROCESSING`, `ENABLE_ACTION_PROCESSING`
+
 ### Features
 
 - Autonomous casting (posting) at configurable intervals
@@ -556,7 +564,7 @@ Connects to iMessage and SMS messaging via the Blooio service with signed webhoo
 }
 ```
 
-**Environment variables:** `BLUEBUBBLES_SERVER_URL`, `BLUEBUBBLES_PASSWORD`
+**Environment variables:** `BLUEBUBBLES_PASSWORD`, `BLUEBUBBLES_SERVER_URL`, `BLUEBUBBLES_ENABLED`, `BLUEBUBBLES_DM_POLICY`, `BLUEBUBBLES_ALLOW_FROM`, `BLUEBUBBLES_GROUP_POLICY`, `BLUEBUBBLES_GROUP_ALLOW_FROM`, `BLUEBUBBLES_WEBHOOK_PATH`, `BLUEBUBBLES_SEND_READ_RECEIPTS`
 
 ### Features
 
@@ -565,8 +573,6 @@ Connects to iMessage and SMS messaging via the Blooio service with signed webhoo
 - Read receipts
 - Webhook-based inbound messages
 - Network-accessible (works from any machine, not just the Mac running Messages)
-
-**Note:** This connector is available from the plugin registry. Install it with `milady plugins install @elizaos/plugin-bluebubbles`.
 
 **Docs:** [BlueBubbles connector](/connectors/bluebubbles)
 
@@ -593,7 +599,7 @@ Connects to iMessage and SMS messaging via the Blooio service with signed webhoo
 }
 ```
 
-**Environment variables:** `BLUESKY_HANDLE`, `BLUESKY_PASSWORD`, `BLUESKY_ENABLED`, `BLUESKY_DRY_RUN`, `BLUESKY_SERVICE`, `BLUESKY_ENABLE_DMS`
+**Environment variables:** `BLUESKY_HANDLE`, `BLUESKY_PASSWORD`, `BLUESKY_ENABLED`, `BLUESKY_SERVICE`, `BLUESKY_DRY_RUN`, `BLUESKY_ENABLE_POSTING`, `BLUESKY_ENABLE_DMS`, `BLUESKY_POLL_INTERVAL`, `BLUESKY_ACTION_INTERVAL`, `BLUESKY_MAX_POST_LENGTH`, `BLUESKY_POST_IMMEDIATELY`, `BLUESKY_POST_INTERVAL_MIN`, `BLUESKY_POST_INTERVAL_MAX`, `BLUESKY_MAX_ACTIONS_PROCESSING`, `BLUESKY_ENABLE_ACTION_PROCESSING`
 
 ### Features
 
@@ -659,6 +665,8 @@ Connects to iMessage and SMS messaging via the Blooio service with signed webhoo
 }
 ```
 
+**Environment variables:** `TWITCH_ACCESS_TOKEN`, `TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET`, `TWITCH_REFRESH_TOKEN`, `TWITCH_USERNAME`, `TWITCH_CHANNEL`, `TWITCH_CHANNELS`, `TWITCH_ALLOWED_ROLES`, `TWITCH_REQUIRE_MENTION`
+
 ### Features
 
 - Live chat monitoring and response
@@ -691,7 +699,7 @@ Connects to iMessage and SMS messaging via the Blooio service with signed webhoo
 }
 ```
 
-**Environment variables:** `MATTERMOST_BOT_TOKEN`, `MATTERMOST_SERVER_URL`
+**Environment variables:** `MATTERMOST_BOT_TOKEN`, `MATTERMOST_SERVER_URL`, `MATTERMOST_ENABLED`, `MATTERMOST_TEAM_ID`, `MATTERMOST_DM_POLICY`, `MATTERMOST_GROUP_POLICY`, `MATTERMOST_ALLOWED_USERS`, `MATTERMOST_REQUIRE_MENTION`, `MATTERMOST_ALLOWED_CHANNELS`, `MATTERMOST_IGNORE_BOT_MESSAGES`
 
 ### Features
 
@@ -885,7 +893,7 @@ operate yourself or explicitly trust for that message flow.
 }
 ```
 
-**Environment variables:** `LINE_CHANNEL_ACCESS_TOKEN`, `LINE_CHANNEL_SECRET`
+**Environment variables:** `LINE_CHANNEL_ACCESS_TOKEN`, `LINE_CHANNEL_SECRET`, `LINE_ENABLED`, `LINE_DM_POLICY`, `LINE_ALLOW_FROM`, `LINE_GROUP_POLICY`, `LINE_WEBHOOK_PATH`
 
 ### Features
 
@@ -916,7 +924,7 @@ operate yourself or explicitly trust for that message flow.
 }
 ```
 
-**Environment variables:** `ZALO_ACCESS_TOKEN`, `ZALO_REFRESH_TOKEN`, `ZALO_APP_ID`, `ZALO_SECRET_KEY`
+**Environment variables:** `ZALO_ACCESS_TOKEN`, `ZALO_SECRET_KEY`, `ZALO_REFRESH_TOKEN`, `ZALO_APP_ID`, `ZALO_ENABLED`, `ZALO_PROXY_URL`, `ZALO_USE_POLLING`, `ZALO_WEBHOOK_URL`, `ZALO_WEBHOOK_PATH`, `ZALO_WEBHOOK_PORT`
 
 ### Features
 
@@ -949,13 +957,15 @@ A personal-account variant is also available as `@elizaos/plugin-zalouser` for o
 }
 ```
 
-**Environment variables:** `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER`
+**Environment variables:** `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER`, `TWILIO_WEBHOOK_URL`, `TWILIO_WEBHOOK_PORT`, `VOICE_CALL_ENABLED`, `VOICE_CALL_PROVIDER`, `VOICE_CALL_FROM_NUMBER`, `VOICE_CALL_TO_NUMBER`, `VOICE_CALL_ALLOW_FROM`, `VOICE_CALL_PUBLIC_URL`, `VOICE_CALL_WEBHOOK_PATH`, `VOICE_CALL_WEBHOOK_PORT`, `VOICE_CALL_INBOUND_POLICY`, `VOICE_CALL_INBOUND_GREETING`, `VOICE_CALL_MAX_CONCURRENT_CALLS`, `VOICE_CALL_MAX_DURATION_SECONDS`
 
 ### Features
 
 - SMS messaging (send and receive)
-- Voice call capabilities
+- Voice call capabilities (inbound and outbound)
 - Webhook-based inbound message handling
+- Configurable inbound call policies and greetings
+- Concurrent call management
 
 **Note:** This connector is available from the plugin registry. Install it with `milady plugins install @elizaos/plugin-twilio`.
 
@@ -979,7 +989,7 @@ A personal-account variant is also available as `@elizaos/plugin-zalouser` for o
 }
 ```
 
-**Environment variables:** `GITHUB_API_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO`
+**Environment variables:** `GITHUB_API_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO`, `GITHUB_BRANCH`, `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_INSTALLATION_ID`, `GITHUB_WEBHOOK_SECRET`
 
 ### Features
 
@@ -1030,11 +1040,14 @@ Gmail Watch is enabled via the `features.gmailWatch` flag or environment variabl
 }
 ```
 
+**Environment variables:** `NEXTCLOUD_URL`, `NEXTCLOUD_ENABLED`, `NEXTCLOUD_BOT_SECRET`, `NEXTCLOUD_WEBHOOK_HOST`, `NEXTCLOUD_WEBHOOK_PATH`, `NEXTCLOUD_WEBHOOK_PORT`, `NEXTCLOUD_ALLOWED_ROOMS`, `NEXTCLOUD_WEBHOOK_PUBLIC_URL`
+
 ### Features
 
 - Room-based messaging
 - DM and group conversation support
 - Self-hosted collaboration platform integration
+- Webhook-based message delivery
 
 **Note:** This connector is available from the plugin registry. Install it with `milady plugins install @elizaos/plugin-nextcloud-talk`.
 
@@ -1058,7 +1071,7 @@ Gmail Watch is enabled via the `features.gmailWatch` flag or environment variabl
 }
 ```
 
-**Environment variables:** `TLON_SHIP`, `TLON_CODE`, `TLON_URL`
+**Environment variables:** `TLON_SHIP`, `TLON_CODE`, `TLON_URL`, `TLON_ENABLED`, `TLON_DM_ALLOWLIST`, `TLON_GROUP_CHANNELS`, `TLON_AUTO_DISCOVER_CHANNELS`
 
 ### Features
 
@@ -1174,7 +1187,7 @@ The `dmPolicy` options are:
 **General connector failures:**
 
 - Connector plugin not loading:
-  Check connector ID mapping in `packages/agent/src/config/plugin-auto-enable.ts` (in the `eliza` submodule), plugin availability, and `plugins.entries` overrides. The auto-enable layer maps connector config keys to plugin package names — a mismatch means the plugin is silently skipped.
+  Check connector ID mapping in `eliza/packages/agent/src/config/plugin-auto-enable.ts`, plugin availability, and `plugins.entries` overrides. The auto-enable layer maps connector config keys to plugin package names — a mismatch means the plugin is silently skipped.
 - Auth succeeds but no messages arrive:
   Check platform webhook/socket settings and policy gates (`dmPolicy`, `groupPolicy`). For webhook-based connectors, confirm the callback URL is publicly reachable.
 - Misrouted connector secrets:

@@ -1,20 +1,81 @@
 ---
 title: "milady plugins"
-description: "List, enable, or inspect plugins from the CLI."
+description: "Browse, search, install, and manage elizaOS plugins from the registry."
 ---
 
 # `milady plugins`
 
-Inspects which plugins resolve in the current environment and can trigger sync or registry operations depending on flags.
+Full plugin management CLI: browse the elizaOS registry, install/uninstall plugins, manage custom drop-in plugins, and inspect plugin configuration.
+
+## Subcommands
+
+| Subcommand | Description |
+|------------|-------------|
+| `milady plugins list` | List all plugins from the registry. |
+| `milady plugins search <query>` | Search the plugin registry by keyword. |
+| `milady plugins info <name>` | Show detailed information about a plugin. |
+| `milady plugins install <name>` | Install a plugin from the registry. Supports version pinning (e.g. `twitter@1.2.3`). |
+| `milady plugins uninstall <name>` | Uninstall a user-installed plugin. |
+| `milady plugins installed` | List plugins installed from the registry. |
+| `milady plugins refresh` | Force-refresh the plugin registry cache. |
+| `milady plugins test` | Validate custom drop-in plugins in the plugins directory. |
+| `milady plugins add-path <path>` | Register an additional plugin search directory in config. |
+| `milady plugins paths` | List all plugin search directories and their contents. |
+| `milady plugins config <name>` | Show plugin configuration parameters and current values. |
+| `milady plugins open [name-or-path]` | Open a plugin directory (or the custom plugins folder) in your editor. |
+
+### `milady plugins list` flags
+
+| Flag | Description |
+|------|-------------|
+| `-q, --query <query>` | Filter plugins by name or keyword. |
+| `-l, --limit <number>` | Max results to show (default: `30`). |
+
+### `milady plugins search` flags
+
+| Flag | Description |
+|------|-------------|
+| `-l, --limit <number>` | Max results (default: `15`). |
+
+### `milady plugins install` flags
+
+| Flag | Description |
+|------|-------------|
+| `--no-restart` | Install without restarting the agent. |
+
+### `milady plugins uninstall` flags
+
+| Flag | Description |
+|------|-------------|
+| `--no-restart` | Uninstall without restarting the agent. |
+
+### `milady plugins config` flags
+
+| Flag | Description |
+|------|-------------|
+| `-e, --edit` | Interactive edit mode. |
 
 ## Examples
 
 ```bash
-milady plugins
-milady plugins --help
+milady plugins list
+milady plugins list -q twitter
+milady plugins search social
+milady plugins info twitter
+milady plugins install twitter
+milady plugins install @custom/plugin-x@2.0.0
+milady plugins uninstall @elizaos/plugin-twitter
+milady plugins installed
+milady plugins test
+milady plugins config twitter
+milady plugins config twitter --edit
+milady plugins paths
+milady plugins open
 ```
+
+Plugin names accept shorthand: `twitter` resolves to `@elizaos/plugin-twitter`.
 
 ## Related
 
 - [Plugins overview](/plugins/overview)
-- [REST — plugins](/rest/plugins)
+- [REST -- plugins](/rest/plugins)

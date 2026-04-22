@@ -75,7 +75,7 @@ If the primary endpoint fails, the client falls back to `index.json`, which is a
 
 ## 3-Tier Caching
 
-The registry client (`src/services/registry-client.ts`) uses a 3-tier resolution strategy to minimize network requests and support offline operation:
+The registry client (`eliza/packages/agent/src/services/registry-client.ts`) uses a 3-tier resolution strategy to minimize network requests and support offline operation:
 
 ```
 Memory Cache  -->  File Cache  -->  Network Fetch
@@ -380,7 +380,7 @@ Local app metadata is merged with remote registry data, with local values taking
 
 ### Core Functions
 
-The registry client exports these functions from `src/services/registry-client.ts`:
+The registry client exports these functions from `eliza/packages/agent/src/services/registry-client.ts`:
 
 ```typescript
 import {

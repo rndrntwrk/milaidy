@@ -8,7 +8,7 @@ Connect your agent to iMessage through a local [BlueBubbles](https://bluebubbles
 
 ## Overview
 
-The BlueBubbles connector is an elizaOS plugin that bridges your agent to iMessage via a self-hosted BlueBubbles server. Unlike the native iMessage connector (which reads the local Messages database directly), BlueBubbles works over HTTP and can be accessed from any machine on the same network. It requires a BlueBubbles server running on a Mac with Messages signed in.
+The BlueBubbles connector is an external elizaOS plugin that bridges your agent to iMessage via a self-hosted BlueBubbles server. Unlike the native iMessage connector (which reads the local Messages database directly), BlueBubbles works over HTTP and can be accessed from any machine on the same network. It requires a BlueBubbles server running on a Mac with Messages signed in. It is auto-enabled by the runtime when a valid password or server URL is detected in your connector configuration.
 
 ## Package Info
 
@@ -51,10 +51,17 @@ To explicitly disable the connector even when credentials are present:
 
 ## Environment Variables
 
-| Variable | Source | Description |
-|----------|--------|-------------|
-| `BLUEBUBBLES_SERVER_URL` | `serverUrl` | BlueBubbles server URL |
-| `BLUEBUBBLES_PASSWORD` | `password` | Server password (required) |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `BLUEBUBBLES_PASSWORD` | Yes | Server password |
+| `BLUEBUBBLES_SERVER_URL` | No | BlueBubbles server URL |
+| `BLUEBUBBLES_ENABLED` | No | Enable or disable the connector |
+| `BLUEBUBBLES_DM_POLICY` | No | DM policy (e.g., `allow`, `deny`, `allowlist`) |
+| `BLUEBUBBLES_ALLOW_FROM` | No | Comma-separated allowed user list |
+| `BLUEBUBBLES_GROUP_POLICY` | No | Group message policy (e.g., `allow`, `deny`) |
+| `BLUEBUBBLES_GROUP_ALLOW_FROM` | No | Comma-separated allowed group list |
+| `BLUEBUBBLES_WEBHOOK_PATH` | No | Webhook endpoint path |
+| `BLUEBUBBLES_SEND_READ_RECEIPTS` | No | Send read receipts for incoming messages |
 
 ## Full Configuration Reference
 
