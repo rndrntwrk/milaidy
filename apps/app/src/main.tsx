@@ -6,6 +6,7 @@ import "@elizaos/app-core/platform/native-plugin-entrypoints";
 import { App as CapacitorApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import { Keyboard } from "@capacitor/keyboard";
+import { Preferences } from "@capacitor/preferences";
 import { App } from "@elizaos/app-core";
 import { client } from "@elizaos/app-core";
 import {
@@ -57,6 +58,7 @@ import { AppProvider } from "@elizaos/app-core";
 import { applyUiTheme, loadUiTheme } from "@elizaos/app-core";
 import { Agent } from "@elizaos/capacitor-agent";
 import { Desktop } from "@elizaos/capacitor-desktop";
+import type { DeviceBridgeClient } from "@elizaos/capacitor-llama";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { CompanionShell } from "@elizaos/app-companion/ui";
@@ -114,6 +116,10 @@ import {
 } from "./app-config";
 import { APP_ENV_ALIASES, APP_ENV_PREFIX } from "./brand-env";
 import { APP_CHARACTER_CATALOG } from "./character-catalog";
+import {
+  apiBaseToDeviceBridgeUrl,
+  resolveIosRuntimeConfig,
+} from "./ios-runtime";
 
 declare global {
   interface Window {
@@ -169,6 +175,10 @@ const platform = Capacitor.getPlatform();
 const isNative = Capacitor.isNativePlatform();
 const isIOS = platform === "ios";
 const isAndroid = platform === "android";
+const IOS_RUNTIME_CONFIG = resolveIosRuntimeConfig(import.meta.env);
+const DEVICE_BRIDGE_ID_KEY = "milady_device_bridge_id";
+
+let mobileDeviceBridgeClient: DeviceBridgeClient | null = null;
 
 function isDesktopPlatform(): boolean {
   return isElectrobunRuntime();
@@ -220,8 +230,7 @@ const appBootConfig: AppBootConfig = {
   assetBaseUrl:
     (import.meta.env.VITE_ASSET_BASE_URL as string | undefined)?.trim() ||
     undefined,
-  cloudApiBase:
-    (import.meta.env.VITE_CLOUD_BASE as string) ?? "https://www.elizacloud.ai",
+  cloudApiBase: IOS_RUNTIME_CONFIG.cloudApiBase,
   vrmAssets: APP_VRM_ASSETS,
   onboardingStyles: APP_STYLE_PRESETS,
   characterEditor: CharacterEditor,
@@ -310,6 +319,7 @@ async function initializePlatform(): Promise<void> {
   if (isIOS || isAndroid) {
     await initializeKeyboard();
     initializeAppLifecycle();
+    await initializeMobileDeviceBridge();
   }
 
   if (isDesktopPlatform()) {
@@ -635,12 +645,83 @@ function injectDetachedShellApiBase(): void {
   if (apiBase) validateAndSetApiBase(apiBase);
 }
 
+function applyBuildTimeIosConnection(): void {
+  if (!isNative) return;
+  if (!IOS_RUNTIME_CONFIG.apiBase && !IOS_RUNTIME_CONFIG.apiToken) return;
+
+  const current = getBootConfig();
+  const next: AppBootConfig = {
+    ...current,
+    ...(IOS_RUNTIME_CONFIG.apiToken
+      ? { apiToken: IOS_RUNTIME_CONFIG.apiToken }
+      : {}),
+  };
+  setBootConfig(next);
+
+  if (IOS_RUNTIME_CONFIG.apiBase) {
+    validateAndSetApiBase(IOS_RUNTIME_CONFIG.apiBase);
+  }
+}
+
+async function getOrCreateDeviceBridgeId(): Promise<string> {
+  const existing = await Preferences.get({ key: DEVICE_BRIDGE_ID_KEY });
+  if (existing.value?.trim()) return existing.value.trim();
+
+  const generated =
+    globalThis.crypto?.randomUUID?.() ??
+    `ios-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  await Preferences.set({ key: DEVICE_BRIDGE_ID_KEY, value: generated });
+  return generated;
+}
+
+function resolveDeviceBridgeUrl(): string | null {
+  if (IOS_RUNTIME_CONFIG.deviceBridgeUrl) {
+    return IOS_RUNTIME_CONFIG.deviceBridgeUrl;
+  }
+  if (IOS_RUNTIME_CONFIG.mode !== "cloud-hybrid") return null;
+  const apiBase = getBootConfig().apiBase?.trim();
+  if (!apiBase) return null;
+  try {
+    return apiBaseToDeviceBridgeUrl(apiBase);
+  } catch {
+    return null;
+  }
+}
+
+async function initializeMobileDeviceBridge(): Promise<void> {
+  if (!isNative || IOS_RUNTIME_CONFIG.mode !== "cloud-hybrid") return;
+  if (mobileDeviceBridgeClient) return;
+
+  const agentUrl = resolveDeviceBridgeUrl();
+  if (!agentUrl) return;
+
+  try {
+    const [{ startDeviceBridgeClient }, deviceId] = await Promise.all([
+      import("@elizaos/capacitor-llama"),
+      getOrCreateDeviceBridgeId(),
+    ]);
+    mobileDeviceBridgeClient = startDeviceBridgeClient({
+      agentUrl,
+      ...(IOS_RUNTIME_CONFIG.deviceBridgeToken
+        ? { pairingToken: IOS_RUNTIME_CONFIG.deviceBridgeToken }
+        : {}),
+      deviceId,
+    });
+  } catch (error) {
+    console.warn(
+      `${APP_LOG_PREFIX} Device bridge unavailable:`,
+      error instanceof Error ? error.message : error,
+    );
+  }
+}
+
 function applyStoredDetachedShellTheme(): void {
   applyUiTheme(loadUiTheme());
 }
 
 async function main(): Promise<void> {
   setupPlatformStyles();
+  applyBuildTimeIosConnection();
 
   try {
     await applyLaunchConnectionFromUrl();
