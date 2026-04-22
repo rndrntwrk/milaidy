@@ -1,7 +1,7 @@
 ---
 title: "Platform Connectors"
 sidebarTitle: "Connectors"
-description: "Platform bridges for 27 messaging platforms — 18 auto-enabled from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Twitter, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, Lens, WeChat) plus 9 installable from the registry (Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
+description: "Platform bridges for 28+ messaging platforms — auto-enabled from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Twitter, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, Lens, WeChat) plus installable from the registry (Bluesky, BlueBubbles, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
 ---
 
 Connectors are platform bridges that allow your agent to communicate across messaging platforms and social networks. Each connector handles authentication, message routing, session management, and platform-specific features.
@@ -37,9 +37,10 @@ Connectors are platform bridges that allow your agent to communicate across mess
 27. [Nextcloud Talk](#nextcloud-talk)
 28. [Tlon](#tlon)
 29. [Lens](#lens)
-30. [Connector Lifecycle](#connector-lifecycle)
-31. [Multi-Account Support](#multi-account-support)
-32. [Session Management](#session-management)
+30. [BlueBubbles](#bluebubbles)
+31. [Connector Lifecycle](#connector-lifecycle)
+32. [Multi-Account Support](#multi-account-support)
+33. [Session Management](#session-management)
 
 ---
 
@@ -76,6 +77,7 @@ Connectors marked **Auto** load automatically when their config is present in `m
 | Gmail Watch | Service account / OAuth | N/A | N/A | No | Registry |
 | Nextcloud Talk | Server credentials | Yes | Yes (rooms) | No | Registry |
 | Tlon | Ship credentials | Yes | Yes (Urbit chats) | No | Registry |
+| BlueBubbles | Server password | Yes | Yes | No | Registry |
 
 ---
 
@@ -586,7 +588,7 @@ Connects to iMessage and SMS messaging via the Blooio service with signed webhoo
 }
 ```
 
-**Environment variables:** `INSTAGRAM_USERNAME`, `INSTAGRAM_PASSWORD`, `INSTAGRAM_DRY_RUN`, `INSTAGRAM_POLL_INTERVAL`, `INSTAGRAM_POST_INTERVAL_MIN`, `INSTAGRAM_POST_INTERVAL_MAX`
+**Environment variables:** `INSTAGRAM_USERNAME`, `INSTAGRAM_PASSWORD`, `INSTAGRAM_PROXY`, `INSTAGRAM_VERIFICATION_CODE`
 
 ### Features
 
@@ -1058,6 +1060,42 @@ Gmail Watch is enabled via the `features.gmailWatch` flag or environment variabl
 
 ---
 
+## BlueBubbles
+
+Connects to iMessage via a self-hosted [BlueBubbles](https://bluebubbles.app/) server running on macOS.
+
+### Setup Requirements
+
+- macOS machine running BlueBubbles Server
+- Server password
+
+### Key Configuration
+
+```json
+{
+  "connectors": {
+    "bluebubbles": {
+      "enabled": true,
+      "serverUrl": "http://your-mac:1234",
+      "password": "YOUR_SERVER_PASSWORD"
+    }
+  }
+}
+```
+
+**Environment variables:** `BLUEBUBBLES_PASSWORD`, `BLUEBUBBLES_SERVER_URL`
+
+### Features
+
+- iMessage send and receive via BlueBubbles server
+- DM and group chat support
+- Read receipt support
+- Webhook-based inbound message handling
+
+**Note:** This connector is available from the plugin registry. Install it with `milady plugins install @elizaos/plugin-bluebubbles`.
+
+---
+
 ## Connector Lifecycle
 
 The typical connector lifecycle follows this pattern:
@@ -1135,7 +1173,7 @@ The `dmPolicy` options are:
 **General connector failures:**
 
 - Connector plugin not loading:
-  Check connector ID mapping in `packages/agent/src/config/plugin-auto-enable.ts` (in the `eliza` submodule), plugin availability, and `plugins.entries` overrides. The auto-enable layer maps connector config keys to plugin package names — a mismatch means the plugin is silently skipped.
+  Check connector ID mapping in `eliza/packages/agent/src/config/plugin-auto-enable.ts`, plugin availability, and `plugins.entries` overrides. The auto-enable layer maps connector config keys to plugin package names — a mismatch means the plugin is silently skipped.
 - Auth succeeds but no messages arrive:
   Check platform webhook/socket settings and policy gates (`dmPolicy`, `groupPolicy`). For webhook-based connectors, confirm the callback URL is publicly reachable.
 - Misrouted connector secrets:
@@ -1249,7 +1287,12 @@ The `dmPolicy` options are:
 **Instagram:**
 
 - Login fails or account locked:
-  Instagram may require verification for automated logins. Use an app-specific password if available. Avoid frequent login attempts which can trigger account locks.
+  Instagram may require verification for automated logins. Set `INSTAGRAM_VERIFICATION_CODE` if 2FA is enabled. Use `INSTAGRAM_PROXY` to reduce rate-limit bans. Avoid frequent login attempts which can trigger account locks.
+
+**BlueBubbles:**
+
+- Cannot connect to server:
+  Confirm `BLUEBUBBLES_PASSWORD` and `BLUEBUBBLES_SERVER_URL` are correct. The BlueBubbles server must be running on macOS and reachable from the agent host.
 
 **LINE:**
 

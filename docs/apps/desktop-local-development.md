@@ -98,7 +98,7 @@ Milady’s pinned **Electrobun** config types (as of the version in this repo) d
 
 ## Why `vite build` is sometimes skipped
 
-Before starting services, the script checks `viteRendererBuildNeeded()` (`scripts/lib/vite-renderer-dist-stale.mjs`): compare `apps/app/dist/index.html` mtime against `apps/app/src`, `vite.config.ts`, shared packages (`packages/ui`, `packages/app-core`), etc.
+Before starting services, the script checks `viteRendererBuildNeeded()` (`scripts/lib/vite-renderer-dist-stale.mjs`): compare `apps/app/dist/index.html` mtime against `apps/app/src`, `vite.config.ts`, shared packages (`eliza/packages/ui`, `eliza/packages/app-core`), etc.
 
 **Why mtime, not a full dependency graph?** It is a **cheap, local-first** heuristic so restarts do not pay 10–30s for a redundant production build when sources did not change. Override when you need a clean bundle.
 
@@ -198,8 +198,8 @@ Browser smoke tests target the **same renderer URL** Electrobun loads in watch m
 | `scripts/lib/kill-process-tree.mjs` | Scoped tree kill |
 | `scripts/lib/desktop-stack-status.mjs` | Port + HTTP probes for `desktop:stack-status` |
 | `scripts/desktop-stack-status.mjs` | CLI entry for agents (`--json`) |
-| `packages/app-core/src/api/dev-stack.ts` | Payload for `GET /api/dev/stack` |
-| `packages/app-core/src/api/dev-console-log.ts` | Safe tail read for `GET /api/dev/console-log` |
+| `eliza/packages/app-core/src/api/dev-stack.ts` | Payload for `GET /api/dev/stack` |
+| `eliza/packages/app-core/src/api/dev-console-log.ts` | Safe tail read for `GET /api/dev/console-log` |
 | `apps/app/electrobun/src/index.ts` | `resolveRendererUrl()`; starts screenshot dev server when enabled |
 | `apps/app/electrobun/src/screenshot-dev-server.ts` | Loopback PNG server (proxied as `/api/dev/cursor-screenshot`) |
 | `apps/app/playwright.ui-smoke.config.ts` | Playwright config for renderer smoke specs |

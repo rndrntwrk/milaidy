@@ -48,13 +48,16 @@ export INSTAGRAM_PASSWORD=YOUR_PASSWORD
 | `username` | Yes | Instagram account username |
 | `password` | Yes | Instagram account password |
 | `enabled` | No | Set `false` to disable (default: `true`) |
+| `proxy` | No | Proxy URL for API requests (reduces rate-limit bans) |
 
 ## Environment Variables
 
-```bash
-export INSTAGRAM_USERNAME=YOUR_USERNAME
-export INSTAGRAM_PASSWORD=YOUR_PASSWORD
-```
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `INSTAGRAM_USERNAME` | Yes | Instagram account username |
+| `INSTAGRAM_PASSWORD` | Yes | Instagram account password |
+| `INSTAGRAM_PROXY` | No | Proxy URL for Instagram API requests |
+| `INSTAGRAM_VERIFICATION_CODE` | No | Two-factor authentication verification code |
 
 ## Related
 

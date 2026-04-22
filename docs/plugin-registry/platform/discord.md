@@ -46,11 +46,13 @@ milady plugins install discord
 }
 ```
 
-Or via environment variable:
+Or via environment variables:
 
 ```bash
-export DISCORD_BOT_TOKEN=YOUR_BOT_TOKEN
+export DISCORD_API_TOKEN=YOUR_BOT_TOKEN
 ```
+
+The runtime sets both `DISCORD_API_TOKEN` and `DISCORD_BOT_TOKEN` from the configured token, so either variable name works.
 
 ## Configuration
 

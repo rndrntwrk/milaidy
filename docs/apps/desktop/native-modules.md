@@ -432,7 +432,7 @@ if (cameraPermission.status !== "granted") {
 }
 ```
 
-The renderer usually should not call this global directly. Prefer the shared app helpers in `packages/app-core/src/bridge/electrobun-rpc.ts`, which wrap the same preload bridge behind request/message helpers used by the app and plugins.
+The renderer usually should not call this global directly. Prefer the shared app helpers in `eliza/packages/app-core/src/bridge/electrobun-rpc.ts`, which wrap the same preload bridge behind request/message helpers used by the app and plugins.
 
 ---
 
