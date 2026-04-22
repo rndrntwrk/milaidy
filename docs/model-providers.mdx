@@ -13,28 +13,28 @@ Milady supports **18 inference backends** out of the box. Provider plugins still
 The table below is the complete list of supported provider plugins, sourced from Milady's provider catalog.
 
 <Note>
-Providers marked **bundled** are pre-installed with every Milady release and load instantly. Providers marked **on demand** are installed automatically the first time they are needed — no manual plugin install required. All providers auto-enable when their API key or config is detected.
+Providers marked **bundled** are pre-installed with every Milady release and load instantly. Providers marked **auto-install** are downloaded automatically the first time their API key is detected — no manual plugin install required. All providers auto-enable when their API key or config is present.
 </Note>
 
 | Provider | Plugin Package | Env Variable(s) | Install | Notes |
 |----------|----------------|------------------|---------|-------|
-| [Anthropic](https://anthropic.com) | `@elizaos/plugin-anthropic` | `ANTHROPIC_API_KEY` or `CLAUDE_API_KEY` | On demand | **Recommended.** Claude models (Opus, Sonnet, Haiku). |
+| [Anthropic](https://anthropic.com) | `@elizaos/plugin-anthropic` | `ANTHROPIC_API_KEY` or `CLAUDE_API_KEY` | Auto-install | **Recommended.** Claude models (Opus, Sonnet, Haiku). |
 | [OpenAI](https://openai.com) | `@elizaos/plugin-openai` | `OPENAI_API_KEY` | Bundled | GPT-4o, o1, o3, GPT-4.1. |
-| [Google Gemini](https://ai.google.dev) | `@elizaos/plugin-google-genai` | `GOOGLE_API_KEY` or `GOOGLE_GENERATIVE_AI_API_KEY` | On demand | Gemini Pro, Flash, Ultra. |
-| [Google Antigravity](https://cloud.google.com/vertex-ai) | `@elizaos/plugin-google-antigravity` | `GOOGLE_CLOUD_API_KEY` | On demand | Google Cloud / Vertex AI models. |
-| [Vercel AI Gateway](https://sdk.vercel.ai) | `@elizaos/plugin-vercel-ai-gateway` | `AI_GATEWAY_API_KEY` or `AIGATEWAY_API_KEY` | On demand | Unified gateway to multiple providers. |
+| [Google Gemini](https://ai.google.dev) | `@elizaos/plugin-google-genai` | `GOOGLE_API_KEY` or `GOOGLE_GENERATIVE_AI_API_KEY` | Auto-install | Gemini Pro, Flash, Ultra. |
+| [Google Antigravity](https://cloud.google.com/vertex-ai) | `@elizaos/plugin-google-antigravity` | `GOOGLE_CLOUD_API_KEY` | Auto-install | Google Cloud / Vertex AI models. |
+| [Vercel AI Gateway](https://sdk.vercel.ai) | `@elizaos/plugin-vercel-ai-gateway` | `AI_GATEWAY_API_KEY` or `AIGATEWAY_API_KEY` | Auto-install | Unified gateway to multiple providers. |
 | [OpenRouter](https://openrouter.ai) | `@elizaos/plugin-openrouter` | `OPENROUTER_API_KEY` | Bundled | 100+ models behind one API key. |
 | [Groq](https://groq.com) | `@elizaos/plugin-groq` | `GROQ_API_KEY` | Bundled | Ultra-fast inference (LPU). |
-| [xAI](https://x.ai) | `@elizaos/plugin-xai` | `XAI_API_KEY` or `GROK_API_KEY` | On demand | Grok models. |
-| [DeepSeek](https://deepseek.com) | `@elizaos/plugin-deepseek` | `DEEPSEEK_API_KEY` | On demand | Reasoning and code models. |
+| [xAI](https://x.ai) | `@elizaos/plugin-xai` | `XAI_API_KEY` or `GROK_API_KEY` | Auto-install | Grok models. |
+| [DeepSeek](https://deepseek.com) | `@elizaos/plugin-deepseek` | `DEEPSEEK_API_KEY` | Auto-install | Reasoning and code models. |
 | [Ollama](https://ollama.com) | `@elizaos/plugin-ollama` | `OLLAMA_BASE_URL` | Bundled | **Local models.** No API key needed. Requires a running [Ollama](https://ollama.com) server. |
-| [Qwen](https://qwen.ai) | `@elizaos/plugin-qwen` | — | On demand | Alibaba's Qwen models. Configure via plugin entry. |
-| [MiniMax](https://minimaxi.com) | `@elizaos/plugin-minimax` | — | On demand | MiniMax language models. Configure via plugin entry. |
-| [Together AI](https://together.ai) | `@elizaos/plugin-together` | `TOGETHER_API_KEY` | On demand | Open-source model hosting. |
-| [Mistral](https://mistral.ai) | `@elizaos/plugin-mistral` | `MISTRAL_API_KEY` | On demand | Mistral and Mixtral models. |
-| [Cohere](https://cohere.com) | `@elizaos/plugin-cohere` | `COHERE_API_KEY` | On demand | Command R+ and embed models. |
-| [Perplexity](https://perplexity.ai) | `@elizaos/plugin-perplexity` | `PERPLEXITY_API_KEY` | On demand | Search-augmented generation. |
-| [Zai](https://homunculuslabs.com) | `@homunculuslabs/plugin-zai` | `ZAI_API_KEY` | On demand | Homunculus Labs Zai models. |
+| [Qwen](https://qwen.ai) | `@elizaos/plugin-qwen` | — | Auto-install | Alibaba's Qwen models. Configure via plugin entry. |
+| [MiniMax](https://minimaxi.com) | `@elizaos/plugin-minimax` | — | Auto-install | MiniMax language models. Configure via plugin entry. |
+| [Together AI](https://together.ai) | `@elizaos/plugin-together` | `TOGETHER_API_KEY` | Auto-install | Open-source model hosting. |
+| [Mistral](https://mistral.ai) | `@elizaos/plugin-mistral` | `MISTRAL_API_KEY` | Auto-install | Mistral and Mixtral models. |
+| [Cohere](https://cohere.com) | `@elizaos/plugin-cohere` | `COHERE_API_KEY` | Auto-install | Command R+ and embed models. |
+| [Perplexity](https://perplexity.ai) | `@elizaos/plugin-perplexity` | `PERPLEXITY_API_KEY` | Auto-install | Search-augmented generation. |
+| [Zai](https://homunculuslabs.com) | `@homunculuslabs/plugin-zai` | `ZAI_API_KEY` | Auto-install | Homunculus Labs Zai models. |
 | [Eliza Cloud](https://elizacloud.ai) | `@elizaos/plugin-elizacloud` | `ELIZAOS_CLOUD_API_KEY` | Bundled | Cloud-managed inference route. Can be selected independently from where Milady itself is running. |
 
 ---
