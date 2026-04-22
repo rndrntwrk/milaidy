@@ -66,10 +66,6 @@ describe("init-submodules", () => {
         return "";
       }
 
-      if (command === 'git ls-files -s -- "steward-fi"') {
-        return "";
-      }
-
       if (command === 'git ls-files -s -- "eliza"') {
         return "160000 0123456789abcdef 0\teliza\n";
       }

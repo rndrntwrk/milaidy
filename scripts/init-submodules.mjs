@@ -18,7 +18,7 @@ const SUBMODULE_READINESS_MARKERS = {
 // per-submodule state (gitlink vs regular files) is evaluated correctly.
 const NO_RECURSE_SUBMODULES = new Set(["eliza"]);
 
-const LEGACY_ROOT_SUBMODULE_PATHS = ["cloud", "steward-fi"];
+const LEGACY_ROOT_SUBMODULE_PATHS = ["cloud"];
 
 function getSubmoduleSkipReason(
   submodulePath,
@@ -198,12 +198,10 @@ export function runInitSubmodules({
     return { initialized: 0, alreadyInitialized: 0, failed: 0, submodules: [] };
   }
 
-  const hasLegacyRootCloudPaths = submodules.some(
-    (s) => s.path === "cloud" || s.path === "steward-fi",
-  );
+  const hasLegacyRootCloudPaths = submodules.some((s) => s.path === "cloud");
   if (hasLegacyRootCloudPaths) {
     log(
-      "[init-submodules] This .gitmodules still lists cloud/ or steward-fi/ at the repo root. Pull the latest branch where those repos are nested under eliza/, or edit .gitmodules to match.",
+      "[init-submodules] This .gitmodules still lists cloud/ at the repo root. Pull the latest branch where it is nested under eliza/, or edit .gitmodules to match.",
     );
   }
 
@@ -372,7 +370,7 @@ export function runInitSubmodules({
   ) {
     const elizaRoot = resolve(rootDir, "eliza");
     log(
-      "[init-submodules] Ensuring nested checkouts under eliza/ (cloud, steward-fi, plugins, …)…",
+      "[init-submodules] Ensuring nested checkouts under eliza/ (cloud, plugins, …)…",
     );
     try {
       // Sync nested config first so git does not keep stale URLs from older

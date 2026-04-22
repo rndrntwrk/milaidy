@@ -11,7 +11,7 @@
  * *.spec.ts            — Playwright specs (run by playwright configs)
  *
  * Test locations: src/, __tests__/, test/ — all are auto-discovered.
- * Subsystems with their own runners: eliza/cloud, eliza/steward-fi,
+ * Subsystems with their own runners: eliza/cloud,
  * eliza/packages/examples, eliza/packages/templates, eliza/packages/benchmarks.
  */
 import fs from "node:fs";
@@ -389,7 +389,6 @@ export default defineConfig({
       "eliza/apps/*/src/services/**/*.test.{ts,tsx}",
       // --- subsystems with their own test runners ---
       "eliza/cloud/**",
-      "eliza/steward-fi/**",
       // --- wired via turbo, not root vitest ---
       "eliza/packages/examples/**",
       "eliza/packages/templates/**",
