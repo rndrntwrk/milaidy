@@ -6,6 +6,8 @@ description: "Zai model provider for Milady — access Homunculus Labs' Zai lang
 
 The Zai plugin connects Milady agents to Homunculus Labs' Zai models.
 
+> **Availability:** This plugin is not in the default Milady plugin registry. Install it directly with `milady plugins install zai` or `milady plugins install @homunculuslabs/plugin-zai`.
+
 **Package:** `@homunculuslabs/plugin-zai`
 
 ## Installation

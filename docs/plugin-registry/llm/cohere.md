@@ -6,6 +6,8 @@ description: "Cohere model provider for Milady — enterprise-grade language mod
 
 The Cohere plugin connects Milady agents to Cohere's language models, providing access to the Command family of models optimized for enterprise use cases including retrieval-augmented generation and tool use.
 
+> **Availability:** This plugin is not in the default Milady plugin registry. Install it directly with `milady plugins install cohere` or `milady plugins install @elizaos/plugin-cohere`.
+
 **Package:** `@elizaos/plugin-cohere`
 
 ## Installation

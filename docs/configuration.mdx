@@ -317,7 +317,7 @@ Agents are defined under `agents.list`. The `agents.defaults` section provides s
       // Heartbeat (periodic background runs)
       heartbeat: {
         every: "30m",
-        model: "anthropic/claude-haiku-3.5",
+        model: "anthropic/claude-haiku-4.5",
         target: "last",
       },
       // Sandbox defaults
@@ -334,7 +334,7 @@ Agents are defined under `agents.list`. The `agents.defaults` section provides s
       subagents: {
         maxConcurrent: 1,
         archiveAfterMinutes: 60,
-        model: "anthropic/claude-haiku-3.5",
+        model: "anthropic/claude-haiku-4.5",
       },
     },
   },
@@ -744,7 +744,7 @@ The `tools` section controls tool availability, web search/fetch, exec permissio
 
     // Sub-agent defaults
     subagents: {
-      model: "anthropic/claude-haiku-3.5",
+      model: "anthropic/claude-haiku-4.5",
       tools: { allow: ["web_search"], deny: [] },
     },
   },
