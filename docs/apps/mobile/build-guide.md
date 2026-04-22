@@ -57,6 +57,11 @@ All build commands are invoked via the `scripts/rt.sh` runtime wrapper from insi
 
 The iOS bundle supports three runtime modes. Use the root helper scripts so the Vite environment, native sync, CocoaPods, and Xcode project overlay stay aligned.
 
+The iOS target is one app. The first onboarding screen chooses the connection mode:
+remote Mac, Eliza Cloud, or Eliza Cloud plus donated phone compute. The mode-specific
+commands below only pre-seed development builds so Xcode opens with the expected
+defaults; users can still change the connection mode in onboarding.
+
 ### 1. Phone build connected to this Mac
 
 Expose the Milady API on the Mac's LAN address, then build/open the iOS project with the phone pointed at that API:
@@ -76,7 +81,8 @@ If `MILADY_IOS_REMOTE_API_BASE` is omitted, the helper picks the first non-loopb
 
 ### 2. Phone build running in cloud
 
-Build the bundled iOS shell with the cloud runtime defaults:
+Build the bundled iOS shell with the cloud runtime defaults, then select Eliza Cloud
+in the first onboarding view:
 
 ```bash
 bun run dev:ios:cloud
@@ -86,7 +92,7 @@ Set `MILADY_IOS_CLOUD_BASE` or `VITE_ELIZA_CLOUD_BASE` only when targeting a non
 
 ### 3. Cloud runtime plus donated phone compute
 
-Cloud-hybrid mode keeps the app on the cloud runtime and starts the existing device bridge so eligible local-inference work can route to the phone through the server-side routing preferences.
+Cloud-hybrid mode keeps the app on the cloud runtime and starts the existing device bridge so eligible local-inference work can route to the phone through the server-side routing preferences. Select the Cloud + phone compute option in the first onboarding view.
 
 ```bash
 ELIZA_DEVICE_BRIDGE_ENABLED=1 \

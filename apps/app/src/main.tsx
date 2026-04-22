@@ -21,6 +21,8 @@ import type { BrandingConfig } from "@elizaos/app-core";
 import {
   type AppBootConfig,
   getBootConfig,
+  MOBILE_RUNTIME_MODE_STORAGE_KEY,
+  normalizeMobileRuntimeMode,
   setBootConfig,
 } from "@elizaos/app-core";
 import {
@@ -30,6 +32,7 @@ import {
   COMMAND_PALETTE_EVENT,
   CONNECT_EVENT,
   dispatchAppEvent,
+  MOBILE_RUNTIME_MODE_CHANGED_EVENT,
   SHARE_TARGET_EVENT,
   TRAY_ACTION_EVENT,
 } from "@elizaos/app-core";
@@ -118,6 +121,7 @@ import { APP_ENV_ALIASES, APP_ENV_PREFIX } from "./brand-env";
 import { APP_CHARACTER_CATALOG } from "./character-catalog";
 import {
   apiBaseToDeviceBridgeUrl,
+  type IosRuntimeConfig,
   resolveIosRuntimeConfig,
 } from "./ios-runtime";
 
@@ -175,10 +179,11 @@ const platform = Capacitor.getPlatform();
 const isNative = Capacitor.isNativePlatform();
 const isIOS = platform === "ios";
 const isAndroid = platform === "android";
-const IOS_RUNTIME_CONFIG = resolveIosRuntimeConfig(import.meta.env);
+const IOS_RUNTIME_ENV_CONFIG = resolveIosRuntimeConfig(import.meta.env);
 const DEVICE_BRIDGE_ID_KEY = "milady_device_bridge_id";
 
 let mobileDeviceBridgeClient: DeviceBridgeClient | null = null;
+let mobileRuntimeModeListenerInstalled = false;
 
 function isDesktopPlatform(): boolean {
   return isElectrobunRuntime();
@@ -230,7 +235,7 @@ const appBootConfig: AppBootConfig = {
   assetBaseUrl:
     (import.meta.env.VITE_ASSET_BASE_URL as string | undefined)?.trim() ||
     undefined,
-  cloudApiBase: IOS_RUNTIME_CONFIG.cloudApiBase,
+  cloudApiBase: IOS_RUNTIME_ENV_CONFIG.cloudApiBase,
   vrmAssets: APP_VRM_ASSETS,
   onboardingStyles: APP_STYLE_PRESETS,
   characterEditor: CharacterEditor,
@@ -319,6 +324,7 @@ async function initializePlatform(): Promise<void> {
   if (isIOS || isAndroid) {
     await initializeKeyboard();
     initializeAppLifecycle();
+    initializeMobileRuntimeModeListener();
     await initializeMobileDeviceBridge();
   }
 
@@ -645,21 +651,34 @@ function injectDetachedShellApiBase(): void {
   if (apiBase) validateAndSetApiBase(apiBase);
 }
 
+function getCurrentIosRuntimeConfig(): IosRuntimeConfig {
+  if (typeof window === "undefined") return IOS_RUNTIME_ENV_CONFIG;
+  try {
+    const mode = normalizeMobileRuntimeMode(
+      window.localStorage.getItem(MOBILE_RUNTIME_MODE_STORAGE_KEY),
+    );
+    return mode ? { ...IOS_RUNTIME_ENV_CONFIG, mode } : IOS_RUNTIME_ENV_CONFIG;
+  } catch {
+    return IOS_RUNTIME_ENV_CONFIG;
+  }
+}
+
 function applyBuildTimeIosConnection(): void {
   if (!isNative) return;
-  if (!IOS_RUNTIME_CONFIG.apiBase && !IOS_RUNTIME_CONFIG.apiToken) return;
+  if (!IOS_RUNTIME_ENV_CONFIG.apiBase && !IOS_RUNTIME_ENV_CONFIG.apiToken)
+    return;
 
   const current = getBootConfig();
   const next: AppBootConfig = {
     ...current,
-    ...(IOS_RUNTIME_CONFIG.apiToken
-      ? { apiToken: IOS_RUNTIME_CONFIG.apiToken }
+    ...(IOS_RUNTIME_ENV_CONFIG.apiToken
+      ? { apiToken: IOS_RUNTIME_ENV_CONFIG.apiToken }
       : {}),
   };
   setBootConfig(next);
 
-  if (IOS_RUNTIME_CONFIG.apiBase) {
-    validateAndSetApiBase(IOS_RUNTIME_CONFIG.apiBase);
+  if (IOS_RUNTIME_ENV_CONFIG.apiBase) {
+    validateAndSetApiBase(IOS_RUNTIME_ENV_CONFIG.apiBase);
   }
 }
 
@@ -674,11 +693,11 @@ async function getOrCreateDeviceBridgeId(): Promise<string> {
   return generated;
 }
 
-function resolveDeviceBridgeUrl(): string | null {
-  if (IOS_RUNTIME_CONFIG.deviceBridgeUrl) {
-    return IOS_RUNTIME_CONFIG.deviceBridgeUrl;
+function resolveDeviceBridgeUrl(config: IosRuntimeConfig): string | null {
+  if (config.deviceBridgeUrl) {
+    return config.deviceBridgeUrl;
   }
-  if (IOS_RUNTIME_CONFIG.mode !== "cloud-hybrid") return null;
+  if (config.mode !== "cloud-hybrid") return null;
   const apiBase = getBootConfig().apiBase?.trim();
   if (!apiBase) return null;
   try {
@@ -689,10 +708,11 @@ function resolveDeviceBridgeUrl(): string | null {
 }
 
 async function initializeMobileDeviceBridge(): Promise<void> {
-  if (!isNative || IOS_RUNTIME_CONFIG.mode !== "cloud-hybrid") return;
+  const runtimeConfig = getCurrentIosRuntimeConfig();
+  if (!isNative || runtimeConfig.mode !== "cloud-hybrid") return;
   if (mobileDeviceBridgeClient) return;
 
-  const agentUrl = resolveDeviceBridgeUrl();
+  const agentUrl = resolveDeviceBridgeUrl(runtimeConfig);
   if (!agentUrl) return;
 
   try {
@@ -702,8 +722,8 @@ async function initializeMobileDeviceBridge(): Promise<void> {
     ]);
     mobileDeviceBridgeClient = startDeviceBridgeClient({
       agentUrl,
-      ...(IOS_RUNTIME_CONFIG.deviceBridgeToken
-        ? { pairingToken: IOS_RUNTIME_CONFIG.deviceBridgeToken }
+      ...(runtimeConfig.deviceBridgeToken
+        ? { pairingToken: runtimeConfig.deviceBridgeToken }
         : {}),
       deviceId,
     });
@@ -713,6 +733,23 @@ async function initializeMobileDeviceBridge(): Promise<void> {
       error instanceof Error ? error.message : error,
     );
   }
+}
+
+function stopMobileDeviceBridge(): void {
+  mobileDeviceBridgeClient?.stop();
+  mobileDeviceBridgeClient = null;
+}
+
+function initializeMobileRuntimeModeListener(): void {
+  if (!isNative || mobileRuntimeModeListenerInstalled) return;
+  mobileRuntimeModeListenerInstalled = true;
+  document.addEventListener(MOBILE_RUNTIME_MODE_CHANGED_EVENT, () => {
+    if (getCurrentIosRuntimeConfig().mode === "cloud-hybrid") {
+      void initializeMobileDeviceBridge();
+      return;
+    }
+    stopMobileDeviceBridge();
+  });
 }
 
 function applyStoredDetachedShellTheme(): void {
