@@ -60,6 +60,17 @@ describe("docker CI smoke contract", () => {
     );
   });
 
+  it("builds local plugin exports required by source imports", () => {
+    const script = fs.readFileSync(dockerSmokeScriptPath, "utf8");
+
+    expect(script).toContain(
+      "eliza/plugins/plugin-telegram/dist/account-auth-service.js",
+    );
+    expect(script).toContain("Building Telegram plugin account-auth export");
+    expect(script).toContain("pushd eliza/plugins/plugin-telegram");
+    expect(script).toContain("bun run build");
+  });
+
   it("boots the smoke container with isolated runtime state and live log dumps", () => {
     const script = fs.readFileSync(dockerSmokeScriptPath, "utf8");
 
@@ -105,6 +116,9 @@ describe("docker CI smoke contract", () => {
     expect(linker).toContain(
       'path.join(workspaceDir, "node_modules", "@elizaos")',
     );
+    expect(linker).toContain("rewriteDistExportsToSource");
+    expect(linker).toContain("pathExists(path.join(packageDir, exportPath))");
+    expect(linker).toContain('replace("./dist/", "./src/")');
   });
 
   it("keeps Docker helper scripts parseable by Node", () => {
