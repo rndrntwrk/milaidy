@@ -183,7 +183,7 @@ Or switch mid-session using the `/model` chat command:
 
 ## Model Fallbacks
 
-Milady supports an ordered fallback chain. If the primary model fails (rate limit, outage, billing issue), the next model in the list is tried automatically.
+If your primary model is unavailable (rate limit, outage, billing issue), Milady automatically tries the next option in the list. This keeps the agent responsive even when a single provider has problems.
 
 ```json5
 {
@@ -263,7 +263,8 @@ Ollama lets you run models locally with no API key and full privacy. It is the o
     ```bash
     ollama pull llama3.3
     ```
-  </Step>
+    To see available models on your machine, run `ollama list`. Browse all models at [ollama.com/library](https://ollama.com/library).
+  </Step></invoke>
   <Step title="Set the base URL">
     Add to `~/.milady/.env`:
     ```bash
@@ -290,6 +291,12 @@ Ollama auto-enables as soon as `OLLAMA_BASE_URL` is set. If you are running Olla
 
 ```bash
 OLLAMA_BASE_URL=http://127.0.0.1:11434
+```
+
+To verify Ollama is running and reachable:
+
+```bash
+curl http://127.0.0.1:11434/api/tags
 ```
 
 For remote Ollama instances, point to your server's address instead.

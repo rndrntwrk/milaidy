@@ -6,6 +6,10 @@ description: Configure and monitor the agent's autonomous reasoning loop, where 
 
 Autonomous mode allows the Milady agent to reason and act independently between user conversations. When enabled, the agent runs a continuous loop -- observing its environment, making decisions, and executing actions without waiting for explicit user input. This is useful for background monitoring, scheduled workflows, and proactive behavior.
 
+<Tip>
+For a step-by-step walkthrough with use cases and safety controls, see the [Autonomous Agent Tutorial](/guides/tutorial-autonomous-agent).
+</Tip>
+
 ## How Autonomous Mode Works
 
 The autonomous system is built on elizaOS's core task system and consists of several interconnected components:

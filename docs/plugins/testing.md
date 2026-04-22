@@ -438,4 +438,4 @@ describe('Weather Plugin E2E', () => {
 - [Create a Plugin](/plugins/create-a-plugin) — Build a plugin from scratch
 - [Plugin Patterns](/plugins/patterns) — Common implementation patterns
 - [Plugin Schemas](/plugins/schemas) — Full type reference
-- [Contributing Guide](/guides/contribution-guide) — Test conventions for the monorepo
+- [Contributing Guide](/guides/contributing) — Test conventions for the monorepo
