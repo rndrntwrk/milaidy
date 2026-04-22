@@ -4,6 +4,10 @@ sidebarTitle: Lens
 description: Connect your agent to the Lens Protocol using the @elizaos/plugin-lens package.
 ---
 
+<Warning>
+The `@elizaos/plugin-lens` package is not currently available in the plugin registry. This connector documentation is retained for reference but the plugin may not be installable. Check the plugin registry for current availability.
+</Warning>
+
 Connect your agent to Lens Protocol for decentralized social interactions.
 
 ## Overview
