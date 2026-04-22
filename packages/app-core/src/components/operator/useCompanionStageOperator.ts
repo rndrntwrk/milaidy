@@ -24,6 +24,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const ALICE_ARCADE_PLUGIN_IDS = new Set(["five55-games"]);
+const HYPERSCAPE_PLUGIN_IDS = new Set(["hyperscape"]);
 
 export type AliceGoLiveLaunchResult = {
   state: "success" | "partial" | "blocked" | "failed";
@@ -218,6 +219,18 @@ export function useCompanionStageOperator() {
     [plugins],
   );
 
+  const hyperscapeRuntimeAvailable = useMemo(
+    () =>
+      plugins.some((plugin) => {
+        const normalized = normalizePluginId(plugin.id);
+        return (
+          HYPERSCAPE_PLUGIN_IDS.has(normalized) &&
+          (plugin.isActive ?? plugin.enabled)
+        );
+      }),
+    [plugins],
+  );
+
   const streamPluginPresent = useMemo(
     () =>
       plugins.some(
@@ -278,7 +291,7 @@ export function useCompanionStageOperator() {
       setStreamCapabilityResolved(true);
       setStreamAvailable(true);
       setStreamError(null);
-      setStreamLive(Boolean(status.running && status.ffmpegAlive));
+      setStreamLive(Boolean(status.running));
       setUptime(status.uptime ?? 0);
       setFrameCount(status.frameCount ?? 0);
       setActiveDestination(status.destination ?? null);
@@ -432,7 +445,15 @@ export function useCompanionStageOperator() {
   }, [arcadeRuntimeAvailable, isAliceActive, loadCatalog, loadGameState]);
 
   const refreshHyperscape = useCallback(async () => {
-    if (!isAliceActive) return;
+    if (!isAliceActive || !hyperscapeRuntimeAvailable) {
+      setHyperscapeAvailable(false);
+      setHyperscapeAgent(null);
+      setHyperscapeQuickCommands([]);
+      setHyperscapeGoal(null);
+      setHyperscapeError(null);
+      setHyperscapeLoading(false);
+      return;
+    }
     setHyperscapeLoading(true);
     setHyperscapeError(null);
     try {
@@ -454,17 +475,18 @@ export function useCompanionStageOperator() {
     } catch (err) {
       if (isApiError(err) && err.status === 404) {
         setHyperscapeAvailable(false);
+        setHyperscapeError(null);
       } else {
         setHyperscapeAvailable(true);
+        setHyperscapeError(err instanceof Error ? err.message : null);
       }
       setHyperscapeAgent(null);
       setHyperscapeQuickCommands([]);
       setHyperscapeGoal(null);
-      setHyperscapeError(err instanceof Error ? err.message : null);
     } finally {
       setHyperscapeLoading(false);
     }
-  }, [isAliceActive]);
+  }, [hyperscapeRuntimeAvailable, isAliceActive]);
 
   useEffect(() => {
     if (!isAliceActive) return;
@@ -536,34 +558,6 @@ export function useCompanionStageOperator() {
     },
     [executePlan],
   );
-
-  const pollDelivery = useCallback(async () => {
-    const deadlineAt = Date.now() + 30_000;
-    let lastMessage = "";
-    while (Date.now() < deadlineAt) {
-      try {
-        const status = await client.streamStatus();
-        if (status.running && status.ffmpegAlive) {
-          await refreshStreamStatus();
-          return { ok: true };
-        }
-        lastMessage = t("aliceoperator.deliveryPending", {
-          defaultValue: "Stream delivery did not reach live state yet.",
-        });
-      } catch (err) {
-        lastMessage = err instanceof Error ? err.message : lastMessage;
-      }
-      await new Promise((resolve) => window.setTimeout(resolve, 2_500));
-    }
-    return {
-      ok: false,
-      message:
-        lastMessage ||
-        t("aliceoperator.deliveryTimeout", {
-          defaultValue: "Stream delivery did not reach live state in time.",
-        }),
-    };
-  }, [refreshStreamStatus, t]);
 
   const performGuidedGoLive = useCallback(
     async (config: {
@@ -659,15 +653,9 @@ export function useCompanionStageOperator() {
               ),
             );
           }
-          const delivery = await pollDelivery();
-          if (!delivery.ok) {
-            return failed(
-              delivery.message ??
-                t("aliceoperator.deliveryTimeout", {
-                  defaultValue: "Stream delivery did not reach live state in time.",
-                }),
-            );
-          }
+          // STREAM555_GO_LIVE already waits for Cloudflare readiness on the
+          // control-plane path; a second local delivery poll only adds lag.
+          await refreshStreamStatus();
           return success(
             t("aliceoperator.cameraLive", {
               defaultValue: "Camera is live and delivering.",
@@ -918,7 +906,6 @@ export function useCompanionStageOperator() {
       executePlan,
       gameState?.activeGameId,
       loadGameState,
-      pollDelivery,
       recordOperatorAction,
       refreshStreamStatus,
       selectedGameId,
