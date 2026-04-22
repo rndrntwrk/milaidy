@@ -13,6 +13,14 @@ const dockerSmokeScriptPath = path.join(
   "scripts",
   "docker-ci-smoke.sh",
 );
+const dockerfilePath = path.join(
+  repoRoot,
+  "eliza",
+  "packages",
+  "app-core",
+  "deploy",
+  "Dockerfile.ci",
+);
 
 describe("docker CI smoke contract", () => {
   it("delegates published-workspace fallback dependencies to the shared helper", () => {
@@ -33,5 +41,13 @@ describe("docker CI smoke contract", () => {
     expect(script).toContain("-e PGLITE_DATA_DIR=/tmp/milady-smoke/pglite");
     expect(script).toContain("Container still booting; recent logs follow");
     expect(script).toContain('"$DOCKER_BIN" logs --tail 80 "$CONTAINER_NAME"');
+  });
+
+  it("does not override tsx esbuild in the runtime image", () => {
+    const dockerfile = fs.readFileSync(dockerfilePath, "utf8");
+
+    expect(dockerfile).not.toContain("ESBUILD_BINARY_PATH");
+    expect(dockerfile).not.toContain("/usr/local/bin/esbuild");
+    expect(dockerfile).toContain("ENV ELIZA_DISABLE_EDGE_TTS=1");
   });
 });
