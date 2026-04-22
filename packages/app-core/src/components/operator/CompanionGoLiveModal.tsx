@@ -5,6 +5,7 @@ import {
   Dialog,
   DialogClose,
   DialogContent,
+  DialogDescription,
   DialogTitle,
 } from "@miladyai/ui";
 import {
@@ -608,12 +609,12 @@ export function CompanionGoLiveModal({
                     defaultValue: "Go Live",
                   })}
                 </DialogTitle>
-                <p className="go-live-modal__description">
+                <DialogDescription className="go-live-modal__description">
                   {t("aliceoperator.goLiveDescription", {
                     defaultValue:
                       "Authenticate, choose channels, pick the launch format, and send Alice live without leaving the stage.",
                   })}
-                </p>
+                </DialogDescription>
               </div>
               <DialogClose asChild>
                 <Button
@@ -1084,7 +1085,11 @@ export function CompanionGoLiveModal({
               </OperatorPill>
               {activeStepIndex >= 0 ? (
                 <span className="text-sm text-white/70">
-                  {STEP_ORDER[activeStepIndex]?.label}
+                  {launching
+                    ? t("aliceoperator.launchProgressHint", {
+                        defaultValue: "Waiting for delivery lock",
+                      })
+                    : STEP_ORDER[activeStepIndex]?.label}
                 </span>
               ) : null}
             </div>

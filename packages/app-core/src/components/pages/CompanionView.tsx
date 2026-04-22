@@ -38,15 +38,15 @@ const COMPANION_DOCK_HEIGHT = "min(42vh, 24rem)";
 const SHELL_MODE_MOBILE_MEDIA_QUERY = "(max-width: 639px)";
 const ALICE_STAGE_BUBBLE_HIDE_MEDIA_QUERY = "(max-width: 767px)";
 const ALICE_GO_LIVE_STRIP_CLASSNAME =
-  "pointer-events-auto inline-flex h-11 min-h-[44px] max-w-full items-center !rounded-xl border border-white/10 bg-black/52 p-1 shadow-[0_10px_30px_rgba(0,0,0,0.24)] ring-1 ring-inset ring-white/6 backdrop-blur-2xl";
+  "pointer-events-auto inline-flex max-w-full items-center gap-1 rounded-lg border border-white/12 bg-black/48 px-1.5 py-1 shadow-[0_12px_32px_rgba(0,0,0,0.22)] backdrop-blur-xl";
 const ALICE_GO_LIVE_BUTTON_CLASSNAME =
-  "h-9 min-h-9 !rounded-[10px] px-3.5 text-sm font-medium shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]";
+  "h-8 min-h-8 gap-2 rounded-lg border border-transparent px-3 text-[12px] font-semibold shadow-none transition-colors";
 const ALICE_GO_LIVE_IDLE_CLASSNAME =
-  "border-accent/40 bg-[linear-gradient(180deg,rgba(var(--accent-rgb),0.22),rgba(var(--accent-rgb),0.12))] text-txt-strong hover:border-accent/65 hover:bg-[linear-gradient(180deg,rgba(var(--accent-rgb),0.28),rgba(var(--accent-rgb),0.16))]";
+  "bg-white/[0.08] text-white/88 hover:bg-white/[0.12]";
 const ALICE_GO_LIVE_LIVE_CLASSNAME =
-  "border-danger/45 bg-[linear-gradient(180deg,rgba(239,68,68,0.92),rgba(220,38,38,0.86))] text-white hover:border-danger/70 hover:bg-[linear-gradient(180deg,rgba(239,68,68,0.98),rgba(220,38,38,0.92))]";
+  "bg-[linear-gradient(180deg,#ef5a50,#d83d35)] text-white hover:bg-[linear-gradient(180deg,#f36960,#df463e)]";
 const ALICE_GO_LIVE_DESTINATION_PILL_CLASSNAME =
-  "pointer-events-none max-w-[10rem] shrink truncate normal-case tracking-[0.08em]";
+  "pointer-events-none max-w-[11rem] shrink-0 truncate rounded-lg border border-white/10 bg-white/[0.04] px-3 py-0 text-[12px] font-medium normal-case tracking-[0.01em] text-white/76 shadow-none";
 
 function AliceConnectionIcon(props: SVGProps<SVGSVGElement>) {
   return (
@@ -77,6 +77,13 @@ const AliceGoLiveHeaderControl = memo(function AliceGoLiveHeaderControl({
   const [preferredMode, setPreferredMode] = useState<"camera" | "screen-share" | "play-games" | "reaction" | "radio">("camera");
   const isMobileViewport = useMediaQuery(SHELL_MODE_MOBILE_MEDIA_QUERY);
   const liveDestinationName = operator.stream.activeDestination?.name?.trim() || null;
+  const liveDestinationLabel = liveDestinationName
+    ? liveDestinationName
+        .split(",")
+        .map((segment) => segment.trim())
+        .filter(Boolean)
+        .join(" · ")
+    : null;
   const liveStateLabel = t("statusbar.LiveShort", { defaultValue: "LIVE" });
   const goLiveLabel = t("statusbar.GoLive");
   const endLiveLabel = t("aliceoperator.action.endLive", {
@@ -100,7 +107,7 @@ const AliceGoLiveHeaderControl = memo(function AliceGoLiveHeaderControl({
     operator.stream.live
       ? ALICE_GO_LIVE_LIVE_CLASSNAME
       : ALICE_GO_LIVE_IDLE_CLASSNAME
-  } ${isMobileViewport ? "!w-9 min-w-9 px-0" : ""}`;
+  } ${isMobileViewport ? "!w-8 min-w-8 px-0" : ""}`;
 
   const handleClick = () => {
     if (operator.stream.live) {
@@ -120,7 +127,7 @@ const AliceGoLiveHeaderControl = memo(function AliceGoLiveHeaderControl({
         <Button
           type="button"
           size="sm"
-          variant={operator.stream.live ? "destructive" : "secondary"}
+          variant="ghost"
           aria-label={actionAriaLabel}
           title={buttonTitle}
           className={buttonClassName}
@@ -140,14 +147,14 @@ const AliceGoLiveHeaderControl = memo(function AliceGoLiveHeaderControl({
             <span className="pointer-events-none">{liveActionLabel}</span>
           )}
         </Button>
-        {operator.stream.live && liveDestinationName && !isMobileViewport ? (
+        {operator.stream.live && liveDestinationLabel && !isMobileViewport ? (
           <OperatorPill
-            tone="accent"
+            tone="neutral"
             className={ALICE_GO_LIVE_DESTINATION_PILL_CLASSNAME}
             title={liveDestinationName}
             data-testid="companion-header-live-destination"
           >
-            {liveDestinationName}
+            {liveDestinationLabel}
           </OperatorPill>
         ) : null}
       </div>

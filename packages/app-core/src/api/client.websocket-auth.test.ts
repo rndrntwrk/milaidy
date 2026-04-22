@@ -100,6 +100,63 @@ describe("MiladyClient WebSocket auth", () => {
     );
   });
 
+  it("does not open a second socket while the first is still connecting", async () => {
+    const { MiladyClient } = await import("./client");
+
+    const client = new MiladyClient("http://127.0.0.1:31337", null);
+    client.connectWs();
+
+    const firstWs = MockWebSocket.instances[0];
+    firstWs.readyState = MockWebSocket.CONNECTING;
+
+    client.connectWs();
+
+    expect(MockWebSocket.instances).toHaveLength(1);
+  });
+
+  it("keeps same-origin websocket fallback on normal web hosts when no base is configured", async () => {
+    const { MiladyClient } = await import("./client");
+
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: {
+        ...globalThis.window,
+        location: {
+          protocol: "https:",
+          host: "alice.rndrntwrk.com",
+        },
+      },
+    });
+
+    const client = new MiladyClient(undefined, null);
+    client.connectWs();
+
+    expect(MockWebSocket.instances).toHaveLength(1);
+    expect(MockWebSocket.instances[0]?.url).toContain(
+      "wss://alice.rndrntwrk.com/ws?clientId=",
+    );
+  });
+
+  it("skips websocket fallback on native placeholder hosts when no base is configured", async () => {
+    const { MiladyClient } = await import("./client");
+
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: {
+        ...globalThis.window,
+        location: {
+          protocol: "https:",
+          host: "localhost",
+        },
+      },
+    });
+
+    const client = new MiladyClient(undefined, null);
+    client.connectWs();
+
+    expect(MockWebSocket.instances).toHaveLength(0);
+  });
+
   it("keeps retrying on a long interval after max reconnect attempts", async () => {
     const { MiladyClient } = await import("./client");
 
