@@ -32,6 +32,15 @@ describe("docker CI smoke contract", () => {
     expect(script).not.toContain("bun add --no-save --dev");
   });
 
+  it("generates core protobuf sources before building the Docker context", () => {
+    const script = fs.readFileSync(dockerSmokeScriptPath, "utf8");
+
+    expect(script).toContain(
+      "eliza/packages/typescript/src/types/generated/eliza/v1/agent_pb.ts",
+    );
+    expect(script).toContain("bun run generate");
+  });
+
   it("boots the smoke container with isolated runtime state and live log dumps", () => {
     const script = fs.readFileSync(dockerSmokeScriptPath, "utf8");
 
