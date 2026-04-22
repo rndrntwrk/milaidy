@@ -37,7 +37,9 @@
               "installation",
               "quickstart",
               "user/apps-and-control",
-              "user/connect-remotely"
+              "user/connect-remotely",
+              "changelog",
+              "roadmap"
             ]
           },
           {
@@ -60,6 +62,7 @@
             "group": "Help",
             "pages": [
               "user/troubleshooting",
+              "stability/known-failure-modes",
               "user/developer-docs"
             ]
           }
@@ -132,7 +135,8 @@
               "plugins/skills",
               "plugins/decision-guide",
               "plugins/patterns",
-              "plugins/publish"
+              "plugins/publish",
+              "plugin-setup-guide"
             ]
           },
           {
@@ -277,7 +281,10 @@
             "pages": [
               "deployment",
               "deployment-bare-metal",
-              "eliza-cloud-deployment"
+              "eliza-cloud-deployment",
+              "eliza-cloud-rollout",
+              "cloud-travel-billing",
+              "lifeops-production-runbook"
             ]
           }
         ]
@@ -290,7 +297,9 @@
             "pages": [
               "architecture",
               "websocket-events",
-              "what-you-can-build"
+              "what-you-can-build",
+              "api-reference",
+              "action-catalog"
             ]
           },
           {
@@ -390,7 +399,11 @@
               "apps/mobile",
               "apps/mobile/build-guide",
               "apps/mobile/capacitor-plugins",
-              "apps/desktop-local-development"
+              "apps/desktop-local-development",
+              "apps/desktop-main-process-reset",
+              "apps/desktop-vrm-three-and-spark",
+              "apps/electrobun-darwin-macos-webgpu-version",
+              "electrobun-startup"
             ]
           },
           {
@@ -400,12 +413,22 @@
               "advanced/logs",
               "advanced/trajectories",
               "security",
+              "security/codeflow-residual-risk",
               "plugin-resolution-and-node-path",
               "skills/streaming",
               "dashboard/chat",
               "dashboard/apps",
               "dashboard/pairing",
               "dashboard/stream"
+            ]
+          },
+          {
+            "group": "Build & Release",
+            "pages": [
+              "build-and-release",
+              "ci-depot",
+              "windows-signing",
+              "guides/electrobun-mac-window-chrome"
             ]
           }
         ]
