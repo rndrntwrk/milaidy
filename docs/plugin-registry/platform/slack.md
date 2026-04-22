@@ -108,6 +108,18 @@ AgentRuntime processes message
 Response posted to Slack channel/DM
 ```
 
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `SLACK_APP_TOKEN` | Yes | Slack App Token (`xapp-...`) for Socket Mode |
+| `SLACK_BOT_TOKEN` | Yes | Slack Bot Token (`xoxb-...`) for API authentication |
+| `SLACK_USER_TOKEN` | No | User Token (`xoxp-...`) for enhanced permissions |
+| `SLACK_SIGNING_SECRET` | No | Signing Secret for verifying HTTP mode requests |
+| `SLACK_CHANNEL_IDS` | No | Comma-separated channel IDs to restrict the bot to |
+| `SLACK_SHOULD_IGNORE_BOT_MESSAGES` | No | Ignore messages from other bots |
+| `SLACK_SHOULD_RESPOND_ONLY_TO_MENTIONS` | No | Only respond when mentioned |
+
 ## Auto-Enable
 
 The plugin auto-enables when `connectors.slack.botToken` is set.

@@ -18,13 +18,24 @@ The Solana plugin provides the agent with a Solana keypair wallet and a set of o
 milady plugins install solana
 ```
 
+## Auto-Enable
+
+The plugin auto-enables when `HELIUS_API_KEY` is set (this is the `envKey` in `plugins.json`).
+
 ## Configuration
 
 | Environment Variable | Required | Description |
 |---------------------|----------|-------------|
 | `SOLANA_PRIVATE_KEY` | Yes | Base58-encoded private key for the agent's wallet |
+| `SOLANA_PUBLIC_KEY` | No | Public key (derived from private key if not set) |
+| `SOL_ADDRESS` | No | Alias for the wallet address |
 | `SOLANA_RPC_URL` | No | RPC endpoint (default: `https://api.mainnet-beta.solana.com`) |
-| `HELIUS_API_KEY` | No | Helius API key for enhanced RPC and webhooks |
+| `HELIUS_API_KEY` | No | Helius API key for enhanced RPC and webhooks (also triggers auto-enable) |
+| `BIRDEYE_API_KEY` | No | Birdeye API key for token price data |
+| `WALLET_SECRET_KEY` | No | Alternative wallet key format |
+| `WALLET_SECRET_SALT` | No | Salt for deterministic key derivation |
+| `WALLET_PUBLIC_KEY` | No | Alternative public key field |
+| `SLIPPAGE` | No | Default slippage for swaps (basis points) |
 
 ```json
 {

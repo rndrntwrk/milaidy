@@ -163,7 +163,7 @@ Restart is pluggable via `setRestartHandler()`:
 
 | Environment | Handler | Behavior |
 |-------------|---------|----------|
-| CLI (default) | Exit with code 75 | The runner script (`scripts/run-node.mjs`) catches exit code 75, optionally rebuilds if sources changed, and relaunches |
+| CLI (default) | Exit with code 75 | The runner script (`eliza/packages/app-core/scripts/run-node.mjs`) catches exit code 75, optionally rebuilds if sources changed, and relaunches |
 | Dev-server / API | Hot-swap | Stops the current runtime, reloads config from disk, creates a new `AgentRuntime`, and swaps the reference in the API server |
 | Electrobun | `AgentManager.restart()` | Uses the Electrobun app's native restart mechanism |
 
@@ -322,7 +322,7 @@ Local embeddings for memory search use `@elizaos/plugin-local-embedding` with co
 |---------|---------|-------------|
 | `embedding.model` | `nomic-embed-text-v1.5.Q5_K_M.gguf` | GGUF model file name |
 | `embedding.gpuLayers` | `auto` (Apple Silicon), `0` (others) | GPU acceleration layers |
-| `embedding.dimensions` | `384` (capped at boot) | Embedding vector dimensions |
+| `embedding.dimensions` | `768` | Embedding vector dimensions |
 | `embedding.contextSize` | Auto-detected | Maximum input token context |
 
 On macOS with Apple Silicon, Metal GPU acceleration is enabled by default with `mmap` disabled to prevent known compatibility issues.
@@ -509,11 +509,11 @@ Three sandbox modes control code execution isolation:
 
 | Mode | Description |
 |------|-------------|
-| `off` | No sandboxing (default) |
-| `light` | Audit logging of all fetch calls, token replacement tracking |
-| `standard` / `max` | Docker container isolation with configurable image, memory limits, CPU caps, and network restrictions |
+| `off` | No sandboxing |
+| `non-main` | Sandbox all sessions except the main session (default when enabled) |
+| `all` | Sandbox all sessions including main |
 
-Sandbox events are recorded to a `SandboxAuditLog` for security review.
+The sandbox uses Docker container isolation with configurable image, memory limits, CPU caps, and network restrictions. Sandbox events are recorded to a `SandboxAuditLog` for security review.
 
 ### Plugin Security
 
@@ -570,28 +570,31 @@ The monorepo uses Bun workspaces:
 
 ```
 milady/
-  packages/
-    app-core/       # Core runtime, CLI, API, services (source of truth)
-      src/
-        cli/        # Commander CLI commands
-        api/        # Dashboard API server
-        runtime/    # Agent loader, plugin system
-        config/     # Plugin auto-enable, config schemas
-        connectors/ # Connector integration code
-        services/   # Business logic (plugin installer, updater, etc.)
-    agent/          # Upstream elizaOS agent (core plugins, auto-enable maps)
-    plugin-wechat/  # WeChat connector plugin (@elizaos/plugin-wechat)
-    ui/             # Shared UI component library
-    shared/         # Shared utilities
+  eliza/                # elizaOS submodule (git submodule)
+    packages/
+      app-core/         # Core runtime, CLI, API, services (source of truth)
+        src/
+          cli/          # Commander CLI commands
+          api/          # Dashboard API server
+          runtime/      # Agent loader, plugin system
+          config/       # Plugin auto-enable, config schemas
+          connectors/   # Connector integration code
+          services/     # Business logic (plugin installer, updater, etc.)
+        scripts/        # Dev orchestrator, CLI runner, build helpers
+      agent/            # Upstream elizaOS agent (core plugins, auto-enable maps)
+      plugin-wechat/    # WeChat connector plugin (@elizaos/plugin-wechat)
+      ui/               # Shared UI component library
+      shared/           # Shared utilities
+    plugins/            # Plugin submodules (e.g., plugin-agent-orchestrator)
   apps/
-    app/            # React SPA frontend (Vite)
-      electrobun/   # Electrobun desktop wrapper
-    homepage/       # Marketing site
-  deploy/
-    cloud-agent-template/  # Cloud deployment template
-  docs/             # Mintlify documentation
-  scripts/          # Build, dev, and utility scripts
-  test/             # E2E and integration tests
+    app/                # React SPA frontend (Vite)
+      electrobun/       # Electrobun desktop wrapper
+    homepage/           # Marketing site
+  deploy/               # Deployment configs (Dockerfile, systemd, etc.)
+  docs/                 # Mintlify documentation
+  scripts/              # Repo-level build, dev, and utility scripts
+  skills/               # Default skills and workspace skill mirrors
+  test/                 # E2E and integration tests
 ```
 
 ### Build Pipeline
@@ -604,7 +607,7 @@ bun run build
 # → cd apps/app && bun run build (Vite frontend)
 ```
 
-The `scripts/rt.sh` helper resolves the best available runtime (bun or Node.js with tsx) for running TypeScript files directly during development.
+The `eliza/packages/app-core/scripts/rt.mjs` helper resolves the best available runtime (bun or Node.js with tsx) for running TypeScript files directly during development.
 
 ### Engine Requirements
 

@@ -56,11 +56,15 @@ export TLON_URL=YOUR_URL
 
 ## Environment Variables
 
-```bash
-export TLON_SHIP=YOUR_SHIP
-export TLON_CODE=YOUR_CODE
-export TLON_URL=YOUR_URL
-```
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `TLON_SHIP` | No | Urbit ship/node identifier |
+| `TLON_CODE` | No | Ship authentication/access code |
+| `TLON_URL` | No | Ship URL |
+| `TLON_ENABLED` | No | Enable or disable the plugin |
+| `TLON_DM_ALLOWLIST` | No | Comma-separated list of allowed DM user IDs |
+| `TLON_GROUP_CHANNELS` | No | Comma-separated list of group channel IDs |
+| `TLON_AUTO_DISCOVER_CHANNELS` | No | Automatically discover and join channels |
 
 ## Related
 

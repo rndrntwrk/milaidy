@@ -126,6 +126,62 @@ Pipes a raw JPEG/image frame buffer to FFmpeg. Used in `pipe` capture mode (desk
 
 **Errors:** `400` empty body; `503` stream not running.
 
+## Stream Source
+
+### Get Stream Source
+
+```
+GET /api/stream/source
+```
+
+Returns the current stream capture source configuration.
+
+**Response:**
+```json
+{
+  "source": {
+    "type": "stream-tab",
+    "url": "https://example.com"
+  }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `source.type` | string | Source type: `"stream-tab"`, `"screen"`, `"custom"`, etc. |
+| `source.url` | string\|undefined | Custom URL when applicable |
+
+### Set Stream Source
+
+```
+POST /api/stream/source
+```
+
+Switch the stream capture source.
+
+**Request body:**
+```json
+{
+  "sourceType": "stream-tab",
+  "customUrl": "https://example.com"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `sourceType` | string | no | Source type (default: `"stream-tab"`) |
+| `customUrl` | string | no | Custom URL for the source |
+
+**Response:**
+```json
+{
+  "ok": true,
+  "source": {
+    "type": "stream-tab"
+  }
+}
+```
+
 ## Audio
 
 ### Set Volume

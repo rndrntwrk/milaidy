@@ -11,7 +11,7 @@ Renderer code talks to the host through `window.__MILADY_ELECTROBUN_RPC__`:
 - `request.<method>(params)` for request/response calls into Bun
 - `onMessage(name, listener)` / `offMessage(name, listener)` for Bun push events
 
-There are **10 native modules** with **118+ request aliases and push messages** in total, covering agent lifecycle, desktop integration, network discovery, voice I/O, wake-word detection, screen capture, camera, canvas windows, geolocation, and system permissions.
+There are **10 native modules** with **140+ request aliases and push messages** in total, covering agent lifecycle, desktop integration, network discovery, voice I/O, wake-word detection, screen capture, camera, canvas windows, geolocation, and system permissions.
 
 ## RPC Alias Conventions
 

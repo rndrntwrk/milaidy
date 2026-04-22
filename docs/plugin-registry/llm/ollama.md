@@ -56,7 +56,14 @@ export OLLAMA_BASE_URL=http://localhost:11434
 
 | Environment Variable | Required | Description |
 |---------------------|----------|-------------|
-| `OLLAMA_BASE_URL` | Yes | Ollama server URL (default: `http://localhost:11434`) |
+| `OLLAMA_BASE_URL` | No | Ollama server URL; triggers auto-enable via `AUTH_PROVIDER_PLUGINS` (default: `http://localhost:11434`) |
+| `OLLAMA_API_ENDPOINT` | No | Plugin API endpoint (default: `http://localhost:11434/api`) |
+| `OLLAMA_SMALL_MODEL` | No | Small model slot (e.g., `llama3.2:3b`) |
+| `OLLAMA_MEDIUM_MODEL` | No | Medium model slot (e.g., `llama3.2`) |
+| `OLLAMA_LARGE_MODEL` | No | Large model slot (e.g., `llama3.3:70b`) |
+| `OLLAMA_EMBEDDING_MODEL` | No | Embedding model (e.g., `nomic-embed-text`) |
+
+> **Note:** The `envKey` in `plugins.json` is `null` for Ollama because it has no API key. Auto-enable is handled by the `AUTH_PROVIDER_PLUGINS` map which triggers on `OLLAMA_BASE_URL`.
 
 ### milady.json Example
 

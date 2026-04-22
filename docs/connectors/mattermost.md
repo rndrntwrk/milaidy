@@ -59,10 +59,18 @@ No environment variable is required to trigger auto-enable — it is driven enti
 
 When the connector is loaded, the runtime pushes the following secrets from your config into `process.env` for the plugin to consume:
 
-| Variable | Source | Description |
-|----------|--------|-------------|
-| `MATTERMOST_BOT_TOKEN` | `botToken` | Bot token from Mattermost System Console |
-| `MATTERMOST_BASE_URL` | `baseUrl` | Base URL for the Mattermost server |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `MATTERMOST_BOT_TOKEN` | Yes | Bot token from Mattermost System Console |
+| `MATTERMOST_SERVER_URL` | No | Base URL for the Mattermost server |
+| `MATTERMOST_ENABLED` | No | Enable or disable the plugin |
+| `MATTERMOST_TEAM_ID` | No | Team/tenant ID |
+| `MATTERMOST_DM_POLICY` | No | DM policy (e.g., `allow`, `deny`, `allowlist`) |
+| `MATTERMOST_GROUP_POLICY` | No | Group message policy (e.g., `allow`, `deny`) |
+| `MATTERMOST_ALLOWED_USERS` | No | Comma-separated list of allowed user IDs |
+| `MATTERMOST_ALLOWED_CHANNELS` | No | Comma-separated list of allowed channel IDs |
+| `MATTERMOST_REQUIRE_MENTION` | No | Only respond when mentioned (`true`/`false`) |
+| `MATTERMOST_IGNORE_BOT_MESSAGES` | No | Ignore messages from other bots (`true`/`false`) |
 
 ## Full Configuration Reference
 

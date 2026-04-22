@@ -16,10 +16,13 @@ Get the training service status.
 
 ```json
 {
-  "available": true,
-  "backend": "mlx",
   "runtimeAvailable": true,
-  "activeJobId": null
+  "runningJobs": 0,
+  "queuedJobs": 0,
+  "completedJobs": 0,
+  "failedJobs": 0,
+  "modelCount": 0,
+  "datasetCount": 0
 }
 ```
 
@@ -40,6 +43,8 @@ List trajectories available for training with pagination.
 
 ```json
 {
+  "available": true,
+  "total": 142,
   "trajectories": [
     {
       "id": "550e8400-e29b-41d4-a716-446655440000",
@@ -49,10 +54,7 @@ List trajectories available for training with pagination.
       "startTime": 1718000000000,
       "endTime": 1718000010000
     }
-  ],
-  "total": 142,
-  "offset": 0,
-  "limit": 100
+  ]
 }
 ```
 

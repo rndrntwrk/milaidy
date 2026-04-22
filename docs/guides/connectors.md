@@ -1,7 +1,7 @@
 ---
 title: "Platform Connectors"
 sidebarTitle: "Connectors"
-description: "Platform bridges for 27 messaging platforms — 18 auto-enabled from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Twitter, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, Lens, WeChat) plus 9 installable from the registry (Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
+description: "Platform bridges for messaging platforms — auto-enabled from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr) plus installable from the registry (Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
 ---
 
 Connectors are platform bridges that allow your agent to communicate across messaging platforms and social networks. Each connector handles authentication, message routing, session management, and platform-specific features.
@@ -117,7 +117,7 @@ Connectors are configured in the `connectors` section of `milady.json`. Common f
   "connectors": {
     "discord": {
       "enabled": true,
-      "token": "BOT_TOKEN",
+      "botToken": "BOT_TOKEN",
       "groupPolicy": "allowlist",
       "guilds": {
         "SERVER_ID": {
@@ -1135,7 +1135,7 @@ The `dmPolicy` options are:
 **General connector failures:**
 
 - Connector plugin not loading:
-  Check connector ID mapping in `packages/agent/src/config/plugin-auto-enable.ts` (in the `eliza` submodule), plugin availability, and `plugins.entries` overrides. The auto-enable layer maps connector config keys to plugin package names — a mismatch means the plugin is silently skipped.
+  Check connector ID mapping in `eliza/packages/agent/src/config/plugin-auto-enable.ts`, plugin availability, and `plugins.entries` overrides. The auto-enable layer maps connector config keys to plugin package names — a mismatch means the plugin is silently skipped.
 - Auth succeeds but no messages arrive:
   Check platform webhook/socket settings and policy gates (`dmPolicy`, `groupPolicy`). For webhook-based connectors, confirm the callback URL is publicly reachable.
 - Misrouted connector secrets:

@@ -8,6 +8,8 @@ The Mistral plugin connects Milady agents to Mistral AI models, offering both op
 
 **Package:** `@elizaos/plugin-mistral`
 
+> **Note:** This plugin is an upstream elizaOS provider and is not included in the bundled `plugins.json` registry. It auto-enables when `MISTRAL_API_KEY` is set and is installable from the remote elizaOS plugin registry.
+
 ## Installation
 
 ```bash

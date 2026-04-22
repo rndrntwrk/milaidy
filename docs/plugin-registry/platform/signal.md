@@ -73,6 +73,15 @@ signal-cli -a +1234567890 daemon --http localhost:8080
 - **Stories** — Optional story message processing
 - **Multi-account** — Supports multiple Signal accounts via `accounts` map
 
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `SIGNAL_ACCOUNT_NUMBER` | Yes | Signal phone number in E.164 format (e.g., `+1234567890`) |
+| `SIGNAL_HTTP_URL` | No | Signal CLI REST API URL (e.g., `http://localhost:8080`) |
+| `SIGNAL_CLI_PATH` | No | Path to signal-cli executable |
+| `SIGNAL_SHOULD_IGNORE_GROUP_MESSAGES` | No | If `true`, only respond to direct messages |
+
 ## Auto-Enable
 
 The plugin auto-enables when the `connectors.signal` block contains an `account`:

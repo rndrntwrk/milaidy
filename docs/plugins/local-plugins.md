@@ -143,7 +143,7 @@ cat > package.json << 'EOF'
     "dev": "tsc --watch"
   },
   "dependencies": {
-    "@elizaos/core": "^2.0.0"
+    "@elizaos/core": "alpha"
   }
 }
 EOF

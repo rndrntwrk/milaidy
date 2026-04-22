@@ -65,7 +65,7 @@ You can also enable and configure autonomous mode programmatically using the Mil
 
 <CodeGroup>
 ```bash curl
-curl -X POST https://api.milady.ai/agents/autonomous-config \
+curl -X POST http://localhost:2138/api/agents/autonomous-config \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -318,7 +318,7 @@ You can disable autonomous mode at any time through the dashboard or API:
 
 <CodeGroup>
 ```bash curl
-curl -X POST https://api.milady.ai/agents/autonomous-config/disable \
+curl -X POST http://localhost:2138/api/agents/autonomous-config/disable \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{

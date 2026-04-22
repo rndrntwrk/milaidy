@@ -36,11 +36,15 @@ The Tlon connector is an elizaOS plugin that bridges your agent to the Urbit net
 
 ## Environment Variables
 
-| Variable | Description |
-|----------|-------------|
-| `TLON_SHIP` | Urbit ship name |
-| `TLON_CODE` | Ship access code |
-| `TLON_URL` | Ship URL |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `TLON_SHIP` | No | Urbit ship/node identifier |
+| `TLON_CODE` | No | Ship authentication/access code |
+| `TLON_URL` | No | Ship URL |
+| `TLON_ENABLED` | No | Enable or disable the plugin |
+| `TLON_DM_ALLOWLIST` | No | Comma-separated list of allowed DM user IDs |
+| `TLON_GROUP_CHANNELS` | No | Comma-separated list of group channel IDs |
+| `TLON_AUTO_DISCOVER_CHANNELS` | No | Automatically discover and join channels (`true`/`false`) |
 
 ## Features
 

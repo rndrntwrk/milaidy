@@ -24,7 +24,7 @@ A plugin is a self-contained module that registers one or more of:
 </Card>
 
 <Card title="Model Providers" icon="brain" href="/plugin-registry/llm/openai">
-  LLM integrations for OpenAI, Anthropic, Google Gemini, Google Antigravity, Groq, Ollama, OpenRouter, DeepSeek, xAI, Mistral, Cohere, Together, Qwen, Minimax, Perplexity, Zai, and Vercel AI Gateway. Eliza Cloud auto-enables separately via `ELIZAOS_CLOUD_API_KEY`.
+  LLM integrations for OpenAI, Anthropic, Google Gemini, Groq, Ollama, OpenRouter, xAI, and Vercel AI Gateway are bundled in the Milady plugin registry (`plugins.json`). Additional upstream elizaOS providers — DeepSeek, Together, Mistral, Cohere, Perplexity, Google Antigravity, Qwen, Minimax, and Zai — auto-enable via env vars and are installable from the remote registry. Eliza Cloud auto-enables separately via `ELIZAOS_CLOUD_API_KEY`.
 </Card>
 
 <Card title="Platform Connectors" icon="plug" href="/plugin-registry/platform/discord">

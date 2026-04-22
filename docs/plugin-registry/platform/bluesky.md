@@ -28,38 +28,38 @@ milady plugins install bluesky
 {
   "connectors": {
     "bluesky": {
-      "username": "YOUR_USERNAME",
-      "password": "YOUR_PASSWORD",
-      "handle": "YOUR_HANDLE"
+      "enabled": true
     }
   }
 }
 ```
 
-Or via environment variables:
+Set credentials via environment variables:
 
 ```bash
-export BLUESKY_USERNAME=YOUR_USERNAME
-export BLUESKY_PASSWORD=YOUR_PASSWORD
-export BLUESKY_HANDLE=YOUR_HANDLE
+export BLUESKY_HANDLE=yourname.bsky.social
+export BLUESKY_PASSWORD=your-app-password
 ```
 
 ## Configuration
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| `username` | Yes | Bluesky account username |
-| `password` | Yes | Bluesky account password or app password |
-| `handle` | Yes | Bluesky handle (e.g., `yourname.bsky.social`) |
-| `enabled` | No | Set `false` to disable (default: `true`) |
-
-## Environment Variables
-
-```bash
-export BLUESKY_USERNAME=YOUR_USERNAME
-export BLUESKY_PASSWORD=YOUR_PASSWORD
-export BLUESKY_HANDLE=YOUR_HANDLE
-```
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `BLUESKY_HANDLE` | Yes | Bluesky handle (e.g., `yourname.bsky.social`) |
+| `BLUESKY_PASSWORD` | Yes | App password (not your main password) |
+| `BLUESKY_ENABLED` | No | Enable or disable the plugin |
+| `BLUESKY_SERVICE` | No | BlueSky service URL (PDS instance) |
+| `BLUESKY_DRY_RUN` | No | Simulate operations without posting |
+| `BLUESKY_ENABLE_DMS` | No | Enable direct message processing |
+| `BLUESKY_ENABLE_POSTING` | No | Enable or disable posting |
+| `BLUESKY_POLL_INTERVAL` | No | Polling interval in seconds |
+| `BLUESKY_ACTION_INTERVAL` | No | Seconds between action-processing cycles |
+| `BLUESKY_MAX_POST_LENGTH` | No | Maximum characters per post |
+| `BLUESKY_POST_IMMEDIATELY` | No | Publish immediately instead of scheduling |
+| `BLUESKY_POST_INTERVAL_MIN` | No | Minimum seconds between automated posts |
+| `BLUESKY_POST_INTERVAL_MAX` | No | Maximum seconds between automated posts |
+| `BLUESKY_MAX_ACTIONS_PROCESSING` | No | Maximum actions per batch |
+| `BLUESKY_ENABLE_ACTION_PROCESSING` | No | Enable automated action processing |
 
 ## Related
 

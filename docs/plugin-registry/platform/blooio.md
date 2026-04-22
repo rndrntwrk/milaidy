@@ -45,10 +45,23 @@ export BLOOIO_WEBHOOK_URL=https://your-domain.com/blooio/webhook
 
 The plugin auto-enables when `apiKey`, `token`, or `botToken` is present in the connector config.
 
-## Configuration
+## Environment Variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
+| `BLOOIO_API_KEY` | Yes | Blooio service API key |
+| `BLOOIO_BASE_URL` | No | Base URL for API requests |
+| `BLOOIO_FROM_NUMBER` | No | Sender phone number |
+| `BLOOIO_WEBHOOK_URL` | No | Webhook callback URL for receiving inbound messages |
+| `BLOOIO_WEBHOOK_PATH` | No | Webhook endpoint path |
+| `BLOOIO_WEBHOOK_PORT` | No | Webhook listener port |
+| `BLOOIO_WEBHOOK_SECRET` | No | Secret key for webhook signature verification |
+| `BLOOIO_SIGNATURE_TOLERANCE_SEC` | No | Tolerance window in seconds for signature validation |
+
+## Configuration
+
+| Field | Required | Description |
+|-------|----------|-------------|
 | `apiKey` | Yes | Blooio platform API key |
 | `webhookUrl` | No | Public URL for receiving inbound messages |
 

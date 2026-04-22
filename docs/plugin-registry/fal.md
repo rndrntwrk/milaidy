@@ -8,6 +8,8 @@ The FAL plugin connects Milady agents to [FAL.ai](https://fal.ai)'s media genera
 
 **Package:** `@elizaos/plugin-fal`
 
+> **Note:** This plugin is an upstream elizaOS feature plugin and is not included in the bundled `plugins.json` registry. It is installable from the remote elizaOS plugin registry and auto-enables via the `features.fal` config flag.
+
 ## Installation
 
 ```bash

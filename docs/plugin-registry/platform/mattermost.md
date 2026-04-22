@@ -42,7 +42,7 @@ Or via environment variables:
 
 ```bash
 export MATTERMOST_BOT_TOKEN=YOUR_BOT_TOKEN
-export MATTERMOST_BASE_URL=https://chat.example.com
+export MATTERMOST_SERVER_URL=https://chat.example.com
 ```
 
 ## Configuration
@@ -65,6 +65,21 @@ export MATTERMOST_BASE_URL=https://chat.example.com
 - **Mention filtering** — Optionally require @mentions before responding
 - **Command prefixes** — Custom prefix triggers for agent responses
 - **Self-hosted** — Works with any Mattermost server deployment
+
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `MATTERMOST_BOT_TOKEN` | Yes | Bot token from Mattermost System Console |
+| `MATTERMOST_SERVER_URL` | No | Base URL for the Mattermost server |
+| `MATTERMOST_ENABLED` | No | Enable or disable the plugin |
+| `MATTERMOST_TEAM_ID` | No | Team/tenant ID |
+| `MATTERMOST_DM_POLICY` | No | DM policy (e.g., `allow`, `deny`, `allowlist`) |
+| `MATTERMOST_GROUP_POLICY` | No | Group message policy |
+| `MATTERMOST_ALLOWED_USERS` | No | Comma-separated allowed user IDs |
+| `MATTERMOST_ALLOWED_CHANNELS` | No | Comma-separated allowed channel IDs |
+| `MATTERMOST_REQUIRE_MENTION` | No | Only respond when mentioned |
+| `MATTERMOST_IGNORE_BOT_MESSAGES` | No | Ignore messages from other bots |
 
 ## Auto-Enable
 

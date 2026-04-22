@@ -26,10 +26,18 @@ export AI_GATEWAY_API_KEY=your-gateway-key
 
 | Environment Variable | Required | Description |
 |---------------------|----------|-------------|
-| `AI_GATEWAY_API_KEY` | Yes* | Vercel AI Gateway API key |
-| `AIGATEWAY_API_KEY` | Yes* | Alias for the gateway API key |
+| `AIGATEWAY_API_KEY` | Yes* | Vercel AI Gateway API key (primary `envKey` in `plugins.json`) |
+| `AI_GATEWAY_API_KEY` | Yes* | Alias (also triggers auto-enable) |
+| `VERCEL_OIDC_TOKEN` | No | OIDC token for Vercel-hosted deployments |
+| `AI_GATEWAY_BASE_URL` | No | Gateway endpoint URL |
+| `AI_GATEWAY_SMALL_MODEL` | No | Small model ID |
+| `AI_GATEWAY_LARGE_MODEL` | No | Large model ID |
+| `AI_GATEWAY_EMBEDDING_MODEL` | No | Embedding model ID |
+| `AI_GATEWAY_EMBEDDING_DIMENSIONS` | No | Embedding dimensions |
+| `AI_GATEWAY_IMAGE_MODEL` | No | Image generation model ID |
+| `AI_GATEWAY_TIMEOUT_MS` | No | Request timeout in ms (default: 30000) |
 
-\* Either variable activates the plugin.
+\* Either `AIGATEWAY_API_KEY` or `AI_GATEWAY_API_KEY` activates the plugin.
 
 ### milady.json Example
 

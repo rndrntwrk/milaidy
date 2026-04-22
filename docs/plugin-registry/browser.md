@@ -38,21 +38,24 @@ export MILADY_FEATURE_BROWSER=true
 
 ## Configuration
 
-| Setting | Description | Default |
-|---------|-------------|---------|
-| `browser.headless` | Run browser in headless mode | `true` |
-| `browser.timeout` | Navigation timeout in milliseconds | `30000` |
-| `browser.userAgent` | Custom user agent string | Playwright default |
-| `browser.proxy` | Proxy server URL | — |
-| `browser.maxPages` | Maximum concurrent pages | `3` |
+### Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `OPENAI_API_KEY` | Yes | Required for browser content extraction (used as the plugin's activation key in `plugins.json`) |
+| `ANTHROPIC_API_KEY` | No | Alternative AI provider for content extraction |
+| `BROWSER_HEADLESS` | No | Run browser in headless mode (default: `true`) |
+| `CAPSOLVER_API_KEY` | No | CAPSolver API key for CAPTCHA solving |
+| `BROWSERBASE_API_KEY` | No | BrowserBase API key for cloud browser sessions |
+| `BROWSERBASE_PROJECT_ID` | No | BrowserBase project identifier |
+
+### Feature Config
 
 ```json
 {
   "features": {
     "browser": {
-      "enabled": true,
-      "headless": true,
-      "timeout": 30000
+      "enabled": true
     }
   }
 }

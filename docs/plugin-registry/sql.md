@@ -6,7 +6,7 @@ description: "Database layer — SQLite adapter, schema, migrations, query inter
 
 The SQL plugin is the database layer for Milady agents. It provides persistent storage for conversation memory, entity data, knowledge embeddings, and agent state.
 
-**Package:** `@elizaos/plugin-sql` (core plugin — always loaded)
+**Package:** `@elizaos/plugin-sql` (core plugin — always loaded at runtime, though not listed in the bundled `plugins.json` registry)
 
 ## Overview
 
@@ -141,7 +141,7 @@ await runtime.setComponent(userId, "userPreferences", {
 | `database.type` | `sqlite` or `postgres` | `sqlite` |
 | `database.url` | PostgreSQL connection URL | — |
 | `database.path` | Custom SQLite file path | Auto-resolved |
-| `database.vectorDimensions` | Embedding vector size | `768` |
+| `database.vectorDimensions` | Embedding vector size | `384` (Milady caps `EMBEDDING_DIMENSION` to 384 at boot) |
 
 ## Related
 

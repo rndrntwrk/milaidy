@@ -37,17 +37,39 @@ The Twilio connector is an elizaOS plugin that bridges your agent to Twilio's co
 
 ## Environment Variables
 
-| Variable | Description |
-|----------|-------------|
-| `TWILIO_ACCOUNT_SID` | Twilio Account SID |
-| `TWILIO_AUTH_TOKEN` | Twilio Auth Token |
-| `TWILIO_PHONE_NUMBER` | Twilio phone number for sending/receiving |
+### SMS / Core
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `TWILIO_ACCOUNT_SID` | Yes | Twilio Account SID |
+| `TWILIO_AUTH_TOKEN` | Yes | Twilio Auth Token |
+| `TWILIO_PHONE_NUMBER` | No | Twilio phone number for sending/receiving |
+| `TWILIO_WEBHOOK_URL` | No | Webhook URL for receiving inbound messages |
+| `TWILIO_WEBHOOK_PORT` | No | Webhook listener port |
+
+### Voice Calls
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `VOICE_CALL_ENABLED` | No | Enable or disable voice call support |
+| `VOICE_CALL_PROVIDER` | No | Voice call provider selection |
+| `VOICE_CALL_TO_NUMBER` | No | Default outbound phone number |
+| `VOICE_CALL_FROM_NUMBER` | No | Caller ID phone number |
+| `VOICE_CALL_ALLOW_FROM` | No | Comma-separated list of allowed inbound caller numbers |
+| `VOICE_CALL_PUBLIC_URL` | No | Public URL for voice call webhooks |
+| `VOICE_CALL_WEBHOOK_PATH` | No | Webhook endpoint path for voice events |
+| `VOICE_CALL_WEBHOOK_PORT` | No | Port for voice call webhook listener |
+| `VOICE_CALL_INBOUND_POLICY` | No | Inbound call acceptance policy |
+| `VOICE_CALL_INBOUND_GREETING` | No | Greeting message for inbound calls |
+| `VOICE_CALL_MAX_CONCURRENT_CALLS` | No | Maximum number of concurrent calls |
+| `VOICE_CALL_MAX_DURATION_SECONDS` | No | Maximum call duration in seconds |
 
 ## Features
 
 - SMS messaging (send and receive)
-- Voice call capabilities
+- Voice call capabilities (inbound and outbound)
 - Webhook-based inbound message handling
+- Configurable call policies and limits
 
 ## Related
 

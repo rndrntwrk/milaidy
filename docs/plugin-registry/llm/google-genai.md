@@ -28,10 +28,14 @@ export GOOGLE_GENERATIVE_AI_API_KEY=AIza...
 
 | Environment Variable | Required | Description |
 |---------------------|----------|-------------|
-| `GOOGLE_API_KEY` | Yes* | Google AI Studio API key |
-| `GOOGLE_GENERATIVE_AI_API_KEY` | Yes* | Alias for `GOOGLE_API_KEY` |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | Yes* | Google AI Studio API key (primary `envKey` in `plugins.json`) |
+| `GOOGLE_API_KEY` | Yes* | Alias (also triggers auto-enable) |
+| `GOOGLE_SMALL_MODEL` | No | Small model slot (e.g., `gemini-2.5-flash`) |
+| `GOOGLE_LARGE_MODEL` | No | Large model slot (e.g., `gemini-2.5-pro`) |
+| `GOOGLE_EMBEDDING_MODEL` | No | Embedding model (e.g., `text-embedding-004`) |
+| `GOOGLE_IMAGE_MODEL` | No | Image generation model (e.g., `imagen-3.0-generate-002`) |
 
-*Either form is accepted.
+*Either `GOOGLE_GENERATIVE_AI_API_KEY` or `GOOGLE_API_KEY` is accepted.
 
 Get your API key from [aistudio.google.com](https://aistudio.google.com).
 

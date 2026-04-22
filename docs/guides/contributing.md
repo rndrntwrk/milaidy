@@ -89,70 +89,42 @@ bun run dev
 
 ## Monorepo Structure
 
-Milady is a monorepo managed with Turborepo and Bun workspaces.
+Milady is a monorepo managed with Bun workspaces. The core elizaOS runtime lives in the `eliza/` git submodule.
 
 ```
 milady/
-├── packages/                # Shared packages
-│   ├── typescript/          # @elizaos/core — Core TypeScript SDK
-│   ├── elizaos/             # CLI tool (milady command)
-│   ├── skills/              # Skills system and bundled skills
-│   ├── docs/                # Documentation site (Mintlify)
-│   ├── schemas/             # Protobuf schemas
-│   └── tui/                 # Terminal UI (disabled)
-├── plugins/                 # Official plugins (100+)
-│   ├── plugin-anthropic/    # Anthropic model provider
-│   ├── plugin-telegram/     # Telegram connector
-│   ├── plugin-discord/      # Discord connector
-│   └── ...
+├── eliza/                       # elizaOS submodule (core runtime)
+│   ├── packages/
+│   │   ├── app-core/            # Main application package (CLI, API, runtime, config)
+│   │   ├── agent/               # Upstream elizaOS agent (core plugins, auto-enable maps)
+│   │   └── ...                  # Other @elizaos/* packages
+│   └── plugins/                 # Official plugins (submodule checkouts)
+│       ├── plugin-agent-orchestrator/
+│       └── ...
 ├── apps/
-│   ├── app/                 # Desktop/mobile app (Capacitor + React)
-│   └── ...                  # No shipped chrome-extension app in this release checkout
-├── src/                     # Milady runtime
-│   ├── runtime/             # elizaOS runtime bootstrap
-│   ├── plugins/             # Built-in Milady plugins
-│   ├── config/              # Configuration loading
-│   ├── services/            # Registry client, plugin manager
-│   └── api/                 # REST API server
-├── skills/                  # Workspace skills
-├── docs/                    # Documentation (this site)
-├── scripts/                 # Build and utility scripts
-├── test/                    # Test setup, helpers, e2e
-├── AGENTS.md                # Repository guidelines
-├── plugins.json             # Plugin registry manifest
-└── tsdown.config.ts         # Build config
-```
-
-### Turbo Build System
-
-Turborepo orchestrates builds across all packages with dependency-aware caching:
-
-```bash
-# Build everything (with caching)
-turbo run build
-
-# Build a specific package
-turbo run build --filter=@elizaos/core
-
-# Build a package and all its dependencies
-turbo run build --filter=@elizaos/plugin-telegram...
-
-# Run tests across all packages
-turbo run test
-
-# Lint all packages
-turbo run lint
+│   ├── app/                     # Desktop/mobile UI (Vite + React)
+│   │   └── electrobun/          # Electrobun desktop shell
+│   ├── browser-bridge/          # Browser bridge extension
+│   └── homepage/                # Marketing site
+├─��� skills/                      # Workspace skills (mirrors from @elizaos/skills)
+├── docs/                        # Documentation (this site)
+├── scripts/                     # Build, dev, and release tooling
+├── test/                        # Test setup, helpers, e2e
+├── CLAUDE.md                    # Repository conventions and architecture
+├── milady.mjs                   # npm bin entry
+└── tsdown.config.ts             # Build config
 ```
 
 ### Key Entry Points
 
 | File | Purpose |
 |------|---------|
-| `src/entry.ts` | CLI entry point |
-| `src/index.ts` | Library exports |
-| `src/runtime/eliza.ts` | elizaOS runtime initialization |
-| `src/runtime/milady-plugin.ts` | Main Milady plugin |
 | `milady.mjs` | npm bin entry |
+| `eliza/packages/app-core/src/entry.ts` | CLI process bootstrap |
+| `eliza/packages/app-core/src/cli/` | Commander CLI (milady command) |
+| `eliza/packages/app-core/src/runtime/eliza.ts` | Agent loader and runtime boot |
+| `eliza/packages/app-core/src/api/` | Dashboard API |
+| `eliza/packages/app-core/src/config/` | Plugin auto-enable, config schemas |
 
 ---
 
@@ -212,17 +184,6 @@ bun run test:e2e
 
 # Live tests (requires API keys)
 MILADY_LIVE_TEST=1 bun run test:live
-
-# Docker-based tests
-bun run test:docker:all
-```
-
-### Runtime fallback for Bun crashes
-
-If Bun segfaults on your platform during long-running sessions, run Milady on Node runtime:
-
-```bash
-MILADY_RUNTIME=node bun run milady start
 ```
 
 ### Test File Conventions
@@ -234,14 +195,14 @@ MILADY_RUNTIME=node bun run milady start
 | `*.live.test.ts` | Live API tests |
 | `test/**/*.test.ts` | Integration tests |
 
-### `packages/app-core` in the root Vitest config
+### `eliza/packages/app-core` in the root Vitest config
 
 The repo root **`vitest.config.ts`** (used by **`bun run test`** → unit shard) includes:
 
-- **`packages/app-core/src/**/*.test.ts`** and **`packages/app-core/src/**/*.test.tsx`** — colocated tests, including TSX, without listing each file.
-- **`packages/app-core/test/**/*.test.ts`** and **`.../test/**/*.test.tsx`** — shared harness tests (e.g. `test/state`, `test/runtime`).
+- **`eliza/packages/app-core/src/**/*.test.ts`** and **`eliza/packages/app-core/src/**/*.test.tsx`** — colocated tests, including TSX, without listing each file.
+- **`eliza/packages/app-core/test/**/*.test.ts`** and **`.../test/**/*.test.tsx`** — shared harness tests (e.g. `test/state`, `test/runtime`).
 
-**Why:** those directories were previously omitted, so new suites never ran in CI. **`packages/app-core/test/**/*.e2e.test.ts(x)`** is excluded from this job so e2e stays on **`test/vitest/e2e.config.ts`**. **`test/vitest/unit.config.ts`** still omits **`packages/app-core/test/app/**`** (heavy renderer harness) from the coverage-focused unit pass—**why:** those are run in targeted app workspaces or separate jobs.
+**Why:** those directories were previously omitted, so new suites never ran in CI. **`eliza/packages/app-core/test/**/*.e2e.test.ts(x)`** is excluded from this job so e2e stays on **`test/vitest/e2e.config.ts`**. **`test/vitest/unit.config.ts`** still omits **`eliza/packages/app-core/test/app/**`** (heavy renderer harness) from the coverage-focused unit pass—**why:** those are run in targeted app workspaces or separate jobs.
 
 ---
 
@@ -430,10 +391,9 @@ Claude Code Review is enabled for automated initial feedback.
 
 Join the community Discord for help, discussions, and announcements:
 
-**[discord.gg/ai16z](https://discord.gg/ai16z)**
+**[discord.gg/milady](https://discord.gg/milady)**
 
 Channels:
-- `#milady` — Milady-specific discussion
 - `#dev` — Development help
 - `#showcase` — Share what you've built
 
