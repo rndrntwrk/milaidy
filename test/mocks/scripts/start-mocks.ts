@@ -716,7 +716,9 @@ export async function startMocks(opts?: {
     baseUrls,
     envVars: envVarsFor(envs, baseUrls),
     requestLedger: () =>
-      servers.flatMap((server) => server.requests.map((entry) => ({ ...entry }))),
+      servers.flatMap((server) =>
+        server.requests.map((entry) => ({ ...entry })),
+      ),
     clearRequestLedger: () => {
       for (const server of servers) {
         server.clearRequests();

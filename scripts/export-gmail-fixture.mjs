@@ -63,7 +63,9 @@ function scrubHeader(header, emailMap) {
 
 function scrubMessage(message, index, emailMap) {
   const headers = Array.isArray(message.payload?.headers)
-    ? message.payload.headers.map((header) => scrubHeader(header, emailMap)).filter(Boolean)
+    ? message.payload.headers
+        .map((header) => scrubHeader(header, emailMap))
+        .filter(Boolean)
     : [];
   return {
     id: `fixture-msg-${index + 1}`,
@@ -105,7 +107,9 @@ async function gmailJson(pathname, token) {
     },
   });
   if (!response.ok) {
-    throw new Error(`Gmail read failed ${response.status}: ${await response.text()}`);
+    throw new Error(
+      `Gmail read failed ${response.status}: ${await response.text()}`,
+    );
   }
   return await response.json();
 }
@@ -113,7 +117,9 @@ async function gmailJson(pathname, token) {
 async function main() {
   const token = process.env.GOOGLE_ACCESS_TOKEN?.trim();
   if (!token) {
-    throw new Error("GOOGLE_ACCESS_TOKEN is required for read-only Gmail export.");
+    throw new Error(
+      "GOOGLE_ACCESS_TOKEN is required for read-only Gmail export.",
+    );
   }
   const out = readFlag("--out", "test/mocks/fixtures/gmail.scrubbed.json");
   const rawOut = readFlag("--raw-out");
@@ -142,7 +148,10 @@ async function main() {
   }
   if (rawOut && process.env.MILADY_GMAIL_EXPORT_WRITE_RAW === "1") {
     await fs.mkdir(path.dirname(rawOut), { recursive: true });
-    await fs.writeFile(rawOut, `${JSON.stringify({ messages: rawMessages }, null, 2)}\n`);
+    await fs.writeFile(
+      rawOut,
+      `${JSON.stringify({ messages: rawMessages }, null, 2)}\n`,
+    );
   }
   const emailMap = new Map();
   const scrubbed = {
