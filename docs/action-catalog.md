@@ -1278,7 +1278,7 @@ _Generated on: 2026-04-16. Total actions: 151._
 ### SEARCH_PLUGINS
 
 - **File:** `eliza/packages/typescript/src/features/plugin-manager/actions/searchPluginAction.ts`
-- **Description:** Search for plugins in the ElizaOS registry by functionality, features, and natural language descriptions.
+- **Description:** Search for plugins in the elizaOS registry by functionality, features, and natural language descriptions.
 - **Validate:** ✅ yes
 - **Handler:** ✅ yes
 - **Examples:** ✅ yes
