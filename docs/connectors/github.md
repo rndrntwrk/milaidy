@@ -16,7 +16,7 @@ The GitHub connector is an elizaOS plugin that bridges your agent to the GitHub 
 |-------|-------|
 | Package | `@elizaos/plugin-github` |
 | Config key | `connectors.github` |
-| Install | `milady plugins install github` |
+| Install | `milady plugins install @elizaos/plugin-github` |
 
 ## Setup Requirements
 

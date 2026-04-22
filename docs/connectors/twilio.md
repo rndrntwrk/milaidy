@@ -16,7 +16,7 @@ The Twilio connector is an elizaOS plugin that bridges your agent to Twilio's co
 |-------|-------|
 | Package | `@elizaos/plugin-twilio` |
 | Config key | `connectors.twilio` |
-| Install | `milady plugins install twilio` |
+| Install | `milady plugins install @elizaos/plugin-twilio` |
 
 ## Setup Requirements
 
