@@ -623,59 +623,6 @@ Connects to iMessage and SMS messaging via the Blooio service with signed webhoo
 
 ---
 
-## WeChat
-
-Connects to WeChat via a third-party proxy service using personal account login.
-
-### Setup Requirements
-
-1. Obtain an API key from the WeChat proxy service
-2. Configure the proxy URL and webhook port
-3. Scan QR code displayed in terminal on first startup
-
-### Privacy Notice
-
-The WeChat connector depends on a user-supplied proxy service. That proxy receives
-your connector API key plus the message payloads and metadata needed to relay
-incoming and outgoing WeChat traffic. Only point `proxyUrl` at infrastructure you
-operate yourself or explicitly trust for that message flow.
-
-### Key Configuration
-
-```json
-{
-  "connectors": {
-    "wechat": {
-      "apiKey": "<key>",
-      "proxyUrl": "https://...",
-      "webhookPort": 18790,
-      "deviceType": "ipad"
-    }
-  }
-}
-```
-
-| Field | Description |
-|-------|------------|
-| `apiKey` | **Required** -- Proxy service API key |
-| `proxyUrl` | **Required** -- Proxy service URL |
-| `webhookPort` | Webhook listener port (default: 18790) |
-| `deviceType` | Device emulation type: `ipad` or `mac` (default: `ipad`) |
-
-**Environment variables:** `WECHAT_API_KEY`
-
-**Multi-account:** Supported via `accounts` map (same pattern as WhatsApp).
-
-### Features
-
-- Text messaging in DMs (enabled by default)
-- Group chat support (enable with `features.groups: true`)
-- Image send/receive (enable with `features.images: true`)
-- QR code login with automatic session persistence
-- Multi-account support via accounts map
-
----
-
 ## Matrix
 
 ### Setup Requirements
@@ -987,32 +934,6 @@ Gmail Watch is enabled via the `features.gmailWatch` flag or environment variabl
 - Group chat participation
 
 **Note:** This connector is available from the plugin registry. Install it with `milady plugins install @elizaos/plugin-tlon`.
-
----
-
-## Lens
-
-**Plugin:** `@elizaos/plugin-lens`
-
-```json5
-{
-  connectors: {
-    lens: {
-      apiKey: "<LENS_API_KEY>",
-    }
-  }
-}
-```
-
-| Env Variable | Config Path |
-|-------------|-------------|
-| `LENS_API_KEY` | `connectors.lens.apiKey` |
-
-**Auto-enable triggers:** `apiKey`, `token`, or `botToken`.
-
-**Features:**
-- Lens Protocol social interactions
-- Post publishing and engagement
 
 ---
 
