@@ -88,9 +88,9 @@ Connectors are configured in the `connectors` section of `milady.json`. Common f
 | Field | Type | Description |
 |-------|------|-------------|
 | `enabled` | boolean | Enable or disable the connector |
-| `dmPolicy` | string | DM acceptance: `"pairing"` (default), `"open"`, or `"closed"` |
-| `allowFrom` | string[] | Allowlist of user IDs (required when `dmPolicy: "open"`) |
-| `groupPolicy` | string | Group message policy: `"allowlist"` (default) or `"open"` |
+| `dmPolicy` | string | DM acceptance: `"pairing"` (default), `"allowlist"`, `"open"`, or `"disabled"` |
+| `allowFrom` | string[] | Allowlist of user IDs (required when `dmPolicy: "open"`, must include `"*"`) |
+| `groupPolicy` | string | Group message policy: `"allowlist"` (default), `"open"`, or `"disabled"` |
 | `groupAllowFrom` | string[] | Allowlist of group IDs |
 | `historyLimit` | number | Max messages to load from conversation history |
 | `dmHistoryLimit` | number | Max messages for DM history |
@@ -593,7 +593,7 @@ Connects to iMessage and SMS messaging via the Blooio service with signed webhoo
 }
 ```
 
-**Environment variables:** `BLUESKY_ENABLED`, `BLUESKY_DRY_RUN`, `BLUESKY_USERNAME`, `BLUESKY_PASSWORD`, `BLUESKY_HANDLE`
+**Environment variables:** `BLUESKY_HANDLE`, `BLUESKY_PASSWORD`, `BLUESKY_ENABLED`, `BLUESKY_DRY_RUN`, `BLUESKY_SERVICE`, `BLUESKY_ENABLE_DMS`
 
 ### Features
 
@@ -624,7 +624,7 @@ Connects to iMessage and SMS messaging via the Blooio service with signed webhoo
 }
 ```
 
-**Environment variables:** `INSTAGRAM_USERNAME`, `INSTAGRAM_PASSWORD`, `INSTAGRAM_DRY_RUN`, `INSTAGRAM_POLL_INTERVAL`, `INSTAGRAM_POST_INTERVAL_MIN`, `INSTAGRAM_POST_INTERVAL_MAX`
+**Environment variables:** `INSTAGRAM_USERNAME`, `INSTAGRAM_PASSWORD`, `INSTAGRAM_PROXY`, `INSTAGRAM_VERIFICATION_CODE`
 
 ### Features
 
@@ -691,7 +691,7 @@ Connects to iMessage and SMS messaging via the Blooio service with signed webhoo
 }
 ```
 
-**Environment variables:** `MATTERMOST_BOT_TOKEN`, `MATTERMOST_BASE_URL`
+**Environment variables:** `MATTERMOST_BOT_TOKEN`, `MATTERMOST_SERVER_URL`
 
 ### Features
 
@@ -885,7 +885,7 @@ operate yourself or explicitly trust for that message flow.
 }
 ```
 
-**Environment variables:** `LINE_CHANNEL_ACCESS_TOKEN`, `LINE_CHANNEL_SECRET`, `LINE_CUSTOM_GREETING`
+**Environment variables:** `LINE_CHANNEL_ACCESS_TOKEN`, `LINE_CHANNEL_SECRET`
 
 ### Features
 
@@ -916,7 +916,7 @@ operate yourself or explicitly trust for that message flow.
 }
 ```
 
-**Environment variables:** `ZALO_ACCESS_TOKEN`, `ZALO_REFRESH_TOKEN`, `ZALO_APP_ID`, `ZALO_APP_SECRET`
+**Environment variables:** `ZALO_ACCESS_TOKEN`, `ZALO_REFRESH_TOKEN`, `ZALO_APP_ID`, `ZALO_SECRET_KEY`
 
 ### Features
 
@@ -1153,8 +1153,9 @@ The `dmPolicy` options are:
 | Policy | Behavior |
 |--------|----------|
 | `pairing` | Default. Agent responds after a pairing/onboarding flow. |
+| `allowlist` | Agent responds only to users in the `allowFrom` list. |
 | `open` | Agent responds to all DMs. Requires `allowFrom: ["*"]`. |
-| `closed` | Agent does not respond to DMs. |
+| `disabled` | Agent does not respond to DMs. |
 
 ---
 

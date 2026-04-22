@@ -166,7 +166,7 @@ Example `GET /api/status` response:
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/api/agent/start` | Start the agent and enable autonomy |
+| `POST` | `/api/agent/start` | Start the agent (starts paused; use `/api/agent/autonomy` to enable autonomy) |
 | `POST` | `/api/agent/stop` | Stop the agent and disable autonomy |
 | `POST` | `/api/agent/pause` | Pause the agent (keep uptime, disable autonomy) |
 | `POST` | `/api/agent/resume` | Resume a paused agent and re-enable autonomy |
@@ -385,6 +385,16 @@ The inbox aggregates messages from every connected platform (iMessage, Telegram,
 
 ---
 
+## Memory & Context
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/memory/remember` | Save a free-text note into the agent's persistent memory |
+| `GET` | `/api/memory/search` | Full-text keyword search over saved memory notes. Params: `q` (required), `limit` |
+| `GET` | `/api/context/quick` | Search memory and knowledge, then synthesize a concise answer. Params: `q` (required), `limit` |
+
+---
+
 ## Knowledge
 
 | Method | Path | Description |
@@ -393,6 +403,7 @@ The inbox aggregates messages from every connected platform (iMessage, Telegram,
 | `GET` | `/api/knowledge/documents` | List knowledge documents. Params: `limit`, `offset` |
 | `GET` | `/api/knowledge/documents/:id` | Get a specific document with content |
 | `POST` | `/api/knowledge/documents` | Upload a document (base64 content or text) |
+| `POST` | `/api/knowledge/documents/bulk` | Upload up to 100 documents in a single request |
 | `POST` | `/api/knowledge/documents/url` | Upload from URL (supports YouTube auto-transcription) |
 | `DELETE` | `/api/knowledge/documents/:id` | Delete a document and all its fragments |
 | `GET` | `/api/knowledge/search` | Semantic search. Params: `q` (required), `threshold`, `limit` |
@@ -598,9 +609,23 @@ Routes under `/api/cloud/v1/` are forwarded as `/api/v1/` on the cloud backend, 
 |--------|------|-------------|
 | `GET` | `/api/workbench/overview` | Get workbench overview (tasks, triggers, todos, life-ops, autonomy state) |
 | `GET` | `/api/workbench/tasks` | List workbench tasks |
-| `POST` | `/api/workbench/tasks` | Create or update a workbench task |
+| `POST` | `/api/workbench/tasks` | Create a new workbench task |
+| `GET` | `/api/workbench/tasks/:id` | Get a single workbench task by ID |
+| `PUT` | `/api/workbench/tasks/:id` | Update a workbench task |
+| `DELETE` | `/api/workbench/tasks/:id` | Delete a workbench task |
 | `GET` | `/api/workbench/todos` | List workbench todos |
 | `POST` | `/api/workbench/todos` | Create or update a workbench to-do item |
+
+---
+
+## Automations
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/automations` | Unified list of all automations (triggers + n8n workflows + workbench tasks) with summary counts |
+| `GET` | `/api/automations/nodes` | Node catalog — available trigger, action, context, integration, and agent nodes |
+| `GET` | `/api/n8n/workflows` | List n8n workflows |
+| `GET` | `/api/n8n/status` | Get n8n status (mode, health, platform) |
 
 ---
 

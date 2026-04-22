@@ -192,7 +192,7 @@ export const myPlugin = {
 
 The web Control UI (opened via `milady dashboard`) provides its own command interface through the API server. Commands sent through the web chat are processed by the same elizaOS runtime, so all runtime commands, hook handlers, and plugin-provided actions are available.
 
-The API server exposes endpoints at `http://localhost:2138` (default) that the web UI uses to send messages and receive responses. The agent restart endpoint (`POST /api/agent/restart`) is also available when `commands.restart` is enabled.
+The API server exposes endpoints that the web UI uses to send messages and receive responses. In production, both the UI and API are served on port `2138` (`MILADY_PORT`). In dev mode, the API runs on a separate port `31337` (`MILADY_API_PORT`) while the UI stays on `2138`. The agent restart endpoint (`POST /api/agent/restart`) is also available when `commands.restart` is enabled.
 
 ## Command Security
 

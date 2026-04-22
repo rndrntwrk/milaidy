@@ -119,7 +119,7 @@ dónde obtener las credenciales, los campos mínimos requeridos y consejos para 
 </div>
 
 **Obtener credenciales:** No se necesita clave de API — instala Ollama localmente
-**Configuración:** https://ollama.ai — ejecuta `ollama pull llama3.2` para descargar un modelo
+**Configuración:** https://ollama.com — ejecuta `ollama pull llama3.2` para descargar un modelo
 **Mínimo requerido:** `OLLAMA_BASE_URL` = `http://localhost:11434` (disparador de auto-habilitación) o `OLLAMA_API_ENDPOINT` = `http://localhost:11434/api`
 **Variables:**
 - `OLLAMA_BASE_URL` — Disparador de auto-habilitación. Predeterminado: `http://localhost:11434`

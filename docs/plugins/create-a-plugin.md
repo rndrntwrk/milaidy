@@ -436,7 +436,9 @@ Override in `milady.json`:
 ```json
 {
   "plugins": {
-    "@elizaos/plugin-telegram": { "enabled": false }
+    "entries": {
+      "telegram": { "enabled": false }
+    }
   }
 }
 ```

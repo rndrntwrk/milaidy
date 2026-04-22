@@ -84,7 +84,8 @@ USER node
 # Set MILADY_API_TOKEN in production to require auth.
 ENV MILADY_API_BIND="0.0.0.0"
 
-# Start the API server + dashboard UI on port 2138.
+# Start the API server + dashboard UI.
+# Default port is 31337 (MILADY_API_PORT). Override with -e MILADY_API_PORT=2138 if needed.
 CMD ["node", "milady.mjs", "start"]
 ```
 
