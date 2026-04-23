@@ -164,6 +164,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Fetch canonical release tags
+        run: |
+          git fetch --tags --force https://github.com/milady-ai/milady.git 'refs/tags/v*:refs/tags/v*' || echo "::warning::Could not fetch canonical release tags; using local tags only"
       - name: Compute next version
         id: ver
         env:
@@ -180,8 +183,8 @@ jobs:
           if [ -n "$VERSION_OVERRIDE" ]; then
             VERSION="${VERSION_OVERRIDE#v}"
           elif [ "$STABLE" = "true" ]; then
-            LATEST_ALPHA="$(git tag --sort=-creatordate | grep '^v[0-9]\+\.[0-9]\+\.[0-9]\+-alpha\.[0-9]\+$' | head -1 || true)"
-            LATEST_STABLE="$(git tag --sort=-creatordate | grep '^v[0-9]\+\.[0-9]\+\.[0-9]\+$' | head -1 || true)"
+            LATEST_ALPHA="$(git tag | grep '^v[0-9]\+\.[0-9]\+\.[0-9]\+-alpha\.[0-9]\+ || true)"
+            LATEST_STABLE="$(git tag | grep '^v[0-9]\+\.[0-9]\+\.[0-9]\+ || true)"
             ALPHA_BASE="$(echo "$LATEST_ALPHA" | sed 's/^v//' | sed 's/-alpha\.[0-9]*$//' )"
             STABLE_VERSION="${LATEST_STABLE#v}"
 
@@ -196,6 +199,4019 @@ jobs:
             fi
           else
             LATEST="$(git tag --sort=-creatordate | grep '^v[0-9]\+\.[0-9]\+\.[0-9]\+-alpha\.[0-9]\+$' | head -1 || true)"
+            if [ -z "$LATEST" ]; then VERSION="2.0.0-alpha.1"
+            else
+              PREFIX=$(echo "$LATEST" | sed 's/\.[0-9]*$/\./' | sed 's/^v//')
+              NUM=$(echo "$LATEST" | grep -oE '[0-9]+$')
+              VERSION="${PREFIX}$((NUM + 1))"
+            fi
+          fi
+          PRERELEASE=$( [ "$STABLE" = "true" ] && echo false || echo true )
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+          echo "Next: v$VERSION (prerelease=$PRERELEASE)"
+
+  # ── 3. FULL BUILD MATRIX (blocking — electrobun + generic/cloud docker) ─
+  build-electrobun:
+    name: Electrobun full matrix
+    needs: [version]
+    uses: ./.github/workflows/release-electrobun.yml
+    with:
+      tag: ${{ needs.version.outputs.tag }}
+      draft: true
+      publish_release: false
+    secrets: inherit
+
+  build-docker:
+    name: Agent image build
+    needs: [version]
+    uses: ./.github/workflows/build-docker.yml
+    with:
+      version: ${{ needs.version.outputs.tag }}
+      push_image: false
+      source_sha: ${{ github.sha }}
+    secrets: inherit
+
+  build-cloud-image:
+    name: Cloud app image build
+    needs: [version]
+    uses: ./.github/workflows/build-cloud-image.yml
+    with:
+      version: ${{ needs.version.outputs.tag }}
+      push_image: false
+      source_sha: ${{ github.sha }}
+    secrets: inherit
+
+  build-npm:
+    name: npm package build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: ./.github/actions/setup-bun-workspace
+        with:
+          disable-local-eliza-workspace: "true"
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+      - name: Restore eliza workspace paths for release scripts
+        run: node scripts/restore-local-eliza-workspace.mjs
+      - name: Build
+        run: |
+          bunx tsdown
+          printf '{"type":"module"}\n' > dist/package.json
+          node --import tsx scripts/write-build-info.ts
+      - name: Validate package
+        run: |
+          npm pack --dry-run 2>&1 | tee /tmp/pack-output.txt
+          grep -q "package.json" /tmp/pack-output.txt || echo "::warning::package.json missing from pack"
+
+  # ── Non-blocking platform builds (open issues on failure) ───────────
+  build-android:
+    name: Android AAB build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Setup workspace dependencies
+        uses: ./.github/actions/setup-bun-workspace
+        with:
+          bun-version: "1.3.11"
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+          install-native-deps: "false"
+          run-postinstall: "true"
+          skip-avatar-clone: "true"
+          no-vision-deps: "true"
+      - name: Restore legacy electrobun compatibility path
+        run: node scripts/ensure-legacy-electrobun-compat.mjs
+      - name: Prepare Android project
+        run: node eliza/packages/app-core/scripts/run-mobile-build.mjs android
+      - name: Build AAB
+        working-directory: apps/app/android
+        run: |
+          chmod +x ./gradlew
+          ./gradlew bundleRelease --no-daemon || echo "::warning::Android AAB build failed (non-blocking)"
+      - name: Upload AAB artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-aab
+          path: apps/app/android/app/build/outputs/bundle/release/*.aab
+          retention-days: 30
+          if-no-files-found: warn
+
+  build-snap:
+    name: Snap build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    env:
+      MILADY_SKIP_LOCAL_UPSTREAMS: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Init non-eliza submodules
+        run: |
+          node scripts/init-submodules.mjs
+          node scripts/disable-local-eliza-workspace.mjs
+      - name: Stage snapcraft.yaml
+        run: |
+          mkdir -p snap
+          cp eliza/packages/app-core/packaging/snap/snapcraft.yaml snap/snapcraft.yaml
+      - name: Normalize runner root ownership for snapd
+        run: |
+          set -euo pipefail
+          ROOT_OWNER="$(stat -c '%u:%g' /)"
+          echo "Runner root owner: ${ROOT_OWNER}"
+          if [ "${ROOT_OWNER}" = "0:0" ]; then
+            echo "Root is already 0:0 — snapd canonicalization OK"
+            exit 0
+          fi
+          echo "Attempting to repair / ownership so snapd/systemd path canonicalization accepts this runner"
+          if sudo -n chown root:root / 2>/dev/null; then
+            echo "Chown succeeded; new owner: $(stat -c '%u:%g' /)"
+          else
+            echo "::warning::Unable to chown / to root:root (sudo unavailable or passwordless sudo disabled). snapd may fail downstream. Remediation: run this job on a standard ubuntu-latest / ubuntu-24.04 GitHub-hosted runner, or configure the container image so / is owned by 0:0."
+          fi
+      - uses: snapcore/action-build@v1
+        id: snap
+      - name: Verify snap
+        run: |
+          sudo snap install --dangerous ${{ steps.snap.outputs.snap }} || echo "::warning::Snap install test failed (non-blocking)"
+      - name: Upload snap artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snap-package
+          path: ${{ steps.snap.outputs.snap }}
+          retention-days: 30
+          if-no-files-found: warn
+
+  build-flatpak:
+    name: Flatpak build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install flatpak tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y flathub org.freedesktop.Platform//24.08 org.freedesktop.Sdk//24.08 org.freedesktop.Sdk.Extension.node22//24.08
+      - name: Build flatpak
+        run: |
+          flatpak-builder --user --install-deps-from=flathub --force-clean build-dir eliza/packages/app-core/packaging/flatpak/com.milady.Milady.yml || echo "::warning::Flatpak build failed (non-blocking)"
+      - name: Upload flatpak artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flatpak-bundle
+          path: eliza/packages/app-core/packaging/flatpak/*.flatpak
+          retention-days: 30
+          if-no-files-found: warn
+
+  build-pypi:
+    name: PyPI package build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build wheel
+        run: |
+          pip install build
+          python -m build eliza/packages/app-core/packaging/pypi/ || echo "::warning::PyPI build failed (non-blocking)"
+      - name: Upload PyPI artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pypi-package
+          path: eliza/packages/app-core/packaging/pypi/dist/
+          retention-days: 30
+          if-no-files-found: warn
+
+  build-debian:
+    name: Debian package build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dpkg-dev debhelper fakeroot
+          curl -fsSL https://bun.sh/install | bash -s "bun-v1.3.10"
+          echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
+      - name: Build deb
+        run: |
+          if [ -f eliza/packages/app-core/packaging/debian/Makefile ] || [ -f eliza/packages/app-core/packaging/debian/rules ]; then
+            cd eliza/packages/app-core/packaging/debian
+            dpkg-buildpackage -us -uc -b || echo "::warning::Debian package build failed (non-blocking)"
+          elif [ -d debian ]; then
+            dpkg-buildpackage -us -uc -b || echo "::warning::Debian package build failed (non-blocking)"
+          else
+            echo "::warning::No debian packaging found — skipping"
+          fi
+      - name: Collect deb artifacts
+        if: success()
+        run: |
+          mkdir -p deb-output
+          cp ../*.deb deb-output/ 2>/dev/null || true
+      - name: Upload deb artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debian-package
+          path: deb-output/
+          retention-days: 30
+          if-no-files-found: warn
+  build-ios:
+    name: iOS build validation
+    needs: [version]
+    runs-on: macos-14
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Setup workspace dependencies
+        uses: ./.github/actions/setup-bun-workspace
+        with:
+          bun-version: "1.3.11"
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+          install-native-deps: "false"
+          run-postinstall: "true"
+          skip-avatar-clone: "true"
+          no-vision-deps: "true"
+      - name: Restore legacy electrobun compatibility path
+        run: node scripts/ensure-legacy-electrobun-compat.mjs
+      - name: Build iOS simulator app
+        run: node eliza/packages/app-core/scripts/run-mobile-build.mjs ios
+        env:
+          LANG: en_US.UTF-8
+      - name: Verify Xcode project
+        run: |
+          if [ -d ios/App ]; then
+            xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release -destination 'generic/platform=iOS' -dry-run || echo "::warning::iOS xcodebuild dry-run failed (non-blocking)"
+          else
+            echo "::warning::ios/App directory not found — skipping Xcode validation"
+          fi
+
+  build-macos-store:
+    name: macOS App Store build validation
+    needs: [version]
+    runs-on: macos-14
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.10"
+      - name: Init non-eliza submodules
+        run: |
+          node scripts/init-submodules.mjs
+          node scripts/disable-local-eliza-workspace.mjs
+      - name: Build web assets and Electrobun
+        run: |
+          bun install --ignore-scripts
+          bun run postinstall
+          ELECTROBUN_SKIP_CODESIGN=1 bun run build || echo "::warning::macOS build failed (non-blocking)"
+
+  build-homepage:
+    name: Homepage build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: ./.github/actions/setup-bun-workspace
+        with:
+          disable-local-eliza-workspace: "true"
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+      - name: Restore eliza workspace paths for homepage scripts
+        run: node scripts/restore-local-eliza-workspace.mjs
+      - name: Generate release metadata
+        run: node scripts/write-homepage-release-data.mjs || echo "::warning::Release metadata gen failed"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build homepage
+        run: bun run build:web
+
+  build-docs:
+    name: Docs validation
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate docs config
+        run: |
+          node -e "const c = require('./docs/docs.json'); console.log('Docs config valid:', c.name)" || echo "::warning::docs.json invalid"
+      - name: Check for broken internal links
+        run: |
+          find docs -name '*.md' -o -name '*.mdx' | head -5 | while read f; do
+            grep -oE '\]\([^)]+\)' "$f" | grep -v 'http' | head -3
+          done
+          echo "Docs link check complete"
+
+  # ── 4. Electrobun + Docker green → tag and publish ─────────────────
+  # NOTE: After the publish job creates a GitHub Release, release-orchestrator.yml
+  # fans out the post-release distribution graph:
+  #   - publish-npm.yml          → npm registry
+  #   - publish-packages.yml     → PyPI, Snap Store, Debian/APT, Flatpak
+  #   - android-release.yml      → Google Play Store
+  #   - apple-store-release.yml  → TestFlight / App Store / Mac App Store
+  #   - deploy-web.yml           → Homepage deployment
+  #   - update-homebrew.yml      → Homebrew tap update
+  # The cloud image is still pushed via the explicit post-publish job below.
+  publish:
+    name: Tag & publish release
+    needs: [version, build-electrobun, build-docker, build-cloud-image, build-npm]
+    if: always() && needs.build-electrobun.result == 'success' && needs.build-docker.result == 'success' && needs.build-cloud-image.result == 'success'
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    permissions:
+      contents: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Create and push tag
+        env:
+          TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists on origin; reusing existing tag"
+            exit 0
+          fi
+
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Local tag $TAG already exists; pushing it to origin"
+          else
+            git tag -a "$TAG" -m "Release $TAG — all builds verified"
+          fi
+
+          git push origin "$TAG"
+
+      - name: Generate release changelog
+        id: changelog
+        env:
+          TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          PREVIOUS_TAG="$(git tag --sort=-creatordate | grep '^v' | grep -vx "$TAG" | head -1 || true)"
+          CHANGELOG_FILE="$RUNNER_TEMP/full-release-changelog.md"
+          {
+            echo "## Full changelog"
+            echo
+            if [ -n "$PREVIOUS_TAG" ]; then
+              echo "- Previous tag: \`$PREVIOUS_TAG\`"
+              echo "- Compare: https://github.com/${{ github.repository }}/compare/$PREVIOUS_TAG...$TAG"
+            else
+              echo "- Previous tag: none"
+            fi
+            echo
+            if [ -n "$PREVIOUS_TAG" ]; then
+              git log --date=short --pretty=format:'- %s (%h, %ad)' "$PREVIOUS_TAG..HEAD"
+            else
+              git log --date=short --pretty=format:'- %s (%h, %ad)'
+            fi
+            echo
+          } > "$CHANGELOG_FILE"
+          echo "previous_tag=$PREVIOUS_TAG" >> "$GITHUB_OUTPUT"
+          echo "file=$CHANGELOG_FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub release
+        uses: actions/github-script@v7
+        env:
+          TAG: ${{ needs.version.outputs.tag }}
+          PRERELEASE: ${{ needs.version.outputs.prerelease }}
+          NPM_RESULT: ${{ needs.build-npm.result }}
+          PREVIOUS_TAG: ${{ steps.changelog.outputs.previous_tag }}
+          CHANGELOG_FILE: ${{ steps.changelog.outputs.file }}
+        with:
+          github-token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const tag = process.env.TAG;
+            const prerelease = process.env.PRERELEASE === 'true';
+            const npmOk = process.env.NPM_RESULT === 'success';
+            const previousTag = process.env.PREVIOUS_TAG || '';
+            const fullChangelog = fs.readFileSync(process.env.CHANGELOG_FILE, 'utf8').trim();
+
+            let generatedNotes = '';
+            try {
+              const notesResponse = await github.rest.repos.generateReleaseNotes({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag_name: tag,
+                ...(previousTag ? { previous_tag_name: previousTag } : {}),
+              });
+              generatedNotes = notesResponse.data.body?.trim() ?? '';
+            } catch (error) {
+              core.warning(`Could not generate GitHub release notes: ${error.message}`);
+            }
+
+            const releasePayload = {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: tag,
+              name: tag,
+              body: [
+                `## ${tag}`,
+                '',
+                prerelease ? '⚠️ Pre-release (alpha)' : '✅ Stable release',
+                '',
+                previousTag ? `**Previous tag:** ${previousTag}` : '**Previous tag:** none',
+                `**Triggered by:** @${context.actor}`,
+                '',
+                '### Release verification',
+                '- ✅ Electrobun desktop — full matrix (macOS ARM, macOS Intel, Windows, Linux)',
+                '- ✅ Canonical agent image — built successfully',
+                '- ✅ Cloud app image — built successfully',
+                npmOk ? '- ✅ npm package — built and validated' : '- ⚠️ npm package — build failed (non-blocking)',
+                '',
+                generatedNotes ? '## Release notes' : null,
+                generatedNotes || null,
+                generatedNotes ? '' : null,
+                fullChangelog,
+                '',
+                '### Publishing pipelines (auto-triggered by this release)',
+                '- ✅ Electrobun artifacts (uploaded during build phase)',
+                '- 🔄 Post-release distribution orchestrator → release-orchestrator.yml',
+                '- 🔄 npm publish → publish-npm.yml',
+                '- 🔄 PyPI / Snap / Debian / Flatpak → publish-packages.yml',
+                '- 🔄 Agent Docker image → build-docker.yml (GHCR push)',
+                '- 🔄 Cloud app Docker image → post-publish push',
+                '- 🔄 Android → android-release.yml (Play Store track by channel)',
+                '- 🔄 iOS / macOS → apple-store-release.yml (TestFlight or App Store by channel)',
+                '- 🔄 Homebrew → update-homebrew.yml',
+                '- 🔄 Homepage → deploy-web.yml',
+              ].filter(Boolean).join('\n'),
+              prerelease,
+              draft: false,
+              generate_release_notes: false,
+            };
+
+            const releases = await github.paginate(github.rest.repos.listReleases, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100,
+            });
+            const matchingReleases = releases.filter((release) => release.tag_name === tag);
+            const existingRelease = matchingReleases.find((release) => !release.draft) ?? matchingReleases[0] ?? null;
+
+            for (const duplicate of matchingReleases) {
+              if (existingRelease && duplicate.id !== existingRelease.id && duplicate.draft) {
+                await github.rest.repos.deleteRelease({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  release_id: duplicate.id,
+                });
+              }
+            }
+
+            let release;
+            if (existingRelease) {
+              const { data } = await github.rest.repos.updateRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: existingRelease.id,
+                tag_name: releasePayload.tag_name,
+                name: releasePayload.name,
+                body: releasePayload.body,
+                prerelease: releasePayload.prerelease,
+                draft: releasePayload.draft,
+                generate_release_notes: releasePayload.generate_release_notes,
+              });
+              release = data;
+              core.info(`Updated release: ${release.html_url}`);
+            } else {
+              const { data } = await github.rest.repos.createRelease(releasePayload);
+              release = data;
+              core.info(`Created release: ${release.html_url}`);
+            }
+
+            if (context.payload.issue) {
+              const issue = context.payload.issue.number;
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: issue,
+                body: `🚀 **Release ${tag} published**\n\n${release.html_url}`,
+              });
+              await github.rest.issues.update({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: issue, state: 'closed', state_reason: 'completed',
+              });
+              try { await github.rest.issues.removeLabel({ owner: context.repo.owner, repo: context.repo.repo, issue_number: issue, name: 'release-ready' }); } catch (e) {}
+            }
+
+  # ── 5. Post-publish: push Docker images that were build-only verified ─
+  push-cloud-image:
+    name: Push cloud app image to GHCR
+    needs: [version, publish]
+    if: needs.publish.result == 'success'
+    uses: ./.github/workflows/build-cloud-image.yml
+    with:
+      version: ${{ needs.version.outputs.tag }}
+      push_image: true
+      source_sha: ${{ github.sha }}
+    secrets: inherit
+
+ | sort -V | tail -1 || true)"
+            LATEST_STABLE="$(git tag --sort=-creatordate | grep '^v[0-9]\+\.[0-9]\+\.[0-9]\+$' | head -1 || true)"
+            ALPHA_BASE="$(echo "$LATEST_ALPHA" | sed 's/^v//' | sed 's/-alpha\.[0-9]*$//' )"
+            STABLE_VERSION="${LATEST_STABLE#v}"
+
+            if [ -z "$LATEST_STABLE" ] && [ -z "$LATEST_ALPHA" ]; then
+              VERSION="2.0.0"
+            elif [ -z "$LATEST_STABLE" ]; then
+              VERSION="$ALPHA_BASE"
+            elif [ -n "$ALPHA_BASE" ] && [ "$(printf '%s\n%s\n' "$ALPHA_BASE" "$STABLE_VERSION" | sort -V | tail -1)" = "$ALPHA_BASE" ] && [ "$ALPHA_BASE" != "$STABLE_VERSION" ]; then
+              VERSION="$ALPHA_BASE"
+            else
+              VERSION="$(bump_patch "$STABLE_VERSION")"
+            fi
+          else
+            LATEST="$(git tag | grep '^v[0-9]\+\.[0-9]\+\.[0-9]\+-alpha\.[0-9]\+ || true)"
+            if [ -z "$LATEST" ]; then VERSION="2.0.0-alpha.1"
+            else
+              PREFIX=$(echo "$LATEST" | sed 's/\.[0-9]*$/\./' | sed 's/^v//')
+              NUM=$(echo "$LATEST" | grep -oE '[0-9]+$')
+              VERSION="${PREFIX}$((NUM + 1))"
+            fi
+          fi
+          PRERELEASE=$( [ "$STABLE" = "true" ] && echo false || echo true )
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+          echo "Next: v$VERSION (prerelease=$PRERELEASE)"
+
+  # ── 3. FULL BUILD MATRIX (blocking — electrobun + generic/cloud docker) ─
+  build-electrobun:
+    name: Electrobun full matrix
+    needs: [version]
+    uses: ./.github/workflows/release-electrobun.yml
+    with:
+      tag: ${{ needs.version.outputs.tag }}
+      draft: true
+      publish_release: false
+    secrets: inherit
+
+  build-docker:
+    name: Agent image build
+    needs: [version]
+    uses: ./.github/workflows/build-docker.yml
+    with:
+      version: ${{ needs.version.outputs.tag }}
+      push_image: false
+      source_sha: ${{ github.sha }}
+    secrets: inherit
+
+  build-cloud-image:
+    name: Cloud app image build
+    needs: [version]
+    uses: ./.github/workflows/build-cloud-image.yml
+    with:
+      version: ${{ needs.version.outputs.tag }}
+      push_image: false
+      source_sha: ${{ github.sha }}
+    secrets: inherit
+
+  build-npm:
+    name: npm package build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: ./.github/actions/setup-bun-workspace
+        with:
+          disable-local-eliza-workspace: "true"
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+      - name: Restore eliza workspace paths for release scripts
+        run: node scripts/restore-local-eliza-workspace.mjs
+      - name: Build
+        run: |
+          bunx tsdown
+          printf '{"type":"module"}\n' > dist/package.json
+          node --import tsx scripts/write-build-info.ts
+      - name: Validate package
+        run: |
+          npm pack --dry-run 2>&1 | tee /tmp/pack-output.txt
+          grep -q "package.json" /tmp/pack-output.txt || echo "::warning::package.json missing from pack"
+
+  # ── Non-blocking platform builds (open issues on failure) ───────────
+  build-android:
+    name: Android AAB build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Setup workspace dependencies
+        uses: ./.github/actions/setup-bun-workspace
+        with:
+          bun-version: "1.3.11"
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+          install-native-deps: "false"
+          run-postinstall: "true"
+          skip-avatar-clone: "true"
+          no-vision-deps: "true"
+      - name: Restore legacy electrobun compatibility path
+        run: node scripts/ensure-legacy-electrobun-compat.mjs
+      - name: Prepare Android project
+        run: node eliza/packages/app-core/scripts/run-mobile-build.mjs android
+      - name: Build AAB
+        working-directory: apps/app/android
+        run: |
+          chmod +x ./gradlew
+          ./gradlew bundleRelease --no-daemon || echo "::warning::Android AAB build failed (non-blocking)"
+      - name: Upload AAB artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-aab
+          path: apps/app/android/app/build/outputs/bundle/release/*.aab
+          retention-days: 30
+          if-no-files-found: warn
+
+  build-snap:
+    name: Snap build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    env:
+      MILADY_SKIP_LOCAL_UPSTREAMS: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Init non-eliza submodules
+        run: |
+          node scripts/init-submodules.mjs
+          node scripts/disable-local-eliza-workspace.mjs
+      - name: Stage snapcraft.yaml
+        run: |
+          mkdir -p snap
+          cp eliza/packages/app-core/packaging/snap/snapcraft.yaml snap/snapcraft.yaml
+      - name: Normalize runner root ownership for snapd
+        run: |
+          set -euo pipefail
+          ROOT_OWNER="$(stat -c '%u:%g' /)"
+          echo "Runner root owner: ${ROOT_OWNER}"
+          if [ "${ROOT_OWNER}" = "0:0" ]; then
+            echo "Root is already 0:0 — snapd canonicalization OK"
+            exit 0
+          fi
+          echo "Attempting to repair / ownership so snapd/systemd path canonicalization accepts this runner"
+          if sudo -n chown root:root / 2>/dev/null; then
+            echo "Chown succeeded; new owner: $(stat -c '%u:%g' /)"
+          else
+            echo "::warning::Unable to chown / to root:root (sudo unavailable or passwordless sudo disabled). snapd may fail downstream. Remediation: run this job on a standard ubuntu-latest / ubuntu-24.04 GitHub-hosted runner, or configure the container image so / is owned by 0:0."
+          fi
+      - uses: snapcore/action-build@v1
+        id: snap
+      - name: Verify snap
+        run: |
+          sudo snap install --dangerous ${{ steps.snap.outputs.snap }} || echo "::warning::Snap install test failed (non-blocking)"
+      - name: Upload snap artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snap-package
+          path: ${{ steps.snap.outputs.snap }}
+          retention-days: 30
+          if-no-files-found: warn
+
+  build-flatpak:
+    name: Flatpak build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install flatpak tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y flathub org.freedesktop.Platform//24.08 org.freedesktop.Sdk//24.08 org.freedesktop.Sdk.Extension.node22//24.08
+      - name: Build flatpak
+        run: |
+          flatpak-builder --user --install-deps-from=flathub --force-clean build-dir eliza/packages/app-core/packaging/flatpak/com.milady.Milady.yml || echo "::warning::Flatpak build failed (non-blocking)"
+      - name: Upload flatpak artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flatpak-bundle
+          path: eliza/packages/app-core/packaging/flatpak/*.flatpak
+          retention-days: 30
+          if-no-files-found: warn
+
+  build-pypi:
+    name: PyPI package build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build wheel
+        run: |
+          pip install build
+          python -m build eliza/packages/app-core/packaging/pypi/ || echo "::warning::PyPI build failed (non-blocking)"
+      - name: Upload PyPI artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pypi-package
+          path: eliza/packages/app-core/packaging/pypi/dist/
+          retention-days: 30
+          if-no-files-found: warn
+
+  build-debian:
+    name: Debian package build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dpkg-dev debhelper fakeroot
+          curl -fsSL https://bun.sh/install | bash -s "bun-v1.3.10"
+          echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
+      - name: Build deb
+        run: |
+          if [ -f eliza/packages/app-core/packaging/debian/Makefile ] || [ -f eliza/packages/app-core/packaging/debian/rules ]; then
+            cd eliza/packages/app-core/packaging/debian
+            dpkg-buildpackage -us -uc -b || echo "::warning::Debian package build failed (non-blocking)"
+          elif [ -d debian ]; then
+            dpkg-buildpackage -us -uc -b || echo "::warning::Debian package build failed (non-blocking)"
+          else
+            echo "::warning::No debian packaging found — skipping"
+          fi
+      - name: Collect deb artifacts
+        if: success()
+        run: |
+          mkdir -p deb-output
+          cp ../*.deb deb-output/ 2>/dev/null || true
+      - name: Upload deb artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debian-package
+          path: deb-output/
+          retention-days: 30
+          if-no-files-found: warn
+  build-ios:
+    name: iOS build validation
+    needs: [version]
+    runs-on: macos-14
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Setup workspace dependencies
+        uses: ./.github/actions/setup-bun-workspace
+        with:
+          bun-version: "1.3.11"
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+          install-native-deps: "false"
+          run-postinstall: "true"
+          skip-avatar-clone: "true"
+          no-vision-deps: "true"
+      - name: Restore legacy electrobun compatibility path
+        run: node scripts/ensure-legacy-electrobun-compat.mjs
+      - name: Build iOS simulator app
+        run: node eliza/packages/app-core/scripts/run-mobile-build.mjs ios
+        env:
+          LANG: en_US.UTF-8
+      - name: Verify Xcode project
+        run: |
+          if [ -d ios/App ]; then
+            xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release -destination 'generic/platform=iOS' -dry-run || echo "::warning::iOS xcodebuild dry-run failed (non-blocking)"
+          else
+            echo "::warning::ios/App directory not found — skipping Xcode validation"
+          fi
+
+  build-macos-store:
+    name: macOS App Store build validation
+    needs: [version]
+    runs-on: macos-14
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.10"
+      - name: Init non-eliza submodules
+        run: |
+          node scripts/init-submodules.mjs
+          node scripts/disable-local-eliza-workspace.mjs
+      - name: Build web assets and Electrobun
+        run: |
+          bun install --ignore-scripts
+          bun run postinstall
+          ELECTROBUN_SKIP_CODESIGN=1 bun run build || echo "::warning::macOS build failed (non-blocking)"
+
+  build-homepage:
+    name: Homepage build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: ./.github/actions/setup-bun-workspace
+        with:
+          disable-local-eliza-workspace: "true"
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+      - name: Restore eliza workspace paths for homepage scripts
+        run: node scripts/restore-local-eliza-workspace.mjs
+      - name: Generate release metadata
+        run: node scripts/write-homepage-release-data.mjs || echo "::warning::Release metadata gen failed"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build homepage
+        run: bun run build:web
+
+  build-docs:
+    name: Docs validation
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate docs config
+        run: |
+          node -e "const c = require('./docs/docs.json'); console.log('Docs config valid:', c.name)" || echo "::warning::docs.json invalid"
+      - name: Check for broken internal links
+        run: |
+          find docs -name '*.md' -o -name '*.mdx' | head -5 | while read f; do
+            grep -oE '\]\([^)]+\)' "$f" | grep -v 'http' | head -3
+          done
+          echo "Docs link check complete"
+
+  # ── 4. Electrobun + Docker green → tag and publish ─────────────────
+  # NOTE: After the publish job creates a GitHub Release, release-orchestrator.yml
+  # fans out the post-release distribution graph:
+  #   - publish-npm.yml          → npm registry
+  #   - publish-packages.yml     → PyPI, Snap Store, Debian/APT, Flatpak
+  #   - android-release.yml      → Google Play Store
+  #   - apple-store-release.yml  → TestFlight / App Store / Mac App Store
+  #   - deploy-web.yml           → Homepage deployment
+  #   - update-homebrew.yml      → Homebrew tap update
+  # The cloud image is still pushed via the explicit post-publish job below.
+  publish:
+    name: Tag & publish release
+    needs: [version, build-electrobun, build-docker, build-cloud-image, build-npm]
+    if: always() && needs.build-electrobun.result == 'success' && needs.build-docker.result == 'success' && needs.build-cloud-image.result == 'success'
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    permissions:
+      contents: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Create and push tag
+        env:
+          TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists on origin; reusing existing tag"
+            exit 0
+          fi
+
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Local tag $TAG already exists; pushing it to origin"
+          else
+            git tag -a "$TAG" -m "Release $TAG — all builds verified"
+          fi
+
+          git push origin "$TAG"
+
+      - name: Generate release changelog
+        id: changelog
+        env:
+          TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          PREVIOUS_TAG="$(git tag --sort=-creatordate | grep '^v' | grep -vx "$TAG" | head -1 || true)"
+          CHANGELOG_FILE="$RUNNER_TEMP/full-release-changelog.md"
+          {
+            echo "## Full changelog"
+            echo
+            if [ -n "$PREVIOUS_TAG" ]; then
+              echo "- Previous tag: \`$PREVIOUS_TAG\`"
+              echo "- Compare: https://github.com/${{ github.repository }}/compare/$PREVIOUS_TAG...$TAG"
+            else
+              echo "- Previous tag: none"
+            fi
+            echo
+            if [ -n "$PREVIOUS_TAG" ]; then
+              git log --date=short --pretty=format:'- %s (%h, %ad)' "$PREVIOUS_TAG..HEAD"
+            else
+              git log --date=short --pretty=format:'- %s (%h, %ad)'
+            fi
+            echo
+          } > "$CHANGELOG_FILE"
+          echo "previous_tag=$PREVIOUS_TAG" >> "$GITHUB_OUTPUT"
+          echo "file=$CHANGELOG_FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub release
+        uses: actions/github-script@v7
+        env:
+          TAG: ${{ needs.version.outputs.tag }}
+          PRERELEASE: ${{ needs.version.outputs.prerelease }}
+          NPM_RESULT: ${{ needs.build-npm.result }}
+          PREVIOUS_TAG: ${{ steps.changelog.outputs.previous_tag }}
+          CHANGELOG_FILE: ${{ steps.changelog.outputs.file }}
+        with:
+          github-token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const tag = process.env.TAG;
+            const prerelease = process.env.PRERELEASE === 'true';
+            const npmOk = process.env.NPM_RESULT === 'success';
+            const previousTag = process.env.PREVIOUS_TAG || '';
+            const fullChangelog = fs.readFileSync(process.env.CHANGELOG_FILE, 'utf8').trim();
+
+            let generatedNotes = '';
+            try {
+              const notesResponse = await github.rest.repos.generateReleaseNotes({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag_name: tag,
+                ...(previousTag ? { previous_tag_name: previousTag } : {}),
+              });
+              generatedNotes = notesResponse.data.body?.trim() ?? '';
+            } catch (error) {
+              core.warning(`Could not generate GitHub release notes: ${error.message}`);
+            }
+
+            const releasePayload = {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: tag,
+              name: tag,
+              body: [
+                `## ${tag}`,
+                '',
+                prerelease ? '⚠️ Pre-release (alpha)' : '✅ Stable release',
+                '',
+                previousTag ? `**Previous tag:** ${previousTag}` : '**Previous tag:** none',
+                `**Triggered by:** @${context.actor}`,
+                '',
+                '### Release verification',
+                '- ✅ Electrobun desktop — full matrix (macOS ARM, macOS Intel, Windows, Linux)',
+                '- ✅ Canonical agent image — built successfully',
+                '- ✅ Cloud app image — built successfully',
+                npmOk ? '- ✅ npm package — built and validated' : '- ⚠️ npm package — build failed (non-blocking)',
+                '',
+                generatedNotes ? '## Release notes' : null,
+                generatedNotes || null,
+                generatedNotes ? '' : null,
+                fullChangelog,
+                '',
+                '### Publishing pipelines (auto-triggered by this release)',
+                '- ✅ Electrobun artifacts (uploaded during build phase)',
+                '- 🔄 Post-release distribution orchestrator → release-orchestrator.yml',
+                '- 🔄 npm publish → publish-npm.yml',
+                '- 🔄 PyPI / Snap / Debian / Flatpak → publish-packages.yml',
+                '- 🔄 Agent Docker image → build-docker.yml (GHCR push)',
+                '- 🔄 Cloud app Docker image → post-publish push',
+                '- 🔄 Android → android-release.yml (Play Store track by channel)',
+                '- 🔄 iOS / macOS → apple-store-release.yml (TestFlight or App Store by channel)',
+                '- 🔄 Homebrew → update-homebrew.yml',
+                '- 🔄 Homepage → deploy-web.yml',
+              ].filter(Boolean).join('\n'),
+              prerelease,
+              draft: false,
+              generate_release_notes: false,
+            };
+
+            const releases = await github.paginate(github.rest.repos.listReleases, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100,
+            });
+            const matchingReleases = releases.filter((release) => release.tag_name === tag);
+            const existingRelease = matchingReleases.find((release) => !release.draft) ?? matchingReleases[0] ?? null;
+
+            for (const duplicate of matchingReleases) {
+              if (existingRelease && duplicate.id !== existingRelease.id && duplicate.draft) {
+                await github.rest.repos.deleteRelease({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  release_id: duplicate.id,
+                });
+              }
+            }
+
+            let release;
+            if (existingRelease) {
+              const { data } = await github.rest.repos.updateRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: existingRelease.id,
+                tag_name: releasePayload.tag_name,
+                name: releasePayload.name,
+                body: releasePayload.body,
+                prerelease: releasePayload.prerelease,
+                draft: releasePayload.draft,
+                generate_release_notes: releasePayload.generate_release_notes,
+              });
+              release = data;
+              core.info(`Updated release: ${release.html_url}`);
+            } else {
+              const { data } = await github.rest.repos.createRelease(releasePayload);
+              release = data;
+              core.info(`Created release: ${release.html_url}`);
+            }
+
+            if (context.payload.issue) {
+              const issue = context.payload.issue.number;
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: issue,
+                body: `🚀 **Release ${tag} published**\n\n${release.html_url}`,
+              });
+              await github.rest.issues.update({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: issue, state: 'closed', state_reason: 'completed',
+              });
+              try { await github.rest.issues.removeLabel({ owner: context.repo.owner, repo: context.repo.repo, issue_number: issue, name: 'release-ready' }); } catch (e) {}
+            }
+
+  # ── 5. Post-publish: push Docker images that were build-only verified ─
+  push-cloud-image:
+    name: Push cloud app image to GHCR
+    needs: [version, publish]
+    if: needs.publish.result == 'success'
+    uses: ./.github/workflows/build-cloud-image.yml
+    with:
+      version: ${{ needs.version.outputs.tag }}
+      push_image: true
+      source_sha: ${{ github.sha }}
+    secrets: inherit
+
+ | sort -V | tail -1 || true)"
+            if [ -z "$LATEST" ]; then VERSION="2.0.0-alpha.1"
+            else
+              PREFIX=$(echo "$LATEST" | sed 's/\.[0-9]*$/\./' | sed 's/^v//')
+              NUM=$(echo "$LATEST" | grep -oE '[0-9]+$')
+              VERSION="${PREFIX}$((NUM + 1))"
+            fi
+          fi
+          PRERELEASE=$( [ "$STABLE" = "true" ] && echo false || echo true )
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+          echo "Next: v$VERSION (prerelease=$PRERELEASE)"
+
+  # ── 3. FULL BUILD MATRIX (blocking — electrobun + generic/cloud docker) ─
+  build-electrobun:
+    name: Electrobun full matrix
+    needs: [version]
+    uses: ./.github/workflows/release-electrobun.yml
+    with:
+      tag: ${{ needs.version.outputs.tag }}
+      draft: true
+      publish_release: false
+    secrets: inherit
+
+  build-docker:
+    name: Agent image build
+    needs: [version]
+    uses: ./.github/workflows/build-docker.yml
+    with:
+      version: ${{ needs.version.outputs.tag }}
+      push_image: false
+      source_sha: ${{ github.sha }}
+    secrets: inherit
+
+  build-cloud-image:
+    name: Cloud app image build
+    needs: [version]
+    uses: ./.github/workflows/build-cloud-image.yml
+    with:
+      version: ${{ needs.version.outputs.tag }}
+      push_image: false
+      source_sha: ${{ github.sha }}
+    secrets: inherit
+
+  build-npm:
+    name: npm package build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: ./.github/actions/setup-bun-workspace
+        with:
+          disable-local-eliza-workspace: "true"
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+      - name: Restore eliza workspace paths for release scripts
+        run: node scripts/restore-local-eliza-workspace.mjs
+      - name: Build
+        run: |
+          bunx tsdown
+          printf '{"type":"module"}\n' > dist/package.json
+          node --import tsx scripts/write-build-info.ts
+      - name: Validate package
+        run: |
+          npm pack --dry-run 2>&1 | tee /tmp/pack-output.txt
+          grep -q "package.json" /tmp/pack-output.txt || echo "::warning::package.json missing from pack"
+
+  # ── Non-blocking platform builds (open issues on failure) ───────────
+  build-android:
+    name: Android AAB build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Setup workspace dependencies
+        uses: ./.github/actions/setup-bun-workspace
+        with:
+          bun-version: "1.3.11"
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+          install-native-deps: "false"
+          run-postinstall: "true"
+          skip-avatar-clone: "true"
+          no-vision-deps: "true"
+      - name: Restore legacy electrobun compatibility path
+        run: node scripts/ensure-legacy-electrobun-compat.mjs
+      - name: Prepare Android project
+        run: node eliza/packages/app-core/scripts/run-mobile-build.mjs android
+      - name: Build AAB
+        working-directory: apps/app/android
+        run: |
+          chmod +x ./gradlew
+          ./gradlew bundleRelease --no-daemon || echo "::warning::Android AAB build failed (non-blocking)"
+      - name: Upload AAB artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-aab
+          path: apps/app/android/app/build/outputs/bundle/release/*.aab
+          retention-days: 30
+          if-no-files-found: warn
+
+  build-snap:
+    name: Snap build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    env:
+      MILADY_SKIP_LOCAL_UPSTREAMS: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Init non-eliza submodules
+        run: |
+          node scripts/init-submodules.mjs
+          node scripts/disable-local-eliza-workspace.mjs
+      - name: Stage snapcraft.yaml
+        run: |
+          mkdir -p snap
+          cp eliza/packages/app-core/packaging/snap/snapcraft.yaml snap/snapcraft.yaml
+      - name: Normalize runner root ownership for snapd
+        run: |
+          set -euo pipefail
+          ROOT_OWNER="$(stat -c '%u:%g' /)"
+          echo "Runner root owner: ${ROOT_OWNER}"
+          if [ "${ROOT_OWNER}" = "0:0" ]; then
+            echo "Root is already 0:0 — snapd canonicalization OK"
+            exit 0
+          fi
+          echo "Attempting to repair / ownership so snapd/systemd path canonicalization accepts this runner"
+          if sudo -n chown root:root / 2>/dev/null; then
+            echo "Chown succeeded; new owner: $(stat -c '%u:%g' /)"
+          else
+            echo "::warning::Unable to chown / to root:root (sudo unavailable or passwordless sudo disabled). snapd may fail downstream. Remediation: run this job on a standard ubuntu-latest / ubuntu-24.04 GitHub-hosted runner, or configure the container image so / is owned by 0:0."
+          fi
+      - uses: snapcore/action-build@v1
+        id: snap
+      - name: Verify snap
+        run: |
+          sudo snap install --dangerous ${{ steps.snap.outputs.snap }} || echo "::warning::Snap install test failed (non-blocking)"
+      - name: Upload snap artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snap-package
+          path: ${{ steps.snap.outputs.snap }}
+          retention-days: 30
+          if-no-files-found: warn
+
+  build-flatpak:
+    name: Flatpak build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install flatpak tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y flathub org.freedesktop.Platform//24.08 org.freedesktop.Sdk//24.08 org.freedesktop.Sdk.Extension.node22//24.08
+      - name: Build flatpak
+        run: |
+          flatpak-builder --user --install-deps-from=flathub --force-clean build-dir eliza/packages/app-core/packaging/flatpak/com.milady.Milady.yml || echo "::warning::Flatpak build failed (non-blocking)"
+      - name: Upload flatpak artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flatpak-bundle
+          path: eliza/packages/app-core/packaging/flatpak/*.flatpak
+          retention-days: 30
+          if-no-files-found: warn
+
+  build-pypi:
+    name: PyPI package build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build wheel
+        run: |
+          pip install build
+          python -m build eliza/packages/app-core/packaging/pypi/ || echo "::warning::PyPI build failed (non-blocking)"
+      - name: Upload PyPI artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pypi-package
+          path: eliza/packages/app-core/packaging/pypi/dist/
+          retention-days: 30
+          if-no-files-found: warn
+
+  build-debian:
+    name: Debian package build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dpkg-dev debhelper fakeroot
+          curl -fsSL https://bun.sh/install | bash -s "bun-v1.3.10"
+          echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
+      - name: Build deb
+        run: |
+          if [ -f eliza/packages/app-core/packaging/debian/Makefile ] || [ -f eliza/packages/app-core/packaging/debian/rules ]; then
+            cd eliza/packages/app-core/packaging/debian
+            dpkg-buildpackage -us -uc -b || echo "::warning::Debian package build failed (non-blocking)"
+          elif [ -d debian ]; then
+            dpkg-buildpackage -us -uc -b || echo "::warning::Debian package build failed (non-blocking)"
+          else
+            echo "::warning::No debian packaging found — skipping"
+          fi
+      - name: Collect deb artifacts
+        if: success()
+        run: |
+          mkdir -p deb-output
+          cp ../*.deb deb-output/ 2>/dev/null || true
+      - name: Upload deb artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debian-package
+          path: deb-output/
+          retention-days: 30
+          if-no-files-found: warn
+  build-ios:
+    name: iOS build validation
+    needs: [version]
+    runs-on: macos-14
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Setup workspace dependencies
+        uses: ./.github/actions/setup-bun-workspace
+        with:
+          bun-version: "1.3.11"
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+          install-native-deps: "false"
+          run-postinstall: "true"
+          skip-avatar-clone: "true"
+          no-vision-deps: "true"
+      - name: Restore legacy electrobun compatibility path
+        run: node scripts/ensure-legacy-electrobun-compat.mjs
+      - name: Build iOS simulator app
+        run: node eliza/packages/app-core/scripts/run-mobile-build.mjs ios
+        env:
+          LANG: en_US.UTF-8
+      - name: Verify Xcode project
+        run: |
+          if [ -d ios/App ]; then
+            xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release -destination 'generic/platform=iOS' -dry-run || echo "::warning::iOS xcodebuild dry-run failed (non-blocking)"
+          else
+            echo "::warning::ios/App directory not found — skipping Xcode validation"
+          fi
+
+  build-macos-store:
+    name: macOS App Store build validation
+    needs: [version]
+    runs-on: macos-14
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.10"
+      - name: Init non-eliza submodules
+        run: |
+          node scripts/init-submodules.mjs
+          node scripts/disable-local-eliza-workspace.mjs
+      - name: Build web assets and Electrobun
+        run: |
+          bun install --ignore-scripts
+          bun run postinstall
+          ELECTROBUN_SKIP_CODESIGN=1 bun run build || echo "::warning::macOS build failed (non-blocking)"
+
+  build-homepage:
+    name: Homepage build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: ./.github/actions/setup-bun-workspace
+        with:
+          disable-local-eliza-workspace: "true"
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+      - name: Restore eliza workspace paths for homepage scripts
+        run: node scripts/restore-local-eliza-workspace.mjs
+      - name: Generate release metadata
+        run: node scripts/write-homepage-release-data.mjs || echo "::warning::Release metadata gen failed"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build homepage
+        run: bun run build:web
+
+  build-docs:
+    name: Docs validation
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate docs config
+        run: |
+          node -e "const c = require('./docs/docs.json'); console.log('Docs config valid:', c.name)" || echo "::warning::docs.json invalid"
+      - name: Check for broken internal links
+        run: |
+          find docs -name '*.md' -o -name '*.mdx' | head -5 | while read f; do
+            grep -oE '\]\([^)]+\)' "$f" | grep -v 'http' | head -3
+          done
+          echo "Docs link check complete"
+
+  # ── 4. Electrobun + Docker green → tag and publish ─────────────────
+  # NOTE: After the publish job creates a GitHub Release, release-orchestrator.yml
+  # fans out the post-release distribution graph:
+  #   - publish-npm.yml          → npm registry
+  #   - publish-packages.yml     → PyPI, Snap Store, Debian/APT, Flatpak
+  #   - android-release.yml      → Google Play Store
+  #   - apple-store-release.yml  → TestFlight / App Store / Mac App Store
+  #   - deploy-web.yml           → Homepage deployment
+  #   - update-homebrew.yml      → Homebrew tap update
+  # The cloud image is still pushed via the explicit post-publish job below.
+  publish:
+    name: Tag & publish release
+    needs: [version, build-electrobun, build-docker, build-cloud-image, build-npm]
+    if: always() && needs.build-electrobun.result == 'success' && needs.build-docker.result == 'success' && needs.build-cloud-image.result == 'success'
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    permissions:
+      contents: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Create and push tag
+        env:
+          TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists on origin; reusing existing tag"
+            exit 0
+          fi
+
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Local tag $TAG already exists; pushing it to origin"
+          else
+            git tag -a "$TAG" -m "Release $TAG — all builds verified"
+          fi
+
+          git push origin "$TAG"
+
+      - name: Generate release changelog
+        id: changelog
+        env:
+          TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          PREVIOUS_TAG="$(git tag --sort=-creatordate | grep '^v' | grep -vx "$TAG" | head -1 || true)"
+          CHANGELOG_FILE="$RUNNER_TEMP/full-release-changelog.md"
+          {
+            echo "## Full changelog"
+            echo
+            if [ -n "$PREVIOUS_TAG" ]; then
+              echo "- Previous tag: \`$PREVIOUS_TAG\`"
+              echo "- Compare: https://github.com/${{ github.repository }}/compare/$PREVIOUS_TAG...$TAG"
+            else
+              echo "- Previous tag: none"
+            fi
+            echo
+            if [ -n "$PREVIOUS_TAG" ]; then
+              git log --date=short --pretty=format:'- %s (%h, %ad)' "$PREVIOUS_TAG..HEAD"
+            else
+              git log --date=short --pretty=format:'- %s (%h, %ad)'
+            fi
+            echo
+          } > "$CHANGELOG_FILE"
+          echo "previous_tag=$PREVIOUS_TAG" >> "$GITHUB_OUTPUT"
+          echo "file=$CHANGELOG_FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub release
+        uses: actions/github-script@v7
+        env:
+          TAG: ${{ needs.version.outputs.tag }}
+          PRERELEASE: ${{ needs.version.outputs.prerelease }}
+          NPM_RESULT: ${{ needs.build-npm.result }}
+          PREVIOUS_TAG: ${{ steps.changelog.outputs.previous_tag }}
+          CHANGELOG_FILE: ${{ steps.changelog.outputs.file }}
+        with:
+          github-token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const tag = process.env.TAG;
+            const prerelease = process.env.PRERELEASE === 'true';
+            const npmOk = process.env.NPM_RESULT === 'success';
+            const previousTag = process.env.PREVIOUS_TAG || '';
+            const fullChangelog = fs.readFileSync(process.env.CHANGELOG_FILE, 'utf8').trim();
+
+            let generatedNotes = '';
+            try {
+              const notesResponse = await github.rest.repos.generateReleaseNotes({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag_name: tag,
+                ...(previousTag ? { previous_tag_name: previousTag } : {}),
+              });
+              generatedNotes = notesResponse.data.body?.trim() ?? '';
+            } catch (error) {
+              core.warning(`Could not generate GitHub release notes: ${error.message}`);
+            }
+
+            const releasePayload = {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: tag,
+              name: tag,
+              body: [
+                `## ${tag}`,
+                '',
+                prerelease ? '⚠️ Pre-release (alpha)' : '✅ Stable release',
+                '',
+                previousTag ? `**Previous tag:** ${previousTag}` : '**Previous tag:** none',
+                `**Triggered by:** @${context.actor}`,
+                '',
+                '### Release verification',
+                '- ✅ Electrobun desktop — full matrix (macOS ARM, macOS Intel, Windows, Linux)',
+                '- ✅ Canonical agent image — built successfully',
+                '- ✅ Cloud app image — built successfully',
+                npmOk ? '- ✅ npm package — built and validated' : '- ⚠️ npm package — build failed (non-blocking)',
+                '',
+                generatedNotes ? '## Release notes' : null,
+                generatedNotes || null,
+                generatedNotes ? '' : null,
+                fullChangelog,
+                '',
+                '### Publishing pipelines (auto-triggered by this release)',
+                '- ✅ Electrobun artifacts (uploaded during build phase)',
+                '- 🔄 Post-release distribution orchestrator → release-orchestrator.yml',
+                '- 🔄 npm publish → publish-npm.yml',
+                '- 🔄 PyPI / Snap / Debian / Flatpak → publish-packages.yml',
+                '- 🔄 Agent Docker image → build-docker.yml (GHCR push)',
+                '- 🔄 Cloud app Docker image → post-publish push',
+                '- 🔄 Android → android-release.yml (Play Store track by channel)',
+                '- 🔄 iOS / macOS → apple-store-release.yml (TestFlight or App Store by channel)',
+                '- 🔄 Homebrew → update-homebrew.yml',
+                '- 🔄 Homepage → deploy-web.yml',
+              ].filter(Boolean).join('\n'),
+              prerelease,
+              draft: false,
+              generate_release_notes: false,
+            };
+
+            const releases = await github.paginate(github.rest.repos.listReleases, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100,
+            });
+            const matchingReleases = releases.filter((release) => release.tag_name === tag);
+            const existingRelease = matchingReleases.find((release) => !release.draft) ?? matchingReleases[0] ?? null;
+
+            for (const duplicate of matchingReleases) {
+              if (existingRelease && duplicate.id !== existingRelease.id && duplicate.draft) {
+                await github.rest.repos.deleteRelease({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  release_id: duplicate.id,
+                });
+              }
+            }
+
+            let release;
+            if (existingRelease) {
+              const { data } = await github.rest.repos.updateRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: existingRelease.id,
+                tag_name: releasePayload.tag_name,
+                name: releasePayload.name,
+                body: releasePayload.body,
+                prerelease: releasePayload.prerelease,
+                draft: releasePayload.draft,
+                generate_release_notes: releasePayload.generate_release_notes,
+              });
+              release = data;
+              core.info(`Updated release: ${release.html_url}`);
+            } else {
+              const { data } = await github.rest.repos.createRelease(releasePayload);
+              release = data;
+              core.info(`Created release: ${release.html_url}`);
+            }
+
+            if (context.payload.issue) {
+              const issue = context.payload.issue.number;
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: issue,
+                body: `🚀 **Release ${tag} published**\n\n${release.html_url}`,
+              });
+              await github.rest.issues.update({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: issue, state: 'closed', state_reason: 'completed',
+              });
+              try { await github.rest.issues.removeLabel({ owner: context.repo.owner, repo: context.repo.repo, issue_number: issue, name: 'release-ready' }); } catch (e) {}
+            }
+
+  # ── 5. Post-publish: push Docker images that were build-only verified ─
+  push-cloud-image:
+    name: Push cloud app image to GHCR
+    needs: [version, publish]
+    if: needs.publish.result == 'success'
+    uses: ./.github/workflows/build-cloud-image.yml
+    with:
+      version: ${{ needs.version.outputs.tag }}
+      push_image: true
+      source_sha: ${{ github.sha }}
+    secrets: inherit
+
+ | sort -V | tail -1 || true)"
+            ALPHA_BASE="$(echo "$LATEST_ALPHA" | sed 's/^v//' | sed 's/-alpha\.[0-9]*$//' )"
+            STABLE_VERSION="${LATEST_STABLE#v}"
+
+            if [ -z "$LATEST_STABLE" ] && [ -z "$LATEST_ALPHA" ]; then
+              VERSION="2.0.0"
+            elif [ -z "$LATEST_STABLE" ]; then
+              VERSION="$ALPHA_BASE"
+            elif [ -n "$ALPHA_BASE" ] && [ "$(printf '%s\n%s\n' "$ALPHA_BASE" "$STABLE_VERSION" | sort -V | tail -1)" = "$ALPHA_BASE" ] && [ "$ALPHA_BASE" != "$STABLE_VERSION" ]; then
+              VERSION="$ALPHA_BASE"
+            else
+              VERSION="$(bump_patch "$STABLE_VERSION")"
+            fi
+          else
+            LATEST="$(git tag --sort=-creatordate | grep '^v[0-9]\+\.[0-9]\+\.[0-9]\+-alpha\.[0-9]\+$' | head -1 || true)"
+            if [ -z "$LATEST" ]; then VERSION="2.0.0-alpha.1"
+            else
+              PREFIX=$(echo "$LATEST" | sed 's/\.[0-9]*$/\./' | sed 's/^v//')
+              NUM=$(echo "$LATEST" | grep -oE '[0-9]+$')
+              VERSION="${PREFIX}$((NUM + 1))"
+            fi
+          fi
+          PRERELEASE=$( [ "$STABLE" = "true" ] && echo false || echo true )
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+          echo "Next: v$VERSION (prerelease=$PRERELEASE)"
+
+  # ── 3. FULL BUILD MATRIX (blocking — electrobun + generic/cloud docker) ─
+  build-electrobun:
+    name: Electrobun full matrix
+    needs: [version]
+    uses: ./.github/workflows/release-electrobun.yml
+    with:
+      tag: ${{ needs.version.outputs.tag }}
+      draft: true
+      publish_release: false
+    secrets: inherit
+
+  build-docker:
+    name: Agent image build
+    needs: [version]
+    uses: ./.github/workflows/build-docker.yml
+    with:
+      version: ${{ needs.version.outputs.tag }}
+      push_image: false
+      source_sha: ${{ github.sha }}
+    secrets: inherit
+
+  build-cloud-image:
+    name: Cloud app image build
+    needs: [version]
+    uses: ./.github/workflows/build-cloud-image.yml
+    with:
+      version: ${{ needs.version.outputs.tag }}
+      push_image: false
+      source_sha: ${{ github.sha }}
+    secrets: inherit
+
+  build-npm:
+    name: npm package build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: ./.github/actions/setup-bun-workspace
+        with:
+          disable-local-eliza-workspace: "true"
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+      - name: Restore eliza workspace paths for release scripts
+        run: node scripts/restore-local-eliza-workspace.mjs
+      - name: Build
+        run: |
+          bunx tsdown
+          printf '{"type":"module"}\n' > dist/package.json
+          node --import tsx scripts/write-build-info.ts
+      - name: Validate package
+        run: |
+          npm pack --dry-run 2>&1 | tee /tmp/pack-output.txt
+          grep -q "package.json" /tmp/pack-output.txt || echo "::warning::package.json missing from pack"
+
+  # ── Non-blocking platform builds (open issues on failure) ───────────
+  build-android:
+    name: Android AAB build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Setup workspace dependencies
+        uses: ./.github/actions/setup-bun-workspace
+        with:
+          bun-version: "1.3.11"
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+          install-native-deps: "false"
+          run-postinstall: "true"
+          skip-avatar-clone: "true"
+          no-vision-deps: "true"
+      - name: Restore legacy electrobun compatibility path
+        run: node scripts/ensure-legacy-electrobun-compat.mjs
+      - name: Prepare Android project
+        run: node eliza/packages/app-core/scripts/run-mobile-build.mjs android
+      - name: Build AAB
+        working-directory: apps/app/android
+        run: |
+          chmod +x ./gradlew
+          ./gradlew bundleRelease --no-daemon || echo "::warning::Android AAB build failed (non-blocking)"
+      - name: Upload AAB artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-aab
+          path: apps/app/android/app/build/outputs/bundle/release/*.aab
+          retention-days: 30
+          if-no-files-found: warn
+
+  build-snap:
+    name: Snap build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    env:
+      MILADY_SKIP_LOCAL_UPSTREAMS: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Init non-eliza submodules
+        run: |
+          node scripts/init-submodules.mjs
+          node scripts/disable-local-eliza-workspace.mjs
+      - name: Stage snapcraft.yaml
+        run: |
+          mkdir -p snap
+          cp eliza/packages/app-core/packaging/snap/snapcraft.yaml snap/snapcraft.yaml
+      - name: Normalize runner root ownership for snapd
+        run: |
+          set -euo pipefail
+          ROOT_OWNER="$(stat -c '%u:%g' /)"
+          echo "Runner root owner: ${ROOT_OWNER}"
+          if [ "${ROOT_OWNER}" = "0:0" ]; then
+            echo "Root is already 0:0 — snapd canonicalization OK"
+            exit 0
+          fi
+          echo "Attempting to repair / ownership so snapd/systemd path canonicalization accepts this runner"
+          if sudo -n chown root:root / 2>/dev/null; then
+            echo "Chown succeeded; new owner: $(stat -c '%u:%g' /)"
+          else
+            echo "::warning::Unable to chown / to root:root (sudo unavailable or passwordless sudo disabled). snapd may fail downstream. Remediation: run this job on a standard ubuntu-latest / ubuntu-24.04 GitHub-hosted runner, or configure the container image so / is owned by 0:0."
+          fi
+      - uses: snapcore/action-build@v1
+        id: snap
+      - name: Verify snap
+        run: |
+          sudo snap install --dangerous ${{ steps.snap.outputs.snap }} || echo "::warning::Snap install test failed (non-blocking)"
+      - name: Upload snap artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snap-package
+          path: ${{ steps.snap.outputs.snap }}
+          retention-days: 30
+          if-no-files-found: warn
+
+  build-flatpak:
+    name: Flatpak build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install flatpak tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y flathub org.freedesktop.Platform//24.08 org.freedesktop.Sdk//24.08 org.freedesktop.Sdk.Extension.node22//24.08
+      - name: Build flatpak
+        run: |
+          flatpak-builder --user --install-deps-from=flathub --force-clean build-dir eliza/packages/app-core/packaging/flatpak/com.milady.Milady.yml || echo "::warning::Flatpak build failed (non-blocking)"
+      - name: Upload flatpak artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flatpak-bundle
+          path: eliza/packages/app-core/packaging/flatpak/*.flatpak
+          retention-days: 30
+          if-no-files-found: warn
+
+  build-pypi:
+    name: PyPI package build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build wheel
+        run: |
+          pip install build
+          python -m build eliza/packages/app-core/packaging/pypi/ || echo "::warning::PyPI build failed (non-blocking)"
+      - name: Upload PyPI artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pypi-package
+          path: eliza/packages/app-core/packaging/pypi/dist/
+          retention-days: 30
+          if-no-files-found: warn
+
+  build-debian:
+    name: Debian package build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dpkg-dev debhelper fakeroot
+          curl -fsSL https://bun.sh/install | bash -s "bun-v1.3.10"
+          echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
+      - name: Build deb
+        run: |
+          if [ -f eliza/packages/app-core/packaging/debian/Makefile ] || [ -f eliza/packages/app-core/packaging/debian/rules ]; then
+            cd eliza/packages/app-core/packaging/debian
+            dpkg-buildpackage -us -uc -b || echo "::warning::Debian package build failed (non-blocking)"
+          elif [ -d debian ]; then
+            dpkg-buildpackage -us -uc -b || echo "::warning::Debian package build failed (non-blocking)"
+          else
+            echo "::warning::No debian packaging found — skipping"
+          fi
+      - name: Collect deb artifacts
+        if: success()
+        run: |
+          mkdir -p deb-output
+          cp ../*.deb deb-output/ 2>/dev/null || true
+      - name: Upload deb artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debian-package
+          path: deb-output/
+          retention-days: 30
+          if-no-files-found: warn
+  build-ios:
+    name: iOS build validation
+    needs: [version]
+    runs-on: macos-14
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Setup workspace dependencies
+        uses: ./.github/actions/setup-bun-workspace
+        with:
+          bun-version: "1.3.11"
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+          install-native-deps: "false"
+          run-postinstall: "true"
+          skip-avatar-clone: "true"
+          no-vision-deps: "true"
+      - name: Restore legacy electrobun compatibility path
+        run: node scripts/ensure-legacy-electrobun-compat.mjs
+      - name: Build iOS simulator app
+        run: node eliza/packages/app-core/scripts/run-mobile-build.mjs ios
+        env:
+          LANG: en_US.UTF-8
+      - name: Verify Xcode project
+        run: |
+          if [ -d ios/App ]; then
+            xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release -destination 'generic/platform=iOS' -dry-run || echo "::warning::iOS xcodebuild dry-run failed (non-blocking)"
+          else
+            echo "::warning::ios/App directory not found — skipping Xcode validation"
+          fi
+
+  build-macos-store:
+    name: macOS App Store build validation
+    needs: [version]
+    runs-on: macos-14
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.10"
+      - name: Init non-eliza submodules
+        run: |
+          node scripts/init-submodules.mjs
+          node scripts/disable-local-eliza-workspace.mjs
+      - name: Build web assets and Electrobun
+        run: |
+          bun install --ignore-scripts
+          bun run postinstall
+          ELECTROBUN_SKIP_CODESIGN=1 bun run build || echo "::warning::macOS build failed (non-blocking)"
+
+  build-homepage:
+    name: Homepage build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: ./.github/actions/setup-bun-workspace
+        with:
+          disable-local-eliza-workspace: "true"
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+      - name: Restore eliza workspace paths for homepage scripts
+        run: node scripts/restore-local-eliza-workspace.mjs
+      - name: Generate release metadata
+        run: node scripts/write-homepage-release-data.mjs || echo "::warning::Release metadata gen failed"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build homepage
+        run: bun run build:web
+
+  build-docs:
+    name: Docs validation
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate docs config
+        run: |
+          node -e "const c = require('./docs/docs.json'); console.log('Docs config valid:', c.name)" || echo "::warning::docs.json invalid"
+      - name: Check for broken internal links
+        run: |
+          find docs -name '*.md' -o -name '*.mdx' | head -5 | while read f; do
+            grep -oE '\]\([^)]+\)' "$f" | grep -v 'http' | head -3
+          done
+          echo "Docs link check complete"
+
+  # ── 4. Electrobun + Docker green → tag and publish ─────────────────
+  # NOTE: After the publish job creates a GitHub Release, release-orchestrator.yml
+  # fans out the post-release distribution graph:
+  #   - publish-npm.yml          → npm registry
+  #   - publish-packages.yml     → PyPI, Snap Store, Debian/APT, Flatpak
+  #   - android-release.yml      → Google Play Store
+  #   - apple-store-release.yml  → TestFlight / App Store / Mac App Store
+  #   - deploy-web.yml           → Homepage deployment
+  #   - update-homebrew.yml      → Homebrew tap update
+  # The cloud image is still pushed via the explicit post-publish job below.
+  publish:
+    name: Tag & publish release
+    needs: [version, build-electrobun, build-docker, build-cloud-image, build-npm]
+    if: always() && needs.build-electrobun.result == 'success' && needs.build-docker.result == 'success' && needs.build-cloud-image.result == 'success'
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    permissions:
+      contents: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Create and push tag
+        env:
+          TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists on origin; reusing existing tag"
+            exit 0
+          fi
+
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Local tag $TAG already exists; pushing it to origin"
+          else
+            git tag -a "$TAG" -m "Release $TAG — all builds verified"
+          fi
+
+          git push origin "$TAG"
+
+      - name: Generate release changelog
+        id: changelog
+        env:
+          TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          PREVIOUS_TAG="$(git tag --sort=-creatordate | grep '^v' | grep -vx "$TAG" | head -1 || true)"
+          CHANGELOG_FILE="$RUNNER_TEMP/full-release-changelog.md"
+          {
+            echo "## Full changelog"
+            echo
+            if [ -n "$PREVIOUS_TAG" ]; then
+              echo "- Previous tag: \`$PREVIOUS_TAG\`"
+              echo "- Compare: https://github.com/${{ github.repository }}/compare/$PREVIOUS_TAG...$TAG"
+            else
+              echo "- Previous tag: none"
+            fi
+            echo
+            if [ -n "$PREVIOUS_TAG" ]; then
+              git log --date=short --pretty=format:'- %s (%h, %ad)' "$PREVIOUS_TAG..HEAD"
+            else
+              git log --date=short --pretty=format:'- %s (%h, %ad)'
+            fi
+            echo
+          } > "$CHANGELOG_FILE"
+          echo "previous_tag=$PREVIOUS_TAG" >> "$GITHUB_OUTPUT"
+          echo "file=$CHANGELOG_FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub release
+        uses: actions/github-script@v7
+        env:
+          TAG: ${{ needs.version.outputs.tag }}
+          PRERELEASE: ${{ needs.version.outputs.prerelease }}
+          NPM_RESULT: ${{ needs.build-npm.result }}
+          PREVIOUS_TAG: ${{ steps.changelog.outputs.previous_tag }}
+          CHANGELOG_FILE: ${{ steps.changelog.outputs.file }}
+        with:
+          github-token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const tag = process.env.TAG;
+            const prerelease = process.env.PRERELEASE === 'true';
+            const npmOk = process.env.NPM_RESULT === 'success';
+            const previousTag = process.env.PREVIOUS_TAG || '';
+            const fullChangelog = fs.readFileSync(process.env.CHANGELOG_FILE, 'utf8').trim();
+
+            let generatedNotes = '';
+            try {
+              const notesResponse = await github.rest.repos.generateReleaseNotes({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag_name: tag,
+                ...(previousTag ? { previous_tag_name: previousTag } : {}),
+              });
+              generatedNotes = notesResponse.data.body?.trim() ?? '';
+            } catch (error) {
+              core.warning(`Could not generate GitHub release notes: ${error.message}`);
+            }
+
+            const releasePayload = {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: tag,
+              name: tag,
+              body: [
+                `## ${tag}`,
+                '',
+                prerelease ? '⚠️ Pre-release (alpha)' : '✅ Stable release',
+                '',
+                previousTag ? `**Previous tag:** ${previousTag}` : '**Previous tag:** none',
+                `**Triggered by:** @${context.actor}`,
+                '',
+                '### Release verification',
+                '- ✅ Electrobun desktop — full matrix (macOS ARM, macOS Intel, Windows, Linux)',
+                '- ✅ Canonical agent image — built successfully',
+                '- ✅ Cloud app image — built successfully',
+                npmOk ? '- ✅ npm package — built and validated' : '- ⚠️ npm package — build failed (non-blocking)',
+                '',
+                generatedNotes ? '## Release notes' : null,
+                generatedNotes || null,
+                generatedNotes ? '' : null,
+                fullChangelog,
+                '',
+                '### Publishing pipelines (auto-triggered by this release)',
+                '- ✅ Electrobun artifacts (uploaded during build phase)',
+                '- 🔄 Post-release distribution orchestrator → release-orchestrator.yml',
+                '- 🔄 npm publish → publish-npm.yml',
+                '- 🔄 PyPI / Snap / Debian / Flatpak → publish-packages.yml',
+                '- 🔄 Agent Docker image → build-docker.yml (GHCR push)',
+                '- 🔄 Cloud app Docker image → post-publish push',
+                '- 🔄 Android → android-release.yml (Play Store track by channel)',
+                '- 🔄 iOS / macOS → apple-store-release.yml (TestFlight or App Store by channel)',
+                '- 🔄 Homebrew → update-homebrew.yml',
+                '- 🔄 Homepage → deploy-web.yml',
+              ].filter(Boolean).join('\n'),
+              prerelease,
+              draft: false,
+              generate_release_notes: false,
+            };
+
+            const releases = await github.paginate(github.rest.repos.listReleases, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100,
+            });
+            const matchingReleases = releases.filter((release) => release.tag_name === tag);
+            const existingRelease = matchingReleases.find((release) => !release.draft) ?? matchingReleases[0] ?? null;
+
+            for (const duplicate of matchingReleases) {
+              if (existingRelease && duplicate.id !== existingRelease.id && duplicate.draft) {
+                await github.rest.repos.deleteRelease({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  release_id: duplicate.id,
+                });
+              }
+            }
+
+            let release;
+            if (existingRelease) {
+              const { data } = await github.rest.repos.updateRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: existingRelease.id,
+                tag_name: releasePayload.tag_name,
+                name: releasePayload.name,
+                body: releasePayload.body,
+                prerelease: releasePayload.prerelease,
+                draft: releasePayload.draft,
+                generate_release_notes: releasePayload.generate_release_notes,
+              });
+              release = data;
+              core.info(`Updated release: ${release.html_url}`);
+            } else {
+              const { data } = await github.rest.repos.createRelease(releasePayload);
+              release = data;
+              core.info(`Created release: ${release.html_url}`);
+            }
+
+            if (context.payload.issue) {
+              const issue = context.payload.issue.number;
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: issue,
+                body: `🚀 **Release ${tag} published**\n\n${release.html_url}`,
+              });
+              await github.rest.issues.update({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: issue, state: 'closed', state_reason: 'completed',
+              });
+              try { await github.rest.issues.removeLabel({ owner: context.repo.owner, repo: context.repo.repo, issue_number: issue, name: 'release-ready' }); } catch (e) {}
+            }
+
+  # ── 5. Post-publish: push Docker images that were build-only verified ─
+  push-cloud-image:
+    name: Push cloud app image to GHCR
+    needs: [version, publish]
+    if: needs.publish.result == 'success'
+    uses: ./.github/workflows/build-cloud-image.yml
+    with:
+      version: ${{ needs.version.outputs.tag }}
+      push_image: true
+      source_sha: ${{ github.sha }}
+    secrets: inherit
+
+ | sort -V | tail -1 || true)"
+            LATEST_STABLE="$(git tag | grep '^v[0-9]\+\.[0-9]\+\.[0-9]\+ || true)"
+            ALPHA_BASE="$(echo "$LATEST_ALPHA" | sed 's/^v//' | sed 's/-alpha\.[0-9]*$//' )"
+            STABLE_VERSION="${LATEST_STABLE#v}"
+
+            if [ -z "$LATEST_STABLE" ] && [ -z "$LATEST_ALPHA" ]; then
+              VERSION="2.0.0"
+            elif [ -z "$LATEST_STABLE" ]; then
+              VERSION="$ALPHA_BASE"
+            elif [ -n "$ALPHA_BASE" ] && [ "$(printf '%s\n%s\n' "$ALPHA_BASE" "$STABLE_VERSION" | sort -V | tail -1)" = "$ALPHA_BASE" ] && [ "$ALPHA_BASE" != "$STABLE_VERSION" ]; then
+              VERSION="$ALPHA_BASE"
+            else
+              VERSION="$(bump_patch "$STABLE_VERSION")"
+            fi
+          else
+            LATEST="$(git tag | grep '^v[0-9]\+\.[0-9]\+\.[0-9]\+-alpha\.[0-9]\+ || true)"
+            if [ -z "$LATEST" ]; then VERSION="2.0.0-alpha.1"
+            else
+              PREFIX=$(echo "$LATEST" | sed 's/\.[0-9]*$/\./' | sed 's/^v//')
+              NUM=$(echo "$LATEST" | grep -oE '[0-9]+$')
+              VERSION="${PREFIX}$((NUM + 1))"
+            fi
+          fi
+          PRERELEASE=$( [ "$STABLE" = "true" ] && echo false || echo true )
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+          echo "Next: v$VERSION (prerelease=$PRERELEASE)"
+
+  # ── 3. FULL BUILD MATRIX (blocking — electrobun + generic/cloud docker) ─
+  build-electrobun:
+    name: Electrobun full matrix
+    needs: [version]
+    uses: ./.github/workflows/release-electrobun.yml
+    with:
+      tag: ${{ needs.version.outputs.tag }}
+      draft: true
+      publish_release: false
+    secrets: inherit
+
+  build-docker:
+    name: Agent image build
+    needs: [version]
+    uses: ./.github/workflows/build-docker.yml
+    with:
+      version: ${{ needs.version.outputs.tag }}
+      push_image: false
+      source_sha: ${{ github.sha }}
+    secrets: inherit
+
+  build-cloud-image:
+    name: Cloud app image build
+    needs: [version]
+    uses: ./.github/workflows/build-cloud-image.yml
+    with:
+      version: ${{ needs.version.outputs.tag }}
+      push_image: false
+      source_sha: ${{ github.sha }}
+    secrets: inherit
+
+  build-npm:
+    name: npm package build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: ./.github/actions/setup-bun-workspace
+        with:
+          disable-local-eliza-workspace: "true"
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+      - name: Restore eliza workspace paths for release scripts
+        run: node scripts/restore-local-eliza-workspace.mjs
+      - name: Build
+        run: |
+          bunx tsdown
+          printf '{"type":"module"}\n' > dist/package.json
+          node --import tsx scripts/write-build-info.ts
+      - name: Validate package
+        run: |
+          npm pack --dry-run 2>&1 | tee /tmp/pack-output.txt
+          grep -q "package.json" /tmp/pack-output.txt || echo "::warning::package.json missing from pack"
+
+  # ── Non-blocking platform builds (open issues on failure) ───────────
+  build-android:
+    name: Android AAB build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Setup workspace dependencies
+        uses: ./.github/actions/setup-bun-workspace
+        with:
+          bun-version: "1.3.11"
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+          install-native-deps: "false"
+          run-postinstall: "true"
+          skip-avatar-clone: "true"
+          no-vision-deps: "true"
+      - name: Restore legacy electrobun compatibility path
+        run: node scripts/ensure-legacy-electrobun-compat.mjs
+      - name: Prepare Android project
+        run: node eliza/packages/app-core/scripts/run-mobile-build.mjs android
+      - name: Build AAB
+        working-directory: apps/app/android
+        run: |
+          chmod +x ./gradlew
+          ./gradlew bundleRelease --no-daemon || echo "::warning::Android AAB build failed (non-blocking)"
+      - name: Upload AAB artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-aab
+          path: apps/app/android/app/build/outputs/bundle/release/*.aab
+          retention-days: 30
+          if-no-files-found: warn
+
+  build-snap:
+    name: Snap build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    env:
+      MILADY_SKIP_LOCAL_UPSTREAMS: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Init non-eliza submodules
+        run: |
+          node scripts/init-submodules.mjs
+          node scripts/disable-local-eliza-workspace.mjs
+      - name: Stage snapcraft.yaml
+        run: |
+          mkdir -p snap
+          cp eliza/packages/app-core/packaging/snap/snapcraft.yaml snap/snapcraft.yaml
+      - name: Normalize runner root ownership for snapd
+        run: |
+          set -euo pipefail
+          ROOT_OWNER="$(stat -c '%u:%g' /)"
+          echo "Runner root owner: ${ROOT_OWNER}"
+          if [ "${ROOT_OWNER}" = "0:0" ]; then
+            echo "Root is already 0:0 — snapd canonicalization OK"
+            exit 0
+          fi
+          echo "Attempting to repair / ownership so snapd/systemd path canonicalization accepts this runner"
+          if sudo -n chown root:root / 2>/dev/null; then
+            echo "Chown succeeded; new owner: $(stat -c '%u:%g' /)"
+          else
+            echo "::warning::Unable to chown / to root:root (sudo unavailable or passwordless sudo disabled). snapd may fail downstream. Remediation: run this job on a standard ubuntu-latest / ubuntu-24.04 GitHub-hosted runner, or configure the container image so / is owned by 0:0."
+          fi
+      - uses: snapcore/action-build@v1
+        id: snap
+      - name: Verify snap
+        run: |
+          sudo snap install --dangerous ${{ steps.snap.outputs.snap }} || echo "::warning::Snap install test failed (non-blocking)"
+      - name: Upload snap artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snap-package
+          path: ${{ steps.snap.outputs.snap }}
+          retention-days: 30
+          if-no-files-found: warn
+
+  build-flatpak:
+    name: Flatpak build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install flatpak tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y flathub org.freedesktop.Platform//24.08 org.freedesktop.Sdk//24.08 org.freedesktop.Sdk.Extension.node22//24.08
+      - name: Build flatpak
+        run: |
+          flatpak-builder --user --install-deps-from=flathub --force-clean build-dir eliza/packages/app-core/packaging/flatpak/com.milady.Milady.yml || echo "::warning::Flatpak build failed (non-blocking)"
+      - name: Upload flatpak artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flatpak-bundle
+          path: eliza/packages/app-core/packaging/flatpak/*.flatpak
+          retention-days: 30
+          if-no-files-found: warn
+
+  build-pypi:
+    name: PyPI package build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build wheel
+        run: |
+          pip install build
+          python -m build eliza/packages/app-core/packaging/pypi/ || echo "::warning::PyPI build failed (non-blocking)"
+      - name: Upload PyPI artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pypi-package
+          path: eliza/packages/app-core/packaging/pypi/dist/
+          retention-days: 30
+          if-no-files-found: warn
+
+  build-debian:
+    name: Debian package build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dpkg-dev debhelper fakeroot
+          curl -fsSL https://bun.sh/install | bash -s "bun-v1.3.10"
+          echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
+      - name: Build deb
+        run: |
+          if [ -f eliza/packages/app-core/packaging/debian/Makefile ] || [ -f eliza/packages/app-core/packaging/debian/rules ]; then
+            cd eliza/packages/app-core/packaging/debian
+            dpkg-buildpackage -us -uc -b || echo "::warning::Debian package build failed (non-blocking)"
+          elif [ -d debian ]; then
+            dpkg-buildpackage -us -uc -b || echo "::warning::Debian package build failed (non-blocking)"
+          else
+            echo "::warning::No debian packaging found — skipping"
+          fi
+      - name: Collect deb artifacts
+        if: success()
+        run: |
+          mkdir -p deb-output
+          cp ../*.deb deb-output/ 2>/dev/null || true
+      - name: Upload deb artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debian-package
+          path: deb-output/
+          retention-days: 30
+          if-no-files-found: warn
+  build-ios:
+    name: iOS build validation
+    needs: [version]
+    runs-on: macos-14
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Setup workspace dependencies
+        uses: ./.github/actions/setup-bun-workspace
+        with:
+          bun-version: "1.3.11"
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+          install-native-deps: "false"
+          run-postinstall: "true"
+          skip-avatar-clone: "true"
+          no-vision-deps: "true"
+      - name: Restore legacy electrobun compatibility path
+        run: node scripts/ensure-legacy-electrobun-compat.mjs
+      - name: Build iOS simulator app
+        run: node eliza/packages/app-core/scripts/run-mobile-build.mjs ios
+        env:
+          LANG: en_US.UTF-8
+      - name: Verify Xcode project
+        run: |
+          if [ -d ios/App ]; then
+            xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release -destination 'generic/platform=iOS' -dry-run || echo "::warning::iOS xcodebuild dry-run failed (non-blocking)"
+          else
+            echo "::warning::ios/App directory not found — skipping Xcode validation"
+          fi
+
+  build-macos-store:
+    name: macOS App Store build validation
+    needs: [version]
+    runs-on: macos-14
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.10"
+      - name: Init non-eliza submodules
+        run: |
+          node scripts/init-submodules.mjs
+          node scripts/disable-local-eliza-workspace.mjs
+      - name: Build web assets and Electrobun
+        run: |
+          bun install --ignore-scripts
+          bun run postinstall
+          ELECTROBUN_SKIP_CODESIGN=1 bun run build || echo "::warning::macOS build failed (non-blocking)"
+
+  build-homepage:
+    name: Homepage build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: ./.github/actions/setup-bun-workspace
+        with:
+          disable-local-eliza-workspace: "true"
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+      - name: Restore eliza workspace paths for homepage scripts
+        run: node scripts/restore-local-eliza-workspace.mjs
+      - name: Generate release metadata
+        run: node scripts/write-homepage-release-data.mjs || echo "::warning::Release metadata gen failed"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build homepage
+        run: bun run build:web
+
+  build-docs:
+    name: Docs validation
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate docs config
+        run: |
+          node -e "const c = require('./docs/docs.json'); console.log('Docs config valid:', c.name)" || echo "::warning::docs.json invalid"
+      - name: Check for broken internal links
+        run: |
+          find docs -name '*.md' -o -name '*.mdx' | head -5 | while read f; do
+            grep -oE '\]\([^)]+\)' "$f" | grep -v 'http' | head -3
+          done
+          echo "Docs link check complete"
+
+  # ── 4. Electrobun + Docker green → tag and publish ─────────────────
+  # NOTE: After the publish job creates a GitHub Release, release-orchestrator.yml
+  # fans out the post-release distribution graph:
+  #   - publish-npm.yml          → npm registry
+  #   - publish-packages.yml     → PyPI, Snap Store, Debian/APT, Flatpak
+  #   - android-release.yml      → Google Play Store
+  #   - apple-store-release.yml  → TestFlight / App Store / Mac App Store
+  #   - deploy-web.yml           → Homepage deployment
+  #   - update-homebrew.yml      → Homebrew tap update
+  # The cloud image is still pushed via the explicit post-publish job below.
+  publish:
+    name: Tag & publish release
+    needs: [version, build-electrobun, build-docker, build-cloud-image, build-npm]
+    if: always() && needs.build-electrobun.result == 'success' && needs.build-docker.result == 'success' && needs.build-cloud-image.result == 'success'
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    permissions:
+      contents: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Create and push tag
+        env:
+          TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists on origin; reusing existing tag"
+            exit 0
+          fi
+
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Local tag $TAG already exists; pushing it to origin"
+          else
+            git tag -a "$TAG" -m "Release $TAG — all builds verified"
+          fi
+
+          git push origin "$TAG"
+
+      - name: Generate release changelog
+        id: changelog
+        env:
+          TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          PREVIOUS_TAG="$(git tag --sort=-creatordate | grep '^v' | grep -vx "$TAG" | head -1 || true)"
+          CHANGELOG_FILE="$RUNNER_TEMP/full-release-changelog.md"
+          {
+            echo "## Full changelog"
+            echo
+            if [ -n "$PREVIOUS_TAG" ]; then
+              echo "- Previous tag: \`$PREVIOUS_TAG\`"
+              echo "- Compare: https://github.com/${{ github.repository }}/compare/$PREVIOUS_TAG...$TAG"
+            else
+              echo "- Previous tag: none"
+            fi
+            echo
+            if [ -n "$PREVIOUS_TAG" ]; then
+              git log --date=short --pretty=format:'- %s (%h, %ad)' "$PREVIOUS_TAG..HEAD"
+            else
+              git log --date=short --pretty=format:'- %s (%h, %ad)'
+            fi
+            echo
+          } > "$CHANGELOG_FILE"
+          echo "previous_tag=$PREVIOUS_TAG" >> "$GITHUB_OUTPUT"
+          echo "file=$CHANGELOG_FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub release
+        uses: actions/github-script@v7
+        env:
+          TAG: ${{ needs.version.outputs.tag }}
+          PRERELEASE: ${{ needs.version.outputs.prerelease }}
+          NPM_RESULT: ${{ needs.build-npm.result }}
+          PREVIOUS_TAG: ${{ steps.changelog.outputs.previous_tag }}
+          CHANGELOG_FILE: ${{ steps.changelog.outputs.file }}
+        with:
+          github-token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const tag = process.env.TAG;
+            const prerelease = process.env.PRERELEASE === 'true';
+            const npmOk = process.env.NPM_RESULT === 'success';
+            const previousTag = process.env.PREVIOUS_TAG || '';
+            const fullChangelog = fs.readFileSync(process.env.CHANGELOG_FILE, 'utf8').trim();
+
+            let generatedNotes = '';
+            try {
+              const notesResponse = await github.rest.repos.generateReleaseNotes({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag_name: tag,
+                ...(previousTag ? { previous_tag_name: previousTag } : {}),
+              });
+              generatedNotes = notesResponse.data.body?.trim() ?? '';
+            } catch (error) {
+              core.warning(`Could not generate GitHub release notes: ${error.message}`);
+            }
+
+            const releasePayload = {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: tag,
+              name: tag,
+              body: [
+                `## ${tag}`,
+                '',
+                prerelease ? '⚠️ Pre-release (alpha)' : '✅ Stable release',
+                '',
+                previousTag ? `**Previous tag:** ${previousTag}` : '**Previous tag:** none',
+                `**Triggered by:** @${context.actor}`,
+                '',
+                '### Release verification',
+                '- ✅ Electrobun desktop — full matrix (macOS ARM, macOS Intel, Windows, Linux)',
+                '- ✅ Canonical agent image — built successfully',
+                '- ✅ Cloud app image — built successfully',
+                npmOk ? '- ✅ npm package — built and validated' : '- ⚠️ npm package — build failed (non-blocking)',
+                '',
+                generatedNotes ? '## Release notes' : null,
+                generatedNotes || null,
+                generatedNotes ? '' : null,
+                fullChangelog,
+                '',
+                '### Publishing pipelines (auto-triggered by this release)',
+                '- ✅ Electrobun artifacts (uploaded during build phase)',
+                '- 🔄 Post-release distribution orchestrator → release-orchestrator.yml',
+                '- 🔄 npm publish → publish-npm.yml',
+                '- 🔄 PyPI / Snap / Debian / Flatpak → publish-packages.yml',
+                '- 🔄 Agent Docker image → build-docker.yml (GHCR push)',
+                '- 🔄 Cloud app Docker image → post-publish push',
+                '- 🔄 Android → android-release.yml (Play Store track by channel)',
+                '- 🔄 iOS / macOS → apple-store-release.yml (TestFlight or App Store by channel)',
+                '- 🔄 Homebrew → update-homebrew.yml',
+                '- 🔄 Homepage → deploy-web.yml',
+              ].filter(Boolean).join('\n'),
+              prerelease,
+              draft: false,
+              generate_release_notes: false,
+            };
+
+            const releases = await github.paginate(github.rest.repos.listReleases, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100,
+            });
+            const matchingReleases = releases.filter((release) => release.tag_name === tag);
+            const existingRelease = matchingReleases.find((release) => !release.draft) ?? matchingReleases[0] ?? null;
+
+            for (const duplicate of matchingReleases) {
+              if (existingRelease && duplicate.id !== existingRelease.id && duplicate.draft) {
+                await github.rest.repos.deleteRelease({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  release_id: duplicate.id,
+                });
+              }
+            }
+
+            let release;
+            if (existingRelease) {
+              const { data } = await github.rest.repos.updateRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: existingRelease.id,
+                tag_name: releasePayload.tag_name,
+                name: releasePayload.name,
+                body: releasePayload.body,
+                prerelease: releasePayload.prerelease,
+                draft: releasePayload.draft,
+                generate_release_notes: releasePayload.generate_release_notes,
+              });
+              release = data;
+              core.info(`Updated release: ${release.html_url}`);
+            } else {
+              const { data } = await github.rest.repos.createRelease(releasePayload);
+              release = data;
+              core.info(`Created release: ${release.html_url}`);
+            }
+
+            if (context.payload.issue) {
+              const issue = context.payload.issue.number;
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: issue,
+                body: `🚀 **Release ${tag} published**\n\n${release.html_url}`,
+              });
+              await github.rest.issues.update({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: issue, state: 'closed', state_reason: 'completed',
+              });
+              try { await github.rest.issues.removeLabel({ owner: context.repo.owner, repo: context.repo.repo, issue_number: issue, name: 'release-ready' }); } catch (e) {}
+            }
+
+  # ── 5. Post-publish: push Docker images that were build-only verified ─
+  push-cloud-image:
+    name: Push cloud app image to GHCR
+    needs: [version, publish]
+    if: needs.publish.result == 'success'
+    uses: ./.github/workflows/build-cloud-image.yml
+    with:
+      version: ${{ needs.version.outputs.tag }}
+      push_image: true
+      source_sha: ${{ github.sha }}
+    secrets: inherit
+
+ | sort -V | tail -1 || true)"
+            if [ -z "$LATEST" ]; then VERSION="2.0.0-alpha.1"
+            else
+              PREFIX=$(echo "$LATEST" | sed 's/\.[0-9]*$/\./' | sed 's/^v//')
+              NUM=$(echo "$LATEST" | grep -oE '[0-9]+$')
+              VERSION="${PREFIX}$((NUM + 1))"
+            fi
+          fi
+          PRERELEASE=$( [ "$STABLE" = "true" ] && echo false || echo true )
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+          echo "Next: v$VERSION (prerelease=$PRERELEASE)"
+
+  # ── 3. FULL BUILD MATRIX (blocking — electrobun + generic/cloud docker) ─
+  build-electrobun:
+    name: Electrobun full matrix
+    needs: [version]
+    uses: ./.github/workflows/release-electrobun.yml
+    with:
+      tag: ${{ needs.version.outputs.tag }}
+      draft: true
+      publish_release: false
+    secrets: inherit
+
+  build-docker:
+    name: Agent image build
+    needs: [version]
+    uses: ./.github/workflows/build-docker.yml
+    with:
+      version: ${{ needs.version.outputs.tag }}
+      push_image: false
+      source_sha: ${{ github.sha }}
+    secrets: inherit
+
+  build-cloud-image:
+    name: Cloud app image build
+    needs: [version]
+    uses: ./.github/workflows/build-cloud-image.yml
+    with:
+      version: ${{ needs.version.outputs.tag }}
+      push_image: false
+      source_sha: ${{ github.sha }}
+    secrets: inherit
+
+  build-npm:
+    name: npm package build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: ./.github/actions/setup-bun-workspace
+        with:
+          disable-local-eliza-workspace: "true"
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+      - name: Restore eliza workspace paths for release scripts
+        run: node scripts/restore-local-eliza-workspace.mjs
+      - name: Build
+        run: |
+          bunx tsdown
+          printf '{"type":"module"}\n' > dist/package.json
+          node --import tsx scripts/write-build-info.ts
+      - name: Validate package
+        run: |
+          npm pack --dry-run 2>&1 | tee /tmp/pack-output.txt
+          grep -q "package.json" /tmp/pack-output.txt || echo "::warning::package.json missing from pack"
+
+  # ── Non-blocking platform builds (open issues on failure) ───────────
+  build-android:
+    name: Android AAB build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Setup workspace dependencies
+        uses: ./.github/actions/setup-bun-workspace
+        with:
+          bun-version: "1.3.11"
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+          install-native-deps: "false"
+          run-postinstall: "true"
+          skip-avatar-clone: "true"
+          no-vision-deps: "true"
+      - name: Restore legacy electrobun compatibility path
+        run: node scripts/ensure-legacy-electrobun-compat.mjs
+      - name: Prepare Android project
+        run: node eliza/packages/app-core/scripts/run-mobile-build.mjs android
+      - name: Build AAB
+        working-directory: apps/app/android
+        run: |
+          chmod +x ./gradlew
+          ./gradlew bundleRelease --no-daemon || echo "::warning::Android AAB build failed (non-blocking)"
+      - name: Upload AAB artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-aab
+          path: apps/app/android/app/build/outputs/bundle/release/*.aab
+          retention-days: 30
+          if-no-files-found: warn
+
+  build-snap:
+    name: Snap build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    env:
+      MILADY_SKIP_LOCAL_UPSTREAMS: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Init non-eliza submodules
+        run: |
+          node scripts/init-submodules.mjs
+          node scripts/disable-local-eliza-workspace.mjs
+      - name: Stage snapcraft.yaml
+        run: |
+          mkdir -p snap
+          cp eliza/packages/app-core/packaging/snap/snapcraft.yaml snap/snapcraft.yaml
+      - name: Normalize runner root ownership for snapd
+        run: |
+          set -euo pipefail
+          ROOT_OWNER="$(stat -c '%u:%g' /)"
+          echo "Runner root owner: ${ROOT_OWNER}"
+          if [ "${ROOT_OWNER}" = "0:0" ]; then
+            echo "Root is already 0:0 — snapd canonicalization OK"
+            exit 0
+          fi
+          echo "Attempting to repair / ownership so snapd/systemd path canonicalization accepts this runner"
+          if sudo -n chown root:root / 2>/dev/null; then
+            echo "Chown succeeded; new owner: $(stat -c '%u:%g' /)"
+          else
+            echo "::warning::Unable to chown / to root:root (sudo unavailable or passwordless sudo disabled). snapd may fail downstream. Remediation: run this job on a standard ubuntu-latest / ubuntu-24.04 GitHub-hosted runner, or configure the container image so / is owned by 0:0."
+          fi
+      - uses: snapcore/action-build@v1
+        id: snap
+      - name: Verify snap
+        run: |
+          sudo snap install --dangerous ${{ steps.snap.outputs.snap }} || echo "::warning::Snap install test failed (non-blocking)"
+      - name: Upload snap artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snap-package
+          path: ${{ steps.snap.outputs.snap }}
+          retention-days: 30
+          if-no-files-found: warn
+
+  build-flatpak:
+    name: Flatpak build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install flatpak tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y flathub org.freedesktop.Platform//24.08 org.freedesktop.Sdk//24.08 org.freedesktop.Sdk.Extension.node22//24.08
+      - name: Build flatpak
+        run: |
+          flatpak-builder --user --install-deps-from=flathub --force-clean build-dir eliza/packages/app-core/packaging/flatpak/com.milady.Milady.yml || echo "::warning::Flatpak build failed (non-blocking)"
+      - name: Upload flatpak artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flatpak-bundle
+          path: eliza/packages/app-core/packaging/flatpak/*.flatpak
+          retention-days: 30
+          if-no-files-found: warn
+
+  build-pypi:
+    name: PyPI package build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build wheel
+        run: |
+          pip install build
+          python -m build eliza/packages/app-core/packaging/pypi/ || echo "::warning::PyPI build failed (non-blocking)"
+      - name: Upload PyPI artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pypi-package
+          path: eliza/packages/app-core/packaging/pypi/dist/
+          retention-days: 30
+          if-no-files-found: warn
+
+  build-debian:
+    name: Debian package build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dpkg-dev debhelper fakeroot
+          curl -fsSL https://bun.sh/install | bash -s "bun-v1.3.10"
+          echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
+      - name: Build deb
+        run: |
+          if [ -f eliza/packages/app-core/packaging/debian/Makefile ] || [ -f eliza/packages/app-core/packaging/debian/rules ]; then
+            cd eliza/packages/app-core/packaging/debian
+            dpkg-buildpackage -us -uc -b || echo "::warning::Debian package build failed (non-blocking)"
+          elif [ -d debian ]; then
+            dpkg-buildpackage -us -uc -b || echo "::warning::Debian package build failed (non-blocking)"
+          else
+            echo "::warning::No debian packaging found — skipping"
+          fi
+      - name: Collect deb artifacts
+        if: success()
+        run: |
+          mkdir -p deb-output
+          cp ../*.deb deb-output/ 2>/dev/null || true
+      - name: Upload deb artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debian-package
+          path: deb-output/
+          retention-days: 30
+          if-no-files-found: warn
+  build-ios:
+    name: iOS build validation
+    needs: [version]
+    runs-on: macos-14
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Setup workspace dependencies
+        uses: ./.github/actions/setup-bun-workspace
+        with:
+          bun-version: "1.3.11"
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+          install-native-deps: "false"
+          run-postinstall: "true"
+          skip-avatar-clone: "true"
+          no-vision-deps: "true"
+      - name: Restore legacy electrobun compatibility path
+        run: node scripts/ensure-legacy-electrobun-compat.mjs
+      - name: Build iOS simulator app
+        run: node eliza/packages/app-core/scripts/run-mobile-build.mjs ios
+        env:
+          LANG: en_US.UTF-8
+      - name: Verify Xcode project
+        run: |
+          if [ -d ios/App ]; then
+            xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release -destination 'generic/platform=iOS' -dry-run || echo "::warning::iOS xcodebuild dry-run failed (non-blocking)"
+          else
+            echo "::warning::ios/App directory not found — skipping Xcode validation"
+          fi
+
+  build-macos-store:
+    name: macOS App Store build validation
+    needs: [version]
+    runs-on: macos-14
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.10"
+      - name: Init non-eliza submodules
+        run: |
+          node scripts/init-submodules.mjs
+          node scripts/disable-local-eliza-workspace.mjs
+      - name: Build web assets and Electrobun
+        run: |
+          bun install --ignore-scripts
+          bun run postinstall
+          ELECTROBUN_SKIP_CODESIGN=1 bun run build || echo "::warning::macOS build failed (non-blocking)"
+
+  build-homepage:
+    name: Homepage build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: ./.github/actions/setup-bun-workspace
+        with:
+          disable-local-eliza-workspace: "true"
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+      - name: Restore eliza workspace paths for homepage scripts
+        run: node scripts/restore-local-eliza-workspace.mjs
+      - name: Generate release metadata
+        run: node scripts/write-homepage-release-data.mjs || echo "::warning::Release metadata gen failed"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build homepage
+        run: bun run build:web
+
+  build-docs:
+    name: Docs validation
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate docs config
+        run: |
+          node -e "const c = require('./docs/docs.json'); console.log('Docs config valid:', c.name)" || echo "::warning::docs.json invalid"
+      - name: Check for broken internal links
+        run: |
+          find docs -name '*.md' -o -name '*.mdx' | head -5 | while read f; do
+            grep -oE '\]\([^)]+\)' "$f" | grep -v 'http' | head -3
+          done
+          echo "Docs link check complete"
+
+  # ── 4. Electrobun + Docker green → tag and publish ─────────────────
+  # NOTE: After the publish job creates a GitHub Release, release-orchestrator.yml
+  # fans out the post-release distribution graph:
+  #   - publish-npm.yml          → npm registry
+  #   - publish-packages.yml     → PyPI, Snap Store, Debian/APT, Flatpak
+  #   - android-release.yml      → Google Play Store
+  #   - apple-store-release.yml  → TestFlight / App Store / Mac App Store
+  #   - deploy-web.yml           → Homepage deployment
+  #   - update-homebrew.yml      → Homebrew tap update
+  # The cloud image is still pushed via the explicit post-publish job below.
+  publish:
+    name: Tag & publish release
+    needs: [version, build-electrobun, build-docker, build-cloud-image, build-npm]
+    if: always() && needs.build-electrobun.result == 'success' && needs.build-docker.result == 'success' && needs.build-cloud-image.result == 'success'
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    permissions:
+      contents: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Create and push tag
+        env:
+          TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists on origin; reusing existing tag"
+            exit 0
+          fi
+
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Local tag $TAG already exists; pushing it to origin"
+          else
+            git tag -a "$TAG" -m "Release $TAG — all builds verified"
+          fi
+
+          git push origin "$TAG"
+
+      - name: Generate release changelog
+        id: changelog
+        env:
+          TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          PREVIOUS_TAG="$(git tag --sort=-creatordate | grep '^v' | grep -vx "$TAG" | head -1 || true)"
+          CHANGELOG_FILE="$RUNNER_TEMP/full-release-changelog.md"
+          {
+            echo "## Full changelog"
+            echo
+            if [ -n "$PREVIOUS_TAG" ]; then
+              echo "- Previous tag: \`$PREVIOUS_TAG\`"
+              echo "- Compare: https://github.com/${{ github.repository }}/compare/$PREVIOUS_TAG...$TAG"
+            else
+              echo "- Previous tag: none"
+            fi
+            echo
+            if [ -n "$PREVIOUS_TAG" ]; then
+              git log --date=short --pretty=format:'- %s (%h, %ad)' "$PREVIOUS_TAG..HEAD"
+            else
+              git log --date=short --pretty=format:'- %s (%h, %ad)'
+            fi
+            echo
+          } > "$CHANGELOG_FILE"
+          echo "previous_tag=$PREVIOUS_TAG" >> "$GITHUB_OUTPUT"
+          echo "file=$CHANGELOG_FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub release
+        uses: actions/github-script@v7
+        env:
+          TAG: ${{ needs.version.outputs.tag }}
+          PRERELEASE: ${{ needs.version.outputs.prerelease }}
+          NPM_RESULT: ${{ needs.build-npm.result }}
+          PREVIOUS_TAG: ${{ steps.changelog.outputs.previous_tag }}
+          CHANGELOG_FILE: ${{ steps.changelog.outputs.file }}
+        with:
+          github-token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const tag = process.env.TAG;
+            const prerelease = process.env.PRERELEASE === 'true';
+            const npmOk = process.env.NPM_RESULT === 'success';
+            const previousTag = process.env.PREVIOUS_TAG || '';
+            const fullChangelog = fs.readFileSync(process.env.CHANGELOG_FILE, 'utf8').trim();
+
+            let generatedNotes = '';
+            try {
+              const notesResponse = await github.rest.repos.generateReleaseNotes({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag_name: tag,
+                ...(previousTag ? { previous_tag_name: previousTag } : {}),
+              });
+              generatedNotes = notesResponse.data.body?.trim() ?? '';
+            } catch (error) {
+              core.warning(`Could not generate GitHub release notes: ${error.message}`);
+            }
+
+            const releasePayload = {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: tag,
+              name: tag,
+              body: [
+                `## ${tag}`,
+                '',
+                prerelease ? '⚠️ Pre-release (alpha)' : '✅ Stable release',
+                '',
+                previousTag ? `**Previous tag:** ${previousTag}` : '**Previous tag:** none',
+                `**Triggered by:** @${context.actor}`,
+                '',
+                '### Release verification',
+                '- ✅ Electrobun desktop — full matrix (macOS ARM, macOS Intel, Windows, Linux)',
+                '- ✅ Canonical agent image — built successfully',
+                '- ✅ Cloud app image — built successfully',
+                npmOk ? '- ✅ npm package — built and validated' : '- ⚠️ npm package — build failed (non-blocking)',
+                '',
+                generatedNotes ? '## Release notes' : null,
+                generatedNotes || null,
+                generatedNotes ? '' : null,
+                fullChangelog,
+                '',
+                '### Publishing pipelines (auto-triggered by this release)',
+                '- ✅ Electrobun artifacts (uploaded during build phase)',
+                '- 🔄 Post-release distribution orchestrator → release-orchestrator.yml',
+                '- 🔄 npm publish → publish-npm.yml',
+                '- 🔄 PyPI / Snap / Debian / Flatpak → publish-packages.yml',
+                '- 🔄 Agent Docker image → build-docker.yml (GHCR push)',
+                '- 🔄 Cloud app Docker image → post-publish push',
+                '- 🔄 Android → android-release.yml (Play Store track by channel)',
+                '- 🔄 iOS / macOS → apple-store-release.yml (TestFlight or App Store by channel)',
+                '- 🔄 Homebrew → update-homebrew.yml',
+                '- 🔄 Homepage → deploy-web.yml',
+              ].filter(Boolean).join('\n'),
+              prerelease,
+              draft: false,
+              generate_release_notes: false,
+            };
+
+            const releases = await github.paginate(github.rest.repos.listReleases, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100,
+            });
+            const matchingReleases = releases.filter((release) => release.tag_name === tag);
+            const existingRelease = matchingReleases.find((release) => !release.draft) ?? matchingReleases[0] ?? null;
+
+            for (const duplicate of matchingReleases) {
+              if (existingRelease && duplicate.id !== existingRelease.id && duplicate.draft) {
+                await github.rest.repos.deleteRelease({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  release_id: duplicate.id,
+                });
+              }
+            }
+
+            let release;
+            if (existingRelease) {
+              const { data } = await github.rest.repos.updateRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: existingRelease.id,
+                tag_name: releasePayload.tag_name,
+                name: releasePayload.name,
+                body: releasePayload.body,
+                prerelease: releasePayload.prerelease,
+                draft: releasePayload.draft,
+                generate_release_notes: releasePayload.generate_release_notes,
+              });
+              release = data;
+              core.info(`Updated release: ${release.html_url}`);
+            } else {
+              const { data } = await github.rest.repos.createRelease(releasePayload);
+              release = data;
+              core.info(`Created release: ${release.html_url}`);
+            }
+
+            if (context.payload.issue) {
+              const issue = context.payload.issue.number;
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: issue,
+                body: `🚀 **Release ${tag} published**\n\n${release.html_url}`,
+              });
+              await github.rest.issues.update({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: issue, state: 'closed', state_reason: 'completed',
+              });
+              try { await github.rest.issues.removeLabel({ owner: context.repo.owner, repo: context.repo.repo, issue_number: issue, name: 'release-ready' }); } catch (e) {}
+            }
+
+  # ── 5. Post-publish: push Docker images that were build-only verified ─
+  push-cloud-image:
+    name: Push cloud app image to GHCR
+    needs: [version, publish]
+    if: needs.publish.result == 'success'
+    uses: ./.github/workflows/build-cloud-image.yml
+    with:
+      version: ${{ needs.version.outputs.tag }}
+      push_image: true
+      source_sha: ${{ github.sha }}
+    secrets: inherit
+
+ | sort -V | tail -1 || true)"
+            ALPHA_BASE="$(echo "$LATEST_ALPHA" | sed 's/^v//' | sed 's/-alpha\.[0-9]*$//' )"
+            STABLE_VERSION="${LATEST_STABLE#v}"
+
+            if [ -z "$LATEST_STABLE" ] && [ -z "$LATEST_ALPHA" ]; then
+              VERSION="2.0.0"
+            elif [ -z "$LATEST_STABLE" ]; then
+              VERSION="$ALPHA_BASE"
+            elif [ -n "$ALPHA_BASE" ] && [ "$(printf '%s\n%s\n' "$ALPHA_BASE" "$STABLE_VERSION" | sort -V | tail -1)" = "$ALPHA_BASE" ] && [ "$ALPHA_BASE" != "$STABLE_VERSION" ]; then
+              VERSION="$ALPHA_BASE"
+            else
+              VERSION="$(bump_patch "$STABLE_VERSION")"
+            fi
+          else
+            LATEST="$(git tag | grep '^v[0-9]\+\.[0-9]\+\.[0-9]\+-alpha\.[0-9]\+ || true)"
+            if [ -z "$LATEST" ]; then VERSION="2.0.0-alpha.1"
+            else
+              PREFIX=$(echo "$LATEST" | sed 's/\.[0-9]*$/\./' | sed 's/^v//')
+              NUM=$(echo "$LATEST" | grep -oE '[0-9]+$')
+              VERSION="${PREFIX}$((NUM + 1))"
+            fi
+          fi
+          PRERELEASE=$( [ "$STABLE" = "true" ] && echo false || echo true )
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+          echo "Next: v$VERSION (prerelease=$PRERELEASE)"
+
+  # ── 3. FULL BUILD MATRIX (blocking — electrobun + generic/cloud docker) ─
+  build-electrobun:
+    name: Electrobun full matrix
+    needs: [version]
+    uses: ./.github/workflows/release-electrobun.yml
+    with:
+      tag: ${{ needs.version.outputs.tag }}
+      draft: true
+      publish_release: false
+    secrets: inherit
+
+  build-docker:
+    name: Agent image build
+    needs: [version]
+    uses: ./.github/workflows/build-docker.yml
+    with:
+      version: ${{ needs.version.outputs.tag }}
+      push_image: false
+      source_sha: ${{ github.sha }}
+    secrets: inherit
+
+  build-cloud-image:
+    name: Cloud app image build
+    needs: [version]
+    uses: ./.github/workflows/build-cloud-image.yml
+    with:
+      version: ${{ needs.version.outputs.tag }}
+      push_image: false
+      source_sha: ${{ github.sha }}
+    secrets: inherit
+
+  build-npm:
+    name: npm package build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: ./.github/actions/setup-bun-workspace
+        with:
+          disable-local-eliza-workspace: "true"
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+      - name: Restore eliza workspace paths for release scripts
+        run: node scripts/restore-local-eliza-workspace.mjs
+      - name: Build
+        run: |
+          bunx tsdown
+          printf '{"type":"module"}\n' > dist/package.json
+          node --import tsx scripts/write-build-info.ts
+      - name: Validate package
+        run: |
+          npm pack --dry-run 2>&1 | tee /tmp/pack-output.txt
+          grep -q "package.json" /tmp/pack-output.txt || echo "::warning::package.json missing from pack"
+
+  # ── Non-blocking platform builds (open issues on failure) ───────────
+  build-android:
+    name: Android AAB build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Setup workspace dependencies
+        uses: ./.github/actions/setup-bun-workspace
+        with:
+          bun-version: "1.3.11"
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+          install-native-deps: "false"
+          run-postinstall: "true"
+          skip-avatar-clone: "true"
+          no-vision-deps: "true"
+      - name: Restore legacy electrobun compatibility path
+        run: node scripts/ensure-legacy-electrobun-compat.mjs
+      - name: Prepare Android project
+        run: node eliza/packages/app-core/scripts/run-mobile-build.mjs android
+      - name: Build AAB
+        working-directory: apps/app/android
+        run: |
+          chmod +x ./gradlew
+          ./gradlew bundleRelease --no-daemon || echo "::warning::Android AAB build failed (non-blocking)"
+      - name: Upload AAB artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-aab
+          path: apps/app/android/app/build/outputs/bundle/release/*.aab
+          retention-days: 30
+          if-no-files-found: warn
+
+  build-snap:
+    name: Snap build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    env:
+      MILADY_SKIP_LOCAL_UPSTREAMS: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Init non-eliza submodules
+        run: |
+          node scripts/init-submodules.mjs
+          node scripts/disable-local-eliza-workspace.mjs
+      - name: Stage snapcraft.yaml
+        run: |
+          mkdir -p snap
+          cp eliza/packages/app-core/packaging/snap/snapcraft.yaml snap/snapcraft.yaml
+      - name: Normalize runner root ownership for snapd
+        run: |
+          set -euo pipefail
+          ROOT_OWNER="$(stat -c '%u:%g' /)"
+          echo "Runner root owner: ${ROOT_OWNER}"
+          if [ "${ROOT_OWNER}" = "0:0" ]; then
+            echo "Root is already 0:0 — snapd canonicalization OK"
+            exit 0
+          fi
+          echo "Attempting to repair / ownership so snapd/systemd path canonicalization accepts this runner"
+          if sudo -n chown root:root / 2>/dev/null; then
+            echo "Chown succeeded; new owner: $(stat -c '%u:%g' /)"
+          else
+            echo "::warning::Unable to chown / to root:root (sudo unavailable or passwordless sudo disabled). snapd may fail downstream. Remediation: run this job on a standard ubuntu-latest / ubuntu-24.04 GitHub-hosted runner, or configure the container image so / is owned by 0:0."
+          fi
+      - uses: snapcore/action-build@v1
+        id: snap
+      - name: Verify snap
+        run: |
+          sudo snap install --dangerous ${{ steps.snap.outputs.snap }} || echo "::warning::Snap install test failed (non-blocking)"
+      - name: Upload snap artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snap-package
+          path: ${{ steps.snap.outputs.snap }}
+          retention-days: 30
+          if-no-files-found: warn
+
+  build-flatpak:
+    name: Flatpak build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install flatpak tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y flathub org.freedesktop.Platform//24.08 org.freedesktop.Sdk//24.08 org.freedesktop.Sdk.Extension.node22//24.08
+      - name: Build flatpak
+        run: |
+          flatpak-builder --user --install-deps-from=flathub --force-clean build-dir eliza/packages/app-core/packaging/flatpak/com.milady.Milady.yml || echo "::warning::Flatpak build failed (non-blocking)"
+      - name: Upload flatpak artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flatpak-bundle
+          path: eliza/packages/app-core/packaging/flatpak/*.flatpak
+          retention-days: 30
+          if-no-files-found: warn
+
+  build-pypi:
+    name: PyPI package build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build wheel
+        run: |
+          pip install build
+          python -m build eliza/packages/app-core/packaging/pypi/ || echo "::warning::PyPI build failed (non-blocking)"
+      - name: Upload PyPI artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pypi-package
+          path: eliza/packages/app-core/packaging/pypi/dist/
+          retention-days: 30
+          if-no-files-found: warn
+
+  build-debian:
+    name: Debian package build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dpkg-dev debhelper fakeroot
+          curl -fsSL https://bun.sh/install | bash -s "bun-v1.3.10"
+          echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
+      - name: Build deb
+        run: |
+          if [ -f eliza/packages/app-core/packaging/debian/Makefile ] || [ -f eliza/packages/app-core/packaging/debian/rules ]; then
+            cd eliza/packages/app-core/packaging/debian
+            dpkg-buildpackage -us -uc -b || echo "::warning::Debian package build failed (non-blocking)"
+          elif [ -d debian ]; then
+            dpkg-buildpackage -us -uc -b || echo "::warning::Debian package build failed (non-blocking)"
+          else
+            echo "::warning::No debian packaging found — skipping"
+          fi
+      - name: Collect deb artifacts
+        if: success()
+        run: |
+          mkdir -p deb-output
+          cp ../*.deb deb-output/ 2>/dev/null || true
+      - name: Upload deb artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debian-package
+          path: deb-output/
+          retention-days: 30
+          if-no-files-found: warn
+  build-ios:
+    name: iOS build validation
+    needs: [version]
+    runs-on: macos-14
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Setup workspace dependencies
+        uses: ./.github/actions/setup-bun-workspace
+        with:
+          bun-version: "1.3.11"
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+          install-native-deps: "false"
+          run-postinstall: "true"
+          skip-avatar-clone: "true"
+          no-vision-deps: "true"
+      - name: Restore legacy electrobun compatibility path
+        run: node scripts/ensure-legacy-electrobun-compat.mjs
+      - name: Build iOS simulator app
+        run: node eliza/packages/app-core/scripts/run-mobile-build.mjs ios
+        env:
+          LANG: en_US.UTF-8
+      - name: Verify Xcode project
+        run: |
+          if [ -d ios/App ]; then
+            xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release -destination 'generic/platform=iOS' -dry-run || echo "::warning::iOS xcodebuild dry-run failed (non-blocking)"
+          else
+            echo "::warning::ios/App directory not found — skipping Xcode validation"
+          fi
+
+  build-macos-store:
+    name: macOS App Store build validation
+    needs: [version]
+    runs-on: macos-14
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.10"
+      - name: Init non-eliza submodules
+        run: |
+          node scripts/init-submodules.mjs
+          node scripts/disable-local-eliza-workspace.mjs
+      - name: Build web assets and Electrobun
+        run: |
+          bun install --ignore-scripts
+          bun run postinstall
+          ELECTROBUN_SKIP_CODESIGN=1 bun run build || echo "::warning::macOS build failed (non-blocking)"
+
+  build-homepage:
+    name: Homepage build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: ./.github/actions/setup-bun-workspace
+        with:
+          disable-local-eliza-workspace: "true"
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+      - name: Restore eliza workspace paths for homepage scripts
+        run: node scripts/restore-local-eliza-workspace.mjs
+      - name: Generate release metadata
+        run: node scripts/write-homepage-release-data.mjs || echo "::warning::Release metadata gen failed"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build homepage
+        run: bun run build:web
+
+  build-docs:
+    name: Docs validation
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate docs config
+        run: |
+          node -e "const c = require('./docs/docs.json'); console.log('Docs config valid:', c.name)" || echo "::warning::docs.json invalid"
+      - name: Check for broken internal links
+        run: |
+          find docs -name '*.md' -o -name '*.mdx' | head -5 | while read f; do
+            grep -oE '\]\([^)]+\)' "$f" | grep -v 'http' | head -3
+          done
+          echo "Docs link check complete"
+
+  # ── 4. Electrobun + Docker green → tag and publish ─────────────────
+  # NOTE: After the publish job creates a GitHub Release, release-orchestrator.yml
+  # fans out the post-release distribution graph:
+  #   - publish-npm.yml          → npm registry
+  #   - publish-packages.yml     → PyPI, Snap Store, Debian/APT, Flatpak
+  #   - android-release.yml      → Google Play Store
+  #   - apple-store-release.yml  → TestFlight / App Store / Mac App Store
+  #   - deploy-web.yml           → Homepage deployment
+  #   - update-homebrew.yml      → Homebrew tap update
+  # The cloud image is still pushed via the explicit post-publish job below.
+  publish:
+    name: Tag & publish release
+    needs: [version, build-electrobun, build-docker, build-cloud-image, build-npm]
+    if: always() && needs.build-electrobun.result == 'success' && needs.build-docker.result == 'success' && needs.build-cloud-image.result == 'success'
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    permissions:
+      contents: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Create and push tag
+        env:
+          TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists on origin; reusing existing tag"
+            exit 0
+          fi
+
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Local tag $TAG already exists; pushing it to origin"
+          else
+            git tag -a "$TAG" -m "Release $TAG — all builds verified"
+          fi
+
+          git push origin "$TAG"
+
+      - name: Generate release changelog
+        id: changelog
+        env:
+          TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          PREVIOUS_TAG="$(git tag --sort=-creatordate | grep '^v' | grep -vx "$TAG" | head -1 || true)"
+          CHANGELOG_FILE="$RUNNER_TEMP/full-release-changelog.md"
+          {
+            echo "## Full changelog"
+            echo
+            if [ -n "$PREVIOUS_TAG" ]; then
+              echo "- Previous tag: \`$PREVIOUS_TAG\`"
+              echo "- Compare: https://github.com/${{ github.repository }}/compare/$PREVIOUS_TAG...$TAG"
+            else
+              echo "- Previous tag: none"
+            fi
+            echo
+            if [ -n "$PREVIOUS_TAG" ]; then
+              git log --date=short --pretty=format:'- %s (%h, %ad)' "$PREVIOUS_TAG..HEAD"
+            else
+              git log --date=short --pretty=format:'- %s (%h, %ad)'
+            fi
+            echo
+          } > "$CHANGELOG_FILE"
+          echo "previous_tag=$PREVIOUS_TAG" >> "$GITHUB_OUTPUT"
+          echo "file=$CHANGELOG_FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub release
+        uses: actions/github-script@v7
+        env:
+          TAG: ${{ needs.version.outputs.tag }}
+          PRERELEASE: ${{ needs.version.outputs.prerelease }}
+          NPM_RESULT: ${{ needs.build-npm.result }}
+          PREVIOUS_TAG: ${{ steps.changelog.outputs.previous_tag }}
+          CHANGELOG_FILE: ${{ steps.changelog.outputs.file }}
+        with:
+          github-token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const tag = process.env.TAG;
+            const prerelease = process.env.PRERELEASE === 'true';
+            const npmOk = process.env.NPM_RESULT === 'success';
+            const previousTag = process.env.PREVIOUS_TAG || '';
+            const fullChangelog = fs.readFileSync(process.env.CHANGELOG_FILE, 'utf8').trim();
+
+            let generatedNotes = '';
+            try {
+              const notesResponse = await github.rest.repos.generateReleaseNotes({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag_name: tag,
+                ...(previousTag ? { previous_tag_name: previousTag } : {}),
+              });
+              generatedNotes = notesResponse.data.body?.trim() ?? '';
+            } catch (error) {
+              core.warning(`Could not generate GitHub release notes: ${error.message}`);
+            }
+
+            const releasePayload = {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: tag,
+              name: tag,
+              body: [
+                `## ${tag}`,
+                '',
+                prerelease ? '⚠️ Pre-release (alpha)' : '✅ Stable release',
+                '',
+                previousTag ? `**Previous tag:** ${previousTag}` : '**Previous tag:** none',
+                `**Triggered by:** @${context.actor}`,
+                '',
+                '### Release verification',
+                '- ✅ Electrobun desktop — full matrix (macOS ARM, macOS Intel, Windows, Linux)',
+                '- ✅ Canonical agent image — built successfully',
+                '- ✅ Cloud app image — built successfully',
+                npmOk ? '- ✅ npm package — built and validated' : '- ⚠️ npm package — build failed (non-blocking)',
+                '',
+                generatedNotes ? '## Release notes' : null,
+                generatedNotes || null,
+                generatedNotes ? '' : null,
+                fullChangelog,
+                '',
+                '### Publishing pipelines (auto-triggered by this release)',
+                '- ✅ Electrobun artifacts (uploaded during build phase)',
+                '- 🔄 Post-release distribution orchestrator → release-orchestrator.yml',
+                '- 🔄 npm publish → publish-npm.yml',
+                '- 🔄 PyPI / Snap / Debian / Flatpak → publish-packages.yml',
+                '- 🔄 Agent Docker image → build-docker.yml (GHCR push)',
+                '- 🔄 Cloud app Docker image → post-publish push',
+                '- 🔄 Android → android-release.yml (Play Store track by channel)',
+                '- 🔄 iOS / macOS → apple-store-release.yml (TestFlight or App Store by channel)',
+                '- 🔄 Homebrew → update-homebrew.yml',
+                '- 🔄 Homepage → deploy-web.yml',
+              ].filter(Boolean).join('\n'),
+              prerelease,
+              draft: false,
+              generate_release_notes: false,
+            };
+
+            const releases = await github.paginate(github.rest.repos.listReleases, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100,
+            });
+            const matchingReleases = releases.filter((release) => release.tag_name === tag);
+            const existingRelease = matchingReleases.find((release) => !release.draft) ?? matchingReleases[0] ?? null;
+
+            for (const duplicate of matchingReleases) {
+              if (existingRelease && duplicate.id !== existingRelease.id && duplicate.draft) {
+                await github.rest.repos.deleteRelease({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  release_id: duplicate.id,
+                });
+              }
+            }
+
+            let release;
+            if (existingRelease) {
+              const { data } = await github.rest.repos.updateRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: existingRelease.id,
+                tag_name: releasePayload.tag_name,
+                name: releasePayload.name,
+                body: releasePayload.body,
+                prerelease: releasePayload.prerelease,
+                draft: releasePayload.draft,
+                generate_release_notes: releasePayload.generate_release_notes,
+              });
+              release = data;
+              core.info(`Updated release: ${release.html_url}`);
+            } else {
+              const { data } = await github.rest.repos.createRelease(releasePayload);
+              release = data;
+              core.info(`Created release: ${release.html_url}`);
+            }
+
+            if (context.payload.issue) {
+              const issue = context.payload.issue.number;
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: issue,
+                body: `🚀 **Release ${tag} published**\n\n${release.html_url}`,
+              });
+              await github.rest.issues.update({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: issue, state: 'closed', state_reason: 'completed',
+              });
+              try { await github.rest.issues.removeLabel({ owner: context.repo.owner, repo: context.repo.repo, issue_number: issue, name: 'release-ready' }); } catch (e) {}
+            }
+
+  # ── 5. Post-publish: push Docker images that were build-only verified ─
+  push-cloud-image:
+    name: Push cloud app image to GHCR
+    needs: [version, publish]
+    if: needs.publish.result == 'success'
+    uses: ./.github/workflows/build-cloud-image.yml
+    with:
+      version: ${{ needs.version.outputs.tag }}
+      push_image: true
+      source_sha: ${{ github.sha }}
+    secrets: inherit
+
+ | sort -V | tail -1 || true)"
             if [ -z "$LATEST" ]; then VERSION="2.0.0-alpha.1"
             else
               PREFIX=$(echo "$LATEST" | sed 's/\.[0-9]*$/\./' | sed 's/^v//')
