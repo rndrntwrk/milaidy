@@ -27,6 +27,28 @@ Artifacts:
 - Capture report: `/Users/shawwalters/eliza-workspace/milady/artifacts/lifeops-ux-review-2026-04-23/capture-report.json`
 - Individual screenshots: `/Users/shawwalters/eliza-workspace/milady/artifacts/lifeops-ux-review-2026-04-23/*.png`
 
+Verified post-fix artifacts:
+
+- Verified capture report: `/Users/shawwalters/eliza-workspace/milady/artifacts/lifeops-ux-review-2026-04-23-verified/capture-report.json`
+- Verified narrow contact sheet: `/Users/shawwalters/eliza-workspace/milady/artifacts/lifeops-ux-review-2026-04-23-verified/contact-narrow.png`
+- Verified screenshots: `/Users/shawwalters/eliza-workspace/milady/artifacts/lifeops-ux-review-2026-04-23-verified/*.png`
+
+Final narrow verification artifacts:
+
+- Final capture report: `/Users/shawwalters/eliza-workspace/milady/artifacts/lifeops-ux-review-2026-04-23-final/capture-report.json`
+- Final desktop capture report: `/Users/shawwalters/eliza-workspace/milady/artifacts/lifeops-ux-review-2026-04-23-final/capture-report-desktop.json`
+- Final screenshots: `/Users/shawwalters/eliza-workspace/milady/artifacts/lifeops-ux-review-2026-04-23-final/*.png`
+
+Implementation status since the initial review:
+
+- Narrow/mobile now uses a compact top section picker instead of the fixed left rail.
+- Document-level horizontal overflow is gone on the reviewed 390px and 1440px captures.
+- Messages and Mail now use a list-first narrow layout instead of rendering the desktop split pane at phone width.
+- Calendar narrow now renders as an agenda-style list instead of the desktop time grid.
+- Setup no longer clips its action row or horizontally shifts the page body on mobile.
+- Social and Screen Time no longer spend narrow space on prominent zero-value tiles by default.
+- The largest remaining work is now product and information-density cleanup, not shell breakage.
+
 ## Product Goal
 
 LifeOps should be the user's command surface for understanding:
@@ -71,13 +93,11 @@ Desktop:
 
 Narrow:
 
-- Every LifeOps section overflows horizontally.
-- Root cause is the fixed LifeOps nav rail width plus main content rendered side by side on a 390px viewport.
-- The content column begins around x=296px, leaving only a narrow slice visible.
-- Messages, Mail, Calendar, Reminders, and Settings become functionally unusable.
-- Top and bottom global app nav consume meaningful space while the LifeOps rail still remains expanded.
-
-This is the main release blocker.
+- Initial review: every LifeOps section overflowed horizontally because the fixed left rail stayed expanded on a 390px viewport.
+- Current state after implementation: the shell no longer overflows at 390px, and the LifeOps rail collapses into a compact top section picker.
+- Messages and Mail are now structurally usable on narrow screens because they open in list-first mode and only show the reader after selection.
+- Calendar, Settings, Payments, Reminders, Screen Time, and Social now capture without clipping at 390px.
+- Remaining narrow work is visual and product-focused: content pruning, agent visibility, and page-specific compression.
 
 ## Core UX Principle
 
@@ -165,9 +185,9 @@ Expected experience:
 
 Current gap:
 
-- Settings has useful access data, but it is mixed with explanatory copy, counts, connector internals, and advanced diagnostic panels.
-- "1/6" and "0/6" account counts are not meaningful to the user.
-- Repeated explanations about token location take space from status.
+- Settings has useful access data, but it is still mixed with advanced setup surfaces and long-tail connector detail.
+- Browser/device setup still needs a tighter default view with advanced controls hidden behind a clearer affordance.
+- The page is now structurally stable on narrow screens, but it still reads like setup plus diagnostics instead of a clean access matrix.
 
 ### Flow 4: Inbox Triage
 
@@ -202,8 +222,8 @@ Expected experience:
 Current gap:
 
 - Screen Time visuals are strong.
-- "Web 0m" and "Phone 0m" imply no usage, when the likely truth is missing data.
-- Social shows message zeros in prominent tiles and source coverage as bottom chips.
+- Zero-value metrics are now suppressed in the primary narrow view, but source readiness is still not explained clearly enough.
+- Social still needs a stronger separation between time, consumption, outbound activity, and source readiness when real data is present.
 - Social needs a clearer distinction between time, consumption, outbound activity, and source readiness.
 
 ### Flow 6: Calendar and Work Planning
@@ -236,7 +256,7 @@ Expected experience:
 
 Current gap:
 
-- Narrow layout is not usable. The fixed rail consumes most of the viewport and pushes page content off-screen.
+- The structural shell issue is fixed, but narrow layouts still need content pruning and tighter hierarchy on Overview, Calendar, and Access.
 
 ## Page And Widget Review
 
@@ -256,12 +276,12 @@ Assessment:
 - Top nav labels can truncate on desktop when combined with the right chat and section rail.
 - LifeOps rail dots are decorative unless they map to a real state. They should become meaningful status indicators or be removed.
 - Right chat is visually quiet but product-weak. It should become an agent activity/access rail with chat as one mode, or chat should include activity cards above the composer.
-- Narrow shell is the largest defect. It must collapse the LifeOps rail and right chat.
+- Narrow shell was the largest defect. The rail collapse is now implemented, but the shell still needs a more intentional agent/status story.
 
 Recommendation:
 
 - Desktop: keep the rail but make dots semantic: green live, amber needs setup, red needs approval/error, muted unavailable.
-- Narrow: replace expanded rail with a compact section picker and hide chat behind an icon button.
+- Narrow: compact section picker is the right pattern; keep it, but trim the labels and align it more tightly with page content.
 - Right rail: default to Agent Activity, not a generic empty chat.
 
 ### First-Run Setup Gate
@@ -425,7 +445,7 @@ Assessment:
 - It is an inbox, not an agent triage surface yet.
 - Needs response, unread, draft waiting, agent sent, and source status are more useful than raw channel counts.
 - Reply button is correct, but the user should see when the agent is drafting or waiting for confirmation.
-- Narrow layout is unusable because the whole three-pane area is pushed right.
+- Narrow layout is now structurally usable with a list-first reader flow, but it still lacks mobile-specific triage states and shortcuts.
 
 Recommendation:
 
@@ -451,6 +471,7 @@ Assessment:
 - Strong foundation for real Gmail review.
 - Current UI does not expose the key Gmail capabilities already planned: unresponded, spam review, recommendations, bulk operations, reply drafts, send confirmation.
 - Raw email content is readable, but there is no "why this matters" layer.
+- Narrow layout is now structurally usable with the same list-first reader flow as Messages.
 
 Recommendation:
 
@@ -592,6 +613,13 @@ Recommendation:
 - Dashboard cards should be single column or masonry with stable widths.
 - Calendar defaults to agenda.
 
+Implementation status:
+
+- The fixed left rail is gone on narrow layouts and replaced with a compact top section picker.
+- The shared shell already hides the right chat behind a drawer on narrow screens.
+- Messages and Mail now behave as list/detail route states on narrow screens.
+- Calendar still needs an agenda-first narrow mode.
+
 ## Data And State Model
 
 LifeOps needs a shared "agent operations" DTO for UI consumption. This should be returned by the application layer, not computed in presentation.
@@ -658,9 +686,9 @@ This DTO should power Overview, Agent, Access, and right rail status. The client
 ### Phase 1: Release Blockers
 
 1. Fix narrow layout.
-   - Collapse LifeOps rail below a breakpoint.
-   - Hide right chat behind a drawer below a breakpoint.
-   - Verify no horizontal overflow at 390px, 768px, 1024px, and 1440px.
+   - Done: collapse LifeOps rail below a breakpoint.
+   - Done: shared shell already hides right chat behind a drawer below a breakpoint.
+   - Done at 390px and 1440px for the reviewed sweep; 768px and 1024px still need to be added to deterministic verification.
 
 2. Add agent operations visibility.
    - Add Overview strip: Now, Done, Next, Needs approval.
@@ -687,9 +715,10 @@ This DTO should power Overview, Agent, Access, and right rail status. The client
    - Add day/week switch.
 
 3. Mail and Messages:
-   - Add needs-response and agent-draft filters.
-   - Add confirmation states for sends.
-   - Add bulk actions behind selection.
+   - Done: list-first mobile flow for narrow view.
+   - Remaining: add needs-response and agent-draft filters.
+   - Remaining: add confirmation states for sends.
+   - Remaining: add bulk actions behind selection.
 
 4. Calendar:
    - Default to agenda on narrow view.

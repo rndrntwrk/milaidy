@@ -262,3 +262,4 @@ scripts/codex-sniff.ts
 .tmp-live/
 signal-auth/
 test-results/
+artifacts/
