@@ -199,6 +199,7 @@ describe("release workflow path contract", () => {
       buildCloudImage.indexOf("Install published-workspace fallback dependencies"),
     );
     expect(buildCloudImage).toContain("tsconfig.declarations.json");
+    expect(buildCloudImage).toContain("cloud rebuild uses the root TypeScript compiler");
     expect(buildCloudImage).toContain("uses: bufbuild/buf-setup-action@v1");
     expect(buildCloudImage).toContain("buf dep update && buf generate");
     expect(buildCloudImage).toContain("cd ../typescript");
