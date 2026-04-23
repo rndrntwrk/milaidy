@@ -65,10 +65,11 @@ export OPENAI_API_KEY=sk-...
 
 | Model | Context | Best For |
 |-------|---------|---------|
-| `gpt-4o` | 128k | Multimodal reasoning, default |
-| `gpt-4o-mini` | 128k | Fast, cost-efficient tasks |
-| `gpt-4-turbo` | 128k | High-quality generation |
-| `gpt-3.5-turbo` | 16k | Simple tasks at low cost |
+| `gpt-4.1` | 1M | Latest flagship model |
+| `gpt-4.1-mini` | 1M | Fast, cost-efficient tasks |
+| `gpt-4.1-nano` | 1M | Ultra-fast, lowest cost |
+| `gpt-4o` | 128k | Multimodal reasoning |
+| `gpt-4o-mini` | 128k | Fast multimodal tasks |
 
 ### Reasoning Models
 

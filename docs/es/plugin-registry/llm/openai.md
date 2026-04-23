@@ -86,10 +86,11 @@ export OPENAI_API_KEY=sk-...
 
 | Modelo | Contexto | Mejor para |
 |--------|----------|------------|
-| `gpt-4o` | 128k | Razonamiento multimodal, predeterminado |
-| `gpt-4o-mini` | 128k | Tareas rápidas y económicas |
-| `gpt-4-turbo` | 128k | Generación de alta calidad |
-| `gpt-3.5-turbo` | 16k | Tareas simples a bajo costo |
+| `gpt-4.1` | 1M | Último modelo principal |
+| `gpt-4.1-mini` | 1M | Tareas rápidas y económicas |
+| `gpt-4.1-nano` | 1M | Ultra rápido, menor costo |
+| `gpt-4o` | 128k | Razonamiento multimodal |
+| `gpt-4o-mini` | 128k | Tareas multimodales rápidas |
 
 <div id="reasoning-models">
 
