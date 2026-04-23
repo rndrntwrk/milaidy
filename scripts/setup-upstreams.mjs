@@ -264,10 +264,12 @@ const TS_IGNORE_DEPRECATIONS_COMPAT_FILES = [
   path.join("packages", "shared", "tsconfig.json"),
   path.join("packages", "interop", "tsconfig.json"),
 ];
-const TSUP_IGNORE_DEPRECATIONS_COMPAT_FILES = [
+const PLUGIN_TS_IGNORE_DEPRECATIONS_COMPAT_FILES = [
   path.join("plugins", "plugin-calendly", "tsconfig.json"),
   path.join("plugins", "plugin-github", "tsconfig.json"),
+  path.join("plugins", "plugin-local-ai", "typescript", "tsconfig.json"),
   path.join("plugins", "plugin-shopify", "tsconfig.json"),
+  path.join("plugins", "plugin-wechat", "tsconfig.json"),
 ];
 const LIFEOPS_SETTINGS_SECTION_RELATIVE_PATH = path.join(
   "apps",
@@ -373,7 +375,7 @@ export function resolveTypeScriptIgnoreDeprecationsTarget(
     }
   }
 
-  return "5.0";
+  return "6.0";
 }
 
 function buildIgnoreDeprecationsCompatibilityReplacements(targetVersion) {
@@ -506,12 +508,12 @@ export function applyTypeScriptIgnoreDeprecationsCompatPatch(
       },
     );
   }
-  for (const relativePath of TSUP_IGNORE_DEPRECATIONS_COMPAT_FILES) {
+  for (const relativePath of PLUGIN_TS_IGNORE_DEPRECATIONS_COMPAT_FILES) {
     patchedReplacements += applyTextReplacements(
       path.join(elizaRoot, relativePath),
-      buildIgnoreDeprecationsCompatibilityReplacements("5.0"),
+      tsConfigReplacements,
       {
-        label: `tsup ignoreDeprecations compatibility patch (${relativePath})`,
+        label: `plugin ignoreDeprecations compatibility patch (${relativePath})`,
       },
     );
   }
@@ -1851,14 +1853,14 @@ export async function ensureElizaBuildOutputs(
 }
 
 /**
- * Ensure plugin-anthropic's tsconfig.build.json explicitly loads @types/bun.
+ * Ensure plugin-anthropic's tsconfig.build.json explicitly loads Bun types.
  *
  * When tsc runs `bun run build` for plugin-anthropic on fresh CI checkouts,
  * it reports TS2868 "Cannot find name 'Bun'" on init.ts / utils/claude-cli.ts
  * because the build config extends tsconfig.json but does not carry the
  * `compilerOptions.types` array forward deterministically. We force the
  * setting in-place so every CI/dev checkout sees a build config that
- * resolves @types/bun without relying on extends inheritance.
+ * resolves Bun globals without relying on extends inheritance.
  *
  * Idempotent: only writes when the desired types list is not already present.
  */
@@ -1898,13 +1900,13 @@ export function ensurePluginAnthropicBunTypes(
     ? compilerOptions.types
     : null;
 
-  if (existingTypes?.includes("bun")) {
+  if (existingTypes?.includes("bun-types")) {
     return false;
   }
 
   const nextTypes = existingTypes ? [...existingTypes] : ["node"];
-  if (!nextTypes.includes("bun")) {
-    nextTypes.push("bun");
+  if (!nextTypes.includes("bun-types")) {
+    nextTypes.push("bun-types");
   }
 
   const nextCompilerOptions = {
@@ -1922,7 +1924,7 @@ export function ensurePluginAnthropicBunTypes(
     `${JSON.stringify(nextParsed, null, indent)}\n`,
   );
   console.log(
-    `[setup-upstreams] Patched ${toDisplayPath(buildConfigPath)} to load @types/bun`,
+    `[setup-upstreams] Patched ${toDisplayPath(buildConfigPath)} to load Bun types`,
   );
   return true;
 }
