@@ -461,4 +461,27 @@ describe("release workflow path contract", () => {
       "symlink_installed_packages_into_manifest_node_modules",
     );
   });
+
+  it("patches generated Android files before the release Gradle build", () => {
+    const agentRelease = readWorkflow("agent-release.yml");
+
+    expect(agentRelease).toContain("Aligned generated Android Gradle wrapper");
+    expect(agentRelease).toContain(
+      "getDefaultProguardFile('proguard-android-optimize.txt')",
+    );
+  });
+
+  it("reuses release-installed Electrobun workspaces during packaging", () => {
+    const releaseElectrobun = readWorkflow("release-electrobun.yml");
+
+    expect(releaseElectrobun).toContain(
+      "name: Patch desktop build workspace install reuse",
+    );
+    expect(releaseElectrobun).toContain(
+      "Reusing release-installed app workspace dependencies",
+    );
+    expect(releaseElectrobun).toContain(
+      "Reusing release-installed Electrobun workspace dependencies",
+    );
+  });
 });

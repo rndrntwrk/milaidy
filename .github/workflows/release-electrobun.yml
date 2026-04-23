@@ -469,6 +469,41 @@ jobs:
       - name: Run repository postinstall patches
         run: bun run postinstall
 
+      - name: Patch desktop build workspace install reuse
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+          const script = "eliza/packages/app-core/scripts/desktop-build.mjs";
+          let source = fs.readFileSync(script, "utf8");
+          const appInstall = [
+            '  runBun(["install", "--ignore-scripts"], {',
+            "    cwd: APP_DIR,",
+            '    label: "Ensuring app workspace dependencies are installed",',
+            "  });",
+            "",
+          ].join("\n");
+          const electrobunInstall = [
+            '  runBun(["install", "--ignore-scripts"], {',
+            "    cwd: ELECTROBUN_DIR,",
+            '    label: "Ensuring Electrobun workspace dependencies are installed",',
+            "  });",
+            "",
+          ].join("\n");
+          if (!source.includes(appInstall) || !source.includes(electrobunInstall)) {
+            throw new Error("Could not find desktop workspace install hooks");
+          }
+          source = source
+            .replace(
+              appInstall,
+              '  console.log("[desktop-build] Reusing release-installed app workspace dependencies");\n',
+            )
+            .replace(
+              electrobunInstall,
+              '  console.log("[desktop-build] Reusing release-installed Electrobun workspace dependencies");\n',
+            );
+          fs.writeFileSync(script, source);
+          NODE
+
       - name: Cache Whisper models and binaries
         if: matrix.platform.os == 'macos' || matrix.platform.os == 'linux'
         uses: actions/cache@v4
