@@ -107,24 +107,38 @@ The same application path must work in both modes:
 
 Do not commit or directly use real owner Gmail captures. Use `bun run lifeops:gmail:export-fixture -- --out test/mocks/fixtures/gmail.scrubbed.json` only with a read-only access token and review the scrubbed output before committing.
 
-For a read-only real API shape check without writing a fixture, use:
+For a read-only real API shape check without writing a fixture, prefer the logged-in LifeOps connector. This exercises the same local app path the agent/UI use, including connector grant selection, refresh, search, and recommendations:
 
 ```bash
-GOOGLE_ACCESS_TOKEN=... bun run lifeops:gmail:real-smoke -- --query "in:inbox newer_than:7d" --max 5
+bun run lifeops:gmail:real-smoke -- --source lifeops --query "in:inbox newer_than:7d" --max 5
 ```
 
-For a real test send, use a dedicated test mailbox and require all send gates:
+The smoke output hashes IDs and redacts emails, URLs, names, subjects, and snippets by default. Set `MILADY_GMAIL_REAL_SMOKE_VERBOSE=1` only for a local manual inspection where scrubbed text content is intentionally needed.
+
+If the local API is not on the default dev ports, pass it explicitly:
 
 ```bash
-GOOGLE_ACCESS_TOKEN=... \
+MILADY_LIFEOPS_API_BASE=http://127.0.0.1:31337 \
+bun run lifeops:gmail:real-smoke -- --source lifeops --query "in:inbox" --max 5
+```
+
+The smoke script still supports direct Gmail API checks when a standalone token is intentionally provided:
+
+```bash
+GOOGLE_ACCESS_TOKEN=... bun run lifeops:gmail:real-smoke -- --source gmail --query "in:inbox newer_than:7d" --max 5
+```
+
+For a real test send through the logged-in LifeOps connector, use a dedicated test mailbox and require all send gates:
+
+```bash
 MILADY_GMAIL_REAL_SMOKE_SEND=1 \
 MILADY_ALLOW_REAL_GMAIL_WRITES=1 \
 MILADY_GMAIL_REAL_SMOKE_TO=test-recipient@example.com \
 MILADY_GMAIL_REAL_SMOKE_ALLOWLIST=test-recipient@example.com \
-bun run lifeops:gmail:real-smoke -- --send-test
+bun run lifeops:gmail:real-smoke -- --source lifeops --send-test
 ```
 
-Do not run real sends against production/personal contacts. Use a controlled test recipient and sweep by the generated `X-Milady-Test-Run` header or subject run id.
+Do not run real sends against production/personal contacts. Direct Gmail sends include an `X-Milady-Test-Run` header; LifeOps sends include the generated run id in the subject and body.
 
 Safe pipeline:
 
