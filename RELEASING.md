@@ -231,11 +231,11 @@ Example: 2.1.3 → 2010300
 ```bash
 # iOS (requires macOS + Xcode)
 bun run dev:ios          # Build + open in Xcode
-node scripts/run-mobile-build.mjs ios   # CI-style simulator build
+bun run build:ios        # CI-style simulator build
 
 # Android (requires Android SDK + JDK 21)
 bun run dev:android      # Build + open in Android Studio
-node scripts/run-mobile-build.mjs android   # CI-style debug build
+bun run build:android    # CI-style debug build
 ```
 
 ### Certificate Renewal

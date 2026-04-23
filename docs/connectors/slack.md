@@ -63,21 +63,13 @@ To explicitly disable the connector even when a token is present:
 }
 ```
 
-## Auto-Enable Mechanism
+## Setup
 
-The `plugin-auto-enable.ts` module checks `connectors.slack` in your config. If any of the fields `botToken`, `token`, or `apiKey` is truthy (and `enabled` is not explicitly `false`), the runtime automatically loads `@elizaos/plugin-slack`.
-
-No environment variable is required to trigger auto-enable — it is driven entirely by the connector config object.
-
-## Environment Variables
-
-When the connector is loaded, the runtime pushes the following secrets from your config into `process.env` for the plugin to consume:
-
-| Variable | Source | Description |
-|----------|--------|-------------|
-| `SLACK_BOT_TOKEN` | `botToken` | Bot token (`xoxb-...`) |
-| `SLACK_APP_TOKEN` | `appToken` | App-level token (`xapp-...`) for Socket Mode |
-| `SLACK_USER_TOKEN` | `userToken` | User token (`xoxp-...`) for user-scoped actions |
+1. Create a Slack app at [api.slack.com/apps](https://api.slack.com/apps).
+2. Enable **Socket Mode** and generate an **App-Level Token** (`xapp-...`).
+3. Under **OAuth & Permissions**, add the required bot scopes and install to your workspace to get a **Bot Token** (`xoxb-...`).
+4. Add both tokens to `connectors.slack` in your config.
+5. Start your agent -- the Slack connector will auto-enable.
 
 ## Transport Modes
 

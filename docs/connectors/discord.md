@@ -63,24 +63,6 @@ To explicitly disable the connector even when a token is present:
 }
 ```
 
-## Auto-Enable Mechanism
-
-The `plugin-auto-enable.ts` module checks `connectors.discord` in your config. If `token` (or `botToken` / `apiKey`) is truthy and `enabled` is not explicitly `false`, the runtime automatically loads `@elizaos/plugin-discord`.
-
-No environment variable is required to trigger auto-enable — it is driven entirely by the connector config object.
-
-## Environment Variables
-
-When loaded, secrets are pushed to `process.env` for the plugin to consume:
-
-| Variable | Source | Description |
-|----------|--------|-------------|
-| `DISCORD_API_TOKEN` | `token` | Primary bot token (always set) |
-| `DISCORD_BOT_TOKEN` | `token` | Mirror of `DISCORD_API_TOKEN` (both always set) |
-| `DISCORD_APPLICATION_ID` | `applicationId` | Application ID. Auto-resolved via Discord OAuth2 API if not set |
-
-Note: If `DISCORD_APPLICATION_ID` is not configured, the runtime automatically resolves it by calling `https://discord.com/api/v10/oauth2/applications/@me` with the bot token.
-
 ## Full Configuration Reference
 
 All fields are set under `connectors.discord` in `milady.json`.

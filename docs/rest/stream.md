@@ -348,6 +348,58 @@ Manually trigger TTS on the live stream.
 
 **Errors:** `400` text missing/too long; `429` already speaking; `503` bridge not attached.
 
+## Stream Source
+
+### Get Stream Source
+
+```
+GET /api/stream/source
+```
+
+Returns the current stream input source configuration.
+
+**Response:**
+```json
+{
+  "source": {
+    "type": "stream-tab",
+    "url": null
+  }
+}
+```
+
+### Set Stream Source
+
+```
+POST /api/stream/source
+```
+
+Switch the stream input source.
+
+**Request body:**
+```json
+{
+  "sourceType": "custom-url",
+  "customUrl": "https://example.com/stream"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `sourceType` | string | no | Source type (default: `"stream-tab"`) |
+| `customUrl` | string | no | Custom URL for the source (only used with custom-url type) |
+
+**Response:**
+```json
+{
+  "ok": true,
+  "source": {
+    "type": "custom-url",
+    "url": "https://example.com/stream"
+  }
+}
+```
+
 ## Visual Settings
 
 ### Get Stream Settings

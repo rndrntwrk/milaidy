@@ -44,19 +44,12 @@ To explicitly disable the connector even when a token is present:
 }
 ```
 
-## Auto-Enable Mechanism
+## Setup
 
-The `plugin-auto-enable.ts` module checks `connectors.telegram` in your config. If any of the fields `botToken`, `token`, or `apiKey` is truthy (and `enabled` is not explicitly `false`), the runtime automatically loads `@elizaos/plugin-telegram`.
-
-No environment variable is required to trigger auto-enable — it is driven entirely by the connector config object.
-
-## Environment Variables
-
-When the connector is loaded, the runtime pushes the following secret from your config into `process.env` for the plugin to consume:
-
-| Variable | Source | Description |
-|----------|--------|-------------|
-| `TELEGRAM_BOT_TOKEN` | `botToken` | Bot token from [@BotFather](https://t.me/BotFather) |
+1. Open Telegram and message [@BotFather](https://t.me/BotFather).
+2. Use `/newbot` to create a new bot and copy the **bot token**.
+3. Add the token to `connectors.telegram.botToken` in your config.
+4. Start your agent -- the Telegram connector will auto-enable.
 
 ## Full Configuration Reference
 
