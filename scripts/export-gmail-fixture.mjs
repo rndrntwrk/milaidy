@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -51,6 +52,21 @@ function scrubEmail(email, emailMap) {
   return next;
 }
 
+function scrubStableId(value, prefix, idMap) {
+  const key = String(value ?? "").trim();
+  if (!key) {
+    return `${prefix}-missing`;
+  }
+  const existing = idMap.get(key);
+  if (existing) {
+    return existing;
+  }
+  const digest = crypto.createHash("sha256").update(key).digest("hex");
+  const scrubbed = `${prefix}-${digest.slice(0, 16)}`;
+  idMap.set(key, scrubbed);
+  return scrubbed;
+}
+
 function scrubHeader(header, emailMap) {
   const name = String(header?.name ?? "");
   const value = String(header?.value ?? "");
@@ -61,15 +77,19 @@ function scrubHeader(header, emailMap) {
   };
 }
 
-function scrubMessage(message, index, emailMap) {
+function scrubMessage(message, index, emailMap, idMap, threadIdMap) {
   const headers = Array.isArray(message.payload?.headers)
     ? message.payload.headers
         .map((header) => scrubHeader(header, emailMap))
         .filter(Boolean)
     : [];
   return {
-    id: `fixture-msg-${index + 1}`,
-    threadId: `fixture-thread-${message.threadId ? String(message.threadId).slice(-6) : index + 1}`,
+    id: scrubStableId(message.id ?? `missing-message-${index}`, "fixture-msg", idMap),
+    threadId: scrubStableId(
+      message.threadId ?? `missing-thread-${index}`,
+      "fixture-thread",
+      threadIdMap,
+    ),
     labelIds: Array.isArray(message.labelIds) ? message.labelIds : [],
     snippet: scrubText(message.snippet, emailMap),
     internalDate: String(message.internalDate ?? Date.now()),
@@ -95,6 +115,18 @@ function assertScrubbed(value) {
         ...new Set(leakedEmails),
       ].join(", ")}`,
     );
+  }
+  const tokenPatterns = [
+    /\bya29\.[A-Za-z0-9._-]+\b/g,
+    /\bBearer\s+[A-Za-z0-9._-]+\b/gi,
+    /\brefresh_token\b/gi,
+    /\baccess_token\b/gi,
+  ];
+  for (const pattern of tokenPatterns) {
+    const matches = serialized.match(pattern);
+    if (matches && matches.length > 0) {
+      throw new Error("Scrubbed fixture still contains credential-like data.");
+    }
   }
 }
 
@@ -154,12 +186,14 @@ async function main() {
     );
   }
   const emailMap = new Map();
+  const idMap = new Map();
+  const threadIdMap = new Map();
   const scrubbed = {
     exportedAt: new Date().toISOString(),
     query,
     maxResults,
     messages: rawMessages.map((message, index) =>
-      scrubMessage(message, index, emailMap),
+      scrubMessage(message, index, emailMap, idMap, threadIdMap),
     ),
   };
   assertScrubbed(scrubbed);
