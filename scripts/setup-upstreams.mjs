@@ -1712,7 +1712,12 @@ async function ensureRepoLocalEliza(repoRoot) {
 
 export function ensureElizaTypescriptDependencyLinks(
   elizaRoot,
-  { repoRoot = path.dirname(elizaRoot), dependencies = ["@noble/hashes"] } = {},
+  {
+    repoRoot = path.dirname(elizaRoot),
+    // Do not link @noble/hashes by default: the Milady root often resolves v1
+    // (ethers/viem), while @elizaos/core requires v2 entrypoints (sha2.js, legacy.js).
+    dependencies = [],
+  } = {},
 ) {
   const packageDir = path.join(elizaRoot, "packages", "typescript");
   let linkedDependencies = 0;

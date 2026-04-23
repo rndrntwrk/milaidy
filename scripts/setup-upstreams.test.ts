@@ -49,21 +49,26 @@ afterEach(() => {
 });
 
 describe("ensureElizaTypescriptDependencyLinks", () => {
-  it("links root-installed @noble/hashes into the local core package", () => {
+  it("does not link any packages by default", () => {
     const repoRoot = makeTempDir();
     const elizaRoot = path.join(repoRoot, "eliza");
-    const rootNobleHashes = path.join(
-      repoRoot,
-      "node_modules",
-      "@noble",
-      "hashes",
-    );
+    expect(ensureElizaTypescriptDependencyLinks(elizaRoot)).toBe(0);
+  });
+
+  it("links an explicitly listed package from the repo root into core", () => {
+    const repoRoot = makeTempDir();
+    const elizaRoot = path.join(repoRoot, "eliza");
+    const targetPkg = path.join(repoRoot, "node_modules", "milady-test-link-pkg");
     writeFile(
-      path.join(rootNobleHashes, "package.json"),
-      '{"name":"@noble/hashes"}',
+      path.join(targetPkg, "package.json"),
+      '{"name":"milady-test-link-pkg"}',
     );
 
-    expect(ensureElizaTypescriptDependencyLinks(elizaRoot)).toBe(1);
+    expect(
+      ensureElizaTypescriptDependencyLinks(elizaRoot, {
+        dependencies: ["milady-test-link-pkg"],
+      }),
+    ).toBe(1);
     expect(
       fs.realpathSync(
         path.join(
@@ -71,11 +76,10 @@ describe("ensureElizaTypescriptDependencyLinks", () => {
           "packages",
           "typescript",
           "node_modules",
-          "@noble",
-          "hashes",
+          "milady-test-link-pkg",
         ),
       ),
-    ).toBe(fs.realpathSync(rootNobleHashes));
+    ).toBe(fs.realpathSync(targetPkg));
   });
 });
 
