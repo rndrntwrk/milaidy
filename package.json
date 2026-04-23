@@ -176,6 +176,7 @@
     "lifeops:benchmark:prompts:self-care": "bun eliza/packages/app-core/scripts/run-node-tsx.mjs eliza/packages/app-core/scripts/lifeops-prompt-benchmark.ts --suite self-care",
     "lifeops:benchmark:prompts:executive-assistant": "bun eliza/packages/app-core/scripts/run-node-tsx.mjs eliza/packages/app-core/scripts/lifeops-prompt-benchmark.ts --suite executive-assistant",
     "lifeops:gmail:export-fixture": "node scripts/export-gmail-fixture.mjs",
+    "lifeops:gmail:real-smoke": "node scripts/gmail-real-smoke.mjs",
     "test:integration": "bunx vitest run --config test/vitest/integration.config.ts",
     "test:mocks:smoke": "bunx vitest run --config test/mocks/vitest.config.ts",
     "test:audit:server": "node eliza/packages/app-core/scripts/audit-server-test-surface.mjs",

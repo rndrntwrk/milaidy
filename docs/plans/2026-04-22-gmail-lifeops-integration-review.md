@@ -51,19 +51,22 @@ Primary references:
 - The service layer requires `confirmSend` before Gmail sends.
 - Gmail action send paths now require explicit send confirmation instead of defaulting to send when planned fields are present.
 - LifeOps exposes Gmail bulk management for archive, trash, report spam, mark read/unread, and apply/remove label.
+- LifeOps exposes read-only Gmail recommendations so the agent/UI can suggest reply, archive, mark-read, or spam-review actions without executing a write.
+- LifeOps Gmail clients expose triage, search, needs-response, recommendations, unresponded, manage, and event-ingest calls with typed inputs and outputs.
 - LifeOps exposes thread-level unresponded detection from sent-thread chronology on the local OAuth path.
 - LifeOps accepts Gmail event ingestion and can fan out to event workflows, including n8n dispatch workflow steps.
 - `MILADY_BLOCK_REAL_GMAIL_WRITES=1` blocks direct Gmail writes unless traffic is routed to loopback mock or `MILADY_ALLOW_REAL_GMAIL_WRITES=1` is explicitly set.
 - `scripts/export-gmail-fixture.mjs` provides the read-only exporter/scrubber/validator path for producing scrubbed Gmail fixtures.
 - `MILADY_MOCK_GOOGLE_BASE` switches Google API and OAuth traffic to the local mock.
-- The Google mock now covers labels, drafts, batch modify/delete, message trash/untrash/delete, thread operations, watch/history, settings filters, and the existing message send/list/get routes.
+- The Google mock now covers labels, drafts, batch modify/delete, message trash/untrash/delete, thread operations, watch/history, settings filters, and message send/list/get routes.
+- The in-process Google mock applies Gmail-aware list filtering for `q`, `labelIds`, `maxResults`, `pageToken`, and `includeSpamTrash`, while still using Mockoon-compatible JSON as the editable fixture source.
 - The mock runtime records a request ledger through `requestLedger()` and `GET /__mock/requests`.
 - Mock runtime seeding can create a local Google grant for Gmail and Calendar smoke tests.
 - Unified inbox can fetch Gmail messages and expose reply-needed metadata.
 
 ### Major Gaps
 
-- The Mockoon JSON is still path-only and static. It does not enforce query behavior, auth scopes, pagination, request-body validity, retry errors, or state transitions.
+- The Mockoon JSON is still path-oriented; the in-process runner now adds Gmail query and pagination behavior, but it still does not enforce auth scopes, all request-body validity, retry errors, or persistent state transitions.
 - Scenario fields such as `expectedActions`, planner assertions, and some response checks are accepted but not enforced by the runner.
 - `gmailInbox` seeds and `gmailDeleteDrafts` cleanup declarations exist in scenarios but are not currently implemented.
 - Spam is classified as ignored instead of stored as a reviewable/reportable queue.
@@ -104,6 +107,25 @@ The same application path must work in both modes:
 
 Do not commit or directly use real owner Gmail captures. Use `bun run lifeops:gmail:export-fixture -- --out test/mocks/fixtures/gmail.scrubbed.json` only with a read-only access token and review the scrubbed output before committing.
 
+For a read-only real API shape check without writing a fixture, use:
+
+```bash
+GOOGLE_ACCESS_TOKEN=... bun run lifeops:gmail:real-smoke -- --query "in:inbox newer_than:7d" --max 5
+```
+
+For a real test send, use a dedicated test mailbox and require all send gates:
+
+```bash
+GOOGLE_ACCESS_TOKEN=... \
+MILADY_GMAIL_REAL_SMOKE_SEND=1 \
+MILADY_ALLOW_REAL_GMAIL_WRITES=1 \
+MILADY_GMAIL_REAL_SMOKE_TO=test-recipient@example.com \
+MILADY_GMAIL_REAL_SMOKE_ALLOWLIST=test-recipient@example.com \
+bun run lifeops:gmail:real-smoke -- --send-test
+```
+
+Do not run real sends against production/personal contacts. Use a controlled test recipient and sweep by the generated `X-Milady-Test-Run` header or subject run id.
+
 Safe pipeline:
 
 1. Read-only exporter runs against a dedicated test account or explicitly approved owner mailbox.
@@ -129,10 +151,10 @@ Safe pipeline:
 
 Remaining implementation units:
 
-1. Add a stateful Gmail fixture service or extend the runner with Gmail-specific handlers.
+1. Add persistent Gmail fixture state transitions for repeated writes in one scenario.
 2. Implement scenario seeds and cleanup for `gmailInbox`, connector status, per-run labels, drafts, and sent messages.
-3. Split spam into a reviewable category instead of dropping it as ignored.
-4. Add a Gmail sweeper for real-mode write tests with per-run labels and recipient allowlists.
+3. Split spam into a persisted review queue instead of only returning recommendation/review candidates.
+4. Add a Gmail sweeper for real-mode write tests with per-run labels, subject/header run IDs, and recipient allowlists.
 
 Implemented in this slice:
 
@@ -140,6 +162,8 @@ Implemented in this slice:
 - Gmail write guard for scenario/test mode.
 - Strict Gmail send confirmation in action paths.
 - Gmail inbox management use cases: archive, trash, report spam, mark read/unread, apply/remove label, batch modify.
+- Gmail recommendation use case for read-only suggested actions.
+- Gmail-aware mock list/search pagination and thread fixtures for API-shape verification.
 - True unresponded-thread detection from sent/inbox thread chronology.
 - LifeOps Gmail event contracts such as `gmail.message.received` and `gmail.thread.needs_response`.
 - LifeOps workflow action for n8n dispatch, keeping n8n as infrastructure and LifeOps as the policy layer.
