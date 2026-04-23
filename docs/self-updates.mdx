@@ -25,7 +25,7 @@ This version string is used as the baseline for all update comparisons.
 The update checker (`src/services/update-checker.ts`) fetches version metadata from the npm registry using the abbreviated metadata endpoint:
 
 ```
-GET https://registry.npmjs.org/milady
+GET https://registry.npmjs.org/miladyai
 Accept: application/vnd.npm.install-v1+json
 ```
 
@@ -117,7 +117,7 @@ When the interval has not elapsed, the `shouldSkipCheck()` function returns `tru
 The update checker fetches dist-tags from the npm registry:
 
 ```
-GET https://registry.npmjs.org/milady
+GET https://registry.npmjs.org/miladyai
 Accept: application/vnd.npm.install-v1+json
 ```
 

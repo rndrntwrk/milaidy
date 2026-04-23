@@ -5,12 +5,28 @@ description: "List, enable, or inspect plugins from the CLI."
 
 # `milady plugins`
 
-Inspects which plugins resolve in the current environment and can trigger sync or registry operations depending on flags.
+List, install, inspect, and manage plugins from the CLI.
+
+## Subcommands
+
+| Subcommand | Description |
+|------------|-------------|
+| `milady plugins list` | Show all loaded and available plugins |
+| `milady plugins list -q <name>` | Filter plugins by name |
+| `milady plugins list --limit <n>` | Limit results |
+| `milady plugins install <package>` | Install a plugin from the registry |
+| `milady plugins refresh` | Refresh the plugin registry cache |
+| `milady plugins config` | Show plugin configuration hints and env keys |
 
 ## Examples
 
 ```bash
-milady plugins
+milady plugins list
+milady plugins list -q telegram
+milady plugins install @elizaos/plugin-openai
+milady plugins install twitter@1.2.3
+milady plugins install @custom/plugin-x@2.0.0
+milady plugins refresh
 milady plugins --help
 ```
 

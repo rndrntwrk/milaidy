@@ -5,7 +5,7 @@ description: "Database maintenance and inspection for the local PGlite store."
 
 # `milady db`
 
-Low-level database utilities (backup hints, migrations status, or repair flows — exact subcommands vary by version).
+Low-level database utilities for the local PGlite store — backup, migration status, and repair.
 
 ## Examples
 
@@ -14,7 +14,11 @@ milady db
 milady db --help
 ```
 
+Run `milady db --help` for the full list of available subcommands.
+
+<Warning>
 Avoid running destructive operations while the API server holds the database lock.
+</Warning>
 
 ## Related
 
