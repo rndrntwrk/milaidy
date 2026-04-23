@@ -135,7 +135,7 @@ describe("release workflow path contract", () => {
     expect(snapBuild).not.toContain("bun install --ignore-scripts");
   });
 
-  it("checks out the eliza submodule before packaging workflows use submodule paths", () => {
+  it("hydrates agent release package jobs without recursive checkout", () => {
     const testPackaging = readWorkflow("test-packaging.yml");
     const publishPackages = readWorkflow("publish-packages.yml");
     const agentRelease = readWorkflow("agent-release.yml");
@@ -150,9 +150,11 @@ describe("release workflow path contract", () => {
       Array.from(publishPackages.matchAll(checkoutWithRecursiveSubmodules))
         .length,
     ).toBeGreaterThanOrEqual(4);
-    expect(
-      Array.from(agentRelease.matchAll(checkoutWithRecursiveSubmodules)).length,
-    ).toBeGreaterThanOrEqual(4);
+    expect(agentRelease).not.toContain("submodules: recursive");
+    expect(agentRelease).toContain("run: node scripts/init-submodules.mjs");
+    expect(agentRelease).toContain(
+      "run: |\n          node scripts/init-submodules.mjs\n          node scripts/disable-local-eliza-workspace.mjs",
+    );
   });
 
   it("initializes tracked workspace submodules before packing JS tarballs", () => {
