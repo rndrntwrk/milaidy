@@ -8,6 +8,8 @@ The Cohere plugin connects Milady agents to Cohere's language models, providing 
 
 **Package:** `@elizaos/plugin-cohere`
 
+> **Availability:** This plugin is not in the bundled registry (`plugins.json`). It is available from the remote elizaOS plugin registry and auto-enables when `COHERE_API_KEY` is set.
+
 ## Installation
 
 ```bash

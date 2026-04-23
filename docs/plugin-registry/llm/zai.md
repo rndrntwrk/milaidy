@@ -8,6 +8,8 @@ The Zai plugin connects Milady agents to Homunculus Labs' Zai models.
 
 **Package:** `@homunculuslabs/plugin-zai`
 
+> **Availability:** This plugin is not in the bundled registry (`plugins.json`). It is available from the remote elizaOS plugin registry.
+
 ## Installation
 
 ```bash

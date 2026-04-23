@@ -8,6 +8,8 @@ The DeepSeek plugin connects Milady agents to DeepSeek's API, providing access t
 
 **Package:** `@elizaos/plugin-deepseek`
 
+> **Availability:** This plugin is not in the bundled registry (`plugins.json`). It is available from the remote elizaOS plugin registry and auto-enables when `DEEPSEEK_API_KEY` is set.
+
 ## Installation
 
 ```bash

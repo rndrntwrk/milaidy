@@ -1,12 +1,14 @@
 ---
 title: "Platform Connectors"
 sidebarTitle: "Connectors"
-description: "Platform bridges for 28 messaging platforms — 18 auto-enabled from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Twitter, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, Lens, WeChat) plus 10 installable from the registry (BlueBubbles, Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
+description: "Platform bridges for messaging platforms and social networks — 22 connector plugins in the registry plus feature plugins (Blooio, Twilio, GitHub, Gmail Watch, WeChat, Twitter, Lens) that provide additional platform integrations."
 ---
 
 Connectors are platform bridges that allow your agent to communicate across messaging platforms and social networks. Each connector handles authentication, message routing, session management, and platform-specific features.
 
 ## Table of Contents
+
+**Connector Plugins**
 
 1. [Supported Platforms](#supported-platforms)
 2. [General Configuration](#general-configuration)
@@ -16,28 +18,34 @@ Connectors are platform bridges that allow your agent to communicate across mess
 6. [WhatsApp](#whatsapp)
 7. [Signal](#signal)
 8. [iMessage](#imessage)
-9. [Blooio](#blooio)
-10. [Microsoft Teams](#microsoft-teams)
-11. [Google Chat](#google-chat)
-12. [Twitter](#twitter)
-13. [Farcaster](#farcaster)
-14. [BlueBubbles](#bluebubbles)
-15. [Bluesky](#bluesky)
-16. [Instagram](#instagram)
-17. [Twitch](#twitch)
-18. [Mattermost](#mattermost)
-19. [WeChat](#wechat)
-20. [Matrix](#matrix)
-21. [Feishu / Lark](#feishu--lark)
-22. [Nostr](#nostr)
-23. [LINE](#line)
-24. [Zalo](#zalo)
-25. [Twilio](#twilio)
-26. [GitHub](#github)
-27. [Gmail Watch](#gmail-watch)
-28. [Nextcloud Talk](#nextcloud-talk)
-29. [Tlon](#tlon)
+9. [Microsoft Teams](#microsoft-teams)
+10. [Google Chat](#google-chat)
+11. [Farcaster](#farcaster)
+12. [BlueBubbles](#bluebubbles)
+13. [Bluesky](#bluesky)
+14. [Instagram](#instagram)
+15. [Twitch](#twitch)
+16. [Mattermost](#mattermost)
+17. [Matrix](#matrix)
+18. [Feishu / Lark](#feishu--lark)
+19. [Nostr](#nostr)
+20. [LINE](#line)
+21. [Zalo](#zalo)
+22. [Nextcloud Talk](#nextcloud-talk)
+23. [Tlon](#tlon)
+
+**Feature Plugins with Platform Integration**
+
+24. [Blooio](#blooio)
+25. [Twitter](#twitter)
+26. [WeChat](#wechat)
+27. [Twilio](#twilio)
+28. [GitHub](#github)
+29. [Gmail Watch](#gmail-watch)
 30. [Lens](#lens)
+
+**Reference**
+
 31. [Connector Lifecycle](#connector-lifecycle)
 32. [Multi-Account Support](#multi-account-support)
 33. [Session Management](#session-management)
@@ -46,7 +54,11 @@ Connectors are platform bridges that allow your agent to communicate across mess
 
 ## Supported Platforms
 
-Connectors marked **Auto** load automatically when their config is present in `milady.json`. Connectors marked **Registry** must be installed first with `milady plugins install <package>`.
+The plugin registry contains **22 connector-category plugins**. Connectors marked **Auto** load automatically when their config is present in `milady.json`. Connectors marked **Registry** must be installed first with `milady plugins install <package>`.
+
+Several additional platform integrations ship as **feature plugins** rather than connector plugins — these are listed in a separate table below.
+
+### Connector Plugins
 
 | Platform | Auth Method | DM Support | Group Support | Multi-Account | Availability |
 |----------|------------|------------|---------------|---------------|-------------|
@@ -56,28 +68,36 @@ Connectors marked **Auto** load automatically when their config is present in `m
 | WhatsApp | QR code (Baileys) or Cloud API | Yes | Yes | Yes | Auto |
 | Signal | signal-cli HTTP API | Yes | Yes | Yes | Auto |
 | iMessage | Native CLI (macOS) | Yes | Yes | Yes | Auto |
-| Blooio | API key + webhook | Yes | Yes | No | Auto |
 | Microsoft Teams | App ID + password | Yes | Yes (teams/channels) | No | Auto |
 | Google Chat | Service account | Yes | Yes (spaces) | Yes | Auto |
-| Twitter | API keys + tokens | DMs | N/A | No | Auto |
 | Farcaster | Neynar API key + signer | Casts | Yes (channels) | No | Auto |
 | Twitch | Client ID + access token | Yes (chat) | Yes (channels) | No | Auto |
 | Mattermost | Bot token | Yes | Yes (channels) | No | Auto |
-| WeChat | Proxy API key + QR code | Yes | Yes | Yes | Auto |
 | Matrix | Access token | Yes | Yes (rooms) | No | Auto |
 | Feishu / Lark | App ID + secret | Yes | Yes (group chats) | No | Auto |
 | Nostr | Private key (nsec/hex) | Yes (NIP-04) | N/A | No | Auto |
-| Lens | API key | Yes | N/A | No | Auto |
 | BlueBubbles | Server password | Yes | Yes | No | Registry |
 | Bluesky | Account credentials | Posts | N/A | No | Registry |
 | Instagram | Username + password | DMs | N/A | No | Registry |
 | LINE | Channel access token + secret | Yes | Yes | No | Registry |
 | Zalo | Access token | Yes | Yes | No | Registry |
-| Twilio | Account SID + auth token | SMS/Voice | N/A | No | Registry |
-| GitHub | API token | Issues/PRs | Yes (repos) | No | Registry |
-| Gmail Watch | Service account / OAuth | N/A | N/A | No | Registry |
+| Zalo User | Access token | Yes | No | No | Registry |
 | Nextcloud Talk | Server credentials | Yes | Yes (rooms) | No | Registry |
 | Tlon | Ship credentials | Yes | Yes (Urbit chats) | No | Registry |
+
+### Feature Plugins with Platform Integration
+
+These plugins are categorized as **feature** plugins in the registry, not connectors, but they provide messaging or platform integration capabilities. They auto-enable when their config or env vars are present.
+
+| Platform | Package | Auth Method | Notes |
+|----------|---------|------------|-------|
+| Blooio | `@elizaos/plugin-blooio` | API key + webhook | iMessage/SMS via Blooio bridge |
+| Twitter/X | `@elizaos/plugin-twitter` | API keys + tokens | Social posting and mention monitoring |
+| WeChat | `@elizaos/plugin-wechat` | Proxy API key + QR code | Third-party proxy; see [privacy notice](#wechat) |
+| Twilio | `@elizaos/plugin-twilio` | Account SID + auth token | SMS and voice calls |
+| GitHub | `@elizaos/plugin-github` | API token | Issues, PRs, repo management |
+| Gmail Watch | `@elizaos/plugin-gmail-watch` | Service account / OAuth | Gmail Pub/Sub message watching |
+| Lens | `@elizaos/plugin-lens` | API key | Lens Protocol social interactions |
 
 ---
 
@@ -354,6 +374,8 @@ See the [WhatsApp Integration Guide](/guides/whatsapp) for detailed setup instru
 
 ## Blooio
 
+> **Note:** Blooio is a **feature plugin** (`@elizaos/plugin-blooio`), not a connector-category plugin in the registry. It provides iMessage/SMS integration via the Blooio bridge service.
+
 Connects to iMessage and SMS messaging via the Blooio service with signed webhooks.
 
 ### Setup Requirements
@@ -461,6 +483,8 @@ Connects to iMessage and SMS messaging via the Blooio service with signed webhoo
 ---
 
 ## Twitter
+
+> **Note:** The Twitter/X plugin (`@elizaos/plugin-twitter`) is not currently in the bundled plugin registry. It is available as an upstream elizaOS plugin for social media posting and mention monitoring.
 
 ### Setup Requirements
 
@@ -705,6 +729,8 @@ Connects to iMessage and SMS messaging via the Blooio service with signed webhoo
 
 ## WeChat
 
+> **Note:** The WeChat plugin (`@elizaos/plugin-wechat`) is not currently in the bundled plugin registry. It is available as an upstream elizaOS plugin.
+
 Connects to WeChat via a third-party proxy service using personal account login.
 
 ### Setup Requirements
@@ -932,6 +958,8 @@ A personal-account variant is also available as `@elizaos/plugin-zalouser` for o
 
 ## Twilio
 
+> **Note:** Twilio is a **feature plugin** (`@elizaos/plugin-twilio`), not a connector-category plugin in the registry. It provides SMS and voice call capabilities.
+
 ### Setup Requirements
 
 - Twilio Account SID and Auth Token
@@ -963,6 +991,8 @@ A personal-account variant is also available as `@elizaos/plugin-zalouser` for o
 
 ## GitHub
 
+> **Note:** GitHub is a **feature plugin** (`@elizaos/plugin-github`), not a connector-category plugin in the registry. It provides repository management, issue tracking, and PR workflows.
+
 ### Setup Requirements
 
 - GitHub API token (personal access token or fine-grained token)
@@ -988,11 +1018,13 @@ A personal-account variant is also available as `@elizaos/plugin-zalouser` for o
 - Pull request workflows (create, review, merge)
 - Code search and file access
 
-**Note:** This connector is available from the plugin registry. Install it with `milady plugins install @elizaos/plugin-github`.
+**Install:** `milady plugins install @elizaos/plugin-github`
 
 ---
 
 ## Gmail Watch
+
+> **Note:** Gmail Watch is a **feature plugin** (`@elizaos/plugin-gmail-watch`), not a connector-category plugin in the registry. It provides Gmail Pub/Sub message watching.
 
 ### Setup Requirements
 
@@ -1071,6 +1103,8 @@ Gmail Watch is enabled via the `features.gmailWatch` flag or environment variabl
 ---
 
 ## Lens
+
+> **Note:** The Lens plugin (`@elizaos/plugin-lens`) is not currently in the bundled plugin registry. It is available as an upstream elizaOS plugin for Lens Protocol social interactions.
 
 **Plugin:** `@elizaos/plugin-lens`
 

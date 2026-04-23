@@ -8,6 +8,8 @@ The Qwen plugin connects Milady agents to Alibaba Cloud's Qwen (Tongyi Qianwen) 
 
 **Package:** `@elizaos/plugin-qwen`
 
+> **Availability:** This plugin is not in the bundled registry (`plugins.json`). It is available from the remote elizaOS plugin registry and auto-enables when `QWEN_API_KEY` or `DASHSCOPE_API_KEY` is set.
+
 ## Installation
 
 ```bash
