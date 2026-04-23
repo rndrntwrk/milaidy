@@ -4,9 +4,13 @@ sidebarTitle: "MiniMax"
 description: "MiniMax model provider for Milady — access MiniMax's language and multimodal models."
 ---
 
+<Warning>
+This plugin is not yet available in the Milady plugin registry. To use MiniMax models today, configure them through the [OpenRouter plugin](/plugin-registry/llm/openrouter) using the appropriate model ID.
+</Warning>
+
 The MiniMax plugin connects Milady agents to MiniMax's language models, providing access to their text generation and multimodal capabilities.
 
-**Package:** `@elizaos/plugin-minimax`
+**Package:** `@elizaos/plugin-minimax` (not yet published)
 
 ## Installation
 

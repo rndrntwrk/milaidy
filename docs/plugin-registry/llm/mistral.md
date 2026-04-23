@@ -4,9 +4,13 @@ sidebarTitle: "Mistral"
 description: "Mistral AI model provider for Milady — open-weight and commercial models with strong multilingual and coding capabilities."
 ---
 
+<Warning>
+This plugin is not yet available in the Milady plugin registry. To use Mistral models today, configure them through the [OpenRouter plugin](/plugin-registry/llm/openrouter) using the appropriate model ID.
+</Warning>
+
 The Mistral plugin connects Milady agents to Mistral AI models, offering both open-weight and commercial models with competitive performance, especially for European languages and code generation.
 
-**Package:** `@elizaos/plugin-mistral`
+**Package:** `@elizaos/plugin-mistral` (not yet published)
 
 ## Installation
 

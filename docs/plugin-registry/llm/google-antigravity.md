@@ -4,9 +4,13 @@ sidebarTitle: "Google Antigravity"
 description: "Google Cloud AI model provider for Milady — access Google Cloud AI Platform models via the Antigravity integration."
 ---
 
+<Warning>
+This plugin is not yet available in the Milady plugin registry. To use Google Antigravity models today, configure them through the [OpenRouter plugin](/plugin-registry/llm/openrouter) using the appropriate model ID.
+</Warning>
+
 The Google Antigravity plugin connects Milady agents to Google Cloud AI Platform, providing access to Google's cloud-hosted AI models through the Google Cloud API.
 
-**Package:** `@elizaos/plugin-google-antigravity`
+**Package:** `@elizaos/plugin-google-antigravity` (not yet published)
 
 ## Installation
 

@@ -33,7 +33,7 @@ In `~/.milady/milady.json`:
 ```
 
 <Warning>
-Use the `token` field — the Discord config schema uses strict validation and `botToken` is not a recognized schema field. While `botToken` triggers auto-enable detection, only `token` passes schema validation.
+Use the `token` field. While `botToken` and `apiKey` also trigger auto-enable detection, `token` is the canonical config key that passes schema validation.
 </Warning>
 
 ## Disabling the Connector

@@ -4,9 +4,13 @@ sidebarTitle: "Qwen"
 description: "Qwen model provider for Milady — access Alibaba Cloud's Qwen language models."
 ---
 
+<Warning>
+This plugin is not yet available in the Milady plugin registry. To use Qwen models today, configure them through the [OpenRouter plugin](/plugin-registry/llm/openrouter) using the appropriate model ID.
+</Warning>
+
 The Qwen plugin connects Milady agents to Alibaba Cloud's Qwen (Tongyi Qianwen) language models, providing access to multilingual models with strong Chinese and English capabilities.
 
-**Package:** `@elizaos/plugin-qwen`
+**Package:** `@elizaos/plugin-qwen` (not yet published)
 
 ## Installation
 

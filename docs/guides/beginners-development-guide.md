@@ -65,7 +65,7 @@ bun run milady --version
 
 ## 4) Repo map (mental model)
 
-Core areas (all under `eliza/packages/app-core/`):
+Core areas (all under `eliza/packages/app-core/` — initialize the submodule with `bun run setup:upstreams`):
 
 - `eliza/packages/app-core/src/runtime/` — runtime startup, plugin orchestration, lifecycle
 - `eliza/packages/app-core/src/cli/` — CLI parsing, command registration, process behavior

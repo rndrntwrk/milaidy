@@ -4,6 +4,10 @@ sidebarTitle: "WeChat"
 description: "WeChat connector for Milady — personal and group messaging via a third-party proxy API."
 ---
 
+<Warning>
+The WeChat plugin is maintained locally in this repository under `packages/plugin-wechat/` and is not published to the elizaOS plugin registry. It is available as a workspace dependency.
+</Warning>
+
 The WeChat plugin connects Milady agents to WeChat via a user-supplied proxy service, enabling text messaging and optional image and group chat support from personal WeChat accounts.
 
 **Package:** `@elizaos/plugin-wechat`

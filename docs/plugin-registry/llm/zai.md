@@ -4,9 +4,13 @@ sidebarTitle: "Zai"
 description: "Zai model provider for Milady — access Homunculus Labs' Zai language models."
 ---
 
+<Warning>
+This plugin is not yet available in the Milady plugin registry. To use Zai models today, configure them through the [OpenRouter plugin](/plugin-registry/llm/openrouter) using the appropriate model ID.
+</Warning>
+
 The Zai plugin connects Milady agents to Homunculus Labs' Zai models.
 
-**Package:** `@homunculuslabs/plugin-zai`
+**Package:** `@homunculuslabs/plugin-zai` (not yet published)
 
 ## Installation
 

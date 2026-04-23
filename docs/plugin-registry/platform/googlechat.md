@@ -4,6 +4,10 @@ sidebarTitle: "Google Chat"
 description: "Google Chat connector for Milady — service account integration with webhook delivery, typing indicators, and per-space configuration."
 ---
 
+<Info>
+The registry ID for this plugin is `google-chat` (with a hyphen). Use `milady plugins install google-chat` to install.
+</Info>
+
 The Google Chat plugin connects Milady agents to Google Chat via a Google Cloud service account, supporting spaces, DMs, and group conversations with webhook-based event delivery.
 
 **Package:** `@elizaos/plugin-google-chat`

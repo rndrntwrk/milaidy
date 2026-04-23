@@ -118,81 +118,6 @@ where to get the credentials, minimum required fields, and tips for optional fie
 - `AI_GATEWAY_TIMEOUT_MS` — Request timeout, default 30000ms
 **Tips:** Routes model calls through Vercel's AI gateway for caching, rate limiting, and observability. Useful if you're already on Vercel.
 
-### DeepSeek
-**Get credentials:** https://platform.deepseek.com/api_keys
-**Minimum required:** `DEEPSEEK_API_KEY`
-**Variables:**
-- `DEEPSEEK_API_KEY` — Your API key from platform.deepseek.com
-- `DEEPSEEK_SMALL_MODEL` — e.g. `deepseek-chat`
-- `DEEPSEEK_LARGE_MODEL` — e.g. `deepseek-reasoner`
-**Tips:** DeepSeek offers competitive pricing and strong reasoning models. The `deepseek-reasoner` model supports chain-of-thought reasoning.
-
-### Together AI
-**Get credentials:** https://api.together.xyz/settings/api-keys
-**Minimum required:** `TOGETHER_API_KEY`
-**Variables:**
-- `TOGETHER_API_KEY` — From api.together.xyz
-- `TOGETHER_SMALL_MODEL` — e.g. `meta-llama/Llama-3.2-3B-Instruct-Turbo`
-- `TOGETHER_LARGE_MODEL` — e.g. `meta-llama/Llama-3.3-70B-Instruct-Turbo`
-- `TOGETHER_EMBEDDING_MODEL` — e.g. `togethercomputer/m2-bert-80M-8k-retrieval`
-- `TOGETHER_IMAGE_MODEL` — e.g. `black-forest-labs/FLUX.1-schnell`
-**Tips:** Together AI hosts a wide range of open-source models. Great for accessing Llama, Mixtral, and other open models via API.
-
-### Mistral
-**Get credentials:** https://console.mistral.ai/api-keys
-**Minimum required:** `MISTRAL_API_KEY`
-**Variables:**
-- `MISTRAL_API_KEY` — From console.mistral.ai
-- `MISTRAL_SMALL_MODEL` — e.g. `mistral-small-latest`
-- `MISTRAL_LARGE_MODEL` — e.g. `mistral-large-latest`
-- `MISTRAL_EMBEDDING_MODEL` — e.g. `mistral-embed`
-**Tips:** Mistral models are fast and cost-effective. Good for European data residency requirements.
-
-### Cohere
-**Get credentials:** https://dashboard.cohere.com/api-keys
-**Minimum required:** `COHERE_API_KEY`
-**Variables:**
-- `COHERE_API_KEY` — From dashboard.cohere.com
-- `COHERE_SMALL_MODEL` — e.g. `command-r`
-- `COHERE_LARGE_MODEL` — e.g. `command-r-plus`
-- `COHERE_EMBEDDING_MODEL` — e.g. `embed-english-v3.0`
-**Tips:** Cohere excels at RAG (retrieval-augmented generation) and multilingual tasks. Their embedding models are production-grade.
-
-### Perplexity
-**Get credentials:** https://www.perplexity.ai/settings/api
-**Minimum required:** `PERPLEXITY_API_KEY`
-**Variables:**
-- `PERPLEXITY_API_KEY` — From perplexity.ai settings
-- `PERPLEXITY_SMALL_MODEL` — e.g. `llama-3.1-sonar-small-128k-online`
-- `PERPLEXITY_LARGE_MODEL` — e.g. `llama-3.1-sonar-large-128k-online`
-**Tips:** Perplexity models have built-in web search — ideal for tasks requiring up-to-date information.
-
-### Google Antigravity
-**Get credentials:** Google Cloud API key with Antigravity access
-**Minimum required:** `GOOGLE_CLOUD_API_KEY`
-**Variables:**
-- `GOOGLE_CLOUD_API_KEY` — Google Cloud API key
-**Tips:** Google Antigravity is a specialized Google model provider. Requires separate Google Cloud credentials from Google Gemini.
-
-### Qwen
-**Minimum required:** Configure via provider plugins config in `milady.json`
-**Variables:**
-- Set model IDs via the `providers.qwen` config block in `milady.json`
-**Tips:** Qwen models from Alibaba Cloud. Configure through the providers section of your config.
-
-### Minimax
-**Minimum required:** Configure via provider plugins config in `milady.json`
-**Variables:**
-- Set model IDs via the `providers.minimax` config block in `milady.json`
-**Tips:** Minimax provides Chinese and multilingual AI models.
-
-### Zai
-**Get credentials:** From Homunculus Labs
-**Minimum required:** `ZAI_API_KEY`
-**Variables:**
-- `ZAI_API_KEY` — Your Zai API key from Homunculus Labs
-**Tips:** Zai is a model provider from Homunculus Labs. Plugin package: `@homunculuslabs/plugin-zai`.
-
 ### Eliza Cloud
 **Get credentials:** From the elizaOS Cloud service
 **Minimum required:** `ELIZAOS_CLOUD_API_KEY` or `ELIZAOS_CLOUD_ENABLED=true`
@@ -242,27 +167,32 @@ where to get the credentials, minimum required fields, and tips for optional fie
 **Tips:** Use negative IDs for groups (they start with -100). Use `TELEGRAM_ALLOWED_CHATS` to restrict who can talk to the bot for safety.
 
 ### Twitter / X
+Twitter/X integration is bundled with the **xAI** provider plugin (`@elizaos/plugin-xai`). There is no separate `@elizaos/plugin-twitter`.
+
 **Get credentials:** https://developer.twitter.com/en/portal/dashboard
-**Minimum required:** All 4 OAuth keys: `TWITTER_API_KEY`, `TWITTER_API_SECRET_KEY`, `TWITTER_ACCESS_TOKEN`, `TWITTER_ACCESS_TOKEN_SECRET`
-**Variables:**
-- `TWITTER_API_KEY` — Consumer API Key
-- `TWITTER_API_SECRET_KEY` — Consumer API Secret
-- `TWITTER_ACCESS_TOKEN` — Access Token (from "Keys and Tokens" tab)
-- `TWITTER_ACCESS_TOKEN_SECRET` — Access Token Secret
-- `TWITTER_DRY_RUN` — `true` to test without actually posting
-- `TWITTER_POST_ENABLE` — `true` to enable autonomous posting
-- `TWITTER_POST_INTERVAL_MIN` / `TWITTER_POST_INTERVAL_MAX` — Minutes between posts (e.g. 90/180)
-- `TWITTER_POST_IMMEDIATELY` — `true` to post on startup
-- `TWITTER_AUTO_RESPOND_MENTIONS` — `true` to reply to @mentions
-- `TWITTER_POLL_INTERVAL` — Seconds between mention checks (e.g. 120)
-- `TWITTER_SEARCH_ENABLE` / `TWITTER_ENABLE_TIMELINE` / `TWITTER_ENABLE_DISCOVERY` — Advanced engagement modes
+**Minimum required:** xAI plugin enabled + Twitter OAuth keys in connector config or env vars.
+**Variables (xAI plugin `X_*` convention):**
+- `X_API_KEY` — Twitter API consumer key
+- `X_API_SECRET` — Twitter API consumer secret
+- `X_ACCESS_TOKEN` — OAuth access token
+- `X_ACCESS_TOKEN_SECRET` — OAuth access token secret
+- `X_AUTH_MODE` — `api_key` (default) or `oauth`
+- `X_ENABLE_POST` — `true` to enable autonomous posting
+- `X_ENABLE_REPLIES` — `true` to reply to @mentions
+- `X_ENABLE_ACTIONS` — `true` to enable like/retweet/quote actions
+
+**Connector config alternative** — set these under `connectors.twitter` in `milady.json`:
+- `apiKey`, `apiSecretKey`, `accessToken`, `accessTokenSecret` — OAuth credentials
+- `postEnable`, `postIntervalMin`, `postIntervalMax`, `dryRun` — posting behavior
+- `searchEnable`, `autoRespondMentions`, `pollInterval` — engagement settings
+
 **Setup steps:**
 1. Apply for developer account at developer.twitter.com (instant for basic tier)
 2. Create a Project and App
 3. Generate all 4 keys from "Keys and Tokens" tab
 4. Set app permissions to Read and Write
 5. Regenerate tokens AFTER setting permissions
-**Tips:** Start with `TWITTER_DRY_RUN=true` to verify without posting. Free API tier has 500 posts/month. You need ALL 4 OAuth keys — missing any one will cause auth failure.
+**Tips:** Start with `dryRun: true` in connector config to verify without posting. Free API tier has 500 posts/month. You need ALL 4 OAuth keys — missing any one will cause auth failure.
 
 ### Slack
 **Get credentials:** https://api.slack.com/apps → Create New App

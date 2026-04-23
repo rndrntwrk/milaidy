@@ -1,7 +1,7 @@
 ---
 title: "Platform Connectors"
 sidebarTitle: "Connectors"
-description: "Platform bridges for 28 messaging platforms — 18 auto-enabled from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Twitter, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, Lens, WeChat) plus 10 installable from the registry (BlueBubbles, Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
+description: "Platform bridges for 23+ messaging platforms — auto-enabled from config or installable from the registry."
 ---
 
 Connectors are platform bridges that allow your agent to communicate across messaging platforms and social networks. Each connector handles authentication, message routing, session management, and platform-specific features.
@@ -59,7 +59,7 @@ Connectors marked **Auto** load automatically when their config is present in `m
 | Blooio | API key + webhook | Yes | Yes | No | Auto |
 | Microsoft Teams | App ID + password | Yes | Yes (teams/channels) | No | Auto |
 | Google Chat | Service account | Yes | Yes (spaces) | Yes | Auto |
-| Twitter | API keys + tokens | DMs | N/A | No | Auto |
+| Twitter/X | API keys + tokens (via xAI plugin) | DMs | N/A | No | Auto (bundled with xAI) |
 | Farcaster | Neynar API key + signer | Casts | Yes (channels) | No | Auto |
 | Twitch | Client ID + access token | Yes (chat) | Yes (channels) | No | Auto |
 | Mattermost | Bot token | Yes | Yes (channels) | No | Auto |
@@ -67,7 +67,7 @@ Connectors marked **Auto** load automatically when their config is present in `m
 | Matrix | Access token | Yes | Yes (rooms) | No | Auto |
 | Feishu / Lark | App ID + secret | Yes | Yes (group chats) | No | Auto |
 | Nostr | Private key (nsec/hex) | Yes (NIP-04) | N/A | No | Auto |
-| Lens | API key | Yes | N/A | No | Auto |
+| Lens | API key | Yes | N/A | No | Registry |
 | BlueBubbles | Server password | Yes | Yes | No | Registry |
 | Bluesky | Account credentials | Posts | N/A | No | Registry |
 | Instagram | Username + password | DMs | N/A | No | Registry |

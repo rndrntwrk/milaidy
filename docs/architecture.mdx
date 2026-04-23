@@ -35,7 +35,9 @@ Milady is a cross-platform AI agent runtime built on top of [elizaOS](https://el
                              v
 +---------------------------------------------------------------+
 |                     API Server Layer                           |
-|  Node.js HTTP server (port 31337 default, MILADY_API_PORT)    |
+|  Node.js HTTP server                                          |
+|  Dev: port 31337 (MILADY_API_PORT)                            |
+|  Prod: port 2138 (MILADY_PORT, shared with dashboard)         |
 |  REST endpoints (/api/*) + WebSocket (/ws)                    |
 |  SSE log streaming, static UI assets                          |
 +---------------------------------------------------------------+

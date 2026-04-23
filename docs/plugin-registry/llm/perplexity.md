@@ -4,9 +4,13 @@ sidebarTitle: "Perplexity"
 description: "Perplexity model provider for Milady — search-augmented language models with real-time web access."
 ---
 
+<Warning>
+This plugin is not yet available in the Milady plugin registry. To use Perplexity models today, configure them through the [OpenRouter plugin](/plugin-registry/llm/openrouter) using the appropriate model ID.
+</Warning>
+
 The Perplexity plugin connects Milady agents to Perplexity's search-augmented language models. These models combine LLM reasoning with live web search, making them ideal for agents that need up-to-date information.
 
-**Package:** `@elizaos/plugin-perplexity`
+**Package:** `@elizaos/plugin-perplexity` (not yet published)
 
 ## Installation
 

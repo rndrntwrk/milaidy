@@ -4,6 +4,10 @@ sidebarTitle: "Knowledge"
 description: "Native RAG system — document ingestion, embedding generation, similarity search, knowledge retrieval, and supported file formats."
 ---
 
+<Warning>
+Knowledge management is a built-in runtime capability, not a standalone plugin. No separate installation is needed — knowledge features are available by default.
+</Warning>
+
 The native knowledge feature provides a Retrieval-Augmented Generation (RAG) system for Milady agents. It enables agents to retrieve relevant information from a document corpus and inject it into the LLM context.
 
 **Runtime Feature:** `knowledge` (enabled by default)

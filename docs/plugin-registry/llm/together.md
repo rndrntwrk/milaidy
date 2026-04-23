@@ -4,9 +4,13 @@ sidebarTitle: "Together AI"
 description: "Together AI model provider for Milady — access open-source models via Together's high-performance inference platform."
 ---
 
+<Warning>
+This plugin is not yet available in the Milady plugin registry. To use Together AI models today, configure them through the [OpenRouter plugin](/plugin-registry/llm/openrouter) using the appropriate model ID.
+</Warning>
+
 The Together AI plugin connects Milady agents to Together's inference platform, providing access to a wide catalog of open-source models with competitive pricing and fast inference.
 
-**Package:** `@elizaos/plugin-together`
+**Package:** `@elizaos/plugin-together` (not yet published)
 
 ## Installation
 
