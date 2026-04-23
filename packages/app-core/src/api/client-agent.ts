@@ -537,6 +537,33 @@ declare module "./client-base" {
       audioSource: string;
       inputMode: string | null;
       destination?: { id: string; name: string } | null;
+      distributor?: string | null;
+      state?: string;
+      requiredOutputsReady?: boolean;
+      statusReason?: string | null;
+      blockedPlatforms?: Array<{
+        platform: string;
+        deliveryState: string | null;
+        outputStatus: string | null;
+        bitrateKbps: number | null;
+        fps: number | null;
+        reconnectCount: number;
+        errorCount: number;
+      }>;
+      platforms?: Record<
+        string,
+        {
+          enabled: boolean;
+          status: string;
+          error: string | null;
+          deliveryState: string | null;
+          outputStatus: string | null;
+          bitrateKbps: number | null;
+          fps: number | null;
+          reconnectCount: number;
+          errorCount: number;
+        }
+      >;
     }>;
     getStreamingDestinations(): Promise<{
       ok: boolean;

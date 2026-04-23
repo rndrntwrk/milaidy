@@ -166,6 +166,9 @@ export function useCompanionStageOperator() {
   const [streamCapabilityPresent, setStreamCapabilityPresent] = useState(false);
   const [streamCapabilityResolved, setStreamCapabilityResolved] = useState(false);
   const [streamLive, setStreamLive] = useState(false);
+  const [streamDegraded, setStreamDegraded] = useState(false);
+  const [streamStarting, setStreamStarting] = useState(false);
+  const [streamState, setStreamState] = useState("idle");
   const [streamLoading, setStreamLoading] = useState(false);
   const [streamError, setStreamError] = useState<string | null>(null);
   const [uptime, setUptime] = useState(0);
@@ -300,11 +303,38 @@ export function useCompanionStageOperator() {
       }
       try {
         const status = await client.streamStatus();
+        const nextState =
+          typeof status.state === "string" && status.state.trim().length > 0
+            ? status.state.trim().toLowerCase()
+            : status.running
+              ? status.ffmpegAlive
+                ? "live"
+                : "starting"
+              : "idle";
+        // The server returns an authoritative `state` string — keep these
+        // three buckets strictly mutually exclusive on the client so a
+        // cold boot ("starting") doesn't render the DEGRADED visual. The
+        // old code folded `requiredOutputsReady === false` into `degraded`,
+        // which flashed orange on every launch. `requiredOutputsReady` is
+        // now only a signal the server uses to pick between "starting" and
+        // "degraded"; we trust its decision.
+        const nextStarting =
+          status.running === true && nextState === "starting";
+        const nextDegraded =
+          status.running === true && nextState === "degraded";
+        const nextLive =
+          status.running === true &&
+          status.ffmpegAlive === true &&
+          !nextStarting &&
+          !nextDegraded;
         setStreamCapabilityPresent(true);
         setStreamCapabilityResolved(true);
         setStreamAvailable(true);
         setStreamError(null);
-        setStreamLive(Boolean(status.running && status.ffmpegAlive));
+        setStreamLive(nextLive);
+        setStreamDegraded(nextDegraded);
+        setStreamStarting(nextStarting);
+        setStreamState(nextState);
         setUptime(status.uptime ?? 0);
         setFrameCount(status.frameCount ?? 0);
         setActiveDestination(status.destination ?? null);
@@ -315,6 +345,10 @@ export function useCompanionStageOperator() {
           setStreamCapabilityResolved(true);
           setStreamAvailable(false);
           setStreamError(null);
+          setStreamLive(false);
+          setStreamDegraded(false);
+          setStreamStarting(false);
+          setStreamState("idle");
           return { status: null, error: null };
         }
         const errorMessage =
@@ -327,6 +361,10 @@ export function useCompanionStageOperator() {
         setStreamCapabilityResolved(true);
         setStreamAvailable(true);
         setStreamError(errorMessage);
+        setStreamLive(false);
+        setStreamDegraded(false);
+        setStreamStarting(false);
+        setStreamState("error");
         return { status: null, error: errorMessage };
       }
     },
@@ -1520,6 +1558,9 @@ export function useCompanionStageOperator() {
       capabilityPresent: streamCapabilityPresent,
       capabilityResolved: streamCapabilityResolved,
       live: streamLive,
+      degraded: streamDegraded,
+      starting: streamStarting,
+      state: streamState,
       loading: streamLoading,
       error: streamError,
       uptime,

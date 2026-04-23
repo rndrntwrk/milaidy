@@ -77,6 +77,9 @@ function Harness({
     <div
       data-testid="operator-stream"
       data-live={String(operator.stream.live)}
+      data-degraded={String(operator.stream.degraded)}
+      data-starting={String(operator.stream.starting)}
+      data-state={operator.stream.state}
       data-available={String(operator.stream.available)}
       data-destination={operator.stream.activeDestination?.name ?? ""}
     />
@@ -119,6 +122,86 @@ describe("useCompanionStageOperator stream health", () => {
     expect(status?.props["data-available"]).toBe("true");
     expect(status?.props["data-live"]).toBe("false");
     expect(status?.props["data-destination"]).toBe("Twitch");
+  });
+
+  it("classifies a cold-boot stream as starting, not degraded", async () => {
+    // Server authoritative state = "starting" — the encoder isn't up yet,
+    // no platform is delivering. Client must NOT flash the DEGRADED visual
+    // during this window; starting is a distinct, calmer state.
+    mockStreamStatus.mockResolvedValue({
+      running: true,
+      ffmpegAlive: false,
+      state: "starting",
+      requiredOutputsReady: false,
+      uptime: 1,
+      frameCount: 0,
+      destination: { id: "twitch", name: "Twitch" },
+    });
+
+    let tree: TestRenderer.ReactTestRenderer | undefined;
+    await act(async () => {
+      tree = TestRenderer.create(<Harness />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const status = tree?.root.findByProps({ "data-testid": "operator-stream" });
+    expect(status?.props["data-live"]).toBe("false");
+    expect(status?.props["data-degraded"]).toBe("false");
+    expect(status?.props["data-starting"]).toBe("true");
+    expect(status?.props["data-state"]).toBe("starting");
+  });
+
+  it("classifies a partially-delivering stream as degraded", async () => {
+    // Server says ffmpeg is producing frames but not all required platforms
+    // are accepting the feed. Client should render DEGRADED, not starting.
+    mockStreamStatus.mockResolvedValue({
+      running: true,
+      ffmpegAlive: true,
+      state: "degraded",
+      requiredOutputsReady: false,
+      uptime: 30,
+      frameCount: 900,
+      destination: { id: "twitch", name: "Twitch" },
+    });
+
+    let tree: TestRenderer.ReactTestRenderer | undefined;
+    await act(async () => {
+      tree = TestRenderer.create(<Harness />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const status = tree?.root.findByProps({ "data-testid": "operator-stream" });
+    expect(status?.props["data-live"]).toBe("false");
+    expect(status?.props["data-degraded"]).toBe("true");
+    expect(status?.props["data-starting"]).toBe("false");
+    expect(status?.props["data-state"]).toBe("degraded");
+  });
+
+  it("reports live only when the server says live and ffmpeg is alive", async () => {
+    mockStreamStatus.mockResolvedValue({
+      running: true,
+      ffmpegAlive: true,
+      state: "live",
+      requiredOutputsReady: true,
+      uptime: 120,
+      frameCount: 3600,
+      destination: { id: "twitch", name: "Twitch" },
+    });
+
+    let tree: TestRenderer.ReactTestRenderer | undefined;
+    await act(async () => {
+      tree = TestRenderer.create(<Harness />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const status = tree?.root.findByProps({ "data-testid": "operator-stream" });
+    expect(status?.props["data-live"]).toBe("true");
+    expect(status?.props["data-degraded"]).toBe("false");
+    expect(status?.props["data-starting"]).toBe("false");
+    expect(status?.props["data-state"]).toBe("live");
   });
 
   it("returns a partial result when camera launch starts but delivery is not yet live", async () => {

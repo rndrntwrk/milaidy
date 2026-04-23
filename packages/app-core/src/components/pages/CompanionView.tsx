@@ -43,6 +43,13 @@ const ALICE_GO_LIVE_BUTTON_CLASSNAME =
   "h-8 min-h-8 gap-2 rounded-lg border border-transparent px-3 text-[12px] font-semibold shadow-none transition-colors";
 const ALICE_GO_LIVE_IDLE_CLASSNAME =
   "bg-white/[0.08] text-white/88 hover:bg-white/[0.12]";
+// STARTING: cooler neutral tint (slate/blue) — distinct from DEGRADED's amber
+// so a cold boot doesn't read as a delivery failure. Intentionally calmer
+// than LIVE/DEGRADED since the operator hasn't done anything wrong yet.
+const ALICE_GO_LIVE_STARTING_CLASSNAME =
+  "bg-[linear-gradient(180deg,#4a5a72,#36455a)] text-white hover:bg-[linear-gradient(180deg,#53647e,#3c4c63)]";
+const ALICE_GO_LIVE_DEGRADED_CLASSNAME =
+  "bg-[linear-gradient(180deg,#c98d1f,#a96d00)] text-white hover:bg-[linear-gradient(180deg,#d59a2d,#b87805)]";
 const ALICE_GO_LIVE_LIVE_CLASSNAME =
   "bg-[linear-gradient(180deg,#ef5a50,#d83d35)] text-white hover:bg-[linear-gradient(180deg,#f36960,#df463e)]";
 const ALICE_GO_LIVE_DESTINATION_PILL_CLASSNAME =
@@ -85,12 +92,31 @@ const AliceGoLiveHeaderControl = memo(function AliceGoLiveHeaderControl({
         .join(" · ")
     : null;
   const liveStateLabel = t("statusbar.LiveShort", { defaultValue: "LIVE" });
+  const degradedStateLabel = t("aliceoperator.streamDegraded", {
+    defaultValue: "DEGRADED",
+  });
+  const startingStateLabel = t("aliceoperator.streamStarting", {
+    defaultValue: "STARTING…",
+  });
   const goLiveLabel = t("statusbar.GoLive");
   const endLiveLabel = t("aliceoperator.action.endLive", {
     defaultValue: "End Live",
   });
-  const liveActionLabel = operator.stream.live ? liveStateLabel : goLiveLabel;
-  const actionAriaLabel = operator.stream.live ? endLiveLabel : goLiveLabel;
+  // liveLike: any running state (live OR degraded OR starting). Clicking in
+  // any of these calls endLive(), which is safe to invoke mid-boot — it
+  // cancels the launch regardless of which phase the server is in.
+  const liveLike =
+    operator.stream.live ||
+    operator.stream.degraded ||
+    operator.stream.starting;
+  const liveActionLabel = operator.stream.live
+    ? liveStateLabel
+    : operator.stream.degraded
+      ? degradedStateLabel
+      : operator.stream.starting
+        ? startingStateLabel
+        : goLiveLabel;
+  const actionAriaLabel = liveLike ? endLiveLabel : goLiveLabel;
   const buttonTitle = operator.stream.live
     ? liveDestinationName
       ? t("aliceoperator.headerLiveDestinationTitle", {
@@ -100,17 +126,39 @@ const AliceGoLiveHeaderControl = memo(function AliceGoLiveHeaderControl({
       : t("aliceoperator.headerLiveTitle", {
           defaultValue: "Alice is live. Click to end live.",
         })
-    : operator.stream.available
-      ? liveActionLabel
-      : t("statusbar.InstallStreamingPlugin");
+    : operator.stream.degraded
+      ? liveDestinationName
+        ? t("aliceoperator.headerDegradedDestinationTitle", {
+            destination: liveDestinationName,
+            defaultValue: `Delivery is degraded on ${liveDestinationName}. Click to end live.`,
+          })
+        : t("aliceoperator.headerDegradedTitle", {
+            defaultValue: "Delivery is degraded. Click to end live.",
+          })
+      : operator.stream.starting
+        ? liveDestinationName
+          ? t("aliceoperator.headerStartingDestinationTitle", {
+              destination: liveDestinationName,
+              defaultValue: `Starting stream to ${liveDestinationName}. Click to cancel.`,
+            })
+          : t("aliceoperator.headerStartingTitle", {
+              defaultValue: "Starting stream. Click to cancel.",
+            })
+        : operator.stream.available
+          ? liveActionLabel
+          : t("statusbar.InstallStreamingPlugin");
   const buttonClassName = `${ALICE_GO_LIVE_BUTTON_CLASSNAME} ${
     operator.stream.live
       ? ALICE_GO_LIVE_LIVE_CLASSNAME
-      : ALICE_GO_LIVE_IDLE_CLASSNAME
+      : operator.stream.degraded
+        ? ALICE_GO_LIVE_DEGRADED_CLASSNAME
+        : operator.stream.starting
+          ? ALICE_GO_LIVE_STARTING_CLASSNAME
+          : ALICE_GO_LIVE_IDLE_CLASSNAME
   } ${isMobileViewport ? "!w-8 min-w-8 px-0" : ""}`;
 
   const handleClick = () => {
-    if (operator.stream.live) {
+    if (liveLike) {
       void operator.stream.endLive();
       return;
     }
@@ -138,7 +186,7 @@ const AliceGoLiveHeaderControl = memo(function AliceGoLiveHeaderControl({
           data-no-camera-zoom="true"
           data-testid="companion-header-go-live"
         >
-          {operator.stream.live ? (
+          {liveLike ? (
             <span className="pointer-events-none inline-flex h-2.5 w-2.5 shrink-0 rounded-full bg-white shadow-[0_0_0_4px_rgba(255,255,255,0.14)]" />
           ) : (
             <AliceConnectionIcon className="pointer-events-none h-3.5 w-3.5 shrink-0" />
@@ -147,7 +195,7 @@ const AliceGoLiveHeaderControl = memo(function AliceGoLiveHeaderControl({
             <span className="pointer-events-none">{liveActionLabel}</span>
           )}
         </Button>
-        {operator.stream.live && liveDestinationLabel && !isMobileViewport ? (
+        {liveLike && liveDestinationLabel && !isMobileViewport ? (
           <OperatorPill
             tone="neutral"
             className={ALICE_GO_LIVE_DESTINATION_PILL_CLASSNAME}

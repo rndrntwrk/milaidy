@@ -24,7 +24,7 @@ import {
 
 export const platformConfigAction: Action = {
   name: 'STREAM555_PLATFORM_CONFIG',
-  description: 'Configure a streaming platform. Valid platforms: twitch, kick, youtube, pumpfun, x, tiktok, zora, custom. Requires approval when setting stream keys.',
+  description: 'Configure a streaming platform. Valid platforms: twitch, kick, youtube, facebook, pumpfun, x, tiktok, zora, custom. Requires approval when setting stream keys.',
   similes: [
     'CONFIGURE_PLATFORM',
     'SET_PLATFORM',
@@ -68,7 +68,7 @@ export const platformConfigAction: Action = {
       if (!platformId) {
         if (callback) {
           callback({
-            text: 'No platform ID provided. Valid: twitch, kick, youtube, pumpfun, x, tiktok, zora, custom.',
+            text: 'No platform ID provided. Valid: twitch, kick, youtube, facebook, pumpfun, x, tiktok, zora, custom.',
             content: { success: false, error: 'No platformId provided' },
           });
         }
