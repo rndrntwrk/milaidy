@@ -511,6 +511,18 @@ jobs:
         env:
           RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
 
+      - name: Generate protobuf types
+        run: |
+          node eliza/packages/shared/scripts/generate-keywords.mjs --target ts
+          if [ -d eliza/packages/schemas ] && [ -f eliza/packages/schemas/buf.gen.yaml ]; then
+            pushd eliza/packages/schemas
+            node node_modules/@bufbuild/buf/install.js 2>/dev/null || true
+            bunx @bufbuild/buf@1.67.0 generate
+            popd
+          fi
+          test -f eliza/packages/typescript/src/types/generated/eliza/v1/agent_pb.js
+          test -f eliza/packages/typescript/src/types/generated/eliza/v1/components_pb.js
+
       - name: Stage desktop bundle inputs
         run: |
           if [ "${{ matrix.platform.os }}" = "macos" ] && [ "${{ matrix.platform.artifact-name }}" = "macos-x64" ]; then
