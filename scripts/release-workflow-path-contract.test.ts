@@ -206,16 +206,12 @@ describe("release workflow path contract", () => {
     expect(buildCloudImage).toContain(
       "Inject tailwindcss into eliza/packages/app-core/node_modules",
     );
-    expect(buildCloudImage).toContain(
-      "uses: docker/setup-buildx-action@v3",
-    );
+    expect(buildCloudImage).toContain("uses: docker/setup-buildx-action@v3");
     expect(buildCloudImage).toContain("continue-on-error: true");
     expect(buildCloudImage).toContain(
       "Build and push cloud app image with Buildx fallback",
     );
-    expect(buildCloudImage).toContain(
-      "const manifests = [",
-    );
+    expect(buildCloudImage).toContain("const manifests = [");
     expect(buildCloudImage).toContain(
       "const unpublished = /^@elizaos\\/(app-|capacitor-|plugin-agent-orchestrator|plugin-app-control|plugin-cli|plugin-imessage|plugin-local-ai|plugin-pdf|plugin-wechat|steward-)/;",
     );
@@ -241,11 +237,26 @@ describe("release workflow path contract", () => {
     expect(agentRelease).toContain(
       "apps/app/node_modules/@capacitor/android/capacitor/gradle/wrapper/gradle-wrapper.properties",
     );
-    expect(agentRelease.indexOf("name: Align Android Gradle wrapper")).toBeLessThan(
+    expect(agentRelease).toContain(
+      "apps/app/android/gradle/wrapper/gradle-wrapper.properties",
+    );
+    expect(
+      agentRelease.indexOf("name: Align Android Gradle wrapper"),
+    ).toBeLessThan(
       agentRelease.indexOf(
         "node eliza/packages/app-core/scripts/run-mobile-build.mjs android",
       ),
     );
+    expect(
+      agentRelease.indexOf(
+        "node eliza/packages/app-core/scripts/run-mobile-build.mjs android",
+      ),
+    ).toBeLessThan(
+      agentRelease.indexOf("name: Align generated Android Gradle wrapper"),
+    );
+    expect(
+      agentRelease.indexOf("name: Align generated Android Gradle wrapper"),
+    ).toBeLessThan(agentRelease.indexOf("working-directory: apps/app/android"));
   });
 
   it("keeps the electrobun release workflow aligned with the LifeOps Browser companion contract", () => {
@@ -341,7 +352,9 @@ describe("release workflow path contract", () => {
     const probeBuild = releaseElectrobun.indexOf(
       "name: Probe Electrobun bun entry build",
     );
-    const packageBuild = releaseElectrobun.indexOf("name: Build Electrobun app");
+    const packageBuild = releaseElectrobun.indexOf(
+      "name: Build Electrobun app",
+    );
 
     expect(probeBuild).toBeGreaterThanOrEqual(0);
     expect(packageBuild).toBeGreaterThanOrEqual(0);

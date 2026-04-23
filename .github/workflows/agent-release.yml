@@ -322,6 +322,7 @@ jobs:
             "eliza/packages/app-core/platforms/android/gradle/wrapper/gradle-wrapper.properties",
             "node_modules/@capacitor/android/capacitor/gradle/wrapper/gradle-wrapper.properties",
             "apps/app/node_modules/@capacitor/android/capacitor/gradle/wrapper/gradle-wrapper.properties",
+            "apps/app/android/gradle/wrapper/gradle-wrapper.properties",
           ].filter((wrapper) => fs.existsSync(wrapper));
           if (wrappers.length === 0) {
             throw new Error("Missing Android Gradle wrapper templates");
@@ -338,6 +339,22 @@ jobs:
           NODE
       - name: Prepare Android project
         run: node eliza/packages/app-core/scripts/run-mobile-build.mjs android
+      - name: Align generated Android Gradle wrapper
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+          const wrapper = "apps/app/android/gradle/wrapper/gradle-wrapper.properties";
+          if (!fs.existsSync(wrapper)) {
+            throw new Error(`Missing generated Android Gradle wrapper at ${wrapper}`);
+          }
+          const raw = fs.readFileSync(wrapper, "utf8");
+          const next = raw.replace(
+            /distributionUrl=.*\n/,
+            "distributionUrl=https\\://services.gradle.org/distributions/gradle-9.4.1-all.zip\n",
+          );
+          fs.writeFileSync(wrapper, next);
+          console.log(`Aligned ${wrapper}`);
+          NODE
       - name: Build AAB
         working-directory: apps/app/android
         run: |
@@ -605,7 +622,8 @@ jobs:
   # The cloud image is still pushed via the explicit post-publish job below.
   publish:
     name: Tag & publish release
-    needs: [version, build-electrobun, build-docker, build-cloud-image, build-npm]
+    needs:
+      [version, build-electrobun, build-docker, build-cloud-image, build-npm]
     if: always() && needs.build-electrobun.result == 'success' && needs.build-docker.result == 'success' && needs.build-cloud-image.result == 'success'
     runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
     permissions:
