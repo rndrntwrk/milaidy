@@ -230,6 +230,9 @@ describe("release workflow path contract", () => {
     const agentRelease = readWorkflow("agent-release.yml");
 
     expect(agentRelease).toContain("name: Align Android Gradle wrapper");
+    expect(agentRelease).toContain(
+      "name: Patch Android mobile build wrapper alignment",
+    );
     expect(agentRelease).toContain("gradle-9.4.1-all.zip");
     expect(agentRelease).toContain(
       "node_modules/@capacitor/android/capacitor/gradle/wrapper/gradle-wrapper.properties",
@@ -242,6 +245,15 @@ describe("release workflow path contract", () => {
     );
     expect(
       agentRelease.indexOf("name: Align Android Gradle wrapper"),
+    ).toBeLessThan(
+      agentRelease.indexOf(
+        "name: Patch Android mobile build wrapper alignment",
+      ),
+    );
+    expect(
+      agentRelease.indexOf(
+        "name: Patch Android mobile build wrapper alignment",
+      ),
     ).toBeLessThan(
       agentRelease.indexOf(
         "node eliza/packages/app-core/scripts/run-mobile-build.mjs android",
@@ -299,6 +311,9 @@ describe("release workflow path contract", () => {
 
     expect(generateKeywords).toBeGreaterThanOrEqual(0);
     expect(generateProto).toBeGreaterThanOrEqual(0);
+    expect(releaseElectrobun).toContain(
+      "buf generate failed on attempt ${attempt}; retrying in 15 seconds",
+    );
     expect(stageDesktop).toBeGreaterThanOrEqual(0);
     expect(releaseElectrobun).not.toContain(
       "[ ! -d eliza/packages/typescript/src/types/generated ]",

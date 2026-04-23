@@ -337,6 +337,39 @@ jobs:
             console.log(`Aligned ${wrapper}`);
           }
           NODE
+      - name: Patch Android mobile build wrapper alignment
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+          const script = "eliza/packages/app-core/scripts/run-mobile-build.mjs";
+          let source = fs.readFileSync(script, "utf8");
+          const needle = "  patchAndroidGradle();\n  overlayAndroid();";
+          const replacement = [
+            "  patchAndroidGradle();",
+            "  const generatedWrapper = path.join(",
+            "    androidDir,",
+            '    "gradle",',
+            '    "wrapper",',
+            '    "gradle-wrapper.properties",',
+            "  );",
+            "  if (!fs.existsSync(generatedWrapper)) {",
+            "    throw new Error(`Missing generated Android Gradle wrapper at ${generatedWrapper}`);",
+            "  }",
+            '  const rawWrapper = fs.readFileSync(generatedWrapper, "utf8");',
+            "  const nextWrapper = rawWrapper.replace(",
+            "    /distributionUrl=.*\\n/,",
+            '    "distributionUrl=https\\\\://services.gradle.org/distributions/gradle-9.4.1-all.zip\\n",',
+            "  );",
+            "  fs.writeFileSync(generatedWrapper, nextWrapper);",
+            "  console.log(`[mobile-build] Aligned generated Android Gradle wrapper: ${generatedWrapper}`);",
+            "  overlayAndroid();",
+          ].join("\n");
+          if (!source.includes(needle)) {
+            throw new Error("Could not find Android Gradle patch insertion point");
+          }
+          source = source.replace(needle, replacement);
+          fs.writeFileSync(script, source);
+          NODE
       - name: Prepare Android project
         run: node eliza/packages/app-core/scripts/run-mobile-build.mjs android
       - name: Align generated Android Gradle wrapper

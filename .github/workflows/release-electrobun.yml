@@ -516,8 +516,18 @@ jobs:
           node eliza/packages/shared/scripts/generate-keywords.mjs --target ts
           if [ -d eliza/packages/schemas ] && [ -f eliza/packages/schemas/buf.gen.yaml ]; then
             pushd eliza/packages/schemas
-            node node_modules/@bufbuild/buf/install.js 2>/dev/null || true
-            bunx @bufbuild/buf@1.67.0 generate
+            for attempt in 1 2 3; do
+              node node_modules/@bufbuild/buf/install.js 2>/dev/null || true
+              if bunx @bufbuild/buf@1.67.0 generate; then
+                break
+              fi
+              if [ "$attempt" -eq 3 ]; then
+                echo "buf generate failed after ${attempt} attempts" >&2
+                exit 1
+              fi
+              echo "buf generate failed on attempt ${attempt}; retrying in 15 seconds" >&2
+              sleep 15
+            done
             popd
           fi
           test -f eliza/packages/typescript/src/types/generated/eliza/v1/agent_pb.ts
@@ -526,7 +536,7 @@ jobs:
       - name: Stage desktop bundle inputs
         run: |
           if [ "${{ matrix.platform.os }}" = "macos" ] && [ "${{ matrix.platform.artifact-name }}" = "macos-x64" ]; then
-            MILADY_DESKTOP_COMMAND_PREFIX="arch -x86_64" node eliza/packages/app-core/scripts/desktop-build.mjs stage --variant=base --build-whisper
+            ELIZA_DESKTOP_COMMAND_PREFIX="arch -x86_64" node eliza/packages/app-core/scripts/desktop-build.mjs stage --variant=base --build-whisper
           else
             node eliza/packages/app-core/scripts/desktop-build.mjs stage --variant=base --build-whisper
           fi
@@ -670,7 +680,7 @@ jobs:
       - name: Build Electrobun app
         run: |
           if [ "${{ matrix.platform.os }}" = "macos" ] && [ "${{ matrix.platform.artifact-name }}" = "macos-x64" ]; then
-            MILADY_DESKTOP_COMMAND_PREFIX="arch -x86_64" node eliza/packages/app-core/scripts/desktop-build.mjs package --env=${{ needs.prepare.outputs.env }}
+            ELIZA_DESKTOP_COMMAND_PREFIX="arch -x86_64" node eliza/packages/app-core/scripts/desktop-build.mjs package --env=${{ needs.prepare.outputs.env }}
           else
             node eliza/packages/app-core/scripts/desktop-build.mjs package --env=${{ needs.prepare.outputs.env }}
           fi
@@ -692,7 +702,34 @@ jobs:
           # by the upload step below. Env is encoded in the platform prefix
           # (canary-macos-arm64-update.json etc.), so the baseUrl has no env
           # subdir. Enables Electrobun's release.generatePatch flow.
-          ELIZA_RELEASE_URL: https://releases.milady.ai/
+          ELIZA_RELEASE_URL: ${{ (github.event_name != 'workflow_call' || inputs.publish_release) && !inputs.draft && 'https://releases.milady.ai/' || '' }}
+
+      - name: Dump Electrobun build diagnostics
+        if: failure()
+        run: |
+          for root in \
+            "eliza/packages/app-core/platforms/electrobun" \
+            "apps/app/electrobun"; do
+            echo "=== ${root}/build ==="
+            find -L "$root/build" -maxdepth 6 -type f -print 2>/dev/null | sort | head -300 || true
+            echo "=== ${root}/artifacts ==="
+            find -L "$root/artifacts" -maxdepth 6 -type f -print 2>/dev/null | sort | head -300 || true
+            echo "=== ${root} wrapper diagnostics ==="
+            find -L "$root/build" -name wrapper-diagnostics.json -print -exec sed -n '1,220p' {} \; 2>/dev/null || true
+          done
+
+      - name: Upload Electrobun build diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: electrobun-${{ matrix.platform.artifact-name }}-build-diagnostics
+          path: |
+            eliza/packages/app-core/platforms/electrobun/build/**
+            eliza/packages/app-core/platforms/electrobun/artifacts/**
+            apps/app/electrobun/build/**
+            apps/app/electrobun/artifacts/**
+          if-no-files-found: warn
+          retention-days: 14
 
       # Inject version.json into the packaged Resources directory.
       # The bun entry getVersionInfo() reads ../Resources/version.json and
