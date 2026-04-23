@@ -95,6 +95,20 @@ Check:
 - whether the backend listens outside localhost
 - whether the current device can reach that network
 
+## Dashboard will not load
+
+Check:
+
+- whether Milady is running (`milady status`)
+- whether another process is using the same port (default 2138 for production, 31337 for dev API)
+- logs in `~/.milady/logs/` for startup errors
+
+If the port is busy, set a different one:
+
+```bash
+MILADY_PORT=3000 milady start
+```
+
 ## Milady is slow
 
 - slow before the first token: choose a faster model or provider
