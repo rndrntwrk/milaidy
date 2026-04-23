@@ -1,7 +1,7 @@
 ---
 title: "Conectores de Plataforma"
 sidebarTitle: "Connectors"
-description: "Puentes de plataforma para 27 plataformas de mensajería — 18 habilitados automáticamente desde la configuración (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Twitter, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, Lens, WeChat) más 9 instalables desde el registro (Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
+description: "Puentes de plataforma para 28 plataformas de mensajería — 18 habilitados automáticamente desde la configuración (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Twitter, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, Lens, WeChat) más 10 instalables desde el registro (BlueBubbles, Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
 ---
 
 Los conectores son puentes de plataforma que permiten a tu agente comunicarse a través de plataformas de mensajería y redes sociales. Cada conector gestiona la autenticación, el enrutamiento de mensajes, la gestión de sesiones y las funcionalidades específicas de cada plataforma.
@@ -71,6 +71,7 @@ Los conectores marcados como **Auto** se cargan automáticamente cuando su confi
 | Feishu / Lark | ID de app + secreto | Sí | Sí (chats grupales) | No | Auto |
 | Nostr | Clave privada (nsec/hex) | Sí (NIP-04) | N/A | No | Auto |
 | Lens | Clave API | Sí | N/A | No | Auto |
+| BlueBubbles | Contraseña del servidor | Sí | Sí | No | Registry |
 | Bluesky | Credenciales de cuenta | Publicaciones | N/A | No | Registry |
 | Instagram | Usuario + contraseña | MDs | N/A | No | Registry |
 | LINE | Token de acceso de canal + secreto | Sí | Sí | No | Registry |
