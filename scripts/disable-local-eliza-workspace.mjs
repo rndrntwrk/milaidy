@@ -47,6 +47,10 @@ import { execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  asElizaOverridesSpecifiers,
+  asRootOverridesSpecifiers,
+} from "./lib/ci-stubs.mjs";
 
 export const ELIZA_WORKSPACE_GLOB = "eliza/packages/*";
 export const PLUGIN_ROOT_WORKSPACE_GLOB = "eliza/plugins/*";
@@ -73,21 +77,23 @@ export const NESTED_INSTALLABLE_PACKAGE_GLOBS = [
   // though they do not participate in the root workspace graph.
   "eliza/packages/app-core/platforms/*",
 ];
+// The @elizaos/plugin-app-control and @elizaos/plugin-wechat entries below
+// are derived from the single source of truth at scripts/lib/ci-stubs.mjs.
+// Other entries (@elizaos/shared, @elizaos/plugin-browser-bridge, @elizaos/ui)
+// are NOT stubs — they point to the real packages inside eliza/ and exist
+// here because those packages are not always npm-published. They stay
+// inline for now.
 export const CI_OVERRIDE_SPECIFIERS = {
   "@elizaos/shared": "file:./eliza/packages/shared",
-  "@elizaos/plugin-app-control":
-    "file:./scripts/ci-stubs/elizaos-plugin-app-control",
   "@elizaos/plugin-browser-bridge":
     "file:./eliza/packages/plugin-browser-bridge",
-  "@elizaos/plugin-wechat": "file:./scripts/ci-stubs/elizaos-plugin-wechat",
   "@elizaos/ui": "file:./eliza/packages/ui",
+  ...asRootOverridesSpecifiers(),
 };
 export const ELIZA_RUNTIME_CI_OVERRIDE_SPECIFIERS = {
-  "@elizaos/plugin-app-control":
-    "file:../scripts/ci-stubs/elizaos-plugin-app-control",
   "@elizaos/plugin-browser-bridge": "file:./packages/plugin-browser-bridge",
-  "@elizaos/plugin-wechat": "file:../scripts/ci-stubs/elizaos-plugin-wechat",
   "@elizaos/ui": "file:./packages/ui",
+  ...asElizaOverridesSpecifiers(),
 };
 export const DEPENDENCY_FIELDS = [
   "dependencies",

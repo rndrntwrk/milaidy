@@ -1,7 +1,7 @@
 {
   "name": "miladyai",
   "version": "2.0.0-alpha.116",
-  "description": "Cute agents for the acceleration. Fresh clone: ./install or install.cmd, or bun run bootstrap, before a bare bun install.",
+  "description": "Cute agents for the acceleration. Fresh clone: run ./install (Unix / macOS) or install.cmd (Windows). Plain bun install works for updates.",
   "homepage": "https://github.com/milady-ai/milady",
   "author": {
     "name": "Milady AI",
@@ -141,7 +141,6 @@
     "action:trajectories-to-dataset": "node scripts/benchmark-to-training-dataset.mjs",
     "action:optimize-planner": "node scripts/optimize-action-planner.mjs",
     "preinstall": "node scripts/init-submodules.mjs",
-    "bootstrap": "node scripts/run-init-then-bun-install.mjs",
     "postinstall": "node scripts/milady-postinstall-repo-setup.mjs",
     "setup:sync": "node eliza/packages/app-core/scripts/run-repo-setup.mjs",
     "pre-review:local": "bun eliza/packages/app-core/scripts/pre-review-local.mjs",

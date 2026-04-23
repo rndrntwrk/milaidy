@@ -38,7 +38,7 @@ If you're an agent or operating on behalf of an agent: welcome. Open your PR and
 
 ## Local clone and eliza submodule maintenance
 
-Milady vendors [eliza](https://github.com/elizaOS/eliza) as a git submodule with nested plugin submodules. Bun resolves `workspace:*` **before** `preinstall`, so use **`./install`**, **`install.cmd`**, or **`bun run bootstrap`** on a fresh clone (then normal `bun install` works).
+Milady vendors [eliza](https://github.com/elizaOS/eliza) as a git submodule with nested plugin submodules. Bun resolves `workspace:*` **before** `preinstall`, so use **`./install`** (Unix / macOS) or **`install.cmd`** (Windows) on a fresh clone. Plain `bun install` works for updates once the submodules are on disk.
 
 To **fast-forward `eliza` to `submodule.eliza.branch` (from Milady’s `.gitmodules`, usually `develop`)** and set **every nested submodule** to the tip of its configured remote branch (`eliza/.gitmodules`):
 

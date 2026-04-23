@@ -179,7 +179,11 @@ cd milady
 ./install                 # Unix / macOS — chmod +x install if needed
 # install.cmd on Windows
 
-bun run bootstrap         # same: submodules, then bun install
+# Both wrappers init the git submodules first, then run `bun install`.
+# This is required on a fresh clone: Bun resolves workspace globs
+# (eliza/packages/*, eliza/plugins/*) before running the preinstall
+# hook, so without submodules on disk the initial `bun install` fails.
+# Once the submodules exist, plain `bun install` is enough for updates.
 ```
 
 **Move eliza and all nested submodules to the latest remote branches** (see `eliza/.gitmodules` for each `branch =`):
