@@ -231,6 +231,12 @@ describe("release workflow path contract", () => {
 
     expect(agentRelease).toContain("name: Align Android Gradle wrapper");
     expect(agentRelease).toContain("gradle-9.4.1-all.zip");
+    expect(agentRelease).toContain(
+      "node_modules/@capacitor/android/capacitor/gradle/wrapper/gradle-wrapper.properties",
+    );
+    expect(agentRelease).toContain(
+      "apps/app/node_modules/@capacitor/android/capacitor/gradle/wrapper/gradle-wrapper.properties",
+    );
     expect(
       agentRelease.indexOf("name: Align Android Gradle wrapper"),
     ).toBeLessThan(
@@ -281,6 +287,15 @@ describe("release workflow path contract", () => {
     expect(generateKeywords).toBeGreaterThanOrEqual(0);
     expect(generateProto).toBeGreaterThanOrEqual(0);
     expect(stageDesktop).toBeGreaterThanOrEqual(0);
+    expect(releaseElectrobun).not.toContain(
+      "[ ! -d eliza/packages/typescript/src/types/generated ]",
+    );
+    expect(releaseElectrobun).toContain(
+      "test -f eliza/packages/typescript/src/types/generated/eliza/v1/agent_pb.js",
+    );
+    expect(releaseElectrobun).toContain(
+      "test -f eliza/packages/typescript/src/types/generated/eliza/v1/components_pb.js",
+    );
     expect(generateKeywords).toBeLessThan(stageDesktop);
     expect(generateProto).toBeLessThan(stageDesktop);
   });
