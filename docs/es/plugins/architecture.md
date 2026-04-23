@@ -41,7 +41,7 @@ export const CORE_PLUGINS: readonly string[] = [
 ];
 ```
 
-> **Nota:** `@elizaos/plugin-secrets-manager`, `relationships`, `@elizaos/plugin-trust`, `@elizaos/plugin-personality` y `@elizaos/plugin-experience` se importan estáticamente para una resolución rápida, pero están comentados en la lista principal. Podrían ser re-habilitados en una versión futura. Milady no incluye `@elizaos/plugin-todo`; la funcionalidad de todos se gestiona mediante la API del workbench y tareas del runtime relacionadas con LifeOps.
+> **Nota:** `@elizaos/plugin-secrets-manager`, `relationships`, `@elizaos/plugin-trust` y `@elizaos/plugin-personality` se importan estáticamente para una resolución rápida, pero están comentados en la lista principal. Experience ahora se distribuye como una capacidad avanzada integrada en lugar de un plugin independiente. Milady no incluye `@elizaos/plugin-todo`; la funcionalidad de todos se gestiona mediante la API del workbench y tareas del runtime relacionadas con LifeOps.
 
 <div id="optional-core-plugins">
 
@@ -242,7 +242,7 @@ const FEATURE_PLUGINS = {
   webhooks:             "@elizaos/plugin-webhooks",
   gmailWatch:           "@elizaos/plugin-gmail-watch",
   personality:          "@elizaos/plugin-personality",
-  experience:           "@elizaos/plugin-experience",
+  experience:           "(capacidad avanzada integrada)",
   form:                 "@elizaos/plugin-form",
   x402:                 "@elizaos/plugin-x402",
   fal:                  "@elizaos/plugin-fal",

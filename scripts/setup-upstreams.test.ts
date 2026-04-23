@@ -58,7 +58,11 @@ describe("ensureElizaTypescriptDependencyLinks", () => {
   it("links an explicitly listed package from the repo root into core", () => {
     const repoRoot = makeTempDir();
     const elizaRoot = path.join(repoRoot, "eliza");
-    const targetPkg = path.join(repoRoot, "node_modules", "milady-test-link-pkg");
+    const targetPkg = path.join(
+      repoRoot,
+      "node_modules",
+      "milady-test-link-pkg",
+    );
     writeFile(
       path.join(targetPkg, "package.json"),
       '{"name":"milady-test-link-pkg"}',

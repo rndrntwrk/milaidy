@@ -331,7 +331,7 @@ describe("release workflow path contract", () => {
     expect(generateKeywords).toBeGreaterThanOrEqual(0);
     expect(generateProto).toBeGreaterThanOrEqual(0);
     expect(releaseElectrobun).toContain(
-      "buf generate failed on attempt ${attempt}; retrying in 15 seconds",
+      `buf generate failed on attempt \${attempt}; retrying in 15 seconds`,
     );
     expect(stageDesktop).toBeGreaterThanOrEqual(0);
     expect(releaseElectrobun).not.toContain(
@@ -351,7 +351,7 @@ describe("release workflow path contract", () => {
     const releaseElectrobun = readWorkflow("release-electrobun.yml");
 
     expect(releaseElectrobun).toContain(
-      "ELIZA_RELEASE_URL: ${{ (github.event_name != 'workflow_call' || inputs.publish_release) && !inputs.draft && 'https://releases.milady.ai/' || '' }}",
+      `ELIZA_RELEASE_URL: \${{ (github.event_name != 'workflow_call' || inputs.publish_release) && !inputs.draft && 'https://releases.milady.ai/' || '' }}`,
     );
   });
 
@@ -384,7 +384,7 @@ describe("release workflow path contract", () => {
       "name: Dump Electrobun build diagnostics",
     );
     expect(releaseElectrobun).toContain(
-      "name: electrobun-${{ matrix.platform.artifact-name }}-build-diagnostics",
+      `name: electrobun-\${{ matrix.platform.artifact-name }}-build-diagnostics`,
     );
     expect(releaseElectrobun).toContain(
       "eliza/packages/app-core/platforms/electrobun/build/**/wrapper-diagnostics.json",
@@ -524,10 +524,10 @@ describe("release workflow path contract", () => {
     );
     expect(releaseElectrobun).toContain('"apps/app/electrobun/build"');
     expect(releaseElectrobun).toContain(
-      'if [ "${{ inputs.draft }}" != "true" ] || [ "${{ inputs.publish_release }}" = "true" ]; then',
+      `if [ "\${{ inputs.draft }}" != "true" ] || [ "\${{ inputs.publish_release }}" = "true" ]; then`,
     );
     expect(releaseElectrobun).toContain(
-      'tar --zstd -cf "$artifact_root/elizaOS-${{ needs.prepare.outputs.env }}-${{ matrix.platform.artifact-name }}.tar.zst"',
+      `tar --zstd -cf "$artifact_root/elizaOS-\${{ needs.prepare.outputs.env }}-\${{ matrix.platform.artifact-name }}.tar.zst"`,
     );
   });
 });

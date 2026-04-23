@@ -41,11 +41,14 @@ function findMiladyRoot() {
 
 function readElizaBranchFromMiladyGitmodules(repoRoot) {
   try {
-    const branch = execSync("git config -f .gitmodules submodule.eliza.branch", {
-      cwd: repoRoot,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    }).trim();
+    const branch = execSync(
+      "git config -f .gitmodules submodule.eliza.branch",
+      {
+        cwd: repoRoot,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      },
+    ).trim();
     if (branch) {
       return branch;
     }

@@ -14,7 +14,6 @@ import {
   isElectrobunRuntime,
 } from "@elizaos/app-core";
 import { PhoneCompanionApp } from "@elizaos/app-core";
-import { CharacterEditor } from "@elizaos/app-core/components/character/CharacterEditor";
 import type { BrandingConfig } from "@elizaos/app-core";
 import {
   type AppBootConfig,
