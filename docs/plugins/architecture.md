@@ -18,22 +18,22 @@ AgentRuntime
 └── Local            (from plugins/ directory)
 ```
 
-The source of truth for which plugins are always loaded lives in `packages/agent/src/runtime/core-plugins.ts` (re-exported by `packages/app-core/src/runtime/core-plugins.ts`):
+The source of truth for which plugins are always loaded lives in the upstream elizaOS repo at `packages/agent/src/runtime/core-plugins.ts` (re-exported by `packages/app-core/src/runtime/core-plugins.ts`). These files live inside the `eliza/` git submodule — run `bun run setup:upstreams` to check it out locally.
 
 ```typescript
 export const CORE_PLUGINS: readonly string[] = [
   "@elizaos/plugin-sql",               // database adapter — required
   "@elizaos/plugin-local-embedding",   // local embeddings — required for memory
   "@elizaos/plugin-form",              // form handling for guided user journeys
-  "knowledge",         // RAG knowledge management — required for knowledge tab
-  "trajectories", // trajectory logging for debugging and RL training
+  "knowledge",                         // RAG knowledge management — built-in runtime feature, not a standalone registry plugin
+  "@elizaos/plugin-trajectory-logger", // trajectory logging for debugging and RL training
   "@elizaos/plugin-agent-orchestrator",// multi-agent orchestration (PTY, SwarmCoordinator, workspace provisioning)
   "@elizaos/plugin-cron",              // scheduled jobs and automation
   "@elizaos/plugin-shell",             // shell command execution
   "@elizaos/plugin-agent-skills",      // skill execution and marketplace runtime
   "@elizaos/plugin-commands",          // slash command handling (skills auto-register as /commands)
   "@elizaos/plugin-plugin-manager",    // dynamic plugin management for registry/plugin installs
-  "roles",                            // internal role-based access control (OWNER/ADMIN/NONE)
+  "roles",                             // internal role-based access control (OWNER/ADMIN/NONE) — built-in runtime module
 ];
 ```
 
@@ -41,7 +41,7 @@ export const CORE_PLUGINS: readonly string[] = [
 
 ### Optional Core Plugins
 
-A separate list of optional core plugins can be enabled from the admin panel. These are not loaded by default due to packaging or specification constraints. The list lives in `packages/agent/src/runtime/core-plugins.ts`:
+A separate list of optional core plugins can be enabled from the admin panel. These are not loaded by default due to packaging or specification constraints. The list also lives in the upstream `packages/agent/src/runtime/core-plugins.ts`:
 
 ```typescript
 export const OPTIONAL_CORE_PLUGINS: readonly string[] = [
@@ -120,7 +120,7 @@ interface Plugin {
 
 ## Auto-Enable Mechanism
 
-Plugins are automatically enabled when their required configuration is detected. This logic lives in `packages/agent/src/config/plugin-auto-enable.ts` (extended by `packages/app-core/src/config/plugin-auto-enable.ts` for Eliza-specific connectors like WeChat) and runs before runtime initialization.
+Plugins are automatically enabled when their required configuration is detected. This logic lives in the upstream `packages/agent/src/config/plugin-auto-enable.ts` (extended by `packages/app-core/src/config/plugin-auto-enable.ts` for Milady-specific connectors like WeChat) and runs before runtime initialization. Both files are inside the `eliza/` git submodule.
 
 ### Trigger Sources
 

@@ -1,21 +1,39 @@
 ---
 title: "milady dashboard"
-description: "Open or print the dashboard URL for the running API."
+description: "Open or print the URL for the Milady web dashboard."
 ---
 
 # `milady dashboard`
 
-Helps launch or locate the web dashboard against the configured API port.
+Opens the web dashboard in your default browser, or prints its URL if a browser cannot be launched.
 
 ## Examples
 
 ```bash
+# Open dashboard in browser
 milady dashboard
+
+# Show available flags (URL-only mode, etc.)
+milady dashboard --help
 ```
 
-Run `milady dashboard --help` for options (browser launcher, URL only, etc.).
+## Dashboard ports
+
+The dashboard URL depends on your port configuration:
+
+| Mode | Default URL |
+|------|------------|
+| Production | `http://localhost:2138` (`MILADY_PORT`) |
+| Dev mode | `http://localhost:2138` (Vite dev server on `MILADY_PORT`, API on `MILADY_API_PORT`) |
+
+Override with environment variables:
+
+```bash
+MILADY_PORT=3000 milady start
+# Dashboard at http://localhost:3000
+```
 
 ## Related
 
-- [Dashboard](/apps/dashboard)
+- [Dashboard](/apps/dashboard) — Dashboard features and settings
 - [CLI environment](/cli/environment) — `MILADY_PORT`, `MILADY_API_PORT`

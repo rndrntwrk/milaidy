@@ -1,11 +1,18 @@
 ---
 title: "milady configure"
-description: "Interactive configuration for Milady after initial setup."
+description: "Interactive configuration guide — shows provider status, common env vars, and suggested next steps."
 ---
 
 # `milady configure`
 
-Opens prompts or flows to adjust settings stored in the Milady config file (under your state directory).
+Displays a quick reference of common configuration options, environment variables, and active provider status. This is a read-only guide, not a setup wizard — use [`milady setup`](/cli/setup) for first-time onboarding.
+
+## What it shows
+
+- Which model providers are detected and their status
+- Common environment variables and where to set them
+- Current config file path and state directory
+- Suggested next steps based on your configuration
 
 ## Examples
 
@@ -13,9 +20,16 @@ Opens prompts or flows to adjust settings stored in the Milady config file (unde
 milady configure
 ```
 
-Run `milady configure --help` for scope and mode flags.
+## When to use
+
+- You need a quick reminder of which env var activates a provider
+- You want to confirm which providers are currently detected
+- You are not sure where your config file lives
+
+For interactive key entry and first-time setup, use [`milady setup`](/cli/setup) instead.
 
 ## Related
 
-- [Configuration](/configuration)
-- [Config schema](/config-schema)
+- [`milady setup`](/cli/setup) — First-time interactive setup
+- [Configuration](/configuration) — Full config reference
+- [Model providers](/model-providers) — Provider details and env variables

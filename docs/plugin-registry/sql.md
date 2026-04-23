@@ -10,17 +10,28 @@ The SQL plugin is the database layer for Milady agents. It provides persistent s
 
 ## Overview
 
-The SQL plugin implements the `IDatabaseAdapter` interface from elizaOS core, backed by SQLite via Drizzle ORM. It is the first core plugin loaded because all other plugins depend on persistent storage.
+The SQL plugin implements the `IDatabaseAdapter` interface from elizaOS core. Milady defaults to **PGLite** (embedded PostgreSQL) for local state, with optional external PostgreSQL for production. It is the first core plugin loaded because all other plugins depend on persistent storage.
 
 ## Database Location
 
-The SQLite database file is stored at:
+The default PGLite database is stored at:
 
 ```
-~/.milady/agents/{agentId}/agent.db
+~/.milady/workspace/.eliza/.elizadb
 ```
 
-For multi-agent setups, each agent has its own isolated database.
+Override via config:
+
+```json5
+{
+  database: {
+    provider: "pglite",
+    pglite: {
+      dataDir: "~/.milady/workspace/.eliza/.elizadb",
+    },
+  },
+}
+```
 
 ## Schema
 
@@ -67,14 +78,17 @@ SQLite does not have a native vector extension, so similarity search is performe
 
 ## PostgreSQL Support
 
-For production deployments, the SQL plugin supports PostgreSQL via the `pg` driver:
+For production deployments, the SQL plugin supports external PostgreSQL:
 
-```json
+```json5
 {
-  "database": {
-    "type": "postgres",
-    "url": "postgresql://user:password@host:5432/milady"
-  }
+  database: {
+    provider: "postgres",
+    postgres: {
+      connectionString: "postgresql://user:password@host:5432/milady",
+      ssl: true,
+    },
+  },
 }
 ```
 
@@ -138,10 +152,12 @@ await runtime.setComponent(userId, "userPreferences", {
 
 | Setting | Description | Default |
 |---------|-------------|---------|
-| `database.type` | `sqlite` or `postgres` | `sqlite` |
-| `database.url` | PostgreSQL connection URL | — |
-| `database.path` | Custom SQLite file path | Auto-resolved |
-| `database.vectorDimensions` | Embedding vector size | `768` |
+| `database.provider` | `pglite` or `postgres` | `pglite` |
+| `database.pglite.dataDir` | PGLite data directory | `~/.milady/workspace/.eliza/.elizadb` |
+| `database.postgres.connectionString` | PostgreSQL connection URL | — |
+| `database.postgres.host` | PostgreSQL host (alternative to connection string) | — |
+| `database.postgres.port` | PostgreSQL port | `5432` |
+| `database.postgres.ssl` | Enable SSL | `false` |
 
 ## Related
 

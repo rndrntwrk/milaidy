@@ -1,22 +1,49 @@
 ---
 title: "milady config"
-description: "Inspect or validate milady.json-style configuration from the shell."
+description: "Read, inspect, and validate Milady's active configuration from the shell."
 ---
 
 # `milady config`
 
-Read-only or validation helpers for the active configuration (exact subcommands depend on your CLI version).
+Read-only commands for inspecting the resolved configuration. Useful for verifying what the runtime will use before starting the server.
+
+## Subcommands
+
+| Subcommand | Purpose |
+|-----------|---------|
+| `milady config get <key>` | Read a single config value using dot-notation |
+| `milady config path` | Print the resolved config file path |
+| `milady config show` | Display all config values grouped by section |
 
 ## Examples
 
 ```bash
-milady config
-milady config --help
+# Read specific values
+milady config get agents.defaults.model
+milady config get gateway.port
+milady config get connectors.discord.token
+
+# Find the config file
+milady config path
+
+# Show full config
+milady config show
+milady config show --all    # Include advanced/hidden fields
+milady config show --json   # Raw JSON output
 ```
 
-Use this when you need to confirm which file path and keys the runtime will load before starting the server.
+## Editing config
+
+`milady config` is read-only. To change values, edit the config file directly:
+
+```bash
+$EDITOR "$(milady config path)"
+```
+
+The config file supports [JSON5 syntax](/configuration#file-format) (comments, trailing commas, unquoted keys).
 
 ## Related
 
-- [Configuration](/configuration)
-- [Config schema](/config-schema)
+- [Configuration](/configuration) — Full config reference
+- [Config schema](/config-schema) — Schema documentation
+- [`milady configure`](/cli/configure) — Interactive configuration guide

@@ -1,20 +1,53 @@
 ---
 title: "milady models"
-description: "CLI helpers for model and provider discovery or checks."
+description: "List configured model providers and check their availability."
 ---
 
 # `milady models`
 
-Subcommands for listing models, probing providers, or aligning CLI output with dashboard model settings (varies by version).
+Lists model providers detected in your environment and their current status (configured, active, missing key).
 
 ## Examples
 
 ```bash
+# List all providers and their status
 milady models
+
+# Show help and available flags
 milady models --help
+```
+
+## What it shows
+
+- Each provider plugin that is auto-enabled or manually configured
+- Whether the provider's API key is set
+- The active model selection from `agents.defaults.model`
+
+## Setting the default model
+
+Edit `~/.milady/milady.json`:
+
+```json5
+{
+  agents: {
+    defaults: {
+      model: {
+        primary: "anthropic/claude-sonnet-4.6",
+        fallbacks: ["openai/gpt-4o"],
+      },
+    },
+  },
+}
+```
+
+Or switch mid-session using the `/model` chat command:
+
+```
+/model openai/gpt-4o
 ```
 
 ## Related
 
-- [Model providers](/model-providers)
-- [REST — models](/rest/models)
+- [Model providers](/model-providers) — Full provider reference with env vars
+- [Configuration — models](/configuration#model-configuration) — Model config section
+- [REST — models](/rest/models) — Model API endpoints

@@ -5,18 +5,52 @@ description: "Database maintenance and inspection for the local PGlite store."
 
 # `milady db`
 
-Low-level database utilities (backup hints, migrations status, or repair flows — exact subcommands vary by version).
+Low-level database utilities for the embedded PGlite database — backup, migration status, and repair.
 
 ## Examples
 
 ```bash
+# Show database status and available subcommands
 milady db
+
+# Show available flags
 milady db --help
 ```
 
-Avoid running destructive operations while the API server holds the database lock.
+## Database location
+
+By default, PGlite stores data at:
+
+```
+~/.milady/workspace/.eliza/.elizadb
+```
+
+Override via config:
+
+```json5
+{
+  database: {
+    provider: "pglite",
+    pglite: {
+      dataDir: "~/.milady/workspace/.eliza/.elizadb",
+    },
+  },
+}
+```
+
+<Warning>
+Avoid running destructive database operations while the API server holds the database lock. Stop the server first with `milady stop` or `Ctrl+C`.
+</Warning>
+
+## Database security tests
+
+Run the database security and readonly test suite:
+
+```bash
+bun run db:check
+```
 
 ## Related
 
-- [Database](/advanced/database)
-- [REST — diagnostics](/rest/diagnostics)
+- [Database](/advanced/database) — Database configuration and backends
+- [REST — diagnostics](/rest/diagnostics) — Runtime diagnostic endpoints

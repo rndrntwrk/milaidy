@@ -1,20 +1,41 @@
 ---
 title: "milady update"
-description: "Update Milady CLI or bundled tooling."
+description: "Check for updates and apply them based on your install method."
 ---
 
 # `milady update`
 
-Checks for updates or reapplies packaging steps depending on how Milady was installed (npm global, git checkout, etc.).
+Checks for a newer Milady release and updates based on how you installed (npm global, Homebrew, desktop app, git checkout).
 
 ## Examples
 
 ```bash
+# Check for updates and apply
 milady update
+
+# Show available flags
 milady update --help
 ```
 
+## Update channels
+
+Configure which release channel to follow in `~/.milady/milady.json`:
+
+```json5
+{
+  update: {
+    channel: "stable",          // "stable" | "beta" | "nightly"
+    checkOnStart: true,         // check for updates when milady starts
+    checkIntervalSeconds: 14400, // 4 hours between checks
+  },
+}
+```
+
+## Desktop app
+
+The desktop app checks for updates automatically on launch. Updates are downloaded in the background and applied on next restart.
+
 ## Related
 
-- [Self-updates](/self-updates)
-- [Build and release](/build-and-release)
+- [Self-updates](/self-updates) — Update mechanism details
+- [Build and release](/build-and-release) — Release process documentation

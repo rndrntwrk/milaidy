@@ -1,20 +1,60 @@
 ---
 title: "milady plugins"
-description: "List, enable, or inspect plugins from the CLI."
+description: "List, install, inspect, and manage plugins from the CLI."
 ---
 
 # `milady plugins`
 
-Inspects which plugins resolve in the current environment and can trigger sync or registry operations depending on flags.
+Manage the plugin lifecycle — list what's loaded, install from the registry, and inspect plugin status.
+
+## Subcommands
+
+| Subcommand | Purpose |
+|-----------|---------|
+| `milady plugins` | List all resolved plugins and their status |
+| `milady plugins list` | Same as above — show installed and auto-enabled plugins |
+| `milady plugins install <package>` | Install a plugin from the registry |
 
 ## Examples
 
 ```bash
+# List all plugins and their load status
 milady plugins
-milady plugins --help
+milady plugins list
+
+# Install a connector plugin
+milady plugins install @elizaos/plugin-bluesky
+milady plugins install @elizaos/plugin-instagram
+
+# Install a feature plugin
+milady plugins install @elizaos/plugin-browser
+```
+
+## How plugins resolve
+
+Plugins load in this order (first match wins):
+
+1. **Ejected** — `~/.milady/plugins/ejected/` (local overrides)
+2. **User-installed** — Tracked in `plugins.installs` in `milady.json`
+3. **Custom/drop-in** — `~/.milady/plugins/custom/` and `plugins.load.paths`
+4. **Auto-enabled** — Detected from env vars, connector config, and feature flags
+5. **Core** — Always loaded (sql, local-embedding, form, etc.)
+
+## Enable/disable in config
+
+```json5
+{
+  plugins: {
+    allow: ["@elizaos/plugin-openai", "discord"],
+    entries: {
+      anthropic: { enabled: false },  // force-disable even if auto-detected
+    },
+  },
+}
 ```
 
 ## Related
 
-- [Plugins overview](/plugins/overview)
-- [REST — plugins](/rest/plugins)
+- [Plugins overview](/plugins/overview) — Plugin system documentation
+- [Plugin architecture](/plugins/architecture) — Auto-enable mechanism details
+- [REST — plugins](/rest/plugins) — Plugin API endpoints
