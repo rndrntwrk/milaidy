@@ -272,6 +272,12 @@ const PLUGIN_TS_IGNORE_DEPRECATIONS_COMPAT_FILES = [
   path.join("plugins", "plugin-shopify", "tsconfig.json"),
   path.join("plugins", "plugin-wechat", "tsconfig.json"),
 ];
+const PLUGIN_TS_IGNORE_DEPRECATIONS_INSERT_FILES = [
+  path.join("plugins", "plugin-agent-skills", "typescript", "tsconfig.json"),
+  path.join("plugins", "plugin-signal", "typescript", "tsconfig.json"),
+  path.join("plugins", "plugin-telegram", "tsconfig.json"),
+  path.join("plugins", "plugin-telegram", "tsconfig.build.json"),
+];
 const LIFEOPS_SETTINGS_SECTION_RELATIVE_PATH = path.join(
   "apps",
   "app-lifeops",
@@ -551,21 +557,16 @@ export function applyTypeScriptIgnoreDeprecationsCompatPatch(
       },
     );
   }
-  patchedReplacements += applyCompilerOption(
-    path.join(
-      elizaRoot,
-      "plugins",
-      "plugin-agent-skills",
-      "typescript",
-      "tsconfig.json",
-    ),
-    "ignoreDeprecations",
-    targetVersion,
-    {
-      label:
-        "plugin-agent-skills ignoreDeprecations compatibility patch (plugins/plugin-agent-skills/typescript/tsconfig.json)",
-    },
-  );
+  for (const relativePath of PLUGIN_TS_IGNORE_DEPRECATIONS_INSERT_FILES) {
+    patchedReplacements += applyCompilerOption(
+      path.join(elizaRoot, relativePath),
+      "ignoreDeprecations",
+      targetVersion,
+      {
+        label: `plugin ignoreDeprecations compatibility patch (${relativePath})`,
+      },
+    );
+  }
   return patchedReplacements;
 }
 

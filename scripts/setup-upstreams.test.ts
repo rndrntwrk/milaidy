@@ -1073,32 +1073,47 @@ describe("applyTypeScriptIgnoreDeprecationsCompatPatch", () => {
     );
   });
 
-  it("inserts plugin-agent-skills deprecation silencing when missing", () => {
+  it("inserts plugin deprecation silencing when missing", () => {
     const elizaRoot = makeTempDir();
     const repoRoot = makeTempDir();
-    const configPath = path.join(
-      elizaRoot,
-      "plugins",
-      "plugin-agent-skills",
-      "typescript",
-      "tsconfig.json",
-    );
+    const configPaths = [
+      path.join(
+        elizaRoot,
+        "plugins",
+        "plugin-agent-skills",
+        "typescript",
+        "tsconfig.json",
+      ),
+      path.join(
+        elizaRoot,
+        "plugins",
+        "plugin-signal",
+        "typescript",
+        "tsconfig.json",
+      ),
+      path.join(elizaRoot, "plugins", "plugin-telegram", "tsconfig.json"),
+      path.join(elizaRoot, "plugins", "plugin-telegram", "tsconfig.build.json"),
+    ];
 
     writeFile(
       path.join(repoRoot, "eliza", "package.json"),
       JSON.stringify({ devDependencies: { typescript: "^6.0.0" } }, null, 2),
     );
-    writeFile(
-      configPath,
-      '{\n  "compilerOptions": {\n    "baseUrl": "./src"\n  }\n}\n',
-    );
+    for (const configPath of configPaths) {
+      writeFile(
+        configPath,
+        '{\n  "compilerOptions": {\n    "baseUrl": "./src"\n  }\n}\n',
+      );
+    }
 
     expect(
       applyTypeScriptIgnoreDeprecationsCompatPatch(elizaRoot, { repoRoot }),
-    ).toBe(1);
-    expect(JSON.parse(fs.readFileSync(configPath, "utf8"))).toMatchObject({
-      compilerOptions: { ignoreDeprecations: "6.0" },
-    });
+    ).toBe(4);
+    for (const configPath of configPaths) {
+      expect(JSON.parse(fs.readFileSync(configPath, "utf8"))).toMatchObject({
+        compilerOptions: { ignoreDeprecations: "6.0" },
+      });
+    }
   });
 
   it("downgrades tsup plugin configs to TypeScript 5-compatible deprecation silencing", () => {
