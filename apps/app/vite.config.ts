@@ -61,7 +61,10 @@ const capacitorKeyboardEntry = tryResolve("@capacitor/keyboard");
 const capacitorPreferencesEntry = tryResolve("@capacitor/preferences");
 const capacitorAppEntry = tryResolve("@capacitor/app");
 
-function isExpectedWsProxySocketError(message: unknown, error: unknown): boolean {
+function isExpectedWsProxySocketError(
+  message: unknown,
+  error: unknown,
+): boolean {
   const text = typeof message === "string" ? message : String(message ?? "");
   if (!text.includes("ws proxy socket error")) {
     return false;
