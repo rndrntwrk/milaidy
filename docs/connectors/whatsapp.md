@@ -103,6 +103,17 @@ The WhatsApp Business Cloud API is Meta's official API. Requires a WhatsApp Busi
 **Pros**: Official API, reliable uptime, webhook-based.
 **Cons**: Requires business account, per-message costs may apply, approval process.
 
+## Features
+
+- Private and group chat messaging
+- Two auth methods: Baileys (QR code, personal) and Cloud API (business)
+- Read receipts and acknowledgment reactions
+- DM and group access policies
+- Media attachments up to 50MB
+- Multi-account support
+- Self-chat mode for testing
+- Session persistence across restarts
+
 ## Full Configuration Reference
 
 All fields are defined under `connectors.whatsapp` in `milady.json`.

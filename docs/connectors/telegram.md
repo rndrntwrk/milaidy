@@ -51,6 +51,17 @@ To explicitly disable the connector even when a token is present:
 3. Add the token to `connectors.telegram.botToken` in your config.
 4. Start your agent -- the Telegram connector will auto-enable.
 
+## Features
+
+- Private chat and group messaging
+- Topic-based conversations in supergroups
+- Reactions, stickers, and message deletion
+- Custom bot commands
+- Streaming responses with partial message edits
+- Webhook support for production deployments
+- Per-group and per-topic configuration
+- Multi-account support
+
 ## Full Configuration Reference
 
 All fields are defined under `connectors.telegram` in `milady.json`.

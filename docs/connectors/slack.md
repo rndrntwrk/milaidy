@@ -19,21 +19,9 @@ Connect your agent to Slack workspaces using the `@elizaos/plugin-slack` package
 | `SLACK_SHOULD_IGNORE_BOT_MESSAGES` | No | If `true`, ignore messages from other bots |
 | `SLACK_SHOULD_RESPOND_ONLY_TO_MENTIONS` | No | If `true`, only respond when @mentioned |
 
-## Overview
+The connector auto-enables when `botToken`, `token`, or `apiKey` is truthy in the connector config and `enabled` is not explicitly `false`.
 
-The Slack connector is an external elizaOS plugin that bridges your agent to Slack workspaces. It supports two transport modes (Socket Mode and HTTP webhooks), per-channel configuration, DM policies, slash commands, multi-account support, and fine-grained action permissions. The connector is auto-enabled by the runtime when a valid token is detected in your connector configuration.
-
-## Package Info
-
-| Field | Value |
-|-------|-------|
-| Package | `@elizaos/plugin-slack` |
-| Config key | `connectors.slack` |
-| Auto-enable trigger | `botToken`, `token`, or `apiKey` is truthy in connector config |
-
-## Minimal Configuration
-
-In `~/.milady/milady.json`:
+Configure in `~/.milady/milady.json`:
 
 ```json
 {
@@ -46,11 +34,9 @@ In `~/.milady/milady.json`:
 }
 ```
 
-The default transport is **Socket Mode**, which requires both `botToken` and `appToken`. If you only provide `botToken`, auto-enable will trigger but Socket Mode will fail to connect. For HTTP mode, `appToken` is not needed — set `"mode": "http"` and provide a `signingSecret` instead.
+The default transport is **Socket Mode**, which requires both `botToken` and `appToken`. For HTTP mode, `appToken` is not needed -- set `"mode": "http"` and provide a `signingSecret` instead.
 
-## Disabling
-
-To explicitly disable the connector even when a token is present:
+To disable:
 
 ```json
 {
@@ -70,6 +56,17 @@ To explicitly disable the connector even when a token is present:
 3. Under **OAuth & Permissions**, add the required bot scopes and install to your workspace to get a **Bot Token** (`xoxb-...`).
 4. Add both tokens to `connectors.slack` in your config.
 5. Start your agent -- the Slack connector will auto-enable.
+
+## Features
+
+- Socket Mode and HTTP webhook transport
+- Channel and DM messaging
+- Per-channel configuration
+- Slash command support
+- Reactions, pins, and search
+- DM access policies
+- Thread management with configurable history scopes
+- Multi-account/workspace support
 
 ## Transport Modes
 

@@ -69,6 +69,15 @@ To explicitly disable the connector even when an account is configured:
 }
 ```
 
+## Features
+
+- Private and group messaging via signal-cli
+- Read receipts and reactions
+- Attachment and media support
+- DM and group access policies
+- Multi-account support
+- Auto-start signal-cli from the connector
+
 ## Full Configuration Reference
 
 All fields are defined under `connectors.signal` in `milady.json`.

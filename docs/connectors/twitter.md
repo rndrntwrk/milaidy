@@ -55,6 +55,16 @@ To explicitly disable the connector even when a token is present:
 4. Add the credentials to `connectors.twitter` in your config as shown below.
 5. Start your agent -- the Twitter connector will auto-enable.
 
+## Features
+
+- Automated posting at configurable intervals
+- Mention monitoring and auto-response
+- Action processing (like, retweet, quote)
+- Keyword search monitoring
+- DM policy configuration
+- Dry run mode for testing
+- Configurable timeline algorithm (weighted or latest)
+
 ## Full Configuration Reference
 
 All fields are nested under `connectors.twitter` in `milady.json`.

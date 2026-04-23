@@ -63,6 +63,18 @@ To explicitly disable the connector even when a token is present:
 }
 ```
 
+## Features
+
+- Server channel and DM messaging
+- Voice channel support
+- Reactions, stickers, polls, and custom emoji
+- Thread management
+- Per-guild and per-channel configuration
+- DM access policies (pairing, allowlist, open)
+- Multi-account support
+- PluralKit integration
+- Exec approval workflows
+
 ## Full Configuration Reference
 
 All fields are set under `connectors.discord` in `milady.json`.
