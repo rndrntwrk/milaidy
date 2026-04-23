@@ -63,8 +63,19 @@ test("browser workspace can create live tabs and switch selection", async ({
     name: "New tab",
   });
   await expect(newTabButton).toBeVisible({ timeout: 120_000 });
+  await expect(tabsSidebar.getByText("User Tabs")).toBeVisible({
+    timeout: 120_000,
+  });
+  await expect(tabsSidebar.getByText("Agent Tabs")).toBeVisible({
+    timeout: 120_000,
+  });
+  await expect(tabsSidebar.getByText("App Tabs")).toBeVisible({
+    timeout: 120_000,
+  });
   const addressInput = browserWorkspaceView.locator("input").first();
   await expect(addressInput).toBeVisible({ timeout: 120_000 });
+  const goButton = browserWorkspaceView.getByRole("button", { name: "Go" });
+  await expect(goButton).toBeVisible({ timeout: 120_000 });
   const chatSidebar = browserWorkspaceView.getByTestId(
     "browser-workspace-view-chat-sidebar",
   );
@@ -117,4 +128,8 @@ test("browser workspace can create live tabs and switch selection", async ({
 
   await exampleTabButton.click();
   await expect(addressInput).toHaveValue("https://example.com/");
+
+  await addressInput.fill("example.org");
+  await goButton.click();
+  await expect(addressInput).toHaveValue("https://example.org/");
 });
