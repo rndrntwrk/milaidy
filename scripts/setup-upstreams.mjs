@@ -473,6 +473,33 @@ function applyTextReplacements(filePath, replacements, { label }) {
   return patchedReplacements;
 }
 
+function applyCompilerOption(filePath, option, value, { label }) {
+  if (!existsSync(filePath)) {
+    return 0;
+  }
+
+  try {
+    const raw = readFileSync(filePath, "utf8");
+    const config = JSON.parse(raw);
+    const current = config.compilerOptions?.[option];
+    if (current === value) {
+      return 0;
+    }
+    config.compilerOptions = {
+      ...(config.compilerOptions ?? {}),
+      [option]: value,
+    };
+    writeFileSync(filePath, `${JSON.stringify(config, null, 2)}\n`);
+    console.log(`[setup-upstreams] Applied ${label}`);
+    return 1;
+  } catch (error) {
+    console.warn(
+      `[setup-upstreams] WARNING: ${label} failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return 0;
+  }
+}
+
 export function applyPluginAnthropicBunRuntimePatch(elizaRoot) {
   let patchedReplacements = 0;
   patchedReplacements += applyTextReplacements(
@@ -524,6 +551,21 @@ export function applyTypeScriptIgnoreDeprecationsCompatPatch(
       },
     );
   }
+  patchedReplacements += applyCompilerOption(
+    path.join(
+      elizaRoot,
+      "plugins",
+      "plugin-agent-skills",
+      "typescript",
+      "tsconfig.json",
+    ),
+    "ignoreDeprecations",
+    targetVersion,
+    {
+      label:
+        "plugin-agent-skills ignoreDeprecations compatibility patch (plugins/plugin-agent-skills/typescript/tsconfig.json)",
+    },
+  );
   return patchedReplacements;
 }
 

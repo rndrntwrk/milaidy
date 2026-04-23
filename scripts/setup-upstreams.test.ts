@@ -1073,6 +1073,34 @@ describe("applyTypeScriptIgnoreDeprecationsCompatPatch", () => {
     );
   });
 
+  it("inserts plugin-agent-skills deprecation silencing when missing", () => {
+    const elizaRoot = makeTempDir();
+    const repoRoot = makeTempDir();
+    const configPath = path.join(
+      elizaRoot,
+      "plugins",
+      "plugin-agent-skills",
+      "typescript",
+      "tsconfig.json",
+    );
+
+    writeFile(
+      path.join(repoRoot, "eliza", "package.json"),
+      JSON.stringify({ devDependencies: { typescript: "^6.0.0" } }, null, 2),
+    );
+    writeFile(
+      configPath,
+      '{\n  "compilerOptions": {\n    "baseUrl": "./src"\n  }\n}\n',
+    );
+
+    expect(
+      applyTypeScriptIgnoreDeprecationsCompatPatch(elizaRoot, { repoRoot }),
+    ).toBe(1);
+    expect(JSON.parse(fs.readFileSync(configPath, "utf8"))).toMatchObject({
+      compilerOptions: { ignoreDeprecations: "6.0" },
+    });
+  });
+
   it("downgrades tsup plugin configs to TypeScript 5-compatible deprecation silencing", () => {
     const elizaRoot = makeTempDir();
     const calendlyPath = path.join(
