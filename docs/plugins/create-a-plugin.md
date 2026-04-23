@@ -338,20 +338,18 @@ Every published plugin should include an `elizaos.plugin.json` manifest at its p
     },
     "required": ["apiKey"]
   },
-  "uiHints": [
-    {
-      "key": "apiKey",
+  "uiHints": {
+    "apiKey": {
       "label": "API Key",
       "type": "password",
-      "helpText": "Get one at openweathermap.org/appid"
+      "help": "Get one at openweathermap.org/appid"
     },
-    {
-      "key": "units",
+    "units": {
       "label": "Temperature Units",
       "type": "select",
       "advanced": false
     }
-  ],
+  },
   "requiredSecrets": ["WEATHER_API_KEY"],
   "channels": ["chat", "telegram", "discord"],
   "dependencies": ["knowledge"]
@@ -365,23 +363,23 @@ Every published plugin should include an `elizaos.plugin.json` manifest at its p
 | `id` | `string` | Unique plugin identifier (kebab-case) |
 | `name` | `string` | Human-readable display name |
 | `version` | `string` | Semver version |
-| `kind` | `PluginKind` | One of: `memory`, `channel`, `provider`, `skill`, `database`, `feature` |
+| `kind` | `PluginKind` | One of: `feature`, `ai-provider`, `connector`, `database`, `app`, `memory`, `channel`, `provider`, `skill` |
 | `configSchema` | `JsonSchema` | JSON Schema for plugin configuration |
-| `uiHints` | `PluginConfigUiHint[]` | Hints for admin panel rendering |
+| `uiHints` | `Record<string, PluginConfigUiHint>` | Hints for admin panel rendering, keyed by config property name |
 | `requiredSecrets` | `string[]` | Environment variables that must be set |
 | `channels` | `string[]` | Supported communication channels |
 | `dependencies` | `string[]` | Other plugins this depends on |
 
 ### UI Hints
 
-The `uiHints` array controls how config fields appear in the admin dashboard:
+The `uiHints` object controls how config fields appear in the admin dashboard. Each key matches a property name in `configSchema`:
 
 ```typescript
 interface PluginConfigUiHint {
-  key: string;        // matches configSchema property name
   label: string;      // display label
   type: 'text' | 'password' | 'number' | 'select' | 'toggle' | 'textarea';
-  helpText?: string;  // tooltip or helper text
+  help?: string;      // tooltip or helper text
+  sensitive?: boolean; // if true, value is masked in the UI
   advanced?: boolean; // if true, hidden under "Advanced" toggle
   placeholder?: string;
 }
@@ -410,7 +408,7 @@ Set an API key and the corresponding plugin loads automatically:
 |---------------------|--------|
 | `ANTHROPIC_API_KEY` | `@elizaos/plugin-anthropic` |
 | `OPENAI_API_KEY` | `@elizaos/plugin-openai` |
-| `GOOGLE_API_KEY` | `@elizaos/plugin-google-genai` |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | `@elizaos/plugin-google-genai` |
 | `GROQ_API_KEY` | `@elizaos/plugin-groq` |
 | `OPENROUTER_API_KEY` | `@elizaos/plugin-openrouter` |
 

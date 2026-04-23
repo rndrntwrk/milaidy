@@ -55,6 +55,12 @@ To explicitly disable the connector even when credentials are present:
 |----------|--------|-------------|
 | `BLUEBUBBLES_SERVER_URL` | `serverUrl` | BlueBubbles server URL |
 | `BLUEBUBBLES_PASSWORD` | `password` | Server password (required) |
+| `BLUEBUBBLES_ENABLED` | `enabled` | Set to `true` to enable |
+| `BLUEBUBBLES_DM_POLICY` | `dmPolicy` | DM access policy |
+| `BLUEBUBBLES_ALLOW_FROM` | `allowFrom` | Allowed user IDs for DMs |
+| `BLUEBUBBLES_GROUP_POLICY` | `groupPolicy` | Group message policy |
+| `BLUEBUBBLES_GROUP_ALLOW_FROM` | `groupAllowFrom` | Allowed group IDs |
+| `BLUEBUBBLES_SEND_READ_RECEIPTS` | `sendReadReceipts` | Send read receipts for incoming messages |
 
 ## Full Configuration Reference
 

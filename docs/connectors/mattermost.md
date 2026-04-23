@@ -63,6 +63,14 @@ When the connector is loaded, the runtime pushes the following secrets from your
 |----------|--------|-------------|
 | `MATTERMOST_BOT_TOKEN` | `botToken` | Bot token from Mattermost System Console |
 | `MATTERMOST_SERVER_URL` | `baseUrl` | Server URL for the Mattermost server |
+| `MATTERMOST_ENABLED` | `enabled` | Set to `true` to enable |
+| `MATTERMOST_TEAM_ID` | — | Team ID to join |
+| `MATTERMOST_DM_POLICY` | — | DM access policy |
+| `MATTERMOST_GROUP_POLICY` | — | Group message policy |
+| `MATTERMOST_REQUIRE_MENTION` | `requireMention` | Only respond when @mentioned |
+| `MATTERMOST_ALLOWED_USERS` | — | Comma-separated list of allowed user IDs |
+| `MATTERMOST_ALLOWED_CHANNELS` | — | Comma-separated list of allowed channel IDs |
+| `MATTERMOST_IGNORE_BOT_MESSAGES` | — | Set to `true` to ignore messages from other bots |
 
 ## Full Configuration Reference
 

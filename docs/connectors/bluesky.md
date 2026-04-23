@@ -10,7 +10,7 @@ Connect your agent to Bluesky for social posting and engagement on the AT Protoc
 
 The Bluesky connector is an elizaOS plugin that bridges your agent to Bluesky via the AT Protocol. It supports automated posting, mention monitoring, and reply handling.
 
-Unlike the 18 auto-enabled connectors (Discord, Telegram, etc.), Bluesky is a **registry plugin** that must be installed manually before use. It is not auto-enabled from connector config alone.
+Unlike the auto-enabled connectors (Discord, Telegram, etc.), Bluesky is a **registry plugin** that must be installed manually before use. It is not auto-enabled from connector config alone.
 
 ## Package Info
 
@@ -51,7 +51,14 @@ Unlike the 18 auto-enabled connectors (Discord, Telegram, etc.), Bluesky is a **
 | `BLUESKY_DRY_RUN` | No | Set to `true` for testing without posting |
 | `BLUESKY_ENABLE_POSTING` | No | Enable or disable post creation |
 | `BLUESKY_ENABLE_DMS` | No | Enable processing of direct messages via the chat.bsky API |
-| `BLUESKY_POLL_INTERVAL` | No | Polling interval in seconds |
+| `BLUESKY_POLL_INTERVAL` | No | Polling interval in seconds (default: `60`) |
+| `BLUESKY_POST_IMMEDIATELY` | No | Post immediately on startup instead of waiting |
+| `BLUESKY_POST_INTERVAL_MIN` | No | Minimum interval in seconds between automated posts (default: `1800`) |
+| `BLUESKY_POST_INTERVAL_MAX` | No | Maximum interval in seconds between automated posts (default: `3600`) |
+| `BLUESKY_MAX_POST_LENGTH` | No | Maximum post character length (default: `300`) |
+| `BLUESKY_ACTION_INTERVAL` | No | Interval in seconds between action-processing cycles (default: `120`) |
+| `BLUESKY_ENABLE_ACTION_PROCESSING` | No | Enable automated action processing (default: `true`) |
+| `BLUESKY_MAX_ACTIONS_PROCESSING` | No | Max actions per batch (default: `5`) |
 
 ## Features
 

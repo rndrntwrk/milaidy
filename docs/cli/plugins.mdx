@@ -5,12 +5,26 @@ description: "List, enable, or inspect plugins from the CLI."
 
 # `milady plugins`
 
-Inspects which plugins resolve in the current environment and can trigger sync or registry operations depending on flags.
+Manage plugins: list installed and available plugins, install from the registry, and remove plugins.
+
+## Subcommands
+
+| Subcommand | Description |
+|------------|-------------|
+| `milady plugins` | List plugins with status |
+| `milady plugins list` | Browse registry plugins |
+| `milady plugins installed` | List installed plugin packages |
+| `milady plugins install <name>` | Install a plugin from npm |
+| `milady plugins uninstall <name>` | Uninstall a plugin |
 
 ## Examples
 
 ```bash
 milady plugins
+milady plugins list
+milady plugins installed
+milady plugins install @elizaos/plugin-browser
+milady plugins uninstall @elizaos/plugin-browser
 milady plugins --help
 ```
 

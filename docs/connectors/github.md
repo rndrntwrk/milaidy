@@ -36,11 +36,16 @@ The GitHub connector is an elizaOS plugin that bridges your agent to the GitHub 
 
 ## Environment Variables
 
-| Variable | Description |
-|----------|-------------|
-| `GITHUB_API_TOKEN` | Personal access token or fine-grained token |
-| `GITHUB_OWNER` | Default repository owner |
-| `GITHUB_REPO` | Default repository name |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `GITHUB_API_TOKEN` | Yes | Personal access token or fine-grained token |
+| `GITHUB_OWNER` | No | Default repository owner |
+| `GITHUB_REPO` | No | Default repository name |
+| `GITHUB_BRANCH` | No | Default branch name (default: `main`) |
+| `GITHUB_APP_ID` | No | GitHub App ID (for GitHub App authentication) |
+| `GITHUB_APP_PRIVATE_KEY` | No | GitHub App private key |
+| `GITHUB_INSTALLATION_ID` | No | GitHub App installation ID |
+| `GITHUB_WEBHOOK_SECRET` | No | Secret for webhook verification |
 
 ## Features
 

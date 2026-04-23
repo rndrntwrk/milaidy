@@ -4,6 +4,8 @@ sidebarTitle: Twitter/X
 description: Connect your agent to Twitter/X using the @elizaos/plugin-twitter package.
 ---
 
+> **Registry note:** `@elizaos/plugin-twitter` is not currently listed in the Milady plugin registry (`plugins.json`). The package may be available from npm or a separate elizaOS plugin repository. Verify availability before configuring.
+
 Connect your agent to Twitter/X for social media engagement.
 
 ## Overview

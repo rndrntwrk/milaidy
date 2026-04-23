@@ -5,12 +5,27 @@ description: "Inspect or validate milady.json-style configuration from the shell
 
 # `milady config`
 
-Read-only or validation helpers for the active configuration (exact subcommands depend on your CLI version).
+Read-only helpers for inspecting the active configuration.
+
+## Subcommands
+
+| Subcommand | Description |
+|------------|-------------|
+| `milady config get <key>` | Read a config value using dot-notation (e.g. `agents.defaults.model`) |
+| `milady config path` | Print the resolved config file path |
+| `milady config show` | Display all config values grouped by section |
+| `milady config show --all` | Include advanced and hidden fields |
+| `milady config show --json` | Output raw JSON |
 
 ## Examples
 
 ```bash
-milady config
+milady config get agents.defaults.model
+milady config get gateway.port
+milady config path
+milady config show
+milady config show --all
+milady config show --json
 milady config --help
 ```
 

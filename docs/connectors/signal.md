@@ -91,6 +91,7 @@ The runtime injects the following environment variables from your `connectors.si
 | `SIGNAL_ACCOUNT_NUMBER` | `account` | Signal phone number (E.164) |
 | `SIGNAL_HTTP_URL` | `httpUrl` | HTTP URL for signal-cli daemon |
 | `SIGNAL_CLI_PATH` | `cliPath` | Path to signal-cli binary |
+| `SIGNAL_SHOULD_IGNORE_GROUP_MESSAGES` | — | Set to `true` to ignore group messages |
 
 You do not need to set these manually — they are derived from the connector config at runtime.
 

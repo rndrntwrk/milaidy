@@ -60,6 +60,9 @@ When the connector is loaded, the runtime pushes the following secret from your 
 | Variable | Source | Description |
 |----------|--------|-------------|
 | `TELEGRAM_BOT_TOKEN` | `botToken` | Bot token from [@BotFather](https://t.me/BotFather) |
+| `TELEGRAM_API_ROOT` | — | Custom Telegram API root URL (for self-hosted Bot API servers) |
+| `TELEGRAM_ALLOWED_CHATS` | — | Comma-separated list of allowed chat IDs |
+| `TELEGRAM_TEST_CHAT_ID` | — | Chat ID used by the test suite |
 
 ## Full Configuration Reference
 

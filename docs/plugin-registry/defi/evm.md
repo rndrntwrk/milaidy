@@ -101,7 +101,7 @@ After the plugin is loaded, the agent can execute on-chain operations through na
   "settings": {
     "secrets": {
       "EVM_PRIVATE_KEY": "0x...",
-      "EVM_RPC_URL": "https://sepolia.base.org"
+      "EVM_RPC_PROVIDER": "https://sepolia.base.org"
     }
   }
 }

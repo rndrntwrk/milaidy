@@ -751,7 +751,7 @@ For local plugin development without publishing:
 
 1. **Workspace discovery** — Place your plugin in:
    - `./plugins/my-plugin/` (project-local)
-   - `~/.milady/plugins/my-plugin/` (global)
+   - `~/.milady/plugins/custom/my-plugin/` (global drop-in)
 
 2. **Config-based loading** — Add to `milady.json`:
    ```json
@@ -762,7 +762,7 @@ For local plugin development without publishing:
 
 3. **Symlink for development:**
    ```bash
-   cd ~/.milady/plugins
+   cd ~/.milady/plugins/custom
    ln -s /path/to/my-plugin my-plugin
    ```
 

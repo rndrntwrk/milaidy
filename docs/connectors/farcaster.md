@@ -57,6 +57,26 @@ The `plugin-auto-enable.ts` module checks `connectors.farcaster` in your config.
 
 No environment variable is required to trigger auto-enable — it is driven entirely by the connector config object.
 
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `FARCASTER_NEYNAR_API_KEY` | Yes | Neynar API key for Farcaster Hub access |
+| `FARCASTER_SIGNER_UUID` | Yes | UUID of the Neynar signer for the agent account |
+| `FARCASTER_FID` | Yes | Farcaster ID (FID) of the agent account |
+| `FARCASTER_DRY_RUN` | No | Set to `true` to simulate operations without executing |
+| `FARCASTER_HUB_URL` | No | Farcaster Hub URL (default: `hub.pinata.cloud`) |
+| `FARCASTER_POLL_INTERVAL` | No | Polling interval in seconds (default: `120`) |
+| `FARCASTER_MODE` | No | Operation mode: `polling` or `webhook` (default: `polling`) |
+| `ENABLE_CAST` | No | Enable or disable cast posting (default: `true`) |
+| `ENABLE_ACTION_PROCESSING` | No | Enable automated action processing (default: `false`) |
+| `CAST_INTERVAL_MIN` | No | Minimum minutes between autonomous casts (default: `90`) |
+| `CAST_INTERVAL_MAX` | No | Maximum minutes between autonomous casts (default: `180`) |
+| `CAST_IMMEDIATELY` | No | Post immediately instead of waiting for schedule (default: `false`) |
+| `MAX_CAST_LENGTH` | No | Maximum cast character length (default: `320`) |
+| `ACTION_INTERVAL` | No | Minutes between action-processing cycles (default: `5`) |
+| `MAX_ACTIONS_PROCESSING` | No | Max actions per batch (default: `1`) |
+
 ## Full Configuration Reference
 
 All fields are defined under `connectors.farcaster` in `milady.json`.
@@ -70,7 +90,7 @@ All fields are defined under `connectors.farcaster` in `milady.json`.
 | `fid` | number | — | Farcaster ID of the agent account (required) |
 | `enabled` | boolean | — | Explicitly enable/disable |
 | `channels` | string[] | — | Farcaster channel names to monitor and participate in |
-| `pollInterval` | number | `60` | Seconds between mention checks |
+| `pollInterval` | number | `120` | Seconds between mention checks |
 
 ### Autonomous Casting
 
@@ -78,8 +98,8 @@ The agent can post casts autonomously at random intervals. The LLM generates cas
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `castIntervalMin` | number | `120` | Minimum minutes between autonomous casts |
-| `castIntervalMax` | number | `240` | Maximum minutes between autonomous casts |
+| `castIntervalMin` | number | `90` | Minimum minutes between autonomous casts |
+| `castIntervalMax` | number | `180` | Maximum minutes between autonomous casts |
 
 ```json
 {
