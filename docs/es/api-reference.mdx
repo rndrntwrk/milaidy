@@ -765,6 +765,15 @@ Las rutas bajo `/api/cloud/v1/` se reenvían como `/api/v1/` al backend en la nu
 | `POST` | `/api/wallet/generate` | Generar nueva(s) wallet(s) para EVM, Solana o ambos |
 | `POST` | `/api/wallet/export` | Exportar claves privadas (requiere confirmación) |
 
+<div id="wallet-cloud">
+### Wallet Cloud
+</div>
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| `POST` | `/api/wallet/primary` | Establecer la fuente de wallet principal (local o cloud) para una cadena. Controlado por `ENABLE_CLOUD_WALLET` |
+| `POST` | `/api/wallet/refresh-cloud` | Volver a consultar Eliza Cloud para obtener los últimos descriptores de wallet cloud. Controlado por `ENABLE_CLOUD_WALLET` |
+
 ---
 
 <div id="drop--mint">

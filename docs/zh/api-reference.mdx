@@ -765,6 +765,15 @@ curl -X POST http://localhost:2138/api/agent/autonomy \
 | `POST` | `/api/wallet/generate` | 为 EVM、Solana 或两者生成新钱包 |
 | `POST` | `/api/wallet/export` | 导出私钥（需要确认） |
 
+<div id="wallet-cloud">
+### 钱包云
+</div>
+
+| 方法 | 路径 | 描述 |
+|--------|------|-------------|
+| `POST` | `/api/wallet/primary` | 为某条链设置主钱包来源（本地或云端）。受 `ENABLE_CLOUD_WALLET` 控制 |
+| `POST` | `/api/wallet/refresh-cloud` | 重新查询 Eliza Cloud 以获取最新的云钱包描述符。受 `ENABLE_CLOUD_WALLET` 控制 |
+
 ---
 
 <div id="drop--mint">
