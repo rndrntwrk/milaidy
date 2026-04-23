@@ -1,7 +1,7 @@
 {
   "name": "miladyai",
   "version": "2.0.0-alpha.116",
-  "description": "Cute agents for the acceleration",
+  "description": "Cute agents for the acceleration. Fresh clone: ./install or install.cmd, or bun run bootstrap, before a bare bun install.",
   "homepage": "https://github.com/milady-ai/milady",
   "author": {
     "name": "Milady AI",
@@ -17,8 +17,13 @@
     "milady.mjs",
     "apps/app/dist",
     "eliza/packages/app-core/scripts",
+    "install",
+    "install.cmd",
     "scripts/init-submodules.mjs",
-    "scripts/setup-upstreams.mjs"
+    "scripts/milady-postinstall-repo-setup.mjs",
+    "scripts/run-init-then-bun-install.mjs",
+    "scripts/setup-upstreams.mjs",
+    "scripts/update-eliza-submodule-pointers-to-remote.mjs"
   ],
   "bundleDependencies": [
     "@elizaos/core",
@@ -27,7 +32,7 @@
   "workspaces": [
     "apps/*",
     "eliza/packages/native-plugins/*",
-    "eliza/packages/app-core/platforms/electrobun",
+    "eliza/packages/app-core/platforms/*",
     "eliza/apps/*",
     "eliza/cloud/packages/services/*",
     "eliza/plugins/*",
@@ -135,13 +140,16 @@
     "train": "bun eliza/apps/app-training/src/cli/train.ts",
     "action:trajectories-to-dataset": "node scripts/benchmark-to-training-dataset.mjs",
     "action:optimize-planner": "node scripts/optimize-action-planner.mjs",
-    "postinstall": "node eliza/packages/app-core/scripts/run-repo-setup.mjs",
+    "preinstall": "node scripts/init-submodules.mjs",
+    "bootstrap": "node scripts/run-init-then-bun-install.mjs",
+    "postinstall": "node scripts/milady-postinstall-repo-setup.mjs",
     "setup:sync": "node eliza/packages/app-core/scripts/run-repo-setup.mjs",
     "pre-review:local": "bun eliza/packages/app-core/scripts/pre-review-local.mjs",
     "prepack": "node eliza/packages/app-core/scripts/rt.mjs run build",
     "publish:plugins:next": "cd eliza/plugins && bun run publish:next",
     "release:check": "bun eliza/packages/app-core/scripts/run-node-tsx.mjs eliza/packages/app-core/scripts/release-check.ts",
     "setup:upstreams": "node scripts/setup-upstreams.mjs",
+    "workspace:bump-eliza-submodules": "node scripts/update-eliza-submodule-pointers-to-remote.mjs",
     "desktop:stack-status": "node eliza/packages/app-core/scripts/desktop-stack-status.mjs",
     "smoke:api-status": "node eliza/packages/app-core/scripts/smoke-api-status.mjs",
     "smoke:api-status:prod": "node eliza/packages/app-core/scripts/smoke-api-status.mjs https://milady.ai https://app.milady.ai",
