@@ -30,6 +30,12 @@ const mobileBuildScriptPath = path.join(
   "scripts",
   "run-mobile-build.mjs",
 );
+const miladyOsWorkflowPath = path.join(
+  repoRoot,
+  ".github",
+  "workflows",
+  "miladyos-cuttlefish.yml",
+);
 
 function readWorkflow(filePath: string) {
   return fs.readFileSync(filePath, "utf8");
@@ -59,6 +65,16 @@ describe("mobile platform workflow contract", () => {
     );
     expect(mobileBuildScript).toContain('target !== "ios-overlay"');
     expect(mobileBuildScript).toContain("prepareIosOverlay();");
+  });
+
+  it("keeps MiladyOS system-image validation wired to a Linux/KVM workflow", () => {
+    const workflow = readWorkflow(miladyOsWorkflowPath);
+
+    expect(workflow).toContain("runs-on: [self-hosted, linux, x64, kvm]");
+    expect(workflow).toContain("bun run build:android:system");
+    expect(workflow).toContain("bun run miladyos:validate");
+    expect(workflow).toContain("node scripts/miladyos/build-aosp.mjs");
+    expect(workflow).toContain("--boot-validate");
   });
 
   it("avoids broad package-local bun installs in the Windows preload smoke job", () => {

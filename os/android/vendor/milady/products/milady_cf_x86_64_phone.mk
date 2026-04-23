@@ -11,6 +11,22 @@ PRODUCT_PACKAGES += \
     default-permissions-com.miladyai.milady.xml \
     privapp-permissions-com.miladyai.milady.xml
 
+PRODUCT_PACKAGES -= \
+    Browser2 \
+    Calendar \
+    Camera2 \
+    Contacts \
+    DeskClock \
+    Dialer \
+    Email \
+    Gallery2 \
+    Launcher3 \
+    Launcher3QuickStep \
+    Messaging \
+    Music \
+    QuickSearchBox \
+    Trebuchet
+
 PRODUCT_PACKAGE_OVERLAYS += \
     vendor/milady/overlays/framework-res
 

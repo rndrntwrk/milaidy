@@ -14,14 +14,10 @@ const defaultSourceVendor = path.join(
   "milady",
 );
 
-function usage() {
-  console.error(
-    "Usage: bun run miladyos:sync -- [--source-vendor <VENDOR_DIR>] <AOSP_ROOT>",
-  );
-  process.exit(1);
-}
+const USAGE =
+  "Usage: bun run miladyos:sync -- [--source-vendor <VENDOR_DIR>] <AOSP_ROOT>";
 
-function parseArgs(argv) {
+export function parseArgs(argv) {
   const args = {
     aospRoot: null,
     sourceVendor: defaultSourceVendor,
@@ -38,41 +34,58 @@ function parseArgs(argv) {
     if (arg === "--source-vendor") {
       args.sourceVendor = readFlagValue(arg, i);
       i += 1;
+    } else if (arg.startsWith("--")) {
+      throw new Error(`Unknown argument: ${arg}`);
     } else if (!args.aospRoot) {
       args.aospRoot = path.resolve(arg);
     } else {
-      usage();
+      throw new Error(`Unknown argument: ${arg}`);
     }
   }
   return args;
 }
 
-const { aospRoot, sourceVendor } = parseArgs(process.argv.slice(2));
-if (!aospRoot) usage();
-if (!fs.existsSync(sourceVendor)) {
-  throw new Error(`Missing MiladyOS vendor source: ${sourceVendor}`);
+export function syncToAosp({ aospRoot, sourceVendor }) {
+  if (!aospRoot) throw new Error(USAGE);
+  if (!fs.existsSync(sourceVendor)) {
+    throw new Error(`Missing MiladyOS vendor source: ${sourceVendor}`);
+  }
+
+  const buildEnvsetup = path.join(aospRoot, "build", "envsetup.sh");
+  if (!fs.existsSync(buildEnvsetup)) {
+    throw new Error(
+      `${aospRoot} does not look like an AOSP checkout; missing build/envsetup.sh`,
+    );
+  }
+
+  const targetVendor = path.join(aospRoot, "vendor", "milady");
+  fs.rmSync(targetVendor, { recursive: true, force: true });
+  fs.mkdirSync(path.dirname(targetVendor), { recursive: true });
+  fs.cpSync(sourceVendor, targetVendor, {
+    recursive: true,
+    filter: (source) => !source.endsWith(".DS_Store"),
+  });
+
+  const apk = path.join(targetVendor, "apps", "Milady", "Milady.apk");
+  if (!fs.existsSync(apk)) {
+    throw new Error(
+      "[miladyos] vendor/milady synced without Milady.apk. Run `bun run build:android:system` before syncing the AOSP product.",
+    );
+  }
+
+  return targetVendor;
 }
 
-const buildEnvsetup = path.join(aospRoot, "build", "envsetup.sh");
-if (!fs.existsSync(buildEnvsetup)) {
-  throw new Error(
-    `${aospRoot} does not look like an AOSP checkout; missing build/envsetup.sh`,
-  );
+export function main(argv = process.argv.slice(2)) {
+  const { aospRoot, sourceVendor } = parseArgs(argv);
+  const targetVendor = syncToAosp({ aospRoot, sourceVendor });
+  console.log(`[miladyos] Synced ${sourceVendor} -> ${targetVendor}`);
 }
 
-const targetVendor = path.join(aospRoot, "vendor", "milady");
-fs.rmSync(targetVendor, { recursive: true, force: true });
-fs.mkdirSync(path.dirname(targetVendor), { recursive: true });
-fs.cpSync(sourceVendor, targetVendor, {
-  recursive: true,
-  filter: (source) => !source.endsWith(".DS_Store"),
-});
+const isMain =
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 
-const apk = path.join(targetVendor, "apps", "Milady", "Milady.apk");
-if (!fs.existsSync(apk)) {
-  throw new Error(
-    "[miladyos] vendor/milady synced without Milady.apk. Run `bun run build:android:system` before syncing the AOSP product.",
-  );
+if (isMain) {
+  main();
 }
-
-console.log(`[miladyos] Synced ${sourceVendor} -> ${targetVendor}`);

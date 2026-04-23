@@ -46,7 +46,7 @@ const requiredApkPermissions = [
 
 const privilegedPermissions = ["android.permission.PACKAGE_USAGE_STATS"];
 
-function parseArgs(argv) {
+export function parseArgs(argv) {
   const args = {
     aospRoot: null,
     apk: null,
@@ -219,7 +219,7 @@ function resolveAapt() {
   fail("Could not find aapt. Set AAPT or ANDROID_HOME/ANDROID_SDK_ROOT.");
 }
 
-function validateXmlFiles(vendorDir) {
+export function validateXmlFiles(vendorDir) {
   const xmlFiles = findFiles(vendorDir, (file) => file.endsWith(".xml"));
   if (xmlFiles.length === 0) fail("No XML files found under vendor/milady");
   if (!commandExists("xmllint")) {
@@ -233,7 +233,7 @@ function validateXmlFiles(vendorDir) {
   );
 }
 
-function validateProductLayer(vendorDir) {
+export function validateProductLayer(vendorDir) {
   const product = read(path.join(vendorDir, "products", `${PRODUCT_NAME}.mk`));
   assertIncludes(
     product,
@@ -241,6 +241,7 @@ function validateProductLayer(vendorDir) {
     "product",
   );
   assertIncludes(product, "PRODUCT_PACKAGES +=", "product");
+  assertIncludes(product, "PRODUCT_PACKAGES -=", "product");
   assertIncludes(product, "Milady", "product");
   assertIncludes(
     product,
@@ -289,6 +290,7 @@ function validateProductLayer(vendorDir) {
     '"Dialer"',
     '"Messaging"',
     '"Contacts"',
+    '"Trebuchet"',
   ]) {
     assertIncludes(androidBp, marker, "Milady Android.bp");
   }
@@ -332,7 +334,7 @@ function validateProductLayer(vendorDir) {
   console.log("[miladyos:validate] Product layer checks passed.");
 }
 
-function validateDefaultPermissions(vendorDir) {
+export function validateDefaultPermissions(vendorDir) {
   const defaultPermissions = read(
     path.join(
       vendorDir,
@@ -579,7 +581,7 @@ function validateApkManifest(manifest) {
   );
 }
 
-function validateApk(apkPath) {
+export function validateApk(apkPath) {
   assertFile(apkPath, "Milady APK");
   const aapt = resolveAapt();
   const badging = run(aapt, ["dump", "badging", apkPath]);
@@ -603,7 +605,7 @@ function validateApk(apkPath) {
   console.log(`[miladyos:validate] APK checks passed with ${aapt}.`);
 }
 
-function validateAospRoot(aospRoot) {
+export function validateAospRoot(aospRoot) {
   const buildEnvsetup = path.join(aospRoot, "build", "envsetup.sh");
   assertFile(buildEnvsetup, "AOSP build/envsetup.sh");
 
@@ -710,8 +712,8 @@ function validateAospRoot(aospRoot) {
   console.log("[miladyos:validate] AOSP source compatibility checks passed.");
 }
 
-function main() {
-  const args = parseArgs(process.argv.slice(2));
+export function main(argv = process.argv.slice(2)) {
+  const args = parseArgs(argv);
   validateXmlFiles(args.vendorDir);
   validateProductLayer(args.vendorDir);
   validateDefaultPermissions(args.vendorDir);
@@ -722,4 +724,10 @@ function main() {
   console.log("[miladyos:validate] MiladyOS checks passed.");
 }
 
-main();
+const isMain =
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (isMain) {
+  main();
+}
