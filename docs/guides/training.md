@@ -164,7 +164,7 @@ The `POST /api/training/jobs` endpoint launches a fine-tuning job:
 |-----------|-------------|
 | `datasetId` | ID of a previously built dataset |
 | `maxTrajectories` | Cap on trajectories to use |
-| `backend` | Training backend: `mlx` (Apple Silicon), `cuda` (NVIDIA GPU), or `cpu` |
+| `backend` | Training backend: `native` (default, prompt optimization), `mlx` (Apple Silicon), `cuda` (NVIDIA GPU), or `cpu` |
 | `model` | Base model to fine-tune |
 | `iterations` | Number of training iterations |
 | `batchSize` | Training batch size |
@@ -406,7 +406,7 @@ curl -X POST http://localhost:31337/api/training/jobs \
   }'
 ```
 
-Supported backends: `mlx` (Apple Silicon), `cuda` (NVIDIA GPU), `cpu`.
+Supported backends: `native` (default, prompt optimization), `mlx` (Apple Silicon), `cuda` (NVIDIA GPU), `cpu`.
 
 ### Step 5: Monitor Progress
 
