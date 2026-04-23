@@ -8,10 +8,14 @@ The Lens plugin connects Milady agents to the Lens Protocol, enabling social int
 
 **Package:** `@elizaos/plugin-lens`
 
+<Note>
+This is an upstream elizaOS plugin and is **not included** in the Milady bundled registry. It must be installed manually from the remote registry.
+</Note>
+
 ## Installation
 
 ```bash
-milady plugins install lens
+milady plugins install @elizaos/plugin-lens
 ```
 
 ## Setup
@@ -38,9 +42,9 @@ Or use environment variables:
 export LENS_API_KEY=your-lens-api-key
 ```
 
-## Auto-Enable
+## Enabling
 
-The plugin auto-enables when `apiKey`, `token`, or `botToken` is present in the connector config.
+After installation, the plugin loads when `apiKey` is present in the connector config. Unlike bundled connectors, it does not auto-enable from config alone — it must be installed first.
 
 ## Configuration
 

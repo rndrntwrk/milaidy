@@ -447,14 +447,14 @@ Plugins extend Milady with connectors, providers, and feature capabilities.
 
 Milady automatically enables plugins based on your configuration. You do not need to manually add plugins to the allowlist in most cases.
 
-**Connector plugins** are auto-enabled when a connector is configured with credentials:
+**Connector plugins** are auto-enabled when a connector is configured with credentials. Connectors marked with * are upstream elizaOS plugins not included in the Milady bundled registry — they must be installed first (`milady plugins install <package>`):
 
 | Connector | Plugin | Auto-Enable Trigger |
 |-----------|--------|---------------------|
 | `telegram` | `@elizaos/plugin-telegram` | `connectors.telegram.botToken` |
 | `discord` | `@elizaos/plugin-discord` | `connectors.discord.botToken` |
 | `slack` | `@elizaos/plugin-slack` | `connectors.slack.botToken` |
-| `twitter` | `@elizaos/plugin-twitter` | `connectors.twitter.apiKey` |
+| `twitter` * | `@elizaos/plugin-twitter` | `connectors.twitter.apiKey` |
 | `whatsapp` | `@elizaos/plugin-whatsapp` | `connectors.whatsapp.authDir` (or `authState`, `sessionPath`, or `accounts` with `authDir`) |
 | `signal` | `@elizaos/plugin-signal` | `connectors.signal.account` (or `httpUrl`, `httpHost`, `httpPort`, `cliPath`, or `accounts` with enabled entries) |
 | `farcaster` | `@elizaos/plugin-farcaster` | `connectors.farcaster.token` |
@@ -463,7 +463,7 @@ Milady automatically enables plugins based on your configuration. You do not nee
 | `msteams` | `@elizaos/plugin-msteams` | `connectors.msteams.token` |
 | `googlechat` | `@elizaos/plugin-google-chat` | `connectors.googlechat.token` |
 | `imessage` | `@elizaos/plugin-imessage` | `connectors.imessage.cliPath` |
-| `lens` | `@elizaos/plugin-lens` | `connectors.lens.token` |
+| `lens` * | `@elizaos/plugin-lens` | `connectors.lens.token` |
 | `mattermost` | `@elizaos/plugin-mattermost` | `connectors.mattermost.token` |
 | `feishu` | `@elizaos/plugin-feishu` | `connectors.feishu.token` |
 | `blooio` | `@elizaos/plugin-blooio` | `connectors.blooio.token` |

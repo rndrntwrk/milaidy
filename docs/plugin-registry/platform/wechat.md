@@ -16,7 +16,11 @@ Unlike most connectors which use official platform APIs, the WeChat connector re
 
 ## Installation
 
-The WeChat plugin ships as a local Milady package (`@elizaos/plugin-wechat`) and does not need to be installed separately. It is available out of the box.
+<Warning>
+The WeChat plugin is **experimental** and not yet included in the Milady bundled plugin registry. Full integration is in progress.
+</Warning>
+
+The WeChat plugin (`@elizaos/plugin-wechat`) is not yet available in the bundled registry. Check the [changelog](/changelog) for availability updates.
 
 ## Setup
 

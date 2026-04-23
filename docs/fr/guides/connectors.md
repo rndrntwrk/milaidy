@@ -1,7 +1,7 @@
 ---
 title: "Connecteurs de plateforme"
 sidebarTitle: "Connectors"
-description: "Passerelles de plateforme pour 27 plateformes de messagerie — 18 activées automatiquement depuis la configuration (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Twitter, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, Lens, WeChat) plus 9 installables depuis le registre (Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
+description: "Passerelles de plateforme pour 28 plateformes — 15 activées automatiquement depuis la configuration (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr) plus 13 installables depuis le registre ou upstream (BlueBubbles, Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon, Twitter, Lens, WeChat)."
 ---
 
 Les connecteurs sont des passerelles de plateforme qui permettent à votre agent de communiquer à travers les plateformes de messagerie et les réseaux sociaux. Chaque connecteur gère l'authentification, le routage des messages, la gestion des sessions et les fonctionnalités spécifiques à la plateforme.

@@ -147,17 +147,19 @@ for (const [featureName, enabled] of Object.entries(config.features ?? {})) {
 
 ## Channel to Plugin Mapping
 
+> **Note:** Not all plugins in this map are bundled with Milady. `twitter` (`@elizaos/plugin-twitter`) and `lens` (`@elizaos/plugin-lens`) are upstream elizaOS plugins that must be installed manually. `wechat` (added by Milady's `app-core`) is experimental. See the [connectors availability table](/guides/connectors#supported-platforms).
+
 ```typescript
 const CHANNEL_PLUGIN_MAP = {
   telegram:    "@elizaos/plugin-telegram",
   discord:     "@elizaos/plugin-discord",
   slack:       "@elizaos/plugin-slack",
-  twitter:     "@elizaos/plugin-twitter",
+  twitter:     "@elizaos/plugin-twitter",     // upstream, not bundled
   whatsapp:    "@elizaos/plugin-whatsapp",
   signal:      "@elizaos/plugin-signal",
   imessage:    "@elizaos/plugin-imessage",
   farcaster:   "@elizaos/plugin-farcaster",
-  lens:        "@elizaos/plugin-lens",
+  lens:        "@elizaos/plugin-lens",         // upstream, not bundled
   msteams:     "@elizaos/plugin-msteams",
   mattermost:  "@elizaos/plugin-mattermost",
   googlechat:  "@elizaos/plugin-google-chat",
@@ -166,6 +168,7 @@ const CHANNEL_PLUGIN_MAP = {
   nostr:       "@elizaos/plugin-nostr",
   blooio:      "@elizaos/plugin-blooio",
   twitch:      "@elizaos/plugin-twitch",
+  wechat:      "@elizaos/plugin-wechat",       // experimental
 };
 ```
 

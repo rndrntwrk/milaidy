@@ -6,17 +6,28 @@ description: Connect your agent to Twitter/X using the @elizaos/plugin-twitter p
 
 Connect your agent to Twitter/X for social media engagement.
 
+<Warning>
+The Twitter plugin (`@elizaos/plugin-twitter`) is an upstream elizaOS plugin and is **not included** in the Milady bundled plugin registry. You must install it manually before use. It does not auto-enable from connector config alone — install it first, then configure.
+</Warning>
+
 ## Overview
 
-The Twitter connector is an external elizaOS plugin that bridges your agent to Twitter/X. It is auto-enabled by the runtime when a valid token is detected in your connector configuration.
+The Twitter connector is an external elizaOS plugin that bridges your agent to Twitter/X. After manual installation, it loads when a valid token is detected in your connector configuration.
+
+## Installation
+
+```bash
+milady plugins install @elizaos/plugin-twitter
+```
 
 ## Package Info
 
 | Field | Value |
 |-------|-------|
 | Package | `@elizaos/plugin-twitter` |
+| Registry | Upstream elizaOS (not bundled) |
 | Config key | `connectors.twitter` |
-| Auto-enable trigger | `botToken`, `token`, or `apiKey` is truthy in connector config |
+| Enable trigger | `apiKey` is truthy in connector config (after install) |
 
 ## Minimal Configuration
 
@@ -47,11 +58,11 @@ To explicitly disable the connector even when a token is present:
 }
 ```
 
-## Auto-Enable Mechanism
+## Enable Mechanism
 
-The `plugin-auto-enable.ts` module checks `connectors.twitter` in your config. If any of the fields `botToken`, `token`, or `apiKey` is truthy (and `enabled` is not explicitly `false`), the runtime automatically loads `@elizaos/plugin-twitter`.
+Once installed, the plugin loads when `connectors.twitter` in your config has a truthy `apiKey` (and `enabled` is not explicitly `false`).
 
-No environment variable is required to trigger auto-enable — it is driven entirely by the connector config object.
+Unlike bundled connectors (Discord, Telegram, Slack), the Twitter plugin must be installed before the runtime can load it. It is not part of the Milady bundled registry.
 
 ## Environment Variables
 
