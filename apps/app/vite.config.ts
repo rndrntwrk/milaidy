@@ -465,6 +465,64 @@ function pathIncludesAny(id: string, markers: string[]): boolean {
   return markers.some((marker) => id.includes(marker));
 }
 
+const NODE_MODULE_CHUNK_GROUPS = [
+  {
+    name: "vendor-langchain",
+    markers: ["/@langchain/", "/langsmith/"],
+  },
+  {
+    name: "vendor-zod",
+    markers: ["/zod/"],
+  },
+  {
+    name: "vendor-utils",
+    markers: ["/dingbat-to-unicode/"],
+  },
+] as const;
+
+const WORKSPACE_CHUNK_GROUPS = [
+  {
+    name: "workspace-app-core",
+    markers: [
+      "/eliza/packages/app-core/",
+      "/eliza/apps/app-companion/",
+      "/eliza/apps/app-steward/",
+      "/eliza/apps/app-task-coordinator/",
+      "/eliza/apps/app-vincent/",
+    ],
+  },
+  {
+    name: "app-training",
+    markers: ["/eliza/apps/app-training/"],
+  },
+  {
+    name: "app-shopify",
+    markers: ["/eliza/apps/app-shopify/"],
+  },
+  {
+    name: "app-games",
+    markers: [
+      "/eliza/apps/app-babylon/",
+      "/eliza/apps/app-scape/",
+      "/eliza/apps/app-hyperscape/",
+      "/eliza/apps/app-2004scape/",
+      "/eliza/apps/app-defense-of-the-agents/",
+    ],
+  },
+  {
+    name: "app-lifeops",
+    markers: ["/eliza/apps/app-lifeops/"],
+  },
+  {
+    name: "workspace-ui",
+    markers: ["/eliza/packages/ui/"],
+  },
+  {
+    name: "workspace-typescript",
+    markers: ["/eliza/packages/typescript/"],
+  },
+] as const;
+
 function resolveManualChunk(id: string): string | undefined {
   const normalizedId = id.split(path.sep).join("/");
 
@@ -489,6 +547,18 @@ function resolveManualChunk(id: string): string | undefined {
     // init ordering bugs with WebGPU/TSL enums (see fix/three-chunk-tdz).
     if (normalizedId.includes("/three/")) {
       return "vendor-three";
+    }
+
+    for (const group of NODE_MODULE_CHUNK_GROUPS) {
+      if (pathIncludesAny(normalizedId, group.markers)) {
+        return group.name;
+      }
+    }
+  }
+
+  for (const group of WORKSPACE_CHUNK_GROUPS) {
+    if (pathIncludesAny(normalizedId, group.markers)) {
+      return group.name;
     }
   }
 
@@ -1692,9 +1762,9 @@ export default defineConfig({
     emptyOutDir: !desktopFastDist,
     sourcemap: desktopFastDist ? false : enableAppSourceMaps,
     target: "es2022",
-    // The desktop/web shell intentionally ships a large eagerly-loaded main
-    // chunk; warn only when it grows beyond the current known baseline.
-    chunkSizeWarningLimit: 3800,
+    // Keep warnings tight enough to catch regressions while allowing the
+    // current largest workspace chunks to build without noise.
+    chunkSizeWarningLimit: 3500,
     minify: desktopFastDist ? false : undefined,
     cssMinify: desktopFastDist ? false : undefined,
     reportCompressedSize: !desktopFastDist,
