@@ -1,4 +1,5 @@
 node_modules
+.eliza-repo-setup.lock
 **/node_modules/
 .env
 .env.worktree

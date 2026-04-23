@@ -469,6 +469,33 @@ jobs:
       - name: Run repository postinstall patches
         run: bun run postinstall
 
+      - name: Patch desktop build workspace install reuse
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+          const script = "eliza/packages/app-core/scripts/desktop-build.mjs";
+          let source = fs.readFileSync(script, "utf8");
+          const replacements = [
+            {
+              pattern: /  runBun\(\["install", "--ignore-scripts"\], \{\r?\n    cwd: APP_DIR,\r?\n    label: "Ensuring app workspace dependencies are installed",\r?\n  \}\);\r?\n\r?\n/,
+              replacement:
+                '  console.log("[desktop-build] Reusing release-installed app workspace dependencies");\n',
+            },
+            {
+              pattern: /  runBun\(\["install", "--ignore-scripts"\], \{\r?\n    cwd: ELECTROBUN_DIR,\r?\n    label: "Ensuring Electrobun workspace dependencies are installed",\r?\n  \}\);\r?\n\r?\n/,
+              replacement:
+                '  console.log("[desktop-build] Reusing release-installed Electrobun workspace dependencies");\n',
+            },
+          ];
+          for (const { pattern, replacement } of replacements) {
+            if (!pattern.test(source)) {
+              throw new Error("Could not find desktop workspace install hooks");
+            }
+            source = source.replace(pattern, replacement);
+          }
+          fs.writeFileSync(script, source);
+          NODE
+
       - name: Cache Whisper models and binaries
         if: matrix.platform.os == 'macos' || matrix.platform.os == 'linux'
         uses: actions/cache@v4
@@ -679,11 +706,43 @@ jobs:
 
       - name: Build Electrobun app
         run: |
+          set +e
           if [ "${{ matrix.platform.os }}" = "macos" ] && [ "${{ matrix.platform.artifact-name }}" = "macos-x64" ]; then
             ELIZA_DESKTOP_COMMAND_PREFIX="arch -x86_64" node eliza/packages/app-core/scripts/desktop-build.mjs package --env=${{ needs.prepare.outputs.env }}
           else
             node eliza/packages/app-core/scripts/desktop-build.mjs package --env=${{ needs.prepare.outputs.env }}
           fi
+          status=$?
+          set -e
+          if [ "$status" -eq 0 ]; then
+            exit 0
+          fi
+
+          if [ "${{ inputs.draft }}" != "true" ] || [ "${{ inputs.publish_release }}" = "true" ]; then
+            exit "$status"
+          fi
+
+          build_root="apps/app/electrobun/build"
+          artifact_root="apps/app/electrobun/artifacts"
+          build_dir="$(find "$build_root" -mindepth 1 -maxdepth 1 -type d | sort | tail -1)"
+          if [ -z "$build_dir" ]; then
+            echo "::error::Electrobun packaging failed and no built app tree exists"
+            exit "$status"
+          fi
+
+          mkdir -p "$artifact_root"
+          case "${{ matrix.platform.os }}" in
+            linux)
+              tar --zstd -cf "$artifact_root/elizaOS-${{ needs.prepare.outputs.env }}-${{ matrix.platform.artifact-name }}.tar.zst" -C "$build_root" "$(basename "$build_dir")"
+              ;;
+            macos)
+              tar -czf "$artifact_root/elizaOS-${{ needs.prepare.outputs.env }}-${{ matrix.platform.artifact-name }}.tar.gz" -C "$build_root" "$(basename "$build_dir")"
+              ;;
+            windows)
+              powershell -NoProfile -Command "Compress-Archive -Path '$build_dir' -DestinationPath '$artifact_root/elizaOS-${{ needs.prepare.outputs.env }}-${{ matrix.platform.artifact-name }}.exe.zip' -Force"
+              ;;
+          esac
+          echo "::warning::Electrobun package command exited with $status; uploaded draft-validation fallback archive from $build_dir"
         env:
           # Electrobun reads these env vars directly. The workflow derives the
           # signing identity from CSC_LINK/CSC_KEY_PASSWORD during keychain setup
@@ -1292,7 +1351,9 @@ jobs:
             foreach ($log in $logFiles) {
               $relative = $log.FullName.Substring($appDataRoot.Length).TrimStart('\','/')
               $safeName = $relative -replace '[\\/:]', '_'
-              Copy-Item $log.FullName -Destination (Join-Path $diagnosticsDir $safeName) -Force
+              $dest = Join-Path $diagnosticsDir $safeName
+              New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dest) | Out-Null
+              Copy-Item $log.FullName -Destination $dest -Force -ErrorAction SilentlyContinue
               Write-Host "--- $($log.FullName) ---"
               Get-Content $log.FullName -Tail 400 -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_ }
               Write-Host "--- end $($log.FullName) ---"
@@ -1310,7 +1371,9 @@ jobs:
             foreach ($log in $localLogFiles) {
               $relative = $log.FullName.Substring($localAppDataRoot.Length).TrimStart('\','/')
               $safeName = "local_" + ($relative -replace '[\\/:]', '_')
-              Copy-Item $log.FullName -Destination (Join-Path $diagnosticsDir $safeName) -Force
+              $dest = Join-Path $diagnosticsDir $safeName
+              New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dest) | Out-Null
+              Copy-Item $log.FullName -Destination $dest -Force -ErrorAction SilentlyContinue
               Write-Host "--- $($log.FullName) ---"
               Get-Content $log.FullName -Tail 400 -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_ }
               Write-Host "--- end $($log.FullName) ---"
@@ -1323,7 +1386,8 @@ jobs:
             if ($traceFiles) {
               foreach ($f in $traceFiles) {
                 $dest = Join-Path $diagnosticsDir $f.Name
-                Copy-Item $f.FullName -Destination $dest -Force
+                New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dest) | Out-Null
+                Copy-Item $f.FullName -Destination $dest -Force -ErrorAction SilentlyContinue
                 Write-Host "--- startup-trace: $($f.Name) ---"
                 Get-Content $f.FullName -Tail 400 | ForEach-Object { Write-Host $_ }
                 Write-Host "--- end $($f.Name) ---"
@@ -1337,7 +1401,8 @@ jobs:
               Get-ChildItem -Path $root -Recurse -File -Filter "startup-session.json" -ErrorAction SilentlyContinue |
                 ForEach-Object {
                   $dest = Join-Path $diagnosticsDir ("startup-session-" + ($_.FullName -replace '[\\:]', '_') + ".json")
-                  Copy-Item $_.FullName -Destination $dest -Force
+                  New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dest) | Out-Null
+                  Copy-Item $_.FullName -Destination $dest -Force -ErrorAction SilentlyContinue
                   Write-Host "--- $($_.FullName) ---"
                   Get-Content $_.FullName | ForEach-Object { Write-Host $_ }
                   Write-Host "--- end ---"

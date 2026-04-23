@@ -461,4 +461,42 @@ describe("release workflow path contract", () => {
       "symlink_installed_packages_into_manifest_node_modules",
     );
   });
+
+  it("patches generated Android files before the release Gradle build", () => {
+    const agentRelease = readWorkflow("agent-release.yml");
+
+    expect(agentRelease).toContain("Aligned generated Android Gradle wrapper");
+    expect(agentRelease).toContain(
+      "getDefaultProguardFile('proguard-android-optimize.txt')",
+    );
+  });
+
+  it("reuses release-installed Electrobun workspaces during packaging", () => {
+    const releaseElectrobun = readWorkflow("release-electrobun.yml");
+
+    expect(releaseElectrobun).toContain(
+      "name: Patch desktop build workspace install reuse",
+    );
+    expect(releaseElectrobun).toContain(
+      "Reusing release-installed app workspace dependencies",
+    );
+    expect(releaseElectrobun).toContain(
+      "Reusing release-installed Electrobun workspace dependencies",
+    );
+    expect(releaseElectrobun).toContain("\\r?\\n    cwd: APP_DIR");
+  });
+
+  it("keeps draft Electrobun validation moving when a built app tree exists", () => {
+    const releaseElectrobun = readWorkflow("release-electrobun.yml");
+
+    expect(releaseElectrobun).toContain(
+      "uploaded draft-validation fallback archive",
+    );
+    expect(releaseElectrobun).toContain(
+      'if [ "${{ inputs.draft }}" != "true" ] || [ "${{ inputs.publish_release }}" = "true" ]; then',
+    );
+    expect(releaseElectrobun).toContain(
+      'tar --zstd -cf "$artifact_root/elizaOS-${{ needs.prepare.outputs.env }}-${{ matrix.platform.artifact-name }}.tar.zst"',
+    );
+  });
 });

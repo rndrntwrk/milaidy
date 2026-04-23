@@ -363,6 +363,14 @@ jobs:
             "  fs.writeFileSync(generatedWrapper, nextWrapper);",
             "  console.log(`[mobile-build] Aligned generated Android Gradle wrapper: ${generatedWrapper}`);",
             "  overlayAndroid();",
+            '  const generatedAppGradle = path.join(androidDir, "app", "build.gradle");',
+            '  const rawAppGradle = fs.readFileSync(generatedAppGradle, "utf8");',
+            "  const nextAppGradle = rawAppGradle.replaceAll(",
+            "    \"getDefaultProguardFile('proguard-android.txt')\",",
+            "    \"getDefaultProguardFile('proguard-android-optimize.txt')\",",
+            "  );",
+            "  fs.writeFileSync(generatedAppGradle, nextAppGradle);",
+            "  console.log(`[mobile-build] Aligned generated Android ProGuard defaults: ${generatedAppGradle}`);",
           ].join("\n");
           if (!source.includes(needle)) {
             throw new Error("Could not find Android Gradle patch insertion point");

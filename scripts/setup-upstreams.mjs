@@ -16,6 +16,7 @@ import {
 } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { asSetupUpstreamsCiStubs } from "./lib/ci-stubs.mjs";
 import { readPackageJson } from "./lib/read-package-json.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -74,20 +75,8 @@ const ELIZA_INSTALL_RETRY_DELAY_MS = 3_000;
 // provided by a CI stub in the root repo rather than published on npm. Before
 // `bun install --cwd eliza`, we inject an override into eliza/package.json so
 // the workspace:* specifier resolves to the stub instead of failing.
-const UNPUBLISHED_ELIZA_PLUGIN_CI_STUBS = [
-  {
-    packageName: "@elizaos/plugin-app-control",
-    workspaceEntry: "plugins/plugin-app-control/typescript",
-    /** Relative from eliza/ to the CI stub directory. */
-    stubRelativePath: "../scripts/ci-stubs/elizaos-plugin-app-control",
-  },
-  {
-    packageName: "@elizaos/plugin-wechat",
-    workspaceEntry: "plugins/plugin-wechat",
-    /** Relative from eliza/ to the CI stub directory. */
-    stubRelativePath: "../scripts/ci-stubs/elizaos-plugin-wechat",
-  },
-];
+// Registry is centralized in scripts/lib/ci-stubs.mjs.
+const UNPUBLISHED_ELIZA_PLUGIN_CI_STUBS = asSetupUpstreamsCiStubs();
 
 const OPTIONAL_ELIZA_PLUGIN_PACKAGES = [
   {
@@ -1712,7 +1701,12 @@ async function ensureRepoLocalEliza(repoRoot) {
 
 export function ensureElizaTypescriptDependencyLinks(
   elizaRoot,
-  { repoRoot = path.dirname(elizaRoot), dependencies = ["@noble/hashes"] } = {},
+  {
+    repoRoot = path.dirname(elizaRoot),
+    // Do not link @noble/hashes by default: the Milady root often resolves v1
+    // (ethers/viem), while @elizaos/core requires v2 entrypoints (sha2.js, legacy.js).
+    dependencies = [],
+  } = {},
 ) {
   const packageDir = path.join(elizaRoot, "packages", "typescript");
   let linkedDependencies = 0;
