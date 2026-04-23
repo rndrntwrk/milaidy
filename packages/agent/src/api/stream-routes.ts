@@ -112,13 +112,39 @@ function formatErrorMessage(err: unknown): string {
 
 interface Stream555StatusLike {
   active: boolean;
+  distributor?: string | null;
   cfSessionId?: string;
+  phase?: string | null;
+  requiredOutputsReady?: boolean;
+  statusReason?: string | null;
+  blockedPlatforms?: Array<{
+    platform?: string;
+    deliveryState?: string | null;
+    outputStatus?: string | null;
+    bitrateKbps?: number | null;
+    fps?: number | null;
+    reconnectCount?: number;
+    errorCount?: number;
+  }>;
   cloudflare?: {
     isConnected?: boolean;
     state?: string;
   };
   startTime?: number;
-  platforms?: Record<string, { enabled: boolean; status: string; error?: string }>;
+  platforms?: Record<
+    string,
+    {
+      enabled: boolean;
+      status: string;
+      error?: string;
+      deliveryState?: string | null;
+      outputStatus?: string | null;
+      bitrateKbps?: number | null;
+      fps?: number | null;
+      reconnectCount?: number;
+      errorCount?: number;
+    }
+  >;
   jobStatus?: {
     state?: string;
   };
@@ -441,6 +467,29 @@ async function applyConfiguredStream555Destinations(
   };
 }
 
+/**
+ * Narrow, closed union of stream-health states exposed to the client.
+ * Upstream distributors may emit arbitrary `phase` strings; we map them
+ * down to these four before returning so the client never has to deal
+ * with an unknown bucket. Any running state we don't recognize lands in
+ * `"degraded"` — the safe fallback — rather than silently passing
+ * through and misclassifying as live.
+ */
+type StreamHealthState = "idle" | "starting" | "live" | "degraded";
+
+const KNOWN_STREAM_HEALTH_STATES: ReadonlySet<StreamHealthState> = new Set([
+  "idle",
+  "starting",
+  "live",
+  "degraded",
+]);
+
+function isKnownStreamHealthState(
+  value: string,
+): value is StreamHealthState {
+  return KNOWN_STREAM_HEALTH_STATES.has(value as StreamHealthState);
+}
+
 function mapStream555StatusToHealth(status?: Stream555StatusLike | null): {
   running: boolean;
   ffmpegAlive: boolean;
@@ -450,6 +499,33 @@ function mapStream555StatusToHealth(status?: Stream555StatusLike | null): {
   muted: boolean;
   audioSource: string;
   inputMode: "screen";
+  distributor?: string | null;
+  state?: StreamHealthState;
+  requiredOutputsReady?: boolean;
+  statusReason?: string | null;
+  blockedPlatforms?: Array<{
+    platform: string;
+    deliveryState: string | null;
+    outputStatus: string | null;
+    bitrateKbps: number | null;
+    fps: number | null;
+    reconnectCount: number;
+    errorCount: number;
+  }>;
+  platforms?: Record<
+    string,
+    {
+      enabled: boolean;
+      status: string;
+      error: string | null;
+      deliveryState: string | null;
+      outputStatus: string | null;
+      bitrateKbps: number | null;
+      fps: number | null;
+      reconnectCount: number;
+      errorCount: number;
+    }
+  >;
 } {
   const running = Boolean(status?.active);
   const platformEntries =
@@ -461,13 +537,105 @@ function mapStream555StatusToHealth(status?: Stream555StatusLike | null): {
   const ffmpegAlive = Object.values(platformEntries ?? {}).some(
     (platform) =>
       platform?.enabled !== false &&
-      isStream555PlatformLiveStatus(platform?.status),
+      (
+        platform?.deliveryState?.trim().toLowerCase() === "active" ||
+        isStream555PlatformLiveStatus(platform?.status) ||
+        isStream555PlatformLiveStatus(platform?.outputStatus)
+      ),
   );
   const startTime = status?.startTime;
   const uptime =
     typeof startTime === "number" && Number.isFinite(startTime) && startTime > 0
       ? Math.max(0, Math.floor((Date.now() - startTime) / 1000))
       : 0;
+  // Normalize the stream-health state to the closed StreamHealthState union:
+  //   - Not running → "idle".
+  //   - Running + an upstream phase we recognize → pass through.
+  //   - Running + an upstream phase we don't recognize → "degraded"
+  //     (safe fallback — we'd rather the operator see a non-idle warning
+  //     than have an unknown phase like "paused" / "handshake" masquerade
+  //     as "live" on the client).
+  //   - Running + no upstream phase → derive from our own signals:
+  //     requiredOutputsReady → "live", ffmpegAlive-only → "degraded",
+  //     else → "starting".
+  //
+  // Additionally guard the "live" case on ffmpegAlive — if the upstream
+  // distributor says live but no platform is actually delivering, prefer
+  // "degraded" so the client doesn't render a green/LIVE visual over a
+  // silent pipe. This is the server-side counterpart to the client's
+  // strict mutual-exclusion contract.
+  const phase = status?.phase?.trim().toLowerCase() || "";
+  let state: StreamHealthState;
+  if (!running) {
+    state = "idle";
+  } else if (phase) {
+    if (isKnownStreamHealthState(phase)) {
+      state = phase === "live" && !ffmpegAlive ? "degraded" : phase;
+    } else {
+      state = "degraded";
+    }
+  } else if (status?.requiredOutputsReady) {
+    state = ffmpegAlive ? "live" : "degraded";
+  } else if (ffmpegAlive) {
+    state = "degraded";
+  } else {
+    state = "starting";
+  }
+  const blockedPlatforms = Array.isArray(status?.blockedPlatforms)
+    ? status.blockedPlatforms
+        .filter((entry): entry is NonNullable<typeof entry> & { platform: string } =>
+          typeof entry?.platform === "string" && entry.platform.trim().length > 0,
+        )
+        .map((entry) => ({
+          platform: entry.platform,
+          deliveryState: entry.deliveryState ?? null,
+          outputStatus: entry.outputStatus ?? null,
+          bitrateKbps:
+            typeof entry.bitrateKbps === "number" && Number.isFinite(entry.bitrateKbps)
+              ? entry.bitrateKbps
+              : null,
+          fps:
+            typeof entry.fps === "number" && Number.isFinite(entry.fps)
+              ? entry.fps
+              : null,
+          reconnectCount:
+            typeof entry.reconnectCount === "number" && Number.isFinite(entry.reconnectCount)
+              ? entry.reconnectCount
+              : 0,
+          errorCount:
+            typeof entry.errorCount === "number" && Number.isFinite(entry.errorCount)
+              ? entry.errorCount
+              : 0,
+        }))
+    : [];
+  const platforms = Object.fromEntries(
+    Object.entries(platformEntries ?? {}).map(([platformId, platform]) => [
+      platformId,
+      {
+        enabled: platform?.enabled !== false,
+        status: platform?.status ?? "idle",
+        error: platform?.error ?? null,
+        deliveryState: platform?.deliveryState ?? null,
+        outputStatus: platform?.outputStatus ?? null,
+        bitrateKbps:
+          typeof platform?.bitrateKbps === "number" && Number.isFinite(platform.bitrateKbps)
+            ? platform.bitrateKbps
+            : null,
+        fps:
+          typeof platform?.fps === "number" && Number.isFinite(platform.fps)
+            ? platform.fps
+            : null,
+        reconnectCount:
+          typeof platform?.reconnectCount === "number" && Number.isFinite(platform.reconnectCount)
+            ? platform.reconnectCount
+            : 0,
+        errorCount:
+          typeof platform?.errorCount === "number" && Number.isFinite(platform.errorCount)
+            ? platform.errorCount
+            : 0,
+      },
+    ]),
+  );
 
   return {
     running,
@@ -478,6 +646,12 @@ function mapStream555StatusToHealth(status?: Stream555StatusLike | null): {
     muted: false,
     audioSource: "555stream",
     inputMode: "screen",
+    distributor: status?.distributor ?? null,
+    state,
+    requiredOutputsReady: Boolean(status?.requiredOutputsReady),
+    statusReason: status?.statusReason ?? null,
+    blockedPlatforms,
+    platforms,
   };
 }
 

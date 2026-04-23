@@ -166,6 +166,9 @@ export function useCompanionStageOperator() {
   const [streamCapabilityPresent, setStreamCapabilityPresent] = useState(false);
   const [streamCapabilityResolved, setStreamCapabilityResolved] = useState(false);
   const [streamLive, setStreamLive] = useState(false);
+  const [streamDegraded, setStreamDegraded] = useState(false);
+  const [streamStarting, setStreamStarting] = useState(false);
+  const [streamState, setStreamState] = useState("idle");
   const [streamLoading, setStreamLoading] = useState(false);
   const [streamError, setStreamError] = useState<string | null>(null);
   const [uptime, setUptime] = useState(0);
@@ -300,11 +303,52 @@ export function useCompanionStageOperator() {
       }
       try {
         const status = await client.streamStatus();
+        // The server normalizes `state` to a closed 4-bucket union
+        // (idle | starting | live | degraded) before returning — any
+        // unknown upstream phase is mapped to "degraded" there, not
+        // passed through. We still handle `state` being absent or
+        // (defensively) something other than the known values: any
+        // running-but-unclassified case falls through to "degraded",
+        // matching the server's safe-fallback policy.
+        const rawState =
+          typeof status.state === "string" && status.state.trim().length > 0
+            ? status.state.trim().toLowerCase()
+            : status.running
+              ? status.ffmpegAlive
+                ? "live"
+                : "starting"
+              : "idle";
+        const isRunning = status.running === true;
+        // Contract: isStarting / isLive / isDegraded are strictly mutually
+        // exclusive and together cover every running state. isLive requires
+        // BOTH the server to say "live" AND the client's ffmpegAlive check
+        // to agree — if the distributor reports live but no platform is
+        // actually delivering, we surface DEGRADED rather than lying with
+        // a green LIVE button. Any running state that isn't live and isn't
+        // starting is degraded — covers known "degraded" plus any string
+        // we didn't anticipate.
+        const isStarting = isRunning && rawState === "starting";
+        const isLive =
+          isRunning && rawState === "live" && status.ffmpegAlive === true;
+        const isDegraded = isRunning && !isStarting && !isLive;
+        const nextState = !isRunning
+          ? "idle"
+          : isLive
+            ? "live"
+            : isStarting
+              ? "starting"
+              : "degraded";
+        const nextStarting = isStarting;
+        const nextDegraded = isDegraded;
+        const nextLive = isLive;
         setStreamCapabilityPresent(true);
         setStreamCapabilityResolved(true);
         setStreamAvailable(true);
         setStreamError(null);
-        setStreamLive(Boolean(status.running && status.ffmpegAlive));
+        setStreamLive(nextLive);
+        setStreamDegraded(nextDegraded);
+        setStreamStarting(nextStarting);
+        setStreamState(nextState);
         setUptime(status.uptime ?? 0);
         setFrameCount(status.frameCount ?? 0);
         setActiveDestination(status.destination ?? null);
@@ -315,6 +359,10 @@ export function useCompanionStageOperator() {
           setStreamCapabilityResolved(true);
           setStreamAvailable(false);
           setStreamError(null);
+          setStreamLive(false);
+          setStreamDegraded(false);
+          setStreamStarting(false);
+          setStreamState("idle");
           return { status: null, error: null };
         }
         const errorMessage =
@@ -327,6 +375,10 @@ export function useCompanionStageOperator() {
         setStreamCapabilityResolved(true);
         setStreamAvailable(true);
         setStreamError(errorMessage);
+        setStreamLive(false);
+        setStreamDegraded(false);
+        setStreamStarting(false);
+        setStreamState("error");
         return { status: null, error: errorMessage };
       }
     },
@@ -1520,6 +1572,9 @@ export function useCompanionStageOperator() {
       capabilityPresent: streamCapabilityPresent,
       capabilityResolved: streamCapabilityResolved,
       live: streamLive,
+      degraded: streamDegraded,
+      starting: streamStarting,
+      state: streamState,
       loading: streamLoading,
       error: streamError,
       uptime,

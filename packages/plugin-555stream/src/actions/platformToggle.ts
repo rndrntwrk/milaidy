@@ -59,7 +59,7 @@ export const platformToggleAction: Action = {
       if (!platformId) {
         if (callback) {
           callback({
-            text: 'No platform ID provided. Valid: twitch, kick, youtube, pumpfun, x, tiktok, zora, custom.',
+            text: 'No platform ID provided. Valid: twitch, kick, youtube, facebook, pumpfun, x, tiktok, zora, custom.',
             content: { success: false, error: 'No platformId provided' },
           });
         }

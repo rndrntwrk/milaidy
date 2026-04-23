@@ -111,6 +111,18 @@ const DESTINATION_MAPPINGS: DestinationMapping[] = [
     enabledEnv: 'STREAM555_DEST_FACEBOOK_ENABLED',
   },
   {
+    platformId: 'tiktok',
+    rtmpUrlEnv: 'STREAM555_DEST_TIKTOK_RTMP_URL',
+    streamKeyEnv: 'STREAM555_DEST_TIKTOK_STREAM_KEY',
+    enabledEnv: 'STREAM555_DEST_TIKTOK_ENABLED',
+  },
+  {
+    platformId: 'zora',
+    rtmpUrlEnv: 'STREAM555_DEST_ZORA_RTMP_URL',
+    streamKeyEnv: 'STREAM555_DEST_ZORA_STREAM_KEY',
+    enabledEnv: 'STREAM555_DEST_ZORA_ENABLED',
+  },
+  {
     platformId: 'custom',
     rtmpUrlEnv: 'STREAM555_DEST_CUSTOM_RTMP_URL',
     streamKeyEnv: 'STREAM555_DEST_CUSTOM_STREAM_KEY',

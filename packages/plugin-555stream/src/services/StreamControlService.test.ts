@@ -18,6 +18,12 @@ const STREAM_ENV_KEYS = [
   "STREAM555_DEST_X_ENABLED",
   "STREAM555_DEST_X_RTMP_URL",
   "STREAM555_DEST_X_STREAM_KEY",
+  "STREAM555_DEST_TIKTOK_ENABLED",
+  "STREAM555_DEST_TIKTOK_RTMP_URL",
+  "STREAM555_DEST_TIKTOK_STREAM_KEY",
+  "STREAM555_DEST_ZORA_ENABLED",
+  "STREAM555_DEST_ZORA_RTMP_URL",
+  "STREAM555_DEST_ZORA_STREAM_KEY",
 ] as const;
 
 const ORIGINAL_ENV = new Map<string, string | undefined>();
@@ -81,6 +87,27 @@ describe("StreamControlService", () => {
 
     await service.stop();
     assert.equal(service.getRuntimeState().loaded, false);
+  });
+
+  it("counts tiktok and zora runtime destinations in readiness state", async () => {
+    setEnv("STREAM555_BASE_URL", "https://stream.rndrntwrk.com");
+    setEnv("STREAM555_AGENT_TOKEN", "stream-static-token");
+    setEnv("STREAM555_DEST_TIKTOK_ENABLED", "true");
+    setEnv("STREAM555_DEST_TIKTOK_RTMP_URL", "rtmps://live-upload.tiktok.com/app");
+    setEnv("STREAM555_DEST_TIKTOK_STREAM_KEY", "tiktok-stream-key");
+    setEnv("STREAM555_DEST_ZORA_ENABLED", "true");
+    setEnv("STREAM555_DEST_ZORA_RTMP_URL", "rtmps://rtmp.zora.co/live");
+    setEnv("STREAM555_DEST_ZORA_STREAM_KEY", "zora-stream-key");
+
+    const service = await StreamControlService.start({} as IAgentRuntime);
+    const runtimeState = service.getRuntimeState();
+
+    assert.equal(runtimeState.channelsSaved, 2);
+    assert.equal(runtimeState.channelsEnabled, 2);
+    assert.equal(runtimeState.channelsReady, 2);
+    assert.deepEqual(runtimeState.errors, []);
+
+    await service.stop();
   });
 
   it("prefers the internal base URL for alice-bot when split URLs are configured", async () => {
