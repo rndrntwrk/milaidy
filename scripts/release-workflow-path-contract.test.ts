@@ -195,6 +195,10 @@ describe("release workflow path contract", () => {
     expect(buildCloudImage).toContain(
       "bash scripts/install-published-workspace-fallback-deps.sh",
     );
+    expect(buildCloudImage.indexOf("Run postinstall patches")).toBeGreaterThan(
+      buildCloudImage.indexOf("Install published-workspace fallback dependencies"),
+    );
+    expect(buildCloudImage).toContain("tsconfig.declarations.json");
     expect(buildCloudImage).toContain("uses: bufbuild/buf-setup-action@v1");
     expect(buildCloudImage).toContain("buf dep update && buf generate");
     expect(buildCloudImage).toContain("cd ../typescript");
@@ -251,6 +255,25 @@ describe("release workflow path contract", () => {
     );
   });
 
+  it("hydrates fallback deps before release postinstall builds local eliza packages", () => {
+    const setupAction = fs.readFileSync(
+      path.join(repoRoot, ".github", "actions", "setup-bun-workspace", "action.yml"),
+      "utf8",
+    );
+    const buildDocker = readWorkflow("build-docker.yml");
+
+    expect(setupAction).toContain(
+      "inputs.disable-local-eliza-workspace == 'true' || inputs.run-postinstall == 'true'",
+    );
+    expect(setupAction.indexOf("Install published-workspace fallback dependencies")).toBeLessThan(
+      setupAction.indexOf("Run repository postinstall patches"),
+    );
+    expect(buildDocker.indexOf("Install published-workspace fallback dependencies")).toBeLessThan(
+      buildDocker.indexOf("Run postinstall patches"),
+    );
+    expect(buildDocker).toContain("bash scripts/install-published-workspace-fallback-deps.sh");
+  });
+
   it("re-installs @elizaos/core's third-party deps after the workspace is disabled", () => {
     const fallbackScript = fs.readFileSync(
       path.join(
@@ -273,5 +296,15 @@ describe("release workflow path contract", () => {
     expect(fallbackScript).toContain(
       "symlink_installed_packages_into_manifest_node_modules",
     );
+  });
+
+  it("uses the highest local TypeScript major when patching eliza ignoreDeprecations", () => {
+    const setupUpstreams = fs.readFileSync(
+      path.join(repoRoot, "scripts", "setup-upstreams.mjs"),
+      "utf8",
+    );
+
+    expect(setupUpstreams).toContain("Math.max(highest, parsed)");
+    expect(setupUpstreams).toContain('path.join("packages", "typescript", "tsconfig.declarations.json")');
   });
 });
