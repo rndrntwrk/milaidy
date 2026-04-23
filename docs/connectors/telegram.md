@@ -1,26 +1,23 @@
----
-title: Telegram Connector
-sidebarTitle: Telegram
-description: Connect your agent to Telegram using the @elizaos/plugin-telegram package.
----
+# Telegram Connector
 
-Connect your agent to Telegram for private chats and group conversations.
+Connect your agent to Telegram for private chats and group conversations using the `@elizaos/plugin-telegram` package.
 
-## Overview
+## Prerequisites
 
-The Telegram connector is an external elizaOS plugin that bridges your agent to Telegram via the Bot API. It is auto-enabled by the runtime when a valid token is detected in your connector configuration.
+- A Telegram bot token from [@BotFather](https://t.me/BotFather)
 
-## Package Info
+## Configuration
 
-| Field | Value |
-|-------|-------|
-| Package | `@elizaos/plugin-telegram` |
-| Config key | `connectors.telegram` |
-| Auto-enable trigger | `botToken`, `token`, or `apiKey` is truthy in connector config |
+| Name | Required | Description |
+|------|----------|-------------|
+| `TELEGRAM_BOT_TOKEN` | Yes | Bot token from [@BotFather](https://t.me/BotFather) |
+| `TELEGRAM_API_ROOT` | No | Base URL for Telegram Bot API (allows overriding the default endpoint) |
+| `TELEGRAM_ALLOWED_CHATS` | No | JSON-encoded array of chat IDs authorized to interact with the bot |
+| `TELEGRAM_TEST_CHAT_ID` | No | Chat ID used by the test suite for validation |
 
-## Minimal Configuration
+The connector auto-enables when `botToken`, `token`, or `apiKey` is truthy in the connector config and `enabled` is not explicitly `false`.
 
-In `~/.milady/milady.json`:
+Configure in `~/.milady/milady.json`:
 
 ```json
 {

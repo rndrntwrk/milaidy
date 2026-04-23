@@ -22,10 +22,17 @@ milady plugins install solana
 
 | Environment Variable | Required | Description |
 |---------------------|----------|-------------|
-| `SOLANA_PRIVATE_KEY` | Yes | Base58-encoded private key for the agent's wallet (alias: `WALLET_PRIVATE_KEY`) |
+| `HELIUS_API_KEY` | Yes | Helius API key for Solana infrastructure services (also the primary auto-enable trigger) |
+| `BIRDEYE_API_KEY` | Yes | Birdeye API key for token price and market data |
+| `SOL_ADDRESS` | Yes | Mint/contract address for native SOL in token swap logic |
+| `SLIPPAGE` | Yes | Maximum acceptable slippage for swaps (percentage or basis points) |
+| `SOLANA_PRIVATE_KEY` | No | Base58-encoded private key for the agent's wallet (alias: `WALLET_PRIVATE_KEY`) |
+| `WALLET_PRIVATE_KEY` | No | Alias for `SOLANA_PRIVATE_KEY` |
 | `SOLANA_RPC_URL` | No | RPC endpoint (default: `https://api.mainnet-beta.solana.com`) |
-| `HELIUS_API_KEY` | No | Helius API key for enhanced RPC and webhooks (also the primary auto-enable trigger) |
-| `BIRDEYE_API_KEY` | No | Birdeye API key for token price and market data |
+| `WALLET_SECRET_SALT` | No | Salt for deterministic wallet key derivation |
+| `WALLET_SECRET_KEY` | No | Secret key for wallet operations |
+| `WALLET_PUBLIC_KEY` | No | Public key override |
+| `SOLANA_PUBLIC_KEY` | No | Solana public key override |
 
 ```json
 {

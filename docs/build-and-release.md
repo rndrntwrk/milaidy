@@ -36,7 +36,7 @@ We do **not** try to exclude deps that might already be inlined by tsdown into p
 
 ## Release workflow: design and WHYs
 
-The release workflow (`.github/workflows/release.yml`) is designed for **reproducible, fail-fast builds** and **diagnosable failures**. Key choices and their reasons:
+The release workflow (`.github/workflows/release-electrobun.yml`) is designed for **reproducible, fail-fast builds** and **diagnosable failures**. Key choices and their reasons:
 
 - **Strict shell (`bash -euo pipefail`)** — Applied at job default for `build-desktop` so every step exits on first error, undefined variable, or pipe failure. **Why:** Without it, a failing command in the middle of a script can be ignored and the step still "succeeds", producing broken artifacts or confusing later failures.
 - **Retry loops with final assertion** — `bun install` steps retry up to 3 times, then run the same install command once more after the loop. **Why:** If all retries failed, the loop exits without failing the step; the final run ensures the step fails with a clear install error instead of silently continuing.
@@ -139,4 +139,4 @@ Why: the previous smoke test could pass while the launcher stayed open but the e
 
 - [Electrobun startup and exception handling](./electrobun-startup.md) — why the agent keeps the API server up on load failure.
 - [Plugin resolution and NODE_PATH](./plugin-resolution-and-node-path.md) — why dynamic plugin imports need `NODE_PATH` in dev/CLI/Electrobun.
-- [CHANGELOG](../CHANGELOG.md) — concrete changes and WHYs per release.
+- [Changelog](./changelog.mdx) — concrete changes and WHYs per release.

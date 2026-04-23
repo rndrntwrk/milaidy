@@ -73,7 +73,7 @@ Core areas (all under `eliza/packages/app-core/`):
 - `eliza/packages/app-core/src/api/` — dashboard API server and routes
 - `eliza/packages/app-core/src/services/` — business logic (plugin installer, updater, etc.)
 - `eliza/packages/app-core/src/connectors/` — connector integration code
-- `eliza/packages/agent/` — upstream elizaOS agent (core plugins, auto-enable maps)
+- `eliza/packages/agent/` — upstream elizaOS agent submodule (core plugins, auto-enable maps)
 - `apps/app/` — desktop/mobile UI app
 - `scripts/` — build/dev/release tooling
 - `test/` + colocated tests — verification

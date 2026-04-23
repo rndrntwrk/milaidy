@@ -291,12 +291,14 @@ Returns voice configuration and current speaking status.
 **Response:**
 ```json
 {
+  "ok": true,
   "enabled": true,
   "autoSpeak": true,
   "provider": "elevenlabs",
-  "speaking": false,
-  "bridgeAttached": true,
-  "apiKeyConfigured": true
+  "configuredProvider": "elevenlabs",
+  "hasApiKey": true,
+  "isSpeaking": false,
+  "isAttached": true
 }
 ```
 

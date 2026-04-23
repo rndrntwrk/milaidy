@@ -36,21 +36,21 @@ The Milady mobile app brings the full dashboard experience to iOS and Android de
 
 ### Shared
 
-- **Node.js 22+** and the project's package manager (check `scripts/rt.sh` for the runtime wrapper)
+- **Node.js 22+** and **Bun** (the project's package manager)
 - The monorepo cloned and dependencies installed at the root level
 
 ## Building the App
 
+All mobile build commands run from the **repository root** using `bun run`.
+
 ### Build for iOS
 
 ```bash
-cd apps/app
-
 # Build plugins, web assets, and sync to the iOS project
-../../scripts/rt.sh run build:ios
+bun run build:ios
 
-# Open the Xcode project
-../../scripts/rt.sh run cap:open:ios
+# Open in Xcode
+bun run dev:ios
 ```
 
 This runs `vite build` to produce the `dist/` web assets, then `capacitor sync ios` to copy them into the native iOS project and update native dependencies.
@@ -60,13 +60,11 @@ The Xcode workspace is at `apps/app/ios/App/App.xcworkspace`.
 ### Build for Android
 
 ```bash
-cd apps/app
-
 # Build plugins, web assets, and sync to the Android project
-../../scripts/rt.sh run build:android
+bun run build:android
 
-# Open the Android Studio project
-../../scripts/rt.sh run cap:open:android
+# Open in Android Studio
+bun run dev:android
 ```
 
 This runs `vite build` followed by `capacitor sync android` to copy web assets and update the Gradle project.
@@ -78,7 +76,8 @@ The Android project is at `apps/app/android/`.
 All nine custom Capacitor plugins must be built before the web app can bundle them:
 
 ```bash
-../../scripts/rt.sh run plugin:build
+cd apps/app
+bun run plugin:build
 ```
 
 This iterates through each plugin directory (`gateway`, `swabble`, `camera`, `screencapture`, `canvas`, `desktop`, `location`, `talkmode`, `agent`) and runs the build script for each.
@@ -88,14 +87,16 @@ This iterates through each plugin directory (`gateway`, `swabble`, `camera`, `sc
 If you have already built the web assets and only need to push changes to the native projects:
 
 ```bash
+cd apps/app
+
 # Sync all platforms
-../../scripts/rt.sh run cap:sync
+bun run cap:sync
 
 # Sync iOS only
-../../scripts/rt.sh run cap:sync:ios
+bun run cap:sync:ios
 
 # Sync Android only
-../../scripts/rt.sh run cap:sync:android
+bun run cap:sync:android
 ```
 
 ## Platform Configuration
@@ -478,17 +479,17 @@ The main activity uses `singleTask` launch mode, which ensures only one instance
 
 ### Live Reload (iOS)
 
-For rapid development with live reload:
+For rapid development with live reload (all commands from the repo root):
 
 ```bash
 # Build plugins and web assets
-../../scripts/rt.sh run build:ios
+bun run build:ios
 
 # Start Vite dev server in a separate terminal
-../../scripts/rt.sh run dev
+bun run dev
 
 # Open Xcode and run on a simulator
-../../scripts/rt.sh run cap:open:ios
+cd apps/app && bun run cap:open:ios
 ```
 
 Update the Capacitor server config to point to your dev server IP for live reload.
@@ -497,23 +498,23 @@ Update the Capacitor server config to point to your dev server IP for live reloa
 
 ```bash
 # Build plugins and web assets
-../../scripts/rt.sh run build:android
+bun run build:android
 
 # Start Vite dev server in a separate terminal
-../../scripts/rt.sh run dev
+bun run dev
 
 # Open Android Studio and run on an emulator
-../../scripts/rt.sh run cap:open:android
+cd apps/app && bun run cap:open:android
 ```
 
 ### Running Tests
 
 ```bash
-# Unit tests (Vitest)
-../../scripts/rt.sh run test
+# Unit tests (Vitest) — from repo root
+bun run test
 
 # Watch mode
-../../scripts/rt.sh run test:watch
+bun run test:watch
 ```
 
 ## Troubleshooting
@@ -530,13 +531,11 @@ Open the Xcode project, select the App target, go to Signing & Capabilities, and
 
 ### Web assets not updating on device
 
-Run `capacitor sync` after rebuilding:
+Run the build command from the repo root, which includes the sync step automatically:
 
 ```bash
-../../scripts/rt.sh run build:ios   # or build:android
+bun run build:ios   # or build:android
 ```
-
-The `build:ios` and `build:android` scripts include the sync step automatically.
 
 ### Gateway discovery not finding devices
 

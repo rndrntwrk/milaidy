@@ -82,8 +82,15 @@ Re-scan the skills directory and reload all skill metadata. Useful after manuall
 
 ```json
 {
-  "ok": true,
-  "count": 5
+  "skills": [
+    {
+      "id": "my-custom-action",
+      "name": "MY_CUSTOM_ACTION",
+      "description": "Does something useful",
+      "enabled": true,
+      "scanStatus": "clean"
+    }
+  ]
 }
 ```
 

@@ -1,31 +1,23 @@
----
-title: Gmail Watch Connector
-sidebarTitle: Gmail Watch
-description: Monitor Gmail inboxes using the @elizaos/plugin-gmail-watch package.
----
+# Gmail Watch Connector
 
-Monitor Gmail inboxes for incoming messages using Pub/Sub.
+Monitor Gmail inboxes for incoming messages using Google Cloud Pub/Sub with the `@elizaos/plugin-gmail-watch` package.
 
-## Overview
-
-The Gmail Watch connector is an elizaOS plugin that monitors Gmail inboxes via Google Cloud Pub/Sub. It watches for new messages and triggers agent events. This connector is enabled via feature flags rather than the `connectors` section. Available from the plugin registry.
-
-## Package Info
-
-| Field | Value |
-|-------|-------|
-| Package | `@elizaos/plugin-gmail-watch` |
-| Feature flag | `features.gmailWatch` |
-| Install | `milady plugins install gmail-watch` |
-
-## Setup Requirements
+## Prerequisites
 
 - Google Cloud service account or OAuth credentials with Gmail API access
-- Pub/Sub topic configured for Gmail push notifications
+- A Pub/Sub topic configured for Gmail push notifications
 
 ## Configuration
 
-Gmail Watch is enabled via the `features` section:
+Gmail Watch does not use environment variables for configuration. It is enabled via the `features` section of your config.
+
+Install the plugin from the registry:
+
+```bash
+milady plugins install gmail-watch
+```
+
+Enable in `~/.milady/milady.json`:
 
 ```json
 {
@@ -34,6 +26,15 @@ Gmail Watch is enabled via the `features` section:
   }
 }
 ```
+
+## Setup
+
+1. Set up a Google Cloud project with the Gmail API enabled.
+2. Configure a Pub/Sub topic for Gmail push notifications.
+3. Create a service account or OAuth credentials with Gmail API access.
+4. Install the plugin: `milady plugins install gmail-watch`.
+5. Enable the feature in your config as shown above.
+6. Start your agent.
 
 ## Features
 

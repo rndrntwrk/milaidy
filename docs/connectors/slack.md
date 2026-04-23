@@ -1,8 +1,23 @@
----
-title: Slack Connector
-sidebarTitle: Slack
-description: Connect your agent to Slack workspaces using the @elizaos/plugin-slack package.
----
+# Slack Connector
+
+Connect your agent to Slack workspaces using the `@elizaos/plugin-slack` package.
+
+## Prerequisites
+
+- A Slack app with a Bot Token (`xoxb-...`) and an App-Level Token (`xapp-...`) for Socket Mode
+- Alternatively, a Signing Secret for HTTP webhook mode
+
+## Configuration
+
+| Name | Required | Description |
+|------|----------|-------------|
+| `SLACK_APP_TOKEN` | Yes | Slack App Token (`xapp-...`) for Socket Mode connections |
+| `SLACK_BOT_TOKEN` | Yes | Slack Bot Token (`xoxb-...`) for API authentication |
+| `SLACK_USER_TOKEN` | No | Optional User Token (`xoxp-...`) for enhanced permissions |
+| `SLACK_SIGNING_SECRET` | No | Slack Signing Secret for verifying HTTP webhook requests |
+| `SLACK_CHANNEL_IDS` | No | Comma-separated list of channel IDs to restrict the bot to |
+| `SLACK_SHOULD_IGNORE_BOT_MESSAGES` | No | If `true`, ignore messages from other bots |
+| `SLACK_SHOULD_RESPOND_ONLY_TO_MENTIONS` | No | If `true`, only respond when @mentioned |
 
 ## Overview
 

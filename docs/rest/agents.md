@@ -21,21 +21,21 @@ All agent endpoints require the agent runtime to be initialized. The API server 
 | POST | `/api/agent/import` | Import agent from a password-encrypted `.eliza-agent` file |
 | GET | `/api/agent/autonomy` | Check whether autonomy is enabled |
 | POST | `/api/agent/autonomy` | Enable or disable autonomy |
+| GET | `/api/agent/events` | Get buffered agent events (actions, thoughts, status changes) |
 | GET | `/api/agent/self-status` | Structured self-status summary with capabilities, wallet, plugins, and awareness |
 
 ---
 
 ### POST /api/agent/start
 
-Start the agent. Sets the agent state to `paused`, records the start timestamp, and detects the active model provider. Use `POST /api/agent/autonomy` to enable autonomous operation separately.
+Start the agent. Sets the agent state to `running`, records the start timestamp, and detects the active model provider.
 
 **Response**
 
 ```json
 {
-  "ok": true,
   "status": {
-    "state": "paused",
+    "state": "running",
     "agentName": "Milady",
     "model": "@elizaos/plugin-anthropic",
     "uptime": 0,
@@ -54,10 +54,12 @@ Stop the agent and disable autonomy. Sets the agent state to `stopped` and clear
 
 ```json
 {
-  "ok": true,
   "status": {
     "state": "stopped",
-    "agentName": "Milady"
+    "agentName": "Milady",
+    "model": "@elizaos/plugin-anthropic",
+    "startedAt": 1718000000000,
+    "uptime": 34200000
   }
 }
 ```
@@ -72,7 +74,6 @@ Pause the agent while keeping uptime intact. Disables autonomy but preserves the
 
 ```json
 {
-  "ok": true,
   "status": {
     "state": "paused",
     "agentName": "Milady",
@@ -93,7 +94,6 @@ Resume a paused agent and re-enable autonomy. The first tick fires immediately.
 
 ```json
 {
-  "ok": true,
   "status": {
     "state": "running",
     "agentName": "Milady",
@@ -149,12 +149,12 @@ Restart the agent runtime. Returns `409` if a restart is already in progress and
 
 ```json
 {
-  "ok": true,
-  "pendingRestart": false,
   "status": {
     "state": "running",
     "agentName": "Milady",
-    "startedAt": 1718000000000
+    "model": "@elizaos/plugin-anthropic",
+    "startedAt": 1718000000000,
+    "uptime": 0
   }
 }
 ```
@@ -226,6 +226,29 @@ Raw binary body — not JSON. The first 4 bytes encode the password length as a 
   "ok": true
 }
 ```
+
+### GET /api/agent/events
+
+Get buffered agent events including actions, thoughts, and status changes. Supports long-polling via the `since` parameter to receive only new events.
+
+**Query Parameters**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `since` | string | No | Event ID to start from (returns only events after this ID) |
+
+**Response**
+
+```json
+{
+  "events": [],
+  "latestEventId": null,
+  "totalBuffered": 0,
+  "replayed": true
+}
+```
+
+---
 
 ### GET /api/agent/self-status
 

@@ -20,10 +20,12 @@ Get the trigger system health snapshot. This endpoint works even when triggers a
 
 ```json
 {
-  "enabled": true,
-  "taskServiceAvailable": true,
-  "activeTriggerCount": 3,
-  "limit": 20
+  "triggersEnabled": true,
+  "activeTriggers": 3,
+  "disabledTriggers": 1,
+  "totalExecutions": 42,
+  "totalFailures": 2,
+  "totalSkipped": 0
 }
 ```
 

@@ -1,26 +1,24 @@
----
-title: Signal Connector
-sidebarTitle: Signal
-description: Connect your agent to Signal using the @elizaos/plugin-signal package.
----
+# Signal Connector
 
-Connect your agent to Signal for private and group messaging via signal-cli.
+Connect your agent to Signal for private and group messaging via signal-cli using the `@elizaos/plugin-signal` package.
 
-## Overview
+## Prerequisites
 
-The Signal connector is an external elizaOS plugin that bridges your agent to Signal via signal-cli running in HTTP or JSON-RPC mode. It is auto-enabled by the runtime when a valid account configuration is detected.
+- [signal-cli](https://github.com/AsamK/signal-cli) installed and a registered/linked Signal account
+- signal-cli running in HTTP daemon mode
 
-## Package Info
+## Configuration
 
-| Field | Value |
-|-------|-------|
-| Package | `@elizaos/plugin-signal` |
-| Config key | `connectors.signal` |
-| Auto-enable trigger | `token`/`botToken`/`apiKey`, OR any of `authDir`/`account`/`httpUrl`/`httpHost`/`httpPort`/`cliPath`, OR `accounts` with configured entries |
+| Name | Required | Description |
+|------|----------|-------------|
+| `SIGNAL_ACCOUNT_NUMBER` | Yes | Signal account phone number in E.164 format (e.g., `+1234567890`) |
+| `SIGNAL_HTTP_URL` | No | Signal CLI REST API URL (e.g., `http://localhost:8080`) |
+| `SIGNAL_CLI_PATH` | No | Path to signal-cli executable (alternative to HTTP API) |
+| `SIGNAL_SHOULD_IGNORE_GROUP_MESSAGES` | No | If `true`, only respond to direct messages |
 
-## Minimal Configuration
+The connector auto-enables when `token`/`botToken`/`apiKey` is set, OR any of `authDir`/`account`/`httpUrl`/`httpHost`/`httpPort`/`cliPath` is set, OR `accounts` contains configured entries.
 
-In `~/.milady/milady.json`:
+Configure in `~/.milady/milady.json`:
 
 ```json
 {

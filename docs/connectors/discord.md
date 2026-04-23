@@ -1,26 +1,29 @@
----
-title: Discord Connector
-sidebarTitle: Discord
-description: Connect your agent to Discord using the @elizaos/plugin-discord package.
----
+# Discord Connector
 
-Connect your agent to Discord servers and DMs.
+Connect your agent to Discord servers and DMs using the `@elizaos/plugin-discord` package.
 
-## Overview
+## Prerequisites
 
-The Discord connector is an external elizaOS plugin that bridges your agent to Discord. It is auto-enabled by the runtime when a valid token is detected in your connector configuration.
+- A Discord bot token from the [Discord Developer Portal](https://discord.com/developers/applications)
+- The bot added to your target server(s) with appropriate permissions
 
-## Package Info
+## Configuration
 
-| Field | Value |
-|-------|-------|
-| Package | `@elizaos/plugin-discord` |
-| Config key | `connectors.discord` |
-| Auto-enable trigger | `token`, `botToken`, or `apiKey` is truthy in connector config |
+| Name | Required | Description |
+|------|----------|-------------|
+| `DISCORD_API_TOKEN` | Yes | Discord bot token for authentication |
+| `DISCORD_APPLICATION_ID` | No | Application ID (auto-resolved from bot token if omitted) |
+| `CHANNEL_IDS` | No | Comma-separated list of channel IDs to restrict the bot to |
+| `DISCORD_LISTEN_CHANNEL_IDS` | No | Comma-separated list of channel IDs where the bot only listens (no responses) |
+| `DISCORD_SHOULD_IGNORE_BOT_MESSAGES` | No | If `true`, ignore messages from other bots |
+| `DISCORD_SHOULD_IGNORE_DIRECT_MESSAGES` | No | If `true`, ignore direct messages |
+| `DISCORD_SHOULD_RESPOND_ONLY_TO_MENTIONS` | No | If `true`, only respond when explicitly @mentioned |
+| `DISCORD_VOICE_CHANNEL_ID` | No | Voice channel ID for the bot to join |
+| `DISCORD_TEST_CHANNEL_ID` | No | Channel ID for test suite operations |
 
-## Minimal Configuration
+The connector auto-enables when `token`, `botToken`, or `apiKey` is truthy in the connector config and `enabled` is not explicitly `false`.
 
-In `~/.milady/milady.json`:
+Configure in `~/.milady/milady.json`:
 
 ```json
 {
@@ -35,6 +38,15 @@ In `~/.milady/milady.json`:
 <Warning>
 Use the `token` field — the Discord config schema uses strict validation and `botToken` is not a recognized schema field. While `botToken` triggers auto-enable detection, only `token` passes schema validation.
 </Warning>
+
+## Setup
+
+1. Go to the [Discord Developer Portal](https://discord.com/developers/applications) and create a new application.
+2. Under **Bot**, create a bot and copy the **Token**.
+3. Under **OAuth2 > URL Generator**, select `bot` scope and the permissions your agent needs.
+4. Use the generated URL to add the bot to your server.
+5. Add the token to `connectors.discord.token` in your config.
+6. Start your agent -- the Discord connector will auto-enable.
 
 ## Disabling the Connector
 

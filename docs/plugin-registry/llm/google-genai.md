@@ -34,6 +34,9 @@ export GOOGLE_GENERATIVE_AI_API_KEY=AIza...
 | `GOOGLE_LARGE_MODEL` | No | Override the large model identifier |
 | `GOOGLE_EMBEDDING_MODEL` | No | Override the embedding model identifier |
 | `GOOGLE_IMAGE_MODEL` | No | Override the image generation model |
+| `SMALL_MODEL` | No | General fallback for the small model when `GOOGLE_SMALL_MODEL` is not set |
+| `LARGE_MODEL` | No | General fallback for the large model when `GOOGLE_LARGE_MODEL` is not set |
+| `IMAGE_MODEL` | No | General fallback for the image model when `GOOGLE_IMAGE_MODEL` is not set |
 
 *Either `GOOGLE_GENERATIVE_AI_API_KEY` or `GOOGLE_API_KEY` is accepted.
 

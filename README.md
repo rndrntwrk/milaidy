@@ -580,7 +580,7 @@ bun run build
 bun run milady start
 ```
 
-> `eliza/packages/app-core/scripts/rt.sh` prefers bun but falls back to npm automatically. `bun run build` runs the production build via Node (`scripts/run-production-build.mjs`).
+> `bun run build` runs the production build via Node (`eliza/packages/app-core/scripts/run-production-build.mjs`).
 
 ### Dev mode (recommended for development)
 
