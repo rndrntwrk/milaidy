@@ -62,7 +62,7 @@ Les connecteurs marqués **Auto** se chargent automatiquement lorsque leur confi
 | Blooio | Clé API + webhook | Oui | Oui | Non | Auto |
 | Microsoft Teams | ID d'app + mot de passe | Oui | Oui (équipes/salons) | Non | Auto |
 | Google Chat | Compte de service | Oui | Oui (espaces) | Oui | Auto |
-| Twitter | Clés API + tokens | MP | N/A | Non | Auto |
+| Twitter | Clés API + tokens | MP | N/A | Non | Registry |
 | Farcaster | Clé API Neynar + signataire | Casts | Oui (canaux) | Non | Auto |
 | Twitch | ID client + token d'accès | Oui (chat) | Oui (canaux) | Non | Auto |
 | Mattermost | Token de bot | Oui | Oui (salons) | Non | Auto |
@@ -70,7 +70,7 @@ Les connecteurs marqués **Auto** se chargent automatiquement lorsque leur confi
 | Matrix | Token d'accès | Oui | Oui (salons) | Non | Auto |
 | Feishu / Lark | ID d'app + secret | Oui | Oui (discussions de groupe) | Non | Auto |
 | Nostr | Clé privée (nsec/hex) | Oui (NIP-04) | N/A | Non | Auto |
-| Lens | Clé API | Oui | N/A | Non | Auto |
+| Lens | Clé API | Oui | N/A | Non | Registry |
 | Bluesky | Identifiants de compte | Publications | N/A | Non | Registry |
 | Instagram | Nom d'utilisateur + mot de passe | MP | N/A | Non | Registry |
 | LINE | Token d'accès + secret du canal | Oui | Oui | Non | Registry |

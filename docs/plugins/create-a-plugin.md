@@ -207,11 +207,13 @@ const weatherPlugin: Plugin = {
 
   actions: [checkWeatherAction],
   providers: [pluginStatusProvider],
-  services: [WeatherCacheService as any],
+  services: [WeatherCacheService],
 };
 
 export default weatherPlugin;
 ```
+
+This is a minimal plugin. The `Plugin` interface also supports `evaluators`, `routes`, `events`, `models`, `componentTypes`, and `tests`. See [Plugin Schemas](/plugins/schemas) for all available extension points.
 
 ## Step 6: Write Tests
 
@@ -251,6 +253,12 @@ describe("weather-plugin", () => {
 ```
 
 ## Step 7: Register with Runtime
+
+| Option | Best for | How it works |
+|--------|----------|--------------|
+| **A: Local Plugin** | Active development and testing | Auto-discovered from the project's `plugins/` directory |
+| **B: Config-Based** | Persistent installations with explicit control | Referenced by path in `milady.json` |
+| **C: Character File** | Per-agent plugin sets | Listed in the character definition, loaded at agent start |
 
 ### Option A: Local Plugin (Development)
 
@@ -371,6 +379,8 @@ Every published plugin should include an `elizaos.plugin.json` manifest at its p
 | `requiredSecrets` | `string[]` | Environment variables that must be set |
 | `channels` | `string[]` | Supported communication channels |
 | `dependencies` | `string[]` | Other plugins this depends on |
+
+Additional fields like `optionalSecrets`, `providers`, `skills`, `gatewayMethods`, and `cliCommands` are also supported. See [Plugin Schemas](/plugins/schemas) for the complete manifest reference.
 
 ### UI Hints
 
