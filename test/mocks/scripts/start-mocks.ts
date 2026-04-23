@@ -358,11 +358,279 @@ type MessageResponse = {
   labelIds?: string[];
 };
 
+type GmailFixtureMessage = MessageResponse & {
+  snippet: string;
+  internalDateOffsetMs: number;
+  headers: Array<{ name: string; value: string }>;
+  bodyText: string;
+};
+
+const GMAIL_FIXTURE_MESSAGES: GmailFixtureMessage[] = [
+  {
+    id: "msg-finance",
+    threadId: "thr-finance",
+    labelIds: ["INBOX", "UNREAD", "IMPORTANT"],
+    snippet: "Please confirm receipt of invoice 4831 when you get a chance.",
+    internalDateOffsetMs: -60 * 60 * 1000,
+    headers: [
+      { name: "From", value: "Finance Team <finance@example.com>" },
+      { name: "To", value: "Owner <owner@example.test>" },
+      { name: "Subject", value: "Invoice 4831 received" },
+      { name: "Message-Id", value: "<finance-4831@example.com>" },
+    ],
+    bodyText:
+      "Hi there,\n\nWe received invoice 4831 for April. Please confirm receipt when you get a chance.\n\nThanks,\nFinance Team\n",
+  },
+  {
+    id: "msg-sarah",
+    threadId: "thr-sarah",
+    labelIds: ["INBOX", "UNREAD"],
+    snippet:
+      "Could you review the product brief tomorrow and send notes before lunch?",
+    internalDateOffsetMs: -3 * 60 * 60 * 1000,
+    headers: [
+      { name: "From", value: "Sarah Lee <sarah@example.com>" },
+      { name: "To", value: "Owner <owner@example.test>" },
+      { name: "Subject", value: "Can you review the product brief?" },
+      { name: "Message-Id", value: "<sarah-brief@example.com>" },
+    ],
+    bodyText:
+      "Hey,\n\nCan you review the product brief tomorrow and send me notes before lunch?\n\nThanks,\nSarah\n",
+  },
+  {
+    id: "msg-julia",
+    threadId: "thr-julia",
+    labelIds: ["INBOX"],
+    snippet: "Looking forward to our intro meeting tomorrow.",
+    internalDateOffsetMs: -6 * 60 * 60 * 1000,
+    headers: [
+      { name: "From", value: "Julia Chen <julia.chen@example.com>" },
+      { name: "To", value: "Owner <owner@example.test>" },
+      { name: "Subject", value: "Looking forward to tomorrow" },
+      { name: "Message-Id", value: "<julia-intro@example.com>" },
+    ],
+    bodyText:
+      "Looking forward to our intro meeting tomorrow. I'd love to compare notes on product strategy and AI assistants.\n\nBest,\nJulia\n",
+  },
+  {
+    id: "msg-newsletter",
+    threadId: "thr-news",
+    labelIds: ["INBOX", "CATEGORY_PROMOTIONS"],
+    snippet:
+      "This week in ops: ship the launch checklist and review the metrics deck.",
+    internalDateOffsetMs: -10 * 60 * 60 * 1000,
+    headers: [
+      { name: "From", value: "Weekly Digest <digest@example.com>" },
+      { name: "To", value: "Owner <owner@example.test>" },
+      { name: "Subject", value: "Weekly ops digest" },
+      { name: "Precedence", value: "bulk" },
+      { name: "List-Id", value: "<weekly.digest.example.com>" },
+      { name: "Message-Id", value: "<weekly-digest@example.com>" },
+    ],
+    bodyText:
+      "This week in ops: ship the launch checklist, review the metrics deck, and confirm next week's travel.\n",
+  },
+  {
+    id: "msg-spam",
+    threadId: "thr-spam",
+    labelIds: ["SPAM", "UNREAD"],
+    snippet: "Suspicious account notice routed to spam.",
+    internalDateOffsetMs: -2 * 60 * 60 * 1000,
+    headers: [
+      { name: "From", value: "Security Notice <security@example.com>" },
+      { name: "To", value: "Owner <owner@example.test>" },
+      { name: "Subject", value: "Account notice" },
+      { name: "Message-Id", value: "<spam-notice@example.com>" },
+    ],
+    bodyText: "This is a synthetic spam-folder fixture.\n",
+  },
+  {
+    id: "msg-unresponded-inbound",
+    threadId: "thr-unresponded",
+    labelIds: ["INBOX"],
+    snippet: "Could you send the signed vendor packet?",
+    internalDateOffsetMs: -16 * 24 * 60 * 60 * 1000,
+    headers: [
+      { name: "From", value: "Vendor Ops <vendor@example.com>" },
+      { name: "To", value: "Owner <owner@example.test>" },
+      { name: "Subject", value: "Signed vendor packet" },
+      { name: "Message-Id", value: "<vendor-inbound@example.com>" },
+    ],
+    bodyText: "Could you send the signed vendor packet when you can?\n",
+  },
+  {
+    id: "msg-unresponded-sent",
+    threadId: "thr-unresponded",
+    labelIds: ["SENT"],
+    snippet: "Following up on the signed packet.",
+    internalDateOffsetMs: -14 * 24 * 60 * 60 * 1000,
+    headers: [
+      { name: "From", value: "Owner <owner@example.test>" },
+      { name: "To", value: "Vendor Ops <vendor@example.com>" },
+      { name: "Subject", value: "Re: Signed vendor packet" },
+      { name: "Message-Id", value: "<vendor-sent@example.test>" },
+      { name: "In-Reply-To", value: "<vendor-inbound@example.com>" },
+      {
+        name: "References",
+        value: "<vendor-inbound@example.com> <vendor-sent@example.test>",
+      },
+    ],
+    bodyText: "Following up on the signed packet. Can you confirm receipt?\n",
+  },
+];
+
+function gmailFixtureInternalDate(message: GmailFixtureMessage): number {
+  return Date.now() + message.internalDateOffsetMs;
+}
+
+function gmailFixtureResponse(message: GmailFixtureMessage): JsonValue {
+  const date = new Date(gmailFixtureInternalDate(message));
+  return {
+    id: message.id,
+    threadId: message.threadId,
+    labelIds: message.labelIds ?? [],
+    snippet: message.snippet,
+    historyId: "123456",
+    internalDate: String(date.getTime()),
+    sizeEstimate: message.bodyText.length,
+    payload: {
+      mimeType: "text/plain",
+      headers: [
+        ...message.headers,
+        { name: "Date", value: formatHttpDate(date) },
+      ],
+      body: {
+        data: Buffer.from(message.bodyText, "utf8").toString("base64url"),
+        size: message.bodyText.length,
+      },
+    },
+  };
+}
+
+function gmailQueryMatches(
+  message: GmailFixtureMessage,
+  query: string,
+): boolean {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) return true;
+  const labels = new Set(
+    (message.labelIds ?? []).map((label) => label.toUpperCase()),
+  );
+  const haystack = [
+    message.id,
+    message.threadId,
+    message.snippet,
+    ...message.headers.map((header) => header.value),
+    ...(message.labelIds ?? []),
+  ]
+    .join(" ")
+    .toLowerCase();
+  const ageMs = Date.now() - gmailFixtureInternalDate(message);
+  const tokens = normalized.split(/\s+/).filter(Boolean);
+  return tokens.every((token) => {
+    if (token === "in:anywhere") return true;
+    if (token === "in:inbox") return labels.has("INBOX");
+    if (token === "in:sent") return labels.has("SENT");
+    if (token === "in:spam") return labels.has("SPAM");
+    if (token === "in:trash") return labels.has("TRASH");
+    if (token === "is:unread") return labels.has("UNREAD");
+    if (token === "is:read") return !labels.has("UNREAD");
+    if (token === "is:important") return labels.has("IMPORTANT");
+    if (token.startsWith("label:")) {
+      return labels.has(token.slice("label:".length).toUpperCase());
+    }
+    if (token.startsWith("category:")) {
+      return labels.has(`CATEGORY_${token.slice("category:".length).toUpperCase()}`);
+    }
+    if (token.startsWith("from:")) {
+      const from = message.headers.find(
+        (header) => header.name.toLowerCase() === "from",
+      )?.value;
+      return (from ?? "").toLowerCase().includes(token.slice("from:".length));
+    }
+    if (token.startsWith("subject:")) {
+      const subject = message.headers.find(
+        (header) => header.name.toLowerCase() === "subject",
+      )?.value;
+      return (subject ?? "")
+        .toLowerCase()
+        .includes(token.slice("subject:".length));
+    }
+    const relative = token.match(/^(older|newer)_than:(\d+)([dmy])$/);
+    if (relative) {
+      const amount = Number.parseInt(relative[2] ?? "", 10);
+      const unit = relative[3];
+      const dayCount =
+        unit === "d" ? amount : unit === "m" ? amount * 30 : amount * 365;
+      const boundaryMs = dayCount * 24 * 60 * 60 * 1000;
+      return relative[1] === "older" ? ageMs >= boundaryMs : ageMs <= boundaryMs;
+    }
+    return haystack.includes(token.replace(/^"|"$/g, ""));
+  });
+}
+
+function gmailListMessages(searchParams: URLSearchParams): DynamicFixtureResponse {
+  const includeSpamTrash = searchParams.get("includeSpamTrash") === "true";
+  const query = searchParams.get("q") ?? "";
+  const labelIds = searchParams.getAll("labelIds");
+  const maxResults = Math.max(
+    1,
+    Math.min(Number.parseInt(searchParams.get("maxResults") ?? "20", 10), 50),
+  );
+  const pageOffset = Math.max(
+    0,
+    Number.parseInt(searchParams.get("pageToken") ?? "0", 10) || 0,
+  );
+  const queryTargetsSpamTrash = /\bin:(?:spam|trash|anywhere)\b/i.test(query);
+  const labelTargetsSpamTrash = labelIds.some((labelId) =>
+    /^(SPAM|TRASH)$/i.test(labelId),
+  );
+  const filtered = GMAIL_FIXTURE_MESSAGES.filter((message) => {
+    const labels = new Set(
+      (message.labelIds ?? []).map((label) => label.toUpperCase()),
+    );
+    if (
+      !includeSpamTrash &&
+      !queryTargetsSpamTrash &&
+      !labelTargetsSpamTrash &&
+      (labels.has("SPAM") || labels.has("TRASH"))
+    ) {
+      return false;
+    }
+    if (
+      labelIds.length > 0 &&
+      !labelIds.every((labelId) => labels.has(labelId.toUpperCase()))
+    ) {
+      return false;
+    }
+    return gmailQueryMatches(message, query);
+  }).sort(
+    (left, right) =>
+      gmailFixtureInternalDate(right) - gmailFixtureInternalDate(left),
+  );
+  const page = filtered.slice(pageOffset, pageOffset + maxResults);
+  return jsonFixture({
+    messages: page.map((message) => ({
+      id: message.id,
+      threadId: message.threadId,
+    })),
+    resultSizeEstimate: filtered.length,
+    ...(pageOffset + maxResults < filtered.length
+      ? { nextPageToken: String(pageOffset + maxResults) }
+      : {}),
+  });
+}
+
 function googleDynamicFixture(
   method: string,
   pathname: string,
+  searchParams: URLSearchParams,
 ): DynamicFixtureResponse | null {
   if (!pathname.startsWith("/gmail/v1/users/me/")) return null;
+
+  if (method === "GET" && pathname === "/gmail/v1/users/me/messages") {
+    return gmailListMessages(searchParams);
+  }
 
   if (method === "GET" && pathname === "/gmail/v1/users/me/labels") {
     return jsonFixture({
@@ -421,6 +689,12 @@ function googleDynamicFixture(
   );
   if (method === "DELETE" && deleteMessageId) {
     return jsonFixture({});
+  }
+  if (method === "GET" && deleteMessageId) {
+    const message = GMAIL_FIXTURE_MESSAGES.find(
+      (candidate) => candidate.id === deleteMessageId,
+    );
+    return message ? jsonFixture(gmailFixtureResponse(message)) : null;
   }
 
   if (method === "POST" && pathname === "/gmail/v1/users/me/drafts") {
@@ -501,20 +775,16 @@ function googleDynamicFixture(
   }
 
   if (method === "GET" && pathname === "/gmail/v1/users/me/threads") {
+    const threadIds = [...new Set(GMAIL_FIXTURE_MESSAGES.map((message) => message.threadId))];
     return jsonFixture({
-      threads: [
-        {
-          id: "thr-finance",
-          historyId: "123456",
-          snippet: "Please confirm receipt of invoice 4831.",
-        },
-        {
-          id: "thr-sarah",
-          historyId: "123455",
-          snippet: "Could you review the product brief?",
-        },
-      ],
-      resultSizeEstimate: 2,
+      threads: threadIds.map((id) => ({
+        id,
+        historyId: "123456",
+        snippet:
+          GMAIL_FIXTURE_MESSAGES.find((message) => message.threadId === id)
+            ?.snippet ?? "",
+      })),
+      resultSizeEstimate: threadIds.length,
     });
   }
 
@@ -523,12 +793,13 @@ function googleDynamicFixture(
     /^\/gmail\/v1\/users\/me\/threads\/([^/]+)\/?$/,
   );
   if (method === "GET" && threadId) {
+    const messages = GMAIL_FIXTURE_MESSAGES.filter(
+      (message) => message.threadId === threadId,
+    );
     return jsonFixture({
       id: threadId,
       historyId: "123456",
-      messages: [
-        { id: "msg-finance", threadId, labelIds: ["INBOX", "UNREAD"] },
-      ],
+      messages: messages.map((message) => gmailFixtureResponse(message)),
     });
   }
 
@@ -614,20 +885,25 @@ async function startFixtureServer(
         body: requestBody,
         createdAt: new Date().toISOString(),
       });
+      const dynamicResponse =
+        environment.name === "Google APIs"
+          ? googleDynamicFixture(
+              method,
+              requestUrl.pathname,
+              requestUrl.searchParams,
+            )
+          : null;
+      if (dynamicResponse) {
+        res.writeHead(dynamicResponse.statusCode, {
+          "Content-Type": "application/json",
+          ...(dynamicResponse.headers ?? {}),
+        });
+        res.end(JSON.stringify(dynamicResponse.body));
+        return;
+      }
+
       const matched = findRoute(routes, method, requestUrl.pathname);
       if (!matched) {
-        const dynamicResponse =
-          environment.name === "Google APIs"
-            ? googleDynamicFixture(method, requestUrl.pathname)
-            : null;
-        if (dynamicResponse) {
-          res.writeHead(dynamicResponse.statusCode, {
-            "Content-Type": "application/json",
-            ...(dynamicResponse.headers ?? {}),
-          });
-          res.end(JSON.stringify(dynamicResponse.body));
-          return;
-        }
 
         res.writeHead(404, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "not_found" }));
