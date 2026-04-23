@@ -361,19 +361,25 @@ export function resolveTypeScriptIgnoreDeprecationsTarget(
   const candidateRoots = [repoRoot, fallbackRoot].filter(
     (candidate) => typeof candidate === "string" && candidate.length > 0,
   );
+  const versionSpecifiers = [];
 
   for (const candidateRoot of candidateRoots) {
     const rootPackageJson = readPackageJson(candidateRoot);
-    const versionSpecifier =
-      rootPackageJson?.devDependencies?.typescript ??
-      rootPackageJson?.dependencies?.typescript;
-    const major = parseFirstNumericVersionSegment(versionSpecifier);
-    if (major !== null) {
-      return major >= 6 ? "6.0" : "5.0";
-    }
+    versionSpecifiers.push(
+      rootPackageJson?.devDependencies?.typescript,
+      rootPackageJson?.dependencies?.typescript,
+    );
   }
 
-  return "5.0";
+  const major = versionSpecifiers.reduce((highest, versionSpecifier) => {
+    const parsed = parseFirstNumericVersionSegment(versionSpecifier);
+    if (parsed === null) {
+      return highest;
+    }
+    return highest === null ? parsed : Math.max(highest, parsed);
+  }, null);
+
+  return major !== null && major >= 6 ? "6.0" : "5.0";
 }
 
 function buildIgnoreDeprecationsCompatibilityReplacements(targetVersion) {

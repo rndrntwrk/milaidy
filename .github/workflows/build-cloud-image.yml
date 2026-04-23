@@ -143,6 +143,20 @@ jobs:
           buf dep update && buf generate
           cd ../typescript
           node ../shared/scripts/generate-keywords.mjs --target ts 2>/dev/null || echo "keyword gen skipped"
+          node - <<'NODE'
+          const fs = require("fs");
+          const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+          const spec = pkg.devDependencies?.typescript ?? pkg.dependencies?.typescript ?? "";
+          const major = Number((spec.match(/\d+/) ?? ["5"])[0]);
+          const target = major >= 6 ? "6.0" : "5.0";
+          const alternate = target === "6.0" ? "5.0" : "6.0";
+          for (const file of ["tsconfig.json", "tsconfig.declarations.json"]) {
+            const raw = fs.readFileSync(file, "utf8");
+            const pattern = new RegExp('"ignoreDeprecations"\\s*:\\s*"' + alternate.replace('.', '\\.') + '"', 'g');
+            const next = raw.replace(pattern, '"ignoreDeprecations": "' + target + '"');
+            if (next !== raw) fs.writeFileSync(file, next);
+          }
+          NODE
           bun run build:node
 
       - name: Build runtime (tsdown)
