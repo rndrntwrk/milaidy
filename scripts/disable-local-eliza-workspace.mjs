@@ -105,6 +105,13 @@ export const CI_LOCKFILES = ["bun.lock", "bun.lockb"];
 export const PINNED_VERSION_SOURCE_OVERRIDE = "override";
 export const PINNED_VERSION_SOURCE_TEMPLATE = "template";
 export const PINNED_VERSION_SOURCE_WORKSPACE = "workspace";
+export const LLAMA_CPP_CAPACITOR_PATCH_PATH = path.join(
+  "eliza",
+  "packages",
+  "app-core",
+  "patches",
+  "llama-cpp-capacitor@0.1.5.patch",
+);
 
 const ELIZAOS_CORE_NAME = "@elizaos/core";
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
@@ -839,6 +846,31 @@ export function applyCiOnlyOverrides(
   });
 }
 
+export function repairKnownElizaPatchFiles(
+  repoRoot = DEFAULT_REPO_ROOT,
+  { log = console.log } = {},
+) {
+  const patchPath = path.join(repoRoot, LLAMA_CPP_CAPACITOR_PATCH_PATH);
+  if (!fs.existsSync(patchPath)) {
+    return false;
+  }
+
+  const source = fs.readFileSync(patchPath, "utf8");
+  const repaired = source.replace(
+    "@@ -18,7 +18,7 @@ apply plugin: 'com.android.library'",
+    "@@ -18,6 +18,6 @@ apply plugin: 'com.android.library'",
+  );
+  if (repaired === source) {
+    return false;
+  }
+
+  fs.writeFileSync(patchPath, repaired);
+  log(
+    `[disable-local-eliza-workspace] Repaired malformed patch hunk in ${LLAMA_CPP_CAPACITOR_PATCH_PATH}`,
+  );
+  return true;
+}
+
 export function disableLocalElizaWorkspace(
   repoRoot = DEFAULT_REPO_ROOT,
   { log = console.log, warn = console.warn, errorLog = console.error } = {},
@@ -879,6 +911,8 @@ export function disableLocalElizaWorkspace(
       );
     }
   }
+
+  repairKnownElizaPatchFiles(repoRoot, { log });
 
   const localOnlyPackagePaths = resolveLocalOnlyWorkspacePackagePaths(repoRoot);
   const localOnlyPackages = new Set(localOnlyPackagePaths.keys());
