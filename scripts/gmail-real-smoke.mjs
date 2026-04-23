@@ -20,6 +20,7 @@ const METADATA_HEADERS = [
   "List-Id",
   "Precedence",
   "Auto-Submitted",
+  "X-Milady-Test-Run",
 ];
 const REDACTED_CONTENT_KEYS = new Set([
   "bodyHtml",
@@ -373,6 +374,64 @@ function requireAllowedRecipient(to) {
   }
 }
 
+function readAllowlist(name) {
+  return (process.env[name] ?? "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function requireRunId() {
+  const runId = process.env.MILADY_GMAIL_REAL_SMOKE_RUN_ID?.trim();
+  if (!runId) {
+    throw new Error(
+      "MILADY_GMAIL_REAL_SMOKE_RUN_ID is required for real send metadata.",
+    );
+  }
+  if (!/^milady-gmail-smoke-[a-zA-Z0-9._:-]{8,160}$/.test(runId)) {
+    throw new Error(
+      "MILADY_GMAIL_REAL_SMOKE_RUN_ID must start with milady-gmail-smoke- and contain only letters, numbers, dot, underscore, colon, or hyphen.",
+    );
+  }
+  const allowlist = readAllowlist("MILADY_GMAIL_REAL_SMOKE_RUN_ALLOWLIST");
+  if (!allowlist.includes(runId)) {
+    throw new Error(
+      "MILADY_GMAIL_REAL_SMOKE_RUN_ALLOWLIST must include the exact run id before a real Gmail send.",
+    );
+  }
+  return runId;
+}
+
+function gmailTestLabelName(runId) {
+  return `Milady/GmailSmoke/${runId}`;
+}
+
+async function findGmailLabel(token, name) {
+  const listed = await gmailJson("/labels", token);
+  const labels = Array.isArray(listed.labels) ? listed.labels : [];
+  return labels.find((label) => label?.name === name) ?? null;
+}
+
+async function ensureGmailLabel(token, name) {
+  const existing = await findGmailLabel(token, name);
+  if (existing?.id) return existing;
+  return await gmailJson("/labels", token, {
+    method: "POST",
+    body: JSON.stringify({
+      name,
+      labelListVisibility: "labelHide",
+      messageListVisibility: "hide",
+    }),
+  });
+}
+
+async function applyGmailLabel(token, messageId, labelId) {
+  await gmailJson(`/messages/${encodeURIComponent(messageId)}/modify`, token, {
+    method: "POST",
+    body: JSON.stringify({ addLabelIds: [labelId] }),
+  });
+}
+
 async function sendSmokeEmail(token) {
   if (process.env.MILADY_GMAIL_REAL_SMOKE_SEND !== "1") {
     throw new Error("Set MILADY_GMAIL_REAL_SMOKE_SEND=1 to run a real send.");
@@ -385,7 +444,9 @@ async function sendSmokeEmail(token) {
     throw new Error("MILADY_GMAIL_REAL_SMOKE_TO is required for real send.");
   }
   requireAllowedRecipient(to);
-  const runId = `milady-gmail-smoke-${crypto.randomUUID()}`;
+  const runId = requireRunId();
+  const labelName = gmailTestLabelName(runId);
+  const label = await ensureGmailLabel(token, labelName);
   const subject = `Milady Gmail smoke ${runId}`;
   const raw = encodeRawEmail([
     `To: ${to}`,
@@ -400,6 +461,9 @@ async function sendSmokeEmail(token) {
     method: "POST",
     body: JSON.stringify({ raw }),
   });
+  if (sent.id && label?.id) {
+    await applyGmailLabel(token, sent.id, label.id);
+  }
   return {
     request: {
       method: "POST",
@@ -407,11 +471,14 @@ async function sendSmokeEmail(token) {
       to,
       subject,
       runId,
+      labelName,
+      xMiladyTestRun: runId,
     },
     response: {
       id: scrubId(sent.id, "gmail-sent"),
       threadId: scrubId(sent.threadId, "gmail-thread"),
       labelIds: Array.isArray(sent.labelIds) ? sent.labelIds : [],
+      appliedRunLabel: Boolean(label?.id),
     },
   };
 }
@@ -428,11 +495,13 @@ async function sendLifeOpsSmokeEmail(baseUrl, options) {
     throw new Error("MILADY_GMAIL_REAL_SMOKE_TO is required for real send.");
   }
   requireAllowedRecipient(to);
-  const runId = `milady-gmail-smoke-${crypto.randomUUID()}`;
+  const runId = requireRunId();
+  const labelName = gmailTestLabelName(runId);
   const subject = `Milady Gmail smoke ${runId}`;
   const bodyText = [
     "This is an explicitly enabled Milady Gmail integration smoke email.",
     `Run ID: ${runId}`,
+    `Sweep label: ${labelName}`,
   ].join("\n");
   const payload = {
     side: options.side,
@@ -458,6 +527,8 @@ async function sendLifeOpsSmokeEmail(baseUrl, options) {
       to,
       subject,
       runId,
+      labelName,
+      xMiladyTestRun: null,
       confirmSend: true,
     },
     response,
@@ -506,6 +577,8 @@ Real send gates:
   MILADY_GMAIL_REAL_SMOKE_SEND=1 MILADY_ALLOW_REAL_GMAIL_WRITES=1 \\
   MILADY_GMAIL_REAL_SMOKE_TO=test@example.com \\
   MILADY_GMAIL_REAL_SMOKE_ALLOWLIST=test@example.com \\
+  MILADY_GMAIL_REAL_SMOKE_RUN_ID=milady-gmail-smoke-20260422T120000-manual \\
+  MILADY_GMAIL_REAL_SMOKE_RUN_ALLOWLIST=milady-gmail-smoke-20260422T120000-manual \\
   bun run lifeops:gmail:real-smoke -- --send-test`);
 }
 

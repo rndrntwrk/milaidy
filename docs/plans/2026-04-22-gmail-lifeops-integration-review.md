@@ -1,6 +1,6 @@
 # Gmail LifeOps Integration Review
 
-Status: Implementation slice landed for backend Gmail inbox-zero operations, event ingestion, n8n workflow dispatch, write guards, and safe fixture export  
+Status: Implementation slice landed for backend Gmail inbox-zero operations, event ingestion, n8n workflow dispatch, write guards, safe fixture export, and real write sweep tooling  
 Last updated: 2026-04-22
 
 ## Scope
@@ -57,6 +57,8 @@ Primary references:
 - LifeOps accepts Gmail event ingestion and can fan out to event workflows, including n8n dispatch workflow steps.
 - `MILADY_BLOCK_REAL_GMAIL_WRITES=1` blocks direct Gmail writes unless traffic is routed to loopback mock or `MILADY_ALLOW_REAL_GMAIL_WRITES=1` is explicitly set.
 - `scripts/export-gmail-fixture.mjs` provides the read-only exporter/scrubber/validator path for producing scrubbed Gmail fixtures.
+- `scripts/gmail-real-sweep.mjs` provides dry-run-first real Gmail cleanup for write-safe smoke sends, with exact run allowlists, recipient allowlists, LifeOps search/manage support, and direct Gmail token fallback.
+- Direct Gmail smoke sends create and apply a per-run Gmail label and include `X-Milady-Test-Run`; LifeOps smoke sends include the same run id in subject/body because the LifeOps send contract does not expose custom RFC 822 headers yet.
 - `MILADY_MOCK_GOOGLE_BASE` switches Google API and OAuth traffic to the local mock.
 - The Google mock now covers labels, drafts, batch modify/delete, message trash/untrash/delete, thread operations, watch/history, settings filters, and message send/list/get routes.
 - The in-process Google mock applies Gmail-aware list filtering for `q`, `labelIds`, `maxResults`, `pageToken`, and `includeSpamTrash`, while still using Mockoon-compatible JSON as the editable fixture source.
@@ -66,11 +68,11 @@ Primary references:
 
 ### Major Gaps
 
-- The Mockoon JSON is still path-oriented; the in-process runner now adds Gmail query and pagination behavior, but it still does not enforce auth scopes, all request-body validity, retry errors, or persistent state transitions.
-- Scenario fields such as `expectedActions`, planner assertions, and some response checks are accepted but not enforced by the runner.
-- `gmailInbox` seeds and `gmailDeleteDrafts` cleanup declarations exist in scenarios but are not currently implemented.
-- Spam is classified as ignored instead of stored as a reviewable/reportable queue.
-- The Gmail sweeper is not implemented, so real write scenarios must stay disabled.
+- The Mockoon JSON remains the editable fixture source while the in-process runner supplies Gmail behavior. It now covers stateful writes, pagination, history movement, token-scope checks when Bearer scopes are known, and body validation for the app-used write routes, but it still does not emulate Gmail retry/error edge cases or every Gmail API validation rule.
+- Gmail scenarios now use strict structured final checks and mock-ledger assertions. `expectedActions`-style planner metadata should still be converted into explicit final checks before it is treated as release proof.
+- `gmailInbox` seeds are implemented as validation/binding against the existing mock fixture set. Dynamic per-scenario Gmail fixture creation is still a backlog item.
+- LifeOps real send cleanup cannot create Gmail labels or custom RFC 822 headers through the LifeOps API yet. It sweeps by exact subject/body run id through LifeOps search/manage, while direct Gmail fallback can also use the per-run Gmail label and header.
+- Full live LLM Gmail scenarios were not executed in this pass; the scenario schema/final-check plumbing and Gmail scenario discovery were verified locally.
 
 ## Mock Vs Real Policy
 
@@ -92,6 +94,8 @@ Real mode is for read-only smoke tests until write guards and cleanup exist:
 - Default scopes should be read-only unless a scenario explicitly needs writes.
 - Write scenarios require an opt-in such as `MILADY_ALLOW_REAL_GMAIL_WRITES=1`.
 - Writes require recipient allowlist, per-run label, per-run header, and an implemented Gmail sweeper.
+- Real send smoke requires an explicit run id and exact run allowlist. Direct Gmail sends add `X-Milady-Test-Run` and apply `Milady/GmailSmoke/<runId>`; LifeOps sends put the run id in subject/body and report the intended label for the sweeper.
+- Real sweeps require an exact run allowlist even in dry-run. Executing trash/delete also requires `MILADY_GMAIL_REAL_SWEEP=1` and a recipient allowlist. Permanent delete additionally requires `MILADY_GMAIL_REAL_SWEEP_DELETE=1`.
 - Production/personal Gmail must not be used for destructive scenarios.
 
 ### Switching Requirements
@@ -131,14 +135,66 @@ GOOGLE_ACCESS_TOKEN=... bun run lifeops:gmail:real-smoke -- --source gmail --que
 For a real test send through the logged-in LifeOps connector, use a dedicated test mailbox and require all send gates:
 
 ```bash
+RUN_ID=milady-gmail-smoke-20260422T120000-manual
+
 MILADY_GMAIL_REAL_SMOKE_SEND=1 \
 MILADY_ALLOW_REAL_GMAIL_WRITES=1 \
 MILADY_GMAIL_REAL_SMOKE_TO=test-recipient@example.com \
 MILADY_GMAIL_REAL_SMOKE_ALLOWLIST=test-recipient@example.com \
+MILADY_GMAIL_REAL_SMOKE_RUN_ID="$RUN_ID" \
+MILADY_GMAIL_REAL_SMOKE_RUN_ALLOWLIST="$RUN_ID" \
 bun run lifeops:gmail:real-smoke -- --source lifeops --send-test
 ```
 
-Do not run real sends against production/personal contacts. Direct Gmail sends include an `X-Milady-Test-Run` header; LifeOps sends include the generated run id in the subject and body.
+Do not run real sends against production/personal contacts. Direct Gmail sends include an `X-Milady-Test-Run` header and apply a hidden `Milady/GmailSmoke/<runId>` label. LifeOps sends include the explicit run id in the subject/body because custom headers are not available through that contract.
+
+The same gates apply to direct Gmail send mode:
+
+```bash
+GOOGLE_ACCESS_TOKEN=... \
+MILADY_GMAIL_REAL_SMOKE_SEND=1 \
+MILADY_ALLOW_REAL_GMAIL_WRITES=1 \
+MILADY_GMAIL_REAL_SMOKE_TO=test-recipient@example.com \
+MILADY_GMAIL_REAL_SMOKE_ALLOWLIST=test-recipient@example.com \
+MILADY_GMAIL_REAL_SMOKE_RUN_ID="$RUN_ID" \
+MILADY_GMAIL_REAL_SMOKE_RUN_ALLOWLIST="$RUN_ID" \
+bun run lifeops:gmail:real-smoke -- --source gmail --send-test
+```
+
+Before any cleanup write, dry-run the sweeper and inspect redacted matches:
+
+```bash
+MILADY_GMAIL_REAL_SWEEP_RUN_ALLOWLIST="$RUN_ID" \
+bun run lifeops:gmail:real-sweep -- --source lifeops --run-id "$RUN_ID"
+```
+
+Then trash only the allowlisted run and recipients:
+
+```bash
+MILADY_GMAIL_REAL_SWEEP=1 \
+MILADY_GMAIL_REAL_SWEEP_RUN_ALLOWLIST="$RUN_ID" \
+MILADY_GMAIL_REAL_SWEEP_RECIPIENT_ALLOWLIST=test-recipient@example.com \
+bun run lifeops:gmail:real-sweep -- --source lifeops --run-id "$RUN_ID" --execute
+```
+
+Direct Gmail fallback uses `GOOGLE_ACCESS_TOKEN`, the same exact run allowlist, and can discover messages by the per-run label plus subject/header run id:
+
+```bash
+GOOGLE_ACCESS_TOKEN=... \
+MILADY_GMAIL_REAL_SWEEP_RUN_ALLOWLIST="$RUN_ID" \
+bun run lifeops:gmail:real-sweep -- --source gmail --run-id "$RUN_ID"
+```
+
+Permanent deletion is intentionally a separate gate and should only be used after a successful dry-run:
+
+```bash
+GOOGLE_ACCESS_TOKEN=... \
+MILADY_GMAIL_REAL_SWEEP=1 \
+MILADY_GMAIL_REAL_SWEEP_DELETE=1 \
+MILADY_GMAIL_REAL_SWEEP_RUN_ALLOWLIST="$RUN_ID" \
+MILADY_GMAIL_REAL_SWEEP_RECIPIENT_ALLOWLIST=test-recipient@example.com \
+bun run lifeops:gmail:real-sweep -- --source gmail --run-id "$RUN_ID" --operation delete --execute
+```
 
 Safe pipeline:
 
@@ -165,22 +221,27 @@ Safe pipeline:
 
 Remaining implementation units:
 
-1. Add persistent Gmail fixture state transitions for repeated writes in one scenario.
-2. Implement scenario seeds and cleanup for `gmailInbox`, connector status, per-run labels, drafts, and sent messages.
-3. Split spam into a persisted review queue instead of only returning recommendation/review candidates.
-4. Add a Gmail sweeper for real-mode write tests with per-run labels, subject/header run IDs, and recipient allowlists.
+1. Add dynamic per-scenario Gmail fixture creation for `gmailInbox` instead of binding scenarios to static mock fixture IDs.
+2. Add LifeOps API label creation and custom Gmail send headers for cleanup parity with direct Gmail token sweeps.
+3. Expand the mock beyond app-used Gmail routes into retry/error edge cases and stricter Gmail request validation.
+4. Run the full live LLM Gmail scenario pack against the loopback mock in CI once LLM scenario credentials are available.
 
 Implemented in this slice:
 
 - Mock request ledger support in `test/mocks/scripts/start-mocks.ts`.
+- Stateful Gmail fixture transitions for repeated writes in one mock run, including message modify/batch modify, delete/trash/untrash, drafts, sends, threads, watch, and history.
 - Gmail write guard for scenario/test mode.
 - Strict Gmail send confirmation in action paths.
 - Gmail inbox management use cases: archive, trash, report spam, mark read/unread, apply/remove label, batch modify.
 - Gmail recommendation use case for read-only suggested actions.
 - Gmail-aware mock list/search pagination and thread fixtures for API-shape verification.
+- Strict scenario final-check validation for Gmail action arguments, approvals, mock request ledger writes, draft creation/sending/deletion, message send, batch modify, n8n dispatch evidence, and no-real-write proof.
+- `gmailInbox` seed validation and `gmailDeleteDrafts` cleanup execution against the loopback mock.
 - True unresponded-thread detection from sent/inbox thread chronology.
+- Persisted Gmail spam-review queue with idempotent upsert, list, status update, event ingestion, route/client coverage, and UI access through recommendations/actions.
 - LifeOps Gmail event contracts such as `gmail.message.received` and `gmail.thread.needs_response`.
 - LifeOps workflow action for n8n dispatch, keeping n8n as infrastructure and LifeOps as the policy layer.
+- Real-mode Gmail write sweeper with dry-run default, exact run allowlist, recipient allowlist, LifeOps search/manage cleanup, direct Gmail token fallback, direct per-run labels, and permanent-delete gate.
 
 ## Scenario Proof Standard
 
