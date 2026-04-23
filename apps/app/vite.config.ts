@@ -485,6 +485,7 @@ const WORKSPACE_CHUNK_GROUPS = [
     name: "workspace-app-core",
     markers: [
       "/eliza/packages/app-core/",
+      "/eliza/packages/typescript/",
       "/eliza/apps/app-companion/",
       "/eliza/apps/app-steward/",
       "/eliza/apps/app-task-coordinator/",
@@ -516,10 +517,6 @@ const WORKSPACE_CHUNK_GROUPS = [
   {
     name: "workspace-ui",
     markers: ["/eliza/packages/ui/"],
-  },
-  {
-    name: "workspace-typescript",
-    markers: ["/eliza/packages/typescript/"],
   },
 ] as const;
 
@@ -1762,9 +1759,9 @@ export default defineConfig({
     emptyOutDir: !desktopFastDist,
     sourcemap: desktopFastDist ? false : enableAppSourceMaps,
     target: "es2022",
-    // Keep warnings tight enough to catch regressions while allowing the
-    // current largest workspace chunks to build without noise.
-    chunkSizeWarningLimit: 3500,
+    // app-core and @elizaos/core share a real runtime cycle in the browser
+    // bundle, so they are intentionally emitted as one workspace chunk.
+    chunkSizeWarningLimit: 6000,
     minify: desktopFastDist ? false : undefined,
     cssMinify: desktopFastDist ? false : undefined,
     reportCompressedSize: !desktopFastDist,

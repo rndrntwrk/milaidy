@@ -13,8 +13,8 @@ import {
   initializeStorageBridge,
   isElectrobunRuntime,
 } from "@elizaos/app-core";
-import { CharacterEditor } from "@elizaos/app-core";
 import { PhoneCompanionApp } from "@elizaos/app-core";
+import { CharacterEditor } from "@elizaos/app-core/components/character/CharacterEditor";
 import type { BrandingConfig } from "@elizaos/app-core";
 import {
   type AppBootConfig,
@@ -59,8 +59,11 @@ import { AppProvider } from "@elizaos/app-core";
 import { applyUiTheme, loadUiTheme } from "@elizaos/app-core";
 import { Agent } from "@elizaos/capacitor-agent";
 import { Desktop } from "@elizaos/capacitor-desktop";
-import type { DeviceBridgeClient } from "@elizaos/capacitor-llama";
-import { StrictMode } from "react";
+import {
+  startDeviceBridgeClient,
+  type DeviceBridgeClient,
+} from "@elizaos/capacitor-llama";
+import { lazy, StrictMode, Suspense, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { CompanionShell } from "@elizaos/app-companion/ui";
 import {
@@ -123,6 +126,28 @@ import {
   type IosRuntimeConfig,
   resolveIosRuntimeConfig,
 } from "./ios-runtime";
+
+type CharacterEditorProps = {
+  sceneOverlay?: boolean;
+  inModal?: boolean;
+  onHeaderActionsChange?: (actions: ReactNode | null) => void;
+};
+
+const LazyCharacterEditor = lazy(() =>
+  import("@elizaos/app-core/components/character/CharacterEditor").then(
+    (module) => ({
+      default: module.CharacterEditor,
+    }),
+  ),
+);
+
+function CharacterEditor(props: CharacterEditorProps) {
+  return (
+    <Suspense fallback={null}>
+      <LazyCharacterEditor {...props} />
+    </Suspense>
+  );
+}
 
 declare global {
   interface Window {
@@ -738,10 +763,7 @@ async function initializeMobileDeviceBridge(): Promise<void> {
   if (!agentUrl) return;
 
   try {
-    const [{ startDeviceBridgeClient }, deviceId] = await Promise.all([
-      import("@elizaos/capacitor-llama"),
-      getOrCreateDeviceBridgeId(),
-    ]);
+    const deviceId = await getOrCreateDeviceBridgeId();
     mobileDeviceBridgeClient = startDeviceBridgeClient({
       agentUrl,
       ...(runtimeConfig.deviceBridgeToken
