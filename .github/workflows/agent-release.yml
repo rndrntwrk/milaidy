@@ -115,21 +115,16 @@ jobs:
             // ── Step 2: Trust check ─────────────────────────────────
             const { computeTrustScore, DEFAULT_CONFIG, expandState } = require('./.github/trust-scoring.cjs');
 
+            const isCanonicalRepo = context.repo.owner === 'milady-ai';
+            const isForkOwner = !isCanonicalRepo && actor === context.repo.owner;
+
             let isOrgMember = false;
             try {
               const { status } = await github.rest.orgs.checkMembershipForUser({ org: context.repo.owner, username: actor });
               isOrgMember = status === 204 || status === 302;
             } catch (e) {}
 
-            let hasRepoWrite = false;
-            try {
-              const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
-                owner: context.repo.owner, repo: context.repo.repo, username: actor,
-              });
-              hasRepoWrite = ['admin', 'maintain', 'write'].includes(data.permission);
-            } catch (e) { core.info(`Repo permission unavailable: ${e.message}`); }
-
-            let allowed = isOrgMember || hasRepoWrite;
+            let allowed = isOrgMember || isForkOwner;
             if (!allowed) {
               let trustTier = 'untested', trustScore = DEFAULT_CONFIG.initialScore;
               try {
@@ -153,7 +148,7 @@ jobs:
               }
             }
 
-            core.info(`Trust: allowed=${allowed} (org=${isOrgMember}, repoWrite=${hasRepoWrite})`);
+            core.info(`Trust: allowed=${allowed} (org=${isOrgMember}, forkOwner=${isForkOwner})`);
             core.setOutput('proceed', allowed ? 'true' : 'false');
 
   # ── 2. Resolve version ─────────────────────────────────────────────
@@ -304,6 +299,25 @@ jobs:
           no-vision-deps: "true"
       - name: Restore legacy electrobun compatibility path
         run: node scripts/ensure-legacy-electrobun-compat.mjs
+      - name: Install Android NDK
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;29.0.13113456"
+      - name: Align Android Gradle wrapper
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+          const wrapper = "eliza/packages/app-core/platforms/android/gradle/wrapper/gradle-wrapper.properties";
+          if (!fs.existsSync(wrapper)) {
+            throw new Error(`Missing Android Gradle wrapper template at ${wrapper}`);
+          }
+          const raw = fs.readFileSync(wrapper, "utf8");
+          const next = raw.replace(
+            /distributionUrl=.*\n/,
+            "distributionUrl=https\\://services.gradle.org/distributions/gradle-9.4.1-all.zip\n",
+          );
+          fs.writeFileSync(wrapper, next);
+          NODE
       - name: Prepare Android project
         run: node eliza/packages/app-core/scripts/run-mobile-build.mjs android
       - name: Build AAB
@@ -770,4 +784,3 @@ jobs:
       push_image: true
       source_sha: ${{ github.sha }}
     secrets: inherit
-
