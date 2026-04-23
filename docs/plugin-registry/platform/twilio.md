@@ -50,7 +50,7 @@ export TWILIO_PHONE_NUMBER=YOUR_PHONE_NUMBER
 |-------|----------|-------------|
 | `accountSid` | Yes | Twilio Account SID |
 | `authToken` | Yes | Twilio Auth Token |
-| `phoneNumber` | Yes | Twilio phone number (E.164 format) |
+| `phoneNumber` | No | Twilio phone number (E.164 format) |
 | `enabled` | No | Set `false` to disable (default: `true`) |
 
 ## Environment Variables

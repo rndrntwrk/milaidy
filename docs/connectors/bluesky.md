@@ -53,8 +53,8 @@ Unlike the auto-enabled connectors (Discord, Telegram, etc.), Bluesky is a **reg
 | `BLUESKY_ENABLE_DMS` | No | Enable processing of direct messages via the chat.bsky API |
 | `BLUESKY_POLL_INTERVAL` | No | Polling interval in seconds (default: `60`) |
 | `BLUESKY_POST_IMMEDIATELY` | No | Post immediately on startup instead of waiting |
-| `BLUESKY_POST_INTERVAL_MIN` | No | Minimum interval in seconds between automated posts (default: `1800`) |
-| `BLUESKY_POST_INTERVAL_MAX` | No | Maximum interval in seconds between automated posts (default: `3600`) |
+| `BLUESKY_POST_INTERVAL_MIN` | No | Minimum interval in seconds between automated posts (default: `1800`, i.e. 30 minutes) |
+| `BLUESKY_POST_INTERVAL_MAX` | No | Maximum interval in seconds between automated posts (default: `3600`, i.e. 60 minutes) |
 | `BLUESKY_MAX_POST_LENGTH` | No | Maximum post character length (default: `300`) |
 | `BLUESKY_ACTION_INTERVAL` | No | Interval in seconds between action-processing cycles (default: `120`) |
 | `BLUESKY_ENABLE_ACTION_PROCESSING` | No | Enable automated action processing (default: `true`) |

@@ -84,7 +84,7 @@ Electrobun may log **`[WebGPU Browser] macOS …`** using **`os.release()`** (Da
 - If WebGPU is hotter on your Mac than WebGL for this workload, set the renderer override in **localStorage** key **`eliza.avatarRenderer`** to **`webgl`** (or **`webgpu`** to experiment the other way). **Why:** path differs by machine and OS version; the desktop webview defaults WebGPU in the Electrobun runtime — sometimes the fallback is kinder to thermals.
 - In dev, disable the **screenshot** and **aggregated console** hooks if you do not use them (`MILADY_DESKTOP_SCREENSHOT_SERVER`, `MILADY_DESKTOP_DEV_LOG`).
 
-**Code:** `packages/app-core/src/hooks/useDocumentVisibility.ts`, `VectorBrowserView.tsx` (3D graph), `ElizaCloudDashboard.tsx`, `StreamView.tsx`, `stream/StreamVoiceConfig.tsx`, `GameView.tsx`, `ChatView.tsx` (game-modal carryover timer), `FineTuningView.tsx`, `state/AppContext.tsx` (cloud credits interval), `VrmViewer.tsx`, `VrmEngine.ts`, `vrm-desktop-energy.ts`.
+**Code:** `eliza/packages/app-core/src/hooks/useDocumentVisibility.ts`, `VectorBrowserView.tsx` (3D graph), `ElizaCloudDashboard.tsx`, `StreamView.tsx`, `stream/StreamVoiceConfig.tsx`, `GameView.tsx`, `ChatView.tsx` (game-modal carryover timer), `FineTuningView.tsx`, `state/AppContext.tsx` (cloud credits interval), `VrmViewer.tsx`, `VrmEngine.ts`, `vrm-desktop-energy.ts`.
 
 ## Desktop Runtime Modes
 

@@ -53,8 +53,8 @@ export BLUESKY_PASSWORD=YOUR_APP_PASSWORD
 |-------|----------|-------------|
 | `enabled` | No | Set `false` to disable (default: `true`) |
 | `postEnable` | No | Enable automated posting |
-| `postIntervalMin` | No | Minimum minutes between posts (default: `90`) |
-| `postIntervalMax` | No | Maximum minutes between posts (default: `180`) |
+| `postIntervalMin` | No | Minimum minutes between posts (default: `30`) |
+| `postIntervalMax` | No | Maximum minutes between posts (default: `60`) |
 | `dryRun` | No | Simulate operations without executing them |
 
 ## Environment Variables
@@ -67,7 +67,15 @@ export BLUESKY_PASSWORD=YOUR_APP_PASSWORD
 | `BLUESKY_SERVICE` | No | Bluesky PDS instance URL |
 | `BLUESKY_DRY_RUN` | No | Set to `true` for testing without posting |
 | `BLUESKY_ENABLE_DMS` | No | Enable direct message processing |
-| `BLUESKY_POLL_INTERVAL` | No | Polling interval in seconds |
+| `BLUESKY_POLL_INTERVAL` | No | Polling interval in seconds (default: `60`) |
+| `BLUESKY_ENABLE_POSTING` | No | Enable or disable post creation (default: `true`) |
+| `BLUESKY_POST_IMMEDIATELY` | No | Post immediately on startup |
+| `BLUESKY_POST_INTERVAL_MIN` | No | Minimum seconds between posts (default: `1800`) |
+| `BLUESKY_POST_INTERVAL_MAX` | No | Maximum seconds between posts (default: `3600`) |
+| `BLUESKY_MAX_POST_LENGTH` | No | Maximum post character length (default: `300`) |
+| `BLUESKY_ACTION_INTERVAL` | No | Seconds between action cycles (default: `120`) |
+| `BLUESKY_ENABLE_ACTION_PROCESSING` | No | Enable action processing (default: `true`) |
+| `BLUESKY_MAX_ACTIONS_PROCESSING` | No | Max actions per batch (default: `5`) |
 
 ## Related
 
