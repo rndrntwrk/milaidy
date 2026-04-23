@@ -1,13 +1,11 @@
 import { ErrorBoundary } from "@elizaos/app-core";
 import "@elizaos/app-core/styles/styles.css";
 import "@elizaos/app-core/styles/brand-gold.css";
-import "@elizaos/app-core/platform/native-plugin-entrypoints";
 
 import { App as CapacitorApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import { Keyboard } from "@capacitor/keyboard";
 import { Preferences } from "@capacitor/preferences";
-import { App } from "@elizaos/app-core";
 import { client } from "@elizaos/app-core";
 import {
   initializeCapacitorBridge,
@@ -119,6 +117,7 @@ import {
 } from "./app-config";
 import { APP_ENV_ALIASES, APP_ENV_PREFIX } from "./brand-env";
 import { APP_CHARACTER_CATALOG } from "./character-catalog";
+import { App } from "../../../eliza/packages/app-core/src/App";
 import {
   apiBaseToDeviceBridgeUrl,
   type IosRuntimeConfig,
@@ -322,6 +321,7 @@ async function initializePlatform(): Promise<void> {
   initializeCapacitorBridge();
 
   if (isIOS || isAndroid) {
+    await import("@elizaos/app-core/platform/native-plugin-entrypoints");
     await initializeKeyboard();
     initializeAppLifecycle();
     initializeMobileRuntimeModeListener();
