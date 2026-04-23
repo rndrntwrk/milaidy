@@ -28,9 +28,10 @@ export XAI_API_KEY=xai-...
 |---------------------|----------|-------------|
 | `XAI_API_KEY` | Yes* | xAI API key from [console.x.ai](https://console.x.ai) |
 | `GROK_API_KEY` | Yes* | Alias that also triggers auto-enable |
-| `XAI_BASE_URL` | No | Custom base URL for the xAI API |
-| `XAI_SMALL_MODEL` | No | Override the small model identifier |
-| `XAI_EMBEDDING_MODEL` | No | Override the embedding model identifier |
+| `XAI_MODEL` | No | Override the default model (default: `grok-3`) |
+| `XAI_BASE_URL` | No | Custom base URL for the xAI API (default: `https://api.x.ai/v1`) |
+| `XAI_SMALL_MODEL` | No | Override the small model identifier (default: `grok-3-mini`) |
+| `XAI_EMBEDDING_MODEL` | No | Override the embedding model identifier (default: `grok-embedding`) |
 
 \* Either `XAI_API_KEY` or `GROK_API_KEY` activates the plugin.
 

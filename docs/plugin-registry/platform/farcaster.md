@@ -103,6 +103,18 @@ AgentRuntime processes with Farcaster context
 Response posted via Neynar API
 ```
 
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `FARCASTER_NEYNAR_API_KEY` | Yes | API key for the Neynar Farcaster API |
+| `FARCASTER_SIGNER_UUID` | Yes | UUID of the Neynar signer for the agent account |
+| `FARCASTER_FID` | Yes | Farcaster ID (user identifier) for the agent |
+| `FARCASTER_HUB_URL` | No | Base URL for the Farcaster hub |
+| `FARCASTER_MODE` | No | Operation mode: `polling` or `webhook` |
+| `FARCASTER_DRY_RUN` | No | Enable dry run mode (no actual posts) |
+| `FARCASTER_POLL_INTERVAL` | No | Polling interval in seconds |
+
 ## Autonomous Casting
 
 When configured, the agent posts casts autonomously at random intervals. The LLM generates cast content based on the character's personality and current context.

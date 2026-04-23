@@ -66,8 +66,16 @@ export BLUESKY_PASSWORD=YOUR_APP_PASSWORD
 | `BLUESKY_ENABLED` | No | Set to `true` to enable |
 | `BLUESKY_SERVICE` | No | Bluesky PDS instance URL |
 | `BLUESKY_DRY_RUN` | No | Set to `true` for testing without posting |
+| `BLUESKY_ENABLE_POSTING` | No | Enable or disable post creation |
 | `BLUESKY_ENABLE_DMS` | No | Enable direct message processing |
 | `BLUESKY_POLL_INTERVAL` | No | Polling interval in seconds |
+| `BLUESKY_ACTION_INTERVAL` | No | Interval in seconds between action-processing cycles |
+| `BLUESKY_MAX_POST_LENGTH` | No | Maximum characters per post |
+| `BLUESKY_POST_IMMEDIATELY` | No | Post immediately instead of waiting for schedule |
+| `BLUESKY_POST_INTERVAL_MIN` | No | Minimum interval in seconds between automated posts |
+| `BLUESKY_POST_INTERVAL_MAX` | No | Maximum interval in seconds between automated posts |
+| `BLUESKY_MAX_ACTIONS_PROCESSING` | No | Maximum actions to process in a single batch |
+| `BLUESKY_ENABLE_ACTION_PROCESSING` | No | Enable or disable automated action processing |
 
 ## Related
 

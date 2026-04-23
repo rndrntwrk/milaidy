@@ -53,6 +53,10 @@ export GITHUB_REPO=YOUR_GITHUB_REPO
 | `owner` | No | Default GitHub repository owner (username or organization) |
 | `repo` | No | Default GitHub repository name |
 | `branch` | No | Default branch name (defaults to `main`) |
+| `appId` | No | GitHub App ID for app-based authentication |
+| `appPrivateKey` | No | GitHub App private key for app-based authentication |
+| `installationId` | No | GitHub App installation ID |
+| `webhookSecret` | No | Secret for validating GitHub webhook payloads |
 | `enabled` | No | Set `false` to disable (default: `true`) |
 
 ## Environment Variables

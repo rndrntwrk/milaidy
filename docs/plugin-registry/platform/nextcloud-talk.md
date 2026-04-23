@@ -38,18 +38,28 @@ milady plugins install nextcloud-talk
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `connectors.nextcloud-talk` | Yes | Config block for Nextcloud Talk |
 | `enabled` | No | Set `false` to disable (default: `true`) |
 
-```json
-{
-  "connectors": {
-    "nextcloud-talk": {
-      "enabled": true
-    }
-  }
-}
-```
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `NEXTCLOUD_URL` | No | Nextcloud server URL |
+| `NEXTCLOUD_BOT_SECRET` | No | Bot secret for authentication |
+| `NEXTCLOUD_WEBHOOK_HOST` | No | Host address for webhook listener |
+| `NEXTCLOUD_WEBHOOK_PORT` | No | Port for webhook listener |
+| `NEXTCLOUD_WEBHOOK_PATH` | No | Webhook endpoint path |
+| `NEXTCLOUD_WEBHOOK_PUBLIC_URL` | No | Public-facing webhook URL |
+| `NEXTCLOUD_ALLOWED_ROOMS` | No | Comma-separated list of allowed room IDs |
+| `NEXTCLOUD_ENABLED` | No | Set to `true` to enable |
+
+## Features
+
+- Room-based messaging
+- DM and group conversation support
+- Self-hosted collaboration platform integration
+- Webhook-based message delivery
+- Configurable room allowlists
 
 ## Related
 

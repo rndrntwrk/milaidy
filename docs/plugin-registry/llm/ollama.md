@@ -23,11 +23,11 @@ brew install ollama
 ### 2. Pull a Model
 
 ```bash
+ollama pull gemma3
+# or
 ollama pull llama3.3
 # or
 ollama pull mistral
-# or
-ollama pull gemma3:12b
 ```
 
 ### 3. Start Ollama
@@ -56,11 +56,12 @@ export OLLAMA_BASE_URL=http://localhost:11434
 
 | Environment Variable | Required | Description |
 |---------------------|----------|-------------|
-| `OLLAMA_API_ENDPOINT` | Yes | Ollama server URL (e.g., `http://localhost:11434`) |
+| `OLLAMA_API_ENDPOINT` | Yes | Ollama server URL (default: `http://localhost:11434/api`) |
 | `OLLAMA_BASE_URL` | No | Alias that triggers auto-enable (resolved to `OLLAMA_API_ENDPOINT`) |
-| `OLLAMA_SMALL_MODEL` | No | Override the small model identifier |
-| `OLLAMA_LARGE_MODEL` | No | Override the large model identifier |
-| `OLLAMA_EMBEDDING_MODEL` | No | Override the embedding model identifier |
+| `OLLAMA_SMALL_MODEL` | No | Override the small model identifier (default: `gemma3:latest`) |
+| `OLLAMA_MEDIUM_MODEL` | No | Override the medium model identifier |
+| `OLLAMA_LARGE_MODEL` | No | Override the large model identifier (default: `gemma3:latest`) |
+| `OLLAMA_EMBEDDING_MODEL` | No | Override the embedding model identifier (default: `nomic-embed-text:latest`) |
 
 ### milady.json Example
 
@@ -99,8 +100,8 @@ Browse all available models at [ollama.com/library](https://ollama.com/library).
 
 | elizaOS Model Type | Default Ollama Model |
 |-------------------|---------------------|
-| `TEXT_SMALL` | `llama3.2` (3B) |
-| `TEXT_LARGE` | `llama3.3` (70B) |
+| `TEXT_SMALL` | `gemma3:latest` |
+| `TEXT_LARGE` | `gemma3:latest` |
 | `TEXT_EMBEDDING` | `nomic-embed-text` |
 | `IMAGE_DESCRIPTION` | `llava` (if installed) |
 

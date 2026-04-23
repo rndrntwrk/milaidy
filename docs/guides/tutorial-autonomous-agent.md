@@ -66,12 +66,12 @@ You can also enable and configure autonomous mode programmatically using the Mil
 <CodeGroup>
 ```bash curl
 # Enable autonomy
-curl -X POST http://localhost:2138/api/agent/autonomy \
+curl -X POST http://localhost:31337/api/agent/autonomy \
   -H "Content-Type: application/json" \
   -d '{"enabled": true}'
 
 # Create a trigger for scheduled execution
-curl -X POST http://localhost:2138/api/triggers \
+curl -X POST http://localhost:31337/api/triggers \
   -H "Content-Type: application/json" \
   -d '{
     "displayName": "Hourly Check",
@@ -276,7 +276,7 @@ You can disable autonomous mode at any time through the dashboard or API:
 
 <CodeGroup>
 ```bash curl
-curl -X POST http://localhost:2138/api/agent/autonomy \
+curl -X POST http://localhost:31337/api/agent/autonomy \
   -H "Content-Type: application/json" \
   -d '{"enabled": false}'
 ```

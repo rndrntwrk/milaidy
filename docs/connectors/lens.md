@@ -14,9 +14,11 @@ The Lens connector is an external elizaOS plugin that bridges your agent to the 
 
 | Field | Value |
 |-------|-------|
-| Package | `@elizaos/plugin-lens` |
+| Package | `@elizaos/plugin-lens` (not currently in the plugin registry -- bundled separately) |
 | Config key | `connectors.lens` |
 | Auto-enable trigger | `apiKey`, `token`, or `botToken` |
+
+> **Note:** The Lens plugin is not published to the `@elizaos` plugin registry. It ships as a bundled or separately sourced package. Check your installation for availability.
 
 ## Minimal Configuration
 

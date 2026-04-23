@@ -27,6 +27,8 @@ milady plugins install evm
 | `ALCHEMY_API_KEY` | No | Alchemy API key for multi-chain RPC (also the primary auto-enable trigger) |
 | `INFURA_API_KEY` | No | Infura API key for RPC |
 | `ANKR_API_KEY` | No | Ankr API key for RPC |
+| `SEPOLIA_RPC_URL` | No | RPC URL for Sepolia testnet (default: `https://ethereum-sepolia-rpc.publicnode.com`) |
+| `BASE_SEPOLIA_RPC_URL` | No | RPC URL for Base Sepolia testnet (default: `https://sepolia.base.org`) |
 
 ```json
 {

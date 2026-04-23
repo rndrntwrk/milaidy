@@ -30,8 +30,8 @@ export GOOGLE_GENERATIVE_AI_API_KEY=AIza...
 |---------------------|----------|-------------|
 | `GOOGLE_GENERATIVE_AI_API_KEY` | Yes* | Google AI Studio API key |
 | `GOOGLE_API_KEY` | Yes* | Alias (also triggers auto-enable) |
-| `GOOGLE_SMALL_MODEL` | No | Override the small model identifier |
-| `GOOGLE_LARGE_MODEL` | No | Override the large model identifier |
+| `GOOGLE_SMALL_MODEL` | No | Override the small model identifier (default: `gemini-2.0-flash-001`) |
+| `GOOGLE_LARGE_MODEL` | No | Override the large model identifier (default: `gemini-2.0-flash-001`) |
 | `GOOGLE_EMBEDDING_MODEL` | No | Override the embedding model identifier |
 | `GOOGLE_IMAGE_MODEL` | No | Override the image generation model |
 
@@ -82,10 +82,10 @@ Get your API key from [aistudio.google.com](https://aistudio.google.com).
 
 | elizaOS Model Type | Gemini Model |
 |-------------------|-------------|
-| `TEXT_SMALL` | `gemini-2.5-flash` |
-| `TEXT_LARGE` | `gemini-2.5-pro` |
+| `TEXT_SMALL` | `gemini-2.0-flash-001` |
+| `TEXT_LARGE` | `gemini-2.0-flash-001` |
 | `TEXT_EMBEDDING` | `text-embedding-004` |
-| `IMAGE_DESCRIPTION` | `gemini-2.5-flash` (vision) |
+| `IMAGE_DESCRIPTION` | `gemini-2.0-flash-001` (vision) |
 
 ## Features
 

@@ -54,10 +54,20 @@ export LINE_CHANNEL_SECRET=YOUR_CHANNEL_SECRET
 
 ## Environment Variables
 
-```bash
-export LINE_CHANNEL_ACCESS_TOKEN=YOUR_CHANNEL_ACCESS_TOKEN
-export LINE_CHANNEL_SECRET=YOUR_CHANNEL_SECRET
-```
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `LINE_CHANNEL_ACCESS_TOKEN` | Yes | LINE Messaging API channel access token |
+| `LINE_CHANNEL_SECRET` | Yes | LINE channel secret for webhook verification |
+| `LINE_ENABLED` | No | Set to `true` to enable |
+| `LINE_DM_POLICY` | No | DM policy (e.g., `allow`, `deny`, `allowlist`) |
+| `LINE_WEBHOOK_PATH` | No | Webhook endpoint path |
+
+## Features
+
+- Bot messaging and customer conversations
+- Rich message types (text, sticker, image, video)
+- Group chat support
+- Webhook-based event handling
 
 ## Related
 
