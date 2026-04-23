@@ -204,6 +204,132 @@ describe("useCompanionStageOperator stream health", () => {
     expect(status?.props["data-state"]).toBe("live");
   });
 
+  it("never flashes degraded during a cold-boot transition from starting to live", async () => {
+    // Locks in the cold-boot regression fix. Before this patch, any running
+    // state with `requiredOutputsReady === false` was classified as degraded,
+    // so the orange pill flashed for the whole launch window. The contract
+    // now: during starting → live, `data-degraded` stays "false" on every
+    // poll, and the visual transitions idle → starting → live.
+    mockStreamStatus
+      .mockResolvedValueOnce({
+        running: true,
+        ffmpegAlive: false,
+        state: "starting",
+        requiredOutputsReady: false,
+        uptime: 1,
+        frameCount: 0,
+        destination: { id: "twitch", name: "Twitch" },
+      })
+      .mockResolvedValueOnce({
+        running: true,
+        ffmpegAlive: true,
+        state: "live",
+        requiredOutputsReady: true,
+        uptime: 6,
+        frameCount: 180,
+        destination: { id: "twitch", name: "Twitch" },
+      });
+
+    const operatorRef: {
+      current: ReturnType<typeof useCompanionStageOperator> | null;
+    } = { current: null };
+    let tree: TestRenderer.ReactTestRenderer | undefined;
+    await act(async () => {
+      tree = TestRenderer.create(
+        <Harness
+          onOperator={(operator) => {
+            operatorRef.current = operator;
+          }}
+        />,
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const first = tree?.root.findByProps({ "data-testid": "operator-stream" });
+    expect(first?.props["data-starting"]).toBe("true");
+    expect(first?.props["data-degraded"]).toBe("false");
+    expect(first?.props["data-live"]).toBe("false");
+
+    await act(async () => {
+      await operatorRef.current?.stream.refreshStatus();
+      await Promise.resolve();
+    });
+
+    const second = tree?.root.findByProps({ "data-testid": "operator-stream" });
+    expect(second?.props["data-starting"]).toBe("false");
+    expect(second?.props["data-degraded"]).toBe("false");
+    expect(second?.props["data-live"]).toBe("true");
+  });
+
+  it("falls unknown running phases through to degraded, not live", async () => {
+    // Server is supposed to normalize unknown upstream phases to "degraded"
+    // before returning, but the client keeps its own safe fallback for
+    // defense in depth: any running state that isn't live/starting lands in
+    // degraded. Simulate a server-side regression that leaks an unknown
+    // phase — the client must not light up LIVE.
+    mockStreamStatus.mockResolvedValue({
+      running: true,
+      ffmpegAlive: true,
+      state: "reconnecting" as unknown as
+        | "idle"
+        | "starting"
+        | "live"
+        | "degraded",
+      requiredOutputsReady: false,
+      uptime: 3,
+      frameCount: 90,
+      destination: { id: "twitch", name: "Twitch" },
+    });
+
+    let tree: TestRenderer.ReactTestRenderer | undefined;
+    await act(async () => {
+      tree = TestRenderer.create(<Harness />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const status = tree?.root.findByProps({ "data-testid": "operator-stream" });
+    expect(status?.props["data-live"]).toBe("false");
+    expect(status?.props["data-starting"]).toBe("false");
+    expect(status?.props["data-degraded"]).toBe("true");
+    // The client-side normalization collapses unknowns into "degraded"
+    // rather than leaking the raw value.
+    expect(status?.props["data-state"]).toBe("degraded");
+  });
+
+  it("does not report live when the server says live but ffmpegAlive disagrees", async () => {
+    // Edge case: distributor passes through `state: "live"` but no platform
+    // is actually delivering (ffmpegAlive: false on the client view). The
+    // old client would compute nextLive=false, nextStarting=false,
+    // nextDegraded=false, and render the IDLE visual — a silent lie. The
+    // new contract: if the two signals disagree we surface DEGRADED so the
+    // operator sees a warning instead of a clean "Go Live" button over a
+    // dead pipe.
+    mockStreamStatus.mockResolvedValue({
+      running: true,
+      ffmpegAlive: false,
+      state: "live",
+      requiredOutputsReady: false,
+      uptime: 90,
+      frameCount: 2700,
+      destination: { id: "twitch", name: "Twitch" },
+    });
+
+    let tree: TestRenderer.ReactTestRenderer | undefined;
+    await act(async () => {
+      tree = TestRenderer.create(<Harness />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const status = tree?.root.findByProps({ "data-testid": "operator-stream" });
+    expect(status?.props["data-live"]).toBe("false");
+    expect(status?.props["data-starting"]).toBe("false");
+    expect(status?.props["data-degraded"]).toBe("true");
+    expect(status?.props["data-state"]).toBe("degraded");
+  });
+
   it("returns a partial result when camera launch starts but delivery is not yet live", async () => {
     const operatorRef: {
       current: ReturnType<typeof useCompanionStageOperator> | null;

@@ -303,7 +303,14 @@ export function useCompanionStageOperator() {
       }
       try {
         const status = await client.streamStatus();
-        const nextState =
+        // The server normalizes `state` to a closed 4-bucket union
+        // (idle | starting | live | degraded) before returning — any
+        // unknown upstream phase is mapped to "degraded" there, not
+        // passed through. We still handle `state` being absent or
+        // (defensively) something other than the known values: any
+        // running-but-unclassified case falls through to "degraded",
+        // matching the server's safe-fallback policy.
+        const rawState =
           typeof status.state === "string" && status.state.trim().length > 0
             ? status.state.trim().toLowerCase()
             : status.running
@@ -311,22 +318,29 @@ export function useCompanionStageOperator() {
                 ? "live"
                 : "starting"
               : "idle";
-        // The server returns an authoritative `state` string — keep these
-        // three buckets strictly mutually exclusive on the client so a
-        // cold boot ("starting") doesn't render the DEGRADED visual. The
-        // old code folded `requiredOutputsReady === false` into `degraded`,
-        // which flashed orange on every launch. `requiredOutputsReady` is
-        // now only a signal the server uses to pick between "starting" and
-        // "degraded"; we trust its decision.
-        const nextStarting =
-          status.running === true && nextState === "starting";
-        const nextDegraded =
-          status.running === true && nextState === "degraded";
-        const nextLive =
-          status.running === true &&
-          status.ffmpegAlive === true &&
-          !nextStarting &&
-          !nextDegraded;
+        const isRunning = status.running === true;
+        // Contract: isStarting / isLive / isDegraded are strictly mutually
+        // exclusive and together cover every running state. isLive requires
+        // BOTH the server to say "live" AND the client's ffmpegAlive check
+        // to agree — if the distributor reports live but no platform is
+        // actually delivering, we surface DEGRADED rather than lying with
+        // a green LIVE button. Any running state that isn't live and isn't
+        // starting is degraded — covers known "degraded" plus any string
+        // we didn't anticipate.
+        const isStarting = isRunning && rawState === "starting";
+        const isLive =
+          isRunning && rawState === "live" && status.ffmpegAlive === true;
+        const isDegraded = isRunning && !isStarting && !isLive;
+        const nextState = !isRunning
+          ? "idle"
+          : isLive
+            ? "live"
+            : isStarting
+              ? "starting"
+              : "degraded";
+        const nextStarting = isStarting;
+        const nextDegraded = isDegraded;
+        const nextLive = isLive;
         setStreamCapabilityPresent(true);
         setStreamCapabilityResolved(true);
         setStreamAvailable(true);

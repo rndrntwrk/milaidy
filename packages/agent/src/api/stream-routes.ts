@@ -467,6 +467,29 @@ async function applyConfiguredStream555Destinations(
   };
 }
 
+/**
+ * Narrow, closed union of stream-health states exposed to the client.
+ * Upstream distributors may emit arbitrary `phase` strings; we map them
+ * down to these four before returning so the client never has to deal
+ * with an unknown bucket. Any running state we don't recognize lands in
+ * `"degraded"` — the safe fallback — rather than silently passing
+ * through and misclassifying as live.
+ */
+type StreamHealthState = "idle" | "starting" | "live" | "degraded";
+
+const KNOWN_STREAM_HEALTH_STATES: ReadonlySet<StreamHealthState> = new Set([
+  "idle",
+  "starting",
+  "live",
+  "degraded",
+]);
+
+function isKnownStreamHealthState(
+  value: string,
+): value is StreamHealthState {
+  return KNOWN_STREAM_HEALTH_STATES.has(value as StreamHealthState);
+}
+
 function mapStream555StatusToHealth(status?: Stream555StatusLike | null): {
   running: boolean;
   ffmpegAlive: boolean;
@@ -477,7 +500,7 @@ function mapStream555StatusToHealth(status?: Stream555StatusLike | null): {
   audioSource: string;
   inputMode: "screen";
   distributor?: string | null;
-  state?: string;
+  state?: StreamHealthState;
   requiredOutputsReady?: boolean;
   statusReason?: string | null;
   blockedPlatforms?: Array<{
@@ -525,10 +548,39 @@ function mapStream555StatusToHealth(status?: Stream555StatusLike | null): {
     typeof startTime === "number" && Number.isFinite(startTime) && startTime > 0
       ? Math.max(0, Math.floor((Date.now() - startTime) / 1000))
       : 0;
+  // Normalize the stream-health state to the closed StreamHealthState union:
+  //   - Not running → "idle".
+  //   - Running + an upstream phase we recognize → pass through.
+  //   - Running + an upstream phase we don't recognize → "degraded"
+  //     (safe fallback — we'd rather the operator see a non-idle warning
+  //     than have an unknown phase like "paused" / "handshake" masquerade
+  //     as "live" on the client).
+  //   - Running + no upstream phase → derive from our own signals:
+  //     requiredOutputsReady → "live", ffmpegAlive-only → "degraded",
+  //     else → "starting".
+  //
+  // Additionally guard the "live" case on ffmpegAlive — if the upstream
+  // distributor says live but no platform is actually delivering, prefer
+  // "degraded" so the client doesn't render a green/LIVE visual over a
+  // silent pipe. This is the server-side counterpart to the client's
+  // strict mutual-exclusion contract.
   const phase = status?.phase?.trim().toLowerCase() || "";
-  const state = running
-    ? phase || (status?.requiredOutputsReady ? "live" : ffmpegAlive ? "degraded" : "starting")
-    : "idle";
+  let state: StreamHealthState;
+  if (!running) {
+    state = "idle";
+  } else if (phase) {
+    if (isKnownStreamHealthState(phase)) {
+      state = phase === "live" && !ffmpegAlive ? "degraded" : phase;
+    } else {
+      state = "degraded";
+    }
+  } else if (status?.requiredOutputsReady) {
+    state = ffmpegAlive ? "live" : "degraded";
+  } else if (ffmpegAlive) {
+    state = "degraded";
+  } else {
+    state = "starting";
+  }
   const blockedPlatforms = Array.isArray(status?.blockedPlatforms)
     ? status.blockedPlatforms
         .filter((entry): entry is NonNullable<typeof entry> & { platform: string } =>

@@ -6197,7 +6197,12 @@ export class MiladyClient {
     inputMode: string | null;
     destination?: { id: string; name: string } | null;
     distributor?: string | null;
-    state?: string;
+    /**
+     * Closed union exposed by the server — upstream distributor phases
+     * are normalized to these four before returning, so the client can
+     * switch exhaustively.
+     */
+    state?: "idle" | "starting" | "live" | "degraded";
     requiredOutputsReady?: boolean;
     statusReason?: string | null;
     blockedPlatforms?: Array<{
