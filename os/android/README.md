@@ -11,6 +11,7 @@ AOSP builds must run on a Linux x86_64 builder with KVM available. Keep the Andr
 ```bash
 bun install
 bun run build:android:system
+bun run miladyos:validate
 
 repo init --partial-clone -b android-latest-release \
   -u https://android.googlesource.com/platform/manifest
@@ -27,9 +28,17 @@ launch_cvd --daemon
 
 `bun run build:android:system` stages `vendor/milady/apps/Milady/Milady.apk`. `bun run miladyos:sync` copies this product layer into the AOSP checkout as `vendor/milady`.
 
+`bun run miladyos:validate` checks the staged APK package, label, permissions, launcher/dialer/SMS/phone-service manifest entries, product makefile, Soong prebuilt, permission XML, and overlay XML. When an AOSP checkout is available, run `bun run miladyos:validate -- --aosp-root /path/to/aosp` to also verify the local AOSP source still uses `framework-res` strings for Dialer/SMS/Assistant role defaults. Current AOSP `roles.xml` does not define a `HOME` default-holder resource; Home falls back through package-manager home resolution, so Milady is made Home by being the installed HOME activity while the standard launchers are overridden.
+
+Primary AOSP source points used for the role wiring:
+
+- `packages/modules/Permission/PermissionController/res/xml/roles.xml`
+- `frameworks/base/core/res/res/values/config.xml`
+
 ## Verification
 
 ```bash
+bun run miladyos:validate
 adb shell cmd role get-role-holders android.app.role.HOME
 adb shell cmd role get-role-holders android.app.role.DIALER
 adb shell cmd role get-role-holders android.app.role.SMS

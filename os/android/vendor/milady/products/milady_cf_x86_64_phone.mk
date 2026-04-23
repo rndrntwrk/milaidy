@@ -12,8 +12,7 @@ PRODUCT_PACKAGES += \
     privapp-permissions-com.miladyai.milady.xml
 
 PRODUCT_PACKAGE_OVERLAYS += \
-    vendor/milady/overlays/framework-res \
-    vendor/milady/overlays/PermissionController
+    vendor/milady/overlays/framework-res
 
 PRODUCT_ARTIFACT_PATH_REQUIREMENT_ALLOWED_LIST += \
     system/priv-app/Milady/% \
