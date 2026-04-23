@@ -68,6 +68,35 @@ describe("Google mock Gmail fidelity surface", () => {
       labels.labels?.find((label) => label.name === "milady-e2e")?.type,
     ).toBe("user");
 
+    const inboxList = await fetch(
+      `${baseUrl}/gmail/v1/users/me/messages?labelIds=INBOX&maxResults=2`,
+    );
+    expect(inboxList.status).toBe(200);
+    const inboxBody = await readJson<{
+      messages?: Array<{ id?: string }>;
+      nextPageToken?: string;
+    }>(inboxList);
+    expect(inboxBody.messages?.length).toBe(2);
+    expect(inboxBody.nextPageToken).toBe("2");
+
+    const spamList = await fetch(
+      `${baseUrl}/gmail/v1/users/me/messages?q=in%3Aspam&includeSpamTrash=true`,
+    );
+    expect(spamList.status).toBe(200);
+    expect(
+      (await readJson<{ messages?: Array<{ id?: string }> }>(spamList))
+        .messages?.[0]?.id,
+    ).toBe("msg-spam");
+
+    const sentList = await fetch(
+      `${baseUrl}/gmail/v1/users/me/messages?q=in%3Asent%20older_than%3A3d`,
+    );
+    expect(sentList.status).toBe(200);
+    expect(
+      (await readJson<{ messages?: Array<{ id?: string }> }>(sentList))
+        .messages?.[0]?.id,
+    ).toBe("msg-unresponded-sent");
+
     const missingMessage = await fetch(
       `${baseUrl}/gmail/v1/users/me/messages/not-real`,
     );
@@ -199,10 +228,17 @@ describe("Google mock Gmail fidelity surface", () => {
     );
 
     const thread = await fetch(
-      `${baseUrl}/gmail/v1/users/me/threads/thr-finance`,
+      `${baseUrl}/gmail/v1/users/me/threads/thr-unresponded`,
     );
     expect(thread.status).toBe(200);
-    expect((await readJson<ThreadResponse>(thread)).id).toBe("thr-finance");
+    const threadBody = await readJson<ThreadResponse>(thread);
+    expect(threadBody.id).toBe("thr-unresponded");
+    expect(threadBody.messages?.map((message) => message.id)).toEqual(
+      expect.arrayContaining([
+        "msg-unresponded-inbound",
+        "msg-unresponded-sent",
+      ]),
+    );
 
     const modifiedThread = await fetch(
       `${baseUrl}/gmail/v1/users/me/threads/thr-finance/modify`,
