@@ -9,15 +9,19 @@ import {
   applyTypeScriptIgnoreDeprecationsCompatPatch,
   applyUnpublishedPluginStubOverrides,
   bootstrapBundledBunInstall,
+  createPackageLink,
   ensureElizaAgentSkillsPluginBuild,
+  ensureElizaBuildOutputs,
   ensurePluginAnthropicBunTypes,
   ensureRequiredElizaPluginBuilds,
   findInstalledPackageDir,
   getElizaInstallArgs,
+  getMissingConditionalElizaWorkspaceEntries,
   getTemporaryElizaWorkspaceEntries,
   getUpstreamPackageLinks,
   resolveTypeScriptIgnoreDeprecationsTarget,
   runElizaInstallWithRetry,
+  stripMissingConditionalElizaWorkspaces,
 } from "./setup-upstreams.mjs";
 
 const tempDirs: string[] = [];
@@ -145,6 +149,74 @@ describe("getTemporaryElizaWorkspaceEntries", () => {
         pathExists: (targetPath) => existingPaths.has(targetPath),
       }),
     ).toEqual(["cloud/packages/services/billing"]);
+  });
+});
+
+describe("getMissingConditionalElizaWorkspaceEntries", () => {
+  it("flags the cloud billing workspace when it is listed but missing", () => {
+    expect(
+      getMissingConditionalElizaWorkspaceEntries(
+        "/repo/eliza",
+        ["cloud/packages/services/billing"],
+        {
+          pathExists: () => false,
+        },
+      ),
+    ).toEqual(["cloud/packages/services/billing"]);
+  });
+
+  it("ignores conditional workspaces that exist on disk", () => {
+    const elizaRoot = "/repo/eliza";
+    const existingPaths = new Set([
+      path.join(
+        elizaRoot,
+        "cloud",
+        "packages",
+        "services",
+        "billing",
+        "package.json",
+      ),
+    ]);
+
+    expect(
+      getMissingConditionalElizaWorkspaceEntries(
+        elizaRoot,
+        ["cloud/packages/services/billing"],
+        {
+          pathExists: (targetPath) => existingPaths.has(targetPath),
+        },
+      ),
+    ).toEqual([]);
+  });
+});
+
+describe("stripMissingConditionalElizaWorkspaces", () => {
+  it("removes a missing cloud workspace from eliza/package.json", () => {
+    const elizaRoot = makeTempDir();
+    const packageJsonPath = path.join(elizaRoot, "package.json");
+    writeFile(
+      packageJsonPath,
+      JSON.stringify(
+        {
+          name: "eliza",
+          workspaces: ["packages/*", "cloud/packages/services/billing"],
+        },
+        null,
+        2,
+      ),
+    );
+
+    expect(stripMissingConditionalElizaWorkspaces(elizaRoot)).toEqual([
+      "cloud/packages/services/billing",
+    ]);
+    expect(
+      JSON.parse(fs.readFileSync(packageJsonPath, "utf8")) as {
+        workspaces: string[];
+      },
+    ).toEqual({
+      name: "eliza",
+      workspaces: ["packages/*"],
+    });
   });
 });
 
@@ -335,6 +407,28 @@ describe("getUpstreamPackageLinks", () => {
         link.linkPath.includes(path.join("packages", "agent", "node_modules")),
       ),
     ).toBe(false);
+  });
+});
+
+describe("createPackageLink", () => {
+  it("replaces a broken symlink before writing the new target", () => {
+    const repoRoot = makeTempDir();
+    const linkPath = path.join(
+      repoRoot,
+      "apps",
+      "home",
+      "node_modules",
+      "@elizaos",
+      "app-babylon",
+    );
+    const targetPath = path.join(repoRoot, "eliza", "apps", "app-babylon");
+
+    fs.mkdirSync(path.dirname(linkPath), { recursive: true });
+    fs.mkdirSync(targetPath, { recursive: true });
+    fs.symlinkSync("../../../../plugins/app-babylon", linkPath, "dir");
+
+    expect(createPackageLink(linkPath, targetPath)).toBe(true);
+    expect(fs.realpathSync(linkPath)).toBe(fs.realpathSync(targetPath));
   });
 });
 
@@ -552,6 +646,58 @@ describe("ensureRequiredElizaPluginBuilds", () => {
     });
     expect(log).toHaveBeenCalledWith(
       expect.stringContaining("@elizaos/plugin-edge-tts"),
+    );
+  });
+});
+
+describe("ensureElizaBuildOutputs", () => {
+  it("always rebuilds @elizaos/core so nested plugin builds see fresh declarations", async () => {
+    const elizaRoot = makeTempDir();
+    writeFile(
+      path.join(
+        elizaRoot,
+        "packages",
+        "typescript",
+        "src",
+        "i18n",
+        "generated",
+        "validation-keyword-data.ts",
+      ),
+      "export {};\n",
+    );
+    writeFile(
+      path.join(
+        elizaRoot,
+        "packages",
+        "prompts",
+        "dist",
+        "typescript",
+        "index.ts",
+      ),
+      "export {};\n",
+    );
+    writeFile(
+      path.join(elizaRoot, "packages", "skills", "dist", "index.js"),
+      "export {};\n",
+    );
+
+    const runCommandImpl = vi.fn().mockResolvedValue(undefined);
+    const log = vi.fn();
+
+    await expect(
+      ensureElizaBuildOutputs(elizaRoot, {
+        runCommandImpl,
+        log,
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(runCommandImpl).toHaveBeenCalledTimes(1);
+    expect(runCommandImpl).toHaveBeenCalledWith("bun", ["run", "build"], {
+      cwd: path.join(elizaRoot, "packages", "typescript"),
+      label: "bun run build (@elizaos/core)",
+    });
+    expect(log).toHaveBeenCalledWith(
+      "[setup-upstreams] Building @elizaos/core",
     );
   });
 });

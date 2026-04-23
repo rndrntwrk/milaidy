@@ -76,6 +76,7 @@
     "build:ios:remote-mac": "node scripts/ios-runtime-mode.mjs remote-mac",
     "build:ios:cloud": "node scripts/ios-runtime-mode.mjs cloud",
     "build:ios:cloud-hybrid": "node scripts/ios-runtime-mode.mjs cloud-hybrid",
+    "bootstrap": "node scripts/bootstrap-repo.mjs",
     "clean": "node eliza/packages/app-core/scripts/clean-repo.mjs",
     "clean:deep": "node eliza/packages/app-core/scripts/clean-repo.mjs --deep",
     "verify": "bun run verify:typecheck && bun run verify:lint && bun run test",
