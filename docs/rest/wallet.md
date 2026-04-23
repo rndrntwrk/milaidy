@@ -382,6 +382,77 @@ Get the current status of the Steward bridge connection, including whether the s
 
 ---
 
+### GET /api/wallet/steward-pending-approvals
+
+List transactions awaiting Steward approval.
+
+**Response**
+
+Returns an array of pending approval objects, each containing the transaction details and the policy that triggered the hold.
+
+---
+
+### POST /api/wallet/steward-approve-tx
+
+Approve a held transaction.
+
+**Request body**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `txId` | string | Yes | Transaction ID to approve |
+
+**Response**
+
+Returns the approval result with the transaction's new status.
+
+---
+
+### POST /api/wallet/steward-deny-tx
+
+Deny a held transaction.
+
+**Request body**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `txId` | string | Yes | Transaction ID to deny |
+| `reason` | string | No | Reason for denial |
+
+**Response**
+
+Returns the denial result with the transaction's new status.
+
+---
+
+### GET /api/wallet/steward-policies
+
+Get the current Steward policy rules.
+
+**Response**
+
+Returns an array of policy rule objects that control which transactions require approval.
+
+---
+
+### PUT /api/wallet/steward-policies
+
+Update the Steward policy rules.
+
+**Request body**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `policies` | array | Yes | Array of policy rule objects |
+
+**Response**
+
+```json
+{ "ok": true }
+```
+
+---
+
 ## Trading
 
 ### POST /api/wallet/trade/preflight
