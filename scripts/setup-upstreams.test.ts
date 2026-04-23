@@ -12,6 +12,7 @@ import {
   createPackageLink,
   ensureElizaAgentSkillsPluginBuild,
   ensureElizaBuildOutputs,
+  ensureElizaTypescriptDependencyLinks,
   ensurePluginAnthropicBunTypes,
   ensureRequiredElizaPluginBuilds,
   findInstalledPackageDir,
@@ -45,6 +46,35 @@ afterEach(() => {
   for (const dir of tempDirs.splice(0)) {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+describe("ensureElizaTypescriptDependencyLinks", () => {
+  it("links root-installed @noble/hashes into the local core package", () => {
+    const repoRoot = makeTempDir();
+    const elizaRoot = path.join(repoRoot, "eliza");
+    const rootNobleHashes = path.join(
+      repoRoot,
+      "node_modules",
+      "@noble",
+      "hashes",
+    );
+    writeFile(path.join(rootNobleHashes, "package.json"), '{"name":"@noble/hashes"}
+');
+
+    expect(ensureElizaTypescriptDependencyLinks(elizaRoot)).toBe(1);
+    expect(
+      fs.realpathSync(
+        path.join(
+          elizaRoot,
+          "packages",
+          "typescript",
+          "node_modules",
+          "@noble",
+          "hashes",
+        ),
+      ),
+    ).toBe(fs.realpathSync(rootNobleHashes));
+  });
 });
 
 describe("getElizaInstallArgs", () => {
