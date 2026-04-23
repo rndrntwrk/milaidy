@@ -1,7 +1,7 @@
 ---
 title: "Platform Connectors"
 sidebarTitle: "Connectors"
-description: "Platform bridges for 28 messaging platforms — 18 auto-enabled from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Twitter, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, Lens, WeChat) plus 10 installable from the registry (BlueBubbles, Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
+description: "Platform bridges for 24 messaging and communication platforms — 16 auto-enabled from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, ACP) plus 8 installable from the registry (BlueBubbles, Bluesky, Instagram, LINE, Zalo, Zalo User, Nextcloud Talk, Tlon). GitHub, Gmail Watch, and Twilio are also available as feature plugins."
 ---
 
 Connectors are platform bridges that allow your agent to communicate across messaging platforms and social networks. Each connector handles authentication, message routing, session management, and platform-specific features.
@@ -19,28 +19,25 @@ Connectors are platform bridges that allow your agent to communicate across mess
 9. [Blooio](#blooio)
 10. [Microsoft Teams](#microsoft-teams)
 11. [Google Chat](#google-chat)
-12. [Twitter](#twitter)
+12. [ACP (Agent Communication Protocol)](#acp-agent-communication-protocol)
 13. [Farcaster](#farcaster)
 14. [BlueBubbles](#bluebubbles)
 15. [Bluesky](#bluesky)
 16. [Instagram](#instagram)
 17. [Twitch](#twitch)
 18. [Mattermost](#mattermost)
-19. [WeChat](#wechat)
-20. [Matrix](#matrix)
-21. [Feishu / Lark](#feishu--lark)
-22. [Nostr](#nostr)
-23. [LINE](#line)
-24. [Zalo](#zalo)
-25. [Twilio](#twilio)
-26. [GitHub](#github)
-27. [Gmail Watch](#gmail-watch)
-28. [Nextcloud Talk](#nextcloud-talk)
-29. [Tlon](#tlon)
-30. [Lens](#lens)
-31. [Connector Lifecycle](#connector-lifecycle)
-32. [Multi-Account Support](#multi-account-support)
-33. [Session Management](#session-management)
+19. [Matrix](#matrix)
+20. [Feishu / Lark](#feishu--lark)
+21. [Nostr](#nostr)
+22. [LINE](#line)
+23. [Zalo](#zalo)
+24. [Zalo User](#zalo-user)
+25. [Nextcloud Talk](#nextcloud-talk)
+26. [Tlon](#tlon)
+27. [Feature Plugins with Messaging Capabilities](#feature-plugins-with-messaging-capabilities)
+28. [Connector Lifecycle](#connector-lifecycle)
+29. [Multi-Account Support](#multi-account-support)
+30. [Session Management](#session-management)
 
 ---
 
@@ -59,25 +56,23 @@ Connectors marked **Auto** load automatically when their config is present in `m
 | Blooio | API key + webhook | Yes | Yes | No | Auto |
 | Microsoft Teams | App ID + password | Yes | Yes (teams/channels) | No | Auto |
 | Google Chat | Service account | Yes | Yes (spaces) | Yes | Auto |
-| Twitter | API keys + tokens | DMs | N/A | No | Auto |
+| ACP | Gateway token + password | Yes | Yes | No | Auto |
 | Farcaster | Neynar API key + signer | Casts | Yes (channels) | No | Auto |
 | Twitch | Client ID + access token | Yes (chat) | Yes (channels) | No | Auto |
 | Mattermost | Bot token | Yes | Yes (channels) | No | Auto |
-| WeChat | Proxy API key + QR code | Yes | Yes | Yes | Auto |
 | Matrix | Access token | Yes | Yes (rooms) | No | Auto |
 | Feishu / Lark | App ID + secret | Yes | Yes (group chats) | No | Auto |
 | Nostr | Private key (nsec/hex) | Yes (NIP-04) | N/A | No | Auto |
-| Lens | API key | Yes | N/A | No | Auto |
 | BlueBubbles | Server password | Yes | Yes | No | Registry |
 | Bluesky | Account credentials | Posts | N/A | No | Registry |
 | Instagram | Username + password | DMs | N/A | No | Registry |
 | LINE | Channel access token + secret | Yes | Yes | No | Registry |
 | Zalo | Access token | Yes | Yes | No | Registry |
-| Twilio | Account SID + auth token | SMS/Voice | N/A | No | Registry |
-| GitHub | API token | Issues/PRs | Yes (repos) | No | Registry |
-| Gmail Watch | Service account / OAuth | N/A | N/A | No | Registry |
+| Zalo User | Cookie-based | Yes | Yes | No | Registry |
 | Nextcloud Talk | Server credentials | Yes | Yes (rooms) | No | Registry |
 | Tlon | Ship credentials | Yes | Yes (Urbit chats) | No | Registry |
+
+GitHub, Twilio, and Gmail Watch also support messaging workflows but are categorized as feature plugins rather than connectors. See [Feature Plugins with Messaging Capabilities](#feature-plugins-with-messaging-capabilities) below.
 
 ---
 
@@ -460,41 +455,32 @@ Connects to iMessage and SMS messaging via the Blooio service with signed webhoo
 
 ---
 
-## Twitter
+## ACP (Agent Communication Protocol)
 
 ### Setup Requirements
 
-- Twitter API v2 credentials (API key, API secret key, access token, access token secret)
+- ACP Gateway URL, token, and password
 
 ### Key Configuration
 
 ```json
 {
   "connectors": {
-    "twitter": {
-      "enabled": true,
-      "apiKey": "...",
-      "apiSecretKey": "...",
-      "accessToken": "...",
-      "accessTokenSecret": "...",
-      "postEnable": true,
-      "postIntervalMin": 90,
-      "postIntervalMax": 180
+    "acp": {
+      "enabled": true
     }
   }
 }
 ```
 
+**Environment variables:** `ACP_GATEWAY_TOKEN`, `ACP_GATEWAY_PASSWORD`, `ACP_GATEWAY_URL`, `ACP_CLIENT_NAME`, `ACP_CLIENT_MODE`
+
 ### Features
 
-- Automated posting with configurable intervals and variance
-- Post immediately option
-- Search and mention monitoring
-- Timeline algorithm selection (`weighted` or `latest`)
-- Auto-respond to mentions
-- Action processing toggle
-- Dry run mode for testing
-- Configurable max tweet length (default: 4000)
+- Agent-to-agent communication through an ACP gateway
+- Session persistence and management
+- Configurable client mode and display name
+- Auto-enabled when `ACP_GATEWAY_TOKEN` is set
 
 ---
 
@@ -703,59 +689,6 @@ Connects to iMessage and SMS messaging via the Blooio service with signed webhoo
 
 ---
 
-## WeChat
-
-Connects to WeChat via a third-party proxy service using personal account login.
-
-### Setup Requirements
-
-1. Obtain an API key from the WeChat proxy service
-2. Configure the proxy URL and webhook port
-3. Scan QR code displayed in terminal on first startup
-
-### Privacy Notice
-
-The WeChat connector depends on a user-supplied proxy service. That proxy receives
-your connector API key plus the message payloads and metadata needed to relay
-incoming and outgoing WeChat traffic. Only point `proxyUrl` at infrastructure you
-operate yourself or explicitly trust for that message flow.
-
-### Key Configuration
-
-```json
-{
-  "connectors": {
-    "wechat": {
-      "apiKey": "<key>",
-      "proxyUrl": "https://...",
-      "webhookPort": 18790,
-      "deviceType": "ipad"
-    }
-  }
-}
-```
-
-| Field | Description |
-|-------|------------|
-| `apiKey` | **Required** -- Proxy service API key |
-| `proxyUrl` | **Required** -- Proxy service URL |
-| `webhookPort` | Webhook listener port (default: 18790) |
-| `deviceType` | Device emulation type: `ipad` or `mac` (default: `ipad`) |
-
-**Environment variables:** `WECHAT_API_KEY`
-
-**Multi-account:** Supported via `accounts` map (same pattern as WhatsApp).
-
-### Features
-
-- Text messaging in DMs (enabled by default)
-- Group chat support (enable with `features.groups: true`)
-- Image send/receive (enable with `features.images: true`)
-- QR code login with automatic session persistence
-- Multi-account support via accounts map
-
----
-
 ## Matrix
 
 ### Setup Requirements
@@ -930,85 +863,36 @@ A personal-account variant is also available as `@elizaos/plugin-zalouser` for o
 
 ---
 
-## Twilio
+## Zalo User
+
+A personal-account variant of the Zalo connector for one-to-one messaging outside of the Official Account system.
 
 ### Setup Requirements
 
-- Twilio Account SID and Auth Token
-- A Twilio phone number
+- Zalo account cookie file for authentication
 
 ### Key Configuration
 
 ```json
 {
   "connectors": {
-    "twilio": {
+    "zalouser": {
       "enabled": true
     }
   }
 }
 ```
 
-**Environment variables:** `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER`
+**Config keys:** `ZALOUSER_COOKIE_PATH`, `ZALOUSER_IMEI`, `ZALOUSER_USER_AGENT`, `ZALOUSER_DM_POLICY`, `ZALOUSER_GROUP_POLICY`, `ZALOUSER_ALLOWED_THREADS`
 
 ### Features
 
-- SMS messaging (send and receive)
-- Voice call capabilities
-- Webhook-based inbound message handling
+- Personal account messaging (outside Official Account)
+- DM and group policy controls
+- Profile configuration
+- Thread allowlists
 
-**Note:** This connector is available from the plugin registry. Install it with `milady plugins install @elizaos/plugin-twilio`.
-
----
-
-## GitHub
-
-### Setup Requirements
-
-- GitHub API token (personal access token or fine-grained token)
-
-### Key Configuration
-
-```json
-{
-  "connectors": {
-    "github": {
-      "enabled": true
-    }
-  }
-}
-```
-
-**Environment variables:** `GITHUB_API_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO`
-
-### Features
-
-- Repository management
-- Issue tracking and creation
-- Pull request workflows (create, review, merge)
-- Code search and file access
-
-**Note:** This connector is available from the plugin registry. Install it with `milady plugins install @elizaos/plugin-github`.
-
----
-
-## Gmail Watch
-
-### Setup Requirements
-
-- Google Cloud service account or OAuth credentials with Gmail API access
-
-### Key Configuration
-
-Gmail Watch is enabled via the `features.gmailWatch` flag or environment variables rather than the `connectors` section.
-
-### Features
-
-- Gmail Pub/Sub message watching
-- Auto-renewal of watch subscriptions
-- Inbound email event handling
-
-**Note:** This connector is available from the plugin registry. Install it with `milady plugins install @elizaos/plugin-gmail-watch`.
+**Note:** This connector is available from the plugin registry. Install it with `milady plugins install @elizaos/plugin-zalouser`.
 
 ---
 
@@ -1070,29 +954,37 @@ Gmail Watch is enabled via the `features.gmailWatch` flag or environment variabl
 
 ---
 
-## Lens
+## Feature Plugins with Messaging Capabilities
 
-**Plugin:** `@elizaos/plugin-lens`
+The following plugins provide messaging or notification capabilities but are categorized as feature plugins rather than connectors in the plugin registry.
 
-```json5
-{
-  connectors: {
-    lens: {
-      apiKey: "<LENS_API_KEY>",
-    }
-  }
-}
-```
+### Twilio
 
-| Env Variable | Config Path |
-|-------------|-------------|
-| `LENS_API_KEY` | `connectors.lens.apiKey` |
+SMS and voice call capabilities via the Twilio API.
 
-**Auto-enable triggers:** `apiKey`, `token`, or `botToken`.
+**Environment variables:** `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER`
 
-**Features:**
-- Lens Protocol social interactions
-- Post publishing and engagement
+**Features:** SMS messaging (send/receive), voice calls, webhook-based inbound handling.
+
+Install with `milady plugins install @elizaos/plugin-twilio`.
+
+### GitHub
+
+Repository management, issue tracking, and pull request workflows via the GitHub API.
+
+**Environment variables:** `GITHUB_API_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO`
+
+**Features:** Repository management, issue tracking, PR workflows, code search.
+
+Install with `milady plugins install @elizaos/plugin-github`.
+
+### Gmail Watch
+
+Monitor Gmail inboxes for incoming messages via Google Cloud Pub/Sub. Enabled via the `features.gmailWatch` flag rather than the `connectors` section.
+
+**Features:** Gmail Pub/Sub message watching, auto-renewal of watch subscriptions, inbound email events.
+
+Install with `milady plugins install @elizaos/plugin-gmail-watch`.
 
 ---
 
@@ -1223,13 +1115,6 @@ The `dmPolicy` options are:
 - Multi-account configuration:
   Signal supports multiple accounts via the `accounts` map. Each account must have `account`, `httpUrl`, or `cliPath` set and must not be `enabled: false`.
 
-**Twitter:**
-
-- API key rejected:
-  Confirm `connectors.twitter.apiKey` is a valid Twitter/X API key. Free-tier keys have strict rate limits.
-- Tweet fetch failures:
-  The FxTwitter API (`api.fxtwitter.com`) is used for tweet verification. If rate-limited, verification requests fail silently.
-
 **iMessage (direct):**
 
 - CLI path not found:
@@ -1239,11 +1124,6 @@ The `dmPolicy` options are:
 
 - API key invalid:
   Confirm `connectors.farcaster.apiKey` is set. Farcaster hub access requires a valid API key.
-
-**Lens:**
-
-- API key invalid:
-  Confirm `connectors.lens.apiKey` is set and the Lens API is reachable.
 
 **MS Teams:**
 

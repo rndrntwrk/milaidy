@@ -242,6 +242,9 @@ where to get the credentials, minimum required fields, and tips for optional fie
 **Tips:** Use negative IDs for groups (they start with -100). Use `TELEGRAM_ALLOWED_CHATS` to restrict who can talk to the bot for safety.
 
 ### Twitter / X
+
+> **Not yet available:** The `@elizaos/plugin-twitter` package is not currently in the plugin registry. The configuration below is for reference when the plugin becomes available.
+
 **Get credentials:** https://developer.twitter.com/en/portal/dashboard
 **Minimum required:** All 4 OAuth keys: `TWITTER_API_KEY`, `TWITTER_API_SECRET_KEY`, `TWITTER_ACCESS_TOKEN`, `TWITTER_ACCESS_TOKEN_SECRET`
 **Variables:**
@@ -344,6 +347,9 @@ where to get the credentials, minimum required fields, and tips for optional fie
 **Tips:** Neynar is required — it's the indexer that makes Farcaster data accessible via API.
 
 ### WeChat
+
+> **Not yet available:** The `@elizaos/plugin-wechat` package is not currently in the plugin registry. The configuration below is for reference when the plugin becomes available.
+
 **Get credentials:** From your WeChat proxy service provider
 **Minimum required:** `WECHAT_API_KEY` + proxy URL in config
 **Variables:**
