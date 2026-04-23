@@ -346,6 +346,18 @@ describe("release workflow path contract", () => {
     );
   });
 
+  it("allows repo maintainers to manually dispatch agent releases", () => {
+    const agentRelease = readWorkflow("agent-release.yml");
+
+    expect(agentRelease).toContain("getCollaboratorPermissionLevel");
+    expect(agentRelease).toContain(
+      "const isRepoMaintainer = ['admin', 'maintain', 'write'].includes(repoPermission);",
+    );
+    expect(agentRelease).toContain(
+      "let allowed = isOrgMember || isForkOwner || isRepoMaintainer;",
+    );
+  });
+
   it("aligns the canonical Electrobun package version before release packaging", () => {
     const releaseElectrobun = readWorkflow("release-electrobun.yml");
 

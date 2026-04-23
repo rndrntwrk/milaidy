@@ -124,7 +124,18 @@ jobs:
               isOrgMember = status === 204 || status === 302;
             } catch (e) {}
 
-            let allowed = isOrgMember || isForkOwner;
+            let repoPermission = 'none';
+            try {
+              const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                username: actor,
+              });
+              repoPermission = data.permission ?? 'none';
+            } catch (e) { core.info(`Repo permission unavailable: ${e.message}`); }
+
+            const isRepoMaintainer = ['admin', 'maintain', 'write'].includes(repoPermission);
+            let allowed = isOrgMember || isForkOwner || isRepoMaintainer;
             if (!allowed) {
               let trustTier = 'untested', trustScore = DEFAULT_CONFIG.initialScore;
               try {
@@ -148,7 +159,7 @@ jobs:
               }
             }
 
-            core.info(`Trust: allowed=${allowed} (org=${isOrgMember}, forkOwner=${isForkOwner})`);
+            core.info(`Trust: allowed=${allowed} (org=${isOrgMember}, forkOwner=${isForkOwner}, repoPermission=${repoPermission})`);
             core.setOutput('proceed', allowed ? 'true' : 'false');
 
   # ── 2. Resolve version ─────────────────────────────────────────────
