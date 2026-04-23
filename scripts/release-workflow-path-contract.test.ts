@@ -206,6 +206,28 @@ describe("release workflow path contract", () => {
     );
   });
 
+  it("resolves release versions from canonical semver tags", () => {
+    const agentRelease = readWorkflow("agent-release.yml");
+
+    expect(agentRelease).toContain("name: Fetch canonical release tags");
+    expect(agentRelease).toContain("https://github.com/milady-ai/milady.git");
+    expect(agentRelease).toContain("sort -V | tail -1");
+    expect(agentRelease).not.toContain(
+      "git tag --sort=-creatordate | grep '^v[0-9]",
+    );
+  });
+
+  it("aligns the canonical Electrobun package version before release packaging", () => {
+    const releaseElectrobun = readWorkflow("release-electrobun.yml");
+
+    expect(releaseElectrobun).toContain(
+      "eliza/packages/app-core/platforms/electrobun/package.json",
+    );
+    expect(releaseElectrobun).toContain(
+      "eliza/packages/app-core/platforms/electrobun/electrobun.config.ts",
+    );
+  });
+
   it("installs browser automation deps in the published-workspace fallback shim", () => {
     const fallbackScript = fs.readFileSync(
       path.join(
