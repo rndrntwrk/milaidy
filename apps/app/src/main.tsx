@@ -405,11 +405,22 @@ function handleDeepLink(url: string): void {
   }
 
   if (parsed.protocol !== `${APP_URL_SCHEME}:`) return;
-  const path = (parsed.pathname || parsed.host || "").replace(/^\/+/, "");
+  const path = getDeepLinkPath(parsed);
 
   switch (path) {
     case "chat":
       window.location.hash = "#chat";
+      break;
+    case "phone":
+    case "phone/call":
+      setHashRoute("phone", parsed.searchParams);
+      break;
+    case "messages":
+    case "messages/compose":
+      setHashRoute("messages", parsed.searchParams);
+      break;
+    case "contacts":
+      setHashRoute("contacts", parsed.searchParams);
       break;
     case "lifeops":
       window.location.hash = "#lifeops";
@@ -483,6 +494,17 @@ function handleDeepLink(url: string): void {
       console.warn(`${APP_LOG_PREFIX} Unknown deep link path:`, path);
       break;
   }
+}
+
+function getDeepLinkPath(parsed: URL): string {
+  const host = parsed.host.replace(/^\/+|\/+$/g, "");
+  const pathname = parsed.pathname.replace(/^\/+|\/+$/g, "");
+  return [host, pathname].filter(Boolean).join("/");
+}
+
+function setHashRoute(route: string, params: URLSearchParams): void {
+  const query = params.toString();
+  window.location.hash = query ? `#${route}?${query}` : `#${route}`;
 }
 
 async function initializeDesktopShell(): Promise<void> {
