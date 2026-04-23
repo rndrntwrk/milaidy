@@ -363,19 +363,25 @@ export function resolveTypeScriptIgnoreDeprecationsTarget(
   const candidateRoots = [repoRoot, fallbackRoot].filter(
     (candidate) => typeof candidate === "string" && candidate.length > 0,
   );
+  const versionSpecifiers = [];
 
   for (const candidateRoot of candidateRoots) {
     const rootPackageJson = readPackageJson(candidateRoot);
-    const versionSpecifier =
-      rootPackageJson?.devDependencies?.typescript ??
-      rootPackageJson?.dependencies?.typescript;
-    const major = parseFirstNumericVersionSegment(versionSpecifier);
-    if (major !== null) {
-      return major >= 6 ? "6.0" : "5.0";
-    }
+    versionSpecifiers.push(
+      rootPackageJson?.devDependencies?.typescript,
+      rootPackageJson?.dependencies?.typescript,
+    );
   }
 
-  return "6.0";
+  const major = versionSpecifiers.reduce((highest, versionSpecifier) => {
+    const parsed = parseFirstNumericVersionSegment(versionSpecifier);
+    if (parsed === null) {
+      return highest;
+    }
+    return highest === null ? parsed : Math.max(highest, parsed);
+  }, null);
+
+  return major !== null && major >= 6 ? "6.0" : "5.0";
 }
 
 function buildIgnoreDeprecationsCompatibilityReplacements(targetVersion) {
@@ -1660,6 +1666,50 @@ async function ensureRepoLocalEliza(repoRoot) {
   return elizaRoot;
 }
 
+export function ensureElizaTypescriptDependencyLinks(
+  elizaRoot,
+  { repoRoot = path.dirname(elizaRoot), dependencies = ["@noble/hashes"] } = {},
+) {
+  const packageDir = path.join(elizaRoot, "packages", "typescript");
+  let linkedDependencies = 0;
+
+  for (const dependency of dependencies) {
+    const target = findInstalledPackageDir(
+      repoRoot,
+      dependency,
+      undefined,
+      null,
+      {
+        searchRoots: [repoRoot, elizaRoot],
+      },
+    );
+    if (!target) {
+      continue;
+    }
+
+    const linkPath = path.join(
+      packageDir,
+      "node_modules",
+      ...dependency.split("/"),
+    );
+    if (createPackageLink(linkPath, target)) {
+      linkedDependencies += 1;
+    }
+  }
+
+  if (linkedDependencies > 0) {
+    console.log(
+      "[setup-upstreams] Linked " +
+        linkedDependencies +
+        " @elizaos/core build " +
+        (linkedDependencies === 1 ? "dependency" : "dependencies") +
+        " into eliza/packages/typescript",
+    );
+  }
+
+  return linkedDependencies;
+}
+
 async function ensureElizaDependencies(elizaRoot) {
   if (hasInstalledElizaDependencies(elizaRoot)) {
     await bootstrapBundledBunInstall(elizaRoot);
@@ -1699,6 +1749,7 @@ async function ensureElizaDependencies(elizaRoot) {
     await runElizaInstallWithRetry(elizaRoot);
     await bootstrapBundledBunInstall(elizaRoot);
   });
+  ensureElizaTypescriptDependencyLinks(elizaRoot);
 }
 
 export function getElizaInstallArgs(env = process.env) {

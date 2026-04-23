@@ -4,7 +4,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react-swc";
-import { defineConfig, type Plugin, transformWithEsbuild } from "vite";
+import {
+  createLogger,
+  defineConfig,
+  type Plugin,
+  transformWithEsbuild,
+} from "vite";
 import { resolveAppBranding } from "../../eliza/packages/app-core/src/config/app-config.ts";
 // Keep workspace-relative TS imports in this config so Vite transpiles them
 // while bundling the config instead of asking Node to load package-exported
@@ -55,6 +60,34 @@ function tryResolve(id: string): string | undefined {
 const capacitorKeyboardEntry = tryResolve("@capacitor/keyboard");
 const capacitorPreferencesEntry = tryResolve("@capacitor/preferences");
 const capacitorAppEntry = tryResolve("@capacitor/app");
+
+function isExpectedWsProxySocketError(
+  message: unknown,
+  error: unknown,
+): boolean {
+  const text = typeof message === "string" ? message : String(message ?? "");
+  if (!text.includes("ws proxy socket error")) {
+    return false;
+  }
+
+  const errorLike =
+    error && typeof error === "object"
+      ? (error as { code?: unknown; message?: unknown })
+      : null;
+  return (
+    errorLike?.code === "ECONNRESET" ||
+    String(errorLike?.message ?? "").includes("read ECONNRESET")
+  );
+}
+
+const viteLogger = createLogger();
+const viteLoggerError = viteLogger.error;
+viteLogger.error = (message, options) => {
+  if (isExpectedWsProxySocketError(message, options?.error)) {
+    return;
+  }
+  viteLoggerError(message, options);
+};
 
 function ensureTrailingSlash(value: string): string {
   return value.endsWith("/") ? value : `${value}/`;
@@ -1237,6 +1270,7 @@ function workspaceJsxInJsPlugin(): Plugin {
 
 export default defineConfig({
   root: here,
+  customLogger: viteLogger,
   base: "./",
   // Keep pre-bundle cache under the app dir (not node_modules/.vite) so Bun
   // installs don't fight Vite, and `bun run clean` / docs can target one path.

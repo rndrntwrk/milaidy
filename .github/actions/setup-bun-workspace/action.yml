@@ -126,7 +126,7 @@ runs:
         npm_config_python: ${{ env.pythonLocation }}/bin/python3
 
     - name: Install published-workspace fallback dependencies
-      if: ${{ inputs.disable-local-eliza-workspace == 'true' }}
+      if: ${{ inputs.disable-local-eliza-workspace == 'true' || inputs.run-postinstall == 'true' }}
       shell: bash
       run: bash scripts/install-published-workspace-fallback-deps.sh
 

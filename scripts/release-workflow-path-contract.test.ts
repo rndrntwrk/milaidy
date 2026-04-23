@@ -36,17 +36,18 @@ describe("release workflow path contract", () => {
       "node eliza/packages/app-core/scripts/run-mobile-build.mjs android",
     );
     expect(agentRelease).toContain(
+      '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;29.0.13113456"',
+    );
+    expect(agentRelease).toContain(
       "node eliza/packages/app-core/scripts/run-mobile-build.mjs ios",
     );
     expect(agentRelease).not.toContain(
       "Build web assets\n        run: |\n          bun install --ignore-scripts\n          bun run postinstall\n          bun run build",
     );
     expect(mobileBuildHelper).toContain(
-      "Usage: node scripts/run-mobile-build.mjs <android|android-system|ios|ios-overlay>",
+      "Usage: node scripts/run-mobile-build.mjs <android|ios|ios-overlay>",
     );
     expect(mobileBuildHelper).toContain('if (target === "android") {');
-    expect(mobileBuildHelper).toContain('target !== "android-system"');
-    expect(mobileBuildHelper).toContain("await buildAndroidSystem();");
     expect(mobileBuildHelper).toContain("await buildIos();");
   });
 
@@ -201,8 +202,171 @@ describe("release workflow path contract", () => {
     expect(buildCloudImage).toContain(
       "node ../shared/scripts/generate-keywords.mjs --target ts",
     );
+    expect(buildCloudImage).toContain('ignoreDeprecations: "5.0"');
     expect(buildCloudImage).toContain(
       "Inject tailwindcss into eliza/packages/app-core/node_modules",
+    );
+    expect(buildCloudImage).toContain("uses: docker/setup-buildx-action@v3");
+    expect(buildCloudImage).toContain("continue-on-error: true");
+    expect(buildCloudImage).toContain(
+      "Build and push cloud app image with Buildx fallback",
+    );
+    expect(buildCloudImage).toContain("const manifests = [");
+    expect(buildCloudImage).toContain(
+      "const unpublished = /^@elizaos\\/(app-|capacitor-|plugin-agent-orchestrator|plugin-app-control|plugin-cli|plugin-imessage|plugin-local-ai|plugin-pdf|plugin-wechat|steward-)/;",
+    );
+    expect(buildCloudImage).toContain(
+      "plugin-agent-orchestrator|plugin-app-control|plugin-cli|plugin-imessage",
+    );
+    expect(buildCloudImage).toContain(
+      '"@elizaos/app-core": "file:./eliza/packages/app-core"',
+    );
+    expect(buildCloudImage).toContain(
+      '"@elizaos/agent": "file:./eliza/packages/agent"',
+    );
+  });
+
+  it("aligns the Android Gradle wrapper before release Android validation", () => {
+    const agentRelease = readWorkflow("agent-release.yml");
+
+    expect(agentRelease).toContain("name: Align Android Gradle wrapper");
+    expect(agentRelease).toContain("gradle-9.4.1-all.zip");
+    expect(
+      agentRelease.indexOf("name: Align Android Gradle wrapper"),
+    ).toBeLessThan(
+      agentRelease.indexOf(
+        "node eliza/packages/app-core/scripts/run-mobile-build.mjs android",
+      ),
+    );
+  });
+
+  it("keeps the electrobun release workflow aligned with the LifeOps Browser companion contract", () => {
+    const releaseElectrobun = readWorkflow("release-electrobun.yml");
+    const rootPackageJson = fs.readFileSync(
+      path.join(repoRoot, "package.json"),
+      "utf8",
+    );
+
+    expect(rootPackageJson).toContain(
+      '"lifeops:browser:package:release": "bun run browser-bridge:package:release"',
+    );
+    expect(releaseElectrobun).toContain(
+      "name: Build LifeOps Browser companions",
+    );
+    expect(releaseElectrobun).toContain(
+      "if bun run lifeops:browser:package:release; then",
+    );
+    expect(releaseElectrobun).toContain("name: lifeops-browser-store-bundles");
+    expect(releaseElectrobun).toContain(
+      "name: Publish LifeOps Browser companions",
+    );
+    expect(releaseElectrobun).toContain(
+      "name: Attach LifeOps Browser assets to GitHub release",
+    );
+    expect(releaseElectrobun).toContain("pattern: lifeops-browser-*");
+  });
+
+  it("generates protobuf types before staging Electrobun desktop bundles", () => {
+    const releaseElectrobun = readWorkflow("release-electrobun.yml");
+    const generateProto = releaseElectrobun.indexOf(
+      "bunx @bufbuild/buf@1.67.0 generate",
+    );
+    const generateKeywords = releaseElectrobun.indexOf(
+      "node eliza/packages/shared/scripts/generate-keywords.mjs --target ts",
+    );
+    const stageDesktop = releaseElectrobun.indexOf(
+      "node eliza/packages/app-core/scripts/desktop-build.mjs stage",
+    );
+
+    expect(generateKeywords).toBeGreaterThanOrEqual(0);
+    expect(generateProto).toBeGreaterThanOrEqual(0);
+    expect(stageDesktop).toBeGreaterThanOrEqual(0);
+    expect(generateKeywords).toBeLessThan(stageDesktop);
+    expect(generateProto).toBeLessThan(stageDesktop);
+  });
+
+  it("only enables Electrobun release patch generation for non-draft publish builds", () => {
+    const releaseElectrobun = readWorkflow("release-electrobun.yml");
+
+    expect(releaseElectrobun).toContain(
+      "ELIZA_RELEASE_URL: ${{ (github.event_name != 'workflow_call' || inputs.publish_release) && !inputs.draft && 'https://releases.milady.ai/' || '' }}",
+    );
+  });
+
+  it("uses the desktop-build command prefix variable for macOS Intel packaging", () => {
+    const releaseElectrobun = readWorkflow("release-electrobun.yml");
+
+    expect(releaseElectrobun).toContain(
+      'ELIZA_DESKTOP_COMMAND_PREFIX="arch -x86_64" node eliza/packages/app-core/scripts/desktop-build.mjs stage',
+    );
+    expect(releaseElectrobun).toContain(
+      'ELIZA_DESKTOP_COMMAND_PREFIX="arch -x86_64" node eliza/packages/app-core/scripts/desktop-build.mjs package',
+    );
+    expect(releaseElectrobun).not.toContain("MILADY_DESKTOP_COMMAND_PREFIX");
+  });
+
+  it("uploads canonical Electrobun build diagnostics when release packaging fails", () => {
+    const releaseElectrobun = readWorkflow("release-electrobun.yml");
+
+    expect(releaseElectrobun).toContain(
+      "name: Dump Electrobun build diagnostics",
+    );
+    expect(releaseElectrobun).toContain(
+      "name: electrobun-${{ matrix.platform.artifact-name }}-build-diagnostics",
+    );
+    expect(releaseElectrobun).toContain(
+      "eliza/packages/app-core/platforms/electrobun/build/**/wrapper-diagnostics.json",
+    );
+  });
+
+  it("probes the Electrobun bun entry build before release packaging", () => {
+    const releaseElectrobun = readWorkflow("release-electrobun.yml");
+    const probeBuild = releaseElectrobun.indexOf(
+      "name: Probe Electrobun bun entry build",
+    );
+    const packageBuild = releaseElectrobun.indexOf(
+      "name: Build Electrobun app",
+    );
+
+    expect(probeBuild).toBeGreaterThanOrEqual(0);
+    expect(packageBuild).toBeGreaterThanOrEqual(0);
+    expect(probeBuild).toBeLessThan(packageBuild);
+    expect(releaseElectrobun).toContain(
+      "bun build src/index.ts --target=bun --outdir",
+    );
+  });
+
+  it("resolves release versions from canonical semver tags", () => {
+    const agentRelease = readWorkflow("agent-release.yml");
+
+    expect(agentRelease).toContain("name: Fetch canonical release tags");
+    expect(agentRelease).toContain("https://github.com/milady-ai/milady.git");
+    expect(agentRelease).toContain("sort -V | tail -1");
+    expect(agentRelease).not.toContain(
+      "git tag --sort=-creatordate | grep '^v[0-9]",
+    );
+  });
+
+  it("allows repo maintainers to manually dispatch agent releases", () => {
+    const agentRelease = readWorkflow("agent-release.yml");
+
+    expect(agentRelease).toContain("getCollaboratorPermissionLevel");
+    expect(agentRelease).toContain(
+      "const isRepoMaintainer = ['admin', 'maintain', 'write'].includes(repoPermission);",
+    );
+    expect(agentRelease).toContain(
+      "let allowed = isOrgMember || isForkOwner || isRepoMaintainer;",
+    );
+  });
+
+  it("aligns the canonical Electrobun package version before release packaging", () => {
+    const releaseElectrobun = readWorkflow("release-electrobun.yml");
+
+    expect(releaseElectrobun).toContain(
+      "eliza/packages/app-core/platforms/electrobun/package.json",
+    );
+    expect(releaseElectrobun).toContain(
+      "eliza/packages/app-core/platforms/electrobun/electrobun.config.ts",
     );
   });
 
