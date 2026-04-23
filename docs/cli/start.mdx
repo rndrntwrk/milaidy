@@ -5,24 +5,66 @@ description: "Start the Milady API server (embedded elizaOS runtime, server-only
 
 # `milady start`
 
-Starts the HTTP + WebSocket API without an interactive REPL. Use this for local development, desktop shells, and headless deployments.
+Starts the HTTP + WebSocket API without an interactive REPL. Use this for headless deployments, local development, and desktop shells.
 
 ## Behavior
 
 - Loads the configured agent runtime and plugins.
 - Binds to the API port from environment (see [CLI environment](/cli/environment)).
 - May print a **connection key** when binding on a non-loopback address and no token is set.
+- Shuts down cleanly on `SIGINT` or `SIGTERM`.
+
+## Common Options
+
+| Flag | Description |
+|------|-------------|
+| `--verbose` | Enable informational-level runtime logs |
+| `--debug` | Enable debug-level runtime logs |
+| `--profile <name>` | Load a named CLI profile (applies profile-specific env vars) |
+| `--no-color` | Disable ANSI color output |
+
+Run `milady start --help` for the full flag list in your build.
 
 ## Examples
 
 ```bash
+# Start the server with default settings
 milady start
+
+# Start on a custom API port
 MILADY_API_PORT=31437 milady start
+
+# Start with verbose logging
+milady start --verbose
+
+# Start with a specific profile
+milady start --profile dev
 ```
 
-Run `milady start --help` for bind, token, and logging flags.
+## Ports
+
+In server-only mode the API binds to port `2138` by default (`MILADY_PORT`). In dev mode (`bun run dev`), the API uses port `31337` (`MILADY_API_PORT`). See [Ports](/cli/environment#ports-and-networking) for the full mapping.
+
+## Process Management
+
+For production deployments, use a process manager:
+
+```bash
+# systemd
+systemctl start milady
+
+# Docker
+docker run -d milady:local
+
+# PM2
+pm2 start "milady start" --name milady
+```
+
+See the [Deployment Guide](/deployment) for Docker and container setups.
 
 ## Related
 
-- [Desktop local development](/apps/desktop-local-development)
-- [REST API](/api-reference)
+- [CLI environment](/cli/environment) — port and path variables
+- [Desktop local development](/apps/desktop-local-development) — dev workflows
+- [REST API](/api-reference) — API endpoint reference
+- [Deployment](/deployment) — Docker and production deployment

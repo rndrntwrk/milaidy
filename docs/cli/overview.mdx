@@ -27,6 +27,19 @@ The `milady` binary (also published as `milady-ai` / `miladyai`) is the primary 
 | [`milady doctor`](/cli/doctor) | Health and environment checks |
 | [`milady db`](/cli/db) | Database utilities |
 
+## Global Flags
+
+These flags apply to all commands:
+
+| Flag | Description |
+|------|-------------|
+| `--verbose` | Enable informational-level runtime logs (`LOG_LEVEL=info`) |
+| `--debug` | Enable debug-level runtime logs (`LOG_LEVEL=debug`) |
+| `--no-color` | Disable ANSI color output |
+| `--profile <name>` | Load a named CLI profile (applies profile-specific env vars) |
+| `--version` | Print the version and exit |
+| `--help` | Show help for the command |
+
 ## Help
 
 Run `milady --help` or `milady <command> --help` for the exact flags in your build. Implementation lives under `eliza/packages/app-core/src/cli/` in this repository.
