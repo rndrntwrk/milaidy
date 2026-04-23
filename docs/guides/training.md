@@ -164,7 +164,7 @@ The `POST /api/training/jobs` endpoint launches a fine-tuning job:
 |-----------|-------------|
 | `datasetId` | ID of a previously built dataset |
 | `maxTrajectories` | Cap on trajectories to use |
-| `backend` | Training backend: `mlx` (Apple Silicon), `cuda` (NVIDIA GPU), or `cpu` |
+| `backend` | Training backend: `native` (default — MIPRO/GEPA prompt optimization), `mlx` (Apple Silicon), `cuda` (NVIDIA GPU), or `cpu` |
 | `model` | Base model to fine-tune |
 | `iterations` | Number of training iterations |
 | `batchSize` | Training batch size |
@@ -249,6 +249,25 @@ The Trajectories view displays:
 - Pagination (50 per page)
 - Export to JSON/CSV/ZIP
 - Bulk clearing of trajectory data
+
+---
+
+## Native Optimization (Default Backend)
+
+The default training backend is `native`, which runs MIPRO / GEPA / bootstrap-fewshot optimization against collected trajectory data. Unlike the `mlx`/`cuda`/`cpu` backends that fine-tune model weights, native optimization produces optimized prompt artifacts stored under `~/.milady/optimized-prompts/<task>/`. The `OptimizedPromptService` loads these automatically at boot.
+
+### Auto-Training
+
+When enough trajectories accumulate, the runtime can trigger native optimization automatically:
+
+- **Threshold:** 100 trajectories per task (default)
+- **Cooldown:** 12 hours between auto-training runs
+- **Configuration:** `GET /api/training/auto/config` and `PUT /api/training/auto/config`, or Settings > Auto-Training in the dashboard
+- **Disable at boot:** set `MILADY_DISABLE_AUTO_BOOTSTRAP=1`
+
+### Privacy Filter
+
+All write paths that touch real user trajectories run through the privacy filter (`eliza/apps/app-training/src/core/privacy-filter.ts`) before any JSONL is written. This applies to both the nightly export cron and on-demand training.
 
 ---
 

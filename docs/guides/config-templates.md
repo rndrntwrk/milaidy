@@ -33,7 +33,7 @@ The simplest configuration for getting started with a single model provider.
   modelProvider: {
     type: "openai",
     apiKey: process.env.OPENAI_API_KEY,
-    model: "gpt-4-turbo",
+    model: "gpt-5",
     temperature: 0.7,
     maxTokens: 2000
   },
@@ -72,7 +72,7 @@ A fully-featured personal assistant with memory, system instructions, and struct
   modelProvider: {
     type: "openai",
     apiKey: process.env.OPENAI_API_KEY,
-    model: "gpt-4-turbo",
+    model: "gpt-5",
     temperature: 0.7,
     maxTokens: 4000
   },
@@ -150,7 +150,7 @@ Complete Discord bot configuration with event handling, commands, and permission
   modelProvider: {
     type: "openai",
     apiKey: process.env.OPENAI_API_KEY,
-    model: "gpt-3.5-turbo",
+    model: "gpt-5-mini",
     temperature: 0.6,
     maxTokens: 1024
   },
@@ -237,7 +237,7 @@ Telegram bot configuration with inline keyboards, message handling, and user man
   modelProvider: {
     type: "openai",
     apiKey: process.env.OPENAI_API_KEY,
-    model: "gpt-3.5-turbo",
+    model: "gpt-5-mini",
     temperature: 0.5,
     maxTokens: 1024
   },
@@ -330,7 +330,7 @@ Advanced configuration for autonomous trading with market triggers, wallet integ
   modelProvider: {
     type: "openai",
     apiKey: process.env.OPENAI_API_KEY,
-    model: "gpt-4-turbo",
+    model: "gpt-5",
     temperature: 0.3,
     maxTokens: 2000
   },
@@ -453,7 +453,7 @@ Configuration for an autonomous research agent with knowledge bases, web browsin
   modelProvider: {
     type: "openai",
     apiKey: process.env.OPENAI_API_KEY,
-    model: "gpt-4-turbo",
+    model: "gpt-5",
     temperature: 0.2,
     maxTokens: 4000
   },
@@ -664,7 +664,7 @@ Enterprise-grade configuration with PostgreSQL, monitoring, multiple connectors,
   modelProvider: {
     type: "openai",
     apiKey: process.env.OPENAI_API_KEY,
-    model: "gpt-4-turbo",
+    model: "gpt-5",
     temperature: 0.7,
     maxTokens: 2000,
     retryPolicy: {

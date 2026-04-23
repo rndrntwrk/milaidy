@@ -250,7 +250,7 @@
           "description": "Override the default Anthropic small model identifier used by the plugin",
           "required": false,
           "sensitive": false,
-          "default": "claude-haiku-4-5-20251001-5-20251001"
+          "default": "claude-haiku-4-5-20251001"
         },
         "ANTHROPIC_LARGE_MODEL": {
           "type": "string",
@@ -2345,42 +2345,42 @@
           "description": "Overrides the default image analysis model used by Google Generative AI.",
           "required": false,
           "sensitive": false,
-          "default": "gemini-2.0-flash-001"
+          "default": "gemini-2.5-flash"
         },
         "GOOGLE_SMALL_MODEL": {
           "type": "string",
           "description": "Overrides the default small language model used for fast text/object generation.",
           "required": false,
           "sensitive": false,
-          "default": "gemini-2.0-flash-001"
+          "default": "gemini-2.5-flash"
         },
         "GOOGLE_LARGE_MODEL": {
           "type": "string",
           "description": "Overrides the default large language model used for complex text/object generation.",
           "required": false,
           "sensitive": false,
-          "default": "gemini-2.0-flash-001"
+          "default": "gemini-2.5-pro"
         },
         "SMALL_MODEL": {
           "type": "string",
           "description": "General fallback environment variable for the small model name when GOOGLE_SMALL_MODEL is not set.",
           "required": false,
           "sensitive": false,
-          "default": "gemini-2.0-flash-001"
+          "default": "gemini-2.5-flash"
         },
         "LARGE_MODEL": {
           "type": "string",
           "description": "General fallback environment variable for the large model name when GOOGLE_LARGE_MODEL is not set.",
           "required": false,
           "sensitive": false,
-          "default": "gemini-2.0-flash-001"
+          "default": "gemini-2.5-pro"
         },
         "IMAGE_MODEL": {
           "type": "string",
           "description": "General fallback environment variable for the image model name when GOOGLE_IMAGE_MODEL is not set.",
           "required": false,
           "sensitive": false,
-          "default": "gemini-2.0-flash-001"
+          "default": "gemini-2.5-flash"
         }
       },
       "homepage": "https://github.com/elizaos-plugins/plugin-google-genai#readme",

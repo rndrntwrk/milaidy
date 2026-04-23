@@ -1,10 +1,10 @@
 ---
 title: "OpenAI Plugin"
 sidebarTitle: "OpenAI"
-description: "OpenAI model provider for Milady — GPT-4o, o1, o3, embeddings, image generation, and speech."
+description: "OpenAI model provider for Milady — GPT-5, o3, o4-mini, embeddings, image generation, and speech."
 ---
 
-The OpenAI plugin connects Milady agents to OpenAI's API, providing access to GPT-4o, the o1/o3 reasoning model families, DALL-E image generation, and Whisper speech-to-text.
+The OpenAI plugin connects Milady agents to OpenAI's API, providing access to GPT-5, GPT-5-mini, the o3/o4-mini reasoning model families, DALL-E image generation, and Whisper speech-to-text.
 
 **Package:** `@elizaos/plugin-openai`
 
@@ -38,8 +38,8 @@ export OPENAI_API_KEY=sk-...
 |---------------------|----------|-------------|
 | `OPENAI_API_KEY` | Yes | OpenAI API key from [platform.openai.com](https://platform.openai.com) |
 | `OPENAI_BASE_URL` | No | Custom base URL (for Azure OpenAI or compatible APIs) |
-| `OPENAI_SMALL_MODEL` | No | Override the small model identifier (default: `gpt-4o-mini`) |
-| `OPENAI_LARGE_MODEL` | No | Override the large model identifier (default: `gpt-4o`) |
+| `OPENAI_SMALL_MODEL` | No | Override the small model identifier (default: `gpt-5-mini`) |
+| `OPENAI_LARGE_MODEL` | No | Override the large model identifier (default: `gpt-5`) |
 | `OPENAI_EMBEDDING_MODEL` | No | Override the embedding model (default: `text-embedding-3-small`) |
 | `OPENAI_TTS_MODEL` | No | Override the text-to-speech model |
 | `OPENAI_TTS_VOICE` | No | Voice profile for text-to-speech output |
@@ -52,7 +52,7 @@ export OPENAI_API_KEY=sk-...
     "profiles": {
       "default": {
         "provider": "openai",
-        "model": "gpt-4o"
+        "model": "gpt-5"
       }
     }
   }
@@ -65,10 +65,10 @@ export OPENAI_API_KEY=sk-...
 
 | Model | Context | Best For |
 |-------|---------|---------|
-| `gpt-4o` | 128k | Multimodal reasoning, default |
-| `gpt-4o-mini` | 128k | Fast, cost-efficient tasks |
-| `gpt-4-turbo` | 128k | High-quality generation |
-| `gpt-3.5-turbo` | 16k | Simple tasks at low cost |
+| `gpt-5` | 200k | Latest flagship, default large model |
+| `gpt-5-mini` | 200k | Fast, cost-efficient tasks, default small model |
+| `gpt-4o` | 128k | Multimodal reasoning |
+| `gpt-4o-mini` | 128k | Cost-efficient alternative |
 
 ### Reasoning Models
 
@@ -88,14 +88,14 @@ export OPENAI_API_KEY=sk-...
 | Image generation | `dall-e-3`, `dall-e-2` |
 | Speech-to-text | `whisper-1` |
 | Text-to-speech | `tts-1`, `tts-1-hd` |
-| Vision | `gpt-4o` (multimodal) |
+| Vision | `gpt-5` (multimodal) |
 
 ## Model Type Mapping
 
 | elizaOS Model Type | OpenAI Model |
 |-------------------|-------------|
-| `TEXT_SMALL` | `gpt-4o-mini` |
-| `TEXT_LARGE` | `gpt-4o` |
+| `TEXT_SMALL` | `gpt-5-mini` |
+| `TEXT_LARGE` | `gpt-5` |
 | `TEXT_EMBEDDING` | `text-embedding-3-small` |
 | `IMAGE` | `dall-e-3` |
 | `TRANSCRIPTION` | `whisper-1` |
@@ -105,7 +105,7 @@ export OPENAI_API_KEY=sk-...
 
 - Streaming responses
 - Function/tool calling
-- Vision (image input with `gpt-4o`)
+- Vision (image input with `gpt-5`)
 - Structured JSON output (`response_format: { type: "json_object" }`)
 - Batch API support
 - Token usage tracking
