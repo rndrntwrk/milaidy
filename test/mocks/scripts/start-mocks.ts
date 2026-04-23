@@ -540,7 +540,9 @@ function gmailQueryMatches(
       return labels.has(token.slice("label:".length).toUpperCase());
     }
     if (token.startsWith("category:")) {
-      return labels.has(`CATEGORY_${token.slice("category:".length).toUpperCase()}`);
+      return labels.has(
+        `CATEGORY_${token.slice("category:".length).toUpperCase()}`,
+      );
     }
     if (token.startsWith("from:")) {
       const from = message.headers.find(
@@ -563,13 +565,17 @@ function gmailQueryMatches(
       const dayCount =
         unit === "d" ? amount : unit === "m" ? amount * 30 : amount * 365;
       const boundaryMs = dayCount * 24 * 60 * 60 * 1000;
-      return relative[1] === "older" ? ageMs >= boundaryMs : ageMs <= boundaryMs;
+      return relative[1] === "older"
+        ? ageMs >= boundaryMs
+        : ageMs <= boundaryMs;
     }
     return haystack.includes(token.replace(/^"|"$/g, ""));
   });
 }
 
-function gmailListMessages(searchParams: URLSearchParams): DynamicFixtureResponse {
+function gmailListMessages(
+  searchParams: URLSearchParams,
+): DynamicFixtureResponse {
   const includeSpamTrash = searchParams.get("includeSpamTrash") === "true";
   const query = searchParams.get("q") ?? "";
   const labelIds = searchParams.getAll("labelIds");
@@ -775,7 +781,9 @@ function googleDynamicFixture(
   }
 
   if (method === "GET" && pathname === "/gmail/v1/users/me/threads") {
-    const threadIds = [...new Set(GMAIL_FIXTURE_MESSAGES.map((message) => message.threadId))];
+    const threadIds = [
+      ...new Set(GMAIL_FIXTURE_MESSAGES.map((message) => message.threadId)),
+    ];
     return jsonFixture({
       threads: threadIds.map((id) => ({
         id,
@@ -904,7 +912,6 @@ async function startFixtureServer(
 
       const matched = findRoute(routes, method, requestUrl.pathname);
       if (!matched) {
-
         res.writeHead(404, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "not_found" }));
         return;

@@ -18,7 +18,9 @@ if (!aospRoot) usage();
 
 const buildEnvsetup = path.join(aospRoot, "build", "envsetup.sh");
 if (!fs.existsSync(buildEnvsetup)) {
-  throw new Error(`${aospRoot} does not look like an AOSP checkout; missing build/envsetup.sh`);
+  throw new Error(
+    `${aospRoot} does not look like an AOSP checkout; missing build/envsetup.sh`,
+  );
 }
 
 const targetVendor = path.join(aospRoot, "vendor", "milady");

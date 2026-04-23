@@ -84,7 +84,11 @@ function scrubMessage(message, index, emailMap, idMap, threadIdMap) {
         .filter(Boolean)
     : [];
   return {
-    id: scrubStableId(message.id ?? `missing-message-${index}`, "fixture-msg", idMap),
+    id: scrubStableId(
+      message.id ?? `missing-message-${index}`,
+      "fixture-msg",
+      idMap,
+    ),
     threadId: scrubStableId(
       message.threadId ?? `missing-thread-${index}`,
       "fixture-thread",
