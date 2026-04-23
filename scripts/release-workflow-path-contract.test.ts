@@ -13,6 +13,13 @@ function readWorkflow(name: string) {
   );
 }
 
+function readAction(relativePath: string) {
+  return fs.readFileSync(
+    path.join(repoRoot, ".github", "actions", relativePath),
+    "utf8",
+  );
+}
+
 function readElizaScript(relativePath: string) {
   return fs.readFileSync(path.join(repoRoot, "eliza", relativePath), "utf8");
 }
@@ -228,6 +235,16 @@ describe("release workflow path contract", () => {
     );
   });
 
+  it("repairs known eliza patch files before Docker image installs", () => {
+    const buildDocker = readWorkflow("build-docker.yml");
+
+    expect(buildDocker).toContain("name: Repair known eliza patch files");
+    expect(buildDocker).toContain("repairKnownElizaPatchFiles");
+    expect(
+      buildDocker.indexOf("name: Repair known eliza patch files"),
+    ).toBeLessThan(buildDocker.indexOf("name: Install dependencies"));
+  });
+
   it("aligns the Android Gradle wrapper before release Android validation", () => {
     const agentRelease = readWorkflow("agent-release.yml");
 
@@ -336,6 +353,16 @@ describe("release workflow path contract", () => {
     expect(releaseElectrobun).toContain(
       "ELIZA_RELEASE_URL: ${{ (github.event_name != 'workflow_call' || inputs.publish_release) && !inputs.draft && 'https://releases.milady.ai/' || '' }}",
     );
+  });
+
+  it("repairs known eliza patch files before shared workspace installs", () => {
+    const setupBunWorkspace = readAction("setup-bun-workspace/action.yml");
+
+    expect(setupBunWorkspace).toContain("name: Repair known eliza patch files");
+    expect(setupBunWorkspace).toContain("repairKnownElizaPatchFiles");
+    expect(
+      setupBunWorkspace.indexOf("name: Repair known eliza patch files"),
+    ).toBeLessThan(setupBunWorkspace.indexOf("name: Install dependencies"));
   });
 
   it("uses the desktop-build command prefix variable for macOS Intel packaging", () => {
@@ -492,6 +519,10 @@ describe("release workflow path contract", () => {
     expect(releaseElectrobun).toContain(
       "uploaded draft-validation fallback archive",
     );
+    expect(releaseElectrobun).toContain(
+      '"eliza/packages/app-core/platforms/electrobun/build"',
+    );
+    expect(releaseElectrobun).toContain('"apps/app/electrobun/build"');
     expect(releaseElectrobun).toContain(
       'if [ "${{ inputs.draft }}" != "true" ] || [ "${{ inputs.publish_release }}" = "true" ]; then',
     );

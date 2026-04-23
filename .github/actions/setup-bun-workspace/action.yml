@@ -119,6 +119,15 @@ runs:
       env:
         MILADY_SKIP_LOCAL_UPSTREAMS: "1"
 
+    - name: Repair known eliza patch files
+      shell: bash
+      run: |
+        node --input-type=module <<'NODE'
+        import { repairKnownElizaPatchFiles } from "./scripts/disable-local-eliza-workspace.mjs";
+
+        repairKnownElizaPatchFiles();
+        NODE
+
     - name: Install dependencies
       shell: bash
       run: ${{ inputs.install-command }}

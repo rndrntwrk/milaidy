@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react-swc";
 import {
+  type Alias,
   createLogger,
   defineConfig,
   type Plugin,
@@ -461,7 +462,7 @@ const enableAppSourceMaps = process.env[BRANDED_ENV.appSourcemap] === "1";
 /** Set by eliza/packages/app-core/scripts/dev-platform.mjs for `vite build --watch` (Electrobun desktop). */
 const desktopFastDist = process.env[BRANDED_ENV.desktopFastDist] === "1";
 
-function pathIncludesAny(id: string, markers: string[]): boolean {
+function pathIncludesAny(id: string, markers: ReadonlyArray<string>): boolean {
   return markers.some((marker) => id.includes(marker));
 }
 
@@ -485,7 +486,6 @@ const WORKSPACE_CHUNK_GROUPS = [
     name: "workspace-app-core",
     markers: [
       "/eliza/packages/app-core/",
-      "/eliza/packages/typescript/",
       "/eliza/apps/app-companion/",
       "/eliza/apps/app-steward/",
       "/eliza/apps/app-task-coordinator/",
@@ -517,6 +517,10 @@ const WORKSPACE_CHUNK_GROUPS = [
   {
     name: "workspace-ui",
     markers: ["/eliza/packages/ui/"],
+  },
+  {
+    name: "workspace-typescript",
+    markers: ["/eliza/packages/typescript/"],
   },
 ] as const;
 
@@ -1497,7 +1501,7 @@ export default defineConfig({
       // Dynamic aliases for all eliza/apps/* packages
       ...(() => {
         const appsDir = path.resolve(miladyRoot, "eliza/apps");
-        const aliases = [];
+        const aliases: Alias[] = [];
         for (const entry of fs.readdirSync(appsDir, { withFileTypes: true })) {
           if (!entry.isDirectory()) continue;
           const pkgPath = path.join(appsDir, entry.name, "package.json");
@@ -1535,7 +1539,7 @@ export default defineConfig({
         );
         const sharedPkgDir = path.dirname(sharedPkgPath);
         const sharedPkg = JSON.parse(fs.readFileSync(sharedPkgPath, "utf8"));
-        const aliases = [];
+        const aliases: Alias[] = [];
         for (const [key, value] of Object.entries(sharedPkg.exports || {})) {
           if (typeof value === "string") {
             const aliasKey =
@@ -1566,7 +1570,7 @@ export default defineConfig({
         );
         const appCorePkg = JSON.parse(fs.readFileSync(appCorePkgPath, "utf8"));
 
-        const generatedAliases = [];
+        const generatedAliases: Alias[] = [];
 
         for (const [key, value] of Object.entries(appCorePkg.exports || {})) {
           if (typeof value === "string") {
@@ -1759,9 +1763,9 @@ export default defineConfig({
     emptyOutDir: !desktopFastDist,
     sourcemap: desktopFastDist ? false : enableAppSourceMaps,
     target: "es2022",
-    // app-core and @elizaos/core share a real runtime cycle in the browser
-    // bundle, so they are intentionally emitted as one workspace chunk.
-    chunkSizeWarningLimit: 6000,
+    // Keep warnings tight enough to catch regressions while allowing the
+    // current largest workspace chunks to build without noise.
+    chunkSizeWarningLimit: 3500,
     minify: desktopFastDist ? false : undefined,
     cssMinify: desktopFastDist ? false : undefined,
     reportCompressedSize: !desktopFastDist,
