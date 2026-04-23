@@ -265,6 +265,7 @@ const TS_IGNORE_DEPRECATIONS_COMPAT_FILES = [
   path.join("packages", "interop", "tsconfig.json"),
 ];
 const PLUGIN_TS_IGNORE_DEPRECATIONS_COMPAT_FILES = [
+  path.join("plugins", "plugin-agent-skills", "typescript", "tsconfig.json"),
   path.join("plugins", "plugin-calendly", "tsconfig.json"),
   path.join("plugins", "plugin-github", "tsconfig.json"),
   path.join("plugins", "plugin-local-ai", "typescript", "tsconfig.json"),

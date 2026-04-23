@@ -149,7 +149,7 @@ jobs:
           const config = JSON.parse(fs.readFileSync(file, "utf8"));
           config.compilerOptions = {
             ...(config.compilerOptions ?? {}),
-            ignoreDeprecations: "5.0",
+            ignoreDeprecations: "6.0",
           };
           fs.writeFileSync(file, JSON.stringify(config, null, 2) + "\n");
           NODE
