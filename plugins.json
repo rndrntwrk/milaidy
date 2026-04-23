@@ -2946,7 +2946,7 @@
       "dirName": "plugin-lp-manager",
       "name": "Lp Manager",
       "npmName": "@elizaos/plugin-lp-manager",
-      "description": "A unified plugin for managing liquidity positions on Solana DEXs (Raydium, Orca, Meteora) and EVM DEXs (Uniswap, PancakeSwap, Aerodrome).",
+      "description": "A plugin for managing liquidity positions on Solana DEXs (Raydium, Orca, Meteora) and EVM DEXs (Uniswap, PancakeSwap, Aerodrome).",
       "tags": [
         "lp-manager",
         "lp",
