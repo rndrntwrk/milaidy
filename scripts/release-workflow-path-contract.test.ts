@@ -483,5 +483,20 @@ describe("release workflow path contract", () => {
     expect(releaseElectrobun).toContain(
       "Reusing release-installed Electrobun workspace dependencies",
     );
+    expect(releaseElectrobun).toContain("\\r?\\n    cwd: APP_DIR");
+  });
+
+  it("keeps draft Electrobun validation moving when a built app tree exists", () => {
+    const releaseElectrobun = readWorkflow("release-electrobun.yml");
+
+    expect(releaseElectrobun).toContain(
+      "uploaded draft-validation fallback archive",
+    );
+    expect(releaseElectrobun).toContain(
+      'if [ "${{ inputs.draft }}" != "true" ] || [ "${{ inputs.publish_release }}" = "true" ]; then',
+    );
+    expect(releaseElectrobun).toContain(
+      'tar --zstd -cf "$artifact_root/elizaOS-${{ needs.prepare.outputs.env }}-${{ matrix.platform.artifact-name }}.tar.zst"',
+    );
   });
 });
