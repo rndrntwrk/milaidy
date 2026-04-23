@@ -224,7 +224,7 @@ describe("Google mock Gmail fidelity surface", () => {
     const threads = await fetch(`${baseUrl}/gmail/v1/users/me/threads`);
     expect(threads.status).toBe(200);
     expect((await readJson<ThreadsResponse>(threads)).resultSizeEstimate).toBe(
-      2,
+      6,
     );
 
     const thread = await fetch(
