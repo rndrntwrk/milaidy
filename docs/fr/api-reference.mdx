@@ -765,6 +765,15 @@ Les routes sous `/api/cloud/v1/` sont transmises en tant que `/api/v1/` vers le 
 | `POST` | `/api/wallet/generate` | Générer de nouveaux portefeuilles pour EVM, Solana ou les deux |
 | `POST` | `/api/wallet/export` | Exporter les clés privées (nécessite une confirmation) |
 
+<div id="wallet-cloud">
+### Wallet Cloud
+</div>
+
+| Méthode | Chemin | Description |
+|---------|--------|-------------|
+| `POST` | `/api/wallet/primary` | Définir la source de portefeuille principale (local ou cloud) pour une chaîne. Contrôlé par `ENABLE_CLOUD_WALLET` |
+| `POST` | `/api/wallet/refresh-cloud` | Interroger à nouveau Eliza Cloud pour obtenir les derniers descripteurs de portefeuille cloud. Contrôlé par `ENABLE_CLOUD_WALLET` |
+
 ---
 
 <div id="drop--mint">
