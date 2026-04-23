@@ -26,10 +26,18 @@ function parseArgs(argv) {
     aospRoot: null,
     sourceVendor: defaultSourceVendor,
   };
+  const readFlagValue = (flag, index) => {
+    const value = argv[index + 1];
+    if (!value || value.startsWith("--")) {
+      throw new Error(`${flag} requires a path value`);
+    }
+    return path.resolve(value);
+  };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === "--source-vendor") {
-      args.sourceVendor = path.resolve(argv[++i] ?? "");
+      args.sourceVendor = readFlagValue(arg, i);
+      i += 1;
     } else if (!args.aospRoot) {
       args.aospRoot = path.resolve(arg);
     } else {

@@ -52,14 +52,24 @@ function parseArgs(argv) {
     apk: null,
     vendorDir: defaultVendorDir,
   };
+  const readFlagValue = (flag, index) => {
+    const value = argv[index + 1];
+    if (!value || value.startsWith("--")) {
+      throw new Error(`${flag} requires a path value`);
+    }
+    return path.resolve(value);
+  };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === "--aosp-root") {
-      args.aospRoot = path.resolve(argv[++i] ?? "");
+      args.aospRoot = readFlagValue(arg, i);
+      i += 1;
     } else if (arg === "--apk") {
-      args.apk = path.resolve(argv[++i] ?? "");
+      args.apk = readFlagValue(arg, i);
+      i += 1;
     } else if (arg === "--vendor-dir") {
-      args.vendorDir = path.resolve(argv[++i] ?? "");
+      args.vendorDir = readFlagValue(arg, i);
+      i += 1;
     } else if (arg === "-h" || arg === "--help") {
       console.log(
         "Usage: bun run miladyos:validate [--apk <APK>] [--vendor-dir <VENDOR_DIR>] [--aosp-root <AOSP_ROOT>]",
