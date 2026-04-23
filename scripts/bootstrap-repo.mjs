@@ -96,7 +96,8 @@ export async function bootstrapRepo(
 }
 
 const isMain =
-  process.argv[1] && path.resolve(process.argv[1]) === path.resolve(SCRIPT_PATH);
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === path.resolve(SCRIPT_PATH);
 
 if (isMain) {
   bootstrapRepo().catch((error) => {
