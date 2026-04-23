@@ -13,6 +13,13 @@ function readWorkflow(name: string) {
   );
 }
 
+function readAction(relativePath: string) {
+  return fs.readFileSync(
+    path.join(repoRoot, ".github", "actions", relativePath),
+    "utf8",
+  );
+}
+
 function readElizaScript(relativePath: string) {
   return fs.readFileSync(path.join(repoRoot, "eliza", relativePath), "utf8");
 }
@@ -346,6 +353,16 @@ describe("release workflow path contract", () => {
     expect(releaseElectrobun).toContain(
       "ELIZA_RELEASE_URL: ${{ (github.event_name != 'workflow_call' || inputs.publish_release) && !inputs.draft && 'https://releases.milady.ai/' || '' }}",
     );
+  });
+
+  it("repairs known eliza patch files before shared workspace installs", () => {
+    const setupBunWorkspace = readAction("setup-bun-workspace/action.yml");
+
+    expect(setupBunWorkspace).toContain("name: Repair known eliza patch files");
+    expect(setupBunWorkspace).toContain("repairKnownElizaPatchFiles");
+    expect(
+      setupBunWorkspace.indexOf("name: Repair known eliza patch files"),
+    ).toBeLessThan(setupBunWorkspace.indexOf("name: Install dependencies"));
   });
 
   it("uses the desktop-build command prefix variable for macOS Intel packaging", () => {
