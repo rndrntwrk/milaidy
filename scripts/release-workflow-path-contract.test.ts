@@ -228,6 +228,16 @@ describe("release workflow path contract", () => {
     );
   });
 
+  it("repairs known eliza patch files before Docker image installs", () => {
+    const buildDocker = readWorkflow("build-docker.yml");
+
+    expect(buildDocker).toContain("name: Repair known eliza patch files");
+    expect(buildDocker).toContain("repairKnownElizaPatchFiles");
+    expect(
+      buildDocker.indexOf("name: Repair known eliza patch files"),
+    ).toBeLessThan(buildDocker.indexOf("name: Install dependencies"));
+  });
+
   it("aligns the Android Gradle wrapper before release Android validation", () => {
     const agentRelease = readWorkflow("agent-release.yml");
 

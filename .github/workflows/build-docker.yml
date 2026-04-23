@@ -24,8 +24,8 @@ name: Build Agent Image
 on:
   push:
     tags:
-      - 'v2.0.0-alpha.*'
-      - 'v2.0.*'
+      - "v2.0.0-alpha.*"
+      - "v2.0.*"
     branches:
       - develop
   release:
@@ -130,6 +130,14 @@ jobs:
       - name: Initialize tracked workspace submodules
         run: node scripts/init-submodules.mjs
 
+      - name: Repair known eliza patch files
+        run: |
+          node --input-type=module <<'NODE'
+          import { repairKnownElizaPatchFiles } from "./scripts/disable-local-eliza-workspace.mjs";
+
+          repairKnownElizaPatchFiles();
+          NODE
+
       # ── 5. Install dependencies ─────────────────────────────────────────────
       - name: Install dependencies
         run: bun install --ignore-scripts
@@ -161,7 +169,6 @@ jobs:
         run: |
           cd eliza/packages/agent
           bun run build:docker-dist
-
 
       # ── 9. Build runtime (tsdown) ───────────────────────────────────────────
       - name: Build runtime (tsdown)
