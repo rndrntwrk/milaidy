@@ -75,8 +75,10 @@ To explicitly disable the connector even when an account is configured:
 
 The `plugin-auto-enable.ts` module checks `connectors.signal` in your config. The plugin auto-enables when any of the following conditions are met (and `enabled` is not explicitly `false`):
 
+- `token`, `botToken`, or `apiKey` is truthy (generic trigger fields)
 - `account` is set together with `httpUrl`
 - `cliPath` is set (signal-cli binary path for auto-start)
+- Any of `authDir`, `httpHost`, or `httpPort` is set
 - `accounts` contains at least one configured entry
 
 No environment variable is required to trigger auto-enable — it is driven entirely by the connector config object.

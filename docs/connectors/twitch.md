@@ -51,7 +51,7 @@ To explicitly disable the connector even when credentials are present:
 
 ## Auto-Enable Mechanism
 
-The `plugin-auto-enable.ts` module checks `connectors.twitch` in your config. If any of the fields `accessToken` or `clientId` is truthy, or `enabled` is explicitly `true` (and `enabled` is not explicitly `false`), the runtime automatically loads `@elizaos/plugin-twitch`.
+The `plugin-auto-enable.ts` module checks `connectors.twitch` in your config. The connector auto-enables when `accessToken` or `clientId` is truthy, or when `enabled` is explicitly `true`. Setting `enabled: false` disables auto-enable regardless of other fields.
 
 No environment variable is required to trigger auto-enable — it is driven entirely by the connector config object.
 
