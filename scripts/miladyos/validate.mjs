@@ -12,10 +12,15 @@ const PRODUCT_NAME = "milady_cf_x86_64_phone";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "../..");
-const vendorDir = path.join(repoRoot, "os", "android", "vendor", "milady");
-const defaultApk = path.join(vendorDir, "apps", "Milady", "Milady.apk");
+const defaultVendorDir = path.join(
+  repoRoot,
+  "os",
+  "android",
+  "vendor",
+  "milady",
+);
 
-const requiredPermissions = [
+const defaultGrantPermissions = [
   "android.permission.READ_CONTACTS",
   "android.permission.WRITE_CONTACTS",
   "android.permission.CALL_PHONE",
@@ -31,26 +36,21 @@ const requiredPermissions = [
   "android.permission.POST_NOTIFICATIONS",
 ];
 
-const requiredManifestMarkers = [
-  "android.intent.category.HOME",
-  "android.intent.action.ASSIST",
-  "android.intent.action.DIAL",
-  "android.provider.Telephony.SMS_DELIVER",
-  "android.provider.Telephony.WAP_PUSH_DELIVER",
-  "android.telecom.InCallService",
-  "android.permission.BIND_INCALL_SERVICE",
-  `${PACKAGE_NAME}.MiladyDialActivity`,
-  `${PACKAGE_NAME}.MiladyAssistActivity`,
-  `${PACKAGE_NAME}.MiladyInCallService`,
-  `${PACKAGE_NAME}.MiladySmsReceiver`,
-  `${PACKAGE_NAME}.MiladyMmsReceiver`,
-  `${PACKAGE_NAME}.MiladyBootReceiver`,
+const requiredApkPermissions = [
+  ...defaultGrantPermissions,
+  "android.permission.MANAGE_OWN_CALLS",
+  "android.permission.RECEIVE_BOOT_COMPLETED",
+  "android.permission.PACKAGE_USAGE_STATS",
+  "android.permission.SYSTEM_ALERT_WINDOW",
 ];
+
+const privilegedPermissions = ["android.permission.PACKAGE_USAGE_STATS"];
 
 function parseArgs(argv) {
   const args = {
     aospRoot: null,
-    apk: defaultApk,
+    apk: null,
+    vendorDir: defaultVendorDir,
   };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -58,15 +58,18 @@ function parseArgs(argv) {
       args.aospRoot = path.resolve(argv[++i] ?? "");
     } else if (arg === "--apk") {
       args.apk = path.resolve(argv[++i] ?? "");
+    } else if (arg === "--vendor-dir") {
+      args.vendorDir = path.resolve(argv[++i] ?? "");
     } else if (arg === "-h" || arg === "--help") {
       console.log(
-        "Usage: bun run miladyos:validate [--apk <APK>] [--aosp-root <AOSP_ROOT>]",
+        "Usage: bun run miladyos:validate [--apk <APK>] [--vendor-dir <VENDOR_DIR>] [--aosp-root <AOSP_ROOT>]",
       );
       process.exit(0);
     } else {
       throw new Error(`Unknown argument: ${arg}`);
     }
   }
+  args.apk ??= path.join(args.vendorDir, "apps", "Milady", "Milady.apk");
   return args;
 }
 
@@ -95,6 +98,43 @@ function assertMatches(content, pattern, label, description) {
   if (!pattern.test(content)) {
     fail(`${label} is missing ${description}`);
   }
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function assertCountAtLeast(content, needle, expectedCount, label) {
+  const count = content.split(needle).length - 1;
+  if (count < expectedCount) {
+    fail(
+      `${label} needs at least ${expectedCount} occurrence(s) of ${needle}; found ${count}`,
+    );
+  }
+}
+
+function xmlStringValue(xml, name, label) {
+  const match = xml.match(
+    new RegExp(
+      `<string\\b(?=[^>]*\\bname="${escapeRegExp(name)}")[^>]*>([^<]*)<\\/string>`,
+    ),
+  );
+  if (!match) {
+    fail(`${label} is missing string resource ${name}`);
+  }
+  return match[1].trim();
+}
+
+function xmlElementBlockByName(xml, tagName, name, label) {
+  const match = xml.match(
+    new RegExp(
+      `<${tagName}\\b(?=[^>]*\\bname="${escapeRegExp(name)}")[\\s\\S]*?<\\/${tagName}>`,
+    ),
+  );
+  if (!match) {
+    fail(`${label} is missing ${tagName} ${name}`);
+  }
+  return match[0];
 }
 
 function run(command, args) {
@@ -169,14 +209,13 @@ function resolveAapt() {
   fail("Could not find aapt. Set AAPT or ANDROID_HOME/ANDROID_SDK_ROOT.");
 }
 
-function validateXmlFiles() {
+function validateXmlFiles(vendorDir) {
   const xmlFiles = findFiles(vendorDir, (file) => file.endsWith(".xml"));
   if (xmlFiles.length === 0) fail("No XML files found under vendor/milady");
   if (!commandExists("xmllint")) {
-    console.warn(
-      "[miladyos:validate] xmllint unavailable; skipping XML parser validation.",
+    fail(
+      "xmllint is required for XML parser validation. Install libxml2 or set PATH to xmllint.",
     );
-    return;
   }
   run("xmllint", ["--noout", ...xmlFiles]);
   console.log(
@@ -184,7 +223,7 @@ function validateXmlFiles() {
   );
 }
 
-function validateProductLayer() {
+function validateProductLayer(vendorDir) {
   const product = read(path.join(vendorDir, "products", `${PRODUCT_NAME}.mk`));
   assertIncludes(
     product,
@@ -259,16 +298,16 @@ function validateProductLayer() {
     "config_defaultSms",
     "config_defaultAssistant",
   ]) {
-    assertIncludes(
+    const value = xmlStringValue(
       frameworkConfig,
-      `name="${resourceName}"`,
+      resourceName,
       "framework-res overlay",
     );
-    assertIncludes(
-      frameworkConfig,
-      `>${PACKAGE_NAME}<`,
-      "framework-res overlay",
-    );
+    if (value !== PACKAGE_NAME) {
+      fail(
+        `framework-res overlay ${resourceName} must be ${PACKAGE_NAME}; found ${value || "<empty>"}`,
+      );
+    }
   }
 
   const obsoleteRoleFiles = findFiles(vendorDir, (file) =>
@@ -283,7 +322,7 @@ function validateProductLayer() {
   console.log("[miladyos:validate] Product layer checks passed.");
 }
 
-function validateDefaultPermissions() {
+function validateDefaultPermissions(vendorDir) {
   const defaultPermissions = read(
     path.join(
       vendorDir,
@@ -296,7 +335,7 @@ function validateDefaultPermissions() {
     `<exception package="${PACKAGE_NAME}">`,
     "default permissions",
   );
-  for (const permission of requiredPermissions) {
+  for (const permission of defaultGrantPermissions) {
     assertIncludes(
       defaultPermissions,
       `name="${permission}"`,
@@ -316,7 +355,218 @@ function validateDefaultPermissions() {
     `<privapp-permissions package="${PACKAGE_NAME}"`,
     "privapp permissions",
   );
+  for (const permission of privilegedPermissions) {
+    assertIncludes(
+      privPermissions,
+      `name="${permission}"`,
+      "privapp permissions",
+    );
+  }
   console.log("[miladyos:validate] Permission XML checks passed.");
+}
+
+function manifestElementBlocks(manifest, elementName) {
+  const blocks = [];
+  const lines = manifest.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i += 1) {
+    const start = lines[i].match(new RegExp(`^(\\s*)E: ${elementName}\\b`));
+    if (!start) continue;
+    const indent = start[1].length;
+    const block = [lines[i]];
+    for (let j = i + 1; j < lines.length; j += 1) {
+      const nextElement = lines[j].match(/^(\s*)E: /);
+      if (nextElement && nextElement[1].length <= indent) break;
+      block.push(lines[j]);
+    }
+    blocks.push(block.join("\n"));
+  }
+  return blocks;
+}
+
+function manifestComponentBlock(manifest, elementName, componentName) {
+  const block = manifestElementBlocks(manifest, elementName).find((candidate) =>
+    candidate.includes(`"${componentName}"`),
+  );
+  if (!block) {
+    fail(`APK manifest is missing ${elementName} ${componentName}`);
+  }
+  return block;
+}
+
+function assertManifestBlockIncludes(block, needle, label) {
+  assertIncludes(block, needle, `APK manifest ${label}`);
+}
+
+function validateApkManifest(manifest) {
+  const mainActivity = manifestComponentBlock(
+    manifest,
+    "activity",
+    `${PACKAGE_NAME}.MainActivity`,
+  );
+  assertManifestBlockIncludes(
+    mainActivity,
+    "android.intent.action.MAIN",
+    "MainActivity",
+  );
+  assertManifestBlockIncludes(
+    mainActivity,
+    "android.intent.category.HOME",
+    "MainActivity",
+  );
+  assertManifestBlockIncludes(
+    mainActivity,
+    "android.intent.category.DEFAULT",
+    "MainActivity",
+  );
+
+  const dialActivity = manifestComponentBlock(
+    manifest,
+    "activity",
+    `${PACKAGE_NAME}.MiladyDialActivity`,
+  );
+  assertCountAtLeast(
+    dialActivity,
+    "android.intent.action.DIAL",
+    2,
+    "APK manifest MiladyDialActivity",
+  );
+  assertManifestBlockIncludes(
+    dialActivity,
+    "android.intent.category.DEFAULT",
+    "MiladyDialActivity",
+  );
+  assertManifestBlockIncludes(
+    dialActivity,
+    'android:scheme(0x01010027)="tel"',
+    "MiladyDialActivity",
+  );
+
+  const assistActivity = manifestComponentBlock(
+    manifest,
+    "activity",
+    `${PACKAGE_NAME}.MiladyAssistActivity`,
+  );
+  assertManifestBlockIncludes(
+    assistActivity,
+    "android.intent.action.ASSIST",
+    "MiladyAssistActivity",
+  );
+  assertManifestBlockIncludes(
+    assistActivity,
+    "android.intent.category.DEFAULT",
+    "MiladyAssistActivity",
+  );
+
+  const inCallService = manifestComponentBlock(
+    manifest,
+    "service",
+    `${PACKAGE_NAME}.MiladyInCallService`,
+  );
+  assertManifestBlockIncludes(
+    inCallService,
+    "android.permission.BIND_INCALL_SERVICE",
+    "MiladyInCallService",
+  );
+  assertManifestBlockIncludes(
+    inCallService,
+    "android.telecom.InCallService",
+    "MiladyInCallService",
+  );
+  assertManifestBlockIncludes(
+    inCallService,
+    "android.telecom.IN_CALL_SERVICE_UI",
+    "MiladyInCallService",
+  );
+
+  const smsReceiver = manifestComponentBlock(
+    manifest,
+    "receiver",
+    `${PACKAGE_NAME}.MiladySmsReceiver`,
+  );
+  assertManifestBlockIncludes(
+    smsReceiver,
+    "android.permission.BROADCAST_SMS",
+    "MiladySmsReceiver",
+  );
+  assertManifestBlockIncludes(
+    smsReceiver,
+    "android.provider.Telephony.SMS_DELIVER",
+    "MiladySmsReceiver",
+  );
+
+  const mmsReceiver = manifestComponentBlock(
+    manifest,
+    "receiver",
+    `${PACKAGE_NAME}.MiladyMmsReceiver`,
+  );
+  assertManifestBlockIncludes(
+    mmsReceiver,
+    "android.permission.BROADCAST_WAP_PUSH",
+    "MiladyMmsReceiver",
+  );
+  assertManifestBlockIncludes(
+    mmsReceiver,
+    "android.provider.Telephony.WAP_PUSH_DELIVER",
+    "MiladyMmsReceiver",
+  );
+  assertManifestBlockIncludes(
+    mmsReceiver,
+    "application/vnd.wap.mms-message",
+    "MiladyMmsReceiver",
+  );
+
+  const respondService = manifestComponentBlock(
+    manifest,
+    "service",
+    `${PACKAGE_NAME}.MiladyRespondViaMessageService`,
+  );
+  assertManifestBlockIncludes(
+    respondService,
+    "android.permission.SEND_RESPOND_VIA_MESSAGE",
+    "MiladyRespondViaMessageService",
+  );
+  assertManifestBlockIncludes(
+    respondService,
+    "android.intent.action.RESPOND_VIA_MESSAGE",
+    "MiladyRespondViaMessageService",
+  );
+  assertManifestBlockIncludes(
+    respondService,
+    'android:scheme(0x01010027)="smsto"',
+    "MiladyRespondViaMessageService",
+  );
+
+  const composeActivity = manifestComponentBlock(
+    manifest,
+    "activity",
+    `${PACKAGE_NAME}.MiladySmsComposeActivity`,
+  );
+  assertManifestBlockIncludes(
+    composeActivity,
+    "android.intent.action.SENDTO",
+    "MiladySmsComposeActivity",
+  );
+  assertManifestBlockIncludes(
+    composeActivity,
+    'android:scheme(0x01010027)="smsto"',
+    "MiladySmsComposeActivity",
+  );
+
+  const bootReceiver = manifestComponentBlock(
+    manifest,
+    "receiver",
+    `${PACKAGE_NAME}.MiladyBootReceiver`,
+  );
+  assertManifestBlockIncludes(
+    bootReceiver,
+    "android.intent.action.LOCKED_BOOT_COMPLETED",
+    "MiladyBootReceiver",
+  );
+  assertManifestBlockIncludes(
+    bootReceiver,
+    "android.intent.action.BOOT_COMPLETED",
+    "MiladyBootReceiver",
+  );
 }
 
 function validateApk(apkPath) {
@@ -325,7 +575,7 @@ function validateApk(apkPath) {
   const badging = run(aapt, ["dump", "badging", apkPath]);
   assertIncludes(badging, `package: name='${PACKAGE_NAME}'`, "APK badging");
   assertIncludes(badging, `application-label:'${APP_NAME}'`, "APK badging");
-  for (const permission of requiredPermissions) {
+  for (const permission of requiredApkPermissions) {
     assertIncludes(
       badging,
       `uses-permission: name='${permission}'`,
@@ -339,9 +589,7 @@ function validateApk(apkPath) {
     apkPath,
     "AndroidManifest.xml",
   ]);
-  for (const marker of requiredManifestMarkers) {
-    assertIncludes(manifest, marker, "APK manifest");
-  }
+  validateApkManifest(manifest);
   console.log(`[miladyos:validate] APK checks passed with ${aapt}.`);
 }
 
@@ -361,20 +609,65 @@ function validateAospRoot(aospRoot) {
       "roles.xml",
     ),
   );
-  assertIncludes(rolesXml, 'name="android.app.role.DIALER"', "AOSP roles.xml");
-  assertIncludes(
+  const dialerRole = xmlElementBlockByName(
     rolesXml,
+    "role",
+    "android.app.role.DIALER",
+    "AOSP roles.xml",
+  );
+  assertIncludes(
+    dialerRole,
     'defaultHolders="config_defaultDialer"',
-    "AOSP roles.xml",
+    "AOSP DIALER role",
   );
-  assertIncludes(rolesXml, 'name="android.app.role.SMS"', "AOSP roles.xml");
+  assertIncludes(dialerRole, "android.intent.action.DIAL", "AOSP DIALER role");
   assertIncludes(
+    dialerRole,
+    "android.telecom.InCallService",
+    "AOSP DIALER role",
+  );
+
+  const smsRole = xmlElementBlockByName(
     rolesXml,
-    'defaultHolders="config_defaultSms"',
+    "role",
+    "android.app.role.SMS",
     "AOSP roles.xml",
   );
-  assertIncludes(rolesXml, 'name="android.app.role.HOME"', "AOSP roles.xml");
-  if (rolesXml.includes('defaultHolders="config_defaultHome')) {
+  assertIncludes(
+    smsRole,
+    'defaultHolders="config_defaultSms"',
+    "AOSP SMS role",
+  );
+  for (const marker of [
+    "android.provider.Telephony.SMS_DELIVER",
+    "android.provider.Telephony.WAP_PUSH_DELIVER",
+    "android.intent.action.RESPOND_VIA_MESSAGE",
+    "android.intent.action.SENDTO",
+  ]) {
+    assertIncludes(smsRole, marker, "AOSP SMS role");
+  }
+
+  const assistantRole = xmlElementBlockByName(
+    rolesXml,
+    "role",
+    "android.app.role.ASSISTANT",
+    "AOSP roles.xml",
+  );
+  assertIncludes(
+    assistantRole,
+    'defaultHolders="config_defaultAssistant"',
+    "AOSP ASSISTANT role",
+  );
+  assertIncludes(assistantRole, "AssistantRoleBehavior", "AOSP ASSISTANT role");
+
+  const homeRole = xmlElementBlockByName(
+    rolesXml,
+    "role",
+    "android.app.role.HOME",
+    "AOSP roles.xml",
+  );
+  assertIncludes(homeRole, "android.intent.category.HOME", "AOSP HOME role");
+  if (homeRole.includes("defaultHolders=")) {
     fail(
       "AOSP HOME role unexpectedly has a defaultHolders config; revisit MiladyOS home defaulting.",
     );
@@ -409,9 +702,9 @@ function validateAospRoot(aospRoot) {
 
 function main() {
   const args = parseArgs(process.argv.slice(2));
-  validateXmlFiles();
-  validateProductLayer();
-  validateDefaultPermissions();
+  validateXmlFiles(args.vendorDir);
+  validateProductLayer(args.vendorDir);
+  validateDefaultPermissions(args.vendorDir);
   validateApk(args.apk);
   if (args.aospRoot) {
     validateAospRoot(args.aospRoot);

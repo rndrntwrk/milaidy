@@ -6,15 +6,44 @@ import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "../..");
-const sourceVendor = path.join(repoRoot, "os", "android", "vendor", "milady");
+const defaultSourceVendor = path.join(
+  repoRoot,
+  "os",
+  "android",
+  "vendor",
+  "milady",
+);
 
 function usage() {
-  console.error("Usage: bun run miladyos:sync -- <AOSP_ROOT>");
+  console.error(
+    "Usage: bun run miladyos:sync -- [--source-vendor <VENDOR_DIR>] <AOSP_ROOT>",
+  );
   process.exit(1);
 }
 
-const aospRoot = process.argv[2] ? path.resolve(process.argv[2]) : null;
+function parseArgs(argv) {
+  const args = {
+    aospRoot: null,
+    sourceVendor: defaultSourceVendor,
+  };
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg === "--source-vendor") {
+      args.sourceVendor = path.resolve(argv[++i] ?? "");
+    } else if (!args.aospRoot) {
+      args.aospRoot = path.resolve(arg);
+    } else {
+      usage();
+    }
+  }
+  return args;
+}
+
+const { aospRoot, sourceVendor } = parseArgs(process.argv.slice(2));
 if (!aospRoot) usage();
+if (!fs.existsSync(sourceVendor)) {
+  throw new Error(`Missing MiladyOS vendor source: ${sourceVendor}`);
+}
 
 const buildEnvsetup = path.join(aospRoot, "build", "envsetup.sh");
 if (!fs.existsSync(buildEnvsetup)) {
@@ -33,8 +62,8 @@ fs.cpSync(sourceVendor, targetVendor, {
 
 const apk = path.join(targetVendor, "apps", "Milady", "Milady.apk");
 if (!fs.existsSync(apk)) {
-  console.warn(
-    "[miladyos] vendor/milady synced, but Milady.apk is missing. Run `bun run build:android:system` before building the AOSP product.",
+  throw new Error(
+    "[miladyos] vendor/milady synced without Milady.apk. Run `bun run build:android:system` before syncing the AOSP product.",
   );
 }
 
