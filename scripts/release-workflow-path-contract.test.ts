@@ -493,6 +493,10 @@ describe("release workflow path contract", () => {
       "uploaded draft-validation fallback archive",
     );
     expect(releaseElectrobun).toContain(
+      '"eliza/packages/app-core/platforms/electrobun/build"',
+    );
+    expect(releaseElectrobun).toContain('"apps/app/electrobun/build"');
+    expect(releaseElectrobun).toContain(
       'if [ "${{ inputs.draft }}" != "true" ] || [ "${{ inputs.publish_release }}" = "true" ]; then',
     );
     expect(releaseElectrobun).toContain(

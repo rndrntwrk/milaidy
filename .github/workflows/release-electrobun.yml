@@ -722,9 +722,19 @@ jobs:
             exit "$status"
           fi
 
-          build_root="apps/app/electrobun/build"
           artifact_root="apps/app/electrobun/artifacts"
-          build_dir="$(find "$build_root" -mindepth 1 -maxdepth 1 -type d | sort | tail -1)"
+          build_root=""
+          build_dir=""
+          for candidate_root in \
+            "eliza/packages/app-core/platforms/electrobun/build" \
+            "apps/app/electrobun/build"; do
+            candidate_dir="$(find "$candidate_root" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort | tail -1 || true)"
+            if [ -n "$candidate_dir" ]; then
+              build_root="$candidate_root"
+              build_dir="$candidate_dir"
+              break
+            fi
+          done
           if [ -z "$build_dir" ]; then
             echo "::error::Electrobun packaging failed and no built app tree exists"
             exit "$status"
