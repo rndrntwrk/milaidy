@@ -202,6 +202,7 @@ describe("release workflow path contract", () => {
     expect(buildCloudImage).toContain(
       "node ../shared/scripts/generate-keywords.mjs --target ts",
     );
+    expect(buildCloudImage).toContain('ignoreDeprecations: "5.0"');
     expect(buildCloudImage).toContain(
       "Inject tailwindcss into eliza/packages/app-core/node_modules",
     );
