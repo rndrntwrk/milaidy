@@ -3,6 +3,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   readdirSync,
   readFileSync,
@@ -10,6 +11,7 @@ import {
   rmSync,
   statSync,
   symlinkSync,
+  unlinkSync,
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
@@ -34,7 +36,8 @@ export const ELIZA_REQUIRED_FILES = ["package.json"];
 export const ELIZA_BUILD_STEPS = [
   {
     // Fresh CI checkouts do not track generated protobuf types for @elizaos/core.
-    // Build the package once so src/types/generated exists before root typecheck/tests.
+    // Also rebuild core declarations on every setup run so nested plugin builds
+    // never typecheck against stale dist/ output after the submodule changes.
     check: path.join(
       "packages",
       "typescript",
@@ -48,6 +51,7 @@ export const ELIZA_BUILD_STEPS = [
     cwd: path.join("packages", "typescript"),
     args: ["run", "build"],
     label: "@elizaos/core",
+    alwaysRun: true,
   },
   {
     check: path.join("packages", "prompts", "dist", "typescript", "index.ts"),
@@ -101,6 +105,10 @@ const OPTIONAL_ELIZA_PLUGIN_PACKAGES = [
     workspaceEntry: "plugins/plugin-local-ai/typescript",
     packageName: "@elizaos/plugin-local-ai",
   },
+];
+const CONDITIONAL_ELIZA_WORKSPACE_ENTRIES = [
+  ...OPTIONAL_ELIZA_PLUGIN_PACKAGES.map(({ workspaceEntry }) => workspaceEntry),
+  "cloud/packages/services/billing",
 ];
 
 const PACKAGE_LINK_ROOTS = [
@@ -634,6 +642,61 @@ export function getTemporaryElizaWorkspaceEntries(
   ];
 }
 
+export function getMissingConditionalElizaWorkspaceEntries(
+  elizaRoot,
+  workspaces,
+  { pathExists = existsSync } = {},
+) {
+  if (!Array.isArray(workspaces)) {
+    return [];
+  }
+
+  return CONDITIONAL_ELIZA_WORKSPACE_ENTRIES.filter((workspaceEntry) => {
+    if (!workspaces.includes(workspaceEntry)) {
+      return false;
+    }
+
+    return !pathExists(path.join(elizaRoot, workspaceEntry, "package.json"));
+  });
+}
+
+export function stripMissingConditionalElizaWorkspaces(
+  elizaRoot,
+  { pathExists = existsSync } = {},
+) {
+  const packageJsonPath = path.join(elizaRoot, "package.json");
+  if (!pathExists(packageJsonPath)) {
+    return [];
+  }
+
+  const raw = readFileSync(packageJsonPath, "utf8");
+  let pkg;
+  try {
+    pkg = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+
+  if (!Array.isArray(pkg.workspaces)) {
+    return [];
+  }
+
+  const missingWorkspaceEntries = getMissingConditionalElizaWorkspaceEntries(
+    elizaRoot,
+    pkg.workspaces,
+    { pathExists },
+  );
+  if (missingWorkspaceEntries.length === 0) {
+    return [];
+  }
+
+  pkg.workspaces = pkg.workspaces.filter(
+    (workspaceEntry) => !missingWorkspaceEntries.includes(workspaceEntry),
+  );
+  writePackageJson(packageJsonPath, raw, pkg);
+  return missingWorkspaceEntries;
+}
+
 async function withTemporaryOptionalElizaPluginWorkspaces(elizaRoot, callback) {
   const packageJsonPath = path.join(elizaRoot, "package.json");
   const raw = readFileSync(packageJsonPath, "utf8");
@@ -651,19 +714,36 @@ async function withTemporaryOptionalElizaPluginWorkspaces(elizaRoot, callback) {
     return callback();
   }
 
-  const missingWorkspaceEntries = getTemporaryElizaWorkspaceEntries(
+  const additionalWorkspaceEntries = getTemporaryElizaWorkspaceEntries(
     elizaRoot,
   ).filter((workspaceEntry) => !pkg.workspaces.includes(workspaceEntry));
+  const removedWorkspaceEntries = getMissingConditionalElizaWorkspaceEntries(
+    elizaRoot,
+    pkg.workspaces,
+  );
 
-  if (missingWorkspaceEntries.length === 0) {
+  if (
+    additionalWorkspaceEntries.length === 0 &&
+    removedWorkspaceEntries.length === 0
+  ) {
     return callback();
   }
 
-  pkg.workspaces = [...pkg.workspaces, ...missingWorkspaceEntries];
-  writePackageJson(packageJsonPath, raw, pkg);
-  console.log(
-    `[setup-upstreams] Temporarily enabling eliza workspace entries (${missingWorkspaceEntries.join(", ")})`,
+  pkg.workspaces = pkg.workspaces.filter(
+    (workspaceEntry) => !removedWorkspaceEntries.includes(workspaceEntry),
   );
+  pkg.workspaces = [...pkg.workspaces, ...additionalWorkspaceEntries];
+  writePackageJson(packageJsonPath, raw, pkg);
+  if (additionalWorkspaceEntries.length > 0) {
+    console.log(
+      `[setup-upstreams] Temporarily enabling eliza workspace entries (${additionalWorkspaceEntries.join(", ")})`,
+    );
+  }
+  if (removedWorkspaceEntries.length > 0) {
+    console.log(
+      `[setup-upstreams] Temporarily disabling missing eliza workspace entries (${removedWorkspaceEntries.join(", ")})`,
+    );
+  }
 
   try {
     return await callback();
@@ -1212,10 +1292,17 @@ function createLink(linkPath, targetPath, kind = "dir") {
     return false;
   }
 
-  rmSync(linkPath, {
-    force: true,
-    recursive: true,
-  });
+  try {
+    const existingLinkStats = lstatSync(linkPath);
+    if (existingLinkStats.isSymbolicLink()) {
+      unlinkSync(linkPath);
+    } else {
+      rmSync(linkPath, {
+        force: true,
+        recursive: existingLinkStats.isDirectory(),
+      });
+    }
+  } catch {}
 
   mkdirSync(path.dirname(linkPath), { recursive: true });
 
@@ -1703,7 +1790,14 @@ export async function bootstrapBundledBunInstall(
   return true;
 }
 
-async function ensureElizaGeneratedKeywordData(elizaRoot) {
+async function ensureElizaGeneratedKeywordData(
+  elizaRoot,
+  {
+    pathExists = existsSync,
+    runCommandImpl = runCommand,
+    log = console.log,
+  } = {},
+) {
   const generatedKeywordDataPath = path.join(
     elizaRoot,
     "packages",
@@ -1714,12 +1808,12 @@ async function ensureElizaGeneratedKeywordData(elizaRoot) {
     "validation-keyword-data.ts",
   );
 
-  if (existsSync(generatedKeywordDataPath)) {
+  if (pathExists(generatedKeywordDataPath)) {
     return;
   }
 
-  console.log("[setup-upstreams] Generating eliza i18n keyword data");
-  await runCommand(
+  log("[setup-upstreams] Generating eliza i18n keyword data");
+  await runCommandImpl(
     "node",
     ["packages/shared/scripts/generate-keywords.mjs", "--target", "ts"],
     {
@@ -1729,16 +1823,27 @@ async function ensureElizaGeneratedKeywordData(elizaRoot) {
   );
 }
 
-async function ensureElizaBuildOutputs(elizaRoot) {
-  await ensureElizaGeneratedKeywordData(elizaRoot);
+export async function ensureElizaBuildOutputs(
+  elizaRoot,
+  {
+    pathExists = existsSync,
+    runCommandImpl = runCommand,
+    log = console.log,
+  } = {},
+) {
+  await ensureElizaGeneratedKeywordData(elizaRoot, {
+    pathExists,
+    runCommandImpl,
+    log,
+  });
 
   for (const step of ELIZA_BUILD_STEPS) {
-    if (existsSync(path.join(elizaRoot, step.check))) {
+    if (!step.alwaysRun && pathExists(path.join(elizaRoot, step.check))) {
       continue;
     }
 
-    console.log(`[setup-upstreams] Building ${step.label}`);
-    await runCommand("bun", step.args, {
+    log(`[setup-upstreams] Building ${step.label}`);
+    await runCommandImpl("bun", step.args, {
       cwd: path.join(elizaRoot, step.cwd),
       label: `bun ${step.args.join(" ")} (${step.label})`,
     });
@@ -1871,12 +1976,19 @@ export async function setupUpstreams(repoRoot = DEFAULT_REPO_ROOT) {
   if (skipReason) {
     if (skipReason.endsWith("=1")) {
       ensurePublishedElizaPackageLinks(repoRoot);
-      // Strip missing optional plugin workspace entries from eliza/package.json
-      // so that any subsequent `bun install --cwd eliza` doesn't fail on
-      // workspace paths that don't exist when plugin submodules are absent.
+      // Strip missing conditional workspace entries from eliza/package.json so
+      // that any subsequent `bun install --cwd eliza` doesn't fail on nested
+      // paths that are intentionally absent in this checkout.
       // Guard: eliza/ may have been renamed by disable-local-eliza-workspace.mjs.
       const elizaRoot = getRepoElizaRoot(repoRoot);
       if (existsSync(path.join(elizaRoot, "package.json"))) {
+        const strippedWorkspaces =
+          stripMissingConditionalElizaWorkspaces(elizaRoot);
+        if (strippedWorkspaces.length > 0) {
+          console.log(
+            `[setup-upstreams] Stripped missing conditional eliza workspace entries (${strippedWorkspaces.join(", ")})`,
+          );
+        }
         const missingPlugins = getMissingOptionalElizaPlugins(elizaRoot);
         if (missingPlugins.length > 0) {
           const patched = applyOptionalElizaPluginFallback(
