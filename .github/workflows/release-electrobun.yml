@@ -764,7 +764,7 @@ jobs:
               tar --zstd -cf "$artifact_root/elizaOS-${{ needs.prepare.outputs.env }}-${{ matrix.platform.artifact-name }}.tar.zst" -C "$build_root" "$(basename "$build_dir")"
               ;;
             macos)
-              tar -czf "$artifact_root/elizaOS-${{ needs.prepare.outputs.env }}-${{ matrix.platform.artifact-name }}.tar.gz" -C "$build_root" "$(basename "$build_dir")"
+              tar -czf "$artifact_root/elizaOS-${{ needs.prepare.outputs.env }}-${{ matrix.platform.artifact-name }}.app.tar.gz" -C "$build_root" "$(basename "$build_dir")"
               ;;
             windows)
               powershell -NoProfile -Command "Compress-Archive -Path '$build_dir' -DestinationPath '$artifact_root/elizaOS-${{ needs.prepare.outputs.env }}-${{ matrix.platform.artifact-name }}.exe.zip' -Force"

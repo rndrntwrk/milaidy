@@ -354,3 +354,82 @@ index 8ba6eb9670..a7a6ea6b9c 100644
    if (
      req.method === "GET" &&
      (url.pathname === "/api/browser-bridge/companions" ||
+diff --git a/packages/app-core/platforms/electrobun/scripts/stage-macos-release-artifacts.sh b/packages/app-core/platforms/electrobun/scripts/stage-macos-release-artifacts.sh
+index 74c284e2df..60998fdf58 100644
+--- a/packages/app-core/platforms/electrobun/scripts/stage-macos-release-artifacts.sh
++++ b/packages/app-core/platforms/electrobun/scripts/stage-macos-release-artifacts.sh
+@@ -147,14 +147,31 @@ wait_for_notary_acceptance() {
+   return 1
+ }
+ 
+-TARBALL_PATH="$(find -L "$ARTIFACTS_DIR" -maxdepth 1 -type f -name "*-macos-*.app.tar.zst" | sort | head -1)"
++TARBALL_PATH=""
++for tarball_pattern in "*-macos-*.app.tar.zst" "*-macos-*.app.tar.gz" "*-macos-*.tar.gz"; do
++  TARBALL_PATH="$(find -L "$ARTIFACTS_DIR" -maxdepth 1 -type f -name "$tarball_pattern" | sort | head -1)"
++  if [[ -n "$TARBALL_PATH" ]]; then
++    break
++  fi
++done
+ if [[ -z "$TARBALL_PATH" ]]; then
+   echo "stage-macos-release-artifacts: no macOS updater tarball found in $ARTIFACTS_DIR"
+   exit 1
+ fi
+ 
+ echo "Using updater tarball: $TARBALL_PATH"
+-tar --zstd -xf "$TARBALL_PATH" -C "$EXTRACT_DIR"
++case "$TARBALL_PATH" in
++  *.tar.zst)
++    tar --zstd -xf "$TARBALL_PATH" -C "$EXTRACT_DIR"
++    ;;
++  *.tar.gz)
++    tar -xzf "$TARBALL_PATH" -C "$EXTRACT_DIR"
++    ;;
++  *)
++    echo "stage-macos-release-artifacts: unsupported macOS tarball format: $TARBALL_PATH"
++    exit 1
++    ;;
++esac
+ 
+ APP_BUNDLE_PATH="$(find "$EXTRACT_DIR" -maxdepth 2 -type d -name "*.app" | sort | head -1)"
+ if [[ -z "$APP_BUNDLE_PATH" ]]; then
+@@ -243,7 +260,22 @@ else
+   echo "Skipping staged app signature verification (unsigned/local build)."
+ fi
+ 
+-FINAL_DMG_NAME="$(basename "${TARBALL_PATH%.app.tar.zst}.dmg")"
++TARBALL_BASENAME="$(basename "$TARBALL_PATH")"
++case "$TARBALL_BASENAME" in
++  *.app.tar.zst)
++    FINAL_DMG_NAME="${TARBALL_BASENAME%.app.tar.zst}.dmg"
++    ;;
++  *.app.tar.gz)
++    FINAL_DMG_NAME="${TARBALL_BASENAME%.app.tar.gz}.dmg"
++    ;;
++  *.tar.gz)
++    FINAL_DMG_NAME="${TARBALL_BASENAME%.tar.gz}.dmg"
++    ;;
++  *)
++    echo "stage-macos-release-artifacts: unsupported macOS tarball name: $TARBALL_BASENAME"
++    exit 1
++    ;;
++esac
+ FINAL_DMG_PATH="$ARTIFACTS_DIR/$FINAL_DMG_NAME"
+ TEMP_DMG_PATH="$TMP_ROOT/$FINAL_DMG_NAME"
+ VOLUME_NAME="$(basename "$STAGED_APP_PATH" .app)"
+diff --git a/packages/app-core/scripts/release-check.ts b/packages/app-core/scripts/release-check.ts
+index 6da229a550..7bd64145e1 100755
+--- a/packages/app-core/scripts/release-check.ts
++++ b/packages/app-core/scripts/release-check.ts
+@@ -903,8 +903,11 @@ function assertElectrobunConfigHasPostWrapSigner() {
+ function assertMacArtifactStagerLooksCorrect() {
+   const script = readElectrobunFile("scripts", "stage-macos-release-artifacts.sh");
+   const requiredSnippets = [
+-    'find -L "$ARTIFACTS_DIR" -maxdepth 1 -type f -name "*-macos-*.app.tar.zst"',
++    'for tarball_pattern in "*-macos-*.app.tar.zst" "*-macos-*.app.tar.gz" "*-macos-*.tar.gz"; do',
+     "no macOS updater tarball found",
++    'tar --zstd -xf "$TARBALL_PATH" -C "$EXTRACT_DIR"',
++    'tar -xzf "$TARBALL_PATH" -C "$EXTRACT_DIR"',
++    'TARBALL_BASENAME="$(basename "$TARBALL_PATH")"',
+     'DIRECT_LAUNCHER_SOURCE="$SCRIPT_DIR/macos-direct-launcher.c"',
+     'codesign -d --entitlements :- "$STAGED_APP_PATH"',
+     "/usr/bin/clang \\",
