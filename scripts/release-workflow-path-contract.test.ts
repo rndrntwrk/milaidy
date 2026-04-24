@@ -162,7 +162,14 @@ describe("release workflow path contract", () => {
       "uses: ./.github/actions/setup-bun-workspace",
     );
     expect(agentRelease).toContain(
-      "run: |\n          node scripts/init-submodules.mjs\n          node scripts/disable-local-eliza-workspace.mjs",
+      [
+        "run: |",
+        "          git submodule sync -- eliza",
+        "          git submodule update --init --depth=1 eliza",
+        "          node scripts/init-submodules.mjs",
+        "          node scripts/apply-eliza-ci-patches.mjs",
+        "          node scripts/disable-local-eliza-workspace.mjs",
+      ].join("\n"),
     );
   });
 

@@ -314,7 +314,10 @@ jobs:
 
       - name: Init non-eliza submodules
         run: |
+          git submodule sync -- eliza
+          git submodule update --init --depth=1 eliza
           node scripts/init-submodules.mjs
+          node scripts/apply-eliza-ci-patches.mjs
           node scripts/disable-local-eliza-workspace.mjs
 
       - name: Install root dependencies
@@ -432,7 +435,10 @@ jobs:
 
       - name: Init non-eliza submodules
         run: |
+          git submodule sync -- eliza
+          git submodule update --init --depth=1 eliza
           node scripts/init-submodules.mjs
+          node scripts/apply-eliza-ci-patches.mjs
           node scripts/disable-local-eliza-workspace.mjs
 
       - name: Install root dependencies

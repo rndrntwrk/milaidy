@@ -355,7 +355,10 @@ jobs:
           submodules: false
       - name: Init non-eliza submodules
         run: |
+          git submodule sync -- eliza
+          git submodule update --init --depth=1 eliza
           node scripts/init-submodules.mjs
+          node scripts/apply-eliza-ci-patches.mjs
           node scripts/disable-local-eliza-workspace.mjs
       - name: Stage snapcraft.yaml
         run: |
@@ -401,7 +404,10 @@ jobs:
           submodules: false
       - name: Init non-eliza submodules
         run: |
+          git submodule sync -- eliza
+          git submodule update --init --depth=1 eliza
           node scripts/init-submodules.mjs
+          node scripts/apply-eliza-ci-patches.mjs
           node scripts/disable-local-eliza-workspace.mjs
       - name: Install flatpak tools
         run: |
@@ -432,7 +438,10 @@ jobs:
           submodules: false
       - name: Init non-eliza submodules
         run: |
+          git submodule sync -- eliza
+          git submodule update --init --depth=1 eliza
           node scripts/init-submodules.mjs
+          node scripts/apply-eliza-ci-patches.mjs
           node scripts/disable-local-eliza-workspace.mjs
       - uses: actions/setup-python@v5
         with:
@@ -461,7 +470,10 @@ jobs:
           submodules: false
       - name: Init non-eliza submodules
         run: |
+          git submodule sync -- eliza
+          git submodule update --init --depth=1 eliza
           node scripts/init-submodules.mjs
+          node scripts/apply-eliza-ci-patches.mjs
           node scripts/disable-local-eliza-workspace.mjs
       - uses: actions/setup-node@v4
         with:
@@ -545,7 +557,10 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
       - name: Init non-eliza submodules
         run: |
+          git submodule sync -- eliza
+          git submodule update --init --depth=1 eliza
           node scripts/init-submodules.mjs
+          node scripts/apply-eliza-ci-patches.mjs
           node scripts/disable-local-eliza-workspace.mjs
       - name: Build web assets and Electrobun
         run: |
