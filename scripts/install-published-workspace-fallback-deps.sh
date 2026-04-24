@@ -156,12 +156,24 @@ symlink_installed_packages_into_manifest_node_modules() {
     [[ -e "$source_path" || -L "$source_path" ]] || continue
 
     mkdir -p "$(dirname "$target_path")"
-    rm -rf "$target_path"
     case "$(uname -s)" in
       MINGW*|MSYS*|CYGWIN*)
+        if [[ -e "$target_path" || -L "$target_path" ]]; then
+          if command -v cygpath >/dev/null 2>&1; then
+            MSYS2_ARG_CONV_EXCL="*" cmd.exe /C "rmdir \"$(cygpath -w "$target_path")\"" >/dev/null 2>&1 || rm -rf "$target_path"
+          else
+            rm -rf "$target_path"
+          fi
+        fi
+        if [[ -d "$source_path" && ! -L "$source_path" ]] && command -v cygpath >/dev/null 2>&1; then
+          if MSYS2_ARG_CONV_EXCL="*" cmd.exe /C "mklink /J \"$(cygpath -w "$target_path")\" \"$(cygpath -w "$(pwd)/$source_path")\"" >/dev/null 2>&1; then
+            continue
+          fi
+        fi
         cp -LR "$source_path" "$target_path"
         ;;
       *)
+        rm -rf "$target_path"
         ln -sfn "$(pwd)/$source_path" "$target_path"
         ;;
     esac

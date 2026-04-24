@@ -495,6 +495,8 @@ describe("release workflow path contract", () => {
       "symlink_installed_packages_into_manifest_node_modules",
     );
     expect(fallbackScript).toContain("MINGW*|MSYS*|CYGWIN*)");
+    expect(fallbackScript).toContain('MSYS2_ARG_CONV_EXCL="*"');
+    expect(fallbackScript).toContain("mklink /J");
     expect(fallbackScript).toContain('cp -LR "$source_path" "$target_path"');
   });
 
