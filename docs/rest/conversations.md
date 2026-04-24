@@ -15,9 +15,11 @@ The conversations API manages the agent's web-chat interface. Each conversation 
 | GET | `/api/conversations/:id/messages` | Get messages for a conversation |
 | POST | `/api/conversations/:id/messages` | Send a message (synchronous) |
 | POST | `/api/conversations/:id/messages/stream` | Send a message (SSE streaming) |
+| POST | `/api/conversations/:id/messages/truncate` | Truncate messages from a point |
 | POST | `/api/conversations/:id/greeting` | Generate a greeting message |
 | PATCH | `/api/conversations/:id` | Update conversation metadata |
 | DELETE | `/api/conversations/:id` | Delete a conversation |
+| POST | `/api/conversations/cleanup-empty` | Delete empty conversations |
 
 ---
 
@@ -201,6 +203,36 @@ data: {"type":"error","message":"Failed to persist message"}
 
 ---
 
+### POST /api/conversations/:id/messages/truncate
+
+Truncate (delete) messages in a conversation starting from a specific message. By default, deletes messages after the specified message; set `inclusive` to also delete the specified message itself.
+
+**Request Body**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `messageId` | string | Yes | ID of the message to truncate from |
+| `inclusive` | boolean | No | If `true`, also delete the specified message (default: `false`) |
+
+**Response**
+
+```json
+{
+  "ok": true,
+  "deletedCount": 5
+}
+```
+
+**Errors**
+
+| Status | Condition |
+|--------|-----------|
+| 400 | Missing `messageId` |
+| 404 | Conversation not found |
+| 503 | Agent is not running |
+
+---
+
 ### POST /api/conversations/:id/greeting
 
 Generate a greeting message for a new conversation. Picks a random `postExample` from the agent's character definition — no model call, no latency. The greeting is stored as an agent message for persistence.
@@ -267,6 +299,30 @@ Delete a conversation. Messages remain in the runtime memory but the conversatio
 }
 ```
 
+
+### POST /api/conversations/cleanup-empty
+
+Delete all conversations that have no user messages. Useful for clearing auto-created conversations that were never used. Optionally keep a specific conversation.
+
+**Request Body**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `keepId` | string | No | Conversation ID to preserve even if empty |
+
+**Response**
+
+```json
+{
+  "deleted": ["uuid-1", "uuid-2"]
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `deleted` | string[] | IDs of conversations that were deleted |
+
+---
 
 ## Common Error Codes
 
