@@ -15,6 +15,7 @@ The Google Chat connector is an external elizaOS plugin that bridges your agent 
 | Field | Value |
 |-------|-------|
 | Package | `@elizaos/plugin-google-chat` |
+| Registry ID | `google-chat` |
 | Config key | `connectors.googlechat` |
 | Auto-enable trigger | `botToken`, `token`, or `apiKey` is truthy in connector config |
 

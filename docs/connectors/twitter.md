@@ -6,9 +6,13 @@ description: Connect your agent to Twitter/X using the @elizaos/plugin-twitter p
 
 Connect your agent to Twitter/X for social media engagement.
 
+<Warning>
+The `@elizaos/plugin-twitter` package is not included in the bundled plugin registry (`plugins.json`). It may be available as an upstream elizaOS community plugin. Install it manually from npm if available, or check the [elizaOS-plugins](https://github.com/elizaOS-plugins) GitHub organization.
+</Warning>
+
 ## Overview
 
-The Twitter connector is an external elizaOS plugin that bridges your agent to Twitter/X. It is auto-enabled by the runtime when a valid token is detected in your connector configuration.
+The Twitter connector is an external elizaOS plugin that bridges your agent to Twitter/X. If the package is installed, it is auto-enabled by the runtime when a valid token is detected in your connector configuration.
 
 ## Package Info
 

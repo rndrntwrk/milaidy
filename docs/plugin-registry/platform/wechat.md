@@ -6,6 +6,10 @@ description: "WeChat connector for Milady — personal and group messaging via a
 
 The WeChat plugin connects Milady agents to WeChat via a user-supplied proxy service, enabling text messaging and optional image and group chat support from personal WeChat accounts.
 
+<Warning>
+This plugin is not included in the bundled plugin registry (`plugins.json`). It may be available as an upstream elizaOS plugin on npm. The `milady plugins install wechat` command will fail unless the package is published to npm.
+</Warning>
+
 **Package:** `@elizaos/plugin-wechat`
 
 ## Overview

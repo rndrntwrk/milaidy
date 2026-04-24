@@ -10,6 +10,10 @@ Connect your agent to iMessage and SMS messaging via the Blooio bridge service.
 
 The Blooio connector is an external elizaOS plugin that bridges your agent to iMessage and SMS through the Blooio service. It uses signed webhooks for inbound messages and an API for outbound messaging. It is auto-enabled by the runtime when a valid API key is detected in your connector configuration.
 
+<Note>
+In the bundled registry (`plugins.json`) this plugin is listed under the `feature` category rather than `connector`. It functions as a connector regardless of the registry classification.
+</Note>
+
 ## Package Info
 
 | Field | Value |

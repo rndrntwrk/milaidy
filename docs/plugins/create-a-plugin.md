@@ -447,12 +447,14 @@ Override in `milady.json`:
 
 ## Starter Template
 
-The fastest way to start a new plugin is with the `elizaos` CLI:
+If you have the upstream `elizaos` CLI installed globally, you can scaffold a plugin project:
 
 ```bash
-# Create a TypeScript starter
+# Requires the elizaos CLI (npm i -g elizaos)
 npx elizaos create my-plugin --template plugin --language typescript
 ```
+
+Alternatively, copy the manual scaffold from [Step 1](#step-1-scaffold-the-project) above — it produces the same structure.
 
 The template includes:
 - Pre-configured `package.json` with `@elizaos/core` peer dependency
@@ -460,7 +462,6 @@ The template includes:
 - Example action, provider, and service
 - Vitest test setup with runtime mocks
 - `elizaos.plugin.json` manifest
-- Cypress E2E test scaffold
 
 ---
 
