@@ -272,10 +272,10 @@ export function validateProductLayer(vendorDir) {
   assertMatches(
     androidProducts,
     new RegExp(
-      `COMMON_LUNCH_CHOICES\\s*:=\\s*\\\\?\\s*${PRODUCT_NAME}-userdebug`,
+      `COMMON_LUNCH_CHOICES\\s*:=\\s*\\\\?\\s*${PRODUCT_NAME}-trunk_staging-userdebug`,
     ),
     "AndroidProducts.mk",
-    `${PRODUCT_NAME}-userdebug lunch choice`,
+    `${PRODUCT_NAME}-trunk_staging-userdebug lunch choice`,
   );
 
   const androidBp = read(path.join(vendorDir, "apps", "Milady", "Android.bp"));

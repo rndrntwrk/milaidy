@@ -2,7 +2,7 @@
 
 This is the migration runbook for taking the current `develop` branch onto a Linux builder and validating the hard-path MiladyOS build: a real AOSP/Cuttlefish product image where Milady is installed as a privileged system app and owns the phone UI surface.
 
-This is not kiosk mode, managed-device mode, or an emulator-only wrapper. The target is an AOSP product build named `milady_cf_x86_64_phone-userdebug`.
+This is not kiosk mode, managed-device mode, or an emulator-only wrapper. The target is an AOSP product build named `milady_cf_x86_64_phone-trunk_staging-userdebug`.
 
 ## Current Repository State
 
@@ -36,7 +36,7 @@ Expected clean checkout shape:
 
 ## Builder Requirements
 
-Use a Linux x86_64 machine with KVM. The MiladyOS build script enforces this because the current Cuttlefish target is `milady_cf_x86_64_phone-userdebug`.
+Use a Linux x86_64 machine with KVM. The MiladyOS build script enforces this because the current Cuttlefish target is `milady_cf_x86_64_phone-trunk_staging-userdebug`.
 
 Recommended machine:
 
@@ -182,7 +182,7 @@ What this command does:
 
    ```bash
    source build/envsetup.sh
-   lunch milady_cf_x86_64_phone-userdebug
+   lunch milady_cf_x86_64_phone-trunk_staging-userdebug
    m -j$(nproc)
    ```
 
@@ -228,7 +228,7 @@ bun run miladyos:validate -- --aosp-root ~/aosp
 ```bash
 cd ~/aosp
 source build/envsetup.sh
-lunch milady_cf_x86_64_phone-userdebug
+lunch milady_cf_x86_64_phone-trunk_staging-userdebug
 m -j"$(nproc)"
 ```
 
@@ -237,7 +237,7 @@ m -j"$(nproc)"
 ```bash
 cd ~/aosp
 source build/envsetup.sh
-lunch milady_cf_x86_64_phone-userdebug
+lunch milady_cf_x86_64_phone-trunk_staging-userdebug
 launch_cvd --daemon
 ```
 
