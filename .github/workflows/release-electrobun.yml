@@ -716,11 +716,10 @@ jobs:
           rm -rf "$out_dir"
           bun build src/index.ts --target=bun --outdir "$out_dir"
 
-      - name: Build patched Electrobun CLI for Windows
-        if: matrix.platform.os == 'windows'
+      - name: Build patched Electrobun CLI
         shell: bash
         run: |
-          node eliza/packages/app-core/scripts/build-patched-electrobun-cli.mjs "${{ steps.resolve-electrobun.outputs.package-dir }}"
+          node eliza/packages/app-core/scripts/build-patched-electrobun-cli.mjs "${{ steps.resolve-electrobun.outputs.package-dir }}" "${{ matrix.platform.artifact-name }}"
 
       - name: Build Electrobun app
         id: build-electrobun-app

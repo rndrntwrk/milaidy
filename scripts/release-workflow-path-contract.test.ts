@@ -596,6 +596,32 @@ describe("release workflow path contract", () => {
     expect(releaseElectrobun).toContain("for build_root in \\");
   });
 
+  it("builds the patched Electrobun CLI for every release platform", () => {
+    const releaseElectrobun = readWorkflow("release-electrobun.yml");
+    const patch = fs.readFileSync(
+      path.join(repoRoot, "patches", "eliza", "ci-release-contracts.patch"),
+      "utf8",
+    );
+
+    const stepStart = releaseElectrobun.indexOf(
+      "name: Build patched Electrobun CLI",
+    );
+    expect(stepStart).toBeGreaterThanOrEqual(0);
+    expect(releaseElectrobun.slice(stepStart, stepStart + 260)).not.toContain(
+      "matrix.platform.os == 'windows'",
+    );
+    expect(releaseElectrobun).toContain(
+      [
+        'node eliza/packages/app-core/scripts/build-patched-electrobun-cli.mjs "$',
+        '{{ steps.resolve-electrobun.outputs.package-dir }}" "$',
+        '{{ matrix.platform.artifact-name }}"',
+      ].join(""),
+    );
+    expect(patch).toContain("function resolveBuildTarget(value) {");
+    expect(patch).toContain(["--target=$", "{buildTarget.bunTarget}"].join(""));
+    expect(patch).toContain("[electrobun-build] Bun entry:");
+  });
+
   it("keeps agent release publication gated on npm and explicit distribution jobs", () => {
     const agentRelease = readWorkflow("agent-release.yml");
 

@@ -11,6 +11,94 @@ index b1ae39caea..1026699c5b 100644
    const [dashboard, setDashboard] = useState<LifeOpsPaymentsDashboard | null>(
      null,
    );
+diff --git a/packages/app-core/platforms/electrobun/scripts/stage-macos-release-artifacts.sh b/packages/app-core/platforms/electrobun/scripts/stage-macos-release-artifacts.sh
+index 74c284e2df..60998fdf58 100644
+--- a/packages/app-core/platforms/electrobun/scripts/stage-macos-release-artifacts.sh
++++ b/packages/app-core/platforms/electrobun/scripts/stage-macos-release-artifacts.sh
+@@ -147,14 +147,31 @@ wait_for_notary_acceptance() {
+   return 1
+ }
+ 
+-TARBALL_PATH="$(find -L "$ARTIFACTS_DIR" -maxdepth 1 -type f -name "*-macos-*.app.tar.zst" | sort | head -1)"
++TARBALL_PATH=""
++for tarball_pattern in "*-macos-*.app.tar.zst" "*-macos-*.app.tar.gz" "*-macos-*.tar.gz"; do
++  TARBALL_PATH="$(find -L "$ARTIFACTS_DIR" -maxdepth 1 -type f -name "$tarball_pattern" | sort | head -1)"
++  if [[ -n "$TARBALL_PATH" ]]; then
++    break
++  fi
++done
+ if [[ -z "$TARBALL_PATH" ]]; then
+   echo "stage-macos-release-artifacts: no macOS updater tarball found in $ARTIFACTS_DIR"
+   exit 1
+ fi
+ 
+ echo "Using updater tarball: $TARBALL_PATH"
+-tar --zstd -xf "$TARBALL_PATH" -C "$EXTRACT_DIR"
++case "$TARBALL_PATH" in
++  *.tar.zst)
++    tar --zstd -xf "$TARBALL_PATH" -C "$EXTRACT_DIR"
++    ;;
++  *.tar.gz)
++    tar -xzf "$TARBALL_PATH" -C "$EXTRACT_DIR"
++    ;;
++  *)
++    echo "stage-macos-release-artifacts: unsupported macOS tarball format: $TARBALL_PATH"
++    exit 1
++    ;;
++esac
+ 
+ APP_BUNDLE_PATH="$(find "$EXTRACT_DIR" -maxdepth 2 -type d -name "*.app" | sort | head -1)"
+ if [[ -z "$APP_BUNDLE_PATH" ]]; then
+@@ -243,7 +260,22 @@ else
+   echo "Skipping staged app signature verification (unsigned/local build)."
+ fi
+ 
+-FINAL_DMG_NAME="$(basename "${TARBALL_PATH%.app.tar.zst}.dmg")"
++TARBALL_BASENAME="$(basename "$TARBALL_PATH")"
++case "$TARBALL_BASENAME" in
++  *.app.tar.zst)
++    FINAL_DMG_NAME="${TARBALL_BASENAME%.app.tar.zst}.dmg"
++    ;;
++  *.app.tar.gz)
++    FINAL_DMG_NAME="${TARBALL_BASENAME%.app.tar.gz}.dmg"
++    ;;
++  *.tar.gz)
++    FINAL_DMG_NAME="${TARBALL_BASENAME%.tar.gz}.dmg"
++    ;;
++  *)
++    echo "stage-macos-release-artifacts: unsupported macOS tarball name: $TARBALL_BASENAME"
++    exit 1
++    ;;
++esac
+ FINAL_DMG_PATH="$ARTIFACTS_DIR/$FINAL_DMG_NAME"
+ TEMP_DMG_PATH="$TMP_ROOT/$FINAL_DMG_NAME"
+ VOLUME_NAME="$(basename "$STAGED_APP_PATH" .app)"
+diff --git a/packages/app-core/platforms/electrobun/src/native/steward.test.ts b/packages/app-core/platforms/electrobun/src/native/steward.test.ts
+index 3a9b0beb88..b7c3bd0b35 100644
+--- a/packages/app-core/platforms/electrobun/src/native/steward.test.ts
++++ b/packages/app-core/platforms/electrobun/src/native/steward.test.ts
+@@ -19,7 +19,7 @@ vi.mock("../../../../src/services/steward-sidecar", () => ({
+   })),
+ }));
+ 
+-vi.mock("@elizaos/app-steward/services/steward-credentials", () => ({
++vi.mock("../../../../src/services/steward-credentials", () => ({
+   saveStewardCredentials: saveStewardCredentialsMock,
+ }));
+ 
+diff --git a/packages/app-core/platforms/electrobun/src/native/steward.ts b/packages/app-core/platforms/electrobun/src/native/steward.ts
+index 149d5e6be6..bf80c208ca 100644
+--- a/packages/app-core/platforms/electrobun/src/native/steward.ts
++++ b/packages/app-core/platforms/electrobun/src/native/steward.ts
+@@ -21,7 +21,7 @@ import {
+   type StewardSidecar,
+   type StewardSidecarStatus,
+ } from "../../../../src/services/steward-sidecar";
+-import { saveStewardCredentials } from "@elizaos/app-steward/services/steward-credentials";
++import { saveStewardCredentials } from "../../../../src/services/steward-credentials";
+ import { getBrandConfig } from "../brand-config";
+ 
+ // ---------------------------------------------------------------------------
 diff --git a/packages/app-core/scripts/audit-live-test-surface.mjs b/packages/app-core/scripts/audit-live-test-surface.mjs
 index 8652a766ac..c6257d3430 100644
 --- a/packages/app-core/scripts/audit-live-test-surface.mjs
@@ -67,106 +155,287 @@ index 8652a766ac..c6257d3430 100644
    roots.push(await analyzeRoot(root));
  }
  
-diff --git a/packages/app-core/scripts/run-release-contract-suite.mjs b/packages/app-core/scripts/run-release-contract-suite.mjs
-index 099d7e91a7..c561db8b95 100755
---- a/packages/app-core/scripts/run-release-contract-suite.mjs
-+++ b/packages/app-core/scripts/run-release-contract-suite.mjs
-@@ -6,16 +6,27 @@ const APP_CORE_ROOT = path.resolve(import.meta.dirname, "..");
- const REPO_ROOT = path.resolve(APP_CORE_ROOT, "..", "..", "..");
- 
- const releaseContractTests = [
--  "eliza/packages/app-core/scripts/asset-cdn.test.ts",
--  "eliza/packages/app-core/scripts/docker-contract.test.ts",
--  "eliza/packages/app-core/scripts/chrome-extension-release-surface.test.ts",
-+  "scripts/release-workflow-path-contract.test.ts",
-+  "scripts/run-release-contract-suite.test.ts",
-+  "scripts/patch-mobile-build-release-compat.test.ts",
-+  "scripts/patch-release-check-pack-fallback.test.ts",
-+  "scripts/electrobun-pr-workflow-contract.test.ts",
-   "eliza/packages/app-core/scripts/electrobun-release-workflow-drift.test.ts",
--  "eliza/packages/app-core/scripts/electrobun-test-workflow-drift.test.ts",
--  "eliza/packages/app-core/scripts/whisper-build-script-drift.test.ts",
-   "eliza/packages/app-core/scripts/release-check.test.ts",
-   "eliza/packages/app-core/scripts/static-asset-manifest.test.ts",
- ];
- 
-+const missingReleaseContractTests = releaseContractTests.filter(
-+  (testPath) => !fs.existsSync(path.join(REPO_ROOT, testPath)),
-+);
-+if (missingReleaseContractTests.length > 0) {
-+  console.error("Release contract suite references missing test files:");
-+  for (const testPath of missingReleaseContractTests) {
-+    console.error(`- ${testPath}`);
-+  }
-+  process.exit(1);
-+}
-+
- function run(command, args, cwd = APP_CORE_ROOT) {
-   const result = spawnSync(command, args, {
-     cwd,
-@@ -33,11 +44,15 @@ function run(command, args, cwd = APP_CORE_ROOT) {
+diff --git a/packages/app-core/scripts/build-patched-electrobun-cli.mjs b/packages/app-core/scripts/build-patched-electrobun-cli.mjs
+index 54eea37026..83dac0f7e2 100644
+--- a/packages/app-core/scripts/build-patched-electrobun-cli.mjs
++++ b/packages/app-core/scripts/build-patched-electrobun-cli.mjs
+@@ -3,6 +3,7 @@
+ import { spawnSync } from "node:child_process";
+ import {
+   appendFileSync,
++  chmodSync,
+   copyFileSync,
+   existsSync,
+   mkdirSync,
+@@ -62,6 +63,50 @@ function writeGitHubEnv(name, value) {
+   appendFileSync(process.env.GITHUB_ENV, `${name}=${value}\n`);
  }
  
- run("bunx", ["vitest", "run", ...releaseContractTests], REPO_ROOT);
--run("bunx", [
--  "vitest",
--  "run",
--  "eliza/packages/app-core/scripts/startup-integration-script-drift.test.ts",
--], REPO_ROOT);
-+run(
-+  "bunx",
-+  [
-+    "vitest",
-+    "run",
-+    "eliza/packages/app-core/scripts/startup-integration-script-drift.test.ts",
-+  ],
-+  REPO_ROOT,
-+);
++function defaultTargetKey() {
++  if (process.platform === "darwin") {
++    return process.arch === "arm64" ? "macos-arm64" : "macos-x64";
++  }
++  if (process.platform === "win32") {
++    return "windows-x64";
++  }
++  if (process.platform === "linux") {
++    return process.arch === "arm64" ? "linux-arm64" : "linux-x64";
++  }
++  fail(`Unsupported platform for patched Electrobun CLI: ${process.platform}`);
++}
++
++function normalizeTargetArg(value) {
++  const rawValue = (value ?? process.env.ELECTROBUN_CLI_BUILD_TARGET ?? "")
++    .trim()
++    .replace(/^--target=/, "");
++  return rawValue || defaultTargetKey();
++}
++
++function resolveBuildTarget(value) {
++  const targetKey = normalizeTargetArg(value);
++  const targetMap = new Map([
++    ["macos-arm64", { bunTarget: "bun-darwin-aarch64", binExt: "" }],
++    ["macos-x64", { bunTarget: "bun-darwin-x64", binExt: "" }],
++    ["linux-arm64", { bunTarget: "bun-linux-aarch64", binExt: "" }],
++    ["linux-x64", { bunTarget: "bun-linux-x64", binExt: "" }],
++    ["windows-x64", { bunTarget: "bun-windows-x64-baseline", binExt: ".exe" }],
++    ["bun-darwin-aarch64", { bunTarget: "bun-darwin-aarch64", binExt: "" }],
++    ["bun-darwin-x64", { bunTarget: "bun-darwin-x64", binExt: "" }],
++    ["bun-linux-aarch64", { bunTarget: "bun-linux-aarch64", binExt: "" }],
++    ["bun-linux-x64", { bunTarget: "bun-linux-x64", binExt: "" }],
++    [
++      "bun-windows-x64-baseline",
++      { bunTarget: "bun-windows-x64-baseline", binExt: ".exe" },
++    ],
++  ]);
++  const target = targetMap.get(targetKey);
++  if (!target) {
++    fail(`Unsupported patched Electrobun CLI target: ${targetKey}`);
++  }
++  return { ...target, targetKey };
++}
++
+ function insertAfterAnchor(source, anchor, insertion, label) {
+   const anchorIndex = source.indexOf(anchor);
+   if (anchorIndex === -1) {
+@@ -73,19 +118,17 @@ function insertAfterAnchor(source, anchor, insertion, label) {
+ }
  
- // tsdown and the release check both resolve repo-root-relative entries/config.
- run("bunx", ["tsdown", "--fail-on-warn", "false"], REPO_ROOT);
-diff --git a/packages/app-core/src/components/conversations/ConversationsSidebar.test.tsx b/packages/app-core/src/components/conversations/ConversationsSidebar.test.tsx
-index bee38b1e9d..e1c3df2cc6 100644
---- a/packages/app-core/src/components/conversations/ConversationsSidebar.test.tsx
-+++ b/packages/app-core/src/components/conversations/ConversationsSidebar.test.tsx
-@@ -200,6 +200,7 @@ vi.mock("@elizaos/ui", () => {
-     SidebarPanel: passthrough,
-     SidebarScrollRegion: passthrough,
-     TooltipProvider: passthrough,
-+    useIntervalWhenDocumentVisible: () => {},
-   };
- });
+ export function patchCliSourceText(original) {
+-  if (
+-    original.includes(
+-      'const overridePackageJson = process.env["ELECTROBUN_RCEDIT_PACKAGE_JSON"];',
+-    )
+-  ) {
+-    return original;
+-  }
+-
+   const eol = original.includes("\r\n") ? "\r\n" : "\n";
+   let patched = original;
+   const importAnchor = 'import * as readline from "readline";';
++  const hasRceditOverride = original.includes(
++    'const overridePackageJson = process.env["ELECTROBUN_RCEDIT_PACKAGE_JSON"];',
++  );
  
-diff --git a/packages/app-core/src/components/pages/TerminalChannelPanel.test.tsx b/packages/app-core/src/components/pages/TerminalChannelPanel.test.tsx
-index 1fc3db564f..3bd7202380 100644
---- a/packages/app-core/src/components/pages/TerminalChannelPanel.test.tsx
-+++ b/packages/app-core/src/components/pages/TerminalChannelPanel.test.tsx
-@@ -36,6 +36,7 @@ vi.mock("@elizaos/ui", () => ({
-   ),
-   ChatTranscript: () => null,
-   TypingIndicator: () => null,
-+  useIntervalWhenDocumentVisible: () => {},
- }));
+-  if (!patched.includes('import { createRequire } from "module";')) {
++  if (
++    !hasRceditOverride &&
++    !patched.includes('import { createRequire } from "module";')
++  ) {
+     patched = patched.replace(
+       importAnchor,
+       [
+@@ -96,7 +139,7 @@ export function patchCliSourceText(original) {
+     );
+   }
  
- vi.mock("../../state/ChatComposerContext", () => ({
-diff --git a/packages/app-core/platforms/electrobun/src/native/steward.test.ts b/packages/app-core/platforms/electrobun/src/native/steward.test.ts
-index 3a9b0beb88..b7c3bd0b35 100644
---- a/packages/app-core/platforms/electrobun/src/native/steward.test.ts
-+++ b/packages/app-core/platforms/electrobun/src/native/steward.test.ts
-@@ -22,3 +22,3 @@
--vi.mock("@elizaos/app-steward/services/steward-credentials", () => ({
-+vi.mock("../../../../src/services/steward-credentials", () => ({
-   saveStewardCredentials: saveStewardCredentialsMock,
- }));
-diff --git a/packages/app-core/platforms/electrobun/src/native/steward.ts b/packages/app-core/platforms/electrobun/src/native/steward.ts
-index 149d5e6be6..bf80c208ca 100644
---- a/packages/app-core/platforms/electrobun/src/native/steward.ts
-+++ b/packages/app-core/platforms/electrobun/src/native/steward.ts
-@@ -23,3 +23,3 @@ import {
- } from "../../../../src/services/steward-sidecar";
--import { saveStewardCredentials } from "@elizaos/app-steward/services/steward-credentials";
-+import { saveStewardCredentials } from "../../../../src/services/steward-credentials";
- import { getBrandConfig } from "../brand-config";
+-  if (!patched.includes("async function importRcedit()")) {
++  if (!hasRceditOverride && !patched.includes("async function importRcedit()")) {
+     patched = insertAfterAnchor(
+       patched,
+       "const _MAX_CHUNK_SIZE = 1024 * 2;",
+@@ -121,24 +164,82 @@ export function patchCliSourceText(original) {
+     );
+   }
+ 
+-  const replacements = patched.match(
+-    /const rcedit = \(await import\("rcedit"\)\)\.default;/g,
+-  );
+-  if (!replacements || replacements.length !== 3) {
+-    throw new Error(
+-      `Expected 3 rcedit dynamic import call sites, found ${replacements?.length ?? 0}`,
++  if (!hasRceditOverride) {
++    const replacements = patched.match(
++      /const rcedit = \(await import\("rcedit"\)\)\.default;/g,
++    );
++    if (!replacements || replacements.length !== 3) {
++      throw new Error(
++        `Expected 3 rcedit dynamic import call sites, found ${replacements?.length ?? 0}`,
++      );
++    }
++
++    patched = patched.replaceAll(
++      'const rcedit = (await import("rcedit")).default;',
++      "const rcedit = await importRcedit();",
+     );
+   }
+ 
+-  patched = patched.replaceAll(
+-    'const rcedit = (await import("rcedit")).default;',
+-    "const rcedit = await importRcedit();",
+-  );
+-
+   if (!patched.includes("async function importRcedit()")) {
+     throw new Error("importRcedit helper was not inserted");
+   }
+ 
++  if (!patched.includes("[electrobun-build] Bun entry:")) {
++    const bunBuildStart = [
++      '		const buildResult = await Bun.build({',
++      '			...bunBuildOptions,',
++      '			entrypoints: [bunSource],',
++      '			outdir: bunDestFolder,',
++      '			// minify: true, // todo (yoav): add minify in canary and prod builds',
++      '			target: "bun",',
++      '		});',
++    ].join(eol);
++    const bunBuildReplacement = [
++      '		console.log(`[electrobun-build] Bun entry: ${bunSource}`);',
++      '		console.log(`[electrobun-build] Bun outdir: ${bunDestFolder}`);',
++      '		let buildResult;',
++      '		try {',
++      '			buildResult = await Bun.build({',
++      '				...bunBuildOptions,',
++      '				entrypoints: [bunSource],',
++      '				outdir: bunDestFolder,',
++      '				// minify: true, // todo (yoav): add minify in canary and prod builds',
++      '				target: "bun",',
++      '			});',
++      '		} catch (error) {',
++      '			console.error("[electrobun-build] Bun.build threw while bundling app entry");',
++      '			console.error(error instanceof Error ? error.stack || error.message : String(error));',
++      '			throw error;',
++      '		}',
++    ].join(eol);
++    if (!patched.includes(bunBuildStart)) {
++      throw new Error("Could not find Bun.build app-entry block");
++    }
++    patched = patched.replace(bunBuildStart, bunBuildReplacement);
++  }
++
++  const terseBuildCatch = [
++    "		} catch (error) {",
++    "			if (error instanceof Error) {",
++    "				console.error(error.message);",
++    "			}",
++    "			process.exit(1);",
++    "		}",
++  ].join(eol);
++  const verboseBuildCatch = [
++    "		} catch (error) {",
++    "			if (error instanceof Error) {",
++    "				console.error(error.stack || error.message);",
++    "			} else {",
++    "				console.error(String(error));",
++    "			}",
++    "			process.exit(1);",
++    "		}",
++  ].join(eol);
++  if (patched.includes(terseBuildCatch)) {
++    patched = patched.replaceAll(terseBuildCatch, verboseBuildCatch);
++  }
++
+   return patched;
+ }
+ 
+@@ -175,6 +276,7 @@ function main() {
+   const installedElectrobunDir = process.argv[2]
+     ? path.resolve(process.argv[2])
+     : resolveElectrobunDir();
++  const buildTarget = resolveBuildTarget(process.argv[3]);
+   const installedManifestPath = path.join(
+     installedElectrobunDir,
+     "package.json",
+@@ -184,14 +286,30 @@ function main() {
+   );
+   const electrobunVersion = installedManifest.version;
+   const installedElectrobunRequire = createRequire(installedManifestPath);
+-  const resolvedRceditPackageJson = installedElectrobunRequire.resolve(
+-    "rcedit/package.json",
+-  );
+-
+-  writeGitHubEnv("ELECTROBUN_RCEDIT_PACKAGE_JSON", resolvedRceditPackageJson);
+   console.log(
+-    `[build-patched-electrobun-cli] Using rcedit package ${resolvedRceditPackageJson}`,
++    `[build-patched-electrobun-cli] Building patched CLI target ${buildTarget.bunTarget} (${buildTarget.targetKey})`,
+   );
++  let resolvedRceditPackageJson = "";
++  try {
++    resolvedRceditPackageJson = installedElectrobunRequire.resolve(
++      "rcedit/package.json",
++    );
++  } catch (error) {
++    if (buildTarget.binExt) {
++      const message = error instanceof Error ? error.message : String(error);
++      fail(`Failed to resolve rcedit for Windows patched CLI: ${message}`);
++    }
++  }
++  if (resolvedRceditPackageJson) {
++    writeGitHubEnv("ELECTROBUN_RCEDIT_PACKAGE_JSON", resolvedRceditPackageJson);
++    console.log(
++      `[build-patched-electrobun-cli] Using rcedit package ${resolvedRceditPackageJson}`,
++    );
++  } else {
++    console.log(
++      "[build-patched-electrobun-cli] rcedit package not present; continuing for non-Windows target",
++    );
++  }
+ 
+   const tempRoot = path.join(
+     process.env.RUNNER_TEMP ?? os.tmpdir(),
+@@ -239,7 +357,7 @@ function main() {
+       "build",
+       "src/cli/index.ts",
+       "--compile",
+-      "--target=bun-windows-x64-baseline",
++      `--target=${buildTarget.bunTarget}`,
+       "--outfile",
+       "src/cli/build/electrobun",
+     ],
+@@ -257,7 +375,7 @@ function main() {
+     "src",
+     "cli",
+     "build",
+-    "electrobun.exe",
++    `electrobun${buildTarget.binExt}`,
+   );
+   if (!existsSync(compiledCliPath)) {
+     fail(`Expected compiled CLI at ${compiledCliPath}`);
+@@ -266,18 +384,22 @@ function main() {
+   const installedBinPath = path.join(
+     installedElectrobunDir,
+     "bin",
+-    "electrobun.exe",
++    `electrobun${buildTarget.binExt}`,
+   );
+   const installedCachePath = path.join(
+     installedElectrobunDir,
+     ".cache",
+-    "electrobun.exe",
++    `electrobun${buildTarget.binExt}`,
+   );
+ 
+   mkdirSync(path.dirname(installedBinPath), { recursive: true });
+   mkdirSync(path.dirname(installedCachePath), { recursive: true });
+   copyFileSync(compiledCliPath, installedBinPath);
+   copyFileSync(compiledCliPath, installedCachePath);
++  if (!buildTarget.binExt) {
++    chmodSync(installedBinPath, 0o755);
++    chmodSync(installedCachePath, 0o755);
++  }
+ 
+   console.log(
+     `[build-patched-electrobun-cli] Installed patched CLI to ${installedBinPath}`,
 diff --git a/packages/app-core/scripts/playwright-ui-smoke-api-stub.mjs b/packages/app-core/scripts/playwright-ui-smoke-api-stub.mjs
 index 8ba6eb9670..a7a6ea6b9c 100644
 --- a/packages/app-core/scripts/playwright-ui-smoke-api-stub.mjs
@@ -354,70 +623,8 @@ index 8ba6eb9670..a7a6ea6b9c 100644
    if (
      req.method === "GET" &&
      (url.pathname === "/api/browser-bridge/companions" ||
-diff --git a/packages/app-core/platforms/electrobun/scripts/stage-macos-release-artifacts.sh b/packages/app-core/platforms/electrobun/scripts/stage-macos-release-artifacts.sh
-index 74c284e2df..60998fdf58 100644
---- a/packages/app-core/platforms/electrobun/scripts/stage-macos-release-artifacts.sh
-+++ b/packages/app-core/platforms/electrobun/scripts/stage-macos-release-artifacts.sh
-@@ -147,14 +147,31 @@ wait_for_notary_acceptance() {
-   return 1
- }
- 
--TARBALL_PATH="$(find -L "$ARTIFACTS_DIR" -maxdepth 1 -type f -name "*-macos-*.app.tar.zst" | sort | head -1)"
-+TARBALL_PATH=""
-+for tarball_pattern in "*-macos-*.app.tar.zst" "*-macos-*.app.tar.gz" "*-macos-*.tar.gz"; do
-+  TARBALL_PATH="$(find -L "$ARTIFACTS_DIR" -maxdepth 1 -type f -name "$tarball_pattern" | sort | head -1)"
-+  if [[ -n "$TARBALL_PATH" ]]; then
-+    break
-+  fi
-+done
- if [[ -z "$TARBALL_PATH" ]]; then
-   echo "stage-macos-release-artifacts: no macOS updater tarball found in $ARTIFACTS_DIR"
-   exit 1
- fi
- 
- echo "Using updater tarball: $TARBALL_PATH"
--tar --zstd -xf "$TARBALL_PATH" -C "$EXTRACT_DIR"
-+case "$TARBALL_PATH" in
-+  *.tar.zst)
-+    tar --zstd -xf "$TARBALL_PATH" -C "$EXTRACT_DIR"
-+    ;;
-+  *.tar.gz)
-+    tar -xzf "$TARBALL_PATH" -C "$EXTRACT_DIR"
-+    ;;
-+  *)
-+    echo "stage-macos-release-artifacts: unsupported macOS tarball format: $TARBALL_PATH"
-+    exit 1
-+    ;;
-+esac
- 
- APP_BUNDLE_PATH="$(find "$EXTRACT_DIR" -maxdepth 2 -type d -name "*.app" | sort | head -1)"
- if [[ -z "$APP_BUNDLE_PATH" ]]; then
-@@ -243,7 +260,22 @@ else
-   echo "Skipping staged app signature verification (unsigned/local build)."
- fi
- 
--FINAL_DMG_NAME="$(basename "${TARBALL_PATH%.app.tar.zst}.dmg")"
-+TARBALL_BASENAME="$(basename "$TARBALL_PATH")"
-+case "$TARBALL_BASENAME" in
-+  *.app.tar.zst)
-+    FINAL_DMG_NAME="${TARBALL_BASENAME%.app.tar.zst}.dmg"
-+    ;;
-+  *.app.tar.gz)
-+    FINAL_DMG_NAME="${TARBALL_BASENAME%.app.tar.gz}.dmg"
-+    ;;
-+  *.tar.gz)
-+    FINAL_DMG_NAME="${TARBALL_BASENAME%.tar.gz}.dmg"
-+    ;;
-+  *)
-+    echo "stage-macos-release-artifacts: unsupported macOS tarball name: $TARBALL_BASENAME"
-+    exit 1
-+    ;;
-+esac
- FINAL_DMG_PATH="$ARTIFACTS_DIR/$FINAL_DMG_NAME"
- TEMP_DMG_PATH="$TMP_ROOT/$FINAL_DMG_NAME"
- VOLUME_NAME="$(basename "$STAGED_APP_PATH" .app)"
 diff --git a/packages/app-core/scripts/release-check.ts b/packages/app-core/scripts/release-check.ts
-index 6da229a550..7bd64145e1 100755
+index 6da229a550..32f4aa0a78 100755
 --- a/packages/app-core/scripts/release-check.ts
 +++ b/packages/app-core/scripts/release-check.ts
 @@ -58,7 +58,7 @@ function resolveOrchestratorPluginPackageJsonPath() {
@@ -429,7 +636,30 @@ index 6da229a550..7bd64145e1 100755
    "workflow_call:",
    "name: Validate Release Inputs",
    "Manual branch dispatches must provide inputs.tag; refusing to derive a release tag from package.json.",
-@@ -239,7 +239,7 @@ const requiredElectrobunPrWorkflowSnippets = [
+@@ -163,9 +163,10 @@ const requiredWorkflowSnippets = [
+   'echo "package-dir=$package_dir" >> "$GITHUB_OUTPUT"',
+   'echo "cache-dir=$package_dir/.cache" >> "$GITHUB_OUTPUT"',
+   "path: $" + "{{ steps.resolve-electrobun.outputs.cache-dir }}",
+-  "name: Build patched Electrobun CLI for Windows",
++  "name: Build patched Electrobun CLI",
+   'node eliza/packages/app-core/scripts/build-patched-electrobun-cli.mjs "$' +
+     '{{ steps.resolve-electrobun.outputs.package-dir }}"',
++  '"${{ matrix.platform.artifact-name }}"',
+   "node eliza/packages/app-core/scripts/desktop-build.mjs package --env=$" +
+     "{{ needs.prepare.outputs.env }}",
+   "ELIZA_ELECTROBUN_NOTARIZE: 0",
+@@ -191,7 +192,10 @@ const _requiredPatchedElectrobunCliSnippets = [
+   'writeGitHubEnv("ELECTROBUN_RCEDIT_PACKAGE_JSON", resolvedRceditPackageJson);',
+   'const overridePackageJson = process.env["ELECTROBUN_RCEDIT_PACKAGE_JSON"];',
+   'const overrideEntry = overrideRequire.resolve("rcedit");',
++  "function resolveBuildTarget(value) {",
+   "--target=bun-windows-x64-baseline",
++  "--target=${buildTarget.bunTarget}",
++  "[electrobun-build] Bun entry:",
+   "const installedBinPath = path.join(",
+   "const installedCachePath = path.join(",
+ ];
+@@ -239,7 +243,7 @@ const requiredElectrobunPrWorkflowSnippets = [
    "workflow_dispatch:",
    "permissions:",
    "contents: read",
@@ -438,7 +668,7 @@ index 6da229a550..7bd64145e1 100755
    "name: Release Workflow Contract",
    "bun install --ignore-scripts",
    "bun run postinstall",
-@@ -903,8 +903,11 @@ function assertElectrobunConfigHasPostWrapSigner() {
+@@ -903,8 +907,11 @@ function assertElectrobunConfigHasPostWrapSigner() {
  function assertMacArtifactStagerLooksCorrect() {
    const script = readElectrobunFile("scripts", "stage-macos-release-artifacts.sh");
    const requiredSnippets = [
@@ -451,3 +681,85 @@ index 6da229a550..7bd64145e1 100755
      'DIRECT_LAUNCHER_SOURCE="$SCRIPT_DIR/macos-direct-launcher.c"',
      'codesign -d --entitlements :- "$STAGED_APP_PATH"',
      "/usr/bin/clang \\",
+diff --git a/packages/app-core/scripts/run-release-contract-suite.mjs b/packages/app-core/scripts/run-release-contract-suite.mjs
+index 099d7e91a7..c561db8b95 100755
+--- a/packages/app-core/scripts/run-release-contract-suite.mjs
++++ b/packages/app-core/scripts/run-release-contract-suite.mjs
+@@ -6,16 +6,27 @@ const APP_CORE_ROOT = path.resolve(import.meta.dirname, "..");
+ const REPO_ROOT = path.resolve(APP_CORE_ROOT, "..", "..", "..");
+ 
+ const releaseContractTests = [
+-  "eliza/packages/app-core/scripts/asset-cdn.test.ts",
+-  "eliza/packages/app-core/scripts/docker-contract.test.ts",
+-  "eliza/packages/app-core/scripts/chrome-extension-release-surface.test.ts",
++  "scripts/release-workflow-path-contract.test.ts",
++  "scripts/run-release-contract-suite.test.ts",
++  "scripts/patch-mobile-build-release-compat.test.ts",
++  "scripts/patch-release-check-pack-fallback.test.ts",
++  "scripts/electrobun-pr-workflow-contract.test.ts",
+   "eliza/packages/app-core/scripts/electrobun-release-workflow-drift.test.ts",
+-  "eliza/packages/app-core/scripts/electrobun-test-workflow-drift.test.ts",
+-  "eliza/packages/app-core/scripts/whisper-build-script-drift.test.ts",
+   "eliza/packages/app-core/scripts/release-check.test.ts",
+   "eliza/packages/app-core/scripts/static-asset-manifest.test.ts",
+ ];
+ 
++const missingReleaseContractTests = releaseContractTests.filter(
++  (testPath) => !fs.existsSync(path.join(REPO_ROOT, testPath)),
++);
++if (missingReleaseContractTests.length > 0) {
++  console.error("Release contract suite references missing test files:");
++  for (const testPath of missingReleaseContractTests) {
++    console.error(`- ${testPath}`);
++  }
++  process.exit(1);
++}
++
+ function run(command, args, cwd = APP_CORE_ROOT) {
+   const result = spawnSync(command, args, {
+     cwd,
+@@ -33,11 +44,15 @@ function run(command, args, cwd = APP_CORE_ROOT) {
+ }
+ 
+ run("bunx", ["vitest", "run", ...releaseContractTests], REPO_ROOT);
+-run("bunx", [
+-  "vitest",
+-  "run",
+-  "eliza/packages/app-core/scripts/startup-integration-script-drift.test.ts",
+-], REPO_ROOT);
++run(
++  "bunx",
++  [
++    "vitest",
++    "run",
++    "eliza/packages/app-core/scripts/startup-integration-script-drift.test.ts",
++  ],
++  REPO_ROOT,
++);
+ 
+ // tsdown and the release check both resolve repo-root-relative entries/config.
+ run("bunx", ["tsdown", "--fail-on-warn", "false"], REPO_ROOT);
+diff --git a/packages/app-core/src/components/conversations/ConversationsSidebar.test.tsx b/packages/app-core/src/components/conversations/ConversationsSidebar.test.tsx
+index bee38b1e9d..e1c3df2cc6 100644
+--- a/packages/app-core/src/components/conversations/ConversationsSidebar.test.tsx
++++ b/packages/app-core/src/components/conversations/ConversationsSidebar.test.tsx
+@@ -200,6 +200,7 @@ vi.mock("@elizaos/ui", () => {
+     SidebarPanel: passthrough,
+     SidebarScrollRegion: passthrough,
+     TooltipProvider: passthrough,
++    useIntervalWhenDocumentVisible: () => {},
+   };
+ });
+ 
+diff --git a/packages/app-core/src/components/pages/TerminalChannelPanel.test.tsx b/packages/app-core/src/components/pages/TerminalChannelPanel.test.tsx
+index 1fc3db564f..3bd7202380 100644
+--- a/packages/app-core/src/components/pages/TerminalChannelPanel.test.tsx
++++ b/packages/app-core/src/components/pages/TerminalChannelPanel.test.tsx
+@@ -36,6 +36,7 @@ vi.mock("@elizaos/ui", () => ({
+   ),
+   ChatTranscript: () => null,
+   TypingIndicator: () => null,
++  useIntervalWhenDocumentVisible: () => {},
+ }));
+ 
+ vi.mock("../../state/ChatComposerContext", () => ({
