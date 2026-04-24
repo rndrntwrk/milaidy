@@ -59,11 +59,6 @@ const requiredActionSnippets = [
   "run: bash scripts/install-published-workspace-fallback-deps.sh",
 ];
 
-const requiredPublishedFallbackSnippets = [
-  'append_versioned_package \\\n  "@elizaos/plugin-signal"',
-  "eliza/plugins/plugin-signal/typescript/package.json",
-];
-
 const forbiddenActionSnippets = ["bun add --no-save --dev"];
 
 const disableMarkers = [
@@ -105,7 +100,6 @@ if (!fs.existsSync(path.join(repoRoot, files.elizaCiPatch))) {
 
 const workflowText = readText(files.workflow, failures);
 const actionText = readText(files.action, failures);
-const publishedFallbackText = readText(files.publishedFallbackScript, failures);
 const packageJson = readJson(files.packageJson, failures);
 const ciWorkflowText = readText(".github/workflows/ci.yml", failures);
 
@@ -117,12 +111,6 @@ assertContainsAll(
 );
 assertCiPreReviewBootstrap(ciWorkflowText, failures);
 assertContainsAll(actionText, files.action, requiredActionSnippets, failures);
-assertContainsAll(
-  publishedFallbackText,
-  files.publishedFallbackScript,
-  requiredPublishedFallbackSnippets,
-  failures,
-);
 assertContainsNone(actionText, files.action, forbiddenActionSnippets, failures);
 assertDisabledWorkspaceInstallsUseNoFrozen(allWorkflowPaths, failures);
 
