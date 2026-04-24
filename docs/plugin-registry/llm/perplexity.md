@@ -6,6 +6,10 @@ description: "Perplexity model provider for Milady — search-augmented language
 
 The Perplexity plugin connects Milady agents to Perplexity's search-augmented language models. These models combine LLM reasoning with live web search, making them ideal for agents that need up-to-date information.
 
+<Info>
+This plugin is available from the upstream elizaOS registry. It is **not bundled** in `plugins.json` and must be installed explicitly.
+</Info>
+
 **Package:** `@elizaos/plugin-perplexity`
 
 ## Installation

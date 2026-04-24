@@ -6,6 +6,10 @@ description: "DeepSeek model provider for Milady — DeepSeek-V3 and DeepSeek-R1
 
 The DeepSeek plugin connects Milady agents to DeepSeek's API, providing access to DeepSeek-V3 (general-purpose) and DeepSeek-R1 (reasoning-focused) models at competitive pricing.
 
+<Info>
+This plugin is available from the upstream elizaOS registry. It is **not bundled** in `plugins.json` and must be installed explicitly.
+</Info>
+
 **Package:** `@elizaos/plugin-deepseek`
 
 ## Installation

@@ -6,6 +6,10 @@ description: "Google Cloud AI model provider for Milady — access Google Cloud 
 
 The Google Antigravity plugin connects Milady agents to Google Cloud AI Platform, providing access to Google's cloud-hosted AI models through the Google Cloud API.
 
+<Info>
+This plugin is available from the upstream elizaOS registry. It is **not bundled** in `plugins.json` and must be installed explicitly.
+</Info>
+
 **Package:** `@elizaos/plugin-google-antigravity`
 
 ## Installation

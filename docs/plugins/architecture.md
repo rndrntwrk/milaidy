@@ -124,65 +124,67 @@ Plugins are automatically enabled when their required configuration is detected.
 
 ### Trigger Sources
 
-**Environment variable API keys** — The `AUTH_PROVIDER_PLUGINS` map connects env vars to plugin package names:
+**Environment variable API keys** — The `AUTH_PROVIDER_PLUGINS` map connects env vars to plugin package names. Plugins marked with `// bundled` ship in `plugins.json`; others require the upstream elizaOS registry or explicit installation:
 
 ```typescript
 const AUTH_PROVIDER_PLUGINS = {
-  ANTHROPIC_API_KEY:              "@elizaos/plugin-anthropic",
-  CLAUDE_API_KEY:                 "@elizaos/plugin-anthropic",
-  OPENAI_API_KEY:                 "@elizaos/plugin-openai",
-  AI_GATEWAY_API_KEY:             "@elizaos/plugin-vercel-ai-gateway",
-  AIGATEWAY_API_KEY:              "@elizaos/plugin-vercel-ai-gateway",
-  GOOGLE_API_KEY:                 "@elizaos/plugin-google-genai",
-  GOOGLE_GENERATIVE_AI_API_KEY:   "@elizaos/plugin-google-genai",
-  GOOGLE_CLOUD_API_KEY:           "@elizaos/plugin-google-antigravity",
-  GROQ_API_KEY:                   "@elizaos/plugin-groq",
-  XAI_API_KEY:                    "@elizaos/plugin-xai",
-  GROK_API_KEY:                   "@elizaos/plugin-xai",
-  OPENROUTER_API_KEY:             "@elizaos/plugin-openrouter",
-  OLLAMA_BASE_URL:                "@elizaos/plugin-ollama",
-  ZAI_API_KEY:                    "@homunculuslabs/plugin-zai",
-  DEEPSEEK_API_KEY:               "@elizaos/plugin-deepseek",
-  TOGETHER_API_KEY:               "@elizaos/plugin-together",
-  MISTRAL_API_KEY:                "@elizaos/plugin-mistral",
-  COHERE_API_KEY:                 "@elizaos/plugin-cohere",
-  PERPLEXITY_API_KEY:             "@elizaos/plugin-perplexity",
-  ELIZAOS_CLOUD_API_KEY:          "@elizaos/plugin-elizacloud",
-  ELIZAOS_CLOUD_ENABLED:          "@elizaos/plugin-elizacloud",
-  CUA_API_KEY:                    "@elizaos/plugin-cua",
-  CUA_HOST:                       "@elizaos/plugin-cua",
-  OBSIDIAN_VAULT_PATH:            "@elizaos/plugin-obsidian",
-  REPOPROMPT_CLI_PATH:            "@elizaos/plugin-repoprompt",
-  CLAUDE_CODE_WORKBENCH_ENABLED:  "@elizaos/plugin-claude-code-workbench",
+  ANTHROPIC_API_KEY:              "@elizaos/plugin-anthropic",           // bundled
+  CLAUDE_API_KEY:                 "@elizaos/plugin-anthropic",           // bundled
+  OPENAI_API_KEY:                 "@elizaos/plugin-openai",              // bundled
+  AI_GATEWAY_API_KEY:             "@elizaos/plugin-vercel-ai-gateway",   // bundled
+  AIGATEWAY_API_KEY:              "@elizaos/plugin-vercel-ai-gateway",   // bundled
+  GOOGLE_API_KEY:                 "@elizaos/plugin-google-genai",        // bundled
+  GOOGLE_GENERATIVE_AI_API_KEY:   "@elizaos/plugin-google-genai",        // bundled
+  GOOGLE_CLOUD_API_KEY:           "@elizaos/plugin-google-antigravity",  // upstream
+  GROQ_API_KEY:                   "@elizaos/plugin-groq",                // bundled
+  XAI_API_KEY:                    "@elizaos/plugin-xai",                 // bundled
+  GROK_API_KEY:                   "@elizaos/plugin-xai",                 // bundled
+  OPENROUTER_API_KEY:             "@elizaos/plugin-openrouter",          // bundled
+  OLLAMA_BASE_URL:                "@elizaos/plugin-ollama",              // bundled
+  ZAI_API_KEY:                    "@homunculuslabs/plugin-zai",          // upstream
+  DEEPSEEK_API_KEY:               "@elizaos/plugin-deepseek",            // upstream
+  TOGETHER_API_KEY:               "@elizaos/plugin-together",            // upstream
+  MISTRAL_API_KEY:                "@elizaos/plugin-mistral",             // upstream
+  COHERE_API_KEY:                 "@elizaos/plugin-cohere",              // upstream
+  PERPLEXITY_API_KEY:             "@elizaos/plugin-perplexity",          // upstream
+  ELIZAOS_CLOUD_API_KEY:          "@elizaos/plugin-elizacloud",          // bundled
+  ELIZAOS_CLOUD_ENABLED:          "@elizaos/plugin-elizacloud",          // bundled
+  CUA_API_KEY:                    "@elizaos/plugin-cua",                 // bundled
+  CUA_HOST:                       "@elizaos/plugin-cua",                 // bundled
+  OBSIDIAN_VAULT_PATH:            "@elizaos/plugin-obsidian",            // bundled
+  REPOPROMPT_CLI_PATH:            "@elizaos/plugin-repoprompt",          // bundled
+  CLAUDE_CODE_WORKBENCH_ENABLED:  "@elizaos/plugin-claude-code-workbench", // bundled
 };
 ```
+
+> **Note:** Upstream plugins (DeepSeek, Together, Mistral, Cohere, Perplexity, Google Antigravity, Zai) are not included in the bundled `plugins.json`. Setting their env var will attempt to resolve them from the upstream elizaOS registry at runtime. Install them explicitly with `milady plugins install <package>` if auto-resolution fails.
 
 **Connector configuration** — Connector blocks with a `botToken`, `token`, or `apiKey` field auto-enable the corresponding connector plugin:
 
 ```typescript
 const CONNECTOR_PLUGINS = {
-  telegram:    "@elizaos/plugin-telegram",
-  discord:     "@elizaos/plugin-discord",
-  slack:       "@elizaos/plugin-slack",
-  twitter:     "@elizaos/plugin-twitter",
-  whatsapp:    "@elizaos/plugin-whatsapp",
-  signal:      "@elizaos/plugin-signal",
-  imessage:    "@elizaos/plugin-imessage",
-  farcaster:   "@elizaos/plugin-farcaster",
-  lens:        "@elizaos/plugin-lens",
-  msteams:     "@elizaos/plugin-msteams",
-  mattermost:  "@elizaos/plugin-mattermost",
-  googlechat:  "@elizaos/plugin-google-chat",
-  feishu:      "@elizaos/plugin-feishu",
-  matrix:      "@elizaos/plugin-matrix",
-  nostr:       "@elizaos/plugin-nostr",
-  blooio:      "@elizaos/plugin-blooio",
-  twitch:      "@elizaos/plugin-twitch",
-  wechat:      "@elizaos/plugin-wechat",  // Milady-specific (added in app-core)
+  telegram:    "@elizaos/plugin-telegram",      // bundled
+  discord:     "@elizaos/plugin-discord",        // bundled
+  slack:       "@elizaos/plugin-slack",           // bundled
+  twitter:     "@elizaos/plugin-twitter",         // upstream (not in plugins.json)
+  whatsapp:    "@elizaos/plugin-whatsapp",        // bundled
+  signal:      "@elizaos/plugin-signal",          // bundled
+  imessage:    "@elizaos/plugin-imessage",        // bundled
+  farcaster:   "@elizaos/plugin-farcaster",       // bundled
+  lens:        "@elizaos/plugin-lens",            // upstream (not in plugins.json)
+  msteams:     "@elizaos/plugin-msteams",         // bundled
+  mattermost:  "@elizaos/plugin-mattermost",      // bundled
+  googlechat:  "@elizaos/plugin-google-chat",     // bundled
+  feishu:      "@elizaos/plugin-feishu",          // bundled
+  matrix:      "@elizaos/plugin-matrix",          // bundled
+  nostr:       "@elizaos/plugin-nostr",           // bundled
+  blooio:      "@elizaos/plugin-blooio",          // bundled (feature category)
+  twitch:      "@elizaos/plugin-twitch",          // bundled
+  wechat:      "@elizaos/plugin-wechat",          // upstream (Milady-specific, not in plugins.json)
 };
 ```
 
-> **Note:** The upstream `packages/agent` defines all `@elizaos/*` connectors. Milady's `packages/app-core` extends this map with the `wechat` entry pointing to `@elizaos/plugin-wechat`.
+> **Note:** The upstream `packages/agent` defines all `@elizaos/*` connectors. Milady's `packages/app-core` extends this map with the `wechat` entry. Connectors marked "upstream" are not in the bundled `plugins.json` — they resolve from the upstream elizaOS registry at runtime. Install them explicitly if auto-resolution fails.
 
 **Feature flags** — The `features` section of `milady.json` auto-enables feature plugins. A feature can be enabled with `features.<name>: true` or `features.<name>.enabled: true`:
 

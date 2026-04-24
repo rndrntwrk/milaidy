@@ -6,6 +6,10 @@ description: "MiniMax model provider for Milady — access MiniMax's language an
 
 The MiniMax plugin connects Milady agents to MiniMax's language models, providing access to their text generation and multimodal capabilities.
 
+<Info>
+This plugin is available from the upstream elizaOS registry. It is **not bundled** in `plugins.json` and must be installed explicitly.
+</Info>
+
 **Package:** `@elizaos/plugin-minimax`
 
 ## Installation

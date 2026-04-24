@@ -65,6 +65,12 @@ bun run milady --version
 
 ## 4) Repo map (mental model)
 
+The runtime source lives in the `eliza/` git submodule. Initialize it first:
+
+```bash
+bun run setup:upstreams
+```
+
 Core areas (all under `eliza/packages/app-core/`):
 
 - `eliza/packages/app-core/src/runtime/` — runtime startup, plugin orchestration, lifecycle
@@ -77,6 +83,8 @@ Core areas (all under `eliza/packages/app-core/`):
 - `apps/app/` — desktop/mobile UI app
 - `scripts/` — build/dev/release tooling
 - `test/` + colocated tests — verification
+
+> **Note:** The `eliza/` directory is a git submodule — these paths will not exist until you run `bun run setup:upstreams` or `git submodule update --init --recursive`. See [CONTRIBUTING.md](https://github.com/milady-ai/milady/blob/main/CONTRIBUTING.md) for submodule maintenance details.
 
 ---
 
