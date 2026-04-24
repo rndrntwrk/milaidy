@@ -624,7 +624,7 @@ index 8ba6eb9670..a7a6ea6b9c 100644
      req.method === "GET" &&
      (url.pathname === "/api/browser-bridge/companions" ||
 diff --git a/packages/app-core/scripts/release-check.ts b/packages/app-core/scripts/release-check.ts
-index 6da229a550..32f4aa0a78 100755
+index 6da229a550..8450d7606e 100755
 --- a/packages/app-core/scripts/release-check.ts
 +++ b/packages/app-core/scripts/release-check.ts
 @@ -58,7 +58,7 @@ function resolveOrchestratorPluginPackageJsonPath() {
@@ -648,18 +648,18 @@ index 6da229a550..32f4aa0a78 100755
    "node eliza/packages/app-core/scripts/desktop-build.mjs package --env=$" +
      "{{ needs.prepare.outputs.env }}",
    "ELIZA_ELECTROBUN_NOTARIZE: 0",
-@@ -191,7 +192,10 @@ const _requiredPatchedElectrobunCliSnippets = [
+@@ -191,7 +192,9 @@ const _requiredPatchedElectrobunCliSnippets = [
    'writeGitHubEnv("ELECTROBUN_RCEDIT_PACKAGE_JSON", resolvedRceditPackageJson);',
    'const overridePackageJson = process.env["ELECTROBUN_RCEDIT_PACKAGE_JSON"];',
    'const overrideEntry = overrideRequire.resolve("rcedit");',
+-  "--target=bun-windows-x64-baseline",
 +  "function resolveBuildTarget(value) {",
-   "--target=bun-windows-x64-baseline",
 +  "--target=${buildTarget.bunTarget}",
 +  "[electrobun-build] Bun entry:",
    "const installedBinPath = path.join(",
    "const installedCachePath = path.join(",
  ];
-@@ -239,7 +243,7 @@ const requiredElectrobunPrWorkflowSnippets = [
+@@ -239,7 +242,7 @@ const requiredElectrobunPrWorkflowSnippets = [
    "workflow_dispatch:",
    "permissions:",
    "contents: read",
@@ -668,7 +668,7 @@ index 6da229a550..32f4aa0a78 100755
    "name: Release Workflow Contract",
    "bun install --ignore-scripts",
    "bun run postinstall",
-@@ -903,8 +907,11 @@ function assertElectrobunConfigHasPostWrapSigner() {
+@@ -903,8 +906,11 @@ function assertElectrobunConfigHasPostWrapSigner() {
  function assertMacArtifactStagerLooksCorrect() {
    const script = readElectrobunFile("scripts", "stage-macos-release-artifacts.sh");
    const requiredSnippets = [
