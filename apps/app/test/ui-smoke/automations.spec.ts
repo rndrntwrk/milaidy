@@ -614,7 +614,10 @@ test("automations can create event tasks and inspect workflow data flow", async 
   await editor.getByRole("combobox").first().click();
   await page.getByRole("option", { name: "Event" }).click();
   await expect(editor.getByText("Waiting for Message Received.")).toBeVisible();
-  await editor.getByRole("button", { name: "Create task" }).click();
+  await page
+    .locator("main")
+    .getByRole("button", { name: "Create task" })
+    .click();
   await expect
     .poll(() => api.getCreatedTrigger())
     .toMatchObject({
