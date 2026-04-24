@@ -1,10 +1,10 @@
 ---
 title: "Plugin Development"
 sidebarTitle: "Plugin Development"
-description: "Create, test, and publish plugins for Eliza/elizaOS."
+description: "Create, test, and publish plugins for elizaOS."
 ---
 
-This guide walks you through creating, testing, and publishing plugins for Eliza/elizaOS.
+This guide walks you through creating, testing, and publishing plugins for elizaOS.
 
 ## Table of Contents
 
@@ -124,7 +124,7 @@ my-plugin/
     "dev": "tsc --watch"
   },
   "dependencies": {
-    "@elizaos/core": "^2.0.0"
+    "@elizaos/core": "alpha"
   },
   "devDependencies": {
     "typescript": "^5.0.0"

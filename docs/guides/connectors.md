@@ -1,7 +1,7 @@
 ---
 title: "Platform Connectors"
 sidebarTitle: "Connectors"
-description: "Platform bridges for 29 messaging platforms — 18 auto-enabled from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Twitter, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, Lens, WeChat) plus 11 installable from the registry (BlueBubbles, Bluesky, Instagram, LINE, Zalo, Zalo User, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
+description: "Platform bridges for 29 messaging platforms — 19 auto-enabled from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, BlueBubbles, MS Teams, Google Chat, Twitter, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, Lens, WeChat) plus 10 installable from the registry (Bluesky, Instagram, LINE, Zalo, Zalo User, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
 ---
 
 Connectors are platform bridges that allow your agent to communicate across messaging platforms and social networks. Each connector handles authentication, message routing, session management, and platform-specific features.
@@ -39,9 +39,9 @@ Connectors are platform bridges that allow your agent to communicate across mess
 29. [Nextcloud Talk](#nextcloud-talk)
 30. [Tlon](#tlon)
 31. [Lens](#lens)
-31. [Connector Lifecycle](#connector-lifecycle)
-32. [Multi-Account Support](#multi-account-support)
-33. [Session Management](#session-management)
+32. [Connector Lifecycle](#connector-lifecycle)
+33. [Multi-Account Support](#multi-account-support)
+34. [Session Management](#session-management)
 
 ---
 
@@ -68,8 +68,8 @@ Connectors marked **Auto** load automatically when their config is present in `m
 | Matrix | Access token | Yes | Yes (rooms) | No | Auto |
 | Feishu / Lark | App ID + secret | Yes | Yes (group chats) | No | Auto |
 | Nostr | Private key (nsec/hex) | Yes (NIP-04) | N/A | No | Auto |
-| Lens | API key | Yes | N/A | No | Auto |
-| BlueBubbles | Server password | Yes | Yes | No | Registry |
+| Lens | API key | Yes | N/A | No | Auto (planned) |
+| BlueBubbles | Server password | Yes | Yes | No | Auto |
 | Bluesky | Account credentials | Posts | N/A | No | Registry |
 | Instagram | Username + password | DMs | N/A | No | Registry |
 | LINE | Channel access token + secret | Yes | Yes | No | Registry |
@@ -568,7 +568,7 @@ Connects to iMessage and SMS messaging via the Blooio service with signed webhoo
 - Webhook-based inbound messages
 - Network-accessible (works from any machine, not just the Mac running Messages)
 
-**Note:** This connector is available from the plugin registry. Install it with `milady plugins install @elizaos/plugin-bluebubbles`.
+**Auto-enable:** The connector auto-enables when both `serverUrl` and `password` are set in the connector config. No manual install is required.
 
 **Docs:** [BlueBubbles connector](/connectors/bluebubbles)
 
@@ -693,7 +693,7 @@ Connects to iMessage and SMS messaging via the Blooio service with signed webhoo
 }
 ```
 
-**Environment variables:** `MATTERMOST_BOT_TOKEN`, `MATTERMOST_SERVER_URL`
+**Environment variables:** `MATTERMOST_BOT_TOKEN`, `MATTERMOST_BASE_URL`
 
 ### Features
 
@@ -1105,6 +1105,8 @@ Gmail Watch is enabled via the `features.gmailWatch` flag or environment variabl
 
 ## Lens
 
+> **Note:** `@elizaos/plugin-lens` is registered in the auto-enable map but is not yet published or bundled. This connector is planned but not yet functional.
+
 **Plugin:** `@elizaos/plugin-lens`
 
 ```json5
@@ -1123,7 +1125,7 @@ Gmail Watch is enabled via the `features.gmailWatch` flag or environment variabl
 
 **Auto-enable triggers:** `apiKey`, `token`, or `botToken`.
 
-**Features:**
+**Features (planned):**
 - Lens Protocol social interactions
 - Post publishing and engagement
 

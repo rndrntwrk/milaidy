@@ -66,7 +66,7 @@ bun run milady start
 
 ### Testing
 
-The project uses **Vitest 4.x** with V8 coverage. Coverage thresholds are set in `scripts/coverage-policy.mjs` at **25%** for lines, functions, and statements, and **15%** for branches.
+The project uses **Vitest 4.x** with V8 coverage. Coverage thresholds are set in `eliza/packages/app-core/scripts/coverage-policy.mjs` at **25%** for lines, functions, and statements, and **15%** for branches.
 
 ```bash
 # Run all tests (parallel runner)
@@ -87,8 +87,8 @@ bun run test:e2e
 # Live API tests (requires API keys)
 MILADY_LIVE_TEST=1 bun run test:live
 
-# Docker-based integration tests
-bun run test:docker:all
+# Docker-based runtime review
+bun run test:docker:review
 ```
 
 **Test file conventions:**
@@ -104,7 +104,7 @@ bun run test:docker:all
 The project uses **Biome 2.x** for both linting and formatting. There is no ESLint or Prettier -- Biome handles everything.
 
 ```bash
-# Run typecheck + lint (the main pre-push check)
+# Run typecheck + lint + tests (the main pre-push check)
 bun run check
 
 # Auto-fix formatting issues

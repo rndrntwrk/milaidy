@@ -437,7 +437,7 @@ Execute a token trade on BSC. Behavior depends on wallet configuration, Steward 
 
 | Header | Type | Required | Description |
 |--------|------|----------|-------------|
-| `x-milady-agent-action` | string | No | Set to `1`, `true`, `yes`, or `agent` to mark this as an agent-automated request. Affects trade permission mode resolution. |
+| `x-eliza-agent-action` | string | No | Set to `1`, `true`, `yes`, or `agent` to mark this as an agent-automated request. Affects trade permission mode resolution. |
 
 **Request body**
 
@@ -653,7 +653,7 @@ Transfer native tokens (BNB) or ERC-20 tokens on BSC.
 
 | Header | Type | Required | Description |
 |--------|------|----------|-------------|
-| `x-milady-agent-action` | string | No | Set to `1`, `true`, `yes`, or `agent` to mark this as an agent-automated request. Affects trade permission mode resolution. |
+| `x-eliza-agent-action` | string | No | Set to `1`, `true`, `yes`, or `agent` to mark this as an agent-automated request. Affects trade permission mode resolution. |
 
 **Request body**
 
