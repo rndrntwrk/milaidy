@@ -112,7 +112,8 @@
               "connectors/github",
               "connectors/gmail-watch",
               "connectors/nextcloud-talk",
-              "connectors/tlon"
+              "connectors/tlon",
+              "connectors/zalouser"
             ]
           }
         ]

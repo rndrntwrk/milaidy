@@ -1,20 +1,37 @@
 ---
 title: "milady plugins"
-description: "List, enable, or inspect plugins from the CLI."
+description: "List, install, search, and manage plugins from the CLI."
 ---
 
 # `milady plugins`
 
-Inspects which plugins resolve in the current environment and can trigger sync or registry operations depending on flags.
+Manage the plugin lifecycle — browse the registry, install or remove plugins, and inspect what's currently loaded.
+
+## Subcommands
+
+| Subcommand | Purpose |
+|------------|---------|
+| `milady plugins list` | Browse available plugins in the registry |
+| `milady plugins installed` | Show plugins currently installed |
+| `milady plugins install <name>` | Install a plugin by name or package |
+| `milady plugins uninstall <name>` | Remove an installed plugin |
+| `milady plugins search <query>` | Search registry plugins by keyword |
 
 ## Examples
 
 ```bash
-milady plugins
-milady plugins --help
+milady plugins list
+milady plugins installed
+milady plugins install @elizaos/plugin-openai
+milady plugins install discord
+milady plugins uninstall discord
+milady plugins search "image generation"
 ```
+
+Short plugin names (e.g. `discord`) resolve to `@elizaos/plugin-discord` automatically. Full package names also work.
 
 ## Related
 
 - [Plugins overview](/plugins/overview)
+- [Plugin registry](/plugins/registry)
 - [REST — plugins](/rest/plugins)

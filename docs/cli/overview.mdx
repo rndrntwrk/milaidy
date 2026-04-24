@@ -27,6 +27,21 @@ The `milady` binary (also published as `milady-ai` / `miladyai`) is the primary 
 | [`milady doctor`](/cli/doctor) | Health and environment checks |
 | [`milady db`](/cli/db) | Database utilities |
 
+## Global flags
+
+| Flag | Purpose |
+|------|---------|
+| `--help` | Show help for any command |
+| `--version` | Print the installed version |
+| `--verbose` | Enable informational runtime logs |
+| `--debug` | Enable debug-level runtime logs |
+
+```bash
+milady --version
+milady --debug start
+milady plugins --help
+```
+
 ## Help
 
 Run `milady --help` or `milady <command> --help` for the exact flags in your build. Implementation lives under `eliza/packages/app-core/src/cli/` in this repository.
