@@ -57,6 +57,12 @@ The `plugin-auto-enable.ts` module checks `connectors.farcaster` in your config.
 
 No environment variable is required to trigger auto-enable — it is driven entirely by the connector config object.
 
+## Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `FARCASTER_NEYNAR_API_KEY` | Neynar API key. When set, the runtime maps this to the connector's `apiKey` field. Can be used as an alternative to placing the key directly in `milady.json`. |
+
 ## Full Configuration Reference
 
 All fields are defined under `connectors.farcaster` in `milady.json`.

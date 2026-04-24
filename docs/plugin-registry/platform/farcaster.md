@@ -109,9 +109,15 @@ When configured, the agent posts casts autonomously at random intervals. The LLM
 
 Casts are limited to 320 characters. Longer responses are split into cast threads.
 
+## Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `FARCASTER_NEYNAR_API_KEY` | Neynar API key. When set, the runtime maps this to the connector's `apiKey` field. |
+
 ## Auto-Enable
 
-The plugin auto-enables when `connectors.farcaster.apiKey` is set.
+The plugin auto-enables when `connectors.farcaster.apiKey` is set or the `FARCASTER_NEYNAR_API_KEY` environment variable is present.
 
 ## Related
 

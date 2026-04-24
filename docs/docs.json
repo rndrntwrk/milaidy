@@ -112,7 +112,9 @@
               "connectors/github",
               "connectors/gmail-watch",
               "connectors/nextcloud-talk",
-              "connectors/tlon"
+              "connectors/tlon",
+              "connectors/acp",
+              "connectors/zalouser"
             ]
           }
         ]
@@ -211,7 +213,9 @@
               "plugin-registry/platform/github",
               "plugin-registry/platform/gmail-watch",
               "plugin-registry/platform/nextcloud-talk",
-              "plugin-registry/platform/tlon"
+              "plugin-registry/platform/tlon",
+              "plugin-registry/platform/acp",
+              "plugin-registry/platform/zalouser"
             ]
           },
           {
