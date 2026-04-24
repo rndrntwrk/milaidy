@@ -24,20 +24,18 @@ The source of truth for which plugins are always loaded lives in `packages/agent
 export const CORE_PLUGINS: readonly string[] = [
   "@elizaos/plugin-sql",               // database adapter — required
   "@elizaos/plugin-local-embedding",   // local embeddings — required for memory
-  "@elizaos/plugin-form",              // form handling for guided user journeys
-  "knowledge",         // RAG knowledge management — required for knowledge tab
-  "trajectories", // trajectory logging for debugging and RL training
-  "@elizaos/plugin-agent-orchestrator",// multi-agent orchestration (PTY, SwarmCoordinator, workspace provisioning)
+  "@elizaos/app-companion",            // VRM companion emotes
   "@elizaos/plugin-cron",              // scheduled jobs and automation
+  "@elizaos/plugin-app-control",       // launch, close, list running Milady apps
   "@elizaos/plugin-shell",             // shell command execution
   "@elizaos/plugin-agent-skills",      // skill execution and marketplace runtime
-  "@elizaos/plugin-commands",          // slash command handling (skills auto-register as /commands)
-  "@elizaos/plugin-plugin-manager",    // dynamic plugin management for registry/plugin installs
-  "roles",                            // internal role-based access control (OWNER/ADMIN/NONE)
+  "@elizaos/plugin-commands",          // slash command handling
+  "@elizaos/app-lifeops",             // LifeOps: tasks, goals, calendar, inbox
+  "@elizaos/plugin-browser-bridge",    // Chrome/Safari companion pairing
 ];
 ```
 
-> **Note:** `@elizaos/plugin-secrets-manager`, `relationships`, `@elizaos/plugin-trust`, and `@elizaos/plugin-personality` are statically imported for fast resolution but commented out of the core list. Experience now ships as a built-in advanced capability instead of a standalone plugin. Milady does not ship `@elizaos/plugin-todo`; todo functionality is handled by the workbench API and LifeOps-related runtime tasks.
+> **Note:** Several capabilities that were previously standalone plugins are now built-in runtime features: experience, form, clipboard, personality (advanced capabilities via `advancedCapabilities: true`), trust (via `enableTrust: true`), secrets-manager (via `enableSecretsManager: true`), plugin-manager (via `enablePluginManager: true`), knowledge, relationships, and trajectories (native features). The agent-orchestrator is opt-in via `ELIZA_AGENT_ORCHESTRATOR` (Eliza app enables by default).
 
 ### Optional Core Plugins
 
@@ -56,10 +54,15 @@ export const OPTIONAL_CORE_PLUGINS: readonly string[] = [
   "@elizaos/plugin-vision",               // vision/image understanding (feature-gated)
   "@elizaos/plugin-cli",                  // CLI interface
   "@elizaos/plugin-discord",              // Discord bot integration
+  "@elizaos/plugin-discord-local",        // Local Discord desktop integration for macOS
+  "@elizaos/plugin-bluebubbles",          // BlueBubbles-backed iMessage integration for macOS
   "@elizaos/plugin-telegram",             // Telegram bot integration
+  "@elizaos/plugin-signal",               // Signal user-account integration
   "@elizaos/plugin-twitch",               // Twitch integration
   "@elizaos/plugin-edge-tts",             // text-to-speech (Microsoft Edge TTS)
   "@elizaos/plugin-elevenlabs",           // ElevenLabs text-to-speech
+  "@elizaos/plugin-music-library",        // music metadata, library, playlists
+  "@elizaos/plugin-music-player",         // music playback engine + streaming routes
 ];
 ```
 

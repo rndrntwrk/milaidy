@@ -53,9 +53,8 @@ If your token is ever exposed, regenerate it immediately by clicking **Regenerat
 1. Open your Milady config file at `~/.milady/milady.json` (create it if it does not exist)
 2. Add the Discord connector configuration:
 
-```json5
+```json
 {
-  // ... existing config ...
   "connectors": {
     "discord": {
       "enabled": true,

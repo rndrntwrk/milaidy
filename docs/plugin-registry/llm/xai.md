@@ -16,7 +16,7 @@ milady plugins install xai
 
 ## Auto-Enable
 
-The plugin auto-enables when `XAI_API_KEY` or `GROK_API_KEY` is present:
+The plugin auto-enables when any of the following env vars are present: `X_API_KEY`, `XAI_API_KEY`, or `GROK_API_KEY`.
 
 ```bash
 export XAI_API_KEY=xai-...
@@ -26,13 +26,15 @@ export XAI_API_KEY=xai-...
 
 | Environment Variable | Required | Description |
 |---------------------|----------|-------------|
-| `XAI_API_KEY` | Yes* | xAI API key from [console.x.ai](https://console.x.ai) |
-| `GROK_API_KEY` | Yes* | Alias that also triggers auto-enable |
+| `X_API_KEY` | Yes* | Primary key in the plugin registry |
+| `XAI_API_KEY` | Yes* | Alias — also triggers auto-enable |
+| `GROK_API_KEY` | Yes* | Alias — also triggers auto-enable |
 | `XAI_BASE_URL` | No | Custom base URL for the xAI API |
+| `XAI_MODEL` | No | Override the default model identifier |
 | `XAI_SMALL_MODEL` | No | Override the small model identifier |
 | `XAI_EMBEDDING_MODEL` | No | Override the embedding model identifier |
 
-\* Either `XAI_API_KEY` or `GROK_API_KEY` activates the plugin.
+\* Any one of `X_API_KEY`, `XAI_API_KEY`, or `GROK_API_KEY` activates the plugin.
 
 ### milady.json Example
 

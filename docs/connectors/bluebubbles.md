@@ -16,7 +16,7 @@ The BlueBubbles connector is an elizaOS plugin that bridges your agent to iMessa
 |-------|-------|
 | Package | `@elizaos/plugin-bluebubbles` |
 | Config key | `connectors.bluebubbles` |
-| Install | `milady plugins install @elizaos/plugin-bluebubbles` |
+| Auto-enable trigger | `serverUrl` and `password` are both truthy in connector config |
 
 ## Minimal Configuration
 

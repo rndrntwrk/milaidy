@@ -62,7 +62,9 @@ When the connector is loaded, the runtime pushes the following secrets from your
 | Variable | Source | Description |
 |----------|--------|-------------|
 | `MATTERMOST_BOT_TOKEN` | `botToken` | Bot token from Mattermost System Console |
-| `MATTERMOST_SERVER_URL` | `baseUrl` | Server URL for the Mattermost server |
+| `MATTERMOST_BASE_URL` | `baseUrl` | Server URL (injected by the runtime's `CONNECTOR_ENV_MAP`) |
+
+The plugin itself also reads `MATTERMOST_SERVER_URL` as an alias. If you set the env var directly (rather than via connector config), use `MATTERMOST_SERVER_URL`.
 
 ## Full Configuration Reference
 

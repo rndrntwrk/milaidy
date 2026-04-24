@@ -88,30 +88,15 @@ For non-Ollama models, the manager fetches the file list from `https://huggingfa
 
 For models with an Ollama tag (e.g., `ollama/llama3.2:1b`), the manager calls `POST http://localhost:11434/api/pull` with the model name. Requires a running Ollama server.
 
-## Programmatic API
+## Management
 
-```typescript
-import {
-  getLocalModelManager,
-  downloadRecommendedModel,
-  getLocalModelStatuses,
-  ensureLocalModel,
-} from "milady/providers/local-models";
+Local models are managed through the dashboard or the CLI:
 
-// Get the singleton manager
-const manager = getLocalModelManager();
-
-// Download the recommended model for a type
-const modelPath = await downloadRecommendedModel("stt", (progress) => {
-  console.log(`${progress.file}: ${progress.percent}%`);
-});
-
-// Ensure a specific model is downloaded
-const path = await ensureLocalModel("openai/whisper-small");
-
-// Check download status for all models
-const statuses = getLocalModelStatuses("embedding");
+```bash
+milady models              # show model provider status and local models
 ```
+
+Models can also be managed through the REST API endpoints at `/api/models`.
 
 ## Related
 
