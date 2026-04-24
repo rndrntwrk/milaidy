@@ -8,6 +8,10 @@ The Twitter plugin connects Milady agents to Twitter/X, enabling autonomous post
 
 **Package:** `@elizaos/plugin-twitter`
 
+<Note>
+The separate `@elizaos/plugin-xai` package also bundles X/Twitter integration alongside Grok models. If you already use xAI with `X_*` env vars, you may not need to install this connector separately.
+</Note>
+
 ## Installation
 
 ```bash

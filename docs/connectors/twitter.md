@@ -8,7 +8,7 @@ Connect your agent to Twitter/X for social media engagement.
 
 ## Overview
 
-The Twitter connector is an external elizaOS plugin that bridges your agent to Twitter/X. It is auto-enabled by the runtime when a valid token is detected in your connector configuration.
+The Twitter connector is an elizaOS plugin that bridges your agent to Twitter/X. It is auto-enabled by the runtime when a valid token is detected in your connector configuration.
 
 ## Package Info
 
@@ -17,6 +17,10 @@ The Twitter connector is an external elizaOS plugin that bridges your agent to T
 | Package | `@elizaos/plugin-twitter` |
 | Config key | `connectors.twitter` |
 | Auto-enable trigger | `botToken`, `token`, or `apiKey` is truthy in connector config |
+
+<Note>
+`@elizaos/plugin-twitter` is the dedicated Twitter connector and handles posting, mentions, and timeline interactions. The separate `@elizaos/plugin-xai` package also includes X/Twitter integration alongside Grok model access — if you already have xAI configured with `X_*` env vars, you may not need this connector separately.
+</Note>
 
 ## Minimal Configuration
 

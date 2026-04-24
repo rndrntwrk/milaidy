@@ -81,7 +81,7 @@ where to get the credentials, minimum required fields, and tips for optional fie
 - `X_AUTH_MODE` — `api_key` (default) or `oauth`
 - `X_API_KEY`, `X_API_SECRET`, `X_ACCESS_TOKEN`, `X_ACCESS_TOKEN_SECRET` — Twitter OAuth keys (for the X connector side of xAI)
 - `X_ENABLE_POST`, `X_ENABLE_REPLIES`, `X_ENABLE_ACTIONS` — Toggle X/Twitter behaviors
-**Tips:** xAI = Grok models. The `X_*` vars are for the Twitter integration bundled with xAI. Keep auth mode as `api_key` unless you need OAuth.
+**Tips:** xAI = Grok models. The `X_*` vars are for the Twitter integration bundled with xAI. Keep auth mode as `api_key` unless you need OAuth. For a standalone Twitter connector (without Grok), see the [Twitter/X connector](#twitter--x) section below — it uses `TWITTER_*` env vars and `connectors.twitter` config instead.
 
 ### Ollama (Local Models)
 **Get credentials:** No API key needed — install Ollama locally
@@ -262,7 +262,7 @@ where to get the credentials, minimum required fields, and tips for optional fie
 3. Generate all 4 keys from "Keys and Tokens" tab
 4. Set app permissions to Read and Write
 5. Regenerate tokens AFTER setting permissions
-**Tips:** Start with `TWITTER_DRY_RUN=true` to verify without posting. Free API tier has 500 posts/month. You need ALL 4 OAuth keys — missing any one will cause auth failure.
+**Tips:** Start with `TWITTER_DRY_RUN=true` to verify without posting. Free API tier has 500 posts/month. You need ALL 4 OAuth keys — missing any one will cause auth failure. If you already use `@elizaos/plugin-xai` with `X_*` env vars, that plugin also bundles Twitter/X integration — you may not need this separate connector.
 
 ### Slack
 **Get credentials:** https://api.slack.com/apps → Create New App
