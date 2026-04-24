@@ -39,9 +39,9 @@ Connectors are platform bridges that allow your agent to communicate across mess
 29. [Nextcloud Talk](#nextcloud-talk)
 30. [Tlon](#tlon)
 31. [Lens](#lens)
-31. [Connector Lifecycle](#connector-lifecycle)
-32. [Multi-Account Support](#multi-account-support)
-33. [Session Management](#session-management)
+32. [Connector Lifecycle](#connector-lifecycle)
+33. [Multi-Account Support](#multi-account-support)
+34. [Session Management](#session-management)
 
 ---
 
