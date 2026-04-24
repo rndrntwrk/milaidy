@@ -11,7 +11,7 @@ The iMessage plugin connects Milady agents to iMessage on macOS, supporting both
 ## Installation
 
 ```bash
-milady plugins install imessage
+milady plugins install @elizaos/plugin-imessage
 ```
 
 ## Setup

@@ -11,7 +11,7 @@ The Telegram plugin connects Milady agents to Telegram as a bot, handling privat
 ## Installation
 
 ```bash
-milady plugins install telegram
+milady plugins install @elizaos/plugin-telegram
 ```
 
 ## Setup

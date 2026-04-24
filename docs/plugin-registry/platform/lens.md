@@ -11,7 +11,7 @@ The Lens plugin connects Milady agents to the Lens Protocol, enabling social int
 ## Installation
 
 ```bash
-milady plugins install lens
+milady plugins install @elizaos/plugin-lens
 ```
 
 ## Setup

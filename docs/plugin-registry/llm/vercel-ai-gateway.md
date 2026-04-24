@@ -11,7 +11,7 @@ The Vercel AI Gateway plugin connects Milady agents to Vercel's AI Gateway, prov
 ## Installation
 
 ```bash
-milady plugins install vercel-ai-gateway
+milady plugins install @elizaos/plugin-vercel-ai-gateway
 ```
 
 ## Auto-Enable

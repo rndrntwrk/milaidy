@@ -11,7 +11,7 @@ The Slack plugin connects Milady agents to Slack workspaces as a bot app, handli
 ## Installation
 
 ```bash
-milady plugins install slack
+milady plugins install @elizaos/plugin-slack
 ```
 
 ## Setup

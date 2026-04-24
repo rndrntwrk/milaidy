@@ -11,7 +11,7 @@ The Blooio plugin connects Milady agents to iMessage and SMS messaging via the B
 ## Installation
 
 ```bash
-milady plugins install blooio
+milady plugins install @elizaos/plugin-blooio
 ```
 
 ## Setup

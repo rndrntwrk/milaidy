@@ -11,7 +11,7 @@ The FAL plugin connects Milady agents to [FAL.ai](https://fal.ai)'s media genera
 ## Installation
 
 ```bash
-milady plugins install fal
+milady plugins install @elizaos/plugin-fal
 ```
 
 ## Enable via Features

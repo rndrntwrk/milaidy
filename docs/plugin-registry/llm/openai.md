@@ -11,7 +11,7 @@ The OpenAI plugin connects Milady agents to OpenAI's API, providing access to GP
 ## Installation
 
 ```bash
-milady plugins install openai
+milady plugins install @elizaos/plugin-openai
 ```
 
 Or add to `milady.json`:

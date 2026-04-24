@@ -11,7 +11,7 @@ The Twitter plugin connects Milady agents to Twitter/X, enabling autonomous post
 ## Installation
 
 ```bash
-milady plugins install twitter
+milady plugins install @elizaos/plugin-twitter
 ```
 
 ## Setup

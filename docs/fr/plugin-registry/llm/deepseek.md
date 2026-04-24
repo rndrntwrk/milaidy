@@ -15,7 +15,7 @@ Le plugin DeepSeek connecte les agents Milady à l'API de DeepSeek, fournissant 
 </div>
 
 ```bash
-milady plugins install deepseek
+milady plugins install @elizaos/plugin-deepseek
 ```
 
 <div id="auto-enable">

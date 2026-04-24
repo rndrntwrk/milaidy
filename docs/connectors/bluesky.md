@@ -18,7 +18,7 @@ Unlike the 18 auto-enabled connectors (Discord, Telegram, etc.), Bluesky is a **
 |-------|-------|
 | Package | `@elizaos/plugin-bluesky` |
 | Config key | `connectors.bluesky` |
-| Install | `milady plugins install bluesky` |
+| Install | `milady plugins install @elizaos/plugin-bluesky` |
 
 ## Setup Requirements
 

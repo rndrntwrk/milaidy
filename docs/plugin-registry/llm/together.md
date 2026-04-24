@@ -11,7 +11,7 @@ The Together AI plugin connects Milady agents to Together's inference platform, 
 ## Installation
 
 ```bash
-milady plugins install together
+milady plugins install @elizaos/plugin-together
 ```
 
 ## Auto-Enable

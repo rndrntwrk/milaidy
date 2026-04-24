@@ -11,7 +11,7 @@ The Anthropic plugin connects Milady agents to Anthropic's Claude API and expose
 ## Installation
 
 ```bash
-milady plugins install anthropic
+milady plugins install @elizaos/plugin-anthropic
 ```
 
 ## Auto-Enable

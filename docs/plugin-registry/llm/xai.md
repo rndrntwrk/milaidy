@@ -11,7 +11,7 @@ The xAI plugin connects Milady agents to xAI's Grok models, providing access to 
 ## Installation
 
 ```bash
-milady plugins install xai
+milady plugins install @elizaos/plugin-xai
 ```
 
 ## Auto-Enable

@@ -11,7 +11,7 @@ The Google Antigravity plugin connects Milady agents to Google Cloud AI Platform
 ## Installation
 
 ```bash
-milady plugins install google-antigravity
+milady plugins install @elizaos/plugin-google-antigravity
 ```
 
 ## Auto-Enable

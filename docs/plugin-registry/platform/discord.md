@@ -11,7 +11,7 @@ The Discord plugin connects Milady agents to Discord as a bot, enabling message 
 ## Installation
 
 ```bash
-milady plugins install discord
+milady plugins install @elizaos/plugin-discord
 ```
 
 ## Setup

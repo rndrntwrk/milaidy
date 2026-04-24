@@ -11,7 +11,7 @@ The Google Gemini plugin connects Milady agents to Google's Gemini API, providin
 ## Installation
 
 ```bash
-milady plugins install google-genai
+milady plugins install @elizaos/plugin-google-genai
 ```
 
 ## Auto-Enable

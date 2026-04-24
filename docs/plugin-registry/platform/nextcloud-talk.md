@@ -11,7 +11,7 @@ The Nextcloud Talk plugin connects Milady agents to Nextcloud Talk, enabling mes
 ## Installation
 
 ```bash
-milady plugins install nextcloud-talk
+milady plugins install @elizaos/plugin-nextcloud-talk
 ```
 
 ## Setup

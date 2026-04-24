@@ -17,7 +17,7 @@ The WhatsApp plugin supports two authentication methods: **Baileys** (QR code sc
 ## Installation
 
 ```bash
-milady plugins install whatsapp
+milady plugins install @elizaos/plugin-whatsapp
 ```
 
 ## Setup

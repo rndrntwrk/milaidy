@@ -11,7 +11,7 @@ The Suno plugin connects Milady agents to Suno's music generation platform, enab
 ## Installation
 
 ```bash
-milady plugins install suno
+milady plugins install @elizaos/plugin-suno
 ```
 
 ## Enable via Features

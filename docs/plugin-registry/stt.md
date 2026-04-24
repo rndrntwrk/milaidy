@@ -11,7 +11,7 @@ The Speech-to-Text (STT) plugin enables Milady agents to transcribe audio input 
 ## Installation
 
 ```bash
-milady plugins install stt
+milady plugins install @elizaos/plugin-stt
 ```
 
 ## Enable via Features

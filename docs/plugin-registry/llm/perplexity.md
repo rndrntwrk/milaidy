@@ -11,7 +11,7 @@ The Perplexity plugin connects Milady agents to Perplexity's search-augmented la
 ## Installation
 
 ```bash
-milady plugins install perplexity
+milady plugins install @elizaos/plugin-perplexity
 ```
 
 ## Auto-Enable

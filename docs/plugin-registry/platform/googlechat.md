@@ -11,7 +11,7 @@ The Google Chat plugin connects Milady agents to Google Chat via a Google Cloud 
 ## Installation
 
 ```bash
-milady plugins install googlechat
+milady plugins install @elizaos/plugin-googlechat
 ```
 
 ## Setup
