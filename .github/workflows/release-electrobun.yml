@@ -152,6 +152,7 @@ jobs:
       - name: Init non-eliza submodules
         run: |
           node scripts/init-submodules.mjs
+          node scripts/apply-eliza-ci-patches.mjs
           node scripts/disable-local-eliza-workspace.mjs
 
       - name: Install root dependencies

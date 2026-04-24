@@ -149,6 +149,24 @@ index 1fc3db564f..3bd7202380 100644
  }));
  
  vi.mock("../../state/ChatComposerContext", () => ({
+diff --git a/packages/app-core/platforms/electrobun/src/native/steward.test.ts b/packages/app-core/platforms/electrobun/src/native/steward.test.ts
+index 3a9b0beb88..b7c3bd0b35 100644
+--- a/packages/app-core/platforms/electrobun/src/native/steward.test.ts
++++ b/packages/app-core/platforms/electrobun/src/native/steward.test.ts
+@@ -22,3 +22,3 @@
+-vi.mock("@elizaos/app-steward/services/steward-credentials", () => ({
++vi.mock("../../../../src/services/steward-credentials", () => ({
+   saveStewardCredentials: saveStewardCredentialsMock,
+ }));
+diff --git a/packages/app-core/platforms/electrobun/src/native/steward.ts b/packages/app-core/platforms/electrobun/src/native/steward.ts
+index 149d5e6be6..bf80c208ca 100644
+--- a/packages/app-core/platforms/electrobun/src/native/steward.ts
++++ b/packages/app-core/platforms/electrobun/src/native/steward.ts
+@@ -23,3 +23,3 @@ import {
+ } from "../../../../src/services/steward-sidecar";
+-import { saveStewardCredentials } from "@elizaos/app-steward/services/steward-credentials";
++import { saveStewardCredentials } from "../../../../src/services/steward-credentials";
+ import { getBrandConfig } from "../brand-config";
 diff --git a/packages/app-core/scripts/playwright-ui-smoke-api-stub.mjs b/packages/app-core/scripts/playwright-ui-smoke-api-stub.mjs
 index 8ba6eb9670..a7a6ea6b9c 100644
 --- a/packages/app-core/scripts/playwright-ui-smoke-api-stub.mjs
