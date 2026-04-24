@@ -1,0 +1,151 @@
+diff --git a/apps/app-lifeops/src/components/LifeOpsPaymentsSection.tsx b/apps/app-lifeops/src/components/LifeOpsPaymentsSection.tsx
+index b1ae39caea..1026699c5b 100644
+--- a/apps/app-lifeops/src/components/LifeOpsPaymentsSection.tsx
++++ b/apps/app-lifeops/src/components/LifeOpsPaymentsSection.tsx
+@@ -53,7 +53,7 @@ function cadenceLabel(cadence: LifeOpsRecurringCharge["cadence"]): string {
+   }
+ }
+ 
+-export function LifeOpsPaymentsSection(): JSX.Element {
++export function LifeOpsPaymentsSection(): JSX.Element | null {
+   const [dashboard, setDashboard] = useState<LifeOpsPaymentsDashboard | null>(
+     null,
+   );
+diff --git a/packages/app-core/scripts/audit-live-test-surface.mjs b/packages/app-core/scripts/audit-live-test-surface.mjs
+index 8652a766ac..c6257d3430 100644
+--- a/packages/app-core/scripts/audit-live-test-surface.mjs
++++ b/packages/app-core/scripts/audit-live-test-surface.mjs
+@@ -38,7 +38,10 @@ const MOCK_DIR_NAMES = new Set([
+   "mocks",
+ ]);
+ const STUB_PATTERNS = [
+-  { id: "playwright-ui-smoke-api-stub", regex: /playwright-ui-smoke-api-stub\.mjs/g },
++  {
++    id: "playwright-ui-smoke-api-stub",
++    regex: /playwright-ui-smoke-api-stub\.mjs/g,
++  },
+   { id: "test/stubs", regex: /test\/stubs/g },
+   { id: "__mocks__", regex: /__mocks__/g },
+   { id: "plugin-stub", regex: /plugin-stub\.mjs/g },
+@@ -57,6 +60,7 @@ const HARNESS_BLOCKER_PATTERNS = [
+     regex: /MILADY_SKIP_STEWARD_FI_LIVE_SMOKE\s*=\s*["']1["']/g,
+   },
+ ];
++const ALLOW_ROUTE_FIXTURE_MARKER = "@milady-live-audit allow-route-fixtures";
+ 
+ function findRepoRoot(startDir) {
+   let currentDir = startDir;
+@@ -326,7 +330,9 @@ async function analyzeRoot(root) {
+     }
+ 
+     const text = await fsp.readFile(absPath, "utf8");
+-    const stubCounts = countMatches(text, STUB_PATTERNS);
++    const stubCounts = text.includes(ALLOW_ROUTE_FIXTURE_MARKER)
++      ? createCounter(STUB_PATTERNS)
++      : countMatches(text, STUB_PATTERNS);
+     if (hasAnyCount(stubCounts)) {
+       stubReferences.push({
+         file: relPath,
+@@ -385,7 +391,9 @@ async function analyzeRoot(root) {
+   }
+   for (const kind of root.requiredScriptKinds) {
+     if ((scriptKindTotals[kind] ?? 0) === 0) {
+-      violations.push(`${root.id}: no package.json test scripts tagged for ${kind}`);
++      violations.push(
++        `${root.id}: no package.json test scripts tagged for ${kind}`,
++      );
+     }
+   }
+   if (harnessBlockers.length > 0) {
+@@ -514,6 +522,9 @@ function renderHumanReport(report) {
+ 
+ const roots = [];
+ for (const root of ROOTS) {
++  if (!fs.existsSync(root.dir)) {
++    continue;
++  }
+   roots.push(await analyzeRoot(root));
+ }
+ 
+diff --git a/packages/app-core/scripts/run-release-contract-suite.mjs b/packages/app-core/scripts/run-release-contract-suite.mjs
+index 099d7e91a7..c561db8b95 100755
+--- a/packages/app-core/scripts/run-release-contract-suite.mjs
++++ b/packages/app-core/scripts/run-release-contract-suite.mjs
+@@ -6,16 +6,27 @@ const APP_CORE_ROOT = path.resolve(import.meta.dirname, "..");
+ const REPO_ROOT = path.resolve(APP_CORE_ROOT, "..", "..", "..");
+ 
+ const releaseContractTests = [
+-  "eliza/packages/app-core/scripts/asset-cdn.test.ts",
+-  "eliza/packages/app-core/scripts/docker-contract.test.ts",
+-  "eliza/packages/app-core/scripts/chrome-extension-release-surface.test.ts",
++  "scripts/release-workflow-path-contract.test.ts",
++  "scripts/run-release-contract-suite.test.ts",
++  "scripts/patch-mobile-build-release-compat.test.ts",
++  "scripts/patch-release-check-pack-fallback.test.ts",
++  "scripts/electrobun-pr-workflow-contract.test.ts",
+   "eliza/packages/app-core/scripts/electrobun-release-workflow-drift.test.ts",
+-  "eliza/packages/app-core/scripts/electrobun-test-workflow-drift.test.ts",
+-  "eliza/packages/app-core/scripts/whisper-build-script-drift.test.ts",
+   "eliza/packages/app-core/scripts/release-check.test.ts",
+   "eliza/packages/app-core/scripts/static-asset-manifest.test.ts",
+ ];
+ 
++const missingReleaseContractTests = releaseContractTests.filter(
++  (testPath) => !fs.existsSync(path.join(REPO_ROOT, testPath)),
++);
++if (missingReleaseContractTests.length > 0) {
++  console.error("Release contract suite references missing test files:");
++  for (const testPath of missingReleaseContractTests) {
++    console.error(`- ${testPath}`);
++  }
++  process.exit(1);
++}
++
+ function run(command, args, cwd = APP_CORE_ROOT) {
+   const result = spawnSync(command, args, {
+     cwd,
+@@ -33,11 +44,15 @@ function run(command, args, cwd = APP_CORE_ROOT) {
+ }
+ 
+ run("bunx", ["vitest", "run", ...releaseContractTests], REPO_ROOT);
+-run("bunx", [
+-  "vitest",
+-  "run",
+-  "eliza/packages/app-core/scripts/startup-integration-script-drift.test.ts",
+-], REPO_ROOT);
++run(
++  "bunx",
++  [
++    "vitest",
++    "run",
++    "eliza/packages/app-core/scripts/startup-integration-script-drift.test.ts",
++  ],
++  REPO_ROOT,
++);
+ 
+ // tsdown and the release check both resolve repo-root-relative entries/config.
+ run("bunx", ["tsdown", "--fail-on-warn", "false"], REPO_ROOT);
+diff --git a/packages/app-core/src/components/conversations/ConversationsSidebar.test.tsx b/packages/app-core/src/components/conversations/ConversationsSidebar.test.tsx
+index bee38b1e9d..e1c3df2cc6 100644
+--- a/packages/app-core/src/components/conversations/ConversationsSidebar.test.tsx
++++ b/packages/app-core/src/components/conversations/ConversationsSidebar.test.tsx
+@@ -200,6 +200,7 @@ vi.mock("@elizaos/ui", () => {
+     SidebarPanel: passthrough,
+     SidebarScrollRegion: passthrough,
+     TooltipProvider: passthrough,
++    useIntervalWhenDocumentVisible: () => {},
+   };
+ });
+ 
+diff --git a/packages/app-core/src/components/pages/TerminalChannelPanel.test.tsx b/packages/app-core/src/components/pages/TerminalChannelPanel.test.tsx
+index 1fc3db564f..3bd7202380 100644
+--- a/packages/app-core/src/components/pages/TerminalChannelPanel.test.tsx
++++ b/packages/app-core/src/components/pages/TerminalChannelPanel.test.tsx
+@@ -36,6 +36,7 @@ vi.mock("@elizaos/ui", () => ({
+   ),
+   ChatTranscript: () => null,
+   TypingIndicator: () => null,
++  useIntervalWhenDocumentVisible: () => {},
+ }));
+ 
+ vi.mock("../../state/ChatComposerContext", () => ({

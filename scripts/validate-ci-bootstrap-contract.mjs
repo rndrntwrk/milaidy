@@ -18,6 +18,8 @@ const files = {
   packageJson: "package.json",
   disableScript: "scripts/disable-local-eliza-workspace.mjs",
   restoreScript: "scripts/restore-local-eliza-workspace.mjs",
+  elizaCiPatchScript: "scripts/apply-eliza-ci-patches.mjs",
+  elizaCiPatch: "patches/eliza/ci-release-contracts.patch",
   publishedFallbackScript:
     "scripts/install-published-workspace-fallback-deps.sh",
   regressionMatrixScript:
@@ -30,6 +32,12 @@ const workflows = [
   ".github/workflows/ci-fork.yml",
   ".github/workflows/docker-ci-smoke.yml",
 ];
+
+const allWorkflowPaths = fs
+  .readdirSync(path.join(repoRoot, ".github", "workflows"))
+  .filter((entry) => /\.ya?ml$/.test(entry))
+  .sort((a, b) => a.localeCompare(b))
+  .map((entry) => path.join(".github", "workflows", entry));
 
 const requiredWorkflowSnippets = [
   "name: Regression Matrix Contract",
@@ -44,6 +52,10 @@ const requiredWorkflowSnippets = [
 const requiredActionSnippets = [
   "disable-local-eliza-workspace:",
   "run: node scripts/disable-local-eliza-workspace.mjs",
+  "name: Apply Milady eliza CI patches",
+  "run: node scripts/apply-eliza-ci-patches.mjs",
+  "name: Validate published-only install mode",
+  "disable-local-eliza-workspace requires an install-command with --no-frozen-lockfile",
   "run: bash scripts/install-published-workspace-fallback-deps.sh",
 ];
 
@@ -82,6 +94,9 @@ for (const relativePath of Object.values(files).filter((value) =>
     failures.push(`Missing bootstrap dependency: ${relativePath}`);
   }
 }
+if (!fs.existsSync(path.join(repoRoot, files.elizaCiPatch))) {
+  failures.push(`Missing bootstrap dependency: ${files.elizaCiPatch}`);
+}
 
 const workflowText = readText(files.workflow, failures);
 const actionText = readText(files.action, failures);
@@ -97,6 +112,7 @@ assertContainsAll(
 assertCiPreReviewBootstrap(ciWorkflowText, failures);
 assertContainsAll(actionText, files.action, requiredActionSnippets, failures);
 assertContainsNone(actionText, files.action, forbiddenActionSnippets, failures);
+assertDisabledWorkspaceInstallsUseNoFrozen(allWorkflowPaths, failures);
 
 const regressionMatrixCommand =
   packageJson?.scripts?.["test:regression-matrix:pr"];
@@ -249,4 +265,45 @@ function assertCiPreReviewBootstrap(workflowText, targetFailures) {
     requiredSnippets,
     targetFailures,
   );
+}
+
+function assertDisabledWorkspaceInstallsUseNoFrozen(
+  workflowRelPaths,
+  targetFailures,
+) {
+  for (const workflowRelPath of workflowRelPaths) {
+    const text = readText(workflowRelPath, targetFailures);
+    if (!text) {
+      continue;
+    }
+
+    const lines = text.split(/\r?\n/);
+    for (let index = 0; index < lines.length; index += 1) {
+      const line = lines[index];
+      if (!line.includes("uses: ./.github/actions/setup-bun-workspace")) {
+        continue;
+      }
+
+      const setupIndent = line.match(/^\s*/)?.[0].length ?? 0;
+      const blockLines = [line];
+      for (let cursor = index + 1; cursor < lines.length; cursor += 1) {
+        const nextLine = lines[cursor];
+        const nextIndent = nextLine.match(/^\s*/)?.[0].length ?? 0;
+        if (nextIndent <= setupIndent && /^\s*-\s/.test(nextLine)) {
+          break;
+        }
+        blockLines.push(nextLine);
+      }
+
+      const block = blockLines.join("\n");
+      if (
+        /disable-local-eliza-workspace:\s*["']?true["']?/.test(block) &&
+        !block.includes("--no-frozen-lockfile")
+      ) {
+        targetFailures.push(
+          `${workflowRelPath}:${index + 1} disables the local eliza workspace without an install-command containing --no-frozen-lockfile`,
+        );
+      }
+    }
+  }
 }

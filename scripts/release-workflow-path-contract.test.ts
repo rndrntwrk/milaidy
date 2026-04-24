@@ -52,7 +52,7 @@ describe("release workflow path contract", () => {
       "Build web assets\n        run: |\n          bun install --ignore-scripts\n          bun run postinstall\n          bun run build",
     );
     expect(mobileBuildHelper).toContain(
-      "Usage: node scripts/run-mobile-build.mjs <android|ios|ios-overlay>",
+      "Usage: node scripts/run-mobile-build.mjs <android|android-system|ios|ios-overlay>",
     );
     expect(mobileBuildHelper).toContain('if (target === "android") {');
     expect(mobileBuildHelper).toContain("await buildIos();");
@@ -158,7 +158,9 @@ describe("release workflow path contract", () => {
         .length,
     ).toBeGreaterThanOrEqual(4);
     expect(agentRelease).not.toContain("submodules: recursive");
-    expect(agentRelease).toContain("run: node scripts/init-submodules.mjs");
+    expect(agentRelease).toContain(
+      "uses: ./.github/actions/setup-bun-workspace",
+    );
     expect(agentRelease).toContain(
       "run: |\n          node scripts/init-submodules.mjs\n          node scripts/disable-local-eliza-workspace.mjs",
     );
@@ -245,34 +247,33 @@ describe("release workflow path contract", () => {
     ).toBeLessThan(buildDocker.indexOf("name: Install dependencies"));
   });
 
-  it("aligns the Android Gradle wrapper before release Android validation", () => {
+  it("patches Android release build compatibility before release Android validation", () => {
     const agentRelease = readWorkflow("agent-release.yml");
-
-    expect(agentRelease).toContain("name: Align Android Gradle wrapper");
-    expect(agentRelease).toContain(
-      "name: Patch Android mobile build wrapper alignment",
+    const mobileCompatScript = fs.readFileSync(
+      path.join(repoRoot, "scripts", "patch-mobile-build-release-compat.mjs"),
+      "utf8",
     );
-    expect(agentRelease).toContain("gradle-9.4.1-all.zip");
+
     expect(agentRelease).toContain(
+      "name: Patch Android release build compatibility",
+    );
+    expect(agentRelease).toContain(
+      "node scripts/patch-mobile-build-release-compat.mjs",
+    );
+    expect(mobileCompatScript).toContain("gradle-9.4.1-all.zip");
+    expect(mobileCompatScript).toContain("llama-cpp-capacitor");
+    expect(mobileCompatScript).toContain("tasks\\.whenTaskAdded");
+    expect(mobileCompatScript).toContain(
       "node_modules/@capacitor/android/capacitor/gradle/wrapper/gradle-wrapper.properties",
     );
-    expect(agentRelease).toContain(
+    expect(mobileCompatScript).toContain(
       "apps/app/node_modules/@capacitor/android/capacitor/gradle/wrapper/gradle-wrapper.properties",
     );
-    expect(agentRelease).toContain(
+    expect(mobileCompatScript).toContain(
       "apps/app/android/gradle/wrapper/gradle-wrapper.properties",
     );
     expect(
-      agentRelease.indexOf("name: Align Android Gradle wrapper"),
-    ).toBeLessThan(
-      agentRelease.indexOf(
-        "name: Patch Android mobile build wrapper alignment",
-      ),
-    );
-    expect(
-      agentRelease.indexOf(
-        "name: Patch Android mobile build wrapper alignment",
-      ),
+      agentRelease.indexOf("name: Patch Android release build compatibility"),
     ).toBeLessThan(
       agentRelease.indexOf(
         "node eliza/packages/app-core/scripts/run-mobile-build.mjs android",
@@ -282,15 +283,10 @@ describe("release workflow path contract", () => {
       agentRelease.indexOf(
         "node eliza/packages/app-core/scripts/run-mobile-build.mjs android",
       ),
-    ).toBeLessThan(
-      agentRelease.indexOf("name: Align generated Android Gradle wrapper"),
-    );
-    expect(
-      agentRelease.indexOf("name: Align generated Android Gradle wrapper"),
     ).toBeLessThan(agentRelease.indexOf("working-directory: apps/app/android"));
   });
 
-  it("keeps the electrobun release workflow aligned with the LifeOps Browser companion contract", () => {
+  it("keeps the electrobun release workflow aligned with the Agent Browser Bridge companion contract", () => {
     const releaseElectrobun = readWorkflow("release-electrobun.yml");
     const rootPackageJson = fs.readFileSync(
       path.join(repoRoot, "package.json"),
@@ -298,22 +294,22 @@ describe("release workflow path contract", () => {
     );
 
     expect(rootPackageJson).toContain(
-      '"lifeops:browser:package:release": "bun run browser-bridge:package:release"',
+      '"browser-bridge:package:release": "cd apps/browser-bridge && bun run package:release"',
     );
     expect(releaseElectrobun).toContain(
-      "name: Build LifeOps Browser companions",
+      "name: Build Agent Browser Bridge companions",
     );
     expect(releaseElectrobun).toContain(
-      "if bun run lifeops:browser:package:release; then",
+      "if bun run browser-bridge:package:release; then",
     );
-    expect(releaseElectrobun).toContain("name: lifeops-browser-store-bundles");
+    expect(releaseElectrobun).toContain("name: browser-bridge-store-bundles");
     expect(releaseElectrobun).toContain(
-      "name: Publish LifeOps Browser companions",
+      "name: Publish Agent Browser Bridge companions",
     );
     expect(releaseElectrobun).toContain(
-      "name: Attach LifeOps Browser assets to GitHub release",
+      "name: Attach Agent Browser Bridge assets to GitHub release",
     );
-    expect(releaseElectrobun).toContain("pattern: lifeops-browser-*");
+    expect(releaseElectrobun).toContain("pattern: browser-bridge-*");
   });
 
   it("generates protobuf types before staging Electrobun desktop bundles", () => {
@@ -490,10 +486,13 @@ describe("release workflow path contract", () => {
   });
 
   it("patches generated Android files before the release Gradle build", () => {
-    const agentRelease = readWorkflow("agent-release.yml");
+    const mobileCompatScript = fs.readFileSync(
+      path.join(repoRoot, "scripts", "patch-mobile-build-release-compat.mjs"),
+      "utf8",
+    );
 
-    expect(agentRelease).toContain("Aligned generated Android Gradle wrapper");
-    expect(agentRelease).toContain(
+    expect(mobileCompatScript).toContain("patchGradleWrapperText");
+    expect(mobileCompatScript).toContain(
       "getDefaultProguardFile('proguard-android-optimize.txt')",
     );
   });
@@ -528,6 +527,29 @@ describe("release workflow path contract", () => {
     );
     expect(releaseElectrobun).toContain(
       `tar --zstd -cf "$artifact_root/elizaOS-\${{ needs.prepare.outputs.env }}-\${{ matrix.platform.artifact-name }}.tar.zst"`,
+    );
+  });
+
+  it("keeps agent release publication gated on npm and explicit distribution jobs", () => {
+    const agentRelease = readWorkflow("agent-release.yml");
+
+    const buildNpmBlock = agentRelease.slice(
+      agentRelease.indexOf("  build-npm:"),
+      agentRelease.indexOf("  # ── Non-blocking platform builds"),
+    );
+
+    expect(buildNpmBlock).not.toContain("continue-on-error: true");
+    expect(agentRelease).toContain("needs.build-npm.result == 'success'");
+    expect(agentRelease).toContain("  push-agent-image:");
+    expect(agentRelease).toContain("  distribute-release:");
+    expect(agentRelease).toContain(
+      "uses: ./.github/workflows/release-orchestrator.yml",
+    );
+    expect(agentRelease).toContain(
+      ["github-token: $", "{{ secrets.GITHUB_TOKEN }}"].join(""),
+    );
+    expect(agentRelease).not.toContain(
+      "secrets.GH_PAT || secrets.GITHUB_TOKEN",
     );
   });
 });

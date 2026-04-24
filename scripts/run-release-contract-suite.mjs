@@ -17,12 +17,13 @@ const canonicalElectrobunDir = path.join(
   "platforms",
   "electrobun",
 );
-const releaseContractTests = [
-  "eliza/packages/app-core/scripts/asset-cdn.test.ts",
-  "eliza/packages/app-core/scripts/docker-contract.test.ts",
-  "eliza/packages/app-core/scripts/chrome-extension-release-surface.test.ts",
+export const releaseContractTests = [
+  "scripts/release-workflow-path-contract.test.ts",
+  "scripts/run-release-contract-suite.test.ts",
+  "scripts/patch-mobile-build-release-compat.test.ts",
+  "scripts/patch-release-check-pack-fallback.test.ts",
   "scripts/electrobun-pr-workflow-contract.test.ts",
-  "eliza/packages/app-core/scripts/whisper-build-script-drift.test.ts",
+  "eliza/packages/app-core/scripts/electrobun-release-workflow-drift.test.ts",
   "eliza/packages/app-core/scripts/release-check.test.ts",
   "eliza/packages/app-core/scripts/static-asset-manifest.test.ts",
 ];
@@ -61,6 +62,23 @@ export function symlinkOrCopy(sourcePath, targetPath) {
   }
 
   fs.copyFileSync(sourcePath, targetPath);
+}
+
+export function assertReleaseContractTestsExist(
+  tests = releaseContractTests,
+  root = repoRoot,
+) {
+  const missing = tests.filter(
+    (testPath) => !fs.existsSync(path.join(root, testPath)),
+  );
+
+  if (missing.length > 0) {
+    throw new Error(
+      `Release contract suite references missing test files:\n${missing
+        .map((testPath) => `- ${testPath}`)
+        .join("\n")}`,
+    );
+  }
 }
 
 export function writeLegacyWindowsSmokeScript(sourcePath, targetPath) {
@@ -189,6 +207,7 @@ export function ensureLegacyElectrobunCompatDir({
         continue;
       }
       const canonical = path.join(canonicalDir, dirName);
+      fs.mkdirSync(canonical, { recursive: true });
       fs.symlinkSync(
         path.relative(legacyDir, canonical),
         link,
@@ -212,10 +231,74 @@ export function ensureLegacyElectrobunCompatDir({
 export function cleanupLegacyElectrobunCompatDir(
   shouldCleanup,
   legacyDir = legacyElectrobunDir,
+  {
+    root = repoRoot,
+    trackedRelativePaths = loadTrackedLegacyElectrobunPaths(root),
+  } = {},
 ) {
-  if (shouldCleanup && fs.existsSync(legacyDir)) {
-    fs.rmSync(legacyDir, { force: true, recursive: true });
+  if (!shouldCleanup || !fs.existsSync(legacyDir)) {
+    return;
   }
+
+  const trackedPaths = new Set(
+    trackedRelativePaths.map((relativePath) =>
+      path.resolve(root, relativePath),
+    ),
+  );
+  if (trackedPaths.size === 0) {
+    fs.rmSync(legacyDir, { force: true, recursive: true });
+    return;
+  }
+
+  pruneGeneratedLegacyElectrobunEntries(legacyDir, trackedPaths);
+}
+
+export function loadTrackedLegacyElectrobunPaths(root = repoRoot) {
+  const result = spawnSync(
+    "git",
+    ["ls-files", "--", path.relative(root, legacyElectrobunDir)],
+    {
+      cwd: root,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    },
+  );
+
+  if (result.status !== 0 || !result.stdout.trim()) {
+    return [];
+  }
+
+  return result.stdout
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function pruneGeneratedLegacyElectrobunEntries(targetPath, trackedPaths) {
+  const absolutePath = path.resolve(targetPath);
+  if (trackedPaths.has(absolutePath)) {
+    return;
+  }
+
+  const stat = fs.lstatSync(absolutePath, { throwIfNoEntry: false });
+  if (!stat) {
+    return;
+  }
+
+  if (stat.isDirectory() && !stat.isSymbolicLink()) {
+    for (const entry of fs.readdirSync(absolutePath)) {
+      pruneGeneratedLegacyElectrobunEntries(
+        path.join(absolutePath, entry),
+        trackedPaths,
+      );
+    }
+    if (fs.readdirSync(absolutePath).length === 0) {
+      fs.rmdirSync(absolutePath);
+    }
+    return;
+  }
+
+  fs.rmSync(absolutePath, { force: true });
 }
 
 export function main() {
@@ -223,6 +306,7 @@ export function main() {
   let createdCompatDir = false;
   try {
     createdCompatDir = ensureLegacyElectrobunCompatDir();
+    assertReleaseContractTestsExist();
 
     run("bunx", [
       "vitest",

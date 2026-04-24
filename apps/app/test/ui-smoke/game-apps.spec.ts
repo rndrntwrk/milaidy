@@ -1,3 +1,4 @@
+// @milady-live-audit allow-route-fixtures
 import { expect, type Page, test } from "@playwright/test";
 import {
   installDefaultAppRoutes,

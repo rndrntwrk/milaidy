@@ -475,6 +475,9 @@ jobs:
           SKIP_AVATAR_CLONE: "1"
           MILADY_NO_VISION_DEPS: "1"
 
+      - name: Patch Android release build compatibility
+        run: node scripts/patch-mobile-build-release-compat.mjs
+
       - name: Build Android website blocker app
         run: bun run test:selfcontrol:mobile:android
 
@@ -720,6 +723,7 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
           disable-local-eliza-workspace: "true"
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
           skip-avatar-clone: "true"
           no-vision-deps: "true"
           prepare-local-eliza-runtime: "true"

@@ -116,10 +116,12 @@ jobs:
           else
             BUILD_ENV="stable"
           fi
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "env=$BUILD_ENV" >> "$GITHUB_OUTPUT"
-          echo "source_sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+          {
+            echo "tag=$TAG"
+            echo "version=$VERSION"
+            echo "env=$BUILD_ENV"
+            echo "source_sha=$GITHUB_SHA"
+          } >> "$GITHUB_OUTPUT"
           echo "Release: $VERSION (tag: $TAG, env: $BUILD_ENV, sha: $GITHUB_SHA)"
 
   validate-release:
@@ -698,6 +700,13 @@ jobs:
           key: electrobun-core-${{ matrix.platform.artifact-name }}-${{ hashFiles('apps/app/electrobun/package.json') }}
           restore-keys: electrobun-core-${{ matrix.platform.artifact-name }}-
 
+      - name: Probe Electrobun bun entry build
+        working-directory: apps/app/electrobun
+        run: |
+          out_dir="$RUNNER_TEMP/electrobun-entry-probe"
+          rm -rf "$out_dir"
+          bun build src/index.ts --target=bun --outdir "$out_dir"
+
       - name: Build patched Electrobun CLI for Windows
         if: matrix.platform.os == 'windows'
         shell: bash
@@ -794,8 +803,10 @@ jobs:
           name: electrobun-${{ matrix.platform.artifact-name }}-build-diagnostics
           path: |
             eliza/packages/app-core/platforms/electrobun/build/**
+            eliza/packages/app-core/platforms/electrobun/build/**/wrapper-diagnostics.json
             eliza/packages/app-core/platforms/electrobun/artifacts/**
             apps/app/electrobun/build/**
+            apps/app/electrobun/build/**/wrapper-diagnostics.json
             apps/app/electrobun/artifacts/**
           if-no-files-found: warn
           retention-days: 14
