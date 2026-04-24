@@ -39,6 +39,13 @@ Install [BlueBubbles](https://bluebubbles.app) on a Mac with Messages signed in.
 |----------|----------|-------------|
 | `BLUEBUBBLES_SERVER_URL` | Yes | BlueBubbles server URL |
 | `BLUEBUBBLES_PASSWORD` | Yes | Server password |
+| `BLUEBUBBLES_ENABLED` | No | Enable or disable the connector |
+| `BLUEBUBBLES_DM_POLICY` | No | DM policy (e.g., allow, deny, allowlist) |
+| `BLUEBUBBLES_ALLOW_FROM` | No | Comma-separated allowed user list |
+| `BLUEBUBBLES_GROUP_POLICY` | No | Group message policy |
+| `BLUEBUBBLES_WEBHOOK_PATH` | No | Webhook endpoint path |
+| `BLUEBUBBLES_GROUP_ALLOW_FROM` | No | Comma-separated allowed group list |
+| `BLUEBUBBLES_SEND_READ_RECEIPTS` | No | Send read receipts for received messages |
 
 ## Features
 

@@ -125,6 +125,15 @@ For production deployments, webhook mode is more reliable than polling:
 
 The webhook endpoint must be accessible over HTTPS.
 
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `TELEGRAM_BOT_TOKEN` | Yes | Telegram bot token from BotFather |
+| `TELEGRAM_API_ROOT` | No | Custom Telegram Bot API root URL |
+| `TELEGRAM_ALLOWED_CHATS` | No | Comma-separated list of allowed chat IDs |
+| `TELEGRAM_TEST_CHAT_ID` | No | Chat ID for test/dev messages |
+
 ## Auto-Enable
 
 The plugin auto-enables when `connectors.telegram.botToken` is set.

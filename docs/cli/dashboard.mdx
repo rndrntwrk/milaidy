@@ -1,21 +1,35 @@
 ---
 title: "milady dashboard"
-description: "Open or print the dashboard URL for the running API."
+description: "Open the Control UI in your browser."
 ---
 
 # `milady dashboard`
 
-Helps launch or locate the web dashboard against the configured API port.
+Opens the Control UI in a browser. Checks whether the server is already running and opens the appropriate URL. If no server is detected, starts a Vite dev server for the app UI.
+
+## Options
+
+| Flag | Description |
+|------|-------------|
+| `--port <port>` | Server port to check (default: `2138`) |
+| `--url <url>` | Server URL to open (overrides `--port`) |
+
+## Behavior
+
+1. If `--url` is provided, opens that URL directly.
+2. If the specified port (default 2138) is listening, opens `http://localhost:<port>`.
+3. If the Vite dev port (2138) is listening, opens `http://localhost:2138`.
+4. Otherwise, starts a Vite dev server for the app UI and opens it once ready.
 
 ## Examples
 
 ```bash
 milady dashboard
+milady dashboard --port 3000
+milady dashboard --url http://192.168.1.10:2138
 ```
-
-Run `milady dashboard --help` for options (browser launcher, URL only, etc.).
 
 ## Related
 
 - [Dashboard](/apps/dashboard)
-- [CLI environment](/cli/environment) — `MILADY_PORT`, `MILADY_API_PORT`
+- [CLI environment](/cli/environment)

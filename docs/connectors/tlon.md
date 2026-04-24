@@ -44,7 +44,7 @@ The Tlon connector is an elizaOS plugin that bridges your agent to the Urbit net
 | `TLON_ENABLED` | Set to `true` to enable |
 | `TLON_DM_ALLOWLIST` | Comma-separated allowed user list for DMs |
 | `TLON_GROUP_CHANNELS` | Comma-separated list of group channel identifiers |
-| `TLON_AUTO_DISCOVER_CHANNELS` | Comma-separated list of channels to auto-discover |
+| `TLON_AUTO_DISCOVER_CHANNELS` | Set to `true` to automatically discover and join channels |
 
 ## Features
 

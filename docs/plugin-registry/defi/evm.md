@@ -27,6 +27,14 @@ milady plugins install evm
 | `ALCHEMY_API_KEY` | No | Alchemy API key for multi-chain RPC (also the primary auto-enable trigger) |
 | `INFURA_API_KEY` | No | Infura API key for RPC |
 | `ANKR_API_KEY` | No | Ankr API key for RPC |
+| `ETHEREUM_PROVIDER_ETHEREUM` | No | Custom RPC URL for Ethereum mainnet |
+| `ETHEREUM_PROVIDER_BASE` | No | Custom RPC URL for Base |
+| `ETHEREUM_PROVIDER_ARBITRUM` | No | Custom RPC URL for Arbitrum |
+| `ETHEREUM_PROVIDER_OPTIMISM` | No | Custom RPC URL for Optimism |
+| `TEE_MODE` | No | Trusted Execution Environment mode |
+| `WALLET_SECRET_SALT` | No | Salt for wallet key derivation |
+| `SEPOLIA_RPC_URL` | No | RPC URL for Sepolia testnet |
+| `BASE_SEPOLIA_RPC_URL` | No | RPC URL for Base Sepolia testnet |
 
 ```json
 {

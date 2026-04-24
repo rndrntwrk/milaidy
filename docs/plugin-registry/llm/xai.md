@@ -26,13 +26,29 @@ export XAI_API_KEY=xai-...
 
 | Environment Variable | Required | Description |
 |---------------------|----------|-------------|
-| `XAI_API_KEY` | Yes* | xAI API key from [console.x.ai](https://console.x.ai) |
-| `GROK_API_KEY` | Yes* | Alias that also triggers auto-enable |
+| `XAI_API_KEY` | Yes | xAI API key from [console.x.ai](https://console.x.ai) |
+| `X_API_KEY` | No | X/Twitter API key (also the primary auto-enable trigger in plugins.json) |
 | `XAI_BASE_URL` | No | Custom base URL for the xAI API |
+| `XAI_MODEL` | No | Override the default model identifier |
 | `XAI_SMALL_MODEL` | No | Override the small model identifier |
 | `XAI_EMBEDDING_MODEL` | No | Override the embedding model identifier |
 
-\* Either `XAI_API_KEY` or `GROK_API_KEY` activates the plugin.
+The plugin also exposes X/Twitter integration keys for social posting when the xAI plugin handles both Grok inference and X platform access:
+
+| Environment Variable | Required | Description |
+|---------------------|----------|-------------|
+| `X_API_SECRET` | No | X API secret key |
+| `X_ACCESS_TOKEN` | No | X OAuth access token |
+| `X_ACCESS_TOKEN_SECRET` | No | X OAuth access token secret |
+| `X_BEARER_TOKEN` | No | X Bearer token |
+| `X_AUTH_MODE` | No | X authentication mode |
+| `X_CLIENT_ID` | No | X OAuth client ID |
+| `X_REDIRECT_URI` | No | X OAuth redirect URI |
+| `X_ENABLE_POST` | No | Enable posting to X |
+| `X_ENABLE_ACTIONS` | No | Enable X action processing |
+| `X_ENABLE_REPLIES` | No | Enable replying to X posts |
+| `X_DRY_RUN` | No | Simulate operations without executing |
+| `X_MAX_POST_LENGTH` | No | Maximum post length |
 
 ### milady.json Example
 

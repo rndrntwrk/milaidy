@@ -68,6 +68,14 @@ export BLUESKY_PASSWORD=YOUR_APP_PASSWORD
 | `BLUESKY_DRY_RUN` | No | Set to `true` for testing without posting |
 | `BLUESKY_ENABLE_DMS` | No | Enable direct message processing |
 | `BLUESKY_POLL_INTERVAL` | No | Polling interval in seconds |
+| `BLUESKY_ENABLE_POSTING` | No | Enable automated posting |
+| `BLUESKY_ACTION_INTERVAL` | No | Interval between actions in ms |
+| `BLUESKY_MAX_POST_LENGTH` | No | Maximum post length |
+| `BLUESKY_POST_IMMEDIATELY` | No | Post immediately on generation |
+| `BLUESKY_POST_INTERVAL_MAX` | No | Maximum minutes between posts |
+| `BLUESKY_POST_INTERVAL_MIN` | No | Minimum minutes between posts |
+| `BLUESKY_MAX_ACTIONS_PROCESSING` | No | Maximum concurrent actions |
+| `BLUESKY_ENABLE_ACTION_PROCESSING` | No | Enable processing of actions |
 
 ## Related
 

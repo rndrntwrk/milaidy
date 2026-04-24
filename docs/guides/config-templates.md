@@ -6,7 +6,17 @@ description: "Ready-to-use configuration templates for common Milady deployment 
 
 ## Overview
 
-This guide provides 8 production-ready configuration templates for different use cases. Each template is a complete, copy-paste configuration that you can customize for your specific needs.
+<Warning>
+**These templates use a simplified, illustrative configuration format for readability.** The actual Milady configuration file (`~/.milady/milady.json`) uses a different schema. In particular:
+- Model providers are configured via the `env` section (e.g., `"OPENAI_API_KEY": "..."`) or environment variables, not a `modelProvider` object.
+- Connectors are configured under `connectors.<name>` as objects (not arrays).
+- There is no `system`, `handlers`, `monitoring`, `scaling`, `cache`, `backup`, or `security` top-level section in the actual config schema.
+- Use `milady configure` or the dashboard Settings page to configure your agent correctly.
+
+See the [Configuration Reference](/configuration) and [Config Schema](/config-schema) for the actual config format.
+</Warning>
+
+This guide provides 8 illustrative configuration templates for different use cases. Each template shows the general shape of a deployment scenario.
 
 <Warning>
 **Important**: Always replace placeholder values before deploying:
@@ -902,67 +912,37 @@ modelProvider: {
 
 ## Validation & Testing
 
-### Validate Configuration Syntax
+### Test Your Setup
 
-Use Bun to validate your config file:
+After editing `~/.milady/milady.json`, verify your configuration:
 
 ```bash
-# Check if config is valid YAML/JSON5
-bun run --eval "console.log(require('./config.json5'))"
+# Start Milady and check for startup errors
+milady
 
-# Or use the Milady config validator
-bun run validate-config config.json5
+# Check model provider status
+milady models
+
+# Check installed plugins
+milady plugins installed
+
+# Run the built-in diagnostics
+milady doctor
 ```
 
-### Test Configuration Locally
+### Development Mode
 
-Test your configuration before deploying:
-
-```bash
-# Start Milady with your config in test mode
-bun run milady --config ./config.json5 --test
-
-# Test a specific connector
-bun run milady --config ./config.json5 --test-connector discord
-
-# Validate all API keys are accessible
-bun run milady --config ./config.json5 --check-keys
-```
-
-### Dry Run Before Production
-
-Perform a dry run to catch errors early:
+For development and testing:
 
 ```bash
-# Load config and simulate initialization without running
-bun run milady --config ./config.json5 --dry-run
+# Start with hot reload (API + UI)
+bun run dev
 
-# Test with sample input
-bun run milady --config ./config.json5 --test-input "Hello, assistant"
-```
+# Run the test suite
+bun run test
 
-### Full Integration Test
-
-Run a complete test before production deployment:
-
-```bash
-# Initialize database, load config, and test all systems
-bun run test:integration --config ./config.json5
-
-# Run with detailed logging
-bun run milady --config ./config.json5 --log-level debug
-```
-
-### Monitor During Startup
-
-Watch logs as the system starts:
-
-```bash
-# Follow logs in real-time
-bun run milady --config ./config.json5 | grep -i "error\|warning\|initialized"
-
-# Save startup logs for debugging
-bun run milady --config ./config.json5 > startup.log 2>&1
+# Type-check and lint
+bun run check
 ```
 
 ---
@@ -970,10 +950,9 @@ bun run milady --config ./config.json5 > startup.log 2>&1
 ## Next Steps
 
 1. **Choose a template** that matches your use case
-2. **Copy the template** and save it as `config.json5`
-3. **Replace all placeholder values** with your actual configuration
-4. **Run validation** with `bun run validate-config config.json5`
-5. **Test locally** before deploying to production
-6. **Deploy** using your hosting platform's deployment process
+2. **Adapt the concepts** to the actual `milady.json` config format (see [Configuration](/configuration) and [Config Schema](/config-schema))
+3. **Replace all placeholder values** with your actual credentials
+4. **Test locally** with `milady` and `milady models`
+5. **Deploy** using your hosting platform's deployment process
 
-See the [Configuration Reference](/docs/reference/config-reference) for complete option documentation.
+See the [Configuration Reference](/configuration) for the actual config format.

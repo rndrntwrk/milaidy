@@ -187,8 +187,8 @@ bun run test:e2e
 # Live tests (requires API keys)
 MILADY_LIVE_TEST=1 bun run test:live
 
-# Docker-based tests
-bun run test:docker:all
+# Docker-based review
+bun run test:docker:review
 ```
 
 ### Runtime fallback for Bun crashes

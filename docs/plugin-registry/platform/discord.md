@@ -122,6 +122,18 @@ The plugin auto-enables when the `connectors.discord` block contains a `token` (
 
 ## Environment Variables
 
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DISCORD_API_TOKEN` | Yes | Discord bot token |
+| `DISCORD_APPLICATION_ID` | No | Discord application ID |
+| `CHANNEL_IDS` | No | Comma-separated list of channel IDs to monitor |
+| `DISCORD_LISTEN_CHANNEL_IDS` | No | Channel IDs to listen to (alternative to `CHANNEL_IDS`) |
+| `DISCORD_TEST_CHANNEL_ID` | No | Channel ID for test/dev messages |
+| `DISCORD_VOICE_CHANNEL_ID` | No | Voice channel ID for voice features |
+| `DISCORD_SHOULD_IGNORE_BOT_MESSAGES` | No | Ignore messages from other bots |
+| `DISCORD_SHOULD_IGNORE_DIRECT_MESSAGES` | No | Ignore direct messages |
+| `DISCORD_SHOULD_RESPOND_ONLY_TO_MENTIONS` | No | Only respond when @mentioned |
+
 The bot token can also be set via:
 
 ```bash

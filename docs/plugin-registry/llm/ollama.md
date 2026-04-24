@@ -57,10 +57,13 @@ export OLLAMA_BASE_URL=http://localhost:11434
 | Environment Variable | Required | Description |
 |---------------------|----------|-------------|
 | `OLLAMA_API_ENDPOINT` | Yes | Ollama server URL (e.g., `http://localhost:11434`) |
-| `OLLAMA_BASE_URL` | No | Alias that triggers auto-enable (resolved to `OLLAMA_API_ENDPOINT`) |
+| `OLLAMA_BASE_URL` | No | Alias for convenience (resolved to `OLLAMA_API_ENDPOINT`) |
 | `OLLAMA_SMALL_MODEL` | No | Override the small model identifier |
+| `OLLAMA_MEDIUM_MODEL` | No | Override the medium model identifier |
 | `OLLAMA_LARGE_MODEL` | No | Override the large model identifier |
 | `OLLAMA_EMBEDDING_MODEL` | No | Override the embedding model identifier |
+| `SMALL_MODEL` | No | Global alias to override the small model identifier |
+| `LARGE_MODEL` | No | Global alias to override the large model identifier |
 
 ### milady.json Example
 

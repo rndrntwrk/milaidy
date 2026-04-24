@@ -32,6 +32,7 @@ export GROQ_API_KEY=gsk_...
 | `GROQ_LARGE_MODEL` | No | Override the large model identifier |
 | `GROQ_TTS_MODEL` | No | Override the text-to-speech model |
 | `GROQ_TTS_VOICE` | No | Voice profile for text-to-speech output |
+| `GROQ_TTS_RESPONSE_FORMAT` | No | Output format for text-to-speech audio |
 
 ### milady.json Example
 

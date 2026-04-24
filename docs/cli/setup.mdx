@@ -7,6 +7,16 @@ description: "Interactive first-time setup — providers, keys, and baseline con
 
 Walks through initial provider keys and core options when you are onboarding a new machine or state directory.
 
+## Options
+
+| Flag | Description |
+|------|-------------|
+| `--workspace <dir>` | Agent workspace directory |
+| `--provider <name>` | Model provider for non-interactive setup (e.g. `anthropic`, `openai`, `ollama`) |
+| `--key <value>` | API key or URL via argv (prefer `--key-stdin` to avoid shell history exposure) |
+| `--key-stdin` | Read the API key or URL from stdin |
+| `--no-wizard` | Skip the interactive model provider wizard |
+
 ## When to use
 
 - Fresh install before first `milady start` or dashboard use.
@@ -15,10 +25,23 @@ Walks through initial provider keys and core options when you are onboarding a n
 ## Examples
 
 ```bash
+# Interactive wizard
 milady setup
+
+# Non-interactive: set Anthropic key
+milady setup --provider anthropic --key sk-ant-...
+
+# Non-interactive via stdin (safer)
+echo "sk-ant-..." | milady setup --provider anthropic --key-stdin
+
+# Skip wizard, just bootstrap workspace
+milady setup --no-wizard
+
+# Custom workspace directory
+milady setup --workspace ~/my-agent
 ```
 
-Run `milady setup --help` for non-interactive or scripted options if available in your version.
+After setup, a health check runs automatically (equivalent to `milady doctor`). The wizard supports these providers: Anthropic (Claude), OpenAI (GPT), Google (Gemini), Groq, xAI (Grok), OpenRouter, Mistral, and Ollama (local, no key required).
 
 ## Related
 

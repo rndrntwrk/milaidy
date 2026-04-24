@@ -36,10 +36,16 @@ milady plugins install nextcloud-talk
 
 ## Configuration
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| `connectors.nextcloud-talk` | Yes | Config block for Nextcloud Talk |
-| `enabled` | No | Set `false` to disable (default: `true`) |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `NEXTCLOUD_URL` | Yes | Nextcloud server URL |
+| `NEXTCLOUD_ENABLED` | No | Enable or disable the connector |
+| `NEXTCLOUD_BOT_SECRET` | No | Bot secret key for webhook verification |
+| `NEXTCLOUD_WEBHOOK_HOST` | No | Webhook listener hostname |
+| `NEXTCLOUD_WEBHOOK_PATH` | No | Webhook endpoint path |
+| `NEXTCLOUD_WEBHOOK_PORT` | No | Webhook listener port |
+| `NEXTCLOUD_ALLOWED_ROOMS` | No | Comma-separated allowed room tokens |
+| `NEXTCLOUD_WEBHOOK_PUBLIC_URL` | No | Public URL for webhook callbacks |
 
 ```json
 {

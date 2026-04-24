@@ -1,7 +1,7 @@
 ---
 title: "Platform Connectors"
 sidebarTitle: "Connectors"
-description: "Platform bridges for 28 messaging platforms — 18 auto-enabled from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Twitter, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, Lens, WeChat) plus 10 installable from the registry (BlueBubbles, Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
+description: "Platform bridges for messaging platforms — auto-enabled from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, BlueBubbles, WeChat) plus installable from the registry (Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon, ACP)."
 ---
 
 Connectors are platform bridges that allow your agent to communicate across messaging platforms and social networks. Each connector handles authentication, message routing, session management, and platform-specific features.
@@ -19,28 +19,27 @@ Connectors are platform bridges that allow your agent to communicate across mess
 9. [Blooio](#blooio)
 10. [Microsoft Teams](#microsoft-teams)
 11. [Google Chat](#google-chat)
-12. [Twitter](#twitter)
-13. [Farcaster](#farcaster)
-14. [BlueBubbles](#bluebubbles)
-15. [Bluesky](#bluesky)
-16. [Instagram](#instagram)
-17. [Twitch](#twitch)
-18. [Mattermost](#mattermost)
-19. [WeChat](#wechat)
-20. [Matrix](#matrix)
-21. [Feishu / Lark](#feishu--lark)
-22. [Nostr](#nostr)
-23. [LINE](#line)
-24. [Zalo](#zalo)
-25. [Twilio](#twilio)
-26. [GitHub](#github)
-27. [Gmail Watch](#gmail-watch)
-28. [Nextcloud Talk](#nextcloud-talk)
-29. [Tlon](#tlon)
-30. [Lens](#lens)
-31. [Connector Lifecycle](#connector-lifecycle)
-32. [Multi-Account Support](#multi-account-support)
-33. [Session Management](#session-management)
+12. [Farcaster](#farcaster)
+13. [BlueBubbles](#bluebubbles)
+14. [Bluesky](#bluesky)
+15. [Instagram](#instagram)
+16. [Twitch](#twitch)
+17. [Mattermost](#mattermost)
+18. [WeChat](#wechat)
+19. [Matrix](#matrix)
+20. [Feishu / Lark](#feishu--lark)
+21. [Nostr](#nostr)
+22. [LINE](#line)
+23. [Zalo](#zalo)
+24. [Twilio](#twilio)
+25. [GitHub](#github)
+26. [Gmail Watch](#gmail-watch)
+27. [Nextcloud Talk](#nextcloud-talk)
+28. [Tlon](#tlon)
+29. [ACP (Agent Communication Protocol)](#acp-agent-communication-protocol)
+30. [Connector Lifecycle](#connector-lifecycle)
+31. [Multi-Account Support](#multi-account-support)
+32. [Session Management](#session-management)
 
 ---
 
@@ -59,7 +58,6 @@ Connectors marked **Auto** load automatically when their config is present in `m
 | Blooio | API key + webhook | Yes | Yes | No | Auto |
 | Microsoft Teams | App ID + password | Yes | Yes (teams/channels) | No | Auto |
 | Google Chat | Service account | Yes | Yes (spaces) | Yes | Auto |
-| Twitter | API keys + tokens | DMs | N/A | No | Auto |
 | Farcaster | Neynar API key + signer | Casts | Yes (channels) | No | Auto |
 | Twitch | Client ID + access token | Yes (chat) | Yes (channels) | No | Auto |
 | Mattermost | Bot token | Yes | Yes (channels) | No | Auto |
@@ -67,8 +65,7 @@ Connectors marked **Auto** load automatically when their config is present in `m
 | Matrix | Access token | Yes | Yes (rooms) | No | Auto |
 | Feishu / Lark | App ID + secret | Yes | Yes (group chats) | No | Auto |
 | Nostr | Private key (nsec/hex) | Yes (NIP-04) | N/A | No | Auto |
-| Lens | API key | Yes | N/A | No | Auto |
-| BlueBubbles | Server password | Yes | Yes | No | Registry |
+| BlueBubbles | Server URL + password | Yes | Yes | No | Auto |
 | Bluesky | Account credentials | Posts | N/A | No | Registry |
 | Instagram | Username + password | DMs | N/A | No | Registry |
 | LINE | Channel access token + secret | Yes | Yes | No | Registry |
@@ -78,6 +75,7 @@ Connectors marked **Auto** load automatically when their config is present in `m
 | Gmail Watch | Service account / OAuth | N/A | N/A | No | Registry |
 | Nextcloud Talk | Server credentials | Yes | Yes (rooms) | No | Registry |
 | Tlon | Ship credentials | Yes | Yes (Urbit chats) | No | Registry |
+| ACP | Gateway token + password | Yes | N/A | No | Registry |
 
 ---
 
@@ -460,44 +458,6 @@ Connects to iMessage and SMS messaging via the Blooio service with signed webhoo
 
 ---
 
-## Twitter
-
-### Setup Requirements
-
-- Twitter API v2 credentials (API key, API secret key, access token, access token secret)
-
-### Key Configuration
-
-```json
-{
-  "connectors": {
-    "twitter": {
-      "enabled": true,
-      "apiKey": "...",
-      "apiSecretKey": "...",
-      "accessToken": "...",
-      "accessTokenSecret": "...",
-      "postEnable": true,
-      "postIntervalMin": 90,
-      "postIntervalMax": 180
-    }
-  }
-}
-```
-
-### Features
-
-- Automated posting with configurable intervals and variance
-- Post immediately option
-- Search and mention monitoring
-- Timeline algorithm selection (`weighted` or `latest`)
-- Auto-respond to mentions
-- Action processing toggle
-- Dry run mode for testing
-- Configurable max tweet length (default: 4000)
-
----
-
 ## Farcaster
 
 ### Setup Requirements
@@ -566,7 +526,7 @@ Connects to iMessage and SMS messaging via the Blooio service with signed webhoo
 - Webhook-based inbound messages
 - Network-accessible (works from any machine, not just the Mac running Messages)
 
-**Note:** This connector is available from the plugin registry. Install it with `milady plugins install @elizaos/plugin-bluebubbles`.
+**Auto-enable:** The connector auto-enables when both `serverUrl` and `password` are set in the connector config.
 
 **Docs:** [BlueBubbles connector](/connectors/bluebubbles)
 
@@ -1070,29 +1030,38 @@ Gmail Watch is enabled via the `features.gmailWatch` flag or environment variabl
 
 ---
 
-## Lens
+## ACP (Agent Communication Protocol)
 
-**Plugin:** `@elizaos/plugin-lens`
+**Plugin:** `@elizaos/plugin-acp`
 
-```json5
+Connects agents through an ACP gateway for inter-agent communication.
+
+### Setup Requirements
+
+- ACP Gateway token and password
+
+### Key Configuration
+
+```json
 {
-  connectors: {
-    lens: {
-      apiKey: "<LENS_API_KEY>",
+  "connectors": {
+    "acp": {
+      "enabled": true
     }
   }
 }
 ```
 
-| Env Variable | Config Path |
-|-------------|-------------|
-| `LENS_API_KEY` | `connectors.lens.apiKey` |
+**Environment variables:** `ACP_GATEWAY_TOKEN`, `ACP_GATEWAY_PASSWORD`, `ACP_GATEWAY_URL`, `ACP_CLIENT_NAME`, `ACP_AGENT_ID`
 
-**Auto-enable triggers:** `apiKey`, `token`, or `botToken`.
+### Features
 
-**Features:**
-- Lens Protocol social interactions
-- Post publishing and engagement
+- Agent-to-agent communication via ACP gateway
+- Session persistence and management
+- Configurable client modes
+- Verbose logging option
+
+**Note:** This connector is available from the plugin registry. Install it with `milady plugins install @elizaos/plugin-acp`.
 
 ---
 
@@ -1223,13 +1192,6 @@ The `dmPolicy` options are:
 - Multi-account configuration:
   Signal supports multiple accounts via the `accounts` map. Each account must have `account`, `httpUrl`, or `cliPath` set and must not be `enabled: false`.
 
-**Twitter:**
-
-- API key rejected:
-  Confirm `connectors.twitter.apiKey` is a valid Twitter/X API key. Free-tier keys have strict rate limits.
-- Tweet fetch failures:
-  The FxTwitter API (`api.fxtwitter.com`) is used for tweet verification. If rate-limited, verification requests fail silently.
-
 **iMessage (direct):**
 
 - CLI path not found:
@@ -1239,11 +1201,6 @@ The `dmPolicy` options are:
 
 - API key invalid:
   Confirm `connectors.farcaster.apiKey` is set. Farcaster hub access requires a valid API key.
-
-**Lens:**
-
-- API key invalid:
-  Confirm `connectors.lens.apiKey` is set and the Lens API is reachable.
 
 **MS Teams:**
 

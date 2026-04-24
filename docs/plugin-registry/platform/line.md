@@ -54,10 +54,15 @@ export LINE_CHANNEL_SECRET=YOUR_CHANNEL_SECRET
 
 ## Environment Variables
 
-```bash
-export LINE_CHANNEL_ACCESS_TOKEN=YOUR_CHANNEL_ACCESS_TOKEN
-export LINE_CHANNEL_SECRET=YOUR_CHANNEL_SECRET
-```
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `LINE_CHANNEL_ACCESS_TOKEN` | Yes | LINE channel access token (primary auto-enable trigger) |
+| `LINE_CHANNEL_SECRET` | No | LINE channel secret for webhook verification |
+| `LINE_ENABLED` | No | Enable or disable the connector |
+| `LINE_DM_POLICY` | No | DM acceptance policy |
+| `LINE_ALLOW_FROM` | No | Comma-separated allowed user IDs |
+| `LINE_GROUP_POLICY` | No | Group message policy |
+| `LINE_WEBHOOK_PATH` | No | Webhook endpoint path |
 
 ## Related
 

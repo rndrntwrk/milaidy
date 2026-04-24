@@ -26,6 +26,13 @@ milady plugins install vision
 
 **Note:** This plugin requires the `@tensorflow/tfjs-node` native addon. On systems without native build tools, set `MILADY_NO_VISION_DEPS=1` to skip installation of optional vision dependencies.
 
+## Configuration
+
+| Environment Variable | Required | Description |
+|---------------------|----------|-------------|
+| `CAMERA_NAME` | No | Name of the camera device to use |
+| `PIXEL_CHANGE_THRESHOLD` | No | Pixel change threshold for motion detection |
+
 ## Features
 
 - Image understanding and description

@@ -18,13 +18,13 @@ Providers marked **bundled** are pre-installed with every Milady release and loa
 
 | Provider | Plugin Package | Env Variable(s) | Install | Notes |
 |----------|----------------|------------------|---------|-------|
-| [Anthropic](https://anthropic.com) | `@elizaos/plugin-anthropic` | `ANTHROPIC_API_KEY` or `CLAUDE_API_KEY` | On demand | **Recommended.** Claude models (Opus, Sonnet, Haiku). |
+| [Anthropic](https://anthropic.com) | `@elizaos/plugin-anthropic` | `ANTHROPIC_API_KEY` or `CLAUDE_API_KEY` | Bundled | **Recommended.** Claude models (Opus, Sonnet, Haiku). |
 | [OpenAI](https://openai.com) | `@elizaos/plugin-openai` | `OPENAI_API_KEY` | Bundled | GPT-4o, o1, o3, GPT-4.1. |
-| [Google Gemini](https://ai.google.dev) | `@elizaos/plugin-google-genai` | `GOOGLE_API_KEY` or `GOOGLE_GENERATIVE_AI_API_KEY` | On demand | Gemini Pro, Flash, Ultra. |
+| [Google Gemini](https://ai.google.dev) | `@elizaos/plugin-google-genai` | `GOOGLE_API_KEY` or `GOOGLE_GENERATIVE_AI_API_KEY` | Bundled | Gemini Pro, Flash, Ultra. |
 | [Google Antigravity](https://cloud.google.com/vertex-ai) | `@elizaos/plugin-google-antigravity` | `GOOGLE_CLOUD_API_KEY` | On demand | Google Cloud / Vertex AI models. |
 | [Vercel AI Gateway](https://sdk.vercel.ai) | `@elizaos/plugin-vercel-ai-gateway` | `AI_GATEWAY_API_KEY` or `AIGATEWAY_API_KEY` | On demand | Unified gateway to multiple providers. |
 | [OpenRouter](https://openrouter.ai) | `@elizaos/plugin-openrouter` | `OPENROUTER_API_KEY` | Bundled | 100+ models behind one API key. |
-| [Groq](https://groq.com) | `@elizaos/plugin-groq` | `GROQ_API_KEY` | Bundled | Ultra-fast inference (LPU). |
+| [Groq](https://groq.com) | `@elizaos/plugin-groq` | `GROQ_API_KEY` | On demand | Ultra-fast inference (LPU). |
 | [xAI](https://x.ai) | `@elizaos/plugin-xai` | `XAI_API_KEY` or `GROK_API_KEY` | On demand | Grok models. |
 | [DeepSeek](https://deepseek.com) | `@elizaos/plugin-deepseek` | `DEEPSEEK_API_KEY` | On demand | Reasoning and code models. |
 | [Ollama](https://ollama.com) | `@elizaos/plugin-ollama` | `OLLAMA_BASE_URL` | Bundled | **Local models.** No API key needed. Requires a running [Ollama](https://ollama.com) server. |
@@ -321,8 +321,8 @@ Every env variable that triggers auto-enable, grouped by provider:
 | `COHERE_API_KEY` | Cohere |
 | `PERPLEXITY_API_KEY` | Perplexity |
 | `ZAI_API_KEY` | Zai |
-| `ELIZAOS_CLOUD_API_KEY` | elizaOS Cloud |
-| `ELIZAOS_CLOUD_ENABLED` | elizaOS Cloud |
+| `ELIZAOS_CLOUD_API_KEY` | Eliza Cloud |
+| `ELIZAOS_CLOUD_ENABLED` | Eliza Cloud |
 
 <Tip>
 Some providers accept multiple env variable names for convenience (e.g., both `ANTHROPIC_API_KEY` and `CLAUDE_API_KEY` activate Anthropic). You only need to set one.

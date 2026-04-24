@@ -11,7 +11,7 @@ The Google Chat plugin connects Milady agents to Google Chat via a Google Cloud 
 ## Installation
 
 ```bash
-milady plugins install googlechat
+milady plugins install google-chat
 ```
 
 ## Setup
@@ -78,6 +78,21 @@ milady plugins install googlechat
 - **DM support** — Private conversation handling with configurable policy
 - **Group chats** — Respond in spaces with optional mention requirements
 - **Multi-account** — Supports multiple accounts via `accounts` map
+
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `GOOGLE_CHAT_ENABLED` | No | Enable or disable the connector |
+| `GOOGLE_CHAT_SPACES` | No | Comma-separated Space IDs to join |
+| `GOOGLE_CHAT_AUDIENCE` | No | App URL or project number for JWT verification |
+| `GOOGLE_CHAT_BOT_USER` | No | Bot user identifier |
+| `GOOGLE_CHAT_WEBHOOK_PATH` | No | Webhook endpoint path |
+| `GOOGLE_CHAT_AUDIENCE_TYPE` | No | Audience type: `app-url` or `project-number` |
+| `GOOGLE_CHAT_REQUIRE_MENTION` | No | Only respond when @mentioned |
+| `GOOGLE_CHAT_SERVICE_ACCOUNT` | No | Inline service account JSON |
+| `GOOGLE_APPLICATION_CREDENTIALS` | No | Path to Google application credentials JSON |
+| `GOOGLE_CHAT_SERVICE_ACCOUNT_FILE` | No | Path to service account JSON key file |
 
 ## Auto-Enable
 

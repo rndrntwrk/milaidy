@@ -1,20 +1,138 @@
 ---
 title: "milady plugins"
-description: "List, enable, or inspect plugins from the CLI."
+description: "Browse, search, install, and manage elizaOS plugins from the CLI."
 ---
 
 # `milady plugins`
 
-Inspects which plugins resolve in the current environment and can trigger sync or registry operations depending on flags.
+Manage elizaOS plugins: browse the registry, install/uninstall packages, inspect installed plugins, test custom drop-in plugins, and manage plugin search paths.
 
-## Examples
+## Subcommands
+
+### `milady plugins list`
+
+List all plugins from the registry. Shows install status and basic metadata.
+
+| Flag | Description |
+|------|-------------|
+| `-q, --query <query>` | Filter plugins by name or keyword |
+| `-l, --limit <number>` | Max results to show (default: 30) |
 
 ```bash
-milady plugins
-milady plugins --help
+milady plugins list
+milady plugins list -q twitter
+milady plugins list --limit 50
+```
+
+### `milady plugins search <query>`
+
+Search the plugin registry by keyword. Shows match score and star count.
+
+| Flag | Description |
+|------|-------------|
+| `-l, --limit <number>` | Max results (default: 15) |
+
+```bash
+milady plugins search social
+```
+
+### `milady plugins info <name>`
+
+Show detailed information about a plugin (description, repo, npm versions, supported elizaOS versions). Shorthand names are expanded (e.g. `twitter` becomes `@elizaos/plugin-twitter`).
+
+```bash
+milady plugins info twitter
+milady plugins info @elizaos/plugin-discord
+```
+
+### `milady plugins install <name>`
+
+Install a plugin from the registry. Optionally pin to a specific version or dist-tag (e.g. `twitter@1.2.3`, `twitter@next`).
+
+| Flag | Description |
+|------|-------------|
+| `--no-restart` | Install without restarting the agent |
+
+```bash
+milady plugins install twitter
+milady plugins install @elizaos/plugin-discord@2.0.0
+```
+
+### `milady plugins uninstall <name>`
+
+Uninstall a user-installed plugin.
+
+| Flag | Description |
+|------|-------------|
+| `--no-restart` | Uninstall without restarting the agent |
+
+```bash
+milady plugins uninstall twitter
+```
+
+### `milady plugins installed`
+
+List plugins that were installed from the registry (user-installed, not bundled).
+
+```bash
+milady plugins installed
+```
+
+### `milady plugins refresh`
+
+Force-refresh the plugin registry cache from upstream.
+
+```bash
+milady plugins refresh
+```
+
+### `milady plugins test`
+
+Validate custom drop-in plugins in `~/.eliza/plugins/custom/` and any additional paths registered via `milady plugins add-path`. Checks that each plugin can be imported and exports a valid Plugin object.
+
+```bash
+milady plugins test
+```
+
+### `milady plugins add-path <path>`
+
+Register an additional plugin search directory in the config file. The path must be an existing directory under the user's home or current working directory.
+
+```bash
+milady plugins add-path ~/my-plugins
+```
+
+### `milady plugins paths`
+
+List all plugin search directories and their contents.
+
+```bash
+milady plugins paths
+```
+
+### `milady plugins config <name>`
+
+Show or interactively edit a plugin's configuration parameters (reads from `plugins.json`).
+
+| Flag | Description |
+|------|-------------|
+| `-e, --edit` | Interactive edit mode |
+
+```bash
+milady plugins config twitter
+milady plugins config twitter --edit
+```
+
+### `milady plugins open [name-or-path]`
+
+Open a plugin directory (or the custom plugins folder) in your editor. Uses `$EDITOR` or falls back to `code`.
+
+```bash
+milady plugins open
+milady plugins open twitter
 ```
 
 ## Related
 
 - [Plugins overview](/plugins/overview)
-- [REST — plugins](/rest/plugins)
+- [REST -- plugins](/rest/plugins)

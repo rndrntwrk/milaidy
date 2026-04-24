@@ -51,10 +51,12 @@ export INSTAGRAM_PASSWORD=YOUR_PASSWORD
 
 ## Environment Variables
 
-```bash
-export INSTAGRAM_USERNAME=YOUR_USERNAME
-export INSTAGRAM_PASSWORD=YOUR_PASSWORD
-```
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `INSTAGRAM_USERNAME` | Yes | Instagram account username |
+| `INSTAGRAM_PASSWORD` | Yes | Instagram account password |
+| `INSTAGRAM_PROXY` | No | Proxy URL for Instagram API requests |
+| `INSTAGRAM_VERIFICATION_CODE` | No | Two-factor verification code |
 
 ## Related
 

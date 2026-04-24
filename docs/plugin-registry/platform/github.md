@@ -57,11 +57,16 @@ export GITHUB_REPO=YOUR_GITHUB_REPO
 
 ## Environment Variables
 
-```bash
-export GITHUB_API_TOKEN=YOUR_API_TOKEN
-export GITHUB_OWNER=YOUR_GITHUB_OWNER
-export GITHUB_REPO=YOUR_GITHUB_REPO
-```
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `GITHUB_API_TOKEN` | Yes | GitHub personal access token (primary auto-enable trigger) |
+| `GITHUB_OWNER` | No | Default repository owner (username or organization) |
+| `GITHUB_REPO` | No | Default repository name |
+| `GITHUB_BRANCH` | No | Default branch name |
+| `GITHUB_APP_ID` | No | GitHub App ID (for GitHub App authentication) |
+| `GITHUB_APP_PRIVATE_KEY` | No | GitHub App private key |
+| `GITHUB_INSTALLATION_ID` | No | GitHub App installation ID |
+| `GITHUB_WEBHOOK_SECRET` | No | Secret for webhook signature verification |
 
 ## Related
 

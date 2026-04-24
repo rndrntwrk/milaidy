@@ -32,8 +32,11 @@ export GOOGLE_GENERATIVE_AI_API_KEY=AIza...
 | `GOOGLE_API_KEY` | Yes* | Alias (also triggers auto-enable) |
 | `GOOGLE_SMALL_MODEL` | No | Override the small model identifier |
 | `GOOGLE_LARGE_MODEL` | No | Override the large model identifier |
+| `SMALL_MODEL` | No | Global alias to override the small model |
+| `LARGE_MODEL` | No | Global alias to override the large model |
 | `GOOGLE_EMBEDDING_MODEL` | No | Override the embedding model identifier |
 | `GOOGLE_IMAGE_MODEL` | No | Override the image generation model |
+| `IMAGE_MODEL` | No | Global alias for the image model |
 
 *Either `GOOGLE_GENERATIVE_AI_API_KEY` or `GOOGLE_API_KEY` is accepted.
 
