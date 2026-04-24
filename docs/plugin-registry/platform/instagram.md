@@ -14,12 +14,16 @@ The Instagram plugin connects Milady agents to Instagram, enabling message handl
 milady plugins install instagram
 ```
 
+<Warning>
+This plugin uses an unofficial API. Instagram may block automated access, lock accounts, or change endpoints without notice. Use a dedicated account — not your personal one. A proxy reduces the risk of IP-based blocks.
+</Warning>
+
 ## Setup
 
 ### 1. Get Your Instagram Credentials
 
-1. Use your Instagram account username and password
-2. For automation, consider creating a dedicated account for your agent
+1. Create a dedicated Instagram account for your agent (do not use your personal account)
+2. If you have 2FA enabled, you will need to provide a verification code on startup
 
 ### 2. Configure Milady
 
@@ -51,10 +55,12 @@ export INSTAGRAM_PASSWORD=YOUR_PASSWORD
 
 ## Environment Variables
 
-```bash
-export INSTAGRAM_USERNAME=YOUR_USERNAME
-export INSTAGRAM_PASSWORD=YOUR_PASSWORD
-```
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `INSTAGRAM_USERNAME` | Yes | Instagram account username |
+| `INSTAGRAM_PASSWORD` | Yes | Instagram account password |
+| `INSTAGRAM_VERIFICATION_CODE` | No | 2FA code (required if 2FA is enabled) |
+| `INSTAGRAM_PROXY` | No | Proxy URL to avoid rate limiting and IP blocks |
 
 ## Related
 

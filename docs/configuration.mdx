@@ -452,21 +452,21 @@ Milady automatically enables plugins based on your configuration. You do not nee
 | Connector | Plugin | Auto-Enable Trigger |
 |-----------|--------|---------------------|
 | `telegram` | `@elizaos/plugin-telegram` | `connectors.telegram.botToken` |
-| `discord` | `@elizaos/plugin-discord` | `connectors.discord.botToken` |
+| `discord` | `@elizaos/plugin-discord` | `connectors.discord.token` (or `botToken`/`apiKey`) |
 | `slack` | `@elizaos/plugin-slack` | `connectors.slack.botToken` |
 | `twitter` | `@elizaos/plugin-twitter` | `connectors.twitter.apiKey` |
 | `whatsapp` | `@elizaos/plugin-whatsapp` | `connectors.whatsapp.authDir` (or `authState`, `sessionPath`, or `accounts` with `authDir`) |
 | `signal` | `@elizaos/plugin-signal` | `connectors.signal.account` (or `httpUrl`, `httpHost`, `httpPort`, `cliPath`, or `accounts` with enabled entries) |
-| `farcaster` | `@elizaos/plugin-farcaster` | `connectors.farcaster.token` |
-| `matrix` | `@elizaos/plugin-matrix` | `connectors.matrix.token` |
-| `nostr` | `@elizaos/plugin-nostr` | `connectors.nostr.token` |
-| `msteams` | `@elizaos/plugin-msteams` | `connectors.msteams.token` |
-| `googlechat` | `@elizaos/plugin-google-chat` | `connectors.googlechat.token` |
+| `farcaster` | `@elizaos/plugin-farcaster` | `connectors.farcaster.apiKey` (or `token`/`botToken`) |
+| `matrix` | `@elizaos/plugin-matrix` | `connectors.matrix.token` (or `botToken`/`apiKey`) |
+| `nostr` | `@elizaos/plugin-nostr` | `connectors.nostr.token` (or `botToken`/`apiKey`); actual auth uses `NOSTR_PRIVATE_KEY` env var |
+| `msteams` | `@elizaos/plugin-msteams` | `connectors.msteams.botToken` (or `token`/`apiKey`) |
+| `googlechat` | `@elizaos/plugin-google-chat` | `connectors.googlechat.apiKey` (or `token`/`botToken`) |
 | `imessage` | `@elizaos/plugin-imessage` | `connectors.imessage.cliPath` |
-| `lens` | `@elizaos/plugin-lens` | `connectors.lens.token` |
-| `mattermost` | `@elizaos/plugin-mattermost` | `connectors.mattermost.token` |
-| `feishu` | `@elizaos/plugin-feishu` | `connectors.feishu.token` |
-| `blooio` | `@elizaos/plugin-blooio` | `connectors.blooio.token` |
+| `lens` | `@elizaos/plugin-lens` | `connectors.lens.apiKey` (or `token`/`botToken`) |
+| `mattermost` | `@elizaos/plugin-mattermost` | `connectors.mattermost.botToken` (or `token`/`apiKey`) |
+| `feishu` | `@elizaos/plugin-feishu` | `connectors.feishu.apiKey` (or `token`/`botToken`) |
+| `blooio` | `@elizaos/plugin-blooio` | `connectors.blooio.apiKey` (or `token`/`botToken`) |
 | `twitch` | `@elizaos/plugin-twitch` | `connectors.twitch.accessToken` or `clientId` or `enabled: true` |
 
 **Provider plugins** are auto-enabled when the corresponding API key environment variable is set:

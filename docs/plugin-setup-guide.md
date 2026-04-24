@@ -262,7 +262,7 @@ where to get the credentials, minimum required fields, and tips for optional fie
 3. Generate all 4 keys from "Keys and Tokens" tab
 4. Set app permissions to Read and Write
 5. Regenerate tokens AFTER setting permissions
-**Tips:** Start with `TWITTER_DRY_RUN=true` to verify without posting. Free API tier has 500 posts/month. You need ALL 4 OAuth keys — missing any one will cause auth failure.
+**Tips:** Start with `TWITTER_DRY_RUN=true` to verify without posting. Free API tier has very limited write access — check [X developer docs](https://developer.twitter.com/en/docs/twitter-api/rate-limits) for current limits. You need ALL 4 OAuth keys — missing any one will cause auth failure.
 
 ### Slack
 **Get credentials:** https://api.slack.com/apps → Create New App

@@ -113,15 +113,13 @@ Posted as reply to original tweet
 
 The plugin auto-enables when `connectors.twitter` contains `apiKey`.
 
+## Environment Variables
+
+The plugin also reads `TWITTER_API_KEY`, `TWITTER_API_SECRET_KEY`, `TWITTER_ACCESS_TOKEN`, and `TWITTER_ACCESS_TOKEN_SECRET` as fallbacks when the corresponding config fields are absent. Config fields take precedence.
+
 ## Rate Limits
 
-Twitter enforces strict rate limits on the v2 API. The plugin manages these automatically:
-
-- Free tier: Very limited write access
-- Basic tier: 1,500 posts/month
-- Pro tier: 300,000 posts/month
-
-Consult [developer.twitter.com/en/docs/twitter-api/rate-limits](https://developer.twitter.com/en/docs/twitter-api/rate-limits) for current limits.
+Twitter enforces strict rate limits on the v2 API. The plugin manages these automatically. Limits change frequently — check the [X developer documentation](https://developer.twitter.com/en/docs/twitter-api/rate-limits) for current numbers before choosing a tier.
 
 ## Related
 
