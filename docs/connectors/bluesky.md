@@ -62,4 +62,5 @@ Unlike the 18 auto-enabled connectors (Discord, Telegram, etc.), Bluesky is a **
 
 ## Related
 
+- [Bluesky plugin reference](/plugin-registry/platform/bluesky)
 - [Connectors overview](/guides/connectors#bluesky)

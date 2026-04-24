@@ -62,4 +62,5 @@ The Twilio connector is an elizaOS plugin that bridges your agent to Twilio's co
 
 ## Related
 
+- [Twilio plugin reference](/plugin-registry/platform/twilio)
 - [Connectors overview](/guides/connectors#twilio)

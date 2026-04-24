@@ -77,5 +77,6 @@ The connector auto-enables when one of the generic trigger fields (`token`, `bot
 
 ## Related
 
+- [Feishu plugin reference](/plugin-registry/platform/feishu)
 - [Connectors overview](/guides/connectors)
 - [Configuration reference](/configuration)

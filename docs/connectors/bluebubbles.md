@@ -90,6 +90,7 @@ All fields are defined under `connectors.bluebubbles` in `milady.json`.
 
 ## Related
 
+- [BlueBubbles plugin reference](/plugin-registry/platform/bluebubbles)
 - [iMessage Connector](/connectors/imessage) — Native iMessage connector (macOS only, reads Messages database directly)
 - [Blooio Connector](/connectors/blooio) — iMessage/SMS via Blooio cloud service
 - [Connectors overview](/guides/connectors)

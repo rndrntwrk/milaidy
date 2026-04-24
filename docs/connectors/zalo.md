@@ -51,4 +51,5 @@ The Zalo connector is an elizaOS plugin that bridges your agent to the Zalo plat
 
 ## Related
 
+- [Zalo plugin reference](/plugin-registry/platform/zalo)
 - [Connectors overview](/guides/connectors#zalo)

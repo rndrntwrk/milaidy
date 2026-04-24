@@ -1087,6 +1087,6 @@ const myPlugin: Plugin = {
 
 ## Next Steps
 
-- [Skills Documentation](./skills.md) — Learn about markdown-based skill extensions
-- [Registry Guide](./registry.md) — Publishing to the plugin registry
+- [Skills Documentation](/plugins/skills) — Learn about markdown-based skill extensions
+- [Registry Guide](/plugins/registry) — Publishing to the plugin registry
 - [Contributing Guide](/guides/contribution-guide) — Contributing to Milady/elizaOS

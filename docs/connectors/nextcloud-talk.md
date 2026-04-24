@@ -56,4 +56,5 @@ The Nextcloud Talk connector is an elizaOS plugin that bridges your agent to Nex
 
 ## Related
 
+- [Nextcloud Talk plugin reference](/plugin-registry/platform/nextcloud-talk)
 - [Connectors overview](/guides/connectors#nextcloud-talk)

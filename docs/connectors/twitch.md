@@ -100,5 +100,6 @@ A separate streaming plugin (`@elizaos/plugin-twitch-streaming`) is available fo
 
 ## Related
 
+- [Twitch plugin reference](/plugin-registry/platform/twitch)
 - [Connectors overview](/guides/connectors)
 - [Configuration reference](/configuration)

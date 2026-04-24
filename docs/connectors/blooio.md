@@ -96,5 +96,6 @@ All fields are defined under `connectors.blooio` in `milady.json`.
 
 ## Related
 
+- [Blooio plugin reference](/plugin-registry/platform/blooio)
 - [Connectors overview](/guides/connectors)
 - [Configuration reference](/configuration)

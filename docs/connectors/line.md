@@ -55,4 +55,5 @@ The LINE connector is an elizaOS plugin that bridges your agent to LINE Messagin
 
 ## Related
 
+- [LINE plugin reference](/plugin-registry/platform/line)
 - [Connectors overview](/guides/connectors#line)

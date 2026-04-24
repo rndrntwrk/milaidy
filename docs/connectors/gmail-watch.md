@@ -43,4 +43,5 @@ Gmail Watch is enabled via the `features` section:
 
 ## Related
 
+- [Gmail Watch plugin reference](/plugin-registry/platform/gmail-watch)
 - [Connectors overview](/guides/connectors#gmail-watch)

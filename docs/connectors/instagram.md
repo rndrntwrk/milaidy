@@ -53,4 +53,5 @@ The Instagram connector is an elizaOS plugin that bridges your agent to Instagra
 
 ## Related
 
+- [Instagram plugin reference](/plugin-registry/platform/instagram)
 - [Connectors overview](/guides/connectors#instagram)

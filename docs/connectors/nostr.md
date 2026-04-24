@@ -93,5 +93,6 @@ NOSTR_ENABLED=false
 
 ## Related
 
+- [Nostr plugin reference](/plugin-registry/platform/nostr)
 - [Connectors overview](/guides/connectors)
 - [Configuration reference](/configuration)
