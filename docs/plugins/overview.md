@@ -28,7 +28,7 @@ A plugin is a self-contained module that registers one or more of:
 </Card>
 
 <Card title="Platform Connectors" icon="plug" href="/plugin-registry/platform/discord">
-  22 connector plugins in the bundled registry. 18 auto-enable via connector config (Discord, Telegram, Twitter, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Mattermost, Farcaster, Twitch, Feishu, Matrix, Nostr, Lens, WeChat). Additional connectors (BlueBubbles, Bluesky, Instagram, LINE, Zalo, Nextcloud Talk, Tlon) are available and can be installed from the registry.
+  28 platform connectors supported. 18 auto-enable when their connector config is present (Discord, Telegram, Twitter, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Mattermost, Farcaster, Twitch, Feishu, Matrix, Nostr, Lens, WeChat). 10 additional connectors are installable from the registry (BlueBubbles, Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon).
 </Card>
 
 <Card title="DeFi & Blockchain" icon="wallet" href="/plugin-registry/defi/evm">
@@ -36,7 +36,7 @@ A plugin is a self-contained module that registers one or more of:
 </Card>
 
 <Card title="Feature Plugins" icon="wand-magic-sparkles" href="/plugin-registry/browser">
-  Extended capabilities — browser control, image generation, text-to-speech, speech-to-text, computer use, cron scheduling, vision, shell, webhooks, FAL media generation, Suno music, OpenTelemetry diagnostics, x402 payments, Obsidian vault sync, Gmail Watch, personality tuning, experience tracking, agent skills, Claude Code workbench, RepoPrompt, and more.
+  64 feature plugins covering browser automation, image generation, TTS/STT, computer use, cron scheduling, vision, shell execution, webhooks, FAL media generation, Suno music, MCP server integration, code sandboxing, agent orchestration, knowledge/RAG, Obsidian vault sync, Gmail Watch, personality tuning, Shopify/Linear integrations, RSS feeds, x402 payments, agent skills, Claude Code workbench, and more.
 </Card>
 
 </CardGroup>

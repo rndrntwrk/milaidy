@@ -1,20 +1,83 @@
 ---
 title: "milady plugins"
-description: "List, enable, or inspect plugins from the CLI."
+description: "List, search, install, and manage plugins from the CLI."
 ---
 
 # `milady plugins`
 
-Inspects which plugins resolve in the current environment and can trigger sync or registry operations depending on flags.
+Manage the Milady plugin ecosystem — browse the registry, install/uninstall plugins, configure parameters, and manage local plugin directories.
+
+## Subcommands
+
+| Command | Description |
+|---------|-------------|
+| `milady plugins list` | List plugins from the remote registry |
+| `milady plugins search <query>` | Search registry plugins by keyword |
+| `milady plugins info <name>` | Show detailed info about a specific plugin |
+| `milady plugins install <name>` | Install a plugin from the registry |
+| `milady plugins uninstall <name>` | Remove an installed plugin |
+| `milady plugins installed` | List plugins installed from the registry |
+| `milady plugins refresh` | Force-refresh the registry cache |
+| `milady plugins config <name>` | View or edit a plugin's configuration |
+| `milady plugins test` | Validate custom drop-in plugins |
+| `milady plugins add-path <path>` | Register an additional plugin search directory |
+| `milady plugins paths` | List all plugin search directories |
+| `milady plugins open [name]` | Open a plugin directory in your editor |
 
 ## Examples
 
 ```bash
-milady plugins
-milady plugins --help
+# Browse registry plugins (default limit: 30)
+milady plugins list
+
+# Search by keyword
+milady plugins search "discord bot"
+milady plugins list -q telegram
+
+# Show plugin details
+milady plugins info telegram
+
+# Install a plugin
+milady plugins install telegram
+milady plugins install twitter@1.2.3    # specific version
+milady plugins install telegram --no-restart
+
+# Uninstall
+milady plugins uninstall @elizaos/plugin-twitter
+
+# List what you've installed
+milady plugins installed
+
+# Force-refresh the registry cache
+milady plugins refresh
+
+# View or interactively edit plugin config
+milady plugins config telegram
+milady plugins config telegram --edit
+
+# Validate custom plugins in ~/.milady/plugins/custom/
+milady plugins test
+```
+
+## Plugin Name Resolution
+
+Plugin names are normalized by the CLI:
+
+- `@scope/plugin-x` — used as-is
+- `plugin-x` — used as-is
+- `x` — expanded to `@elizaos/plugin-x`
+
+Version pinning works with `@`:
+
+```bash
+milady plugins install twitter@1.2.3
+milady plugins install @custom/plugin-x@2.0.0
+milady plugins install twitter@next
 ```
 
 ## Related
 
-- [Plugins overview](/plugins/overview)
-- [REST — plugins](/rest/plugins)
+- [Plugins overview](/plugins/overview) — How plugins work
+- [Plugin registry](/plugins/registry) — Registry architecture and caching
+- [Local plugins](/plugins/local-plugins) — Develop plugins locally
+- [REST — plugins](/rest/plugins) — Plugin management API

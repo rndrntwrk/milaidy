@@ -149,6 +149,7 @@
               "plugin-registry/llm/openrouter",
               "plugin-registry/llm/groq",
               "plugin-registry/llm/ollama",
+              "plugin-registry/llm/local-ai",
               "plugin-registry/llm/deepseek",
               "plugin-registry/llm/xai",
               "plugin-registry/llm/mistral",
