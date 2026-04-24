@@ -22,7 +22,7 @@ on:
       ANDROID_KEY_PASSWORD:
         required: true
       PLAY_STORE_SERVICE_ACCOUNT_JSON:
-        required: true
+        required: false
   workflow_dispatch:
     inputs:
       track:
@@ -56,6 +56,7 @@ jobs:
     outputs:
       version_name: ${{ steps.version.outputs.name }}
       version_code: ${{ steps.version.outputs.code }}
+      play_store_ready: ${{ steps.play_store_credentials.outputs.ready }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -97,6 +98,18 @@ jobs:
           echo "name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
           echo "code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
           echo "Version: $VERSION_NAME (code: $VERSION_CODE)"
+
+      - name: Check Play Store credentials
+        id: play_store_credentials
+        env:
+          PLAY_STORE_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_STORE_SERVICE_ACCOUNT_JSON }}
+        run: |
+          if [[ -n "$PLAY_STORE_SERVICE_ACCOUNT_JSON" ]]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::PLAY_STORE_SERVICE_ACCOUNT_JSON is not configured; signed AAB will be built and attached, but Play Store upload will be skipped."
+          fi
 
       - name: Install dependencies
         run: bun install
@@ -167,6 +180,7 @@ jobs:
   publish-play-store:
     name: Publish to Play Store
     needs: build-aab
+    if: needs.build-aab.outputs.play_store_ready == 'true'
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
