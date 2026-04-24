@@ -35,11 +35,30 @@ Qwen does not have an env-var auto-enable trigger. Enable it explicitly in your 
 }
 ```
 
+Set your Qwen API key via the Alibaba Cloud DashScope console:
+
+```bash
+export QWEN_API_KEY=your-dashscope-api-key
+```
+
+## Supported Models
+
+| Model | Context Window | Description |
+|-------|---------------|-------------|
+| `qwen-max` | 32K | Flagship model, best quality |
+| `qwen-plus` | 128K | Balanced performance and cost |
+| `qwen-turbo` | 128K | Fast, cost-effective |
+| `qwen-long` | 10M | Ultra-long context support |
+| `qwen-vl-max` | 32K | Vision-language model |
+| `qwen-vl-plus` | 32K | Vision-language (balanced) |
+
 ## Features
 
 - Multilingual support (strong Chinese and English)
 - Streaming responses
 - Tool use / function calling
+- Vision-language capabilities (VL models)
+- Ultra-long context support (qwen-long)
 
 ## Related
 

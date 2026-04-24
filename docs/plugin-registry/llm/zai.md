@@ -4,7 +4,7 @@ sidebarTitle: "Zai"
 description: "Zai model provider for Milady — access Homunculus Labs' Zai language models."
 ---
 
-The Zai plugin connects Milady agents to Homunculus Labs' Zai models.
+The Zai plugin connects Milady agents to Homunculus Labs' Zai language models.
 
 **Package:** `@homunculuslabs/plugin-zai`
 
@@ -44,8 +44,9 @@ export ZAI_API_KEY=your-zai-api-key
 
 ## Features
 
-- Text generation
+- Text generation via Homunculus Labs models
 - Streaming responses
+- Tool use / function calling
 
 ## Related
 

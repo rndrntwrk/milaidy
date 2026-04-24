@@ -14,7 +14,9 @@ The FAL plugin connects Milady agents to [FAL.ai](https://fal.ai)'s media genera
 milady plugins install fal
 ```
 
-## Enable via Features
+## Configuration
+
+### Enable via Features
 
 ```json
 {
@@ -24,12 +26,32 @@ milady plugins install fal
 }
 ```
 
+### Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `FAL_KEY` | Yes | FAL.ai API key from [fal.ai/dashboard](https://fal.ai/dashboard) |
+
+```bash
+export FAL_KEY=your-fal-api-key
+```
+
+## Supported Capabilities
+
+| Capability | Examples |
+|-----------|----------|
+| Image generation | Flux, Stable Diffusion, SDXL |
+| Video generation | Runway, AnimateDiff |
+| Audio generation | Text-to-speech, music |
+| Image editing | Inpainting, upscaling, style transfer |
+
 ## Features
 
 - Image generation via FAL.ai models
 - Video generation
 - Audio generation
 - Fast inference on serverless GPU infrastructure
+- Wide selection of open-source and commercial models
 
 ## Related
 

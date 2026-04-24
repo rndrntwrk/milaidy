@@ -14,7 +14,9 @@ The Suno plugin connects Milady agents to Suno's music generation platform, enab
 milady plugins install suno
 ```
 
-## Enable via Features
+## Configuration
+
+### Enable via Features
 
 ```json
 {
@@ -24,11 +26,22 @@ milady plugins install suno
 }
 ```
 
+### Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `SUNO_API_KEY` | Yes | Suno API key |
+
+```bash
+export SUNO_API_KEY=your-suno-api-key
+```
+
 ## Features
 
 - Music generation from text descriptions
 - Song creation with lyrics
 - Multiple music styles and genres
+- Instrumental track generation
 
 ## Related
 

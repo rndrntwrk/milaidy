@@ -4,7 +4,7 @@ sidebarTitle: "Google Antigravity"
 description: "Google Cloud AI model provider for Milady — access Google Cloud AI Platform models via the Antigravity integration."
 ---
 
-The Google Antigravity plugin connects Milady agents to Google Cloud AI Platform, providing access to Google's cloud-hosted AI models through the Google Cloud API.
+The Google Antigravity plugin connects Milady agents to Google Cloud AI Platform, providing access to Google's cloud-hosted AI models through the Google Cloud API. This is the Google Cloud (Vertex AI) integration, as opposed to the [Google Gemini plugin](/plugin-registry/llm/google-genai) which uses Google AI Studio.
 
 **Package:** `@elizaos/plugin-google-antigravity`
 
@@ -42,11 +42,21 @@ export GOOGLE_CLOUD_API_KEY=your-google-cloud-api-key
 }
 ```
 
+## When to Use This vs Google Gemini
+
+| | Google Antigravity | Google Gemini |
+|---|---|---|
+| **API** | Google Cloud / Vertex AI | Google AI Studio |
+| **Auth** | Google Cloud API key | Google AI Studio API key |
+| **Best for** | Enterprise / GCP-integrated workloads | Quick start / personal use |
+| **Env var** | `GOOGLE_CLOUD_API_KEY` | `GOOGLE_GENERATIVE_AI_API_KEY` |
+
 ## Features
 
 - Google Cloud AI Platform model access
 - Streaming responses
 - Tool use / function calling
+- Enterprise-grade authentication via Google Cloud
 
 ## Related
 
