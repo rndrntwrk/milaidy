@@ -542,6 +542,7 @@ describe("release workflow path contract", () => {
     expect(releaseElectrobun).toContain(
       `tar -czf "$artifact_root/elizaOS-\${{ needs.prepare.outputs.env }}-\${{ matrix.platform.artifact-name }}.app.tar.gz"`,
     );
+    expect(releaseElectrobun).toContain("for build_root in \\");
   });
 
   it("keeps agent release publication gated on npm and explicit distribution jobs", () => {

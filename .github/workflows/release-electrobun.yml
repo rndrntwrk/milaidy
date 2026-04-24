@@ -850,11 +850,16 @@ jobs:
         run: |
           VERSION="$(node -p "require('./apps/app/electrobun/package.json').version")"
           ENV_NAME="${{ needs.prepare.outputs.env }}"
-          find -L apps/app/electrobun/build -type d -name "Resources" | while read -r res_dir; do
-            dest="$res_dir/version.json"
-            printf '{"identifier":"com.miladyai.milady","channel":"%s","name":"milady","version":"%s"}' \
-              "$ENV_NAME" "$VERSION" > "$dest"
-            echo "Wrote $dest"
+          for build_root in \
+            "eliza/packages/app-core/platforms/electrobun/build" \
+            "apps/app/electrobun/build"; do
+            [ -d "$build_root" ] || continue
+            find -L "$build_root" -type d -name "Resources" | while read -r res_dir; do
+              dest="$res_dir/version.json"
+              printf '{"identifier":"com.miladyai.milady","channel":"%s","name":"milady","version":"%s"}' \
+                "$ENV_NAME" "$VERSION" > "$dest"
+              echo "Wrote $dest"
+            done
           done
 
       - name: List build output
