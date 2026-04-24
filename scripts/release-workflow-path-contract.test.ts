@@ -548,6 +548,17 @@ describe("release workflow path contract", () => {
     expect(releaseElectrobun).toContain(
       "steps.build-electrobun-app.outputs.fallback != 'true'",
     );
+    expect(releaseElectrobun).toContain(
+      [
+        "name: Verify macOS signature and notarization",
+        "        if: matrix.platform.os == 'macos' && steps.build-electrobun-app.outputs.fallback != 'true'",
+        "        run: |",
+        "          shopt -s nullglob",
+      ].join("\n"),
+    );
+    expect(releaseElectrobun).toContain(
+      "No .app bundle or .dmg found in apps/app/electrobun/artifacts",
+    );
     expect(releaseElectrobun).toContain("for build_root in \\");
   });
 

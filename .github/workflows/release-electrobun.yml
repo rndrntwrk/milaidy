@@ -1262,8 +1262,10 @@ jobs:
           done
 
       - name: Verify macOS signature and notarization
-        if: matrix.platform.os == 'macos'
+        if: matrix.platform.os == 'macos' && steps.build-electrobun-app.outputs.fallback != 'true'
         run: |
+          shopt -s nullglob
+
           retry_stapler_validate() {
             local target="$1"
             local attempts="${2:-5}"
@@ -1289,8 +1291,8 @@ jobs:
           if [ "${#apps[@]}" -eq 0 ]; then
             dmgs=(apps/app/electrobun/artifacts/*.dmg)
             if [ "${#dmgs[@]}" -eq 0 ]; then
-              echo "::warning::No .app bundle or .dmg found — skipping codesign check"
-              exit 0
+              echo "::error::No .app bundle or .dmg found in apps/app/electrobun/artifacts"
+              exit 1
             fi
             dmg="${dmgs[0]}"
             echo "No .app bundle found in artifacts; mounting DMG: $dmg"
