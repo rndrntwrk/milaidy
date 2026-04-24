@@ -452,7 +452,7 @@ Milady automatically enables plugins based on your configuration. You do not nee
 | Connector | Plugin | Auto-Enable Trigger |
 |-----------|--------|---------------------|
 | `telegram` | `@elizaos/plugin-telegram` | `connectors.telegram.botToken` |
-| `discord` | `@elizaos/plugin-discord` | `connectors.discord.botToken` |
+| `discord` | `@elizaos/plugin-discord` | `connectors.discord.token` (or `botToken`, `apiKey`) |
 | `slack` | `@elizaos/plugin-slack` | `connectors.slack.botToken` |
 | `twitter` | `@elizaos/plugin-twitter` | `connectors.twitter.apiKey` |
 | `whatsapp` | `@elizaos/plugin-whatsapp` | `connectors.whatsapp.authDir` (or `authState`, `sessionPath`, or `accounts` with `authDir`) |
@@ -468,6 +468,7 @@ Milady automatically enables plugins based on your configuration. You do not nee
 | `feishu` | `@elizaos/plugin-feishu` | `connectors.feishu.token` |
 | `blooio` | `@elizaos/plugin-blooio` | `connectors.blooio.token` |
 | `twitch` | `@elizaos/plugin-twitch` | `connectors.twitch.accessToken` or `clientId` or `enabled: true` |
+| `wechat` | `@elizaos/plugin-wechat` | `connectors.wechat.apiKey` (or `accounts` with a truthy `apiKey`) |
 
 **Provider plugins** are auto-enabled when the corresponding API key environment variable is set:
 

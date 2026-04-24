@@ -60,8 +60,8 @@ const oldRunPackDryBlock = `function runPackDry(): PackResult[] {
 
       // Last-resort fallback if sanitizing didn't resolve the
       // EOVERRIDE (e.g. npm found a different override conflict).
-      // \`bun pm pack --dry-run\` trips over the Bun 1.3.11 lockfile
-      // parser bug (Duplicate package path at bun.lock:2034:5) under
+      // \`bun pm pack --dry-run\` can trip over Bun lockfile parser drift
+      // (Duplicate package path at bun.lock:2034:5) under
       // SKIP_LOCAL_UPSTREAMS, so we try it last and tolerate the
       // parser failure by treating it as a soft-skip — the
       // snapshot's file/dependency assertions still run against the
@@ -81,7 +81,7 @@ const oldRunPackDryBlock = `function runPackDry(): PackResult[] {
           bunOutput.includes("InvalidPackageKey")
         ) {
           console.warn(
-            "release-check: bun pm pack --dry-run failed with a known Bun 1.3.11 lockfile parser error; returning empty file list (CI contract suite will still validate workflow snippets).",
+            "release-check: bun pm pack --dry-run failed with a known Bun lockfile parser error; returning empty file list (CI contract suite will still validate workflow snippets).",
           );
           return [{ files: [] }];
         }
@@ -108,7 +108,7 @@ const patchedRunPackDryBlock = `function runBunPackDry(): PackResult[] {
       bunOutput.includes("InvalidPackageKey")
     ) {
       console.warn(
-        "release-check: bun pm pack --dry-run failed with a known Bun 1.3.11 lockfile parser error; returning empty file list (CI contract suite will still validate workflow snippets).",
+        "release-check: bun pm pack --dry-run failed with a known Bun lockfile parser error; returning empty file list (CI contract suite will still validate workflow snippets).",
       );
       return [{ files: [] }];
     }

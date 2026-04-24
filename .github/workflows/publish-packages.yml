@@ -77,6 +77,8 @@ jobs:
       pypi_version: ${{ steps.ver.outputs.pypi_version }}
       deb_version: ${{ steps.ver.outputs.deb_version }}
       is_prerelease: ${{ steps.ver.outputs.is_prerelease }}
+      snap_store_ready: ${{ steps.registry_credentials.outputs.snap_store_ready }}
+      apt_repo_ready: ${{ steps.registry_credentials.outputs.apt_repo_ready }}
     steps:
       - name: Determine versions
         id: ver
@@ -105,6 +107,26 @@ jobs:
           echo "PyPI: $PYPI_VERSION"
           echo "Debian: ${DEB_VERSION}-1"
           echo "Pre-release: $(echo "$VERSION" | grep -qE '(alpha|beta|rc)' && echo true || echo false)"
+
+      - name: Check optional registry credentials
+        id: registry_credentials
+        env:
+          SNAP_STORE_CREDENTIALS: ${{ secrets.SNAP_STORE_CREDENTIALS }}
+          APT_REPO_TOKEN: ${{ secrets.APT_REPO_TOKEN }}
+        run: |
+          if [[ -n "$SNAP_STORE_CREDENTIALS" ]]; then
+            echo "snap_store_ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "snap_store_ready=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::SNAP_STORE_CREDENTIALS is not configured; Snap will be built and tested, but store publish will be skipped."
+          fi
+
+          if [[ -n "$APT_REPO_TOKEN" ]]; then
+            echo "apt_repo_ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "apt_repo_ready=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::APT_REPO_TOKEN is not configured; Debian package will be built and attached, but apt repository dispatch will be skipped."
+          fi
 
   # ── PyPI ───────────────────────────────────────────────────────────────
   publish-pypi:
@@ -222,13 +244,17 @@ jobs:
           milady --version || echo "Version check completed"
 
       - name: Publish to Snap Store
-        if: success()
+        if: success() && needs.prepare.outputs.snap_store_ready == 'true'
         uses: snapcore/action-publish@v1
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAP_STORE_CREDENTIALS }}
         with:
           snap: ${{ steps.snapcraft.outputs.snap }}
           release: ${{ needs.prepare.outputs.is_prerelease == 'true' && 'edge,beta' || 'stable,candidate' }}
+
+      - name: Skip Snap Store publish
+        if: success() && needs.prepare.outputs.snap_store_ready != 'true'
+        run: echo "::warning::Snap Store publish skipped because SNAP_STORE_CREDENTIALS is not configured."
 
   # ── Debian / apt ───────────────────────────────────────────────────────
   build-deb:
@@ -254,7 +280,7 @@ jobs:
 
       - name: Setup Bun
         run: |
-          curl -fsSL https://bun.sh/install | bash -s "bun-v1.3.10"
+          curl -fsSL https://bun.sh/install | bash -s "bun-v1.3.13"
           echo "$HOME/.bun/bin" >> $GITHUB_PATH
           export PATH="$HOME/.bun/bin:$PATH"
           bun --version
@@ -318,7 +344,7 @@ jobs:
           done
 
       - name: Trigger APT repository update
-        if: success()
+        if: success() && needs.prepare.outputs.apt_repo_ready == 'true'
         env:
           GH_TOKEN: ${{ secrets.APT_REPO_TOKEN }}
         run: |
@@ -339,6 +365,10 @@ jobs:
             -f event_type=update-apt \
             -f "client_payload[version]=$VERSION" \
             -f "client_payload[deb_url]=$DEB_URL"
+
+      - name: Skip APT repository update
+        if: success() && needs.prepare.outputs.apt_repo_ready != 'true'
+        run: echo "::warning::APT repository update skipped because APT_REPO_TOKEN is not configured."
 
   # ── Flatpak ────────────────────────────────────────────────────────────
   build-flatpak:
