@@ -42,7 +42,7 @@ const FIXTURES: GameFixture[] = [
     commandChecks: [
       {
         testId: "clawville-command-move-krusty",
-        content: "Move to Krusty Krab",
+        content: "Move to tool workshop",
       },
       {
         testId: "clawville-command-visit-nearest",
@@ -323,6 +323,7 @@ for (const fixture of FIXTURES) {
     await expect(page.getByTestId(fixture.surfaceTestId)).toBeVisible({
       timeout: 60_000,
     });
+    await expect(page.getByText("Apps chat")).toHaveCount(0);
 
     for (const check of fixture.commandChecks) {
       const commandButton = page.getByTestId(check.testId);
