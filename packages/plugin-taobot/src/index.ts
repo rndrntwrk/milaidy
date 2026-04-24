@@ -13,13 +13,22 @@ export { taobotPlugin } from './plugin.js';
 export { taobotPlugin as default } from './plugin.js';
 
 // Actions
-export { allActions, taobotStreamActions, taobotArcadeActions } from './actions/index.js';
+export { allActions, taobotStreamActions, taobotArcadeActions, taobotEmoteActions } from './actions/index.js';
 
 // Providers
 export { taobotStateProvider, taobotPhilosophyProvider } from './providers/index.js';
 
 // Services
 export { TaobotBridgeService } from './services/TaobotBridgeService.js';
+export {
+  sendEmotion,
+  sendSpeakStart,
+  sendSpeakStop,
+  sendGreeting,
+  sendLightColor,
+  sendCameraMode,
+  closeOscSocket,
+} from './services/OscBridge.js';
 
 // Routes
 export {
