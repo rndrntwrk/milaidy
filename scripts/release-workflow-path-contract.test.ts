@@ -33,6 +33,16 @@ describe("release workflow path contract", () => {
     );
   });
 
+  it("uses the verified Bun runtime for release packaging", () => {
+    const setupBunWorkspace = readAction("setup-bun-workspace/action.yml");
+    const agentRelease = readWorkflow("agent-release.yml");
+    const releaseElectrobun = readWorkflow("release-electrobun.yml");
+
+    expect(setupBunWorkspace).toContain('default: "1.3.13"');
+    expect(agentRelease).toContain('BUN_VERSION: "1.3.13"');
+    expect(releaseElectrobun).toContain('BUN_VERSION: "1.3.13"');
+  });
+
   it("uses the mobile build helper for release Android and iOS validation jobs", () => {
     const agentRelease = readWorkflow("agent-release.yml");
     const mobileBuildHelper = readElizaScript(
@@ -531,7 +541,7 @@ describe("release workflow path contract", () => {
     expect(releaseElectrobun).toContain("\\r?\\n    cwd: APP_DIR");
   });
 
-  it("keeps draft Electrobun validation moving when a built app tree exists", () => {
+  it("keeps draft Electrobun fallback artifacts away from release-grade gates", () => {
     const releaseElectrobun = readWorkflow("release-electrobun.yml");
 
     expect(releaseElectrobun).toContain(
@@ -551,17 +561,8 @@ describe("release workflow path contract", () => {
       `tar -czf "$artifact_root/elizaOS-\${{ needs.prepare.outputs.env }}-\${{ matrix.platform.artifact-name }}.app.tar.gz"`,
     );
     expect(releaseElectrobun).toContain("Wrote fallback $dest");
-    expect(releaseElectrobun).toContain(
-      "Extracting draft fallback $($fallbackZip.Name) to $extractDir",
-    );
-    expect(releaseElectrobun).toContain(
-      [
-        '"',
-        "$",
-        "{{ steps.build-electrobun-app.outputs.fallback }}",
-        '" -ne "true"',
-      ].join(""),
-    );
+    expect(releaseElectrobun).not.toContain("$fallbackZip");
+    expect(releaseElectrobun).not.toContain("Extracting draft fallback");
     expect(releaseElectrobun).toContain(
       "steps.build-electrobun-app.outputs.fallback != 'true'",
     );
@@ -576,6 +577,22 @@ describe("release workflow path contract", () => {
     expect(releaseElectrobun).toContain(
       "No .app bundle or .dmg found in apps/app/electrobun/artifacts",
     );
+    for (const stepName of [
+      "Install Inno Setup 6.7.1",
+      "Extract Windows app bundle for Inno Setup",
+      "Build Inno Setup installer",
+      "Smoke test packaged Windows app",
+      "Build MSIX package",
+      "Compress Windows artifacts before upload",
+      "Prepare public canary Windows installer artifact",
+      "Smoke test packaged macOS app",
+    ]) {
+      const stepStart = releaseElectrobun.indexOf(`name: ${stepName}`);
+      expect(stepStart).toBeGreaterThanOrEqual(0);
+      expect(releaseElectrobun.slice(stepStart, stepStart + 240)).toContain(
+        "steps.build-electrobun-app.outputs.fallback != 'true'",
+      );
+    }
     expect(releaseElectrobun).toContain("for build_root in \\");
   });
 
@@ -589,6 +606,7 @@ describe("release workflow path contract", () => {
 
     expect(buildNpmBlock).not.toContain("continue-on-error: true");
     expect(agentRelease).toContain("needs.build-npm.result == 'success'");
+    expect(agentRelease).toContain("draft: false");
     expect(agentRelease).toContain("  push-agent-image:");
     expect(agentRelease).toContain("  distribute-release:");
     expect(agentRelease).toContain(

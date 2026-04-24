@@ -42,7 +42,7 @@ permissions:
   pages: write
 
 env:
-  BUN_VERSION: "1.3.11"
+  BUN_VERSION: "1.3.13"
   MILADY_SKIP_LOCAL_UPSTREAMS: "1"
   # Runner selection: all jobs use ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}.
   # To override (e.g. point at a self-hosted or large-runner pool), set the
@@ -244,7 +244,7 @@ jobs:
     uses: ./.github/workflows/release-electrobun.yml
     with:
       tag: ${{ needs.version.outputs.tag }}
-      draft: true
+      draft: false
       publish_release: false
     secrets: inherit
 
@@ -312,7 +312,7 @@ jobs:
       - name: Setup workspace dependencies
         uses: ./.github/actions/setup-bun-workspace
         with:
-          bun-version: "1.3.11"
+          bun-version: ${{ env.BUN_VERSION }}
           install-command: bun install --ignore-scripts --no-frozen-lockfile
           install-native-deps: "false"
           run-postinstall: "true"
@@ -522,7 +522,7 @@ jobs:
       - name: Setup workspace dependencies
         uses: ./.github/actions/setup-bun-workspace
         with:
-          bun-version: "1.3.11"
+          bun-version: ${{ env.BUN_VERSION }}
           install-command: bun install --ignore-scripts --no-frozen-lockfile
           install-native-deps: "false"
           run-postinstall: "true"
