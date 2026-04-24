@@ -6,6 +6,8 @@ description: "Twitter/X connector for Milady — posting, replying, monitoring m
 
 The Twitter plugin connects Milady agents to Twitter/X, enabling autonomous posting, replying to mentions, monitoring timelines, and engaging with other accounts.
 
+> **On-demand plugin.** This plugin is resolved from the remote elizaOS plugin registry and auto-installs when its credentials are detected. It is not included in Milady's bundled `plugins.json` index.
+
 **Package:** `@elizaos/plugin-twitter`
 
 ## Installation

@@ -6,6 +6,8 @@ description: "Mistral AI model provider for Milady — open-weight and commercia
 
 The Mistral plugin connects Milady agents to Mistral AI models, offering both open-weight and commercial models with competitive performance, especially for European languages and code generation.
 
+> **On-demand plugin.** This plugin is resolved from the remote elizaOS plugin registry and auto-installs when its API key is detected. It is not included in Milady's bundled `plugins.json` index.
+
 **Package:** `@elizaos/plugin-mistral`
 
 ## Installation

@@ -5,13 +5,31 @@ description: "List, enable, or inspect plugins from the CLI."
 
 # `milady plugins`
 
-Inspects which plugins resolve in the current environment and can trigger sync or registry operations depending on flags.
+Manage plugins from the CLI — list, search, install, and uninstall plugins from the elizaOS registry.
+
+## Subcommands
+
+| Subcommand | Description |
+|------------|-------------|
+| `milady plugins list` | Browse registry plugins (default limit: 30) |
+| `milady plugins installed` | Show currently installed plugins |
+| `milady plugins install <name>` | Install a plugin from the registry |
+| `milady plugins uninstall <name>` | Remove an installed plugin |
+| `milady plugins search <query>` | Search plugins by keyword |
+| `milady plugins info <name>` | Show detailed plugin information |
+| `milady plugins config <name>` | Show or edit plugin configuration |
+| `milady plugins refresh` | Force cache refresh from remote registry |
 
 ## Examples
 
 ```bash
-milady plugins
-milady plugins --help
+milady plugins list                 # browse all available plugins
+milady plugins search telegram      # find telegram-related plugins
+milady plugins install discord      # install the Discord connector
+milady plugins installed            # see what's installed
+milady plugins info openai          # show plugin details
+milady plugins uninstall suno       # remove a plugin
+milady plugins --help               # show all subcommands
 ```
 
 ## Related

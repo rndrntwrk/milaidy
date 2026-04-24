@@ -6,6 +6,8 @@ description: "Together AI model provider for Milady — access open-source model
 
 The Together AI plugin connects Milady agents to Together's inference platform, providing access to a wide catalog of open-source models with competitive pricing and fast inference.
 
+> **On-demand plugin.** This plugin is resolved from the remote elizaOS plugin registry and auto-installs when its API key is detected. It is not included in Milady's bundled `plugins.json` index.
+
 **Package:** `@elizaos/plugin-together`
 
 ## Installation

@@ -6,6 +6,8 @@ description: Connect your agent to Twitter/X using the @elizaos/plugin-twitter p
 
 Connect your agent to Twitter/X for social media engagement.
 
+> **Availability:** `@elizaos/plugin-twitter` is an on-demand elizaOS plugin resolved from the remote plugin registry. It is **not** included in Milady's bundled `plugins.json` index. The plugin auto-installs at runtime when a valid token is detected in your connector configuration.
+
 ## Overview
 
 The Twitter connector is an external elizaOS plugin that bridges your agent to Twitter/X. It is auto-enabled by the runtime when a valid token is detected in your connector configuration.

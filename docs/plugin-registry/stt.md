@@ -6,6 +6,8 @@ description: "Speech-to-text plugin for Milady — transcribe audio input into t
 
 The Speech-to-Text (STT) plugin enables Milady agents to transcribe audio input into text, powering voice-based interactions.
 
+> **On-demand plugin.** This plugin is resolved from the remote elizaOS plugin registry and auto-installs when configured. It is not included in Milady's bundled `plugins.json` index.
+
 **Package:** `@elizaos/plugin-stt`
 
 ## Installation

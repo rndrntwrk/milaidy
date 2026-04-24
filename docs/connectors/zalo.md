@@ -49,6 +49,51 @@ The Zalo connector is an elizaOS plugin that bridges your agent to the Zalo plat
 - Webhook-based message handling
 - Customer interaction management
 
+---
+
+## Zalo User (Personal Account)
+
+A separate connector, `@elizaos/plugin-zalouser`, provides personal Zalo account messaging (as opposed to Official Account). Install it with:
+
+```bash
+milady plugins install zalouser
+```
+
+### Package Info
+
+| Field | Value |
+|-------|-------|
+| Package | `@elizaos/plugin-zalouser` |
+| Config key | `connectors.zalouser` |
+| Category | `connector` |
+
+### Configuration
+
+```json
+{
+  "connectors": {
+    "zalouser": {
+      "enabled": true
+    }
+  }
+}
+```
+
+### Environment Variables
+
+| Variable | Type | Description |
+|----------|------|-------------|
+| `ZALOUSER_IMEI` | string | Device IMEI identifier |
+| `ZALOUSER_ENABLED` | boolean | Enable or disable the connector |
+| `ZALOUSER_PROFILES` | string | Profile configuration |
+| `ZALOUSER_DM_POLICY` | string | DM policy (`allow`, `deny`, `allowlist`) |
+| `ZALOUSER_USER_AGENT` | string | User agent string |
+| `ZALOUSER_COOKIE_PATH` | string | Path to cookie storage |
+| `ZALOUSER_GROUP_POLICY` | string | Group message policy (`allow`, `deny`) |
+| `ZALOUSER_LISTEN_TIMEOUT` | number | Listen timeout in ms |
+| `ZALOUSER_ALLOWED_THREADS` | string | Comma-separated list of allowed threads |
+| `ZALOUSER_DEFAULT_PROFILE` | string | Default profile name |
+
 ## Related
 
 - [Connectors overview](/guides/connectors#zalo)

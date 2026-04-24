@@ -6,6 +6,8 @@ description: "FAL media generation plugin for Milady — access FAL.ai's suite o
 
 The FAL plugin connects Milady agents to [FAL.ai](https://fal.ai)'s media generation platform, providing access to fast inference for image, video, and audio generation models.
 
+> **On-demand plugin.** This plugin is resolved from the remote elizaOS plugin registry and auto-installs when its API key is detected. It is not included in Milady's bundled `plugins.json` index.
+
 **Package:** `@elizaos/plugin-fal`
 
 ## Installation

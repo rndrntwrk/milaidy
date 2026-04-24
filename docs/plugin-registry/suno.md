@@ -6,6 +6,8 @@ description: "Suno music generation plugin for Milady — generate music and son
 
 The Suno plugin connects Milady agents to Suno's music generation platform, enabling agents to create music and songs from text prompts.
 
+> **On-demand plugin.** This plugin is resolved from the remote elizaOS plugin registry and auto-installs when configured. It is not included in Milady's bundled `plugins.json` index.
+
 **Package:** `@elizaos/plugin-suno`
 
 ## Installation
