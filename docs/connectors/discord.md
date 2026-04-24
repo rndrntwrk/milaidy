@@ -61,11 +61,17 @@ No environment variable is required to trigger auto-enable — it is driven enti
 
 When loaded, secrets are pushed to `process.env` for the plugin to consume:
 
-| Variable | Source | Description |
-|----------|--------|-------------|
-| `DISCORD_API_TOKEN` | `token` | Primary bot token (always set) |
-| `DISCORD_BOT_TOKEN` | `token` | Mirror of `DISCORD_API_TOKEN` (both always set) |
-| `DISCORD_APPLICATION_ID` | `applicationId` | Application ID. Auto-resolved via Discord OAuth2 API if not set |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DISCORD_API_TOKEN` | Yes | Primary bot token (always set from `token` config field) |
+| `DISCORD_BOT_TOKEN` | No | Mirror of `DISCORD_API_TOKEN` (both always set) |
+| `DISCORD_APPLICATION_ID` | No | Application ID. Auto-resolved via Discord OAuth2 API if not set |
+| `CHANNEL_IDS` | No | Comma-separated list of channel IDs to restrict the bot to |
+| `DISCORD_LISTEN_CHANNEL_IDS` | No | Comma-separated list of channel IDs where the bot will only listen (not respond) |
+| `DISCORD_VOICE_CHANNEL_ID` | No | Voice channel ID the bot should join (auto-selects based on activity if not set) |
+| `DISCORD_SHOULD_IGNORE_BOT_MESSAGES` | No | Ignore messages from other bots |
+| `DISCORD_SHOULD_IGNORE_DIRECT_MESSAGES` | No | Ignore direct messages |
+| `DISCORD_SHOULD_RESPOND_ONLY_TO_MENTIONS` | No | Only respond when explicitly @mentioned |
 
 Note: If `DISCORD_APPLICATION_ID` is not configured, the runtime automatically resolves it by calling `https://discord.com/api/v10/oauth2/applications/@me` with the bot token.
 

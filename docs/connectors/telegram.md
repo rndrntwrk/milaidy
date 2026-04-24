@@ -57,9 +57,11 @@ No environment variable is required to trigger auto-enable — it is driven enti
 
 When the connector is loaded, the runtime pushes the following secret from your config into `process.env` for the plugin to consume:
 
-| Variable | Source | Description |
-|----------|--------|-------------|
-| `TELEGRAM_BOT_TOKEN` | `botToken` | Bot token from [@BotFather](https://t.me/BotFather) |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `TELEGRAM_BOT_TOKEN` | Yes | Bot token from [@BotFather](https://t.me/BotFather) |
+| `TELEGRAM_API_ROOT` | No | Override the default Telegram Bot API base URL |
+| `TELEGRAM_ALLOWED_CHATS` | No | JSON-encoded array of authorized chat IDs |
 
 ## Full Configuration Reference
 

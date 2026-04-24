@@ -57,6 +57,28 @@ The `plugin-auto-enable.ts` module checks `connectors.farcaster` in your config.
 
 No environment variable is required to trigger auto-enable — it is driven entirely by the connector config object.
 
+## Environment Variables
+
+When the connector is loaded, the following environment variables are consumed by the plugin:
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `FARCASTER_NEYNAR_API_KEY` | Yes | — | Neynar API key for authentication |
+| `FARCASTER_SIGNER_UUID` | Yes | — | UUID of the Neynar signer for signing casts |
+| `FARCASTER_FID` | Yes | — | Farcaster ID (user identifier) for the agent account |
+| `FARCASTER_HUB_URL` | No | `hub.pinata.cloud` | Farcaster hub URL |
+| `FARCASTER_POLL_INTERVAL` | No | `120` | Polling interval in seconds |
+| `FARCASTER_DRY_RUN` | No | `false` | Simulate operations without executing |
+| `FARCASTER_MODE` | No | `polling` | Operation mode: `polling` or `webhook` |
+| `ENABLE_CAST` | No | `true` | Enable or disable posting casts |
+| `CAST_IMMEDIATELY` | No | `false` | Publish casts immediately instead of on a schedule |
+| `CAST_INTERVAL_MIN` | No | `90` | Minimum interval in minutes between automated casts |
+| `CAST_INTERVAL_MAX` | No | `180` | Maximum interval in minutes between automated casts |
+| `MAX_CAST_LENGTH` | No | `320` | Maximum characters per cast |
+| `ACTION_INTERVAL` | No | `5` | Interval in minutes between action-processing cycles |
+| `ENABLE_ACTION_PROCESSING` | No | `false` | Enable automated action processing |
+| `MAX_ACTIONS_PROCESSING` | No | `1` | Maximum actions to process in a single batch |
+
 ## Full Configuration Reference
 
 All fields are defined under `connectors.farcaster` in `milady.json`.
@@ -70,7 +92,10 @@ All fields are defined under `connectors.farcaster` in `milady.json`.
 | `fid` | number | — | Farcaster ID of the agent account (required) |
 | `enabled` | boolean | — | Explicitly enable/disable |
 | `channels` | string[] | — | Farcaster channel names to monitor and participate in |
-| `pollInterval` | number | `60` | Seconds between mention checks |
+| `pollInterval` | number | `120` | Seconds between mention checks |
+| `mode` | `"polling"` \| `"webhook"` | `"polling"` | Operation mode |
+| `dryRun` | boolean | `false` | Simulate operations without executing |
+| `hubUrl` | string | `hub.pinata.cloud` | Farcaster hub URL |
 
 ### Autonomous Casting
 
@@ -78,8 +103,18 @@ The agent can post casts autonomously at random intervals. The LLM generates cas
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `castIntervalMin` | number | `120` | Minimum minutes between autonomous casts |
-| `castIntervalMax` | number | `240` | Maximum minutes between autonomous casts |
+| `castIntervalMin` | number | `90` | Minimum minutes between autonomous casts |
+| `castIntervalMax` | number | `180` | Maximum minutes between autonomous casts |
+| `castImmediately` | boolean | `false` | Publish casts immediately |
+| `maxCastLength` | number | `320` | Maximum characters per cast |
+
+### Action Processing
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `actionInterval` | number | `5` | Minutes between action-processing cycles |
+| `enableActionProcessing` | boolean | `false` | Enable automated action processing |
+| `maxActionsProcessing` | number | `1` | Max actions to process per batch |
 
 ```json
 {

@@ -83,14 +83,14 @@ No environment variable is required to trigger auto-enable — it is driven enti
 
 ## Environment Variables
 
-The runtime injects the following environment variables from your `connectors.signal` config into `process.env` via `CHANNEL_ENV_MAP`, so the plugin can read them at startup:
+The runtime injects the following environment variables from your `connectors.signal` config into `process.env`, so the plugin can read them at startup:
 
-| Env Variable | Source Config Field | Description |
-|---|---|---|
-| `SIGNAL_AUTH_DIR` | `authDir` | Path to signal-cli data directory |
-| `SIGNAL_ACCOUNT_NUMBER` | `account` | Signal phone number (E.164) |
-| `SIGNAL_HTTP_URL` | `httpUrl` | HTTP URL for signal-cli daemon |
-| `SIGNAL_CLI_PATH` | `cliPath` | Path to signal-cli binary |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `SIGNAL_ACCOUNT_NUMBER` | Yes | Signal phone number in E.164 format (e.g., `+1234567890`) |
+| `SIGNAL_HTTP_URL` | No | HTTP URL for signal-cli REST API (e.g., `http://localhost:8080`) |
+| `SIGNAL_CLI_PATH` | No | Path to signal-cli executable (alternative to HTTP API) |
+| `SIGNAL_SHOULD_IGNORE_GROUP_MESSAGES` | No | If true, the bot will only respond to direct messages |
 
 You do not need to set these manually — they are derived from the connector config at runtime.
 
