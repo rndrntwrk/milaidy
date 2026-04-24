@@ -723,6 +723,7 @@ jobs:
           node eliza/packages/app-core/scripts/build-patched-electrobun-cli.mjs "${{ steps.resolve-electrobun.outputs.package-dir }}"
 
       - name: Build Electrobun app
+        id: build-electrobun-app
         run: |
           set +e
           if [ "${{ matrix.platform.os }}" = "macos" ] && [ "${{ matrix.platform.artifact-name }}" = "macos-x64" ]; then
@@ -733,6 +734,7 @@ jobs:
           status=$?
           set -e
           if [ "$status" -eq 0 ]; then
+            echo "fallback=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -779,6 +781,7 @@ jobs:
               powershell -NoProfile -Command "Compress-Archive -Path '$build_dir' -DestinationPath '$artifact_root/elizaOS-${{ needs.prepare.outputs.env }}-${{ matrix.platform.artifact-name }}.exe.zip' -Force"
               ;;
           esac
+          echo "fallback=true" >> "$GITHUB_OUTPUT"
           echo "::warning::Electrobun package command exited with $status; uploaded draft-validation fallback archive from $build_dir"
         env:
           # Electrobun reads these env vars directly. The workflow derives the
@@ -877,7 +880,7 @@ jobs:
           find -L apps/app/electrobun/artifacts -type f 2>/dev/null | sort || echo "(no artifacts directory)"
 
       - name: Stage standard macOS release app
-        if: matrix.platform.os == 'macos'
+        if: matrix.platform.os == 'macos' && steps.build-electrobun-app.outputs.fallback != 'true'
         env:
           ELECTROBUN_DEVELOPER_ID: ${{ steps.macos-keychain.outputs.developer_id }}
           ELECTROBUN_APPLEID: ${{ secrets.APPLE_ID }}

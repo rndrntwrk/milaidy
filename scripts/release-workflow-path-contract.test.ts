@@ -494,7 +494,7 @@ describe("release workflow path contract", () => {
     expect(fallbackScript).toContain(
       "symlink_installed_packages_into_manifest_node_modules",
     );
-    expect(fallbackScript).toContain('MINGW*|MSYS*|CYGWIN*)');
+    expect(fallbackScript).toContain("MINGW*|MSYS*|CYGWIN*)");
     expect(fallbackScript).toContain('cp -LR "$source_path" "$target_path"');
   });
 
@@ -545,6 +545,9 @@ describe("release workflow path contract", () => {
       `tar -czf "$artifact_root/elizaOS-\${{ needs.prepare.outputs.env }}-\${{ matrix.platform.artifact-name }}.app.tar.gz"`,
     );
     expect(releaseElectrobun).toContain("Wrote fallback $dest");
+    expect(releaseElectrobun).toContain(
+      "steps.build-electrobun-app.outputs.fallback != 'true'",
+    );
     expect(releaseElectrobun).toContain("for build_root in \\");
   });
 
