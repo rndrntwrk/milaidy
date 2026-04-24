@@ -157,7 +157,14 @@ symlink_installed_packages_into_manifest_node_modules() {
 
     mkdir -p "$(dirname "$target_path")"
     rm -rf "$target_path"
-    ln -sfn "$(pwd)/$source_path" "$target_path"
+    case "$(uname -s)" in
+      MINGW*|MSYS*|CYGWIN*)
+        cp -LR "$source_path" "$target_path"
+        ;;
+      *)
+        ln -sfn "$(pwd)/$source_path" "$target_path"
+        ;;
+    esac
   done <<< "$entries"
 }
 

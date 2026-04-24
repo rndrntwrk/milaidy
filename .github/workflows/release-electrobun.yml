@@ -758,6 +758,15 @@ jobs:
             exit "$status"
           fi
 
+          VERSION="$(node -p "require('./apps/app/electrobun/package.json').version")"
+          ENV_NAME="${{ needs.prepare.outputs.env }}"
+          find -L "$build_dir" -type d -name "Resources" | while read -r res_dir; do
+            dest="$res_dir/version.json"
+            printf '{"identifier":"com.miladyai.milady","channel":"%s","name":"milady","version":"%s"}' \
+              "$ENV_NAME" "$VERSION" > "$dest"
+            echo "Wrote fallback $dest"
+          done
+
           mkdir -p "$artifact_root"
           case "${{ matrix.platform.os }}" in
             linux)
