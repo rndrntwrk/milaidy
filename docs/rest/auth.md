@@ -8,13 +8,14 @@ The Milady API can be secured with a token by setting the `MILADY_API_TOKEN` env
 
 ## Authentication Methods
 
-The API supports three authentication headers, checked in priority order:
+The API supports multiple authentication headers, checked in priority order:
 
 | Priority | Header | Format | Example |
 |----------|--------|--------|---------|
 | 1 | `Authorization` | `Bearer <token>` | `Authorization: Bearer sk-milady-...` |
-| 2 | `x-milady-token` | Plain token string | `x-milady-token: sk-milady-...` |
-| 3 | `x-api-key` | Plain token string | `x-api-key: sk-milady-...` |
+| 2 | `x-eliza-token` | Plain token string | `x-eliza-token: sk-milady-...` |
+| 3 | `x-elizaos-token` | Plain token string | `x-elizaos-token: sk-milady-...` |
+| 4 | `x-api-key` / `x-api-token` | Plain token string | `x-api-key: sk-milady-...` |
 
 When no `MILADY_API_TOKEN` is set, all requests are allowed without authentication.
 
@@ -166,7 +167,7 @@ The `/api/wallet/keys` endpoint enforces stricter rules: in production, a token 
 The API server includes these auth-related headers in CORS preflight responses:
 
 ```
-Access-Control-Allow-Headers: Content-Type, Authorization, X-Milady-Token, X-Api-Key, X-Milady-Export-Token
+Access-Control-Allow-Headers: Content-Type, Authorization, X-API-Token, X-Api-Key, X-ElizaOS-Client-Id, X-ElizaOS-UI-Language, X-ElizaOS-Token, X-Eliza-Export-Token, X-Eliza-Terminal-Token
 ```
 
 ## Related

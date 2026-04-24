@@ -28,6 +28,17 @@ The `milady` binary (also published as `milady-ai` / `miladyai`) is the primary 
 | [`milady db`](/cli/db) | Database utilities (reset) |
 | `milady benchmark` | Run a benchmark task headlessly against the agent |
 
+## Global options
+
+| Flag | Description |
+|------|-------------|
+| `-v, --version` | Print version |
+| `--verbose` | Enable informational runtime logs |
+| `--debug` | Enable debug-level runtime logs |
+| `--dev` | Dev profile: isolate state under `~/.eliza-dev` with separate config and ports |
+| `--profile <name>` | Use a named profile (isolates state and config under `~/.eliza-<name>`) |
+| `--no-color` | Disable ANSI colors |
+
 ## Help
 
 Run `milady --help` or `milady <command> --help` for the exact flags in your build. Implementation lives under `eliza/packages/app-core/src/cli/` in this repository.
