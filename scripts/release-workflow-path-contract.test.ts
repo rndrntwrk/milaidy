@@ -499,6 +499,7 @@ describe("release workflow path contract", () => {
     expect(fallbackScript).toContain("mklink /J");
     expect(fallbackScript).toContain("bun_store_entries");
     expect(fallbackScript).toContain('"node_modules", ".bun"');
+    expect(fallbackScript).toContain("stat.isSymbolicLink()");
     expect(fallbackScript).toContain('cp -LR "$source_path" "$target_path"');
   });
 

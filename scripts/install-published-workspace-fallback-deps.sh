@@ -152,7 +152,7 @@ symlink_installed_packages_into_manifest_node_modules() {
     local package_name="$1"
     local source_path="$2"
     local target_path="$target_node_modules/$package_name"
-    [[ -e "$source_path" || -L "$source_path" ]] || return 0
+    [[ -e "$source_path" ]] || return 0
 
     mkdir -p "$(dirname "$target_path")"
     case "$(uname -s)" in
@@ -205,6 +205,8 @@ symlink_installed_packages_into_manifest_node_modules() {
               : [topLevelPath];
             for (const packageDir of packageDirs) {
               try {
+                const stat = fs.lstatSync(packageDir);
+                if (!stat.isDirectory() || stat.isSymbolicLink()) continue;
                 const pkg = JSON.parse(fs.readFileSync(path.join(packageDir, "package.json"), "utf8"));
                 if (typeof pkg.name !== "string" || seen.has(pkg.name)) continue;
                 seen.add(pkg.name);
