@@ -214,6 +214,10 @@ append_versioned_package \
   "@elizaos/plugin-agent-orchestrator" \
   "eliza/plugins/plugin-agent-orchestrator/package.json" \
   ".eliza.ci-disabled/plugins/plugin-agent-orchestrator/package.json"
+append_versioned_package \
+  "@elizaos/plugin-signal" \
+  "eliza/plugins/plugin-signal/typescript/package.json" \
+  ".eliza.ci-disabled/plugins/plugin-signal/typescript/package.json"
 
 # coding-agent-adapters is a transitive dep of eliza/packages/agent's server.ts.
 # After disable-local-eliza-workspace drops eliza/packages/agent from the
