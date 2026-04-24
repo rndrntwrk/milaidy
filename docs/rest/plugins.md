@@ -25,6 +25,7 @@ When `MILADY_API_TOKEN` is set, include it as a `Bearer` token in the `Authoriza
 | Method | Path | Description |
 |--------|------|-------------|
 | POST | `/api/plugins/install` | Install a plugin from npm |
+| POST | `/api/plugins/update` | Update an installed plugin to a newer version |
 | POST | `/api/plugins/uninstall` | Uninstall a plugin |
 | POST | `/api/plugins/:id/eject` | Eject a plugin to a local copy |
 | POST | `/api/plugins/:id/sync` | Sync an ejected plugin back to npm |
@@ -210,6 +211,30 @@ Install a plugin package from npm. Plugin installation may take significant time
 |-------|------|----------|-------------|
 | `name` | string | Yes | npm package name |
 | `autoRestart` | boolean | No | Whether to restart the agent after install (defaults to `true`) |
+
+**Response**
+
+```json
+{
+  "ok": true,
+  "requiresRestart": true
+}
+```
+
+---
+
+### POST /api/plugins/update
+
+Update an installed plugin to a newer version. Uses the same install mechanism but targets an existing plugin for upgrade.
+
+**Request Body**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | Yes | npm package name |
+| `version` | string | No | Specific version to update to |
+| `stream` | string | No | Release stream (`latest` or `alpha`) |
+| `autoRestart` | boolean | No | Whether to restart the agent after update (defaults to `true`) |
 
 **Response**
 
