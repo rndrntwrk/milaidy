@@ -191,8 +191,19 @@ symlink_installed_packages_into_manifest_node_modules() {
         const path = require("node:path");
         const root = process.cwd();
         const store = path.join(root, "node_modules", ".bun");
-        const seen = new Set();
+        const packages = new Map();
         if (!fs.existsSync(store)) process.exit(0);
+
+        function compareVersions(left, right) {
+          const leftParts = String(left).split(/[^0-9]+/).filter(Boolean).map(Number);
+          const rightParts = String(right).split(/[^0-9]+/).filter(Boolean).map(Number);
+          const length = Math.max(leftParts.length, rightParts.length, 3);
+          for (let index = 0; index < length; index += 1) {
+            const diff = (leftParts[index] ?? 0) - (rightParts[index] ?? 0);
+            if (diff !== 0) return diff;
+          }
+          return String(left).localeCompare(String(right));
+        }
 
         for (const entry of fs.readdirSync(store).sort()) {
           const modulesDir = path.join(store, entry, "node_modules");
@@ -208,12 +219,19 @@ symlink_installed_packages_into_manifest_node_modules() {
                 const stat = fs.lstatSync(packageDir);
                 if (!stat.isDirectory() || stat.isSymbolicLink()) continue;
                 const pkg = JSON.parse(fs.readFileSync(path.join(packageDir, "package.json"), "utf8"));
-                if (typeof pkg.name !== "string" || seen.has(pkg.name)) continue;
-                seen.add(pkg.name);
-                process.stdout.write(`${pkg.name}\t${path.relative(root, packageDir)}\n`);
+                if (typeof pkg.name !== "string") continue;
+                const version = typeof pkg.version === "string" ? pkg.version : "0.0.0";
+                const current = packages.get(pkg.name);
+                if (!current || compareVersions(version, current.version) > 0) {
+                  packages.set(pkg.name, { version, packageDir });
+                }
               } catch {}
             }
           }
+        }
+
+        for (const [name, { packageDir }] of [...packages.entries()].sort(([left], [right]) => left.localeCompare(right))) {
+          process.stdout.write(`${name}\t${path.relative(root, packageDir)}\n`);
         }
       ')"
 
