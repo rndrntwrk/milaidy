@@ -926,10 +926,15 @@ jobs:
         if: matrix.platform.os == 'windows'
         shell: pwsh
         run: |
-          $tarball = Get-ChildItem -Path (Join-Path $PWD "apps/app/electrobun/artifacts") -File -Filter "*.tar.zst" -ErrorAction SilentlyContinue |
+          $artifactsDir = Join-Path $PWD "apps/app/electrobun/artifacts"
+          $tarball = Get-ChildItem -Path $artifactsDir -File -Filter "*.tar.zst" -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 1
+          $fallbackZip = Get-ChildItem -Path $artifactsDir -File -Filter "*.exe.zip" -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime -Descending |
             Select-Object -First 1
 
-          if (-not $tarball) {
+          if ((-not $tarball) -and ("${{ steps.build-electrobun-app.outputs.fallback }}" -ne "true" -or -not $fallbackZip)) {
             Write-Error "No .tar.zst archive found in artifacts"
             exit 1
           }
@@ -937,9 +942,15 @@ jobs:
           # Use a short path to avoid Windows MAX_PATH (260 char) limits
           # with deeply nested node_modules inside the app bundle
           $extractDir = "C:\m"
+          Remove-Item $extractDir -Recurse -Force -ErrorAction SilentlyContinue
           New-Item -ItemType Directory -Force -Path $extractDir | Out-Null
-          Write-Host "Extracting $($tarball.Name) to $extractDir ..."
-          tar -xf $tarball.FullName -C $extractDir
+          if ($tarball) {
+            Write-Host "Extracting $($tarball.Name) to $extractDir ..."
+            tar -xf $tarball.FullName -C $extractDir
+          } else {
+            Write-Host "Extracting draft fallback $($fallbackZip.Name) to $extractDir ..."
+            Expand-Archive -Path $fallbackZip.FullName -DestinationPath $extractDir -Force
+          }
           Write-Host "Extracted top-level structure:"
           Get-ChildItem -Path $extractDir -Recurse -Depth 3 | ForEach-Object { Write-Host "  $($_.FullName)" }
 

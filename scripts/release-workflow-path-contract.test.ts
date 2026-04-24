@@ -552,6 +552,17 @@ describe("release workflow path contract", () => {
     );
     expect(releaseElectrobun).toContain("Wrote fallback $dest");
     expect(releaseElectrobun).toContain(
+      "Extracting draft fallback $($fallbackZip.Name) to $extractDir",
+    );
+    expect(releaseElectrobun).toContain(
+      [
+        '"',
+        "$",
+        "{{ steps.build-electrobun-app.outputs.fallback }}",
+        '" -ne "true"',
+      ].join(""),
+    );
+    expect(releaseElectrobun).toContain(
       "steps.build-electrobun-app.outputs.fallback != 'true'",
     );
     expect(releaseElectrobun).toContain(
