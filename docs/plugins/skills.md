@@ -97,7 +97,7 @@ Shipped with the `@elizaos/plugin-agent-skills` package. These are automatically
 
 ### 2. Extra Directories
 
-Additional directories configured in `~/.milady/config.json`:
+Additional directories configured in `~/.milady/milady.json`:
 
 ```json
 {
@@ -176,7 +176,7 @@ Whether a skill is active is determined by this cascade (highest priority first)
 4. **`skills.allowBundled`** -- config allow list (whitelist mode: only listed skills load)
 5. **Default** -- enabled
 
-Configuration example in `~/.milady/config.json`:
+Configuration example in `~/.milady/milady.json`:
 
 ```json
 {

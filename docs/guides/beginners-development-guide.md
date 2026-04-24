@@ -53,6 +53,12 @@ Install dependencies:
 bun install
 ```
 
+Initialize the elizaOS submodule and link local packages (required for reading/editing runtime source):
+
+```bash
+bun run setup:upstreams
+```
+
 Recommended quick sanity checks:
 
 ```bash

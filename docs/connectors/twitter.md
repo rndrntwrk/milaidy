@@ -6,13 +6,15 @@ description: Connect your agent to Twitter/X using the @elizaos/plugin-twitter p
 
 Connect your agent to Twitter/X for social media engagement.
 
-<Warning>
-The `@elizaos/plugin-twitter` package is not included in the bundled plugin registry (`plugins.json`). It may be available as an upstream elizaOS community plugin. Install it manually from npm if available, or check the [elizaOS-plugins](https://github.com/elizaOS-plugins) GitHub organization.
-</Warning>
-
 ## Overview
 
-The Twitter connector is an external elizaOS plugin that bridges your agent to Twitter/X. If the package is installed, it is auto-enabled by the runtime when a valid token is detected in your connector configuration.
+The Twitter connector is an external elizaOS plugin that bridges your agent to Twitter/X. It must be installed from the registry before use, and then auto-enables when a valid token is detected in your connector configuration.
+
+## Installation
+
+```bash
+milady plugins install @elizaos/plugin-twitter
+```
 
 ## Package Info
 
@@ -53,9 +55,9 @@ To explicitly disable the connector even when a token is present:
 
 ## Auto-Enable Mechanism
 
-The `plugin-auto-enable.ts` module checks `connectors.twitter` in your config. If any of the fields `botToken`, `token`, or `apiKey` is truthy (and `enabled` is not explicitly `false`), the runtime automatically loads `@elizaos/plugin-twitter`.
+After installation, the `plugin-auto-enable.ts` module checks `connectors.twitter` in your config. If any of the fields `botToken`, `token`, or `apiKey` is truthy (and `enabled` is not explicitly `false`), the runtime automatically loads `@elizaos/plugin-twitter`.
 
-No environment variable is required to trigger auto-enable — it is driven entirely by the connector config object.
+No environment variable is required to trigger auto-enable — it is driven entirely by the connector config object. However, the plugin must first be installed via the registry (see [Installation](#installation) above).
 
 ## Environment Variables
 

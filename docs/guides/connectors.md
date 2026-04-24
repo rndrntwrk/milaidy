@@ -1,7 +1,7 @@
 ---
 title: "Platform Connectors"
 sidebarTitle: "Connectors"
-description: "Platform bridges for messaging platforms — 15 auto-enabled from connector config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, MS Teams, Google Chat, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, Blooio) plus registry-installable connectors (BlueBubbles, Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon, Zalo User)."
+description: "Platform bridges for 28 messaging platforms — 17 auto-enabled from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, BlueBubbles, Blooio, MS Teams, Google Chat, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, WeChat) plus 11 installable from the registry (Twitter, Lens, Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
 ---
 
 Connectors are platform bridges that allow your agent to communicate across messaging platforms and social networks. Each connector handles authentication, message routing, session management, and platform-specific features.
@@ -46,7 +46,7 @@ Connectors are platform bridges that allow your agent to communicate across mess
 
 ## Supported Platforms
 
-Connectors marked **Auto** load automatically when their config is present in `milady.json`. Connectors marked **Registry** must be installed first with `milady plugins install <package>`. Connectors marked **Upstream** are upstream elizaOS plugins not included in the bundled registry — install them manually from npm if available.
+Connectors marked **Auto** load automatically when their config is present in `milady.json`. Connectors marked **Registry** must be installed first with `milady plugins install <package>`.
 
 | Platform | Auth Method | DM Support | Group Support | Multi-Account | Availability |
 |----------|------------|------------|---------------|---------------|-------------|
@@ -59,16 +59,16 @@ Connectors marked **Auto** load automatically when their config is present in `m
 | Blooio | API key + webhook | Yes | Yes | No | Auto |
 | Microsoft Teams | App ID + password | Yes | Yes (teams/channels) | No | Auto |
 | Google Chat | Service account | Yes | Yes (spaces) | Yes | Auto |
-| Twitter | API keys + tokens | DMs | N/A | No | Upstream (not in bundled registry) |
+| Twitter | API keys + tokens | DMs | N/A | No | Registry |
 | Farcaster | Neynar API key + signer | Casts | Yes (channels) | No | Auto |
 | Twitch | Client ID + access token | Yes (chat) | Yes (channels) | No | Auto |
 | Mattermost | Bot token | Yes | Yes (channels) | No | Auto |
-| WeChat | Proxy API key + QR code | Yes | Yes | Yes | Upstream (not in bundled registry) |
+| WeChat | Proxy API key + QR code | Yes | Yes | Yes | Auto |
 | Matrix | Access token | Yes | Yes (rooms) | No | Auto |
 | Feishu / Lark | App ID + secret | Yes | Yes (group chats) | No | Auto |
 | Nostr | Private key (nsec/hex) | Yes (NIP-04) | N/A | No | Auto |
-| Lens | API key | Yes | N/A | No | Upstream (not in bundled registry) |
-| BlueBubbles | Server password | Yes | Yes | No | Registry |
+| Lens | API key | Yes | N/A | No | Registry |
+| BlueBubbles | Server password | Yes | Yes | No | Auto |
 | Bluesky | Account credentials | Posts | N/A | No | Registry |
 | Instagram | Username + password | DMs | N/A | No | Registry |
 | LINE | Channel access token + secret | Yes | Yes | No | Registry |
@@ -78,7 +78,6 @@ Connectors marked **Auto** load automatically when their config is present in `m
 | Gmail Watch | Service account / OAuth | N/A | N/A | No | Registry |
 | Nextcloud Talk | Server credentials | Yes | Yes (rooms) | No | Registry |
 | Tlon | Ship credentials | Yes | Yes (Urbit chats) | No | Registry |
-| Zalo User | Access token | Yes | Yes | No | Registry |
 
 ---
 
@@ -463,9 +462,7 @@ Connects to iMessage and SMS messaging via the Blooio service with signed webhoo
 
 ## Twitter
 
-<Warning>
-The `@elizaos/plugin-twitter` package is not included in the bundled plugin registry. It may be available as an upstream elizaOS plugin on npm. Install it manually if needed.
-</Warning>
+Install from the registry before configuring: `milady plugins install @elizaos/plugin-twitter`
 
 ### Setup Requirements
 
@@ -571,7 +568,7 @@ The `@elizaos/plugin-twitter` package is not included in the bundled plugin regi
 - Webhook-based inbound messages
 - Network-accessible (works from any machine, not just the Mac running Messages)
 
-**Note:** This connector is available from the plugin registry. Install it with `milady plugins install @elizaos/plugin-bluebubbles`.
+This connector ships bundled and auto-enables when `password` or `serverUrl` is configured.
 
 **Docs:** [BlueBubbles connector](/connectors/bluebubbles)
 
@@ -709,10 +706,6 @@ The `@elizaos/plugin-twitter` package is not included in the bundled plugin regi
 ---
 
 ## WeChat
-
-<Warning>
-The `@elizaos/plugin-wechat` package is not included in the bundled plugin registry. It may be available as an upstream elizaOS plugin on npm. Install it manually if needed.
-</Warning>
 
 Connects to WeChat via a third-party proxy service using personal account login.
 
@@ -1081,9 +1074,7 @@ Gmail Watch is enabled via the `features.gmailWatch` flag or environment variabl
 
 ## Lens
 
-<Warning>
-The `@elizaos/plugin-lens` package is not included in the bundled plugin registry. It may be available as an upstream elizaOS plugin on npm. Install it manually if needed.
-</Warning>
+Install from the registry before configuring: `milady plugins install @elizaos/plugin-lens`
 
 **Plugin:** `@elizaos/plugin-lens`
 
