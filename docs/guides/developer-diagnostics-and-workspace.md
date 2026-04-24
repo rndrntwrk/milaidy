@@ -14,7 +14,7 @@ This guide is for **people building Milady from source** — editors, agents, an
 
 **Scope:** This is **diagnostics**, not hiding failures. Serious resolution errors still surface normally.
 
-**Related code:** `packages/agent/src/runtime/plugin-collector.ts`, `packages/agent/src/runtime/plugin-resolver.ts`. See also [Plugin resolution and NODE_PATH](../plugin-resolution-and-node-path.md#optional-plugins-why-was-this-package-in-the-load-set).
+**Related code:** `eliza/packages/agent/src/runtime/plugin-collector.ts`, `eliza/packages/agent/src/runtime/plugin-resolver.ts`. See also [Plugin resolution and NODE_PATH](../plugin-resolution-and-node-path.md#optional-plugins-why-was-this-package-in-the-load-set).
 
 ## Browser / stagehand server path
 
@@ -24,7 +24,7 @@ This guide is for **people building Milady from source** — editors, agents, an
 
 **Operational note:** If you do not use browser automation, absence of stagehand is **expected**; messages are intentionally concise at debug level so daily dev is not spammed.
 
-**Related:** `scripts/link-browser-server.mjs`, `packages/agent/src/runtime/eliza.ts` (`ensureBrowserServerLink`, `findPluginBrowserStagehandDir`).
+**Related:** `scripts/link-browser-server.mjs`, `eliza/packages/agent/src/runtime/eliza.ts` (`ensureBrowserServerLink`, `findPluginBrowserStagehandDir`).
 
 ## Life-ops schema migrations (PGlite)
 

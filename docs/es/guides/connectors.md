@@ -1365,7 +1365,7 @@ Las opciones de `dmPolicy` son:
 **Fallos generales de conectores:**
 
 - El plugin del conector no se carga:
-  Verificar el mapeo de ID del conector en `packages/agent/src/config/plugin-auto-enable.ts` (en el submódulo `eliza`), la disponibilidad del plugin y las anulaciones de `plugins.entries`. La capa de habilitación automática mapea las claves de configuración del conector a nombres de paquetes de plugins — una discrepancia significa que el plugin se omite silenciosamente.
+  Verificar el mapeo de ID del conector en `eliza/packages/agent/src/config/plugin-auto-enable.ts` (en el submódulo upstream de elizaOS), la disponibilidad del plugin y las anulaciones de `plugins.entries`. La capa de habilitación automática mapea las claves de configuración del conector a nombres de paquetes de plugins — una discrepancia significa que el plugin se omite silenciosamente.
 - La autenticación tiene éxito pero no llegan mensajes:
   Verificar la configuración de webhook/socket de la plataforma y las puertas de política (`dmPolicy`, `groupPolicy`). Para conectores basados en webhook, confirmar que la URL de callback es accesible públicamente.
 - Secretos de conector mal enrutados:

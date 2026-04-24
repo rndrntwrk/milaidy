@@ -1365,7 +1365,7 @@ Les options de `dmPolicy` sont :
 **Défaillances générales des connecteurs :**
 
 - Le plugin du connecteur ne se charge pas :
-  Vérifiez le mappage des ID de connecteur dans `packages/agent/src/config/plugin-auto-enable.ts` (dans le sous-module `eliza`), la disponibilité du plugin et les surcharges de `plugins.entries`. La couche d'activation automatique mappe les clés de configuration du connecteur aux noms de packages de plugins — une incohérence signifie que le plugin est silencieusement ignoré.
+  Vérifiez le mappage des ID de connecteur dans `eliza/packages/agent/src/config/plugin-auto-enable.ts` (dans le sous-module upstream elizaOS), la disponibilité du plugin et les surcharges de `plugins.entries`. La couche d'activation automatique mappe les clés de configuration du connecteur aux noms de packages de plugins — une incohérence signifie que le plugin est silencieusement ignoré.
 - L'authentification réussit mais aucun message n'arrive :
   Vérifiez les paramètres de webhook/socket de la plateforme et les portes de politique (`dmPolicy`, `groupPolicy`). Pour les connecteurs basés sur les webhooks, confirmez que l'URL de rappel est publiquement accessible.
 - Secrets de connecteur mal routés :

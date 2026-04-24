@@ -1362,7 +1362,7 @@ Gmail Watch 通过 `features.gmailWatch` 标志或环境变量启用，而非 `c
 **通用连接器故障：**
 
 - 连接器插件未加载：
-  检查 `packages/agent/src/config/plugin-auto-enable.ts`（在 `eliza` 子模块中）中的连接器 ID 映射、插件可用性以及 `plugins.entries` 覆盖。自动启用层将连接器配置键映射到插件包名 — 不匹配意味着插件被静默跳过。
+  检查 `eliza/packages/agent/src/config/plugin-auto-enable.ts`（在上游 elizaOS 子模块中）中的连接器 ID 映射、插件可用性以及 `plugins.entries` 覆盖。自动启用层将连接器配置键映射到插件包名 — 不匹配意味着插件被静默跳过。
 - 认证成功但没有消息到达：
   检查平台 webhook/socket 设置和策略门控（`dmPolicy`、`groupPolicy`）。对于基于 webhook 的连接器，确认回调 URL 可公开访问。
 - 连接器密钥路由错误：
