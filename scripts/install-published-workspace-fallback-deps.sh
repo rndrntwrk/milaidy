@@ -148,12 +148,11 @@ symlink_installed_packages_into_manifest_node_modules() {
     }
   ' "$manifest")"
 
-  while IFS= read -r package_name; do
-    [[ -z "$package_name" ]] && continue
-
-    local source_path="node_modules/$package_name"
+  link_package_into_target_node_modules() {
+    local package_name="$1"
+    local source_path="$2"
     local target_path="$target_node_modules/$package_name"
-    [[ -e "$source_path" || -L "$source_path" ]] || continue
+    [[ -e "$source_path" || -L "$source_path" ]] || return 0
 
     mkdir -p "$(dirname "$target_path")"
     case "$(uname -s)" in
@@ -177,7 +176,52 @@ symlink_installed_packages_into_manifest_node_modules() {
         ln -sfn "$(pwd)/$source_path" "$target_path"
         ;;
     esac
+  }
+
+  while IFS= read -r package_name; do
+    [[ -z "$package_name" ]] && continue
+    link_package_into_target_node_modules "$package_name" "node_modules/$package_name"
   done <<< "$entries"
+
+  case "$(uname -s)" in
+    MINGW*|MSYS*|CYGWIN*)
+      local bun_store_entries
+      bun_store_entries="$(node -e '
+        const fs = require("node:fs");
+        const path = require("node:path");
+        const root = process.cwd();
+        const store = path.join(root, "node_modules", ".bun");
+        const seen = new Set();
+        if (!fs.existsSync(store)) process.exit(0);
+
+        for (const entry of fs.readdirSync(store).sort()) {
+          const modulesDir = path.join(store, entry, "node_modules");
+          if (!fs.existsSync(modulesDir)) continue;
+          for (const topLevel of fs.readdirSync(modulesDir).sort()) {
+            if (topLevel.startsWith(".")) continue;
+            const topLevelPath = path.join(modulesDir, topLevel);
+            const packageDirs = topLevel.startsWith("@")
+              ? fs.readdirSync(topLevelPath).sort().map((name) => path.join(topLevelPath, name))
+              : [topLevelPath];
+            for (const packageDir of packageDirs) {
+              try {
+                const pkg = JSON.parse(fs.readFileSync(path.join(packageDir, "package.json"), "utf8"));
+                if (typeof pkg.name !== "string" || seen.has(pkg.name)) continue;
+                seen.add(pkg.name);
+                process.stdout.write(`${pkg.name}\t${path.relative(root, packageDir)}\n`);
+              } catch {}
+            }
+          }
+        }
+      ')"
+
+      while IFS=$'\t' read -r package_name source_path; do
+        [[ -z "$package_name" || -z "$source_path" ]] && continue
+        [[ -e "$target_node_modules/$package_name" || -L "$target_node_modules/$package_name" ]] && continue
+        link_package_into_target_node_modules "$package_name" "$source_path"
+      done <<< "$bun_store_entries"
+      ;;
+  esac
 }
 
 packages=(

@@ -497,6 +497,8 @@ describe("release workflow path contract", () => {
     expect(fallbackScript).toContain("MINGW*|MSYS*|CYGWIN*)");
     expect(fallbackScript).toContain('MSYS2_ARG_CONV_EXCL="*"');
     expect(fallbackScript).toContain("mklink /J");
+    expect(fallbackScript).toContain("bun_store_entries");
+    expect(fallbackScript).toContain('"node_modules", ".bun"');
     expect(fallbackScript).toContain('cp -LR "$source_path" "$target_path"');
   });
 
