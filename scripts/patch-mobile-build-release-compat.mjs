@@ -17,6 +17,11 @@ const androidGradleWrappers = [
   "apps/app/android/gradle/wrapper/gradle-wrapper.properties",
 ];
 
+const runMobileBuildPath =
+  "eliza/packages/app-core/scripts/run-mobile-build.mjs";
+const runMobileBuildPatchMarker =
+  "function patchAndroidGradleWrapperForReleaseCompat()";
+
 export function patchGradleWrapperText(source) {
   return source.replace(
     /^distributionUrl=.*$/m,
@@ -41,6 +46,49 @@ export function patchLlamaBuildGradleText(source) {
       /\n\s*\/\/ Disable clean tasks[^\n]*\n\s*tasks\.whenTaskAdded\s*\{\s*task\s*->\s*\n\s*if\s*\(\s*task\.name\.contains\(["']Clean["']\)\s*&&\s*task\.name\.contains\(["']Debug["']\)\s*\)\s*\{\s*\n\s*task\.enabled\s*=\s*false\s*\n\s*}\s*\n\s*}\s*/g,
       "\n",
     );
+}
+
+export function patchRunMobileBuildText(source) {
+  if (source.includes(runMobileBuildPatchMarker)) {
+    return source;
+  }
+
+  const anchor = "function patchAndroidGradle() {\n";
+  if (!source.includes(anchor)) {
+    throw new Error(
+      "Unable to patch run-mobile-build.mjs: patchAndroidGradle anchor not found.",
+    );
+  }
+
+  const distributionLiteral = JSON.stringify(
+    `distributionUrl=${GRADLE_DISTRIBUTION}`,
+  );
+
+  return source.replace(
+    anchor,
+    `function patchAndroidGradleWrapperForReleaseCompat() {
+  const wrapperPath = path.join(
+    androidDir,
+    "gradle",
+    "wrapper",
+    "gradle-wrapper.properties",
+  );
+  if (!fs.existsSync(wrapperPath)) return;
+  const current = fs.readFileSync(wrapperPath, "utf8");
+  const patched = current.replace(
+    /^distributionUrl=.*$/m,
+    ${distributionLiteral},
+  );
+  if (patched !== current) {
+    fs.writeFileSync(wrapperPath, patched, "utf8");
+    console.log("[mobile-build] Patched Android Gradle wrapper for AGP 9.");
+  }
+}
+
+function patchAndroidGradle() {
+  patchAndroidGradleWrapperForReleaseCompat();
+`,
+  );
 }
 
 function collectBunPackageGradlePaths(root, packageName) {
@@ -126,6 +174,28 @@ export function patchReleaseMobileBuildCompat({
   if (llamaCount === 0) {
     warn(
       "[mobile-release-compat] llama-cpp-capacitor Gradle file was not installed; skipped package patch.",
+    );
+  }
+
+  const mobileBuildScriptPath = path.join(root, runMobileBuildPath);
+  if (!fs.existsSync(mobileBuildScriptPath)) {
+    warn(
+      `[mobile-release-compat] ${runMobileBuildPath} was not present; skipped generated Android wrapper hook.`,
+    );
+    return;
+  }
+
+  const currentMobileBuildScript = fs.readFileSync(
+    mobileBuildScriptPath,
+    "utf8",
+  );
+  const patchedMobileBuildScript = patchRunMobileBuildText(
+    currentMobileBuildScript,
+  );
+  if (patchedMobileBuildScript !== currentMobileBuildScript) {
+    fs.writeFileSync(mobileBuildScriptPath, patchedMobileBuildScript, "utf8");
+    log(
+      `[mobile-release-compat] Patched ${runMobileBuildPath} to re-align generated Android Gradle wrappers`,
     );
   }
 }

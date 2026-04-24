@@ -20,6 +20,7 @@ const files = {
   restoreScript: "scripts/restore-local-eliza-workspace.mjs",
   elizaCiPatchScript: "scripts/apply-eliza-ci-patches.mjs",
   elizaCiPatch: "patches/eliza/ci-release-contracts.patch",
+  localElizaCiOverridesScript: "scripts/build-local-eliza-ci-overrides.mjs",
   publishedFallbackScript:
     "scripts/install-published-workspace-fallback-deps.sh",
   regressionMatrixScript:
@@ -57,6 +58,8 @@ const requiredActionSnippets = [
   "name: Validate published-only install mode",
   "disable-local-eliza-workspace requires an install-command with --no-frozen-lockfile",
   "run: bash scripts/install-published-workspace-fallback-deps.sh",
+  "name: Build local eliza CI override packages",
+  "run: node scripts/build-local-eliza-ci-overrides.mjs",
 ];
 
 const forbiddenActionSnippets = ["bun add --no-save --dev"];
@@ -112,6 +115,16 @@ assertContainsAll(
 assertCiPreReviewBootstrap(ciWorkflowText, failures);
 assertContainsAll(actionText, files.action, requiredActionSnippets, failures);
 assertContainsNone(actionText, files.action, forbiddenActionSnippets, failures);
+assertOrdered(
+  actionText,
+  files.action,
+  [
+    "run: bash scripts/install-published-workspace-fallback-deps.sh",
+    "run: node scripts/build-local-eliza-ci-overrides.mjs",
+    "name: Run repository postinstall patches",
+  ],
+  failures,
+);
 assertDisabledWorkspaceInstallsUseNoFrozen(allWorkflowPaths, failures);
 
 const regressionMatrixCommand =
@@ -233,6 +246,26 @@ function assertContainsNone(text, relativePath, snippets, targetFailures) {
         `${relativePath} still contains forbidden bootstrap snippet: ${snippet}`,
       );
     }
+  }
+}
+
+function assertOrdered(text, relativePath, snippets, targetFailures) {
+  let lastIndex = -1;
+  for (const snippet of snippets) {
+    const index = text.indexOf(snippet);
+    if (index === -1) {
+      targetFailures.push(
+        `${relativePath} is missing required ordered snippet: ${snippet}`,
+      );
+      continue;
+    }
+    if (index < lastIndex) {
+      targetFailures.push(
+        `${relativePath} has bootstrap snippets out of order: ${snippets.join(" -> ")}`,
+      );
+      return;
+    }
+    lastIndex = index;
   }
 }
 

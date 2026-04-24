@@ -20,6 +20,7 @@ const canonicalElectrobunDir = path.join(
 export const releaseContractTests = [
   "scripts/release-workflow-path-contract.test.ts",
   "scripts/run-release-contract-suite.test.ts",
+  "scripts/build-local-eliza-ci-overrides.test.ts",
   "scripts/patch-mobile-build-release-compat.test.ts",
   "scripts/patch-release-check-pack-fallback.test.ts",
   "scripts/electrobun-pr-workflow-contract.test.ts",

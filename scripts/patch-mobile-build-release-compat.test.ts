@@ -4,6 +4,7 @@ import {
   GRADLE_DISTRIBUTION,
   patchGradleWrapperText,
   patchLlamaBuildGradleText,
+  patchRunMobileBuildText,
 } from "./patch-mobile-build-release-compat.mjs";
 
 describe("patch-mobile-build-release-compat", () => {
@@ -48,5 +49,31 @@ android {
     );
     expect(patched).not.toContain("tasks.whenTaskAdded");
     expect(patched).not.toContain("proguard-android.txt");
+  });
+
+  it("patches run-mobile-build so generated Android wrappers are aligned after Capacitor sync", () => {
+    const source = `
+import fs from "node:fs";
+import path from "node:path";
+
+const androidDir = path.join("apps", "app", "android");
+
+function patchAndroidGradle() {
+  console.log("patch Android project");
+}
+`;
+
+    const patched = patchRunMobileBuildText(source);
+
+    expect(patched).toContain(
+      "function patchAndroidGradleWrapperForReleaseCompat()",
+    );
+    expect(patched).toContain(
+      JSON.stringify(`distributionUrl=${GRADLE_DISTRIBUTION}`),
+    );
+    expect(patched).toContain(
+      "patchAndroidGradleWrapperForReleaseCompat();\n  console.log",
+    );
+    expect(patchRunMobileBuildText(patched)).toBe(patched);
   });
 });

@@ -262,6 +262,10 @@ describe("release workflow path contract", () => {
     );
     expect(mobileCompatScript).toContain("gradle-9.4.1-all.zip");
     expect(mobileCompatScript).toContain("llama-cpp-capacitor");
+    expect(mobileCompatScript).toContain("patchRunMobileBuildText");
+    expect(mobileCompatScript).toContain(
+      "patchAndroidGradleWrapperForReleaseCompat",
+    );
     expect(mobileCompatScript).toContain("tasks\\.whenTaskAdded");
     expect(mobileCompatScript).toContain(
       "node_modules/@capacitor/android/capacitor/gradle/wrapper/gradle-wrapper.properties",
