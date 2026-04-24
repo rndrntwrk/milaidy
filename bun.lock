@@ -345,6 +345,7 @@
         "drizzle-orm": "^0.45.1",
         "lucide-react": "^1.0.0",
         "sharp": "^0.34.5",
+        "telegram": "2.17.4",
       },
       "peerDependencies": {
         "react": "*",
@@ -456,7 +457,7 @@
     },
     "eliza/packages/agent": {
       "name": "@elizaos/agent",
-      "version": "2.0.0-alpha.331",
+      "version": "2.0.0-alpha.333",
       "bin": {
         "eliza-autonomous": "./src/bin.ts",
       },
@@ -527,7 +528,7 @@
     },
     "eliza/packages/app-core": {
       "name": "@elizaos/app-core",
-      "version": "2.0.0-alpha.331",
+      "version": "2.0.0-alpha.333",
       "dependencies": {
         "@capacitor/barcode-scanner": "^3.0.0",
         "@capacitor/core": "8.3.1",
@@ -546,6 +547,7 @@
         "@elizaos/app-training": "workspace:*",
         "@elizaos/app-vincent": "workspace:*",
         "@elizaos/core": "workspace:*",
+        "@elizaos/plugin-browser-bridge": "workspace:*",
         "@elizaos/plugin-wechat": "workspace:*",
         "@elizaos/shared": "workspace:*",
         "@elizaos/ui": "workspace:*",
@@ -632,7 +634,7 @@
     },
     "eliza/packages/elizaos": {
       "name": "elizaos",
-      "version": "2.0.0-alpha.331",
+      "version": "2.0.0-alpha.333",
       "bin": {
         "elizaos": "./dist/cli.js",
       },
@@ -649,7 +651,7 @@
     },
     "eliza/packages/interop": {
       "name": "@elizaos/interop",
-      "version": "2.0.0-alpha.331",
+      "version": "2.0.0-alpha.333",
       "dependencies": {
         "@elizaos/core": "workspace:*",
       },
@@ -979,11 +981,11 @@
     },
     "eliza/packages/rust": {
       "name": "@elizaos/rust",
-      "version": "2.0.0-alpha.331",
+      "version": "2.0.0-alpha.333",
     },
     "eliza/packages/scenario-runner": {
       "name": "@elizaos/scenario-runner",
-      "version": "2.0.0-alpha.331",
+      "version": "2.0.0-alpha.333",
       "bin": {
         "milady-scenarios": "./bin/milady-scenarios",
       },
@@ -999,18 +1001,18 @@
     },
     "eliza/packages/scenario-schema": {
       "name": "@elizaos/scenario-schema",
-      "version": "2.0.0-alpha.331",
+      "version": "2.0.0-alpha.333",
     },
     "eliza/packages/schemas": {
       "name": "@elizaos/schemas",
-      "version": "2.0.0-alpha.331",
+      "version": "2.0.0-alpha.333",
       "devDependencies": {
         "@bufbuild/buf": "^1.47.2",
       },
     },
     "eliza/packages/shared": {
       "name": "@elizaos/shared",
-      "version": "2.0.0-alpha.331",
+      "version": "2.0.0-alpha.333",
       "dependencies": {
         "@elizaos/core": "workspace:*",
         "zod": "^4.3.6",
@@ -1026,7 +1028,7 @@
     },
     "eliza/packages/skills": {
       "name": "@elizaos/skills",
-      "version": "2.0.0-alpha.331",
+      "version": "2.0.0-alpha.333",
       "dependencies": {
         "@elizaos/core": "workspace:*",
         "yaml": "^2.8.2",
@@ -1037,7 +1039,7 @@
     },
     "eliza/packages/typescript": {
       "name": "@elizaos/core",
-      "version": "2.0.0-alpha.331",
+      "version": "2.0.0-alpha.333",
       "dependencies": {
         "@ai-sdk/anthropic": "^3.0.13",
         "@ai-sdk/google": "^3.0.8",
@@ -1093,7 +1095,7 @@
     },
     "eliza/packages/ui": {
       "name": "@elizaos/ui",
-      "version": "2.0.0-alpha.331",
+      "version": "2.0.0-alpha.333",
       "dependencies": {
         "@radix-ui/react-checkbox": "^1.3.3",
         "@radix-ui/react-dialog": "^1.1.15",
@@ -1135,7 +1137,7 @@
       },
       "devDependencies": {
         "@electric-sql/pglite": "^0.3.9",
-        "@elizaos/core": "workspace:*",
+        "@elizaos/core": "alpha",
         "@types/node": "^25.2.3",
         "bun-types": "latest",
         "git-workspace-service": "0.4.5",
@@ -1143,7 +1145,7 @@
         "typescript": "^6.0.0",
       },
       "peerDependencies": {
-        "@elizaos/core": "workspace:*",
+        "@elizaos/core": "alpha",
         "git-workspace-service": "0.4.5",
         "pty-manager": "1.11.0",
       },
@@ -2019,7 +2021,7 @@
       "dependencies": {
         "@electric-sql/pglite": "^0.3.3",
         "@elizaos/core": "alpha",
-        "@neondatabase/serverless": "^1.1.0",
+        "@neondatabase/serverless": "^1.0.2",
         "dotenv": "^17.2.3",
         "drizzle-kit": "^0.31.8",
         "drizzle-orm": "^0.45.1",
@@ -4852,7 +4854,7 @@
 
     "levn": ["levn@0.4.1", "", { "dependencies": { "prelude-ls": "^1.2.1", "type-check": "~0.4.0" } }, "sha512-+bT2uH4E5LGE7h/n3evcS/sQlJXCpIp6ym8OWJ5eV6+67Dsql/LaaT7qJBAt2rzfoa/5QBGBhxDix1dMt2kQKQ=="],
 
-    "libsignal": ["@whiskeysockets/libsignal-node@github:whiskeysockets/libsignal-node#1c30d7d", { "dependencies": { "curve25519-js": "^0.0.4", "protobufjs": "6.8.8" } }, "WhiskeySockets-libsignal-node-1c30d7d", "sha512-5q4/OuDQaMYx3RpDqMqS3WYyqjrsSMpU8ipQZtpYnm5l6DwNoLV9oIYMDK0NILKW+tyk3tVCIA11BMYQ+A1+GA=="],
+    "libsignal": ["@whiskeysockets/libsignal-node@github:whiskeysockets/libsignal-node#1c30d7d", { "dependencies": { "curve25519-js": "^0.0.4", "protobufjs": "6.8.8" } }, "WhiskeySockets-libsignal-node-1c30d7d"],
 
     "libsodium": ["libsodium@0.7.16", "", {}, "sha512-3HrzSPuzm6Yt9aTYCDxYEG8x8/6C0+ag655Y7rhhWZM9PT4NpdnbqlzXhGZlDnkgR6MeSTnOt/VIyHLs9aSf+Q=="],
 
