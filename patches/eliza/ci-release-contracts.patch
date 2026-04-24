@@ -1,16 +1,20 @@
-diff --git a/apps/app-lifeops/src/components/LifeOpsPaymentsSection.tsx b/apps/app-lifeops/src/components/LifeOpsPaymentsSection.tsx
-index b1ae39caea..1026699c5b 100644
---- a/apps/app-lifeops/src/components/LifeOpsPaymentsSection.tsx
-+++ b/apps/app-lifeops/src/components/LifeOpsPaymentsSection.tsx
-@@ -53,7 +53,7 @@ function cadenceLabel(cadence: LifeOpsRecurringCharge["cadence"]): string {
+diff --git a/packages/app-core/deploy/cloud-agent-template/package.json b/packages/app-core/deploy/cloud-agent-template/package.json
+index 1c9cff1486..0f49416e6f 100644
+--- a/packages/app-core/deploy/cloud-agent-template/package.json
++++ b/packages/app-core/deploy/cloud-agent-template/package.json
+@@ -6,9 +6,9 @@
+     "start": "tsx entrypoint.ts"
+   },
+   "dependencies": {
+-    "@elizaos/core": "2.0.0-alpha.339",
+-    "@elizaos/plugin-sql": "2.0.0-alpha.19",
+-    "@elizaos/plugin-elizacloud": "2.0.0-alpha.8",
++    "@elizaos/core": "workspace:*",
++    "@elizaos/plugin-sql": "workspace:*",
++    "@elizaos/plugin-elizacloud": "workspace:*",
+     "tsx": "4.21.0"
    }
  }
- 
--export function LifeOpsPaymentsSection(): JSX.Element {
-+export function LifeOpsPaymentsSection(): JSX.Element | null {
-   const [dashboard, setDashboard] = useState<LifeOpsPaymentsDashboard | null>(
-     null,
-   );
 diff --git a/packages/app-core/platforms/electrobun/scripts/stage-macos-release-artifacts.sh b/packages/app-core/platforms/electrobun/scripts/stage-macos-release-artifacts.sh
 index 74c284e2df..60998fdf58 100644
 --- a/packages/app-core/platforms/electrobun/scripts/stage-macos-release-artifacts.sh
@@ -156,7 +160,7 @@ index 8652a766ac..c6257d3430 100644
  }
  
 diff --git a/packages/app-core/scripts/build-patched-electrobun-cli.mjs b/packages/app-core/scripts/build-patched-electrobun-cli.mjs
-index 54eea37026..83dac0f7e2 100644
+index 54eea37026..18df9837c7 100644
 --- a/packages/app-core/scripts/build-patched-electrobun-cli.mjs
 +++ b/packages/app-core/scripts/build-patched-electrobun-cli.mjs
 @@ -3,6 +3,7 @@
@@ -254,7 +258,7 @@ index 54eea37026..83dac0f7e2 100644
      patched = insertAfterAnchor(
        patched,
        "const _MAX_CHUNK_SIZE = 1024 * 2;",
-@@ -121,24 +164,82 @@ export function patchCliSourceText(original) {
+@@ -121,24 +164,129 @@ export function patchCliSourceText(original) {
      );
    }
  
@@ -302,6 +306,29 @@ index 54eea37026..83dac0f7e2 100644
 +    const bunBuildReplacement = [
 +      '		console.log(`[electrobun-build] Bun entry: ${bunSource}`);',
 +      '		console.log(`[electrobun-build] Bun outdir: ${bunDestFolder}`);',
++      '		const runBunCliBuildFallback = (reason: string) => {',
++      '			console.error(`[electrobun-build] Retrying app entry build with Bun CLI fallback after ${reason}`);',
++      '			const fallbackResult = Bun.spawnSync([',
++      '				targetPaths.BUN_BINARY,',
++      '				"build",',
++      '				bunSource,',
++      '				"--target=bun",',
++      '				"--outdir",',
++      '				bunDestFolder,',
++      '			], {',
++      '				cwd: projectRoot,',
++      '				env: process.env,',
++      '				stdout: "inherit",',
++      '				stderr: "inherit",',
++      '			});',
++      '			const fallbackExitCode = fallbackResult.exitCode ?? 1;',
++      '			if (fallbackExitCode !== 0) {',
++      '				console.error(`[electrobun-build] Bun CLI fallback failed with exit code ${fallbackExitCode}`);',
++      '				return false;',
++      '			}',
++      '			console.log("[electrobun-build] Bun CLI fallback succeeded");',
++      '			return true;',
++      '		};',
 +      '		let buildResult;',
 +      '		try {',
 +      '			buildResult = await Bun.build({',
@@ -314,13 +341,37 @@ index 54eea37026..83dac0f7e2 100644
 +      '		} catch (error) {',
 +      '			console.error("[electrobun-build] Bun.build threw while bundling app entry");',
 +      '			console.error(error instanceof Error ? error.stack || error.message : String(error));',
-+      '			throw error;',
++      '			if (!runBunCliBuildFallback("Bun.build throw")) {',
++      '				throw error;',
++      '			}',
++      '			buildResult = { success: true, logs: [] };',
 +      '		}',
 +    ].join(eol);
 +    if (!patched.includes(bunBuildStart)) {
 +      throw new Error("Could not find Bun.build app-entry block");
 +    }
 +    patched = patched.replace(bunBuildStart, bunBuildReplacement);
++
++    const bunBuildFailure = [
++      "		if (!buildResult.success) {",
++      '			console.error("failed to build", bunSource);',
++      "			printBuildLogs(buildResult.logs);",
++      '			throw new Error("Build failed: bun build failed");',
++      "		}",
++    ].join(eol);
++    const bunBuildFailureReplacement = [
++      "		if (!buildResult.success) {",
++      '			console.error("failed to build", bunSource);',
++      "			printBuildLogs(buildResult.logs);",
++      '			if (!runBunCliBuildFallback("Bun.build unsuccessful result")) {',
++      '				throw new Error("Build failed: bun build failed");',
++      "			}",
++      "		}",
++    ].join(eol);
++    if (!patched.includes(bunBuildFailure)) {
++      throw new Error("Could not find Bun.build app-entry failure block");
++    }
++    patched = patched.replace(bunBuildFailure, bunBuildFailureReplacement);
 +  }
 +
 +  const terseBuildCatch = [
@@ -348,7 +399,7 @@ index 54eea37026..83dac0f7e2 100644
    return patched;
  }
  
-@@ -175,6 +276,7 @@ function main() {
+@@ -175,6 +323,7 @@ function main() {
    const installedElectrobunDir = process.argv[2]
      ? path.resolve(process.argv[2])
      : resolveElectrobunDir();
@@ -356,7 +407,7 @@ index 54eea37026..83dac0f7e2 100644
    const installedManifestPath = path.join(
      installedElectrobunDir,
      "package.json",
-@@ -184,14 +286,30 @@ function main() {
+@@ -184,14 +333,30 @@ function main() {
    );
    const electrobunVersion = installedManifest.version;
    const installedElectrobunRequire = createRequire(installedManifestPath);
@@ -393,7 +444,7 @@ index 54eea37026..83dac0f7e2 100644
  
    const tempRoot = path.join(
      process.env.RUNNER_TEMP ?? os.tmpdir(),
-@@ -239,7 +357,7 @@ function main() {
+@@ -239,7 +404,7 @@ function main() {
        "build",
        "src/cli/index.ts",
        "--compile",
@@ -402,7 +453,7 @@ index 54eea37026..83dac0f7e2 100644
        "--outfile",
        "src/cli/build/electrobun",
      ],
-@@ -257,7 +375,7 @@ function main() {
+@@ -257,7 +422,7 @@ function main() {
      "src",
      "cli",
      "build",
@@ -411,7 +462,7 @@ index 54eea37026..83dac0f7e2 100644
    );
    if (!existsSync(compiledCliPath)) {
      fail(`Expected compiled CLI at ${compiledCliPath}`);
-@@ -266,18 +384,22 @@ function main() {
+@@ -266,18 +431,22 @@ function main() {
    const installedBinPath = path.join(
      installedElectrobunDir,
      "bin",
@@ -437,10 +488,10 @@ index 54eea37026..83dac0f7e2 100644
    console.log(
      `[build-patched-electrobun-cli] Installed patched CLI to ${installedBinPath}`,
 diff --git a/packages/app-core/scripts/playwright-ui-smoke-api-stub.mjs b/packages/app-core/scripts/playwright-ui-smoke-api-stub.mjs
-index 8ba6eb9670..a7a6ea6b9c 100644
+index b130d993dd..00a4e4a827 100644
 --- a/packages/app-core/scripts/playwright-ui-smoke-api-stub.mjs
 +++ b/packages/app-core/scripts/playwright-ui-smoke-api-stub.mjs
-@@ -520,6 +520,83 @@ function streamSettings(payload = {}) {
+@@ -638,6 +638,83 @@ function streamSettings(payload = {}) {
    };
  }
  
@@ -524,7 +575,7 @@ index 8ba6eb9670..a7a6ea6b9c 100644
  const sockets = new Set();
  const server = http.createServer(async (req, res) => {
    const url = new URL(
-@@ -1083,14 +1160,95 @@ const server = http.createServer(async (req, res) => {
+@@ -1251,14 +1328,95 @@ const server = http.createServer(async (req, res) => {
      url.pathname === "/api/lifeops/connectors/google/status"
    ) {
      sendJson(req, res, 200, {
@@ -624,7 +675,7 @@ index 8ba6eb9670..a7a6ea6b9c 100644
      req.method === "GET" &&
      (url.pathname === "/api/browser-bridge/companions" ||
 diff --git a/packages/app-core/scripts/release-check.ts b/packages/app-core/scripts/release-check.ts
-index 6da229a550..8450d7606e 100755
+index d82707249d..fd8886b3b1 100755
 --- a/packages/app-core/scripts/release-check.ts
 +++ b/packages/app-core/scripts/release-check.ts
 @@ -58,7 +58,7 @@ function resolveOrchestratorPluginPackageJsonPath() {
@@ -648,7 +699,7 @@ index 6da229a550..8450d7606e 100755
    "node eliza/packages/app-core/scripts/desktop-build.mjs package --env=$" +
      "{{ needs.prepare.outputs.env }}",
    "ELIZA_ELECTROBUN_NOTARIZE: 0",
-@@ -191,7 +192,9 @@ const _requiredPatchedElectrobunCliSnippets = [
+@@ -191,7 +192,11 @@ const _requiredPatchedElectrobunCliSnippets = [
    'writeGitHubEnv("ELECTROBUN_RCEDIT_PACKAGE_JSON", resolvedRceditPackageJson);',
    'const overridePackageJson = process.env["ELECTROBUN_RCEDIT_PACKAGE_JSON"];',
    'const overrideEntry = overrideRequire.resolve("rcedit");',
@@ -656,10 +707,12 @@ index 6da229a550..8450d7606e 100755
 +  "function resolveBuildTarget(value) {",
 +  "--target=${buildTarget.bunTarget}",
 +  "[electrobun-build] Bun entry:",
++  "targetPaths.BUN_BINARY",
++  "Bun CLI fallback succeeded",
    "const installedBinPath = path.join(",
    "const installedCachePath = path.join(",
  ];
-@@ -239,7 +242,7 @@ const requiredElectrobunPrWorkflowSnippets = [
+@@ -239,7 +244,7 @@ const requiredElectrobunPrWorkflowSnippets = [
    "workflow_dispatch:",
    "permissions:",
    "contents: read",
@@ -668,9 +721,9 @@ index 6da229a550..8450d7606e 100755
    "name: Release Workflow Contract",
    "bun install --ignore-scripts",
    "bun run postinstall",
-@@ -903,8 +906,11 @@ function assertElectrobunConfigHasPostWrapSigner() {
- function assertMacArtifactStagerLooksCorrect() {
-   const script = readElectrobunFile("scripts", "stage-macos-release-artifacts.sh");
+@@ -923,8 +928,11 @@ function assertMacArtifactStagerLooksCorrect() {
+     "stage-macos-release-artifacts.sh",
+   );
    const requiredSnippets = [
 -    'find -L "$ARTIFACTS_DIR" -maxdepth 1 -type f -name "*-macos-*.app.tar.zst"',
 +    'for tarball_pattern in "*-macos-*.app.tar.zst" "*-macos-*.app.tar.gz" "*-macos-*.tar.gz"; do',
@@ -739,18 +792,6 @@ index 099d7e91a7..c561db8b95 100755
  
  // tsdown and the release check both resolve repo-root-relative entries/config.
  run("bunx", ["tsdown", "--fail-on-warn", "false"], REPO_ROOT);
-diff --git a/packages/app-core/src/components/conversations/ConversationsSidebar.test.tsx b/packages/app-core/src/components/conversations/ConversationsSidebar.test.tsx
-index bee38b1e9d..e1c3df2cc6 100644
---- a/packages/app-core/src/components/conversations/ConversationsSidebar.test.tsx
-+++ b/packages/app-core/src/components/conversations/ConversationsSidebar.test.tsx
-@@ -200,6 +200,7 @@ vi.mock("@elizaos/ui", () => {
-     SidebarPanel: passthrough,
-     SidebarScrollRegion: passthrough,
-     TooltipProvider: passthrough,
-+    useIntervalWhenDocumentVisible: () => {},
-   };
- });
- 
 diff --git a/packages/app-core/src/components/pages/TerminalChannelPanel.test.tsx b/packages/app-core/src/components/pages/TerminalChannelPanel.test.tsx
 index 1fc3db564f..3bd7202380 100644
 --- a/packages/app-core/src/components/pages/TerminalChannelPanel.test.tsx

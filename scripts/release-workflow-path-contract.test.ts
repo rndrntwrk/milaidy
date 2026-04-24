@@ -620,6 +620,23 @@ describe("release workflow path contract", () => {
     expect(patch).toContain("function resolveBuildTarget(value) {");
     expect(patch).toContain(["--target=$", "{buildTarget.bunTarget}"].join(""));
     expect(patch).toContain("[electrobun-build] Bun entry:");
+    expect(patch).toContain("targetPaths.BUN_BINARY");
+    expect(patch).toContain("Bun CLI fallback succeeded");
+  });
+
+  it("keeps the cloud agent template on workspace elizaOS packages before publish materialization", () => {
+    const patch = fs.readFileSync(
+      path.join(repoRoot, "patches", "eliza", "ci-release-contracts.patch"),
+      "utf8",
+    );
+
+    for (const packageName of [
+      "@elizaos/core",
+      "@elizaos/plugin-sql",
+      "@elizaos/plugin-elizacloud",
+    ]) {
+      expect(patch).toContain(`"${packageName}": "workspace:*"`);
+    }
   });
 
   it("keeps agent release publication gated on npm and explicit distribution jobs", () => {
