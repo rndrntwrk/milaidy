@@ -65,7 +65,9 @@ bun run milady --version
 
 ## 4) Repo map (mental model)
 
-Core areas (all under `eliza/packages/app-core/` inside the `eliza/` submodule):
+The core runtime source lives inside the `eliza/` git submodule. Run `bun install` to initialize it.
+
+Core areas (all under `eliza/packages/app-core/`):
 
 - `eliza/packages/app-core/src/runtime/` — runtime startup, plugin orchestration, lifecycle
 - `eliza/packages/app-core/src/cli/` — CLI parsing, command registration, process behavior
@@ -74,7 +76,7 @@ Core areas (all under `eliza/packages/app-core/` inside the `eliza/` submodule):
 - `eliza/packages/app-core/src/services/` — business logic (plugin installer, updater, etc.)
 - `eliza/packages/app-core/src/connectors/` — connector integration code
 - `eliza/packages/agent/` — upstream elizaOS agent (core plugins, auto-enable maps)
-- `apps/app/` — desktop/mobile UI app
+- `apps/app/` — desktop/mobile UI app (at repo root, not in submodule)
 - `scripts/` — build/dev/release tooling
 - `test/` + colocated tests — verification
 
@@ -82,7 +84,7 @@ Core areas (all under `eliza/packages/app-core/` inside the `eliza/` submodule):
 
 ## 5) Entry points and startup path
 
-Important files to understand first:
+Important files to understand first (all inside the `eliza/` submodule):
 
 1. `eliza/packages/app-core/src/entry.ts` (CLI process bootstrap)
 2. `eliza/packages/app-core/src/cli/run-main.ts` (dotenv + Commander + error handling)

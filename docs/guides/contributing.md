@@ -90,49 +90,70 @@ bun run dev
 
 ## Monorepo Structure
 
-Milady is a monorepo managed with Bun workspaces.
+Milady is a monorepo managed with Bun workspaces. The core elizaOS runtime and all plugins live inside the `eliza/` git submodule. Run `bun install` to initialize it.
 
 ```
 milady/
+├── eliza/                       # Git submodule — elizaOS runtime + plugins
+│   ├── packages/
+│   │   ├── app-core/            # Main application package (runtime source of truth)
+│   │   │   └── src/
+│   │   │       ├── entry.ts     # CLI bootstrap
+│   │   │       ├── cli/         # Commander CLI (milady command)
+│   │   │       ├── runtime/     # Agent loader, plugin resolution
+│   │   │       ├── api/         # Dashboard API server
+│   │   │       ├── config/      # Plugin auto-enable, config schemas
+│   │   │       ├── connectors/  # Connector integration code
+│   │   │       └── services/    # Business logic
+│   │   ├── agent/               # Upstream elizaOS agent (core plugins, auto-enable maps)
+│   │   ├── typescript/          # @elizaos/core — Core TypeScript SDK
+│   │   └── skills/              # Skills system and bundled skills
+│   └── plugins/                 # Official plugins (100+)
+│       ├── plugin-anthropic/    # Anthropic model provider
+│       ├── plugin-telegram/     # Telegram connector
+│       ├── plugin-discord/      # Discord connector
+│       └── ...
 ├── apps/
-│   ├── app/                 # Desktop/mobile app (Capacitor + React)
-│   │   ├── electrobun/      # Electrobun desktop wrapper
-│   │   └── src/             # React UI components
-│   ├── browser-bridge/      # Browser extension bridge
-│   └── homepage/            # Marketing site
-├── eliza/                   # elizaOS submodule (core framework)
-│   └── packages/
-│       └── app-core/        # Main application package (runtime source of truth)
-├── skills/                  # Workspace skills and defaults
-├── docs/                    # Documentation (this site)
-├── scripts/                 # Build and utility scripts
-├── test/                    # Test setup, helpers, e2e
-├── AGENTS.md                # Repository guidelines
-└── tsdown.config.ts         # Build config
+│   ├── app/                     # Desktop (Electrobun) + mobile (Capacitor) + web UI
+│   └── homepage/                # Marketing site
+├── skills/                      # Workspace skills
+├── docs/                        # Documentation (this site)
+├── scripts/                     # Build, dev, and utility scripts
+├── test/                        # Test setup, helpers, e2e
+├── plugins.json                 # Plugin registry manifest (98 plugins)
+├── AGENTS.md                    # Repository guidelines
+└── tsdown.config.ts             # Build config
 ```
+
+> **Important:** All source code paths like `packages/app-core/src/...` refer to files inside the `eliza/` submodule. When navigating the filesystem, prefix with `eliza/` (e.g., `eliza/packages/app-core/src/entry.ts`).
 
 ### Build System
 
-Builds are run via Bun scripts defined in the root `package.json`:
+Bun workspaces manage the monorepo. Common build commands:
 
 ```bash
-# Full build (TypeScript + UI)
+# Build everything
 bun run build
 
-# Typecheck + lint
-bun run verify
-
-# Run tests
+# Run all tests
 bun run test
+
+# Typecheck + lint
+bun run check
+
+# Development mode (API on :31337, UI on :2138)
+bun run dev
 ```
 
 ### Key Entry Points
 
 | File | Purpose |
 |------|---------|
-| `milady.mjs` | npm bin entry (CLI bootstrap) |
-| `eliza/packages/app-core/src/entry.ts` | CLI entry point |
+| `milady.mjs` | npm bin entry (top-level) |
+| `eliza/packages/app-core/src/entry.ts` | CLI process bootstrap |
+| `eliza/packages/app-core/src/index.ts` | Library exports |
 | `eliza/packages/app-core/src/runtime/eliza.ts` | elizaOS runtime initialization |
+| `eliza/packages/app-core/src/cli/run-main.ts` | Commander CLI + error handling |
 
 ---
 
