@@ -581,20 +581,12 @@
               "connectors/zalo",
               "connectors/zalouser",
               "connectors/twilio",
-              "connectors/nextcloud-talk"
-            ]
-          },
-          {
-            "group": "Social",
-            "pages": [
-              "connectors/twitter",
-              "connectors/bluesky",
-              "connectors/farcaster",
-              "connectors/nostr",
-              "connectors/instagram",
-              "connectors/twitch",
-              "connectors/lens",
-              "connectors/tlon"
+              "connectors/github",
+              "connectors/gmail-watch",
+              "connectors/nextcloud-talk",
+              "connectors/tlon",
+              "connectors/acp",
+              "connectors/zalouser"
             ]
           },
           {
@@ -1099,7 +1091,9 @@
               "plugin-registry/platform/github",
               "plugin-registry/platform/gmail-watch",
               "plugin-registry/platform/nextcloud-talk",
-              "plugin-registry/platform/tlon"
+              "plugin-registry/platform/tlon",
+              "plugin-registry/platform/acp",
+              "plugin-registry/platform/zalouser"
             ]
           },
           {

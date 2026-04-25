@@ -1,7 +1,7 @@
 ---
 title: "Platform Connectors"
 sidebarTitle: "Connectors"
-description: "Platform bridges for 28 messaging platforms — 17 auto-enabled from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, BlueBubbles, Blooio, MS Teams, Google Chat, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, WeChat) plus 11 installable from the registry (Twitter, Lens, Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
+description: "Platform bridges for 30 messaging platforms — 18 auto-enabled from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Twitter, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, Lens, WeChat) plus 12 installable from the registry (ACP, BlueBubbles, Bluesky, Instagram, LINE, Zalo, Zalouser, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
 ---
 
 Connectors are platform bridges that allow your agent to communicate across messaging platforms and social networks. Each connector handles authentication, message routing, session management, and platform-specific features.
@@ -21,27 +21,30 @@ Connectors are platform bridges that allow your agent to communicate across mess
 9. [Blooio](#blooio)
 10. [Microsoft Teams](#microsoft-teams)
 11. [Google Chat](#google-chat)
-12. [Farcaster](#farcaster)
-13. [BlueBubbles](#bluebubbles)
-14. [Bluesky](#bluesky)
-15. [Instagram](#instagram)
-16. [Twitch](#twitch)
-17. [Mattermost](#mattermost)
-18. [WeChat](#wechat)
-19. [Matrix](#matrix)
-20. [Feishu / Lark](#feishu--lark)
-21. [Nostr](#nostr)
-22. [LINE](#line)
-23. [Zalo](#zalo)
-24. [Twilio](#twilio)
-25. [GitHub](#github)
-26. [Gmail Watch](#gmail-watch)
-27. [Nextcloud Talk](#nextcloud-talk)
-28. [Tlon](#tlon)
-29. [ACP (Agent Communication Protocol)](#acp-agent-communication-protocol)
-30. [Connector Lifecycle](#connector-lifecycle)
-31. [Multi-Account Support](#multi-account-support)
-32. [Session Management](#session-management)
+12. [Twitter](#twitter)
+13. [Farcaster](#farcaster)
+14. [BlueBubbles](#bluebubbles)
+15. [Bluesky](#bluesky)
+16. [Instagram](#instagram)
+17. [Twitch](#twitch)
+18. [Mattermost](#mattermost)
+19. [WeChat](#wechat)
+20. [Matrix](#matrix)
+21. [Feishu / Lark](#feishu--lark)
+22. [Nostr](#nostr)
+23. [LINE](#line)
+24. [Zalo](#zalo)
+25. [Twilio](#twilio)
+26. [GitHub](#github)
+27. [Gmail Watch](#gmail-watch)
+28. [Nextcloud Talk](#nextcloud-talk)
+29. [Tlon](#tlon)
+30. [Lens](#lens)
+31. [ACP (Agent Communication Protocol)](#acp-agent-communication-protocol)
+32. [Zalouser](#zalouser)
+33. [Connector Lifecycle](#connector-lifecycle)
+34. [Multi-Account Support](#multi-account-support)
+35. [Session Management](#session-management)
 
 ---
 
@@ -79,7 +82,8 @@ Connectors marked **Auto** load automatically when their config is present in `m
 | Gmail Watch | Service account / OAuth | N/A | N/A | No | Registry |
 | Nextcloud Talk | Server credentials | Yes | Yes (rooms) | No | Registry |
 | Tlon | Ship credentials | Yes | Yes (Urbit chats) | No | Registry |
-| ACP | Gateway token + password | Yes | N/A | No | Registry |
+| ACP | Gateway token | Yes (agent-to-agent) | N/A | No | Registry |
+| Zalouser | User credentials | Yes | N/A | No | Registry |
 
 ---
 
@@ -556,6 +560,10 @@ Install from the registry before configuring: `milady plugins install @elizaos/p
 - Neynar API key (from [neynar.com](https://neynar.com))
 - Farcaster account with a Neynar signer UUID
 - Farcaster ID (FID) of the agent account
+
+| Env Variable | Description |
+|-------------|-------------|
+| `FARCASTER_NEYNAR_API_KEY` | Neynar API key (alternative to config) |
 
 ### Key Configuration
 
@@ -1124,6 +1132,72 @@ Connects agents through an ACP gateway for inter-agent communication.
 - Verbose logging option
 
 **Note:** This connector is available from the plugin registry. Install it with `milady plugins install @elizaos/plugin-acp`.
+
+---
+
+## ACP (Agent Communication Protocol)
+
+**Plugin:** `@elizaos/plugin-acp`
+
+The ACP connector links agents through an ACP gateway for agent-to-agent communication.
+
+### Setup Requirements
+
+- ACP gateway token
+
+### Key Configuration
+
+```json
+{
+  "connectors": {
+    "acp": {
+      "enabled": true
+    }
+  }
+}
+```
+
+| Env Variable | Description |
+|-------------|-------------|
+| `ACP_GATEWAY_TOKEN` | Gateway authentication token |
+
+### Features
+
+- Agent-to-agent messaging via ACP gateway
+- Realtime communication between agents
+
+**Note:** This connector is available from the plugin registry. Install it with `milady plugins install acp`.
+
+---
+
+## Zalouser
+
+**Plugin:** `@elizaos/plugin-zalouser`
+
+A personal-account variant of the Zalo connector for one-to-one messaging outside of the Official Account system.
+
+### Setup Requirements
+
+- Zalo user credentials
+
+### Key Configuration
+
+```json
+{
+  "connectors": {
+    "zalouser": {
+      "enabled": true
+    }
+  }
+}
+```
+
+### Features
+
+- Personal Zalo account messaging
+- One-to-one conversations
+
+**Note:** This connector is available from the plugin registry. Install it with `milady plugins install zalouser`.
 
 ---
 

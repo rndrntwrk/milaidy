@@ -67,23 +67,9 @@ No environment variable is required to trigger auto-enable — it is driven enti
 
 ## Environment Variables
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `FARCASTER_NEYNAR_API_KEY` | Yes | Neynar API key for Farcaster Hub access |
-| `FARCASTER_SIGNER_UUID` | Yes | UUID of the Neynar signer for the agent account |
-| `FARCASTER_FID` | Yes | Farcaster ID (FID) of the agent account |
-| `FARCASTER_DRY_RUN` | No | Set to `true` to simulate operations without executing |
-| `FARCASTER_HUB_URL` | No | Farcaster Hub URL (default: `hub.pinata.cloud`) |
-| `FARCASTER_POLL_INTERVAL` | No | Polling interval in seconds (default: `120`) |
-| `FARCASTER_MODE` | No | Operation mode: `polling` or `webhook` (default: `polling`) |
-| `ENABLE_CAST` | No | Enable or disable cast posting (default: `true`) |
-| `ENABLE_ACTION_PROCESSING` | No | Enable automated action processing (default: `false`) |
-| `CAST_INTERVAL_MIN` | No | Minimum minutes between autonomous casts (default: `90`) |
-| `CAST_INTERVAL_MAX` | No | Maximum minutes between autonomous casts (default: `180`) |
-| `CAST_IMMEDIATELY` | No | Post immediately instead of waiting for schedule (default: `false`) |
-| `MAX_CAST_LENGTH` | No | Maximum cast character length (default: `320`) |
-| `ACTION_INTERVAL` | No | Minutes between action-processing cycles (default: `5`) |
-| `MAX_ACTIONS_PROCESSING` | No | Max actions per batch (default: `1`) |
+| Variable | Description |
+|----------|-------------|
+| `FARCASTER_NEYNAR_API_KEY` | Neynar API key. When set, the runtime maps this to the connector's `apiKey` field. Can be used as an alternative to placing the key directly in `milady.json`. |
 
 ## Full Configuration Reference
 
