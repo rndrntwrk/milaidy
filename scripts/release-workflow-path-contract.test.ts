@@ -420,7 +420,9 @@ describe("release workflow path contract", () => {
     expect(patch).toContain("AppOpsManager.class.getMethod(");
     expect(patch).toContain("invokeSetMode(appOps, context)");
     expect(patch).not.toContain("+            appOps.setMode(");
-    expect(patch).toContain('selectLiveProvider("openai") ?? selectLiveProvider()');
+    expect(patch).toContain(
+      'selectLiveProvider("openai") ?? selectLiveProvider()',
+    );
     expect(
       agentRelease.indexOf("name: Patch Android release build compatibility"),
     ).toBeLessThan(
@@ -442,9 +444,7 @@ describe("release workflow path contract", () => {
       "name: Apply Milady eliza CI patches",
     );
     expect(
-      websiteBlockerAndroidBlock.indexOf(
-        "name: Apply Milady eliza CI patches",
-      ),
+      websiteBlockerAndroidBlock.indexOf("name: Apply Milady eliza CI patches"),
     ).toBeLessThan(
       websiteBlockerAndroidBlock.indexOf(
         "name: Patch Android release build compatibility",
