@@ -1,20 +1,18 @@
 ---
 title: WeChat Connector
 sidebarTitle: WeChat
-description: Connect your agent to WeChat using the @elizaos/plugin-wechat package.
+description: The @elizaos/plugin-wechat package is not currently available in the Milady plugin registry.
 ---
 
 <Warning>
-The `@elizaos/plugin-wechat` package is not currently available in the plugin registry. This connector documentation is retained for reference but the plugin may not be installable. Check the plugin registry for current availability.
+**Not currently available.** The `@elizaos/plugin-wechat` package is not present in the Milady plugin registry. The documentation below is retained for reference in case the plugin is restored in a future release. Do not attempt to configure this connector — it will not load.
 </Warning>
-
-Connect your agent to WeChat for personal and group messaging via a third-party proxy service.
 
 > **Registry status:** This connector is not in the `plugins.json` registry but is provided as a workspace package (`@elizaos/plugin-wechat`) within the Milady repository. If running from a published npm install, you may need to install it separately.
 
 ## Overview
 
-The WeChat connector is a Milady-local plugin that bridges your agent to WeChat via a user-supplied proxy service. Unlike most connectors which use official platform APIs, the WeChat connector relies on a third-party proxy that bridges WeChat's protocol. Your agent authenticates by scanning a QR code displayed in the terminal on first startup.
+The WeChat connector was a Milady-local plugin that bridged your agent to WeChat via a user-supplied proxy service. Unlike most connectors which use official platform APIs, the WeChat connector relied on a third-party proxy that bridges WeChat's protocol.
 
 ## Privacy Notice
 

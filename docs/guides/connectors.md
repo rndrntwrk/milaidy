@@ -1,7 +1,7 @@
 ---
 title: "Platform Connectors"
 sidebarTitle: "Connectors"
-description: "Platform bridges for messaging platforms — auto-enabled from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr) plus installable from the registry (Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
+description: "Platform bridges for 24 messaging platforms — 15 auto-enabled from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr) plus 9 installable from the registry (Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon). Twitter, Lens, and WeChat plugins are not currently available."
 ---
 
 Connectors are platform bridges that allow your agent to communicate across messaging platforms and social networks. Each connector handles authentication, message routing, session management, and platform-specific features.
@@ -57,12 +57,15 @@ Connectors marked **Auto** load automatically when their config is present in `m
 | Blooio | API key + webhook | Yes | Yes | No | Auto |
 | Microsoft Teams | App ID + password | Yes | Yes (teams/channels) | No | Auto |
 | Google Chat | Service account | Yes | Yes (spaces) | Yes | Auto |
+| ~~Twitter~~ | ~~API keys + tokens~~ | ~~DMs~~ | ~~N/A~~ | ~~No~~ | **Unavailable** |
 | Farcaster | Neynar API key + signer | Casts | Yes (channels) | No | Auto |
 | Twitch | Client ID + access token | Yes (chat) | Yes (channels) | No | Auto |
 | Mattermost | Bot token | Yes | Yes (channels) | No | Auto |
+| ~~WeChat~~ | ~~Proxy API key + QR code~~ | ~~Yes~~ | ~~Yes~~ | ~~Yes~~ | **Unavailable** |
 | Matrix | Access token | Yes | Yes (rooms) | No | Auto |
 | Feishu / Lark | App ID + secret | Yes | Yes (group chats) | No | Auto |
 | Nostr | Private key (nsec/hex) | Yes (NIP-04) | N/A | No | Auto |
+| ~~Lens~~ | ~~API key~~ | ~~Yes~~ | ~~N/A~~ | ~~No~~ | **Unavailable** |
 | Bluesky | Account credentials | Posts | N/A | No | Registry |
 | Instagram | Username + password | DMs | N/A | No | Registry |
 | LINE | Channel access token + secret | Yes | Yes | No | Registry |
@@ -495,6 +498,48 @@ Connects to iMessage and SMS messaging via the Blooio service with signed webhoo
 
 ---
 
+## Twitter
+
+<Warning>
+**Not currently available.** The `@elizaos/plugin-twitter` package is not present in the Milady plugin registry. This section is retained for reference only.
+</Warning>
+
+### Setup Requirements
+
+- Twitter API v2 credentials (API key, API secret key, access token, access token secret)
+
+### Key Configuration
+
+```json
+{
+  "connectors": {
+    "twitter": {
+      "enabled": true,
+      "apiKey": "...",
+      "apiSecretKey": "...",
+      "accessToken": "...",
+      "accessTokenSecret": "...",
+      "postEnable": true,
+      "postIntervalMin": 90,
+      "postIntervalMax": 180
+    }
+  }
+}
+```
+
+### Features
+
+- Automated posting with configurable intervals and variance
+- Post immediately option
+- Search and mention monitoring
+- Timeline algorithm selection (`weighted` or `latest`)
+- Auto-respond to mentions
+- Action processing toggle
+- Dry run mode for testing
+- Configurable max tweet length (default: 4000)
+
+---
+
 ## Farcaster
 
 ### Setup Requirements
@@ -697,6 +742,63 @@ This connector auto-enables when its configuration is present in `milady.json`.
 - Mention filtering (optionally require @mentions)
 - Custom command prefix triggers
 - Self-hosted server support
+
+---
+
+## WeChat
+
+<Warning>
+**Not currently available.** The `@elizaos/plugin-wechat` package is not present in the Milady plugin registry. This section is retained for reference only.
+</Warning>
+
+Connects to WeChat via a third-party proxy service using personal account login.
+
+### Setup Requirements
+
+1. Obtain an API key from the WeChat proxy service
+2. Configure the proxy URL and webhook port
+3. Scan QR code displayed in terminal on first startup
+
+### Privacy Notice
+
+The WeChat connector depends on a user-supplied proxy service. That proxy receives
+your connector API key plus the message payloads and metadata needed to relay
+incoming and outgoing WeChat traffic. Only point `proxyUrl` at infrastructure you
+operate yourself or explicitly trust for that message flow.
+
+### Key Configuration
+
+```json
+{
+  "connectors": {
+    "wechat": {
+      "apiKey": "<key>",
+      "proxyUrl": "https://...",
+      "webhookPort": 18790,
+      "deviceType": "ipad"
+    }
+  }
+}
+```
+
+| Field | Description |
+|-------|------------|
+| `apiKey` | **Required** -- Proxy service API key |
+| `proxyUrl` | **Required** -- Proxy service URL |
+| `webhookPort` | Webhook listener port (default: 18790) |
+| `deviceType` | Device emulation type: `ipad` or `mac` (default: `ipad`) |
+
+**Environment variables:** `WECHAT_API_KEY`
+
+**Multi-account:** Supported via `accounts` map (same pattern as WhatsApp).
+
+### Features
+
+- Text messaging in DMs (enabled by default)
+- Group chat support (enable with `features.groups: true`)
+- Image send/receive (enable with `features.images: true`)
+- QR code login with automatic session persistence
+- Multi-account support via accounts map
 
 ---
 
@@ -1041,7 +1143,37 @@ Gmail Watch is enabled via the `features.gmailWatch` flag or environment variabl
 - Ship-to-ship messaging
 - Group chat participation
 
-This connector auto-enables when its configuration is present in `milady.json`.
+**Note:** This connector is available from the plugin registry. Install it with `milady plugins install @elizaos/plugin-tlon`.
+
+---
+
+## Lens
+
+<Warning>
+**Not currently available.** The `@elizaos/plugin-lens` package is not present in the Milady plugin registry. This section is retained for reference only.
+</Warning>
+
+**Plugin:** `@elizaos/plugin-lens`
+
+```json5
+{
+  connectors: {
+    lens: {
+      apiKey: "<LENS_API_KEY>",
+    }
+  }
+}
+```
+
+| Env Variable | Config Path |
+|-------------|-------------|
+| `LENS_API_KEY` | `connectors.lens.apiKey` |
+
+**Auto-enable triggers:** `apiKey`, `token`, or `botToken`.
+
+**Features:**
+- Lens Protocol social interactions
+- Post publishing and engagement
 
 ---
 

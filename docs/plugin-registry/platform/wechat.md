@@ -1,26 +1,26 @@
 ---
 title: "WeChat Plugin"
 sidebarTitle: "WeChat"
-description: "WeChat connector for Milady — personal and group messaging via a third-party proxy API."
+description: "The @elizaos/plugin-wechat package is not currently available in the Milady plugin registry."
 ---
 
 <Warning>
-The `@elizaos/plugin-wechat` package is not currently available in the plugin registry. This documentation is retained for reference but the plugin may not be installable. Check the plugin registry for current availability.
+**Not currently available.** The `@elizaos/plugin-wechat` package is not present in the Milady plugin registry. The documentation below is retained for reference in case the plugin is restored in a future release.
 </Warning>
 
-The WeChat plugin connects Milady agents to WeChat via a user-supplied proxy service, enabling text messaging and optional image and group chat support from personal WeChat accounts.
+The WeChat plugin connected Milady agents to WeChat via a user-supplied proxy service, enabling text messaging and optional image and group chat support from personal WeChat accounts.
 
 **Package:** `@elizaos/plugin-wechat`
 
 ## Overview
 
-Unlike most connectors which use official platform APIs, the WeChat connector relies on a third-party proxy service that bridges WeChat's protocol. Your agent authenticates by scanning a QR code displayed in the terminal on first startup.
+Unlike most connectors which use official platform APIs, the WeChat connector relied on a third-party proxy service that bridges WeChat's protocol.
 
 **Privacy Notice:** The WeChat connector sends your API key and message payloads through the configured proxy service. Only point `proxyUrl` at infrastructure you operate yourself or explicitly trust.
 
-## Installation
+## Installation (unavailable)
 
-The WeChat plugin ships as a local Milady package (`@elizaos/plugin-wechat`) and does not need to be installed separately. It is available out of the box.
+The WeChat plugin is not currently available in the registry.
 
 ## Setup
 
