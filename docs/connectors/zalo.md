@@ -8,7 +8,7 @@ Connect your agent to Zalo for Official Account messaging and support workflows.
 
 ## Overview
 
-The Zalo connector is an elizaOS plugin that bridges your agent to the Zalo platform via the Official Account API. This connector is available from the plugin registry. A personal-account variant is also available as `@elizaos/plugin-zalouser`.
+The Zalo connector is an elizaOS plugin that bridges your agent to the Zalo platform via the Official Account API. This connector is available from the plugin registry. A personal-account variant is also available — see [Zalo User connector](/connectors/zalouser).
 
 ## Package Info
 
@@ -51,4 +51,5 @@ The Zalo connector is an elizaOS plugin that bridges your agent to the Zalo plat
 
 ## Related
 
+- [Zalo User (personal account) connector](/connectors/zalouser)
 - [Connectors overview](/guides/connectors#zalo)

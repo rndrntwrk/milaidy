@@ -87,6 +87,7 @@ import "@elizaos/app-scape/ui";
 import "@elizaos/app-hyperscape/ui";
 import "@elizaos/app-2004scape/ui";
 import "@elizaos/app-defense-of-the-agents/ui";
+import "@clawville/app-clawville/ui";
 import {
   AppBlockerSettingsCard,
   LifeOpsBrowserSetupPanel as BrowserBridgeSetupPanel,
@@ -113,6 +114,7 @@ import "@elizaos/app-vincent/register";
 import { shouldUseCloudOnlyBranding } from "@elizaos/app-core";
 import {
   APP_BRANDING_BASE,
+  APP_CONFIG,
   APP_LOG_PREFIX,
   APP_NAMESPACE,
   APP_URL_SCHEME,
@@ -255,6 +257,7 @@ const APP_VRM_ASSETS = APP_STYLE_PRESETS.slice()
 
 const appBootConfig: AppBootConfig = {
   branding: APP_BRANDING,
+  defaultApps: APP_CONFIG.defaultApps,
   assetBaseUrl:
     (import.meta.env.VITE_ASSET_BASE_URL as string | undefined)?.trim() ||
     undefined,

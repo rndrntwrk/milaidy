@@ -166,6 +166,7 @@ const CHANNEL_PLUGIN_MAP = {
   nostr:       "@elizaos/plugin-nostr",
   blooio:      "@elizaos/plugin-blooio",
   twitch:      "@elizaos/plugin-twitch",
+  wechat:      "@elizaos/plugin-wechat",
 };
 ```
 

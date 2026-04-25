@@ -1,0 +1,1092 @@
+diff --git a/packages/app-core/deploy/cloud-agent-template/package.json b/packages/app-core/deploy/cloud-agent-template/package.json
+index 1c9cff1486..0f49416e6f 100644
+--- a/packages/app-core/deploy/cloud-agent-template/package.json
++++ b/packages/app-core/deploy/cloud-agent-template/package.json
+@@ -6,9 +6,9 @@
+     "start": "tsx entrypoint.ts"
+   },
+   "dependencies": {
+-    "@elizaos/core": "2.0.0-alpha.339",
+-    "@elizaos/plugin-sql": "2.0.0-alpha.19",
+-    "@elizaos/plugin-elizacloud": "2.0.0-alpha.8",
++    "@elizaos/core": "workspace:*",
++    "@elizaos/plugin-sql": "workspace:*",
++    "@elizaos/plugin-elizacloud": "workspace:*",
+     "tsx": "4.21.0"
+   }
+ }
+diff --git a/packages/app-core/deploy/Dockerfile.cloud b/packages/app-core/deploy/Dockerfile.cloud
+--- a/packages/app-core/deploy/Dockerfile.cloud
++++ b/packages/app-core/deploy/Dockerfile.cloud
+@@ -44 +44 @@
+-RUN node <<'EOF'
++RUN bun run - <<'EOF'
+diff --git a/packages/app-core/platforms/electrobun/scripts/stage-macos-release-artifacts.sh b/packages/app-core/platforms/electrobun/scripts/stage-macos-release-artifacts.sh
+index 74c284e2df..60998fdf58 100644
+--- a/packages/app-core/platforms/electrobun/scripts/stage-macos-release-artifacts.sh
++++ b/packages/app-core/platforms/electrobun/scripts/stage-macos-release-artifacts.sh
+@@ -147,14 +147,31 @@ wait_for_notary_acceptance() {
+   return 1
+ }
+
+-TARBALL_PATH="$(find -L "$ARTIFACTS_DIR" -maxdepth 1 -type f -name "*-macos-*.app.tar.zst" | sort | head -1)"
++TARBALL_PATH=""
++for tarball_pattern in "*-macos-*.app.tar.zst" "*-macos-*.app.tar.gz" "*-macos-*.tar.gz"; do
++  TARBALL_PATH="$(find -L "$ARTIFACTS_DIR" -maxdepth 1 -type f -name "$tarball_pattern" | sort | head -1)"
++  if [[ -n "$TARBALL_PATH" ]]; then
++    break
++  fi
++done
+ if [[ -z "$TARBALL_PATH" ]]; then
+   echo "stage-macos-release-artifacts: no macOS updater tarball found in $ARTIFACTS_DIR"
+   exit 1
+ fi
+
+ echo "Using updater tarball: $TARBALL_PATH"
+-tar --zstd -xf "$TARBALL_PATH" -C "$EXTRACT_DIR"
++case "$TARBALL_PATH" in
++  *.tar.zst)
++    tar --zstd -xf "$TARBALL_PATH" -C "$EXTRACT_DIR"
++    ;;
++  *.tar.gz)
++    tar -xzf "$TARBALL_PATH" -C "$EXTRACT_DIR"
++    ;;
++  *)
++    echo "stage-macos-release-artifacts: unsupported macOS tarball format: $TARBALL_PATH"
++    exit 1
++    ;;
++esac
+
+ APP_BUNDLE_PATH="$(find "$EXTRACT_DIR" -maxdepth 2 -type d -name "*.app" | sort | head -1)"
+ if [[ -z "$APP_BUNDLE_PATH" ]]; then
+@@ -243,7 +260,22 @@ else
+   echo "Skipping staged app signature verification (unsigned/local build)."
+ fi
+
+-FINAL_DMG_NAME="$(basename "${TARBALL_PATH%.app.tar.zst}.dmg")"
++TARBALL_BASENAME="$(basename "$TARBALL_PATH")"
++case "$TARBALL_BASENAME" in
++  *.app.tar.zst)
++    FINAL_DMG_NAME="${TARBALL_BASENAME%.app.tar.zst}.dmg"
++    ;;
++  *.app.tar.gz)
++    FINAL_DMG_NAME="${TARBALL_BASENAME%.app.tar.gz}.dmg"
++    ;;
++  *.tar.gz)
++    FINAL_DMG_NAME="${TARBALL_BASENAME%.tar.gz}.dmg"
++    ;;
++  *)
++    echo "stage-macos-release-artifacts: unsupported macOS tarball name: $TARBALL_BASENAME"
++    exit 1
++    ;;
++esac
+ FINAL_DMG_PATH="$ARTIFACTS_DIR/$FINAL_DMG_NAME"
+ TEMP_DMG_PATH="$TMP_ROOT/$FINAL_DMG_NAME"
+ VOLUME_NAME="$(basename "$STAGED_APP_PATH" .app)"
+diff --git a/packages/app-core/platforms/electrobun/src/native/steward.test.ts b/packages/app-core/platforms/electrobun/src/native/steward.test.ts
+index 3a9b0beb88..b7c3bd0b35 100644
+--- a/packages/app-core/platforms/electrobun/src/native/steward.test.ts
++++ b/packages/app-core/platforms/electrobun/src/native/steward.test.ts
+@@ -19,7 +19,7 @@ vi.mock("../../../../src/services/steward-sidecar", () => ({
+   })),
+ }));
+
+-vi.mock("@elizaos/app-steward/services/steward-credentials", () => ({
++vi.mock("../../../../src/services/steward-credentials", () => ({
+   saveStewardCredentials: saveStewardCredentialsMock,
+ }));
+
+diff --git a/packages/app-core/platforms/electrobun/src/native/steward.ts b/packages/app-core/platforms/electrobun/src/native/steward.ts
+index 149d5e6be6..bf80c208ca 100644
+--- a/packages/app-core/platforms/electrobun/src/native/steward.ts
++++ b/packages/app-core/platforms/electrobun/src/native/steward.ts
+@@ -21,7 +21,7 @@ import {
+   type StewardSidecar,
+   type StewardSidecarStatus,
+ } from "../../../../src/services/steward-sidecar";
+-import { saveStewardCredentials } from "@elizaos/app-steward/services/steward-credentials";
++import { saveStewardCredentials } from "../../../../src/services/steward-credentials";
+ import { getBrandConfig } from "../brand-config";
+
+ // ---------------------------------------------------------------------------
+diff --git a/packages/app-core/scripts/build-patched-electrobun-cli.mjs b/packages/app-core/scripts/build-patched-electrobun-cli.mjs
+index 54eea37026..18df9837c7 100644
+--- a/packages/app-core/scripts/build-patched-electrobun-cli.mjs
++++ b/packages/app-core/scripts/build-patched-electrobun-cli.mjs
+@@ -3,6 +3,7 @@
+ import { spawnSync } from "node:child_process";
+ import {
+   appendFileSync,
++  chmodSync,
+   copyFileSync,
+   existsSync,
+   mkdirSync,
+@@ -62,6 +63,50 @@ function writeGitHubEnv(name, value) {
+   appendFileSync(process.env.GITHUB_ENV, `${name}=${value}\n`);
+ }
+
++function defaultTargetKey() {
++  if (process.platform === "darwin") {
++    return process.arch === "arm64" ? "macos-arm64" : "macos-x64";
++  }
++  if (process.platform === "win32") {
++    return "windows-x64";
++  }
++  if (process.platform === "linux") {
++    return process.arch === "arm64" ? "linux-arm64" : "linux-x64";
++  }
++  fail(`Unsupported platform for patched Electrobun CLI: ${process.platform}`);
++}
++
++function normalizeTargetArg(value) {
++  const rawValue = (value ?? process.env.ELECTROBUN_CLI_BUILD_TARGET ?? "")
++    .trim()
++    .replace(/^--target=/, "");
++  return rawValue || defaultTargetKey();
++}
++
++function resolveBuildTarget(value) {
++  const targetKey = normalizeTargetArg(value);
++  const targetMap = new Map([
++    ["macos-arm64", { bunTarget: "bun-darwin-aarch64", binExt: "" }],
++    ["macos-x64", { bunTarget: "bun-darwin-x64", binExt: "" }],
++    ["linux-arm64", { bunTarget: "bun-linux-aarch64", binExt: "" }],
++    ["linux-x64", { bunTarget: "bun-linux-x64", binExt: "" }],
++    ["windows-x64", { bunTarget: "bun-windows-x64-baseline", binExt: ".exe" }],
++    ["bun-darwin-aarch64", { bunTarget: "bun-darwin-aarch64", binExt: "" }],
++    ["bun-darwin-x64", { bunTarget: "bun-darwin-x64", binExt: "" }],
++    ["bun-linux-aarch64", { bunTarget: "bun-linux-aarch64", binExt: "" }],
++    ["bun-linux-x64", { bunTarget: "bun-linux-x64", binExt: "" }],
++    [
++      "bun-windows-x64-baseline",
++      { bunTarget: "bun-windows-x64-baseline", binExt: ".exe" },
++    ],
++  ]);
++  const target = targetMap.get(targetKey);
++  if (!target) {
++    fail(`Unsupported patched Electrobun CLI target: ${targetKey}`);
++  }
++  return { ...target, targetKey };
++}
++
+ function insertAfterAnchor(source, anchor, insertion, label) {
+   const anchorIndex = source.indexOf(anchor);
+   if (anchorIndex === -1) {
+@@ -73,19 +118,17 @@ function insertAfterAnchor(source, anchor, insertion, label) {
+ }
+
+ export function patchCliSourceText(original) {
+-  if (
+-    original.includes(
+-      'const overridePackageJson = process.env["ELECTROBUN_RCEDIT_PACKAGE_JSON"];',
+-    )
+-  ) {
+-    return original;
+-  }
+-
+   const eol = original.includes("\r\n") ? "\r\n" : "\n";
+   let patched = original;
+   const importAnchor = 'import * as readline from "readline";';
++  const hasRceditOverride = original.includes(
++    'const overridePackageJson = process.env["ELECTROBUN_RCEDIT_PACKAGE_JSON"];',
++  );
+
+-  if (!patched.includes('import { createRequire } from "module";')) {
++  if (
++    !hasRceditOverride &&
++    !patched.includes('import { createRequire } from "module";')
++  ) {
+     patched = patched.replace(
+       importAnchor,
+       [
+@@ -96,7 +139,7 @@ export function patchCliSourceText(original) {
+     );
+   }
+
+-  if (!patched.includes("async function importRcedit()")) {
++  if (!hasRceditOverride && !patched.includes("async function importRcedit()")) {
+     patched = insertAfterAnchor(
+       patched,
+       "const _MAX_CHUNK_SIZE = 1024 * 2;",
+@@ -121,24 +164,129 @@ export function patchCliSourceText(original) {
+     );
+   }
+
+-  const replacements = patched.match(
+-    /const rcedit = \(await import\("rcedit"\)\)\.default;/g,
+-  );
+-  if (!replacements || replacements.length !== 3) {
+-    throw new Error(
+-      `Expected 3 rcedit dynamic import call sites, found ${replacements?.length ?? 0}`,
++  if (!hasRceditOverride) {
++    const replacements = patched.match(
++      /const rcedit = \(await import\("rcedit"\)\)\.default;/g,
++    );
++    if (!replacements || replacements.length !== 3) {
++      throw new Error(
++        `Expected 3 rcedit dynamic import call sites, found ${replacements?.length ?? 0}`,
++      );
++    }
++
++    patched = patched.replaceAll(
++      'const rcedit = (await import("rcedit")).default;',
++      "const rcedit = await importRcedit();",
+     );
+   }
+
+-  patched = patched.replaceAll(
+-    'const rcedit = (await import("rcedit")).default;',
+-    "const rcedit = await importRcedit();",
+-  );
+-
+   if (!patched.includes("async function importRcedit()")) {
+     throw new Error("importRcedit helper was not inserted");
+   }
+
++  if (!patched.includes("[electrobun-build] Bun entry:")) {
++    const bunBuildStart = [
++      '		const buildResult = await Bun.build({',
++      '			...bunBuildOptions,',
++      '			entrypoints: [bunSource],',
++      '			outdir: bunDestFolder,',
++      '			// minify: true, // todo (yoav): add minify in canary and prod builds',
++      '			target: "bun",',
++      '		});',
++    ].join(eol);
++    const bunBuildReplacement = [
++      '		console.log(`[electrobun-build] Bun entry: ${bunSource}`);',
++      '		console.log(`[electrobun-build] Bun outdir: ${bunDestFolder}`);',
++      '		const runBunCliBuildFallback = (reason: string) => {',
++      '			console.error(`[electrobun-build] Retrying app entry build with Bun CLI fallback after ${reason}`);',
++      '			const fallbackResult = Bun.spawnSync([',
++      '				targetPaths.BUN_BINARY,',
++      '				"build",',
++      '				bunSource,',
++      '				"--target=bun",',
++      '				"--outdir",',
++      '				bunDestFolder,',
++      '			], {',
++      '				cwd: projectRoot,',
++      '				env: process.env,',
++      '				stdout: "inherit",',
++      '				stderr: "inherit",',
++      '			});',
++      '			const fallbackExitCode = fallbackResult.exitCode ?? 1;',
++      '			if (fallbackExitCode !== 0) {',
++      '				console.error(`[electrobun-build] Bun CLI fallback failed with exit code ${fallbackExitCode}`);',
++      '				return false;',
++      '			}',
++      '			console.log("[electrobun-build] Bun CLI fallback succeeded");',
++      '			return true;',
++      '		};',
++      '		let buildResult;',
++      '		try {',
++      '			buildResult = await Bun.build({',
++      '				...bunBuildOptions,',
++      '				entrypoints: [bunSource],',
++      '				outdir: bunDestFolder,',
++      '				// minify: true, // todo (yoav): add minify in canary and prod builds',
++      '				target: "bun",',
++      '			});',
++      '		} catch (error) {',
++      '			console.error("[electrobun-build] Bun.build threw while bundling app entry");',
++      '			console.error(error instanceof Error ? error.stack || error.message : String(error));',
++      '			if (!runBunCliBuildFallback("Bun.build throw")) {',
++      '				throw error;',
++      '			}',
++      '			buildResult = { success: true, logs: [] };',
++      '		}',
++    ].join(eol);
++    if (!patched.includes(bunBuildStart)) {
++      throw new Error("Could not find Bun.build app-entry block");
++    }
++    patched = patched.replace(bunBuildStart, bunBuildReplacement);
++
++    const bunBuildFailure = [
++      "		if (!buildResult.success) {",
++      '			console.error("failed to build", bunSource);',
++      "			printBuildLogs(buildResult.logs);",
++      '			throw new Error("Build failed: bun build failed");',
++      "		}",
++    ].join(eol);
++    const bunBuildFailureReplacement = [
++      "		if (!buildResult.success) {",
++      '			console.error("failed to build", bunSource);',
++      "			printBuildLogs(buildResult.logs);",
++      '			if (!runBunCliBuildFallback("Bun.build unsuccessful result")) {',
++      '				throw new Error("Build failed: bun build failed");',
++      "			}",
++      "		}",
++    ].join(eol);
++    if (!patched.includes(bunBuildFailure)) {
++      throw new Error("Could not find Bun.build app-entry failure block");
++    }
++    patched = patched.replace(bunBuildFailure, bunBuildFailureReplacement);
++  }
++
++  const terseBuildCatch = [
++    "		} catch (error) {",
++    "			if (error instanceof Error) {",
++    "				console.error(error.message);",
++    "			}",
++    "			process.exit(1);",
++    "		}",
++  ].join(eol);
++  const verboseBuildCatch = [
++    "		} catch (error) {",
++    "			if (error instanceof Error) {",
++    "				console.error(error.stack || error.message);",
++    "			} else {",
++    "				console.error(String(error));",
++    "			}",
++    "			process.exit(1);",
++    "		}",
++  ].join(eol);
++  if (patched.includes(terseBuildCatch)) {
++    patched = patched.replaceAll(terseBuildCatch, verboseBuildCatch);
++  }
++
+   return patched;
+ }
+
+@@ -175,6 +323,7 @@ function main() {
+   const installedElectrobunDir = process.argv[2]
+     ? path.resolve(process.argv[2])
+     : resolveElectrobunDir();
++  const buildTarget = resolveBuildTarget(process.argv[3]);
+   const installedManifestPath = path.join(
+     installedElectrobunDir,
+     "package.json",
+@@ -184,14 +333,30 @@ function main() {
+   );
+   const electrobunVersion = installedManifest.version;
+   const installedElectrobunRequire = createRequire(installedManifestPath);
+-  const resolvedRceditPackageJson = installedElectrobunRequire.resolve(
+-    "rcedit/package.json",
+-  );
+-
+-  writeGitHubEnv("ELECTROBUN_RCEDIT_PACKAGE_JSON", resolvedRceditPackageJson);
+   console.log(
+-    `[build-patched-electrobun-cli] Using rcedit package ${resolvedRceditPackageJson}`,
++    `[build-patched-electrobun-cli] Building patched CLI target ${buildTarget.bunTarget} (${buildTarget.targetKey})`,
+   );
++  let resolvedRceditPackageJson = "";
++  try {
++    resolvedRceditPackageJson = installedElectrobunRequire.resolve(
++      "rcedit/package.json",
++    );
++  } catch (error) {
++    if (buildTarget.binExt) {
++      const message = error instanceof Error ? error.message : String(error);
++      fail(`Failed to resolve rcedit for Windows patched CLI: ${message}`);
++    }
++  }
++  if (resolvedRceditPackageJson) {
++    writeGitHubEnv("ELECTROBUN_RCEDIT_PACKAGE_JSON", resolvedRceditPackageJson);
++    console.log(
++      `[build-patched-electrobun-cli] Using rcedit package ${resolvedRceditPackageJson}`,
++    );
++  } else {
++    console.log(
++      "[build-patched-electrobun-cli] rcedit package not present; continuing for non-Windows target",
++    );
++  }
+
+   const tempRoot = path.join(
+     process.env.RUNNER_TEMP ?? os.tmpdir(),
+@@ -239,7 +404,7 @@ function main() {
+       "build",
+       "src/cli/index.ts",
+       "--compile",
+-      "--target=bun-windows-x64-baseline",
++      `--target=${buildTarget.bunTarget}`,
+       "--outfile",
+       "src/cli/build/electrobun",
+     ],
+@@ -257,7 +422,7 @@ function main() {
+     "src",
+     "cli",
+     "build",
+-    "electrobun.exe",
++    `electrobun${buildTarget.binExt}`,
+   );
+   if (!existsSync(compiledCliPath)) {
+     fail(`Expected compiled CLI at ${compiledCliPath}`);
+@@ -266,18 +431,22 @@ function main() {
+   const installedBinPath = path.join(
+     installedElectrobunDir,
+     "bin",
+-    "electrobun.exe",
++    `electrobun${buildTarget.binExt}`,
+   );
+   const installedCachePath = path.join(
+     installedElectrobunDir,
+     ".cache",
+-    "electrobun.exe",
++    `electrobun${buildTarget.binExt}`,
+   );
+
+   mkdirSync(path.dirname(installedBinPath), { recursive: true });
+   mkdirSync(path.dirname(installedCachePath), { recursive: true });
+   copyFileSync(compiledCliPath, installedBinPath);
+   copyFileSync(compiledCliPath, installedCachePath);
++  if (!buildTarget.binExt) {
++    chmodSync(installedBinPath, 0o755);
++    chmodSync(installedCachePath, 0o755);
++  }
+
+   console.log(
+     `[build-patched-electrobun-cli] Installed patched CLI to ${installedBinPath}`,
+diff --git a/packages/app-core/scripts/playwright-ui-smoke-api-stub.mjs b/packages/app-core/scripts/playwright-ui-smoke-api-stub.mjs
+index b130d993dd..00a4e4a827 100644
+--- a/packages/app-core/scripts/playwright-ui-smoke-api-stub.mjs
++++ b/packages/app-core/scripts/playwright-ui-smoke-api-stub.mjs
+@@ -638,6 +638,83 @@ function streamSettings(payload = {}) {
+   };
+ }
+
++function emptyLifeOpsScreenTimeSummary() {
++  return {
++    items: [],
++    totalSeconds: 0,
++  };
++}
++
++function emptyLifeOpsSocialHabitSummary(url) {
++  const since = url.searchParams.get("since") ?? nowIso();
++  const until = url.searchParams.get("until") ?? nowIso();
++  return {
++    since,
++    until,
++    totalSeconds: 0,
++    services: [],
++    devices: [],
++    surfaces: [],
++    browsers: [],
++    sessions: [],
++    messages: {
++      channels: [],
++      inbound: 0,
++      outbound: 0,
++      opened: 0,
++      replied: 0,
++    },
++    dataSources: [],
++    fetchedAt: nowIso(),
++  };
++}
++
++function lifeOpsCapabilitiesStatus() {
++  return {
++    appEnabled: lifeOpsAppEnabled,
++    capabilities: [],
++    generatedAt: nowIso(),
++    relativeTime: null,
++    summary: {
++      totalCount: 0,
++      workingCount: 0,
++      degradedCount: 0,
++      blockedCount: 0,
++      notConfiguredCount: 0,
++    },
++  };
++}
++
++function emptyLifeOpsCalendarFeed(url) {
++  return {
++    calendarId: url.searchParams.get("calendarId") ?? "primary",
++    events: [],
++    source: "cache",
++    timeMin: url.searchParams.get("timeMin") ?? nowIso(),
++    timeMax: url.searchParams.get("timeMax") ?? nowIso(),
++    syncedAt: null,
++  };
++}
++
++function emptyLifeOpsInbox() {
++  return {
++    messages: [],
++    channelCounts: Object.fromEntries(
++      [
++        "gmail",
++        "x_dm",
++        "discord",
++        "telegram",
++        "signal",
++        "imessage",
++        "whatsapp",
++        "sms",
++      ].map((channel) => [channel, { total: 0, unread: 0 }]),
++    ),
++    fetchedAt: nowIso(),
++  };
++}
++
+ const sockets = new Set();
+ const server = http.createServer(async (req, res) => {
+   const url = new URL(
+@@ -1251,14 +1328,95 @@ const server = http.createServer(async (req, res) => {
+     url.pathname === "/api/lifeops/connectors/google/status"
+   ) {
+     sendJson(req, res, 200, {
++      side: url.searchParams.get("side") === "agent" ? "agent" : "owner",
++      provider: "google",
++      mode: "cloud_managed",
++      defaultMode: "cloud_managed",
++      availableModes: ["cloud_managed", "local"],
++      executionTarget: "local",
++      sourceOfTruth: "local_storage",
++      configured: false,
+       connected: false,
+-      available: false,
+-      authUrl: null,
+-      lastSyncedAt: null,
++      reason: "disconnected",
++      preferredByAgent: false,
++      cloudConnectionId: null,
++      identity: null,
++      grantedCapabilities: [],
++      grantedScopes: [],
++      expiresAt: null,
++      hasRefreshToken: false,
++      grant: null,
+     });
+     return;
+   }
+
++  if (
++    req.method === "GET" &&
++    url.pathname === "/api/lifeops/connectors/google/accounts"
++  ) {
++    sendJson(req, res, 200, []);
++    return;
++  }
++
++  if (
++    req.method === "GET" &&
++    url.pathname === "/api/lifeops/connectors/x/status"
++  ) {
++    sendJson(req, res, 200, {
++      side: url.searchParams.get("side") === "agent" ? "agent" : "owner",
++      provider: "x",
++      mode: "cloud_managed",
++      defaultMode: "cloud_managed",
++      availableModes: ["cloud_managed", "local"],
++      executionTarget: "local",
++      sourceOfTruth: "local_storage",
++      configured: false,
++      connected: false,
++      reason: "disconnected",
++      preferredByAgent: false,
++      cloudConnectionId: null,
++      grantedCapabilities: [],
++      grantedScopes: [],
++      identity: null,
++      hasCredentials: false,
++      feedRead: false,
++      feedWrite: false,
++      dmRead: false,
++      dmWrite: false,
++      dmInbound: false,
++      grant: null,
++    });
++    return;
++  }
++
++  if (req.method === "GET" && url.pathname === "/api/lifeops/capabilities") {
++    sendJson(req, res, 200, lifeOpsCapabilitiesStatus());
++    return;
++  }
++
++  if (
++    req.method === "GET" &&
++    url.pathname === "/api/lifeops/screen-time/summary"
++  ) {
++    sendJson(req, res, 200, emptyLifeOpsScreenTimeSummary());
++    return;
++  }
++
++  if (req.method === "GET" && url.pathname === "/api/lifeops/social/summary") {
++    sendJson(req, res, 200, emptyLifeOpsSocialHabitSummary(url));
++    return;
++  }
++
++  if (req.method === "GET" && url.pathname === "/api/lifeops/calendar/feed") {
++    sendJson(req, res, 200, emptyLifeOpsCalendarFeed(url));
++    return;
++  }
++
++  if (req.method === "GET" && url.pathname === "/api/lifeops/inbox") {
++    sendJson(req, res, 200, emptyLifeOpsInbox());
++    return;
++  }
++
+   if (
+     req.method === "GET" &&
+     (url.pathname === "/api/browser-bridge/companions" ||
+diff --git a/packages/app-core/scripts/release-check.ts b/packages/app-core/scripts/release-check.ts
+index d82707249d..fd8886b3b1 100755
+--- a/packages/app-core/scripts/release-check.ts
++++ b/packages/app-core/scripts/release-check.ts
+@@ -58,7 +58,7 @@ function resolveOrchestratorPluginPackageJsonPath() {
+   return resolveExistingPath(orchestratorPluginPackageJsonPathCandidates);
+ }
+ const requiredWorkflowSnippets = [
+-  'BUN_VERSION: "1.3.11"',
++  'BUN_VERSION: "1.3.13"',
+   "workflow_call:",
+   "name: Validate Release Inputs",
+   "Manual branch dispatches must provide inputs.tag; refusing to derive a release tag from package.json.",
+@@ -163,9 +163,10 @@ const requiredWorkflowSnippets = [
+   'echo "package-dir=$package_dir" >> "$GITHUB_OUTPUT"',
+   'echo "cache-dir=$package_dir/.cache" >> "$GITHUB_OUTPUT"',
+   "path: $" + "{{ steps.resolve-electrobun.outputs.cache-dir }}",
+-  "name: Build patched Electrobun CLI for Windows",
++  "name: Build patched Electrobun CLI",
+   'node eliza/packages/app-core/scripts/build-patched-electrobun-cli.mjs "$' +
+     '{{ steps.resolve-electrobun.outputs.package-dir }}"',
++  '"${{ matrix.platform.artifact-name }}"',
+   "node eliza/packages/app-core/scripts/desktop-build.mjs package --env=$" +
+     "{{ needs.prepare.outputs.env }}",
+   "ELIZA_ELECTROBUN_NOTARIZE: 0",
+@@ -191,7 +192,11 @@ const _requiredPatchedElectrobunCliSnippets = [
+   'writeGitHubEnv("ELECTROBUN_RCEDIT_PACKAGE_JSON", resolvedRceditPackageJson);',
+   'const overridePackageJson = process.env["ELECTROBUN_RCEDIT_PACKAGE_JSON"];',
+   'const overrideEntry = overrideRequire.resolve("rcedit");',
+-  "--target=bun-windows-x64-baseline",
++  "function resolveBuildTarget(value) {",
++  "--target=${buildTarget.bunTarget}",
++  "[electrobun-build] Bun entry:",
++  "targetPaths.BUN_BINARY",
++  "Bun CLI fallback succeeded",
+   "const installedBinPath = path.join(",
+   "const installedCachePath = path.join(",
+ ];
+@@ -239,7 +244,7 @@ const requiredElectrobunPrWorkflowSnippets = [
+   "workflow_dispatch:",
+   "permissions:",
+   "contents: read",
+-  'BUN_VERSION: "1.3.11"',
++  'BUN_VERSION: "1.3.13"',
+   "name: Release Workflow Contract",
+   "bun install --ignore-scripts",
+   "bun run postinstall",
+@@ -923,8 +928,11 @@ function assertMacArtifactStagerLooksCorrect() {
+     "stage-macos-release-artifacts.sh",
+   );
+   const requiredSnippets = [
+-    'find -L "$ARTIFACTS_DIR" -maxdepth 1 -type f -name "*-macos-*.app.tar.zst"',
++    'for tarball_pattern in "*-macos-*.app.tar.zst" "*-macos-*.app.tar.gz" "*-macos-*.tar.gz"; do',
+     "no macOS updater tarball found",
++    'tar --zstd -xf "$TARBALL_PATH" -C "$EXTRACT_DIR"',
++    'tar -xzf "$TARBALL_PATH" -C "$EXTRACT_DIR"',
++    'TARBALL_BASENAME="$(basename "$TARBALL_PATH")"',
+     'DIRECT_LAUNCHER_SOURCE="$SCRIPT_DIR/macos-direct-launcher.c"',
+     'codesign -d --entitlements :- "$STAGED_APP_PATH"',
+     "/usr/bin/clang \\",
+diff --git a/packages/app-core/scripts/run-release-contract-suite.mjs b/packages/app-core/scripts/run-release-contract-suite.mjs
+index 099d7e91a7..c561db8b95 100755
+--- a/packages/app-core/scripts/run-release-contract-suite.mjs
++++ b/packages/app-core/scripts/run-release-contract-suite.mjs
+@@ -6,16 +6,27 @@ const APP_CORE_ROOT = path.resolve(import.meta.dirname, "..");
+ const REPO_ROOT = path.resolve(APP_CORE_ROOT, "..", "..", "..");
+
+ const releaseContractTests = [
+-  "eliza/packages/app-core/scripts/asset-cdn.test.ts",
+-  "eliza/packages/app-core/scripts/docker-contract.test.ts",
+-  "eliza/packages/app-core/scripts/chrome-extension-release-surface.test.ts",
++  "scripts/release-workflow-path-contract.test.ts",
++  "scripts/run-release-contract-suite.test.ts",
++  "scripts/patch-mobile-build-release-compat.test.ts",
++  "scripts/patch-release-check-pack-fallback.test.ts",
++  "scripts/electrobun-pr-workflow-contract.test.ts",
+   "eliza/packages/app-core/scripts/electrobun-release-workflow-drift.test.ts",
+-  "eliza/packages/app-core/scripts/electrobun-test-workflow-drift.test.ts",
+-  "eliza/packages/app-core/scripts/whisper-build-script-drift.test.ts",
+   "eliza/packages/app-core/scripts/release-check.test.ts",
+   "eliza/packages/app-core/scripts/static-asset-manifest.test.ts",
+ ];
+
++const missingReleaseContractTests = releaseContractTests.filter(
++  (testPath) => !fs.existsSync(path.join(REPO_ROOT, testPath)),
++);
++if (missingReleaseContractTests.length > 0) {
++  console.error("Release contract suite references missing test files:");
++  for (const testPath of missingReleaseContractTests) {
++    console.error(`- ${testPath}`);
++  }
++  process.exit(1);
++}
++
+ function run(command, args, cwd = APP_CORE_ROOT) {
+   const result = spawnSync(command, args, {
+     cwd,
+@@ -33,11 +44,15 @@ function run(command, args, cwd = APP_CORE_ROOT) {
+ }
+
+ run("bunx", ["vitest", "run", ...releaseContractTests], REPO_ROOT);
+-run("bunx", [
+-  "vitest",
+-  "run",
+-  "eliza/packages/app-core/scripts/startup-integration-script-drift.test.ts",
+-], REPO_ROOT);
++run(
++  "bunx",
++  [
++    "vitest",
++    "run",
++    "eliza/packages/app-core/scripts/startup-integration-script-drift.test.ts",
++  ],
++  REPO_ROOT,
++);
+
+ // tsdown and the release check both resolve repo-root-relative entries/config.
+ run("bunx", ["tsdown", "--fail-on-warn", "false"], REPO_ROOT);
+diff --git a/packages/app-core/src/components/pages/TerminalChannelPanel.test.tsx b/packages/app-core/src/components/pages/TerminalChannelPanel.test.tsx
+index 1fc3db564f..3bd7202380 100644
+--- a/packages/app-core/src/components/pages/TerminalChannelPanel.test.tsx
++++ b/packages/app-core/src/components/pages/TerminalChannelPanel.test.tsx
+@@ -36,6 +36,7 @@ vi.mock("@elizaos/ui", () => ({
+   ),
+   ChatTranscript: () => null,
+   TypingIndicator: () => null,
++  useIntervalWhenDocumentVisible: () => {},
+ }));
+
+ vi.mock("../../state/ChatComposerContext", () => ({
+diff --git a/packages/app-core/src/components/settings/AppearanceSettingsSection.tsx b/packages/app-core/src/components/settings/AppearanceSettingsSection.tsx
+index f4aaa5dba9..2854b16dc6 100644
+--- a/packages/app-core/src/components/settings/AppearanceSettingsSection.tsx
++++ b/packages/app-core/src/components/settings/AppearanceSettingsSection.tsx
+@@ -3 +3 @@ import { BUILTIN_THEMES } from "@elizaos/shared/themes/presets";
+-import { Button, Input } from "@elizaos/ui";
++import { Button, Input, Switch } from "@elizaos/ui";
+@@ -13,0 +14,2 @@ import {
++  type CompanionHalfFramerateMode,
++  type CompanionVrmPowerMode,
+@@ -17,0 +20 @@ import {
++import { COMPANION_ENABLED } from "../../navigation";
+@@ -19,0 +23,12 @@ import { LANGUAGES } from "../shared/LanguageDropdown";
++const COMPANION_VRM_POWER_OPTIONS: CompanionVrmPowerMode[] = [
++  "quality",
++  "balanced",
++  "efficiency",
++];
++
++const COMPANION_HALF_FRAMERATE_OPTIONS: CompanionHalfFramerateMode[] = [
++  "off",
++  "when_saving_power",
++  "always",
++];
++
+@@ -44,0 +60,6 @@ export function AppearanceSettingsSection() {
++    companionVrmPowerMode,
++    setCompanionVrmPowerMode,
++    companionAnimateWhenHidden,
++    setCompanionAnimateWhenHidden,
++    companionHalfFramerateMode,
++    setCompanionHalfFramerateMode,
+@@ -350,0 +372,12 @@ export function AppearanceSettingsSection() {
++      {COMPANION_ENABLED && (
++        <CompanionPerformanceSettings
++          companionVrmPowerMode={companionVrmPowerMode}
++          setCompanionVrmPowerMode={setCompanionVrmPowerMode}
++          companionHalfFramerateMode={companionHalfFramerateMode}
++          setCompanionHalfFramerateMode={setCompanionHalfFramerateMode}
++          companionAnimateWhenHidden={companionAnimateWhenHidden}
++          setCompanionAnimateWhenHidden={setCompanionAnimateWhenHidden}
++          t={t}
++        />
++      )}
++
+@@ -482,0 +516,109 @@ export function AppearanceSettingsSection() {
++function CompanionPerformanceSettings({
++  companionVrmPowerMode,
++  setCompanionVrmPowerMode,
++  companionHalfFramerateMode,
++  setCompanionHalfFramerateMode,
++  companionAnimateWhenHidden,
++  setCompanionAnimateWhenHidden,
++  t,
++}: {
++  companionVrmPowerMode: CompanionVrmPowerMode;
++  setCompanionVrmPowerMode: (mode: CompanionVrmPowerMode) => void;
++  companionHalfFramerateMode: CompanionHalfFramerateMode;
++  setCompanionHalfFramerateMode: (mode: CompanionHalfFramerateMode) => void;
++  companionAnimateWhenHidden: boolean;
++  setCompanionAnimateWhenHidden: (enabled: boolean) => void;
++  t: (key: string, vars?: Record<string, unknown>) => string;
++}) {
++  return (
++    <section className="space-y-2">
++      <h3 className="text-xs font-medium uppercase tracking-wider text-muted">
++        {t("settings.appearance.companionPerformance", {
++          defaultValue: "Companion performance",
++        })}
++      </h3>
++      <div
++        className="rounded-xl border border-border bg-card/60 px-3 py-3 flex flex-col gap-3"
++        data-testid="settings-companion-vrm-power"
++      >
++        <div className="min-w-0">
++          <div className="text-xs font-semibold text-txt">
++            {t("settings.companionVrmPower.label")}
++          </div>
++          <div className="text-2xs text-muted mt-1 leading-snug">
++            {t("settings.companionVrmPower.desc")}
++          </div>
++        </div>
++        <div className="flex flex-wrap gap-1.5">
++          {COMPANION_VRM_POWER_OPTIONS.map((mode) => {
++            const active = companionVrmPowerMode === mode;
++            return (
++              <Button
++                key={mode}
++                type="button"
++                variant={active ? "default" : "ghost"}
++                size="sm"
++                className="flex-1 basis-[calc(50%-0.25rem)] sm:basis-0 min-h-touch rounded-lg border px-2 py-1.5 text-xs-tight font-semibold !whitespace-normal"
++                onClick={() => setCompanionVrmPowerMode(mode)}
++                aria-pressed={active}
++              >
++                {t(`settings.companionVrmPower.${mode}`)}
++              </Button>
++            );
++          })}
++        </div>
++        <div
++          className="flex flex-col gap-2 border-t border-border pt-3"
++          data-testid="settings-companion-half-framerate"
++        >
++          <div className="min-w-0">
++            <div className="text-xs font-semibold text-txt">
++              {t("settings.companionHalfFramerate.label")}
++            </div>
++            <div className="text-2xs text-muted mt-1 leading-snug">
++              {t("settings.companionHalfFramerate.desc")}
++            </div>
++          </div>
++          <div className="flex flex-wrap gap-1.5">
++            {COMPANION_HALF_FRAMERATE_OPTIONS.map((mode) => {
++              const active = companionHalfFramerateMode === mode;
++              return (
++                <Button
++                  key={mode}
++                  type="button"
++                  variant={active ? "default" : "ghost"}
++                  size="sm"
++                  className="flex-1 basis-[calc(50%-0.25rem)] sm:basis-0 min-h-touch rounded-lg border px-2 py-1.5 text-xs-tight font-semibold !whitespace-normal"
++                  onClick={() => setCompanionHalfFramerateMode(mode)}
++                  aria-pressed={active}
++                >
++                  {t(`settings.companionHalfFramerate.${mode}`)}
++                </Button>
++              );
++            })}
++          </div>
++        </div>
++        <div
++          className="flex flex-col gap-2 border-t border-border pt-3"
++          data-testid="settings-companion-animate-when-hidden"
++        >
++          <div className="text-xs font-semibold text-txt">
++            {t("settings.companionAnimateWhenHidden.title")}
++          </div>
++          <div className="flex items-end justify-between gap-3">
++            <div className="min-w-0 flex-1 text-2xs text-muted leading-snug pr-2">
++              {t("settings.companionAnimateWhenHidden.desc")}
++            </div>
++            <Switch
++              className="shrink-0"
++              checked={companionAnimateWhenHidden}
++              onCheckedChange={setCompanionAnimateWhenHidden}
++              aria-label={t("settings.companionAnimateWhenHidden.title")}
++            />
++          </div>
++        </div>
++      </div>
++    </section>
++  );
++}
++
+diff --git a/apps/app-lifeops/test/selfcontrol-desktop.live.e2e.test.ts b/apps/app-lifeops/test/selfcontrol-desktop.live.e2e.test.ts
+index 43ec323125..5b4de02384 100644
+--- a/apps/app-lifeops/test/selfcontrol-desktop.live.e2e.test.ts
++++ b/apps/app-lifeops/test/selfcontrol-desktop.live.e2e.test.ts
+@@ -23,6 +23,7 @@ type DesktopMode = "dev:desktop" | "dev:desktop:watch";
+ type StartedDesktopStack = {
+   apiPort: number;
+   close: () => Promise<void>;
++  desktopBridgePort: number;
+   getLogTail: () => string;
+   hostsFilePath: string;
+   uiPort: number;
+@@ -97,13 +98,14 @@ async function waitForJsonPredicate<T>(
+   url: string,
+   predicate: (value: T) => boolean,
+   timeoutMs = 240_000,
++  requestInit?: RequestInit,
+ ): Promise<T> {
+   const deadline = Date.now() + timeoutMs;
+   let lastError: unknown = null;
+
+   while (Date.now() < deadline) {
+     try {
+-      const response = await fetch(url);
++      const response = await fetch(url, requestInit);
+       if (!response.ok) {
+         throw new Error(`Request failed (${response.status}): ${url}`);
+       }
+@@ -155,6 +157,23 @@ async function waitForTextPredicate(
+     : new Error(`Timed out waiting for ${url}`);
+ }
+
++async function waitForDesktopBridgeHealth(
++  port: number,
++  token: string,
++  timeoutMs = 240_000,
++): Promise<void> {
++  await waitForJsonPredicate<{ ok?: boolean }>(
++    `http://127.0.0.1:${port}/health`,
++    (value) => value.ok === true,
++    timeoutMs,
++    {
++      headers: {
++        Authorization: `Bearer ${token}`,
++      },
++    },
++  );
++}
++
+ async function waitForHostsBlock(
+   hostsFilePath: string,
+   websites: string[],
+@@ -211,6 +230,8 @@ async function startDesktopStack(
+   const hostsFilePath = path.join(tempRoot, "hosts");
+   const apiPort = await getFreePort();
+   const uiPort = await getFreePort();
++  const desktopBridgePort = await getFreePort();
++  const desktopBridgeToken = `desktop-smoke-${desktopBridgePort}`;
+   const logs: string[] = [];
+
+   await mkdir(stateDir, { recursive: true });
+@@ -240,6 +261,9 @@ async function startDesktopStack(
+       ELIZA_DISABLE_LIFEOPS_SCHEDULER: "1",
+       ELIZA_DISABLE_LOCAL_EMBEDDINGS: "1",
+       ELIZA_DISABLE_PROACTIVE_AGENT: "1",
++      ELIZA_DESKTOP_TEST_BRIDGE_ENABLED: "1",
++      ELIZA_DESKTOP_TEST_BRIDGE_PORT: String(desktopBridgePort),
++      ELIZA_DESKTOP_TEST_BRIDGE_TOKEN: desktopBridgeToken,
+       ELIZA_API_PORT: String(apiPort),
+       ELIZA_PORT: String(uiPort),
+       ELIZA_UI_PORT: String(uiPort),
+@@ -288,6 +312,8 @@ async function startDesktopStack(
+       (text) => text.includes("[electrobun]") || text.includes("[api]"),
+     );
+
++    await waitForDesktopBridgeHealth(desktopBridgePort, desktopBridgeToken);
++
+     await sleep(2_000);
+     if (child.exitCode != null) {
+       throw new Error(
+@@ -308,6 +334,7 @@ async function startDesktopStack(
+
+   return {
+     apiPort,
++    desktopBridgePort,
+     getLogTail: () => logs.join("").slice(-16_000),
+     hostsFilePath,
+     uiPort,
+diff --git a/packages/app-core/platforms/electrobun/src/index.ts b/packages/app-core/platforms/electrobun/src/index.ts
+index 66347845e6..9c0a6850d0 100644
+--- a/packages/app-core/platforms/electrobun/src/index.ts
++++ b/packages/app-core/platforms/electrobun/src/index.ts
+@@ -41,6 +41,7 @@ import {
+   resolveBootstrapViewRenderer,
+   resolveMainWindowPartition,
+   shouldForceMainWindowCef,
++  shouldUseHeadlessDesktopSmoke,
+ } from "./main-window-session";
+ import {
+   buildMainMenuResetApiCandidates,
+@@ -1866,6 +1867,19 @@ async function main(): Promise<void> {
+     }),
+   );
+
++  if (shouldUseHeadlessDesktopSmoke(process.env)) {
++    console.log(
++      "[Main] Headless desktop smoke mode enabled; skipping native BrowserWindow creation.",
++    );
++    const stopScreenshotDevServer = startScreenshotDevServer();
++    if (stopScreenshotDevServer) {
++      cleanupFns.push(stopScreenshotDevServer);
++    }
++    cleanupFns.push(() => getAgentManager().stop());
++    setupShutdown();
++    return;
++  }
++
+   // Create window first — on Windows (CEF) the UI message loop must be
+   // running before any synchronous FFI calls like setApplicationMenu().
+   // Calling setupApplicationMenu() before createMainWindow() deadlocks.
+diff --git a/packages/app-core/platforms/electrobun/src/main-window-session.test.ts b/packages/app-core/platforms/electrobun/src/main-window-session.test.ts
+new file mode 100644
+--- /dev/null
++++ b/packages/app-core/platforms/electrobun/src/main-window-session.test.ts
+@@ -0,0 +1,34 @@
++import { describe, expect, it } from "vitest";
++import { shouldUseHeadlessDesktopSmoke } from "./main-window-session";
++
++describe("shouldUseHeadlessDesktopSmoke", () => {
++  it("is disabled by default", () => {
++    expect(shouldUseHeadlessDesktopSmoke({})).toBe(false);
++  });
++
++  it("accepts the elizaOS smoke env flag", () => {
++    expect(
++      shouldUseHeadlessDesktopSmoke({
++        ELIZA_DESKTOP_HEADLESS_SMOKE: "1",
++      }),
++    ).toBe(true);
++  });
++
++  it("accepts the Milady smoke env flag", () => {
++    expect(
++      shouldUseHeadlessDesktopSmoke({
++        MILADY_DESKTOP_HEADLESS_SMOKE: "true",
++      }),
++    ).toBe(true);
++  });
++
++  it("treats explicit off values as disabled", () => {
++    for (const value of ["0", "false", "no", "off"]) {
++      expect(
++        shouldUseHeadlessDesktopSmoke({
++          MILADY_DESKTOP_HEADLESS_SMOKE: value,
++        }),
++      ).toBe(false);
++    }
++  });
++});
+diff --git a/packages/app-core/platforms/electrobun/src/main-window-session.ts b/packages/app-core/platforms/electrobun/src/main-window-session.ts
+index bdcbdddbf3..ebfbcbb7f6 100644
+--- a/packages/app-core/platforms/electrobun/src/main-window-session.ts
++++ b/packages/app-core/platforms/electrobun/src/main-window-session.ts
+@@ -46,6 +46,17 @@ export function shouldForceMainWindowCef(
+   return parseEnabledFlag(trimToNull(env.ELIZA_DESKTOP_FORCE_CEF));
+ }
+
++export function shouldUseHeadlessDesktopSmoke(
++  env: NodeJS.ProcessEnv = process.env,
++): boolean {
++  return parseEnabledFlag(
++    trimToNull(
++      env.ELIZA_DESKTOP_HEADLESS_SMOKE ??
++        env.MILADY_DESKTOP_HEADLESS_SMOKE,
++    ),
++  );
++}
++
+ export function resolveMainWindowPartition(
+   env: NodeJS.ProcessEnv = process.env,
+ ): string | null {

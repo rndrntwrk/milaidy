@@ -348,12 +348,12 @@ jobs:
     # the mirror generator, which breaks Xcode/Electron-dependent jobs.
     runs-on: macos-14
     timeout-minutes: 40
-    # Electrobun native renderer can SIGTRAP (signal 5) on macos-14 runners
-    # during "dev:desktop" launch — see de514875 run 72040224535. The dev
-    # stack itself is healthy (startup smokes pass); this is an Electrobun
-    # native-runtime crash that requires upstream investigation. Mark as
-    # non-blocking so it does not gate develop.
-    continue-on-error: true
+    # This job verifies the desktop orchestrator + Electrobun process +
+    # website-blocker API via the loopback test bridge. Release jobs own the
+    # packaged/native window gate, so CI uses a headless Electrobun smoke mode
+    # to avoid hosted macOS WKWebView SIGTRAPs masking product regressions.
+    env:
+      MILADY_DESKTOP_HEADLESS_SMOKE: "1"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -474,6 +474,9 @@ jobs:
         env:
           SKIP_AVATAR_CLONE: "1"
           MILADY_NO_VISION_DEPS: "1"
+
+      - name: Patch Android release build compatibility
+        run: node scripts/patch-mobile-build-release-compat.mjs
 
       - name: Build Android website blocker app
         run: bun run test:selfcontrol:mobile:android
@@ -596,9 +599,15 @@ jobs:
     steps:
       - name: Check cloud secrets
         id: cloud
+        env:
+          ELIZAOS_CLOUD_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY != '' && secrets.ELIZAOS_CLOUD_API_KEY || secrets.ELIZACLOUD_API_KEY }}
         run: |
-          if [ -z "${{ secrets.ELIZAOS_CLOUD_API_KEY }}" ]; then
-            echo "::warning::ELIZAOS_CLOUD_API_KEY not configured — skipping cloud E2E."
+          if [ -z "${ELIZAOS_CLOUD_API_KEY}" ]; then
+            if [ "${{ github.event_name }}" = "push" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+              echo "::error::ELIZAOS_CLOUD_API_KEY or ELIZACLOUD_API_KEY is required for canonical cloud E2E."
+              exit 1
+            fi
+            echo "::warning::No Eliza Cloud API key configured for this PR — skipping cloud E2E."
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
@@ -628,7 +637,7 @@ jobs:
         env:
           MILADY_LIVE_TEST: "1"
           ELIZA_LIVE_TEST: "1"
-          ELIZAOS_CLOUD_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY }}
+          ELIZAOS_CLOUD_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY != '' && secrets.ELIZAOS_CLOUD_API_KEY || secrets.ELIZACLOUD_API_KEY }}
           ELIZAOS_CLOUD_BASE_URL: ${{ secrets.ELIZAOS_CLOUD_BASE_URL }}
 
   action-e2e:
@@ -636,8 +645,9 @@ jobs:
     needs: [regression-matrix]
     runs-on: ubuntu-24.04
     timeout-minutes: 45
-    # Gate on API key availability (Groq preferred — cheapest)
-    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'run-action-e2e') }}
+    # Push/dispatch CI must exercise the real action invocation path. PRs can
+    # opt into the live-provider job with the run-action-e2e label.
+    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run-action-e2e')) }}
     env:
       MILADY_LIVE_TEST: "1"
       ELIZA_LIVE_TEST: "1"
@@ -645,9 +655,9 @@ jobs:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-      ELIZAOS_CLOUD_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY }}
-      OPENAI_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY != '' && secrets.ELIZAOS_CLOUD_API_KEY || secrets.OPENAI_API_KEY }}
-      OPENAI_BASE_URL: ${{ secrets.ELIZAOS_CLOUD_API_KEY != '' && 'https://elizacloud.ai/api/v1' || 'https://api.openai.com/v1' }}
+      ELIZAOS_CLOUD_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY != '' && secrets.ELIZAOS_CLOUD_API_KEY || secrets.ELIZACLOUD_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY != '' && secrets.ELIZAOS_CLOUD_API_KEY || (secrets.ELIZACLOUD_API_KEY != '' && secrets.ELIZACLOUD_API_KEY || secrets.OPENAI_API_KEY) }}
+      OPENAI_BASE_URL: ${{ (secrets.ELIZAOS_CLOUD_API_KEY != '' || secrets.ELIZACLOUD_API_KEY != '') && 'https://elizacloud.ai/api/v1' || 'https://api.openai.com/v1' }}
       NODE_NO_WARNINGS: "1"
       NODE_OPTIONS: "--max-old-space-size=4096"
     steps:
@@ -694,8 +704,8 @@ jobs:
           fi
 
           if grep -Eiq 'exceeded your current quota|insufficient[_ -]?quota|billing details|credit balance|invalid api key|unauthorized|authentication|status code: 429|too many requests' "$log_file"; then
-            echo "::warning::Action Invocation E2E skipped because the configured live provider is unavailable."
-            exit 0
+            echo "::error::Action Invocation E2E requires an available live provider in canonical CI."
+            exit 1
           fi
 
           exit 1
@@ -720,6 +730,7 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
           disable-local-eliza-workspace: "true"
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
           skip-avatar-clone: "true"
           no-vision-deps: "true"
           prepare-local-eliza-runtime: "true"
@@ -740,7 +751,7 @@ jobs:
         env:
           MILADY_LIVE_TEST: "1"
           ELIZA_LIVE_TEST: "1"
-          ELIZAOS_CLOUD_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY }}
+          ELIZAOS_CLOUD_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY != '' && secrets.ELIZAOS_CLOUD_API_KEY || secrets.ELIZACLOUD_API_KEY }}
           ELIZAOS_CLOUD_BASE_URL: ${{ secrets.ELIZAOS_CLOUD_BASE_URL }}
 
   live-surface-audit:
@@ -779,7 +790,7 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          ELIZAOS_CLOUD_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY }}
+          ELIZAOS_CLOUD_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY != '' && secrets.ELIZAOS_CLOUD_API_KEY || secrets.ELIZACLOUD_API_KEY }}
         run: |
           if [ -z "${OPENAI_API_KEY}" ] && \
              [ -z "${GROQ_API_KEY}" ] && \
@@ -787,7 +798,11 @@ jobs:
              [ -z "${GOOGLE_GENERATIVE_AI_API_KEY}" ] && \
              [ -z "${OPENROUTER_API_KEY}" ] && \
              [ -z "${ELIZAOS_CLOUD_API_KEY}" ]; then
-            echo "::warning::No live provider secret configured — skipping UI Playwright smoke."
+            if [ "${{ github.event_name }}" = "push" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+              echo "::error::At least one live provider secret is required for canonical UI Playwright smoke."
+              exit 1
+            fi
+            echo "::warning::No live provider secret configured for this PR — skipping UI Playwright smoke."
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
@@ -868,7 +883,7 @@ jobs:
         env:
           MILADY_LIVE_TEST: "1"
           ELIZA_LIVE_TEST: "1"
-          ELIZAOS_CLOUD_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY }}
+          ELIZAOS_CLOUD_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY != '' && secrets.ELIZAOS_CLOUD_API_KEY || secrets.ELIZACLOUD_API_KEY }}
           ELIZAOS_CLOUD_BASE_URL: ${{ secrets.ELIZAOS_CLOUD_BASE_URL }}
 
   test-status:
@@ -886,6 +901,7 @@ jobs:
         website-blocker-mobile-ios,
         desktop-contract,
         cloud-live-e2e,
+        action-e2e,
         validation-e2e,
         live-surface-audit,
         ui-playwright-smoke,
@@ -908,10 +924,12 @@ jobs:
           echo "website-blocker-mobile-ios:     ${{ needs.website-blocker-mobile-ios.result }}"
           echo "desktop-contract:   ${{ needs.desktop-contract.result }}"
           echo "cloud-live-e2e:     ${{ needs.cloud-live-e2e.result }}"
+          echo "action-e2e:         ${{ needs.action-e2e.result }}"
           echo "validation-e2e:     ${{ needs.validation-e2e.result }}"
           echo "live-surface-audit: ${{ needs.live-surface-audit.result }}"
           echo "ui-playwright-smoke:${{ needs.ui-playwright-smoke.result }}"
           echo "==================================="
+          strict_results="${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}"
           bad=0
           for pair in \
             "regression-matrix:${{ needs.regression-matrix.result }}" \
@@ -924,12 +942,17 @@ jobs:
             "website-blocker-mobile-ios:${{ needs.website-blocker-mobile-ios.result }}" \
             "desktop-contract:${{ needs.desktop-contract.result }}" \
             "cloud-live-e2e:${{ needs.cloud-live-e2e.result }}" \
+            "action-e2e:${{ needs.action-e2e.result }}" \
             "validation-e2e:${{ needs.validation-e2e.result }}" \
             "live-surface-audit:${{ needs.live-surface-audit.result }}" \
             "ui-playwright-smoke:${{ needs.ui-playwright-smoke.result }}"; do
             name="${pair%%:*}"
             result="${pair##*:}"
-            if [ "$result" != "success" ] && [ "$result" != "skipped" ]; then
+            if [ "$result" = "skipped" ] && [ "$strict_results" != "true" ]; then
+              echo "::warning title=Test gate::Live-only job '${name}' was skipped for this PR context."
+              continue
+            fi
+            if [ "$result" != "success" ]; then
               echo "::error title=Test gate::Required job '${name}' finished with '${result}' (expected success)"
               bad=1
             fi
