@@ -109,62 +109,6 @@ index 149d5e6be6..bf80c208ca 100644
  import { getBrandConfig } from "../brand-config";
 
  // ---------------------------------------------------------------------------
-diff --git a/packages/app-core/scripts/audit-live-test-surface.mjs b/packages/app-core/scripts/audit-live-test-surface.mjs
-index 8652a766ac..c6257d3430 100644
---- a/packages/app-core/scripts/audit-live-test-surface.mjs
-+++ b/packages/app-core/scripts/audit-live-test-surface.mjs
-@@ -38,7 +38,10 @@ const MOCK_DIR_NAMES = new Set([
-   "mocks",
- ]);
- const STUB_PATTERNS = [
--  { id: "playwright-ui-smoke-api-stub", regex: /playwright-ui-smoke-api-stub\.mjs/g },
-+  {
-+    id: "playwright-ui-smoke-api-stub",
-+    regex: /playwright-ui-smoke-api-stub\.mjs/g,
-+  },
-   { id: "test/stubs", regex: /test\/stubs/g },
-   { id: "__mocks__", regex: /__mocks__/g },
-   { id: "plugin-stub", regex: /plugin-stub\.mjs/g },
-@@ -57,6 +60,7 @@ const HARNESS_BLOCKER_PATTERNS = [
-     regex: /MILADY_SKIP_STEWARD_FI_LIVE_SMOKE\s*=\s*["']1["']/g,
-   },
- ];
-+const ALLOW_ROUTE_FIXTURE_MARKER = "@milady-live-audit allow-route-fixtures";
-
- function findRepoRoot(startDir) {
-   let currentDir = startDir;
-@@ -326,7 +330,9 @@ async function analyzeRoot(root) {
-     }
-
-     const text = await fsp.readFile(absPath, "utf8");
--    const stubCounts = countMatches(text, STUB_PATTERNS);
-+    const stubCounts = text.includes(ALLOW_ROUTE_FIXTURE_MARKER)
-+      ? createCounter(STUB_PATTERNS)
-+      : countMatches(text, STUB_PATTERNS);
-     if (hasAnyCount(stubCounts)) {
-       stubReferences.push({
-         file: relPath,
-@@ -385,7 +391,9 @@ async function analyzeRoot(root) {
-   }
-   for (const kind of root.requiredScriptKinds) {
-     if ((scriptKindTotals[kind] ?? 0) === 0) {
--      violations.push(`${root.id}: no package.json test scripts tagged for ${kind}`);
-+      violations.push(
-+        `${root.id}: no package.json test scripts tagged for ${kind}`,
-+      );
-     }
-   }
-   if (harnessBlockers.length > 0) {
-@@ -514,6 +522,9 @@ function renderHumanReport(report) {
-
- const roots = [];
- for (const root of ROOTS) {
-+  if (!fs.existsSync(root.dir)) {
-+    continue;
-+  }
-   roots.push(await analyzeRoot(root));
- }
-
 diff --git a/packages/app-core/scripts/build-patched-electrobun-cli.mjs b/packages/app-core/scripts/build-patched-electrobun-cli.mjs
 index 54eea37026..18df9837c7 100644
 --- a/packages/app-core/scripts/build-patched-electrobun-cli.mjs
@@ -965,49 +909,6 @@ index f4aaa5dba9..2854b16dc6 100644
 +  );
 +}
 +
-diff --git a/packages/app-core/src/components/settings/CapabilitiesSection.test.tsx b/packages/app-core/src/components/settings/CapabilitiesSection.test.tsx
-index aeb30036b1..dcda66cc24 100644
---- a/packages/app-core/src/components/settings/CapabilitiesSection.test.tsx
-+++ b/packages/app-core/src/components/settings/CapabilitiesSection.test.tsx
-@@ -34 +34,3 @@ describe("CapabilitiesSection", () => {
--    expect(screen.getByText("Enable Computer Use")).toBeTruthy();
-+    expect(
-+      screen.getByRole("switch", { name: "Enable Computer Use" }),
-+    ).toBeTruthy();
-@@ -52 +54,3 @@ describe("CapabilitiesSection", () => {
--    expect(screen.getAllByText("Enable Computer Use")).toHaveLength(1);
-+    expect(
-+      screen.getByRole("switch", { name: "Enable Computer Use" }),
-+    ).toBeTruthy();
-diff --git a/packages/app-core/src/components/settings/CapabilitiesSection.tsx b/packages/app-core/src/components/settings/CapabilitiesSection.tsx
-index 03fcf79243..711c1d4fbc 100644
---- a/packages/app-core/src/components/settings/CapabilitiesSection.tsx
-+++ b/packages/app-core/src/components/settings/CapabilitiesSection.tsx
-@@ -126,0 +127,8 @@ export function CapabilitiesSection() {
-+        description={
-+          computerUseEnabled
-+            ? t("settings.sections.capabilities.computerUseHint", {
-+                defaultValue:
-+                  "Computer Use requires Accessibility and Screen Recording permissions.",
-+              })
-+            : undefined
-+        }
-@@ -158,0 +167 @@ function CapabilityRow({
-+  description,
-@@ -162,0 +172 @@ function CapabilityRow({
-+  description?: ReactNode;
-@@ -168,3 +178,8 @@ function CapabilityRow({
--      <div className="flex min-w-0 items-center gap-2">
--        <div className="truncate font-medium text-sm">{label}</div>
--        <CapabilityStatusIcon status={status} />
-+      <div className="flex min-w-0 flex-col gap-1">
-+        <div className="flex min-w-0 items-center gap-2">
-+          <div className="truncate font-medium text-sm">{label}</div>
-+          <CapabilityStatusIcon status={status} />
-+        </div>
-+        {description ? (
-+          <div className="text-xs-tight text-muted">{description}</div>
-+        ) : null}
 diff --git a/apps/app-lifeops/test/selfcontrol-desktop.live.e2e.test.ts b/apps/app-lifeops/test/selfcontrol-desktop.live.e2e.test.ts
 index 43ec323125..5b4de02384 100644
 --- a/apps/app-lifeops/test/selfcontrol-desktop.live.e2e.test.ts

@@ -775,10 +775,26 @@ describe("release workflow path contract", () => {
       path.join(repoRoot, "scripts", "apply-eliza-ci-patches.mjs"),
       "utf8",
     );
+    const capabilitiesSection = fs.readFileSync(
+      path.join(
+        repoRoot,
+        "eliza",
+        "packages",
+        "app-core",
+        "src",
+        "components",
+        "settings",
+        "CapabilitiesSection.tsx",
+      ),
+      "utf8",
+    );
 
     expect(applyPatchScript).toContain('"--unidiff-zero"');
     expect(patch).toContain("settings-companion-vrm-power");
-    expect(patch).toContain("settings.sections.capabilities.computerUseHint");
+    expect(patch).not.toContain("CapabilitiesSection.tsx");
+    expect(capabilitiesSection).toContain(
+      "settings.sections.capabilities.computerUseHint",
+    );
     expect(patch).toContain("RUN bun run - <<'EOF'");
     expect(buildCloudImage).toContain("Apply Milady eliza CI patches");
     expect(buildCloudImage).toContain(

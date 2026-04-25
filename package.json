@@ -148,6 +148,7 @@
     "publish:plugins:next": "cd eliza/plugins && bun run publish:next",
     "release:check": "bun eliza/packages/app-core/scripts/run-node-tsx.mjs eliza/packages/app-core/scripts/release-check.ts",
     "setup:upstreams": "node scripts/setup-upstreams.mjs",
+    "workspace:sync-submodules": "node scripts/init-submodules.mjs",
     "workspace:bump-eliza-submodules": "node scripts/update-eliza-submodule-pointers-to-remote.mjs",
     "desktop:stack-status": "node eliza/packages/app-core/scripts/desktop-stack-status.mjs",
     "smoke:api-status": "node eliza/packages/app-core/scripts/smoke-api-status.mjs",

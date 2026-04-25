@@ -387,6 +387,7 @@ export function main() {
     ? listElizaUntrackedFiles()
     : [];
   try {
+    run("node", ["scripts/init-submodules.mjs"]);
     createdCompatDir = ensureLegacyElectrobunCompatDir();
     assertReleaseContractTestsExist();
     run("node", ["scripts/apply-eliza-ci-patches.mjs"]);
