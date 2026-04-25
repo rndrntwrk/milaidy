@@ -598,6 +598,7 @@ jobs:
       - name: Generate protobuf types
         run: |
           node eliza/packages/shared/scripts/generate-keywords.mjs --target ts
+          test -f eliza/packages/shared/src/i18n/generated/validation-keyword-data.js
           if [ -d eliza/packages/schemas ] && [ -f eliza/packages/schemas/buf.gen.yaml ]; then
             pushd eliza/packages/schemas
             for attempt in 1 2 3; do

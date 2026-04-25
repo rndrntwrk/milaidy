@@ -540,6 +540,9 @@ describe("release workflow path contract", () => {
     expect(releaseElectrobun).toContain(
       "test -f eliza/packages/typescript/src/types/generated/eliza/v1/components_pb.ts",
     );
+    expect(releaseElectrobun).toContain(
+      "test -f eliza/packages/shared/src/i18n/generated/validation-keyword-data.js",
+    );
     expect(generateKeywords).toBeLessThan(stageDesktop);
     expect(generateProto).toBeLessThan(stageDesktop);
   });
@@ -865,6 +868,19 @@ describe("release workflow path contract", () => {
     expect(patch).toContain(
       '+    "@elizaos/plugin-agent-skills": "workspace:*",',
     );
+  });
+
+  it("patches shared keyword generation to emit runtime JavaScript", () => {
+    const patch = fs.readFileSync(
+      path.join(repoRoot, "patches", "eliza", "ci-release-contracts.patch"),
+      "utf8",
+    );
+
+    expect(patch).toContain(
+      "diff --git a/packages/shared/scripts/generate-keywords.mjs",
+    );
+    expect(patch).toContain("function generateJavaScript(entries)");
+    expect(patch).toContain("validation-keyword-data.js");
   });
 
   it("patches generated Android files before the release Gradle build", () => {
