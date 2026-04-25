@@ -600,10 +600,25 @@ describe("release workflow path contract", () => {
     );
     expect(fallbackScript).toContain("ensure_eliza_submodule_manifest");
     expect(fallbackScript).toContain('"plugins/plugin-anthropic"');
+    expect(fallbackScript).toContain('"plugins/plugin-agent-skills"');
     expect(fallbackScript).toContain('"plugins/plugin-local-embedding"');
+    expect(fallbackScript).toContain('"plugins/plugin-pdf"');
+    expect(fallbackScript).toContain('"plugins/plugin-sql"');
+    expect(fallbackScript).toContain('"@elizaos/plugin-agent-skills"');
     expect(fallbackScript).toContain('"@elizaos/plugin-local-embedding"');
+    expect(fallbackScript).toContain('"@elizaos/plugin-pdf"');
+    expect(fallbackScript).toContain('"@elizaos/plugin-sql"');
+    expect(fallbackScript).toContain(
+      '"eliza/plugins/plugin-agent-skills/typescript/package.json"',
+    );
     expect(fallbackScript).toContain(
       '"eliza/plugins/plugin-local-embedding/typescript/package.json"',
+    );
+    expect(fallbackScript).toContain(
+      '"eliza/plugins/plugin-pdf/typescript/package.json"',
+    );
+    expect(fallbackScript).toContain(
+      '"eliza/plugins/plugin-sql/typescript/package.json"',
     );
     expect(fallbackScript).toContain('"jsonrepair"');
     expect(fallbackScript).toContain(

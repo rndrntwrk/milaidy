@@ -318,9 +318,16 @@ append_versioned_package \
   "eliza/plugins/plugin-agent-orchestrator/package.json" \
   ".eliza.ci-disabled/plugins/plugin-agent-orchestrator/package.json"
 
-# Published @elizaos/agent eagerly imports the local embedding plugin from its
-# runtime entrypoint during live release validation. Keep the published plugin
-# available when the root workspace graph has been rewritten away.
+# Published @elizaos/agent eagerly imports static runtime plugins during live
+# release validation. Keep those published plugins available when the root
+# workspace graph has been rewritten away.
+ensure_eliza_submodule_manifest \
+  "eliza/plugins/plugin-agent-skills/typescript/package.json" \
+  "plugins/plugin-agent-skills"
+append_versioned_package \
+  "@elizaos/plugin-agent-skills" \
+  "eliza/plugins/plugin-agent-skills/typescript/package.json" \
+  ".eliza.ci-disabled/plugins/plugin-agent-skills/typescript/package.json"
 ensure_eliza_submodule_manifest \
   "eliza/plugins/plugin-local-embedding/typescript/package.json" \
   "plugins/plugin-local-embedding"
@@ -328,6 +335,20 @@ append_versioned_package \
   "@elizaos/plugin-local-embedding" \
   "eliza/plugins/plugin-local-embedding/typescript/package.json" \
   ".eliza.ci-disabled/plugins/plugin-local-embedding/typescript/package.json"
+ensure_eliza_submodule_manifest \
+  "eliza/plugins/plugin-pdf/typescript/package.json" \
+  "plugins/plugin-pdf"
+append_versioned_package \
+  "@elizaos/plugin-pdf" \
+  "eliza/plugins/plugin-pdf/typescript/package.json" \
+  ".eliza.ci-disabled/plugins/plugin-pdf/typescript/package.json"
+ensure_eliza_submodule_manifest \
+  "eliza/plugins/plugin-sql/typescript/package.json" \
+  "plugins/plugin-sql"
+append_versioned_package \
+  "@elizaos/plugin-sql" \
+  "eliza/plugins/plugin-sql/typescript/package.json" \
+  ".eliza.ci-disabled/plugins/plugin-sql/typescript/package.json"
 
 # coding-agent-adapters is a transitive dep of eliza/packages/agent's server.ts.
 # After disable-local-eliza-workspace drops eliza/packages/agent from the
