@@ -884,6 +884,10 @@ describe("release workflow path contract", () => {
 
   it("keeps draft Electrobun fallback artifacts away from release-grade gates", () => {
     const releaseElectrobun = readWorkflow("release-electrobun.yml");
+    const windowsSmokeBlock = releaseElectrobun.slice(
+      releaseElectrobun.indexOf("name: Smoke test packaged Windows app"),
+      releaseElectrobun.indexOf("name: Run Windows clean installer proof"),
+    );
 
     expect(releaseElectrobun).toContain(
       "uploaded draft-validation fallback archive",
@@ -909,6 +913,13 @@ describe("release workflow path contract", () => {
     );
     expect(releaseElectrobun).toContain(
       "Windows clean installer proof exited with code $LASTEXITCODE.",
+    );
+    expect(windowsSmokeBlock).toContain("timeout-minutes: 30");
+    expect(windowsSmokeBlock).toContain(
+      "pwsh -NoProfile -ExecutionPolicy Bypass -File eliza/packages/app-core/platforms/electrobun/scripts/smoke-test-windows.ps1",
+    );
+    expect(windowsSmokeBlock).not.toContain(
+      "bun run test:desktop:packaged:windows",
     );
     expect(releaseElectrobun).toContain(
       [
