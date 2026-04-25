@@ -10,9 +10,7 @@ This plugin is not yet available in the Milady plugin registry. To use Cohere mo
 
 The Cohere plugin connects Milady agents to Cohere's language models, providing access to the Command family of models optimized for enterprise use cases including retrieval-augmented generation and tool use.
 
-<Info>
-This plugin is available from the upstream elizaOS registry. It is **not bundled** in `plugins.json` and must be installed explicitly.
-</Info>
+> **On-demand plugin.** This plugin is resolved from the remote elizaOS plugin registry and auto-installs when its API key is detected. It is not included in Milady's bundled `plugins.json` index.
 
 **Package:** `@elizaos/plugin-cohere`
 

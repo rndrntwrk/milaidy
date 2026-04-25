@@ -8,9 +8,7 @@ description: Connect your agent to Twitter/X via the xAI plugin (@elizaos/plugin
 
 Connect your agent to Twitter/X for social media engagement.
 
-<Warning>
-This connector is **not included** in the bundled plugin registry (`plugins.json`). It is available from the upstream elizaOS registry and must be installed explicitly: `milady plugins install @elizaos/plugin-twitter`.
-</Warning>
+> **Availability:** `@elizaos/plugin-twitter` is an on-demand elizaOS plugin resolved from the remote plugin registry. It is **not** included in Milady's bundled `plugins.json` index. The plugin auto-installs at runtime when a valid token is detected in your connector configuration.
 
 ## Overview
 

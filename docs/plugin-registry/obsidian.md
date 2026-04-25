@@ -10,9 +10,9 @@ This plugin is not yet available in the Milady plugin registry.
 
 The Obsidian plugin connects Milady agents to your local [Obsidian](https://obsidian.md) vault, enabling agents to read, search, and interact with your notes and knowledge base.
 
-**Package:** `@elizaos/plugin-obsidian` (not yet published)
+> **On-demand plugin.** This plugin is resolved from the remote elizaOS plugin registry and auto-installs when configured. It is not included in Milady's bundled `plugins.json` index.
 
-> **Note:** This plugin is an upstream elizaOS feature plugin and is not included in the bundled `plugins.json` registry. It auto-enables when `OBSIDIAN_VAULT_PATH` is set and is installable from the remote elizaOS plugin registry.
+**Package:** `@elizaos/plugin-obsidian`
 
 ## Installation
 

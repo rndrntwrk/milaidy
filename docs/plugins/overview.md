@@ -28,7 +28,7 @@ A plugin is a self-contained module that registers one or more of:
 </Card>
 
 <Card title="Platform Connectors" icon="plug" href="/plugin-registry/platform/discord">
-  28 platform connectors. 18 auto-enable via connector config (Discord, Telegram, Twitter, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Mattermost, Farcaster, Twitch, Feishu, Matrix, Nostr, Lens, WeChat). 10 more are installable from the registry (BlueBubbles, Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon).
+  22 connector plugins in the bundled `plugins.json` registry: BlueBubbles, Bluesky, Discord, Farcaster, Feishu, Google Chat, iMessage, Instagram, LINE, Matrix, Mattermost, MS Teams, Nextcloud Talk, Nostr, Signal, Slack, Telegram, Tlon, Twitch, WhatsApp, Zalo, and Zalo User. All auto-enable when their connector config or API key is detected. Additional connectors (Twitter, Lens, WeChat) are available as on-demand plugins from the remote registry.
 </Card>
 
 <Card title="DeFi & Blockchain" icon="wallet" href="/plugin-registry/defi/evm">

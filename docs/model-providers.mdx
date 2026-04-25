@@ -4,7 +4,7 @@ sidebarTitle: "Model Providers"
 description: "Supported inference backends and how they fit into Milady's server-target-first routing model."
 ---
 
-Milady supports **19 inference backends** out of the box. Provider plugins still supply the concrete model implementations, but the active backend is selected through canonical runtime routing on the connected server, not by ad hoc env toggles in the client.
+Milady supports **18 inference backends**. Five are **bundled** with every release (OpenAI, OpenRouter, Groq, Ollama, and Eliza Cloud); the remaining providers are **on demand** — they auto-install from the plugin registry when their API key or config is detected. The active backend is selected through canonical runtime routing on the connected server, not by ad hoc env toggles in the client.
 
 ---
 

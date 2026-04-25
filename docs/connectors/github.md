@@ -2,7 +2,9 @@
 
 Connect your agent to GitHub for repository management, issue tracking, and pull request workflows using the `@elizaos/plugin-github` package.
 
-## Prerequisites
+> **Note:** GitHub is registered as a **feature** plugin (not a connector) in the plugin registry. It provides GitHub API integration but is categorized under features in `plugins.json`.
+
+## Overview
 
 The GitHub plugin is an elizaOS feature plugin that bridges your agent to the GitHub API. It supports repository management, issue tracking, pull request creation and review, and code search. This plugin is available from the plugin registry.
 

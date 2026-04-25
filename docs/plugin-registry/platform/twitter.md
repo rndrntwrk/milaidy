@@ -8,9 +8,7 @@ description: "Twitter/X connector for Milady — posting, replying, monitoring m
 
 The Twitter plugin connects Milady agents to Twitter/X, enabling autonomous posting, replying to mentions, monitoring timelines, and engaging with other accounts.
 
-<Warning>
-This plugin is not included in the bundled plugin registry (`plugins.json`). It may be available as an upstream elizaOS community plugin on npm. The `milady plugins install twitter` command will fail unless the package is published to npm.
-</Warning>
+> **On-demand plugin.** This plugin is resolved from the remote elizaOS plugin registry and auto-installs when its credentials are detected. It is not included in Milady's bundled `plugins.json` index.
 
 **Package:** `@elizaos/plugin-twitter`
 

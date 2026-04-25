@@ -2,7 +2,9 @@
 
 Connect your agent to Twilio for SMS messaging and voice call capabilities using the `@elizaos/plugin-twilio` package.
 
-## Prerequisites
+> **Note:** Twilio is registered as a **feature** plugin (not a connector) in the plugin registry. It provides SMS and voice capabilities but is categorized under features in `plugins.json`.
+
+## Overview
 
 The Twilio plugin is an elizaOS feature plugin that bridges your agent to Twilio's communication APIs. It supports inbound and outbound SMS, as well as voice call capabilities. This plugin is available from the plugin registry.
 

@@ -10,6 +10,8 @@ The Zai plugin connects Milady agents to Homunculus Labs' Zai language models.
 This plugin is available from the upstream elizaOS registry. It is **not bundled** in `plugins.json` and must be installed explicitly.
 </Info>
 
+> **Third-party on-demand plugin.** This is an external plugin published by Homunculus Labs (not `@elizaos`). It is resolved from the remote plugin registry and is not included in Milady's bundled `plugins.json` index.
+
 **Package:** `@homunculuslabs/plugin-zai`
 
 ## Installation

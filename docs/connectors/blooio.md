@@ -2,7 +2,9 @@
 
 Connect your agent to iMessage and SMS messaging via the Blooio bridge service using the `@elizaos/plugin-blooio` package.
 
-## Prerequisites
+> **Note:** Blooio is registered as a **feature** plugin (not a connector) in the plugin registry. It behaves like a connector but is categorized under features in `plugins.json`.
+
+## Overview
 
 - A Blooio account and API key from the Blooio platform
 

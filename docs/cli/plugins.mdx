@@ -5,7 +5,20 @@ description: "List, search, install, and manage plugins from the CLI."
 
 # `milady plugins`
 
-Manage the Milady plugin ecosystem — browse the registry, install/uninstall plugins, configure parameters, and manage local plugin directories.
+Manage plugins from the CLI — list, search, install, and uninstall plugins from the elizaOS registry.
+
+## Subcommands
+
+| Subcommand | Description |
+|------------|-------------|
+| `milady plugins list` | Browse registry plugins (default limit: 30) |
+| `milady plugins installed` | Show currently installed plugins |
+| `milady plugins install <name>` | Install a plugin from the registry |
+| `milady plugins uninstall <name>` | Remove an installed plugin |
+| `milady plugins search <query>` | Search plugins by keyword |
+| `milady plugins info <name>` | Show detailed plugin information |
+| `milady plugins config <name>` | Show or edit plugin configuration |
+| `milady plugins refresh` | Force cache refresh from remote registry |
 
 ## Subcommands
 
@@ -36,36 +49,13 @@ List all plugins from the registry. Shows install status and basic metadata.
 | `-l, --limit <number>` | Max results to show (default: 30) |
 
 ```bash
-# Browse registry plugins (default limit: 30)
-milady plugins list
-
-# Search by keyword
-milady plugins search "discord bot"
-milady plugins list -q telegram
-
-# Show plugin details
-milady plugins info telegram
-
-# Install a plugin
-milady plugins install telegram
-milady plugins install twitter@1.2.3    # specific version
-milady plugins install telegram --no-restart
-
-# Uninstall
-milady plugins uninstall @elizaos/plugin-twitter
-
-# List what you've installed
-milady plugins installed
-
-# Force-refresh the registry cache
-milady plugins refresh
-
-# View or interactively edit plugin config
-milady plugins config telegram
-milady plugins config telegram --edit
-
-# Validate custom plugins in ~/.milady/plugins/custom/
-milady plugins test
+milady plugins list                 # browse all available plugins
+milady plugins search telegram      # find telegram-related plugins
+milady plugins install discord      # install the Discord connector
+milady plugins installed            # see what's installed
+milady plugins info openai          # show plugin details
+milady plugins uninstall suno       # remove a plugin
+milady plugins --help               # show all subcommands
 ```
 
 ## Plugin Name Resolution
