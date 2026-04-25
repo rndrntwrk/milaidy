@@ -1,17 +1,11 @@
 import { expect, test } from "@playwright/test";
-import {
-  enableSettingsAdvanced,
-  openAppPath,
-  openSettingsSection,
-  seedAppStorage,
-} from "./helpers";
+import { openAppPath, openSettingsSection, seedAppStorage } from "./helpers";
 
 test("settings exposes computer use capability controls", async ({ page }) => {
   await seedAppStorage(page);
   await openAppPath(page, "/voice");
 
   await expect(page.getByTestId("settings-shell")).toBeVisible();
-  await enableSettingsAdvanced(page);
   await openSettingsSection(page, /^Capabilities\b/);
 
   await expect(page.locator("#capabilities")).toBeVisible();

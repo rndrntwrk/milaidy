@@ -804,3 +804,201 @@ index 1fc3db564f..3bd7202380 100644
  }));
  
  vi.mock("../../state/ChatComposerContext", () => ({
+diff --git a/packages/app-core/src/components/settings/AppearanceSettingsSection.tsx b/packages/app-core/src/components/settings/AppearanceSettingsSection.tsx
+index f4aaa5dba9..2854b16dc6 100644
+--- a/packages/app-core/src/components/settings/AppearanceSettingsSection.tsx
++++ b/packages/app-core/src/components/settings/AppearanceSettingsSection.tsx
+@@ -3 +3 @@ import { BUILTIN_THEMES } from "@elizaos/shared/themes/presets";
+-import { Button, Input } from "@elizaos/ui";
++import { Button, Input, Switch } from "@elizaos/ui";
+@@ -13,0 +14,2 @@ import {
++  type CompanionHalfFramerateMode,
++  type CompanionVrmPowerMode,
+@@ -17,0 +20 @@ import {
++import { COMPANION_ENABLED } from "../../navigation";
+@@ -19,0 +23,12 @@ import { LANGUAGES } from "../shared/LanguageDropdown";
++const COMPANION_VRM_POWER_OPTIONS: CompanionVrmPowerMode[] = [
++  "quality",
++  "balanced",
++  "efficiency",
++];
++
++const COMPANION_HALF_FRAMERATE_OPTIONS: CompanionHalfFramerateMode[] = [
++  "off",
++  "when_saving_power",
++  "always",
++];
++
+@@ -44,0 +60,6 @@ export function AppearanceSettingsSection() {
++    companionVrmPowerMode,
++    setCompanionVrmPowerMode,
++    companionAnimateWhenHidden,
++    setCompanionAnimateWhenHidden,
++    companionHalfFramerateMode,
++    setCompanionHalfFramerateMode,
+@@ -350,0 +372,12 @@ export function AppearanceSettingsSection() {
++      {COMPANION_ENABLED && (
++        <CompanionPerformanceSettings
++          companionVrmPowerMode={companionVrmPowerMode}
++          setCompanionVrmPowerMode={setCompanionVrmPowerMode}
++          companionHalfFramerateMode={companionHalfFramerateMode}
++          setCompanionHalfFramerateMode={setCompanionHalfFramerateMode}
++          companionAnimateWhenHidden={companionAnimateWhenHidden}
++          setCompanionAnimateWhenHidden={setCompanionAnimateWhenHidden}
++          t={t}
++        />
++      )}
++
+@@ -482,0 +516,109 @@ export function AppearanceSettingsSection() {
++function CompanionPerformanceSettings({
++  companionVrmPowerMode,
++  setCompanionVrmPowerMode,
++  companionHalfFramerateMode,
++  setCompanionHalfFramerateMode,
++  companionAnimateWhenHidden,
++  setCompanionAnimateWhenHidden,
++  t,
++}: {
++  companionVrmPowerMode: CompanionVrmPowerMode;
++  setCompanionVrmPowerMode: (mode: CompanionVrmPowerMode) => void;
++  companionHalfFramerateMode: CompanionHalfFramerateMode;
++  setCompanionHalfFramerateMode: (mode: CompanionHalfFramerateMode) => void;
++  companionAnimateWhenHidden: boolean;
++  setCompanionAnimateWhenHidden: (enabled: boolean) => void;
++  t: (key: string, vars?: Record<string, unknown>) => string;
++}) {
++  return (
++    <section className="space-y-2">
++      <h3 className="text-xs font-medium uppercase tracking-wider text-muted">
++        {t("settings.appearance.companionPerformance", {
++          defaultValue: "Companion performance",
++        })}
++      </h3>
++      <div
++        className="rounded-xl border border-border bg-card/60 px-3 py-3 flex flex-col gap-3"
++        data-testid="settings-companion-vrm-power"
++      >
++        <div className="min-w-0">
++          <div className="text-xs font-semibold text-txt">
++            {t("settings.companionVrmPower.label")}
++          </div>
++          <div className="text-2xs text-muted mt-1 leading-snug">
++            {t("settings.companionVrmPower.desc")}
++          </div>
++        </div>
++        <div className="flex flex-wrap gap-1.5">
++          {COMPANION_VRM_POWER_OPTIONS.map((mode) => {
++            const active = companionVrmPowerMode === mode;
++            return (
++              <Button
++                key={mode}
++                type="button"
++                variant={active ? "default" : "ghost"}
++                size="sm"
++                className="flex-1 basis-[calc(50%-0.25rem)] sm:basis-0 min-h-touch rounded-lg border px-2 py-1.5 text-xs-tight font-semibold !whitespace-normal"
++                onClick={() => setCompanionVrmPowerMode(mode)}
++                aria-pressed={active}
++              >
++                {t(`settings.companionVrmPower.${mode}`)}
++              </Button>
++            );
++          })}
++        </div>
++        <div
++          className="flex flex-col gap-2 border-t border-border pt-3"
++          data-testid="settings-companion-half-framerate"
++        >
++          <div className="min-w-0">
++            <div className="text-xs font-semibold text-txt">
++              {t("settings.companionHalfFramerate.label")}
++            </div>
++            <div className="text-2xs text-muted mt-1 leading-snug">
++              {t("settings.companionHalfFramerate.desc")}
++            </div>
++          </div>
++          <div className="flex flex-wrap gap-1.5">
++            {COMPANION_HALF_FRAMERATE_OPTIONS.map((mode) => {
++              const active = companionHalfFramerateMode === mode;
++              return (
++                <Button
++                  key={mode}
++                  type="button"
++                  variant={active ? "default" : "ghost"}
++                  size="sm"
++                  className="flex-1 basis-[calc(50%-0.25rem)] sm:basis-0 min-h-touch rounded-lg border px-2 py-1.5 text-xs-tight font-semibold !whitespace-normal"
++                  onClick={() => setCompanionHalfFramerateMode(mode)}
++                  aria-pressed={active}
++                >
++                  {t(`settings.companionHalfFramerate.${mode}`)}
++                </Button>
++              );
++            })}
++          </div>
++        </div>
++        <div
++          className="flex flex-col gap-2 border-t border-border pt-3"
++          data-testid="settings-companion-animate-when-hidden"
++        >
++          <div className="text-xs font-semibold text-txt">
++            {t("settings.companionAnimateWhenHidden.title")}
++          </div>
++          <div className="flex items-end justify-between gap-3">
++            <div className="min-w-0 flex-1 text-2xs text-muted leading-snug pr-2">
++              {t("settings.companionAnimateWhenHidden.desc")}
++            </div>
++            <Switch
++              className="shrink-0"
++              checked={companionAnimateWhenHidden}
++              onCheckedChange={setCompanionAnimateWhenHidden}
++              aria-label={t("settings.companionAnimateWhenHidden.title")}
++            />
++          </div>
++        </div>
++      </div>
++    </section>
++  );
++}
++
+diff --git a/packages/app-core/src/components/settings/CapabilitiesSection.test.tsx b/packages/app-core/src/components/settings/CapabilitiesSection.test.tsx
+index aeb30036b1..dcda66cc24 100644
+--- a/packages/app-core/src/components/settings/CapabilitiesSection.test.tsx
++++ b/packages/app-core/src/components/settings/CapabilitiesSection.test.tsx
+@@ -34 +34,3 @@ describe("CapabilitiesSection", () => {
+-    expect(screen.getByText("Enable Computer Use")).toBeTruthy();
++    expect(
++      screen.getByRole("switch", { name: "Enable Computer Use" }),
++    ).toBeTruthy();
+@@ -52 +54,3 @@ describe("CapabilitiesSection", () => {
+-    expect(screen.getAllByText("Enable Computer Use")).toHaveLength(1);
++    expect(
++      screen.getByRole("switch", { name: "Enable Computer Use" }),
++    ).toBeTruthy();
+diff --git a/packages/app-core/src/components/settings/CapabilitiesSection.tsx b/packages/app-core/src/components/settings/CapabilitiesSection.tsx
+index 03fcf79243..711c1d4fbc 100644
+--- a/packages/app-core/src/components/settings/CapabilitiesSection.tsx
++++ b/packages/app-core/src/components/settings/CapabilitiesSection.tsx
+@@ -126,0 +127,8 @@ export function CapabilitiesSection() {
++        description={
++          computerUseEnabled
++            ? t("settings.sections.capabilities.computerUseHint", {
++                defaultValue:
++                  "Computer Use requires Accessibility and Screen Recording permissions.",
++              })
++            : undefined
++        }
+@@ -158,0 +167 @@ function CapabilityRow({
++  description,
+@@ -162,0 +172 @@ function CapabilityRow({
++  description?: ReactNode;
+@@ -168,3 +178,8 @@ function CapabilityRow({
+-      <div className="flex min-w-0 items-center gap-2">
+-        <div className="truncate font-medium text-sm">{label}</div>
+-        <CapabilityStatusIcon status={status} />
++      <div className="flex min-w-0 flex-col gap-1">
++        <div className="flex min-w-0 items-center gap-2">
++          <div className="truncate font-medium text-sm">{label}</div>
++          <CapabilityStatusIcon status={status} />
++        </div>
++        {description ? (
++          <div className="text-xs-tight text-muted">{description}</div>
++        ) : null}

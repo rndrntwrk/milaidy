@@ -530,6 +530,10 @@ describe("release workflow path contract", () => {
     expect(fallbackScript).toContain('MSYS2_ARG_CONV_EXCL="*"');
     expect(fallbackScript).toContain("mklink /J");
     expect(fallbackScript).toContain("bun_store_entries");
+    expect(fallbackScript).toContain(
+      "Bun can keep installed packages only in node_modules/.bun on every runner",
+    );
+    expect(fallbackScript).toContain('grep -Fxq -- "$package_name"');
     expect(fallbackScript).toContain('"node_modules", ".bun"');
     expect(fallbackScript).toContain("compareVersions");
     expect(fallbackScript).toContain("stat.isSymbolicLink()");
@@ -656,6 +660,14 @@ describe("release workflow path contract", () => {
       path.join(repoRoot, "patches", "eliza", "ci-release-contracts.patch"),
       "utf8",
     );
+    const applyPatchScript = fs.readFileSync(
+      path.join(repoRoot, "scripts", "apply-eliza-ci-patches.mjs"),
+      "utf8",
+    );
+
+    expect(applyPatchScript).toContain('"--unidiff-zero"');
+    expect(patch).toContain("settings-companion-vrm-power");
+    expect(patch).toContain("settings.sections.capabilities.computerUseHint");
 
     for (const packageName of [
       "@elizaos/core",

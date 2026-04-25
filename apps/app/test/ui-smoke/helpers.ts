@@ -63,14 +63,6 @@ export async function readLocalStorage(
   return page.evaluate((storageKey) => localStorage.getItem(storageKey), key);
 }
 
-export async function enableSettingsAdvanced(page: Page): Promise<void> {
-  const advancedSwitch = page.getByRole("switch", { name: "Show advanced" });
-  await expect(advancedSwitch).toBeVisible();
-  if ((await advancedSwitch.getAttribute("aria-checked")) !== "true") {
-    await advancedSwitch.click();
-  }
-}
-
 export async function openSettingsSection(
   page: Page,
   sectionName: string | RegExp,

@@ -43,15 +43,18 @@ function main() {
     );
   }
 
-  const alreadyApplied = runGit(["apply", "--reverse", "--check", patchPath], {
-    allowFailure: true,
-  });
+  const alreadyApplied = runGit(
+    ["apply", "--unidiff-zero", "--reverse", "--check", patchPath],
+    {
+      allowFailure: true,
+    },
+  );
   if (alreadyApplied.status === 0) {
     console.log("[apply-eliza-ci-patches] eliza CI patches already applied");
     return;
   }
 
-  const canApply = runGit(["apply", "--check", patchPath], {
+  const canApply = runGit(["apply", "--unidiff-zero", "--check", patchPath], {
     allowFailure: true,
   });
   if (canApply.status !== 0) {
@@ -59,7 +62,7 @@ function main() {
     throw new Error(`eliza CI patch no longer applies cleanly:\n${stderr}`);
   }
 
-  runGit(["apply", patchPath]);
+  runGit(["apply", "--unidiff-zero", patchPath]);
   console.log("[apply-eliza-ci-patches] applied eliza CI patches");
 }
 

@@ -1,6 +1,5 @@
 import { expect, test } from "@playwright/test";
 import {
-  enableSettingsAdvanced,
   openAppPath,
   openSettingsSection,
   readLocalStorage,
@@ -18,8 +17,7 @@ test.beforeEach(async ({ page }) => {
 test("companion media settings persist across reloads", async ({ page }) => {
   await openAppPath(page, "/voice");
   await expect(page.getByTestId("settings-shell")).toBeVisible();
-  await enableSettingsAdvanced(page);
-  await openSettingsSection(page, /^Media\b/);
+  await openSettingsSection(page, /^Appearance\b/);
 
   await page
     .getByTestId("settings-companion-vrm-power")

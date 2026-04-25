@@ -140,7 +140,6 @@ symlink_installed_packages_into_manifest_node_modules() {
     for (const field of dependencyFields) {
       for (const [name, spec] of Object.entries(pkg[field] ?? {})) {
         if (typeof spec !== "string" || spec.length === 0) continue;
-        if (spec.startsWith("workspace:") || spec.startsWith("file:")) continue;
         if (seen.has(name)) continue;
         seen.add(name);
         process.stdout.write(name + "\n");
@@ -183,65 +182,65 @@ symlink_installed_packages_into_manifest_node_modules() {
     link_package_into_target_node_modules "$package_name" "node_modules/$package_name"
   done <<< "$entries"
 
-  case "$(uname -s)" in
-    MINGW*|MSYS*|CYGWIN*)
-      local bun_store_entries
-      bun_store_entries="$(node -e '
-        const fs = require("node:fs");
-        const path = require("node:path");
-        const root = process.cwd();
-        const store = path.join(root, "node_modules", ".bun");
-        const packages = new Map();
-        if (!fs.existsSync(store)) process.exit(0);
+  # Bun can keep installed packages only in node_modules/.bun on every runner
+  # OS. Link those store packages too so restored source workspaces resolve
+  # runtime deps like @elizaos/plugin-local-embedding from their own package dir.
+  local bun_store_entries
+  bun_store_entries="$(node -e '
+    const fs = require("node:fs");
+    const path = require("node:path");
+    const root = process.cwd();
+    const store = path.join(root, "node_modules", ".bun");
+    const packages = new Map();
+    if (!fs.existsSync(store)) process.exit(0);
 
-        function compareVersions(left, right) {
-          const leftParts = String(left).split(/[^0-9]+/).filter(Boolean).map(Number);
-          const rightParts = String(right).split(/[^0-9]+/).filter(Boolean).map(Number);
-          const length = Math.max(leftParts.length, rightParts.length, 3);
-          for (let index = 0; index < length; index += 1) {
-            const diff = (leftParts[index] ?? 0) - (rightParts[index] ?? 0);
-            if (diff !== 0) return diff;
-          }
-          return String(left).localeCompare(String(right));
-        }
+    function compareVersions(left, right) {
+      const leftParts = String(left).split(/[^0-9]+/).filter(Boolean).map(Number);
+      const rightParts = String(right).split(/[^0-9]+/).filter(Boolean).map(Number);
+      const length = Math.max(leftParts.length, rightParts.length, 3);
+      for (let index = 0; index < length; index += 1) {
+        const diff = (leftParts[index] ?? 0) - (rightParts[index] ?? 0);
+        if (diff !== 0) return diff;
+      }
+      return String(left).localeCompare(String(right));
+    }
 
-        for (const entry of fs.readdirSync(store).sort()) {
-          const modulesDir = path.join(store, entry, "node_modules");
-          if (!fs.existsSync(modulesDir)) continue;
-          for (const topLevel of fs.readdirSync(modulesDir).sort()) {
-            if (topLevel.startsWith(".")) continue;
-            const topLevelPath = path.join(modulesDir, topLevel);
-            const packageDirs = topLevel.startsWith("@")
-              ? fs.readdirSync(topLevelPath).sort().map((name) => path.join(topLevelPath, name))
-              : [topLevelPath];
-            for (const packageDir of packageDirs) {
-              try {
-                const stat = fs.lstatSync(packageDir);
-                if (!stat.isDirectory() || stat.isSymbolicLink()) continue;
-                const pkg = JSON.parse(fs.readFileSync(path.join(packageDir, "package.json"), "utf8"));
-                if (typeof pkg.name !== "string") continue;
-                const version = typeof pkg.version === "string" ? pkg.version : "0.0.0";
-                const current = packages.get(pkg.name);
-                if (!current || compareVersions(version, current.version) > 0) {
-                  packages.set(pkg.name, { version, packageDir });
-                }
-              } catch {}
+    for (const entry of fs.readdirSync(store).sort()) {
+      const modulesDir = path.join(store, entry, "node_modules");
+      if (!fs.existsSync(modulesDir)) continue;
+      for (const topLevel of fs.readdirSync(modulesDir).sort()) {
+        if (topLevel.startsWith(".")) continue;
+        const topLevelPath = path.join(modulesDir, topLevel);
+        const packageDirs = topLevel.startsWith("@")
+          ? fs.readdirSync(topLevelPath).sort().map((name) => path.join(topLevelPath, name))
+          : [topLevelPath];
+        for (const packageDir of packageDirs) {
+          try {
+            const stat = fs.lstatSync(packageDir);
+            if (!stat.isDirectory() || stat.isSymbolicLink()) continue;
+            const pkg = JSON.parse(fs.readFileSync(path.join(packageDir, "package.json"), "utf8"));
+            if (typeof pkg.name !== "string") continue;
+            const version = typeof pkg.version === "string" ? pkg.version : "0.0.0";
+            const current = packages.get(pkg.name);
+            if (!current || compareVersions(version, current.version) > 0) {
+              packages.set(pkg.name, { version, packageDir });
             }
-          }
+          } catch {}
         }
+      }
+    }
 
-        for (const [name, { packageDir }] of [...packages.entries()].sort(([left], [right]) => left.localeCompare(right))) {
-          process.stdout.write(`${name}\t${path.relative(root, packageDir)}\n`);
-        }
-      ')"
+    for (const [name, { packageDir }] of [...packages.entries()].sort(([left], [right]) => left.localeCompare(right))) {
+      process.stdout.write(`${name}\t${path.relative(root, packageDir)}\n`);
+    }
+  ')"
 
-      while IFS=$'\t' read -r package_name source_path; do
-        [[ -z "$package_name" || -z "$source_path" ]] && continue
-        [[ -e "$target_node_modules/$package_name" || -L "$target_node_modules/$package_name" ]] && continue
-        link_package_into_target_node_modules "$package_name" "$source_path"
-      done <<< "$bun_store_entries"
-      ;;
-  esac
+  while IFS=$'\t' read -r package_name source_path; do
+    [[ -z "$package_name" || -z "$source_path" ]] && continue
+    grep -Fxq -- "$package_name" <<< "$entries" || continue
+    [[ -e "$target_node_modules/$package_name" || -L "$target_node_modules/$package_name" ]] && continue
+    link_package_into_target_node_modules "$package_name" "$source_path"
+  done <<< "$bun_store_entries"
 }
 
 packages=(
