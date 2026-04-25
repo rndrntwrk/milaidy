@@ -152,13 +152,12 @@ Example `GET /api/status` response:
 
 ```json
 {
-  "state": "running",
-  "agentName": "Milady",
-  "model": "@elizaos/plugin-anthropic",
-  "uptime": 3600000,
-  "startedAt": 1718000000000,
-  "pendingRestart": false,
-  "pendingRestartReasons": []
+  "name": "Milady",
+  "status": "running",
+  "model": "anthropic/claude-sonnet-4.6",
+  "uptime": 3600,
+  "autonomy": { "enabled": true },
+  "pendingRestart": false
 }
 ```
 

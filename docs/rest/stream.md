@@ -4,6 +4,31 @@ sidebarTitle: Stream
 description: REST API endpoints for controlling live streaming, overlays, voice TTS, and stream settings.
 ---
 
+## Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/stream/live` | Start streaming (destination-managed) |
+| POST | `/api/stream/offline` | Stop the active stream |
+| GET | `/api/stream/status` | Current stream health and configuration |
+| POST | `/api/stream/start` | Start streaming (direct RTMP) |
+| POST | `/api/stream/stop` | Stop FFmpeg process |
+| POST | `/api/stream/frame` | Pipe a raw image frame to FFmpeg |
+| POST | `/api/stream/volume` | Set audio volume |
+| POST | `/api/stream/mute` | Mute audio |
+| POST | `/api/stream/unmute` | Unmute audio |
+| GET | `/api/streaming/destinations` | List configured streaming destinations |
+| POST | `/api/streaming/destination` | Set active streaming destination |
+| GET | `/api/stream/overlay-layout` | Get overlay layout |
+| POST | `/api/stream/overlay-layout` | Save overlay layout |
+| GET | `/api/stream/voice` | Get voice (TTS) configuration |
+| POST | `/api/stream/voice` | Save voice settings |
+| POST | `/api/stream/voice/speak` | Manually trigger TTS on live stream |
+| GET | `/api/stream/settings` | Get visual stream settings |
+| POST | `/api/stream/settings` | Save visual stream settings |
+
+---
+
 ## Stream Control
 
 ### Start Stream (Destination-Managed)

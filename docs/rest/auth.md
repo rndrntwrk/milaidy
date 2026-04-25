@@ -158,7 +158,7 @@ Certain endpoints (such as `POST /api/agent/reset`) are classified as sensitive 
 - In all other cases, a valid `MILADY_API_TOKEN` must be configured **and** included in the request. Non-loopback requests without a configured token return `403 Forbidden` with the message "Sensitive endpoint requires API token authentication".
 
 <Note>
-The `/api/wallet/keys` endpoint enforces stricter rules: in production, a token is always required even from loopback addresses.
+The wallet key export endpoint (`POST /api/wallet/export`) enforces stricter rules: in production, a token is always required even from loopback addresses.
 </Note>
 
 ## CORS

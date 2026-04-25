@@ -4,6 +4,16 @@ sidebarTitle: Memory
 description: REST API endpoints for storing, searching, and retrieving agent memory and context.
 ---
 
+## Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/memory/remember` | Save a free-text note into persistent memory |
+| GET | `/api/memory/search` | Full-text keyword search over memory notes |
+| GET | `/api/context/quick` | Search memory + knowledge and synthesize a concise answer |
+
+---
+
 ## Remember
 
 ```
