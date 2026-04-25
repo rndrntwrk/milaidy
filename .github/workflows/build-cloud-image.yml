@@ -328,6 +328,7 @@ jobs:
         run: cp eliza/packages/app-core/deploy/Dockerfile.cloud.dockerignore .dockerignore
 
       - name: Set up Depot CLI
+        if: vars.DEPOT_ENABLED != 'false'
         uses: depot/setup-action@v1
 
       - name: Set up Docker Buildx fallback
@@ -352,6 +353,7 @@ jobs:
 
       - name: Build and push cloud app image
         id: depot-build
+        if: vars.DEPOT_ENABLED != 'false'
         continue-on-error: true
         uses: depot/build-push-action@v1
         with:
@@ -378,7 +380,7 @@ jobs:
           provenance: false
 
       - name: Build and push cloud app image with Buildx fallback
-        if: steps.depot-build.outcome == 'failure'
+        if: vars.DEPOT_ENABLED == 'false' || steps.depot-build.outcome == 'failure'
         uses: docker/build-push-action@v6
         with:
           context: .
