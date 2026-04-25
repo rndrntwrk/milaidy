@@ -14,6 +14,10 @@ This plugin is not included in the bundled plugin registry (`plugins.json`). It 
 
 **Package:** `@elizaos/plugin-twitter`
 
+<Note>
+The separate `@elizaos/plugin-xai` package also bundles X/Twitter integration alongside Grok models. If you already use xAI with `X_*` env vars, you may not need to install this connector separately.
+</Note>
+
 ## Installation
 
 ```bash

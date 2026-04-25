@@ -36,7 +36,7 @@ Un plugin es un módulo autónomo que registra uno o más de los siguientes:
 </Card>
 
 <Card title="Conectores de plataformas" icon="plug" href="/es/plugin-registry/platform/discord">
-  Puentes hacia más de 17 plataformas de mensajería mediante auto-habilitación (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, BlueBubbles, Blooio, MS Teams, Google Chat, Mattermost, Farcaster, Twitch, WeChat, Feishu, Matrix, Nostr). Conectores adicionales (Twitter, Lens, Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon) están disponibles en el registro de elizaOS.
+  28 conectores de plataformas. 18 se auto-habilitan mediante configuración (Discord, Telegram, Twitter, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Mattermost, Farcaster, Twitch, WeChat, Feishu, Matrix, Nostr, Lens). 10 más se pueden instalar desde el registro (BlueBubbles, Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon).
 </Card>
 
 <Card title="DeFi y Blockchain" icon="wallet" href="/es/plugin-registry/defi/evm">
