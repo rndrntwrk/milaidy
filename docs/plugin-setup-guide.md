@@ -526,9 +526,9 @@ where to get the credentials, minimum required fields, and tips for optional fie
 
 ### Mattermost
 **Get credentials:** Your Mattermost instance → System Console → Integrations → Bot Accounts
-**Minimum required:** `MATTERMOST_BASE_URL` + `MATTERMOST_BOT_TOKEN`
+**Minimum required:** `MATTERMOST_SERVER_URL` + `MATTERMOST_BOT_TOKEN`
 **Variables:**
-- `MATTERMOST_BASE_URL` — e.g. `https://mattermost.yourcompany.com`
+- `MATTERMOST_SERVER_URL` — e.g. `https://mattermost.yourcompany.com`
 - `MATTERMOST_BOT_TOKEN` — From System Console → Bot Accounts → Add Bot Account
 - `MATTERMOST_TEAM_ID` — Your team ID (from team URL or API)
 - `MATTERMOST_DM_POLICY` / `MATTERMOST_GROUP_POLICY` — `allow-all` or `allow-from`

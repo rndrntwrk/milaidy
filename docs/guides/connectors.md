@@ -1,7 +1,7 @@
 ---
 title: "Platform Connectors"
 sidebarTitle: "Connectors"
-description: "Platform bridges for 28 messaging platforms — 19 auto-enabled from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, BlueBubbles, Blooio, MS Teams, Google Chat, Twitter, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, Lens, WeChat) plus 9 installable from the registry (Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
+description: "Platform bridges for 26 messaging platforms — 17 auto-enabled from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Twitter, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, WeChat) plus 9 installable from the registry (Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
 ---
 
 Connectors are platform bridges that allow your agent to communicate across messaging platforms and social networks. Each connector handles authentication, message routing, session management, and platform-specific features.
@@ -68,8 +68,7 @@ Connectors marked **Auto** load automatically when their config is present in `m
 | Matrix | Access token | Yes | Yes (rooms) | No | Auto |
 | Feishu / Lark | App ID + secret | Yes | Yes (group chats) | No | Auto |
 | Nostr | Private key (nsec/hex) | Yes (NIP-04) | N/A | No | Auto |
-| Lens | API key | Yes | N/A | No | Auto |
-| BlueBubbles | Server password | Yes | Yes | No | Registry |
+| ~~Lens~~ | — | — | — | — | Unavailable (no plugin exists) |
 | Bluesky | Account credentials | Posts | N/A | No | Registry |
 | Instagram | Username + password | DMs | N/A | No | Registry |
 | LINE | Channel access token + secret | Yes | Yes | No | Registry |
@@ -1143,27 +1142,7 @@ Gmail Watch is enabled via the `features.gmailWatch` flag or environment variabl
 
 ## Lens
 
-**Plugin:** `@elizaos/plugin-lens`
-
-```json5
-{
-  connectors: {
-    lens: {
-      apiKey: "<LENS_API_KEY>",
-    }
-  }
-}
-```
-
-| Env Variable | Config Path |
-|-------------|-------------|
-| `LENS_API_KEY` | `connectors.lens.apiKey` |
-
-**Auto-enable triggers:** `apiKey`, `token`, or `botToken`.
-
-**Features:**
-- Lens Protocol social interactions
-- Post publishing and engagement
+> **Unavailable.** The `@elizaos/plugin-lens` package does not exist in the plugin registry or npm. This connector is not currently functional. The documentation is retained for reference in case the plugin is added in the future.
 
 ---
 

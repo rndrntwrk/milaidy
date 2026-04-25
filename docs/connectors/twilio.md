@@ -37,28 +37,37 @@ The Twilio connector is an elizaOS plugin that bridges your agent to Twilio's co
 
 ## Environment Variables
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `TWILIO_ACCOUNT_SID` | Yes | Twilio Account SID |
-| `TWILIO_AUTH_TOKEN` | Yes | Twilio Auth Token |
-| `TWILIO_PHONE_NUMBER` | No | Twilio phone number for sending/receiving |
-| `TWILIO_WEBHOOK_URL` | No | Webhook URL for inbound messages |
-| `TWILIO_WEBHOOK_PORT` | No | Port for webhook listener |
-| `VOICE_CALL_ENABLED` | No | Enable voice call capabilities |
-| `VOICE_CALL_PROVIDER` | No | Voice call provider selection |
-| `VOICE_CALL_FROM_NUMBER` | No | Phone number for outbound calls |
-| `VOICE_CALL_TO_NUMBER` | No | Default destination phone number |
-| `VOICE_CALL_ALLOW_FROM` | No | Comma-separated list of allowed caller numbers |
-| `VOICE_CALL_PUBLIC_URL` | No | Public URL for voice call webhooks |
-| `VOICE_CALL_INBOUND_POLICY` | No | Inbound call handling policy |
+### SMS
+
+| Variable | Description |
+|----------|-------------|
+| `TWILIO_ACCOUNT_SID` | Twilio Account SID |
+| `TWILIO_AUTH_TOKEN` | Twilio Auth Token |
+| `TWILIO_PHONE_NUMBER` | Twilio phone number for sending/receiving |
+
+### Voice Calls
+
+| Variable | Description |
+|----------|-------------|
+| `VOICE_CALL_ENABLED` | Enable voice call support (`true`/`false`) |
+| `VOICE_CALL_PROVIDER` | Voice provider (e.g. `twilio`) |
+| `VOICE_CALL_TO_NUMBER` | Default outbound number |
+| `VOICE_CALL_FROM_NUMBER` | Caller ID number |
+| `VOICE_CALL_PUBLIC_URL` | Public URL for webhook callbacks |
+| `VOICE_CALL_WEBHOOK_PATH` | Webhook path for inbound calls |
+| `VOICE_CALL_WEBHOOK_PORT` | Port for voice webhook server |
+| `VOICE_CALL_ALLOW_FROM` | Comma-separated allowlist of inbound caller numbers |
+| `VOICE_CALL_INBOUND_POLICY` | Policy for inbound calls (`allow`, `reject`, `allowlist`) |
+| `VOICE_CALL_INBOUND_GREETING` | Greeting message for inbound calls |
+| `VOICE_CALL_MAX_CONCURRENT_CALLS` | Max simultaneous calls |
+| `VOICE_CALL_MAX_DURATION_SECONDS` | Max call duration in seconds |
 
 ## Features
 
 - SMS messaging (send and receive)
 - Voice call capabilities (inbound and outbound)
-- Webhook-based inbound message handling
-- Configurable inbound call policies and greetings
-- Concurrent call management
+- Webhook-based inbound message and call handling
+- Configurable inbound call policies and allowlists
 
 ## Related
 

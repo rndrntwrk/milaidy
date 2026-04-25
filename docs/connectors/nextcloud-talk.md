@@ -20,7 +20,7 @@ The Nextcloud Talk connector is an elizaOS plugin that bridges your agent to Nex
 
 ## Setup Requirements
 
-- Nextcloud server URL and credentials
+- Nextcloud server URL and bot credentials
 
 ## Configuration
 
@@ -36,16 +36,16 @@ The Nextcloud Talk connector is an elizaOS plugin that bridges your agent to Nex
 
 ## Environment Variables
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `NEXTCLOUD_URL` | No | Nextcloud server URL |
-| `NEXTCLOUD_BOT_SECRET` | No | Bot secret for authentication |
-| `NEXTCLOUD_WEBHOOK_HOST` | No | Host address for webhook listener |
-| `NEXTCLOUD_WEBHOOK_PORT` | No | Port for webhook listener |
-| `NEXTCLOUD_WEBHOOK_PATH` | No | Webhook endpoint path |
-| `NEXTCLOUD_WEBHOOK_PUBLIC_URL` | No | Public-facing webhook URL |
-| `NEXTCLOUD_ALLOWED_ROOMS` | No | Comma-separated list of allowed room IDs |
-| `NEXTCLOUD_ENABLED` | No | Set to `true` to enable |
+| Variable | Description |
+|----------|-------------|
+| `NEXTCLOUD_URL` | Nextcloud server URL |
+| `NEXTCLOUD_ENABLED` | Explicitly enable/disable the connector |
+| `NEXTCLOUD_BOT_SECRET` | Bot authentication secret |
+| `NEXTCLOUD_WEBHOOK_HOST` | Hostname for webhook server |
+| `NEXTCLOUD_WEBHOOK_PATH` | Path for webhook endpoint |
+| `NEXTCLOUD_WEBHOOK_PORT` | Port for webhook server |
+| `NEXTCLOUD_WEBHOOK_PUBLIC_URL` | Public URL for webhook callbacks |
+| `NEXTCLOUD_ALLOWED_ROOMS` | Comma-separated list of allowed room IDs |
 
 ## Features
 

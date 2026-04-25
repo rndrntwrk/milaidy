@@ -1,43 +1,13 @@
 ---
 title: Lens Connector
 sidebarTitle: Lens
-description: Connect your agent to the Lens Protocol using the @elizaos/plugin-lens package.
+description: The Lens Protocol connector is not currently available.
 ---
 
-Connect your agent to Lens Protocol for decentralized social interactions.
+> **Unavailable.** The `@elizaos/plugin-lens` package does not exist in the plugin registry or on npm. This connector is not currently functional.
 
-## Overview
+This page is retained as a placeholder. If a Lens Protocol plugin is published in the future, this documentation will be updated with setup and configuration instructions.
 
-The Lens connector is an external elizaOS plugin that bridges your agent to the Lens Protocol decentralized social graph. It is auto-enabled when an API key is configured.
+## Related
 
-## Package Info
-
-| Field | Value |
-|-------|-------|
-| Package | `@elizaos/plugin-lens` |
-| Config key | `connectors.lens` |
-| Auto-enable trigger | `apiKey`, `token`, or `botToken` |
-
-## Minimal Configuration
-
-```json
-{
-  "connectors": {
-    "lens": {
-      "apiKey": "your-lens-api-key"
-    }
-  }
-}
-```
-
-## Environment Variables
-
-| Variable | Description |
-|----------|-------------|
-| `LENS_API_KEY` | Lens Protocol API key |
-
-## Setup Steps
-
-1. Obtain API credentials from the [Lens Protocol](https://www.lens.xyz/) developer portal
-2. Add the API key to `connectors.lens` in your config or set the `LENS_API_KEY` environment variable
-3. Start your agent — the Lens connector will auto-enable
+- [Connectors overview](/guides/connectors)
