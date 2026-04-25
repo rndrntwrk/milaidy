@@ -342,6 +342,7 @@ Every published plugin should include an `elizaos.plugin.json` manifest at its p
     "apiKey": {
       "label": "API Key",
       "type": "password",
+      "sensitive": true,
       "help": "Get one at openweathermap.org/appid"
     },
     "units": {
@@ -365,23 +366,22 @@ Every published plugin should include an `elizaos.plugin.json` manifest at its p
 | `version` | `string` | Semver version |
 | `kind` | `PluginKind` | One of: `ai-provider`, `app`, `connector`, `feature`, `database` |
 | `configSchema` | `JsonSchema` | JSON Schema for plugin configuration |
-| `uiHints` | `Record<string, UiHint>` | Hints for admin panel rendering (keyed by config property name) |
+| `uiHints` | `Record<string, PluginConfigUiHint>` | Hints for admin panel rendering, keyed by config property name |
 | `requiredSecrets` | `string[]` | Environment variables that must be set |
 | `channels` | `string[]` | Supported communication channels |
 | `dependencies` | `string[]` | Other plugins this depends on |
 
 ### UI Hints
 
-The `uiHints` array controls how config fields appear in the admin dashboard:
+The `uiHints` object controls how config fields appear in the admin dashboard. Each key matches a property name in `configSchema`:
 
 ```typescript
 interface PluginConfigUiHint {
-  key: string;        // matches configSchema property name
   label: string;      // display label
   type: 'text' | 'password' | 'number' | 'select' | 'toggle' | 'textarea';
-  helpText?: string;  // tooltip or helper text
+  sensitive?: boolean; // if true, value is masked in the UI
+  help?: string;      // tooltip or helper text
   advanced?: boolean; // if true, hidden under "Advanced" toggle
-  placeholder?: string;
 }
 ```
 

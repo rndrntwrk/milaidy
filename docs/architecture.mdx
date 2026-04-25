@@ -6,6 +6,8 @@ description: High-level overview of the Milady AI system architecture, layers, p
 
 Milady is a cross-platform AI agent runtime built on top of [elizaOS](https://elizaos.ai). It delivers the same backend across CLI, web, desktop (Electrobun), and mobile (Capacitor) through a layered architecture. This page covers the full system from entry points through runtime lifecycle, plugin loading, API surface, and build tooling.
 
+> **Path convention:** Paths like `packages/app-core/` and `packages/agent/` refer to directories inside the `eliza/` git submodule. The full filesystem path from the repo root is `eliza/packages/app-core/`. Run `bun run setup:upstreams` to initialize the submodule for local development.
+
 ## High-Level Diagram
 
 ```
