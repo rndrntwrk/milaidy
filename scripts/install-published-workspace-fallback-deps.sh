@@ -346,6 +346,15 @@ append_third_party_dependencies_from_manifest \
 append_third_party_dependencies_from_manifest \
   ".eliza.ci-disabled/packages/app-core/package.json"
 
+# The release validation cloud live suite imports local plugin provider source
+# before package builds have materialized plugin dist. Keep provider source
+# dependencies available after the workspace graph is disabled; otherwise
+# plugin-anthropic fails at import time on jsonrepair.
+append_third_party_dependencies_from_manifest \
+  "eliza/plugins/plugin-anthropic/typescript/package.json"
+append_third_party_dependencies_from_manifest \
+  ".eliza.ci-disabled/plugins/plugin-anthropic/typescript/package.json"
+
 # @elizaos/core's declaration build expects the explicit `bun-types` ambient
 # library named in tsconfig, plus the @types/bun package used by the source
 # workspace. Both disappear when the local workspace is disabled.
@@ -386,6 +395,12 @@ for attempt in 1 2 3; do
       1
     symlink_installed_packages_into_manifest_node_modules \
       ".eliza.ci-disabled/packages/agent/package.json" \
+      1
+    symlink_installed_packages_into_manifest_node_modules \
+      "eliza/plugins/plugin-anthropic/typescript/package.json" \
+      1
+    symlink_installed_packages_into_manifest_node_modules \
+      ".eliza.ci-disabled/plugins/plugin-anthropic/typescript/package.json" \
       1
 
     # @types/uuid shadows uuid@13's bundled types and makes TS report that

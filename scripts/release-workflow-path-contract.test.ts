@@ -593,6 +593,15 @@ describe("release workflow path contract", () => {
       '".eliza.ci-disabled/packages/agent/package.json"',
     );
     expect(fallbackScript).toContain(
+      '"eliza/plugins/plugin-anthropic/typescript/package.json"',
+    );
+    expect(fallbackScript).toContain(
+      '".eliza.ci-disabled/plugins/plugin-anthropic/typescript/package.json"',
+    );
+    expect(fallbackScript).toContain(
+      "plugin-anthropic fails at import time on jsonrepair",
+    );
+    expect(fallbackScript).toContain(
       "symlink_installed_packages_into_manifest_node_modules",
     );
     expect(fallbackScript).toContain("MINGW*|MSYS*|CYGWIN*)");
