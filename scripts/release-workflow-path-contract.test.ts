@@ -235,6 +235,24 @@ describe("release workflow path contract", () => {
     expect(desktopSmokeBlock).toContain("Run website blocker desktop smokes");
   });
 
+  it("keeps canonical Tests from quietly skipping live action coverage", () => {
+    const workflow = readWorkflow("test.yml");
+    const actionE2eBlock = workflow.slice(
+      workflow.indexOf("  action-e2e:"),
+      workflow.indexOf("  validation-e2e:"),
+    );
+    const testStatusBlock = workflow.slice(workflow.indexOf("  test-status:"));
+
+    expect(actionE2eBlock).toContain("github.event_name == 'push'");
+    expect(actionE2eBlock).toContain("run-action-e2e");
+    expect(actionE2eBlock).toContain(
+      "Action Invocation E2E requires an available live provider",
+    );
+    expect(testStatusBlock).toContain("action-e2e,");
+    expect(testStatusBlock).toContain("strict_results=");
+    expect(testStatusBlock).toContain('if [ "$result" != "success" ]; then');
+  });
+
   it("keeps plugin-agent-orchestrator submodule init as the published release-check version source", () => {
     const releaseContract = readWorkflow("test-electrobun-release.yml");
 
