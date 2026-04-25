@@ -16,7 +16,7 @@ The Tlon connector is an elizaOS plugin that bridges your agent to the Urbit net
 |-------|-------|
 | Package | `@elizaos/plugin-tlon` |
 | Config key | `connectors.tlon` |
-| Category | Auto-enabled connector |
+| Install | `milady plugins install @elizaos/plugin-tlon` |
 
 ## Setup Requirements
 

@@ -16,7 +16,8 @@ The BlueBubbles connector is an elizaOS plugin that bridges your agent to iMessa
 |-------|-------|
 | Package | `@elizaos/plugin-bluebubbles` |
 | Config key | `connectors.bluebubbles` |
-| Install | `milady plugins install bluebubbles` |
+| Install | `milady plugins install @elizaos/plugin-bluebubbles` |
+| Auto-enable trigger | Once installed, auto-enables when `password` or `serverUrl` is set in connector config |
 
 ## Setup Requirements
 
@@ -40,17 +41,34 @@ The BlueBubbles connector is an elizaOS plugin that bridges your agent to iMessa
 
 ## Environment Variables
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `BLUEBUBBLES_PASSWORD` | Yes | BlueBubbles server password |
-| `BLUEBUBBLES_SERVER_URL` | No | BlueBubbles server URL |
-| `BLUEBUBBLES_ENABLED` | No | Enable or disable the connector |
-| `BLUEBUBBLES_DM_POLICY` | No | DM policy (`allow`, `deny`, `allowlist`) |
-| `BLUEBUBBLES_ALLOW_FROM` | No | Comma-separated allowed user list |
-| `BLUEBUBBLES_GROUP_POLICY` | No | Group message policy (`allow`, `deny`) |
-| `BLUEBUBBLES_GROUP_ALLOW_FROM` | No | Comma-separated allowed group list |
-| `BLUEBUBBLES_WEBHOOK_PATH` | No | Webhook path for receiving messages |
-| `BLUEBUBBLES_SEND_READ_RECEIPTS` | No | Send read receipts (`true`/`false`) |
+| Variable | Source | Description |
+|----------|--------|-------------|
+| `BLUEBUBBLES_SERVER_URL` | `serverUrl` | BlueBubbles server URL |
+| `BLUEBUBBLES_PASSWORD` | `password` | Server password (required) |
+
+## Full Configuration Reference
+
+All fields are defined under `connectors.bluebubbles` in `milady.json`.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `serverUrl` | string | — | BlueBubbles server URL (required) |
+| `password` | string | — | Server password (required) |
+| `enabled` | boolean | — | Explicitly enable/disable |
+| `dmPolicy` | `"pairing"` \| `"allowlist"` \| `"open"` \| `"disabled"` | `"pairing"` | DM access policy |
+| `allowFrom` | string[] | — | User IDs allowed to DM |
+| `groupPolicy` | `"open"` \| `"disabled"` \| `"allowlist"` | `"allowlist"` | Group message policy |
+| `groupAllowFrom` | string[] | — | Allowed group IDs |
+| `webhookPath` | string | — | Webhook path for inbound messages |
+| `sendReadReceipts` | boolean | — | Send read receipts for incoming messages |
+
+## Setup Steps
+
+1. Install [BlueBubbles](https://bluebubbles.app) on a Mac with Messages signed in.
+2. Start the BlueBubbles server and note the server URL and password.
+3. Install the plugin: `milady plugins install @elizaos/plugin-bluebubbles`
+4. Add the server URL and password to `connectors.bluebubbles` in your config.
+5. Start your agent — the BlueBubbles connector will auto-enable from config.
 
 ## Features
 

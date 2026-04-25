@@ -1,27 +1,46 @@
 ---
 title: "Developer Docs"
 sidebarTitle: "Developer Docs"
-description: "Where to find developer and builder documentation for Milady and elizaOS."
+description: "Find the right docs for product setup, plugin development, REST API, and runtime internals."
 ---
 
-## Milady developer reference
+Milady docs cover both product usage and developer reference. Use the navigation tabs at the top to find the right section.
 
-Detailed reference docs ship with this repo and are accessible from these paths:
+## Product setup (Use Milady tab)
 
-- provider setup
-- character changes
-- installed capabilities
-- app launch and control
-- remote connections
-- connector setup (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, and [22 more](/guides/connectors))
-- LifeOps
-- troubleshooting
+- [Installation](/installation), [First Launch](/quickstart), [Provider setup](/user/provider-setup)
+- [Character changes](/user/change-character), [Add a capability](/user/add-capability)
+- [Connectors](/guides/connectors) — 28 platforms (Discord, Telegram, Slack, WhatsApp, Signal, and more)
+- [LifeOps](/user/lifeops-setup), [Troubleshooting](/user/troubleshooting)
 
-## elizaOS framework docs
+## Connectors (Connectors tab)
 
-For general elizaOS framework documentation (not Milady-specific):
+- [All connectors](/guides/connectors) — comparison table, setup, and troubleshooting
+- Individual connector setup guides for all 28 platforms
+
+## Plugins (Plugins tab)
+
+- [Overview](/plugins/overview), [Architecture](/plugins/architecture), [Registry](/plugins/registry)
+- [Create a plugin](/plugins/create-a-plugin), [Development guide](/plugins/development)
+- LLM provider, platform connector, DeFi, and utility plugin references
+
+## Reference (Reference tab)
+
+- [Configuration](/configuration), [Config schema](/config-schema), [Model providers](/model-providers)
+- [CLI commands](/cli/overview) — start, setup, configure, plugins, models, and more
+- [REST API](/api-reference) — 40+ endpoint groups for agents, auth, conversations, plugins, skills, and more
+- [WebSocket events](/websocket-events)
+- [Runtime internals](/runtime/core) — core, events, memory, models, providers, services
+- [Agents](/agents/character-interface) — character, memory, personality, lifecycle
+
+## Apps and deployment (Apps & Deploy tab)
+
+- [Desktop](/apps/desktop), [Dashboard](/apps/dashboard), [Mobile](/apps/mobile)
+- [Deployment](/deployment), [Eliza Cloud](/eliza-cloud-deployment), [Build and release](/build-and-release)
+- [Architecture](/architecture), [Security](/security)
+
+## elizaOS upstream docs
+
+For deep framework internals beyond what ships in these docs:
 
 - [elizaOS docs home](https://docs.elizaos.ai)
-- [Runtime core](https://docs.elizaos.ai/runtime/core)
-- [Create a plugin](https://docs.elizaos.ai/guides/create-a-plugin)
-- [Deploy a project](https://docs.elizaos.ai/guides/deploy-a-project)

@@ -16,7 +16,7 @@ The Instagram connector is an elizaOS plugin that bridges your agent to Instagra
 |-------|-------|
 | Package | `@elizaos/plugin-instagram` |
 | Config key | `connectors.instagram` |
-| Category | Auto-enabled connector |
+| Install | `milady plugins install @elizaos/plugin-instagram` |
 
 ## Setup Requirements
 
