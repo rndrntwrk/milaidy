@@ -698,16 +698,39 @@ jobs:
             exit 1
           fi
 
+          case "${{ matrix.platform.artifact-name }}" in
+            macos-arm64|macos-x64|linux-x64|linux-arm64)
+              electrobun_core_target="${{ matrix.platform.artifact-name }}"
+              ;;
+            windows-x64)
+              electrobun_core_target="win-x64"
+              ;;
+            *)
+              echo "::error::Unsupported Electrobun release artifact target: ${{ matrix.platform.artifact-name }}"
+              exit 1
+              ;;
+          esac
+
           echo "Resolved electrobun package dir: $package_dir"
           echo "package-dir=$package_dir" >> "$GITHUB_OUTPUT"
           echo "cache-dir=$package_dir/.cache" >> "$GITHUB_OUTPUT"
+          echo "core-target=$electrobun_core_target" >> "$GITHUB_OUTPUT"
+          echo "core-cache-dir=$package_dir/dist-$electrobun_core_target" >> "$GITHUB_OUTPUT"
 
-      - name: Cache local electrobun core downloads
+      - name: Cache Electrobun CLI and core binaries
         uses: actions/cache@v4
         with:
-          path: ${{ steps.resolve-electrobun.outputs.cache-dir }}
-          key: electrobun-core-${{ matrix.platform.artifact-name }}-${{ hashFiles('apps/app/electrobun/package.json') }}
+          path: |
+            ${{ steps.resolve-electrobun.outputs.cache-dir }}
+            ${{ steps.resolve-electrobun.outputs.core-cache-dir }}
+          key: electrobun-core-${{ matrix.platform.artifact-name }}-${{ hashFiles('apps/app/electrobun/package.json', 'eliza/packages/app-core/platforms/electrobun/package.json') }}
           restore-keys: electrobun-core-${{ matrix.platform.artifact-name }}-
+
+      - name: Prepare Electrobun core binaries
+        run: |
+          node eliza/packages/app-core/scripts/ensure-electrobun-core.mjs \
+            --package-dir "${{ steps.resolve-electrobun.outputs.package-dir }}" \
+            --target "${{ steps.resolve-electrobun.outputs.core-target }}"
 
       - name: Probe Electrobun bun entry build
         working-directory: apps/app/electrobun

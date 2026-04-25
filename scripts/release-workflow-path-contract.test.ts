@@ -725,6 +725,10 @@ describe("release workflow path contract", () => {
 
   it("reuses release-installed Electrobun workspaces during packaging", () => {
     const releaseElectrobun = readWorkflow("release-electrobun.yml");
+    const patch = fs.readFileSync(
+      path.join(repoRoot, "patches", "eliza", "ci-release-contracts.patch"),
+      "utf8",
+    );
 
     expect(releaseElectrobun).toContain(
       "name: Patch desktop build workspace install reuse",
@@ -736,6 +740,36 @@ describe("release workflow path contract", () => {
       "Reusing release-installed Electrobun workspace dependencies",
     );
     expect(releaseElectrobun).toContain("\\r?\\n    cwd: APP_DIR");
+    expect(patch).toContain(
+      "eliza/packages/app-core/scripts/ensure-electrobun-core.mjs",
+    );
+  });
+
+  it("prepares and caches Electrobun core binaries before release packaging", () => {
+    const releaseElectrobun = readWorkflow("release-electrobun.yml");
+    const cacheStep = releaseElectrobun.indexOf(
+      "name: Cache Electrobun CLI and core binaries",
+    );
+    const prepareStep = releaseElectrobun.indexOf(
+      "name: Prepare Electrobun core binaries",
+    );
+    const packageStep = releaseElectrobun.indexOf("name: Build Electrobun app");
+
+    expect(cacheStep).toBeGreaterThanOrEqual(0);
+    expect(prepareStep).toBeGreaterThan(cacheStep);
+    expect(packageStep).toBeGreaterThan(prepareStep);
+    expect(releaseElectrobun).toContain(
+      'echo "core-cache-dir=$package_dir/dist-$electrobun_core_target" >> "$GITHUB_OUTPUT"',
+    );
+    expect(releaseElectrobun).toContain(
+      ["$", "{{ steps.resolve-electrobun.outputs.core-cache-dir }}"].join(""),
+    );
+    expect(releaseElectrobun).toContain(
+      'windows-x64)\n              electrobun_core_target="win-x64"',
+    );
+    expect(releaseElectrobun).toContain(
+      "node eliza/packages/app-core/scripts/ensure-electrobun-core.mjs",
+    );
   });
 
   it("keeps draft Electrobun fallback artifacts away from release-grade gates", () => {
