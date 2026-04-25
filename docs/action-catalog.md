@@ -1,3 +1,9 @@
+---
+title: "Action Catalog"
+sidebarTitle: "Action Catalog"
+description: "Complete reference of all 151 actions available across Milady plugins."
+---
+
 # Action Catalog
 
 _Generated on: 2026-04-16. Total actions: 147._

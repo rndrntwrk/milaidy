@@ -1,3 +1,9 @@
+---
+title: "Plugin Resolution and NODE_PATH"
+sidebarTitle: "Plugin Resolution"
+description: "Why dynamic plugin imports fail without NODE_PATH and how Milady fixes it across CLI, dev server, and Electrobun."
+---
+
 # Plugin resolution: why NODE_PATH is needed
 
 This doc explains **why** dynamic plugin imports fail without `NODE_PATH` and **how** we fix it across CLI, dev server, and Electrobun.
