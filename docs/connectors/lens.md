@@ -6,17 +6,19 @@ Connect your agent to Lens Protocol for decentralized social interactions.
 
 ## Overview
 
-The Lens connector is an external elizaOS plugin that bridges your agent to the Lens Protocol decentralized social graph. When available, it will be auto-enabled when an API key is configured.
+The Lens connector is an external elizaOS plugin that bridges your agent to the Lens Protocol decentralized social graph built on Polygon. It is auto-enabled when an API key is configured.
 
 - A Lens Protocol account and API credentials from the [Lens Protocol](https://www.lens.xyz/) developer portal
 
 ## Configuration
 
-| Name | Required | Description |
-|------|----------|-------------|
-| `LENS_API_KEY` | Yes | Lens Protocol API key |
+## Setup
 
-Configure in `~/.milady/milady.json`:
+### 1. Get a Lens API Key
+
+Obtain API credentials from the [Lens Protocol](https://www.lens.xyz/) developer portal.
+
+### 2. Configure Milady
 
 ```json
 {
@@ -28,20 +30,35 @@ Configure in `~/.milady/milady.json`:
 }
 ```
 
-The connector auto-enables when `apiKey`, `token`, or `botToken` is truthy in the connector config.
+Or via environment variable:
 
-## Setup
+```bash
+export LENS_API_KEY=your-lens-api-key
+```
 
-1. Obtain API credentials from the [Lens Protocol](https://www.lens.xyz/) developer portal.
-2. Add the API key to `connectors.lens` in your config or set the `LENS_API_KEY` environment variable.
-3. Start your agent -- the Lens connector will auto-enable.
+The Lens connector will auto-enable once the API key is configured.
 
-1. Obtain API credentials from the [Lens Protocol](https://www.lens.xyz/) developer portal
-2. Add the API key to `connectors.lens` in your config or set the `LENS_API_KEY` environment variable
-3. Start your agent — the Lens connector will auto-enable
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `LENS_API_KEY` | Yes | Lens Protocol API key |
+
+## Configuration Reference
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `apiKey` | Yes | Lens Protocol API key |
+
+## Features
+
+- Post publishing and engagement on Lens Protocol
+- Profile-based social graph traversal
+- Decentralized content on Polygon
 
 ## Related
 
-- [Lens plugin reference](/plugin-registry/platform/lens)
-- [Connectors overview](/guides/connectors)
-- [Configuration reference](/configuration)
+- [Lens Plugin Reference](/plugin-registry/platform/lens)
+- [Farcaster Connector](/connectors/farcaster) — Another decentralized social connector
+- [Nostr Connector](/connectors/nostr) — Relay-based decentralized social
+- [Connectors overview](/guides/connectors#lens)

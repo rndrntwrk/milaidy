@@ -41,11 +41,27 @@ MiniMax does not have an env-var auto-enable trigger. Enable it explicitly in yo
 }
 ```
 
+Set your MiniMax API credentials:
+
+```bash
+export MINIMAX_API_KEY=your-minimax-api-key
+export MINIMAX_GROUP_ID=your-group-id
+```
+
+## Supported Models
+
+| Model | Description |
+|-------|-------------|
+| `abab6.5s-chat` | Standard chat model |
+| `abab6.5-chat` | Enhanced chat model |
+| `abab5.5-chat` | Lighter, faster model |
+
 ## Features
 
 - Text generation
-- Multimodal capabilities
+- Multimodal capabilities (text + image understanding)
 - Streaming responses
+- Tool use / function calling
 
 ## Related
 

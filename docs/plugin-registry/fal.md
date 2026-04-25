@@ -20,51 +20,36 @@ The FAL plugin connects Milady agents to [FAL.ai](https://fal.ai)'s media genera
 milady plugins install fal
 ```
 
-## Enable via Features
-
-```json
-{
-  "features": {
-    "fal": true
-  }
-}
-```
-
 ## Configuration
 
-Set your FAL API key:
+### Enable via Features
 
 ```json
 {
-  "env": {
-    "FAL_KEY": "<YOUR_FAL_KEY>"
-  },
   "features": {
     "fal": true
-  },
-  "media": {
-    "image": {
-      "enabled": true,
-      "mode": "own-key",
-      "provider": "fal",
-      "fal": { "model": "flux/schnell" }
-    },
-    "video": {
-      "enabled": true,
-      "mode": "own-key",
-      "provider": "fal"
-    }
   }
 }
 ```
 
-**Get credentials:** [fal.ai/dashboard/keys](https://fal.ai/dashboard/keys)
+### Environment Variables
 
-| Variable | Description |
-|----------|-------------|
-| `FAL_KEY` | FAL.ai API key |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `FAL_KEY` | Yes | FAL.ai API key from [fal.ai/dashboard](https://fal.ai/dashboard) |
 
-The FAL plugin also auto-enables when `media.image.provider` or `media.video.provider` is set to `"fal"` with `mode: "own-key"`.
+```bash
+export FAL_KEY=your-fal-api-key
+```
+
+## Supported Capabilities
+
+| Capability | Examples |
+|-----------|----------|
+| Image generation | Flux, Stable Diffusion, SDXL |
+| Video generation | Runway, AnimateDiff |
+| Audio generation | Text-to-speech, music |
+| Image editing | Inpainting, upscaling, style transfer |
 
 ## Features
 
@@ -72,6 +57,7 @@ The FAL plugin also auto-enables when `media.image.provider` or `media.video.pro
 - Video generation
 - Audio generation
 - Fast inference on serverless GPU infrastructure
+- Wide selection of open-source and commercial models
 
 ## Related
 

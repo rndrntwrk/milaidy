@@ -4,9 +4,26 @@ Connect your agent to the Urbit network via Tlon for ship-to-ship messaging usin
 
 ## Prerequisites
 
-- An Urbit ship with access credentials (ship name and access code)
+The Tlon connector is an elizaOS plugin that bridges your agent to the Urbit network. It supports ship-to-ship messaging and group chat participation. This connector is available from the plugin registry.
 
-## Configuration
+## Package Info
+
+| Field | Value |
+|-------|-------|
+| Package | `@elizaos/plugin-tlon` |
+| Config key | `connectors.tlon` |
+| Install | `milady plugins install tlon` |
+
+## Setup
+
+### 1. Get Your Urbit Ship Credentials
+
+1. Have a running Urbit ship (planet, star, or comet)
+2. Note the ship name (e.g., `~zod`)
+3. Obtain the access code from your ship's web interface (Settings → Access Key)
+4. Note the ship's URL (e.g., `http://localhost:8080`)
+
+### 2. Configure Milady
 
 | Name | Required | Description |
 |------|----------|-------------|
@@ -30,33 +47,51 @@ Configure in `~/.milady/milady.json`:
 {
   "connectors": {
     "tlon": {
-      "enabled": true
+      "ship": "~zod",
+      "code": "YOUR_ACCESS_CODE",
+      "url": "http://localhost:8080"
     }
   }
 }
 ```
 
-## Setup
+Or via environment variables:
 
-| Variable | Description |
-|----------|-------------|
-| `TLON_SHIP` | Urbit ship name (e.g., `~zod`) |
-| `TLON_CODE` | Ship access code |
-| `TLON_URL` | Ship URL (e.g., `http://localhost:8080`) |
-| `TLON_ENABLED` | Set to `true` to enable |
-| `TLON_DM_ALLOWLIST` | Comma-separated allowed user list for DMs |
-| `TLON_GROUP_CHANNELS` | Comma-separated list of group channel identifiers |
-| `TLON_AUTO_DISCOVER_CHANNELS` | Set to `true` to automatically discover and join channels |
+```bash
+export TLON_SHIP=~zod
+export TLON_CODE=YOUR_ACCESS_CODE
+export TLON_URL=http://localhost:8080
+```
+
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `TLON_SHIP` | Yes | Urbit ship name (e.g., `~zod`) |
+| `TLON_CODE` | Yes | Ship access code |
+| `TLON_URL` | Yes | Ship URL (e.g., `http://localhost:8080`) |
+| `TLON_ENABLED` | No | Set to `true` to enable |
+| `TLON_DM_ALLOWLIST` | No | Comma-separated allowed user list for DMs |
+| `TLON_GROUP_CHANNELS` | No | Comma-separated list of group channel identifiers |
+| `TLON_AUTO_DISCOVER_CHANNELS` | No | Comma-separated list of channels to auto-discover |
+
+## Configuration Reference
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `ship` | Yes | Urbit ship name (e.g., `~zod`) |
+| `code` | Yes | Urbit ship access code |
+| `url` | Yes | Urbit ship URL |
+| `enabled` | No | Set `false` to disable (default: `true`) |
 
 ## Features
 
-- Urbit-based chat and social interactions
-- Ship-to-ship messaging
+- Ship-to-ship messaging on the Urbit network
 - Group chat participation
-- DM allowlisting
-- Automatic channel discovery
+- DM allowlist for access control
+- Auto-discovery of group channels
 
 ## Related
 
-- [Tlon plugin reference](/plugin-registry/platform/tlon)
+- [Tlon Plugin Reference](/plugin-registry/platform/tlon)
 - [Connectors overview](/guides/connectors#tlon)
