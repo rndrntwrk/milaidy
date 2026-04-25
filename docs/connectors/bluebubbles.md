@@ -16,8 +16,9 @@ The BlueBubbles connector is an external elizaOS plugin that bridges your agent 
 |-------|-------|
 | Package | `@elizaos/plugin-bluebubbles` |
 | Config key | `connectors.bluebubbles` |
-| Install | `milady plugins install @elizaos/plugin-bluebubbles` |
-| Auto-enable trigger | Once installed, auto-enables when `password` or `serverUrl` is set in connector config |
+| Install | `milady plugins install bluebubbles` |
+
+Once installed, the connector activates when `password` or `serverUrl` is set in connector config, or `accounts` has at least one enabled entry.
 
 ## Setup Requirements
 
@@ -73,9 +74,9 @@ All fields are defined under `connectors.bluebubbles` in `milady.json`.
 
 1. Install [BlueBubbles](https://bluebubbles.app) on a Mac with Messages signed in.
 2. Start the BlueBubbles server and note the server URL and password.
-3. Install the plugin: `milady plugins install @elizaos/plugin-bluebubbles`
+3. Install the plugin: `milady plugins install bluebubbles`
 4. Add the server URL and password to `connectors.bluebubbles` in your config.
-5. Start your agent — the BlueBubbles connector will auto-enable from config.
+5. Start your agent — the BlueBubbles connector will load and connect.
 
 ## Features
 
