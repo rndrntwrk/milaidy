@@ -59,18 +59,18 @@ describe("action e2e workflow contract", () => {
     );
     expect(elizaPatch).toContain('plugin: "@elizaos/plugin-elizacloud"');
     expect(elizaPatch).toContain(
-      'ELIZAOS_CLOUD_ACTION_PLANNER_MODEL: largeModel',
+      "ELIZAOS_CLOUD_ACTION_PLANNER_MODEL: largeModel",
     );
     expect(elizaPatch).toContain(
       [
         "  LIVE_PROVIDER_ENV_KEYS.add(provider.largeModelEnvVar);",
-        '+  for (const key of provider.extraEnvVars ?? []) {',
+        "+  for (const key of provider.extraEnvVars ?? []) {",
       ].join("\n"),
     );
     expect(elizaPatch).not.toContain(
       [
         "  keyEnvVars: string[];",
-        '+  for (const key of provider.extraEnvVars ?? []) {',
+        "+  for (const key of provider.extraEnvVars ?? []) {",
       ].join("\n"),
     );
     expect(actionE2EBlock).toContain(
