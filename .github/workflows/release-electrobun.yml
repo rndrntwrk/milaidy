@@ -523,7 +523,8 @@ jobs:
         run: |
           git -C eliza submodule update --init --depth=1 plugins/plugin-telegram
           test -f eliza/plugins/plugin-telegram/package.json
-          (cd eliza/plugins/plugin-telegram && bun install --ignore-scripts && bun run build)
+          repo_root="$PWD"
+          (cd eliza/plugins/plugin-telegram && bun "$repo_root/node_modules/tsup/dist/cli-default.js")
           installed_dir="node_modules/@elizaos/plugin-telegram"
           test -d "$installed_dir"
           test -d eliza/plugins/plugin-telegram/dist

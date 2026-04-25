@@ -726,7 +726,10 @@ describe("release workflow path contract", () => {
       "git -C eliza submodule update --init --depth=1 plugins/plugin-telegram",
     );
     expect(windowsTelegramOverlayBlock).toContain(
-      "(cd eliza/plugins/plugin-telegram && bun install --ignore-scripts && bun run build)",
+      'repo_root="$PWD"',
+    );
+    expect(windowsTelegramOverlayBlock).toContain(
+      '(cd eliza/plugins/plugin-telegram && bun "$repo_root/node_modules/tsup/dist/cli-default.js")',
     );
     expect(windowsTelegramOverlayBlock).toContain(
       'cp -r eliza/plugins/plugin-telegram/dist "$installed_dir/dist"',
