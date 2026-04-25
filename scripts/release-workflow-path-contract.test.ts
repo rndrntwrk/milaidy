@@ -641,6 +641,23 @@ describe("release workflow path contract", () => {
     expect(fallbackInstallBlock).toContain(
       "run: bash scripts/install-published-workspace-fallback-deps.sh",
     );
+
+    const windowsElectrobunInstallStart = releaseElectrobun.indexOf(
+      "      - name: Install Windows Electrobun package dependency",
+      fallbackInstallStart,
+    );
+    expect(windowsElectrobunInstallStart).toBeGreaterThan(-1);
+
+    const windowsElectrobunInstallBlock = releaseElectrobun.slice(
+      windowsElectrobunInstallStart,
+      releaseElectrobun.indexOf("\n\n", windowsElectrobunInstallStart),
+    );
+    expect(windowsElectrobunInstallBlock).toContain(
+      "if: matrix.platform.os == 'windows'",
+    );
+    expect(windowsElectrobunInstallBlock).toContain(
+      "bun add --no-save --dev --ignore-scripts electrobun@1.16.0",
+    );
   });
 
   it("installs browser automation deps in the published-workspace fallback shim", () => {
