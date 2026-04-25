@@ -92,6 +92,24 @@ append_dependency_spec_package() {
   packages+=("$package_name")
 }
 
+ensure_eliza_submodule_manifest() {
+  local manifest="$1"
+  local submodule_path="$2"
+
+  [[ -f "$manifest" ]] && return 0
+  [[ -d eliza ]] || return 0
+  command -v git >/dev/null 2>&1 || return 0
+
+  if ! git -C eliza submodule update --init --depth=1 "$submodule_path" >/dev/null; then
+    echo "::warning::Could not initialize eliza/$submodule_path before fallback dependency install"
+    return 0
+  fi
+
+  if [[ ! -f "$manifest" ]]; then
+    echo "::warning::Expected fallback dependency manifest is still missing: $manifest"
+  fi
+}
+
 # Append every third-party dependency from a manifest's `dependencies` section,
 # preserving the manifest's pinned spec. Used to keep package builds (e.g.
 # eliza/packages/typescript) functional after disable-local-eliza-workspace
@@ -350,9 +368,16 @@ append_third_party_dependencies_from_manifest \
 # before package builds have materialized plugin dist. Keep provider source
 # dependencies available after the workspace graph is disabled; otherwise
 # plugin-anthropic fails at import time on jsonrepair.
+ensure_eliza_submodule_manifest \
+  "eliza/plugins/plugin-anthropic/typescript/package.json" \
+  "plugins/plugin-anthropic"
 append_third_party_dependencies_from_manifest \
   "eliza/plugins/plugin-anthropic/typescript/package.json"
 append_third_party_dependencies_from_manifest \
+  ".eliza.ci-disabled/plugins/plugin-anthropic/typescript/package.json"
+append_dependency_spec_package \
+  "jsonrepair" \
+  "eliza/plugins/plugin-anthropic/typescript/package.json" \
   ".eliza.ci-disabled/plugins/plugin-anthropic/typescript/package.json"
 
 # @elizaos/core's declaration build expects the explicit `bun-types` ambient

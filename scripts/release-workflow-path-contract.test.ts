@@ -598,8 +598,20 @@ describe("release workflow path contract", () => {
     expect(fallbackScript).toContain(
       '".eliza.ci-disabled/plugins/plugin-anthropic/typescript/package.json"',
     );
+    expect(fallbackScript).toContain("ensure_eliza_submodule_manifest");
+    expect(fallbackScript).toContain('"plugins/plugin-anthropic"');
+    expect(fallbackScript).toContain('"jsonrepair"');
     expect(fallbackScript).toContain(
       "plugin-anthropic fails at import time on jsonrepair",
+    );
+    expect(
+      fallbackScript.indexOf(
+        'ensure_eliza_submodule_manifest \\\n  "eliza/plugins/plugin-anthropic/typescript/package.json"',
+      ),
+    ).toBeLessThan(
+      fallbackScript.indexOf(
+        'append_third_party_dependencies_from_manifest \\\n  "eliza/plugins/plugin-anthropic/typescript/package.json"',
+      ),
     );
     expect(fallbackScript).toContain(
       "symlink_installed_packages_into_manifest_node_modules",
