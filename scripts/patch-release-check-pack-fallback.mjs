@@ -179,6 +179,14 @@ const workflowSnippetCompatReplacements = [
     "name: Build patched Electrobun CLI for Windows",
     "name: Build patched Electrobun CLI",
   ],
+  [
+    "name: Run cloud live regression suite",
+    "name: Run optional cloud live regression suite",
+  ],
+  [
+    "run: bun run test:live:cloud",
+    'if bun run test:live:cloud 2>&1 | tee "$log_file"; then',
+  ],
 ];
 
 function getLocalPackHotspotPathsBlock(source) {
