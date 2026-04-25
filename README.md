@@ -502,7 +502,6 @@ Or use `~/.milady/.env` for secrets.
 | [Google Gemini](https://ai.google.dev) | `GOOGLE_API_KEY` | gemini pro, flash, ultra |
 | [Google Antigravity](https://cloud.google.com/vertex-ai) | `GOOGLE_CLOUD_API_KEY` | vertex AI / cloud models |
 | [Ollama](https://ollama.com) | — | local, free, no API key, full privacy |
-| [LocalAI](https://localai.io) | — | self-hosted, OpenAI-compatible local inference |
 | [Groq](https://groq.com) | `GROQ_API_KEY` | fast af |
 | [xAI](https://x.ai) | `XAI_API_KEY` | grok, based |
 | [DeepSeek](https://deepseek.com) | `DEEPSEEK_API_KEY` | reasoning arc |
