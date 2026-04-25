@@ -904,4 +904,60 @@ describe("release workflow path contract", () => {
       "secrets.GH_PAT || secrets.GITHUB_TOKEN",
     );
   });
+
+  it("requires enabled release distribution workflows to succeed", () => {
+    const releaseOrchestrator = readWorkflow("release-orchestrator.yml");
+    const publishPackages = readWorkflow("publish-packages.yml");
+    const androidRelease = readWorkflow("android-release.yml");
+    const appleStoreRelease = readWorkflow("apple-store-release.yml");
+
+    expect(releaseOrchestrator).toContain(
+      'PUBLISH_FLATPAK="$PUBLISH_PACKAGES"',
+    );
+    expect(releaseOrchestrator).not.toContain('PUBLISH_FLATPAK="false"');
+    expect(releaseOrchestrator).toContain(
+      "Require enabled distributions succeeded",
+    );
+    for (const dependency of [
+      "needs.publish-npm.result",
+      "needs.publish-packages.result",
+      "needs.publish-android.result",
+      "needs.publish-apple.result",
+      "needs.update-homebrew.result",
+      "needs.deploy-homepage.result",
+    ]) {
+      expect(releaseOrchestrator).toContain(dependency);
+    }
+
+    expect(publishPackages).toContain(
+      "SNAP_STORE_CREDENTIALS is required when Snap publishing is enabled.",
+    );
+    expect(publishPackages).toContain(
+      "APT_REPO_TOKEN is required when apt publishing is enabled.",
+    );
+    expect(publishPackages).toContain(
+      "Require enabled package publishers succeeded",
+    );
+    expect(publishPackages).not.toContain("Snap Store publish skipped");
+    expect(publishPackages).not.toContain("APT repository update skipped");
+    expect(publishPackages).not.toContain("skipping .deb attachment");
+    expect(publishPackages).not.toContain("skipping Flatpak attachment");
+
+    expect(androidRelease).toContain(
+      "PLAY_STORE_SERVICE_ACCOUNT_JSON is required for Android release publishing.",
+    );
+    expect(androidRelease).toContain("Require Android release succeeded");
+    expect(androidRelease).not.toContain("Play Store upload will be skipped");
+    expect(androidRelease).not.toContain("skipping AAB attachment");
+
+    expect(appleStoreRelease).toContain(
+      "APP_STORE_APP_ID is required for TestFlight/App Store delivery.",
+    );
+    expect(appleStoreRelease).toContain(
+      "Require enabled Apple releases succeeded",
+    );
+    expect(appleStoreRelease).not.toContain("APP_STORE_APP_ID is not set");
+    expect(appleStoreRelease).not.toContain("bunx tsdown || true");
+    expect(appleStoreRelease).not.toContain("if-no-files-found: warn");
+  });
 });

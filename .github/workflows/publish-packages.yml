@@ -108,25 +108,36 @@ jobs:
           echo "Debian: ${DEB_VERSION}-1"
           echo "Pre-release: $(echo "$VERSION" | grep -qE '(alpha|beta|rc)' && echo true || echo false)"
 
-      - name: Check optional registry credentials
+      - name: Check registry credentials
         id: registry_credentials
         env:
+          INPUT_SNAP: ${{ inputs.snap }}
+          INPUT_APT: ${{ inputs.apt }}
           SNAP_STORE_CREDENTIALS: ${{ secrets.SNAP_STORE_CREDENTIALS }}
           APT_REPO_TOKEN: ${{ secrets.APT_REPO_TOKEN }}
         run: |
+          missing=0
           if [[ -n "$SNAP_STORE_CREDENTIALS" ]]; then
             echo "snap_store_ready=true" >> "$GITHUB_OUTPUT"
           else
             echo "snap_store_ready=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::SNAP_STORE_CREDENTIALS is not configured; Snap will be built and tested, but store publish will be skipped."
+            if [[ "$INPUT_SNAP" == "true" ]]; then
+              echo "::error::SNAP_STORE_CREDENTIALS is required when Snap publishing is enabled."
+              missing=1
+            fi
           fi
 
           if [[ -n "$APT_REPO_TOKEN" ]]; then
             echo "apt_repo_ready=true" >> "$GITHUB_OUTPUT"
           else
             echo "apt_repo_ready=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::APT_REPO_TOKEN is not configured; Debian package will be built and attached, but apt repository dispatch will be skipped."
+            if [[ "$INPUT_APT" == "true" ]]; then
+              echo "::error::APT_REPO_TOKEN is required when apt publishing is enabled."
+              missing=1
+            fi
           fi
+
+          exit "$missing"
 
   # ── PyPI ───────────────────────────────────────────────────────────────
   publish-pypi:
@@ -252,10 +263,6 @@ jobs:
           snap: ${{ steps.snapcraft.outputs.snap }}
           release: ${{ needs.prepare.outputs.is_prerelease == 'true' && 'edge,beta' || 'stable,candidate' }}
 
-      - name: Skip Snap Store publish
-        if: success() && needs.prepare.outputs.snap_store_ready != 'true'
-        run: echo "::warning::Snap Store publish skipped because SNAP_STORE_CREDENTIALS is not configured."
-
   # ── Debian / apt ───────────────────────────────────────────────────────
   build-deb:
     name: Build Debian Package
@@ -281,7 +288,7 @@ jobs:
       - name: Setup Bun
         run: |
           curl -fsSL https://bun.sh/install | bash -s "bun-v1.3.13"
-          echo "$HOME/.bun/bin" >> $GITHUB_PATH
+          echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
           export PATH="$HOME/.bun/bin:$PATH"
           bun --version
 
@@ -318,7 +325,8 @@ jobs:
 
       - name: Test .deb package
         run: |
-          sudo dpkg -i deb-output/*.deb || sudo apt-get -f install -y
+          debs=(deb-output/*.deb)
+          sudo dpkg -i "${debs[@]}" || sudo apt-get -f install -y
           which elizaos-app
           elizaos-app --version || echo "Version check completed"
 
@@ -335,8 +343,8 @@ jobs:
         run: |
           TAG="v${{ needs.prepare.outputs.version }}"
           if ! gh release view "$TAG" >/dev/null 2>&1; then
-            echo "No GitHub release found for $TAG; skipping .deb attachment."
-            exit 0
+            echo "::error::No GitHub release found for $TAG; cannot attach .deb artifacts."
+            exit 1
           fi
           for deb in deb-output/*.deb; do
             echo "Uploading $deb to release..."
@@ -349,11 +357,13 @@ jobs:
           GH_TOKEN: ${{ secrets.APT_REPO_TOKEN }}
         run: |
           VERSION="${{ needs.prepare.outputs.version }}"
-          DEB_VERSION="${{ needs.prepare.outputs.deb_version }}"
 
-          # Find the actual .deb filename
-          DEB_FILE=$(ls deb-output/*.deb | head -1)
-          DEB_BASENAME=$(basename "$DEB_FILE")
+          DEB_FILE="$(find deb-output -maxdepth 1 -type f -name '*.deb' | sort | head -n 1)"
+          if [[ -z "$DEB_FILE" ]]; then
+            echo "::error::No .deb artifact found in deb-output."
+            exit 1
+          fi
+          DEB_BASENAME="$(basename "$DEB_FILE")"
 
           TAG="v${VERSION}"
 
@@ -365,10 +375,6 @@ jobs:
             -f event_type=update-apt \
             -f "client_payload[version]=$VERSION" \
             -f "client_payload[deb_url]=$DEB_URL"
-
-      - name: Skip APT repository update
-        if: success() && needs.prepare.outputs.apt_repo_ready != 'true'
-        run: echo "::warning::APT repository update skipped because APT_REPO_TOKEN is not configured."
 
   # ── Flatpak ────────────────────────────────────────────────────────────
   build-flatpak:
@@ -417,8 +423,8 @@ jobs:
         run: |
           TAG="v${{ needs.prepare.outputs.version }}"
           if ! gh release view "$TAG" >/dev/null 2>&1; then
-            echo "No GitHub release found for $TAG; skipping Flatpak attachment."
-            exit 0
+            echo "::error::No GitHub release found for $TAG; cannot attach Flatpak artifact."
+            exit 1
           fi
           gh release upload "$TAG" eliza/packages/app-core/packaging/flatpak/elizaos-app.flatpak --clobber
 
@@ -431,21 +437,43 @@ jobs:
     steps:
       - name: Summary
         run: |
-          echo "## Package Publishing Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Version: **${{ needs.prepare.outputs.version }}**" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Package | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|---------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| PyPI (elizaos-app ${{ needs.prepare.outputs.pypi_version }}) | ${{ needs.publish-pypi.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Homebrew | handled by update-homebrew.yml |" >> $GITHUB_STEP_SUMMARY
-          echo "| Snap | ${{ needs.publish-snap.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Debian (.deb) | ${{ needs.build-deb.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Flatpak | ${{ needs.build-flatpak.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Install commands" >> $GITHUB_STEP_SUMMARY
-          echo '```bash' >> $GITHUB_STEP_SUMMARY
-          echo "pip install elizaos-app==${{ needs.prepare.outputs.pypi_version }}" >> $GITHUB_STEP_SUMMARY
-          echo "brew install elizaos-app" >> $GITHUB_STEP_SUMMARY
-          echo "sudo snap install elizaos-app --classic" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## Package Publishing Summary"
+            echo ""
+            echo "Version: **${{ needs.prepare.outputs.version }}**"
+            echo ""
+            echo "| Package | Status |"
+            echo "|---------|--------|"
+            echo "| PyPI (elizaos-app ${{ needs.prepare.outputs.pypi_version }}) | ${{ needs.publish-pypi.result || 'skipped' }} |"
+            echo "| Homebrew | handled by update-homebrew.yml |"
+            echo "| Snap | ${{ needs.publish-snap.result || 'skipped' }} |"
+            echo "| Debian (.deb) | ${{ needs.build-deb.result || 'skipped' }} |"
+            echo "| Flatpak | ${{ needs.build-flatpak.result || 'skipped' }} |"
+            echo ""
+            echo "### Install commands"
+            echo '```bash'
+            echo "pip install elizaos-app==${{ needs.prepare.outputs.pypi_version }}"
+            echo "brew install elizaos-app"
+            echo "sudo snap install elizaos-app --classic"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Require enabled package publishers succeeded
+        run: |
+          failed=0
+          require_result() {
+            local label="$1"
+            local enabled="$2"
+            local result="$3"
+            if [[ "$enabled" == "true" && "$result" != "success" ]]; then
+              echo "::error::$label result was '$result', expected success"
+              failed=1
+            fi
+          }
+
+          require_result "PyPI" "${{ inputs.pypi }}" "${{ needs.publish-pypi.result }}"
+          require_result "Snap" "${{ inputs.snap }}" "${{ needs.publish-snap.result }}"
+          require_result "Debian/APT" "${{ inputs.apt }}" "${{ needs.build-deb.result }}"
+          require_result "Flatpak" "${{ inputs.flatpak }}" "${{ needs.build-flatpak.result }}"
+
+          exit "$failed"
