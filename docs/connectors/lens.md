@@ -10,7 +10,13 @@ This connector is **not included** in the bundled plugin registry (`plugins.json
 
 ## Overview
 
-The Lens connector is an upstream elizaOS plugin that bridges your agent to the Lens Protocol decentralized social graph. It is auto-enabled when an API key is configured.
+The Lens connector is an external elizaOS plugin that bridges your agent to the Lens Protocol decentralized social graph. It must be installed from the registry before use, and then auto-enables when an API key is configured.
+
+## Installation
+
+```bash
+milady plugins install @elizaos/plugin-lens
+```
 
 - A Lens Protocol account and API credentials from the [Lens Protocol](https://www.lens.xyz/) developer portal
 
@@ -50,19 +56,7 @@ The Lens connector will auto-enable once the API key is configured.
 
 ## Configuration Reference
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| `apiKey` | Yes | Lens Protocol API key |
-
-## Features
-
-- Post publishing and engagement on Lens Protocol
-- Profile-based social graph traversal
-- Decentralized content on Polygon
-
-## Related
-
-- [Lens Plugin Reference](/plugin-registry/platform/lens)
-- [Farcaster Connector](/connectors/farcaster) — Another decentralized social connector
-- [Nostr Connector](/connectors/nostr) — Relay-based decentralized social
-- [Connectors overview](/guides/connectors#lens)
+1. Install the plugin: `milady plugins install @elizaos/plugin-lens`
+2. Obtain API credentials from the [Lens Protocol](https://www.lens.xyz/) developer portal
+3. Add the API key to `connectors.lens` in your config or set the `LENS_API_KEY` environment variable
+4. Start your agent — the Lens connector will auto-enable

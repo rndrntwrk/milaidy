@@ -72,8 +72,7 @@ Les connecteurs marqués **Auto** se chargent automatiquement lorsque leur confi
 | Matrix | Token d'accès | Oui | Oui (salons) | Non | Auto |
 | Feishu / Lark | ID d'app + secret | Oui | Oui (discussions de groupe) | Non | Auto |
 | Nostr | Clé privée (nsec/hex) | Oui (NIP-04) | N/A | Non | Auto |
-| Lens | Clé API | Oui | N/A | Non | Auto |
-| BlueBubbles | Mot de passe serveur | Oui | Oui | Non | Registry |
+| Lens | Clé API | Oui | N/A | Non | Registry |
 | Bluesky | Identifiants de compte | Publications | N/A | Non | Registry |
 | Instagram | Nom d'utilisateur + mot de passe | MP | N/A | Non | Registry |
 | LINE | Token d'accès + secret du canal | Oui | Oui | Non | Registry |

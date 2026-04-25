@@ -14,7 +14,13 @@ This connector is **not included** in the bundled plugin registry (`plugins.json
 
 ## Overview
 
-The Twitter connector is an upstream elizaOS plugin that bridges your agent to Twitter/X. It is auto-enabled by the runtime when a valid token is detected in your connector configuration.
+The Twitter connector is an external elizaOS plugin that bridges your agent to Twitter/X. It must be installed from the registry before use, and then auto-enables when a valid token is detected in your connector configuration.
+
+## Installation
+
+```bash
+milady plugins install @elizaos/plugin-twitter
+```
 
 ## Configuration
 
@@ -57,10 +63,9 @@ To explicitly disable the connector even when a token is present:
 
 ## Setup
 
-The xAI plugin auto-enables when any of the following are set:
-- `connectors.twitter.apiKey`, `connectors.twitter.token`, or `connectors.twitter.accessToken` in your config
-- `X_API_KEY`, `XAI_API_KEY`, or `GROK_API_KEY` environment variables
-- `enabled` is not explicitly `false`
+After installation, the `plugin-auto-enable.ts` module checks `connectors.twitter` in your config. If any of the fields `botToken`, `token`, or `apiKey` is truthy (and `enabled` is not explicitly `false`), the runtime automatically loads `@elizaos/plugin-twitter`.
+
+No environment variable is required to trigger auto-enable — it is driven entirely by the connector config object. However, the plugin must first be installed via the registry (see [Installation](#installation) above).
 
 ## Environment Variables
 

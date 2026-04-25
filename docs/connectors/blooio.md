@@ -6,7 +6,11 @@ Connect your agent to iMessage and SMS messaging via the Blooio bridge service u
 
 - A Blooio account and API key from the Blooio platform
 
-## Configuration
+<Note>
+In the bundled registry (`plugins.json`) this plugin is listed under the `feature` category rather than `connector`. It functions as a connector regardless of the registry classification.
+</Note>
+
+## Package Info
 
 | Name | Required | Description |
 |------|----------|-------------|

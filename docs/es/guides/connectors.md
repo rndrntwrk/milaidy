@@ -72,8 +72,7 @@ Los conectores marcados como **Auto** se cargan automáticamente cuando su confi
 | Matrix | Token de acceso | Sí | Sí (salas) | No | Auto |
 | Feishu / Lark | ID de app + secreto | Sí | Sí (chats grupales) | No | Auto |
 | Nostr | Clave privada (nsec/hex) | Sí (NIP-04) | N/A | No | Auto |
-| Lens | Clave API | Sí | N/A | No | Auto |
-| BlueBubbles | Contraseña del servidor | Sí | Sí | No | Registry |
+| Lens | Clave API | Sí | N/A | No | Registry |
 | Bluesky | Credenciales de cuenta | Publicaciones | N/A | No | Registry |
 | Instagram | Usuario + contraseña | MDs | N/A | No | Registry |
 | LINE | Token de acceso de canal + secreto | Sí | Sí | No | Registry |

@@ -1,7 +1,7 @@
 ---
 title: "Platform Connectors"
 sidebarTitle: "Connectors"
-description: "Platform bridges for 30 messaging platforms — 22 bundled connectors that auto-enable from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, BlueBubbles, Bluesky, Instagram, LINE, Zalo, Nextcloud Talk, Tlon) plus additional connectors available via the upstream registry or as feature plugins (Twitter/X, WeChat, Lens, Twilio, GitHub, Gmail Watch)."
+description: "Platform bridges for 28 messaging platforms — 17 auto-enabled from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, BlueBubbles, Blooio, MS Teams, Google Chat, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, WeChat) plus 11 installable from the registry (Twitter, Lens, Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
 ---
 
 Connectors are platform bridges that allow your agent to communicate across messaging platforms and social networks. Each connector handles authentication, message routing, session management, and platform-specific features.
@@ -59,7 +59,7 @@ Connectors marked **Auto** load automatically when their config is present in `m
 | iMessage | Native CLI (macOS) | Yes | Yes | Yes | Auto |
 | Microsoft Teams | App ID + password | Yes | Yes (teams/channels) | No | Auto |
 | Google Chat | Service account | Yes | Yes (spaces) | Yes | Auto |
-| Twitter | API keys + tokens | DMs | N/A | No | Upstream |
+| Twitter | API keys + tokens | DMs | N/A | No | Registry |
 | Farcaster | Neynar API key + signer | Casts | Yes (channels) | No | Auto |
 | Twitch | Client ID + access token | Yes (chat) | Yes (channels) | No | Auto |
 | Mattermost | Bot token | Yes | Yes (channels) | No | Auto |
@@ -67,8 +67,8 @@ Connectors marked **Auto** load automatically when their config is present in `m
 | Matrix | Access token | Yes | Yes (rooms) | No | Auto |
 | Feishu / Lark | App ID + secret | Yes | Yes (group chats) | No | Auto |
 | Nostr | Private key (nsec/hex) | Yes (NIP-04) | N/A | No | Auto |
-| Lens | API key | Yes | N/A | No | Upstream |
-| BlueBubbles | Server password | Yes | Yes | No | Registry |
+| Lens | API key | Yes | N/A | No | Registry |
+| BlueBubbles | Server password | Yes | Yes | No | Auto |
 | Bluesky | Account credentials | Posts | N/A | No | Registry |
 | Instagram | Username + password | DMs | N/A | No | Registry |
 | LINE | Channel access token + secret | Yes | Yes | No | Registry |
@@ -509,6 +509,46 @@ Connects to iMessage and SMS messaging via the Blooio service with signed webhoo
 
 ---
 
+## Twitter
+
+Install from the registry before configuring: `milady plugins install @elizaos/plugin-twitter`
+
+### Setup Requirements
+
+- Twitter API v2 credentials (API key, API secret key, access token, access token secret)
+
+### Key Configuration
+
+```json
+{
+  "connectors": {
+    "twitter": {
+      "enabled": true,
+      "apiKey": "...",
+      "apiSecretKey": "...",
+      "accessToken": "...",
+      "accessTokenSecret": "...",
+      "postEnable": true,
+      "postIntervalMin": 90,
+      "postIntervalMax": 180
+    }
+  }
+}
+```
+
+### Features
+
+- Automated posting with configurable intervals and variance
+- Post immediately option
+- Search and mention monitoring
+- Timeline algorithm selection (`weighted` or `latest`)
+- Auto-respond to mentions
+- Action processing toggle
+- Dry run mode for testing
+- Configurable max tweet length (default: 4000)
+
+---
+
 ## Farcaster
 
 ### Setup Requirements
@@ -579,7 +619,7 @@ Connects to iMessage and SMS messaging via the Blooio service with signed webhoo
 - Webhook-based inbound messages
 - Network-accessible (works from any machine, not just the Mac running Messages)
 
-**Auto-enable:** The connector auto-enables when both `serverUrl` and `password` are set in the connector config.
+This connector ships bundled and auto-enables when `password` or `serverUrl` is configured.
 
 **Docs:** [BlueBubbles connector](/connectors/bluebubbles)
 
@@ -1052,7 +1092,9 @@ A personal-account variant of the Zalo connector for one-to-one messaging outsid
 
 ## ACP (Agent Communication Protocol)
 
-**Plugin:** `@elizaos/plugin-acp`
+Install from the registry before configuring: `milady plugins install @elizaos/plugin-lens`
+
+**Plugin:** `@elizaos/plugin-lens`
 
 Connects agents through an ACP gateway for inter-agent communication.
 

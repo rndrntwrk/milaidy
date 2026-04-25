@@ -9,18 +9,12 @@ Connect your agent to Google Chat for DMs and space conversations using the `@el
 
 ## Configuration
 
-| Name | Required | Description |
-|------|----------|-------------|
-| `GOOGLE_APPLICATION_CREDENTIALS` | No | Path to credentials file or inline JSON |
-| `GOOGLE_CHAT_SERVICE_ACCOUNT` | No | Service account credentials (inline) |
-| `GOOGLE_CHAT_SERVICE_ACCOUNT_FILE` | No | Path to service account credentials file |
-| `GOOGLE_CHAT_ENABLED` | No | Enable or disable the connector |
-| `GOOGLE_CHAT_AUDIENCE` | No | Authentication audience/scope |
-| `GOOGLE_CHAT_AUDIENCE_TYPE` | No | Audience type (e.g., `app-url`, `project-number`) |
-| `GOOGLE_CHAT_BOT_USER` | No | Bot user identifier |
-| `GOOGLE_CHAT_SPACES` | No | Comma-separated space/room list |
-| `GOOGLE_CHAT_WEBHOOK_PATH` | No | Webhook endpoint path |
-| `GOOGLE_CHAT_REQUIRE_MENTION` | No | Only respond when @mentioned |
+| Field | Value |
+|-------|-------|
+| Package | `@elizaos/plugin-google-chat` |
+| Registry ID | `google-chat` |
+| Config key | `connectors.googlechat` |
+| Auto-enable trigger | `botToken`, `token`, or `apiKey` is truthy in connector config |
 
 The connector auto-enables when `botToken`, `token`, or `apiKey` is truthy in the connector config. The `serviceAccountFile`/`audience` fields alone do not trigger auto-enable -- you must include one of the trigger fields or add the plugin to `plugins.allow`.
 
