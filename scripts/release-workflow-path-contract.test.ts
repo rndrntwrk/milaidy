@@ -728,6 +728,26 @@ describe("release workflow path contract", () => {
     );
   });
 
+  it("keeps Windows packaged smoke blocking before installer proof", () => {
+    const releaseElectrobun = readWorkflow("release-electrobun.yml");
+    const smokeStart = releaseElectrobun.indexOf(
+      "      - name: Smoke test packaged Windows app",
+    );
+    const proofStart = releaseElectrobun.indexOf(
+      "      - name: Run Windows clean installer proof",
+      smokeStart,
+    );
+    const smokeBlock = releaseElectrobun.slice(smokeStart, proofStart);
+
+    expect(smokeStart).toBeGreaterThan(-1);
+    expect(proofStart).toBeGreaterThan(smokeStart);
+    expect(smokeBlock).not.toContain("continue-on-error: true");
+    expect(smokeBlock).toContain("bun run test:desktop:packaged:windows");
+    expect(smokeBlock).toContain(
+      'Write-Error "Packaged Windows smoke test exited with code $LASTEXITCODE."',
+    );
+  });
+
   it("installs browser automation deps in the published-workspace fallback shim", () => {
     const fallbackScript = fs.readFileSync(
       path.join(

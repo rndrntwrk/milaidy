@@ -1099,7 +1099,6 @@ jobs:
 
       - name: Smoke test packaged Windows app
         if: matrix.platform.os == 'windows' && steps.build-electrobun-app.outputs.fallback != 'true'
-        continue-on-error: true
         timeout-minutes: 30
         shell: pwsh
         env:
