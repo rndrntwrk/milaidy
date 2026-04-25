@@ -90,7 +90,7 @@ If you are a coding agent submitting work:
 - **Tests required.** Bug fixes need regression tests. Features need unit tests.
 - **Onboarding UX stability checks.** Any onboarding-affecting PR must verify viewport lock/no scroll drift in both `bun run dev` and desktop (`bun run start:desktop`) before merge.
 - **Database changes:** Run `bun run db:check` after any database-related work. Migrations are auto-applied by `@elizaos/plugin-sql` — there are no manual migration files.
-- **Coverage floor:** 25% for lines, functions, and statements, and 15% for branches.
+- **Coverage floor:** 25% for lines, functions, and statements, and 15% for branches (canonical policy in `eliza/packages/app-core/scripts/coverage-policy.mjs`).
 - **Files under ~500 LOC.** Split when it improves clarity.
 - **No secrets.** No real credentials, phone numbers, or live config in code.
 - **Minimal dependencies.** Don't add packages unless `src/` directly imports them.
@@ -99,12 +99,19 @@ If you are a coding agent submitting work:
 - **NODE_PATH setup:** Do not remove the `NODE_PATH` code in `eliza/packages/agent/src/runtime/eliza.ts`, `eliza/packages/app-core/scripts/run-node.mjs`, or `eliza/packages/app-core/platforms/electrobun/src/native/agent.ts`. It ensures dynamic plugin imports resolve correctly; see `docs/plugin-resolution-and-node-path.md`.
 - **Bun exports patch:** Do not remove the `patchBunExports` logic in `eliza/packages/app-core/scripts/patch-deps.mjs`. It fixes plugin load failures under Bun when a published package's `exports["."].bun` points to a missing `src/` path; see "Bun and published package exports" in `docs/plugin-resolution-and-node-path.md`.
 
-### Git Hooks
+### Local Review Script
 
-Milady uses repo-managed hooks (`git config core.hooksPath git-hooks`). The active hooks are:
+Run the local pre-review check before pushing:
 
-- **post-checkout / post-commit / post-merge** — workspace maintenance (submodule sync, dependency checks)
-- **pre-push** — ensures Git LFS is installed before pushing
+```bash
+bun run pre-review:local
+```
+
+This prints the same 6-line review contract used by the GitHub agent review workflow (classification, scope, code quality, security, tests, decision).
+
+The `git-hooks/` directory contains Git LFS hooks and post-checkout/post-commit/post-merge helpers. The `pre-push` hook enforces Git LFS — it does not run the review script automatically. Run `bun run pre-review:local` manually before pushing.
+
+Bypass for emergencies: `MILADY_SKIP_PRE_REVIEW=1`.
 
 ## Security
 

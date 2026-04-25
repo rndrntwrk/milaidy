@@ -195,7 +195,8 @@ Milady binds to loopback by default (`127.0.0.1`) on port `2138`, meaning only y
 If you bind to `0.0.0.0` or expose ports publicly, set an API token first:
 
 ```bash
-echo "MILADY_API_TOKEN=$(openssl rand -hex 32)" >> .env
+# Add to your project root .env or ~/.milady/.env
+echo "MILADY_API_TOKEN=$(openssl rand -hex 32)" >> ~/.milady/.env
 ```
 
 ### Protect secrets

@@ -26,21 +26,18 @@ The source of truth for which plugins are always loaded lives in the elizaOS sub
 export const CORE_PLUGINS: readonly string[] = [
   "@elizaos/plugin-sql",               // database adapter — required
   "@elizaos/plugin-local-embedding",   // local embeddings — required for memory
-  "@elizaos/plugin-form",              // form handling for guided user journeys
-  "knowledge",                         // RAG knowledge management — built-in runtime feature, not a standalone registry plugin
-  "@elizaos/plugin-trajectory-logger", // trajectory logging for debugging and RL training
-  "@elizaos/plugin-agent-orchestrator",// multi-agent orchestration (PTY, SwarmCoordinator, workspace provisioning)
+  "@elizaos/app-companion",            // VRM companion emotes
   "@elizaos/plugin-cron",              // scheduled jobs and automation
-  "@elizaos/plugin-app-control",       // launch, close, and list running Milady apps from agent chat
+  "@elizaos/plugin-app-control",       // launch, close, list running Milady apps
   "@elizaos/plugin-shell",             // shell command execution
   "@elizaos/plugin-agent-skills",      // skill execution and marketplace runtime
-  "@elizaos/plugin-commands",          // slash command handling (skills auto-register as /commands)
-  "@elizaos/plugin-plugin-manager",    // dynamic plugin management for registry/plugin installs
-  "roles",                             // internal role-based access control (OWNER/ADMIN/NONE) — built-in runtime module
+  "@elizaos/plugin-commands",          // slash command handling
+  "@elizaos/app-lifeops",             // LifeOps: tasks, goals, calendar, inbox
+  "@elizaos/plugin-browser-bridge",    // Chrome/Safari companion pairing
 ];
 ```
 
-> **Note:** Several capabilities that were previously separate plugins are now built-in to the runtime: `knowledge`, `relationships`, `trajectories`, and `roles` are native features; `form`, `experience`, `clipboard`, and `personality` are advanced capabilities enabled via `advancedCapabilities: true`; `plugin-manager`, `secrets-manager`, and `trust` are core capabilities enabled via character settings. `@elizaos/plugin-agent-orchestrator` is opt-in via the `ELIZA_AGENT_ORCHESTRATOR` env var (the Eliza app enables it by default).
+> **Note:** Several capabilities that were previously standalone plugins are now built-in runtime features: experience, form, clipboard, personality (advanced capabilities via `advancedCapabilities: true`), trust (via `enableTrust: true`), secrets-manager (via `enableSecretsManager: true`), plugin-manager (via `enablePluginManager: true`), knowledge, relationships, and trajectories (native features). The agent-orchestrator is opt-in via `ELIZA_AGENT_ORCHESTRATOR` (Eliza app enables by default).
 
 ### Optional Core Plugins
 
@@ -66,7 +63,7 @@ export const OPTIONAL_CORE_PLUGINS: readonly string[] = [
   "@elizaos/plugin-twitch",               // Twitch integration
   "@elizaos/plugin-edge-tts",             // text-to-speech (Microsoft Edge TTS)
   "@elizaos/plugin-elevenlabs",           // ElevenLabs text-to-speech
-  "@elizaos/plugin-music-library",        // music metadata, library, playlists, YouTube search
+  "@elizaos/plugin-music-library",        // music metadata, library, playlists
   "@elizaos/plugin-music-player",         // music playback engine + streaming routes
 ];
 ```

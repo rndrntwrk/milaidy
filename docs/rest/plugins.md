@@ -141,16 +141,31 @@ Update a plugin's enabled state and/or configuration. Enabling/disabling a plugi
 
 ### POST /api/plugins/:id/test
 
-Test a plugin's connectivity or configuration. The test behavior is plugin-specific (e.g. verifying API key validity, checking endpoint reachability).
+Test a plugin's connectivity or configuration. If the plugin exposes a health probe, it is invoked. Otherwise, a basic "plugin is loaded" status is returned.
 
 **Response**
 
 ```json
 {
-  "ok": true,
-  "result": { "..." : "..." }
+  "success": true,
+  "pluginId": "openai",
+  "message": "Connection successful",
+  "durationMs": 142
 }
 ```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `success` | boolean | Whether the test passed |
+| `pluginId` | string | Plugin identifier |
+| `message` | string | Human-readable result description |
+| `durationMs` | number | Time taken for the test in milliseconds |
+
+**Errors**
+
+| Status | Condition |
+|--------|-----------|
+| 404 | Plugin not found or not loaded |
 
 ---
 
@@ -210,7 +225,9 @@ Install a plugin package from npm. Plugin installation may take significant time
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `name` | string | Yes | npm package name |
+| `version` | string | No | Specific version to install (defaults to latest) |
 | `autoRestart` | boolean | No | Whether to restart the agent after install (defaults to `true`) |
+| `stream` | boolean | No | Stream install progress events via SSE |
 
 **Response**
 
@@ -385,11 +402,10 @@ List core and optional-core plugins with their enabled/loaded status.
 ```json
 {
   "core": [
-    { "name": "knowledge", "loaded": true, "required": true },
-    { "name": "sql", "loaded": true, "required": true }
+    { "npmName": "@elizaos/plugin-sql", "id": "sql", "name": "Sql", "isCore": true, "loaded": true }
   ],
-  "optionalCore": [
-    { "name": "secrets-manager", "loaded": true, "required": false, "enabled": true }
+  "optional": [
+    { "npmName": "@elizaos/plugin-browser", "id": "browser", "name": "Browser", "isCore": false, "loaded": true, "enabled": true }
   ]
 }
 ```
@@ -398,13 +414,13 @@ List core and optional-core plugins with their enabled/loaded status.
 
 ### POST /api/plugins/core/toggle
 
-Toggle an optional core plugin on or off.
+Toggle an optional core plugin on or off. Only plugins in the `OPTIONAL_CORE_PLUGINS` list can be toggled; core plugins cannot be disabled.
 
 **Request Body**
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `name` | string | Yes | Core plugin name |
+| `npmName` | string | Yes | Full npm package name (e.g. `@elizaos/plugin-browser`) |
 | `enabled` | boolean | Yes | Desired state |
 
 **Response**

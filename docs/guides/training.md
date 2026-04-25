@@ -17,6 +17,14 @@ Milady captures all LLM interactions as trajectories, which can be curated into 
 
 ---
 
+<Info>
+**API port note:** In development mode (`bun run dev`), the API runs on port **31337**. In production mode (`milady start`), the API runs on port **2138**. Curl examples below use `localhost:2138` (production). Adjust the port for dev mode.
+</Info>
+
+<Info>
+**Environment controls:** Set `ELIZA_DISABLE_TRAJECTORY_LOGGING=1` or `NODE_ENV=test` to disable trajectory persistence. Auto-training thresholds (default: 100 trajectories, 12h cooldown) can be configured via `/api/training/auto/config` or Settings → Auto-Training.
+</Info>
+
 ## Trajectory Collection
 
 Every LLM call made by the agent is automatically logged as part of a trajectory. The trajectory logger service (`trajectories`) records:
@@ -164,7 +172,7 @@ The `POST /api/training/jobs` endpoint launches a fine-tuning job:
 |-----------|-------------|
 | `datasetId` | ID of a previously built dataset |
 | `maxTrajectories` | Cap on trajectories to use |
-| `backend` | Training backend: `native` (default, prompt optimization), `mlx` (Apple Silicon), `cuda` (NVIDIA GPU), or `cpu` |
+| `backend` | Training backend: `native` (default — MIPRO/GEPA/bootstrap-fewshot against trajectories), `mlx` (Apple Silicon), `cuda` (NVIDIA GPU), or `cpu` |
 | `model` | Base model to fine-tune |
 | `iterations` | Number of training iterations |
 | `batchSize` | Training batch size |
