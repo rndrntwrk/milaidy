@@ -21,6 +21,22 @@ diff --git a/packages/app-core/deploy/Dockerfile.cloud b/packages/app-core/deplo
 @@ -44 +44 @@
 -RUN node <<'EOF'
 +RUN bun run - <<'EOF'
+diff --git a/packages/app-core/platforms/android/app/src/main/java/ai/elizaos/app/MiladyBootReceiver.java b/packages/app-core/platforms/android/app/src/main/java/ai/elizaos/app/MiladyBootReceiver.java
+index 9e739b04b3..c0879e6d69 100644
+--- a/packages/app-core/platforms/android/app/src/main/java/ai/elizaos/app/MiladyBootReceiver.java
++++ b/packages/app-core/platforms/android/app/src/main/java/ai/elizaos/app/MiladyBootReceiver.java
+@@ -33,10 +33,9 @@ public class MiladyBootReceiver extends BroadcastReceiver {
+             return;
+         }
+         try {
+-            appOps.setMode(
++            appOps.setUidMode(
+                 AppOpsManager.OPSTR_GET_USAGE_STATS,
+                 Process.myUid(),
+-                context.getPackageName(),
+                 AppOpsManager.MODE_ALLOWED
+             );
+         } catch (SecurityException error) {
 diff --git a/packages/app-core/platforms/electrobun/scripts/stage-macos-release-artifacts.sh b/packages/app-core/platforms/electrobun/scripts/stage-macos-release-artifacts.sh
 index 74c284e2df..60998fdf58 100644
 --- a/packages/app-core/platforms/electrobun/scripts/stage-macos-release-artifacts.sh

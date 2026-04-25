@@ -377,6 +377,10 @@ describe("release workflow path contract", () => {
 
   it("patches Android release build compatibility before release Android validation", () => {
     const agentRelease = readWorkflow("agent-release.yml");
+    const patch = fs.readFileSync(
+      path.join(repoRoot, "patches", "eliza", "ci-release-contracts.patch"),
+      "utf8",
+    );
     const mobileCompatScript = fs.readFileSync(
       path.join(repoRoot, "scripts", "patch-mobile-build-release-compat.mjs"),
       "utf8",
@@ -404,6 +408,9 @@ describe("release workflow path contract", () => {
     expect(mobileCompatScript).toContain(
       "apps/app/android/gradle/wrapper/gradle-wrapper.properties",
     );
+    expect(patch).toContain("MiladyBootReceiver.java");
+    expect(patch).toContain("appOps.setUidMode(");
+    expect(patch).not.toContain("+            appOps.setMode(");
     expect(
       agentRelease.indexOf("name: Patch Android release build compatibility"),
     ).toBeLessThan(
