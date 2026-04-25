@@ -25,12 +25,12 @@ The registry has two layers:
 
 ### Bundled Registry (`plugins.json`)
 
-A local JSON file shipped with Milady containing metadata for ~98 plugins from the elizaOS ecosystem. Each entry includes the plugin's id, npm package name, category, environment variables, version, dependencies, and detailed parameter definitions. This file follows the `plugin-index-v1` schema.
+A local JSON file shipped with Milady containing metadata for 98 plugins from the elizaOS ecosystem. Each entry includes the plugin's id, npm package name, category, environment variables, version, dependencies, and detailed parameter definitions. This file follows the `plugin-index-v1` schema.
 
 ```json
 {
   "$schema": "plugin-index-v1",
-  "generatedAt": "2026-04-11T...",
+  "generatedAt": "2026-04-11T01:55:50.795Z",
   "count": 98,
   "plugins": [
     {
