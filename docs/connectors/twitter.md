@@ -5,10 +5,10 @@ description: The @elizaos/plugin-twitter package is not currently available in t
 ---
 
 <Warning>
-**Not currently available.** The `@elizaos/plugin-twitter` package is not present in the Milady plugin registry. The documentation below is retained for reference in case the plugin is restored in a future release. Do not attempt to configure this connector — it will not load.
+**Not available.** The `@elizaos/plugin-twitter` package is not currently in the Milady plugin registry. This page describes a connector that may be added in a future release. Check the [plugin registry](/plugins/registry) for available connectors.
 </Warning>
 
-> **Registry status:** This connector is referenced in the runtime auto-enable map but is not included in the `plugins.json` registry. You may need to install it manually with `npm install @elizaos/plugin-twitter` before it can be loaded.
+Connect your agent to Twitter/X for social media engagement.
 
 ## Overview
 

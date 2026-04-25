@@ -948,6 +948,8 @@
               "connectors/instagram",
               "connectors/line",
               "connectors/zalo",
+              "connectors/zalouser",
+              "connectors/acp",
               "connectors/twilio",
               "connectors/github",
               "connectors/gmail-watch",

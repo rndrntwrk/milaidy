@@ -1,60 +1,29 @@
 ---
-title: Zalo User Connector
-sidebarTitle: Zalo User
-description: Connect your agent to Zalo personal accounts for one-to-one messaging using the @elizaos/plugin-zalouser package.
+title: Zalo Personal Account Connector
+sidebarTitle: Zalo Personal
+description: Connect your agent to Zalo personal accounts using the @elizaos/plugin-zalouser package.
 ---
 
-Connect your agent to Zalo using a personal account for one-to-one messaging workflows.
+Connect your agent to Zalo for one-to-one personal-account messaging workflows.
 
 ## Overview
 
-The Zalo User connector is an external elizaOS plugin for personal Zalo account messaging. Unlike the [Zalo OA connector](/connectors/zalo) which uses Official Account APIs, this connector operates through a personal account and supports direct one-to-one messaging.
+The Zalouser connector is an elizaOS plugin that bridges your agent to Zalo through a personal account (as opposed to an Official Account). This connector targets direct messaging and group chat via a personal Zalo login. For Official Account workflows, see the [Zalo OA connector](/connectors/zalo).
 
 ## Package Info
 
 | Field | Value |
 |-------|-------|
 | Package | `@elizaos/plugin-zalouser` |
-| Config key | `connectors.zalouser` |
-| Auto-enable trigger | `botToken`, `token`, or `apiKey` is truthy in connector config |
+| Install | `milady plugins install zalouser` |
 
-## Setup
-
-### 1. Obtain Device Credentials
-
-The connector authenticates using device-level credentials (IMEI and cookie). Refer to the [Zalo User setup guide](https://docs.eliza.ai/plugin-setup-guide#zalo-user-personal) for instructions on obtaining these values.
-
-### 2. Configure Milady
-
-Add the connector configuration to `milady.json`:
+## Configuration
 
 ```json
 {
   "connectors": {
     "zalouser": {
-      "enabled": true,
-      "apiKey": "placeholder"
-    }
-  }
-}
-```
-
-Or via environment variables:
-
-```bash
-export ZALOUSER_IMEI=YOUR_DEVICE_IMEI
-export ZALOUSER_COOKIE_PATH=./auth/zalouser
-```
-
-## Disabling
-
-To explicitly disable the connector even when credentials are present:
-
-```json
-{
-  "connectors": {
-    "zalouser": {
-      "enabled": false
+      "enabled": true
     }
   }
 }
@@ -62,46 +31,31 @@ To explicitly disable the connector even when credentials are present:
 
 ## Environment Variables
 
-| Env Variable | Description |
-|---|---|
-| `ZALOUSER_IMEI` | Device IMEI identifier for authentication |
-| `ZALOUSER_ENABLED` | Enable or disable the connector |
-| `ZALOUSER_COOKIE_PATH` | Path to cookie/session storage |
-| `ZALOUSER_USER_AGENT` | Custom user agent string |
-| `ZALOUSER_DM_POLICY` | DM access policy (`pairing`, `open`, `allowlist`, `disabled`) |
-| `ZALOUSER_GROUP_POLICY` | Group message policy |
-| `ZALOUSER_LISTEN_TIMEOUT` | Timeout for listen operations (ms) |
-| `ZALOUSER_ALLOWED_THREADS` | Comma-separated allowed thread/conversation IDs |
-| `ZALOUSER_PROFILES` | Profile configuration |
-| `ZALOUSER_DEFAULT_PROFILE` | Default profile to use |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `ZALOUSER_ENABLED` | No | Enable or disable the connector (`true`/`false`) |
+| `ZALOUSER_IMEI` | No | Device IMEI identifier |
+| `ZALOUSER_USER_AGENT` | No | User agent string for the session |
+| `ZALOUSER_COOKIE_PATH` | No | Path to cookie/session file |
+| `ZALOUSER_PROFILES` | No | Profile configuration |
+| `ZALOUSER_DEFAULT_PROFILE` | No | Default profile to use |
 
-## Full Configuration Reference
+### Message Policies
 
-All fields are defined under `connectors.zalouser` in `milady.json`.
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `ZALOUSER_DM_POLICY` | No | DM policy (`allow`, `deny`, `allowlist`) |
+| `ZALOUSER_GROUP_POLICY` | No | Group message policy (`allow`, `deny`) |
+| `ZALOUSER_ALLOWED_THREADS` | No | Comma-separated list of allowed channel/room IDs |
+| `ZALOUSER_LISTEN_TIMEOUT` | No | Timeout value for listening (ms) |
 
-### Core Fields
+## Features
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `enabled` | boolean | — | Explicitly enable/disable |
-| `apiKey` | string | — | Trigger field for auto-enable |
-
-### Access Policies
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `dmPolicy` | `"pairing"` \| `"allowlist"` \| `"open"` \| `"disabled"` | `"pairing"` | DM access policy |
-| `groupPolicy` | `"open"` \| `"disabled"` \| `"allowlist"` | `"allowlist"` | Group message policy |
-
-### Features
-
-- Personal Zalo account messaging (one-to-one)
-- Multi-profile support for managing multiple conversations
-- Thread allowlisting for access control
-- Cookie-based session persistence
+- Personal-account one-to-one messaging
+- Group chat support with configurable policies
+- Thread allowlisting for selective engagement
 
 ## Related
 
-- [Zalo OA connector](/connectors/zalo) — Official Account connector for business workflows
+- [Zalo OA Connector](/connectors/zalo) — Official Account variant
 - [Connectors overview](/guides/connectors)
-- [Configuration reference](/configuration)

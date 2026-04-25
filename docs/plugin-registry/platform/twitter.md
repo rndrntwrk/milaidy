@@ -5,10 +5,10 @@ description: "The @elizaos/plugin-twitter package is not currently available in 
 ---
 
 <Warning>
-**Not currently available.** The `@elizaos/plugin-twitter` package is not present in the Milady plugin registry. The documentation below is retained for reference in case the plugin is restored in a future release.
+**Not available.** The `@elizaos/plugin-twitter` package is not currently in the Milady plugin registry. This page describes a plugin that may be added in a future release.
 </Warning>
 
-The Twitter plugin connected Milady agents to Twitter/X for autonomous posting, replying to mentions, monitoring timelines, and engaging with other accounts.
+The Twitter plugin connects Milady agents to Twitter/X, enabling autonomous posting, replying to mentions, monitoring timelines, and engaging with other accounts.
 
 **Package:** `@elizaos/plugin-twitter`
 

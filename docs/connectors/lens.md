@@ -5,8 +5,10 @@ description: The @elizaos/plugin-lens package is not currently available in the 
 ---
 
 <Warning>
-**Not currently available.** The `@elizaos/plugin-lens` package is not present in the Milady plugin registry. The documentation below is retained for reference in case the plugin is restored in a future release. Do not attempt to configure this connector — it will not load.
+**Not available.** The `@elizaos/plugin-lens` package is not currently in the Milady plugin registry. This page describes a connector that may be added in a future release. Check the [plugin registry](/plugins/registry) for available connectors.
 </Warning>
+
+Connect your agent to Lens Protocol for decentralized social interactions.
 
 ## Overview
 

@@ -5,10 +5,10 @@ description: The @elizaos/plugin-wechat package is not currently available in th
 ---
 
 <Warning>
-**Not currently available.** The `@elizaos/plugin-wechat` package is not present in the Milady plugin registry. The documentation below is retained for reference in case the plugin is restored in a future release. Do not attempt to configure this connector — it will not load.
+**Not available.** The `@elizaos/plugin-wechat` package is not currently in the Milady plugin registry. This page describes a connector that may be added in a future release. Check the [plugin registry](/plugins/registry) for available connectors.
 </Warning>
 
-> **Registry status:** This connector is not in the `plugins.json` registry but is provided as a workspace package (`@elizaos/plugin-wechat`) within the Milady repository. If running from a published npm install, you may need to install it separately.
+Connect your agent to WeChat for personal and group messaging via a third-party proxy service.
 
 ## Overview
 
