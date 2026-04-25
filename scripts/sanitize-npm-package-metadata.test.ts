@@ -95,6 +95,34 @@ describe("sanitize-npm-package-metadata", () => {
     expect(readPackageJson(repoRoot).overrides).toEqual({ undici: "7.24.6" });
   });
 
+  it("removes bundled dependencies before npm pack or publish", () => {
+    const repoRoot = makeTempDir();
+    const log = vi.fn();
+    writePackageJson(repoRoot, {
+      name: "milady",
+      bundleDependencies: [
+        "@elizaos/core",
+        "@elizaos/plugin-agent-orchestrator",
+      ],
+      dependencies: {
+        "@elizaos/core": "2.0.0-alpha.353",
+        "@elizaos/plugin-agent-orchestrator": "0.3.9",
+      },
+    });
+
+    const result = sanitizeNpmPackageMetadata(repoRoot, { log });
+
+    expect(result.changed).toBe(true);
+    expect(result.removedBundledDependencies).toEqual([
+      "@elizaos/core",
+      "@elizaos/plugin-agent-orchestrator",
+    ]);
+    expect(readPackageJson(repoRoot).bundleDependencies).toBeUndefined();
+    expect(log).toHaveBeenCalledWith(
+      expect.stringContaining("removed 2 bundled dependencies"),
+    );
+  });
+
   it("supports dry-run without mutating package.json", () => {
     const repoRoot = makeTempDir();
     const packageJson = {

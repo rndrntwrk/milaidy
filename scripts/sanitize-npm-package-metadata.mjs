@@ -10,6 +10,7 @@ const DEPENDENCY_FIELDS = [
   "peerDependencies",
   "devDependencies",
 ];
+const BUNDLE_DEPENDENCY_FIELDS = ["bundleDependencies", "bundledDependencies"];
 const LOCAL_PROTOCOLS = ["workspace:", "file:", "link:", "portal:"];
 
 function isPlainObject(value) {
@@ -75,35 +76,51 @@ export function sanitizeNpmPackageMetadata(
   const overrides = isPlainObject(packageJson.overrides)
     ? packageJson.overrides
     : null;
+  const removed = [];
+  const removedBundledDependencies = [];
+  let changed = false;
 
-  if (!overrides) {
-    return { changed: false, removed: [] };
+  if (overrides) {
+    const directDependencySpecs = collectDirectDependencySpecs(packageJson);
+    const sanitizedOverrides = {};
+
+    for (const [name, overrideValue] of Object.entries(overrides)) {
+      const reason = removalReason(name, overrideValue, directDependencySpecs);
+      if (reason) {
+        removed.push({ name, reason });
+        continue;
+      }
+      sanitizedOverrides[name] = overrideValue;
+    }
+
+    if (removed.length > 0) {
+      if (Object.keys(sanitizedOverrides).length === 0) {
+        delete packageJson.overrides;
+      } else {
+        packageJson.overrides = sanitizedOverrides;
+      }
+      changed = true;
+    }
   }
 
-  const directDependencySpecs = collectDirectDependencySpecs(packageJson);
-  const sanitizedOverrides = {};
-  const removed = [];
-
-  for (const [name, overrideValue] of Object.entries(overrides)) {
-    const reason = removalReason(name, overrideValue, directDependencySpecs);
-    if (reason) {
-      removed.push({ name, reason });
+  for (const field of BUNDLE_DEPENDENCY_FIELDS) {
+    const bundledDependencies = packageJson[field];
+    if (
+      !Array.isArray(bundledDependencies) ||
+      bundledDependencies.length === 0
+    ) {
       continue;
     }
-    sanitizedOverrides[name] = overrideValue;
+    removedBundledDependencies.push(...bundledDependencies);
+    delete packageJson[field];
+    changed = true;
   }
 
-  if (removed.length === 0) {
+  if (!changed) {
     options.log?.(
-      "[sanitize-npm-package-metadata] no npm override metadata changes needed",
+      "[sanitize-npm-package-metadata] no npm package metadata changes needed",
     );
-    return { changed: false, removed };
-  }
-
-  if (Object.keys(sanitizedOverrides).length === 0) {
-    delete packageJson.overrides;
-  } else {
-    packageJson.overrides = sanitizedOverrides;
+    return { changed: false, removed, removedBundledDependencies };
   }
 
   if (!options.dryRun) {
@@ -114,13 +131,21 @@ export function sanitizeNpmPackageMetadata(
     );
   }
 
-  options.log?.(
-    `[sanitize-npm-package-metadata] removed ${removed.length} npm-unsafe override(s): ${removed
-      .map(({ name, reason }) => `${name} (${reason})`)
-      .join(", ")}`,
-  );
+  if (removed.length > 0) {
+    options.log?.(
+      `[sanitize-npm-package-metadata] removed ${removed.length} npm-unsafe override(s): ${removed
+        .map(({ name, reason }) => `${name} (${reason})`)
+        .join(", ")}`,
+    );
+  }
 
-  return { changed: true, removed };
+  if (removedBundledDependencies.length > 0) {
+    options.log?.(
+      `[sanitize-npm-package-metadata] removed ${removedBundledDependencies.length} bundled dependencies from package metadata: ${removedBundledDependencies.join(", ")}`,
+    );
+  }
+
+  return { changed: true, removed, removedBundledDependencies };
 }
 
 export function isDirectRun(

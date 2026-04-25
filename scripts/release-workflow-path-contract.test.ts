@@ -989,6 +989,10 @@ describe("release workflow path contract", () => {
     expect(patch).toContain(
       "node --import tsx scripts/copy-runtime-node-modules.ts --link-only || exit $$?",
     );
+    expect(patch).toContain(
+      "cp milady.mjs debian/elizaos-app/usr/lib/elizaos-app/elizaos-app.mjs",
+    );
+    expect(patch).toContain("-elizaos-app.mjs usr/lib/elizaos-app/");
     expect(
       patch.indexOf("ELIZAOS_APP_SKIP_LOCAL_UPSTREAMS=1 bun install"),
     ).toBeLessThan(
