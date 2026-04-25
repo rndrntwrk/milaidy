@@ -56,18 +56,13 @@ export LINE_CHANNEL_SECRET=YOUR_CHANNEL_SECRET
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `LINE_CHANNEL_ACCESS_TOKEN` | Yes | LINE Messaging API channel access token |
-| `LINE_CHANNEL_SECRET` | Yes | LINE channel secret for webhook verification |
-| `LINE_ENABLED` | No | Set to `true` to enable |
-| `LINE_DM_POLICY` | No | DM policy (e.g., `allow`, `deny`, `allowlist`) |
+| `LINE_CHANNEL_ACCESS_TOKEN` | Yes | LINE channel access token (primary auto-enable trigger) |
+| `LINE_CHANNEL_SECRET` | No | LINE channel secret for webhook verification |
+| `LINE_ENABLED` | No | Enable or disable the connector |
+| `LINE_DM_POLICY` | No | DM acceptance policy |
+| `LINE_ALLOW_FROM` | No | Comma-separated allowed user IDs |
+| `LINE_GROUP_POLICY` | No | Group message policy |
 | `LINE_WEBHOOK_PATH` | No | Webhook endpoint path |
-
-## Features
-
-- Bot messaging and customer conversations
-- Rich message types (text, sticker, image, video)
-- Group chat support
-- Webhook-based event handling
 
 ## Related
 

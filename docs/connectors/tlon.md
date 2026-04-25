@@ -38,11 +38,15 @@ Configure in `~/.milady/milady.json`:
 
 ## Setup
 
-1. Ensure you have access to an Urbit ship.
-2. Note the ship name, access code, and URL.
-3. Install the plugin: `milady plugins install tlon`.
-4. Set the `TLON_SHIP`, `TLON_CODE`, and `TLON_URL` environment variables or configure them inline.
-5. Start your agent.
+| Variable | Description |
+|----------|-------------|
+| `TLON_SHIP` | Urbit ship name (e.g., `~zod`) |
+| `TLON_CODE` | Ship access code |
+| `TLON_URL` | Ship URL (e.g., `http://localhost:8080`) |
+| `TLON_ENABLED` | Set to `true` to enable |
+| `TLON_DM_ALLOWLIST` | Comma-separated allowed user list for DMs |
+| `TLON_GROUP_CHANNELS` | Comma-separated list of group channel identifiers |
+| `TLON_AUTO_DISCOVER_CHANNELS` | Set to `true` to automatically discover and join channels |
 
 ## Features
 

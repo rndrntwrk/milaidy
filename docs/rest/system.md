@@ -350,9 +350,9 @@ Execute a shell command on the server and stream output via WebSocket. Responds 
 |-------|------|----------|-------------|
 | `command` | string | Yes | Shell command to execute |
 | `clientId` | string | Conditional | WebSocket client ID to receive output. Required if not provided via header. |
-| `terminalToken` | string | Conditional | Required when `MILADY_TERMINAL_RUN_TOKEN` is configured |
+| `terminalToken` | string | Conditional | Required when `ELIZA_TERMINAL_RUN_TOKEN` is configured |
 
-The `clientId` can alternatively be sent via the `X-Milady-Client-Id` header.
+The `clientId` can alternatively be sent via the `X-Eliza-Client-Id` header.
 
 **Constraints**
 
@@ -379,7 +379,7 @@ Output is streamed via WebSocket:
 
 | Status | Condition |
 |--------|-----------|
-| 400 | Missing client ID (provide `clientId` in body or `X-Milady-Client-Id` header) |
+| 400 | Missing client ID (provide `clientId` in body or `X-Eliza-Client-Id` header) |
 | 400 | Missing or empty command |
 | 403 | Shell access is disabled |
 | 403 | Terminal authorization required (invalid `terminalToken`) |

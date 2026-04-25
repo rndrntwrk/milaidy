@@ -178,8 +178,16 @@ bun run test:e2e
 # Live tests (requires API keys)
 MILADY_LIVE_TEST=1 bun run test:live
 
-# Integration tests
-bun run test:integration
+# Docker-based review
+bun run test:docker:review
+```
+
+### Runtime fallback for Bun crashes
+
+If Bun segfaults on your platform during long-running sessions, run Milady on Node runtime:
+
+```bash
+MILADY_RUNTIME=node bun run milady start
 ```
 
 ### Test File Conventions

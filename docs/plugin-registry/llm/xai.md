@@ -28,11 +28,10 @@ export XAI_API_KEY=xai-...
 
 | Environment Variable | Required | Description |
 |---------------------|----------|-------------|
-| `XAI_API_KEY` | Yes* | xAI API key for Grok model access from [console.x.ai](https://console.x.ai) |
-| `GROK_API_KEY` | Yes* | Alias that also triggers auto-enable |
-| `X_API_KEY` | No | X (formerly Twitter) API key for OAuth 1.0a integration |
+| `XAI_API_KEY` | Yes | xAI API key from [console.x.ai](https://console.x.ai) |
+| `X_API_KEY` | No | X/Twitter API key (also the primary auto-enable trigger in plugins.json) |
 | `XAI_BASE_URL` | No | Custom base URL for the xAI API |
-| `XAI_MODEL` | No | Override the Grok model for text generation (e.g., `grok-3`, `grok-3-mini`) |
+| `XAI_MODEL` | No | Override the default model identifier |
 | `XAI_SMALL_MODEL` | No | Override the small model identifier |
 | `XAI_EMBEDDING_MODEL` | No | Override the embedding model identifier |
 | `X_DRY_RUN` | No | When true, all X actions are simulated |
@@ -42,7 +41,22 @@ export XAI_API_KEY=xai-...
 | `X_ENABLE_ACTIONS` | No | Enable timeline actions (like, repost) on X |
 | `X_MAX_POST_LENGTH` | No | Maximum post length (up to 4000 for premium) |
 
-\* Either `XAI_API_KEY` or `GROK_API_KEY` activates the plugin. Additional `X_*` variables control the bundled X/Twitter integration.
+The plugin also exposes X/Twitter integration keys for social posting when the xAI plugin handles both Grok inference and X platform access:
+
+| Environment Variable | Required | Description |
+|---------------------|----------|-------------|
+| `X_API_SECRET` | No | X API secret key |
+| `X_ACCESS_TOKEN` | No | X OAuth access token |
+| `X_ACCESS_TOKEN_SECRET` | No | X OAuth access token secret |
+| `X_BEARER_TOKEN` | No | X Bearer token |
+| `X_AUTH_MODE` | No | X authentication mode |
+| `X_CLIENT_ID` | No | X OAuth client ID |
+| `X_REDIRECT_URI` | No | X OAuth redirect URI |
+| `X_ENABLE_POST` | No | Enable posting to X |
+| `X_ENABLE_ACTIONS` | No | Enable X action processing |
+| `X_ENABLE_REPLIES` | No | Enable replying to X posts |
+| `X_DRY_RUN` | No | Simulate operations without executing |
+| `X_MAX_POST_LENGTH` | No | Maximum post length |
 
 ### milady.json Example
 

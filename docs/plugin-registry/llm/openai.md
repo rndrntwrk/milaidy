@@ -38,20 +38,22 @@ export OPENAI_API_KEY=sk-...
 |---------------------|----------|-------------|
 | `OPENAI_API_KEY` | Yes | API key from [platform.openai.com](https://platform.openai.com) |
 | `OPENAI_BASE_URL` | No | Custom base URL (for Azure OpenAI or compatible APIs) |
-| `OPENAI_SMALL_MODEL` | No | Override the small model identifier (default: `gpt-5-mini`) |
-| `OPENAI_LARGE_MODEL` | No | Override the large model identifier (default: `gpt-5`) |
+| `OPENAI_SMALL_MODEL` | No | Override the small model identifier (default: `gpt-4o-mini`) |
+| `OPENAI_LARGE_MODEL` | No | Override the large model identifier (default: `gpt-4o`) |
+| `SMALL_MODEL` | No | Global alias to override the small model identifier |
+| `LARGE_MODEL` | No | Global alias to override the large model identifier |
 | `OPENAI_EMBEDDING_MODEL` | No | Override the embedding model (default: `text-embedding-3-small`) |
-| `OPENAI_EMBEDDING_URL` | No | Custom base URL for the embeddings endpoint |
-| `OPENAI_EMBEDDING_API_KEY` | No | Custom API key for the embeddings endpoint |
-| `OPENAI_EMBEDDING_DIMENSIONS` | No | Number of dimensions for embedding vectors |
-| `OPENAI_IMAGE_DESCRIPTION_MODEL` | No | Model for image description/vision tasks |
+| `OPENAI_EMBEDDING_URL` | No | Custom URL for the embedding endpoint |
+| `OPENAI_EMBEDDING_API_KEY` | No | Separate API key for the embedding endpoint |
+| `OPENAI_EMBEDDING_DIMENSIONS` | No | Override embedding vector dimensions |
+| `OPENAI_IMAGE_DESCRIPTION_MODEL` | No | Model used for image description/vision tasks |
 | `OPENAI_IMAGE_DESCRIPTION_MAX_TOKENS` | No | Max tokens for image description responses |
 | `OPENAI_TTS_MODEL` | No | Override the text-to-speech model |
 | `OPENAI_TTS_VOICE` | No | Voice profile for text-to-speech output |
-| `OPENAI_TTS_INSTRUCTIONS` | No | Instructions to control TTS style/behavior |
-| `OPENAI_EXPERIMENTAL_TELEMETRY` | No | Enable experimental telemetry for debugging |
-| `OPENAI_BROWSER_BASE_URL` | No | Browser-only proxy endpoint for OpenAI requests (no secrets in the client) |
-| `OPENAI_BROWSER_EMBEDDING_URL` | No | Browser-only proxy endpoint for embeddings |
+| `OPENAI_TTS_INSTRUCTIONS` | No | Instructions for text-to-speech voice style |
+| `OPENAI_EXPERIMENTAL_TELEMETRY` | No | Enable experimental telemetry features |
+| `OPENAI_BROWSER_BASE_URL` | No | Browser-only proxy endpoint base URL (no secrets in the client) |
+| `OPENAI_BROWSER_EMBEDDING_URL` | No | Browser-only proxy URL for embedding requests |
 
 ### milady.json Example
 

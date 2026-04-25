@@ -6,7 +6,17 @@ description: "Ready-to-use milady.json templates for common deployment scenarios
 
 ## Overview
 
-This guide provides 8 production-ready configuration templates for different use cases. Each template is a complete `milady.json` file you can drop into `~/.milady/` and customize.
+<Warning>
+**These templates use a simplified, illustrative configuration format for readability.** The actual Milady configuration file (`~/.milady/milady.json`) uses a different schema. In particular:
+- Model providers are configured via the `env` section (e.g., `"OPENAI_API_KEY": "..."`) or environment variables, not a `modelProvider` object.
+- Connectors are configured under `connectors.<name>` as objects (not arrays).
+- There is no `system`, `handlers`, `monitoring`, `scaling`, `cache`, `backup`, or `security` top-level section in the actual config schema.
+- Use `milady configure` or the dashboard Settings page to configure your agent correctly.
+
+See the [Configuration Reference](/configuration) and [Config Schema](/config-schema) for the actual config format.
+</Warning>
+
+This guide provides 8 illustrative configuration templates for different use cases. Each template shows the general shape of a deployment scenario.
 
 <Warning>
 **Important**: Replace all placeholder values before running:
@@ -603,12 +613,48 @@ OPENAI_API_KEY=sk-...
 BRAVE_API_KEY=BSA...
 ```
 
-### Validation
+Load with:
+```json5
+modelProvider: {
+  apiKey: process.env.OPENAI_API_KEY
+}
+```
+
+---
+
+## Validation & Testing
+
+### Test Your Setup
+
+After editing `~/.milady/milady.json`, verify your configuration:
 
 ```bash
-milady doctor        # check environment and config
-milady config show   # display resolved config
-milady models        # verify configured providers
+# Start Milady and check for startup errors
+milady
+
+# Check model provider status
+milady models
+
+# Check installed plugins
+milady plugins installed
+
+# Run the built-in diagnostics
+milady doctor
+```
+
+### Development Mode
+
+For development and testing:
+
+```bash
+# Start with hot reload (API + UI)
+bun run dev
+
+# Run the test suite
+bun run test
+
+# Type-check and lint
+bun run check
 ```
 
 ---
@@ -616,10 +662,9 @@ milady models        # verify configured providers
 ## Next Steps
 
 1. **Choose a template** that matches your use case
-2. **Copy the template** and save it as `config.json5`
-3. **Replace all placeholder values** with your actual configuration
-4. **Run validation** with `bun run validate-config config.json5`
-5. **Test locally** before deploying to production
-6. **Deploy** using your hosting platform's deployment process
+2. **Adapt the concepts** to the actual `milady.json` config format (see [Configuration](/configuration) and [Config Schema](/config-schema))
+3. **Replace all placeholder values** with your actual credentials
+4. **Test locally** with `milady` and `milady models`
+5. **Deploy** using your hosting platform's deployment process
 
-See the [Configuration Reference](/configuration) for complete option documentation.
+See the [Configuration Reference](/configuration) for the actual config format.

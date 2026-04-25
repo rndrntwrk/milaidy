@@ -44,9 +44,9 @@ Configure in `~/.milady/milady.json`:
 | `LINE_CHANNEL_ACCESS_TOKEN` | Yes | Channel access token from LINE Developer Console |
 | `LINE_CHANNEL_SECRET` | No | Channel secret for webhook verification |
 | `LINE_ENABLED` | No | Set to `true` to enable |
-| `LINE_DM_POLICY` | No | DM access policy |
-| `LINE_ALLOW_FROM` | No | Comma-separated list of allowed user IDs for DMs |
-| `LINE_GROUP_POLICY` | No | Group message policy |
+| `LINE_DM_POLICY` | No | DM policy (e.g., `allow`, `deny`, `allowlist`) |
+| `LINE_ALLOW_FROM` | No | Comma-separated allowed user list |
+| `LINE_GROUP_POLICY` | No | Group message policy (e.g., `allow`, `deny`) |
 | `LINE_WEBHOOK_PATH` | No | Webhook endpoint path |
 
 ## Features

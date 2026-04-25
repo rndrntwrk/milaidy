@@ -65,19 +65,19 @@ Configure in `~/.milady/milady.json`:
 |----------|----------|-------------|
 | `BLUESKY_HANDLE` | Yes | Bluesky handle (e.g., `yourname.bsky.social`) |
 | `BLUESKY_PASSWORD` | Yes | App password (not your main password -- generate at bsky.app/settings/app-passwords) |
-| `BLUESKY_ENABLED` | No | Set to `true` to enable |
-| `BLUESKY_SERVICE` | No | Bluesky PDS instance URL (defaults to the main Bluesky service) |
-| `BLUESKY_DRY_RUN` | No | Set to `true` for testing without posting |
-| `BLUESKY_ENABLE_POSTING` | No | Enable or disable post creation |
-| `BLUESKY_ENABLE_DMS` | No | Enable processing of direct messages via the chat.bsky API |
+| `BLUESKY_ENABLED` | No | Set to `true` to enable (default: `true`) |
+| `BLUESKY_SERVICE` | No | Bluesky PDS instance URL (default: `https://bsky.social`) |
+| `BLUESKY_DRY_RUN` | No | Set to `true` for testing without posting (default: `false`) |
+| `BLUESKY_ENABLE_POSTING` | No | Enable or disable post creation (default: `true`) |
+| `BLUESKY_ENABLE_DMS` | No | Enable processing of direct messages via the chat.bsky API (default: `true`) |
 | `BLUESKY_POLL_INTERVAL` | No | Polling interval in seconds (default: `60`) |
-| `BLUESKY_POST_IMMEDIATELY` | No | Post immediately on startup instead of waiting |
-| `BLUESKY_POST_INTERVAL_MIN` | No | Minimum interval in seconds between automated posts (default: `1800`, i.e. 30 minutes) |
-| `BLUESKY_POST_INTERVAL_MAX` | No | Maximum interval in seconds between automated posts (default: `3600`, i.e. 60 minutes) |
-| `BLUESKY_MAX_POST_LENGTH` | No | Maximum post character length (default: `300`) |
 | `BLUESKY_ACTION_INTERVAL` | No | Interval in seconds between action-processing cycles (default: `120`) |
-| `BLUESKY_ENABLE_ACTION_PROCESSING` | No | Enable automated action processing (default: `true`) |
-| `BLUESKY_MAX_ACTIONS_PROCESSING` | No | Max actions per batch (default: `5`) |
+| `BLUESKY_MAX_POST_LENGTH` | No | Maximum number of characters allowed in a post (default: `300`) |
+| `BLUESKY_POST_IMMEDIATELY` | No | If true, posts are published immediately instead of waiting for a schedule (default: `false`) |
+| `BLUESKY_POST_INTERVAL_MIN` | No | Minimum interval in seconds between automated posts (default: `1800`) |
+| `BLUESKY_POST_INTERVAL_MAX` | No | Maximum interval in seconds between automated posts (default: `3600`) |
+| `BLUESKY_MAX_ACTIONS_PROCESSING` | No | Maximum number of actions to process in a single batch (default: `5`) |
+| `BLUESKY_ENABLE_ACTION_PROCESSING` | No | Enable or disable automated action processing (default: `true`) |
 
 ## Features
 

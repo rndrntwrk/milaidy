@@ -1,7 +1,7 @@
 ---
 title: "Platform Connectors"
 sidebarTitle: "Connectors"
-description: "Platform bridges for 29 messaging platforms — 18 auto-enabled from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Twitter, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, Lens, WeChat) plus 11 installable from the registry (BlueBubbles, Bluesky, Instagram, LINE, Zalo, Zalo User, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
+description: "Platform bridges for messaging platforms — auto-enabled from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, BlueBubbles, WeChat) plus installable from the registry (Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon, ACP)."
 ---
 
 Connectors are platform bridges that allow your agent to communicate across messaging platforms and social networks. Each connector handles authentication, message routing, session management, and platform-specific features.
@@ -21,29 +21,27 @@ Connectors are platform bridges that allow your agent to communicate across mess
 9. [Blooio](#blooio)
 10. [Microsoft Teams](#microsoft-teams)
 11. [Google Chat](#google-chat)
-12. [ACP (Agent Communication Protocol)](#acp-agent-communication-protocol)
-13. [Farcaster](#farcaster)
-14. [BlueBubbles](#bluebubbles)
-15. [Bluesky](#bluesky)
-16. [Instagram](#instagram)
-17. [Twitch](#twitch)
-18. [Mattermost](#mattermost)
-19. [WeChat](#wechat)
-20. [Matrix](#matrix)
-21. [Feishu / Lark](#feishu--lark)
-22. [Nostr](#nostr)
-23. [LINE](#line)
-24. [Zalo](#zalo)
-25. [Zalo User](#zalo-user)
-26. [Twilio](#twilio)
-27. [GitHub](#github)
-28. [Gmail Watch](#gmail-watch)
-29. [Nextcloud Talk](#nextcloud-talk)
-30. [Tlon](#tlon)
-31. [Lens](#lens)
-32. [Connector Lifecycle](#connector-lifecycle)
-33. [Multi-Account Support](#multi-account-support)
-34. [Session Management](#session-management)
+12. [Farcaster](#farcaster)
+13. [BlueBubbles](#bluebubbles)
+14. [Bluesky](#bluesky)
+15. [Instagram](#instagram)
+16. [Twitch](#twitch)
+17. [Mattermost](#mattermost)
+18. [WeChat](#wechat)
+19. [Matrix](#matrix)
+20. [Feishu / Lark](#feishu--lark)
+21. [Nostr](#nostr)
+22. [LINE](#line)
+23. [Zalo](#zalo)
+24. [Twilio](#twilio)
+25. [GitHub](#github)
+26. [Gmail Watch](#gmail-watch)
+27. [Nextcloud Talk](#nextcloud-talk)
+28. [Tlon](#tlon)
+29. [ACP (Agent Communication Protocol)](#acp-agent-communication-protocol)
+30. [Connector Lifecycle](#connector-lifecycle)
+31. [Multi-Account Support](#multi-account-support)
+32. [Session Management](#session-management)
 
 ---
 
@@ -61,15 +59,13 @@ Connectors marked **Auto** load automatically when their config is present in `m
 | iMessage | Native CLI (macOS) | Yes | Yes | Yes | Auto |
 | Microsoft Teams | App ID + password | Yes | Yes (teams/channels) | No | Auto |
 | Google Chat | Service account | Yes | Yes (spaces) | Yes | Auto |
-| Twitter/X | API keys + tokens (via xAI plugin) | DMs | N/A | No | Auto (bundled with xAI) |
 | Farcaster | Neynar API key + signer | Casts | Yes (channels) | No | Auto |
 | Twitch | Client ID + access token | Yes (chat) | Yes (channels) | No | Auto |
 | Mattermost | Bot token | Yes | Yes (channels) | No | Auto |
 | Matrix | Access token | Yes | Yes (rooms) | No | Auto |
 | Feishu / Lark | App ID + secret | Yes | Yes (group chats) | No | Auto |
 | Nostr | Private key (nsec/hex) | Yes (NIP-04) | N/A | No | Auto |
-| Lens | API key | Yes | N/A | No | Registry |
-| BlueBubbles | Server password | Yes | Yes | No | Registry |
+| BlueBubbles | Server URL + password | Yes | Yes | No | Auto |
 | Bluesky | Account credentials | Posts | N/A | No | Registry |
 | Instagram | Username + password | DMs | N/A | No | Registry |
 | LINE | Channel access token + secret | Yes | Yes | No | Registry |
@@ -80,25 +76,7 @@ Connectors marked **Auto** load automatically when their config is present in `m
 | Gmail Watch | Service account / OAuth | N/A | N/A | No | Registry |
 | Nextcloud Talk | Server credentials | Yes | Yes (rooms) | No | Registry |
 | Tlon | Ship credentials | Yes | Yes (Urbit chats) | No | Registry |
-| BlueBubbles | Server password | Yes | Yes | No | Registry |
-
-\* **Bundled** connectors (Twitter, WeChat, Lens) ship as local or separately sourced packages and are not published to the `@elizaos` plugin registry. They auto-enable from connector config when the package is available in your installation.
-
-### Feature Plugins with Platform Integration
-
-These plugins are categorized as **feature** plugins in the registry, not connectors, but they provide messaging or platform integration capabilities. They auto-enable when their config or env vars are present.
-
-| Platform | Package | Auth Method | Notes |
-|----------|---------|------------|-------|
-| Blooio | `@elizaos/plugin-blooio` | API key + webhook | iMessage/SMS via Blooio bridge |
-| Twitter/X | `@elizaos/plugin-twitter` | API keys + tokens | Social posting and mention monitoring |
-| WeChat | `@elizaos/plugin-wechat` | Proxy API key + QR code | Third-party proxy; see [privacy notice](#wechat) |
-| Twilio | `@elizaos/plugin-twilio` | Account SID + auth token | SMS and voice calls |
-| GitHub | `@elizaos/plugin-github` | API token | Issues, PRs, repo management |
-| Gmail Watch | `@elizaos/plugin-gmail-watch` | Service account / OAuth | Gmail Pub/Sub message watching |
-| Lens | `@elizaos/plugin-lens` | API key | Lens Protocol social interactions |
-
-GitHub, Twilio, and Gmail Watch also support messaging workflows but are categorized as feature plugins rather than connectors. See [Feature Plugins with Messaging Capabilities](#feature-plugins-with-messaging-capabilities) below.
+| ACP | Gateway token + password | Yes | N/A | No | Registry |
 
 ---
 
@@ -528,39 +506,6 @@ Connects to iMessage and SMS messaging via the Blooio service with signed webhoo
 
 ---
 
-## ACP (Agent Communication Protocol)
-
-<Note>
-The Twitter plugin (`@elizaos/plugin-twitter`) is an upstream elizaOS plugin not included in the Milady bundled registry. Install it first: `milady plugins install @elizaos/plugin-twitter`
-</Note>
-
-### Setup Requirements
-
-- ACP Gateway URL, token, and password
-
-### Key Configuration
-
-```json
-{
-  "connectors": {
-    "acp": {
-      "enabled": true
-    }
-  }
-}
-```
-
-**Environment variables:** `ACP_GATEWAY_TOKEN`, `ACP_GATEWAY_PASSWORD`, `ACP_GATEWAY_URL`, `ACP_CLIENT_NAME`, `ACP_CLIENT_MODE`
-
-### Features
-
-- Agent-to-agent communication through an ACP gateway
-- Session persistence and management
-- Configurable client mode and display name
-- Auto-enabled when `ACP_GATEWAY_TOKEN` is set
-
----
-
 ## Farcaster
 
 ### Setup Requirements
@@ -630,6 +575,8 @@ The Twitter plugin (`@elizaos/plugin-twitter`) is an upstream elizaOS plugin not
 - Read receipts
 - Webhook-based inbound messages
 - Network-accessible (works from any machine, not just the Mac running Messages)
+
+**Auto-enable:** The connector auto-enables when both `serverUrl` and `password` are set in the connector config.
 
 **Docs:** [BlueBubbles connector](/connectors/bluebubbles)
 
@@ -1100,76 +1047,17 @@ A personal-account variant of the Zalo connector for one-to-one messaging outsid
 
 ---
 
-## Feature Plugins with Messaging Capabilities
-
-The following plugins provide messaging or notification capabilities but are categorized as feature plugins rather than connectors in the plugin registry.
-
-### Twilio
-
-SMS and voice call capabilities via the Twilio API.
-
-**Environment variables:** `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER`
-
-**Features:** SMS messaging (send/receive), voice calls, webhook-based inbound handling.
-
-Install with `milady plugins install @elizaos/plugin-twilio`.
-
-### GitHub
-
-Repository management, issue tracking, and pull request workflows via the GitHub API.
-
-**Environment variables:** `GITHUB_API_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO`
-
-**Features:** Repository management, issue tracking, PR workflows, code search.
-
-Install with `milady plugins install @elizaos/plugin-github`.
-
-### Gmail Watch
-
-Monitor Gmail inboxes for incoming messages via Google Cloud Pub/Sub. Enabled via the `features.gmailWatch` flag rather than the `connectors` section.
-
-**Features:** Gmail Pub/Sub message watching, auto-renewal of watch subscriptions, inbound email events.
-
-Install with `milady plugins install @elizaos/plugin-gmail-watch`.
-
----
-
-## Zalo Personal (Zalouser)
-
-**Plugin:** `@elizaos/plugin-zalouser`
-
-The Zalouser connector bridges your agent to Zalo via a personal account (as opposed to an Official Account). For OA workflows, see the [Zalo](#zalo) section above.
-
-```json
-{
-  "connectors": {
-    "zalouser": {
-      "enabled": true
-    }
-  }
-}
-```
-
-| Env Variable | Description |
-|-------------|-------------|
-| `ZALOUSER_IMEI` | Device IMEI identifier |
-| `ZALOUSER_COOKIE_PATH` | Path to cookie/session file |
-| `ZALOUSER_DM_POLICY` | DM policy (`allow`, `deny`, `allowlist`) |
-| `ZALOUSER_GROUP_POLICY` | Group message policy (`allow`, `deny`) |
-| `ZALOUSER_ALLOWED_THREADS` | Comma-separated list of allowed channel/room IDs |
-
-**Features:**
-- Personal-account one-to-one messaging
-- Group chat support with configurable policies
-- Thread allowlisting for selective engagement
-
----
-
 ## ACP (Agent Communication Protocol)
 
 **Plugin:** `@elizaos/plugin-acp`
 
-The ACP connector bridges your agent to an ACP gateway for real-time agent-to-agent communication.
+Connects agents through an ACP gateway for inter-agent communication.
+
+### Setup Requirements
+
+- ACP Gateway token and password
+
+### Key Configuration
 
 ```json
 {
@@ -1181,20 +1069,16 @@ The ACP connector bridges your agent to an ACP gateway for real-time agent-to-ag
 }
 ```
 
-| Env Variable | Description |
-|-------------|-------------|
-| `ACP_GATEWAY_URL` | URL for the ACP gateway |
-| `ACP_GATEWAY_TOKEN` | Authentication token for the gateway |
-| `ACP_GATEWAY_PASSWORD` | Password for the gateway (required) |
-| `ACP_AGENT_ID` | Agent identifier |
-| `ACP_CLIENT_NAME` | Client display name |
+**Environment variables:** `ACP_GATEWAY_TOKEN`, `ACP_GATEWAY_PASSWORD`, `ACP_GATEWAY_URL`, `ACP_CLIENT_NAME`, `ACP_AGENT_ID`
 
-**Auto-enable trigger:** `ACP_GATEWAY_TOKEN` environment variable.
+### Features
 
-**Features:**
-- Real-time agent-to-agent messaging via ACP gateway
+- Agent-to-agent communication via ACP gateway
 - Session persistence and management
-- Multi-agent orchestration workflows
+- Configurable client modes
+- Verbose logging option
+
+**Note:** This connector is available from the plugin registry. Install it with `milady plugins install @elizaos/plugin-acp`.
 
 ---
 

@@ -30,8 +30,8 @@ milady plugins install vision
 
 | Environment Variable | Required | Description |
 |---------------------|----------|-------------|
-| `CAMERA_NAME` | No | Camera name to search for (lowercase partial match) |
-| `PIXEL_CHANGE_THRESHOLD` | No | Percentage of pixels that must change to trigger VLM update (default: 50) |
+| `CAMERA_NAME` | No | Name of the camera device to use |
+| `PIXEL_CHANGE_THRESHOLD` | No | Pixel change threshold for motion detection |
 
 ## Features
 

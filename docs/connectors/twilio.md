@@ -78,7 +78,7 @@ Configure in `~/.milady/milady.json`:
 | `VOICE_CALL_PUBLIC_URL` | No | Public URL for voice call webhooks |
 | `VOICE_CALL_INBOUND_POLICY` | No | Inbound call handling policy |
 | `VOICE_CALL_INBOUND_GREETING` | No | Greeting message for inbound calls |
-| `VOICE_CALL_WEBHOOK_PATH` | No | Webhook endpoint path for voice calls |
+| `VOICE_CALL_WEBHOOK_PATH` | No | Webhook path for voice call events |
 | `VOICE_CALL_WEBHOOK_PORT` | No | Port for voice call webhook listener |
 | `VOICE_CALL_MAX_CONCURRENT_CALLS` | No | Maximum number of concurrent calls |
 | `VOICE_CALL_MAX_DURATION_SECONDS` | No | Maximum call duration in seconds |

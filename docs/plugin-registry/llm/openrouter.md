@@ -44,21 +44,21 @@ export OPENROUTER_API_KEY=sk-or-...
 |---------------------|----------|-------------|
 | `OPENROUTER_API_KEY` | Yes | OpenRouter API key from [openrouter.ai](https://openrouter.ai) |
 | `OPENROUTER_BASE_URL` | No | Custom base URL for the OpenRouter API |
-| `OPENROUTER_BROWSER_BASE_URL` | No | Browser-only proxy endpoint for OpenRouter requests (no secrets in the client) |
+| `OPENROUTER_BROWSER_BASE_URL` | No | Browser-only proxy endpoint base URL |
 | `OPENROUTER_SMALL_MODEL` | No | Override the small model identifier |
 | `OPENROUTER_LARGE_MODEL` | No | Override the large model identifier |
-| `OPENROUTER_IMAGE_MODEL` | No | Override the image description model |
-| `OPENROUTER_IMAGE_GENERATION_MODEL` | No | Override the image generation model |
+| `SMALL_MODEL` | No | Global alias to override the small model |
+| `LARGE_MODEL` | No | Global alias to override the large model |
 | `OPENROUTER_EMBEDDING_MODEL` | No | Override the embedding model identifier |
-| `OPENROUTER_EMBEDDING_DIMENSIONS` | No | Number of dimensions for embedding vectors (256, 384, 512, 768, 1024, 1536, 2048, 3072) |
-| `OPENROUTER_AUTO_CLEANUP_IMAGES` | No | Automatically cleanup generated images after a short delay |
-| `OPENROUTER_TOOL_EXECUTION_MAX_STEPS` | No | Max steps for multi-step tool execution (default: 5) |
-| `SMALL_MODEL` | No | General fallback for the small model |
-| `LARGE_MODEL` | No | General fallback for the large model |
-| `IMAGE_MODEL` | No | General fallback for the image model |
-| `IMAGE_GENERATION_MODEL` | No | General fallback for the image generation model |
-| `EMBEDDING_MODEL` | No | General fallback for the embedding model |
-| `EMBEDDING_DIMENSIONS` | No | General fallback for embedding dimensions |
+| `EMBEDDING_MODEL` | No | Global alias to override the embedding model |
+| `OPENROUTER_EMBEDDING_DIMENSIONS` | No | Override embedding vector dimensions |
+| `EMBEDDING_DIMENSIONS` | No | Global alias for embedding dimensions |
+| `OPENROUTER_IMAGE_MODEL` | No | Override the image model identifier |
+| `IMAGE_MODEL` | No | Global alias for the image model |
+| `OPENROUTER_IMAGE_GENERATION_MODEL` | No | Override the image generation model |
+| `IMAGE_GENERATION_MODEL` | No | Global alias for the image generation model |
+| `OPENROUTER_AUTO_CLEANUP_IMAGES` | No | Automatically clean up generated images |
+| `OPENROUTER_TOOL_EXECUTION_MAX_STEPS` | No | Maximum tool execution steps |
 
 ### milady.json Example
 

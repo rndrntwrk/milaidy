@@ -60,11 +60,11 @@ milady plugins install imessage
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `IMESSAGE_CLI_PATH` | No | Path to the iMessage CLI tool binary |
-| `IMESSAGE_DB_PATH` | No | Path to the iMessage database file |
-| `IMESSAGE_ENABLED` | No | Enable or disable the plugin |
-| `IMESSAGE_DM_POLICY` | No | DM policy (e.g., `allow`, `deny`, `allowlist`) |
-| `IMESSAGE_ALLOW_FROM` | No | Comma-separated list of allowed sender IDs |
+| `IMESSAGE_ENABLED` | No | Enable or disable the connector |
+| `IMESSAGE_CLI_PATH` | No | Path to the iMessage CLI tool executable |
+| `IMESSAGE_DB_PATH` | No | Path to iMessage database (default: `~/Library/Messages/chat.db`) |
+| `IMESSAGE_DM_POLICY` | No | DM access policy |
+| `IMESSAGE_ALLOW_FROM` | No | Comma-separated allowed phone numbers/emails |
 | `IMESSAGE_GROUP_POLICY` | No | Group message policy |
 | `IMESSAGE_POLL_INTERVAL_MS` | No | Polling interval in milliseconds |
 

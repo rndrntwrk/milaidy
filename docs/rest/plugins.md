@@ -225,16 +225,16 @@ Install a plugin package from npm. Plugin installation may take significant time
 
 ### POST /api/plugins/update
 
-Update an installed plugin to a newer version from npm.
+Update an installed plugin to a newer version. Uses the same install mechanism but targets an existing plugin for upgrade.
 
 **Request Body**
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `name` | string | Yes | npm package name |
-| `autoRestart` | boolean | No | Whether to restart the agent after update (defaults to `true`) |
-| `stream` | string | No | npm dist-tag to use (`latest` or `alpha`) |
 | `version` | string | No | Specific version to update to |
+| `stream` | string | No | Release stream (`latest` or `alpha`) |
+| `autoRestart` | boolean | No | Whether to restart the agent after update (defaults to `true`) |
 
 **Response**
 

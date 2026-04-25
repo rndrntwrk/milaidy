@@ -30,13 +30,13 @@ export GOOGLE_API_KEY=AIza...
 |---------------------|----------|-------------|
 | `GOOGLE_GENERATIVE_AI_API_KEY` | Yes* | Google AI Studio API key |
 | `GOOGLE_API_KEY` | Yes* | Alias (also triggers auto-enable) |
-| `GOOGLE_SMALL_MODEL` | No | Override the small model identifier (default: `gemini-2.0-flash-001`) |
-| `GOOGLE_LARGE_MODEL` | No | Override the large model identifier (default: `gemini-2.0-flash-001`) |
+| `GOOGLE_SMALL_MODEL` | No | Override the small model identifier |
+| `GOOGLE_LARGE_MODEL` | No | Override the large model identifier |
+| `SMALL_MODEL` | No | Global alias to override the small model |
+| `LARGE_MODEL` | No | Global alias to override the large model |
 | `GOOGLE_EMBEDDING_MODEL` | No | Override the embedding model identifier |
 | `GOOGLE_IMAGE_MODEL` | No | Override the image generation model |
-| `SMALL_MODEL` | No | General fallback for the small model when `GOOGLE_SMALL_MODEL` is not set |
-| `LARGE_MODEL` | No | General fallback for the large model when `GOOGLE_LARGE_MODEL` is not set |
-| `IMAGE_MODEL` | No | General fallback for the image model when `GOOGLE_IMAGE_MODEL` is not set |
+| `IMAGE_MODEL` | No | Global alias for the image model |
 
 *Either `GOOGLE_GENERATIVE_AI_API_KEY` or `GOOGLE_API_KEY` is accepted.
 

@@ -87,16 +87,16 @@ milady plugins install google-chat
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `GOOGLE_APPLICATION_CREDENTIALS` | No | Path to credentials file or inline JSON |
-| `GOOGLE_CHAT_SERVICE_ACCOUNT` | No | Inline service account credentials |
-| `GOOGLE_CHAT_SERVICE_ACCOUNT_FILE` | No | Path to service account JSON key file |
-| `GOOGLE_CHAT_ENABLED` | No | Enable or disable the plugin |
-| `GOOGLE_CHAT_AUDIENCE` | No | Authentication audience/scope |
-| `GOOGLE_CHAT_AUDIENCE_TYPE` | No | Authentication audience type |
+| `GOOGLE_CHAT_ENABLED` | No | Enable or disable the connector |
+| `GOOGLE_CHAT_SPACES` | No | Comma-separated Space IDs to join |
+| `GOOGLE_CHAT_AUDIENCE` | No | App URL or project number for JWT verification |
 | `GOOGLE_CHAT_BOT_USER` | No | Bot user identifier |
-| `GOOGLE_CHAT_SPACES` | No | Comma-separated list of spaces/rooms |
 | `GOOGLE_CHAT_WEBHOOK_PATH` | No | Webhook endpoint path |
-| `GOOGLE_CHAT_REQUIRE_MENTION` | No | Only respond when mentioned |
+| `GOOGLE_CHAT_AUDIENCE_TYPE` | No | Audience type: `app-url` or `project-number` |
+| `GOOGLE_CHAT_REQUIRE_MENTION` | No | Only respond when @mentioned |
+| `GOOGLE_CHAT_SERVICE_ACCOUNT` | No | Inline service account JSON |
+| `GOOGLE_APPLICATION_CREDENTIALS` | No | Path to Google application credentials JSON |
+| `GOOGLE_CHAT_SERVICE_ACCOUNT_FILE` | No | Path to service account JSON key file |
 
 ## Auto-Enable
 

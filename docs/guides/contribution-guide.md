@@ -88,8 +88,8 @@ bun run test:e2e
 # Live API tests (requires API keys)
 MILADY_LIVE_TEST=1 bun run test:live
 
-# Integration tests
-bun run test:integration
+# Docker-based review
+bun run test:docker:review
 ```
 
 **Test file conventions:**

@@ -125,21 +125,21 @@ Casts are limited to 320 characters. Longer responses are split into cast thread
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `FARCASTER_NEYNAR_API_KEY` | Yes | API key for the Neynar Farcaster API |
-| `FARCASTER_FID` | Yes | Farcaster user identifier (FID) |
-| `FARCASTER_SIGNER_UUID` | Yes | UUID of the Neynar signer for signing casts |
-| `FARCASTER_HUB_URL` | No | Base URL for the Farcaster hub |
-| `FARCASTER_MODE` | No | Operation mode: `polling` or `webhook` |
+| `FARCASTER_NEYNAR_API_KEY` | Yes | Neynar API key |
+| `FARCASTER_FID` | Yes | Farcaster ID of the agent account |
+| `FARCASTER_SIGNER_UUID` | Yes | Neynar signer UUID |
+| `FARCASTER_HUB_URL` | No | Custom Hub URL |
+| `FARCASTER_MODE` | No | Operating mode |
 | `FARCASTER_DRY_RUN` | No | Simulate operations without executing |
 | `FARCASTER_POLL_INTERVAL` | No | Polling interval in seconds |
-| `ENABLE_CAST` | No | Enable or disable casting |
-| `CAST_IMMEDIATELY` | No | Post immediately instead of scheduling |
+| `ENABLE_CAST` | No | Enable automated casting |
+| `CAST_IMMEDIATELY` | No | Post casts immediately |
 | `CAST_INTERVAL_MIN` | No | Minimum minutes between casts |
 | `CAST_INTERVAL_MAX` | No | Maximum minutes between casts |
-| `MAX_CAST_LENGTH` | No | Maximum characters per cast |
-| `ACTION_INTERVAL` | No | Minutes between action-processing cycles |
-| `MAX_ACTIONS_PROCESSING` | No | Maximum actions per batch |
-| `ENABLE_ACTION_PROCESSING` | No | Enable automated action processing |
+| `MAX_CAST_LENGTH` | No | Maximum cast length |
+| `ACTION_INTERVAL` | No | Interval between actions |
+| `MAX_ACTIONS_PROCESSING` | No | Maximum concurrent actions |
+| `ENABLE_ACTION_PROCESSING` | No | Enable action processing |
 
 ## Auto-Enable
 

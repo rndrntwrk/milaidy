@@ -117,11 +117,11 @@ The actual secret value is never logged.
 
 ## Configuration
 
-| Environment Variable | Required | Description |
-|---------------------|----------|-------------|
-| `ENCRYPTION_SALT` | No | Custom salt for encryption key derivation |
-| `ENABLE_ENCRYPTION` | No | Enable encryption for stored secrets (default: `true`) |
-| `ENABLE_ACCESS_LOGGING` | No | Enable access logging for audit (default: `true`) |
+| Environment Variable | Description | Default |
+|---------------------|-------------|---------|
+| `ENABLE_ENCRYPTION` | Enable encryption at rest | `true` |
+| `ENCRYPTION_SALT` | Custom salt for encryption key derivation | Auto-generated |
+| `ENABLE_ACCESS_LOGGING` | Enable access audit logging | `true` |
 
 ## Related
 

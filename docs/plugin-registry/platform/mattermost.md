@@ -85,15 +85,15 @@ export MATTERMOST_SERVER_URL=https://chat.example.com
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `MATTERMOST_BOT_TOKEN` | Yes | Bot token from Mattermost System Console |
-| `MATTERMOST_SERVER_URL` | No | Base URL for the Mattermost server |
-| `MATTERMOST_ENABLED` | No | Enable or disable the plugin |
-| `MATTERMOST_TEAM_ID` | No | Team/tenant ID |
-| `MATTERMOST_DM_POLICY` | No | DM policy (e.g., `allow`, `deny`, `allowlist`) |
+| `MATTERMOST_BOT_TOKEN` | Yes | Bot token (primary auto-enable trigger) |
+| `MATTERMOST_SERVER_URL` | No | Mattermost server URL |
+| `MATTERMOST_ENABLED` | No | Enable or disable the connector |
+| `MATTERMOST_TEAM_ID` | No | Team ID to connect to |
+| `MATTERMOST_DM_POLICY` | No | DM acceptance policy |
 | `MATTERMOST_GROUP_POLICY` | No | Group message policy |
 | `MATTERMOST_ALLOWED_USERS` | No | Comma-separated allowed user IDs |
+| `MATTERMOST_REQUIRE_MENTION` | No | Only respond when @mentioned |
 | `MATTERMOST_ALLOWED_CHANNELS` | No | Comma-separated allowed channel IDs |
-| `MATTERMOST_REQUIRE_MENTION` | No | Only respond when mentioned |
 | `MATTERMOST_IGNORE_BOT_MESSAGES` | No | Ignore messages from other bots |
 
 ## Auto-Enable

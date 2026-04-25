@@ -5,17 +5,15 @@ description: "Diagnose environment, ports, and common misconfigurations."
 
 # `milady doctor`
 
-Runs health checks grouped by category: **System** (runtime version, node_modules, build artifacts, local upstreams), **Configuration** (config file, model API key, host binding), **Storage** (state directory, database, disk space), and **Network** (port availability).
+Runs health checks across four categories: System, Configuration, Storage, and Network. Reports pass/fail/warn status for each check with suggested fixes.
 
-## What it checks
-
-## Flags
+## Options
 
 | Flag | Description |
 |------|-------------|
-| `--no-ports` | Skip port availability checks. |
-| `--fix` | Automatically fix issues where possible (runs auto-fixable `milady` sub-commands). |
-| `--json` | Output results as JSON (CI-friendly). Exits with code 1 if any check fails. |
+| `--no-ports` | Skip port availability checks |
+| `--fix` | Automatically fix issues where possible (runs `milady` sub-commands for auto-fixable checks) |
+| `--json` | Output results as JSON (CI-friendly). Exits with code 1 if any checks fail. |
 
 ## Examples
 

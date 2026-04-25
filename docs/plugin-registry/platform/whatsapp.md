@@ -136,15 +136,15 @@ Response sent via Baileys API
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `WHATSAPP_ACCESS_TOKEN` | No | Cloud API access token (required for `cloudapi` auth) |
-| `WHATSAPP_PHONE_NUMBER_ID` | No | Phone number ID for Cloud API |
-| `WHATSAPP_AUTH_METHOD` | No | Authentication method: `cloudapi` or `baileys` |
+| `WHATSAPP_ACCESS_TOKEN` | No | WhatsApp Cloud API access token |
+| `WHATSAPP_PHONE_NUMBER_ID` | No | WhatsApp Business phone number ID |
+| `WHATSAPP_AUTH_METHOD` | No | Authentication method: `baileys` or `cloud-api` |
 | `WHATSAPP_AUTH_DIR` | No | Directory for Baileys session files |
 | `WHATSAPP_PRINT_QR` | No | Print QR code in terminal for Baileys auth |
-| `WHATSAPP_WEBHOOK_VERIFY_TOKEN` | No | Webhook verification token |
-| `WHATSAPP_BUSINESS_ACCOUNT_ID` | No | WhatsApp Business Account ID |
-| `WHATSAPP_API_VERSION` | No | API version string for Cloud API |
-| `WHATSAPP_DM_POLICY` | No | DM policy (e.g., `allow`, `deny`, `allowlist`) |
+| `WHATSAPP_WEBHOOK_VERIFY_TOKEN` | No | Webhook verification token for Cloud API |
+| `WHATSAPP_BUSINESS_ACCOUNT_ID` | No | WhatsApp Business account ID |
+| `WHATSAPP_API_VERSION` | No | Cloud API version |
+| `WHATSAPP_DM_POLICY` | No | DM acceptance policy |
 | `WHATSAPP_GROUP_POLICY` | No | Group message policy |
 
 ## Auto-Enable

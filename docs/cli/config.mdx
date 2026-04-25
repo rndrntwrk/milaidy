@@ -1,36 +1,47 @@
 ---
 title: "milady config"
-description: "Read, inspect, and validate Milady's active configuration from the shell."
+description: "Read, display, and locate the active configuration from the shell."
 ---
 
 # `milady config`
 
-Read-only helpers for inspecting the active configuration.
+Config helpers for inspecting the active configuration. Three subcommands are available.
 
 ## Subcommands
 
-| Subcommand | Description |
-|------------|-------------|
-| `milady config get <key>` | Read a config value using dot-notation (e.g. `agents.defaults.model`) |
-| `milady config path` | Print the resolved config file path |
-| `milady config show` | Display all config values grouped by section |
-| `milady config show --all` | Include advanced and hidden fields |
-| `milady config show --json` | Output raw JSON |
+### `milady config get <key>`
 
-## Examples
+Read a single config value using dot-notation. Nested keys are supported (e.g. `agents.defaults.model.primary`). Prints `(not set)` when the key does not exist, or the JSON-formatted value otherwise.
 
 ```bash
-milady config get agents.defaults.model
-milady config get gateway.port
+milady config get agents.defaults.model.primary
+milady config get cloud.enabled
+```
+
+### `milady config path`
+
+Print the resolved config file path (e.g. `~/.eliza/eliza.json`).
+
+```bash
 milady config path
+```
+
+### `milady config show`
+
+Display all configuration values grouped by section. Sensitive values (API keys, tokens) are masked. Hidden fields are excluded unless `--all` is passed.
+
+| Flag | Description |
+|------|-------------|
+| `-a, --all` | Include advanced and hidden fields |
+| `--json` | Output as raw JSON |
+
+```bash
 milady config show
 milady config show --all
 milady config show --json
-milady config --help
 ```
 
 ## Related
 
-- [Configuration](/configuration) — Full config reference
-- [Config schema](/config-schema) — Schema documentation
-- [`milady configure`](/cli/configure) — Interactive configuration guide
+- [Configuration](/configuration)
+- [`milady configure`](/cli/configure)

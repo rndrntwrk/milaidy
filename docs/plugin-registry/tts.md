@@ -32,11 +32,11 @@ milady plugins install tts
 
 | Environment Variable | Required | Description |
 |---------------------|----------|-------------|
-| `TTS_AUTO_MODE` | No | When to automatically apply TTS: `off`, `always`, `inbound`, `tagged` |
-| `TTS_SUMMARIZE` | No | Summarize long text instead of truncating |
-| `TTS_MAX_LENGTH` | No | Maximum text length for TTS synthesis |
-| `TTS_DEFAULT_VOICE` | No | Default voice ID for synthesis |
-| `TTS_DEFAULT_PROVIDER` | No | Default TTS provider: `auto`, `elevenlabs`, `openai`, `edge`, `simple-voice` |
+| `TTS_AUTO_MODE` | No | Enable automatic TTS for all responses |
+| `TTS_SUMMARIZE` | No | Summarize long text before synthesis |
+| `TTS_MAX_LENGTH` | No | Maximum text length for synthesis |
+| `TTS_DEFAULT_VOICE` | No | Default voice profile |
+| `TTS_DEFAULT_PROVIDER` | No | Default TTS provider (`elevenlabs`, `openai`, or `edge-tts`) |
 
 ## Providers
 

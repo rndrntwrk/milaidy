@@ -26,18 +26,18 @@ export AI_GATEWAY_API_KEY=your-gateway-key
 
 | Environment Variable | Required | Description |
 |---------------------|----------|-------------|
-| `AI_GATEWAY_API_KEY` | Yes* | Vercel AI Gateway API key (OpenAI-compatible endpoints) |
-| `AIGATEWAY_API_KEY` | Yes* | Alias that also triggers auto-enable |
-| `VERCEL_OIDC_TOKEN` | No | OIDC token for Vercel (used as Bearer auth for Gateway) |
+| `AI_GATEWAY_API_KEY` | No | Vercel AI Gateway API key |
+| `AIGATEWAY_API_KEY` | No | Alias that also triggers auto-enable (primary env key for auto-enable) |
+| `VERCEL_OIDC_TOKEN` | No | Vercel OIDC token for authentication |
 | `AI_GATEWAY_BASE_URL` | No | Custom base URL for the gateway endpoint |
 | `AI_GATEWAY_SMALL_MODEL` | No | Override the small model identifier |
 | `AI_GATEWAY_LARGE_MODEL` | No | Override the large model identifier |
 | `AI_GATEWAY_EMBEDDING_MODEL` | No | Override the embedding model |
-| `AI_GATEWAY_EMBEDDING_DIMENSIONS` | No | Number of dimensions for embedding vectors |
+| `AI_GATEWAY_EMBEDDING_DIMENSIONS` | No | Override embedding vector dimensions |
 | `AI_GATEWAY_IMAGE_MODEL` | No | Override the image generation model |
 | `AI_GATEWAY_TIMEOUT_MS` | No | Request timeout in milliseconds |
 
-\* Either `AI_GATEWAY_API_KEY` or `AIGATEWAY_API_KEY` activates the plugin. Neither is strictly required (the plugin also accepts `VERCEL_OIDC_TOKEN`).
+Either `AI_GATEWAY_API_KEY`, `AIGATEWAY_API_KEY`, or `VERCEL_OIDC_TOKEN` activates the plugin.
 
 ### milady.json Example
 

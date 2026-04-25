@@ -4,8 +4,7 @@ Connect your agent to iMessage through a local [BlueBubbles](https://bluebubbles
 
 ## Prerequisites
 
-- A Mac with Messages signed in
-- [BlueBubbles](https://bluebubbles.app) server installed and running on that Mac
+The BlueBubbles connector is an elizaOS plugin that bridges your agent to iMessage via a self-hosted BlueBubbles server. Unlike the native iMessage connector (which reads the local Messages database directly), BlueBubbles works over HTTP and can be accessed from any machine on the same network. It requires a BlueBubbles server running on a Mac with Messages signed in. It is auto-enabled by the runtime when a valid server URL and password are detected in your connector configuration.
 
 ## Configuration
 
@@ -13,8 +12,7 @@ Connect your agent to iMessage through a local [BlueBubbles](https://bluebubbles
 |-------|-------|
 | Package | `@elizaos/plugin-bluebubbles` |
 | Config key | `connectors.bluebubbles` |
-| Availability | Registry — install with `milady plugins install @elizaos/plugin-bluebubbles` |
-| Enable trigger | `password` or `serverUrl` is truthy in connector config, or `accounts` with at least one enabled entry |
+| Auto-enable trigger | `serverUrl` and `password` are both truthy in connector config |
 
 These can be set as environment variables or under the `connectors.bluebubbles` config in `~/.milady/milady.json`:
 
@@ -74,13 +72,18 @@ All fields are defined under `connectors.bluebubbles` in `milady.json`.
 | `webhookPath` | string | — | Webhook path for inbound messages |
 | `sendReadReceipts` | boolean | — | Send read receipts for incoming messages |
 
+## Auto-Enable Mechanism
+
+The `plugin-auto-enable.ts` module checks `connectors.bluebubbles` in your config. If both `serverUrl` and `password` are truthy (and `enabled` is not explicitly `false`), the runtime automatically loads `@elizaos/plugin-bluebubbles`.
+
+No environment variable is required to trigger auto-enable — it is driven entirely by the connector config object.
+
 ## Setup Steps
 
 1. Install [BlueBubbles](https://bluebubbles.app) on a Mac with Messages signed in.
 2. Start the BlueBubbles server and note the server URL and password.
 3. Add the server URL and password to `connectors.bluebubbles` in your config.
-4. Install the plugin: `milady plugins install @elizaos/plugin-bluebubbles`
-5. Start your agent — the BlueBubbles connector will enable when credentials are present.
+4. Start your agent — the plugin auto-enables when both `serverUrl` and `password` are present.
 
 ## Features
 

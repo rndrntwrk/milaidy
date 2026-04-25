@@ -59,14 +59,14 @@ export ZALO_APP_ID=YOUR_APP_ID
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `ZALO_ACCESS_TOKEN` | Yes | OA access token |
-| `ZALO_SECRET_KEY` | Yes | Application secret key |
-| `ZALO_APP_ID` | No | Application ID |
-| `ZALO_REFRESH_TOKEN` | No | Token refresh credential |
-| `ZALO_ENABLED` | No | Set to `true` to enable |
+| `ZALO_ACCESS_TOKEN` | Yes | Zalo API access token (primary auto-enable trigger) |
+| `ZALO_SECRET_KEY` | Yes | Zalo application secret key |
+| `ZALO_REFRESH_TOKEN` | No | Zalo API refresh token |
+| `ZALO_APP_ID` | No | Zalo application ID |
+| `ZALO_ENABLED` | No | Enable or disable the connector |
 | `ZALO_PROXY_URL` | No | Proxy URL for API requests |
 | `ZALO_USE_POLLING` | No | Use polling instead of webhooks |
-| `ZALO_WEBHOOK_URL` | No | Webhook URL for inbound messages |
+| `ZALO_WEBHOOK_URL` | No | Webhook callback URL |
 | `ZALO_WEBHOOK_PATH` | No | Webhook endpoint path |
 | `ZALO_WEBHOOK_PORT` | No | Webhook listener port |
 

@@ -326,7 +326,6 @@ Use this staged path so you do not get overwhelmed.
    - `/guides/connectors`
    - `/connectors/discord`
    - `/connectors/telegram`
-   - `/connectors/twitter`
    - `/connectors/slack`
 4. **Wallet and autonomous workflows**
    - `/guides/wallet`

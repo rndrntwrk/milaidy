@@ -86,13 +86,13 @@ export MSTEAMS_TENANT_ID=YOUR_TENANT_ID
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `MSTEAMS_APP_PASSWORD` | Yes | Azure Bot App Password (client secret) |
 | `MSTEAMS_APP_ID` | No | Azure Bot App ID |
+| `MSTEAMS_ENABLED` | No | Enable or disable the connector |
 | `MSTEAMS_TENANT_ID` | No | Azure AD Tenant ID |
-| `MSTEAMS_ENABLED` | No | Enable or disable the plugin |
+| `MSTEAMS_APP_PASSWORD` | Yes | Azure Bot App Password (client secret) |
+| `MSTEAMS_MEDIA_MAX_MB` | No | Maximum media upload size in MB |
 | `MSTEAMS_WEBHOOK_PATH` | No | Webhook endpoint path |
 | `MSTEAMS_WEBHOOK_PORT` | No | Webhook listener port |
-| `MSTEAMS_MEDIA_MAX_MB` | No | Maximum media file size in MB |
 | `MSTEAMS_ALLOWED_TENANTS` | No | Comma-separated allowed tenant IDs |
 | `MSTEAMS_SHAREPOINT_SITE_ID` | No | SharePoint site ID for file uploads |
 

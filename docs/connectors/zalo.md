@@ -43,18 +43,18 @@ Configure in `~/.milady/milady.json`:
 
 ## Setup
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `ZALO_ACCESS_TOKEN` | Yes | OA access token |
-| `ZALO_SECRET_KEY` | Yes | Application secret key |
-| `ZALO_APP_ID` | No | Application ID |
-| `ZALO_REFRESH_TOKEN` | No | Token refresh credential |
-| `ZALO_ENABLED` | No | Set to `true` to enable |
-| `ZALO_PROXY_URL` | No | Proxy URL for API requests |
-| `ZALO_USE_POLLING` | No | Use polling instead of webhooks |
-| `ZALO_WEBHOOK_URL` | No | Webhook URL for inbound messages |
-| `ZALO_WEBHOOK_PATH` | No | Webhook endpoint path |
-| `ZALO_WEBHOOK_PORT` | No | Webhook listener port |
+| Variable | Description |
+|----------|-------------|
+| `ZALO_ACCESS_TOKEN` | OA access token (required) |
+| `ZALO_SECRET_KEY` | Application secret key (required) |
+| `ZALO_REFRESH_TOKEN` | Token refresh credential |
+| `ZALO_APP_ID` | Application ID |
+| `ZALO_ENABLED` | Set to `true` to enable |
+| `ZALO_PROXY_URL` | Proxy URL for API requests |
+| `ZALO_USE_POLLING` | Use polling instead of webhooks |
+| `ZALO_WEBHOOK_URL` | Webhook URL for receiving messages |
+| `ZALO_WEBHOOK_PATH` | Webhook endpoint path |
+| `ZALO_WEBHOOK_PORT` | Port for webhook listener |
 
 ## Features
 
