@@ -786,6 +786,18 @@ describe("release workflow path contract", () => {
     expect(fallbackScript).toContain('cp -LR "$source_path" "$target_path"');
   });
 
+  it("keeps agent runtime plugin dependencies declared for release packaging", () => {
+    const patch = fs.readFileSync(
+      path.join(repoRoot, "patches", "eliza", "ci-release-contracts.patch"),
+      "utf8",
+    );
+
+    expect(patch).toContain("diff --git a/packages/agent/package.json");
+    expect(patch).toContain(
+      '+    "@elizaos/plugin-agent-skills": "workspace:*",',
+    );
+  });
+
   it("patches generated Android files before the release Gradle build", () => {
     const mobileCompatScript = fs.readFileSync(
       path.join(repoRoot, "scripts", "patch-mobile-build-release-compat.mjs"),
@@ -894,6 +906,9 @@ describe("release workflow path contract", () => {
     expect(releaseElectrobun).not.toContain("Extracting draft fallback");
     expect(releaseElectrobun).toContain(
       "steps.build-electrobun-app.outputs.fallback != 'true'",
+    );
+    expect(releaseElectrobun).toContain(
+      "Windows clean installer proof exited with code $LASTEXITCODE.",
     );
     expect(releaseElectrobun).toContain(
       [

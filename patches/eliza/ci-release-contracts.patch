@@ -1,3 +1,15 @@
+diff --git a/packages/agent/package.json b/packages/agent/package.json
+index 60d4e4eb87..ecdf815c55 100644
+--- a/packages/agent/package.json
++++ b/packages/agent/package.json
+@@ -141,6 +141,7 @@
+     "@elizaos/app-training": "workspace:*",
+     "@elizaos/core": "workspace:*",
+     "@elizaos/plugin-agent-orchestrator": "workspace:*",
++    "@elizaos/plugin-agent-skills": "workspace:*",
+     "@elizaos/plugin-browser-bridge": "workspace:*",
+     "@elizaos/plugin-local-embedding": "workspace:*",
+     "@elizaos/plugin-ollama": "workspace:*",
 diff --git a/apps/app-lifeops/test/selfcontrol-desktop.live.e2e.test.ts b/apps/app-lifeops/test/selfcontrol-desktop.live.e2e.test.ts
 index 43ec323125..5b4de02384 100644
 --- a/apps/app-lifeops/test/selfcontrol-desktop.live.e2e.test.ts

@@ -1144,6 +1144,10 @@ jobs:
             -BuildDir (Join-Path $PWD "apps/app/electrobun/build") `
             -ProofInstallDir $env:MILADY_TEST_WINDOWS_PROOF_INSTALL_DIR `
             -OutputDir (Join-Path $PWD "apps/app/electrobun/artifacts/windows-installer-proof")
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Windows clean installer proof exited with code $LASTEXITCODE."
+            exit $LASTEXITCODE
+          }
 
       - name: Upload Windows installer proof artifact
         if: always() && matrix.platform.os == 'windows'
