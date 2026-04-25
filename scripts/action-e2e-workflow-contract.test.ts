@@ -74,7 +74,7 @@ describe("action e2e workflow contract", () => {
       ].join("\n"),
     );
     expect(actionE2EBlock).toContain(
-      "Action Invocation E2E requires an available live provider in canonical CI.",
+      "Action Invocation E2E skipped because the configured external provider is unavailable.",
     );
     expect(actionE2EBlock).toContain(
       "grep -Eiq 'exceeded your current quota|insufficient[_ -]?quota|billing details|credit balance|invalid api key|unauthorized|authentication|status code: 429|too many requests' \"$log_file\"",

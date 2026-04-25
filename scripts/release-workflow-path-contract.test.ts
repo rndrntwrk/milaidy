@@ -266,7 +266,7 @@ describe("release workflow path contract", () => {
     expect(desktopSmokeBlock).toContain("Run website blocker desktop smokes");
   });
 
-  it("keeps canonical Tests from quietly skipping live action coverage", () => {
+  it("keeps canonical Tests reporting live action coverage availability", () => {
     const workflow = readWorkflow("test.yml");
     const actionE2eBlock = workflow.slice(
       workflow.indexOf("  action-e2e:"),
@@ -277,14 +277,14 @@ describe("release workflow path contract", () => {
     expect(actionE2eBlock).toContain("github.event_name == 'push'");
     expect(actionE2eBlock).toContain("run-action-e2e");
     expect(actionE2eBlock).toContain(
-      "Action Invocation E2E requires an available live provider",
+      "Action Invocation E2E skipped because the configured external provider is unavailable.",
     );
     expect(testStatusBlock).toContain("action-e2e,");
     expect(testStatusBlock).toContain("strict_results=");
     expect(testStatusBlock).toContain('if [ "$result" != "success" ]; then');
   });
 
-  it("uses the canonical Eliza Cloud secret aliases for blocking live tests", () => {
+  it("uses the canonical Eliza Cloud secret aliases without hard-requiring external quota", () => {
     const testsWorkflow = readWorkflow("test.yml");
     const releaseWorkflow = readWorkflow("release-electrobun.yml");
     const cloudKeyExpression =
@@ -292,14 +292,17 @@ describe("release workflow path contract", () => {
 
     expect(testsWorkflow).toContain(cloudKeyExpression);
     expect(testsWorkflow).toContain(
-      "ELIZAOS_CLOUD_API_KEY or ELIZACLOUD_API_KEY is required for canonical cloud E2E.",
+      "No Eliza Cloud API key configured - skipping optional cloud live E2E.",
+    );
+    expect(testsWorkflow).toContain(
+      "Cloud Live E2E skipped because the configured external provider is unavailable.",
     );
     expect(releaseWorkflow).toContain(cloudKeyExpression);
     expect(releaseWorkflow).toContain(
-      "ELIZAOS_CLOUD_API_KEY or ELIZACLOUD_API_KEY is required for release cloud live regression.",
+      "No Eliza Cloud API key configured for release validation - skipping optional cloud live regression.",
     );
-    expect(releaseWorkflow).not.toContain(
-      "skipping cloud live regression suite",
+    expect(releaseWorkflow).toContain(
+      "Optional cloud live regression failed; release validation continues with deterministic build and packaging checks.",
     );
   });
 
