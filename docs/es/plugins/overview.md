@@ -28,7 +28,7 @@ Un plugin es un módulo autónomo que registra uno o más de los siguientes:
 <CardGroup cols={2}>
 
 <Card title="Plugins principales" icon="cube" href="/es/plugin-registry/knowledge">
-  Plugins esenciales que se incluyen con cada instalación de Milady — knowledge, database, form, cron, shell, agent-skills, trajectory-logger y agent-orchestrator.
+  Plugins esenciales que se incluyen con cada instalación de Milady — sql, local-embedding, form, knowledge, trajectory-logger, agent-orchestrator, cron, shell, agent-skills, commands, plugin-manager y roles.
 </Card>
 
 <Card title="Proveedores de modelos" icon="brain" href="/es/plugin-registry/llm/openai">
@@ -36,7 +36,7 @@ Un plugin es un módulo autónomo que registra uno o más de los siguientes:
 </Card>
 
 <Card title="Conectores de plataformas" icon="plug" href="/es/plugin-registry/platform/discord">
-  Puentes hacia 19 plataformas de mensajería mediante auto-habilitación (Discord, Telegram, Twitter, Slack, WhatsApp, Signal, iMessage, BlueBubbles, Blooio, MS Teams, Google Chat, Mattermost, Farcaster, Twitch, Feishu, Matrix, Nostr, Lens, WeChat). Conectores adicionales (Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon) están disponibles en el registro de elizaOS.
+  Puentes hacia 18 plataformas de mensajería mediante auto-habilitación (Discord, Telegram, Twitter, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Mattermost, Farcaster, Twitch, Feishu, Matrix, Nostr, Lens, WeChat). Conectores adicionales (Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon) están disponibles en el registro de elizaOS.
 </Card>
 
 <Card title="DeFi y Blockchain" icon="wallet" href="/es/plugin-registry/defi/evm">
@@ -128,9 +128,22 @@ milady plugins list
 
 </div>
 
+Habilita o deshabilita un plugin configurando su flag `enabled` en `milady.json`:
+
+```json
+{
+  "plugins": {
+    "entries": {
+      "plugin-name": { "enabled": false }
+    }
+  }
+}
+```
+
+O edita el archivo de configuración directamente (`milady config path` muestra la ubicación del archivo):
+
 ```bash
-milady plugins enable plugin-name
-milady plugins disable plugin-name
+$EDITOR "$(milady config path)"
 ```
 
 <div id="eject-copy-to-local">
@@ -139,11 +152,13 @@ milady plugins disable plugin-name
 
 </div>
 
-```bash
-milady plugins eject plugin-name
+Expulsa un plugin a través del chat del agente para clonar su código fuente y editarlo localmente:
+
+```
+eject the telegram plugin so I can edit its source
 ```
 
-Consulta [Expulsar Plugin](/es/plugins/plugin-eject) para detalles sobre cómo personalizar plugins expulsados.
+Consulta [Expulsar Plugin](/es/plugins/plugin-eject) para el flujo completo de expulsar/sincronizar/reinyectar.
 
 <div id="related">
 
