@@ -543,6 +543,18 @@ describe("release workflow path contract", () => {
     expect(releaseElectrobun).toContain(
       "test -f eliza/packages/shared/src/i18n/generated/validation-keyword-data.js",
     );
+    expect(releaseElectrobun).toContain(
+      'const installedDir = path.join("node_modules", "@elizaos", "shared", "src", "i18n", "generated");',
+    );
+    expect(releaseElectrobun).toContain(
+      'for (const file of ["validation-keyword-data.ts", "validation-keyword-data.js"])',
+    );
+    expect(releaseElectrobun).toContain(
+      "test -f node_modules/@elizaos/shared/src/i18n/generated/validation-keyword-data.js",
+    );
+    expect(releaseElectrobun).toContain(
+      "test -f dist/node_modules/@elizaos/shared/src/i18n/generated/validation-keyword-data.js",
+    );
     expect(generateKeywords).toBeLessThan(stageDesktop);
     expect(generateProto).toBeLessThan(stageDesktop);
   });
