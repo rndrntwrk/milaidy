@@ -411,13 +411,16 @@ jobs:
           flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
           flatpak install --user -y flathub org.freedesktop.Platform//24.08 org.freedesktop.Sdk//24.08 org.freedesktop.Sdk.Extension.node22//24.08
       - name: Build flatpak
-        run: flatpak-builder --user --install-deps-from=flathub --force-clean build-dir eliza/packages/app-core/packaging/flatpak/com.milady.Milady.yml
+        working-directory: eliza/packages/app-core/packaging/flatpak
+        run: |
+          flatpak-builder --repo=repo --user --install-deps-from=flathub --force-clean build-dir ai.elizaos.App.yml
+          flatpak build-bundle repo elizaos-app.flatpak ai.elizaos.App
       - name: Upload flatpak artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: flatpak-bundle
-          path: eliza/packages/app-core/packaging/flatpak/*.flatpak
+          path: eliza/packages/app-core/packaging/flatpak/elizaos-app.flatpak
           retention-days: 30
           if-no-files-found: error
 
