@@ -165,6 +165,10 @@ export function resolveCiOverrideSpecifiers(repoRoot = DEFAULT_REPO_ROOT) {
 
   return {
     ...CI_OVERRIDE_SPECIFIERS,
+    "@elizaos/app-core": resolveRootElizaPackageOverrideSpecifier(
+      "packages/app-core",
+      repoRoot,
+    ),
     ...localOnlyOverrides,
     "@elizaos/ui": resolveRootUiOverrideSpecifier(repoRoot),
   };

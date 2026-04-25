@@ -370,6 +370,8 @@ describe("disable-local-eliza-workspace", () => {
       fs.readFileSync(path.join(repoRoot, "package.json"), "utf8"),
     );
     expect(rootPackage.overrides).toMatchObject({
+      "@elizaos/app-core":
+        resolveCiOverrideSpecifiers(repoRoot)["@elizaos/app-core"],
       "@elizaos/ui": resolveCiOverrideSpecifiers(repoRoot)["@elizaos/ui"],
       "@elizaos/plugin-app-control":
         CI_OVERRIDE_SPECIFIERS["@elizaos/plugin-app-control"],
@@ -409,6 +411,8 @@ describe("disable-local-eliza-workspace", () => {
       fs.readFileSync(path.join(repoRoot, "package.json"), "utf8"),
     );
     expect(rootPackage.overrides).toMatchObject({
+      "@elizaos/app-core":
+        resolveCiOverrideSpecifiers(repoRoot)["@elizaos/app-core"],
       "@elizaos/ui": resolveCiOverrideSpecifiers(repoRoot)["@elizaos/ui"],
       "@elizaos/plugin-app-control":
         CI_OVERRIDE_SPECIFIERS["@elizaos/plugin-app-control"],

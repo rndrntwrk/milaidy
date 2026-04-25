@@ -21,6 +21,7 @@ export const releaseContractTests = [
   "scripts/release-workflow-path-contract.test.ts",
   "scripts/run-release-contract-suite.test.ts",
   "scripts/build-local-eliza-ci-overrides.test.ts",
+  "scripts/disable-local-eliza-workspace.test.ts",
   "scripts/patch-mobile-build-release-compat.test.ts",
   "scripts/patch-release-check-pack-fallback.test.ts",
   "scripts/electrobun-pr-workflow-contract.test.ts",
@@ -49,6 +50,82 @@ export function run(command, args, cwd = repoRoot) {
       `Command failed with exit code ${result.status ?? 1}: ${command} ${args.join(" ")}`,
     );
   }
+}
+
+export function isElizaWorktreeClean(root = repoRoot) {
+  const result = spawnSync("git", ["-C", "eliza", "status", "--porcelain"], {
+    cwd: root,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  return result.status === 0 && result.stdout.trim().length === 0;
+}
+
+export function listElizaUntrackedFiles(root = repoRoot) {
+  const result = spawnSync(
+    "git",
+    ["-C", "eliza", "ls-files", "--others", "--exclude-standard"],
+    {
+      cwd: root,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
+  if (result.status !== 0 || !result.stdout.trim()) {
+    return [];
+  }
+
+  return result.stdout
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+export function restoreGeneratedElizaChanges(
+  shouldRestore,
+  root = repoRoot,
+  initialUntrackedFiles = [],
+) {
+  if (!shouldRestore) {
+    return false;
+  }
+
+  let restored = false;
+  const diff = spawnSync("git", ["-C", "eliza", "diff", "--binary"], {
+    cwd: root,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  if (diff.status === 0 && diff.stdout.trim().length > 0) {
+    const apply = spawnSync("git", ["-C", "eliza", "apply", "-R", "-"], {
+      cwd: root,
+      encoding: "utf8",
+      input: diff.stdout,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    if (apply.status !== 0) {
+      const stderr = apply.stderr.trim();
+      throw new Error(
+        stderr || "failed to restore generated eliza release-contract changes",
+      );
+    }
+    restored = true;
+  }
+
+  const initialUntracked = new Set(initialUntrackedFiles);
+  for (const relativePath of listElizaUntrackedFiles(root)) {
+    if (initialUntracked.has(relativePath)) {
+      continue;
+    }
+    fs.rmSync(path.join(root, "eliza", relativePath), {
+      force: true,
+      recursive: true,
+    });
+    restored = true;
+  }
+
+  return restored;
 }
 
 export function symlinkOrCopy(sourcePath, targetPath) {
@@ -305,9 +382,14 @@ function pruneGeneratedLegacyElectrobunEntries(targetPath, trackedPaths) {
 export function main() {
   let exitCode = 0;
   let createdCompatDir = false;
+  const shouldRestoreElizaChanges = isElizaWorktreeClean();
+  const initialElizaUntrackedFiles = shouldRestoreElizaChanges
+    ? listElizaUntrackedFiles()
+    : [];
   try {
     createdCompatDir = ensureLegacyElectrobunCompatDir();
     assertReleaseContractTestsExist();
+    run("node", ["scripts/apply-eliza-ci-patches.mjs"]);
 
     run("bunx", [
       "vitest",
@@ -340,6 +422,11 @@ export function main() {
     exitCode = 1;
   } finally {
     cleanupLegacyElectrobunCompatDir(createdCompatDir);
+    restoreGeneratedElizaChanges(
+      shouldRestoreElizaChanges,
+      repoRoot,
+      initialElizaUntrackedFiles,
+    );
   }
 
   return exitCode;
