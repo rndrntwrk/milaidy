@@ -17,6 +17,7 @@ The BlueBubbles connector is an external elizaOS plugin that bridges your agent 
 | Package | `@elizaos/plugin-bluebubbles` |
 | Config key | `connectors.bluebubbles` |
 | Install | `milady plugins install bluebubbles` |
+| Activation trigger | Once installed, activates when `password` or `serverUrl` is truthy in connector config, or `accounts` with at least one enabled entry |
 
 Once installed, the connector activates when `password` or `serverUrl` is set in connector config, or `accounts` has at least one enabled entry.
 
