@@ -1104,6 +1104,11 @@ describe("release workflow path contract", () => {
       "sudo apt-get install -y build-essential nodejs dpkg-dev debhelper fakeroot",
     );
     expect(debianValidationBlock).toContain(nodeSourceNpmProvideCheck);
+    expect(debianValidationBlock).toContain("uses: oven-sh/setup-bun@v2");
+    expect(debianValidationBlock).toContain(
+      ["bun-version: $", "{{ env.BUN_VERSION }}"].join(""),
+    );
+    expect(debianValidationBlock).not.toContain("https://bun.sh/install");
     expect(debianValidationBlock).toContain(
       "dpkg-checkbuilddeps debian/control",
     );
