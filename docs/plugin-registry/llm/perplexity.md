@@ -4,13 +4,13 @@ sidebarTitle: "Perplexity"
 description: "Perplexity model provider for Milady — search-augmented language models with real-time web access."
 ---
 
-> **Not in plugin registry.** `@elizaos/plugin-perplexity` is not registered in `plugins.json`. This plugin may not be installable via `milady plugins install`. Access Perplexity models via [OpenRouter](/plugin-registry/llm/openrouter) instead.
+<Warning>
+This plugin is not yet available in the Milady plugin registry. To use Perplexity models today, configure them through the [OpenRouter plugin](/plugin-registry/llm/openrouter) using the appropriate model ID.
+</Warning>
 
 The Perplexity plugin connects Milady agents to Perplexity's search-augmented language models. These models combine LLM reasoning with live web search, making them ideal for agents that need up-to-date information.
 
-> **Availability:** This plugin is not in the default Milady plugin registry. Install it directly with `milady plugins install perplexity` or `milady plugins install @elizaos/plugin-perplexity`.
-
-**Package:** `@elizaos/plugin-perplexity`
+**Package:** `@elizaos/plugin-perplexity` (not yet published)
 
 > **Availability:** This plugin is not in the bundled registry (`plugins.json`). It is available from the remote elizaOS plugin registry and auto-enables when `PERPLEXITY_API_KEY` is set.
 

@@ -4,11 +4,13 @@ sidebarTitle: "Suno"
 description: "Suno music generation plugin for Milady — generate music and songs using Suno's AI models."
 ---
 
-> **Not in plugin registry.** `@elizaos/plugin-suno` is not registered in `plugins.json`. This plugin may not be installable via `milady plugins install`.
+<Warning>
+This plugin is not yet available in the Milady plugin registry.
+</Warning>
 
 The Suno plugin connects Milady agents to Suno's music generation platform, enabling agents to create music and songs from text prompts.
 
-**Package:** `@elizaos/plugin-suno`
+**Package:** `@elizaos/plugin-suno` (not yet published)
 
 > **Note:** This plugin is an upstream elizaOS feature plugin and is not included in the bundled `plugins.json` registry. It is installable from the remote elizaOS plugin registry and auto-enables via the `features.suno` config flag.
 

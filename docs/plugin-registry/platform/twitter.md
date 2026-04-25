@@ -1,16 +1,16 @@
 ---
 title: "Twitter / X Plugin"
 sidebarTitle: "Twitter"
-description: "The @elizaos/plugin-twitter package is not currently available in the Milady plugin registry."
+description: "Twitter/X connector for Milady — posting, replying, monitoring mentions, and timeline interactions via the xAI plugin."
 ---
 
 <Warning>
-**Not available.** The `@elizaos/plugin-twitter` package is not currently in the Milady plugin registry. This page describes a plugin that may be added in a future release.
+There is no standalone `@elizaos/plugin-twitter`. Twitter/X integration is bundled with the **xAI plugin** (`@elizaos/plugin-xai`). Install and configure the xAI plugin to use Twitter/X features.
 </Warning>
 
-The Twitter plugin connects Milady agents to Twitter/X, enabling autonomous posting, replying to mentions, monitoring timelines, and engaging with other accounts.
+The xAI plugin connects Milady agents to Twitter/X, enabling autonomous posting, replying to mentions, monitoring timelines, and engaging with other accounts.
 
-**Package:** `@elizaos/plugin-twitter`
+**Package:** `@elizaos/plugin-xai`
 
 <Note>
 This is an upstream elizaOS plugin and is **not included** in the Milady bundled registry. It must be installed manually from the remote registry.
@@ -19,7 +19,7 @@ This is an upstream elizaOS plugin and is **not included** in the Milady bundled
 ## Installation
 
 ```bash
-milady plugins install @elizaos/plugin-twitter
+milady plugins install xai
 ```
 
 ## Setup

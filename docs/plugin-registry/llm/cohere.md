@@ -4,13 +4,13 @@ sidebarTitle: "Cohere"
 description: "Cohere model provider for Milady — enterprise-grade language models with RAG, embeddings, and reranking."
 ---
 
-> **Not in plugin registry.** `@elizaos/plugin-cohere` is not registered in `plugins.json`. This plugin may not be installable via `milady plugins install`. Use it via [OpenRouter](/plugin-registry/llm/openrouter) instead, or check for a community package.
+<Warning>
+This plugin is not yet available in the Milady plugin registry. To use Cohere models today, configure them through the [OpenRouter plugin](/plugin-registry/llm/openrouter) using the appropriate model ID.
+</Warning>
 
 The Cohere plugin connects Milady agents to Cohere's language models, providing access to the Command family of models optimized for enterprise use cases including retrieval-augmented generation and tool use.
 
-> **Availability:** This plugin is not in the default Milady plugin registry. Install it directly with `milady plugins install cohere` or `milady plugins install @elizaos/plugin-cohere`.
-
-**Package:** `@elizaos/plugin-cohere`
+**Package:** `@elizaos/plugin-cohere` (not yet published)
 
 > **Availability:** This plugin is not in the bundled registry (`plugins.json`). It is available from the remote elizaOS plugin registry and auto-enables when `COHERE_API_KEY` is set.
 

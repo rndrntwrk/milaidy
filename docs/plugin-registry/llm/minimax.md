@@ -4,13 +4,13 @@ sidebarTitle: "MiniMax"
 description: "MiniMax model provider for Milady — access MiniMax's language and multimodal models."
 ---
 
-> **Not in plugin registry.** `@elizaos/plugin-minimax` is not registered in `plugins.json`. This plugin may not be installable via `milady plugins install`.
+<Warning>
+This plugin is not yet available in the Milady plugin registry. To use MiniMax models today, configure them through the [OpenRouter plugin](/plugin-registry/llm/openrouter) using the appropriate model ID.
+</Warning>
 
 The MiniMax plugin connects Milady agents to MiniMax's language models, providing access to their text generation and multimodal capabilities.
 
-> **Availability:** This plugin is not in the default Milady plugin registry. Install it directly with `milady plugins install minimax` or `milady plugins install @elizaos/plugin-minimax`.
-
-**Package:** `@elizaos/plugin-minimax`
+**Package:** `@elizaos/plugin-minimax` (not yet published)
 
 > **Availability:** This plugin is not in the bundled registry (`plugins.json`). It is available from the remote elizaOS plugin registry and auto-enables when `MINIMAX_API_KEY` is set.
 

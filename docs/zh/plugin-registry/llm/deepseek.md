@@ -4,9 +4,13 @@ sidebarTitle: "DeepSeek"
 description: "Milady 的 DeepSeek 模型提供者 — DeepSeek-V3 和 DeepSeek-R1 推理模型。"
 ---
 
+<Warning>
+此插件尚未在 Milady 插件注册表中提供。要使用 DeepSeek 模型，请通过 [OpenRouter 插件](/plugin-registry/llm/openrouter) 配置，使用相应的模型 ID。
+</Warning>
+
 DeepSeek 插件将 Milady 代理连接到 DeepSeek 的 API，以极具竞争力的价格提供对 DeepSeek-V3（通用）和 DeepSeek-R1（专注推理）模型的访问。
 
-**Package:** `@elizaos/plugin-deepseek`
+**Package:** `@elizaos/plugin-deepseek`（尚未发布）
 
 <div id="installation">
 

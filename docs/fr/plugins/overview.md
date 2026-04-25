@@ -32,7 +32,7 @@ Un plugin est un module autonome qui enregistre un ou plusieurs des éléments s
 </Card>
 
 <Card title="Fournisseurs de modèles" icon="brain" href="/fr/plugin-registry/llm/openai">
-  Intégrations LLM pour OpenAI, Anthropic, Google Gemini, Google Antigravity, Groq, Ollama, OpenRouter, DeepSeek, xAI, Mistral, Cohere, Together, Qwen, Minimax, Perplexity, Zai, Vercel AI Gateway et Eliza Cloud.
+  Intégrations LLM disponibles dans le registre : OpenAI, Anthropic, Google Gemini, Groq, Ollama, OpenRouter, xAI, Vercel AI Gateway et Eliza Cloud. Fournisseurs supplémentaires (DeepSeek, Mistral, Cohere, etc.) accessibles via OpenRouter.
 </Card>
 
 <Card title="Connecteurs de plateformes" icon="plug" href="/fr/plugin-registry/platform/discord">

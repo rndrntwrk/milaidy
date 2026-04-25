@@ -1,4 +1,8 @@
-# Twitter/X Connector
+---
+title: Twitter/X Connector
+sidebarTitle: Twitter/X
+description: Connect your agent to Twitter/X via the xAI plugin (@elizaos/plugin-xai).
+---
 
 Connect your agent to Twitter/X for social media engagement using the `@elizaos/plugin-twitter` package.
 
@@ -6,16 +10,15 @@ Connect your agent to Twitter/X for social media engagement using the `@elizaos/
 
 ## Overview
 
-The Twitter connector is an external elizaOS plugin that bridges your agent to Twitter/X. When available, it will be auto-enabled by the runtime when a valid token is detected in your connector configuration.
+Twitter/X integration is bundled with the **xAI provider plugin** (`@elizaos/plugin-xai`). There is no separate `@elizaos/plugin-twitter` — the xAI plugin handles both Grok model access and X platform connectivity. The connector is auto-enabled when X/Twitter OAuth credentials are detected in your connector configuration or environment variables.
 
 ## Configuration
 
-| Name | Required | Description |
-|------|----------|-------------|
-| API key | Yes | Twitter/X API key (consumer key), set via `connectors.twitter.apiKey` |
-| API secret key | Yes | API secret key (consumer secret), set via `connectors.twitter.apiSecretKey` |
-| Access token | Yes | OAuth access token, set via `connectors.twitter.accessToken` |
-| Access token secret | Yes | OAuth access token secret, set via `connectors.twitter.accessTokenSecret` |
+| Field | Value |
+|-------|-------|
+| Package | `@elizaos/plugin-xai` |
+| Config key | `connectors.twitter` |
+| Auto-enable trigger | `apiKey`, `token`, or X OAuth env vars (`X_API_KEY`, etc.) |
 
 > **Note:** Twitter credentials are read directly from the `connectors.twitter` config object by the plugin, not from environment variables.
 
@@ -50,21 +53,25 @@ To explicitly disable the connector even when a token is present:
 
 ## Setup
 
-1. Apply for a [Twitter Developer account](https://developer.twitter.com/) with API access.
-2. Create a project and app in the Twitter Developer Portal.
-3. Generate API key, API secret key, access token, and access token secret.
-4. Add the credentials to `connectors.twitter` in your config as shown below.
-5. Start your agent -- the Twitter connector will auto-enable.
+The xAI plugin auto-enables when any of the following are set:
+- `connectors.twitter.apiKey`, `connectors.twitter.token`, or `connectors.twitter.accessToken` in your config
+- `X_API_KEY`, `XAI_API_KEY`, or `GROK_API_KEY` environment variables
+- `enabled` is not explicitly `false`
 
-## Features
+## Environment Variables
 
-- Automated posting at configurable intervals
-- Mention monitoring and auto-response
-- Action processing (like, retweet, quote)
-- Keyword search monitoring
-- DM policy configuration
-- Dry run mode for testing
-- Configurable timeline algorithm (weighted or latest)
+The xAI plugin reads Twitter credentials from both environment variables (`X_API_KEY`, `X_API_SECRET`, `X_ACCESS_TOKEN`, `X_ACCESS_TOKEN_SECRET`) and the `connectors.twitter` config object. You can use either approach.
+
+| Variable | Description |
+|----------|-------------|
+| `X_API_KEY` | Twitter consumer API key |
+| `X_API_SECRET` | Twitter consumer API secret |
+| `X_ACCESS_TOKEN` | OAuth access token |
+| `X_ACCESS_TOKEN_SECRET` | OAuth access token secret |
+| `X_AUTH_MODE` | `api_key` (default) or `oauth` |
+| `X_ENABLE_POST` | Enable autonomous posting |
+| `X_ENABLE_REPLIES` | Enable mention replies |
+| `X_ENABLE_ACTIONS` | Enable like/retweet/quote |
 
 ## Full Configuration Reference
 
@@ -143,6 +150,6 @@ The posting interval is calculated as a random value between `postIntervalMin` a
 
 ## Related
 
-- [Twitter plugin reference](/plugin-registry/platform/twitter)
+- [xAI plugin reference](/plugin-registry/llm/xai)
 - [Connectors overview](/guides/connectors)
 - [Configuration reference](/configuration)

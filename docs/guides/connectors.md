@@ -1,7 +1,7 @@
 ---
 title: "Platform Connectors"
 sidebarTitle: "Connectors"
-description: "Platform bridges for 24 messaging and communication platforms — 16 auto-enabled from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, ACP) plus 8 installable from the registry (BlueBubbles, Bluesky, Instagram, LINE, Zalo, Zalo User, Nextcloud Talk, Tlon). GitHub, Gmail Watch, and Twilio are also available as feature plugins."
+description: "Platform bridges for 23+ messaging platforms — auto-enabled from config or installable from the registry."
 ---
 
 Connectors are platform bridges that allow your agent to communicate across messaging platforms and social networks. Each connector handles authentication, message routing, session management, and platform-specific features.
@@ -57,13 +57,14 @@ Connectors marked **Auto** load automatically when their config is present in `m
 | iMessage | Native CLI (macOS) | Yes | Yes | Yes | Auto |
 | Microsoft Teams | App ID + password | Yes | Yes (teams/channels) | No | Auto |
 | Google Chat | Service account | Yes | Yes (spaces) | Yes | Auto |
-| ACP | Gateway token + password | Yes | Yes | No | Auto |
+| Twitter/X | API keys + tokens (via xAI plugin) | DMs | N/A | No | Auto (bundled with xAI) |
 | Farcaster | Neynar API key + signer | Casts | Yes (channels) | No | Auto |
 | Twitch | Client ID + access token | Yes (chat) | Yes (channels) | No | Auto |
 | Mattermost | Bot token | Yes | Yes (channels) | No | Auto |
 | Matrix | Access token | Yes | Yes (rooms) | No | Auto |
 | Feishu / Lark | App ID + secret | Yes | Yes (group chats) | No | Auto |
 | Nostr | Private key (nsec/hex) | Yes (NIP-04) | N/A | No | Auto |
+| Lens | API key | Yes | N/A | No | Registry |
 | BlueBubbles | Server password | Yes | Yes | No | Registry |
 | Bluesky | Account credentials | Posts | N/A | No | Registry |
 | Instagram | Username + password | DMs | N/A | No | Registry |

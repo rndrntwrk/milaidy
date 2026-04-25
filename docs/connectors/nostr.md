@@ -18,22 +18,7 @@ Connect your agent to Nostr for relay-based social posting and conversations usi
 
 The connector auto-enables when `token`, `botToken`, or `apiKey` is truthy in the connector config. Environment variables alone do not trigger auto-enable.
 
-Configure in `~/.milady/milady.json`:
-
-```json
-{
-  "env": {
-    "NOSTR_PRIVATE_KEY": "nsec1your_private_key_here"
-  },
-  "connectors": {
-    "nostr": {
-      "token": "placeholder"
-    }
-  }
-}
-```
-
-Alternatively, add the plugin to `plugins.allow` explicitly:
+Add the plugin to `plugins.allow` and set your private key:
 
 ```json
 {
@@ -46,7 +31,9 @@ Alternatively, add the plugin to `plugins.allow` explicitly:
 }
 ```
 
-To disable:
+The generic auto-enable trigger fields (`token`, `botToken`, `apiKey`) also work if set in `connectors.nostr`, but the explicit `plugins.allow` approach above is clearer since Nostr uses a private key rather than a token.
+
+## Disabling
 
 ```json
 {

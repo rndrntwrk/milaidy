@@ -4,13 +4,13 @@ sidebarTitle: "Together AI"
 description: "Together AI model provider for Milady — access open-source models via Together's high-performance inference platform."
 ---
 
-> **Not in plugin registry.** `@elizaos/plugin-together` is not registered in `plugins.json`. This plugin may not be installable via `milady plugins install`. Access Together-hosted models via [OpenRouter](/plugin-registry/llm/openrouter) instead.
+<Warning>
+This plugin is not yet available in the Milady plugin registry. To use Together AI models today, configure them through the [OpenRouter plugin](/plugin-registry/llm/openrouter) using the appropriate model ID.
+</Warning>
 
 The Together AI plugin connects Milady agents to Together's inference platform, providing access to a wide catalog of open-source models with competitive pricing and fast inference.
 
-> **Availability:** This plugin is not in the default Milady plugin registry. Install it directly with `milady plugins install together` or `milady plugins install @elizaos/plugin-together`.
-
-**Package:** `@elizaos/plugin-together`
+**Package:** `@elizaos/plugin-together` (not yet published)
 
 > **Availability:** This plugin is not in the bundled registry (`plugins.json`). It is available from the remote elizaOS plugin registry and auto-enables when `TOGETHER_API_KEY` is set.
 

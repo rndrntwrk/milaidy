@@ -35,18 +35,9 @@ Configure in `~/.milady/milady.json`:
 }
 ```
 
-<Note>
-Use the `token` field in your config. While `botToken` or `apiKey` also trigger auto-enable detection, `token` is the canonical schema field and is what the plugin reads at runtime.
-</Note>
-
-## Setup
-
-1. Go to the [Discord Developer Portal](https://discord.com/developers/applications) and create a new application.
-2. Under **Bot**, create a bot and copy the **Token**.
-3. Under **OAuth2 > URL Generator**, select `bot` scope and the permissions your agent needs.
-4. Use the generated URL to add the bot to your server.
-5. Add the token to `connectors.discord.token` in your config.
-6. Start your agent -- the Discord connector will auto-enable.
+<Warning>
+Use the `token` field. While `botToken` and `apiKey` also trigger auto-enable detection, `token` is the canonical config key that passes schema validation.
+</Warning>
 
 ## Disabling the Connector
 

@@ -4,7 +4,9 @@ sidebarTitle: "SQL"
 description: "Database layer — SQLite adapter, schema, migrations, query interface, and memory persistence."
 ---
 
-> **Not in plugin registry.** `@elizaos/plugin-sql` is not separately registered in `plugins.json`. It is a core plugin that is always loaded by the runtime.
+<Warning>
+SQL/database support is a built-in runtime capability, not a standalone installable plugin. The runtime handles database connections automatically.
+</Warning>
 
 The SQL plugin is the database layer for Milady agents. It provides persistent storage for conversation memory, entity data, knowledge embeddings, and agent state.
 
