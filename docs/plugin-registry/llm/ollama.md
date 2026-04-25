@@ -46,7 +46,7 @@ milady plugins install ollama
 
 ## Auto-Enable
 
-The plugin auto-enables when `OLLAMA_BASE_URL` is present:
+The plugin auto-enables when `OLLAMA_BASE_URL` is set:
 
 ```bash
 export OLLAMA_BASE_URL=http://localhost:11434
@@ -56,14 +56,13 @@ export OLLAMA_BASE_URL=http://localhost:11434
 
 | Environment Variable | Required | Description |
 |---------------------|----------|-------------|
-| `OLLAMA_BASE_URL` | No | Ollama server URL; triggers auto-enable via `AUTH_PROVIDER_PLUGINS` (default: `http://localhost:11434`) |
-| `OLLAMA_API_ENDPOINT` | No | Plugin API endpoint (default: `http://localhost:11434/api`) |
-| `OLLAMA_SMALL_MODEL` | No | Small model slot (e.g., `llama3.2:3b`) |
-| `OLLAMA_MEDIUM_MODEL` | No | Medium model slot (e.g., `llama3.2`) |
-| `OLLAMA_LARGE_MODEL` | No | Large model slot (e.g., `llama3.3:70b`) |
-| `OLLAMA_EMBEDDING_MODEL` | No | Embedding model (e.g., `nomic-embed-text`) |
-
-> **Note:** The `envKey` in `plugins.json` is `null` for Ollama because it has no API key. Auto-enable is handled by the `AUTH_PROVIDER_PLUGINS` map which triggers on `OLLAMA_BASE_URL`.
+| `OLLAMA_BASE_URL` | Yes | Ollama server URL — triggers auto-enable (default: `http://localhost:11434`) |
+| `OLLAMA_API_ENDPOINT` | No | Ollama API endpoint used internally by the plugin (default: `http://localhost:11434/api`) |
+| `OLLAMA_SMALL_MODEL` | No | Small model name (default: `gemma3:latest`) |
+| `OLLAMA_LARGE_MODEL` | No | Large model name (default: `gemma3:latest`) |
+| `OLLAMA_EMBEDDING_MODEL` | No | Embedding model name (default: `nomic-embed-text:latest`) |
+| `SMALL_MODEL` | No | Fallback small model if `OLLAMA_SMALL_MODEL` is not set |
+| `LARGE_MODEL` | No | Fallback large model if `OLLAMA_LARGE_MODEL` is not set |
 
 ### milady.json Example
 
@@ -102,12 +101,12 @@ Browse all available models at [ollama.com/library](https://ollama.com/library).
 
 | elizaOS Model Type | Default Ollama Model |
 |-------------------|---------------------|
-| `TEXT_SMALL` | `llama3.2` (3B) |
-| `TEXT_LARGE` | `llama3.3` (70B) |
-| `TEXT_EMBEDDING` | `nomic-embed-text` |
+| `TEXT_SMALL` | `gemma3:latest` |
+| `TEXT_LARGE` | `gemma3:latest` |
+| `TEXT_EMBEDDING` | `nomic-embed-text:latest` |
 | `IMAGE_DESCRIPTION` | `llava` (if installed) |
 
-Override defaults in your auth profile:
+Override defaults via environment variables or in your auth profile:
 
 ```json
 {
@@ -115,8 +114,8 @@ Override defaults in your auth profile:
     "profiles": {
       "default": {
         "provider": "ollama",
-        "model": "mistral",
-        "modelSmall": "llama3.2:3b"
+        "model": "llama3.3",
+        "modelSmall": "gemma3:4b"
       }
     }
   }

@@ -9,7 +9,7 @@ description: "Set up Milady as a Discord bot with step-by-step instructions for 
 This tutorial walks you through creating and configuring Milady to run as a Discord bot. By the end, you'll have a fully functional AI assistant responding to messages in your Discord server.
 
 <Info>
-Milady uses the Discord plugin to interact with Discord servers. This guide assumes you have Milady installed locally and basic familiarity with Discord's developer portal.
+Milady uses the `@elizaos/plugin-discord` connector to interact with Discord servers. This guide assumes you have Milady installed locally and basic familiarity with Discord's developer portal.
 </Info>
 
 ## Prerequisites
@@ -50,18 +50,21 @@ If your token is ever exposed, regenerate it immediately by clicking **Regenerat
 </Step>
 
 <Step title="Configure milady.json">
-1. Open `~/.milady/milady.json` (or create it if it does not exist)
+1. Open your Milady config file (run `milady config path` to find it, typically `~/.milady/milady.json`)
 2. Add the Discord connector configuration:
 
 ```json
 {
-  // ... existing config ...
-  connectors: {
-    discord: {
-      enabled: true,
-      botToken: "YOUR_BOT_TOKEN_HERE",
-    },
-  },
+  "connectors": {
+    "discord": {
+      "enabled": true,
+      "token": "YOUR_BOT_TOKEN_HERE",
+      "dm": {
+        "enabled": true,
+        "policy": "pairing"
+      }
+    }
+  }
 }
 ```
 
@@ -70,21 +73,20 @@ If your token is ever exposed, regenerate it immediately by clicking **Regenerat
 5. Save the file
 
 <Info>
-The Discord plugin auto-enables when `connectors.discord.botToken` is set. You do not need to add it to a plugin allowlist. Enable `Message Content Intent` in the Discord Developer Portal so the bot can read message text.
+The Discord connector auto-enables when `token` is present in the config. Make sure to enable the `MESSAGE_CONTENT` intent in the Discord Developer Portal under **Bot > Privileged Gateway Intents**.
 </Info>
 
 </Step>
 
-<Step title="Verify the Plugin Loads">
-1. Open your terminal
-2. Run the following command to verify plugins are recognized:
+<Step title="Verify the Discord Plugin">
+1. Open your terminal and run the following command to verify the plugin is recognized:
 
 ```bash
-milady plugins
+milady plugins installed
 ```
 
-3. Confirm that `discord` appears in the list
-4. Check `milady.json` to ensure `botToken` is set under `connectors.discord`
+2. Confirm that `discord` appears in the list of installed plugins
+3. Check `milady.json` to ensure the `token` field is set under `connectors.discord`
 
 </Step>
 
@@ -119,7 +121,7 @@ milady start
 2. You should see output confirming the Discord connector has connected
 3. In your Discord server, send a message to your bot:
    - Direct message: `Hello bot`
-   - In a channel: `@YourBot hello` (mention the bot)
+   - In a channel: `@YourBotName hello bot` (mention the bot)
 
 4. Your bot should respond with an AI-generated message
 5. Test a few more interactions to confirm everything is working
@@ -132,8 +134,8 @@ milady start
 
 Before considering your setup complete:
 
-- [ ] Bot token is securely stored in `~/.milady/milady.json` under `connectors.discord.botToken`
-- [ ] Discord connector shows as enabled
+- [ ] Bot token is securely stored in `milady.json` under `connectors.discord.token`
+- [ ] Discord connector shows as connected in the console output
 - [ ] Bot appears online in your Discord server
 - [ ] Bot responds to direct messages
 - [ ] Bot responds to channel messages (if configured)
@@ -144,24 +146,24 @@ Before considering your setup complete:
 <AccordionGroup>
 
 <Accordion title="Bot appears offline in Discord">
-This usually means the Discord plugin didn't connect successfully.
+This usually means the Discord connector didn't connect successfully.
 
 **Solutions:**
 1. Verify your bot token is correct and hasn't expired
-2. Check that `botToken` is set under `connectors.discord` in `milady.json`
-3. Ensure `Message Content Intent` is enabled in the Discord Developer Portal
+2. Check that `token` is set under `connectors.discord` in `milady.json`
+3. Ensure the `MESSAGE_CONTENT` privileged intent is enabled in the Discord Developer Portal
 4. Run `milady start` and look for error messages in the console
-5. Regenerate your bot token if it may have been revoked
+5. Regenerate your bot token if it's been compromised or auto-revoked
 </Accordion>
 
 <Accordion title="Bot doesn't respond to messages">
 If your bot is online but not responding:
 
 **Solutions:**
-1. Check that `Message Content Intent` is enabled in the Discord Developer Portal
+1. Check that `MESSAGE_CONTENT` intent is enabled in the Discord Developer Portal under **Bot > Privileged Gateway Intents**
 2. Verify the bot has permission to see and send messages in the channel
 3. Check the Milady console for error messages
-4. Ensure your Discord server is not blocked by `groupPolicy` settings in `milady.json`
+4. If using `groupPolicy: "allowlist"`, ensure the server/channel IDs are listed in the `guilds` config
 5. Try restarting Milady with `Ctrl+C` followed by `milady start`
 </Accordion>
 
@@ -188,14 +190,13 @@ Discord limits how many messages bots can send:
 </Accordion>
 
 <Accordion title="Slash commands not showing up">
-If you've configured slash commands but they're not appearing:
+If slash commands aren't appearing:
 
 **Solutions:**
-1. Ensure the `applications.commands` scope is included in the OAuth2 URL
-2. Ensure the bot has `Use Slash Commands` permission in the server
-3. Restart Milady after configuration changes
-4. In Discord, type `/` in a message box and wait 1-2 seconds for commands to appear
-5. If still missing, re-invite the bot using your updated authorization URL
+1. Ensure the `Use Slash Commands` scope is included in your bot's OAuth2 invite URL
+2. Restart Milady after making any configuration changes
+3. In Discord, type `/` in a message box and wait 1-2 seconds for commands to appear
+4. If still missing, re-invite the bot using an updated authorization URL with the `applications.commands` scope
 </Accordion>
 
 </AccordionGroup>

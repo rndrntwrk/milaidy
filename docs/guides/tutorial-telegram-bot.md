@@ -111,7 +111,22 @@ Click **Advanced** to expand additional settings:
 
 ## Configuration via milady.json
 
-You can also configure the Telegram connector directly in `~/.milady/milady.json`:
+You can also configure the Telegram connector directly in `~/.milady/milady.json`. The recommended approach uses the `connectors` section:
+
+```json
+{
+  "connectors": {
+    "telegram": {
+      "enabled": true,
+      "botToken": "123456789:ABCdefGHIjklmNOpqrsTUVwxyzABC-defGHI",
+      "dmPolicy": "pairing",
+      "groupPolicy": "allowlist"
+    }
+  }
+}
+```
+
+Alternatively, set the token as an environment variable:
 
 ```json5
 {
@@ -207,7 +222,7 @@ milady start
 ## Next Steps
 
 - **[Connectors Guide](/guides/connectors)** — Overview of all available connectors
-- **[Configuration Guide](/guides/config-templates)** — Advanced configuration options
+- **[Telegram Connector Reference](/connectors/telegram)** — Advanced Telegram configuration options
 - **[Deployment Guide](/deployment)** — Deploy your bot to production
 
 ## Need Help?
