@@ -28,7 +28,7 @@ index 74c284e2df..60998fdf58 100644
 @@ -147,14 +147,31 @@ wait_for_notary_acceptance() {
    return 1
  }
- 
+
 -TARBALL_PATH="$(find -L "$ARTIFACTS_DIR" -maxdepth 1 -type f -name "*-macos-*.app.tar.zst" | sort | head -1)"
 +TARBALL_PATH=""
 +for tarball_pattern in "*-macos-*.app.tar.zst" "*-macos-*.app.tar.gz" "*-macos-*.tar.gz"; do
@@ -41,7 +41,7 @@ index 74c284e2df..60998fdf58 100644
    echo "stage-macos-release-artifacts: no macOS updater tarball found in $ARTIFACTS_DIR"
    exit 1
  fi
- 
+
  echo "Using updater tarball: $TARBALL_PATH"
 -tar --zstd -xf "$TARBALL_PATH" -C "$EXTRACT_DIR"
 +case "$TARBALL_PATH" in
@@ -56,13 +56,13 @@ index 74c284e2df..60998fdf58 100644
 +    exit 1
 +    ;;
 +esac
- 
+
  APP_BUNDLE_PATH="$(find "$EXTRACT_DIR" -maxdepth 2 -type d -name "*.app" | sort | head -1)"
  if [[ -z "$APP_BUNDLE_PATH" ]]; then
 @@ -243,7 +260,22 @@ else
    echo "Skipping staged app signature verification (unsigned/local build)."
  fi
- 
+
 -FINAL_DMG_NAME="$(basename "${TARBALL_PATH%.app.tar.zst}.dmg")"
 +TARBALL_BASENAME="$(basename "$TARBALL_PATH")"
 +case "$TARBALL_BASENAME" in
@@ -90,12 +90,12 @@ index 3a9b0beb88..b7c3bd0b35 100644
 @@ -19,7 +19,7 @@ vi.mock("../../../../src/services/steward-sidecar", () => ({
    })),
  }));
- 
+
 -vi.mock("@elizaos/app-steward/services/steward-credentials", () => ({
 +vi.mock("../../../../src/services/steward-credentials", () => ({
    saveStewardCredentials: saveStewardCredentialsMock,
  }));
- 
+
 diff --git a/packages/app-core/platforms/electrobun/src/native/steward.ts b/packages/app-core/platforms/electrobun/src/native/steward.ts
 index 149d5e6be6..bf80c208ca 100644
 --- a/packages/app-core/platforms/electrobun/src/native/steward.ts
@@ -107,7 +107,7 @@ index 149d5e6be6..bf80c208ca 100644
 -import { saveStewardCredentials } from "@elizaos/app-steward/services/steward-credentials";
 +import { saveStewardCredentials } from "../../../../src/services/steward-credentials";
  import { getBrandConfig } from "../brand-config";
- 
+
  // ---------------------------------------------------------------------------
 diff --git a/packages/app-core/scripts/audit-live-test-surface.mjs b/packages/app-core/scripts/audit-live-test-surface.mjs
 index 8652a766ac..c6257d3430 100644
@@ -130,12 +130,12 @@ index 8652a766ac..c6257d3430 100644
    },
  ];
 +const ALLOW_ROUTE_FIXTURE_MARKER = "@milady-live-audit allow-route-fixtures";
- 
+
  function findRepoRoot(startDir) {
    let currentDir = startDir;
 @@ -326,7 +330,9 @@ async function analyzeRoot(root) {
      }
- 
+
      const text = await fsp.readFile(absPath, "utf8");
 -    const stubCounts = countMatches(text, STUB_PATTERNS);
 +    const stubCounts = text.includes(ALLOW_ROUTE_FIXTURE_MARKER)
@@ -156,7 +156,7 @@ index 8652a766ac..c6257d3430 100644
    }
    if (harnessBlockers.length > 0) {
 @@ -514,6 +522,9 @@ function renderHumanReport(report) {
- 
+
  const roots = [];
  for (const root of ROOTS) {
 +  if (!fs.existsSync(root.dir)) {
@@ -164,7 +164,7 @@ index 8652a766ac..c6257d3430 100644
 +  }
    roots.push(await analyzeRoot(root));
  }
- 
+
 diff --git a/packages/app-core/scripts/build-patched-electrobun-cli.mjs b/packages/app-core/scripts/build-patched-electrobun-cli.mjs
 index 54eea37026..18df9837c7 100644
 --- a/packages/app-core/scripts/build-patched-electrobun-cli.mjs
@@ -180,7 +180,7 @@ index 54eea37026..18df9837c7 100644
 @@ -62,6 +63,50 @@ function writeGitHubEnv(name, value) {
    appendFileSync(process.env.GITHUB_ENV, `${name}=${value}\n`);
  }
- 
+
 +function defaultTargetKey() {
 +  if (process.platform === "darwin") {
 +    return process.arch === "arm64" ? "macos-arm64" : "macos-x64";
@@ -230,7 +230,7 @@ index 54eea37026..18df9837c7 100644
    if (anchorIndex === -1) {
 @@ -73,19 +118,17 @@ function insertAfterAnchor(source, anchor, insertion, label) {
  }
- 
+
  export function patchCliSourceText(original) {
 -  if (
 -    original.includes(
@@ -246,7 +246,7 @@ index 54eea37026..18df9837c7 100644
 +  const hasRceditOverride = original.includes(
 +    'const overridePackageJson = process.env["ELECTROBUN_RCEDIT_PACKAGE_JSON"];',
 +  );
- 
+
 -  if (!patched.includes('import { createRequire } from "module";')) {
 +  if (
 +    !hasRceditOverride &&
@@ -258,7 +258,7 @@ index 54eea37026..18df9837c7 100644
 @@ -96,7 +139,7 @@ export function patchCliSourceText(original) {
      );
    }
- 
+
 -  if (!patched.includes("async function importRcedit()")) {
 +  if (!hasRceditOverride && !patched.includes("async function importRcedit()")) {
      patched = insertAfterAnchor(
@@ -267,7 +267,7 @@ index 54eea37026..18df9837c7 100644
 @@ -121,24 +164,129 @@ export function patchCliSourceText(original) {
      );
    }
- 
+
 -  const replacements = patched.match(
 -    /const rcedit = \(await import\("rcedit"\)\)\.default;/g,
 -  );
@@ -289,7 +289,7 @@ index 54eea37026..18df9837c7 100644
 +      "const rcedit = await importRcedit();",
      );
    }
- 
+
 -  patched = patched.replaceAll(
 -    'const rcedit = (await import("rcedit")).default;',
 -    "const rcedit = await importRcedit();",
@@ -298,7 +298,7 @@ index 54eea37026..18df9837c7 100644
    if (!patched.includes("async function importRcedit()")) {
      throw new Error("importRcedit helper was not inserted");
    }
- 
+
 +  if (!patched.includes("[electrobun-build] Bun entry:")) {
 +    const bunBuildStart = [
 +      '		const buildResult = await Bun.build({',
@@ -404,7 +404,7 @@ index 54eea37026..18df9837c7 100644
 +
    return patched;
  }
- 
+
 @@ -175,6 +323,7 @@ function main() {
    const installedElectrobunDir = process.argv[2]
      ? path.resolve(process.argv[2])
@@ -447,7 +447,7 @@ index 54eea37026..18df9837c7 100644
 +      "[build-patched-electrobun-cli] rcedit package not present; continuing for non-Windows target",
 +    );
 +  }
- 
+
    const tempRoot = path.join(
      process.env.RUNNER_TEMP ?? os.tmpdir(),
 @@ -239,7 +404,7 @@ function main() {
@@ -481,7 +481,7 @@ index 54eea37026..18df9837c7 100644
 -    "electrobun.exe",
 +    `electrobun${buildTarget.binExt}`,
    );
- 
+
    mkdirSync(path.dirname(installedBinPath), { recursive: true });
    mkdirSync(path.dirname(installedCachePath), { recursive: true });
    copyFileSync(compiledCliPath, installedBinPath);
@@ -490,7 +490,7 @@ index 54eea37026..18df9837c7 100644
 +    chmodSync(installedBinPath, 0o755);
 +    chmodSync(installedCachePath, 0o755);
 +  }
- 
+
    console.log(
      `[build-patched-electrobun-cli] Installed patched CLI to ${installedBinPath}`,
 diff --git a/packages/app-core/scripts/playwright-ui-smoke-api-stub.mjs b/packages/app-core/scripts/playwright-ui-smoke-api-stub.mjs
@@ -500,7 +500,7 @@ index b130d993dd..00a4e4a827 100644
 @@ -638,6 +638,83 @@ function streamSettings(payload = {}) {
    };
  }
- 
+
 +function emptyLifeOpsScreenTimeSummary() {
 +  return {
 +    items: [],
@@ -609,7 +609,7 @@ index b130d993dd..00a4e4a827 100644
      });
      return;
    }
- 
+
 +  if (
 +    req.method === "GET" &&
 +    url.pathname === "/api/lifeops/connectors/google/accounts"
@@ -746,7 +746,7 @@ index 099d7e91a7..c561db8b95 100755
 +++ b/packages/app-core/scripts/run-release-contract-suite.mjs
 @@ -6,16 +6,27 @@ const APP_CORE_ROOT = path.resolve(import.meta.dirname, "..");
  const REPO_ROOT = path.resolve(APP_CORE_ROOT, "..", "..", "..");
- 
+
  const releaseContractTests = [
 -  "eliza/packages/app-core/scripts/asset-cdn.test.ts",
 -  "eliza/packages/app-core/scripts/docker-contract.test.ts",
@@ -762,7 +762,7 @@ index 099d7e91a7..c561db8b95 100755
    "eliza/packages/app-core/scripts/release-check.test.ts",
    "eliza/packages/app-core/scripts/static-asset-manifest.test.ts",
  ];
- 
+
 +const missingReleaseContractTests = releaseContractTests.filter(
 +  (testPath) => !fs.existsSync(path.join(REPO_ROOT, testPath)),
 +);
@@ -779,7 +779,7 @@ index 099d7e91a7..c561db8b95 100755
      cwd,
 @@ -33,11 +44,15 @@ function run(command, args, cwd = APP_CORE_ROOT) {
  }
- 
+
  run("bunx", ["vitest", "run", ...releaseContractTests], REPO_ROOT);
 -run("bunx", [
 -  "vitest",
@@ -795,7 +795,7 @@ index 099d7e91a7..c561db8b95 100755
 +  ],
 +  REPO_ROOT,
 +);
- 
+
  // tsdown and the release check both resolve repo-root-relative entries/config.
  run("bunx", ["tsdown", "--fail-on-warn", "false"], REPO_ROOT);
 diff --git a/packages/app-core/src/components/pages/TerminalChannelPanel.test.tsx b/packages/app-core/src/components/pages/TerminalChannelPanel.test.tsx
@@ -808,7 +808,7 @@ index 1fc3db564f..3bd7202380 100644
    TypingIndicator: () => null,
 +  useIntervalWhenDocumentVisible: () => {},
  }));
- 
+
  vi.mock("../../state/ChatComposerContext", () => ({
 diff --git a/packages/app-core/src/components/settings/AppearanceSettingsSection.tsx b/packages/app-core/src/components/settings/AppearanceSettingsSection.tsx
 index f4aaa5dba9..2854b16dc6 100644
@@ -1008,3 +1008,184 @@ index 03fcf79243..711c1d4fbc 100644
 +        {description ? (
 +          <div className="text-xs-tight text-muted">{description}</div>
 +        ) : null}
+diff --git a/apps/app-lifeops/test/selfcontrol-desktop.live.e2e.test.ts b/apps/app-lifeops/test/selfcontrol-desktop.live.e2e.test.ts
+index 43ec323125..5b4de02384 100644
+--- a/apps/app-lifeops/test/selfcontrol-desktop.live.e2e.test.ts
++++ b/apps/app-lifeops/test/selfcontrol-desktop.live.e2e.test.ts
+@@ -23,6 +23,7 @@ type DesktopMode = "dev:desktop" | "dev:desktop:watch";
+ type StartedDesktopStack = {
+   apiPort: number;
+   close: () => Promise<void>;
++  desktopBridgePort: number;
+   getLogTail: () => string;
+   hostsFilePath: string;
+   uiPort: number;
+@@ -97,13 +98,14 @@ async function waitForJsonPredicate<T>(
+   url: string,
+   predicate: (value: T) => boolean,
+   timeoutMs = 240_000,
++  requestInit?: RequestInit,
+ ): Promise<T> {
+   const deadline = Date.now() + timeoutMs;
+   let lastError: unknown = null;
+
+   while (Date.now() < deadline) {
+     try {
+-      const response = await fetch(url);
++      const response = await fetch(url, requestInit);
+       if (!response.ok) {
+         throw new Error(`Request failed (${response.status}): ${url}`);
+       }
+@@ -155,6 +157,23 @@ async function waitForTextPredicate(
+     : new Error(`Timed out waiting for ${url}`);
+ }
+
++async function waitForDesktopBridgeHealth(
++  port: number,
++  token: string,
++  timeoutMs = 240_000,
++): Promise<void> {
++  await waitForJsonPredicate<{ ok?: boolean }>(
++    `http://127.0.0.1:${port}/health`,
++    (value) => value.ok === true,
++    timeoutMs,
++    {
++      headers: {
++        Authorization: `Bearer ${token}`,
++      },
++    },
++  );
++}
++
+ async function waitForHostsBlock(
+   hostsFilePath: string,
+   websites: string[],
+@@ -211,6 +230,8 @@ async function startDesktopStack(
+   const hostsFilePath = path.join(tempRoot, "hosts");
+   const apiPort = await getFreePort();
+   const uiPort = await getFreePort();
++  const desktopBridgePort = await getFreePort();
++  const desktopBridgeToken = `desktop-smoke-${desktopBridgePort}`;
+   const logs: string[] = [];
+
+   await mkdir(stateDir, { recursive: true });
+@@ -240,6 +261,9 @@ async function startDesktopStack(
+       ELIZA_DISABLE_LIFEOPS_SCHEDULER: "1",
+       ELIZA_DISABLE_LOCAL_EMBEDDINGS: "1",
+       ELIZA_DISABLE_PROACTIVE_AGENT: "1",
++      ELIZA_DESKTOP_TEST_BRIDGE_ENABLED: "1",
++      ELIZA_DESKTOP_TEST_BRIDGE_PORT: String(desktopBridgePort),
++      ELIZA_DESKTOP_TEST_BRIDGE_TOKEN: desktopBridgeToken,
+       ELIZA_API_PORT: String(apiPort),
+       ELIZA_PORT: String(uiPort),
+       ELIZA_UI_PORT: String(uiPort),
+@@ -288,6 +312,8 @@ async function startDesktopStack(
+       (text) => text.includes("[electrobun]") || text.includes("[api]"),
+     );
+
++    await waitForDesktopBridgeHealth(desktopBridgePort, desktopBridgeToken);
++
+     await sleep(2_000);
+     if (child.exitCode != null) {
+       throw new Error(
+@@ -308,6 +334,7 @@ async function startDesktopStack(
+
+   return {
+     apiPort,
++    desktopBridgePort,
+     getLogTail: () => logs.join("").slice(-16_000),
+     hostsFilePath,
+     uiPort,
+diff --git a/packages/app-core/platforms/electrobun/src/index.ts b/packages/app-core/platforms/electrobun/src/index.ts
+index 66347845e6..9c0a6850d0 100644
+--- a/packages/app-core/platforms/electrobun/src/index.ts
++++ b/packages/app-core/platforms/electrobun/src/index.ts
+@@ -41,6 +41,7 @@ import {
+   resolveBootstrapViewRenderer,
+   resolveMainWindowPartition,
+   shouldForceMainWindowCef,
++  shouldUseHeadlessDesktopSmoke,
+ } from "./main-window-session";
+ import {
+   buildMainMenuResetApiCandidates,
+@@ -1866,6 +1867,19 @@ async function main(): Promise<void> {
+     }),
+   );
+
++  if (shouldUseHeadlessDesktopSmoke(process.env)) {
++    console.log(
++      "[Main] Headless desktop smoke mode enabled; skipping native BrowserWindow creation.",
++    );
++    const stopScreenshotDevServer = startScreenshotDevServer();
++    if (stopScreenshotDevServer) {
++      cleanupFns.push(stopScreenshotDevServer);
++    }
++    cleanupFns.push(() => getAgentManager().stop());
++    setupShutdown();
++    return;
++  }
++
+   // Create window first — on Windows (CEF) the UI message loop must be
+   // running before any synchronous FFI calls like setApplicationMenu().
+   // Calling setupApplicationMenu() before createMainWindow() deadlocks.
+diff --git a/packages/app-core/platforms/electrobun/src/main-window-session.test.ts b/packages/app-core/platforms/electrobun/src/main-window-session.test.ts
+new file mode 100644
+--- /dev/null
++++ b/packages/app-core/platforms/electrobun/src/main-window-session.test.ts
+@@ -0,0 +1,34 @@
++import { describe, expect, it } from "vitest";
++import { shouldUseHeadlessDesktopSmoke } from "./main-window-session";
++
++describe("shouldUseHeadlessDesktopSmoke", () => {
++  it("is disabled by default", () => {
++    expect(shouldUseHeadlessDesktopSmoke({})).toBe(false);
++  });
++
++  it("accepts the elizaOS smoke env flag", () => {
++    expect(
++      shouldUseHeadlessDesktopSmoke({
++        ELIZA_DESKTOP_HEADLESS_SMOKE: "1",
++      }),
++    ).toBe(true);
++  });
++
++  it("accepts the Milady smoke env flag", () => {
++    expect(
++      shouldUseHeadlessDesktopSmoke({
++        MILADY_DESKTOP_HEADLESS_SMOKE: "true",
++      }),
++    ).toBe(true);
++  });
++
++  it("treats explicit off values as disabled", () => {
++    for (const value of ["0", "false", "no", "off"]) {
++      expect(
++        shouldUseHeadlessDesktopSmoke({
++          MILADY_DESKTOP_HEADLESS_SMOKE: value,
++        }),
++      ).toBe(false);
++    }
++  });
++});
+diff --git a/packages/app-core/platforms/electrobun/src/main-window-session.ts b/packages/app-core/platforms/electrobun/src/main-window-session.ts
+index bdcbdddbf3..ebfbcbb7f6 100644
+--- a/packages/app-core/platforms/electrobun/src/main-window-session.ts
++++ b/packages/app-core/platforms/electrobun/src/main-window-session.ts
+@@ -46,6 +46,17 @@ export function shouldForceMainWindowCef(
+   return parseEnabledFlag(trimToNull(env.ELIZA_DESKTOP_FORCE_CEF));
+ }
+
++export function shouldUseHeadlessDesktopSmoke(
++  env: NodeJS.ProcessEnv = process.env,
++): boolean {
++  return parseEnabledFlag(
++    trimToNull(
++      env.ELIZA_DESKTOP_HEADLESS_SMOKE ??
++        env.MILADY_DESKTOP_HEADLESS_SMOKE,
++    ),
++  );
++}
++
+ export function resolveMainWindowPartition(
+   env: NodeJS.ProcessEnv = process.env,
+ ): string | null {

@@ -223,6 +223,18 @@ describe("release workflow path contract", () => {
     expect(elizaInit).toBeLessThan(trackedInit);
   });
 
+  it("keeps website blocker desktop smoke blocking through the headless Electrobun bridge", () => {
+    const workflow = readWorkflow("test.yml");
+    const desktopSmokeBlock = workflow.slice(
+      workflow.indexOf("  website-blocker-desktop-smoke:"),
+      workflow.indexOf("  ios-website-blocker-build:"),
+    );
+
+    expect(desktopSmokeBlock).toContain('MILADY_DESKTOP_HEADLESS_SMOKE: "1"');
+    expect(desktopSmokeBlock).not.toContain("continue-on-error: true");
+    expect(desktopSmokeBlock).toContain("Run website blocker desktop smokes");
+  });
+
   it("keeps plugin-agent-orchestrator submodule init as the published release-check version source", () => {
     const releaseContract = readWorkflow("test-electrobun-release.yml");
 
@@ -234,6 +246,14 @@ describe("release workflow path contract", () => {
 
   it("keeps cloud image builds aligned with the published-workspace release path", () => {
     const buildCloudImage = readWorkflow("build-cloud-image.yml");
+    const fallbackDeps = fs.readFileSync(
+      path.join(
+        repoRoot,
+        "scripts",
+        "install-published-workspace-fallback-deps.sh",
+      ),
+      "utf8",
+    );
 
     expect(buildCloudImage).toContain(
       "git submodule update --init --depth=1 eliza",
@@ -269,6 +289,18 @@ describe("release workflow path contract", () => {
     );
     expect(buildCloudImage).toContain(
       '"@elizaos/agent": "file:./eliza/packages/agent"',
+    );
+    expect(fallbackDeps).toContain(
+      ['local link_all_store_packages="', '{2:-0}"'].join("$"),
+    );
+    expect(fallbackDeps).toContain(
+      '"eliza/packages/typescript/package.json" \\\n      1',
+    );
+    expect(fallbackDeps).toContain(
+      '"eliza/packages/app-core/package.json" \\\n      1',
+    );
+    expect(fallbackDeps).toContain(
+      '"eliza/packages/agent/package.json" \\\n      1',
     );
   });
 
