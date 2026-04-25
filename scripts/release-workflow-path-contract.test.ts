@@ -432,9 +432,7 @@ describe("release workflow path contract", () => {
       patch.indexOf('selectLiveProvider("anthropic")'),
     );
     expect(patch).toContain('plugin: "@elizaos/plugin-elizacloud"');
-    expect(patch).toContain(
-      'ELIZAOS_CLOUD_ACTION_PLANNER_MODEL: largeModel',
-    );
+    expect(patch).toContain("ELIZAOS_CLOUD_ACTION_PLANNER_MODEL: largeModel");
     expect(
       agentRelease.indexOf("name: Patch Android release build compatibility"),
     ).toBeLessThan(
@@ -1003,6 +1001,15 @@ describe("release workflow path contract", () => {
     );
     expect(patch).toContain(
       "cp milady.mjs debian/elizaos-app/usr/lib/elizaos-app/elizaos-app.mjs",
+    );
+    expect(patch).toContain(
+      "install -m 644 debian/elizaos-app.service debian/elizaos-app/usr/lib/elizaos-app/elizaos-app.service",
+    );
+    expect(patch).toContain(
+      "-\tinstall -m 644 packaging/debian/elizaos-app.service debian/elizaos-app/usr/lib/elizaos-app/elizaos-app.service",
+    );
+    expect(patch).toContain(
+      "+\tinstall -m 644 debian/elizaos-app.service debian/elizaos-app/usr/lib/elizaos-app/elizaos-app.service",
     );
     expect(patch).toContain("-elizaos-app.mjs usr/lib/elizaos-app/");
     expect(

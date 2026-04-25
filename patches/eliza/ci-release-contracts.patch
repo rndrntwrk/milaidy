@@ -131,6 +131,9 @@ index 40eea15ff9..3d852ccb06 100755
 @@ -23 +24 @@ override_dh_auto_install:
 -	cp elizaos-app.mjs debian/elizaos-app/usr/lib/elizaos-app/
 +	cp milady.mjs debian/elizaos-app/usr/lib/elizaos-app/elizaos-app.mjs
+@@ -36 +37 @@ override_dh_auto_install:
+-	install -m 644 packaging/debian/elizaos-app.service debian/elizaos-app/usr/lib/elizaos-app/elizaos-app.service
++	install -m 644 debian/elizaos-app.service debian/elizaos-app/usr/lib/elizaos-app/elizaos-app.service
 diff --git a/packages/app-core/packaging/debian/install b/packages/app-core/packaging/debian/install
 index 998ae35c63..f09fae624e 100644
 --- a/packages/app-core/packaging/debian/install
