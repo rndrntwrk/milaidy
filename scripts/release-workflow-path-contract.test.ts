@@ -684,6 +684,9 @@ describe("release workflow path contract", () => {
     expect(windowsElectrobunInstallBlock).toContain(
       "@elizaos/plugin-agent-skills@alpha",
     );
+    expect(windowsElectrobunInstallBlock).toContain(
+      "@elizaos/plugin-anthropic@alpha",
+    );
     expect(windowsElectrobunInstallBlock).not.toContain(
       "PLUGIN_AGENT_SKILLS_VERSION",
     );
