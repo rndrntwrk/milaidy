@@ -1,7 +1,7 @@
 ---
 title: "Platform Connectors"
 sidebarTitle: "Connectors"
-description: "Platform bridges for 28 messaging platforms — 19 auto-enabled from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, BlueBubbles, Blooio, MS Teams, Google Chat, Twitter, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, Lens, WeChat) plus 9 installable from the registry (Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
+description: "Platform bridges for 30+ messaging platforms — 16 auto-enabled from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, ACP) plus others installable from the registry (Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon, Twitter, WeChat, Lens, Bluebubbles)."
 ---
 
 Connectors are platform bridges that allow your agent to communicate across messaging platforms and social networks. Each connector handles authentication, message routing, session management, and platform-specific features.
@@ -60,15 +60,15 @@ Connectors marked **Auto** load automatically when their config is present in `m
 | Blooio | API key + webhook | Yes | Yes | No | Auto |
 | Microsoft Teams | App ID + password | Yes | Yes (teams/channels) | No | Auto |
 | Google Chat | Service account | Yes | Yes (spaces) | Yes | Auto |
-| Twitter | API keys + tokens | DMs | N/A | No | Auto |
+| Twitter | API keys + tokens | DMs | N/A | No | Registry |
 | Farcaster | Neynar API key + signer | Casts | Yes (channels) | No | Auto |
 | Twitch | Client ID + access token | Yes (chat) | Yes (channels) | No | Auto |
 | Mattermost | Bot token | Yes | Yes (channels) | No | Auto |
-| WeChat | Proxy API key + QR code | Yes | Yes | Yes | Auto |
+| WeChat | Proxy API key + QR code | Yes | Yes | Yes | Registry |
 | Matrix | Access token | Yes | Yes (rooms) | No | Auto |
 | Feishu / Lark | App ID + secret | Yes | Yes (group chats) | No | Auto |
 | Nostr | Private key (nsec/hex) | Yes (NIP-04) | N/A | No | Auto |
-| ~~Lens~~ | — | — | — | — | Unavailable (no plugin exists) |
+| Lens | API key | Yes | N/A | No | Registry |
 | Bluesky | Account credentials | Posts | N/A | No | Registry |
 | Instagram | Username + password | DMs | N/A | No | Registry |
 | LINE | Channel access token + secret | Yes | Yes | No | Registry |
@@ -79,6 +79,8 @@ Connectors marked **Auto** load automatically when their config is present in `m
 | Gmail Watch | Service account / OAuth | N/A | N/A | No | Registry |
 | Nextcloud Talk | Server credentials | Yes | Yes (rooms) | No | Registry |
 | Tlon | Ship credentials | Yes | Yes (Urbit chats) | No | Registry |
+| ACP | Agent gateway | Yes | N/A | No | Auto |
+| Bluebubbles | API key | Yes | Yes | No | Registry |
 
 ---
 
@@ -502,6 +504,8 @@ Connects to iMessage and SMS messaging via the Blooio service with signed webhoo
 
 ## Twitter
 
+**Note:** This connector is available from the plugin registry. Install it with `milady plugins install @elizaos/plugin-twitter`.
+
 ### Setup Requirements
 
 - Twitter API v2 credentials (API key, API secret key, access token, access token secret)
@@ -744,6 +748,8 @@ Connects to iMessage and SMS messaging via the Blooio service with signed webhoo
 ---
 
 ## WeChat
+
+**Note:** This connector is available from the plugin registry. Install it with `milady plugins install @elizaos/plugin-wechat`.
 
 Connects to WeChat via a third-party proxy service using personal account login.
 
@@ -1143,7 +1149,29 @@ Gmail Watch is enabled via the `features.gmailWatch` flag or environment variabl
 
 ## Lens
 
-> **Unavailable.** The `@elizaos/plugin-lens` package does not exist in the plugin registry or npm. This connector is not currently functional. The documentation is retained for reference in case the plugin is added in the future.
+**Note:** This connector is available from the plugin registry. Install it with `milady plugins install @elizaos/plugin-lens`.
+
+**Plugin:** `@elizaos/plugin-lens`
+
+```json5
+{
+  connectors: {
+    lens: {
+      apiKey: "<LENS_API_KEY>",
+    }
+  }
+}
+```
+
+| Env Variable | Config Path |
+|-------------|-------------|
+| `LENS_API_KEY` | `connectors.lens.apiKey` |
+
+**Auto-enable triggers:** `apiKey`, `token`, or `botToken`.
+
+**Features:**
+- Lens Protocol social interactions
+- Post publishing and engagement
 
 ---
 

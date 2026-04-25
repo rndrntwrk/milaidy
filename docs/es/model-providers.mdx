@@ -20,24 +20,24 @@ Los proveedores marcados como **incluidos** están preinstalados con cada lanzam
 
 | Proveedor | Paquete del Plugin | Variable(s) de Entorno | Instalación | Notas |
 |-----------|-------------------|------------------------|----------|-------|
-| [Anthropic](https://anthropic.com) | `@elizaos/plugin-anthropic` | `ANTHROPIC_API_KEY` o `CLAUDE_API_KEY` | Bajo demanda | **Recomendado.** Modelos Claude (Opus, Sonnet, Haiku). |
-| [OpenAI](https://openai.com) | `@elizaos/plugin-openai` | `OPENAI_API_KEY` | Incluido | GPT-4o, o1, o3, GPT-4.1. |
-| [Google Gemini](https://ai.google.dev) | `@elizaos/plugin-google-genai` | `GOOGLE_API_KEY` o `GOOGLE_GENERATIVE_AI_API_KEY` | Bajo demanda | Gemini Pro, Flash, Ultra. |
-| [Google Antigravity](https://cloud.google.com/vertex-ai) | `@elizaos/plugin-google-antigravity` | `GOOGLE_CLOUD_API_KEY` | Bajo demanda | Modelos de Google Cloud / Vertex AI. |
-| [Vercel AI Gateway](https://sdk.vercel.ai) | `@elizaos/plugin-vercel-ai-gateway` | `AI_GATEWAY_API_KEY` o `AIGATEWAY_API_KEY` | Bajo demanda | Puerta de enlace unificada a múltiples proveedores. |
-| [OpenRouter](https://openrouter.ai) | `@elizaos/plugin-openrouter` | `OPENROUTER_API_KEY` | Incluido | Más de 100 modelos con una sola clave API. |
-| [Groq](https://groq.com) | `@elizaos/plugin-groq` | `GROQ_API_KEY` | Incluido | Inferencia ultrarrápida (LPU). |
-| [xAI](https://x.ai) | `@elizaos/plugin-xai` | `XAI_API_KEY` o `GROK_API_KEY` | Bajo demanda | Modelos Grok. |
-| [DeepSeek](https://deepseek.com) | `@elizaos/plugin-deepseek` | `DEEPSEEK_API_KEY` | Bajo demanda | Modelos de razonamiento y código. |
-| [Ollama](https://ollama.com) | `@elizaos/plugin-ollama` | `OLLAMA_BASE_URL` | Incluido | **Modelos locales.** No se necesita clave API. Requiere un servidor [Ollama](https://ollama.com) en ejecución. |
-| [Qwen](https://qwen.ai) | `@elizaos/plugin-qwen` | — | Bajo demanda | Modelos Qwen de Alibaba. Configurar mediante la entrada del plugin. |
-| [MiniMax](https://minimaxi.com) | `@elizaos/plugin-minimax` | — | Bajo demanda | Modelos de lenguaje MiniMax. Configurar mediante la entrada del plugin. |
-| [Together AI](https://together.ai) | `@elizaos/plugin-together` | `TOGETHER_API_KEY` | Bajo demanda | Alojamiento de modelos de código abierto. |
-| [Mistral](https://mistral.ai) | `@elizaos/plugin-mistral` | `MISTRAL_API_KEY` | Bajo demanda | Modelos Mistral y Mixtral. |
-| [Cohere](https://cohere.com) | `@elizaos/plugin-cohere` | `COHERE_API_KEY` | Bajo demanda | Modelos Command R+ y de embeddings. |
-| [Perplexity](https://perplexity.ai) | `@elizaos/plugin-perplexity` | `PERPLEXITY_API_KEY` | Bajo demanda | Generación aumentada por búsqueda. |
-| [Zai](https://homunculuslabs.com) | `@homunculuslabs/plugin-zai` | `ZAI_API_KEY` | Bajo demanda | Modelos Zai de Homunculus Labs. |
-| [Eliza Cloud](https://elizacloud.ai) | `@elizaos/plugin-elizacloud` | `ELIZAOS_CLOUD_API_KEY` | Incluido | Ruta de inferencia gestionada en la nube. Se puede seleccionar independientemente de dónde se ejecute Milady. |
+| [Anthropic](https://anthropic.com) | `@elizaos/plugin-anthropic` | `ANTHROPIC_API_KEY` o `CLAUDE_API_KEY` | No | **Recomendado.** Modelos Claude (Opus, Sonnet, Haiku). |
+| [OpenAI](https://openai.com) | `@elizaos/plugin-openai` | `OPENAI_API_KEY` | Sí | GPT-4o, o1, o3, GPT-4.1. |
+| [Google Gemini](https://ai.google.dev) | `@elizaos/plugin-google-genai` | `GOOGLE_API_KEY` o `GOOGLE_GENERATIVE_AI_API_KEY` | No | Gemini Pro, Flash, Ultra. |
+| [Google Antigravity](https://cloud.google.com/vertex-ai) | `@elizaos/plugin-google-antigravity` | `GOOGLE_CLOUD_API_KEY` | No | Modelos de Google Cloud / Vertex AI. |
+| [Vercel AI Gateway](https://sdk.vercel.ai) | `@elizaos/plugin-vercel-ai-gateway` | `AI_GATEWAY_API_KEY` o `AIGATEWAY_API_KEY` | No | Puerta de enlace unificada a múltiples proveedores. |
+| [OpenRouter](https://openrouter.ai) | `@elizaos/plugin-openrouter` | `OPENROUTER_API_KEY` | Sí | Más de 100 modelos con una sola clave API. |
+| [Groq](https://groq.com) | `@elizaos/plugin-groq` | `GROQ_API_KEY` | Sí | Inferencia ultrarrápida (LPU). |
+| [xAI](https://x.ai) | `@elizaos/plugin-xai` | `XAI_API_KEY` o `GROK_API_KEY` | No | Modelos Grok. |
+| [DeepSeek](https://deepseek.com) | `@elizaos/plugin-deepseek` | `DEEPSEEK_API_KEY` | No | Modelos de razonamiento y código. |
+| [Ollama](https://ollama.com) | `@elizaos/plugin-ollama` | `OLLAMA_BASE_URL` | Sí | **Modelos locales.** No se necesita clave API. |
+| [Qwen](https://qwen.ai) | `@elizaos/plugin-qwen` | — | No | Modelos Qwen de Alibaba. Configurar mediante la entrada del plugin. |
+| [MiniMax](https://minimaxi.com) | `@elizaos/plugin-minimax` | — | No | Modelos de lenguaje MiniMax. Configurar mediante la entrada del plugin. |
+| [Together AI](https://together.ai) | `@elizaos/plugin-together` | `TOGETHER_API_KEY` | No | Alojamiento de modelos de código abierto. |
+| [Mistral](https://mistral.ai) | `@elizaos/plugin-mistral` | `MISTRAL_API_KEY` | No | Modelos Mistral y Mixtral. |
+| [Cohere](https://cohere.com) | `@elizaos/plugin-cohere` | `COHERE_API_KEY` | No | Modelos Command R+ y de embeddings. |
+| [Perplexity](https://perplexity.ai) | `@elizaos/plugin-perplexity` | `PERPLEXITY_API_KEY` | No | Generación aumentada por búsqueda. |
+| [Zai](https://homunculuslabs.com) | `@homunculuslabs/plugin-zai` | `ZAI_API_KEY` | No | Modelos Zai de Homunculus Labs. |
+| [Eliza Cloud](https://elizacloud.ai) | `@elizaos/plugin-elizacloud` | `ELIZAOS_CLOUD_API_KEY` | Sí | Ruta de inferencia gestionada en la nube. Se puede seleccionar independientemente de dónde se ejecute Milady. |
 
 ---
 

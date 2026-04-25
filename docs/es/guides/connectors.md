@@ -1,7 +1,7 @@
 ---
 title: "Conectores de Plataforma"
 sidebarTitle: "Connectors"
-description: "Puentes de plataforma para 28 plataformas de mensajería — 19 habilitados automáticamente desde la configuración (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, BlueBubbles, Blooio, MS Teams, Google Chat, Twitter, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, Lens, WeChat) más 9 instalables desde el registro (Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
+description: "Puentes de plataforma para más de 30 plataformas de mensajería — 16 habilitados automáticamente desde la configuración (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, ACP) más otros instalables desde el registro (Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon, Twitter, WeChat, Lens, Bluebubbles)."
 ---
 
 Los conectores son puentes de plataforma que permiten a tu agente comunicarse a través de plataformas de mensajería y redes sociales. Cada conector gestiona la autenticación, el enrutamiento de mensajes, la gestión de sesiones y las funcionalidades específicas de cada plataforma.
@@ -64,15 +64,15 @@ Los conectores marcados como **Auto** se cargan automáticamente cuando su confi
 | Blooio | Clave API + webhook | Sí | Sí | No | Auto |
 | Microsoft Teams | ID de app + contraseña | Sí | Sí (equipos/canales) | No | Auto |
 | Google Chat | Cuenta de servicio | Sí | Sí (espacios) | Sí | Auto |
-| Twitter | Claves API + tokens | MDs | N/A | No | Auto |
+| Twitter | Claves API + tokens | MDs | N/A | No | Registry |
 | Farcaster | Clave API de Neynar + firmante | Casts | Sí (canales) | No | Auto |
 | Twitch | Client ID + token de acceso | Sí (chat) | Sí (canales) | No | Auto |
 | Mattermost | Token de bot | Sí | Sí (canales) | No | Auto |
-| WeChat | Clave API de proxy + código QR | Sí | Sí | Sí | Auto |
+| WeChat | Clave API de proxy + código QR | Sí | Sí | Sí | Registry |
 | Matrix | Token de acceso | Sí | Sí (salas) | No | Auto |
 | Feishu / Lark | ID de app + secreto | Sí | Sí (chats grupales) | No | Auto |
 | Nostr | Clave privada (nsec/hex) | Sí (NIP-04) | N/A | No | Auto |
-| Lens | Clave API | Sí | N/A | No | Auto |
+| Lens | Clave API | Sí | N/A | No | Registry |
 | Bluesky | Credenciales de cuenta | Publicaciones | N/A | No | Registry |
 | Instagram | Usuario + contraseña | MDs | N/A | No | Registry |
 | LINE | Token de acceso de canal + secreto | Sí | Sí | No | Registry |
