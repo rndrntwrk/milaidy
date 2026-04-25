@@ -409,7 +409,8 @@ describe("release workflow path contract", () => {
       "apps/app/android/gradle/wrapper/gradle-wrapper.properties",
     );
     expect(patch).toContain("MiladyBootReceiver.java");
-    expect(patch).toContain("appOps.setUidMode(");
+    expect(patch).toContain("AppOpsManager.class.getMethod(");
+    expect(patch).toContain("invokeSetMode(appOps, context)");
     expect(patch).not.toContain("+            appOps.setMode(");
     expect(
       agentRelease.indexOf("name: Patch Android release build compatibility"),
