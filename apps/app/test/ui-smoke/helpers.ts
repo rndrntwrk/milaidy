@@ -296,9 +296,9 @@ export async function installCloudWalletImportApiOverrides(
 
   const initialWalletConfig = {
     selectedRpcProviders: {
-      evm: "alchemy",
-      bsc: "alchemy",
-      solana: "helius-birdeye",
+      evm: "eliza-cloud",
+      bsc: "eliza-cloud",
+      solana: "eliza-cloud",
     },
     walletNetwork: "mainnet",
     legacyCustomChains: [],
@@ -308,7 +308,7 @@ export async function installCloudWalletImportApiOverrides(
     nodeRealBscRpcSet: false,
     quickNodeBscRpcSet: false,
     managedBscRpcReady: false,
-    cloudManagedAccess: false,
+    cloudManagedAccess: true,
     heliusKeySet: true,
     birdeyeKeySet: false,
     evmChains: ["ethereum", "base"],

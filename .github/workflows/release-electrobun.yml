@@ -945,33 +945,20 @@ jobs:
           Write-Host "Extracted top-level structure:"
           Get-ChildItem -Path $extractDir -Recurse -Depth 3 | ForEach-Object { Write-Host "  $($_.FullName)" }
 
-          # Verify the expected runtime entry point exists.
-          # The Electrobun bundle ships the runtime under Resources\app\eliza-dist for
-          # back-compat with packaged builds. Mirror it to milady-dist so the canonical
-          # forward-name resolves too, then check entry.js under that name.
+          # Verify the expected runtime entry point exists without mutating the
+          # extracted installer source tree. Inno follows recursively, so
+          # junction/copy aliases here can duplicate the deep runtime tree and
+          # trip Windows path handling during compilation.
           $appRoot = Get-ChildItem -Path $extractDir -Directory | Select-Object -First 1
           if ($appRoot) {
             $resApp = Join-Path $appRoot.FullName "Resources\app"
             $elizaDist = Join-Path $resApp "eliza-dist"
-            $miladyDist = Join-Path $resApp "milady-dist"
-            if ((Test-Path $elizaDist) -and (-not (Test-Path $miladyDist))) {
-              Write-Host "Mirroring eliza-dist -> milady-dist for forward-canonical name"
-              cmd /c "mklink /J `"$miladyDist`" `"$elizaDist`"" | Out-Null
-              if (-not (Test-Path $miladyDist)) {
-                Write-Host "Junction not available; copying eliza-dist -> milady-dist"
-                Copy-Item -Recurse -Path $elizaDist -Destination $miladyDist
-              }
-            }
-            $entryCheck = Join-Path $miladyDist "entry.js"
             $entryCheckEliza = Join-Path $elizaDist "entry.js"
-            Write-Host "Checking for: $entryCheck"
+            Write-Host "Checking for: $entryCheckEliza"
             if (Test-Path $entryCheckEliza) {
               Write-Host "eliza-dist/entry.js found"
-            }
-            if (Test-Path $entryCheck) {
-              Write-Host "milady-dist/entry.js found"
             } else {
-              Write-Host "WARNING: milady-dist/entry.js NOT found"
+              Write-Host "WARNING: eliza-dist/entry.js NOT found"
               Write-Host "Resources/app contents:"
               if (Test-Path $resApp) {
                 Get-ChildItem -Path $resApp -Recurse -Depth 2 | ForEach-Object { Write-Host "  $($_.FullName)" }

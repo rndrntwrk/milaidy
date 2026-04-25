@@ -5,6 +5,9 @@ import { describe, expect, it } from "vitest";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..");
+const githubTokenInput = ["github_token: $", "{{ secrets.GITHUB_TOKEN }}"].join(
+  "",
+);
 
 function readWorkflow(name: string) {
   return fs.readFileSync(
@@ -147,9 +150,23 @@ describe("release workflow path contract", () => {
     const snapBuild = readWorkflow("snap-build-test.yml");
 
     expect(snapBuild).toContain("uses: bufbuild/buf-setup-action@v1");
+    expect(snapBuild).toContain(githubTokenInput);
     expect(snapBuild).toContain("buf dep update");
     expect(snapBuild).toContain("buf generate");
     expect(snapBuild).not.toContain("bun install --ignore-scripts");
+  });
+
+  it("authenticates buf setup downloads in release workflows", () => {
+    for (const workflowName of [
+      "build-cloud-agent.yml",
+      "build-cloud-image.yml",
+      "snap-build-test.yml",
+    ]) {
+      const workflow = readWorkflow(workflowName);
+
+      expect(workflow).toContain("uses: bufbuild/buf-setup-action@v1");
+      expect(workflow).toContain(githubTokenInput);
+    }
   });
 
   it("hydrates agent release package jobs without recursive checkout", () => {
@@ -225,6 +242,7 @@ describe("release workflow path contract", () => {
       "bash scripts/install-published-workspace-fallback-deps.sh",
     );
     expect(buildCloudImage).toContain("uses: bufbuild/buf-setup-action@v1");
+    expect(buildCloudImage).toContain(githubTokenInput);
     expect(buildCloudImage).toContain("buf dep update && buf generate");
     expect(buildCloudImage).toContain("cd ../typescript");
     expect(buildCloudImage).toContain(
@@ -501,6 +519,10 @@ describe("release workflow path contract", () => {
     expect(fallbackScript).toContain(
       '".eliza.ci-disabled/packages/typescript/package.json"',
     );
+    expect(fallbackScript).toContain('"eliza/packages/agent/package.json"');
+    expect(fallbackScript).toContain(
+      '".eliza.ci-disabled/packages/agent/package.json"',
+    );
     expect(fallbackScript).toContain(
       "symlink_installed_packages_into_manifest_node_modules",
     );
@@ -594,6 +616,11 @@ describe("release workflow path contract", () => {
       );
     }
     expect(releaseElectrobun).toContain("for build_root in \\");
+    expect(releaseElectrobun).toContain("eliza-dist/entry.js found");
+    expect(releaseElectrobun).not.toContain(
+      "Mirroring eliza-dist -> milady-dist",
+    );
+    expect(releaseElectrobun).not.toContain('mklink /J `"$miladyDist');
   });
 
   it("builds the patched Electrobun CLI for every release platform", () => {

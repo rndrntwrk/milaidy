@@ -371,6 +371,10 @@ for attempt in 1 2 3; do
       "eliza/packages/typescript/package.json"
     symlink_installed_packages_into_manifest_node_modules \
       ".eliza.ci-disabled/packages/typescript/package.json"
+    symlink_installed_packages_into_manifest_node_modules \
+      "eliza/packages/agent/package.json"
+    symlink_installed_packages_into_manifest_node_modules \
+      ".eliza.ci-disabled/packages/agent/package.json"
 
     # @types/uuid shadows uuid@13's bundled types and makes TS report that
     # v4/v5 do not exist. Remove the stale package anywhere the core build can
