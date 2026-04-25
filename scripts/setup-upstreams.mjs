@@ -176,10 +176,31 @@ const ELIZA_EDGE_TTS_PLUGIN_BUILD = {
   ),
   args: ["run", "build"],
 };
+const ELIZA_LOCAL_EMBEDDING_PLUGIN_BUILD = {
+  label: "@elizaos/plugin-local-embedding",
+  cwd: path.join("eliza", "plugins", "plugin-local-embedding", "typescript"),
+  manifest: path.join(
+    "eliza",
+    "plugins",
+    "plugin-local-embedding",
+    "typescript",
+    "package.json",
+  ),
+  artifact: path.join(
+    "eliza",
+    "plugins",
+    "plugin-local-embedding",
+    "typescript",
+    "dist",
+    "index.js",
+  ),
+  args: ["run", "build"],
+};
 const ELIZA_REQUIRED_PLUGIN_BUILDS = [
   ELIZA_AGENT_SKILLS_PLUGIN_BUILD,
   ELIZA_TELEGRAM_PLUGIN_BUILD,
   ELIZA_EDGE_TTS_PLUGIN_BUILD,
+  ELIZA_LOCAL_EMBEDDING_PLUGIN_BUILD,
 ];
 const INBOX_REPLY_HINT_LEGACY =
   "Sent through the connected {{source}} account on this Mac.";

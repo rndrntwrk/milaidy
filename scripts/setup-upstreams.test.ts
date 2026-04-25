@@ -14,6 +14,7 @@ import {
   ensureElizaBuildOutputs,
   ensureElizaTypescriptDependencyLinks,
   ensurePluginAnthropicBunTypes,
+  ensurePublishedElizaPackageLinks,
   ensureRequiredElizaPluginBuilds,
   findInstalledPackageDir,
   getElizaInstallArgs,
@@ -377,6 +378,79 @@ describe("findInstalledPackageDir", () => {
   });
 });
 
+describe("ensurePublishedElizaPackageLinks", () => {
+  it("links published skip-mode packages from Bun's store into root and eliza node_modules", () => {
+    const repoRoot = makeTempDir();
+    const packageName = "@elizaos/plugin-local-embedding";
+    const version = "2.0.0-alpha.12";
+    const installedPackage = path.join(
+      repoRoot,
+      "node_modules",
+      ".bun",
+      "@elizaos+plugin-local-embedding@2.0.0-alpha.12",
+      "node_modules",
+      "@elizaos",
+      "plugin-local-embedding",
+    );
+
+    writeFile(
+      path.join(repoRoot, "package.json"),
+      JSON.stringify({ dependencies: { [packageName]: version } }, null, 2),
+    );
+    writeFile(
+      path.join(installedPackage, "package.json"),
+      JSON.stringify({ name: packageName, version }, null, 2),
+    );
+
+    expect(ensurePublishedElizaPackageLinks(repoRoot)).toBe(4);
+    expect(
+      fs.realpathSync(
+        path.join(
+          repoRoot,
+          "node_modules",
+          "@elizaos",
+          "plugin-local-embedding",
+        ),
+      ),
+    ).toBe(fs.realpathSync(installedPackage));
+    expect(
+      fs.realpathSync(
+        path.join(
+          repoRoot,
+          "eliza",
+          "node_modules",
+          "@elizaos",
+          "plugin-local-embedding",
+        ),
+      ),
+    ).toBe(fs.realpathSync(installedPackage));
+    expect(
+      fs.realpathSync(
+        path.join(
+          repoRoot,
+          "apps",
+          "app",
+          "node_modules",
+          "@elizaos",
+          "plugin-local-embedding",
+        ),
+      ),
+    ).toBe(fs.realpathSync(installedPackage));
+    expect(
+      fs.realpathSync(
+        path.join(
+          repoRoot,
+          "apps",
+          "home",
+          "node_modules",
+          "@elizaos",
+          "plugin-local-embedding",
+        ),
+      ),
+    ).toBe(fs.realpathSync(installedPackage));
+  });
+});
+
 describe("getUpstreamPackageLinks", () => {
   it("links nested eliza plugin workspaces into eliza node_modules", () => {
     const repoRoot = makeTempDir();
@@ -580,6 +654,13 @@ describe("ensureRequiredElizaPluginBuilds", () => {
       "plugin-edge-tts",
       "typescript",
     );
+    const localEmbeddingPackage = path.join(
+      repoRoot,
+      "eliza",
+      "plugins",
+      "plugin-local-embedding",
+      "typescript",
+    );
     writeFile(path.join(agentSkillsPackage, "package.json"), "{}\n");
     writeFile(
       path.join(agentSkillsPackage, "dist", "index.js"),
@@ -589,6 +670,11 @@ describe("ensureRequiredElizaPluginBuilds", () => {
     writeFile(path.join(edgeTtsPackage, "package.json"), "{}\n");
     writeFile(
       path.join(edgeTtsPackage, "dist", "node", "index.node.js"),
+      "export {};\n",
+    );
+    writeFile(path.join(localEmbeddingPackage, "package.json"), "{}\n");
+    writeFile(
+      path.join(localEmbeddingPackage, "dist", "index.js"),
       "export {};\n",
     );
 
@@ -609,6 +695,14 @@ describe("ensureRequiredElizaPluginBuilds", () => {
               "dist",
               "node",
               "index.node.js",
+            ),
+          ) ||
+          targetPath.endsWith(
+            path.join(
+              "plugin-local-embedding",
+              "typescript",
+              "dist",
+              "index.js",
             ),
           ),
         stat: () => ({ mtimeMs: 1 }) as fs.Stats,
@@ -649,6 +743,13 @@ describe("ensureRequiredElizaPluginBuilds", () => {
       "plugins",
       "plugin-telegram",
     );
+    const localEmbeddingPackage = path.join(
+      repoRoot,
+      "eliza",
+      "plugins",
+      "plugin-local-embedding",
+      "typescript",
+    );
     writeFile(path.join(agentSkillsPackage, "package.json"), "{}\n");
     writeFile(
       path.join(agentSkillsPackage, "dist", "index.js"),
@@ -658,6 +759,11 @@ describe("ensureRequiredElizaPluginBuilds", () => {
     writeFile(path.join(telegramPackage, "package.json"), "{}\n");
     writeFile(
       path.join(telegramPackage, "dist", "account-auth-service.js"),
+      "export {};\n",
+    );
+    writeFile(path.join(localEmbeddingPackage, "package.json"), "{}\n");
+    writeFile(
+      path.join(localEmbeddingPackage, "dist", "index.js"),
       "export {};\n",
     );
 
@@ -673,6 +779,14 @@ describe("ensureRequiredElizaPluginBuilds", () => {
           ) ||
           targetPath.endsWith(
             path.join("plugin-telegram", "dist", "account-auth-service.js"),
+          ) ||
+          targetPath.endsWith(
+            path.join(
+              "plugin-local-embedding",
+              "typescript",
+              "dist",
+              "index.js",
+            ),
           ),
         stat: () => ({ mtimeMs: 1 }) as fs.Stats,
         runCommandImpl,
@@ -687,6 +801,90 @@ describe("ensureRequiredElizaPluginBuilds", () => {
     });
     expect(log).toHaveBeenCalledWith(
       expect.stringContaining("@elizaos/plugin-edge-tts"),
+    );
+  });
+
+  it("builds plugin-local-embedding when the runtime import artifact is missing", async () => {
+    const repoRoot = makeTempDir();
+    const agentSkillsPackage = path.join(
+      repoRoot,
+      "eliza",
+      "plugins",
+      "plugin-agent-skills",
+      "typescript",
+    );
+    const telegramPackage = path.join(
+      repoRoot,
+      "eliza",
+      "plugins",
+      "plugin-telegram",
+    );
+    const edgeTtsPackage = path.join(
+      repoRoot,
+      "eliza",
+      "plugins",
+      "plugin-edge-tts",
+      "typescript",
+    );
+    const localEmbeddingPackage = path.join(
+      repoRoot,
+      "eliza",
+      "plugins",
+      "plugin-local-embedding",
+      "typescript",
+    );
+    writeFile(path.join(agentSkillsPackage, "package.json"), "{}\n");
+    writeFile(
+      path.join(agentSkillsPackage, "dist", "index.js"),
+      "export {};\n",
+    );
+    writeFile(path.join(telegramPackage, "package.json"), "{}\n");
+    writeFile(
+      path.join(telegramPackage, "dist", "account-auth-service.js"),
+      "export {};\n",
+    );
+    writeFile(path.join(edgeTtsPackage, "package.json"), "{}\n");
+    writeFile(
+      path.join(edgeTtsPackage, "dist", "node", "index.node.js"),
+      "export {};\n",
+    );
+    writeFile(path.join(localEmbeddingPackage, "package.json"), "{}\n");
+
+    const runCommandImpl = vi.fn().mockResolvedValue(undefined);
+    const log = vi.fn();
+
+    await expect(
+      ensureRequiredElizaPluginBuilds(repoRoot, {
+        pathExists: (targetPath) =>
+          targetPath.endsWith(path.join("package.json")) ||
+          targetPath.endsWith(
+            path.join("plugin-agent-skills", "typescript", "dist", "index.js"),
+          ) ||
+          targetPath.endsWith(
+            path.join("plugin-telegram", "dist", "account-auth-service.js"),
+          ) ||
+          targetPath.endsWith(
+            path.join(
+              "plugin-edge-tts",
+              "typescript",
+              "dist",
+              "node",
+              "index.node.js",
+            ),
+          ),
+        stat: () => ({ mtimeMs: 1 }) as fs.Stats,
+        runCommandImpl,
+        log,
+      }),
+    ).resolves.toBe(true);
+
+    expect(runCommandImpl).toHaveBeenCalledTimes(1);
+    expect(runCommandImpl).toHaveBeenCalledWith("bun", ["run", "build"], {
+      cwd: localEmbeddingPackage,
+      label: "bun run build (@elizaos/plugin-local-embedding)",
+    });
+    expect(log).toHaveBeenCalledWith(
+      expect.stringContaining("@elizaos/plugin-local-embedding"),
     );
   });
 });

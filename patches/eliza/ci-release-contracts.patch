@@ -15,6 +15,12 @@ index 1c9cff1486..0f49416e6f 100644
      "tsx": "4.21.0"
    }
  }
+diff --git a/packages/app-core/deploy/Dockerfile.cloud b/packages/app-core/deploy/Dockerfile.cloud
+--- a/packages/app-core/deploy/Dockerfile.cloud
++++ b/packages/app-core/deploy/Dockerfile.cloud
+@@ -44 +44 @@
+-RUN node <<'EOF'
++RUN bun run - <<'EOF'
 diff --git a/packages/app-core/platforms/electrobun/scripts/stage-macos-release-artifacts.sh b/packages/app-core/platforms/electrobun/scripts/stage-macos-release-artifacts.sh
 index 74c284e2df..60998fdf58 100644
 --- a/packages/app-core/platforms/electrobun/scripts/stage-macos-release-artifacts.sh

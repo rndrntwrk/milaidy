@@ -669,6 +669,11 @@ describe("release workflow path contract", () => {
     expect(applyPatchScript).toContain('"--unidiff-zero"');
     expect(patch).toContain("settings-companion-vrm-power");
     expect(patch).toContain("settings.sections.capabilities.computerUseHint");
+    expect(patch).toContain("RUN bun run - <<'EOF'");
+    expect(buildCloudImage).toContain("Apply Milady eliza CI patches");
+    expect(buildCloudImage).toContain(
+      "node scripts/apply-eliza-ci-patches.mjs",
+    );
     expect(buildCloudImage).toContain("Init cloud image plugin manifests");
     expect(buildCloudImage).toContain("plugins/plugin-sql");
     expect(buildCloudImage).toContain("plugins/plugin-elizacloud");

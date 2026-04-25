@@ -111,6 +111,9 @@ jobs:
             plugins/plugin-sql \
             plugins/plugin-elizacloud
 
+      - name: Apply Milady eliza CI patches
+        run: node scripts/apply-eliza-ci-patches.mjs
+
       - name: Init non-eliza submodules
         run: |
           node scripts/init-submodules.mjs
