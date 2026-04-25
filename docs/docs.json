@@ -1339,6 +1339,115 @@
           {
             "group": "Security & Stability",
             "pages": [
+              "agents/character-interface",
+              "agents/runtime-and-lifecycle",
+              "agents/memory-and-state",
+              "agents/personality-and-behavior"
+            ]
+          },
+          {
+            "group": "Runtime",
+            "pages": [
+              "runtime/core",
+              "runtime/memory",
+              "runtime/events",
+              "runtime/models",
+              "runtime/providers",
+              "runtime/services",
+              "runtime/types",
+              "runtime/action-callback-streaming"
+            ]
+          },
+          {
+            "group": "CLI Reference",
+            "pages": [
+              "cli/overview",
+              "cli/start",
+              "cli/setup",
+              "cli/configure",
+              "cli/config",
+              "cli/dashboard",
+              "cli/models",
+              "cli/plugins",
+              "cli/update",
+              "cli/doctor",
+              "cli/db",
+              "cli/environment"
+            ]
+          },
+          {
+            "group": "REST API",
+            "pages": [
+              "rest/system",
+              "rest/agents",
+              "rest/auth",
+              "rest/character",
+              "rest/conversations",
+              "rest/memory",
+              "rest/knowledge",
+              "rest/models",
+              "rest/plugins",
+              "rest/connectors",
+              "rest/skills",
+              "rest/training",
+              "rest/trajectories",
+              "rest/triggers",
+              "rest/autonomy",
+              "rest/avatar",
+              "rest/emotes",
+              "rest/inbox",
+              "rest/sandbox",
+              "rest/secrets",
+              "rest/wallet",
+              "rest/cloud",
+              "rest/apps",
+              "rest/coding-agents",
+              "rest/custom-actions",
+              "rest/automations",
+              "rest/database",
+              "rest/diagnostics",
+              "rest/mcp",
+              "rest/permissions",
+              "rest/stream",
+              "rest/subscriptions",
+              "rest/update",
+              "rest/onboarding",
+              "rest/whatsapp-pairing",
+              "rest/workbench",
+              "rest/lifeops",
+              "rest/nfa",
+              "rest/drop",
+              "rest/bug-report",
+              "rest/whitelist",
+              "rest/v1-compat"
+            ]
+          },
+          {
+            "group": "Apps",
+            "pages": [
+              "apps/overview",
+              "apps/dashboard",
+              "apps/dashboard/settings",
+              "apps/dashboard/talk-mode",
+              "apps/desktop",
+              "apps/desktop/deep-linking",
+              "apps/desktop/native-modules",
+              "apps/mobile",
+              "apps/mobile/build-guide",
+              "apps/mobile/capacitor-plugins",
+              "apps/desktop-local-development",
+              "apps/desktop-main-process-reset",
+              "apps/desktop-vrm-three-and-spark",
+              "apps/electrobun-darwin-macos-webgpu-version",
+              "electrobun-startup"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "advanced/database",
+              "advanced/logs",
+              "advanced/trajectories",
               "security",
               "security/codeflow-residual-risk",
               "stability/known-failure-modes"
