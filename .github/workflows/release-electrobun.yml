@@ -604,25 +604,31 @@ jobs:
           const path = require("node:path");
 
           const sourceDir = path.join("eliza", "packages", "shared", "src", "i18n", "generated");
-          const installedDir = path.join("node_modules", "@elizaos", "shared", "src", "i18n", "generated");
-          const installedManifest = path.join("node_modules", "@elizaos", "shared", "package.json");
+          const installedPackageDirs = [
+            path.join("eliza", "packages", "app-core", "node_modules", "@elizaos", "shared"),
+            path.join("eliza", "packages", "node_modules", "@elizaos", "shared"),
+            path.join("node_modules", "@elizaos", "shared"),
+          ].filter((packageDir) => fs.existsSync(path.join(packageDir, "package.json")));
 
-          if (!fs.existsSync(installedManifest)) {
-            throw new Error(`Installed @elizaos/shared package not found at ${installedManifest}`);
+          if (installedPackageDirs.length === 0) {
+            throw new Error("Installed @elizaos/shared package not found in runtime node_modules candidates");
           }
 
-          fs.mkdirSync(installedDir, { recursive: true });
           for (const file of ["validation-keyword-data.ts", "validation-keyword-data.js"]) {
             const source = path.join(sourceDir, file);
-            const destination = path.join(installedDir, file);
             if (!fs.existsSync(source)) {
               throw new Error(`Generated keyword data file missing: ${source}`);
             }
-            fs.copyFileSync(source, destination);
-            console.log(`Mirrored generated keyword data into installed @elizaos/shared: ${destination}`);
+            for (const packageDir of installedPackageDirs) {
+              const installedDir = path.join(packageDir, "src", "i18n", "generated");
+              const destination = path.join(installedDir, file);
+              fs.mkdirSync(installedDir, { recursive: true });
+              fs.copyFileSync(source, destination);
+              console.log(`Mirrored generated keyword data into installed @elizaos/shared: ${destination}`);
+            }
           }
           NODE
-          test -f node_modules/@elizaos/shared/src/i18n/generated/validation-keyword-data.js
+          test -f eliza/packages/app-core/node_modules/@elizaos/shared/src/i18n/generated/validation-keyword-data.js
           if [ -d eliza/packages/schemas ] && [ -f eliza/packages/schemas/buf.gen.yaml ]; then
             pushd eliza/packages/schemas
             for attempt in 1 2 3; do
