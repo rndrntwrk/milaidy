@@ -723,7 +723,7 @@ describe("release workflow path contract", () => {
       "if: matrix.platform.os == 'windows'",
     );
     expect(windowsTelegramOverlayBlock).toContain(
-      "git submodule update --init --depth=1 eliza/plugins/plugin-telegram",
+      "git -C eliza submodule update --init --depth=1 plugins/plugin-telegram",
     );
     expect(windowsTelegramOverlayBlock).toContain(
       "(cd eliza/plugins/plugin-telegram && bun install --ignore-scripts && bun run build)",

@@ -521,7 +521,7 @@ jobs:
       - name: Build local plugin-telegram and overlay Windows node_modules
         if: matrix.platform.os == 'windows'
         run: |
-          git submodule update --init --depth=1 eliza/plugins/plugin-telegram
+          git -C eliza submodule update --init --depth=1 plugins/plugin-telegram
           test -f eliza/plugins/plugin-telegram/package.json
           (cd eliza/plugins/plugin-telegram && bun install --ignore-scripts && bun run build)
           installed_dir="node_modules/@elizaos/plugin-telegram"
