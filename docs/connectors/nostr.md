@@ -18,9 +18,9 @@ Connect your agent to Nostr for relay-based social posting and conversations usi
 
 The connector auto-enables when `token`, `botToken`, or `apiKey` is truthy in the connector config. Environment variables alone do not trigger auto-enable.
 
-The actual private key is set via the `NOSTR_PRIVATE_KEY` environment variable. However, auto-enable detection requires one of the generic trigger fields (`token`, `botToken`, or `apiKey`) in the connector config — environment variables alone do not trigger auto-enable.
+Nostr authenticates via the `NOSTR_PRIVATE_KEY` environment variable, not via a config-level token. Because the auto-enable system looks for `token`, `botToken`, or `apiKey` in the connector config, you have two options:
 
-The recommended approach is to add the plugin to `plugins.allow` explicitly, which avoids needing a placeholder token:
+**Option 1 (recommended):** Add the plugin to `plugins.allow` explicitly — no placeholder needed:
 
 ```json
 {
@@ -33,7 +33,7 @@ The recommended approach is to add the plugin to `plugins.allow` explicitly, whi
 }
 ```
 
-Alternatively, set a placeholder token to trigger auto-enable:
+**Option 2:** Set a placeholder trigger field to activate auto-enable:
 
 ```json
 {
@@ -47,6 +47,8 @@ Alternatively, set a placeholder token to trigger auto-enable:
   }
 }
 ```
+
+The `"token": "placeholder"` value is not used for authentication — it only triggers the auto-enable mechanism. The actual private key is always read from `NOSTR_PRIVATE_KEY`.
 
 ## Disabling
 

@@ -38,10 +38,13 @@ You can customize your bot's avatar and username on the Bot page. Changes take e
 
 </Step>
 
-<Step title="Get Your Bot Token">
+<Step title="Get Your Bot Token and Enable Intents">
 1. In the **Bot** section, locate the **TOKEN** field
 2. Click **Copy** to copy your bot token to your clipboard
 3. Store this token securely—never share it publicly or commit it to version control
+4. Scroll down to **Privileged Gateway Intents**
+5. Toggle **Message Content Intent** to **ON** — this is required for the bot to read message text
+6. Click **Save Changes**
 
 <Warning>
 If your token is ever exposed, regenerate it immediately by clicking **Regenerate** in the Discord Developer Portal.

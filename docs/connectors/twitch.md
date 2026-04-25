@@ -52,11 +52,7 @@ To disable:
 
 ## Setup
 
-1. Go to the [Twitch Developer Console](https://dev.twitch.tv/console/apps) and create a new application.
-2. Note the **Client ID** and generate an **Access Token** with the required chat scopes.
-3. Optionally generate a **Client Secret** and **Refresh Token** for automatic token renewal.
-4. Add the credentials to `connectors.twitch` in your config or set the environment variables.
-5. Start your agent -- the Twitch connector will auto-enable.
+The `plugin-auto-enable.ts` module checks `connectors.twitch` in your config. The connector auto-enables when `accessToken` or `clientId` is truthy, or when `enabled` is explicitly `true`. Setting `enabled: false` disables auto-enable regardless of other fields.
 
 No environment variable is required to trigger auto-enable — it is driven entirely by the connector config object.
 

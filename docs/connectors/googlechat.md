@@ -20,6 +20,8 @@ The connector auto-enables when `botToken`, `token`, or `apiKey` is truthy in th
 
 Configure in `~/.milady/milady.json`:
 
+Google Chat authenticates via a service account JSON file, not an API key. The `apiKey` field below is only used to trigger auto-enable — it has no functional role in authentication.
+
 ```json
 {
   "connectors": {

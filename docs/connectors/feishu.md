@@ -19,23 +19,7 @@ Connect your agent to Feishu (known as Lark outside China) for bot interactions,
 
 ## Minimal Configuration
 
-The actual credentials are set via `FEISHU_APP_ID` and `FEISHU_APP_SECRET` environment variables. Auto-enable detection requires one of the generic trigger fields (`token`, `botToken`, or `apiKey`) in the connector config — environment variables alone do not trigger auto-enable.
-
-The recommended approach is to add the plugin to `plugins.allow` explicitly:
-
-```json
-{
-  "env": {
-    "FEISHU_APP_ID": "cli_your_app_id",
-    "FEISHU_APP_SECRET": "your_app_secret"
-  },
-  "plugins": {
-    "allow": ["@elizaos/plugin-feishu"]
-  }
-}
-```
-
-Alternatively, set `apiKey` in the connector config to trigger auto-enable:
+The connector auto-enables when one of the generic trigger fields (`token`, `botToken`, or `apiKey`) is present in the connector config. Environment variables alone do not trigger auto-enable. Here the `apiKey` field is set to the Feishu app secret to trigger auto-enable; actual authentication uses `FEISHU_APP_ID` and `FEISHU_APP_SECRET`.
 
 ```json
 {

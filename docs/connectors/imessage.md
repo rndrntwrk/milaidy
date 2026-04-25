@@ -6,7 +6,7 @@ Connect your agent to iMessage for private chats and group conversations on macO
 
 - macOS with iMessage configured and signed in
 - Full Disk Access granted to the terminal or application running Milady (for chat database access at `~/Library/Messages/chat.db`)
-- A CLI tool for iMessage access (e.g., `imessage-exporter`)
+- A CLI tool for iMessage access — set the `cliPath` config field to the absolute path of the binary
 
 ## Configuration
 
