@@ -1,7 +1,7 @@
 ---
 title: "Platform Connectors"
 sidebarTitle: "Connectors"
-description: "Platform bridges for 26 messaging platforms — 17 auto-enabled from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Twitter, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, WeChat) plus 9 installable from the registry (Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
+description: "Platform bridges for 28 messaging platforms — 19 auto-enabled from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, BlueBubbles, Blooio, MS Teams, Google Chat, Twitter, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, Lens, WeChat) plus 9 installable from the registry (Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
 ---
 
 Connectors are platform bridges that allow your agent to communicate across messaging platforms and social networks. Each connector handles authentication, message routing, session management, and platform-specific features.
@@ -18,29 +18,29 @@ Connectors are platform bridges that allow your agent to communicate across mess
 8. [iMessage](#imessage)
 9. [BlueBubbles](#bluebubbles)
 10. [Blooio](#blooio)
-12. [Microsoft Teams](#microsoft-teams)
-13. [Google Chat](#google-chat)
-14. [Twitter](#twitter)
-15. [Farcaster](#farcaster)
-16. [Bluesky](#bluesky)
-17. [Instagram](#instagram)
-18. [Twitch](#twitch)
-19. [Mattermost](#mattermost)
-20. [WeChat](#wechat)
-21. [Matrix](#matrix)
-22. [Feishu / Lark](#feishu--lark)
-23. [Nostr](#nostr)
-24. [LINE](#line)
-25. [Zalo](#zalo)
-26. [Twilio](#twilio)
-27. [GitHub](#github)
-28. [Gmail Watch](#gmail-watch)
-29. [Nextcloud Talk](#nextcloud-talk)
-30. [Tlon](#tlon)
-31. [Lens](#lens)
-32. [Connector Lifecycle](#connector-lifecycle)
-33. [Multi-Account Support](#multi-account-support)
-34. [Session Management](#session-management)
+11. [Microsoft Teams](#microsoft-teams)
+11. [Google Chat](#google-chat)
+12. [Twitter](#twitter)
+13. [Farcaster](#farcaster)
+14. [Bluesky](#bluesky)
+15. [Instagram](#instagram)
+16. [Twitch](#twitch)
+17. [Mattermost](#mattermost)
+18. [WeChat](#wechat)
+19. [Matrix](#matrix)
+20. [Feishu / Lark](#feishu--lark)
+21. [Nostr](#nostr)
+22. [LINE](#line)
+23. [Zalo](#zalo)
+24. [Twilio](#twilio)
+25. [GitHub](#github)
+26. [Gmail Watch](#gmail-watch)
+27. [Nextcloud Talk](#nextcloud-talk)
+28. [Tlon](#tlon)
+29. [Lens](#lens)
+30. [Connector Lifecycle](#connector-lifecycle)
+31. [Multi-Account Support](#multi-account-support)
+32. [Session Management](#session-management)
 
 ---
 
@@ -355,13 +355,12 @@ See the [WhatsApp Integration Guide](/guides/whatsapp) for detailed setup instru
 
 ## BlueBubbles
 
-Connects to iMessage via a self-hosted [BlueBubbles](https://bluebubbles.app) server running on macOS.
+Connects to iMessage through a self-hosted [BlueBubbles](https://bluebubbles.app) server running on macOS. Unlike the direct iMessage connector, BlueBubbles is network-accessible — the agent does not need to run on the same Mac as iMessage.
 
 ### Setup Requirements
 
-- macOS with iMessage configured
-- BlueBubbles Server installed and running
-- Server password from BlueBubbles settings
+- A Mac with iMessage signed in and [BlueBubbles server](https://bluebubbles.app) installed
+- The server password and URL reachable from the machine running Milady
 
 ### Key Configuration
 
@@ -369,25 +368,27 @@ Connects to iMessage via a self-hosted [BlueBubbles](https://bluebubbles.app) se
 {
   "connectors": {
     "bluebubbles": {
-      "enabled": true
+      "password": "YOUR_BLUEBUBBLES_PASSWORD",
+      "serverUrl": "http://192.168.1.50:1234"
     }
   }
 }
 ```
 
-**Environment variables:** `BLUEBUBBLES_PASSWORD` (required), `BLUEBUBBLES_SERVER_URL`, `BLUEBUBBLES_ENABLED`, `BLUEBUBBLES_DM_POLICY`, `BLUEBUBBLES_ALLOW_FROM`, `BLUEBUBBLES_GROUP_POLICY`, `BLUEBUBBLES_GROUP_ALLOW_FROM`, `BLUEBUBBLES_WEBHOOK_PATH`, `BLUEBUBBLES_SEND_READ_RECEIPTS`
+**Environment variables:** `BLUEBUBBLES_PASSWORD`, `BLUEBUBBLES_SERVER_URL`
 
 ### Features
 
-- iMessage send and receive through BlueBubbles REST API
-- Webhook-based inbound message handling
-- DM and group chat support with policy controls
+- Send and receive iMessages and SMS through a local BlueBubbles server
+- Tapback reactions (add and remove)
+- Reply to specific messages in threads
+- Edit and unsend sent messages (macOS version dependent)
+- Send attachments with captions and iMessage effects
+- Group chat participant management
 - Read receipt support
-- Self-hosted — no third-party proxy required
+- Webhook-based inbound message handling
 
-### When to Use BlueBubbles
-
-BlueBubbles is the best choice when you want full local control over iMessage with a GUI server application. For a lightweight CLI-only approach, use the [iMessage](#imessage) connector. For iMessage without running a Mac server, use [Blooio](#blooio).
+See the [BlueBubbles connector reference](/connectors/bluebubbles) for the full configuration reference.
 
 ---
 
@@ -1284,6 +1285,13 @@ The `dmPolicy` options are:
 
 - CLI path not found:
   Requires `cliPath` pointing to a valid iMessage CLI tool. macOS-only — Accessibility permissions are required.
+
+**BlueBubbles:**
+
+- Connection refused or timeout:
+  Confirm the BlueBubbles server is running on the target Mac and the `serverUrl` is reachable from the agent machine. Check firewall rules if connecting across the network.
+- Password rejected:
+  Confirm `connectors.bluebubbles.password` matches the password configured in the BlueBubbles server app on macOS.
 
 **Farcaster:**
 
