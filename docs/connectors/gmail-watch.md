@@ -39,45 +39,9 @@ Gmail Watch is configured in two places in `milady.json`:
 }
 ```
 
-### 2. Configure the Gmail account in hooks
+## Environment Variables
 
-```json
-{
-  "hooks": {
-    "gmail": {
-      "account": "user@gmail.com",
-      "label": "INBOX",
-      "includeBody": true
-    }
-  }
-}
-```
-
-### Full example
-
-```json
-{
-  "features": {
-    "gmailWatch": true
-  },
-  "hooks": {
-    "enabled": true,
-    "gmail": {
-      "account": "user@gmail.com",
-      "label": "INBOX",
-      "includeBody": true
-    }
-  }
-}
-```
-
-### Gmail Hook Fields
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `account` | string | — | Gmail address to monitor (required) |
-| `label` | string | `"INBOX"` | Gmail label to watch |
-| `includeBody` | boolean | `false` | Include email body content in agent events |
+Gmail Watch reads credentials from `hooks.gmail.account` in `milady.json` or from Google Cloud service account credentials. Refer to the [configuration reference](/configuration) for details on the `hooks` section.
 
 ## Features
 

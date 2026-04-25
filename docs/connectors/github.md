@@ -53,6 +53,8 @@ The GitHub connector is an elizaOS plugin that bridges your agent to the GitHub 
 - Issue tracking and creation
 - Pull request workflows (create, review, merge)
 - Code search and file access
+- GitHub App authentication (alternative to personal access tokens)
+- Webhook event handling
 
 ## Related
 

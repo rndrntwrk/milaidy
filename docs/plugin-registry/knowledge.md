@@ -6,6 +6,7 @@ description: "Native RAG system — document ingestion, embedding generation, si
 
 The native knowledge feature provides a Retrieval-Augmented Generation (RAG) system for Milady agents. It enables agents to retrieve relevant information from a document corpus and inject it into the LLM context.
 
+**Package:** `@elizaos/plugin-knowledge`
 **Runtime Feature:** `knowledge` (enabled by default)
 
 ## Overview
