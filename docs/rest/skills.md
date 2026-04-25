@@ -24,7 +24,8 @@ When `MILADY_API_TOKEN` is set, include it as a `Bearer` token in the `Authoriza
 | POST | `/api/skills/:id/acknowledge` | Acknowledge a skill security scan |
 | POST | `/api/skills/:id/enable` | Enable a skill (honors scan acknowledgments) |
 | POST | `/api/skills/:id/disable` | Disable a skill |
-| POST | `/api/skills/:id/acknowledge` | Acknowledge security scan findings |
+| POST | `/api/skills/:id/acknowledge` | Acknowledge a skill security scan |
+| DELETE | `/api/skills/:id` | Delete a skill |
 
 ### Skills Catalog
 

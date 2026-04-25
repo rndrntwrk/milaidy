@@ -1,11 +1,21 @@
 ---
 title: "milady plugins"
-description: "List, search, install, and manage plugins from the CLI."
+description: "List, install, search, and manage plugins from the CLI."
 ---
 
 # `milady plugins`
 
-Manage plugins from the CLI — list, search, install, and uninstall plugins from the elizaOS registry.
+Manage the plugin lifecycle — browse the registry, install or remove plugins, and inspect what's currently loaded.
+
+## Subcommands
+
+| Subcommand | Purpose |
+|------------|---------|
+| `milady plugins list` | Browse available plugins in the registry |
+| `milady plugins installed` | Show plugins currently installed |
+| `milady plugins install <name>` | Install a plugin by name or package |
+| `milady plugins uninstall <name>` | Remove an installed plugin |
+| `milady plugins search <query>` | Search registry plugins by keyword |
 
 ## Subcommands
 
@@ -49,182 +59,18 @@ List all plugins from the registry. Shows install status and basic metadata.
 | `-l, --limit <number>` | Max results to show (default: 30) |
 
 ```bash
-milady plugins list                 # browse all available plugins
-milady plugins search telegram      # find telegram-related plugins
-milady plugins install discord      # install the Discord connector
-milady plugins installed            # see what's installed
-milady plugins info openai          # show plugin details
-milady plugins uninstall suno       # remove a plugin
-milady plugins --help               # show all subcommands
-```
-
-## Plugin Name Resolution
-
-Plugin names are normalized by the CLI:
-
-- `@scope/plugin-x` — used as-is
-- `plugin-x` — used as-is
-- `x` — expanded to `@elizaos/plugin-x`
-
-Version pinning works with `@`:
-
-```bash
-milady plugins install twitter@1.2.3
-milady plugins install @custom/plugin-x@2.0.0
-milady plugins install twitter@next
-```
-
-### `milady plugins search <query>`
-
-Search the plugin registry by keyword. Shows match score and star count.
-
-| Flag | Description |
-|------|-------------|
-| `-l, --limit <number>` | Max results (default: 15) |
-
-```bash
-milady plugins search social
-```
-
-### `milady plugins info <name>`
-
-Show detailed information about a plugin (description, repo, npm versions, supported elizaOS versions). Shorthand names are expanded (e.g. `twitter` becomes `@elizaos/plugin-twitter`).
-
-```bash
-milady plugins info twitter
-milady plugins info @elizaos/plugin-discord
-```
-
-### `milady plugins install <name>`
-
-Install a plugin from the registry. Optionally pin to a specific version or dist-tag (e.g. `twitter@1.2.3`, `twitter@next`).
-
-| Flag | Description |
-|------|-------------|
-| `--no-restart` | Install without restarting the agent |
-
-```bash
-milady plugins install twitter
-milady plugins install @elizaos/plugin-discord@2.0.0
-```
-
-### `milady plugins uninstall <name>`
-
-Uninstall a user-installed plugin.
-
-| Flag | Description |
-|------|-------------|
-| `--no-restart` | Uninstall without restarting the agent |
-
-```bash
-milady plugins uninstall twitter
-```
-
-### `milady plugins installed`
-
-List plugins that were installed from the registry (user-installed, not bundled).
-
-```bash
+milady plugins list
 milady plugins installed
+milady plugins install @elizaos/plugin-openai
+milady plugins install discord
+milady plugins uninstall discord
+milady plugins search "image generation"
 ```
 
-### `milady plugins refresh`
-
-Force-refresh the plugin registry cache from upstream.
-
-```bash
-milady plugins refresh
-```
-
-### `milady plugins test`
-
-Validate custom drop-in plugins in `~/.eliza/plugins/custom/` and any additional paths registered via `milady plugins add-path`. Checks that each plugin can be imported and exports a valid Plugin object.
-
-```bash
-milady plugins test
-```
-
-### `milady plugins add-path <path>`
-
-Register an additional plugin search directory in the config file. The path must be an existing directory under the user's home or current working directory.
-
-```bash
-milady plugins add-path ~/my-plugins
-```
-
-### `milady plugins paths`
-
-List all plugin search directories and their contents.
-
-```bash
-milady plugins paths
-```
-
-### `milady plugins config <name>`
-
-Show or interactively edit a plugin's configuration parameters (reads from `plugins.json`).
-
-| Flag | Description |
-|------|-------------|
-| `-e, --edit` | Interactive edit mode |
-
-```bash
-milady plugins config twitter
-milady plugins config twitter --edit
-```
-
-### `milady plugins open [name-or-path]`
-
-Open a plugin directory (or the custom plugins folder) in your editor. Uses `$EDITOR` or falls back to `code`.
-
-```bash
-milady plugins open
-milady plugins open twitter
-```
-
-## How plugins resolve
-
-Plugins load in this order (first match wins):
-
-1. **Ejected** — `~/.milady/plugins/ejected/` (local overrides)
-2. **User-installed** — Tracked in `plugins.installs` in `milady.json`
-3. **Custom/drop-in** — `~/.milady/plugins/custom/` and `plugins.load.paths`
-4. **Auto-enabled** — Detected from env vars, connector config, and feature flags
-5. **Core** — Always loaded (sql, local-embedding, form, etc.)
-
-## Enable/disable in config
-
-```json5
-{
-  plugins: {
-    allow: ["@elizaos/plugin-openai", "discord"],
-    entries: {
-      anthropic: { enabled: false },  // force-disable even if auto-detected
-    },
-  },
-}
-```
-
-## Plugin Name Resolution
-
-The CLI normalizes user input:
-
-- `@scope/plugin-x` — used as-is
-- `plugin-x` — used as-is
-- `x` — expanded to `@elizaos/plugin-x`
-
-Version pinning is supported with `@`:
-
-```bash
-milady plugins install twitter@1.2.3
-milady plugins install @custom/plugin-x@next
-```
-
-Plugin names accept shorthand: `twitter` resolves to `@elizaos/plugin-twitter`.
+Short plugin names (e.g. `discord`) resolve to `@elizaos/plugin-discord` automatically. Full package names also work.
 
 ## Related
 
-- [Plugins overview](/plugins/overview) — How plugins work
-- [Plugin registry](/plugins/registry) — Registry architecture and caching
-- [Local plugins](/plugins/local-plugins) — Develop plugins locally
-- [REST — plugins](/rest/plugins) — Plugin management API
+- [Plugins overview](/plugins/overview)
+- [Plugin registry](/plugins/registry)
+- [REST — plugins](/rest/plugins)

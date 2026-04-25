@@ -585,15 +585,7 @@
               "connectors/gmail-watch",
               "connectors/nextcloud-talk",
               "connectors/tlon",
-              "connectors/acp",
               "connectors/zalouser"
-            ]
-          },
-          {
-            "group": "Developer Platforms",
-            "pages": [
-              "connectors/github",
-              "connectors/gmail-watch"
             ]
           }
         ]

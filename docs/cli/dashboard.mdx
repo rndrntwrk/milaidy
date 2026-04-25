@@ -5,21 +5,13 @@ description: "Open the Control UI in your browser."
 
 # `milady dashboard`
 
-Opens the Control UI in a browser. Checks whether the server is already running and opens the appropriate URL. If no server is detected, starts a Vite dev server for the app UI.
+Launches the web dashboard in your default browser, or prints the URL if the browser can't be opened.
 
 ## Options
 
-| Flag | Description |
-|------|-------------|
-| `--port <port>` | Server port to check (default: `2138`) |
-| `--url <url>` | Server URL to open (overrides `--port`) |
-
-## Behavior
-
-1. If `--url` is provided, opens that URL directly.
-2. If the specified port (default 2138) is listening, opens `http://localhost:<port>`.
-3. If the Vite dev port (2138) is listening, opens `http://localhost:2138`.
-4. Otherwise, starts a Vite dev server for the app UI and opens it once ready.
+| Flag | Purpose |
+|------|---------|
+| `--port <port>` | Use a custom port instead of the default |
 
 ## Examples
 
@@ -27,8 +19,9 @@ Opens the Control UI in a browser. Checks whether the server is already running 
 # Open dashboard in browser
 milady dashboard
 milady dashboard --port 3000
-milady dashboard --url http://192.168.1.10:2138
 ```
+
+Run `milady dashboard --help` for the full option list.
 
 ## Related
 

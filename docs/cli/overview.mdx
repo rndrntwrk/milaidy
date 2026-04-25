@@ -66,6 +66,21 @@ milady plugins uninstall <name>  # remove an installed plugin
 milady plugins search <query>  # search plugins by keyword
 ```
 
+## Global flags
+
+| Flag | Purpose |
+|------|---------|
+| `--help` | Show help for any command |
+| `--version` | Print the installed version |
+| `--verbose` | Enable informational runtime logs |
+| `--debug` | Enable debug-level runtime logs |
+
+```bash
+milady --version
+milady --debug start
+milady plugins --help
+```
+
 ## Help
 
 Run `milady --help` or `milady <command> --help` for the exact flags in your build. Implementation lives under `eliza/packages/app-core/src/cli/` in the elizaOS submodule (run `bun run setup:upstreams` to initialize it for development).
