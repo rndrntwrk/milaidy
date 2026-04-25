@@ -667,4 +667,4 @@ bun run check
 4. **Test locally** with `milady` and `milady models`
 5. **Deploy** using your hosting platform's deployment process
 
-See the [Configuration Reference](/configuration) for the actual config format.
+See the [Configuration Reference](/configuration) for complete option documentation.
