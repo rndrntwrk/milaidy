@@ -22,16 +22,16 @@ describe("action e2e workflow contract", () => {
       `OPENROUTER_API_KEY: \${{ secrets.OPENROUTER_API_KEY }}`,
     );
     expect(workflow).toContain(
-      `ELIZAOS_CLOUD_API_KEY: \${{ secrets.ELIZAOS_CLOUD_API_KEY }}`,
+      `ELIZAOS_CLOUD_API_KEY: \${{ secrets.ELIZAOS_CLOUD_API_KEY != '' && secrets.ELIZAOS_CLOUD_API_KEY || secrets.ELIZACLOUD_API_KEY }}`,
     );
     expect(workflow).toContain(
-      `OPENAI_API_KEY: \${{ secrets.ELIZAOS_CLOUD_API_KEY != '' && secrets.ELIZAOS_CLOUD_API_KEY || secrets.OPENAI_API_KEY }}`,
+      `OPENAI_API_KEY: \${{ secrets.ELIZAOS_CLOUD_API_KEY != '' && secrets.ELIZAOS_CLOUD_API_KEY || (secrets.ELIZACLOUD_API_KEY != '' && secrets.ELIZACLOUD_API_KEY || secrets.OPENAI_API_KEY) }}`,
     );
     expect(workflow).toContain(
-      `OPENAI_BASE_URL: \${{ secrets.ELIZAOS_CLOUD_API_KEY != '' && 'https://elizacloud.ai/api/v1' || 'https://api.openai.com/v1' }}`,
+      `OPENAI_BASE_URL: \${{ (secrets.ELIZAOS_CLOUD_API_KEY != '' || secrets.ELIZACLOUD_API_KEY != '') && 'https://elizacloud.ai/api/v1' || 'https://api.openai.com/v1' }}`,
     );
     expect(workflow).toContain(
-      "Action Invocation E2E skipped because the configured live provider is unavailable.",
+      "Action Invocation E2E requires an available live provider in canonical CI.",
     );
     expect(workflow).toContain(
       "grep -Eiq 'exceeded your current quota|insufficient[_ -]?quota|billing details|credit balance|invalid api key|unauthorized|authentication|status code: 429|too many requests' \"$log_file\"",

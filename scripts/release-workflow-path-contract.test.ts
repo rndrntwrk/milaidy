@@ -253,6 +253,25 @@ describe("release workflow path contract", () => {
     expect(testStatusBlock).toContain('if [ "$result" != "success" ]; then');
   });
 
+  it("uses the canonical Eliza Cloud secret aliases for blocking live tests", () => {
+    const testsWorkflow = readWorkflow("test.yml");
+    const releaseWorkflow = readWorkflow("release-electrobun.yml");
+    const cloudKeyExpression =
+      "secrets.ELIZAOS_CLOUD_API_KEY != '' && secrets.ELIZAOS_CLOUD_API_KEY || secrets.ELIZACLOUD_API_KEY";
+
+    expect(testsWorkflow).toContain(cloudKeyExpression);
+    expect(testsWorkflow).toContain(
+      "ELIZAOS_CLOUD_API_KEY or ELIZACLOUD_API_KEY is required for canonical cloud E2E.",
+    );
+    expect(releaseWorkflow).toContain(cloudKeyExpression);
+    expect(releaseWorkflow).toContain(
+      "ELIZAOS_CLOUD_API_KEY or ELIZACLOUD_API_KEY is required for release cloud live regression.",
+    );
+    expect(releaseWorkflow).not.toContain(
+      "skipping cloud live regression suite",
+    );
+  });
+
   it("keeps plugin-agent-orchestrator submodule init as the published release-check version source", () => {
     const releaseContract = readWorkflow("test-electrobun-release.yml");
 

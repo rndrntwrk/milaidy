@@ -177,8 +177,8 @@ jobs:
         # which exists as src in the workspace but the npm-published alpha.12
         # tarball doesn't ship dist/account-auth-service.js. This step is
         # best-effort — if the install fails (workspace context broken when
-        # MILADY_SKIP_LOCAL_UPSTREAMS=1), the cloud live regression suite
-        # itself is gated on ELIZAOS_CLOUD_API_KEY anyway. Never fails the job.
+        # MILADY_SKIP_LOCAL_UPSTREAMS=1), the blocking cloud live regression
+        # still runs with the canonical Eliza Cloud secret.
         continue-on-error: true
         run: |
           set +e
@@ -252,13 +252,13 @@ jobs:
       - name: Probe cloud live regression key
         id: probe-cloud-live-key
         env:
-          ELIZAOS_CLOUD_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY }}
+          ELIZAOS_CLOUD_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY != '' && secrets.ELIZAOS_CLOUD_API_KEY || secrets.ELIZACLOUD_API_KEY }}
         run: |
           if [ -n "${ELIZAOS_CLOUD_API_KEY:-}" ]; then
             echo "available=true" >> "$GITHUB_OUTPUT"
           else
-            echo "::warning::ELIZAOS_CLOUD_API_KEY not set; skipping cloud live regression suite"
-            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::error::ELIZAOS_CLOUD_API_KEY or ELIZACLOUD_API_KEY is required for release cloud live regression."
+            exit 1
           fi
 
       - name: Run cloud live regression suite
@@ -266,7 +266,7 @@ jobs:
         run: bun run test:live:cloud
         env:
           MILADY_LIVE_TEST: "1"
-          ELIZAOS_CLOUD_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY }}
+          ELIZAOS_CLOUD_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY != '' && secrets.ELIZAOS_CLOUD_API_KEY || secrets.ELIZACLOUD_API_KEY }}
           ELIZAOS_CLOUD_BASE_URL: ${{ secrets.ELIZAOS_CLOUD_BASE_URL }}
 
       - name: Restore build metadata after test rebuilds

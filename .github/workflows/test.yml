@@ -599,13 +599,15 @@ jobs:
     steps:
       - name: Check cloud secrets
         id: cloud
+        env:
+          ELIZAOS_CLOUD_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY != '' && secrets.ELIZAOS_CLOUD_API_KEY || secrets.ELIZACLOUD_API_KEY }}
         run: |
-          if [ -z "${{ secrets.ELIZAOS_CLOUD_API_KEY }}" ]; then
+          if [ -z "${ELIZAOS_CLOUD_API_KEY}" ]; then
             if [ "${{ github.event_name }}" = "push" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-              echo "::error::ELIZAOS_CLOUD_API_KEY is required for canonical cloud E2E."
+              echo "::error::ELIZAOS_CLOUD_API_KEY or ELIZACLOUD_API_KEY is required for canonical cloud E2E."
               exit 1
             fi
-            echo "::warning::ELIZAOS_CLOUD_API_KEY not configured for this PR — skipping cloud E2E."
+            echo "::warning::No Eliza Cloud API key configured for this PR — skipping cloud E2E."
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
@@ -635,7 +637,7 @@ jobs:
         env:
           MILADY_LIVE_TEST: "1"
           ELIZA_LIVE_TEST: "1"
-          ELIZAOS_CLOUD_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY }}
+          ELIZAOS_CLOUD_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY != '' && secrets.ELIZAOS_CLOUD_API_KEY || secrets.ELIZACLOUD_API_KEY }}
           ELIZAOS_CLOUD_BASE_URL: ${{ secrets.ELIZAOS_CLOUD_BASE_URL }}
 
   action-e2e:
@@ -653,9 +655,9 @@ jobs:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-      ELIZAOS_CLOUD_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY }}
-      OPENAI_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY != '' && secrets.ELIZAOS_CLOUD_API_KEY || secrets.OPENAI_API_KEY }}
-      OPENAI_BASE_URL: ${{ secrets.ELIZAOS_CLOUD_API_KEY != '' && 'https://elizacloud.ai/api/v1' || 'https://api.openai.com/v1' }}
+      ELIZAOS_CLOUD_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY != '' && secrets.ELIZAOS_CLOUD_API_KEY || secrets.ELIZACLOUD_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY != '' && secrets.ELIZAOS_CLOUD_API_KEY || (secrets.ELIZACLOUD_API_KEY != '' && secrets.ELIZACLOUD_API_KEY || secrets.OPENAI_API_KEY) }}
+      OPENAI_BASE_URL: ${{ (secrets.ELIZAOS_CLOUD_API_KEY != '' || secrets.ELIZACLOUD_API_KEY != '') && 'https://elizacloud.ai/api/v1' || 'https://api.openai.com/v1' }}
       NODE_NO_WARNINGS: "1"
       NODE_OPTIONS: "--max-old-space-size=4096"
     steps:
@@ -749,7 +751,7 @@ jobs:
         env:
           MILADY_LIVE_TEST: "1"
           ELIZA_LIVE_TEST: "1"
-          ELIZAOS_CLOUD_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY }}
+          ELIZAOS_CLOUD_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY != '' && secrets.ELIZAOS_CLOUD_API_KEY || secrets.ELIZACLOUD_API_KEY }}
           ELIZAOS_CLOUD_BASE_URL: ${{ secrets.ELIZAOS_CLOUD_BASE_URL }}
 
   live-surface-audit:
@@ -788,7 +790,7 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          ELIZAOS_CLOUD_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY }}
+          ELIZAOS_CLOUD_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY != '' && secrets.ELIZAOS_CLOUD_API_KEY || secrets.ELIZACLOUD_API_KEY }}
         run: |
           if [ -z "${OPENAI_API_KEY}" ] && \
              [ -z "${GROQ_API_KEY}" ] && \
@@ -881,7 +883,7 @@ jobs:
         env:
           MILADY_LIVE_TEST: "1"
           ELIZA_LIVE_TEST: "1"
-          ELIZAOS_CLOUD_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY }}
+          ELIZAOS_CLOUD_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY != '' && secrets.ELIZAOS_CLOUD_API_KEY || secrets.ELIZACLOUD_API_KEY }}
           ELIZAOS_CLOUD_BASE_URL: ${{ secrets.ELIZAOS_CLOUD_BASE_URL }}
 
   test-status:
