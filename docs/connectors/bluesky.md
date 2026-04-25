@@ -50,11 +50,10 @@ Unlike the 18 auto-enabled connectors (Discord, Telegram, etc.), Bluesky is a **
 | `BLUESKY_SERVICE` | No | BlueSky service URL (PDS instance) |
 | `BLUESKY_DRY_RUN` | No | Set to `true` for testing without posting |
 | `BLUESKY_ENABLE_DMS` | No | Enable processing of direct messages via the chat.bsky API |
-| `BLUESKY_ENABLE_POSTING` | No | Enable or disable the ability to post |
-| `BLUESKY_POLL_INTERVAL` | No | Polling interval in seconds for fetching new notifications |
+| `BLUESKY_POLL_INTERVAL` | No | Polling interval in seconds |
 | `BLUESKY_ACTION_INTERVAL` | No | Interval in seconds between action-processing cycles |
 | `BLUESKY_MAX_POST_LENGTH` | No | Maximum number of characters allowed in a post |
-| `BLUESKY_POST_IMMEDIATELY` | No | If `true`, posts are published immediately instead of waiting for a schedule |
+| `BLUESKY_POST_IMMEDIATELY` | No | Post immediately instead of waiting for a schedule |
 | `BLUESKY_POST_INTERVAL_MIN` | No | Minimum interval in seconds between automated posts |
 | `BLUESKY_POST_INTERVAL_MAX` | No | Maximum interval in seconds between automated posts |
 | `BLUESKY_MAX_ACTIONS_PROCESSING` | No | Maximum number of actions to process in a single batch |

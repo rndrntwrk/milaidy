@@ -115,6 +115,8 @@ const statuses = getLocalModelStatuses("embedding");
 
 ## Related
 
-- [Model Providers](/runtime/models)
-- [Environment variables](/cli/environment) — `OLLAMA_BASE_URL`, `LOCAL_EMBEDDING_*`
+- [Model Providers](/model-providers) — all inference backends
+- [Local AI Plugin](/plugin-registry/llm/local-ai) — embedded GGUF inference without an Ollama server
+- [Ollama Plugin](/plugin-registry/llm/ollama) — local inference via a running Ollama server
+- [Environment variables](/cli/environment) — `OLLAMA_API_ENDPOINT`, `LOCAL_EMBEDDING_*`
 - [`milady models`](/cli/models) — check configured providers

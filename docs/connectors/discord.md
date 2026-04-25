@@ -63,15 +63,15 @@ When loaded, secrets are pushed to `process.env` for the plugin to consume:
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `DISCORD_API_TOKEN` | Yes | Discord API token used to authenticate the bot |
-| `DISCORD_APPLICATION_ID` | No | Application ID (auto-resolved from bot token if omitted) |
-| `CHANNEL_IDS` | No | Comma-separated list of Discord channel IDs to restrict the bot to |
-| `DISCORD_LISTEN_CHANNEL_IDS` | No | Comma-separated list of channel IDs where the bot will only listen (not respond) |
-| `DISCORD_SHOULD_IGNORE_BOT_MESSAGES` | No | If `true`, ignore messages from other bots |
-| `DISCORD_SHOULD_IGNORE_DIRECT_MESSAGES` | No | If `true`, ignore direct messages |
-| `DISCORD_SHOULD_RESPOND_ONLY_TO_MENTIONS` | No | If `true`, only respond when explicitly mentioned |
-| `DISCORD_VOICE_CHANNEL_ID` | No | Voice channel ID to join when scanning a guild |
+| `DISCORD_API_TOKEN` | Yes | Primary bot token (always set from `token` config field) |
+| `DISCORD_APPLICATION_ID` | No | Application ID. Auto-resolved via Discord OAuth2 API if not set |
+| `CHANNEL_IDS` | No | Comma-separated list of channel IDs |
 | `DISCORD_TEST_CHANNEL_ID` | No | Channel ID used by the test suite |
+| `DISCORD_VOICE_CHANNEL_ID` | No | Voice channel ID the bot should join |
+| `DISCORD_SHOULD_IGNORE_BOT_MESSAGES` | No | Ignore messages from other bots |
+| `DISCORD_SHOULD_IGNORE_DIRECT_MESSAGES` | No | Ignore direct messages |
+| `DISCORD_SHOULD_RESPOND_ONLY_TO_MENTIONS` | No | Only respond when mentioned |
+| `DISCORD_LISTEN_CHANNEL_IDS` | No | Comma-separated list of listen-only channel IDs |
 
 Note: If `DISCORD_APPLICATION_ID` is not configured, the runtime automatically resolves it by calling `https://discord.com/api/v10/oauth2/applications/@me` with the bot token.
 

@@ -127,14 +127,14 @@ SKILLS_DENYLIST = <comma-separated denied skill names>
 
 ## Sandbox Manager
 
-`SandboxManager` from `src/services/sandbox-manager.ts` provides Docker-based code execution isolation when `agents.defaults.sandbox.mode` is `"standard"` or `"max"`:
+`SandboxManager` from `eliza/packages/app-core/src/services/sandbox-manager.ts` provides Docker-based code execution isolation when `agents.defaults.sandbox.mode` is `"standard"` or `"max"`:
 
 ```typescript
 const sandboxManager = new SandboxManager({
   mode: "standard",
   image: dockerSettings?.image ?? undefined,  // no default image — must be configured
   browser: dockerSettings?.browser ?? undefined,
-  containerPrefix: "milady-sandbox-",
+  containerPrefix: "eliza-sandbox",
   network: "bridge",
   memory: "512m",
   cpus: 0.5,

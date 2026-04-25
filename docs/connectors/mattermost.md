@@ -57,20 +57,20 @@ No environment variable is required to trigger auto-enable — it is driven enti
 
 ## Environment Variables
 
-When the connector is loaded, the runtime pushes the following secrets from your config into `process.env` for the plugin to consume:
+When the connector is loaded, the runtime pushes the following into `process.env` for the plugin to consume:
 
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `MATTERMOST_BOT_TOKEN` | Yes | Bot token from Mattermost System Console |
-| `MATTERMOST_SERVER_URL` | No | Base URL for the Mattermost server |
-| `MATTERMOST_ENABLED` | No | Enable or disable the plugin |
+| `MATTERMOST_SERVER_URL` | No | Server URL for the Mattermost server |
+| `MATTERMOST_ENABLED` | No | Enable or disable the connector |
 | `MATTERMOST_TEAM_ID` | No | Team/tenant ID |
 | `MATTERMOST_DM_POLICY` | No | DM policy (e.g., `allow`, `deny`, `allowlist`) |
 | `MATTERMOST_GROUP_POLICY` | No | Group message policy (e.g., `allow`, `deny`) |
-| `MATTERMOST_ALLOWED_USERS` | No | Comma-separated list of allowed user IDs |
-| `MATTERMOST_ALLOWED_CHANNELS` | No | Comma-separated list of allowed channel IDs |
-| `MATTERMOST_REQUIRE_MENTION` | No | Only respond when mentioned (`true`/`false`) |
-| `MATTERMOST_IGNORE_BOT_MESSAGES` | No | Ignore messages from other bots (`true`/`false`) |
+| `MATTERMOST_ALLOWED_USERS` | No | Comma-separated allowed user list |
+| `MATTERMOST_REQUIRE_MENTION` | No | Only respond when mentioned |
+| `MATTERMOST_ALLOWED_CHANNELS` | No | Comma-separated allowed channel list |
+| `MATTERMOST_IGNORE_BOT_MESSAGES` | No | Ignore messages from other bots |
 
 ## Full Configuration Reference
 

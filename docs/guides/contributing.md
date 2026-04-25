@@ -162,7 +162,7 @@ bun run dev:desktop:watch
 
 ### Testing
 
-Coverage thresholds are enforced from `scripts/coverage-policy.mjs`: 25% lines/functions/statements, 15% branches. CI fails when coverage falls below these floors.
+Coverage thresholds are enforced from `eliza/packages/app-core/scripts/coverage-policy.mjs`: 25% lines/functions/statements, 15% branches. CI fails when coverage falls below these floors.
 
 ```bash
 # Run all tests (parallel)
@@ -179,6 +179,14 @@ bun run test:e2e
 
 # Live tests (requires API keys)
 MILADY_LIVE_TEST=1 bun run test:live
+```
+
+### Runtime fallback for Bun crashes
+
+If Bun segfaults on your platform during long-running sessions, run Milady on Node runtime:
+
+```bash
+ELIZA_RUNTIME=node bun run milady start
 ```
 
 ### Test File Conventions

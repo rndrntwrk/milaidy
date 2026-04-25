@@ -4,6 +4,8 @@ sidebarTitle: "Google Antigravity"
 description: "Google Cloud AI model provider for Milady — access Google Cloud AI Platform models via the Antigravity integration."
 ---
 
+> **Not in plugin registry.** `@elizaos/plugin-google-antigravity` is not registered in `plugins.json`. This plugin may not be installable via `milady plugins install`. Use [Google Gemini](/plugin-registry/llm/google-genai) for Google AI models instead.
+
 The Google Antigravity plugin connects Milady agents to Google Cloud AI Platform, providing access to Google's cloud-hosted AI models through the Google Cloud API.
 
 > **Availability:** This plugin is not in the default Milady plugin registry. Install it directly with `milady plugins install google-antigravity` or `milady plugins install @elizaos/plugin-google-antigravity`.

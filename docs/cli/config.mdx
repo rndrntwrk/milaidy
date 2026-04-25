@@ -1,20 +1,36 @@
 ---
 title: "milady config"
-description: "Inspect or validate milady.json-style configuration from the shell."
+description: "Inspect configuration values, file path, and schema from the shell."
 ---
 
 # `milady config`
 
-Read-only or validation helpers for the active configuration (exact subcommands depend on your CLI version).
+Config helpers for reading and inspecting the active configuration.
+
+## Subcommands
+
+| Subcommand | Description |
+|------------|-------------|
+| `milady config get <key>` | Read a config value by dot-notation key (e.g. `env.ANTHROPIC_API_KEY`). |
+| `milady config path` | Print the resolved config file path. |
+| `milady config show` | Display all configuration values grouped by section. |
+
+### `milady config show` flags
+
+| Flag | Description |
+|------|-------------|
+| `-a, --all` | Include advanced/hidden fields. |
+| `--json` | Output as raw JSON. |
 
 ## Examples
 
 ```bash
-milady config
-milady config --help
+milady config get env.ANTHROPIC_API_KEY
+milady config path
+milady config show
+milady config show --json
+milady config show --all
 ```
-
-Use this when you need to confirm which file path and keys the runtime will load before starting the server.
 
 ## Related
 

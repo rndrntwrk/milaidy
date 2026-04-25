@@ -4,6 +4,8 @@ sidebarTitle: "Knowledge"
 description: "Native RAG system — document ingestion, embedding generation, similarity search, knowledge retrieval, and supported file formats."
 ---
 
+> **Not a standalone plugin.** Knowledge is a built-in runtime feature, not a separately registered plugin in `plugins.json`. It is enabled by default and does not need to be installed.
+
 The native knowledge feature provides a Retrieval-Augmented Generation (RAG) system for Milady agents. It enables agents to retrieve relevant information from a document corpus and inject it into the LLM context.
 
 **Package:** `@elizaos/plugin-knowledge`

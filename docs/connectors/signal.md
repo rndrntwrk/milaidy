@@ -87,12 +87,13 @@ The runtime injects the following environment variables from your `connectors.si
 
 | Env Variable | Required | Description |
 |---|---|---|
-| `SIGNAL_ACCOUNT_NUMBER` | Yes | Signal phone number in E.164 format (e.g., `+1234567890`) |
-| `SIGNAL_HTTP_URL` | No | Signal CLI REST API URL (e.g., `http://localhost:8080`) |
-| `SIGNAL_CLI_PATH` | No | Path to signal-cli executable (alternative to HTTP API) |
-| `SIGNAL_SHOULD_IGNORE_GROUP_MESSAGES` | No | If `true`, the bot will only respond to direct messages |
+| `SIGNAL_AUTH_DIR` | `authDir` | Path to signal-cli data directory |
+| `SIGNAL_ACCOUNT_NUMBER` | `account` | Signal phone number (E.164) |
+| `SIGNAL_HTTP_URL` | `httpUrl` | HTTP URL for signal-cli daemon |
+| `SIGNAL_CLI_PATH` | `cliPath` | Path to signal-cli binary |
+| `SIGNAL_SHOULD_IGNORE_GROUP_MESSAGES` | N/A | If true, only respond to direct messages |
 
-You do not need to set these manually — they are derived from the connector config at runtime.
+The first four are derived from the connector config at runtime. `SIGNAL_SHOULD_IGNORE_GROUP_MESSAGES` can be set as a standalone environment variable.
 
 ## Full Configuration Reference
 

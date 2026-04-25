@@ -117,10 +117,11 @@ The actual secret value is never logged.
 
 ## Configuration
 
-| Setting | Description | Default |
-|---------|-------------|---------|
-| `secrets.encryption` | Enable encryption at rest | `true` |
-| `secrets.auditLog` | Enable access audit logging | `true` |
+| Environment Variable | Required | Description |
+|---------------------|----------|-------------|
+| `ENCRYPTION_SALT` | No | Custom salt for encryption key derivation |
+| `ENABLE_ENCRYPTION` | No | Enable encryption for stored secrets (default: `true`) |
+| `ENABLE_ACCESS_LOGGING` | No | Enable access logging for audit (default: `true`) |
 
 ## Related
 

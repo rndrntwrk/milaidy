@@ -26,16 +26,19 @@ The plugin auto-enables when `ALCHEMY_API_KEY` is set (this is the `envKey` in `
 
 | Environment Variable | Required | Description |
 |---------------------|----------|-------------|
-| `EVM_PRIVATE_KEY` | Yes | Private key for the agent's wallet (hex, with or without `0x`) |
-| `EVM_RPC_PROVIDER` | No | RPC provider name |
-| `ALCHEMY_API_KEY` | No | Alchemy API key for multi-chain RPC (also triggers auto-enable) |
+| `EVM_PRIVATE_KEY` | Yes | Hex-encoded private key (starting with `0x`) for the agent's wallet |
+| `EVM_RPC_PROVIDER` | No | Preferred RPC provider: `alchemy`, `infura`, `ankr`, or `elizacloud` |
+| `ALCHEMY_API_KEY` | No | Alchemy API key for multi-chain RPC |
 | `INFURA_API_KEY` | No | Infura API key for RPC |
-| `ANKR_API_KEY` | No | Ankr API key for RPC |
-| `ETHEREUM_PROVIDER_ETHEREUM` | No | Custom RPC URL for Ethereum mainnet |
-| `ETHEREUM_PROVIDER_BASE` | No | Custom RPC URL for Base |
-| `ETHEREUM_PROVIDER_ARBITRUM` | No | Custom RPC URL for Arbitrum |
-| `ETHEREUM_PROVIDER_OPTIMISM` | No | Custom RPC URL for Optimism |
-| `TEE_MODE` | No | Trusted Execution Environment mode |
+| `ANKR_API_KEY` | No | Ankr premium API key for RPC |
+| `ETHEREUM_PROVIDER_ETHEREUM` | No | Custom RPC URL for Ethereum mainnet (overrides provider-based RPC) |
+| `ETHEREUM_PROVIDER_BASE` | No | Custom RPC URL for Base mainnet |
+| `ETHEREUM_PROVIDER_ARBITRUM` | No | Custom RPC URL for Arbitrum One |
+| `ETHEREUM_PROVIDER_OPTIMISM` | No | Custom RPC URL for Optimism mainnet |
+| `TEE_MODE` | No | Enable Trusted Execution Environment (TEE) mode |
+| `WALLET_SECRET_SALT` | No | Salt value for TEE-derived wallet keypair |
+| `SEPOLIA_RPC_URL` | No | RPC endpoint URL for Sepolia testnet |
+| `BASE_SEPOLIA_RPC_URL` | No | RPC endpoint URL for Base Sepolia testnet |
 
 ```json
 {
@@ -110,7 +113,7 @@ After the plugin is loaded, the agent can execute on-chain operations through na
   "settings": {
     "secrets": {
       "EVM_PRIVATE_KEY": "0x...",
-      "EVM_RPC_URL": "https://sepolia.base.org"
+      "BASE_SEPOLIA_RPC_URL": "https://sepolia.base.org"
     }
   }
 }

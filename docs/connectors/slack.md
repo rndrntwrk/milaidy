@@ -56,15 +56,17 @@ No environment variable is required to trigger auto-enable — it is driven enti
 
 ## Environment Variables
 
+When the connector is loaded, the runtime pushes the following secrets from your config into `process.env` for the plugin to consume:
+
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `SLACK_APP_TOKEN` | Yes | Slack App Token (`xapp-...`) for Socket Mode connections |
-| `SLACK_BOT_TOKEN` | Yes | Slack Bot Token (`xoxb-...`) for API authentication |
-| `SLACK_USER_TOKEN` | No | User Token (`xoxp-...`) for enhanced permissions |
-| `SLACK_SIGNING_SECRET` | No | Slack Signing Secret for verifying HTTP mode requests |
+| `SLACK_BOT_TOKEN` | Yes | Bot token (`xoxb-...`) for API authentication |
+| `SLACK_APP_TOKEN` | Yes | App-level token (`xapp-...`) for Socket Mode connections |
+| `SLACK_USER_TOKEN` | No | User token (`xoxp-...`) for enhanced permissions |
 | `SLACK_CHANNEL_IDS` | No | Comma-separated list of channel IDs to restrict the bot to |
-| `SLACK_SHOULD_IGNORE_BOT_MESSAGES` | No | If `true`, ignore messages from other bots |
-| `SLACK_SHOULD_RESPOND_ONLY_TO_MENTIONS` | No | If `true`, only respond when mentioned |
+| `SLACK_SIGNING_SECRET` | No | Signing secret for verifying requests |
+| `SLACK_SHOULD_IGNORE_BOT_MESSAGES` | No | Ignore messages from other bots |
+| `SLACK_SHOULD_RESPOND_ONLY_TO_MENTIONS` | No | Only respond when mentioned |
 
 ## Transport Modes
 

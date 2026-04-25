@@ -5,24 +5,25 @@ description: "Diagnose environment, ports, and common misconfigurations."
 
 # `milady doctor`
 
-Runs a full environment health check, flagging missing dependencies, port conflicts, and configuration issues.
+Runs health checks grouped by category: **System** (runtime version, node_modules, build artifacts, local upstreams), **Configuration** (config file, model API key, host binding), **Storage** (state directory, database, disk space), and **Network** (port availability).
 
 ## What it checks
 
-- **Node.js / Bun version** — verifies Node.js 22+ and Bun are available
-- **Config file** — checks that `~/.milady/milady.json` exists and is valid JSON
-- **State directory** — verifies `~/.milady/` is accessible and writable
-- **Port availability** — checks whether default ports (2138, 18789, 31337) are free or already in use
-- **Model providers** — reports which API keys are configured and reachable
-- **Database** — checks that the SQLite/PGlite database is accessible
+## Flags
 
-For maintainers working from a source checkout, `doctor` also checks the repo-local vendored workspace under `./eliza` and reports whether `@elizaos/core` resolves to vendored source or a published install.
+| Flag | Description |
+|------|-------------|
+| `--no-ports` | Skip port availability checks. |
+| `--fix` | Automatically fix issues where possible (runs auto-fixable `milady` sub-commands). |
+| `--json` | Output results as JSON (CI-friendly). Exits with code 1 if any check fails. |
 
-## Usage
+## Examples
 
 ```bash
 milady doctor
-milady doctor --help
+milady doctor --fix
+milady doctor --json
+milady doctor --no-ports
 ```
 
 From a source checkout:

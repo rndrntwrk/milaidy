@@ -4,7 +4,7 @@ sidebarTitle: "Model Providers"
 description: "Supported inference backends and how they fit into Milady's server-target-first routing model."
 ---
 
-Milady supports **18 inference backends** out of the box. Provider plugins still supply the concrete model implementations, but the active backend is selected through canonical runtime routing on the connected server, not by ad hoc env toggles in the client.
+Milady supports multiple inference backends out of the box. Provider plugins supply the concrete model implementations, but the active backend is selected through canonical runtime routing on the connected server, not by ad hoc env toggles in the client.
 
 ---
 
@@ -27,13 +27,14 @@ Providers marked **bundled** are pre-installed with every Milady release and loa
 | [Groq](https://groq.com) | `@elizaos/plugin-groq` | `GROQ_API_KEY` | Bundled | Ultra-fast inference (LPU). |
 | [xAI](https://x.ai) | `@elizaos/plugin-xai` | `XAI_API_KEY` or `GROK_API_KEY` | On demand | Grok models. |
 | [DeepSeek](https://deepseek.com) | `@elizaos/plugin-deepseek` | `DEEPSEEK_API_KEY` | On demand | Reasoning and code models. |
-| [Ollama](https://ollama.com) | `@elizaos/plugin-ollama` | `OLLAMA_BASE_URL` | Bundled | **Local models.** No API key needed. Requires a running [Ollama](https://ollama.com) server. |
-| [Qwen](https://qwen.ai) | `@elizaos/plugin-qwen` | — | On demand | Alibaba's Qwen models. Configure via plugin entry. |
-| [MiniMax](https://minimaxi.com) | `@elizaos/plugin-minimax` | — | On demand | MiniMax language models. Configure via plugin entry. |
-| [Together AI](https://together.ai) | `@elizaos/plugin-together` | `TOGETHER_API_KEY` | On demand | Open-source model hosting. |
-| [Mistral](https://mistral.ai) | `@elizaos/plugin-mistral` | `MISTRAL_API_KEY` | On demand | Mistral and Mixtral models. |
-| [Cohere](https://cohere.com) | `@elizaos/plugin-cohere` | `COHERE_API_KEY` | On demand | Command R+ and embed models. |
-| [Perplexity](https://perplexity.ai) | `@elizaos/plugin-perplexity` | `PERPLEXITY_API_KEY` | On demand | Search-augmented generation. |
+| [Ollama](https://ollama.com) | `@elizaos/plugin-ollama` | `OLLAMA_API_ENDPOINT` or `OLLAMA_BASE_URL` | Bundled | **Local models (server).** No API key needed. Requires a running [Ollama](https://ollama.com) server. |
+| [Local AI](/plugin-registry/llm/local-ai) | `@elizaos/plugin-local-ai` | — | On demand | **Local models (embedded).** Runs GGUF models directly on-device via `node-llama-cpp`. No server needed. |
+| [Qwen](https://qwen.ai) | `@elizaos/plugin-qwen` | — | On demand | Alibaba's Qwen models. Configure via plugin entry. Not in the plugin registry — use via [OpenRouter](/plugin-registry/llm/openrouter). |
+| [MiniMax](https://minimaxi.com) | `@elizaos/plugin-minimax` | — | On demand | MiniMax language models. Not in the plugin registry. |
+| [Together AI](https://together.ai) | `@elizaos/plugin-together` | `TOGETHER_API_KEY` | On demand | Open-source model hosting. Not in the plugin registry — use via [OpenRouter](/plugin-registry/llm/openrouter). |
+| [Mistral](https://mistral.ai) | `@elizaos/plugin-mistral` | `MISTRAL_API_KEY` | On demand | Mistral and Mixtral models. Not in the plugin registry — use via [OpenRouter](/plugin-registry/llm/openrouter). |
+| [Cohere](https://cohere.com) | `@elizaos/plugin-cohere` | `COHERE_API_KEY` | On demand | Command R+ and embed models. Not in the plugin registry — use via [OpenRouter](/plugin-registry/llm/openrouter). |
+| [Perplexity](https://perplexity.ai) | `@elizaos/plugin-perplexity` | `PERPLEXITY_API_KEY` | On demand | Search-augmented generation. Not in the plugin registry — use via [OpenRouter](/plugin-registry/llm/openrouter). |
 | [Zai](https://homunculuslabs.com) | `@homunculuslabs/plugin-zai` | `ZAI_API_KEY` | On demand | Homunculus Labs Zai models. |
 | [Eliza Cloud](https://elizacloud.ai) | `@elizaos/plugin-elizacloud` | `ELIZAOS_CLOUD_API_KEY` | Bundled | Cloud-managed inference route. Can be selected independently from where Milady itself is running. |
 
@@ -224,7 +225,7 @@ GROQ_API_KEY=gsk_...
 OPENROUTER_API_KEY=sk-or-v1-...
 
 # Local — offline / privacy-sensitive work
-OLLAMA_BASE_URL=http://127.0.0.1:11434
+OLLAMA_API_ENDPOINT=http://127.0.0.1:11434
 ```
 
 With this setup, all four providers are available. You can set different models for different purposes:
@@ -249,7 +250,7 @@ With this setup, all four providers are available. You can set different models 
 
 ## Local Models with Ollama
 
-Ollama lets you run models locally with no API key and full privacy. It is the only provider that does not require an API key — just a running Ollama server.
+Ollama lets you run models locally with no API key and full privacy. It does not require an API key — just a running Ollama server. For fully embedded local inference without any server, see [Local AI](/plugin-registry/llm/local-ai).
 
 ### Setup
 
@@ -263,13 +264,13 @@ Ollama lets you run models locally with no API key and full privacy. It is the o
     ```bash
     ollama pull llama3.3
     ```
-    To see available models on your machine, run `ollama list`. Browse all models at [ollama.com/library](https://ollama.com/library).
-  </Step></invoke>
-  <Step title="Set the base URL">
+  </Step>
+  <Step title="Set the endpoint URL">
     Add to `~/.milady/.env`:
     ```bash
-    OLLAMA_BASE_URL=http://127.0.0.1:11434
+    OLLAMA_API_ENDPOINT=http://127.0.0.1:11434
     ```
+    (`OLLAMA_BASE_URL` also works as an alias.)
   </Step>
   <Step title="Select the model">
     In `~/.milady/milady.json`:
@@ -287,10 +288,10 @@ Ollama lets you run models locally with no API key and full privacy. It is the o
   </Step>
 </Steps>
 
-Ollama auto-enables as soon as `OLLAMA_BASE_URL` is set. If you are running Ollama on the default port locally, just set:
+Ollama auto-enables as soon as `OLLAMA_API_ENDPOINT` (or the alias `OLLAMA_BASE_URL`) is set. If you are running Ollama on the default port locally, just set:
 
 ```bash
-OLLAMA_BASE_URL=http://127.0.0.1:11434
+OLLAMA_API_ENDPOINT=http://127.0.0.1:11434
 ```
 
 To verify Ollama is running and reachable:
@@ -321,7 +322,8 @@ Every env variable that triggers auto-enable, grouped by provider:
 | `XAI_API_KEY` | xAI |
 | `GROK_API_KEY` | xAI |
 | `OPENROUTER_API_KEY` | OpenRouter |
-| `OLLAMA_BASE_URL` | Ollama |
+| `OLLAMA_API_ENDPOINT` | Ollama |
+| `OLLAMA_BASE_URL` | Ollama (alias) |
 | `DEEPSEEK_API_KEY` | DeepSeek |
 | `TOGETHER_API_KEY` | Together AI |
 | `MISTRAL_API_KEY` | Mistral |

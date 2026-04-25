@@ -38,6 +38,16 @@ Or uncomment in `OPTIONAL_CORE_PLUGINS` in your configuration:
 }
 ```
 
+## Configuration
+
+| Environment Variable | Required | Description |
+|---------------------|----------|-------------|
+| `COMPUTER_USE_ENABLED` | No | Enable computer use capabilities (desktop automation, screenshots, browser control) |
+| `COMPUTER_USE_SCREENSHOT_AFTER_ACTION` | No | Automatically capture a screenshot after each desktop action |
+| `COMPUTER_USE_ACTION_TIMEOUT_MS` | No | Maximum action execution timeout in milliseconds |
+| `COMPUTER_USE_APPROVAL_MODE` | No | Approval mode: `full_control` (auto-approve all), `smart_approve` (auto-approve safe read-only), `approve_all` (require approval for every command), `off` (deny all) |
+| `COMPUTER_USE_BROWSER_HEADLESS` | No | Run browser automation headlessly (useful for CI and test environments) |
+
 ## Platform Support
 
 | Platform | Support |

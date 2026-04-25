@@ -4,6 +4,8 @@ sidebarTitle: "Qwen"
 description: "Qwen model provider for Milady — access Alibaba Cloud's Qwen language models."
 ---
 
+> **Not in plugin registry.** `@elizaos/plugin-qwen` is not registered in `plugins.json`. This plugin may not be installable via `milady plugins install`. Access Qwen models via [OpenRouter](/plugin-registry/llm/openrouter) or [Ollama](/plugin-registry/llm/ollama) instead.
+
 The Qwen plugin connects Milady agents to Alibaba Cloud's Qwen (Tongyi Qianwen) language models, providing access to multilingual models with strong Chinese and English capabilities.
 
 > **Availability:** This plugin is not in the default Milady plugin registry. Install it directly with `milady plugins install qwen` or `milady plugins install @elizaos/plugin-qwen`.

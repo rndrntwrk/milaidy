@@ -46,12 +46,15 @@ The Twilio connector is an elizaOS plugin that bridges your agent to Twilio's co
 | `TWILIO_WEBHOOK_PORT` | No | Port for the webhook server |
 | `VOICE_CALL_ENABLED` | No | Enable voice call capabilities |
 | `VOICE_CALL_PROVIDER` | No | Voice call provider selection |
-| `VOICE_CALL_FROM_NUMBER` | No | Outbound caller ID number |
-| `VOICE_CALL_TO_NUMBER` | No | Default destination number |
-| `VOICE_CALL_ALLOW_FROM` | No | Comma-separated allowed inbound callers |
-| `VOICE_CALL_INBOUND_POLICY` | No | Inbound call policy |
+| `VOICE_CALL_FROM_NUMBER` | No | Phone number for outbound calls |
+| `VOICE_CALL_TO_NUMBER` | No | Default destination phone number |
+| `VOICE_CALL_ALLOW_FROM` | No | Comma-separated list of allowed caller numbers |
+| `VOICE_CALL_PUBLIC_URL` | No | Public URL for voice call webhooks |
+| `VOICE_CALL_WEBHOOK_PATH` | No | Webhook path for voice calls |
+| `VOICE_CALL_WEBHOOK_PORT` | No | Port for voice call webhooks |
+| `VOICE_CALL_INBOUND_POLICY` | No | Inbound call handling policy |
 | `VOICE_CALL_INBOUND_GREETING` | No | Greeting message for inbound calls |
-| `VOICE_CALL_MAX_CONCURRENT_CALLS` | No | Maximum concurrent calls |
+| `VOICE_CALL_MAX_CONCURRENT_CALLS` | No | Maximum number of concurrent calls |
 | `VOICE_CALL_MAX_DURATION_SECONDS` | No | Maximum call duration in seconds |
 
 ## Features

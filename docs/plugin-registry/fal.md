@@ -4,6 +4,8 @@ sidebarTitle: "FAL"
 description: "FAL media generation plugin for Milady — access FAL.ai's suite of image, video, and audio generation models."
 ---
 
+> **Not in plugin registry.** `@elizaos/plugin-fal` is not registered in `plugins.json`. This plugin may not be installable via `milady plugins install`.
+
 The FAL plugin connects Milady agents to [FAL.ai](https://fal.ai)'s media generation platform, providing access to fast inference for image, video, and audio generation models.
 
 **Package:** `@elizaos/plugin-fal`

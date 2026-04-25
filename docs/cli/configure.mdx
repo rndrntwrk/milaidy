@@ -1,19 +1,27 @@
 ---
 title: "milady configure"
-description: "Interactive configuration for Milady after initial setup."
+description: "Configuration guidance and common environment variable reference."
 ---
 
 # `milady configure`
 
-Opens prompts or flows to adjust settings stored in the Milady config file (under your state directory).
+Prints configuration guidance: how to read and set config values, and the most common environment variables for model providers.
 
-## Examples
+This command does not accept flags. For reading and writing config values, use [`milady config`](/cli/config). For interactive key setup, use [`milady setup`](/cli/setup).
 
-```bash
-milady configure
+## Output
+
 ```
+Set values with:
+  milady config get <key>     Read a config value
+  Edit ~/.milady/milady.json directly for full control.
 
-Run `milady configure --help` for scope and mode flags.
+Common environment variables:
+  ANTHROPIC_API_KEY    Anthropic (Claude)
+  OPENAI_API_KEY       OpenAI (GPT)
+  AI_GATEWAY_API_KEY   Vercel AI Gateway
+  GOOGLE_API_KEY       Google (Gemini)
+```
 
 ## Related
 

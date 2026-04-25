@@ -63,8 +63,8 @@ No environment variable is required to trigger auto-enable — it is driven enti
 | `BLOOIO_WEBHOOK_URL` | No | Webhook callback URL for receiving inbound messages |
 | `BLOOIO_WEBHOOK_PATH` | No | Webhook endpoint path |
 | `BLOOIO_WEBHOOK_PORT` | No | Webhook listener port |
-| `BLOOIO_WEBHOOK_SECRET` | No | Secret key for webhook signature verification |
-| `BLOOIO_SIGNATURE_TOLERANCE_SEC` | No | Tolerance window in seconds for signature validation |
+| `BLOOIO_WEBHOOK_SECRET` | No | Secret key for webhook/client verification |
+| `BLOOIO_SIGNATURE_TOLERANCE_SEC` | No | Tolerance window in seconds for signature verification |
 
 ## Setup Steps
 

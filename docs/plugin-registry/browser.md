@@ -38,18 +38,14 @@ export MILADY_FEATURE_BROWSER=true
 
 ## Configuration
 
-### Environment Variables
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `OPENAI_API_KEY` | Yes | Required for browser content extraction (used as the plugin's activation key in `plugins.json`) |
-| `ANTHROPIC_API_KEY` | No | Alternative AI provider for content extraction |
+| Environment Variable | Required | Description |
+|---------------------|----------|-------------|
+| `OPENAI_API_KEY` | No | OpenAI API key for AI-powered browser interactions |
+| `ANTHROPIC_API_KEY` | No | Anthropic API key for Claude-powered interactions |
 | `BROWSER_HEADLESS` | No | Run browser in headless mode (default: `true`) |
-| `CAPSOLVER_API_KEY` | No | CAPSolver API key for CAPTCHA solving |
-| `BROWSERBASE_API_KEY` | No | BrowserBase API key for cloud browser sessions |
-| `BROWSERBASE_PROJECT_ID` | No | BrowserBase project identifier |
-
-### Feature Config
+| `BROWSERBASE_API_KEY` | No | API key for Browserbase cloud browser service |
+| `BROWSERBASE_PROJECT_ID` | No | Project ID for Browserbase |
+| `CAPSOLVER_API_KEY` | No | CapSolver API key for automated CAPTCHA solving |
 
 ```json
 {

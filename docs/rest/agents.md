@@ -4,7 +4,7 @@ sidebarTitle: "Agents"
 description: "REST API endpoints for agent lifecycle, administration, and transfer (export/import)."
 ---
 
-All agent endpoints require the agent runtime to be initialized. The API server runs on port **31337** in development (`MILADY_API_PORT`) and **2138** in production. All paths are prefixed with `/api/`. When `MILADY_API_TOKEN` is set, include it as a `Bearer` token in the `Authorization` header.
+All agent endpoints require the agent runtime to be initialized. The API server runs on port **2138** by default (`MILADY_API_PORT`); in desktop dev mode, the API splits to port **31337** while the UI stays on 2138. All paths are prefixed with `/api/`. When `MILADY_API_TOKEN` is set, include it as a `Bearer` token in the `Authorization` header.
 
 ## Endpoints
 
@@ -162,8 +162,8 @@ Restart the agent runtime. Returns `409` if a restart is already in progress and
 Wipe config, workspace (memory), oauth tokens, and return to onboarding state. Stops the runtime, deletes the `~/.milady/` state directory (with safety checks to prevent deletion of system paths), and resets all server state.
 
 This is a sensitive endpoint with stricter authorization:
-- In `development` or `dev` environments (`NODE_ENV`), no token is required.
-- In all other environments, a valid `MILADY_API_TOKEN` must be configured and included in the request. Returns `403` if no token is configured.
+- If `MILADY_API_TOKEN` is configured, the request must include it as a Bearer token.
+- If no token is configured, the request is only allowed from loopback addresses (localhost). Non-loopback requests without a token return `403`.
 
 **Response**
 

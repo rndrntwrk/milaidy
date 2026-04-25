@@ -61,13 +61,13 @@ No environment variable is required to trigger auto-enable — it is driven enti
 |----------|----------|-------------|
 | `TWITCH_ACCESS_TOKEN` | Yes | Twitch OAuth access token with chat scopes |
 | `TWITCH_CLIENT_ID` | No | Twitch application Client ID |
-| `TWITCH_CLIENT_SECRET` | No | Twitch application Client Secret |
-| `TWITCH_REFRESH_TOKEN` | No | Twitch OAuth refresh token |
-| `TWITCH_USERNAME` | No | Twitch username for authentication |
-| `TWITCH_CHANNEL` | No | Primary Twitch channel name |
-| `TWITCH_CHANNELS` | No | Comma-separated list of channel names to join |
+| `TWITCH_CLIENT_SECRET` | No | Twitch client secret |
+| `TWITCH_REFRESH_TOKEN` | No | Refresh token for token renewal |
+| `TWITCH_USERNAME` | No | Twitch username for the bot |
+| `TWITCH_CHANNEL` | No | Primary channel name to join |
+| `TWITCH_CHANNELS` | No | Comma-separated list of additional channels |
 | `TWITCH_ALLOWED_ROLES` | No | Comma-separated list of allowed roles |
-| `TWITCH_REQUIRE_MENTION` | No | Only respond when mentioned (`true`/`false`) |
+| `TWITCH_REQUIRE_MENTION` | No | Only respond when mentioned |
 
 ## Setup Steps
 

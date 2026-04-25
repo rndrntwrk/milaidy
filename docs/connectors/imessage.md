@@ -65,11 +65,11 @@ No environment variable is required to trigger auto-enable — it is driven enti
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `IMESSAGE_CLI_PATH` | No | Path to the iMessage CLI tool binary |
+| `IMESSAGE_CLI_PATH` | No | Path to the iMessage CLI tool executable |
 | `IMESSAGE_DB_PATH` | No | Path to the iMessage database file |
-| `IMESSAGE_ENABLED` | No | Enable or disable the plugin |
+| `IMESSAGE_ENABLED` | No | Enable or disable the connector |
 | `IMESSAGE_DM_POLICY` | No | DM policy (e.g., `allow`, `deny`, `allowlist`) |
-| `IMESSAGE_ALLOW_FROM` | No | Comma-separated list of allowed sender IDs |
+| `IMESSAGE_ALLOW_FROM` | No | Comma-separated allowed sender list |
 | `IMESSAGE_GROUP_POLICY` | No | Group message policy |
 | `IMESSAGE_POLL_INTERVAL_MS` | No | Polling interval in milliseconds |
 

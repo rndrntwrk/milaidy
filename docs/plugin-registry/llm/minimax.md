@@ -4,6 +4,8 @@ sidebarTitle: "MiniMax"
 description: "MiniMax model provider for Milady — access MiniMax's language and multimodal models."
 ---
 
+> **Not in plugin registry.** `@elizaos/plugin-minimax` is not registered in `plugins.json`. This plugin may not be installable via `milady plugins install`.
+
 The MiniMax plugin connects Milady agents to MiniMax's language models, providing access to their text generation and multimodal capabilities.
 
 > **Availability:** This plugin is not in the default Milady plugin registry. Install it directly with `milady plugins install minimax` or `milady plugins install @elizaos/plugin-minimax`.

@@ -56,7 +56,7 @@ Milady is a cross-platform AI agent runtime built on top of [elizaOS](https://el
 
 Milady has two primary entry points, plus a dev-server variant:
 
-### CLI Entry (`packages/app-core/src/entry.ts`)
+### CLI Entry (`eliza/packages/app-core/src/entry.ts`)
 
 The CLI entry point is the bootstrap for all Milady operations. Built by `tsdown` into `dist/entry.js` and invoked by the `milady.mjs` wrapper script.
 
@@ -66,10 +66,10 @@ The boot sequence is:
 2. **Normalize environment** -- honor `--no-color`, `--debug`, `--verbose` flags by setting `NO_COLOR`, `FORCE_COLOR`, and `LOG_LEVEL` in `process.env`
 3. **Suppress native logging** -- set `NODE_LLAMA_CPP_LOG_LEVEL` to match the chosen log level, suppressing noisy tokenizer warnings at default verbosity
 4. **Parse CLI profiles** -- extract `--profile <name>` from `process.argv` via `parseCliProfileArgs()`, apply the profile environment via `applyCliProfileEnv()`
-5. **Delegate to Commander** -- dynamically import `src/cli/run-main.ts` and call `runCli(process.argv)`
+5. **Delegate to Commander** -- dynamically import `./cli/run-main.ts` and call `runCli(process.argv)`
 
 ```typescript
-// packages/app-core/src/entry.ts — simplified bootstrap
+// eliza/packages/app-core/src/entry.ts — simplified bootstrap
 process.title = "milady";
 const parsed = parseCliProfileArgs(process.argv);
 if (parsed.profile) applyCliProfileEnv({ profile: parsed.profile });
@@ -79,16 +79,16 @@ import("./cli/run-main")
 
 `run-main.ts` continues by loading `.env` files via dotenv, normalizing API key environment variables (e.g., `Z_AI_API_KEY` to `ZAI_API_KEY`), building the Commander program tree, and dispatching to the requested subcommand.
 
-### Library Entry (`packages/app-core/src/index.ts`)
+### Library Entry (`eliza/packages/app-core/src/index.ts`)
 
 The public API surface exported by the `miladyai` npm package. It re-exports:
 
-- **Config types** from `packages/app-core/src/config/types.ts` -- the full `MiladyConfig` type and its nested schemas
+- **Config types** from `eliza/packages/shared/src/config/types.eliza.ts` -- the full `ElizaConfig` type and its nested schemas
 - **Restart infrastructure** -- `RESTART_EXIT_CODE`, `requestRestart()`, `setRestartHandler()`, and the `RestartHandler` type
 
 This allows other packages (e.g., the Electrobun app, the dev-server) to programmatically control the runtime without importing internal modules.
 
-### Dev-Server Entry (`packages/app-core/src/runtime/dev-server.ts`)
+### Dev-Server Entry (`eliza/packages/app-core/src/runtime/dev-server.ts`)
 
 A combined dev server that starts the elizaOS runtime in headless mode and wires it into the API server. Used during development (`bun run dev`):
 
@@ -100,13 +100,13 @@ A combined dev server that starts the elizaOS runtime in headless mode and wires
 
 ## Runtime Lifecycle
 
-The `startEliza()` function in `packages/app-core/src/runtime/eliza.ts` orchestrates the full lifecycle from config loading through agent operation.
+The `startEliza()` function in `eliza/packages/agent/src/runtime/eliza.ts` orchestrates the full lifecycle from config loading through agent operation.
 
 ### Initialization Phase
 
 <Steps>
   <Step title="Load Configuration">
-    Read `~/.milady/milady.json` via `loadMiladyConfig()`. If no config exists, fall back to an empty `MiladyConfig` object with all-optional fields.
+    Read the config file (defaults to `~/.milady/milady.json` in this product) via `loadElizaConfig()`. If no config exists, fall back to an empty `ElizaConfig` object with all-optional fields.
   </Step>
   <Step title="Startup / First-Run Selection">
     If no server target has been established yet, the app surfaces a chooser-first startup flow: create a local server, connect to a discovered LAN server, connect to Eliza Cloud, or manually connect to a remote server. Provider routing happens after server selection rather than being implied by hosting mode.
@@ -120,8 +120,8 @@ The `startEliza()` function in `packages/app-core/src/runtime/eliza.ts` orchestr
   <Step title="Prepare Workspace">
     Ensure `~/.milady/workspace/` exists with bootstrap files. Create the `~/.milady/plugins/custom/` directory for drop-in plugins.
   </Step>
-  <Step title="Create Milady Plugin">
-    Instantiate the bridge plugin that provides workspace context, session keys, emotes, custom actions, trigger tasks, and autonomous state tracking to the elizaOS runtime.
+  <Step title="Create Eliza Plugin">
+    Instantiate the bridge plugin via `createElizaPlugin()` that provides workspace context, session keys, custom actions, trigger tasks, and lifecycle actions to the elizaOS runtime.
   </Step>
   <Step title="Resolve and Load Plugins">
     Run the full plugin resolution pipeline (detailed below). Plugins are loaded in parallel for faster startup.
@@ -175,7 +175,7 @@ Milady extends elizaOS through several integration points:
 
 ### Plugin System Bridge
 
-The `createMiladyPlugin()` function (`packages/app-core/src/runtime/eliza-plugin.ts`) creates a standard elizaOS `Plugin` that bridges Milady-specific functionality into the runtime:
+The `createElizaPlugin()` function (`eliza/packages/agent/src/runtime/eliza-plugin.ts`) creates a standard elizaOS `Plugin` that bridges Milady-specific functionality into the runtime:
 
 **Providers** (injected into every LLM context):
 - `channelProfileProvider` -- channel-specific personality profiles
@@ -335,7 +335,7 @@ The trajectory logger (`trajectories`) records agent decision paths for debuggin
 
 ## API Server Architecture
 
-The API server (`packages/app-core/src/api/server.ts`) is a raw Node.js `http.createServer()` instance -- no Express or framework overhead.
+The API server (`eliza/packages/app-core/src/api/server.ts`) is a raw Node.js `http.createServer()` instance -- no Express or framework overhead.
 
 ### Server State
 
@@ -431,7 +431,7 @@ Events are buffered in a ring buffer on the server so newly connected clients ca
 
 ## Service Architecture
 
-Milady's `packages/app-core/src/services/` directory contains standalone service modules:
+Milady's `eliza/packages/app-core/src/services/` directory contains standalone service modules:
 
 | Service | File | Purpose |
 |---------|------|---------|
@@ -582,31 +582,37 @@ The monorepo uses Bun workspaces:
 
 ```
 milady/
-  eliza/                # elizaOS submodule (git submodule)
+  eliza/              # elizaOS submodule (contains all packages)
     packages/
-      app-core/         # Core runtime, CLI, API, services (source of truth)
+      app-core/       # Frontend UI, platform shells (Electrobun, Capacitor)
         src/
-          cli/          # Commander CLI commands
-          api/          # Dashboard API server
-          runtime/      # Agent loader, plugin system
-          config/       # Plugin auto-enable, config schemas
-          connectors/   # Connector integration code
-          services/     # Business logic (plugin installer, updater, etc.)
-        scripts/        # Dev orchestrator, CLI runner, build helpers
-      agent/            # Upstream elizaOS agent (core plugins, auto-enable maps)
-      plugin-wechat/    # WeChat connector plugin (@elizaos/plugin-wechat)
-      ui/               # Shared UI component library
-      shared/           # Shared utilities
-    plugins/            # Plugin submodules (e.g., plugin-agent-orchestrator)
+          api/        # Dashboard API server (main server.ts)
+          services/   # Business logic (plugin installer, updater, etc.)
+          runtime/    # Dev server, embedding presets
+          config/     # App-level config, branding
+          hooks/      # React hooks (UI)
+      agent/          # Runtime agent package (core plugins, providers, actions)
+        src/
+          cli/        # Commander CLI commands
+          runtime/    # Agent loader (eliza.ts), plugin system (eliza-plugin.ts)
+          config/     # Config schemas, type definitions
+          providers/  # Context providers (workspace, admin-trust, skills, etc.)
+          actions/    # Agent actions (restart, send-message, skills, etc.)
+          hooks/      # Event hooks system (discovery, registry, dispatch)
+          triggers/   # Trigger task types and scheduling
+          api/        # Chat routes, conversation routes
+      shared/         # Shared utilities, config types, onboarding presets
+      ui/             # Shared UI component library
+    plugins/          # elizaOS plugin submodules
+    apps/
+      app-training/   # Training orchestration (privacy filter, native backend)
   apps/
-    app/                # React SPA frontend (Vite)
-      electrobun/       # Electrobun desktop wrapper
-    homepage/           # Marketing site
-  deploy/               # Deployment configs (Dockerfile, systemd, etc.)
-  docs/                 # Mintlify documentation
-  scripts/              # Repo-level build, dev, and utility scripts
-  skills/               # Default skills and workspace skill mirrors
-  test/                 # E2E and integration tests
+    app/              # React SPA frontend (Vite)
+      electrobun/     # Electrobun desktop wrapper
+    homepage/         # Marketing site
+  docs/               # Mintlify documentation
+  scripts/            # Build, dev, and utility scripts
+  test/               # E2E and integration tests
 ```
 
 ### Build Pipeline

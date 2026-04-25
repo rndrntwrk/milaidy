@@ -4,6 +4,8 @@ sidebarTitle: "Obsidian"
 description: "Obsidian vault integration for Milady — read, search, and manage notes in your Obsidian vault."
 ---
 
+> **Not in plugin registry.** `@elizaos/plugin-obsidian` is not registered in `plugins.json`. This plugin may not be installable via `milady plugins install`.
+
 The Obsidian plugin connects Milady agents to your local [Obsidian](https://obsidian.md) vault, enabling agents to read, search, and interact with your notes and knowledge base.
 
 **Package:** `@elizaos/plugin-obsidian`
