@@ -68,11 +68,11 @@ Mount persistent state to survive container restarts:
 
 ## Ports
 
-| Port | Service | Default | Environment Variable |
-|------|---------|---------|---------------------|
-| 2138 | API Server + Dashboard UI | Default app port | `APP_PORT` / `MILADY_PORT` |
-| 18789 | Gateway (WebSocket + HTTP) | Default gateway port | `APP_GATEWAY_PORT` / `MILADY_GATEWAY_PORT` |
-| 18790 | Bridge (inter-service communication) | Default bridge port | `APP_BRIDGE_PORT` / `MILADY_BRIDGE_PORT` |
+| Port | Service | Default | Environment Variable | Notes |
+|------|---------|---------|---------------------|-------|
+| 2138 | API Server + Dashboard UI | Always exposed inside container | `MILADY_PORT` | Production default; `MILADY_API_PORT` (31337) is the dev-mode default |
+| 18789 | Gateway (WebSocket + HTTP) | Host-mapped | `MILADY_GATEWAY_PORT` | Multiplexed WebSocket + HTTP with optional TLS |
+| 18790 | Bridge (inter-service communication) | Host-mapped | `MILADY_BRIDGE_PORT` | Inter-container communication (WeChat webhook, etc.) |
 
 ## Environment Variables
 
