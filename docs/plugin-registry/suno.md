@@ -24,6 +24,34 @@ milady plugins install suno
 }
 ```
 
+## Configuration
+
+Set your Suno API key:
+
+```json
+{
+  "env": {
+    "SUNO_API_KEY": "<YOUR_SUNO_KEY>"
+  },
+  "features": {
+    "suno": true
+  },
+  "media": {
+    "audio": {
+      "enabled": true,
+      "mode": "own-key",
+      "provider": "suno"
+    }
+  }
+}
+```
+
+| Variable | Description |
+|----------|-------------|
+| `SUNO_API_KEY` | Suno API key for music generation |
+
+The Suno plugin also auto-enables when `media.audio.provider` is set to `"suno"` with `mode: "own-key"`.
+
 ## Features
 
 - Music generation from text descriptions

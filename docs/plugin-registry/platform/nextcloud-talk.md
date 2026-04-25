@@ -51,6 +51,38 @@ milady plugins install nextcloud-talk
 }
 ```
 
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `NEXTCLOUD_URL` | Yes | Base URL of your Nextcloud instance (e.g., `https://cloud.example.com`) |
+| `NEXTCLOUD_BOT_SECRET` | Yes | Bot secret for webhook signature verification |
+| `NEXTCLOUD_WEBHOOK_HOST` | No | Host address for the webhook listener |
+| `NEXTCLOUD_WEBHOOK_PORT` | No | Port for the webhook listener |
+| `NEXTCLOUD_WEBHOOK_PATH` | No | Path for the webhook endpoint |
+| `NEXTCLOUD_WEBHOOK_PUBLIC_URL` | No | Full public URL for the webhook (overrides host/port/path) |
+| `NEXTCLOUD_ALLOWED_ROOMS` | No | Comma-separated list of room/channel IDs to participate in |
+| `NEXTCLOUD_ENABLED` | No | Set to `true` to enable (alternative to config) |
+
+## Full Example
+
+```json
+{
+  "connectors": {
+    "nextcloud-talk": {
+      "enabled": true
+    }
+  },
+  "env": {
+    "NEXTCLOUD_URL": "https://cloud.example.com",
+    "NEXTCLOUD_BOT_SECRET": "YOUR_BOT_SECRET",
+    "NEXTCLOUD_WEBHOOK_PUBLIC_URL": "https://your-agent.example.com/hooks/nextcloud",
+    "NEXTCLOUD_ALLOWED_ROOMS": "general,support"
+  }
+}
+```
+
 ## Related
 
+- [Nextcloud Talk Connector](/connectors/nextcloud-talk) — Full connector documentation
 - [Connectors Guide](/guides/connectors) — General connector documentation
