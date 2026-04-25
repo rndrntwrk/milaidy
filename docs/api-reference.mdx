@@ -4,7 +4,7 @@ sidebarTitle: API Reference
 description: Complete reference for all Milady REST API endpoints, organized by resource group.
 ---
 
-The Milady API server runs on port **31337** by default (`MILADY_API_PORT`). All endpoints are prefixed with `/api/`. Authentication is required when `MILADY_API_TOKEN` is set.
+The Milady API server runs on port **2138** by default (port **31337** in dev mode via `MILADY_API_PORT`). The web dashboard runs on port **2138** (`MILADY_PORT`). All endpoints are prefixed with `/api/`. Authentication is required when `MILADY_API_TOKEN` is set.
 
 <Warning>
 When `MILADY_API_TOKEN` is configured, include the token as a `Bearer` token in the `Authorization` header, or use the pairing flow to obtain it.
@@ -12,7 +12,7 @@ When `MILADY_API_TOKEN` is configured, include the token as a `Bearer` token in 
 
 ## Quick Start
 
-These examples assume the API is running on `localhost:31337`. Replace `YOUR_TOKEN` with the value of `MILADY_API_TOKEN` or the token received from the pairing flow.
+These examples assume the API is running on `localhost:2138` (production default). In dev mode, the API defaults to `localhost:31337`. Replace `YOUR_TOKEN` with the value of `MILADY_API_TOKEN` or the token received from the pairing flow.
 
 ### Check agent status
 

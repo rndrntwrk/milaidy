@@ -1,7 +1,7 @@
 ---
 title: "Platform Connectors"
 sidebarTitle: "Connectors"
-description: "Platform bridges for 27 messaging platforms — 23 auto-enabled from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Twitter, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, Lens, WeChat, Bluesky, Instagram, LINE, Zalo, Tlon) plus 4 installable from the registry (Twilio, GitHub, Gmail Watch, Nextcloud Talk)."
+description: "Platform bridges for 27 messaging platforms — 16 auto-enabled from config with bundled plugins (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, WeChat), 2 auto-enabled from config with upstream plugins (Twitter, Lens — not bundled in registry), plus 9 installable from the registry (Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
 ---
 
 Connectors are platform bridges that allow your agent to communicate across messaging platforms and social networks. Each connector handles authentication, message routing, session management, and platform-specific features.
@@ -63,7 +63,7 @@ Connectors marked **Auto** load automatically when their config is present in `m
 | Blooio | API key + webhook | Yes | Yes | No | Auto |
 | Microsoft Teams | App ID + password | Yes | Yes (teams/channels) | No | Auto |
 | Google Chat | Service account | Yes | Yes (spaces) | Yes | Auto |
-| Twitter | API keys + tokens | DMs | N/A | No | Auto* |
+| Twitter | API keys + tokens | DMs | N/A | No | Auto (upstream, not bundled) |
 | Farcaster | Neynar API key + signer | Casts | Yes (channels) | No | Auto |
 | Twitch | Client ID + access token | Yes (chat) | Yes (channels) | No | Auto |
 | Mattermost | Bot token | Yes | Yes (channels) | No | Auto |
@@ -71,12 +71,11 @@ Connectors marked **Auto** load automatically when their config is present in `m
 | Matrix | Access token | Yes | Yes (rooms) | No | Auto |
 | Feishu / Lark | App ID + secret | Yes | Yes (group chats) | No | Auto |
 | Nostr | Private key (nsec/hex) | Yes (NIP-04) | N/A | No | Auto |
-| Lens | API key | Yes | N/A | No | Auto |
-| Bluesky | Account credentials | Posts | N/A | No | Auto |
-| Instagram | Username + password | DMs | N/A | No | Auto |
-| LINE | Channel access token + secret | Yes | Yes | No | Auto |
-| Zalo | Access token | Yes | Yes | No | Auto |
-| Tlon | Ship credentials | Yes | Yes (Urbit chats) | No | Auto |
+| Lens | API key | Yes | N/A | No | Auto (upstream, not bundled) |
+| Bluesky | Account credentials | Posts | N/A | No | Registry |
+| Instagram | Username + password | DMs | N/A | No | Registry |
+| LINE | Channel access token + secret | Yes | Yes | No | Registry |
+| Zalo | Access token | Yes | Yes | No | Registry |
 | Twilio | Account SID + auth token | SMS/Voice | N/A | No | Registry |
 | GitHub | API token | Issues/PRs | Yes (repos) | No | Registry |
 | Gmail Watch | Service account / OAuth | N/A | N/A | No | Registry |

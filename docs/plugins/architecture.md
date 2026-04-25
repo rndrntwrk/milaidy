@@ -182,7 +182,7 @@ const CONNECTOR_PLUGINS = {
 };
 ```
 
-> **Note:** The upstream `packages/agent` defines all `@elizaos/*` connectors. Milady's `packages/app-core` extends this map with the `wechat` entry pointing to `@elizaos/plugin-wechat`.
+> **Note:** The upstream `packages/agent` defines all `@elizaos/*` connectors. Milady's `packages/app-core` extends this map with the `wechat` entry pointing to `@elizaos/plugin-wechat`. Two entries — `twitter` (`@elizaos/plugin-twitter`) and `lens` (`@elizaos/plugin-lens`) — are upstream elizaOS packages **not bundled** in the local Milady plugin registry (`plugins.json`). They will auto-enable only if the package is installed separately.
 
 **Feature flags** — The `features` section of `milady.json` auto-enables feature plugins. A feature can be enabled with `features.<name>: true` or `features.<name>.enabled: true`:
 

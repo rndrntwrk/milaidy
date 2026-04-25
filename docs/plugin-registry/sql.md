@@ -141,7 +141,7 @@ await runtime.setComponent(userId, "userPreferences", {
 | `database.type` | `sqlite` or `postgres` | `sqlite` |
 | `database.url` | PostgreSQL connection URL | — |
 | `database.path` | Custom SQLite file path | Auto-resolved |
-| `database.vectorDimensions` | Embedding vector size | `768` |
+| `database.vectorDimensions` | Embedding vector size | `768` (runtime caps to `384` when using local embeddings via `EMBEDDING_DIMENSION`) |
 
 ## Related
 

@@ -28,7 +28,7 @@ A plugin is a self-contained module that registers one or more of:
 </Card>
 
 <Card title="Platform Connectors" icon="plug" href="/plugin-registry/platform/discord">
-  Bridges to 24 messaging platforms. Auto-enabled from config: Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Mattermost, Farcaster, Twitch, Feishu, Matrix, Nostr, Twitter, Lens, and WeChat. Registry connectors: Bluesky, Instagram, LINE, Zalo, BlueBubbles, Nextcloud Talk, Tlon, and Zalouser. Feature plugins with connector tags: Twilio, GitHub, Gmail Watch, and ACP.
+  Bridges to 16 bundled messaging platforms via auto-enable (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Mattermost, Farcaster, Twitch, Feishu, Matrix, Nostr, WeChat) plus 2 upstream auto-enable connectors (Twitter, Lens — not bundled in the local registry). Additional connectors (Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon) are installable from the elizaOS registry.
 </Card>
 
 <Card title="DeFi & Blockchain" icon="wallet" href="/plugin-registry/defi/evm">

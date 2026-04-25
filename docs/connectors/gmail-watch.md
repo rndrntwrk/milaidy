@@ -86,8 +86,12 @@ Gmail Watch is configured in two places in `milady.json`:
 - Inbound email event handling
 - Label filtering for targeted inbox monitoring
 
+## Important
+
+Unlike most connectors, Gmail Watch is configured via the `features` section of `milady.json`, **not** the `connectors` section. It must be installed from the registry before use.
+
 ## Related
 
-- [Hooks configuration](/configuration#hooks)
+- [Gmail Watch plugin reference](/plugin-registry/platform/gmail-watch)
 - [Connectors overview](/guides/connectors#gmail-watch)
 - [Configuration reference](/configuration)
