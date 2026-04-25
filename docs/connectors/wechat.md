@@ -2,7 +2,9 @@
 
 Connect your agent to WeChat for personal and group messaging via a third-party proxy service using the `@elizaos/plugin-wechat` package.
 
-> **Note:** This plugin is a Milady-local package (not in the public plugin registry). It is resolved from the repo-local eliza submodule or published to npm as `@elizaos/plugin-wechat`.
+> **Status:** The `@elizaos/plugin-wechat` package is not currently available in the plugin registry. This page documents the planned connector interface. Check the [plugin registry](/plugins/registry) for availability updates.
+
+## Overview
 
 ## Prerequisites
 

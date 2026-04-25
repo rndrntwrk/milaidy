@@ -244,7 +244,7 @@ where to get the credentials, minimum required fields, and tips for optional fie
 
 ### Twitter / X
 
-> **Not available.** The `@elizaos/plugin-twitter` package is not currently in the Milady plugin registry. This section is retained for reference if the plugin is added in a future release.
+> **Not yet available:** The `@elizaos/plugin-twitter` package is not currently in the plugin registry. The configuration below is for reference when the plugin becomes available.
 
 **Get credentials:** https://developer.twitter.com/en/portal/dashboard
 **Minimum required:** All 4 OAuth keys: `TWITTER_API_KEY`, `TWITTER_API_SECRET_KEY`, `TWITTER_ACCESS_TOKEN`, `TWITTER_ACCESS_TOKEN_SECRET`
@@ -349,7 +349,7 @@ where to get the credentials, minimum required fields, and tips for optional fie
 
 ### WeChat
 
-> **Not available.** The `@elizaos/plugin-wechat` package is not currently in the Milady plugin registry. This section is retained for reference if the plugin is added in a future release.
+> **Not yet available:** The `@elizaos/plugin-wechat` package is not currently in the plugin registry. The configuration below is for reference when the plugin becomes available.
 
 **Get credentials:** From your WeChat proxy service provider
 **Minimum required:** `WECHAT_API_KEY` + proxy URL in config

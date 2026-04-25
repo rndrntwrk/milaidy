@@ -4,7 +4,21 @@ Connect your agent to Twilio for SMS messaging and voice call capabilities using
 
 ## Prerequisites
 
-- A Twilio account with Account SID and Auth Token
+The Twilio plugin is an elizaOS feature plugin that bridges your agent to Twilio's communication APIs. It supports inbound and outbound SMS, as well as voice call capabilities. This plugin is available from the plugin registry.
+
+> **Note:** Twilio is categorized as a feature plugin, not a connector. Configure it with environment variables rather than the `connectors` section.
+
+## Package Info
+
+| Field | Value |
+|-------|-------|
+| Package | `@elizaos/plugin-twilio` |
+| Category | Feature plugin |
+| Install | `milady plugins install twilio` |
+
+## Setup Requirements
+
+- Twilio Account SID and Auth Token
 - A Twilio phone number
 
 ## Configuration

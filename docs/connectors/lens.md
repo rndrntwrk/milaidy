@@ -2,9 +2,11 @@
 
 Connect your agent to Lens Protocol for decentralized social interactions using the `@elizaos/plugin-lens` package.
 
-> **Note:** This plugin is not currently listed in the plugin registry. Check the [elizaOS plugins organization](https://github.com/elizaOS-plugins) for availability.
+> **Status:** The `@elizaos/plugin-lens` package is not currently available in the plugin registry. This page documents the planned connector interface. Check the [plugin registry](/plugins/registry) for availability updates.
 
-## Prerequisites
+## Overview
+
+The Lens connector is an external elizaOS plugin that bridges your agent to the Lens Protocol decentralized social graph. When available, it will be auto-enabled when an API key is configured.
 
 - A Lens Protocol account and API credentials from the [Lens Protocol](https://www.lens.xyz/) developer portal
 

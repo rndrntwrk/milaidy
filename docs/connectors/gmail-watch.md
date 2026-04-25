@@ -2,7 +2,21 @@
 
 Monitor Gmail inboxes for incoming messages using Google Cloud Pub/Sub with the `@elizaos/plugin-gmail-watch` package.
 
-## Prerequisites
+## Overview
+
+The Gmail Watch plugin is an elizaOS feature plugin that monitors Gmail inboxes via Google Cloud Pub/Sub. It watches for new messages and triggers agent events. This plugin is enabled via the `features.gmailWatch` flag rather than the `connectors` section. Available from the plugin registry.
+
+> **Note:** Gmail Watch is categorized as a feature plugin, not a connector. It uses the `features` config section instead of `connectors`.
+
+## Package Info
+
+| Field | Value |
+|-------|-------|
+| Package | `@elizaos/plugin-gmail-watch` |
+| Feature flag | `features.gmailWatch` |
+| Install | `milady plugins install gmail-watch` |
+
+## Setup Requirements
 
 - A Gmail account
 - Google Cloud service account or OAuth credentials with Gmail API access
