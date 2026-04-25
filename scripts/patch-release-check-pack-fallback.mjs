@@ -185,7 +185,7 @@ const workflowSnippetCompatReplacements = [
   ],
   [
     "run: bun run test:live:cloud",
-    'if bun run test:live:cloud 2>&1 | tee "$log_file"; then',
+    'if bun run test:live:cloud 2>&1 | tee \\"$log_file\\"; then',
   ],
 ];
 

@@ -154,7 +154,7 @@ describe("patch-release-check-pack-fallback", () => {
     );
     expect(patched).toContain("name: Run optional cloud live regression suite");
     expect(patched).toContain(
-      'if bun run test:live:cloud 2>&1 | tee "$log_file"; then',
+      'if bun run test:live:cloud 2>&1 | tee \\"$log_file\\"; then',
     );
     expect(patched).toContain(
       'for tarball_pattern in "*-macos-*.app.tar.zst" "*-macos-*.app.tar.gz" "*-macos-*.tar.gz"; do',
