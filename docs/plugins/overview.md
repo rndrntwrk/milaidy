@@ -24,11 +24,11 @@ A plugin is a self-contained module that registers one or more of:
 </Card>
 
 <Card title="Model Providers" icon="brain" href="/plugin-registry/llm/openai">
-  LLM integrations available in the registry: OpenAI, Anthropic, Google Gemini, Groq, Ollama, OpenRouter, xAI, Local AI, and Vercel AI Gateway. These auto-enable when their API key env var is set. Eliza Cloud auto-enables separately via `ELIZAOS_CLOUD_API_KEY`.
+  18 inference backends. OpenAI, OpenRouter, Groq, Ollama, and Eliza Cloud ship as bundled plugins. Anthropic, Google Gemini, xAI, and Vercel AI Gateway install on demand when their API key is detected. Additional providers (Google Antigravity, DeepSeek, Mistral, Cohere, Together, Qwen, Minimax, Perplexity, Zai) are available from the remote registry and auto-enable the same way.
 </Card>
 
 <Card title="Platform Connectors" icon="plug" href="/plugin-registry/platform/discord">
-  23 connector plugins in the registry. Connectors auto-enable via connector config when their credentials are set — Discord, Telegram, Slack, WhatsApp, Signal, iMessage, BlueBubbles, Blooio, MS Teams, Google Chat, Mattermost, Farcaster, Twitch, Feishu, Matrix, Nostr, Bluesky, Instagram, LINE, Zalo, Nextcloud Talk, Tlon. Twitter/X integration is bundled with the xAI provider plugin.
+  28 platform connectors. 18 auto-enable via connector config (Discord, Telegram, Twitter, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Mattermost, Farcaster, Twitch, Feishu, Matrix, Nostr, Lens, WeChat). 10 more are installable from the registry (BlueBubbles, Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon).
 </Card>
 
 <Card title="DeFi & Blockchain" icon="wallet" href="/plugin-registry/defi/evm">

@@ -1,7 +1,7 @@
 ---
 title: "Conectores de Plataforma"
 sidebarTitle: "Connectors"
-description: "Puentes de plataforma para 28 plataformas — 15 habilitados automáticamente desde la configuración (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr) más 13 instalables desde el registro o upstream (BlueBubbles, Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon, Twitter, Lens, WeChat)."
+description: "Puentes de plataforma para 28 plataformas de mensajería — 18 habilitados automáticamente desde la configuración (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Twitter, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, Lens, WeChat) más 10 instalables desde el registro (BlueBubbles, Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
 ---
 
 Los conectores son puentes de plataforma que permiten a tu agente comunicarse a través de plataformas de mensajería y redes sociales. Cada conector gestiona la autenticación, el enrutamiento de mensajes, la gestión de sesiones y las funcionalidades específicas de cada plataforma.

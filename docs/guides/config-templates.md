@@ -24,10 +24,14 @@ The simplest configuration — one provider, one agent, no connectors.
 ```json5
 {
   // Minimal Milady configuration
-  // Drop into ~/.milady/milady.json and run `milady`
-
-  env: {
-    ANTHROPIC_API_KEY: "<YOUR_ANTHROPIC_API_KEY>",
+  // Perfect for: Learning, prototyping, single-model deployments
+  
+  modelProvider: {
+    type: "openai",
+    apiKey: process.env.OPENAI_API_KEY,
+    model: "gpt-4o",
+    temperature: 0.7,
+    maxTokens: 2000
   },
 
   agents: {
@@ -62,12 +66,15 @@ A fully-featured personal assistant with Ollama fallback, voice, and browser too
 
 ```json5
 {
-  // Personal assistant with memory, voice, and web tools
-  env: {
-    ANTHROPIC_API_KEY: "<YOUR_ANTHROPIC_API_KEY>",
-    OLLAMA_BASE_URL: "http://127.0.0.1:11434",
-    BRAVE_API_KEY: "<YOUR_BRAVE_API_KEY>",
-    ELEVENLABS_API_KEY: "<YOUR_ELEVENLABS_API_KEY>",
+  // Personal Assistant Configuration
+  // Perfect for: Individual productivity, note-taking, knowledge management
+  
+  modelProvider: {
+    type: "openai",
+    apiKey: process.env.OPENAI_API_KEY,
+    model: "gpt-4o",
+    temperature: 0.7,
+    maxTokens: 4000
   },
 
   agents: {
@@ -127,9 +134,15 @@ A Discord community bot with per-guild configuration.
 
 ```json5
 {
-  // Discord bot — invite to your server and configure channels
-  env: {
-    ANTHROPIC_API_KEY: "<YOUR_ANTHROPIC_API_KEY>",
+  // Discord Bot Configuration
+  // Perfect for: Community automation, moderation, engagement
+  
+  modelProvider: {
+    type: "openai",
+    apiKey: process.env.OPENAI_API_KEY,
+    model: "gpt-4o-mini",
+    temperature: 0.6,
+    maxTokens: 1024
   },
 
   agents: {
@@ -187,9 +200,15 @@ A Telegram bot with group support and inline buttons.
 
 ```json5
 {
-  // Telegram bot — get token from @BotFather
-  env: {
-    ANTHROPIC_API_KEY: "<YOUR_ANTHROPIC_API_KEY>",
+  // Telegram Bot Configuration
+  // Perfect for: Mobile-first interactions, instant messaging, notifications
+  
+  modelProvider: {
+    type: "openai",
+    apiKey: process.env.OPENAI_API_KEY,
+    model: "gpt-4o-mini",
+    temperature: 0.5,
+    maxTokens: 1024
   },
 
   agents: {
@@ -238,9 +257,16 @@ Multiple platforms from a single agent — Discord, Telegram, and Slack.
 
 ```json5
 {
-  // Multi-connector — one agent, three platforms
-  env: {
-    ANTHROPIC_API_KEY: "<YOUR_ANTHROPIC_API_KEY>",
+  // Trading Bot Configuration
+  // Perfect for: Autonomous trading, market analysis, portfolio management
+  // WARNING: Only use with real funds after extensive testing and validation
+  
+  modelProvider: {
+    type: "openai",
+    apiKey: process.env.OPENAI_API_KEY,
+    model: "gpt-4o",
+    temperature: 0.3,
+    maxTokens: 2000
   },
 
   agents: {
@@ -299,11 +325,15 @@ Autonomous trading on BNB Smart Chain with PancakeSwap.
 
 ```json5
 {
-  // BSC trading agent — requires a funded EVM wallet
-  env: {
-    ANTHROPIC_API_KEY: "<YOUR_ANTHROPIC_API_KEY>",
-    EVM_PRIVATE_KEY: "<YOUR_WALLET_PRIVATE_KEY>",
-    ELIZA_TRADE_PERMISSION_MODE: "agent",
+  // Research Agent Configuration
+  // Perfect for: Information synthesis, market research, academic research, competitive analysis
+  
+  modelProvider: {
+    type: "openai",
+    apiKey: process.env.OPENAI_API_KEY,
+    model: "gpt-4o",
+    temperature: 0.2,
+    maxTokens: 4000
   },
 
   agents: {
@@ -410,10 +440,20 @@ Production deployment with PostgreSQL, monitoring, multiple connectors, and clou
 
 ```json5
 {
-  // Production server — PostgreSQL, OTEL, multi-connector
-  env: {
-    ANTHROPIC_API_KEY: "<YOUR_ANTHROPIC_API_KEY>",
-    OPENAI_API_KEY: "<YOUR_OPENAI_API_KEY>",
+  // Production Server Configuration
+  // Perfect for: Enterprise deployments, multi-tenant systems, high-traffic services
+  
+  modelProvider: {
+    type: "openai",
+    apiKey: process.env.OPENAI_API_KEY,
+    model: "gpt-4o",
+    temperature: 0.7,
+    maxTokens: 2000,
+    retryPolicy: {
+      maxRetries: 3,
+      backoffMultiplier: 2,
+      initialDelayMs: 1000
+    }
   },
 
   agents: {
