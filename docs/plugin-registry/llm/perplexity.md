@@ -12,7 +12,7 @@ The Perplexity plugin connects Milady agents to Perplexity's search-augmented la
 
 **Package:** `@elizaos/plugin-perplexity`
 
-> **Note:** This plugin is an upstream elizaOS provider and is not included in the bundled `plugins.json` registry. It auto-enables when `PERPLEXITY_API_KEY` is set and is installable from the remote elizaOS plugin registry.
+> **Availability:** This plugin is not in the bundled registry (`plugins.json`). It is available from the remote elizaOS plugin registry and auto-enables when `PERPLEXITY_API_KEY` is set.
 
 ## Installation
 

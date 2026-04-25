@@ -12,6 +12,8 @@ The WeChat plugin connects Milady agents to WeChat via a user-supplied proxy ser
 
 **Package:** `@elizaos/plugin-wechat`
 
+> **Availability:** This plugin is not in the bundled registry (`plugins.json`). It is available as an upstream elizaOS plugin and auto-enables when its connector config is present.
+
 ## Overview
 
 Unlike most connectors which use official platform APIs, the WeChat connector relied on a third-party proxy service that bridges WeChat's protocol.

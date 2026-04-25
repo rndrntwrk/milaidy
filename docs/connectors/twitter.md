@@ -10,6 +10,8 @@ description: The @elizaos/plugin-twitter package is not currently available in t
 
 Connect your agent to Twitter/X for social media engagement.
 
+> **Note:** The Twitter/X plugin (`@elizaos/plugin-twitter`) is not currently in the bundled plugin registry (`plugins.json`). It is available as an upstream elizaOS plugin. Auto-enables when its config is present.
+
 ## Overview
 
 The Twitter connector was an external elizaOS plugin that bridged your agent to Twitter/X.

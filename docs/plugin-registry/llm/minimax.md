@@ -12,7 +12,7 @@ The MiniMax plugin connects Milady agents to MiniMax's language models, providin
 
 **Package:** `@elizaos/plugin-minimax`
 
-> **Note:** This plugin is an upstream elizaOS provider and is not included in the bundled `plugins.json` registry. It must be explicitly enabled in your config and is installable from the remote elizaOS plugin registry.
+> **Availability:** This plugin is not in the bundled registry (`plugins.json`). It is available from the remote elizaOS plugin registry and auto-enables when `MINIMAX_API_KEY` is set.
 
 ## Installation
 

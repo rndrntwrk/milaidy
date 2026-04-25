@@ -8,6 +8,8 @@ The GitHub plugin connects Milady agents to GitHub, enabling interactions with r
 
 **Package:** `@elizaos/plugin-github`
 
+> **Note:** GitHub is categorized as a **feature** plugin in the registry, not a connector. It provides repository management, issue tracking, and PR workflows.
+
 ## Installation
 
 ```bash

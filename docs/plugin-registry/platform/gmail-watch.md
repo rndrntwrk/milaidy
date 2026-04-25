@@ -8,6 +8,8 @@ The Gmail Watch plugin connects Milady agents to Gmail, enabling monitoring of i
 
 **Package:** `@elizaos/plugin-gmail-watch`
 
+> **Note:** Gmail Watch is categorized as a **feature** plugin in the registry, not a connector. It provides Gmail Pub/Sub message watching and auto-renewal.
+
 ## Installation
 
 ```bash

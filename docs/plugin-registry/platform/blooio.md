@@ -8,6 +8,8 @@ The Blooio plugin connects Milady agents to iMessage and SMS messaging via the B
 
 **Package:** `@elizaos/plugin-blooio`
 
+> **Note:** Blooio is categorized as a **feature** plugin in the registry, not a connector. It provides platform integration for iMessage/SMS via the Blooio bridge service.
+
 ## Installation
 
 ```bash

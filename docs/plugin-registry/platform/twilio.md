@@ -8,6 +8,8 @@ The Twilio plugin connects Milady agents to Twilio, enabling SMS messaging and v
 
 **Package:** `@elizaos/plugin-twilio`
 
+> **Note:** Twilio is categorized as a **feature** plugin in the registry, not a connector. It provides SMS and voice call capabilities via the Twilio API.
+
 ## Installation
 
 ```bash

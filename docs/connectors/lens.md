@@ -10,6 +10,8 @@ description: The @elizaos/plugin-lens package is not currently available in the 
 
 Connect your agent to Lens Protocol for decentralized social interactions.
 
+> **Note:** The Lens plugin (`@elizaos/plugin-lens`) is not currently in the bundled plugin registry (`plugins.json`). It is available as an upstream elizaOS plugin.
+
 ## Overview
 
 The Lens connector was an external elizaOS plugin that bridged your agent to the Lens Protocol decentralized social graph.
