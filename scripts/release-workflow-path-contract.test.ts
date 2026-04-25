@@ -800,6 +800,10 @@ describe("release workflow path contract", () => {
 
   it("prepares and caches Electrobun core binaries before release packaging", () => {
     const releaseElectrobun = readWorkflow("release-electrobun.yml");
+    const patch = fs.readFileSync(
+      path.join(repoRoot, "patches", "eliza", "ci-release-contracts.patch"),
+      "utf8",
+    );
     const cacheStep = releaseElectrobun.indexOf(
       "name: Cache Electrobun CLI and core binaries",
     );
@@ -823,6 +827,10 @@ describe("release workflow path contract", () => {
     expect(releaseElectrobun).toContain(
       "node eliza/packages/app-core/scripts/ensure-electrobun-core.mjs",
     );
+    expect(patch).toContain(
+      'const windowsTar = "C:\\\\Windows\\\\System32\\\\tar.exe";',
+    );
+    expect(patch).toContain("getTarExecutable(),");
   });
 
   it("keeps draft Electrobun fallback artifacts away from release-grade gates", () => {

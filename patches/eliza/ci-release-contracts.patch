@@ -997,11 +997,21 @@ index 0000000000..e3cc371ea0
 +  );
 +}
 +
++function getTarExecutable() {
++  if (process.platform === "win32") {
++    const windowsTar = "C:\\Windows\\System32\\tar.exe";
++    if (fs.existsSync(windowsTar)) return windowsTar;
++  }
++  return "tar";
++}
++
 +function extractTarball(tarballPath, distDir) {
 +  fs.mkdirSync(distDir, { recursive: true });
-+  const result = spawnSync("tar", ["-xzf", tarballPath, "-C", distDir], {
-+    stdio: "inherit",
-+  });
++  const result = spawnSync(
++    getTarExecutable(),
++    ["-xzf", tarballPath, "-C", distDir],
++    { stdio: "inherit" },
++  );
 +  if (result.status !== 0) {
 +    throw new Error(`tar failed with exit code ${result.status ?? 1}`);
 +  }
