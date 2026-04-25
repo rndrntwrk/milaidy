@@ -78,13 +78,104 @@ To disable:
 
 ## Features
 
-- Team channel and DM messaging
-- Threaded reply support (`thread` or `top-level` reply styles)
-- Mention-based response filtering
-- Per-team and per-channel configuration
-- Media uploads via OneDrive/SharePoint
-- Multi-tenant support via allowed tenants list
-- Webhook-based event handling
+## Environment Variables
+
+When the connector is loaded, the runtime can consume the following secrets from environment variables as an alternative to inline config:
+
+| Variable | Source | Description |
+|----------|--------|-------------|
+| `MSTEAMS_APP_ID` | `appId` | Azure Bot App ID |
+| `MSTEAMS_APP_PASSWORD` | `appPassword` | Azure Bot App Password (client secret) |
+| `MSTEAMS_TENANT_ID` | `tenantId` | Azure AD Tenant ID |
+| `MSTEAMS_ENABLED` | `enabled` | Set to `true` to enable |
+| `MSTEAMS_WEBHOOK_PATH` | — | Webhook endpoint path |
+| `MSTEAMS_WEBHOOK_PORT` | — | Port for incoming webhook events |
+| `MSTEAMS_MEDIA_MAX_MB` | `mediaMaxMb` | Max media file size in MB |
+| `MSTEAMS_ALLOWED_TENANTS` | — | Comma-separated list of allowed Azure AD tenant IDs |
+| `MSTEAMS_SHAREPOINT_SITE_ID` | `sharePointSiteId` | SharePoint site ID for file uploads |
+
+## Full Configuration Reference
+
+All fields are defined under `connectors.msteams` in `milady.json`.
+
+### Core Fields
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `appId` | string | — | Azure Bot App ID (Microsoft App ID) |
+| `appPassword` | string | — | Azure Bot App Password (client secret) |
+| `tenantId` | string | — | Azure AD Tenant ID |
+| `enabled` | boolean | — | Explicitly enable/disable |
+| `capabilities` | string[] | — | Capability flags |
+| `configWrites` | boolean | — | Allow config writes from Teams events |
+| `requireMention` | boolean | — | Only respond when @mentioned |
+| `dmPolicy` | `"pairing"` \| `"allowlist"` \| `"open"` \| `"disabled"` | `"pairing"` | DM access policy. `"open"` requires `allowFrom` to include `"*"` |
+| `allowFrom` | string[] | — | User IDs allowed to DM |
+| `groupPolicy` | `"open"` \| `"disabled"` \| `"allowlist"` | `"allowlist"` | Group join policy |
+| `groupAllowFrom` | string[] | — | Allowed group/team IDs |
+| `historyLimit` | integer >= 0 | — | Max messages in context |
+| `dmHistoryLimit` | integer >= 0 | — | History limit for DMs |
+| `dms` | object | — | Per-DM history overrides keyed by DM ID. Each value: `{historyLimit?: int}` |
+| `textChunkLimit` | integer > 0 | — | Max characters per message chunk |
+| `chunkMode` | `"length"` \| `"newline"` | — | Long message splitting strategy |
+| `mediaMaxMb` | number > 0 | — | Max media file size in MB (up to 100MB via OneDrive upload) |
+| `blockStreamingCoalesce` | object | — | Coalescing settings: `minChars`, `maxChars`, `idleMs` |
+| `replyStyle` | `"thread"` \| `"top-level"` | `"thread"` | Reply threading mode |
+| `markdown` | object | — | Table rendering: `tables` can be `"off"`, `"bullets"`, or `"code"` |
+
+### Webhook Configuration
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `webhook.port` | integer > 0 | Port for incoming webhook events |
+| `webhook.path` | string | Path for webhook endpoint (e.g., `/api/msteams/webhook`) |
+
+### Media Configuration
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `mediaAllowHosts` | string[] | Allowlist of hosts from which media can be downloaded |
+| `mediaAuthAllowHosts` | string[] | Hosts that require authentication headers for media downloads |
+| `sharePointSiteId` | string | SharePoint site ID for file uploads in group chats (e.g., `"contoso.sharepoint.com,guid1,guid2"`) |
+
+### Team Configuration
+
+Per-team settings are defined under `teams.<team-id>`:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `requireMention` | boolean | Only respond when @mentioned |
+| `tools` | ToolPolicySchema | Tool access policy |
+| `toolsBySender` | object | Per-sender tool policies (keyed by sender ID) |
+| `replyStyle` | `"thread"` \| `"top-level"` | Override reply style for this team |
+| `channels` | object | Per-channel configuration (see below) |
+
+### Channel Configuration
+
+Per-channel settings are defined within a team under `teams.<team-id>.channels.<channel-id>`:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `requireMention` | boolean | Only respond when @mentioned |
+| `tools` | ToolPolicySchema | Tool access policy |
+| `toolsBySender` | object | Per-sender tool policies (keyed by sender ID) |
+| `replyStyle` | `"thread"` \| `"top-level"` | Override reply style for this channel |
+
+### Heartbeat
+
+```json
+{
+  "connectors": {
+    "msteams": {
+      "heartbeat": {
+        "showOk": true,
+        "showAlerts": true,
+        "useIndicator": true
+      }
+    }
+  }
+}
+```
 
 ## Related
 

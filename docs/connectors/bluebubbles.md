@@ -45,7 +45,36 @@ To disable:
 }
 ```
 
-## Setup
+## Environment Variables
+
+| Variable | Source | Description |
+|----------|--------|-------------|
+| `BLUEBUBBLES_SERVER_URL` | `serverUrl` | BlueBubbles server URL |
+| `BLUEBUBBLES_PASSWORD` | `password` | Server password (required) |
+| `BLUEBUBBLES_ENABLED` | `enabled` | Set to `true` to enable |
+| `BLUEBUBBLES_DM_POLICY` | `dmPolicy` | DM access policy |
+| `BLUEBUBBLES_ALLOW_FROM` | `allowFrom` | Allowed user IDs for DMs |
+| `BLUEBUBBLES_GROUP_POLICY` | `groupPolicy` | Group message policy |
+| `BLUEBUBBLES_GROUP_ALLOW_FROM` | `groupAllowFrom` | Allowed group IDs |
+| `BLUEBUBBLES_SEND_READ_RECEIPTS` | `sendReadReceipts` | Send read receipts for incoming messages |
+
+## Full Configuration Reference
+
+All fields are defined under `connectors.bluebubbles` in `milady.json`.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `serverUrl` | string | — | BlueBubbles server URL (required) |
+| `password` | string | — | Server password (required) |
+| `enabled` | boolean | — | Explicitly enable/disable |
+| `dmPolicy` | `"pairing"` \| `"allowlist"` \| `"open"` \| `"disabled"` | `"pairing"` | DM access policy |
+| `allowFrom` | string[] | — | User IDs allowed to DM |
+| `groupPolicy` | `"open"` \| `"disabled"` \| `"allowlist"` | `"allowlist"` | Group message policy |
+| `groupAllowFrom` | string[] | — | Allowed group IDs |
+| `webhookPath` | string | — | Webhook path for inbound messages |
+| `sendReadReceipts` | boolean | — | Send read receipts for incoming messages |
+
+## Setup Steps
 
 1. Install [BlueBubbles](https://bluebubbles.app) on a Mac with Messages signed in.
 2. Start the BlueBubbles server and note the server URL and password.

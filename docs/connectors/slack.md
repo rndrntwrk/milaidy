@@ -59,14 +59,19 @@ To disable:
 
 ## Features
 
-- Socket Mode and HTTP webhook transport
-- Channel and DM messaging
-- Per-channel configuration
-- Slash command support
-- Reactions, pins, and search
-- DM access policies
-- Thread management with configurable history scopes
-- Multi-account/workspace support
+## Environment Variables
+
+When the connector is loaded, the runtime pushes the following secrets from your config into `process.env` for the plugin to consume:
+
+| Variable | Source | Description |
+|----------|--------|-------------|
+| `SLACK_BOT_TOKEN` | `botToken` | Bot token (`xoxb-...`) |
+| `SLACK_APP_TOKEN` | `appToken` | App-level token (`xapp-...`) for Socket Mode |
+| `SLACK_USER_TOKEN` | `userToken` | User token (`xoxp-...`) for user-scoped actions |
+| `SLACK_SIGNING_SECRET` | `signingSecret` | Signing secret for HTTP mode webhook verification |
+| `SLACK_CHANNEL_IDS` | — | Comma-separated list of channel IDs to join |
+| `SLACK_SHOULD_IGNORE_BOT_MESSAGES` | — | Set to `true` to ignore messages from other bots |
+| `SLACK_SHOULD_RESPOND_ONLY_TO_MENTIONS` | — | Set to `true` to only respond when @mentioned |
 
 ## Transport Modes
 

@@ -20,7 +20,7 @@ AgentRuntime
 └── Local            (from plugins/ directory)
 ```
 
-The source of truth for which plugins are always loaded lives in the upstream elizaOS repo at `packages/agent/src/runtime/core-plugins.ts` (re-exported by `packages/app-core/src/runtime/core-plugins.ts`). These files live inside the `eliza/` git submodule — run `bun run setup:upstreams` to check it out locally.
+The source of truth for which plugins are always loaded lives in `eliza/packages/agent/src/runtime/core-plugins.ts` (re-exported by `eliza/packages/app-core/src/runtime/core-plugins.ts`):
 
 ```typescript
 export const CORE_PLUGINS: readonly string[] = [
@@ -44,7 +44,7 @@ export const CORE_PLUGINS: readonly string[] = [
 
 ### Optional Core Plugins
 
-A separate list of optional core plugins can be enabled from the admin panel. These are not loaded by default due to packaging or specification constraints. The list also lives in the upstream `packages/agent/src/runtime/core-plugins.ts`:
+A separate list of optional core plugins can be enabled from the admin panel. These are not loaded by default due to packaging or specification constraints. The list lives in `eliza/packages/agent/src/runtime/core-plugins.ts`:
 
 ```typescript
 export const OPTIONAL_CORE_PLUGINS: readonly string[] = [
@@ -128,7 +128,7 @@ interface Plugin {
 
 ## Auto-Enable Mechanism
 
-Plugins are automatically enabled when their required configuration is detected. This logic lives in the upstream `packages/agent/src/config/plugin-auto-enable.ts` (extended by `packages/app-core/src/config/plugin-auto-enable.ts` for Milady-specific connectors like WeChat) and runs before runtime initialization. Both files are inside the `eliza/` git submodule.
+Plugins are automatically enabled when their required configuration is detected. This logic lives in `eliza/packages/agent/src/config/plugin-auto-enable.ts` (extended by `eliza/packages/app-core/src/config/plugin-auto-enable.ts` for Eliza-specific connectors like WeChat) and runs before runtime initialization.
 
 ### Trigger Sources
 
@@ -200,9 +200,7 @@ const CONNECTOR_PLUGINS = {
 };
 ```
 
-> **Note:** The upstream `packages/agent` defines all `@elizaos/*` connectors. Milady's `packages/app-core` extends this map with the `wechat` entry pointing to `@elizaos/plugin-wechat`.
->
-> **Not all connectors in this map are bundled.** `twitter` (`@elizaos/plugin-twitter`) and `lens` (`@elizaos/plugin-lens`) are upstream elizaOS plugins that must be installed manually (`milady plugins install <package>`). `wechat` is experimental and not yet fully integrated. See the [availability column in the connectors table](/guides/connectors#supported-platforms) for each connector's status.
+> **Note:** The upstream `eliza/packages/agent` defines all `@elizaos/*` connectors. Milady's `eliza/packages/app-core` extends this map with the `wechat` entry pointing to `@elizaos/plugin-wechat`.
 
 **Feature flags** — The `features` section of `milady.json` auto-enables feature plugins. A feature can be enabled with `features.<name>: true` or `features.<name>.enabled: true`:
 

@@ -46,11 +46,91 @@ The connector auto-enables when `apiKey` is truthy in the connector config and `
 
 ## Setup
 
-1. Create a Farcaster account if you don't have one.
-2. Sign up at [Neynar](https://neynar.com) and obtain an API key.
-3. Create a signer via the Neynar dashboard and note the signer UUID.
-4. Add the credentials to `connectors.farcaster` in your config or set the environment variables.
-5. Start your agent -- the Farcaster connector will auto-enable.
+```json
+{
+  "connectors": {
+    "farcaster": {
+      "apiKey": "YOUR_NEYNAR_API_KEY",
+      "signerUuid": "YOUR_SIGNER_UUID",
+      "fid": 12345,
+      "enabled": false
+    }
+  }
+}
+```
+
+## Auto-Enable Mechanism
+
+The `plugin-auto-enable.ts` module checks `connectors.farcaster` in your config. If the `apiKey` field is truthy (and `enabled` is not explicitly `false`), the runtime automatically loads `@elizaos/plugin-farcaster`.
+
+No environment variable is required to trigger auto-enable — it is driven entirely by the connector config object.
+
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `FARCASTER_NEYNAR_API_KEY` | Yes | Neynar API key for Farcaster Hub access |
+| `FARCASTER_SIGNER_UUID` | Yes | UUID of the Neynar signer for the agent account |
+| `FARCASTER_FID` | Yes | Farcaster ID (FID) of the agent account |
+| `FARCASTER_DRY_RUN` | No | Set to `true` to simulate operations without executing |
+| `FARCASTER_HUB_URL` | No | Farcaster Hub URL (default: `hub.pinata.cloud`) |
+| `FARCASTER_POLL_INTERVAL` | No | Polling interval in seconds (default: `120`) |
+| `FARCASTER_MODE` | No | Operation mode: `polling` or `webhook` (default: `polling`) |
+| `ENABLE_CAST` | No | Enable or disable cast posting (default: `true`) |
+| `ENABLE_ACTION_PROCESSING` | No | Enable automated action processing (default: `false`) |
+| `CAST_INTERVAL_MIN` | No | Minimum minutes between autonomous casts (default: `90`) |
+| `CAST_INTERVAL_MAX` | No | Maximum minutes between autonomous casts (default: `180`) |
+| `CAST_IMMEDIATELY` | No | Post immediately instead of waiting for schedule (default: `false`) |
+| `MAX_CAST_LENGTH` | No | Maximum cast character length (default: `320`) |
+| `ACTION_INTERVAL` | No | Minutes between action-processing cycles (default: `5`) |
+| `MAX_ACTIONS_PROCESSING` | No | Max actions per batch (default: `1`) |
+
+## Full Configuration Reference
+
+All fields are defined under `connectors.farcaster` in `milady.json`.
+
+### Core Fields
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `apiKey` | string | — | Neynar API key (required) |
+| `signerUuid` | string | — | Neynar signer UUID for the agent account (required) |
+| `fid` | number | — | Farcaster ID of the agent account (required) |
+| `enabled` | boolean | — | Explicitly enable/disable |
+| `channels` | string[] | — | Farcaster channel names to monitor and participate in |
+| `pollInterval` | number | `120` | Seconds between mention checks |
+
+### Autonomous Casting
+
+The agent can post casts autonomously at random intervals. The LLM generates cast content based on the character's personality and current context.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `castIntervalMin` | number | `90` | Minimum minutes between autonomous casts |
+| `castIntervalMax` | number | `180` | Maximum minutes between autonomous casts |
+
+```json
+{
+  "connectors": {
+    "farcaster": {
+      "apiKey": "...",
+      "signerUuid": "...",
+      "fid": 12345,
+      "channels": ["ai", "agents"],
+      "castIntervalMin": 90,
+      "castIntervalMax": 180
+    }
+  }
+}
+```
+
+### Cast Limits
+
+Casts are limited to 320 characters. Longer responses are automatically split into cast threads.
+
+### DM Policy
+
+Farcaster supports direct casts (private messages via Warpcast). The connector handles incoming direct casts as DM conversations.
 
 ## Features
 

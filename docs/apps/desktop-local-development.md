@@ -98,7 +98,7 @@ Milady’s pinned **Electrobun** config types (as of the version in this repo) d
 
 ## Why `vite build` is sometimes skipped
 
-Before starting services, the script checks `viteRendererBuildNeeded()` (`eliza/packages/app-core/scripts/lib/vite-renderer-dist-stale.mjs`): compare `apps/app/dist/index.html` mtime against `apps/app/src`, `vite.config.ts`, shared packages, etc.
+Before starting services, the script checks `viteRendererBuildNeeded()` (`scripts/lib/vite-renderer-dist-stale.mjs`): compare `apps/app/dist/index.html` mtime against `apps/app/src`, `vite.config.ts`, shared packages (`eliza/packages/ui`, `eliza/packages/app-core`), etc.
 
 **Why mtime, not a full dependency graph?** It is a **cheap, local-first** heuristic so restarts do not pay 10–30s for a redundant production build when sources did not change. Override when you need a clean bundle.
 
@@ -192,12 +192,12 @@ Browser smoke tests target the **same renderer URL** Electrobun loads in watch m
 | Piece | Role |
 |-------|------|
 | `.cursor/rules/milady-desktop-dev-observability.mdc` | Cursor: when to use stack / screenshot / console hooks (**why:** product does not auto-scan localhost) |
-| `eliza/packages/app-core/scripts/dev-platform.mjs` | Orchestrator; sets env for stack / screenshot / log path |
-| `eliza/packages/app-core/scripts/lib/vite-renderer-dist-stale.mjs` | When `vite build` is needed |
-| `eliza/packages/app-core/scripts/lib/kill-ui-listen-port.mjs` | Free UI port |
-| `eliza/packages/app-core/scripts/lib/kill-process-tree.mjs` | Scoped tree kill |
-| `eliza/packages/app-core/scripts/lib/desktop-stack-status.mjs` | Port + HTTP probes for `desktop:stack-status` |
-| `eliza/packages/app-core/scripts/desktop-stack-status.mjs` | CLI entry for agents (`--json`) |
+| `scripts/dev-platform.mjs` | Orchestrator; sets env for stack / screenshot / log path |
+| `scripts/lib/vite-renderer-dist-stale.mjs` | When `vite build` is needed |
+| `scripts/lib/kill-ui-listen-port.mjs` | Free UI port |
+| `scripts/lib/kill-process-tree.mjs` | Scoped tree kill |
+| `scripts/lib/desktop-stack-status.mjs` | Port + HTTP probes for `desktop:stack-status` |
+| `scripts/desktop-stack-status.mjs` | CLI entry for agents (`--json`) |
 | `eliza/packages/app-core/src/api/dev-stack.ts` | Payload for `GET /api/dev/stack` |
 | `eliza/packages/app-core/src/api/dev-console-log.ts` | Safe tail read for `GET /api/dev/console-log` |
 | `apps/app/electrobun/src/index.ts` | `resolveRendererUrl()`; starts screenshot dev server when enabled |

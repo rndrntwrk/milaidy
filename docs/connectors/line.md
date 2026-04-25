@@ -39,12 +39,15 @@ Configure in `~/.milady/milady.json`:
 
 ## Setup
 
-1. Go to [developers.line.biz](https://developers.line.biz) and create a Messaging API channel.
-2. Note the **Channel access token** and **Channel secret** from the channel settings.
-3. Install the plugin: `milady plugins install line`.
-4. Set `LINE_CHANNEL_ACCESS_TOKEN` and optionally `LINE_CHANNEL_SECRET` as environment variables or in your config.
-5. Configure a webhook URL in the LINE Developer Console pointing to your Milady instance.
-6. Start your agent.
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `LINE_CHANNEL_ACCESS_TOKEN` | Yes | Channel access token from LINE Developer Console |
+| `LINE_CHANNEL_SECRET` | No | Channel secret for webhook verification |
+| `LINE_ENABLED` | No | Set to `true` to enable |
+| `LINE_DM_POLICY` | No | DM access policy |
+| `LINE_ALLOW_FROM` | No | Comma-separated list of allowed user IDs for DMs |
+| `LINE_GROUP_POLICY` | No | Group message policy |
+| `LINE_WEBHOOK_PATH` | No | Webhook endpoint path |
 
 ## Features
 

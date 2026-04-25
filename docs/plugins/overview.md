@@ -28,7 +28,7 @@ A plugin is a self-contained module that registers one or more of:
 </Card>
 
 <Card title="Platform Connectors" icon="plug" href="/plugin-registry/platform/discord">
-  28 connector plugins across the bundled and remote registries. 18 auto-enable via connector config (Discord, Telegram, Twitter, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Mattermost, Farcaster, Twitch, Feishu, Matrix, Nostr, Lens, WeChat). 10 additional connectors (BlueBubbles, Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon) are available and can be installed from the registry.
+  22 connector plugins in the bundled registry (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, MS Teams, Google Chat, Mattermost, Farcaster, Twitch, Feishu, Matrix, Nostr, BlueBubbles, Bluesky, Instagram, LINE, Zalo, Nextcloud Talk, Tlon, and more). Additional connectors (Twitter, Lens, WeChat) are available from the remote registry.
 </Card>
 
 <Card title="DeFi & Blockchain" icon="wallet" href="/plugin-registry/defi/evm">
@@ -47,7 +47,7 @@ Plugins are loaded during runtime initialization in this order:
 
 1. **Milady plugin** — The bridge plugin (`createMiladyPlugin()`) providing workspace context, session keys, emotes, custom actions, and lifecycle actions. Always first in the plugins array.
 2. **Pre-registered plugins** — `@elizaos/plugin-sql` and `@elizaos/plugin-local-embedding` are pre-registered before `runtime.initialize()` to prevent race conditions.
-3. **Core plugins** — Always loaded: `local-embedding`, `form`, `trajectory-logger`, `agent-orchestrator`, `cron`, `shell`, `agent-skills`, `commands`, `plugin-manager` (see `packages/agent/src/runtime/core-plugins.ts`). Additional plugins like `pdf`, `browser`, `computeruse`, `code`, `vision`, `cli`, `edge-tts`, `elevenlabs`, `discord`, `telegram`, and `twitch` are optional and loaded when their feature flags or environment variables are configured.
+3. **Core plugins** — Always loaded: `sql`, `local-embedding`, `form`, `knowledge`, `trajectory-logger`, `agent-orchestrator`, `cron`, `shell`, `agent-skills`, `commands`, `plugin-manager`, `roles` (see `eliza/packages/agent/src/runtime/core-plugins.ts`). Additional plugins like `pdf`, `cua`, `browser`, `computeruse`, `obsidian`, `code`, `repoprompt`, `claude-code-workbench`, `vision`, `cli`, `edge-tts`, `elevenlabs`, `discord`, `telegram`, and `twitch` are optional and loaded when their feature flags or environment variables are configured.
 4. **Auto-enabled plugins** — Connector, provider, feature, streaming, subscription, hooks (webhooks + Gmail Watch), and media generation plugins are auto-enabled based on config and environment variables (see [Architecture](/plugins/architecture) for the full maps).
 5. **Ejected plugins** — Local overrides discovered from `~/.milady/plugins/ejected/`. When an ejected copy exists, it takes priority over the npm-published version.
 6. **User-installed plugins** — Tracked in `plugins.installs` in `milady.json`. Collected before drop-in plugins; any plugin name already present here takes precedence.

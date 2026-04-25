@@ -1,8 +1,8 @@
 # Lens Connector
 
-Connect your agent to Lens Protocol for decentralized social interactions using the `@elizaos/plugin-lens` package.
+> **Registry note:** `@elizaos/plugin-lens` is not currently listed in the Milady plugin registry (`plugins.json`). The package may be available from npm or a separate elizaOS plugin repository. Verify availability before configuring.
 
-> **Status:** The `@elizaos/plugin-lens` package is not currently available in the plugin registry. This page documents the planned connector interface. Check the [plugin registry](/plugins/registry) for availability updates.
+Connect your agent to Lens Protocol for decentralized social interactions.
 
 ## Overview
 

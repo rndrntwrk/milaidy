@@ -404,10 +404,10 @@ The API server exposes a WebSocket endpoint at `/ws` on the same port as the API
 | `agent_event` | Server -> Client | Runtime autonomy loop events with run/seq tracking |
 | `heartbeat_event` | Server -> Client | Agent heartbeat with status, duration, channel info |
 | `training_event` | Server -> Client | Fine-tuning progress updates |
-| `proactive_message` | Server -> Client | Agent-initiated messages |
-| `conversation_update` | Server -> Client | New messages in active conversations |
+| `proactive-message` | Server -> Client | Agent-initiated messages |
+| `conversation-updated` | Server -> Client | Conversation metadata changed |
 | `ping` / `pong` | Bidirectional | Keepalive mechanism |
-| `set_active_conversation` | Client -> Server | Tell the server which conversation the UI is viewing |
+| `active-conversation` | Client -> Server | Tell the server which conversation the UI is viewing |
 
 ### Event Envelope
 
@@ -584,28 +584,29 @@ The monorepo uses Bun workspaces:
 
 ```
 milady/
-  packages/
-    app-core/       # Core runtime, CLI, API, services (source of truth)
-      src/
-        cli/        # Commander CLI commands
-        api/        # Dashboard API server
-        runtime/    # Agent loader, plugin system
-        config/     # Plugin auto-enable, config schemas
-        connectors/ # Connector integration code
-        services/   # Business logic (plugin installer, updater, etc.)
-    agent/          # Upstream elizaOS agent (core plugins, auto-enable maps)
-    ui/             # Shared UI component library
-    shared/         # Shared utilities
+  eliza/              # elizaOS submodule (git submodule; must be initialized)
+    packages/
+      app-core/       # Core runtime, CLI, API, services (source of truth)
+        src/
+          cli/        # Commander CLI commands
+          api/        # Dashboard API server
+          runtime/    # Agent loader, plugin system
+          config/     # Plugin auto-enable, config schemas
+          connectors/ # Connector integration code
+          services/   # Business logic (plugin installer, updater, etc.)
+      agent/          # Upstream elizaOS agent (core plugins, auto-enable maps)
+      plugin-wechat/  # WeChat connector plugin (@elizaos/plugin-wechat)
+      ui/             # Shared UI component library
+      shared/         # Shared utilities
   apps/
-    app/                # React SPA frontend (Vite)
-      electrobun/       # Electrobun desktop wrapper
-    homepage/           # Marketing site
-  deploy/
-    cloud-agent-template/  # Cloud deployment template
-  docs/                 # Mintlify documentation
-  scripts/              # Build, dev, and utility scripts
-  skills/               # Default skill mirrors from @elizaos/skills
-  test/                 # E2E and integration tests
+    app/            # React SPA frontend (Vite)
+      electrobun/   # Electrobun desktop wrapper
+    browser-bridge/ # Browser extension (@elizaos/browser-bridge-extension)
+    homepage/       # Marketing site
+  deploy/             # Deployment configs (systemd units, docker CI, deploy.env)
+  docs/             # Mintlify documentation
+  scripts/          # Build, dev, and utility scripts
+  test/             # E2E and integration tests
 ```
 
 ### Build Pipeline

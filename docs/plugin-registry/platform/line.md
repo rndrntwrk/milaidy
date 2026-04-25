@@ -49,7 +49,7 @@ export LINE_CHANNEL_SECRET=YOUR_CHANNEL_SECRET
 | Field | Required | Description |
 |-------|----------|-------------|
 | `channelAccessToken` | Yes | LINE Messaging API channel access token |
-| `channelSecret` | Yes | LINE channel secret |
+| `channelSecret` | No | LINE channel secret (for webhook verification) |
 | `enabled` | No | Set `false` to disable (default: `true`) |
 
 ## Environment Variables

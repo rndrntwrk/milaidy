@@ -36,7 +36,7 @@ The Milady mobile app brings the full dashboard experience to iOS and Android de
 
 ### Shared
 
-- **Node.js 22+** and **Bun** (the project's package manager)
+- **Node.js 22+** and the project's package manager (Bun)
 - The monorepo cloned and dependencies installed at the root level
 
 ## Building the App
@@ -49,8 +49,8 @@ All mobile build commands run from the **repository root** using `bun run`.
 # Build plugins, web assets, and sync to the iOS project
 bun run build:ios
 
-# Open in Xcode
-bun run dev:ios
+# Open the Xcode project
+bun run cap:open:ios
 ```
 
 This runs `vite build` to produce the `dist/` web assets, then `capacitor sync ios` to copy them into the native iOS project and update native dependencies.
@@ -63,8 +63,8 @@ The Xcode workspace is at `apps/app/ios/App/App.xcworkspace`.
 # Build plugins, web assets, and sync to the Android project
 bun run build:android
 
-# Open in Android Studio
-bun run dev:android
+# Open the Android Studio project
+bun run cap:open:android
 ```
 
 This runs `vite build` followed by `capacitor sync android` to copy web assets and update the Gradle project.
@@ -76,7 +76,6 @@ The Android project is at `apps/app/android/`.
 All custom Capacitor plugins must be built before the web app can bundle them:
 
 ```bash
-cd apps/app
 bun run plugin:build
 ```
 
@@ -113,11 +112,15 @@ The shared Capacitor configuration lives in `capacitor.config.ts`. Mobile target
   server: {
     androidScheme: "https",
     iosScheme: "https",
-    allowNavigation: ["localhost", "127.0.0.1"],
+    allowNavigation: [
+      "localhost", "127.0.0.1",
+      "*.elizacloud.ai", "app.milady.ai", "cloud.milady.ai", "*.milady.ai",
+      "rs-sdk-demo.fly.dev", "*.fly.dev",
+      "hyperscape.gg", "*.hyperscape.gg",
+    ],
   },
   plugins: {
     Keyboard: { resize: "body", resizeOnFullScreen: true },
-    StatusBar: { style: "dark", backgroundColor: "#0a0a0a" },
   },
   ios: {
     contentInset: "automatic",
@@ -137,10 +140,9 @@ The shared Capacitor configuration lives in `capacitor.config.ts`. Mobile target
 | Field | Purpose |
 |-------|---------|
 | `webDir` | Directory containing the bundled Vite output (`dist`) |
-| `server.allowNavigation` | Domains the WebView is allowed to navigate to (localhost for local API) |
+| `server.allowNavigation` | Domains the WebView is allowed to navigate to (localhost, Eliza Cloud, game servers, etc.) |
 | `server.androidScheme` / `iosScheme` | Both set to HTTPS for secure WebView content loading |
 | `plugins.Keyboard.resize` | Body resize mode keeps the chat input visible when the keyboard opens |
-| `plugins.StatusBar` | Dark status bar matching the app's `#0a0a0a` background |
 | `ios.contentInset` | Automatic insets for the notch / Dynamic Island |
 | `ios.preferredContentMode` | Mobile-optimized rendering (not desktop-style) |
 | `ios.allowsLinkPreview` | Disables long-press link previews that interfere with custom gestures |
@@ -513,7 +515,7 @@ bun run build:ios
 bun run dev
 
 # Open Xcode and run on a simulator
-cd apps/app && bun run cap:open:ios
+bun run cap:open:ios
 ```
 
 Update the Capacitor server config to point to your dev server IP for live reload.
@@ -528,13 +530,13 @@ bun run build:android
 bun run dev
 
 # Open Android Studio and run on an emulator
-cd apps/app && bun run cap:open:android
+bun run cap:open:android
 ```
 
 ### Running Tests
 
 ```bash
-# Unit tests (Vitest) — from repo root
+# Unit tests (Vitest)
 bun run test
 
 # Watch mode

@@ -51,6 +51,16 @@ export BLUESKY_PASSWORD=your-app-password
 
 ## Configuration
 
+| Field | Required | Description |
+|-------|----------|-------------|
+| `enabled` | No | Set `false` to disable (default: `true`) |
+| `postEnable` | No | Enable automated posting |
+| `postIntervalMin` | No | Minimum minutes between posts (default: `30`) |
+| `postIntervalMax` | No | Maximum minutes between posts (default: `60`) |
+| `dryRun` | No | Simulate operations without executing them |
+
+## Environment Variables
+
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `BLUESKY_HANDLE` | Yes | Bluesky handle (e.g., `yourname.bsky.social`) |
@@ -60,15 +70,15 @@ export BLUESKY_PASSWORD=your-app-password
 | `BLUESKY_DRY_RUN` | No | Set to `true` for testing without posting |
 | `BLUESKY_ENABLE_POSTING` | No | Enable or disable post creation |
 | `BLUESKY_ENABLE_DMS` | No | Enable direct message processing |
-| `BLUESKY_ENABLE_POSTING` | No | Enable or disable posting |
-| `BLUESKY_POLL_INTERVAL` | No | Polling interval in seconds |
-| `BLUESKY_ACTION_INTERVAL` | No | Interval in seconds between action-processing cycles |
-| `BLUESKY_MAX_POST_LENGTH` | No | Maximum characters per post |
-| `BLUESKY_POST_IMMEDIATELY` | No | Post immediately instead of waiting for schedule |
-| `BLUESKY_POST_INTERVAL_MIN` | No | Minimum interval in seconds between automated posts |
-| `BLUESKY_POST_INTERVAL_MAX` | No | Maximum interval in seconds between automated posts |
-| `BLUESKY_MAX_ACTIONS_PROCESSING` | No | Maximum actions to process in a single batch |
-| `BLUESKY_ENABLE_ACTION_PROCESSING` | No | Enable or disable automated action processing |
+| `BLUESKY_POLL_INTERVAL` | No | Polling interval in seconds (default: `60`) |
+| `BLUESKY_ENABLE_POSTING` | No | Enable or disable post creation (default: `true`) |
+| `BLUESKY_POST_IMMEDIATELY` | No | Post immediately on startup |
+| `BLUESKY_POST_INTERVAL_MIN` | No | Minimum seconds between posts (default: `1800`) |
+| `BLUESKY_POST_INTERVAL_MAX` | No | Maximum seconds between posts (default: `3600`) |
+| `BLUESKY_MAX_POST_LENGTH` | No | Maximum post character length (default: `300`) |
+| `BLUESKY_ACTION_INTERVAL` | No | Seconds between action cycles (default: `120`) |
+| `BLUESKY_ENABLE_ACTION_PROCESSING` | No | Enable action processing (default: `true`) |
+| `BLUESKY_MAX_ACTIONS_PROCESSING` | No | Max actions per batch (default: `5`) |
 
 ## Related
 

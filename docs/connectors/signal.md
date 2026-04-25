@@ -71,12 +71,27 @@ To explicitly disable the connector even when an account is configured:
 
 ## Features
 
-- Private and group messaging via signal-cli
-- Read receipts and reactions
-- Attachment and media support
-- DM and group access policies
-- Multi-account support
-- Auto-start signal-cli from the connector
+The `plugin-auto-enable.ts` module checks `connectors.signal` in your config. The plugin auto-enables when any of the following conditions are met (and `enabled` is not explicitly `false`):
+
+- `account` is set together with `httpUrl`
+- `cliPath` is set (signal-cli binary path for auto-start)
+- `accounts` contains at least one configured entry
+
+No environment variable is required to trigger auto-enable — it is driven entirely by the connector config object.
+
+## Environment Variables
+
+The runtime injects the following environment variables from your `connectors.signal` config into `process.env` via `CHANNEL_ENV_MAP`, so the plugin can read them at startup:
+
+| Env Variable | Source Config Field | Description |
+|---|---|---|
+| `SIGNAL_AUTH_DIR` | `authDir` | Path to signal-cli data directory |
+| `SIGNAL_ACCOUNT_NUMBER` | `account` | Signal phone number (E.164) |
+| `SIGNAL_HTTP_URL` | `httpUrl` | HTTP URL for signal-cli daemon |
+| `SIGNAL_CLI_PATH` | `cliPath` | Path to signal-cli binary |
+| `SIGNAL_SHOULD_IGNORE_GROUP_MESSAGES` | — | Set to `true` to ignore group messages |
+
+You do not need to set these manually — they are derived from the connector config at runtime.
 
 ## Full Configuration Reference
 

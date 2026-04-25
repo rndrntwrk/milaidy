@@ -342,7 +342,6 @@ Every published plugin should include an `elizaos.plugin.json` manifest at its p
     "apiKey": {
       "label": "API Key",
       "type": "password",
-      "sensitive": true,
       "help": "Get one at openweathermap.org/appid"
     },
     "units": {
@@ -364,7 +363,7 @@ Every published plugin should include an `elizaos.plugin.json` manifest at its p
 | `id` | `string` | Unique plugin identifier (kebab-case) |
 | `name` | `string` | Human-readable display name |
 | `version` | `string` | Semver version |
-| `kind` | `PluginKind` | One of: `ai-provider`, `app`, `connector`, `feature`, `database` |
+| `kind` | `PluginKind` | One of: `feature`, `ai-provider`, `connector`, `database`, `app`, `memory`, `channel`, `provider`, `skill` |
 | `configSchema` | `JsonSchema` | JSON Schema for plugin configuration |
 | `uiHints` | `Record<string, PluginConfigUiHint>` | Hints for admin panel rendering, keyed by config property name |
 | `requiredSecrets` | `string[]` | Environment variables that must be set |
@@ -379,8 +378,8 @@ The `uiHints` object controls how config fields appear in the admin dashboard. E
 interface PluginConfigUiHint {
   label: string;      // display label
   type: 'text' | 'password' | 'number' | 'select' | 'toggle' | 'textarea';
-  sensitive?: boolean; // if true, value is masked in the UI
   help?: string;      // tooltip or helper text
+  sensitive?: boolean; // if true, value is masked in the UI
   advanced?: boolean; // if true, hidden under "Advanced" toggle
 }
 ```
@@ -408,7 +407,7 @@ Set an API key and the corresponding plugin loads automatically:
 |---------------------|--------|
 | `ANTHROPIC_API_KEY` | `@elizaos/plugin-anthropic` |
 | `OPENAI_API_KEY` | `@elizaos/plugin-openai` |
-| `GOOGLE_API_KEY` | `@elizaos/plugin-google-genai` |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | `@elizaos/plugin-google-genai` |
 | `GROQ_API_KEY` | `@elizaos/plugin-groq` |
 | `OPENROUTER_API_KEY` | `@elizaos/plugin-openrouter` |
 

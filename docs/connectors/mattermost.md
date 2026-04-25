@@ -59,12 +59,70 @@ To disable:
 
 ## Features
 
-- Channel and DM messaging
-- Mention-based response filtering
-- Chat mode selection (`dm-only`, `channel-only`, or `all`)
-- Bot message filtering
-- Custom command prefix support
-- Self-hosted server support
+## Environment Variables
+
+When the connector is loaded, the runtime pushes the following secrets from your config into `process.env` for the plugin to consume:
+
+| Variable | Source | Description |
+|----------|--------|-------------|
+| `MATTERMOST_BOT_TOKEN` | `botToken` | Bot token from Mattermost System Console |
+| `MATTERMOST_SERVER_URL` | `baseUrl` | Server URL for the Mattermost server |
+| `MATTERMOST_ENABLED` | `enabled` | Set to `true` to enable |
+| `MATTERMOST_TEAM_ID` | — | Team ID to join |
+| `MATTERMOST_DM_POLICY` | — | DM access policy |
+| `MATTERMOST_GROUP_POLICY` | — | Group message policy |
+| `MATTERMOST_REQUIRE_MENTION` | `requireMention` | Only respond when @mentioned |
+| `MATTERMOST_ALLOWED_USERS` | — | Comma-separated list of allowed user IDs |
+| `MATTERMOST_ALLOWED_CHANNELS` | — | Comma-separated list of allowed channel IDs |
+| `MATTERMOST_IGNORE_BOT_MESSAGES` | — | Set to `true` to ignore messages from other bots |
+
+## Full Configuration Reference
+
+All fields are defined under `connectors.mattermost` in `milady.json`.
+
+### Core Fields
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `botToken` | string | — | Bot token from Mattermost System Console (required) |
+| `baseUrl` | string | — | Base URL for your Mattermost server (required) |
+| `enabled` | boolean | — | Explicitly enable/disable |
+| `chatmode` | `"dm-only"` \| `"channel-only"` \| `"all"` | `"all"` | Restrict which chat types the bot responds in |
+| `requireMention` | boolean | `false` | Only respond when @mentioned |
+| `oncharPrefixes` | string[] | — | Custom command prefixes that trigger agent responses |
+| `configWrites` | boolean | `true` | Allow config writes from channel events |
+
+### Chat Mode
+
+The `chatmode` field controls where the bot responds:
+
+| Mode | Behavior |
+|------|----------|
+| `"all"` | Responds in both DMs and channels (default) |
+| `"dm-only"` | Responds only in direct messages |
+| `"channel-only"` | Responds only in channels |
+
+```json
+{
+  "connectors": {
+    "mattermost": {
+      "botToken": "YOUR_BOT_TOKEN",
+      "baseUrl": "https://chat.example.com",
+      "chatmode": "all",
+      "requireMention": true,
+      "oncharPrefixes": ["!", "/ask"]
+    }
+  }
+}
+```
+
+### Self-Hosted Server Support
+
+The Mattermost connector works with any Mattermost server deployment, including self-hosted instances. Set `baseUrl` to your server's URL and ensure the Milady host can reach it over the network.
+
+## Multi-Account Support
+
+Mattermost does not support multi-account configuration. Each agent runs a single Mattermost bot.
 
 ## Related
 

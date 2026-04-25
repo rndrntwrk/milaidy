@@ -58,10 +58,10 @@ Your agent needs a Farcaster account (FID — Farcaster ID):
 | `signerUuid` | Yes | Neynar signer UUID for the agent account |
 | `fid` | Yes | Farcaster ID (FID) of the agent account |
 | `enabled` | No | Set `false` to disable (default: `true`) |
-| `pollInterval` | No | Seconds between mention checks (default: `60`) |
+| `pollInterval` | No | Seconds between mention checks (default: `120`) |
 | `channels` | No | Array of Farcaster channel names to monitor |
-| `castIntervalMin` | No | Min minutes between autonomous casts (default: `120`) |
-| `castIntervalMax` | No | Max minutes between autonomous casts (default: `240`) |
+| `castIntervalMin` | No | Min minutes between autonomous casts (default: `90`) |
+| `castIntervalMax` | No | Max minutes between autonomous casts (default: `180`) |
 
 ```json
 {

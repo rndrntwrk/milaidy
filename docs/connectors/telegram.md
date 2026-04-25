@@ -53,14 +53,16 @@ To explicitly disable the connector even when a token is present:
 
 ## Features
 
-- Private chat and group messaging
-- Topic-based conversations in supergroups
-- Reactions, stickers, and message deletion
-- Custom bot commands
-- Streaming responses with partial message edits
-- Webhook support for production deployments
-- Per-group and per-topic configuration
-- Multi-account support
+## Environment Variables
+
+When the connector is loaded, the runtime pushes the following secret from your config into `process.env` for the plugin to consume:
+
+| Variable | Source | Description |
+|----------|--------|-------------|
+| `TELEGRAM_BOT_TOKEN` | `botToken` | Bot token from [@BotFather](https://t.me/BotFather) |
+| `TELEGRAM_API_ROOT` | — | Custom Telegram API root URL (for self-hosted Bot API servers) |
+| `TELEGRAM_ALLOWED_CHATS` | — | Comma-separated list of allowed chat IDs |
+| `TELEGRAM_TEST_CHAT_ID` | — | Chat ID used by the test suite |
 
 ## Full Configuration Reference
 

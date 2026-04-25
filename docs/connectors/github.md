@@ -51,11 +51,16 @@ Configure in `~/.milady/milady.json`:
 
 ## Setup
 
-1. Go to [GitHub Settings > Developer settings > Personal access tokens](https://github.com/settings/tokens) and generate a token with the scopes you need (e.g., `repo`, `issues`, `pull_requests`).
-2. Install the plugin: `milady plugins install github`.
-3. Set `GITHUB_API_TOKEN` as an environment variable or in your config.
-4. Optionally set `GITHUB_OWNER` and `GITHUB_REPO` for a default repository context.
-5. Start your agent.
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `GITHUB_API_TOKEN` | Yes | Personal access token or fine-grained token |
+| `GITHUB_OWNER` | No | Default repository owner |
+| `GITHUB_REPO` | No | Default repository name |
+| `GITHUB_BRANCH` | No | Default branch name (default: `main`) |
+| `GITHUB_APP_ID` | No | GitHub App ID (for GitHub App authentication) |
+| `GITHUB_APP_PRIVATE_KEY` | No | GitHub App private key |
+| `GITHUB_INSTALLATION_ID` | No | GitHub App installation ID |
+| `GITHUB_WEBHOOK_SECRET` | No | Secret for webhook verification |
 
 ## Features
 

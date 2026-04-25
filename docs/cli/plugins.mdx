@@ -5,28 +5,26 @@ description: "List, install, inspect, and manage plugins from the CLI."
 
 # `milady plugins`
 
-List, install, inspect, and manage plugins from the CLI.
+Manage plugins: list installed and available plugins, install from the registry, and remove plugins.
 
 ## Subcommands
 
 | Subcommand | Description |
 |------------|-------------|
-| `milady plugins list` | Show all loaded and available plugins |
-| `milady plugins list -q <name>` | Filter plugins by name |
-| `milady plugins list --limit <n>` | Limit results |
-| `milady plugins install <package>` | Install a plugin from the registry |
-| `milady plugins refresh` | Refresh the plugin registry cache |
-| `milady plugins config` | Show plugin configuration hints and env keys |
+| `milady plugins` | List plugins with status |
+| `milady plugins list` | Browse registry plugins |
+| `milady plugins installed` | List installed plugin packages |
+| `milady plugins install <name>` | Install a plugin from npm |
+| `milady plugins uninstall <name>` | Uninstall a plugin |
 
 ## Examples
 
 ```bash
+milady plugins
 milady plugins list
-milady plugins list -q telegram
-milady plugins install @elizaos/plugin-openai
-milady plugins install twitter@1.2.3
-milady plugins install @custom/plugin-x@2.0.0
-milady plugins refresh
+milady plugins installed
+milady plugins install @elizaos/plugin-browser
+milady plugins uninstall @elizaos/plugin-browser
 milady plugins --help
 ```
 
