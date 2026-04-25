@@ -10,7 +10,7 @@ Milady supports multiple deployment strategies: CI Docker images (used for cloud
 
 ### CI Dockerfile
 
-The primary Dockerfile (`deploy/Dockerfile.ci`) builds a production image from pre-built CI artifacts. It expects that `bun install`, `tsdown`, and `vite build` have already been run before the Docker build step (typically in a GitHub Actions workflow).
+The primary Dockerfile (`eliza/packages/app-core/deploy/Dockerfile`) builds a production image from source:
 
 ```dockerfile
 FROM node:22-slim AS pruner
@@ -51,10 +51,11 @@ Key characteristics:
 The CI image is built by the GitHub Actions release pipeline. To run it locally after building:
 
 ```bash
-docker run -p 2138:2138 \
-  -v ~/.milady:/root/.milady \
-  -e ANTHROPIC_API_KEY=sk-ant-... \
-  milady:ci
+docker build \
+  --build-arg MILADY_DOCKER_APT_PACKAGES="ffmpeg imagemagick" \
+  -t milady:local \
+  -f eliza/packages/app-core/deploy/Dockerfile \
+  .
 ```
 
 ### Volumes
@@ -105,7 +106,46 @@ ELIZAOS_CLOUD_API_KEY=eliza_xxx
 
 ### Eliza Cloud (AWS ECS)
 
-Cloud agent deployment uses the same `deploy/Dockerfile.ci` with build args to customize the entrypoint and port configuration. The CI pipeline pre-builds artifacts and passes them into the Docker build context.
+The `Dockerfile.cloud-agent` (in the elizaOS submodule deploy directory) builds a slim container for deploying agents to Eliza Cloud:
+
+```dockerfile
+FROM node:22-bookworm-slim
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+      curl ca-certificates && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY deploy/cloud-agent-entrypoint.ts ./entrypoint.ts
+RUN npm install -g tsx@4
+
+ENV NODE_ENV=production
+ENV PORT=2138
+ENV BRIDGE_PORT=18790
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD curl -f http://localhost:${PORT}/health || exit 1
+
+EXPOSE ${PORT}
+EXPOSE ${BRIDGE_PORT}
+
+RUN useradd -m agent
+USER agent
+
+CMD ["tsx", "entrypoint.ts"]
+```
+
+Key differences from the base Dockerfile:
+
+| Aspect | Base | Cloud Agent |
+|--------|------|-------------|
+| Base image | `node:22-bookworm` (full) | `node:22-bookworm-slim` |
+| Build step | Full source build with Bun | Single entrypoint file, run with `tsx` |
+| Health check | None | `curl` to `/health` every 30s |
+| User | `node` (existing) | `agent` (custom created) |
+| Ports | 2138 | 2138 + 18790 |
 
 #### Cloud Agent Environment Variables
 
@@ -116,8 +156,26 @@ Cloud agent deployment uses the same `deploy/Dockerfile.ci` with build args to c
 | `ANTHROPIC_API_KEY` | Anthropic API key (BYOK mode) |
 | `SMALL_MODEL` | Model selection for small/fast tasks |
 | `LARGE_MODEL` | Model selection for large/complex tasks |
-| `APP_PORT` | Health endpoint port (default: 2138) |
-| `APP_API_BIND` | API bind address (default: `127.0.0.1`) |
+| `PORT` | Health endpoint port (default: 2138) |
+| `BRIDGE_PORT` | Bridge HTTP port (default: 18790) |
+
+#### Build and Run
+
+```bash
+# Build the cloud agent image
+docker build -f eliza/packages/app-core/deploy/Dockerfile.cloud-agent -t elizaos/agent:latest .
+
+# Run with Eliza Cloud inference
+docker run -p 2138:2138 -p 18790:18790 \
+  -e ELIZAOS_CLOUD_API_KEY=eliza_xxx \
+  elizaos/agent:latest
+
+# Run with BYOK (Bring Your Own Key)
+docker run -p 2138:2138 -p 18790:18790 \
+  -e OPENAI_API_KEY=sk-xxx \
+  -e LARGE_MODEL=gpt-4o \
+  elizaos/agent:latest
+```
 
 ## Sandbox Container
 
@@ -157,13 +215,42 @@ The sandbox runs as a sidecar and sleeps indefinitely, ready to accept commands 
 ### Viewing Logs
 
 ```bash
-docker logs -f <container-name>
+docker compose -f eliza/packages/app-core/deploy/docker-compose.yml logs -f milady-gateway
 ```
 
 ### Health Check
 
 ```bash
-curl -f http://localhost:2138/api/health
+docker compose -f eliza/packages/app-core/deploy/docker-compose.yml exec milady-gateway \
+  node dist/index.js health --token "$MILADY_GATEWAY_TOKEN"
+```
+
+### Adding Messaging Channels
+
+<CodeGroup>
+```bash WhatsApp (QR)
+docker compose -f eliza/packages/app-core/deploy/docker-compose.yml run --rm milady-cli channels login
+```
+
+```bash Telegram
+docker compose -f eliza/packages/app-core/deploy/docker-compose.yml run --rm milady-cli \
+  channels add --channel telegram --token <bot-token>
+```
+
+```bash Discord
+docker compose -f eliza/packages/app-core/deploy/docker-compose.yml run --rm milady-cli \
+  channels add --channel discord --token <bot-token>
+```
+</CodeGroup>
+
+### Stopping and Restarting
+
+```bash
+# Stop the gateway
+docker compose -f eliza/packages/app-core/deploy/docker-compose.yml down
+
+# Restart the gateway
+docker compose -f eliza/packages/app-core/deploy/docker-compose.yml up -d milady-gateway
 ```
 
 ## Security Hardening

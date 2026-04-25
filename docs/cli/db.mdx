@@ -5,7 +5,7 @@ description: "Database management for the local agent database."
 
 # `milady db`
 
-Low-level database utilities for the embedded PGlite database — backup, migration status, and repair.
+Low-level database utilities for the local PGlite store — backup, migration status, and repair.
 
 ## Examples
 
@@ -17,38 +17,11 @@ milady db
 milady db --help
 ```
 
-## Database location
-
-By default, PGlite stores data at:
-
-```
-~/.milady/workspace/.eliza/.elizadb
-```
-
-Override via config:
-
-```json5
-{
-  database: {
-    provider: "pglite",
-    pglite: {
-      dataDir: "~/.milady/workspace/.eliza/.elizadb",
-    },
-  },
-}
-```
+Run `milady db --help` for the full list of available subcommands.
 
 <Warning>
-Avoid running destructive database operations while the API server holds the database lock. Stop the server first with `milady stop` or `Ctrl+C`.
+Avoid running destructive operations while the API server holds the database lock.
 </Warning>
-
-## Database security tests
-
-Run the database security and readonly test suite:
-
-```bash
-bun run db:check
-```
 
 ## Related
 

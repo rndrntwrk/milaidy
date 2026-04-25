@@ -575,8 +575,11 @@ milady models        # verify configured providers
 
 ## Next Steps
 
-1. **Choose a template** and save it as `~/.milady/milady.json`
-2. **Replace placeholders** with your actual credentials
-3. **Run `milady doctor`** to validate the setup
-4. **Start Milady** with `milady` or `milady start`
-5. **Customize** using the [Configuration Reference](/configuration)
+1. **Choose a template** that matches your use case
+2. **Copy the template** and save it as `config.json5`
+3. **Replace all placeholder values** with your actual configuration
+4. **Run validation** with `bun run validate-config config.json5`
+5. **Test locally** before deploying to production
+6. **Deploy** using your hosting platform's deployment process
+
+See the [Configuration Reference](/configuration) for complete option documentation.

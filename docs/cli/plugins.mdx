@@ -5,29 +5,29 @@ description: "List, install, inspect, and manage plugins from the CLI."
 
 # `milady plugins`
 
-Manage the plugin lifecycle — list what's loaded, install from the registry, and inspect plugin status.
+List, install, inspect, and manage plugins from the CLI.
 
 ## Subcommands
 
-| Subcommand | Purpose |
-|-----------|---------|
-| `milady plugins` | List all resolved plugins and their status |
-| `milady plugins list` | Same as above — show installed and auto-enabled plugins |
+| Subcommand | Description |
+|------------|-------------|
+| `milady plugins list` | Show all loaded and available plugins |
+| `milady plugins list -q <name>` | Filter plugins by name |
+| `milady plugins list --limit <n>` | Limit results |
 | `milady plugins install <package>` | Install a plugin from the registry |
+| `milady plugins refresh` | Refresh the plugin registry cache |
+| `milady plugins config` | Show plugin configuration hints and env keys |
 
 ## Examples
 
 ```bash
-# List all plugins and their load status
-milady plugins
 milady plugins list
-
-# Install a connector plugin
-milady plugins install @elizaos/plugin-bluesky
-milady plugins install @elizaos/plugin-instagram
-
-# Install a feature plugin
-milady plugins install @elizaos/plugin-browser
+milady plugins list -q telegram
+milady plugins install @elizaos/plugin-openai
+milady plugins install twitter@1.2.3
+milady plugins install @custom/plugin-x@2.0.0
+milady plugins refresh
+milady plugins --help
 ```
 
 ## How plugins resolve

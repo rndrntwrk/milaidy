@@ -9,17 +9,12 @@ Connect your agent to iMessage through a local [BlueBubbles](https://bluebubbles
 
 ## Configuration
 
-| Name | Required | Description |
-|------|----------|-------------|
-| `BLUEBUBBLES_PASSWORD` | Yes | BlueBubbles server password |
-| `BLUEBUBBLES_SERVER_URL` | No | BlueBubbles server URL (e.g., `http://192.168.1.10:1234`) |
-| `BLUEBUBBLES_ENABLED` | No | Enable or disable the connector |
-| `BLUEBUBBLES_DM_POLICY` | No | DM policy (e.g., `allow`, `deny`, `allowlist`) |
-| `BLUEBUBBLES_ALLOW_FROM` | No | Comma-separated allowed user list |
-| `BLUEBUBBLES_GROUP_POLICY` | No | Group message policy (e.g., `allow`, `deny`) |
-| `BLUEBUBBLES_GROUP_ALLOW_FROM` | No | Comma-separated allowed group list |
-| `BLUEBUBBLES_WEBHOOK_PATH` | No | Webhook path for inbound messages |
-| `BLUEBUBBLES_SEND_READ_RECEIPTS` | No | Send read receipts for incoming messages |
+| Field | Value |
+|-------|-------|
+| Package | `@elizaos/plugin-bluebubbles` |
+| Config key | `connectors.bluebubbles` |
+| Availability | Registry — install with `milady plugins install @elizaos/plugin-bluebubbles` |
+| Enable trigger | `password` or `serverUrl` is truthy in connector config, or `accounts` with at least one enabled entry |
 
 These can be set as environment variables or under the `connectors.bluebubbles` config in `~/.milady/milady.json`:
 
@@ -55,7 +50,8 @@ To disable:
 1. Install [BlueBubbles](https://bluebubbles.app) on a Mac with Messages signed in.
 2. Start the BlueBubbles server and note the server URL and password.
 3. Add the server URL and password to `connectors.bluebubbles` in your config.
-4. Start your agent -- the BlueBubbles connector will auto-enable.
+4. Install the plugin: `milady plugins install @elizaos/plugin-bluebubbles`
+5. Start your agent — the BlueBubbles connector will enable when credentials are present.
 
 ## Features
 

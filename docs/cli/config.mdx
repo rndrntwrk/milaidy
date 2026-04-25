@@ -5,42 +5,28 @@ description: "Read, inspect, and validate Milady's active configuration from the
 
 # `milady config`
 
-Read-only commands for inspecting the resolved configuration. Useful for verifying what the runtime will use before starting the server.
+Read-only helpers for inspecting the active configuration.
 
 ## Subcommands
 
-| Subcommand | Purpose |
-|-----------|---------|
-| `milady config get <key>` | Read a single config value using dot-notation |
-| `milady config path` | Print the resolved config file path |
-| `milady config show` | Display all config values grouped by section |
+| Subcommand | Description |
+|------------|-------------|
+| `milady config get <key>` | Read a specific config key (dot-notation) |
+| `milady config path` | Print the path to the active `milady.json` |
+| `milady config show` | Display the resolved configuration |
+| `milady config show --all` | Include advanced/hidden fields |
+| `milady config show --json` | Raw JSON output |
 
 ## Examples
 
 ```bash
-# Read specific values
 milady config get agents.defaults.model
 milady config get gateway.port
-milady config get connectors.discord.token
-
-# Find the config file
 milady config path
-
-# Show full config
 milady config show
-milady config show --all    # Include advanced/hidden fields
-milady config show --json   # Raw JSON output
+milady config show --all
+milady config --help
 ```
-
-## Editing config
-
-`milady config` is read-only. To change values, edit the config file directly:
-
-```bash
-$EDITOR "$(milady config path)"
-```
-
-The config file supports [JSON5 syntax](/configuration#file-format) (comments, trailing commas, unquoted keys).
 
 ## Related
 
