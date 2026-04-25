@@ -56,7 +56,7 @@ export DISCORD_API_TOKEN=YOUR_BOT_TOKEN
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `token` | Yes | Discord bot token |
+| `token` | Yes | Discord bot token (the Discord config schema uses strict validation — use `token`, not `botToken`) |
 | `enabled` | No | Set `false` to disable (default: `true`) |
 | `groupPolicy` | No | Group join policy: `"open"`, `"disabled"`, or `"allowlist"` (default: `"allowlist"`) |
 | `dm.policy` | No | DM access policy: `"pairing"`, `"allowlist"`, `"open"`, or `"disabled"` (default: `"pairing"`) |
@@ -66,13 +66,8 @@ export DISCORD_API_TOKEN=YOUR_BOT_TOKEN
   "connectors": {
     "discord": {
       "token": "YOUR_BOT_TOKEN",
-      "guilds": {
-        "SERVER_ID": {
-          "channels": {
-            "CHANNEL_ID": { "allow": true }
-          }
-        }
-      }
+      "allowedChannels": ["1234567890123456789"],
+      "prefix": "!"
     }
   }
 }
@@ -108,7 +103,7 @@ Response sent back to Discord channel/DM
 
 ## Auto-Enable
 
-The plugin auto-enables when the `connectors.discord` block contains a `token` (or `botToken` / `apiKey` as aliases):
+The plugin auto-enables when the `connectors.discord` block contains a `token` (or `botToken` / `apiKey` — these trigger auto-enable detection but `token` is the validated schema field):
 
 ```json
 {
@@ -128,8 +123,11 @@ The bot token can also be set via:
 export DISCORD_API_TOKEN=YOUR_BOT_TOKEN
 ```
 
+Both `DISCORD_API_TOKEN` and `DISCORD_BOT_TOKEN` environment variables are recognized (the runtime sets both for compatibility).
+
 ## Related
 
+- [Discord Connector Reference](/connectors/discord) — Full configuration reference (intents, PluralKit, streaming modes, per-guild tools, exec approvals)
 - [Telegram Plugin](/plugin-registry/platform/telegram) — Telegram bot integration
 - [Slack Plugin](/plugin-registry/platform/slack) — Slack workspace integration
 - [Connectors Guide](/guides/connectors) — General connector documentation

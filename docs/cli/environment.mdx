@@ -23,6 +23,9 @@ These variables are read by the CLI wrapper (`run-node.mjs`) and the embedded ru
 | `MILADY_API_PORT` / `ELIZA_PORT` | HTTP API bind port. |
 | `MILADY_PORT` | Dashboard / Vite dev port in orchestrated dev flows. |
 | `MILADY_GATEWAY_PORT`, `MILADY_HOME_PORT`, … | Other local services — see **Ports** under [Environment setup](/installation). |
+| `MILADY_API_BIND` | Bind address for the API server. Default `127.0.0.1` (loopback only). Set to `0.0.0.0` for container/cloud deployments. |
+| `MILADY_API_TOKEN` | Bearer token for API authentication. **Required** when `MILADY_API_BIND` is not loopback — without it, anyone who can reach the server gets full access. Generate with `openssl rand -hex 32`. |
+| `MILADY_ALLOWED_ORIGINS` | Comma-separated list of allowed CORS origins for the API (e.g. `https://app.milady.ai,https://elizacloud.ai`). |
 
 ## Development
 

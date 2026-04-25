@@ -31,7 +31,7 @@ milady plugins install twitter
   "connectors": {
     "twitter": {
       "apiKey": "YOUR_API_KEY",
-      "apiSecretKey": "YOUR_API_SECRET_KEY",
+      "apiSecretKey": "YOUR_API_SECRET",
       "accessToken": "YOUR_ACCESS_TOKEN",
       "accessTokenSecret": "YOUR_ACCESS_TOKEN_SECRET"
     }
@@ -44,7 +44,7 @@ milady plugins install twitter
 | Field | Required | Description |
 |-------|----------|-------------|
 | `apiKey` | Yes | Twitter API key (consumer key) |
-| `apiSecretKey` | Yes | API secret key (consumer secret) |
+| `apiSecretKey` | Yes | Twitter API secret key (consumer secret) |
 | `accessToken` | Yes | OAuth 1.0a access token |
 | `accessTokenSecret` | Yes | OAuth 1.0a access token secret |
 | `enabled` | No | Set `false` to disable (default: `true`) |
@@ -125,6 +125,7 @@ Consult [developer.twitter.com/en/docs/twitter-api/rate-limits](https://develope
 
 ## Related
 
+- [Twitter Connector Reference](/connectors/twitter) — Full configuration reference (cookie auth, DM policy, timeline interactions)
 - [Discord Plugin](/plugin-registry/platform/discord) — Discord bot integration
 - [Farcaster Plugin](/plugin-registry/platform/farcaster) — Decentralized social alternative
 - [Connectors Guide](/guides/connectors) — General connector documentation
