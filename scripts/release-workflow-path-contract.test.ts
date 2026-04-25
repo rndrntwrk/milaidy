@@ -926,7 +926,7 @@ describe("release workflow path contract", () => {
       "dpkg-checkbuilddeps debian/control",
     );
     expect(patch).toContain(
-      "node --import tsx scripts/copy-runtime-node-modules.ts --link-only || true",
+      "node --import tsx scripts/copy-runtime-node-modules.ts --link-only || exit $$?",
     );
     expect(agentRelease).toContain("apps/app/ios/App/App.xcodeproj");
     expect(agentRelease).not.toContain("if [ -d ios/App ]; then");
