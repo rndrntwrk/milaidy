@@ -63,7 +63,7 @@ The connector auto-enables when `apiKey` is truthy in the connector config and `
 
 The `plugin-auto-enable.ts` module checks `connectors.farcaster` in your config. If the `apiKey` field is truthy (and `enabled` is not explicitly `false`), the runtime automatically loads `@elizaos/plugin-farcaster`.
 
-No environment variable is required to trigger auto-enable — it is driven entirely by the connector config object.
+The connector can also be enabled via the `FARCASTER_NEYNAR_API_KEY` environment variable (used as the primary env key in the plugin registry). Additional env vars supported: `FARCASTER_FID`, `FARCASTER_SIGNER_UUID`, `FARCASTER_POLL_INTERVAL`, `FARCASTER_HUB_URL`, `FARCASTER_DRY_RUN`, `FARCASTER_MODE`.
 
 ## Environment Variables
 

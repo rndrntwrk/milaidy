@@ -1,10 +1,10 @@
 ---
 title: "OpenAI Plugin"
 sidebarTitle: "OpenAI"
-description: "OpenAI model provider for Milady — GPT-5, o1, o3, o4-mini, embeddings, image generation, and speech."
+description: "OpenAI model provider for Milady — GPT-5, o3, o4-mini, embeddings, image generation, and speech."
 ---
 
-The OpenAI plugin connects Milady agents to OpenAI's API, providing access to GPT-5, the o1/o3/o4-mini reasoning model families, DALL-E image generation, and Whisper speech-to-text.
+The OpenAI plugin connects Milady agents to OpenAI's API, providing access to GPT-5, GPT-5-mini, the o3/o4-mini reasoning model families, DALL-E image generation, and Whisper speech-to-text.
 
 **Package:** `@elizaos/plugin-openai`
 
@@ -38,10 +38,8 @@ export OPENAI_API_KEY=sk-...
 |---------------------|----------|-------------|
 | `OPENAI_API_KEY` | Yes | API key from [platform.openai.com](https://platform.openai.com) |
 | `OPENAI_BASE_URL` | No | Custom base URL (for Azure OpenAI or compatible APIs) |
-| `OPENAI_SMALL_MODEL` | No | Override the small model identifier (default: `gpt-4o-mini`) |
-| `OPENAI_LARGE_MODEL` | No | Override the large model identifier (default: `gpt-4o`) |
-| `SMALL_MODEL` | No | Global alias to override the small model identifier |
-| `LARGE_MODEL` | No | Global alias to override the large model identifier |
+| `OPENAI_SMALL_MODEL` | No | Override the small model identifier (default: `gpt-5-mini`) |
+| `OPENAI_LARGE_MODEL` | No | Override the large model identifier (default: `gpt-5`) |
 | `OPENAI_EMBEDDING_MODEL` | No | Override the embedding model (default: `text-embedding-3-small`) |
 | `OPENAI_EMBEDDING_URL` | No | Custom URL for the embedding endpoint |
 | `OPENAI_EMBEDDING_API_KEY` | No | Separate API key for the embedding endpoint |
@@ -76,11 +74,10 @@ export OPENAI_API_KEY=sk-...
 
 | Model | Context | Best For |
 |-------|---------|---------|
-| `gpt-4.1` | 1M | Latest flagship model |
-| `gpt-4.1-mini` | 1M | Fast, cost-efficient tasks |
-| `gpt-4.1-nano` | 1M | Ultra-fast, lowest cost |
+| `gpt-5` | 200k | Latest flagship, default large model |
+| `gpt-5-mini` | 200k | Fast, cost-efficient tasks, default small model |
 | `gpt-4o` | 128k | Multimodal reasoning |
-| `gpt-4o-mini` | 128k | Fast multimodal tasks |
+| `gpt-4o-mini` | 128k | Cost-efficient alternative |
 
 ### Reasoning Models
 
@@ -99,8 +96,8 @@ export OPENAI_API_KEY=sk-...
 | Embeddings | `text-embedding-3-small`, `text-embedding-3-large` |
 | Image generation | `dall-e-3`, `dall-e-2` |
 | Speech-to-text | `whisper-1` |
-| Text-to-speech | `gpt-5-mini-tts`, `tts-1`, `tts-1-hd` |
-| Vision | `gpt-5`, `gpt-5-mini`, `gpt-4o` (multimodal) |
+| Text-to-speech | `tts-1`, `tts-1-hd` |
+| Vision | `gpt-5` (multimodal) |
 
 ## Model Type Mapping
 
@@ -117,7 +114,7 @@ export OPENAI_API_KEY=sk-...
 
 - Streaming responses
 - Function/tool calling
-- Vision (image input with `gpt-5`, `gpt-5-mini`, `gpt-4o`)
+- Vision (image input with `gpt-5`)
 - Structured JSON output (`response_format: { type: "json_object" }`)
 - Batch API support
 - Token usage tracking

@@ -94,17 +94,10 @@ Launch an app. If the app's plugin is not installed, it is installed first. Retu
 
 ```json
 {
-  "pluginInstalled": true,
-  "needsRestart": false,
-  "displayName": "Hyperscape",
-  "launchType": "viewer",
-  "launchUrl": null,
-  "viewer": {
-    "url": "https://example.com/app",
-    "sandbox": "allow-scripts allow-same-origin",
-    "postMessageAuth": false,
-    "authMessage": null
-  }
+  "name": "@elizaos/app-browser",
+  "displayName": "Browser",
+  "viewerUrl": "http://localhost:2138/apps/browser",
+  "running": true
 }
 ```
 

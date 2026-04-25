@@ -83,9 +83,9 @@ OpenRouter provides access to models from all major providers. Use the full prov
 
 | Model ID | Description |
 |---------|-------------|
+| `openai/gpt-5` | GPT-5 flagship multimodal |
+| `openai/gpt-5-mini` | Fast and efficient |
 | `openai/gpt-4o` | GPT-4o multimodal |
-| `openai/gpt-4o-mini` | Fast and efficient |
-| `openai/o1` | Reasoning model |
 | `openai/o3-mini` | Fast reasoning |
 
 ### Anthropic via OpenRouter

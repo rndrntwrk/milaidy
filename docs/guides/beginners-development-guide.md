@@ -116,12 +116,15 @@ Important files to understand first (all inside the `eliza/` submodule):
 ## 6) Daily commands for development
 
 ```bash
+bun run dev           # API on :31337, UI on :2138 (dev mode splits them)
 bun run build
 bun run check
 bun run test
 bun run test:e2e
 bun run test:coverage
 ```
+
+In dev mode, the API runs on port 31337 and the dashboard UI on port 2138. In production, both share port 2138. The dev orchestrator auto-shifts to the next free port if defaults are busy and syncs the env vars (`MILADY_API_PORT`, `MILADY_PORT`).
 
 CLI iteration examples:
 

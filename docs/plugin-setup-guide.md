@@ -23,7 +23,7 @@ where to get the credentials, minimum required fields, and tips for optional fie
 - `OPENAI_LARGE_MODEL` — e.g. `gpt-5` (used for complex reasoning)
 - `OPENAI_EMBEDDING_MODEL` — e.g. `text-embedding-3-small` (for semantic search)
 - `OPENAI_TTS_MODEL` / `OPENAI_TTS_VOICE` — e.g. `tts-1` / `alloy` (for voice synthesis)
-- `OPENAI_IMAGE_DESCRIPTION_MODEL` — e.g. `gpt-5-mini` (for image understanding)
+- `OPENAI_IMAGE_DESCRIPTION_MODEL` — e.g. `gpt-5` (for image understanding)
 **Tips:** OpenAI is the default fallback for most features. If you have credits, set this first. Use `gpt-5-mini` as small model to save costs.
 
 ### Anthropic
@@ -41,8 +41,8 @@ where to get the credentials, minimum required fields, and tips for optional fie
 **Minimum required:** `GOOGLE_GENERATIVE_AI_API_KEY` or `GOOGLE_API_KEY`
 **Variables:**
 - `GOOGLE_GENERATIVE_AI_API_KEY` / `GOOGLE_API_KEY` — From AI Studio or Google Cloud (either works for auto-enable)
-- `GOOGLE_SMALL_MODEL` — e.g. `gemini-2.0-flash`
-- `GOOGLE_LARGE_MODEL` — e.g. `gemini-2.0-flash-001`
+- `GOOGLE_SMALL_MODEL` — e.g. `gemini-2.5-flash`
+- `GOOGLE_LARGE_MODEL` — e.g. `gemini-2.5-pro`
 - `GOOGLE_EMBEDDING_MODEL` — e.g. `text-embedding-004`
 - `GOOGLE_IMAGE_MODEL` — e.g. `gemini-2.0-flash-001`
 **Tips:** Gemini Flash is fast and cheap; great for small model. The free tier is generous.
@@ -63,9 +63,9 @@ where to get the credentials, minimum required fields, and tips for optional fie
 **Minimum required:** `OPENROUTER_API_KEY`
 **Variables:**
 - `OPENROUTER_API_KEY` — From openrouter.ai/keys
-- `OPENROUTER_SMALL_MODEL` — e.g. `google/gemini-2.0-flash-001` (default)
-- `OPENROUTER_LARGE_MODEL` — e.g. `google/gemini-2.5-flash` (default)
-- `OPENROUTER_IMAGE_MODEL` — e.g. `x-ai/grok-2-vision-1212` (for vision tasks)
+- `OPENROUTER_SMALL_MODEL` — e.g. `openai/gpt-5-mini` or `meta-llama/llama-3.3-70b`
+- `OPENROUTER_LARGE_MODEL` — e.g. `anthropic/claude-sonnet-4-6`
+- `OPENROUTER_IMAGE_MODEL` — e.g. `openai/gpt-5` (for vision tasks)
 - `OPENROUTER_IMAGE_GENERATION_MODEL` — e.g. `openai/dall-e-3`
 - `OPENROUTER_EMBEDDING_MODEL` — e.g. `openai/text-embedding-3-small`
 - `OPENROUTER_TOOL_EXECUTION_MAX_STEPS` — Max tool call steps per turn (default: 15)

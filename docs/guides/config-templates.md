@@ -39,7 +39,7 @@ The simplest configuration — one provider, one agent, no connectors.
   modelProvider: {
     type: "openai",
     apiKey: process.env.OPENAI_API_KEY,
-    model: "gpt-4o",
+    model: "gpt-5",
     temperature: 0.7,
     maxTokens: 2000
   },
@@ -82,7 +82,7 @@ A fully-featured personal assistant with Ollama fallback, voice, and browser too
   modelProvider: {
     type: "openai",
     apiKey: process.env.OPENAI_API_KEY,
-    model: "gpt-4o",
+    model: "gpt-5",
     temperature: 0.7,
     maxTokens: 4000
   },
@@ -150,7 +150,7 @@ A Discord community bot with per-guild configuration.
   modelProvider: {
     type: "openai",
     apiKey: process.env.OPENAI_API_KEY,
-    model: "gpt-4o-mini",
+    model: "gpt-5-mini",
     temperature: 0.6,
     maxTokens: 1024
   },
@@ -216,7 +216,7 @@ A Telegram bot with group support and inline buttons.
   modelProvider: {
     type: "openai",
     apiKey: process.env.OPENAI_API_KEY,
-    model: "gpt-4o-mini",
+    model: "gpt-5-mini",
     temperature: 0.5,
     maxTokens: 1024
   },
@@ -274,7 +274,7 @@ Multiple platforms from a single agent — Discord, Telegram, and Slack.
   modelProvider: {
     type: "openai",
     apiKey: process.env.OPENAI_API_KEY,
-    model: "gpt-4o",
+    model: "gpt-5",
     temperature: 0.3,
     maxTokens: 2000
   },
@@ -341,7 +341,7 @@ Autonomous trading on BNB Smart Chain with PancakeSwap.
   modelProvider: {
     type: "openai",
     apiKey: process.env.OPENAI_API_KEY,
-    model: "gpt-4o",
+    model: "gpt-5",
     temperature: 0.2,
     maxTokens: 4000
   },
@@ -456,7 +456,7 @@ Production deployment with PostgreSQL, monitoring, multiple connectors, and clou
   modelProvider: {
     type: "openai",
     apiKey: process.env.OPENAI_API_KEY,
-    model: "gpt-4o",
+    model: "gpt-5",
     temperature: 0.7,
     maxTokens: 2000,
     retryPolicy: {
