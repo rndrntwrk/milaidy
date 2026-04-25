@@ -682,10 +682,10 @@ describe("release workflow path contract", () => {
     );
     expect(windowsElectrobunInstallBlock).toContain("electrobun@1.16.0");
     expect(windowsElectrobunInstallBlock).toContain(
-      "PLUGIN_AGENT_SKILLS_VERSION=",
+      "@elizaos/plugin-agent-skills@alpha",
     );
-    expect(windowsElectrobunInstallBlock).toContain(
-      '"@elizaos/plugin-agent-skills@$PLUGIN_AGENT_SKILLS_VERSION"',
+    expect(windowsElectrobunInstallBlock).not.toContain(
+      "PLUGIN_AGENT_SKILLS_VERSION",
     );
   });
 
