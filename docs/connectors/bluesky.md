@@ -10,7 +10,7 @@ Connect your agent to Bluesky for social posting and engagement on the AT Protoc
 
 The Bluesky connector is an elizaOS plugin that bridges your agent to Bluesky via the AT Protocol. It supports automated posting, mention monitoring, and reply handling.
 
-Bluesky is an **auto-enabled connector** — it loads automatically when its configuration is present in `milady.json`. No manual plugin install is required.
+Unlike auto-enabled connectors (Discord, Telegram, etc.), Bluesky is a **registry plugin** that must be installed manually before use. It is not auto-enabled from connector config alone.
 
 ## Package Info
 

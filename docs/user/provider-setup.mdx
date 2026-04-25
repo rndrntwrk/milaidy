@@ -34,11 +34,19 @@ Common cloud providers:
 
 ## Ollama
 
-Make sure Ollama is running before you test it. If the model is not downloaded yet, pull it first.
+Make sure Ollama is running before you test it. Verify with:
+
+```bash
+curl http://127.0.0.1:11434/api/tags
+```
+
+If the model is not downloaded yet, pull it first:
 
 ```bash
 ollama pull llama3.3
 ```
+
+To see which models you already have: `ollama list`.
 
 ## Remote backends
 

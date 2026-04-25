@@ -502,4 +502,4 @@ The registry has a browsable web interface hosted from `registry/site/`. Users c
 - [Plugin Development Guide](./development) -- Create your own plugins
 - [Local Plugin Development](./local-plugins) -- Develop without publishing
 - [Publishing Guide](./publish) -- Publish to npm and the registry
-- [Contributing Guide](/guides/contribution-guide) -- Submit plugins upstream
+- [Contributing Guide](/guides/contributing) -- Submit plugins upstream
