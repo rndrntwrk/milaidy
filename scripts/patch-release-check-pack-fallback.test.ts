@@ -78,6 +78,8 @@ const upstreamReleaseWorkflowDriftBlock = `const requiredWorkflowSnippets = [
   'node eliza/packages/app-core/scripts/build-patched-electrobun-cli.mjs "$' +
     '{{ steps.resolve-electrobun.outputs.package-dir }}"',
   "ELIZAOS_CLOUD_API_KEY: $" + "{{ secrets.ELIZAOS_CLOUD_API_KEY }}",
+  "name: Run cloud live regression suite",
+  "run: bun run test:live:cloud",
 ];
 const _requiredPatchedElectrobunCliSnippets = [
   "--target=bun-windows-x64-baseline",
@@ -150,6 +152,10 @@ describe("patch-release-check-pack-fallback", () => {
     expect(patched).toContain(
       "secrets.ELIZAOS_CLOUD_API_KEY != '' && secrets.ELIZAOS_CLOUD_API_KEY || secrets.ELIZACLOUD_API_KEY",
     );
+    expect(patched).toContain("name: Run optional cloud live regression suite");
+    expect(patched).toContain(
+      'if bun run test:live:cloud 2>&1 | tee \\"$log_file\\"; then',
+    );
     expect(patched).toContain(
       'for tarball_pattern in "*-macos-*.app.tar.zst" "*-macos-*.app.tar.gz" "*-macos-*.tar.gz"; do',
     );
@@ -158,6 +164,8 @@ describe("patch-release-check-pack-fallback", () => {
     expect(patched).not.toContain(
       "name: Build patched Electrobun CLI for Windows",
     );
+    expect(patched).not.toContain("name: Run cloud live regression suite");
+    expect(patched).not.toContain("run: bun run test:live:cloud");
     expect(patched).not.toContain("--target=bun-windows-x64-baseline");
   });
 

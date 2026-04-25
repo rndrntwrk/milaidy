@@ -180,8 +180,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Fetch canonical release tags
-        run: |
-          git fetch --tags --force https://github.com/milady-ai/milady.git 'refs/tags/v*:refs/tags/v*' || echo "::warning::Could not fetch canonical release tags; using local tags only"
+        run: git fetch --tags --force https://github.com/milady-ai/milady.git 'refs/tags/v*:refs/tags/v*'
       - name: Compute next version
         id: ver
         env:
@@ -280,24 +279,23 @@ jobs:
         with:
           disable-local-eliza-workspace: "true"
           install-command: bun install --ignore-scripts --no-frozen-lockfile
-      - name: Restore eliza workspace paths for release scripts
-        run: node scripts/restore-local-eliza-workspace.mjs
       - name: Build
         run: |
           bunx tsdown
           printf '{"type":"module"}\n' > dist/package.json
           node --import tsx scripts/write-build-info.ts
+      - name: Sanitize npm package metadata
+        run: node scripts/sanitize-npm-package-metadata.mjs
       - name: Validate package
         run: |
           npm pack --dry-run 2>&1 | tee /tmp/pack-output.txt
-          grep -q "package.json" /tmp/pack-output.txt || echo "::warning::package.json missing from pack"
+          grep -q "package.json" /tmp/pack-output.txt
 
-  # ── Non-blocking platform builds (open issues on failure) ───────────
+  # ── Release validation builds (blocking) ────────────────────────────
   build-android:
     name: Android AAB build
     needs: [version]
     runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
         with:
@@ -332,7 +330,7 @@ jobs:
         working-directory: apps/app/android
         run: |
           chmod +x ./gradlew
-          ./gradlew bundleRelease --no-daemon || echo "::warning::Android AAB build failed (non-blocking)"
+          ./gradlew bundleRelease --no-daemon
       - name: Upload AAB artifact
         if: success()
         uses: actions/upload-artifact@v4
@@ -340,13 +338,12 @@ jobs:
           name: android-aab
           path: apps/app/android/app/build/outputs/bundle/release/*.aab
           retention-days: 30
-          if-no-files-found: warn
+          if-no-files-found: error
 
   build-snap:
     name: Snap build
     needs: [version]
     runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
-    continue-on-error: true
     env:
       MILADY_SKIP_LOCAL_UPSTREAMS: "1"
     steps:
@@ -382,8 +379,7 @@ jobs:
       - uses: snapcore/action-build@v1
         id: snap
       - name: Verify snap
-        run: |
-          sudo snap install --dangerous ${{ steps.snap.outputs.snap }} || echo "::warning::Snap install test failed (non-blocking)"
+        run: sudo snap install --dangerous ${{ steps.snap.outputs.snap }}
       - name: Upload snap artifact
         if: success()
         uses: actions/upload-artifact@v4
@@ -391,13 +387,12 @@ jobs:
           name: snap-package
           path: ${{ steps.snap.outputs.snap }}
           retention-days: 30
-          if-no-files-found: warn
+          if-no-files-found: error
 
   build-flatpak:
     name: Flatpak build
     needs: [version]
     runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
         with:
@@ -416,22 +411,23 @@ jobs:
           flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
           flatpak install --user -y flathub org.freedesktop.Platform//24.08 org.freedesktop.Sdk//24.08 org.freedesktop.Sdk.Extension.node22//24.08
       - name: Build flatpak
+        working-directory: eliza/packages/app-core/packaging/flatpak
         run: |
-          flatpak-builder --user --install-deps-from=flathub --force-clean build-dir eliza/packages/app-core/packaging/flatpak/com.milady.Milady.yml || echo "::warning::Flatpak build failed (non-blocking)"
+          flatpak-builder --repo=repo --user --install-deps-from=flathub --force-clean build-dir ai.elizaos.App.yml
+          flatpak build-bundle repo elizaos-app.flatpak ai.elizaos.App
       - name: Upload flatpak artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: flatpak-bundle
-          path: eliza/packages/app-core/packaging/flatpak/*.flatpak
+          path: eliza/packages/app-core/packaging/flatpak/elizaos-app.flatpak
           retention-days: 30
-          if-no-files-found: warn
+          if-no-files-found: error
 
   build-pypi:
     name: PyPI package build
     needs: [version]
     runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
         with:
@@ -449,7 +445,7 @@ jobs:
       - name: Build wheel
         run: |
           pip install build
-          python -m build eliza/packages/app-core/packaging/pypi/ || echo "::warning::PyPI build failed (non-blocking)"
+          python -m build eliza/packages/app-core/packaging/pypi/
       - name: Upload PyPI artifact
         if: success()
         uses: actions/upload-artifact@v4
@@ -457,13 +453,12 @@ jobs:
           name: pypi-package
           path: eliza/packages/app-core/packaging/pypi/dist/
           retention-days: 30
-          if-no-files-found: warn
+          if-no-files-found: error
 
   build-debian:
     name: Debian package build
     needs: [version]
     runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
         with:
@@ -475,30 +470,39 @@ jobs:
           node scripts/init-submodules.mjs
           node scripts/apply-eliza-ci-patches.mjs
           node scripts/disable-local-eliza-workspace.mjs
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Install build deps
+      - name: Install Debian build deps
         run: |
+          curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
           sudo apt-get update
-          sudo apt-get install -y dpkg-dev debhelper fakeroot
-          curl -fsSL https://bun.sh/install | bash -s "bun-v${BUN_VERSION}"
-          echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
+          sudo apt-get install -y build-essential nodejs dpkg-dev debhelper fakeroot
+          node --version
+          npm --version
+          dpkg-query -W -f='${Version} ${Provides}\n' nodejs | grep -Eq '(^|, )npm(,|$)'
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - name: Stage Debian packaging
+        run: |
+          rm -rf debian
+          cp -R eliza/packages/app-core/packaging/debian debian
+          test -f debian/changelog
+          test -x debian/rules
+          dpkg-checkbuilddeps debian/control
       - name: Build deb
         run: |
-          if [ -f eliza/packages/app-core/packaging/debian/Makefile ] || [ -f eliza/packages/app-core/packaging/debian/rules ]; then
-            cd eliza/packages/app-core/packaging/debian
-            dpkg-buildpackage -us -uc -b || echo "::warning::Debian package build failed (non-blocking)"
-          elif [ -d debian ]; then
-            dpkg-buildpackage -us -uc -b || echo "::warning::Debian package build failed (non-blocking)"
-          else
-            echo "::warning::No debian packaging found — skipping"
-          fi
+          dpkg-buildpackage -us -uc -b
       - name: Collect deb artifacts
         if: success()
         run: |
           mkdir -p deb-output
-          cp ../*.deb deb-output/ 2>/dev/null || true
+          shopt -s nullglob
+          debs=(../*.deb)
+          if [ "${#debs[@]}" -eq 0 ]; then
+            echo "::error::No .deb artifacts found after dpkg-buildpackage"
+            exit 1
+          fi
+          cp "${debs[@]}" deb-output/
       - name: Upload deb artifact
         if: success()
         uses: actions/upload-artifact@v4
@@ -506,12 +510,11 @@ jobs:
           name: debian-package
           path: deb-output/
           retention-days: 30
-          if-no-files-found: warn
+          if-no-files-found: error
   build-ios:
     name: iOS build validation
     needs: [version]
     runs-on: macos-14
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
         with:
@@ -536,17 +539,18 @@ jobs:
           LANG: en_US.UTF-8
       - name: Verify Xcode project
         run: |
-          if [ -d ios/App ]; then
-            xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release -destination 'generic/platform=iOS' -dry-run || echo "::warning::iOS xcodebuild dry-run failed (non-blocking)"
+          if [ -d apps/app/ios/App ]; then
+            xcodebuild -project apps/app/ios/App/App.xcodeproj -scheme App -configuration Release -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" -showBuildSettings > /tmp/milady-xcodebuild-settings.txt
+            grep -q "PRODUCT_BUNDLE_IDENTIFIER = com.miladyai.milady" /tmp/milady-xcodebuild-settings.txt
           else
-            echo "::warning::ios/App directory not found — skipping Xcode validation"
+            echo "::error::apps/app/ios/App directory not found"
+            exit 1
           fi
 
   build-macos-store:
     name: macOS App Store build validation
     needs: [version]
     runs-on: macos-14
-    continue-on-error: true
     env:
       MILADY_SKIP_LOCAL_UPSTREAMS: ""
       ELIZA_SKIP_LOCAL_UPSTREAMS: ""
@@ -569,14 +573,12 @@ jobs:
       - name: Restore legacy electrobun compatibility path
         run: node scripts/ensure-legacy-electrobun-compat.mjs
       - name: Build web assets and Electrobun
-        run: |
-          ELECTROBUN_SKIP_CODESIGN=1 bun run build || echo "::warning::macOS build failed (non-blocking)"
+        run: ELECTROBUN_SKIP_CODESIGN=1 bun run build
 
   build-homepage:
     name: Homepage build
     needs: [version]
     runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
         with:
@@ -588,7 +590,7 @@ jobs:
       - name: Restore eliza workspace paths for homepage scripts
         run: node scripts/restore-local-eliza-workspace.mjs
       - name: Generate release metadata
-        run: node scripts/write-homepage-release-data.mjs || echo "::warning::Release metadata gen failed"
+        run: node scripts/write-homepage-release-data.mjs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Build homepage
@@ -598,15 +600,13 @@ jobs:
     name: Docs validation
     needs: [version]
     runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
       - name: Validate docs config
-        run: |
-          node -e "const c = require('./docs/docs.json'); console.log('Docs config valid:', c.name)" || echo "::warning::docs.json invalid"
+        run: node -e "const c = require('./docs/docs.json'); console.log('Docs config valid:', c.name)"
       - name: Check for broken internal links
         run: |
           find docs -name '*.md' -o -name '*.mdx' | head -5 | while read -r f; do
@@ -621,8 +621,37 @@ jobs:
   publish:
     name: Tag & publish release
     needs:
-      [version, build-electrobun, build-docker, build-cloud-image, build-npm]
-    if: always() && needs.build-electrobun.result == 'success' && needs.build-docker.result == 'success' && needs.build-cloud-image.result == 'success' && needs.build-npm.result == 'success'
+      [
+        version,
+        build-electrobun,
+        build-docker,
+        build-cloud-image,
+        build-npm,
+        build-android,
+        build-snap,
+        build-flatpak,
+        build-pypi,
+        build-debian,
+        build-ios,
+        build-macos-store,
+        build-homepage,
+        build-docs,
+      ]
+    if: >-
+      always() &&
+      needs.build-electrobun.result == 'success' &&
+      needs.build-docker.result == 'success' &&
+      needs.build-cloud-image.result == 'success' &&
+      needs.build-npm.result == 'success' &&
+      needs.build-android.result == 'success' &&
+      needs.build-snap.result == 'success' &&
+      needs.build-flatpak.result == 'success' &&
+      needs.build-pypi.result == 'success' &&
+      needs.build-debian.result == 'success' &&
+      needs.build-ios.result == 'success' &&
+      needs.build-macos-store.result == 'success' &&
+      needs.build-homepage.result == 'success' &&
+      needs.build-docs.result == 'success'
     runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
     permissions:
       contents: write

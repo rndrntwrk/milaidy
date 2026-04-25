@@ -1,4 +1,6 @@
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -8,6 +10,13 @@ const repoRoot = path.resolve(scriptDir, "..");
 const githubTokenInput = ["github_token: $", "{{ secrets.GITHUB_TOKEN }}"].join(
   "",
 );
+const nodeSourceNpmProvideCheck = [
+  "dpkg-query -W -f='",
+  "$",
+  "{Version} ",
+  "$",
+  "{Provides}\\n' nodejs | grep -Eq '(^|, )npm(,|$)'",
+].join("");
 
 function readWorkflow(name: string) {
   return fs.readFileSync(
@@ -25,6 +34,26 @@ function readAction(relativePath: string) {
 
 function readElizaScript(relativePath: string) {
   return fs.readFileSync(path.join(repoRoot, "eliza", relativePath), "utf8");
+}
+
+function extractAddedFileFromPatch(patch: string, filePath: string) {
+  const marker = `diff --git a/${filePath} b/${filePath}`;
+  const start = patch.indexOf(marker);
+  expect(start).toBeGreaterThanOrEqual(0);
+
+  const nextDiff = patch.indexOf("\ndiff --git ", start + marker.length);
+  const section =
+    nextDiff === -1 ? patch.slice(start) : patch.slice(start, nextDiff);
+  const hunkMatch = /^@@ -0,0 \+1,(\d+) @@$/m.exec(section);
+  expect(hunkMatch).not.toBeNull();
+
+  const addedLines = section
+    .split("\n")
+    .filter((line) => line.startsWith("+") && !line.startsWith("+++"))
+    .map((line) => line.slice(1));
+
+  expect(addedLines).toHaveLength(Number(hunkMatch?.[1]));
+  return addedLines.join("\n");
 }
 
 describe("release workflow path contract", () => {
@@ -259,7 +288,7 @@ describe("release workflow path contract", () => {
     expect(desktopSmokeBlock).toContain("Run website blocker desktop smokes");
   });
 
-  it("keeps canonical Tests from quietly skipping live action coverage", () => {
+  it("keeps canonical Tests reporting live action coverage availability", () => {
     const workflow = readWorkflow("test.yml");
     const actionE2eBlock = workflow.slice(
       workflow.indexOf("  action-e2e:"),
@@ -270,14 +299,14 @@ describe("release workflow path contract", () => {
     expect(actionE2eBlock).toContain("github.event_name == 'push'");
     expect(actionE2eBlock).toContain("run-action-e2e");
     expect(actionE2eBlock).toContain(
-      "Action Invocation E2E requires an available live provider",
+      "Action Invocation E2E skipped because the configured external provider is unavailable.",
     );
     expect(testStatusBlock).toContain("action-e2e,");
     expect(testStatusBlock).toContain("strict_results=");
     expect(testStatusBlock).toContain('if [ "$result" != "success" ]; then');
   });
 
-  it("uses the canonical Eliza Cloud secret aliases for blocking live tests", () => {
+  it("uses the canonical Eliza Cloud secret aliases without hard-requiring external quota", () => {
     const testsWorkflow = readWorkflow("test.yml");
     const releaseWorkflow = readWorkflow("release-electrobun.yml");
     const cloudKeyExpression =
@@ -285,14 +314,17 @@ describe("release workflow path contract", () => {
 
     expect(testsWorkflow).toContain(cloudKeyExpression);
     expect(testsWorkflow).toContain(
-      "ELIZAOS_CLOUD_API_KEY or ELIZACLOUD_API_KEY is required for canonical cloud E2E.",
+      "No Eliza Cloud API key configured - skipping optional cloud live E2E.",
+    );
+    expect(testsWorkflow).toContain(
+      "Cloud Live E2E skipped because the configured external provider is unavailable.",
     );
     expect(releaseWorkflow).toContain(cloudKeyExpression);
     expect(releaseWorkflow).toContain(
-      "ELIZAOS_CLOUD_API_KEY or ELIZACLOUD_API_KEY is required for release cloud live regression.",
+      "No Eliza Cloud API key configured for release validation - skipping optional cloud live regression.",
     );
-    expect(releaseWorkflow).not.toContain(
-      "skipping cloud live regression suite",
+    expect(releaseWorkflow).toContain(
+      "Optional cloud live regression failed; release validation continues with deterministic build and packaging checks.",
     );
   });
 
@@ -377,6 +409,7 @@ describe("release workflow path contract", () => {
 
   it("patches Android release build compatibility before release Android validation", () => {
     const agentRelease = readWorkflow("agent-release.yml");
+    const testWorkflow = readWorkflow("test.yml");
     const patch = fs.readFileSync(
       path.join(repoRoot, "patches", "eliza", "ci-release-contracts.patch"),
       "utf8",
@@ -412,6 +445,19 @@ describe("release workflow path contract", () => {
     expect(patch).toContain("AppOpsManager.class.getMethod(");
     expect(patch).toContain("invokeSetMode(appOps, context)");
     expect(patch).not.toContain("+            appOps.setMode(");
+    expect(patch).not.toContain(
+      'selectLiveProvider("openai") ?? selectLiveProvider()',
+    );
+    expect(patch).toContain('selectLiveProvider("elizacloud")');
+    expect(patch).toContain('selectLiveProvider("anthropic")');
+    expect(patch).toContain('selectLiveProvider("google")');
+    expect(patch).toContain('selectLiveProvider("groq")');
+    expect(patch).toContain('selectLiveProvider("openrouter")');
+    expect(patch.indexOf('selectLiveProvider("elizacloud")')).toBeLessThan(
+      patch.indexOf('selectLiveProvider("anthropic")'),
+    );
+    expect(patch).toContain('plugin: "@elizaos/plugin-elizacloud"');
+    expect(patch).toContain("ELIZAOS_CLOUD_ACTION_PLANNER_MODEL: largeModel");
     expect(
       agentRelease.indexOf("name: Patch Android release build compatibility"),
     ).toBeLessThan(
@@ -424,6 +470,21 @@ describe("release workflow path contract", () => {
         "node eliza/packages/app-core/scripts/run-mobile-build.mjs android",
       ),
     ).toBeLessThan(agentRelease.indexOf("working-directory: apps/app/android"));
+
+    const websiteBlockerAndroidBlock = testWorkflow.slice(
+      testWorkflow.indexOf("  website-blocker-mobile-android:"),
+      testWorkflow.indexOf("  website-blocker-mobile-ios:"),
+    );
+    expect(websiteBlockerAndroidBlock).toContain(
+      "name: Apply Milady eliza CI patches",
+    );
+    expect(
+      websiteBlockerAndroidBlock.indexOf("name: Apply Milady eliza CI patches"),
+    ).toBeLessThan(
+      websiteBlockerAndroidBlock.indexOf(
+        "name: Patch Android release build compatibility",
+      ),
+    );
   });
 
   it("keeps the electrobun release workflow aligned with the Agent Browser Bridge companion contract", () => {
@@ -478,6 +539,21 @@ describe("release workflow path contract", () => {
     );
     expect(releaseElectrobun).toContain(
       "test -f eliza/packages/typescript/src/types/generated/eliza/v1/components_pb.ts",
+    );
+    expect(releaseElectrobun).toContain(
+      "test -f eliza/packages/shared/src/i18n/generated/validation-keyword-data.js",
+    );
+    expect(releaseElectrobun).toContain(
+      "mkdir -p dist/node_modules/@elizaos/shared/src/i18n/generated",
+    );
+    expect(releaseElectrobun).toContain(
+      "cp eliza/packages/shared/src/i18n/generated/validation-keyword-data.ts dist/node_modules/@elizaos/shared/src/i18n/generated/",
+    );
+    expect(releaseElectrobun).toContain(
+      "cp eliza/packages/shared/src/i18n/generated/validation-keyword-data.js dist/node_modules/@elizaos/shared/src/i18n/generated/",
+    );
+    expect(releaseElectrobun).toContain(
+      "test -f dist/node_modules/@elizaos/shared/src/i18n/generated/validation-keyword-data.js",
     );
     expect(generateKeywords).toBeLessThan(stageDesktop);
     expect(generateProto).toBeLessThan(stageDesktop);
@@ -549,6 +625,9 @@ describe("release workflow path contract", () => {
 
     expect(agentRelease).toContain("name: Fetch canonical release tags");
     expect(agentRelease).toContain("https://github.com/milady-ai/milady.git");
+    expect(agentRelease).not.toContain(
+      "Could not fetch canonical release tags; using local tags only",
+    );
     expect(agentRelease).toContain("sort -V | tail -1");
     expect(agentRelease).not.toContain(
       "git tag --sort=-creatordate | grep '^v[0-9]",
@@ -575,6 +654,115 @@ describe("release workflow path contract", () => {
     );
     expect(releaseElectrobun).toContain(
       "eliza/packages/app-core/platforms/electrobun/electrobun.config.ts",
+    );
+  });
+
+  it("keeps Windows release packaging on the last green dependency path", () => {
+    const releaseElectrobun = readWorkflow("release-electrobun.yml");
+    const buildJobStart = releaseElectrobun.indexOf("\n  build:\n");
+    expect(buildJobStart).toBeGreaterThan(-1);
+
+    const fallbackInstallStart = releaseElectrobun.indexOf(
+      "      - name: Install published-workspace fallback dependencies",
+      buildJobStart,
+    );
+    expect(fallbackInstallStart).toBeGreaterThan(-1);
+
+    const fallbackInstallBlock = releaseElectrobun.slice(
+      fallbackInstallStart,
+      releaseElectrobun.indexOf("\n\n", fallbackInstallStart),
+    );
+    expect(fallbackInstallBlock).toContain(
+      "if: matrix.platform.os != 'windows'",
+    );
+    expect(fallbackInstallBlock).toContain(
+      "run: bash scripts/install-published-workspace-fallback-deps.sh",
+    );
+
+    const windowsElectrobunInstallStart = releaseElectrobun.indexOf(
+      "      - name: Install Windows Electrobun package dependency",
+      fallbackInstallStart,
+    );
+    expect(windowsElectrobunInstallStart).toBeGreaterThan(-1);
+
+    const windowsElectrobunInstallBlock = releaseElectrobun.slice(
+      windowsElectrobunInstallStart,
+      releaseElectrobun.indexOf("\n\n", windowsElectrobunInstallStart),
+    );
+    expect(windowsElectrobunInstallBlock).toContain(
+      "if: matrix.platform.os == 'windows'",
+    );
+    expect(windowsElectrobunInstallBlock).toContain(
+      "bun add --no-save --dev --ignore-scripts \\",
+    );
+    expect(windowsElectrobunInstallBlock).toContain("electrobun@1.16.0");
+    expect(windowsElectrobunInstallBlock).toContain(
+      "@elizaos/plugin-agent-skills@alpha",
+    );
+    expect(windowsElectrobunInstallBlock).toContain(
+      "@elizaos/plugin-anthropic@alpha",
+    );
+    expect(windowsElectrobunInstallBlock).not.toContain(
+      "PLUGIN_AGENT_SKILLS_VERSION",
+    );
+  });
+
+  it("supports Windows-only Electrobun release dispatches", () => {
+    const releaseElectrobun = readWorkflow("release-electrobun.yml");
+
+    expect(releaseElectrobun).toContain("Desktop platform matrix to build");
+    expect(releaseElectrobun).toContain("desktop_matrix:");
+    expect(releaseElectrobun).toContain(
+      [
+        "Validate Release Inputs\n    if: $",
+        "{{ inputs.platform != 'windows' }}",
+      ].join(""),
+    );
+    expect(releaseElectrobun).toContain(
+      ["RELEASE_PLATFORM: $", "{{ inputs.platform || 'all' }}"].join(""),
+    );
+    expect(releaseElectrobun).toContain(
+      '{"platform":[{"name":"Windows","os":"windows","runner":"$' +
+        "{{ vars.RUNNER_WINDOWS || 'windows-2025' }}" +
+        '","artifact-name":"windows-x64"}]}',
+    );
+    expect(releaseElectrobun).toContain(
+      [
+        "matrix: $",
+        "{{ fromJson(needs.prepare.outputs.desktop_matrix) }}",
+      ].join(""),
+    );
+    expect(releaseElectrobun).toContain(
+      [
+        "name: Build Agent Browser Bridge companions",
+        "    if: $" + "{{ inputs.platform == '' || inputs.platform == 'all' }}",
+      ].join("\n"),
+    );
+    expect(releaseElectrobun).toContain(
+      "(inputs.platform == '' || inputs.platform == 'all') &&",
+    );
+    expect(releaseElectrobun).toContain(
+      "needs.validate-release.result == 'success' || needs.validate-release.result == 'skipped'",
+    );
+  });
+
+  it("keeps Windows packaged smoke blocking before installer proof", () => {
+    const releaseElectrobun = readWorkflow("release-electrobun.yml");
+    const smokeStart = releaseElectrobun.indexOf(
+      "      - name: Smoke test packaged Windows app",
+    );
+    const proofStart = releaseElectrobun.indexOf(
+      "      - name: Run Windows clean installer proof",
+      smokeStart,
+    );
+    const smokeBlock = releaseElectrobun.slice(smokeStart, proofStart);
+
+    expect(smokeStart).toBeGreaterThan(-1);
+    expect(proofStart).toBeGreaterThan(smokeStart);
+    expect(smokeBlock).not.toContain("continue-on-error: true");
+    expect(smokeBlock).toContain("bun run test:desktop:packaged:windows");
+    expect(smokeBlock).toContain(
+      'Write-Error "Packaged Windows smoke test exited with code $LASTEXITCODE."',
     );
   });
 
@@ -682,6 +870,31 @@ describe("release workflow path contract", () => {
     expect(fallbackScript).toContain('cp -LR "$source_path" "$target_path"');
   });
 
+  it("keeps agent runtime plugin dependencies declared for release packaging", () => {
+    const patch = fs.readFileSync(
+      path.join(repoRoot, "patches", "eliza", "ci-release-contracts.patch"),
+      "utf8",
+    );
+
+    expect(patch).toContain("diff --git a/packages/agent/package.json");
+    expect(patch).toContain(
+      '+    "@elizaos/plugin-agent-skills": "workspace:*",',
+    );
+  });
+
+  it("patches shared keyword generation to emit runtime JavaScript", () => {
+    const patch = fs.readFileSync(
+      path.join(repoRoot, "patches", "eliza", "ci-release-contracts.patch"),
+      "utf8",
+    );
+
+    expect(patch).toContain(
+      "diff --git a/packages/shared/scripts/generate-keywords.mjs",
+    );
+    expect(patch).toContain("function generateJavaScript(entries)");
+    expect(patch).toContain("validation-keyword-data.js");
+  });
+
   it("patches generated Android files before the release Gradle build", () => {
     const mobileCompatScript = fs.readFileSync(
       path.join(repoRoot, "scripts", "patch-mobile-build-release-compat.mjs"),
@@ -696,6 +909,10 @@ describe("release workflow path contract", () => {
 
   it("reuses release-installed Electrobun workspaces during packaging", () => {
     const releaseElectrobun = readWorkflow("release-electrobun.yml");
+    const patch = fs.readFileSync(
+      path.join(repoRoot, "patches", "eliza", "ci-release-contracts.patch"),
+      "utf8",
+    );
 
     expect(releaseElectrobun).toContain(
       "name: Patch desktop build workspace install reuse",
@@ -707,10 +924,67 @@ describe("release workflow path contract", () => {
       "Reusing release-installed Electrobun workspace dependencies",
     );
     expect(releaseElectrobun).toContain("\\r?\\n    cwd: APP_DIR");
+    expect(patch).toContain(
+      "eliza/packages/app-core/scripts/ensure-electrobun-core.mjs",
+    );
+  });
+
+  it("prepares and caches Electrobun core binaries before release packaging", () => {
+    const releaseElectrobun = readWorkflow("release-electrobun.yml");
+    const patch = fs.readFileSync(
+      path.join(repoRoot, "patches", "eliza", "ci-release-contracts.patch"),
+      "utf8",
+    );
+    const cacheStep = releaseElectrobun.indexOf(
+      "name: Cache Electrobun CLI and core binaries",
+    );
+    const prepareStep = releaseElectrobun.indexOf(
+      "name: Prepare Electrobun core binaries",
+    );
+    const packageStep = releaseElectrobun.indexOf("name: Build Electrobun app");
+
+    expect(cacheStep).toBeGreaterThanOrEqual(0);
+    expect(prepareStep).toBeGreaterThan(cacheStep);
+    expect(packageStep).toBeGreaterThan(prepareStep);
+    expect(releaseElectrobun).toContain(
+      'echo "core-cache-dir=$package_dir/dist-$electrobun_core_target" >> "$GITHUB_OUTPUT"',
+    );
+    expect(releaseElectrobun).toContain(
+      ["$", "{{ steps.resolve-electrobun.outputs.core-cache-dir }}"].join(""),
+    );
+    expect(releaseElectrobun).toContain(
+      'windows-x64)\n              electrobun_core_target="win-x64"',
+    );
+    expect(releaseElectrobun).toContain(
+      "node eliza/packages/app-core/scripts/ensure-electrobun-core.mjs",
+    );
+    expect(patch).toContain(
+      'const windowsTar = "C:\\\\Windows\\\\System32\\\\tar.exe";',
+    );
+    expect(patch).toContain("getTarExecutable(),");
+
+    const ensureScript = extractAddedFileFromPatch(
+      patch,
+      "packages/app-core/scripts/ensure-electrobun-core.mjs",
+    );
+    const tempDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "milady-electrobun-core-"),
+    );
+    try {
+      const scriptPath = path.join(tempDir, "ensure-electrobun-core.mjs");
+      fs.writeFileSync(scriptPath, ensureScript);
+      execFileSync(process.execPath, ["--check", scriptPath]);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 
   it("keeps draft Electrobun fallback artifacts away from release-grade gates", () => {
     const releaseElectrobun = readWorkflow("release-electrobun.yml");
+    const windowsSmokeBlock = releaseElectrobun.slice(
+      releaseElectrobun.indexOf("name: Smoke test packaged Windows app"),
+      releaseElectrobun.indexOf("name: Run Windows clean installer proof"),
+    );
 
     expect(releaseElectrobun).toContain(
       "uploaded draft-validation fallback archive",
@@ -733,6 +1007,13 @@ describe("release workflow path contract", () => {
     expect(releaseElectrobun).not.toContain("Extracting draft fallback");
     expect(releaseElectrobun).toContain(
       "steps.build-electrobun-app.outputs.fallback != 'true'",
+    );
+    expect(releaseElectrobun).toContain(
+      "Windows clean installer proof exited with code $LASTEXITCODE.",
+    );
+    expect(windowsSmokeBlock).toContain("timeout-minutes: 30");
+    expect(windowsSmokeBlock).toContain(
+      "bun run test:desktop:packaged:windows",
     );
     expect(releaseElectrobun).toContain(
       [
@@ -763,6 +1044,12 @@ describe("release workflow path contract", () => {
     }
     expect(releaseElectrobun).toContain("for build_root in \\");
     expect(releaseElectrobun).toContain("eliza-dist/entry.js found");
+    expect(releaseElectrobun).toContain(
+      'Join-Path $elizaDist "node_modules\\@elizaos\\shared\\src\\i18n\\generated\\validation-keyword-data.js"',
+    );
+    expect(releaseElectrobun).toContain(
+      "eliza-dist generated keyword data found",
+    );
     expect(releaseElectrobun).not.toContain(
       "Mirroring eliza-dist -> milady-dist",
     );
@@ -845,27 +1132,273 @@ describe("release workflow path contract", () => {
     }
   });
 
-  it("keeps agent release publication gated on npm and explicit distribution jobs", () => {
+  it("keeps agent release publication gated on every release validation job", () => {
     const agentRelease = readWorkflow("agent-release.yml");
+    const reusableNpmPublish = readWorkflow("reusable-npm-publish.yml");
+    const patch = fs.readFileSync(
+      path.join(repoRoot, "patches", "eliza", "ci-release-contracts.patch"),
+      "utf8",
+    );
 
     const buildNpmBlock = agentRelease.slice(
       agentRelease.indexOf("  build-npm:"),
-      agentRelease.indexOf("  # ── Non-blocking platform builds"),
+      agentRelease.indexOf("  # ── Release validation builds"),
+    );
+    const releaseValidationBlock = agentRelease.slice(
+      agentRelease.indexOf("  # ── Release validation builds"),
+      agentRelease.indexOf("  # ── 4. Electrobun + Docker + npm green"),
+    );
+    const publishBlock = agentRelease.slice(
+      agentRelease.indexOf("  publish:"),
+      agentRelease.indexOf("  # ── 5. Post-publish"),
+    );
+    const distributeReleaseBlock = agentRelease.slice(
+      agentRelease.indexOf("  distribute-release:"),
+    );
+    const debianValidationBlock = agentRelease.slice(
+      agentRelease.indexOf("  build-debian:"),
+      agentRelease.indexOf("  build-ios:"),
+    );
+    const iosValidationBlock = agentRelease.slice(
+      agentRelease.indexOf("  build-ios:"),
+      agentRelease.indexOf("  build-macos-store:"),
     );
 
     expect(buildNpmBlock).not.toContain("continue-on-error: true");
-    expect(agentRelease).toContain("needs.build-npm.result == 'success'");
+    expect(buildNpmBlock).not.toContain("package.json missing from pack");
+    expect(buildNpmBlock).not.toContain(
+      "Restore eliza workspace paths for release scripts",
+    );
+    expect(buildNpmBlock).toContain(
+      "node scripts/sanitize-npm-package-metadata.mjs",
+    );
+    expect(
+      buildNpmBlock.indexOf("node scripts/sanitize-npm-package-metadata.mjs"),
+    ).toBeLessThan(buildNpmBlock.indexOf("npm pack --dry-run"));
+    expect(reusableNpmPublish).toContain(
+      "node scripts/sanitize-npm-package-metadata.mjs",
+    );
+    expect(
+      reusableNpmPublish.indexOf(
+        "node scripts/sanitize-npm-package-metadata.mjs",
+      ),
+    ).toBeLessThan(reusableNpmPublish.indexOf("npm pack --dry-run"));
+    expect(
+      reusableNpmPublish.indexOf(
+        "node scripts/sanitize-npm-package-metadata.mjs",
+      ),
+    ).toBeLessThan(reusableNpmPublish.indexOf("run: npm publish"));
+    expect(releaseValidationBlock).not.toContain("continue-on-error: true");
+    expect(releaseValidationBlock).not.toContain("failed (non-blocking)");
+    expect(releaseValidationBlock).not.toContain('|| echo "::warning::');
+    expect(releaseValidationBlock).toContain("ai.elizaos.App.yml");
+    expect(releaseValidationBlock).toContain("elizaos-app.flatpak");
+    expect(releaseValidationBlock).toContain("name: Stage Debian packaging");
+    expect(releaseValidationBlock).toContain(
+      "cp -R eliza/packages/app-core/packaging/debian debian",
+    );
+    expect(releaseValidationBlock).not.toContain(
+      "cd eliza/packages/app-core/packaging/debian",
+    );
+    expect(debianValidationBlock).toContain(
+      "curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -",
+    );
+    expect(debianValidationBlock).toContain(
+      "sudo apt-get install -y build-essential nodejs dpkg-dev debhelper fakeroot",
+    );
+    expect(debianValidationBlock).toContain(nodeSourceNpmProvideCheck);
+    expect(debianValidationBlock).toContain("uses: oven-sh/setup-bun@v2");
+    expect(debianValidationBlock).toContain(
+      ["bun-version: $", "{{ env.BUN_VERSION }}"].join(""),
+    );
+    expect(debianValidationBlock).not.toContain("https://bun.sh/install");
+    expect(debianValidationBlock).toContain(
+      "dpkg-checkbuilddeps debian/control",
+    );
+    expect(patch).toContain(
+      "node --import tsx scripts/copy-runtime-node-modules.ts --link-only || exit $$?",
+    );
+    expect(patch).toContain(
+      "cp milady.mjs debian/elizaos-app/usr/lib/elizaos-app/elizaos-app.mjs",
+    );
+    expect(patch).toContain(
+      "install -m 644 debian/elizaos-app.service debian/elizaos-app/usr/lib/elizaos-app/elizaos-app.service",
+    );
+    expect(patch).toContain(
+      "-\tinstall -m 644 packaging/debian/elizaos-app.service debian/elizaos-app/usr/lib/elizaos-app/elizaos-app.service",
+    );
+    expect(patch).toContain(
+      "+\tinstall -m 644 debian/elizaos-app.service debian/elizaos-app/usr/lib/elizaos-app/elizaos-app.service",
+    );
+    expect(patch).toContain("-elizaos-app.mjs usr/lib/elizaos-app/");
+    expect(
+      patch.indexOf("ELIZAOS_APP_SKIP_LOCAL_UPSTREAMS=1 bun install"),
+    ).toBeLessThan(
+      patch.indexOf(
+        "node --import tsx scripts/copy-runtime-node-modules.ts --link-only",
+      ),
+    );
+    expect(
+      patch.indexOf(
+        "node --import tsx scripts/copy-runtime-node-modules.ts --link-only",
+      ),
+    ).toBeLessThan(patch.indexOf("bun run build"));
+    expect(agentRelease).toContain("apps/app/ios/App/App.xcodeproj");
+    expect(agentRelease).not.toContain("if [ -d ios/App ]; then");
+    expect(iosValidationBlock).toContain("CODE_SIGNING_ALLOWED=NO");
+    expect(iosValidationBlock).not.toContain("-dry-run");
+    expect(debianValidationBlock).not.toContain(" nodejs npm ");
+    expect(debianValidationBlock).not.toContain("actions/setup-node@v4");
+    expect(releaseValidationBlock).not.toContain("com.milady.Milady.yml");
+    expect(releaseValidationBlock).not.toContain("ai.milady.Milady");
+    for (const job of [
+      "build-electrobun",
+      "build-docker",
+      "build-cloud-image",
+      "build-npm",
+      "build-android",
+      "build-snap",
+      "build-flatpak",
+      "build-pypi",
+      "build-debian",
+      "build-ios",
+      "build-macos-store",
+      "build-homepage",
+      "build-docs",
+    ]) {
+      expect(publishBlock).toContain(`${job},`);
+      expect(publishBlock).toContain(`needs.${job}.result == 'success'`);
+    }
     expect(agentRelease).toContain("draft: false");
     expect(agentRelease).toContain("  push-agent-image:");
     expect(agentRelease).toContain("  distribute-release:");
     expect(agentRelease).toContain(
       "uses: ./.github/workflows/release-orchestrator.yml",
     );
+    expect(distributeReleaseBlock).toContain(
+      "needs: [version, publish, push-agent-image, push-cloud-image]",
+    );
+    for (const input of [
+      "publish_npm: true",
+      "publish_packages: true",
+      "publish_android: true",
+      "publish_apple: true",
+      "update_homebrew: true",
+      "deploy_homepage: true",
+    ]) {
+      expect(distributeReleaseBlock).toContain(input);
+    }
     expect(agentRelease).toContain(
       ["github-token: $", "{{ secrets.GITHUB_TOKEN }}"].join(""),
     );
     expect(agentRelease).not.toContain(
       "secrets.GH_PAT || secrets.GITHUB_TOKEN",
+    );
+  });
+
+  it("requires enabled release distribution workflows to succeed", () => {
+    const releaseOrchestrator = readWorkflow("release-orchestrator.yml");
+    const publishPackages = readWorkflow("publish-packages.yml");
+    const androidRelease = readWorkflow("android-release.yml");
+    const appleStoreRelease = readWorkflow("apple-store-release.yml");
+
+    expect(releaseOrchestrator).toContain(
+      'PUBLISH_FLATPAK="$PUBLISH_PACKAGES"',
+    );
+    expect(releaseOrchestrator).not.toContain('PUBLISH_FLATPAK="false"');
+    expect(releaseOrchestrator).toContain(
+      "Require enabled distributions succeeded",
+    );
+    expect(releaseOrchestrator).toContain('ANDROID_TRACK="production"');
+    expect(releaseOrchestrator).toContain('APPLE_TRACK="app-store"');
+    expect(releaseOrchestrator).toContain('ANDROID_TRACK="internal"');
+    expect(releaseOrchestrator).toContain('APPLE_TRACK="testflight"');
+    expect(releaseOrchestrator).toContain(
+      "uses: ./.github/workflows/android-release.yml",
+    );
+    expect(releaseOrchestrator).toContain(
+      "uses: ./.github/workflows/apple-store-release.yml",
+    );
+    expect(releaseOrchestrator).toContain("platform: both");
+    expect(releaseOrchestrator).toContain(
+      ["track: $", "{{ needs.prepare.outputs.apple_track }}"].join(""),
+    );
+    for (const dependency of [
+      "needs.publish-npm.result",
+      "needs.publish-packages.result",
+      "needs.publish-android.result",
+      "needs.publish-apple.result",
+      "needs.update-homebrew.result",
+      "needs.deploy-homepage.result",
+    ]) {
+      expect(releaseOrchestrator).toContain(dependency);
+    }
+
+    expect(publishPackages).toContain(
+      "SNAP_STORE_CREDENTIALS is required when Snap publishing is enabled.",
+    );
+    expect(publishPackages).toContain(
+      "APT_REPO_TOKEN is required when apt publishing is enabled.",
+    );
+    expect(publishPackages).toContain(
+      "sudo apt-get install -y nodejs build-essential",
+    );
+    expect(publishPackages).toContain(nodeSourceNpmProvideCheck);
+    expect(publishPackages).toContain("dpkg-checkbuilddeps debian/control");
+    expect(publishPackages).toContain(
+      "Require enabled package publishers succeeded",
+    );
+    expect(publishPackages).not.toContain("Snap Store publish skipped");
+    expect(publishPackages).not.toContain("APT repository update skipped");
+    expect(publishPackages).not.toContain("skipping .deb attachment");
+    expect(publishPackages).not.toContain("skipping Flatpak attachment");
+
+    expect(androidRelease).toContain(
+      "PLAY_STORE_SERVICE_ACCOUNT_JSON is required for Android release publishing.",
+    );
+    expect(androidRelease).toContain("name: Build Signed AAB");
+    expect(androidRelease).toContain("name: Publish to Play Store");
+    expect(androidRelease).toContain("Attach AAB to GitHub Release");
+    expect(androidRelease).toContain("bundle exec fastlane supply");
+    expect(androidRelease).toContain('--package_name "ai.milady.app"');
+    expect(androidRelease).toContain("Require Android release succeeded");
+    expect(androidRelease).not.toContain("Play Store upload will be skipped");
+    expect(androidRelease).not.toContain("skipping AAB attachment");
+
+    expect(appleStoreRelease).toContain(
+      "APP_STORE_APP_ID is required for TestFlight/App Store delivery.",
+    );
+    expect(appleStoreRelease).toContain("name: Build & Submit iOS");
+    expect(appleStoreRelease).toContain("bundle exec fastlane release");
+    expect(appleStoreRelease).toContain("bundle exec fastlane beta");
+    expect(appleStoreRelease).toContain("name: Build & Submit macOS");
+    expect(appleStoreRelease).toContain("Upload to App Store Connect");
+    expect(appleStoreRelease).toContain("xcrun altool --upload-app");
+    expect(appleStoreRelease).toContain(
+      "Require enabled Apple releases succeeded",
+    );
+    expect(appleStoreRelease).not.toContain("APP_STORE_APP_ID is not set");
+    expect(appleStoreRelease).not.toContain("bunx tsdown || true");
+    expect(appleStoreRelease).not.toContain("if-no-files-found: warn");
+  });
+
+  it("fills existing app-core node_modules mirrors instead of trusting partial directories", () => {
+    const script = fs.readFileSync(
+      path.join(repoRoot, "scripts", "copy-runtime-node-modules.ts"),
+      "utf8",
+    );
+
+    expect(script).toContain(
+      "fs.rmSync(targetDir, { force: true, recursive: true })",
+    );
+    expect(script).toContain(
+      'const miladyRootBunStore = path.join(miladyRootNodeModules, ".bun");',
+    );
+    expect(script).toContain(
+      'path.join(miladyRootBunStore, entry.name, "node_modules")',
+    );
+    expect(script).not.toContain(
+      "} else if (stat?.isDirectory()) {\n    return null;",
     );
   });
 });

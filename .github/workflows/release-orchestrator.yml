@@ -151,7 +151,6 @@ jobs:
 
           PUBLISH_FLATPAK="$PUBLISH_PACKAGES"
           if [[ "$IS_PRERELEASE" == "true" ]]; then
-            PUBLISH_FLATPAK="false"
             UPDATE_HOMEBREW="false"
           fi
 
@@ -279,3 +278,25 @@ jobs:
             echo "| Homebrew | ${{ needs.update-homebrew.result || 'skipped' }} |"
             echo "| Homepage | ${{ needs.deploy-homepage.result || 'skipped' }} |"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Require enabled distributions succeeded
+        run: |
+          failed=0
+          require_result() {
+            local label="$1"
+            local enabled="$2"
+            local result="$3"
+            if [[ "$enabled" == "true" && "$result" != "success" ]]; then
+              echo "::error::$label distribution result was '$result', expected success"
+              failed=1
+            fi
+          }
+
+          require_result "npm" "${{ needs.prepare.outputs.publish_npm }}" "${{ needs.publish-npm.result }}"
+          require_result "Package registries" "${{ needs.prepare.outputs.publish_packages }}" "${{ needs.publish-packages.result }}"
+          require_result "Android" "${{ needs.prepare.outputs.publish_android }}" "${{ needs.publish-android.result }}"
+          require_result "Apple Stores" "${{ needs.prepare.outputs.publish_apple }}" "${{ needs.publish-apple.result }}"
+          require_result "Homebrew" "${{ needs.prepare.outputs.update_homebrew }}" "${{ needs.update-homebrew.result }}"
+          require_result "Homepage" "${{ needs.prepare.outputs.deploy_homepage }}" "${{ needs.deploy-homepage.result }}"
+
+          exit "$failed"
