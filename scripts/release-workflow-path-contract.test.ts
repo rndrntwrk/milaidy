@@ -420,9 +420,13 @@ describe("release workflow path contract", () => {
     expect(patch).toContain("AppOpsManager.class.getMethod(");
     expect(patch).toContain("invokeSetMode(appOps, context)");
     expect(patch).not.toContain("+            appOps.setMode(");
-    expect(patch).toContain(
+    expect(patch).not.toContain(
       'selectLiveProvider("openai") ?? selectLiveProvider()',
     );
+    expect(patch).toContain('selectLiveProvider("openrouter")');
+    expect(patch).toContain('selectLiveProvider("anthropic")');
+    expect(patch).toContain('selectLiveProvider("google")');
+    expect(patch).toContain('selectLiveProvider("groq")');
     expect(
       agentRelease.indexOf("name: Patch Android release build compatibility"),
     ).toBeLessThan(
@@ -989,6 +993,10 @@ describe("release workflow path contract", () => {
     expect(patch).toContain(
       "node --import tsx scripts/copy-runtime-node-modules.ts --link-only || exit $$?",
     );
+    expect(patch).toContain(
+      "cp milady.mjs debian/elizaos-app/usr/lib/elizaos-app/elizaos-app.mjs",
+    );
+    expect(patch).toContain("-elizaos-app.mjs usr/lib/elizaos-app/");
     expect(
       patch.indexOf("ELIZAOS_APP_SKIP_LOCAL_UPSTREAMS=1 bun install"),
     ).toBeLessThan(

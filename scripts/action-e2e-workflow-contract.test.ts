@@ -5,38 +5,55 @@ import { resolveRepoRoot } from "./lib/repo-root.mjs";
 
 const repoRoot = resolveRepoRoot(import.meta.url);
 const workflowPath = path.join(repoRoot, ".github", "workflows", "test.yml");
+const elizaPatchPath = path.join(
+  repoRoot,
+  "patches",
+  "eliza",
+  "ci-release-contracts.patch",
+);
 
 function workflowText() {
   return fs.readFileSync(workflowPath, "utf8");
 }
 
 describe("action e2e workflow contract", () => {
-  it("uses only provider-specific credentials for live action invocation", () => {
+  it("uses non-OpenAI provider credentials for live action invocation", () => {
     const workflow = workflowText();
+    const actionE2EBlock = workflow.slice(
+      workflow.indexOf("  action-e2e:"),
+      workflow.indexOf("  validation-e2e:"),
+    );
+    const elizaPatch = fs.readFileSync(elizaPatchPath, "utf8");
 
-    expect(workflow).toContain('name: "Action Invocation E2E"');
-    expect(workflow).toContain(
-      `GOOGLE_GENERATIVE_AI_API_KEY: \${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}`,
+    expect(actionE2EBlock).toContain('name: "Action Invocation E2E"');
+    expect(actionE2EBlock).toContain(
+      `ELIZA_E2E_OPENROUTER_API_KEY: \${{ secrets.OPENROUTER_API_KEY }}`,
     );
-    expect(workflow).toContain(
-      `OPENROUTER_API_KEY: \${{ secrets.OPENROUTER_API_KEY }}`,
+    expect(actionE2EBlock).toContain(
+      `ELIZA_E2E_ANTHROPIC_API_KEY: \${{ secrets.ANTHROPIC_API_KEY }}`,
     );
-    expect(workflow).toContain(
+    expect(actionE2EBlock).toContain(
+      `ELIZA_E2E_GOOGLE_GENERATIVE_AI_API_KEY: \${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}`,
+    );
+    expect(actionE2EBlock).toContain(
+      `ELIZA_E2E_GROQ_API_KEY: \${{ secrets.GROQ_API_KEY }}`,
+    );
+    expect(actionE2EBlock).toContain(
       `ELIZAOS_CLOUD_API_KEY: \${{ secrets.ELIZAOS_CLOUD_API_KEY != '' && secrets.ELIZAOS_CLOUD_API_KEY || secrets.ELIZACLOUD_API_KEY }}`,
     );
-    expect(workflow).toContain(
-      `OPENAI_API_KEY: \${{ secrets.OPENAI_API_KEY }}`,
+    expect(actionE2EBlock).not.toContain("OPENAI_API_KEY:");
+    expect(actionE2EBlock).not.toContain("OPENAI_BASE_URL:");
+    expect(elizaPatch).not.toContain(
+      '? (selectLiveProvider("openai") ?? selectLiveProvider())',
     );
-    expect(workflow).toContain(
-      `OPENAI_BASE_URL: \${{ secrets.OPENAI_BASE_URL != '' && secrets.OPENAI_BASE_URL || 'https://api.openai.com/v1' }}`,
-    );
-    expect(workflow).not.toContain(
-      "OPENAI_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY",
-    );
-    expect(workflow).toContain(
+    expect(elizaPatch).toContain('selectLiveProvider("openrouter")');
+    expect(elizaPatch).toContain('selectLiveProvider("anthropic")');
+    expect(elizaPatch).toContain('selectLiveProvider("google")');
+    expect(elizaPatch).toContain('selectLiveProvider("groq")');
+    expect(actionE2EBlock).toContain(
       "Action Invocation E2E requires an available live provider in canonical CI.",
     );
-    expect(workflow).toContain(
+    expect(actionE2EBlock).toContain(
       "grep -Eiq 'exceeded your current quota|insufficient[_ -]?quota|billing details|credit balance|invalid api key|unauthorized|authentication|status code: 429|too many requests' \"$log_file\"",
     );
   });

@@ -128,6 +128,15 @@ index 40eea15ff9..3d852ccb06 100755
  		bun run build; \
  	else \
  		npm install --ignore-scripts; \
+@@ -23 +24 @@ override_dh_auto_install:
+-	cp elizaos-app.mjs debian/elizaos-app/usr/lib/elizaos-app/
++	cp milady.mjs debian/elizaos-app/usr/lib/elizaos-app/elizaos-app.mjs
+diff --git a/packages/app-core/packaging/debian/install b/packages/app-core/packaging/debian/install
+index 998ae35c63..f09fae624e 100644
+--- a/packages/app-core/packaging/debian/install
++++ b/packages/app-core/packaging/debian/install
+@@ -2 +1,0 @@
+-elizaos-app.mjs usr/lib/elizaos-app/
 diff --git a/packages/app-core/platforms/android/app/src/main/java/ai/elizaos/app/MiladyBootReceiver.java b/packages/app-core/platforms/android/app/src/main/java/ai/elizaos/app/MiladyBootReceiver.java
 index 8a999411b9..ef72354bef 100644
 --- a/packages/app-core/platforms/android/app/src/main/java/ai/elizaos/app/MiladyBootReceiver.java
@@ -1663,12 +1672,15 @@ diff --git a/packages/app-core/test/live-agent/action-invocation.live.e2e.test.t
 index 2da7e85664..bf48402af1 100644
 --- a/packages/app-core/test/live-agent/action-invocation.live.e2e.test.ts
 +++ b/packages/app-core/test/live-agent/action-invocation.live.e2e.test.ts
-@@ -44,7 +44,7 @@ import { createRealTestRuntime } from "../helpers/real-runtime.ts";
+@@ -44,7 +44,10 @@ import { createRealTestRuntime } from "../helpers/real-runtime.ts";
  const liveModelTestsEnabled =
    process.env.MILADY_LIVE_TEST === "1" || process.env.ELIZA_LIVE_TEST === "1";
  const selectedLiveProvider = liveModelTestsEnabled
 -  ? selectLiveProvider()
-+  ? (selectLiveProvider("openai") ?? selectLiveProvider())
++  ? (selectLiveProvider("openrouter") ??
++    selectLiveProvider("anthropic") ??
++    selectLiveProvider("google") ??
++    selectLiveProvider("groq"))
    : null;
  const canRunLiveTests = liveModelTestsEnabled && selectedLiveProvider !== null;
  
