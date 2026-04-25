@@ -21,7 +21,7 @@ The Nextcloud Talk connector is an elizaOS plugin that bridges your agent to Nex
 ## Setup Requirements
 
 - Nextcloud server URL
-- Bot secret (from Nextcloud Talk bot settings)
+- Nextcloud Talk bot secret (from Nextcloud admin settings)
 
 ## Configuration
 
@@ -45,12 +45,11 @@ In `~/.milady/milady.json`:
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `NEXTCLOUD_URL` | No | Nextcloud server URL |
-| `NEXTCLOUD_BOT_SECRET` | No | Bot secret from Nextcloud Talk |
-| `NEXTCLOUD_ENABLED` | No | Enable or disable the connector |
-| `NEXTCLOUD_WEBHOOK_HOST` | No | Webhook server host address |
-| `NEXTCLOUD_WEBHOOK_PORT` | No | Webhook server port |
-| `NEXTCLOUD_WEBHOOK_PATH` | No | Custom webhook path |
+| `NEXTCLOUD_URL` | Yes | Nextcloud server URL |
+| `NEXTCLOUD_BOT_SECRET` | Yes | Bot secret for authentication |
+| `NEXTCLOUD_WEBHOOK_HOST` | No | Host address for webhook listener |
+| `NEXTCLOUD_WEBHOOK_PORT` | No | Port for webhook listener |
+| `NEXTCLOUD_WEBHOOK_PATH` | No | Webhook endpoint path |
 | `NEXTCLOUD_WEBHOOK_PUBLIC_URL` | No | Public-facing webhook URL |
 | `NEXTCLOUD_ALLOWED_ROOMS` | No | Comma-separated list of allowed room IDs |
 

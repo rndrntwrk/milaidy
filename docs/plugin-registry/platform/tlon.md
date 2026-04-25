@@ -53,18 +53,29 @@ export TLON_URL=YOUR_URL
 | `code` | Yes | Urbit ship access code |
 | `url` | Yes | Urbit ship URL |
 | `enabled` | No | Set `false` to disable (default: `true`) |
+| `dmAllowlist` | No | Comma-separated allowed user list for DMs |
+| `groupChannels` | No | Comma-separated list of group channel identifiers |
+| `autoDiscoverChannels` | No | Comma-separated list of channels to auto-discover |
 
 ## Environment Variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `TLON_SHIP` | No | Urbit ship/node identifier |
-| `TLON_CODE` | No | Ship authentication/access code |
+| `TLON_SHIP` | No | Urbit ship name |
+| `TLON_CODE` | No | Ship access code |
 | `TLON_URL` | No | Ship URL |
-| `TLON_ENABLED` | No | Enable or disable the plugin |
-| `TLON_DM_ALLOWLIST` | No | Comma-separated list of allowed DM user IDs |
-| `TLON_GROUP_CHANNELS` | No | Comma-separated list of group channel IDs |
-| `TLON_AUTO_DISCOVER_CHANNELS` | No | Automatically discover and join channels |
+| `TLON_ENABLED` | No | Enable or disable the connector |
+| `TLON_DM_ALLOWLIST` | No | Comma-separated allowed user list for DMs |
+| `TLON_GROUP_CHANNELS` | No | Comma-separated group channel identifiers |
+| `TLON_AUTO_DISCOVER_CHANNELS` | No | Comma-separated channels to auto-discover |
+
+## Features
+
+- Urbit-based chat and social interactions
+- Ship-to-ship messaging
+- Group chat participation
+- DM allowlists for access control
+- Channel auto-discovery
 
 ## Related
 

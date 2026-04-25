@@ -65,8 +65,13 @@ You can also enable autonomous mode programmatically using the local Milady API:
 
 <CodeGroup>
 ```bash curl
-curl -X POST http://localhost:2138/api/agents/autonomous-config \
-  -H "Authorization: Bearer YOUR_API_KEY" \
+# Enable autonomy
+curl -X POST http://localhost:31337/api/agent/autonomy \
+  -H "Content-Type: application/json" \
+  -d '{"enabled": true}'
+
+# Create a trigger for scheduled execution
+curl -X POST http://localhost:31337/api/triggers \
   -H "Content-Type: application/json" \
   -d '{
     "enabled": true
@@ -267,8 +272,7 @@ You can disable autonomous mode at any time through the dashboard or API:
 
 <CodeGroup>
 ```bash curl
-curl -X POST http://localhost:2138/api/agents/autonomous-config/disable \
-  -H "Authorization: Bearer YOUR_API_KEY" \
+curl -X POST http://localhost:31337/api/agent/autonomy \
   -H "Content-Type: application/json" \
   -d '{
     "enabled": false

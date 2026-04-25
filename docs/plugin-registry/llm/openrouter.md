@@ -44,21 +44,13 @@ export OPENROUTER_API_KEY=sk-or-...
 |---------------------|----------|-------------|
 | `OPENROUTER_API_KEY` | Yes | OpenRouter API key from [openrouter.ai](https://openrouter.ai) |
 | `OPENROUTER_BASE_URL` | No | Custom base URL for the OpenRouter API |
-| `OPENROUTER_BROWSER_BASE_URL` | No | Browser-only proxy endpoint base URL for OpenRouter requests (no secrets in the client) |
-| `OPENROUTER_SMALL_MODEL` | No | Override the small model identifier |
-| `OPENROUTER_LARGE_MODEL` | No | Override the large model identifier |
-| `SMALL_MODEL` | No | Fallback small model name when `OPENROUTER_SMALL_MODEL` is not set |
-| `LARGE_MODEL` | No | Fallback large model name when `OPENROUTER_LARGE_MODEL` is not set |
-| `OPENROUTER_IMAGE_MODEL` | No | Override the image description model |
-| `IMAGE_MODEL` | No | Fallback image model name when `OPENROUTER_IMAGE_MODEL` is not set |
-| `OPENROUTER_IMAGE_GENERATION_MODEL` | No | Override the image generation model |
-| `IMAGE_GENERATION_MODEL` | No | Fallback image generation model name when `OPENROUTER_IMAGE_GENERATION_MODEL` is not set |
-| `OPENROUTER_EMBEDDING_MODEL` | No | Override the embedding model identifier |
-| `EMBEDDING_MODEL` | No | Fallback embedding model name when `OPENROUTER_EMBEDDING_MODEL` is not set |
-| `OPENROUTER_EMBEDDING_DIMENSIONS` | No | Number of embedding vector dimensions (256, 384, 512, 768, 1024, 1536, 2048, 3072) |
-| `EMBEDDING_DIMENSIONS` | No | Fallback embedding dimensions when `OPENROUTER_EMBEDDING_DIMENSIONS` is not set |
-| `OPENROUTER_AUTO_CLEANUP_IMAGES` | No | Automatically clean up generated images after a short delay |
-| `OPENROUTER_TOOL_EXECUTION_MAX_STEPS` | No | Maximum steps for multi-step tool execution |
+| `OPENROUTER_SMALL_MODEL` | No | Override the small model identifier (default: `google/gemini-2.0-flash-001`) |
+| `OPENROUTER_LARGE_MODEL` | No | Override the large model identifier (default: `google/gemini-2.5-flash`) |
+| `OPENROUTER_EMBEDDING_MODEL` | No | Override the embedding model identifier (default: `openai/text-embedding-3-small`) |
+| `OPENROUTER_EMBEDDING_DIMENSIONS` | No | Override embedding dimensions (default: `1536`) |
+| `OPENROUTER_IMAGE_GENERATION_MODEL` | No | Override the image generation model (default: `google/gemini-2.5-flash-image-preview`) |
+| `OPENROUTER_TOOL_EXECUTION_MAX_STEPS` | No | Max tool call steps per turn (default: `15`) |
+| `OPENROUTER_AUTO_CLEANUP_IMAGES` | No | Automatically clean up generated images (default: `false`) |
 
 ### milady.json Example
 
@@ -116,8 +108,11 @@ Browse all models at [openrouter.ai/models](https://openrouter.ai/models).
 
 | elizaOS Model Type | Default OpenRouter Model |
 |-------------------|------------------------|
-| `TEXT_SMALL` | `anthropic/claude-haiku-4.5` |
-| `TEXT_LARGE` | `anthropic/claude-sonnet-4.6` |
+| `TEXT_SMALL` | `google/gemini-2.0-flash-001` |
+| `TEXT_LARGE` | `google/gemini-2.5-flash` |
+| `IMAGE` | `x-ai/grok-2-vision-1212` |
+| `IMAGE_GENERATION` | `google/gemini-2.5-flash-image-preview` |
+| `TEXT_EMBEDDING` | `openai/text-embedding-3-small` |
 
 ## Features
 

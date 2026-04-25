@@ -276,12 +276,12 @@ Custom actions executed during autonomous mode enforce the same SSRF guards as u
     Send a POST request to `/api/agent/autonomy`:
     ```bash
     # Disable autonomy
-    curl -X POST http://localhost:2138/api/agent/autonomy \
+    curl -X POST http://localhost:31337/api/agent/autonomy \
       -H "Content-Type: application/json" \
       -d '{"enabled": false}'
 
     # Enable autonomy
-    curl -X POST http://localhost:2138/api/agent/autonomy \
+    curl -X POST http://localhost:31337/api/agent/autonomy \
       -H "Content-Type: application/json" \
       -d '{"enabled": true}'
     ```

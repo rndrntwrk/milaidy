@@ -59,18 +59,18 @@ No environment variable is required to trigger auto-enable — it is driven enti
 
 When the connector is loaded, the runtime pushes the following into `process.env` for the plugin to consume:
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `MATTERMOST_BOT_TOKEN` | Yes | Bot token from Mattermost System Console |
-| `MATTERMOST_SERVER_URL` | No | Server URL for the Mattermost server |
-| `MATTERMOST_ENABLED` | No | Enable or disable the connector |
-| `MATTERMOST_TEAM_ID` | No | Team/tenant ID |
-| `MATTERMOST_DM_POLICY` | No | DM policy (e.g., `allow`, `deny`, `allowlist`) |
-| `MATTERMOST_GROUP_POLICY` | No | Group message policy (e.g., `allow`, `deny`) |
-| `MATTERMOST_ALLOWED_USERS` | No | Comma-separated allowed user list |
-| `MATTERMOST_REQUIRE_MENTION` | No | Only respond when mentioned |
-| `MATTERMOST_ALLOWED_CHANNELS` | No | Comma-separated allowed channel list |
-| `MATTERMOST_IGNORE_BOT_MESSAGES` | No | Ignore messages from other bots |
+| Variable | Source | Description |
+|----------|--------|-------------|
+| `MATTERMOST_BOT_TOKEN` | `botToken` | Bot token from Mattermost System Console |
+| `MATTERMOST_SERVER_URL` | `baseUrl` | Server URL for the Mattermost server |
+| `MATTERMOST_TEAM_ID` | `teamId` | Team/tenant ID |
+| `MATTERMOST_DM_POLICY` | `dmPolicy` | DM policy (e.g., allow, deny, allowlist) |
+| `MATTERMOST_GROUP_POLICY` | `groupPolicy` | Group message policy |
+| `MATTERMOST_ALLOWED_USERS` | — | Comma-separated list of allowed user IDs |
+| `MATTERMOST_ALLOWED_CHANNELS` | — | Comma-separated list of allowed channel IDs |
+| `MATTERMOST_REQUIRE_MENTION` | `requireMention` | Only respond when mentioned |
+| `MATTERMOST_IGNORE_BOT_MESSAGES` | — | Ignore messages from other bots |
+| `MATTERMOST_ENABLED` | `enabled` | Enable or disable the connector |
 
 ## Full Configuration Reference
 

@@ -52,6 +52,23 @@ export TWILIO_PHONE_NUMBER=YOUR_PHONE_NUMBER
 | `authToken` | Yes | Twilio Auth Token |
 | `phoneNumber` | Yes | Twilio phone number (E.164 format) |
 | `enabled` | No | Set `false` to disable (default: `true`) |
+| `webhookUrl` | No | Webhook URL for inbound messages |
+| `webhookPort` | No | Port for webhook listener |
+
+### Voice Call Configuration
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `voiceCallEnabled` | No | Enable voice call capabilities |
+| `voiceCallProvider` | No | Voice call provider selection |
+| `voiceCallFromNumber` | No | Phone number for outbound calls |
+| `voiceCallToNumber` | No | Default destination phone number |
+| `voiceCallAllowFrom` | No | Comma-separated list of allowed caller numbers |
+| `voiceCallPublicUrl` | No | Public URL for voice call webhooks |
+| `voiceCallInboundPolicy` | No | Inbound call handling policy |
+| `voiceCallInboundGreeting` | No | Greeting message for inbound callers |
+| `voiceCallMaxConcurrentCalls` | No | Maximum number of concurrent calls |
+| `voiceCallMaxDurationSeconds` | No | Maximum call duration in seconds |
 
 ## Environment Variables
 

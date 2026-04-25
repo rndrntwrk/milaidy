@@ -18,9 +18,11 @@ The Twitter connector was an external elizaOS plugin that bridged your agent to 
 
 | Field | Value |
 |-------|-------|
-| Package | `@elizaos/plugin-twitter` (upstream, not bundled) |
+| Package | `@elizaos/plugin-twitter` (not currently in the plugin registry -- bundled separately) |
 | Config key | `connectors.twitter` |
 | Auto-enable trigger | `botToken`, `token`, or `apiKey` is truthy in connector config |
+
+> **Note:** The Twitter/X plugin is not published to the `@elizaos` plugin registry. It ships as a bundled or separately sourced package. Check your installation for availability.
 
 ## Minimal Configuration
 

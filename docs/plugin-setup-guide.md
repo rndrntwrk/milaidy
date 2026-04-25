@@ -19,12 +19,12 @@ where to get the credentials, minimum required fields, and tips for optional fie
 **Variables:**
 - `OPENAI_API_KEY` — Your secret API key from platform.openai.com
 - `OPENAI_BASE_URL` — Leave blank for OpenAI default; set to a proxy URL if using a custom endpoint
-- `OPENAI_SMALL_MODEL` — e.g. `gpt-4o-mini` (used for fast/cheap tasks)
-- `OPENAI_LARGE_MODEL` — e.g. `gpt-4o` (used for complex reasoning)
+- `OPENAI_SMALL_MODEL` — e.g. `gpt-5-mini` (used for fast/cheap tasks)
+- `OPENAI_LARGE_MODEL` — e.g. `gpt-5` (used for complex reasoning)
 - `OPENAI_EMBEDDING_MODEL` — e.g. `text-embedding-3-small` (for semantic search)
 - `OPENAI_TTS_MODEL` / `OPENAI_TTS_VOICE` — e.g. `tts-1` / `alloy` (for voice synthesis)
-- `OPENAI_IMAGE_DESCRIPTION_MODEL` — e.g. `gpt-4o` (for image understanding)
-**Tips:** OpenAI is the default fallback for most features. If you have credits, set this first. Use `gpt-4o-mini` as small model to save costs.
+- `OPENAI_IMAGE_DESCRIPTION_MODEL` — e.g. `gpt-5-mini` (for image understanding)
+**Tips:** OpenAI is the default fallback for most features. If you have credits, set this first. Use `gpt-5-mini` as small model to save costs.
 
 ### Anthropic
 **Get credentials:** https://console.anthropic.com/settings/keys
@@ -42,9 +42,9 @@ where to get the credentials, minimum required fields, and tips for optional fie
 **Variables:**
 - `GOOGLE_GENERATIVE_AI_API_KEY` / `GOOGLE_API_KEY` — From AI Studio or Google Cloud (either works for auto-enable)
 - `GOOGLE_SMALL_MODEL` — e.g. `gemini-2.0-flash`
-- `GOOGLE_LARGE_MODEL` — e.g. `gemini-2.0-pro`
+- `GOOGLE_LARGE_MODEL` — e.g. `gemini-2.0-flash-001`
 - `GOOGLE_EMBEDDING_MODEL` — e.g. `text-embedding-004`
-- `GOOGLE_IMAGE_MODEL` — e.g. `imagen-3.0-generate-002`
+- `GOOGLE_IMAGE_MODEL` — e.g. `gemini-2.0-flash-001`
 **Tips:** Gemini Flash is fast and cheap; great for small model. The free tier is generous.
 
 ### Groq
@@ -52,22 +52,23 @@ where to get the credentials, minimum required fields, and tips for optional fie
 **Minimum required:** `GROQ_API_KEY`
 **Variables:**
 - `GROQ_API_KEY` — From console.groq.com
-- `GROQ_SMALL_MODEL` — e.g. `llama-3.1-8b-instant`
+- `GROQ_SMALL_MODEL` — e.g. `openai/gpt-oss-20b`
 - `GROQ_LARGE_MODEL` — e.g. `llama-3.3-70b-versatile`
-- `GROQ_TTS_MODEL` / `GROQ_TTS_VOICE` — e.g. `playai-tts` / `Fritz-PlayAI`
-**Tips:** Groq is extremely fast inference — great for latency-sensitive use cases. Free tier available. Supports TTS via PlayAI voices.
+- `GROQ_TTS_MODEL` / `GROQ_TTS_VOICE` — e.g. `canopylabs/orpheus-v1-english` / `troy`
+- `GROQ_TTS_RESPONSE_FORMAT` — Audio response format (default: `wav`)
+**Tips:** Groq is extremely fast inference — great for latency-sensitive use cases. Free tier available.
 
 ### OpenRouter
 **Get credentials:** https://openrouter.ai/keys
 **Minimum required:** `OPENROUTER_API_KEY`
 **Variables:**
 - `OPENROUTER_API_KEY` — From openrouter.ai/keys
-- `OPENROUTER_SMALL_MODEL` — e.g. `openai/gpt-4o-mini` or `meta-llama/llama-3.3-70b`
-- `OPENROUTER_LARGE_MODEL` — e.g. `anthropic/claude-sonnet-4-6`
-- `OPENROUTER_IMAGE_MODEL` — e.g. `openai/gpt-4o` (for vision tasks)
+- `OPENROUTER_SMALL_MODEL` — e.g. `google/gemini-2.0-flash-001` (default)
+- `OPENROUTER_LARGE_MODEL` — e.g. `google/gemini-2.5-flash` (default)
+- `OPENROUTER_IMAGE_MODEL` — e.g. `x-ai/grok-2-vision-1212` (for vision tasks)
 - `OPENROUTER_IMAGE_GENERATION_MODEL` — e.g. `openai/dall-e-3`
 - `OPENROUTER_EMBEDDING_MODEL` — e.g. `openai/text-embedding-3-small`
-- `OPENROUTER_TOOL_EXECUTION_MAX_STEPS` — Max tool call steps per turn (default: 5)
+- `OPENROUTER_TOOL_EXECUTION_MAX_STEPS` — Max tool call steps per turn (default: 15)
 **Tips:** OpenRouter gives you access to 200+ models through one API key. Great if you want to switch models without managing multiple accounts. Use model IDs in `provider/model-name` format.
 
 ### xAI (Grok)
@@ -75,13 +76,13 @@ where to get the credentials, minimum required fields, and tips for optional fie
 **Minimum required:** `XAI_API_KEY` or `GROK_API_KEY`
 **Variables:**
 - `XAI_API_KEY` / `GROK_API_KEY` — From console.x.ai (either works for auto-enable)
-- `XAI_MODEL` — e.g. `grok-2-1212` (overrides small/large)
+- `XAI_MODEL` — e.g. `grok-3` (overrides small/large)
 - `XAI_SMALL_MODEL` / `XAI_LARGE_MODEL` — Specific model slots
-- `XAI_EMBEDDING_MODEL` — e.g. `v1`
-- `X_AUTH_MODE` — `api_key` (default) or `oauth`
+- `XAI_EMBEDDING_MODEL` — e.g. `grok-embedding`
+- `X_AUTH_MODE` — `env` (default) or `oauth`
 - `X_API_KEY`, `X_API_SECRET`, `X_ACCESS_TOKEN`, `X_ACCESS_TOKEN_SECRET` — Twitter OAuth keys (for the X connector side of xAI)
 - `X_ENABLE_POST`, `X_ENABLE_REPLIES`, `X_ENABLE_ACTIONS` — Toggle X/Twitter behaviors
-**Tips:** xAI = Grok models. The `X_*` vars are for the Twitter integration bundled with xAI. Keep auth mode as `api_key` unless you need OAuth.
+**Tips:** xAI = Grok models. The `X_*` vars are for the Twitter integration bundled with xAI. Keep auth mode as `env` unless you need OAuth.
 
 ### Ollama (Local Models)
 **Get credentials:** No API key needed — install Ollama locally
@@ -90,9 +91,9 @@ where to get the credentials, minimum required fields, and tips for optional fie
 **Variables:**
 - `OLLAMA_BASE_URL` — Auto-enable trigger. Default: `http://localhost:11434`
 - `OLLAMA_API_ENDPOINT` — Plugin endpoint. Default: `http://localhost:11434/api`
-- `OLLAMA_SMALL_MODEL` — e.g. `llama3.2:3b`
-- `OLLAMA_MEDIUM_MODEL` — e.g. `llama3.2`
-- `OLLAMA_LARGE_MODEL` — e.g. `llama3.3:70b`
+- `OLLAMA_SMALL_MODEL` — e.g. `gemma3:latest` (default)
+- `OLLAMA_MEDIUM_MODEL` — e.g. `gemma3:latest`
+- `OLLAMA_LARGE_MODEL` — e.g. `gemma3:latest` (default)
 - `OLLAMA_EMBEDDING_MODEL` — e.g. `nomic-embed-text`
 **Tips:** Completely free and private. Requires Ollama running on your machine or a server. Pull models with `ollama pull <model>`. For embeddings use `nomic-embed-text`.
 
@@ -115,7 +116,7 @@ where to get the credentials, minimum required fields, and tips for optional fie
 - `AI_GATEWAY_BASE_URL` — Your gateway endpoint URL
 - `AI_GATEWAY_SMALL_MODEL` / `AI_GATEWAY_LARGE_MODEL` / `AI_GATEWAY_EMBEDDING_MODEL` — Model IDs
 - `AI_GATEWAY_IMAGE_MODEL` — For image generation
-- `AI_GATEWAY_TIMEOUT_MS` — Request timeout, default 30000ms
+- `AI_GATEWAY_TIMEOUT_MS` — Request timeout, default 60000ms
 **Tips:** Routes model calls through Vercel's AI gateway for caching, rate limiting, and observability. Useful if you're already on Vercel.
 
 ### DeepSeek

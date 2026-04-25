@@ -30,9 +30,9 @@ export GROQ_API_KEY=gsk_...
 | `GROQ_BASE_URL` | No | Custom base URL for API requests |
 | `GROQ_SMALL_MODEL` | No | Override the small model identifier |
 | `GROQ_LARGE_MODEL` | No | Override the large model identifier |
-| `GROQ_TTS_MODEL` | No | Override the text-to-speech model |
-| `GROQ_TTS_VOICE` | No | Voice profile for text-to-speech output |
-| `GROQ_TTS_RESPONSE_FORMAT` | No | TTS response format |
+| `GROQ_TTS_MODEL` | No | Override the text-to-speech model (default: `canopylabs/orpheus-v1-english`) |
+| `GROQ_TTS_VOICE` | No | Voice profile for text-to-speech output (default: `troy`) |
+| `GROQ_TTS_RESPONSE_FORMAT` | No | Audio response format (default: `wav`) |
 
 ### milady.json Example
 
@@ -53,6 +53,7 @@ export GROQ_API_KEY=gsk_...
 
 | Model | Context | Speed | Best For |
 |-------|---------|-------|---------|
+| `openai/gpt-oss-20b` | 128k | Fastest | Default small model |
 | `llama-3.3-70b-versatile` | 128k | Fast | General-purpose, balanced |
 | `llama-3.1-70b-versatile` | 128k | Fast | Reasoning and analysis |
 | `llama-3.1-8b-instant` | 128k | Fastest | High-throughput, simple tasks |
@@ -66,7 +67,7 @@ export GROQ_API_KEY=gsk_...
 
 | elizaOS Model Type | Groq Model |
 |-------------------|-----------|
-| `TEXT_SMALL` | `llama-3.1-8b-instant` |
+| `TEXT_SMALL` | `openai/gpt-oss-20b` |
 | `TEXT_LARGE` | `llama-3.3-70b-versatile` |
 | `IMAGE_DESCRIPTION` | `llama-3.2-11b-vision-preview` |
 

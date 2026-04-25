@@ -28,11 +28,12 @@ export XAI_API_KEY=xai-...
 
 | Environment Variable | Required | Description |
 |---------------------|----------|-------------|
-| `XAI_API_KEY` | Yes | xAI API key from [console.x.ai](https://console.x.ai) |
-| `XAI_BASE_URL` | No | Custom base URL for the xAI API |
-| `XAI_MODEL` | No | Grok model for text generation (e.g., `grok-3`, `grok-3-mini`) |
-| `XAI_SMALL_MODEL` | No | Grok model for faster/smaller tasks |
-| `XAI_EMBEDDING_MODEL` | No | xAI model for text embeddings |
+| `XAI_API_KEY` | Yes* | xAI API key from [console.x.ai](https://console.x.ai) |
+| `GROK_API_KEY` | Yes* | Alias that also triggers auto-enable |
+| `XAI_MODEL` | No | Override the default model (default: `grok-3`) |
+| `XAI_BASE_URL` | No | Custom base URL for the xAI API (default: `https://api.x.ai/v1`) |
+| `XAI_SMALL_MODEL` | No | Override the small model identifier (default: `grok-3-mini`) |
+| `XAI_EMBEDDING_MODEL` | No | Override the embedding model identifier (default: `grok-embedding`) |
 
 ### X (Twitter) Integration Settings
 

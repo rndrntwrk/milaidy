@@ -83,7 +83,7 @@ import("./cli/run-main")
 
 The public API surface exported by the `miladyai` npm package. It re-exports:
 
-- **Config types** from `eliza/packages/shared/src/config/types.eliza.ts` -- the full `ElizaConfig` type and its nested schemas
+- **Config types** from `eliza/packages/app-core/src/config/types.ts` -- the full `MiladyConfig` type and its nested schemas
 - **Restart infrastructure** -- `RESTART_EXIT_CODE`, `requestRestart()`, `setRestartHandler()`, and the `RestartHandler` type
 
 This allows other packages (e.g., the Electrobun app, the dev-server) to programmatically control the runtime without importing internal modules.
@@ -100,7 +100,7 @@ A combined dev server that starts the elizaOS runtime in headless mode and wires
 
 ## Runtime Lifecycle
 
-The `startEliza()` function in `eliza/packages/agent/src/runtime/eliza.ts` orchestrates the full lifecycle from config loading through agent operation.
+The `startEliza()` function in `eliza/packages/app-core/src/runtime/eliza.ts` orchestrates the full lifecycle from config loading through agent operation.
 
 ### Initialization Phase
 
@@ -175,7 +175,7 @@ Milady extends elizaOS through several integration points:
 
 ### Plugin System Bridge
 
-The `createElizaPlugin()` function (`eliza/packages/agent/src/runtime/eliza-plugin.ts`) creates a standard elizaOS `Plugin` that bridges Milady-specific functionality into the runtime:
+The `createMiladyPlugin()` function (`eliza/packages/app-core/src/runtime/eliza-plugin.ts`) creates a standard elizaOS `Plugin` that bridges Milady-specific functionality into the runtime:
 
 **Providers** (injected into every LLM context):
 - `channelProfileProvider` -- channel-specific personality profiles
@@ -582,37 +582,30 @@ The monorepo uses Bun workspaces:
 
 ```
 milady/
-  eliza/              # elizaOS submodule (contains all packages)
+  eliza/                # elizaOS submodule (contains packages, plugins, apps)
     packages/
-      app-core/       # Frontend UI, platform shells (Electrobun, Capacitor)
+      app-core/         # Core runtime, CLI, API, services (source of truth)
         src/
-          api/        # Dashboard API server (main server.ts)
-          services/   # Business logic (plugin installer, updater, etc.)
-          runtime/    # Dev server, embedding presets
-          config/     # App-level config, branding
-          hooks/      # React hooks (UI)
-      agent/          # Runtime agent package (core plugins, providers, actions)
-        src/
-          cli/        # Commander CLI commands
-          runtime/    # Agent loader (eliza.ts), plugin system (eliza-plugin.ts)
-          config/     # Config schemas, type definitions
-          providers/  # Context providers (workspace, admin-trust, skills, etc.)
-          actions/    # Agent actions (restart, send-message, skills, etc.)
-          hooks/      # Event hooks system (discovery, registry, dispatch)
-          triggers/   # Trigger task types and scheduling
-          api/        # Chat routes, conversation routes
-      shared/         # Shared utilities, config types, onboarding presets
-      ui/             # Shared UI component library
-    plugins/          # elizaOS plugin submodules
-    apps/
-      app-training/   # Training orchestration (privacy filter, native backend)
+          cli/          # Commander CLI commands
+          api/          # Dashboard API server
+          runtime/      # Agent loader, plugin system
+          config/       # Plugin auto-enable, config schemas
+          connectors/   # Connector integration code
+          services/     # Business logic (plugin installer, updater, etc.)
+      agent/            # Upstream elizaOS agent (core plugins, auto-enable maps)
+      ui/               # Shared UI component library
+      shared/           # Shared utilities
+    plugins/            # elizaOS plugin submodules (plugin-agent-orchestrator, etc.)
   apps/
-    app/              # React SPA frontend (Vite)
-      electrobun/     # Electrobun desktop wrapper
-    homepage/         # Marketing site
-  docs/               # Mintlify documentation
-  scripts/            # Build, dev, and utility scripts
-  test/               # E2E and integration tests
+    app/                # React SPA frontend (Vite)
+      electrobun/       # Electrobun desktop wrapper
+    homepage/           # Marketing site
+  deploy/
+    cloud-agent-template/  # Cloud deployment template
+  docs/                 # Mintlify documentation
+  scripts/              # Build, dev, and utility scripts
+  skills/               # Default skill mirrors from @elizaos/skills
+  test/                 # E2E and integration tests
 ```
 
 ### Build Pipeline

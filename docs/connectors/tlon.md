@@ -36,15 +36,15 @@ The Tlon connector is an elizaOS plugin that bridges your agent to the Urbit net
 
 ## Environment Variables
 
-| Variable | Description |
-|----------|-------------|
-| `TLON_SHIP` | Urbit ship name (e.g., `~zod`) |
-| `TLON_CODE` | Ship access code |
-| `TLON_URL` | Ship URL (e.g., `http://localhost:8080`) |
-| `TLON_ENABLED` | Set to `true` to enable |
-| `TLON_DM_ALLOWLIST` | Comma-separated allowed user list for DMs |
-| `TLON_GROUP_CHANNELS` | Comma-separated list of group channel identifiers |
-| `TLON_AUTO_DISCOVER_CHANNELS` | Enable automatic channel discovery (`true`/`false`) |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `TLON_SHIP` | No | Urbit ship name (e.g., `~zod`) |
+| `TLON_CODE` | No | Ship access/authentication code |
+| `TLON_URL` | No | Ship URL (e.g., `http://localhost:8080`) |
+| `TLON_ENABLED` | No | Set to `true` to enable |
+| `TLON_DM_ALLOWLIST` | No | Comma-separated allowed user list for DMs |
+| `TLON_GROUP_CHANNELS` | No | Comma-separated list of group channel identifiers |
+| `TLON_AUTO_DISCOVER_CHANNELS` | No | Comma-separated list of channels to auto-discover |
 
 ## Features
 

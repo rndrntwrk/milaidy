@@ -59,6 +59,14 @@ export INSTAGRAM_PASSWORD=YOUR_PASSWORD
 | `INSTAGRAM_PROXY` | No | Proxy URL for Instagram API requests |
 | `INSTAGRAM_VERIFICATION_CODE` | No | Two-factor authentication verification code |
 
+## Features
+
+- Media posting with caption generation
+- Comment monitoring and response
+- DM handling
+- Dry run mode for testing
+- Configurable posting and polling intervals
+
 ## Related
 
 - [Connectors Guide](/guides/connectors) — General connector documentation

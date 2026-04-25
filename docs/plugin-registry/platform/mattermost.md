@@ -45,6 +45,21 @@ export MATTERMOST_BOT_TOKEN=YOUR_BOT_TOKEN
 export MATTERMOST_SERVER_URL=https://chat.example.com
 ```
 
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `MATTERMOST_BOT_TOKEN` | Yes | Bot token from Mattermost System Console |
+| `MATTERMOST_SERVER_URL` | No | Mattermost server URL |
+| `MATTERMOST_TEAM_ID` | No | Team/tenant ID |
+| `MATTERMOST_DM_POLICY` | No | DM policy |
+| `MATTERMOST_GROUP_POLICY` | No | Group message policy |
+| `MATTERMOST_ALLOWED_USERS` | No | Comma-separated list of allowed user IDs |
+| `MATTERMOST_ALLOWED_CHANNELS` | No | Comma-separated list of allowed channel IDs |
+| `MATTERMOST_REQUIRE_MENTION` | No | Only respond when mentioned |
+| `MATTERMOST_IGNORE_BOT_MESSAGES` | No | Ignore messages from other bots |
+| `MATTERMOST_ENABLED` | No | Enable or disable the connector |
+
 ## Configuration
 
 | Field | Required | Description |

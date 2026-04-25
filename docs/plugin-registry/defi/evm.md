@@ -30,15 +30,9 @@ The plugin auto-enables when `ALCHEMY_API_KEY` is set (this is the `envKey` in `
 | `EVM_RPC_PROVIDER` | No | Preferred RPC provider: `alchemy`, `infura`, `ankr`, or `elizacloud` |
 | `ALCHEMY_API_KEY` | No | Alchemy API key for multi-chain RPC |
 | `INFURA_API_KEY` | No | Infura API key for RPC |
-| `ANKR_API_KEY` | No | Ankr premium API key for RPC |
-| `ETHEREUM_PROVIDER_ETHEREUM` | No | Custom RPC URL for Ethereum mainnet (overrides provider-based RPC) |
-| `ETHEREUM_PROVIDER_BASE` | No | Custom RPC URL for Base mainnet |
-| `ETHEREUM_PROVIDER_ARBITRUM` | No | Custom RPC URL for Arbitrum One |
-| `ETHEREUM_PROVIDER_OPTIMISM` | No | Custom RPC URL for Optimism mainnet |
-| `TEE_MODE` | No | Enable Trusted Execution Environment (TEE) mode |
-| `WALLET_SECRET_SALT` | No | Salt value for TEE-derived wallet keypair |
-| `SEPOLIA_RPC_URL` | No | RPC endpoint URL for Sepolia testnet |
-| `BASE_SEPOLIA_RPC_URL` | No | RPC endpoint URL for Base Sepolia testnet |
+| `ANKR_API_KEY` | No | Ankr API key for RPC |
+| `SEPOLIA_RPC_URL` | No | RPC URL for Sepolia testnet (default: `https://ethereum-sepolia-rpc.publicnode.com`) |
+| `BASE_SEPOLIA_RPC_URL` | No | RPC URL for Base Sepolia testnet (default: `https://sepolia.base.org`) |
 
 ```json
 {

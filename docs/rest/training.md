@@ -374,6 +374,58 @@ Run a benchmark against a fine-tuned model to evaluate performance.
 }
 ```
 
+---
+
+### GET /api/training/auto/config
+
+Get the auto-training configuration (thresholds, cooldown).
+
+**Response**
+
+```json
+{
+  "threshold": 100,
+  "cooldownHours": 12,
+  "enabled": true
+}
+```
+
+---
+
+### PUT /api/training/auto/config
+
+Update the auto-training configuration.
+
+**Request**
+
+```json
+{
+  "threshold": 200,
+  "cooldownHours": 24
+}
+```
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `threshold` | integer | No | Number of trajectories per task before auto-training triggers |
+| `cooldownHours` | number | No | Minimum hours between auto-training runs |
+| `enabled` | boolean | No | Enable or disable auto-training |
+
+**Response**
+
+```json
+{
+  "ok": true,
+  "config": {
+    "threshold": 200,
+    "cooldownHours": 24,
+    "enabled": true
+  }
+}
+```
+
+---
+
 ## Common Error Codes
 
 | Status | Code | Description |

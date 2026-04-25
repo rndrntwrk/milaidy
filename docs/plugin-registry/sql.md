@@ -143,7 +143,7 @@ await runtime.setComponent(userId, "userPreferences", {
 | `database.type` | `sqlite` or `postgres` | `sqlite` |
 | `database.url` | PostgreSQL connection URL | — |
 | `database.path` | Custom SQLite file path | Auto-resolved |
-| `database.vectorDimensions` | Embedding vector size | `384` (Milady caps `EMBEDDING_DIMENSION` to 384 at boot) |
+| `database.vectorDimensions` | Embedding vector size | `384` |
 
 ## Related
 

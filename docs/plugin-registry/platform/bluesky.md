@@ -54,22 +54,21 @@ export BLUESKY_PASSWORD=your-app-password
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `BLUESKY_HANDLE` | Yes | Bluesky handle (e.g., `yourname.bsky.social`) |
-| `BLUESKY_PASSWORD` | Yes | App password (not your main password) |
-| `BLUESKY_ENABLED` | No | Enable or disable the plugin |
-| `BLUESKY_SERVICE` | No | BlueSky service URL (PDS instance) |
-| `BLUESKY_DRY_RUN` | No | Simulate operations without posting |
+| `BLUESKY_PASSWORD` | Yes | App password (generate at Settings > App Passwords) |
+| `BLUESKY_ENABLED` | No | Set to `true` to enable |
+| `BLUESKY_SERVICE` | No | Bluesky PDS instance URL |
+| `BLUESKY_DRY_RUN` | No | Set to `true` for testing without posting |
+| `BLUESKY_ENABLE_POSTING` | No | Enable or disable post creation |
 | `BLUESKY_ENABLE_DMS` | No | Enable direct message processing |
 | `BLUESKY_ENABLE_POSTING` | No | Enable or disable posting |
 | `BLUESKY_POLL_INTERVAL` | No | Polling interval in seconds |
-| `BLUESKY_ACTION_INTERVAL` | No | Seconds between action-processing cycles |
+| `BLUESKY_ACTION_INTERVAL` | No | Interval in seconds between action-processing cycles |
 | `BLUESKY_MAX_POST_LENGTH` | No | Maximum characters per post |
-| `BLUESKY_POST_IMMEDIATELY` | No | Publish immediately instead of scheduling |
-| `BLUESKY_POST_INTERVAL_MIN` | No | Minimum seconds between automated posts |
-| `BLUESKY_POST_INTERVAL_MAX` | No | Maximum seconds between automated posts |
-| `BLUESKY_MAX_ACTIONS_PROCESSING` | No | Maximum actions per batch |
-| `BLUESKY_ENABLE_ACTION_PROCESSING` | No | Enable automated action processing |
-
-See the [Bluesky Connector reference](/connectors/bluesky) for the full list of 15 environment variables.
+| `BLUESKY_POST_IMMEDIATELY` | No | Post immediately instead of waiting for schedule |
+| `BLUESKY_POST_INTERVAL_MIN` | No | Minimum interval in seconds between automated posts |
+| `BLUESKY_POST_INTERVAL_MAX` | No | Maximum interval in seconds between automated posts |
+| `BLUESKY_MAX_ACTIONS_PROCESSING` | No | Maximum actions to process in a single batch |
+| `BLUESKY_ENABLE_ACTION_PROCESSING` | No | Enable or disable automated action processing |
 
 ## Related
 

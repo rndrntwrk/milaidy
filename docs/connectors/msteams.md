@@ -79,17 +79,17 @@ No environment variable is required to trigger auto-enable — it is driven enti
 
 When the connector is loaded, the runtime can consume the following secrets from environment variables as an alternative to inline config:
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `MSTEAMS_APP_ID` | No | Azure Bot App ID |
-| `MSTEAMS_APP_PASSWORD` | Yes | Azure Bot App Password (client secret) |
-| `MSTEAMS_TENANT_ID` | No | Azure AD Tenant ID |
-| `MSTEAMS_ENABLED` | No | Enable or disable the connector |
-| `MSTEAMS_MEDIA_MAX_MB` | No | Maximum media file size in MB |
-| `MSTEAMS_WEBHOOK_PATH` | No | Webhook endpoint path |
-| `MSTEAMS_WEBHOOK_PORT` | No | Webhook listener port |
-| `MSTEAMS_ALLOWED_TENANTS` | No | Comma-separated allowed tenant list |
-| `MSTEAMS_SHAREPOINT_SITE_ID` | No | SharePoint site ID for file uploads in group chats |
+| Variable | Source | Description |
+|----------|--------|-------------|
+| `MSTEAMS_APP_ID` | `appId` | Azure Bot App ID |
+| `MSTEAMS_APP_PASSWORD` | `appPassword` | Azure Bot App Password (client secret) |
+| `MSTEAMS_TENANT_ID` | `tenantId` | Azure AD Tenant ID |
+| `MSTEAMS_ENABLED` | `enabled` | Enable or disable the connector |
+| `MSTEAMS_MEDIA_MAX_MB` | `mediaMaxMb` | Maximum media file size in MB |
+| `MSTEAMS_WEBHOOK_PATH` | — | Webhook endpoint path |
+| `MSTEAMS_WEBHOOK_PORT` | — | Webhook listener port |
+| `MSTEAMS_ALLOWED_TENANTS` | — | Comma-separated list of allowed tenant IDs |
+| `MSTEAMS_SHAREPOINT_SITE_ID` | `sharePointSiteId` | SharePoint site ID for file uploads |
 
 ## Full Configuration Reference
 
