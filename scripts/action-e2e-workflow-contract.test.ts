@@ -41,15 +41,26 @@ describe("action e2e workflow contract", () => {
     expect(actionE2EBlock).toContain(
       `ELIZAOS_CLOUD_API_KEY: \${{ secrets.ELIZAOS_CLOUD_API_KEY != '' && secrets.ELIZAOS_CLOUD_API_KEY || secrets.ELIZACLOUD_API_KEY }}`,
     );
+    expect(actionE2EBlock).toContain(
+      `ELIZAOS_CLOUD_BASE_URL: \${{ secrets.ELIZAOS_CLOUD_BASE_URL }}`,
+    );
     expect(actionE2EBlock).not.toContain("OPENAI_API_KEY:");
     expect(actionE2EBlock).not.toContain("OPENAI_BASE_URL:");
     expect(elizaPatch).not.toContain(
       '? (selectLiveProvider("openai") ?? selectLiveProvider())',
     );
-    expect(elizaPatch).toContain('selectLiveProvider("openrouter")');
+    expect(elizaPatch).toContain('selectLiveProvider("elizacloud")');
     expect(elizaPatch).toContain('selectLiveProvider("anthropic")');
     expect(elizaPatch).toContain('selectLiveProvider("google")');
     expect(elizaPatch).toContain('selectLiveProvider("groq")');
+    expect(elizaPatch).toContain('selectLiveProvider("openrouter")');
+    expect(elizaPatch.indexOf('selectLiveProvider("elizacloud")')).toBeLessThan(
+      elizaPatch.indexOf('selectLiveProvider("anthropic")'),
+    );
+    expect(elizaPatch).toContain('plugin: "@elizaos/plugin-elizacloud"');
+    expect(elizaPatch).toContain(
+      'ELIZAOS_CLOUD_ACTION_PLANNER_MODEL: largeModel',
+    );
     expect(actionE2EBlock).toContain(
       "Action Invocation E2E requires an available live provider in canonical CI.",
     );

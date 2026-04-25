@@ -423,10 +423,18 @@ describe("release workflow path contract", () => {
     expect(patch).not.toContain(
       'selectLiveProvider("openai") ?? selectLiveProvider()',
     );
-    expect(patch).toContain('selectLiveProvider("openrouter")');
+    expect(patch).toContain('selectLiveProvider("elizacloud")');
     expect(patch).toContain('selectLiveProvider("anthropic")');
     expect(patch).toContain('selectLiveProvider("google")');
     expect(patch).toContain('selectLiveProvider("groq")');
+    expect(patch).toContain('selectLiveProvider("openrouter")');
+    expect(patch.indexOf('selectLiveProvider("elizacloud")')).toBeLessThan(
+      patch.indexOf('selectLiveProvider("anthropic")'),
+    );
+    expect(patch).toContain('plugin: "@elizaos/plugin-elizacloud"');
+    expect(patch).toContain(
+      'ELIZAOS_CLOUD_ACTION_PLANNER_MODEL: largeModel',
+    );
     expect(
       agentRelease.indexOf("name: Patch Android release build compatibility"),
     ).toBeLessThan(
