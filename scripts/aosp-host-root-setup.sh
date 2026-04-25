@@ -23,6 +23,7 @@ apt-get install -y \
   zlib1g-dev libc6-dev-i386 x11proto-core-dev libx11-dev \
   lib32z1-dev libgl1-mesa-dev libxml2-utils xsltproc unzip \
   fontconfig repo \
+  python3 python-is-python3 \
   git devscripts equivs config-package-dev debhelper-compat golang curl
 
 CUTTLE_DIR="${CUTTLE_DIR:-/home/${REAL_USER}/android-cuttlefish}"
