@@ -71,6 +71,30 @@ describe("release workflow path contract", () => {
     expect(mobileBuildHelper).toContain("await buildIos();");
   });
 
+  it("keeps macOS App Store validation on the source-workspace install path", () => {
+    const agentRelease = readWorkflow("agent-release.yml");
+    const macStoreBlock = agentRelease.slice(
+      agentRelease.indexOf("  build-macos-store:"),
+      agentRelease.indexOf("  build-homepage:"),
+    );
+
+    expect(macStoreBlock).toContain('MILADY_SKIP_LOCAL_UPSTREAMS: ""');
+    expect(macStoreBlock).toContain(
+      "uses: ./.github/actions/setup-bun-workspace",
+    );
+    expect(macStoreBlock).toContain(
+      "install-command: bun install --ignore-scripts --no-frozen-lockfile",
+    );
+    expect(macStoreBlock).toContain('install-native-deps: "false"');
+    expect(macStoreBlock).toContain(
+      "node scripts/ensure-legacy-electrobun-compat.mjs",
+    );
+    expect(macStoreBlock).not.toContain(
+      "node scripts/disable-local-eliza-workspace.mjs",
+    );
+    expect(macStoreBlock).not.toContain("bun install --ignore-scripts\n");
+  });
+
   it("does not reinstall eliza/packages/app-core directly in the windows preload smoke job", () => {
     const workflow = readWorkflow("windows-desktop-preload-smoke.yml");
 
