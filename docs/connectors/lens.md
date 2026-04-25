@@ -54,7 +54,12 @@ The Lens connector will auto-enable once the API key is configured.
 
 ## Configuration Reference
 
-1. Install the plugin: `milady plugins install @elizaos/plugin-lens`
-2. Obtain API credentials from the [Lens Protocol](https://www.lens.xyz/) developer portal
-3. Add the API key to `connectors.lens` in your config or set the `LENS_API_KEY` environment variable
-4. Start your agent — the Lens connector will auto-enable
+1. Obtain API credentials from the [Lens Protocol](https://www.lens.xyz/) developer portal
+2. Add the API key to `connectors.lens` in your config or set the `LENS_API_KEY` environment variable
+3. Start your agent — the Lens connector will auto-enable
+
+## Related
+
+- [Lens plugin reference](/plugin-registry/platform/lens)
+- [Connectors overview](/guides/connectors)
+- [Configuration reference](/configuration)

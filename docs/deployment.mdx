@@ -4,7 +4,32 @@ sidebarTitle: Deployment
 description: Deploy Milady using Docker, Docker Compose, or cloud containers. Covers environment variables, port configuration, volumes, and security hardening.
 ---
 
-Milady supports multiple deployment strategies: CI Docker images (used for cloud deployments), bare-metal systemd services, and the Electrobun desktop app.
+Milady supports multiple deployment strategies: standalone Docker containers, Docker Compose orchestration, and cloud-managed containers for Eliza Cloud (AWS ECS).
+
+<Warning>
+The Docker deployment files referenced below (`deploy/Dockerfile`, `docker-setup.sh`) live in the `eliza/` submodule. You must initialize it first with `bun run setup:upstreams` or `git submodule update --init --recursive` before following these instructions. The `deploy/` directory in the repo root contains only `Dockerfile.ci` (CI-specific image for pre-built artifacts) and supporting config files.
+</Warning>
+
+## Quick Start with Docker Compose
+
+The fastest way to deploy Milady is using the included setup script, which builds the image, generates authentication tokens, runs interactive onboarding, and starts the gateway.
+
+```bash
+cd deploy
+./docker-setup.sh
+```
+
+The setup script performs the following steps:
+
+1. Builds the Docker image (`milady:local` by default)
+2. Generates a random gateway token (via `openssl rand -hex 32`, or Python `secrets.token_hex(32)` as fallback)
+3. Writes environment variables to `deploy/.env`
+4. Runs interactive setup (`milady-cli setup`)
+5. Starts the gateway service in detached mode
+
+<Warning>
+The setup script requires Docker and Docker Compose to be installed. It will exit with an error if either is missing.
+</Warning>
 
 ## Docker Image
 

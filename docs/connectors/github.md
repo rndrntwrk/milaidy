@@ -20,37 +20,9 @@ The GitHub plugin is an elizaOS feature plugin that bridges your agent to the Gi
 
 ## Setup Requirements
 
-- GitHub API token (personal access token or fine-grained token)
+- GitHub API token (personal access token, fine-grained token, or GitHub App credentials)
 
-## Setup
-
-### 1. Create a GitHub Personal Access Token
-
-1. Go to [github.com/settings/tokens](https://github.com/settings/tokens)
-2. Click **Generate new token** (classic) or **Fine-grained token**
-3. Select the scopes needed for your use case (e.g., `repo`, `issues`, `pull_requests`)
-4. Copy the generated token
-
-### 2. Configure Milady
-
-| Name | Required | Description |
-|------|----------|-------------|
-| `GITHUB_API_TOKEN` | Yes | Personal access token or fine-grained token for API authentication |
-| `GITHUB_OWNER` | No | Default repository owner (username or organization) |
-| `GITHUB_REPO` | No | Default repository name |
-| `GITHUB_BRANCH` | No | Default branch name (default: `main`) |
-| `GITHUB_APP_ID` | No | GitHub App ID for app-based authentication |
-| `GITHUB_APP_PRIVATE_KEY` | No | GitHub App private key for app-based authentication |
-| `GITHUB_INSTALLATION_ID` | No | GitHub App installation ID |
-| `GITHUB_WEBHOOK_SECRET` | No | Secret for validating GitHub webhook payloads |
-
-Install the plugin from the registry:
-
-```bash
-milady plugins install github
-```
-
-Configure in `~/.milady/milady.json`:
+## Minimal Configuration
 
 ```json
 {
@@ -86,25 +58,69 @@ All fields are defined under `connectors.github` in `milady.json`.
 
 ## Environment Variables
 
-| Variable | Description |
-|----------|-------------|
-| `GITHUB_API_TOKEN` | Personal access token or fine-grained token |
-| `GITHUB_OWNER` | Default repository owner |
-| `GITHUB_REPO` | Default repository name |
-| `GITHUB_BRANCH` | Default branch name |
-| `GITHUB_APP_ID` | GitHub App ID (for GitHub App authentication) |
-| `GITHUB_APP_PRIVATE_KEY` | GitHub App private key (for GitHub App authentication) |
-| `GITHUB_INSTALLATION_ID` | GitHub App installation ID |
-| `GITHUB_WEBHOOK_SECRET` | Webhook secret for verifying GitHub webhook payloads |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `GITHUB_API_TOKEN` | Yes | Personal access token or fine-grained token |
+| `GITHUB_OWNER` | No | Default repository owner (username or org) |
+| `GITHUB_REPO` | No | Default repository name |
+| `GITHUB_BRANCH` | No | Default branch (e.g. `main`) |
+| `GITHUB_WEBHOOK_SECRET` | No | For GitHub App webhook verification |
+| `GITHUB_APP_ID` | No | GitHub App ID (for App-based auth) |
+| `GITHUB_APP_PRIVATE_KEY` | No | GitHub App private key PEM (for App-based auth) |
+| `GITHUB_INSTALLATION_ID` | No | GitHub App installation ID (for App-based auth) |
+
+## Authentication Methods
+
+### Fine-Grained Personal Access Token (recommended)
+
+Fine-grained tokens are scoped to specific repositories and permissions, and they expire automatically.
+
+1. Go to [github.com/settings/personal-access-tokens/new](https://github.com/settings/personal-access-tokens/new).
+2. Set a token name (e.g. "Milady") and expiration (90 days is reasonable).
+3. Under **Repository access**, select **Only select repositories** and pick the repos you want.
+4. Under **Repository permissions**, grant at minimum:
+   - **Contents**: Read (Read and write if you want the agent to push code)
+   - **Issues**: Read and write
+   - **Pull requests**: Read and write
+   - **Metadata**: Read (always required)
+5. Click **Generate token**. Copy it immediately — it starts with `github_pat_` and is only shown once.
+
+### Classic Personal Access Token
+
+Use a classic token when fine-grained tokens don't support the scope you need (e.g. private packages).
+
+1. Go to [github.com/settings/tokens](https://github.com/settings/tokens).
+2. Click **Generate new token (classic)**.
+3. Grant the scopes you need (`repo`, `read:org`, etc.).
+4. Copy the token.
+
+### GitHub App (for teams and production)
+
+GitHub Apps are better for team use — installations are easier to audit and can be installed org-wide.
+
+1. Register a new GitHub App at [github.com/settings/apps/new](https://github.com/settings/apps/new).
+2. Generate a private key and note the App ID.
+3. Install the app into the repos or org — note the Installation ID.
+4. Set `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, and `GITHUB_INSTALLATION_ID` in your environment or config.
 
 ## Features
 
-- Repository management
+- Repository management (read files, create branches, push code)
 - Issue tracking and creation
 - Pull request workflows (create, review, merge)
 - Code search and file access
-- GitHub App authentication support
-- Webhook-based event handling
+- Webhook-driven event handling (with GitHub App)
+
+## Troubleshooting
+
+**"401 Unauthorized" when the agent tries any action.**
+Token is wrong, expired, or doesn't have the repo scoped. Re-check in GitHub settings.
+
+**"403 Resource not accessible by personal access token."**
+The token is valid but doesn't have permission for the specific action. Most common cause: you granted Contents: Read but the agent tried to write. Go back and grant Contents: Read and write.
+
+**"Not found" when reading a repo you know exists.**
+Fine-grained tokens are strictly allowlist — if the repo isn't in the list, the agent can't see it. Go back to the token page and add the repo.
 
 ## Related
 
