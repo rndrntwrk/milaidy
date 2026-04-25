@@ -1759,7 +1759,11 @@ index 07df508cb7..6624435c73 100644
 +    largeModel: string;
 +  }) => Record<string, string>;
  }> = [
-@@ -142,0 +164,24 @@ const PROVIDERS: Array<{
+@@ -139,7 +158,31 @@ const PROVIDERS: Array<{
+     largeModelEnvVar: "OPENAI_LARGE_MODEL",
+     defaultSmallModel: "gpt-4o-mini",
+     defaultLargeModel: "gpt-4o-mini",
+   },
 +  {
 +    name: "elizacloud",
 +    plugin: "@elizaos/plugin-elizacloud",
@@ -1784,6 +1788,9 @@ index 07df508cb7..6624435c73 100644
 +      ELIZAOS_CLOUD_RESPONSE_HANDLER_MODEL: smallModel,
 +    }),
 +  },
+   {
+     name: "anthropic",
+     plugin: "@elizaos/plugin-anthropic",
 @@ -190,0 +237,3 @@ for (const provider of PROVIDERS) {
 +  for (const key of provider.extraEnvVars ?? []) {
 +    LIVE_PROVIDER_ENV_KEYS.add(key);
