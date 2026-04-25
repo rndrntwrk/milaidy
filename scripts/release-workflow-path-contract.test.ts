@@ -1,4 +1,6 @@
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -32,6 +34,26 @@ function readAction(relativePath: string) {
 
 function readElizaScript(relativePath: string) {
   return fs.readFileSync(path.join(repoRoot, "eliza", relativePath), "utf8");
+}
+
+function extractAddedFileFromPatch(patch: string, filePath: string) {
+  const marker = `diff --git a/${filePath} b/${filePath}`;
+  const start = patch.indexOf(marker);
+  expect(start).toBeGreaterThanOrEqual(0);
+
+  const nextDiff = patch.indexOf("\ndiff --git ", start + marker.length);
+  const section =
+    nextDiff === -1 ? patch.slice(start) : patch.slice(start, nextDiff);
+  const hunkMatch = /^@@ -0,0 \+1,(\d+) @@$/m.exec(section);
+  expect(hunkMatch).not.toBeNull();
+
+  const addedLines = section
+    .split("\n")
+    .filter((line) => line.startsWith("+") && !line.startsWith("+++"))
+    .map((line) => line.slice(1));
+
+  expect(addedLines).toHaveLength(Number(hunkMatch?.[1]));
+  return addedLines.join("\n");
 }
 
 describe("release workflow path contract", () => {
@@ -831,6 +853,21 @@ describe("release workflow path contract", () => {
       'const windowsTar = "C:\\\\Windows\\\\System32\\\\tar.exe";',
     );
     expect(patch).toContain("getTarExecutable(),");
+
+    const ensureScript = extractAddedFileFromPatch(
+      patch,
+      "packages/app-core/scripts/ensure-electrobun-core.mjs",
+    );
+    const tempDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "milady-electrobun-core-"),
+    );
+    try {
+      const scriptPath = path.join(tempDir, "ensure-electrobun-core.mjs");
+      fs.writeFileSync(scriptPath, ensureScript);
+      execFileSync(process.execPath, ["--check", scriptPath]);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 
   it("keeps draft Electrobun fallback artifacts away from release-grade gates", () => {

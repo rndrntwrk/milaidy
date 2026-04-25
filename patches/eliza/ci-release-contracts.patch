@@ -788,7 +788,7 @@ new file mode 100644
 index 0000000000..e3cc371ea0
 --- /dev/null
 +++ b/packages/app-core/scripts/ensure-electrobun-core.mjs
-@@ -0,0 +1,308 @@
+@@ -0,0 +1,318 @@
 +#!/usr/bin/env node
 +
 +import { spawnSync } from "node:child_process";
