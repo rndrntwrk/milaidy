@@ -1672,3 +1672,51 @@ index 2da7e85664..bf48402af1 100644
    : null;
  const canRunLiveTests = liveModelTestsEnabled && selectedLiveProvider !== null;
  
+diff --git a/packages/app-core/test/helpers/live-provider.test.ts b/packages/app-core/test/helpers/live-provider.test.ts
+index 750bc86bc7..fca21dc429 100644
+--- a/packages/app-core/test/helpers/live-provider.test.ts
++++ b/packages/app-core/test/helpers/live-provider.test.ts
+@@ -58,0 +59,26 @@ describe("selectLiveProvider", () => {
++  it("preserves canonical OpenAI-compatible base URL overrides", async () => {
++    vi.stubEnv("OPENAI_API_KEY", "eliza_test_cloud_key");
++    vi.stubEnv("OPENAI_BASE_URL", "https://elizacloud.ai/api/v1");
++
++    const { selectLiveProvider } = await import("./live-provider.ts");
++
++    const provider = selectLiveProvider("openai");
++    expect(provider?.baseUrl).toBe("https://elizacloud.ai/api/v1");
++    expect(provider?.env.OPENAI_BASE_URL).toBe("https://elizacloud.ai/api/v1");
++  });
++
++  it("prefers scoped live-test base URL over canonical provider base URL", async () => {
++    vi.stubEnv("OPENAI_API_KEY", "sk_test_openai_key");
++    vi.stubEnv("OPENAI_BASE_URL", "https://api.openai.com/v1");
++    vi.stubEnv(
++      "MILADY_LIVE_TEST_OPENAI_BASE_URL",
++      "https://proxy.example.test/v1",
++    );
++
++    const { selectLiveProvider } = await import("./live-provider.ts");
++
++    expect(selectLiveProvider("openai")?.baseUrl).toBe(
++      "https://proxy.example.test/v1",
++    );
++  });
++
+diff --git a/packages/app-core/test/helpers/live-provider.ts b/packages/app-core/test/helpers/live-provider.ts
+index 07df508cb7..6624435c73 100644
+--- a/packages/app-core/test/helpers/live-provider.ts
++++ b/packages/app-core/test/helpers/live-provider.ts
+@@ -60,0 +61 @@ function getLiveTestBaseUrlOverride(
++  canonicalBaseUrlEnvVar?: string,
+@@ -65,0 +67 @@ function getLiveTestBaseUrlOverride(
++    canonicalBaseUrlEnvVar,
+@@ -66,0 +69,3 @@ function getLiveTestBaseUrlOverride(
++    if (!name) {
++      continue;
++    }
+@@ -224 +229,3 @@ export function selectLiveProvider(
+-    const baseUrl = getLiveTestBaseUrlOverride(def.name) ?? def.defaultBaseUrl;
++    const baseUrl =
++      getLiveTestBaseUrlOverride(def.name, def.baseUrlEnvVar) ??
++      def.defaultBaseUrl;
