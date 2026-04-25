@@ -1,16 +1,14 @@
 ---
 title: BlueBubbles Connector
 sidebarTitle: BlueBubbles
-description: Connect your agent to iMessage and SMS via a local BlueBubbles server using the @elizaos/plugin-bluebubbles package.
+description: Connect your agent to iMessage through a local BlueBubbles server using the @elizaos/plugin-bluebubbles package.
 ---
 
-Connect your agent to iMessage and SMS messaging via a local BlueBubbles server.
+Connect your agent to iMessage and SMS messaging through a self-hosted BlueBubbles server.
 
 ## Overview
 
-The BlueBubbles connector bridges your agent to iMessage through a self-hosted [BlueBubbles](https://bluebubbles.app) server running on macOS. Unlike the direct iMessage connector (which requires CLI tools), BlueBubbles exposes a REST API and webhook interface, making it accessible from any machine on your network — not just the Mac running iMessage.
-
-It is auto-enabled by the runtime when a valid `password` is detected in your connector configuration.
+The BlueBubbles connector is an elizaOS plugin that bridges your agent to iMessage via a local [BlueBubbles](https://bluebubbles.app/) server running on macOS. Unlike the direct iMessage connector, BlueBubbles provides a REST API and webhook interface, making it suitable for remote or headless setups. This connector is **auto-enabled** when its configuration is present in `milady.json`.
 
 ## Package Info
 
@@ -18,51 +16,24 @@ It is auto-enabled by the runtime when a valid `password` is detected in your co
 |-------|-------|
 | Package | `@elizaos/plugin-bluebubbles` |
 | Config key | `connectors.bluebubbles` |
-| Auto-enable trigger | `password` is truthy in connector config |
+| Category | Auto-enabled connector |
 
-## Prerequisites
+## Setup Requirements
 
-1. A Mac with iMessage signed in
-2. [BlueBubbles server](https://bluebubbles.app) installed and running on that Mac
-3. The server password and URL reachable from the machine running Milady
+- A Mac running [BlueBubbles Server](https://bluebubbles.app/) with iMessage configured
+- BlueBubbles server password
+- Network access to the BlueBubbles server from the machine running Milady
 
-## Minimal Configuration
-
-In `~/.milady/milady.json`:
+## Configuration
 
 ```json
 {
   "connectors": {
     "bluebubbles": {
-      "password": "YOUR_BLUEBUBBLES_PASSWORD"
-    }
-  }
-}
-```
-
-If the BlueBubbles server is not on `localhost`, specify the URL:
-
-```json
-{
-  "connectors": {
-    "bluebubbles": {
+      "enabled": true,
+      "serverUrl": "http://localhost:1234",
       "password": "YOUR_BLUEBUBBLES_PASSWORD",
-      "serverUrl": "http://192.168.1.50:1234"
-    }
-  }
-}
-```
-
-## Disabling
-
-To explicitly disable the connector even when a password is present:
-
-```json
-{
-  "connectors": {
-    "bluebubbles": {
-      "password": "YOUR_BLUEBUBBLES_PASSWORD",
-      "enabled": false
+      "dmPolicy": "pairing"
     }
   }
 }
@@ -70,57 +41,27 @@ To explicitly disable the connector even when a password is present:
 
 ## Environment Variables
 
-| Variable | Description |
-|----------|-------------|
-| `BLUEBUBBLES_PASSWORD` | BlueBubbles server password |
-| `BLUEBUBBLES_SERVER_URL` | Server URL (default: local) |
-| `BLUEBUBBLES_ENABLED` | Explicitly enable/disable |
-| `BLUEBUBBLES_DM_POLICY` | DM policy (`allow`, `deny`, `allowlist`) |
-| `BLUEBUBBLES_ALLOW_FROM` | Comma-separated allowed user list |
-| `BLUEBUBBLES_GROUP_POLICY` | Group message policy |
-| `BLUEBUBBLES_GROUP_ALLOW_FROM` | Comma-separated allowed group list |
-| `BLUEBUBBLES_WEBHOOK_PATH` | Custom webhook endpoint path |
-| `BLUEBUBBLES_SEND_READ_RECEIPTS` | Send read receipts (`true`/`false`) |
-
-## Full Configuration Reference
-
-All fields are nested under `connectors.bluebubbles` in `milady.json`.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `password` | string | — | BlueBubbles server password (required) |
-| `serverUrl` | string | — | BlueBubbles server URL |
-| `enabled` | boolean | — | Explicitly enable/disable |
-| `dmPolicy` | string | `"pairing"` | DM access policy |
-| `allowFrom` | string[] | — | Allowed user list for DMs |
-| `groupPolicy` | string | `"allowlist"` | Group message policy |
-| `groupAllowFrom` | string[] | — | Allowed group list |
-| `webhookPath` | string | — | Custom webhook path |
-| `sendReadReceipts` | boolean | `false` | Send read receipts |
+| Variable | Required | Sensitive | Description |
+|----------|----------|-----------|-------------|
+| `BLUEBUBBLES_SERVER_URL` | No | No | BlueBubbles server URL (e.g., `http://localhost:1234`) |
+| `BLUEBUBBLES_PASSWORD` | Yes | Yes | Server password |
+| `BLUEBUBBLES_ENABLED` | No | No | Enable or disable the connector |
+| `BLUEBUBBLES_DM_POLICY` | No | No | DM policy: `pairing`, `open`, or `closed` |
+| `BLUEBUBBLES_ALLOW_FROM` | No | No | Comma-separated list of allowed sender IDs |
+| `BLUEBUBBLES_GROUP_POLICY` | No | No | Group message policy: `allowlist` or `open` |
+| `BLUEBUBBLES_GROUP_ALLOW_FROM` | No | No | Comma-separated list of allowed group IDs |
+| `BLUEBUBBLES_WEBHOOK_PATH` | No | No | Custom webhook path for inbound messages |
+| `BLUEBUBBLES_SEND_READ_RECEIPTS` | No | No | Send read receipts for received messages |
 
 ## Features
 
-- Send and receive iMessages and SMS through a local BlueBubbles server
-- Tapback reactions (add and remove)
-- Reply to specific messages in threads
-- Edit and unsend sent messages (macOS version dependent)
-- Send attachments (images, files) with captions
-- iMessage effects (balloons, confetti, etc.)
-- Group chat participant management
-- Read receipt support
+- iMessage and SMS messaging via BlueBubbles bridge
+- DM and group chat support
 - Webhook-based inbound message handling
-
-## BlueBubbles vs iMessage Connector
-
-| | BlueBubbles | iMessage (direct) |
-|--|-------------|-------------------|
-| **Requires macOS on agent machine** | No (just network access to the BB server) | Yes |
-| **Setup complexity** | Install BB server on a Mac, configure password | Install CLI tool, grant Accessibility permissions |
-| **Rich actions** | Reactions, edit, unsend, effects, attachments | Basic send/receive |
-| **Multi-machine** | Yes (any device on the network) | No (same machine only) |
+- Read receipt support
+- DM and group access policies
 
 ## Related
 
-- [iMessage connector](/connectors/imessage) — direct iMessage integration (macOS only)
-- [Blooio connector](/connectors/blooio) — cloud-based iMessage/SMS bridge
+- [iMessage Connector](/connectors/imessage) (direct macOS CLI approach)
 - [Connectors overview](/guides/connectors)

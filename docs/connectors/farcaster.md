@@ -57,6 +57,26 @@ The `plugin-auto-enable.ts` module checks `connectors.farcaster` in your config.
 
 No environment variable is required to trigger auto-enable — it is driven entirely by the connector config object.
 
+## Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `FARCASTER_NEYNAR_API_KEY` | Neynar API key |
+| `FARCASTER_SIGNER_UUID` | Neynar signer UUID |
+| `FARCASTER_FID` | Farcaster ID of the agent account |
+| `FARCASTER_HUB_URL` | Custom Farcaster hub URL |
+| `FARCASTER_MODE` | Operation mode |
+| `FARCASTER_DRY_RUN` | Set to `true` for testing without casting |
+| `FARCASTER_POLL_INTERVAL` | Seconds between mention checks |
+| `ENABLE_CAST` | Enable autonomous casting |
+| `CAST_IMMEDIATELY` | Cast immediately on startup |
+| `CAST_INTERVAL_MIN` | Min minutes between autonomous casts |
+| `CAST_INTERVAL_MAX` | Max minutes between autonomous casts |
+| `MAX_CAST_LENGTH` | Maximum characters per cast |
+| `ACTION_INTERVAL` | Action processing interval |
+| `MAX_ACTIONS_PROCESSING` | Max concurrent action processing |
+| `ENABLE_ACTION_PROCESSING` | Enable action processing |
+
 ## Full Configuration Reference
 
 All fields are defined under `connectors.farcaster` in `milady.json`.

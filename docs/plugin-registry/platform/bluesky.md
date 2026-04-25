@@ -10,6 +10,8 @@ The Bluesky plugin connects Milady agents to the Bluesky social network via the 
 
 ## Installation
 
+This connector auto-enables when its configuration is present in `milady.json`. You can also install it explicitly:
+
 ```bash
 milady plugins install bluesky
 ```
@@ -59,15 +61,16 @@ export BLUESKY_PASSWORD=YOUR_APP_PASSWORD
 
 ## Environment Variables
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `BLUESKY_HANDLE` | Yes | Bluesky handle (e.g., `yourname.bsky.social`) |
-| `BLUESKY_PASSWORD` | Yes | App password (generate at Settings > App Passwords) |
-| `BLUESKY_ENABLED` | No | Set to `true` to enable |
-| `BLUESKY_SERVICE` | No | Bluesky PDS instance URL |
-| `BLUESKY_DRY_RUN` | No | Set to `true` for testing without posting |
-| `BLUESKY_ENABLE_DMS` | No | Enable direct message processing |
-| `BLUESKY_POLL_INTERVAL` | No | Polling interval in seconds |
+```bash
+export BLUESKY_PASSWORD=YOUR_PASSWORD
+export BLUESKY_HANDLE=YOUR_HANDLE
+export BLUESKY_ENABLED=true
+export BLUESKY_DRY_RUN=false
+export BLUESKY_ENABLE_POSTING=true
+export BLUESKY_ENABLE_DMS=true
+```
+
+See the [Bluesky Connector reference](/connectors/bluesky) for the full list of 15 environment variables.
 
 ## Related
 

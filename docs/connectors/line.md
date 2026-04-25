@@ -8,7 +8,7 @@ Connect your agent to LINE for bot messaging and customer conversations.
 
 ## Overview
 
-The LINE connector is an elizaOS plugin that bridges your agent to LINE Messaging API. It supports rich message types, group chat, and webhook-based event handling. This connector is available from the plugin registry.
+The LINE connector is an elizaOS plugin that bridges your agent to LINE Messaging API. It supports rich message types, group chat, and webhook-based event handling. This connector is **auto-enabled** when its configuration is present in `milady.json`.
 
 ## Package Info
 
@@ -16,7 +16,7 @@ The LINE connector is an elizaOS plugin that bridges your agent to LINE Messagin
 |-------|-------|
 | Package | `@elizaos/plugin-line` |
 | Config key | `connectors.line` |
-| Install | `milady plugins install line` |
+| Category | Auto-enabled connector |
 
 ## Setup Requirements
 
@@ -38,13 +38,15 @@ The LINE connector is an elizaOS plugin that bridges your agent to LINE Messagin
 
 ## Environment Variables
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `LINE_CHANNEL_ACCESS_TOKEN` | Yes | Channel access token from LINE Developer Console |
-| `LINE_CHANNEL_SECRET` | No | Channel secret for webhook verification |
-| `LINE_ENABLED` | No | Set to `true` to enable |
-| `LINE_DM_POLICY` | No | DM policy (e.g., `allow`, `deny`, `allowlist`) |
-| `LINE_WEBHOOK_PATH` | No | Webhook endpoint path |
+| Variable | Description |
+|----------|-------------|
+| `LINE_CHANNEL_ACCESS_TOKEN` | Channel access token from LINE Developer Console |
+| `LINE_CHANNEL_SECRET` | Channel secret for webhook verification |
+| `LINE_ENABLED` | Set to `true` to enable |
+| `LINE_DM_POLICY` | DM acceptance policy (`pairing`, `open`, `closed`) |
+| `LINE_ALLOW_FROM` | Comma-separated allowlist of user IDs |
+| `LINE_GROUP_POLICY` | Group message policy (`allowlist`, `open`) |
+| `LINE_WEBHOOK_PATH` | Custom webhook path |
 
 ## Features
 

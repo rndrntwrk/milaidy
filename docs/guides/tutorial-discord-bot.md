@@ -53,37 +53,50 @@ If your token is ever exposed, regenerate it immediately by clicking **Regenerat
 1. Open your Milady config file at `~/.milady/milady.json` (create it if it does not exist)
 2. Add the Discord connector configuration:
 
-```json5
+```json
 {
-  // ... existing config ...
   "connectors": {
     "discord": {
       "enabled": true,
-      "token": "YOUR_BOT_TOKEN_HERE"
+      "token": "YOUR_BOT_TOKEN_HERE",
+      "guilds": {
+        "YOUR_SERVER_ID": {
+          "requireMention": true,
+          "channels": {
+            "YOUR_CHANNEL_ID": {
+              "allow": true,
+              "requireMention": false
+            }
+          }
+        }
+      },
+      "dm": {
+        "enabled": true,
+        "policy": "pairing"
+      }
     }
   }
 }
 ```
 
 3. Replace `YOUR_BOT_TOKEN_HERE` with the token you copied in Step 2
-4. Save the file
+4. Replace `YOUR_SERVER_ID` and `YOUR_CHANNEL_ID` with the IDs from your Discord server (enable Developer Mode in Discord settings to copy IDs)
+5. Save the file
 
 <Info>
-The Discord connector auto-enables when a `token` is present in the connector config. The `MESSAGE_CONTENT` intent must also be enabled in the Discord Developer Portal for the bot to read message text.
+Connectors are configured under the `connectors` key in `milady.json`. The `MESSAGE_CONTENT` intent is required to read message text — ensure it is enabled in the Discord Developer Portal under your bot's **Privileged Gateway Intents**.
 </Info>
 
 </Step>
 
 <Step title="Verify the Discord Connector">
-1. Open your terminal
-2. Start Milady to verify the connector loads:
+1. Open your terminal and navigate to your Milady installation directory
+2. Confirm that `milady.json` has `"enabled": true` under `connectors.discord`
+3. The Discord connector auto-enables when a valid `token` is present in the config — no manual plugin install is needed
 
-```bash
-milady
-```
-
-3. Check the console output for a line confirming the Discord connector has loaded
-4. Verify `milady.json` has `"enabled": true` set for the Discord connector
+<Info>
+See the [Connectors Guide](/guides/connectors) for the full list of connector configuration options and policies.
+</Info>
 
 </Step>
 
@@ -131,8 +144,8 @@ milady
 
 Before considering your setup complete:
 
-- [ ] Bot token is securely stored in `~/.milady/milady.json`
-- [ ] Discord connector shows as `"enabled": true`
+- [ ] Bot token is securely stored in `milady.json`
+- [ ] Discord connector shows as `"enabled": true` under `connectors.discord`
 - [ ] Bot appears online in your Discord server
 - [ ] Bot responds to direct messages
 - [ ] Bot responds to channel messages (if configured)
@@ -147,21 +160,21 @@ This usually means the Discord plugin didn't connect successfully.
 
 **Solutions:**
 1. Verify your bot token is correct and hasn't expired
-2. Check that `"enabled": true` is set in `~/.milady/milady.json` under `connectors.discord`
-3. Ensure `MESSAGE_CONTENT` intent is enabled in the Discord Developer Portal
-4. Run `milady` and look for error messages in the console
-5. Regenerate your bot token if needed
+2. Check that `"enabled": true` is set under `connectors.discord` in `milady.json`
+3. Ensure `MESSAGE_CONTENT` intent is enabled in the Discord Developer Portal under **Privileged Gateway Intents**
+4. Run `bun run milady` and look for error messages in the console
+5. Regenerate your bot token if it's been more than 30 days since creation
 </Accordion>
 
 <Accordion title="Bot doesn't respond to messages">
 If your bot is online but not responding:
 
 **Solutions:**
-1. Check that `MESSAGE_CONTENT` intent is enabled in both `milady.json` and the Discord Developer Portal
+1. Check that `MESSAGE_CONTENT` intent is enabled in the Discord Developer Portal under **Privileged Gateway Intents**
 2. Verify the bot has permission to see and send messages in the channel
 3. Check the Milady console for error messages
-4. Ensure your Discord server is in the allowed guilds if `groupPolicy` is set to `"allowlist"`
-5. Try restarting Milady with `Ctrl+C` followed by `milady`
+4. Ensure your Discord server is listed in your milady.json allowed servers (if applicable)
+5. Try restarting Milady with `Ctrl+C` followed by `bun run milady`
 </Accordion>
 
 <Accordion title="Permission denied errors">

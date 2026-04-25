@@ -10,7 +10,7 @@ Connect your agent to Bluesky for social posting and engagement on the AT Protoc
 
 The Bluesky connector is an elizaOS plugin that bridges your agent to Bluesky via the AT Protocol. It supports automated posting, mention monitoring, and reply handling.
 
-Unlike the 18 auto-enabled connectors (Discord, Telegram, etc.), Bluesky is a **registry plugin** that must be installed manually before use. It is not auto-enabled from connector config alone.
+Bluesky is an **auto-enabled connector** — it loads automatically when its configuration is present in `milady.json`. No manual plugin install is required.
 
 ## Package Info
 
@@ -18,7 +18,7 @@ Unlike the 18 auto-enabled connectors (Discord, Telegram, etc.), Bluesky is a **
 |-------|-------|
 | Package | `@elizaos/plugin-bluesky` |
 | Config key | `connectors.bluesky` |
-| Install | `milady plugins install bluesky` |
+| Category | Auto-enabled connector |
 
 ## Setup Requirements
 
@@ -42,16 +42,23 @@ Unlike the 18 auto-enabled connectors (Discord, Telegram, etc.), Bluesky is a **
 
 ## Environment Variables
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `BLUESKY_HANDLE` | Yes | Bluesky handle (e.g., `yourname.bsky.social`) |
-| `BLUESKY_PASSWORD` | Yes | App password (not your main password -- generate at bsky.app/settings/app-passwords) |
-| `BLUESKY_ENABLED` | No | Set to `true` to enable |
-| `BLUESKY_SERVICE` | No | Bluesky PDS instance URL (defaults to the main Bluesky service) |
-| `BLUESKY_DRY_RUN` | No | Set to `true` for testing without posting |
-| `BLUESKY_ENABLE_POSTING` | No | Enable or disable post creation |
-| `BLUESKY_ENABLE_DMS` | No | Enable processing of direct messages via the chat.bsky API |
-| `BLUESKY_POLL_INTERVAL` | No | Polling interval in seconds |
+| Variable | Description |
+|----------|-------------|
+| `BLUESKY_PASSWORD` | App password (not your main password) |
+| `BLUESKY_HANDLE` | Bluesky handle (e.g., `yourname.bsky.social`) |
+| `BLUESKY_ENABLED` | Set to `true` to enable |
+| `BLUESKY_DRY_RUN` | Set to `true` for testing without posting |
+| `BLUESKY_SERVICE` | Bluesky PDS service URL (optional) |
+| `BLUESKY_ENABLE_DMS` | Enable DM handling |
+| `BLUESKY_ENABLE_POSTING` | Enable automated posting |
+| `BLUESKY_POLL_INTERVAL` | Polling interval in ms |
+| `BLUESKY_ACTION_INTERVAL` | Action processing interval in ms |
+| `BLUESKY_MAX_POST_LENGTH` | Max characters per post |
+| `BLUESKY_POST_IMMEDIATELY` | Post immediately on startup |
+| `BLUESKY_POST_INTERVAL_MIN` | Min seconds between posts |
+| `BLUESKY_POST_INTERVAL_MAX` | Max seconds between posts |
+| `BLUESKY_MAX_ACTIONS_PROCESSING` | Max concurrent action processing |
+| `BLUESKY_ENABLE_ACTION_PROCESSING` | Enable action processing |
 
 ## Features
 
