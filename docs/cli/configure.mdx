@@ -1,11 +1,18 @@
 ---
 title: "milady configure"
-description: "Configuration guidance and common environment variable reference."
+description: "Interactive configuration guide — shows provider status, common env vars, and suggested next steps."
 ---
 
 # `milady configure`
 
-Prints configuration guidance: how to read and set config values, and the most common environment variables for model providers.
+Displays a quick reference of common configuration options, environment variables, and active provider status. This is a read-only guide, not a setup wizard — use [`milady setup`](/cli/setup) for first-time onboarding.
+
+## What it shows
+
+- Which model providers are detected and their status
+- Common environment variables and where to set them
+- Current config file path and state directory
+- Suggested next steps based on your configuration
 
 This command does not accept flags. For reading and writing config values, use [`milady config`](/cli/config). For interactive key setup, use [`milady setup`](/cli/setup).
 
@@ -16,14 +23,16 @@ Set values with:
   milady config get <key>     Read a config value
   Edit ~/.milady/milady.json directly for full control.
 
-Common environment variables:
-  ANTHROPIC_API_KEY    Anthropic (Claude)
-  OPENAI_API_KEY       OpenAI (GPT)
-  AI_GATEWAY_API_KEY   Vercel AI Gateway
-  GOOGLE_API_KEY       Google (Gemini)
-```
+## When to use
+
+- You need a quick reminder of which env var activates a provider
+- You want to confirm which providers are currently detected
+- You are not sure where your config file lives
+
+For interactive key entry and first-time setup, use [`milady setup`](/cli/setup) instead.
 
 ## Related
 
-- [Configuration](/configuration)
-- [Config schema](/config-schema)
+- [`milady setup`](/cli/setup) — First-time interactive setup
+- [Configuration](/configuration) — Full config reference
+- [Model providers](/model-providers) — Provider details and env variables

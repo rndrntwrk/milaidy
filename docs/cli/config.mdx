@@ -1,38 +1,49 @@
 ---
 title: "milady config"
-description: "Inspect configuration values, file path, and schema from the shell."
+description: "Read, inspect, and validate Milady's active configuration from the shell."
 ---
 
 # `milady config`
 
-Config helpers for reading and inspecting the active configuration.
+Read-only commands for inspecting the resolved configuration. Useful for verifying what the runtime will use before starting the server.
 
 ## Subcommands
 
-| Subcommand | Description |
-|------------|-------------|
-| `milady config get <key>` | Read a config value by dot-notation key (e.g. `env.ANTHROPIC_API_KEY`). |
-| `milady config path` | Print the resolved config file path. |
-| `milady config show` | Display all configuration values grouped by section. |
-
-### `milady config show` flags
-
-| Flag | Description |
-|------|-------------|
-| `-a, --all` | Include advanced/hidden fields. |
-| `--json` | Output as raw JSON. |
+| Subcommand | Purpose |
+|-----------|---------|
+| `milady config get <key>` | Read a single config value using dot-notation |
+| `milady config path` | Print the resolved config file path |
+| `milady config show` | Display all config values grouped by section |
 
 ## Examples
 
 ```bash
-milady config get env.ANTHROPIC_API_KEY
+# Read specific values
+milady config get agents.defaults.model
+milady config get gateway.port
+milady config get connectors.discord.token
+
+# Find the config file
 milady config path
+
+# Show full config
 milady config show
-milady config show --json
-milady config show --all
+milady config show --all    # Include advanced/hidden fields
+milady config show --json   # Raw JSON output
 ```
+
+## Editing config
+
+`milady config` is read-only. To change values, edit the config file directly:
+
+```bash
+$EDITOR "$(milady config path)"
+```
+
+The config file supports [JSON5 syntax](/configuration#file-format) (comments, trailing commas, unquoted keys).
 
 ## Related
 
-- [Configuration](/configuration)
-- [Config schema](/config-schema)
+- [Configuration](/configuration) — Full config reference
+- [Config schema](/config-schema) — Schema documentation
+- [`milady configure`](/cli/configure) — Interactive configuration guide

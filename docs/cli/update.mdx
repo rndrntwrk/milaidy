@@ -1,43 +1,41 @@
 ---
 title: "milady update"
-description: "Check for and install updates, manage release channels."
+description: "Check for updates and apply them based on your install method."
 ---
 
 # `milady update`
 
-Checks for updates on the current release channel and installs them. Supports switching between release channels (stable, beta, nightly).
-
-## Flags
-
-| Flag | Description |
-|------|-------------|
-| `-c, --channel <channel>` | Switch release channel before updating (`stable`, `beta`, `nightly`). |
-| `--check` | Check for updates without installing. |
-| `--force` | Force update check (bypass interval cache). |
-
-## Subcommands
-
-| Subcommand | Description |
-|------------|-------------|
-| `milady update status` | Show current version and available updates across all channels. |
-| `milady update channel [channel]` | View or change the release channel. |
+Checks for a newer Milady release and updates based on how you installed (npm global, Homebrew, desktop app, git checkout).
 
 ## Examples
 
 ```bash
+# Check for updates and apply
 milady update
-milady update --check
-milady update --channel beta
-milady update --force
-milady update status
-milady update channel
-milady update channel nightly
+
+# Show available flags
+milady update --help
 ```
 
-After updating, run `milady doctor` to verify the new version is healthy.
+## Update channels
+
+Configure which release channel to follow in `~/.milady/milady.json`:
+
+```json5
+{
+  update: {
+    channel: "stable",          // "stable" | "beta" | "nightly"
+    checkOnStart: true,         // check for updates when milady starts
+    checkIntervalSeconds: 14400, // 4 hours between checks
+  },
+}
+```
+
+## Desktop app
+
+The desktop app checks for updates automatically on launch. Updates are downloaded in the background and applied on next restart.
 
 ## Related
 
-- [Changelog](/changelog) — What changed in each release
-- [Self-updates](/self-updates)
-- [Build and release](/build-and-release)
+- [Self-updates](/self-updates) — Update mechanism details
+- [Build and release](/build-and-release) — Release process documentation

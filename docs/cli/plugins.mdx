@@ -1,59 +1,56 @@
 ---
 title: "milady plugins"
-description: "Browse, install, search, and manage plugins from the CLI."
+description: "List, install, inspect, and manage plugins from the CLI."
 ---
 
 # `milady plugins`
 
-Manage plugins from the terminal — browse the registry, install and uninstall packages, search by keyword, configure plugin parameters, and inspect drop-in plugins.
+Manage the plugin lifecycle — list what's loaded, install from the registry, and inspect plugin status.
 
 ## Subcommands
 
-| Subcommand | Description |
-|------------|-------------|
-| `milady plugins list` | List all plugins from the remote registry (default limit: 30) |
-| `milady plugins search <query>` | Search by keyword with relevance scoring |
-| `milady plugins info <name>` | Show detailed info for a specific plugin |
-| `milady plugins install <name>` | Install a plugin from the registry |
-| `milady plugins uninstall <name>` | Remove a user-installed plugin |
-| `milady plugins installed` | List plugins installed from the registry |
-| `milady plugins refresh` | Force-refresh the registry cache |
-| `milady plugins config <name>` | View or edit a plugin's configuration |
-| `milady plugins test` | Validate custom drop-in plugins |
-| `milady plugins add-path <path>` | Register an additional plugin search directory |
-| `milady plugins paths` | List all plugin search directories |
-| `milady plugins open [name]` | Open a plugin directory in your editor |
+| Subcommand | Purpose |
+|-----------|---------|
+| `milady plugins` | List all resolved plugins and their status |
+| `milady plugins list` | Same as above — show installed and auto-enabled plugins |
+| `milady plugins install <package>` | Install a plugin from the registry |
 
 ## Examples
 
 ```bash
-# Browse the registry
+# List all plugins and their load status
+milady plugins
 milady plugins list
-milady plugins list -q telegram
-milady plugins list --limit 100
 
-# Search with scoring
-milady plugins search "discord bot"
+# Install a connector plugin
+milady plugins install @elizaos/plugin-bluesky
+milady plugins install @elizaos/plugin-instagram
 
-# Get plugin details
-milady plugins info telegram
+# Install a feature plugin
+milady plugins install @elizaos/plugin-browser
+```
 
-# Install and manage
-milady plugins install telegram
-milady plugins install telegram@1.2.3
-milady plugins uninstall telegram
-milady plugins installed
+## How plugins resolve
 
-# Configure a plugin interactively
-milady plugins config telegram --edit
+Plugins load in this order (first match wins):
 
-# Manage custom plugin directories
-milady plugins add-path ~/my-plugins
-milady plugins paths
-milady plugins open
+1. **Ejected** — `~/.milady/plugins/ejected/` (local overrides)
+2. **User-installed** — Tracked in `plugins.installs` in `milady.json`
+3. **Custom/drop-in** — `~/.milady/plugins/custom/` and `plugins.load.paths`
+4. **Auto-enabled** — Detected from env vars, connector config, and feature flags
+5. **Core** — Always loaded (sql, local-embedding, form, etc.)
 
-# Refresh the registry cache
-milady plugins refresh
+## Enable/disable in config
+
+```json5
+{
+  plugins: {
+    allow: ["@elizaos/plugin-openai", "discord"],
+    entries: {
+      anthropic: { enabled: false },  // force-disable even if auto-detected
+    },
+  },
+}
 ```
 
 ## Plugin Name Resolution
@@ -75,6 +72,6 @@ Plugin names accept shorthand: `twitter` resolves to `@elizaos/plugin-twitter`.
 
 ## Related
 
-- [Plugins overview](/plugins/overview) — plugin system concepts
-- [Plugin registry](/plugins/registry) — how discovery, caching, and resolution work
-- [REST — plugins](/rest/plugins) — HTTP API for plugin management
+- [Plugins overview](/plugins/overview) — Plugin system documentation
+- [Plugin architecture](/plugins/architecture) — Auto-enable mechanism details
+- [REST — plugins](/rest/plugins) — Plugin API endpoints
