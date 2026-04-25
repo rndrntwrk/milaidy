@@ -1107,7 +1107,7 @@ jobs:
           Remove-Item $env:MILADY_TEST_WINDOWS_LAUNCHER_DIR -Recurse -Force -ErrorAction SilentlyContinue
           Remove-Item $env:MILADY_TEST_WINDOWS_LAUNCHER_PATH_FILE -Force -ErrorAction SilentlyContinue
 
-          pwsh -NoProfile -ExecutionPolicy Bypass -File eliza/packages/app-core/platforms/electrobun/scripts/smoke-test-windows.ps1
+          bun run test:desktop:packaged:windows
           if ($LASTEXITCODE -ne 0) {
             Write-Error "Packaged Windows smoke test exited with code $LASTEXITCODE."
             exit $LASTEXITCODE

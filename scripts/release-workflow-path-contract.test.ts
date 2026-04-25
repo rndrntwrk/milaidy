@@ -916,9 +916,6 @@ describe("release workflow path contract", () => {
     );
     expect(windowsSmokeBlock).toContain("timeout-minutes: 30");
     expect(windowsSmokeBlock).toContain(
-      "pwsh -NoProfile -ExecutionPolicy Bypass -File eliza/packages/app-core/platforms/electrobun/scripts/smoke-test-windows.ps1",
-    );
-    expect(windowsSmokeBlock).not.toContain(
       "bun run test:desktop:packaged:windows",
     );
     expect(releaseElectrobun).toContain(
