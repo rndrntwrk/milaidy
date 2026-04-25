@@ -1,10 +1,10 @@
 ---
 title: "BlueBubbles Plugin"
 sidebarTitle: "BlueBubbles"
-description: "BlueBubbles connector for Milady — iMessage integration via a local BlueBubbles server."
+description: "BlueBubbles connector for sending and receiving iMessage through a local BlueBubbles server."
 ---
 
-The BlueBubbles plugin connects Milady agents to iMessage through a self-hosted [BlueBubbles](https://bluebubbles.app) server running on macOS.
+The BlueBubbles plugin connects Milady agents to iMessage via a self-hosted [BlueBubbles](https://bluebubbles.app) server on macOS, enabling DM and group messaging through a REST API and webhook-based approach.
 
 **Package:** `@elizaos/plugin-bluebubbles`
 
@@ -16,18 +16,16 @@ milady plugins install bluebubbles
 
 ## Setup
 
-### 1. Install BlueBubbles Server
-
-Install [BlueBubbles](https://bluebubbles.app) on a Mac with Messages signed in. Start the server and note the URL and password from the BlueBubbles dashboard.
-
-### 2. Configure Milady
+1. Install the [BlueBubbles Server](https://bluebubbles.app) on a Mac with iMessage configured
+2. Set a server password in BlueBubbles Server settings
+3. Configure the connector in `milady.json`
 
 ```json
 {
   "connectors": {
     "bluebubbles": {
-      "serverUrl": "http://192.168.1.10:1234",
-      "password": "your-bluebubbles-password"
+      "enabled": true,
+      "apiKey": "YOUR_BLUEBUBBLES_PASSWORD"
     }
   }
 }
@@ -35,21 +33,33 @@ Install [BlueBubbles](https://bluebubbles.app) on a Mac with Messages signed in.
 
 ## Configuration
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `BLUEBUBBLES_SERVER_URL` | Yes | BlueBubbles server URL |
-| `BLUEBUBBLES_PASSWORD` | Yes | Server password |
+| Field | Required | Description |
+|-------|----------|-------------|
+| `apiKey` | Yes | BlueBubbles server password |
+| `enabled` | No | Set `false` to disable (default: auto-enabled when `apiKey` is set) |
+
+## Environment Variables
+
+```bash
+export BLUEBUBBLES_PASSWORD=YOUR_BLUEBUBBLES_PASSWORD
+export BLUEBUBBLES_SERVER_URL=http://localhost:1234
+```
 
 ## Features
 
-- Send and receive iMessage via BlueBubbles HTTP API
-- DM and group chat support
-- Read receipts
-- Webhook-based inbound messages
-- Network-accessible (not limited to the Mac running Messages)
+- **iMessage and SMS** — Send and receive iMessage and SMS messages
+- **DMs** — One-to-one conversations
+- **Group chats** — Group message support
+- **Read receipts** — Configurable read receipt sending
+- **Webhook-based** — Reliable inbound message handling via webhooks
+- **Self-hosted** — All data stays on your Mac
+
+## Auto-Enable
+
+The plugin auto-enables when the `connectors.bluebubbles` block contains an `apiKey`, `token`, or `botToken`.
 
 ## Related
 
-- [BlueBubbles Connector Setup](/connectors/bluebubbles) — Full configuration reference
-- [iMessage Plugin](/plugin-registry/platform/imessage) — Native iMessage connector
-- [Blooio Plugin](/plugin-registry/platform/blooio) — iMessage/SMS via Blooio cloud
+- [BlueBubbles connector reference](/connectors/bluebubbles) — Full configuration reference
+- [iMessage connector](/connectors/imessage) — Direct iMessage connector
+- [Connectors Guide](/guides/connectors) — General connector documentation

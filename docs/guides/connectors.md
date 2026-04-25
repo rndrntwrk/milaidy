@@ -1,7 +1,7 @@
 ---
 title: "Platform Connectors"
 sidebarTitle: "Connectors"
-description: "Platform bridges for 27 messaging platforms — 16 auto-enabled from config with bundled plugins (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, WeChat), 2 auto-enabled from config with upstream plugins (Twitter, Lens — not bundled in registry), plus 9 installable from the registry (Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
+description: "Platform bridges for 29 messaging platforms — 18 auto-enabled from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Twitter, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, Lens, WeChat) plus 11 installable from the registry (Bluesky, Instagram, LINE, Zalo, Zalo User, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon, BlueBubbles)."
 ---
 
 Connectors are platform bridges that allow your agent to communicate across messaging platforms and social networks. Each connector handles authentication, message routing, session management, and platform-specific features.
@@ -39,11 +39,10 @@ Connectors are platform bridges that allow your agent to communicate across mess
 28. [Tlon](#tlon)
 29. [Lens](#lens)
 30. [BlueBubbles](#bluebubbles)
-31. [Zalouser](#zalouser)
-32. [ACP](#acp)
-33. [Connector Lifecycle](#connector-lifecycle)
-31. [Multi-Account Support](#multi-account-support)
-32. [Session Management](#session-management)
+31. [Zalo User](#zalo-user)
+32. [Connector Lifecycle](#connector-lifecycle)
+33. [Multi-Account Support](#multi-account-support)
+34. [Session Management](#session-management)
 
 ---
 
@@ -80,6 +79,9 @@ Connectors marked **Auto** load automatically when their config is present in `m
 | GitHub | API token | Issues/PRs | Yes (repos) | No | Registry |
 | Gmail Watch | Service account / OAuth | N/A | N/A | No | Registry |
 | Nextcloud Talk | Server credentials | Yes | Yes (rooms) | No | Registry |
+| Tlon | Ship credentials | Yes | Yes (Urbit chats) | No | Registry |
+| BlueBubbles | Server password | Yes | Yes | No | Registry |
+| Zalo User | Device credentials (IMEI) | Yes | No | Yes (profiles) | Registry |
 
 ---
 
@@ -1265,6 +1267,75 @@ Agent Communication Protocol — connects agents through an ACP gateway for agen
 - Client mode and version identification
 
 **Note:** This connector is available from the plugin registry. Install it with `milady plugins install @elizaos/plugin-acp`.
+
+---
+
+## BlueBubbles
+
+### Setup Requirements
+
+- macOS with iMessage configured
+- [BlueBubbles Server](https://bluebubbles.app) installed and running
+
+### Key Configuration
+
+```json
+{
+  "connectors": {
+    "bluebubbles": {
+      "enabled": true,
+      "apiKey": "YOUR_BLUEBUBBLES_PASSWORD"
+    }
+  }
+}
+```
+
+**Environment variables:** `BLUEBUBBLES_PASSWORD`, `BLUEBUBBLES_SERVER_URL`
+
+### Features
+
+- iMessage and SMS messaging via BlueBubbles bridge
+- DM and group chat support
+- Webhook-based inbound message handling
+- Read receipt support
+- Self-hosted — all data stays on your Mac
+
+**Note:** This connector is available from the plugin registry. Install it with `milady plugins install @elizaos/plugin-bluebubbles`.
+
+---
+
+## Zalo User
+
+Personal-account variant of the Zalo connector for one-to-one messaging outside the Official Account system.
+
+### Setup Requirements
+
+- Zalo personal account
+- Device credentials (IMEI and cookie) — see the [setup guide](https://docs.eliza.ai/plugin-setup-guide#zalo-user-personal)
+
+### Key Configuration
+
+```json
+{
+  "connectors": {
+    "zalouser": {
+      "enabled": true,
+      "apiKey": "placeholder"
+    }
+  }
+}
+```
+
+**Environment variables:** `ZALOUSER_IMEI`, `ZALOUSER_COOKIE_PATH`, `ZALOUSER_USER_AGENT`
+
+### Features
+
+- Personal Zalo account messaging (one-to-one)
+- Multi-profile support
+- Thread allowlisting for access control
+- Cookie-based session persistence
+
+**Note:** This connector is available from the plugin registry. Install it with `milady plugins install @elizaos/plugin-zalouser`.
 
 ---
 
