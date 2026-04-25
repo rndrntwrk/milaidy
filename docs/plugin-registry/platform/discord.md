@@ -119,11 +119,17 @@ The plugin auto-enables when the `connectors.discord` block contains a `token` (
 
 ## Environment Variables
 
-The bot token can also be set via:
-
-```bash
-export DISCORD_API_TOKEN=YOUR_BOT_TOKEN
-```
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DISCORD_API_TOKEN` | Yes | Discord API token for bot authentication |
+| `DISCORD_APPLICATION_ID` | No | Application ID (auto-resolved from bot token if omitted) |
+| `CHANNEL_IDS` | No | Comma-separated channel IDs to restrict the bot to |
+| `DISCORD_LISTEN_CHANNEL_IDS` | No | Comma-separated channel IDs where the bot only listens |
+| `DISCORD_SHOULD_IGNORE_BOT_MESSAGES` | No | Ignore messages from other bots |
+| `DISCORD_SHOULD_IGNORE_DIRECT_MESSAGES` | No | Ignore direct messages |
+| `DISCORD_SHOULD_RESPOND_ONLY_TO_MENTIONS` | No | Only respond when mentioned |
+| `DISCORD_VOICE_CHANNEL_ID` | No | Voice channel ID to join |
+| `DISCORD_TEST_CHANNEL_ID` | No | Channel ID used by the test suite |
 
 Both `DISCORD_API_TOKEN` and `DISCORD_BOT_TOKEN` environment variables are recognized (the runtime sets both for compatibility).
 

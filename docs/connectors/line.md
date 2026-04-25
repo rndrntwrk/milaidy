@@ -38,15 +38,15 @@ The LINE connector is an elizaOS plugin that bridges your agent to LINE Messagin
 
 ## Environment Variables
 
-| Variable | Description |
-|----------|-------------|
-| `LINE_CHANNEL_ACCESS_TOKEN` | Channel access token from LINE Developer Console |
-| `LINE_CHANNEL_SECRET` | Channel secret for webhook verification |
-| `LINE_ENABLED` | Set to `true` to enable |
-| `LINE_DM_POLICY` | DM acceptance policy (`pairing`, `open`, `closed`) |
-| `LINE_ALLOW_FROM` | Comma-separated allowlist of user IDs |
-| `LINE_GROUP_POLICY` | Group message policy (`allowlist`, `open`) |
-| `LINE_WEBHOOK_PATH` | Custom webhook path |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `LINE_CHANNEL_ACCESS_TOKEN` | Yes | Channel access token from LINE Developer Console |
+| `LINE_CHANNEL_SECRET` | No | Channel secret for webhook verification |
+| `LINE_ENABLED` | No | Enable or disable the LINE plugin |
+| `LINE_WEBHOOK_PATH` | No | Webhook endpoint path |
+| `LINE_DM_POLICY` | No | DM policy (e.g., `allow`, `deny`, `allowlist`) |
+| `LINE_ALLOW_FROM` | No | Comma-separated list of allowed user IDs |
+| `LINE_GROUP_POLICY` | No | Group message policy (e.g., `allow`, `deny`) |
 
 ## Features
 

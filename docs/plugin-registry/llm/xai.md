@@ -26,13 +26,27 @@ export XAI_API_KEY=xai-...
 
 | Environment Variable | Required | Description |
 |---------------------|----------|-------------|
-| `XAI_API_KEY` | Yes* | xAI API key from [console.x.ai](https://console.x.ai) |
-| `GROK_API_KEY` | Yes* | Alias that also triggers auto-enable |
-| `XAI_BASE_URL` | No | Custom base URL for the xAI API |
-| `XAI_SMALL_MODEL` | No | Override the small model identifier |
-| `XAI_EMBEDDING_MODEL` | No | Override the embedding model identifier |
+| `X_API_KEY` | Yes* | xAI API key from [console.x.ai](https://console.x.ai) (primary `envKey` in `plugins.json`) |
+| `XAI_API_KEY` | Yes* | Alias for `X_API_KEY` (also triggers auto-enable via `AUTH_PROVIDER_PLUGINS`) |
+| `GROK_API_KEY` | Yes* | Alias (also triggers auto-enable) |
+| `XAI_BASE_URL` | No | Custom base URL |
+| `XAI_MODEL` | No | Override the default model |
+| `XAI_SMALL_MODEL` | No | Small model slot |
+| `XAI_EMBEDDING_MODEL` | No | Embedding model slot |
+| `X_AUTH_MODE` | No | Auth mode: `api_key` (default) or `oauth` |
+| `X_CLIENT_ID` | No | OAuth client ID |
+| `X_BEARER_TOKEN` | No | Bearer token for API access |
+| `X_API_SECRET` | No | API secret (for OAuth) |
+| `X_ACCESS_TOKEN` | No | OAuth access token |
+| `X_ACCESS_TOKEN_SECRET` | No | OAuth access token secret |
+| `X_REDIRECT_URI` | No | OAuth redirect URI |
+| `X_ENABLE_POST` | No | Enable autonomous posting to X |
+| `X_ENABLE_REPLIES` | No | Enable reply behavior |
+| `X_ENABLE_ACTIONS` | No | Enable X actions |
+| `X_MAX_POST_LENGTH` | No | Max post character length |
+| `X_DRY_RUN` | No | Test without posting |
 
-\* Either `XAI_API_KEY` or `GROK_API_KEY` activates the plugin.
+\* At least one of `X_API_KEY`, `XAI_API_KEY`, or `GROK_API_KEY` activates the plugin.
 
 ### milady.json Example
 

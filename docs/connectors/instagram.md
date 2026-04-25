@@ -38,9 +38,9 @@ The Instagram connector is an elizaOS plugin that bridges your agent to Instagra
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `INSTAGRAM_USERNAME` | Yes | Instagram username |
-| `INSTAGRAM_PASSWORD` | Yes | Instagram password |
-| `INSTAGRAM_PROXY` | No | Proxy URL for Instagram API requests (reduces bans) |
+| `INSTAGRAM_USERNAME` | Yes | Instagram username for authentication |
+| `INSTAGRAM_PASSWORD` | Yes | Instagram password for authentication |
+| `INSTAGRAM_PROXY` | No | Proxy URL for Instagram API requests |
 | `INSTAGRAM_VERIFICATION_CODE` | No | Two-factor authentication verification code |
 
 ## Features

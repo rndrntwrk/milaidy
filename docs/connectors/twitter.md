@@ -4,6 +4,10 @@ sidebarTitle: Twitter/X
 description: Connect your agent to Twitter/X using the @elizaos/plugin-twitter package.
 ---
 
+<Warning>
+The `@elizaos/plugin-twitter` package is not currently available in the plugin registry. This connector documentation is retained for reference but the plugin may not be installable. Check the plugin registry for current availability.
+</Warning>
+
 Connect your agent to Twitter/X for social media engagement.
 
 > **Registry status:** This connector is referenced in the runtime auto-enable map but is not included in the `plugins.json` registry. You may need to install it manually with `npm install @elizaos/plugin-twitter` before it can be loaded.

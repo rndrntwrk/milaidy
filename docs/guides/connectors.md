@@ -1,7 +1,7 @@
 ---
 title: "Platform Connectors"
 sidebarTitle: "Connectors"
-description: "Platform bridges for 28+ messaging platforms — auto-enabled from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Twitter, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, Lens, WeChat) plus installable from the registry (Bluesky, BlueBubbles, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
+description: "Platform bridges for messaging platforms — auto-enabled from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr) plus installable from the registry (Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
 ---
 
 Connectors are platform bridges that allow your agent to communicate across messaging platforms and social networks. Each connector handles authentication, message routing, session management, and platform-specific features.
@@ -20,28 +20,24 @@ Connectors are platform bridges that allow your agent to communicate across mess
 10. [Blooio](#blooio)
 11. [Microsoft Teams](#microsoft-teams)
 11. [Google Chat](#google-chat)
-12. [Twitter](#twitter)
-13. [Farcaster](#farcaster)
-14. [Bluesky](#bluesky)
-15. [Instagram](#instagram)
-16. [Twitch](#twitch)
-17. [Mattermost](#mattermost)
-18. [WeChat](#wechat)
-19. [Matrix](#matrix)
-20. [Feishu / Lark](#feishu--lark)
-21. [Nostr](#nostr)
-22. [LINE](#line)
-23. [Zalo](#zalo)
-24. [Twilio](#twilio)
-25. [GitHub](#github)
-26. [Gmail Watch](#gmail-watch)
-27. [Nextcloud Talk](#nextcloud-talk)
-28. [Tlon](#tlon)
-29. [Lens](#lens)
-30. [BlueBubbles](#bluebubbles)
-31. [Connector Lifecycle](#connector-lifecycle)
-32. [Multi-Account Support](#multi-account-support)
-33. [Session Management](#session-management)
+12. [Farcaster](#farcaster)
+13. [Bluesky](#bluesky)
+14. [Instagram](#instagram)
+15. [Twitch](#twitch)
+16. [Mattermost](#mattermost)
+17. [Matrix](#matrix)
+18. [Feishu / Lark](#feishu--lark)
+19. [Nostr](#nostr)
+20. [LINE](#line)
+21. [Zalo](#zalo)
+22. [Twilio](#twilio)
+23. [GitHub](#github)
+24. [Gmail Watch](#gmail-watch)
+25. [Nextcloud Talk](#nextcloud-talk)
+26. [Tlon](#tlon)
+27. [Connector Lifecycle](#connector-lifecycle)
+28. [Multi-Account Support](#multi-account-support)
+29. [Session Management](#session-management)
 
 ---
 
@@ -57,23 +53,21 @@ Connectors marked **Auto** load automatically when their config is present in `m
 | WhatsApp | QR code (Baileys) or Cloud API | Yes | Yes | Yes | Auto |
 | Signal | signal-cli HTTP API | Yes | Yes | Yes | Auto |
 | iMessage | Native CLI (macOS) | Yes | Yes | Yes | Auto |
-| BlueBubbles | Server password | Yes | Yes | No | Auto |
+| BlueBubbles | iMessage via BlueBubbles server | Yes | Yes | No | Auto |
 | Blooio | API key + webhook | Yes | Yes | No | Auto |
 | Microsoft Teams | App ID + password | Yes | Yes (teams/channels) | No | Auto |
 | Google Chat | Service account | Yes | Yes (spaces) | Yes | Auto |
-| Twitter | API keys + tokens | DMs | N/A | No | Auto (upstream, not bundled) |
 | Farcaster | Neynar API key + signer | Casts | Yes (channels) | No | Auto |
 | Twitch | Client ID + access token | Yes (chat) | Yes (channels) | No | Auto |
 | Mattermost | Bot token | Yes | Yes (channels) | No | Auto |
-| WeChat | Proxy API key + QR code | Yes | Yes | Yes | Auto* |
 | Matrix | Access token | Yes | Yes (rooms) | No | Auto |
 | Feishu / Lark | App ID + secret | Yes | Yes (group chats) | No | Auto |
 | Nostr | Private key (nsec/hex) | Yes (NIP-04) | N/A | No | Auto |
-| Lens | API key | Yes | N/A | No | Auto (upstream, not bundled) |
 | Bluesky | Account credentials | Posts | N/A | No | Registry |
 | Instagram | Username + password | DMs | N/A | No | Registry |
 | LINE | Channel access token + secret | Yes | Yes | No | Registry |
 | Zalo | Access token | Yes | Yes | No | Registry |
+| Zalo (Personal) | Cookie-based auth | Yes | Yes | No | Registry |
 | Twilio | Account SID + auth token | SMS/Voice | N/A | No | Registry |
 | GitHub | API token | Issues/PRs | Yes (repos) | No | Registry |
 | Gmail Watch | Service account / OAuth | N/A | N/A | No | Registry |
@@ -121,7 +115,7 @@ Connectors are configured in the `connectors` section of `milady.json`. Common f
   "connectors": {
     "discord": {
       "enabled": true,
-      "token": "BOT_TOKEN",
+      "botToken": "BOT_TOKEN",
       "groupPolicy": "allowlist",
       "guilds": {
         "SERVER_ID": {
@@ -501,48 +495,6 @@ Connects to iMessage and SMS messaging via the Blooio service with signed webhoo
 
 ---
 
-## Twitter
-
-**Note:** This connector is available from the plugin registry. Install it with `milady plugins install @elizaos/plugin-twitter`.
-
-### Setup Requirements
-
-- Twitter API v2 credentials (API key, API secret key, access token, access token secret)
-
-### Key Configuration
-
-```json
-{
-  "connectors": {
-    "twitter": {
-      "enabled": true,
-      "apiKey": "...",
-      "apiSecretKey": "...",
-      "accessToken": "...",
-      "accessTokenSecret": "...",
-      "postEnable": true,
-      "postIntervalMin": 90,
-      "postIntervalMax": 180
-    }
-  }
-}
-```
-
-### Features
-
-- Automated posting with configurable intervals and variance
-- Post immediately option
-- Search and mention monitoring
-- Timeline algorithm selection (`weighted` or `latest`)
-- Auto-respond to mentions
-- Action processing toggle
-- Dry run mode for testing
-- Configurable max tweet length (default: 4000)
-
-> **Note:** This connector is in the auto-enable map but not in `plugins.json`. You may need to install the package manually with `npm install @elizaos/plugin-twitter`.
-
----
-
 ## Farcaster
 
 ### Setup Requirements
@@ -745,63 +697,6 @@ This connector auto-enables when its configuration is present in `milady.json`.
 - Mention filtering (optionally require @mentions)
 - Custom command prefix triggers
 - Self-hosted server support
-
----
-
-## WeChat
-
-**Note:** This connector is available from the plugin registry. Install it with `milady plugins install @elizaos/plugin-wechat`.
-
-Connects to WeChat via a third-party proxy service using personal account login.
-
-### Setup Requirements
-
-1. Obtain an API key from the WeChat proxy service
-2. Configure the proxy URL and webhook port
-3. Scan QR code displayed in terminal on first startup
-
-### Privacy Notice
-
-The WeChat connector depends on a user-supplied proxy service. That proxy receives
-your connector API key plus the message payloads and metadata needed to relay
-incoming and outgoing WeChat traffic. Only point `proxyUrl` at infrastructure you
-operate yourself or explicitly trust for that message flow.
-
-### Key Configuration
-
-```json
-{
-  "connectors": {
-    "wechat": {
-      "apiKey": "<key>",
-      "proxyUrl": "https://...",
-      "webhookPort": 18790,
-      "deviceType": "ipad"
-    }
-  }
-}
-```
-
-| Field | Description |
-|-------|------------|
-| `apiKey` | **Required** -- Proxy service API key |
-| `proxyUrl` | **Required** -- Proxy service URL |
-| `webhookPort` | Webhook listener port (default: 18790) |
-| `deviceType` | Device emulation type: `ipad` or `mac` (default: `ipad`) |
-
-**Environment variables:** `WECHAT_API_KEY`
-
-**Multi-account:** Supported via `accounts` map (same pattern as WhatsApp).
-
-### Features
-
-- Text messaging in DMs (enabled by default)
-- Group chat support (enable with `features.groups: true`)
-- Image send/receive (enable with `features.images: true`)
-- QR code login with automatic session persistence
-- Multi-account support via accounts map
-
-> **Note:** This connector is in the auto-enable map but not in `plugins.json`. It is provided as a workspace package (`@elizaos/plugin-wechat`) within this repository. If running from a published install, you may need to install it manually.
 
 ---
 
@@ -1147,229 +1042,6 @@ Gmail Watch is enabled via the `features.gmailWatch` flag or environment variabl
 - Group chat participation
 
 This connector auto-enables when its configuration is present in `milady.json`.
-
----
-
-## Lens
-
-**Note:** This connector is available from the plugin registry. Install it with `milady plugins install @elizaos/plugin-lens`.
-
-**Plugin:** `@elizaos/plugin-lens`
-
-```json5
-{
-  connectors: {
-    lens: {
-      apiKey: "<LENS_API_KEY>",
-    }
-  }
-}
-```
-
-| Env Variable | Config Path |
-|-------------|-------------|
-| `LENS_API_KEY` | `connectors.lens.apiKey` |
-
-**Auto-enable triggers:** `apiKey`, `token`, or `botToken`.
-
-**Features:**
-- Lens Protocol social interactions
-- Post publishing and engagement
-
-> **Note:** This connector is in the auto-enable map but not in `plugins.json`. You may need to install the package manually with `npm install @elizaos/plugin-lens`.
-
----
-
-## BlueBubbles
-
-### Setup Requirements
-
-- BlueBubbles server running on macOS
-- Server URL and password
-
-### Key Configuration
-
-```json
-{
-  "connectors": {
-    "bluebubbles": {
-      "enabled": true
-    }
-  }
-}
-```
-
-### Features
-
-- iMessage bridge via BlueBubbles server
-- DM and group messaging
-- Alternative to the native iMessage connector for non-direct setups
-
-**Note:** This connector is available from the plugin registry. Install it with `milady plugins install @elizaos/plugin-bluebubbles`.
-
----
-
-## Zalouser
-
-### Setup Requirements
-
-- Zalo personal account credentials
-
-### Key Configuration
-
-```json
-{
-  "connectors": {
-    "zalouser": {
-      "enabled": true
-    }
-  }
-}
-```
-
-### Features
-
-- Personal Zalo account messaging (as opposed to the Official Account connector `@elizaos/plugin-zalo`)
-- One-to-one messaging outside the Official Account system
-
-**Note:** This connector is available from the plugin registry. Install it with `milady plugins install @elizaos/plugin-zalouser`.
-
----
-
-## ACP
-
-Agent Communication Protocol — connects agents through an ACP gateway for agent-to-agent communication.
-
-### Setup Requirements
-
-- ACP gateway URL and authentication token
-
-### Key Configuration
-
-```json
-{
-  "connectors": {
-    "acp": {
-      "enabled": true
-    }
-  }
-}
-```
-
-**Environment variables:** `ACP_GATEWAY_TOKEN`, `ACP_GATEWAY_URL`, `ACP_GATEWAY_PASSWORD`
-
-### Features
-
-- Agent-to-agent communication via ACP gateway
-- Session management with configurable persistence
-- Client mode and version identification
-
-**Note:** This connector is available from the plugin registry. Install it with `milady plugins install @elizaos/plugin-acp`.
-
----
-
-## BlueBubbles
-
-### Setup Requirements
-
-- macOS with iMessage configured
-- [BlueBubbles Server](https://bluebubbles.app) installed and running
-
-### Key Configuration
-
-```json
-{
-  "connectors": {
-    "bluebubbles": {
-      "enabled": true,
-      "apiKey": "YOUR_BLUEBUBBLES_PASSWORD"
-    }
-  }
-}
-```
-
-**Environment variables:** `BLUEBUBBLES_PASSWORD`, `BLUEBUBBLES_SERVER_URL`
-
-### Features
-
-- iMessage and SMS messaging via BlueBubbles bridge
-- DM and group chat support
-- Webhook-based inbound message handling
-- Read receipt support
-- Self-hosted — all data stays on your Mac
-
-**Note:** This connector is available from the plugin registry. Install it with `milady plugins install @elizaos/plugin-bluebubbles`.
-
----
-
-## Zalo User
-
-Personal-account variant of the Zalo connector for one-to-one messaging outside the Official Account system.
-
-### Setup Requirements
-
-- Zalo personal account
-- Device credentials (IMEI and cookie) — see the [setup guide](https://docs.eliza.ai/plugin-setup-guide#zalo-user-personal)
-
-### Key Configuration
-
-```json
-{
-  "connectors": {
-    "zalouser": {
-      "enabled": true,
-      "apiKey": "placeholder"
-    }
-  }
-}
-```
-
-**Environment variables:** `ZALOUSER_IMEI`, `ZALOUSER_COOKIE_PATH`, `ZALOUSER_USER_AGENT`
-
-### Features
-
-- Personal Zalo account messaging (one-to-one)
-- Multi-profile support
-- Thread allowlisting for access control
-- Cookie-based session persistence
-
-**Note:** This connector is available from the plugin registry. Install it with `milady plugins install @elizaos/plugin-zalouser`.
-
----
-
-## BlueBubbles
-
-Connects to iMessage via a self-hosted [BlueBubbles](https://bluebubbles.app/) server running on macOS.
-
-### Setup Requirements
-
-- macOS machine running BlueBubbles Server
-- Server password
-
-### Key Configuration
-
-```json
-{
-  "connectors": {
-    "bluebubbles": {
-      "enabled": true,
-      "serverUrl": "http://your-mac:1234",
-      "password": "YOUR_SERVER_PASSWORD"
-    }
-  }
-}
-```
-
-**Environment variables:** `BLUEBUBBLES_PASSWORD`, `BLUEBUBBLES_SERVER_URL`
-
-### Features
-
-- iMessage send and receive via BlueBubbles server
-- DM and group chat support
-- Read receipt support
-- Webhook-based inbound message handling
-
-**Note:** This connector is available from the plugin registry. Install it with `milady plugins install @elizaos/plugin-bluebubbles`.
 
 ---
 

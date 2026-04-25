@@ -90,70 +90,42 @@ bun run dev
 
 ## Monorepo Structure
 
-Milady is a monorepo managed with Bun workspaces. The core elizaOS runtime and all plugins live inside the `eliza/` git submodule. Run `bun install` to initialize it.
+Milady is a monorepo managed with Bun workspaces. The core elizaOS runtime lives in the `eliza/` git submodule.
 
 ```
 milady/
-├── eliza/                       # Git submodule — elizaOS runtime + plugins
+├── eliza/                       # elizaOS submodule (core runtime)
 │   ├── packages/
-│   │   ├── app-core/            # Main application package (runtime source of truth)
-│   │   │   └── src/
-│   │   │       ├── entry.ts     # CLI bootstrap
-│   │   │       ├── cli/         # Commander CLI (milady command)
-│   │   │       ├── runtime/     # Agent loader, plugin resolution
-│   │   │       ├── api/         # Dashboard API server
-│   │   │       ├── config/      # Plugin auto-enable, config schemas
-│   │   │       ├── connectors/  # Connector integration code
-│   │   │       └── services/    # Business logic
+│   │   ├── app-core/            # Main application package (CLI, API, runtime, config)
 │   │   ├── agent/               # Upstream elizaOS agent (core plugins, auto-enable maps)
-│   │   ├── typescript/          # @elizaos/core — Core TypeScript SDK
-│   │   └── skills/              # Skills system and bundled skills
-│   └── plugins/                 # Official plugins (100+)
-│       ├── plugin-anthropic/    # Anthropic model provider
-│       ├── plugin-telegram/     # Telegram connector
-│       ├── plugin-discord/      # Discord connector
+│   │   └── ...                  # Other @elizaos/* packages
+│   └── plugins/                 # Official plugins (submodule checkouts)
+│       ├── plugin-agent-orchestrator/
 │       └── ...
 ├── apps/
-│   ├── app/                     # Desktop (Electrobun) + mobile (Capacitor) + web UI
+│   ├── app/                     # Desktop/mobile UI (Vite + React)
+│   │   └── electrobun/          # Electrobun desktop shell
+│   ├── browser-bridge/          # Browser bridge extension
 │   └── homepage/                # Marketing site
-├── skills/                      # Workspace skills
+├─��� skills/                      # Workspace skills (mirrors from @elizaos/skills)
 ├── docs/                        # Documentation (this site)
-├── scripts/                     # Build, dev, and utility scripts
+├── scripts/                     # Build, dev, and release tooling
 ├── test/                        # Test setup, helpers, e2e
-├── plugins.json                 # Plugin registry manifest (98 plugins)
-├── AGENTS.md                    # Repository guidelines
+├── CLAUDE.md                    # Repository conventions and architecture
+├── milady.mjs                   # npm bin entry
 └── tsdown.config.ts             # Build config
-```
-
-> **Important:** All source code paths like `packages/app-core/src/...` refer to files inside the `eliza/` submodule. When navigating the filesystem, prefix with `eliza/` (e.g., `eliza/packages/app-core/src/entry.ts`).
-
-### Build System
-
-Bun workspaces manage the monorepo. Common build commands:
-
-```bash
-# Build everything
-bun run build
-
-# Run all tests
-bun run test
-
-# Typecheck + lint
-bun run check
-
-# Development mode (API on :31337, UI on :2138)
-bun run dev
 ```
 
 ### Key Entry Points
 
 | File | Purpose |
 |------|---------|
-| `milady.mjs` | npm bin entry (top-level) |
+| `milady.mjs` | npm bin entry |
 | `eliza/packages/app-core/src/entry.ts` | CLI process bootstrap |
-| `eliza/packages/app-core/src/index.ts` | Library exports |
-| `eliza/packages/app-core/src/runtime/eliza.ts` | elizaOS runtime initialization |
-| `eliza/packages/app-core/src/cli/run-main.ts` | Commander CLI + error handling |
+| `eliza/packages/app-core/src/cli/` | Commander CLI (milady command) |
+| `eliza/packages/app-core/src/runtime/eliza.ts` | Agent loader and runtime boot |
+| `eliza/packages/app-core/src/api/` | Dashboard API |
+| `eliza/packages/app-core/src/config/` | Plugin auto-enable, config schemas |
 
 ---
 
@@ -207,17 +179,6 @@ bun run test:e2e
 
 # Live tests (requires API keys)
 MILADY_LIVE_TEST=1 bun run test:live
-
-# Docker-based tests
-bun run test:docker:all
-```
-
-### Runtime fallback for Bun crashes
-
-If Bun segfaults on your platform during long-running sessions, run Milady on Node runtime:
-
-```bash
-MILADY_RUNTIME=node bun run milady start
 ```
 
 ### Test File Conventions
@@ -426,6 +387,10 @@ Claude Code Review is enabled for automated initial feedback.
 Join the community Discord for help, discussions, and announcements:
 
 **[discord.gg/milady](https://discord.gg/milady)**
+
+Channels:
+- `#dev` — Development help
+- `#showcase` — Share what you've built
 
 ### GitHub
 

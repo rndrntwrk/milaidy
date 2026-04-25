@@ -82,6 +82,20 @@ export MSTEAMS_TENANT_ID=YOUR_TENANT_ID
 - **SharePoint integration** — File uploads in group chats via SharePoint site
 - **Media host allowlists** — Control which hosts can serve downloadable media
 
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `MSTEAMS_APP_PASSWORD` | Yes | Azure Bot App Password (client secret) |
+| `MSTEAMS_APP_ID` | No | Azure Bot App ID |
+| `MSTEAMS_TENANT_ID` | No | Azure AD Tenant ID |
+| `MSTEAMS_ENABLED` | No | Enable or disable the plugin |
+| `MSTEAMS_WEBHOOK_PATH` | No | Webhook endpoint path |
+| `MSTEAMS_WEBHOOK_PORT` | No | Webhook listener port |
+| `MSTEAMS_MEDIA_MAX_MB` | No | Maximum media file size in MB |
+| `MSTEAMS_ALLOWED_TENANTS` | No | Comma-separated allowed tenant IDs |
+| `MSTEAMS_SHAREPOINT_SITE_ID` | No | SharePoint site ID for file uploads |
+
 ## Auto-Enable
 
 The plugin auto-enables when the `connectors.msteams` block contains `botToken`, `token`, or `apiKey`. Note that `appId` and `appPassword` alone do not trigger auto-enable -- set `botToken` to the app password to trigger auto-enable, or add the plugin to `plugins.allow` explicitly.

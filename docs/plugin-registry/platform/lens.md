@@ -4,7 +4,11 @@ sidebarTitle: "Lens"
 description: "The Lens Protocol plugin is not currently available."
 ---
 
-> **Unavailable.** The `@elizaos/plugin-lens` package does not exist in the plugin registry or on npm. This plugin is not currently functional.
+<Warning>
+The `@elizaos/plugin-lens` package is not currently available in the plugin registry. This documentation is retained for reference but the plugin may not be installable. Check the plugin registry for current availability.
+</Warning>
+
+The Lens plugin connects Milady agents to the Lens Protocol, enabling social interactions on the decentralized social graph built on Polygon.
 
 **Package:** `@elizaos/plugin-lens`
 

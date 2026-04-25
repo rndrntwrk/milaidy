@@ -132,6 +132,21 @@ AgentRuntime processes message
 Response sent via Baileys API
 ```
 
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `WHATSAPP_ACCESS_TOKEN` | No | Cloud API access token (required for `cloudapi` auth) |
+| `WHATSAPP_PHONE_NUMBER_ID` | No | Phone number ID for Cloud API |
+| `WHATSAPP_AUTH_METHOD` | No | Authentication method: `cloudapi` or `baileys` |
+| `WHATSAPP_AUTH_DIR` | No | Directory for Baileys session files |
+| `WHATSAPP_PRINT_QR` | No | Print QR code in terminal for Baileys auth |
+| `WHATSAPP_WEBHOOK_VERIFY_TOKEN` | No | Webhook verification token |
+| `WHATSAPP_BUSINESS_ACCOUNT_ID` | No | WhatsApp Business Account ID |
+| `WHATSAPP_API_VERSION` | No | API version string for Cloud API |
+| `WHATSAPP_DM_POLICY` | No | DM policy (e.g., `allow`, `deny`, `allowlist`) |
+| `WHATSAPP_GROUP_POLICY` | No | Group message policy |
+
 ## Auto-Enable
 
 The plugin auto-enables when `connectors.whatsapp` contains an `authDir` or `accounts` configuration with at least one account that has `authDir` set.

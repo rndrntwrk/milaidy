@@ -4,9 +4,11 @@ sidebarTitle: Lens
 description: The Lens Protocol connector is not currently available.
 ---
 
-> **Unavailable.** The `@elizaos/plugin-lens` package does not exist in the plugin registry or on npm. This connector is not currently functional.
+<Warning>
+The `@elizaos/plugin-lens` package is not currently available in the plugin registry. This connector documentation is retained for reference but the plugin may not be installable. Check the plugin registry for current availability.
+</Warning>
 
-> **Registry status:** This connector is referenced in the runtime auto-enable map but is not included in the `plugins.json` registry. You may need to install it manually with `npm install @elizaos/plugin-lens` before it can be loaded.
+Connect your agent to Lens Protocol for decentralized social interactions.
 
 ## Overview
 

@@ -59,25 +59,23 @@ No environment variable is required to trigger auto-enable — it is driven enti
 
 ## Environment Variables
 
-All settings can alternatively be set via environment variables. The primary env var trigger is `FARCASTER_NEYNAR_API_KEY`.
-
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `FARCASTER_NEYNAR_API_KEY` | Yes | Neynar API key (sensitive) |
-| `FARCASTER_SIGNER_UUID` | Yes | Neynar signer UUID for the agent account |
-| `FARCASTER_FID` | Yes | Farcaster ID of the agent account |
-| `FARCASTER_HUB_URL` | No | Farcaster hub URL (default: `hub.pinata.cloud`) |
-| `FARCASTER_POLL_INTERVAL` | No | Polling interval in seconds (default: `120`) |
-| `FARCASTER_MODE` | No | Operation mode: `polling` or `webhook` (default: `polling`) |
-| `FARCASTER_DRY_RUN` | No | Simulate operations without executing |
-| `ENABLE_CAST` | No | Enable/disable casting (default: `true`) |
-| `CAST_INTERVAL_MIN` | No | Minimum minutes between autonomous casts (default: `90`) |
-| `CAST_INTERVAL_MAX` | No | Maximum minutes between autonomous casts (default: `180`) |
-| `CAST_IMMEDIATELY` | No | Publish casts immediately instead of scheduling |
-| `MAX_CAST_LENGTH` | No | Max characters per cast (default: `320`) |
-| `ENABLE_ACTION_PROCESSING` | No | Enable automated action processing |
-| `ACTION_INTERVAL` | No | Minutes between action-processing cycles (default: `5`) |
-| `MAX_ACTIONS_PROCESSING` | No | Max actions per batch (default: `1`) |
+| `FARCASTER_NEYNAR_API_KEY` | Yes | API key for the Neynar Farcaster API |
+| `FARCASTER_FID` | Yes | Farcaster user identifier (FID) |
+| `FARCASTER_SIGNER_UUID` | Yes | UUID of the Neynar signer for signing casts |
+| `FARCASTER_HUB_URL` | No | Base URL for the Farcaster hub |
+| `FARCASTER_MODE` | No | Operation mode: `polling` or `webhook` |
+| `FARCASTER_DRY_RUN` | No | Simulate operations without executing (`true`/`false`) |
+| `FARCASTER_POLL_INTERVAL` | No | Polling interval in seconds |
+| `ENABLE_CAST` | No | Enable or disable casting |
+| `CAST_IMMEDIATELY` | No | Post immediately instead of scheduling (`true`/`false`) |
+| `CAST_INTERVAL_MIN` | No | Minimum minutes between automated casts |
+| `CAST_INTERVAL_MAX` | No | Maximum minutes between automated casts |
+| `MAX_CAST_LENGTH` | No | Maximum characters allowed per cast |
+| `ACTION_INTERVAL` | No | Minutes between action-processing cycles |
+| `MAX_ACTIONS_PROCESSING` | No | Maximum actions to process per batch |
+| `ENABLE_ACTION_PROCESSING` | No | Enable or disable automated action processing |
 
 ## Full Configuration Reference
 

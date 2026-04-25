@@ -65,9 +65,7 @@ bun run milady --version
 
 ## 4) Repo map (mental model)
 
-> **Note:** Core packages live inside the `eliza/` git submodule. The paths below use the short form `packages/app-core/` — the actual location on disk is `eliza/packages/app-core/`. Run `bun run setup:upstreams` or `git submodule update --init --recursive` to initialize the submodule before exploring these paths.
-
-Core areas (all under `eliza/packages/app-core/`):
+Core areas (all under `eliza/packages/app-core/` in the `eliza` submodule):
 
 - `eliza/packages/app-core/src/runtime/` — runtime startup, plugin orchestration, lifecycle
 - `eliza/packages/app-core/src/cli/` — CLI parsing, command registration, process behavior

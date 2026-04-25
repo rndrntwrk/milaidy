@@ -42,7 +42,6 @@ Or via environment variables:
 ```bash
 export ZALO_ACCESS_TOKEN=YOUR_ACCESS_TOKEN
 export ZALO_SECRET_KEY=YOUR_SECRET_KEY
-export ZALO_REFRESH_TOKEN=YOUR_REFRESH_TOKEN
 export ZALO_APP_ID=YOUR_APP_ID
 ```
 
@@ -52,18 +51,24 @@ export ZALO_APP_ID=YOUR_APP_ID
 |-------|----------|-------------|
 | `accessToken` | Yes | Zalo API access token |
 | `secretKey` | Yes | Zalo application secret key |
-| `refreshToken` | No | Zalo API refresh token |
 | `appId` | No | Zalo application ID |
+| `refreshToken` | No | Token refresh credential |
 | `enabled` | No | Set `false` to disable (default: `true`) |
 
 ## Environment Variables
 
-```bash
-export ZALO_ACCESS_TOKEN=YOUR_ACCESS_TOKEN
-export ZALO_SECRET_KEY=YOUR_SECRET_KEY
-export ZALO_REFRESH_TOKEN=YOUR_REFRESH_TOKEN
-export ZALO_APP_ID=YOUR_APP_ID
-```
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `ZALO_ACCESS_TOKEN` | Yes | OA access token |
+| `ZALO_SECRET_KEY` | Yes | Application secret key |
+| `ZALO_APP_ID` | No | Application ID |
+| `ZALO_REFRESH_TOKEN` | No | Token refresh credential |
+| `ZALO_ENABLED` | No | Enable or disable the plugin |
+| `ZALO_PROXY_URL` | No | Proxy URL for API requests |
+| `ZALO_USE_POLLING` | No | Use polling instead of webhooks |
+| `ZALO_WEBHOOK_URL` | No | Webhook URL for receiving messages |
+| `ZALO_WEBHOOK_PATH` | No | Webhook endpoint path |
+| `ZALO_WEBHOOK_PORT` | No | Webhook listener port |
 
 ## Related
 

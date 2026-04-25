@@ -43,11 +43,16 @@ export OPENROUTER_API_KEY=sk-or-...
 | Environment Variable | Required | Description |
 |---------------------|----------|-------------|
 | `OPENROUTER_API_KEY` | Yes | OpenRouter API key from [openrouter.ai](https://openrouter.ai) |
-| `OPENROUTER_BASE_URL` | No | Custom base URL for the OpenRouter API |
-| `OPENROUTER_SMALL_MODEL` | No | Override the small model identifier |
-| `OPENROUTER_LARGE_MODEL` | No | Override the large model identifier |
-| `OPENROUTER_EMBEDDING_MODEL` | No | Override the embedding model identifier |
-| `OPENROUTER_IMAGE_GENERATION_MODEL` | No | Override the image generation model |
+| `OPENROUTER_BASE_URL` | No | Custom base URL |
+| `OPENROUTER_BROWSER_BASE_URL` | No | Browser-only proxy endpoint base URL |
+| `OPENROUTER_SMALL_MODEL` | No | Small model slot |
+| `OPENROUTER_LARGE_MODEL` | No | Large model slot |
+| `OPENROUTER_IMAGE_MODEL` | No | Vision model for image understanding |
+| `OPENROUTER_IMAGE_GENERATION_MODEL` | No | Image generation model |
+| `OPENROUTER_EMBEDDING_MODEL` | No | Embedding model |
+| `OPENROUTER_EMBEDDING_DIMENSIONS` | No | Embedding dimensions |
+| `OPENROUTER_AUTO_CLEANUP_IMAGES` | No | Auto-cleanup generated images |
+| `OPENROUTER_TOOL_EXECUTION_MAX_STEPS` | No | Max tool call steps per turn (default: 5) |
 
 ### milady.json Example
 

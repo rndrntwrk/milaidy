@@ -4,6 +4,10 @@ sidebarTitle: "WeChat"
 description: "WeChat connector for Milady — personal and group messaging via a third-party proxy API."
 ---
 
+<Warning>
+The `@elizaos/plugin-wechat` package is not currently available in the plugin registry. This documentation is retained for reference but the plugin may not be installable. Check the plugin registry for current availability.
+</Warning>
+
 The WeChat plugin connects Milady agents to WeChat via a user-supplied proxy service, enabling text messaging and optional image and group chat support from personal WeChat accounts.
 
 **Package:** `@elizaos/plugin-wechat`

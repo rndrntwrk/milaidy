@@ -8,6 +8,8 @@ The Suno plugin connects Milady agents to Suno's music generation platform, enab
 
 **Package:** `@elizaos/plugin-suno`
 
+> **Note:** This plugin is an upstream elizaOS feature plugin and is not included in the bundled `plugins.json` registry. It is installable from the remote elizaOS plugin registry and auto-enables via the `features.suno` config flag.
+
 ## Installation
 
 ```bash

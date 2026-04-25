@@ -8,6 +8,8 @@ The Image Generation plugin enables Milady agents to generate images using AI im
 
 **Package:** `@elizaos/plugin-image-generation`
 
+> **Note:** This plugin is an upstream elizaOS feature plugin and is not included in the bundled `plugins.json` registry. It is installable from the remote elizaOS plugin registry and auto-enables via the `features.imageGen` config flag.
+
 ## Overview
 
 The Image Generation plugin registers an `IMAGE` model handler and a set of actions that allow agents to generate images from text descriptions, edit existing images, and create variations.

@@ -38,16 +38,18 @@ export MILADY_FEATURE_BROWSER=true
 
 ## Configuration
 
-| Environment Variable | Required | Description |
-|---------------------|----------|-------------|
-| `OPENAI_API_KEY` | Yes* | Required for stagehand-server web extraction |
-| `ANTHROPIC_API_KEY` | No | Alternative LLM provider for stagehand |
-| `BROWSER_HEADLESS` | No | Run browser in headless mode (default: `true`) |
-| `BROWSERBASE_API_KEY` | No | API key for BrowserBase cloud browser service |
-| `BROWSERBASE_PROJECT_ID` | No | Project ID for BrowserBase |
-| `CAPSOLVER_API_KEY` | No | API key for CAPSolver CAPTCHA solving |
+### Environment Variables
 
-*An LLM API key is required for content extraction. `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` can be used.
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `OPENAI_API_KEY` | Yes | Required for browser content extraction (used as the plugin's activation key in `plugins.json`) |
+| `ANTHROPIC_API_KEY` | No | Alternative AI provider for content extraction |
+| `BROWSER_HEADLESS` | No | Run browser in headless mode (default: `true`) |
+| `CAPSOLVER_API_KEY` | No | CAPSolver API key for CAPTCHA solving |
+| `BROWSERBASE_API_KEY` | No | BrowserBase API key for cloud browser sessions |
+| `BROWSERBASE_PROJECT_ID` | No | BrowserBase project identifier |
+
+### Feature Config
 
 ```json
 {

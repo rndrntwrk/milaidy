@@ -54,8 +54,8 @@ export INSTAGRAM_PASSWORD=YOUR_PASSWORD
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `INSTAGRAM_USERNAME` | Yes | Instagram account username |
-| `INSTAGRAM_PASSWORD` | Yes | Instagram account password |
+| `INSTAGRAM_USERNAME` | Yes | Instagram username for authentication |
+| `INSTAGRAM_PASSWORD` | Yes | Instagram password for authentication |
 | `INSTAGRAM_PROXY` | No | Proxy URL for Instagram API requests |
 | `INSTAGRAM_VERIFICATION_CODE` | No | Two-factor authentication verification code |
 

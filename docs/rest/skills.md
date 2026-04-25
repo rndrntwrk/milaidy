@@ -67,7 +67,8 @@ List all local skills found in the agent's skills directory. Each entry includes
       "filePath": "/path/to/skills/my-custom-action.ts",
       "enabled": true,
       "priority": 0,
-      "valid": true
+      "valid": true,
+      "scanStatus": "clean"
     }
   ]
 }
@@ -83,8 +84,15 @@ Re-scan the skills directory and reload all skill metadata. Useful after manuall
 
 ```json
 {
-  "ok": true,
-  "count": 5
+  "skills": [
+    {
+      "id": "my-custom-action",
+      "name": "MY_CUSTOM_ACTION",
+      "description": "Does something useful",
+      "enabled": true,
+      "scanStatus": "clean"
+    }
+  ]
 }
 ```
 

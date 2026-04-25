@@ -93,20 +93,20 @@ The WhatsApp Business Cloud API is Meta's official API. Requires a WhatsApp Busi
 
 ## Environment Variables
 
-| Variable | Description |
-|----------|-------------|
-| `WHATSAPP_AUTH_METHOD` | Authentication method: `cloudapi` or `baileys` |
-| `WHATSAPP_ACCESS_TOKEN` | WhatsApp Business API access token (required for `cloudapi` auth) |
-| `WHATSAPP_PHONE_NUMBER_ID` | Phone number ID from Meta Developer Dashboard (required for `cloudapi` auth) |
-| `WHATSAPP_AUTH_DIR` | Directory for Baileys session files (required for `baileys` auth) |
-| `WHATSAPP_PRINT_QR` | Print QR code in terminal when using Baileys auth |
-| `WHATSAPP_WEBHOOK_VERIFY_TOKEN` | Webhook verification token |
-| `WHATSAPP_BUSINESS_ACCOUNT_ID` | WhatsApp Business Account ID |
-| `WHATSAPP_API_VERSION` | API version string |
-| `WHATSAPP_DM_POLICY` | DM policy (`allow`, `deny`, `allowlist`) |
-| `WHATSAPP_GROUP_POLICY` | Group message policy |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `WHATSAPP_ACCESS_TOKEN` | No | WhatsApp Cloud API access token (required for `cloudapi` auth) |
+| `WHATSAPP_PHONE_NUMBER_ID` | No | Phone number ID for Cloud API (required for `cloudapi` auth) |
+| `WHATSAPP_AUTH_METHOD` | No | Authentication method: `cloudapi` or `baileys` |
+| `WHATSAPP_AUTH_DIR` | No | Directory for Baileys session files (required for `baileys` auth) |
+| `WHATSAPP_PRINT_QR` | No | Print QR code in terminal when using Baileys auth (`true`/`false`) |
+| `WHATSAPP_WEBHOOK_VERIFY_TOKEN` | No | Webhook verification token |
+| `WHATSAPP_BUSINESS_ACCOUNT_ID` | No | WhatsApp Business Account ID |
+| `WHATSAPP_API_VERSION` | No | API version string for Cloud API |
+| `WHATSAPP_DM_POLICY` | No | DM policy (e.g., `allow`, `deny`, `allowlist`) |
+| `WHATSAPP_GROUP_POLICY` | No | Group message policy |
 
-These can also be placed in the `env` section of your config file. When using Baileys mode with the connector config, set `authDir` in the connector config instead of using the environment variable.
+These can also be placed in the `env` section of your config file. Baileys mode does not require Cloud API environment variables.
 
 ## Full Configuration Reference
 

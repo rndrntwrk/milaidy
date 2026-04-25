@@ -10,6 +10,8 @@ The Together AI plugin connects Milady agents to Together's inference platform, 
 
 **Package:** `@elizaos/plugin-together`
 
+> **Note:** This plugin is an upstream elizaOS provider and is not included in the bundled `plugins.json` registry. It auto-enables when `TOGETHER_API_KEY` is set and is installable from the remote elizaOS plugin registry.
+
 ## Installation
 
 ```bash

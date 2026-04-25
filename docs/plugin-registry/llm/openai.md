@@ -38,11 +38,20 @@ export OPENAI_API_KEY=sk-...
 |---------------------|----------|-------------|
 | `OPENAI_API_KEY` | Yes | OpenAI API key from [platform.openai.com](https://platform.openai.com) |
 | `OPENAI_BASE_URL` | No | Custom base URL (for Azure OpenAI or compatible APIs) |
-| `OPENAI_SMALL_MODEL` | No | Override the small model identifier (default: `gpt-4o-mini`) |
-| `OPENAI_LARGE_MODEL` | No | Override the large model identifier (default: `gpt-4o`) |
-| `OPENAI_EMBEDDING_MODEL` | No | Override the embedding model (default: `text-embedding-3-small`) |
-| `OPENAI_TTS_MODEL` | No | Override the text-to-speech model |
-| `OPENAI_TTS_VOICE` | No | Voice profile for text-to-speech output |
+| `OPENAI_SMALL_MODEL` | No | Override small model (default: `gpt-4o-mini`) |
+| `OPENAI_LARGE_MODEL` | No | Override large model (default: `gpt-4o`) |
+| `OPENAI_EMBEDDING_MODEL` | No | Embedding model (default: `text-embedding-3-small`) |
+| `OPENAI_EMBEDDING_URL` | No | Custom embedding endpoint URL |
+| `OPENAI_EMBEDDING_API_KEY` | No | Separate API key for embeddings |
+| `OPENAI_EMBEDDING_DIMENSIONS` | No | Embedding vector dimensions |
+| `OPENAI_IMAGE_DESCRIPTION_MODEL` | No | Vision model for image analysis (default: `gpt-4o`) |
+| `OPENAI_IMAGE_DESCRIPTION_MAX_TOKENS` | No | Max tokens for image descriptions |
+| `OPENAI_TTS_MODEL` | No | TTS model (default: `tts-1`) |
+| `OPENAI_TTS_VOICE` | No | TTS voice (default: `alloy`) |
+| `OPENAI_TTS_INSTRUCTIONS` | No | Custom TTS instructions |
+| `OPENAI_EXPERIMENTAL_TELEMETRY` | No | Enable experimental telemetry |
+| `OPENAI_BROWSER_BASE_URL` | No | Browser-only proxy endpoint base URL |
+| `OPENAI_BROWSER_EMBEDDING_URL` | No | Browser-only embedding endpoint URL |
 
 ### milady.json Example
 

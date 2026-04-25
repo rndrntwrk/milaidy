@@ -56,6 +56,18 @@ milady plugins install imessage
 - **Per-group config** — Configure mention requirements and tool access per group
 - **Multi-account** — Supports multiple accounts via `accounts` map
 
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `IMESSAGE_CLI_PATH` | No | Path to the iMessage CLI tool binary |
+| `IMESSAGE_DB_PATH` | No | Path to the iMessage database file |
+| `IMESSAGE_ENABLED` | No | Enable or disable the plugin |
+| `IMESSAGE_DM_POLICY` | No | DM policy (e.g., `allow`, `deny`, `allowlist`) |
+| `IMESSAGE_ALLOW_FROM` | No | Comma-separated list of allowed sender IDs |
+| `IMESSAGE_GROUP_POLICY` | No | Group message policy |
+| `IMESSAGE_POLL_INTERVAL_MS` | No | Polling interval in milliseconds |
+
 ## Auto-Enable
 
 The plugin auto-enables when the `connectors.imessage` block contains a `cliPath`:

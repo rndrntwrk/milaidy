@@ -55,11 +55,25 @@ export TWILIO_PHONE_NUMBER=YOUR_PHONE_NUMBER
 
 ## Environment Variables
 
-```bash
-export TWILIO_ACCOUNT_SID=YOUR_ACCOUNT_SID
-export TWILIO_AUTH_TOKEN=YOUR_AUTH_TOKEN
-export TWILIO_PHONE_NUMBER=YOUR_PHONE_NUMBER
-```
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `TWILIO_ACCOUNT_SID` | Yes | Twilio Account SID |
+| `TWILIO_AUTH_TOKEN` | Yes | Twilio Auth Token |
+| `TWILIO_PHONE_NUMBER` | No | Twilio phone number for sending/receiving |
+| `TWILIO_WEBHOOK_URL` | No | Webhook URL for inbound messages |
+| `TWILIO_WEBHOOK_PORT` | No | Webhook listener port |
+| `VOICE_CALL_ENABLED` | No | Enable or disable voice call support |
+| `VOICE_CALL_PROVIDER` | No | Voice call provider |
+| `VOICE_CALL_TO_NUMBER` | No | Default outbound phone number |
+| `VOICE_CALL_FROM_NUMBER` | No | Caller ID phone number |
+| `VOICE_CALL_ALLOW_FROM` | No | Comma-separated allowed inbound callers |
+| `VOICE_CALL_PUBLIC_URL` | No | Public URL for voice call webhooks |
+| `VOICE_CALL_WEBHOOK_PATH` | No | Voice webhook endpoint path |
+| `VOICE_CALL_WEBHOOK_PORT` | No | Voice webhook listener port |
+| `VOICE_CALL_INBOUND_POLICY` | No | Inbound call policy |
+| `VOICE_CALL_INBOUND_GREETING` | No | Greeting for inbound calls |
+| `VOICE_CALL_MAX_CONCURRENT_CALLS` | No | Maximum concurrent calls |
+| `VOICE_CALL_MAX_DURATION_SECONDS` | No | Maximum call duration in seconds |
 
 ## Related
 

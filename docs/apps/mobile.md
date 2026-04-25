@@ -36,7 +36,7 @@ The Milady mobile app brings the full dashboard experience to iOS and Android de
 
 ### Shared
 
-- **Node.js 22+** and the project's package manager (check `scripts/rt.sh` for the runtime wrapper)
+- **Node.js 22+** and the project's package manager (Bun)
 - The monorepo cloned and dependencies installed at the root level
 
 ## Building the App
@@ -47,10 +47,10 @@ The Milady mobile app brings the full dashboard experience to iOS and Android de
 cd apps/app
 
 # Build plugins, web assets, and sync to the iOS project
-../../scripts/rt.sh run build:ios
+bun run build:ios
 
 # Open the Xcode project
-../../scripts/rt.sh run cap:open:ios
+bun run cap:open:ios
 ```
 
 This runs `vite build` to produce the `dist/` web assets, then `capacitor sync ios` to copy them into the native iOS project and update native dependencies.
@@ -63,10 +63,10 @@ The Xcode workspace is at `apps/app/ios/App/App.xcworkspace`.
 cd apps/app
 
 # Build plugins, web assets, and sync to the Android project
-../../scripts/rt.sh run build:android
+bun run build:android
 
 # Open the Android Studio project
-../../scripts/rt.sh run cap:open:android
+bun run cap:open:android
 ```
 
 This runs `vite build` followed by `capacitor sync android` to copy web assets and update the Gradle project.
@@ -75,13 +75,13 @@ The Android project is at `apps/app/android/`.
 
 ### Build Plugins Only
 
-All nine custom Capacitor plugins must be built before the web app can bundle them:
+All custom Capacitor plugins must be built before the web app can bundle them:
 
 ```bash
-../../scripts/rt.sh run plugin:build
+bun run plugin:build
 ```
 
-This iterates through each plugin directory (`gateway`, `swabble`, `camera`, `screencapture`, `canvas`, `desktop`, `location`, `talkmode`, `agent`) and runs the build script for each.
+This iterates through each plugin directory (`gateway`, `swabble`, `camera`, `screencapture`, `canvas`, `desktop`, `location`, `talkmode`, `agent`, `appblocker`, `llama`, `mobile-signals`, `websiteblocker`) and runs the build script for each.
 
 ### Sync Without Rebuilding
 
@@ -89,13 +89,13 @@ If you have already built the web assets and only need to push changes to the na
 
 ```bash
 # Sync all platforms
-../../scripts/rt.sh run cap:sync
+bun run cap:sync
 
 # Sync iOS only
-../../scripts/rt.sh run cap:sync:ios
+bun run cap:sync:ios
 
 # Sync Android only
-../../scripts/rt.sh run cap:sync:android
+bun run cap:sync:android
 ```
 
 ## Platform Configuration
@@ -149,7 +149,7 @@ The shared Capacitor configuration lives in `capacitor.config.ts`. Mobile target
 
 ## Capacitor Plugins
 
-The mobile app uses 9 custom Milady Capacitor plugins plus the core Haptics plugin, each providing native capabilities with web fallbacks.
+The mobile app uses 13 custom Milady Capacitor plugins plus the core Haptics plugin, each providing native capabilities with web fallbacks.
 
 ### 1. Gateway (`@elizaos/capacitor-gateway`)
 
@@ -246,7 +246,31 @@ Desktop-specific features (macOS/Electrobun only):
 
 Not available on iOS/Android — these features are silently unavailable on mobile.
 
-### 10. Haptics (`@capacitor/haptics`)
+### 10. App Blocker (`@elizaos/capacitor-appblocker`)
+
+App blocking for focus/productivity features (LifeOps). Allows the agent to block distracting apps on the user's device.
+
+- Available on native platforms only.
+
+### 11. Llama (`@elizaos/capacitor-llama`)
+
+On-device LLM inference via `llama-cpp-capacitor`. Enables local model execution without network access.
+
+- Available on native platforms with sufficient hardware.
+
+### 12. Mobile Signals (`@elizaos/capacitor-mobile-signals`)
+
+Mobile-specific signal handling and lifecycle events.
+
+- Available on iOS and Android only.
+
+### 13. Website Blocker (`@elizaos/capacitor-websiteblocker`)
+
+Website blocking for focus/productivity features (LifeOps). Allows the agent to block distracting websites.
+
+- Available on native platforms only.
+
+### 14. Haptics (`@capacitor/haptics`)
 
 Native haptic feedback for touch interactions (core Capacitor plugin, not custom).
 
@@ -482,13 +506,13 @@ For rapid development with live reload:
 
 ```bash
 # Build plugins and web assets
-../../scripts/rt.sh run build:ios
+bun run build:ios
 
 # Start Vite dev server in a separate terminal
-../../scripts/rt.sh run dev
+bun run dev
 
 # Open Xcode and run on a simulator
-../../scripts/rt.sh run cap:open:ios
+bun run cap:open:ios
 ```
 
 Update the Capacitor server config to point to your dev server IP for live reload.
@@ -497,23 +521,23 @@ Update the Capacitor server config to point to your dev server IP for live reloa
 
 ```bash
 # Build plugins and web assets
-../../scripts/rt.sh run build:android
+bun run build:android
 
 # Start Vite dev server in a separate terminal
-../../scripts/rt.sh run dev
+bun run dev
 
 # Open Android Studio and run on an emulator
-../../scripts/rt.sh run cap:open:android
+bun run cap:open:android
 ```
 
 ### Running Tests
 
 ```bash
 # Unit tests (Vitest)
-../../scripts/rt.sh run test
+bun run test
 
 # Watch mode
-../../scripts/rt.sh run test:watch
+bun run test:watch
 ```
 
 ## Troubleshooting
@@ -533,7 +557,7 @@ Open the Xcode project, select the App target, go to Signing & Capabilities, and
 Run `capacitor sync` after rebuilding:
 
 ```bash
-../../scripts/rt.sh run build:ios   # or build:android
+bun run build:ios   # or build:android
 ```
 
 The `build:ios` and `build:android` scripts include the sync step automatically.

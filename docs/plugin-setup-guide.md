@@ -608,6 +608,8 @@ Connect to any MCP server for extended tool capabilities.
 **Tips:** MCP servers can provide tools (web search, code execution, file access, databases, etc.) directly to the AI. See https://modelcontextprotocol.io for available servers.
 
 ### IQ (Solana On-chain)
+> **Note:** The IQ plugin is an upstream elizaOS connector not included in the bundled `plugins.json` registry. Install from the remote registry if needed.
+
 On-chain chat via Solana blockchain.
 **Minimum required:** `SOLANA_PRIVATE_KEY` + `IQ_GATEWAY_URL`
 **Variables:**
@@ -627,6 +629,8 @@ Monitors Gmail via Google Pub/Sub push notifications.
 ---
 
 ## Streaming (Live Broadcasting)
+
+> **Note:** All streaming plugins listed below are upstream elizaOS plugins and are not included in the bundled `plugins.json` registry. They are installable from the remote elizaOS plugin registry.
 
 ### Enable Streaming (streaming-base)
 Adds the Stream tab to the UI with RTMP destination management.

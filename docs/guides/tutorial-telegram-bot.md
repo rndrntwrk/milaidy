@@ -113,6 +113,18 @@ Click **Advanced** to expand additional settings:
 
 You can also configure the Telegram connector directly in `~/.milady/milady.json`:
 
+```json5
+{
+  connectors: {
+    telegram: {
+      botToken: "123456789:ABCdefGHIjklmNOpqrsTUVwxyzABC-defGHI",
+    },
+  },
+}
+```
+
+Alternatively, place the token in the `env` section or a `.env` file:
+
 ```json
 {
   "env": {
@@ -121,16 +133,10 @@ You can also configure the Telegram connector directly in `~/.milady/milady.json
 }
 ```
 
-Or use a `.env` file in your project root:
-
-```bash
-TELEGRAM_BOT_TOKEN=123456789:ABCdefGHIjklmNOpqrsTUVwxyzABC-defGHI
-```
-
 Then start Milady:
 
 ```bash
-milady
+milady start
 ```
 
 ## Configuration Parameters

@@ -79,6 +79,21 @@ milady plugins install googlechat
 - **Group chats** — Respond in spaces with optional mention requirements
 - **Multi-account** — Supports multiple accounts via `accounts` map
 
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `GOOGLE_APPLICATION_CREDENTIALS` | No | Path to credentials file or inline JSON |
+| `GOOGLE_CHAT_SERVICE_ACCOUNT` | No | Inline service account credentials |
+| `GOOGLE_CHAT_SERVICE_ACCOUNT_FILE` | No | Path to service account JSON key file |
+| `GOOGLE_CHAT_ENABLED` | No | Enable or disable the plugin |
+| `GOOGLE_CHAT_AUDIENCE` | No | Authentication audience/scope |
+| `GOOGLE_CHAT_AUDIENCE_TYPE` | No | Authentication audience type |
+| `GOOGLE_CHAT_BOT_USER` | No | Bot user identifier |
+| `GOOGLE_CHAT_SPACES` | No | Comma-separated list of spaces/rooms |
+| `GOOGLE_CHAT_WEBHOOK_PATH` | No | Webhook endpoint path |
+| `GOOGLE_CHAT_REQUIRE_MENTION` | No | Only respond when mentioned |
+
 ## Auto-Enable
 
 The plugin auto-enables when the `connectors.googlechat` block contains `botToken`, `token`, or `apiKey`. Note that `serviceAccountFile` alone does not trigger auto-enable. Include `"apiKey": "placeholder"` to trigger auto-enable when using service account auth, or add the plugin to `plugins.allow` explicitly:

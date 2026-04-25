@@ -205,23 +205,15 @@ available independently.
 
 ### POST /api/restart
 
-Restart the server process. Sets the agent state to `restarting`, broadcasts a status update, responds immediately, and exits after a 1-second delay.
+Restart the server process. Sets the agent state to `restarting`, broadcasts a status update, and responds immediately. The process exits after a short delay.
 
 **Response**
 
 ```json
 {
-  "ok": true,
-  "message": "Restarting...",
-  "restarting": true
+  "ok": true
 }
 ```
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `ok` | boolean | Always `true` |
-| `message` | string | Human-readable status message |
-| `restarting` | boolean | Confirms the server is entering a restart cycle |
 
 ---
 

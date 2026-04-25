@@ -27,11 +27,12 @@ export GROQ_API_KEY=gsk_...
 | Environment Variable | Required | Description |
 |---------------------|----------|-------------|
 | `GROQ_API_KEY` | Yes | Groq API key from [console.groq.com](https://console.groq.com) |
-| `GROQ_BASE_URL` | No | Custom base URL for API requests |
-| `GROQ_SMALL_MODEL` | No | Override the small model identifier |
-| `GROQ_LARGE_MODEL` | No | Override the large model identifier |
-| `GROQ_TTS_MODEL` | No | Override the text-to-speech model |
-| `GROQ_TTS_VOICE` | No | Voice profile for text-to-speech output |
+| `GROQ_BASE_URL` | No | Custom base URL |
+| `GROQ_SMALL_MODEL` | No | Small model slot (e.g., `llama-3.1-8b-instant`) |
+| `GROQ_LARGE_MODEL` | No | Large model slot (e.g., `llama-3.3-70b-versatile`) |
+| `GROQ_TTS_MODEL` | No | TTS model (e.g., `playai-tts`) |
+| `GROQ_TTS_VOICE` | No | TTS voice (e.g., `Fritz-PlayAI`) |
+| `GROQ_TTS_RESPONSE_FORMAT` | No | TTS output format |
 
 ### milady.json Example
 

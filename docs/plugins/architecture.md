@@ -37,7 +37,9 @@ export const CORE_PLUGINS: readonly string[] = [
 ];
 ```
 
-> **Note:** `@elizaos/plugin-secrets-manager`, `relationships`, `@elizaos/plugin-trust`, and `@elizaos/plugin-personality` are statically imported for fast resolution but commented out of the core list. Experience now ships as a built-in advanced capability instead of a standalone plugin. Milady does not ship `@elizaos/plugin-todo`; todo functionality is handled by the workbench API and LifeOps-related runtime tasks.
+> **Note:** Some plugins in the `CORE_PLUGINS` list (e.g., `@elizaos/plugin-sql`, `knowledge`, `trajectories`, `roles`) are resolved from the upstream elizaOS runtime and are **not** listed in the bundled `plugins.json` registry. The bundled registry covers the 98 plugins that have dedicated metadata entries for UI configuration and parameter hints.
+
+> `@elizaos/plugin-secrets-manager`, `relationships`, `@elizaos/plugin-trust`, `@elizaos/plugin-personality`, and `@elizaos/plugin-experience` are statically imported for fast resolution but commented out of the core list. They may be re-enabled in a future release. Milady does not ship `@elizaos/plugin-todo`; todo functionality is handled by the workbench API and LifeOps-related runtime tasks.
 
 ### Optional Core Plugins
 
@@ -124,7 +126,7 @@ Plugins are automatically enabled when their required configuration is detected.
 
 ### Trigger Sources
 
-**Environment variable API keys** — The `AUTH_PROVIDER_PLUGINS` map connects env vars to plugin package names:
+**Environment variable API keys** — The `AUTH_PROVIDER_PLUGINS` map connects env vars to plugin package names. Plugins marked with `*` are upstream elizaOS plugins available from the remote registry but **not** included in the bundled `plugins.json`:
 
 ```typescript
 const AUTH_PROVIDER_PLUGINS = {
@@ -135,18 +137,18 @@ const AUTH_PROVIDER_PLUGINS = {
   AIGATEWAY_API_KEY:              "@elizaos/plugin-vercel-ai-gateway",
   GOOGLE_API_KEY:                 "@elizaos/plugin-google-genai",
   GOOGLE_GENERATIVE_AI_API_KEY:   "@elizaos/plugin-google-genai",
-  GOOGLE_CLOUD_API_KEY:           "@elizaos/plugin-google-antigravity",
+  GOOGLE_CLOUD_API_KEY:           "@elizaos/plugin-google-antigravity",  // * upstream-only
   GROQ_API_KEY:                   "@elizaos/plugin-groq",
   XAI_API_KEY:                    "@elizaos/plugin-xai",
   GROK_API_KEY:                   "@elizaos/plugin-xai",
   OPENROUTER_API_KEY:             "@elizaos/plugin-openrouter",
   OLLAMA_BASE_URL:                "@elizaos/plugin-ollama",
-  ZAI_API_KEY:                    "@homunculuslabs/plugin-zai",
-  DEEPSEEK_API_KEY:               "@elizaos/plugin-deepseek",
-  TOGETHER_API_KEY:               "@elizaos/plugin-together",
-  MISTRAL_API_KEY:                "@elizaos/plugin-mistral",
-  COHERE_API_KEY:                 "@elizaos/plugin-cohere",
-  PERPLEXITY_API_KEY:             "@elizaos/plugin-perplexity",
+  ZAI_API_KEY:                    "@homunculuslabs/plugin-zai",          // * upstream-only
+  DEEPSEEK_API_KEY:               "@elizaos/plugin-deepseek",            // * upstream-only
+  TOGETHER_API_KEY:               "@elizaos/plugin-together",            // * upstream-only
+  MISTRAL_API_KEY:                "@elizaos/plugin-mistral",             // * upstream-only
+  COHERE_API_KEY:                 "@elizaos/plugin-cohere",              // * upstream-only
+  PERPLEXITY_API_KEY:             "@elizaos/plugin-perplexity",          // * upstream-only
   ELIZAOS_CLOUD_API_KEY:          "@elizaos/plugin-elizacloud",
   ELIZAOS_CLOUD_ENABLED:          "@elizaos/plugin-elizacloud",
   CUA_API_KEY:                    "@elizaos/plugin-cua",
@@ -157,19 +159,19 @@ const AUTH_PROVIDER_PLUGINS = {
 };
 ```
 
-**Connector configuration** — Connector blocks with a `botToken`, `token`, or `apiKey` field auto-enable the corresponding connector plugin:
+**Connector configuration** — Connector blocks with a `botToken`, `token`, or `apiKey` field auto-enable the corresponding connector plugin. Plugins marked with `*` are upstream-only (not in the bundled `plugins.json`):
 
 ```typescript
 const CONNECTOR_PLUGINS = {
   telegram:    "@elizaos/plugin-telegram",
   discord:     "@elizaos/plugin-discord",
   slack:       "@elizaos/plugin-slack",
-  twitter:     "@elizaos/plugin-twitter",
+  twitter:     "@elizaos/plugin-twitter",           // * upstream-only
   whatsapp:    "@elizaos/plugin-whatsapp",
   signal:      "@elizaos/plugin-signal",
   imessage:    "@elizaos/plugin-imessage",
   farcaster:   "@elizaos/plugin-farcaster",
-  lens:        "@elizaos/plugin-lens",
+  lens:        "@elizaos/plugin-lens",               // * upstream-only
   msteams:     "@elizaos/plugin-msteams",
   mattermost:  "@elizaos/plugin-mattermost",
   googlechat:  "@elizaos/plugin-google-chat",
@@ -178,7 +180,7 @@ const CONNECTOR_PLUGINS = {
   nostr:       "@elizaos/plugin-nostr",
   blooio:      "@elizaos/plugin-blooio",
   twitch:      "@elizaos/plugin-twitch",
-  wechat:      "@elizaos/plugin-wechat",  // Milady-specific (added in app-core)
+  wechat:      "@elizaos/plugin-wechat",             // * Milady-specific (added in app-core), upstream-only
 };
 ```
 
@@ -196,45 +198,45 @@ const CONNECTOR_PLUGINS = {
 }
 ```
 
-The complete `FEATURE_PLUGINS` map:
+The complete `FEATURE_PLUGINS` map. Plugins marked with `*` are upstream-only (not in the bundled `plugins.json`):
 
 ```typescript
 const FEATURE_PLUGINS = {
   browser:              "@elizaos/plugin-browser",
-  cua:                  "@elizaos/plugin-cua",
-  obsidian:             "@elizaos/plugin-obsidian",
+  cua:                  "@elizaos/plugin-cua",                   // * upstream-only
+  obsidian:             "@elizaos/plugin-obsidian",              // * upstream-only
   cron:                 "@elizaos/plugin-cron",
   shell:                "@elizaos/plugin-shell",
-  imageGen:             "@elizaos/plugin-image-generation",
+  imageGen:             "@elizaos/plugin-image-generation",      // * upstream-only
   tts:                  "@elizaos/plugin-tts",
-  stt:                  "@elizaos/plugin-stt",
+  stt:                  "@elizaos/plugin-stt",                   // * upstream-only
   agentSkills:          "@elizaos/plugin-agent-skills",
   commands:             "@elizaos/plugin-commands",
-  diagnosticsOtel:      "@elizaos/plugin-diagnostics-otel",
+  diagnosticsOtel:      "@elizaos/plugin-diagnostics-otel",      // * upstream-only
   webhooks:             "@elizaos/plugin-webhooks",
   gmailWatch:           "@elizaos/plugin-gmail-watch",
   personality:          "@elizaos/plugin-personality",
   experience:           "(built-in advanced capability)",
   form:                 "@elizaos/plugin-form",
-  x402:                 "@elizaos/plugin-x402",
-  fal:                  "@elizaos/plugin-fal",
-  suno:                 "@elizaos/plugin-suno",
+  x402:                 "@elizaos/plugin-x402",                  // * upstream-only
+  fal:                  "@elizaos/plugin-fal",                   // * upstream-only
+  suno:                 "@elizaos/plugin-suno",                  // * upstream-only
   vision:               "@elizaos/plugin-vision",
   computeruse:          "@elizaos/plugin-computeruse",
-  repoprompt:           "@elizaos/plugin-repoprompt",
-  claudeCodeWorkbench:  "@elizaos/plugin-claude-code-workbench",
+  repoprompt:           "@elizaos/plugin-repoprompt",            // * upstream-only
+  claudeCodeWorkbench:  "@elizaos/plugin-claude-code-workbench", // * upstream-only
 };
 ```
 
-**Streaming destinations** — The `streaming` section of config auto-enables streaming plugins for live video platforms:
+**Streaming destinations** — The `streaming` section of config auto-enables streaming plugins for live video platforms. All streaming plugins are upstream-only and not in the bundled `plugins.json`:
 
 ```typescript
 const STREAMING_PLUGINS = {
-  twitch:     "@elizaos/plugin-twitch-streaming",
-  youtube:    "@elizaos/plugin-youtube-streaming",
-  customRtmp: "@elizaos/plugin-custom-rtmp",
-  pumpfun:    "@elizaos/plugin-pumpfun-streaming",
-  x:          "@elizaos/plugin-x-streaming",
+  twitch:     "@elizaos/plugin-twitch-streaming",   // * upstream-only
+  youtube:    "@elizaos/plugin-youtube-streaming",   // * upstream-only
+  customRtmp: "@elizaos/plugin-custom-rtmp",         // * upstream-only
+  pumpfun:    "@elizaos/plugin-pumpfun-streaming",   // * upstream-only
+  x:          "@elizaos/plugin-x-streaming",         // * upstream-only
 };
 ```
 

@@ -4,6 +4,10 @@ sidebarTitle: "Twitter"
 description: "Twitter/X connector for Milady — posting, replying, monitoring mentions, and timeline interactions."
 ---
 
+<Warning>
+The `@elizaos/plugin-twitter` package is not currently available in the plugin registry. This documentation is retained for reference but the plugin may not be installable. Check the plugin registry for current availability.
+</Warning>
+
 The Twitter plugin connects Milady agents to Twitter/X, enabling autonomous posting, replying to mentions, monitoring timelines, and engaging with other accounts.
 
 **Package:** `@elizaos/plugin-twitter`

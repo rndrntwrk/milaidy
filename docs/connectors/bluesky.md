@@ -42,28 +42,29 @@ Unlike auto-enabled connectors (Discord, Telegram, etc.), Bluesky is a **registr
 
 ## Environment Variables
 
-| Variable | Description |
-|----------|-------------|
-| `BLUESKY_PASSWORD` | App password (not your main password) |
-| `BLUESKY_HANDLE` | Bluesky handle (e.g., `yourname.bsky.social`) |
-| `BLUESKY_ENABLED` | Set to `true` to enable |
-| `BLUESKY_DRY_RUN` | Set to `true` for testing without posting |
-| `BLUESKY_SERVICE` | Bluesky PDS service URL (optional) |
-| `BLUESKY_ENABLE_DMS` | Enable DM handling |
-| `BLUESKY_ENABLE_POSTING` | Enable automated posting |
-| `BLUESKY_POLL_INTERVAL` | Polling interval in ms |
-| `BLUESKY_ACTION_INTERVAL` | Action processing interval in ms |
-| `BLUESKY_MAX_POST_LENGTH` | Max characters per post |
-| `BLUESKY_POST_IMMEDIATELY` | Post immediately on startup |
-| `BLUESKY_POST_INTERVAL_MIN` | Min seconds between posts |
-| `BLUESKY_POST_INTERVAL_MAX` | Max seconds between posts |
-| `BLUESKY_MAX_ACTIONS_PROCESSING` | Max concurrent action processing |
-| `BLUESKY_ENABLE_ACTION_PROCESSING` | Enable action processing |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `BLUESKY_HANDLE` | Yes | Bluesky handle (e.g., `yourname.bsky.social`) |
+| `BLUESKY_PASSWORD` | Yes | App password (not your main password) |
+| `BLUESKY_ENABLED` | No | Set to `true` to enable the plugin |
+| `BLUESKY_SERVICE` | No | BlueSky service URL (PDS instance) |
+| `BLUESKY_DRY_RUN` | No | Set to `true` for testing without posting |
+| `BLUESKY_ENABLE_DMS` | No | Enable processing of direct messages via the chat.bsky API |
+| `BLUESKY_ENABLE_POSTING` | No | Enable or disable the ability to post |
+| `BLUESKY_POLL_INTERVAL` | No | Polling interval in seconds for fetching new notifications |
+| `BLUESKY_ACTION_INTERVAL` | No | Interval in seconds between action-processing cycles |
+| `BLUESKY_MAX_POST_LENGTH` | No | Maximum number of characters allowed in a post |
+| `BLUESKY_POST_IMMEDIATELY` | No | If `true`, posts are published immediately instead of waiting for a schedule |
+| `BLUESKY_POST_INTERVAL_MIN` | No | Minimum interval in seconds between automated posts |
+| `BLUESKY_POST_INTERVAL_MAX` | No | Maximum interval in seconds between automated posts |
+| `BLUESKY_MAX_ACTIONS_PROCESSING` | No | Maximum number of actions to process in a single batch |
+| `BLUESKY_ENABLE_ACTION_PROCESSING` | No | Enable or disable automated action processing |
 
 ## Features
 
 - Post creation at configurable intervals
 - Mention and reply monitoring
+- Direct message processing
 - Dry run mode for testing
 - AT Protocol-based decentralized social networking
 

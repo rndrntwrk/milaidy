@@ -34,6 +34,19 @@ milady plugins install nextcloud-talk
 }
 ```
 
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `NEXTCLOUD_URL` | No | Nextcloud server URL |
+| `NEXTCLOUD_ENABLED` | No | Enable or disable the plugin |
+| `NEXTCLOUD_BOT_SECRET` | No | Bot secret for authentication |
+| `NEXTCLOUD_WEBHOOK_HOST` | No | Webhook listener host address |
+| `NEXTCLOUD_WEBHOOK_PATH` | No | Webhook endpoint path |
+| `NEXTCLOUD_WEBHOOK_PORT` | No | Webhook listener port |
+| `NEXTCLOUD_ALLOWED_ROOMS` | No | Comma-separated list of allowed room IDs |
+| `NEXTCLOUD_WEBHOOK_PUBLIC_URL` | No | Public-facing webhook URL |
+
 ## Configuration
 
 | Field | Required | Description |

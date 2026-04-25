@@ -8,6 +8,8 @@ The Obsidian plugin connects Milady agents to your local [Obsidian](https://obsi
 
 **Package:** `@elizaos/plugin-obsidian`
 
+> **Note:** This plugin is an upstream elizaOS feature plugin and is not included in the bundled `plugins.json` registry. It auto-enables when `OBSIDIAN_VAULT_PATH` is set and is installable from the remote elizaOS plugin registry.
+
 ## Installation
 
 ```bash

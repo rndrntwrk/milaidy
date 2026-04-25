@@ -44,18 +44,16 @@ In `~/.milady/milady.json`:
 
 ## Environment Variables
 
-All fields can also be set via environment variables:
-
-| Variable | Description |
-|----------|-------------|
-| `NEXTCLOUD_URL` | Nextcloud server URL |
-| `NEXTCLOUD_ENABLED` | Enable or disable the connector |
-| `NEXTCLOUD_BOT_SECRET` | Bot secret for webhook authentication (sensitive) |
-| `NEXTCLOUD_WEBHOOK_HOST` | Webhook listener host address |
-| `NEXTCLOUD_WEBHOOK_PATH` | Webhook endpoint path |
-| `NEXTCLOUD_WEBHOOK_PORT` | Webhook listener port |
-| `NEXTCLOUD_ALLOWED_ROOMS` | Comma-separated list of room names to monitor |
-| `NEXTCLOUD_WEBHOOK_PUBLIC_URL` | Public-facing URL for the webhook endpoint |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `NEXTCLOUD_URL` | No | Nextcloud server URL |
+| `NEXTCLOUD_ENABLED` | No | Enable or disable the plugin |
+| `NEXTCLOUD_BOT_SECRET` | No | Bot secret for authentication |
+| `NEXTCLOUD_WEBHOOK_HOST` | No | Webhook listener host address |
+| `NEXTCLOUD_WEBHOOK_PATH` | No | Webhook endpoint path |
+| `NEXTCLOUD_WEBHOOK_PORT` | No | Webhook listener port |
+| `NEXTCLOUD_ALLOWED_ROOMS` | No | Comma-separated list of allowed room/conversation IDs |
+| `NEXTCLOUD_WEBHOOK_PUBLIC_URL` | No | Public-facing webhook URL |
 
 ## Features
 
