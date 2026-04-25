@@ -549,6 +549,9 @@ describe("release workflow path contract", () => {
 
     expect(agentRelease).toContain("name: Fetch canonical release tags");
     expect(agentRelease).toContain("https://github.com/milady-ai/milady.git");
+    expect(agentRelease).not.toContain(
+      "Could not fetch canonical release tags; using local tags only",
+    );
     expect(agentRelease).toContain("sort -V | tail -1");
     expect(agentRelease).not.toContain(
       "git tag --sort=-creatordate | grep '^v[0-9]",
@@ -845,16 +848,45 @@ describe("release workflow path contract", () => {
     }
   });
 
-  it("keeps agent release publication gated on npm and explicit distribution jobs", () => {
+  it("keeps agent release publication gated on every release validation job", () => {
     const agentRelease = readWorkflow("agent-release.yml");
 
     const buildNpmBlock = agentRelease.slice(
       agentRelease.indexOf("  build-npm:"),
-      agentRelease.indexOf("  # ── Non-blocking platform builds"),
+      agentRelease.indexOf("  # ── Release validation builds"),
+    );
+    const releaseValidationBlock = agentRelease.slice(
+      agentRelease.indexOf("  # ── Release validation builds"),
+      agentRelease.indexOf("  # ── 4. Electrobun + Docker + npm green"),
+    );
+    const publishBlock = agentRelease.slice(
+      agentRelease.indexOf("  publish:"),
+      agentRelease.indexOf("  # ── 5. Post-publish"),
     );
 
     expect(buildNpmBlock).not.toContain("continue-on-error: true");
-    expect(agentRelease).toContain("needs.build-npm.result == 'success'");
+    expect(buildNpmBlock).not.toContain("package.json missing from pack");
+    expect(releaseValidationBlock).not.toContain("continue-on-error: true");
+    expect(releaseValidationBlock).not.toContain("failed (non-blocking)");
+    expect(releaseValidationBlock).not.toContain('|| echo "::warning::');
+    for (const job of [
+      "build-electrobun",
+      "build-docker",
+      "build-cloud-image",
+      "build-npm",
+      "build-android",
+      "build-snap",
+      "build-flatpak",
+      "build-pypi",
+      "build-debian",
+      "build-ios",
+      "build-macos-store",
+      "build-homepage",
+      "build-docs",
+    ]) {
+      expect(publishBlock).toContain(`${job},`);
+      expect(publishBlock).toContain(`needs.${job}.result == 'success'`);
+    }
     expect(agentRelease).toContain("draft: false");
     expect(agentRelease).toContain("  push-agent-image:");
     expect(agentRelease).toContain("  distribute-release:");
