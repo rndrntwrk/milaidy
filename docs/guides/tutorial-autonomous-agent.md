@@ -338,5 +338,5 @@ Disabling autonomy will prevent any scheduled executions from running. The agent
 
 - Learn more about [configuring advanced autonomous mode options](/guides/autonomous-mode)
 - Explore [trigger type details and edge cases](/guides/triggers)
-- Review the [sandbox and security guide](/guides/sandbox) for production deployments
-- See the [coding swarms guide](/guides/coding-swarms) for multi-agent orchestration
+- Review [developer diagnostics and workspace](/guides/developer-diagnostics-and-workspace) for monitoring
+- Explore [sandbox configuration](/guides/sandbox) for production safety
