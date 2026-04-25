@@ -470,13 +470,14 @@ jobs:
           node scripts/init-submodules.mjs
           node scripts/apply-eliza-ci-patches.mjs
           node scripts/disable-local-eliza-workspace.mjs
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Install build deps
+      - name: Install Debian build deps
         run: |
+          curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
           sudo apt-get update
-          sudo apt-get install -y dpkg-dev debhelper fakeroot
+          sudo apt-get install -y build-essential nodejs dpkg-dev debhelper fakeroot
+          node --version
+          npm --version
+          dpkg-query -W -f='${Version} ${Provides}\n' nodejs | grep -Eq '(^|, )npm(,|$)'
           curl -fsSL https://bun.sh/install | bash -s "bun-v${BUN_VERSION}"
           echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
       - name: Stage Debian packaging
@@ -485,6 +486,7 @@ jobs:
           cp -R eliza/packages/app-core/packaging/debian debian
           test -f debian/changelog
           test -x debian/rules
+          dpkg-checkbuilddeps debian/control
       - name: Build deb
         run: |
           dpkg-buildpackage -us -uc -b
@@ -492,6 +494,7 @@ jobs:
         if: success()
         run: |
           mkdir -p deb-output
+          shopt -s nullglob
           debs=(../*.deb)
           if [ "${#debs[@]}" -eq 0 ]; then
             echo "::error::No .deb artifacts found after dpkg-buildpackage"

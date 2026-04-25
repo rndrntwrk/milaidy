@@ -8,6 +8,13 @@ const repoRoot = path.resolve(scriptDir, "..");
 const githubTokenInput = ["github_token: $", "{{ secrets.GITHUB_TOKEN }}"].join(
   "",
 );
+const nodeSourceNpmProvideCheck = [
+  "dpkg-query -W -f='",
+  "$",
+  "{Version} ",
+  "$",
+  "{Provides}\\n' nodejs | grep -Eq '(^|, )npm(,|$)'",
+].join("");
 
 function readWorkflow(name: string) {
   return fs.readFileSync(
@@ -863,6 +870,10 @@ describe("release workflow path contract", () => {
       agentRelease.indexOf("  publish:"),
       agentRelease.indexOf("  # ── 5. Post-publish"),
     );
+    const debianValidationBlock = agentRelease.slice(
+      agentRelease.indexOf("  build-debian:"),
+      agentRelease.indexOf("  build-ios:"),
+    );
 
     expect(buildNpmBlock).not.toContain("continue-on-error: true");
     expect(buildNpmBlock).not.toContain("package.json missing from pack");
@@ -878,6 +889,18 @@ describe("release workflow path contract", () => {
     expect(releaseValidationBlock).not.toContain(
       "cd eliza/packages/app-core/packaging/debian",
     );
+    expect(debianValidationBlock).toContain(
+      "curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -",
+    );
+    expect(debianValidationBlock).toContain(
+      "sudo apt-get install -y build-essential nodejs dpkg-dev debhelper fakeroot",
+    );
+    expect(debianValidationBlock).toContain(nodeSourceNpmProvideCheck);
+    expect(debianValidationBlock).toContain(
+      "dpkg-checkbuilddeps debian/control",
+    );
+    expect(debianValidationBlock).not.toContain(" nodejs npm ");
+    expect(debianValidationBlock).not.toContain("actions/setup-node@v4");
     expect(releaseValidationBlock).not.toContain("com.milady.Milady.yml");
     expect(releaseValidationBlock).not.toContain("ai.milady.Milady");
     for (const job of [
@@ -942,6 +965,11 @@ describe("release workflow path contract", () => {
     expect(publishPackages).toContain(
       "APT_REPO_TOKEN is required when apt publishing is enabled.",
     );
+    expect(publishPackages).toContain(
+      "sudo apt-get install -y nodejs build-essential",
+    );
+    expect(publishPackages).toContain(nodeSourceNpmProvideCheck);
+    expect(publishPackages).toContain("dpkg-checkbuilddeps debian/control");
     expect(publishPackages).toContain(
       "Require enabled package publishers succeeded",
     );
