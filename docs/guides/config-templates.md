@@ -902,55 +902,22 @@ modelProvider: {
 
 ## Validation & Testing
 
-### Validate Configuration Syntax
+### Validate Your Setup
 
-Use Bun to validate your config file:
-
-```bash
-# Check if config is valid YAML/JSON5
-bun run --eval "console.log(require('./config.json5'))"
-
-# Or use the Milady config validator
-bun run validate-config config.json5
-```
-
-### Test Configuration Locally
-
-Test your configuration before deploying:
+After editing your `milady.json` config, verify the build and runtime:
 
 ```bash
-# Start Milady with your config in test mode
-bun run milady --config ./config.json5 --test
+# Build the project
+bun run build
 
-# Test a specific connector
-bun run milady --config ./config.json5 --test-connector discord
+# Run checks (typecheck + lint)
+bun run check
 
-# Validate all API keys are accessible
-bun run milady --config ./config.json5 --check-keys
-```
+# Run the test suite
+bun run test
 
-### Dry Run Before Production
-
-Perform a dry run to catch errors early:
-
-```bash
-# Load config and simulate initialization without running
-bun run milady --config ./config.json5 --dry-run
-
-# Test with sample input
-bun run milady --config ./config.json5 --test-input "Hello, assistant"
-```
-
-### Full Integration Test
-
-Run a complete test before production deployment:
-
-```bash
-# Initialize database, load config, and test all systems
-bun run test:integration --config ./config.json5
-
-# Run with detailed logging
-bun run milady --config ./config.json5 --log-level debug
+# Start Milady and verify behavior
+bun run milady start
 ```
 
 ### Monitor During Startup
@@ -958,11 +925,10 @@ bun run milady --config ./config.json5 --log-level debug
 Watch logs as the system starts:
 
 ```bash
-# Follow logs in real-time
-bun run milady --config ./config.json5 | grep -i "error\|warning\|initialized"
+# Start with verbose output
+bun run milady start --verbose
 
-# Save startup logs for debugging
-bun run milady --config ./config.json5 > startup.log 2>&1
+# Check logs under ~/.milady/logs/ for runtime investigation
 ```
 
 ---
@@ -970,10 +936,9 @@ bun run milady --config ./config.json5 > startup.log 2>&1
 ## Next Steps
 
 1. **Choose a template** that matches your use case
-2. **Copy the template** and save it as `config.json5`
+2. **Adapt the template** into your `~/.milady/milady.json` configuration
 3. **Replace all placeholder values** with your actual configuration
-4. **Run validation** with `bun run validate-config config.json5`
-5. **Test locally** before deploying to production
-6. **Deploy** using your hosting platform's deployment process
+4. **Test locally** before deploying to production
+5. **Deploy** using your hosting platform's deployment process
 
-See the [Configuration Reference](/configuration) for complete option documentation.
+See the [Configuration](/configuration) reference and [Config Schema](/config-schema) for complete option documentation.

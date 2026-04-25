@@ -100,6 +100,7 @@ Get cloud connection status, authentication state, and billing URL.
 |-------|------|-------------|
 | `connected` | boolean | Whether the cloud auth service is authenticated |
 | `enabled` | boolean | Whether cloud mode is enabled in config |
+| `cloudVoiceProxyAvailable` | boolean | Whether cloud voice proxy is available for the current session (may be omitted) |
 | `hasApiKey` | boolean | Whether an API key is present in config |
 | `userId` | string\|null | Authenticated user ID, or `null` when not connected |
 | `organizationId` | string\|null | Authenticated organization ID, or `null` when not connected |
@@ -125,10 +126,11 @@ Get the cloud credit balance. Returns `null` balance when not connected.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `connected` | boolean | Whether the cloud is connected |
+| `connected` | boolean | Whether the cloud auth service is authenticated |
 | `balance` | number \| null | Credit balance in dollars, or `null` when not connected |
 | `low` | boolean | `true` when balance is below $2.00 |
 | `critical` | boolean | `true` when balance is below $0.50 |
+| `authRejected` | boolean | `true` when the cloud API key was rejected during the credit check |
 | `topUpUrl` | string | URL to the cloud billing page |
 
 ---

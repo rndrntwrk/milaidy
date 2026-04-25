@@ -16,13 +16,13 @@ Get the training service status.
 
 ```json
 {
-  "runtimeAvailable": true,
   "runningJobs": 0,
   "queuedJobs": 0,
   "completedJobs": 0,
   "failedJobs": 0,
   "modelCount": 0,
-  "datasetCount": 0
+  "datasetCount": 0,
+  "runtimeAvailable": true
 }
 ```
 

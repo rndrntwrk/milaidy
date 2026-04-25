@@ -1,30 +1,31 @@
----
-title: LINE Connector
-sidebarTitle: LINE
-description: Connect your agent to LINE using the @elizaos/plugin-line package.
----
+# LINE Connector
 
-Connect your agent to LINE for bot messaging and customer conversations.
+Connect your agent to LINE for bot messaging and customer conversations using the `@elizaos/plugin-line` package.
 
-## Overview
+## Prerequisites
 
-The LINE connector is an elizaOS plugin that bridges your agent to LINE Messaging API. It supports rich message types, group chat, and webhook-based event handling. This connector is **auto-enabled** when its configuration is present in `milady.json`.
-
-## Package Info
-
-| Field | Value |
-|-------|-------|
-| Package | `@elizaos/plugin-line` |
-| Config key | `connectors.line` |
-| Install | `milady plugins install @elizaos/plugin-line` |
-
-## Setup Requirements
-
-- LINE Channel access token
-- LINE Channel secret
-- Create a Messaging API channel at [developers.line.biz](https://developers.line.biz)
+- A LINE Messaging API channel created at [developers.line.biz](https://developers.line.biz)
+- Channel access token and channel secret from the LINE Developer Console
 
 ## Configuration
+
+| Name | Required | Description |
+|------|----------|-------------|
+| `LINE_CHANNEL_ACCESS_TOKEN` | Yes | Channel access token from LINE Developer Console |
+| `LINE_CHANNEL_SECRET` | No | Channel secret for webhook verification |
+| `LINE_ENABLED` | No | Enable or disable the connector |
+| `LINE_DM_POLICY` | No | DM policy (e.g., `allow`, `deny`, `allowlist`) |
+| `LINE_ALLOW_FROM` | No | Comma-separated allowed user list |
+| `LINE_GROUP_POLICY` | No | Group message policy (e.g., `allow`, `deny`) |
+| `LINE_WEBHOOK_PATH` | No | Webhook endpoint path |
+
+Install the plugin from the registry:
+
+```bash
+milady plugins install line
+```
+
+Configure in `~/.milady/milady.json`:
 
 ```json
 {
@@ -36,23 +37,21 @@ The LINE connector is an elizaOS plugin that bridges your agent to LINE Messagin
 }
 ```
 
-## Environment Variables
+## Setup
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `LINE_CHANNEL_ACCESS_TOKEN` | Yes | Channel access token from LINE Developer Console |
-| `LINE_CHANNEL_SECRET` | No | Channel secret for webhook verification |
-| `LINE_ENABLED` | No | Enable or disable the connector |
-| `LINE_DM_POLICY` | No | DM policy (e.g., `allow`, `deny`, `allowlist`) |
-| `LINE_ALLOW_FROM` | No | Comma-separated allowed user list |
-| `LINE_GROUP_POLICY` | No | Group message policy (e.g., `allow`, `deny`) |
-| `LINE_WEBHOOK_PATH` | No | Webhook endpoint path |
+1. Go to [developers.line.biz](https://developers.line.biz) and create a Messaging API channel.
+2. Note the **Channel access token** and **Channel secret** from the channel settings.
+3. Install the plugin: `milady plugins install line`.
+4. Set `LINE_CHANNEL_ACCESS_TOKEN` and optionally `LINE_CHANNEL_SECRET` as environment variables or in your config.
+5. Configure a webhook URL in the LINE Developer Console pointing to your Milady instance.
+6. Start your agent.
 
 ## Features
 
 - Bot messaging and customer conversations
 - Rich message types (text, sticker, image, video)
 - Group chat support
+- DM and group message policies
 - Webhook-based event handling
 
 ## Related

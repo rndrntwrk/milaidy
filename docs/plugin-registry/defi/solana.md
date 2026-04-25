@@ -26,17 +26,17 @@ The plugin auto-enables when `HELIUS_API_KEY` is set (this is the `envKey` in `p
 
 | Environment Variable | Required | Description |
 |---------------------|----------|-------------|
+| `HELIUS_API_KEY` | Yes | Helius API key for Solana infrastructure services (also the primary auto-enable trigger) |
+| `BIRDEYE_API_KEY` | Yes | Birdeye API key for token price and market data |
 | `SOL_ADDRESS` | Yes | Mint/contract address for native SOL in token swap logic |
-| `SLIPPAGE` | Yes | Maximum acceptable slippage for swaps/transactions |
-| `HELIUS_API_KEY` | Yes | Helius API key for Solana infrastructure services |
-| `BIRDEYE_API_KEY` | Yes | Birdeye API key for market data services |
-| `SOLANA_PRIVATE_KEY` | No | Base58 or base64-encoded private key for the agent's wallet |
-| `WALLET_PRIVATE_KEY` | No | Alternative name for the Solana wallet private key |
-| `WALLET_SECRET_KEY` | No | Base58-encoded wallet secret key (alternative to `WALLET_SECRET_SALT`) |
-| `WALLET_SECRET_SALT` | No | Salt used to derive the wallet secret key |
-| `WALLET_PUBLIC_KEY` | No | Base58-encoded wallet public key |
-| `SOLANA_PUBLIC_KEY` | No | Alternative name for the wallet public key |
+| `SLIPPAGE` | Yes | Maximum acceptable slippage for swaps (percentage or basis points) |
+| `SOLANA_PRIVATE_KEY` | No | Base58-encoded private key for the agent's wallet (alias: `WALLET_PRIVATE_KEY`) |
+| `WALLET_PRIVATE_KEY` | No | Alias for `SOLANA_PRIVATE_KEY` |
 | `SOLANA_RPC_URL` | No | RPC endpoint (default: `https://api.mainnet-beta.solana.com`) |
+| `WALLET_SECRET_SALT` | No | Salt for deterministic wallet key derivation |
+| `WALLET_SECRET_KEY` | No | Secret key for wallet operations |
+| `WALLET_PUBLIC_KEY` | No | Public key override |
+| `SOLANA_PUBLIC_KEY` | No | Solana public key override |
 
 ```json
 {

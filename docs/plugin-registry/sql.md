@@ -154,12 +154,10 @@ await runtime.setComponent(userId, "userPreferences", {
 
 | Setting | Description | Default |
 |---------|-------------|---------|
-| `database.provider` | `pglite` or `postgres` | `pglite` |
-| `database.pglite.dataDir` | PGLite data directory | `~/.milady/workspace/.eliza/.elizadb` |
-| `database.postgres.connectionString` | PostgreSQL connection URL | — |
-| `database.postgres.host` | PostgreSQL host (alternative to connection string) | — |
-| `database.postgres.port` | PostgreSQL port | `5432` |
-| `database.postgres.ssl` | Enable SSL | `false` |
+| `database.type` | `sqlite` or `postgres` | `sqlite` |
+| `database.url` | PostgreSQL connection URL | — |
+| `database.path` | Custom SQLite file path | Auto-resolved |
+| `database.vectorDimensions` | Embedding vector size | `384` (Milady caps `EMBEDDING_DIMENSION` to 384) |
 
 ## Related
 

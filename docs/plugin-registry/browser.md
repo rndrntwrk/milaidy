@@ -40,12 +40,14 @@ export MILADY_FEATURE_BROWSER=true
 
 | Environment Variable | Required | Description |
 |---------------------|----------|-------------|
-| `OPENAI_API_KEY` | No | OpenAI API key for AI-powered browser interactions |
-| `ANTHROPIC_API_KEY` | No | Anthropic API key for Claude-powered interactions |
+| `OPENAI_API_KEY` | No* | OpenAI API key for AI-powered browser interactions |
+| `ANTHROPIC_API_KEY` | No* | Anthropic API key for Claude-powered interactions |
 | `BROWSER_HEADLESS` | No | Run browser in headless mode (default: `true`) |
-| `BROWSERBASE_API_KEY` | No | API key for Browserbase cloud browser service |
-| `BROWSERBASE_PROJECT_ID` | No | Project ID for Browserbase |
-| `CAPSOLVER_API_KEY` | No | CapSolver API key for automated CAPTCHA solving |
+| `BROWSERBASE_API_KEY` | No | API key for BrowserBase cloud browser service |
+| `BROWSERBASE_PROJECT_ID` | No | Project ID for BrowserBase |
+| `CAPSOLVER_API_KEY` | No | API key for CAPSolver automated CAPTCHA solving |
+
+*At least one LLM API key (`OPENAI_API_KEY` or `ANTHROPIC_API_KEY`) is needed for content extraction.
 
 ```json
 {

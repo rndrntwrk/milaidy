@@ -1,43 +1,26 @@
----
-title: Twitter/X Connector
-sidebarTitle: Twitter/X
-description: The @elizaos/plugin-twitter package is not currently available in the Milady plugin registry.
----
+# Twitter/X Connector
 
-<Warning>
-**Not available.** The `@elizaos/plugin-twitter` package is not currently in the Milady plugin registry. This page describes a connector that may be added in a future release. Check the [plugin registry](/plugins/registry) for available connectors.
-</Warning>
+Connect your agent to Twitter/X for social media engagement using the `@elizaos/plugin-twitter` package.
 
-Connect your agent to Twitter/X for social media engagement.
+## Prerequisites
 
-<Warning>
-The Twitter plugin (`@elizaos/plugin-twitter`) is an upstream elizaOS plugin and is **not included** in the Milady bundled plugin registry. You must install it manually before use. It does not auto-enable from connector config alone — install it first, then configure.
-</Warning>
+- Twitter/X API credentials (API key, API secret key, access token, access token secret)
+- A Twitter Developer account with API access
 
-## Overview
+## Configuration
 
-The Twitter connector is an external elizaOS plugin that bridges your agent to Twitter/X. After manual installation, it loads when a valid token is detected in your connector configuration.
+| Name | Required | Description |
+|------|----------|-------------|
+| API key | Yes | Twitter/X API key (consumer key), set via `connectors.twitter.apiKey` |
+| API secret key | Yes | API secret key (consumer secret), set via `connectors.twitter.apiSecretKey` |
+| Access token | Yes | OAuth access token, set via `connectors.twitter.accessToken` |
+| Access token secret | Yes | OAuth access token secret, set via `connectors.twitter.accessTokenSecret` |
 
-## Installation
+> **Note:** Twitter credentials are read directly from the `connectors.twitter` config object by the plugin, not from environment variables.
 
-```bash
-milady plugins install @elizaos/plugin-twitter
-```
+The connector auto-enables when `botToken`, `token`, or `apiKey` is truthy in the connector config and `enabled` is not explicitly `false`.
 
-## Package Info
-
-| Field | Value |
-|-------|-------|
-| Package | `@elizaos/plugin-twitter` |
-| Registry | Upstream elizaOS (not bundled) |
-| Config key | `connectors.twitter` |
-| Enable trigger | `apiKey` is truthy in connector config (after install) |
-
-> **Note:** The Twitter/X plugin is not published to the `@elizaos` plugin registry. It ships as a bundled or separately sourced package. Check your installation for availability.
-
-## Minimal Configuration
-
-In `~/.milady/milady.json`:
+Configure in `~/.milady/milady.json`:
 
 ```json
 {
@@ -64,21 +47,29 @@ To explicitly disable the connector even when a token is present:
 }
 ```
 
-## Enable Mechanism
+## Setup
 
-Once installed, the plugin loads when `connectors.twitter` in your config has a truthy `apiKey` (and `enabled` is not explicitly `false`).
+1. Apply for a [Twitter Developer account](https://developer.twitter.com/) with API access.
+2. Create a project and app in the Twitter Developer Portal.
+3. Generate API key, API secret key, access token, and access token secret.
+4. Add the credentials to `connectors.twitter` in your config as shown below.
+5. Start your agent -- the Twitter connector will auto-enable.
 
-Unlike bundled connectors (Discord, Telegram, Slack), the Twitter plugin must be installed before the runtime can load it. It is not part of the Milady bundled registry.
+## Features
 
-## Environment Variables
-
-Unlike Discord, Telegram, and Slack, the Twitter connector does **not** inject secrets into `process.env` via the runtime's `CHANNEL_ENV_MAP`. Twitter credentials are read directly from the `connectors.twitter` config object by the plugin.
+- Automated posting at configurable intervals
+- Mention monitoring and auto-response
+- Action processing (like, retweet, quote)
+- Keyword search monitoring
+- DM policy configuration
+- Dry run mode for testing
+- Configurable timeline algorithm (weighted or latest)
 
 ## Full Configuration Reference
 
 All fields are nested under `connectors.twitter` in `milady.json`.
 
-Note: Twitter does **not** support multi-account configuration or the `accounts` array pattern used by some other connectors. Only a single Twitter account can be configured per agent.
+Note: Twitter does **not** support multi-account configuration. Only a single Twitter account can be configured per agent.
 
 ### Authentication
 

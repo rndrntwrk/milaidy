@@ -26,13 +26,19 @@ The plugin auto-enables when `ALCHEMY_API_KEY` is set (this is the `envKey` in `
 
 | Environment Variable | Required | Description |
 |---------------------|----------|-------------|
-| `EVM_PRIVATE_KEY` | Yes | Hex-encoded private key (starting with `0x`) for the agent's wallet |
-| `EVM_RPC_PROVIDER` | No | Preferred RPC provider: `alchemy`, `infura`, `ankr`, or `elizacloud` |
-| `ALCHEMY_API_KEY` | No | Alchemy API key for multi-chain RPC |
+| `EVM_PRIVATE_KEY` | Yes | Private key for the agent's wallet (hex, starting with `0x`) |
+| `EVM_RPC_PROVIDER` | No | Default RPC endpoint (mainnet) |
+| `ALCHEMY_API_KEY` | No | Alchemy API key for multi-chain RPC (also the primary auto-enable trigger) |
 | `INFURA_API_KEY` | No | Infura API key for RPC |
 | `ANKR_API_KEY` | No | Ankr API key for RPC |
-| `SEPOLIA_RPC_URL` | No | RPC URL for Sepolia testnet (default: `https://ethereum-sepolia-rpc.publicnode.com`) |
-| `BASE_SEPOLIA_RPC_URL` | No | RPC URL for Base Sepolia testnet (default: `https://sepolia.base.org`) |
+| `ETHEREUM_PROVIDER_ETHEREUM` | No | Custom RPC endpoint for Ethereum mainnet |
+| `ETHEREUM_PROVIDER_BASE` | No | Custom RPC endpoint for Base |
+| `ETHEREUM_PROVIDER_ARBITRUM` | No | Custom RPC endpoint for Arbitrum |
+| `ETHEREUM_PROVIDER_OPTIMISM` | No | Custom RPC endpoint for Optimism |
+| `SEPOLIA_RPC_URL` | No | RPC endpoint for Sepolia testnet |
+| `BASE_SEPOLIA_RPC_URL` | No | RPC endpoint for Base Sepolia testnet |
+| `WALLET_SECRET_SALT` | No | Salt for deterministic wallet key derivation |
+| `TEE_MODE` | No | Trusted Execution Environment mode |
 
 ```json
 {

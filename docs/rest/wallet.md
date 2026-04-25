@@ -39,16 +39,20 @@ Get token balances across all supported chains. Requires `ALCHEMY_API_KEY` for E
     "address": "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
     "chains": [
       {
+        "chain": "ethereum",
         "chainId": 1,
-        "name": "Ethereum",
-        "nativeBalance": "1.5",
-        "tokens": []
+        "nativeBalance": "1.234",
+        "nativeSymbol": "ETH",
+        "nativeValueUsd": "3200.00",
+        "tokens": [],
+        "error": null
       }
     ]
   },
   "solana": {
     "address": "7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgHU",
-    "nativeBalance": "2.5",
+    "solBalance": "0.5",
+    "solValueUsd": "50.00",
     "tokens": []
   }
 }

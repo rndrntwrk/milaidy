@@ -67,7 +67,7 @@ bun run milady start
 
 ### Testing
 
-The project uses **Vitest 4.x** with V8 coverage. Coverage thresholds are set in `eliza/packages/app-core/scripts/coverage-policy.mjs` at **25%** for lines, functions, and statements, and **15%** for branches.
+The project uses **Vitest** with V8 coverage.
 
 ```bash
 # Run all tests (parallel runner)
@@ -87,6 +87,9 @@ bun run test:e2e
 
 # Live API tests (requires API keys)
 MILADY_LIVE_TEST=1 bun run test:live
+
+# Integration tests
+bun run test:integration
 ```
 
 **Test file conventions:**

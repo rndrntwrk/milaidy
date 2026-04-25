@@ -27,11 +27,11 @@ Returns the current state of the NFT drop — whether it is active, supply remai
 
 ```json
 {
-  "dropEnabled": true,
+  "dropEnabled": false,
   "publicMintOpen": false,
-  "whitelistMintOpen": true,
+  "whitelistMintOpen": false,
   "mintedOut": false,
-  "currentSupply": 342,
+  "currentSupply": 0,
   "maxSupply": 2138,
   "shinyPrice": "0.1",
   "userHasMinted": false

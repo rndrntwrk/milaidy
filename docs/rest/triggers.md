@@ -22,9 +22,9 @@ Get the trigger system health snapshot. This endpoint works even when triggers a
 {
   "triggersEnabled": true,
   "activeTriggers": 3,
-  "disabledTriggers": 0,
-  "totalExecutions": 12,
-  "totalFailures": 0,
+  "disabledTriggers": 1,
+  "totalExecutions": 42,
+  "totalFailures": 2,
   "totalSkipped": 0
 }
 ```

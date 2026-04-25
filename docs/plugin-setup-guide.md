@@ -505,7 +505,7 @@ where to get the credentials, minimum required fields, and tips for optional fie
 - `BLOOIO_WEBHOOK_URL` — Your public URL for incoming SMS webhooks
 - `BLOOIO_WEBHOOK_SECRET` — Secret for webhook signature verification
 - `BLOOIO_BASE_URL` — bloo.io API base URL (leave as default)
-- `BLOOIO_PHONE_NUMBER` — Phone number to send from
+- `BLOOIO_FROM_NUMBER` — Phone number to send from
 - `BLOOIO_WEBHOOK_PORT` — Port for webhook listener
 **Tips:** Blooio bridges iMessage/SMS. Requires a Mac running the Blooio app.
 

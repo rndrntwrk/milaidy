@@ -1,38 +1,37 @@
----
-title: WeChat Connector
-sidebarTitle: WeChat
-description: The @elizaos/plugin-wechat package is not currently available in the Milady plugin registry.
----
+# WeChat Connector
 
-<Warning>
-**Not available.** The `@elizaos/plugin-wechat` package is not currently in the Milady plugin registry. This page describes a connector that may be added in a future release. Check the [plugin registry](/plugins/registry) for available connectors.
-</Warning>
+Connect your agent to WeChat for personal and group messaging via a third-party proxy service using the `@elizaos/plugin-wechat` package.
 
-Connect your agent to WeChat for personal and group messaging via a third-party proxy service.
+> **Note:** This plugin is a Milady-local package (not in the public plugin registry). It is resolved from the repo-local eliza submodule or published to npm as `@elizaos/plugin-wechat`.
 
-<Warning>
-The WeChat plugin (`@elizaos/plugin-wechat`) is **experimental** and not yet included in the Milady bundled plugin registry. It currently exists as a development stub. Full integration is in progress — check the [changelog](/changelog) for updates.
-</Warning>
+## Prerequisites
 
-## Overview
+- A WeChat account
+- A proxy service URL and API key for bridging WeChat's protocol
 
-The WeChat connector bridges your agent to WeChat via a user-supplied proxy service. Unlike most connectors which use official platform APIs, the WeChat connector relies on a third-party proxy that bridges WeChat's protocol. Your agent authenticates by scanning a QR code displayed in the terminal on first startup.
+> **Privacy notice:** The WeChat connector sends your API key and message payloads through the configured proxy service. Only point `proxyUrl` at infrastructure you operate yourself or explicitly trust for that message flow.
 
-## Privacy Notice
+## Configuration
 
-The WeChat connector sends your API key and message payloads through the configured proxy service. Only point `proxyUrl` at infrastructure you operate yourself or explicitly trust for that message flow.
+| Name | Required | Description |
+|------|----------|-------------|
+| `WECHAT_API_KEY` | Yes | Proxy service API key |
 
-## Package Info
+Additional configuration is done via the `connectors.wechat` config in `~/.milady/milady.json`:
 
-| Field | Value |
-|-------|-------|
-| Package | `@elizaos/plugin-wechat` |
-| Config key | `connectors.wechat` |
-| Auto-enable trigger | `apiKey` is truthy at top level, or an `accounts` entry has a truthy `apiKey` |
+| Config Field | Type | Default | Description |
+|------|------|---------|-------------|
+| `apiKey` | string | -- | Proxy service API key (required) |
+| `proxyUrl` | string | -- | Proxy service URL (required) |
+| `webhookPort` | number | `18790` | Webhook listener port |
+| `deviceType` | `"ipad"` / `"mac"` | `"ipad"` | Device emulation type |
+| `enabled` | boolean | -- | Explicitly enable/disable |
+| `features.images` | boolean | `false` | Enable image send/receive |
+| `features.groups` | boolean | `false` | Enable group chat support |
 
-## Minimal Configuration
+The connector auto-enables when `apiKey` is truthy at the top level, or an `accounts` entry has a truthy `apiKey`.
 
-In `~/.milady/milady.json`:
+Configure in `~/.milady/milady.json`:
 
 ```json
 {
@@ -61,64 +60,13 @@ To explicitly disable the connector even when an API key is present:
 }
 ```
 
-## Auto-Enable Mechanism
+## Setup
 
-The `plugin-auto-enable.ts` module checks `connectors.wechat` in your config. The plugin auto-enables when:
-
-- A top-level `apiKey` is truthy, OR
-- An `accounts` map contains at least one enabled account with a truthy `apiKey`
-
-Setting `enabled: false` at the connector or account level disables auto-enable. No environment variable is required to trigger auto-enable — it is driven entirely by the connector config object.
-
-## Environment Variables
-
-| Variable | Source | Description |
-|----------|--------|-------------|
-| `WECHAT_API_KEY` | `apiKey` | Proxy service API key |
-
-## Full Configuration Reference
-
-All fields are defined under `connectors.wechat` in `milady.json`.
-
-### Core Fields
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `apiKey` | string | — | Proxy service API key (required) |
-| `proxyUrl` | string | — | Proxy service URL (required) |
-| `webhookPort` | number | `18790` | Webhook listener port for incoming messages |
-| `deviceType` | `"ipad"` \| `"mac"` | `"ipad"` | Device emulation type |
-| `enabled` | boolean | — | Explicitly enable/disable |
-
-### Feature Toggles
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `features.images` | boolean | `false` | Enable image send/receive |
-| `features.groups` | boolean | `false` | Enable group chat support |
-
-```json
-{
-  "connectors": {
-    "wechat": {
-      "apiKey": "YOUR_API_KEY",
-      "proxyUrl": "https://your-proxy.example.com",
-      "webhookPort": 18790,
-      "deviceType": "ipad",
-      "features": {
-        "images": true,
-        "groups": true
-      }
-    }
-  }
-}
-```
-
-### QR Code Login
-
-On first start, the plugin displays a QR code in the terminal. Scan it with WeChat on your phone to link the session. Sessions persist automatically — subsequent starts reuse the existing session unless it has expired.
-
-If a session expires after extended inactivity, the plugin attempts to re-login automatically. If re-login fails, a new QR code is displayed for scanning.
+1. Obtain an API key and proxy service URL.
+2. Add the credentials to `connectors.wechat` in your config.
+3. Start Milady -- on first start, the plugin displays a QR code in the terminal.
+4. Scan the QR code with WeChat on your phone to link the session.
+5. Sessions persist automatically -- subsequent starts reuse the existing session unless it has expired.
 
 ### Multi-Account Support
 

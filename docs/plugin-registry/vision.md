@@ -37,6 +37,7 @@ milady plugins install vision
 
 - Image understanding and description
 - Visual analysis of screenshots and photos
+- Camera input with change detection
 - Feature-gated — only loaded when explicitly enabled
 
 ## Related

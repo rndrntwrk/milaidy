@@ -58,7 +58,7 @@ This guide is for **people building Milady from source** — editors, agents, an
 
 **Why this is not “product UI”:** Output is **stdout for local development only** — same category as port tables and log prefixes. **Goal:** faster human/agent scanning of **effective env** (ports, feature flags, sources) when four processes start. It does not change dashboard, chat, or companion rendering.
 
-**Where:** `eliza/packages/shared` (table + color + figlet helpers), `scripts/dev-platform.mjs`, `apps/app/vite.config.ts`, `eliza/packages/app-core/src/runtime/dev-server.ts`, Electrobun banner helper under `apps/app/electrobun/src/`.
+**Where:** `eliza/packages/shared` (table + color + figlet helpers), `eliza/packages/app-core/scripts/dev-platform.mjs`, `apps/app/vite.config.ts`, `eliza/packages/app-core/src/runtime/dev-server.ts`, Electrobun banner helper under `apps/app/electrobun/src/`.
 
 **Related doc:** [Desktop local development](../apps/desktop-local-development.md#startup-tables-and-terminal-banners).
 

@@ -58,12 +58,14 @@ export OLLAMA_BASE_URL=http://localhost:11434
 
 | Environment Variable | Required | Description |
 |---------------------|----------|-------------|
-| `OLLAMA_API_ENDPOINT` | Yes | Ollama server URL (default: `http://localhost:11434/api`) |
-| `OLLAMA_BASE_URL` | No | Alias that triggers auto-enable (resolved to `OLLAMA_API_ENDPOINT`) |
-| `OLLAMA_SMALL_MODEL` | No | Override the small model identifier (default: `gemma3:latest`) |
-| `OLLAMA_MEDIUM_MODEL` | No | Override the medium model identifier |
-| `OLLAMA_LARGE_MODEL` | No | Override the large model identifier (default: `gemma3:latest`) |
-| `OLLAMA_EMBEDDING_MODEL` | No | Override the embedding model identifier (default: `nomic-embed-text:latest`) |
+| `OLLAMA_API_ENDPOINT` | Yes | Ollama API URL (e.g., `http://localhost:11434/api`). The plugin strips this to the domain and appends API paths. |
+| `OLLAMA_BASE_URL` | No | Auto-enable trigger. Set to the Ollama server URL (e.g., `http://localhost:11434`) to activate the plugin. |
+| `OLLAMA_SMALL_MODEL` | No | Override the small model identifier |
+| `OLLAMA_MEDIUM_MODEL` | No | Override the medium model identifier (defined in config but not currently used) |
+| `OLLAMA_LARGE_MODEL` | No | Override the large model identifier |
+| `OLLAMA_EMBEDDING_MODEL` | No | Override the embedding model identifier |
+| `SMALL_MODEL` | No | Fallback for the small model if `OLLAMA_SMALL_MODEL` is not set |
+| `LARGE_MODEL` | No | Fallback for the large model if `OLLAMA_LARGE_MODEL` is not set |
 
 ### milady.json Example
 

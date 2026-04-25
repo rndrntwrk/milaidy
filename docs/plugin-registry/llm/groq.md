@@ -30,9 +30,9 @@ export GROQ_API_KEY=gsk_...
 | `GROQ_BASE_URL` | No | Custom base URL for API requests |
 | `GROQ_SMALL_MODEL` | No | Override the small model identifier |
 | `GROQ_LARGE_MODEL` | No | Override the large model identifier |
-| `GROQ_TTS_MODEL` | No | Override the text-to-speech model (default: `canopylabs/orpheus-v1-english`) |
-| `GROQ_TTS_VOICE` | No | Voice profile for text-to-speech output (default: `troy`) |
-| `GROQ_TTS_RESPONSE_FORMAT` | No | Audio response format (default: `wav`) |
+| `GROQ_TTS_MODEL` | No | Override the text-to-speech model |
+| `GROQ_TTS_VOICE` | No | Voice profile for text-to-speech output |
+| `GROQ_TTS_RESPONSE_FORMAT` | No | Response format for TTS output |
 
 ### milady.json Example
 
