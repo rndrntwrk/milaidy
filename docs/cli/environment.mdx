@@ -20,7 +20,7 @@ These variables are read by the CLI wrapper (`run-node.mjs`) and the embedded ru
 
 | Variable | Purpose |
 |----------|---------|
-| `MILADY_API_PORT` / `ELIZA_PORT` | HTTP API bind port. |
+| `MILADY_API_PORT` / `ELIZA_PORT` | HTTP API bind port (default 31337). `MILADY_API_PORT` takes precedence over `ELIZA_PORT`. |
 | `MILADY_PORT` | Dashboard / Vite dev port in orchestrated dev flows. |
 | `MILADY_GATEWAY_PORT`, `MILADY_HOME_PORT`, … | Other local services — see [Ports and Networking](/configuration#ports-and-networking). |
 

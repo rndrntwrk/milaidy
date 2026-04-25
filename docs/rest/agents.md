@@ -14,7 +14,7 @@ All agent endpoints require the agent runtime to be initialized. The API server 
 | POST | `/api/agent/stop` | Stop the agent and disable autonomy |
 | POST | `/api/agent/pause` | Pause the agent (keep uptime, disable autonomy) |
 | POST | `/api/agent/resume` | Resume a paused agent and re-enable autonomy |
-| POST | `/api/agent/restart` | Restart the agent runtime |
+| POST | `/api/agent/restart` | Restart the agent runtime (also available as `POST /api/restart`) |
 | POST | `/api/agent/reset` | Wipe config, workspace, memory and return to onboarding |
 | POST | `/api/agent/export` | Export agent as a password-encrypted `.eliza-agent` binary file |
 | GET | `/api/agent/export/estimate` | Estimate export file size before downloading |

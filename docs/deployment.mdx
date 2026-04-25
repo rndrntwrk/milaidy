@@ -225,23 +225,24 @@ docker compose -f eliza/packages/app-core/deploy/docker-compose.yml exec milady-
   node dist/index.js health --token "$MILADY_GATEWAY_TOKEN"
 ```
 
-### Adding Messaging Channels
+### Adding Connectors
 
-<CodeGroup>
-```bash WhatsApp (QR)
-docker compose -f eliza/packages/app-core/deploy/docker-compose.yml run --rm milady-cli channels login
+Configure connectors in your `milady.json` instead of using CLI commands. See [Configuration — Connectors](/configuration#connectors-messaging-channels) for the full schema.
+
+```json
+{
+  "connectors": {
+    "telegram": { "botToken": "<bot-token>" },
+    "discord":  { "token": "<bot-token>" }
+  }
+}
 ```
 
-```bash Telegram
-docker compose -f eliza/packages/app-core/deploy/docker-compose.yml run --rm milady-cli \
-  channels add --channel telegram --token <bot-token>
-```
+Then restart the service:
 
-```bash Discord
-docker compose -f eliza/packages/app-core/deploy/docker-compose.yml run --rm milady-cli \
-  channels add --channel discord --token <bot-token>
+```bash
+docker compose -f deploy/docker-compose.yml restart milady
 ```
-</CodeGroup>
 
 ### Stopping and Restarting
 

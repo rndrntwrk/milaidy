@@ -35,9 +35,9 @@ Configure in `~/.milady/milady.json`:
 }
 ```
 
-<Warning>
-Use the `token` field — the Discord config schema uses strict validation and `botToken` is not a recognized schema field. While `botToken` triggers auto-enable detection, only `token` passes schema validation.
-</Warning>
+<Note>
+Use the `token` field in your config. While `botToken` or `apiKey` also trigger auto-enable detection, `token` is the canonical schema field and is what the plugin reads at runtime.
+</Note>
 
 ## Setup
 

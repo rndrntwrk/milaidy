@@ -516,7 +516,7 @@ Milady activa automáticamente los plugins según su configuración. En la mayor
 | Conector | Plugin | Activador de activación automática |
 |----------|--------|------------------------------------|
 | `telegram` | `@elizaos/plugin-telegram` | `connectors.telegram.botToken` |
-| `discord` | `@elizaos/plugin-discord` | `connectors.discord.botToken` |
+| `discord` | `@elizaos/plugin-discord` | `connectors.discord.token` (o `botToken`, `apiKey`) |
 | `slack` | `@elizaos/plugin-slack` | `connectors.slack.botToken` |
 | `twitter` | `@elizaos/plugin-twitter` | `connectors.twitter.apiKey` |
 | `whatsapp` | `@elizaos/plugin-whatsapp` | `connectors.whatsapp.authDir` (o `authState`, `sessionPath`, o `accounts` con `authDir`) |
@@ -628,12 +628,12 @@ Los conectores integran Milady con plataformas de mensajería. Configúrelos baj
     },
     discord: {
       enabled: true,
-      botToken: "<DISCORD_BOT_TOKEN>",
+      token: "<DISCORD_BOT_TOKEN>",
     },
     slack: {
       enabled: true,
       botToken: "<SLACK_BOT_TOKEN>",
-      apiKey: "<SLACK_APP_TOKEN>",
+      appToken: "<SLACK_APP_TOKEN>",
     },
     whatsapp: {
       enabled: true,

@@ -452,7 +452,7 @@ Milady automatically enables plugins based on your configuration. You do not nee
 | Connector | Plugin | Auto-Enable Trigger |
 |-----------|--------|---------------------|
 | `telegram` | `@elizaos/plugin-telegram` | `connectors.telegram.botToken` |
-| `discord` | `@elizaos/plugin-discord` | `connectors.discord.token` (also detects `botToken` or `apiKey`) |
+| `discord` | `@elizaos/plugin-discord` | `connectors.discord.token` (or `botToken`, `apiKey`) |
 | `slack` | `@elizaos/plugin-slack` | `connectors.slack.botToken` |
 | `twitter` * | `@elizaos/plugin-twitter` | `connectors.twitter.apiKey` |
 | `whatsapp` | `@elizaos/plugin-whatsapp` | `connectors.whatsapp.authDir` (or `authState`, `sessionPath`, or `accounts` with `authDir`) |
@@ -565,7 +565,7 @@ Connectors integrate Milady with messaging platforms. Configure them under `conn
     slack: {
       enabled: true,
       botToken: "<SLACK_BOT_TOKEN>",
-      apiKey: "<SLACK_APP_TOKEN>",
+      appToken: "<SLACK_APP_TOKEN>",
     },
     whatsapp: {
       enabled: true,

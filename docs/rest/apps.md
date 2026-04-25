@@ -233,9 +233,9 @@ Proxied response from the Hyperscape API.
 
 ---
 
-### POST /api/apps/hyperscape/embedded-agents/:id/(start|stop|pause|resume|command)
+### POST /api/apps/hyperscape/embedded-agents/:id/:action
 
-Control an embedded agent. The action segment must be one of: `start`, `stop`, `pause`, `resume`, or `command`.
+Control an embedded agent. `:action` must be one of `start`, `stop`, `pause`, `resume`, or `command`.
 
 **Path Parameters**
 
