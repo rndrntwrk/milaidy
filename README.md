@@ -77,8 +77,8 @@ Grab from **[Releases](https://github.com/milady-ai/milady/releases/latest)**:
 | macOS (Apple Silicon) | [`Milady-arm64.dmg`](https://github.com/milady-ai/milady/releases/latest) | for your overpriced rectangle |
 | macOS (Intel) | [`Milady-x64.dmg`](https://github.com/milady-ai/milady/releases/latest) | boomer mac (why separate arm64/x64: [Build & release](docs/build-and-release.md#macos-why-two-dmgs-arm64-and-x64)) |
 | Windows | [`Milady-Setup.exe`](https://github.com/milady-ai/milady/releases/latest) | for the gamer anons |
-| iOS | Coming soon — [follow releases](https://github.com/milady-ai/milady/releases) | for the privacy-pilled |
-| Android | Coming soon — [APK on GitHub](https://github.com/milady-ai/milady/releases/latest) | for the degen on the go |
+| iOS | App Store (coming soon) | for the privacy-pilled |
+| Android | Google Play (coming soon) / [APK](https://github.com/milady-ai/milady/releases/latest) | for the degen on the go |
 | Linux | [`.AppImage`](https://github.com/milady-ai/milady/releases/latest) / [`.deb`](https://github.com/milady-ai/milady/releases/latest) / [Snap](#snap) / [Flatpak](#flatpak) / [APT repo](#debian--ubuntu-apt) | I use arch btw |
 
 Signed and notarized. No Gatekeeper FUD. We're legit.
@@ -105,7 +105,7 @@ shasum -a 256 --check --ignore-missing SHA256SUMS.txt
 ### New Environment Setup (recommended)
 
 ```bash
-curl -fsSL https://milady-ai.github.io/milady/install.sh | bash
+curl -fsSL https://get.milady.ai | bash
 milady setup
 ```
 
@@ -157,7 +157,7 @@ First run walks you through onboarding:
 
 Windows:
 ```powershell
-irm https://milady-ai.github.io/milady/install.ps1 | iex
+irm https://get.milady.ai/install.ps1 | iex
 ```
 
 NPM global:
