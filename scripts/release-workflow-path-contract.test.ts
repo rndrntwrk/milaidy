@@ -702,8 +702,37 @@ describe("release workflow path contract", () => {
     expect(windowsElectrobunInstallBlock).toContain(
       "@elizaos/plugin-anthropic@alpha",
     );
+    expect(windowsElectrobunInstallBlock).toContain(
+      "@elizaos/plugin-telegram@alpha",
+    );
     expect(windowsElectrobunInstallBlock).not.toContain(
       "PLUGIN_AGENT_SKILLS_VERSION",
+    );
+
+    const windowsTelegramOverlayStart = releaseElectrobun.indexOf(
+      "      - name: Build local plugin-telegram and overlay Windows node_modules",
+      windowsElectrobunInstallStart,
+    );
+    expect(windowsTelegramOverlayStart).toBeGreaterThan(-1);
+
+    const windowsTelegramOverlayBlock = releaseElectrobun.slice(
+      windowsTelegramOverlayStart,
+      releaseElectrobun.indexOf("\n\n", windowsTelegramOverlayStart),
+    );
+    expect(windowsTelegramOverlayBlock).toContain(
+      "if: matrix.platform.os == 'windows'",
+    );
+    expect(windowsTelegramOverlayBlock).toContain(
+      "git submodule update --init --depth=1 eliza/plugins/plugin-telegram",
+    );
+    expect(windowsTelegramOverlayBlock).toContain(
+      "(cd eliza/plugins/plugin-telegram && bun install --ignore-scripts && bun run build)",
+    );
+    expect(windowsTelegramOverlayBlock).toContain(
+      'cp -r eliza/plugins/plugin-telegram/dist "$installed_dir/dist"',
+    );
+    expect(windowsTelegramOverlayBlock).toContain(
+      'test -f "$installed_dir/dist/account-auth-service.js"',
     );
   });
 
@@ -1049,6 +1078,15 @@ describe("release workflow path contract", () => {
     );
     expect(releaseElectrobun).toContain(
       "eliza-dist generated keyword data found",
+    );
+    expect(releaseElectrobun).toContain(
+      "dist/node_modules/@elizaos/plugin-telegram/dist/account-auth-service.js",
+    );
+    expect(releaseElectrobun).toContain(
+      'Join-Path $elizaDist "node_modules\\@elizaos\\plugin-telegram\\dist\\account-auth-service.js"',
+    );
+    expect(releaseElectrobun).toContain(
+      "eliza-dist plugin-telegram account auth service found",
     );
     expect(releaseElectrobun).not.toContain(
       "Mirroring eliza-dist -> milady-dist",
