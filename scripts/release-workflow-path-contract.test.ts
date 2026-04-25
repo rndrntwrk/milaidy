@@ -876,6 +876,7 @@ describe("release workflow path contract", () => {
 
   it("keeps agent release publication gated on every release validation job", () => {
     const agentRelease = readWorkflow("agent-release.yml");
+    const reusableNpmPublish = readWorkflow("reusable-npm-publish.yml");
     const patch = fs.readFileSync(
       path.join(repoRoot, "patches", "eliza", "ci-release-contracts.patch"),
       "utf8",
@@ -893,9 +894,16 @@ describe("release workflow path contract", () => {
       agentRelease.indexOf("  publish:"),
       agentRelease.indexOf("  # ── 5. Post-publish"),
     );
+    const distributeReleaseBlock = agentRelease.slice(
+      agentRelease.indexOf("  distribute-release:"),
+    );
     const debianValidationBlock = agentRelease.slice(
       agentRelease.indexOf("  build-debian:"),
       agentRelease.indexOf("  build-ios:"),
+    );
+    const iosValidationBlock = agentRelease.slice(
+      agentRelease.indexOf("  build-ios:"),
+      agentRelease.indexOf("  build-macos-store:"),
     );
 
     expect(buildNpmBlock).not.toContain("continue-on-error: true");
@@ -903,6 +911,25 @@ describe("release workflow path contract", () => {
     expect(buildNpmBlock).not.toContain(
       "Restore eliza workspace paths for release scripts",
     );
+    expect(buildNpmBlock).toContain(
+      "node scripts/sanitize-npm-package-metadata.mjs",
+    );
+    expect(
+      buildNpmBlock.indexOf("node scripts/sanitize-npm-package-metadata.mjs"),
+    ).toBeLessThan(buildNpmBlock.indexOf("npm pack --dry-run"));
+    expect(reusableNpmPublish).toContain(
+      "node scripts/sanitize-npm-package-metadata.mjs",
+    );
+    expect(
+      reusableNpmPublish.indexOf(
+        "node scripts/sanitize-npm-package-metadata.mjs",
+      ),
+    ).toBeLessThan(reusableNpmPublish.indexOf("npm pack --dry-run"));
+    expect(
+      reusableNpmPublish.indexOf(
+        "node scripts/sanitize-npm-package-metadata.mjs",
+      ),
+    ).toBeLessThan(reusableNpmPublish.indexOf("run: npm publish"));
     expect(releaseValidationBlock).not.toContain("continue-on-error: true");
     expect(releaseValidationBlock).not.toContain("failed (non-blocking)");
     expect(releaseValidationBlock).not.toContain('|| echo "::warning::');
@@ -942,6 +969,8 @@ describe("release workflow path contract", () => {
     ).toBeLessThan(patch.indexOf("bun run build"));
     expect(agentRelease).toContain("apps/app/ios/App/App.xcodeproj");
     expect(agentRelease).not.toContain("if [ -d ios/App ]; then");
+    expect(iosValidationBlock).toContain("CODE_SIGNING_ALLOWED=NO");
+    expect(iosValidationBlock).not.toContain("-dry-run");
     expect(debianValidationBlock).not.toContain(" nodejs npm ");
     expect(debianValidationBlock).not.toContain("actions/setup-node@v4");
     expect(releaseValidationBlock).not.toContain("com.milady.Milady.yml");
@@ -970,6 +999,19 @@ describe("release workflow path contract", () => {
     expect(agentRelease).toContain(
       "uses: ./.github/workflows/release-orchestrator.yml",
     );
+    expect(distributeReleaseBlock).toContain(
+      "needs: [version, publish, push-agent-image, push-cloud-image]",
+    );
+    for (const input of [
+      "publish_npm: true",
+      "publish_packages: true",
+      "publish_android: true",
+      "publish_apple: true",
+      "update_homebrew: true",
+      "deploy_homepage: true",
+    ]) {
+      expect(distributeReleaseBlock).toContain(input);
+    }
     expect(agentRelease).toContain(
       ["github-token: $", "{{ secrets.GITHUB_TOKEN }}"].join(""),
     );
@@ -990,6 +1032,20 @@ describe("release workflow path contract", () => {
     expect(releaseOrchestrator).not.toContain('PUBLISH_FLATPAK="false"');
     expect(releaseOrchestrator).toContain(
       "Require enabled distributions succeeded",
+    );
+    expect(releaseOrchestrator).toContain('ANDROID_TRACK="production"');
+    expect(releaseOrchestrator).toContain('APPLE_TRACK="app-store"');
+    expect(releaseOrchestrator).toContain('ANDROID_TRACK="internal"');
+    expect(releaseOrchestrator).toContain('APPLE_TRACK="testflight"');
+    expect(releaseOrchestrator).toContain(
+      "uses: ./.github/workflows/android-release.yml",
+    );
+    expect(releaseOrchestrator).toContain(
+      "uses: ./.github/workflows/apple-store-release.yml",
+    );
+    expect(releaseOrchestrator).toContain("platform: both");
+    expect(releaseOrchestrator).toContain(
+      ["track: $", "{{ needs.prepare.outputs.apple_track }}"].join(""),
     );
     for (const dependency of [
       "needs.publish-npm.result",
@@ -1024,6 +1080,11 @@ describe("release workflow path contract", () => {
     expect(androidRelease).toContain(
       "PLAY_STORE_SERVICE_ACCOUNT_JSON is required for Android release publishing.",
     );
+    expect(androidRelease).toContain("name: Build Signed AAB");
+    expect(androidRelease).toContain("name: Publish to Play Store");
+    expect(androidRelease).toContain("Attach AAB to GitHub Release");
+    expect(androidRelease).toContain("bundle exec fastlane supply");
+    expect(androidRelease).toContain('--package_name "ai.milady.app"');
     expect(androidRelease).toContain("Require Android release succeeded");
     expect(androidRelease).not.toContain("Play Store upload will be skipped");
     expect(androidRelease).not.toContain("skipping AAB attachment");
@@ -1031,6 +1092,12 @@ describe("release workflow path contract", () => {
     expect(appleStoreRelease).toContain(
       "APP_STORE_APP_ID is required for TestFlight/App Store delivery.",
     );
+    expect(appleStoreRelease).toContain("name: Build & Submit iOS");
+    expect(appleStoreRelease).toContain("bundle exec fastlane release");
+    expect(appleStoreRelease).toContain("bundle exec fastlane beta");
+    expect(appleStoreRelease).toContain("name: Build & Submit macOS");
+    expect(appleStoreRelease).toContain("Upload to App Store Connect");
+    expect(appleStoreRelease).toContain("xcrun altool --upload-app");
     expect(appleStoreRelease).toContain(
       "Require enabled Apple releases succeeded",
     );
@@ -1047,6 +1114,12 @@ describe("release workflow path contract", () => {
 
     expect(script).toContain(
       "fs.rmSync(targetDir, { force: true, recursive: true })",
+    );
+    expect(script).toContain(
+      'const miladyRootBunStore = path.join(miladyRootNodeModules, ".bun");',
+    );
+    expect(script).toContain(
+      'path.join(miladyRootBunStore, entry.name, "node_modules")',
     );
     expect(script).not.toContain(
       "} else if (stat?.isDirectory()) {\n    return null;",
