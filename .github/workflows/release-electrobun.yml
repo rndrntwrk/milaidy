@@ -1061,6 +1061,14 @@ jobs:
                 Write-Host "  Resources/app directory does not exist"
               }
             }
+            $keywordDataCheck = Join-Path $elizaDist "node_modules\@elizaos\shared\src\i18n\generated\validation-keyword-data.js"
+            Write-Host "Checking for: $keywordDataCheck"
+            if (Test-Path $keywordDataCheck) {
+              Write-Host "eliza-dist generated keyword data found"
+            } else {
+              Write-Error "eliza-dist generated keyword data NOT found: $keywordDataCheck"
+              exit 1
+            }
           }
 
       - name: Build Inno Setup installer

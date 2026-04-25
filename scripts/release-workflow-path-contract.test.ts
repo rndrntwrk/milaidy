@@ -1044,6 +1044,12 @@ describe("release workflow path contract", () => {
     }
     expect(releaseElectrobun).toContain("for build_root in \\");
     expect(releaseElectrobun).toContain("eliza-dist/entry.js found");
+    expect(releaseElectrobun).toContain(
+      'Join-Path $elizaDist "node_modules\\@elizaos\\shared\\src\\i18n\\generated\\validation-keyword-data.js"',
+    );
+    expect(releaseElectrobun).toContain(
+      "eliza-dist generated keyword data found",
+    );
     expect(releaseElectrobun).not.toContain(
       "Mirroring eliza-dist -> milady-dist",
     );
