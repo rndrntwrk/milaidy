@@ -88,6 +88,7 @@
     "verify:typecheck:extended": "node scripts/run-repo-checks.mjs typecheck:extended",
     "verify:typecheck:workspace": "tsc --noEmit -p tsconfig.workspace.json",
     "verify:lint": "node scripts/run-repo-checks.mjs lint",
+    "verify:i18n": "node scripts/check-i18n.mjs",
     "verify:lint:workspace": "node eliza/packages/app-core/scripts/run-biome-check.mjs",
     "verify:lint:fix": "node eliza/packages/app-core/scripts/run-biome-check.mjs --write",
     "verify:format": "bunx @biomejs/biome format scripts test apps",
