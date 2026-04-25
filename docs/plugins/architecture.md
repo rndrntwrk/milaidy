@@ -18,7 +18,7 @@ AgentRuntime
 └── Local            (from plugins/ directory)
 ```
 
-The source of truth for which plugins are always loaded lives in `eliza/packages/agent/src/runtime/core-plugins.ts` (re-exported by `eliza/packages/app-core/src/runtime/core-plugins.ts`) inside the `eliza` git submodule:
+The source of truth for which plugins are always loaded lives in `eliza/packages/agent/src/runtime/core-plugins.ts` (re-exported by `eliza/packages/app-core/src/runtime/core-plugins.ts`):
 
 ```typescript
 export const CORE_PLUGINS: readonly string[] = [
@@ -120,7 +120,7 @@ interface Plugin {
 
 ## Auto-Enable Mechanism
 
-Plugins are automatically enabled when their required configuration is detected. This logic lives in `eliza/packages/agent/src/config/plugin-auto-enable.ts` (extended by `eliza/packages/app-core/src/config/plugin-auto-enable.ts` for Milady-specific connectors like WeChat) and runs before runtime initialization.
+Plugins are automatically enabled when their required configuration is detected. This logic lives in `eliza/packages/agent/src/config/plugin-auto-enable.ts` (extended by `eliza/packages/app-core/src/config/plugin-auto-enable.ts` for Eliza-specific connectors like WeChat) and runs before runtime initialization.
 
 ### Trigger Sources
 
@@ -182,7 +182,7 @@ const CONNECTOR_PLUGINS = {
 };
 ```
 
-> **Note:** The upstream `packages/agent` defines all `@elizaos/*` connectors. Milady's `packages/app-core` extends this map with the `wechat` entry pointing to `@elizaos/plugin-wechat`. Two entries — `twitter` (`@elizaos/plugin-twitter`) and `lens` (`@elizaos/plugin-lens`) — are upstream elizaOS packages **not bundled** in the local Milady plugin registry (`plugins.json`). They will auto-enable only if the package is installed separately.
+> **Note:** The upstream `eliza/packages/agent` defines all `@elizaos/*` connectors. Milady's `eliza/packages/app-core` extends this map with the `wechat` entry pointing to `@elizaos/plugin-wechat`.
 
 **Feature flags** — The `features` section of `milady.json` auto-enables feature plugins. A feature can be enabled with `features.<name>: true` or `features.<name>.enabled: true`:
 

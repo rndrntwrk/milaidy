@@ -34,7 +34,7 @@ A single capability surface (implemented per OS):
 
 **Returns** must distinguish: `not_found`, `denied` (user cancelled / ACL), `unavailable` (no daemon), `error` (transient).
 
-TypeScript contract: `packages/app-core/src/security/platform-secure-store.ts`.
+TypeScript contract: `eliza/packages/app-core/src/security/platform-secure-store.ts`.
 
 ## Vault ID (`vaultId`) — multi-profile and multi-agent
 
