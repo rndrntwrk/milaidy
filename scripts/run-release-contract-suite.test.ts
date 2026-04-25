@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -9,6 +10,7 @@ import {
   cleanupLegacyElectrobunCompatDir,
   ensureLegacyElectrobunCompatDir,
   releaseContractTests,
+  restoreGeneratedElizaChanges,
 } from "./run-release-contract-suite.mjs";
 
 const tempRoots: string[] = [];
@@ -207,4 +209,51 @@ describe("run release contract suite", () => {
       assertReleaseContractTestsExist(releaseContractTests),
     ).not.toThrow();
   });
+
+  it("restores generated eliza patch changes without deleting pre-existing untracked files", () => {
+    const repoRoot = makeTempRoot();
+    const elizaRoot = path.join(repoRoot, "eliza");
+    const trackedFile = path.join(elizaRoot, "tracked.txt");
+    const preservedUntracked = path.join(elizaRoot, "preserved.txt");
+    const generatedUntracked = path.join(elizaRoot, "generated.txt");
+
+    fs.mkdirSync(elizaRoot, { recursive: true });
+    runGit(repoRoot, ["-C", "eliza", "init"]);
+    fs.writeFileSync(trackedFile, "original\n");
+    runGit(repoRoot, ["-C", "eliza", "add", "tracked.txt"]);
+    runGit(repoRoot, [
+      "-C",
+      "eliza",
+      "-c",
+      "user.name=Milady Tests",
+      "-c",
+      "user.email=tests@example.invalid",
+      "commit",
+      "-m",
+      "seed",
+    ]);
+
+    fs.writeFileSync(preservedUntracked, "keep\n");
+    const initialUntrackedFiles = ["preserved.txt"];
+    fs.writeFileSync(trackedFile, "generated change\n");
+    fs.writeFileSync(generatedUntracked, "delete me\n");
+
+    expect(
+      restoreGeneratedElizaChanges(true, repoRoot, initialUntrackedFiles),
+    ).toBe(true);
+    expect(fs.readFileSync(trackedFile, "utf8")).toBe("original\n");
+    expect(fs.existsSync(preservedUntracked)).toBe(true);
+    expect(fs.existsSync(generatedUntracked)).toBe(false);
+  });
 });
+
+function runGit(cwd: string, args: string[]) {
+  const result = spawnSync("git", args, {
+    cwd,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  if (result.status !== 0) {
+    throw new Error(result.stderr);
+  }
+}

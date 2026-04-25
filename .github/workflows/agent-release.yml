@@ -479,22 +479,25 @@ jobs:
           sudo apt-get install -y dpkg-dev debhelper fakeroot
           curl -fsSL https://bun.sh/install | bash -s "bun-v${BUN_VERSION}"
           echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
+      - name: Stage Debian packaging
+        run: |
+          rm -rf debian
+          cp -R eliza/packages/app-core/packaging/debian debian
+          test -f debian/changelog
+          test -x debian/rules
       - name: Build deb
         run: |
-          if [ -f eliza/packages/app-core/packaging/debian/Makefile ] || [ -f eliza/packages/app-core/packaging/debian/rules ]; then
-            cd eliza/packages/app-core/packaging/debian
-            dpkg-buildpackage -us -uc -b
-          elif [ -d debian ]; then
-            dpkg-buildpackage -us -uc -b
-          else
-            echo "::error::No debian packaging found"
-            exit 1
-          fi
+          dpkg-buildpackage -us -uc -b
       - name: Collect deb artifacts
         if: success()
         run: |
           mkdir -p deb-output
-          cp ../*.deb deb-output/ 2>/dev/null || true
+          debs=(../*.deb)
+          if [ "${#debs[@]}" -eq 0 ]; then
+            echo "::error::No .deb artifacts found after dpkg-buildpackage"
+            exit 1
+          fi
+          cp "${debs[@]}" deb-output/
       - name: Upload deb artifact
         if: success()
         uses: actions/upload-artifact@v4

@@ -871,6 +871,13 @@ describe("release workflow path contract", () => {
     expect(releaseValidationBlock).not.toContain('|| echo "::warning::');
     expect(releaseValidationBlock).toContain("ai.elizaos.App.yml");
     expect(releaseValidationBlock).toContain("elizaos-app.flatpak");
+    expect(releaseValidationBlock).toContain("name: Stage Debian packaging");
+    expect(releaseValidationBlock).toContain(
+      "cp -R eliza/packages/app-core/packaging/debian debian",
+    );
+    expect(releaseValidationBlock).not.toContain(
+      "cd eliza/packages/app-core/packaging/debian",
+    );
     expect(releaseValidationBlock).not.toContain("com.milady.Milady.yml");
     expect(releaseValidationBlock).not.toContain("ai.milady.Milady");
     for (const job of [
