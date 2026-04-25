@@ -11,7 +11,7 @@ function workflowText() {
 }
 
 describe("action e2e workflow contract", () => {
-  it("prefers non-OpenAI providers and falls back to Eliza Cloud before raw OpenAI", () => {
+  it("uses only provider-specific credentials for live action invocation", () => {
     const workflow = workflowText();
 
     expect(workflow).toContain('name: "Action Invocation E2E"');
@@ -25,10 +25,13 @@ describe("action e2e workflow contract", () => {
       `ELIZAOS_CLOUD_API_KEY: \${{ secrets.ELIZAOS_CLOUD_API_KEY != '' && secrets.ELIZAOS_CLOUD_API_KEY || secrets.ELIZACLOUD_API_KEY }}`,
     );
     expect(workflow).toContain(
-      `OPENAI_API_KEY: \${{ secrets.ELIZAOS_CLOUD_API_KEY != '' && secrets.ELIZAOS_CLOUD_API_KEY || (secrets.ELIZACLOUD_API_KEY != '' && secrets.ELIZACLOUD_API_KEY || secrets.OPENAI_API_KEY) }}`,
+      `OPENAI_API_KEY: \${{ secrets.OPENAI_API_KEY }}`,
     );
     expect(workflow).toContain(
-      `OPENAI_BASE_URL: \${{ (secrets.ELIZAOS_CLOUD_API_KEY != '' || secrets.ELIZACLOUD_API_KEY != '') && 'https://elizacloud.ai/api/v1' || 'https://api.openai.com/v1' }}`,
+      `OPENAI_BASE_URL: \${{ secrets.OPENAI_BASE_URL != '' && secrets.OPENAI_BASE_URL || 'https://api.openai.com/v1' }}`,
+    );
+    expect(workflow).not.toContain(
+      "OPENAI_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY",
     );
     expect(workflow).toContain(
       "Action Invocation E2E requires an available live provider in canonical CI.",

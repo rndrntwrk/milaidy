@@ -1676,9 +1676,19 @@ diff --git a/packages/app-core/test/helpers/live-provider.test.ts b/packages/app
 index 750bc86bc7..fca21dc429 100644
 --- a/packages/app-core/test/helpers/live-provider.test.ts
 +++ b/packages/app-core/test/helpers/live-provider.test.ts
-@@ -58,0 +59,26 @@ describe("selectLiveProvider", () => {
-+  it("preserves canonical OpenAI-compatible base URL overrides", async () => {
+@@ -58,0 +59,36 @@ describe("selectLiveProvider", () => {
++  it("rejects Eliza Cloud shaped keys for openai provider selection", async () => {
 +    vi.stubEnv("OPENAI_API_KEY", "eliza_test_cloud_key");
++    vi.stubEnv("OPENAI_BASE_URL", "https://elizacloud.ai/api/v1");
++    vi.stubEnv("ELIZA_E2E_OPENAI_API_KEY", "");
++
++    const { selectLiveProvider } = await import("./live-provider.ts");
++
++    expect(selectLiveProvider("openai")).toBeNull();
++  });
++
++  it("preserves canonical OpenAI-compatible base URL overrides", async () => {
++    vi.stubEnv("OPENAI_API_KEY", "sk_test_openai_key");
 +    vi.stubEnv("OPENAI_BASE_URL", "https://elizacloud.ai/api/v1");
 +
 +    const { selectLiveProvider } = await import("./live-provider.ts");
@@ -1707,6 +1717,11 @@ diff --git a/packages/app-core/test/helpers/live-provider.ts b/packages/app-core
 index 07df508cb7..6624435c73 100644
 --- a/packages/app-core/test/helpers/live-provider.ts
 +++ b/packages/app-core/test/helpers/live-provider.ts
+@@ -38,0 +39,4 @@ function providerKeyMatchesSelection(
++  if (providerName === "openai" && /^eliza[-_]/i.test(trimmed)) {
++    return false;
++  }
++
 @@ -60,0 +61 @@ function getLiveTestBaseUrlOverride(
 +  canonicalBaseUrlEnvVar?: string,
 @@ -65,0 +67 @@ function getLiveTestBaseUrlOverride(

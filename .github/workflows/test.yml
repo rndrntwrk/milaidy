@@ -659,8 +659,8 @@ jobs:
       GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       ELIZAOS_CLOUD_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY != '' && secrets.ELIZAOS_CLOUD_API_KEY || secrets.ELIZACLOUD_API_KEY }}
-      OPENAI_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY != '' && secrets.ELIZAOS_CLOUD_API_KEY || (secrets.ELIZACLOUD_API_KEY != '' && secrets.ELIZACLOUD_API_KEY || secrets.OPENAI_API_KEY) }}
-      OPENAI_BASE_URL: ${{ (secrets.ELIZAOS_CLOUD_API_KEY != '' || secrets.ELIZACLOUD_API_KEY != '') && 'https://elizacloud.ai/api/v1' || 'https://api.openai.com/v1' }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENAI_BASE_URL: ${{ secrets.OPENAI_BASE_URL != '' && secrets.OPENAI_BASE_URL || 'https://api.openai.com/v1' }}
       NODE_NO_WARNINGS: "1"
       NODE_OPTIONS: "--max-old-space-size=4096"
     steps:
