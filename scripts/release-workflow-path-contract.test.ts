@@ -928,6 +928,18 @@ describe("release workflow path contract", () => {
     expect(patch).toContain(
       "node --import tsx scripts/copy-runtime-node-modules.ts --link-only || exit $$?",
     );
+    expect(
+      patch.indexOf("ELIZAOS_APP_SKIP_LOCAL_UPSTREAMS=1 bun install"),
+    ).toBeLessThan(
+      patch.indexOf(
+        "node --import tsx scripts/copy-runtime-node-modules.ts --link-only",
+      ),
+    );
+    expect(
+      patch.indexOf(
+        "node --import tsx scripts/copy-runtime-node-modules.ts --link-only",
+      ),
+    ).toBeLessThan(patch.indexOf("bun run build"));
     expect(agentRelease).toContain("apps/app/ios/App/App.xcodeproj");
     expect(agentRelease).not.toContain("if [ -d ios/App ]; then");
     expect(debianValidationBlock).not.toContain(" nodejs npm ");

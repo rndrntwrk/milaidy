@@ -97,11 +97,16 @@ index 9e739b04b3..02a9f18340 100644
      }
  }
 diff --git a/packages/app-core/packaging/debian/rules b/packages/app-core/packaging/debian/rules
-index bb5de34e02..d05b1cbe5b 100755
+index bb5de34e02..6e2c9c8b36 100755
 --- a/packages/app-core/packaging/debian/rules
 +++ b/packages/app-core/packaging/debian/rules
-@@ -8,0 +9 @@ override_dh_auto_build:
+@@ -8,5 +8,6 @@ override_dh_auto_build:
+ 	if command -v bun >/dev/null 2>&1; then \
+ 		node scripts/init-submodules.mjs || true; \
+ 		node scripts/disable-local-eliza-workspace.mjs || true; \
+ 		ELIZAOS_APP_SKIP_LOCAL_UPSTREAMS=1 bun install --ignore-scripts; \
 +		node --import tsx scripts/copy-runtime-node-modules.ts --link-only || exit $$?; \
+ 		bun run build; \
 diff --git a/packages/app-core/test/live-agent/action-invocation.live.e2e.test.ts b/packages/app-core/test/live-agent/action-invocation.live.e2e.test.ts
 index a2d87b6bb3..f3abec43f2 100644
 --- a/packages/app-core/test/live-agent/action-invocation.live.e2e.test.ts
