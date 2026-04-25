@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { main as syncToAospMain } from "./sync-to-aosp.mjs";
 import { main as validateMain } from "./validate.mjs";
 
-const PRODUCT_LUNCH = "milady_cf_x86_64_phone-userdebug";
+const PRODUCT_LUNCH = "milady_cf_x86_64_phone-trunk_staging-userdebug";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "../..");
 

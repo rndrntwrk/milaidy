@@ -35,6 +35,6 @@ PRODUCT_ARTIFACT_PATH_REQUIREMENT_ALLOWED_LIST += \
     system/etc/default-permissions/default-permissions-com.miladyai.milady.xml \
     system/etc/permissions/privapp-permissions-com.miladyai.milady.xml
 
-PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
+PRODUCT_PRODUCT_PROPERTIES += \
     ro.miladyos.product=milady_cf_x86_64_phone \
     ro.miladyos.home=com.miladyai.milady

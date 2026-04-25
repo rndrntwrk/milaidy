@@ -547,25 +547,29 @@ jobs:
     needs: [version]
     runs-on: macos-14
     continue-on-error: true
+    env:
+      MILADY_SKIP_LOCAL_UPSTREAMS: ""
+      ELIZA_SKIP_LOCAL_UPSTREAMS: ""
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: false
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - uses: oven-sh/setup-bun@v2
+      - name: Setup workspace dependencies
+        uses: ./.github/actions/setup-bun-workspace
         with:
           bun-version: ${{ env.BUN_VERSION }}
-      - name: Init non-eliza submodules
-        run: |
-          git submodule sync -- eliza
-          git submodule update --init --depth=1 eliza
-          node scripts/init-submodules.mjs
-          node scripts/apply-eliza-ci-patches.mjs
-          node scripts/disable-local-eliza-workspace.mjs
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+          install-native-deps: "false"
+          run-postinstall: "true"
+          skip-avatar-clone: "true"
+          no-vision-deps: "true"
+      - name: Restore legacy electrobun compatibility path
+        run: node scripts/ensure-legacy-electrobun-compat.mjs
       - name: Build web assets and Electrobun
         run: |
-          bun install --ignore-scripts
-          bun run postinstall
           ELECTROBUN_SKIP_CODESIGN=1 bun run build || echo "::warning::macOS build failed (non-blocking)"
 
   build-homepage:

@@ -272,10 +272,10 @@ export function validateProductLayer(vendorDir) {
   assertMatches(
     androidProducts,
     new RegExp(
-      `COMMON_LUNCH_CHOICES\\s*:=\\s*\\\\?\\s*${PRODUCT_NAME}-userdebug`,
+      `COMMON_LUNCH_CHOICES\\s*:=\\s*\\\\?\\s*${PRODUCT_NAME}-trunk_staging-userdebug`,
     ),
     "AndroidProducts.mk",
-    `${PRODUCT_NAME}-userdebug lunch choice`,
+    `${PRODUCT_NAME}-trunk_staging-userdebug lunch choice`,
   );
 
   const androidBp = read(path.join(vendorDir, "apps", "Milady", "Android.bp"));
@@ -374,6 +374,31 @@ export function validateDefaultPermissions(vendorDir) {
       "privapp permissions",
     );
   }
+
+  // The product makefile lists these XMLs by module name in PRODUCT_PACKAGES.
+  // Soong needs prebuilt_etc{} declarations or `m` exits with "module not defined".
+  const permissionsBp = read(path.join(vendorDir, "permissions", "Android.bp"));
+  for (const moduleName of [
+    `default-permissions-${PACKAGE_NAME}.xml`,
+    `privapp-permissions-${PACKAGE_NAME}.xml`,
+  ]) {
+    assertIncludes(
+      permissionsBp,
+      `name: "${moduleName}"`,
+      "permissions/Android.bp",
+    );
+  }
+  assertIncludes(
+    permissionsBp,
+    'sub_dir: "default-permissions"',
+    "permissions/Android.bp",
+  );
+  assertIncludes(
+    permissionsBp,
+    'sub_dir: "permissions"',
+    "permissions/Android.bp",
+  );
+
   console.log("[miladyos:validate] Permission XML checks passed.");
 }
 

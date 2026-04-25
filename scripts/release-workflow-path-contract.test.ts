@@ -71,6 +71,30 @@ describe("release workflow path contract", () => {
     expect(mobileBuildHelper).toContain("await buildIos();");
   });
 
+  it("keeps macOS App Store validation on the source-workspace install path", () => {
+    const agentRelease = readWorkflow("agent-release.yml");
+    const macStoreBlock = agentRelease.slice(
+      agentRelease.indexOf("  build-macos-store:"),
+      agentRelease.indexOf("  build-homepage:"),
+    );
+
+    expect(macStoreBlock).toContain('MILADY_SKIP_LOCAL_UPSTREAMS: ""');
+    expect(macStoreBlock).toContain(
+      "uses: ./.github/actions/setup-bun-workspace",
+    );
+    expect(macStoreBlock).toContain(
+      "install-command: bun install --ignore-scripts --no-frozen-lockfile",
+    );
+    expect(macStoreBlock).toContain('install-native-deps: "false"');
+    expect(macStoreBlock).toContain(
+      "node scripts/ensure-legacy-electrobun-compat.mjs",
+    );
+    expect(macStoreBlock).not.toContain(
+      "node scripts/disable-local-eliza-workspace.mjs",
+    );
+    expect(macStoreBlock).not.toContain("bun install --ignore-scripts\n");
+  });
+
   it("does not reinstall eliza/packages/app-core directly in the windows preload smoke job", () => {
     const workflow = readWorkflow("windows-desktop-preload-smoke.yml");
 
@@ -353,6 +377,10 @@ describe("release workflow path contract", () => {
 
   it("patches Android release build compatibility before release Android validation", () => {
     const agentRelease = readWorkflow("agent-release.yml");
+    const patch = fs.readFileSync(
+      path.join(repoRoot, "patches", "eliza", "ci-release-contracts.patch"),
+      "utf8",
+    );
     const mobileCompatScript = fs.readFileSync(
       path.join(repoRoot, "scripts", "patch-mobile-build-release-compat.mjs"),
       "utf8",
@@ -380,6 +408,10 @@ describe("release workflow path contract", () => {
     expect(mobileCompatScript).toContain(
       "apps/app/android/gradle/wrapper/gradle-wrapper.properties",
     );
+    expect(patch).toContain("MiladyBootReceiver.java");
+    expect(patch).toContain("AppOpsManager.class.getMethod(");
+    expect(patch).toContain("invokeSetMode(appOps, context)");
+    expect(patch).not.toContain("+            appOps.setMode(");
     expect(
       agentRelease.indexOf("name: Patch Android release build compatibility"),
     ).toBeLessThan(

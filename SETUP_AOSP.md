@@ -2,7 +2,7 @@
 
 This is the migration runbook for taking the current `develop` branch onto a Linux builder and validating the hard-path MiladyOS build: a real AOSP/Cuttlefish product image where Milady is installed as a privileged system app and owns the phone UI surface.
 
-This is not kiosk mode, managed-device mode, or an emulator-only wrapper. The target is an AOSP product build named `milady_cf_x86_64_phone-userdebug`.
+This is not kiosk mode, managed-device mode, or an emulator-only wrapper. The target is an AOSP product build named `milady_cf_x86_64_phone-trunk_staging-userdebug`.
 
 ## Current Repository State
 
@@ -36,7 +36,7 @@ Expected clean checkout shape:
 
 ## Builder Requirements
 
-Use a Linux x86_64 machine with KVM. The MiladyOS build script enforces this because the current Cuttlefish target is `milady_cf_x86_64_phone-userdebug`.
+Use a Linux x86_64 machine with KVM. The MiladyOS build script enforces this because the current Cuttlefish target is `milady_cf_x86_64_phone-trunk_staging-userdebug`.
 
 Recommended machine:
 
@@ -156,7 +156,7 @@ repo sync -c -j8
 
 Notes:
 
-- Google now recommends `android-latest-release` for platform work.
+- `android-latest-release` is a moving target. The product makefile inherits `device/google/cuttlefish/vsoc_x86_64_only/phone/aosp_cf.mk`, and Google has renamed the Cuttlefish device tree twice in the last 18 months. If `lunch milady_cf_x86_64_phone-trunk_staging-userdebug` ever errors with `Cannot locate config for milady_cf_x86_64_phone`, the inherit-product path in `os/android/vendor/milady/products/milady_cf_x86_64_phone.mk` likely needs an update — bisect by `repo init -b <tag>` against an older release tag (e.g. `android-15.0.0_r10`) until the inherit-product path resolves, then update the makefile + `validate.mjs` reference together.
 - `repo sync` can take more than an hour and can fail on flaky networks. Re-run the same command if it fails.
 - Do not put AOSP under the Milady checkout.
 
@@ -182,7 +182,7 @@ What this command does:
 
    ```bash
    source build/envsetup.sh
-   lunch milady_cf_x86_64_phone-userdebug
+   lunch milady_cf_x86_64_phone-trunk_staging-userdebug
    m -j$(nproc)
    ```
 
@@ -228,7 +228,7 @@ bun run miladyos:validate -- --aosp-root ~/aosp
 ```bash
 cd ~/aosp
 source build/envsetup.sh
-lunch milady_cf_x86_64_phone-userdebug
+lunch milady_cf_x86_64_phone-trunk_staging-userdebug
 m -j"$(nproc)"
 ```
 
@@ -237,7 +237,7 @@ m -j"$(nproc)"
 ```bash
 cd ~/aosp
 source build/envsetup.sh
-lunch milady_cf_x86_64_phone-userdebug
+lunch milady_cf_x86_64_phone-trunk_staging-userdebug
 launch_cvd --daemon
 ```
 
@@ -366,14 +366,36 @@ cd ~/milady
 node scripts/miladyos/build-aosp.mjs --aosp-root ~/aosp
 ```
 
+### `dev:android` is not the AOSP loop
+
+`bun run dev:android` opens **Android Studio against the Capacitor app**, not against AOSP. It builds a debug APK and installs it on a connected handset/emulator using the standard Capacitor flow. This is for app-only iteration without the system image.
+
+The actual AOSP iteration loop is:
+
+1. Edit Capacitor app sources or `os/android/vendor/milady/`.
+2. `bun run build:android:system` (rebuilds the privileged APK).
+3. `node scripts/miladyos/build-aosp.mjs --aosp-root ~/aosp` (sync + `m`).
+4. If only product XML/makefiles changed, add `--skip-build` to skip the APK rebuild.
+5. `node scripts/miladyos/build-aosp.mjs --aosp-root ~/aosp --launch --boot-validate` to relaunch Cuttlefish from a clean state.
+
 ## Known Limits Of This Stage
 
 Validated locally on macOS:
 
-- Android system APK builds.
-- Static MiladyOS product validation passes.
+- Android system APK builds (requires Android SDK with `build-tools` and JDK 21).
+- Static MiladyOS product validation passes (requires `xmllint` and `aapt` — see below).
 - MiladyOS script and workflow contract tests pass.
 - App-core typecheck passes.
+
+`bun run miladyos:validate` shells out to two binaries that aren't on a stock macOS:
+
+```bash
+brew install libxml2     # for xmllint
+# aapt comes with the Android SDK build-tools — install via Android Studio
+#   or `sdkmanager "build-tools;36.0.0"` and ensure ANDROID_HOME is set.
+```
+
+On Linux these come from `apt install libxml2-utils` and the SDK / `setup-android` action respectively.
 
 Requires Linux/KVM validation:
 

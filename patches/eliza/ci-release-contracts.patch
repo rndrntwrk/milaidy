@@ -21,6 +21,81 @@ diff --git a/packages/app-core/deploy/Dockerfile.cloud b/packages/app-core/deplo
 @@ -44 +44 @@
 -RUN node <<'EOF'
 +RUN bun run - <<'EOF'
+diff --git a/packages/app-core/platforms/android/app/src/main/java/ai/elizaos/app/MiladyBootReceiver.java b/packages/app-core/platforms/android/app/src/main/java/ai/elizaos/app/MiladyBootReceiver.java
+index 9e739b04b3..02a9f18340 100644
+--- a/packages/app-core/platforms/android/app/src/main/java/ai/elizaos/app/MiladyBootReceiver.java
++++ b/packages/app-core/platforms/android/app/src/main/java/ai/elizaos/app/MiladyBootReceiver.java
+@@ -8,0 +9,2 @@
++
++import java.lang.reflect.Method;
+@@ -33,15 +35,55 @@ public class MiladyBootReceiver extends BroadcastReceiver {
+             return;
+         }
+-        try {
+-            appOps.setMode(
+-                AppOpsManager.OPSTR_GET_USAGE_STATS,
+-                Process.myUid(),
+-                context.getPackageName(),
+-                AppOpsManager.MODE_ALLOWED
+-            );
+-        } catch (SecurityException error) {
+-            // Non-priv installs cannot setMode on themselves; fall back to
+-            // user-driven Special Access grant via the Settings deep link.
+-            Log.w(TAG, "GET_USAGE_STATS appop grant denied; user grant required.", error);
++        if (invokeSetMode(appOps, context)) {
++            return;
++        }
++        Log.w(TAG, "GET_USAGE_STATS appop grant API unavailable; user grant required.");
++    }
++
++    private static boolean invokeSetMode(AppOpsManager appOps, Context context) {
++        try {
++            Method setMode = AppOpsManager.class.getMethod(
++                "setMode",
++                String.class,
++                int.class,
++                String.class,
++                int.class
++            );
++            setMode.invoke(
++                appOps,
++                AppOpsManager.OPSTR_GET_USAGE_STATS,
++                Process.myUid(),
++                context.getPackageName(),
++                AppOpsManager.MODE_ALLOWED
++            );
++            return true;
++        } catch (NoSuchMethodException error) {
++            return invokeSetUidMode(appOps);
++        } catch (ReflectiveOperationException | RuntimeException error) {
++            Log.w(TAG, "GET_USAGE_STATS appop grant denied; user grant required.", error);
++            return true;
++        }
++    }
++
++    private static boolean invokeSetUidMode(AppOpsManager appOps) {
++        try {
++            Method setUidMode = AppOpsManager.class.getMethod(
++                "setUidMode",
++                String.class,
++                int.class,
++                int.class
++            );
++            setUidMode.invoke(
++                appOps,
++                AppOpsManager.OPSTR_GET_USAGE_STATS,
++                Process.myUid(),
++                AppOpsManager.MODE_ALLOWED
++            );
++            return true;
++        } catch (NoSuchMethodException error) {
++            return false;
++        } catch (ReflectiveOperationException | RuntimeException error) {
++            Log.w(TAG, "GET_USAGE_STATS appop grant denied; user grant required.", error);
++            return true;
+         }
+     }
+ }
 diff --git a/packages/app-core/platforms/electrobun/scripts/stage-macos-release-artifacts.sh b/packages/app-core/platforms/electrobun/scripts/stage-macos-release-artifacts.sh
 index 74c284e2df..60998fdf58 100644
 --- a/packages/app-core/platforms/electrobun/scripts/stage-macos-release-artifacts.sh
