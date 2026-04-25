@@ -4,7 +4,7 @@ sidebarTitle: "Model Providers"
 description: "Supported inference backends and how they fit into Milady's server-target-first routing model."
 ---
 
-Milady supports **10 inference backends** with dedicated plugins in the registry, plus access to hundreds of additional models through OpenRouter. Provider plugins supply the concrete model implementations, and the active backend is selected through canonical runtime routing on the connected server, not by ad hoc env toggles in the client.
+Milady supports **19 inference backends** out of the box. Provider plugins still supply the concrete model implementations, but the active backend is selected through canonical runtime routing on the connected server, not by ad hoc env toggles in the client.
 
 ---
 
@@ -26,7 +26,14 @@ Providers marked **bundled** are pre-installed with every Milady release and loa
 | [Groq](https://groq.com) | `@elizaos/plugin-groq` | `GROQ_API_KEY` | On demand | Ultra-fast inference (LPU). |
 | [xAI](https://x.ai) | `@elizaos/plugin-xai` | `XAI_API_KEY` or `GROK_API_KEY` | On demand | Grok models + Twitter/X integration. |
 | [Ollama](https://ollama.com) | `@elizaos/plugin-ollama` | `OLLAMA_BASE_URL` | Bundled | **Local models.** No API key needed. Requires a running [Ollama](https://ollama.com) server. |
-| [Local AI](https://localai.io) | `@elizaos/plugin-local-ai` | `MODELS_DIR` | On demand | Run local .gguf model files. Full offline operation. |
+| [Local AI](https://github.com/elizaos-plugins/plugin-local-ai) | `@elizaos/plugin-local-ai` | — | On demand | **In-process local models.** Runs GGUF models directly with no external server. |
+| [Qwen](https://qwen.ai) | `@elizaos/plugin-qwen` | — | On demand | Alibaba's Qwen models. Configure via plugin entry. |
+| [MiniMax](https://minimaxi.com) | `@elizaos/plugin-minimax` | — | On demand | MiniMax language models. Configure via plugin entry. |
+| [Together AI](https://together.ai) | `@elizaos/plugin-together` | `TOGETHER_API_KEY` | On demand | Open-source model hosting. |
+| [Mistral](https://mistral.ai) | `@elizaos/plugin-mistral` | `MISTRAL_API_KEY` | On demand | Mistral and Mixtral models. |
+| [Cohere](https://cohere.com) | `@elizaos/plugin-cohere` | `COHERE_API_KEY` | On demand | Command R+ and embed models. |
+| [Perplexity](https://perplexity.ai) | `@elizaos/plugin-perplexity` | `PERPLEXITY_API_KEY` | On demand | Search-augmented generation. |
+| [Zai](https://homunculuslabs.com) | `@homunculuslabs/plugin-zai` | `ZAI_API_KEY` | On demand | Homunculus Labs Zai models. |
 | [Eliza Cloud](https://elizacloud.ai) | `@elizaos/plugin-elizacloud` | `ELIZAOS_CLOUD_API_KEY` | Bundled | Cloud-managed inference route. Can be selected independently from where Milady itself is running. |
 
 <Info>

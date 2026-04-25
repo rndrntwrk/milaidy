@@ -1,10 +1,10 @@
 ---
 title: "Local AI Plugin"
 sidebarTitle: "Local AI"
-description: "LocalAI self-hosted model provider for Milady — OpenAI-compatible local model inference without external API dependencies."
+description: "Local AI provider for Milady — self-hosted, OpenAI-compatible local model inference with GGUF models."
 ---
 
-The Local AI plugin provides self-hosted, OpenAI-compatible local model inference for Milady agents. Unlike Ollama, which manages model downloads and serving, Local AI works directly with GGUF model files on disk.
+The Local AI plugin runs language models directly on your machine using GGUF model files. No API key or external service needed.
 
 **Package:** `@elizaos/plugin-local-ai`
 
@@ -14,61 +14,53 @@ The Local AI plugin provides self-hosted, OpenAI-compatible local model inferenc
 milady plugins install local-ai
 ```
 
-## Setup
-
-### 1. Prepare Model Files
-
-Download GGUF model files to a local directory:
-
-```bash
-mkdir -p ~/.milady/models
-# Download your preferred models in GGUF format
-```
-
-Default models (if not overridden):
-- **Large model:** `DeepHermes-3-Llama-3-8B-q4.gguf`
-- **Small model:** `DeepHermes-3-Llama-3-3B-Preview-q4.gguf`
-- **Embedding model:** `bge-small-en-v1.5.Q4_K_M.gguf`
-
-### 2. Configure Environment
-
-```bash
-export LOCAL_LARGE_MODEL=DeepHermes-3-Llama-3-8B-q4.gguf
-export LOCAL_SMALL_MODEL=DeepHermes-3-Llama-3-3B-Preview-q4.gguf
-export LOCAL_EMBEDDING_MODEL=bge-small-en-v1.5.Q4_K_M.gguf
-```
-
 ## Configuration
+
+Local AI does not require an API key. Configure it through environment variables or `milady.json`:
 
 | Environment Variable | Required | Default | Description |
 |---------------------|----------|---------|-------------|
 | `LOCAL_LARGE_MODEL` | No | `DeepHermes-3-Llama-3-8B-q4.gguf` | Filename of the large model |
 | `LOCAL_SMALL_MODEL` | No | `DeepHermes-3-Llama-3-3B-Preview-q4.gguf` | Filename of the small model |
 | `LOCAL_EMBEDDING_MODEL` | No | `bge-small-en-v1.5.Q4_K_M.gguf` | Filename of the embedding model |
-| `LOCAL_EMBEDDING_DIMENSIONS` | No | `384` | Embedding output dimensions |
-| `MODELS_DIR` | No | — | Directory where model files are stored |
-| `CACHE_DIR` | No | — | Cache directory for model assets |
-| `CUDA_VISIBLE_DEVICES` | No | — | GPU device IDs for CUDA acceleration |
+| `LOCAL_EMBEDDING_DIMENSIONS` | No | `384` | Number of dimensions the embedding model outputs |
+| `MODELS_DIR` | No | — | Filesystem path where model files are stored |
+| `CACHE_DIR` | No | — | Filesystem path for model asset cache |
+| `CUDA_VISIBLE_DEVICES` | No | — | GPU selection for CUDA-enabled inference |
 
-## Features
+### milady.json Example
 
-- Fully local — no API keys, no network calls
-- Works with standard GGUF model files
-- GPU acceleration when CUDA is available
-- Embedding generation for semantic search
-- No external service dependency
+```json
+{
+  "plugins": {
+    "allow": ["local-ai"]
+  },
+  "env": {
+    "LOCAL_LARGE_MODEL": "DeepHermes-3-Llama-3-8B-q4.gguf",
+    "MODELS_DIR": "/path/to/models"
+  }
+}
+```
 
-## Differences from Ollama
+## How It Works
 
-| Feature | Local AI | Ollama |
-|---------|----------|--------|
-| Model management | Manual GGUF files | Built-in pull/serve |
-| Setup | Place model files in directory | `ollama pull <model>` |
-| Dependencies | None (self-contained) | Ollama server process |
-| API format | OpenAI-compatible | OpenAI-compatible + native |
-| Package | `@elizaos/plugin-local-ai` | `@elizaos/plugin-ollama` |
+Local AI loads GGUF-format models and runs inference entirely on-device. It supports CPU and CUDA GPU acceleration. The plugin provides an OpenAI-compatible interface so the rest of the runtime treats it like any other provider.
+
+Models are downloaded automatically on first use if they are not already present in the configured `MODELS_DIR`.
+
+## When to Use Local AI vs Ollama
+
+| | Local AI | Ollama |
+|---|---------|--------|
+| External process | No (in-process) | Yes (separate server) |
+| Model format | GGUF files | Ollama model registry |
+| Setup | Plugin install only | Install Ollama + pull models |
+| GPU support | CUDA | CUDA, Metal, ROCm |
+
+Use **Local AI** when you want zero external dependencies and are comfortable with GGUF model files. Use **Ollama** when you want a broader model catalog and a dedicated model server.
 
 ## Related
 
-- [Ollama Plugin](/plugin-registry/llm/ollama) — Managed local model serving
-- [Model Providers](/runtime/models) — Compare all providers
+- [Ollama Plugin](/plugin-registry/llm/ollama) — Local models via Ollama server
+- [Model Providers](/model-providers) — Compare all providers
+- [Local Models Guide](/guides/local-models) — Full guide to running models locally

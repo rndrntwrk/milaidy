@@ -579,6 +579,7 @@
               "connectors/line",
               "connectors/wechat",
               "connectors/zalo",
+              "connectors/zalouser",
               "connectors/twilio",
               "connectors/nextcloud-talk"
             ]
@@ -1065,6 +1066,47 @@
               "plugin-registry/vision",
               "plugin-registry/webhooks",
               "plugin-registry/x402"
+            ]
+          },
+          {
+            "group": "Platform Connectors",
+            "pages": [
+              "plugin-registry/platform/discord",
+              "plugin-registry/platform/telegram",
+              "plugin-registry/platform/slack",
+              "plugin-registry/platform/whatsapp",
+              "plugin-registry/platform/signal",
+              "plugin-registry/platform/imessage",
+              "plugin-registry/platform/twitter",
+              "plugin-registry/platform/farcaster",
+              "plugin-registry/platform/bluesky",
+              "plugin-registry/platform/instagram",
+              "plugin-registry/platform/twitch",
+              "plugin-registry/platform/msteams",
+              "plugin-registry/platform/googlechat",
+              "plugin-registry/platform/matrix",
+              "plugin-registry/platform/mattermost",
+              "plugin-registry/platform/wechat",
+              "plugin-registry/platform/feishu",
+              "plugin-registry/platform/nostr",
+              "plugin-registry/platform/lens",
+              "plugin-registry/platform/blooio",
+              "plugin-registry/platform/bluebubbles",
+              "plugin-registry/platform/line",
+              "plugin-registry/platform/zalo",
+              "plugin-registry/platform/zalouser",
+              "plugin-registry/platform/twilio",
+              "plugin-registry/platform/github",
+              "plugin-registry/platform/gmail-watch",
+              "plugin-registry/platform/nextcloud-talk",
+              "plugin-registry/platform/tlon"
+            ]
+          },
+          {
+            "group": "DeFi & Blockchain",
+            "pages": [
+              "plugin-registry/defi/evm",
+              "plugin-registry/defi/solana"
             ]
           }
         ]

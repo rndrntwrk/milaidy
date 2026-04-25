@@ -4,11 +4,11 @@ sidebarTitle: Zalo User
 description: Connect your agent to Zalo personal accounts using the @elizaos/plugin-zalouser package.
 ---
 
-Connect your agent to Zalo for one-to-one messaging via a personal account.
+Connect your agent to Zalo personal accounts for one-to-one messaging workflows.
 
 ## Overview
 
-The Zalo User connector is an elizaOS plugin for personal-account Zalo messaging. Unlike the [Zalo OA connector](/connectors/zalo) which uses the Official Account API, this connector operates through a personal Zalo account for direct one-to-one messaging workflows.
+The Zalo User connector is a personal-account variant of the [Zalo connector](/connectors/zalo). While the standard Zalo plugin uses the Official Account API, this connector authenticates as a personal Zalo user via cookie-based sessions.
 
 ## Package Info
 
@@ -18,47 +18,42 @@ The Zalo User connector is an elizaOS plugin for personal-account Zalo messaging
 | Config key | `connectors.zalouser` |
 | Install | `milady plugins install zalouser` |
 
-## Setup Requirements
-
-- Zalo account cookie file for authentication
-- IMEI identifier (optional)
-
 ## Configuration
 
 ```json
 {
   "connectors": {
     "zalouser": {
-      "enabled": true
+      "enabled": true,
+      "cookiePath": "./auth/zalouser"
     }
   }
 }
 ```
 
-## Config Keys
+## Environment Variables
 
-| Key | Type | Description |
-|-----|------|-------------|
-| `ZALOUSER_ENABLED` | boolean | Enable or disable the connector |
-| `ZALOUSER_COOKIE_PATH` | string | Path to cookie file for authentication |
-| `ZALOUSER_IMEI` | string | Device IMEI identifier |
-| `ZALOUSER_USER_AGENT` | string | User agent string |
-| `ZALOUSER_DM_POLICY` | string | DM policy (e.g. `allow`, `deny`, `allowlist`) |
-| `ZALOUSER_GROUP_POLICY` | string | Group message policy (e.g. `allow`, `deny`) |
-| `ZALOUSER_ALLOWED_THREADS` | string | Comma-separated allowed channel/room list |
-| `ZALOUSER_PROFILES` | string | Profile configuration |
-| `ZALOUSER_DEFAULT_PROFILE` | string | Default profile |
-| `ZALOUSER_LISTEN_TIMEOUT` | number | Timeout value for listening |
+| Variable | Description |
+|----------|-------------|
+| `ZALOUSER_ENABLED` | Enable or disable the connector |
+| `ZALOUSER_COOKIE_PATH` | Path to cookie/session storage |
+| `ZALOUSER_IMEI` | Device IMEI identifier |
+| `ZALOUSER_USER_AGENT` | User agent string for requests |
+| `ZALOUSER_PROFILES` | Profile configuration |
+| `ZALOUSER_DEFAULT_PROFILE` | Default profile to use |
+| `ZALOUSER_DM_POLICY` | DM policy: `"allow"`, `"deny"`, or `"allowlist"` |
+| `ZALOUSER_GROUP_POLICY` | Group message policy: `"allow"` or `"deny"` |
+| `ZALOUSER_ALLOWED_THREADS` | Comma-separated list of allowed thread IDs |
+| `ZALOUSER_LISTEN_TIMEOUT` | Timeout for message listening (ms) |
 
 ## Features
 
-- Personal account messaging (outside Official Account)
+- Personal account messaging (not Official Account)
+- One-to-one chat workflows
+- Cookie-based session persistence
 - DM and group policy controls
-- Profile configuration
-- Thread allowlists
-- Configurable listen timeout
 
 ## Related
 
-- [Zalo OA connector](/connectors/zalo)
-- [Connectors overview](/guides/connectors#zalo-user)
+- [Zalo (Official Account)](/connectors/zalo) — Official Account messaging
+- [Connectors overview](/guides/connectors#zalo)

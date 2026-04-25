@@ -1,7 +1,7 @@
 ---
 title: "Platform Connectors"
 sidebarTitle: "Connectors"
-description: "Platform bridges for 23+ messaging platforms — auto-enabled from config or installable from the registry."
+description: "Platform bridges for 29 messaging platforms — 18 auto-enabled from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Twitter, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, Lens, WeChat) plus 11 installable from the registry (BlueBubbles, Bluesky, Instagram, LINE, Zalo, Zalo User, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
 ---
 
 Connectors are platform bridges that allow your agent to communicate across messaging platforms and social networks. Each connector handles authentication, message routing, session management, and platform-specific features.
@@ -28,18 +28,22 @@ Connectors are platform bridges that allow your agent to communicate across mess
 16. [Instagram](#instagram)
 17. [Twitch](#twitch)
 18. [Mattermost](#mattermost)
-19. [Matrix](#matrix)
-20. [Feishu / Lark](#feishu--lark)
-21. [Nostr](#nostr)
-22. [LINE](#line)
-23. [Zalo](#zalo)
-24. [Zalo User](#zalo-user)
-25. [Nextcloud Talk](#nextcloud-talk)
-26. [Tlon](#tlon)
-27. [Feature Plugins with Messaging Capabilities](#feature-plugins-with-messaging-capabilities)
-28. [Connector Lifecycle](#connector-lifecycle)
-29. [Multi-Account Support](#multi-account-support)
-30. [Session Management](#session-management)
+19. [WeChat](#wechat)
+20. [Matrix](#matrix)
+21. [Feishu / Lark](#feishu--lark)
+22. [Nostr](#nostr)
+23. [LINE](#line)
+24. [Zalo](#zalo)
+25. [Zalo User](#zalo-user)
+26. [Twilio](#twilio)
+27. [GitHub](#github)
+28. [Gmail Watch](#gmail-watch)
+29. [Nextcloud Talk](#nextcloud-talk)
+30. [Tlon](#tlon)
+31. [Lens](#lens)
+32. [Connector Lifecycle](#connector-lifecycle)
+33. [Multi-Account Support](#multi-account-support)
+34. [Session Management](#session-management)
 
 ---
 
@@ -70,7 +74,10 @@ Connectors marked **Auto** load automatically when their config is present in `m
 | Instagram | Username + password | DMs | N/A | No | Registry |
 | LINE | Channel access token + secret | Yes | Yes | No | Registry |
 | Zalo | Access token | Yes | Yes | No | Registry |
-| Zalo User | Cookie-based | Yes | Yes | No | Registry |
+| Zalo User | Cookie session | Yes | No | No | Registry |
+| Twilio | Account SID + auth token | SMS/Voice | N/A | No | Registry |
+| GitHub | API token | Issues/PRs | Yes (repos) | No | Registry |
+| Gmail Watch | Service account / OAuth | N/A | N/A | No | Registry |
 | Nextcloud Talk | Server credentials | Yes | Yes (rooms) | No | Registry |
 | Tlon | Ship credentials | Yes | Yes (Urbit chats) | No | Registry |
 | BlueBubbles | Server password | Yes | Yes | No | Registry |
@@ -936,6 +943,37 @@ This connector auto-enables when its configuration is present in `milady.json`.
 ---
 
 ## Zalo User
+
+### Setup Requirements
+
+- Zalo personal account session (cookie-based authentication)
+
+### Key Configuration
+
+```json
+{
+  "connectors": {
+    "zalouser": {
+      "enabled": true,
+      "cookiePath": "./auth/zalouser"
+    }
+  }
+}
+```
+
+**Environment variables:** `ZALOUSER_COOKIE_PATH`, `ZALOUSER_IMEI`, `ZALOUSER_USER_AGENT`, `ZALOUSER_DM_POLICY`, `ZALOUSER_GROUP_POLICY`, `ZALOUSER_ALLOWED_THREADS`, `ZALOUSER_LISTEN_TIMEOUT`
+
+### Features
+
+- Personal account one-to-one messaging (not Official Account)
+- Cookie-based session persistence
+- DM and group policy controls
+
+**Note:** This is the personal-account variant of the [Zalo](#zalo) connector. Install it with `milady plugins install @elizaos/plugin-zalouser`.
+
+---
+
+## Twilio
 
 ### Setup Requirements
 
