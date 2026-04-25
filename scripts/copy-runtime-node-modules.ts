@@ -101,6 +101,10 @@ function ensureMirroredNodeModules() {
 
 ensureMirroredNodeModules();
 
+if (process.argv.includes("--link-only")) {
+  process.exit(0);
+}
+
 const cwd = process.cwd();
 const pathFlags = new Set(["--scan-dir", "--target-dist"]);
 const args: string[] = [];

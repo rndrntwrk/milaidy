@@ -466,6 +466,9 @@ jobs:
       - name: Initialize tracked workspace submodules
         run: node scripts/init-submodules.mjs
 
+      - name: Apply Milady eliza CI patches
+        run: node scripts/apply-eliza-ci-patches.mjs
+
       - name: Install dependencies
         run: bun install --ignore-scripts
 

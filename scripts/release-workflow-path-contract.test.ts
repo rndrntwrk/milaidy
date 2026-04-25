@@ -384,6 +384,7 @@ describe("release workflow path contract", () => {
 
   it("patches Android release build compatibility before release Android validation", () => {
     const agentRelease = readWorkflow("agent-release.yml");
+    const testWorkflow = readWorkflow("test.yml");
     const patch = fs.readFileSync(
       path.join(repoRoot, "patches", "eliza", "ci-release-contracts.patch"),
       "utf8",
@@ -419,6 +420,7 @@ describe("release workflow path contract", () => {
     expect(patch).toContain("AppOpsManager.class.getMethod(");
     expect(patch).toContain("invokeSetMode(appOps, context)");
     expect(patch).not.toContain("+            appOps.setMode(");
+    expect(patch).toContain('selectLiveProvider("openai") ?? selectLiveProvider()');
     expect(
       agentRelease.indexOf("name: Patch Android release build compatibility"),
     ).toBeLessThan(
@@ -431,6 +433,23 @@ describe("release workflow path contract", () => {
         "node eliza/packages/app-core/scripts/run-mobile-build.mjs android",
       ),
     ).toBeLessThan(agentRelease.indexOf("working-directory: apps/app/android"));
+
+    const websiteBlockerAndroidBlock = testWorkflow.slice(
+      testWorkflow.indexOf("  website-blocker-mobile-android:"),
+      testWorkflow.indexOf("  website-blocker-mobile-ios:"),
+    );
+    expect(websiteBlockerAndroidBlock).toContain(
+      "name: Apply Milady eliza CI patches",
+    );
+    expect(
+      websiteBlockerAndroidBlock.indexOf(
+        "name: Apply Milady eliza CI patches",
+      ),
+    ).toBeLessThan(
+      websiteBlockerAndroidBlock.indexOf(
+        "name: Patch Android release build compatibility",
+      ),
+    );
   });
 
   it("keeps the electrobun release workflow aligned with the Agent Browser Bridge companion contract", () => {
@@ -857,6 +876,10 @@ describe("release workflow path contract", () => {
 
   it("keeps agent release publication gated on every release validation job", () => {
     const agentRelease = readWorkflow("agent-release.yml");
+    const patch = fs.readFileSync(
+      path.join(repoRoot, "patches", "eliza", "ci-release-contracts.patch"),
+      "utf8",
+    );
 
     const buildNpmBlock = agentRelease.slice(
       agentRelease.indexOf("  build-npm:"),
@@ -877,6 +900,9 @@ describe("release workflow path contract", () => {
 
     expect(buildNpmBlock).not.toContain("continue-on-error: true");
     expect(buildNpmBlock).not.toContain("package.json missing from pack");
+    expect(buildNpmBlock).not.toContain(
+      "Restore eliza workspace paths for release scripts",
+    );
     expect(releaseValidationBlock).not.toContain("continue-on-error: true");
     expect(releaseValidationBlock).not.toContain("failed (non-blocking)");
     expect(releaseValidationBlock).not.toContain('|| echo "::warning::');
@@ -899,6 +925,11 @@ describe("release workflow path contract", () => {
     expect(debianValidationBlock).toContain(
       "dpkg-checkbuilddeps debian/control",
     );
+    expect(patch).toContain(
+      "node --import tsx scripts/copy-runtime-node-modules.ts --link-only || true",
+    );
+    expect(agentRelease).toContain("apps/app/ios/App/App.xcodeproj");
+    expect(agentRelease).not.toContain("if [ -d ios/App ]; then");
     expect(debianValidationBlock).not.toContain(" nodejs npm ");
     expect(debianValidationBlock).not.toContain("actions/setup-node@v4");
     expect(releaseValidationBlock).not.toContain("com.milady.Milady.yml");

@@ -96,6 +96,21 @@ index 9e739b04b3..02a9f18340 100644
          }
      }
  }
+diff --git a/packages/app-core/packaging/debian/rules b/packages/app-core/packaging/debian/rules
+index bb5de34e02..d05b1cbe5b 100755
+--- a/packages/app-core/packaging/debian/rules
++++ b/packages/app-core/packaging/debian/rules
+@@ -8,0 +9 @@ override_dh_auto_build:
++		node --import tsx scripts/copy-runtime-node-modules.ts --link-only || true; \
+diff --git a/packages/app-core/test/live-agent/action-invocation.live.e2e.test.ts b/packages/app-core/test/live-agent/action-invocation.live.e2e.test.ts
+index a2d87b6bb3..f3abec43f2 100644
+--- a/packages/app-core/test/live-agent/action-invocation.live.e2e.test.ts
++++ b/packages/app-core/test/live-agent/action-invocation.live.e2e.test.ts
+@@ -45,3 +45,3 @@ const liveModelTestsEnabled =
+ const selectedLiveProvider = liveModelTestsEnabled
+-  ? selectLiveProvider()
++  ? (selectLiveProvider("openai") ?? selectLiveProvider())
+   : null;
 diff --git a/packages/app-core/platforms/electrobun/scripts/stage-macos-release-artifacts.sh b/packages/app-core/platforms/electrobun/scripts/stage-macos-release-artifacts.sh
 index 74c284e2df..60998fdf58 100644
 --- a/packages/app-core/platforms/electrobun/scripts/stage-macos-release-artifacts.sh
