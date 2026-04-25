@@ -8,9 +8,13 @@ description: Connect your agent to Twitter/X via the xAI plugin (@elizaos/plugin
 
 Connect your agent to Twitter/X for social media engagement.
 
+<Warning>
+This connector is **not included** in the bundled plugin registry (`plugins.json`). It is available from the upstream elizaOS registry and must be installed explicitly: `milady plugins install @elizaos/plugin-twitter`.
+</Warning>
+
 ## Overview
 
-Twitter/X integration is bundled with the **xAI provider plugin** (`@elizaos/plugin-xai`). There is no separate `@elizaos/plugin-twitter` — the xAI plugin handles both Grok model access and X platform connectivity. The connector is auto-enabled when X/Twitter OAuth credentials are detected in your connector configuration or environment variables.
+The Twitter connector is an upstream elizaOS plugin that bridges your agent to Twitter/X. It is auto-enabled by the runtime when a valid token is detected in your connector configuration.
 
 ## Configuration
 

@@ -6,9 +6,11 @@ description: "Zai model provider for Milady — access Homunculus Labs' Zai lang
 
 The Zai plugin connects Milady agents to Homunculus Labs' Zai language models.
 
-**Package:** `@homunculuslabs/plugin-zai` (not yet published)
+<Info>
+This plugin is available from the upstream elizaOS registry. It is **not bundled** in `plugins.json` and must be installed explicitly.
+</Info>
 
-> **Availability:** This plugin is not in the bundled registry (`plugins.json`). It is available from the remote elizaOS plugin registry.
+**Package:** `@homunculuslabs/plugin-zai`
 
 ## Installation
 

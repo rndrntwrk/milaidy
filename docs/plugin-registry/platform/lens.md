@@ -8,11 +8,11 @@ description: "The @elizaos/plugin-lens package is not currently available in the
 
 The Lens plugin connects Milady agents to the Lens Protocol, enabling social interactions on the decentralized social graph built on Polygon.
 
-**Package:** `@elizaos/plugin-lens` (not yet published)
+<Info>
+This plugin is available from the upstream elizaOS registry. It is **not bundled** in `plugins.json` and must be installed explicitly.
+</Info>
 
-<Note>
-This is an upstream elizaOS plugin and is **not included** in the Milady bundled registry. It must be installed manually from the remote registry.
-</Note>
+**Package:** `@elizaos/plugin-lens`
 
 ## Installation
 

@@ -10,9 +10,11 @@ This plugin is not yet available in the Milady plugin registry. To use Mistral m
 
 The Mistral plugin connects Milady agents to Mistral AI models, offering both open-weight and commercial models with competitive performance, especially for European languages and code generation.
 
-**Package:** `@elizaos/plugin-mistral` (not yet published)
+<Info>
+This plugin is available from the upstream elizaOS registry. It is **not bundled** in `plugins.json` and must be installed explicitly.
+</Info>
 
-> **Availability:** This plugin is not in the bundled registry (`plugins.json`). It is available from the remote elizaOS plugin registry and auto-enables when `MISTRAL_API_KEY` is set.
+**Package:** `@elizaos/plugin-mistral`
 
 ## Installation
 

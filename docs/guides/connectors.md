@@ -1,7 +1,7 @@
 ---
 title: "Platform Connectors"
 sidebarTitle: "Connectors"
-description: "Platform bridges for 28 messaging and social platforms — 18 auto-enable from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Twitter, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, Lens, WeChat) plus 10 installable from the registry (BlueBubbles, Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
+description: "Platform bridges for 30 messaging platforms — 22 bundled connectors that auto-enable from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, BlueBubbles, Bluesky, Instagram, LINE, Zalo, Nextcloud Talk, Tlon) plus additional connectors available via the upstream registry or as feature plugins (Twitter/X, WeChat, Lens, Twilio, GitHub, Gmail Watch)."
 ---
 
 Connectors are platform bridges that allow your agent to communicate across messaging platforms and social networks. Each connector handles authentication, message routing, session management, and platform-specific features.
@@ -47,7 +47,7 @@ Connectors are platform bridges that allow your agent to communicate across mess
 
 ## Supported Platforms
 
-Connectors marked **Auto** load automatically when their config is present in `milady.json`. Connectors marked **Registry** must be installed first with `milady plugins install <package>`. Connectors marked **Upstream** are available from the elizaOS plugin registry but are not bundled with Milady — install them manually. **Experimental** connectors are in development and not yet fully integrated.
+Connectors marked **Auto** load automatically when their config is present in `milady.json`. Connectors marked **Registry** must be installed first with `milady plugins install <package>`. Connectors marked **Upstream** are available from the upstream elizaOS registry but are not bundled — install them explicitly with `milady plugins install <package>` before configuring.
 
 | Platform | Auth Method | DM Support | Group Support | Multi-Account | Availability |
 |----------|------------|------------|---------------|---------------|-------------|
@@ -59,13 +59,16 @@ Connectors marked **Auto** load automatically when their config is present in `m
 | iMessage | Native CLI (macOS) | Yes | Yes | Yes | Auto |
 | Microsoft Teams | App ID + password | Yes | Yes (teams/channels) | No | Auto |
 | Google Chat | Service account | Yes | Yes (spaces) | Yes | Auto |
+| Twitter | API keys + tokens | DMs | N/A | No | Upstream |
 | Farcaster | Neynar API key + signer | Casts | Yes (channels) | No | Auto |
 | Twitch | Client ID + access token | Yes (chat) | Yes (channels) | No | Auto |
 | Mattermost | Bot token | Yes | Yes (channels) | No | Auto |
+| WeChat | Proxy API key + QR code | Yes | Yes | Yes | Upstream |
 | Matrix | Access token | Yes | Yes (rooms) | No | Auto |
 | Feishu / Lark | App ID + secret | Yes | Yes (group chats) | No | Auto |
 | Nostr | Private key (nsec/hex) | Yes (NIP-04) | N/A | No | Auto |
-| BlueBubbles | Server URL + password | Yes | Yes | No | Auto |
+| Lens | API key | Yes | N/A | No | Upstream |
+| BlueBubbles | Server password | Yes | Yes | No | Registry |
 | Bluesky | Account credentials | Posts | N/A | No | Registry |
 | Instagram | Username + password | DMs | N/A | No | Registry |
 | LINE | Channel access token + secret | Yes | Yes | No | Registry |

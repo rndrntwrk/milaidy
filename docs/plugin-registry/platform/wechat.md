@@ -10,6 +10,10 @@ The WeChat plugin is maintained locally in this repository under `packages/plugi
 
 The WeChat plugin connects Milady agents to WeChat via a user-supplied proxy service, enabling text messaging and optional image and group chat support from personal WeChat accounts.
 
+<Info>
+This plugin is **not included** in the bundled `plugins.json`. It is a Milady-specific connector available via the local checkout. Run `bun run setup:upstreams` to make it available.
+</Info>
+
 **Package:** `@elizaos/plugin-wechat`
 
 > **Availability:** This plugin is not in the bundled registry (`plugins.json`). It is available as an upstream elizaOS plugin and auto-enables when its connector config is present.

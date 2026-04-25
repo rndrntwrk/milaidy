@@ -10,9 +10,11 @@ This plugin is not yet available in the Milady plugin registry. To use Qwen mode
 
 The Qwen plugin connects Milady agents to Alibaba Cloud's Qwen (Tongyi Qianwen) language models, providing access to multilingual models with strong Chinese and English capabilities.
 
-**Package:** `@elizaos/plugin-qwen` (not yet published)
+<Info>
+This plugin is available from the upstream elizaOS registry. It is **not bundled** in `plugins.json` and must be installed explicitly.
+</Info>
 
-> **Availability:** This plugin is not in the bundled registry (`plugins.json`). It is available from the remote elizaOS plugin registry and auto-enables when `QWEN_API_KEY` or `DASHSCOPE_API_KEY` is set.
+**Package:** `@elizaos/plugin-qwen`
 
 ## Installation
 

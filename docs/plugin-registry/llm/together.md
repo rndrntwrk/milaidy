@@ -10,9 +10,11 @@ This plugin is not yet available in the Milady plugin registry. To use Together 
 
 The Together AI plugin connects Milady agents to Together's inference platform, providing access to a wide catalog of open-source models with competitive pricing and fast inference.
 
-**Package:** `@elizaos/plugin-together` (not yet published)
+<Info>
+This plugin is available from the upstream elizaOS registry. It is **not bundled** in `plugins.json` and must be installed explicitly.
+</Info>
 
-> **Availability:** This plugin is not in the bundled registry (`plugins.json`). It is available from the remote elizaOS plugin registry and auto-enables when `TOGETHER_API_KEY` is set.
+**Package:** `@elizaos/plugin-together`
 
 ## Installation
 

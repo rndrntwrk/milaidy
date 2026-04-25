@@ -28,16 +28,18 @@ milady plugins install @elizaos/plugin-vision
 
 ## Configuration
 
-| Environment Variable | Required | Description |
-|---------------------|----------|-------------|
-| `CAMERA_NAME` | No | Name of the camera device to use |
-| `PIXEL_CHANGE_THRESHOLD` | No | Pixel change threshold for motion detection |
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `CAMERA_NAME` | string | — | Camera name to search for (lowercase partial match) |
+| `PIXEL_CHANGE_THRESHOLD` | number | 50 | Percentage of pixels that must change to trigger a VLM update |
+
+Set these in your plugin config or as environment variables.
 
 ## Features
 
 - Image understanding and description
 - Visual analysis of screenshots and photos
-- Camera input with change detection
+- Camera integration with change detection
 - Feature-gated — only loaded when explicitly enabled
 
 ## Related

@@ -10,9 +10,11 @@ This plugin is not yet available in the Milady plugin registry. To use DeepSeek 
 
 The DeepSeek plugin connects Milady agents to DeepSeek's API, providing access to DeepSeek-V3 (general-purpose) and DeepSeek-R1 (reasoning-focused) models at competitive pricing.
 
-**Package:** `@elizaos/plugin-deepseek` (not yet published)
+<Info>
+This plugin is available from the upstream elizaOS registry. It is **not bundled** in `plugins.json` and must be installed explicitly.
+</Info>
 
-> **Availability:** This plugin is not in the bundled registry (`plugins.json`). It is available from the remote elizaOS plugin registry and auto-enables when `DEEPSEEK_API_KEY` is set.
+**Package:** `@elizaos/plugin-deepseek`
 
 ## Installation
 
