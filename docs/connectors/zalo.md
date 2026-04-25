@@ -126,18 +126,24 @@ milady plugins install zalouser
 
 ### Environment Variables
 
-| Variable | Type | Description |
-|----------|------|-------------|
-| `ZALOUSER_IMEI` | string | Device IMEI identifier |
-| `ZALOUSER_ENABLED` | boolean | Enable or disable the connector |
-| `ZALOUSER_PROFILES` | string | Profile configuration |
-| `ZALOUSER_DM_POLICY` | string | DM policy (`allow`, `deny`, `allowlist`) |
-| `ZALOUSER_USER_AGENT` | string | User agent string |
-| `ZALOUSER_COOKIE_PATH` | string | Path to cookie storage |
-| `ZALOUSER_GROUP_POLICY` | string | Group message policy (`allow`, `deny`) |
-| `ZALOUSER_LISTEN_TIMEOUT` | number | Listen timeout in ms |
-| `ZALOUSER_ALLOWED_THREADS` | string | Comma-separated list of allowed threads |
-| `ZALOUSER_DEFAULT_PROFILE` | string | Default profile name |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `ZALO_ACCESS_TOKEN` | Yes | OA access token |
+| `ZALO_SECRET_KEY` | Yes | Application secret key |
+| `ZALO_REFRESH_TOKEN` | No | Token refresh credential |
+| `ZALO_APP_ID` | No | Application ID |
+| `ZALO_ENABLED` | No | Enable or disable the connector |
+| `ZALO_WEBHOOK_URL` | No | Webhook URL for receiving messages |
+| `ZALO_WEBHOOK_PATH` | No | Webhook endpoint path |
+| `ZALO_WEBHOOK_PORT` | No | Webhook listener port |
+| `ZALO_PROXY_URL` | No | Proxy URL for API requests |
+| `ZALO_USE_POLLING` | No | Use polling instead of webhooks |
+
+## Features
+
+- Official Account messaging and support workflows
+- Webhook-based message handling
+- Customer interaction management
 
 ## Related
 

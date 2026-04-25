@@ -66,9 +66,9 @@ No environment variable is required to trigger auto-enable — it is driven enti
 | `TWITCH_REFRESH_TOKEN` | No | Refresh token for automatic token renewal |
 | `TWITCH_USERNAME` | No | Twitch username for the bot |
 | `TWITCH_CHANNEL` | No | Primary channel name to join |
-| `TWITCH_CHANNELS` | No | Comma-separated additional channel names |
-| `TWITCH_ALLOWED_ROLES` | No | Comma-separated allowed roles |
-| `TWITCH_REQUIRE_MENTION` | No | Only respond when mentioned |
+| `TWITCH_CHANNELS` | No | Comma-separated list of additional channels to join |
+| `TWITCH_ALLOWED_ROLES` | No | Comma-separated list of roles allowed to interact |
+| `TWITCH_REQUIRE_MENTION` | No | Only respond when @mentioned |
 
 ## Setup Steps
 

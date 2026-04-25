@@ -71,6 +71,18 @@ To disable:
 | `IMESSAGE_GROUP_POLICY` | Group join policy |
 | `IMESSAGE_POLL_INTERVAL_MS` | Polling interval in milliseconds |
 
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `IMESSAGE_CLI_PATH` | No | Path to the iMessage CLI tool executable |
+| `IMESSAGE_DB_PATH` | No | Path to the iMessage database |
+| `IMESSAGE_ENABLED` | No | Enable or disable the connector |
+| `IMESSAGE_DM_POLICY` | No | DM policy (e.g., `allow`, `deny`, `allowlist`) |
+| `IMESSAGE_ALLOW_FROM` | No | Comma-separated allowed sender list |
+| `IMESSAGE_GROUP_POLICY` | No | Group message policy |
+| `IMESSAGE_POLL_INTERVAL_MS` | No | Polling interval in milliseconds |
+
 ## Full Configuration Reference
 
 All fields are defined under `connectors.imessage` in `milady.json`.

@@ -45,16 +45,17 @@ To disable:
 
 ## Environment Variables
 
-| Variable | Source | Description |
-|----------|--------|-------------|
-| `BLUEBUBBLES_SERVER_URL` | `serverUrl` | BlueBubbles server URL |
-| `BLUEBUBBLES_PASSWORD` | `password` | Server password (required) |
-| `BLUEBUBBLES_ENABLED` | `enabled` | Set to `true` to enable |
-| `BLUEBUBBLES_DM_POLICY` | `dmPolicy` | DM access policy |
-| `BLUEBUBBLES_ALLOW_FROM` | `allowFrom` | Allowed user IDs for DMs |
-| `BLUEBUBBLES_GROUP_POLICY` | `groupPolicy` | Group message policy |
-| `BLUEBUBBLES_GROUP_ALLOW_FROM` | `groupAllowFrom` | Allowed group IDs |
-| `BLUEBUBBLES_SEND_READ_RECEIPTS` | `sendReadReceipts` | Send read receipts for incoming messages |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `BLUEBUBBLES_SERVER_URL` | No | BlueBubbles server URL |
+| `BLUEBUBBLES_PASSWORD` | Yes | Server password |
+| `BLUEBUBBLES_ENABLED` | No | Enable or disable the connector |
+| `BLUEBUBBLES_DM_POLICY` | No | DM policy (e.g., `allow`, `deny`, `allowlist`) |
+| `BLUEBUBBLES_ALLOW_FROM` | No | Comma-separated allowed sender list |
+| `BLUEBUBBLES_GROUP_POLICY` | No | Group message policy |
+| `BLUEBUBBLES_GROUP_ALLOW_FROM` | No | Comma-separated allowed group list |
+| `BLUEBUBBLES_WEBHOOK_PATH` | No | Webhook endpoint path |
+| `BLUEBUBBLES_SEND_READ_RECEIPTS` | No | Send read receipts for incoming messages |
 
 ## Full Configuration Reference
 

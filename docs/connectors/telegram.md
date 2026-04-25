@@ -57,12 +57,11 @@ To explicitly disable the connector even when a token is present:
 
 When the connector is loaded, the runtime pushes the following secret from your config into `process.env` for the plugin to consume:
 
-| Variable | Source | Description |
-|----------|--------|-------------|
-| `TELEGRAM_BOT_TOKEN` | `botToken` | Bot token from [@BotFather](https://t.me/BotFather) |
-| `TELEGRAM_API_ROOT` | — | Custom Telegram API root URL (for self-hosted Bot API servers) |
-| `TELEGRAM_ALLOWED_CHATS` | — | Comma-separated list of allowed chat IDs |
-| `TELEGRAM_TEST_CHAT_ID` | — | Chat ID used by the test suite |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `TELEGRAM_BOT_TOKEN` | Yes | Bot token from [@BotFather](https://t.me/BotFather) |
+| `TELEGRAM_API_ROOT` | No | Override the default Telegram Bot API base URL |
+| `TELEGRAM_ALLOWED_CHATS` | No | JSON-encoded array of authorized chat IDs |
 
 ## Full Configuration Reference
 
