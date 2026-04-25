@@ -61,6 +61,18 @@ describe("action e2e workflow contract", () => {
     expect(elizaPatch).toContain(
       'ELIZAOS_CLOUD_ACTION_PLANNER_MODEL: largeModel',
     );
+    expect(elizaPatch).toContain(
+      [
+        "  LIVE_PROVIDER_ENV_KEYS.add(provider.largeModelEnvVar);",
+        '+  for (const key of provider.extraEnvVars ?? []) {',
+      ].join("\n"),
+    );
+    expect(elizaPatch).not.toContain(
+      [
+        "  keyEnvVars: string[];",
+        '+  for (const key of provider.extraEnvVars ?? []) {',
+      ].join("\n"),
+    );
     expect(actionE2EBlock).toContain(
       "Action Invocation E2E requires an available live provider in canonical CI.",
     );

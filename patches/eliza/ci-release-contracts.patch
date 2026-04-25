@@ -1791,7 +1791,9 @@ index 07df508cb7..6624435c73 100644
    {
      name: "anthropic",
      plugin: "@elizaos/plugin-anthropic",
-@@ -190,0 +237,3 @@ for (const provider of PROVIDERS) {
+@@ -188,2 +237,5 @@ for (const provider of PROVIDERS) {
+   LIVE_PROVIDER_ENV_KEYS.add(provider.smallModelEnvVar);
+   LIVE_PROVIDER_ENV_KEYS.add(provider.largeModelEnvVar);
 +  for (const key of provider.extraEnvVars ?? []) {
 +    LIVE_PROVIDER_ENV_KEYS.add(key);
 +  }
