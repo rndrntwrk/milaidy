@@ -479,6 +479,7 @@ jobs:
           done
 
       - name: Install published-workspace fallback dependencies
+        if: matrix.platform.os != 'windows'
         run: bash scripts/install-published-workspace-fallback-deps.sh
 
       - name: Restore eliza workspace paths for desktop release scripts

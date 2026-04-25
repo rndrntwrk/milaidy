@@ -620,6 +620,29 @@ describe("release workflow path contract", () => {
     );
   });
 
+  it("keeps Windows release packaging on the last green dependency path", () => {
+    const releaseElectrobun = readWorkflow("release-electrobun.yml");
+    const buildJobStart = releaseElectrobun.indexOf("\n  build:\n");
+    expect(buildJobStart).toBeGreaterThan(-1);
+
+    const fallbackInstallStart = releaseElectrobun.indexOf(
+      "      - name: Install published-workspace fallback dependencies",
+      buildJobStart,
+    );
+    expect(fallbackInstallStart).toBeGreaterThan(-1);
+
+    const fallbackInstallBlock = releaseElectrobun.slice(
+      fallbackInstallStart,
+      releaseElectrobun.indexOf("\n\n", fallbackInstallStart),
+    );
+    expect(fallbackInstallBlock).toContain(
+      "if: matrix.platform.os != 'windows'",
+    );
+    expect(fallbackInstallBlock).toContain(
+      "run: bash scripts/install-published-workspace-fallback-deps.sh",
+    );
+  });
+
   it("installs browser automation deps in the published-workspace fallback shim", () => {
     const fallbackScript = fs.readFileSync(
       path.join(
