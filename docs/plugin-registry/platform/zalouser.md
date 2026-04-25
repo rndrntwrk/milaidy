@@ -1,10 +1,10 @@
 ---
-title: "Zalouser Plugin"
-sidebarTitle: "Zalouser"
-description: "Zalo personal-account connector for Milady — one-to-one messaging via personal Zalo accounts."
+title: "Zalo User Plugin"
+sidebarTitle: "Zalo User"
+description: "Zalo User connector for Milady — personal-account messaging on the Zalo platform."
 ---
 
-The Zalouser plugin connects Milady agents to personal Zalo accounts for one-to-one messaging, as an alternative to the [Zalo Official Account](/plugin-registry/platform/zalo) connector.
+The Zalo User plugin connects Milady agents to Zalo via a personal account, enabling one-to-one and group messaging outside the Official Account API.
 
 **Package:** `@elizaos/plugin-zalouser`
 
@@ -16,22 +16,20 @@ milady plugins install zalouser
 
 ## Setup
 
-### 1. Export Zalo Session
+### 1. Obtain Credentials
 
-Export session cookies from the official Zalo app or web client.
+The Zalo User connector authenticates with a device IMEI and session cookie from your personal Zalo account.
 
-### 2. Get Device IMEI
+### 2. Configure Milady
 
-Note the device IMEI from your Zalo app installation.
-
-### 3. Configure Environment
+Set environment variables:
 
 ```bash
-ZALOUSER_COOKIE_PATH=/path/to/cookies.json
-ZALOUSER_IMEI=your-device-imei
+export ZALOUSER_IMEI=YOUR_DEVICE_IMEI
+export ZALOUSER_COOKIE_PATH=/path/to/cookie
 ```
 
-### 4. Enable the Connector
+Or enable the connector in `milady.json`:
 
 ```json
 {
@@ -43,29 +41,30 @@ ZALOUSER_IMEI=your-device-imei
 }
 ```
 
-## Configuration
+## Environment Variables
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `ZALOUSER_COOKIE_PATH` | Yes | Path to exported Zalo session cookies |
-| `ZALOUSER_IMEI` | Yes | Device IMEI from the official Zalo app |
-| `ZALOUSER_USER_AGENT` | No | Browser user agent string |
-| `ZALOUSER_PROFILES` | No | Multiple account profiles (JSON) |
-| `ZALOUSER_DEFAULT_PROFILE` | No | Default profile name |
-| `ZALOUSER_ALLOWED_THREADS` | No | Comma-separated allowed thread IDs |
-| `ZALOUSER_DM_POLICY` | No | DM acceptance policy |
-| `ZALOUSER_GROUP_POLICY` | No | Group message policy |
-| `ZALOUSER_LISTEN_TIMEOUT` | No | Connection timeout in milliseconds |
+| Variable | Description |
+|----------|-------------|
+| `ZALOUSER_IMEI` | Device IMEI identifier (required) |
+| `ZALOUSER_PROFILES` | Profile configuration |
+| `ZALOUSER_DEFAULT_PROFILE` | Default profile to use |
+| `ZALOUSER_COOKIE_PATH` | Path to session cookie file |
+| `ZALOUSER_USER_AGENT` | User agent string for requests |
+| `ZALOUSER_DM_POLICY` | DM policy (`allow`, `deny`, `allowlist`) |
+| `ZALOUSER_GROUP_POLICY` | Group message policy (`allow`, `deny`) |
+| `ZALOUSER_ALLOWED_THREADS` | Comma-separated list of allowed thread IDs |
+| `ZALOUSER_LISTEN_TIMEOUT` | Timeout for listening to events |
+| `ZALOUSER_ENABLED` | Enable or disable the connector |
 
 ## Features
 
-- **Personal account messaging** — Use a personal Zalo account instead of Official Account
-- **One-to-one conversations** — Direct messaging with Zalo contacts
-- **Multiple profiles** — Configure multiple account profiles
-- **Thread filtering** — Restrict which conversations the agent participates in
+- Personal-account one-to-one messaging (unlike the Official Account variant)
+- DM and group policy controls
+- Multi-profile support via `ZALOUSER_PROFILES`
+- Thread allowlisting via `ZALOUSER_ALLOWED_THREADS`
 
 ## Related
 
-- [Zalo Plugin](/plugin-registry/platform/zalo) — Official Account variant
-- [Zalouser Connector](/connectors/zalouser) — Connector setup guide
-- [Connectors Guide](/guides/connectors) — General connector documentation
+- [Zalo (Official Account) plugin](/plugin-registry/platform/zalo)
+- [Zalo User connector setup](/connectors/zalouser)
+- [Connectors Guide](/guides/connectors)
