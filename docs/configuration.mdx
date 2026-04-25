@@ -1258,8 +1258,8 @@ Key environment variables that affect Milady behavior:
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `MILADY_API_PORT` | `31337` | API + WebSocket port. In dev mode this is a separate server; in production the API is served on `MILADY_PORT` instead. |
-| `MILADY_PORT` | `2138` | Dashboard (Web UI) port — also serves the API in production mode |
+| `MILADY_API_PORT` | `31337` | API + WebSocket port. Used in dev mode (`bun run dev`) where the API and UI run on separate ports. In production (`milady start`) the API is served on `MILADY_PORT` instead |
+| `MILADY_PORT` | `2138` | Dashboard (Web UI) port. In production this port also serves the API. In dev mode this port is the Vite dev server only |
 | `MILADY_GATEWAY_PORT` | `18789` | Gateway port |
 | `MILADY_HOME_PORT` | `2142` | Home Dashboard port |
 | `MILADY_WECHAT_WEBHOOK_PORT` | `18790` | WeChat Webhook port |

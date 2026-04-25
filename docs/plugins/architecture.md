@@ -20,7 +20,7 @@ AgentRuntime
 └── Local            (from plugins/ directory)
 ```
 
-The source of truth for which plugins are always loaded lives in `eliza/packages/agent/src/runtime/core-plugins.ts` (re-exported by `eliza/packages/app-core/src/runtime/core-plugins.ts`) in the elizaOS submodule:
+The source of truth for which plugins are always loaded lives in `eliza/packages/agent/src/runtime/core-plugins.ts` (in the upstream elizaOS submodule, re-exported by `eliza/packages/app-core/src/runtime/core-plugins.ts`):
 
 ```typescript
 export const CORE_PLUGINS: readonly string[] = [
@@ -128,7 +128,7 @@ interface Plugin {
 
 ## Auto-Enable Mechanism
 
-Plugins are automatically enabled when their required configuration is detected. This logic lives in `eliza/packages/agent/src/config/plugin-auto-enable.ts` (extended by `eliza/packages/app-core/src/config/plugin-auto-enable.ts` for Milady-specific connectors like WeChat) and runs before runtime initialization.
+Plugins are automatically enabled when their required configuration is detected. This logic lives in `eliza/packages/agent/src/config/plugin-auto-enable.ts` (extended by Milady's own `plugin-auto-enable.ts` for connectors like WeChat) and runs before runtime initialization.
 
 ### Trigger Sources
 

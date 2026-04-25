@@ -36,7 +36,7 @@ Un plugin est un module autonome qui enregistre un ou plusieurs des éléments s
 </Card>
 
 <Card title="Connecteurs de plateformes" icon="plug" href="/fr/plugin-registry/platform/discord">
-  28 connecteurs de plateformes pris en charge. 18 s'activent automatiquement lorsque leur configuration est présente (Discord, Telegram, Twitter, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Mattermost, Farcaster, Twitch, Feishu, Matrix, Nostr, Lens, WeChat). 10 connecteurs supplémentaires sont installables depuis le registre (BlueBubbles, Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon).
+  28 plugins de connecteurs disponibles. 18 s'activent automatiquement via la configuration (Discord, Telegram, Twitter, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Mattermost, Farcaster, Twitch, Feishu, Matrix, Nostr, Lens, WeChat). Des connecteurs supplémentaires (BlueBubbles, Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon) peuvent être installés depuis le registre.
 </Card>
 
 <Card title="DeFi et Blockchain" icon="wallet" href="/fr/plugin-registry/defi/evm">
@@ -59,7 +59,7 @@ Les plugins sont chargés lors de l'initialisation du runtime dans cet ordre :
 
 1. **Plugin Milady** — Le plugin passerelle (`createMiladyPlugin()`) fournissant le contexte du workspace, les clés de session, les emotes, les actions personnalisées et les actions de cycle de vie. Toujours en première position dans le tableau de plugins.
 2. **Plugins pré-enregistrés** — `@elizaos/plugin-sql` et `@elizaos/plugin-local-embedding` sont pré-enregistrés avant `runtime.initialize()` pour éviter les conditions de concurrence.
-3. **Plugins principaux** — Toujours chargés : `sql`, `local-embedding`, `form`, `knowledge`, `trajectory-logger`, `agent-orchestrator`, `cron`, `shell`, `agent-skills` (voir `packages/agent/src/runtime/core-plugins.ts`). Des plugins supplémentaires comme `pdf`, `cua`, `browser`, `computeruse`, `obsidian`, `code`, `repoprompt`, `claude-code-workbench`, `vision`, `cli`, `edge-tts`, `elevenlabs`, `discord`, `telegram` et `twitch` sont optionnels et chargés lorsque leurs feature flags ou variables d'environnement sont configurés.
+3. **Plugins principaux** — Toujours chargés : `sql`, `local-embedding`, `form`, `knowledge`, `trajectory-logger`, `agent-orchestrator`, `cron`, `shell`, `agent-skills`, `commands`, `plugin-manager`, `roles` (voir `eliza/packages/agent/src/runtime/core-plugins.ts`). Des plugins supplémentaires comme `pdf`, `cua`, `browser`, `computeruse`, `obsidian`, `code`, `repoprompt`, `claude-code-workbench`, `vision`, `cli`, `edge-tts`, `elevenlabs`, `discord`, `telegram` et `twitch` sont optionnels et chargés lorsque leurs feature flags ou variables d'environnement sont configurés.
 4. **Plugins auto-activés** — Les plugins de connecteurs, fournisseurs, fonctionnalités, streaming, abonnement, hooks (webhooks + Gmail Watch) et génération de médias sont auto-activés en fonction de la configuration et des variables d'environnement (voir [Architecture](/fr/plugins/architecture) pour les cartes complètes).
 5. **Plugins éjectés** — Surcharges locales découvertes depuis `~/.milady/plugins/ejected/`. Lorsqu'une copie éjectée existe, elle a la priorité sur la version publiée sur npm.
 6. **Plugins installés par l'utilisateur** — Suivis dans `plugins.installs` dans `milady.json`. Collectés avant les plugins drop-in ; tout nom de plugin déjà présent ici a la priorité.
