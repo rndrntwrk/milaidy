@@ -36,7 +36,7 @@ Configure in `~/.milady/milady.json`:
 ```
 
 <Warning>
-Use the `token` field. While `botToken` and `apiKey` also trigger auto-enable detection, `token` is the canonical config key that passes schema validation.
+Use the `token` field for your bot token. The auto-enable detection accepts `token`, `botToken`, or `apiKey`, but the Discord config schema only validates `token` as a known field. Using `botToken` will trigger auto-enable but may fail schema validation.
 </Warning>
 
 ## Disabling the Connector

@@ -17,7 +17,25 @@ Connect your agent to Feishu (known as Lark outside China) for bot interactions,
 | `FEISHU_ALLOWED_CHATS` | No | JSON-encoded array of chat IDs authorized to interact with the bot |
 | `FEISHU_TEST_CHAT_ID` | No | Chat ID used by the test suite for validation |
 
-These can be set as environment variables or in the `env` section of `~/.milady/milady.json`:
+## Minimal Configuration
+
+The actual credentials are set via `FEISHU_APP_ID` and `FEISHU_APP_SECRET` environment variables. Auto-enable detection requires one of the generic trigger fields (`token`, `botToken`, or `apiKey`) in the connector config — environment variables alone do not trigger auto-enable.
+
+The recommended approach is to add the plugin to `plugins.allow` explicitly:
+
+```json
+{
+  "env": {
+    "FEISHU_APP_ID": "cli_your_app_id",
+    "FEISHU_APP_SECRET": "your_app_secret"
+  },
+  "plugins": {
+    "allow": ["@elizaos/plugin-feishu"]
+  }
+}
+```
+
+Alternatively, set `apiKey` in the connector config to trigger auto-enable:
 
 ```json
 {

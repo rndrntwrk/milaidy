@@ -34,7 +34,19 @@ Configure in `~/.milady/milady.json`:
 }
 ```
 
-The default transport is **Socket Mode**, which requires both `botToken` and `appToken`. For HTTP mode, `appToken` is not needed -- set `"mode": "http"` and provide a `signingSecret` instead.
+The default transport is **Socket Mode**, which requires both `botToken` and `appToken`. Providing only `botToken` is enough to trigger auto-enable, but Socket Mode will fail to connect without `appToken`. For HTTP webhook mode, `appToken` is not needed — set `"mode": "http"` and provide a `signingSecret` instead:
+
+```json
+{
+  "connectors": {
+    "slack": {
+      "botToken": "xoxb-your-bot-token",
+      "signingSecret": "your-signing-secret",
+      "mode": "http"
+    }
+  }
+}
+```
 
 To disable:
 

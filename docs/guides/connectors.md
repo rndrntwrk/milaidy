@@ -12,6 +12,9 @@ Connectors are platform bridges that allow your agent to communicate across mess
 
 1. [Supported Platforms](#supported-platforms)
 2. [General Configuration](#general-configuration)
+
+**Auto-enabled connectors** (load when config is present):
+
 3. [Discord](#discord)
 4. [Telegram](#telegram)
 5. [Slack](#slack)
@@ -23,27 +26,31 @@ Connectors are platform bridges that allow your agent to communicate across mess
 11. [Google Chat](#google-chat)
 12. [Twitter](#twitter)
 13. [Farcaster](#farcaster)
-14. [BlueBubbles](#bluebubbles)
-15. [Bluesky](#bluesky)
-16. [Instagram](#instagram)
-17. [Twitch](#twitch)
-18. [Mattermost](#mattermost)
-19. [WeChat](#wechat)
-20. [Matrix](#matrix)
-21. [Feishu / Lark](#feishu--lark)
-22. [Nostr](#nostr)
+14. [Twitch](#twitch)
+15. [Mattermost](#mattermost)
+16. [WeChat](#wechat)
+17. [Matrix](#matrix)
+18. [Feishu / Lark](#feishu--lark)
+19. [Nostr](#nostr)
+20. [Lens](#lens)
+
+**Registry connectors** (install with `milady plugins install <name>`):
+
+21. [Bluesky](#bluesky)
+22. [Instagram](#instagram)
 23. [LINE](#line)
 24. [Zalo](#zalo)
-25. [Zalo User](#zalo-user)
-26. [Twilio](#twilio)
-27. [GitHub](#github)
-28. [Gmail Watch](#gmail-watch)
-29. [Nextcloud Talk](#nextcloud-talk)
-30. [Tlon](#tlon)
-31. [Lens](#lens)
-32. [Connector Lifecycle](#connector-lifecycle)
-33. [Multi-Account Support](#multi-account-support)
-34. [Session Management](#session-management)
+25. [Twilio](#twilio)
+26. [GitHub](#github)
+27. [Gmail Watch](#gmail-watch)
+28. [Nextcloud Talk](#nextcloud-talk)
+29. [Tlon](#tlon)
+
+**Reference:**
+
+30. [Connector Lifecycle](#connector-lifecycle)
+31. [Multi-Account Support](#multi-account-support)
+32. [Session Management](#session-management)
 
 ---
 

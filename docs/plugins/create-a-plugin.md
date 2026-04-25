@@ -38,7 +38,7 @@ my-plugin/
     "test": "vitest run"
   },
   "dependencies": {
-    "@elizaos/core": "alpha"
+    "@elizaos/core": "^2.0.0"
   },
   "devDependencies": {
     "typescript": "^5.0.0",

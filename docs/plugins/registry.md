@@ -30,7 +30,7 @@ A local JSON file shipped with Milady containing metadata for 98 plugins from th
 ```json
 {
   "$schema": "plugin-index-v1",
-  "generatedAt": "2026-04-11T01:55:50.795Z",
+  "generatedAt": "2026-02-09T20:23:38.561Z",
   "count": 98,
   "plugins": [
     {
