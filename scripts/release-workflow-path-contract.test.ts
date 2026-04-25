@@ -1026,4 +1026,18 @@ describe("release workflow path contract", () => {
     expect(appleStoreRelease).not.toContain("bunx tsdown || true");
     expect(appleStoreRelease).not.toContain("if-no-files-found: warn");
   });
+
+  it("fills existing app-core node_modules mirrors instead of trusting partial directories", () => {
+    const script = fs.readFileSync(
+      path.join(repoRoot, "scripts", "copy-runtime-node-modules.ts"),
+      "utf8",
+    );
+
+    expect(script).toContain(
+      "fs.rmSync(targetDir, { force: true, recursive: true })",
+    );
+    expect(script).not.toContain(
+      "} else if (stat?.isDirectory()) {\n    return null;",
+    );
+  });
 });

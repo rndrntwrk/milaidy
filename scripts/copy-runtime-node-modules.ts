@@ -35,8 +35,8 @@ function populateNodeModules(
   const stat = fs.lstatSync(targetDir, { throwIfNoEntry: false });
   if (stat?.isSymbolicLink()) {
     fs.unlinkSync(targetDir);
-  } else if (stat?.isDirectory()) {
-    return null;
+  } else if (stat && !stat.isDirectory()) {
+    fs.rmSync(targetDir, { force: true, recursive: true });
   }
 
   fs.mkdirSync(targetDir, { recursive: true });
