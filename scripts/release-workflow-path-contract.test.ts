@@ -544,19 +544,13 @@ describe("release workflow path contract", () => {
       "test -f eliza/packages/shared/src/i18n/generated/validation-keyword-data.js",
     );
     expect(releaseElectrobun).toContain(
-      'path.join("eliza", "packages", "app-core", "node_modules", "@elizaos", "shared")',
+      "mkdir -p dist/node_modules/@elizaos/shared/src/i18n/generated",
     );
     expect(releaseElectrobun).toContain(
-      'path.join("eliza", "packages", "node_modules", "@elizaos", "shared")',
+      "cp eliza/packages/shared/src/i18n/generated/validation-keyword-data.ts dist/node_modules/@elizaos/shared/src/i18n/generated/",
     );
     expect(releaseElectrobun).toContain(
-      'path.join("node_modules", "@elizaos", "shared")',
-    );
-    expect(releaseElectrobun).toContain(
-      'for (const file of ["validation-keyword-data.ts", "validation-keyword-data.js"])',
-    );
-    expect(releaseElectrobun).toContain(
-      "test -f eliza/packages/app-core/node_modules/@elizaos/shared/src/i18n/generated/validation-keyword-data.js",
+      "cp eliza/packages/shared/src/i18n/generated/validation-keyword-data.js dist/node_modules/@elizaos/shared/src/i18n/generated/",
     );
     expect(releaseElectrobun).toContain(
       "test -f dist/node_modules/@elizaos/shared/src/i18n/generated/validation-keyword-data.js",
