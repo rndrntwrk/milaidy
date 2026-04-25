@@ -22,7 +22,11 @@ Unlike most connectors which use official platform APIs, the WeChat connector re
 
 ## Installation (unavailable)
 
-The WeChat plugin is not currently available in the registry.
+<Warning>
+The WeChat plugin is **experimental** and not yet included in the Milady bundled plugin registry. Full integration is in progress.
+</Warning>
+
+The WeChat plugin (`@elizaos/plugin-wechat`) is not yet available in the bundled registry. Check the [changelog](/changelog) for availability updates.
 
 ## Setup
 

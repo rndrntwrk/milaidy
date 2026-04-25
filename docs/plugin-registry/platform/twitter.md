@@ -12,11 +12,15 @@ The Twitter plugin connects Milady agents to Twitter/X, enabling autonomous post
 
 **Package:** `@elizaos/plugin-twitter`
 
-> **Availability:** This plugin is not in the bundled registry (`plugins.json`). It is available as an upstream elizaOS plugin and auto-enables when its connector config is present.
+<Note>
+This is an upstream elizaOS plugin and is **not included** in the Milady bundled registry. It must be installed manually from the remote registry.
+</Note>
 
 ## Installation
 
-If available in your installation, the plugin can be enabled via connector config. Otherwise, check the elizaOS plugins repository for the latest source.
+```bash
+milady plugins install @elizaos/plugin-twitter
+```
 
 ## Setup
 
@@ -113,9 +117,9 @@ Response generated
 Posted as reply to original tweet
 ```
 
-## Auto-Enable
+## Enabling
 
-The plugin auto-enables when `connectors.twitter` contains `apiKey`.
+After installation, the plugin loads when `connectors.twitter` contains `apiKey`. Unlike bundled connectors, it does not auto-enable from config alone — it must be installed first.
 
 ## Rate Limits
 

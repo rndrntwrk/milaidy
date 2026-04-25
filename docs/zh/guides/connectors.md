@@ -1,7 +1,7 @@
 ---
 title: "平台连接器"
 sidebarTitle: "Connectors"
-description: "28 个消息平台的平台桥接器 — 18 个通过配置自动启用（Discord、Telegram、Slack、WhatsApp、Signal、iMessage、Blooio、MS Teams、Google Chat、Twitter、Farcaster、Twitch、Mattermost、Matrix、Feishu、Nostr、Lens、WeChat），另有 10 个可从注册表安装（BlueBubbles、Bluesky、Instagram、LINE、Zalo、Twilio、GitHub、Gmail Watch、Nextcloud Talk、Tlon）。"
+description: "28 个平台的平台桥接器 — 15 个通过配置自动启用（Discord、Telegram、Slack、WhatsApp、Signal、iMessage、Blooio、MS Teams、Google Chat、Farcaster、Twitch、Mattermost、Matrix、Feishu、Nostr），另有 13 个可从注册表或上游安装（BlueBubbles、Bluesky、Instagram、LINE、Zalo、Twilio、GitHub、Gmail Watch、Nextcloud Talk、Tlon、Twitter、Lens、WeChat）。"
 ---
 
 连接器是平台桥接器，允许你的代理在不同消息平台和社交网络之间进行通信。每个连接器负责处理身份验证、消息路由、会话管理和平台特定功能。
