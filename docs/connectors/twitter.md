@@ -71,18 +71,25 @@ No environment variable is required to trigger auto-enable — it is driven enti
 
 ## Environment Variables
 
-The xAI plugin reads Twitter credentials from both environment variables (`X_API_KEY`, `X_API_SECRET`, `X_ACCESS_TOKEN`, `X_ACCESS_TOKEN_SECRET`) and the `connectors.twitter` config object. You can use either approach.
+Unlike Discord, Telegram, and Slack, the Milady runtime does **not** inject Twitter secrets into `process.env` via the `CHANNEL_ENV_MAP`. The plugin reads credentials directly from the `connectors.twitter` config object.
 
-| Variable | Description |
-|----------|-------------|
-| `X_API_KEY` | Twitter consumer API key |
-| `X_API_SECRET` | Twitter consumer API secret |
-| `X_ACCESS_TOKEN` | OAuth access token |
-| `X_ACCESS_TOKEN_SECRET` | OAuth access token secret |
-| `X_AUTH_MODE` | `api_key` (default) or `oauth` |
-| `X_ENABLE_POST` | Enable autonomous posting |
-| `X_ENABLE_REPLIES` | Enable mention replies |
-| `X_ENABLE_ACTIONS` | Enable like/retweet/quote |
+The plugin also reads these environment variables as a fallback if the corresponding config fields are absent:
+
+| Variable | Config Equivalent |
+|----------|-------------------|
+| `TWITTER_API_KEY` | `apiKey` |
+| `TWITTER_API_SECRET_KEY` | `apiSecretKey` |
+| `TWITTER_ACCESS_TOKEN` | `accessToken` |
+| `TWITTER_ACCESS_TOKEN_SECRET` | `accessTokenSecret` |
+| `TWITTER_DRY_RUN` | `dryRun` |
+| `TWITTER_POST_ENABLE` | `postEnable` |
+| `TWITTER_POST_INTERVAL_MIN` | `postIntervalMin` |
+| `TWITTER_POST_INTERVAL_MAX` | `postIntervalMax` |
+| `TWITTER_SEARCH_ENABLE` | `searchEnable` |
+| `TWITTER_AUTO_RESPOND_MENTIONS` | `autoRespondMentions` |
+| `TWITTER_POLL_INTERVAL` | `pollInterval` |
+
+Config fields take precedence over environment variables. When using config-based setup, you do not need to set any environment variables.
 
 ## Full Configuration Reference
 
