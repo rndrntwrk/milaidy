@@ -8,7 +8,7 @@ The Milady API can be secured with a token by setting the `MILADY_API_TOKEN` env
 
 ## Authentication Methods
 
-The API supports multiple authentication headers, checked in priority order:
+The API supports four authentication headers, checked in priority order:
 
 | Priority | Header | Format | Example |
 |----------|--------|--------|---------|
@@ -89,7 +89,7 @@ When the agent is running as a cloud-provisioned container (e.g., on Eliza Cloud
 1. `MILADY_CLOUD_PROVISIONED=1` (or `ELIZA_CLOUD_PROVISIONED=1`) is set
 2. `MILADY_API_TOKEN` (or `ELIZA_API_TOKEN`) is configured
 
-When cloud provisioned, `GET /api/auth/status` returns `{ "required": true, "pairingEnabled": false, "expiresAt": null }` — the API token is still required for requests, but the pairing flow is disabled since the token is already provisioned.
+When cloud provisioned, `GET /api/auth/status` returns `{ "required": false, "pairingEnabled": false, "expiresAt": null }` — cloud-provisioned containers enforce API auth upstream, and reporting `required: true` locally would strand clients in the pairing flow. The pairing flow is disabled since the token is already provisioned.
 
 A container with only the cloud flag but no API token falls through to the normal pairing flow.
 
@@ -111,7 +111,7 @@ Check whether authentication is required and whether the pairing flow is current
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `required` | boolean | `true` when `MILADY_API_TOKEN` is set. `false` when running in a cloud-provisioned container. |
+| `required` | boolean | `true` when `MILADY_API_TOKEN` is set and not cloud provisioned. `false` when running in a cloud-provisioned container (auth is enforced upstream). |
 | `pairingEnabled` | boolean | `true` when the pairing flow is active. `false` when cloud provisioned. |
 | `expiresAt` | number \| null | Unix ms timestamp when the current pairing code expires, or `null` if pairing is disabled or cloud provisioned |
 
@@ -173,7 +173,7 @@ Access-Control-Allow-Headers: Content-Type, Authorization, X-API-Token, X-Api-Ke
 ## Related
 
 - [API Reference overview](/api-reference)
-- [Environment variables](/cli/environment) — `MILADY_API_TOKEN`, `ELIZA_ALLOW_WS_QUERY_TOKEN`, `ELIZA_PAIRING_DISABLED`, `MILADY_CLOUD_PROVISIONED`
+- [Environment variables](/cli/environment) — `MILADY_API_TOKEN` / `ELIZA_API_TOKEN`, `MILADY_ALLOW_WS_QUERY_TOKEN`, `MILADY_PAIRING_DISABLED`, `MILADY_CLOUD_PROVISIONED` / `ELIZA_CLOUD_PROVISIONED`
 
 ## Common Error Codes
 

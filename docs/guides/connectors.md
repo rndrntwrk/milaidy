@@ -1,7 +1,7 @@
 ---
 title: "Platform Connectors"
 sidebarTitle: "Connectors"
-description: "Platform bridges for 29 messaging platforms — 19 auto-enabled from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Twitter, Farcaster, BlueBubbles, Twitch, Mattermost, Matrix, Feishu, Nostr, Lens, WeChat) plus 10 installable from the registry (Bluesky, Instagram, LINE, Zalo, Zalo User, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
+description: "Platform bridges for 29 messaging platforms — 19 auto-enabled from config (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, BlueBubbles, MS Teams, Google Chat, Twitter, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, Lens, WeChat) plus 10 installable from the registry (Bluesky, Instagram, LINE, Zalo, Zalo User, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
 ---
 
 Connectors are platform bridges that allow your agent to communicate across messaging platforms and social networks. Each connector handles authentication, message routing, session management, and platform-specific features.
@@ -69,7 +69,7 @@ Connectors marked **Auto** load automatically when their config is present in `m
 | Matrix | Access token | Yes | Yes (rooms) | No | Auto |
 | Feishu / Lark | App ID + secret | Yes | Yes (group chats) | No | Auto |
 | Nostr | Private key (nsec/hex) | Yes (NIP-04) | N/A | No | Auto |
-| Lens | API key | Yes | N/A | No | Auto |
+| Lens | API key | Yes | N/A | No | Auto (planned) |
 | BlueBubbles | Server password | Yes | Yes | No | Auto |
 | Bluesky | Account credentials | Posts | N/A | No | Registry |
 | Instagram | Username + password | DMs | N/A | No | Registry |
@@ -626,7 +626,7 @@ Install from the registry before configuring: `milady plugins install @elizaos/p
 - Webhook-based inbound messages
 - Network-accessible (works from any machine, not just the Mac running Messages)
 
-This connector ships bundled and auto-enables when `password` or `serverUrl` is configured.
+**Auto-enable:** The connector auto-enables when both `serverUrl` and `password` are set in the connector config. No manual install is required.
 
 **Docs:** [BlueBubbles connector](/connectors/bluebubbles)
 
@@ -753,7 +753,7 @@ This connector auto-enables when its configuration is present in `milady.json`.
 }
 ```
 
-**Environment variables:** `MATTERMOST_BOT_TOKEN`, `MATTERMOST_SERVER_URL`, `MATTERMOST_ENABLED`, `MATTERMOST_TEAM_ID`, `MATTERMOST_DM_POLICY`, `MATTERMOST_GROUP_POLICY`, `MATTERMOST_ALLOWED_USERS`, `MATTERMOST_REQUIRE_MENTION`, `MATTERMOST_ALLOWED_CHANNELS`, `MATTERMOST_IGNORE_BOT_MESSAGES`
+**Environment variables:** `MATTERMOST_BOT_TOKEN`, `MATTERMOST_BASE_URL`
 
 ### Features
 
@@ -1101,6 +1101,8 @@ A personal-account variant of the Zalo connector for one-to-one messaging outsid
 
 Install from the registry before configuring: `milady plugins install @elizaos/plugin-lens`
 
+> **Note:** `@elizaos/plugin-lens` is registered in the auto-enable map but is not yet published or bundled. This connector is planned but not yet functional.
+
 **Plugin:** `@elizaos/plugin-lens`
 
 Connects agents through an ACP gateway for inter-agent communication.
@@ -1162,41 +1164,9 @@ The ACP connector links agents through an ACP gateway for agent-to-agent communi
 
 ### Features
 
-- Agent-to-agent messaging via ACP gateway
-- Realtime communication between agents
-
-**Note:** This connector is available from the plugin registry. Install it with `milady plugins install acp`.
-
----
-
-## Zalouser
-
-**Plugin:** `@elizaos/plugin-zalouser`
-
-A personal-account variant of the Zalo connector for one-to-one messaging outside of the Official Account system.
-
-### Setup Requirements
-
-- Zalo user credentials
-
-### Key Configuration
-
-```json
-{
-  "connectors": {
-    "zalouser": {
-      "enabled": true
-    }
-  }
-}
-```
-
-### Features
-
-- Personal Zalo account messaging
-- One-to-one conversations
-
-**Note:** This connector is available from the plugin registry. Install it with `milady plugins install zalouser`.
+**Features (planned):**
+- Lens Protocol social interactions
+- Post publishing and engagement
 
 ---
 

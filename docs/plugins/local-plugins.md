@@ -506,14 +506,14 @@ curl http://localhost:18789/api/plugins
 curl http://localhost:18789/api/registry/search?q=my-plugin
 ```
 
-5. **Run multiple instances** with different configs using `ELIZAOS_CONFIG_DIR`:
+5. **Run multiple instances** with different configs using `MILADY_STATE_DIR`:
 
 ```bash
 # Instance with your dev plugin
-ELIZAOS_CONFIG_DIR=./config-dev milady start
+MILADY_STATE_DIR=./state-dev milady start
 
 # Instance with production plugins
-ELIZAOS_CONFIG_DIR=./config-prod milady start
+MILADY_STATE_DIR=./state-prod milady start
 ```
 
 ---
@@ -629,7 +629,6 @@ These environment variables affect plugin paths and behavior. They are defined i
 | `LOG_LEVEL` | `error` | Set log verbosity: `debug`, `info`, `warn`, `error`. |
 | `ELIZA_DISABLE_WORKSPACE_PLUGIN_OVERRIDES` | unset | Set to `1` to disable workspace plugin overrides (dev-only mechanism). |
 | `ELIZA_WORKSPACE_ROOT` | unset | Override the workspace root for plugin resolution. When set, only this directory is searched for local plugin sources. |
-| `ELIZAOS_CONFIG_DIR` | unset | Override the elizaOS core config directory. Useful for running multiple agent instances with different plugin configurations. |
 
 When `MILADY_STATE_DIR` is set, all derived paths change accordingly:
 - Plugins: `$MILADY_STATE_DIR/plugins/installed/`, `$MILADY_STATE_DIR/plugins/custom/`, `$MILADY_STATE_DIR/plugins/ejected/`

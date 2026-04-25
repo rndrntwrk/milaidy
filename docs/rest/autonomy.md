@@ -23,7 +23,7 @@ The API layer interacts with the autonomy service through this interface:
 
 ### State Resolution
 
-The `enabled` field in the response is resolved from `runtime.enableAutonomy === true`. The POST handler calls `enableAutonomy()` or `disableAutonomy()` on the AUTONOMY service when available, then syncs the runtime flag.
+The `enabled` field in the response is resolved from the runtime flag `runtime.enableAutonomy === true`.
 
 ### Trigger Integration
 
@@ -48,7 +48,7 @@ Get the current autonomy state.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `enabled` | boolean | Whether autonomous operation is currently enabled (resolved from `runtime.enableAutonomy`) |
+| `enabled` | boolean | Whether autonomous operation is currently enabled |
 
 ---
 
@@ -80,12 +80,12 @@ When enabling, the autonomy task fires its first tick immediately. When disablin
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `enabled` | boolean | The new autonomy enabled state after the operation |
+| `enabled` | boolean | The current autonomy enabled state after the operation |
 
 **Behavior Notes**
 
-- If the `AUTONOMY` service is registered, `enableAutonomy()` or `disableAutonomy()` is called on it. Otherwise, only the `runtime.enableAutonomy` flag is set directly.
-- The `enabled` parameter must be a boolean; non-boolean values return a 400 error.
+- If the `AUTONOMY` service is not registered in the runtime, the `enabled` property is set directly on the runtime object
+- The `enabled` parameter must be a boolean; non-boolean values return a `400` error
 
 ## Related
 

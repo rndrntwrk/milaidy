@@ -582,33 +582,35 @@ The Gateway runs on port **18789** (default) and provides:
 
 ### Workspace Structure
 
-The monorepo uses Bun workspaces:
+The monorepo uses Bun workspaces. Core runtime packages live inside the `eliza/` git submodule:
 
 ```
 milady/
-  eliza/              # elizaOS submodule (git submodule; must be initialized)
+  eliza/                # elizaOS submodule (core runtime packages)
     packages/
-      app-core/       # Core runtime, CLI, API, services (source of truth)
+      app-core/         # Core runtime, CLI, API, services (source of truth)
         src/
-          cli/        # Commander CLI commands
-          api/        # Dashboard API server
-          runtime/    # Agent loader, plugin system
-          config/     # Plugin auto-enable, config schemas
-          connectors/ # Connector integration code
-          services/   # Business logic (plugin installer, updater, etc.)
-      agent/          # Upstream elizaOS agent (core plugins, auto-enable maps)
-      plugin-wechat/  # WeChat connector plugin (@elizaos/plugin-wechat)
-      ui/             # Shared UI component library
-      shared/         # Shared utilities
+          cli/          # Commander CLI commands
+          api/          # Dashboard API server
+          runtime/      # Agent loader, plugin system
+          config/       # Plugin auto-enable, config schemas
+          connectors/   # Connector integration code
+          services/     # Business logic (plugin installer, updater, etc.)
+      agent/            # Upstream elizaOS agent (core plugins, auto-enable maps)
+      ui/               # Shared UI component library
+      shared/           # Shared utilities
+    plugins/            # elizaOS plugins (git submodules)
   apps/
-    app/            # React SPA frontend (Vite)
-      electrobun/   # Electrobun desktop wrapper
-    browser-bridge/ # Browser extension (@elizaos/browser-bridge-extension)
-    homepage/       # Marketing site
-  deploy/             # Deployment configs (systemd units, docker CI, deploy.env)
-  docs/             # Mintlify documentation
-  scripts/          # Build, dev, and utility scripts
-  test/             # E2E and integration tests
+    app/                # React SPA frontend (Vite)
+      electrobun/       # Electrobun desktop wrapper
+    browser-bridge/     # Browser extension bridge
+    homepage/           # Marketing site
+  deploy/
+    systemd/            # Bare-metal systemd deployment
+  docs/                 # Mintlify documentation
+  scripts/              # Build, dev, and utility scripts
+  skills/               # Agent skills directory
+  test/                 # E2E and integration tests
 ```
 
 ### Build Pipeline

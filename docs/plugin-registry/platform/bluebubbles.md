@@ -8,15 +8,9 @@ iMessage connector via a local BlueBubbles server.
 
 **Package:** `@elizaos/plugin-bluebubbles`
 
-## Overview
+## Auto-Enable
 
-The BlueBubbles plugin connects Milady agents to iMessage through a local BlueBubbles server. Agents can send and receive iMessages, enabling conversational workflows over Apple's messaging platform.
-
-## Installation
-
-```bash
-milady plugins install @elizaos/plugin-bluebubbles
-```
+This plugin auto-enables when both `serverUrl` and `password` are set in the connector config. No manual install is required.
 
 ## Auto-Enable
 

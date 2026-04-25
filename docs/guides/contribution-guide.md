@@ -93,7 +93,7 @@ bun run test:e2e
 # Live API smoke tests (requires API keys)
 MILADY_LIVE_TEST=1 bun run test:live:smoke
 
-# Docker-based review tests
+# Docker-based runtime review
 bun run test:docker:review
 ```
 

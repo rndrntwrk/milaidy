@@ -103,17 +103,35 @@ milady/
 │       ├── plugin-agent-orchestrator/
 │       └── ...
 ├── apps/
-│   ├── app/                     # Desktop/mobile UI (Vite + React)
-│   │   └── electrobun/          # Electrobun desktop shell
-│   ├── browser-bridge/          # Browser bridge extension
-│   └── homepage/                # Marketing site
-├─��� skills/                      # Workspace skills (mirrors from @elizaos/skills)
-├── docs/                        # Documentation (this site)
-├── scripts/                     # Build, dev, and release tooling
-├── test/                        # Test setup, helpers, e2e
-├── CLAUDE.md                    # Repository conventions and architecture
-├── milady.mjs                   # npm bin entry
-└── tsdown.config.ts             # Build config
+│   ├── app/                 # Desktop/mobile app (Capacitor + React)
+│   │   ├── electrobun/      # Electrobun desktop wrapper
+│   │   └── src/             # React UI components
+│   ├── browser-bridge/      # Browser extension bridge
+│   └── homepage/            # Marketing site
+├── eliza/                   # elizaOS submodule (core framework)
+│   └── packages/
+│       └── app-core/        # Main application package (runtime source of truth)
+├── skills/                  # Workspace skills and defaults
+├── docs/                    # Documentation (this site)
+├── scripts/                 # Build and utility scripts
+├── test/                    # Test setup, helpers, e2e
+├── AGENTS.md                # Repository guidelines
+└── tsdown.config.ts         # Build config
+```
+
+### Build System
+
+Builds are run via Bun scripts defined in the root `package.json`:
+
+```bash
+# Full build (TypeScript + UI)
+bun run build
+
+# Typecheck + lint + tests (the main verification suite)
+bun run verify
+
+# Run tests only
+bun run test
 ```
 
 ### Key Entry Points
@@ -162,6 +180,8 @@ bun run dev:desktop:watch
 
 ### Testing
 
+Coverage thresholds are enforced from `eliza/packages/app-core/scripts/coverage-policy.mjs`: 25% lines/functions/statements, 15% branches. CI fails when coverage falls below these floors.
+
 ```bash
 # Run all tests (parallel)
 bun run test
@@ -178,7 +198,7 @@ bun run test:e2e
 # Live tests (requires API keys)
 MILADY_LIVE_TEST=1 bun run test:live
 
-# Docker-based review
+# Docker-based runtime review
 bun run test:docker:review
 ```
 
@@ -204,9 +224,9 @@ MILADY_RUNTIME=node bun run milady start
 The repo root **`vitest.config.ts`** (used by **`bun run test`** via the unit shard) includes:
 
 - **`eliza/packages/app-core/src/**/*.test.ts`** and **`eliza/packages/app-core/src/**/*.test.tsx`** — colocated tests, including TSX, without listing each file.
-- **`eliza/packages/app-core/test/**/*.test.ts`** and **`.../test/**/*.test.tsx`** — shared harness tests (e.g. `test/state`, `test/runtime`).
+- **`eliza/packages/app-core/test/live-agent/**/*.test.ts`** — live-agent harness tests.
 
-**Why:** those directories were previously omitted, so new suites never ran in CI. **`eliza/packages/app-core/test/**/*.e2e.test.ts(x)`** is excluded from this job so e2e stays on **`test/vitest/e2e.config.ts`**. **`test/vitest/unit.config.ts`** still omits **`eliza/packages/app-core/test/app/**`** (heavy renderer harness) from the coverage-focused unit pass — those are run in targeted app workspaces or separate jobs.
+**Why:** those directories were previously omitted, so new suites never ran in CI. **`*.e2e.test.ts(x)`** is excluded from this job so e2e stays on **`test/vitest/e2e.config.ts`**. **`test/vitest/unit.config.ts`** still omits **`eliza/packages/app-core/test/app/**`** (heavy renderer harness) from the coverage-focused unit pass—**why:** those are run in targeted app workspaces or separate jobs.
 
 ---
 
@@ -240,7 +260,7 @@ The repo root **`vitest.config.ts`** (used by **`bun run test`** via the unit sh
 The project uses **Biome** for formatting and linting:
 
 ```bash
-# Check formatting and lint
+# Typecheck + lint + tests (alias for `bun run verify`)
 bun run check
 
 # Fix formatting issues

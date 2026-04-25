@@ -126,7 +126,7 @@ Global user-level skills stored at:
 
 The catalog file is also stored here at `~/.milady/skills/catalog.json`.
 
-### 4. Workspace Skills (highest precedence)
+### 4. Workspace Skills
 
 Project-local skills in the agent's workspace directory:
 
@@ -138,7 +138,7 @@ Project-local skills in the agent's workspace directory:
     └── SKILL.md
 ```
 
-### 5. Marketplace Skills
+### 5. Marketplace Skills (highest precedence)
 
 Skills installed from the marketplace are placed under:
 

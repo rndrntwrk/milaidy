@@ -10,6 +10,7 @@ All agent endpoints require the agent runtime to be initialized. The API server 
 
 | Method | Path | Description |
 |--------|------|-------------|
+| GET | `/api/agents` | List running agent(s) |
 | POST | `/api/agent/start` | Start the agent |
 | POST | `/api/agent/stop` | Stop the agent and disable autonomy |
 | POST | `/api/agent/pause` | Pause the agent (keep uptime, disable autonomy) |
@@ -23,6 +24,32 @@ All agent endpoints require the agent runtime to be initialized. The API server 
 | POST | `/api/agent/autonomy` | Enable or disable autonomy |
 | GET | `/api/agent/events` | Get buffered agent events (actions, thoughts, status changes) |
 | GET | `/api/agent/self-status` | Structured self-status summary with capabilities, wallet, plugins, and awareness |
+
+---
+
+### GET /api/agents
+
+List the running agent(s). The app runs a single agent; the response wraps it in an `agents` array for compatibility with multi-agent callers and health probes.
+
+**Response**
+
+```json
+{
+  "agents": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "name": "Milady",
+      "status": "running"
+    }
+  ]
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `agents[].id` | string | Agent UUID (falls back to a nil UUID if the runtime is not started) |
+| `agents[].name` | string | Agent display name from the character config |
+| `agents[].status` | string | Current agent state (`not_started`, `starting`, `running`, `paused`, `stopped`, `restarting`, `error`) |
 
 ---
 
@@ -134,7 +161,6 @@ Enable or disable autonomous operation.
 
 ```json
 {
-  "ok": true,
   "enabled": true
 }
 ```
@@ -153,8 +179,7 @@ Restart the agent runtime. Returns `409` if a restart is already in progress and
     "state": "running",
     "agentName": "Milady",
     "model": "@elizaos/plugin-anthropic",
-    "startedAt": 1718000000000,
-    "uptime": 0
+    "startedAt": 1718000000000
   }
 }
 ```
@@ -163,7 +188,7 @@ Restart the agent runtime. Returns `409` if a restart is already in progress and
 
 ### POST /api/agent/reset
 
-Wipe config, workspace (memory), oauth tokens, and return to onboarding state. Stops the runtime, deletes the `~/.milady/` state directory (with safety checks to prevent deletion of system paths), and resets all server state.
+Wipe memory, onboarding config, cloud secrets, and return to onboarding state. Stops the runtime, deletes the PGlite database directory (with safety checks), clears persisted onboarding and cloud credentials, and resets server state. GGUF models and the state directory itself are preserved.
 
 This is a sensitive endpoint with stricter authorization:
 - If `MILADY_API_TOKEN` is configured, the request must include it as a Bearer token.

@@ -67,7 +67,7 @@ No environment variable is required to trigger auto-enable — it is driven enti
 | `BLOOIO_API_KEY` | Yes | Blooio service API key |
 | `BLOOIO_WEBHOOK_URL` | No | URL for receiving inbound messages |
 | `BLOOIO_BASE_URL` | No | Base URL for API requests |
-| `BLOOIO_FROM_NUMBER` | No | Sender phone number |
+| `BLOOIO_PHONE_NUMBER` | No | Sender phone number (injected by the runtime from `fromNumber` config field) |
 | `BLOOIO_WEBHOOK_PATH` | No | Webhook endpoint path |
 | `BLOOIO_WEBHOOK_PORT` | No | Webhook listener port |
 | `BLOOIO_WEBHOOK_SECRET` | No | Secret key for webhook/client verification |
