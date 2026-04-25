@@ -105,6 +105,12 @@ jobs:
       - name: Init eliza checkout
         run: git submodule update --init --depth=1 eliza
 
+      - name: Init cloud image plugin manifests
+        run: |
+          git -C eliza submodule update --init --depth=1 \
+            plugins/plugin-sql \
+            plugins/plugin-elizacloud
+
       - name: Init non-eliza submodules
         run: |
           node scripts/init-submodules.mjs

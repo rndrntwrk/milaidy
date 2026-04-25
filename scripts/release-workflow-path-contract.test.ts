@@ -656,6 +656,7 @@ describe("release workflow path contract", () => {
   });
 
   it("keeps the cloud agent template on workspace elizaOS packages before publish materialization", () => {
+    const buildCloudImage = readWorkflow("build-cloud-image.yml");
     const patch = fs.readFileSync(
       path.join(repoRoot, "patches", "eliza", "ci-release-contracts.patch"),
       "utf8",
@@ -668,6 +669,9 @@ describe("release workflow path contract", () => {
     expect(applyPatchScript).toContain('"--unidiff-zero"');
     expect(patch).toContain("settings-companion-vrm-power");
     expect(patch).toContain("settings.sections.capabilities.computerUseHint");
+    expect(buildCloudImage).toContain("Init cloud image plugin manifests");
+    expect(buildCloudImage).toContain("plugins/plugin-sql");
+    expect(buildCloudImage).toContain("plugins/plugin-elizacloud");
 
     for (const packageName of [
       "@elizaos/core",
