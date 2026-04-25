@@ -20,6 +20,10 @@ Then run deploy commands from the `deploy/` directory, which delegates to the su
 
 The fastest way to deploy Milady is using the included setup script, which builds the image, generates authentication tokens, runs interactive onboarding, and starts the gateway.
 
+<Info>
+The Docker deployment scripts (`docker-setup.sh`, `Dockerfile`, `docker-compose.yml`) live in the elizaOS submodule at `eliza/packages/app-core/deploy/`. Initialize it first with `git submodule update --init --recursive` or `bun run setup:upstreams`.
+</Info>
+
 ```bash
 cd deploy
 bash ../eliza/packages/app-core/deploy/docker-setup.sh

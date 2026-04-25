@@ -61,6 +61,20 @@ The `plugin-auto-enable.ts` module checks `connectors.imessage` in your config. 
 
 No environment variable is required to trigger auto-enable — it is driven entirely by the connector config object.
 
+## Environment Variables
+
+All settings can alternatively be set via environment variables:
+
+| Variable | Description |
+|----------|-------------|
+| `IMESSAGE_CLI_PATH` | Path to the iMessage CLI binary |
+| `IMESSAGE_DB_PATH` | Path to the iMessage database file |
+| `IMESSAGE_ENABLED` | Enable or disable the connector |
+| `IMESSAGE_DM_POLICY` | DM policy (`pairing`, `allowlist`, `open`, `disabled`) |
+| `IMESSAGE_ALLOW_FROM` | Comma-separated list of allowed sender IDs |
+| `IMESSAGE_GROUP_POLICY` | Group message policy (`open`, `disabled`, `allowlist`) |
+| `IMESSAGE_POLL_INTERVAL_MS` | Polling interval in milliseconds |
+
 ## Full Configuration Reference
 
 All fields are defined under `connectors.imessage` in `milady.json`.

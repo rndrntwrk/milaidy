@@ -1,52 +1,27 @@
 ---
-title: "Where Developer Docs Live"
+title: "Developer Docs"
 sidebarTitle: "Developer Docs"
-description: "Builder docs for app-core, ui, agent, plugins, runtime internals, and REST live in the Developer tab."
+description: "Where to find developer and builder documentation for Milady and elizaOS."
 ---
 
-Milady docs cover product usage. Developer, plugin, connector, and API docs live in the other tabs.
+## Milady developer reference
 
-## Milady docs (Use Milady tab)
+Detailed reference docs ship with this repo and are accessible from these paths:
 
-- provider setup
-- character changes
-- installed capabilities
-- app launch and control
-- remote connections
-- connector setup (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, and [22 more](/guides/connectors))
-- LifeOps
-- troubleshooting
+- **Connectors** — [overview](/guides/connectors) and per-platform setup for [Discord](/connectors/discord), [Telegram](/connectors/telegram), [Slack](/connectors/slack), [WhatsApp](/connectors/whatsapp), [Signal](/connectors/signal), [iMessage](/connectors/imessage), and [24 more](/guides/connectors)
+- **Plugins** — [overview](/plugins/overview), [architecture](/plugins/architecture), [create a plugin](/plugins/create-a-plugin), [registry](/plugins/registry)
+- **CLI** — [overview](/cli/overview), [setup](/cli/setup), [start](/cli/start), [environment variables](/cli/environment)
+- **REST API** — [agents](/rest/agents), [plugins](/rest/plugins), [skills](/rest/skills), [connectors](/rest/connectors), [models](/rest/models), [memory](/rest/memory)
+- **Runtime** — [core](/runtime/core), [services](/runtime/services), [events](/runtime/events), [providers](/runtime/providers)
+- **Agents** — [character interface](/agents/character-interface), [memory and state](/agents/memory-and-state), [personality](/agents/personality-and-behavior)
+- **Configuration** — [config reference](/configuration), [config schema](/config-schema), [model providers](/model-providers)
+- **Deployment** — [Docker and cloud](/deployment), [bare metal](/deployment-bare-metal)
 
-## Developer docs (Developer tab)
+## elizaOS framework docs
 
-- [Architecture](/architecture) — system design and layers
-- [Agents](/agents/character-interface) — character interface, memory, personality, runtime lifecycle
-- [Runtime](/runtime/core) — core, events, memory, models, providers, services, types
-- [REST API](/rest/agents) — 40 endpoint groups
-- [Apps](/apps/overview) — desktop, dashboard, mobile
-- [Advanced](/advanced/database) — database, logs, trajectories, chat commands, WebSocket events
-
-## Guides tab
-
-- [Beginner user guide](/guides/beginners-user-guide)
-- [Beginner dev guide](/guides/beginners-development-guide)
-- [Tutorials](/guides/tutorial-discord-bot) — Discord bot, Telegram bot, autonomous agent
-- [Configuration](/configuration) — config file, schemas, templates, includes
-- [Deployment](/deployment) — bare metal, cloud, self-updates
-
-## Connectors tab
-
-- [All 27 connectors](/guides/connectors) — overview with config examples
-- Per-connector reference pages for every supported platform
-
-## Plugins tab
-
-- [Plugin overview](/plugins/overview) — what plugins are and how they load
-- [Create a plugin](/plugins/create-a-plugin) — step-by-step tutorial
-- [Plugin registry](/plugins/registry) — browse LLM providers, platform connectors, DeFi, and feature plugins
-
-## elizaOS upstream docs
+For general elizaOS framework documentation (not Milady-specific):
 
 - [elizaOS docs home](https://docs.elizaos.ai)
+- [Runtime core](https://docs.elizaos.ai/runtime/core)
 - [Create a plugin](https://docs.elizaos.ai/guides/create-a-plugin)
 - [Deploy a project](https://docs.elizaos.ai/guides/deploy-a-project)

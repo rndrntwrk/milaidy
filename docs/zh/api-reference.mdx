@@ -4,7 +4,7 @@ sidebarTitle: API 参考
 description: Milady REST API 所有端点的完整参考，按资源分组整理。
 ---
 
-Milady API 服务器默认运行在端口 **2138**。所有端点均以 `/api/` 为前缀。当设置了 `MILADY_API_TOKEN` 时，需要进行身份验证。
+Milady API 服务器在开发环境中运行在端口 **31337**（`MILADY_API_PORT`），生产环境中运行在端口 **2138**。所有端点均以 `/api/` 为前缀。当设置了 `MILADY_API_TOKEN` 时，需要进行身份验证。
 
 <Warning>
 当配置了 `MILADY_API_TOKEN` 时，请在 `Authorization` 头中以 `Bearer` 令牌的形式包含该令牌，或使用配对流程获取令牌。
