@@ -15,7 +15,7 @@ The Solana plugin provides the agent with a Solana keypair wallet and a set of o
 ## Installation
 
 ```bash
-milady plugins install solana
+milady plugins install @elizaos/plugin-solana
 ```
 
 ## Auto-Enable

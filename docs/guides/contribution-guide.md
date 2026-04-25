@@ -67,7 +67,7 @@ bun run milady start
 
 ### Testing
 
-The project uses **Vitest** with V8 coverage.
+The project uses **Vitest 4.x** with V8 coverage. Coverage thresholds are defined in `eliza/packages/app-core/scripts/coverage-policy.mjs` and imported by the root `vitest.config.ts`.
 
 ```bash
 # Run all tests (parallel runner)
@@ -88,7 +88,7 @@ bun run test:e2e
 # Live API tests (requires API keys)
 MILADY_LIVE_TEST=1 bun run test:live
 
-# Docker-based review
+# Docker-based integration review
 bun run test:docker:review
 ```
 

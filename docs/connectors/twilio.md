@@ -13,8 +13,8 @@ The Twilio plugin is an elizaOS feature plugin that bridges your agent to Twilio
 | Field | Value |
 |-------|-------|
 | Package | `@elizaos/plugin-twilio` |
-| Category | Feature plugin |
-| Install | `milady plugins install twilio` |
+| Config key | `connectors.twilio` |
+| Install | `milady plugins install @elizaos/plugin-twilio` |
 
 ## Setup
 

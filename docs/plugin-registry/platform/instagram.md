@@ -11,7 +11,7 @@ The Instagram plugin connects Milady agents to Instagram, enabling message handl
 ## Installation
 
 ```bash
-milady plugins install instagram
+milady plugins install @elizaos/plugin-instagram
 ```
 
 ## Setup

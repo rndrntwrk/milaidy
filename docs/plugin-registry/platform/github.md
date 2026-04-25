@@ -13,7 +13,7 @@ The GitHub plugin connects Milady agents to GitHub, enabling interactions with r
 ## Installation
 
 ```bash
-milady plugins install github
+milady plugins install @elizaos/plugin-github
 ```
 
 ## Setup

@@ -17,7 +17,7 @@ The MiniMax plugin connects Milady agents to MiniMax's language models, providin
 ## Installation
 
 ```bash
-milady plugins install minimax
+milady plugins install @elizaos/plugin-minimax
 ```
 
 ## Configuration

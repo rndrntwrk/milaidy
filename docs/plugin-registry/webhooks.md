@@ -11,7 +11,7 @@ The Webhooks plugin enables Milady agents to receive and process incoming webhoo
 ## Installation
 
 ```bash
-milady plugins install webhooks
+milady plugins install @elizaos/plugin-webhooks
 ```
 
 ## Configuration

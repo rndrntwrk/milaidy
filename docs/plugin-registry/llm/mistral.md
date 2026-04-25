@@ -17,7 +17,7 @@ The Mistral plugin connects Milady agents to Mistral AI models, offering both op
 ## Installation
 
 ```bash
-milady plugins install mistral
+milady plugins install @elizaos/plugin-mistral
 ```
 
 ## Auto-Enable

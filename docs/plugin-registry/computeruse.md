@@ -15,7 +15,7 @@ Computer use enables agents to operate the computer as a human would: viewing th
 ## Installation
 
 ```bash
-milady plugins install computeruse
+milady plugins install @elizaos/plugin-computeruse
 ```
 
 ## Enable via Features

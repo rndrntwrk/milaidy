@@ -12,7 +12,7 @@ The Nextcloud Talk connector is an elizaOS plugin that bridges your agent to Nex
 |-------|-------|
 | Package | `@elizaos/plugin-nextcloud-talk` |
 | Config key | `connectors.nextcloud-talk` |
-| Install | `milady plugins install nextcloud-talk` |
+| Install | `milady plugins install @elizaos/plugin-nextcloud-talk` |
 
 ## Setup
 

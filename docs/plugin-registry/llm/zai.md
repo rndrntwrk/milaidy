@@ -13,7 +13,7 @@ The Zai plugin connects Milady agents to Homunculus Labs' Zai language models.
 ## Installation
 
 ```bash
-milady plugins install zai
+milady plugins install @elizaos/plugin-zai
 ```
 
 ## Auto-Enable

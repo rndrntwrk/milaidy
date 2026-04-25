@@ -12,7 +12,7 @@ A personal-account variant is also available as `@elizaos/plugin-zalouser`.
 |-------|-------|
 | Package | `@elizaos/plugin-zalo` |
 | Config key | `connectors.zalo` |
-| Install | `milady plugins install zalo` |
+| Install | `milady plugins install @elizaos/plugin-zalo` |
 
 ## Setup
 

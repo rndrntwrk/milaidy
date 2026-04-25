@@ -17,7 +17,7 @@ The Cohere plugin connects Milady agents to Cohere's language models, providing 
 ## Installation
 
 ```bash
-milady plugins install cohere
+milady plugins install @elizaos/plugin-cohere
 ```
 
 ## Auto-Enable

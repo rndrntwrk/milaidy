@@ -14,7 +14,7 @@ The Gmail Watch plugin is an elizaOS feature plugin that monitors Gmail inboxes 
 |-------|-------|
 | Package | `@elizaos/plugin-gmail-watch` |
 | Feature flag | `features.gmailWatch` |
-| Install | `milady plugins install gmail-watch` |
+| Install | `milady plugins install @elizaos/plugin-gmail-watch` |
 
 ## Setup Requirements
 

@@ -11,7 +11,7 @@ The Vision plugin gives Milady agents the ability to understand and analyze imag
 ## Installation
 
 ```bash
-milady plugins install vision
+milady plugins install @elizaos/plugin-vision
 ```
 
 ## Enable via Features

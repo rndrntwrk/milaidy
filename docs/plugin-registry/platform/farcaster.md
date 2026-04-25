@@ -15,7 +15,7 @@ Farcaster is a sufficiently decentralized social protocol. Users own their accou
 ## Installation
 
 ```bash
-milady plugins install farcaster
+milady plugins install @elizaos/plugin-farcaster
 ```
 
 ## Setup

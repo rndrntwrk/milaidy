@@ -11,7 +11,7 @@ The Twitch plugin connects Milady agents to Twitch, enabling chat messaging and 
 ## Installation
 
 ```bash
-milady plugins install twitch
+milady plugins install @elizaos/plugin-twitch
 ```
 
 ## Setup

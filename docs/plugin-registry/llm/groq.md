@@ -11,7 +11,7 @@ The Groq plugin connects Milady agents to Groq's inference API. Groq's Language 
 ## Installation
 
 ```bash
-milady plugins install groq
+milady plugins install @elizaos/plugin-groq
 ```
 
 ## Auto-Enable

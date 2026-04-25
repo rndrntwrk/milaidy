@@ -17,7 +17,7 @@ The Qwen plugin connects Milady agents to Alibaba Cloud's Qwen (Tongyi Qianwen) 
 ## Installation
 
 ```bash
-milady plugins install qwen
+milady plugins install @elizaos/plugin-qwen
 ```
 
 ## Configuration

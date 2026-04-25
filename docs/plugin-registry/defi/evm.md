@@ -15,7 +15,7 @@ The EVM plugin provides the agent with an embedded wallet and a set of on-chain 
 ## Installation
 
 ```bash
-milady plugins install evm
+milady plugins install @elizaos/plugin-evm
 ```
 
 ## Auto-Enable

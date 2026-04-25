@@ -11,7 +11,7 @@ The Microsoft Teams plugin connects Milady agents to Teams as an Azure Bot, supp
 ## Installation
 
 ```bash
-milady plugins install msteams
+milady plugins install @elizaos/plugin-msteams
 ```
 
 ## Setup

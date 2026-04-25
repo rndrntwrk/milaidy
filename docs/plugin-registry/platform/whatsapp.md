@@ -18,7 +18,7 @@ Two paths are available:
 ## Installation
 
 ```bash
-milady plugins install whatsapp
+milady plugins install @elizaos/plugin-whatsapp
 ```
 
 ## Setup

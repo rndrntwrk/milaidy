@@ -11,7 +11,7 @@ The Mattermost plugin connects Milady agents to a Mattermost server as a bot, su
 ## Installation
 
 ```bash
-milady plugins install mattermost
+milady plugins install @elizaos/plugin-mattermost
 ```
 
 ## Setup

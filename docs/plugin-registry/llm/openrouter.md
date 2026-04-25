@@ -27,7 +27,7 @@ After upstream publishes a fixed version, verify `dist/node/index.node.js` conta
 ## Installation
 
 ```bash
-milady plugins install openrouter
+milady plugins install @elizaos/plugin-openrouter
 ```
 
 ## Auto-Enable

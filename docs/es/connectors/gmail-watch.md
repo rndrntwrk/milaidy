@@ -24,7 +24,7 @@ El conector Gmail Watch es un plugin de elizaOS que monitorea bandejas de entrad
 |-------|-------|
 | Paquete | `@elizaos/plugin-gmail-watch` |
 | Feature flag | `features.gmailWatch` |
-| Instalación | `milady plugins install gmail-watch` |
+| Instalación | `milady plugins install @elizaos/plugin-gmail-watch` |
 
 <div id="setup-requirements">
 

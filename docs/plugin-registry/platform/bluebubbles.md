@@ -15,7 +15,7 @@ The BlueBubbles plugin connects Milady agents to iMessage through a local BlueBu
 ## Installation
 
 ```bash
-milady plugins install bluebubbles
+milady plugins install @elizaos/plugin-bluebubbles
 ```
 
 ## Auto-Enable

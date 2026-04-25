@@ -15,7 +15,7 @@ The TTS plugin registers a `TEXT_TO_SPEECH` model handler and actions that allow
 ## Installation
 
 ```bash
-milady plugins install tts
+milady plugins install @elizaos/plugin-tts
 ```
 
 ## Enable via Features

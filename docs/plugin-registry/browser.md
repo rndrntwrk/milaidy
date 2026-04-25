@@ -15,7 +15,7 @@ The Browser plugin uses a headless browser (via stagehand-server and Puppeteer/C
 ## Installation
 
 ```bash
-milady plugins install browser
+milady plugins install @elizaos/plugin-browser
 ```
 
 The plugin requires a running stagehand-server instance for browser automation.

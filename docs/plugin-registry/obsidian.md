@@ -17,7 +17,7 @@ The Obsidian plugin connects Milady agents to your local [Obsidian](https://obsi
 ## Installation
 
 ```bash
-milady plugins install obsidian
+milady plugins install @elizaos/plugin-obsidian
 ```
 
 ## Auto-Enable

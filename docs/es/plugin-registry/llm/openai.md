@@ -15,7 +15,7 @@ El plugin de OpenAI conecta los agentes de Milady con la API de OpenAI, proporci
 </div>
 
 ```bash
-milady plugins install openai
+milady plugins install @elizaos/plugin-openai
 ```
 
 O añade a `milady.json`:

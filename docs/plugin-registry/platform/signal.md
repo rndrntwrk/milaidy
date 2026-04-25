@@ -11,7 +11,7 @@ The Signal plugin connects Milady agents to Signal via signal-cli running in HTT
 ## Installation
 
 ```bash
-milady plugins install signal
+milady plugins install @elizaos/plugin-signal
 ```
 
 ## Setup

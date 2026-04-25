@@ -21,7 +21,7 @@ The Image Generation plugin registers an `IMAGE` model handler and a set of acti
 ## Installation
 
 ```bash
-milady plugins install image-generation
+milady plugins install @elizaos/plugin-image-generation
 ```
 
 ## Enable via Features

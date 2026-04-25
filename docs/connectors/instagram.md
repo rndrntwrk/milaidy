@@ -4,8 +4,19 @@ Connect your agent to Instagram for media posting, comment monitoring, and DM ha
 
 ## Prerequisites
 
-- An Instagram account with username and password
-- Optionally, a proxy URL for API requests
+The Instagram connector is an elizaOS plugin that bridges your agent to Instagram. It supports media posting with caption generation, comment response, and direct message handling. This connector is available from the plugin registry.
+
+## Package Info
+
+| Field | Value |
+|-------|-------|
+| Package | `@elizaos/plugin-instagram` |
+| Config key | `connectors.instagram` |
+| Install | `milady plugins install @elizaos/plugin-instagram` |
+
+## Setup Requirements
+
+- Instagram account credentials (username and password)
 
 ## Configuration
 

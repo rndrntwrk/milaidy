@@ -41,7 +41,7 @@ Ollama listens on `http://localhost:11434` by default.
 ### 4. Enable the Plugin
 
 ```bash
-milady plugins install ollama
+milady plugins install @elizaos/plugin-ollama
 ```
 
 ## Auto-Enable

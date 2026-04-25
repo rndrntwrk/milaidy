@@ -15,7 +15,7 @@ OpenAI 插件将 Milady 代理连接到 OpenAI 的 API，提供对 GPT-4o、o1/o
 </div>
 
 ```bash
-milady plugins install openai
+milady plugins install @elizaos/plugin-openai
 ```
 
 或添加到 `milady.json`：

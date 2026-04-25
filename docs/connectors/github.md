@@ -13,8 +13,8 @@ The GitHub plugin is an elizaOS feature plugin that bridges your agent to the Gi
 | Field | Value |
 |-------|-------|
 | Package | `@elizaos/plugin-github` |
-| Category | Feature plugin |
-| Install | `milady plugins install github` |
+| Config key | `connectors.github` |
+| Install | `milady plugins install @elizaos/plugin-github` |
 
 ## Setup Requirements
 

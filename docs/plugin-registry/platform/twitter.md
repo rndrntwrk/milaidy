@@ -19,7 +19,7 @@ This is an upstream elizaOS plugin and is **not included** in the Milady bundled
 ## Installation
 
 ```bash
-milady plugins install xai
+milady plugins install @elizaos/plugin-twitter
 ```
 
 ## Setup
