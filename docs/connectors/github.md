@@ -20,7 +20,16 @@ The GitHub plugin is an elizaOS feature plugin that bridges your agent to the Gi
 
 - GitHub API token (personal access token or fine-grained token)
 
-## Configuration
+## Setup
+
+### 1. Create a GitHub Personal Access Token
+
+1. Go to [github.com/settings/tokens](https://github.com/settings/tokens)
+2. Click **Generate new token** (classic) or **Fine-grained token**
+3. Select the scopes needed for your use case (e.g., `repo`, `issues`, `pull_requests`)
+4. Copy the generated token
+
+### 2. Configure Milady
 
 | Name | Required | Description |
 |------|----------|-------------|
@@ -43,13 +52,37 @@ Configure in `~/.milady/milady.json`:
 
 ```json
 {
-  "plugins": {
-    "allow": ["@elizaos/plugin-github"]
+  "connectors": {
+    "github": {
+      "apiToken": "YOUR_API_TOKEN",
+      "owner": "YOUR_GITHUB_OWNER",
+      "repo": "YOUR_GITHUB_REPO"
+    }
   }
 }
 ```
 
-## Setup
+Or via environment variables:
+
+```bash
+export GITHUB_API_TOKEN=YOUR_API_TOKEN
+export GITHUB_OWNER=YOUR_GITHUB_OWNER
+export GITHUB_REPO=YOUR_GITHUB_REPO
+```
+
+## Configuration Reference
+
+All fields are defined under `connectors.github` in `milady.json`.
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `apiToken` | Yes | GitHub personal access token |
+| `owner` | No | Default GitHub repository owner (username or organization) |
+| `repo` | No | Default GitHub repository name |
+| `branch` | No | Default branch name (defaults to `main`) |
+| `enabled` | No | Set `false` to disable (default: `true`) |
+
+## Environment Variables
 
 | Variable | Description |
 |----------|-------------|
@@ -73,4 +106,6 @@ Configure in `~/.milady/milady.json`:
 
 ## Related
 
+- [GitHub plugin reference](/plugin-registry/platform/github)
 - [Connectors overview](/guides/connectors#github)
+- [Configuration reference](/configuration)

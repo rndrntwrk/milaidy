@@ -169,7 +169,7 @@ Prefixed **vite / api / electrobun** lines are mirrored to **`.milady/desktop-de
 
 ## UI E2E (Playwright)
 
-Browser smoke tests target the **same renderer URL** Electrobun loads in watch mode (`http://localhost:<MILADY_PORT>`, default **2138**). They do **not** drive the native Electrobun webview; tray, native menus, and packaged-only behaviors stay covered by **`bun run test:desktop:packaged`** (where applicable) and the [release regression checklist](./release-regression-checklist.md).
+Browser smoke tests target the **same renderer URL** Electrobun loads in watch mode (`http://localhost:<MILADY_PORT>`, default **2138**). They do **not** drive the native Electrobun webview; tray, native menus, and packaged-only behaviors stay covered by **`bun run test:desktop:packaged`** (where applicable) and the [release regression checklist](/apps/release-regression-checklist).
 
 **Why Playwright:** the app already ships Playwright for renderer and packaged checks, so the browser smoke flows now use the same supported stack instead of a separate TestCafe toolchain. This removes the vulnerable `replicator` dependency entirely and keeps the UI E2E surface on one runner.
 
@@ -185,7 +185,7 @@ Browser smoke tests target the **same renderer URL** Electrobun loads in watch m
 
 **Full test matrix:** `bun run test` does **not** run Playwright UI smoke by default. Set **`MILADY_TEST_UI_PLAYWRIGHT=1`** to append the UI suite to `test/scripts/test-parallel.mjs` (serial, after Vitest e2e). `MILADY_TEST_UI_TESTCAFE=1` is still accepted as a legacy alias.
 
-**Path A vs native webview (Phase B):** These specs still target the renderer URL, not the embedded Electrobun webview. Packaged/native behaviors remain covered by **`bun run test:desktop:packaged`**, **`bun run test:desktop:playwright`**, and the [release regression checklist](./release-regression-checklist.md).
+**Path A vs native webview (Phase B):** These specs still target the renderer URL, not the embedded Electrobun webview. Packaged/native behaviors remain covered by **`bun run test:desktop:packaged`**, **`bun run test:desktop:playwright`**, and the [release regression checklist](/apps/release-regression-checklist).
 
 ## Related source
 
@@ -211,4 +211,4 @@ Browser smoke tests target the **same renderer URL** Electrobun loads in watch m
 ## See also
 
 - [Desktop app (Electrobun)](/apps/desktop) — runtime modes, IPC, downloads
-- [Electrobun startup and exception handling](../electrobun-startup.md) — why main-process try/catch stays
+- [Electrobun startup and exception handling](/electrobun-startup) — why main-process try/catch stays

@@ -58,4 +58,5 @@ Configure in `~/.milady/milady.json`:
 
 ## Related
 
+- [Tlon plugin reference](/plugin-registry/platform/tlon)
 - [Connectors overview](/guides/connectors#tlon)

@@ -52,4 +52,5 @@ Configure in `~/.milady/milady.json`:
 
 ## Related
 
+- [Instagram plugin reference](/plugin-registry/platform/instagram)
 - [Connectors overview](/guides/connectors#instagram)

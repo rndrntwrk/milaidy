@@ -111,5 +111,6 @@ All fields are defined under `connectors.twitch` in `milady.json`.
 
 ## Related
 
+- [Twitch plugin reference](/plugin-registry/platform/twitch)
 - [Connectors overview](/guides/connectors)
 - [Configuration reference](/configuration)

@@ -90,4 +90,5 @@ Configure in `~/.milady/milady.json`:
 
 ## Related
 
+- [Bluesky plugin reference](/plugin-registry/platform/bluesky)
 - [Connectors overview](/guides/connectors#bluesky)

@@ -62,5 +62,6 @@ The generic auto-enable trigger fields (`token`, `botToken`, `apiKey`) also work
 
 ## Related
 
+- [Nostr plugin reference](/plugin-registry/platform/nostr)
 - [Connectors overview](/guides/connectors)
 - [Configuration reference](/configuration)

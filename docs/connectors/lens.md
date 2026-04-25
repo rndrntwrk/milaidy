@@ -36,10 +36,12 @@ The connector auto-enables when `apiKey`, `token`, or `botToken` is truthy in th
 2. Add the API key to `connectors.lens` in your config or set the `LENS_API_KEY` environment variable.
 3. Start your agent -- the Lens connector will auto-enable.
 
-## Features
-
-- Decentralized social graph interactions via Lens Protocol
+1. Obtain API credentials from the [Lens Protocol](https://www.lens.xyz/) developer portal
+2. Add the API key to `connectors.lens` in your config or set the `LENS_API_KEY` environment variable
+3. Start your agent — the Lens connector will auto-enable
 
 ## Related
 
+- [Lens plugin reference](/plugin-registry/platform/lens)
 - [Connectors overview](/guides/connectors)
+- [Configuration reference](/configuration)

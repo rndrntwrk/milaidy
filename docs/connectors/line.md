@@ -59,4 +59,5 @@ Configure in `~/.milady/milady.json`:
 
 ## Related
 
+- [LINE plugin reference](/plugin-registry/platform/line)
 - [Connectors overview](/guides/connectors#line)

@@ -464,7 +464,7 @@ bun add elizaos-plugin-custom-feature
 
 - [Plugin Development Guide](/plugins/development) — Create your own plugins
 - [Local Plugin Development](/plugins/local-plugins) — Develop without publishing
-- [Contributing Guide](./contributing.md) — Submit plugins upstream
+- [Contributing Guide](/guides/contributing) — Submit plugins upstream
 
 ---
 

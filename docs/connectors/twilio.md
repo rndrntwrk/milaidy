@@ -94,4 +94,5 @@ Configure in `~/.milady/milady.json`:
 
 ## Related
 
+- [Twilio plugin reference](/plugin-registry/platform/twilio)
 - [Connectors overview](/guides/connectors#twilio)

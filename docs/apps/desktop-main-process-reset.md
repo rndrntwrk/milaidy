@@ -62,10 +62,10 @@ Settings still uses **`handleReset`** in the renderer (confirm in webview + full
 
 ## Related documentation
 
-- [Desktop app](./desktop.md) — native menu overview (table updated to match main-process reset).
-- [Environment variables](../cli/environment.md) — `MILADY_DISABLE_EDGE_TTS` and other runtime flags.
-- [TTS / Edge plugin](../plugin-registry/tts.md) — Microsoft Edge TTS cloud disclosure when orchestrator auto-loads Edge TTS.
-- [Contributing — Testing](../guides/contributing.md) — Vitest include globs for `eliza/packages/app-core`.
+- [Desktop app](/apps/desktop) — native menu overview (table updated to match main-process reset).
+- [Environment variables](/cli/environment) — `MILADY_DISABLE_EDGE_TTS` and other runtime flags.
+- [TTS / Edge plugin](/plugin-registry/tts) — Microsoft Edge TTS cloud disclosure when orchestrator auto-loads Edge TTS.
+- [Contributing — Testing](/guides/contributing) — Vitest include globs for `packages/app-core`.
 
 ## Tray RPC wait timeout
 

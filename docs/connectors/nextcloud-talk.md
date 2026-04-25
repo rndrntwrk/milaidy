@@ -59,5 +59,6 @@ Configure in `~/.milady/milady.json`:
 
 ## Related
 
+- [Nextcloud Talk plugin reference](/plugin-registry/platform/nextcloud-talk)
 - [Connectors overview](/guides/connectors#nextcloud-talk)
 - [Configuration reference](/configuration)

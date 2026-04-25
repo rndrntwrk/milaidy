@@ -66,5 +66,5 @@ Configure in `~/.milady/milady.json`:
 
 ## Related
 
-- [Zalo User (personal account) connector](/connectors/zalouser)
+- [Zalo plugin reference](/plugin-registry/platform/zalo)
 - [Connectors overview](/guides/connectors#zalo)
