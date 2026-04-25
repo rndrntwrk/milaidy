@@ -38,6 +38,11 @@ on:
         required: false
         type: boolean
         default: false
+      platform:
+        description: "Desktop platform matrix to build (all, windows, macos, linux)"
+        required: false
+        type: string
+        default: "all"
   workflow_dispatch:
     inputs:
       tag:
@@ -49,6 +54,16 @@ on:
         required: false
         type: boolean
         default: true
+      platform:
+        description: "Desktop platform matrix to build"
+        required: false
+        type: choice
+        default: "all"
+        options:
+          - all
+          - windows
+          - macos
+          - linux
 
 concurrency:
   group: release-electrobun-${{ github.ref }}
@@ -71,6 +86,7 @@ jobs:
       tag: ${{ steps.version.outputs.tag }}
       env: ${{ steps.version.outputs.env }}
       source_sha: ${{ steps.version.outputs.source_sha }}
+      desktop_matrix: ${{ steps.desktop-matrix.outputs.desktop_matrix }}
     steps:
       - name: Enable Git long paths (Windows)
         if: runner.os == 'Windows'
@@ -124,8 +140,36 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "Release: $VERSION (tag: $TAG, env: $BUILD_ENV, sha: $GITHUB_SHA)"
 
+      - name: Select desktop platform matrix
+        id: desktop-matrix
+        env:
+          RELEASE_PLATFORM: ${{ inputs.platform || 'all' }}
+        run: |
+          case "$RELEASE_PLATFORM" in
+            ""|all)
+              printf '%s\n' '{"platform":[{"name":"macOS (Apple Silicon)","os":"macos","runner":"macos-14","artifact-name":"macos-arm64"},{"name":"macOS (Intel)","os":"macos","runner":"macos-15-intel","artifact-name":"macos-x64"},{"name":"Windows","os":"windows","runner":"${{ vars.RUNNER_WINDOWS || 'windows-2025' }}","artifact-name":"windows-x64"},{"name":"Linux","os":"linux","runner":"ubuntu-latest","artifact-name":"linux-x64"}]}' > "$RUNNER_TEMP/desktop-matrix.json"
+              ;;
+            windows)
+              printf '%s\n' '{"platform":[{"name":"Windows","os":"windows","runner":"${{ vars.RUNNER_WINDOWS || 'windows-2025' }}","artifact-name":"windows-x64"}]}' > "$RUNNER_TEMP/desktop-matrix.json"
+              ;;
+            macos)
+              printf '%s\n' '{"platform":[{"name":"macOS (Apple Silicon)","os":"macos","runner":"macos-14","artifact-name":"macos-arm64"},{"name":"macOS (Intel)","os":"macos","runner":"macos-15-intel","artifact-name":"macos-x64"}]}' > "$RUNNER_TEMP/desktop-matrix.json"
+              ;;
+            linux)
+              printf '%s\n' '{"platform":[{"name":"Linux","os":"linux","runner":"ubuntu-latest","artifact-name":"linux-x64"}]}' > "$RUNNER_TEMP/desktop-matrix.json"
+              ;;
+            *)
+              echo "::error::Unsupported desktop release platform: $RELEASE_PLATFORM"
+              exit 1
+              ;;
+          esac
+
+          echo "desktop_matrix=$(tr -d '\n' < "$RUNNER_TEMP/desktop-matrix.json")" >> "$GITHUB_OUTPUT"
+          cat "$RUNNER_TEMP/desktop-matrix.json"
+
   validate-release:
     name: Validate Release Inputs
+    if: ${{ inputs.platform != 'windows' }}
     needs: prepare
     runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
     env:
@@ -295,6 +339,7 @@ jobs:
 
   build-browser-companions:
     name: Build Agent Browser Bridge companions
+    if: ${{ inputs.platform == '' || inputs.platform == 'all' }}
     needs: [prepare, validate-release]
     runs-on: macos-14
     timeout-minutes: 60
@@ -377,6 +422,7 @@ jobs:
 
   build:
     name: Build ${{ matrix.platform.name }}
+    if: ${{ always() && needs.prepare.result == 'success' && (needs.validate-release.result == 'success' || needs.validate-release.result == 'skipped') }}
     needs: [prepare, validate-release]
     runs-on: ${{ matrix.platform.runner }}
     timeout-minutes: 150
@@ -385,26 +431,7 @@ jobs:
         shell: bash -euo pipefail {0}
     strategy:
       fail-fast: false
-      matrix:
-        platform:
-          # Electrobun builds for the host architecture only (no universal binary),
-          # so we need separate Apple Silicon and Intel macOS jobs.
-          - name: macOS (Apple Silicon)
-            os: macos
-            runner: macos-14
-            artifact-name: macos-arm64
-          - name: macOS (Intel)
-            os: macos
-            runner: macos-15-intel
-            artifact-name: macos-x64
-          - name: Windows
-            os: windows
-            runner: ${{ vars.RUNNER_WINDOWS || 'windows-2025' }}
-            artifact-name: windows-x64
-          - name: Linux
-            os: linux
-            runner: ubuntu-latest
-            artifact-name: linux-x64
+      matrix: ${{ fromJson(needs.prepare.outputs.desktop_matrix) }}
 
     steps:
       - name: Enable Git long paths (Windows)
@@ -484,7 +511,11 @@ jobs:
 
       - name: Install Windows Electrobun package dependency
         if: matrix.platform.os == 'windows'
-        run: bun add --no-save --dev --ignore-scripts electrobun@1.16.0
+        run: |
+          PLUGIN_AGENT_SKILLS_VERSION="$(node -p "require('./eliza/plugins/plugin-agent-skills/typescript/package.json').version")"
+          bun add --no-save --dev --ignore-scripts \
+            electrobun@1.16.0 \
+            "@elizaos/plugin-agent-skills@$PLUGIN_AGENT_SKILLS_VERSION"
 
       - name: Restore eliza workspace paths for desktop release scripts
         run: node scripts/restore-local-eliza-workspace.mjs
@@ -1653,7 +1684,7 @@ jobs:
 
   release:
     name: Create Release
-    if: ${{ github.event_name != 'workflow_call' || inputs.publish_release }}
+    if: ${{ (inputs.platform == '' || inputs.platform == 'all') && (github.event_name != 'workflow_call' || inputs.publish_release) }}
     needs: [prepare, build]
     runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
     timeout-minutes: 10

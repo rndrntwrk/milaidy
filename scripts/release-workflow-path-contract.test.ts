@@ -678,7 +678,53 @@ describe("release workflow path contract", () => {
       "if: matrix.platform.os == 'windows'",
     );
     expect(windowsElectrobunInstallBlock).toContain(
-      "bun add --no-save --dev --ignore-scripts electrobun@1.16.0",
+      "bun add --no-save --dev --ignore-scripts \\",
+    );
+    expect(windowsElectrobunInstallBlock).toContain("electrobun@1.16.0");
+    expect(windowsElectrobunInstallBlock).toContain(
+      "PLUGIN_AGENT_SKILLS_VERSION=",
+    );
+    expect(windowsElectrobunInstallBlock).toContain(
+      '"@elizaos/plugin-agent-skills@$PLUGIN_AGENT_SKILLS_VERSION"',
+    );
+  });
+
+  it("supports Windows-only Electrobun release dispatches", () => {
+    const releaseElectrobun = readWorkflow("release-electrobun.yml");
+
+    expect(releaseElectrobun).toContain("Desktop platform matrix to build");
+    expect(releaseElectrobun).toContain("desktop_matrix:");
+    expect(releaseElectrobun).toContain(
+      [
+        "Validate Release Inputs\n    if: $",
+        "{{ inputs.platform != 'windows' }}",
+      ].join(""),
+    );
+    expect(releaseElectrobun).toContain(
+      ["RELEASE_PLATFORM: $", "{{ inputs.platform || 'all' }}"].join(""),
+    );
+    expect(releaseElectrobun).toContain(
+      '{"platform":[{"name":"Windows","os":"windows","runner":"$' +
+        "{{ vars.RUNNER_WINDOWS || 'windows-2025' }}" +
+        '","artifact-name":"windows-x64"}]}',
+    );
+    expect(releaseElectrobun).toContain(
+      [
+        "matrix: $",
+        "{{ fromJson(needs.prepare.outputs.desktop_matrix) }}",
+      ].join(""),
+    );
+    expect(releaseElectrobun).toContain(
+      [
+        "name: Build Agent Browser Bridge companions",
+        "    if: $" + "{{ inputs.platform == '' || inputs.platform == 'all' }}",
+      ].join("\n"),
+    );
+    expect(releaseElectrobun).toContain(
+      "(inputs.platform == '' || inputs.platform == 'all') &&",
+    );
+    expect(releaseElectrobun).toContain(
+      "needs.validate-release.result == 'success' || needs.validate-release.result == 'skipped'",
     );
   });
 
