@@ -318,6 +318,17 @@ append_versioned_package \
   "eliza/plugins/plugin-agent-orchestrator/package.json" \
   ".eliza.ci-disabled/plugins/plugin-agent-orchestrator/package.json"
 
+# Published @elizaos/agent eagerly imports the local embedding plugin from its
+# runtime entrypoint during live release validation. Keep the published plugin
+# available when the root workspace graph has been rewritten away.
+ensure_eliza_submodule_manifest \
+  "eliza/plugins/plugin-local-embedding/typescript/package.json" \
+  "plugins/plugin-local-embedding"
+append_versioned_package \
+  "@elizaos/plugin-local-embedding" \
+  "eliza/plugins/plugin-local-embedding/typescript/package.json" \
+  ".eliza.ci-disabled/plugins/plugin-local-embedding/typescript/package.json"
+
 # coding-agent-adapters is a transitive dep of eliza/packages/agent's server.ts.
 # After disable-local-eliza-workspace drops eliza/packages/agent from the
 # workspace, its transitive deps don't get installed — but the Docker CI smoke

@@ -600,6 +600,11 @@ describe("release workflow path contract", () => {
     );
     expect(fallbackScript).toContain("ensure_eliza_submodule_manifest");
     expect(fallbackScript).toContain('"plugins/plugin-anthropic"');
+    expect(fallbackScript).toContain('"plugins/plugin-local-embedding"');
+    expect(fallbackScript).toContain('"@elizaos/plugin-local-embedding"');
+    expect(fallbackScript).toContain(
+      '"eliza/plugins/plugin-local-embedding/typescript/package.json"',
+    );
     expect(fallbackScript).toContain('"jsonrepair"');
     expect(fallbackScript).toContain(
       "plugin-anthropic fails at import time on jsonrepair",
