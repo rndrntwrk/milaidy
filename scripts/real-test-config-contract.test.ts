@@ -81,6 +81,8 @@ describe("real test config contract", () => {
     expect(fullLiveE2E).toContain("MILADY_LIVE_BROWSER_SUITE=1");
     expect(fullLiveE2E).toContain("test/vitest/live-e2e.config.ts");
     expect(heavyE2E).toContain("MILADY_LIVE_BROWSER_SUITE=1");
-    expect(runnerSource).toContain('args: ["run", "test:e2e:all"]');
+    expect(runnerSource).toContain('args: ["run", "test:e2e"]');
+    expect(runnerSource).not.toContain('args: ["run", "test:e2e:all"]');
+    expect(runnerSource).not.toContain('args: ["run", "scenarios:lifeops"]');
   });
 });

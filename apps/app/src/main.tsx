@@ -40,11 +40,14 @@ import {
   installDesktopPermissionsClientPatch,
   installForceFreshOnboardingClientPatch,
   installLocalProviderCloudPreferencePatch,
+  isAppWindowRoute,
   isDetachedWindowShell,
+  getWindowNavigationPath,
   resolveWindowShellRoute,
   shouldInstallMainWindowOnboardingPatches,
   syncDetachedShellLocation,
 } from "@elizaos/app-core";
+import { AppWindowRenderer } from "@elizaos/app-core";
 import { dispatchQueuedLifeOpsGithubCallbackFromUrl } from "@elizaos/app-lifeops/platform";
 import type { ShareTargetPayload } from "@elizaos/app-core/platform";
 import {
@@ -62,7 +65,7 @@ import {
   startDeviceBridgeClient,
   type DeviceBridgeClient,
 } from "@elizaos/capacitor-llama";
-import { lazy, StrictMode, Suspense, type ReactNode } from "react";
+import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { CompanionShell } from "@elizaos/app-companion/ui";
 import {
@@ -87,6 +90,7 @@ import "@elizaos/app-scape/ui";
 import "@elizaos/app-hyperscape/ui";
 import "@elizaos/app-2004scape/ui";
 import "@elizaos/app-defense-of-the-agents/ui";
+import "@elizaos/app-screenshare/ui";
 import "@clawville/app-clawville/ui";
 import {
   AppBlockerSettingsCard,
@@ -128,27 +132,10 @@ import {
   resolveIosRuntimeConfig,
 } from "./ios-runtime";
 
-type CharacterEditorProps = {
-  sceneOverlay?: boolean;
-  inModal?: boolean;
-  onHeaderActionsChange?: (actions: ReactNode | null) => void;
-};
-
-const LazyCharacterEditor = lazy(() =>
-  import("@elizaos/app-core/components/character/CharacterEditor").then(
-    (module) => ({
-      default: module.CharacterEditor,
-    }),
-  ),
-);
-
-function CharacterEditor(props: CharacterEditorProps) {
-  return (
-    <Suspense fallback={null}>
-      <LazyCharacterEditor {...props} />
-    </Suspense>
-  );
-}
+// CharacterEditor is statically re-exported by `@elizaos/app-core/browser`,
+// so the previous `lazy()` wrapper here was eagerly merged back into the
+// main chunk by Rollup. Static import keeps the load path honest.
+import { CharacterEditor } from "@elizaos/app-core/components/character/CharacterEditor";
 
 declare global {
   interface Window {
@@ -608,11 +595,27 @@ function isPhoneCompanionMode(): boolean {
   return params.get("mode") === "companion";
 }
 
+function resolveAppWindowSlug(): string | null {
+  if (!isAppWindowRoute()) return null;
+  const path = getWindowNavigationPath();
+  if (!path.startsWith("/apps/")) return null;
+  // Take only the first path segment after /apps/. URLs like
+  // `/apps/plugins/extra` would otherwise yield a malformed slug
+  // ("plugins/extra") that no descriptor can match.
+  const slug = path
+    .slice("/apps/".length)
+    .replace(/[?#].*$/, "")
+    .split("/")[0];
+  return slug.length > 0 ? slug : null;
+}
+
 function mountReactApp(): void {
   const rootEl = document.getElementById("root");
   if (!rootEl) throw new Error("Root element #root not found");
 
   const phoneCompanion = isPhoneCompanionMode();
+  const detachedShell = isDetachedWindowShell(windowShellRoute);
+  const appWindowSlug = detachedShell ? null : resolveAppWindowSlug();
 
   createRoot(rootEl).render(
     <ErrorBoundary>
@@ -620,9 +623,13 @@ function mountReactApp(): void {
         <AppProvider branding={APP_BRANDING}>
           {phoneCompanion ? (
             <PhoneCompanionApp />
-          ) : isDetachedWindowShell(windowShellRoute) ? (
+          ) : detachedShell ? (
             <div className="flex h-screen min-h-0 w-screen flex-col overflow-hidden">
               <DetachedShellRoot route={windowShellRoute} />
+            </div>
+          ) : appWindowSlug ? (
+            <div className="flex h-screen min-h-0 w-screen flex-col overflow-hidden">
+              <AppWindowRenderer slug={appWindowSlug} />
             </div>
           ) : (
             <>

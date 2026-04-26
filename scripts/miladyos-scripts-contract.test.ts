@@ -4,20 +4,20 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { parseArgs as parseAvdTestArgs } from "./miladyos/avd-test.mjs";
 import {
-  parseArgs as parseBootAnimationArgs,
-  inspectBootAnimationDir,
-} from "./miladyos/build-bootanimation.mjs";
-import { lintInitRc } from "./miladyos/lint-init-rc.mjs";
-import {
   parseArgs as parseBootValidateArgs,
   resolveAdb,
 } from "./miladyos/boot-validate.mjs";
 import { parseArgs as parseBuildAospArgs } from "./miladyos/build-aosp.mjs";
 import {
+  inspectBootAnimationDir,
+  parseArgs as parseBootAnimationArgs,
+} from "./miladyos/build-bootanimation.mjs";
+import {
   parseArgs as parseCaptureArgs,
   STEP_MAP,
 } from "./miladyos/capture-screens.mjs";
 import { parseArgs as parseE2eArgs } from "./miladyos/e2e-validate.mjs";
+import { lintInitRc } from "./miladyos/lint-init-rc.mjs";
 import {
   parseArgs as parseSyncArgs,
   syncToAosp,
@@ -224,10 +224,12 @@ describe("MiladyOS script contracts", () => {
     );
     const issues = lintInitRc(bad);
     const messages = issues.map((i) => i.message);
-    expect(messages.some((m) => /unknown init event "bootp"/.test(m))).toBe(true);
-    expect(messages.some((m) => /setprop requires <name> <value>/.test(m))).toBe(
+    expect(messages.some((m) => /unknown init event "bootp"/.test(m))).toBe(
       true,
     );
+    expect(
+      messages.some((m) => /setprop requires <name> <value>/.test(m)),
+    ).toBe(true);
     expect(
       messages.some((m) => /unknown top-level keyword "unknown_top"/.test(m)),
     ).toBe(true);
@@ -235,7 +237,9 @@ describe("MiladyOS script contracts", () => {
 
   it("inspects bootanimation directories and rejects malformed input", () => {
     const framesDir = makeTempDir();
-    expect(() => inspectBootAnimationDir(framesDir)).toThrow(/Missing desc\.txt/);
+    expect(() => inspectBootAnimationDir(framesDir)).toThrow(
+      /Missing desc\.txt/,
+    );
 
     fs.writeFileSync(
       path.join(framesDir, "desc.txt"),
