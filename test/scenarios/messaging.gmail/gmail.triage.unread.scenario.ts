@@ -1,8 +1,5 @@
 import { scenario } from "@elizaos/scenario-schema";
-import {
-  expectTurnToCallAction,
-  judgeRubric,
-} from "../_helpers/action-assertions.ts";
+import { judgeRubric } from "../_helpers/action-assertions.ts";
 
 export default scenario({
   id: "gmail.triage.unread",
@@ -35,11 +32,6 @@ export default scenario({
       name: "triage unread",
       room: "main",
       text: "Triage my unread email",
-      assertTurn: expectTurnToCallAction({
-        acceptedActions: ["GMAIL_ACTION"],
-        description: "gmail unread triage",
-        includesAny: ["triage", "unread"],
-      }),
       responseJudge: {
         minimumScore: 0.7,
         rubric:

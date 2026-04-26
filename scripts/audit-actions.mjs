@@ -328,7 +328,9 @@ function findViolations(action, source) {
       // are explicitly OK per project policy — string matching in validate()
       // is permitted when fully internationalized + greedy.
       const fnBodyMatch = source.match(
-        new RegExp(`function\\s+${fn}\\s*\\([^)]*\\)\\s*[^{]*\\{([\\s\\S]{0,800}?)\\n\\}`),
+        new RegExp(
+          `function\\s+${fn}\\s*\\([^)]*\\)\\s*[^{]*\\{([\\s\\S]{0,800}?)\\n\\}`,
+        ),
       );
       const fnBody = fnBodyMatch?.[1] ?? "";
       const usesI18nLoader =

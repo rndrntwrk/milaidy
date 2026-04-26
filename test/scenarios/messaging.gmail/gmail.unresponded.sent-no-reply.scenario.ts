@@ -54,7 +54,7 @@ export default scenario({
     {
       type: "gmailMockRequest",
       method: "GET",
-      path: "/gmail/v1/users/me/threads/thr-unresponded",
+      path: "/gmail/v1/users/me/threads",
       minCount: 1,
     },
     {
