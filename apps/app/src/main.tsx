@@ -616,7 +616,13 @@ function resolveAppWindowSlug(): string | null {
   if (!isAppWindowRoute()) return null;
   const path = getWindowNavigationPath();
   if (!path.startsWith("/apps/")) return null;
-  const slug = path.slice("/apps/".length).replace(/[?#].*$/, "");
+  // Take only the first path segment after /apps/. URLs like
+  // `/apps/plugins/extra` would otherwise yield a malformed slug
+  // ("plugins/extra") that no descriptor can match.
+  const slug = path
+    .slice("/apps/".length)
+    .replace(/[?#].*$/, "")
+    .split("/")[0];
   return slug.length > 0 ? slug : null;
 }
 
