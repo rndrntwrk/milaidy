@@ -1130,6 +1130,54 @@ function nativeModuleStubPlugin(): Plugin {
         ].join("\n");
       }
 
+      if (strippedId === "@elizaos/plugin-sql") {
+        return [
+          "const handler = { get: () => table, apply: () => table };",
+          "const table = new Proxy(function table() {}, handler);",
+          ...[
+            "agentTable",
+            "approvalRequestTable",
+            "authAuditEventTable",
+            "authBootstrapJtiSeenTable",
+            "authIdentityCreatedAtDefault",
+            "authIdentityTable",
+            "authOwnerBindingTable",
+            "authOwnerLoginTokenTable",
+            "authSessionTable",
+            "cacheTable",
+            "channelTable",
+            "channelParticipantsTable",
+            "componentTable",
+            "embeddingTable",
+            "entityTable",
+            "entityIdentityTable",
+            "entityMergeCandidateTable",
+            "factCandidateTable",
+            "logTable",
+            "longTermMemories",
+            "memoryTable",
+            "memoryAccessLogs",
+            "messageTable",
+            "messageServerTable",
+            "messageServerAgentsTable",
+            "pairingAllowlistTable",
+            "pairingRequestTable",
+            "participantTable",
+            "relationshipTable",
+            "roomTable",
+            "serverTable",
+            "sessionSummaries",
+            "taskTable",
+            "worldTable",
+          ].map((name) => `export const ${name} = table;`),
+          "export const PGLITE_ERROR_CODES = Object.freeze({ ACTIVE_LOCK: 'ACTIVE_LOCK', CORRUPT_DATA: 'CORRUPT_DATA', MANUAL_RESET_REQUIRED: 'MANUAL_RESET_REQUIRED' });",
+          "export const getPgliteErrorCode = () => null;",
+          "export const createPgliteInitError = (_code, message) => new Error(message);",
+          "export const plugin = table;",
+          "export default table;",
+        ].join("\n");
+      }
+
       // Capacitor native plugins — mobile-only, cloud builds stub them.
       // Must export the exact named identifiers used in app-core sources.
       if (capacitorNativeScopeRe.test(strippedId)) {
@@ -1816,6 +1864,11 @@ export default defineConfig({
             "electron",
             "node-llama-cpp",
             "pty-manager",
+            // `@stwd/sdk/auth` dynamic-imports `@simplewebauthn/browser`, but
+            // Milady's main app never loads the auth surface (it's used only by
+            // eliza/cloud). Externalize so Rollup doesn't traverse the dynamic
+            // import chain looking for the missing peer dep.
+            "@simplewebauthn/browser",
           ].includes(id)
         )
           return true;

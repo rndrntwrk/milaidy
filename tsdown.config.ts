@@ -11,6 +11,7 @@ const nativeExternals = [
   "@reflink/reflink-linux-arm64-gnu",
   "@reflink/reflink-linux-x64-gnu",
   "fsevents",
+  "jose",
   // Keep React external for Node server builds; bundling it introduces incompatible wrappers.
   "react",
   "react-dom",

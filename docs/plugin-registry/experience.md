@@ -1,26 +1,24 @@
 ---
-title: "Experience Plugin"
+title: "Experience Advanced Capability"
 sidebarTitle: "Experience"
-description: "Experience learning plugin for ElizaOS - records and recalls transferable agent experiences"
+description: "Built-in experience learning for elizaOS - records and recalls transferable agent experiences"
 ---
 
 Record and recall transferable experiences so Milady agents learn from past interactions.
 
-**Package:** `@elizaos/plugin-experience`
+**Runtime:** built-in advanced capability
 
 ## Overview
 
-The Experience plugin gives elizaOS agents the ability to record, store, and recall experiences from their interactions. These experiences are transferable, meaning insights gained in one context can inform the agent's behavior in future situations. This creates a feedback loop where agents improve their responses and decision-making over time based on accumulated experience.
+Experience is a built-in advanced capability. It gives Eliza agents the ability to record, store, and recall experiences from their interactions. These experiences are transferable, meaning insights gained in one context can inform the agent's behavior in future situations. This creates a feedback loop where agents improve their responses and decision-making over time based on accumulated experience.
 
-## Installation
+## Enablement
 
-```bash
-milady plugins install experience
-```
+Experience is enabled through advanced capabilities, not by installing a runtime plugin package.
 
 ## Configuration
 
-This plugin has no configuration parameters. It works out of the box once installed.
+This capability has no standalone plugin configuration parameters.
 
 ## Related
 

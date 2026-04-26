@@ -40,6 +40,16 @@ Runtime knobs that affect training, skills, code execution, and state placement.
 - `EXECUTECODE_DISABLE` — set to `true` / `1` to disable the `EXECUTE_CODE` action entirely. Default: enabled.
 - `ATROPOS_DATA_DIR` — staging directory used by the atropos training backend for dataset files.
 - `ATROPOS_BIN` — override path to the atropos binary when dispatching to that backend.
+- `MILADY_APP_VERIFICATION_MAX_RETRIES` — max retry rounds when `APP create` / `PLUGIN create` verification fails. The parent re-prompts the sub-agent with a structured failure report each round; after the cap the failure is surfaced to the user verbatim. Default `3`.
+- `MILADY_APP_VERIFICATION_DEFAULT_PROFILE` — `fast` (typecheck + lint, ~10s) or `full` (all checks including launch + headless browser smoke test, ~30–90s). Default `full` for create flows, `fast` for relaunch.
+- `MILADY_PROTECTED_APPS` — comma-separated app names that cannot be deleted or uninstalled via `APP` / `PLUGIN` actions. Apps shipped under `eliza/apps/` are always implicitly included.
+- `MILADY_APP_LOAD_AUDIT_LOG` — path to the audit log written when `APP load_from_directory` registers a new app source. Default `~/.milady/audit/app-loads.jsonl`.
+
+Model defaults (orchestrator-spawned coding sub-agents inherit these unless explicitly overridden):
+
+- The Anthropic large default is `claude-opus-4-7` (set via `ANTHROPIC_LARGE_MODEL` in the registry, the agent provider switch, and `runtime/eliza.ts`'s fallback). Sub-agents that read `ANTHROPIC_MODEL` from their parent env will see Opus 4.7 unless the user overrides it in onboarding.
+- The Anthropic small default stays `claude-haiku-4-5-20251001`.
+- The OpenAI plugin large/small fallbacks are `gpt-5.4` / `gpt-5.4-mini` (matches the rest of the repo's pricing tables and provider-switch config).
 
 Port env vars (never hardcoded — the dev orchestrator auto-shifts to the next free port and syncs env):
 - `MILADY_API_PORT` (31337), `MILADY_PORT` (2138), `MILADY_GATEWAY_PORT` (18789), `MILADY_HOME_PORT` (2142), `MILADY_WECHAT_WEBHOOK_PORT` (18790).
@@ -93,6 +103,15 @@ scripts/
   setup-upstreams.mjs   Initialize repo-local upstreams and link @elizaos packages
   patch-deps.mjs        Post-install patches for broken upstream exports
 ```
+
+### App and plugin scaffold templates
+
+Two scaffolds live under the `eliza/` submodule and are copied + customized when the orchestrator handles `APP create` or `PLUGIN create`:
+
+- `eliza/templates/min-app/` — minimal Eliza app (Vite + React entry, runtime `Plugin` with one trivial action, `package.json` with the `elizaos.app` metadata block, vitest smoke test, hero image placeholder, `SCAFFOLD.md` with the sub-agent contract).
+- `eliza/templates/min-plugin/` — minimal Eliza runtime plugin (one action, one provider, `package.json` with the `elizaos.plugin` metadata block, vitest smoke test, `SCAFFOLD.md` with the sub-agent contract).
+
+Both use placeholders (`__APP_NAME__`, `__APP_DISPLAY_NAME__`, `__PLUGIN_NAME__`, `__PLUGIN_DISPLAY_NAME__`) that the scaffold copy step replaces. After scaffolding, the spawned coding sub-agent must run `bun run typecheck && bun run lint && bun run test` and emit a structured `APP_CREATE_DONE {...}` / `PLUGIN_CREATE_DONE {...}` line; see `AGENTS.md` for the full verification contract.
 
 ## Default Agent Knowledge
 
