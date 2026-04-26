@@ -43,9 +43,9 @@ describe("LifeOps provider mock coverage contract", () => {
 
       expect(MOCK_ENVIRONMENTS).toContain(entry.environment);
       expect(entry.envVars.length).toBeGreaterThan(0);
-      expect(fs.existsSync(path.join(ENVIRONMENTS_DIR, `${entry.environment}.json`))).toBe(
-        true,
-      );
+      expect(
+        fs.existsSync(path.join(ENVIRONMENTS_DIR, `${entry.environment}.json`)),
+      ).toBe(true);
 
       const environment = readMockEnvironment(entry.environment);
       expect(environment.name).toEqual(expect.any(String));
