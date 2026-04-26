@@ -17,6 +17,13 @@ import { fileURLToPath } from "node:url";
 const PINNED_VERSION = "2.0.0-alpha.8";
 const PATCH_REL_PATH =
   "patches/elizacloud/0001-json-output-enforcement-and-fence-strip.patch";
+const DIST_ENTRYPOINTS = ["dist/node/index.node.js", "dist/cjs/index.node.cjs"];
+const REQUIRED_DIST_MARKERS = [
+  'format: { type: "json_object" }',
+  "let jsonText = extractResponsesOutputText(data);",
+  "```(?:json)?",
+  '.replace(/\\n?```\\s*$/i, "")',
+];
 
 const scriptPath = fileURLToPath(import.meta.url);
 const repoRoot = path.resolve(path.dirname(scriptPath), "..");
@@ -35,6 +42,17 @@ function log(msg) {
 function fail(msg) {
   console.error(`[patch-elizacloud] ${msg}`);
   process.exit(1);
+}
+
+function distAlreadyHasBridgeFixes(pluginRoot) {
+  return DIST_ENTRYPOINTS.every((relPath) => {
+    const entrypointPath = path.join(pluginRoot, relPath);
+    if (!fs.existsSync(entrypointPath)) {
+      return false;
+    }
+    const source = fs.readFileSync(entrypointPath, "utf8");
+    return REQUIRED_DIST_MARKERS.every((marker) => source.includes(marker));
+  });
 }
 
 function main() {
@@ -59,6 +77,12 @@ function main() {
   }
   const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, "utf8"));
   if (pkg.version !== PINNED_VERSION) {
+    if (distAlreadyHasBridgeFixes(pluginRoot)) {
+      log(
+        `installed version ${pkg.version} already contains the bridge fixes - skipping`,
+      );
+      return;
+    }
     fail(
       `version mismatch — patch was authored against @elizaos/plugin-elizacloud@${PINNED_VERSION}, ` +
         `but installed version is ${pkg.version}. Regenerate the patch against the new version, ` +
@@ -99,6 +123,10 @@ function main() {
   );
 
   if (forwardCheck.status !== 0) {
+    if (distAlreadyHasBridgeFixes(pluginRoot)) {
+      log("bridge fixes already present in built dist - skipping patch");
+      return;
+    }
     fail(`patch no longer applies cleanly:\n${forwardCheck.stderr.trim()}`);
   }
 
