@@ -87,6 +87,7 @@ import "@elizaos/app-scape/ui";
 import "@elizaos/app-hyperscape/ui";
 import "@elizaos/app-2004scape/ui";
 import "@elizaos/app-defense-of-the-agents/ui";
+import "@elizaos/app-screenshare/ui";
 import "@clawville/app-clawville/ui";
 import {
   AppBlockerSettingsCard,

@@ -490,6 +490,7 @@ const WORKSPACE_CHUNK_GROUPS = [
       "/eliza/apps/app-steward/",
       "/eliza/apps/app-task-coordinator/",
       "/eliza/apps/app-vincent/",
+      "/eliza/apps/app-screenshare/",
     ],
   },
   {
