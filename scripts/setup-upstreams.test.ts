@@ -22,6 +22,7 @@ import {
   getTemporaryElizaWorkspaceEntries,
   getUpstreamPackageLinks,
   patchPluginBuildTscBinPaths,
+  patchPluginManagerWindowsDtsBuild,
   resolveTypeScriptIgnoreDeprecationsTarget,
   runElizaInstallWithRetry,
   stripMissingConditionalElizaWorkspaces,
@@ -1674,5 +1675,54 @@ describe("patchPluginBuildTscBinPaths", () => {
       'process.platform === "win32" ? "tsc.cmd" : "tsc"',
     );
     expect(patchPluginBuildTscBinPaths(pluginsRoot)).toBe(0);
+  });
+});
+
+describe("patchPluginManagerWindowsDtsBuild", () => {
+  it("uses tsc declaration emit when tsup DTS is disabled on Windows", () => {
+    const pluginsRoot = makeTempDir();
+    const packageDir = path.join(
+      pluginsRoot,
+      "plugin-plugin-manager",
+      "typescript",
+    );
+    const packageJsonPath = path.join(packageDir, "package.json");
+    const tsupConfigPath = path.join(packageDir, "tsup.config.ts");
+
+    writeFile(
+      packageJsonPath,
+      JSON.stringify(
+        {
+          name: "@elizaos/plugin-plugin-manager",
+          scripts: { build: "tsup && tsc --noEmit" },
+        },
+        null,
+        2,
+      ),
+    );
+    writeFile(
+      tsupConfigPath,
+      [
+        'import { defineConfig } from "tsup";',
+        "export default defineConfig({",
+        "  dts: true, // require DTS so we get d.ts in the dist folder on npm",
+        "});",
+      ].join("\n"),
+    );
+
+    expect(patchPluginManagerWindowsDtsBuild(pluginsRoot)).toBe(2);
+
+    const packageJson = JSON.parse(
+      fs.readFileSync(packageJsonPath, "utf8"),
+    ) as {
+      scripts: { build: string };
+    };
+    expect(packageJson.scripts.build).toBe(
+      "tsup && tsc --emitDeclarationOnly -p tsconfig.build.json && tsc --noEmit",
+    );
+    expect(fs.readFileSync(tsupConfigPath, "utf8")).toContain(
+      'dts: process.platform === "win32" ? false : true',
+    );
+    expect(patchPluginManagerWindowsDtsBuild(pluginsRoot)).toBe(0);
   });
 });

@@ -2102,12 +2102,66 @@ export function patchPluginBuildTscBinPaths(
   return patchedFiles;
 }
 
+export function patchPluginManagerWindowsDtsBuild(
+  pluginsRoot,
+  { pathExists = existsSync } = {},
+) {
+  const packageDir = path.join(
+    pluginsRoot,
+    "plugin-plugin-manager",
+    "typescript",
+  );
+  const packageJsonPath = path.join(packageDir, "package.json");
+  const tsupConfigPath = path.join(packageDir, "tsup.config.ts");
+
+  if (!pathExists(packageJsonPath) || !pathExists(tsupConfigPath)) {
+    return 0;
+  }
+
+  let patchedFiles = 0;
+  const packageJsonRaw = readFileSync(packageJsonPath, "utf8");
+  const packageJson = JSON.parse(packageJsonRaw);
+  const scripts =
+    packageJson && typeof packageJson === "object" ? packageJson.scripts : null;
+
+  if (scripts?.build === "tsup && tsc --noEmit") {
+    scripts.build =
+      "tsup && tsc --emitDeclarationOnly -p tsconfig.build.json && tsc --noEmit";
+    const indent = packageJsonRaw.match(/^(\s+)"/m)?.[1] ?? "  ";
+    writeFileSync(
+      packageJsonPath,
+      `${JSON.stringify(packageJson, null, indent)}\n`,
+    );
+    patchedFiles += 1;
+  }
+
+  const tsupConfig = readFileSync(tsupConfigPath, "utf8");
+  const patchedTsupConfig = tsupConfig.replace(
+    "dts: true, // require DTS so we get d.ts in the dist folder on npm",
+    'dts: process.platform === "win32" ? false : true, // Windows tsup DTS is flaky; tsc emits declarations below.',
+  );
+
+  if (patchedTsupConfig !== tsupConfig) {
+    writeFileSync(tsupConfigPath, patchedTsupConfig);
+    patchedFiles += 1;
+  }
+
+  if (patchedFiles > 0) {
+    console.log(
+      `[setup-upstreams] Patched plugin-plugin-manager Windows DTS build (${patchedFiles} file${patchedFiles === 1 ? "" : "s"})`,
+    );
+  }
+
+  return patchedFiles;
+}
+
 export async function ensurePluginBuildOutputs(
   pluginsRoot,
   { pathExists = existsSync, runCommandImpl = runCommand } = {},
 ) {
   ensurePluginAnthropicBunTypes(pluginsRoot, { pathExists });
   patchPluginBuildTscBinPaths(pluginsRoot, { pathExists });
+  patchPluginManagerWindowsDtsBuild(pluginsRoot, { pathExists });
   for (const packageDir of discoverPluginPackageDirs(pluginsRoot)) {
     const packageJson = readPackageJson(packageDir);
     if (!packageJson?.name?.startsWith("@elizaos/")) {

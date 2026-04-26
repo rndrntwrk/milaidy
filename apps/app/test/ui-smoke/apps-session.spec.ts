@@ -21,7 +21,7 @@ test("apps view can route into internal tool pages and survive a reload", async 
   await assertReadyChecks(
     page,
     "plugins-viewer",
-    [{ selector: '[data-testid="plugins-view-page"]' }],
+    [{ text: "AI Providers" }, { text: "Other Features" }],
     "any",
     90_000,
   );
@@ -38,7 +38,7 @@ test("apps view can route into internal tool pages and survive a reload", async 
   await assertReadyChecks(
     page,
     "plugins-viewer-reload",
-    [{ selector: '[data-testid="plugins-view-page"]' }],
+    [{ text: "AI Providers" }, { text: "Other Features" }],
     "any",
     90_000,
   );
