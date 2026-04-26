@@ -11,9 +11,11 @@ import {
   LifeOpsRepository,
 } from "@elizaos/app-lifeops/lifeops/repository";
 import type { IAgentRuntime } from "@elizaos/core";
-import type {
-  LifeOpsConnectorSide,
-  LifeOpsGoogleCapability,
+import {
+  LIFEOPS_X_CAPABILITIES,
+  type LifeOpsConnectorSide,
+  type LifeOpsGoogleCapability,
+  type LifeOpsXCapability,
 } from "@elizaos/shared/contracts/lifeops";
 
 function sanitizePathSegment(value: string): string {
@@ -131,7 +133,7 @@ export async function seedGoogleConnectorGrant(
 export async function seedXConnectorGrant(
   runtime: IAgentRuntime,
   opts?: {
-    capabilities?: Array<"x.read" | "x.write">;
+    capabilities?: LifeOpsXCapability[];
     side?: LifeOpsConnectorSide;
     handle?: string;
   },
@@ -139,18 +141,27 @@ export async function seedXConnectorGrant(
   await ensureLifeOpsSchema(runtime);
 
   const repo = new LifeOpsRepository(runtime);
+  const side = opts?.side ?? "owner";
   const capabilities = Array.from(
-    new Set(opts?.capabilities ?? ["x.read", "x.write"]),
-  ).filter(
-    (capability): capability is "x.read" | "x.write" =>
-      capability === "x.read" || capability === "x.write",
+    new Set(
+      opts?.capabilities ??
+        (side === "agent"
+          ? [...LIFEOPS_X_CAPABILITIES]
+          : ([
+              "x.read",
+              "x.dm.read",
+              "x.dm.write",
+            ] satisfies LifeOpsXCapability[])),
+    ),
+  ).filter((capability): capability is LifeOpsXCapability =>
+    LIFEOPS_X_CAPABILITIES.includes(capability),
   );
 
   await repo.upsertConnectorGrant(
     createLifeOpsConnectorGrant({
       agentId: runtime.agentId,
       provider: "x",
-      side: opts?.side ?? "owner",
+      side,
       mode: "local",
       identity: { handle: opts?.handle ?? "@mocked-lifeops" },
       grantedScopes: [],

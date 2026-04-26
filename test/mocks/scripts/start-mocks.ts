@@ -4,6 +4,13 @@ import http from "node:http";
 import type { AddressInfo } from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  createGoogleCalendarMockState,
+  type GoogleCalendarMockState,
+  type GoogleCalendarRequestLedgerMetadata,
+  googleCalendarDynamicFixture,
+} from "./google-calendar-state.ts";
+import { MockHttpError } from "./mock-http-error.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ENVS_DIR = path.resolve(__dirname, "..", "environments");
@@ -70,6 +77,7 @@ export interface MockRequestLedgerEntry {
   createdAt: string;
   runId?: string;
   gmail?: GmailRequestLedgerMetadata;
+  calendar?: GoogleCalendarRequestLedgerMetadata;
 }
 
 interface GmailDecodedSendMetadata {
@@ -104,15 +112,6 @@ interface DynamicFixtureResponse {
   statusCode: number;
   body: JsonValue;
   headers?: Record<string, string>;
-}
-
-class MockHttpError extends Error {
-  constructor(
-    public readonly statusCode: number,
-    message: string,
-  ) {
-    super(message);
-  }
 }
 
 export interface StartedMocks {
@@ -549,6 +548,7 @@ interface GoogleMockState {
   gmailHistoryId: number;
   gmailHistory: GmailHistoryRecord[];
   googleTokens: Map<string, Set<string>>;
+  calendar: GoogleCalendarMockState;
 }
 
 const GOOGLE_DEFAULT_TOKEN_SCOPES = [
@@ -583,6 +583,13 @@ const GOOGLE_GMAIL_DRAFT_SCOPES = [
 const GOOGLE_GMAIL_SETTINGS_SCOPES = [
   "https://www.googleapis.com/auth/gmail.settings.basic",
   "https://www.googleapis.com/auth/gmail.modify",
+] as const;
+const GOOGLE_CALENDAR_READ_SCOPES = [
+  "https://www.googleapis.com/auth/calendar.readonly",
+  "https://www.googleapis.com/auth/calendar.events",
+] as const;
+const GOOGLE_CALENDAR_WRITE_SCOPES = [
+  "https://www.googleapis.com/auth/calendar.events",
 ] as const;
 
 function createGoogleMockState(): GoogleMockState {
@@ -633,6 +640,7 @@ function createGoogleMockState(): GoogleMockState {
       },
     ],
     googleTokens: new Map(),
+    calendar: createGoogleCalendarMockState(),
   };
 }
 
@@ -1210,10 +1218,18 @@ function refreshGoogleTokensFromSeededGrants(state: GoogleMockState): void {
   }
 }
 
-function requiredGmailScopes(
+function requiredGoogleScopes(
   method: string,
   pathname: string,
 ): readonly string[] {
+  if (pathname === "/calendar/v3/users/me/calendarList") {
+    return GOOGLE_CALENDAR_READ_SCOPES;
+  }
+  if (/^\/calendar\/v3\/calendars\/[^/]+\/events(?:\/|$)/.test(pathname)) {
+    return method === "GET"
+      ? GOOGLE_CALENDAR_READ_SCOPES
+      : GOOGLE_CALENDAR_WRITE_SCOPES;
+  }
   if (!pathname.startsWith("/gmail/v1/users/me/")) return [];
   if (pathname.includes("/settings/filters")) {
     return GOOGLE_GMAIL_SETTINGS_SCOPES;
@@ -1245,7 +1261,7 @@ function enforceGoogleAuthIfPresent(
   pathname: string,
   headers: http.IncomingHttpHeaders,
 ): DynamicFixtureResponse | null {
-  const requiredScopes = requiredGmailScopes(method, pathname);
+  const requiredScopes = requiredGoogleScopes(method, pathname);
   if (requiredScopes.length === 0) return null;
   const token = bearerToken(headers);
   if (!token) return null;
@@ -1258,7 +1274,7 @@ function enforceGoogleAuthIfPresent(
   }
   return requiredScopes.some((scope) => scopes.has(scope))
     ? null
-    : jsonError(403, "Google mock token is missing required Gmail scope");
+    : jsonError(403, "Google mock token is missing required scope");
 }
 
 function googleDynamicFixture(
@@ -1287,8 +1303,6 @@ function googleDynamicFixture(
     });
   }
 
-  if (!pathname.startsWith("/gmail/v1/users/me/")) return null;
-
   const authFailure = enforceGoogleAuthIfPresent(
     state,
     method,
@@ -1296,6 +1310,18 @@ function googleDynamicFixture(
     headers,
   );
   if (authFailure) return authFailure;
+
+  const calendarResponse = googleCalendarDynamicFixture({
+    state: state.calendar,
+    method,
+    pathname,
+    searchParams,
+    requestBody,
+    ledgerEntry,
+  });
+  if (calendarResponse) return calendarResponse;
+
+  if (!pathname.startsWith("/gmail/v1/users/me/")) return null;
 
   if (method === "GET" && pathname === "/gmail/v1/users/me/messages") {
     return gmailListMessages(state, searchParams);
