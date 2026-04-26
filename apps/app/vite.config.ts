@@ -466,6 +466,25 @@ function pathIncludesAny(id: string, markers: ReadonlyArray<string>): boolean {
   return markers.some((marker) => id.includes(marker));
 }
 
+/**
+ * 2026 chunking policy: keep only **vendor splits that pay for themselves
+ * via long-term browser caching** (large, stable, change-rarely deps).
+ * Workspace code is intentionally NOT manually chunked — Vite's automatic
+ * splitting follows the actual import graph and avoids the circular-chunk
+ * + empty-chunk + dynamic↔static-collision warnings that plagued the older
+ * "one chunk per workspace package" approach. Code splitting that genuinely
+ * matters happens at React.lazy() route boundaries, not at the bundler config.
+ *
+ * Rules of thumb for adding a NODE_MODULE_CHUNK_GROUPS entry:
+ *   1. > 100 KB minified, AND
+ *   2. Stable across releases (helps long-term caching), AND
+ *   3. Loaded on the critical path (or you don't care if it's split out).
+ *
+ * Don't add a workspace marker. If you need to split a workspace surface
+ * out of the main chunk, do it at the call site with React.lazy() — that
+ * gives you a real lazy boundary instead of a fake manual chunk that
+ * Rollup ends up eagerly merging anyway.
+ */
 const NODE_MODULE_CHUNK_GROUPS = [
   {
     name: "vendor-langchain",
@@ -475,57 +494,9 @@ const NODE_MODULE_CHUNK_GROUPS = [
     name: "vendor-zod",
     markers: ["/zod/"],
   },
-  {
-    name: "vendor-utils",
-    markers: ["/dingbat-to-unicode/"],
-  },
 ] as const;
 
-const WORKSPACE_CHUNK_GROUPS = [
-  {
-    name: "workspace-app-core",
-    markers: [
-      "/eliza/packages/app-core/",
-      "/eliza/apps/app-companion/",
-      "/eliza/apps/app-steward/",
-      "/eliza/apps/app-task-coordinator/",
-      "/eliza/apps/app-vincent/",
-      "/eliza/apps/app-screenshare/",
-    ],
-  },
-  {
-    name: "app-training",
-    markers: ["/eliza/apps/app-training/"],
-  },
-  {
-    name: "app-shopify",
-    markers: ["/eliza/apps/app-shopify/"],
-  },
-  {
-    name: "app-games",
-    markers: [
-      "/eliza/apps/app-babylon/",
-      "/eliza/apps/app-scape/",
-      "/eliza/apps/app-hyperscape/",
-      "/eliza/apps/app-2004scape/",
-      "/eliza/apps/app-defense-of-the-agents/",
-    ],
-  },
-  {
-    name: "app-lifeops",
-    markers: ["/eliza/apps/app-lifeops/"],
-  },
-  {
-    name: "workspace-ui",
-    markers: ["/eliza/packages/ui/"],
-  },
-  // NOTE: `workspace-typescript` (eliza/packages/typescript) is intentionally
-  // NOT split into its own chunk. Splitting it produced a TDZ error
-  // ("Cannot access 'Oi' before initialization") in clipboardService's
-  // default-config top-level const, which blanked the whole renderer. Same
-  // class of bug as the `vendor-three` comment above. Keep it inlined until
-  // the upstream circular import is resolved.
-] as const;
+const WORKSPACE_CHUNK_GROUPS = [] as const;
 
 function resolveManualChunk(id: string): string | undefined {
   const normalizedId = id.split(path.sep).join("/");
@@ -1816,7 +1787,17 @@ export default defineConfig({
     target: "es2022",
     // Keep warnings tight enough to catch regressions while allowing the
     // current largest workspace chunks to build without noise.
-    chunkSizeWarningLimit: 3500,
+    // Electrobun ships the bundle with the desktop app — there is no
+    // first-paint network cost for the user. The remaining ~4MB main
+    // chunk is the merged workspace surface (app-core + companion +
+    // steward + task-coordinator + vincent + screenshare); splitting
+    // them via manual chunks reintroduces circular-chunk + empty-chunk
+    // warnings without measurable benefit. If a true cold-start budget
+    // matters later, lift owner-of-route lazy() boundaries at the call
+    // sites that own a single import path (route-level splits land in
+    // their own chunks naturally — see AppsPageView / AutomationsView /
+    // SettingsView / StreamView / etc. above).
+    chunkSizeWarningLimit: 5000,
     minify: desktopFastDist ? false : undefined,
     cssMinify: desktopFastDist ? false : undefined,
     reportCompressedSize: !desktopFastDist,
