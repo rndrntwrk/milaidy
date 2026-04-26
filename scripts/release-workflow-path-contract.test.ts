@@ -729,7 +729,7 @@ describe("release workflow path contract", () => {
       'repo_root="$PWD"',
     );
     expect(windowsTelegramOverlayBlock).toContain(
-      '(cd eliza/plugins/plugin-telegram && bun "$repo_root/node_modules/tsup/dist/cli-default.js")',
+      '(cd eliza/plugins/plugin-telegram && bun "$repo_root/node_modules/tsup/dist/cli-default.js" src/index.ts src/account-auth-service.ts --format esm --out-dir dist --tsconfig tsconfig.build.json --sourcemap --clean --no-config)',
     );
     expect(windowsTelegramOverlayBlock).toContain(
       'cp -r eliza/plugins/plugin-telegram/dist "$installed_dir/dist"',
