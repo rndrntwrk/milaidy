@@ -1170,97 +1170,10 @@ index 0000000000..303048d25a
 +  });
 +});
 diff --git a/packages/app-core/scripts/playwright-ui-smoke-api-stub.mjs b/packages/app-core/scripts/playwright-ui-smoke-api-stub.mjs
-index b130d993dd..00a4e4a827 100644
+index dec1cc0..1a95836 100644
 --- a/packages/app-core/scripts/playwright-ui-smoke-api-stub.mjs
 +++ b/packages/app-core/scripts/playwright-ui-smoke-api-stub.mjs
-@@ -638,6 +638,83 @@ function streamSettings(payload = {}) {
-   };
- }
- 
-+function emptyLifeOpsScreenTimeSummary() {
-+  return {
-+    items: [],
-+    totalSeconds: 0,
-+  };
-+}
-+
-+function emptyLifeOpsSocialHabitSummary(url) {
-+  const since = url.searchParams.get("since") ?? nowIso();
-+  const until = url.searchParams.get("until") ?? nowIso();
-+  return {
-+    since,
-+    until,
-+    totalSeconds: 0,
-+    services: [],
-+    devices: [],
-+    surfaces: [],
-+    browsers: [],
-+    sessions: [],
-+    messages: {
-+      channels: [],
-+      inbound: 0,
-+      outbound: 0,
-+      opened: 0,
-+      replied: 0,
-+    },
-+    dataSources: [],
-+    fetchedAt: nowIso(),
-+  };
-+}
-+
-+function lifeOpsCapabilitiesStatus() {
-+  return {
-+    appEnabled: lifeOpsAppEnabled,
-+    capabilities: [],
-+    generatedAt: nowIso(),
-+    relativeTime: null,
-+    summary: {
-+      totalCount: 0,
-+      workingCount: 0,
-+      degradedCount: 0,
-+      blockedCount: 0,
-+      notConfiguredCount: 0,
-+    },
-+  };
-+}
-+
-+function emptyLifeOpsCalendarFeed(url) {
-+  return {
-+    calendarId: url.searchParams.get("calendarId") ?? "primary",
-+    events: [],
-+    source: "cache",
-+    timeMin: url.searchParams.get("timeMin") ?? nowIso(),
-+    timeMax: url.searchParams.get("timeMax") ?? nowIso(),
-+    syncedAt: null,
-+  };
-+}
-+
-+function emptyLifeOpsInbox() {
-+  return {
-+    messages: [],
-+    channelCounts: Object.fromEntries(
-+      [
-+        "gmail",
-+        "x_dm",
-+        "discord",
-+        "telegram",
-+        "signal",
-+        "imessage",
-+        "whatsapp",
-+        "sms",
-+      ].map((channel) => [channel, { total: 0, unread: 0 }]),
-+    ),
-+    fetchedAt: nowIso(),
-+  };
-+}
-+
- const sockets = new Set();
- const server = http.createServer(async (req, res) => {
-   const url = new URL(
-@@ -1251,14 +1328,95 @@ const server = http.createServer(async (req, res) => {
-     url.pathname === "/api/lifeops/connectors/google/status"
-   ) {
-     sendJson(req, res, 200, {
+@@ -1401,0 +1402,8 @@ const server = http.createServer(async (req, res) => {
 +      side: url.searchParams.get("side") === "agent" ? "agent" : "owner",
 +      provider: "google",
 +      mode: "cloud_managed",
@@ -1269,7 +1182,7 @@ index b130d993dd..00a4e4a827 100644
 +      executionTarget: "local",
 +      sourceOfTruth: "local_storage",
 +      configured: false,
-       connected: false,
+@@ -1403,3 +1411,48 @@ const server = http.createServer(async (req, res) => {
 -      available: false,
 -      authUrl: null,
 -      lastSyncedAt: null,
@@ -1282,10 +1195,10 @@ index b130d993dd..00a4e4a827 100644
 +      expiresAt: null,
 +      hasRefreshToken: false,
 +      grant: null,
-     });
-     return;
-   }
- 
++    });
++    return;
++  }
++
 +  if (
 +    req.method === "GET" &&
 +    url.pathname === "/api/lifeops/connectors/google/accounts"
@@ -1321,41 +1234,6 @@ index b130d993dd..00a4e4a827 100644
 +      dmWrite: false,
 +      dmInbound: false,
 +      grant: null,
-+    });
-+    return;
-+  }
-+
-+  if (req.method === "GET" && url.pathname === "/api/lifeops/capabilities") {
-+    sendJson(req, res, 200, lifeOpsCapabilitiesStatus());
-+    return;
-+  }
-+
-+  if (
-+    req.method === "GET" &&
-+    url.pathname === "/api/lifeops/screen-time/summary"
-+  ) {
-+    sendJson(req, res, 200, emptyLifeOpsScreenTimeSummary());
-+    return;
-+  }
-+
-+  if (req.method === "GET" && url.pathname === "/api/lifeops/social/summary") {
-+    sendJson(req, res, 200, emptyLifeOpsSocialHabitSummary(url));
-+    return;
-+  }
-+
-+  if (req.method === "GET" && url.pathname === "/api/lifeops/calendar/feed") {
-+    sendJson(req, res, 200, emptyLifeOpsCalendarFeed(url));
-+    return;
-+  }
-+
-+  if (req.method === "GET" && url.pathname === "/api/lifeops/inbox") {
-+    sendJson(req, res, 200, emptyLifeOpsInbox());
-+    return;
-+  }
-+
-   if (
-     req.method === "GET" &&
-     (url.pathname === "/api/browser-bridge/companions" ||
 diff --git a/packages/app-core/scripts/release-check.ts b/packages/app-core/scripts/release-check.ts
 index d82707249d..b4a3cd97ad 100755
 --- a/packages/app-core/scripts/release-check.ts
@@ -1505,194 +1383,6 @@ index 1fc3db564f..3bd7202380 100644
  }));
  
  vi.mock("../../state/ChatComposerContext", () => ({
-diff --git a/packages/app-core/src/components/settings/AppearanceSettingsSection.tsx b/packages/app-core/src/components/settings/AppearanceSettingsSection.tsx
-index a46bc842f7..e6afb4abcc 100644
---- a/packages/app-core/src/components/settings/AppearanceSettingsSection.tsx
-+++ b/packages/app-core/src/components/settings/AppearanceSettingsSection.tsx
-@@ -1,6 +1,6 @@
- import type { ResolvedContentPack } from "@elizaos/shared/contracts/content-pack";
- import { BUILTIN_THEMES } from "@elizaos/shared/themes/presets";
--import { Button, Input } from "@elizaos/ui";
-+import { Button, Input, Switch } from "@elizaos/ui";
- import { Check, FolderOpen, Moon, Sun } from "lucide-react";
- import { useCallback, useEffect, useMemo, useRef, useState } from "react";
- import {
-@@ -11,12 +11,27 @@ import {
-   releaseLoadedContentPack,
- } from "../../content-packs";
- import {
-+  type CompanionHalfFramerateMode,
-+  type CompanionVrmPowerMode,
-   loadPersistedActivePackUrl,
-   savePersistedActivePackUrl,
-   useApp,
- } from "../../state";
-+import { COMPANION_ENABLED } from "../../navigation";
- import { LANGUAGES } from "../shared/LanguageDropdown";
- 
-+const COMPANION_VRM_POWER_OPTIONS: CompanionVrmPowerMode[] = [
-+  "quality",
-+  "balanced",
-+  "efficiency",
-+];
-+
-+const COMPANION_HALF_FRAMERATE_OPTIONS: CompanionHalfFramerateMode[] = [
-+  "off",
-+  "when_saving_power",
-+  "always",
-+];
-+
- function supportsDirectoryUpload(): boolean {
-   if (typeof document === "undefined") return false;
-   const input = document.createElement("input") as HTMLInputElement & {
-@@ -42,6 +57,12 @@ export function AppearanceSettingsSection() {
-     uiTheme,
-     uiLanguage,
-     setUiTheme,
-+    companionVrmPowerMode,
-+    setCompanionVrmPowerMode,
-+    companionAnimateWhenHidden,
-+    setCompanionAnimateWhenHidden,
-+    companionHalfFramerateMode,
-+    setCompanionHalfFramerateMode,
-     t,
-   } = useApp();
- 
-@@ -348,6 +369,18 @@ export function AppearanceSettingsSection() {
-         </div>
-       </section>
- 
-+      {COMPANION_ENABLED && (
-+        <CompanionPerformanceSettings
-+          companionVrmPowerMode={companionVrmPowerMode}
-+          setCompanionVrmPowerMode={setCompanionVrmPowerMode}
-+          companionHalfFramerateMode={companionHalfFramerateMode}
-+          setCompanionHalfFramerateMode={setCompanionHalfFramerateMode}
-+          companionAnimateWhenHidden={companionAnimateWhenHidden}
-+          setCompanionAnimateWhenHidden={setCompanionAnimateWhenHidden}
-+          t={t}
-+        />
-+      )}
-+
-       {loadedPacks.length > 0 && (
-         <section className="space-y-2">
-           <h3 className="text-xs font-medium uppercase tracking-wider text-muted">
-@@ -480,6 +513,115 @@ export function AppearanceSettingsSection() {
-   );
- }
- 
-+function CompanionPerformanceSettings({
-+  companionVrmPowerMode,
-+  setCompanionVrmPowerMode,
-+  companionHalfFramerateMode,
-+  setCompanionHalfFramerateMode,
-+  companionAnimateWhenHidden,
-+  setCompanionAnimateWhenHidden,
-+  t,
-+}: {
-+  companionVrmPowerMode: CompanionVrmPowerMode;
-+  setCompanionVrmPowerMode: (mode: CompanionVrmPowerMode) => void;
-+  companionHalfFramerateMode: CompanionHalfFramerateMode;
-+  setCompanionHalfFramerateMode: (mode: CompanionHalfFramerateMode) => void;
-+  companionAnimateWhenHidden: boolean;
-+  setCompanionAnimateWhenHidden: (enabled: boolean) => void;
-+  t: (key: string, vars?: Record<string, unknown>) => string;
-+}) {
-+  return (
-+    <section className="space-y-2">
-+      <h3 className="text-xs font-medium uppercase tracking-wider text-muted">
-+        {t("settings.appearance.companionPerformance", {
-+          defaultValue: "Companion performance",
-+        })}
-+      </h3>
-+      <div
-+        className="rounded-xl border border-border bg-card/60 px-3 py-3 flex flex-col gap-3"
-+        data-testid="settings-companion-vrm-power"
-+      >
-+        <div className="min-w-0">
-+          <div className="text-xs font-semibold text-txt">
-+            {t("settings.companionVrmPower.label")}
-+          </div>
-+          <div className="text-2xs text-muted mt-1 leading-snug">
-+            {t("settings.companionVrmPower.desc")}
-+          </div>
-+        </div>
-+        <div className="flex flex-wrap gap-1.5">
-+          {COMPANION_VRM_POWER_OPTIONS.map((mode) => {
-+            const active = companionVrmPowerMode === mode;
-+            return (
-+              <Button
-+                key={mode}
-+                type="button"
-+                variant={active ? "default" : "ghost"}
-+                size="sm"
-+                className="flex-1 basis-[calc(50%-0.25rem)] sm:basis-0 min-h-touch rounded-lg border px-2 py-1.5 text-xs-tight font-semibold !whitespace-normal"
-+                onClick={() => setCompanionVrmPowerMode(mode)}
-+                aria-pressed={active}
-+              >
-+                {t(`settings.companionVrmPower.${mode}`)}
-+              </Button>
-+            );
-+          })}
-+        </div>
-+        <div
-+          className="flex flex-col gap-2 border-t border-border pt-3"
-+          data-testid="settings-companion-half-framerate"
-+        >
-+          <div className="min-w-0">
-+            <div className="text-xs font-semibold text-txt">
-+              {t("settings.companionHalfFramerate.label")}
-+            </div>
-+            <div className="text-2xs text-muted mt-1 leading-snug">
-+              {t("settings.companionHalfFramerate.desc")}
-+            </div>
-+          </div>
-+          <div className="flex flex-wrap gap-1.5">
-+            {COMPANION_HALF_FRAMERATE_OPTIONS.map((mode) => {
-+              const active = companionHalfFramerateMode === mode;
-+              return (
-+                <Button
-+                  key={mode}
-+                  type="button"
-+                  variant={active ? "default" : "ghost"}
-+                  size="sm"
-+                  className="flex-1 basis-[calc(50%-0.25rem)] sm:basis-0 min-h-touch rounded-lg border px-2 py-1.5 text-xs-tight font-semibold !whitespace-normal"
-+                  onClick={() => setCompanionHalfFramerateMode(mode)}
-+                  aria-pressed={active}
-+                >
-+                  {t(`settings.companionHalfFramerate.${mode}`)}
-+                </Button>
-+              );
-+            })}
-+          </div>
-+        </div>
-+        <div
-+          className="flex flex-col gap-2 border-t border-border pt-3"
-+          data-testid="settings-companion-animate-when-hidden"
-+        >
-+          <div className="text-xs font-semibold text-txt">
-+            {t("settings.companionAnimateWhenHidden.title")}
-+          </div>
-+          <div className="flex items-end justify-between gap-3">
-+            <div className="min-w-0 flex-1 text-2xs text-muted leading-snug pr-2">
-+              {t("settings.companionAnimateWhenHidden.desc")}
-+            </div>
-+            <Switch
-+              className="shrink-0"
-+              checked={companionAnimateWhenHidden}
-+              onCheckedChange={setCompanionAnimateWhenHidden}
-+              aria-label={t("settings.companionAnimateWhenHidden.title")}
-+            />
-+          </div>
-+        </div>
-+      </div>
-+    </section>
-+  );
-+}
-+
- function selectableTileClass(active: boolean): string {
-   return `relative flex min-h-11 flex-col items-center justify-center gap-1.5 rounded-lg border p-3 transition-colors ${
-     active
 diff --git a/packages/app-core/test/live-agent/action-invocation.live.e2e.test.ts b/packages/app-core/test/live-agent/action-invocation.live.e2e.test.ts
 index 2da7e85664..bf48402af1 100644
 --- a/packages/app-core/test/live-agent/action-invocation.live.e2e.test.ts
@@ -1889,17 +1579,10 @@ index a28b5d8..e6b7d33 100644
 +  console.log(`  JavaScript (shared): ${outPath}`);
 +}
 +
-diff --git a/packages/app-core/scripts/ensure-bundled-workspaces.mjs b/packages/app-core/scripts/ensure-bundled-workspaces.mjs
-index 406fd93..7ec2c42 100644
---- a/packages/app-core/scripts/ensure-bundled-workspaces.mjs
-+++ b/packages/app-core/scripts/ensure-bundled-workspaces.mjs
-@@ -30 +30 @@ export const BUNDLED_WORKSPACE_BUILDS = [
--    args: ["../../../scripts/build-bundled-agent-skills-artifact.mjs"],
-+    args: ["../../../packages/app-core/scripts/build-bundled-agent-skills-artifact.mjs"],
 diff --git a/packages/app-core/scripts/copy-runtime-node-modules.ts b/packages/app-core/scripts/copy-runtime-node-modules.ts
 --- a/packages/app-core/scripts/copy-runtime-node-modules.ts
 +++ b/packages/app-core/scripts/copy-runtime-node-modules.ts
-@@ -374,0 +375,115 @@ export function stripPackagedCronCliRegistration(source: string): string {
+@@ -374,0 +375,140 @@ export function stripPackagedCronCliRegistration(source: string): string {
 +type PackageJsonManifest = {
 +  exports?: Record<string, unknown>;
 +};
@@ -2015,22 +1698,43 @@ diff --git a/packages/app-core/scripts/copy-runtime-node-modules.ts b/packages/a
 +  }
 +}
 +
-@@ -378,2 +493,7 @@ function patchCopiedPackageRuntimeSurface(
++export function rewritePackagedLifeOpsTelegramAuthImport(source: string): string {
++  return source.replace(
++    'from "../../../../plugins/plugin-telegram/src/account-auth-service.ts";',
++    'from "@elizaos/plugin-telegram/account-auth-service";',
++  );
++}
++
++function patchCopiedAppLifeOpsRuntimeImports(packageDir: string): void {
++  const telegramAuthPath = path.join(
++    packageDir,
++    "src",
++    "lifeops",
++    "telegram-auth.ts",
++  );
++  if (!fs.existsSync(telegramAuthPath)) {
++    return;
++  }
++
++  const original = fs.readFileSync(telegramAuthPath, "utf8");
++  const rewritten = rewritePackagedLifeOpsTelegramAuthImport(original);
++  if (rewritten !== original) {
++    fs.writeFileSync(telegramAuthPath, rewritten);
++  }
++}
++
+@@ -378,2 +518,12 @@ function patchCopiedPackageRuntimeSurface(
 -): void {
 -  if (name !== "@elizaos/plugin-cron") {
 +): void {
++  if (name === "@elizaos/app-lifeops") {
++    patchCopiedAppLifeOpsRuntimeImports(packageDir);
++    return;
++  }
++
 +  if (name === "@elizaos/agent") {
 +    patchCopiedAgentRuntimeExports(packageDir);
 +    return;
 +  }
 +
 +  if (name !== "@elizaos/plugin-cron") {
-diff --git a/packages/app-core/scripts/build-bundled-agent-skills-artifact.mjs b/packages/app-core/scripts/build-bundled-agent-skills-artifact.mjs
-index c585fac..0a6543d 100644
---- a/packages/app-core/scripts/build-bundled-agent-skills-artifact.mjs
-+++ b/packages/app-core/scripts/build-bundled-agent-skills-artifact.mjs
-@@ -6,0 +7 @@ import { fileURLToPath } from "node:url";
-+import { resolveRepoRootFromImportMeta } from "./lib/repo-root.mjs";
-@@ -10 +11 @@ const __dirname = path.dirname(__filename);
--const repoRoot = path.resolve(__dirname, "..");
-+const repoRoot = resolveRepoRootFromImportMeta(import.meta.url);

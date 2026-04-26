@@ -752,6 +752,13 @@ describe("release workflow path contract", () => {
     expect(windowsTelegramOverlayBlock).toContain(
       'test -f "$installed_dir/dist/account-auth-service.js"',
     );
+    expect(patch).toContain("rewritePackagedLifeOpsTelegramAuthImport");
+    expect(patch).toContain(
+      '+  if (name === "@elizaos/app-lifeops") {\n+    patchCopiedAppLifeOpsRuntimeImports(packageDir);',
+    );
+    expect(patch).toContain(
+      'from "@elizaos/plugin-telegram/account-auth-service";',
+    );
     expect(patch).toContain(
       '+  if (name === "@elizaos/agent") {\n+    patchCopiedAgentRuntimeExports(packageDir);',
     );
@@ -771,6 +778,18 @@ describe("release workflow path contract", () => {
     );
     expect(releaseElectrobun).toContain(
       '"@elizaos/agent/runtime/plugin-types"',
+    );
+    expect(releaseElectrobun).toContain(
+      '"@elizaos/app-lifeops/lifeops/telegram-auth"',
+    );
+    expect(releaseElectrobun).toContain(
+      "dist/node_modules/@elizaos/app-lifeops/src/lifeops/telegram-auth.ts",
+    );
+    expect(releaseElectrobun).toContain(
+      'from "@elizaos/plugin-telegram/account-auth-service";',
+    );
+    expect(releaseElectrobun).toContain(
+      "../../../../plugins/plugin-telegram/src/account-auth-service.ts",
     );
     expect(releaseElectrobun).toContain(
       'Join-Path $elizaDist "node_modules\\@elizaos\\agent\\packages\\agent\\src\\$runtimeModule"',
@@ -947,18 +966,29 @@ describe("release workflow path contract", () => {
       path.join(repoRoot, "patches", "eliza", "ci-release-contracts.patch"),
       "utf8",
     );
+    const bundledWorkspacesScript = readElizaScript(
+      path.join("packages", "app-core", "scripts", "ensure-bundled-workspaces.mjs"),
+    );
+    const buildAgentSkillsArtifactScript = readElizaScript(
+      path.join(
+        "packages",
+        "app-core",
+        "scripts",
+        "build-bundled-agent-skills-artifact.mjs",
+      ),
+    );
 
     expect(patch).toContain("diff --git a/packages/agent/package.json");
     expect(patch).toContain(
       '+    "@elizaos/plugin-agent-skills": "workspace:*",',
     );
-    expect(patch).toContain(
-      'args: ["../../../packages/app-core/scripts/build-bundled-agent-skills-artifact.mjs"]',
+    expect(bundledWorkspacesScript).toContain(
+      "../../../packages/app-core/scripts/build-bundled-agent-skills-artifact.mjs",
     );
-    expect(patch).toContain(
+    expect(buildAgentSkillsArtifactScript).toContain(
       'import { resolveRepoRootFromImportMeta } from "./lib/repo-root.mjs";',
     );
-    expect(patch).toContain(
+    expect(buildAgentSkillsArtifactScript).toContain(
       "const repoRoot = resolveRepoRootFromImportMeta(import.meta.url);",
     );
   });
@@ -1197,9 +1227,19 @@ describe("release workflow path contract", () => {
       ),
       "utf8",
     );
+    const appearanceSettingsSection = readElizaScript(
+      path.join(
+        "packages",
+        "app-core",
+        "src",
+        "components",
+        "settings",
+        "AppearanceSettingsSection.tsx",
+      ),
+    );
 
     expect(applyPatchScript).toContain('"--unidiff-zero"');
-    expect(patch).toContain("settings-companion-vrm-power");
+    expect(appearanceSettingsSection).toContain("settings-companion-vrm-power");
     expect(patch).not.toContain("CapabilitiesSection.tsx");
     expect(capabilitiesSection).toContain(
       "settings.sections.capabilities.computerUseHint",
