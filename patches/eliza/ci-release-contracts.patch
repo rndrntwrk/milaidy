@@ -2015,12 +2015,16 @@ diff --git a/packages/app-core/scripts/copy-runtime-node-modules.ts b/packages/a
 +  }
 +}
 +
-@@ -378,0 +493,5 @@ function patchCopiedPackageRuntimeSurface(
+@@ -378,2 +493,7 @@ function patchCopiedPackageRuntimeSurface(
+-): void {
+-  if (name !== "@elizaos/plugin-cron") {
++): void {
 +  if (name === "@elizaos/agent") {
 +    patchCopiedAgentRuntimeExports(packageDir);
 +    return;
 +  }
 +
++  if (name !== "@elizaos/plugin-cron") {
 diff --git a/packages/app-core/scripts/build-bundled-agent-skills-artifact.mjs b/packages/app-core/scripts/build-bundled-agent-skills-artifact.mjs
 index c585fac..0a6543d 100644
 --- a/packages/app-core/scripts/build-bundled-agent-skills-artifact.mjs
