@@ -5,6 +5,8 @@ const env = {
 // Native .node packages must stay external; rolldown cannot bundle shared libraries.
 const nativeExternals = [
   "node-llama-cpp",
+  "@node-rs/argon2",
+  /^@node-rs\/argon2-/,
   "@reflink/reflink",
   "@reflink/reflink-darwin-arm64",
   "@reflink/reflink-darwin-x64",

@@ -967,7 +967,12 @@ describe("release workflow path contract", () => {
       "utf8",
     );
     const bundledWorkspacesScript = readElizaScript(
-      path.join("packages", "app-core", "scripts", "ensure-bundled-workspaces.mjs"),
+      path.join(
+        "packages",
+        "app-core",
+        "scripts",
+        "ensure-bundled-workspaces.mjs",
+      ),
     );
     const buildAgentSkillsArtifactScript = readElizaScript(
       path.join(

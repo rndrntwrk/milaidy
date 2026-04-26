@@ -79,9 +79,8 @@ function scanSources() {
     for (const file of walk(dir)) {
       const text = fs.readFileSync(file, "utf8");
 
-      let m;
       LITERAL_KEY_RE.lastIndex = 0;
-      m = LITERAL_KEY_RE.exec(text);
+      let m = LITERAL_KEY_RE.exec(text);
       while (m) {
         const arr = literalKeys.get(m[1]) ?? [];
         arr.push({ file, line: lineOf(text, m.index) });
@@ -296,10 +295,12 @@ function main() {
 
   // 3. Surface dynamic call sites the allowlist doesn't cover (informational).
   if (dynamicSites.length > 0) {
-    const uncovered =
-      allowlist.keys.length === 0 && allowlist.prefixes.length === 0
-        ? dynamicSites
-        : [];
+    const uncovered = dynamicSites.filter(() => {
+      // We can't know what key the dynamic call resolves to; treat the
+      // allowlist as the contract. If the allowlist has any keys/prefixes,
+      // we trust the developer. Otherwise, warn.
+      return allowlist.keys.length === 0 && allowlist.prefixes.length === 0;
+    });
     if (uncovered.length > 0) {
       warnings.push(
         `[i18n] ${dynamicSites.length} dynamic t(<expr>) call site(s) — add resolved keys/prefixes to ${relpath(ALLOWLIST_PATH)} so unused-key checking stays accurate:`,
