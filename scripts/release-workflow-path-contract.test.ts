@@ -923,6 +923,9 @@ describe("release workflow path contract", () => {
     expect(patch).toContain(
       '+    "@elizaos/plugin-agent-skills": "workspace:*",',
     );
+    expect(patch).toContain(
+      'args: ["../../../packages/app-core/scripts/build-bundled-agent-skills-artifact.mjs"]',
+    );
   });
 
   it("patches shared keyword generation to emit runtime JavaScript", () => {

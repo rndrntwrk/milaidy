@@ -1889,3 +1889,10 @@ index a28b5d8..e6b7d33 100644
 +  console.log(`  JavaScript (shared): ${outPath}`);
 +}
 +
+diff --git a/packages/app-core/scripts/ensure-bundled-workspaces.mjs b/packages/app-core/scripts/ensure-bundled-workspaces.mjs
+index 406fd93..7ec2c42 100644
+--- a/packages/app-core/scripts/ensure-bundled-workspaces.mjs
++++ b/packages/app-core/scripts/ensure-bundled-workspaces.mjs
+@@ -30 +30 @@ export const BUNDLED_WORKSPACE_BUILDS = [
+-    args: ["../../../scripts/build-bundled-agent-skills-artifact.mjs"],
++    args: ["../../../packages/app-core/scripts/build-bundled-agent-skills-artifact.mjs"],
