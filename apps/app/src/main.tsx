@@ -40,11 +40,14 @@ import {
   installDesktopPermissionsClientPatch,
   installForceFreshOnboardingClientPatch,
   installLocalProviderCloudPreferencePatch,
+  isAppWindowRoute,
   isDetachedWindowShell,
+  getWindowNavigationPath,
   resolveWindowShellRoute,
   shouldInstallMainWindowOnboardingPatches,
   syncDetachedShellLocation,
 } from "@elizaos/app-core";
+import { AppWindowRenderer } from "@elizaos/app-core";
 import { dispatchQueuedLifeOpsGithubCallbackFromUrl } from "@elizaos/app-lifeops/platform";
 import type { ShareTargetPayload } from "@elizaos/app-core/platform";
 import {
@@ -608,11 +611,21 @@ function isPhoneCompanionMode(): boolean {
   return params.get("mode") === "companion";
 }
 
+function resolveAppWindowSlug(): string | null {
+  if (!isAppWindowRoute()) return null;
+  const path = getWindowNavigationPath();
+  if (!path.startsWith("/apps/")) return null;
+  const slug = path.slice("/apps/".length).replace(/[?#].*$/, "");
+  return slug.length > 0 ? slug : null;
+}
+
 function mountReactApp(): void {
   const rootEl = document.getElementById("root");
   if (!rootEl) throw new Error("Root element #root not found");
 
   const phoneCompanion = isPhoneCompanionMode();
+  const detachedShell = isDetachedWindowShell(windowShellRoute);
+  const appWindowSlug = detachedShell ? null : resolveAppWindowSlug();
 
   createRoot(rootEl).render(
     <ErrorBoundary>
@@ -620,9 +633,13 @@ function mountReactApp(): void {
         <AppProvider branding={APP_BRANDING}>
           {phoneCompanion ? (
             <PhoneCompanionApp />
-          ) : isDetachedWindowShell(windowShellRoute) ? (
+          ) : detachedShell ? (
             <div className="flex h-screen min-h-0 w-screen flex-col overflow-hidden">
               <DetachedShellRoot route={windowShellRoute} />
+            </div>
+          ) : appWindowSlug ? (
+            <div className="flex h-screen min-h-0 w-screen flex-col overflow-hidden">
+              <AppWindowRenderer slug={appWindowSlug} />
             </div>
           ) : (
             <>

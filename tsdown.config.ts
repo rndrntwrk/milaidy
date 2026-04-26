@@ -19,7 +19,14 @@ const nativeExternals = [
 // Runtime-loaded @elizaos/plugin-* packages must stay external.
 const pluginExternal = /^@elizaos\/plugin-/;
 const optionalAppExternal = /^@elizaos\/app-/;
-const allExternals = [...nativeExternals, pluginExternal, optionalAppExternal];
+// @node-rs/* ships native .node bindings per platform (argon2, etc.) — always external.
+const nodeRsExternal = /^@node-rs\//;
+const allExternals = [
+  ...nativeExternals,
+  pluginExternal,
+  optionalAppExternal,
+  nodeRsExternal,
+];
 
 export default [
   {
