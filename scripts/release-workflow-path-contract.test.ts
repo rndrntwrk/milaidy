@@ -75,6 +75,19 @@ describe("release workflow path contract", () => {
     expect(releaseElectrobun).toContain('BUN_VERSION: "1.3.13"');
   });
 
+  it("runs eliza repo setup from the Milady root during postinstall", () => {
+    const postinstall = fs.readFileSync(
+      path.join(repoRoot, "scripts", "milady-postinstall-repo-setup.mjs"),
+      "utf8",
+    );
+
+    expect(postinstall).toContain(
+      'const repoRoot = path.resolve(__dirname, "..");',
+    );
+    expect(postinstall).toContain("await runRepoSetup(repoRoot);");
+    expect(postinstall).not.toContain("await runRepoSetup();");
+  });
+
   it("uses the mobile build helper for release Android and iOS validation jobs", () => {
     const agentRelease = readWorkflow("agent-release.yml");
     const mobileBuildHelper = readElizaScript(
@@ -725,9 +738,7 @@ describe("release workflow path contract", () => {
     expect(windowsTelegramOverlayBlock).toContain(
       "git -C eliza submodule update --init --depth=1 plugins/plugin-telegram",
     );
-    expect(windowsTelegramOverlayBlock).toContain(
-      'repo_root="$PWD"',
-    );
+    expect(windowsTelegramOverlayBlock).toContain('repo_root="$PWD"');
     expect(windowsTelegramOverlayBlock).toContain(
       '(cd eliza/plugins/plugin-telegram && bun "$repo_root/node_modules/tsup/dist/cli-default.js" src/index.ts src/account-auth-service.ts --format esm --out-dir dist --tsconfig tsconfig.build.json --sourcemap --clean --no-config)',
     );
