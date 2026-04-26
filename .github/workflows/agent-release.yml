@@ -237,6 +237,43 @@ jobs:
           echo "Next: v$VERSION (prerelease=$PRERELEASE)"
 
   # ── 3. FULL BUILD MATRIX (blocking — electrobun + generic/cloud docker) ─
+  # ── P0 auth smoke — cloud-provisioned bootstrap exchange ────────────
+  # Blocks publish on contract violations of the cloud-provisioned auth
+  # path. See `docs/security/remote-auth-hardening-plan.md` §12.
+  # The smoke generates an RS256 keypair at runtime, serves a fixture
+  # JWKS via loopback HTTP, boots the real bootstrap exchange + onboarding
+  # routes against a real pglite database, and asserts:
+  #   - GET /api/onboarding/status without auth returns 401
+  #     (audited bypass closed)
+  #   - POST /api/auth/bootstrap/exchange with a valid token → 200
+  #   - replayed token → 401 reason=replay
+  #   - tampered, wrong-iss, attacker-signed (same kid), wrong-containerId
+  #     → 401
+  # The private key is generated per-run and never written to disk.
+  smoke-auth:
+    name: Auth bootstrap smoke (P0 gate)
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Setup workspace dependencies
+        uses: ./.github/actions/setup-bun-workspace
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+          install-native-deps: "false"
+          run-postinstall: "true"
+          skip-avatar-clone: "true"
+          no-vision-deps: "true"
+          prepare-local-eliza-runtime: "true"
+      - name: Run auth bootstrap smoke
+        run: bun run test:auth
+
   build-electrobun:
     name: Electrobun full matrix
     needs: [version]
@@ -623,6 +660,7 @@ jobs:
     needs:
       [
         version,
+        smoke-auth,
         build-electrobun,
         build-docker,
         build-cloud-image,
@@ -639,6 +677,7 @@ jobs:
       ]
     if: >-
       always() &&
+      needs.smoke-auth.result == 'success' &&
       needs.build-electrobun.result == 'success' &&
       needs.build-docker.result == 'success' &&
       needs.build-cloud-image.result == 'success' &&

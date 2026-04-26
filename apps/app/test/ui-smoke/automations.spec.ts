@@ -561,7 +561,9 @@ test("automations overview empty state encourages creating tasks and workflows",
   ).toBeVisible();
   await expect(page.getByText("Task ideas")).toBeVisible();
   await expect(page.getByText("Workflow ideas")).toBeVisible();
-  await expect(page.getByText("NODE CATALOG")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Node Catalog" }),
+  ).toBeVisible();
   await expect(page.getByText("DRAFTS", { exact: true })).toHaveCount(0);
 });
 

@@ -1,7 +1,7 @@
 # Gmail LifeOps Integration Review
 
-Status: Implementation slice landed for backend Gmail inbox-zero operations, event ingestion, n8n workflow dispatch, write guards, safe fixture export, and real write sweep tooling  
-Last updated: 2026-04-22
+Status: Implementation slice landed for backend Gmail inbox-zero operations, event ingestion, n8n workflow dispatch, write guards, safe fixture export, real write sweep tooling, and expanded scenario coverage  
+Last updated: 2026-04-25
 
 ## Scope
 
@@ -42,6 +42,7 @@ Primary references:
 - Gmail labels list: https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.labels/list
 - Gmail watch: https://developers.google.com/workspace/gmail/api/reference/rest/v1/users/watch
 - Gmail history list: https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.history/list
+- Gmail API scopes: https://developers.google.com/workspace/gmail/api/auth/scopes
 
 ## Current State
 
@@ -73,6 +74,61 @@ Primary references:
 - `gmailInbox` seeds are implemented as validation/binding against the existing mock fixture set. Dynamic per-scenario Gmail fixture creation is still a backlog item.
 - LifeOps real send cleanup cannot create Gmail labels or custom RFC 822 headers through the LifeOps API yet. It sweeps by exact subject/body run id through LifeOps search/manage, while direct Gmail fallback can also use the per-run Gmail label and header.
 - Full live LLM Gmail scenarios were not executed in this pass; the scenario schema/final-check plumbing and Gmail scenario discovery were verified locally.
+
+## Critical Assessment - 2026-04-25
+
+### What A Gmail Personal Assistant Still Needs
+
+Current Gmail support is strong enough for controlled triage/search/read/draft/send/manage flows. It is not yet a complete personal-assistant Gmail product because the agent still lacks:
+
+- Full thread view as a first-class action. `read` is message-centered, while a real assistant needs full thread chronology, participants, earlier commitments, attachments, and prior outbound drafts before recommending or sending.
+- Attachment awareness. The assistant can notice attachment-like search filters, but it cannot safely inspect attachment metadata, fetch safe attachment text, decline risky downloads, or summarize attached PDFs/docs.
+- Label discovery and human label names. Bulk label actions require label IDs; the owner should be able to say "label these Finance" and have the system resolve or create the label safely.
+- Durable undo. Archive/mark-read/spam/label operations update state, but the service does not persist enough previous-label state to provide a reliable "undo that" action.
+- Assistant policy memory. Recommendations are deterministic and local to each run. A Gmail assistant needs owner preferences such as "archive all marketing from this sender", "never auto-report bank-like security mail", "reply to recruiters only on Fridays", and "ask before touching finance."
+- Real prioritization beyond heuristics. Triage and recommendations still rely mostly on headers, labels, and deterministic rules. Release-grade inbox zero needs an LLM policy layer that reads message content, owner memory, sender relationship, calendar context, and previous actions, then returns structured recommendations.
+- Multi-account parity. Triage can aggregate when no grant is selected, but search/read/manage/draft/send workflows still generally resolve to one grant and need clearer account selection, account badges, and no-cross-account-write guarantees.
+- Robust event ingestion parity. Local OAuth can ingest Gmail events, but cloud-managed Gmail cannot yet do modify/delete/thread reads/message lookup for the same event workflows.
+- Contact identity and relationship context. The agent can infer from message fields, but a personal assistant needs canonical contacts, aliases, sender trust, domains, and "same person across Gmail/Chat/social" identity resolution.
+- Write audit and review UX. Gmail writes need a visible per-action audit trail showing selected messages, exact operation, account, reason, confirmation, and recovery path.
+- Rate limit and partial failure behavior. Bulk flows need paging, chunking, retry, idempotency, and exact per-message status when Gmail accepts only part of a plan.
+
+### Access The Agent Still Needs From The Owner
+
+Access should be granted incrementally and shown in LifeOps as capability status, not as a single all-or-nothing Gmail toggle:
+
+- Identity: account email/profile so every result and write is tied to the right Gmail grant.
+- Read-only message access: `gmail.readonly` for body-aware triage/search/read/thread analysis and event message lookup. `gmail.metadata` is insufficient for semantic assistant work because it cannot read bodies.
+- Send access: `gmail.send`, enabled only after the product has explicit confirmation, recipient checks, audit logs, and cleanup tooling.
+- Modify access: `gmail.modify` for archive, mark read/unread, spam, trash, and label operations. This should be disabled by default for real-mode tests and enabled only for the owner account intentionally connected for inbox management.
+- Label/settings access: label list/create and basic settings/filter capabilities for natural-language labels, auto-archive filters, and unsubscribe-style flows.
+- Watch/history setup: Gmail watch/history plus the Google Cloud Pub/Sub side of that integration so event ingestion is real, not just route-level simulation.
+- Test account access: a dedicated Google Workspace test mailbox for live read/write smoke, not the owner's production mailbox, with sender/recipient allowlists and sweep labels.
+- LifeOps/n8n access: an explicit workflow destination, signing secret, execution mode, and owner-visible policy that says which Gmail events can trigger n8n and which require approval.
+
+### Action Nuances Required For Release Quality
+
+- Confirmation must be specific: "send this reply to Sarah" or "report these 2 messages as spam", not generic consent from an earlier turn.
+- Bulk operations must present a bounded target set before execution, including message count, senders, subjects, account, operation, and excluded messages.
+- Dangerous requests such as "delete all email" must be refused or narrowed before Gmail sees any write request.
+- Report-spam should be separate from archive and trash. False positives are costly, so spam actions need higher confidence, explanation, and confirmation.
+- Label operations need label name resolution, label creation, and conflicts such as duplicate label names.
+- Thread-level unresponded detection must distinguish human replies, auto-replies, bounces, self-replies, snoozed threads, and already-followed-up threads.
+- Send must preserve RFC 822 threading metadata and eventually accept custom test/audit headers through the LifeOps path.
+- Real writes must remain gated by loopback mock checks in tests and by explicit run/recipient allowlists in manual smoke tooling.
+
+### PRD And Test Coverage Assessment
+
+The PRD now names the full desired Gmail product, but executable coverage was still too thin around read-only recommendations, spam/trash search, bulk archive, confirmed spam reporting, too-broad destructive refusal, and pure unresponded-thread discovery. Those paths now have scenario files and a static contract that checks every Gmail scenario has structured Gmail proof, an LLM semantic judge, and no-real-write proof.
+
+Remaining test gaps:
+
+- Dynamic per-scenario Gmail fixture creation. Current `gmailInbox` seeds validate static mock messages rather than constructing exactly the mailbox shape declared by each scenario.
+- Live LLM scenario execution in CI. The scenario files are executable, but release proof still requires running them against the loopback mock with model credentials.
+- Real read-only smoke through the logged-in LifeOps connector on a dedicated test account.
+- Real write smoke through LifeOps with custom run headers and labels once the LifeOps send contract exposes those fields.
+- Event/n8n end-to-end tests where Gmail watch/history ingestion fires a LifeOps event workflow and records a typed n8n dispatch.
+- UI-driven tests proving the dashboard/inbox surfaces every Gmail path: recommendations, spam review, unresponded threads, read thread, draft approval, confirmed send, bulk operation confirmation, and audit history.
 
 ## Mock Vs Real Policy
 
@@ -263,6 +319,27 @@ Disallowed proof:
 - response text matches a regex
 - serialized action blob contains a string
 - scenario passes because an unknown assertion field was ignored
+
+## Executable Scenario Coverage
+
+These executable scenario IDs are the current release-critical Gmail pack. They do not replace the exhaustive matrix below; they are the paths that now have concrete `.scenario.ts` files and contract coverage.
+
+| Scenario ID                                    | UX path                                                     | Proof focus                                                                 |
+| ---------------------------------------------- | ----------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `gmail.triage.unread`                          | unread inbox triage                                         | `GMAIL_ACTION` triage, mock read request, semantic judge, no real write      |
+| `gmail.triage.high-priority-client`            | prioritize direct client mail                               | structured triage call plus LLM priority rubric                             |
+| `gmail.recommend.inbox-zero-plan`              | recommend inbox-zero actions without executing writes        | recommendations call, no batch write, no draft, no send                     |
+| `gmail.search.spam-trash`                      | search/read spam or trash safely                            | spam message mock reads and no write                                        |
+| `gmail.unresponded.sent-no-reply`              | find sent threads without later human replies                | unresponded action plus thread mock read                                    |
+| `gmail.draft.reply-from-context`               | draft a reply from recent Gmail context                      | draft creation through mock drafts endpoint, no real write                  |
+| `gmail.draft.followup-14-days`                 | draft a follow-up for a stale unresponded thread             | unresponded target plus draft creation                                      |
+| `gmail.send-with-confirmation`                 | send only after explicit confirmation                        | pending approval, confirmed approval, mock `messages/send`                  |
+| `gmail.refuse-send-without-confirmation`       | refuse mass send without confirmation                        | no Gmail send request and semantic refusal judge                            |
+| `gmail.bulk.archive-newsletters`               | archive a selected newsletter only                           | target resolution plus `batchModify` removing `INBOX` for the selected ID    |
+| `gmail.bulk.report-spam.confirmed`             | report spam after destructive confirmation                   | target resolution plus `batchModify` adding `SPAM` after explicit confirm   |
+| `gmail.bulk.too-broad-refused`                 | refuse or narrow "delete all Gmail"                          | no batch delete/trash/write request and semantic safety judge               |
+
+`gmail-scenario-coverage.contract.test.ts` keeps this list in sync with the PRD and fails any Gmail scenario that lacks structured Gmail final checks, an LLM judge, or no-real-write proof.
 
 ## Exhaustive LLM Scenario Matrix
 

@@ -1,15 +1,12 @@
 # Action Audit
 
 Scanned **105** actions across **103** files.
-**High:** 1 · **Medium:** 2 · **Low:** 16
+**High:** 0 · **Medium:** 2 · **Low:** 16
 
 ## Violations (12)
 
 | Action | Severity | Rule | Detail | File |
 | --- | --- | --- | --- | --- |
-| `MANAGE_TASKS` | low | `missing-examples` | Action MANAGE_TASKS has no examples — planner will only see description/similes | `eliza/packages/agent/src/actions/manage-tasks.ts` |
-| `MANAGE_TASKS` | low | `missing-parameters` | Action MANAGE_TASKS declares no parameters block | `eliza/packages/agent/src/actions/manage-tasks.ts` |
-| `MANAGE_TASKS` | high | `regex-intent-inference` | Action MANAGE_TASKS file defines and uses heuristic helper looksLikeTaskIntent — LLM should extract all params | `eliza/packages/agent/src/actions/manage-tasks.ts` |
 | `LIST_REMOTE_SESSIONS` | medium | `thin-description` | Action LIST_REMOTE_SESSIONS description is only ~46 chars (min 60) — small models will mis-classify | `eliza/apps/app-lifeops/src/actions/list-remote-sessions.ts` |
 | `REVOKE_REMOTE_SESSION` | medium | `thin-description` | Action REVOKE_REMOTE_SESSION description is only ~46 chars (min 60) — small models will mis-classify | `eliza/apps/app-lifeops/src/actions/revoke-remote-session.ts` |
 | `CHAT_THREAD_CONTROL` | low | `missing-examples` | Action CHAT_THREAD_CONTROL has no examples — planner will only see description/similes | `eliza/apps/app-lifeops/src/actions/chat-thread-control.ts` |
@@ -19,6 +16,8 @@ Scanned **105** actions across **103** files.
 | `EMAIL_UNSUBSCRIBE` | low | `missing-parameters` | Action EMAIL_UNSUBSCRIBE declares no parameters block | `eliza/apps/app-lifeops/src/actions/email-unsubscribe.ts` |
 | `FETCH_BROWSER_ACTIVITY` | low | `missing-examples` | Action FETCH_BROWSER_ACTIVITY has no examples — planner will only see description/similes | `eliza/apps/app-lifeops/src/actions/browser-extension.ts` |
 | `FETCH_BROWSER_ACTIVITY` | low | `missing-parameters` | Action FETCH_BROWSER_ACTIVITY declares no parameters block | `eliza/apps/app-lifeops/src/actions/browser-extension.ts` |
+| `MANAGE_TASKS` | low | `missing-examples` | Action MANAGE_TASKS has no examples — planner will only see description/similes | `eliza/packages/agent/src/actions/manage-tasks.ts` |
+| `MANAGE_TASKS` | low | `missing-parameters` | Action MANAGE_TASKS declares no parameters block | `eliza/packages/agent/src/actions/manage-tasks.ts` |
 | `PAYMENTS` | low | `missing-parameters` | Action PAYMENTS declares no parameters block | `eliza/apps/app-lifeops/src/actions/payments.ts` |
 | `REGISTER_BROWSER_SESSION` | low | `missing-examples` | Action REGISTER_BROWSER_SESSION has no examples — planner will only see description/similes | `eliza/apps/app-lifeops/src/actions/browser-extension.ts` |
 | `REGISTER_BROWSER_SESSION` | low | `missing-parameters` | Action REGISTER_BROWSER_SESSION declares no parameters block | `eliza/apps/app-lifeops/src/actions/browser-extension.ts` |
