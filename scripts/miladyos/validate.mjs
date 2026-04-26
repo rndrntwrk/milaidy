@@ -262,14 +262,26 @@ export function validateProductLayer(vendorDir) {
     "privapp-permissions-com.miladyai.milady.xml",
     "milady_common.mk",
   );
-  assertIncludes(common, "vendor/milady/overlays/framework-res", "milady_common.mk");
+  assertIncludes(
+    common,
+    "vendor/milady/overlays/framework-res",
+    "milady_common.mk",
+  );
   // Ensure no first-boot UX leaks through.
   for (const marker of ["Provision", "SetupWizard", "ManagedProvisioning"]) {
-    assertIncludes(common, marker, "milady_common.mk PRODUCT_PACKAGES -= strip list");
+    assertIncludes(
+      common,
+      marker,
+      "milady_common.mk PRODUCT_PACKAGES -= strip list",
+    );
   }
   assertIncludes(common, "ro.setupwizard.mode=DISABLED", "milady_common.mk");
   // Boot-time scaffolds.
-  assertIncludes(common, "init.milady.rc", "milady_common.mk PRODUCT_COPY_FILES");
+  assertIncludes(
+    common,
+    "init.milady.rc",
+    "milady_common.mk PRODUCT_COPY_FILES",
+  );
   assertIncludes(common, "BOARD_VENDOR_SEPOLICY_DIRS", "milady_common.mk");
   assertIncludes(common, "vendor/milady/sepolicy", "milady_common.mk");
   if (common.includes("PermissionController")) {
@@ -282,7 +294,11 @@ export function validateProductLayer(vendorDir) {
   const pixelTemplate = read(
     path.join(vendorDir, "products", "milady_pixel_phone.mk"),
   );
-  assertIncludes(pixelTemplate, "MILADY_PIXEL_CODENAME", "milady_pixel_phone.mk");
+  assertIncludes(
+    pixelTemplate,
+    "MILADY_PIXEL_CODENAME",
+    "milady_pixel_phone.mk",
+  );
   assertIncludes(
     pixelTemplate,
     "vendor/milady/milady_common.mk",
@@ -292,9 +308,7 @@ export function validateProductLayer(vendorDir) {
   const androidProducts = read(path.join(vendorDir, "AndroidProducts.mk"));
   assertMatches(
     androidProducts,
-    new RegExp(
-      `\\$\\(LOCAL_DIR\\)/products/${PRODUCT_NAME}\\.mk`,
-    ),
+    new RegExp(`\\$\\(LOCAL_DIR\\)/products/${PRODUCT_NAME}\\.mk`),
     "AndroidProducts.mk",
     `PRODUCT_MAKEFILES entry for ${PRODUCT_NAME}`,
   );

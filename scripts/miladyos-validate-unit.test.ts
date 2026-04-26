@@ -179,7 +179,14 @@ prebuilt_etc {
   );
 
   writeFile(
-    path.join(vendor, "overlays", "framework-res", "res", "values", "config.xml"),
+    path.join(
+      vendor,
+      "overlays",
+      "framework-res",
+      "res",
+      "values",
+      "config.xml",
+    ),
     `<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="config_defaultDialer" translatable="false">${PACKAGE_NAME}</string>
@@ -204,8 +211,12 @@ describe("validateXmlFiles", () => {
   it("rejects malformed XML", () => {
     const vendor = makeValidVendorDir();
     fs.writeFileSync(
-      path.join(vendor, "permissions", `privapp-permissions-${PACKAGE_NAME}.xml`),
-      "<?xml version=\"1.0\"?><unterminated",
+      path.join(
+        vendor,
+        "permissions",
+        `privapp-permissions-${PACKAGE_NAME}.xml`,
+      ),
+      '<?xml version="1.0"?><unterminated',
     );
     expect(() => validateXmlFiles(vendor)).toThrow();
   });
@@ -257,7 +268,9 @@ describe("validateProductLayer", () => {
     const commonPath = path.join(vendor, "milady_common.mk");
     fs.writeFileSync(
       commonPath,
-      fs.readFileSync(commonPath, "utf8").replace(/init\.milady\.rc/g, "init.x.rc"),
+      fs
+        .readFileSync(commonPath, "utf8")
+        .replace(/init\.milady\.rc/g, "init.x.rc"),
     );
     expect(() => validateProductLayer(vendor)).toThrow(/init\.milady\.rc/);
   });
@@ -269,9 +282,14 @@ describe("validateProductLayer", () => {
       commonPath,
       fs
         .readFileSync(commonPath, "utf8")
-        .replace(/BOARD_VENDOR_SEPOLICY_DIRS \+= vendor\/milady\/sepolicy/g, ""),
+        .replace(
+          /BOARD_VENDOR_SEPOLICY_DIRS \+= vendor\/milady\/sepolicy/g,
+          "",
+        ),
     );
-    expect(() => validateProductLayer(vendor)).toThrow(/BOARD_VENDOR_SEPOLICY_DIRS/);
+    expect(() => validateProductLayer(vendor)).toThrow(
+      /BOARD_VENDOR_SEPOLICY_DIRS/,
+    );
   });
 
   it("rejects when the per-Pixel template is absent", () => {
@@ -301,8 +319,13 @@ describe("validateProductLayer", () => {
   it("rejects an obsolete PermissionController role-holder XML", () => {
     const vendor = makeValidVendorDir();
     writeFile(
-      path.join(vendor, "overlays", "PermissionController", "config_defaultRoleHolders.xml"),
-      "<?xml version=\"1.0\"?><resources><string name=\"config_defaultDialerRoleHolders\">x</string></resources>",
+      path.join(
+        vendor,
+        "overlays",
+        "PermissionController",
+        "config_defaultRoleHolders.xml",
+      ),
+      '<?xml version="1.0"?><resources><string name="config_defaultDialerRoleHolders">x</string></resources>',
     );
     expect(() => validateProductLayer(vendor)).toThrow(/PermissionController/);
   });
