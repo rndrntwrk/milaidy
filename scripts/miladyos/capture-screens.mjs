@@ -32,22 +32,13 @@ const PACKAGE_NAME = "com.miladyai.milady";
 const STEP_MAP = {
   home: {
     label: "home",
-    drive: (adb, serial) =>
-      shell(
-        adb,
-        serial,
-        "input keyevent KEYCODE_HOME",
-      ),
+    drive: (adb, serial) => shell(adb, serial, "input keyevent KEYCODE_HOME"),
     settleMs: 1500,
   },
   dialer: {
     label: "dialer",
     drive: (adb, serial) =>
-      shell(
-        adb,
-        serial,
-        "am start -a android.intent.action.DIAL",
-      ),
+      shell(adb, serial, "am start -a android.intent.action.DIAL"),
     settleMs: 2500,
   },
   sms: {
@@ -63,11 +54,7 @@ const STEP_MAP = {
   assist: {
     label: "assist",
     drive: (adb, serial) =>
-      shell(
-        adb,
-        serial,
-        "am start -a android.intent.action.ASSIST",
-      ),
+      shell(adb, serial, "am start -a android.intent.action.ASSIST"),
     settleMs: 2500,
   },
   recents: {

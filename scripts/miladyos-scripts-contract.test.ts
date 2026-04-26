@@ -138,9 +138,7 @@ describe("MiladyOS script contracts", () => {
     );
     expect(() => parseCaptureArgs(["--out"])).toThrow(/--out requires a value/);
     expect(() => parseE2eArgs(["--out"])).toThrow(/--out requires a value/);
-    expect(() => parseAvdTestArgs(["--avd"])).toThrow(
-      /--avd requires a value/,
-    );
+    expect(() => parseAvdTestArgs(["--avd"])).toThrow(/--avd requires a value/);
   });
 
   it("parses capture-screens / e2e-validate / avd-test flags without side effects", () => {
@@ -201,8 +199,9 @@ describe("MiladyOS script contracts", () => {
   });
 
   it("rejects unknown capture steps", () => {
-    expect(() => parseCaptureArgs(["--out", "/tmp", "--steps", "bogus"]))
-      .toThrow(/Unknown step "bogus"/);
+    expect(() =>
+      parseCaptureArgs(["--out", "/tmp", "--steps", "bogus"]),
+    ).toThrow(/Unknown step "bogus"/);
     expect(Object.keys(STEP_MAP).sort()).toEqual(
       ["assist", "dialer", "home", "launcher", "recents", "sms"].sort(),
     );
