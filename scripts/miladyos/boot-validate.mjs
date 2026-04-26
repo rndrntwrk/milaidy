@@ -42,13 +42,21 @@ const FORBIDDEN_STOCK_PACKAGES = [
   "com.android.email",
   "com.android.gallery3d",
   "com.android.launcher3",
+  "com.android.managedprovisioning",
   "com.android.messaging",
   "com.android.music",
+  "com.android.provision",
   "com.google.android.apps.messaging",
   "com.google.android.apps.nexuslauncher",
   "com.google.android.dialer",
+  "com.google.android.setupwizard",
   "org.lineageos.trebuchet",
 ];
+
+const REQUIRED_BOOT_PROPERTIES = {
+  "ro.setupwizard.mode": "DISABLED",
+  "ro.miladyos.boot_phase": "completed",
+};
 
 const LOGCAT_FAILURE_PATTERNS = [
   /FATAL EXCEPTION/i,
@@ -212,6 +220,20 @@ function validateProductProperty(adb, serial) {
   return product;
 }
 
+function validateBootProperties(adb, serial) {
+  const properties = {};
+  for (const [name, expected] of Object.entries(REQUIRED_BOOT_PROPERTIES)) {
+    const actual = shell(adb, serial, `getprop ${name}`).trim();
+    if (actual !== expected) {
+      throw new Error(
+        `${name} must be ${expected}; found ${actual || "<empty>"}`,
+      );
+    }
+    properties[name] = actual;
+  }
+  return properties;
+}
+
 function validatePackagePath(adb, serial) {
   const pmPath = shell(adb, serial, `pm path ${PACKAGE_NAME}`);
   assertIncludes(pmPath, "/system/priv-app/Milady/", "Milady package path");
@@ -308,6 +330,7 @@ export async function validateBootedDevice(options) {
     adb,
     serial,
     product: validateProductProperty(adb, serial),
+    bootProperties: validateBootProperties(adb, serial),
     packagePath: validatePackagePath(adb, serial),
     homeResolution: validateHomeResolution(adb, serial),
     roles: validateRoles(adb, serial),

@@ -4,6 +4,10 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { parseArgs as parseAvdTestArgs } from "./miladyos/avd-test.mjs";
 import {
+  parseArgs as parseBootAnimationArgs,
+  inspectBootAnimationDir,
+} from "./miladyos/build-bootanimation.mjs";
+import {
   parseArgs as parseBootValidateArgs,
   resolveAdb,
 } from "./miladyos/boot-validate.mjs";
@@ -202,5 +206,29 @@ describe("MiladyOS script contracts", () => {
     expect(Object.keys(STEP_MAP).sort()).toEqual(
       ["assist", "dialer", "home", "launcher", "recents", "sms"].sort(),
     );
+  });
+
+  it("inspects bootanimation directories and rejects malformed input", () => {
+    const framesDir = makeTempDir();
+    expect(() => inspectBootAnimationDir(framesDir)).toThrow(/Missing desc\.txt/);
+
+    fs.writeFileSync(
+      path.join(framesDir, "desc.txt"),
+      "1080 2400 30\np 0 0 part0\n",
+    );
+    expect(() => inspectBootAnimationDir(framesDir)).not.toThrow();
+    const inspection = inspectBootAnimationDir(framesDir);
+    expect(inspection.parts).toEqual(["part0"]);
+    expect(inspection.issues).toContain("missing part directory: part0/");
+
+    fs.mkdirSync(path.join(framesDir, "part0"));
+    const empty = inspectBootAnimationDir(framesDir);
+    expect(empty.issues).toContain("part part0/ has zero PNG frames");
+
+    expect(parseBootAnimationArgs(["--frames", framesDir, "--check"])).toEqual({
+      framesDir,
+      outPath: path.join(framesDir, "bootanimation.zip"),
+      check: true,
+    });
   });
 });

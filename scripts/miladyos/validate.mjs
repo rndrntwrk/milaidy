@@ -240,42 +240,78 @@ export function validateProductLayer(vendorDir) {
     "device/google/cuttlefish/vsoc_x86_64_only/phone/aosp_cf.mk",
     "product",
   );
-  assertIncludes(product, "PRODUCT_PACKAGES +=", "product");
-  assertIncludes(product, "PRODUCT_PACKAGES -=", "product");
-  assertIncludes(product, "Milady", "product");
   assertIncludes(
     product,
+    "vendor/milady/milady_common.mk",
+    "product (must inherit milady_common.mk for shared OS-path invariants)",
+  );
+  assertIncludes(product, "MILADY_PRODUCT_TAG", "product");
+
+  const common = read(path.join(vendorDir, "milady_common.mk"));
+  assertIncludes(common, "PRODUCT_PACKAGES +=", "milady_common.mk");
+  assertIncludes(common, "PRODUCT_PACKAGES -=", "milady_common.mk");
+  assertIncludes(common, "Milady", "milady_common.mk");
+  assertIncludes(
+    common,
     "default-permissions-com.miladyai.milady.xml",
-    "product",
+    "milady_common.mk",
   );
   assertIncludes(
-    product,
+    common,
     "privapp-permissions-com.miladyai.milady.xml",
-    "product",
+    "milady_common.mk",
   );
-  assertIncludes(product, "vendor/milady/overlays/framework-res", "product");
-  if (product.includes("PermissionController")) {
+  assertIncludes(common, "vendor/milady/overlays/framework-res", "milady_common.mk");
+  // Ensure no first-boot UX leaks through.
+  for (const marker of ["Provision", "SetupWizard", "ManagedProvisioning"]) {
+    assertIncludes(common, marker, "milady_common.mk PRODUCT_PACKAGES -= strip list");
+  }
+  assertIncludes(common, "ro.setupwizard.mode=DISABLED", "milady_common.mk");
+  // Boot-time scaffolds.
+  assertIncludes(common, "init.milady.rc", "milady_common.mk PRODUCT_COPY_FILES");
+  assertIncludes(common, "BOARD_VENDOR_SEPOLICY_DIRS", "milady_common.mk");
+  assertIncludes(common, "vendor/milady/sepolicy", "milady_common.mk");
+  if (common.includes("PermissionController")) {
     fail(
-      "product still references a PermissionController overlay; role defaults live in framework-res strings.",
+      "milady_common.mk still references a PermissionController overlay; role defaults live in framework-res strings.",
     );
   }
+
+  // Per-Pixel templates exist and follow the same MILADY_PIXEL_CODENAME contract.
+  const pixelTemplate = read(
+    path.join(vendorDir, "products", "milady_pixel_phone.mk"),
+  );
+  assertIncludes(pixelTemplate, "MILADY_PIXEL_CODENAME", "milady_pixel_phone.mk");
+  assertIncludes(
+    pixelTemplate,
+    "vendor/milady/milady_common.mk",
+    "milady_pixel_phone.mk",
+  );
 
   const androidProducts = read(path.join(vendorDir, "AndroidProducts.mk"));
   assertMatches(
     androidProducts,
     new RegExp(
-      `PRODUCT_MAKEFILES\\s*:=\\s*\\\\?\\s*\\$\\(LOCAL_DIR\\)/products/${PRODUCT_NAME}\\.mk`,
+      `\\$\\(LOCAL_DIR\\)/products/${PRODUCT_NAME}\\.mk`,
     ),
     "AndroidProducts.mk",
     `PRODUCT_MAKEFILES entry for ${PRODUCT_NAME}`,
   );
   assertMatches(
     androidProducts,
-    new RegExp(
-      `COMMON_LUNCH_CHOICES\\s*:=\\s*\\\\?\\s*${PRODUCT_NAME}-trunk_staging-userdebug`,
-    ),
+    new RegExp(`${PRODUCT_NAME}-trunk_staging-userdebug`),
     "AndroidProducts.mk",
     `${PRODUCT_NAME}-trunk_staging-userdebug lunch choice`,
+  );
+
+  // Init script + sepolicy scaffold present.
+  assertFile(
+    path.join(vendorDir, "init", "init.milady.rc"),
+    "vendor/milady init script",
+  );
+  assertFile(
+    path.join(vendorDir, "sepolicy", "file_contexts"),
+    "vendor/milady sepolicy file_contexts",
   );
 
   const androidBp = read(path.join(vendorDir, "apps", "Milady", "Android.bp"));
