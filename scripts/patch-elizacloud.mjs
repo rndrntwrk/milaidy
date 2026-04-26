@@ -8,6 +8,13 @@
  *
  * Pinned to @elizaos/plugin-elizacloud@2.0.0-alpha.8 — refuses to apply
  * to other versions because the patch context lines may have shifted.
+ *
+ * The alpha.8 registry artifact and the repo-local alpha.8 workspace package
+ * have diverged in the wild. The static patch targets the repo-local
+ * `/responses` implementation. Published-only CI can still install an older
+ * AI SDK based artifact under the same version; that implementation has its
+ * own JSON response path and fence repair, so this bridge patch should skip it
+ * instead of failing postinstall before CI can run.
  */
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -23,6 +30,14 @@ const REQUIRED_DIST_MARKERS = [
   "let jsonText = extractResponsesOutputText(data);",
   "```(?:json)?",
   '.replace(/\\n?```\\s*$/i, "")',
+];
+const LEGACY_AI_SDK_OBJECT_MARKERS = [
+  "const openai = createOpenAIClient(runtime);",
+  "generateObject({",
+  'output: "no-schema"',
+  "experimental_repairText: getJsonRepairFunction()",
+  "JSONParseError",
+  'text.replace(/```json\\n|\\n```|```/g, "")',
 ];
 
 const scriptPath = fileURLToPath(import.meta.url);
@@ -44,18 +59,26 @@ function fail(msg) {
   process.exit(1);
 }
 
-function distAlreadyHasBridgeFixes(pluginRoot) {
+function distHasMarkers(pluginRoot, markers) {
   return DIST_ENTRYPOINTS.every((relPath) => {
     const entrypointPath = path.join(pluginRoot, relPath);
     if (!fs.existsSync(entrypointPath)) {
       return false;
     }
     const source = fs.readFileSync(entrypointPath, "utf8");
-    return REQUIRED_DIST_MARKERS.every((marker) => source.includes(marker));
+    return markers.every((marker) => source.includes(marker));
   });
 }
 
-function main() {
+export function distAlreadyHasBridgeFixes(pluginRoot) {
+  return distHasMarkers(pluginRoot, REQUIRED_DIST_MARKERS);
+}
+
+export function distUsesLegacyAiSdkObjectGeneration(pluginRoot) {
+  return distHasMarkers(pluginRoot, LEGACY_AI_SDK_OBJECT_MARKERS);
+}
+
+export function main() {
   if (!fs.existsSync(patchPath)) {
     fail(`patch file missing: ${path.relative(repoRoot, patchPath)}`);
   }
@@ -76,10 +99,18 @@ function main() {
     fail(`plugin package.json missing at ${pkgJsonPath}`);
   }
   const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, "utf8"));
+  const usesLegacyAiSdkObjectGeneration =
+    distUsesLegacyAiSdkObjectGeneration(pluginRoot);
   if (pkg.version !== PINNED_VERSION) {
     if (distAlreadyHasBridgeFixes(pluginRoot)) {
       log(
         `installed version ${pkg.version} already contains the bridge fixes - skipping`,
+      );
+      return;
+    }
+    if (usesLegacyAiSdkObjectGeneration) {
+      log(
+        `installed version ${pkg.version} uses legacy AI SDK object generation - skipping direct /responses bridge patch`,
       );
       return;
     }
@@ -88,6 +119,13 @@ function main() {
         `but installed version is ${pkg.version}. Regenerate the patch against the new version, ` +
         `or update PINNED_VERSION in this script if the patch still applies cleanly.`,
     );
+  }
+
+  if (usesLegacyAiSdkObjectGeneration) {
+    log(
+      "legacy AI SDK object generation detected - skipping direct /responses bridge patch",
+    );
+    return;
   }
 
   // Reverse-check first: if patches are already applied, exit cleanly.
@@ -144,8 +182,14 @@ function main() {
   log("applied 2 patches across 2 files");
 }
 
-try {
-  main();
-} catch (error) {
-  fail(error instanceof Error ? error.message : String(error));
+const isDirectRun =
+  typeof process.argv[1] === "string" &&
+  fs.realpathSync(scriptPath) === fs.realpathSync(process.argv[1]);
+
+if (isDirectRun) {
+  try {
+    main();
+  } catch (error) {
+    fail(error instanceof Error ? error.message : String(error));
+  }
 }
