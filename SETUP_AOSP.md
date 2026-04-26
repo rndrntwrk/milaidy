@@ -477,6 +477,26 @@ If it repeatedly fails, lower parallelism:
 repo sync -c -j4
 ```
 
+### `nsjail: mount('/', '/', ...): Permission denied` partway through `m`
+
+Ubuntu 24.04 restricts unprivileged user namespaces via AppArmor by default. AOSP's Soong uses `nsjail` to sandbox parts of the build (Trusty TEE VM and a few others) and nsjail can't set up its sandbox root without those namespaces. Symptom:
+
+```
+FAILED: out/soong/.intermediates/trusty/.../trusty_security_vm_*.elf
+[E] initCloneNs(): mount('/', '/', NULL, MS_REC|MS_PRIVATE, NULL): Permission denied
+ninja: build stopped: subcommand failed.
+```
+
+Fix (one-time, persistent across reboots):
+
+```bash
+echo "kernel.apparmor_restrict_unprivileged_userns = 0" | \
+  sudo tee /etc/sysctl.d/99-miladyos-aosp.conf
+sudo sysctl --system
+```
+
+`scripts/aosp-host-root-setup.sh` writes this file already; only relevant if you set up the host before this fix landed or used a different setup path.
+
 ### AOSP build runs out of memory
 
 Lower parallelism:
