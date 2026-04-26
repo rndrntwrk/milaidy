@@ -366,6 +366,23 @@ cd ~/milady
 node scripts/miladyos/build-aosp.mjs --aosp-root ~/aosp
 ```
 
+### Visual / e2e validation (Cuttlefish or AVD)
+
+After Cuttlefish boots (or against a stock AVD), capture role-ownership proof and a PNG gallery of the Milady surfaces:
+
+```bash
+# Cuttlefish — full role/permission/appop checks + Dialer/SMS/Assist screenshots
+bun run miladyos:e2e -- --out reports/aosp-cuttlefish
+
+# AVD short loop — install the Capacitor APK on an existing emulator
+bun run miladyos:avd -- --avd JejuWallet_Pixel6 --capture reports/avd
+
+# Just grab screenshots without driving steps
+bun run miladyos:capture -- --out reports/manual --no-launch
+```
+
+`miladyos:e2e` writes `report.json` next to the PNGs with the boot-validate results and step list. `miladyos:avd` is the short app-only iteration loop — it does **not** prove role ownership (only Cuttlefish + a real AOSP build can do that), but it does verify the WebView, gateway service, and deep-link routing without paying for a system rebuild.
+
 ### `dev:android` is not the AOSP loop
 
 `bun run dev:android` opens **Android Studio against the Capacitor app**, not against AOSP. It builds a debug APK and installs it on a connected handset/emulator using the standard Capacitor flow. This is for app-only iteration without the system image.
