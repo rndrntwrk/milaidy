@@ -250,6 +250,66 @@ function validateHomeResolution(adb, serial) {
   return resolved;
 }
 
+/**
+ * For every system intent whose default app we stripped from
+ * PRODUCT_PACKAGES, prove a Milady activity is the resolver. Without
+ * these assertions a stripped phone could pass HOME/Dialer/SMS role
+ * validation while silently failing to open URLs / set alarms / take
+ * photos — exactly the regression class this list catches.
+ */
+const REPLACEMENT_INTENT_RESOLUTIONS = [
+  {
+    label: "VIEW http",
+    args: '-a android.intent.action.VIEW -c android.intent.category.BROWSABLE -d "http://example.com"',
+  },
+  {
+    label: "VIEW https",
+    args: '-a android.intent.action.VIEW -c android.intent.category.BROWSABLE -d "https://example.com"',
+  },
+  {
+    label: "STILL_IMAGE_CAMERA",
+    args: "-a android.media.action.STILL_IMAGE_CAMERA",
+  },
+  {
+    label: "IMAGE_CAPTURE",
+    args: "-a android.media.action.IMAGE_CAPTURE",
+  },
+  {
+    label: "SET_ALARM",
+    args: "-a android.intent.action.SET_ALARM",
+  },
+  {
+    label: "SHOW_ALARMS",
+    args: "-a android.intent.action.SHOW_ALARMS",
+  },
+  {
+    label: "APP_CONTACTS launcher",
+    args: "-a android.intent.action.MAIN -c android.intent.category.APP_CONTACTS",
+  },
+  {
+    label: "APP_CALENDAR launcher",
+    args: "-a android.intent.action.MAIN -c android.intent.category.APP_CALENDAR",
+  },
+];
+
+function validateReplacementIntents(adb, serial) {
+  const resolutions = {};
+  for (const { label, args } of REPLACEMENT_INTENT_RESOLUTIONS) {
+    const resolved = shell(
+      adb,
+      serial,
+      `cmd package resolve-activity --brief ${args}`,
+    );
+    if (!resolved.includes(PACKAGE_NAME)) {
+      throw new Error(
+        `Intent "${label}" did not resolve to ${PACKAGE_NAME}; got:\n${resolved}`,
+      );
+    }
+    resolutions[label] = resolved;
+  }
+  return resolutions;
+}
+
 function validateRoles(adb, serial) {
   const roles = {};
   for (const role of REQUIRED_ROLES) {
@@ -333,6 +393,7 @@ export async function validateBootedDevice(options) {
     bootProperties: validateBootProperties(adb, serial),
     packagePath: validatePackagePath(adb, serial),
     homeResolution: validateHomeResolution(adb, serial),
+    replacementIntents: validateReplacementIntents(adb, serial),
     roles: validateRoles(adb, serial),
     appOps: validateAppOps(adb, serial),
     forbiddenPackages: validateForbiddenPackages(adb, serial),

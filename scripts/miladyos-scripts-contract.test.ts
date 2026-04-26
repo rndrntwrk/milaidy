@@ -7,6 +7,7 @@ import {
   parseArgs as parseBootAnimationArgs,
   inspectBootAnimationDir,
 } from "./miladyos/build-bootanimation.mjs";
+import { lintInitRc } from "./miladyos/lint-init-rc.mjs";
 import {
   parseArgs as parseBootValidateArgs,
   resolveAdb,
@@ -205,6 +206,31 @@ describe("MiladyOS script contracts", () => {
     expect(Object.keys(STEP_MAP).sort()).toEqual(
       ["assist", "dialer", "home", "launcher", "recents", "sms"].sort(),
     );
+  });
+
+  it("lints init.rc — accepts valid script, rejects bad triggers / commands", () => {
+    const dir = makeTempDir();
+    const ok = path.join(dir, "ok.rc");
+    fs.writeFileSync(
+      ok,
+      "on init\n    setprop ro.foo bar\non property:sys.boot_completed=1\n    setprop ro.x y\n",
+    );
+    expect(lintInitRc(ok)).toEqual([]);
+
+    const bad = path.join(dir, "bad.rc");
+    fs.writeFileSync(
+      bad,
+      "on bootp\n    setprop ro.x\n    bogus_cmd foo\n\nunknown_top\n    setprop ro.y z\n",
+    );
+    const issues = lintInitRc(bad);
+    const messages = issues.map((i) => i.message);
+    expect(messages.some((m) => /unknown init event "bootp"/.test(m))).toBe(true);
+    expect(messages.some((m) => /setprop requires <name> <value>/.test(m))).toBe(
+      true,
+    );
+    expect(
+      messages.some((m) => /unknown top-level keyword "unknown_top"/.test(m)),
+    ).toBe(true);
   });
 
   it("inspects bootanimation directories and rejects malformed input", () => {

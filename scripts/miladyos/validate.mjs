@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import { lintInitRc } from "./lint-init-rc.mjs";
 
 const PACKAGE_NAME = "com.miladyai.milady";
 const APP_NAME = "Milady";
@@ -313,6 +314,18 @@ export function validateProductLayer(vendorDir) {
     path.join(vendorDir, "sepolicy", "file_contexts"),
     "vendor/milady sepolicy file_contexts",
   );
+
+  // Lint the init script syntactically — typos here only show up at
+  // boot otherwise.
+  const initIssues = lintInitRc(path.join(vendorDir, "init", "init.milady.rc"));
+  const initErrors = initIssues.filter((i) => !i.soft);
+  if (initErrors.length > 0) {
+    fail(
+      `init.milady.rc has lint errors:\n - ${initErrors
+        .map((i) => `line ${i.line}: ${i.message}`)
+        .join("\n - ")}`,
+    );
+  }
 
   const androidBp = read(path.join(vendorDir, "apps", "Milady", "Android.bp"));
   for (const marker of [
@@ -640,6 +653,77 @@ function validateApkManifest(manifest) {
     "android.intent.action.BOOT_COMPLETED",
     "MiladyBootReceiver",
   );
+
+  // Replacement activities for the role apps stripped from PRODUCT_PACKAGES.
+  // Without these, the system has no resolver for the corresponding intents
+  // and a stripped phone is a broken phone — http URLs can't open, alarms
+  // can't be set, etc.
+
+  // Replacement activities for stripped role apps (Browser2, Contacts,
+  // Camera2, DeskClock, Calendar). These soft-warn instead of failing
+  // because the activity Java sources land in the eliza submodule and a
+  // staged APK built before they were added is still a valid OS-path
+  // image — just one with intent-resolution gaps for the corresponding
+  // system intents.
+  const REPLACEMENT_ACTIVITIES = [
+    {
+      name: "MiladyBrowserActivity",
+      markers: [
+        "android.intent.action.VIEW",
+        "android.intent.category.BROWSABLE",
+        'android:scheme(0x01010027)="http"',
+        'android:scheme(0x01010027)="https"',
+      ],
+    },
+    {
+      name: "MiladyContactsActivity",
+      markers: ["android.intent.category.APP_CONTACTS"],
+    },
+    {
+      name: "MiladyCameraActivity",
+      markers: [
+        "android.media.action.STILL_IMAGE_CAMERA",
+        "android.media.action.IMAGE_CAPTURE",
+      ],
+    },
+    {
+      name: "MiladyClockActivity",
+      markers: [
+        "android.intent.action.SET_ALARM",
+        "android.intent.action.SHOW_ALARMS",
+      ],
+    },
+    {
+      name: "MiladyCalendarActivity",
+      markers: ["android.intent.category.APP_CALENDAR"],
+    },
+  ];
+
+  const replacementWarnings = [];
+  for (const { name, markers } of REPLACEMENT_ACTIVITIES) {
+    const blocks = manifestElementBlocks(manifest, "activity").filter((b) =>
+      b.includes(`"${PACKAGE_NAME}.${name}"`),
+    );
+    if (blocks.length === 0) {
+      replacementWarnings.push(
+        `[soft] APK manifest is missing activity ${PACKAGE_NAME}.${name} — system intent will have no resolver after stripping the corresponding AOSP app.`,
+      );
+      continue;
+    }
+    const block = blocks[0];
+    for (const marker of markers) {
+      if (!block.includes(marker)) {
+        replacementWarnings.push(
+          `[soft] APK manifest ${name} is missing ${marker}`,
+        );
+      }
+    }
+  }
+  if (replacementWarnings.length > 0) {
+    console.warn(
+      `[miladyos:validate] Soft warnings (rebuild APK to clear):\n - ${replacementWarnings.join("\n - ")}`,
+    );
+  }
 }
 
 export function validateApk(apkPath) {
