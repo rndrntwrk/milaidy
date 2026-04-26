@@ -15,12 +15,18 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const PINNED_VERSION = "2.0.0-alpha.8";
-const PATCH_REL_PATH = "patches/elizacloud/0001-json-output-enforcement-and-fence-strip.patch";
+const PATCH_REL_PATH =
+  "patches/elizacloud/0001-json-output-enforcement-and-fence-strip.patch";
 
 const scriptPath = fileURLToPath(import.meta.url);
 const repoRoot = path.resolve(path.dirname(scriptPath), "..");
 const patchPath = path.join(repoRoot, PATCH_REL_PATH);
-const pluginLink = path.join(repoRoot, "node_modules", "@elizaos", "plugin-elizacloud");
+const pluginLink = path.join(
+  repoRoot,
+  "node_modules",
+  "@elizaos",
+  "plugin-elizacloud",
+);
 
 function log(msg) {
   console.log(`[patch-elizacloud] ${msg}`);
@@ -37,7 +43,9 @@ function main() {
   }
 
   if (!fs.existsSync(pluginLink)) {
-    log("@elizaos/plugin-elizacloud not installed — skipping (will retry on next install)");
+    log(
+      "@elizaos/plugin-elizacloud not installed — skipping (will retry on next install)",
+    );
     return;
   }
 
@@ -53,20 +61,24 @@ function main() {
   if (pkg.version !== PINNED_VERSION) {
     fail(
       `version mismatch — patch was authored against @elizaos/plugin-elizacloud@${PINNED_VERSION}, ` +
-      `but installed version is ${pkg.version}. Regenerate the patch against the new version, ` +
-      `or update PINNED_VERSION in this script if the patch still applies cleanly.`,
+        `but installed version is ${pkg.version}. Regenerate the patch against the new version, ` +
+        `or update PINNED_VERSION in this script if the patch still applies cleanly.`,
     );
   }
 
   // Reverse-check first: if patches are already applied, exit cleanly.
-  const reverseCheck = spawnSync("git", [
-    "apply",
-    "--reverse",
-    "--check",
-    "--unsafe-paths",
-    `--directory=${pluginRoot}`,
-    patchPath,
-  ], { encoding: "utf8" });
+  const reverseCheck = spawnSync(
+    "git",
+    [
+      "apply",
+      "--reverse",
+      "--check",
+      "--unsafe-paths",
+      `--directory=${pluginRoot}`,
+      patchPath,
+    ],
+    { encoding: "utf8" },
+  );
 
   if (reverseCheck.status === 0) {
     log("patches already applied");
@@ -74,25 +86,28 @@ function main() {
   }
 
   // Forward-check
-  const forwardCheck = spawnSync("git", [
-    "apply",
-    "--check",
-    "--unsafe-paths",
-    `--directory=${pluginRoot}`,
-    patchPath,
-  ], { encoding: "utf8" });
+  const forwardCheck = spawnSync(
+    "git",
+    [
+      "apply",
+      "--check",
+      "--unsafe-paths",
+      `--directory=${pluginRoot}`,
+      patchPath,
+    ],
+    { encoding: "utf8" },
+  );
 
   if (forwardCheck.status !== 0) {
     fail(`patch no longer applies cleanly:\n${forwardCheck.stderr.trim()}`);
   }
 
   // Apply
-  const apply = spawnSync("git", [
-    "apply",
-    "--unsafe-paths",
-    `--directory=${pluginRoot}`,
-    patchPath,
-  ], { encoding: "utf8" });
+  const apply = spawnSync(
+    "git",
+    ["apply", "--unsafe-paths", `--directory=${pluginRoot}`, patchPath],
+    { encoding: "utf8" },
+  );
 
   if (apply.status !== 0) {
     fail(`apply failed:\n${apply.stderr.trim()}`);
