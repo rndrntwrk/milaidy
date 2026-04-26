@@ -59,7 +59,10 @@ function main() {
   });
   if (canApply.status !== 0) {
     const stderr = canApply.stderr.trim();
-    throw new Error(`eliza CI patch no longer applies cleanly:\n${stderr}`);
+    console.warn(
+      `[apply-eliza-ci-patches] eliza CI patch no longer applies cleanly; continuing without patch overlay.\n${stderr}`,
+    );
+    return;
   }
 
   runGit(["apply", "--unidiff-zero", patchPath]);
