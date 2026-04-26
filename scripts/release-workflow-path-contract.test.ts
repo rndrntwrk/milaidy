@@ -966,18 +966,29 @@ describe("release workflow path contract", () => {
       path.join(repoRoot, "patches", "eliza", "ci-release-contracts.patch"),
       "utf8",
     );
+    const bundledWorkspacesScript = readElizaScript(
+      path.join("packages", "app-core", "scripts", "ensure-bundled-workspaces.mjs"),
+    );
+    const buildAgentSkillsArtifactScript = readElizaScript(
+      path.join(
+        "packages",
+        "app-core",
+        "scripts",
+        "build-bundled-agent-skills-artifact.mjs",
+      ),
+    );
 
     expect(patch).toContain("diff --git a/packages/agent/package.json");
     expect(patch).toContain(
       '+    "@elizaos/plugin-agent-skills": "workspace:*",',
     );
-    expect(patch).toContain(
-      'args: ["../../../packages/app-core/scripts/build-bundled-agent-skills-artifact.mjs"]',
+    expect(bundledWorkspacesScript).toContain(
+      "../../../packages/app-core/scripts/build-bundled-agent-skills-artifact.mjs",
     );
-    expect(patch).toContain(
+    expect(buildAgentSkillsArtifactScript).toContain(
       'import { resolveRepoRootFromImportMeta } from "./lib/repo-root.mjs";',
     );
-    expect(patch).toContain(
+    expect(buildAgentSkillsArtifactScript).toContain(
       "const repoRoot = resolveRepoRootFromImportMeta(import.meta.url);",
     );
   });
@@ -1216,9 +1227,19 @@ describe("release workflow path contract", () => {
       ),
       "utf8",
     );
+    const appearanceSettingsSection = readElizaScript(
+      path.join(
+        "packages",
+        "app-core",
+        "src",
+        "components",
+        "settings",
+        "AppearanceSettingsSection.tsx",
+      ),
+    );
 
     expect(applyPatchScript).toContain('"--unidiff-zero"');
-    expect(patch).toContain("settings-companion-vrm-power");
+    expect(appearanceSettingsSection).toContain("settings-companion-vrm-power");
     expect(patch).not.toContain("CapabilitiesSection.tsx");
     expect(capabilitiesSection).toContain(
       "settings.sections.capabilities.computerUseHint",
