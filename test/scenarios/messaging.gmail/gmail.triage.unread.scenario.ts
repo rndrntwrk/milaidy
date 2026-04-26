@@ -1,5 +1,8 @@
 import { scenario } from "@elizaos/scenario-schema";
-import { expectTurnToCallAction } from "../_helpers/action-assertions.ts";
+import {
+  expectTurnToCallAction,
+  judgeRubric,
+} from "../_helpers/action-assertions.ts";
 
 export default scenario({
   id: "gmail.triage.unread",
@@ -37,6 +40,11 @@ export default scenario({
         description: "gmail unread triage",
         includesAny: ["triage", "unread"],
       }),
+      responseJudge: {
+        minimumScore: 0.7,
+        rubric:
+          "The assistant must summarize unread Gmail and distinguish messages that need the owner's attention from lower-value inbox items. It must not claim it modified or sent anything.",
+      },
     },
   ],
   finalChecks: [
@@ -54,6 +62,12 @@ export default scenario({
     {
       type: "gmailNoRealWrite",
     },
+    judgeRubric({
+      name: "gmail-unread-triage-rubric",
+      threshold: 0.7,
+      description:
+        "End-to-end: the assistant used Gmail triage to summarize unread mail without modifying or sending Gmail messages.",
+    }),
   ],
   cleanup: [
     {
