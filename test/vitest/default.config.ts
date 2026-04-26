@@ -239,6 +239,18 @@ export default defineConfig({
         ),
       },
       {
+        find: "@elizaos/plugin-sql/schema",
+        replacement: path.join(
+          repoRoot,
+          "eliza",
+          "plugins",
+          "plugin-sql",
+          "typescript",
+          "schema",
+          "index.ts",
+        ),
+      },
+      {
         find: "@elizaos/plugin-telegram",
         replacement: path.join(
           repoRoot,
