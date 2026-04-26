@@ -266,5 +266,6 @@ scripts/bin/yt-dlp_*
 scripts/codex-sniff.ts
 .tmp-live/
 signal-auth/
+whatsapp-auth/
 test-results/
 artifacts/
