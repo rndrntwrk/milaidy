@@ -1542,7 +1542,9 @@
       "dependencies": {
         "@ai-sdk/openai": "^3.0.9",
         "@elizaos/core": "workspace:*",
+        "@elizaos/shared": "workspace:*",
         "ai": "^6.0.30",
+        "jose": "^6.2.2",
         "js-tiktoken": "^1.0.21",
         "undici": "^7.16.0",
       },
