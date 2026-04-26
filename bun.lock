@@ -494,16 +494,6 @@
         "lucide-react": "^1.0.0",
       },
     },
-    "eliza/cloud/packages/sdk": {
-      "name": "@elizaos/cloud-sdk",
-      "version": "0.1.0",
-      "devDependencies": {
-        "@types/bun": "^1.3.5",
-        "@types/node": "^22.19.2",
-        "typescript": "^6.0.0",
-        "vitest": "^4.1.4",
-      },
-    },
     "eliza/cloud/packages/services/billing": {
       "name": "@elizaos/billing",
       "version": "1.0.0",
@@ -548,7 +538,7 @@
     },
     "eliza/packages/agent": {
       "name": "@elizaos/agent",
-      "version": "2.0.0-alpha.367",
+      "version": "2.0.0-alpha.373",
       "bin": {
         "eliza-autonomous": "./src/bin.ts",
       },
@@ -621,7 +611,7 @@
     },
     "eliza/packages/app-core": {
       "name": "@elizaos/app-core",
-      "version": "2.0.0-alpha.367",
+      "version": "2.0.0-alpha.373",
       "dependencies": {
         "@capacitor/barcode-scanner": "^3.0.0",
         "@capacitor/core": "8.3.1",
@@ -731,7 +721,7 @@
     },
     "eliza/packages/elizaos": {
       "name": "elizaos",
-      "version": "2.0.0-alpha.367",
+      "version": "2.0.0-alpha.373",
       "bin": {
         "elizaos": "./dist/cli.js",
       },
@@ -748,7 +738,7 @@
     },
     "eliza/packages/interop": {
       "name": "@elizaos/interop",
-      "version": "2.0.0-alpha.367",
+      "version": "2.0.0-alpha.373",
       "dependencies": {
         "@elizaos/core": "workspace:*",
       },
@@ -1078,11 +1068,11 @@
     },
     "eliza/packages/rust": {
       "name": "@elizaos/rust",
-      "version": "2.0.0-alpha.367",
+      "version": "2.0.0-alpha.373",
     },
     "eliza/packages/scenario-runner": {
       "name": "@elizaos/scenario-runner",
-      "version": "2.0.0-alpha.367",
+      "version": "2.0.0-alpha.373",
       "bin": {
         "milady-scenarios": "./bin/milady-scenarios",
       },
@@ -1098,18 +1088,18 @@
     },
     "eliza/packages/scenario-schema": {
       "name": "@elizaos/scenario-schema",
-      "version": "2.0.0-alpha.367",
+      "version": "2.0.0-alpha.373",
     },
     "eliza/packages/schemas": {
       "name": "@elizaos/schemas",
-      "version": "2.0.0-alpha.367",
+      "version": "2.0.0-alpha.373",
       "devDependencies": {
         "@bufbuild/buf": "^1.47.2",
       },
     },
     "eliza/packages/shared": {
       "name": "@elizaos/shared",
-      "version": "2.0.0-alpha.367",
+      "version": "2.0.0-alpha.373",
       "dependencies": {
         "@elizaos/core": "workspace:*",
         "zod": "^4.3.6",
@@ -1125,7 +1115,7 @@
     },
     "eliza/packages/skills": {
       "name": "@elizaos/skills",
-      "version": "2.0.0-alpha.367",
+      "version": "2.0.0-alpha.373",
       "dependencies": {
         "@elizaos/core": "workspace:*",
         "yaml": "^2.8.2",
@@ -1136,7 +1126,7 @@
     },
     "eliza/packages/typescript": {
       "name": "@elizaos/core",
-      "version": "2.0.0-alpha.367",
+      "version": "2.0.0-alpha.373",
       "dependencies": {
         "@ai-sdk/anthropic": "^3.0.13",
         "@ai-sdk/google": "^3.0.8",
@@ -1192,7 +1182,7 @@
     },
     "eliza/packages/ui": {
       "name": "@elizaos/ui",
-      "version": "2.0.0-alpha.367",
+      "version": "2.0.0-alpha.373",
       "dependencies": {
         "@radix-ui/react-checkbox": "^1.3.3",
         "@radix-ui/react-dialog": "^1.1.15",
@@ -1234,7 +1224,7 @@
       },
       "devDependencies": {
         "@electric-sql/pglite": "^0.3.9",
-        "@elizaos/core": "alpha",
+        "@elizaos/core": "workspace:*",
         "@types/node": "^25.2.3",
         "bun-types": "latest",
         "git-workspace-service": "0.4.5",
@@ -1242,7 +1232,7 @@
         "typescript": "^6.0.0",
       },
       "peerDependencies": {
-        "@elizaos/core": "alpha",
+        "@elizaos/core": "workspace:*",
         "git-workspace-service": "0.4.5",
         "pty-manager": "1.11.0",
       },
@@ -1397,7 +1387,7 @@
       "name": "@elizaos/plugin-commands-root",
       "version": "1.0.0",
       "dependencies": {
-        "@elizaos/core": "alpha",
+        "@elizaos/core": "workspace:*",
       },
       "devDependencies": {
         "@biomejs/biome": "^2.3.11",
@@ -1409,7 +1399,7 @@
       "name": "@elizaos/plugin-commands",
       "version": "2.0.0-alpha.9",
       "dependencies": {
-        "@elizaos/core": "alpha",
+        "@elizaos/core": "workspace:*",
       },
       "devDependencies": {
         "@biomejs/biome": "^2.3.11",
@@ -1473,7 +1463,7 @@
         "@discordjs/opus": "^0.10.0",
         "@discordjs/rest": "2.4.3",
         "@discordjs/voice": "0.18.0",
-        "@elizaos/core": "alpha",
+        "@elizaos/core": "workspace:*",
         "discord-api-types": "^0.37.119",
         "discord.js": "14.18.0",
         "fast-levenshtein": "^3.0.0",
@@ -1500,7 +1490,7 @@
         "@discordjs/opus": "^0.10.0",
         "@discordjs/rest": "2.4.3",
         "@discordjs/voice": "0.18.0",
-        "@elizaos/core": "alpha",
+        "@elizaos/core": "workspace:*",
         "discord-api-types": "^0.37.119",
         "discord.js": "14.18.0",
         "fast-levenshtein": "^3.0.0",
@@ -1519,7 +1509,7 @@
         "vitest": "^4.1.4",
       },
       "peerDependencies": {
-        "@elizaos/core": "alpha",
+        "@elizaos/core": "workspace:*",
         "whatwg-url": "7.1.0",
       },
     },
@@ -1527,7 +1517,7 @@
       "name": "@elizaos/plugin-edge-tts-root",
       "version": "2.0.0-alpha.7",
       "dependencies": {
-        "@elizaos/core": "alpha",
+        "@elizaos/core": "workspace:*",
         "node-edge-tts": "^1.0.7",
       },
       "devDependencies": {
@@ -1540,7 +1530,7 @@
       "name": "@elizaos/plugin-edge-tts",
       "version": "2.0.0-alpha.12",
       "dependencies": {
-        "@elizaos/core": "alpha",
+        "@elizaos/core": "workspace:*",
         "node-edge-tts": "^1.0.7",
       },
       "devDependencies": {
@@ -1561,7 +1551,7 @@
         "vitest": "^4.1.4",
       },
       "peerDependencies": {
-        "@elizaos/core": "alpha",
+        "@elizaos/core": "workspace:*",
       },
     },
     "eliza/plugins/plugin-elizacloud/typescript": {
@@ -1569,7 +1559,7 @@
       "version": "2.0.0-alpha.8",
       "dependencies": {
         "@ai-sdk/openai": "^3.0.9",
-        "@elizaos/core": "alpha",
+        "@elizaos/core": "workspace:*",
         "ai": "^6.0.30",
         "js-tiktoken": "^1.0.21",
         "undici": "^7.16.0",
@@ -1589,7 +1579,7 @@
       "name": "@elizaos/plugin-evm-root",
       "version": "2.0.0-alpha.1",
       "dependencies": {
-        "@elizaos/core": "alpha",
+        "@elizaos/core": "workspace:*",
         "@lifi/data-types": "5.15.5",
         "@lifi/sdk": "^3.7.9",
         "@lifi/types": "^17.18.0",
@@ -1611,7 +1601,7 @@
       "name": "@elizaos/plugin-evm",
       "version": "2.0.0-alpha.8",
       "dependencies": {
-        "@elizaos/core": "alpha",
+        "@elizaos/core": "workspace:*",
         "@lifi/data-types": "5.15.5",
         "@lifi/sdk": "^3.7.9",
         "@lifi/types": "^17.18.0",
@@ -1729,14 +1719,14 @@
         "@biomejs/biome": "^2.3.11",
       },
       "peerDependencies": {
-        "@elizaos/core": "alpha",
+        "@elizaos/core": "workspace:*",
       },
     },
     "eliza/plugins/plugin-imessage/typescript": {
       "name": "@elizaos/plugin-imessage",
       "version": "2.0.0-alpha.9",
       "dependencies": {
-        "@elizaos/core": "alpha",
+        "@elizaos/core": "workspace:*",
         "zod": "^4.3.6",
       },
       "devDependencies": {
@@ -1750,7 +1740,7 @@
       "name": "@elizaos/plugin-local-ai-root",
       "version": "2.0.0-alpha.1",
       "dependencies": {
-        "@elizaos/core": "alpha",
+        "@elizaos/core": "workspace:*",
         "@huggingface/transformers": "^3.5.1",
         "node-llama-cpp": "3.10.0",
         "stream-browserify": "^3.0.0",
@@ -1770,7 +1760,7 @@
       "name": "@elizaos/plugin-local-ai",
       "version": "2.0.0-alpha.7",
       "dependencies": {
-        "@elizaos/core": "alpha",
+        "@elizaos/core": "workspace:*",
         "@huggingface/transformers": "^3.5.1",
         "node-llama-cpp": "3.18.1",
         "stream-browserify": "^3.0.0",
@@ -1785,7 +1775,7 @@
         "typescript": "^6.0.0",
       },
       "peerDependencies": {
-        "@elizaos/core": "alpha",
+        "@elizaos/core": "workspace:*",
       },
     },
     "eliza/plugins/plugin-local-embedding": {
@@ -1801,7 +1791,7 @@
       "name": "@elizaos/plugin-local-embedding",
       "version": "2.0.0-alpha.12",
       "dependencies": {
-        "@elizaos/core": "alpha",
+        "@elizaos/core": "workspace:*",
         "@huggingface/transformers": "^3.5.1",
         "node-llama-cpp": "^3.15.1",
         "nodejs-whisper": "0.2.9",
@@ -1872,7 +1862,7 @@
         "typescript": "^6.0.0",
       },
       "peerDependencies": {
-        "@elizaos/core": "alpha",
+        "@elizaos/core": "workspace:*",
       },
     },
     "eliza/plugins/plugin-ollama/typescript": {
@@ -1886,14 +1876,14 @@
       },
       "devDependencies": {
         "@biomejs/biome": "2.4.2",
-        "@elizaos/core": "alpha",
+        "@elizaos/core": "workspace:*",
         "@types/node": "^25.0.3",
         "bun-types": "^1.3.12",
         "typescript": "^6.0.0",
         "vitest": "^4.0.0",
       },
       "peerDependencies": {
-        "@elizaos/core": "alpha",
+        "@elizaos/core": "workspace:*",
       },
     },
     "eliza/plugins/plugin-openai": {
@@ -1979,14 +1969,14 @@
         "typescript": "^6.0.0",
       },
       "peerDependencies": {
-        "@elizaos/core": "alpha",
+        "@elizaos/core": "workspace:*",
       },
     },
     "eliza/plugins/plugin-pdf/typescript": {
       "name": "@elizaos/plugin-pdf",
       "version": "2.0.0-alpha.18",
       "dependencies": {
-        "@elizaos/core": "alpha",
+        "@elizaos/core": "workspace:*",
         "unpdf": "^1.4.0",
       },
       "devDependencies": {
@@ -2007,14 +1997,14 @@
         "typescript": "^6.0.0",
       },
       "peerDependencies": {
-        "@elizaos/core": "alpha",
+        "@elizaos/core": "workspace:*",
       },
     },
     "eliza/plugins/plugin-shell/typescript": {
       "name": "@elizaos/plugin-shell",
       "version": "2.0.0-alpha.10",
       "dependencies": {
-        "@elizaos/core": "alpha",
+        "@elizaos/core": "workspace:*",
         "cross-spawn": "^7.0.6",
         "zod": "^4.3.6",
       },
@@ -2109,7 +2099,7 @@
         "vitest": "^3.2.4",
       },
       "peerDependencies": {
-        "@elizaos/core": "alpha",
+        "@elizaos/core": "workspace:*",
       },
     },
     "eliza/plugins/plugin-sql/typescript": {
@@ -2117,8 +2107,8 @@
       "version": "2.0.0-alpha.19",
       "dependencies": {
         "@electric-sql/pglite": "^0.3.3",
-        "@elizaos/core": "alpha",
-        "@neondatabase/serverless": "^1.0.2",
+        "@elizaos/core": "workspace:*",
+        "@neondatabase/serverless": "^1.1.0",
         "dotenv": "^17.2.3",
         "drizzle-kit": "^0.31.8",
         "drizzle-orm": "^0.45.1",
@@ -2570,8 +2560,6 @@
     "@elizaos/capacitor-talkmode": ["@elizaos/capacitor-talkmode@workspace:eliza/packages/native-plugins/talkmode"],
 
     "@elizaos/capacitor-websiteblocker": ["@elizaos/capacitor-websiteblocker@workspace:eliza/packages/native-plugins/websiteblocker"],
-
-    "@elizaos/cloud-sdk": ["@elizaos/cloud-sdk@workspace:eliza/cloud/packages/sdk"],
 
     "@elizaos/config": ["@elizaos/config@1.7.3-alpha.4", "", {}, "sha512-7qMeJYxZ0Y7u4OihmnpUPGdYJHDV09iaEE/Wm8XVVhLcyI73fcYiINy27bEC0m90hGsunaE2gcYrrhS4Xy+e3w=="],
 
@@ -6339,8 +6327,6 @@
 
     "@elizaos/capacitor-websiteblocker/rimraf": ["rimraf@6.1.3", "", { "dependencies": { "glob": "^13.0.3", "package-json-from-dist": "^1.0.1" }, "bin": { "rimraf": "dist/esm/bin.mjs" } }, "sha512-LKg+Cr2ZF61fkcaK1UdkH2yEBBKnYjTyWzTJT6KNPcSPaiT7HSdhtMXQuN5wkTX0Xu72KQ1l8S42rlmexS2hSA=="],
 
-    "@elizaos/cloud-sdk/@types/node": ["@types/node@22.19.2", "", { "dependencies": { "undici-types": "~6.21.0" } }, "sha512-LPM2G3Syo1GLzXLGJAKdqoU35XvrWzGJ21/7sgZTUpbkBaOasTj8tjwn6w+hCkqaa1TfJ/w67rJSwYItlJ2mYw=="],
-
     "@elizaos/gateway-discord/@types/node": ["@types/node@22.19.2", "", { "dependencies": { "undici-types": "~6.21.0" } }, "sha512-LPM2G3Syo1GLzXLGJAKdqoU35XvrWzGJ21/7sgZTUpbkBaOasTj8tjwn6w+hCkqaa1TfJ/w67rJSwYItlJ2mYw=="],
 
     "@elizaos/gateway-webhook/@types/node": ["@types/node@22.19.2", "", { "dependencies": { "undici-types": "~6.21.0" } }, "sha512-LPM2G3Syo1GLzXLGJAKdqoU35XvrWzGJ21/7sgZTUpbkBaOasTj8tjwn6w+hCkqaa1TfJ/w67rJSwYItlJ2mYw=="],
@@ -7096,8 +7082,6 @@
     "@elizaos/billing/vitest/tinyexec": ["tinyexec@0.3.2", "", {}, "sha512-KQQR9yN7R5+OSwaK0XQoj22pwHoTlgYqmUscPYoknOoWCWfj/5/ABTMRi69FrKU5ffPVh5QcFikpWJI/P1ocHA=="],
 
     "@elizaos/billing/vitest/tinyrainbow": ["tinyrainbow@2.0.0", "", {}, "sha512-op4nsTR47R6p0vMUUoYl/a+ljLFVtlfaXkLQmqfLR1qHma1h/ysYk4hEXZ880bf2CYgTskvTa/e196Vd5dDQXw=="],
-
-    "@elizaos/cloud-sdk/@types/node/undici-types": ["undici-types@6.21.0", "", {}, "sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ=="],
 
     "@elizaos/gateway-discord/@types/node/undici-types": ["undici-types@6.21.0", "", {}, "sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ=="],
 

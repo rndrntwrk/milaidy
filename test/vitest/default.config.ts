@@ -210,6 +210,26 @@ export default defineConfig({
         ),
       },
       {
+        // `@elizaos/plugin-sql/schema` etc. resolve to TS source via the
+        // package's `exports` field. Vitest's Node-style resolver inside
+        // this config doesn't honour those, so map sub-paths explicitly to
+        // the actual source dir. Without this, anything that transitively
+        // imports `@elizaos/plugin-sql/schema` (auth-store, etc.) fails to
+        // load with "Cannot find package".
+        find: /^@elizaos\/plugin-sql$/,
+        replacement: path.join(
+          repoRoot,
+          "eliza/plugins/plugin-sql/typescript/index.node.ts",
+        ),
+      },
+      {
+        find: /^@elizaos\/plugin-sql\/(.+)$/,
+        replacement: path.join(
+          repoRoot,
+          "eliza/plugins/plugin-sql/typescript/$1",
+        ),
+      },
+      {
         // App-core tests mock this plugin, but Vitest still has to resolve the specifier.
         find: "@elizaos/capacitor-agent",
         replacement: appCoreModuleFallbackPath,
