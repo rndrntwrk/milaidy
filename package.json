@@ -296,6 +296,7 @@
     "@elizaos/plugin-google-genai": "workspace:*",
     "@elizaos/plugin-bluebubbles": "workspace:*",
     "@elizaos/plugin-local-embedding": "workspace:*",
+    "@elizaos/plugin-n8n-workflow": "^1.2.11",
     "@elizaos/plugin-ollama": "workspace:*",
     "@elizaos/plugin-discord": "workspace:*",
     "@elizaos/plugin-openai": "workspace:*",

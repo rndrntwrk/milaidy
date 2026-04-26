@@ -26,6 +26,7 @@
         "@elizaos/plugin-evm": "workspace:*",
         "@elizaos/plugin-google-genai": "workspace:*",
         "@elizaos/plugin-local-embedding": "workspace:*",
+        "@elizaos/plugin-n8n-workflow": "^1.2.11",
         "@elizaos/plugin-ollama": "workspace:*",
         "@elizaos/plugin-openai": "workspace:*",
         "@elizaos/plugin-openrouter": "2.0.0-alpha.13",
@@ -551,7 +552,7 @@
     },
     "eliza/packages/agent": {
       "name": "@elizaos/agent",
-      "version": "2.0.0-alpha.399",
+      "version": "2.0.0-alpha.403",
       "bin": {
         "eliza-autonomous": "./src/bin.ts",
       },
@@ -624,7 +625,7 @@
     },
     "eliza/packages/app-core": {
       "name": "@elizaos/app-core",
-      "version": "2.0.0-alpha.399",
+      "version": "2.0.0-alpha.403",
       "dependencies": {
         "@capacitor/barcode-scanner": "^3.0.0",
         "@capacitor/core": "8.3.1",
@@ -735,7 +736,7 @@
     },
     "eliza/packages/elizaos": {
       "name": "elizaos",
-      "version": "2.0.0-alpha.399",
+      "version": "2.0.0-alpha.403",
       "bin": {
         "elizaos": "./dist/cli.js",
       },
@@ -752,7 +753,7 @@
     },
     "eliza/packages/interop": {
       "name": "@elizaos/interop",
-      "version": "2.0.0-alpha.399",
+      "version": "2.0.0-alpha.403",
       "dependencies": {
         "@elizaos/core": "workspace:*",
       },
@@ -1082,11 +1083,11 @@
     },
     "eliza/packages/rust": {
       "name": "@elizaos/rust",
-      "version": "2.0.0-alpha.399",
+      "version": "2.0.0-alpha.403",
     },
     "eliza/packages/scenario-runner": {
       "name": "@elizaos/scenario-runner",
-      "version": "2.0.0-alpha.399",
+      "version": "2.0.0-alpha.403",
       "bin": {
         "milady-scenarios": "./bin/milady-scenarios",
       },
@@ -1102,18 +1103,18 @@
     },
     "eliza/packages/scenario-schema": {
       "name": "@elizaos/scenario-schema",
-      "version": "2.0.0-alpha.399",
+      "version": "2.0.0-alpha.403",
     },
     "eliza/packages/schemas": {
       "name": "@elizaos/schemas",
-      "version": "2.0.0-alpha.399",
+      "version": "2.0.0-alpha.403",
       "devDependencies": {
         "@bufbuild/buf": "^1.47.2",
       },
     },
     "eliza/packages/shared": {
       "name": "@elizaos/shared",
-      "version": "2.0.0-alpha.399",
+      "version": "2.0.0-alpha.403",
       "dependencies": {
         "@elizaos/core": "workspace:*",
         "zod": "^4.3.6",
@@ -1129,7 +1130,7 @@
     },
     "eliza/packages/skills": {
       "name": "@elizaos/skills",
-      "version": "2.0.0-alpha.399",
+      "version": "2.0.0-alpha.403",
       "dependencies": {
         "@elizaos/core": "workspace:*",
         "yaml": "^2.8.2",
@@ -1140,7 +1141,7 @@
     },
     "eliza/packages/typescript": {
       "name": "@elizaos/core",
-      "version": "2.0.0-alpha.399",
+      "version": "2.0.0-alpha.403",
       "dependencies": {
         "@ai-sdk/anthropic": "^3.0.13",
         "@ai-sdk/google": "^3.0.8",
@@ -1196,7 +1197,7 @@
     },
     "eliza/packages/ui": {
       "name": "@elizaos/ui",
-      "version": "2.0.0-alpha.399",
+      "version": "2.0.0-alpha.403",
       "dependencies": {
         "@radix-ui/react-checkbox": "^1.3.3",
         "@radix-ui/react-dialog": "^1.1.15",
@@ -2705,6 +2706,8 @@
     "@elizaos/plugin-music-library": ["@elizaos/plugin-music-library@workspace:eliza/plugins/plugin-music-library"],
 
     "@elizaos/plugin-music-player": ["@elizaos/plugin-music-player@workspace:eliza/plugins/plugin-music-player"],
+
+    "@elizaos/plugin-n8n-workflow": ["@elizaos/plugin-n8n-workflow@1.2.11", "", { "dependencies": { "drizzle-orm": "^0.45.1" }, "peerDependencies": { "@elizaos/core": "1.7.2" } }, "sha512-ChurwBCNgahloj5kCeannA8OPcMcGdtiqIYSwBHHy6vYGvTfcEE9Kni0V7FgjhFcy+qR6Vzswi2ADTNRN1ognA=="],
 
     "@elizaos/plugin-ollama": ["@elizaos/plugin-ollama@workspace:eliza/plugins/plugin-ollama/typescript"],
 
