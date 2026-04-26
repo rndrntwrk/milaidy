@@ -647,7 +647,9 @@ jobs:
           test -f dist/node_modules/@elizaos/shared/src/i18n/generated/validation-keyword-data.js
           if [ "${{ matrix.platform.os }}" = "windows" ]; then
             test -f dist/node_modules/@elizaos/plugin-telegram/dist/account-auth-service.js
-            (cd dist && bun -e 'for (const specifier of ["@elizaos/agent/config/env-vars","@elizaos/agent/config/plugin-auto-enable","@elizaos/agent/config/schema","@elizaos/agent/runtime/advanced-capabilities-config","@elizaos/agent/runtime/embedding-presets","@elizaos/agent/runtime/plugin-collector","@elizaos/agent/runtime/plugin-resolver","@elizaos/agent/runtime/plugin-types"]) await import(specifier);')
+            grep -Fq 'from "@elizaos/plugin-telegram/account-auth-service";' dist/node_modules/@elizaos/app-lifeops/src/lifeops/telegram-auth.ts
+            ! grep -Fq '../../../../plugins/plugin-telegram/src/account-auth-service.ts' dist/node_modules/@elizaos/app-lifeops/src/lifeops/telegram-auth.ts
+            (cd dist && bun -e 'for (const specifier of ["@elizaos/agent/config/env-vars","@elizaos/agent/config/plugin-auto-enable","@elizaos/agent/config/schema","@elizaos/agent/runtime/advanced-capabilities-config","@elizaos/agent/runtime/embedding-presets","@elizaos/agent/runtime/plugin-collector","@elizaos/agent/runtime/plugin-resolver","@elizaos/agent/runtime/plugin-types","@elizaos/app-lifeops/lifeops/telegram-auth"]) await import(specifier);')
           fi
 
       # Import the Developer ID certificate into a temporary keychain.
@@ -1074,6 +1076,21 @@ jobs:
               Write-Host "eliza-dist plugin-telegram account auth service found"
             } else {
               Write-Error "eliza-dist plugin-telegram account auth service NOT found: $telegramAuthCheck"
+              exit 1
+            }
+            $lifeOpsTelegramAuthCheck = Join-Path $elizaDist "node_modules\@elizaos\app-lifeops\src\lifeops\telegram-auth.ts"
+            Write-Host "Checking for: $lifeOpsTelegramAuthCheck"
+            if (-not (Test-Path $lifeOpsTelegramAuthCheck)) {
+              Write-Error "eliza-dist app-lifeops telegram auth source NOT found: $lifeOpsTelegramAuthCheck"
+              exit 1
+            }
+            $lifeOpsTelegramAuthSource = Get-Content $lifeOpsTelegramAuthCheck -Raw
+            if (-not $lifeOpsTelegramAuthSource.Contains('from "@elizaos/plugin-telegram/account-auth-service";')) {
+              Write-Error "eliza-dist app-lifeops telegram auth does not import packaged plugin-telegram export"
+              exit 1
+            }
+            if ($lifeOpsTelegramAuthSource.Contains('../../../../plugins/plugin-telegram/src/account-auth-service.ts')) {
+              Write-Error "eliza-dist app-lifeops telegram auth still imports workspace-relative plugin-telegram source"
               exit 1
             }
             $agentRuntimeModules = @(

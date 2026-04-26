@@ -1899,7 +1899,7 @@ index 406fd93..7ec2c42 100644
 diff --git a/packages/app-core/scripts/copy-runtime-node-modules.ts b/packages/app-core/scripts/copy-runtime-node-modules.ts
 --- a/packages/app-core/scripts/copy-runtime-node-modules.ts
 +++ b/packages/app-core/scripts/copy-runtime-node-modules.ts
-@@ -374,0 +375,115 @@ export function stripPackagedCronCliRegistration(source: string): string {
+@@ -374,0 +375,140 @@ export function stripPackagedCronCliRegistration(source: string): string {
 +type PackageJsonManifest = {
 +  exports?: Record<string, unknown>;
 +};
@@ -2015,10 +2015,40 @@ diff --git a/packages/app-core/scripts/copy-runtime-node-modules.ts b/packages/a
 +  }
 +}
 +
-@@ -378,2 +493,7 @@ function patchCopiedPackageRuntimeSurface(
++export function rewritePackagedLifeOpsTelegramAuthImport(source: string): string {
++  return source.replace(
++    'from "../../../../plugins/plugin-telegram/src/account-auth-service.ts";',
++    'from "@elizaos/plugin-telegram/account-auth-service";',
++  );
++}
++
++function patchCopiedAppLifeOpsRuntimeImports(packageDir: string): void {
++  const telegramAuthPath = path.join(
++    packageDir,
++    "src",
++    "lifeops",
++    "telegram-auth.ts",
++  );
++  if (!fs.existsSync(telegramAuthPath)) {
++    return;
++  }
++
++  const original = fs.readFileSync(telegramAuthPath, "utf8");
++  const rewritten = rewritePackagedLifeOpsTelegramAuthImport(original);
++  if (rewritten !== original) {
++    fs.writeFileSync(telegramAuthPath, rewritten);
++  }
++}
++
+@@ -378,2 +518,12 @@ function patchCopiedPackageRuntimeSurface(
 -): void {
 -  if (name !== "@elizaos/plugin-cron") {
 +): void {
++  if (name === "@elizaos/app-lifeops") {
++    patchCopiedAppLifeOpsRuntimeImports(packageDir);
++    return;
++  }
++
 +  if (name === "@elizaos/agent") {
 +    patchCopiedAgentRuntimeExports(packageDir);
 +    return;

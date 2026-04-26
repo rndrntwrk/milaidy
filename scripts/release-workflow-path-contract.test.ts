@@ -752,6 +752,13 @@ describe("release workflow path contract", () => {
     expect(windowsTelegramOverlayBlock).toContain(
       'test -f "$installed_dir/dist/account-auth-service.js"',
     );
+    expect(patch).toContain("rewritePackagedLifeOpsTelegramAuthImport");
+    expect(patch).toContain(
+      '+  if (name === "@elizaos/app-lifeops") {\n+    patchCopiedAppLifeOpsRuntimeImports(packageDir);',
+    );
+    expect(patch).toContain(
+      'from "@elizaos/plugin-telegram/account-auth-service";',
+    );
     expect(patch).toContain(
       '+  if (name === "@elizaos/agent") {\n+    patchCopiedAgentRuntimeExports(packageDir);',
     );
@@ -771,6 +778,18 @@ describe("release workflow path contract", () => {
     );
     expect(releaseElectrobun).toContain(
       '"@elizaos/agent/runtime/plugin-types"',
+    );
+    expect(releaseElectrobun).toContain(
+      '"@elizaos/app-lifeops/lifeops/telegram-auth"',
+    );
+    expect(releaseElectrobun).toContain(
+      "dist/node_modules/@elizaos/app-lifeops/src/lifeops/telegram-auth.ts",
+    );
+    expect(releaseElectrobun).toContain(
+      'from "@elizaos/plugin-telegram/account-auth-service";',
+    );
+    expect(releaseElectrobun).toContain(
+      "../../../../plugins/plugin-telegram/src/account-auth-service.ts",
     );
     expect(releaseElectrobun).toContain(
       'Join-Path $elizaDist "node_modules\\@elizaos\\agent\\packages\\agent\\src\\$runtimeModule"',
