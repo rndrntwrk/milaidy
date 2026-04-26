@@ -1896,3 +1896,12 @@ index 406fd93..7ec2c42 100644
 @@ -30 +30 @@ export const BUNDLED_WORKSPACE_BUILDS = [
 -    args: ["../../../scripts/build-bundled-agent-skills-artifact.mjs"],
 +    args: ["../../../packages/app-core/scripts/build-bundled-agent-skills-artifact.mjs"],
+diff --git a/packages/app-core/scripts/build-bundled-agent-skills-artifact.mjs b/packages/app-core/scripts/build-bundled-agent-skills-artifact.mjs
+index c585fac..0a6543d 100644
+--- a/packages/app-core/scripts/build-bundled-agent-skills-artifact.mjs
++++ b/packages/app-core/scripts/build-bundled-agent-skills-artifact.mjs
+@@ -6,0 +7 @@ import { fileURLToPath } from "node:url";
++import { resolveRepoRootFromImportMeta } from "./lib/repo-root.mjs";
+@@ -10 +11 @@ const __dirname = path.dirname(__filename);
+-const repoRoot = path.resolve(__dirname, "..");
++const repoRoot = resolveRepoRootFromImportMeta(import.meta.url);

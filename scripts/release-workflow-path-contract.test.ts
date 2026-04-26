@@ -926,6 +926,12 @@ describe("release workflow path contract", () => {
     expect(patch).toContain(
       'args: ["../../../packages/app-core/scripts/build-bundled-agent-skills-artifact.mjs"]',
     );
+    expect(patch).toContain(
+      'import { resolveRepoRootFromImportMeta } from "./lib/repo-root.mjs";',
+    );
+    expect(patch).toContain(
+      "const repoRoot = resolveRepoRootFromImportMeta(import.meta.url);",
+    );
   });
 
   it("patches shared keyword generation to emit runtime JavaScript", () => {
