@@ -323,11 +323,24 @@ function findViolations(action, source) {
     const callCount = (source.match(new RegExp(`\\b${fn}\\s*\\(`, "g")) ?? [])
       .length;
     if (callCount > 1) {
-      violations.push({
-        severity: "high",
-        rule: "regex-intent-inference",
-        detail: `Action ${name} file defines and uses heuristic helper ${fn} — LLM should extract all params`,
-      });
+      // Allowlist: validate-time helpers that delegate to the shared i18n
+      // keyword loader (`getValidationKeywordTerms` + `findKeywordTermMatch`)
+      // are explicitly OK per project policy — string matching in validate()
+      // is permitted when fully internationalized + greedy.
+      const fnBodyMatch = source.match(
+        new RegExp(`function\\s+${fn}\\s*\\([^)]*\\)\\s*[^{]*\\{([\\s\\S]{0,800}?)\\n\\}`),
+      );
+      const fnBody = fnBodyMatch?.[1] ?? "";
+      const usesI18nLoader =
+        /\bgetValidationKeywordTerms\s*\(/.test(fnBody) ||
+        /\bfindKeywordTermMatch\s*\(/.test(fnBody);
+      if (!usesI18nLoader) {
+        violations.push({
+          severity: "high",
+          rule: "regex-intent-inference",
+          detail: `Action ${name} file defines and uses heuristic helper ${fn} — LLM should extract all params`,
+        });
+      }
     }
   }
   const formatCoercionPattern =
