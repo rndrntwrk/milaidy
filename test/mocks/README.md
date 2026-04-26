@@ -15,6 +15,10 @@ at those local URLs via env vars instead of hitting real services.
 | `environments/x-twitter.json`     | X (Twitter) v2                       | `MILADY_MOCK_X_BASE`        |
 | `environments/google.json`        | Gmail / Calendar / OAuth token       | `MILADY_MOCK_GOOGLE_BASE`   |
 | `environments/cloud-managed.json` | Eliza Cloud managed-Google endpoints | `ELIZA_CLOUD_BASE_URL`      |
+| `environments/signal.json`        | signal-cli HTTP receive/send         | `SIGNAL_HTTP_URL`           |
+| `environments/browser-workspace.json` | Desktop browser workspace bridge | `ELIZA_BROWSER_WORKSPACE_URL` |
+| `environments/bluebubbles.json`   | BlueBubbles iMessage HTTP API        | `ELIZA_BLUEBUBBLES_URL`     |
+| `environments/github.json`        | GitHub REST plus Octokit fixtures    | `MILADY_MOCK_GITHUB_BASE`   |
 
 Each LifeOps client reads its env var on import and falls back to the real URL
 when unset. These env vars are test-only: the normal `bun run dev` launcher now
@@ -66,14 +70,18 @@ Mockoon is optional for editing or manual inspection of the same JSON files.
 
 ```bash
 bunx @mockoon/cli start --data test/mocks/environments/twilio.json
-# ... or all six in parallel:
+# ... or all HTTP fixture files in parallel:
 bunx @mockoon/cli start \
   --data test/mocks/environments/twilio.json \
   --data test/mocks/environments/whatsapp.json \
   --data test/mocks/environments/calendly.json \
   --data test/mocks/environments/x-twitter.json \
   --data test/mocks/environments/google.json \
-  --data test/mocks/environments/cloud-managed.json
+  --data test/mocks/environments/cloud-managed.json \
+  --data test/mocks/environments/signal.json \
+  --data test/mocks/environments/browser-workspace.json \
+  --data test/mocks/environments/bluebubbles.json \
+  --data test/mocks/environments/github.json
 ```
 
 Then point the clients at the mocks:
@@ -84,6 +92,14 @@ export MILADY_MOCK_WHATSAPP_BASE=http://127.0.0.1:3002
 export MILADY_MOCK_CALENDLY_BASE=http://127.0.0.1:3003
 export MILADY_MOCK_X_BASE=http://127.0.0.1:3004
 export MILADY_MOCK_GOOGLE_BASE=http://127.0.0.1:3005
+export SIGNAL_HTTP_URL=http://127.0.0.1:3006
+export SIGNAL_ACCOUNT_NUMBER=+15550000000
+export ELIZA_BROWSER_WORKSPACE_URL=http://127.0.0.1:3007
+export ELIZA_BROWSER_WORKSPACE_TOKEN=mock-browser-workspace-token
+export ELIZA_IMESSAGE_BACKEND=bluebubbles
+export ELIZA_BLUEBUBBLES_URL=http://127.0.0.1:3008
+export ELIZA_BLUEBUBBLES_PASSWORD=mock-bluebubbles-password
+export MILADY_MOCK_GITHUB_BASE=http://127.0.0.1:3009
 ```
 
 ## Test usage
@@ -115,6 +131,31 @@ parameters, auth scopes, request-body validation, pagination, and rate-limit
 variants need a stateful Gmail fixture service or a richer runner layer. Keep
 real mailbox captures out of this directory unless they have gone through a
 redaction and fixture-validation pipeline.
+
+## Non-Google dynamic mock coverage
+
+The in-process runner adds stateful contract routes for these provider files:
+
+- X read/search/DM surfaces: `/2/dm_events`, home timeline, mentions, recent
+  search, tweet create, and DM send.
+- WhatsApp send plus inbound webhook ingestion at `/webhook` and
+  `/webhooks/whatsapp`; the buffered webhook messages are visible through the
+  test-only `/__mock/whatsapp/inbound` route.
+- Signal local HTTP receive/send: `/api/v1/check`, `/api/v1/rpc`,
+  `/v1/receive/:account`, and `/v2/send`.
+- Discord browser workspace bridge routes: `/tabs`, `/tabs/:id/navigate`,
+  `/tabs/:id/eval`, `/tabs/:id/show`, `/tabs/:id/hide`,
+  `/tabs/:id/snapshot`, and tab close.
+- BlueBubbles iMessage routes: server info, chat query, message query/search,
+  message send, chat messages, and message detail.
+- GitHub REST fixtures for PR list/review, issue create/assign, search, and
+  notifications. `helpers/github-octokit-fixture.ts` also exports a reusable
+  Octokit-shaped fixture for plugin unit tests.
+
+Telegram is intentionally not represented as an HTTP mock here. LifeOps uses
+MTProto through `telegram-local-client.ts` and already exposes a dependency
+injection seam (`TelegramLocalClientDeps`) for tests. Adding a fake Telegram
+HTTP gateway would not match a real consumer path.
 
 ## Add or edit mocks
 
