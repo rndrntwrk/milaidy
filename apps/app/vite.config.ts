@@ -1493,6 +1493,10 @@ export default defineConfig({
           ),
         },
       ]),
+      {
+        find: /^telegram(\/.*)?$/,
+        replacement: path.join(appCoreSrcRoot, "platform/empty-node-module.ts"),
+      },
       // Capacitor plugins — resolve to local plugin sources
       ...NATIVE_PLUGIN_ALIAS_ENTRIES,
       // Force local @elizaos/ui source paths when the app bundles linked
