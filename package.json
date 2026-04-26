@@ -83,6 +83,7 @@
     "miladyos:capture": "node scripts/miladyos/capture-screens.mjs",
     "miladyos:e2e": "node scripts/miladyos/e2e-validate.mjs",
     "miladyos:avd": "node scripts/miladyos/avd-test.mjs",
+    "miladyos:sim": "node scripts/miladyos/sim.mjs",
     "build:ios:remote-mac": "node scripts/ios-runtime-mode.mjs remote-mac",
     "build:ios:cloud": "node scripts/ios-runtime-mode.mjs cloud",
     "build:ios:cloud-hybrid": "node scripts/ios-runtime-mode.mjs cloud-hybrid",

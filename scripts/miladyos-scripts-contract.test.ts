@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { parseArgs as parseAvdTestArgs } from "./miladyos/avd-test.mjs";
+import { parseArgs as parseSimArgs } from "./miladyos/sim.mjs";
 import {
   parseArgs as parseBootValidateArgs,
   resolveAdb,
@@ -196,6 +197,41 @@ describe("MiladyOS script contracts", () => {
       apk,
       capture: outDir,
       reuse: false,
+    });
+  });
+
+  it("parses sim runner flags including --wait-for-build / --stop-after", () => {
+    expect(
+      parseSimArgs([
+        "--aosp-root",
+        "/tmp/aosp",
+        "--product",
+        "milady_pixel_phone",
+        "--variant",
+        "user",
+        "--out",
+        "/tmp/reports",
+        "--wait-for-build",
+        "--stop-after",
+        "--boot-timeout-ms",
+        "60000",
+      ]),
+    ).toMatchObject({
+      aospRoot: "/tmp/aosp",
+      product: "milady_pixel_phone",
+      variant: "user",
+      outDir: "/tmp/reports",
+      waitForBuild: true,
+      stopAfter: true,
+      bootTimeoutMs: 60_000,
+    });
+    expect(parseSimArgs([])).toMatchObject({
+      aospRoot: path.join(os.homedir(), "aosp"),
+      product: "milady_cf_x86_64_phone",
+      variant: "trunk_staging-userdebug",
+      noLaunch: false,
+      stopAfter: false,
+      waitForBuild: false,
     });
   });
 
