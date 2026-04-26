@@ -1834,6 +1834,11 @@ export default defineConfig({
             "electron",
             "node-llama-cpp",
             "pty-manager",
+            // `@stwd/sdk/auth` dynamic-imports `@simplewebauthn/browser`, but
+            // Milady's main app never loads the auth surface (it's used only by
+            // eliza/cloud). Externalize so Rollup doesn't traverse the dynamic
+            // import chain looking for the missing peer dep.
+            "@simplewebauthn/browser",
           ].includes(id)
         )
           return true;
