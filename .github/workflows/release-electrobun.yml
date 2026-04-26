@@ -647,6 +647,7 @@ jobs:
           test -f dist/node_modules/@elizaos/shared/src/i18n/generated/validation-keyword-data.js
           if [ "${{ matrix.platform.os }}" = "windows" ]; then
             test -f dist/node_modules/@elizaos/plugin-telegram/dist/account-auth-service.js
+            (cd dist && bun -e 'for (const specifier of ["@elizaos/agent/config/env-vars","@elizaos/agent/config/plugin-auto-enable","@elizaos/agent/config/schema","@elizaos/agent/runtime/advanced-capabilities-config","@elizaos/agent/runtime/embedding-presets","@elizaos/agent/runtime/plugin-collector","@elizaos/agent/runtime/plugin-resolver","@elizaos/agent/runtime/plugin-types"]) await import(specifier);')
           fi
 
       # Import the Developer ID certificate into a temporary keychain.
@@ -1074,6 +1075,47 @@ jobs:
             } else {
               Write-Error "eliza-dist plugin-telegram account auth service NOT found: $telegramAuthCheck"
               exit 1
+            }
+            $agentRuntimeModules = @(
+              "config\env-vars.js",
+              "config\plugin-auto-enable.js",
+              "config\schema.js",
+              "runtime\advanced-capabilities-config.js",
+              "runtime\embedding-presets.js",
+              "runtime\plugin-collector.js",
+              "runtime\plugin-resolver.js",
+              "runtime\plugin-types.js"
+            )
+            foreach ($runtimeModule in $agentRuntimeModules) {
+              $agentRuntimeCheck = Join-Path $elizaDist "node_modules\@elizaos\agent\packages\agent\src\$runtimeModule"
+              Write-Host "Checking for: $agentRuntimeCheck"
+              if (Test-Path $agentRuntimeCheck) {
+                Write-Host "eliza-dist @elizaos/agent runtime module found: $runtimeModule"
+              } else {
+                Write-Error "eliza-dist @elizaos/agent runtime module NOT found: $agentRuntimeCheck"
+                exit 1
+              }
+            }
+            $agentManifestPath = Join-Path $elizaDist "node_modules\@elizaos\agent\package.json"
+            $agentManifest = Get-Content $agentManifestPath -Raw | ConvertFrom-Json
+            $agentExportNames = @($agentManifest.exports.PSObject.Properties.Name)
+            $agentRequiredExports = @(
+              "./config/env-vars",
+              "./config/plugin-auto-enable",
+              "./config/schema",
+              "./runtime/advanced-capabilities-config",
+              "./runtime/embedding-presets",
+              "./runtime/plugin-collector",
+              "./runtime/plugin-resolver",
+              "./runtime/plugin-types"
+            )
+            foreach ($runtimeExport in $agentRequiredExports) {
+              if ($agentExportNames -contains $runtimeExport) {
+                Write-Host "eliza-dist @elizaos/agent package export found: $runtimeExport"
+              } else {
+                Write-Error "eliza-dist @elizaos/agent package export NOT found: $runtimeExport"
+                exit 1
+              }
             }
           }
 
