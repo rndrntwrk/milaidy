@@ -172,7 +172,7 @@ function ensureDebugSignedApk(originalApk) {
   fs.mkdirSync(signedDir, { recursive: true });
   const signedApk = path.join(
     signedDir,
-    path.basename(originalApk, ".apk") + "-debug-signed.apk",
+    `${path.basename(originalApk, ".apk")}-debug-signed.apk`,
   );
   fs.copyFileSync(originalApk, signedApk);
   const result = spawnSync(
@@ -228,9 +228,7 @@ function listRunningEmulators(adb) {
 
 function emulatorAvdName(adb, serial) {
   try {
-    return adbRun(adb, serial, ["emu", "avd", "name"])
-      .split(/\r?\n/)[0]
-      .trim();
+    return adbRun(adb, serial, ["emu", "avd", "name"]).split(/\r?\n/)[0].trim();
   } catch {
     return null;
   }
