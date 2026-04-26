@@ -2,11 +2,17 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { parseArgs as parseAvdTestArgs } from "./miladyos/avd-test.mjs";
 import {
   parseArgs as parseBootValidateArgs,
   resolveAdb,
 } from "./miladyos/boot-validate.mjs";
 import { parseArgs as parseBuildAospArgs } from "./miladyos/build-aosp.mjs";
+import {
+  parseArgs as parseCaptureArgs,
+  STEP_MAP,
+} from "./miladyos/capture-screens.mjs";
+import { parseArgs as parseE2eArgs } from "./miladyos/e2e-validate.mjs";
 import {
   parseArgs as parseSyncArgs,
   syncToAosp,
@@ -125,6 +131,76 @@ describe("MiladyOS script contracts", () => {
     );
     expect(() => parseBootValidateArgs(["--adb"])).toThrow(
       /--adb requires a value/,
+    );
+    expect(() => parseCaptureArgs(["--out"])).toThrow(/--out requires a value/);
+    expect(() => parseE2eArgs(["--out"])).toThrow(/--out requires a value/);
+    expect(() => parseAvdTestArgs(["--avd"])).toThrow(
+      /--avd requires a value/,
+    );
+  });
+
+  it("parses capture-screens / e2e-validate / avd-test flags without side effects", () => {
+    const outDir = path.join(makeTempDir(), "shots");
+    expect(
+      parseCaptureArgs([
+        "--out",
+        outDir,
+        "--steps",
+        "home,dialer",
+        "--label",
+        "smoke",
+        "--no-launch",
+      ]),
+    ).toMatchObject({
+      outDir,
+      steps: ["home", "dialer"],
+      label: "smoke",
+      noLaunch: true,
+    });
+
+    expect(
+      parseE2eArgs([
+        "--out",
+        outDir,
+        "--skip-boot-validate",
+        "--steps",
+        "home",
+        "--timeout-ms",
+        "500",
+      ]),
+    ).toMatchObject({
+      outDir,
+      skipBootValidate: true,
+      steps: ["home"],
+      timeoutMs: 500,
+    });
+
+    const apk = path.join(makeTempDir(), "vendor", "milady.apk");
+    fs.mkdirSync(path.dirname(apk), { recursive: true });
+    fs.writeFileSync(apk, "apk\n");
+    expect(
+      parseAvdTestArgs([
+        "--avd",
+        "Pixel6_API34",
+        "--apk",
+        apk,
+        "--capture",
+        outDir,
+        "--no-reuse",
+      ]),
+    ).toMatchObject({
+      avd: "Pixel6_API34",
+      apk,
+      capture: outDir,
+      reuse: false,
+    });
+  });
+
+  it("rejects unknown capture steps", () => {
+    expect(() => parseCaptureArgs(["--out", "/tmp", "--steps", "bogus"]))
+      .toThrow(/Unknown step "bogus"/);
+    expect(Object.keys(STEP_MAP).sort()).toEqual(
+      ["assist", "dialer", "home", "launcher", "recents", "sms"].sort(),
     );
   });
 });

@@ -92,6 +92,10 @@ USER.md
 .milady-repo-setup.lock
 .milady/desktop-dev-console.log
 .milady/gmail-fixtures/
+.milady/avd-signed/
+reports/avd-smoke/
+reports/aosp-cuttlefish/
+reports/e2e-*/
 test/mocks/fixtures/*.raw.json
 .turbo/
 skills/.cache/
