@@ -38,4 +38,16 @@ for deb in "${CUTTLE_DIR}"/cuttlefish-base_*_*64.deb; do dpkg -i "$deb" || apt-g
 for deb in "${CUTTLE_DIR}"/cuttlefish-user_*_*64.deb; do dpkg -i "$deb" || apt-get install -f -y; done
 
 usermod -aG kvm,cvdnetwork,render "${REAL_USER}"
+
+# Ubuntu 24.04 ships AppArmor with unprivileged user namespaces restricted
+# by default. AOSP's Soong uses nsjail to sandbox parts of the build
+# (Trusty TEE VM, etc.) and nsjail relies on unprivileged userns to mount
+# its sandbox root. Without this, `m` fails partway through with:
+#   FAILED: out/soong/.intermediates/trusty/.../trusty_security_vm_*.elf
+#   nsjail: initCloneNs(): mount('/', '/', NULL, MS_REC|MS_PRIVATE, NULL): Permission denied
+# Persist the unrestrict so subsequent boots don't re-break the build.
+echo "kernel.apparmor_restrict_unprivileged_userns = 0" \
+  > /etc/sysctl.d/99-miladyos-aosp.conf
+sysctl --system >/dev/null
+
 echo "Done. Reboot or log out/in so user ${REAL_USER} is in kvm,cvdnetwork,render."
