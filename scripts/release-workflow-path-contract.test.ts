@@ -672,6 +672,10 @@ describe("release workflow path contract", () => {
 
   it("keeps Windows release packaging on the last green dependency path", () => {
     const releaseElectrobun = readWorkflow("release-electrobun.yml");
+    const patch = fs.readFileSync(
+      path.join(repoRoot, "patches", "eliza", "ci-release-contracts.patch"),
+      "utf8",
+    );
     const buildJobStart = releaseElectrobun.indexOf("\n  build:\n");
     expect(buildJobStart).toBeGreaterThan(-1);
 
@@ -748,6 +752,31 @@ describe("release workflow path contract", () => {
     expect(windowsTelegramOverlayBlock).toContain(
       'test -f "$installed_dir/dist/account-auth-service.js"',
     );
+    expect(patch).toContain(
+      '+  if (name === "@elizaos/agent") {\n+    patchCopiedAgentRuntimeExports(packageDir);',
+    );
+    expect(patch).toContain(
+      '+const AGENT_DEEP_IMPORT_EXPORT_DIRS = [\n+  "config",\n+  "providers",\n+  "runtime",\n+] as const;',
+    );
+    expect(patch).toContain("collectAgentDeepImportExportEntries");
+    expect(patch).toContain("exportKey:");
+    expect(patch).toContain('sourceRelative.replace(/\\.js$/, "")');
+  });
+
+  it("proves published agent runtime deep imports before Windows release smoke", () => {
+    const releaseElectrobun = readWorkflow("release-electrobun.yml");
+
+    expect(releaseElectrobun).toContain(
+      '"@elizaos/agent/config/plugin-auto-enable"',
+    );
+    expect(releaseElectrobun).toContain(
+      '"@elizaos/agent/runtime/plugin-types"',
+    );
+    expect(releaseElectrobun).toContain(
+      'Join-Path $elizaDist "node_modules\\@elizaos\\agent\\packages\\agent\\src\\$runtimeModule"',
+    );
+    expect(releaseElectrobun).toContain('"config\\plugin-auto-enable.js"');
+    expect(releaseElectrobun).toContain('"./runtime/plugin-types"');
   });
 
   it("supports Windows-only Electrobun release dispatches", () => {
