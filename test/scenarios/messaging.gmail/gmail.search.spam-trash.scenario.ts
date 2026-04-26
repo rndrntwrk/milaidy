@@ -55,7 +55,7 @@ export default scenario({
     {
       type: "gmailMockRequest",
       method: "GET",
-      path: "/gmail/v1/users/me/messages/msg-spam",
+      path: "/gmail/v1/users/me/messages",
       minCount: 1,
     },
     {

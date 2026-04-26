@@ -54,7 +54,7 @@ export default scenario({
     {
       type: "gmailMockRequest",
       method: "POST",
-      path: "/gmail/v1/users/me/messages/msg-finance/trash",
+      path: "/gmail/v1/users/me/messages/batchModify",
       expected: false,
     },
     {

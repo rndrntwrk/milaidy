@@ -47,7 +47,7 @@ export default scenario({
       responseJudge: {
         minimumScore: 0.75,
         rubric:
-          "The assistant must archive only the previously identified newsletter. It must not archive person-to-person messages, finance mail, spam, or unrelated inbox items.",
+          "The assistant must bind the archive operation to the newsletter selected in the previous step. It must not archive person-to-person messages, finance mail, spam, or unrelated inbox items.",
       },
     },
   ],
@@ -67,9 +67,12 @@ export default scenario({
     {
       type: "gmailBatchModify",
       body: {
-        ids: "msg-newsletter",
         removeLabelIds: "INBOX",
       },
+    },
+    {
+      type: "gmailDraftCreated",
+      expected: false,
     },
     {
       type: "gmailMessageSent",

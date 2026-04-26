@@ -1,6 +1,6 @@
 # Action Audit
 
-Scanned **105** actions across **103** files.
+Scanned **105** actions across **104** files.
 **High:** 0 · **Medium:** 2 · **Low:** 16
 
 ## Violations (12)

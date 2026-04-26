@@ -79,23 +79,27 @@ function scanSources() {
     for (const file of walk(dir)) {
       const text = fs.readFileSync(file, "utf8");
 
-      let m;
       LITERAL_KEY_RE.lastIndex = 0;
-      while ((m = LITERAL_KEY_RE.exec(text))) {
+      let m = LITERAL_KEY_RE.exec(text);
+      while (m) {
         const arr = literalKeys.get(m[1]) ?? [];
         arr.push({ file, line: lineOf(text, m.index) });
         literalKeys.set(m[1], arr);
+        m = LITERAL_KEY_RE.exec(text);
       }
 
       I18N_KEY_RE.lastIndex = 0;
-      while ((m = I18N_KEY_RE.exec(text))) {
+      m = I18N_KEY_RE.exec(text);
+      while (m) {
         const arr = literalKeys.get(m[1]) ?? [];
         arr.push({ file, line: lineOf(text, m.index) });
         literalKeys.set(m[1], arr);
+        m = I18N_KEY_RE.exec(text);
       }
 
       TEMPLATE_RE.lastIndex = 0;
-      while ((m = TEMPLATE_RE.exec(text))) {
+      m = TEMPLATE_RE.exec(text);
+      while (m) {
         const tpl = m[1];
         const line = lineOf(text, m.index);
         if (!tpl.includes("${")) {
@@ -116,10 +120,12 @@ function scanSources() {
             });
           }
         }
+        m = TEMPLATE_RE.exec(text);
       }
 
       DYNAMIC_RE.lastIndex = 0;
-      while ((m = DYNAMIC_RE.exec(text))) {
+      m = DYNAMIC_RE.exec(text);
+      while (m) {
         // Skip JSX `{t(<something>)}` where the snippet is one of `{`, `(` etc.
         // The DYNAMIC_RE only matches non-quote/backtick first chars, and we
         // already covered template literals above, so anything left is a
@@ -131,6 +137,7 @@ function scanSources() {
             .slice(m.index, Math.min(text.length, m.index + 60))
             .replace(/\n.*$/s, ""),
         });
+        m = DYNAMIC_RE.exec(text);
       }
     }
   }
@@ -288,7 +295,7 @@ function main() {
 
   // 3. Surface dynamic call sites the allowlist doesn't cover (informational).
   if (dynamicSites.length > 0) {
-    const uncovered = dynamicSites.filter((s) => {
+    const uncovered = dynamicSites.filter(() => {
       // We can't know what key the dynamic call resolves to; treat the
       // allowlist as the contract. If the allowlist has any keys/prefixes,
       // we trust the developer. Otherwise, warn.
