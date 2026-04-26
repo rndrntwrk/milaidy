@@ -84,7 +84,8 @@ function extractActions(source, filePath) {
   // Many files in this codebase use that constant pattern; without resolution
   // the audit silently skips them.
   const namedConstants = new Map();
-  const constRe = /\bconst\s+([A-Z][A-Z0-9_]+)\s*=\s*["']([A-Z][A-Z0-9_]+)["']/g;
+  const constRe =
+    /\bconst\s+([A-Z][A-Z0-9_]+)\s*=\s*["']([A-Z][A-Z0-9_]+)["']/g;
   for (const m of source.matchAll(constRe)) {
     namedConstants.set(m[1], m[2]);
   }

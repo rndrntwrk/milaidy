@@ -363,7 +363,12 @@ function pruneGeneratedLegacyElectrobunEntries(targetPath, trackedPaths) {
     return;
   }
 
-  if (stat.isDirectory() && !stat.isSymbolicLink()) {
+  if (stat.isSymbolicLink()) {
+    fs.unlinkSync(absolutePath);
+    return;
+  }
+
+  if (stat.isDirectory()) {
     for (const entry of fs.readdirSync(absolutePath)) {
       pruneGeneratedLegacyElectrobunEntries(
         path.join(absolutePath, entry),

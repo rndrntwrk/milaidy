@@ -143,7 +143,9 @@ function loadLocales() {
   for (const entry of fs.readdirSync(LOCALE_DIR)) {
     if (!entry.endsWith(".json")) continue;
     const lang = entry.replace(/\.json$/, "");
-    const data = JSON.parse(fs.readFileSync(path.join(LOCALE_DIR, entry), "utf8"));
+    const data = JSON.parse(
+      fs.readFileSync(path.join(LOCALE_DIR, entry), "utf8"),
+    );
     if (data && typeof data === "object" && !Array.isArray(data)) {
       locales[lang] = data;
     }
@@ -215,13 +217,29 @@ function main() {
     }
   }
 
+  // 1b. Every key in the source locale must also exist in every other locale
+  // (catches keys referenced only via dynamic/prefix calls — they fall back to
+  // en at runtime, which means non-en users see English mid-UI).
+  const sourceKeys = Object.keys(locales[SOURCE_LOCALE]);
+  for (const lang of langs) {
+    if (lang === SOURCE_LOCALE) continue;
+    const untranslated = sourceKeys.filter((k) => !(k in locales[lang]));
+    if (untranslated.length === 0) continue;
+    errors.push(
+      `[i18n] ${lang}.json missing ${untranslated.length} key(s) present in ${SOURCE_LOCALE}.json (untranslated):`,
+    );
+    for (const key of untranslated.slice(0, 50)) {
+      errors.push(`  - ${key}`);
+    }
+    if (untranslated.length > 50) {
+      errors.push(`  ... ${untranslated.length - 50} more`);
+    }
+  }
+
   // 2. Every locale key must be referenced in source (literal, wildcard prefix,
   //    or allowlist).
   const allowedKeys = new Set([...literalKeys.keys(), ...allowlist.keys]);
-  const allowedPrefixes = [
-    ...prefixWildcards.keys(),
-    ...allowlist.prefixes,
-  ];
+  const allowedPrefixes = [...prefixWildcards.keys(), ...allowlist.prefixes];
 
   const unusedByLang = new Map();
   for (const lang of langs) {

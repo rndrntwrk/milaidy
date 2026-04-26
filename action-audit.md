@@ -1,29 +1,16 @@
 # Action Audit
 
 Scanned **105** actions across **103** files.
-**High:** 10 · **Medium:** 6 · **Low:** 16
+**High:** 1 · **Medium:** 2 · **Low:** 16
 
-## Violations (23)
+## Violations (12)
 
 | Action | Severity | Rule | Detail | File |
 | --- | --- | --- | --- | --- |
-| `CALENDLY` | high | `regex-intent-inference` | Action CALENDLY file defines and uses heuristic helper inferSubactionFromIntent — LLM should extract all params | `eliza/apps/app-lifeops/src/actions/calendly.ts` |
-| `CALENDLY` | medium | `param-format-coercion` | Action CALENDLY file defines and uses parseLooseParameterString — accepts stringly-typed planner params; prefer enforcing structured JSON in the planner schema | `eliza/apps/app-lifeops/src/actions/calendly.ts` |
-| `CALL_EXTERNAL` | high | `regex-intent-inference` | Action CALL_EXTERNAL file defines and uses heuristic helper looksLikeStandingCallPolicy — LLM should extract all params | `eliza/apps/app-lifeops/src/actions/twilio-call.ts` |
-| `CALL_USER` | high | `regex-intent-inference` | Action CALL_USER file defines and uses heuristic helper looksLikeStandingCallPolicy — LLM should extract all params | `eliza/apps/app-lifeops/src/actions/twilio-call.ts` |
-| `INTENT_SYNC` | high | `regex-intent-inference` | Action INTENT_SYNC file defines and uses heuristic helper looksLikeBroadcastPayload — LLM should extract all params | `eliza/apps/app-lifeops/src/actions/intent-sync.ts` |
-| `LIFE` | high | `regex-intent-inference` | Action LIFE file defines and uses heuristic helper extractLifeTimeZoneFromText — LLM should extract all params | `eliza/apps/app-lifeops/src/actions/life.ts` |
-| `LIFEOPS_COMPUTER_USE` | high | `regex-intent-inference` | Action LIFEOPS_COMPUTER_USE file defines and uses heuristic helper inferSurface — LLM should extract all params | `eliza/apps/app-lifeops/src/actions/computer-use.ts` |
 | `MANAGE_TASKS` | low | `missing-examples` | Action MANAGE_TASKS has no examples — planner will only see description/similes | `eliza/packages/agent/src/actions/manage-tasks.ts` |
 | `MANAGE_TASKS` | low | `missing-parameters` | Action MANAGE_TASKS declares no parameters block | `eliza/packages/agent/src/actions/manage-tasks.ts` |
-| `MANAGE_TASKS` | high | `regex-intent-inference` | Action MANAGE_TASKS file defines and uses heuristic helper looksLikeListTaskIntent — LLM should extract all params | `eliza/packages/agent/src/actions/manage-tasks.ts` |
-| `OWNER_CALENDAR` | high | `regex-intent-inference` | Action OWNER_CALENDAR file defines and uses heuristic helper looksLikeNonRequestPreface — LLM should extract all params | `eliza/apps/app-lifeops/src/actions/owner-calendar.ts` |
-| `REMOTE_DESKTOP` | high | `regex-intent-inference` | Action REMOTE_DESKTOP file defines and uses heuristic helper inferSubactionFromText — LLM should extract all params | `eliza/apps/app-lifeops/src/actions/remote-desktop.ts` |
-| `REMOTE_DESKTOP` | medium | `param-format-coercion` | Action REMOTE_DESKTOP file defines and uses parseLooseParameterString — accepts stringly-typed planner params; prefer enforcing structured JSON in the planner schema | `eliza/apps/app-lifeops/src/actions/remote-desktop.ts` |
-| `TWILIO_VOICE_CALL` | high | `regex-intent-inference` | Action TWILIO_VOICE_CALL file defines and uses heuristic helper looksLikeStandingCallPolicy — LLM should extract all params | `eliza/apps/app-lifeops/src/actions/twilio-call.ts` |
-| `CALENDAR_ACTION` | medium | `regex-in-handler` | Action CALENDAR_ACTION handler uses a raw regex (/\b(propose\|suggest\|offer\|share\|send)\b[^.]*\b(\d+\|a few\|some\|several\|multiple\|three\|two\|four\|five)\b[^.]*\b(times?\|slots?\|options?\|windows?)\b/.test() — suspicious unless it's data-format validation | `eliza/apps/app-lifeops/src/actions/calendar.ts` |
+| `MANAGE_TASKS` | high | `regex-intent-inference` | Action MANAGE_TASKS file defines and uses heuristic helper looksLikeTaskIntent — LLM should extract all params | `eliza/packages/agent/src/actions/manage-tasks.ts` |
 | `LIST_REMOTE_SESSIONS` | medium | `thin-description` | Action LIST_REMOTE_SESSIONS description is only ~46 chars (min 60) — small models will mis-classify | `eliza/apps/app-lifeops/src/actions/list-remote-sessions.ts` |
-| `PASSWORD_MANAGER` | medium | `param-format-coercion` | Action PASSWORD_MANAGER file defines and uses parseLooseParameterString — accepts stringly-typed planner params; prefer enforcing structured JSON in the planner schema | `eliza/apps/app-lifeops/src/actions/password-manager.ts` |
 | `REVOKE_REMOTE_SESSION` | medium | `thin-description` | Action REVOKE_REMOTE_SESSION description is only ~46 chars (min 60) — small models will mis-classify | `eliza/apps/app-lifeops/src/actions/revoke-remote-session.ts` |
 | `CHAT_THREAD_CONTROL` | low | `missing-examples` | Action CHAT_THREAD_CONTROL has no examples — planner will only see description/similes | `eliza/apps/app-lifeops/src/actions/chat-thread-control.ts` |
 | `CHAT_THREAD_CONTROL` | low | `missing-parameters` | Action CHAT_THREAD_CONTROL declares no parameters block | `eliza/apps/app-lifeops/src/actions/chat-thread-control.ts` |
@@ -40,7 +27,7 @@ Scanned **105** actions across **103** files.
 | `SEARCH_ACROSS_CHANNELS` | low | `missing-examples` | Action SEARCH_ACROSS_CHANNELS has no examples — planner will only see description/similes | `eliza/apps/app-lifeops/src/actions/search-across-channels.ts` |
 | `SUBSCRIPTIONS` | low | `missing-parameters` | Action SUBSCRIPTIONS declares no parameters block | `eliza/apps/app-lifeops/src/actions/subscriptions.ts` |
 
-## Clean (82)
+## Clean (93)
 
 | Action | File |
 | --- | --- |
@@ -54,6 +41,10 @@ Scanned **105** actions across **103** files.
 | `BLOCK_WEBSITES` | `eliza/apps/app-lifeops/src/actions/website-blocker.ts` |
 | `BOOK_TRAVEL` | `eliza/apps/app-lifeops/src/actions/book-travel.ts` |
 | `BROWSER_SESSION` | `eliza/packages/agent/src/actions/browser-session.ts` |
+| `CALENDAR_ACTION` | `eliza/apps/app-lifeops/src/actions/calendar.ts` |
+| `CALENDLY` | `eliza/apps/app-lifeops/src/actions/calendly.ts` |
+| `CALL_EXTERNAL` | `eliza/apps/app-lifeops/src/actions/twilio-call.ts` |
+| `CALL_USER` | `eliza/apps/app-lifeops/src/actions/twilio-call.ts` |
 | `CHECK_AVAILABILITY` | `eliza/apps/app-lifeops/src/actions/scheduling.ts` |
 | `COMPUTE_TRAVEL_BUFFER` | `eliza/apps/app-lifeops/src/travel-time/action.ts` |
 | `DOSSIER` | `eliza/apps/app-lifeops/src/actions/dossier.ts` |
@@ -76,7 +67,10 @@ Scanned **105** actions across **103** files.
 | `INBOX` | `eliza/apps/app-lifeops/src/actions/inbox.ts` |
 | `INBOX_TRIAGE_GMAIL` | `eliza/apps/app-lifeops/src/actions/inbox-triage.ts` |
 | `INSTALL_PLUGIN` | `eliza/packages/agent/src/actions/install-plugin.ts` |
+| `INTENT_SYNC` | `eliza/apps/app-lifeops/src/actions/intent-sync.ts` |
 | `LAUNCH_APP` | `eliza/packages/agent/src/actions/app-control.ts` |
+| `LIFE` | `eliza/apps/app-lifeops/src/actions/life.ts` |
+| `LIFEOPS_COMPUTER_USE` | `eliza/apps/app-lifeops/src/actions/computer-use.ts` |
 | `LIFEOPS_CONNECTOR` | `eliza/apps/app-lifeops/src/actions/lifeops-connector.ts` |
 | `LIFEOPS_MUTATE` | `eliza/apps/app-lifeops/src/actions/lifeops-mutate.ts` |
 | `LINK_ENTITY` | `eliza/packages/agent/src/actions/entity-actions.ts` |
@@ -87,6 +81,7 @@ Scanned **105** actions across **103** files.
 | `LOG_LEVEL` | `eliza/packages/agent/src/actions/log-level.ts` |
 | `MARK_FOLLOWUP_DONE` | `eliza/apps/app-lifeops/src/followup/actions/markFollowupDone.ts` |
 | `OWNER_APP_BLOCK` | `eliza/apps/app-lifeops/src/actions/owner-app-block.ts` |
+| `OWNER_CALENDAR` | `eliza/apps/app-lifeops/src/actions/owner-calendar.ts` |
 | `OWNER_INBOX` | `eliza/apps/app-lifeops/src/actions/owner-inbox.ts` |
 | `OWNER_RELATIONSHIP` | `eliza/apps/app-lifeops/src/actions/relationships.ts` |
 | `OWNER_REMOTE_DESKTOP` | `eliza/apps/app-lifeops/src/actions/owner-remote-desktop.ts` |
@@ -94,6 +89,7 @@ Scanned **105** actions across **103** files.
 | `OWNER_SCREEN_TIME` | `eliza/apps/app-lifeops/src/actions/owner-screen-time.ts` |
 | `OWNER_SEND_MESSAGE` | `eliza/apps/app-lifeops/src/actions/cross-channel-send.ts` |
 | `OWNER_WEBSITE_BLOCK` | `eliza/apps/app-lifeops/src/actions/owner-website-block.ts` |
+| `PASSWORD_MANAGER` | `eliza/apps/app-lifeops/src/actions/password-manager.ts` |
 | `PROPOSE_MEETING_TIMES` | `eliza/apps/app-lifeops/src/actions/scheduling.ts` |
 | `PUBLISH_DEVICE_INTENT` | `eliza/apps/app-lifeops/src/actions/device-bus.ts` |
 | `READ_CHANNEL` | `eliza/packages/agent/src/actions/read-channel.ts` |
@@ -102,6 +98,7 @@ Scanned **105** actions across **103** files.
 | `REINJECT_PLUGIN` | `eliza/packages/agent/src/actions/reinject-plugin.ts` |
 | `REJECT_REQUEST` | `eliza/apps/app-lifeops/src/actions/approval.ts` |
 | `RELEASE_BLOCK` | `eliza/apps/app-lifeops/src/website-blocker/chat-integration/actions/releaseBlock.ts` |
+| `REMOTE_DESKTOP` | `eliza/apps/app-lifeops/src/actions/remote-desktop.ts` |
 | `REQUEST_FIELD_FILL` | `eliza/apps/app-lifeops/src/actions/autofill.ts` |
 | `REQUEST_WEBSITE_BLOCKING_PERMISSION` | `eliza/apps/app-lifeops/src/actions/website-blocker.ts` |
 | `RESTART_AGENT` | `eliza/packages/agent/src/actions/restart.ts` |
@@ -120,6 +117,7 @@ Scanned **105** actions across **103** files.
 | `STOP_APP` | `eliza/packages/agent/src/actions/app-control.ts` |
 | `SYNC_PLUGIN` | `eliza/packages/agent/src/actions/sync-plugin.ts` |
 | `TOGGLE_LIFEOPS_FEATURE` | `eliza/apps/app-lifeops/src/actions/feature-toggle.ts` |
+| `TWILIO_VOICE_CALL` | `eliza/apps/app-lifeops/src/actions/twilio-call.ts` |
 | `UNBLOCK_APPS` | `eliza/apps/app-lifeops/src/actions/app-blocker.ts` |
 | `UNBLOCK_WEBSITES` | `eliza/apps/app-lifeops/src/actions/website-blocker.ts` |
 | `UPDATE_MEETING_PREFERENCES` | `eliza/apps/app-lifeops/src/actions/scheduling.ts` |
