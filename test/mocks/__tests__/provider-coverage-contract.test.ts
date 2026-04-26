@@ -6,7 +6,7 @@ import {
   LIFEOPS_PROVIDER_MOCK_COVERAGE,
   REQUIRED_LIFEOPS_PROVIDER_IDS,
 } from "../helpers/provider-coverage.ts";
-import { MOCK_ENVIRONMENTS } from "../scripts/start-mocks.ts";
+import { MOCK_ENVIRONMENTS, startMocks } from "../scripts/start-mocks.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, "../../..");
@@ -50,6 +50,30 @@ describe("LifeOps provider mock coverage contract", () => {
       const environment = readMockEnvironment(entry.environment);
       expect(environment.name).toEqual(expect.any(String));
       expect(environment.routes).toEqual(expect.any(Array));
+    }
+  });
+
+  it("emits every registry env var from the real mock runner", async () => {
+    for (const environment of MOCK_ENVIRONMENTS) {
+      const providers = LIFEOPS_PROVIDER_MOCK_COVERAGE.filter(
+        (entry) => entry.environment === environment,
+      );
+      expect(providers.length).toBeGreaterThan(0);
+
+      const mocks = await startMocks({ envs: [environment] });
+      try {
+        for (const provider of providers) {
+          for (const envVar of provider.envVars) {
+            expect(
+              mocks.envVars[envVar],
+              `${provider.id} declares ${envVar}, but startMocks(${environment}) did not emit it`,
+            ).toEqual(expect.any(String));
+            expect(mocks.envVars[envVar].length).toBeGreaterThan(0);
+          }
+        }
+      } finally {
+        await mocks.stop();
+      }
     }
   });
 
