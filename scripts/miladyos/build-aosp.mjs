@@ -116,11 +116,15 @@ function runAospBuild(aospRoot, jobs) {
 }
 
 function launchCuttlefish(aospRoot) {
+  // Cuttlefish 1.x ships `cvd start`; 0.x exposed `launch_cvd`. Prefer the
+  // newer command and fall back so older host packages keep working.
+  // `cvd start` reads host artifacts from $ANDROID_HOST_OUT, which lunch
+  // populates from build/envsetup.sh.
   run(
     "bash",
     [
       "-lc",
-      `source build/envsetup.sh && lunch ${PRODUCT_LUNCH} && launch_cvd --daemon`,
+      `source build/envsetup.sh && lunch ${PRODUCT_LUNCH} && (cvd start --daemon 2>/dev/null || launch_cvd --daemon)`,
     ],
     { cwd: aospRoot },
   );

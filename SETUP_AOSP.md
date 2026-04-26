@@ -366,6 +366,23 @@ cd ~/milady
 node scripts/miladyos/build-aosp.mjs --aosp-root ~/aosp
 ```
 
+### Visual / e2e validation (Cuttlefish or AVD)
+
+After Cuttlefish boots (or against a stock AVD), capture role-ownership proof and a PNG gallery of the Milady surfaces:
+
+```bash
+# Cuttlefish — full role/permission/appop checks + Dialer/SMS/Assist screenshots
+bun run miladyos:e2e -- --out reports/aosp-cuttlefish
+
+# AVD short loop — install the Capacitor APK on an existing emulator
+bun run miladyos:avd -- --avd JejuWallet_Pixel6 --capture reports/avd
+
+# Just grab screenshots without driving steps
+bun run miladyos:capture -- --out reports/manual --no-launch
+```
+
+`miladyos:e2e` writes `report.json` next to the PNGs with the boot-validate results and step list. `miladyos:avd` is the short app-only iteration loop — it does **not** prove role ownership (only Cuttlefish + a real AOSP build can do that), but it does verify the WebView, gateway service, and deep-link routing without paying for a system rebuild.
+
 ### `dev:android` is not the AOSP loop
 
 `bun run dev:android` opens **Android Studio against the Capacitor app**, not against AOSP. It builds a debug APK and installs it on a connected handset/emulator using the standard Capacitor flow. This is for app-only iteration without the system image.
@@ -459,6 +476,26 @@ If it repeatedly fails, lower parallelism:
 ```bash
 repo sync -c -j4
 ```
+
+### `nsjail: mount('/', '/', ...): Permission denied` partway through `m`
+
+Ubuntu 24.04 restricts unprivileged user namespaces via AppArmor by default. AOSP's Soong uses `nsjail` to sandbox parts of the build (Trusty TEE VM and a few others) and nsjail can't set up its sandbox root without those namespaces. Symptom:
+
+```
+FAILED: out/soong/.intermediates/trusty/.../trusty_security_vm_*.elf
+[E] initCloneNs(): mount('/', '/', NULL, MS_REC|MS_PRIVATE, NULL): Permission denied
+ninja: build stopped: subcommand failed.
+```
+
+Fix (one-time, persistent across reboots):
+
+```bash
+echo "kernel.apparmor_restrict_unprivileged_userns = 0" | \
+  sudo tee /etc/sysctl.d/99-miladyos-aosp.conf
+sudo sysctl --system
+```
+
+`scripts/aosp-host-root-setup.sh` writes this file already; only relevant if you set up the host before this fix landed or used a different setup path.
 
 ### AOSP build runs out of memory
 
