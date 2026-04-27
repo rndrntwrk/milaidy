@@ -272,6 +272,15 @@ append_dependency_spec_package \
   "eliza/packages/agent/package.json" \
   ".eliza.ci-disabled/packages/agent/package.json"
 
+# Unit coverage imports agent source through app workspaces after the local
+# workspace graph is restored. Install the agent's third-party deps explicitly
+# so transitive ESM imports such as viem/accounts and puppeteer-core do not rely
+# on incidental root hoisting in published-only CI.
+append_third_party_dependencies_from_manifest \
+  "eliza/packages/agent/package.json"
+append_third_party_dependencies_from_manifest \
+  ".eliza.ci-disabled/packages/agent/package.json"
+
 # eliza/packages/typescript (@elizaos/core) is rebuilt from source in the
 # cloud-image and snap pipelines so the local agent-orchestrator override is
 # included. After disable-local-eliza-workspace removes the package from the
@@ -350,6 +359,12 @@ for attempt in 1 2 3; do
       1
     symlink_installed_packages_into_manifest_node_modules \
       ".eliza.ci-disabled/packages/agent/package.json" \
+      1
+    symlink_installed_packages_into_manifest_node_modules \
+      "eliza/apps/app-lifeops/package.json" \
+      1
+    symlink_installed_packages_into_manifest_node_modules \
+      "eliza/apps/app-vincent/package.json" \
       1
     symlink_installed_packages_into_manifest_node_modules \
       "eliza/plugins/plugin-anthropic/typescript/package.json" \
