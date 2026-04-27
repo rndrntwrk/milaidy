@@ -1239,19 +1239,21 @@ describe("release workflow path contract", () => {
       ),
       "utf8",
     );
-    const appearanceSettingsSection = readElizaScript(
+    const companionPerformanceSettings = readElizaScript(
       path.join(
-        "packages",
-        "app-core",
+        "apps",
+        "app-companion",
         "src",
         "components",
-        "settings",
-        "AppearanceSettingsSection.tsx",
+        "companion",
+        "CompanionPerformanceSettings.tsx",
       ),
     );
 
     expect(applyPatchScript).toContain('"--unidiff-zero"');
-    expect(appearanceSettingsSection).toContain("settings-companion-vrm-power");
+    expect(companionPerformanceSettings).toContain(
+      "settings-companion-vrm-power",
+    );
     expect(patch).not.toContain("CapabilitiesSection.tsx");
     expect(capabilitiesSection).toContain(
       "settings.sections.capabilities.computerUseHint",
