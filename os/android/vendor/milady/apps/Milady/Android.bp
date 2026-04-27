@@ -19,10 +19,20 @@ android_app_import {
     dex_preopt: {
         enabled: false,
     },
+    // Soong-level overrides remove these packages from the product image
+    // even when they were added via PRODUCT_PACKAGES upstream of our
+    // strip list. PRODUCT_PACKAGES -= only strips entries added in the
+    // same inherit chain or earlier; entries from inherited makefiles
+    // (e.g. aosp_product.mk → messaging) need this mechanism instead.
+    //
+    // Names must match the Soong module names exactly. `Messaging`
+    // (capital M) is wrong — packages/apps/Messaging/Android.bp declares
+    // `name: "messaging"` (lowercase). Same caveat for any future addition.
     overrides: [
         "Launcher3",
         "Launcher3QuickStep",
         "Dialer",
+        "messaging",
         "Messaging",
         "Contacts",
         "Trebuchet",

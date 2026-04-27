@@ -262,10 +262,27 @@ export function validateProductLayer(vendorDir) {
     "privapp-permissions-com.miladyai.milady.xml",
     "milady_common.mk",
   );
-  assertIncludes(
-    common,
-    "vendor/milady/overlays/framework-res",
-    "milady_common.mk",
+  // PRODUCT_PACKAGE_OVERLAYS root must mirror the AOSP source tree from
+  // there: e.g. <root>/frameworks/base/core/res/res/values/config.xml
+  // overlays the framework-res package's config_default* strings. The
+  // older path "vendor/milady/overlays/framework-res" never merged
+  // because Soong looks under the overlay root for `LOCAL_RESOURCE_DIR`
+  // (frameworks/base/core/res/res), not for a directory called
+  // "framework-res".
+  assertIncludes(common, "vendor/milady/overlays", "milady_common.mk");
+  assertFile(
+    path.join(
+      vendorDir,
+      "overlays",
+      "frameworks",
+      "base",
+      "core",
+      "res",
+      "res",
+      "values",
+      "config.xml",
+    ),
+    "framework-res overlay (must mirror frameworks/base/core/res/res/...)",
   );
   // Ensure no first-boot UX leaks through.
   for (const marker of ["Provision", "SetupWizard", "ManagedProvisioning"]) {
@@ -351,6 +368,11 @@ export function validateProductLayer(vendorDir) {
     '"Launcher3"',
     '"Launcher3QuickStep"',
     '"Dialer"',
+    // Both "messaging" (lowercase, the actual Soong module name from
+    // packages/apps/Messaging/Android.bp) and "Messaging" (legacy
+    // / lineage variants) — the lowercase one is the load-bearing
+    // entry; the capital is kept for non-AOSP forks that diverge.
+    '"messaging"',
     '"Messaging"',
     '"Contacts"',
     '"Trebuchet"',
@@ -362,7 +384,10 @@ export function validateProductLayer(vendorDir) {
     path.join(
       vendorDir,
       "overlays",
-      "framework-res",
+      "frameworks",
+      "base",
+      "core",
+      "res",
       "res",
       "values",
       "config.xml",

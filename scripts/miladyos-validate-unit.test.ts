@@ -71,7 +71,7 @@ PRODUCT_PACKAGES -= \\
     QuickSearchBox \\
     SetupWizard \\
     Trebuchet
-PRODUCT_PACKAGE_OVERLAYS += vendor/milady/overlays/framework-res
+PRODUCT_PACKAGE_OVERLAYS += vendor/milady/overlays
 PRODUCT_PRODUCT_PROPERTIES += \\
     ro.miladyos.product=$(MILADY_PRODUCT_TAG) \\
     ro.miladyos.home=${PACKAGE_NAME} \\
@@ -121,6 +121,7 @@ COMMON_LUNCH_CHOICES := \\
         "Launcher3",
         "Launcher3QuickStep",
         "Dialer",
+        "messaging",
         "Messaging",
         "Contacts",
         "Trebuchet",
@@ -182,7 +183,10 @@ prebuilt_etc {
     path.join(
       vendor,
       "overlays",
-      "framework-res",
+      "frameworks",
+      "base",
+      "core",
+      "res",
       "res",
       "values",
       "config.xml",
