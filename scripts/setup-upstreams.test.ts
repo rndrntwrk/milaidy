@@ -748,9 +748,7 @@ describe("ensureRequiredElizaPluginBuilds", () => {
       ensureRequiredElizaPluginBuilds(repoRoot, {
         pathExists: (targetPath) =>
           targetPath.endsWith(path.join("package.json")) ||
-          targetPath.endsWith(
-            path.join("plugin-telegram", "tsconfig.json"),
-          ) ||
+          targetPath.endsWith(path.join("plugin-telegram", "tsconfig.json")) ||
           targetPath.endsWith(
             path.join("plugin-telegram", "tsconfig.build.json"),
           ) ||
