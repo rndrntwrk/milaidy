@@ -1336,6 +1336,10 @@ export async function ensureRequiredElizaPluginBuilds(
   repoRoot = DEFAULT_REPO_ROOT,
   options = {},
 ) {
+  ensurePluginTelegramNodeTypes(getRepoPluginsRoot(repoRoot), {
+    pathExists: options.pathExists ?? existsSync,
+  });
+
   let builtAny = false;
   for (const buildConfig of ELIZA_REQUIRED_PLUGIN_BUILDS) {
     builtAny =
@@ -2344,13 +2348,14 @@ export async function setupUpstreams(repoRoot = DEFAULT_REPO_ROOT) {
   }
 
   const elizaRoot = await ensureRepoLocalEliza(repoRoot);
+  const pluginsRoot = getRepoPluginsRoot(repoRoot);
   applyMiladyCopyPatches(elizaRoot);
   applyTypeScriptIgnoreDeprecationsCompatPatch(elizaRoot);
   applyLifeOpsLucideCompatPatch(elizaRoot);
+  ensurePluginTelegramNodeTypes(pluginsRoot);
   await ensureElizaDependencies(elizaRoot);
   await ensureElizaBuildOutputs(elizaRoot);
 
-  const pluginsRoot = getRepoPluginsRoot(repoRoot);
   ensurePluginDependencyLinks(repoRoot, pluginsRoot);
   applyPluginAnthropicBunRuntimePatch(elizaRoot);
   applyPluginAnthropicCliUsagePatch(elizaRoot);
