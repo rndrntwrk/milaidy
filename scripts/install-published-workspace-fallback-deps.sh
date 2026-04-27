@@ -332,6 +332,13 @@ append_dependency_spec_package \
   "eliza/packages/typescript/package.json" \
   ".eliza.ci-disabled/packages/typescript/package.json"
 append_dependency_spec_package \
+  "@types/node" \
+  "eliza/package.json" \
+  ".eliza.ci-disabled/package.json" \
+  "eliza/packages/typescript/package.json" \
+  ".eliza.ci-disabled/packages/typescript/package.json" \
+  "package.json"
+append_dependency_spec_package \
   "@types/fast-redact" \
   "eliza/packages/typescript/package.json" \
   ".eliza.ci-disabled/packages/typescript/package.json"
@@ -348,6 +355,10 @@ for attempt in 1 2 3; do
     symlink_installed_packages_into_manifest_node_modules \
       ".eliza.ci-disabled/packages/typescript/package.json" \
       1
+    symlink_installed_packages_into_manifest_node_modules \
+      "eliza/package.json"
+    symlink_installed_packages_into_manifest_node_modules \
+      ".eliza.ci-disabled/package.json"
     symlink_installed_packages_into_manifest_node_modules \
       "eliza/packages/app-core/package.json" \
       1
