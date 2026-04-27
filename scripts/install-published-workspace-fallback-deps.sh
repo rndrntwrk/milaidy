@@ -140,128 +140,26 @@ append_third_party_dependencies_from_manifest() {
   done <<< "$entries"
 }
 
+# Delegates manifest-scoped node_modules linking to a single Node process.
+#
+# The previous bash version iterated per package and on Windows spawned
+# `cygpath` + `cmd.exe /C "rmdir"` + `cmd.exe /C "mklink /J"` per entry across
+# multiple manifest passes. Hundreds of cygwin forks under load triggered
+# `child_copy: cygheap read copy failed, ... Win32 error 299` and crashed bash
+# mid-script, surfacing as a cancelled `website-blocker-startup-smoke` run.
+# Doing the same work in one Node process eliminates the fork pressure and
+# uses `fs.symlinkSync(..., "junction")` instead of cmd.exe on Windows.
+#
+# Bun can keep installed packages only in node_modules/.bun on every runner
+# OS, so the helper also scans that store and links the highest-version copy
+# of each package. With link_all_store_packages=1 it links every store package;
+# otherwise it only links those declared in the manifest. The grep for
+# "$package_name" against bun_store_entries is preserved inside the helper.
 symlink_installed_packages_into_manifest_node_modules() {
   local manifest="$1"
   local link_all_store_packages="${2:-0}"
   [[ -f "$manifest" ]] || return 0
-
-  local package_dir target_node_modules entries
-  package_dir="$(dirname "$manifest")"
-  target_node_modules="$package_dir/node_modules"
-  mkdir -p "$target_node_modules"
-
-  entries="$(node -e '
-    const fs = require("node:fs");
-    const pkg = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
-    const dependencyFields = ["dependencies", "devDependencies"];
-    const seen = new Set();
-
-    for (const field of dependencyFields) {
-      for (const [name, spec] of Object.entries(pkg[field] ?? {})) {
-        if (typeof spec !== "string" || spec.length === 0) continue;
-        if (seen.has(name)) continue;
-        seen.add(name);
-        process.stdout.write(name + "\n");
-      }
-    }
-  ' "$manifest")"
-
-  link_package_into_target_node_modules() {
-    local package_name="$1"
-    local source_path="$2"
-    local target_path="$target_node_modules/$package_name"
-    [[ -e "$source_path" ]] || return 0
-
-    mkdir -p "$(dirname "$target_path")"
-    case "$(uname -s)" in
-      MINGW*|MSYS*|CYGWIN*)
-        if [[ -e "$target_path" || -L "$target_path" ]]; then
-          if command -v cygpath >/dev/null 2>&1; then
-            MSYS2_ARG_CONV_EXCL="*" cmd.exe /C "rmdir \"$(cygpath -w "$target_path")\"" >/dev/null 2>&1 || rm -rf "$target_path"
-          else
-            rm -rf "$target_path"
-          fi
-        fi
-        if [[ -d "$source_path" && ! -L "$source_path" ]] && command -v cygpath >/dev/null 2>&1; then
-          if MSYS2_ARG_CONV_EXCL="*" cmd.exe /C "mklink /J \"$(cygpath -w "$target_path")\" \"$(cygpath -w "$(pwd)/$source_path")\"" >/dev/null 2>&1; then
-            continue
-          fi
-        fi
-        cp -LR "$source_path" "$target_path"
-        ;;
-      *)
-        rm -rf "$target_path"
-        ln -sfn "$(pwd)/$source_path" "$target_path"
-        ;;
-    esac
-  }
-
-  while IFS= read -r package_name; do
-    [[ -z "$package_name" ]] && continue
-    link_package_into_target_node_modules "$package_name" "node_modules/$package_name"
-  done <<< "$entries"
-
-  # Bun can keep installed packages only in node_modules/.bun on every runner
-  # OS. Link those store packages too so restored source workspaces resolve
-  # runtime deps like @elizaos/plugin-local-embedding from their own package dir.
-  local bun_store_entries
-  bun_store_entries="$(node -e '
-    const fs = require("node:fs");
-    const path = require("node:path");
-    const root = process.cwd();
-    const store = path.join(root, "node_modules", ".bun");
-    const packages = new Map();
-    if (!fs.existsSync(store)) process.exit(0);
-
-    function compareVersions(left, right) {
-      const leftParts = String(left).split(/[^0-9]+/).filter(Boolean).map(Number);
-      const rightParts = String(right).split(/[^0-9]+/).filter(Boolean).map(Number);
-      const length = Math.max(leftParts.length, rightParts.length, 3);
-      for (let index = 0; index < length; index += 1) {
-        const diff = (leftParts[index] ?? 0) - (rightParts[index] ?? 0);
-        if (diff !== 0) return diff;
-      }
-      return String(left).localeCompare(String(right));
-    }
-
-    for (const entry of fs.readdirSync(store).sort()) {
-      const modulesDir = path.join(store, entry, "node_modules");
-      if (!fs.existsSync(modulesDir)) continue;
-      for (const topLevel of fs.readdirSync(modulesDir).sort()) {
-        if (topLevel.startsWith(".")) continue;
-        const topLevelPath = path.join(modulesDir, topLevel);
-        const packageDirs = topLevel.startsWith("@")
-          ? fs.readdirSync(topLevelPath).sort().map((name) => path.join(topLevelPath, name))
-          : [topLevelPath];
-        for (const packageDir of packageDirs) {
-          try {
-            const stat = fs.lstatSync(packageDir);
-            if (!stat.isDirectory() || stat.isSymbolicLink()) continue;
-            const pkg = JSON.parse(fs.readFileSync(path.join(packageDir, "package.json"), "utf8"));
-            if (typeof pkg.name !== "string") continue;
-            const version = typeof pkg.version === "string" ? pkg.version : "0.0.0";
-            const current = packages.get(pkg.name);
-            if (!current || compareVersions(version, current.version) > 0) {
-              packages.set(pkg.name, { version, packageDir });
-            }
-          } catch {}
-        }
-      }
-    }
-
-    for (const [name, { packageDir }] of [...packages.entries()].sort(([left], [right]) => left.localeCompare(right))) {
-      process.stdout.write(`${name}\t${path.relative(root, packageDir)}\n`);
-    }
-  ')"
-
-  while IFS=$'\t' read -r package_name source_path; do
-    [[ -z "$package_name" || -z "$source_path" ]] && continue
-    if [[ "$link_all_store_packages" != "1" ]]; then
-      grep -Fxq -- "$package_name" <<< "$entries" || continue
-    fi
-    [[ -e "$target_node_modules/$package_name" || -L "$target_node_modules/$package_name" ]] && continue
-    link_package_into_target_node_modules "$package_name" "$source_path"
-  done <<< "$bun_store_entries"
+  node scripts/lib/symlink-store-packages.mjs "$manifest" "$link_all_store_packages"
 }
 
 packages=(
