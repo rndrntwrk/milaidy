@@ -176,7 +176,6 @@
     "test:ui:playwright:cloud-wallet": "node apps/app/scripts/run-ui-playwright.mjs --config playwright.ui-smoke.config.ts test/ui-smoke/cloud-wallet-import.spec.ts",
     "test:ui:playwright:computer-use": "node apps/app/scripts/run-ui-playwright.mjs --config playwright.ui-smoke.config.ts test/ui-smoke/computer-use.spec.ts",
     "test:ui:playwright:packaged": "node apps/app/scripts/run-ui-playwright.mjs --config playwright.ui-packaged.config.ts test/ui-smoke/packaged-hash.spec.ts",
-    "test:ui:playwright:settings-chat": "node apps/app/scripts/run-ui-playwright.mjs --config playwright.ui-smoke.config.ts test/ui-smoke/settings-chat-companion.spec.ts",
     "test:desktop:contract": "cd eliza/packages/app-core/platforms/electrobun && bun run test",
     "test:desktop:packaged": "bash eliza/packages/app-core/platforms/electrobun/scripts/smoke-test.sh",
     "test:desktop:packaged:unsigned": "SKIP_SIGNATURE_CHECK=1 ELECTROBUN_SKIP_CODESIGN=1 bash eliza/packages/app-core/platforms/electrobun/scripts/smoke-test.sh",
