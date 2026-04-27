@@ -318,6 +318,7 @@ jobs:
           python-version: "3.12"
 
       - name: Setup workspace dependencies
+        if: runner.os != 'Windows'
         uses: ./.github/actions/setup-bun-workspace
         with:
           bun-version: ${{ env.BUN_VERSION }}
@@ -325,6 +326,39 @@ jobs:
           install-native-deps: "false"
           skip-avatar-clone: "true"
           no-vision-deps: "true"
+
+      - name: Setup Bun (Windows)
+        if: runner.os == 'Windows'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Cache Bun install (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+
+      - name: Install dependencies (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          for i in 1 2 3; do
+            bun install --ignore-scripts && exit 0
+            rm -rf node_modules
+            echo "Attempt $i failed, retrying in $((i * 15))s..."
+            sleep $((i * 15))
+          done
+          exit 1
+
+      - name: Run repository postinstall patches (Windows)
+        if: runner.os == 'Windows'
+        run: bun run postinstall
+        env:
+          SKIP_AVATAR_CLONE: "1"
+          MILADY_NO_VISION_DEPS: "1"
 
       - name: Build @elizaos/core dist (required by dev-stack imports)
         shell: bash
