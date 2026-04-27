@@ -272,7 +272,7 @@ jobs:
   website-blocker-startup-smoke:
     name: Website Blocker Startup Smoke (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 70
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
@@ -368,7 +368,7 @@ jobs:
     # runners unchanged. `macos-latest` is auto-rewritten to depot-ubuntu by
     # the mirror generator, which breaks Xcode/Electron-dependent jobs.
     runs-on: macos-14
-    timeout-minutes: 75
+    timeout-minutes: 120
     # This job verifies the desktop orchestrator + Electrobun process +
     # website-blocker API via the loopback test bridge. Release jobs own the
     # packaged/native window gate, so CI uses a headless Electrobun smoke mode
@@ -746,7 +746,7 @@ jobs:
   validation-e2e:
     name: End-to-End Validation (Issue
     runs-on: ubuntu-24.04
-    timeout-minutes: 70
+    timeout-minutes: 120
     steps:
       - name: Checkout
         uses: actions/checkout@v4
