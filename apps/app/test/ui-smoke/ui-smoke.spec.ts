@@ -46,6 +46,6 @@ test("chat, apps, and settings routes render through the real shell", async ({
     page.locator("#permissions").getByText("Permissions", { exact: true }),
   ).toBeVisible();
   await expect(
-    capabilitiesSection.getByRole("switch", { name: /Computer Use/ }),
+    capabilitiesSection.getByRole("switch", { name: "Enable Computer Use" }),
   ).toBeVisible();
 });
