@@ -8,9 +8,9 @@ import {
 
 async function openWalletRpcSettings(page: Page) {
   await page.getByRole("button", { name: "Open RPC settings" }).click();
-  await expect(
-    page.getByRole("button", { name: /Eliza Cloud/ }).first(),
-  ).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId("wallet-rpc-mode-cloud")).toBeVisible({
+    timeout: 15_000,
+  });
 }
 
 test.beforeEach(async ({ page }) => {
