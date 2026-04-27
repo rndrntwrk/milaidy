@@ -67,6 +67,14 @@ export const ELIZA_BUILD_STEPS = [
     label: "@elizaos/skills",
   },
 ];
+export const ELIZA_TYPESCRIPT_BUILD_DEPENDENCIES = [
+  "@types/node",
+  "@types/bun",
+  "bun-types",
+];
+const ELIZA_TYPESCRIPT_AMBIENT_DEPENDENCIES = new Set(
+  ELIZA_TYPESCRIPT_BUILD_DEPENDENCIES,
+);
 
 const OPTIONAL_ELIZA_PLUGIN_FALLBACK_TAG = "alpha";
 const ELIZA_INSTALL_RETRY_DELAY_MS = 3_000;
@@ -1750,7 +1758,7 @@ export function ensureElizaTypescriptDependencyLinks(
     repoRoot = path.dirname(elizaRoot),
     // Do not link @noble/hashes by default: the Milady root often resolves v1
     // (ethers/viem), while @elizaos/core requires v2 entrypoints (sha2.js, legacy.js).
-    dependencies = [],
+    dependencies = ELIZA_TYPESCRIPT_BUILD_DEPENDENCIES,
   } = {},
 ) {
   const packageDir = path.join(elizaRoot, "packages", "typescript");
@@ -1770,13 +1778,27 @@ export function ensureElizaTypescriptDependencyLinks(
       continue;
     }
 
-    const linkPath = path.join(
-      packageDir,
-      "node_modules",
-      ...dependency.split("/"),
-    );
-    if (createPackageLink(linkPath, target)) {
-      linkedDependencies += 1;
+    const linkRoots = [packageDir];
+    if (ELIZA_TYPESCRIPT_AMBIENT_DEPENDENCIES.has(dependency)) {
+      linkRoots.push(elizaRoot);
+    }
+
+    for (const linkRoot of linkRoots) {
+      const linkPath = path.join(
+        linkRoot,
+        "node_modules",
+        ...dependency.split("/"),
+      );
+      if (
+        existsSync(linkPath) &&
+        existsSync(target) &&
+        realpathSync(linkPath) === realpathSync(target)
+      ) {
+        continue;
+      }
+      if (createPackageLink(linkPath, target)) {
+        linkedDependencies += 1;
+      }
     }
   }
 
@@ -1796,6 +1818,7 @@ export function ensureElizaTypescriptDependencyLinks(
 async function ensureElizaDependencies(elizaRoot) {
   if (hasInstalledElizaDependencies(elizaRoot)) {
     await bootstrapBundledBunInstall(elizaRoot);
+    ensureElizaTypescriptDependencyLinks(elizaRoot);
     return;
   }
 

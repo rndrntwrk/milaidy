@@ -58,6 +58,52 @@ describe("ensureElizaTypescriptDependencyLinks", () => {
     expect(ensureElizaTypescriptDependencyLinks(elizaRoot)).toBe(0);
   });
 
+  it("links core ambient type dependencies by default when available", () => {
+    const repoRoot = makeTempDir();
+    const elizaRoot = path.join(repoRoot, "eliza");
+    const nodeTypesPkg = path.join(
+      repoRoot,
+      "node_modules",
+      "@types",
+      "node",
+    );
+    const bunTypesPkg = path.join(
+      repoRoot,
+      "node_modules",
+      "@types",
+      "bun",
+    );
+    const bunTypesAmbientPkg = path.join(repoRoot, "node_modules", "bun-types");
+    writeFile(path.join(nodeTypesPkg, "package.json"), '{"name":"@types/node"}');
+    writeFile(path.join(bunTypesPkg, "package.json"), '{"name":"@types/bun"}');
+    writeFile(
+      path.join(bunTypesAmbientPkg, "package.json"),
+      '{"name":"bun-types"}',
+    );
+
+    expect(ensureElizaTypescriptDependencyLinks(elizaRoot)).toBe(6);
+    for (const [dependency, targetPkg] of [
+      ["@types/node", nodeTypesPkg],
+      ["@types/bun", bunTypesPkg],
+      ["bun-types", bunTypesAmbientPkg],
+    ] as const) {
+      expect(
+        fs.realpathSync(
+          path.join(
+            elizaRoot,
+            "packages",
+            "typescript",
+            "node_modules",
+            dependency,
+          ),
+        ),
+      ).toBe(fs.realpathSync(targetPkg));
+      expect(
+        fs.realpathSync(path.join(elizaRoot, "node_modules", dependency)),
+      ).toBe(fs.realpathSync(targetPkg));
+    }
+  });
+
   it("links an explicitly listed package from the repo root into core", () => {
     const repoRoot = makeTempDir();
     const elizaRoot = path.join(repoRoot, "eliza");
