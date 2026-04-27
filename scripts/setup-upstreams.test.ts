@@ -62,20 +62,13 @@ describe("ensureElizaTypescriptDependencyLinks", () => {
   it("links core ambient type dependencies by default when available", () => {
     const repoRoot = makeTempDir();
     const elizaRoot = path.join(repoRoot, "eliza");
-    const nodeTypesPkg = path.join(
-      repoRoot,
-      "node_modules",
-      "@types",
-      "node",
-    );
-    const bunTypesPkg = path.join(
-      repoRoot,
-      "node_modules",
-      "@types",
-      "bun",
-    );
+    const nodeTypesPkg = path.join(repoRoot, "node_modules", "@types", "node");
+    const bunTypesPkg = path.join(repoRoot, "node_modules", "@types", "bun");
     const bunTypesAmbientPkg = path.join(repoRoot, "node_modules", "bun-types");
-    writeFile(path.join(nodeTypesPkg, "package.json"), '{"name":"@types/node"}');
+    writeFile(
+      path.join(nodeTypesPkg, "package.json"),
+      '{"name":"@types/node"}',
+    );
     writeFile(path.join(bunTypesPkg, "package.json"), '{"name":"@types/bun"}');
     writeFile(
       path.join(bunTypesAmbientPkg, "package.json"),
