@@ -332,6 +332,11 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
+          # The action's built-in post-step cache-save fails intermittently on
+          # Windows (tar exits non-zero during cache.tzst creation). The explicit
+          # actions/cache@v4 step below already covers ~/.bun/install/cache, so
+          # disabling the action's internal cache avoids the redundant failure.
+          no-cache: true
 
       - name: Cache Bun install (Windows)
         if: runner.os == 'Windows'
