@@ -2086,6 +2086,67 @@ export function ensurePluginAnthropicBunTypes(
   return true;
 }
 
+export function ensurePluginTelegramNodeTypes(
+  pluginsRoot,
+  { pathExists = existsSync } = {},
+) {
+  const configPaths = [
+    path.join(pluginsRoot, "plugin-telegram", "tsconfig.json"),
+    path.join(pluginsRoot, "plugin-telegram", "tsconfig.build.json"),
+  ];
+  let patchedFiles = 0;
+
+  for (const configPath of configPaths) {
+    if (!pathExists(configPath)) {
+      continue;
+    }
+
+    const raw = readFileSync(configPath, "utf8");
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (error) {
+      console.warn(
+        `[setup-upstreams] Could not parse ${toDisplayPath(configPath)}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      continue;
+    }
+
+    const compilerOptions =
+      parsed && typeof parsed === "object" && parsed.compilerOptions
+        ? parsed.compilerOptions
+        : {};
+    const existingTypes = Array.isArray(compilerOptions.types)
+      ? compilerOptions.types
+      : [];
+
+    if (existingTypes.includes("node")) {
+      continue;
+    }
+
+    const nextParsed = {
+      ...parsed,
+      compilerOptions: {
+        ...compilerOptions,
+        types: [...existingTypes, "node"],
+      },
+    };
+    const indent = raw.match(/^(\s+)"/m)?.[1] ?? "  ";
+    writeFileSync(configPath, `${JSON.stringify(nextParsed, null, indent)}\n`);
+    patchedFiles += 1;
+  }
+
+  if (patchedFiles > 0) {
+    console.log(
+      `[setup-upstreams] Patched plugin-telegram Node type config (${patchedFiles} file${patchedFiles === 1 ? "" : "s"})`,
+    );
+  }
+
+  return patchedFiles;
+}
+
 export function patchPluginBuildTscBinPaths(
   pluginsRoot,
   { pathExists = existsSync } = {},
@@ -2183,6 +2244,7 @@ export async function ensurePluginBuildOutputs(
   { pathExists = existsSync, runCommandImpl = runCommand } = {},
 ) {
   ensurePluginAnthropicBunTypes(pluginsRoot, { pathExists });
+  ensurePluginTelegramNodeTypes(pluginsRoot, { pathExists });
   patchPluginBuildTscBinPaths(pluginsRoot, { pathExists });
   patchPluginManagerWindowsDtsBuild(pluginsRoot, { pathExists });
   for (const packageDir of discoverPluginPackageDirs(pluginsRoot)) {

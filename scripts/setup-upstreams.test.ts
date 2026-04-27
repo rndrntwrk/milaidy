@@ -14,6 +14,7 @@ import {
   ensureElizaBuildOutputs,
   ensureElizaTypescriptDependencyLinks,
   ensurePluginAnthropicBunTypes,
+  ensurePluginTelegramNodeTypes,
   ensurePublishedElizaPackageLinks,
   ensureRequiredElizaPluginBuilds,
   findInstalledPackageDir,
@@ -1677,6 +1678,64 @@ describe("ensurePluginAnthropicBunTypes", () => {
   it("is a no-op when plugin-anthropic is not present", () => {
     const pluginsRoot = makeTempDir();
     expect(ensurePluginAnthropicBunTypes(pluginsRoot)).toBe(false);
+  });
+});
+
+describe("ensurePluginTelegramNodeTypes", () => {
+  function writeTelegramConfig(
+    pluginsRoot: string,
+    fileName: string,
+    config: Record<string, unknown>,
+  ) {
+    const configPath = path.join(pluginsRoot, "plugin-telegram", fileName);
+    writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`);
+    return configPath;
+  }
+
+  it("adds 'node' to both plugin-telegram TypeScript configs", () => {
+    const pluginsRoot = makeTempDir();
+    const baseConfigPath = writeTelegramConfig(pluginsRoot, "tsconfig.json", {
+      compilerOptions: { target: "ESNext" },
+    });
+    const buildConfigPath = writeTelegramConfig(
+      pluginsRoot,
+      "tsconfig.build.json",
+      {
+        extends: "./tsconfig.json",
+        compilerOptions: { declaration: true },
+      },
+    );
+
+    expect(ensurePluginTelegramNodeTypes(pluginsRoot)).toBe(2);
+
+    expect(
+      JSON.parse(fs.readFileSync(baseConfigPath, "utf8")).compilerOptions.types,
+    ).toEqual(["node"]);
+    expect(
+      JSON.parse(fs.readFileSync(buildConfigPath, "utf8")).compilerOptions
+        .types,
+    ).toEqual(["node"]);
+  });
+
+  it("preserves existing type packages and does not duplicate 'node'", () => {
+    const pluginsRoot = makeTempDir();
+    const configPath = writeTelegramConfig(pluginsRoot, "tsconfig.json", {
+      compilerOptions: { types: ["vitest/globals"] },
+    });
+    writeTelegramConfig(pluginsRoot, "tsconfig.build.json", {
+      compilerOptions: { types: ["node"] },
+    });
+
+    expect(ensurePluginTelegramNodeTypes(pluginsRoot)).toBe(1);
+
+    expect(
+      JSON.parse(fs.readFileSync(configPath, "utf8")).compilerOptions.types,
+    ).toEqual(["vitest/globals", "node"]);
+  });
+
+  it("is a no-op when plugin-telegram is not present", () => {
+    const pluginsRoot = makeTempDir();
+    expect(ensurePluginTelegramNodeTypes(pluginsRoot)).toBe(0);
   });
 });
 
