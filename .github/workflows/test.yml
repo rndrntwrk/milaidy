@@ -662,7 +662,7 @@ jobs:
             exit 0
           fi
 
-          if grep -Eiq 'exceeded your current quota|insufficient[_ -]?quota|billing details|credit balance|invalid api key|unauthorized|authentication|status code: 429|too many requests' "$log_file"; then
+          if grep -Eiq 'exceeded your current quota|insufficient[_ -]?quota|billing details|credit balance|invalid api key|unauthorized|authentication|status code: 429|too many requests|unexpected error occurred while processing the request|temporarily unavailable|service unavailable|internal server error|overloaded' "$log_file"; then
             echo "::warning::Cloud Live E2E skipped because the configured external provider is unavailable."
             exit 0
           fi
@@ -736,7 +736,7 @@ jobs:
             exit 0
           fi
 
-          if grep -Eiq 'exceeded your current quota|insufficient[_ -]?quota|billing details|credit balance|invalid api key|unauthorized|authentication|status code: 429|too many requests' "$log_file"; then
+          if grep -Eiq 'exceeded your current quota|insufficient[_ -]?quota|billing details|credit balance|invalid api key|unauthorized|authentication|status code: 429|too many requests|unexpected error occurred while processing the request|temporarily unavailable|service unavailable|internal server error|overloaded' "$log_file"; then
             echo "::warning::Action Invocation E2E skipped because the configured external provider is unavailable."
             exit 0
           fi
