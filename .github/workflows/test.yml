@@ -375,6 +375,9 @@ jobs:
             bunx @bufbuild/buf@1.67.0 generate
             cd -
           fi
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            bun add --no-save --dev --ignore-scripts @types/node@^25.0.6 @types/bun@^1.3.5
+          fi
           node --input-type=module <<'NODE'
           import path from "node:path";
           import { ensureElizaTypescriptDependencyLinks } from "./scripts/setup-upstreams.mjs";
