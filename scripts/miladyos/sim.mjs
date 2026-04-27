@@ -167,14 +167,21 @@ function bashLoginCapture(aospRoot, command) {
   if (result.error) {
     throw new Error(`bash failed: ${result.error.message}`);
   }
-  return { status: result.status ?? -1, stdout: result.stdout, stderr: result.stderr };
+  return {
+    status: result.status ?? -1,
+    stdout: result.stdout,
+    stderr: result.stderr,
+  };
 }
 
 function startCuttlefish(args) {
   console.log(`[sim] lunch ${lunchTarget(args)}`);
   // Stop first to avoid "already running" guard rails. Best-effort —
   // ignore failures since "no instance running" is also exit-non-zero.
-  bashLoginCapture(args.aospRoot, `lunch ${lunchTarget(args)} >/dev/null && (cvd stop --clean 2>/dev/null || stop_cvd 2>/dev/null || true)`);
+  bashLoginCapture(
+    args.aospRoot,
+    `lunch ${lunchTarget(args)} >/dev/null && (cvd stop --clean 2>/dev/null || stop_cvd 2>/dev/null || true)`,
+  );
   console.log(`[sim] cvd start --daemon`);
   bashLogin(
     args.aospRoot,

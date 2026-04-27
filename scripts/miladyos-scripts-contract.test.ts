@@ -3,7 +3,6 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { parseArgs as parseAvdTestArgs } from "./miladyos/avd-test.mjs";
-import { parseArgs as parseSimArgs } from "./miladyos/sim.mjs";
 import {
   parseArgs as parseBootValidateArgs,
   resolveAdb,
@@ -19,6 +18,7 @@ import {
 } from "./miladyos/capture-screens.mjs";
 import { parseArgs as parseE2eArgs } from "./miladyos/e2e-validate.mjs";
 import { lintInitRc } from "./miladyos/lint-init-rc.mjs";
+import { parseArgs as parseSimArgs } from "./miladyos/sim.mjs";
 import {
   parseArgs as parseSyncArgs,
   syncToAosp,
