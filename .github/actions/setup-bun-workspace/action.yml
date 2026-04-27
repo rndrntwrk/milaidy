@@ -143,6 +143,14 @@ runs:
         repairKnownElizaPatchFiles();
         NODE
 
+    - name: Ensure nested cloud workspace is hydrated
+      if: ${{ inputs.disable-local-eliza-workspace != 'true' }}
+      shell: bash
+      run: |
+        git -C eliza submodule update --init cloud
+        test -d eliza/cloud/packages/sdk
+        test -d eliza/cloud/packages/services/billing
+
     - name: Install dependencies
       shell: bash
       run: |
