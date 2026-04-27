@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import {
   assertReadyChecks,
+  installDefaultAppRoutes,
   openAppPath,
   openSettingsSection,
   seedAppStorage,
@@ -8,6 +9,7 @@ import {
 
 test.beforeEach(async ({ page }) => {
   await seedAppStorage(page);
+  await installDefaultAppRoutes(page);
 });
 
 test("chat, apps, and settings routes render through the real shell", async ({
