@@ -393,7 +393,10 @@ describe("validateDefaultPermissions", () => {
       xmlPath,
       fs
         .readFileSync(xmlPath, "utf8")
-        .replace(/name="android\.permission\.MANAGE_APP_OPS_MODES"[^/]*\/>/g, ""),
+        .replace(
+          /name="android\.permission\.MANAGE_APP_OPS_MODES"[^/]*\/>/g,
+          "",
+        ),
     );
     expect(() => validateDefaultPermissions(vendor)).toThrow(
       /MANAGE_APP_OPS_MODES/,
