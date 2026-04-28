@@ -3,6 +3,43 @@ title: Changelog
 description: What's new in Milady — features, improvements, and fixes.
 ---
 
+<Update label="2026-04-28" description="Week of April 28; refreshed app heroes, self-correcting action params, LifeOps connector quiet-by-default, MiladyOS role auto-assignment" tags={["Feature", "Update", "Fix"]}>
+
+## Refreshed app catalog artwork
+
+The [apps view](/dashboard/apps) ships with new hero artwork across the catalog, including dedicated Defense of the Agents and ClawVille tiles. The desktop splash screen has also been updated so first-run feels fresher before your agent finishes booting.
+
+## Self-correcting action parameters
+
+When your agent picks an action but a required field is missing or malformed, it now fills the gap automatically with a small targeted LLM call scoped to that action's schema and recent conversation — instead of failing the request. Twenty-two LifeOps and agent actions are wired in, including calendar, inbox, send-message, relationships, password manager, autofill, and Twilio calling, so natural-language requests succeed more reliably the first time.
+
+## Unified PLUGIN action
+
+Plugin install, eject, sync, list, search, and create are now driven through a single unified PLUGIN action with nine sub-modes instead of separate actions. Talk to your agent the same way you always have — "install the Shopify plugin," "show me my plugins," "create a new plugin scaffold" — and the runtime routes to the right behavior. Existing wording continues to work via legacy aliases.
+
+## MiladyOS auto-assigns Milady as default phone roles
+
+On [MiladyOS](/architecture) builds, Milady is now auto-assigned as the default Phone, SMS, and Assistant app on first boot. Previously these roles required manual assignment via shell command after flashing — on a fresh boot they're now wired automatically through a system-level overlay, alongside the existing default-launcher behavior.
+
+## Updates
+
+- **Personal connectors quiet by default** — Signal, Discord, Telegram, iMessage, and WhatsApp [LifeOps connectors](/rest/lifeops) no longer auto-reply to inbound messages on your personal accounts. Your agent still reads incoming messages into the [unified inbox](/rest/inbox) and sends outbound on demand, but it won't talk back unless you explicitly opt in per platform.
+- **Discord DMs route through the desktop bridge** — When your agent runs in local-execution mode, [LifeOps](/rest/lifeops) Discord sends now go through the desktop CDP path so DMs land reliably even when the bot account isn't in the conversation. Previously these sends failed with a "Missing Access" error for most personal DMs.
+- **Companion performance moved into the Companion app** — VRM performance controls (FPS cap, render scale, animation budget) have moved from the main settings sidebar into the [Companion](/dashboard/apps) app's own settings panel, so performance tuning lives next to the avatar it affects.
+- **OWNER_RELATIONSHIP explicit-intent routing** — Relationship lookups now require explicit relationship intent in the prompt before routing to OWNER_RELATIONSHIP, reducing accidental triggers from passing mentions of names in unrelated requests.
+- **Quieter agent logs** — Debug-level logs from the OWNER_RELATIONSHIP path have been dropped, cleaning up the runtime log stream during normal use.
+- **Confirmation gating** — Multi-step action loops now break cleanly on a canonical "requires confirmation" signal, so your agent stops and waits for approval on sensitive operations like wallet transactions instead of looping past the prompt.
+- **Sharper LifeOps benchmarks** — The internal benchmark suite that gates LifeOps changes now seeds Google OAuth and lifeops schema fixtures up front, so quality regressions are caught before reaching your agent.
+
+## Bug fixes
+
+- Fixed the Windows postinstall step failing on PowerShell setups where the `HOME` environment variable wasn't set, which prevented type packages from materializing on a fresh clone
+- Fixed the Telegram plugin postinstall step erroring on missing Node type declarations
+- Fixed the dashboard splash background occasionally failing to load due to an asset format mismatch
+- Fixed account-pool error and status messages missing translations in non-English locales
+
+</Update>
+
 <Update label="2026-04-26" description="Week of April 26; native app windows, screenshare app, plugin role gating, lifeops polish, n8n empty-state translations" tags={["Feature", "Update", "Fix"]}>
 
 ## Apps open in dedicated native windows
