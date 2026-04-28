@@ -159,6 +159,7 @@ COMMON_LUNCH_CHOICES := \\
 <permissions>
     <privapp-permissions package="${PACKAGE_NAME}">
         <permission name="android.permission.PACKAGE_USAGE_STATS" />
+        <permission name="android.permission.MANAGE_APP_OPS_MODES" />
     </privapp-permissions>
 </permissions>
 `,
@@ -196,6 +197,7 @@ prebuilt_etc {
     <string name="config_defaultDialer" translatable="false">${PACKAGE_NAME}</string>
     <string name="config_defaultSms" translatable="false">${PACKAGE_NAME}</string>
     <string name="config_defaultAssistant" translatable="false">${PACKAGE_NAME}</string>
+    <string name="config_defaultBrowser" translatable="false">${PACKAGE_NAME}</string>
 </resources>
 `,
   );
@@ -378,5 +380,23 @@ describe("validateDefaultPermissions", () => {
         .replace(/name="android\.permission\.SEND_SMS"[^/]*\/>/g, ""),
     );
     expect(() => validateDefaultPermissions(vendor)).toThrow(/SEND_SMS/);
+  });
+
+  it("rejects when MANAGE_APP_OPS_MODES is missing from the privapp whitelist", () => {
+    const vendor = makeValidVendorDir();
+    const xmlPath = path.join(
+      vendor,
+      "permissions",
+      `privapp-permissions-${PACKAGE_NAME}.xml`,
+    );
+    fs.writeFileSync(
+      xmlPath,
+      fs
+        .readFileSync(xmlPath, "utf8")
+        .replace(/name="android\.permission\.MANAGE_APP_OPS_MODES"[^/]*\/>/g, ""),
+    );
+    expect(() => validateDefaultPermissions(vendor)).toThrow(
+      /MANAGE_APP_OPS_MODES/,
+    );
   });
 });

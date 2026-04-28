@@ -43,9 +43,13 @@ const requiredApkPermissions = [
   "android.permission.RECEIVE_BOOT_COMPLETED",
   "android.permission.PACKAGE_USAGE_STATS",
   "android.permission.SYSTEM_ALERT_WINDOW",
+  "android.permission.MANAGE_APP_OPS_MODES",
 ];
 
-const privilegedPermissions = ["android.permission.PACKAGE_USAGE_STATS"];
+const privilegedPermissions = [
+  "android.permission.PACKAGE_USAGE_STATS",
+  "android.permission.MANAGE_APP_OPS_MODES",
+];
 
 export function parseArgs(argv) {
   const args = {
@@ -397,6 +401,7 @@ export function validateProductLayer(vendorDir) {
     "config_defaultDialer",
     "config_defaultSms",
     "config_defaultAssistant",
+    "config_defaultBrowser",
   ]) {
     const value = xmlStringValue(
       frameworkConfig,

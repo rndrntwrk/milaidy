@@ -7,7 +7,10 @@ import {
   parseArgs as parseBootValidateArgs,
   resolveAdb,
 } from "./miladyos/boot-validate.mjs";
-import { parseArgs as parseBuildAospArgs } from "./miladyos/build-aosp.mjs";
+import {
+  parseArgs as parseBuildAospArgs,
+  recommendedJobs,
+} from "./miladyos/build-aosp.mjs";
 import {
   inspectBootAnimationDir,
   parseArgs as parseBootAnimationArgs,
@@ -81,7 +84,11 @@ describe("MiladyOS script contracts", () => {
       jobs: 12,
       launch: true,
       bootValidate: true,
+      skipStopCvd: false,
     });
+    expect(
+      parseBuildAospArgs(["--aosp-root", aospRoot, "--skip-stop-cvd"]),
+    ).toMatchObject({ skipStopCvd: true });
     expect(
       parseBootValidateArgs([
         "--adb",
@@ -233,6 +240,15 @@ describe("MiladyOS script contracts", () => {
       stopAfter: false,
       waitForBuild: false,
     });
+  });
+
+  it("caps build-aosp --jobs by available RAM, not by CPU count", () => {
+    // 30 GiB host with 24 cores → (30-4)/4 = 6 workers, well under cpu count.
+    expect(recommendedJobs(30 * 1024 ** 3, 24)).toBe(6);
+    // Tiny host: still at least one worker.
+    expect(recommendedJobs(2 * 1024 ** 3, 4)).toBe(1);
+    // Big builder: cpu count wins because RAM is plentiful.
+    expect(recommendedJobs(256 * 1024 ** 3, 16)).toBe(16);
   });
 
   it("rejects unknown capture steps", () => {
