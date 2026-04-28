@@ -30,4 +30,6 @@ Bun.serve({
   },
 });
 
-console.log(`[milady-agent-stub] listening on 127.0.0.1:${port} (bun ${Bun.version})`);
+console.log(
+  `[milady-agent-stub] listening on 127.0.0.1:${port} (bun ${Bun.version})`,
+);
