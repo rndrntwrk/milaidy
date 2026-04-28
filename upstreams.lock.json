@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-04-14T03:26:51.417Z",
-  "elizaCommit": "d358290e7a22",
+  "generatedAt": "2026-04-28T23:00:00.000Z",
+  "elizaCommit": "05c636c004bf",
   "elizaBranch": "develop",
   "upstreams": [
     {
@@ -10,7 +10,7 @@
       "sourcePath": "eliza/packages/agent",
       "sourceType": "core",
       "repoUrl": "https://github.com/elizaos/eliza.git",
-      "pinnedCommit": "d358290e7a22",
+      "pinnedCommit": "05c636c004bf",
       "bundledAtRelease": false
     },
     {
@@ -19,7 +19,7 @@
       "sourcePath": "eliza/packages/app-core",
       "sourceType": "core",
       "repoUrl": "https://github.com/elizaos/eliza.git",
-      "pinnedCommit": "d358290e7a22",
+      "pinnedCommit": "05c636c004bf",
       "bundledAtRelease": false
     },
     {
@@ -28,7 +28,7 @@
       "sourcePath": "eliza/packages/typescript",
       "sourceType": "core",
       "repoUrl": "https://github.com/elizaos/eliza.git",
-      "pinnedCommit": "d358290e7a22",
+      "pinnedCommit": "05c636c004bf",
       "bundledAtRelease": true
     },
     {
@@ -37,7 +37,7 @@
       "sourcePath": "eliza/packages/docs",
       "sourceType": "core",
       "repoUrl": "https://github.com/elizaos/eliza.git",
-      "pinnedCommit": "d358290e7a22",
+      "pinnedCommit": "05c636c004bf",
       "bundledAtRelease": false
     },
     {
@@ -46,7 +46,7 @@
       "sourcePath": "eliza/packages/interop",
       "sourceType": "core",
       "repoUrl": "https://github.com/elizaos/eliza.git",
-      "pinnedCommit": "d358290e7a22",
+      "pinnedCommit": "05c636c004bf",
       "bundledAtRelease": false
     },
     {
@@ -307,7 +307,7 @@
       "sourcePath": "eliza/packages/prompts",
       "sourceType": "core",
       "repoUrl": "https://github.com/elizaos/eliza.git",
-      "pinnedCommit": "d358290e7a22",
+      "pinnedCommit": "05c636c004bf",
       "bundledAtRelease": false
     },
     {
@@ -316,7 +316,7 @@
       "sourcePath": "eliza/packages/python",
       "sourceType": "core",
       "repoUrl": "https://github.com/elizaos/eliza.git",
-      "pinnedCommit": "d358290e7a22",
+      "pinnedCommit": "05c636c004bf",
       "bundledAtRelease": false
     },
     {
@@ -325,7 +325,7 @@
       "sourcePath": "eliza/packages/rust",
       "sourceType": "core",
       "repoUrl": "https://github.com/elizaos/eliza.git",
-      "pinnedCommit": "d358290e7a22",
+      "pinnedCommit": "05c636c004bf",
       "bundledAtRelease": false
     },
     {
@@ -334,7 +334,7 @@
       "sourcePath": "eliza/packages/schemas",
       "sourceType": "core",
       "repoUrl": "https://github.com/elizaos/eliza.git",
-      "pinnedCommit": "d358290e7a22",
+      "pinnedCommit": "05c636c004bf",
       "bundledAtRelease": false
     },
     {
@@ -343,7 +343,7 @@
       "sourcePath": "eliza/packages/shared",
       "sourceType": "core",
       "repoUrl": "https://github.com/elizaos/eliza.git",
-      "pinnedCommit": "d358290e7a22",
+      "pinnedCommit": "05c636c004bf",
       "bundledAtRelease": false
     },
     {
@@ -352,7 +352,7 @@
       "sourcePath": "eliza/packages/skills",
       "sourceType": "core",
       "repoUrl": "https://github.com/elizaos/eliza.git",
-      "pinnedCommit": "d358290e7a22",
+      "pinnedCommit": "05c636c004bf",
       "bundledAtRelease": false
     },
     {
@@ -361,7 +361,7 @@
       "sourcePath": "eliza/packages/ui",
       "sourceType": "core",
       "repoUrl": "https://github.com/elizaos/eliza.git",
-      "pinnedCommit": "d358290e7a22",
+      "pinnedCommit": "05c636c004bf",
       "bundledAtRelease": false
     },
     {
@@ -370,7 +370,7 @@
       "sourcePath": "eliza/packages/elizaos",
       "sourceType": "core",
       "repoUrl": "https://github.com/elizaos/eliza.git",
-      "pinnedCommit": "d358290e7a22",
+      "pinnedCommit": "05c636c004bf",
       "bundledAtRelease": false
     }
   ]
