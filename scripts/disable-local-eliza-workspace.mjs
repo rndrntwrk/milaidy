@@ -66,7 +66,7 @@ export const LOCAL_ONLY_WORKSPACE_GLOBS = [
   "eliza/apps/*",
 ];
 export const LOCAL_ONLY_ELIZA_PACKAGE_PATHS = {
-  "@elizaos/plugin-browser-bridge": "packages/plugin-browser-bridge",
+  "@elizaos/plugin-browser-bridge": "plugins/plugin-browser-bridge",
   "@elizaos/plugin-signal": "plugins/plugin-signal/typescript",
   "@elizaos/skills": "packages/skills",
 };
@@ -92,7 +92,7 @@ export const CI_OVERRIDE_SPECIFIERS = {
 };
 export const ELIZA_RUNTIME_CI_OVERRIDE_SPECIFIERS = {
   "@elizaos/ui": "file:./packages/ui",
-  "@elizaos/plugin-browser-bridge": "file:./packages/plugin-browser-bridge",
+  "@elizaos/plugin-browser-bridge": "file:./plugins/plugin-browser-bridge",
   "@elizaos/plugin-signal": "file:./plugins/plugin-signal/typescript",
   "@elizaos/skills": "file:./packages/skills",
   ...asElizaOverridesSpecifiers(),

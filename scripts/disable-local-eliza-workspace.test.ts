@@ -556,7 +556,7 @@ describe("disable-local-eliza-workspace", () => {
       path.join(
         repoRoot,
         "eliza",
-        "packages",
+        "plugins",
         "plugin-browser-bridge",
         "package.json",
       ),
@@ -589,7 +589,7 @@ describe("disable-local-eliza-workspace", () => {
       fs.readFileSync(path.join(repoRoot, "package.json"), "utf8"),
     );
     expect(rootPackage.workspaces).toContain(
-      "eliza/packages/plugin-browser-bridge",
+      "eliza/plugins/plugin-browser-bridge",
     );
     expect(rootPackage.dependencies).toMatchObject({
       "@elizaos/core": "2.0.0-alpha.163",
@@ -605,7 +605,7 @@ describe("disable-local-eliza-workspace", () => {
         path.join(
           repoRoot,
           "eliza",
-          "packages",
+          "plugins",
           "plugin-browser-bridge",
           "package.json",
         ),

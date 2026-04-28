@@ -212,6 +212,18 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
+      - name: Free disk space (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        # The bun install cache restored below has grown past 2.9 GB. Combined
+        # with the apt webkit2gtk + GStreamer install, the default ubuntu-latest
+        # runner runs out of disk during cache.tzst extraction. Drop unused
+        # toolchains to reclaim ~25 GB before the heavy steps run.
+        run: |
+          df -h /
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+
       - name: Install Linux desktop runtime dependencies
         if: runner.os == 'Linux'
         shell: bash
