@@ -39,6 +39,8 @@ await runRepoSetup(repoRoot);
 const miladyBridgePatchScripts = [
   // https://github.com/elizaos-plugins/plugin-elizacloud/pull/15
   "patch-elizacloud.mjs",
+  // milady-only fix for claude.ai OAuth tier — see script header.
+  "patch-coding-agent-adapters-tools-flag.mjs",
 ];
 
 for (const scriptName of miladyBridgePatchScripts) {
