@@ -405,122 +405,23 @@ describe("validateDefaultPermissions", () => {
   });
 });
 
-/**
- * Layer the milady_agent sepolicy artefacts on top of the minimal
- * vendor dir. Kept separate from `makeValidVendorDir` so the existing
- * product-layer / permissions tests don't have to carry sepolicy
- * fixtures they don't exercise.
- */
-function writeValidSepolicy(vendor: string): void {
-  writeFile(
-    path.join(vendor, "sepolicy", "file_contexts"),
-    [
-      "/data/data/com\\.miladyai\\.milady/files/agent/bin(/.*)?       u:object_r:milady_agent_exec:s0",
-      "/data/data/com\\.miladyai\\.milady/files/agent(/.*)?           u:object_r:milady_agent_data:s0",
-      "",
-    ].join("\n"),
-  );
-  writeFile(
-    path.join(vendor, "sepolicy", "milady_agent.te"),
-    `type milady_agent, domain, coredomain;
-type milady_agent_exec, exec_type, file_type, data_file_type, core_data_file_type;
-type milady_agent_data, file_type, data_file_type, core_data_file_type;
-app_domain(milady_agent)
-net_domain(milady_agent)
-domain_auto_trans(priv_app, milady_agent_exec, milady_agent)
-allow milady_agent milady_agent_exec:file { r_file_perms execute };
-allow milady_agent milady_agent_data:file create_file_perms;
-neverallow milady_agent self:capability *;
-neverallow milady_agent { domain -milady_agent -crash_dump }:process { transition dyntransition };
-`,
-  );
-}
-
 describe("validateSepolicy", () => {
-  it("passes a well-formed sepolicy directory", () => {
+  // The first attempt at a custom milady_agent SELinux domain landed at
+  // the AOSP build's neverallow envelope (priv_app cannot transition to
+  // arbitrary domains, app domains cannot have file_contexts entries
+  // pointing under /data/data, etc.) and was reverted; the agent runs
+  // in priv_app for now, which is what AOSP's seapp_contexts grants
+  // the Milady APK by default. The validator only pins file existence
+  // to keep BOARD_VENDOR_SEPOLICY_DIRS happy. When the custom domain
+  // returns, the rule-level assertions come back too.
+  it("passes when sepolicy/file_contexts exists (even empty)", () => {
     const vendor = makeValidVendorDir();
-    writeValidSepolicy(vendor);
     expect(() => validateSepolicy(vendor)).not.toThrow();
   });
 
-  it("rejects when milady_agent.te is missing", () => {
+  it("rejects when sepolicy/file_contexts is missing", () => {
     const vendor = makeValidVendorDir();
-    writeValidSepolicy(vendor);
-    fs.rmSync(path.join(vendor, "sepolicy", "milady_agent.te"));
-    expect(() => validateSepolicy(vendor)).toThrow(/milady_agent\.te/);
-  });
-
-  it("rejects when file_contexts has no agent labels", () => {
-    const vendor = makeValidVendorDir();
-    writeValidSepolicy(vendor);
-    writeFile(
-      path.join(vendor, "sepolicy", "file_contexts"),
-      "# nothing here\n",
-    );
-    expect(() => validateSepolicy(vendor)).toThrow(/milady_agent_exec/);
-  });
-
-  it("rejects when the priv_app -> milady_agent domain transition is missing", () => {
-    const vendor = makeValidVendorDir();
-    writeValidSepolicy(vendor);
-    const tePath = path.join(vendor, "sepolicy", "milady_agent.te");
-    // Strip the domain_auto_trans line — without it the priv_app exec
-    // never lands the child in milady_agent and the policy is dead
-    // weight.
-    fs.writeFileSync(
-      tePath,
-      fs
-        .readFileSync(tePath, "utf8")
-        .replace(/domain_auto_trans\([^)]*\)\n/g, ""),
-    );
-    expect(() => validateSepolicy(vendor)).toThrow(/domain_auto_trans/);
-  });
-
-  it("rejects when the capability neverallow is missing", () => {
-    const vendor = makeValidVendorDir();
-    writeValidSepolicy(vendor);
-    const tePath = path.join(vendor, "sepolicy", "milady_agent.te");
-    fs.writeFileSync(
-      tePath,
-      fs
-        .readFileSync(tePath, "utf8")
-        .replace(/neverallow milady_agent self:capability[^;]*;\n/g, ""),
-    );
-    expect(() => validateSepolicy(vendor)).toThrow(/capability/);
-  });
-
-  it("rejects when the cross-domain transition neverallow is missing", () => {
-    const vendor = makeValidVendorDir();
-    writeValidSepolicy(vendor);
-    const tePath = path.join(vendor, "sepolicy", "milady_agent.te");
-    fs.writeFileSync(
-      tePath,
-      fs
-        .readFileSync(tePath, "utf8")
-        .replace(
-          /neverallow milady_agent \{ domain[^;]*\}:process[^;]*;\n/g,
-          "",
-        ),
-    );
-    expect(() => validateSepolicy(vendor)).toThrow(/transition/);
-  });
-
-  it("rejects when the milady_agent_exec exec_type declaration is wrong", () => {
-    const vendor = makeValidVendorDir();
-    writeValidSepolicy(vendor);
-    const tePath = path.join(vendor, "sepolicy", "milady_agent.te");
-    // Drop the exec_type attribute — without it the
-    // domain_auto_trans is not even expressible (entrypoint requires
-    // exec_type) and sepolicy_test will reject the pattern outright.
-    fs.writeFileSync(
-      tePath,
-      fs
-        .readFileSync(tePath, "utf8")
-        .replace(
-          /type milady_agent_exec[^;]*;/,
-          "type milady_agent_exec, file_type;",
-        ),
-    );
-    expect(() => validateSepolicy(vendor)).toThrow(/milady_agent_exec/);
+    fs.rmSync(path.join(vendor, "sepolicy", "file_contexts"));
+    expect(() => validateSepolicy(vendor)).toThrow(/file_contexts/);
   });
 });
