@@ -531,6 +531,15 @@ jobs:
         run: |
           rm -rf debian
           cp -R eliza/packages/app-core/packaging/debian debian
+          # Eliza's debian packaging hardcodes the legacy entry name
+          # "elizaos-app.mjs" from before the upstream rename. Milady's
+          # actual entry script is milady.mjs, so rewrite the install
+          # manifest and rules to point at it. The package itself stays
+          # named elizaos-app for now (binary path /usr/bin/elizaos-app)
+          # since renaming the deb package is its own task.
+          if [ -f milady.mjs ] && [ ! -f elizaos-app.mjs ]; then
+            sed -i 's/elizaos-app\.mjs/milady.mjs/g' debian/install debian/rules
+          fi
           test -f debian/changelog
           test -x debian/rules
           dpkg-checkbuilddeps debian/control
