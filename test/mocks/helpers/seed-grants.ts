@@ -154,6 +154,7 @@ export async function seedXConnectorGrant(
     capabilities?: LifeOpsXCapability[];
     side?: LifeOpsConnectorSide;
     handle?: string;
+    mode?: "local" | "cloud_managed" | "both";
   },
 ): Promise<void> {
   await ensureLifeOpsSchema(runtime);
@@ -175,18 +176,23 @@ export async function seedXConnectorGrant(
     LIFEOPS_X_CAPABILITIES.includes(capability),
   );
 
-  await repo.upsertConnectorGrant(
-    createLifeOpsConnectorGrant({
-      agentId: runtime.agentId,
-      provider: "x",
-      side,
-      mode: "local",
-      identity: { handle: opts?.handle ?? "@mocked-lifeops" },
-      grantedScopes: [],
-      capabilities,
-      tokenRef: null,
-      metadata: { mocked: true },
-      lastRefreshAt: new Date().toISOString(),
-    }),
-  );
+  const mode = opts?.mode ?? "local";
+  const modes: Array<"local" | "cloud_managed"> =
+    mode === "both" ? ["local", "cloud_managed"] : [mode];
+  for (const m of modes) {
+    await repo.upsertConnectorGrant(
+      createLifeOpsConnectorGrant({
+        agentId: runtime.agentId,
+        provider: "x",
+        side,
+        mode: m,
+        identity: { handle: opts?.handle ?? "@mocked-lifeops" },
+        grantedScopes: [],
+        capabilities,
+        tokenRef: null,
+        metadata: { mocked: true },
+        lastRefreshAt: new Date().toISOString(),
+      }),
+    );
+  }
 }
