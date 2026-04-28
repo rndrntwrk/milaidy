@@ -32,10 +32,10 @@ You are Luna, an autonomous AI agent powered by elizaOS.
 
 ### Onboarding-Generated Prompts
 
-When a user completes onboarding, Milady writes a full agent configuration into `milady.json`. The onboarding flow (in `src/runtime/eliza.ts`) walks through several steps:
+When a user completes onboarding, Milady writes a full agent configuration into `milady.json`. The onboarding flow (in `eliza/packages/agent/src/runtime/eliza.ts`) walks through several steps:
 
 1. **Agent name** — pick from random suggestions or enter a custom name.
-2. **Style preset** — select a personality template from `STYLE_PRESETS` (defined in `src/onboarding-presets.ts`). The chosen template supplies `bio`, `system`, `style`, `adjectives`, `topics`, `postExamples`, and `messageExamples` in a single operation.
+2. **Style preset** — select a personality template from `STYLE_PRESETS` (defined in `eliza/packages/shared/src/onboarding-presets.ts`). The chosen template supplies `bio`, `system`, `style`, `adjectives`, `topics`, `postExamples`, and `messageExamples` in a single operation.
 3. **Model provider** — select an LLM provider (Anthropic, OpenAI, OpenRouter, Gemini, Groq, etc.) and enter an API key. The key is persisted into `config.env` and set in `process.env` for the current run. Skipped if an existing key is detected in the environment.
 4. **Wallet setup** — optionally generate fresh EVM + Solana keypairs or import existing private keys. Keys are stored in `config.env` (`EVM_PRIVATE_KEY`, `SOLANA_PRIVATE_KEY`).
 5. **Skills registry** — if no `SKILLS_REGISTRY` or `CLAWHUB_REGISTRY` URL is set, defaults to `https://clawhub.ai`. The `SKILLSMP_API_KEY` is also persisted if present.
@@ -94,43 +94,33 @@ At every conversation turn, providers registered with the runtime inject additio
 
 ### Channel Profile Provider
 
-`createChannelProfileProvider()` injects channel-specific behavior rules based on the current message channel (DM, group, etc.). Created in `src/providers/simple-mode.ts`.
+`createChannelProfileProvider()` injects channel-specific behavior rules based on the current message channel (DM, group, etc.). Created in `eliza/packages/agent/src/providers/simple-mode.ts`.
 
 ### Workspace Provider
 
-`createWorkspaceProvider()` reads the agent's workspace directory and injects a summary of relevant files. Bounded by `bootstrapMaxChars` to stay within token limits.
+`createWorkspaceProvider()` reads the agent's workspace directory and injects a summary of relevant files.
 
 ```typescript
-createWorkspaceProvider({
-  workspaceDir,
-  maxCharsPerFile: config?.bootstrapMaxChars,
-})
+const provider = createWorkspaceProvider({
+  dir: agentWorkspaceDir,
+});
 ```
 
-Here `config` is the `MiladyPluginConfig` object passed to `createMiladyPlugin()`, not the top-level `MiladyConfig`.
+Here `config` is the `ElizaPluginConfig` object passed to `createElizaPlugin()`, not the top-level `ElizaConfig`.
 
 ### Admin Trust Provider
 
-`adminTrustProvider` from `src/providers/admin-trust.ts` injects information about whether the current user has admin privileges, enabling the agent to make trust-appropriate decisions.
+`adminTrustProvider` from `eliza/packages/agent/src/providers/admin-trust.ts` injects information about whether the current user has admin privileges, enabling the agent to make trust-appropriate decisions.
 
 ### Autonomous State Provider
 
 `createAutonomousStateProvider()` injects the current autonomous mode status so the agent knows whether it's running in interactive or autonomous mode.
 
-### Emote Provider
+### Emote action
 
-The emote provider injects the list of available avatar animation IDs when the agent has a 3D avatar. This tells the model it can use the `PLAY_EMOTE` action:
+Available emote IDs are declared as an `enum` on the `PLAY_EMOTE` action's `emote` parameter. The runtime automatically includes the allowed values in the **Available Actions** section of the prompt, so a separate emote provider is no longer needed.
 
-```
-## Available Emotes
-
-You can play emote animations on your 3D avatar using the PLAY_EMOTE action.
-Use emotes sparingly and naturally during conversation to express yourself.
-
-Available emote IDs: wave, dance, sit, ...
-```
-
-Disabled by setting `character.settings.DISABLE_EMOTES = true`, which saves approximately 300 tokens per turn.
+To disable emotes entirely, set `character.settings.DISABLE_EMOTES = true`. This removes the `PLAY_EMOTE` action at plugin init time so it never appears in the prompt.
 
 ### Custom Actions Provider
 
@@ -148,7 +138,7 @@ When no custom actions are configured, the provider returns empty text (no token
 
 ### UI Catalog Provider
 
-`uiCatalogProvider` from `src/providers/ui-catalog.ts` injects the Milady UI component catalog, allowing the agent to compose structured UI responses.
+`uiCatalogProvider` from `eliza/packages/agent/src/providers/ui-catalog.ts` injects the Milady UI component catalog, allowing the agent to compose structured UI responses.
 
 ## Session Key Provider
 
@@ -169,7 +159,6 @@ return {
     createSessionKeyProvider({ defaultAgentId: agentId }),
     ...getSessionProviders({ storePath: sessionStorePath }),
     uiCatalogProvider,
-    emoteProvider,
     customActionsProvider,
   ],
 };

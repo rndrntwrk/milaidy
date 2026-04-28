@@ -1,50 +1,197 @@
 {
-  "$schema": "https://unpkg.com/knip@next/schema.json",
+  "$schema": "https://unpkg.com/knip@6next/schema.json",
+  "ignore": [
+    "**/*.d.ts",
+    ".eslintrc.js",
+    "**/__tests__/**",
+    "**/__mocks__/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/.vite/**",
+    "**/test-results/**",
+    "**/.playwright-artifacts*/**",
+    "**/*.spec.ts-snapshots/**",
+    "node_modules/**",
+    "test/contracts/lib/**"
+  ],
+  "ignoreDependencies": ["typescript"],
   "workspaces": {
     ".": {
       "entry": [
-        "src/index.ts",
-        "src/runtime/eliza.ts",
         "src/entry.ts",
-        "milaidy.mjs",
-        "scripts/**/*.ts",
+        "milady.mjs",
+        "scripts/*.js",
+        "scripts/*.mjs",
+        "scripts/*.ts",
+        "scripts/**/*.js",
         "scripts/**/*.mjs",
-        "scripts/**/*.js"
+        "scripts/**/*.ts",
+        "eliza/packages/app-core/scripts/rt.sh",
+        "eliza/packages/app-core/scripts/*.mjs",
+        "eliza/packages/app-core/scripts/lib/*.mjs",
       ],
-      "project": ["src/**/*.ts", "scripts/**/*.ts"],
+      "project": ["src/**/*.{ts,tsx}", "scripts/**/*.{ts,mjs,js}"],
       "ignore": ["dist/**", "build/**", "coverage/**", "**/*.test.ts"]
+    },
+    "eliza/packages/app-core": {
+      "entry": [
+        "src/index.ts",
+        "src/runtime/dev-server.ts",
+        "src/api/index.ts",
+        "src/config/index.ts",
+        "src/events/index.ts",
+        "src/hooks/index.ts",
+        "src/state/index.ts",
+        "src/components/index.ts",
+        "src/utils/index.ts",
+        "src/platform/index.ts",
+        "src/navigation/index.ts",
+        "src/i18n/index.ts",
+        "src/actions/index.ts",
+        "src/voice/index.ts",
+        "src/autonomy/index.ts",
+        "src/coding/index.ts",
+        "src/providers/index.ts",
+        "src/bridge/index.ts",
+        "src/bridge/electrobun-rpc.ts",
+        "src/bridge/electrobun-runtime.ts",
+        "src/ui/index.ts",
+        "src/ui/components/ui/*.tsx",
+        "src/ui/hooks/**/*.ts",
+        "src/ui/lib/*.ts",
+        "scripts/*.mjs",
+        "scripts/lib/*.mjs"
+      ],
+      "project": ["src/**/*.{ts,tsx}", "scripts/**/*.{mjs,js}"],
+      "ignore": [
+        "dist/**",
+        "build/**",
+        "coverage/**",
+        "**/*.test.ts",
+        "**/*.test.tsx"
+      ]
+    },
+    "eliza/packages/agent": {
+      "entry": ["src/index.ts"],
+      "project": ["src/**/*.{ts,tsx}"],
+      "ignore": ["test/**"]
+    },
+    "eliza/packages/shared": {
+      "entry": ["src/index.ts"],
+      "project": ["src/**/*.{ts,tsx}"]
+    },
+    "eliza/apps/app-lifeops": {
+      "entry": [
+        "src/index.ts",
+        "src/client.ts",
+        "src/ui.ts",
+        "src/plugin.ts",
+        "src/public.ts",
+        "src/agent-lifeops.ts",
+        "src/lifeops/index.ts",
+        "src/widgets/index.ts",
+        "src/api/client-lifeops.ts",
+        "src/routes/plugin.ts",
+        "src/components/AppBlockerSettingsCard.tsx",
+        "src/components/LifeOpsBrowserSetupPanel.tsx",
+        "src/components/LifeOpsPageSections.tsx",
+        "src/components/LifeOpsPageView.tsx",
+        "src/components/LifeOpsSettingsSection.tsx",
+        "src/components/LifeOpsWorkspaceView.tsx",
+        "src/components/WebsiteBlockerSettingsCard.tsx",
+        "src/components/chat/widgets/plugins/*.tsx"
+      ],
+      "project": ["src/**/*.{ts,tsx}"],
+      "ignoreDependencies": ["@elizaos/ui", "lucide-react"],
+      "ignore": [
+        "dist/**",
+        "build/**",
+        "coverage/**",
+        "test/**",
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "**/*.live.test.ts",
+        "**/*.real.test.ts",
+        "**/*.integration.test.ts",
+        "**/*.e2e.test.ts"
+      ]
+    },
+    "apps/browser-bridge": {
+      "entry": [
+        "entrypoints/*.ts",
+        "scripts/*.mjs",
+        "src/api-client.ts",
+        "src/dom-actions.ts",
+        "src/page-extract.ts",
+        "src/popup-model.ts",
+        "src/protocol.ts",
+        "src/storage.ts",
+        "src/tab-cache.ts",
+        "src/webextension.ts"
+      ],
+      "project": [
+        "entrypoints/**/*.{ts,tsx}",
+        "src/**/*.{ts,tsx}",
+        "scripts/**/*.{mjs,js,ts}"
+      ],
+      "ignore": [
+        "dist/**",
+        "build/**",
+        "coverage/**",
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "src/test-dom-setup.ts"
+      ]
     },
     "apps/app": {
       "entry": [
         "src/main.tsx",
-        "electron/main.ts",
-        "electron/preload.ts",
-        "vite.config.ts",
-        "vitest.config.ts",
-        "index.html",
-        "src/main.tsx",
-        "electron/main.ts",
-        "electron/preload.ts",
+        "src/stubs/*.ts",
         "vite.config.ts",
         "vitest.config.ts",
         "index.html",
         "capacitor.config.ts"
       ],
-      "project": ["src/**/*.{ts,tsx}", "electron/**/*.{ts,tsx}"],
+      "project": ["src/**/*.{ts,tsx}"],
       "ignore": [
         "dist/**",
         "build/**",
         "coverage/**",
         "**/*.test.ts",
         "public/**",
-        "playwright.electron.config.ts",
-        "playwright.electron.packaged.config.ts",
+        "test/**",
+        ".storybook/**",
+        "src/stories/**",
+        "electrobun/**",
+        "plugins/**",
+        "playwright.electrobun.packaged.config.ts",
         "cypress.config.ts",
         "**/*.cy.ts",
         "**/cypress/**",
         "tsdown.config.ts"
       ]
+    },
+    "apps/app/electrobun": {
+      "entry": [
+        "src/index.ts",
+        "src/native/agent.ts",
+        "src/bridge/electrobun-preload.ts",
+        "electrobun.config.ts",
+        "vitest.config.ts"
+      ],
+      "project": ["src/**/*.{ts,tsx}", "scripts/**/*.ts"],
+      "ignore": [
+        "build/**",
+        "coverage/**",
+        "src/preload.js",
+        "src/libMacWindowEffects.dylib",
+        "src/**/__tests__/**"
+      ]
+    },
+    "apps/homepage": {
+      "entry": ["src/main.tsx", "vite.config.ts", "index.html"],
+      "project": ["src/**/*.{ts,tsx}"],
+      "ignore": ["dist/**", "build/**", "coverage/**", "public/**"]
     }
-  },
-  "ignore": ["**/*.d.ts", ".eslintrc.js", "**/__tests__/**", "**/__mocks__/**"]
+  }
 }

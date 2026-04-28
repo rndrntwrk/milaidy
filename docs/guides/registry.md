@@ -27,7 +27,7 @@ The plugin registry is:
 - **Metadata** including name, description, category, and configuration
 - **Discovery system** for finding and loading plugins
 
-Milaidy ships with a bundled `plugins.json` containing 90+ plugins from the elizaOS ecosystem.
+Milady ships with a bundled `plugins.json` containing 90+ plugins from the elizaOS ecosystem.
 
 ---
 
@@ -36,33 +36,33 @@ Milaidy ships with a bundled `plugins.json` containing 90+ plugins from the eliz
 ### List Available Plugins
 
 ```bash
-milaidy plugins list
+milady plugins list
 ```
 
 ### Search Plugins
 
 ```bash
-milaidy plugins list --search telegram
+milady plugins list --search telegram
 ```
 
 ### View Plugin Details
 
 ```bash
-milaidy plugins info telegram
+milady plugins info telegram
 ```
 
 ### Browse by Category
 
 ```bash
-milaidy plugins list --category connector
-milaidy plugins list --category model
-milaidy plugins list --category tool
+milady plugins list --category connector
+milady plugins list --category model
+milady plugins list --category tool
 ```
 
 ### Programmatic Access
 
 ```typescript
-import pluginIndex from "milaidy/plugins.json";
+import pluginIndex from "miladyai/plugins.json";
 
 // List all plugins
 for (const plugin of pluginIndex.plugins) {
@@ -83,13 +83,10 @@ Most plugins are npm packages:
 
 ```bash
 # Install the Telegram connector
-npm install @elizaos/plugin-telegram
-
-# Or with pnpm
-pnpm add @elizaos/plugin-telegram
+bun add @elizaos/plugin-telegram
 ```
 
-### Configure in milaidy.json
+### Configure in milady.json
 
 ```json
 {
@@ -114,7 +111,7 @@ OPENAI_API_KEY=sk-...
 
 ### Auto-Enable Based on Credentials
 
-Milaidy can auto-enable plugins when their required credentials are present:
+Milady can auto-enable plugins when their required credentials are present:
 
 ```json
 {
@@ -138,7 +135,7 @@ Each plugin in the registry has a manifest entry:
   "dirName": "plugin-telegram",
   "name": "Telegram",
   "npmName": "@elizaos/plugin-telegram",
-  "description": "Telegram bot connector for elizaOS agents",
+  "description": "Telegram bot connector for Eliza agents",
   "category": "connector",
   "envKey": "TELEGRAM_BOT_TOKEN",
   "configKeys": [
@@ -402,7 +399,7 @@ If you're maintaining a fork or custom registry:
 
 ```bash
 # Generate plugins.json from installed plugins
-pnpm generate:plugins
+bun run generate:plugins
 ```
 
 This scans `node_modules/@elizaos/plugin-*` and generates an updated index.
@@ -415,20 +412,20 @@ This scans `node_modules/@elizaos/plugin-*` and generates an updated index.
 
 ```bash
 # List model plugins
-milaidy plugins list --category model
+milady plugins list --category model
 
 # Check OpenAI plugin info
-milaidy plugins info openai
+milady plugins info openai
 
 # Install and configure
-pnpm add @elizaos/plugin-openai
+bun add @elizaos/plugin-openai
 echo "OPENAI_API_KEY=sk-..." >> .env
 ```
 
 ### Adding Multiple Connectors
 
 ```json
-// milaidy.json
+// milady.json
 {
   "plugins": [
     "@elizaos/plugin-telegram",
@@ -449,10 +446,10 @@ SLACK_BOT_TOKEN=...
 
 ```bash
 # Install community plugin
-pnpm add elizaos-plugin-custom-feature
+bun add elizaos-plugin-custom-feature
 
 # Add to config
-# milaidy.json
+# milady.json
 {
   "plugins": [
     "@elizaos/plugin-openai",
@@ -467,7 +464,7 @@ pnpm add elizaos-plugin-custom-feature
 
 - [Plugin Development Guide](/plugins/development) — Create your own plugins
 - [Local Plugin Development](/plugins/local-plugins) — Develop without publishing
-- [Contributing Guide](./contributing.md) — Submit plugins upstream
+- [Contributing Guide](/guides/contributing) — Submit plugins upstream
 
 ---
 
@@ -523,13 +520,13 @@ pnpm add elizaos-plugin-custom-feature
 bunx vitest run src/services/plugin-installer.test.ts src/services/skill-marketplace.test.ts src/services/mcp-marketplace.test.ts
 
 # Plugin install e2e lifecycle
-bunx vitest run --config vitest.e2e.config.ts test/plugin-install.e2e.test.ts test/skills-marketplace-api.e2e.test.ts test/skills-marketplace-services.e2e.test.ts
+bunx vitest run --config test/vitest/e2e.config.ts test/plugin-install.e2e.test.ts test/skills-marketplace-api.e2e.test.ts test/skills-marketplace-services.e2e.test.ts
 
 # On-chain service tests
 bunx vitest run src/api/tx-service.test.ts src/api/registry-service.test.ts src/api/drop-service.test.ts
 
 # API server e2e (includes registry routes)
-bunx vitest run --config vitest.e2e.config.ts test/api-server.e2e.test.ts
+bunx vitest run --config test/vitest/e2e.config.ts test/api-server.e2e.test.ts
 
 bun run typecheck
 ```

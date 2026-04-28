@@ -4,7 +4,7 @@ sidebarTitle: "Permissions"
 description: "REST API endpoints for reading and managing system permission states, including shell access control."
 ---
 
-The permissions API manages OS-level permissions (microphone, camera, screen recording, etc.) and the shell access toggle. Permission states are tracked in server memory and updated via Electron IPC in desktop deployments. Shell access controls whether the agent can execute terminal commands.
+The permissions API manages OS-level permissions (microphone, camera, screen recording, etc.) and the shell access toggle. Permission states are tracked in server memory and updated via Electrobun RPC in desktop deployments. Shell access controls whether the agent can execute terminal commands.
 
 ## Endpoints
 
@@ -14,32 +14,51 @@ Get all system permission states.
 
 **Response**
 
+Returns a flat map of permission ID to permission state:
+
 ```json
 {
-  "permissions": {
-    "microphone": {
-      "id": "microphone",
-      "status": "granted",
-      "lastChecked": 1718000000000,
-      "canRequest": false
-    },
-    "camera": {
-      "id": "camera",
-      "status": "denied",
-      "lastChecked": 1718000000000,
-      "canRequest": true
-    }
+  "accessibility": {
+    "id": "accessibility",
+    "status": "granted",
+    "lastChecked": 1718000000000,
+    "canRequest": false
   },
-  "platform": "darwin",
-  "shellEnabled": true
+  "screen-recording": {
+    "id": "screen-recording",
+    "status": "granted",
+    "lastChecked": 1718000000000,
+    "canRequest": false
+  },
+  "microphone": {
+    "id": "microphone",
+    "status": "granted",
+    "lastChecked": 1718000000000,
+    "canRequest": false
+  },
+  "camera": {
+    "id": "camera",
+    "status": "denied",
+    "lastChecked": 1718000000000,
+    "canRequest": true
+  },
+  "shell": {
+    "id": "shell",
+    "status": "granted",
+    "lastChecked": 1718000000000,
+    "canRequest": false
+  }
 }
 ```
 
+Each value is a permission state object with the following fields:
+
 | Field | Type | Description |
 |-------|------|-------------|
-| `permissions` | object | Map of permission ID to permission state |
-| `platform` | string | Operating system platform (`darwin`, `win32`, `linux`) |
-| `shellEnabled` | boolean | Whether shell command execution is currently enabled |
+| `id` | string | Permission identifier |
+| `status` | string | `"granted"`, `"denied"`, `"not-determined"`, `"restricted"`, or `"not-applicable"` |
+| `lastChecked` | number | Unix ms timestamp of the last check |
+| `canRequest` | boolean | Whether the app can request this permission via system prompt |
 
 ---
 
@@ -79,17 +98,7 @@ Get the shell access toggle status.
 
 ```json
 {
-  "enabled": true,
-  "id": "shell",
-  "status": "granted",
-  "lastChecked": 1718000000000,
-  "canRequest": false,
-  "permission": {
-    "id": "shell",
-    "status": "granted",
-    "lastChecked": 1718000000000,
-    "canRequest": false
-  }
+  "enabled": true
 }
 ```
 
@@ -113,15 +122,14 @@ Toggle shell access on or off. When changed while the agent is running, schedule
 
 **Response**
 
+Returns the updated shell permission state:
+
 ```json
 {
-  "shellEnabled": false,
-  "permission": {
-    "id": "shell",
-    "status": "denied",
-    "lastChecked": 1718000000000,
-    "canRequest": false
-  }
+  "id": "shell",
+  "status": "denied",
+  "lastChecked": 1718000000000,
+  "canRequest": true
 }
 ```
 
@@ -129,7 +137,7 @@ Toggle shell access on or off. When changed while the agent is running, schedule
 
 ### PUT /api/permissions/state
 
-Update permission states in bulk. Used by the Electron renderer after receiving updated permission states via IPC.
+Update permission states in bulk. Used by the Electrobun renderer after receiving updated permission states via RPC.
 
 **Request**
 
@@ -163,22 +171,17 @@ Update permission states in bulk. Used by the Electron renderer after receiving 
 
 ### POST /api/permissions/refresh
 
-Force refresh all permission states. In Electron deployments, this signals the renderer to re-check permissions via IPC.
+Force refresh all permission states. In desktop deployments, this signals the renderer to re-check permissions via IPC.
 
 **Response**
 
-```json
-{
-  "message": "Permission refresh requested",
-  "action": "ipc:permissions:refresh"
-}
-```
+Returns the full permissions state map (same shape as `GET /api/permissions`).
 
 ---
 
 ### POST /api/permissions/:id/request
 
-Request a specific system permission. In Electron deployments, this triggers a native system permission prompt.
+Request a specific system permission. In desktop deployments, this triggers a native system permission prompt.
 
 **Path Parameters**
 

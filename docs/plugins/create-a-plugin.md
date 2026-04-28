@@ -38,7 +38,7 @@ my-plugin/
     "test": "vitest run"
   },
   "dependencies": {
-    "@elizaos/core": "next"
+    "@elizaos/core": "^2.0.0"
   },
   "devDependencies": {
     "typescript": "^5.0.0",
@@ -207,11 +207,13 @@ const weatherPlugin: Plugin = {
 
   actions: [checkWeatherAction],
   providers: [pluginStatusProvider],
-  services: [WeatherCacheService as any],
+  services: [WeatherCacheService],
 };
 
 export default weatherPlugin;
 ```
+
+This is a minimal plugin. The `Plugin` interface also supports `evaluators`, `routes`, `events`, `models`, `componentTypes`, and `tests`. See [Plugin Schemas](/plugins/schemas) for all available extension points.
 
 ## Step 6: Write Tests
 
@@ -251,6 +253,12 @@ describe("weather-plugin", () => {
 ```
 
 ## Step 7: Register with Runtime
+
+| Option | Best for | How it works |
+|--------|----------|--------------|
+| **A: Local Plugin** | Active development and testing | Auto-discovered from the project's `plugins/` directory |
+| **B: Config-Based** | Persistent installations with explicit control | Referenced by path in `milady.json` |
+| **C: Character File** | Per-agent plugin sets | Listed in the character definition, loaded at agent start |
 
 ### Option A: Local Plugin (Development)
 
@@ -301,10 +309,10 @@ Add to `milady.json`:
 
 ```bash
 # Build the plugin
-cd my-plugin && npm run build
+cd my-plugin && bun run build
 
 # Run tests
-npm test
+bun test
 
 # Start Milady with the plugin loaded
 milady start
@@ -338,23 +346,21 @@ Every published plugin should include an `elizaos.plugin.json` manifest at its p
     },
     "required": ["apiKey"]
   },
-  "uiHints": [
-    {
-      "key": "apiKey",
+  "uiHints": {
+    "apiKey": {
       "label": "API Key",
       "type": "password",
-      "helpText": "Get one at openweathermap.org/appid"
+      "help": "Get one at openweathermap.org/appid"
     },
-    {
-      "key": "units",
+    "units": {
       "label": "Temperature Units",
       "type": "select",
       "advanced": false
     }
-  ],
+  },
   "requiredSecrets": ["WEATHER_API_KEY"],
   "channels": ["chat", "telegram", "discord"],
-  "dependencies": ["@elizaos/plugin-knowledge"]
+  "dependencies": ["knowledge"]
 }
 ```
 
@@ -365,25 +371,26 @@ Every published plugin should include an `elizaos.plugin.json` manifest at its p
 | `id` | `string` | Unique plugin identifier (kebab-case) |
 | `name` | `string` | Human-readable display name |
 | `version` | `string` | Semver version |
-| `kind` | `PluginKind` | One of: `memory`, `channel`, `provider`, `skill`, `database`, `feature` |
+| `kind` | `PluginKind` | One of: `feature`, `ai-provider`, `connector`, `database`, `app`, `memory`, `channel`, `provider`, `skill` |
 | `configSchema` | `JsonSchema` | JSON Schema for plugin configuration |
-| `uiHints` | `PluginConfigUiHint[]` | Hints for admin panel rendering |
+| `uiHints` | `Record<string, PluginConfigUiHint>` | Hints for admin panel rendering, keyed by config property name |
 | `requiredSecrets` | `string[]` | Environment variables that must be set |
 | `channels` | `string[]` | Supported communication channels |
 | `dependencies` | `string[]` | Other plugins this depends on |
 
+Additional fields like `optionalSecrets`, `providers`, `skills`, `gatewayMethods`, and `cliCommands` are also supported. See [Plugin Schemas](/plugins/schemas) for the complete manifest reference.
+
 ### UI Hints
 
-The `uiHints` array controls how config fields appear in the admin dashboard:
+The `uiHints` object controls how config fields appear in the admin dashboard. Each key matches a property name in `configSchema`:
 
 ```typescript
 interface PluginConfigUiHint {
-  key: string;        // matches configSchema property name
   label: string;      // display label
   type: 'text' | 'password' | 'number' | 'select' | 'toggle' | 'textarea';
-  helpText?: string;  // tooltip or helper text
+  help?: string;      // tooltip or helper text
+  sensitive?: boolean; // if true, value is masked in the UI
   advanced?: boolean; // if true, hidden under "Advanced" toggle
-  placeholder?: string;
 }
 ```
 
@@ -391,16 +398,16 @@ interface PluginConfigUiHint {
 
 ## How Plugin Discovery Works
 
-When Milady starts, it discovers plugins from multiple sources in priority order:
+When Milady starts, it discovers plugins from multiple sources in this order:
 
 1. **Milady plugin** — Built-in workspace context and session management
 2. **Core plugins** — Always loaded (`@elizaos/plugin-sql`, `@elizaos/plugin-local-embedding`, etc.)
 3. **Connector plugins** — Auto-enabled when channel config exists (e.g., `telegram` config → `@elizaos/plugin-telegram`)
 4. **Provider plugins** — Auto-enabled when API key env var is set (e.g., `ANTHROPIC_API_KEY` → `@elizaos/plugin-anthropic`)
 5. **Feature plugins** — Enabled via feature flags in `milady.json` (e.g., `features.browser: true` → `@elizaos/plugin-browser`)
-6. **User-installed plugins** — Installed via `milady plugins install`
-7. **Custom plugins** — Dropped into `~/.milady/plugins/custom/`
-8. **Ejected plugins** — Git-cloned upstream plugins in `~/.milady/plugins/ejected/`
+6. **Ejected plugins** — Git-cloned upstream plugins in `~/.milady/plugins/ejected/` (take priority over npm versions)
+7. **User-installed plugins** — Installed via `milady plugins install`
+8. **Custom plugins** — Dropped into `~/.milady/plugins/custom/`
 
 ### Auto-Enable by Environment Variable
 
@@ -410,7 +417,7 @@ Set an API key and the corresponding plugin loads automatically:
 |---------------------|--------|
 | `ANTHROPIC_API_KEY` | `@elizaos/plugin-anthropic` |
 | `OPENAI_API_KEY` | `@elizaos/plugin-openai` |
-| `GOOGLE_API_KEY` | `@elizaos/plugin-google-genai` |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | `@elizaos/plugin-google-genai` |
 | `GROQ_API_KEY` | `@elizaos/plugin-groq` |
 | `OPENROUTER_API_KEY` | `@elizaos/plugin-openrouter` |
 
@@ -436,7 +443,9 @@ Override in `milady.json`:
 ```json
 {
   "plugins": {
-    "@elizaos/plugin-telegram": { "enabled": false }
+    "entries": {
+      "telegram": { "enabled": false }
+    }
   }
 }
 ```
@@ -445,14 +454,14 @@ Override in `milady.json`:
 
 ## Starter Template
 
-The fastest way to start a new plugin is the TypeScript starter template:
+If you have the upstream `elizaos` CLI installed globally, you can scaffold a plugin project:
 
 ```bash
-# Copy the starter
-cp -r examples/_plugin/typescript/ my-plugin
-cd my-plugin
-bun install
+# Requires the elizaos CLI (npm i -g elizaos)
+npx elizaos create my-plugin --template plugin --language typescript
 ```
+
+Alternatively, copy the manual scaffold from [Step 1](#step-1-scaffold-the-project) above — it produces the same structure.
 
 The template includes:
 - Pre-configured `package.json` with `@elizaos/core` peer dependency
@@ -460,7 +469,6 @@ The template includes:
 - Example action, provider, and service
 - Vitest test setup with runtime mocks
 - `elizaos.plugin.json` manifest
-- Cypress E2E test scaffold
 
 ---
 

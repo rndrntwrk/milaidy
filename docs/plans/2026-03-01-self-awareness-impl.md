@@ -1,12 +1,10 @@
 # Agent Self-Awareness System — Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Give the Milady agent runtime perception of its own wallet, permissions, plugins, provider, connectors, cloud, and feature state via a layered lazy-load system with declarative contributor registration.
 
-**Architecture:** A new `AwarenessRegistry` collects `AwarenessContributor` implementations (one per module), composes their summaries into ~300 tokens injected every LLM turn via a new ElizaOS provider, and exposes detail via a `GET_SELF_STATUS` action. Six P0 guardrails enforce sanitization, token budgets, failure isolation, event invalidation, versioned contracts, and trust boundaries.
+**Architecture:** A new `AwarenessRegistry` collects `AwarenessContributor` implementations (one per module), composes their summaries into ~300 tokens injected every LLM turn via a new elizaOS provider, and exposes detail via a `GET_SELF_STATUS` action. Six P0 guardrails enforce sanitization, token budgets, failure isolation, event invalidation, versioned contracts, and trust boundaries.
 
-**Tech Stack:** TypeScript, ElizaOS `@elizaos/core` (Provider, Action, IAgentRuntime), vitest
+**Tech Stack:** TypeScript, elizaOS `@elizaos/core` (Provider, Action, IAgentRuntime), vitest
 
 **Design doc:** `docs/plans/2026-03-01-self-awareness-design.md`
 
@@ -507,7 +505,7 @@ function fakeRuntime(overrides: Record<string, unknown> = {}): IAgentRuntime {
   return {
     plugins: overrides.plugins ?? [],
     character: overrides.character ?? {
-      settings: { model: "claude-opus-4-6" },
+      settings: { model: "claude-opus-4-7" },
     },
     getSetting: (key: string) => (overrides.settings as Record<string, string>)?.[key] ?? null,
     ...overrides,
@@ -743,7 +741,7 @@ Expected: All tests PASS
 
 ```bash
 git add src/providers/self-status.ts src/providers/self-status.test.ts
-git commit -m "feat(awareness): add self-status ElizaOS provider"
+git commit -m "feat(awareness): add self-status elizaOS provider"
 ```
 
 ---
@@ -1007,7 +1005,7 @@ init: async (_pluginConfig, runtime) => {
 },
 ```
 
-Note: The exact mechanism for service registration depends on ElizaOS's `runtime.registerService` pattern. If the runtime supports `getService`/`registerService`, use that. Otherwise attach to the runtime object and have the action access it from there. Determine the best pattern during implementation by checking how existing services (like CLOUD_AUTH) are registered.
+Note: The exact mechanism for service registration depends on elizaOS's `runtime.registerService` pattern. If the runtime supports `getService`/`registerService`, use that. Otherwise attach to the runtime object and have the action access it from there. Determine the best pattern during implementation by checking how existing services (like CLOUD_AUTH) are registered.
 
 **Step 4: Run tests to verify they pass**
 
@@ -1100,7 +1098,7 @@ function fakeRuntime(registry: AwarenessRegistry): IAgentRuntime {
   return {
     plugins: [{ name: "milady" }, { name: "test-plugin" }],
     character: {
-      settings: { model: "claude-opus-4-6" },
+      settings: { model: "claude-opus-4-7" },
     },
     getSetting: () => null,
     getService: (name: string) => {
@@ -1192,23 +1190,23 @@ git commit -m "test(awareness): add integration smoke tests"
 
 ---
 
-### Task 9: Update CLAUDE.md With Final File Paths
+### Task 9: Sync project documentation paths
 
 **Files:**
-- Modify: `CLAUDE.md`
+- Modify as needed: `AGENTS.md`, `CLAUDE.md`
 
 **Step 1: Verify all files exist**
 
 Run: `ls -la src/contracts/awareness.ts src/awareness/registry.ts src/awareness/contributors/index.ts src/providers/self-status.ts src/actions/get-self-status.ts`
 Expected: All files exist
 
-**Step 2: Update CLAUDE.md if any paths changed during implementation**
+**Step 2: Update repo guides if paths diverged**
 
-Ensure the Self-Awareness System section in CLAUDE.md matches the actual file paths. If any paths diverged during implementation, update accordingly.
+Ensure the Self-Awareness System section in `AGENTS.md` / `CLAUDE.md` matches the shipped file paths.
 
 **Step 3: Commit**
 
 ```bash
-git add CLAUDE.md
-git commit -m "docs: update CLAUDE.md with final awareness system paths"
+git add AGENTS.md CLAUDE.md
+git commit -m "docs: sync awareness system paths in AGENTS.md / CLAUDE.md"
 ```

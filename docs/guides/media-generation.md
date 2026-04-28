@@ -106,7 +106,7 @@ The provider module header also references ElevenLabs for sound effects (`Eleven
 | `prompt` | string | Yes | Text description of the audio (lyrics, mood, style, etc.) |
 | `duration` | number | No | Audio duration in seconds |
 | `instrumental` | boolean | No | Whether to generate instrumental music without vocals |
-| `genre` | string | No | Music genre (e.g., `pop`, `rock`, `classical`, `electronic`) |
+| `genre` | string | No | Music genre (e.g., `pop`, `rock`, `classical`, `synthwave`) |
 
 **Output:** Returns an `audioUrl`, optional `title`, and optional `duration` in seconds.
 
@@ -119,9 +119,9 @@ Analyze images to describe contents, identify objects, read text, or answer ques
 | Provider | Config Key | Default Model | API Endpoint |
 |----------|-----------|--------------|-------------|
 | Eliza Cloud | `cloud` (default) | Managed | `{cloudBaseUrl}/media/vision/analyze` |
-| OpenAI | `openai` | `gpt-4o` | `https://api.openai.com/v1/chat/completions` |
-| Google | `google` | `gemini-2.0-flash` | Google Generative Language API |
-| Anthropic | `anthropic` | `claude-sonnet-4-20250514` | `https://api.anthropic.com/v1/messages` |
+| OpenAI | `openai` | `gpt-5` | `https://api.openai.com/v1/chat/completions` |
+| Google | `google` | `gemini-2.5-flash` | Google Generative Language API |
+| Anthropic | `anthropic` | `claude-sonnet-4-6` | `https://api.anthropic.com/v1/messages` |
 | xAI | `xai` | `grok-2-vision-1212` | `https://api.x.ai/v1/chat/completions` |
 | Ollama | `ollama` | `llava` | `http://localhost:11434/api/chat` |
 
@@ -214,7 +214,7 @@ Media providers are configured in the `media` section of `milady.json`. Each med
       "provider": "openai",
       "openai": {
         "apiKey": "your-openai-api-key",
-        "model": "gpt-4o"
+        "model": "gpt-5"
       }
     }
   }
@@ -241,13 +241,13 @@ Eliza Cloud settings are in the `cloud` section of `milady.json`:
 ```json
 {
   "cloud": {
-    "baseUrl": "https://www.elizacloud.ai/api/v1",
+    "baseUrl": "https://elizacloud.ai/api/v1",
     "apiKey": "optional-cloud-api-key"
   }
 }
 ```
 
-The default base URL is `https://www.elizacloud.ai/api/v1`. The API key is optional and can provide access to higher-tier cloud features. When provided, it is sent as a `Bearer` token in the `Authorization` header.
+The default base URL is `https://elizacloud.ai/api/v1`. The API key is optional and can provide access to higher-tier cloud features. When provided, it is sent as a `Bearer` token in the `Authorization` header.
 
 Eliza Cloud exposes four media endpoints:
 
@@ -329,7 +329,7 @@ FAL supports both image and video generation. The `model` field specifies which 
       "provider": "openai",
       "openai": {
         "apiKey": "your-openai-api-key",
-        "model": "gpt-4o",
+        "model": "gpt-5",
         "maxTokens": 1024
       }
     }
@@ -366,7 +366,7 @@ OpenAI supports image generation (DALL-E), video generation (Sora), and vision a
       "provider": "google",
       "google": {
         "apiKey": "your-google-api-key",
-        "model": "gemini-2.0-flash"
+        "model": "gemini-2.5-flash"
       }
     }
   }
@@ -385,7 +385,7 @@ Google supports image generation (Imagen), video generation (Veo), and vision an
       "provider": "anthropic",
       "anthropic": {
         "apiKey": "your-anthropic-api-key",
-        "model": "claude-sonnet-4-20250514"
+        "model": "claude-sonnet-4-6"
       }
     }
   }

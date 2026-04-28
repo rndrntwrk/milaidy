@@ -1,53 +1,51 @@
 ---
 title: Whitelist API
 sidebarTitle: Whitelist
-description: REST API endpoints for NFT ownership verification and Merkle proof generation for whitelisted minting.
+description: REST API endpoints for whitelist status, Twitter verification, and Merkle proof generation.
 ---
 
-## NFT Verification
-
-### Verify NFT Ownership
+## Whitelist Status
 
 ```
-POST /api/whitelist/nft/verify
+GET /api/whitelist/status
 ```
 
-Verifies Milady NFT ownership for the agent's own EVM wallet and, if verified, adds it to the in-memory whitelist. The wallet address is resolved server-side from the agent's onboarded wallet — no address is accepted in the request body.
-
-**Request body:** none.
+Returns the current whitelist status for the agent.
 
 **Response:**
 ```json
 {
-  "verified": true,
-  "balance": 2,
-  "contractAddress": "0x5Af0D9827E0c53E4799BB226655A1de152A425a5",
-  "error": null,
-  "walletAddress": "0xabc..."
+  "eligible": false,
+  "twitterVerified": false,
+  "ogCode": null,
+  "walletAddress": "0x1234567890abcdef1234567890abcdef12345678"
 }
 ```
 
-**Errors:** `400` if no wallet address is onboarded; `500` on chain verification failure.
+| Field | Type | Description |
+|-------|------|-------------|
+| `eligible` | boolean | Whether the wallet is eligible for whitelist minting |
+| `twitterVerified` | boolean | Whether the Twitter verification step is complete |
+| `ogCode` | string\|null | OG verification code, if any |
+| `walletAddress` | string | The wallet address being checked |
 
-### NFT Whitelist Status
+## Twitter Verification
+
+### Get Verification Message
 
 ```
-GET /api/whitelist/nft/status
+POST /api/whitelist/twitter/message
 ```
 
-Returns the agent's current NFT whitelist eligibility without triggering a blockchain call.
+Generates a verification message for the user to post on Twitter.
 
-**Response:**
-```json
-{
-  "walletAddress": "0xabc...",
-  "whitelisted": false,
-  "contractAddress": "0x5Af0D9827E0c53E4799BB226655A1de152A425a5",
-  "message": "Address is not whitelisted. Use POST /api/whitelist/nft/verify to verify NFT ownership."
-}
+### Verify Twitter Post
+
+```
+POST /api/whitelist/twitter/verify
 ```
 
-`walletAddress` is an empty string if no wallet is onboarded.
+Verifies that the user posted the verification message on Twitter and, if verified, adds them to the whitelist.
 
 ## Merkle Proofs
 

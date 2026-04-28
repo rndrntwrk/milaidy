@@ -63,7 +63,7 @@ Private keys stored here are **not** displayed in plaintext within this section.
 
 ## 4. Media Generation
 
-Controls which providers handle image, video, audio, and vision tasks. Each sub-section has an independent provider selection and, for cloud-capable providers, a mode toggle between Milady Cloud (no key required) and your own API key.
+Controls which providers handle image, video, audio, and vision tasks. Each sub-section has an independent provider selection and, for cloud-capable providers, a mode toggle between Eliza Cloud (no key required) and your own API key.
 
 ### Image
 

@@ -4,7 +4,16 @@ sidebarTitle: Config Schema
 description: Complete reference for the milady.json configuration file, organized by section with all fields documented.
 ---
 
-Milady is configured through a `milady.json` file stored in the state directory (default: `~/.milady/milady.json`). All sections are optional; Milady uses sensible defaults when fields are omitted.
+Milady is configured through a `milady.json` file stored in the state
+directory (default: `~/.milady/milady.json`). All sections are optional; Milady
+uses sensible defaults when fields are omitted.
+
+Canonical runtime routing is persisted separately from legacy compatibility
+fields. The top-level runtime source of truth is:
+
+- `deploymentTarget`
+- `linkedAccounts`
+- `serviceRouting`
 
 The configuration is validated against Zod schemas at load time. Invalid fields produce warnings but do not block startup.
 
@@ -30,6 +39,9 @@ The `MiladyConfig` type defines every section available in `milady.json`. Below 
 | [`models`](#models) | `ModelsConfig` | Custom model providers, Bedrock discovery, model selection |
 | [`nodeHost`](#nodehost) | `NodeHostConfig` | Node host browser proxy settings |
 | [`agents`](#agents) | `AgentsConfig` | Agent list, defaults, and per-agent configuration |
+| `deploymentTarget` | `DeploymentTargetConfig` | Canonical hosting target for the active server |
+| `linkedAccounts` | `LinkedAccountsConfig` | Canonical linked-account inventory |
+| `serviceRouting` | `ServiceRoutingConfig` | Canonical per-capability routing |
 | [`tools`](#tools) | `ToolsConfig` | Tool profiles, exec, web, media, links, sandbox policies |
 | [`bindings`](#bindings) | `AgentBinding[]` | Agent-to-channel routing bindings |
 | [`broadcast`](#broadcast) | `BroadcastConfig` | Broadcast peer routing strategy |
@@ -49,7 +61,7 @@ The `MiladyConfig` type defines every section available in `milady.json`. Below 
 | [`memory`](#memory) | `MemoryConfig` | Memory backend (builtin or QMD) |
 | [`embedding`](#embedding) | `EmbeddingConfig` | Local embedding model (GGUF, GPU layers, idle unload) |
 | [`database`](#database) | `DatabaseConfig` | Database provider and connection settings |
-| [`cloud`](#cloud) | `CloudConfig` | ElizaCloud integration, bridge, backup, containers |
+| [`cloud`](#cloud) | `CloudConfig` | Eliza Cloud integration, bridge, backup, containers |
 | [`x402`](#x402) | `X402Config` | x402 HTTP payment protocol |
 | [`media`](#media) | `MediaConfig` | Media generation providers (image, video, audio, vision) |
 | [`mcp`](#mcp) | `object` | MCP (Model Context Protocol) server definitions |
@@ -73,6 +85,9 @@ The `MiladyConfig` type defines every section available in `milady.json`. Below 
   "models": {},
   "nodeHost": {},
   "agents": {},
+  "deploymentTarget": {},
+  "linkedAccounts": {},
+  "serviceRouting": {},
   "tools": {},
   "bindings": [],
   "broadcast": {},
@@ -98,6 +113,39 @@ The `MiladyConfig` type defines every section available in `milady.json`. Below 
   "registry": {},
   "features": {},
   "customActions": []
+}
+```
+
+## Canonical Runtime Routing
+
+These three fields define the active runtime topology:
+
+| Field | Description |
+|------|-------------|
+| `deploymentTarget` | Where the active server runs: `local`, `cloud`, or `remote` |
+| `linkedAccounts` | Which provider or cloud accounts are linked |
+| `serviceRouting` | Which backend handles `llmText`, `tts`, `media`, `embeddings`, and `rpc` |
+
+```json5
+{
+  deploymentTarget: {
+    runtime: "remote",
+    provider: "remote",
+    remoteApiBase: "https://milady.example.com",
+  },
+  linkedAccounts: {
+    elizacloud: {
+      status: "linked",
+      source: "oauth",
+    },
+  },
+  serviceRouting: {
+    llmText: {
+      backend: "openrouter",
+      transport: "direct",
+      primaryModel: "openrouter/anthropic/claude-sonnet-4.6",
+    },
+  },
 }
 ```
 
@@ -149,7 +197,7 @@ Environment variable injection and shell env import.
 | `[key]` | `string` | -- | Sugar: string values placed directly under `env` are treated as env var overrides |
 
 <Info>
-String values placed directly under the `env` key are treated as environment variable overrides. For example, `"env": { "OPENAI_API_KEY": "sk-..." }` sets the key when not already present in the process environment.
+String values placed directly under the `env` key are treated as environment variable overrides. For example, `"env": { "OPENAI_API_KEY": "<OPENAI_API_KEY>" }` sets the key when not already present in the process environment.
 </Info>
 
 ---
@@ -428,9 +476,6 @@ Global agent defaults. Every agent inherits these unless overridden.
 | `workspace` | `string` | -- | Default working directory for agent runs |
 | `adminEntityId` | `string` | -- | Stable owner/admin entity ID for control-chat ownership |
 | `repoRoot` | `string` | -- | Repository root override for system prompt |
-| `skipBootstrap` | `boolean` | -- | Skip bootstrap (BOOTSTRAP.md creation) for pre-configured deployments |
-| `bootstrapMaxChars` | `number` | `20000` | Max chars for injected bootstrap files before truncation |
-| `enableBootstrapProviders` | `boolean` | `true` | Enable bootstrap providers (attachments, entities, facts) |
 | `userTimezone` | `string` | -- | IANA timezone for the user (defaults to host timezone) |
 | `timeFormat` | `"auto" \| "12" \| "24"` | -- | Time format in system prompt |
 | `envelopeTimezone` | `string` | `"utc"` | Envelope timestamp timezone (`"utc"`, `"local"`, `"user"`, or IANA TZ) |
@@ -919,7 +964,7 @@ Messaging connector configuration. Each key is a connector ID (e.g. `telegram`, 
     },
     "discord": {
       "enabled": true,
-      "token": "Bot ..."
+      "botToken": "Bot ..."
     }
   }
 }
@@ -1266,13 +1311,13 @@ Database provider and connection configuration.
 
 ## `cloud`
 
-ElizaCloud integration for remote agent provisioning, inference proxying, and state backup.
+Eliza Cloud integration for remote agent provisioning, inference proxying, and state backup.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `enabled` | `boolean` | `false` | Enable ElizaCloud integration |
+| `enabled` | `boolean` | `false` | Enable Eliza Cloud integration |
 | `provider` | `string` | -- | Cloud provider ID (e.g. `"elizacloud"`; set during onboarding) |
-| `baseUrl` | `string` | `https://www.elizacloud.ai/api/v1` | API base URL |
+| `baseUrl` | `string` | `https://elizacloud.ai/api/v1` | API base URL |
 | `apiKey` | `string` | -- | Cached API key (stored encrypted via gateway auth) |
 | `inferenceMode` | `"cloud" \| "byok" \| "local"` | -- | Inference routing: `cloud` (proxied), `byok` (user keys), `local` (no cloud) |
 | `autoProvision` | `boolean` | `false` | Auto-deploy agents to cloud on creation |
@@ -1391,7 +1436,7 @@ MCP (Model Context Protocol) server definitions.
     "servers": {
       "my-server": {
         "type": "stdio",
-        "command": "npx",
+        "command": "bunx",
         "args": ["-y", "@some/mcp-server"],
         "env": { "API_KEY": "..." }
       },
@@ -1439,7 +1484,9 @@ Feature flags for plugin auto-enable and feature toggles. Each key maps to eithe
 ```json
 {
   "features": {
-    "shellEnabled": true,
+    "shell": true,
+    "browser": true,
+    "cron": true,
     "someFeature": { "enabled": true, "option": "value" }
   }
 }

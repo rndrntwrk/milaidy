@@ -1,6 +1,10 @@
+---
+title: Known Failure Modes
+---
+
 # Known Failure Modes
 
-This document catalogs known failure modes across the Milaidy system, organized by subsystem. Each entry describes the observable symptoms, underlying root cause, any current mitigation in place, and the remaining gap or risk.
+This document catalogs known failure modes across the Milady system, organized by subsystem. Each entry describes the observable symptoms, underlying root cause, any current mitigation in place, and the remaining gap or risk.
 
 ---
 
@@ -69,6 +73,16 @@ This document catalogs known failure modes across the Milaidy system, organized 
 | **Root cause** | Server-Sent Events (SSE) have no built-in replay or resume mechanism. When the network connection drops, the stream terminates and there is no way to recover from the last received offset. |
 | **Current mitigation** | SSE interruption detection with visual indicator and retry button in chat UI. |
 | **Gap / Risk** | No automatic retry with offset tracking. The user loses the partial response and must re-trigger the full generation. On long responses this is especially costly in both time and tokens. |
+
+### F-03b: Post-generation error replaces streamed text
+
+| Field | Detail |
+|---|---|
+| **Status** | **Fixed** (PR #1833) |
+| **Symptoms** | The LLM streams a full reply successfully, but a post-action continuation fails. The already-streamed text is discarded and replaced with a generic "provider issue" message, confusing the user. |
+| **Root cause** | The error handler did not distinguish between failures that occurred before any text was streamed and failures that occurred after. Both paths produced the same generic fallback reply. |
+| **Current mitigation** | The streaming error handler now checks whether text was already delivered. If so, the streamed text is preserved in the final `done` SSE event instead of being replaced. Errors are logged for diagnosis. |
+| **Gap / Risk** | None — the user retains the partial or complete reply that was already visible. |
 
 ### F-04: Insufficient credits fallback detection
 
@@ -170,7 +184,7 @@ This document catalogs known failure modes across the Milaidy system, organized 
 
 | Field | Detail |
 |---|---|
-| **Status** | **Fixed** (plugin-agent-orchestrator 0.3.4, PR #7; milaidy PR #817) |
+| **Status** | **Fixed** (plugin-agent-orchestrator 0.3.4, PR #7; milady PR #817) |
 | **Symptoms** | The first task sent to a coding agent is not received. Subsequent tasks work normally. |
 | **Root cause** | The listener must be attached before `pushDefaultRules` executes, which includes a 1500ms sleep. If the listener attachment is delayed (e.g., under heavy system load), the task delivery window is missed. |
 | **Current mitigation** | Fixed ordering ensures the listener is attached before `pushDefaultRules` is called. A 30-second timeout fallback forces task delivery if `session_ready` is never received (covers edge cases where the ready detection pattern doesn't match a CLI update). |

@@ -1,10 +1,10 @@
 ---
 title: "Testing Plugins"
 sidebarTitle: "Testing"
-description: "Unit, integration, and E2E testing patterns for ElizaOS plugins using Vitest."
+description: "Unit, integration, and E2E testing patterns for elizaOS plugins using Vitest."
 ---
 
-This guide covers testing patterns for ElizaOS plugins — from unit testing individual actions and providers to integration testing with the runtime, and embedding test suites in your plugin.
+This guide covers testing patterns for elizaOS plugins — from unit testing individual actions and providers to integration testing with the runtime, and embedding test suites in your plugin.
 
 ## Setup
 
@@ -168,7 +168,7 @@ describe('pluginStatusProvider', () => {
     const runtime = createMockRuntime();
     const message = createMockMessage('hello');
 
-    const result = await pluginStatusProvider.get(runtime, message);
+    const result = await pluginStatusProvider.get(runtime, message, {} as any);
 
     expect(result).toBeDefined();
     expect(typeof result.text).toBe('string');
@@ -182,7 +182,7 @@ describe('pluginStatusProvider', () => {
     const runtime = createMockRuntime();
     const message = createMockMessage('hello');
 
-    const result = await pluginStatusProvider.get(runtime, message);
+    const result = await pluginStatusProvider.get(runtime, message, {} as any);
 
     expect(result.text).toContain('missing');
   });
@@ -327,6 +327,7 @@ Plugins can embed tests via the `tests` field. These run when users execute `mil
 ```typescript
 import type { Plugin, TestSuite, Memory } from '@elizaos/core';
 import { checkWeatherAction } from './actions/weather';
+import { pluginStatusProvider } from './providers/status';
 
 const weatherTests: TestSuite = {
   name: 'weather-plugin-tests',
@@ -343,7 +344,7 @@ const weatherTests: TestSuite = {
       name: 'provider returns context',
       fn: async (runtime) => {
         const msg = { content: { text: 'status' } } as Memory;
-        const result = await pluginStatusProvider.get(runtime, msg);
+        const result = await pluginStatusProvider.get(runtime, msg, {} as any);
         if (!result.text) throw new Error('Expected non-empty text');
       },
     },
@@ -414,11 +415,18 @@ E2E tests start the agent, load the plugin, and verify behavior through the chat
 // cypress/e2e/plugin.cy.ts
 describe('Weather Plugin E2E', () => {
   it('responds to weather queries', () => {
-    cy.request('POST', 'http://localhost:18789/api/chat', {
-      message: 'What is the weather in London?',
-    }).then((response) => {
-      expect(response.status).to.eq(200);
-      expect(response.body.text).to.include('London');
+    cy.request('POST', 'http://localhost:18789/api/conversations', {
+      title: 'Weather Plugin Test',
+    }).then(({ body }) => {
+      const conversationId = body.conversation.id;
+      cy.request(
+        'POST',
+        `http://localhost:18789/api/conversations/${conversationId}/messages`,
+        { text: 'What is the weather in London?' },
+      ).then((response) => {
+        expect(response.status).to.eq(200);
+        expect(response.body.text).to.include('London');
+      });
     });
   });
 });
@@ -431,4 +439,4 @@ describe('Weather Plugin E2E', () => {
 - [Create a Plugin](/plugins/create-a-plugin) — Build a plugin from scratch
 - [Plugin Patterns](/plugins/patterns) — Common implementation patterns
 - [Plugin Schemas](/plugins/schemas) — Full type reference
-- [Contributing Guide](/guides/contribution-guide) — Test conventions for the monorepo
+- [Contributing Guide](/guides/contributing) — Test conventions for the monorepo

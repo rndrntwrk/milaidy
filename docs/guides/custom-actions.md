@@ -22,11 +22,11 @@ When a user sends a message, the runtime evaluates all registered actions. If th
 
 ## Built-in Actions Reference
 
-Milady registers the following built-in actions from `src/actions/` automatically at runtime.
+Milady registers the following built-in actions automatically at runtime. Action source lives in the elizaOS submodule under `eliza/packages/app-core/src/actions/`.
 
 ### Agent Lifecycle
 
-**RESTART_AGENT** -- Gracefully restarts the agent process. Stops the runtime, rebuilds if source files changed, and relaunches. Persists a "Restarting..." memory, returns the response, then schedules a restart after a 1.5-second delay so the response can flush. In CLI mode, exits with code 75 for the runner script; in Electron mode, performs an in-process hot restart. Optional `reason` parameter is logged for diagnostics.
+**RESTART_AGENT** -- Gracefully restarts the agent process. Stops the runtime, rebuilds if source files changed, and relaunches. Persists a "Restarting..." memory, returns the response, then schedules a restart after a 1.5-second delay so the response can flush. In CLI mode, exits with code 75 for the runner script; in desktop runtime mode, performs an in-process hot restart. Optional `reason` parameter is logged for diagnostics.
 
 ### Plugin Management
 
@@ -71,7 +71,7 @@ All media actions use the configured provider (Eliza Cloud by default, or FAL/Op
 |--------|-------------|
 | `PLAY_EMOTE` | Play an emote animation on the avatar. Looks up the emote in the catalog and POSTs to the local API. |
 | `INSTALL_PLUGIN` | Install a plugin from the registry via `POST /api/plugins/install`. Auto-restarts to load it. |
-| `RUN_IN_TERMINAL` | Execute a shell command via `POST /api/terminal/run`. Output is broadcast via WebSocket. |
+| `SHELL_COMMAND` | Execute a shell command via `POST /api/terminal/run`. Output is broadcast via WebSocket. |
 | `LOG_LEVEL` | Set the per-room log level for the current session (`trace`, `debug`, `info`, `warn`, `error`). |
 
 ## Custom Actions

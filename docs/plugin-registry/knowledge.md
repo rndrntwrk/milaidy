@@ -1,16 +1,20 @@
 ---
-title: "Knowledge Plugin"
+title: "Knowledge"
 sidebarTitle: "Knowledge"
-description: "RAG system — document ingestion, embedding generation, similarity search, knowledge retrieval, and supported file formats."
+description: "Native RAG system — document ingestion, embedding generation, similarity search, knowledge retrieval, and supported file formats."
 ---
 
-The Knowledge plugin provides a Retrieval-Augmented Generation (RAG) system for Milady agents. It enables agents to retrieve relevant information from a document corpus and inject it into the LLM context.
+<Warning>
+Knowledge management is a built-in runtime capability, not a standalone plugin. No separate installation is needed — knowledge features are available by default.
+</Warning>
 
-**Package:** `@elizaos/plugin-knowledge` (core plugin — always loaded)
+The native knowledge feature provides a Retrieval-Augmented Generation (RAG) system for Milady agents. It enables agents to retrieve relevant information from a document corpus and inject it into the LLM context.
+
+**Built-in runtime feature** — `knowledge` is part of the elizaOS core runtime and is enabled by default. It is not a standalone plugin in the plugin registry; it loads automatically as part of the core plugin set.
 
 ## Overview
 
-The Knowledge plugin manages the full RAG pipeline:
+The knowledge feature manages the full RAG pipeline:
 
 1. **Ingest** — Documents are chunked and embedded on upload
 2. **Index** — Embeddings are stored in the vector store (backed by the SQL plugin)
@@ -19,7 +23,7 @@ The Knowledge plugin manages the full RAG pipeline:
 
 ## Installation
 
-The Knowledge plugin is loaded automatically. No installation is required.
+Knowledge is enabled automatically in Milady. No installation is required.
 
 ## Supported File Formats
 
@@ -41,7 +45,7 @@ Navigate to **Agent → Knowledge** and upload documents through the file picker
 ### Via the REST API
 
 ```bash
-curl -X POST http://localhost:3000/api/knowledge \
+curl -X POST http://localhost:31337/api/knowledge \
   -H "Authorization: Bearer $MILADY_API_KEY" \
   -F "file=@document.pdf" \
   -F "agentId=your-agent-id"
@@ -95,7 +99,7 @@ Place documents in the knowledge directory specified in `milady.json`:
 
 ## Embedding Model
 
-By default, knowledge embeddings use the local embedding model provided by `@elizaos/plugin-local-embedding` (Nomic Embed Text v1.5, 768 dimensions). This runs entirely on-device — no API key required.
+By default, knowledge embeddings use the local embedding model provided by `@elizaos/plugin-local-embedding` (Nomic Embed Text v1.5). Milady caps the embedding dimension to **384** (set via `EMBEDDING_DIMENSION` at boot). This runs entirely on-device — no API key required.
 
 To use a different embedding model, configure it in `milady.json`:
 
@@ -103,7 +107,7 @@ To use a different embedding model, configure it in `milady.json`:
 {
   "embedding": {
     "model": "nomic-embed-text-v1.5.Q5_K_M.gguf",
-    "dimensions": 768
+    "dimensions": 384
   }
 }
 ```
@@ -130,7 +134,7 @@ The provider runs with `position: -5` (before most other providers) to ensure kn
 
 ## Actions
 
-The Knowledge plugin registers the following actions:
+The native knowledge feature registers the following actions:
 
 | Action | Description |
 |--------|-------------|
@@ -154,6 +158,6 @@ for (const result of results) {
 
 ## Related
 
-- [Bootstrap Plugin](/plugin-registry/bootstrap) — Prompt assembly that includes knowledge context
+- [Cron Plugin](/plugin-registry/cron) — Triggers knowledge retrieval on a schedule
 - [SQL Plugin](/plugin-registry/sql) — Vector store backend
 - [Knowledge Guide](/guides/knowledge) — Detailed knowledge management guide

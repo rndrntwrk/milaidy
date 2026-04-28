@@ -1,40 +1,188 @@
-/**
- * Milady Capacitor App Entry Point
- *
- * This file initializes the Capacitor runtime, sets up platform-specific
- * features, and mounts the React application.
- */
-
-import "./styles.css";
+import { ErrorBoundary } from "@elizaos/app-core";
+import "@elizaos/app-core/styles/styles.css";
+import "@elizaos/app-core/styles/brand-gold.css";
 
 import { App as CapacitorApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import { Keyboard } from "@capacitor/keyboard";
-import { StatusBar, Style } from "@capacitor/status-bar";
-// Import Capacitor bridge utilities
+import { Preferences } from "@capacitor/preferences";
+import { client } from "@elizaos/app-core";
 import {
   initializeCapacitorBridge,
+  subscribeDesktopBridgeEvent,
   initializeStorageBridge,
   isElectrobunRuntime,
-} from "@milady/app-core/bridge";
+} from "@elizaos/app-core";
+import { PhoneCompanionApp } from "@elizaos/app-core";
+import type { BrandingConfig } from "@elizaos/app-core";
+import {
+  type AppBootConfig,
+  getBootConfig,
+  MOBILE_RUNTIME_MODE_STORAGE_KEY,
+  normalizeMobileRuntimeMode,
+  setBootConfig,
+} from "@elizaos/app-core";
 import {
   AGENT_READY_EVENT,
   APP_PAUSE_EVENT,
   APP_RESUME_EVENT,
   COMMAND_PALETTE_EVENT,
   CONNECT_EVENT,
-  dispatchMiladyEvent,
-  EMOTE_PICKER_EVENT,
+  dispatchAppEvent,
+  MOBILE_RUNTIME_MODE_CHANGED_EVENT,
   SHARE_TARGET_EVENT,
   TRAY_ACTION_EVENT,
-} from "@milady/app-core/events";
-// Import the agent plugin
-import { Agent } from "@milady/capacitor-agent";
-import { Desktop } from "@milady/capacitor-desktop";
+} from "@elizaos/app-core";
+import {
+  applyForceFreshOnboardingReset,
+  applyLaunchConnectionFromUrl,
+  applyLaunchConnection,
+  installDesktopPermissionsClientPatch,
+  installForceFreshOnboardingClientPatch,
+  installLocalProviderCloudPreferencePatch,
+  isAppWindowRoute,
+  isDetachedWindowShell,
+  getWindowNavigationPath,
+  resolveWindowShellRoute,
+  shouldInstallMainWindowOnboardingPatches,
+  syncDetachedShellLocation,
+} from "@elizaos/app-core";
+import { AppWindowRenderer } from "@elizaos/app-core";
+import { dispatchQueuedLifeOpsGithubCallbackFromUrl } from "@elizaos/app-lifeops/platform";
+import type { ShareTargetPayload } from "@elizaos/app-core/platform";
+import {
+  DESKTOP_TRAY_MENU_ITEMS,
+  DesktopOnboardingRuntime,
+  DesktopSurfaceNavigationRuntime,
+  DesktopTrayRuntime,
+  DetachedShellRoot,
+} from "@elizaos/app-core";
+import { AppProvider } from "@elizaos/app-core";
+import { applyUiTheme, loadUiTheme } from "@elizaos/app-core";
+import { Agent } from "@elizaos/capacitor-agent";
+import { Desktop } from "@elizaos/capacitor-desktop";
+import {
+  startDeviceBridgeClient,
+  type DeviceBridgeClient,
+} from "@elizaos/capacitor-llama";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { App } from "./App";
-import { AppProvider } from "./AppContext";
+import { CompanionShell } from "@elizaos/app-companion/ui";
+import {
+  createVectorBrowserRenderer,
+  GlobalEmoteOverlay,
+  InferenceCloudAlertButton,
+  prefetchVrmToCache,
+  resolveCompanionInferenceNotice,
+  THREE,
+  useCompanionSceneStatus,
+} from "@elizaos/app-companion";
+import "@elizaos/app-companion/register";
+// Side-effect: register LifeOps sidebar widgets + client methods on ElizaClient.
+import "@elizaos/app-lifeops/widgets";
+// Side-effect: register coding-agent (task-coordinator) slots so app-core
+// slot wrappers (CodingAgentControlChip, PtyConsoleBase, etc.) render the
+// real components instead of nulls.
+import "@elizaos/app-task-coordinator/register-slots";
+// Side-effect: register game operator surfaces + detail extensions.
+import "@elizaos/app-babylon/ui";
+import "@elizaos/app-scape/ui";
+import "@elizaos/app-hyperscape/ui";
+import "@elizaos/app-2004scape/ui";
+import "@elizaos/app-defense-of-the-agents/ui";
+import "@elizaos/app-screenshare/ui";
+import "@clawville/app-clawville/ui";
+import {
+  AppBlockerSettingsCard,
+  LifeOpsBrowserSetupPanel as BrowserBridgeSetupPanel,
+  LifeOpsPageView,
+  WebsiteBlockerSettingsCard,
+} from "@elizaos/app-lifeops/ui";
+import { LifeOpsActivitySignalsEffect } from "@elizaos/app-lifeops/components/LifeOpsActivitySignalsEffect";
+import {
+  ApprovalQueue,
+  StewardLogo,
+  TransactionHistory,
+} from "@elizaos/app-steward/ui";
+import {
+  CodingAgentControlChip,
+  CodingAgentSettingsSection,
+  CodingAgentTasksPanel,
+  PtyConsoleDrawer,
+} from "@elizaos/app-task-coordinator";
+import { FineTuningView } from "@elizaos/app-training/ui";
+import "@elizaos/app-shopify/register";
+import "@elizaos/app-vincent/client";
+import { useVincentState } from "@elizaos/app-vincent/ui";
+import "@elizaos/app-vincent/register";
+import { shouldUseCloudOnlyBranding } from "@elizaos/app-core";
+import {
+  APP_BRANDING_BASE,
+  APP_CONFIG,
+  APP_LOG_PREFIX,
+  APP_NAMESPACE,
+  APP_URL_SCHEME,
+} from "./app-config";
+import { APP_ENV_ALIASES, APP_ENV_PREFIX } from "./brand-env";
+import { APP_CHARACTER_CATALOG } from "./character-catalog";
+import { App } from "../../../eliza/packages/app-core/src/App";
+import {
+  apiBaseToDeviceBridgeUrl,
+  type IosRuntimeConfig,
+  resolveIosRuntimeConfig,
+} from "./ios-runtime";
+
+// CharacterEditor is statically re-exported by `@elizaos/app-core/browser`,
+// so the previous `lazy()` wrapper here was eagerly merged back into the
+// main chunk by Rollup. Static import keeps the load path honest.
+import { CharacterEditor } from "@elizaos/app-core/components/character/CharacterEditor";
+
+declare global {
+  interface Window {
+    __ELIZA_APP_SHARE_QUEUE__?: ShareTargetPayload[];
+    __ELIZA_APP_CHARACTER_EDITOR__?: typeof CharacterEditor;
+    __ELIZA_APP_API_BASE__?: string;
+  }
+}
+
+const BRANDED_WINDOW_KEYS = {
+  apiBase: `__${APP_ENV_PREFIX}_API_BASE__`,
+  characterEditor: `__${APP_ENV_PREFIX}_CHARACTER_EDITOR__`,
+  shareQueue: `__${APP_ENV_PREFIX}_SHARE_QUEUE__`,
+} as const;
+
+type AppCompatWindow = Window &
+  Record<string, unknown> & {
+    __ELIZA_APP_SHARE_QUEUE__?: ShareTargetPayload[];
+    __ELIZA_APP_CHARACTER_EDITOR__?: typeof CharacterEditor;
+    __ELIZA_APP_API_BASE__?: string;
+  };
+
+function getAppWindow(): AppCompatWindow {
+  return window as unknown as AppCompatWindow;
+}
+
+function getInjectedAppApiBase(): string | undefined {
+  const appWindow = getAppWindow();
+  const brandedApiBase = appWindow[BRANDED_WINDOW_KEYS.apiBase];
+  return (
+    appWindow.__ELIZA_APP_API_BASE__ ??
+    (typeof brandedApiBase === "string" ? brandedApiBase : undefined)
+  );
+}
+
+const APP_BRANDING: Partial<BrandingConfig> = {
+  ...APP_BRANDING_BASE,
+  // The hosted web bundle stays cloud-only in production. Desktop shells and
+  // other hosts inject an explicit API base before React boots, and that host
+  // backend should control onboarding capabilities instead.
+  cloudOnly: shouldUseCloudOnlyBranding({
+    isDev: import.meta.env.DEV ?? false,
+    injectedApiBase:
+      typeof window === "undefined" ? undefined : getInjectedAppApiBase(),
+    isNativePlatform: Capacitor.isNativePlatform(),
+  }),
+};
 
 /**
  * Platform detection utilities
@@ -43,125 +191,169 @@ const platform = Capacitor.getPlatform();
 const isNative = Capacitor.isNativePlatform();
 const isIOS = platform === "ios";
 const isAndroid = platform === "android";
-const isWeb = isWebPlatform();
+const IOS_RUNTIME_ENV_CONFIG = resolveIosRuntimeConfig(import.meta.env);
+const DEVICE_BRIDGE_ID_KEY = "milady_device_bridge_id";
 
-function isElectronPlatform(): boolean {
-  return platform === "electron" || isElectrobunRuntime();
+let mobileDeviceBridgeClient: DeviceBridgeClient | null = null;
+let mobileRuntimeModeListenerInstalled = false;
+
+function isDesktopPlatform(): boolean {
+  return isElectrobunRuntime();
 }
 
-function isWebPlatform(): boolean {
-  return platform === "web" && !isElectrobunRuntime();
+const windowShellRoute = resolveWindowShellRoute();
+
+/**
+ * Adds `eliza-electrobun-frameless` for CSS `-webkit-app-region` (Chromium/CEF).
+ * macOS WKWebView move/resize are still driven by native overlays in
+ * window-effects.mm; this class mainly marks the shell and helps non-WK engines.
+ */
+function shouldEnableElectrobunMacWindowDrag(): boolean {
+  if (!isElectrobunRuntime() || typeof document === "undefined") return false;
+  if (isDetachedWindowShell(windowShellRoute)) return false;
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent;
+  return /Mac/i.test(ua) && !/(iPhone|iPad|iPod)/i.test(ua);
 }
 
-interface ShareTargetFile {
-  name: string;
-  path?: string;
+if (shouldEnableElectrobunMacWindowDrag()) {
+  document.documentElement.classList.add("eliza-electrobun-frameless");
 }
 
-interface ShareTargetPayload {
-  source?: string;
-  title?: string;
-  text?: string;
-  url?: string;
-  files?: ShareTargetFile[];
+// Dev escape hatch: ?reset forces a truly fresh onboarding session by clearing
+// persisted state and temporarily suppressing stale backend resume config.
+if (shouldInstallMainWindowOnboardingPatches(windowShellRoute)) {
+  applyForceFreshOnboardingReset();
+  installForceFreshOnboardingClientPatch(client);
 }
+installLocalProviderCloudPreferencePatch(client);
+installDesktopPermissionsClientPatch(client);
 
-declare global {
-  interface Window {
-    __MILADY_SHARE_QUEUE__?: ShareTargetPayload[];
+// Register custom character editor for app-core's ViewRouter to pick up
+window.__ELIZA_APP_CHARACTER_EDITOR__ = CharacterEditor;
+getAppWindow()[BRANDED_WINDOW_KEYS.characterEditor] = CharacterEditor;
+
+import { getStylePresets } from "@elizaos/shared/onboarding-presets";
+
+// Derive VRM roster from STYLE_PRESETS so character names stay in one place.
+const APP_STYLE_PRESETS = getStylePresets();
+
+const APP_VRM_ASSETS = APP_STYLE_PRESETS.slice()
+  .sort((a, b) => a.avatarIndex - b.avatarIndex)
+  .map((p) => ({ title: p.name, slug: `${APP_NAMESPACE}-${p.avatarIndex}` }));
+
+const appBootConfig: AppBootConfig = {
+  branding: APP_BRANDING,
+  defaultApps: APP_CONFIG.defaultApps,
+  assetBaseUrl:
+    (import.meta.env.VITE_ASSET_BASE_URL as string | undefined)?.trim() ||
+    undefined,
+  cloudApiBase: IOS_RUNTIME_ENV_CONFIG.cloudApiBase,
+  vrmAssets: APP_VRM_ASSETS,
+  onboardingStyles: APP_STYLE_PRESETS,
+  characterEditor: CharacterEditor,
+  companionShell: CompanionShell,
+  resolveCompanionInferenceNotice,
+  companionInferenceAlertButton: InferenceCloudAlertButton,
+  companionGlobalOverlay: GlobalEmoteOverlay,
+  useCompanionSceneStatus,
+  prefetchVrmToCache,
+  companionVectorBrowser: {
+    THREE,
+    createVectorBrowserRenderer,
+  },
+  codingAgentTasksPanel: CodingAgentTasksPanel,
+  codingAgentSettingsSection: CodingAgentSettingsSection,
+  codingAgentControlChip: CodingAgentControlChip,
+  ptyConsoleDrawer: PtyConsoleDrawer,
+  fineTuningView: FineTuningView,
+  useVincentState,
+  stewardLogo: StewardLogo,
+  stewardApprovalQueue: ApprovalQueue,
+  stewardTransactionHistory: TransactionHistory,
+  characterCatalog: APP_CHARACTER_CATALOG,
+  envAliases: APP_ENV_ALIASES,
+  lifeOpsPageView: LifeOpsPageView,
+  lifeOpsBrowserSetupPanel: BrowserBridgeSetupPanel,
+  appBlockerSettingsCard: AppBlockerSettingsCard,
+  websiteBlockerSettingsCard: WebsiteBlockerSettingsCard,
+  clientMiddleware: {
+    forceFreshOnboarding:
+      shouldInstallMainWindowOnboardingPatches(windowShellRoute),
+    preferLocalProvider: true,
+    desktopPermissions: isDesktopPlatform(),
+  },
+};
+
+setBootConfig(appBootConfig);
+
+function getShareQueue(): ShareTargetPayload[] {
+  const appWindow = getAppWindow();
+  const brandedQueue = appWindow[BRANDED_WINDOW_KEYS.shareQueue];
+  const existing =
+    appWindow.__ELIZA_APP_SHARE_QUEUE__ ??
+    (Array.isArray(brandedQueue)
+      ? (brandedQueue as ShareTargetPayload[])
+      : undefined);
+  if (existing) {
+    appWindow.__ELIZA_APP_SHARE_QUEUE__ = existing;
+    appWindow[BRANDED_WINDOW_KEYS.shareQueue] = existing;
+    return existing;
   }
+  const queue: ShareTargetPayload[] = [];
+  appWindow.__ELIZA_APP_SHARE_QUEUE__ = queue;
+  appWindow[BRANDED_WINDOW_KEYS.shareQueue] = queue;
+  return queue;
 }
 
 function dispatchShareTarget(payload: ShareTargetPayload): void {
-  if (!window.__MILADY_SHARE_QUEUE__) {
-    window.__MILADY_SHARE_QUEUE__ = [];
-  }
-  window.__MILADY_SHARE_QUEUE__.push(payload);
-  dispatchMiladyEvent(SHARE_TARGET_EVENT, payload);
+  getShareQueue().push(payload);
+  dispatchAppEvent(SHARE_TARGET_EVENT, payload);
 }
 
-/**
- * Initialize the agent plugin.
- *
- * Used for web/mobile plugin fallback status checks.
- */
+function logNativePluginUnavailable(pluginName: string, error: unknown): void {
+  console.warn(
+    `${APP_LOG_PREFIX} ${pluginName} plugin not available:`,
+    error instanceof Error ? error.message : error,
+  );
+}
+
 async function initializeAgent(): Promise<void> {
   try {
     const status = await Agent.getStatus();
-    console.log(
-      `[Milady] Agent status: ${status.state}`,
-      status.agentName ?? "",
-    );
-
-    // Dispatch event so the UI knows the agent is available
-    dispatchMiladyEvent(AGENT_READY_EVENT, status);
+    dispatchAppEvent(AGENT_READY_EVENT, status);
   } catch (err) {
     console.warn(
-      "[Milady] Agent not available:",
+      `${APP_LOG_PREFIX} Agent not available:`,
       err instanceof Error ? err.message : err,
     );
   }
 }
 
-/**
- * Initialize platform-specific features
- */
 async function initializePlatform(): Promise<void> {
-  // Initialize storage bridge (replaces localStorage with Preferences on native)
   await initializeStorageBridge();
-
-  // Initialize the Capacitor bridge for native plugin access
   initializeCapacitorBridge();
 
   if (isIOS || isAndroid) {
-    // Configure status bar for mobile platforms (not available on Electron)
-    await initializeStatusBar();
-
-    // Configure keyboard behavior
+    await import("@elizaos/app-core/platform/native-plugin-entrypoints");
     await initializeKeyboard();
-
-    // Handle app lifecycle events
     initializeAppLifecycle();
+    initializeMobileRuntimeModeListener();
+    await initializeMobileDeviceBridge();
   }
 
-  if (isElectronPlatform()) {
-    // Electron-specific initialization
-    await initializeElectron();
-  } else if (!isWeb) {
-    // The web shell bootstraps against the HTTP API directly. Avoid the extra
-    // plugin status probe there so protected endpoints do not get hit before
-    // pairing/bootstrap state is known.
+  if (isDesktopPlatform()) {
+    await initializeDesktopShell();
+  } else {
     await initializeAgent();
   }
 }
 
-/**
- * Configure the native status bar
- */
-async function initializeStatusBar(): Promise<void> {
-  // Set dark style for dark theme
-  await StatusBar.setStyle({ style: Style.Dark });
-
-  if (isAndroid) {
-    // Make status bar overlay content on Android
-    await StatusBar.setOverlaysWebView({ overlay: true });
-    await StatusBar.setBackgroundColor({ color: "#0a0a0a" });
-  }
-}
-
-/**
- * Configure keyboard behavior on native platforms
- */
 async function initializeKeyboard(): Promise<void> {
   if (isIOS) {
-    // Disable auto-scroll on iOS when keyboard appears
-    await Keyboard.setScroll({ isDisabled: true });
-
-    // Set keyboard accessory bar visibility
     await Keyboard.setAccessoryBarVisible({ isVisible: true });
   }
 
-  // Listen for keyboard events
   Keyboard.addListener("keyboardWillShow", (info) => {
     document.body.style.setProperty(
       "--keyboard-height",
@@ -176,44 +368,48 @@ async function initializeKeyboard(): Promise<void> {
   });
 }
 
-/**
- * Handle app lifecycle events (pause, resume, back button)
- */
 function initializeAppLifecycle(): void {
-  // Handle app state changes
-  CapacitorApp.addListener("appStateChange", ({ isActive }) => {
-    if (isActive) {
-      // App came to foreground - refresh data if needed
-      dispatchMiladyEvent(APP_RESUME_EVENT);
-    } else {
-      // App went to background
-      dispatchMiladyEvent(APP_PAUSE_EVENT);
-    }
+  void Promise.resolve(
+    CapacitorApp.addListener("appStateChange", ({ isActive }) => {
+      if (isActive) {
+        dispatchAppEvent(APP_RESUME_EVENT);
+      } else {
+        dispatchAppEvent(APP_PAUSE_EVENT);
+      }
+    }),
+  ).catch((error) => {
+    logNativePluginUnavailable("App", error);
   });
 
-  // Handle Android back button
-  CapacitorApp.addListener("backButton", ({ canGoBack }) => {
-    if (canGoBack) {
-      window.history.back();
-    }
+  void Promise.resolve(
+    CapacitorApp.addListener("backButton", ({ canGoBack }) => {
+      if (canGoBack) {
+        window.history.back();
+      }
+    }),
+  ).catch((error) => {
+    logNativePluginUnavailable("App", error);
   });
 
-  // Handle deep links
-  CapacitorApp.addListener("appUrlOpen", ({ url }) => {
-    handleDeepLink(url);
+  void Promise.resolve(
+    CapacitorApp.addListener("appUrlOpen", ({ url }) => {
+      handleDeepLink(url);
+    }),
+  ).catch((error) => {
+    logNativePluginUnavailable("App", error);
   });
 
-  // Check if app was opened via deep link
-  CapacitorApp.getLaunchUrl().then((result) => {
-    if (result?.url) {
-      handleDeepLink(result.url);
-    }
-  });
+  void CapacitorApp.getLaunchUrl()
+    .then((result) => {
+      if (result?.url) {
+        handleDeepLink(result.url);
+      }
+    })
+    .catch((error) => {
+      logNativePluginUnavailable("App", error);
+    });
 }
 
-/**
- * Handle deep links (milady:// URLs)
- */
 function handleDeepLink(url: string): void {
   let parsed: URL;
   try {
@@ -222,151 +418,162 @@ function handleDeepLink(url: string): void {
     return;
   }
 
-  // Handle different deep link paths
-  if (parsed.protocol === "milady:") {
-    const path = (parsed.pathname || parsed.host || "").replace(/^\/+/, "");
+  if (parsed.protocol !== `${APP_URL_SCHEME}:`) return;
+  const path = getDeepLinkPath(parsed);
 
-    switch (path) {
-      case "chat":
-        // Navigate to chat view
-        window.location.hash = "#chat";
-        break;
-      case "settings":
-        // Navigate to settings
-        window.location.hash = "#settings";
-        break;
-      case "connect": {
-        // Handle gateway connection URL
-        const gatewayUrl = parsed.searchParams.get("url");
-        if (gatewayUrl) {
-          // Security: only allow https/http URLs to prevent SSRF
-          try {
-            const validatedUrl = new URL(gatewayUrl);
-            if (
-              validatedUrl.protocol !== "https:" &&
-              validatedUrl.protocol !== "http:"
-            ) {
-              console.error(
-                "[Milady] Invalid gateway URL protocol:",
-                validatedUrl.protocol,
-              );
-              break;
-            }
-            dispatchMiladyEvent(CONNECT_EVENT, {
-              gatewayUrl: validatedUrl.href,
-            });
-          } catch {
-            console.error("[Milady] Invalid gateway URL format");
-          }
-        }
-        break;
-      }
-      case "share": {
-        const title = parsed.searchParams.get("title")?.trim() || undefined;
-        const text = parsed.searchParams.get("text")?.trim() || undefined;
-        const sharedUrl = parsed.searchParams.get("url")?.trim() || undefined;
-        const files = parsed.searchParams
-          .getAll("file")
-          .map((filePath) => filePath.trim())
-          .filter((filePath) => filePath.length > 0)
-          .map((filePath) => {
-            const slash = Math.max(
-              filePath.lastIndexOf("/"),
-              filePath.lastIndexOf("\\"),
+  switch (path) {
+    case "chat":
+      window.location.hash = "#chat";
+      break;
+    case "phone":
+    case "phone/call":
+      setHashRoute("phone", parsed.searchParams);
+      break;
+    case "messages":
+    case "messages/compose":
+      setHashRoute("messages", parsed.searchParams);
+      break;
+    case "contacts":
+      setHashRoute("contacts", parsed.searchParams);
+      break;
+    case "lifeops":
+      window.location.hash = "#lifeops";
+      dispatchQueuedLifeOpsGithubCallbackFromUrl(url);
+      break;
+    case "settings":
+      window.location.hash = "#settings";
+      dispatchQueuedLifeOpsGithubCallbackFromUrl(url);
+      break;
+    case "connect": {
+      const gatewayUrl = parsed.searchParams.get("url");
+      if (gatewayUrl) {
+        try {
+          const validatedUrl = new URL(gatewayUrl);
+          if (
+            validatedUrl.protocol !== "https:" &&
+            validatedUrl.protocol !== "http:"
+          ) {
+            console.error(
+              `${APP_LOG_PREFIX} Invalid gateway URL protocol:`,
+              validatedUrl.protocol,
             );
-            const name = slash >= 0 ? filePath.slice(slash + 1) : filePath;
-            return { name, path: filePath };
+            break;
+          }
+          const token =
+            parsed.searchParams.get("token") ??
+            parsed.searchParams.get("accessToken") ??
+            null;
+          const connection = applyLaunchConnection({
+            kind: "remote",
+            apiBase: validatedUrl.href,
+            token,
           });
-
-        dispatchShareTarget({
-          source: "deep-link",
-          title,
-          text,
-          url: sharedUrl,
-          files,
-        });
-        break;
+          dispatchAppEvent(CONNECT_EVENT, {
+            gatewayUrl: connection.apiBase,
+            token: connection.token ?? undefined,
+          });
+        } catch {
+          console.error(`${APP_LOG_PREFIX} Invalid gateway URL format`);
+        }
       }
-      default:
-        console.log(`[Milady] Unknown deep link path: ${path}`);
+      break;
     }
+    case "share": {
+      const title = parsed.searchParams.get("title")?.trim() || undefined;
+      const text = parsed.searchParams.get("text")?.trim() || undefined;
+      const sharedUrl = parsed.searchParams.get("url")?.trim() || undefined;
+      const files = parsed.searchParams
+        .getAll("file")
+        .map((filePath) => filePath.trim())
+        .filter((filePath) => filePath.length > 0)
+        .map((filePath) => {
+          const slash = Math.max(
+            filePath.lastIndexOf("/"),
+            filePath.lastIndexOf("\\"),
+          );
+          const name = slash >= 0 ? filePath.slice(slash + 1) : filePath;
+          return { name, path: filePath };
+        });
+
+      dispatchShareTarget({
+        source: "deep-link",
+        title,
+        text,
+        url: sharedUrl,
+        files,
+      });
+      break;
+    }
+    default:
+      console.warn(`${APP_LOG_PREFIX} Unknown deep link path:`, path);
+      break;
   }
 }
 
-/**
- * Initialize Electron-specific features
- */
-async function initializeElectron(): Promise<void> {
-  document.body.classList.add("electron");
-
-  try {
-    const version = await Desktop.getVersion();
-    const desktopNativeReady =
-      typeof version.electron === "string" &&
-      version.electron !== "N/A" &&
-      version.electron !== "unknown";
-    if (!desktopNativeReady) {
-      return;
-    }
-
-    // Global command palette shortcut
-    await Desktop.registerShortcut({
-      id: "command-palette",
-      accelerator: "CommandOrControl+K",
-    });
-
-    // Emote picker shortcut
-    await Desktop.registerShortcut({
-      id: "emote-picker",
-      accelerator: "CommandOrControl+E",
-    });
-
-    await Desktop.addListener("shortcutPressed", (event: { id: string }) => {
-      if (event.id === "command-palette") {
-        dispatchMiladyEvent(COMMAND_PALETTE_EVENT);
-      }
-      if (event.id === "emote-picker") {
-        dispatchMiladyEvent(EMOTE_PICKER_EVENT);
-      }
-    });
-
-    // Tray actions routed to the renderer as app-level events.
-    await Desktop.setTrayMenu({
-      menu: [
-        { id: "tray-open-chat", label: "Open Chat" },
-        { id: "tray-open-workbench", label: "Open Workbench" },
-        { id: "tray-toggle-pause", label: "Pause/Resume Agent" },
-        { id: "tray-restart", label: "Restart Agent" },
-        { id: "tray-notify", label: "Send Test Notification" },
-        { id: "tray-sep-1", type: "separator" },
-        { id: "tray-show-window", label: "Show Window" },
-        { id: "tray-hide-window", label: "Hide Window" },
-      ],
-    });
-
-    await Desktop.addListener(
-      "trayMenuClick",
-      (event: { itemId: string; checked?: boolean }) => {
-        dispatchMiladyEvent(TRAY_ACTION_EVENT, event);
-      },
-    );
-  } catch {}
+function getDeepLinkPath(parsed: URL): string {
+  const host = parsed.host.replace(/^\/+|\/+$/g, "");
+  const pathname = parsed.pathname.replace(/^\/+|\/+$/g, "");
+  return [host, pathname].filter(Boolean).join("/");
 }
 
-/**
- * Set up CSS custom properties for platform-specific styling
- */
+function setHashRoute(route: string, params: URLSearchParams): void {
+  const query = params.toString();
+  window.location.hash = query ? `#${route}?${query}` : `#${route}`;
+}
+
+async function initializeDesktopShell(): Promise<void> {
+  document.body.classList.add("desktop");
+
+  const version = await Desktop.getVersion();
+  const desktopNativeReady =
+    typeof version.runtime === "string" &&
+    version.runtime !== "N/A" &&
+    version.runtime !== "unknown";
+  if (!desktopNativeReady) return;
+
+  await Desktop.registerShortcut({
+    id: "command-palette",
+    accelerator: "CommandOrControl+K",
+  });
+
+  await Desktop.addListener("shortcutPressed", (event: { id: string }) => {
+    if (event.id === "command-palette") {
+      dispatchAppEvent(COMMAND_PALETTE_EVENT);
+    }
+  });
+
+  await Desktop.setTrayMenu({
+    menu: [...DESKTOP_TRAY_MENU_ITEMS],
+  });
+
+  await Desktop.addListener(
+    "trayMenuClick",
+    (event: { itemId: string; checked?: boolean }) => {
+      dispatchAppEvent(TRAY_ACTION_EVENT, event);
+    },
+  );
+
+  subscribeDesktopBridgeEvent({
+    rpcMessage: "shareTargetReceived",
+    ipcChannel: "desktop:shareTargetReceived",
+    listener: (payload) => {
+      const url = (payload as { url?: string } | null | undefined)?.url;
+      if (typeof url !== "string" || url.trim().length === 0) {
+        return;
+      }
+      handleDeepLink(url);
+    },
+  });
+}
+
 function setupPlatformStyles(): void {
   const root = document.documentElement;
-
-  // Set platform class on body for CSS targeting
   document.body.classList.add(`platform-${platform}`);
 
   if (isNative) {
     document.body.classList.add("native");
   }
 
-  // Set safe area insets as CSS variables (fallback values)
   root.style.setProperty("--safe-area-top", "env(safe-area-inset-top, 0px)");
   root.style.setProperty(
     "--safe-area-bottom",
@@ -377,28 +584,68 @@ function setupPlatformStyles(): void {
     "--safe-area-right",
     "env(safe-area-inset-right, 0px)",
   );
-
-  // Initialize keyboard height variable
   root.style.setProperty("--keyboard-height", "0px");
 }
 
-/**
- * Mount the React application into the DOM
- */
+function isPhoneCompanionMode(): boolean {
+  if (typeof window === "undefined") return false;
+  const params = new URLSearchParams(
+    window.location.search || window.location.hash.split("?")[1] || "",
+  );
+  return params.get("mode") === "companion";
+}
+
+function resolveAppWindowSlug(): string | null {
+  if (!isAppWindowRoute()) return null;
+  const path = getWindowNavigationPath();
+  if (!path.startsWith("/apps/")) return null;
+  // Take only the first path segment after /apps/. URLs like
+  // `/apps/plugins/extra` would otherwise yield a malformed slug
+  // ("plugins/extra") that no descriptor can match.
+  const slug = path
+    .slice("/apps/".length)
+    .replace(/[?#].*$/, "")
+    .split("/")[0];
+  return slug.length > 0 ? slug : null;
+}
+
 function mountReactApp(): void {
   const rootEl = document.getElementById("root");
   if (!rootEl) throw new Error("Root element #root not found");
 
+  const phoneCompanion = isPhoneCompanionMode();
+  const detachedShell = isDetachedWindowShell(windowShellRoute);
+  const appWindowSlug = detachedShell ? null : resolveAppWindowSlug();
+
   createRoot(rootEl).render(
-    <StrictMode>
-      <AppProvider>
-        <App />
-      </AppProvider>
-    </StrictMode>,
+    <ErrorBoundary>
+      <StrictMode>
+        <AppProvider branding={APP_BRANDING}>
+          {phoneCompanion ? (
+            <PhoneCompanionApp />
+          ) : detachedShell ? (
+            <div className="flex h-screen min-h-0 w-screen flex-col overflow-hidden">
+              <DetachedShellRoot route={windowShellRoute} />
+            </div>
+          ) : appWindowSlug ? (
+            <div className="flex h-screen min-h-0 w-screen flex-col overflow-hidden">
+              <AppWindowRenderer slug={appWindowSlug} />
+            </div>
+          ) : (
+            <>
+              <DesktopOnboardingRuntime />
+              <DesktopSurfaceNavigationRuntime />
+              <DesktopTrayRuntime />
+              <LifeOpsActivitySignalsEffect />
+              <App />
+            </>
+          )}
+        </AppProvider>
+      </StrictMode>
+    </ErrorBoundary>,
   );
 }
 
-/** Detect popout mode from URL params. */
 function isPopoutWindow(): boolean {
   if (typeof window === "undefined") return false;
   const params = new URLSearchParams(
@@ -408,74 +655,197 @@ function isPopoutWindow(): boolean {
 }
 
 /**
- * In popout mode, inject the API base from the URL query string so the
- * client can connect without the Electron main-process injection.
+ * Validates an apiBase string and applies it to the boot config.
+ * Allows localhost, loopback, HTTPS, and private-network HTTP hosts.
  */
+function validateAndSetApiBase(apiBase: string): void {
+  try {
+    const parsed = new URL(apiBase);
+    const host = parsed.hostname;
+    const allowPrivateHttp =
+      /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host) ||
+      /^192\.168\.\d{1,3}\.\d{1,3}$/.test(host) ||
+      /^172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}$/.test(host) ||
+      /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d{1,3}\.\d{1,3}$/.test(host) ||
+      host.endsWith(".local") ||
+      host.endsWith(".internal") ||
+      host.endsWith(".ts.net");
+    if (
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host === "::1" ||
+      host === window.location.hostname ||
+      parsed.protocol === "https:" ||
+      (parsed.protocol === "http:" && allowPrivateHttp)
+    ) {
+      setBootConfig({ ...getBootConfig(), apiBase });
+    } else {
+      console.warn(`${APP_LOG_PREFIX} Rejected non-local apiBase:`, host);
+    }
+  } catch {
+    if (apiBase.startsWith("/") && !apiBase.startsWith("//")) {
+      setBootConfig({ ...getBootConfig(), apiBase });
+    } else {
+      console.warn(
+        `${APP_LOG_PREFIX} Rejected invalid relative apiBase:`,
+        apiBase,
+      );
+    }
+  }
+}
+
 function injectPopoutApiBase(): void {
   const params = new URLSearchParams(
     window.location.search || window.location.hash.split("?")[1] || "",
   );
   const apiBase = params.get("apiBase");
-  if (apiBase) {
-    // Validate apiBase is same-origin or localhost to prevent redirection attacks
-    try {
-      const parsed = new URL(apiBase);
-      const host = parsed.hostname;
-      if (
-        host === "localhost" ||
-        host === "127.0.0.1" ||
-        host === window.location.hostname
-      ) {
-        window.__MILADY_API_BASE__ = apiBase;
-      } else {
-        console.warn("[Milady] Rejected non-local apiBase:", host);
-      }
-    } catch {
-      // Relative URL — only allow paths starting with "/" but not "//" (protocol-relative)
-      if (apiBase.startsWith("/") && !apiBase.startsWith("//")) {
-        window.__MILADY_API_BASE__ = apiBase;
-      } else {
-        console.warn("[Milady] Rejected invalid relative apiBase:", apiBase);
-      }
-    }
+  if (apiBase) validateAndSetApiBase(apiBase);
+}
+
+function injectDetachedShellApiBase(): void {
+  const apiBase = new URLSearchParams(window.location.search).get("apiBase");
+  if (apiBase) validateAndSetApiBase(apiBase);
+}
+
+function getCurrentIosRuntimeConfig(): IosRuntimeConfig {
+  if (typeof window === "undefined") return IOS_RUNTIME_ENV_CONFIG;
+  try {
+    const mode = normalizeMobileRuntimeMode(
+      window.localStorage.getItem(MOBILE_RUNTIME_MODE_STORAGE_KEY),
+    );
+    return mode ? { ...IOS_RUNTIME_ENV_CONFIG, mode } : IOS_RUNTIME_ENV_CONFIG;
+  } catch {
+    return IOS_RUNTIME_ENV_CONFIG;
   }
 }
 
-/**
- * Main initialization
- */
+function applyBuildTimeIosConnection(): void {
+  if (!isNative) return;
+  if (!IOS_RUNTIME_ENV_CONFIG.apiBase && !IOS_RUNTIME_ENV_CONFIG.apiToken)
+    return;
+
+  const current = getBootConfig();
+  const next: AppBootConfig = {
+    ...current,
+    ...(IOS_RUNTIME_ENV_CONFIG.apiToken
+      ? { apiToken: IOS_RUNTIME_ENV_CONFIG.apiToken }
+      : {}),
+  };
+  setBootConfig(next);
+
+  if (IOS_RUNTIME_ENV_CONFIG.apiBase) {
+    validateAndSetApiBase(IOS_RUNTIME_ENV_CONFIG.apiBase);
+  }
+}
+
+async function getOrCreateDeviceBridgeId(): Promise<string> {
+  const existing = await Preferences.get({ key: DEVICE_BRIDGE_ID_KEY });
+  if (existing.value?.trim()) return existing.value.trim();
+
+  const generated =
+    globalThis.crypto?.randomUUID?.() ??
+    `ios-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  await Preferences.set({ key: DEVICE_BRIDGE_ID_KEY, value: generated });
+  return generated;
+}
+
+function resolveDeviceBridgeUrl(config: IosRuntimeConfig): string | null {
+  if (config.deviceBridgeUrl) {
+    return config.deviceBridgeUrl;
+  }
+  if (config.mode !== "cloud-hybrid") return null;
+  const apiBase = getBootConfig().apiBase?.trim();
+  if (!apiBase) return null;
+  try {
+    return apiBaseToDeviceBridgeUrl(apiBase);
+  } catch {
+    return null;
+  }
+}
+
+async function initializeMobileDeviceBridge(): Promise<void> {
+  const runtimeConfig = getCurrentIosRuntimeConfig();
+  if (!isNative || runtimeConfig.mode !== "cloud-hybrid") return;
+  if (mobileDeviceBridgeClient) return;
+
+  const agentUrl = resolveDeviceBridgeUrl(runtimeConfig);
+  if (!agentUrl) return;
+
+  try {
+    const deviceId = await getOrCreateDeviceBridgeId();
+    mobileDeviceBridgeClient = startDeviceBridgeClient({
+      agentUrl,
+      ...(runtimeConfig.deviceBridgeToken
+        ? { pairingToken: runtimeConfig.deviceBridgeToken }
+        : {}),
+      deviceId,
+    });
+  } catch (error) {
+    console.warn(
+      `${APP_LOG_PREFIX} Device bridge unavailable:`,
+      error instanceof Error ? error.message : error,
+    );
+  }
+}
+
+function stopMobileDeviceBridge(): void {
+  mobileDeviceBridgeClient?.stop();
+  mobileDeviceBridgeClient = null;
+}
+
+function initializeMobileRuntimeModeListener(): void {
+  if (!isNative || mobileRuntimeModeListenerInstalled) return;
+  mobileRuntimeModeListenerInstalled = true;
+  document.addEventListener(MOBILE_RUNTIME_MODE_CHANGED_EVENT, () => {
+    if (getCurrentIosRuntimeConfig().mode === "cloud-hybrid") {
+      void initializeMobileDeviceBridge();
+      return;
+    }
+    stopMobileDeviceBridge();
+  });
+}
+
+function applyStoredDetachedShellTheme(): void {
+  applyUiTheme(loadUiTheme());
+}
+
 async function main(): Promise<void> {
-  // Set up platform-specific styles first
   setupPlatformStyles();
+  applyBuildTimeIosConnection();
+
+  try {
+    await applyLaunchConnectionFromUrl();
+  } catch (err) {
+    console.error(
+      `${APP_LOG_PREFIX} Failed to apply managed cloud launch session:`,
+      err instanceof Error ? err.message : err,
+    );
+  }
 
   if (isPopoutWindow()) {
-    // Popout mode — skip platform init (agent lifecycle, Capacitor bridges,
-    // shortcuts, tray). Just inject the API base and mount the React app.
     injectPopoutApiBase();
     mountReactApp();
     return;
   }
 
-  // Mount the React app
-  mountReactApp();
+  if (isDetachedWindowShell(windowShellRoute)) {
+    injectDetachedShellApiBase();
+    applyStoredDetachedShellTheme();
+    syncDetachedShellLocation(windowShellRoute);
+    await initializeStorageBridge();
+    initializeCapacitorBridge();
+    mountReactApp();
+    return;
+  }
 
-  // Initialize platform features (Capacitor bridges, native plugins, etc.)
+  mountReactApp();
   await initializePlatform();
 }
 
-// Run initialization when DOM is ready
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", main);
 } else {
   main();
 }
 
-// Export platform utilities for use by other modules
-export {
-  platform,
-  isNative,
-  isIOS,
-  isAndroid,
-  isElectronPlatform as isElectron,
-  isWeb,
-};
+export { isAndroid, isDesktopPlatform as isDesktop, isIOS, isNative, platform };

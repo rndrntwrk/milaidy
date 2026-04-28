@@ -1,17 +1,24 @@
 ---
 title: Beginner User Guide
 sidebarTitle: Beginner User Guide
-summary: Step-by-step onboarding for first-time Milady users, from installation through safe daily operation.
-description: A complete beginner walkthrough for installing Milady, finishing first-run setup, daily usage, safety, troubleshooting, and next steps.
+summary: Step-by-step onboarding for first-time Milady operators, from installation through safe daily operation.
+description: A complete beginner walkthrough for installing Milady, choosing a server target, configuring providers, and operating the runtime safely.
 ---
 
-If you're brand new to Milady, this guide is for you.
+If you're brand new to running Milady yourself, this guide is for you.
+
+<Info>
+If you only need the consumer-facing product walkthrough, use
+[milady.ai/docs](https://milady.ai/docs). This page is for people installing,
+operating, or hosting Milady via the developer docs at
+[docs.milady.ai](https://docs.milady.ai).
+</Info>
 
 You do **not** need to be a developer to use Milady. The core model is:
 
-1. Milady runs locally on your machine.
-2. You connect the model providers and plugins you want.
-3. You control how private vs connected your setup is.
+1. Milady is a client that can create or connect to a server.
+2. The server target and the active model provider are separate choices.
+3. You control how local, connected, or cloud-assisted your setup is.
 
 ---
 
@@ -27,7 +34,7 @@ You can use it for:
 
 Main interfaces:
 
-- `milady` command (CLI/TUI)
+- `milady` command (CLI)
 - Dashboard in browser
 - Desktop/mobile app builds (platform dependent)
 
@@ -45,8 +52,8 @@ Main interfaces:
 
 Start simple:
 
-- First get local startup working
-- Then add one model provider
+- First choose the server you want to use
+- Then add one chat provider
 - Then optionally add connectors/plugins
 
 ---
@@ -56,21 +63,21 @@ Start simple:
 ### macOS / Linux / WSL (recommended)
 
 ```bash
-curl -fsSL https://milady-ai.github.io/milady/install.sh | bash
+curl -fsSL https://get.milady.ai | bash
 milady setup
 ```
 
 ### Windows (PowerShell)
 
 ```powershell
-irm https://milady-ai.github.io/milady/install.ps1 | iex
+irm https://get.milady.ai/install.ps1 | iex
 milady setup
 ```
 
-### npm global alternative
+### Bun global alternative
 
 ```bash
-npm install -g miladyai
+bun install -g miladyai
 milady setup
 ```
 
@@ -78,7 +85,7 @@ If `milady` is not found after install, restart your terminal and run `milady --
 
 ---
 
-## 4) First start and onboarding
+## 4) First start and server selection
 
 Start Milady:
 
@@ -86,22 +93,23 @@ Start Milady:
 milady
 ```
 
-On first run, onboarding typically asks for:
+On first launch, Milady should start with a chooser-first flow:
 
-1. Agent name
-2. Style/personality preset
-3. Model provider + API key (or skip)
-4. Optional wallet setup
+1. **Create one** to start a local server on this machine
+2. **Pick a LAN server** if Milady finds one on your network
+3. **Use Eliza Cloud** if you want a hosted Milady server
+4. **Manually connect** if you already know the remote server URL
 
-After onboarding, you'll see local URLs for the dashboard and gateway.
+After you choose a server, Milady checks whether that server is already
+configured. If not, it continues setup for that server only.
 
-### If you skipped provider setup
+### Important rule
 
-That is fine. You can add providers later using:
+Server target and provider target are different things:
 
-```bash
-milady models
-```
+- A local server can still use OpenAI, Anthropic, OpenRouter, Ollama, or Eliza Cloud inference
+- An Eliza Cloud server can still use direct OpenAI or Anthropic inference
+- Linking an Eliza Cloud account does not force cloud inference
 
 ---
 
@@ -110,10 +118,11 @@ milady models
 Use this exact path:
 
 1. Run `milady`
-2. Open the dashboard URL
-3. Send a basic prompt (e.g., "hello")
-4. Confirm a response is returned
-5. Run `milady models` and check provider status
+2. Choose a server target
+3. Open the dashboard for that server
+4. Send a basic prompt (e.g., "hello")
+5. Confirm a response is returned
+6. Run `milady models` and check provider status
 
 If these work, your base install is healthy.
 
@@ -123,37 +132,49 @@ If these work, your base install is healthy.
 
 ```bash
 milady                    # start interactive mode (default)
-milady start              # run server-only, no TUI
+milady start              # run server-only, headless
 milady dashboard          # open dashboard in browser
 milady configure          # configuration guidance
 milady config get <key>   # read config value
 milady models             # show model provider status
-milady plugins list       # list installed plugins
+milady plugins installed   # list installed plugins
+milady plugins list       # browse registry plugins
 ```
 
 Tip: Use `milady <command> --help` any time you feel stuck.
 
 ---
 
-## 7) Understanding run modes
+## 7) Understanding server target vs provider
 
-### Interactive mode (`milady`)
+### Server target
 
-- Good for active local usage
-- Includes terminal UI (status, activity, quick controls)
+This answers **where the Milady server lives**:
 
-### Service mode (`milady start`)
+- Local
+- LAN
+- Remote
+- Eliza Cloud
 
-- Good for background services
-- Useful with process managers (systemd/pm2/docker)
+### Provider route
 
-If you're unsure, start with interactive mode.
+This answers **who handles chat inference and other capabilities**:
+
+- Local models such as Ollama or llama.cpp-based stacks
+- Direct providers such as OpenAI, Anthropic, OpenRouter, Groq, and Mistral
+- Eliza Cloud inference when you explicitly select it
+
+If something feels confusing, check these in order:
+
+1. Which server am I connected to?
+2. Which provider is active for chat on that server?
+3. Which accounts are merely linked but not active?
 
 ---
 
 ## 8) Where files live on your machine
 
-Milady stores state under `~/.milady/`:
+Local runtime state is stored under `~/.milady/`:
 
 - `~/.milady/milady.json` → main configuration
 - `~/.milady/logs/` → runtime logs
@@ -167,14 +188,15 @@ This is essential for backup, troubleshooting, and migration to another machine.
 
 ### Keep API local by default
 
-Milady binds to loopback by default (`127.0.0.1`), meaning only your machine can access it.
+Milady binds to loopback by default (`127.0.0.1`) on port `2138`, meaning only your machine can access it. Open your dashboard at `http://localhost:2138`.
 
 ### If exposing to network, set a token
 
 If you bind to `0.0.0.0` or expose ports publicly, set an API token first:
 
 ```bash
-echo "MILADY_API_TOKEN=$(openssl rand -hex 32)" >> .env
+# Add to your project root .env or ~/.milady/.env
+echo "MILADY_API_TOKEN=$(openssl rand -hex 32)" >> ~/.milady/.env
 ```
 
 ### Protect secrets
@@ -189,10 +211,11 @@ echo "MILADY_API_TOKEN=$(openssl rand -hex 32)" >> .env
 
 Typical flow:
 
-1. Get key from provider dashboard
-2. Configure through setup/config/models flows
-3. Verify with `milady models`
-4. Send a test prompt
+1. Connect to the server you want to use
+2. Get a key from your provider dashboard if needed
+3. Configure the provider through setup, settings, or `milady models`
+4. Verify with `milady models`
+5. Send a test prompt
 
 If responses fail, verify:
 
@@ -265,7 +288,7 @@ Good routine:
 
 - **Provider**: the LLM backend (Anthropic/OpenAI/Ollama/etc.)
 - **Plugin**: adds capabilities/integrations
-- **Headless**: no interactive terminal UI; service-style runtime
+- **Headless**: no interactive UI; service-style runtime
 - **Workspace**: local files Milady uses for agent context and tasks
 - **Gateway**: service layer used by dashboard and interfaces
 
@@ -283,10 +306,9 @@ Use this staged path so you do not get overwhelmed.
 2. **Core configuration**
    - `/configuration`
    - `/config-schema`
-   - `/model-providers`
+   - `/runtime/models`
 3. **Everyday commands and interfaces**
    - `/chat-commands`
-   - `/apps/tui`
    - `/apps/dashboard`
 4. **Safety basics**
    - `/guides/sandbox`
@@ -305,7 +327,6 @@ Use this staged path so you do not get overwhelmed.
    - `/guides/connectors`
    - `/connectors/discord`
    - `/connectors/telegram`
-   - `/connectors/twitter`
    - `/connectors/slack`
 4. **Wallet and autonomous workflows**
    - `/guides/wallet`
@@ -325,7 +346,7 @@ Use this staged path so you do not get overwhelmed.
 3. **App/platform specialization**
    - `/apps/desktop`
    - `/apps/mobile`
-   - `/apps/chrome-extension`
+   - Browser Relay release-status documentation when browser automation is relevant
 4. **Cloud and deployment**
    - `/guides/cloud`
    - `/deployment`

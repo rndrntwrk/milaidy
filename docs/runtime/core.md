@@ -4,7 +4,7 @@ sidebarTitle: "Core"
 description: "AgentRuntime class, constructor parameters, plugin registration, and the Milady configuration cascade."
 ---
 
-The `AgentRuntime` class from `@elizaos/core` is the central object that manages plugin registration, message processing, provider context assembly, and service lifecycle. Milady wraps it with additional bootstrap logic in `src/runtime/eliza.ts`.
+The `AgentRuntime` class from `@elizaos/core` is the central object that manages plugin registration, message processing, provider context assembly, and service lifecycle. Milady wraps it with additional bootstrap logic in `eliza/packages/agent/src/runtime/eliza.ts`.
 
 ## AgentRuntime Constructor
 
@@ -12,7 +12,7 @@ The `AgentRuntime` class from `@elizaos/core` is the central object that manages
 const runtime = new AgentRuntime({
   character,
   actionPlanning: true,
-  plugins: [miladyPlugin, ...resolvedPlugins],
+  plugins: [elizaPlugin, ...resolvedPlugins],
   logLevel: "error",
   // sandboxMode and sandboxAuditHandler are only included when sandbox is active
   ...(isSandboxActive && {
@@ -21,7 +21,7 @@ const runtime = new AgentRuntime({
   }),
   settings: {
     VALIDATION_LEVEL: "fast",
-    MODEL_PROVIDER: "anthropic/claude-sonnet-4-5",
+    MODEL_PROVIDER: "anthropic/claude-sonnet-4.6",
     BUNDLED_SKILLS_DIRS: "/path/to/skills",
     WORKSPACE_SKILLS_DIR: "~/.milady/workspace/skills",
     SKILLS_ALLOWLIST: "skill-a,skill-b",
@@ -47,7 +47,7 @@ const runtime = new AgentRuntime({
 | Setting Key | Source | Description |
 |---|---|---|
 | `VALIDATION_LEVEL` | Hardcoded | Set to `"fast"` — controls elizaOS validation depth |
-| `MODEL_PROVIDER` | `agents.defaults.model.primary` | Primary model selection (e.g., `"anthropic/claude-sonnet-4-5"`) |
+| `MODEL_PROVIDER` | `agents.defaults.model.primary` | Primary model selection (e.g., `"anthropic/claude-sonnet-4.6"`) |
 | `BUNDLED_SKILLS_DIRS` | `@elizaos/skills` package | Absolute path to bundled skills directory |
 | `WORKSPACE_SKILLS_DIR` | workspace path + `/skills` | Per-agent skills override directory |
 | `EXTRA_SKILLS_DIRS` | `skills.load.extraDirs` | Additional skill directories from config |
@@ -88,7 +88,7 @@ await runtime.initialize();
 
 ## Plugin Export Detection
 
-`findRuntimePluginExport()` in `src/runtime/eliza.ts` locates the Plugin export from a dynamically-imported module using a priority order:
+`findRuntimePluginExport()` in `eliza/packages/agent/src/runtime/eliza.ts` locates the Plugin export from a dynamically-imported module using a priority order:
 
 ```
 1. module.default   (ES module default export)
@@ -142,24 +142,33 @@ for (const [featureName, enabled] of Object.entries(config.features ?? {})) {
 ```
 
 <Note>
-**ElizaCloud plugin exclusion**: When ElizaCloud is effectively enabled (cloud API key is set and the cloud plugin is loaded), direct AI provider plugins (e.g., `@elizaos/plugin-anthropic`, `@elizaos/plugin-openai`) are removed from the load set. The cloud plugin proxies model requests through ElizaCloud, so loading individual provider plugins would be redundant and could cause routing conflicts.
+**Eliza Cloud plugin exclusion**: When Eliza Cloud is effectively enabled (cloud API key is set and the cloud plugin is loaded), direct AI provider plugins (e.g., `@elizaos/plugin-anthropic`, `@elizaos/plugin-openai`) are removed from the load set. The cloud plugin proxies model requests through Eliza Cloud, so loading individual provider plugins would be redundant and could cause routing conflicts.
 </Note>
 
 ## Channel to Plugin Mapping
 
+> **Note:** Not all plugins in this map are bundled with Milady. `twitter` (`@elizaos/plugin-twitter`) and `lens` (`@elizaos/plugin-lens`) are upstream elizaOS plugins that must be installed manually. `wechat` (added by Milady's `app-core`) is experimental. See the [connectors availability table](/guides/connectors#supported-platforms).
+
 ```typescript
 const CHANNEL_PLUGIN_MAP = {
-  discord:     "@elizaos/plugin-discord",
   telegram:    "@elizaos/plugin-telegram",
+  discord:     "@elizaos/plugin-discord",
   slack:       "@elizaos/plugin-slack",
-  twitter:     "@elizaos/plugin-twitter",
+  twitter:     "@elizaos/plugin-twitter",     // upstream, not bundled
   whatsapp:    "@elizaos/plugin-whatsapp",
   signal:      "@elizaos/plugin-signal",
   imessage:    "@elizaos/plugin-imessage",
-  bluebubbles: "@elizaos/plugin-bluebubbles",
+  farcaster:   "@elizaos/plugin-farcaster",
+  lens:        "@elizaos/plugin-lens",         // upstream, not bundled
   msteams:     "@elizaos/plugin-msteams",
   mattermost:  "@elizaos/plugin-mattermost",
   googlechat:  "@elizaos/plugin-google-chat",
+  feishu:      "@elizaos/plugin-feishu",
+  matrix:      "@elizaos/plugin-matrix",
+  nostr:       "@elizaos/plugin-nostr",
+  blooio:      "@elizaos/plugin-blooio",
+  twitch:      "@elizaos/plugin-twitch",
+  wechat:      "@elizaos/plugin-wechat",       // experimental
 };
 ```
 
@@ -168,18 +177,31 @@ const CHANNEL_PLUGIN_MAP = {
 ```typescript
 const PROVIDER_PLUGIN_MAP = {
   ANTHROPIC_API_KEY:              "@elizaos/plugin-anthropic",
+  CLAUDE_API_KEY:                 "@elizaos/plugin-anthropic",
   OPENAI_API_KEY:                 "@elizaos/plugin-openai",
-  GOOGLE_API_KEY:                 "@elizaos/plugin-google-genai",
-  GOOGLE_GENERATIVE_AI_API_KEY:   "@elizaos/plugin-google-genai",
-  GROQ_API_KEY:                   "@elizaos/plugin-groq",
-  XAI_API_KEY:                    "@elizaos/plugin-xai",
-  OPENROUTER_API_KEY:             "@elizaos/plugin-openrouter",
   AI_GATEWAY_API_KEY:             "@elizaos/plugin-vercel-ai-gateway",
   AIGATEWAY_API_KEY:              "@elizaos/plugin-vercel-ai-gateway",
-  ZAI_API_KEY:                    "@homunculuslabs/plugin-zai",
+  GOOGLE_API_KEY:                 "@elizaos/plugin-google-genai",
+  GOOGLE_GENERATIVE_AI_API_KEY:   "@elizaos/plugin-google-genai",
+  GOOGLE_CLOUD_API_KEY:           "@elizaos/plugin-google-antigravity",
+  GROQ_API_KEY:                   "@elizaos/plugin-groq",
+  XAI_API_KEY:                    "@elizaos/plugin-xai",
+  GROK_API_KEY:                   "@elizaos/plugin-xai",
+  OPENROUTER_API_KEY:             "@elizaos/plugin-openrouter",
   OLLAMA_BASE_URL:                "@elizaos/plugin-ollama",
+  ZAI_API_KEY:                    "@homunculuslabs/plugin-zai",
+  DEEPSEEK_API_KEY:               "@elizaos/plugin-deepseek",
+  TOGETHER_API_KEY:               "@elizaos/plugin-together",
+  MISTRAL_API_KEY:                "@elizaos/plugin-mistral",
+  COHERE_API_KEY:                 "@elizaos/plugin-cohere",
+  PERPLEXITY_API_KEY:             "@elizaos/plugin-perplexity",
   ELIZAOS_CLOUD_API_KEY:          "@elizaos/plugin-elizacloud",
   ELIZAOS_CLOUD_ENABLED:          "@elizaos/plugin-elizacloud",
+  CUA_API_KEY:                    "@elizaos/plugin-cua",
+  CUA_HOST:                       "@elizaos/plugin-cua",
+  OBSIDIAN_VAULT_PATH:            "@elizaos/plugin-obsidian",
+  REPOPROMPT_CLI_PATH:            "@elizaos/plugin-repoprompt",
+  CLAUDE_CODE_WORKBENCH_ENABLED:  "@elizaos/plugin-claude-code-workbench",
 };
 ```
 

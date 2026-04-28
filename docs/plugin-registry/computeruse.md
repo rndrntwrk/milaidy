@@ -15,7 +15,7 @@ Computer use enables agents to operate the computer as a human would: viewing th
 ## Installation
 
 ```bash
-milady plugins install computeruse
+milady plugins install @elizaos/plugin-computeruse
 ```
 
 ## Enable via Features
@@ -37,6 +37,16 @@ Or uncomment in `OPTIONAL_CORE_PLUGINS` in your configuration:
   }
 }
 ```
+
+## Configuration
+
+| Environment Variable | Required | Description |
+|---------------------|----------|-------------|
+| `COMPUTER_USE_ENABLED` | No | Enable or disable computer use (default: disabled) |
+| `COMPUTER_USE_SCREENSHOT_AFTER_ACTION` | No | Take a screenshot after each action |
+| `COMPUTER_USE_ACTION_TIMEOUT_MS` | No | Timeout for individual actions in milliseconds |
+| `COMPUTER_USE_APPROVAL_MODE` | No | Require human approval before actions |
+| `COMPUTER_USE_BROWSER_HEADLESS` | No | Run the browser in headless mode |
 
 ## Platform Support
 
@@ -69,7 +79,7 @@ Computer use works best with a vision-capable model. The workflow:
 ```
 1. TAKE_SCREENSHOT
        ↓
-2. Send to vision model (e.g., GPT-4o, Claude claude-sonnet-4-5)
+2. Send to vision model (e.g., GPT-4o, Claude claude-sonnet-4-6)
        ↓
 3. Model describes what is on screen
        ↓
@@ -88,7 +98,7 @@ Configure a vision-capable model as the primary model:
     "profiles": {
       "default": {
         "provider": "anthropic",
-        "model": "claude-sonnet-4-5"
+        "model": "claude-sonnet-4-6"
       }
     }
   },
@@ -137,7 +147,7 @@ Computer use is a powerful capability. Consider:
 
 ## Trajectory Logging
 
-Computer use sessions are automatically logged by the `@elizaos/plugin-trajectory-logger` (a core plugin). Logs include screenshots and action sequences for debugging and RL training.
+Computer use sessions are automatically logged by the `trajectories` (a core plugin). Logs include screenshots and action sequences for debugging and RL training.
 
 ## Related
 

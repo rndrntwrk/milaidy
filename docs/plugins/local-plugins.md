@@ -6,6 +6,8 @@ description: "Develop plugins locally without publishing to npm."
 
 This guide covers developing plugins locally without publishing to npm -- custom integrations, private plugins, rapid prototyping, and ejecting upstream plugins for modification.
 
+Maintainer note: this document is for runtime/user plugin paths under `~/.milady/plugins/*`. Milady source-checkout development of first-party packages uses the repo-local workspaces under `eliza/plugins/*` and `eliza/packages/*` by default; the old sibling-checkout flow is no longer the primary path in this repo.
+
 ## Table of Contents
 
 1. [Plugin Locations](#plugin-locations)
@@ -141,7 +143,7 @@ cat > package.json << 'EOF'
     "dev": "tsc --watch"
   },
   "dependencies": {
-    "@elizaos/core": "^2.0.0"
+    "@elizaos/core": "alpha"
   }
 }
 EOF
@@ -381,7 +383,7 @@ Each ejected plugin has a `.upstream.json` at its root:
 
 ```json
 {
-  "$schema": "milaidy-upstream-v1",
+  "$schema": "milady-upstream-v1",
   "source": "github:elizaos-plugins/plugin-telegram",
   "gitUrl": "https://github.com/elizaos-plugins/plugin-telegram.git",
   "branch": "1.x",
@@ -504,14 +506,14 @@ curl http://localhost:18789/api/plugins
 curl http://localhost:18789/api/registry/search?q=my-plugin
 ```
 
-5. **Run multiple instances** with different configs using `ELIZAOS_CONFIG_DIR`:
+5. **Run multiple instances** with different configs using `MILADY_STATE_DIR`:
 
 ```bash
 # Instance with your dev plugin
-ELIZAOS_CONFIG_DIR=./config-dev milady start
+MILADY_STATE_DIR=./state-dev milady start
 
 # Instance with production plugins
-ELIZAOS_CONFIG_DIR=./config-prod milady start
+MILADY_STATE_DIR=./state-prod milady start
 ```
 
 ---
@@ -617,7 +619,7 @@ bun run tsc --noEmit  # Type-check without emitting
 
 ## Environment Variables
 
-These environment variables affect plugin paths and behavior. They are defined in `src/config/paths.ts`.
+These environment variables affect plugin paths and behavior. They are defined in `eliza/packages/agent/src/config/paths.ts`.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -625,8 +627,8 @@ These environment variables affect plugin paths and behavior. They are defined i
 | `MILADY_CONFIG_PATH` | `~/.milady/milady.json` | Override the config file path directly. |
 | `MILADY_OAUTH_DIR` | `~/.milady/credentials` | Override the OAuth credentials directory. |
 | `LOG_LEVEL` | `error` | Set log verbosity: `debug`, `info`, `warn`, `error`. |
-| `MILADY_DISABLE_WORKSPACE_PLUGIN_OVERRIDES` | unset | Set to `1` to disable workspace plugin overrides (dev-only mechanism). |
-| `ELIZAOS_CONFIG_DIR` | unset | Override the ElizaOS core config directory. Useful for running multiple agent instances with different plugin configurations. |
+| `ELIZA_DISABLE_WORKSPACE_PLUGIN_OVERRIDES` | unset | Set to `1` to disable workspace plugin overrides (dev-only mechanism). |
+| `ELIZA_WORKSPACE_ROOT` | unset | Override the workspace root for plugin resolution. When set, only this directory is searched for local plugin sources. |
 
 When `MILADY_STATE_DIR` is set, all derived paths change accordingly:
 - Plugins: `$MILADY_STATE_DIR/plugins/installed/`, `$MILADY_STATE_DIR/plugins/custom/`, `$MILADY_STATE_DIR/plugins/ejected/`
@@ -654,7 +656,7 @@ When your plugin is ready for distribution:
     "prepublishOnly": "bun run build"
   },
   "peerDependencies": {
-    "@elizaos/core": "^2.0.0"
+    "@elizaos/core": ">=2.0.0"
   }
 }
 ```
@@ -686,6 +688,6 @@ Remove the local copy from `~/.milady/plugins/custom/` to avoid loading both ver
 
 ## Next Steps
 
-- [Plugin Development Guide](./development.md) -- Full plugin API reference
-- [Skills Documentation](./skills.md) -- Lighter-weight extensions
+- [Plugin Development Guide](/plugins/development) -- Full plugin API reference
+- [Skills Documentation](/plugins/skills) -- Lighter-weight extensions
 - [Contributing Guide](/guides/contribution-guide) -- Contributing plugins upstream

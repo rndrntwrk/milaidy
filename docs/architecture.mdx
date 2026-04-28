@@ -4,57 +4,65 @@ sidebarTitle: Architecture
 description: High-level overview of the Milady AI system architecture, layers, plugin system, and cross-platform delivery.
 ---
 
-Milady is a cross-platform AI agent runtime built on top of [elizaOS](https://elizaos.ai). It delivers the same backend across CLI, web, desktop (Electron), and mobile (Capacitor) surfaces through a layered architecture. This page covers the full system from entry points through runtime lifecycle, plugin loading, API surface, and build tooling.
+Milady is a cross-platform AI agent runtime built on top of [elizaOS](https://elizaos.ai). It delivers the same backend across CLI, web, desktop (Electrobun), and mobile (Capacitor) through a layered architecture. This page covers the full system from entry points through runtime lifecycle, plugin loading, API surface, and build tooling.
+
+<Info>
+Source paths like `packages/app-core/src/...` and `packages/agent/src/...` live in the `eliza/` git submodule. Initialize it with `bun run setup:upstreams` or `git submodule update --init --recursive` to browse these files locally.
+</Info>
 
 ## High-Level Diagram
 
 ```
 +---------------------------------------------------------------+
 |                        Frontend Layer                          |
-|  React SPA (Vite) + Capacitor (iOS/Android) + Electron (Desktop)|
+|  React SPA (Vite) + Capacitor (iOS/Android) + Electrobun (Desktop) |
 |  Tabs: Chat, Character, Wallets, Knowledge, Social, Apps,     |
 |         Settings, Advanced (Plugins, Skills, Triggers, DB, ...) |
 +----------------------------+----------------------------------+
                              | HTTP + WebSocket
                              v
 +---------------------------------------------------------------+
-|                     API Server Layer                           |
-|  Node.js HTTP server (port 2138)                              |
-|  REST endpoints (/api/*) + WebSocket (/ws)                    |
-|  SSE log streaming, static UI assets                          |
+|                       CLI Layer                                |
+|  Commander-based CLI (entry.ts -> run-main.ts)                |
+|  Commands: start, setup, configure, config, update, ...       |
+|  Profile system, dotenv loading, log-level control            |
 +----------------------------+----------------------------------+
                              |
                              v
 +---------------------------------------------------------------+
 |                    Runtime Layer (elizaOS)                     |
 |  AgentRuntime + Plugin system                                 |
-|  13 core plugins + optional plugins + Milady plugin           |
+|  12 core plugins + optional plugins + Milady plugin           |
 |  Providers, Actions, Services, Evaluators                     |
 +----------------------------+----------------------------------+
                              |
                              v
 +---------------------------------------------------------------+
-|                       CLI Layer                                |
-|  Commander-based CLI (entry.ts -> run-main.ts)                |
-|  Commands: start, setup, configure, config, update, ...       |
-|  Profile system, dotenv loading, log-level control            |
+|                     API Server Layer                           |
+|  Node.js HTTP server                                          |
+|  Dev: port 31337 (MILADY_API_PORT)                            |
+|  Prod: port 2138 (MILADY_PORT, shared with dashboard)         |
+|  REST endpoints (/api/*) + WebSocket (/ws)                    |
+|  SSE log streaming, static UI assets                          |
 +---------------------------------------------------------------+
                              |
                              v
 +---------------------------------------------------------------+
 |                    Storage & Config Layer                      |
-|  ~/.milady/milady.json  (Zod-validated config)              |
+|  ~/.milady/milady.json  (primary runtime config)            |
 |  PGLite (default) or PostgreSQL (database)                    |
-|  ~/.milady/workspace/ (agent files, skills, bootstrap)       |
+|  ~/.milady/workspace/ (agent files, skills)               |
 |  ~/.milady/plugins/  (custom, ejected, installed)            |
 +---------------------------------------------------------------+
 ```
 
 ## Entry Points and Boot Sequence
 
+> **Note:** Source paths like `packages/app-core/src/...` and `packages/agent/src/...` referenced throughout this page live in the elizaOS submodule at `eliza/`. Run `bun run setup:upstreams` to populate the submodule for local inspection.
+
 Milady has two primary entry points, plus a dev-server variant:
 
-### CLI Entry (`src/entry.ts`)
+### CLI Entry (`eliza/packages/app-core/src/entry.ts`)
 
 The CLI entry point is the bootstrap for all Milady operations. Built by `tsdown` into `dist/entry.js` and invoked by the `milady.mjs` wrapper script.
 
@@ -64,10 +72,10 @@ The boot sequence is:
 2. **Normalize environment** -- honor `--no-color`, `--debug`, `--verbose` flags by setting `NO_COLOR`, `FORCE_COLOR`, and `LOG_LEVEL` in `process.env`
 3. **Suppress native logging** -- set `NODE_LLAMA_CPP_LOG_LEVEL` to match the chosen log level, suppressing noisy tokenizer warnings at default verbosity
 4. **Parse CLI profiles** -- extract `--profile <name>` from `process.argv` via `parseCliProfileArgs()`, apply the profile environment via `applyCliProfileEnv()`
-5. **Delegate to Commander** -- dynamically import `src/cli/run-main.ts` and call `runCli(process.argv)`
+5. **Delegate to Commander** -- dynamically import `./cli/run-main.ts` and call `runCli(process.argv)`
 
 ```typescript
-// src/entry.ts — simplified bootstrap
+// eliza/packages/app-core/src/entry.ts — simplified bootstrap
 process.title = "milady";
 const parsed = parseCliProfileArgs(process.argv);
 if (parsed.profile) applyCliProfileEnv({ profile: parsed.profile });
@@ -77,16 +85,16 @@ import("./cli/run-main")
 
 `run-main.ts` continues by loading `.env` files via dotenv, normalizing API key environment variables (e.g., `Z_AI_API_KEY` to `ZAI_API_KEY`), building the Commander program tree, and dispatching to the requested subcommand.
 
-### Library Entry (`src/index.ts`)
+### Library Entry (`eliza/packages/app-core/src/index.ts`)
 
 The public API surface exported by the `miladyai` npm package. It re-exports:
 
-- **Config types** from `src/config/types.ts` -- the full `MiladyConfig` type and its nested schemas
+- **Config types** from `eliza/packages/app-core/src/config/types.ts` -- the full `MiladyConfig` type and its nested schemas
 - **Restart infrastructure** -- `RESTART_EXIT_CODE`, `requestRestart()`, `setRestartHandler()`, and the `RestartHandler` type
 
-This allows other packages (e.g., the Electron app, the dev-server) to programmatically control the runtime without importing internal modules.
+This allows other packages (e.g., the Electrobun app, the dev-server) to programmatically control the runtime without importing internal modules.
 
-### Dev-Server Entry (`src/runtime/dev-server.ts`)
+### Dev-Server Entry (`eliza/packages/app-core/src/runtime/dev-server.ts`)
 
 A combined dev server that starts the elizaOS runtime in headless mode and wires it into the API server. Used during development (`bun run dev`):
 
@@ -98,16 +106,16 @@ A combined dev server that starts the elizaOS runtime in headless mode and wires
 
 ## Runtime Lifecycle
 
-The `startEliza()` function in `src/runtime/eliza.ts` orchestrates the full lifecycle from config loading through agent operation.
+The `startEliza()` function in `eliza/packages/app-core/src/runtime/eliza.ts` orchestrates the full lifecycle from config loading through agent operation.
 
 ### Initialization Phase
 
 <Steps>
   <Step title="Load Configuration">
-    Read `~/.milady/milady.json` via `loadMiladyConfig()`. If no config exists, fall back to an empty `MiladyConfig` object with all-optional fields.
+    Read the config file (defaults to `~/.milady/milady.json` in this product) via `loadElizaConfig()`. If no config exists, fall back to an empty `ElizaConfig` object with all-optional fields.
   </Step>
-  <Step title="First-Run Onboarding">
-    If no agent name is configured and stdin is a TTY, run the interactive onboarding flow: welcome banner, name selection (4 random + custom), personality/style preset, AI provider selection, and wallet setup. In headless mode (GUI), this is deferred to the web UI.
+  <Step title="Startup / First-Run Selection">
+    If no server target has been established yet, the app surfaces a chooser-first startup flow: create a local server, connect to a discovered LAN server, connect to Eliza Cloud, or manually connect to a remote server. Provider routing happens after server selection rather than being implied by hosting mode.
   </Step>
   <Step title="Environment Propagation">
     Push connector secrets (`DISCORD_API_TOKEN`, `TELEGRAM_BOT_TOKEN`, etc.) from config into `process.env`. Auto-resolve Discord Application ID from bot token via the Discord API. Propagate cloud, x402, and database config into env vars.
@@ -118,8 +126,8 @@ The `startEliza()` function in `src/runtime/eliza.ts` orchestrates the full life
   <Step title="Prepare Workspace">
     Ensure `~/.milady/workspace/` exists with bootstrap files. Create the `~/.milady/plugins/custom/` directory for drop-in plugins.
   </Step>
-  <Step title="Create Milady Plugin">
-    Instantiate the bridge plugin that provides workspace context, session keys, emotes, custom actions, trigger tasks, and autonomous state tracking to the elizaOS runtime.
+  <Step title="Create Eliza Plugin">
+    Instantiate the bridge plugin via `createElizaPlugin()` that provides workspace context, session keys, custom actions, trigger tasks, and lifecycle actions to the elizaOS runtime.
   </Step>
   <Step title="Resolve and Load Plugins">
     Run the full plugin resolution pipeline (detailed below). Plugins are loaded in parallel for faster startup.
@@ -131,7 +139,7 @@ The `startEliza()` function in `src/runtime/eliza.ts` orchestrates the full life
     Call `runtime.initialize()` which registers all remaining plugins in parallel, starts services, and sets up the agent loop. Enable trajectory logging. Warm up the AgentSkillsService asynchronously.
   </Step>
   <Step title="Start API Server">
-    Launch the HTTP/WebSocket API server on port 2138 (default). Register the restart handler for hot-reload support.
+    Launch the HTTP/WebSocket API server on port 31337 (default `MILADY_API_PORT`). Register the restart handler for hot-reload support.
   </Step>
   <Step title="Load Hooks System">
     Load webhook and hook configurations from the workspace. Fire the `gateway.startup` hook event.
@@ -163,9 +171,9 @@ Restart is pluggable via `setRestartHandler()`:
 
 | Environment | Handler | Behavior |
 |-------------|---------|----------|
-| CLI (default) | Exit with code 75 | The runner script (`scripts/run-node.mjs`) catches exit code 75, optionally rebuilds if sources changed, and relaunches |
+| CLI (default) | Exit with code 75 | The runner script (`eliza/packages/app-core/scripts/run-node.mjs`) catches exit code 75, optionally rebuilds if sources changed, and relaunches |
 | Dev-server / API | Hot-swap | Stops the current runtime, reloads config from disk, creates a new `AgentRuntime`, and swaps the reference in the API server |
-| Electron | `AgentManager.restart()` | Uses the Electron app's native restart mechanism |
+| Electrobun | `AgentManager.restart()` | Uses the Electrobun app's native restart mechanism |
 
 ## elizaOS Integration Layer
 
@@ -173,16 +181,15 @@ Milady extends elizaOS through several integration points:
 
 ### Plugin System Bridge
 
-The `createMiladyPlugin()` function (`src/runtime/milady-plugin.ts`) creates a standard elizaOS `Plugin` that bridges Milady-specific functionality into the runtime:
+The `createMiladyPlugin()` function (`eliza/packages/app-core/src/runtime/eliza-plugin.ts`) creates a standard elizaOS `Plugin` that bridges Milady-specific functionality into the runtime:
 
 **Providers** (injected into every LLM context):
 - `channelProfileProvider` -- channel-specific personality profiles
-- `workspaceProvider` -- workspace file context (limited by `bootstrapMaxChars`)
+- `workspaceProvider` -- workspace file context
 - `adminTrustProvider` -- admin trust level for privileged operations
 - `autonomousStateProvider` -- current autonomous agent state
 - `sessionKeyProvider` -- session bridge for cross-channel continuity
 - `uiCatalogProvider` -- available UI components the agent can render
-- `emoteProvider` -- available 3D avatar emote animations (gated by `DISABLE_EMOTES` setting)
 - `customActionsProvider` -- user-defined custom action descriptions
 
 **Actions** (agent-invokable operations):
@@ -196,6 +203,7 @@ The `createMiladyPlugin()` function (`src/runtime/milady-plugin.ts`) creates a s
 - Register trigger task workers
 - Start autonomous state tracking
 - Bind custom action runtime references
+- Remove `PLAY_EMOTE` action when `character.settings.DISABLE_EMOTES` is set
 
 ### Error Boundaries
 
@@ -220,11 +228,11 @@ Plugin resolution (`resolvePlugins()`) handles three tiers of plugins through a 
 
 `collectPluginNames()` builds a `Set<string>` of package names to load:
 
-1. Start with all 13 **core plugins** (`CORE_PLUGINS`)
+1. Start with all 12 **core plugins** (`CORE_PLUGINS`)
 2. Add plugins from the **allow list** (`config.plugins.allow`) -- these are additive, not exclusive
 3. Add **connector plugins** for any configured channels (Discord, Telegram, Slack, etc.) using the `CHANNEL_PLUGIN_MAP`
 4. Add **model-provider plugins** when their API key environment variables are detected (e.g., `ANTHROPIC_API_KEY` triggers `@elizaos/plugin-anthropic`)
-5. Handle **ElizaCloud mode** -- when cloud is active, remove direct AI provider plugins since the cloud plugin handles all model calls
+5. Handle **Eliza Cloud mode** -- when cloud is active, remove direct AI provider plugins since the cloud plugin handles all model calls
 6. Add plugins from **`config.plugins.entries`** with `enabled !== false`
 7. Add plugins from **feature flags** (`config.features`)
 8. Add **user-installed plugins** from `config.plugins.installs`
@@ -286,7 +294,7 @@ interface Provider {
 }
 ```
 
-Milady registers 8+ providers through the Milady plugin, plus any providers from loaded plugins.
+Milady registers 7+ providers through the Milady plugin, plus any providers from loaded plugins.
 
 ### Actions
 
@@ -322,18 +330,18 @@ Local embeddings for memory search use `@elizaos/plugin-local-embedding` with co
 |---------|---------|-------------|
 | `embedding.model` | `nomic-embed-text-v1.5.Q5_K_M.gguf` | GGUF model file name |
 | `embedding.gpuLayers` | `auto` (Apple Silicon), `0` (others) | GPU acceleration layers |
-| `embedding.dimensions` | Auto-detected | Embedding vector dimensions |
+| `embedding.dimensions` | `768` | Embedding vector dimensions |
 | `embedding.contextSize` | Auto-detected | Maximum input token context |
 
 On macOS with Apple Silicon, Metal GPU acceleration is enabled by default with `mmap` disabled to prevent known compatibility issues.
 
 ### Trajectory Logging
 
-The trajectory logger (`@elizaos/plugin-trajectory-logger`) records agent decision paths for debugging and reinforcement learning. The runtime waits up to 3 seconds for the service to register, then enables it by default.
+The trajectory logger (`trajectories`) records agent decision paths for debugging and reinforcement learning. The runtime waits up to 3 seconds for the service to register, then enables it by default.
 
 ## API Server Architecture
 
-The API server (`src/api/server.ts`) is a raw Node.js `http.createServer()` instance -- no Express or framework overhead.
+The API server (`eliza/packages/app-core/src/api/server.ts`) is a raw Node.js `http.createServer()` instance -- no Express or framework overhead.
 
 ### Server State
 
@@ -353,18 +361,29 @@ Routes are organized into domain-specific handler modules:
 | Module | Prefix | Purpose |
 |--------|--------|---------|
 | `agent-admin-routes.ts` | `/api/agent/*` | Agent name, bio, system prompt, style, examples |
-| `agent-lifecycle-routes.ts` | `/api/agent/*` | Start, stop, restart, status |
-| `auth-routes.ts` | `/api/auth/*` | Token validation, onboarding tokens |
-| `autonomy-routes.ts` | `/api/autonomy/*` | Autonomous mode state |
+| `agent-lifecycle-routes.ts` | `/api/agent/*` | Start, stop, restart, status, export/import |
+| `auth-routes.ts` | `/api/auth/*` | Token validation, pairing flow |
+| `autonomy-routes.ts` | `/api/agent/autonomy` | Autonomous mode state |
 | `character-routes.ts` | `/api/character/*` | Character CRUD, AI-assisted generation |
-| `cloud-routes.ts` | `/api/cloud/*` | ElizaCloud integration |
+| `cloud-routes.ts` | `/api/cloud/*` | Eliza Cloud integration, billing, agents |
+| `cloud-compat-routes.ts` | `/api/cloud/compat/*`, `/api/cloud/v1/*` | Cloud backend proxy |
+| `connector-routes.ts` | `/api/connectors/*` | Messaging connector configuration |
+| `conversation-routes.ts` | `/api/conversations/*` | Web-chat conversations and messaging |
+| `inbox-routes.ts` | `/api/inbox/*` | Unified cross-channel inbox |
 | `knowledge-routes.ts` | `/api/knowledge/*` | Document upload, search, RAG management |
+| `memory-routes.ts` | `/api/memory/*`, `/api/context/*` | Memory persistence and context search |
 | `models-routes.ts` | `/api/models/*` | Model provider discovery and selection |
-| `plugin-validation.ts` | `/api/plugins/*` | Plugin config validation |
+| `onboarding-routes.ts` | `/api/onboarding/*` | First-run setup flow |
+| `plugin-routes.ts` | `/api/plugins/*` | Plugin management and installation |
 | `registry-routes.ts` | `/api/registry/*` | Plugin registry browsing |
+| `sandbox-routes.ts` | `/api/sandbox/*` | Container-based code execution |
+| `secrets-routes.ts` | `/api/secrets/*` | API key and credential management |
+| `skills-routes.ts` | `/api/skills/*` | Skill catalog and marketplace |
 | `training-routes.ts` | `/api/training/*` | Fine-tuning orchestration |
 | `trigger-routes.ts` | `/api/triggers/*` | Trigger task management |
-| `wallet-routes.ts` | `/api/wallet/*` | Wallet addresses, balances, NFTs |
+| `workbench-routes.ts` | `/api/workbench/*` | Tasks, todos, unified dashboard |
+| `automations-routes.ts` | `/api/automations/*`, `/api/n8n/*` | Unified automations and n8n workflows |
+| `wallet-routes.ts` | `/api/wallet/*` | Wallet addresses, balances, trading |
 | `apps-routes.ts` | `/api/apps/*` | elizaOS app marketplace |
 
 ### Authentication
@@ -379,7 +398,7 @@ If the API is bound to a non-loopback address (`MILADY_API_BIND` is not `127.0.0
 
 ## WebSocket Event System
 
-The API server exposes a WebSocket endpoint at `/ws` on port 2138.
+The API server exposes a WebSocket endpoint at `/ws` on the same port as the API (31337 by default, configurable via `MILADY_API_PORT`).
 
 ### Event Types
 
@@ -389,10 +408,10 @@ The API server exposes a WebSocket endpoint at `/ws` on port 2138.
 | `agent_event` | Server -> Client | Runtime autonomy loop events with run/seq tracking |
 | `heartbeat_event` | Server -> Client | Agent heartbeat with status, duration, channel info |
 | `training_event` | Server -> Client | Fine-tuning progress updates |
-| `proactive_message` | Server -> Client | Agent-initiated messages |
-| `conversation_update` | Server -> Client | New messages in active conversations |
+| `proactive-message` | Server -> Client | Agent-initiated messages |
+| `conversation-updated` | Server -> Client | Conversation metadata changed |
 | `ping` / `pong` | Bidirectional | Keepalive mechanism |
-| `set_active_conversation` | Client -> Server | Tell the server which conversation the UI is viewing |
+| `active-conversation` | Client -> Server | Tell the server which conversation the UI is viewing |
 
 ### Event Envelope
 
@@ -418,7 +437,7 @@ Events are buffered in a ring buffer on the server so newly connected clients ca
 
 ## Service Architecture
 
-Milady's `src/services/` directory contains standalone service modules:
+Milady's `eliza/packages/app-core/src/services/` directory contains standalone service modules:
 
 | Service | File | Purpose |
 |---------|------|---------|
@@ -481,7 +500,7 @@ Milady uses a Zod-validated JSON configuration file (`milady.json`):
     - `hooks` -- Webhook mappings, Gmail integration
     - `messages` -- TTS, queue, broadcast, response prefix
     - `database` -- Provider selection (PGLite/Postgres), connection config
-    - `cloud` -- ElizaCloud integration settings
+    - `cloud` -- Eliza Cloud integration settings
     - `models` -- Custom model providers, Bedrock discovery
     - `update` -- Release channel, check intervals
     - `embedding` -- Local embedding model, GPU layers, dimensions
@@ -500,7 +519,7 @@ Milady uses a Zod-validated JSON configuration file (`milady.json`):
 
 - Token-based auth via `MILADY_API_TOKEN` (bearer token on all `/api/*` requests)
 - Auto-generated token when binding to non-loopback addresses
-- WebSocket connections validated against the same token
+- WebSocket connections authenticated via an `auth` message after connection (or via a bearer token in the upgrade handshake header)
 
 ### Sandbox System
 
@@ -508,11 +527,11 @@ Three sandbox modes control code execution isolation:
 
 | Mode | Description |
 |------|-------------|
-| `off` | No sandboxing (default) |
-| `light` | Audit logging of all fetch calls, token replacement tracking |
-| `standard` / `max` | Docker container isolation with configurable image, memory limits, CPU caps, and network restrictions |
+| `off` | No sandboxing |
+| `non-main` | Sandbox all sessions except the main session (default when enabled) |
+| `all` | Sandbox all sessions including main |
 
-Sandbox events are recorded to a `SandboxAuditLog` for security review.
+The sandbox uses Docker container isolation with configurable image, memory limits, CPU caps, and network restrictions. Sandbox events are recorded to a `SandboxAuditLog` for security review.
 
 ### Plugin Security
 
@@ -534,8 +553,8 @@ The same backend serves all platforms:
 | Platform | Delivery | Notes |
 |----------|----------|-------|
 | CLI | `milady start` | Direct Node.js process, runner script handles restart exit codes |
-| Web | Browser at `http://localhost:2138` | Vite dev proxy in development |
-| Desktop | Electron wrapper | Bundles the API server + UI, uses `electron-updater` for native updates |
+| Web | Browser at `http://localhost:2138` (UI port) | Vite dev proxy forwards API calls to port 31337 |
+| Desktop | Electrobun wrapper | Bundles the API server + UI, uses the Electrobun updater for native updates |
 | iOS | Capacitor | Connects to local/remote API |
 | Android | Capacitor | Connects to local/remote API |
 
@@ -565,35 +584,48 @@ The Gateway runs on port **18789** (default) and provides:
 
 ### Workspace Structure
 
-The monorepo uses npm workspaces:
+The monorepo uses Bun workspaces. Core runtime packages live inside the `eliza/` git submodule:
 
 ```
 milady/
-  src/              # Core runtime, CLI, API, services
+  eliza/                # elizaOS submodule (core runtime packages)
+    packages/
+      app-core/         # Core runtime, CLI, API, services (source of truth)
+        src/
+          cli/          # Commander CLI commands
+          api/          # Dashboard API server
+          runtime/      # Agent loader, plugin system
+          config/       # Plugin auto-enable, config schemas
+          connectors/   # Connector integration code
+          services/     # Business logic (plugin installer, updater, etc.)
+      agent/            # Upstream elizaOS agent (core plugins, auto-enable maps)
+      ui/               # Shared UI component library
+      shared/           # Shared utilities
+    plugins/            # elizaOS plugins (git submodules)
   apps/
-    app/            # React SPA frontend (Vite)
-      electron/     # Electron desktop wrapper
-      plugins/      # App-specific plugins
-  plugins/
-    plugin-*/       # Workspace plugins (development)
+    app/                # React SPA frontend (Vite)
+      electrobun/       # Electrobun desktop wrapper
+    browser-bridge/     # Browser extension bridge
+    homepage/           # Marketing site
   deploy/
-    cloud-agent-template/  # Cloud deployment template
-  docs/             # Mintlify documentation
-  scripts/          # Build, dev, and utility scripts
-  test/             # E2E and integration tests
+    systemd/            # Bare-metal systemd deployment
+  docs/                 # Mintlify documentation
+  scripts/              # Build, dev, and utility scripts
+  skills/               # Agent skills directory
+  test/                 # E2E and integration tests
 ```
 
 ### Build Pipeline
 
 ```bash
 # Full build: TypeScript + build info + frontend
-npm run build
+bun run build
 # → tsdown (src/ → dist/)
 # → scripts/write-build-info.ts (version metadata)
-# → cd apps/app && npm run build (Vite frontend)
+# → cd apps/app && bun run build (Vite frontend)
 ```
 
-The `scripts/rt.sh` helper resolves the best available runtime (bun or Node.js with tsx) for running TypeScript files directly during development.
+The `eliza/packages/app-core/scripts/rt.mjs` helper resolves the best available runtime (bun or Node.js with tsx) for running TypeScript files directly during development.
 
 ### Engine Requirements
 

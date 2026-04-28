@@ -8,7 +8,7 @@ Milady is a modular AI agent framework. Here's what people are building with it.
 
 ## Social Media Agents
 
-Deploy agents across Twitter/X, Discord, Telegram, and Slack that engage with communities, post content, and respond to mentions — all driven by a configurable character personality. A single character file controls posting cadence, tone, and auto-reply behavior across every connected platform.
+Deploy agents across Twitter/X, Discord, Telegram, Slack, Farcaster, and 20+ other platforms that engage with communities, post content, and respond to mentions — all driven by a configurable character personality. A single character file controls posting cadence, tone, and auto-reply behavior across every connected platform.
 
 ```json
 {
@@ -36,7 +36,7 @@ Deploy agents across Twitter/X, Discord, Telegram, and Slack that engage with co
 - Keyword monitoring and engagement
 - Content scheduling via triggers
 
-**Plugins**: Discord, Telegram, Twitter, Slack connectors
+**Plugins**: Discord, Telegram, Twitter, Slack, Farcaster, WhatsApp, and other platform connectors
 
 ---
 
@@ -49,7 +49,7 @@ Build support agents that live in your Discord server and Telegram group simulta
   "name": "Support Agent",
   "bio": ["Technical support specialist for the community"],
   "connectors": {
-    "discord": { "botToken": "..." },
+    "discord": { "token": "..." },
     "telegram": { "botToken": "..." }
   },
   "plugins": { "allow": ["knowledge"] }
@@ -104,7 +104,7 @@ Create agents that answer questions from your documentation, codebase, or custom
 - Context-aware responses grounded in your content
 - Continuous learning from new uploads
 
-**Plugins**: `knowledge`, `bootstrap` plugins
+**Plugins**: `knowledge` plugin
 
 ---
 
@@ -171,7 +171,7 @@ Orchestrate multiple agents that collaborate, share knowledge, and specialize in
 Pick a use case above and follow these steps:
 
 1. [Install Milady](/installation)
-2. [Create your character](/quickstart)
+2. Choose or connect to a server target
 3. Install relevant plugins for your use case
 4. Configure connectors for your platforms
 5. Deploy with [cloud](/guides/cloud) or [self-host](/deployment)

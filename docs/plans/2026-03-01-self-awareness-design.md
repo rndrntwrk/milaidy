@@ -15,7 +15,7 @@ The Milady agent has full API access to wallet, permissions, plugins, cloud, and
 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
-| Token strategy | Layered lazy-load | ~300 tokens always-on summary + on-demand detail. Matches OpenClaw's approach |
+| Token strategy | Layered lazy-load | ~300 tokens always-on summary + on-demand detail |
 | Registration model | Declarative | Plugins declare `AwarenessContributor` interface. Zero core code changes for new modules |
 | Documentation | CLAUDE.md + contracts | Mirrors the agent's own layered lazy-load pattern for AI-assisted development |
 
@@ -106,7 +106,7 @@ Located at `src/awareness/registry.ts`.
 
 | pos | id | summary example | invalidateOn | cacheTtl |
 |-----|-----|------|------|------|
-| 10 | runtime | `Model: claude-opus-4-6 via anthropic \| OS: darwin \| pending restart: shell enabled` | config-changed, runtime-restarted | 300s |
+| 10 | runtime | `Model: claude-opus-4-7 via anthropic \| OS: darwin \| pending restart: shell enabled` | config-changed, runtime-restarted | 300s |
 | 20 | permissions | `Perms: shell✓ a11y✓ camera✗ mic✗ screen✗` | permission-changed | 120s |
 | 30 | wallet | `Wallet: 0x12..ab (local-signer) \| SOL: none` | wallet-updated | 60s |
 | 40 | provider | `Provider: anthropic (fallback: openai)` | provider-changed | 300s |
@@ -148,16 +148,6 @@ Located at `src/awareness/registry.ts`.
 4. If event-driven invalidation needed, call `awarenessRegistry.invalidate('event')` from relevant API route
 5. Done — no core provider/registry/CLAUDE.md changes needed
 
-## OpenClaw Comparison
-
-| Aspect | OpenClaw | Milady (this design) |
-|--------|----------|---------------------|
-| Context injection | `buildAgentSystemPrompt()` + `buildRuntimeLine()` | `composeSummary()` via `agentSelfStatus` provider |
-| Extensibility | Skills YAML frontmatter + `agent:bootstrap` plugin hook | `AwarenessContributor` interface + plugin auto-discovery |
-| Token efficiency | Per-file caps (20k), lazy skill loading | Per-contributor caps (80 chars), global cap (1200 chars) |
-| Proactive refresh | Heartbeat daemon (30min interval) | Event-driven invalidation + TTL |
-| Trust model | Skill requirements gating | `trusted` field + output sanitization |
-
 ## File Map
 
 ```
@@ -172,6 +162,6 @@ src/awareness/contributors/
   connectors.ts                      — Channel status
   cloud.ts                           — Cloud connection + credits
   features.ts                        — Feature flags
-src/providers/self-status.ts         — ElizaOS provider (calls registry.composeSummary)
+src/providers/self-status.ts         — elizaOS provider (calls registry.composeSummary)
 src/actions/get-self-status.ts       — GET_SELF_STATUS action (calls registry.getDetail)
 ```

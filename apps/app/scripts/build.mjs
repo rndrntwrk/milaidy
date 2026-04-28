@@ -1,20 +1,86 @@
-﻿#!/usr/bin/env node
+#!/usr/bin/env node
+// UI build: Capacitor plugins then Vite. Requires prior `bun install` (postinstall).
+// ELIZA_BUILD_FULL_SETUP=1 prepends install --ignore-scripts + run-repo-setup (CI-style).
 import { spawn } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import { resolveElizaAssetBaseUrls } from "../../../eliza/packages/app-core/scripts/lib/asset-cdn.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const appDir = path.resolve(__dirname, "..");
 const repoRoot = path.resolve(appDir, "..", "..");
-const rtScript = path.join(repoRoot, "scripts", "rt.mjs");
+const repoSetupScript = path.join(
+  repoRoot,
+  "eliza",
+  "packages",
+  "app-core",
+  "scripts",
+  "run-repo-setup.mjs",
+);
+const pruneCdnAssetsScript = path.join(
+  repoRoot,
+  "eliza",
+  "packages",
+  "app-core",
+  "scripts",
+  "prune-cdn-local-assets.mjs",
+);
+const bunExecutable = path
+  .basename(process.execPath)
+  .toLowerCase()
+  .includes("bun")
+  ? process.execPath
+  : "bun";
+
+function readAppEnvPrefix() {
+  const appConfigPath = path.join(appDir, "app.config.ts");
+  const fallback = "MILADY";
+  if (!fs.existsSync(appConfigPath)) {
+    return fallback;
+  }
+
+  const content = fs.readFileSync(appConfigPath, "utf8");
+  const match = content.match(/envPrefix\s*:\s*["']([^"']+)["']/);
+  const raw = match?.[1]?.trim() || fallback;
+  const normalized = raw
+    .replace(/[^A-Za-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .toUpperCase();
+  return normalized || fallback;
+}
+
+const APP_ENV_PREFIX = readAppEnvPrefix();
+const BRANDED_BUILD_FULL_SETUP = `${APP_ENV_PREFIX}_BUILD_FULL_SETUP`;
+const BRANDED_ASSET_BASE_URL = `${APP_ENV_PREFIX}_ASSET_BASE_URL`;
+
+const fullSetup =
+  process.env.ELIZA_BUILD_FULL_SETUP === "1" ||
+  process.env[BRANDED_BUILD_FULL_SETUP] === "1";
 
 function run(command, args, cwd) {
+  const { appAssetBaseUrl } = resolveElizaAssetBaseUrls();
+  const env = {
+    ...process.env,
+    ...(appAssetBaseUrl
+      ? {
+          VITE_ASSET_BASE_URL:
+            process.env.VITE_ASSET_BASE_URL ??
+            process.env.ELIZA_ASSET_BASE_URL ??
+            process.env[BRANDED_ASSET_BASE_URL] ??
+            appAssetBaseUrl,
+        }
+      : {}),
+  };
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd,
       stdio: "inherit",
-      env: process.env,
+      env,
+    });
+    child.on("error", (error) => {
+      reject(new Error(`${command} failed to start: ${error.message}`));
     });
     child.on("exit", (code, signal) => {
       if (signal) {
@@ -30,7 +96,18 @@ function run(command, args, cwd) {
   });
 }
 
-await run(process.execPath, [rtScript, "run", "install:build"], repoRoot);
+if (fullSetup) {
+  await run(bunExecutable, ["install", "--ignore-scripts"], repoRoot);
+  await run(process.execPath, [repoSetupScript], repoRoot);
+}
+
 await run(process.execPath, [path.join(__dirname, "plugin-build.mjs")], appDir);
-await run(process.execPath, [rtScript, "install", "--ignore-scripts"], appDir);
-await run(process.execPath, [rtScript, "run", "build:web"], appDir);
+
+if (fullSetup) {
+  await run(bunExecutable, ["install", "--ignore-scripts"], appDir);
+}
+
+await run(bunExecutable, ["run", "build:web"], appDir);
+if (resolveElizaAssetBaseUrls().appAssetBaseUrl) {
+  await run(process.execPath, [pruneCdnAssetsScript], repoRoot);
+}

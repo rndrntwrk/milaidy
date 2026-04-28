@@ -1,10 +1,10 @@
 ---
 title: "Plugin Development"
 sidebarTitle: "Plugin Development"
-description: "Create, test, and publish plugins for Milady/elizaOS."
+description: "Create, test, and publish plugins for elizaOS."
 ---
 
-This guide walks you through creating, testing, and publishing plugins for Milady/elizaOS.
+This guide walks you through creating, testing, and publishing plugins for elizaOS.
 
 ## Table of Contents
 
@@ -124,7 +124,7 @@ my-plugin/
     "dev": "tsc --watch"
   },
   "dependencies": {
-    "@elizaos/core": "^2.0.0"
+    "@elizaos/core": "alpha"
   },
   "devDependencies": {
     "typescript": "^5.0.0"
@@ -303,8 +303,8 @@ const sendMessageAction: Action = {
     const messageText = params.message as string;
     const platform = (params.platform as string) ?? "telegram";
 
-    // Actually send the message...
-    await runtime.sendMessage(targetUser, messageText, platform);
+    // Send the message via the appropriate connector service
+    // (implementation depends on the platform connector plugin)
 
     return {
       success: true,
@@ -737,12 +737,12 @@ describe("my-plugin integration", () => {
 
 2. **Build your plugin:**
    ```bash
-   npm run build
+   bun run build
    ```
 
 3. **Publish:**
    ```bash
-   npm publish --access public
+   bun publish --access public
    ```
 
 ### Local Development
@@ -751,7 +751,7 @@ For local plugin development without publishing:
 
 1. **Workspace discovery** — Place your plugin in:
    - `./plugins/my-plugin/` (project-local)
-   - `~/.milady/plugins/my-plugin/` (global)
+   - `~/.milady/plugins/custom/my-plugin/` (global drop-in)
 
 2. **Config-based loading** — Add to `milady.json`:
    ```json
@@ -762,7 +762,7 @@ For local plugin development without publishing:
 
 3. **Symlink for development:**
    ```bash
-   cd ~/.milady/plugins
+   cd ~/.milady/plugins/custom
    ln -s /path/to/my-plugin my-plugin
    ```
 
@@ -821,10 +821,10 @@ Plugins can include an `elizaos.plugin.json` manifest file for rich metadata:
 
 | Kind | Description |
 |------|-------------|
-| `memory` | Memory/storage adapters |
-| `channel` | Messaging platform connectors |
-| `provider` | Context/data providers |
-| `skill` | Skill-based extensions |
+| `ai-provider` | AI/LLM model providers |
+| `app` | Application plugins |
+| `connector` | Messaging platform connectors |
+| `feature` | Feature extensions and skills |
 | `database` | Database adapters |
 
 ### PluginOrigin Types
@@ -920,10 +920,6 @@ const ModelType = {
   TEXT_SMALL: "TEXT_SMALL",       // Fast, cheap, simple tasks
   TEXT_LARGE: "TEXT_LARGE",       // Complex reasoning
   TEXT_COMPLETION: "TEXT_COMPLETION",
-
-  // Reasoning models
-  TEXT_REASONING_SMALL: "REASONING_SMALL",
-  TEXT_REASONING_LARGE: "REASONING_LARGE",
 
   // Embeddings
   TEXT_EMBEDDING: "TEXT_EMBEDDING",
@@ -1087,6 +1083,6 @@ const myPlugin: Plugin = {
 
 ## Next Steps
 
-- [Skills Documentation](./skills.md) — Learn about markdown-based skill extensions
-- [Registry Guide](./registry.md) — Publishing to the plugin registry
+- [Skills Documentation](/plugins/skills) — Learn about markdown-based skill extensions
+- [Registry Guide](/plugins/registry) — Publishing to the plugin registry
 - [Contributing Guide](/guides/contribution-guide) — Contributing to Milady/elizaOS

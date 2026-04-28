@@ -1,95 +1,45 @@
 ---
 title: "BlueBubbles Plugin"
 sidebarTitle: "BlueBubbles"
-description: "BlueBubbles connector for Milady — iMessage bridge with reactions, effects, group management, and attachment support."
+description: "BlueBubbles connector for sending and receiving iMessage through a local BlueBubbles server"
 ---
 
-The BlueBubbles plugin connects Milady agents to iMessage via a BlueBubbles server, providing a cross-platform iMessage bridge with rich actions including reactions, message effects, and group management.
+iMessage connector via a local BlueBubbles server.
 
 **Package:** `@elizaos/plugin-bluebubbles`
 
-## Installation
+## Auto-Enable
 
-```bash
-milady plugins install bluebubbles
-```
-
-## Setup
-
-### 1. Install BlueBubbles Server
-
-Install [BlueBubbles](https://bluebubbles.app/) on a Mac with iMessage configured. The server must be running and accessible from the machine running Milady.
-
-### 2. Get Server Credentials
-
-From the BlueBubbles server settings, note the:
-- **Server URL** (e.g., `http://192.168.1.100:1234`)
-- **Server password**
-
-### 3. Configure Milady
-
-```json
-{
-  "connectors": {
-    "bluebubbles": {
-      "enabled": true,
-      "serverUrl": "http://localhost:1234",
-      "password": "your-password",
-      "dmPolicy": "pairing"
-    }
-  }
-}
-```
-
-## Configuration
-
-| Field | Required | Description |
-|-------|----------|-------------|
-| `serverUrl` | Yes | BlueBubbles server URL |
-| `password` | Yes | Server password |
-| `webhookPath` | No | Webhook endpoint path for incoming events |
-| `readReceipts` | No | Send read receipts (default: `true`) |
-| `dmPolicy` | No | DM handling policy |
-
-## Features
-
-- **iMessage bridge** — Full iMessage access via BlueBubbles server
-- **Reactions** — React to messages with tapback emojis
-- **Message effects** — Send messages with iMessage effects (slam, loud, gentle, invisible ink, etc.)
-- **Edit and unsend** — Edit or unsend previously sent messages
-- **Reply** — Reply to specific messages in threads
-- **Attachments** — Send media attachments
-- **Group management** — Rename groups, set group icons, add/remove participants, leave groups
-- **Read receipts** — Configurable read receipt support
-- **Multi-account** — Supports multiple accounts via `accounts` map
+This plugin auto-enables when both `serverUrl` and `password` are set in the connector config. No manual install is required.
 
 ## Auto-Enable
 
-The plugin auto-enables when the `connectors.bluebubbles` block contains a `serverUrl` and `password`:
+This plugin auto-enables when the `BLUEBUBBLES_SERVER_URL` environment variable is set.
 
-```json
-{
-  "connectors": {
-    "bluebubbles": {
-      "serverUrl": "http://localhost:1234",
-      "password": "your-password"
-    }
-  }
-}
-```
+## Configuration
 
-## Troubleshooting
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `BLUEBUBBLES_SERVER_URL` | Yes | BlueBubbles server URL |
+| `BLUEBUBBLES_PASSWORD` | Yes | Server password |
+| `BLUEBUBBLES_ENABLED` | No | Enable or disable the connector |
+| `BLUEBUBBLES_DM_POLICY` | No | DM policy (e.g., allow, deny, allowlist) |
+| `BLUEBUBBLES_ALLOW_FROM` | No | Comma-separated allowed user list |
+| `BLUEBUBBLES_GROUP_POLICY` | No | Group message policy |
+| `BLUEBUBBLES_WEBHOOK_PATH` | No | Webhook endpoint path |
+| `BLUEBUBBLES_GROUP_ALLOW_FROM` | No | Comma-separated allowed group list |
+| `BLUEBUBBLES_SEND_READ_RECEIPTS` | No | Send read receipts for received messages |
 
-### Connection Refused
+## Features
 
-Verify the BlueBubbles server is running and the URL is reachable from the Milady host. If running on a different machine, ensure firewall rules allow the connection.
-
-### Authentication Failed
-
-Double-check the server password matches the one configured in BlueBubbles server settings.
+- Send and receive iMessage via BlueBubbles HTTP API
+- DM and group chat support
+- Read receipts
+- Webhook-based inbound messages
+- Network-accessible (not limited to the Mac running Messages)
 
 ## Related
 
-- [iMessage Plugin](/plugin-registry/platform/imessage) — Native macOS iMessage integration
-- [Signal Plugin](/plugin-registry/platform/signal) — Signal messaging integration
-- [Connectors Guide](/guides/connectors) — General connector documentation
+- [BlueBubbles Connector Setup](/connectors/bluebubbles) — Full configuration reference
+- [iMessage Plugin](/plugin-registry/platform/imessage) — Native iMessage connector
+- [Blooio Plugin](/plugin-registry/platform/blooio) — iMessage/SMS via Blooio cloud

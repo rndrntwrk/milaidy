@@ -20,10 +20,12 @@ Get the trigger system health snapshot. This endpoint works even when triggers a
 
 ```json
 {
-  "enabled": true,
-  "taskServiceAvailable": true,
-  "activeTriggerCount": 3,
-  "limit": 20
+  "triggersEnabled": true,
+  "activeTriggers": 3,
+  "disabledTriggers": 1,
+  "totalExecutions": 42,
+  "totalFailures": 2,
+  "totalSkipped": 0
 }
 ```
 
@@ -77,6 +79,7 @@ Create a new trigger. Returns `429` if the active trigger limit for the creator 
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
+| `kind` | string | No | Trigger kind: `"text"` (default) or `"workflow"`. Workflow triggers require `workflowId`. |
 | `displayName` | string | No | Human-readable trigger name (default: `"New Trigger"`) |
 | `instructions` | string | No | Instructions for the agent when this trigger fires |
 | `triggerType` | string | No | `"interval"`, `"cron"`, or `"once"` (default: `"interval"`) |
@@ -87,6 +90,8 @@ Create a new trigger. Returns `429` if the active trigger limit for the creator 
 | `wakeMode` | string | No | `"inject_now"` fires immediately (default), other modes defer |
 | `enabled` | boolean | No | Whether the trigger is active (default: `true`) |
 | `createdBy` | string | No | Creator identifier for limit tracking (default: `"api"`) |
+| `workflowId` | string | No | n8n workflow ID (required when `kind` is `"workflow"`) |
+| `workflowName` | string | No | Human-readable workflow name (for `kind: "workflow"`) |
 
 **Response (201 Created)**
 
@@ -248,3 +253,15 @@ Get the run history for a trigger.
   ]
 }
 ```
+
+## Common Error Codes
+
+| Status | Code | Description |
+|--------|------|-------------|
+| 400 | `INVALID_REQUEST` | Request body is malformed or missing required fields |
+| 401 | `UNAUTHORIZED` | Missing or invalid authentication token |
+| 404 | `NOT_FOUND` | Requested resource does not exist |
+| 409 | `TRIGGER_EXISTS` | A trigger with the same configuration already exists |
+| 429 | `TRIGGER_LIMIT_REACHED` | Maximum number of triggers for this creator has been reached |
+| 500 | `TRIGGER_DISABLED` | Trigger system is disabled in configuration |
+| 500 | `INTERNAL_ERROR` | Unexpected server error |

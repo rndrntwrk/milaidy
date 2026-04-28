@@ -16,10 +16,13 @@ Get the training service status.
 
 ```json
 {
-  "available": true,
-  "backend": "mlx",
-  "runtimeAvailable": true,
-  "activeJobId": null
+  "runningJobs": 0,
+  "queuedJobs": 0,
+  "completedJobs": 0,
+  "failedJobs": 0,
+  "modelCount": 0,
+  "datasetCount": 0,
+  "runtimeAvailable": true
 }
 ```
 
@@ -40,6 +43,8 @@ List trajectories available for training with pagination.
 
 ```json
 {
+  "available": true,
+  "total": 142,
   "trajectories": [
     {
       "id": "550e8400-e29b-41d4-a716-446655440000",
@@ -49,10 +54,7 @@ List trajectories available for training with pagination.
       "startTime": 1718000000000,
       "endTime": 1718000010000
     }
-  ],
-  "total": 142,
-  "offset": 0,
-  "limit": 100
+  ]
 }
 ```
 
@@ -181,7 +183,7 @@ Start a new training job.
 |-----------|------|----------|-------------|
 | `datasetId` | string | No | Dataset ID to train on (uses latest if omitted) |
 | `maxTrajectories` | integer | No | Cap on trajectories to use |
-| `backend` | string | No | Training backend: `"mlx"`, `"cuda"`, or `"cpu"` |
+| `backend` | string | No | Training backend: `"native"` (default, prompt optimization via MIPRO/GEPA), `"mlx"`, `"cuda"`, or `"cpu"` |
 | `model` | string | No | Base model to fine-tune |
 | `iterations` | integer | No | Number of training iterations |
 | `batchSize` | integer | No | Batch size |
@@ -371,3 +373,66 @@ Run a benchmark against a fine-tuned model to evaluate performance.
   "completedAt": 1718006000000
 }
 ```
+
+---
+
+### GET /api/training/auto/config
+
+Get the auto-training configuration (thresholds, cooldown).
+
+**Response**
+
+```json
+{
+  "threshold": 100,
+  "cooldownHours": 12,
+  "enabled": true
+}
+```
+
+---
+
+### PUT /api/training/auto/config
+
+Update the auto-training configuration.
+
+**Request**
+
+```json
+{
+  "threshold": 200,
+  "cooldownHours": 24
+}
+```
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `threshold` | integer | No | Number of trajectories per task before auto-training triggers |
+| `cooldownHours` | number | No | Minimum hours between auto-training runs |
+| `enabled` | boolean | No | Enable or disable auto-training |
+
+**Response**
+
+```json
+{
+  "ok": true,
+  "config": {
+    "threshold": 200,
+    "cooldownHours": 24,
+    "enabled": true
+  }
+}
+```
+
+---
+
+## Common Error Codes
+
+| Status | Code | Description |
+|--------|------|-------------|
+| 400 | `INVALID_REQUEST` | Request body is malformed or missing required fields |
+| 401 | `UNAUTHORIZED` | Missing or invalid authentication token |
+| 404 | `NOT_FOUND` | Requested resource does not exist |
+| 500 | `TRAINING_FAILED` | Training job failed to start or complete |
+| 503 | `SERVICE_UNAVAILABLE` | Training service is not available |
+| 500 | `INTERNAL_ERROR` | Unexpected server error |

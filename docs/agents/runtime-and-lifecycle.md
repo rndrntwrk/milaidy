@@ -12,8 +12,8 @@ Milady has two primary runtime entry points:
 
 | Function | File | Use |
 |---|---|---|
-| `startEliza(opts)` | `src/runtime/eliza.ts` | Full startup including onboarding and optional interactive loop |
-| `bootElizaRuntime(opts)` | `src/runtime/eliza.ts` | Headless startup for API server use (wraps `startEliza`) |
+| `startEliza(opts)` | `eliza/packages/agent/src/runtime/eliza.ts` | Full startup including onboarding and optional interactive loop |
+| `bootElizaRuntime(opts)` | `eliza/packages/agent/src/runtime/eliza.ts` | Headless startup for API server use (wraps `startEliza`) |
 
 ```typescript
 // CLI mode — interactive chat after boot
@@ -44,7 +44,7 @@ addLogListener(logToChatListener);
 `milady.json` is loaded from the state directory (`~/.milady/milady.json`). If the file does not exist, an empty config is used with defaults:
 
 ```typescript
-config = loadMiladyConfig();
+config = loadElizaConfig();
 // Falls back to {} if ENOENT
 ```
 
@@ -68,7 +68,6 @@ Immediately after config is loaded and before onboarding, several environment va
 |---|---|
 | LOG_LEVEL propagation | `process.env.LOG_LEVEL = config.logging?.level ?? "error"` |
 | Destructive migrations | `ELIZA_ALLOW_DESTRUCTIVE_MIGRATIONS=true` |
-| Bootstrap ignore | `IGNORE_BOOTSTRAP=true` |
 | Subscription credentials | `applySubscriptionCredentials()` applies any stored subscription keys |
 | OG tracking | OG tracking initialization for analytics/telemetry |
 
@@ -93,19 +92,16 @@ Several helper functions push config values into `process.env` so that elizaOS p
 The agent workspace directory is created if needed:
 
 ```typescript
-await ensureAgentWorkspace({ dir: workspaceDir, ensureBootstrapFiles: true });
+await ensureAgentWorkspace({ dir: workspaceDir });
 ```
-
-Bootstrap files (e.g., `BOOTSTRAP.md`) are created on first run.
 
 ### Step 7: Create Milady Plugin
 
-`createMiladyPlugin()` is called to produce the core bridge plugin that provides workspace context, session keys, emotes, custom actions, and lifecycle actions (restart, send-message):
+`createElizaPlugin()` is called to produce the core bridge plugin that provides workspace context, session keys, custom actions, and lifecycle actions (restart, send-message):
 
 ```typescript
-const miladyPlugin = createMiladyPlugin({
+const elizaPlugin = createElizaPlugin({
   workspaceDir,
-  bootstrapMaxChars: config.agents?.defaults?.bootstrapMaxChars,
   agentId,
 });
 ```
@@ -128,7 +124,7 @@ Each plugin is wrapped with an error boundary so a crash in one plugin cannot ha
 let runtime = new AgentRuntime({
   character,
   actionPlanning: true,
-  plugins: [miladyPlugin, ...otherPlugins.map((p) => p.plugin)],
+  plugins: [elizaPlugin, ...otherPlugins.map((p) => p.plugin)],
   logLevel: runtimeLogLevel,
   settings: {
     VALIDATION_LEVEL: "fast",
@@ -166,7 +162,7 @@ After initialization:
 ## Plugin Loading Order
 
 ```
-1. miladyPlugin                    (passed first in the plugins array to AgentRuntime constructor)
+1. elizaPlugin                     (passed first in the plugins array to AgentRuntime constructor)
 2. @elizaos/plugin-sql             (pre-registered via registerSqlPluginWithRecovery() before runtime.initialize())
 3. @elizaos/plugin-local-embedding (pre-registered so TEXT_EMBEDDING handler at priority 10 is available)
 4. All other plugins               (registered during runtime.initialize() in parallel)
@@ -174,7 +170,7 @@ After initialization:
 
 ## Restart Behavior
 
-Milady supports pluggable restart handlers via `src/runtime/restart.ts`:
+Milady supports pluggable restart handlers via `eliza/packages/agent/src/runtime/restart.ts`:
 
 ```typescript
 export const RESTART_EXIT_CODE = 75;
@@ -195,7 +191,7 @@ export function requestRestart(reason?: string): void | Promise<void> {
 
 | Environment | Restart strategy |
 |---|---|
-| CLI | Exits with code 75; `scripts/run-node.mjs` catches this, rebuilds if needed, relaunches |
+| CLI | Exits with code 75; `eliza/packages/app-core/scripts/run-node.mjs` catches this, rebuilds if needed, relaunches |
 | Dev server | Host calls `setRestartHandler()` to hot-swap the runtime in-process |
 | API endpoint | `POST /api/agent/restart` calls `requestRestart()` |
 
@@ -214,7 +210,7 @@ The `restartAction` available to the LLM calls `requestRestart()` with an option
 
 The sandbox system has two layers of configuration:
 
-**TypeScript config type** (`AgentDefaultsConfig` in `types.agent-defaults.ts` and `AgentConfig` in `types.agents.ts`):
+**TypeScript config type** (`AgentDefaultsConfig` in `eliza/packages/shared/src/config/types.agent-defaults.ts` and `AgentConfig` in `eliza/packages/shared/src/config/types.agents.ts`):
 
 | Mode | Description |
 |---|---|
@@ -222,7 +218,7 @@ The sandbox system has two layers of configuration:
 | `"non-main"` | Sandbox non-main sessions only |
 | `"all"` | Sandbox all sessions |
 
-**Runtime sandbox manager** (`SandboxManager` in `services/sandbox-manager.ts`):
+**Runtime sandbox manager** (`SandboxManager` in `eliza/packages/app-core/src/services/sandbox-manager.ts`):
 
 | Mode | Description |
 |---|---|
@@ -230,7 +226,6 @@ The sandbox system has two layers of configuration:
 | `"light"` | Audit log only; no container isolation |
 | `"standard"` | Docker container isolation for tool execution |
 | `"max"` | Maximum isolation including network restrictions |
-
 <Note>
 The runtime in `eliza.ts` reads `agents.defaults.sandbox.mode` as a raw string and maps it to the `SandboxMode` type. It only recognizes `"light"`, `"standard"`, and `"max"` -- all other values (including the TypeScript-typed `"non-main"` and `"all"`) fall back to `"off"`. To enable sandboxing, use `"light"`, `"standard"`, or `"max"` in `milady.json`. The per-agent `sandbox.mode` field in `types.agents.ts` (`"off" | "non-main" | "all"`) controls which sessions are sandboxed, while the defaults-level mode controls the sandbox intensity.
 </Note>

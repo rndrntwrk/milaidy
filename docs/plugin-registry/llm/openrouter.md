@@ -8,10 +8,26 @@ The OpenRouter plugin connects Milady agents to OpenRouter's unified inference g
 
 **Package:** `@elizaos/plugin-openrouter`
 
+## Milady: pinned version and upstream bundle bug
+
+In the Milady monorepo, **`@elizaos/plugin-openrouter` is pinned to `2.0.0-alpha.13`** (exact version in root `package.json`, reflected in `bun.lock`).
+
+**Why pin**
+
+- **`2.0.0-alpha.12` on npm is a bad publish:** the Node and browser ESM bundles are **truncated**. They include only rolled-up config helpers; the **main plugin object is missing**, yet the file still **exports** `openrouterPlugin` and a default alias. **Why runtime fails:** Bun (and any strict tooling) tries to load that file and errors because those bindings are **never declared** in the module.
+- **Why not `^2.0.0-alpha.10`:** Semver ranges can float to **`alpha.12`**, which breaks `bun install` / lockfile refresh for everyone using OpenRouter.
+- **Why we do not patch this in `patch-deps.mjs`:** Unlike a wrong export *name* in an otherwise complete file, this tarball omits the **entire implementation chunk**. A postinstall string replace cannot invent the plugin; the safe fix is **use a good version**.
+
+**When to remove the pin**
+
+After upstream publishes a fixed version, verify `dist/node/index.node.js` contains the full plugin (hundreds of lines, not ~80) and that `bun build …/index.node.js --target=bun` succeeds, then bump and relax the range if desired.
+
+**Reference:** [Plugin resolution — pinned OpenRouter](/plugin-resolution-and-node-path#pinned-elizaosplugin-openrouter).
+
 ## Installation
 
 ```bash
-milady plugins install openrouter
+milady plugins install @elizaos/plugin-openrouter
 ```
 
 ## Auto-Enable
@@ -27,6 +43,22 @@ export OPENROUTER_API_KEY=sk-or-...
 | Environment Variable | Required | Description |
 |---------------------|----------|-------------|
 | `OPENROUTER_API_KEY` | Yes | OpenRouter API key from [openrouter.ai](https://openrouter.ai) |
+| `OPENROUTER_BASE_URL` | No | Custom base URL for the OpenRouter API |
+| `OPENROUTER_BROWSER_BASE_URL` | No | Browser-only proxy endpoint base URL |
+| `OPENROUTER_SMALL_MODEL` | No | Override the small model identifier |
+| `OPENROUTER_LARGE_MODEL` | No | Override the large model identifier |
+| `SMALL_MODEL` | No | Global alias to override the small model |
+| `LARGE_MODEL` | No | Global alias to override the large model |
+| `OPENROUTER_EMBEDDING_MODEL` | No | Override the embedding model identifier |
+| `EMBEDDING_MODEL` | No | Global alias to override the embedding model |
+| `OPENROUTER_EMBEDDING_DIMENSIONS` | No | Override embedding vector dimensions |
+| `EMBEDDING_DIMENSIONS` | No | Global alias for embedding dimensions |
+| `OPENROUTER_IMAGE_MODEL` | No | Override the image model identifier |
+| `IMAGE_MODEL` | No | Global alias for the image model |
+| `OPENROUTER_IMAGE_GENERATION_MODEL` | No | Override the image generation model |
+| `IMAGE_GENERATION_MODEL` | No | Global alias for the image generation model |
+| `OPENROUTER_AUTO_CLEANUP_IMAGES` | No | Automatically clean up generated images |
+| `OPENROUTER_TOOL_EXECUTION_MAX_STEPS` | No | Maximum tool execution steps |
 
 ### milady.json Example
 
@@ -36,7 +68,7 @@ export OPENROUTER_API_KEY=sk-or-...
     "profiles": {
       "default": {
         "provider": "openrouter",
-        "model": "anthropic/claude-sonnet-4-5"
+        "model": "anthropic/claude-sonnet-4.6"
       }
     }
   }
@@ -51,18 +83,18 @@ OpenRouter provides access to models from all major providers. Use the full prov
 
 | Model ID | Description |
 |---------|-------------|
+| `openai/gpt-5` | GPT-5 flagship multimodal |
+| `openai/gpt-5-mini` | Fast and efficient |
 | `openai/gpt-4o` | GPT-4o multimodal |
-| `openai/gpt-4o-mini` | Fast and efficient |
-| `openai/o1` | Reasoning model |
 | `openai/o3-mini` | Fast reasoning |
 
 ### Anthropic via OpenRouter
 
 | Model ID | Description |
 |---------|-------------|
-| `anthropic/claude-opus-4` | Most capable Claude |
-| `anthropic/claude-sonnet-4-5` | Balanced Claude |
-| `anthropic/claude-haiku-4` | Fastest Claude |
+| `anthropic/claude-opus-4.7` | Most capable Claude |
+| `anthropic/claude-sonnet-4.6` | Balanced Claude |
+| `anthropic/claude-haiku-4.5` | Fastest Claude |
 
 ### Meta via OpenRouter
 
@@ -84,9 +116,11 @@ Browse all models at [openrouter.ai/models](https://openrouter.ai/models).
 
 | elizaOS Model Type | Default OpenRouter Model |
 |-------------------|------------------------|
-| `TEXT_SMALL` | `anthropic/claude-haiku-4` |
-| `TEXT_LARGE` | `anthropic/claude-sonnet-4-5` |
-| `TEXT_REASONING_LARGE` | `anthropic/claude-opus-4` |
+| `TEXT_SMALL` | `google/gemini-2.0-flash-001` |
+| `TEXT_LARGE` | `google/gemini-2.5-flash` |
+| `IMAGE` | `x-ai/grok-2-vision-1212` |
+| `IMAGE_GENERATION` | `google/gemini-2.5-flash-image-preview` |
+| `TEXT_EMBEDDING` | `openai/text-embedding-3-small` |
 
 ## Features
 
@@ -109,7 +143,7 @@ OpenRouter supports routing preferences for cost, latency, or throughput:
     "profiles": {
       "default": {
         "provider": "openrouter",
-        "model": "anthropic/claude-sonnet-4-5",
+        "model": "anthropic/claude-sonnet-4.6",
         "providerPreferences": {
           "order": ["Anthropic", "AWS Bedrock"],
           "allowFallbacks": true
@@ -138,4 +172,4 @@ See [openrouter.ai/docs#limits](https://openrouter.ai/docs#limits) for rate limi
 
 - [OpenAI Plugin](/plugin-registry/llm/openai) — Direct OpenAI integration
 - [Anthropic Plugin](/plugin-registry/llm/anthropic) — Direct Anthropic integration
-- [Model Providers Guide](/model-providers) — Compare all providers
+- [Model Providers](/runtime/models) — Compare all providers

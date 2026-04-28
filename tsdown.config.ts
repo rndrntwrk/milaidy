@@ -1,12 +1,8 @@
-// tsdown config — no import needed, defineConfig is a type-only identity fn
-
 const env = {
   NODE_ENV: "production",
 };
 
-// Packages with native .node binaries must be externalized — rolldown cannot
-// bundle Mach-O/ELF shared libraries and will error trying to read them as
-// UTF-8.  This list covers direct + transitive native deps.
+// Native .node packages must stay external; rolldown cannot bundle shared libraries.
 const nativeExternals = [
   "node-llama-cpp",
   "@reflink/reflink",
@@ -15,24 +11,37 @@ const nativeExternals = [
   "@reflink/reflink-linux-arm64-gnu",
   "@reflink/reflink-linux-x64-gnu",
   "fsevents",
+  "jose",
+  // Keep React external for Node server builds; bundling it introduces incompatible wrappers.
+  "react",
+  "react-dom",
 ];
 
-// @elizaos/plugin-* are loaded at runtime via dynamic import(); every entry that
-// transitively includes eliza.ts needs the plugin regex so rolldown treats them
-// as external and doesn't emit UNRESOLVED_IMPORT warnings.
+// Runtime-loaded @elizaos/plugin-* packages must stay external.
 const pluginExternal = /^@elizaos\/plugin-/;
-const allExternals = [...nativeExternals, pluginExternal];
+const optionalAppExternal = /^@elizaos\/app-/;
+// @node-rs/* ships native .node bindings per platform (argon2 + arch
+// variants like @node-rs/argon2-darwin-arm64). Single regex covers all
+// of them — always external; rolldown can't bundle the .node binary.
+const nodeRsExternal = /^@node-rs\//;
+const allExternals = [
+  ...nativeExternals,
+  pluginExternal,
+  optionalAppExternal,
+  nodeRsExternal,
+];
 
 export default [
   {
-    entry: "src/index.ts",
+    entry: "eliza/packages/app-core/src/index.ts",
     env,
     fixedExtension: false,
     platform: "node",
-    external: nativeExternals,
+    inlineOnly: false,
+    external: allExternals,
   },
   {
-    entry: "src/entry.ts",
+    entry: "eliza/packages/app-core/src/entry.ts",
     env,
     fixedExtension: false,
     platform: "node",
@@ -41,33 +50,22 @@ export default [
     external: allExternals,
   },
   {
-    entry: "src/runtime/eliza.ts",
+    entry: "eliza/packages/app-core/src/runtime/eliza.ts",
     env,
     fixedExtension: false,
     platform: "node",
-    external: allExternals,
-    outputOptions: { codeSplitting: false },
-  },
-  {
-    entry: "src/api/server.ts",
-    env,
-    fixedExtension: false,
-    platform: "node",
-    external: allExternals,
-    // Disable code splitting to prevent circular chunk dependencies.
-    // Without this, rolldown places the __exportAll runtime helper in the
-    // entry chunk and shared chunks import it back, creating a circular
-    // import that fails when Electron loads server.js via dynamic import().
-    outputOptions: { codeSplitting: false },
-  },
-  {
-    entry: "src/plugins/whatsapp/index.ts",
-    outDir: "dist/plugins/whatsapp",
-    env,
-    fixedExtension: false,
-    platform: "node",
-    unbundle: true,
     inlineOnly: false,
-    external: nativeExternals,
+    external: allExternals,
+    outputOptions: { codeSplitting: false },
+  },
+  {
+    entry: "eliza/packages/app-core/src/api/server.ts",
+    env,
+    fixedExtension: false,
+    platform: "node",
+    inlineOnly: false,
+    external: allExternals,
+    // Disable code splitting to avoid circular imports in server.js.
+    outputOptions: { codeSplitting: false },
   },
 ];

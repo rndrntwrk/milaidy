@@ -11,11 +11,11 @@ The Milady mobile app brings the full dashboard experience to iOS and Android de
 | Platform | Minimum Version | Scheme | Notes |
 |----------|----------------|--------|-------|
 | **iOS** | iOS 14+ (armv7) | HTTPS | Automatic content inset, mobile-preferred content mode, link preview disabled |
-| **Android** | API 22 (Android 5.1+) | HTTPS | Input capture enabled, mixed content disabled, WebContents debugging off in production |
+| **Android** | API 26 (Android 8.0+) | HTTPS | Input capture enabled, mixed content disabled, WebContents debugging off in production |
 
 **App ID:** `com.miladyai.milady`
-**Package name:** `@milady/app`
-**Current version:** `2.0.0-alpha.26`
+**Package name:** `@miladyai/app`
+**Current version:** `2.0.0-alpha.87`
 
 ## Prerequisites
 
@@ -32,25 +32,25 @@ The Milady mobile app brings the full dashboard experience to iOS and Android de
 - **Android Studio** (any recent version)
 - **Android SDK** with API level 35 (compileSdk) installed via SDK Manager
 - **JDK 17+** (bundled with recent Android Studio)
-- A physical device or emulator with API 22+
+- A physical device or emulator with API 26+
 
 ### Shared
 
-- **Node.js 18+** and the project's package manager (check `scripts/rt.sh` for the runtime wrapper)
+- **Node.js 22+** and the project's package manager (Bun)
 - The monorepo cloned and dependencies installed at the root level
 
 ## Building the App
 
+All mobile build commands run from the **repository root** using `bun run`.
+
 ### Build for iOS
 
 ```bash
-cd apps/app
-
 # Build plugins, web assets, and sync to the iOS project
-../../scripts/rt.sh run build:ios
+bun run build:ios
 
 # Open the Xcode project
-../../scripts/rt.sh run cap:open:ios
+bun run cap:open:ios
 ```
 
 This runs `vite build` to produce the `dist/` web assets, then `capacitor sync ios` to copy them into the native iOS project and update native dependencies.
@@ -60,13 +60,11 @@ The Xcode workspace is at `apps/app/ios/App/App.xcworkspace`.
 ### Build for Android
 
 ```bash
-cd apps/app
-
 # Build plugins, web assets, and sync to the Android project
-../../scripts/rt.sh run build:android
+bun run build:android
 
 # Open the Android Studio project
-../../scripts/rt.sh run cap:open:android
+bun run cap:open:android
 ```
 
 This runs `vite build` followed by `capacitor sync android` to copy web assets and update the Gradle project.
@@ -75,32 +73,34 @@ The Android project is at `apps/app/android/`.
 
 ### Build Plugins Only
 
-All nine custom Capacitor plugins must be built before the web app can bundle them:
+All custom Capacitor plugins must be built before the web app can bundle them:
 
 ```bash
-../../scripts/rt.sh run plugin:build
+bun run plugin:build
 ```
 
-This iterates through each plugin directory (`gateway`, `swabble`, `camera`, `screencapture`, `canvas`, `desktop`, `location`, `talkmode`, `agent`) and runs the build script for each.
+This iterates through each plugin directory (`gateway`, `swabble`, `camera`, `screencapture`, `canvas`, `desktop`, `location`, `talkmode`, `agent`, `appblocker`, `llama`, `mobile-signals`, `websiteblocker`) and runs the build script for each.
 
 ### Sync Without Rebuilding
 
 If you have already built the web assets and only need to push changes to the native projects:
 
 ```bash
+cd apps/app
+
 # Sync all platforms
-../../scripts/rt.sh run cap:sync
+bun run cap:sync
 
 # Sync iOS only
-../../scripts/rt.sh run cap:sync:ios
+bun run cap:sync:ios
 
 # Sync Android only
-../../scripts/rt.sh run cap:sync:android
+bun run cap:sync:android
 ```
 
 ## Platform Configuration
 
-The shared Capacitor configuration lives in `capacitor.config.ts`, which re-exports from `electron/capacitor.shared.ts`. This shared config is used across all native targets (iOS, Android, Electron).
+The shared Capacitor configuration lives in `capacitor.config.ts`. Mobile targets use that shared config, while the desktop runtime is configured alongside the Electrobun app.
 
 ### Configuration Fields
 
@@ -112,11 +112,15 @@ The shared Capacitor configuration lives in `capacitor.config.ts`, which re-expo
   server: {
     androidScheme: "https",
     iosScheme: "https",
-    allowNavigation: ["localhost", "127.0.0.1"],
+    allowNavigation: [
+      "localhost", "127.0.0.1",
+      "*.elizacloud.ai", "app.milady.ai", "cloud.milady.ai", "*.milady.ai",
+      "rs-sdk-demo.fly.dev", "*.fly.dev",
+      "hyperscape.gg", "*.hyperscape.gg",
+    ],
   },
   plugins: {
     Keyboard: { resize: "body", resizeOnFullScreen: true },
-    StatusBar: { style: "dark", backgroundColor: "#0a0a0a" },
   },
   ios: {
     contentInset: "automatic",
@@ -136,10 +140,9 @@ The shared Capacitor configuration lives in `capacitor.config.ts`, which re-expo
 | Field | Purpose |
 |-------|---------|
 | `webDir` | Directory containing the bundled Vite output (`dist`) |
-| `server.allowNavigation` | Domains the WebView is allowed to navigate to (localhost for local API) |
+| `server.allowNavigation` | Domains the WebView is allowed to navigate to (localhost, Eliza Cloud, game servers, etc.) |
 | `server.androidScheme` / `iosScheme` | Both set to HTTPS for secure WebView content loading |
 | `plugins.Keyboard.resize` | Body resize mode keeps the chat input visible when the keyboard opens |
-| `plugins.StatusBar` | Dark status bar matching the app's `#0a0a0a` background |
 | `ios.contentInset` | Automatic insets for the notch / Dynamic Island |
 | `ios.preferredContentMode` | Mobile-optimized rendering (not desktop-style) |
 | `ios.allowsLinkPreview` | Disables long-press link previews that interfere with custom gestures |
@@ -149,9 +152,9 @@ The shared Capacitor configuration lives in `capacitor.config.ts`, which re-expo
 
 ## Capacitor Plugins
 
-The mobile app uses 9 custom Milady Capacitor plugins plus the core Haptics plugin, each providing native capabilities with web fallbacks.
+The mobile app uses 13 custom Milady Capacitor plugins plus the core Haptics plugin, each providing native capabilities with web fallbacks.
 
-### 1. Gateway (`@milady/capacitor-gateway`)
+### 1. Gateway (`@elizaos/capacitor-gateway`)
 
 Connects the mobile app to a Milady agent running elsewhere on the network.
 
@@ -161,7 +164,7 @@ Connects the mobile app to a Milady agent running elsewhere on the network.
 - **Events:** Streams `gatewayEvent`, `stateChange`, `error`, and `discovery` events.
 - On web, discovery falls back to manual connection; WebSocket works natively in the browser.
 
-### 2. Swabble (`@milady/capacitor-swabble`)
+### 2. Swabble (`@elizaos/capacitor-swabble`)
 
 Voice wake-word detection for hands-free activation.
 
@@ -171,7 +174,7 @@ Voice wake-word detection for hands-free activation.
 - **Transcript events:** Provides speech segments with timing information and confidence scores.
 - On web, falls back to the Web Speech API (`SpeechRecognition` / `webkitSpeechRecognition`) if available.
 
-### 3. Talk Mode (`@milady/capacitor-talkmode`)
+### 3. Talk Mode (`@elizaos/capacitor-talkmode`)
 
 Full speech pipeline: speech-to-text, chat with agent, text-to-speech response.
 
@@ -182,7 +185,7 @@ Full speech pipeline: speech-to-text, chat with agent, text-to-speech response.
 - **State machine:** Cycles through `idle` -> `listening` -> `processing` -> `speaking` with event listeners for each transition.
 - **Permissions:** Checks and requests microphone and speech recognition permissions.
 
-### 4. Camera (`@milady/capacitor-camera`)
+### 4. Camera (`@elizaos/capacitor-camera`)
 
 Full camera control with preview, photo capture, and video recording.
 
@@ -193,17 +196,17 @@ Full camera control with preview, photo capture, and video recording.
 - **Manual controls:** Zoom, focus point, exposure point, flash mode, white balance, and ISO.
 - On web, falls back to `navigator.mediaDevices.getUserMedia`.
 
-### 5. Location (`@milady/capacitor-location`)
+### 5. Location (`@elizaos/capacitor-location`)
 
 GPS and geolocation services.
 
 - **Accuracy levels:** best, high, medium, low, passive.
 - **Single position:** `getCurrentPosition` with cache age and timeout options.
 - **Continuous watch:** `watchPosition` with minimum distance and interval filters.
-- **Background location:** Available on iOS/Android only (not on Electron). Requires separate permission grant.
+- **Background location:** Available on iOS/Android only (not on Electrobun). Requires separate permission grant.
 - On web, uses the browser Geolocation API.
 
-### 6. Screen Capture (`@milady/capacitor-screencapture`)
+### 6. Screen Capture (`@elizaos/capacitor-screencapture`)
 
 Screenshot and screen recording.
 
@@ -212,7 +215,7 @@ Screenshot and screen recording.
 - **Pause/resume:** Recording can be paused and resumed.
 - Native platforms only for screenshots. Recording also available on web via `getDisplayMedia`.
 
-### 7. Canvas (`@milady/capacitor-canvas`)
+### 7. Canvas (`@elizaos/capacitor-canvas`)
 
 Canvas rendering and web view management. Available on all platforms (HTML Canvas API is universal).
 
@@ -223,17 +226,17 @@ Canvas rendering and web view management. Available on all platforms (HTML Canva
 - **Deep links:** Intercepts `milady://` URLs and fires `deepLink` events.
 - **Touch input:** Streams multi-touch events with force data.
 
-### 8. Agent (`@milady/capacitor-agent`)
+### 8. Agent (`@elizaos/capacitor-agent`)
 
 Agent lifecycle management.
 
-- **Cross-platform:** Uses IPC to the main-process AgentManager on Electron, and HTTP calls to the API server on iOS/Android/Web.
+- **Cross-platform:** Uses IPC to the main-process AgentManager on Electrobun, and HTTP calls to the API server on iOS/Android/Web.
 - **Lifecycle:** Start, stop, and query agent status (`not_started`, `starting`, `running`, `stopped`, `error`).
 - **Chat:** Send text messages and receive agent responses.
 
-### 9. Desktop (`@milady/capacitor-desktop`)
+### 9. Desktop (`@elizaos/capacitor-desktop`)
 
-Desktop-specific features (macOS/Electron only):
+Desktop-specific features (macOS/Electrobun only):
 
 - **System tray:** Create, update, and destroy with custom icons, tooltips, and context menus.
 - **Global shortcuts:** Register accelerator-based keyboard shortcuts with press events.
@@ -246,7 +249,31 @@ Desktop-specific features (macOS/Electron only):
 
 Not available on iOS/Android — these features are silently unavailable on mobile.
 
-### 10. Haptics (`@capacitor/haptics`)
+### 10. App Blocker (`@elizaos/capacitor-appblocker`)
+
+App blocking for focus/productivity features (LifeOps). Allows the agent to block distracting apps on the user's device.
+
+- Available on native platforms only.
+
+### 11. Llama (`@elizaos/capacitor-llama`)
+
+On-device LLM inference via `llama-cpp-capacitor`. Enables local model execution without network access.
+
+- Available on native platforms with sufficient hardware.
+
+### 12. Mobile Signals (`@elizaos/capacitor-mobile-signals`)
+
+Mobile-specific signal handling and lifecycle events.
+
+- Available on iOS and Android only.
+
+### 13. Website Blocker (`@elizaos/capacitor-websiteblocker`)
+
+Website blocking for focus/productivity features (LifeOps). Allows the agent to block distracting websites.
+
+- Available on native platforms only.
+
+### 14. Haptics (`@capacitor/haptics`)
 
 Native haptic feedback for touch interactions (core Capacitor plugin, not custom).
 
@@ -257,7 +284,7 @@ Native haptic feedback for touch interactions (core Capacitor plugin, not custom
 
 ## Plugin Bridge Layer
 
-The plugin bridge (`src/bridge/plugin-bridge.ts`) provides a unified interface to all plugins with automatic platform detection and error handling.
+The plugin bridge provides a unified interface to all plugins with automatic platform detection and error handling.
 
 ### Capability Detection
 
@@ -291,7 +318,7 @@ isFeatureAvailable("camera");           // true on native or with getUserMedia
 isFeatureAvailable("location");         // true if navigator.geolocation exists
 isFeatureAvailable("backgroundLocation"); // true on iOS/Android only
 isFeatureAvailable("screenCapture");    // true on native or with getDisplayMedia
-isFeatureAvailable("desktopTray");      // true on Electron only
+isFeatureAvailable("desktopTray");      // true on Electrobun only
 ```
 
 ### Plugin Wrapping
@@ -341,7 +368,7 @@ Key behaviors:
 
 ## Storage Bridge
 
-The storage bridge (`src/bridge/storage-bridge.ts`) ensures persistent data survives across app sessions on native platforms.
+The storage bridge ensures persistent data survives across app sessions on native platforms.
 
 ### How It Works
 
@@ -394,7 +421,7 @@ The global bridge object is exposed on `window.Milady` and provides a unified AP
 | `haptics` | object | Haptic feedback functions: `light()`, `medium()`, `heavy()`, `success()`, `warning()`, `error()`, `selectionStart()`, `selectionChanged()`, `selectionEnd()` |
 | `plugins` | `MiladyPlugins` | Access to all Milady plugins with fallback support |
 | `isFeatureAvailable(feature)` | function | Check if a specific feature is available on the current platform |
-| `platform` | object | Platform detection: `name`, `isNative`, `isIOS`, `isAndroid`, `isElectron`, `isWeb`, `isMacOS` |
+| `platform` | object | Platform detection: `name`, `isNative`, `isIOS`, `isAndroid`, `isDesktop`, `isWeb`, `isMacOS` |
 | `getPlugin(name)` | function | Get a registered plugin by name |
 | `hasPlugin(name)` | function | Check if a plugin is registered |
 | `registerPlugin(name, plugin)` | function | Register a custom plugin at runtime |
@@ -464,7 +491,7 @@ The Android manifest declares these permissions:
 
 | Property | Value |
 |----------|-------|
-| `minSdkVersion` | 22 (Android 5.1) |
+| `minSdkVersion` | 26 (Android 8.0) |
 | `compileSdkVersion` | 35 |
 | `targetSdkVersion` | 35 |
 | `applicationId` | `com.miladyai.milady` |
@@ -478,17 +505,17 @@ The main activity uses `singleTask` launch mode, which ensures only one instance
 
 ### Live Reload (iOS)
 
-For rapid development with live reload:
+For rapid development with live reload (all commands from the repo root):
 
 ```bash
 # Build plugins and web assets
-../../scripts/rt.sh run build:ios
+bun run build:ios
 
 # Start Vite dev server in a separate terminal
-../../scripts/rt.sh run dev
+bun run dev
 
 # Open Xcode and run on a simulator
-../../scripts/rt.sh run cap:open:ios
+bun run cap:open:ios
 ```
 
 Update the Capacitor server config to point to your dev server IP for live reload.
@@ -497,23 +524,23 @@ Update the Capacitor server config to point to your dev server IP for live reloa
 
 ```bash
 # Build plugins and web assets
-../../scripts/rt.sh run build:android
+bun run build:android
 
 # Start Vite dev server in a separate terminal
-../../scripts/rt.sh run dev
+bun run dev
 
 # Open Android Studio and run on an emulator
-../../scripts/rt.sh run cap:open:android
+bun run cap:open:android
 ```
 
 ### Running Tests
 
 ```bash
 # Unit tests (Vitest)
-../../scripts/rt.sh run test
+bun run test
 
 # Watch mode
-../../scripts/rt.sh run test:watch
+bun run test:watch
 ```
 
 ## Troubleshooting
@@ -530,13 +557,11 @@ Open the Xcode project, select the App target, go to Signing & Capabilities, and
 
 ### Web assets not updating on device
 
-Run `capacitor sync` after rebuilding:
+Run the build command from the repo root, which includes the sync step automatically:
 
 ```bash
-../../scripts/rt.sh run build:ios   # or build:android
+bun run build:ios   # or build:android
 ```
-
-The `build:ios` and `build:android` scripts include the sync step automatically.
 
 ### Gateway discovery not finding devices
 

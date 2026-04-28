@@ -5,7 +5,11 @@ description: How to set up a development environment, follow code conventions, a
 
 # Contributing Guide
 
-Welcome to Milady! This guide will help you set up your development environment and contribute effectively.
+Welcome to Milady! This guide covers development environment setup and contribution workflow.
+
+<Info>
+For the full contribution process including the Agent Review Bot and agents-only PR workflow, see the [Contribution Guide](/guides/contribution-guide).
+</Info>
 
 ## Table of Contents
 
@@ -71,17 +75,14 @@ bun run dev
 ### Editor Setup
 
 **VS Code Extensions:**
-- ESLint
-- Prettier
+- Biome (handles both formatting and linting)
 - TypeScript
-- Biome (for formatting)
 
 **Settings (.vscode/settings.json):**
 ```json
 {
   "editor.formatOnSave": true,
-  "editor.defaultFormatter": "biomejs.biome",
-  "typescript.preferences.importModuleSpecifier": "relative"
+  "editor.defaultFormatter": "biomejs.biome"
 }
 ```
 
@@ -89,70 +90,60 @@ bun run dev
 
 ## Monorepo Structure
 
-Milady is a monorepo managed with Turborepo and Bun workspaces.
+Milady is a monorepo managed with Bun workspaces. The core elizaOS runtime lives in the `eliza/` git submodule.
 
 ```
 milady/
-├── packages/                # Shared packages
-│   ├── typescript/          # @elizaos/core — Core TypeScript SDK
-│   ├── elizaos/             # CLI tool (milady command)
-│   ├── skills/              # Skills system and bundled skills
-│   ├── docs/                # Documentation site (Mintlify)
-│   ├── schemas/             # Protobuf schemas
-│   └── tui/                 # Terminal UI
-├── plugins/                 # Official plugins (100+)
-│   ├── plugin-anthropic/    # Anthropic model provider
-│   ├── plugin-telegram/     # Telegram connector
-│   ├── plugin-discord/      # Discord connector
-│   └── ...
+├── eliza/                       # elizaOS submodule (core runtime)
+│   ├── packages/
+│   │   ├── app-core/            # Main application package (CLI, API, runtime, config)
+│   │   ├── agent/               # Upstream elizaOS agent (core plugins, auto-enable maps)
+│   │   └── ...                  # Other @elizaos/* packages
+│   └── plugins/                 # Official plugins (submodule checkouts)
+│       ├── plugin-agent-orchestrator/
+│       └── ...
 ├── apps/
 │   ├── app/                 # Desktop/mobile app (Capacitor + React)
-│   └── chrome-extension/    # Browser extension
-├── src/                     # Milady runtime
-│   ├── runtime/             # ElizaOS runtime bootstrap
-│   ├── plugins/             # Built-in Milady plugins
-│   ├── config/              # Configuration loading
-│   ├── services/            # Registry client, plugin manager
-│   └── api/                 # REST API server
-├── skills/                  # Workspace skills
+│   │   ├── electrobun/      # Electrobun desktop wrapper
+│   │   └── src/             # React UI components
+│   ├── browser-bridge/      # Browser extension bridge
+│   └── homepage/            # Marketing site
+├── eliza/                   # elizaOS submodule (core framework)
+│   └── packages/
+│       └── app-core/        # Main application package (runtime source of truth)
+├── skills/                  # Workspace skills and defaults
 ├── docs/                    # Documentation (this site)
 ├── scripts/                 # Build and utility scripts
 ├── test/                    # Test setup, helpers, e2e
 ├── AGENTS.md                # Repository guidelines
-├── plugins.json             # Plugin registry manifest
 └── tsdown.config.ts         # Build config
 ```
 
-### Turbo Build System
+### Build System
 
-Turborepo orchestrates builds across all packages with dependency-aware caching:
+Builds are run via Bun scripts defined in the root `package.json`:
 
 ```bash
-# Build everything (with caching)
-turbo run build
+# Full build (TypeScript + UI)
+bun run build
 
-# Build a specific package
-turbo run build --filter=@elizaos/core
+# Typecheck + lint + tests (the main verification suite)
+bun run verify
 
-# Build a package and all its dependencies
-turbo run build --filter=@elizaos/plugin-telegram...
-
-# Run tests across all packages
-turbo run test
-
-# Lint all packages
-turbo run lint
+# Run tests only
+bun run test
 ```
 
 ### Key Entry Points
 
 | File | Purpose |
 |------|---------|
-| `src/entry.ts` | CLI entry point |
-| `src/index.ts` | Library exports |
-| `src/runtime/eliza.ts` | elizaOS runtime initialization |
-| `src/runtime/milady-plugin.ts` | Main Milady plugin |
 | `milady.mjs` | npm bin entry |
+| `eliza/packages/app-core/src/entry.ts` | CLI process bootstrap |
+| `eliza/packages/app-core/src/cli/` | Commander CLI (milady command) |
+| `eliza/packages/app-core/src/runtime/eliza.ts` | Agent loader and runtime boot |
+| `eliza/packages/app-core/src/api/` | Dashboard API |
+| `eliza/packages/app-core/src/config/` | Plugin auto-enable, config schemas |
 
 ---
 
@@ -164,10 +155,7 @@ turbo run lint
 # Full build (TypeScript + UI)
 bun run build
 
-# TypeScript only
-bun run build:node
-
-# Desktop app (Electron)
+# Desktop app (Electrobun)
 bun run build:desktop
 
 # Mobile (Android)
@@ -180,31 +168,25 @@ bun run build:ios
 ### Development Mode
 
 ```bash
-# Run with auto-reload on changes
+# Start API + UI with hot reload
 bun run dev
 
-# Run CLI directly (via tsx)
-bun run milady start
-
-# UI development only
-bun run dev:ui
-
-# Desktop app development
+# Desktop app development (Electrobun)
 bun run dev:desktop
 
-# Terminal UI
-bun run tui
+# Desktop with HMR via Vite dev server
+bun run dev:desktop:watch
 ```
 
 ### Testing
 
-Coverage thresholds are enforced in `vitest.config.ts`: 25% lines/functions/statements, 15% branches. CI fails when coverage falls below these floors.
+Coverage thresholds are enforced from `eliza/packages/app-core/scripts/coverage-policy.mjs`: 25% lines/functions/statements, 15% branches. CI fails when coverage falls below these floors.
 
 ```bash
 # Run all tests (parallel)
 bun run test
 
-# Run with coverage (enforces thresholds)
+# Run with coverage
 bun run test:coverage
 
 # Watch mode
@@ -216,8 +198,8 @@ bun run test:e2e
 # Live tests (requires API keys)
 MILADY_LIVE_TEST=1 bun run test:live
 
-# Docker-based tests
-bun run test:docker:all
+# Docker-based runtime review
+bun run test:docker:review
 ```
 
 ### Runtime fallback for Bun crashes
@@ -236,6 +218,15 @@ MILADY_RUNTIME=node bun run milady start
 | `*.e2e.test.ts` | End-to-end tests |
 | `*.live.test.ts` | Live API tests |
 | `test/**/*.test.ts` | Integration tests |
+
+### `eliza/packages/app-core` in the root Vitest config
+
+The repo root **`vitest.config.ts`** (used by **`bun run test`** via the unit shard) includes:
+
+- **`eliza/packages/app-core/src/**/*.test.ts`** and **`eliza/packages/app-core/src/**/*.test.tsx`** — colocated tests, including TSX, without listing each file.
+- **`eliza/packages/app-core/test/live-agent/**/*.test.ts`** — live-agent harness tests.
+
+**Why:** those directories were previously omitted, so new suites never ran in CI. **`*.e2e.test.ts(x)`** is excluded from this job so e2e stays on **`test/vitest/e2e.config.ts`**. **`test/vitest/unit.config.ts`** still omits **`eliza/packages/app-core/test/app/**`** (heavy renderer harness) from the coverage-focused unit pass—**why:** those are run in targeted app workspaces or separate jobs.
 
 ---
 
@@ -269,7 +260,7 @@ MILADY_RUNTIME=node bun run milady start
 The project uses **Biome** for formatting and linting:
 
 ```bash
-# Check formatting and lint
+# Typecheck + lint + tests (alias for `bun run verify`)
 bun run check
 
 # Fix formatting issues
@@ -424,10 +415,9 @@ Claude Code Review is enabled for automated initial feedback.
 
 Join the community Discord for help, discussions, and announcements:
 
-**[discord.gg/ai16z](https://discord.gg/ai16z)**
+**[discord.gg/milady](https://discord.gg/milady)**
 
 Channels:
-- `#milady` — Milady-specific discussion
 - `#dev` — Development help
 - `#showcase` — Share what you've built
 
@@ -488,4 +478,4 @@ What should happen
 - [Plugin Development Guide](/plugins/development) — Build plugins
 - [Skills Documentation](/plugins/skills) — Create skills
 - [Local Plugin Development](/plugins/local-plugins) — Develop locally
-- Browse the codebase: start with `src/runtime/milady-plugin.ts`
+- [First Extension Walkthrough](/guides/first-extension-walkthrough) — Build your first extension

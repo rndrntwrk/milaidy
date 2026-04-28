@@ -1,0 +1,930 @@
+# Agent Release: build-first release pipeline.
+#
+# Flow: decide (evaluate + trust) → version → FULL BUILD MATRIX → tag → publish
+# Builds are verified BEFORE any tag or release is created.
+#
+# Triggers:
+#   - PR merged to develop: auto-evaluates if enough changes warrant a release
+#   - `release-ready` label on issue: immediate release
+#   - workflow_dispatch: manual release with optional stable/version override
+#
+# Trust-gated: only org members or legendary/trusted contributors (75+).
+name: Agent Release
+
+on:
+  issues:
+    types: [labeled]
+  pull_request:
+    types: [closed]
+    branches: [develop]
+  workflow_dispatch:
+    inputs:
+      stable:
+        description: "Create a stable release (not alpha)"
+        required: false
+        type: boolean
+        default: false
+      version_override:
+        description: "Explicit version (e.g. 2.0.0-alpha.126). Leave empty for auto-bump."
+        required: false
+        type: string
+
+concurrency:
+  group: agent-release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: read
+  issues: write
+  packages: write
+  id-token: write
+  pages: write
+
+env:
+  BUN_VERSION: "1.3.13"
+  MILADY_SKIP_LOCAL_UPSTREAMS: "1"
+  # Runner selection: all jobs use ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}.
+  # To override (e.g. point at a self-hosted or large-runner pool), set the
+  # RUNNER_UBUNTU repo variable in Settings → Variables → Actions.
+
+jobs:
+  # ── 1. Single decision gate — combines evaluation + trust check ────
+  # No skipped ancestors — this job always runs and outputs proceed=true/false.
+  decide:
+    name: Evaluate & authorize
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    permissions:
+      contents: read
+      issues: write
+    outputs:
+      proceed: ${{ steps.decision.outputs.proceed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Decide whether to release
+        id: decision
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const event = context.eventName;
+            const actor = context.actor;
+
+            // ── Step 1: Should we release? ──────────────────────────
+            let shouldRelease = false;
+            let reason = '';
+
+            if (event === 'workflow_dispatch' || (event === 'issues' && context.payload.label?.name === 'release-ready')) {
+              shouldRelease = true;
+              reason = event === 'workflow_dispatch' ? 'Manual dispatch' : 'release-ready label';
+            } else if (event === 'pull_request' && context.payload.pull_request?.merged) {
+              // Evaluate changes since last tag
+              const { execSync } = require('child_process');
+              const latestTag = execSync('git tag --sort=-creatordate | grep "^v" | head -1').toString().trim();
+              if (!latestTag) {
+                shouldRelease = true;
+                reason = 'No prior release tag';
+              } else {
+                const commitCount = parseInt(execSync(`git rev-list --count ${latestTag}..HEAD`).toString().trim(), 10);
+                const changedFiles = execSync(`git diff --name-only ${latestTag}..HEAD`).toString().trim().split('\n').filter(Boolean);
+                const srcChanges = changedFiles.filter(f => /^(packages\/|apps\/|scripts\/)/.test(f)).length;
+                const hasElectrobun = changedFiles.filter(f =>
+                  f.startsWith('apps/app/electrobun/') ||
+                  f.startsWith('eliza/packages/app-core/platforms/electrobun/')
+                ).length;
+                const docOnly = srcChanges === 0;
+
+                if (docOnly) { reason = `Doc-only since ${latestTag}`; }
+                else if (commitCount < 5) { reason = `${commitCount} commits since ${latestTag} (need 5)`; }
+                else if (hasElectrobun > 0) { shouldRelease = true; reason = `Electrobun changes (${hasElectrobun} files), ${commitCount} commits since ${latestTag}`; }
+                else if (srcChanges >= 10) { shouldRelease = true; reason = `${srcChanges} src files, ${commitCount} commits since ${latestTag}`; }
+                else if (commitCount >= 15) { shouldRelease = true; reason = `${commitCount} commits since ${latestTag}`; }
+                else { reason = `${commitCount} commits, ${srcChanges} src files — below thresholds`; }
+              }
+            } else {
+              reason = 'Event not applicable';
+            }
+
+            core.info(`Should release: ${shouldRelease} — ${reason}`);
+            if (!shouldRelease) {
+              core.setOutput('proceed', 'false');
+              return;
+            }
+
+            // ── Step 2: Trust check ─────────────────────────────────
+            const { computeTrustScore, DEFAULT_CONFIG, expandState } = require('./.github/trust-scoring.cjs');
+
+            const isCanonicalRepo = context.repo.owner === 'milady-ai';
+            const isForkOwner = !isCanonicalRepo && actor === context.repo.owner;
+
+            let isOrgMember = false;
+            try {
+              const { status } = await github.rest.orgs.checkMembershipForUser({ org: context.repo.owner, username: actor });
+              isOrgMember = status === 204 || status === 302;
+            } catch (e) {}
+
+            let repoPermission = 'none';
+            try {
+              const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                username: actor,
+              });
+              repoPermission = data.permission ?? 'none';
+            } catch (e) { core.info(`Repo permission unavailable: ${e.message}`); }
+
+            const isRepoMaintainer = ['admin', 'maintain', 'write'].includes(repoPermission);
+            let allowed = isOrgMember || isForkOwner || isRepoMaintainer;
+            if (!allowed) {
+              let trustTier = 'untested', trustScore = DEFAULT_CONFIG.initialScore;
+              try {
+                const { data: fileData } = await github.rest.repos.getContent({
+                  owner: context.repo.owner, repo: context.repo.repo,
+                  path: '.github/contributor-trust.json', ref: 'develop',
+                });
+                const allStates = JSON.parse(Buffer.from(fileData.content, 'base64').toString());
+                if (allStates[actor]) {
+                  const state = expandState(allStates[actor]);
+                  const result = computeTrustScore(state, DEFAULT_CONFIG);
+                  trustTier = result.tier;
+                  trustScore = result.score;
+                }
+              } catch (e) { core.info(`Trust data unavailable: ${e.message}`); }
+
+              allowed = ['legendary', 'trusted'].includes(trustTier);
+              if (!allowed && context.payload.issue) {
+                try { await github.rest.issues.removeLabel({ owner: context.repo.owner, repo: context.repo.repo, issue_number: context.payload.issue.number, name: 'release-ready' }); } catch (e) {}
+                await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: context.payload.issue.number, body: `⚠️ **Release not authorized** — @${actor} trust \`${trustTier}\` (${trustScore}/100). Need org member or trusted+ (75+).` });
+              }
+            }
+
+            core.info(`Trust: allowed=${allowed} (org=${isOrgMember}, forkOwner=${isForkOwner}, repoPermission=${repoPermission})`);
+            core.setOutput('proceed', allowed ? 'true' : 'false');
+
+  # ── 2. Resolve version ─────────────────────────────────────────────
+  version:
+    name: Resolve version
+    needs: [decide]
+    if: needs.decide.outputs.proceed == 'true'
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+      tag: ${{ steps.ver.outputs.tag }}
+      prerelease: ${{ steps.ver.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fetch canonical release tags
+        run: git fetch --tags --force https://github.com/milady-ai/milady.git 'refs/tags/v*:refs/tags/v*'
+      - name: Compute next version
+        id: ver
+        env:
+          STABLE: ${{ github.event.inputs.stable || 'false' }}
+          VERSION_OVERRIDE: ${{ github.event.inputs.version_override || '' }}
+        run: |
+          bump_patch() {
+            local version="$1"
+            local major minor patch
+            IFS='.' read -r major minor patch <<<"$version"
+            echo "${major}.${minor}.$((patch + 1))"
+          }
+
+          if [ -n "$VERSION_OVERRIDE" ]; then
+            VERSION="${VERSION_OVERRIDE#v}"
+          elif [ "$STABLE" = "true" ]; then
+            LATEST_ALPHA="$(git tag | grep '^v[0-9]\+\.[0-9]\+\.[0-9]\+-alpha\.[0-9]\+$' | sort -V | tail -1 || true)"
+            LATEST_STABLE="$(git tag | grep '^v[0-9]\+\.[0-9]\+\.[0-9]\+$' | sort -V | tail -1 || true)"
+            ALPHA_BASE="$(echo "$LATEST_ALPHA" | sed 's/^v//' | sed 's/-alpha\.[0-9]*$//' )"
+            STABLE_VERSION="${LATEST_STABLE#v}"
+
+            if [ -z "$LATEST_STABLE" ] && [ -z "$LATEST_ALPHA" ]; then
+              VERSION="2.0.0"
+            elif [ -z "$LATEST_STABLE" ]; then
+              VERSION="$ALPHA_BASE"
+            elif [ -n "$ALPHA_BASE" ] && [ "$(printf '%s\n%s\n' "$ALPHA_BASE" "$STABLE_VERSION" | sort -V | tail -1)" = "$ALPHA_BASE" ] && [ "$ALPHA_BASE" != "$STABLE_VERSION" ]; then
+              VERSION="$ALPHA_BASE"
+            else
+              VERSION="$(bump_patch "$STABLE_VERSION")"
+            fi
+          else
+            LATEST="$(git tag | grep '^v[0-9]\+\.[0-9]\+\.[0-9]\+-alpha\.[0-9]\+$' | sort -V | tail -1 || true)"
+            if [ -z "$LATEST" ]; then VERSION="2.0.0-alpha.1"
+            else
+              PREFIX=$(echo "$LATEST" | sed 's/\.[0-9]*$/\./' | sed 's/^v//')
+              NUM=$(echo "$LATEST" | grep -oE '[0-9]+$')
+              VERSION="${PREFIX}$((NUM + 1))"
+            fi
+          fi
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$ ]]; then
+            echo "::error::Invalid release version: $VERSION"
+            exit 1
+          fi
+          if git ls-remote --exit-code --tags https://github.com/milady-ai/milady.git "refs/tags/v$VERSION" >/dev/null 2>&1; then
+            echo "::error::Release tag v$VERSION already exists in the canonical repository"
+            exit 1
+          fi
+          PRERELEASE=$( [ "$STABLE" = "true" ] && echo false || echo true )
+          {
+            echo "version=$VERSION"
+            echo "tag=v$VERSION"
+            echo "prerelease=$PRERELEASE"
+          } >> "$GITHUB_OUTPUT"
+          echo "Next: v$VERSION (prerelease=$PRERELEASE)"
+
+  # ── 3. FULL BUILD MATRIX (blocking — electrobun + generic/cloud docker) ─
+  # ── P0 auth smoke — cloud-provisioned bootstrap exchange ────────────
+  # Blocks publish on contract violations of the cloud-provisioned auth
+  # path. See `docs/security/remote-auth-hardening-plan.md` §12.
+  # The smoke generates an RS256 keypair at runtime, serves a fixture
+  # JWKS via loopback HTTP, boots the real bootstrap exchange + onboarding
+  # routes against a real pglite database, and asserts:
+  #   - GET /api/onboarding/status without auth returns 401
+  #     (audited bypass closed)
+  #   - POST /api/auth/bootstrap/exchange with a valid token → 200
+  #   - replayed token → 401 reason=replay
+  #   - tampered, wrong-iss, attacker-signed (same kid), wrong-containerId
+  #     → 401
+  # The private key is generated per-run and never written to disk.
+  smoke-auth:
+    name: Auth bootstrap smoke (P0 gate)
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Setup workspace dependencies
+        uses: ./.github/actions/setup-bun-workspace
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+          install-native-deps: "false"
+          run-postinstall: "true"
+          skip-avatar-clone: "true"
+          no-vision-deps: "true"
+          prepare-local-eliza-runtime: "true"
+      - name: Run auth bootstrap smoke
+        run: bun run test:auth
+
+  build-electrobun:
+    name: Electrobun full matrix
+    needs: [version]
+    uses: ./.github/workflows/release-electrobun.yml
+    with:
+      tag: ${{ needs.version.outputs.tag }}
+      draft: false
+      publish_release: false
+    secrets: inherit
+
+  build-docker:
+    name: Agent image build
+    needs: [version]
+    uses: ./.github/workflows/build-docker.yml
+    with:
+      version: ${{ needs.version.outputs.tag }}
+      push_image: false
+      source_sha: ${{ github.sha }}
+    secrets: inherit
+
+  build-cloud-image:
+    name: Cloud app image build
+    needs: [version]
+    uses: ./.github/workflows/build-cloud-image.yml
+    with:
+      version: ${{ needs.version.outputs.tag }}
+      push_image: false
+      source_sha: ${{ github.sha }}
+    secrets: inherit
+
+  build-npm:
+    name: npm package build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: ./.github/actions/setup-bun-workspace
+        with:
+          disable-local-eliza-workspace: "true"
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+      - name: Build
+        run: |
+          bunx tsdown
+          printf '{"type":"module"}\n' > dist/package.json
+          node --import tsx scripts/write-build-info.ts
+      - name: Sanitize npm package metadata
+        run: node scripts/sanitize-npm-package-metadata.mjs
+      - name: Validate package
+        run: |
+          npm pack --dry-run 2>&1 | tee /tmp/pack-output.txt
+          grep -q "package.json" /tmp/pack-output.txt
+
+  # ── Release validation builds (blocking) ────────────────────────────
+  build-android:
+    name: Android AAB build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Setup workspace dependencies
+        uses: ./.github/actions/setup-bun-workspace
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+          install-native-deps: "false"
+          run-postinstall: "true"
+          skip-avatar-clone: "true"
+          no-vision-deps: "true"
+      - name: Restore legacy electrobun compatibility path
+        run: node scripts/ensure-legacy-electrobun-compat.mjs
+      - name: Install Android NDK
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;29.0.13113456"
+      - name: Patch Android release build compatibility
+        run: node scripts/patch-mobile-build-release-compat.mjs
+      - name: Prepare Android project
+        run: node eliza/packages/app-core/scripts/run-mobile-build.mjs android
+      - name: Build AAB
+        working-directory: apps/app/android
+        run: |
+          chmod +x ./gradlew
+          ./gradlew bundleRelease --no-daemon
+      - name: Upload AAB artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-aab
+          path: apps/app/android/app/build/outputs/bundle/release/*.aab
+          retention-days: 30
+          if-no-files-found: error
+
+  build-snap:
+    name: Snap build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    env:
+      MILADY_SKIP_LOCAL_UPSTREAMS: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Init non-eliza submodules
+        run: |
+          git submodule sync -- eliza
+          git submodule update --init --depth=1 eliza
+          node scripts/init-submodules.mjs
+          node scripts/apply-eliza-ci-patches.mjs
+          node scripts/disable-local-eliza-workspace.mjs
+      - name: Stage snapcraft.yaml
+        run: |
+          mkdir -p snap
+          cp eliza/packages/app-core/packaging/snap/snapcraft.yaml snap/snapcraft.yaml
+      - name: Normalize runner root ownership for snapd
+        run: |
+          set -euo pipefail
+          ROOT_OWNER="$(stat -c '%u:%g' /)"
+          echo "Runner root owner: ${ROOT_OWNER}"
+          if [ "${ROOT_OWNER}" = "0:0" ]; then
+            echo "Root is already 0:0 — snapd canonicalization OK"
+            exit 0
+          fi
+          echo "Attempting to repair / ownership so snapd/systemd path canonicalization accepts this runner"
+          if sudo -n chown root:root / 2>/dev/null; then
+            echo "Chown succeeded; new owner: $(stat -c '%u:%g' /)"
+          else
+            echo "::warning::Unable to chown / to root:root (sudo unavailable or passwordless sudo disabled). snapd may fail downstream. Remediation: run this job on a standard ubuntu-latest / ubuntu-24.04 GitHub-hosted runner, or configure the container image so / is owned by 0:0."
+          fi
+      - uses: snapcore/action-build@v1
+        id: snap
+      - name: Verify snap
+        run: sudo snap install --dangerous ${{ steps.snap.outputs.snap }}
+      - name: Upload snap artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snap-package
+          path: ${{ steps.snap.outputs.snap }}
+          retention-days: 30
+          if-no-files-found: error
+
+  build-flatpak:
+    name: Flatpak build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Init non-eliza submodules
+        run: |
+          git submodule sync -- eliza
+          git submodule update --init --depth=1 eliza
+          node scripts/init-submodules.mjs
+          node scripts/apply-eliza-ci-patches.mjs
+          node scripts/disable-local-eliza-workspace.mjs
+      - name: Install flatpak tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y flathub org.freedesktop.Platform//24.08 org.freedesktop.Sdk//24.08 org.freedesktop.Sdk.Extension.node22//24.08
+      - name: Build flatpak
+        working-directory: eliza/packages/app-core/packaging/flatpak
+        run: |
+          flatpak-builder --repo=repo --user --install-deps-from=flathub --force-clean build-dir ai.elizaos.App.yml
+          flatpak build-bundle repo elizaos-app.flatpak ai.elizaos.App
+      - name: Upload flatpak artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flatpak-bundle
+          path: eliza/packages/app-core/packaging/flatpak/elizaos-app.flatpak
+          retention-days: 30
+          if-no-files-found: error
+
+  build-pypi:
+    name: PyPI package build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Init non-eliza submodules
+        run: |
+          git submodule sync -- eliza
+          git submodule update --init --depth=1 eliza
+          node scripts/init-submodules.mjs
+          node scripts/apply-eliza-ci-patches.mjs
+          node scripts/disable-local-eliza-workspace.mjs
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build wheel
+        run: |
+          pip install build
+          python -m build eliza/packages/app-core/packaging/pypi/
+      - name: Upload PyPI artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pypi-package
+          path: eliza/packages/app-core/packaging/pypi/dist/
+          retention-days: 30
+          if-no-files-found: error
+
+  build-debian:
+    name: Debian package build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Init non-eliza submodules
+        run: |
+          git submodule sync -- eliza
+          git submodule update --init --depth=1 eliza
+          node scripts/init-submodules.mjs
+          node scripts/apply-eliza-ci-patches.mjs
+          node scripts/disable-local-eliza-workspace.mjs
+      - name: Install Debian build deps
+        run: |
+          curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+          sudo apt-get update
+          sudo apt-get install -y build-essential nodejs dpkg-dev debhelper fakeroot
+          node --version
+          npm --version
+          dpkg-query -W -f='${Version} ${Provides}\n' nodejs | grep -Eq '(^|, )npm(,|$)'
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - name: Generate eliza i18n keyword data
+        # eliza/packages/shared/src/i18n/keyword-matching.ts imports from
+        # ./generated/validation-keyword-data.js, which is gitignored and
+        # produced by packages/shared/scripts/generate-keywords.mjs. The
+        # Debian build runs a Vite/Rolldown production build via
+        # debian/rules and will fail to resolve the generated module on a
+        # fresh checkout unless this step runs first.
+        run: node eliza/packages/app-core/scripts/ensure-shared-i18n-data.mjs
+      - name: Stage Debian packaging
+        run: |
+          rm -rf debian
+          cp -R eliza/packages/app-core/packaging/debian debian
+          # Eliza's debian packaging hardcodes the legacy entry name
+          # "elizaos-app.mjs" from before the upstream rename. Milady's
+          # actual entry script is milady.mjs, so rewrite the install
+          # manifest and rules to point at it. The package itself stays
+          # named elizaos-app for now (binary path /usr/bin/elizaos-app)
+          # since renaming the deb package is its own task.
+          if [ -f milady.mjs ] && [ ! -f elizaos-app.mjs ]; then
+            sed -i 's/elizaos-app\.mjs/milady.mjs/g' debian/install debian/rules
+          fi
+          test -f debian/changelog
+          test -x debian/rules
+          dpkg-checkbuilddeps debian/control
+      - name: Build deb
+        run: |
+          dpkg-buildpackage -us -uc -b
+      - name: Collect deb artifacts
+        if: success()
+        run: |
+          mkdir -p deb-output
+          shopt -s nullglob
+          debs=(../*.deb)
+          if [ "${#debs[@]}" -eq 0 ]; then
+            echo "::error::No .deb artifacts found after dpkg-buildpackage"
+            exit 1
+          fi
+          cp "${debs[@]}" deb-output/
+      - name: Upload deb artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debian-package
+          path: deb-output/
+          retention-days: 30
+          if-no-files-found: error
+  build-ios:
+    name: iOS build validation
+    needs: [version]
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Setup workspace dependencies
+        uses: ./.github/actions/setup-bun-workspace
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+          install-native-deps: "false"
+          run-postinstall: "true"
+          skip-avatar-clone: "true"
+          no-vision-deps: "true"
+      - name: Restore legacy electrobun compatibility path
+        run: node scripts/ensure-legacy-electrobun-compat.mjs
+      - name: Build iOS simulator app
+        run: node eliza/packages/app-core/scripts/run-mobile-build.mjs ios
+        env:
+          LANG: en_US.UTF-8
+      - name: Verify Xcode project
+        run: |
+          if [ -d apps/app/ios/App ]; then
+            xcodebuild -project apps/app/ios/App/App.xcodeproj -scheme App -configuration Release -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" -showBuildSettings > /tmp/milady-xcodebuild-settings.txt
+            grep -q "PRODUCT_BUNDLE_IDENTIFIER = com.miladyai.milady" /tmp/milady-xcodebuild-settings.txt
+          else
+            echo "::error::apps/app/ios/App directory not found"
+            exit 1
+          fi
+
+  build-macos-store:
+    name: macOS App Store build validation
+    needs: [version]
+    runs-on: macos-14
+    env:
+      MILADY_SKIP_LOCAL_UPSTREAMS: ""
+      ELIZA_SKIP_LOCAL_UPSTREAMS: ""
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Setup workspace dependencies
+        uses: ./.github/actions/setup-bun-workspace
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+          install-native-deps: "false"
+          run-postinstall: "true"
+          skip-avatar-clone: "true"
+          no-vision-deps: "true"
+      - name: Restore legacy electrobun compatibility path
+        run: node scripts/ensure-legacy-electrobun-compat.mjs
+      - name: Build web assets and Electrobun
+        run: ELECTROBUN_SKIP_CODESIGN=1 bun run build
+
+  build-homepage:
+    name: Homepage build
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: ./.github/actions/setup-bun-workspace
+        with:
+          disable-local-eliza-workspace: "true"
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+      - name: Restore eliza workspace paths for homepage scripts
+        run: node scripts/restore-local-eliza-workspace.mjs
+      - name: Generate release metadata
+        run: node scripts/write-homepage-release-data.mjs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build homepage
+        run: bun run build:web
+
+  build-docs:
+    name: Docs validation
+    needs: [version]
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate docs config
+        run: node -e "const c = require('./docs/docs.json'); console.log('Docs config valid:', c.name)"
+      - name: Check for broken internal links
+        run: |
+          find docs -name '*.md' -o -name '*.mdx' | head -5 | while read -r f; do
+            grep -oE '\]\([^)]+\)' "$f" | grep -v 'http' | head -3
+          done
+          echo "Docs link check complete"
+
+  # ── 4. Electrobun + Docker + npm green → tag and publish ────────────
+  # The GitHub release is created with GITHUB_TOKEN for scoped permissions.
+  # Post-release distribution is called explicitly below instead of relying
+  # on release-event fan-out semantics.
+  publish:
+    name: Tag & publish release
+    needs:
+      [
+        version,
+        smoke-auth,
+        build-electrobun,
+        build-docker,
+        build-cloud-image,
+        build-npm,
+        build-android,
+        build-snap,
+        build-flatpak,
+        build-pypi,
+        build-debian,
+        build-ios,
+        build-macos-store,
+        build-homepage,
+        build-docs,
+      ]
+    if: >-
+      always() &&
+      needs.smoke-auth.result == 'success' &&
+      needs.build-electrobun.result == 'success' &&
+      needs.build-docker.result == 'success' &&
+      needs.build-cloud-image.result == 'success' &&
+      needs.build-npm.result == 'success' &&
+      needs.build-android.result == 'success' &&
+      needs.build-snap.result == 'success' &&
+      needs.build-flatpak.result == 'success' &&
+      needs.build-pypi.result == 'success' &&
+      needs.build-debian.result == 'success' &&
+      needs.build-ios.result == 'success' &&
+      needs.build-macos-store.result == 'success' &&
+      needs.build-homepage.result == 'success' &&
+      needs.build-docs.result == 'success'
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    permissions:
+      contents: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Create and push tag
+        env:
+          TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists on origin; reusing existing tag"
+            exit 0
+          fi
+
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Local tag $TAG already exists; pushing it to origin"
+          else
+            git tag -a "$TAG" -m "Release $TAG — all builds verified"
+          fi
+
+          git push origin "$TAG"
+
+      - name: Generate release changelog
+        id: changelog
+        env:
+          TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          PREVIOUS_TAG="$(git tag --sort=-creatordate | grep '^v' | grep -vx "$TAG" | head -1 || true)"
+          CHANGELOG_FILE="$RUNNER_TEMP/full-release-changelog.md"
+          {
+            echo "## Full changelog"
+            echo
+            if [ -n "$PREVIOUS_TAG" ]; then
+              echo "- Previous tag: \`$PREVIOUS_TAG\`"
+              echo "- Compare: https://github.com/${{ github.repository }}/compare/$PREVIOUS_TAG...$TAG"
+            else
+              echo "- Previous tag: none"
+            fi
+            echo
+            if [ -n "$PREVIOUS_TAG" ]; then
+              git log --date=short --pretty=format:'- %s (%h, %ad)' "$PREVIOUS_TAG..HEAD"
+            else
+              git log --date=short --pretty=format:'- %s (%h, %ad)'
+            fi
+            echo
+          } > "$CHANGELOG_FILE"
+          echo "previous_tag=$PREVIOUS_TAG" >> "$GITHUB_OUTPUT"
+          echo "file=$CHANGELOG_FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub release
+        uses: actions/github-script@v7
+        env:
+          TAG: ${{ needs.version.outputs.tag }}
+          PRERELEASE: ${{ needs.version.outputs.prerelease }}
+          NPM_RESULT: ${{ needs.build-npm.result }}
+          PREVIOUS_TAG: ${{ steps.changelog.outputs.previous_tag }}
+          CHANGELOG_FILE: ${{ steps.changelog.outputs.file }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const tag = process.env.TAG;
+            const prerelease = process.env.PRERELEASE === 'true';
+            const npmOk = process.env.NPM_RESULT === 'success';
+            const previousTag = process.env.PREVIOUS_TAG || '';
+            const fullChangelog = fs.readFileSync(process.env.CHANGELOG_FILE, 'utf8').trim();
+
+            let generatedNotes = '';
+            try {
+              const notesResponse = await github.rest.repos.generateReleaseNotes({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag_name: tag,
+                ...(previousTag ? { previous_tag_name: previousTag } : {}),
+              });
+              generatedNotes = notesResponse.data.body?.trim() ?? '';
+            } catch (error) {
+              core.warning(`Could not generate GitHub release notes: ${error.message}`);
+            }
+
+            const releasePayload = {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: tag,
+              name: tag,
+              body: [
+                `## ${tag}`,
+                '',
+                prerelease ? '⚠️ Pre-release (alpha)' : '✅ Stable release',
+                '',
+                previousTag ? `**Previous tag:** ${previousTag}` : '**Previous tag:** none',
+                `**Triggered by:** @${context.actor}`,
+                '',
+                '### Release verification',
+                '- ✅ Electrobun desktop — full matrix (macOS ARM, macOS Intel, Windows, Linux)',
+                '- ✅ Canonical agent image — built successfully',
+                '- ✅ Cloud app image — built successfully',
+                npmOk ? '- ✅ npm package — built and validated' : '- ❌ npm package — build failed',
+                '',
+                generatedNotes ? '## Release notes' : null,
+                generatedNotes || null,
+                generatedNotes ? '' : null,
+                fullChangelog,
+                '',
+                '### Publishing pipelines (called explicitly by this workflow)',
+                '- ✅ Electrobun artifacts (uploaded during build phase)',
+                '- 🔄 Agent Docker image → post-publish push',
+                '- 🔄 Cloud app Docker image → post-publish push',
+                '- 🔄 Post-release distribution orchestrator → release-orchestrator.yml',
+                '- 🔄 npm publish → publish-npm.yml',
+                '- 🔄 PyPI / Snap / Debian / Flatpak → publish-packages.yml',
+                '- 🔄 Android → android-release.yml (Play Store track by channel)',
+                '- 🔄 iOS / macOS → apple-store-release.yml (TestFlight or App Store by channel)',
+                '- 🔄 Homebrew → update-homebrew.yml',
+                '- 🔄 Homepage → deploy-web.yml',
+              ].filter(Boolean).join('\n'),
+              prerelease,
+              draft: false,
+              generate_release_notes: false,
+            };
+
+            const releases = await github.paginate(github.rest.repos.listReleases, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100,
+            });
+            const matchingReleases = releases.filter((release) => release.tag_name === tag);
+            const existingRelease = matchingReleases.find((release) => !release.draft) ?? matchingReleases[0] ?? null;
+
+            for (const duplicate of matchingReleases) {
+              if (existingRelease && duplicate.id !== existingRelease.id && duplicate.draft) {
+                await github.rest.repos.deleteRelease({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  release_id: duplicate.id,
+                });
+              }
+            }
+
+            let release;
+            if (existingRelease) {
+              const { data } = await github.rest.repos.updateRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: existingRelease.id,
+                tag_name: releasePayload.tag_name,
+                name: releasePayload.name,
+                body: releasePayload.body,
+                prerelease: releasePayload.prerelease,
+                draft: releasePayload.draft,
+                generate_release_notes: releasePayload.generate_release_notes,
+              });
+              release = data;
+              core.info(`Updated release: ${release.html_url}`);
+            } else {
+              const { data } = await github.rest.repos.createRelease(releasePayload);
+              release = data;
+              core.info(`Created release: ${release.html_url}`);
+            }
+
+            if (context.payload.issue) {
+              const issue = context.payload.issue.number;
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: issue,
+                body: `🚀 **Release ${tag} published**\n\n${release.html_url}`,
+              });
+              await github.rest.issues.update({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: issue, state: 'closed', state_reason: 'completed',
+              });
+              try { await github.rest.issues.removeLabel({ owner: context.repo.owner, repo: context.repo.repo, issue_number: issue, name: 'release-ready' }); } catch (e) {}
+            }
+
+  # ── 5. Post-publish: push and distribute what was build-only verified ─
+  push-agent-image:
+    name: Push agent image to GHCR
+    needs: [version, publish]
+    if: needs.publish.result == 'success'
+    uses: ./.github/workflows/build-docker.yml
+    with:
+      version: ${{ needs.version.outputs.tag }}
+      push_image: true
+      source_sha: ${{ github.sha }}
+    secrets: inherit
+
+  push-cloud-image:
+    name: Push cloud app image to GHCR
+    needs: [version, publish]
+    if: needs.publish.result == 'success'
+    uses: ./.github/workflows/build-cloud-image.yml
+    with:
+      version: ${{ needs.version.outputs.tag }}
+      push_image: true
+      source_sha: ${{ github.sha }}
+    secrets: inherit
+
+  distribute-release:
+    name: Distribute release
+    needs: [version, publish, push-agent-image, push-cloud-image]
+    if: needs.publish.result == 'success' && needs.push-agent-image.result == 'success' && needs.push-cloud-image.result == 'success'
+    uses: ./.github/workflows/release-orchestrator.yml
+    with:
+      version: ${{ needs.version.outputs.version }}
+      publish_npm: true
+      publish_packages: true
+      publish_android: true
+      publish_apple: true
+      update_homebrew: true
+      deploy_homepage: true
+    secrets: inherit

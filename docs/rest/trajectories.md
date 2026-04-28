@@ -6,7 +6,7 @@ description: "REST API endpoints for browsing, exporting, and managing agent tra
 
 Trajectories are structured records of the agent's autonomous activity: each trajectory captures LLM calls, provider accesses, token usage, and timing for one agent reasoning session. They form the raw data for fine-tuning and performance analysis.
 
-Trajectory data is provided by the `@elizaos/plugin-trajectory-logger` service. The agent must be running with this plugin loaded for trajectory endpoints to function.
+Trajectory data is provided by the native `trajectories` service. The agent must be running with trajectories enabled for these endpoints to function.
 
 ## Endpoints
 
@@ -72,6 +72,7 @@ Get aggregate trajectory statistics.
 {
   "totalTrajectories": 142,
   "totalLlmCalls": 891,
+  "totalProviderAccesses": 320,
   "totalPromptTokens": 450000,
   "totalCompletionTokens": 128000,
   "averageDurationMs": 8500,
@@ -79,9 +80,9 @@ Get aggregate trajectory statistics.
     "chat": 98,
     "autonomy": 44
   },
-  "byStatus": {
-    "completed": 138,
-    "error": 4
+  "byModel": {
+    "claude-opus-4-7": 500,
+    "claude-sonnet-4-5": 391
   }
 }
 ```
@@ -121,7 +122,7 @@ Get full trajectory details including all LLM calls and provider accesses.
       "id": "call-001",
       "trajectoryId": "550e8400-e29b-41d4-a716-446655440000",
       "stepId": "step-0",
-      "model": "claude-opus-4-5",
+      "model": "claude-opus-4-7",
       "systemPrompt": "You are Milady...",
       "userPrompt": "What should I post today?",
       "response": "Here are some ideas...",

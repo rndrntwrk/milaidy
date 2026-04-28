@@ -1,0 +1,98 @@
+# Connect MCP servers (Model Context Protocol)
+
+MCP — the **Model Context Protocol** — is a standard for giving AI agents access to external tools, files, databases, and APIs. Think of it as "plugin for the plugin": you point Milady at one or more MCP servers, and your agent gains whatever capabilities those servers expose. Web search, file system access, databases, GitHub APIs, browser automation — all through one common interface.
+
+**What you'll learn:** what MCP is in plain language, how to configure Milady to talk to one or more MCP servers, and where to find ones worth trying.
+
+## What MCP is, in one paragraph
+
+Most AI features require writing custom code to bolt them onto your agent. MCP inverts that: the server author writes it once, exposes it in a standard shape, and any MCP-aware agent (Milady, Claude Desktop, Cursor, and many others) can use it instantly. The result is a rapidly growing ecosystem of reusable capabilities.
+
+## What you need before you start
+
+- **At least one MCP server** you want to use. See "Finding MCP servers" below.
+- **Milady running** with a working provider.
+- **Node.js or Bun installed** if the MCP server you pick is Node-based (most are). Python-based servers need Python.
+
+## Finding MCP servers
+
+The easiest starting point is the [official MCP servers directory](https://github.com/modelcontextprotocol/servers) — a curated list maintained by the protocol's authors. Notable ones:
+
+| Server | What it does |
+| --- | --- |
+| `@modelcontextprotocol/server-filesystem` | Read/write files in allowed directories |
+| `@modelcontextprotocol/server-github` | Interact with GitHub repos (alternative to Milady's GitHub connector) |
+| `@modelcontextprotocol/server-postgres` | Run read-only SQL against a Postgres database |
+| `@modelcontextprotocol/server-brave-search` | Web search via Brave |
+| `@modelcontextprotocol/server-puppeteer` | Control a headless browser |
+
+Third-party servers are everywhere — search GitHub for "mcp server" to find ones for Linear, Slack, Notion, Jira, AWS, and more.
+
+## Step 1 — Configure MCP in milady.json
+
+The MCP connector is configured through `~/.milady/milady.json` because MCP configuration is structurally richer than a flat list of env vars. Add an `mcp` block:
+
+```json
+{
+  "connectors": {
+    "mcp": {
+      "servers": {
+        "filesystem": {
+          "command": "npx",
+          "args": [
+            "-y",
+            "@modelcontextprotocol/server-filesystem",
+            "/Users/you/Documents/milady-workspace"
+          ]
+        },
+        "brave-search": {
+          "command": "npx",
+          "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+          "env": {
+            "BRAVE_API_KEY": "your-brave-key"
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+**Key shape:**
+- Each MCP server gets a key (the name you'll see in the UI).
+- `command` is what Milady runs to start the server. Usually `npx`, `bun x`, `python`, or an absolute binary path.
+- `args` is the command arguments.
+- `env` passes environment variables to the server process — this is where API keys live.
+
+## Step 2 — Restart Milady
+
+MCP servers are started when Milady starts. Restart the app after editing the config. On startup you should see log lines confirming each server connected.
+
+## Step 3 — Use it
+
+Start a chat with your agent and ask for something the server can provide:
+
+- **Filesystem server:** "list the markdown files in my milady-workspace"
+- **Brave search:** "search the web for the latest Rust release"
+- **Postgres server:** "show me the 10 most recent rows from the orders table"
+
+If the agent can call the tool, it will; if not, check the status panel for connection errors.
+
+## Troubleshooting
+
+**"MCP server failed to start."**
+Check the command and args are exactly right. `npx -y ...` triggers auto-install of the npm package; first run takes time.
+
+**The agent doesn't discover the tool.**
+Confirm the server is running — Milady's MCP panel shows connected servers and their exposed tools. If a server connects but exposes no tools, there's a version mismatch or the server itself is misconfigured.
+
+**Permissions errors on the filesystem server.**
+The filesystem server is sandboxed to the directories you pass in `args`. It can only read/write inside those paths. Either add the path you need, or move the files somewhere the server can see.
+
+## Security note
+
+MCP servers run as child processes of Milady with whatever permissions Milady has. A filesystem server you gave access to `~/Documents` can read everything in Documents. A database server has whatever DB permissions its connection string grants. **Only run MCP servers from sources you trust**, and scope each one to the smallest set of resources it needs.
+
+## What's next
+
+- [Plugins for non-developers](/docs/advanced/plugins-for-users) — if MCP feels like too much, many use cases are better served by a regular Milady plugin.

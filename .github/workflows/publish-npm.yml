@@ -12,8 +12,19 @@ name: Publish npm
 #   - Manual dispatch for ad-hoc publishes
 
 on:
-  release:
-    types: [published]
+  workflow_call:
+    inputs:
+      version:
+        description: "Version to publish (e.g. 2.0.0, 2.0.0-beta.1)"
+        required: true
+        type: string
+      dist_tag:
+        description: "npm dist-tag override"
+        required: true
+        type: string
+    secrets:
+      NPM_TOKEN:
+        required: true
   workflow_dispatch:
     inputs:
       version:
@@ -36,57 +47,30 @@ env:
   CI: "true"
 
 jobs:
-  publish:
-    name: Publish to npm
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    timeout-minutes: 15
+  detect-meta:
+    name: Determine version and dist-tag
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      dist_tag: ${{ steps.meta.outputs.dist_tag }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          check-latest: false
-          registry-url: "https://registry.npmjs.org"
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Cache Bun install
-        uses: actions/cache@v4
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: bun-${{ runner.os }}-
-
       - name: Determine version and dist-tag
         id: meta
         run: |
-          # Resolve version
-          if [[ -n "${{ inputs.version }}" ]]; then
-            VERSION="${{ inputs.version }}"
-          elif [[ "${{ github.event_name }}" == "release" ]]; then
-            VERSION="${{ github.event.release.tag_name }}"
-            VERSION="${VERSION#v}"
-          else
-            VERSION=$(node -p "require('./package.json').version")
-          fi
+          VERSION="${{ inputs.version }}"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
-          # Resolve dist-tag
-          if [[ -n "${{ inputs.dist_tag }}" ]]; then
-            DIST_TAG="${{ inputs.dist_tag }}"
-          elif echo "$VERSION" | grep -qE 'nightly'; then
+          DIST_TAG="${{ inputs.dist_tag }}"
+          if [[ -z "$DIST_TAG" ]] && echo "$VERSION" | grep -qE 'nightly'; then
             DIST_TAG="nightly"
-          elif echo "$VERSION" | grep -qE 'beta'; then
+          elif [[ -z "$DIST_TAG" ]] && echo "$VERSION" | grep -qE 'beta'; then
             DIST_TAG="beta"
-          elif echo "$VERSION" | grep -qE 'alpha|rc'; then
+          elif [[ -z "$DIST_TAG" ]] && echo "$VERSION" | grep -qE 'alpha|rc'; then
             DIST_TAG="next"
-          else
+          elif [[ -z "$DIST_TAG" ]]; then
             DIST_TAG="latest"
           fi
           echo "dist_tag=$DIST_TAG" >> "$GITHUB_OUTPUT"
@@ -94,81 +78,53 @@ jobs:
           echo "Version: $VERSION"
           echo "Dist-tag: $DIST_TAG"
 
-      - name: Install dependencies
-        run: |
-          # Use --ignore-scripts to skip postinstall (submodule init) since we don't need plugins for npm publish
-          # Retry up to 3 times to handle flaky network issues
-          for attempt in 1 2 3; do
-            echo "Attempt $attempt of 3..."
-            if bun install --frozen-lockfile --ignore-scripts; then
-              echo "Dependencies installed successfully"
-              exit 0
-            fi
-            echo "Attempt $attempt failed, waiting 10s before retry..."
-            sleep 10
-          done
-          echo "All attempts failed"
-          exit 1
+  publish:
+    name: Publish
+    needs: detect-meta
+    uses: ./.github/workflows/reusable-npm-publish.yml
+    with:
+      version: ${{ needs.detect-meta.outputs.version }}
+      dist_tag: ${{ needs.detect-meta.outputs.dist_tag }}
+    secrets:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Set version in package.json
-        run: |
-          node -e "
-            const fs = require('fs');
-            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-            pkg.version = '${{ steps.meta.outputs.version }}';
-            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
-          "
-          echo "Publishing version: $(node -p "require('./package.json').version")"
-
-      - name: Build
-        run: |
-          bunx tsdown
-          node --import tsx scripts/write-build-info.ts
-          echo '{"type":"module"}' > dist/package.json
-
-      - name: Validate package
-        run: |
-          PACK_OUTPUT=$(npm pack --dry-run 2>&1)
-          echo "$PACK_OUTPUT"
-
-          # Verify critical files are included in the package
-          for required in "milady.mjs" "dist/index.js" "package.json"; do
-            if ! echo "$PACK_OUTPUT" | grep -q "$required"; then
-              echo "::error::Required file '$required' missing from package contents"
-              exit 1
-            fi
-          done
-
-          echo "Package validation passed — all required files present"
-
-      - name: Publish to npm
-        run: npm publish --tag ${{ steps.meta.outputs.dist_tag }} --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
+  verify:
+    name: Verify publish
+    needs: [detect-meta, publish]
+    runs-on: ubuntu-24.04
+    steps:
       - name: Verify publish
         run: |
-          sleep 5  # Give the registry a moment to propagate
-          PUBLISHED=$(npm view miladyai@${{ steps.meta.outputs.dist_tag }} version 2>/dev/null || echo "")
-          EXPECTED="${{ steps.meta.outputs.version }}"
+          EXPECTED="${{ needs.detect-meta.outputs.version }}"
+          DIST_TAG="${{ needs.detect-meta.outputs.dist_tag }}"
 
-          if [[ "$PUBLISHED" == "$EXPECTED" ]]; then
-            echo "Verified: miladyai@${{ steps.meta.outputs.dist_tag }} → $PUBLISHED"
-          else
-            echo "::warning::Published version ($PUBLISHED) does not match expected ($EXPECTED). Registry may still be propagating."
-          fi
+          for attempt in {1..12}; do
+            PUBLISHED_VERSION="$(npm view "miladyai@$EXPECTED" version 2>/dev/null || true)"
+            DIST_TAG_VERSION="$(npm view "miladyai@$DIST_TAG" version 2>/dev/null || true)"
+            if [[ "$PUBLISHED_VERSION" == "$EXPECTED" && "$DIST_TAG_VERSION" == "$EXPECTED" ]]; then
+              echo "Verified: miladyai@$EXPECTED and miladyai@$DIST_TAG both resolve to $EXPECTED"
+              exit 0
+            fi
+            echo "Publish not visible yet (attempt $attempt/12): version='$PUBLISHED_VERSION' dist-tag='$DIST_TAG_VERSION'"
+            sleep 10
+          done
+
+          echo "::error::npm registry verification failed for miladyai@$EXPECTED with dist-tag $DIST_TAG"
+          exit 1
 
       - name: Summary
         run: |
-          echo "## npm Publish Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Package | milady |" >> $GITHUB_STEP_SUMMARY
-          echo "| Version | \`${{ steps.meta.outputs.version }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Dist-tag | \`${{ steps.meta.outputs.dist_tag }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Install" >> $GITHUB_STEP_SUMMARY
-          echo '```bash' >> $GITHUB_STEP_SUMMARY
-          echo "npm install -g miladyai@${{ steps.meta.outputs.dist_tag }}" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## npm Publish Summary"
+            echo ""
+            echo "| Field | Value |"
+            echo "|-------|-------|"
+            echo "| Package | miladyai |"
+            echo "| Version | \`${{ needs.detect-meta.outputs.version }}\` |"
+            echo "| Dist-tag | \`${{ needs.detect-meta.outputs.dist_tag }}\` |"
+            echo ""
+            echo "### Install"
+            echo '```bash'
+            echo "npm install -g miladyai@${{ needs.detect-meta.outputs.dist_tag }}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

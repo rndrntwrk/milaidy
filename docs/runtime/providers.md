@@ -54,7 +54,7 @@ Provider results are concatenated in registration order.
 
 ## Built-in Milady Providers
 
-The Milady plugin (`createMiladyPlugin()`) registers the following providers:
+The Eliza plugin (`createElizaPlugin()`) registers the following providers:
 
 ### Channel Profile Provider
 
@@ -62,7 +62,7 @@ The Milady plugin (`createMiladyPlugin()`) registers the following providers:
 
 Injects channel-specific behavior rules. Adapts the agent's tone for DMs vs. group conversations vs. channels.
 
-**Source:** `src/providers/simple-mode.ts`
+**Source:** `eliza/packages/agent/src/providers/simple-mode.ts`
 
 ### Workspace Provider
 
@@ -73,13 +73,14 @@ Reads the agent's workspace directory and injects a summary of relevant files in
 ```typescript
 createWorkspaceProvider({
   workspaceDir: "~/.milady/workspace",
-  maxCharsPerFile: config.agents?.defaults?.bootstrapMaxChars,
 })
 ```
 
-`maxCharsPerFile` (alias `bootstrapMaxChars`) limits how many characters from each file are injected, preventing oversized contexts. Default is 20,000 characters.
+The `workspaceProvider` uses the agent's workspace directory to inject a summary of relevant files.
 
-**Source:** `src/providers/workspace-provider.ts`
+Files that still contain the default placeholder content (the boilerplate generated on first run) are automatically skipped. Only workspace files you have customized are injected into the prompt.
+
+**Source:** `eliza/packages/agent/src/providers/workspace-provider.ts`
 
 ### Admin Trust Provider
 
@@ -92,7 +93,7 @@ Injects a trust context block indicating whether the current conversation partic
 This conversation is with a trusted admin. Elevated permissions are active.
 ```
 
-**Source:** `src/providers/admin-trust.ts`
+**Source:** `eliza/packages/agent/src/providers/admin-trust.ts`
 
 ### Autonomous State Provider
 
@@ -105,7 +106,7 @@ Injects the current autonomous mode status so the agent knows whether it is in i
 Status: active
 ```
 
-**Source:** `src/providers/autonomous-state.ts`
+**Source:** `eliza/packages/agent/src/runtime/eliza-plugin.ts` (registered inline)
 
 ### Session Key Provider
 
@@ -117,13 +118,13 @@ Injects the cryptographic session key for the current session, enabling authenti
 createSessionKeyProvider({ defaultAgentId: "main" })
 ```
 
-**Source:** `src/providers/session-bridge.ts`
+**Source:** `eliza/packages/agent/src/providers/session-bridge.ts`
 
 ### Session Providers
 
 From `getSessionProviders()` — a set of providers for session-level context (current session metadata, active participants, etc.).
 
-**Source:** `src/providers/session-utils.ts`
+**Source:** `eliza/packages/agent/src/providers/session-utils.ts`
 
 ### UI Catalog Provider
 
@@ -131,24 +132,15 @@ From `getSessionProviders()` — a set of providers for session-level context (c
 
 Injects the Milady UI component catalog, allowing the agent to compose structured UI elements in its responses.
 
-**Source:** `src/providers/ui-catalog.ts` (`uiCatalogProvider`)
+**Source:** `eliza/packages/agent/src/providers/ui-catalog.ts` (`uiCatalogProvider`)
 
-### Emote Provider
+### Emote Provider (deprecated)
 
-**Name:** `emotes`
+<Warning>
+The emote provider has been removed. Available emote IDs are now declared as an `enum` on the `PLAY_EMOTE` action's `emote` parameter. The runtime's `formatActions` function automatically includes the enum values in the prompt's **Available Actions** section, so a separate provider is no longer needed.
+</Warning>
 
-Injects available avatar animation IDs when the agent has a 3D avatar. This tells the LLM it can trigger animations via the `PLAY_EMOTE` action.
-
-```
-## Available Emotes
-
-You can play emote animations on your 3D avatar using the PLAY_EMOTE action.
-Use emotes sparingly and naturally during conversation to express yourself.
-
-Available emote IDs: wave, dance, sit, think, clap, ...
-```
-
-Disabled by setting `character.settings.DISABLE_EMOTES = true`. Saves approximately 300 tokens per turn.
+To disable emotes entirely, set `character.settings.DISABLE_EMOTES = true`. When this setting is enabled, the `PLAY_EMOTE` action is removed from the plugin at init time so it never appears in the prompt.
 
 ### Custom Actions Provider
 
@@ -236,8 +228,7 @@ Providers registered in the Milady plugin follow this order:
 5. sessionKey         (session auth)
 6. ...sessionProviders
 7. uiCatalog          (UI components)
-8. emotes             (avatar animations)
-9. customActions      (user-defined actions)
+8. customActions      (user-defined actions)
 ```
 
 Order matters: context assembled later in the list appears closer to the end of the injected system context and may be more salient to some models.

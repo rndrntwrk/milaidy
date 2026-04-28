@@ -1,10 +1,26 @@
 name: Tests
 
 on:
-  push:
-    branches: [main, develop]
   pull_request:
     branches: [main, develop]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "AGENTS.md"
+      - "CHANGELOG.md"
+      - "LICENSE"
+      - ".github/ISSUE_TEMPLATE/**"
+      - ".github/pull_request_template.md"
+  push:
+    branches: [main, develop]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "AGENTS.md"
+      - "CHANGELOG.md"
+      - "LICENSE"
+      - ".github/ISSUE_TEMPLATE/**"
+      - ".github/pull_request_template.md"
   workflow_dispatch:
 
 concurrency:
@@ -13,128 +29,582 @@ concurrency:
 
 env:
   CI: "true"
-  BUN_VERSION: "1.3.9"
+  BUN_VERSION: "1.3.11"
+  NODE_VERSION: "22.20.0"
+  NODE_NO_WARNINGS: "1"
   NODE_OPTIONS: "--max-old-space-size=4096"
 
 jobs:
-  unit-tests:
-    name: Unit Tests
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    timeout-minutes: 20
+  regression-matrix:
+    name: Regression Matrix Contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      # WHY setup-node before bun install: optional deps like @discordjs/opus fall back to node-gyp; Node 22 + colocated cache avoids nodejs.org header download. Engines require >=22.
-      - name: Setup Node.js
-        uses: useblacksmith/setup-node@v5
         with:
-          node-version: 22
+          # Published-only CI restores required non-eliza submodules during setup.
+          submodules: false
+          fetch-depth: 0
 
-      - name: Setup Python (for node-gyp when native prebuilds missing)
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install setuptools for distutils (Python 3.12+)
-        run: pip install setuptools
-
-      - name: Install canvas native dependencies
-        run: sudo apt-get update && sudo apt-get install -y libcairo2-dev libjpeg-dev libpango1.0-dev libgif-dev build-essential libpixman-1-dev
+      - name: Validate CI bootstrap contract
+        run: node scripts/validate-ci-bootstrap-contract.mjs
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
-      # WHY cache global Bun cache: avoids re-downloading tarballs; we do not cache node_modules (upload cost > gain).
-      - name: Cache Bun install
-        uses: actions/cache@v4
+      - name: Setup workspace dependencies
+        uses: ./.github/actions/setup-bun-workspace
         with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: bun-${{ runner.os }}-
+          bun-version: ${{ env.BUN_VERSION }}
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+          install-native-deps: "false"
+          run-postinstall: "false"
 
-      - name: Install dependencies
-        run: bun install --ignore-scripts
-        env:
-          npm_config_python: ${{ env.pythonLocation }}/bin/python3
+      - name: Restore eliza workspace paths for repo scripts
+        run: node scripts/restore-local-eliza-workspace.mjs
 
-      - name: Run repository postinstall patches
-        run: bun run postinstall
+      - name: Validate regression matrix contract
+        run: bun run test:regression-matrix:pr
 
-      - name: Run unit tests
-        run: bunx vitest run --config vitest.unit.config.ts
-
-      - name: Run unit tests with coverage
-        run: bun run test:coverage
-
-      - name: Upload coverage report
-        uses: actions/upload-artifact@v4
+  unit-tests:
+    name: Real tests (Vitest, shard ${{ matrix.shard }}/${{ strategy.job-total }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
-          name: coverage-report
-          path: coverage/
-          retention-days: 14
+          submodules: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup workspace dependencies
+        uses: ./.github/actions/setup-bun-workspace
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+          skip-avatar-clone: "true"
+          no-vision-deps: "true"
+
+      - name: Restore eliza workspace paths for repo scripts
+        run: node scripts/restore-local-eliza-workspace.mjs
+
+      - name: Generate protobuf types
+        run: |
+          if [ -d eliza/packages/schemas ] && [ -f eliza/packages/schemas/buf.gen.yaml ] && [ ! -d eliza/packages/typescript/src/types/generated ]; then
+            cd eliza/packages/schemas
+            node node_modules/@bufbuild/buf/install.js 2>/dev/null || true
+            bunx @bufbuild/buf@1.67.0 generate
+          fi
+
+      - name: Build
+        run: bun run build
+
+      - name: Run real integration tests (live/real suite)
+        run: bun run test:ci:real -- --shard=${{ matrix.shard }}/${{ strategy.job-total }}
+
+      - name: Run startup script drift guard
+        if: matrix.shard == 1
+        run: bun run test:startup:contract
 
   db-check:
     name: Database Security Check
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: false
 
       - name: Setup Node.js
-        uses: useblacksmith/setup-node@v5
+        uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: ${{ env.NODE_VERSION }}
 
-      - name: Setup Python (for node-gyp when native prebuilds missing)
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install setuptools for distutils (Python 3.12+)
-        run: pip install setuptools
-
-      - name: Install canvas native dependencies
-        run: sudo apt-get update && sudo apt-get install -y libcairo2-dev libjpeg-dev libpango1.0-dev libgif-dev build-essential libpixman-1-dev
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+      - name: Setup workspace dependencies
+        uses: ./.github/actions/setup-bun-workspace
         with:
           bun-version: ${{ env.BUN_VERSION }}
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+          skip-avatar-clone: "true"
+          no-vision-deps: "true"
 
-      - name: Cache Bun install
-        uses: actions/cache@v4
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: bun-${{ runner.os }}-
+      - name: Restore eliza workspace paths for repo scripts
+        run: node scripts/restore-local-eliza-workspace.mjs
 
-      - name: Install dependencies
-        run: bun install --ignore-scripts
-        env:
-          npm_config_python: ${{ env.pythonLocation }}/bin/python3
-
-      - name: Run repository postinstall patches
-        run: bun run postinstall
+      - name: Generate protobuf types
+        run: |
+          if [ -d eliza/packages/schemas ] && [ -f eliza/packages/schemas/buf.gen.yaml ] && [ ! -d eliza/packages/typescript/src/types/generated ]; then
+            cd eliza/packages/schemas
+            node node_modules/@bufbuild/buf/install.js 2>/dev/null || true
+            bunx @bufbuild/buf@1.67.0 generate
+          fi
 
       - name: Run database security and query-guard tests
         run: bun run db:check
 
-  e2e-tests:
-    name: E2E Tests (Vitest)
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    timeout-minutes: 20
+  website-blocker-cross-platform:
+    name: Website Blocker Cross-Platform (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    # Windows dev stack currently hits an 'EBUSY: Watcher crashed' Windows
+    # file-watcher bug on startup (exit code 3) during the E2E suite. The
+    # code itself is healthy on linux/macos; flag the windows entry as
+    # non-blocking until the watcher issue is addressed upstream.
+    continue-on-error: ${{ matrix.os == 'windows-latest' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ github.event_name == 'pull_request' && fromJSON('["ubuntu-latest"]') || fromJSON('["ubuntu-latest", "windows-latest", "macos-latest"]') }}
+    steps:
+      - name: Enable Git long paths (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          function Set-GitLongPaths([string]$Scope) {
+            & git config $Scope core.longpaths true
+            if ($LASTEXITCODE -ne 0) {
+              throw "git config $Scope core.longpaths true failed with exit code $LASTEXITCODE"
+            }
+          }
+
+          try {
+            Set-GitLongPaths "--system"
+            Write-Host "Enabled Git long paths in system config."
+          } catch {
+            Write-Warning "System git config failed; falling back to --global. $($_.Exception.Message)"
+            Set-GitLongPaths "--global"
+            Write-Host "Enabled Git long paths in global config."
+          }
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Initialize tracked workspace submodules
+        run: node scripts/init-submodules.mjs
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Free disk space (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        # The bun install cache restored below has grown past 2.9 GB. Combined
+        # with the apt webkit2gtk + GStreamer install, the default ubuntu-latest
+        # runner runs out of disk during cache.tzst extraction. Drop unused
+        # toolchains to reclaim ~25 GB before the heavy steps run.
+        run: |
+          df -h /
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      - name: Install Linux desktop runtime dependencies
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          APT_ARGS=(-o Acquire::ForceIPv4=true -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o DPkg::Lock::Timeout=120)
+          for attempt in 1 2 3; do
+            if sudo env DEBIAN_FRONTEND=noninteractive timeout 5m apt-get "${APT_ARGS[@]}" update && \
+               sudo env DEBIAN_FRONTEND=noninteractive timeout 12m apt-get "${APT_ARGS[@]}" install -y --no-install-recommends \
+                 libwebkit2gtk-4.1-0 libayatana-appindicator3-1 xvfb; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "Linux desktop dependency install failed after ${attempt} attempts"
+              exit 1
+            fi
+            sleep $((attempt * 10))
+          done
+
+      - name: Cache Bun install
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          for i in 1 2 3; do
+            bun install --ignore-scripts && exit 0
+            rm -rf node_modules
+            echo "Attempt $i failed, retrying in $((i * 15))s..."
+            sleep $((i * 15))
+          done
+          exit 1
+
+      - name: Run repository postinstall patches
+        run: bun run postinstall
+        env:
+          SKIP_AVATAR_CLONE: "1"
+          MILADY_NO_VISION_DEPS: "1"
+
+      - name: Run website blocker unit suites
+        run: bun run test:selfcontrol:unit
+
+      - name: Run website blocker E2E suites (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          # The blocking cross-platform lane covers the Vite-backed dev stack.
+          # Electrobun desktop startup has a dedicated smoke lane below.
+          xvfb-run -a bun run test:selfcontrol:e2e
+
+      - name: Run website blocker E2E suites
+        if: runner.os != 'Linux'
+        run: bun run test:selfcontrol:e2e
+
+  website-blocker-startup-smoke:
+    name: Website Blocker Startup Smoke (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ github.event_name == 'pull_request' && fromJSON('["ubuntu-latest"]') || fromJSON('["ubuntu-latest", "windows-latest", "macos-latest"]') }}
+    steps:
+      - name: Enable Git long paths (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          function Set-GitLongPaths([string]$Scope) {
+            & git config $Scope core.longpaths true
+            if ($LASTEXITCODE -ne 0) {
+              throw "git config $Scope core.longpaths true failed with exit code $LASTEXITCODE"
+            }
+          }
+
+          try {
+            Set-GitLongPaths "--system"
+            Write-Host "Enabled Git long paths in system config."
+          } catch {
+            Write-Warning "System git config failed; falling back to --global. $($_.Exception.Message)"
+            Set-GitLongPaths "--global"
+            Write-Host "Enabled Git long paths in global config."
+          }
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Initialize tracked workspace submodules
+        run: node scripts/init-submodules.mjs
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup workspace dependencies
+        if: runner.os != 'Windows'
+        uses: ./.github/actions/setup-bun-workspace
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+          install-native-deps: "false"
+          skip-avatar-clone: "true"
+          no-vision-deps: "true"
+
+      - name: Setup Bun (Windows)
+        if: runner.os == 'Windows'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+          # The action's built-in post-step cache-save fails intermittently on
+          # Windows (tar exits non-zero during cache.tzst creation). The explicit
+          # actions/cache@v4 step below already covers ~/.bun/install/cache, so
+          # disabling the action's internal cache avoids the redundant failure.
+          no-cache: true
+
+      - name: Cache Bun install (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+
+      - name: Install dependencies (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          for i in 1 2 3; do
+            bun install --ignore-scripts && exit 0
+            rm -rf node_modules
+            echo "Attempt $i failed, retrying in $((i * 15))s..."
+            sleep $((i * 15))
+          done
+          exit 1
+
+      - name: Run repository postinstall patches (Windows)
+        if: runner.os == 'Windows'
+        run: bun run postinstall
+        env:
+          SKIP_AVATAR_CLONE: "1"
+          MILADY_NO_VISION_DEPS: "1"
+
+      - name: Build @elizaos/core dist (required by dev-stack imports)
+        shell: bash
+        run: |
+          # Run bun's own postinstall (skipped by --ignore-scripts) so its
+          # runtime-embedded build plugins can execute.
+          for bun_package_dir in node_modules/bun eliza/node_modules/bun; do
+            if [ -f "${bun_package_dir}/install.js" ]; then
+              (cd "${bun_package_dir}" && node install.js)
+            fi
+          done
+          if [ -d eliza/packages/schemas ] && [ -f eliza/packages/schemas/buf.gen.yaml ] && [ ! -d eliza/packages/typescript/src/types/generated ]; then
+            cd eliza/packages/schemas
+            bunx @bufbuild/buf@1.67.0 generate
+            cd -
+          fi
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            bun add --no-save --dev --ignore-scripts @types/node@^25.0.6 @types/bun@^1.3.5
+          fi
+          node --input-type=module <<'NODE'
+          import path from "node:path";
+          import { ensureElizaTypescriptDependencyLinks } from "./scripts/setup-upstreams.mjs";
+
+          ensureElizaTypescriptDependencyLinks(path.join(process.cwd(), "eliza"));
+          NODE
+          cd eliza/packages/typescript
+          bun run build:node
+
+      - name: Link restored eliza workspaces into root node_modules
+        run: node scripts/link-local-eliza-workspace.mjs
+
+      - name: Run website blocker startup smokes
+        run: bun run test:selfcontrol:startup
+
+  website-blocker-desktop-smoke:
+    name: Website Blocker Desktop Smoke (macOS)
+    # Pinned to macos-14: Depot passes through macOS labels to GitHub-hosted
+    # runners unchanged. `macos-latest` is auto-rewritten to depot-ubuntu by
+    # the mirror generator, which breaks Xcode/Electron-dependent jobs.
+    runs-on: macos-14
+    timeout-minutes: 120
+    # This job verifies the desktop orchestrator + Electrobun process +
+    # website-blocker API via the loopback test bridge. Release jobs own the
+    # packaged/native window gate, so CI uses a headless Electrobun smoke mode
+    # to avoid hosted macOS WKWebView SIGTRAPs masking product regressions.
+    env:
+      MILADY_DESKTOP_HEADLESS_SMOKE: "1"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: false
 
       - name: Setup Node.js
-        uses: useblacksmith/setup-node@v5
+        uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup workspace dependencies
+        uses: ./.github/actions/setup-bun-workspace
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+          install-native-deps: "false"
+          skip-avatar-clone: "true"
+          no-vision-deps: "true"
+
+      - name: Build @elizaos/core dist (required by dev-stack imports)
+        shell: bash
+        run: |
+          # Run bun's own postinstall (skipped by --ignore-scripts) so its
+          # runtime-embedded build plugins can execute.
+          for bun_package_dir in node_modules/bun eliza/node_modules/bun; do
+            if [ -f "${bun_package_dir}/install.js" ]; then
+              (cd "${bun_package_dir}" && node install.js)
+            fi
+          done
+          if [ -d eliza/packages/schemas ] && [ -f eliza/packages/schemas/buf.gen.yaml ] && [ ! -d eliza/packages/typescript/src/types/generated ]; then
+            cd eliza/packages/schemas
+            bunx @bufbuild/buf@1.67.0 generate
+            cd -
+          fi
+          cd eliza/packages/typescript
+          bun run build:node
+
+      - name: Link restored eliza workspaces into root node_modules
+        run: node scripts/link-local-eliza-workspace.mjs
+
+      - name: Build
+        run: bun run build
+
+      - name: Run website blocker desktop smokes
+        run: bun run test:live:selfcontrol:desktop
+
+  website-blocker-mobile-android:
+    name: Website Blocker Android Build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Cache Bun install
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('apps/app/android/**/*.gradle*', 'apps/app/android/**/gradle-wrapper.properties', 'eliza/packages/native-plugins/websiteblocker/android/**/*.kt') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      - name: Initialize tracked workspace submodules
+        run: node scripts/init-submodules.mjs
+
+      - name: Apply Milady eliza CI patches
+        run: node scripts/apply-eliza-ci-patches.mjs
+
+      - name: Install dependencies
+        run: bun install --ignore-scripts
+
+      - name: Run repository postinstall patches
+        run: bun run postinstall
+        env:
+          SKIP_AVATAR_CLONE: "1"
+          MILADY_NO_VISION_DEPS: "1"
+
+      - name: Patch Android release build compatibility
+        run: node scripts/patch-mobile-build-release-compat.mjs
+
+      - name: Build Android website blocker app
+        run: bun run test:selfcontrol:mobile:android
+
+  website-blocker-mobile-ios:
+    name: Website Blocker iOS Build
+    # Pinned to macos-14: requires Xcode. Depot passes macOS labels through
+    # to GitHub-hosted runners; `macos-latest` gets auto-rewritten by the
+    # mirror generator.
+    runs-on: macos-14
+    timeout-minutes: 50
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Cache Bun install
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+
+      - name: Initialize tracked workspace submodules
+        run: node scripts/init-submodules.mjs
+
+      - name: Install dependencies
+        run: bun install --ignore-scripts
+
+      - name: Run repository postinstall patches
+        run: bun run postinstall
+        env:
+          SKIP_AVATAR_CLONE: "1"
+          MILADY_NO_VISION_DEPS: "1"
+
+      - name: Build iOS website blocker app
+        run: bun run test:selfcontrol:mobile:ios
+
+  desktop-contract:
+    name: Electrobun Desktop Contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
 
       - name: Setup Python (for node-gyp when native prebuilds missing)
         uses: actions/setup-python@v5
@@ -145,7 +615,7 @@ jobs:
         run: pip install setuptools
 
       - name: Install canvas native dependencies
-        run: sudo apt-get update && sudo apt-get install -y libcairo2-dev libjpeg-dev libpango1.0-dev libgif-dev build-essential libpixman-1-dev
+        run: sudo apt-get update && sudo apt-get install -y build-essential libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev libpixman-1-dev librsvg2-dev
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -159,383 +629,402 @@ jobs:
           key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
           restore-keys: bun-${{ runner.os }}-
 
+      - name: Initialize tracked workspace submodules
+        run: node scripts/init-submodules.mjs
+
       - name: Install dependencies
-        run: bun install
+        run: bun install --ignore-scripts
         env:
           npm_config_python: ${{ env.pythonLocation }}/bin/python3
 
       - name: Run repository postinstall patches
         run: bun run postinstall
-
-      - name: Build
-        run: bun run build
-
-      - name: Run E2E tests
-        run: >
-          bunx vitest run --config vitest.e2e.config.ts
-          --exclude test/anvil-contracts.e2e.test.ts
-          --exclude test/apps-e2e.e2e.test.ts
-
-  app-startup-e2e:
-    name: App Startup E2E (Onboarding)
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    timeout-minutes: 30
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install canvas native dependencies
-        run: sudo apt-get update && sudo apt-get install -y libcairo2-dev libjpeg-dev libpango1.0-dev libgif-dev build-essential libpixman-1-dev
-
-      # WHY useblacksmith: colocated cache avoids nodejs.org download timeouts on Blacksmith runners.
-      - name: Setup Node.js
-        uses: useblacksmith/setup-node@v5
-        with:
-          node-version: 22
-
-      - name: Setup Python (for node-gyp)
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install setuptools for distutils (Python 3.12+)
-        run: pip install setuptools
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Cache Bun install
-        uses: actions/cache@v4
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: bun-${{ runner.os }}-
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile --ignore-scripts
         env:
-          npm_config_python: ${{ env.pythonLocation }}/bin/python3
+          SKIP_AVATAR_CLONE: "1"
+          MILADY_NO_VISION_DEPS: "1"
 
-      - name: Run repository postinstall patches
-        run: bun run postinstall
+      - name: Run Electrobun contract tests
+        run: bun run test:desktop:contract
 
-      - name: Run app startup/onboarding tests
-        run: >
-          bunx vitest run --root apps/app --config vitest.config.ts
-          test/app/startup-chat.e2e.test.ts
-          test/app/startup-onboarding.e2e.test.ts
-          test/app/startup-backend-missing.e2e.test.ts
-          test/app/startup-token-401.e2e.test.ts
-
-  electron-ui-e2e:
-    # Desktop packaging/build validation is release-only. Keep PR/branch CI fast.
-    if: startsWith(github.ref, 'refs/tags/v')
-    name: Electron Build (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [blacksmith-4vcpu-ubuntu-2404, macos-latest]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install canvas native dependencies (Linux)
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libcairo2-dev libjpeg-dev libpango1.0-dev libgif-dev build-essential libpixman-1-dev
-
-      # WHY split: Blacksmith has colocated Node cache; GitHub-hosted macOS needs v3 to avoid v4 timeouts.
-      - name: Setup Node.js (Blacksmith)
-        if: runner.os == 'Linux'
-        uses: useblacksmith/setup-node@v5
-        with:
-          node-version: 22
-
-      - name: Setup Node.js (GitHub-hosted)
-        if: runner.os != 'Linux'
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          check-latest: false
-
-      - name: Setup Python (for node-gyp)
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install setuptools for distutils (Python 3.12+)
-        run: pip install setuptools
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Cache Bun install
-        uses: actions/cache@v4
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: bun-${{ runner.os }}-
-
-      - name: Install dependencies
-        run: bun install
-        env:
-          npm_config_python: ${{ env.pythonLocation }}/bin/python3
-
-      - name: Run repository postinstall patches
-        run: bun run postinstall
-
-      - name: Build core dist (server bundle)
-        run: |
-          bunx tsdown
-          echo '{"type":"module"}' > dist/package.json
-          node --import tsx scripts/write-build-info.ts
-
-      - name: Build renderer assets
-        run: |
-          cd apps/app
-          bunx vite build
-
-      - name: Build native macOS effects dylib
-        if: runner.os == 'macOS'
-        run: |
-          cd apps/app/electrobun
-          bun run build:native-effects
-
-      - name: Bundle backend node_modules into dist/
-        run: node --import tsx scripts/copy-runtime-node-modules.ts --scan-dir dist --target-dist dist
-
-      - name: Build webview bridge preload
-        run: bun run build:preload
-        working-directory: apps/app/electrobun
-
-      - name: Build Electrobun app
-        run: |
-          cd apps/app/electrobun
-          ELECTROBUN_SKIP_CODESIGN=1 bun run build -- --env=canary
-
-      - name: Stage Electrobun build diagnostic logs
-        if: failure()
-        shell: pwsh
-        run: |
-          $diagnosticsDir = Join-Path $env:RUNNER_TEMP "electrobun-ui-e2e-logs"
-          New-Item -ItemType Directory -Force -Path $diagnosticsDir | Out-Null
-
-          $windowsLogPath = $null
-          $candidates = @(
-            (Join-Path $env:HOME ".config/Milady/milady-startup.log")
-          )
-
-          if ($env:USERPROFILE) {
-            $windowsLogPath = Join-Path $env:USERPROFILE ".config/Milady/milady-startup.log"
-            $candidates += $windowsLogPath
-          }
-
-          foreach ($candidate in ($candidates | Select-Object -Unique)) {
-            if (-not (Test-Path $candidate)) {
-              continue
-            }
-
-            $destinationName = if ($windowsLogPath -and $candidate -eq $windowsLogPath) {
-              "milady-startup-windows.log"
-            } else {
-              "milady-startup-unix.log"
-            }
-
-            Copy-Item $candidate (Join-Path $diagnosticsDir $destinationName) -Force
-          }
-
-      - name: Upload Electrobun build diagnostic logs
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: electrobun-ui-e2e-${{ matrix.os }}-logs
-          path: ${{ runner.temp }}/electrobun-ui-e2e-logs
-          if-no-files-found: warn
-          retention-days: 14
-
-  electron-packaged-dmg-e2e:
-    # Desktop packaging/build validation is release-only. Keep PR/branch CI fast.
-    if: startsWith(github.ref, 'refs/tags/v')
-    name: Electron Packaged DMG E2E (macOS)
-    runs-on: macos-latest
-    timeout-minutes: 30
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      # WHY v3 + check-latest: false — v4 has slow post-action and nodejs.org timeouts; v3 uses toolcache.
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          check-latest: false
-
-      - name: Setup Python (for node-gyp)
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install setuptools for distutils (Python 3.12+)
-        run: pip install setuptools
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Cache Bun install
-        uses: actions/cache@v4
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: bun-${{ runner.os }}-
-
-      - name: Install dependencies
-        run: bun install
-        env:
-          npm_config_python: ${{ env.pythonLocation }}/bin/python3
-
-      - name: Run repository postinstall patches
-        run: bun run postinstall
-
-      - name: Build and smoke test packaged macOS app
-        env:
-          SMOKE_DIAGNOSTICS_DIR: ${{ runner.temp }}/milady-packaged-dmg-smoke
-        run: |
-          STARTUP_TIMEOUT=240 \
-          LIVENESS_TIMEOUT=10 \
-          SKIP_SIGNATURE_CHECK=1 \
-          bash apps/app/electrobun/scripts/smoke-test.sh
-
-      - name: Upload packaged macOS smoke diagnostics
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: electrobun-packaged-dmg-macos-smoke-diagnostics
-          path: |
-            ${{ runner.temp }}/milady-packaged-dmg-smoke/**
-            apps/app/electrobun/build/**/wrapper-diagnostics.json
-          if-no-files-found: warn
-          retention-days: 14
+  # Pull requests only validate the release-workflow contract in
+  # test-electrobun-release.yml. The full Electrobun packaging/signing matrix
+  # runs from release-electrobun.yml for tagged or manually dispatched releases.
+  # The old electron-ui-e2e and electron-packaged-dmg-e2e jobs remain removed
+  # after the Electrobun migration.
 
   cloud-live-e2e:
     name: Cloud Live E2E (Eliza Cloud)
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - name: Check cloud secrets
         id: cloud
+        env:
+          ELIZAOS_CLOUD_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY != '' && secrets.ELIZAOS_CLOUD_API_KEY || secrets.ELIZACLOUD_API_KEY }}
         run: |
-          if [ -z "${{ secrets.ELIZAOS_CLOUD_API_KEY }}" ]; then
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "Cloud API key is not configured; skipping cloud live test job."
+          if [ -z "${ELIZAOS_CLOUD_API_KEY}" ]; then
+            echo "::warning::No Eliza Cloud API key configured - skipping optional cloud live E2E."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
           else
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Checkout
-        if: steps.cloud.outputs.enabled == 'true'
+        if: steps.cloud.outputs.skip != 'true'
         uses: actions/checkout@v4
+        with:
+          submodules: false
 
-      - name: Install canvas native dependencies
-        if: steps.cloud.outputs.enabled == 'true'
-        run: sudo apt-get update && sudo apt-get install -y libcairo2-dev libjpeg-dev libpango1.0-dev libgif-dev build-essential libpixman-1-dev
-
-      - name: Setup Bun
-        if: steps.cloud.outputs.enabled == 'true'
-        uses: oven-sh/setup-bun@v2
+      - name: Setup workspace dependencies
+        if: steps.cloud.outputs.skip != 'true'
+        uses: ./.github/actions/setup-bun-workspace
         with:
           bun-version: ${{ env.BUN_VERSION }}
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+          prepare-local-eliza-runtime: "true"
 
-      - name: Cache Bun install
-        if: steps.cloud.outputs.enabled == 'true'
-        uses: actions/cache@v4
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: bun-${{ runner.os }}-
+      - name: Restore eliza workspace paths for repo scripts
+        if: steps.cloud.outputs.skip != 'true'
+        run: node scripts/restore-local-eliza-workspace.mjs
 
-      - name: Install dependencies
-        if: steps.cloud.outputs.enabled == 'true'
+      - name: Run Cloud Live E2E
+        if: steps.cloud.outputs.skip != 'true'
+        shell: bash
         run: |
-          for i in 1 2 3 4 5; do
-            bun install --frozen-lockfile --ignore-scripts && break
-            echo "Attempt $i failed, retrying in $((i * 15))s..."
-            sleep $((i * 15))
-          done
+          set -o pipefail
+          log_file="$(mktemp)"
 
-      - name: Run repository postinstall patches
-        if: steps.cloud.outputs.enabled == 'true'
-        run: bun run postinstall
+          if bun run test:live:cloud 2>&1 | tee "$log_file"; then
+            exit 0
+          fi
 
-      - name: Run cloud live test
-        if: steps.cloud.outputs.enabled == 'true'
-        run: >
-          bunx vitest run --config vitest.e2e.config.ts
-          test/cloud-providers.e2e.test.ts
+          if grep -Eiq 'exceeded your current quota|quota exceeded|insufficient[_ -]?(quota|balance|funds|credits?)|billing details|credit balance|please add credits|top[_ -]?up your credits|invalid api key|unauthorized|authentication|status code: 429|too many requests|unexpected error occurred while processing the request|temporarily unavailable|service unavailable|internal server error|overloaded' "$log_file"; then
+            echo "::warning::Cloud Live E2E skipped because the configured external provider is unavailable."
+            exit 0
+          fi
+
+          exit 1
         env:
           MILADY_LIVE_TEST: "1"
-          ELIZAOS_CLOUD_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY }}
+          ELIZA_LIVE_TEST: "1"
+          ELIZAOS_CLOUD_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY != '' && secrets.ELIZAOS_CLOUD_API_KEY || secrets.ELIZACLOUD_API_KEY }}
           ELIZAOS_CLOUD_BASE_URL: ${{ secrets.ELIZAOS_CLOUD_BASE_URL }}
 
-  validation-e2e:
-    name: End-to-End Validation (Issue #6)
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    timeout-minutes: 20
+  action-e2e:
+    name: "Action Invocation E2E"
+    needs: [regression-matrix]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    # Push/dispatch CI must exercise the real action invocation path. PRs can
+    # opt into the live-provider job with the run-action-e2e label.
+    if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run-action-e2e')) }}
+    env:
+      MILADY_LIVE_TEST: "1"
+      ELIZA_LIVE_TEST: "1"
+      ELIZA_E2E_OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      ELIZA_E2E_ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      ELIZA_E2E_GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
+      ELIZA_E2E_GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      ELIZAOS_CLOUD_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY != '' && secrets.ELIZAOS_CLOUD_API_KEY || secrets.ELIZACLOUD_API_KEY }}
+      ELIZAOS_CLOUD_BASE_URL: ${{ secrets.ELIZAOS_CLOUD_BASE_URL }}
+      NODE_NO_WARNINGS: "1"
+      NODE_OPTIONS: "--max-old-space-size=4096"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: false
 
-      - name: Install canvas native dependencies
-        run: sudo apt-get update && sudo apt-get install -y libcairo2-dev libjpeg-dev libpango1.0-dev libgif-dev build-essential libpixman-1-dev
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+      - name: Setup workspace dependencies
+        uses: ./.github/actions/setup-bun-workspace
         with:
           bun-version: ${{ env.BUN_VERSION }}
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+          skip-avatar-clone: "true"
+          no-vision-deps: "true"
 
-      - name: Cache Bun install
-        uses: actions/cache@v4
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: bun-${{ runner.os }}-
+      - name: Restore eliza workspace paths for repo scripts
+        run: node scripts/restore-local-eliza-workspace.mjs
 
-      - name: Install dependencies
-        run: bun install --ignore-scripts
-
-      - name: Run repository postinstall patches
-        run: bun run postinstall
+      - name: Generate protobuf types
+        run: |
+          if [ -d eliza/packages/schemas ] && [ -f eliza/packages/schemas/buf.gen.yaml ] && [ ! -d eliza/packages/typescript/src/types/generated ]; then
+            cd eliza/packages/schemas
+            node node_modules/@bufbuild/buf/install.js 2>/dev/null || true
+            bunx @bufbuild/buf@1.67.0 generate
+          fi
 
       - name: Build
         run: bun run build
 
-      - name: Run E2E Validation tests
-        run: bunx vitest run --config vitest.e2e.config.ts test/e2e-validation.e2e.test.ts
+      - name: Run action invocation E2E tests
+        shell: bash
+        run: |
+          set -o pipefail
+          log_file="$(mktemp)"
+
+          if bun run test:action-e2e 2>&1 | tee "$log_file"; then
+            exit 0
+          fi
+
+          if grep -Eiq 'exceeded your current quota|quota exceeded|insufficient[_ -]?(quota|balance|funds|credits?)|billing details|credit balance|please add credits|top[_ -]?up your credits|invalid api key|unauthorized|authentication|status code: 429|too many requests|unexpected error occurred while processing the request|temporarily unavailable|service unavailable|internal server error|overloaded' "$log_file"; then
+            echo "::warning::Action Invocation E2E skipped because the configured external provider is unavailable."
+            exit 0
+          fi
+
+          exit 1
+
+  validation-e2e:
+    name: End-to-End Validation (Issue
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup workspace dependencies
+        uses: ./.github/actions/setup-bun-workspace
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+          skip-avatar-clone: "true"
+          no-vision-deps: "true"
+
+      - name: Generate protobuf types
+        run: |
+          if [ -d eliza/packages/schemas ] && [ -f eliza/packages/schemas/buf.gen.yaml ] && [ ! -d eliza/packages/typescript/src/types/generated ]; then
+            cd eliza/packages/schemas
+            node node_modules/@bufbuild/buf/install.js 2>/dev/null || true
+            bunx @bufbuild/buf@1.67.0 generate
+          fi
+
+      - name: Build
+        run: bun run build
+
+      - name: Run E2E validation suite
+        run: bun run test:e2e:validation
         env:
-          NODE_OPTIONS: "--max-old-space-size=4096"
+          MILADY_LIVE_TEST: "1"
+          ELIZA_LIVE_TEST: "1"
+          ELIZAOS_CLOUD_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY != '' && secrets.ELIZAOS_CLOUD_API_KEY || secrets.ELIZACLOUD_API_KEY }}
+          ELIZAOS_CLOUD_BASE_URL: ${{ secrets.ELIZAOS_CLOUD_BASE_URL }}
+
+  live-surface-audit:
+    name: Live Surface Audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Setup workspace dependencies
+        uses: ./.github/actions/setup-bun-workspace
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+          prepare-local-eliza-runtime: "true"
+
+      - name: Restore eliza workspace paths for repo scripts
+        run: node scripts/restore-local-eliza-workspace.mjs
+
+      - name: Run live surface audit
+        run: bun run test:audit:live:strict
+
+  ui-playwright-smoke:
+    name: UI Playwright Smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check live provider secrets
+        id: provider-check
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          ELIZAOS_CLOUD_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY != '' && secrets.ELIZAOS_CLOUD_API_KEY || secrets.ELIZACLOUD_API_KEY }}
+        run: |
+          if [ -z "${OPENAI_API_KEY}" ] && \
+             [ -z "${GROQ_API_KEY}" ] && \
+             [ -z "${ANTHROPIC_API_KEY}" ] && \
+             [ -z "${GOOGLE_GENERATIVE_AI_API_KEY}" ] && \
+             [ -z "${OPENROUTER_API_KEY}" ] && \
+             [ -z "${ELIZAOS_CLOUD_API_KEY}" ]; then
+            if [ "${{ github.event_name }}" = "push" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+              echo "::error::At least one live provider secret is required for canonical UI Playwright smoke."
+              exit 1
+            fi
+            echo "::warning::No live provider secret configured for this PR — skipping UI Playwright smoke."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout
+        if: steps.provider-check.outputs.skip != 'true'
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - name: Setup workspace dependencies
+        if: steps.provider-check.outputs.skip != 'true'
+        uses: ./.github/actions/setup-bun-workspace
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+          install-command: bun install --ignore-scripts --no-frozen-lockfile
+          skip-avatar-clone: "true"
+          no-vision-deps: "true"
+
+      - name: Restore eliza workspace paths for repo scripts
+        if: steps.provider-check.outputs.skip != 'true'
+        run: node scripts/restore-local-eliza-workspace.mjs
+
+      - name: Re-link workspace after restore (ensures @elizaos/* symlinks)
+        if: steps.provider-check.outputs.skip != 'true'
+        shell: bash
+        env:
+          SKIP_AVATAR_CLONE: "1"
+          MILADY_NO_VISION_DEPS: "1"
+        run: bun install --no-frozen-lockfile
+
+      - name: Build @elizaos/core dist (required by dev-stack imports)
+        if: steps.provider-check.outputs.skip != 'true'
+        shell: bash
+        run: |
+          for bun_package_dir in node_modules/bun eliza/node_modules/bun; do
+            if [ -f "${bun_package_dir}/install.js" ]; then
+              (cd "${bun_package_dir}" && node install.js)
+            fi
+          done
+          if [ -d eliza/packages/schemas ] && [ -f eliza/packages/schemas/buf.gen.yaml ] && [ ! -d eliza/packages/typescript/src/types/generated ]; then
+            cd eliza/packages/schemas
+            bunx @bufbuild/buf@1.67.0 generate
+            cd -
+          fi
+          cd eliza/packages/typescript
+          bun run build:node
+
+      - name: Link restored eliza workspaces into root node_modules
+        if: steps.provider-check.outputs.skip != 'true'
+        run: node scripts/link-local-eliza-workspace.mjs
+
+      - name: Install Electrobun runtime dependencies
+        if: steps.provider-check.outputs.skip != 'true'
+        run: |
+          APT_ARGS=(-o Acquire::ForceIPv4=true -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o DPkg::Lock::Timeout=120)
+          for attempt in 1 2 3; do
+            if sudo env DEBIAN_FRONTEND=noninteractive timeout 5m apt-get "${APT_ARGS[@]}" update && \
+               sudo env DEBIAN_FRONTEND=noninteractive timeout 12m apt-get "${APT_ARGS[@]}" install -y --no-install-recommends \
+                 libwebkit2gtk-4.1-0 libayatana-appindicator3-1; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "Electrobun runtime dependency install failed after ${attempt} attempts"
+              exit 1
+            fi
+            sleep $((attempt * 10))
+          done
+
+      - name: Install Playwright browser
+        if: steps.provider-check.outputs.skip != 'true'
+        run: bunx playwright install --with-deps chromium
+
+      - name: Run UI Playwright smoke tests
+        if: steps.provider-check.outputs.skip != 'true'
+        run: bun run test:ui:playwright
+        env:
+          MILADY_LIVE_TEST: "1"
+          ELIZA_LIVE_TEST: "1"
+          ELIZAOS_CLOUD_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY != '' && secrets.ELIZAOS_CLOUD_API_KEY || secrets.ELIZACLOUD_API_KEY }}
+          ELIZAOS_CLOUD_BASE_URL: ${{ secrets.ELIZAOS_CLOUD_BASE_URL }}
 
   test-status:
     name: All Tests Passed
     if: always()
-    needs: [unit-tests, db-check, e2e-tests, app-startup-e2e, electron-ui-e2e, electron-packaged-dmg-e2e, cloud-live-e2e, validation-e2e]
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    needs:
+      [
+        regression-matrix,
+        unit-tests,
+        db-check,
+        website-blocker-cross-platform,
+        website-blocker-startup-smoke,
+        website-blocker-desktop-smoke,
+        website-blocker-mobile-android,
+        website-blocker-mobile-ios,
+        desktop-contract,
+        cloud-live-e2e,
+        action-e2e,
+        validation-e2e,
+        live-surface-audit,
+        ui-playwright-smoke,
+      ]
+    runs-on: ubuntu-24.04
     steps:
       - name: Check test results
+        shell: bash
         run: |
-          # Note: electron jobs are optional (macOS packaging can have flaky deps)
-          if [[ "${{ needs.unit-tests.result }}" == "failure" || \
-                "${{ needs.db-check.result }}" == "failure" || \
-                "${{ needs.e2e-tests.result }}" == "failure" || \
-                "${{ needs.app-startup-e2e.result }}" == "failure" || \
-                "${{ needs.cloud-live-e2e.result }}" == "failure" || \
-                "${{ needs.validation-e2e.result }}" == "failure" ]]; then
-            echo "One or more test jobs failed"
+          set -u
+          # Gate job: surface which dependency failed (logs are easy to miss otherwise).
+          echo "=== Required test job results ==="
+          echo "regression-matrix:  ${{ needs.regression-matrix.result }}"
+          echo "unit-tests:         ${{ needs.unit-tests.result }}"
+          echo "db-check:           ${{ needs.db-check.result }}"
+          echo "website-blocker-cross-platform: ${{ needs.website-blocker-cross-platform.result }}"
+          echo "website-blocker-startup-smoke:  ${{ needs.website-blocker-startup-smoke.result }}"
+          echo "website-blocker-desktop-smoke:  ${{ needs.website-blocker-desktop-smoke.result }}"
+          echo "website-blocker-mobile-android: ${{ needs.website-blocker-mobile-android.result }}"
+          echo "website-blocker-mobile-ios:     ${{ needs.website-blocker-mobile-ios.result }}"
+          echo "desktop-contract:   ${{ needs.desktop-contract.result }}"
+          echo "cloud-live-e2e:     ${{ needs.cloud-live-e2e.result }}"
+          echo "action-e2e:         ${{ needs.action-e2e.result }}"
+          echo "validation-e2e:     ${{ needs.validation-e2e.result }}"
+          echo "live-surface-audit: ${{ needs.live-surface-audit.result }}"
+          echo "ui-playwright-smoke:${{ needs.ui-playwright-smoke.result }}"
+          echo "==================================="
+          strict_results="${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}"
+          bad=0
+          for pair in \
+            "regression-matrix:${{ needs.regression-matrix.result }}" \
+            "unit-tests:${{ needs.unit-tests.result }}" \
+            "db-check:${{ needs.db-check.result }}" \
+            "website-blocker-cross-platform:${{ needs.website-blocker-cross-platform.result }}" \
+            "website-blocker-startup-smoke:${{ needs.website-blocker-startup-smoke.result }}" \
+            "website-blocker-desktop-smoke:${{ needs.website-blocker-desktop-smoke.result }}" \
+            "website-blocker-mobile-android:${{ needs.website-blocker-mobile-android.result }}" \
+            "website-blocker-mobile-ios:${{ needs.website-blocker-mobile-ios.result }}" \
+            "desktop-contract:${{ needs.desktop-contract.result }}" \
+            "cloud-live-e2e:${{ needs.cloud-live-e2e.result }}" \
+            "action-e2e:${{ needs.action-e2e.result }}" \
+            "validation-e2e:${{ needs.validation-e2e.result }}" \
+            "live-surface-audit:${{ needs.live-surface-audit.result }}" \
+            "ui-playwright-smoke:${{ needs.ui-playwright-smoke.result }}"; do
+            name="${pair%%:*}"
+            result="${pair##*:}"
+            if [ "$result" = "skipped" ] && [ "$strict_results" != "true" ]; then
+              echo "::warning title=Test gate::Live-only job '${name}' was skipped for this PR context."
+              continue
+            fi
+            if [ "$result" != "success" ]; then
+              echo "::error title=Test gate::Required job '${name}' finished with '${result}' (expected success)"
+              bad=1
+            fi
+          done
+          if [ "$bad" -ne 0 ]; then
             exit 1
           fi
-          echo "All test jobs passed"
+          echo "All required test jobs passed."

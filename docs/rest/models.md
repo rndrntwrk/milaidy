@@ -90,7 +90,7 @@ List available AI models. Optionally filter by a specific provider or refresh th
       { "id": "text-embedding-3-large", "name": "text-embedding-3-large", "category": "embedding" }
     ],
     "anthropic": [
-      { "id": "claude-opus-4-5", "name": "Claude Opus 4.5", "category": "chat" }
+      { "id": "claude-opus-4-7", "name": "Claude Opus 4.7", "category": "chat" }
     ]
   }
 }
@@ -111,12 +111,12 @@ List available AI models. Optionally filter by a specific provider or refresh th
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `id` | string | Model identifier (e.g., `gpt-4o`, `claude-opus-4-5`) |
+| `id` | string | Model identifier (e.g., `gpt-4o`, `claude-opus-4-7`) |
 | `name` | string | Human-readable display name |
 | `category` | string | One of: `chat`, `embedding`, `image`, `tts`, `stt`, `other` |
 
 ## Related
 
-- [Model Providers](/model-providers) — configuring model providers
+- [Model Providers](/runtime/models) — configuring model providers
 - [Environment variables](/cli/environment) — API key variables
 - [`milady models`](/cli/models) — CLI command for checking models

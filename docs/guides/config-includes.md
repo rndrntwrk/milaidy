@@ -145,7 +145,7 @@ Keys `__proto__`, `constructor`, and `prototype` are silently blocked during mer
     "servers": {
       "filesystem": {
         "type": "stdio",
-        "command": "npx",
+        "command": "bunx",
         "args": ["-y", "@modelcontextprotocol/server-filesystem", "/data"]
       }
     }
@@ -165,7 +165,7 @@ Keys `__proto__`, `constructor`, and `prototype` are silently blocked during mer
 // connectors.json5
 {
   "connectors": {
-    "discord": { "botToken": "...", "guilds": { ... } },
+    "discord": { "token": "...", "guilds": { ... } },
     "telegram": { "botToken": "...", "groups": { ... } }
   }
 }

@@ -15,9 +15,10 @@ Eliza Cloud provides remote agent hosting and provisioning. The Milady cloud int
 5. [Cloud Proxy](#cloud-proxy)
 6. [Backup Scheduler](#backup-scheduler)
 7. [Connection Monitor](#connection-monitor)
-8. [Cloud Status and Credits](#cloud-status-and-credits)
-9. [Credits and Billing](#credits-and-billing)
-10. [API Endpoints](#api-endpoints)
+8. [Granular Cloud Service Toggles](#granular-cloud-service-toggles)
+9. [Cloud Status and Credits](#cloud-status-and-credits)
+10. [Credits and Billing](#credits-and-billing)
+11. [API Endpoints](#api-endpoints)
 
 ---
 
@@ -42,7 +43,7 @@ The following walkthrough covers the full lifecycle of connecting to Eliza Cloud
 ### Step 1: Start the Login Flow
 
 ```bash
-curl -X POST http://localhost:2138/api/cloud/login \
+curl -X POST http://localhost:31337/api/cloud/login \
   -H "Authorization: Bearer your-token"
 ```
 
@@ -60,7 +61,7 @@ Open the `browserUrl` in your browser to authenticate.
 ### Step 2: Poll for Authentication
 
 ```bash
-curl "http://localhost:2138/api/cloud/login/status?sessionId=a1b2c3d4-..."
+curl "http://localhost:31337/api/cloud/login/status?sessionId=a1b2c3d4-..."
 ```
 
 Responses:
@@ -73,7 +74,7 @@ On success, the API key is automatically saved to `milady.json` and `process.env
 ### Step 3: Check Connection Status
 
 ```bash
-curl http://localhost:2138/api/cloud/status
+curl http://localhost:31337/api/cloud/status
 ```
 
 Response:
@@ -84,14 +85,14 @@ Response:
   "hasApiKey": true,
   "userId": "user-123",
   "organizationId": "org-456",
-  "topUpUrl": "https://www.elizacloud.ai/dashboard/settings?tab=billing"
+  "topUpUrl": "https://elizacloud.ai/dashboard/settings?tab=billing"
 }
 ```
 
 ### Step 4: Create a Cloud Agent
 
 ```bash
-curl -X POST http://localhost:2138/api/cloud/agents \
+curl -X POST http://localhost:31337/api/cloud/agents \
   -H "Authorization: Bearer your-token" \
   -H "Content-Type: application/json" \
   -d '{
@@ -104,14 +105,14 @@ curl -X POST http://localhost:2138/api/cloud/agents \
 ### Step 5: Connect to the Agent
 
 ```bash
-curl -X POST http://localhost:2138/api/cloud/agents/agent-id/connect \
+curl -X POST http://localhost:31337/api/cloud/agents/agent-id/connect \
   -H "Authorization: Bearer your-token"
 ```
 
 ### Disconnecting
 
 ```bash
-curl -X POST http://localhost:2138/api/cloud/disconnect \
+curl -X POST http://localhost:31337/api/cloud/disconnect \
   -H "Authorization: Bearer your-token"
 ```
 
@@ -253,6 +254,28 @@ When `maxFailures` consecutive heartbeat failures occur:
 
 ---
 
+## Granular cloud service routing
+
+Eliza Cloud linkage and Eliza Cloud service use are separate.
+
+Once an Eliza Cloud account is linked, the connected server can route individual capabilities through Eliza Cloud without forcing every capability onto the cloud path. The canonical runtime config expresses that through `serviceRouting`, for example:
+
+- `serviceRouting.llmText` for chat inference
+- `serviceRouting.tts` for text-to-speech
+- `serviceRouting.media` for image/video generation
+- `serviceRouting.embeddings` for embeddings
+- `serviceRouting.rpc` for wallet / blockchain RPC
+
+That means a server can:
+
+- run locally while using Eliza Cloud only for inference
+- run on Eliza Cloud while still using OpenAI, Anthropic, or Ollama for inference
+- keep Eliza Cloud linked for RPC or media while `llmText` uses another provider
+
+Provider switching updates the canonical route for the selected capability. The current Milady app treats `llmText` as the main inference route; additional capabilities are expected to move onto the same `serviceRouting` contract instead of legacy `cloud.services.*` flags.
+
+---
+
 ## Cloud Status and Credits
 
 ### Status Endpoint
@@ -266,7 +289,7 @@ When `maxFailures` consecutive heartbeat failures occur:
   "hasApiKey": true,
   "userId": "...",
   "organizationId": "...",
-  "topUpUrl": "https://www.elizacloud.ai/dashboard/settings?tab=billing"
+  "topUpUrl": "https://elizacloud.ai/dashboard/settings?tab=billing"
 }
 ```
 
@@ -282,7 +305,7 @@ When not connected, the response includes a `reason` field: `"not_authenticated"
   "balance": 15.50,
   "low": false,
   "critical": false,
-  "topUpUrl": "https://www.elizacloud.ai/dashboard/settings?tab=billing"
+  "topUpUrl": "https://elizacloud.ai/dashboard/settings?tab=billing"
 }
 ```
 
@@ -295,7 +318,7 @@ Balance thresholds: `low` is true when balance < $2.00, `critical` when < $0.50.
 Monitor your Eliza Cloud balance before and during agent operation to avoid service interruption.
 
 ```bash
-curl http://localhost:2138/api/cloud/credits \
+curl http://localhost:31337/api/cloud/credits \
   -H "Authorization: Bearer your-token"
 ```
 
@@ -306,7 +329,7 @@ Response:
   "balance": 12.50,
   "low": false,
   "critical": false,
-  "topUpUrl": "https://www.elizacloud.ai/dashboard/settings?tab=billing"
+  "topUpUrl": "https://elizacloud.ai/dashboard/settings?tab=billing"
 }
 ```
 

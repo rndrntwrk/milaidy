@@ -8,13 +8,14 @@ The Milady API can be secured with a token by setting the `MILADY_API_TOKEN` env
 
 ## Authentication Methods
 
-The API supports three authentication headers, checked in priority order:
+The API supports four authentication headers, checked in priority order:
 
 | Priority | Header | Format | Example |
 |----------|--------|--------|---------|
 | 1 | `Authorization` | `Bearer <token>` | `Authorization: Bearer sk-milady-...` |
-| 2 | `x-milady-token` | Plain token string | `x-milady-token: sk-milady-...` |
-| 3 | `x-api-key` | Plain token string | `x-api-key: sk-milady-...` |
+| 2 | `x-eliza-token` | Plain token string | `x-eliza-token: sk-milady-...` |
+| 3 | `x-elizaos-token` | Plain token string | `x-elizaos-token: sk-milady-...` |
+| 4 | `x-api-key` / `x-api-token` | Plain token string | `x-api-key: sk-milady-...` |
 
 When no `MILADY_API_TOKEN` is set, all requests are allowed without authentication.
 
@@ -22,7 +23,7 @@ All token comparisons use `crypto.timingSafeEqual` to prevent timing attacks.
 
 ## WebSocket Authentication
 
-WebSocket connections to `/ws` use the same auth headers. Additionally, when `MILADY_ALLOW_WS_QUERY_TOKEN=1` is set, the token can be passed as a query parameter (less secure, useful for clients that cannot set headers):
+WebSocket connections to `/ws` use the same auth headers. Additionally, when `ELIZA_ALLOW_WS_QUERY_TOKEN=1` is set, the token can be passed as a query parameter (less secure, useful for clients that cannot set headers):
 
 | Priority | Parameter |
 |----------|-----------|
@@ -39,13 +40,13 @@ The pairing flow allows remote UIs (like the dashboard) to obtain the API token 
 ### How It Works
 
 1. The server generates a pairing code on first request to `GET /api/auth/status`
-2. The code is displayed in the server logs: `[milady-api] Pairing code: XXXX-XXXX (valid for 10 minutes)`
+2. The code is displayed in the server logs: `[eliza-api] Pairing code: XXXX-XXXX (valid for 10 minutes)`
 3. The user enters the code in the UI, which submits it to `POST /api/auth/pair`
 4. On success, the token is returned and the pairing code is cleared
 
 ### Pairing Code Format
 
-Codes follow the `XXXX-XXXX` pattern (4 characters, dash, 4 characters). The alphabet excludes visually ambiguous characters:
+Codes follow the `XXXX-XXXX` pattern (two groups of 4 characters separated by a dash, 8 characters total). The alphabet excludes visually ambiguous characters:
 
 ```
 ABCDEFGHJKLMNPQRSTUVWXYZ23456789
@@ -66,7 +67,7 @@ Code submission normalizes input by stripping non-alphanumeric characters and up
 
 Pairing is active when:
 - `MILADY_API_TOKEN` is set (non-empty after trimming)
-- `MILADY_PAIRING_DISABLED` is not `"1"`
+- `ELIZA_PAIRING_DISABLED` is not `"1"`
 
 ## Rate Limiting
 
@@ -80,6 +81,17 @@ The `POST /api/auth/pair` endpoint is rate-limited per IP address:
 | Reset | Window resets after expiry on next attempt |
 
 The IP is resolved from `req.socket.remoteAddress`. When the limit is exceeded, the endpoint returns `429 Too Many Requests`.
+
+## Cloud provisioning bypass
+
+When the agent is running as a cloud-provisioned container (e.g., on Eliza Cloud or in an enterprise deployment), authentication and pairing are bypassed automatically. The bypass activates only when **both** conditions are met:
+
+1. `MILADY_CLOUD_PROVISIONED=1` (or `ELIZA_CLOUD_PROVISIONED=1`) is set
+2. `MILADY_API_TOKEN` (or `ELIZA_API_TOKEN`) is configured
+
+When cloud provisioned, `GET /api/auth/status` returns `{ "required": false, "pairingEnabled": false, "expiresAt": null }` — cloud-provisioned containers enforce API auth upstream, and reporting `required: true` locally would strand clients in the pairing flow. The pairing flow is disabled since the token is already provisioned.
+
+A container with only the cloud flag but no API token falls through to the normal pairing flow.
 
 ## Endpoints
 
@@ -99,9 +111,9 @@ Check whether authentication is required and whether the pairing flow is current
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `required` | boolean | `true` when `MILADY_API_TOKEN` is set |
-| `pairingEnabled` | boolean | `true` when the pairing flow is active |
-| `expiresAt` | number \| null | Unix ms timestamp when the current pairing code expires, or `null` if pairing is disabled |
+| `required` | boolean | `true` when `MILADY_API_TOKEN` is set and not cloud provisioned. `false` when running in a cloud-provisioned container (auth is enforced upstream). |
+| `pairingEnabled` | boolean | `true` when the pairing flow is active. `false` when cloud provisioned. |
+| `expiresAt` | number \| null | Unix ms timestamp when the current pairing code expires, or `null` if pairing is disabled or cloud provisioned |
 
 ---
 
@@ -138,15 +150,39 @@ Submit a pairing code to receive the API token. Rate-limited by IP address.
 | `410` | Pairing code expired — a new code has been automatically generated |
 | `429` | Too many attempts — rate limit exceeded (5 per 10 minutes per IP) |
 
+## Sensitive endpoint authorization
+
+Certain endpoints (such as `POST /api/agent/reset`) are classified as sensitive and require stricter authorization than standard API routes:
+
+- **Loopback requests** (from `127.0.0.1`, `::1`, or `::ffff:127.0.0.1`) are allowed without a token when no `MILADY_API_TOKEN` is configured. This supports the desktop app, which communicates over localhost and does not need token auth for local operations.
+- In `development` or `dev` environments (set via `NODE_ENV`) with `ELIZA_DEV_AUTH_BYPASS=1`, sensitive endpoints are accessible without a token regardless of the request origin.
+- In all other cases, a valid `MILADY_API_TOKEN` must be configured **and** included in the request. Non-loopback requests without a configured token return `403 Forbidden` with the message "Sensitive endpoint requires API token authentication".
+
+<Note>
+The wallet key export endpoint (`POST /api/wallet/export`) enforces stricter rules: in production, a token is always required even from loopback addresses.
+</Note>
+
 ## CORS
 
 The API server includes these auth-related headers in CORS preflight responses:
 
 ```
-Access-Control-Allow-Headers: Content-Type, Authorization, X-Milady-Token, X-Api-Key, X-Milady-Export-Token
+Access-Control-Allow-Headers: Content-Type, Authorization, X-API-Token, X-Api-Key, X-ElizaOS-Client-Id, X-ElizaOS-UI-Language, X-ElizaOS-Token, X-Eliza-Export-Token, X-Eliza-Terminal-Token
 ```
 
 ## Related
 
 - [API Reference overview](/api-reference)
-- [Environment variables](/cli/environment) — `MILADY_API_TOKEN`, `MILADY_ALLOW_WS_QUERY_TOKEN`, `MILADY_PAIRING_DISABLED`
+- [Environment variables](/cli/environment) — `MILADY_API_TOKEN` / `ELIZA_API_TOKEN`, `MILADY_ALLOW_WS_QUERY_TOKEN`, `MILADY_PAIRING_DISABLED`, `MILADY_CLOUD_PROVISIONED` / `ELIZA_CLOUD_PROVISIONED`
+
+## Common Error Codes
+
+| Status | Code | Description |
+|--------|------|-------------|
+| 400 | `INVALID_REQUEST` | Request body is malformed or missing required fields |
+| 401 | `UNAUTHORIZED` | Missing or invalid authentication token |
+| 404 | `NOT_FOUND` | Requested resource does not exist |
+| 401 | `INVALID_CREDENTIALS` | Provided credentials are incorrect |
+| 429 | `RATE_LIMITED` | Too many requests from this IP address |
+| 500 | `INTERNAL_ERROR` | Unexpected server error |
+| 401 | `TOKEN_EXPIRED` | Authentication token has expired |

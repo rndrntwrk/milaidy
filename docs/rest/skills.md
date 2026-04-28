@@ -4,7 +4,9 @@ sidebarTitle: "Skills"
 description: "REST API endpoints for managing local skills, the skills catalog, and the skills marketplace."
 ---
 
-The skills API covers three areas: **local skills** (agent-specific TypeScript action files), the **skills catalog** (curated registry of community skills), and the **skills marketplace** (npm-based skill packages). Skills extend the agent with new actions, providers, or evaluators.
+The skills API covers three areas: **local skills** (markdown-based SKILL.md extensions that teach the agent task-specific procedures), the **skills catalog** (curated registry of community skills), and the **skills marketplace** (git-based skill packages). Skills are injected into the agent's context at runtime to guide its behavior.
+
+When `MILADY_API_TOKEN` is set, include it as a `Bearer` token in the `Authorization` header.
 
 ## Endpoints
 
@@ -19,7 +21,11 @@ The skills API covers three areas: **local skills** (agent-specific TypeScript a
 | POST | `/api/skills/:id/open` | Open a skill file in the default editor |
 | GET | `/api/skills/:id/source` | Read the source code of a skill |
 | PUT | `/api/skills/:id/source` | Write updated source code for a skill |
-| PUT | `/api/skills/:id` | Update skill preferences (enabled, priority, etc.) |
+| POST | `/api/skills/:id/acknowledge` | Acknowledge a skill security scan |
+| POST | `/api/skills/:id/enable` | Enable a skill (honors scan acknowledgments) |
+| POST | `/api/skills/:id/disable` | Disable a skill |
+| POST | `/api/skills/:id/acknowledge` | Acknowledge a skill security scan |
+| DELETE | `/api/skills/:id` | Delete a skill |
 
 ### Skills Catalog
 
@@ -63,7 +69,8 @@ List all local skills found in the agent's skills directory. Each entry includes
       "filePath": "/path/to/skills/my-custom-action.ts",
       "enabled": true,
       "priority": 0,
-      "valid": true
+      "valid": true,
+      "scanStatus": "clean"
     }
   ]
 }
@@ -79,8 +86,15 @@ Re-scan the skills directory and reload all skill metadata. Useful after manuall
 
 ```json
 {
-  "ok": true,
-  "count": 5
+  "skills": [
+    {
+      "id": "my-custom-action",
+      "name": "MY_CUSTOM_ACTION",
+      "description": "Does something useful",
+      "enabled": true,
+      "scanStatus": "clean"
+    }
+  ]
 }
 ```
 
@@ -184,17 +198,9 @@ Write updated source code to a skill file. The server validates basic syntax bef
 
 ---
 
-### PUT /api/skills/:id
+### POST /api/skills/:id/enable
 
-Update runtime preferences for a skill (enabled state, priority, custom config).
-
-**Request Body**
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `enabled` | boolean | No | Whether the skill is active |
-| `priority` | number | No | Sort priority (lower runs first) |
-| `config` | object | No | Arbitrary skill-specific configuration |
+Enable an installed skill. Returns 409 if the skill has unacknowledged scan findings — acknowledge via `POST /api/skills/:id/acknowledge` first.
 
 **Response**
 
@@ -203,11 +209,46 @@ Update runtime preferences for a skill (enabled state, priority, custom config).
   "ok": true,
   "skill": {
     "id": "my-skill",
-    "enabled": true,
-    "priority": 10
-  }
+    "enabled": true
+  },
+  "scanStatus": null
 }
 ```
+
+---
+
+### POST /api/skills/:id/disable
+
+Disable an installed skill.
+
+**Response**
+
+```json
+{
+  "ok": true,
+  "skill": {
+    "id": "my-skill",
+    "enabled": false
+  },
+  "scanStatus": null
+}
+```
+
+---
+
+### DELETE /api/skills/:id
+
+Delete a skill and remove its files from the skills directory.
+
+**Response**
+
+```json
+{
+  "ok": true
+}
+```
+
+**Errors:** `404` skill not found.
 
 ---
 
@@ -561,10 +602,22 @@ Acknowledges the security scan findings for a skill. Required before the skill c
 bunx vitest run src/services/plugin-installer.test.ts src/services/skill-marketplace.test.ts src/services/skill-catalog-client.test.ts
 
 # Skills marketplace API and services e2e
-bunx vitest run --config vitest.e2e.config.ts test/skills-marketplace-api.e2e.test.ts test/skills-marketplace-services.e2e.test.ts
+bunx vitest run --config test/vitest/e2e.config.ts test/skills-marketplace-api.e2e.test.ts test/skills-marketplace-services.e2e.test.ts
 
 # API server e2e (includes skills routes)
-bunx vitest run --config vitest.e2e.config.ts test/api-server.e2e.test.ts
+bunx vitest run --config test/vitest/e2e.config.ts test/api-server.e2e.test.ts
 
 bun run typecheck
 ```
+
+## Common Error Codes
+
+| Status | Code | Description |
+|--------|------|-------------|
+| 400 | `INVALID_REQUEST` | Request body is malformed or missing required fields |
+| 401 | `UNAUTHORIZED` | Missing or invalid authentication token |
+| 404 | `NOT_FOUND` | Requested resource does not exist |
+| 500 | `SKILL_BLOCKED` | Skill is blocked due to security scan findings |
+| 500 | `SYNTAX_ERROR` | Skill source code contains syntax errors |
+| 500 | `ALREADY_INSTALLED` | Skill is already installed |
+| 500 | `INTERNAL_ERROR` | Unexpected server error |

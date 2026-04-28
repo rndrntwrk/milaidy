@@ -33,13 +33,13 @@ Services are accessible via the runtime:
 const service = runtime.getService("AGENT_SKILLS_SERVICE");
 
 // Get all services of a type (returns array for multi-instance services)
-const services = runtime.getServicesByType("trajectory_logger");
+const services = runtime.getServicesByType("trajectories");
 
 // Wait for a service to finish loading
 const svcPromise = runtime.getServiceLoadPromise("AGENT_SKILLS_SERVICE");
 
 // Check registration status
-const status = runtime.getServiceRegistrationStatus("trajectory_logger");
+const status = runtime.getServiceRegistrationStatus("trajectories");
 // Returns: "pending" | "registering" | "registered" | "failed" | "unknown"
 ```
 
@@ -51,28 +51,37 @@ Core plugins are always loaded and each provides one or more services:
 |---|---|---|
 | `@elizaos/plugin-sql` | Database adapter | PGLite or PostgreSQL persistence; provides `runtime.adapter` |
 | `@elizaos/plugin-local-embedding` | `TEXT_EMBEDDING` handler | Local GGUF embedding model via node-llama-cpp |
-| `@elizaos/plugin-secrets-manager` | Secrets service | Encrypted credential storage and retrieval |
-| `@elizaos/plugin-knowledge` | Knowledge service | RAG knowledge indexing and retrieval |
-| `@elizaos/plugin-rolodex` | Rolodex service | Contact graph, relationship memory, social tracking |
-| `@elizaos/plugin-trajectory-logger` | `trajectory_logger` | Debug and RL training trajectory capture |
+| `@elizaos/plugin-form` | Form service | Structured form packaging for guided user journeys |
+| `knowledge` | Knowledge service | RAG knowledge indexing and retrieval |
+| `trajectories` | `trajectories` | Debug and RL training trajectory capture |
 | `@elizaos/plugin-agent-orchestrator` | Orchestrator service | Multi-agent task coordination and spawning |
 | `@elizaos/plugin-cron` | Cron service | Scheduled job execution |
 | `@elizaos/plugin-shell` | Shell service | Shell command execution with security controls |
-| `@elizaos/plugin-plugin-manager` | Plugin manager service | Dynamic plugin install/uninstall at runtime |
 | `@elizaos/plugin-agent-skills` | `AGENT_SKILLS_SERVICE` | Skill catalog loading and execution |
-| `@elizaos/plugin-pdf` | PDF service | PDF document processing |
-| `@elizaos/plugin-form` | Form service | Structured form packaging |
+| `@elizaos/plugin-commands` | Commands service | Slash command handling (skills auto-register as /commands) |
+| `@elizaos/plugin-plugin-manager` | Plugin manager service | Dynamic plugin install/uninstall at runtime |
+| `roles` | Roles service | Role-based access control (OWNER/ADMIN/NONE) |
 
 ## Optional Core Services
 
-These services are available but not loaded by default:
+These services are available but not loaded by default — enable via admin panel or config:
 
 | Plugin | Description |
 |---|---|
+| `@elizaos/plugin-pdf` | PDF document processing |
+| `@elizaos/plugin-cua` | CUA computer-use agent (cloud sandbox automation) |
+| `@elizaos/plugin-obsidian` | Obsidian vault CLI integration |
 | `@elizaos/plugin-code` | Code writing and file operations |
-| `@elizaos/plugin-browser` | Browser automation (requires stagehand-server binary) |
-| `@elizaos/plugin-vision` | Visual understanding (requires @tensorflow/tfjs-node) |
-| `@elizaos/plugin-computeruse` | Computer use automation (requires platform binaries) |
+| `@elizaos/plugin-repoprompt` | RepoPrompt CLI integration |
+| `@elizaos/plugin-claude-code-workbench` | Claude Code companion workflows |
+| `@elizaos/plugin-computeruse` | Computer use automation (platform-specific, requires platform binaries) |
+| `@elizaos/plugin-browser` | Browser automation (requires stagehand-server) |
+| `@elizaos/plugin-vision` | Visual understanding (feature-gated) |
+| `@elizaos/plugin-edge-tts` | Text-to-speech (Microsoft Edge TTS) |
+| `@elizaos/plugin-elevenlabs` | ElevenLabs text-to-speech |
+| `@elizaos/plugin-cli` | CLI interface |
+| `@elizaos/plugin-secrets-manager` | Encrypted credential storage (statically imported, may be re-enabled as core) |
+| `relationships` | Contact graph, relationship memory (statically imported, may be re-enabled as core) |
 | `@elizaos/plugin-x402` | x402 HTTP micropayment protocol |
 
 ## Trajectory Logger Service
@@ -80,7 +89,7 @@ These services are available but not loaded by default:
 The trajectory logger is treated specially during startup. Milady waits for it to become available with a 3-second timeout before enabling it:
 
 ```typescript
-await waitForTrajectoryLoggerService(runtime, "post-init", 3000);
+await waitForTrajectoriesService(runtime, "post-init", 3000);
 ensureTrajectoryLoggerEnabled(runtime, "post-init");
 ```
 
@@ -118,14 +127,14 @@ SKILLS_DENYLIST = <comma-separated denied skill names>
 
 ## Sandbox Manager
 
-`SandboxManager` from `src/services/sandbox-manager.ts` provides Docker-based code execution isolation when `agents.defaults.sandbox.mode` is `"standard"` or `"max"`:
+`SandboxManager` from `eliza/packages/app-core/src/services/sandbox-manager.ts` provides Docker-based code execution isolation when `agents.defaults.sandbox.mode` is `"standard"` or `"max"`:
 
 ```typescript
 const sandboxManager = new SandboxManager({
   mode: "standard",
   image: dockerSettings?.image ?? undefined,  // no default image — must be configured
   browser: dockerSettings?.browser ?? undefined,
-  containerPrefix: "milady-sandbox-",
+  containerPrefix: "eliza-sandbox",
   network: "bridge",
   memory: "512m",
   cpus: 0.5,

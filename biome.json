@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.4.2/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.4.11/schema.json",
   "vcs": {
     "enabled": true,
     "clientKind": "git",
@@ -12,6 +12,8 @@
       "**",
       "!assets",
       "!dist",
+      "!apps/app/public",
+      "!apps/app/electrobun/build",
       "!**/tsc-out",
       "!**/dist-tsc",
       "!docs/_layouts",
@@ -23,10 +25,12 @@
       "!skills",
       "!Swabble",
       "!vendor",
-      "!test/contracts/lib",
-      "!test/contracts/out",
-      "!test/contracts/cache",
-      "!**/vrms/imported-avatars.json"
+      "!**/vrms/imported-avatars.json",
+      "!collision-report.json",
+      "!scripts/type-audit-report.json",
+      "!scripts/type-audit-report.md",
+      "!scripts/lib/elizaos-core-roles-shim.js",
+      "!test/contracts/lib/openzeppelin-contracts/**"
     ]
   },
   "assist": {
@@ -71,5 +75,30 @@
     "parser": {
       "tailwindDirectives": true
     }
-  }
+  },
+  "overrides": [
+    {
+      "includes": ["**/*.css"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noDuplicateProperties": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "apps/app/src/main.tsx",
+        "eliza/packages/app-core/src/styles/styles.css"
+      ],
+      "assist": {
+        "actions": {
+          "source": {
+            "organizeImports": "off"
+          }
+        }
+      }
+    }
+  ]
 }

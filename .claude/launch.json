@@ -1,0 +1,37 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dev",
+      "runtimeExecutable": "/bin/zsh",
+      "runtimeArgs": ["-l", "-c", "ELIZA_DEV_ONCHAIN=0 bun run dev"],
+      "port": 2138,
+      "autoPort": false
+    },
+    {
+      "name": "dev-ui-only",
+      "runtimeExecutable": "/bin/zsh",
+      "runtimeArgs": ["-l", "-c", "npm run dev:ui"],
+      "port": 2138,
+      "autoPort": true
+    },
+    {
+      "name": "homepage",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev:homepage"],
+      "port": 2139
+    },
+    {
+      "name": "storybook",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "--prefix", "apps/app", "storybook"],
+      "port": 6007
+    },
+    {
+      "name": "docs",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "docs:dev"],
+      "port": 3000
+    }
+  ]
+}

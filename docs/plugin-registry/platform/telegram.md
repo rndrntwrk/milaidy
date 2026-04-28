@@ -11,7 +11,7 @@ The Telegram plugin connects Milady agents to Telegram as a bot, handling privat
 ## Installation
 
 ```bash
-milady plugins install telegram
+milady plugins install @elizaos/plugin-telegram
 ```
 
 ## Setup
@@ -46,18 +46,24 @@ export TELEGRAM_BOT_TOKEN=123456789:ABCdef...
 |-------|----------|-------------|
 | `botToken` | Yes | Telegram bot token from BotFather |
 | `enabled` | No | Set `false` to disable (default: `true`) |
-| `allowedUsers` | No | Array of Telegram user IDs to accept messages from |
-| `allowedGroups` | No | Array of group/channel IDs to respond in |
+| `dmPolicy` | No | DM access policy: `"pairing"`, `"allowlist"`, `"open"`, or `"disabled"` (default: `"pairing"`) |
+| `allowFrom` | No | User IDs allowed to DM (required when `dmPolicy` is `"open"`, must include `"*"`) |
+| `groupPolicy` | No | Group join policy: `"open"`, `"disabled"`, or `"allowlist"` (default: `"allowlist"`) |
 | `webhookUrl` | No | Use webhook instead of polling (requires HTTPS URL) |
-| `webhookSecret` | No | Secret token for webhook verification |
+| `webhookSecret` | No | Secret token for webhook verification (required when `webhookUrl` is set) |
 
 ```json
 {
   "connectors": {
     "telegram": {
       "botToken": "123456789:ABCdef...",
-      "allowedUsers": [123456, 789012],
-      "allowedGroups": [-1001234567890]
+      "dmPolicy": "pairing",
+      "groupPolicy": "allowlist",
+      "groups": {
+        "-1001234567890": {
+          "requireMention": true
+        }
+      }
     }
   }
 }
@@ -119,12 +125,22 @@ For production deployments, webhook mode is more reliable than polling:
 
 The webhook endpoint must be accessible over HTTPS.
 
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `TELEGRAM_BOT_TOKEN` | Yes | Telegram bot token from BotFather |
+| `TELEGRAM_API_ROOT` | No | Custom Telegram Bot API root URL |
+| `TELEGRAM_ALLOWED_CHATS` | No | Comma-separated list of allowed chat IDs |
+| `TELEGRAM_TEST_CHAT_ID` | No | Chat ID for test/dev messages |
+
 ## Auto-Enable
 
 The plugin auto-enables when `connectors.telegram.botToken` is set.
 
 ## Related
 
+- [Telegram Connector Reference](/connectors/telegram) — Full configuration reference (streaming modes, custom commands, webhook setup, per-group topics, DM history)
 - [Discord Plugin](/plugin-registry/platform/discord) — Discord bot integration
 - [WhatsApp Plugin](/plugin-registry/platform/whatsapp) — WhatsApp integration
 - [Connectors Guide](/guides/connectors) — General connector documentation

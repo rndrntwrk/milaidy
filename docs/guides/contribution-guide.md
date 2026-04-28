@@ -2,6 +2,7 @@
 title: "Contributing Guide"
 sidebarTitle: "Contributing"
 description: "Set up your development environment and contribute to Milady."
+redirect: /guides/contributing
 ---
 
 Welcome to the Milady project. This guide covers environment setup, development workflow, and the pull request process.
@@ -29,12 +30,17 @@ Bun is the project's package manager. All commands in this guide use `bun`.
 git clone https://github.com/milady-ai/milady.git
 cd milady
 
-# Install dependencies
-bun install
+# Install dependencies (initializes submodules + runs bun install)
+./install        # Unix / macOS
+# install.cmd    # Windows
 
 # Build the project (TypeScript via tsdown + UI build)
 bun run build
 ```
+
+<Info>
+Use `./install` (or `install.cmd` on Windows) on a fresh clone. Plain `bun install` works for subsequent updates once the submodules are on disk.
+</Info>
 
 After building, verify the CLI works:
 
@@ -57,11 +63,8 @@ bun run dev
 # Run UI development only
 bun run dev:ui
 
-# Desktop app (Electron) development
+# Desktop app (Electrobun) development
 bun run dev:desktop
-
-# Terminal UI
-bun run tui
 
 # Run the CLI directly
 bun run milady start
@@ -69,7 +72,7 @@ bun run milady start
 
 ### Testing
 
-The project uses **Vitest 4.x** with V8 coverage. Coverage thresholds are set at **25%** for lines, functions, and statements, and **15%** for branches.
+The project uses **Vitest 4.x** with V8 coverage. Coverage thresholds are set in `eliza/packages/app-core/scripts/coverage-policy.mjs` at **25%** for lines, functions, and statements, and **15%** for branches.
 
 ```bash
 # Run all tests (parallel runner)
@@ -87,11 +90,11 @@ bun run db:check
 # End-to-end tests
 bun run test:e2e
 
-# Live API tests (requires API keys)
-MILADY_LIVE_TEST=1 bun run test:live
+# Live API smoke tests (requires API keys)
+MILADY_LIVE_TEST=1 bun run test:live:smoke
 
-# Docker-based integration tests
-bun run test:docker:all
+# Docker-based runtime review
+bun run test:docker:review
 ```
 
 **Test file conventions:**
@@ -101,13 +104,15 @@ bun run test:docker:all
 | `*.test.ts` | Colocated with source | Unit tests |
 | `*.e2e.test.ts` | `test/` directory | End-to-end tests |
 | `*.live.test.ts` | `test/` directory | Live API tests (require real keys) |
+| `*.real.test.ts` | Colocated or `test/` | Tests against real services |
+| `*.integration.test.ts` | `test/` directory | Integration tests |
 
 ### Linting and Formatting
 
 The project uses **Biome 2.x** for both linting and formatting. There is no ESLint or Prettier -- Biome handles everything.
 
 ```bash
-# Run typecheck + lint (the main pre-push check)
+# Run typecheck + lint + tests (the main pre-push check)
 bun run check
 
 # Auto-fix formatting issues
@@ -132,9 +137,9 @@ Key Biome rules configured in `biome.json`:
 bun run build
 
 # Build using Node.js (instead of Bun runtime)
-bun run build:node
+bun run build
 
-# Desktop app (Electron)
+# Desktop app (Electrobun)
 bun run build:desktop
 
 # Mobile builds
@@ -313,9 +318,8 @@ Install the [Biome VS Code extension](https://marketplace.visualstudio.com/items
 milady/
 ├── apps/
 │   ├── app/                 # Desktop/mobile app (Capacitor + React)
-│   │   ├── electron/        # Electron desktop wrapper
+│   │   ├── electrobun/      # Electrobun desktop wrapper
 │   │   └── src/             # React UI components
-│   └── chrome-extension/    # Browser extension
 ├── deploy/                  # Docker deployment configs
 ├── docs/                    # Documentation site
 ├── packages/                # Workspace packages
@@ -334,7 +338,7 @@ milady/
 │   ├── security/            # Security utilities
 │   ├── services/            # Background services
 │   ├── triggers/            # Trigger system
-│   ├── tui/                 # Terminal UI
+│   ├── tui/                 # Terminal UI (disabled)
 │   └── utils/               # Helper utilities
 ├── test/                    # Test setup, helpers, e2e scripts
 ├── AGENTS.md                # Repository guidelines for agents

@@ -4,14 +4,20 @@ sidebarTitle: "DeepSeek"
 description: "DeepSeek model provider for Milady — DeepSeek-V3 and DeepSeek-R1 reasoning models."
 ---
 
+<Warning>
+This plugin is not yet available in the Milady plugin registry. To use DeepSeek models today, configure them through the [OpenRouter plugin](/plugin-registry/llm/openrouter) using the appropriate model ID.
+</Warning>
+
 The DeepSeek plugin connects Milady agents to DeepSeek's API, providing access to DeepSeek-V3 (general-purpose) and DeepSeek-R1 (reasoning-focused) models at competitive pricing.
+
+> **On-demand plugin.** This plugin is resolved from the remote elizaOS plugin registry and auto-installs when its API key is detected. It is not included in Milady's bundled `plugins.json` index.
 
 **Package:** `@elizaos/plugin-deepseek`
 
 ## Installation
 
 ```bash
-milady plugins install deepseek
+milady plugins install @elizaos/plugin-deepseek
 ```
 
 ## Auto-Enable
@@ -58,8 +64,7 @@ DeepSeek-V3 is a mixture-of-experts model with 671B parameters (37B active). Dee
 | elizaOS Model Type | DeepSeek Model |
 |-------------------|---------------|
 | `TEXT_SMALL` | `deepseek-chat` |
-| `TEXT_LARGE` | `deepseek-chat` |
-| `TEXT_REASONING_LARGE` | `deepseek-reasoner` |
+| `TEXT_LARGE` | `deepseek-chat` or `deepseek-reasoner` (configure the large slot) |
 
 ## Features
 
@@ -73,15 +78,12 @@ DeepSeek-V3 is a mixture-of-experts model with 671B parameters (37B active). Dee
 
 ## DeepSeek-R1 Reasoning
 
-The `deepseek-reasoner` model produces a `<think>` block containing its reasoning chain before the final answer. Milady exposes this through the standard reasoning model type:
+The `deepseek-reasoner` model produces a `<think>` block containing its reasoning chain before the final answer. Configure the **large** text slot to `deepseek-reasoner`, then use `TEXT_LARGE`:
 
 ```typescript
-const response = await runtime.useModel("TEXT_REASONING_LARGE", {
+const response = await runtime.useModel("TEXT_LARGE", {
   prompt: "Prove that there are infinitely many prime numbers.",
 });
-
-console.log(response.reasoning); // The <think> chain
-console.log(response.text);      // The final answer
 ```
 
 ## Local DeepSeek via Ollama
@@ -106,4 +108,4 @@ DeepSeek-V3 costs a fraction of GPT-4o at comparable quality for most tasks.
 - [OpenRouter Plugin](/plugin-registry/llm/openrouter) — Access DeepSeek via OpenRouter
 - [Groq Plugin](/plugin-registry/llm/groq) — Fast inference alternative
 - [Ollama Plugin](/plugin-registry/llm/ollama) — Run DeepSeek locally
-- [Model Providers Guide](/model-providers) — Compare all providers
+- [Model Providers](/runtime/models) — Compare all providers

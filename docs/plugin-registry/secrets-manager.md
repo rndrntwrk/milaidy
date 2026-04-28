@@ -6,7 +6,7 @@ description: "Secure secret storage, environment variable mapping, runtime secre
 
 The Secrets Manager plugin provides secure, encrypted storage for API keys and other sensitive configuration values. It is loaded early in the startup sequence — before any connector or provider plugins — so secrets are available at plugin initialization time.
 
-**Package:** `@elizaos/plugin-secrets-manager` (core plugin — always loaded)
+**Package:** `@elizaos/plugin-secrets-manager` (statically imported — available but not in the default core plugin set; may be re-enabled in a future release)
 
 ## Overview
 
@@ -26,7 +26,9 @@ Navigate to **Agent → Settings → Secrets** and add key-value pairs.
 ### Via the CLI
 
 ```bash
-milady config set secrets.OPENAI_API_KEY sk-...
+# Open the config file in your editor
+$EDITOR "$(milady config path)"
+# Add the key under the "secrets" section
 ```
 
 ### Via Configuration File
@@ -36,7 +38,7 @@ Secrets can be included in `milady.json` (not recommended for production — use
 ```json
 {
   "secrets": {
-    "OPENAI_API_KEY": "sk-...",
+    "OPENAI_API_KEY": "<OPENAI_API_KEY>",
     "TELEGRAM_BOT_TOKEN": "123456:ABC..."
   }
 }
@@ -115,10 +117,11 @@ The actual secret value is never logged.
 
 ## Configuration
 
-| Setting | Description | Default |
-|---------|-------------|---------|
-| `secrets.encryption` | Enable encryption at rest | `true` |
-| `secrets.auditLog` | Enable access audit logging | `true` |
+| Environment Variable | Description | Default |
+|---------------------|-------------|---------|
+| `ENABLE_ENCRYPTION` | Enable encryption at rest | `true` |
+| `ENCRYPTION_SALT` | Custom salt for encryption key derivation | Auto-generated |
+| `ENABLE_ACCESS_LOGGING` | Enable access audit logging | `true` |
 
 ## Related
 
