@@ -519,6 +519,14 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
+      - name: Generate eliza i18n keyword data
+        # eliza/packages/shared/src/i18n/keyword-matching.ts imports from
+        # ./generated/validation-keyword-data.js, which is gitignored and
+        # produced by packages/shared/scripts/generate-keywords.mjs. The
+        # Debian build runs a Vite/Rolldown production build via
+        # debian/rules and will fail to resolve the generated module on a
+        # fresh checkout unless this step runs first.
+        run: node eliza/packages/app-core/scripts/ensure-shared-i18n-data.mjs
       - name: Stage Debian packaging
         run: |
           rm -rf debian
