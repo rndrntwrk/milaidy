@@ -400,6 +400,7 @@
     "@elizaos/plugin-rolodex": "2.0.0-alpha.10",
     "@elizaos/plugin-discord": "workspace:*",
     "@elizaos/plugin-knowledge": "workspace:*",
+    "@elizaos/plugin-openai": "workspace:*",
     "@elizaos/plugin-sql": "workspace:*",
     "@elizaos/plugin-telegram": "workspace:*",
     "@elizaos/core": "workspace:*",
