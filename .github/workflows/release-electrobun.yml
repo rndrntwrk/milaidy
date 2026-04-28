@@ -615,6 +615,25 @@ jobs:
         run: |
           node eliza/packages/shared/scripts/generate-keywords.mjs --target ts
           test -f eliza/packages/shared/src/i18n/generated/validation-keyword-data.js
+          # Bun's per-package workspace cache (node_modules/.bun/<spec>/node_modules/<pkg>/)
+          # is populated at `bun install` time. On Windows it doesn't symlink to
+          # the workspace source like Linux/macOS do, so the keyword data we
+          # just generated never reaches the cached copy of @elizaos/shared
+          # that subsequent bun-build / Rolldown-bundling steps consume —
+          # leading to "Could not resolve './generated/validation-keyword-data.js'"
+          # in keyword-matching.ts. Mirror the generated files into every
+          # bun-cache location for @elizaos/shared so resolution succeeds.
+          src_generated="eliza/packages/shared/src/i18n/generated"
+          if [ -d node_modules/.bun ]; then
+            while IFS= read -r cache_pkg_dir; do
+              [ -d "$cache_pkg_dir" ] || continue
+              cache_generated="$cache_pkg_dir/src/i18n/generated"
+              mkdir -p "$cache_generated"
+              cp -f "$src_generated"/validation-keyword-data.ts "$cache_generated/" 2>/dev/null || true
+              cp -f "$src_generated"/validation-keyword-data.js "$cache_generated/" 2>/dev/null || true
+              echo "[release] mirrored keyword data to $cache_generated"
+            done < <(find node_modules/.bun -maxdepth 4 -type d -path "*@elizaos+shared*/node_modules/@elizaos/shared" 2>/dev/null)
+          fi
           if [ -d eliza/packages/schemas ] && [ -f eliza/packages/schemas/buf.gen.yaml ]; then
             pushd eliza/packages/schemas
             for attempt in 1 2 3; do

@@ -29,12 +29,28 @@ android_app_import {
     // (capital M) is wrong — packages/apps/Messaging/Android.bp declares
     // `name: "messaging"` (lowercase). Same caveat for any future addition.
     overrides: [
+        // Role apps Milady takes over.
         "Launcher3",
         "Launcher3QuickStep",
+        "Trebuchet",
         "Dialer",
         "messaging",
         "Messaging",
         "Contacts",
-        "Trebuchet",
+        // Stripped AOSP defaults that ship via /product/app/. Without an
+        // override here, /product/app/Browser2/Browser2.apk and friends
+        // leak in even when our PRODUCT_PACKAGES -= line lists them —
+        // the strip is only honored within the same product-inherit chain.
+        "Browser2",
+        "Calendar",
+        "Camera2",
+        "DeskClock",
+        "Email",
+        "Gallery2",
+        "Music",
+        "QuickSearchBox",
+        "Provision",
+        "ManagedProvisioning",
+        "SetupWizard",
     ],
 }
