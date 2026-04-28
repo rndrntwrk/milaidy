@@ -495,6 +495,114 @@ export function validateDefaultPermissions(vendorDir) {
   console.log("[miladyos:validate] Permission XML checks passed.");
 }
 
+/**
+ * The Phase-C agent domain (`milady_agent`) is the SELinux box the
+ * priv-app drops the on-device agent process into. The .te file is the
+ * single source of truth for that contract — every assertion below
+ * pins one load-bearing line so a future "small cleanup" PR can't
+ * silently widen the envelope.
+ *
+ * See os/android/vendor/milady/sepolicy/README.md for the design.
+ */
+export function validateSepolicy(vendorDir) {
+  const fileContexts = read(path.join(vendorDir, "sepolicy", "file_contexts"));
+  // The two label patterns must both be present — the bin/ subdir gets
+  // the exec_type, the rest of the agent dir gets the data_type. Without
+  // either, the domain transition can never fire (no exec_type) or the
+  // agent has no writable scratch (no data_type).
+  assertIncludes(
+    fileContexts,
+    "milady_agent_exec",
+    "vendor/milady sepolicy/file_contexts",
+  );
+  assertIncludes(
+    fileContexts,
+    "milady_agent_data",
+    "vendor/milady sepolicy/file_contexts",
+  );
+
+  const tePath = path.join(vendorDir, "sepolicy", "milady_agent.te");
+  assertFile(tePath, "vendor/milady sepolicy milady_agent.te");
+  const te = read(tePath);
+
+  // Type declarations. `coredomain` is required because the agent runs
+  // out of /data (a core partition) and the parent domain is itself
+  // coredomain — without it CoredomainViolations rejects the policy.
+  assertMatches(
+    te,
+    /\btype\s+milady_agent\b[^;]*\bdomain\b[^;]*\bcoredomain\b[^;]*;/,
+    "milady_agent.te",
+    "type milady_agent, domain, coredomain;",
+  );
+  // milady_agent_exec must be exec_type for the domain transition to
+  // even be expressible, and must inherit data_file_type +
+  // core_data_file_type so it survives sepolicy_test's path-attribute
+  // checks against /data/.
+  assertMatches(
+    te,
+    /\btype\s+milady_agent_exec\b[^;]*\bexec_type\b[^;]*\bdata_file_type\b[^;]*\bcore_data_file_type\b[^;]*;/,
+    "milady_agent.te",
+    "type milady_agent_exec, exec_type, file_type, data_file_type, core_data_file_type;",
+  );
+  assertMatches(
+    te,
+    /\btype\s+milady_agent_data\b[^;]*\bdata_file_type\b[^;]*\bcore_data_file_type\b[^;]*;/,
+    "milady_agent.te",
+    "type milady_agent_data, file_type, data_file_type, core_data_file_type;",
+  );
+
+  // app_domain() macro gives the standard appdomain hooks; without it
+  // the agent can't even allocate appdomain_tmpfs. net_domain() is what
+  // actually opens the loopback TCP listener.
+  assertIncludes(te, "app_domain(milady_agent)", "milady_agent.te");
+  assertIncludes(te, "net_domain(milady_agent)", "milady_agent.te");
+
+  // The whole point of Phase C: priv_app -> milady_agent on execve of
+  // a milady_agent_exec file. Without this auto-trans the child runs
+  // in priv_app and the domain is dead weight.
+  assertMatches(
+    te,
+    /\bdomain_auto_trans\(\s*priv_app\s*,\s*milady_agent_exec\s*,\s*milady_agent\s*\)/,
+    "milady_agent.te",
+    "domain_auto_trans(priv_app, milady_agent_exec, milady_agent)",
+  );
+
+  // The agent must be able to read+exec its bundle and read+write its
+  // state dir. These are the load-bearing allow rules; if either is
+  // missing the agent can't start.
+  assertMatches(
+    te,
+    /\ballow\s+milady_agent\s+milady_agent_exec\s*:\s*file\b[^;]*\bexecute\b/,
+    "milady_agent.te",
+    "allow milady_agent milady_agent_exec:file ... execute",
+  );
+  assertMatches(
+    te,
+    /\ballow\s+milady_agent\s+milady_agent_data\s*:\s*file\b[^;]*\bcreate_file_perms\b/,
+    "milady_agent.te",
+    "allow milady_agent milady_agent_data:file create_file_perms",
+  );
+
+  // Neverallow rules — the security envelope. These must stay; the
+  // agent runs as the priv-app's UID with no Linux caps, and it must
+  // not be able to escape its own data dir or transition to another
+  // domain.
+  assertMatches(
+    te,
+    /\bneverallow\s+milady_agent\s+self\s*:\s*capability\b/,
+    "milady_agent.te",
+    "neverallow milady_agent self:capability *",
+  );
+  assertMatches(
+    te,
+    /\bneverallow\s+milady_agent\b[\s\S]*?:\s*process\s*\{[^}]*\btransition\b/,
+    "milady_agent.te",
+    "neverallow milady_agent {domain -milady_agent ...}:process { transition ... }",
+  );
+
+  console.log("[miladyos:validate] Sepolicy checks passed.");
+}
+
 function manifestElementBlocks(manifest, elementName) {
   const blocks = [];
   const lines = manifest.split(/\r?\n/);
@@ -906,6 +1014,7 @@ export function main(argv = process.argv.slice(2)) {
   validateXmlFiles(args.vendorDir);
   validateProductLayer(args.vendorDir);
   validateDefaultPermissions(args.vendorDir);
+  validateSepolicy(args.vendorDir);
   validateApk(args.apk);
   if (args.aospRoot) {
     validateAospRoot(args.aospRoot);

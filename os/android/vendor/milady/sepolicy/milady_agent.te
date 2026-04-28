@@ -1,0 +1,159 @@
+###
+### Milady on-device agent domain.
+###
+### The Milady priv-app launches a child process (`bun` + the elizaOS
+### agent bundle) from its own data dir to host the agent runtime
+### locally. Without a domain transition that child inherits the full
+### priv_app policy — far broader than the agent actually needs.
+### `milady_agent` is a narrow box just for the agent process: it can
+### serve loopback HTTP, read its own bundle, and read/write its own
+### state dir. Nothing else.
+###
+### Phase C of docs/agent-on-mobile.md. See README in this directory for
+### how the labels reach the files at runtime (restorecon from the
+### MiladyAgentService Java code, since installd does not consult
+### file_contexts for paths under /data/data/<pkg>/).
+###
+
+#####################################
+# Types
+
+# The domain the agent process runs in. coredomain because the
+# entrypoint binary lives on /data (which is core-managed), and the
+# parent (priv_app) is itself a coredomain.
+type milady_agent, domain, coredomain;
+
+# The exec_type for the bun binary (and its musl loader / libstdc++ /
+# libgcc_s shared objects) that the priv_app launches. Tagged with
+# data_file_type + core_data_file_type so it passes
+# TestDataTypeViolations / TestCoreDataTypeViolations against paths
+# under /data, but deliberately NOT app_data_file_type — that attribute
+# is reserved for installd-managed app sandbox files (enforced by
+# TestAppDataTypeViolations).
+type milady_agent_exec, exec_type, file_type, data_file_type, core_data_file_type;
+
+# The agent's writable runtime / state dir
+# (/data/data/com.miladyai.milady/files/agent/{state,logs,db,...}).
+# Same data_file_type / core_data_file_type story as the exec type.
+type milady_agent_data, file_type, data_file_type, core_data_file_type;
+
+#####################################
+# Domain bootstrap
+
+# Standard appdomain hooks (typeattribute appdomain, tmpfs labelling,
+# ptrace neverallows, the usual app boilerplate).
+app_domain(milady_agent)
+
+# Loopback TCP. The bun runtime serves on 127.0.0.1:31337. SELinux
+# cannot pin the bind to that exact host:port pair — netd / the app's
+# own bind() call do that — so we grant the netdomain primitives and
+# rely on the agent code itself to bind to loopback only.
+net_domain(milady_agent)
+
+#####################################
+# Domain transition: priv_app -> milady_agent
+#
+# When the Milady priv_app execve()s a file labeled milady_agent_exec
+# (the bun binary, dropped under /data/data/<pkg>/files/agent/bin/),
+# the kernel auto-transitions the new process into milady_agent.
+# Without this, the child inherits priv_app and the whole exercise
+# is moot.
+domain_auto_trans(priv_app, milady_agent_exec, milady_agent)
+
+#####################################
+# Read & exec the agent bundle
+#
+# The agent process needs to mmap+execute the bun binary and its
+# musl loader / libstdc++ / libgcc_s shared objects, all labeled
+# milady_agent_exec. `entrypoint` is granted by domain_auto_trans
+# already; the rest covers dlopen()-style loads.
+allow milady_agent milady_agent_exec:file { r_file_perms execute };
+allow milady_agent milady_agent_exec:dir r_dir_perms;
+
+#####################################
+# Read & write the agent state dir
+allow milady_agent milady_agent_data:dir create_dir_perms;
+allow milady_agent milady_agent_data:file create_file_perms;
+allow milady_agent milady_agent_data:lnk_file { create_file_perms read };
+
+# The agent dir's parent (the priv_app's files/ dir) is privapp_data_file.
+# Allow search so getcwd / open by absolute path works.
+allow milady_agent privapp_data_file:dir { search getattr };
+
+# The priv_app drops the agent files into place. Reading them through
+# the parent's view (e.g. for early bootstrap before the child ever
+# starts) needs `use` on the inherited fd.
+allow milady_agent priv_app:fd use;
+
+# Read the priv_app bundle's own apk metadata (zygote-style symlink
+# traversal lands here on some bionic paths). r_file_perms only.
+allow milady_agent privapp_data_file:file r_file_perms;
+allow milady_agent privapp_data_file:lnk_file r_file_perms;
+
+#####################################
+# Logging
+#
+# The agent writes to stderr/stdout, which the parent service forwards
+# to logcat — no direct logd access needed. Quiet known noise from
+# bionic's startup (proc / sysfs reads) so the dmesg | grep avc gate
+# stays signal-only.
+dontaudit milady_agent proc:file read;
+dontaudit milady_agent sysfs:file read;
+dontaudit milady_agent sysfs:dir read;
+dontaudit milady_agent self:capability *;
+
+#####################################
+# Neverallow rules — the security envelope
+###
+
+# No capabilities. The agent runs as the priv_app's UID, fully in
+# user space. Any cap acquisition is a bug.
+neverallow milady_agent self:capability *;
+neverallow milady_agent self:capability2 *;
+
+# No file access outside its own envelope. The agent must read its
+# bundle and read/write its data dir. Anything else is out.
+# privapp_data_file is permitted (search/getattr/r_file_perms above)
+# because that's the agent dir's parent — without it the agent can't
+# resolve its own path.
+neverallow milady_agent ~{
+  milady_agent_exec
+  milady_agent_data
+  privapp_data_file
+  proc
+  sysfs
+  appdomain_tmpfs
+}:file { create write append unlink link rename setattr };
+
+# No raw network sockets — only TCP / UDP via the netdomain attribute
+# (which gives stream + dgram). Belt and suspenders against the agent
+# being used as a packet-socket pivot.
+neverallow milady_agent self:{
+  packet_socket
+  rawip_socket
+  netlink_socket
+  netlink_route_socket
+  netlink_audit_socket
+  netlink_kobject_uevent_socket
+} *;
+
+# No transitions out of milady_agent except via crash_dump (debug) or
+# back to itself. In particular, do not let the agent re-enter priv_app
+# or hop into shell/su domains.
+neverallow milady_agent { domain -milady_agent -crash_dump }:process { transition dyntransition };
+
+# No service registration. The agent talks via loopback HTTP, not the
+# binder service manager.
+neverallow milady_agent service_manager_type:service_manager add;
+
+# No property writes — the agent has no business touching system
+# properties. Mirrors priv_app.te's own neverallow set.
+neverallow milady_agent property_socket:sock_file write;
+neverallow milady_agent property_type:property_service set;
+
+# No kernel printk buffer access.
+neverallow milady_agent kmsg_device:chr_file no_rw_file_perms;
+
+# No cgroup manipulation.
+neverallow milady_agent cgroup:file *;
+neverallow milady_agent cgroup_v2:file *;

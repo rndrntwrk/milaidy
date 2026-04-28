@@ -1,13 +1,23 @@
 # MiladyOS file_contexts.
 #
-# Empty for now. /data/milady (created by init.milady.rc) gets the
-# default `system_data_file` label, which the system_app domain can
-# read/write — sufficient for the Milady process's scratch directory.
+# Vendor file_contexts entries merge into the device's vendor_file_contexts
+# at build time (see BOARD_VENDOR_SEPOLICY_DIRS in milady_common.mk).
 #
-# Adding a custom type here also requires:
-#   1. A .te declaration under sepolicy/public/ (private types aren't
-#      visible to vendor file_contexts).
-#   2. The type to inherit `data_file_type` AND `core_data_file_type`
-#      attributes (sepolicy_test enforces this for /data/* paths).
-# Until we have a concrete need for narrower labelling, the default is
-# the right answer.
+# Paths under /data/data/<pkg>/ are NOT labeled by file_contexts at install
+# time — installd labels them via seapp_contexts (priv-apps land on
+# `privapp_data_file`). The labels below take effect only when the agent
+# service explicitly invokes restorecon(8) / SELinux.restoreconRecursive on
+# the agent runtime dir after copying the bun binary out of assets/. See
+# Phase B (MiladyAgentService) and the README in this directory.
+#
+# These two patterns separate the agent runtime files into:
+#   1. Executables (bun, ld-musl, libstdc++, libgcc_s) — labeled
+#      `milady_agent_exec`. Used as the entrypoint that triggers the
+#      domain transition from priv_app -> milady_agent.
+#   2. Everything else under the agent dir — labeled `milady_agent_data`
+#      (writable scratch the child process owns).
+#
+# The order matters: more specific patterns (the bin subdirectory) come
+# first so they win over the broader catch-all rule.
+/data/data/com\.miladyai\.milady/files/agent/bin(/.*)?       u:object_r:milady_agent_exec:s0
+/data/data/com\.miladyai\.milady/files/agent(/.*)?           u:object_r:milady_agent_data:s0
