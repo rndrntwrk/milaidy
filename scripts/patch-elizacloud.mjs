@@ -59,6 +59,12 @@ function fail(msg) {
   process.exit(1);
 }
 
+export function missingDistEntrypoints(pluginRoot) {
+  return DIST_ENTRYPOINTS.filter(
+    (relPath) => !fs.existsSync(path.join(pluginRoot, relPath)),
+  );
+}
+
 function distHasMarkers(pluginRoot, markers) {
   return DIST_ENTRYPOINTS.every((relPath) => {
     const entrypointPath = path.join(pluginRoot, relPath);
@@ -99,6 +105,17 @@ export function main() {
     fail(`plugin package.json missing at ${pkgJsonPath}`);
   }
   const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, "utf8"));
+
+  const missingEntrypoints = missingDistEntrypoints(pluginRoot);
+  if (missingEntrypoints.length > 0) {
+    log(
+      `built dist entrypoints missing (${missingEntrypoints.join(
+        ", ",
+      )}) - skipping bridge patch until plugin build artifacts exist`,
+    );
+    return;
+  }
+
   const usesLegacyAiSdkObjectGeneration =
     distUsesLegacyAiSdkObjectGeneration(pluginRoot);
   if (pkg.version !== PINNED_VERSION) {

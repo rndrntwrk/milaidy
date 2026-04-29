@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import {
   distAlreadyHasBridgeFixes,
   distUsesLegacyAiSdkObjectGeneration,
+  missingDistEntrypoints,
 } from "./patch-elizacloud.mjs";
 
 function writeFile(filePath: string, contents: string) {
@@ -14,6 +15,23 @@ function writeFile(filePath: string, contents: string) {
 }
 
 describe("patch-elizacloud", () => {
+  it("detects source-only installs without built dist artifacts", () => {
+    const pluginRoot = fs.mkdtempSync(path.join(os.tmpdir(), "milady-patch-"));
+
+    writeFile(
+      path.join(pluginRoot, "package.json"),
+      JSON.stringify({
+        name: "@elizaos/plugin-elizacloud",
+        version: "2.0.0-alpha.8",
+      }),
+    );
+
+    expect(missingDistEntrypoints(pluginRoot)).toEqual([
+      "dist/node/index.node.js",
+      "dist/cjs/index.node.cjs",
+    ]);
+  });
+
   it("detects the npm alpha.8 legacy AI SDK object-generation build", () => {
     const pluginRoot = fs.mkdtempSync(path.join(os.tmpdir(), "milady-patch-"));
 
