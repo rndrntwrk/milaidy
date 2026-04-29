@@ -76,7 +76,20 @@ async function locatorVisible(
   timeoutMs: number = READY_CHECK_TIMEOUT_MS,
 ): Promise<boolean> {
   try {
-    await locator.first().waitFor({ state: "visible", timeout: timeoutMs });
+    await expect
+      .poll(
+        async () => {
+          const count = await locator.count();
+          for (let index = 0; index < count; index += 1) {
+            if (await locator.nth(index).isVisible()) {
+              return true;
+            }
+          }
+          return false;
+        },
+        { timeout: timeoutMs },
+      )
+      .toBe(true);
     return true;
   } catch {
     return false;
@@ -207,6 +220,40 @@ function emptyWalletTradingProfile(url: URL) {
   };
 }
 
+function catalogApp({
+  name,
+  displayName,
+  description,
+  category,
+}: {
+  name: string;
+  displayName: string;
+  description: string;
+  category: string;
+}) {
+  return {
+    name,
+    displayName,
+    description,
+    category,
+    launchType: "local",
+    launchUrl: null,
+    icon: null,
+    heroImage: null,
+    capabilities: [],
+    stars: 0,
+    repository: "",
+    latestVersion: null,
+    supports: { v0: false, v1: false, v2: true },
+    npm: {
+      package: name,
+      v0Version: null,
+      v1Version: null,
+      v2Version: null,
+    },
+  };
+}
+
 /** Installs baseline API routes for smoke tests before flow-specific overrides. */
 export async function installDefaultAppRoutes(page: Page): Promise<void> {
   await page.route("**/api/health", async (route) => {
@@ -254,6 +301,43 @@ export async function installDefaultAppRoutes(page: Page): Promise<void> {
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({ sessions: [] }),
+    });
+  });
+
+  await page.route("**/api/catalog/apps", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([
+        catalogApp({
+          name: "@elizaos/app-companion",
+          displayName: "Companion",
+          description: "The companion overlay shell for ambient agent presence.",
+          category: "shell",
+        }),
+      ]),
+    });
+  });
+
+  await page.route("**/api/lifeops/app-state", async (route) => {
+    if (!["GET", "PUT"].includes(route.request().method())) {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        enabled: true,
+        priorityScoring: {
+          enabled: true,
+          model: null,
+        },
+      }),
     });
   });
 

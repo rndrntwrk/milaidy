@@ -424,3 +424,87 @@ export async function mockCloudApi(
     },
   };
 }
+
+export interface RemoteAgentMockOptions {
+  /** Status payload returned by /api/status. Default: running, agentName "remote-agent". */
+  status?: {
+    state?: string;
+    agentName?: string;
+    model?: string;
+    uptime?: number;
+    memories?: number;
+  };
+  /** /api/stream/settings response. Default: ok=true, settings={}. */
+  streamSettings?: { ok?: boolean; settings?: Record<string, unknown> };
+}
+
+export interface RemoteAgentMockState {
+  /** Authorization header values seen across all routed requests. */
+  seenAuthHeaders(): string[];
+  /** Total request count to the mocked URL across all paths. */
+  totalRequests(): number;
+}
+
+/**
+ * Stub /api/health, /api/status, and /api/stream/settings on an arbitrary
+ * remote agent base URL so AgentProvider's health probes succeed without
+ * touching the network.
+ */
+export async function mockRemoteAgent(
+  context: BrowserContext,
+  baseUrl: string,
+  opts: RemoteAgentMockOptions = {},
+): Promise<RemoteAgentMockState> {
+  const normalized = baseUrl.replace(/\/+$/, "");
+  const seenAuth: string[] = [];
+  let total = 0;
+  const status = {
+    state: opts.status?.state ?? "running",
+    agentName: opts.status?.agentName ?? "remote-agent",
+    model: opts.status?.model ?? "remote-model",
+    uptime: opts.status?.uptime ?? 100,
+    memories: opts.status?.memories,
+  };
+  const streamSettings = {
+    ok: opts.streamSettings?.ok ?? true,
+    settings: opts.streamSettings?.settings ?? {},
+  };
+
+  const matcher = new RegExp(
+    `^${normalized.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/api/`,
+  );
+
+  await context.route(matcher, async (route) => {
+    const request = route.request();
+    total += 1;
+    const auth = request.headers().authorization ?? "";
+    seenAuth.push(auth);
+    const url = new URL(request.url());
+    if (url.pathname === "/api/health") {
+      await jsonResponse(route, 200, {
+        status: "ok",
+        ready: true,
+        uptime: status.uptime,
+      });
+      return;
+    }
+    if (url.pathname === "/api/status") {
+      await jsonResponse(route, 200, status);
+      return;
+    }
+    if (url.pathname === "/api/stream/settings") {
+      await jsonResponse(route, 200, streamSettings);
+      return;
+    }
+    await jsonResponse(route, 200, { ok: true });
+  });
+
+  return {
+    seenAuthHeaders() {
+      return [...seenAuth];
+    },
+    totalRequests() {
+      return total;
+    },
+  };
+}
