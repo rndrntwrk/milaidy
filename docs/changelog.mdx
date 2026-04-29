@@ -3,6 +3,46 @@ title: Changelog
 description: What's new in Milady — features, improvements, and fixes.
 ---
 
+<Update label="2026-04-29" description="Week of April 29; verification verdicts return to chat, first-party app protection, MiladyOS local agent on Android, open-in-cloud from the homepage" tags={["Feature", "Update", "Fix"]}>
+
+## Verification verdicts return to chat
+
+When your agent spawns a [coding agent](/guides/coding-swarms) to build a new app or plugin (`APP.create`, `PLUGIN.create`), the verification verdict — pass or fail — is now posted back into the originating chat room when the run completes. Previously the verdict was visible to ops via SSE/WS but silently dropped from the conversation, leaving you without confirmation that your request had landed. Verdicts are deduped and the bridge cleans up its subscriptions correctly when sessions end.
+
+## First-party app protection
+
+The runtime now protects first-party [apps](/dashboard/apps) — Companion, Wallet, LifeOps, Browser Bridge, and others — from being clobbered at load time by a third-party package that happens to share a name. A new protected-apps resolver unions your `MILADY_PROTECTED_APPS` environment list with first-party app names from the workspace and rejects clobber attempts in the loader. Scope-aware lookups also catch attempts like `@evil/app-companion` masquerading as the first-party `app-companion`.
+
+## Browser verification fails closed
+
+The [app verification](/dashboard/apps) browser-check now fails closed if `puppeteer-core` isn't available, so missing dependencies can't quietly skip the check. If you intentionally run without browser verification, opt out explicitly by setting `MILADY_BROWSER_VERIFY_OPTIONAL=1`.
+
+## MiladyOS local agent on Android
+
+[MiladyOS](/architecture) builds now run the agent as its own SELinux-confined process. A dedicated `milady_agent` domain transitions the runtime out of the priv-app sandbox into a tighter policy scoped to the agent's exec/data directories and loopback networking. Phase B of the same landing also relabels the on-disk agent tree after extraction so the policy actually sticks. Net effect: the agent runs with only the kernel-enforced capabilities it needs, not full priv-app reach.
+
+## Open in cloud from the homepage
+
+A new **Open in cloud** button on the Milady homepage takes you from a marketing page to a running [cloud agent](/guides/cloud) in one flow. Click it and a popup opens, signs you in, provisions (or reuses) a cloud agent, polls the provision job, and redirects the popup to your agent UI when it's ready — no manual dashboard hop. The button shows idle, preparing, and cancellable states throughout, and cleanly handles popup-closed and timeout cases.
+
+## Updates
+
+- **Coding-agent model preferences propagate to spawned sessions** — When you set Anthropic or OpenAI model preferences in [coding agent settings](/guides/coding-swarms), those choices now flow correctly into the environment of every spawned coding session through the orchestrator's PTY layer. Previously a stale default could leak into long-running sessions.
+- **Computer-use action routing fix** — The action planner now routes computer-use requests (browser navigation, screenshot, click) to the correct handler more reliably, eliminating misroutes that previously sent these requests through generic chat replies.
+- **Gmail email-draft-reply graceful 404** — When your agent tries to draft a reply to a [Gmail](/rest/lifeops) thread that's been deleted or moved, the action now degrades gracefully with a clear message instead of surfacing a Google API 404.
+- **LIFE explicit-intent routing** — LIFE actions now require explicit life-tracking intent in the prompt before routing, so casual phrases like "remember to call mom" no longer trigger the LIFE handler when you meant a simple todo.
+- **Strict execution gaps closed** — Three remaining strict-execution gaps in the action loop have been closed, so multi-step agent runs honor the strict-mode contract end to end.
+- **MANAGE_APP_OPS_MODES action available on mobile** — Mobile builds now declare `MANAGE_APP_OPS_MODES` in their action manifest, exposing app-ops management to your agent on Android and iOS.
+
+## Bug fixes
+
+- Fixed [MiladyOS](/architecture) AOSP cuttlefish builds failing during boot validation — the build pipeline now completes end to end and the boot path is validated automatically
+- Fixed a dependency conflict where `@elizaos/plugin-openai` could pull in a duplicate `@ai-sdk/provider` version on fresh installs — the plugin is now pinned to the workspace
+- Fixed scheduling and activity column repair throwing on databases where the underlying table didn't yet exist — the migration now guards on table existence first
+- Fixed the static asset manifest going out of sync after new hero artwork was added, which could cause missing-image fallbacks in the [apps view](/dashboard/apps)
+
+</Update>
+
 <Update label="2026-04-28" description="Week of April 28; refreshed app heroes, self-correcting action params, LifeOps connector quiet-by-default, MiladyOS role auto-assignment" tags={["Feature", "Update", "Fix"]}>
 
 ## Refreshed app catalog artwork
