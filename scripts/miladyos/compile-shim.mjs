@@ -279,7 +279,9 @@ export function buildLoaderWrapForAbi({
   if (size === 0) {
     throw new Error(`[compile-shim] Produced an empty loader-wrap binary.`);
   }
-  log(`[compile-shim] Built ${target.realLoaderName} for ${abi} (${size} bytes).`);
+  log(
+    `[compile-shim] Built ${target.realLoaderName} for ${abi} (${size} bytes).`,
+  );
   return out;
 }
 

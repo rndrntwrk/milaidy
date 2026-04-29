@@ -18,12 +18,7 @@ describe("compile-shim args", () => {
     // x86_64-only by design.
     expect(args.abis).toEqual(["x86_64"]);
     expect(args.cacheDir).toBe(
-      path.join(
-        os.homedir(),
-        ".cache",
-        "milady-android-agent",
-        "seccomp-shim",
-      ),
+      path.join(os.homedir(), ".cache", "milady-android-agent", "seccomp-shim"),
     );
     expect(args.skipIfPresent).toBe(false);
   });
@@ -81,9 +76,7 @@ describe("compile-shim build invocations", () => {
   let scratchDir: string;
 
   beforeEach(() => {
-    scratchDir = fs.mkdtempSync(
-      path.join(os.tmpdir(), "compile-shim-test-"),
-    );
+    scratchDir = fs.mkdtempSync(path.join(os.tmpdir(), "compile-shim-test-"));
   });
 
   afterEach(() => {
@@ -114,9 +107,7 @@ describe("compile-shim build invocations", () => {
       log: () => {},
       spawn: fakeSpawn,
     });
-    expect(out).toBe(
-      path.join(scratchDir, "x86_64", "libsigsys-handler.so"),
-    );
+    expect(out).toBe(path.join(scratchDir, "x86_64", "libsigsys-handler.so"));
     expect(captured.length).toBeGreaterThan(0);
     const compile = captured[0];
     expect(compile?.args).toContain("-shared");
@@ -150,9 +141,7 @@ describe("compile-shim build invocations", () => {
     });
     // Output filename matches the loader filename it replaces, so the
     // staging step in stage-android-agent.mjs can drop it in place.
-    expect(out).toBe(
-      path.join(scratchDir, "x86_64", "ld-musl-x86_64.so.1"),
-    );
+    expect(out).toBe(path.join(scratchDir, "x86_64", "ld-musl-x86_64.so.1"));
     const compile = captured[0];
     expect(compile?.args).toContain("-static");
     // -static + -Wl,--disable-new-dtags ensure the wrapper has zero
