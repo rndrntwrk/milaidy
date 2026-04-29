@@ -201,14 +201,7 @@ async function writeModelsStrings() {
 </resources>
 `;
   await writeFile(
-    path.join(
-      MODELS_MODULE_DIR,
-      "src",
-      "main",
-      "res",
-      "values",
-      "strings.xml",
-    ),
+    path.join(MODELS_MODULE_DIR, "src", "main", "res", "values", "strings.xml"),
     strings,
   );
 }

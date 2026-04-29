@@ -1,7 +1,7 @@
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 // The script reads files relative to its own location (repoRoot =
 // scripts/../..). To exercise it against a fixture without rewriting
@@ -53,7 +53,9 @@ describe("stage-models-dfm", () => {
       `$1\n    dynamicFeatures = [':models']`,
     );
     expect(after).toContain('namespace = "com.miladyai.milady"');
-    expect(after).toMatch(/namespace = "[^"]+"\n\s+dynamicFeatures = \[':models'\]/);
+    expect(after).toMatch(
+      /namespace = "[^"]+"\n\s+dynamicFeatures = \[':models'\]/,
+    );
   });
 
   it("the DFM AndroidManifest.xml uses install-time delivery (not on-demand)", () => {
