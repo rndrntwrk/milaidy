@@ -637,7 +637,32 @@ export function buildLibllamaForAbi({
     return dst;
   });
 
-  for (const out of [...ggmlOuts, llamaOut]) {
+  // The apothic fork builds with SONAME chains: libllama.so has
+  // SONAME=libllama.so.0 and NEEDED entries pointing at SONAME (e.g.
+  // "libggml.so.0"), not at the unversioned filename. The dynamic linker
+  // matches NEEDED against on-disk SONAME, so we must ship a copy at
+  // libfoo.so.0 (or the linker fails to resolve and dlopen returns NULL).
+  // We do NOT ship the .so.X.Y.Z versioned tail — only the SONAME alias
+  // that NEEDED references.
+  //
+  // Cost: ~5MB per ABI of duplicated content (the .so and .so.0 are
+  // identical). APK build dedupes identical files automatically; even
+  // without dedup this is well under the per-ABI .so budget.
+  const sonameAliases = [];
+  for (const out of [llamaOut, ...ggmlOuts]) {
+    const soname = readSoname(out);
+    if (soname && soname !== path.basename(out)) {
+      const aliasPath = path.join(abiAssetDir, soname);
+      fs.copyFileSync(out, aliasPath);
+      sonameAliases.push(aliasPath);
+      log(
+        `[compile-libllama] Copied ${path.basename(out)} -> ${soname} ` +
+          `(NEEDED-resolution alias for ${abi}).`,
+      );
+    }
+  }
+
+  for (const out of [...ggmlOuts, llamaOut, ...sonameAliases]) {
     const sizeBefore = fs.statSync(out).size;
     const stripped = stripBinary({ filePath: out, zigBin, log });
     if (stripped) {
@@ -784,11 +809,17 @@ export function buildShimForAbi({
 }
 
 /**
- * Find every `libggml*.so` under the build tree. b4500 ships
- *   libggml.so, libggml-cpu.so, libggml-base.so
- * — all of which appear in libllama.so's NEEDED list. Older pins shipped
- * only libggml.so; the script copies whatever it finds so the asset dir
- * always carries the full transitive set.
+ * Find every `libggml*.so` under the build tree. b4500 shipped plain .so
+ * files; the apothic fork (built off b8198) ships SONAME-versioned files
+ * (e.g. `libggml.so.0.9.7`) plus an unversioned symlink chain
+ * (`libggml.so` -> `libggml.so.0` -> `libggml.so.0.9.7`).
+ *
+ * Strategy: collect the unversioned `libggml*.so` symlink (matched by
+ * exact `.so` suffix — `.so.0` and `.so.0.9.7` are skipped) and copy via
+ * `fs.copyFileSync`, which follows the symlink and writes a real file at
+ * the asset destination. The asset dir then carries a regular `.so` file
+ * the dynamic linker can resolve directly via NEEDED entries — no need
+ * to ship the SONAME chain into the APK.
  */
 function locateBuiltGgmlLibs(buildDir) {
   const found = new Set();
@@ -812,7 +843,12 @@ function locateBuiltGgmlLibs(buildDir) {
         }
         stack.push(path.join(dir, entry.name));
       } else if (
-        entry.isFile() &&
+        // Accept both regular files (older pins) and symlinks (b8198+
+        // ships SONAME chains). Match `libggml*.so` exactly — the
+        // `.so.0` / `.so.X.Y.Z` SONAME copies are skipped because we
+        // want the unversioned entry the dynamic linker resolves at
+        // NEEDED-time.
+        (entry.isFile() || entry.isSymbolicLink()) &&
         entry.name.startsWith("libggml") &&
         entry.name.endsWith(".so")
       ) {
@@ -821,6 +857,115 @@ function locateBuiltGgmlLibs(buildDir) {
     }
   }
   return [...found];
+}
+
+/**
+ * Parse the DT_SONAME entry from a shared object's `.dynamic` section
+ * without spawning a subprocess. Returns the SONAME string (e.g.
+ * `"libllama.so.0"`) or `null` when absent or unparseable.
+ *
+ * Why parse manually instead of running `readelf -d`:
+ *   - `readelf` may not be on PATH on every CI/dev host.
+ *   - The script already runs in zig-cc / cmake mode; adding a third
+ *     external dependency is friction.
+ *   - The encoding is well-defined: ELF64, little-endian (zig builds
+ *     always produce LSB), find PT_DYNAMIC via PHDR table, walk
+ *     d_tag/d_un pairs looking for DT_SONAME (5), then index into
+ *     DT_STRTAB (5)'s string table.
+ *
+ * Falls back to null on any parse error so the caller can decide
+ * whether to fail loud (NEEDED missing) or proceed.
+ *
+ * Exported for unit tests.
+ */
+export function readSoname(filePath) {
+  let fd;
+  try {
+    fd = fs.openSync(filePath, "r");
+    const head = Buffer.alloc(64); // ELF64 header is 64 bytes
+    fs.readSync(fd, head, 0, 64, 0);
+    if (
+      head[0] !== 0x7f ||
+      head[1] !== 0x45 ||
+      head[2] !== 0x4c ||
+      head[3] !== 0x46
+    ) {
+      return null; // not ELF
+    }
+    const eiClass = head[4]; // 1=ELF32, 2=ELF64
+    if (eiClass !== 2) return null;
+    const eiData = head[5]; // 1=LSB, 2=MSB
+    if (eiData !== 1) return null;
+    const phoff = Number(head.readBigUInt64LE(0x20));
+    const phentsize = head.readUInt16LE(0x36);
+    const phnum = head.readUInt16LE(0x38);
+
+    // Find PT_DYNAMIC (p_type = 2)
+    const phbuf = Buffer.alloc(phentsize * phnum);
+    fs.readSync(fd, phbuf, 0, phbuf.length, phoff);
+    let dynOff = -1;
+    let dynSize = 0;
+    for (let i = 0; i < phnum; i += 1) {
+      const off = i * phentsize;
+      const ptype = phbuf.readUInt32LE(off);
+      if (ptype === 2) {
+        dynOff = Number(phbuf.readBigUInt64LE(off + 0x08));
+        dynSize = Number(phbuf.readBigUInt64LE(off + 0x20));
+        break;
+      }
+    }
+    if (dynOff < 0) return null;
+
+    const dynBuf = Buffer.alloc(dynSize);
+    fs.readSync(fd, dynBuf, 0, dynSize, dynOff);
+    let sonameStrOff = -1;
+    let strtabAddr = -1;
+    let strtabSize = -1;
+    // Walk DT_NEEDED (1), DT_STRTAB (5), DT_SONAME (14), DT_STRSZ (10)
+    for (let i = 0; i < dynSize; i += 16) {
+      const dTag = Number(dynBuf.readBigInt64LE(i));
+      const dUn = Number(dynBuf.readBigUInt64LE(i + 8));
+      if (dTag === 0) break; // DT_NULL
+      if (dTag === 14) sonameStrOff = dUn; // DT_SONAME
+      if (dTag === 5) strtabAddr = dUn; // DT_STRTAB
+      if (dTag === 10) strtabSize = dUn; // DT_STRSZ
+    }
+    if (sonameStrOff < 0 || strtabAddr < 0 || strtabSize < 0) return null;
+
+    // DT_STRTAB is a virtual address; we need the file offset. Walk PHDRs
+    // again to find the LOAD segment containing strtabAddr.
+    let strtabFileOff = -1;
+    for (let i = 0; i < phnum; i += 1) {
+      const off = i * phentsize;
+      const ptype = phbuf.readUInt32LE(off);
+      if (ptype !== 1) continue; // PT_LOAD
+      const pOffset = Number(phbuf.readBigUInt64LE(off + 0x08));
+      const pVaddr = Number(phbuf.readBigUInt64LE(off + 0x10));
+      const pFilesz = Number(phbuf.readBigUInt64LE(off + 0x20));
+      if (strtabAddr >= pVaddr && strtabAddr < pVaddr + pFilesz) {
+        strtabFileOff = pOffset + (strtabAddr - pVaddr);
+        break;
+      }
+    }
+    if (strtabFileOff < 0) return null;
+
+    const strBuf = Buffer.alloc(strtabSize);
+    fs.readSync(fd, strBuf, 0, strtabSize, strtabFileOff);
+    if (sonameStrOff >= strtabSize) return null;
+    const end = strBuf.indexOf(0, sonameStrOff);
+    if (end < 0) return null;
+    return strBuf.toString("utf8", sonameStrOff, end);
+  } catch {
+    return null;
+  } finally {
+    if (fd !== undefined) {
+      try {
+        fs.closeSync(fd);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
 }
 
 function locateBuiltLib(buildDir, soName) {
@@ -856,7 +1001,12 @@ function locateBuiltLib(buildDir, soName) {
           continue;
         }
         stack.push(path.join(dir, entry.name));
-      } else if (entry.isFile() && entry.name === soName) {
+      } else if (
+        // Accept files OR symlinks — the apothic fork builds with
+        // SONAME chains where the unversioned `lib*.so` is a symlink.
+        (entry.isFile() || entry.isSymbolicLink()) &&
+        entry.name === soName
+      ) {
         return path.join(dir, entry.name);
       }
     }

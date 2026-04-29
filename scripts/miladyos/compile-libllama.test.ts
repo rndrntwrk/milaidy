@@ -508,12 +508,20 @@ describe("compile-libllama shim build invocation", () => {
 
 describe("compile-libllama pinned constants", () => {
   it("matches the SHA referenced in eliza/packages/agent/src/runtime/aosp-llama-adapter.ts", () => {
-    // b4500 — the first stable tag exposing both the post-rewrite sampler
-    // chain API and the renamed model/vocab API the adapter binds. b3490
-    // (the spike pin) shipped neither and dlsym would have returned NULL
-    // for every renamed symbol.
-    expect(LLAMA_CPP_TAG).toBe("b4500");
-    expect(LLAMA_CPP_COMMIT).toBe("a133566d34a1dd3693c504786963bf1b7b7d8c0e");
+    // apothic/llama.cpp-1bit-turboquant @ main-b8198-b2b5273 — the fork
+    // that adds TBQ3_0 / TBQ4_0 KV-cache codecs (CPU + CUDA). Based on
+    // upstream b8198, so it inherits the post-2024 sampler-chain API and
+    // the renamed model/vocab API the adapter binds against. The matching
+    // Bonsai-8B-1bit GGUF on Hugging Face is trained against this fork.
+    expect(LLAMA_CPP_TAG).toBe("main-b8198-b2b5273");
+    expect(LLAMA_CPP_COMMIT).toBe("b2b5273e8b275bb96362fe844a5202632eb3e52b");
+  });
+
+  it("clones from the apothic fork (not stock ggml-org)", async () => {
+    const mod = await import("./compile-libllama.mjs");
+    expect(mod.LLAMA_CPP_REMOTE).toBe(
+      "https://github.com/Apothic-AI/llama.cpp-1bit-turboquant.git",
+    );
   });
 
   it("declares a target row for each supported Android ABI", () => {
