@@ -3,6 +3,34 @@
 Custom selinux policy for the Milady privileged system app and the
 on-device agent it spawns.
 
+## SELinux is NOT seccomp
+
+This directory only controls SELinux MAC (mandatory access control). It
+cannot relax Android's per-process seccomp-bpf syscall filter, which is
+installed by the zygote in
+`frameworks/base/core/jni/com_android_internal_os_Zygote.cpp` from the
+per-arch allowlists in
+`bionic/libc/seccomp/{x86_64,arm64}_app_policy.cpp`.
+
+When the on-device bun process exits with `SIGSYS` (signal 31, exit code
+159 = 128 + 31), the kernel killed it for issuing a syscall the seccomp
+filter doesn't allow. No SELinux rule will let it through — the filter
+is inherited and locked via `SECCOMP_FILTER_FLAG_TSYNC` before our
+process exists, and `prctl(PR_SET_NO_NEW_PRIVS, 1)` makes the trap
+final.
+
+The mitigation lives in `MiladyAgentService.java` as `BUN_FEATURE_FLAG_*`
+env vars passed to bun, which steer it onto fallback syscalls Android's
+allowlist already covers (drop io_uring, drop pidfd_open, drop
+RWF_NONBLOCK, drop the spawnsync fast path). See the comment block in
+`startAgentProcess()` for the full diagnosis playbook and the curl
+commands to map a future `audit: type=1326` syscall number to a name.
+
+If a future bun release introduces a brand-new gated syscall with no
+fallback flag, the only fixes are (a) downgrade bun, (b) patch bun, or
+(c) extend the per-arch seccomp allowlist in `bionic/libc/seccomp/` and
+rebuild AOSP. **None of those are sepolicy work.**
+
 `BOARD_VENDOR_SEPOLICY_DIRS += vendor/milady/sepolicy` (in
 `milady_common.mk`) wires this directory into the board policy. Soong
 globs `*.te`, `file_contexts`, and `seapp_contexts` flat at the top
@@ -15,9 +43,40 @@ apply to platform `system/sepolicy/`).
 - `file_contexts` — labels for paths the Milady app or its agent
   runtime creates. Paths under `/data/data/<pkg>/` are NOT labeled by
   installd from this file; the agent service must call `restorecon`
-  after copying the bun binary out of `assets/agent/`.
-- `milady_agent.te` — domain + types for the on-device agent
-  (`milady_agent`, `milady_agent_exec`, `milady_agent_data`).
+  after copying the bun binary out of `assets/agent/`. Today the
+  patterns are advisory (installd writes `app_data_file` and our
+  current allow rule operates on that); the entries are kept so a
+  future custom-seinfo + domain-transition build plugs in cleanly.
+- `milady_agent.te` — primary `allow platform_app app_data_file:file
+  { execute execute_no_trans };` rule, plus the type declarations
+  (`milady_agent_exec`, `milady_agent_data`) and the
+  documented-intent comment block listing the seccomp-blocked
+  syscalls the BUN_FEATURE_FLAG_* env block in MiladyAgentService
+  routes around.
+
+## Verifying after a build
+
+After `m` finishes and a clean Cuttlefish boot completes, the
+sepolicy half is healthy when:
+
+```bash
+adb logcat -d | grep -E "(seccomp|SIGSYS|audit)"
+adb shell dmesg | grep -E "(seccomp|SIGSYS)"
+adb shell ps -A | grep milady
+```
+
+emit no `audit: type=1326` lines (seccomp violations) and the
+`com.miladyai.milady` process is visible in `ps -A`. Static checks
+against the policy files themselves run via:
+
+```bash
+bun run miladyos:validate
+```
+
+`validateSepolicy()` pins the existence of the policy files, the
+`platform_app` execve allow rule, the type declarations, and the
+documented seccomp syscall list (so doc + runtime mitigation cannot
+drift apart silently).
 
 ## The `milady_agent` domain
 

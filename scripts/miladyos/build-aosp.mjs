@@ -6,8 +6,10 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { main as compileLibllamaMain } from "./compile-libllama.mjs";
+import { main as stageDefaultModelsMain } from "./stage-default-models.mjs";
+import { main as stageModelsDfmMain } from "./stage-models-dfm.mjs";
 import { main as syncToAospMain } from "./sync-to-aosp.mjs";
-import { main as validateMain } from "./validate.mjs";
+import { main as validateMain, validateSepolicy } from "./validate.mjs";
 
 const PRODUCT_LUNCH = "milady_cf_x86_64_phone-trunk_staging-userdebug";
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -39,11 +41,27 @@ export function parseArgs(argv) {
     // --skip-libllama lets developers iterate on non-inference paths
     // without paying the llama.cpp cross-compile cost.
     skipLibllama: false,
+    // AOSP builds bundle a small chat model (SmolLM2 360M) and a small
+    // embedding model (BGE small en v1.5) into the APK assets so first-
+    // boot chat works offline. Off-by-default would mean every fresh
+    // install starts in "no model assigned" state and the user can't
+    // chat until they download. ~400 MB APK growth; --skip-bundled-models
+    // for builders who want runtime-download instead.
+    skipBundledModels: false,
     // When set, also re-run `bun run build:android:system` with AOSP env
     // flags so the privileged APK staged into vendor/milady is rebuilt
     // with libllama.so + BuildConfig.AOSP_BUILD=true. Off by default to
     // preserve the existing two-step contract documented in SETUP_AOSP.md.
     rebuildPrivilegedApk: false,
+    // Output format for the privileged Capacitor APK rebuild path.
+    //   "apk" — produce a base APK with all assets inline (the
+    //           AOSP/cuttlefish path; cvd needs APKs).
+    //   "aab" — produce an AAB for Play Store distribution. Splits the
+    //           bundled GGUF models into a `:models` dynamic feature
+    //           module so the base APK stays under Play's 200MB limit.
+    // Defaults to "apk" because that's the AOSP build path; AAB is
+    // explicitly requested by Play Store builders.
+    buildFormat: process.env.MILADY_BUILD_FORMAT ?? "apk",
   };
 
   const readFlagValue = (flag, index) => {
@@ -75,11 +93,16 @@ export function parseArgs(argv) {
       args.skipStopCvd = true;
     } else if (arg === "--skip-libllama") {
       args.skipLibllama = true;
+    } else if (arg === "--skip-bundled-models") {
+      args.skipBundledModels = true;
     } else if (arg === "--rebuild-privileged-apk") {
       args.rebuildPrivilegedApk = true;
+    } else if (arg === "--build-format") {
+      args.buildFormat = readFlagValue(arg, i);
+      i += 1;
     } else if (arg === "-h" || arg === "--help") {
       console.log(
-        "Usage: node scripts/miladyos/build-aosp.mjs --aosp-root <AOSP_ROOT> [--source-vendor <VENDOR_DIR>] [--jobs <N>] [--skip-build] [--skip-stop-cvd] [--skip-libllama] [--rebuild-privileged-apk] [--launch] [--boot-validate]",
+        "Usage: node scripts/miladyos/build-aosp.mjs --aosp-root <AOSP_ROOT> [--source-vendor <VENDOR_DIR>] [--jobs <N>] [--skip-build] [--skip-stop-cvd] [--skip-libllama] [--skip-bundled-models] [--rebuild-privileged-apk] [--build-format apk|aab] [--launch] [--boot-validate]",
       );
       process.exit(0);
     } else if (arg.startsWith("--")) {
@@ -96,6 +119,11 @@ export function parseArgs(argv) {
   }
   if (!Number.isFinite(args.jobs) || args.jobs <= 0) {
     throw new Error("--jobs must be a positive integer");
+  }
+  if (args.buildFormat !== "apk" && args.buildFormat !== "aab") {
+    throw new Error(
+      `--build-format must be "apk" or "aab" (got "${args.buildFormat}")`,
+    );
   }
   return args;
 }
@@ -211,10 +239,82 @@ function rebuildPrivilegedApk() {
   }
 }
 
+/**
+ * After the standard `:app:assembleRelease` path produced an APK +
+ * staged it as Milady.apk, run a follow-up `:app:bundleRelease` that
+ * produces an AAB with the bundled GGUF models split out into a
+ * `:models` dynamic feature module. The DFM is staged into the
+ * regenerated `apps/app/android/` tree by stage-models-dfm.mjs first,
+ * then gradle builds the bundle.
+ *
+ * The AOSP/cuttlefish path keeps the APK because cvd does not handle
+ * AABs. The AAB is the Play Store deliverable; nothing in this script
+ * uploads it — staging it under the conventional gradle output path is
+ * the contract.
+ */
+async function rebuildPrivilegedAab() {
+  // Restructure the regenerated tree to add the `:models` dynamic
+  // feature module. The script is gated on MILADY_BUILD_FORMAT=aab so
+  // it's safe to call here unconditionally — passing --force just
+  // bypasses the env check.
+  await stageModelsDfmMain(["--force"]);
+
+  // Build the bundle. We don't go through `bun run build:android:system`
+  // a second time because that would re-overlay the regenerated tree
+  // (overlayAndroid() / patchAndroidGradle()) and undo the DFM
+  // restructure. Direct gradle invocation keeps the staged DFM
+  // structure intact.
+  const androidDir = path.join(repoRoot, "apps", "app", "android");
+  const gradleArgs = ["-PmiladyAospBuild=true", ":app:bundleRelease"];
+  run("./gradlew", gradleArgs, { cwd: androidDir });
+
+  // Stage the AAB next to the staged APK so the AOSP product layer
+  // path stays untouched but the AAB is discoverable. The conventional
+  // gradle output path is app/build/outputs/bundle/release/app-release.aab.
+  const aabSource = path.join(
+    androidDir,
+    "app",
+    "build",
+    "outputs",
+    "bundle",
+    "release",
+    "app-release.aab",
+  );
+  if (!fs.existsSync(aabSource)) {
+    throw new Error(
+      `Expected AAB output at ${aabSource} after :app:bundleRelease, but the file is missing.`,
+    );
+  }
+  const stagedDir = path.join(
+    repoRoot,
+    "os",
+    "android",
+    "vendor",
+    "milady",
+    "apps",
+    "Milady",
+  );
+  fs.mkdirSync(stagedDir, { recursive: true });
+  const aabTarget = path.join(stagedDir, "Milady.aab");
+  fs.copyFileSync(aabSource, aabTarget);
+  console.log(`[miladyos:build-aosp] Staged AAB at ${aabTarget}.`);
+}
+
 export async function main(argv = process.argv.slice(2)) {
   const args = parseArgs(argv);
   assertLinuxBuilder();
   assertAospRoot(args.aospRoot);
+
+  // Run the sepolicy regression check up-front. The full validateMain()
+  // also covers it, but it gates on validateApk() which only succeeds
+  // after build:android:system has staged Milady.apk. The sepolicy half
+  // is independent of the APK and pinning the milady_agent.te +
+  // file_contexts shape early means a rule-drift on a builder upgrade
+  // surfaces before the multi-hour m build, not after.
+  const vendorForValidate = args.sourceVendor
+    ? args.sourceVendor
+    : path.join(repoRoot, "os", "android", "vendor", "milady");
+  validateSepolicy(vendorForValidate);
 
   // Cross-compile libllama.so per ABI BEFORE we rebuild the privileged APK
   // (so it's already in assets/agent/{abi}/ when gradle packs the APK) and
@@ -224,8 +324,31 @@ export async function main(argv = process.argv.slice(2)) {
     await compileLibllamaMain(["--skip-if-present"]);
   }
 
+  // Stage the default chat + embedding GGUF models into APK assets so
+  // first-boot chat works offline. Idempotent: if the files are already
+  // staged with the expected size they're left alone. ~400 MB APK growth
+  // when both models are bundled; --skip-bundled-models opts out.
+  if (!args.skipBundledModels) {
+    await stageDefaultModelsMain([]);
+  } else {
+    console.log(
+      "[miladyos:build-aosp] --skip-bundled-models; first-boot chat will require runtime download.",
+    );
+  }
+
   if (args.rebuildPrivilegedApk) {
     rebuildPrivilegedApk();
+    if (args.buildFormat === "aab") {
+      // AOSP path keeps the APK that's already staged; this is an
+      // additional Play-Store-bound AAB that lives next to it. We
+      // intentionally do NOT replace Milady.apk with Milady.aab —
+      // cvd cannot consume an AAB.
+      await rebuildPrivilegedAab();
+    }
+  } else if (args.buildFormat === "aab") {
+    console.warn(
+      "[miladyos:build-aosp] --build-format=aab requires --rebuild-privileged-apk; skipping AAB build (the privileged APK was not rebuilt this run).",
+    );
   }
 
   const syncArgs = args.sourceVendor
