@@ -125,6 +125,8 @@
     "dev:home": "node eliza/packages/app-core/scripts/rt.mjs eliza/packages/app-core/scripts/dev-ui.mjs --name=milady --app=home",
     "dev:home:ui": "node eliza/packages/app-core/scripts/rt.mjs eliza/packages/app-core/scripts/dev-ui.mjs --name=milady --app=home --ui-only",
     "dev:web": "cd apps/homepage && bun run dev",
+    "dev:cloud:local": "node scripts/dev-local-cloud.mjs",
+    "seed:cloud:local": "node scripts/seed-local-cloud.mjs",
     "dev:ios": "bun run build:ios && cd apps/app && bun x capacitor open ios",
     "dev:ios:remote-mac": "node scripts/ios-runtime-mode.mjs remote-mac --open",
     "dev:ios:cloud": "node scripts/ios-runtime-mode.mjs cloud --open",
