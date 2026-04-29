@@ -198,7 +198,11 @@ jobs:
           git submodule sync -- eliza
           git submodule update --init --depth=1 eliza
           node scripts/init-submodules.mjs
-          node scripts/apply-eliza-ci-patches.mjs
+          if [ -f scripts/apply-eliza-ci-patches.mjs ]; then
+            node scripts/apply-eliza-ci-patches.mjs
+          else
+            echo "Skipping Milady eliza CI patches: scripts/apply-eliza-ci-patches.mjs not present"
+          fi
           node scripts/disable-local-eliza-workspace.mjs
 
       - name: Install root dependencies
@@ -372,7 +376,11 @@ jobs:
           git submodule sync -- eliza
           git submodule update --init --depth=1 eliza
           node scripts/init-submodules.mjs
-          node scripts/apply-eliza-ci-patches.mjs
+          if [ -f scripts/apply-eliza-ci-patches.mjs ]; then
+            node scripts/apply-eliza-ci-patches.mjs
+          else
+            echo "Skipping Milady eliza CI patches: scripts/apply-eliza-ci-patches.mjs not present"
+          fi
           node scripts/disable-local-eliza-workspace.mjs
 
       - name: Install root dependencies
@@ -475,7 +483,11 @@ jobs:
           git submodule sync -- eliza
           git submodule update --init --depth=1 eliza
           node scripts/init-submodules.mjs
-          node scripts/apply-eliza-ci-patches.mjs
+          if [ -f scripts/apply-eliza-ci-patches.mjs ]; then
+            node scripts/apply-eliza-ci-patches.mjs
+          else
+            echo "Skipping Milady eliza CI patches: scripts/apply-eliza-ci-patches.mjs not present"
+          fi
           node scripts/disable-local-eliza-workspace.mjs
 
       - name: Install root dependencies

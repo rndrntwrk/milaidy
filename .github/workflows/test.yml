@@ -524,7 +524,12 @@ jobs:
         run: node scripts/init-submodules.mjs
 
       - name: Apply Milady eliza CI patches
-        run: node scripts/apply-eliza-ci-patches.mjs
+        run: |
+          if [ -f scripts/apply-eliza-ci-patches.mjs ]; then
+            node scripts/apply-eliza-ci-patches.mjs
+          else
+            echo "Skipping Milady eliza CI patches: scripts/apply-eliza-ci-patches.mjs not present"
+          fi
 
       - name: Install dependencies
         run: bun install --ignore-scripts
