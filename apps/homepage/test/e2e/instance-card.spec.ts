@@ -192,8 +192,12 @@ test.describe("homepage - instance card menu", () => {
       .first();
 
     // The disabled variant shows italic "starting…" — the live "open" text
-    // should not be present in this card.
-    await expect(card.getByText("starting", { exact: false })).toBeVisible();
+    // should not be present in this card. ("starting" appears in both the
+    // StatusDot label and the disabled button label, so just assert at least
+    // one is visible.)
+    await expect(
+      card.getByText("starting", { exact: false }).first(),
+    ).toBeVisible();
     await expect(card.getByText(/^open$/)).toHaveCount(0);
 
     // The disabled button itself is rendered with disabled+aria-disabled.

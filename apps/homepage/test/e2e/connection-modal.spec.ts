@@ -56,7 +56,7 @@ test.describe("homepage - attach-remote connection modal", () => {
 
     await page.locator("#connect-name").fill("remote-buddy");
     await page.locator("#connect-url").fill(remoteUrl);
-    await page.getByRole("button", { name: "attach" }).click();
+    await page.getByRole("button", { name: "attach", exact: true }).click();
 
     // Toast confirms attach.
     await expect(page.getByText("remote-buddy attached.")).toBeVisible({
@@ -86,7 +86,7 @@ test.describe("homepage - attach-remote connection modal", () => {
     await page.goto("/");
     await openAttachRemoteModal(page);
 
-    const submit = page.getByRole("button", { name: "attach" });
+    const submit = page.getByRole("button", { name: "attach", exact: true });
     await expect(submit).toBeDisabled();
 
     // Name without URL still disabled.
@@ -116,7 +116,7 @@ test.describe("homepage - attach-remote connection modal", () => {
     await page.locator("#connect-name").fill("with-token");
     await page.locator("#connect-url").fill(remoteUrl);
     await page.locator("#connect-token").fill("milady_secret_test_token");
-    await page.getByRole("button", { name: "attach" }).click();
+    await page.getByRole("button", { name: "attach", exact: true }).click();
 
     // Wait for the agent to surface in the grid so we know health probes ran.
     await expect(page.getByRole("heading", { name: "with-token" })).toBeVisible(

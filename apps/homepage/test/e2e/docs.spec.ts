@@ -81,9 +81,16 @@ test.describe("homepage - docs", () => {
       const tierCardsRegion = page.locator("#docs-tier-cards-heading");
       await expect(tierCardsRegion).toBeVisible();
 
-      // Each tier card is an <a href="/docs/<tier>"> link.
+      // Each tier card is an <a href="/docs/<tier>"> link. Sidebar also
+      // renders the same hrefs, so scope to the cards section.
+      const cardsSection = page.locator(
+        'section[aria-labelledby="docs-tier-cards-heading"]',
+      );
+      await expect(cardsSection).toBeVisible();
       for (const tier of [...TIERS, "developer"] as const) {
-        await expect(page.locator(`a[href="/docs/${tier}"]`)).toBeVisible();
+        await expect(
+          cardsSection.locator(`a[href="/docs/${tier}"]`),
+        ).toBeVisible();
       }
 
       expect(errors, errors.join("\n")).toEqual([]);
@@ -272,8 +279,9 @@ test.describe("homepage - docs", () => {
         }),
       ).toBeVisible();
 
-      // Hero CTA: "Open App" links to /dashboard.
-      await expect(page.locator('a[href="/dashboard"]')).toBeVisible();
+      // Hero CTA: "Open App" links to /dashboard. Multiple /dashboard
+      // links exist on the page (hero + nav); assert at least one is visible.
+      await expect(page.locator('a[href="/dashboard"]').first()).toBeVisible();
 
       expect(errors, errors.join("\n")).toEqual([]);
     });

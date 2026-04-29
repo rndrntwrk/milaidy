@@ -112,7 +112,9 @@ test.describe("homepage - sign-in flow", () => {
 
     // Push the clock past the 5-minute deadline; the next poll iteration
     // should detect Date.now() > deadline and flip into the timeout error.
-    await page.clock.fastForward("5:30");
+    // 5 minutes 30 seconds in milliseconds. Playwright's mm:ss format
+    // requires zero-padded values; passing a number is unambiguous.
+    await page.clock.fastForward(5 * 60 * 1000 + 30 * 1000);
 
     await expect(
       page.getByText("Login timed out. Please try again."),

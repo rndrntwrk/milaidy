@@ -216,7 +216,7 @@ export async function mockCloudApi(
         });
         return;
       }
-      await jsonResponse(route, 200, { agents });
+      await jsonResponse(route, 200, { agents } as unknown as JsonBody);
       return;
     }
 
@@ -435,7 +435,10 @@ export interface RemoteAgentMockOptions {
     memories?: number;
   };
   /** /api/stream/settings response. Default: ok=true, settings={}. */
-  streamSettings?: { ok?: boolean; settings?: Record<string, unknown> };
+  streamSettings?: {
+    ok?: boolean;
+    settings?: { [key: string]: JsonBody };
+  };
 }
 
 export interface RemoteAgentMockState {
@@ -489,7 +492,16 @@ export async function mockRemoteAgent(
       return;
     }
     if (url.pathname === "/api/status") {
-      await jsonResponse(route, 200, status);
+      const statusBody: { [key: string]: JsonBody } = {
+        state: status.state,
+        agentName: status.agentName,
+        model: status.model,
+        uptime: status.uptime,
+      };
+      if (status.memories !== undefined) {
+        statusBody.memories = status.memories;
+      }
+      await jsonResponse(route, 200, statusBody);
       return;
     }
     if (url.pathname === "/api/stream/settings") {
