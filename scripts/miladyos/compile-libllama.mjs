@@ -45,9 +45,16 @@
 //   `llama_get_embeddings_seq` and `llama_set_embeddings` for the
 //   embed() path.
 //
-// Output:
-//   apps/app/android/app/src/main/assets/agent/arm64-v8a/libllama.so   (real phones)
-//   apps/app/android/app/src/main/assets/agent/x86_64/libllama.so      (cuttlefish + emulators)
+// Output (per ABI):
+//   apps/app/android/app/src/main/assets/agent/{abi}/libllama.so
+//   apps/app/android/app/src/main/assets/agent/{abi}/libggml.so
+//   apps/app/android/app/src/main/assets/agent/{abi}/libggml-cpu.so
+//   apps/app/android/app/src/main/assets/agent/{abi}/libggml-base.so
+//
+// libllama.so has NEEDED entries on the entire libggml family (see
+// `readelf -d`); the dynamic linker resolves them from the per-ABI asset
+// dir via the LD_LIBRARY_PATH MiladyAgentService.java sets at process
+// launch. ABIs: arm64-v8a (real phones) and x86_64 (cuttlefish + emulators).
 //
 // Approximate build cost on a modern Linux x86_64 builder (16 cores, NVMe):
 //   - llama.cpp clone:    ~30 s, ~150 MB working tree.
@@ -80,11 +87,19 @@
 //        `zig objcopy --strip-all <src> <dst>` truncates dst to 0 before
 //        reading src when src == dst; the in-place pattern leaves an empty
 //        file. We strip to `<file>.stripped` and rename.
-//     4. Co-copies libggml.so alongside libllama.so. libllama.so has a
-//        NEEDED entry for libggml.so; the dynamic linker resolves it from
-//        the same dir at runtime via LD_LIBRARY_PATH set by
-//        MiladyAgentService.java. Without the co-copy, dlopen fails with
-//        "libggml.so: cannot open shared object file".
+//     4. Co-copies the entire libggml*.so family alongside libllama.so.
+//        On b4500 libllama.so has NEEDED entries for libggml.so,
+//        libggml-cpu.so, and libggml-base.so; the dynamic linker resolves
+//        all three from the same dir at runtime via the LD_LIBRARY_PATH
+//        MiladyAgentService.java sets. Without the co-copy, dlopen fails
+//        with "libggml-base.so: cannot open shared object file" (or
+//        whichever NEEDED sibling is missing).
+//     5. Configures cmake with `-DCMAKE_SKIP_BUILD_RPATH=TRUE` so the
+//        resulting .so files don't bake an absolute RUNPATH to the
+//        build-host cache dir. Without this, every shipped APK leaks
+//        `/home/<builder>/.cache/...` as a hardcoded RUNPATH and the
+//        runtime dynamic linker tries (and fails) to look there before
+//        falling back to LD_LIBRARY_PATH.
 //
 // Failure mode:
 //   If zig is missing, this script exits with code 1 and prints the exact
@@ -545,6 +560,16 @@ export function buildLibllamaForAbi({
       // device of the target ABI. The default tunes for the build host's
       // native cpu, which is wrong for a cross-build.
       "-DGGML_NATIVE=OFF",
+      // Don't bake in an absolute RUNPATH to the build tree. The default
+      // CMAKE_BUILD_RPATH points at the per-ABI build dir, which is a
+      // path-leak in shipped APKs and adds dead lookup entries at runtime.
+      // Android's MiladyAgentService.java sets LD_LIBRARY_PATH to the
+      // per-ABI asset dir, so the dynamic linker resolves NEEDED siblings
+      // from there.
+      "-DCMAKE_SKIP_BUILD_RPATH=TRUE",
+      "-DCMAKE_SKIP_INSTALL_RPATH=TRUE",
+      "-DCMAKE_BUILD_WITH_INSTALL_RPATH=TRUE",
+      "-DCMAKE_INSTALL_RPATH=",
     ],
     {},
   );
@@ -556,32 +581,40 @@ export function buildLibllamaForAbi({
     {},
   );
 
+  // libllama.so and the ggml shared-library family are all transitive build
+  // products of the `llama` target. b4500's NEEDED chain (verified via
+  // `readelf -d`):
+  //   libllama.so -> libggml.so, libggml-cpu.so, libggml-base.so, libc.so
+  //   libggml.so   -> libggml-cpu.so, libggml-base.so, libc.so
+  // We co-copy every libggml*.so we find under the build tree alongside
+  // libllama.so so the dynamic linker resolves the whole graph from the
+  // per-ABI asset dir at runtime (LD_LIBRARY_PATH set by
+  // MiladyAgentService.java).
   const builtLlama = locateBuiltLib(buildDir, "libllama.so");
   if (!builtLlama) {
     throw new Error(
       `[compile-libllama] Could not locate built libllama.so anywhere under ${buildDir}.`,
     );
   }
-  // libggml.so is a transitive build product of the `llama` target — cmake's
-  // dependency graph builds ggml first as a SHARED library then links libllama
-  // against it. If it's missing, the build is wrong end-to-end (don't paper
-  // over with a fallback).
-  const builtGgml = locateBuiltLib(buildDir, "libggml.so");
-  if (!builtGgml) {
+  const builtGgmlLibs = locateBuiltGgmlLibs(buildDir);
+  if (builtGgmlLibs.length === 0) {
     throw new Error(
-      `[compile-libllama] Could not locate built libggml.so anywhere under ${buildDir}. ` +
-        `libllama.so has a NEEDED entry for libggml.so; without co-copying it the ` +
-        `runtime dlopen will fail. Check that BUILD_SHARED_LIBS=ON took effect.`,
+      `[compile-libllama] Could not locate any libggml*.so under ${buildDir}. ` +
+        `libllama.so has NEEDED entries for the ggml family; without co-copying ` +
+        `them the runtime dlopen will fail. Check that BUILD_SHARED_LIBS=ON took effect.`,
     );
   }
 
   fs.mkdirSync(abiAssetDir, { recursive: true });
   const llamaOut = path.join(abiAssetDir, "libllama.so");
-  const ggmlOut = path.join(abiAssetDir, "libggml.so");
   fs.copyFileSync(builtLlama, llamaOut);
-  fs.copyFileSync(builtGgml, ggmlOut);
+  const ggmlOuts = builtGgmlLibs.map((src) => {
+    const dst = path.join(abiAssetDir, path.basename(src));
+    fs.copyFileSync(src, dst);
+    return dst;
+  });
 
-  for (const out of [ggmlOut, llamaOut]) {
+  for (const out of [...ggmlOuts, llamaOut]) {
     const sizeBefore = fs.statSync(out).size;
     const stripped = stripBinary({ filePath: out, zigBin, log });
     if (stripped) {
@@ -598,7 +631,47 @@ export function buildLibllamaForAbi({
       );
     }
   }
-  return { llama: llamaOut, ggml: ggmlOut };
+  return { llama: llamaOut, ggml: ggmlOuts };
+}
+
+/**
+ * Find every `libggml*.so` under the build tree. b4500 ships
+ *   libggml.so, libggml-cpu.so, libggml-base.so
+ * — all of which appear in libllama.so's NEEDED list. Older pins shipped
+ * only libggml.so; the script copies whatever it finds so the asset dir
+ * always carries the full transitive set.
+ */
+function locateBuiltGgmlLibs(buildDir) {
+  const found = new Set();
+  const stack = [buildDir];
+  while (stack.length > 0) {
+    const dir = stack.pop();
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        if (
+          entry.name === "_deps" ||
+          entry.name === "CMakeFiles" ||
+          entry.name.startsWith(".")
+        ) {
+          continue;
+        }
+        stack.push(path.join(dir, entry.name));
+      } else if (
+        entry.isFile() &&
+        entry.name.startsWith("libggml") &&
+        entry.name.endsWith(".so")
+      ) {
+        found.add(path.join(dir, entry.name));
+      }
+    }
+  }
+  return [...found];
 }
 
 function locateBuiltLib(buildDir, soName) {
