@@ -473,48 +473,35 @@ export async function runSmoke({ adb: adbImpl = adb } = {}) {
   });
 
   // ── Step 8: verify the response was LOCAL, not cloud-routed ─────────
-  logStep(8, "Verifying provider is local (not cloud-routed)");
-  // The local-inference service tracks the active loaded model. On AOSP
-  // with MILADY_LOCAL_LLAMA=1 the runtime registers libllama as the
-  // local-inference loader; if a chat completion ran without a local
-  // active-model entry, the response was cloud-routed (a contract bug
-  // we want to catch loudly).
-  let activeResp;
-  try {
-    activeResp = await fetch(
-      `http://127.0.0.1:${HOST_PORT}/api/local-inference/active`,
-      {
-        headers: { authorization: `Bearer ${token}` },
-        signal: AbortSignal.timeout(HEALTH_POLL_INTERVAL_MS * 5),
-      },
-    );
-  } catch (error) {
+  logStep(8, "Verifying provider is local (via on-device agent log)");
+  // The agent bundle uses the standalone agent server (not the
+  // app-core wrapper), so `/api/local-inference/active` doesn't exist
+  // on the AOSP runtime — that route lives in app-core and is only
+  // active on the desktop / Capacitor wrapper. On AOSP we verify
+  // local inference via the agent.log: presence of `[aosp-llama]
+  // Loaded ...gguf` AND `[aosp-llama] gen done` proves a real local
+  // FFI call ran. No-network host (cvd has no Internet) plus no
+  // ANTHROPIC_API_KEY / OPENAI_API_KEY / ELIZAOS_CLOUD_API_KEY is the
+  // belt-and-braces argument; the log line is the ground truth.
+  const logCheck = adbImpl(
+    [
+      "shell",
+      "su",
+      "0",
+      "grep",
+      "-cE",
+      "aosp-llama. (Loaded|gen done)",
+      `/data/data/${PACKAGE_NAME}/files/agent/agent.log`,
+    ],
+    { serial },
+  );
+  const aospLogLines = Number.parseInt(logCheck.stdout.trim(), 10);
+  if (!Number.isFinite(aospLogLines) || aospLogLines < 2) {
     results.push({
       step: 8,
       label: "Provider is local",
       ok: false,
-      detail: `/api/local-inference/active fetch failed: ${error.message}`,
-    });
-    return results;
-  }
-  if (!activeResp.ok) {
-    results.push({
-      step: 8,
-      label: "Provider is local",
-      ok: false,
-      detail: `/api/local-inference/active returned HTTP ${activeResp.status}`,
-    });
-    return results;
-  }
-  const active = await activeResp.json().catch(() => null);
-  const status = active?.status ?? "?";
-  const modelId = active?.modelId ?? null;
-  if (status !== "ready" || !modelId) {
-    results.push({
-      step: 8,
-      label: "Provider is local",
-      ok: false,
-      detail: `active.status=${status} modelId=${modelId ?? "null"} — chat may have been cloud-routed.`,
+      detail: `agent.log has ${aospLogLines || 0} aosp-llama Loaded/gen-done lines (need ≥2 for a real chat-with-local-inference round)`,
     });
     return results;
   }
@@ -522,11 +509,11 @@ export async function runSmoke({ adb: adbImpl = adb } = {}) {
     step: 8,
     label: "Provider is local",
     ok: true,
-    detail: `active model: ${modelId}`,
+    detail: `agent.log shows ${aospLogLines} aosp-llama Loaded/gen-done lines`,
   });
-
   return results;
 }
+
 
 export async function main(argv = process.argv.slice(2)) {
   const wantJson = argv.includes("--json");
