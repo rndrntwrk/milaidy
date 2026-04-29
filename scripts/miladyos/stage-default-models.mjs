@@ -73,7 +73,11 @@ export const DEFAULT_MODELS = [
     displayName: "BGE Small EN v1.5 (embedding)",
     hfRepo: "ChristianAzinn/bge-small-en-v1.5-gguf",
     ggufFile: "bge-small-en-v1.5.Q4_K_M.gguf",
-    expectedMinBytes: 30 * 1024 * 1024, // 30 MB lower bound
+    // The Q4_K_M quant of BGE small en v1.5 is ~28 MB (29,203,744 bytes
+    // observed on HuggingFace). The lower bound was previously 30 MB, which
+    // rejected the legitimate file. Loosen to 25 MB so transient HF
+    // re-quants of slightly different sizes still pass the sanity check.
+    expectedMinBytes: 25 * 1024 * 1024, // 25 MB lower bound
     expectedMaxBytes: 200 * 1024 * 1024, // 200 MB upper bound
     role: "embedding",
   },
