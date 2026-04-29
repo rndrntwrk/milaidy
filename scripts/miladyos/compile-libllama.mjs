@@ -29,8 +29,21 @@
 //   that miss <bit> / <span> shims llama.cpp's CMake feature checks rely on.
 //
 // llama.cpp pin (matches eliza/packages/agent/src/runtime/aosp-llama-adapter.ts):
-//   tag:    b3490
-//   commit: 6e2b6000e5fe808954a7dcef8225b5b7f2c1b9e9
+//   tag:    b4500
+//   commit: a133566d34a1dd3693c504786963bf1b7b7d8c0e
+//
+// Why b4500 (not the prior b3490 pin):
+//   The adapter binds the post-2024 sampler-chain API
+//   (`llama_sampler_chain_init`, `llama_sampler_init_greedy`, etc.) plus the
+//   renamed model/vocab API (`llama_model_load_from_file`,
+//   `llama_init_from_model`, `llama_model_get_vocab`, `llama_vocab_eos`,
+//   `llama_vocab_is_eog`). Tag b3490 ships only the legacy `llama_sample_*`
+//   family and the older `llama_load_model_from_file` / `llama_token_eos`
+//   names — `dlsym()` returns NULL for every renamed symbol, so the adapter
+//   throws at first inference call. b4500 is the first stable tag that
+//   ships ALL of the symbols the adapter binds, including
+//   `llama_get_embeddings_seq` and `llama_set_embeddings` for the
+//   embed() path.
 //
 // Output:
 //   apps/app/android/app/src/main/assets/agent/arm64-v8a/libllama.so   (real phones)
@@ -46,6 +59,32 @@
 //
 // Idempotent: cached clone + cached build dirs skip rework. Bumping the
 // pinned tag in LLAMA_CPP_TAG / LLAMA_CPP_COMMIT busts the cache.
+//
+// CI portability:
+//   The script self-bootstraps everything it needs. On a clean machine with
+//   only `zig` and `cmake` on PATH, it:
+//     1. Writes per-ABI `zig-cc` / `zig-cxx` driver scripts to
+//        ${cacheDir}/zig-driver/{abi}/. CMake invokes its CMAKE_C_COMPILER as
+//        a single binary with whatever args it wants; if we passed `zig` with
+//        --target=... in CMAKE_C_FLAGS, zig parses `--target=...` as an
+//        unknown top-level subcommand and fails its compiler probe. The
+//        driver scripts shim `zig cc --target=<triple>` so cmake sees a
+//        regular cc-style compiler.
+//     2. Patches `ggml/src/ggml.c` so `<execinfo.h>` is only included on glibc
+//        Linux. Upstream b3490 includes it under a bare `__linux__` guard;
+//        musl libc does not provide that header, and the include explodes the
+//        compile. The current pin (b4500+) already gates the include on
+//        `__GLIBC__`, so the patch detects this and no-ops. On older pins
+//        the patch rewrites the include guard.
+//     3. Strips libllama.so / libggml.so out-of-place. zig 0.13's
+//        `zig objcopy --strip-all <src> <dst>` truncates dst to 0 before
+//        reading src when src == dst; the in-place pattern leaves an empty
+//        file. We strip to `<file>.stripped` and rename.
+//     4. Co-copies libggml.so alongside libllama.so. libllama.so has a
+//        NEEDED entry for libggml.so; the dynamic linker resolves it from
+//        the same dir at runtime via LD_LIBRARY_PATH set by
+//        MiladyAgentService.java. Without the co-copy, dlopen fails with
+//        "libggml.so: cannot open shared object file".
 //
 // Failure mode:
 //   If zig is missing, this script exits with code 1 and prints the exact
@@ -63,8 +102,8 @@ import { fileURLToPath } from "node:url";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "..", "..");
 
-export const LLAMA_CPP_TAG = "b3490";
-export const LLAMA_CPP_COMMIT = "6e2b6000e5fe808954a7dcef8225b5b7f2c1b9e9";
+export const LLAMA_CPP_TAG = "b4500";
+export const LLAMA_CPP_COMMIT = "a133566d34a1dd3693c504786963bf1b7b7d8c0e";
 export const LLAMA_CPP_REMOTE = "https://github.com/ggml-org/llama.cpp.git";
 export const MIN_ZIG_VERSION = "0.13.0";
 
@@ -239,6 +278,10 @@ function run(command, args, { cwd, env = process.env } = {}) {
  * to skip the network when the cache already holds the exact commit. The
  * working tree is detached at LLAMA_CPP_COMMIT — we never let a moving tag
  * slip the source out from under a build.
+ *
+ * Also runs `patchLlamaCppSourceForMusl()` on every checkout so the patch
+ * survives cache reuse (the source-patch sentinel sits next to the
+ * checkout sentinel and is keyed off LLAMA_CPP_COMMIT).
  */
 export function ensureLlamaCppCheckout({
   cacheDir,
@@ -252,6 +295,7 @@ export function ensureLlamaCppCheckout({
     fs.existsSync(path.join(cacheDir, "CMakeLists.txt"))
   ) {
     log(`[compile-libllama] Reusing cached llama.cpp checkout at ${cacheDir}`);
+    patchLlamaCppSourceForMusl({ srcDir: cacheDir, log });
     return cacheDir;
   }
   if (!fs.existsSync(path.join(cacheDir, ".git"))) {
@@ -283,19 +327,179 @@ export function ensureLlamaCppCheckout({
     cwd: cacheDir,
   });
   fs.writeFileSync(sentinel, `${LLAMA_CPP_COMMIT}\n`, "utf8");
+  patchLlamaCppSourceForMusl({ srcDir: cacheDir, log });
   return cacheDir;
 }
 
 /**
- * Configure + build libllama.so for one ABI. Produces:
- *   <srcDir>/build-<abi>/src/libllama.so   (or wherever cmake puts it)
- * and copies the resolved .so into <abiAssetDir>/libllama.so after stripping.
+ * Ensure `ggml/src/ggml.c` has the `<execinfo.h>` include gated on
+ * `__GLIBC__`. musl libc does not ship `execinfo.h`, so a bare `__linux__`
+ * guard breaks `zig cc --target=*-linux-musl` with
+ * "fatal error: 'execinfo.h' file not found".
  *
- * Strip strategy: prefer `llvm-strip` if zig ships it inside the toolchain
- * dir; fall back to system `strip`. Stripped size is what ends up in the APK.
+ * Upstream llama.cpp added `__GLIBC__` to the guard in commits between
+ * b3490 and b4500 (verified against the b4500 source: it uses
+ * `#elif defined(__linux__) && defined(__GLIBC__)`). On the current pin
+ * this function is therefore a no-op; on b3490 and earlier it rewrites
+ * the include guard.
+ *
+ * Decision matrix:
+ *   - If the source already has the `__GLIBC__` guard => no-op (write
+ *     sentinel so cache reuse is fast, log, return).
+ *   - If it has the legacy `#if defined(__linux__)\n#include <execinfo.h>`
+ *     block (b3490) => rewrite the guard, sentinel the patch.
+ *   - Otherwise => fail loudly. The pin may have introduced an entirely
+ *     new layout we haven't audited; refuse to silently skip
+ *     (Commandment 8: explicit failure beats silent breakage).
+ *
+ * Sentinel is keyed off LLAMA_CPP_COMMIT so cache reuse stays correct
+ * across pin bumps.
+ *
+ * Exported for unit testing.
+ */
+export function patchLlamaCppSourceForMusl({ srcDir, log = console.log }) {
+  const target = path.join(srcDir, "ggml", "src", "ggml.c");
+  if (!fs.existsSync(target)) {
+    throw new Error(
+      `[compile-libllama] Cannot patch ggml.c: file not found at ${target}. ` +
+        `Has the llama.cpp source layout changed in a newer pin?`,
+    );
+  }
+  const sentinel = path.join(
+    srcDir,
+    `.musl-execinfo-patched.${LLAMA_CPP_COMMIT}`,
+  );
+  if (fs.existsSync(sentinel)) {
+    return;
+  }
+
+  const original = fs.readFileSync(target, "utf8");
+
+  // Already-fixed: pin includes the `__GLIBC__` guard upstream. Just write
+  // the sentinel so subsequent cached runs short-circuit.
+  if (
+    original.includes("defined(__linux__) && defined(__GLIBC__)") &&
+    original.includes("#include <execinfo.h>")
+  ) {
+    fs.writeFileSync(sentinel, `${LLAMA_CPP_COMMIT}\n`, "utf8");
+    log(
+      `[compile-libllama] ggml/src/ggml.c already gates <execinfo.h> on __GLIBC__; no patch needed.`,
+    );
+    return;
+  }
+
+  // Legacy b3490-style block. Exact pre-image match required so we don't
+  // silently no-op on partial source drift.
+  const preImage =
+    "#if defined(__linux__)\n" +
+    "#include <execinfo.h>\n" +
+    "static void ggml_print_backtrace_symbols(void) {\n" +
+    "    void * trace[100];\n" +
+    "    int nptrs = backtrace(trace, sizeof(trace)/sizeof(trace[0]));\n" +
+    "    backtrace_symbols_fd(trace, nptrs, STDERR_FILENO);\n" +
+    "}\n" +
+    "#else\n" +
+    "static void ggml_print_backtrace_symbols(void) {\n" +
+    "    // platform not supported\n" +
+    "}\n" +
+    "#endif\n";
+  if (!original.includes(preImage)) {
+    throw new Error(
+      `[compile-libllama] Could not locate expected execinfo.h block in ggml.c, ` +
+        `and the file does not already use the __GLIBC__ guard. The llama.cpp ` +
+        `source layout drifted; update patchLlamaCppSourceForMusl() before bumping ` +
+        `LLAMA_CPP_COMMIT. Looked at ${target}.`,
+    );
+  }
+  const postImage =
+    "#if defined(__linux__) && defined(__GLIBC__)\n" +
+    "#include <execinfo.h>\n" +
+    "static void ggml_print_backtrace_symbols(void) {\n" +
+    "    void * trace[100];\n" +
+    "    int nptrs = backtrace(trace, sizeof(trace)/sizeof(trace[0]));\n" +
+    "    backtrace_symbols_fd(trace, nptrs, STDERR_FILENO);\n" +
+    "}\n" +
+    "#else\n" +
+    "static void ggml_print_backtrace_symbols(void) {\n" +
+    "    // platform not supported (musl libc has no execinfo.h)\n" +
+    "}\n" +
+    "#endif\n";
+  fs.writeFileSync(target, original.replace(preImage, postImage), "utf8");
+  fs.writeFileSync(sentinel, `${LLAMA_CPP_COMMIT}\n`, "utf8");
+  log(
+    `[compile-libllama] Patched ggml/src/ggml.c to gate <execinfo.h> on __GLIBC__ (musl compatibility).`,
+  );
+}
+
+/**
+ * Write per-ABI `zig-cc` / `zig-cxx` driver scripts under
+ * `${cacheDir}/zig-driver/${abi}/` and return their absolute paths.
+ *
+ * Why we need a driver instead of `-DCMAKE_C_COMPILER=zig` plus
+ * `--target=...` in CMAKE_C_FLAGS:
+ *   CMake invokes its CMAKE_C_COMPILER as a single binary, e.g.
+ *     `zig --target=aarch64-linux-musl -c -o test.o test.c`
+ *   zig parses `--target=aarch64-linux-musl` as an unknown top-level
+ *   subcommand and bails before it even sees `-c`. The compiler probe
+ *   fails and configure aborts. The fix is to wrap zig in a tiny driver
+ *   that always front-prepends the `cc` / `c++` subcommand and the
+ *   `--target=` flag, so cmake's invocation pattern just works.
+ *
+ * Driver scripts are written fresh on every run (they're cheap and
+ * stateless), so a stale cache from an older script version doesn't
+ * leak into a new one.
+ *
+ * Exported for unit testing.
+ */
+export function ensureZigDrivers({ cacheDir, abi, zigBin = "zig" }) {
+  const target = ABI_TARGETS.find((t) => t.androidAbi === abi);
+  if (!target) {
+    throw new Error(`[compile-libllama] Unknown ABI: ${abi}`);
+  }
+  const driverDir = path.join(cacheDir, "zig-driver", abi);
+  fs.mkdirSync(driverDir, { recursive: true });
+  const ccPath = path.join(driverDir, "zig-cc");
+  const cxxPath = path.join(driverDir, "zig-cxx");
+  // Quote zigBin so a path with spaces still works. The driver runs under
+  // /bin/sh which is POSIX-portable across Linux, macOS, Alpine.
+  const ccBody =
+    "#!/bin/sh\n" +
+    "# Auto-generated by scripts/miladyos/compile-libllama.mjs.\n" +
+    "# Do not edit — regenerated on every build.\n" +
+    `exec "${zigBin}" cc --target=${target.zigTarget} "$@"\n`;
+  const cxxBody =
+    "#!/bin/sh\n" +
+    "# Auto-generated by scripts/miladyos/compile-libllama.mjs.\n" +
+    "# Do not edit — regenerated on every build.\n" +
+    `exec "${zigBin}" c++ --target=${target.zigTarget} "$@"\n`;
+  fs.writeFileSync(ccPath, ccBody, "utf8");
+  fs.writeFileSync(cxxPath, cxxBody, "utf8");
+  fs.chmodSync(ccPath, 0o755);
+  fs.chmodSync(cxxPath, 0o755);
+  return { ccPath, cxxPath };
+}
+
+/**
+ * Configure + build libllama.so + libggml.so for one ABI. Produces:
+ *   <srcDir>/build-<abi>/src/libllama.so
+ *   <srcDir>/build-<abi>/ggml/src/libggml.so
+ * and copies both into <abiAssetDir>/ after stripping.
+ *
+ * libllama.so has a NEEDED entry for libggml.so (`readelf -d`); the dynamic
+ * linker resolves it from the same dir at runtime via the LD_LIBRARY_PATH
+ * MiladyAgentService.java sets to the per-ABI asset dir. Without the
+ * libggml.so co-copy, dlopen(libllama.so) fails with
+ * "libggml.so: cannot open shared object file" the moment bun tries to
+ * load it via bun:ffi.
+ *
+ * Strip strategy: out-of-place via `zig objcopy --strip-all <src> <dst>` then
+ * rename. zig 0.13's objcopy truncates dst to 0 BEFORE reading src when
+ * src == dst, which destroys the binary on in-place strip. Falls back to
+ * system `strip` (which does in-place safely) if zig objcopy isn't available.
  */
 export function buildLibllamaForAbi({
   srcDir,
+  cacheDir,
   abi,
   abiAssetDir,
   jobs,
@@ -310,13 +514,10 @@ export function buildLibllamaForAbi({
   const buildDir = path.join(srcDir, `build-${abi}`);
   fs.mkdirSync(buildDir, { recursive: true });
 
-  // We pass `zig cc` and `zig c++` as the C/CXX compilers; CMake invokes them
-  // as if they were a single binary, and `--target=<triple>` selects the musl
-  // libc + cross-linker zig ships internally. CMAKE_SYSTEM_NAME=Linux +
-  // CMAKE_SYSTEM_PROCESSOR are required so cmake's try_compile checks behave
-  // like a Linux cross-build (otherwise it tries to native-link host libs).
-  const cFlags = `--target=${target.zigTarget}`;
-  const cxxFlags = cFlags;
+  // Per-ABI driver scripts that wrap `zig cc --target=<triple>` so cmake's
+  // single-binary compiler probe works. See ensureZigDrivers() for why
+  // passing `--target=` via CMAKE_C_FLAGS doesn't work on its own.
+  const { ccPath, cxxPath } = ensureZigDrivers({ cacheDir, abi, zigBin });
 
   log(
     `[compile-libllama] Configuring llama.cpp for ${abi} (${target.zigTarget}) in ${buildDir}`,
@@ -333,14 +534,11 @@ export function buildLibllamaForAbi({
       "-DLLAMA_BUILD_EXAMPLES=OFF",
       "-DLLAMA_BUILD_TESTS=OFF",
       "-DLLAMA_BUILD_SERVER=OFF",
-      `-DCMAKE_C_COMPILER=${zigBin}`,
-      `-DCMAKE_CXX_COMPILER=${zigBin}`,
-      // `zig cc` works as a drive-in for `cc`; tell cmake so it doesn't try
-      // to look up an absolute compiler path.
+      `-DCMAKE_C_COMPILER=${ccPath}`,
+      `-DCMAKE_CXX_COMPILER=${cxxPath}`,
+      // No launcher — the driver scripts do all the wrapping themselves.
       "-DCMAKE_C_COMPILER_LAUNCHER=",
       "-DCMAKE_CXX_COMPILER_LAUNCHER=",
-      `-DCMAKE_C_FLAGS=${cFlags}`,
-      `-DCMAKE_CXX_FLAGS=${cxxFlags}`,
       "-DCMAKE_SYSTEM_NAME=Linux",
       `-DCMAKE_SYSTEM_PROCESSOR=${target.cmakeProcessor}`,
       // Disable host-arch-specific ISA so the resulting .so loads on any
@@ -358,38 +556,65 @@ export function buildLibllamaForAbi({
     {},
   );
 
-  const built = locateBuiltLibllama(buildDir);
-  if (!built) {
+  const builtLlama = locateBuiltLib(buildDir, "libllama.so");
+  if (!builtLlama) {
     throw new Error(
       `[compile-libllama] Could not locate built libllama.so anywhere under ${buildDir}.`,
     );
   }
-  fs.mkdirSync(abiAssetDir, { recursive: true });
-  const target_so = path.join(abiAssetDir, "libllama.so");
-  fs.copyFileSync(built, target_so);
-
-  // Strip symbols. `zig` ships its own strip binary as part of the
-  // toolchain; preferring it keeps the strip target-aware. Fall back to
-  // system strip if necessary.
-  const stripped = stripBinary({ filePath: target_so, zigBin, log });
-  if (stripped) {
-    log(
-      `[compile-libllama] Stripped libllama.so for ${abi} (size now ${fs.statSync(target_so).size} bytes).`,
+  // libggml.so is a transitive build product of the `llama` target — cmake's
+  // dependency graph builds ggml first as a SHARED library then links libllama
+  // against it. If it's missing, the build is wrong end-to-end (don't paper
+  // over with a fallback).
+  const builtGgml = locateBuiltLib(buildDir, "libggml.so");
+  if (!builtGgml) {
+    throw new Error(
+      `[compile-libllama] Could not locate built libggml.so anywhere under ${buildDir}. ` +
+        `libllama.so has a NEEDED entry for libggml.so; without co-copying it the ` +
+        `runtime dlopen will fail. Check that BUILD_SHARED_LIBS=ON took effect.`,
     );
   }
-  return target_so;
+
+  fs.mkdirSync(abiAssetDir, { recursive: true });
+  const llamaOut = path.join(abiAssetDir, "libllama.so");
+  const ggmlOut = path.join(abiAssetDir, "libggml.so");
+  fs.copyFileSync(builtLlama, llamaOut);
+  fs.copyFileSync(builtGgml, ggmlOut);
+
+  for (const out of [ggmlOut, llamaOut]) {
+    const sizeBefore = fs.statSync(out).size;
+    const stripped = stripBinary({ filePath: out, zigBin, log });
+    if (stripped) {
+      const sizeAfter = fs.statSync(out).size;
+      if (sizeAfter === 0) {
+        throw new Error(
+          `[compile-libllama] Strip produced an empty file at ${out} ` +
+            `(was ${sizeBefore} bytes). This is the zig objcopy in-place ` +
+            `truncation bug — the script is supposed to strip out-of-place.`,
+        );
+      }
+      log(
+        `[compile-libllama] Stripped ${path.basename(out)} for ${abi} (${sizeBefore} -> ${sizeAfter} bytes).`,
+      );
+    }
+  }
+  return { llama: llamaOut, ggml: ggmlOut };
 }
 
-function locateBuiltLibllama(buildDir) {
+function locateBuiltLib(buildDir, soName) {
+  // Known cmake output dirs for llama.cpp b3490: libllama.so lands under
+  // build/src, libggml.so lands under build/ggml/src. Other layouts are
+  // possible if cmake's RUNTIME_OUTPUT_DIRECTORY changes upstream.
   const candidates = [
-    path.join(buildDir, "src", "libllama.so"),
-    path.join(buildDir, "libllama.so"),
-    path.join(buildDir, "bin", "libllama.so"),
+    path.join(buildDir, "src", soName),
+    path.join(buildDir, "ggml", "src", soName),
+    path.join(buildDir, soName),
+    path.join(buildDir, "bin", soName),
   ];
   for (const c of candidates) {
     if (fs.existsSync(c)) return c;
   }
-  // Fallback: walk one level deep.
+  // Fallback: BFS through the build tree (skip CMake internals + _deps).
   const stack = [buildDir];
   while (stack.length > 0) {
     const dir = stack.pop();
@@ -401,9 +626,15 @@ function locateBuiltLibllama(buildDir) {
     }
     for (const entry of entries) {
       if (entry.isDirectory()) {
-        if (entry.name === "_deps" || entry.name.startsWith(".")) continue;
+        if (
+          entry.name === "_deps" ||
+          entry.name === "CMakeFiles" ||
+          entry.name.startsWith(".")
+        ) {
+          continue;
+        }
         stack.push(path.join(dir, entry.name));
-      } else if (entry.isFile() && entry.name === "libllama.so") {
+      } else if (entry.isFile() && entry.name === soName) {
         return path.join(dir, entry.name);
       }
     }
@@ -411,18 +642,38 @@ function locateBuiltLibllama(buildDir) {
   return null;
 }
 
+/**
+ * Strip a shared object out-of-place, then atomically rename over the
+ * original. zig 0.13's `zig objcopy --strip-all <src> <dst>` truncates dst
+ * to 0 BEFORE it reads src when src == dst — the in-place pattern leaves
+ * an empty file and a non-zero exit. Out-of-place is correct on every
+ * platform (and is also what GNU strip does internally for cross-binaries).
+ *
+ * Falls back to system `strip --strip-all <file>` (in-place safe on
+ * GNU coreutils) if `zig objcopy` is missing or errors.
+ */
 function stripBinary({ filePath, zigBin, log }) {
-  // Try zig's bundled llvm-strip first — it knows the target ABI.
+  const tmpPath = `${filePath}.stripped`;
   const zigStripResult = spawnSync(
     zigBin,
-    ["objcopy", "--strip-all", filePath, filePath],
+    ["objcopy", "--strip-all", filePath, tmpPath],
     {
       stdio: ["ignore", "pipe", "pipe"],
     },
   );
-  if (zigStripResult.status === 0) return true;
-  // Fallback: system strip. May leave more symbols than zig objcopy on a
-  // cross-target binary, but reduces size meaningfully on most builders.
+  if (zigStripResult.status === 0 && fs.existsSync(tmpPath)) {
+    const tmpSize = fs.statSync(tmpPath).size;
+    if (tmpSize > 0) {
+      fs.renameSync(tmpPath, filePath);
+      return true;
+    }
+    // Defensive: zig wrote a zero-byte file. Discard and fall through to
+    // system strip — better to ship with symbols than ship empty.
+    fs.rmSync(tmpPath, { force: true });
+  } else if (fs.existsSync(tmpPath)) {
+    fs.rmSync(tmpPath, { force: true });
+  }
+  // Fallback: system strip. GNU coreutils strip is in-place safe.
   const systemStripResult = spawnSync("strip", ["--strip-all", filePath], {
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -442,8 +693,9 @@ export async function main(argv = process.argv.slice(2)) {
 
   let allPresent = true;
   for (const abi of args.abis) {
-    const out = path.join(args.androidAssetsDir, abi, "libllama.so");
-    if (!fs.existsSync(out)) {
+    const llama = path.join(args.androidAssetsDir, abi, "libllama.so");
+    const ggml = path.join(args.androidAssetsDir, abi, "libggml.so");
+    if (!fs.existsSync(llama) || !fs.existsSync(ggml)) {
       allPresent = false;
       break;
     }
@@ -465,6 +717,7 @@ export async function main(argv = process.argv.slice(2)) {
     const abiAssetDir = path.join(args.androidAssetsDir, abi);
     buildLibllamaForAbi({
       srcDir,
+      cacheDir: args.cacheDir,
       abi,
       abiAssetDir,
       jobs: args.jobs,
