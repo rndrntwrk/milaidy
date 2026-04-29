@@ -209,9 +209,7 @@ jobs:
         run: node scripts/init-submodules.mjs
 
       - name: Install dependencies
-        run: bun install --ignore-scripts
-        env:
-          MILADY_SKIP_LOCAL_UPSTREAMS: "1"
+        run: bun install --cwd eliza --ignore-scripts --frozen-lockfile
 
       - name: Generate protobuf types
         run: |
