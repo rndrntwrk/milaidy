@@ -32,6 +32,7 @@ export const PLUGIN_PATCH_DIRS = {
   "plugin-anthropic": "plugins/plugin-anthropic",
   "plugin-google-genai": "plugins/plugin-google-genai",
   "plugin-personality": "plugins/plugin-personality",
+  "plugin-plugin-manager": "plugins/plugin-plugin-manager",
   "plugin-agent-skills": "plugins/plugin-agent-skills",
 };
 
