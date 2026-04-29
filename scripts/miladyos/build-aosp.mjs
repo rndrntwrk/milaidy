@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import { main as compileLibllamaMain } from "./compile-libllama.mjs";
 import { main as syncToAospMain } from "./sync-to-aosp.mjs";
 import { main as validateMain } from "./validate.mjs";
 
@@ -32,6 +33,17 @@ export function parseArgs(argv) {
     launch: false,
     bootValidate: false,
     skipStopCvd: false,
+    // AOSP builds need a musl-linked libllama.so per ABI for the on-device
+    // bun process to dlopen via bun:ffi (see compile-libllama.mjs and
+    // eliza/packages/agent/src/runtime/aosp-llama-adapter.ts). Default on;
+    // --skip-libllama lets developers iterate on non-inference paths
+    // without paying the llama.cpp cross-compile cost.
+    skipLibllama: false,
+    // When set, also re-run `bun run build:android:system` with AOSP env
+    // flags so the privileged APK staged into vendor/milady is rebuilt
+    // with libllama.so + BuildConfig.AOSP_BUILD=true. Off by default to
+    // preserve the existing two-step contract documented in SETUP_AOSP.md.
+    rebuildPrivilegedApk: false,
   };
 
   const readFlagValue = (flag, index) => {
@@ -61,9 +73,13 @@ export function parseArgs(argv) {
       args.bootValidate = true;
     } else if (arg === "--skip-stop-cvd") {
       args.skipStopCvd = true;
+    } else if (arg === "--skip-libllama") {
+      args.skipLibllama = true;
+    } else if (arg === "--rebuild-privileged-apk") {
+      args.rebuildPrivilegedApk = true;
     } else if (arg === "-h" || arg === "--help") {
       console.log(
-        "Usage: node scripts/miladyos/build-aosp.mjs --aosp-root <AOSP_ROOT> [--source-vendor <VENDOR_DIR>] [--jobs <N>] [--skip-build] [--skip-stop-cvd] [--launch] [--boot-validate]",
+        "Usage: node scripts/miladyos/build-aosp.mjs --aosp-root <AOSP_ROOT> [--source-vendor <VENDOR_DIR>] [--jobs <N>] [--skip-build] [--skip-stop-cvd] [--skip-libllama] [--rebuild-privileged-apk] [--launch] [--boot-validate]",
       );
       process.exit(0);
     } else if (arg.startsWith("--")) {
@@ -161,10 +177,56 @@ function launchCuttlefish(aospRoot) {
   );
 }
 
+/**
+ * Re-build the privileged Capacitor APK with AOSP-only env flags so the
+ * staged Milady.apk picks up BuildConfig.AOSP_BUILD=true and the agent
+ * bundle is produced with MILADY_AOSP_BUILD=1 (bundler then keeps
+ * `node-llama-cpp` real instead of stubbing it; see
+ * eliza/packages/agent/scripts/build-mobile-bundle.mjs).
+ *
+ * Both flags are propagated explicitly via env so subprocesses spawned by
+ * gradle and bun see them. The gradle property `-PmiladyAospBuild=true`
+ * controls the BuildConfig field via run-mobile-build.mjs.
+ */
+function rebuildPrivilegedApk() {
+  const env = {
+    ...process.env,
+    MILADY_AOSP_BUILD: "1",
+    MILADY_GRADLE_AOSP_BUILD: "true",
+  };
+  const result = spawnSync("bun", ["run", "build:android:system"], {
+    cwd: repoRoot,
+    env,
+    stdio: "inherit",
+  });
+  if (result.error) {
+    throw new Error(
+      `bun run build:android:system failed: ${result.error.message}`,
+    );
+  }
+  if (result.status !== 0) {
+    throw new Error(
+      `bun run build:android:system exited with code ${result.status}`,
+    );
+  }
+}
+
 export async function main(argv = process.argv.slice(2)) {
   const args = parseArgs(argv);
   assertLinuxBuilder();
   assertAospRoot(args.aospRoot);
+
+  // Cross-compile libllama.so per ABI BEFORE we rebuild the privileged APK
+  // (so it's already in assets/agent/{abi}/ when gradle packs the APK) and
+  // BEFORE we sync vendor/milady into AOSP (so the synced APK contains it).
+  // The compile step is idempotent — `--skip-if-present` keeps re-runs cheap.
+  if (!args.skipLibllama) {
+    await compileLibllamaMain(["--skip-if-present"]);
+  }
+
+  if (args.rebuildPrivilegedApk) {
+    rebuildPrivilegedApk();
+  }
 
   const syncArgs = args.sourceVendor
     ? ["--source-vendor", args.sourceVendor, args.aospRoot]

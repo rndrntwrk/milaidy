@@ -55,35 +55,48 @@ valid JSON.
 
 A working APK that ships the bundled agent and serves chat through it requires four more pieces.
 
-### 1. Asset shipping
+### 1. Asset shipping (DONE)
 
-Bun + the three musl shared objects must land in the APK. They cannot live under `lib/{abi}/`
-because Android extracts those without the executable bit (and renames them `libfoo.so`). The
-practical path is `apps/app/android/app/src/main/assets/agent/{bun,ld-musl-*.so.1,libstdc++*,
-libgcc_s*,server.js}` plus a copy step at first launch that drops them into the app's writable
-data dir (`/data/data/com.miladyai.milady/files/agent/`) and chmods them.
+Bun + the three musl shared objects land in the APK under
+`apps/app/android/app/src/main/assets/agent/{abi}/`. The
+`stage-android-agent.mjs` step in `eliza/packages/app-core/scripts/run-mobile-build.mjs`
+populates that tree on every Capacitor APK build, and `MiladyAgentService.java`
+copies the files into `/data/data/com.miladyai.milady/files/agent/{abi}/` at
+first launch with the executable bit set.
 
-This adds ~100 MB to the APK per architecture. With both `x86_64` (cuttlefish) and `arm64-v8a`
-(real phones) shipped, the APK grows ~200 MB. Acceptable for the on-device trade-off, possibly
-worth a Play-Store-style ABI split if size matters.
+For the AOSP product build, the same tree also receives a per-ABI
+**`libllama.so`** (musl-linked, cross-compiled from llama.cpp `b3490` via
+`scripts/miladyos/compile-libllama.mjs`). The Capacitor APK does NOT ship
+`libllama.so` — it relies on the WebView-hosted `llama-cpp-capacitor`
+plugin reached through the DeviceBridge loopback instead.
 
-### 2. `MiladyAgentService.java`
+APK size with the agent runtime is ~100 MB per ABI; with `libllama.so`
+added on the AOSP variant, ~110-115 MB per ABI. ABI split via Play
+bundle config keeps the user-visible download sane.
 
-A new foreground service in `eliza/packages/app-core/platforms/android/app/src/main/java/...`
-that:
+### 2. `MiladyAgentService.java` (DONE)
 
-1. On first launch, copies `assets/agent/` → app data dir, sets executable bits.
-2. `Runtime.exec()`s `ld-musl <bun> <agent-bundle.js> serve` with
-   `MILADY_STATE_DIR=/data/data/com.miladyai.milady/files/.milady`,
-   `MILADY_API_PORT=31337`, `LD_LIBRARY_PATH=...`.
-3. Forwards stdout/stderr to logcat for diagnostics.
-4. Holds a foreground notification (`FOREGROUND_SERVICE_SPECIAL_USE`) so Android won't kill it.
-5. `MiladyBootReceiver` already runs at `BOOT_COMPLETED`; have it `startForegroundService()`
-   on the new service alongside the existing `GatewayConnectionService`.
+`MiladyAgentService` is the foreground service that owns the local Eliza
+agent process. It:
 
-This is parallel in shape to `GatewayConnectionService`, which today only holds a notification
-for an externally-managed WebSocket. Differences: this one owns a child process and has to keep
-it alive across pause/resume.
+1. Copies `assets/agent/` → app data dir on first launch, sets executable bits.
+2. `Runtime.exec()`s `ld-musl <bun> <agent-bundle.js> serve`.
+3. Forwards stdout/stderr to logcat.
+4. Holds a `FOREGROUND_SERVICE_SPECIAL_USE` notification with subtype
+   `local-agent-runtime`.
+5. `MiladyBootReceiver` calls `startForegroundService()` for it at
+   `BOOT_COMPLETED`.
+
+It also exports the per-platform inference env vars to the bun process:
+
+- `ELIZA_DEVICE_BRIDGE_ENABLED=1` — always on, lets the WebView host
+  `@elizaos/capacitor-llama` and broker inference for the agent.
+- `MILADY_LOCAL_LLAMA=1` — only when `BuildConfig.AOSP_BUILD == true`.
+  This flips the runtime onto the in-process `bun:ffi` loader at
+  `eliza/packages/agent/src/runtime/aosp-llama-adapter.ts`, which dlopens
+  `agent/{abi}/libllama.so` directly. The gradle `AOSP_BUILD` field is
+  driven by `-PmiladyAospBuild=true`, set by `scripts/miladyos/build-aosp.mjs`
+  during the AOSP product build.
 
 ### 3. SELinux policy
 
@@ -103,12 +116,11 @@ Validate by running `adb shell dmesg | grep avc` after `cvd reset` and tightenin
 
 The bundling spike showed the agent loads but dies on:
 
-- **PGlite extension resolution.** `@electric-sql/pglite` resolves `vector.tar.gz`,
-  `fuzzystrmatch.tar.gz`, and `pglite.data` via `import.meta.url` of its own bundled module —
-  after `bun build`, that URL is the agent bundle's path, not the package's, and the `../`
-  relative paths land in `/data/local/`. Fix: ship those files alongside the bundle and either
-  patch PGlite's resolution or symlink `/data/local/{vector,fuzzystrmatch}.tar.gz` →
-  `/data/data/.../files/agent/`.
+- **PGlite extension resolution** (DONE). `pglite.wasm`, `pglite.data`,
+  `vector.tar.gz`, and `fuzzystrmatch.tar.gz` are now shipped under
+  `assets/agent/` and `MiladyAgentService` extracts them with the right
+  parent/child relative path PGlite expects via its `new URL("../X", ...)`
+  resolution.
 - **Plugin resolution.** The 10 core plugins (`@elizaos/plugin-shell`, `@elizaos/plugin-cron`,
   `@elizaos/plugin-app-control`, `@elizaos/plugin-commands`, etc.) are looked up by package name
   at runtime, not bundled. They need to ship as a flattened `node_modules/@elizaos/plugin-*` tree
@@ -120,12 +132,9 @@ The bundling spike showed the agent loads but dies on:
   guards (`if (process.platform === "android") return null`) at every site, or — better — a
   `MILADY_PLATFORM=android` env var the runtime checks centrally to short-circuit them. The
   existing `ELIZA_DISABLE_LOCAL_EMBEDDINGS=1` knob is the precedent.
-- **No AI provider on-device.** Local LLM via `node-llama-cpp` is desktop-only; on mobile we
-  already have `llama-cpp-capacitor` (JNI-bound llama.cpp) ready to host a local model. Wiring
-  the agent to use it instead of `node-llama-cpp` is its own task. For first-light, the agent
-  can run with `ANTHROPIC_API_KEY` from the user's onboarding and route inference through the
-  cloud — the local agent then owns state, tool use, scheduling, and connector logic, which is
-  most of what "local agent" buys us. Pure-on-device inference is a follow-on.
+- **On-device inference** (DONE for both APK variants). Two parallel paths
+  now ship and are documented in the architecture section below. `node-llama-cpp`
+  remains desktop-only; mobile uses one of the two mobile-friendly loaders.
 
 ### 5. UI wiring
 
@@ -148,6 +157,65 @@ function shouldShowLocalOption(isDesktop: boolean, isDev: boolean, isAndroid: bo
 `MOBILE_RUNTIME_MODE_STORAGE_KEY = "local"`, and the chat path then talks to the on-device
 agent the same way it talks to a remote one — same protocol, no UI changes.
 
+## On-device inference: two paths, one runtime
+
+Milady ships two distinct local-inference architectures on Android, gated by
+which APK variant you're holding:
+
+```
+┌─────────────────────────────┐         ┌────────────────────────────┐
+│  Capacitor APK (Play / IPA) │         │   AOSP product APK         │
+│  com.miladyai.milady        │         │   com.miladyai.milady      │
+│                             │         │   (priv-app, AOSP_BUILD=1) │
+│   ┌──────────────────────┐  │         │   ┌──────────────────────┐ │
+│   │ WebView              │  │         │   │ WebView              │ │
+│   │ @elizaos/            │  │         │   │ (no llama plugin —   │ │
+│   │ capacitor-llama JNI  │  │         │   │  bundle dependency   │ │
+│   │      ↑               │  │         │   │  remains for fallback│ │
+│   │      │               │  │         │   │  parity, unused)     │ │
+│   │      │ DeviceBridge  │  │         │   └──────────────────────┘ │
+│   │      │ /api/local-   │  │         │              │             │
+│   │      │ inference/    │  │         │              │             │
+│   │      │ device-bridge │  │         │              │             │
+│   │  loopback WSS        │  │         │              │             │
+│   └─────────┬────────────┘  │         │              │             │
+│             │               │         │              │             │
+│   ┌─────────┴────────────┐  │         │   ┌──────────┴──────────┐  │
+│   │ MiladyAgentService   │  │         │   │ MiladyAgentService   │ │
+│   │ (bun process)        │  │         │   │ (bun process)        │ │
+│   │ ELIZA_DEVICE_BRIDGE_ │  │         │   │ MILADY_LOCAL_LLAMA=1 │ │
+│   │   ENABLED=1          │  │         │   │ + DeviceBridge       │ │
+│   │   (sole inference)   │  │         │   │   loopback (legacy)  │ │
+│   │                      │  │         │   │   bun:ffi.dlopen()   │ │
+│   │                      │  │         │   │   agent/{abi}/       │ │
+│   │                      │  │         │   │   libllama.so        │ │
+│   └──────────────────────┘  │         │   └──────────────────────┘ │
+└─────────────────────────────┘         └────────────────────────────┘
+```
+
+The selection is deterministic and triple-gated:
+
+1. **Build-time gate** — `MILADY_AOSP_BUILD=1` env to
+   `eliza/packages/agent/scripts/build-mobile-bundle.mjs` keeps
+   `node-llama-cpp` in the bundle (rather than stub-replacing it) so the
+   `bun:ffi` loader has metadata helpers available to it.
+2. **APK gradle gate** — `BuildConfig.AOSP_BUILD` boolean baked into the
+   APK by `-PmiladyAospBuild=true`. `MiladyAgentService` reads it with
+   `if (BuildConfig.AOSP_BUILD) agentEnv.put("MILADY_LOCAL_LLAMA", "1")`.
+3. **Runtime gate** — `MILADY_LOCAL_LLAMA=1` in the bun process env makes
+   `aosp-llama-adapter.ts` register itself as the `localInferenceLoader`
+   *before* the Capacitor adapter, so even with both loaders compiled in
+   the FFI path always wins on AOSP.
+
+Why two paths instead of one: the Capacitor APK distributes through the
+Play Store and cannot ship `priv-app` privileges, system-level SELinux
+domains, or arbitrary `dlopen()` of native code from app data. The
+DeviceBridge loopback path keeps inference inside the WebView's
+`llama-cpp-capacitor` JNI binding, which IS allowed for normal apps. The
+AOSP product build owns the system surface, runs in `priv_app` (or its
+own SELinux domain — sub-task 3 follow-up), and can dlopen() `libllama.so`
+straight into the agent process without crossing the WebView boundary.
+
 ## Reproducing the spike
 
 ```
@@ -161,6 +229,25 @@ adb shell '(echo -e "GET /api/health HTTP/1.0\r\nHost: localhost\r\n\r"; sleep 1
 
 `bootstrap.sh` is idempotent (cached downloads in `/tmp/milady-android-spike/`) and
 ABI-aware (reads `ro.product.cpu.abi` and picks `x86_64` or `aarch64` artifacts).
+
+## Building the AOSP variant locally
+
+```bash
+# 0. (one-time) install zig 0.13+ for the libllama cross-compile.
+sudo snap install zig --classic --beta && zig version
+
+# 1. Cross-compile libllama.so for both ABIs (idempotent).
+node scripts/miladyos/compile-libllama.mjs --skip-if-present
+
+# 2. Rebuild the privileged Capacitor APK with AOSP flags.
+MILADY_AOSP_BUILD=1 MILADY_GRADLE_AOSP_BUILD=true bun run build:android:system
+
+# 3. Run the AOSP product build (which also re-runs steps 1+2 if missing).
+node scripts/miladyos/build-aosp.mjs --aosp-root ~/aosp \
+  --rebuild-privileged-apk --launch --boot-validate
+```
+
+See `SETUP_AOSP.md` for the full Linux-x86_64-with-KVM setup.
 
 ## Open questions for follow-up sessions
 

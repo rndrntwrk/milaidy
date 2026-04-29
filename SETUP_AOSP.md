@@ -116,11 +116,78 @@ exec "$SHELL"
 bun --version
 ```
 
-Build and stage the Android system APK:
+### Native llama.cpp build prerequisites
+
+The AOSP-bound APK ships an in-process llama.cpp loaded by the bun agent
+process via `bun:ffi` (see `eliza/packages/agent/src/runtime/aosp-llama-adapter.ts`).
+That requires a **musl-linked** `libllama.so` per ABI, which we cross-compile
+from llama.cpp upstream tag **`b3490`** (commit
+`6e2b6000e5fe808954a7dcef8225b5b7f2c1b9e9`).
+
+We use `zig` for the cross-compile because zig bundles a complete musl libc
+and cross-toolchain for both `aarch64-linux-musl` and `x86_64-linux-musl`. The
+regular Android NDK clang produces bionic-linked binaries that the in-APK
+musl loader cannot dlopen.
+
+Install zig (>= 0.13.0):
 
 ```bash
-bun run build:android:system
+# Linux — pick whichever installs zig 0.13+ on your distro
+sudo snap install zig --classic --beta
+# or, vendor-provided tarball:
+ZIG_VERSION=0.13.0
+curl -L -o /tmp/zig.tar.xz \
+  "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-x86_64-${ZIG_VERSION}.tar.xz"
+sudo tar -xJf /tmp/zig.tar.xz -C /opt
+sudo ln -sf "/opt/zig-linux-x86_64-${ZIG_VERSION}/zig" /usr/local/bin/zig
+zig version  # expect 0.13.0 or newer
 ```
+
+Cross-compile + stage `libllama.so` for both ABIs (idempotent — re-running
+re-uses the cached llama.cpp clone and per-ABI cmake build dirs):
+
+```bash
+node scripts/miladyos/compile-libllama.mjs --skip-if-present
+```
+
+Output paths:
+
+```text
+apps/app/android/app/src/main/assets/agent/arm64-v8a/libllama.so   (real phones)
+apps/app/android/app/src/main/assets/agent/x86_64/libllama.so      (cuttlefish + emulators)
+```
+
+Approximate cost on a 16-core Linux x86_64 builder: ~2-3 minutes per ABI;
+the resulting `libllama.so` is ~5-10 MB stripped per ABI, depending on the
+zig-selected baseline ISA.
+
+### Build the privileged Capacitor APK with AOSP flags
+
+`scripts/miladyos/build-aosp.mjs` runs `compile-libllama.mjs` automatically
+during the AOSP path, so the only thing the operator needs to do is rebuild
+the privileged APK with the AOSP-only env so `BuildConfig.AOSP_BUILD=true`
+gets baked in:
+
+```bash
+MILADY_AOSP_BUILD=1 MILADY_GRADLE_AOSP_BUILD=true bun run build:android:system
+```
+
+This:
+
+1. Builds the agent bundle with `MILADY_AOSP_BUILD=1` (which keeps
+   `node-llama-cpp` real instead of stub-replaced — see
+   `eliza/packages/agent/scripts/build-mobile-bundle.mjs`).
+2. Patches `apps/app/android/app/build.gradle` to enable `BuildConfig`
+   generation and adds the `AOSP_BUILD` boolean buildConfigField.
+3. Forwards `-PmiladyAospBuild=true` to gradle, which sets
+   `BuildConfig.AOSP_BUILD=true` so `MiladyAgentService` exports
+   `MILADY_LOCAL_LLAMA=1` to the bun process at startup.
+4. Stages the APK to `os/android/vendor/milady/apps/Milady/Milady.apk`.
+
+Without these flags, `bun run build:android:system` produces a normal
+Capacitor APK (DeviceBridge inference path, `BuildConfig.AOSP_BUILD=false`).
+That's correct for the Play Store / sideload distribution; the AOSP product
+build is the only path that needs `MILADY_LOCAL_LLAMA=1`.
 
 This produces and stages:
 
@@ -168,6 +235,7 @@ From the Milady checkout:
 cd ~/milady
 node scripts/miladyos/build-aosp.mjs \
   --aosp-root ~/aosp \
+  --rebuild-privileged-apk \
   --launch \
   --boot-validate
 ```
@@ -176,9 +244,18 @@ What this command does:
 
 1. Confirms the host is Linux x86_64 and `/dev/kvm` exists.
 2. Confirms `~/aosp/build/envsetup.sh` exists.
-3. Copies `os/android/vendor/milady` into `~/aosp/vendor/milady`.
-4. Validates the MiladyOS product layer against the AOSP checkout.
-5. Runs:
+3. Cross-compiles `libllama.so` for `arm64-v8a` + `x86_64` from llama.cpp
+   `b3490` and stages it under
+   `apps/app/android/app/src/main/assets/agent/{abi}/libllama.so`.
+   Skipped when both `.so` files already exist; pass `--skip-libllama` to
+   skip even when missing (only useful for non-inference smoke iteration).
+4. With `--rebuild-privileged-apk`: re-runs `bun run build:android:system`
+   under `MILADY_AOSP_BUILD=1` + `MILADY_GRADLE_AOSP_BUILD=true` so the
+   APK staged into `os/android/vendor/milady/apps/Milady/Milady.apk`
+   carries `BuildConfig.AOSP_BUILD=true` and the AOSP-keyed agent bundle.
+5. Copies `os/android/vendor/milady` into `~/aosp/vendor/milady`.
+6. Validates the MiladyOS product layer against the AOSP checkout.
+7. Runs:
 
    ```bash
    source build/envsetup.sh
@@ -186,13 +263,13 @@ What this command does:
    m -j$(nproc)
    ```
 
-6. Launches Cuttlefish:
+8. Launches Cuttlefish:
 
    ```bash
    launch_cvd --daemon
    ```
 
-7. Runs boot validation:
+9. Runs boot validation:
 
    ```bash
    node scripts/miladyos/boot-validate.mjs
@@ -306,6 +383,30 @@ adb shell appops get com.miladyai.milady GET_USAGE_STATS
 adb shell pm list packages | grep -E 'milady|launcher|dialer|messaging|contacts|trebuchet'
 adb logcat -d | grep -Ei 'FATAL EXCEPTION|SecurityException|avc: denied|privapp-permissions'
 ```
+
+Verify the native llama.cpp loader landed (AOSP build only — the Capacitor
+APK ships without it and uses the DeviceBridge path instead):
+
+```bash
+# Each ABI dir on the device should expose libllama.so alongside bun + musl.
+adb shell ls -l /data/data/com.miladyai.milady/files/agent/arm64-v8a/libllama.so
+# (or x86_64 on cuttlefish — pick whichever matches `getprop ro.product.cpu.abi`).
+
+# Confirm the agent process exported MILADY_LOCAL_LLAMA=1 at startup.
+adb shell ps -A | grep milady
+adb shell logcat -d | grep -E '\[aosp-llama\]|MILADY_LOCAL_LLAMA'
+```
+
+Expected logcat lines on a healthy AOSP boot:
+
+```
+I aosp-llama: Loaded /data/.../<model>.gguf (n_ctx=...)
+I aosp-llama: Registered native libllama.so loader (MILADY_LOCAL_LLAMA=1)
+```
+
+If `libllama.so` is missing on the device but the gate is on, the runtime
+logs `[aosp-llama] MILADY_LOCAL_LLAMA=1 but libllama.so missing at <path>`
+and refuses to register the loader (no silent fallback).
 
 Expected high-level results:
 

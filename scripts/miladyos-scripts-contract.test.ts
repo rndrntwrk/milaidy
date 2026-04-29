@@ -90,6 +90,16 @@ describe("MiladyOS script contracts", () => {
       parseBuildAospArgs(["--aosp-root", aospRoot, "--skip-stop-cvd"]),
     ).toMatchObject({ skipStopCvd: true });
     expect(
+      parseBuildAospArgs(["--aosp-root", aospRoot, "--skip-libllama"]),
+    ).toMatchObject({ skipLibllama: true });
+    expect(
+      parseBuildAospArgs(["--aosp-root", aospRoot, "--rebuild-privileged-apk"]),
+    ).toMatchObject({ rebuildPrivilegedApk: true });
+    expect(parseBuildAospArgs(["--aosp-root", aospRoot])).toMatchObject({
+      skipLibllama: false,
+      rebuildPrivilegedApk: false,
+    });
+    expect(
       parseBootValidateArgs([
         "--adb",
         "/tmp/adb",
