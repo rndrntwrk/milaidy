@@ -216,6 +216,35 @@ AOSP product build owns the system surface, runs in `priv_app` (or its
 own SELinux domain — sub-task 3 follow-up), and can dlopen() `libllama.so`
 straight into the agent process without crossing the WebView boundary.
 
+### TurboQuant fork scope
+
+The `apothic/llama.cpp-1bit-turboquant` fork (used by Bonsai 8B 1-bit) adds
+`tbq3_0` / `tbq4_0` KV-cache types to GGML. Per the fork's README and
+direct inspection of `ggml/src/ggml-cuda/turboquant.cuh` plus the
+`fattn-vec-instance-tbq*` template instances, the cache types are
+implemented in **`ggml-cpu` and `ggml-cuda` only**. There are no `tbq*`
+implementations in `ggml-metal`, `ggml-vulkan`, `ggml-opencl`,
+`ggml-hexagon`, or `ggml-hip`. That means:
+
+- **Server / desktop CUDA + CPU**: TurboQuant cache works. Use the fork's
+  `--cache-type-k tbq4_0 --cache-type-v tbq3_0` flags via the apothic
+  build of `llama-server` / `llama-cli`.
+- **Apple Silicon (Metal)**: 1-bit weights still load on stock llama.cpp
+  via the standard llama.cpp build, but the KV cache runs at full
+  precision — TurboQuant's memory win is not available. Bonsai is still
+  usable; just with the regular cache footprint.
+- **Mobile (Vulkan, GPU-delegate, OpenCL)**: same as Metal — 1-bit
+  weights load, full-precision KV cache.
+
+We deliberately do **not** switch the AOSP `libllama.so` source pin to
+the apothic fork. The fork is single-architecture (CPU + CUDA), and
+Milady's AOSP build is musl-cross-compiled for CPU only on
+`aarch64-linux-musl` and `x86_64-linux-musl`. There is no CUDA on those
+ABIs, so switching to the fork would gain us nothing while diverging
+from upstream llama.cpp's release cadence and breaking the b4500 symbol
+pin the FFI adapter relies on. The `Bonsai 8B 1-bit (TurboQuant)` entry
+in the catalog blurb spells this out for end users.
+
 ## Reproducing the spike
 
 ```
