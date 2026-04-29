@@ -129,6 +129,7 @@ import { App } from "../../../eliza/packages/app-core/src/App";
 import {
   apiBaseToDeviceBridgeUrl,
   type IosRuntimeConfig,
+  type IosRuntimeMode,
   resolveIosRuntimeConfig,
 } from "./ios-runtime";
 
@@ -707,11 +708,21 @@ function injectDetachedShellApiBase(): void {
   if (apiBase) validateAndSetApiBase(apiBase);
 }
 
+function mobileModeToIosRuntimeMode(
+  mode: ReturnType<typeof normalizeMobileRuntimeMode>,
+): IosRuntimeMode | null {
+  return mode === "remote-mac" || mode === "cloud" || mode === "cloud-hybrid"
+    ? mode
+    : null;
+}
+
 function getCurrentIosRuntimeConfig(): IosRuntimeConfig {
   if (typeof window === "undefined") return IOS_RUNTIME_ENV_CONFIG;
   try {
-    const mode = normalizeMobileRuntimeMode(
-      window.localStorage.getItem(MOBILE_RUNTIME_MODE_STORAGE_KEY),
+    const mode = mobileModeToIosRuntimeMode(
+      normalizeMobileRuntimeMode(
+        window.localStorage.getItem(MOBILE_RUNTIME_MODE_STORAGE_KEY),
+      ),
     );
     // MobileRuntimeMode includes "local" but IosRuntimeConfig.mode does not —
     // the local-agent runtime is Android-only. Drop "local" before assigning.
