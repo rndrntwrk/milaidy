@@ -141,7 +141,9 @@ jobs:
 
       - name: Build local plugin-telegram and overlay node_modules
         run: |
-          git submodule update --init --depth=1 eliza/plugins/plugin-telegram
+          # plugin-telegram is a submodule of the eliza submodule, not a
+          # direct submodule of milady. Run the init from inside eliza/.
+          git -C eliza submodule update --init --depth=1 plugins/plugin-telegram
           test -f eliza/plugins/plugin-telegram/package.json
           (cd eliza/plugins/plugin-telegram && bun "$GITHUB_WORKSPACE/node_modules/tsup/dist/cli-default.js" src/index.ts src/account-auth-service.ts --format esm --out-dir dist --tsconfig tsconfig.build.json --sourcemap --clean --no-config)
 

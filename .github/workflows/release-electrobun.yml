@@ -226,7 +226,9 @@ jobs:
         continue-on-error: true
         run: |
           set +e
-          git submodule update --init --depth=1 eliza/plugins/plugin-telegram 2>/dev/null || true
+          # plugin-telegram is a submodule of the eliza submodule, not a
+          # direct submodule of milady. Run the init from inside eliza/.
+          git -C eliza submodule update --init --depth=1 plugins/plugin-telegram 2>/dev/null || true
           if [ ! -f eliza/plugins/plugin-telegram/package.json ]; then
             echo "plugin-telegram submodule not available; skipping (subpath import may fail at runtime)"
             exit 0
