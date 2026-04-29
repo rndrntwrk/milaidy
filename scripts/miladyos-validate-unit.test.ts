@@ -205,6 +205,10 @@ prebuilt_etc {
 
   writeFile(path.join(vendor, "init", "init.milady.rc"), "on init\n");
   writeFile(path.join(vendor, "sepolicy", "file_contexts"), "");
+  writeFile(
+    path.join(vendor, "sepolicy", "milady_agent.te"),
+    "allow platform_app app_data_file:file { execute execute_no_trans };\n",
+  );
 
   return vendor;
 }

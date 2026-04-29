@@ -517,6 +517,20 @@ export function validateSepolicy(vendorDir) {
   const fileContextsPath = path.join(vendorDir, "sepolicy", "file_contexts");
   assertFile(fileContextsPath, "vendor/milady sepolicy/file_contexts");
 
+  // The agent runs as platform_app and must be able to execve the bundled
+  // bun runtime out of /data/data/<pkg>/files/agent/. AOSP's stock
+  // platform_app.te has no such allow rule (only priv_app does), so we
+  // add it here.
+  const tePath = path.join(vendorDir, "sepolicy", "milady_agent.te");
+  assertFile(tePath, "vendor/milady sepolicy/milady_agent.te");
+  const te = read(tePath);
+  assertMatches(
+    te,
+    /allow\s+platform_app\s+app_data_file\s*:\s*file\b[^;]*\bexecute_no_trans\b[^;]*;/,
+    "milady_agent.te",
+    "allow platform_app app_data_file:file { execute execute_no_trans } (on-device agent exec)",
+  );
+
   console.log("[miladyos:validate] Sepolicy checks passed.");
 }
 
