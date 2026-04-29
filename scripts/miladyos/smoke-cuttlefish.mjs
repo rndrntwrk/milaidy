@@ -181,38 +181,50 @@ export async function runSmoke({ adb: adbImpl = adb } = {}) {
     detail: `abi=${abi}`,
   });
 
-  // ── Step 3: launch the service explicitly ───────────────────────────
+  // ── Step 3: launch the service ──────────────────────────────────────
   logStep(3, "Starting MiladyAgentService");
-  const startSvc = adbImpl(
-    ["shell", "am", "start-foreground-service", "-n", SERVICE_FQN],
-    { serial },
-  );
-  // am exits 0 with "Starting service: Intent..." on success. On older
-  // Androids without start-foreground-service, fall back to startservice.
-  const svcStdout = startSvc.stdout + startSvc.stderr;
+  // The MiladyAgentService is declared android:exported="false" so a
+  // direct `am start-foreground-service` from adb shell (uid 2000) hits
+  // "Requires permission not exported from uid 10036". The legitimate
+  // startup path is via MainActivity.onCreate() which calls
+  // MiladyAgentService.start(this) from inside the Milady process. We
+  // also rely on MiladyBootReceiver auto-starting the service on boot.
+  // Try direct start first (works on debuggable / shell-uid-allowed
+  // builds); on permission denial, fall back to launching MainActivity;
+  // finally treat an already-running service as success.
+  const tryStart = (cmd) =>
+    adbImpl(["shell", "am", cmd, "-n", SERVICE_FQN], { serial });
+  let startSvc = tryStart("start-foreground-service");
+  let svcText = (startSvc.stdout + startSvc.stderr).trim();
+  const isPermDenied = /not exported from uid/i.test(svcText);
   if (
     startSvc.status !== 0 ||
-    /Error:|Unable to find|Bad component name/i.test(svcStdout)
+    /Error:|Unable to find|Bad component name/i.test(svcText)
   ) {
-    const fallback = adbImpl(
-      ["shell", "am", "startservice", "-n", SERVICE_FQN],
-      {
-        serial,
-      },
-    );
-    if (
-      fallback.status !== 0 ||
-      /Error:|Unable to find/i.test(fallback.stdout + fallback.stderr)
-    ) {
-      results.push({
-        step: 3,
-        label: "MiladyAgentService start",
-        ok: false,
-        detail: `am start-foreground-service / startservice both failed: ${svcStdout
-          .trim()
-          .slice(0, 200)}`,
-      });
-      return results;
+    if (!isPermDenied) {
+      startSvc = tryStart("startservice");
+      svcText = (startSvc.stdout + startSvc.stderr).trim();
+    }
+    if (isPermDenied || startSvc.status !== 0 || /Error:/i.test(svcText)) {
+      // Launch the activity, which kicks the service from inside the
+      // Milady uid via MiladyAgentService.start(this).
+      const launchAct = adbImpl(
+        ["shell", "am", "start", "-n", `${PACKAGE_NAME}/${PACKAGE_NAME}.MainActivity`],
+        { serial },
+      );
+      const launchText = (launchAct.stdout + launchAct.stderr).trim();
+      if (
+        launchAct.status !== 0 ||
+        /Error:|Unable to find/i.test(launchText)
+      ) {
+        results.push({
+          step: 3,
+          label: "MiladyAgentService start",
+          ok: false,
+          detail: `service direct-start hit "${svcText.slice(0, 80)}" and activity launch fallback failed: ${launchText.slice(0, 120)}`,
+        });
+        return results;
+      }
     }
   }
   results.push({ step: 3, label: "MiladyAgentService start", ok: true });
@@ -251,12 +263,15 @@ export async function runSmoke({ adb: adbImpl = adb } = {}) {
   });
 
   // ── Step 5: read the per-boot bearer token from app data dir ────────
-  logStep(5, "Reading per-boot bearer token (run-as → root cat fallback)");
+  logStep(5, "Reading per-boot bearer token (run-as → su 0 fallback)");
   // Release-built APKs from the AOSP image are NOT debuggable, so
-  // `run-as <pkg>` fails with "package not debuggable". cuttlefish
-  // userdebug images run adbd as root, which means we can `cat` the
-  // token file directly. Try run-as first (works on debuggable /
-  // userdebug Capacitor builds), then fall back to a direct read.
+  // `run-as <pkg>` fails with "package not debuggable". On a userdebug
+  // cuttlefish, `adb root` switches adbd to root but `adb shell` still
+  // enters as the shell user (uid 2000) which cannot read /data/data/
+  // <pkg>/files/. Use `su 0 cat` to escalate inside the shell. Try in
+  // order: run-as → direct cat → su 0 cat. The shell context still
+  // bumps into SELinux on user builds, but on userdebug the
+  // `permissive` shell domain lets `su 0` read app data.
   const tokenPath = `/data/data/${PACKAGE_NAME}/files/auth/local-agent-token`;
   let tokenResult = adbImpl(
     ["shell", "run-as", PACKAGE_NAME, "cat", tokenPath],
@@ -268,8 +283,13 @@ export async function runSmoke({ adb: adbImpl = adb } = {}) {
     /run-as: /i.test(tokenResult.stderr) ||
     /not debuggable/i.test(tokenResult.stderr);
   if (runAsFailed) {
-    // Adbd-as-root direct read. Returns empty when adbd is shell.
     tokenResult = adbImpl(["shell", "cat", tokenPath], { serial });
+    token = tokenResult.stdout.trim();
+  }
+  if (!token || token.length < 16 || /[^0-9a-fA-F]/.test(token)) {
+    // Last resort on userdebug: su 0 cat. `adb root` plus `su 0` is the
+    // canonical way to read app-private files from an adb shell.
+    tokenResult = adbImpl(["shell", "su", "0", "cat", tokenPath], { serial });
     token = tokenResult.stdout.trim();
   }
   if (!token || token.length < 16 || /[^0-9a-fA-F]/.test(token)) {
@@ -277,7 +297,7 @@ export async function runSmoke({ adb: adbImpl = adb } = {}) {
       step: 5,
       label: "Bearer token readable",
       ok: false,
-      detail: `Could not read ${tokenPath}: run-as failed (${tokenResult.stderr.trim().slice(0, 80) || "non-debuggable"}) and direct cat returned ${token.length} chars. Run \`adb root\` if the device is userdebug, or rebuild the APK with android:debuggable=true for run-as.`,
+      detail: `Could not read ${tokenPath}: run-as / cat / su 0 cat all failed. Last stderr: ${tokenResult.stderr.trim().slice(0, 100) || "(empty)"}. Run \`adb root\` on userdebug; on non-userdebug, rebuild the APK with android:debuggable=true.`,
     });
     return results;
   }

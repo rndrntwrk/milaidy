@@ -109,3 +109,27 @@ type milady_agent_data, file_type, data_file_type, core_data_file_type;
 ### extend the per-arch seccomp allowlist in `bionic/libc/seccomp/` and
 ### rebuild AOSP. None of those are sepolicy work.
 ###
+
+###
+### Runtime allows for the on-device bun process under platform_app.
+###
+### bun + musl libc query /proc/sys/vm/overcommit_memory at startup to
+### tune their malloc / mmap behaviour. AOSP's stock platform_app.te
+### only allows `proc:file read` for a small allowlist; the
+### `proc_overcommit_memory` type is NOT in it, so the open() returns
+### EACCES (audit denial: scontext=platform_app tcontext=
+### proc_overcommit_memory tclass=file). musl handles the failure but
+### bun's fallback path on the third such denial is to abort
+### initialization, so the agent process exits before printing any log
+### line. Granting `read open getattr` on this single proc node mirrors
+### what `untrusted_app_*` already gets on user/userdebug.
+###
+### The fifo_file ioctl is the FIONREAD/TCGETS probes Node-style
+### runtimes do on stdout/stderr (and bun's IPC pipe to its child). On
+### app domains, AOSP's neverallow envelope blocks ioctl on pipe fds
+### unless explicitly listed; bun retries with read(2), but the avc
+### denial counter in dmesg makes the audit log noisy. Allow it
+### explicitly so the audit trail stays signal-only.
+###
+allow platform_app proc_overcommit_memory:file { read open getattr };
+allow platform_app platform_app:fifo_file ioctl;
