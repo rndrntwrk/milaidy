@@ -25,13 +25,26 @@
  *   then unwraps the pointer back into a struct argument when calling the
  *   real entry points.
  *
- * llama.cpp pin: b4500
+ * llama.cpp pin: apothic/llama.cpp-1bit-turboquant @ main-b8198-b2b5273
+ *   (== upstream llama.cpp b8198 + TurboQuant KV-cache patch)
  *   Field set verified against
- *     ~/.cache/milady-android-agent/llama-cpp-b4500/include/llama.h
+ *     ~/.cache/milady-android-agent/llama-cpp-main-b8198-b2b5273/include/llama.h
  *   Specifically:
- *     llama_model_params:           lines 278-310
- *     llama_context_params:         lines 314-355
- *     llama_sampler_chain_params:   lines 377-379  (one field: no_perf)
+ *     llama_model_params:           lines 280-320
+ *     llama_context_params:         lines 329-381
+ *     llama_sampler_chain_params:   one field: no_perf
+ *
+ * Drift since the b4500 pin:
+ *   - llama_context_params.flash_attn (bool) → flash_attn_type (enum). The
+ *     bool setter has been removed; the adapter never called it.
+ *   - llama_context_params gains type_k / type_v (ggml_type for K/V cache),
+ *     samplers / n_samplers (sampler-seq config), swa_full, kv_unified.
+ *     Setters for type_k / type_v are now exposed below to drive the
+ *     TurboQuant KV-cache integration (Bonsai-8B-1bit ships a TBQ-trained
+ *     1-bit GGUF that needs type_k=tbq4_0 / type_v=tbq3_0 for the memory
+ *     win to materialise on phone CPU).
+ *   - llama_model_params gains use_direct_io / use_extra_bufts / no_host /
+ *     no_alloc; defaults are fine for AOSP CPU, no setters needed.
  *
  * Setter coverage strategy:
  *   We expose only the fields the adapter currently calls or is likely to
@@ -157,13 +170,28 @@ void milady_llama_context_params_set_offload_kqv(struct llama_context_params * p
     if (p != NULL) p->offload_kqv = v;
 }
 
-void milady_llama_context_params_set_flash_attn(struct llama_context_params * p, bool v) {
-    if (p != NULL) p->flash_attn = v;
-}
-
 /* pooling_type is enum llama_pooling_type, ABI-wise an int. We accept i32. */
 void milady_llama_context_params_set_pooling_type(struct llama_context_params * p, int32_t v) {
     if (p != NULL) p->pooling_type = (enum llama_pooling_type) v;
+}
+
+/* type_k / type_v are enum ggml_type, ABI-wise an int. We accept i32 so the
+ * adapter can pass the GGML_TYPE_TBQ3_0 (43) / GGML_TYPE_TBQ4_0 (44)
+ * constants from llama.cpp-1bit-turboquant. Stock ggml types
+ * (GGML_TYPE_F16 = 1, GGML_TYPE_Q4_0 = 2, etc.) work too — this is just
+ * the canonical KV-cache type field.
+ *
+ * Wiring these turns on the fork's CPU TurboQuant KV-cache path. The
+ * tbq{3,4}_0 codebooks live in ggml/src/ggml-quants.c; the CPU vec-dot
+ * implementations live in ggml/src/ggml-cpu/quants.c. Storage is
+ * 14 bytes per 32 floats (tbq3_0) / 16 bytes per 32 floats (tbq4_0)
+ * vs 64 bytes for fp16 — a ~4x KV-cache memory reduction on phones. */
+void milady_llama_context_params_set_type_k(struct llama_context_params * p, int32_t v) {
+    if (p != NULL) p->type_k = (enum ggml_type) v;
+}
+
+void milady_llama_context_params_set_type_v(struct llama_context_params * p, int32_t v) {
+    if (p != NULL) p->type_v = (enum ggml_type) v;
 }
 
 struct llama_context * milady_llama_init_from_model(struct llama_model * model, const struct llama_context_params * p) {

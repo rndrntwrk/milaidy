@@ -29,21 +29,34 @@
 //   that miss <bit> / <span> shims llama.cpp's CMake feature checks rely on.
 //
 // llama.cpp pin (matches eliza/packages/agent/src/runtime/aosp-llama-adapter.ts):
-//   tag:    b4500
-//   commit: a133566d34a1dd3693c504786963bf1b7b7d8c0e
+//   fork:   https://github.com/Apothic-AI/llama.cpp-1bit-turboquant
+//   tag:    main-b8198-b2b5273  (== upstream b8198 + TurboQuant KV-cache patch)
+//   commit: b2b5273e8b275bb96362fe844a5202632eb3e52b
 //
-// Why b4500 (not the prior b3490 pin):
-//   The adapter binds the post-2024 sampler-chain API
-//   (`llama_sampler_chain_init`, `llama_sampler_init_greedy`, etc.) plus the
+// Why this fork (not stock ggml-org/llama.cpp b4500):
+//   apothic/llama.cpp-1bit-turboquant adds two GGML quant types (TBQ3_0 = 43,
+//   TBQ4_0 = 44) that the matching Bonsai-8B-1bit GGUF on Hugging Face is
+//   trained against. The fork's KV-cache path stores K/V in TBQ format
+//   instead of fp16 — block_tbq3_0 packs 32 floats into 14 bytes vs 64
+//   bytes for fp16, a 4–4.6× reduction. KV cache is the dominant memory
+//   consumer on long contexts on phones, so this is the difference between
+//   "Bonsai loads but OOMs after 1k tokens" and "Bonsai loads and chats".
+//
+//   Critically, the fork ships a CPU implementation of TBQ — see
+//   `ggml/src/ggml-cpu/quants.c` (ggml_vec_dot_tbq{3,4}_0_f32,
+//   quantize_row_tbq{3,4}_0) and `ggml/src/ggml-cpu/ggml-cpu.c` (type-trait
+//   registration). Mobile is CPU-only via the bun:ffi musl path, so the
+//   CPU TBQ implementation is what makes this useful on phones at all.
+//
+//   The fork is based on llama.cpp b8198 (much newer than the prior b4500
+//   pin), so it inherits the post-2024 sampler-chain API
+//   (`llama_sampler_chain_init`, `llama_sampler_init_greedy`, etc.) and the
 //   renamed model/vocab API (`llama_model_load_from_file`,
 //   `llama_init_from_model`, `llama_model_get_vocab`, `llama_vocab_eos`,
-//   `llama_vocab_is_eog`). Tag b3490 ships only the legacy `llama_sample_*`
-//   family and the older `llama_load_model_from_file` / `llama_token_eos`
-//   names — `dlsym()` returns NULL for every renamed symbol, so the adapter
-//   throws at first inference call. b4500 is the first stable tag that
-//   ships ALL of the symbols the adapter binds, including
-//   `llama_get_embeddings_seq` and `llama_set_embeddings` for the
-//   embed() path.
+//   `llama_vocab_is_eog`) the adapter binds against. One drift versus
+//   b4500: `llama_context_params.flash_attn` (bool) → `flash_attn_type`
+//   (enum). The shim no longer exposes a `set_flash_attn` setter (the
+//   adapter never called it anyway).
 //
 // Output (per ABI):
 //   apps/app/android/app/src/main/assets/agent/{abi}/libllama.so
@@ -124,9 +137,12 @@ import { fileURLToPath } from "node:url";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "..", "..");
 
-export const LLAMA_CPP_TAG = "b4500";
-export const LLAMA_CPP_COMMIT = "a133566d34a1dd3693c504786963bf1b7b7d8c0e";
-export const LLAMA_CPP_REMOTE = "https://github.com/ggml-org/llama.cpp.git";
+// apothic/llama.cpp-1bit-turboquant @ main-b8198-b2b5273
+// (TurboQuant KV-cache patch on top of upstream llama.cpp b8198).
+export const LLAMA_CPP_TAG = "main-b8198-b2b5273";
+export const LLAMA_CPP_COMMIT = "b2b5273e8b275bb96362fe844a5202632eb3e52b";
+export const LLAMA_CPP_REMOTE =
+  "https://github.com/Apothic-AI/llama.cpp-1bit-turboquant.git";
 export const MIN_ZIG_VERSION = "0.13.0";
 
 export const ABI_TARGETS = [

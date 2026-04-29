@@ -43,9 +43,40 @@ apply to platform `system/sepolicy/`).
 - `file_contexts` — labels for paths the Milady app or its agent
   runtime creates. Paths under `/data/data/<pkg>/` are NOT labeled by
   installd from this file; the agent service must call `restorecon`
-  after copying the bun binary out of `assets/agent/`.
-- `milady_agent.te` — domain + types for the on-device agent
-  (`milady_agent`, `milady_agent_exec`, `milady_agent_data`).
+  after copying the bun binary out of `assets/agent/`. Today the
+  patterns are advisory (installd writes `app_data_file` and our
+  current allow rule operates on that); the entries are kept so a
+  future custom-seinfo + domain-transition build plugs in cleanly.
+- `milady_agent.te` — primary `allow platform_app app_data_file:file
+  { execute execute_no_trans };` rule, plus the type declarations
+  (`milady_agent_exec`, `milady_agent_data`) and the
+  documented-intent comment block listing the seccomp-blocked
+  syscalls the BUN_FEATURE_FLAG_* env block in MiladyAgentService
+  routes around.
+
+## Verifying after a build
+
+After `m` finishes and a clean Cuttlefish boot completes, the
+sepolicy half is healthy when:
+
+```bash
+adb logcat -d | grep -E "(seccomp|SIGSYS|audit)"
+adb shell dmesg | grep -E "(seccomp|SIGSYS)"
+adb shell ps -A | grep milady
+```
+
+emit no `audit: type=1326` lines (seccomp violations) and the
+`com.miladyai.milady` process is visible in `ps -A`. Static checks
+against the policy files themselves run via:
+
+```bash
+bun run miladyos:validate
+```
+
+`validateSepolicy()` pins the existence of the policy files, the
+`platform_app` execve allow rule, the type declarations, and the
+documented seccomp syscall list (so doc + runtime mitigation cannot
+drift apart silently).
 
 ## The `milady_agent` domain
 
