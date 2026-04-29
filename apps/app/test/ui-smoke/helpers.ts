@@ -225,18 +225,20 @@ function catalogApp({
   displayName,
   description,
   category,
+  launchType = "local",
 }: {
   name: string;
   displayName: string;
   description: string;
   category: string;
+  launchType?: string;
 }) {
   return {
     name,
     displayName,
     description,
     category,
-    launchType: "local",
+    launchType,
     launchUrl: null,
     icon: null,
     heroImage: null,
@@ -318,6 +320,7 @@ export async function installDefaultAppRoutes(page: Page): Promise<void> {
           displayName: "Companion",
           description: "The companion overlay shell for ambient agent presence.",
           category: "shell",
+          launchType: "overlay",
         }),
       ]),
     });
