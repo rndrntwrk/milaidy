@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { createGitHubOctokitFixture } from "../helpers/github-octokit-fixture.ts";
+import { createGitHubOctokitFixture } from "../../../eliza/test/mocks/helpers/github-octokit-fixture.ts";
 import { type StartedMocks, startMocks } from "../scripts/start-mocks.ts";
 
 type JsonRecord = Record<string, unknown>;

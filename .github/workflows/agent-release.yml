@@ -660,10 +660,10 @@ jobs:
         with:
           node-version: 22
       - name: Validate docs config
-        run: node -e "const c = require('./docs/docs.json'); console.log('Docs config valid:', c.name)"
+        run: node -e "const c = require('./eliza/docs/docs.json'); console.log('Docs config valid:', c.name)"
       - name: Check for broken internal links
         run: |
-          find docs -name '*.md' -o -name '*.mdx' | head -5 | while read -r f; do
+          find eliza/docs -name '*.md' -o -name '*.mdx' | head -5 | while read -r f; do
             grep -oE '\]\([^)]+\)' "$f" | grep -v 'http' | head -3
           done
           echo "Docs link check complete"

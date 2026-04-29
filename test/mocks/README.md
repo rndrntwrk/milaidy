@@ -1,24 +1,26 @@
 # LifeOps External API Mocks
 
-This directory contains Mockoon-compatible environment files that emulate the
-external HTTP APIs LifeOps integrates with. Tests serve these files through the
-in-process fixture runner in `scripts/start-mocks.ts` and point LifeOps clients
-at those local URLs via env vars instead of hitting real services.
+This directory contains Milady-specific mock harness code. Shared
+Mockoon-compatible environment files are loaded from
+`eliza/test/mocks/environments` unless this directory provides a same-named
+override. Tests serve those files through the in-process fixture runner in
+`scripts/start-mocks.ts` and point LifeOps clients at those local URLs via env
+vars instead of hitting real services.
 
 ## Files
 
 | File                              | Mocks                                | Env var                     |
 | --------------------------------- | ------------------------------------ | --------------------------- |
-| `environments/twilio.json`        | Twilio Programmable Messaging/Voice  | `MILADY_MOCK_TWILIO_BASE`   |
-| `environments/whatsapp.json`      | WhatsApp Business Cloud (Meta Graph) | `MILADY_MOCK_WHATSAPP_BASE` |
-| `environments/calendly.json`      | Calendly v2                          | `MILADY_MOCK_CALENDLY_BASE` |
-| `environments/x-twitter.json`     | X (Twitter) v2                       | `MILADY_MOCK_X_BASE`        |
-| `environments/google.json`        | Gmail / Calendar / OAuth token       | `MILADY_MOCK_GOOGLE_BASE`   |
+| `eliza/test/mocks/environments/twilio.json`        | Twilio Programmable Messaging/Voice  | `MILADY_MOCK_TWILIO_BASE`   |
+| `eliza/test/mocks/environments/whatsapp.json`      | WhatsApp Business Cloud (Meta Graph) | `MILADY_MOCK_WHATSAPP_BASE` |
+| `eliza/test/mocks/environments/calendly.json`      | Calendly v2                          | `MILADY_MOCK_CALENDLY_BASE` |
+| `eliza/test/mocks/environments/x-twitter.json`     | X (Twitter) v2                       | `MILADY_MOCK_X_BASE`        |
+| `eliza/test/mocks/environments/google.json`        | Gmail / Calendar / OAuth token       | `MILADY_MOCK_GOOGLE_BASE`   |
 | `environments/cloud-managed.json` | Eliza Cloud managed-Google endpoints | `ELIZA_CLOUD_BASE_URL`      |
-| `environments/signal.json`        | signal-cli HTTP receive/send         | `SIGNAL_HTTP_URL`           |
-| `environments/browser-workspace.json` | Desktop browser workspace bridge | `ELIZA_BROWSER_WORKSPACE_URL` |
-| `environments/bluebubbles.json`   | BlueBubbles iMessage HTTP API        | `ELIZA_BLUEBUBBLES_URL`     |
-| `environments/github.json`        | GitHub REST plus Octokit fixtures    | `MILADY_MOCK_GITHUB_BASE`   |
+| `eliza/test/mocks/environments/signal.json`        | signal-cli HTTP receive/send         | `SIGNAL_HTTP_URL`           |
+| `eliza/test/mocks/environments/browser-workspace.json` | Desktop browser workspace bridge | `ELIZA_BROWSER_WORKSPACE_URL` |
+| `eliza/test/mocks/environments/bluebubbles.json`   | BlueBubbles iMessage HTTP API        | `ELIZA_BLUEBUBBLES_URL`     |
+| `eliza/test/mocks/environments/github.json`        | GitHub REST plus Octokit fixtures    | `MILADY_MOCK_GITHUB_BASE`   |
 
 Each LifeOps client reads its env var on import and falls back to the real URL
 when unset. These env vars are test-only: the normal `bun run dev` launcher now
@@ -69,19 +71,19 @@ of Mockoon templating used by these files: `{{body 'field'}}`,
 Mockoon is optional for editing or manual inspection of the same JSON files.
 
 ```bash
-bunx @mockoon/cli start --data test/mocks/environments/twilio.json
+bunx @mockoon/cli start --data test/mocks/eliza/test/mocks/environments/twilio.json
 # ... or all HTTP fixture files in parallel:
 bunx @mockoon/cli start \
-  --data test/mocks/environments/twilio.json \
-  --data test/mocks/environments/whatsapp.json \
-  --data test/mocks/environments/calendly.json \
-  --data test/mocks/environments/x-twitter.json \
-  --data test/mocks/environments/google.json \
+  --data test/mocks/eliza/test/mocks/environments/twilio.json \
+  --data test/mocks/eliza/test/mocks/environments/whatsapp.json \
+  --data test/mocks/eliza/test/mocks/environments/calendly.json \
+  --data test/mocks/eliza/test/mocks/environments/x-twitter.json \
+  --data test/mocks/eliza/test/mocks/environments/google.json \
   --data test/mocks/environments/cloud-managed.json \
-  --data test/mocks/environments/signal.json \
-  --data test/mocks/environments/browser-workspace.json \
-  --data test/mocks/environments/bluebubbles.json \
-  --data test/mocks/environments/github.json
+  --data test/mocks/eliza/test/mocks/environments/signal.json \
+  --data test/mocks/eliza/test/mocks/environments/browser-workspace.json \
+  --data test/mocks/eliza/test/mocks/environments/bluebubbles.json \
+  --data test/mocks/eliza/test/mocks/environments/github.json
 ```
 
 Then point the clients at the mocks:
@@ -112,7 +114,7 @@ servers.
 
 ## Google / Gmail mock coverage
 
-`environments/google.json` is the local Gmail/Google fixture used by
+`eliza/test/mocks/environments/google.json` is the Gmail/Google fixture used by
 `MILADY_MOCK_GOOGLE_BASE`. The in-process runner also adds Gmail-specific
 dynamic routes for surfaces LifeOps needs for read, send, and inbox-zero
 development:

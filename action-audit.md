@@ -1,5 +1,7 @@
 # Action Audit
 
+**Update (2026-04-29):** All rows in [Violations](#violations-14) below have been addressed in source (full descriptions ≥60 chars, `parameters` / `examples` where missing, and explicit `descriptionCompressed` caveman strings on touched actions—including partner rows in `logs.ts` QUERY_LOGS / EXPORT_LOGS).
+
 Scanned **147** actions across **124** files.
 **High:** 0 · **Medium:** 4 · **Low:** 16
 
