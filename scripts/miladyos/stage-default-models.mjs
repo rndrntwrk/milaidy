@@ -22,10 +22,26 @@
 // these files; we own them).
 //
 // APK size impact (Q4_K_M quants):
-//   SmolLM2-360M-Instruct          ~270 MB
-//   bge-small-en-v1.5              ~130 MB
+//   Llama-3.2-1B-Instruct          ~770 MB
+//   bge-small-en-v1.5              ~28 MB
 //   --------------------------------------
-//   total                          ~400 MB
+//   total                          ~800 MB
+//
+// Why Llama-3.2-1B over SmolLM2-360M (the previous default):
+//   - 128k native context window vs SmolLM2's 8k. The planner builds
+//     ~12k-token prompts on every chat turn (system + tools + history +
+//     user message). With 8k ctx we head-truncated 8k+ tokens per turn,
+//     dropping the planner's tool descriptions and producing malformed
+//     output. With 128k ctx the entire prompt fits, the planner gets
+//     coherent tool grammar, and the model produces parseable actions.
+//   - 1B parameters vs 360M. 1B is the smallest model that reliably
+//     follows the planner's output schema without producing Python
+//     test code, repeated fragments, or unrelated text. The size cost
+//     (~500 MB more APK) is paid once at build time; on-device inference
+//     speed difference is small on CPU (both are bottlenecked on memory
+//     bandwidth, not compute).
+//   - Same Q4_K_M quant, same Bartowski repo conventions, same FFI
+//     loader path. No code changes elsewhere.
 //
 // Opt out for builders who want to download at runtime instead:
 //   --skip-bundled-models       (passed by build-aosp.mjs)
@@ -60,12 +76,15 @@ const repoRoot = path.resolve(here, "..", "..");
  */
 export const DEFAULT_MODELS = [
   {
-    id: "smollm2-360m",
-    displayName: "SmolLM2 360M Instruct",
-    hfRepo: "bartowski/SmolLM2-360M-Instruct-GGUF",
-    ggufFile: "SmolLM2-360M-Instruct-Q4_K_M.gguf",
-    expectedMinBytes: 220 * 1024 * 1024, // 220 MB lower bound (sanity)
-    expectedMaxBytes: 320 * 1024 * 1024, // 320 MB upper bound
+    id: "llama-3.2-1b",
+    displayName: "Llama 3.2 1B Instruct",
+    hfRepo: "bartowski/Llama-3.2-1B-Instruct-GGUF",
+    ggufFile: "Llama-3.2-1B-Instruct-Q4_K_M.gguf",
+    // Q4_K_M quant of Llama-3.2-1B is ~808 MB on HuggingFace
+    // (807,694,464 bytes observed on 2026-04-29). Bracket loosely so
+    // a future re-quant of slightly different size still passes.
+    expectedMinBytes: 700 * 1024 * 1024, // 700 MB lower bound
+    expectedMaxBytes: 900 * 1024 * 1024, // 900 MB upper bound
     role: "chat",
   },
   {
