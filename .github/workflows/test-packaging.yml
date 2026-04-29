@@ -211,6 +211,12 @@ jobs:
       - name: Install dependencies
         run: bun install --cwd eliza --ignore-scripts --frozen-lockfile
 
+      - name: Prepare vendored Bun package
+        run: |
+          if [ -f eliza/node_modules/bun/install.js ]; then
+            node eliza/node_modules/bun/install.js
+          fi
+
       - name: Generate protobuf types
         run: |
           if [ -d eliza/packages/schemas ] && [ -f eliza/packages/schemas/buf.gen.yaml ] && [ ! -d eliza/packages/typescript/src/types/generated ]; then
