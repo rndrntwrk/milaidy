@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   ABI_TARGETS,
+  buildShimForAbi,
   compareSemver,
   ensureZigDrivers,
   LLAMA_CPP_COMMIT,
@@ -168,8 +169,12 @@ describe("compile-libllama zig driver scripts", () => {
     );
     const ccBody = fs.readFileSync(ccPath, "utf8");
     const cxxBody = fs.readFileSync(cxxPath, "utf8");
-    expect(ccBody).toContain('exec "/opt/zig/zig" cc --target=aarch64-linux-musl');
-    expect(cxxBody).toContain('exec "/opt/zig/zig" c++ --target=aarch64-linux-musl');
+    expect(ccBody).toContain(
+      'exec "/opt/zig/zig" cc --target=aarch64-linux-musl',
+    );
+    expect(cxxBody).toContain(
+      'exec "/opt/zig/zig" c++ --target=aarch64-linux-musl',
+    );
     // Driver scripts must be executable so cmake can invoke them.
     expect(fs.statSync(ccPath).mode & 0o111).not.toBe(0);
     expect(fs.statSync(cxxPath).mode & 0o111).not.toBe(0);
@@ -242,7 +247,9 @@ describe("compile-libllama musl source patch", () => {
     patchLlamaCppSourceForMusl({ srcDir: scratchDir, log: () => {} });
     const after = fs.readFileSync(file, "utf8");
     expect(after).toContain("#if defined(__linux__) && defined(__GLIBC__)");
-    expect(after).not.toContain("#if defined(__linux__)\n#include <execinfo.h>");
+    expect(after).not.toContain(
+      "#if defined(__linux__)\n#include <execinfo.h>",
+    );
     expect(
       fs.existsSync(
         path.join(scratchDir, `.musl-execinfo-patched.${LLAMA_CPP_COMMIT}`),
@@ -305,6 +312,133 @@ describe("compile-libllama musl source patch", () => {
     expect(() =>
       patchLlamaCppSourceForMusl({ srcDir: scratchDir, log: () => {} }),
     ).toThrow(/Cannot patch ggml\.c/);
+  });
+});
+
+describe("compile-libllama shim build invocation", () => {
+  let scratchDir: string;
+
+  beforeEach(() => {
+    scratchDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "compile-libllama-shim-test-"),
+    );
+  });
+
+  afterEach(() => {
+    fs.rmSync(scratchDir, { recursive: true, force: true });
+  });
+
+  function setUpFakeWorkspace() {
+    // Fake llama include dir with both llama.h and ../ggml/include/ggml.h
+    // because llama.h #include "ggml.h".
+    const includeDir = path.join(scratchDir, "src", "include");
+    const ggmlIncludeDir = path.join(scratchDir, "src", "ggml", "include");
+    fs.mkdirSync(includeDir, { recursive: true });
+    fs.mkdirSync(ggmlIncludeDir, { recursive: true });
+    fs.writeFileSync(path.join(includeDir, "llama.h"), "// fake\n", "utf8");
+    fs.writeFileSync(path.join(ggmlIncludeDir, "ggml.h"), "// fake\n", "utf8");
+    // Fake asset dir with a libllama.so (truncated empty file is fine —
+    // we never actually run the link step in unit tests).
+    const abiAssetDir = path.join(scratchDir, "assets", "x86_64");
+    fs.mkdirSync(abiAssetDir, { recursive: true });
+    fs.writeFileSync(path.join(abiAssetDir, "libllama.so"), "", "utf8");
+    // Fake shim source.
+    const shimSourcePath = path.join(scratchDir, "shim", "milady_llama_shim.c");
+    fs.mkdirSync(path.dirname(shimSourcePath), { recursive: true });
+    fs.writeFileSync(shimSourcePath, "/* fake */\n", "utf8");
+    return { includeDir, abiAssetDir, shimSourcePath };
+  }
+
+  it("invokes the per-ABI zig driver with -shared/-fPIC and -lllama against the asset dir", () => {
+    const { includeDir, abiAssetDir, shimSourcePath } = setUpFakeWorkspace();
+    const captured: { command: string; args: string[] }[] = [];
+    const fakeSpawn = (command: string, args: string[]) => {
+      captured.push({ command, args });
+      // Stub a successful compile by writing a non-empty shim output.
+      const outIdx = args.indexOf("-o");
+      if (outIdx >= 0 && outIdx + 1 < args.length) {
+        // biome-ignore lint/style/noNonNullAssertion: spawn-stub bookkeeping
+        fs.writeFileSync(args[outIdx + 1]!, "ELF-stub", "utf8");
+      }
+    };
+    const out = buildShimForAbi({
+      cacheDir: scratchDir,
+      abi: "x86_64",
+      abiAssetDir,
+      shimSourcePath,
+      llamaIncludeDir: includeDir,
+      log: () => {},
+      spawn: fakeSpawn,
+    });
+    expect(out).toBe(path.join(abiAssetDir, "libmilady-llama-shim.so"));
+    expect(captured.length).toBeGreaterThan(0);
+    // First call is the compile; second is the system strip fallback
+    // (zig objcopy is invoked separately via the internal stripBinary
+    // path which uses spawnSync directly, not the injected `spawn`).
+    const compile = captured[0];
+    expect(compile?.args).toContain("-shared");
+    expect(compile?.args).toContain("-fPIC");
+    expect(compile?.args).toContain("-O2");
+    expect(compile?.args).toContain(`-I${includeDir}`);
+    expect(compile?.args).toContain(`-L${abiAssetDir}`);
+    expect(compile?.args).toContain("-lllama");
+    expect(compile?.args).toContain(shimSourcePath);
+    expect(compile?.args).toContain("-Wl,--disable-new-dtags");
+    // Driver script path matches the ABI's zig-driver dir.
+    expect(compile?.command).toBe(
+      path.join(scratchDir, "zig-driver", "x86_64", "zig-cc"),
+    );
+  });
+
+  it("fails loudly when the shim source is missing", () => {
+    const { includeDir, abiAssetDir } = setUpFakeWorkspace();
+    expect(() =>
+      buildShimForAbi({
+        cacheDir: scratchDir,
+        abi: "x86_64",
+        abiAssetDir,
+        shimSourcePath: path.join(scratchDir, "no-such-file.c"),
+        llamaIncludeDir: includeDir,
+        log: () => {},
+        spawn: () => {},
+      }),
+    ).toThrow(/Shim source not found/);
+  });
+
+  it("fails loudly when libllama.so is missing from the asset dir", () => {
+    const { includeDir, shimSourcePath } = setUpFakeWorkspace();
+    const emptyAssetDir = path.join(scratchDir, "no-llama");
+    fs.mkdirSync(emptyAssetDir, { recursive: true });
+    expect(() =>
+      buildShimForAbi({
+        cacheDir: scratchDir,
+        abi: "x86_64",
+        abiAssetDir: emptyAssetDir,
+        shimSourcePath,
+        llamaIncludeDir: includeDir,
+        log: () => {},
+        spawn: () => {},
+      }),
+    ).toThrow(/Cannot link shim/);
+  });
+
+  it("fails loudly when the ggml include dir is missing (header-chain drift)", () => {
+    const { includeDir, abiAssetDir, shimSourcePath } = setUpFakeWorkspace();
+    fs.rmSync(path.join(scratchDir, "src", "ggml"), {
+      recursive: true,
+      force: true,
+    });
+    expect(() =>
+      buildShimForAbi({
+        cacheDir: scratchDir,
+        abi: "x86_64",
+        abiAssetDir,
+        shimSourcePath,
+        llamaIncludeDir: includeDir,
+        log: () => {},
+        spawn: () => {},
+      }),
+    ).toThrow(/ggml\.h missing/);
   });
 });
 

@@ -50,11 +50,18 @@
 //   apps/app/android/app/src/main/assets/agent/{abi}/libggml.so
 //   apps/app/android/app/src/main/assets/agent/{abi}/libggml-cpu.so
 //   apps/app/android/app/src/main/assets/agent/{abi}/libggml-base.so
+//   apps/app/android/app/src/main/assets/agent/{abi}/libmilady-llama-shim.so
 //
 // libllama.so has NEEDED entries on the entire libggml family (see
 // `readelf -d`); the dynamic linker resolves them from the per-ABI asset
 // dir via the LD_LIBRARY_PATH MiladyAgentService.java sets at process
 // launch. ABIs: arm64-v8a (real phones) and x86_64 (cuttlefish + emulators).
+//
+// libmilady-llama-shim.so is the bun:ffi struct-by-value workaround: a
+// thin C wrapper (scripts/miladyos/llama-shim/milady_llama_shim.c) that
+// converts llama.cpp's struct-by-value entry points into pointer-style
+// equivalents bun:ffi can speak. NEEDED-links libllama.so; resolved from
+// the same asset dir at runtime.
 //
 // Approximate build cost on a modern Linux x86_64 builder (16 cores, NVMe):
 //   - llama.cpp clone:    ~30 s, ~150 MB working tree.
@@ -635,6 +642,132 @@ export function buildLibllamaForAbi({
 }
 
 /**
+ * Compile `scripts/miladyos/llama-shim/milady_llama_shim.c` into
+ * `<abiAssetDir>/libmilady-llama-shim.so`. The shim provides pointer-style
+ * wrappers around llama.cpp's struct-by-value entry points that bun:ffi
+ * cannot call directly. See the file's header for the full rationale.
+ *
+ * Linkage:
+ *   - Compiled with the same per-ABI zig driver used for llama.cpp
+ *     (musl-linked, matches the bun-on-Android runtime ABI).
+ *   - NEEDED-links libllama.so via `-L<abiAssetDir> -lllama`. Runtime
+ *     resolution comes through the per-ABI LD_LIBRARY_PATH that
+ *     MiladyAgentService.java sets — same mechanism libllama.so uses to
+ *     find libggml*.so.
+ *   - RUNPATH stripped (`-Wl,--disable-new-dtags` + no -rpath) so we don't
+ *     bake in a build-host path.
+ *
+ * Output: `<abiAssetDir>/libmilady-llama-shim.so`, stripped to ~10-30 KB.
+ *
+ * Exported for tests so we can assert the compile invocation arguments
+ * without running zig end-to-end.
+ */
+export function buildShimForAbi({
+  cacheDir,
+  abi,
+  abiAssetDir,
+  shimSourcePath = path.join(
+    repoRoot,
+    "scripts",
+    "miladyos",
+    "llama-shim",
+    "milady_llama_shim.c",
+  ),
+  llamaIncludeDir,
+  zigBin = "zig",
+  log = console.log,
+  spawn = run,
+}) {
+  if (!fs.existsSync(shimSourcePath)) {
+    throw new Error(
+      `[compile-libllama] Shim source not found at ${shimSourcePath}. ` +
+        `Restore scripts/miladyos/llama-shim/milady_llama_shim.c.`,
+    );
+  }
+  if (!fs.existsSync(llamaIncludeDir)) {
+    throw new Error(
+      `[compile-libllama] llama.h include dir missing at ${llamaIncludeDir}. ` +
+        `Did the llama.cpp checkout fail?`,
+    );
+  }
+  const llamaSo = path.join(abiAssetDir, "libllama.so");
+  if (!fs.existsSync(llamaSo)) {
+    throw new Error(
+      `[compile-libllama] Cannot link shim: ${llamaSo} is missing. ` +
+        `Run buildLibllamaForAbi() before buildShimForAbi().`,
+    );
+  }
+
+  const { ccPath } = ensureZigDrivers({ cacheDir, abi, zigBin });
+  const shimOut = path.join(abiAssetDir, "libmilady-llama-shim.so");
+
+  // llama.h transitively includes ggml.h, which lives under ggml/include/
+  // in the llama.cpp tree (separate from the llama include dir). We pass
+  // both -I flags so the compiler resolves the full header chain.
+  const ggmlIncludeDir = path.resolve(llamaIncludeDir, "..", "ggml", "include");
+  if (!fs.existsSync(path.join(ggmlIncludeDir, "ggml.h"))) {
+    throw new Error(
+      `[compile-libllama] ggml.h missing under ${ggmlIncludeDir}. ` +
+        `llama.h transitively includes it; the layout of the cached ` +
+        `llama.cpp checkout may have changed.`,
+    );
+  }
+
+  log(
+    `[compile-libllama] Compiling libmilady-llama-shim.so for ${abi} (NEEDED libllama.so)`,
+  );
+  // -fPIC + -shared: build a position-independent shared object.
+  // -O2: matches llama.cpp's release optimization level.
+  // -I<include>: pick up llama.h from the cached llama.cpp checkout, and
+  //   ggml.h from the ggml/include sibling.
+  // -L<abiAssetDir> -lllama: resolve libllama.so for the link step. The
+  //   resulting .so has NEEDED libllama.so; runtime resolution is via
+  //   LD_LIBRARY_PATH set by MiladyAgentService.java.
+  // -Wl,--disable-new-dtags + no -rpath: don't bake a RUNPATH that points
+  //   at the build-host cache dir.
+  spawn(
+    ccPath,
+    [
+      "-shared",
+      "-fPIC",
+      "-O2",
+      `-I${llamaIncludeDir}`,
+      `-I${ggmlIncludeDir}`,
+      `-L${abiAssetDir}`,
+      "-Wl,--disable-new-dtags",
+      "-o",
+      shimOut,
+      shimSourcePath,
+      "-lllama",
+    ],
+    {},
+  );
+
+  if (!fs.existsSync(shimOut)) {
+    throw new Error(
+      `[compile-libllama] Shim compile reported success but ${shimOut} is missing.`,
+    );
+  }
+  const sizeBefore = fs.statSync(shimOut).size;
+  const stripped = stripBinary({ filePath: shimOut, zigBin, log });
+  if (stripped) {
+    const sizeAfter = fs.statSync(shimOut).size;
+    if (sizeAfter === 0) {
+      throw new Error(
+        `[compile-libllama] Strip produced an empty libmilady-llama-shim.so ` +
+          `(was ${sizeBefore} bytes). This is the zig objcopy in-place ` +
+          `truncation bug — the script is supposed to strip out-of-place.`,
+      );
+    }
+    log(
+      `[compile-libllama] Stripped libmilady-llama-shim.so for ${abi} ` +
+        `(${sizeBefore} -> ${sizeAfter} bytes).`,
+    );
+  }
+  return shimOut;
+}
+
+/**
  * Find every `libggml*.so` under the build tree. b4500 ships
  *   libggml.so, libggml-cpu.so, libggml-base.so
  * — all of which appear in libllama.so's NEEDED list. Older pins shipped
@@ -768,7 +901,12 @@ export async function main(argv = process.argv.slice(2)) {
   for (const abi of args.abis) {
     const llama = path.join(args.androidAssetsDir, abi, "libllama.so");
     const ggml = path.join(args.androidAssetsDir, abi, "libggml.so");
-    if (!fs.existsSync(llama) || !fs.existsSync(ggml)) {
+    const shim = path.join(
+      args.androidAssetsDir,
+      abi,
+      "libmilady-llama-shim.so",
+    );
+    if (!fs.existsSync(llama) || !fs.existsSync(ggml) || !fs.existsSync(shim)) {
       allPresent = false;
       break;
     }
@@ -797,10 +935,22 @@ export async function main(argv = process.argv.slice(2)) {
       log: console.log,
       spawn: run,
     });
+    // Compile the bun:ffi struct-by-value shim against the freshly built
+    // libllama.so. Has to come AFTER the llama build because it links
+    // against -lllama from <abiAssetDir>.
+    buildShimForAbi({
+      cacheDir: args.cacheDir,
+      abi,
+      abiAssetDir,
+      llamaIncludeDir: path.join(srcDir, "include"),
+      log: console.log,
+      spawn: run,
+    });
   }
 
   console.log(
-    `[compile-libllama] Built libllama.so for ${args.abis.join(", ")} (llama.cpp ${LLAMA_CPP_TAG} / ${LLAMA_CPP_COMMIT.slice(0, 12)}).`,
+    `[compile-libllama] Built libllama.so + libmilady-llama-shim.so for ` +
+      `${args.abis.join(", ")} (llama.cpp ${LLAMA_CPP_TAG} / ${LLAMA_CPP_COMMIT.slice(0, 12)}).`,
   );
 }
 
