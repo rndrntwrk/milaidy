@@ -153,11 +153,15 @@ runs:
     - name: Repair known eliza patch files
       shell: bash
       run: |
-        node --input-type=module <<'NODE'
-        import { repairKnownElizaPatchFiles } from "./scripts/disable-local-eliza-workspace.mjs";
+        if grep -Eq "export .*repairKnownElizaPatchFiles" scripts/disable-local-eliza-workspace.mjs; then
+          node --input-type=module <<'NODE'
+          import { repairKnownElizaPatchFiles } from "./scripts/disable-local-eliza-workspace.mjs";
 
-        repairKnownElizaPatchFiles();
+          repairKnownElizaPatchFiles();
         NODE
+        else
+          echo "Skipping known eliza patch repair: repairKnownElizaPatchFiles export not present"
+        fi
 
     - name: Ensure nested cloud workspace is hydrated
       if: ${{ inputs.disable-local-eliza-workspace != 'true' }}

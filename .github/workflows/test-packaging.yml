@@ -45,6 +45,26 @@ jobs:
       - name: Install validation dependencies
         run: pip install pyyaml build twine
 
+      - name: Adapt packaging validation for Milady snap branding
+        run: |
+          if grep -q "^name: milady" eliza/packages/app-core/packaging/snap/snapcraft.yaml; then
+            python - <<'PY'
+          from pathlib import Path
+
+          script = Path("eliza/packages/app-core/packaging/test-packaging.sh")
+          text = script.read_text()
+          text = text.replace(
+              'check "Has name field" grep -q "^name: elizaos-app" "$SCRIPT_DIR/snap/snapcraft.yaml"',
+              'check "Has name field" grep -Eq "^name: (elizaos-app|milady)" "$SCRIPT_DIR/snap/snapcraft.yaml"',
+          )
+          text = text.replace(
+              'check "Has elizaos-app part" grep -q "^  elizaos-app:" "$SCRIPT_DIR/snap/snapcraft.yaml"',
+              'check "Has app part" grep -Eq "^  (elizaos-app|milady):" "$SCRIPT_DIR/snap/snapcraft.yaml"',
+          )
+          script.write_text(text)
+          PY
+          fi
+
       - name: Run packaging validation suite
         run: bash eliza/packages/app-core/packaging/test-packaging.sh
 
