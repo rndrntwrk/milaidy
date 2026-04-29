@@ -82,11 +82,13 @@ const HEALTH_TIMEOUT_MS = 30_000;
 const HEALTH_POLL_INTERVAL_MS = 1_000;
 // Cuttlefish x86_64 has no GPU; Llama-3.2-1B decoding a 9k-token
 // planner prompt on CPU runs for several minutes per turn (planner +
-// action evaluator + reply). 1800 s matches the service-side
+// action evaluator + reply). End-to-end chat lands at 25–45 min on
+// cvd's 4 emulated vCPUs (each model call is ~12 min wall-clock; a
+// chat turn fires 3–5 calls). 3600 s matches the service-side
 // ELIZA_CHAT_GENERATION_TIMEOUT_MS we set in MiladyAgentService when
 // AOSP_BUILD=true. Real phone hardware resolves in seconds, so this
 // only matters for cvd runs.
-const CHAT_TIMEOUT_MS = 1_800_000;
+const CHAT_TIMEOUT_MS = 3_600_000;
 
 
 // ANSI color helpers — output is human-readable, no JSON for now.
