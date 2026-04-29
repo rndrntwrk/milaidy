@@ -214,7 +214,7 @@
     "scenarios:critical": "MILADY_LIVE_TEST=1 ELIZA_LIVE_TEST=1 bun eliza/packages/scenario-runner/src/cli.ts run eliza/test/scenarios/ --tag critical",
     "scenarios:smoke": "MILADY_LIVE_TEST=1 ELIZA_LIVE_TEST=1 bun eliza/packages/scenario-runner/src/cli.ts run eliza/test/scenarios/ --tag smoke",
     "scenarios:creds:pull": "node scripts/scenario-creds-pull.mjs",
-    "scenarios:sweep": "node scripts/sweeper/run.mjs --service all",
+    "scenarios:sweep": "node eliza/scripts/sweeper/run.mjs --service all",
     "milady-scenarios": "bun eliza/packages/scenario-runner/src/cli.ts",
     "test:real": "MILADY_LIVE_TEST=1 ELIZA_LIVE_TEST=1 bunx vitest run --config test/vitest/real.config.ts",
     "test:ci:real": "MILADY_LIVE_TEST=1 ELIZA_LIVE_TEST=1 MILADY_CI_REAL=1 bunx vitest run --config test/vitest/real.config.ts",
