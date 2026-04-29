@@ -133,6 +133,7 @@ import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import { main as compileShimMain } from "./compile-shim.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "..", "..");
@@ -1126,6 +1127,18 @@ export async function main(argv = process.argv.slice(2)) {
       spawn: run,
     });
   }
+
+  // Cross-compile the SIGSYS-handler shim + loader-wrap for x86_64. ARM64
+  // skips this — its kernel ABI omits the legacy non-AT syscalls Android's
+  // x86_64 seccomp filter traps on, so musl's wrappers there never invoke
+  // a form the filter could block. The compile-shim main() short-circuits
+  // when --skip-if-present is honoured.
+  //
+  // Staged into the APK by stage-android-agent.mjs: the wrapper takes the
+  // place of `ld-musl-x86_64.so.1`, and the original Alpine loader is
+  // renamed to `.so.1.real`. See seccomp-shim/sigsys-handler.c header for
+  // the production-landing checklist.
+  await compileShimMain(["--skip-if-present"]);
 
   console.log(
     `[compile-libllama] Built libllama.so + libmilady-llama-shim.so for ` +
