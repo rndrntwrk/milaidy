@@ -27,7 +27,7 @@ for (const routeCase of ROUTE_CASES) {
         page,
         routeCase.name,
         routeCase.readyChecks,
-        "any",
+        "all",
         routeCase.timeoutMs,
       );
       return;

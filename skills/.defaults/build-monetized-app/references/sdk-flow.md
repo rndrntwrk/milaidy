@@ -1,6 +1,6 @@
 # SDK flow: build + deploy + monetize
 
-The full 6-step flow. Each step is one or two `@elizaos/cloud-sdk` calls. The whole sequence is idempotent at the step boundary - if step 5 fails, restart from step 5.
+The full 6-step flow. Each step is one or two `@elizaos/cloud-sdk` calls. The whole sequence is idempotent at the step boundary — if step 5 fails, restart from step 5.
 
 ## Setup
 
@@ -49,7 +49,7 @@ The agent's job, not the SDK's. Use the org's container registry creds (default 
 
 The canonical reference for this shape is [`apps/edad-chat/server.ts` and `apps/edad-chat/api/proxy.ts`](https://github.com/elizaOS/cloud-mini-apps/tree/main/apps/edad-chat) in `elizaOS/cloud-mini-apps`. Copy that pattern when your app is a chat shell.
 
-If you want the inline minimal version - a Next.js or Hono handler is equivalent - the shape is:
+If you want the inline minimal version — a Next.js or Hono handler is equivalent — the shape is:
 
 ```ts
 import { ElizaCloudClient } from "@elizaos/cloud-sdk";
@@ -91,7 +91,7 @@ For frontend, ship a static page that:
 2. Posts user prompts to your chat route with the user-token in the `authorization` header
 3. Renders streaming responses
 
-The frontend can be served by the same container or by any static host pointing at the same domain - the cloud doesn't care.
+The frontend can be served by the same container or by any static host pointing at the same domain — the cloud doesn't care.
 
 ## 3. Deploy the container
 
@@ -107,7 +107,7 @@ const container = await cloud.routes.postApiV1Containers({
 });
 ```
 
-After `postApiV1Containers` returns, poll `getApiV1ContainersById(container.id)` until `status === "running"` and `load_balancer_url` is populated. Health-check failures here mean the image's server doesn't bind to `$PORT` correctly - pull `cloud.routes.getApiV1ContainersByIdLogs(container.id)` and surface to the human.
+After `postApiV1Containers` returns, poll `getApiV1ContainersById(container.id)` until `status === "running"` and `load_balancer_url` is populated. Health-check failures here mean the image's server doesn't bind to `$PORT` correctly — pull `cloud.routes.getApiV1ContainersByIdLogs(container.id)` and surface to the human.
 
 ## 4. Set markup
 
@@ -120,7 +120,7 @@ await cloud.routes.patchApiV1AppsById({
 });
 ```
 
-Markup % is the lever that turns app activity into earnings. The active monetization model in the current schema is markup-based, NOT per-token pricing - older docs that describe per-token are stale; trust the current `apps` table schema.
+Markup % is the lever that turns app activity into earnings. The active monetization model in the current schema is markup-based, NOT per-token pricing — older docs that describe per-token are stale; trust the current `apps` table schema.
 
 A 20% markup is a reasonable default for a v1 app. Higher kills retention; lower starves the survival loop. Tune later based on `redeemable_earnings_ledger` data.
 
@@ -143,17 +143,17 @@ Without this, the OAuth redirect flow can't return users to your app, and CORS r
 Print the audit trail so the owner can verify + cash out:
 
 ```
-* App:        https://www.elizacloud.ai/dashboard/apps/<APP_ID>
-* Container:  <container.load_balancer_url>
-* Markup:     20%
-* Survival:   earnings auto-fund hosting; agent stays alive while profitable
--> Cashout:    https://www.elizacloud.ai/dashboard/earnings (Redeem for elizaOS)
+✓ App:        https://www.elizacloud.ai/dashboard/apps/<APP_ID>
+✓ Container:  <container.load_balancer_url>
+✓ Markup:     20%
+✓ Survival:   earnings auto-fund hosting; agent stays alive while profitable
+→ Cashout:    https://www.elizacloud.ai/dashboard/earnings (Redeem for elizaOS)
 ```
 
 Done. The earnings loop is now active. Subsequent user activity on the app credits the owner's `redeemable_earnings_ledger`, the daily container-billing cron pulls those earnings before touching credits, and the agent stays online as long as the app is profitable.
 
 ## What you do not need to do
 
-- **A description, website URL, custom domain, or per-app affiliate code** - defaults handle these or the owner sets them post-hoc on the dashboard.
-- **An always-on flag** - the org's `pay_as_you_go_from_earnings` controls billing strategy and is the owner's call.
-- **An end-to-end retry loop** - each step is idempotent on its own; restart from the failed step.
+- **A description, website URL, custom domain, or per-app affiliate code** — defaults handle these or the owner sets them post-hoc on the dashboard.
+- **An always-on flag** — the org's `pay_as_you_go_from_earnings` controls billing strategy and is the owner's call.
+- **An end-to-end retry loop** — each step is idempotent on its own; restart from the failed step.

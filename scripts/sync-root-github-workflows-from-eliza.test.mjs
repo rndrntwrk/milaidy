@@ -21,7 +21,10 @@ describe("applyMiladyWorkflowTransform", () => {
 
   test("rewrites homebrew tap only for update-homebrew.yml", () => {
     const snippet = "repository: elizaOS/homebrew-tap";
-    const other = applyMiladyWorkflowTransform("release-electrobun.yml", snippet);
+    const other = applyMiladyWorkflowTransform(
+      "release-electrobun.yml",
+      snippet,
+    );
     assert.ok(other.includes("elizaOS/homebrew-tap"));
 
     const brew = applyMiladyWorkflowTransform("update-homebrew.yml", snippet);

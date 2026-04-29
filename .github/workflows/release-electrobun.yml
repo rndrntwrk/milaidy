@@ -381,6 +381,11 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
+      - name: Ensure nested cloud workspace is hydrated
+        run: |
+          git -C eliza submodule update --init cloud
+          test -d eliza/cloud/packages/sdk
+
       - name: Install root dependencies
         # --ignore-scripts skips native dependency install scripts (e.g. @tensorflow/tfjs-node
         # which has no pre-built binary for Node 22 on Windows and fails to compile).

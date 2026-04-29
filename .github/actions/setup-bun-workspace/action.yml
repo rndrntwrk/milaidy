@@ -160,7 +160,7 @@ runs:
       run: |
         git -C eliza submodule update --init cloud
         test -d eliza/cloud/packages/sdk
-        test -d eliza/cloud/packages/services/billing
+        test -d eliza/cloud/packages/billing
 
     - name: Install dependencies
       shell: bash

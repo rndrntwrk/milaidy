@@ -1,3 +1,4 @@
+// @milady-live-audit allow-route-fixtures
 import { expect, type Page, test } from "@playwright/test";
 import {
   installDefaultAppRoutes,
@@ -66,18 +67,21 @@ test("Providers section lists Eliza Cloud and Local provider entries", async ({
 test("Providers section connects to Eliza Cloud via the cloud sign-in flow", async ({
   page,
 }) => {
-  let cliSessionPostHits = 0;
-  await page.route("**/api/auth/cli-session", async (route) => {
+  let cloudLoginPostHits = 0;
+  page.on("popup", (popup) => {
+    void popup.close();
+  });
+  await page.route("**/api/cloud/login", async (route) => {
     if (route.request().method() === "POST") {
-      cliSessionPostHits += 1;
+      cloudLoginPostHits += 1;
       await route.fulfill({
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
+          ok: true,
           sessionId: "smoke-cli-session",
-          loginUrl:
-            "https://cloud.example.test/login?session=smoke-cli-session",
-          pollUrl: "/api/auth/cli-session/smoke-cli-session",
+          browserUrl:
+            "https://cloud.example.test/auth/cli-login?session=smoke-cli-session",
         }),
       });
       return;
@@ -85,12 +89,12 @@ test("Providers section connects to Eliza Cloud via the cloud sign-in flow", asy
     await route.fallback();
   });
 
-  await page.route("**/api/v1/milady/agents", async (route) => {
+  await page.route("**/api/cloud/login/status**", async (route) => {
     if (route.request().method() === "GET") {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ agents: [] }),
+        body: JSON.stringify({ status: "pending" }),
       });
       return;
     }
@@ -112,10 +116,14 @@ test("Providers section connects to Eliza Cloud via the cloud sign-in flow", asy
     providersSection.getByText("Eliza Cloud", { exact: true }).first(),
   ).toBeVisible();
 
-  // The intercept above is registered so any sign-in attempt during this turn
-  // resolves cleanly — a non-zero count confirms the wiring without us having
-  // to drive a popup.
-  expect(cliSessionPostHits).toBeGreaterThanOrEqual(0);
+  await providersSection.getByRole("button", { name: /^Eliza Cloud,/ }).click();
+  const connectButton = providersSection.getByRole("button", {
+    name: /^Connect Eliza Cloud$/,
+  });
+  await expect(connectButton).toBeVisible();
+  await connectButton.click();
+
+  await expect.poll(() => cloudLoginPostHits, { timeout: 5_000 }).toBe(1);
 });
 
 test("Wallet & RPC section exposes the cloud-mode picker and save button", async ({
@@ -154,6 +162,12 @@ test("Apps section shows Create / Load entry points and the verify-on-relaunch t
     name: "Load from directory",
   });
   await expect(loadButton).toBeVisible();
+  const verifyOnRelaunch = appsSection.getByRole("checkbox", {
+    name: "Verify on relaunch",
+  });
+  await expect(verifyOnRelaunch).toBeChecked();
+  await verifyOnRelaunch.click();
+  await expect(verifyOnRelaunch).not.toBeChecked();
 
   await createButton.click();
   await expect(appsSection.locator("#apps-create-intent")).toBeVisible();
@@ -201,7 +215,31 @@ test("Appearance section lets the user pick a theme mode", async ({ page }) => {
     .toBe(false);
 });
 
-test("Permissions section renders the refresh button", async ({ page }) => {
+test("Permissions section exercises browser and local website permission controls", async ({
+  page,
+}) => {
+  let websiteBlockingRequestHits = 0;
+  await page.route(
+    "**/api/permissions/website-blocking/request",
+    async (route) => {
+      if (route.request().method() !== "POST") {
+        await route.fallback();
+        return;
+      }
+      websiteBlockingRequestHits += 1;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          id: "website-blocking",
+          status: "granted",
+          canRequest: false,
+          lastChecked: Date.now(),
+        }),
+      });
+    },
+  );
+
   await openSettings(page);
   await openSettingsSection(page, /^Permissions\b/);
 
@@ -210,6 +248,15 @@ test("Permissions section renders the refresh button", async ({ page }) => {
   await expect(permissions).toBeVisible();
 
   await expect(
-    permissions.getByTestId("permissions-refresh-button"),
+    permissions.getByRole("button", { name: "Grant Camera" }),
   ).toBeVisible();
+
+  const websiteBlockingRequestButton = permissions.getByRole("button", {
+    name: "Request Approval",
+  });
+  await expect(websiteBlockingRequestButton).toBeVisible();
+  await websiteBlockingRequestButton.click();
+  await expect
+    .poll(() => websiteBlockingRequestHits, { timeout: 5_000 })
+    .toBe(1);
 });
