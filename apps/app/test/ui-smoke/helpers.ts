@@ -220,6 +220,26 @@ function emptyWalletTradingProfile(url: URL) {
   };
 }
 
+function smokePermission(id: string, status = "not-determined") {
+  return {
+    id,
+    status,
+    canRequest: status === "not-determined",
+    lastChecked: Date.parse(SMOKE_GENERATED_AT),
+  };
+}
+
+function smokePermissionsState() {
+  return {
+    accessibility: smokePermission("accessibility"),
+    "screen-recording": smokePermission("screen-recording"),
+    microphone: smokePermission("microphone"),
+    camera: smokePermission("camera"),
+    shell: smokePermission("shell", "granted"),
+    "website-blocking": smokePermission("website-blocking"),
+  };
+}
+
 function catalogApp({
   name,
   displayName,
@@ -371,6 +391,102 @@ export async function installDefaultAppRoutes(page: Page): Promise<void> {
         cloudVoiceProxyAvailable: false,
         hasApiKey: false,
       }),
+    });
+  });
+
+  await page.route("**/api/permissions", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(smokePermissionsState()),
+    });
+  });
+
+  await page.route("**/api/permissions/refresh", async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(smokePermissionsState()),
+    });
+  });
+
+  await page.route("**/api/permissions/shell", async (route) => {
+    const method = route.request().method();
+    if (method === "GET") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ enabled: true }),
+      });
+      return;
+    }
+    if (method === "PUT") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(smokePermissionsState().shell),
+      });
+      return;
+    }
+    await route.fallback();
+  });
+
+  await page.route("**/api/permissions/*", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const id = decodeURIComponent(url.pathname.split("/").pop() ?? "");
+    const permission =
+      smokePermissionsState()[
+        id as keyof ReturnType<typeof smokePermissionsState>
+      ];
+
+    if (!permission || request.method() !== "GET") {
+      await route.fallback();
+      return;
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(permission),
+    });
+  });
+
+  await page.route("**/api/permissions/*/request", async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.fallback();
+      return;
+    }
+    const url = new URL(route.request().url());
+    const id = decodeURIComponent(url.pathname.split("/").at(-2) ?? "");
+    const permission =
+      smokePermissionsState()[
+        id as keyof ReturnType<typeof smokePermissionsState>
+      ];
+    await route.fulfill({
+      status: permission ? 200 : 404,
+      contentType: "application/json",
+      body: JSON.stringify(permission ?? { error: "Unknown permission" }),
+    });
+  });
+
+  await page.route("**/api/permissions/*/open-settings", async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ ok: true }),
     });
   });
 
