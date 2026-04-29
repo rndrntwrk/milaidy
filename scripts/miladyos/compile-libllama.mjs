@@ -875,9 +875,22 @@ function stripBinary({ filePath, zigBin, log }) {
     }
     // Defensive: zig wrote a zero-byte file. Discard and fall through to
     // system strip — better to ship with symbols than ship empty.
+    log(
+      `[compile-libllama] DEBUG: zig objcopy produced an empty ${path.basename(tmpPath)}; ` +
+        `falling back to system strip.`,
+    );
     fs.rmSync(tmpPath, { force: true });
   } else if (fs.existsSync(tmpPath)) {
+    log(
+      `[compile-libllama] DEBUG: zig objcopy failed (status=${zigStripResult.status}, ` +
+        `error=${zigStripResult.error?.message ?? "none"}); falling back to system strip.`,
+    );
     fs.rmSync(tmpPath, { force: true });
+  } else if (zigStripResult.status !== 0) {
+    log(
+      `[compile-libllama] DEBUG: zig objcopy unavailable or failed (status=${zigStripResult.status}, ` +
+        `error=${zigStripResult.error?.message ?? "none"}); falling back to system strip.`,
+    );
   }
   // Fallback: system strip. GNU coreutils strip is in-place safe.
   const systemStripResult = spawnSync("strip", ["--strip-all", filePath], {

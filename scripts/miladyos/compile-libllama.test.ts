@@ -390,6 +390,70 @@ describe("compile-libllama shim build invocation", () => {
     );
   });
 
+  /**
+   * Regression for the AOSP runtime contract: the dynamic linker must
+   * resolve libllama.so via LD_LIBRARY_PATH at runtime, NOT via a baked-in
+   * RUNPATH that points at the build-host cache dir. Two failure modes the
+   * test guards against:
+   *
+   * 1. Missing `-lllama` — without this, the shim has no NEEDED entry for
+   *    libllama.so and every shim symbol that calls llama.cpp would
+   *    dlsym to NULL on the device.
+   *
+   * 2. `-Wl,--enable-new-dtags` snuck back in — modern binutils default
+   *    to RUNPATH (which is overridable by LD_LIBRARY_PATH) over
+   *    DT_RPATH, but we still want to be explicit. RUNPATH baked from
+   *    the build host (e.g. /home/shaw/...) would not exist on Android
+   *    and the lookup would fail before LD_LIBRARY_PATH even gets a chance.
+   */
+  it("links shim against -lllama AND strips RUNPATH via --disable-new-dtags", () => {
+    const { includeDir, abiAssetDir, shimSourcePath } = setUpFakeWorkspace();
+    const captured: { command: string; args: string[] }[] = [];
+    const fakeSpawn = (command: string, args: string[]) => {
+      captured.push({ command, args });
+      const outIdx = args.indexOf("-o");
+      if (outIdx >= 0 && outIdx + 1 < args.length) {
+        // biome-ignore lint/style/noNonNullAssertion: spawn-stub bookkeeping
+        fs.writeFileSync(args[outIdx + 1]!, "ELF-stub", "utf8");
+      }
+    };
+    buildShimForAbi({
+      cacheDir: scratchDir,
+      abi: "arm64-v8a",
+      abiAssetDir,
+      shimSourcePath,
+      llamaIncludeDir: includeDir,
+      log: () => {},
+      spawn: fakeSpawn,
+    });
+    const compile = captured[0];
+    expect(compile?.args).toBeDefined();
+    if (!compile?.args) return;
+
+    // -lllama must be present so the shim's NEEDED list includes libllama.so.
+    // Without it, runtime dlopen of the shim would still succeed, but the
+    // shim's calls into llama_*_default_params() / llama_*_load_from_file()
+    // would resolve to NULL — a silent regression that only fires on
+    // the device.
+    expect(compile.args).toContain("-lllama");
+
+    // Either the explicit --disable-new-dtags is present (current
+    // behaviour) OR --enable-new-dtags is NOT present. We don't accept
+    // the third option (no flag at all) because zig/lld defaults vary
+    // across versions.
+    const hasDisable = compile.args.includes("-Wl,--disable-new-dtags");
+    const hasEnable = compile.args.includes("-Wl,--enable-new-dtags");
+    expect(hasEnable).toBe(false);
+    expect(hasDisable).toBe(true);
+
+    // No -Wl,-rpath= flags (RUNPATH must come from LD_LIBRARY_PATH at
+    // runtime, NOT from a baked-in build-host path).
+    for (const arg of compile.args) {
+      expect(arg).not.toMatch(/^-Wl,-rpath/);
+      expect(arg).not.toMatch(/^-rpath/);
+    }
+  });
+
   it("fails loudly when the shim source is missing", () => {
     const { includeDir, abiAssetDir } = setUpFakeWorkspace();
     expect(() =>

@@ -73,6 +73,13 @@ struct llama_model_params * milady_llama_model_params_default(void) {
     struct llama_model_params defaults = llama_model_default_params();
     struct llama_model_params * out = (struct llama_model_params *) malloc(sizeof(struct llama_model_params));
     if (out == NULL) return NULL;
+    /* Plain-data struct as of llama.cpp b4500 (verified llama.h:278-310 — the
+     * only pointer fields are `devices`, `tensor_split`, `rpc_servers`,
+     * `progress_callback`, `progress_callback_user_data`, `kv_overrides`, and
+     * the defaults zero them out). A shallow memcpy is safe. If a future
+     * llama.cpp bump adds a pointer field that requires deep-copy or owned
+     * lifetime semantics, this memcpy must be replaced with explicit
+     * field copies. */
     memcpy(out, &defaults, sizeof(struct llama_model_params));
     return out;
 }
