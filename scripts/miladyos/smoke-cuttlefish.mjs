@@ -45,7 +45,6 @@ const CHAT_TIMEOUT_MS = 60_000;
 const RESET = "[0m";
 const RED = "[31m";
 const GREEN = "[32m";
-const YELLOW = "[33m";
 const CYAN = "[36m";
 
 const TOTAL_STEPS = 8;
@@ -89,11 +88,6 @@ function adb(args, { serial = null, timeout = 10_000 } = {}) {
     status: result.status,
     error: result.error,
   };
-}
-
-function failExit(message) {
-  console.error(color(RED, `[smoke-cuttlefish] ${message}`));
-  process.exit(1);
 }
 
 async function sleep(ms) {
@@ -200,9 +194,12 @@ export async function runSmoke({ adb: adbImpl = adb } = {}) {
     startSvc.status !== 0 ||
     /Error:|Unable to find|Bad component name/i.test(svcStdout)
   ) {
-    const fallback = adbImpl(["shell", "am", "startservice", "-n", SERVICE_FQN], {
-      serial,
-    });
+    const fallback = adbImpl(
+      ["shell", "am", "startservice", "-n", SERVICE_FQN],
+      {
+        serial,
+      },
+    );
     if (
       fallback.status !== 0 ||
       /Error:|Unable to find/i.test(fallback.stdout + fallback.stderr)
