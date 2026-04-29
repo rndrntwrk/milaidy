@@ -39,7 +39,12 @@ const AGENT_PORT = 31337;
 const HOST_PORT = 31337;
 const HEALTH_TIMEOUT_MS = 30_000;
 const HEALTH_POLL_INTERVAL_MS = 1_000;
-const CHAT_TIMEOUT_MS = 60_000;
+// Cuttlefish x86_64 has no GPU; SmolLM2-360M decoding an 8k prompt
+// on CPU runs for several minutes per turn. 1800 s matches the
+// service-side ELIZA_CHAT_GENERATION_TIMEOUT_MS we set in
+// MiladyAgentService when AOSP_BUILD=true. Real phone hardware
+// resolves in seconds, so this only matters for cvd runs.
+const CHAT_TIMEOUT_MS = 1_800_000;
 
 // ANSI color helpers — output is human-readable, no JSON for now.
 const RESET = "[0m";
