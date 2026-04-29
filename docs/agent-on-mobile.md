@@ -274,6 +274,11 @@ MILADY_AOSP_BUILD=1 MILADY_GRADLE_AOSP_BUILD=true bun run build:android:system
 # 3. Run the AOSP product build (which also re-runs steps 1+2 if missing).
 node scripts/miladyos/build-aosp.mjs --aosp-root ~/aosp \
   --rebuild-privileged-apk --launch --boot-validate
+
+# 4. End-to-end smoke (after cvd is up): runs through health check,
+#    bearer token retrieval, chat completion, and local-vs-cloud
+#    detection in eight phases. Exits 0 on full pass.
+node scripts/miladyos/smoke-cuttlefish.mjs
 ```
 
 See `SETUP_AOSP.md` for the full Linux-x86_64-with-KVM setup.

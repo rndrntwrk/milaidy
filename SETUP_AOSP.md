@@ -285,6 +285,34 @@ What this command does:
    node scripts/miladyos/boot-validate.mjs
    ```
 
+## End-to-End Smoke Test
+
+After the AOSP build finishes and `cvd start` is up, verify the on-device
+agent actually serves chat requests with a single command:
+
+```bash
+node scripts/miladyos/smoke-cuttlefish.mjs
+```
+
+The smoke script runs eight phases:
+
+1. Verifies cvd / device is reachable via adb.
+2. Confirms `com.miladyai.milady` is installed; reports the device's
+   primary ABI (`getprop ro.product.cpu.abi`).
+3. Starts `MiladyAgentService` via `am start-foreground-service`.
+4. Polls `http://127.0.0.1:31337/api/health` (over `adb forward`) up to
+   30s for a 200.
+5. Reads the per-boot bearer token via `adb shell run-as <pkg> cat
+   /data/data/<pkg>/files/auth/local-agent-token`.
+6. POSTs a chat message to `/v1/chat/completions` with the bearer token.
+7. Asserts the response has a non-empty `choices[0].message.content`.
+8. Hits `/api/local-inference/active` and asserts a local model is
+   loaded (`status: "ready"`, non-null `modelId`) — fails loudly if the
+   chat response was cloud-routed.
+
+Pass `--json` for a machine-readable result array. Exit code is 0 on
+all-pass, 1 on any failure.
+
 ## Manual Build Flow
 
 Use this if you want to isolate the stages.
