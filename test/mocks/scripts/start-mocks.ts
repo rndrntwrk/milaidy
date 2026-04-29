@@ -8,18 +8,22 @@ import {
   GITHUB_FIXTURE_NOTIFICATIONS,
   GITHUB_FIXTURE_PULLS,
   GITHUB_FIXTURE_SEARCH_ITEMS,
-} from "../helpers/github-octokit-fixture.ts";
-import type { GoogleCalendarRequestLedgerMetadata } from "./google-calendar-state.ts";
+} from "../../../eliza/test/mocks/helpers/github-octokit-fixture.ts";
+import type { GoogleCalendarRequestLedgerMetadata } from "../../../eliza/test/mocks/scripts/google-calendar-state.ts";
+import { MockHttpError } from "../../../eliza/test/mocks/scripts/mock-http-error.ts";
 import {
   createGoogleMockState,
   type GmailRequestLedgerMetadata,
   type GoogleMockState,
   googleDynamicFixture,
 } from "./google-gmail-state.ts";
-import { MockHttpError } from "./mock-http-error.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ENVS_DIR = path.resolve(__dirname, "..", "environments");
+const UPSTREAM_ENVS_DIR = path.resolve(
+  __dirname,
+  "../../../eliza/test/mocks/environments",
+);
 
 export const MOCK_ENVIRONMENTS = [
   "google",
@@ -35,6 +39,12 @@ export const MOCK_ENVIRONMENTS = [
 ] as const;
 
 export type MockEnvironmentName = (typeof MOCK_ENVIRONMENTS)[number];
+
+export function mockEnvironmentPath(name: MockEnvironmentName): string {
+  const localPath = path.resolve(ENVS_DIR, `${name}.json`);
+  if (fs.existsSync(localPath)) return localPath;
+  return path.resolve(UPSTREAM_ENVS_DIR, `${name}.json`);
+}
 
 type JsonPrimitive = string | number | boolean | null;
 type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
@@ -1859,7 +1869,7 @@ export async function startMocks(opts?: {
 }): Promise<StartedMocks> {
   const envs = opts?.envs ?? MOCK_ENVIRONMENTS;
 
-  const dataPaths = envs.map((e) => path.resolve(ENVS_DIR, `${e}.json`));
+  const dataPaths = envs.map((e) => mockEnvironmentPath(e));
   const missing = dataPaths.filter((p) => !fs.existsSync(p));
   if (missing.length > 0) {
     throw new Error(`Mock environment files missing: ${missing.join(", ")}`);
