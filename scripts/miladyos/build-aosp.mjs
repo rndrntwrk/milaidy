@@ -6,6 +6,7 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { main as compileLibllamaMain } from "./compile-libllama.mjs";
+import { main as stageDefaultModelsMain } from "./stage-default-models.mjs";
 import { main as syncToAospMain } from "./sync-to-aosp.mjs";
 import { main as validateMain } from "./validate.mjs";
 
@@ -39,6 +40,13 @@ export function parseArgs(argv) {
     // --skip-libllama lets developers iterate on non-inference paths
     // without paying the llama.cpp cross-compile cost.
     skipLibllama: false,
+    // AOSP builds bundle a small chat model (SmolLM2 360M) and a small
+    // embedding model (BGE small en v1.5) into the APK assets so first-
+    // boot chat works offline. Off-by-default would mean every fresh
+    // install starts in "no model assigned" state and the user can't
+    // chat until they download. ~400 MB APK growth; --skip-bundled-models
+    // for builders who want runtime-download instead.
+    skipBundledModels: false,
     // When set, also re-run `bun run build:android:system` with AOSP env
     // flags so the privileged APK staged into vendor/milady is rebuilt
     // with libllama.so + BuildConfig.AOSP_BUILD=true. Off by default to
@@ -75,11 +83,13 @@ export function parseArgs(argv) {
       args.skipStopCvd = true;
     } else if (arg === "--skip-libllama") {
       args.skipLibllama = true;
+    } else if (arg === "--skip-bundled-models") {
+      args.skipBundledModels = true;
     } else if (arg === "--rebuild-privileged-apk") {
       args.rebuildPrivilegedApk = true;
     } else if (arg === "-h" || arg === "--help") {
       console.log(
-        "Usage: node scripts/miladyos/build-aosp.mjs --aosp-root <AOSP_ROOT> [--source-vendor <VENDOR_DIR>] [--jobs <N>] [--skip-build] [--skip-stop-cvd] [--skip-libllama] [--rebuild-privileged-apk] [--launch] [--boot-validate]",
+        "Usage: node scripts/miladyos/build-aosp.mjs --aosp-root <AOSP_ROOT> [--source-vendor <VENDOR_DIR>] [--jobs <N>] [--skip-build] [--skip-stop-cvd] [--skip-libllama] [--skip-bundled-models] [--rebuild-privileged-apk] [--launch] [--boot-validate]",
       );
       process.exit(0);
     } else if (arg.startsWith("--")) {
@@ -222,6 +232,18 @@ export async function main(argv = process.argv.slice(2)) {
   // The compile step is idempotent — `--skip-if-present` keeps re-runs cheap.
   if (!args.skipLibllama) {
     await compileLibllamaMain(["--skip-if-present"]);
+  }
+
+  // Stage the default chat + embedding GGUF models into APK assets so
+  // first-boot chat works offline. Idempotent: if the files are already
+  // staged with the expected size they're left alone. ~400 MB APK growth
+  // when both models are bundled; --skip-bundled-models opts out.
+  if (!args.skipBundledModels) {
+    await stageDefaultModelsMain([]);
+  } else {
+    console.log(
+      "[miladyos:build-aosp] --skip-bundled-models; first-boot chat will require runtime download.",
+    );
   }
 
   if (args.rebuildPrivilegedApk) {

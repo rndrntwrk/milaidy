@@ -249,13 +249,23 @@ What this command does:
    `apps/app/android/app/src/main/assets/agent/{abi}/libllama.so`.
    Skipped when both `.so` files already exist; pass `--skip-libllama` to
    skip even when missing (only useful for non-inference smoke iteration).
-4. With `--rebuild-privileged-apk`: re-runs `bun run build:android:system`
+4. Stages the default chat model (SmolLM2 360M Instruct, ~270 MB) and the
+   default embedding model (BGE small en v1.5, ~130 MB) into
+   `apps/app/android/app/src/main/assets/agent/models/` along with a
+   `manifest.json` describing each file. The on-device runtime's
+   bundled-models bootstrap registers these in the local-inference
+   registry on first launch so the auto-assign pass picks them up
+   without any download UX. Total APK growth: ~400 MB. Pass
+   `--skip-bundled-models` (or set `MILADY_SKIP_BUNDLED_MODELS=1`) to
+   opt out and rely on runtime download instead. Idempotent: existing
+   files of the expected size are left alone.
+6. With `--rebuild-privileged-apk`: re-runs `bun run build:android:system`
    under `MILADY_AOSP_BUILD=1` + `MILADY_GRADLE_AOSP_BUILD=true` so the
    APK staged into `os/android/vendor/milady/apps/Milady/Milady.apk`
    carries `BuildConfig.AOSP_BUILD=true` and the AOSP-keyed agent bundle.
-5. Copies `os/android/vendor/milady` into `~/aosp/vendor/milady`.
-6. Validates the MiladyOS product layer against the AOSP checkout.
-7. Runs:
+7. Copies `os/android/vendor/milady` into `~/aosp/vendor/milady`.
+8. Validates the MiladyOS product layer against the AOSP checkout.
+9. Runs:
 
    ```bash
    source build/envsetup.sh
@@ -263,13 +273,13 @@ What this command does:
    m -j$(nproc)
    ```
 
-8. Launches Cuttlefish:
+10. Launches Cuttlefish:
 
-   ```bash
-   launch_cvd --daemon
-   ```
+    ```bash
+    launch_cvd --daemon
+    ```
 
-9. Runs boot validation:
+11. Runs boot validation:
 
    ```bash
    node scripts/miladyos/boot-validate.mjs
