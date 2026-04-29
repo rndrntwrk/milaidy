@@ -56,14 +56,6 @@ jobs:
           skip-avatar-clone: "true"
           no-vision-deps: "true"
 
-      - name: Restore eliza workspace paths for repo scripts
-        run: node scripts/restore-local-eliza-workspace.mjs
-
-      - name: Install submodule verification dependencies
-        run: |
-          bun install --cwd eliza --no-frozen-lockfile --ignore-scripts
-          bun install --cwd eliza/cloud --no-frozen-lockfile --ignore-scripts
-
       - name: Ensure biome uses correct architecture
         run: |
           mkdir -p eliza/node_modules
@@ -101,14 +93,6 @@ jobs:
           install-command: bun install --ignore-scripts --no-frozen-lockfile
           prepare-local-eliza-runtime: "true"
 
-      - name: Restore eliza workspace paths for repo scripts
-        run: node scripts/restore-local-eliza-workspace.mjs
-
-      - name: Install submodule verification dependencies
-        run: |
-          bun install --cwd eliza --no-frozen-lockfile --ignore-scripts
-          bun install --cwd eliza/cloud --no-frozen-lockfile --ignore-scripts
-
       - name: Ensure biome uses correct architecture
         run: |
           # bunx resolves the @biomejs/biome package first, so replacing only the
@@ -144,14 +128,6 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
           install-command: bun install --ignore-scripts --no-frozen-lockfile
 
-      - name: Restore eliza workspace paths for repo scripts
-        run: node scripts/restore-local-eliza-workspace.mjs
-
-      - name: Install submodule verification dependencies
-        run: |
-          bun install --cwd eliza --no-frozen-lockfile --ignore-scripts
-          bun install --cwd eliza/cloud --no-frozen-lockfile --ignore-scripts
-
       - name: Generate protobuf types
         run: |
           if [ -d eliza/packages/schemas ] && [ -f eliza/packages/schemas/buf.gen.yaml ] && [ ! -d eliza/packages/typescript/src/types/generated ]; then
@@ -186,9 +162,6 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
           install-command: bun install --ignore-scripts --no-frozen-lockfile
-
-      - name: Restore eliza workspace paths for repo scripts
-        run: node scripts/restore-local-eliza-workspace.mjs
 
       - name: Build project
         run: bun run build

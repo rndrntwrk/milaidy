@@ -191,12 +191,22 @@ runs:
     - name: Install published-workspace fallback dependencies
       if: ${{ inputs.disable-local-eliza-workspace == 'true' }}
       shell: bash
-      run: bash scripts/install-published-workspace-fallback-deps.sh
+      run: |
+        if [ -f scripts/install-published-workspace-fallback-deps.sh ]; then
+          bash scripts/install-published-workspace-fallback-deps.sh
+        else
+          echo "Skipping published-workspace fallback dependencies: helper script not present"
+        fi
 
     - name: Build local eliza CI override packages
       if: ${{ inputs.disable-local-eliza-workspace == 'true' }}
       shell: bash
-      run: node scripts/build-local-eliza-ci-overrides.mjs
+      run: |
+        if [ -f scripts/build-local-eliza-ci-overrides.mjs ]; then
+          node scripts/build-local-eliza-ci-overrides.mjs
+        else
+          echo "Skipping local eliza CI override build: helper script not present"
+        fi
 
     - name: Run repository postinstall patches
       if: ${{ inputs.run-postinstall == 'true' }}
