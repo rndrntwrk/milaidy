@@ -50,9 +50,9 @@ jobs:
             const allPathsMatch = (regex) => hasFiles && paths.every((path) => regex.test(path));
             const anyPathMatch = (regex) => paths.some((path) => regex.test(path));
 
-            const isDocsOnly = allPathsMatch(/(^docs\/)|(^|\/)readme\.md$|\.mdx?$/);
+            const isDocsOnly = allPathsMatch(/(^docs\/)|(^eliza\/docs\/)|(^|\/)readme\.md$|\.mdx?$/);
             const isCiOnly = allPathsMatch(/^\.github\/(workflows|actions)\//);
-            const isTestsOnly = allPathsMatch(/(^test\/)|(\.test\.[tj]sx?$)|(\.spec\.[tj]sx?$)|vitest.*config/);
+            const isTestsOnly = allPathsMatch(/(^test\/)|(^eliza\/test\/)|(\.test\.[tj]sx?$)|(\.spec\.[tj]sx?$)|vitest.*config/);
 
             const securityPatterns = ['security', 'vulnerability', 'cve', 'injection', 'xss', 'csrf', 'sqli', 'auth bypass'];
             const docsPatterns = ['docs:', 'documentation', 'readme', 'changelog'];

@@ -149,7 +149,9 @@ function patchReleaseOrchestrator() {
   );
 
   fs.writeFileSync(orchestratorPath, raw);
-  console.log("Patched release-orchestrator.yml with publish-npm + deploy-homepage jobs.");
+  console.log(
+    "Patched release-orchestrator.yml with publish-npm + deploy-homepage jobs.",
+  );
 }
 
 function main() {
@@ -161,7 +163,10 @@ function main() {
       console.error(`Missing source workflow: ${srcPath}`);
       process.exit(1);
     }
-    const transformed = transformWithBanner(file, fs.readFileSync(srcPath, "utf8"));
+    const transformed = transformWithBanner(
+      file,
+      fs.readFileSync(srcPath, "utf8"),
+    );
     const dstPath = path.join(dstDir, file);
     fs.writeFileSync(dstPath, transformed);
     console.log(`Wrote ${path.relative(repoRoot, dstPath)}`);
@@ -177,13 +182,16 @@ function main() {
     fs.readFileSync(orchSrc, "utf8"),
   );
   fs.writeFileSync(path.join(dstDir, "release-orchestrator.yml"), orchOut);
-  console.log(`Wrote ${path.relative(repoRoot, path.join(dstDir, "release-orchestrator.yml"))}`);
+  console.log(
+    `Wrote ${path.relative(repoRoot, path.join(dstDir, "release-orchestrator.yml"))}`,
+  );
 
   patchReleaseOrchestrator();
 }
 
 const isDirectRun =
-  path.resolve(process.argv[1] ?? "") === path.resolve(fileURLToPath(import.meta.url));
+  path.resolve(process.argv[1] ?? "") ===
+  path.resolve(fileURLToPath(import.meta.url));
 if (isDirectRun) {
   main();
 }

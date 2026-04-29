@@ -104,12 +104,55 @@ test.describe("homepage - provision agent modal", () => {
     });
   });
 
-  test.skip("provision timeout via clock fast-forward", async () => {
-    // Skipped: ProvisionAgentModal uses recursive setTimeout (2.5s × 48
-    // attempts = 120s). Playwright's mocked clock + the modal's awaited
-    // fetch chain interleave in a way that makes the timeout deterministic
-    // only with manual ticking, which is brittle across Chromium versions.
-    // The "provision failure" test above exercises the same error-surface
-    // path with a concrete failure status, which is the more useful guarantee.
+  test("provision timeout via clock fast-forward", async ({ page }) => {
+    // The modal polls every 2.5s up to 48 times before surfacing a timeout.
+    // We use page.clock to fast-forward through those intervals deterministically
+    // instead of waiting 120 real seconds.
+    //
+    // Strategy: install the clock BEFORE the page loads so the modal's
+    // setTimeout calls are intercepted, then loop runFor(2500) + a tiny real
+    // waitForTimeout to flush microtasks (fetch resolution + setState +
+    // the next setTimeout registration) between iterations. This matches
+    // the modal's recursive setTimeout pattern faithfully.
+    await loginViaPolling(page);
+    // Queue 60 "in_progress" responses so every poll attempt sees pending
+    // (cap is 48; we add buffer).
+    const jobStatuses = Array.from({ length: 60 }, () => ({
+      status: "in_progress" as const,
+    }));
+    await mockCloudApi(page.context(), {
+      agents: [SEED_AGENT],
+      jobStatuses,
+    });
+
+    await page.clock.install();
+    await page.goto("/");
+    // Let React mount + initial useEffects fire under the fake clock.
+    await page.clock.runFor(1000);
+
+    await openProvisionModal(page);
+    await page.locator(NAME_INPUT_ID).fill("timeout-agent");
+    await page.getByRole("button", { name: SUBMIT_BUTTON_TEXT }).click();
+
+    // First poll (attempt=0) is invoked synchronously after provisionAgent
+    // resolves, no setTimeout yet. Give microtasks time to flush so attempt=0
+    // completes and schedules the setTimeout for attempt=1.
+    await page.waitForTimeout(100);
+
+    // Step through 50 polling cycles to exceed MAX_POLL_ATTEMPTS=48. Each
+    // runFor(2500) fires the pending setTimeout; the awaited fetch returns
+    // "in_progress" and schedules the next setTimeout. waitForTimeout(50)
+    // is real time — allows the awaited fetch + microtasks to complete
+    // before the next clock tick.
+    for (let i = 0; i < 50; i++) {
+      await page.clock.runFor(2500);
+      await page.waitForTimeout(50);
+    }
+
+    // The modal copy on timeout: see ProvisionAgentModal.tsx pollJob()
+    // when attempt >= MAX_POLL_ATTEMPTS.
+    await expect(
+      page.getByText(/Provisioning is taking longer than expected/i),
+    ).toBeVisible({ timeout: 15_000 });
   });
 });

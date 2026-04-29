@@ -26,6 +26,10 @@
       "@elizaos/app-companion/*": ["./eliza/apps/app-companion/src/*"],
       "@elizaos/app-shopify": ["./eliza/apps/app-shopify/src/index.ts"],
       "@elizaos/app-shopify/*": ["./eliza/apps/app-shopify/src/*"],
+      "@elizaos/app-hyperliquid": ["./eliza/apps/app-hyperliquid/src/index.ts"],
+      "@elizaos/app-hyperliquid/*": ["./eliza/apps/app-hyperliquid/src/*"],
+      "@elizaos/app-polymarket": ["./eliza/apps/app-polymarket/src/index.ts"],
+      "@elizaos/app-polymarket/*": ["./eliza/apps/app-polymarket/src/*"],
       "@elizaos/app-vincent": ["./eliza/apps/app-vincent/src/index.ts"],
       "@elizaos/app-vincent/*": ["./eliza/apps/app-vincent/src/*"],
       "@elizaos/app-elizamaker": ["./eliza/apps/app-elizamaker/src/index.ts"],
@@ -47,7 +51,13 @@
       "@elizaos/app-steward/*": ["./eliza/apps/app-steward/src/*"]
     }
   },
-  "include": ["eliza/packages/app-core/src/**/*"],
+  "include": [
+    "vitest.config.ts",
+    "eliza/test/vitest/**/*.ts",
+    "eliza/test/eliza-package-paths.ts",
+    "scripts/lib/repo-root.d.mts",
+    "eliza/packages/app-core/src/**/*"
+  ],
   "exclude": [
     "node_modules",
     "dist",

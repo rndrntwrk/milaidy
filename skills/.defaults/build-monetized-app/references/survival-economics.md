@@ -6,8 +6,8 @@ Why this skill exists: a Milady-style autonomous agent runs in an Eliza Cloud co
 
 Two tables in the cloud DB matter:
 
-- **`credit_transactions`** - the org's purchased credit balance, debited per cloud-SDK call when no earnings are available
-- **`redeemable_earnings_ledger`** - the owner's accumulated markup-cuts from every app they own; can be cashed out OR auto-applied to hosting
+- **`credit_transactions`** — the org's purchased credit balance, debited per cloud-SDK call when no earnings are available
+- **`redeemable_earnings_ledger`** — the owner's accumulated markup-cuts from every app they own; can be cashed out OR auto-applied to hosting
 
 Every cloud-SDK call routed through a monetized app generates two ledger rows:
 1. The user pays the base inference cost (debited from their org's credits)
@@ -25,7 +25,7 @@ Container hosting is pay-as-you-go, billed daily. The cron at `app/api/cron/cont
 4. If both are zero, marks the container with a `payment_overdue` warning
 5. After 48 hours of `payment_overdue`, the container is stopped
 
-This means: **as long as your app's earnings >= your container's hosting cost, the loop is self-sustaining.** No credit-card top-ups, no manual intervention.
+This means: **as long as your app's earnings ≥ your container's hosting cost, the loop is self-sustaining.** No credit-card top-ups, no manual intervention.
 
 ## The default tier
 
@@ -35,13 +35,13 @@ A new container without explicit overrides runs at:
 - **Memory**: 512 MB
 - **Cost**: ~$0.67/day (subject to current pricing in the cloud's `container_pricing` table)
 
-An app earning a 20% markup on roughly $3.50/day of inference activity covers hosting. That's 4-5 active chat users at modest daily usage. Empirically achievable for any app that has even a small daily-active core.
+An app earning a 20% markup on roughly $3.50/day of inference activity covers hosting. That's 4–5 active chat users at modest daily usage. Empirically achievable for any app that has even a small daily-active core.
 
 ## Why earnings come before credits
 
 This is the design choice that makes the agent autonomous:
 
-- If hosting was paid from credits first, the owner has to keep the credit balance topped up forever - the agent depends on the human's wallet
+- If hosting was paid from credits first, the owner has to keep the credit balance topped up forever — the agent depends on the human's wallet
 - With earnings-first, a profitable app generates its own runway without the owner spending anything
 
 The org's owner controls this via the `pay_as_you_go_from_earnings` flag on the org settings. When true (the default), the agent's economics are self-contained. When false, hosting always pulls from credits and earnings stay on the redemption ledger for cashout.
@@ -50,7 +50,7 @@ The org's owner controls this via the `pay_as_you_go_from_earnings` flag on the 
 
 In order:
 
-1. **Stay online.** Earnings >= hosting cost. If not, prioritize work that closes that gap.
+1. **Stay online.** Earnings ≥ hosting cost. If not, prioritize work that closes that gap.
 2. **Profitability margin.** Earnings significantly above hosting builds reserve, which absorbs short-term dips in usage.
 3. **Diversification.** A single app is single-point-of-failure. Once one is profitable, the agent should add another to reduce dependence on any one app's traffic.
 

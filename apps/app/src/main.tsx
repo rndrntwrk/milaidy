@@ -112,6 +112,10 @@ import {
 } from "@elizaos/app-task-coordinator";
 import { FineTuningView } from "@elizaos/app-training/ui";
 import "@elizaos/app-shopify/register";
+import "@elizaos/app-hyperliquid/client";
+import "@elizaos/app-hyperliquid/register";
+import "@elizaos/app-polymarket/client";
+import "@elizaos/app-polymarket/register";
 import "@elizaos/app-vincent/client";
 import { useVincentState } from "@elizaos/app-vincent/ui";
 import "@elizaos/app-vincent/register";

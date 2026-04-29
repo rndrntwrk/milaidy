@@ -1,17 +1,17 @@
 ---
 name: build-monetized-app
-description: "Use when the task is building a new app on Eliza Cloud that earns money - chat apps, agent apps, MCP-backed tools, anything that calls the cloud's chat/messages/inference endpoints on behalf of users. Covers app registration, container deploy, markup configuration, affiliate header, and the survival-economics loop where earnings auto-fund the agent's own hosting. Pairs with the `eliza-cloud` skill (which covers Cloud as a backend in general) by focusing specifically on the build-and-monetize flow."
+description: "Use when the task is building a new app on Eliza Cloud that earns money — chat apps, agent apps, MCP-backed tools, anything that calls the cloud's chat/messages/inference endpoints on behalf of users. Covers app registration, container deploy, markup configuration, affiliate header, and the survival-economics loop where earnings auto-fund the agent's own hosting. Pairs with the `eliza-cloud` skill (which covers Cloud as a backend in general) by focusing specifically on the build-and-monetize flow."
 ---
 
 # Build a monetized app on Eliza Cloud
 
-Use this skill when you need to build an app that takes a markup on every chat or inference call and credits the earnings back to your owner. Eliza Cloud already supports app registration, per-app API keys, container deploys, the `appId`-based auth and redirect flow, the affiliate-header revenue path, and creator-monetization plumbing - you do not need to invent any of these.
+Use this skill when you need to build an app that takes a markup on every chat or inference call and credits the earnings back to your owner. Eliza Cloud already supports app registration, per-app API keys, container deploys, the `appId`-based auth and redirect flow, the affiliate-header revenue path, and creator-monetization plumbing — you do not need to invent any of these.
 
 Read `references/sdk-flow.md` for the 6-step build flow with a self-contained code example. External references (all public):
 
-- **Working chat-app**: [`elizaOS/cloud-mini-apps/apps/edad-chat`](https://github.com/elizaOS/cloud-mini-apps/tree/main/apps/edad-chat) - copyable end-to-end implementation. Read its `server.ts` and `api/proxy.ts` for the canonical chat-forwarder shape using `@elizaos/cloud-sdk`.
-- **SDK reference**: [`@elizaos/cloud-sdk` README](https://github.com/elizaOS/cloud/tree/develop/packages/sdk) - typed methods + helpers + auth.
-- **Human-readable recipe**: [`docs/building-a-monetized-app.md`](https://github.com/elizaOS/cloud/blob/develop/docs/building-a-monetized-app.md) - same loop, narrative form, with the schema fields explained.
+- **Working chat-app**: [`elizaOS/cloud-mini-apps/apps/edad-chat`](https://github.com/elizaOS/cloud-mini-apps/tree/main/apps/edad-chat) — copyable end-to-end implementation. Read its `server.ts` and `api/proxy.ts` for the canonical chat-forwarder shape using `@elizaos/cloud-sdk`.
+- **SDK reference**: [`@elizaos/cloud-sdk` README](https://github.com/elizaOS/cloud/tree/develop/packages/sdk) — typed methods + helpers + auth.
+- **Human-readable recipe**: [`docs/building-a-monetized-app.md`](https://github.com/elizaOS/cloud/blob/develop/docs/building-a-monetized-app.md) — same loop, narrative form, with the schema fields explained.
 
 ## The survival-economics loop
 
@@ -48,16 +48,16 @@ Full code in `references/sdk-flow.md`. The skill assumes you have:
 
 Every cloud-SDK call your deployed app makes on behalf of a user MUST carry:
 
-- `Authorization: Bearer <user_jwt>` - the JWT from the app-auth OAuth redirect
-- `x-affiliate-code: <your_affiliate_code>` - the owner's affiliate code; this is what credits earnings
+- `Authorization: Bearer <user_jwt>` — the JWT from the app-auth OAuth redirect
+- `x-affiliate-code: <your_affiliate_code>` — the owner's affiliate code; this is what credits earnings
 
 This pattern is shared with the [`eliza-cloud`](../eliza-cloud/SKILL.md) skill; see that skill for the auth flow itself. This skill assumes you've already read it.
 
 ## Read these references in order
 
-1. `references/sdk-flow.md` - the 6-step deploy + monetize flow with full code
-2. `references/survival-economics.md` - why this matters; how earnings flow into hosting
-3. `references/failure-modes.md` - recovery table for the failures you'll actually hit (name collision, container deploy failure, auth blocker, etc.)
+1. `references/sdk-flow.md` — the 6-step deploy + monetize flow with full code
+2. `references/survival-economics.md` — why this matters; how earnings flow into hosting
+3. `references/failure-modes.md` — recovery table for the failures you'll actually hit (name collision, container deploy failure, auth blocker, etc.)
 
 ## What this skill is NOT
 
