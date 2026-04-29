@@ -527,6 +527,57 @@ The runner:
 4. Spawns `miladyos:e2e` which boot-validates and captures HOME / Dialer / SMS / Assist / launcher screenshots.
 5. Optionally tears down cvd at the end (`--stop-after`).
 
+### Play Store distribution (AAB + dynamic feature module)
+
+Cuttlefish and the AOSP product build want a base APK with the bundled GGUF models inline; cvd cannot consume an AAB. Play Store wants the opposite: an AAB whose base module stays under the 200MB upload ceiling, with the GGUFs split into a dynamic feature module (DFM) that ships alongside the base on first install.
+
+The build script handles both paths from one entry point:
+
+```bash
+# AOSP / cuttlefish (default)
+node scripts/miladyos/build-aosp.mjs --aosp-root ~/aosp --rebuild-privileged-apk
+
+# Play Store (AAB with :models DFM split out)
+MILADY_BUILD_FORMAT=aab \
+  node scripts/miladyos/build-aosp.mjs --aosp-root ~/aosp --rebuild-privileged-apk --build-format aab
+```
+
+What the AAB path adds on top of the APK path:
+
+1. After `build:android:system` finishes (which produces the base APK), `scripts/miladyos/stage-models-dfm.mjs` restructures the regenerated `apps/app/android/` tree:
+   - Creates `apps/app/android/models/` as a new gradle module declared with `apply plugin: 'com.android.dynamic-feature'`.
+   - Patches `settings.gradle` to `include ':models'`.
+   - Patches `app/build.gradle` to declare `dynamicFeatures = [':models']`.
+   - Moves the staged GGUFs from `app/src/main/assets/agent/models/` into `models/src/main/assets/agent/models/`.
+2. Invokes `./gradlew :app:bundleRelease` directly (NOT through `bun run build:android:system`, which would re-overlay the regenerated tree and undo the DFM restructure).
+3. Stages the resulting AAB at `os/android/vendor/milady/apps/Milady/Milady.aab` next to the existing APK.
+
+The DFM is install-time delivered (`<dist:install-time>` with `<dist:removable dist:value="false" />` and `<dist:fusing dist:include="true" />`), which means Play installs the module alongside the base APK on first install — no on-demand prompt, no `SplitInstallManager` glue in app code. From the user's perspective it's identical to the inline-models APK; from `MiladyAgentService`'s perspective `getAssets().open("agent/models/...")` resolves through the merged AssetManager exactly the same way.
+
+Verify the AAB shape locally with `bundletool` (do NOT upload to Play Store from this script — that's a separate manual step):
+
+```bash
+# Install bundletool if not present
+curl -L -o /tmp/bundletool.jar \
+  https://github.com/google/bundletool/releases/latest/download/bundletool-all-1.18.1.jar
+
+# Sanity-check the AAB structure includes the :models DFM
+java -jar /tmp/bundletool.jar build-apks \
+  --bundle=os/android/vendor/milady/apps/Milady/Milady.aab \
+  --output=/tmp/milady.apks --mode=universal
+
+# `unzip -l /tmp/milady.apks` should list a base/ split AND a models/ split
+# the base split should be << 200MB; the models split carries the GGUFs.
+unzip -l /tmp/milady.apks | grep -E "(base|models)"
+```
+
+Expected approximate sizes after the split:
+- Base APK split: ~150 MB (bun runtime + WebView assets + libllama.so).
+- Models DFM split: ~400 MB (SmolLM2 + BGE).
+- Combined uncompressed install size: same as the inline-models APK; the split only matters at upload + over-the-wire delivery.
+
+The AAB build path gates on `--rebuild-privileged-apk` because the standard MiladyOS APK staging is a dependency: gradle reuses the same agent-bundle.js + libllama.so output the APK path produces. Calling with `--build-format aab` without `--rebuild-privileged-apk` logs a warning and skips the AAB build (the existing APK is left in place).
+
 ### Visual / e2e validation (Cuttlefish or AVD)
 
 After Cuttlefish boots (or against a stock AVD), capture role-ownership proof and a PNG gallery of the Milady surfaces:
@@ -594,6 +645,35 @@ Still out of scope for Cuttlefish:
 Those come after Cuttlefish is green.
 
 ## Troubleshooting
+
+### Sepolicy + seccomp diagnosis
+
+The on-device agent is gated by **two** independent kernel mechanisms:
+
+- **SELinux (MAC)** — controlled by `os/android/vendor/milady/sepolicy/`. Denials show up in logcat as `avc: denied { ... }` lines. The current allow rule in `milady_agent.te` (`allow platform_app app_data_file:file { execute execute_no_trans };`) is what lets bun start.
+- **seccomp-bpf** — controlled by AOSP's per-arch syscall allowlist in `bionic/libc/seccomp/{x86_64,arm64}_app_policy.cpp`. Denials kill the process with `SIGSYS` (signal 31, exit code 159 = 128 + 31). **No SELinux rule can relax the seccomp filter** — it's locked at zygote fork via `prctl(PR_SET_NO_NEW_PRIVS, 1)`.
+
+The seccomp mitigation lives in `MiladyAgentService.startAgentProcess()` as four `BUN_FEATURE_FLAG_*` env vars passed to bun (`DISABLE_IO_POOL`, `FORCE_WAITER_THREAD`, `DISABLE_RWF_NONBLOCK`, `DISABLE_SPAWNSYNC_FAST_PATH`). They route bun off `io_uring_*`, `pidfd_*`, `clone3`, and `RWF_NONBLOCK` syscall paths that Android's app allowlist blocks. The same flag list is documented in `milady_agent.te`'s comment block; `validateSepolicy()` pins both copies so they cannot drift apart silently.
+
+Verify on a clean Cuttlefish boot:
+
+```bash
+# 1. Static check (works without a device): the .te + file_contexts +
+#    runtime BUN_FEATURE_FLAG_* parity.
+bun run miladyos:validate
+
+# 2. Live check on cuttlefish: no SIGSYS, no audit lines, milady process up.
+adb shell ps -A | grep milady
+adb logcat -d | grep -E "(seccomp|SIGSYS|audit:.*type=1326)"
+adb shell dmesg | grep -E "(seccomp|SIGSYS)"
+
+# 3. Live check: SELinux denials targeting milady_agent_* labels.
+adb logcat -d | grep -E "avc:.*(milady_agent|com\.miladyai\.milady)"
+```
+
+Healthy state: the process is in `ps -A`, logcat / dmesg are silent, and any `avc:` lines that DO mention Milady are documented `dontaudit`-eligible noise (proc/sysfs probes, etc.) — not `denied { execute }` for the bun binary, which is the failure mode the allow rule addresses.
+
+If a future bun release introduces a brand-new gated syscall with no fallback flag, the only fixes are (a) downgrade bun, (b) patch bun, or (c) extend the per-arch seccomp allowlist in `bionic/libc/seccomp/` and rebuild AOSP. None of those are sepolicy work — vendor sepolicy cannot relax seccomp.
 
 ### `MiladyOS AOSP/Cuttlefish builds require a Linux x86_64 builder with KVM`
 
