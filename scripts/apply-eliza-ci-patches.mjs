@@ -10,8 +10,10 @@ const repoRoot = path.resolve(path.dirname(scriptPath), "..");
 const elizaDir = path.join(repoRoot, "eliza");
 const patchPath = path.join(
   repoRoot,
-  "patches",
   "eliza",
+  "patches",
+  "milady",
+  "eliza-ci-bootstrap",
   "ci-release-contracts.patch",
 );
 
@@ -150,7 +152,7 @@ function main() {
   }
   if (drifted.length > 0) {
     console.warn(
-      `[apply-eliza-ci-patches] ${drifted.length} file(s) drifted from upstream and were skipped:\n  - ${drifted.join("\n  - ")}\nRegenerate patches/eliza/ci-release-contracts.patch against the current eliza submodule HEAD.`,
+      `[apply-eliza-ci-patches] ${drifted.length} file(s) drifted from upstream and were skipped:\n  - ${drifted.join("\n  - ")}\nRegenerate eliza/patches/milady/eliza-ci-bootstrap/ci-release-contracts.patch against the current eliza submodule HEAD.`,
     );
   }
 }

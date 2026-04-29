@@ -49,7 +49,7 @@ PRODUCT_PACKAGES -= \
     Trebuchet
 
 PRODUCT_PACKAGE_OVERLAYS += \
-    vendor/milady/overlays/framework-res
+    vendor/milady/overlays
 
 PRODUCT_ARTIFACT_PATH_REQUIREMENT_ALLOWED_LIST += \
     system/priv-app/Milady/% \

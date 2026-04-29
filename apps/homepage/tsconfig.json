@@ -40,6 +40,10 @@
       "@elizaos/app-lifeops/*": ["./eliza/apps/app-lifeops/src/*"],
       "@elizaos/app-shopify": ["./eliza/apps/app-shopify/src/index.ts"],
       "@elizaos/app-shopify/*": ["./eliza/apps/app-shopify/src/*"],
+      "@elizaos/app-hyperliquid": ["./eliza/apps/app-hyperliquid/src/index.ts"],
+      "@elizaos/app-hyperliquid/*": ["./eliza/apps/app-hyperliquid/src/*"],
+      "@elizaos/app-polymarket": ["./eliza/apps/app-polymarket/src/index.ts"],
+      "@elizaos/app-polymarket/*": ["./eliza/apps/app-polymarket/src/*"],
       "@elizaos/app-steward": ["./eliza/apps/app-steward/src/index.ts"],
       "@elizaos/app-steward/*": ["./eliza/apps/app-steward/src/*"],
       "@elizaos/app-screenshare": ["./eliza/apps/app-screenshare/src/index.ts"],
@@ -79,8 +83,11 @@
   "include": [
     "src/**/*.ts",
     "src/**/*.tsx",
+    "test/**/*.ts",
+    "test/**/*.tsx",
+    "playwright.config.ts",
     "../../eliza/packages/app-core/src/ambient-modules.d.ts",
     "../../eliza/packages/agent/src/external-modules.d.ts"
   ],
-  "exclude": ["node_modules", "dist"]
+  "exclude": ["node_modules", "dist", "test-results", "playwright-report"]
 }

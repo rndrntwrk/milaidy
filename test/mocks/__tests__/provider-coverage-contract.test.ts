@@ -6,16 +6,22 @@ import {
   LIFEOPS_PROVIDER_MOCK_COVERAGE,
   REQUIRED_LIFEOPS_PROVIDER_IDS,
 } from "../helpers/provider-coverage.ts";
-import { MOCK_ENVIRONMENTS, startMocks } from "../scripts/start-mocks.ts";
+import {
+  MOCK_ENVIRONMENTS,
+  type MockEnvironmentName,
+  mockEnvironmentPath,
+  startMocks,
+} from "../scripts/start-mocks.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, "../../..");
-const ENVIRONMENTS_DIR = path.resolve(PROJECT_ROOT, "test/mocks/environments");
 const README_PATH = path.resolve(PROJECT_ROOT, "test/mocks/README.md");
 
-function readMockEnvironment(name: string): Record<string, unknown> {
+function readMockEnvironment(
+  name: MockEnvironmentName,
+): Record<string, unknown> {
   return JSON.parse(
-    fs.readFileSync(path.join(ENVIRONMENTS_DIR, `${name}.json`), "utf8"),
+    fs.readFileSync(mockEnvironmentPath(name), "utf8"),
   ) as Record<string, unknown>;
 }
 
@@ -43,9 +49,7 @@ describe("LifeOps provider mock coverage contract", () => {
 
       expect(MOCK_ENVIRONMENTS).toContain(entry.environment);
       expect(entry.envVars.length).toBeGreaterThan(0);
-      expect(
-        fs.existsSync(path.join(ENVIRONMENTS_DIR, `${entry.environment}.json`)),
-      ).toBe(true);
+      expect(fs.existsSync(mockEnvironmentPath(entry.environment))).toBe(true);
 
       const environment = readMockEnvironment(entry.environment);
       expect(environment.name).toEqual(expect.any(String));

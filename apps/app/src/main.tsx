@@ -112,6 +112,10 @@ import {
 } from "@elizaos/app-task-coordinator";
 import { FineTuningView } from "@elizaos/app-training/ui";
 import "@elizaos/app-shopify/register";
+import "@elizaos/app-hyperliquid/client";
+import "@elizaos/app-hyperliquid/register";
+import "@elizaos/app-polymarket/client";
+import "@elizaos/app-polymarket/register";
 import "@elizaos/app-vincent/client";
 import { useVincentState } from "@elizaos/app-vincent/ui";
 import "@elizaos/app-vincent/register";
@@ -713,7 +717,10 @@ function getCurrentIosRuntimeConfig(): IosRuntimeConfig {
     const mode = normalizeMobileRuntimeMode(
       window.localStorage.getItem(MOBILE_RUNTIME_MODE_STORAGE_KEY),
     );
-    return mode ? { ...IOS_RUNTIME_ENV_CONFIG, mode } : IOS_RUNTIME_ENV_CONFIG;
+    // MobileRuntimeMode includes "local" but IosRuntimeConfig.mode does not —
+    // the local-agent runtime is Android-only. Drop "local" before assigning.
+    if (!mode || mode === "local") return IOS_RUNTIME_ENV_CONFIG;
+    return { ...IOS_RUNTIME_ENV_CONFIG, mode };
   } catch {
     return IOS_RUNTIME_ENV_CONFIG;
   }
@@ -753,7 +760,11 @@ function resolveDeviceBridgeUrl(config: IosRuntimeConfig): string | null {
   if (config.deviceBridgeUrl) {
     return config.deviceBridgeUrl;
   }
-  if (config.mode !== "cloud-hybrid") return null;
+  // cloud-hybrid: paired phone dials a remote agent via the cloud apiBase.
+  // local: the agent runs in-process on the same device (Android foreground
+  // service, future iOS variants), so the WebView's @elizaos/capacitor-llama
+  // dials the bridge over loopback at the locally bound apiBase.
+  if (config.mode !== "cloud-hybrid" && config.mode !== "local") return null;
   const apiBase = getBootConfig().apiBase?.trim();
   if (!apiBase) return null;
   try {
@@ -765,7 +776,12 @@ function resolveDeviceBridgeUrl(config: IosRuntimeConfig): string | null {
 
 async function initializeMobileDeviceBridge(): Promise<void> {
   const runtimeConfig = getCurrentIosRuntimeConfig();
-  if (!isNative || runtimeConfig.mode !== "cloud-hybrid") return;
+  if (
+    !isNative ||
+    (runtimeConfig.mode !== "cloud-hybrid" && runtimeConfig.mode !== "local")
+  ) {
+    return;
+  }
   if (mobileDeviceBridgeClient) return;
 
   const agentUrl = resolveDeviceBridgeUrl(runtimeConfig);
@@ -797,7 +813,8 @@ function initializeMobileRuntimeModeListener(): void {
   if (!isNative || mobileRuntimeModeListenerInstalled) return;
   mobileRuntimeModeListenerInstalled = true;
   document.addEventListener(MOBILE_RUNTIME_MODE_CHANGED_EVENT, () => {
-    if (getCurrentIosRuntimeConfig().mode === "cloud-hybrid") {
+    const mode = getCurrentIosRuntimeConfig().mode;
+    if (mode === "cloud-hybrid" || mode === "local") {
       void initializeMobileDeviceBridge();
       return;
     }
