@@ -508,12 +508,11 @@ describe("compile-libllama shim build invocation", () => {
 
 describe("compile-libllama pinned constants", () => {
   it("matches the SHA referenced in eliza/packages/agent/src/runtime/aosp-llama-adapter.ts", () => {
-    // b4500 — the first stable tag exposing both the post-rewrite sampler
-    // chain API and the renamed model/vocab API the adapter binds. b3490
-    // (the spike pin) shipped neither and dlsym would have returned NULL
-    // for every renamed symbol.
-    expect(LLAMA_CPP_TAG).toBe("b4500");
-    expect(LLAMA_CPP_COMMIT).toBe("a133566d34a1dd3693c504786963bf1b7b7d8c0e");
+    // main-b8198-b2b5273 is the TurboQuant fork pin documented by the
+    // AOSP adapter. Keep this contract explicit so script/cache drift is
+    // caught before Android assets are rebuilt from the wrong source.
+    expect(LLAMA_CPP_TAG).toBe("main-b8198-b2b5273");
+    expect(LLAMA_CPP_COMMIT).toBe("b2b5273e8b275bb96362fe844a5202632eb3e52b");
   });
 
   it("declares a target row for each supported Android ABI", () => {
