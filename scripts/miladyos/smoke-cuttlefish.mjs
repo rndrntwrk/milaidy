@@ -251,24 +251,33 @@ export async function runSmoke({ adb: adbImpl = adb } = {}) {
   });
 
   // ── Step 5: read the per-boot bearer token from app data dir ────────
-  logStep(5, "Reading per-boot bearer token via run-as");
-  const tokenResult = adbImpl(
-    [
-      "shell",
-      "run-as",
-      PACKAGE_NAME,
-      "cat",
-      `/data/data/${PACKAGE_NAME}/files/auth/local-agent-token`,
-    ],
+  logStep(5, "Reading per-boot bearer token (run-as → root cat fallback)");
+  // Release-built APKs from the AOSP image are NOT debuggable, so
+  // `run-as <pkg>` fails with "package not debuggable". cuttlefish
+  // userdebug images run adbd as root, which means we can `cat` the
+  // token file directly. Try run-as first (works on debuggable /
+  // userdebug Capacitor builds), then fall back to a direct read.
+  const tokenPath = `/data/data/${PACKAGE_NAME}/files/auth/local-agent-token`;
+  let tokenResult = adbImpl(
+    ["shell", "run-as", PACKAGE_NAME, "cat", tokenPath],
     { serial },
   );
-  const token = tokenResult.stdout.trim();
+  let token = tokenResult.stdout.trim();
+  const runAsFailed =
+    !token ||
+    /run-as: /i.test(tokenResult.stderr) ||
+    /not debuggable/i.test(tokenResult.stderr);
+  if (runAsFailed) {
+    // Adbd-as-root direct read. Returns empty when adbd is shell.
+    tokenResult = adbImpl(["shell", "cat", tokenPath], { serial });
+    token = tokenResult.stdout.trim();
+  }
   if (!token || token.length < 16 || /[^0-9a-fA-F]/.test(token)) {
     results.push({
       step: 5,
       label: "Bearer token readable",
       ok: false,
-      detail: `run-as cat returned ${token ? `${token.length} chars (non-hex?)` : "empty"}; the service may not have written the token yet, or the build is non-userdebug.`,
+      detail: `Could not read ${tokenPath}: run-as failed (${tokenResult.stderr.trim().slice(0, 80) || "non-debuggable"}) and direct cat returned ${token.length} chars. Run \`adb root\` if the device is userdebug, or rebuild the APK with android:debuggable=true for run-as.`,
     });
     return results;
   }
