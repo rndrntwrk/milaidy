@@ -50,6 +50,12 @@
       "@elizaos/app-vincent/*": ["./eliza/apps/app-vincent/src/*"],
       "@elizaos/agent": ["./eliza/packages/agent/src/index.ts"],
       "@elizaos/agent/*": ["./eliza/packages/agent/src/*"],
+      "@elizaos/plugin-browser-bridge": [
+        "./eliza/plugins/plugin-browser-bridge/src/index.ts"
+      ],
+      "@elizaos/plugin-browser-bridge/*": [
+        "./eliza/plugins/plugin-browser-bridge/src/*"
+      ],
       "@elizaos/core": ["./eliza/packages/typescript/src/index.ts"],
       "@elizaos/core/*": ["./eliza/packages/typescript/src/*"],
       "@elizaos/shared": ["./eliza/packages/shared/src/index.ts"],
