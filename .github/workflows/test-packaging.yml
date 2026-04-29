@@ -217,6 +217,40 @@ jobs:
             node eliza/node_modules/bun/install.js
           fi
 
+      - name: Rewrite workspace ranges for tarball install
+        run: |
+          node eliza/scripts/replace-workspace-versions.js
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from "node:fs";
+
+          const coreVersion = JSON.parse(
+            readFileSync("eliza/packages/typescript/package.json", "utf8"),
+          ).version;
+          const manifests = ["eliza/plugins/plugin-sql/typescript/package.json"];
+          const dependencyFields = [
+            "dependencies",
+            "peerDependencies",
+            "optionalDependencies",
+          ];
+
+          for (const manifest of manifests) {
+            const pkg = JSON.parse(readFileSync(manifest, "utf8"));
+            let changed = false;
+            for (const field of dependencyFields) {
+              const deps = pkg[field];
+              if (!deps) continue;
+              if (deps["@elizaos/core"]?.startsWith("workspace:")) {
+                deps["@elizaos/core"] = coreVersion;
+                changed = true;
+              }
+            }
+            if (changed) {
+              writeFileSync(manifest, `${JSON.stringify(pkg, null, 2)}\n`);
+              console.log(`Rewrote workspace ranges in ${manifest}`);
+            }
+          }
+          NODE
+
       - name: Generate protobuf types
         run: |
           if [ -d eliza/packages/schemas ] && [ -f eliza/packages/schemas/buf.gen.yaml ] && [ ! -d eliza/packages/typescript/src/types/generated ]; then
