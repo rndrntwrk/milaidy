@@ -262,25 +262,36 @@ jobs:
       - name: Pack upstream tarballs
         run: node eliza/packages/app-core/scripts/pack-upstreams.mjs
 
+      - name: Pack shared tarball
+        run: |
+          bun run --cwd eliza/packages/shared build
+          mkdir -p artifacts
+          (
+            cd eliza/packages/shared/dist
+            npm pack
+          )
+          mv eliza/packages/shared/dist/elizaos-shared-*.tgz artifacts/
+
       - name: Verify tarball installation
         run: |
           set -euo pipefail
           ARTIFACTS_DIR="artifacts"
-          for tarball in "$ARTIFACTS_DIR"/*.tgz; do
-            [ -f "$tarball" ] || continue
-            echo "::group::Testing $(basename "$tarball")"
-            TEST_DIR=$(mktemp -d)
-            cd "$TEST_DIR"
-            echo '{"name":"tarball-test","private":true,"type":"module"}' > package.json
-            npm install "$OLDPWD/$tarball" --ignore-scripts 2>&1
-            # Verify the package has a valid entry point
-            PKG_MANIFEST=$(find node_modules/@elizaos -mindepth 2 -maxdepth 2 -name package.json | head -n 1)
-            PKG_NAME=$(node -p "require('$PKG_MANIFEST').name" 2>/dev/null || echo "unknown")
+          REPO_DIR="$PWD"
+          test -n "$(find "$ARTIFACTS_DIR" -maxdepth 1 -name '*.tgz' -print -quit)"
+          echo "::group::Testing local tarball set"
+          find "$ARTIFACTS_DIR" -maxdepth 1 -name '*.tgz' -print | sort
+          TEST_DIR=$(mktemp -d)
+          cd "$TEST_DIR"
+          echo '{"name":"tarball-test","private":true,"type":"module"}' > package.json
+          npm install "$REPO_DIR/$ARTIFACTS_DIR"/*.tgz --ignore-scripts 2>&1
+          find node_modules/@elizaos -mindepth 2 -maxdepth 2 -name package.json -print | sort
+          for manifest in node_modules/@elizaos/*/package.json; do
+            PKG_NAME=$(node -p "require('$manifest').name" 2>/dev/null || echo "unknown")
             echo "Installed: $PKG_NAME"
-            cd "$OLDPWD"
-            rm -rf "$TEST_DIR"
-            echo "::endgroup::"
           done
+          cd "$REPO_DIR"
+          rm -rf "$TEST_DIR"
+          echo "::endgroup::"
           echo "All JS tarballs passed installation test"
 
       - name: Upload tarball artifacts
