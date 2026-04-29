@@ -318,7 +318,8 @@ export async function installDefaultAppRoutes(page: Page): Promise<void> {
         catalogApp({
           name: "@elizaos/app-companion",
           displayName: "Companion",
-          description: "The companion overlay shell for ambient agent presence.",
+          description:
+            "The companion overlay shell for ambient agent presence.",
           category: "shell",
           launchType: "overlay",
         }),
