@@ -103,10 +103,10 @@ GHA workflow — no CI mirror needed, no 2× execution:
 
 | Category | Workflows | Reason |
 |---|---|---|
-| Thin/fast | `ci.yml`, `auto-label.yml`, `run-prr.yml`, `agent-review.yml`, `agent-fix-ci.yml`, `integration-dod-gap-issues.yml`, `task-agent-cross-platform-review.yml` | <3min jobs; no Depot compute win |
+| Thin/fast | `ci.yml`, `auto-label.yml`, `agent-review.yml`, `agent-fix-ci.yml`, `integration-dod-gap-issues.yml`, `task-agent-cross-platform-review.yml` | <3min jobs; no Depot compute win |
 | Cross-platform / macOS / Windows / mobile | `agent-release.yml`, `android-release.yml`, `apple-store-release.yml`, `mobile-build-smoke.yml`, `release-electrobun.yml`, `test-electrobun-release.yml`, `test-packaging.yml`, `test-flatpak.yml`, `update-homebrew.yml`, `windows-*.yml` | Depot CI remaps **every** non-`depot-*` label (`macos-14`, `windows-latest`, etc.) to `depot-ubuntu-latest`, which lacks Xcode / Android SDK / Windows SDK |
 | Tests matrix | `test.yml` | `cloud-live-e2e` step ordering doesn't survive Depot mirror's checkout reordering |
-| Release credentials | `publish-npm.yml`, `publish-packages.yml`, `publish-plugin-elizacloud.yml`, `reusable-npm-publish.yml`, `release-orchestrator.yml`, `snap-build-test.yml`, `deploy-origin-smoke.yml`, `deploy-web.yml`, `ci-fork.yml` | Keep on canonical GHA for OIDC/secret predictability |
+| Release credentials | `publish-npm.yml`, `publish-packages.yml`, `reusable-npm-publish.yml`, `release-orchestrator.yml`, `snap-build-test.yml`, `deploy-origin-smoke.yml`, `deploy-web.yml`, `ci-fork.yml` | Keep on canonical GHA for OIDC/secret predictability |
 
 > **Depot runner-label gotcha**: the [Depot compatibility doc](https://depot.dev/docs/github-actions/quickstart#migration-compatibility)
 > states all non-Depot labels become `depot-ubuntu-latest`. macOS labels do

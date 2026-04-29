@@ -7,8 +7,8 @@ import {
   type GoogleCalendarMockState,
   type GoogleCalendarRequestLedgerMetadata,
   googleCalendarDynamicFixture,
-} from "./google-calendar-state.ts";
-import { MockHttpError } from "./mock-http-error.ts";
+} from "../../../eliza/test/mocks/scripts/google-calendar-state.ts";
+import { MockHttpError } from "../../../eliza/test/mocks/scripts/mock-http-error.ts";
 
 type JsonPrimitive = string | number | boolean | null;
 type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };

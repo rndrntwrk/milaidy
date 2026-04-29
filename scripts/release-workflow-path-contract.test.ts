@@ -508,7 +508,7 @@ describe("release workflow path contract", () => {
     );
 
     expect(rootPackageJson).toContain(
-      '"browser-bridge:package:release": "cd apps/browser-bridge && bun run package:release"',
+      '"browser-bridge:package:release": "cd eliza/apps/browser-bridge && bun run package:release"',
     );
     expect(releaseElectrobun).toContain(
       "name: Build Agent Browser Bridge companions",
