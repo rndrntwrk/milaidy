@@ -1,0 +1,92 @@
+# Connect to Microsoft Teams
+
+Teams is the most involved connector to set up — it requires an Azure app registration, a client secret, and a bot registration in the Bot Framework portal. Plan on 20–30 minutes and have your Microsoft 365 admin on standby in case approvals are needed.
+
+**What you'll learn:** register an Azure app, generate credentials, create a Bot Framework bot, connect it to Teams, hand the three values to Milady. Several hops but it's a one-time setup.
+
+## What you need before you start
+
+- **Admin access to a Microsoft 365 / Azure AD tenant**, or permission from an admin to register apps. For personal tenants, you're the admin automatically.
+- **An Azure subscription** (free tier works).
+- **Milady running** with a working provider.
+
+<Callout kind="warning" title="This is the hardest connector">
+If you've never touched Azure App Registrations or Bot Framework before, budget extra time — the Microsoft portals have moved around repeatedly, and the exact button labels sometimes change from what guides show. The screenshots here may lag slightly behind current Azure UI.
+</Callout>
+
+## Step 1 — Register the Azure app
+
+<Steps>
+  <li>Open <a href="https://portal.azure.com">portal.azure.com</a> and sign in with your admin account.</li>
+  <li>Search for <strong>Azure Active Directory</strong> (now called "Microsoft Entra ID") and open it.</li>
+  <li>Go to <strong>App registrations → New registration</strong>.</li>
+  <li>Give it a name (e.g. "Milady Teams Bot"). Pick <strong>Accounts in this organizational directory only</strong> unless you need multi-tenant. Leave Redirect URI blank for now.</li>
+  <li>Click <strong>Register</strong>.</li>
+  <li>On the app's overview page, copy two values: <strong>Application (client) ID</strong> and <strong>Directory (tenant) ID</strong>. Save both.</li>
+</Steps>
+
+## Step 2 — Create a client secret
+
+<Steps>
+  <li>In your new app, go to <strong>Certificates &amp; secrets → Client secrets → New client secret</strong>.</li>
+  <li>Give it a description and expiry (max 24 months).</li>
+  <li>Click <strong>Add</strong>.</li>
+  <li>Copy the secret's <strong>Value</strong> (not the Secret ID) immediately. Azure only shows it once.</li>
+</Steps>
+
+## Step 3 — Register the bot in Bot Framework
+
+<Steps>
+  <li>Open <a href="https://dev.botframework.com/bots/new">dev.botframework.com/bots/new</a>.</li>
+  <li>Sign in with the same admin account.</li>
+  <li>Fill in the bot handle, display name, and long description.</li>
+  <li>For <strong>Messaging endpoint</strong>, enter <code>https://&lt;your-public-milady-url&gt;/api/messages</code>. If Milady is on a home network, expose it via a tunnel (Cloudflare Tunnel or ngrok).</li>
+  <li>For <strong>Microsoft App ID</strong>, paste the Application (client) ID from Step 1.</li>
+  <li>Click <strong>Register</strong>.</li>
+</Steps>
+
+## Step 4 — Connect the bot to Teams
+
+<Steps>
+  <li>In the Bot Framework portal, open your new bot → <strong>Channels</strong>.</li>
+  <li>Click <strong>Microsoft Teams</strong> in the channel list.</li>
+  <li>Accept the terms and click <strong>Save</strong>.</li>
+</Steps>
+
+## Step 5 — Hand the three values to Milady
+
+<Steps>
+  <li>Open Milady. Go to <strong>Settings → Plugins → Microsoft Teams → Configure</strong>.</li>
+  <li>Paste the <strong>Application (client) ID</strong> into the <strong>App ID</strong> field.</li>
+  <li>Paste the <strong>client secret value</strong> into the <strong>App password</strong> field.</li>
+  <li>Paste the <strong>Directory (tenant) ID</strong> into the <strong>Tenant ID</strong> field.</li>
+  <li>Click <strong>Save</strong>.</li>
+</Steps>
+
+## Step 6 — Install the bot into a Teams channel
+
+<Steps>
+  <li>In Teams, go to the team you want the bot in.</li>
+  <li>Click <strong>···</strong> next to the team → <strong>Manage team → Apps → Add an app</strong>.</li>
+  <li>Search for your bot by its handle from Step 3 and install it.</li>
+  <li>In any channel, <code>@</code>-mention the bot and send a message.</li>
+</Steps>
+
+## Troubleshooting
+
+**"Unauthorized" when Teams sends a message to Milady.**
+Most common cause: the messaging endpoint URL in Bot Framework doesn't match your Milady public URL, or your tunnel is down. Teams pings the endpoint during registration — if that ping fails, messages don't get delivered.
+
+**Bot shows up in Teams but replies never arrive.**
+Messaging endpoint is reachable but the app credentials don't match. Re-check the three values in Milady's Configure panel against the Azure portal. The client secret has to be the `Value`, not the `Secret ID`.
+
+**Admin consent required error.**
+Your tenant requires admin approval for new apps. Ask your M365 admin to grant consent in Azure AD → App registrations → your app → API permissions → Grant admin consent.
+
+**Bot only responds in one team.**
+That's normal — the bot has to be installed per-team. Repeat Step 6 in each team you want coverage in.
+
+## What's next
+
+- [Connect to Slack](/docs/intermediate/connect-slack) — if Teams was a stretch, Slack's setup takes about ten minutes by comparison.
+- [Running multiple connectors](/docs/advanced/multi-connector-setup) — Teams plus Slack gives you both major workplace chat platforms.

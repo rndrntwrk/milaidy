@@ -1,10 +1,10 @@
-import { client, type EmoteInfo } from "@miladyai/app-core/api";
+import { client, type EmoteInfo } from "../api";
 import {
   dispatchAppEmoteEvent,
   dispatchAppEvent,
   STOP_EMOTE_EVENT,
   type AppEmoteEventDetail,
-} from "@miladyai/app-core/events";
+} from "../events";
 
 const LOCAL_APP_EMOTE_ECHO_DEDUPE_WINDOW_MS = 1500;
 

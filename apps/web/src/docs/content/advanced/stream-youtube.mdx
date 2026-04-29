@@ -1,0 +1,72 @@
+# Stream to YouTube Live
+
+Push your Milady agent's stream to YouTube Live. Setup is as straightforward as Twitch once you've enabled live streaming on your YouTube channel — the only catch is that Google requires phone verification and a 24-hour waiting period for brand-new channels.
+
+**What you'll learn:** enable live streaming on YouTube, grab your stream key, connect Milady.
+
+## What you need before you start
+
+- **A YouTube channel** with **live streaming enabled**. Google requires:
+  - A verified phone number on the Google account.
+  - No live streaming restrictions in the last 90 days.
+  - A waiting period of up to 24 hours after enabling live streaming for the first time.
+- **Milady running** with a working provider.
+- **Hardware that can encode video in real time.**
+
+## Step 1 — Enable live streaming (one-time)
+
+<Steps>
+  <li>Open <a href="https://studio.youtube.com">studio.youtube.com</a>.</li>
+  <li>Click <strong>Create → Go Live</strong> in the top right.</li>
+  <li>YouTube walks you through phone verification if you haven't done it.</li>
+  <li>After verification, YouTube says live streaming will be available within 24 hours. For most accounts it's instant, but budget for the delay on a new account.</li>
+</Steps>
+
+## Step 2 — Create a stream and grab the key
+
+<Steps>
+  <li>Once live streaming is active, in YouTube Studio click <strong>Create → Go Live</strong> again.</li>
+  <li>Pick <strong>Streaming software</strong> (as opposed to webcam or mobile).</li>
+  <li>Fill in the stream's title, description, privacy (public / unlisted / private), and category.</li>
+  <li>Under <strong>Stream settings</strong>, find the <strong>Stream key</strong>. Click the copy button.</li>
+  <li>Also note the <strong>Stream URL</strong> — YouTube's default is <code>rtmp://a.rtmp.youtube.com/live2</code>.</li>
+</Steps>
+
+<Callout kind="warning">
+YouTube stream keys — like Twitch's — are essentially broadcasting passwords. Keep them private and regenerate if they leak.
+</Callout>
+
+## Step 3 — Hand everything to Milady
+
+<Steps>
+  <li>Open Milady. Go to <strong>Settings → Plugins → YouTube Streaming → Configure</strong>.</li>
+  <li>Paste the <strong>Stream key</strong>.</li>
+  <li>Leave <strong>RTMP URL</strong> as default (<code>rtmp://a.rtmp.youtube.com/live2</code>) unless YouTube told you otherwise.</li>
+  <li>Click <strong>Save</strong>.</li>
+</Steps>
+
+## Step 4 — Go live
+
+<Steps>
+  <li>Open the <strong>Stream</strong> tab in Milady.</li>
+  <li>Pick YouTube as the destination.</li>
+  <li>Click <strong>Go Live</strong>.</li>
+  <li>Return to YouTube Studio's Live Control Room — after 15–30 seconds of buffering, you'll see a preview of the stream.</li>
+  <li>Once the preview shows your stream, click <strong>Go Live</strong> on YouTube's side to actually publish it to viewers.</li>
+</Steps>
+
+## Troubleshooting
+
+**"Stream key not found" or Milady errors immediately.**
+Key is wrong, or you copied a scheduled stream's key before the stream started. YouTube stream keys can be persistent or per-event depending on how you set up the stream — persistent keys (from Settings) are easier for testing.
+
+**Milady is streaming but YouTube Live Control Room never shows the preview.**
+You may have pasted the key from a "Scheduled for later" stream that hasn't opened yet. Either wait until the scheduled time, or create a new immediate stream.
+
+**Stream starts but audio is silent.**
+Audio isn't being captured on Milady's side. Check the Stream tab's audio source — many streaming setups default to "no audio" on first use.
+
+## What's next
+
+- [Stream to Twitch](/docs/advanced/stream-twitch) — the other major platform, often streamed simultaneously.
+- [Stream to custom RTMP](/docs/advanced/stream-custom-rtmp) — for everything that isn't Twitch or YouTube.

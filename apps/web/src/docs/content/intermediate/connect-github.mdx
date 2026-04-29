@@ -1,0 +1,71 @@
+# Connect to GitHub
+
+The GitHub connector gives your Milady agent access to a repository — reading issues and pull requests, commenting, creating branches, opening PRs, and in general doing things a developer teammate would do. It's powered by a personal access token or a GitHub App installation.
+
+**What you'll learn:** create a fine-grained personal access token scoped to the repos you want Milady to work on, paste it into Milady. Faster than most connector setups — about five minutes.
+
+## What you need before you start
+
+- **A GitHub account** with access to the repositories you want Milady to touch.
+- **Milady running** with a working provider.
+
+## Step 1 — Create a fine-grained personal access token
+
+Fine-grained tokens are the modern way to do this — they're scoped to specific repositories and specific permissions, and they expire automatically. Use these instead of classic tokens unless you need something a fine-grained token can't do.
+
+<Steps>
+  <li>Open <a href="https://github.com/settings/personal-access-tokens/new">github.com/settings/personal-access-tokens/new</a> (Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token).</li>
+  <li>Token name: "Milady" (or something you'll recognize in the list later).</li>
+  <li>Expiration: pick whatever makes sense. 90 days is a reasonable default.</li>
+  <li>Repository access: <strong>Only select repositories</strong>. Pick the repos you want Milady to work on. Avoid "All repositories" — it's a much bigger blast radius.</li>
+  <li>Repository permissions: grant the permissions you actually need. At minimum, <strong>Contents: Read</strong>, <strong>Issues: Read and write</strong>, <strong>Pull requests: Read and write</strong>, <strong>Metadata: Read</strong> (always required).</li>
+  <li>Click <strong>Generate token</strong>. Copy it immediately — it starts with <code>github_pat_</code>. GitHub only shows it once.</li>
+</Steps>
+
+<Callout kind="warning">
+This token can do everything you granted it across every repo you picked. Treat it like a password. Revoke it from the same settings page the moment it's no longer needed.
+</Callout>
+
+## Step 2 — Hand the token to Milady
+
+<Steps>
+  <li>Open Milady. Go to <strong>Settings → Plugins → GitHub → Configure</strong>.</li>
+  <li>Paste the token into <strong>GitHub API token</strong>.</li>
+  <li>(Optional) Set <strong>Owner</strong> and <strong>Repo</strong> to a default repository the agent should focus on. Format: owner = username or org, repo = just the repo name (not the full URL).</li>
+  <li>(Optional) Set <strong>Branch</strong> to the default branch the agent should work from (usually <code>main</code>).</li>
+  <li>Click <strong>Save</strong>.</li>
+</Steps>
+
+## Step 3 — Test it
+
+Ask your agent to do something lightweight in GitHub — e.g. "show me the five most recent open issues in {owner}/{repo}" or "summarize the last PR that was merged." If the token has read access, the agent will fetch and respond.
+
+## Classic tokens (alternative)
+
+If you need something fine-grained tokens don't support — e.g. access to private packages, or scopes that only classic tokens offer — use a classic token instead. Go to [github.com/settings/tokens](https://github.com/settings/tokens), click **Generate new token (classic)**, and grant the scopes you need. Classic tokens use the same Milady config field.
+
+## GitHub Apps (for teams)
+
+For production or team use, a GitHub App is better than a personal access token — installations are easier to audit, and the app can be installed into an org. Milady supports this too:
+
+<Steps>
+  <li>Register a new GitHub App at <a href="https://github.com/settings/apps/new">github.com/settings/apps/new</a>.</li>
+  <li>Generate a private key and copy the App ID.</li>
+  <li>Install the app into the repos or org you want it working on — note the Installation ID.</li>
+  <li>In Milady's Configure panel, set <strong>GitHub App ID</strong>, <strong>Private key</strong> (paste the PEM), and <strong>Installation ID</strong> instead of the personal token.</li>
+</Steps>
+
+## Troubleshooting
+
+**"401 Unauthorized" when the agent tries to do anything.**
+Token is wrong, expired, or doesn't have the repo scoped. Re-check in GitHub settings.
+
+**"403 Resource not accessible by personal access token."**
+The token is valid but doesn't have permission for the specific action. Most common cause: you granted Contents: Read but the agent tried to write. Go back to the token page and grant Contents: Read and write.
+
+**"Not found" when reading a repo you know exists.**
+The token isn't scoped to that repo. Fine-grained tokens are strictly allowlist — if the repo isn't in the list from Step 1, the agent can't see it.
+
+## What's next
+
+- [Connect to Slack](/docs/intermediate/connect-slack) — pair GitHub with Slack to get your agent working inside a team chat where it can respond to PR review requests and issue triage.

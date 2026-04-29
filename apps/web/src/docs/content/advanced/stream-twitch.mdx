@@ -1,0 +1,64 @@
+# Stream to Twitch
+
+Give Milady a **Stream** tab and let your agent go live on your Twitch channel — video, audio, the whole thing. This is different from the [Twitch chat connector](/docs/intermediate/connect-twitch), which just puts a bot in chat; this plugin actually pushes video via RTMP.
+
+**What you'll learn:** grab a stream key from Twitch, paste it into Milady, start streaming.
+
+## What you need before you start
+
+- **A Twitch account** — personal or a dedicated streaming account.
+- **A Twitch channel with streaming enabled.** For new accounts Twitch may require phone verification before your first stream.
+- **The Enable Streaming plugin active in Milady** — it adds the Stream tab. This usually turns on automatically when any streaming destination plugin is configured.
+- **A machine with enough CPU/GPU to encode video in real time.** This is more hardware-intensive than any other connector.
+- **Milady running** with a working provider.
+
+## Step 1 — Get your Twitch stream key
+
+<Steps>
+  <li>Sign in at <a href="https://dashboard.twitch.tv">dashboard.twitch.tv</a>.</li>
+  <li>Left sidebar: <strong>Settings → Stream</strong>.</li>
+  <li>Under <strong>Primary Stream Key</strong>, click <strong>Copy</strong>.</li>
+</Steps>
+
+<Callout kind="danger" title="Stream keys are dangerous">
+Anyone who has your stream key can broadcast to your Twitch channel as you. If it leaks — screenshots, shared screens, logs — regenerate it immediately from the same page. Never paste it into a public chat, a git commit, or a screen recording.
+</Callout>
+
+## Step 2 — Hand the key to Milady
+
+<Steps>
+  <li>Open Milady. Go to <strong>Settings → Plugins → Twitch Streaming → Configure</strong>.</li>
+  <li>Paste the <strong>Stream key</strong>.</li>
+  <li>Click <strong>Save</strong>.</li>
+</Steps>
+
+## Step 3 — Go live
+
+<Steps>
+  <li>Open the <strong>Stream</strong> tab in Milady.</li>
+  <li>Pick Twitch as the destination.</li>
+  <li>Hit <strong>Go Live</strong>.</li>
+  <li>Open <code>twitch.tv/yourchannel</code> in a separate browser — after a few seconds of buffering, you should see the stream.</li>
+</Steps>
+
+## Stream quality tips
+
+- Twitch supports up to 1080p60 but only pays out to Partners/Affiliates at higher tiers. For a first stream, 720p30 is easier on your hardware and looks fine.
+- If your stream lags or drops frames, lower the bitrate in the Stream tab until it's stable.
+- Wired ethernet is dramatically more reliable than Wi-Fi for streaming. Plug in if you can.
+
+## Troubleshooting
+
+**Milady shows "stream failed" immediately after clicking Go Live.**
+Stream key is wrong, or your Twitch account isn't allowed to stream yet. Go back to Twitch, verify the key, and confirm your account has streaming enabled (some new accounts require phone verification).
+
+**Stream starts but Twitch shows "reconnecting" repeatedly.**
+Network instability or a bitrate too high for your uplink. Lower the bitrate in Milady's Stream tab.
+
+**Stream looks choppy even though the bitrate is low.**
+CPU/GPU can't keep up with the encoder. Pick a more efficient codec (H.264 over AV1) and a lower resolution in Milady's stream settings.
+
+## What's next
+
+- [Stream to YouTube](/docs/advanced/stream-youtube) — works alongside Twitch if you want to multi-stream.
+- [Stream to custom RTMP](/docs/advanced/stream-custom-rtmp) — for Kick, Facebook Live, TikTok, or self-hosted destinations.

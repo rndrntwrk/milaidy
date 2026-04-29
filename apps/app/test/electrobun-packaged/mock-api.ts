@@ -168,14 +168,6 @@ function applyCors(res: http.ServerResponse): void {
       "X-Milady-Client-Id",
       "X-Milady-Terminal-Token",
       "X-Milady-UI-Language",
-      "X-ElizaOS-Token",
-      "X-Eliza-Token",
-      "X-ElizaOS-Client-Id",
-      "X-ElizaOS-UI-Language",
-      "X-ElizaOS-Export-Token",
-      "X-Eliza-Export-Token",
-      "X-ElizaOS-Terminal-Token",
-      "X-Eliza-Terminal-Token",
     ].join(", "),
   );
 }
@@ -350,6 +342,19 @@ export async function startMockApiServer(
       configured: false,
       envKey: "TELEGRAM_BOT_TOKEN",
       category: "connector",
+      source: "bundled",
+      parameters: [],
+      validationErrors: [],
+      validationWarnings: [],
+    },
+    {
+      id: "todo",
+      name: "Todo",
+      description: "Task manager",
+      enabled: true,
+      configured: true,
+      envKey: null,
+      category: "feature",
       source: "bundled",
       parameters: [],
       validationErrors: [],
@@ -617,64 +622,6 @@ export async function startMockApiServer(
       json(res, 200, { ok: true });
       return;
     }
-    if (method === "POST" && pathname === "/api/provider/switch") {
-      const body = await readJson(req);
-      const provider =
-        typeof body.provider === "string" ? body.provider.trim() : "";
-      const primaryModel =
-        typeof body.primaryModel === "string" ? body.primaryModel.trim() : "";
-
-      if (!provider) {
-        json(res, 400, { error: "provider is required" });
-        return;
-      }
-
-      if (provider === "openai") {
-        config = {
-          ...config,
-          serviceRouting: {
-            llmText: {
-              transport: "direct",
-              backend: "openai",
-              primaryModel: primaryModel || "gpt-5.4-nano",
-            },
-          },
-        };
-      } else if (provider === "ollama") {
-        config = {
-          ...config,
-          serviceRouting: {
-            llmText: {
-              transport: "direct",
-              backend: "ollama",
-              primaryModel: primaryModel || "llama3.2",
-            },
-          },
-        };
-      } else if (provider === "elizacloud") {
-        config = {
-          ...config,
-          serviceRouting: {
-            llmText: {
-              transport: "cloud-proxy",
-              backend: "elizacloud",
-              smallModel: "small-model",
-              largeModel: "large-model",
-            },
-          },
-        };
-      } else {
-        json(res, 400, { error: `Unsupported provider: ${provider}` });
-        return;
-      }
-
-      json(res, 200, {
-        success: true,
-        provider,
-        restarting: false,
-      });
-      return;
-    }
     if (method === "POST" && pathname === "/api/agent/reset") {
       onboardingComplete = false;
       agentState = "not_started";
@@ -736,28 +683,6 @@ export async function startMockApiServer(
         tasksAvailable: true,
         triggersAvailable: true,
         todosAvailable: true,
-      });
-      return;
-    }
-
-    if (method === "GET" && pathname === "/api/arcade555/mastery/runs") {
-      const limitParam = Number(searchParams.get("limit") ?? 8);
-      json(res, 200, {
-        runs: [],
-        limit: Number.isFinite(limitParam) ? limitParam : 8,
-        cursor: null,
-        nextCursor: null,
-        total: 0,
-      });
-      return;
-    }
-    if (method === "POST" && pathname === "/api/arcade555/mastery/runs") {
-      json(res, 200, {
-        ok: true,
-        runId: "mock-mastery-run",
-        run: null,
-        executionMode: "mock",
-        durationMs: 1,
       });
       return;
     }
@@ -1147,7 +1072,6 @@ export async function startMockApiServer(
           launchType: "viewer",
           launchUrl: null,
           icon: null,
-          heroImage: null,
           capabilities: [],
           stars: 100,
           repository: "https://github.com/HyperscapeAI/hyperscape",
@@ -1441,11 +1365,7 @@ export async function startMockApiServer(
       return;
     }
 
-    if (pathname.startsWith("/api/")) {
-      // Catch-all for any unmatched API route (GET, POST, PUT, DELETE).
-      // Returning 200 prevents the startup coordinator from seeing a 404
-      // on routes that the upstream runtime adds but this mock doesn't
-      // explicitly handle (e.g. /api/agent/* lifecycle routes, /api/vincent/*).
+    if (method === "GET" && pathname.startsWith("/api/")) {
       json(res, 200, { ok: true });
       return;
     }

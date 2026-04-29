@@ -1,0 +1,1258 @@
+import crypto from "node:crypto";
+import fs from "node:fs";
+import type http from "node:http";
+import path from "node:path";
+import { logger, ModelType, type AgentRuntime, type UUID } from "@elizaos/core";
+import type { ElizaConfig } from "../config/config.js";
+import { loadElizaConfig, saveElizaConfig } from "../config/config.js";
+import type { CustomActionDef } from "../config/types.eliza.js";
+import {
+  buildTestHandler,
+  registerCustomActionLive,
+} from "../runtime/custom-actions.js";
+import { EMOTE_BY_ID, EMOTE_CATALOG } from "../emotes/catalog.js";
+import { resolveStateDir } from "../config/paths.js";
+import { readStreamSettings } from "./stream-persistence.js";
+import { resolveTerminalRunLimits } from "./terminal-run-limits.js";
+import {
+  ensurePrivyWalletsForCustomUser,
+  isPrivyWalletProvisioningEnabled,
+} from "../services/privy-wallets.js";
+import type { ReadJsonBodyOptions } from "./http-helpers.js";
+
+// ---------------------------------------------------------------------------
+// Companion stage state — persistent scene state shared between the
+// operator's browser and the 555stream capture-service's headless
+// Chromium so both views render identically.
+//
+// Phase 1 only persists camera framing (zoom / yaw / pitch / pan). The
+// shape must agree with
+// `packages/app-core/src/components/companion/companion-stage-state.ts`
+// on the client — if you change one, update the other. Inlined here
+// (rather than imported) because `packages/agent` doesn't import from
+// `packages/app-core` as a runtime dep.
+// ---------------------------------------------------------------------------
+
+interface CompanionStageCamera {
+  zoom: number;
+  yaw: number;
+  pitch: number;
+  pan: number;
+}
+
+interface CompanionStageState {
+  camera: CompanionStageCamera;
+}
+
+interface PartialCompanionStageState {
+  camera?: Partial<CompanionStageCamera>;
+}
+
+const DEFAULT_COMPANION_STAGE_STATE: CompanionStageState = {
+  camera: {
+    zoom: 0.95,
+    yaw: 0,
+    pitch: 0,
+    pan: 0,
+  },
+};
+
+/**
+ * Persistence root for the companion stage state file.
+ *
+ * Resolution order:
+ *   1. `MILAIDY_HOME` — the alice-bot k8s deployment mounts its PVC at
+ *      `/home/node/.milaidy` and exports this env var to every process
+ *      in the container. This is the ONLY path that survives pod
+ *      rollouts and restarts.
+ *   2. `ELIZA_DATA_DIR` — legacy fallback used by `stream-persistence.ts`
+ *      and other persistence modules. Not currently set on the
+ *      alice-bot pod (both variables are resolved, but the first wins).
+ *   3. `process.cwd() + "/data"` — final fallback for local development
+ *      (where neither env var is set). Lands in the repo checkout, not
+ *      in a shared volume — fine for dev, wrong for production.
+ *
+ * Phase 1 of the companion stage service shipped with only options
+ * (2) and (3). On the alice-bot pod that put the file at
+ * `/app/milaidy/data/companion/stage.json`, inside the container's
+ * ephemeral writable layer — functional within a session but wiped on
+ * every deploy. Fixed here by preferring `MILAIDY_HOME` first.
+ */
+const COMPANION_STAGE_DIR = path.join(
+  process.env.MILAIDY_HOME ||
+    process.env.ELIZA_DATA_DIR ||
+    path.join(process.cwd(), "data"),
+  "companion",
+);
+const COMPANION_STAGE_FILE = path.join(COMPANION_STAGE_DIR, "stage.json");
+
+function clamp01(value: unknown, fallback: number): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
+  if (value < 0) return 0;
+  if (value > 1) return 1;
+  return value;
+}
+
+function clampFinite(
+  value: unknown,
+  fallback: number,
+  min: number,
+  max: number,
+): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
+  if (value < min) return min;
+  if (value > max) return max;
+  return value;
+}
+
+function sanitizeCompanionStageState(
+  raw: unknown,
+): CompanionStageState {
+  const candidate =
+    raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const rawCamera =
+    candidate.camera && typeof candidate.camera === "object"
+      ? (candidate.camera as Record<string, unknown>)
+      : {};
+  return {
+    camera: {
+      zoom: clamp01(
+        rawCamera.zoom,
+        DEFAULT_COMPANION_STAGE_STATE.camera.zoom,
+      ),
+      yaw: clampFinite(rawCamera.yaw, 0, -Math.PI, Math.PI),
+      pitch: clampFinite(rawCamera.pitch, 0, -Math.PI / 2, Math.PI / 2),
+      pan: clampFinite(rawCamera.pan, 0, -5, 5),
+    },
+  };
+}
+
+function readCompanionStageState(): CompanionStageState {
+  try {
+    if (fs.existsSync(COMPANION_STAGE_FILE)) {
+      const raw = JSON.parse(
+        fs.readFileSync(COMPANION_STAGE_FILE, "utf-8"),
+      );
+      return sanitizeCompanionStageState(raw);
+    }
+  } catch (err) {
+    logger.warn(
+      `[companion-stage] Failed to read ${COMPANION_STAGE_FILE}: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+  }
+  return { ...DEFAULT_COMPANION_STAGE_STATE };
+}
+
+function writeCompanionStageState(next: CompanionStageState): void {
+  try {
+    fs.mkdirSync(COMPANION_STAGE_DIR, { recursive: true });
+    fs.writeFileSync(
+      COMPANION_STAGE_FILE,
+      JSON.stringify(next, null, 2),
+      "utf-8",
+    );
+  } catch (err) {
+    logger.warn(
+      `[companion-stage] Failed to persist ${COMPANION_STAGE_FILE}: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+  }
+}
+
+function mergeCompanionStagePatch(
+  base: CompanionStageState,
+  patch: PartialCompanionStageState,
+): CompanionStageState {
+  return {
+    camera: {
+      ...base.camera,
+      ...(patch.camera ?? {}),
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+interface StreamEventEnvelope {
+  type: string;
+  version: number;
+  eventId: string;
+  ts: number;
+  stream: string;
+  agentId?: string;
+  roomId?: string;
+  payload: Record<string, unknown>;
+}
+
+type TerminalRunRequestBody = {
+  command?: string;
+  clientId?: unknown;
+  terminalToken?: string;
+};
+
+export interface MiscRouteContext {
+  req: http.IncomingMessage;
+  res: http.ServerResponse;
+  method: string;
+  pathname: string;
+  url: URL;
+  state: {
+    config: ElizaConfig;
+    runtime: AgentRuntime | null;
+    agentState: string;
+    agentName: string;
+    shellEnabled: boolean | undefined;
+    broadcastWs?: ((data: Record<string, unknown>) => void) | null;
+    broadcastWsToClientId?: (clientId: string, data: Record<string, unknown>) => void;
+    nextEventId: number;
+    eventBuffer: StreamEventEnvelope[];
+    shareIngestQueue: Array<{
+      id: string;
+      source: string;
+      title?: string;
+      url?: string;
+      text?: string;
+      suggestedPrompt: string;
+      receivedAt: number;
+    }>;
+    startup: Record<string, unknown>;
+    broadcastStatus?: () => void;
+    pendingRestartReasons: string[];
+  };
+  json: (res: http.ServerResponse, data: unknown, status?: number) => void;
+  error: (res: http.ServerResponse, message: string, status?: number) => void;
+  readJsonBody: <T extends object>(
+    req: http.IncomingMessage,
+    res: http.ServerResponse,
+    options?: ReadJsonBodyOptions,
+  ) => Promise<T | null>;
+  AGENT_EVENT_ALLOWED_STREAMS: Set<string>;
+  resolveTerminalRunRejection: (
+    req: http.IncomingMessage,
+    body: TerminalRunRequestBody,
+  ) => { reason: string; status: number } | null;
+  resolveTerminalRunClientId: (
+    req: http.IncomingMessage,
+    body: TerminalRunRequestBody,
+  ) => string | null;
+  isSharedTerminalClientId: (clientId: string) => boolean;
+  activeTerminalRunCount: number;
+  setActiveTerminalRunCount: (delta: number) => void;
+}
+
+// ---------------------------------------------------------------------------
+// Route handler
+// ---------------------------------------------------------------------------
+
+export async function handleMiscRoutes(
+  ctx: MiscRouteContext,
+): Promise<boolean> {
+  const { req, res, method, pathname, url, state, json, error, readJsonBody } =
+    ctx;
+
+  // ── POST /api/restart ───────────────────────────────────────────────
+  if (method === "POST" && pathname === "/api/restart") {
+    state.agentState = "restarting";
+    state.startup = {
+      ...state.startup,
+      phase: "restarting",
+    };
+    state.broadcastStatus?.();
+    json(res, { ok: true, message: "Restarting...", restarting: true });
+    setTimeout(() => process.exit(0), 1000);
+    return true;
+  }
+
+  // ── POST /api/ingest/share ───────────────────────────────────────────
+  if (method === "POST" && pathname === "/api/ingest/share") {
+    const body = await readJsonBody<{
+      source?: string;
+      title?: string;
+      url?: string;
+      text?: string;
+    }>(req, res);
+    if (!body) return true;
+
+    const item = {
+      id: crypto.randomUUID(),
+      source: (body.source as string) ?? "unknown",
+      title: body.title as string | undefined,
+      url: body.url as string | undefined,
+      text: body.text as string | undefined,
+      suggestedPrompt: body.title
+        ? `What do you think about "${body.title}"?`
+        : body.url
+          ? `Can you analyze this: ${body.url}`
+          : body.text
+            ? `What are your thoughts on: ${(body.text as string).slice(0, 100)}`
+            : "What do you think about this shared content?",
+      receivedAt: Date.now(),
+    };
+    state.shareIngestQueue.push(item);
+    json(res, { ok: true, item });
+    return true;
+  }
+
+  // ── GET /api/ingest/share ────────────────────────────────────────────
+  if (method === "GET" && pathname === "/api/ingest/share") {
+    const consume = url.searchParams.get("consume") === "1";
+    if (consume) {
+      const items = [...state.shareIngestQueue];
+      state.shareIngestQueue.length = 0;
+      json(res, { items });
+    } else {
+      json(res, { items: state.shareIngestQueue });
+    }
+    return true;
+  }
+
+  // ── GET /api/emotes ──────────────────────────────────────────────────
+  if (method === "GET" && pathname === "/api/emotes") {
+    json(res, { emotes: EMOTE_CATALOG });
+    return true;
+  }
+
+  // ── POST /api/emote ─────────────────────────────────────────────────
+  if (method === "POST" && pathname === "/api/emote") {
+    const body = await readJsonBody<{ emoteId?: string }>(req, res);
+    if (!body) return true;
+    const emote = body.emoteId ? EMOTE_BY_ID.get(body.emoteId) : undefined;
+    if (!emote) {
+      error(res, `Unknown emote: ${body.emoteId ?? "(none)"}`);
+      return true;
+    }
+    const emotePayload = {
+      emoteId: emote.id,
+      path: emote.path,
+      duration: emote.duration,
+      loop: false,
+    };
+    // Existing operator-UI path: browser clients listening on the WS
+    // receive the emote and dispatch it to their local VrmStage. This
+    // is how the operator's tab sees an emote when they click it.
+    state.broadcastWs?.({ type: "emote", ...emotePayload });
+
+    // New broadcast path: when a 555stream session is currently live
+    // with the LiveKit broadcast flag, forward the emote as a LiveKit
+    // data message so the capture-service's headless Chromium
+    // (subscribing via LiveKitBroadcastPublisher's DataReceived
+    // handler) dispatches the same `eliza:app-emote` window event and
+    // VrmStage plays the animation on the rendered video track going
+    // to Cloudflare → Twitch/Kick. Fire-and-forget: if the 555stream
+    // plugin isn't installed, isn't initialized, or the call fails,
+    // the operator UI still gets the emote via the WS path above.
+    // Service name matches StreamControlService.serviceType in
+    // 555stream's plugin-555stream package.
+    const streamControl =
+      (state.runtime?.getService?.("stream555") as
+        | {
+            broadcastEvent?: (
+              topic: string,
+              payload: unknown,
+            ) => Promise<unknown>;
+          }
+        | undefined) ?? undefined;
+    if (streamControl && typeof streamControl.broadcastEvent === "function") {
+      void streamControl
+        .broadcastEvent("emote", emotePayload)
+        .catch((err: unknown) => {
+          logger.debug?.(
+            "[misc-routes] LiveKit emote broadcast failed (non-fatal):",
+            err instanceof Error ? err.message : err,
+          );
+        });
+    }
+
+    json(res, { ok: true });
+    return true;
+  }
+
+  // ── GET /api/companion/stage ─────────────────────────────────────────
+  //
+  // Return the current persistent companion stage state so a newly
+  // connected browser (operator's tab OR the 555stream capture-service
+  // headless Chromium) can hydrate its local camera/orbit refs to
+  // match the authoritative server state before the first WS push
+  // arrives. This avoids the "first frame shows default zoom, second
+  // frame snaps to the operator's zoom" glitch on reconnect.
+  //
+  // Lives under `/api/*` which is Cloudflare-Access-gated for operator
+  // surfaces. Public broadcast viewers hitting
+  // `alice.rndrntwrk.com/broadcast/*` cannot reach this — they use
+  // `/api/broadcast/:channel/stage` below instead.
+  if (method === "GET" && pathname === "/api/companion/stage") {
+    json(res, { ok: true, state: readCompanionStageState() });
+    return true;
+  }
+
+  // ── GET /api/broadcast/:channel/stage ────────────────────────────────
+  //
+  // Public, read-only variant of `/api/companion/stage`. Served under
+  // the `/api/broadcast/*` prefix which — paired with Cloudflare Access
+  // bypass on the same prefix — is reachable by unauthenticated
+  // broadcast viewers at `alice.rndrntwrk.com/broadcast/:channel`.
+  //
+  // Payload is identical: camera zoom/yaw/pitch/pan framing state.
+  // That's viewport configuration, not user data — safe to expose
+  // publicly. POST/DELETE on this path is intentionally NOT added:
+  // mutations stay on the authenticated `/api/companion/stage` path.
+  //
+  // Channel is only used for routing validation today. Multi-channel
+  // support (separate per-channel stages) is a future extension.
+  {
+    const publicStageMatch = pathname.match(
+      /^\/api\/broadcast\/([a-zA-Z0-9-]+)\/stage$/,
+    );
+    if (method === "GET" && publicStageMatch) {
+      // Hardcoded allowlist mirror of
+      // packages/app-core/src/platform/init.ts BROADCAST_CHANNEL_ALLOWLIST.
+      // Keep these two in sync — adding a new channel requires a change
+      // in both files. An unknown channel 404s instead of leaking.
+      const allowed = new Set(["alice-cam"]);
+      const channel = publicStageMatch[1];
+      if (!allowed.has(channel)) {
+        error(res, "Unknown broadcast channel", 404);
+        return true;
+      }
+      json(res, { ok: true, channel, state: readCompanionStageState() });
+      return true;
+    }
+  }
+
+  // ── GET /api/broadcast/:channel/scene ────────────────────────────────
+  //
+  // Public, read-only scene configuration for the broadcast renderer.
+  // Mirrors the subset of data that `GET /api/stream/settings` +
+  // `GET /api/avatar/vrm` + `GET /api/avatar/background` (all auth-gated)
+  // expose to the operator surface. Without this, public viewers would
+  // fall back to localStorage/bundled defaults and drift from the
+  // capture renderer whenever the server was configured with a custom
+  // VRM or background.
+  //
+  // Returns:
+  //   selectedVrmIndex     — server-selected bundled VRM index, or 0 if custom
+  //   hasCustomVrm         — true if `avatars/custom.vrm` exists
+  //   hasCustomBackground  — true if `avatars/custom-background.{png,jpg,webp}` exists
+  //
+  // When `hasCustomVrm` / `hasCustomBackground` is true, the client
+  // should hit `/api/broadcast/:channel/vrm` and
+  // `/api/broadcast/:channel/background` (public file-serve routes
+  // below) to load the assets — the authenticated
+  // `/api/avatar/{vrm,background}` endpoints are unreachable from the
+  // Cloudflare-Access-bypassed public surface.
+  //
+  // Payload is intentionally minimal: no character bio, persona, or
+  // any other operator-private configuration. Just what the 3D scene
+  // needs to render.
+  {
+    const publicSceneMatch = pathname.match(
+      /^\/api\/broadcast\/([a-zA-Z0-9-]+)\/scene$/,
+    );
+    if (method === "GET" && publicSceneMatch) {
+      const allowed = new Set(["alice-cam"]);
+      const channel = publicSceneMatch[1];
+      if (!allowed.has(channel)) {
+        error(res, "Unknown broadcast channel", 404);
+        return true;
+      }
+      const settings = readStreamSettings();
+      // Share the same avatar root resolution as /api/avatar/*
+      // (avatar-routes.ts) so the public surface reports the exact
+      // same custom-asset presence the authenticated/capture path
+      // sees. resolveStateDir honors MILADY_STATE_DIR / ELIZA_STATE_DIR
+      // (the canonical state-dir env vars); a divergent inline env
+      // chain here would make public hasCustomVrm=false while the
+      // authed path still serves the file correctly.
+      const avatarDir = path.join(resolveStateDir(), "avatars");
+      let hasCustomVrm = false;
+      try {
+        hasCustomVrm = fs.statSync(path.join(avatarDir, "custom.vrm")).isFile();
+      } catch {
+        /* no custom VRM */
+      }
+      let hasCustomBackground = false;
+      for (const ext of ["png", "jpg", "webp"]) {
+        try {
+          if (
+            fs
+              .statSync(path.join(avatarDir, `custom-background.${ext}`))
+              .isFile()
+          ) {
+            hasCustomBackground = true;
+            break;
+          }
+        } catch {
+          /* none at this extension */
+        }
+      }
+      json(res, {
+        ok: true,
+        channel,
+        scene: {
+          selectedVrmIndex:
+            typeof settings.avatarIndex === "number"
+              ? settings.avatarIndex
+              : null,
+          hasCustomVrm,
+          hasCustomBackground,
+        },
+      });
+      return true;
+    }
+  }
+
+  // ── GET /api/broadcast/:channel/vrm ──────────────────────────────────
+  //
+  // Public, read-only variant of `/api/avatar/vrm`. Serves the same
+  // `avatars/custom.vrm` file so public broadcast viewers can render
+  // the server-selected custom avatar. HEAD is also supported so the
+  // client can check existence without downloading.
+  {
+    const publicVrmMatch = pathname.match(
+      /^\/api\/broadcast\/([a-zA-Z0-9-]+)\/vrm$/,
+    );
+    if ((method === "GET" || method === "HEAD") && publicVrmMatch) {
+      const allowed = new Set(["alice-cam"]);
+      const channel = publicVrmMatch[1];
+      if (!allowed.has(channel)) {
+        error(res, "Unknown broadcast channel", 404);
+        return true;
+      }
+      // Share the same avatar root resolution as /api/avatar/vrm —
+      // see note on the /scene handler above.
+      const vrmPath = path.join(resolveStateDir(), "avatars", "custom.vrm");
+      try {
+        const stat = fs.statSync(vrmPath);
+        if (!stat.isFile()) {
+          error(res, "VRM not found", 404);
+          return true;
+        }
+        res.writeHead(200, {
+          "Content-Type": "model/gltf-binary",
+          "Content-Length": stat.size,
+          "Cache-Control": "public, max-age=60",
+        });
+        if (method === "HEAD") {
+          res.end();
+          return true;
+        }
+        fs.createReadStream(vrmPath).pipe(res);
+        return true;
+      } catch {
+        error(res, "VRM not found", 404);
+        return true;
+      }
+    }
+  }
+
+  // ── GET /api/broadcast/:channel/background ───────────────────────────
+  //
+  // Public, read-only variant of `/api/avatar/background`. Finds the
+  // custom-background.{png,jpg,webp} file the operator uploaded and
+  // serves it with the correct MIME type.
+  {
+    const publicBgMatch = pathname.match(
+      /^\/api\/broadcast\/([a-zA-Z0-9-]+)\/background$/,
+    );
+    if ((method === "GET" || method === "HEAD") && publicBgMatch) {
+      const allowed = new Set(["alice-cam"]);
+      const channel = publicBgMatch[1];
+      if (!allowed.has(channel)) {
+        error(res, "Unknown broadcast channel", 404);
+        return true;
+      }
+      // Share the same avatar root resolution as /api/avatar/*
+      // (avatar-routes.ts) so the public surface reports the exact
+      // same custom-asset presence the authenticated/capture path
+      // sees. resolveStateDir honors MILADY_STATE_DIR / ELIZA_STATE_DIR
+      // (the canonical state-dir env vars); a divergent inline env
+      // chain here would make public hasCustomVrm=false while the
+      // authed path still serves the file correctly.
+      const avatarDir = path.join(resolveStateDir(), "avatars");
+      const MIME: Record<string, string> = {
+        png: "image/png",
+        jpg: "image/jpeg",
+        webp: "image/webp",
+      };
+      let found: { filePath: string; ext: string } | null = null;
+      for (const ext of ["png", "jpg", "webp"]) {
+        const filePath = path.join(avatarDir, `custom-background.${ext}`);
+        try {
+          if (fs.statSync(filePath).isFile()) {
+            found = { filePath, ext };
+            break;
+          }
+        } catch {
+          /* none at this extension */
+        }
+      }
+      if (!found) {
+        error(res, "Background not found", 404);
+        return true;
+      }
+      const stat = fs.statSync(found.filePath);
+      res.writeHead(200, {
+        "Content-Type": MIME[found.ext],
+        "Content-Length": stat.size,
+        "Cache-Control": "public, max-age=60",
+      });
+      if (method === "HEAD") {
+        res.end();
+        return true;
+      }
+      fs.createReadStream(found.filePath).pipe(res);
+      return true;
+    }
+  }
+
+  // ── POST /api/companion/stage ────────────────────────────────────────
+  //
+  // Mutate the persistent companion stage state. Body is a patch of
+  // the form `{ patch: { camera: { zoom?: number, yaw?: ... } } }`.
+  // The route deep-merges the patch into the current state, sanitizes
+  // the result (defensive clamping against NaN/Infinity and
+  // out-of-range values), persists the merged state to
+  // `$ELIZA_DATA_DIR/companion/stage.json`, and broadcasts the new
+  // full state to every connected `/ws` client as a
+  // `"companion-stage-state"` message.
+  //
+  // The operator's own browser receives the echo and it's a no-op
+  // (the local optimistic update already applied the same values).
+  // The capture-service's headless Chromium receives the echo and
+  // applies it to its own VrmEngine, so the stream mirrors the
+  // operator's camera framing within a single WS round-trip.
+  if (method === "POST" && pathname === "/api/companion/stage") {
+    const body = await readJsonBody<{ patch?: PartialCompanionStageState }>(
+      req,
+      res,
+    );
+    if (!body) return true;
+    if (!body.patch || typeof body.patch !== "object") {
+      error(res, "Missing 'patch' field", 400);
+      return true;
+    }
+    const current = readCompanionStageState();
+    const merged = sanitizeCompanionStageState(
+      mergeCompanionStagePatch(current, body.patch),
+    );
+    writeCompanionStageState(merged);
+    state.broadcastWs?.({
+      type: "companion-stage-state",
+      state: merged,
+    });
+    json(res, { ok: true, state: merged });
+    return true;
+  }
+
+  // ── POST /api/agent/event ──────────────────────────────────────────────
+  if (method === "POST" && pathname === "/api/agent/event") {
+    const body = await readJsonBody<{
+      stream?: string;
+      data?: Record<string, unknown>;
+      roomId?: string;
+    }>(req, res);
+    if (!body || !body.stream) {
+      error(res, "Missing 'stream' field");
+      return true;
+    }
+    if (!ctx.AGENT_EVENT_ALLOWED_STREAMS.has(body.stream)) {
+      error(
+        res,
+        `Invalid stream: ${body.stream}. Allowed: ${[...ctx.AGENT_EVENT_ALLOWED_STREAMS].join(", ")}`,
+        400,
+      );
+      return true;
+    }
+    const envelope: StreamEventEnvelope = {
+      type: "agent_event",
+      version: 1,
+      eventId: `evt-${state.nextEventId}`,
+      ts: Date.now(),
+      stream: body.stream,
+      agentId: state.runtime?.agentId
+        ? String(state.runtime.agentId)
+        : undefined,
+      roomId: body.roomId,
+      payload: body.data ?? {},
+    };
+    state.nextEventId += 1;
+    state.eventBuffer.push(envelope);
+    if (state.eventBuffer.length > 1500) {
+      state.eventBuffer.splice(0, state.eventBuffer.length - 1500);
+    }
+    state.broadcastWs?.(envelope as unknown as Record<string, unknown>);
+    json(res, { ok: true });
+    return true;
+  }
+
+  // ── POST /api/terminal/run ──────────────────────────────────────────
+  if (method === "POST" && pathname === "/api/terminal/run") {
+    if (state.shellEnabled === false) {
+      error(res, "Shell access is disabled", 403);
+      return true;
+    }
+
+    const body = await readJsonBody<{
+      command?: string;
+      clientId?: unknown;
+      terminalToken?: string;
+      captureOutput?: boolean;
+    }>(req, res);
+    if (!body) return true;
+
+    const terminalRejection = ctx.resolveTerminalRunRejection(req, body);
+    if (terminalRejection) {
+      error(res, terminalRejection.reason, terminalRejection.status);
+      return true;
+    }
+
+    const command = typeof body.command === "string" ? body.command.trim() : "";
+    if (!command) {
+      error(res, "Missing or empty command");
+      return true;
+    }
+
+    if (command.length > 4096) {
+      error(res, "Command exceeds maximum length (4096 chars)", 400);
+      return true;
+    }
+
+    if (
+      command.includes("\n") ||
+      command.includes("\r") ||
+      command.includes("\0")
+    ) {
+      error(
+        res,
+        "Command must be a single line without control characters",
+        400,
+      );
+      return true;
+    }
+
+    const targetClientId = ctx.resolveTerminalRunClientId(req, body);
+    if (!targetClientId) {
+      error(
+        res,
+        "Missing client id. Provide X-Eliza-Client-Id header or clientId in the request body.",
+        400,
+      );
+      return true;
+    }
+
+    const emitTerminalEvent = (payload: Record<string, unknown>) => {
+      if (ctx.isSharedTerminalClientId(targetClientId)) {
+        state.broadcastWs?.(payload);
+        return;
+      }
+      if (typeof state.broadcastWsToClientId !== "function") return;
+      state.broadcastWsToClientId(targetClientId, payload);
+    };
+
+    const { maxConcurrent, maxDurationMs } = resolveTerminalRunLimits();
+    if (ctx.activeTerminalRunCount >= maxConcurrent) {
+      error(
+        res,
+        `Too many active terminal runs (${maxConcurrent}). Wait for a command to finish.`,
+        429,
+      );
+      return true;
+    }
+
+    const captureOutput = body.captureOutput === true;
+    const MAX_CAPTURE_BYTES = 128 * 1024;
+
+    if (!captureOutput) {
+      json(res, { ok: true });
+    }
+
+    const { spawn } = await import("node:child_process");
+    const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+    emitTerminalEvent({
+      type: "terminal-output",
+      runId,
+      event: "start",
+      command,
+      maxDurationMs,
+    });
+
+    const proc = spawn(command, {
+      shell: true,
+      cwd: process.cwd(),
+      env: { ...process.env, FORCE_COLOR: "0" },
+    });
+
+    ctx.setActiveTerminalRunCount(1);
+    let finalized = false;
+    let timedOut = false;
+    let stdout = "";
+    let stderr = "";
+    let truncated = false;
+
+    const appendOutput = (
+      current: string,
+      chunkText: string,
+    ): string => {
+      if (!captureOutput || truncated || !chunkText) {
+        return current;
+      }
+      const remaining = MAX_CAPTURE_BYTES - Buffer.byteLength(current, "utf8");
+      if (remaining <= 0) {
+        truncated = true;
+        return current;
+      }
+      const chunkBytes = Buffer.byteLength(chunkText, "utf8");
+      if (chunkBytes <= remaining) {
+        return current + chunkText;
+      }
+      truncated = true;
+      return current + Buffer.from(chunkText, "utf8").subarray(0, remaining).toString("utf8");
+    };
+
+    const finalize = () => {
+      if (finalized) return;
+      finalized = true;
+      ctx.setActiveTerminalRunCount(-1);
+      clearTimeout(timeoutHandle);
+    };
+
+    const timeoutHandle = setTimeout(() => {
+      if (proc.killed) return;
+      timedOut = true;
+      proc.kill("SIGTERM");
+      emitTerminalEvent({
+        type: "terminal-output",
+        runId,
+        event: "timeout",
+        maxDurationMs,
+      });
+
+      setTimeout(() => {
+        if (!proc.killed) proc.kill("SIGKILL");
+      }, 3000);
+    }, maxDurationMs);
+
+    proc.stdout?.on("data", (chunk: Buffer) => {
+      const text = chunk.toString("utf-8");
+      stdout = appendOutput(stdout, text);
+      emitTerminalEvent({
+        type: "terminal-output",
+        runId,
+        event: "stdout",
+        data: text,
+      });
+    });
+
+    proc.stderr?.on("data", (chunk: Buffer) => {
+      const text = chunk.toString("utf-8");
+      stderr = appendOutput(stderr, text);
+      emitTerminalEvent({
+        type: "terminal-output",
+        runId,
+        event: "stderr",
+        data: text,
+      });
+    });
+
+    proc.on("close", (code: number | null) => {
+      finalize();
+      emitTerminalEvent({
+        type: "terminal-output",
+        runId,
+        event: "exit",
+        code: code ?? 1,
+      });
+      if (captureOutput) {
+        json(res, {
+          ok: true,
+          runId,
+          command,
+          exitCode: code ?? 1,
+          stdout,
+          stderr,
+          timedOut,
+          truncated,
+          maxDurationMs,
+        });
+      }
+    });
+
+    proc.on("error", (err: Error) => {
+      finalize();
+      emitTerminalEvent({
+        type: "terminal-output",
+        runId,
+        event: "error",
+        data: err.message,
+      });
+      if (captureOutput) {
+        error(res, err.message, 500);
+      }
+    });
+
+    return true;
+  }
+
+  // ── Custom Actions CRUD ──────────────────────────────────────────────
+
+  if (method === "GET" && pathname === "/api/custom-actions") {
+    const config = loadElizaConfig();
+    json(res, { actions: config.customActions ?? [] });
+    return true;
+  }
+
+  if (method === "POST" && pathname === "/api/custom-actions") {
+    const body = await readJsonBody<Record<string, unknown>>(req, res);
+    if (!body) return true;
+
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+    const description =
+      typeof body.description === "string" ? body.description.trim() : "";
+
+    if (!name || !description) {
+      error(res, "name and description are required", 400);
+      return true;
+    }
+
+    const handler = body.handler as CustomActionDef["handler"] | undefined;
+    const validHandlerTypes = new Set(["http", "shell", "code"]);
+    if (!handler || !handler.type || !validHandlerTypes.has(handler.type)) {
+      error(
+        res,
+        "handler with valid type (http, shell, code) is required",
+        400,
+      );
+      return true;
+    }
+
+    if (handler.type === "shell" || handler.type === "code") {
+      const terminalRejection = ctx.resolveTerminalRunRejection(
+        req,
+        body as TerminalRunRequestBody,
+      );
+      if (terminalRejection) {
+        error(
+          res,
+          `Creating ${handler.type} actions requires terminal authorization. ${terminalRejection.reason}`,
+          terminalRejection.status,
+        );
+        return true;
+      }
+    }
+
+    if (
+      handler.type === "http" &&
+      (typeof handler.url !== "string" || !handler.url.trim())
+    ) {
+      error(res, "HTTP handler requires a url", 400);
+      return true;
+    }
+    if (
+      handler.type === "shell" &&
+      (typeof handler.command !== "string" || !handler.command.trim())
+    ) {
+      error(res, "Shell handler requires a command", 400);
+      return true;
+    }
+    if (
+      handler.type === "code" &&
+      (typeof handler.code !== "string" || !handler.code.trim())
+    ) {
+      error(res, "Code handler requires code", 400);
+      return true;
+    }
+
+    const now = new Date().toISOString();
+    const actionDef: CustomActionDef = {
+      id: crypto.randomUUID(),
+      name: name.toUpperCase().replace(/\s+/g, "_"),
+      description,
+      similes: Array.isArray(body.similes)
+        ? body.similes.filter((s): s is string => typeof s === "string")
+        : [],
+      parameters: Array.isArray(body.parameters)
+        ? (body.parameters as Array<{
+            name: string;
+            description: string;
+            required: boolean;
+          }>)
+        : [],
+      handler,
+      enabled: body.enabled !== false,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const config = loadElizaConfig();
+    if (!config.customActions) config.customActions = [];
+    config.customActions.push(actionDef);
+    saveElizaConfig(config);
+
+    if (actionDef.enabled) {
+      registerCustomActionLive(actionDef);
+    }
+
+    json(res, { ok: true, action: actionDef });
+    return true;
+  }
+
+  // Generate a custom action definition from a natural language prompt
+  if (method === "POST" && pathname === "/api/custom-actions/generate") {
+    const body = await readJsonBody<{ prompt?: string }>(req, res);
+    if (!body) return true;
+
+    const prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
+    if (!prompt) {
+      error(res, "prompt is required", 400);
+      return true;
+    }
+
+    const runtime = state.runtime;
+    if (!runtime) {
+      error(res, "Agent runtime not available", 503);
+      return true;
+    }
+
+    try {
+      const systemPrompt = [
+        "You are a helper that generates custom action definitions from natural language descriptions.",
+        "Given a user's description of what they want an action to do, generate a JSON object with these fields:",
+        "",
+        "- name: string (UPPER_SNAKE_CASE action name)",
+        "- description: string (clear description of what the action does)",
+        '- similes: optional string[] of alternative action names and phrases',
+        '- handlerType: "http" | "shell" | "code"',
+        "- handler: object with type-specific fields:",
+        '  For http: { type: "http", method: "GET"|"POST"|etc, url: string, headers?: object, bodyTemplate?: string }',
+        '  For shell: { type: "shell", command: string }',
+        '  For code: { type: "code", code: string }',
+        "- parameters: array of { name: string, description: string, required: boolean }",
+        "",
+        "Use {{paramName}} placeholders in URLs, body templates, and shell commands.",
+        "For code handlers, parameters are available via params.paramName and fetch() is available.",
+        "",
+        "Respond with ONLY the JSON object, no markdown fences or explanation.",
+      ].join("\n");
+
+      const llmResponse = await runtime.useModel(ModelType.TEXT_SMALL, {
+        prompt: `${systemPrompt}\n\nUser request: ${prompt}`,
+      });
+
+      const text =
+        typeof llmResponse === "string" ? llmResponse : String(llmResponse);
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        error(res, "Failed to generate action definition", 500);
+        return true;
+      }
+
+      const generated = JSON.parse(jsonMatch[0]) as Record<string, unknown>;
+      json(res, { ok: true, generated });
+    } catch (err) {
+      error(
+        res,
+        `Generation failed: ${err instanceof Error ? err.message : String(err)}`,
+        500,
+      );
+    }
+    return true;
+  }
+
+  const customActionMatch = pathname.match(/^\/api\/custom-actions\/([^/]+)$/);
+  const customActionTestMatch = pathname.match(
+    /^\/api\/custom-actions\/([^/]+)\/test$/,
+  );
+
+  if (method === "POST" && customActionTestMatch) {
+    const actionId = decodeURIComponent(customActionTestMatch[1]);
+    const body = await readJsonBody<{ params?: Record<string, string> }>(
+      req,
+      res,
+    );
+    if (!body) return true;
+
+    const config = loadElizaConfig();
+    const def = (config.customActions ?? []).find((a) => a.id === actionId);
+    if (!def) {
+      error(res, "Action not found", 404);
+      return true;
+    }
+
+    if (def.handler.type === "shell" || def.handler.type === "code") {
+      const terminalRejection = ctx.resolveTerminalRunRejection(
+        req,
+        body as TerminalRunRequestBody,
+      );
+      if (terminalRejection) {
+        error(
+          res,
+          `Testing ${def.handler.type} actions requires terminal authorization. ${terminalRejection.reason}`,
+          terminalRejection.status,
+        );
+        return true;
+      }
+    }
+
+    const testParams = body.params ?? {};
+    const start = Date.now();
+    try {
+      const handler = buildTestHandler(def);
+      const result = await handler(testParams);
+      json(res, {
+        ok: result.ok,
+        output: result.output,
+        durationMs: Date.now() - start,
+      });
+    } catch (err) {
+      json(res, {
+        ok: false,
+        output: "",
+        error: err instanceof Error ? err.message : String(err),
+        durationMs: Date.now() - start,
+      });
+    }
+    return true;
+  }
+
+  if (method === "PUT" && customActionMatch) {
+    const actionId = decodeURIComponent(customActionMatch[1]);
+    const body = await readJsonBody<Record<string, unknown>>(req, res);
+    if (!body) return true;
+
+    const config = loadElizaConfig();
+    const actions = config.customActions ?? [];
+    const idx = actions.findIndex((a) => a.id === actionId);
+    if (idx === -1) {
+      error(res, "Action not found", 404);
+      return true;
+    }
+
+    const existing = actions[idx];
+
+    let newHandler = existing.handler;
+    if (body.handler != null) {
+      const h = body.handler as Record<string, unknown>;
+      const hValidTypes = new Set(["http", "shell", "code"]);
+      if (!h.type || !hValidTypes.has(h.type as string)) {
+        error(res, "handler.type must be http, shell, or code", 400);
+        return true;
+      }
+      newHandler = h as unknown as CustomActionDef["handler"];
+    }
+
+    if (newHandler.type === "shell" || newHandler.type === "code") {
+      const terminalRejection = ctx.resolveTerminalRunRejection(
+        req,
+        body as TerminalRunRequestBody,
+      );
+      if (terminalRejection) {
+        error(
+          res,
+          `Updating to ${newHandler.type} handler requires terminal authorization. ${terminalRejection.reason}`,
+          terminalRejection.status,
+        );
+        return true;
+      }
+    }
+
+    const updated: CustomActionDef = {
+      ...existing,
+      name:
+        typeof body.name === "string"
+          ? body.name.trim().toUpperCase().replace(/\s+/g, "_")
+          : existing.name,
+      description:
+        typeof body.description === "string"
+          ? body.description.trim()
+          : existing.description,
+      similes: Array.isArray(body.similes)
+        ? body.similes.filter((s): s is string => typeof s === "string")
+        : existing.similes,
+      parameters: Array.isArray(body.parameters)
+        ? (body.parameters as CustomActionDef["parameters"])
+        : existing.parameters,
+      handler: newHandler,
+      enabled:
+        typeof body.enabled === "boolean" ? body.enabled : existing.enabled,
+      updatedAt: new Date().toISOString(),
+    };
+
+    actions[idx] = updated;
+    config.customActions = actions;
+    saveElizaConfig(config);
+
+    json(res, { ok: true, action: updated });
+    return true;
+  }
+
+  if (method === "DELETE" && customActionMatch) {
+    const actionId = decodeURIComponent(customActionMatch[1]);
+
+    const config = loadElizaConfig();
+    const actions = config.customActions ?? [];
+    const idx = actions.findIndex((a) => a.id === actionId);
+    if (idx === -1) {
+      error(res, "Action not found", 404);
+      return true;
+    }
+
+    actions.splice(idx, 1);
+    config.customActions = actions;
+    saveElizaConfig(config);
+
+    json(res, { ok: true });
+    return true;
+  }
+
+  // ── GET /api/privy/status ───────────────────────────────────────────────
+  if (method === "GET" && pathname === "/api/privy/status") {
+    const enabled = isPrivyWalletProvisioningEnabled();
+    json(res, { enabled, configured: enabled });
+    return true;
+  }
+
+  // ── POST /api/privy/login ───────────────────────────────────────────────
+  if (method === "POST" && pathname === "/api/privy/login") {
+    if (!isPrivyWalletProvisioningEnabled()) {
+      error(res, "Privy wallet provisioning is not configured.", 503);
+      return true;
+    }
+    const body = await readJsonBody<{ userId?: string }>(req, res);
+    if (!body) return true;
+
+    const userId = (body.userId ?? "").trim();
+    if (!userId) {
+      error(res, "userId is required", 400);
+      return true;
+    }
+
+    try {
+      const result = await ensurePrivyWalletsForCustomUser(userId);
+      json(res, { ok: true, ...result });
+    } catch (err) {
+      logger.error(
+        `[api] Privy login failed: ${err instanceof Error ? err.message : err}`,
+      );
+      error(
+        res,
+        `Privy login failed: ${err instanceof Error ? err.message : "unknown error"}`,
+        500,
+      );
+    }
+    return true;
+  }
+
+  // ── POST /api/privy/logout ──────────────────────────────────────────────
+  if (method === "POST" && pathname === "/api/privy/logout") {
+    json(res, { ok: true });
+    return true;
+  }
+
+  return false;
+}

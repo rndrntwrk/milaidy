@@ -1,0 +1,877 @@
+@import "tailwindcss";
+@import "./base.css";
+@import "./electrobun-mac-window-drag.css";
+
+@source "..";
+@source "../../../ui/src";
+
+/*
+ * Map the existing theme CSS custom properties to Tailwind theme tokens.
+ * Using @theme inline so Tailwind inlines var() references rather than
+ * generating duplicate CSS variables. This lets the [data-theme="..."]
+ * selectors in base.css drive all visual changes at runtime.
+ */
+@theme inline {
+  /* Colors — surfaces */
+  --color-bg: var(--bg);
+  --color-bg-accent: var(--bg-accent);
+  --color-bg-elevated: var(--bg-elevated);
+  --color-bg-hover: var(--bg-hover);
+  --color-bg-muted: var(--bg-muted);
+  --color-card: var(--card);
+  --color-card-fg: var(--card-foreground);
+  --color-surface: var(--surface);
+
+  /* Colors — text */
+  --color-txt: var(--text);
+  --color-txt-strong: var(--text-strong);
+  --color-txt-chat: var(--chat-text);
+  --color-muted: var(--muted);
+  --color-muted-strong: var(--muted-strong);
+
+  /* Colors — border */
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-border-hover: var(--border-hover);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Colors — accent */
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-muted: var(--accent-muted);
+  --color-accent-subtle: var(--accent-subtle);
+  --color-accent-fg: var(--accent-foreground);
+  --color-primary: var(--primary);
+  --color-primary-fg: var(--primary-foreground);
+
+  /* Colors — status */
+  --color-ok: var(--ok);
+  --color-ok-muted: var(--ok-muted);
+  --color-ok-subtle: var(--ok-subtle);
+  --color-warn: var(--warn);
+  --color-warn-muted: var(--warn-muted);
+  --color-warn-subtle: var(--warn-subtle);
+  --color-danger: var(--danger);
+  --color-destructive: var(--destructive);
+  --color-destructive-fg: var(--destructive-foreground);
+  --color-destructive-subtle: var(--destructive-subtle);
+  --color-muted-strong: var(--muted-strong);
+  --color-status-success: var(--status-success);
+  --color-status-success-bg: var(--status-success-bg);
+  --color-status-danger: var(--status-danger);
+  --color-status-danger-bg: var(--status-danger-bg);
+  --color-status-warning: var(--status-warning);
+  --color-status-warning-bg: var(--status-warning-bg);
+  --color-status-info: var(--status-info);
+  --color-status-info-bg: var(--status-info-bg);
+
+  /* Colors — header */
+  --color-header-bg: var(--header-bar-bg);
+  --color-header-fg: var(--header-bar-fg);
+
+  /* Colors — chain icons */
+  --color-chain-eth: #627eea;
+  --color-chain-base: #0052ff;
+  --color-chain-arb: #28a0f0;
+  --color-chain-op: #ff0420;
+  --color-chain-pol: #8247e5;
+  --color-chain-sol: #9945ff;
+  --color-chain-bsc: #f0b90b;
+
+  /* Fonts */
+  --font-body: var(--font-body);
+  --font-mono: var(--mono);
+  --font-display: var(--font-display);
+  --font-chat: var(--font-chat);
+
+  /* Shadows */
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+
+  /* Radius */
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+}
+
+/* ── Global resets ──────────────────────────────────────────────────── */
+
+#root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  font-family: var(--font-body);
+  color: var(--text);
+  background: var(--bg);
+}
+
+/*
+ * Theme flips touch a large number of CSS variables. Temporarily disabling
+ * transitions prevents the entire shell from animating every color/border
+ * change when users toggle light/dark rapidly.
+ */
+:root[data-theme-switching],
+:root[data-theme-switching] *,
+:root[data-theme-switching] *::before,
+:root[data-theme-switching] *::after {
+  /* biome-ignore lint/complexity/noImportantStyles: Theme-switch guard must override component-level transition utilities */
+  transition: none !important;
+}
+
+/* ── Typing indicator animation ─────────────────────────────────────── */
+
+@keyframes typing-bounce {
+  0%,
+  60%,
+  100% {
+    opacity: 0.3;
+    transform: translateY(0);
+  }
+
+  30% {
+    opacity: 1;
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.alice-stage-actions-shell {
+  pointer-events: none;
+  position: absolute;
+  right: 1rem;
+  top: calc(var(--safe-area-top, 0px) + var(--milady-macos-frame-top-inset, 0px) + 9.25rem);
+  bottom: calc(var(--safe-area-bottom, 0px) + min(42vh, 24rem) + 7rem);
+  z-index: 20;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.alice-stage-actions-panel {
+  width: min(28rem, calc(100vw - 2rem));
+  max-height: 100%;
+  overflow-y: auto;
+}
+
+/* ── Scene chrome suppression while a Dialog is open ───────────────────
+ * The companion view mounts the chat dock and stage rail as direct children
+ * of the VRM scene. Both create their own stacking contexts above the
+ * DialogOverlay (via `position: absolute` on a z-10 ancestor in the
+ * companion stacking context), so without this rule chat bubbles and the
+ * compose bar remain legible in front of the modal.
+ *
+ * The body attribute is set by a ref-counted effect inside our shared
+ * DialogContent (see packages/ui/.../dialog.tsx) so nested Dialogs keep
+ * the flag on until the last one closes. We deliberately do NOT key off
+ * Radix's generic `data-scroll-locked` — other primitives set it too and
+ * would cause unrelated hides.
+ *
+ * Scoped to the two known leaking surfaces only — we rely on the overlay
+ * dim + blur (set on DialogOverlay) to cover the VRM avatar and
+ * background so the companion scene as a whole does not need to be
+ * hidden. That keeps the overlay blur read-through subtle (you can
+ * tell a scene is there) without letting readable UI chrome compete with
+ * the dialog content.
+ */
+body[data-milady-dialog-open="true"] .companion-chat-dock,
+body[data-milady-dialog-open="true"] .companion-stage-overlay {
+  display: none !important;
+}
+
+.go-live-modal {
+  --go-live-border: rgba(255, 255, 255, 0.1);
+  --go-live-border-strong: rgba(255, 255, 255, 0.16);
+  --go-live-text-soft: rgba(255, 255, 255, 0.68);
+  --go-live-text-muted: rgba(255, 255, 255, 0.46);
+  --go-live-accent-soft: rgba(var(--accent-rgb), 0.14);
+
+  /* shadcn DialogContent is `display: grid` by default. Inside a grid cell,
+     the nested flex-column height chain (shell → body flex:1 → overflow-y
+     scroll) is ambiguous because the grid track auto-sizes to content.
+     Force flex at the DialogContent level so the shell's `height: 100%`
+     resolves against the fixed modal height, body's `min-height: 0` /
+     `flex: 1 1 auto` kicks in, and overflow-y:auto on the body actually
+     has a bounded height to compare against — which is what makes the
+     scroll bar appear when content exceeds the body. Without this the
+     channels step (7 cards in a 2-col grid → 4 rows) rendered off the
+     bottom with no way to reach them. */
+  display: flex !important;
+  flex-direction: column;
+}
+
+.go-live-modal__shell {
+  display: flex;
+  height: 100%;
+  max-height: none;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at top, rgba(var(--accent-rgb), 0.08), transparent 42%),
+    linear-gradient(180deg, rgba(6, 10, 17, 0.98), rgba(8, 13, 21, 0.96));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 32px 90px rgba(0, 0, 0, 0.45);
+}
+
+.go-live-modal__header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  border-bottom: 1px solid var(--go-live-border);
+  background: linear-gradient(180deg, rgba(9, 13, 20, 0.96), rgba(9, 13, 20, 0.9));
+  padding: 1.5rem 1.5rem 1.25rem;
+  backdrop-filter: blur(22px);
+}
+
+.go-live-modal__header-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.go-live-modal__header-copy {
+  max-width: 48rem;
+}
+
+.go-live-modal__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  color: var(--go-live-text-muted);
+}
+
+.go-live-modal__title {
+  margin-top: 0.75rem;
+  font-size: clamp(1.8rem, 3.4vw, 2.75rem);
+  font-weight: 650;
+  line-height: 0.96;
+  color: rgba(255, 255, 255, 0.98);
+  letter-spacing: -0.02em;
+}
+
+.go-live-modal__description {
+  margin-top: 0.85rem;
+  max-width: 46rem;
+  font-size: 1.05rem;
+  line-height: 1.6;
+  color: var(--go-live-text-soft);
+}
+
+.go-live-modal__close {
+  flex: 0 0 auto;
+  border: 1px solid var(--go-live-border);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.go-live-modal__close:hover {
+  border-color: var(--go-live-border-strong);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.go-live-modal__stepper {
+  margin: 1.35rem 0 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+  padding: 0;
+  list-style: none;
+}
+
+.go-live-modal__step {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border: 1px solid var(--go-live-border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.02);
+  padding: 0.75rem 0.95rem;
+  color: var(--go-live-text-muted);
+}
+
+.go-live-modal__step--active {
+  border-color: rgba(var(--accent-rgb), 0.5);
+  background: var(--go-live-accent-soft);
+  color: rgba(255, 249, 232, 0.96);
+}
+
+.go-live-modal__step--complete {
+  border-color: rgba(36, 197, 151, 0.34);
+  background: rgba(36, 197, 151, 0.1);
+  color: rgba(223, 255, 245, 0.96);
+}
+
+.go-live-modal__step-index {
+  display: inline-flex;
+  height: 1.6rem;
+  width: 1.6rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.go-live-modal__step-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.go-live-modal__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 1.5rem;
+  /* Explicit overflow rules so the scroll container is not subject to
+     Tailwind class-purge ordering or specificity surprises. overscroll-
+     behavior: contain prevents the page scroll from taking over once the
+     body bottoms out — on desktop with a trackpad that otherwise bubbles
+     the remaining scroll up to the chat dock behind the modal. */
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+}
+
+.go-live-modal__mode-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.95rem;
+}
+
+.go-live-modal__mode-card {
+  display: flex;
+  min-height: 11.5rem;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 1rem;
+  border: 1px solid var(--go-live-border);
+  border-radius: 26px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.025));
+  padding: 1.15rem 1.1rem 1rem;
+  text-align: left;
+  color: rgba(255, 255, 255, 0.96);
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    transform 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.go-live-modal__mode-card:hover {
+  border-color: var(--go-live-border-strong);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.04));
+  transform: translateY(-1px);
+}
+
+.go-live-modal__mode-card:focus-within {
+  border-color: rgba(var(--accent-rgb), 0.52);
+  box-shadow:
+    inset 0 0 0 1px rgba(var(--accent-rgb), 0.12),
+    0 0 0 2px rgba(var(--accent-rgb), 0.22);
+}
+
+.go-live-modal__mode-card--active {
+  border-color: rgba(var(--accent-rgb), 0.58);
+  background:
+    linear-gradient(180deg, rgba(var(--accent-rgb), 0.18), rgba(var(--accent-rgb), 0.08)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03));
+  box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), 0.16);
+}
+
+.go-live-modal__mode-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.8rem;
+}
+
+.go-live-modal__mode-card-icon {
+  display: inline-flex;
+  height: 2.75rem;
+  width: 2.75rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.22);
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.go-live-modal__mode-card-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.go-live-modal__mode-card-title {
+  display: block;
+  font-size: 1.08rem;
+  font-weight: 650;
+  line-height: 1.2;
+  color: rgba(255, 255, 255, 0.98);
+}
+
+.go-live-modal__mode-card-support {
+  display: block;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--go-live-text-muted);
+}
+
+.go-live-modal__mode-card-check {
+  display: inline-flex;
+  height: 1.8rem;
+  width: 1.8rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(var(--accent-rgb), 0.2);
+  color: rgba(255, 243, 204, 0.96);
+}
+
+.go-live-modal__mode-card-description {
+  display: block;
+  font-size: 0.96rem;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.82);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.go-live-modal__mode-card-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(255, 244, 217, 0.84);
+}
+
+.go-live-modal__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-top: 1px solid var(--go-live-border);
+  background: linear-gradient(180deg, rgba(8, 12, 19, 0.86), rgba(8, 12, 19, 0.97));
+  padding: 1rem 1.5rem 1.2rem;
+  backdrop-filter: blur(22px);
+}
+
+.go-live-modal__footer-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+  color: var(--go-live-text-soft);
+}
+
+.go-live-modal__footer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.65rem;
+}
+
+.go-live-modal__footer-secondary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.go-live-modal__footer-primary {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.65rem;
+}
+
+@media (max-width: 1040px) {
+  .alice-stage-actions-shell {
+    left: 0.75rem;
+    right: 0.75rem;
+    top: auto;
+    bottom: calc(var(--safe-area-bottom, 0px) + min(42vh, 24rem) + 8rem);
+    justify-content: center;
+  }
+
+  .alice-stage-actions-panel {
+    width: min(44rem, calc(100vw - 1.5rem));
+    max-height: min(34vh, 24rem);
+  }
+
+  .go-live-modal__stepper {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .go-live-modal__mode-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .alice-stage-actions-shell {
+    left: 0.5rem;
+    right: 0.5rem;
+    bottom: calc(var(--safe-area-bottom, 0px) + min(42vh, 24rem) + 7.25rem);
+  }
+
+  .alice-stage-actions-panel {
+    width: 100%;
+    max-height: min(30vh, 20rem);
+  }
+
+  .go-live-modal__header {
+    padding: 1.2rem 1rem 1rem;
+  }
+
+  .go-live-modal__title {
+    font-size: clamp(1.45rem, 8vw, 2rem);
+  }
+
+  .go-live-modal__description {
+    font-size: 0.92rem;
+  }
+
+  .go-live-modal__body {
+    padding: 1rem;
+  }
+
+  .go-live-modal__step {
+    padding: 0.68rem 0.75rem;
+  }
+
+  .go-live-modal__mode-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .go-live-modal__footer {
+    padding: 0.95rem 1rem 1rem;
+  }
+
+  .go-live-modal__footer-status,
+  .go-live-modal__footer-actions {
+    width: 100%;
+  }
+
+  .go-live-modal__footer-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .go-live-modal__footer-secondary {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .go-live-modal__footer-primary {
+    width: 100%;
+  }
+
+  .go-live-modal__footer-primary > * {
+    width: 100%;
+  }
+}
+
+/* ── Loading screen dots animation ────────────────────────────────── */
+
+.loading-screen__dots::after {
+  content: "";
+  animation: loading-dots 1.5s steps(4) infinite;
+}
+
+@keyframes loading-dots {
+  0% {
+    content: "";
+  }
+
+  25% {
+    content: ".";
+  }
+
+  50% {
+    content: "..";
+  }
+
+  75% {
+    content: "...";
+  }
+}
+
+/* ── Animation utilities ────────────────────────────────────────────── */
+
+.animate-in {
+  animation: fade-in 200ms ease-out;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.slide-in-from-right {
+  animation: slide-in-right 200ms ease-out;
+}
+
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* Utility: hide scrollbar */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.custom-scrollbar,
+.chat-native-scrollbar,
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb-mid) var(--scrollbar-track);
+}
+
+.custom-scrollbar::-webkit-scrollbar,
+.chat-native-scrollbar::-webkit-scrollbar,
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track,
+.chat-native-scrollbar::-webkit-scrollbar-track,
+*::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb,
+.chat-native-scrollbar::-webkit-scrollbar-thumb,
+*::-webkit-scrollbar-thumb {
+  background: linear-gradient(
+    180deg,
+    var(--scrollbar-thumb-start) 0%,
+    var(--scrollbar-thumb-mid) 55%,
+    var(--scrollbar-thumb-end) 100%
+  );
+  border-radius: 9999px;
+  border: 2px solid var(--scrollbar-track);
+  background-clip: padding-box;
+  box-shadow: inset 0 0 0 1px var(--scrollbar-thumb-edge);
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover,
+.chat-native-scrollbar::-webkit-scrollbar-thumb:hover,
+*::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(
+    180deg,
+    var(--scrollbar-thumb-hover-start) 0%,
+    var(--scrollbar-thumb-hover-mid) 55%,
+    var(--scrollbar-thumb-hover-end) 100%
+  );
+}
+
+.custom-scrollbar::-webkit-scrollbar-corner,
+.chat-native-scrollbar::-webkit-scrollbar-corner,
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Keyboard shortcuts styling */
+kbd {
+  font-family: var(--mono);
+}
+
+/* Enhanced animations and transitions */
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Dark mode contrast improvements */
+[data-theme="dark"] .text-muted {
+  color: hsl(240 5% 64.9%);
+}
+
+[data-theme="dark"] .text-muted-strong {
+  color: hsl(240 4% 74%);
+}
+
+[data-theme="dark"] .bg-bg-accent {
+  background-color: hsl(240 5.9% 14%);
+}
+
+[data-theme="dark"] .bg-bg-elevated {
+  background-color: hsl(240 4.8% 10%);
+}
+
+/* Focus visible improvements */
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px var(--focus);
+}
+
+[data-theme="dark"] :focus-visible {
+  box-shadow: 0 0 0 4px var(--focus);
+}
+
+.alice-stage-rail-node {
+  position: relative;
+  display: flex;
+  height: 8rem;
+  width: 4.6rem;
+  align-items: center;
+}
+
+.alice-stage-rail-node::before,
+.alice-stage-rail-node::after {
+  content: "";
+  position: absolute;
+  width: 1px;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.12),
+    rgba(255, 255, 255, 0.04)
+  );
+}
+
+.alice-stage-rail-node::before {
+  top: 0;
+  height: calc(50% - 1.85rem);
+}
+
+.alice-stage-rail-node::after {
+  bottom: 0;
+  height: calc(50% - 1.85rem);
+}
+
+.alice-stage-rail-node--left::before,
+.alice-stage-rail-node--left::after {
+  right: 1.35rem;
+}
+
+.alice-stage-rail-launcher {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 999px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.14);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  touch-action: manipulation;
+}
+
+.alice-stage-rail-launcher::before {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.alice-stage-rail-launcher::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 0.9rem;
+  height: 1px;
+  transform: translateY(-50%);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.alice-stage-rail-launcher--left {
+  margin-left: auto;
+}
+
+.alice-stage-rail-launcher--left::after {
+  left: -0.9rem;
+}
+
+.alice-stage-rail-launcher--pulse {
+  box-shadow:
+    0 10px 24px rgba(0, 0, 0, 0.18),
+    0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.alice-stage-rail-launcher--pulse:hover,
+.alice-stage-rail-launcher--pulse:focus-visible {
+  box-shadow:
+    0 14px 30px rgba(0, 0, 0, 0.24),
+    0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+.alice-stage-rail-launcher--active {
+  box-shadow:
+    0 14px 34px rgba(0, 0, 0, 0.28),
+    0 0 0 1px rgba(255, 255, 255, 0.14);
+}
+
+.pro-streamer-summary-sheet {
+  align-self: center;
+  width: 100%;
+  border-radius: 1.2rem;
+  background: rgba(9, 13, 20, 0.96);
+}
+
+/* Reduced motion - !important is intentional for accessibility override */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    /* biome-ignore lint/complexity/noImportantStyles: Accessibility requires forcing reduced motion */
+    animation-duration: 0.01ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: Accessibility requires forcing reduced motion */
+    animation-iteration-count: 1 !important;
+    /* biome-ignore lint/complexity/noImportantStyles: Accessibility requires forcing reduced motion */
+    transition-duration: 0.01ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: Accessibility requires forcing reduced motion */
+    scroll-behavior: auto !important;
+  }
+}

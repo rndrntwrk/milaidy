@@ -135,9 +135,7 @@ function readStringParam(params: PluginParamDef[], key: string): string | null {
   return typeof value === "string" ? value : null;
 }
 
-export function isStream555PrimaryPlugin(
-  plugin?: Pick<PluginInfo, "id" | "npmName"> | null,
-): boolean {
+export function isStream555PrimaryPlugin(plugin?: Pick<PluginInfo, "id" | "npmName"> | null): boolean {
   if (!plugin) return false;
   const id = normalizePluginId(plugin.id);
   const npmName = normalizePluginId(plugin.npmName);
@@ -149,7 +147,9 @@ export function isStream555PrimaryPlugin(
   );
 }
 
-export function findStream555Plugin(plugins: PluginInfo[]): PluginInfo | null {
+export function findStream555Plugin(
+  plugins: PluginInfo[],
+): PluginInfo | null {
   return plugins.find((plugin) => isStream555PrimaryPlugin(plugin)) ?? null;
 }
 
@@ -247,7 +247,9 @@ export function titleForStream555LaunchMode(
   });
 }
 
-export function serializeStream555ConfigValue(value: unknown): string | null {
+export function serializeStream555ConfigValue(
+  value: unknown,
+): string | null {
   if (typeof value === "boolean") return value ? "true" : "false";
   if (typeof value === "number" && Number.isFinite(value)) {
     return String(value);

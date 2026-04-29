@@ -1,0 +1,159 @@
+# Bring your own API key
+
+If you picked a cloud provider in [Picking a provider](/docs/beginner/picking-a-provider), this is the page where you actually get the key and hand it to Milady. One page, seven providers, copy-paste at the top of each section.
+
+**What you'll learn:** where to create an API key for each major cloud LLM provider, where to paste it in Milady, and which model defaults we'd pick on day one. About two minutes per provider.
+
+## Before you start
+
+- You're **signing up for a cloud LLM provider**, not for Milady. Milady runs on your machine and pays no cloud bills on your behalf — any charges belong to you and the provider you pick.
+- Most providers give some amount of **free credit** when you sign up. You can try everything on this page without putting a card down for at least a few minutes of real use.
+- **Treat API keys like passwords.** They can be used to spend money or read data tied to your account. Never paste them into a chat screenshot or commit them to git.
+
+<Callout kind="tip" title="Don't want to pick one?">
+If you're still deciding, [Picking a provider](/docs/beginner/picking-a-provider) walks through the tradeoffs in plain language. This page assumes you've already chosen.
+</Callout>
+
+---
+
+## OpenAI
+
+Fast, reliable, and the default path if you just want something that works.
+
+<Steps>
+  <li>Open <a href="https://platform.openai.com/api-keys">platform.openai.com/api-keys</a> and sign in.</li>
+  <li>Click <strong>Create new secret key</strong>. Give it a name like "Milady" so you can revoke it later without thinking.</li>
+  <li>Copy the key — it starts with <code>sk-</code>. This is the only time it's shown; if you lose it, make a new one.</li>
+  <li>In Milady, go to <strong>Settings → Plugins → OpenAI → Configure</strong>, paste into <strong>API key</strong>, click <strong>Save</strong>.</li>
+</Steps>
+
+**Good day-one defaults:** small model `gpt-4o-mini`, large model `gpt-4o`. You can change these in the same Configure panel if you want to spend more or less.
+
+**Pricing reality:** `gpt-4o-mini` is cheap enough that a full day of casual chat costs cents. `gpt-4o` is roughly 15× more expensive — use it for the "large" slot only if you want higher-quality reasoning.
+
+---
+
+## Anthropic (Claude)
+
+Best-in-class for long context, careful reasoning, and code review.
+
+<Steps>
+  <li>Open <a href="https://console.anthropic.com/settings/keys">console.anthropic.com/settings/keys</a> and sign in.</li>
+  <li>Click <strong>Create Key</strong>. Name it "Milady" and pick a workspace.</li>
+  <li>Copy the key — it starts with <code>sk-ant-</code>.</li>
+  <li>In Milady, go to <strong>Settings → Plugins → Anthropic → Configure</strong>, paste into <strong>API key</strong>, click <strong>Save</strong>.</li>
+</Steps>
+
+**Good day-one defaults:** small `claude-haiku-4-5-20251001`, large `claude-sonnet-4-6`. Claude Haiku is genuinely fast; Sonnet is the sweet spot for thoughtful replies.
+
+**Pricing reality:** Claude pricing is in the same order of magnitude as OpenAI for comparable tiers. Haiku for the small slot is the right default.
+
+---
+
+## Google Gemini
+
+Generous free tier and very cheap Flash tier. Good budget pick.
+
+<Steps>
+  <li>Open <a href="https://aistudio.google.com/app/apikey">aistudio.google.com/app/apikey</a> and sign in with a Google account.</li>
+  <li>Click <strong>Create API key</strong>. Pick any Google Cloud project (or let it make a new one).</li>
+  <li>Copy the key.</li>
+  <li>In Milady, go to <strong>Settings → Plugins → Google GenAI → Configure</strong>, paste into <strong>API key</strong>, click <strong>Save</strong>.</li>
+</Steps>
+
+**Good day-one defaults:** small `gemini-2.0-flash`, large `gemini-2.0-pro`. Flash is fast enough to feel instant and lands well within the free tier for most people.
+
+**Pricing reality:** The free tier alone is enough for light daily use. Paid is still among the cheapest cloud options.
+
+---
+
+## Groq
+
+Fastest inference on the market for open-source models. Great for low-latency voice or back-and-forth.
+
+<Steps>
+  <li>Open <a href="https://console.groq.com/keys">console.groq.com/keys</a> and sign in.</li>
+  <li>Click <strong>Create API Key</strong>, name it "Milady".</li>
+  <li>Copy the key.</li>
+  <li>In Milady, go to <strong>Settings → Plugins → Groq → Configure</strong>, paste into <strong>API key</strong>, click <strong>Save</strong>.</li>
+</Steps>
+
+**Good day-one defaults:** small `llama-3.1-8b-instant`, large `llama-3.3-70b-versatile`.
+
+**Pricing reality:** Generous free tier. Paid is cheap by cloud standards. The speed is the real draw — responses feel immediate.
+
+---
+
+## OpenRouter
+
+One key, 200+ models. Pick this if you want to switch between providers without juggling logins.
+
+<Steps>
+  <li>Open <a href="https://openrouter.ai/keys">openrouter.ai/keys</a> and sign in (Google or GitHub works).</li>
+  <li>Click <strong>Create Key</strong>, name it "Milady". Optionally set a spend limit.</li>
+  <li>Copy the key.</li>
+  <li>In Milady, go to <strong>Settings → Plugins → OpenRouter → Configure</strong>, paste into <strong>API key</strong>, click <strong>Save</strong>.</li>
+</Steps>
+
+**Good day-one defaults:** small `openai/gpt-4o-mini`, large `anthropic/claude-3.5-sonnet`. Both are specified in `provider/model` format.
+
+**Pricing reality:** OpenRouter takes a thin margin on top of the underlying provider's pricing. Trade-off: marginally more expensive than going direct, much easier to experiment across providers.
+
+---
+
+## xAI (Grok)
+
+If you specifically want Grok's voice.
+
+<Steps>
+  <li>Open <a href="https://console.x.ai/">console.x.ai</a> and sign in with your X account.</li>
+  <li>Go to <strong>API Keys</strong> → <strong>Create API Key</strong>.</li>
+  <li>Copy the key.</li>
+  <li>In Milady, go to <strong>Settings → Plugins → xAI → Configure</strong>, paste into <strong>API key</strong>, click <strong>Save</strong>.</li>
+</Steps>
+
+**Good day-one defaults:** `grok-2-1212` in the model slot.
+
+<Callout kind="note">
+The xAI plugin also bundles a Twitter/X integration. If you only want Grok as a model provider and don't want the X posting behavior, leave the <code>X_*</code> fields blank in the Configure panel.
+</Callout>
+
+---
+
+## Vercel AI Gateway
+
+Route other providers through Vercel for caching, rate limiting, and observability. Pick this if you're already on Vercel.
+
+<Steps>
+  <li>Read the Vercel setup guide at <a href="https://vercel.com/docs/ai/ai-gateway">vercel.com/docs/ai/ai-gateway</a>.</li>
+  <li>Create an AI Gateway in your Vercel project; Vercel gives you a gateway URL and an API key.</li>
+  <li>In Milady, go to <strong>Settings → Plugins → Vercel AI Gateway → Configure</strong>, paste both into <strong>API key</strong> and <strong>Base URL</strong>, click <strong>Save</strong>.</li>
+</Steps>
+
+**When to pick this:** you want one place to see usage across OpenAI / Anthropic / Google without writing your own proxy.
+
+---
+
+## Which one should I actually pick?
+
+If you're still unsure:
+
+| Goal | Pick |
+| --- | --- |
+| "Just works, no surprises" | **OpenAI** |
+| "Cheapest serious option" | **Google Gemini** (generous free tier) |
+| "Fastest replies" | **Groq** |
+| "Best for long, careful responses" | **Anthropic** |
+| "Try lots of models without lots of accounts" | **OpenRouter** |
+| "Something other than the big three" | **xAI** or a specific model via **OpenRouter** |
+
+## I don't want to use the cloud
+
+Totally valid. See:
+
+- [Running Ollama locally](/docs/intermediate/local-ollama) — free, private, needs a moderately beefy machine
+- [Using local model files](/docs/intermediate/local-ai) — for advanced users with `.gguf` files already on disk
+
+## What's next
+
+[Switching providers mid-flight](/docs/intermediate/switching-providers) — once you have one provider working, adding a second as a fallback is a few clicks.

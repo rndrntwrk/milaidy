@@ -1,9 +1,8 @@
 import type { CapacitorConfig } from "@capacitor/cli";
-import appConfig from "./app.config";
 
 const config: CapacitorConfig = {
-  appId: appConfig.appId,
-  appName: appConfig.appName,
+  appId: "com.miladyai.milady",
+  appName: "Milady",
   webDir: "dist",
   server: {
     androidScheme: "https",
@@ -13,9 +12,6 @@ const config: CapacitorConfig = {
       "localhost",
       "127.0.0.1",
       "*.elizacloud.ai",
-      "app.milady.ai",
-      "cloud.milady.ai",
-      "*.milady.ai",
       "rs-sdk-demo.fly.dev",
       "*.fly.dev",
       "hyperscape.gg",
@@ -26,6 +22,10 @@ const config: CapacitorConfig = {
     Keyboard: {
       resize: "body",
       resizeOnFullScreen: true,
+    },
+    StatusBar: {
+      style: "dark",
+      backgroundColor: "#0a0a0a",
     },
   },
   ios: {
