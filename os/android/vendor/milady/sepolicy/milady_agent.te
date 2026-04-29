@@ -28,5 +28,12 @@
 ###
 ### Validated by scripts/miladyos/validate.mjs::validateSepolicy().
 ###
+### NOTE — SELinux is NOT seccomp. If the on-device bun process exits
+### with SIGSYS / code 159, that's a seccomp-bpf trap installed by the
+### zygote (bionic/libc/seccomp/{arch}_app_policy.cpp) — no rule in this
+### file can relax it. The seccomp mitigation is the BUN_FEATURE_FLAG_*
+### env block in MiladyAgentService.startAgentProcess(); see
+### sepolicy/README.md for the full diagnosis playbook.
+###
 
 allow platform_app app_data_file:file { execute execute_no_trans };

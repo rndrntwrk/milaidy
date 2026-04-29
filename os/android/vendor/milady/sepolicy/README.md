@@ -3,6 +3,34 @@
 Custom selinux policy for the Milady privileged system app and the
 on-device agent it spawns.
 
+## SELinux is NOT seccomp
+
+This directory only controls SELinux MAC (mandatory access control). It
+cannot relax Android's per-process seccomp-bpf syscall filter, which is
+installed by the zygote in
+`frameworks/base/core/jni/com_android_internal_os_Zygote.cpp` from the
+per-arch allowlists in
+`bionic/libc/seccomp/{x86_64,arm64}_app_policy.cpp`.
+
+When the on-device bun process exits with `SIGSYS` (signal 31, exit code
+159 = 128 + 31), the kernel killed it for issuing a syscall the seccomp
+filter doesn't allow. No SELinux rule will let it through — the filter
+is inherited and locked via `SECCOMP_FILTER_FLAG_TSYNC` before our
+process exists, and `prctl(PR_SET_NO_NEW_PRIVS, 1)` makes the trap
+final.
+
+The mitigation lives in `MiladyAgentService.java` as `BUN_FEATURE_FLAG_*`
+env vars passed to bun, which steer it onto fallback syscalls Android's
+allowlist already covers (drop io_uring, drop pidfd_open, drop
+RWF_NONBLOCK, drop the spawnsync fast path). See the comment block in
+`startAgentProcess()` for the full diagnosis playbook and the curl
+commands to map a future `audit: type=1326` syscall number to a name.
+
+If a future bun release introduces a brand-new gated syscall with no
+fallback flag, the only fixes are (a) downgrade bun, (b) patch bun, or
+(c) extend the per-arch seccomp allowlist in `bionic/libc/seccomp/` and
+rebuild AOSP. **None of those are sepolicy work.**
+
 `BOARD_VENDOR_SEPOLICY_DIRS += vendor/milady/sepolicy` (in
 `milady_common.mk`) wires this directory into the board policy. Soong
 globs `*.te`, `file_contexts`, and `seapp_contexts` flat at the top
