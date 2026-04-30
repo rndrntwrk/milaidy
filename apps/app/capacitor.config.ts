@@ -8,7 +8,8 @@ const config: CapacitorConfig = {
   server: {
     androidScheme: "https",
     iosScheme: "https",
-    // Allow the webview to connect to the embedded API server and game servers
+    // Self-hosters add their own domains via MILADY_ALLOWED_HOSTS
+    // (build-time env, comma-separated). Listed entries are baseline.
     allowNavigation: [
       "localhost",
       "127.0.0.1",
@@ -20,6 +21,10 @@ const config: CapacitorConfig = {
       "*.fly.dev",
       "hyperscape.gg",
       "*.hyperscape.gg",
+      ...(process.env.MILADY_ALLOWED_HOSTS ?? "")
+        .split(",")
+        .map((h) => h.trim())
+        .filter(Boolean),
     ],
   },
   plugins: {
