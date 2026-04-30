@@ -696,6 +696,7 @@ function desktopCorsPlugin(): Plugin {
         if (!origin || !req.url?.startsWith("/api")) return next();
 
         res.setHeader("Access-Control-Allow-Origin", origin);
+        res.setHeader("Access-Control-Allow-Credentials", "true");
         res.setHeader(
           "Access-Control-Allow-Methods",
           "GET, POST, PUT, DELETE, OPTIONS",
