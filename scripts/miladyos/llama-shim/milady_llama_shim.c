@@ -225,6 +225,51 @@ struct llama_sampler * milady_llama_sampler_chain_init(const struct llama_sample
     return llama_sampler_chain_init(*p);
 }
 
+/* ------------------------------------------------------------------ */
+/* llama_batch + llama_decode                                         */
+/* ------------------------------------------------------------------ */
+/*
+ * `llama_batch_get_one` returns `struct llama_batch` by value, and
+ * `llama_decode` takes `struct llama_batch` by value. bun:ffi can't
+ * round-trip a struct return through a foreign function call (the
+ * return-value ABI for an aggregate that doesn't fit in a single
+ * register depends on hidden caller-allocated storage that bun:ffi
+ * doesn't materialize), so we wrap both in pointer-style helpers.
+ *
+ * milady_llama_batch_get_one()
+ *   Heap-allocates a `llama_batch`, fills it via the upstream helper,
+ *   and returns the pointer. The token buffer the caller passed in
+ *   stays caller-owned — `llama_batch_get_one` only stashes the
+ *   pointer in `batch.token`, it does not copy. The caller MUST keep
+ *   the token buffer alive across the matching `llama_decode` call.
+ *
+ * milady_llama_batch_free()
+ *   Frees only the heap-allocated `llama_batch`. It does NOT free the
+ *   token / embd / pos / seq_id arrays — those are caller-owned (for
+ *   `_get_one` they're the caller's input; for batches built via
+ *   `llama_batch_init` the caller frees with `llama_batch_free`).
+ *
+ * milady_llama_decode()
+ *   Dereferences the pointer and calls real `llama_decode(ctx, *p)`.
+ */
+
+struct llama_batch * milady_llama_batch_get_one(int32_t * tokens, int32_t n_tokens) {
+    struct llama_batch defaults = llama_batch_get_one(tokens, n_tokens);
+    struct llama_batch * out = (struct llama_batch *) malloc(sizeof(struct llama_batch));
+    if (out == NULL) return NULL;
+    memcpy(out, &defaults, sizeof(struct llama_batch));
+    return out;
+}
+
+void milady_llama_batch_free(struct llama_batch * p) {
+    free(p);
+}
+
+int32_t milady_llama_decode(struct llama_context * ctx, const struct llama_batch * p) {
+    if (p == NULL) return -1;
+    return llama_decode(ctx, *p);
+}
+
 #ifdef __cplusplus
 }
 #endif

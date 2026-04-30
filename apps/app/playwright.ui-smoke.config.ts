@@ -14,6 +14,7 @@ const uiSmokeLiveStack = path.join(
 );
 const uiSmokeApiPort = Number(process.env.MILADY_UI_SMOKE_API_PORT || "31337");
 const uiSmokePort = Number(process.env.MILADY_UI_SMOKE_PORT || "2138");
+const reuseExistingServer = process.env.MILADY_UI_SMOKE_REUSE_SERVER === "1";
 
 // Keep the app's API port env aligned with the live stack when the suite runs
 // on non-default ports.
@@ -52,7 +53,7 @@ export default defineConfig({
     command: `node ${JSON.stringify(path.join(repoRoot, "eliza", "packages", "app-core", "scripts", "run-node-tsx.mjs"))} ${JSON.stringify(uiSmokeLiveStack)}`,
     cwd: repoRoot,
     port: uiSmokePort,
-    reuseExistingServer: false,
+    reuseExistingServer,
     timeout: 240_000,
   },
 });
