@@ -11,7 +11,7 @@ Este documento explica **por qué** los imports dinámicos de plugins fallan sin
 El runtime (`src/runtime/eliza.ts`) carga plugins vía import dinámico:
 
 ```ts
-import("@elizaos/plugin-coding-agent")
+import("@elizaos/plugin-sql")
 ```
 
 Node resuelve esto recorriendo hacia arriba desde el **directorio del archivo que importa**. Cuando eliza se ejecuta desde diferentes ubicaciones, la resolución puede fallar:
@@ -60,7 +60,7 @@ env.NODE_PATH = ...;
 **Por qué aquí:** El ejecutor CLI genera un proceso hijo que ejecuta `milady.mjs` → `dist/entry.js` → `dist/eliza.js`. Establecer `NODE_PATH` en el env del hijo asegura que el hijo resuelva desde la raíz aunque `dist/` no tenga su propio `node_modules`.
 
 <div id="3-appsappelectrobunscrnativeagentts-electrobun-native-runtime">
-### 3. `apps/app/electrobun/src/native/agent.ts` (runtime nativo de Electrobun)
+### 3. `eliza/packages/app-core/platforms/electrobun/src/native/agent.ts` (runtime nativo de Electrobun)
 </div>
 
 ```ts
@@ -86,17 +86,17 @@ En el `.app` empaquetado, `eliza.js` vive en `app.asar.unpacked/milady-dist/eliz
 ## Bun y exports de paquetes publicados
 </div>
 
-Algunos paquetes `@elizaos` (por ejemplo, `@elizaos/plugin-coding-agent`) publican un `package.json` con `exports["."].bun = "./src/index.ts"`. **Por qué lo hacen:** En el monorepo upstream, Bun puede ejecutar TypeScript directamente, por lo que apuntar a `src/` evita un paso de compilación. Sin embargo, el tarball npm publicado solo incluye `dist/` — `src/` no se envía. Cuando instalamos desde npm, la condición `"bun"` apunta a una ruta que no existe.
+Algunos paquetes `@elizaos` (por ejemplo, `@elizaos/plugin-sql`) publican un `package.json` con `exports["."].bun = "./src/index.ts"`. **Por qué lo hacen:** En el monorepo upstream, Bun puede ejecutar TypeScript directamente, por lo que apuntar a `src/` evita un paso de compilación. Sin embargo, el tarball npm publicado solo incluye `dist/` — `src/` no se envía. Cuando instalamos desde npm, la condición `"bun"` apunta a una ruta que no existe.
 
 **Qué sucede:** El resolver de Bun prefiere la condición de exportación `"bun"`. Intenta cargar `./src/index.ts`, el archivo no existe, y obtenemos "Cannot find module … from …/src/runtime/eliza.ts" aunque el paquete está en `node_modules`. Bun no retrocede a la condición `"import"` cuando el objetivo `"bun"` falta.
 
-**Nuestra solución:** `scripts/patch-deps.mjs` se ejecuta después de `bun install` vía `scripts/run-repo-setup.mjs` (usado por `postinstall` y el bootstrap de compilación de la app). Encuentra `@elizaos/plugin-coding-agent` (y cualquier otro paquete que añadamos) y, si `exports["."].bun` apunta a `./src/index.ts` y ese archivo no existe, elimina las condiciones `"bun"` y `"default"` que referencian `src/`. Después del parche, solo quedan `"import"` (y similares), así que Bun resuelve a `./dist/index.js`. **Por qué solo parcheamos cuando falta el archivo:** En un workspace de desarrollo donde el plugin está checkeado con `src/` presente, dejamos el paquete sin cambios para que los flujos de trabajo upstream sigan funcionando.
+**Nuestra solución:** `scripts/patch-deps.mjs` se ejecuta después de `bun install` vía `scripts/run-repo-setup.mjs` (usado por `postinstall` y el bootstrap de compilación de la app). Aplica el parche a los paquetes `@elizaos` instalados que lo necesitan y, si `exports["."].bun` apunta a `./src/index.ts` y ese archivo no existe, elimina las condiciones `"bun"` y `"default"` que referencian `src/`. Después del parche, solo quedan `"import"` (y similares), así que Bun resuelve a `./dist/index.js`. **Por qué solo parcheamos cuando falta el archivo:** En un workspace de desarrollo donde el plugin está checkeado con `src/` presente, dejamos el paquete sin cambios para que los flujos de trabajo upstream sigan funcionando.
 
 <div id="pinned-elizaosplugin-openrouter">
 ## Fijado: `@elizaos/plugin-openrouter`
 </div>
 
-Este repositorio actualmente resuelve **`@elizaos/plugin-openrouter`** vía un enlace local del workspace (**`workspace:*`**) durante el desarrollo. La nota importante sobre el artefacto publicado no cambia: **`2.0.0-alpha.10`** es el último tarball npm conocido como bueno, mientras que **`2.0.0-alpha.12`** envió entrypoints de dist rotos.
+Este repositorio actualmente resuelve **`@elizaos/plugin-openrouter`** vía un enlace local del workspace (**`workspace:*`**) durante el desarrollo. Cuando no se usa el checkout local, el `package.json` raíz fija **`2.0.0-alpha.13`** (el tarball npm actual conocido como bueno). **`2.0.0-alpha.12`** envió entrypoints de dist rotos y debe evitarse.
 
 <div id="what-went-wrong-in-200-alpha12">
 ### Qué salió mal en `2.0.0-alpha.12`
@@ -106,7 +106,7 @@ El tarball npm publicado para **`2.0.0-alpha.12`** contiene salidas JavaScript *
 
 **Por qué Bun da error:** Cuando el runtime carga el plugin, Bun construye/transpila ese archivo de entrada y falla con errores como *`openrouterPlugin` is not declared in this file* — los símbolos se exportan pero nunca se definen. El build CommonJS (`dist/cjs/index.node.cjs`) está incompleto de la misma manera (los getters de exportación referencian un chunk `import_plugin` faltante).
 
-**Por qué no parcheamos el dist en postinstall:** La release rota le falta el cuerpo entero del plugin, no un solo identificador incorrecto (contrasta con `@elizaos/plugin-pdf`, donde un pequeño string replace arregla un alias de exportación malo). Reconstruir el plugin desde el código fuente dentro de Milady sería bifurcar upstream y sería frágil. Cuando no estés usando el checkout local del workspace, prefiere el artefacto publicado **`2.0.0-alpha.10`** conocido como bueno.
+**Por qué no parcheamos el dist en postinstall:** La release rota le falta el cuerpo entero del plugin, no un solo identificador incorrecto (contrasta con `@elizaos/plugin-pdf`, donde un pequeño string replace arregla un alias de exportación malo). Reconstruir el plugin desde el código fuente dentro de Milady sería bifurcar upstream y sería frágil. Cuando no estés usando el checkout local del workspace, prefiere el artefacto publicado **`2.0.0-alpha.13`** conocido como bueno.
 
 <div id="maintainer-notes">
 ### Notas para mantenedores

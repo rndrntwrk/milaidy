@@ -11,7 +11,7 @@ The iMessage plugin connects Milady agents to iMessage on macOS, supporting both
 ## Installation
 
 ```bash
-milady plugins install imessage
+milady plugins install @elizaos/plugin-imessage
 ```
 
 ## Setup
@@ -27,7 +27,7 @@ milady plugins install imessage
 {
   "connectors": {
     "imessage": {
-      "enabled": true,
+      "cliPath": "/usr/local/bin/imessage",
       "service": "auto",
       "dmPolicy": "pairing"
     }
@@ -39,13 +39,13 @@ milady plugins install imessage
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `service` | No | Service type: `imessage`, `sms`, or `auto` (default: `auto`) |
-| `cliPath` | No | Path to iMessage CLI tool |
-| `dbPath` | No | Path to iMessage database |
-| `remoteHost` | No | Remote host for SSH-based access |
-| `region` | No | Region configuration |
-| `includeAttachments` | No | Include attachments in messages (default: `true`) |
-| `dmPolicy` | No | DM handling policy |
+| `cliPath` | Yes | Path to the iMessage CLI tool executable (required to trigger auto-enable) |
+| `service` | No | Service type: `"imessage"`, `"sms"`, or `"auto"` |
+| `dbPath` | No | Path to iMessage database (default: `~/Library/Messages/chat.db`) |
+| `remoteHost` | No | Remote Mac hostname for SSH-based iMessage access |
+| `region` | No | Region configuration for phone number formatting |
+| `includeAttachments` | No | Include attachments in messages |
+| `dmPolicy` | No | DM access policy: `"pairing"`, `"allowlist"`, `"open"`, or `"disabled"` (default: `"pairing"`) |
 
 ## Features
 
@@ -56,15 +56,27 @@ milady plugins install imessage
 - **Per-group config** — Configure mention requirements and tool access per group
 - **Multi-account** — Supports multiple accounts via `accounts` map
 
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `IMESSAGE_ENABLED` | No | Enable or disable the connector |
+| `IMESSAGE_CLI_PATH` | No | Path to the iMessage CLI tool executable |
+| `IMESSAGE_DB_PATH` | No | Path to iMessage database (default: `~/Library/Messages/chat.db`) |
+| `IMESSAGE_DM_POLICY` | No | DM access policy |
+| `IMESSAGE_ALLOW_FROM` | No | Comma-separated allowed phone numbers/emails |
+| `IMESSAGE_GROUP_POLICY` | No | Group message policy |
+| `IMESSAGE_POLL_INTERVAL_MS` | No | Polling interval in milliseconds |
+
 ## Auto-Enable
 
-The plugin auto-enables when the `connectors.imessage` block is present:
+The plugin auto-enables when the `connectors.imessage` block contains a `cliPath`:
 
 ```json
 {
   "connectors": {
     "imessage": {
-      "enabled": true
+      "cliPath": "/usr/local/bin/imessage"
     }
   }
 }
@@ -85,5 +97,6 @@ The default iMessage database is at `~/Library/Messages/chat.db`. If using a non
 
 ## Related
 
+- [iMessage Connector Reference](/connectors/imessage) — Full configuration reference (per-contact config, remote SSH access, attachment options)
 - [Signal Plugin](/plugin-registry/platform/signal) — Signal messaging integration
 - [Connectors Guide](/guides/connectors) — General connector documentation

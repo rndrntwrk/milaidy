@@ -53,6 +53,12 @@ Install dependencies:
 bun install
 ```
 
+Initialize the elizaOS submodule and link local packages (required for reading/editing runtime source):
+
+```bash
+bun run setup:upstreams
+```
+
 Recommended quick sanity checks:
 
 ```bash
@@ -65,34 +71,42 @@ bun run milady --version
 
 ## 4) Repo map (mental model)
 
-Core areas (all under `packages/app-core/`):
+The runtime source lives in the `eliza/` git submodule. Initialize it first:
 
-- `packages/app-core/src/runtime/` — runtime startup, plugin orchestration, lifecycle
-- `packages/app-core/src/cli/` — CLI parsing, command registration, process behavior
-- `packages/app-core/src/config/` — config types, loading, resolution
-- `packages/app-core/src/api/` — dashboard API server and routes
-- `packages/app-core/src/services/` — business logic (plugin installer, updater, etc.)
-- `packages/app-core/src/connectors/` — connector integration code
-- `packages/agent/` — upstream elizaOS agent (core plugins, auto-enable maps)
+```bash
+bun run setup:upstreams
+```
+
+Core areas (all under `eliza/packages/app-core/`):
+
+- `eliza/packages/app-core/src/runtime/` — runtime startup, plugin orchestration, lifecycle
+- `eliza/packages/app-core/src/cli/` — CLI parsing, command registration, process behavior
+- `eliza/packages/app-core/src/config/` — config types, loading, resolution
+- `eliza/packages/app-core/src/api/` — dashboard API server and routes
+- `eliza/packages/app-core/src/services/` — business logic (plugin installer, updater, etc.)
+- `eliza/packages/app-core/src/connectors/` — connector integration code
+- `eliza/packages/agent/` — upstream elizaOS agent submodule (core plugins, auto-enable maps)
 - `apps/app/` — desktop/mobile UI app
 - `scripts/` — build/dev/release tooling
 - `test/` + colocated tests — verification
+
+> **Note:** The `eliza/` directory is a git submodule — these paths will not exist until you run `bun run setup:upstreams` or `git submodule update --init --recursive`. See [CONTRIBUTING.md](https://github.com/milady-ai/milady/blob/main/CONTRIBUTING.md) for submodule maintenance details.
 
 ---
 
 ## 5) Entry points and startup path
 
-Important files to understand first:
+Important files to understand first (all inside the `eliza/` submodule):
 
-1. `packages/app-core/src/entry.ts` (CLI process bootstrap)
-2. `packages/app-core/src/cli/run-main.ts` (dotenv + Commander + error handling)
-3. `packages/app-core/src/cli/program/*` (command registration)
-4. `packages/app-core/src/runtime/eliza.ts` (runtime boot sequence + plugin resolution)
-5. `packages/app-core/src/index.ts` (package exports)
+1. `eliza/packages/app-core/src/entry.ts` (CLI process bootstrap)
+2. `eliza/packages/app-core/src/cli/run-main.ts` (dotenv + Commander + error handling)
+3. `eliza/packages/app-core/src/cli/program/*` (command registration)
+4. `eliza/packages/app-core/src/runtime/eliza.ts` (runtime boot sequence + plugin resolution)
+5. `eliza/packages/app-core/src/index.ts` (package exports)
 
 ### Suggested reading order (first 60–90 min)
 
-1. Read `packages/app-core/src/entry.ts` top-to-bottom
+1. Read `eliza/packages/app-core/src/entry.ts` top-to-bottom
 2. Trace into `run-main.ts`
 3. Open one command registration file (`register.start.ts`, etc.)
 4. Read runtime lifecycle doc and compare to `eliza.ts`
@@ -102,6 +116,7 @@ Important files to understand first:
 ## 6) Daily commands for development
 
 ```bash
+bun run dev           # API on :31337, UI on :2138 (dev mode splits them)
 bun run build
 bun run check
 bun run test
@@ -109,12 +124,14 @@ bun run test:e2e
 bun run test:coverage
 ```
 
+In dev mode, the API runs on port 31337 and the dashboard UI on port 2138. In production, both share port 2138. The dev orchestrator auto-shifts to the next free port if defaults are busy and syncs the env vars (`MILADY_API_PORT`, `MILADY_PORT`).
+
 CLI iteration examples:
 
 ```bash
 bun run milady --help
 bun run milady start --verbose
-bun run milady config get agent.name
+bun run milady config get agents.defaults.model
 ```
 
 When you touch logic, at minimum run:
@@ -284,15 +301,15 @@ Treat this as a curriculum. Finish each layer before moving deeper.
    - `/advanced/database`
    - `/advanced/logs`
 
-### Layer 5 — Advanced architecture and planning docs
+### Layer 5 — Advanced architecture
 
 Use these when designing non-trivial changes:
 
-- `/autonomous-loop-implementation/README`
-- `/triggers-system-implementation/README`
-- `/fast-mode-implementation-dossier/README`
+- `/architecture` — system shape and major subsystems
+- `/agents/runtime-and-lifecycle` — startup, restarts, and lifecycle
+- `/plugins/architecture` — plugin load order, providers, and extension points
 
-These documents are long-form design dossiers. Read only the sections relevant to your current change.
+Read only the sections relevant to your current change. Historical implementation write-ups may still exist in the repository under `docs/plans/` for contracts referenced from source code.
 
 ### Advanced contributor tracks (pick one)
 

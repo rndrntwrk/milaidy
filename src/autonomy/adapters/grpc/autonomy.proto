@@ -1,0 +1,363 @@
+// Milaidy Autonomy Kernel gRPC API
+//
+// Protocol Buffer service definitions for the Autonomy Kernel's external API.
+// These definitions are stubs for Tier 3.4 of the remediation plan and will
+// drive future codegen for both server and client implementations.
+//
+// Until proto codegen tooling (buf, protoc-gen-ts) is configured, the
+// companion types.ts file provides manually-maintained TypeScript mirrors.
+
+syntax = "proto3";
+
+package milaidy.autonomy.v1;
+
+option java_multiple_files = true;
+option java_package = "ai.milaidy.autonomy.v1";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/struct.proto";
+
+// ============================================================================
+// AutonomyService
+// ============================================================================
+
+// Primary gRPC service for the Milaidy Autonomy Kernel.
+// Exposes kernel status, identity management, approval resolution,
+// safe-mode control, and metrics retrieval.
+service AutonomyService {
+  // --- Kernel Status ---
+
+  // Get the current autonomy kernel status including state machine state,
+  // enabled flag, and component health.
+  rpc GetAutonomyStatus(GetAutonomyStatusRequest) returns (GetAutonomyStatusResponse);
+
+  // Enable or disable the autonomy kernel at runtime.
+  rpc SetAutonomyStatus(SetAutonomyStatusRequest) returns (SetAutonomyStatusResponse);
+
+  // --- Identity Management ---
+
+  // Retrieve the current agent identity configuration.
+  rpc GetIdentity(GetIdentityRequest) returns (GetIdentityResponse);
+
+  // Apply a partial update to the agent identity.
+  // Increments the identity version and recomputes the integrity hash.
+  rpc UpdateIdentity(UpdateIdentityRequest) returns (UpdateIdentityResponse);
+
+  // Retrieve the version history of identity changes (requires persistence).
+  rpc GetIdentityHistory(GetIdentityHistoryRequest) returns (GetIdentityHistoryResponse);
+
+  // --- Approval Gate ---
+
+  // List all pending approval requests.
+  rpc ListApprovals(ListApprovalsRequest) returns (ListApprovalsResponse);
+
+  // Resolve a pending approval request (approve or deny).
+  rpc ResolveApproval(ResolveApprovalRequest) returns (ResolveApprovalResponse);
+
+  // --- Safe Mode ---
+
+  // Get the current safe mode status.
+  rpc GetSafeModeStatus(GetSafeModeStatusRequest) returns (GetSafeModeStatusResponse);
+
+  // Request to exit safe mode (requires sufficient trust from the approver).
+  rpc ExitSafeMode(ExitSafeModeRequest) returns (ExitSafeModeResponse);
+
+  // --- Metrics ---
+
+  // Retrieve current baseline metrics and SOW target compliance.
+  rpc GetMetrics(GetMetricsRequest) returns (GetMetricsResponse);
+}
+
+// ============================================================================
+// Common / Shared Messages
+// ============================================================================
+
+// Kernel operating states, mirroring the KernelState union in types.ts.
+enum KernelState {
+  KERNEL_STATE_UNSPECIFIED = 0;
+  KERNEL_STATE_IDLE = 1;
+  KERNEL_STATE_PLANNING = 2;
+  KERNEL_STATE_EXECUTING = 3;
+  KERNEL_STATE_VERIFYING = 4;
+  KERNEL_STATE_WRITING_MEMORY = 5;
+  KERNEL_STATE_AUDITING = 6;
+  KERNEL_STATE_AWAITING_APPROVAL = 7;
+  KERNEL_STATE_SAFE_MODE = 8;
+  KERNEL_STATE_ERROR = 9;
+}
+
+// Risk classification for tool actions.
+enum RiskClass {
+  RISK_CLASS_UNSPECIFIED = 0;
+  RISK_CLASS_READ_ONLY = 1;
+  RISK_CLASS_REVERSIBLE = 2;
+  RISK_CLASS_IRREVERSIBLE = 3;
+}
+
+// Source of a tool call request.
+enum ToolCallSource {
+  TOOL_CALL_SOURCE_UNSPECIFIED = 0;
+  TOOL_CALL_SOURCE_LLM = 1;
+  TOOL_CALL_SOURCE_USER = 2;
+  TOOL_CALL_SOURCE_SYSTEM = 3;
+  TOOL_CALL_SOURCE_PLUGIN = 4;
+}
+
+// Approval decision outcomes.
+enum ApprovalDecision {
+  APPROVAL_DECISION_UNSPECIFIED = 0;
+  APPROVAL_DECISION_APPROVED = 1;
+  APPROVAL_DECISION_DENIED = 2;
+  APPROVAL_DECISION_EXPIRED = 3;
+}
+
+// Communication tone options.
+enum CommunicationTone {
+  COMMUNICATION_TONE_UNSPECIFIED = 0;
+  COMMUNICATION_TONE_FORMAL = 1;
+  COMMUNICATION_TONE_CASUAL = 2;
+  COMMUNICATION_TONE_TECHNICAL = 3;
+  COMMUNICATION_TONE_EMPATHETIC = 4;
+}
+
+// Verbosity levels for communication.
+enum Verbosity {
+  VERBOSITY_UNSPECIFIED = 0;
+  VERBOSITY_CONCISE = 1;
+  VERBOSITY_BALANCED = 2;
+  VERBOSITY_DETAILED = 3;
+}
+
+// Drift severity levels.
+enum DriftSeverity {
+  DRIFT_SEVERITY_UNSPECIFIED = 0;
+  DRIFT_SEVERITY_NONE = 1;
+  DRIFT_SEVERITY_LOW = 2;
+  DRIFT_SEVERITY_MEDIUM = 3;
+  DRIFT_SEVERITY_HIGH = 4;
+  DRIFT_SEVERITY_CRITICAL = 5;
+}
+
+// ============================================================================
+// Identity Messages
+// ============================================================================
+
+// Communication style constraints for the agent persona.
+message CommunicationStyle {
+  CommunicationTone tone = 1;
+  Verbosity verbosity = 2;
+  string persona_voice = 3;
+}
+
+// Full agent identity configuration.
+// Mirrors AutonomyIdentityConfig from identity/schema.ts.
+message Identity {
+  // Base identity fields (from ElizaOS IdentityConfig).
+  string name = 1;
+
+  // Autonomy-specific fields.
+  repeated string core_values = 10;
+  CommunicationStyle communication_style = 11;
+  repeated string hard_boundaries = 12;
+  google.protobuf.Struct soft_preferences = 13;
+
+  // Integrity fields.
+  string identity_hash = 20;
+  int32 identity_version = 21;
+}
+
+// A single version entry in the identity history.
+message IdentityVersion {
+  Identity identity = 1;
+  google.protobuf.Timestamp changed_at = 2;
+  string changed_by = 3;
+}
+
+// ============================================================================
+// Approval Messages
+// ============================================================================
+
+// A proposed tool call awaiting approval.
+message ProposedToolCall {
+  string tool = 1;
+  google.protobuf.Struct params = 2;
+  ToolCallSource source = 3;
+  string request_id = 4;
+}
+
+// A pending approval request.
+message ApprovalRequest {
+  string id = 1;
+  ProposedToolCall call = 2;
+  RiskClass risk_class = 3;
+  google.protobuf.Timestamp created_at = 4;
+  google.protobuf.Timestamp expires_at = 5;
+}
+
+// Result of resolving an approval request.
+message ApprovalResult {
+  string id = 1;
+  ApprovalDecision decision = 2;
+  string decided_by = 3;
+  google.protobuf.Timestamp decided_at = 4;
+}
+
+// ============================================================================
+// Safe Mode Messages
+// ============================================================================
+
+// Current safe mode status.
+message SafeModeStatus {
+  bool active = 1;
+  google.protobuf.Timestamp entered_at = 2;
+  string reason = 3;
+  int32 consecutive_errors = 4;
+}
+
+// Result of a safe-mode exit request.
+message SafeModeExitResult {
+  bool allowed = 1;
+  string reason = 2;
+}
+
+// ============================================================================
+// Metrics Messages
+// ============================================================================
+
+// Baseline metrics for SOW compliance tracking.
+message BaselineMetrics {
+  double preference_following_accuracy = 1;
+  double instruction_completion_rate = 2;
+  double persona_drift_score = 3;
+  double memory_poisoning_resistance = 4;
+  double compounding_error_rate = 5;
+  double sycophancy_score = 6;
+  int32 turn_count = 7;
+  google.protobuf.Timestamp measured_at = 8;
+  string label = 9;
+}
+
+// SOW target for a single metric.
+message MetricTarget {
+  string metric_name = 1;
+  double target_value = 2;
+  // "higher" means the metric should be >= target; "lower" means <= target.
+  string direction = 3;
+  double current_value = 4;
+  bool target_met = 5;
+}
+
+// ============================================================================
+// Request / Response Messages
+// ============================================================================
+
+// --- GetAutonomyStatus ---
+
+message GetAutonomyStatusRequest {}
+
+message GetAutonomyStatusResponse {
+  bool enabled = 1;
+  KernelState current_state = 2;
+  bool safe_mode_active = 3;
+  int32 pending_approvals = 4;
+  // Orchestration phase: idle, planning, executing, verifying, writing_memory, auditing.
+  string orchestration_phase = 5;
+}
+
+// --- SetAutonomyStatus ---
+
+message SetAutonomyStatusRequest {
+  bool enabled = 1;
+}
+
+message SetAutonomyStatusResponse {
+  bool enabled = 1;
+  bool previously_enabled = 2;
+}
+
+// --- GetIdentity ---
+
+message GetIdentityRequest {}
+
+message GetIdentityResponse {
+  Identity identity = 1;
+  bool integrity_valid = 2;
+}
+
+// --- UpdateIdentity ---
+
+message UpdateIdentityRequest {
+  // Partial update fields. Only non-default fields are applied.
+  Identity partial_identity = 1;
+}
+
+message UpdateIdentityResponse {
+  Identity updated_identity = 1;
+  int32 previous_version = 2;
+}
+
+// --- GetIdentityHistory ---
+
+message GetIdentityHistoryRequest {
+  // Maximum number of versions to return. 0 = all.
+  int32 limit = 1;
+  // Offset for pagination.
+  int32 offset = 2;
+}
+
+message GetIdentityHistoryResponse {
+  repeated IdentityVersion versions = 1;
+  int32 total_count = 2;
+}
+
+// --- ListApprovals ---
+
+message ListApprovalsRequest {}
+
+message ListApprovalsResponse {
+  repeated ApprovalRequest approvals = 1;
+}
+
+// --- ResolveApproval ---
+
+message ResolveApprovalRequest {
+  string approval_id = 1;
+  ApprovalDecision decision = 2;
+  string decided_by = 3;
+}
+
+message ResolveApprovalResponse {
+  ApprovalResult result = 1;
+  bool found = 2;
+}
+
+// --- GetSafeModeStatus ---
+
+message GetSafeModeStatusRequest {}
+
+message GetSafeModeStatusResponse {
+  SafeModeStatus status = 1;
+}
+
+// --- ExitSafeMode ---
+
+message ExitSafeModeRequest {
+  ToolCallSource approver_source = 1;
+  double approver_trust = 2;
+}
+
+message ExitSafeModeResponse {
+  SafeModeExitResult result = 1;
+}
+
+// --- GetMetrics ---
+
+message GetMetricsRequest {
+  // Optional label filter. If empty, returns the latest metrics.
+  string label = 1;
+}
+
+message GetMetricsResponse {
+  BaselineMetrics metrics = 1;
+  repeated MetricTarget targets = 2;
+}

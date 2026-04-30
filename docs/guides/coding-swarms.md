@@ -40,7 +40,7 @@ To disable:
 
 The orchestration stack has four main pieces:
 
-- `AgentOrchestratorService`: action routing + API surface for coding tasks.
+- `CODE_TASK` compatibility service: task metadata/query surface exported by `@elizaos/plugin-agent-orchestrator`.
 - `PTYService`: launches/manages local coding-agent terminal sessions.
 - `SwarmCoordinator`: handles multi-agent supervision, turn triage, and completion.
 - `CodingWorkspaceService`: provisions per-task Git workspaces.
@@ -160,9 +160,7 @@ For replay benchmark workflows, keep captures and normalized artifacts separate:
 - raw captures: `.parallax/pty-captures/` (or exported into `captures/`)
 - normalized replay artifacts: `replays/`
 
-Reference runbook (kept as the benchmark example):
-
-- [solo-vs-swarm-replay-benchmark-runbook.md](../solo-vs-swarm-replay-benchmark-runbook.md)
+Reference: the solo-vs-swarm replay benchmark runbook is maintained in the repository for benchmark workflows.
 
 Useful benchmark env vars:
 

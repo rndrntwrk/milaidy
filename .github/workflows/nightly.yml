@@ -1,6 +1,6 @@
 name: Nightly Build
 
-# Automated nightly builds from the main branch.
+# Automated nightly builds from the default branch.
 # Publishes to npm with the "nightly" dist-tag and creates a GitHub pre-release.
 # Skips if no new commits since the last nightly.
 on:
@@ -27,6 +27,7 @@ env:
 
 permissions:
   contents: write
+  packages: write
 
 jobs:
   # ── Check for new commits ───────────────────────────────────────────────
@@ -40,7 +41,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ github.event.repository.default_branch }}
           submodules: false
           fetch-depth: 0
 
@@ -90,7 +91,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ github.event.repository.default_branch }}
           submodules: false
 
       - name: Setup Node.js
@@ -113,7 +114,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: "1.3.10"
+          bun-version: "1.3.11"
 
       - name: Cache Bun install
         uses: actions/cache@v4
@@ -122,7 +123,10 @@ jobs:
           key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
           restore-keys: bun-${{ runner.os }}-
 
-      - name: Init non-eliza submodules
+      - name: Init eliza checkout for nightly tests
+        run: git submodule update --init eliza
+
+      - name: Init published-mode submodules
         run: |
           node scripts/init-submodules.mjs
           node scripts/disable-local-eliza-workspace.mjs
@@ -131,6 +135,38 @@ jobs:
         run: bun install --ignore-scripts
         env:
           npm_config_python: ${{ env.pythonLocation }}/bin/python3
+
+      - name: Install published-workspace fallback dependencies
+        run: bash scripts/install-published-workspace-fallback-deps.sh
+
+      - name: Build local plugin-telegram and overlay node_modules
+        run: |
+          git submodule update --init --depth=1 eliza/plugins/plugin-telegram
+          test -f eliza/plugins/plugin-telegram/package.json
+          (cd eliza/plugins/plugin-telegram && bun "$GITHUB_WORKSPACE/node_modules/tsup/dist/cli-default.js" src/index.ts src/account-auth-service.ts --format esm --out-dir dist --tsconfig tsconfig.build.json --sourcemap --clean --no-config)
+
+          installed_dir="node_modules/@elizaos/plugin-telegram"
+          test -d "$installed_dir"
+          test -d eliza/plugins/plugin-telegram/dist
+          rm -rf "$installed_dir/dist"
+          cp -r eliza/plugins/plugin-telegram/dist "$installed_dir/dist"
+          cp eliza/plugins/plugin-telegram/package.json "$installed_dir/package.json"
+          test -f "$installed_dir/dist/account-auth-service.js"
+
+      - name: Restore eliza workspace paths for repo-local tests
+        run: node scripts/restore-local-eliza-workspace.mjs
+
+      - name: Install local eliza test dependencies
+        run: |
+          bun install --cwd eliza --no-frozen-lockfile --ignore-scripts
+          bun install --cwd eliza/cloud --no-frozen-lockfile --ignore-scripts
+
+      - name: Generate protobuf types
+        run: |
+          cd eliza/packages/schemas
+          bunx --package @bufbuild/buf@1.68.3 buf generate
+          test -f ../typescript/src/types/generated/eliza/v1/agent_pb.ts
+          test -f ../typescript/src/types/generated/eliza/v1/components_pb.ts
 
       - name: Run repository postinstall patches
         run: bun run postinstall
@@ -177,19 +213,40 @@ jobs:
         run: bun run build
 
       - name: Run deterministic E2E tests
+        run: bun run test:integration
+
+      - name: Run real local E2E tests
         run: bun run test:e2e
 
       - name: Run startup E2E contract guard
         run: bun run test:startup:contract
-
-      - name: Run startup E2E tests
-        run: bun run test:startup:e2e
 
       - name: Run desktop contract tests
         run: bun run test:desktop:contract
 
       - name: Run validation E2E tests
         run: bun run test:e2e:validation
+
+      - name: Run live surface audit
+        run: bun run test:audit:live:strict
+
+      - name: Install Playwright browser
+        run: bunx playwright install --with-deps chromium
+
+      - name: Check live provider secrets
+        run: |
+          if [ -z "${{ secrets.ELIZAOS_CLOUD_API_KEY }}" ]; then
+            echo "::error::UI Playwright smoke requires ELIZAOS_CLOUD_API_KEY so the suite can complete real onboarding."
+            exit 1
+          fi
+
+      - name: Run UI Playwright smoke tests
+        run: bun run test:ui:playwright
+        env:
+          MILADY_LIVE_TEST: "1"
+          ELIZA_LIVE_TEST: "1"
+          ELIZAOS_CLOUD_API_KEY: ${{ secrets.ELIZAOS_CLOUD_API_KEY }}
+          ELIZAOS_CLOUD_BASE_URL: ${{ secrets.ELIZAOS_CLOUD_BASE_URL }}
 
       - name: Upload build artifacts for publish
         uses: actions/upload-artifact@v4
@@ -240,7 +297,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ github.event.repository.default_branch }}
           submodules: false
 
       - name: Setup Node.js
@@ -253,7 +310,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: "1.3.10"
+          bun-version: "1.3.11"
 
       - name: Cache Bun install
         uses: actions/cache@v4
@@ -275,6 +332,9 @@ jobs:
       - name: Install dependencies (for npm publish file resolution)
         run: bun install --ignore-scripts
 
+      - name: Install published-workspace fallback dependencies
+        run: bash scripts/install-published-workspace-fallback-deps.sh
+
       - name: Publish with nightly dist-tag
         run: npm publish --tag nightly --access public
         env:
@@ -290,7 +350,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ github.event.repository.default_branch }}
           submodules: false
           fetch-depth: 0
 
@@ -329,7 +389,7 @@ jobs:
             milady update --channel nightly
             ```
 
-            > This is an automated nightly build from the `main` branch.
+            > This is an automated nightly build from the default branch.
             > It may contain experimental features and known issues.
             > For stable releases, use `npm install -g miladyai@latest`.
         env:

@@ -27,7 +27,7 @@ Skills can include:
 | Complexity | Low -- documentation-focused | High -- full programmatic control |
 | Runtime | Injected into agent prompts | Runs as executable code |
 | Use case | Task instructions, workflows | Actions, services, API integrations |
-| Installation | Drop a folder or install from marketplace | `milady plugin install` |
+| Installation | Drop a folder or install from marketplace | `milady plugins install` |
 
 Use skills when you want to teach the agent a procedure. Use plugins when you need executable logic, background services, or API routes.
 
@@ -97,7 +97,7 @@ Shipped with the `@elizaos/plugin-agent-skills` package. These are automatically
 
 ### 2. Extra Directories
 
-Additional directories configured in `~/.milady/config.json`:
+Additional directories configured in `~/.milady/milady.json`:
 
 ```json
 {
@@ -126,7 +126,7 @@ Global user-level skills stored at:
 
 The catalog file is also stored here at `~/.milady/skills/catalog.json`.
 
-### 4. Workspace Skills (highest precedence)
+### 4. Workspace Skills
 
 Project-local skills in the agent's workspace directory:
 
@@ -138,7 +138,7 @@ Project-local skills in the agent's workspace directory:
     └── SKILL.md
 ```
 
-### 5. Marketplace Skills
+### 5. Marketplace Skills (highest precedence)
 
 Skills installed from the marketplace are placed under:
 
@@ -170,13 +170,13 @@ When two skills share the same name, the higher-precedence source wins. The full
 
 Whether a skill is active is determined by this cascade (highest priority first):
 
-1. **Database preferences** -- per-agent toggle set via the API (`PUT /api/skills/:id`)
+1. **Database preferences** -- per-agent toggle set via the API (`POST /api/skills/:id/enable` or `POST /api/skills/:id/disable`)
 2. **`skills.denyBundled`** -- config deny list, always blocks
 3. **`skills.entries[id].enabled`** -- per-skill config flag
 4. **`skills.allowBundled`** -- config allow list (whitelist mode: only listed skills load)
 5. **Default** -- enabled
 
-Configuration example in `~/.milady/config.json`:
+Configuration example in `~/.milady/milady.json`:
 
 ```json
 {
@@ -761,7 +761,9 @@ apt install my-tool   # Linux
 |----------|--------|-------------|
 | `/api/skills` | GET | List all discovered skills with enabled state |
 | `/api/skills/refresh` | POST | Re-scan skill directories and refresh the list |
-| `/api/skills/:id` | PUT | Enable or disable a skill (persisted per-agent) |
+| `/api/skills/:id/enable` | POST | Enable a skill (persisted per-agent, honors scan acknowledgments) |
+| `/api/skills/:id/disable` | POST | Disable a skill (persisted per-agent) |
+| `/api/skills/:id` | PUT | **Deprecated** — use `POST /api/skills/:id/enable` or `POST /api/skills/:id/disable` instead |
 | `/api/skills/:id/scan` | GET | Get the security scan report for a skill |
 | `/api/skills/catalog` | GET | Browse the full skill catalog |
 | `/api/skills/catalog/search` | GET | Search the catalog |
@@ -833,7 +835,7 @@ apt install my-tool   # Linux
 - Custom skill not appearing in `/api/skills`:
   Confirm the skill directory contains a valid `SKILL.md` with name/description frontmatter. Check that the directory is in a scanned location (bundled, managed, workspace, or marketplace). Run `POST /api/skills/refresh` to re-scan.
 - Skill loads but is disabled:
-  Check the enable/disable cascade: database preferences override config, `denyBundled` blocks unconditionally, `allowBundled` acts as a whitelist. Use `PUT /api/skills/:id` with `{ "enabled": true }` to force-enable.
+  Check the enable/disable cascade: database preferences override config, `denyBundled` blocks unconditionally, `allowBundled` acts as a whitelist. Use `POST /api/skills/:id/enable` to force-enable.
 - Required binary or env var missing:
   Skills with `required-bins` or `required-env` frontmatter are skipped if dependencies are absent. Install the required CLI tool or set the environment variable.
 
@@ -850,7 +852,7 @@ apt install my-tool   # Linux
 bunx vitest run src/services/skill-marketplace.test.ts src/services/skill-catalog-client.test.ts
 
 # Skill marketplace e2e lifecycle
-bunx vitest run --config vitest.e2e.config.ts test/skills-marketplace-api.e2e.test.ts test/skills-marketplace-services.e2e.test.ts
+bunx vitest run --config test/vitest/e2e.config.ts test/skills-marketplace-api.e2e.test.ts test/skills-marketplace-services.e2e.test.ts
 
 bun run typecheck
 ```

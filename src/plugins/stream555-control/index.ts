@@ -1,0 +1,2360 @@
+import type {
+  Action,
+  HandlerOptions,
+  IAgentRuntime,
+  Memory,
+  Plugin,
+  Provider,
+  ProviderResult,
+  State,
+} from "@elizaos/core";
+import {
+  assertFive55Capability,
+  createFive55CapabilityPolicy,
+} from "../../runtime/five55-capability-policy.js";
+import { assertTrustedAdminForAction } from "../../runtime/trusted-admin.js";
+import {
+  exceptionAction,
+  executeApiAction,
+  readParam,
+} from "../five55-shared/action-kit.js";
+import {
+  createAgentRequestId,
+  describeAgentAuthSource,
+  isAgentAuthConfigured,
+  requestAgentJson,
+} from "../five55-shared/agent-auth.js";
+import { getPluginInfo, type RegistryPluginInfo } from "../../services/registry-client.js";
+import { resolveManagedAppStreamUrl } from "../../services/app-catalog.js";
+
+const STREAM555_BASE_ENV = "STREAM555_BASE_URL";
+const STREAM_API_ENV = "STREAM_API_URL";
+const STREAM555_PUBLIC_BASE_ENV = "STREAM555_PUBLIC_BASE_URL";
+const STREAM555_INTERNAL_BASE_ENV = "STREAM555_INTERNAL_BASE_URL";
+const STREAM555_INTERNAL_AGENT_IDS_ENV = "STREAM555_INTERNAL_AGENT_IDS";
+const STREAM_SESSION_ENV = "STREAM_SESSION_ID";
+const STREAM555_SESSION_ENV = "STREAM555_DEFAULT_SESSION_ID";
+const STREAM555_DEST_SYNC_ON_GO_LIVE_ENV = "STREAM555_DEST_SYNC_ON_GO_LIVE";
+const CAPABILITY_POLICY = createFive55CapabilityPolicy();
+const DEFAULT_STREAM555_PUBLIC_BASE_URL = "https://stream.rndrntwrk.com";
+const DEFAULT_STREAM555_INTERNAL_BASE_URL = "http://control-plane:3000";
+const DEFAULT_INTERNAL_AGENT_IDS = ["alice", "alice-internal"];
+const DEFAULT_CF_CONNECT_TIMEOUT_MS = 45_000;
+const DEFAULT_CF_CONNECT_POLL_MS = 5_000;
+
+type JsonObject = Record<string, unknown>;
+type LBarVideoAspect = "square" | "landscape";
+interface DestinationEnvMapping {
+  platformId: string;
+  label: string;
+  rtmpUrlEnv: string;
+  streamKeyEnv: string;
+  enabledEnv: string;
+  defaultRtmpUrl?: string;
+}
+
+interface DestinationApplySuccess {
+  platformId: string;
+  enabled: boolean;
+  configured: boolean;
+}
+
+interface DestinationApplyFailure {
+  platformId: string;
+  status: number;
+  error: string;
+}
+
+interface StreamReadinessSnapshot {
+  sessionId: string;
+  active: boolean;
+  jobId?: string;
+  cfSessionId?: string;
+  cloudflareConnected: boolean;
+  cloudflareState?: string;
+  publisher?: string;
+  publisherReason?: string | null;
+  platforms: Record<string, unknown>;
+  phase?: string;
+  raw?: JsonObject;
+  outputs?: JsonObject[];
+}
+
+let cachedAgentSessionId: string | undefined;
+
+const DESTINATION_ENV_MAPPINGS: DestinationEnvMapping[] = [
+  {
+    platformId: "pumpfun",
+    label: "Pump.fun",
+    rtmpUrlEnv: "STREAM555_DEST_PUMPFUN_RTMP_URL",
+    streamKeyEnv: "STREAM555_DEST_PUMPFUN_STREAM_KEY",
+    enabledEnv: "STREAM555_DEST_PUMPFUN_ENABLED",
+    defaultRtmpUrl: "rtmps://pump-prod-tg2x8veh.rtmp.livekit.cloud/x",
+  },
+  {
+    platformId: "x",
+    label: "X",
+    rtmpUrlEnv: "STREAM555_DEST_X_RTMP_URL",
+    streamKeyEnv: "STREAM555_DEST_X_STREAM_KEY",
+    enabledEnv: "STREAM555_DEST_X_ENABLED",
+    defaultRtmpUrl: "rtmps://or.pscp.tv:443/x",
+  },
+  {
+    platformId: "twitch",
+    label: "Twitch",
+    rtmpUrlEnv: "STREAM555_DEST_TWITCH_RTMP_URL",
+    streamKeyEnv: "STREAM555_DEST_TWITCH_STREAM_KEY",
+    enabledEnv: "STREAM555_DEST_TWITCH_ENABLED",
+    defaultRtmpUrl: "rtmps://ingest.global-contribute.live-video.net/app",
+  },
+  {
+    platformId: "kick",
+    label: "Kick",
+    rtmpUrlEnv: "STREAM555_DEST_KICK_RTMP_URL",
+    streamKeyEnv: "STREAM555_DEST_KICK_STREAM_KEY",
+    enabledEnv: "STREAM555_DEST_KICK_ENABLED",
+    defaultRtmpUrl: "rtmps://fa723fc1b171.global-contribute.live-video.net",
+  },
+  {
+    platformId: "youtube",
+    label: "YouTube",
+    rtmpUrlEnv: "STREAM555_DEST_YOUTUBE_RTMP_URL",
+    streamKeyEnv: "STREAM555_DEST_YOUTUBE_STREAM_KEY",
+    enabledEnv: "STREAM555_DEST_YOUTUBE_ENABLED",
+    defaultRtmpUrl: "rtmps://a.rtmp.youtube.com/live2",
+  },
+  {
+    platformId: "facebook",
+    label: "Facebook",
+    rtmpUrlEnv: "STREAM555_DEST_FACEBOOK_RTMP_URL",
+    streamKeyEnv: "STREAM555_DEST_FACEBOOK_STREAM_KEY",
+    enabledEnv: "STREAM555_DEST_FACEBOOK_ENABLED",
+    defaultRtmpUrl: "rtmps://live-api-s.facebook.com:443/rtmp/",
+  },
+  {
+    platformId: "custom",
+    label: "Custom",
+    rtmpUrlEnv: "STREAM555_DEST_CUSTOM_RTMP_URL",
+    streamKeyEnv: "STREAM555_DEST_CUSTOM_STREAM_KEY",
+    enabledEnv: "STREAM555_DEST_CUSTOM_ENABLED",
+  },
+];
+
+function trimEnv(key: string): string | undefined {
+  const value = process.env[key]?.trim();
+  return value ? value : undefined;
+}
+
+function readParamValue(
+  options: HandlerOptions | undefined,
+  key: string,
+): string | undefined {
+  const value = readParam(options, key);
+  return value?.trim() ? value.trim() : undefined;
+}
+
+type LiveLayoutMode = "camera-full" | "camera-hold";
+
+function resolveSceneForLayoutMode(
+  rawLayoutMode: string | undefined,
+  fallbackScene: string,
+): string {
+  const layoutMode = rawLayoutMode?.trim().toLowerCase() as
+    | LiveLayoutMode
+    | undefined;
+  if (layoutMode === "camera-hold") return "active-pip";
+  if (layoutMode === "camera-full") return "default";
+  return fallbackScene;
+}
+
+function assertStreamReadAccess(): void {
+  assertFive55Capability(CAPABILITY_POLICY, "stream.read");
+}
+
+function assertStreamControlAccess(
+  runtime: IAgentRuntime,
+  message: Memory,
+  state: State | undefined,
+  actionName: string,
+): void {
+  assertTrustedAdminForAction(runtime, message, state, actionName);
+  assertFive55Capability(CAPABILITY_POLICY, "stream.control");
+}
+
+function isInternalAgentId(agentId: string | undefined): boolean {
+  const normalized = agentId?.trim().toLowerCase();
+  if (!normalized) return false;
+  const configured = parseCsvList(trimEnv(STREAM555_INTERNAL_AGENT_IDS_ENV));
+  const allowList = configured?.length ? configured : DEFAULT_INTERNAL_AGENT_IDS;
+  return allowList.includes(normalized);
+}
+
+function resolveBaseUrl(
+  runtime: IAgentRuntime,
+  options?: HandlerOptions,
+): string {
+  const explicit =
+    readParamValue(options, "baseUrl") ||
+    trimEnv(STREAM555_BASE_ENV) ||
+    trimEnv(STREAM_API_ENV);
+  if (explicit) return explicit;
+
+  const agentHint =
+    readParamValue(options, "agentId") || runtime.agentId?.toString();
+  if (isInternalAgentId(agentHint)) {
+    return (
+      trimEnv(STREAM555_INTERNAL_BASE_ENV) || DEFAULT_STREAM555_INTERNAL_BASE_URL
+    );
+  }
+
+  return trimEnv(STREAM555_PUBLIC_BASE_ENV) || DEFAULT_STREAM555_PUBLIC_BASE_URL;
+}
+
+function parseCsvList(value: string | undefined): string[] | undefined {
+  if (!value) return undefined;
+  const list = value
+    .split(",")
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean);
+  return list.length > 0 ? list : undefined;
+}
+
+function parseBooleanFlag(value: string | undefined, fallback: boolean): boolean {
+  if (!value) return fallback;
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return fallback;
+  if (["1", "true", "yes", "on", "enabled"].includes(normalized)) return true;
+  if (["0", "false", "no", "off", "disabled"].includes(normalized)) return false;
+  return fallback;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+function asJsonRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+function asJsonArray(value: unknown): JsonObject[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return value
+    .map((entry) => (asJsonRecord(entry) ? (entry as JsonObject) : undefined))
+    .filter((entry): entry is JsonObject => entry !== undefined);
+}
+
+function asString(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function asStringSet(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const normalized = new Set<string>();
+  for (const candidate of value) {
+    const text = asString(candidate);
+    if (!text) continue;
+    normalized.add(text.trim().toLowerCase());
+  }
+  return Array.from(normalized);
+}
+
+function getEnabledPlatformIds(
+  platforms: Record<string, unknown> | undefined,
+): string[] {
+  const snapshotPlatforms = asJsonRecord(platforms) ?? {};
+  const ids = new Set<string>();
+  for (const [platformId, detail] of Object.entries(snapshotPlatforms)) {
+    const platform = asJsonRecord(detail);
+    const enabled =
+      typeof platform?.enabled === "boolean"
+        ? platform.enabled
+        : false;
+    if (enabled) {
+      ids.add(platformId);
+    }
+  }
+  return Array.from(ids);
+}
+
+function getProvisionedPlatformIds(snapshot: StreamReadinessSnapshot): string[] {
+  const outputs = asJsonArray(snapshot.outputs);
+  if (!outputs) return [];
+  const ids = new Set<string>();
+  for (const output of outputs) {
+    const platform = asString(output.platform);
+    if (platform) {
+      ids.add(platform.toLowerCase());
+    }
+  }
+  return Array.from(ids);
+}
+
+function areRequiredOutputsProvisioned(
+  snapshot: StreamReadinessSnapshot,
+  enabledPlatformIds: string[],
+): boolean {
+  if (enabledPlatformIds.length === 0) return true;
+  const provisionedPlatforms = new Set(getProvisionedPlatformIds(snapshot));
+  return enabledPlatformIds.every((platformId) =>
+    provisionedPlatforms.has(platformId.toLowerCase()),
+  );
+}
+
+function getMissingOutputPlatforms(
+  snapshot: StreamReadinessSnapshot,
+  enabledPlatformIds: string[],
+): string[] {
+  if (enabledPlatformIds.length === 0) return [];
+  const provisioned = new Set(getProvisionedPlatformIds(snapshot));
+  return enabledPlatformIds.filter(
+    (platformId) => !provisioned.has(platformId.toLowerCase()),
+  );
+}
+
+function streamReadinessFailureReason(
+  snapshot: StreamReadinessSnapshot | undefined,
+  enabledPlatformIds: string[],
+  requirePublisher: boolean,
+): string {
+  if (!snapshot) {
+    return "stream status check returned no readable state";
+  }
+  if (!snapshot.active) {
+    return "stream has not become active";
+  }
+  if (!snapshot.cfSessionId) {
+    return "stream session has no active Cloudflare session id";
+  }
+  if (!snapshot.cloudflareConnected) {
+    return "Cloudflare did not connect";
+  }
+  if (requirePublisher && (snapshot.publisher || "none") === "none") {
+    return snapshot.publisherReason
+      ? `publisher did not attach: ${snapshot.publisherReason}`
+      : "publisher did not attach";
+  }
+  const missingOutputs = getMissingOutputPlatforms(snapshot, enabledPlatformIds);
+  if (missingOutputs.length > 0) {
+    return `simulcast outputs were not provisioned for ${missingOutputs.join(", ")}`;
+  }
+  return "stream start did not reach connected state";
+}
+
+function isStreamReady(
+  snapshot: StreamReadinessSnapshot,
+  enabledPlatformIds: string[],
+  requirePublisher: boolean,
+): boolean {
+  return Boolean(
+    snapshot.active &&
+    snapshot.cfSessionId &&
+    snapshot.cloudflareConnected &&
+    areRequiredOutputsProvisioned(snapshot, enabledPlatformIds) &&
+    (!requirePublisher || (snapshot.publisher || "none") !== "none"),
+  );
+}
+
+async function fetchStreamReadinessSnapshot(
+  base: string,
+  sessionId: string,
+  requestId?: string,
+): Promise<StreamReadinessSnapshot> {
+  const response = await fetchJson(
+    "GET",
+    base,
+    `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/stream/status`,
+    {},
+    requestId,
+  );
+  if (!response.ok) {
+    throw new Error(
+      `stream status check failed (${response.status}): ${getErrorDetail(response)}`,
+    );
+  }
+
+  const data = asJsonRecord(response.data) ?? {};
+  const cloudflare = asJsonRecord(data.cloudflare);
+  return {
+    sessionId,
+    active: Boolean(data.active),
+    jobId: asString(data.jobId),
+    cfSessionId: asString(data.cfSessionId),
+    cloudflareConnected: Boolean(cloudflare?.isConnected),
+    cloudflareState: asString(cloudflare?.state),
+    publisher: asString(data.publisher) || "none",
+    publisherReason:
+      typeof data.publisherReason === "string"
+        ? data.publisherReason
+        : data.publisherReason === null
+          ? null
+          : undefined,
+    platforms: asJsonRecord(data.platforms) ?? {},
+    phase: asString(data.phase),
+    raw: data,
+    outputs: asJsonArray(data.outputs),
+  };
+}
+
+async function waitForStreamReadiness(
+  base: string,
+  sessionId: string,
+  requestId: string,
+  enabledPlatformIds: string[],
+  requirePublisher: boolean,
+  timeoutMs = DEFAULT_CF_CONNECT_TIMEOUT_MS,
+  pollMs = DEFAULT_CF_CONNECT_POLL_MS,
+): Promise<{
+  ready: boolean;
+  lastSnapshot?: StreamReadinessSnapshot;
+  failureReason?: string;
+}> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() <= deadline) {
+    const snapshot = await fetchStreamReadinessSnapshot(
+      base,
+      sessionId,
+      requestId,
+    );
+    if (isStreamReady(snapshot, enabledPlatformIds, requirePublisher)) {
+      return { ready: true, lastSnapshot: snapshot };
+    }
+    if (Date.now() >= deadline) {
+      break;
+    }
+    await sleep(pollMs);
+  }
+  const lastSnapshot = await fetchStreamReadinessSnapshot(base, sessionId, requestId).catch(
+    () => undefined,
+  );
+  return {
+    ready: false,
+    lastSnapshot,
+    failureReason: streamReadinessFailureReason(
+      lastSnapshot,
+      enabledPlatformIds,
+      requirePublisher,
+    ),
+  };
+}
+
+function selectDestinationMappings(
+  requestedPlatforms: string[] | undefined,
+): DestinationEnvMapping[] {
+  if (!requestedPlatforms || requestedPlatforms.length === 0) {
+    return DESTINATION_ENV_MAPPINGS;
+  }
+  const requestedSet = new Set(requestedPlatforms.map((entry) => entry.trim().toLowerCase()));
+  return DESTINATION_ENV_MAPPINGS.filter((mapping) =>
+    requestedSet.has(mapping.platformId.toLowerCase()),
+  );
+}
+
+function buildDestinationPayloads(
+  mappings: DestinationEnvMapping[],
+): Array<{
+  platformId: string;
+  rtmpUrl?: string;
+  streamKey?: string;
+  enabled: boolean;
+}> {
+  const payloads: Array<{
+    platformId: string;
+    rtmpUrl?: string;
+    streamKey?: string;
+    enabled: boolean;
+  }> = [];
+
+  for (const mapping of mappings) {
+    const configuredRtmpUrl = trimEnv(mapping.rtmpUrlEnv);
+    const configuredStreamKey = trimEnv(mapping.streamKeyEnv);
+    const enabledRaw = trimEnv(mapping.enabledEnv);
+
+    if (!configuredRtmpUrl && !configuredStreamKey && !enabledRaw) {
+      continue;
+    }
+
+    const enabled = parseBooleanFlag(enabledRaw, Boolean(configuredStreamKey));
+    const rtmpUrl = configuredRtmpUrl || (configuredStreamKey ? mapping.defaultRtmpUrl : undefined);
+
+    payloads.push({
+      platformId: mapping.platformId,
+      ...(rtmpUrl ? { rtmpUrl } : {}),
+      ...(configuredStreamKey ? { streamKey: configuredStreamKey } : {}),
+      enabled,
+    });
+  }
+
+  return payloads;
+}
+
+const HEX_COLOR_PATTERN = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/;
+const DEFAULT_L_BAR_COLOR = "#6D28D9";
+const DEFAULT_QR_URL = "https://555stream.tv";
+
+function sanitizeHexColor(value: string | undefined): string {
+  if (!value) return DEFAULT_L_BAR_COLOR;
+  const trimmed = value.trim();
+  return HEX_COLOR_PATTERN.test(trimmed) ? trimmed : DEFAULT_L_BAR_COLOR;
+}
+
+function normalizeVideoAspect(value: string | undefined): LBarVideoAspect {
+  if (!value) return "square";
+  return value.trim().toLowerCase() === "landscape" ? "landscape" : "square";
+}
+
+function sanitizeBrandToken(value: string | undefined, fallback: string): string {
+  const normalized = (value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  if (normalized.length > 0) return normalized.slice(0, 48);
+  return fallback;
+}
+
+function buildLBarFromBrandPayload(input: {
+  type: string;
+  imageUrl?: string;
+  videoUrl?: string;
+  text?: string;
+  durationMs?: number;
+  adName?: string;
+  brandName?: string;
+  brandId?: string;
+  ctaText?: string;
+  ctaUrl?: string;
+  qrUrl?: string;
+  color?: string;
+  logoUrl?: string;
+  twitter?: string;
+  handle?: string;
+  videoAspect?: string;
+}): JsonObject | null {
+  if (input.type.trim().toLowerCase() !== "l-bar") return null;
+  const videoSrc = input.videoUrl?.trim() || input.imageUrl?.trim();
+  if (!videoSrc) return null;
+
+  const brandName =
+    input.brandName?.trim() ||
+    input.adName?.trim() ||
+    "Alice Sponsor";
+  const timestamp = Date.now().toString(36);
+  const inferredBrandId = sanitizeBrandToken(brandName, "alice-sponsor");
+  const brandId = sanitizeBrandToken(input.brandId, inferredBrandId);
+  const tagline = input.text?.trim();
+  const ctaText = input.ctaText?.trim() || tagline || "Learn more";
+  const destinationUrl =
+    input.qrUrl?.trim() ||
+    input.ctaUrl?.trim() ||
+    input.twitter?.trim() ||
+    DEFAULT_QR_URL;
+  const aspect = normalizeVideoAspect(input.videoAspect);
+  const isImageFallback = !input.videoUrl?.trim() && Boolean(input.imageUrl?.trim());
+
+  return {
+    type: "l-bar",
+    brand: {
+      id: `${brandId}-${timestamp}`,
+      name: brandName,
+      color: sanitizeHexColor(input.color),
+      video: {
+        src: videoSrc,
+        aspect,
+        ...(isImageFallback ? { type: "image" } : {}),
+      },
+      ...(input.imageUrl?.trim() && input.videoUrl?.trim()
+        ? { banners: [input.imageUrl.trim()] }
+        : {}),
+      ...(tagline ? { tagline } : {}),
+      ...(input.logoUrl?.trim() ? { logoUrl: input.logoUrl.trim() } : {}),
+      ...(input.twitter?.trim() ? { twitter: input.twitter.trim() } : {}),
+      ...(input.handle?.trim() ? { handle: input.handle.trim() } : {}),
+      cta: {
+        text: ctaText,
+        url: destinationUrl,
+      },
+      qr: {
+        url: destinationUrl,
+        label: ctaText,
+      },
+    },
+    ...(input.adName?.trim() ? { _adName: input.adName.trim() } : {}),
+    ...(Number.isFinite(input.durationMs) ? { _duration: input.durationMs } : {}),
+  };
+}
+
+function buildGenericAdPayload(input: {
+  type: string;
+  imageUrl?: string;
+  text?: string;
+  durationMs?: number;
+  adName?: string;
+}): JsonObject {
+  const normalizedLayout = input.type?.trim() ? input.type.trim() : "l-bar";
+  return {
+    type: normalizedLayout,
+    layout: normalizedLayout,
+    name: input.adName?.trim() || `Ad ${new Date().toISOString()}`,
+    ...(Number.isFinite(input.durationMs) ? { duration: input.durationMs } : {}),
+    mainContent: {
+      ...(input.text?.trim() ? { title: input.text.trim() } : {}),
+      ...(input.imageUrl?.trim() ? { imageUrl: input.imageUrl.trim() } : {}),
+    },
+  };
+}
+
+function normalizeAppName(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) throw new Error("appName is required");
+  if (trimmed.startsWith("@")) return trimmed;
+
+  const normalized = trimmed
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  if (!normalized) throw new Error("appName is required");
+
+  if (
+    normalized === "eliza-town" ||
+    normalized === "elizatown" ||
+    normalized === "agent-town" ||
+    normalized === "agenttown" ||
+    normalized === "ai-town" ||
+    normalized === "aitown"
+  ) {
+    return "@elizaos/app-agent-town";
+  }
+
+  if (normalized.startsWith("app-") || normalized.startsWith("plugin-")) {
+    return `@elizaos/${normalized}`;
+  }
+
+  return `@elizaos/app-${normalized}`;
+}
+
+function getTemplateFallbackValue(key: string): string | undefined {
+  if (key === "RS_SDK_BOT_NAME") {
+    const runtimeBotName = process.env.BOT_NAME?.trim();
+    if (runtimeBotName && runtimeBotName.length > 0) {
+      return runtimeBotName;
+    }
+    return "testbot";
+  }
+  return undefined;
+}
+
+function substituteTemplateVars(raw: string): string {
+  return raw.replace(/\{([A-Z0-9_]+)\}/g, (_full, key: string) => {
+    const value = process.env[key];
+    if (value && value.trim().length > 0) {
+      return value.trim();
+    }
+    return getTemplateFallbackValue(key) ?? "";
+  });
+}
+
+function buildViewerUrl(
+  baseUrl: string,
+  embedParams?: Record<string, string>,
+): string {
+  if (!embedParams || Object.keys(embedParams).length === 0) {
+    return substituteTemplateVars(baseUrl);
+  }
+  const resolvedBaseUrl = substituteTemplateVars(baseUrl);
+  const [beforeHash, hashPartRaw] = resolvedBaseUrl.split("#", 2);
+  const [pathPart, queryPartRaw] = beforeHash.split("?", 2);
+  const queryParams = new URLSearchParams(queryPartRaw ?? "");
+  for (const [key, rawValue] of Object.entries(embedParams)) {
+    queryParams.set(key, substituteTemplateVars(rawValue));
+  }
+  const query = queryParams.toString();
+  const hash = hashPartRaw ? `#${hashPartRaw}` : "";
+  return `${pathPart}${query.length > 0 ? `?${query}` : ""}${hash}`;
+}
+
+function isLocalhostUrl(raw: string): boolean {
+  try {
+    const url = new URL(raw);
+    const hostname = url.hostname.toLowerCase();
+    return (
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      hostname === "0.0.0.0" ||
+      hostname === "::1"
+    );
+  } catch {
+    return false;
+  }
+}
+
+function resolveAppUrlCandidates(
+  pluginInfo: RegistryPluginInfo,
+): Array<{ source: "viewer" | "launchUrl" | "homepage"; url: string }> {
+  const candidates: Array<{
+    source: "viewer" | "launchUrl" | "homepage";
+    url: string;
+  }> = [];
+
+  const viewer = pluginInfo.appMeta?.viewer;
+  if (viewer?.url) {
+    candidates.push({
+      source: "viewer",
+      url: buildViewerUrl(viewer.url, viewer.embedParams),
+    });
+  }
+  const launchUrl = pluginInfo.appMeta?.launchUrl;
+  if (launchUrl) {
+    candidates.push({ source: "launchUrl", url: buildViewerUrl(launchUrl) });
+  }
+  if (pluginInfo.homepage) {
+    candidates.push({
+      source: "homepage",
+      url: buildViewerUrl(pluginInfo.homepage),
+    });
+  }
+
+  return candidates
+    .map((entry) => ({ ...entry, url: entry.url.trim() }))
+    .filter((entry) => entry.url.length > 0);
+}
+
+function parseAllowLocalhost(raw: string | undefined): boolean | undefined {
+  if (!raw) return undefined;
+  const normalized = raw.trim().toLowerCase();
+  if (!normalized) return undefined;
+  return !["false", "0", "no", "off"].includes(normalized);
+}
+
+function defaultAllowLocalhostForEnv(): boolean {
+  return process.env.NODE_ENV !== "production";
+}
+
+async function fetchJson(
+  method: "GET" | "POST" | "PUT",
+  base: string,
+  endpoint: string,
+  payload: JsonObject,
+  requestId?: string,
+): Promise<{
+  ok: boolean;
+  status: number;
+  data?: JsonObject;
+  rawBody: string;
+  requestId: string;
+}> {
+  const response = await requestAgentJson({
+    method,
+    baseUrl: base,
+    endpoint,
+    ...(method === "GET" ? {} : { body: payload }),
+    requestId,
+    logScope: "stream555-control",
+  });
+  return {
+    ok: response.ok,
+    status: response.status,
+    data: response.data as JsonObject | undefined,
+    rawBody: response.rawBody,
+    requestId: response.requestId,
+  };
+}
+
+function getErrorDetail(payload: { data?: JsonObject; rawBody: string }): string {
+  const fromData = payload.data?.error;
+  if (typeof fromData === "string" && fromData.trim()) return fromData;
+  return payload.rawBody || "upstream request failed";
+}
+
+function mapFailureCode(status: number): string {
+  if (status === 400) return "E_UPSTREAM_BAD_REQUEST";
+  if (status === 401) return "E_UPSTREAM_UNAUTHORIZED";
+  if (status === 403) return "E_UPSTREAM_FORBIDDEN";
+  if (status === 404) return "E_UPSTREAM_NOT_FOUND";
+  if (status === 409) return "E_UPSTREAM_CONFLICT";
+  if (status === 429) return "E_UPSTREAM_RATE_LIMITED";
+  if (status >= 500) return "E_UPSTREAM_SERVER";
+  return "E_UPSTREAM_FAILURE";
+}
+
+function buildEnvelopeActionResult({
+  ok,
+  module,
+  action,
+  status,
+  message,
+  data,
+  details,
+}: {
+  ok: boolean;
+  module: string;
+  action: string;
+  status: number;
+  message: string;
+  data?: unknown;
+  details?: unknown;
+}): { success: boolean; text: string } {
+  return {
+    success: ok,
+    text: JSON.stringify({
+      ok,
+      code: ok ? "OK" : mapFailureCode(status),
+      module,
+      action,
+      message,
+      status,
+      retryable: status === 429 || status >= 500,
+      ...(ok ? { data } : { details }),
+    }),
+  };
+}
+
+async function applyConfiguredDestinations(params: {
+  base: string;
+  sessionId: string;
+  requestedPlatforms?: string[];
+  requestId?: string;
+}): Promise<{
+  attempted: number;
+  applied: DestinationApplySuccess[];
+  failed: DestinationApplyFailure[];
+}> {
+  const mappings = selectDestinationMappings(params.requestedPlatforms);
+  const payloads = buildDestinationPayloads(mappings);
+
+  const applied: DestinationApplySuccess[] = [];
+  const failed: DestinationApplyFailure[] = [];
+
+  for (const payload of payloads) {
+    const updateResponse = await fetchJson(
+      "PUT",
+      params.base,
+      `/api/agent/v1/platforms/${encodeURIComponent(payload.platformId)}`,
+      {
+        ...(payload.rtmpUrl ? { rtmpUrl: payload.rtmpUrl } : {}),
+        ...(payload.streamKey ? { streamKey: payload.streamKey } : {}),
+        enabled: payload.enabled,
+      },
+      params.requestId,
+    );
+
+    if (!updateResponse.ok) {
+      failed.push({
+        platformId: payload.platformId,
+        status: updateResponse.status || 502,
+        error: getErrorDetail(updateResponse),
+      });
+      continue;
+    }
+
+    const toggleResponse = await fetchJson(
+      "POST",
+      params.base,
+      `/api/agent/v1/sessions/${encodeURIComponent(params.sessionId)}/platforms/${encodeURIComponent(payload.platformId)}/toggle`,
+      { enabled: payload.enabled },
+      params.requestId,
+    );
+
+    if (!toggleResponse.ok) {
+      failed.push({
+        platformId: payload.platformId,
+        status: toggleResponse.status || 502,
+        error: getErrorDetail(toggleResponse),
+      });
+      continue;
+    }
+
+    applied.push({
+      platformId: payload.platformId,
+      enabled: payload.enabled,
+      configured: true,
+    });
+  }
+
+  return {
+    attempted: payloads.length,
+    applied,
+    failed,
+  };
+}
+
+async function ensureAgentSessionId(
+  base: string,
+  requestedSessionId?: string,
+  requestId?: string,
+): Promise<string> {
+  const preferredSessionId =
+    requestedSessionId?.trim() ||
+    cachedAgentSessionId ||
+    trimEnv(STREAM_SESSION_ENV) ||
+    trimEnv(STREAM555_SESSION_ENV);
+
+  const body =
+    preferredSessionId && preferredSessionId.length > 0
+      ? { sessionId: preferredSessionId }
+      : {};
+
+  const response = await fetchJson(
+    "POST",
+    base,
+    "/api/agent/v1/sessions",
+    body,
+    requestId,
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `session bootstrap failed (${response.status}): ${getErrorDetail(response)} [requestId: ${response.requestId}]`,
+    );
+  }
+
+  const sessionId = response.data?.sessionId;
+  if (typeof sessionId !== "string" || sessionId.trim().length === 0) {
+    throw new Error("session bootstrap did not return sessionId");
+  }
+
+  cachedAgentSessionId = sessionId;
+  return sessionId;
+}
+
+function createControlRequestId(action: string): string {
+  return createAgentRequestId(`stream555-control-${action}`);
+}
+
+function commandTransport(
+  requestId?: string,
+  logScope = "stream555-control",
+) {
+  return {
+    service: "stream555",
+    operation: "command" as const,
+    idempotent: true,
+    agentAuth: {
+      ...(requestId ? { requestId } : {}),
+      logScope,
+    },
+  };
+}
+
+function buildStopIdempotencyKey(sessionId: string): string {
+  const normalizedSessionId = sessionId.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const nonce = Math.random().toString(36).slice(2, 10);
+  return `stream-stop:${normalizedSessionId}:${Date.now().toString(36)}:${nonce}`;
+}
+
+const stream555ControlProvider: Provider = {
+  name: "stream555Control",
+  description: "555stream orchestration controls (go-live, ads, radio, guests, scenes)",
+  async get(
+    runtime: IAgentRuntime,
+    _message: Memory,
+    _state: State,
+  ): Promise<ProviderResult> {
+    const configured = Boolean(
+      trimEnv(STREAM555_BASE_ENV) ||
+      trimEnv(STREAM_API_ENV) ||
+      trimEnv(STREAM555_PUBLIC_BASE_ENV) ||
+      trimEnv(STREAM555_INTERNAL_BASE_ENV),
+    );
+    const hasToken = isAgentAuthConfigured();
+    return {
+      text: [
+        "## 555stream Control Surface",
+        "",
+        "Actions: STREAM555_GO_LIVE, STREAM555_DESTINATIONS_APPLY, STREAM555_GO_LIVE_APP, STREAM555_STREAM_STATUS, STREAM555_GO_LIVE_SEGMENTS, STREAM555_SEGMENT_STATE, STREAM555_SCREEN_SHARE, STREAM555_END_LIVE, STREAM555_AD_CREATE, STREAM555_AD_TRIGGER, STREAM555_AD_DISMISS, STREAM555_RADIO_CONTROL, STREAM555_GUEST_INVITE, STREAM555_SCENE_SET, STREAM555_PIP_ENABLE, STREAM555_SEGMENT_OVERRIDE, STREAM555_EARNINGS_ESTIMATE",
+        "Wallet Auth Actions: STREAM555_AUTH_WALLET_LOGIN, STREAM555_AUTH_WALLET_CHALLENGE, STREAM555_AUTH_WALLET_VERIFY, STREAM555_AUTH_WALLET_PROVISION_LINKED",
+        `Base URL configured: ${configured ? "yes" : "no"} (${STREAM555_BASE_ENV}|${STREAM_API_ENV}|${STREAM555_PUBLIC_BASE_ENV}|${STREAM555_INTERNAL_BASE_ENV})`,
+        `Resolved base URL: ${resolveBaseUrl(runtime)}`,
+        `Agent auth configured: ${hasToken ? "yes" : "no"} (${describeAgentAuthSource()})`,
+      ].join("\n"),
+    };
+  },
+};
+
+const goLiveAction: Action = {
+  name: "STREAM555_GO_LIVE",
+  similes: ["GO_LIVE_STREAM555", "STREAM555_START_LIVE", "START_LIVE_STREAM555"],
+  description:
+    "Starts Alice live stream via agent-v1 stream start for the resolved session.",
+  validate: async () => true,
+  handler: async (runtime, message, state, options) => {
+    try {
+      assertStreamControlAccess(runtime, message, state, "STREAM555_GO_LIVE");
+      const requestedSessionId = readParam(
+        options as HandlerOptions | undefined,
+        "sessionId",
+      );
+      const inputType =
+        readParam(options as HandlerOptions | undefined, "inputType") || "website";
+      const inputUrl = readParam(options as HandlerOptions | undefined, "inputUrl");
+      const scene = resolveSceneForLayoutMode(
+        readParam(options as HandlerOptions | undefined, "layoutMode"),
+        readParam(options as HandlerOptions | undefined, "scene") || "default",
+      );
+      const applyDestinations = parseBooleanFlag(
+        readParam(options as HandlerOptions | undefined, "applyDestinations"),
+        parseBooleanFlag(trimEnv(STREAM555_DEST_SYNC_ON_GO_LIVE_ENV), true),
+      );
+      const destinationPlatforms = parseCsvList(
+        readParam(options as HandlerOptions | undefined, "destinationPlatforms"),
+      );
+      const requestId = createControlRequestId("go-live");
+
+      const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
+      const sessionId = await ensureAgentSessionId(base, requestedSessionId, requestId);
+      const needsPublisherReadiness =
+        inputType.toLowerCase() === "avatar" || inputType.toLowerCase() === "camera";
+      let destinationSync:
+        | { attempted: number; applied: DestinationApplySuccess[]; failed: DestinationApplyFailure[] }
+        | undefined;
+      if (applyDestinations) {
+        destinationSync = await applyConfiguredDestinations({
+          base,
+          sessionId,
+          requestedPlatforms: destinationPlatforms,
+          requestId,
+        });
+        if (destinationSync.failed.length > 0) {
+          console.warn("[stream555.control] destination sync failed", {
+            sessionId,
+            requestId,
+            failed: destinationSync.failed,
+          });
+        }
+      }
+
+      const requestPayload = {
+        input: {
+          type: inputType,
+          ...(inputUrl ? { url: inputUrl } : {}),
+        },
+        options: { scene },
+      };
+      const startResponse = await fetchJson(
+        "POST",
+        base,
+        `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/stream/start`,
+        requestPayload,
+        requestId,
+      );
+
+      let startSnapshot: StreamReadinessSnapshot | undefined;
+      let readyResult:
+        | {
+            ready: boolean;
+            lastSnapshot?: StreamReadinessSnapshot;
+            failureReason?: string;
+          }
+        | undefined;
+      if (!startResponse.ok) {
+        if (startResponse.status === 409) {
+          startSnapshot = await fetchStreamReadinessSnapshot(
+            base,
+            sessionId,
+            requestId,
+          ).catch(() => undefined);
+          if (!startSnapshot) {
+            throw new Error(
+              `stream start failed (${startResponse.status}): ${getErrorDetail(startResponse)}`,
+            );
+          }
+          if (!needsPublisherReadiness) {
+            if (!startSnapshot.active) {
+              throw new Error("stream start did not create an active session");
+            }
+            return buildEnvelopeActionResult({
+              ok: true,
+              module: "stream555.control",
+              action: "STREAM555_GO_LIVE",
+              status: startResponse.status,
+              message: "go-live already active",
+              data: {
+                ...startResponse.data,
+                sessionId,
+                inputType,
+                scene,
+                requestId,
+                cfSessionId: startSnapshot.cfSessionId ?? asString(startResponse.data?.cfSessionId),
+                cloudflareConnected: startSnapshot.cloudflareConnected,
+                publisher: startSnapshot.publisher,
+                publisherReason: startSnapshot.publisherReason ?? null,
+                phase: startSnapshot.phase,
+                platformStatuses: startSnapshot.platforms,
+                streamStatus: startSnapshot.raw,
+                destinationSync,
+              },
+            });
+          }
+        } else {
+          throw new Error(
+            `stream start failed (${startResponse.status}): ${getErrorDetail(startResponse)} [requestId: ${startResponse.requestId}]`,
+          );
+        }
+      }
+
+      if (needsPublisherReadiness) {
+        const startPayloadPlatforms = asStringSet(startResponse.data?.platforms);
+        let enabledPlatforms =
+          startPayloadPlatforms.length > 0 ? startPayloadPlatforms : [];
+        if (enabledPlatforms.length === 0) {
+          enabledPlatforms = getEnabledPlatformIds(startSnapshot?.platforms);
+        }
+        if (destinationSync?.applied.length) {
+          const merged = new Set(enabledPlatforms);
+          for (const applied of destinationSync.applied) {
+            if (applied.enabled) merged.add(applied.platformId);
+          }
+          enabledPlatforms = Array.from(merged);
+        }
+        readyResult = await waitForStreamReadiness(
+          base,
+          sessionId,
+          requestId,
+          enabledPlatforms,
+          needsPublisherReadiness,
+        );
+
+        if (!readyResult.ready) {
+          await fetchJson(
+            "POST",
+            base,
+            `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/stream/stop`,
+            {},
+            requestId,
+          ).catch(() => undefined);
+          return buildEnvelopeActionResult({
+            ok: false,
+            module: "stream555.control",
+            action: "STREAM555_GO_LIVE",
+            status: 504,
+            message: `stream start did not reach connected state: ${readyResult.failureReason ?? "unknown"}`,
+            details: {
+              sessionId,
+              requestId,
+              scene,
+              inputType,
+              snapshot: readyResult.lastSnapshot ?? startSnapshot ?? startResponse.data,
+              destinationSync,
+            },
+          });
+        }
+      }
+
+      const finalSnapshot = readyResult?.lastSnapshot ?? startSnapshot;
+      return buildEnvelopeActionResult({
+        ok: true,
+        module: "stream555.control",
+        action: "STREAM555_GO_LIVE",
+        status: startResponse.status || 200,
+        message:
+          readyResult && needsPublisherReadiness
+            ? "go-live is ready"
+            : "go-live requested",
+        data: {
+          ...(startResponse.data ?? {}),
+          sessionId,
+          inputType,
+          scene,
+          requestId,
+          cfSessionId:
+            finalSnapshot?.cfSessionId ??
+            asString(startResponse.data?.cfSessionId),
+          cloudflareConnected: finalSnapshot?.cloudflareConnected ?? false,
+          phase: finalSnapshot?.phase ?? asString(startResponse.data?.phase),
+          publisher: finalSnapshot?.publisher ?? asString(startResponse.data?.publisher),
+          publisherReason:
+            finalSnapshot?.publisherReason ??
+            (typeof startResponse.data?.publisherReason === "string"
+              ? startResponse.data?.publisherReason
+              : null),
+          platformStatuses: finalSnapshot?.platforms ?? asJsonRecord(startResponse.data?.platforms),
+          streamStatus: finalSnapshot?.raw ?? asJsonRecord(startResponse.data),
+          destinationSync,
+        },
+      });
+    } catch (err) {
+      return exceptionAction("stream555.control", "STREAM555_GO_LIVE", err);
+    }
+  },
+  parameters: [
+    { name: "sessionId", description: "Optional session id", required: false, schema: { type: "string" as const } },
+    { name: "inputType", description: "camera|screen|website|avatar|radio|...", required: false, schema: { type: "string" as const } },
+    { name: "inputUrl", description: "Optional source url for website/rtmp/file", required: false, schema: { type: "string" as const } },
+    { name: "scene", description: "Initial scene id", required: false, schema: { type: "string" as const } },
+    { name: "layoutMode", description: "Optional Alice layout mode (camera-full|camera-hold)", required: false, schema: { type: "string" as const } },
+    { name: "applyDestinations", description: "Apply configured RTMP destinations before go-live (default true)", required: false, schema: { type: "string" as const } },
+    { name: "destinationPlatforms", description: "Comma-separated subset of destinations to apply before go-live", required: false, schema: { type: "string" as const } },
+  ],
+};
+
+const destinationsApplyAction: Action = {
+  name: "STREAM555_DESTINATIONS_APPLY",
+  similes: [
+    "STREAM555_APPLY_DESTINATIONS",
+    "STREAM555_SYNC_PLATFORMS",
+    "STREAM555_CONFIGURE_RTMP_DESTINATIONS",
+  ],
+  description:
+    "Sync stored RTMP destination credentials (Pump.fun, X, Twitch, Kick, YouTube, Facebook, Custom) into 555stream and toggle platform states on the active session.",
+  validate: async () => true,
+  handler: async (runtime, message, state, options) => {
+    try {
+      assertStreamControlAccess(runtime, message, state, "STREAM555_DESTINATIONS_APPLY");
+      const requestedSessionId = readParam(
+        options as HandlerOptions | undefined,
+        "sessionId",
+      );
+      const requestedPlatforms = parseCsvList(
+        readParam(options as HandlerOptions | undefined, "platforms"),
+      );
+      const requestId = createControlRequestId("destinations-apply");
+
+      const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
+      const sessionId = await ensureAgentSessionId(base, requestedSessionId, requestId);
+      const syncResult = await applyConfiguredDestinations({
+        base,
+        sessionId,
+        requestedPlatforms,
+        requestId,
+      });
+
+      if (syncResult.attempted === 0) {
+        return buildEnvelopeActionResult({
+          ok: true,
+          module: "stream555.control",
+          action: "STREAM555_DESTINATIONS_APPLY",
+          status: 200,
+          message: "no destination credentials configured in env",
+          data: {
+            sessionId,
+            attempted: 0,
+            configuredPlatforms: DESTINATION_ENV_MAPPINGS.map((mapping) => mapping.platformId),
+          },
+        });
+      }
+
+      if (syncResult.failed.length > 0) {
+        return buildEnvelopeActionResult({
+          ok: false,
+          module: "stream555.control",
+          action: "STREAM555_DESTINATIONS_APPLY",
+          status: 424,
+          message: `${syncResult.failed.length} destination updates failed`,
+          details: {
+            sessionId,
+            attempted: syncResult.attempted,
+            applied: syncResult.applied,
+            failed: syncResult.failed,
+          },
+        });
+      }
+
+      return buildEnvelopeActionResult({
+        ok: true,
+        module: "stream555.control",
+        action: "STREAM555_DESTINATIONS_APPLY",
+        status: 200,
+        message: "destination credentials synced",
+        data: {
+          sessionId,
+          attempted: syncResult.attempted,
+          applied: syncResult.applied,
+        },
+      });
+    } catch (err) {
+      return exceptionAction("stream555.control", "STREAM555_DESTINATIONS_APPLY", err);
+    }
+  },
+  parameters: [
+    { name: "sessionId", description: "Optional session id", required: false, schema: { type: "string" as const } },
+    { name: "platforms", description: "Optional comma-separated platform subset (pumpfun,x,twitch,kick,youtube,facebook,custom)", required: false, schema: { type: "string" as const } },
+  ],
+};
+
+const goLiveAppAction: Action = {
+  name: "STREAM555_GO_LIVE_APP",
+  similes: ["STREAM555_APP_GO_LIVE", "STREAM555_STREAM_APP", "GO_LIVE_APP_STREAM555"],
+  description:
+    "Starts a 555stream website-capture stream using a Milaidy app viewer URL (Babylon, Agent Town, etc).",
+  validate: async () => true,
+  handler: async (runtime, message, state, options) => {
+    try {
+      assertStreamControlAccess(runtime, message, state, "STREAM555_GO_LIVE_APP");
+
+      const appNameRaw = readParam(options as HandlerOptions | undefined, "appName");
+      if (!appNameRaw) throw new Error("appName is required");
+      const viewerUrlOverride = readParam(
+        options as HandlerOptions | undefined,
+        "viewerUrl",
+      );
+      const allowLocalhost =
+        parseAllowLocalhost(
+          readParam(options as HandlerOptions | undefined, "allowLocalhost"),
+        ) ??
+        parseAllowLocalhost(process.env.STREAM555_ALLOW_LOCALHOST_APP_URLS) ??
+        defaultAllowLocalhostForEnv();
+      const scene = resolveSceneForLayoutMode(
+        readParam(options as HandlerOptions | undefined, "layoutMode"),
+        readParam(options as HandlerOptions | undefined, "scene") || "default",
+      );
+      const requestedSessionId = readParam(
+        options as HandlerOptions | undefined,
+        "sessionId",
+      );
+      const requestId = createControlRequestId("go-live-app");
+
+      const appName = normalizeAppName(appNameRaw);
+
+      let resolvedUrl = viewerUrlOverride?.trim() ?? "";
+      let resolvedFrom: "viewerUrl" | "viewer" | "launchUrl" | "homepage" = "viewerUrl";
+      if (!resolvedUrl) {
+        const managedStreamUrl = resolveManagedAppStreamUrl(appName);
+        if (managedStreamUrl && managedStreamUrl.trim().length > 0) {
+          resolvedUrl = managedStreamUrl.trim();
+          resolvedFrom = "homepage";
+        }
+      }
+      const pluginInfo = await getPluginInfo(appName);
+      if (pluginInfo && pluginInfo.kind !== "app") {
+        throw new Error(`"${pluginInfo.name}" is not an app.`);
+      }
+      const wrapperRequired = Boolean(pluginInfo?.appMeta?.viewer?.postMessageAuth);
+      const wrapperProvided = Boolean(viewerUrlOverride && viewerUrlOverride.trim().length > 0);
+
+      if (!resolvedUrl) {
+        if (!pluginInfo) {
+          throw new Error(`App "${appNameRaw}" not found in the registry.`);
+        }
+
+        const candidates = resolveAppUrlCandidates(pluginInfo).filter(
+          (entry) => !(wrapperRequired && !wrapperProvided && entry.source === "viewer"),
+        );
+        if (candidates.length === 0) {
+          if (wrapperRequired && !wrapperProvided) {
+            throw new Error(
+              `App "${appName}" requires embed auth and has no fallback launch/homepage URL. Provide a wrapper viewerUrl that performs the auth handshake.`,
+            );
+          }
+          throw new Error(`"${pluginInfo.name}" has no streamable viewer URL.`);
+        }
+
+        const nonLocal = candidates.find((entry) => !isLocalhostUrl(entry.url));
+        const chosen = nonLocal ?? (allowLocalhost ? candidates[0] : null);
+        if (!chosen) {
+          throw new Error(
+            `resolved viewer URL is localhost. Provide a public viewerUrl override or set allowLocalhost=true.`,
+          );
+        }
+
+        resolvedUrl = chosen.url;
+        resolvedFrom = chosen.source;
+      }
+
+      if (!allowLocalhost && isLocalhostUrl(resolvedUrl)) {
+        throw new Error(
+          `resolved viewer URL is localhost (${resolvedUrl}). Provide a public viewerUrl override or set allowLocalhost=true for local testing.`,
+        );
+      }
+
+      const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
+      const sessionId = await ensureAgentSessionId(base, requestedSessionId, requestId);
+
+      const appOptions = {
+        name: appName,
+        displayName: pluginInfo?.appMeta?.displayName ?? null,
+        category: pluginInfo?.appMeta?.category ?? null,
+        launchType: pluginInfo?.appMeta?.launchType ?? null,
+        viewer: pluginInfo?.appMeta?.viewer
+          ? {
+              postMessageAuth: Boolean(pluginInfo.appMeta.viewer.postMessageAuth),
+              sandbox: pluginInfo.appMeta.viewer.sandbox ?? null,
+              embedParamKeys: Object.keys(pluginInfo.appMeta.viewer.embedParams ?? {}),
+            }
+          : null,
+        requirements: {
+          wrapperRequired,
+          wrapperProvided,
+          publicUrlRequired: !allowLocalhost,
+          localhostAllowed: allowLocalhost,
+        },
+      };
+
+      return executeApiAction({
+        module: "stream555.control",
+        action: "STREAM555_GO_LIVE_APP",
+        base,
+        endpoint: `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/stream/start`,
+        payload: {
+          input: {
+            type: "website",
+            url: resolvedUrl,
+          },
+          options: {
+            scene,
+            appName,
+            resolvedFrom,
+            app: appOptions,
+          },
+        },
+        requestContract: {
+          input: { required: true, type: "object" },
+          options: { required: false, type: "object" },
+        },
+        responseContract: {},
+        successMessage: "app go-live requested",
+        transport: commandTransport(requestId),
+        context: { sessionId },
+      });
+    } catch (err) {
+      return exceptionAction("stream555.control", "STREAM555_GO_LIVE_APP", err);
+    }
+  },
+  parameters: [
+    {
+      name: "appName",
+      description: "App package or alias (babylon, agent-town, eliza town, etc)",
+      required: true,
+      schema: { type: "string" as const },
+    },
+    {
+      name: "viewerUrl",
+      description:
+        "Optional explicit viewer URL override (must be reachable by capture-service)",
+      required: false,
+      schema: { type: "string" as const },
+    },
+    {
+      name: "layoutMode",
+      description: "Optional Alice layout mode (camera-full|camera-hold)",
+      required: false,
+      schema: { type: "string" as const },
+    },
+    {
+      name: "allowLocalhost",
+      description: "Allow localhost URLs for local testing (default false)",
+      required: false,
+      schema: { type: "string" as const },
+    },
+    { name: "sessionId", description: "Optional session id", required: false, schema: { type: "string" as const } },
+    { name: "scene", description: "Initial scene id", required: false, schema: { type: "string" as const } },
+  ],
+};
+
+const goLiveSegmentsAction: Action = {
+  name: "STREAM555_GO_LIVE_SEGMENTS",
+  similes: [
+    "GO_LIVE_SEGMENTS_STREAM555",
+    "STREAM555_SEGMENT_BOOTSTRAP",
+    "STREAM555_START_SEGMENT_MODE",
+  ],
+  description:
+    "Bootstraps or resumes segment orchestration for the resolved active stream session.",
+  validate: async () => true,
+  handler: async (runtime, message, state, options) => {
+    try {
+      assertStreamControlAccess(
+        runtime,
+        message,
+        state,
+        "STREAM555_GO_LIVE_SEGMENTS",
+      );
+      const requestedSessionId = readParam(
+        options as HandlerOptions | undefined,
+        "sessionId",
+      );
+      const segmentIntent = readParam(
+        options as HandlerOptions | undefined,
+        "segmentIntent",
+      );
+      const segmentTypes = parseCsvList(
+        readParam(options as HandlerOptions | undefined, "segmentTypes"),
+      );
+      const topicHints = parseCsvList(
+        readParam(options as HandlerOptions | undefined, "topicHints"),
+      );
+      const theme = readParam(options as HandlerOptions | undefined, "theme");
+      const segmentCountRaw = readParam(
+        options as HandlerOptions | undefined,
+        "segmentCount",
+      );
+      const avgSegmentDurationMsRaw = readParam(
+        options as HandlerOptions | undefined,
+        "avgSegmentDurationMs",
+      );
+      const autoStopRaw = readParam(
+        options as HandlerOptions | undefined,
+        "autoStop",
+      );
+      const segmentCount = segmentCountRaw
+        ? Number.parseInt(segmentCountRaw, 10)
+        : undefined;
+      const avgSegmentDurationMs = avgSegmentDurationMsRaw
+        ? Number.parseInt(avgSegmentDurationMsRaw, 10)
+        : undefined;
+      const normalizedAutoStop = autoStopRaw
+        ? !["false", "0", "no"].includes(autoStopRaw.trim().toLowerCase())
+        : undefined;
+
+      const optionsPayload: JsonObject = {};
+      if (segmentIntent) optionsPayload.segmentIntent = segmentIntent;
+      if (segmentTypes) optionsPayload.segmentTypes = segmentTypes;
+      if (topicHints) optionsPayload.topicHints = topicHints;
+      if (theme) optionsPayload.theme = theme;
+      if (
+        typeof segmentCount === "number" &&
+        Number.isFinite(segmentCount) &&
+        segmentCount > 0
+      ) {
+        optionsPayload.segmentCount = segmentCount;
+      }
+      if (
+        typeof avgSegmentDurationMs === "number" &&
+        Number.isFinite(avgSegmentDurationMs) &&
+        avgSegmentDurationMs > 0
+      ) {
+        optionsPayload.avgSegmentDurationMs = avgSegmentDurationMs;
+      }
+      if (typeof normalizedAutoStop === "boolean") {
+        optionsPayload.autoStop = normalizedAutoStop;
+      }
+
+      const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
+      const requestId = createControlRequestId("go-live-segments");
+      const sessionId = await ensureAgentSessionId(base, requestedSessionId, requestId);
+
+      return executeApiAction({
+        module: "stream555.control",
+        action: "STREAM555_GO_LIVE_SEGMENTS",
+        base,
+        endpoint: "/api/agent/v1/go-live/segments",
+        payload: {
+          sessionId,
+          options: optionsPayload,
+        },
+        requestContract: {
+          sessionId: { required: true, type: "string", nonEmpty: true },
+          options: { required: false, type: "object" },
+        },
+        responseContract: {},
+        successMessage: "segment orchestration bootstrap requested",
+        transport: commandTransport(requestId),
+        context: { sessionId },
+      });
+    } catch (err) {
+      return exceptionAction("stream555.control", "STREAM555_GO_LIVE_SEGMENTS", err);
+    }
+  },
+  parameters: [
+    { name: "sessionId", description: "Optional session id", required: false, schema: { type: "string" as const } },
+    { name: "segmentIntent", description: "balanced|news|reaction|gaming|qa|analysis", required: false, schema: { type: "string" as const } },
+    { name: "segmentTypes", description: "Comma-separated segment type list", required: false, schema: { type: "string" as const } },
+    { name: "topicHints", description: "Comma-separated topic hints", required: false, schema: { type: "string" as const } },
+    { name: "theme", description: "Optional segment theme override", required: false, schema: { type: "string" as const } },
+    { name: "segmentCount", description: "Optional segment count", required: false, schema: { type: "string" as const } },
+    { name: "avgSegmentDurationMs", description: "Optional segment duration per segment (ms)", required: false, schema: { type: "string" as const } },
+    { name: "autoStop", description: "true|false", required: false, schema: { type: "string" as const } },
+  ],
+};
+
+const segmentStateAction: Action = {
+  name: "STREAM555_SEGMENT_STATE",
+  similes: [
+    "STREAM555_GET_SEGMENT_STATE",
+    "STREAM555_SEGMENTS_STATUS",
+    "SEGMENT_STATE_STREAM555",
+  ],
+  description:
+    "Fetches segment runtime state for the resolved session (queue, active segment, overrides, metrics).",
+  validate: async () => true,
+  handler: async (runtime, _message, _state, options) => {
+    try {
+      assertStreamReadAccess();
+      const requestedSessionId = readParam(
+        options as HandlerOptions | undefined,
+        "sessionId",
+      );
+      const requestId = createControlRequestId("segment-state");
+      const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
+      const sessionId = await ensureAgentSessionId(base, requestedSessionId, requestId);
+      const response = await fetchJson(
+        "GET",
+        base,
+        `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/segments/state`,
+        {},
+        requestId,
+      );
+      if (!response.ok) {
+        return buildEnvelopeActionResult({
+          ok: false,
+          module: "stream555.control",
+          action: "STREAM555_SEGMENT_STATE",
+          status: response.status || 502,
+          message: `segment state query failed (${response.status}): ${getErrorDetail(response)}`,
+          details: response.data ?? response.rawBody,
+        });
+      }
+
+      return buildEnvelopeActionResult({
+        ok: true,
+        module: "stream555.control",
+        action: "STREAM555_SEGMENT_STATE",
+        status: response.status,
+        message: "segment state fetched",
+        data: response.data ?? {},
+      });
+    } catch (err) {
+      return exceptionAction("stream555.control", "STREAM555_SEGMENT_STATE", err);
+    }
+  },
+  parameters: [
+    { name: "sessionId", description: "Optional session id", required: false, schema: { type: "string" as const } },
+  ],
+};
+
+const streamStatusAction: Action = {
+  name: "STREAM555_STREAM_STATUS",
+  similes: [
+    "GET_STREAM_STATUS",
+    "STREAM_STATUS_STREAM555",
+    "CHECK_STREAM_STATUS_STREAM555",
+  ],
+  description:
+    "Returns current stream status, including publisher readiness and platform connection state.",
+  validate: async () => true,
+  handler: async (runtime, _message, _state, options) => {
+    try {
+      assertStreamReadAccess();
+      const requestedSessionId = readParam(
+        options as HandlerOptions | undefined,
+        "sessionId",
+      );
+      const requestId = createControlRequestId("stream-status");
+      const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
+      const sessionId = await ensureAgentSessionId(base, requestedSessionId, requestId);
+      const response = await fetchJson(
+        "GET",
+        base,
+        `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/stream/status`,
+        {},
+        requestId,
+      );
+      if (!response.ok) {
+        return buildEnvelopeActionResult({
+          ok: false,
+          module: "stream555.control",
+          action: "STREAM555_STREAM_STATUS",
+          status: response.status || 502,
+          message: `stream status query failed (${response.status}): ${getErrorDetail(response)}`,
+          details: response.data ?? response.rawBody,
+        });
+      }
+
+      return buildEnvelopeActionResult({
+        ok: true,
+        module: "stream555.control",
+        action: "STREAM555_STREAM_STATUS",
+        status: response.status,
+        message: "stream status fetched",
+        data: response.data ?? response.rawBody,
+      });
+    } catch (err) {
+      return exceptionAction("stream555.control", "STREAM555_STREAM_STATUS", err);
+    }
+  },
+  parameters: [
+    {
+      name: "sessionId",
+      description: "Optional session id",
+      required: false,
+      schema: { type: "string" as const },
+    },
+  ],
+};
+
+const screenShareAction: Action = {
+  name: "STREAM555_SCREEN_SHARE",
+  similes: ["STREAM555_START_SCREEN_SHARE", "START_SCREEN_SHARE_STREAM555"],
+  description:
+    "Switches the current stream input to screen share for the resolved session.",
+  validate: async () => true,
+  handler: async (runtime, message, state, options) => {
+    try {
+      assertStreamControlAccess(
+        runtime,
+        message,
+        state,
+        "STREAM555_SCREEN_SHARE",
+      );
+      const requestedSessionId = readParam(
+        options as HandlerOptions | undefined,
+        "sessionId",
+      );
+      const inputUrl = readParam(options as HandlerOptions | undefined, "inputUrl");
+      const sceneId =
+        readParam(options as HandlerOptions | undefined, "sceneId") || "active-pip";
+      const requestId = createControlRequestId("screen-share");
+
+      const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
+      const sessionId = await ensureAgentSessionId(base, requestedSessionId, requestId);
+
+      return executeApiAction({
+        module: "stream555.control",
+        action: "STREAM555_SCREEN_SHARE",
+        base,
+        endpoint: `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/stream/start`,
+        payload: {
+          input: {
+            type: "screen",
+            ...(inputUrl ? { url: inputUrl } : {}),
+          },
+          options: { scene: sceneId },
+        },
+        requestContract: {
+          input: { required: true, type: "object" },
+          options: { required: false, type: "object" },
+        },
+        responseContract: {},
+        successMessage: "screen-share requested",
+        transport: commandTransport(requestId),
+        context: { sessionId },
+      });
+    } catch (err) {
+      return exceptionAction("stream555.control", "STREAM555_SCREEN_SHARE", err);
+    }
+  },
+  parameters: [
+    { name: "sessionId", description: "Optional session id", required: false, schema: { type: "string" as const } },
+    { name: "inputUrl", description: "Optional URL for browser-based screen source", required: false, schema: { type: "string" as const } },
+    { name: "sceneId", description: "Scene to activate (default active-pip)", required: false, schema: { type: "string" as const } },
+  ],
+};
+
+const endLiveAction: Action = {
+  name: "STREAM555_END_LIVE",
+  similes: ["STOP_LIVE_STREAM555", "STREAM555_STOP_LIVE"],
+  description: "Stops Alice live stream for the resolved session.",
+  validate: async () => true,
+  handler: async (runtime, message, state, options) => {
+    try {
+      assertStreamControlAccess(runtime, message, state, "STREAM555_END_LIVE");
+      const requestedSessionId = readParam(
+        options as HandlerOptions | undefined,
+        "sessionId",
+      );
+      const requestId = createControlRequestId("end-live");
+      const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
+      const sessionId = await ensureAgentSessionId(base, requestedSessionId, requestId);
+
+      return executeApiAction({
+        module: "stream555.control",
+        action: "STREAM555_END_LIVE",
+        base,
+        endpoint: `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/stream/stop`,
+        payload: {},
+        requestContract: {},
+        responseContract: {},
+        successMessage: "end-live requested",
+        transport: {
+          ...commandTransport(requestId),
+          idempotencyKey: buildStopIdempotencyKey(sessionId),
+        },
+        context: { sessionId },
+      });
+    } catch (err) {
+      return exceptionAction("stream555.control", "STREAM555_END_LIVE", err);
+    }
+  },
+  parameters: [
+    { name: "sessionId", description: "Optional session id", required: false, schema: { type: "string" as const } },
+  ],
+};
+
+const adsCreateAction: Action = {
+  name: "STREAM555_AD_CREATE",
+  similes: ["STREAM555_CREATE_AD", "CREATE_AD_STREAM555"],
+  description:
+    "Creates an ad in the resolved session. L-Bar defaults to the same brand-intake template path used by Studio.",
+  validate: async () => true,
+  handler: async (runtime, message, state, options) => {
+    try {
+      assertStreamControlAccess(runtime, message, state, "STREAM555_AD_CREATE");
+      const requestedSessionId = readParam(
+        options as HandlerOptions | undefined,
+        "sessionId",
+      );
+      const type = readParam(options as HandlerOptions | undefined, "type") || "l-bar";
+      const imageUrl = readParam(
+        options as HandlerOptions | undefined,
+        "imageUrl",
+      );
+      const text = readParam(options as HandlerOptions | undefined, "text");
+      const durationMsRaw = readParam(
+        options as HandlerOptions | undefined,
+        "durationMs",
+      );
+      const adName = readParam(options as HandlerOptions | undefined, "adName");
+      const brandName = readParam(
+        options as HandlerOptions | undefined,
+        "brandName",
+      );
+      const brandId = readParam(options as HandlerOptions | undefined, "brandId");
+      const videoUrl = readParam(
+        options as HandlerOptions | undefined,
+        "videoUrl",
+      );
+      const videoAspect = readParam(
+        options as HandlerOptions | undefined,
+        "videoAspect",
+      );
+      const ctaText = readParam(options as HandlerOptions | undefined, "ctaText");
+      const ctaUrl = readParam(options as HandlerOptions | undefined, "ctaUrl");
+      const qrUrl = readParam(options as HandlerOptions | undefined, "qrUrl");
+      const color = readParam(options as HandlerOptions | undefined, "color");
+      const logoUrl = readParam(options as HandlerOptions | undefined, "logoUrl");
+      const twitter = readParam(options as HandlerOptions | undefined, "twitter");
+      const handle = readParam(options as HandlerOptions | undefined, "handle");
+      const durationMs = durationMsRaw ? Number.parseInt(durationMsRaw, 10) : undefined;
+      const requestId = createControlRequestId("ad-create");
+
+      const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
+      const sessionId = await ensureAgentSessionId(base, requestedSessionId, requestId);
+      const lBarPayload = buildLBarFromBrandPayload({
+        type,
+        imageUrl,
+        videoUrl,
+        text,
+        durationMs,
+        adName,
+        brandName,
+        brandId,
+        ctaText,
+        ctaUrl,
+        qrUrl,
+        color,
+        logoUrl,
+        twitter,
+        handle,
+        videoAspect,
+      });
+      const endpoint = lBarPayload
+        ? `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/ads/l-bar/from-brand`
+        : `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/ads`;
+      const payload = lBarPayload
+        ? lBarPayload
+        : buildGenericAdPayload({
+            type,
+            imageUrl,
+            text,
+            durationMs,
+            adName,
+          });
+
+      return executeApiAction({
+        module: "stream555.control",
+        action: "STREAM555_AD_CREATE",
+        base,
+        endpoint,
+        payload,
+        requestContract: {
+          type: { required: true, type: "string", nonEmpty: true },
+        },
+        responseContract: {},
+        successMessage: "ad created",
+        transport: commandTransport(requestId),
+        context: { sessionId },
+      });
+    } catch (err) {
+      return exceptionAction("stream555.control", "STREAM555_AD_CREATE", err);
+    }
+  },
+  parameters: [
+    { name: "sessionId", description: "Optional session id", required: false, schema: { type: "string" as const } },
+    { name: "type", description: "Ad layout/type (default l-bar)", required: false, schema: { type: "string" as const } },
+    { name: "adName", description: "Ad display name", required: false, schema: { type: "string" as const } },
+    { name: "imageUrl", description: "Creative image URL", required: false, schema: { type: "string" as const } },
+    { name: "videoUrl", description: "Creative video URL (preferred for l-bar template flow)", required: false, schema: { type: "string" as const } },
+    { name: "videoAspect", description: "Video aspect for l-bar (square|landscape)", required: false, schema: { type: "string" as const } },
+    { name: "text", description: "Creative text/caption", required: false, schema: { type: "string" as const } },
+    { name: "brandName", description: "Brand display name for l-bar template flow", required: false, schema: { type: "string" as const } },
+    { name: "brandId", description: "Brand identifier for l-bar template flow", required: false, schema: { type: "string" as const } },
+    { name: "ctaText", description: "CTA copy for l-bar template flow", required: false, schema: { type: "string" as const } },
+    { name: "ctaUrl", description: "CTA destination URL for l-bar template flow", required: false, schema: { type: "string" as const } },
+    { name: "qrUrl", description: "QR destination URL for l-bar template flow", required: false, schema: { type: "string" as const } },
+    { name: "color", description: "Brand primary hex color for l-bar template flow", required: false, schema: { type: "string" as const } },
+    { name: "logoUrl", description: "Brand logo URL for l-bar template flow", required: false, schema: { type: "string" as const } },
+    { name: "twitter", description: "Brand X/Twitter URL or handle", required: false, schema: { type: "string" as const } },
+    { name: "handle", description: "Brand social handle", required: false, schema: { type: "string" as const } },
+    { name: "durationMs", description: "Playback duration in milliseconds", required: false, schema: { type: "string" as const } },
+  ],
+};
+
+const adsTriggerAction: Action = {
+  name: "STREAM555_AD_TRIGGER",
+  similes: ["STREAM555_TRIGGER_AD", "TRIGGER_AD_BREAK_STREAM555"],
+  description: "Triggers an ad break for a specific ad id in the active session.",
+  validate: async () => true,
+  handler: async (runtime, message, state, options) => {
+    try {
+      assertStreamControlAccess(runtime, message, state, "STREAM555_AD_TRIGGER");
+      const adId = readParam(options as HandlerOptions | undefined, "adId");
+      if (!adId) throw new Error("adId is required");
+
+      const requestedSessionId = readParam(
+        options as HandlerOptions | undefined,
+        "sessionId",
+      );
+      const durationMsRaw = readParam(
+        options as HandlerOptions | undefined,
+        "durationMs",
+      );
+      const durationMs = durationMsRaw ? Number.parseInt(durationMsRaw, 10) : undefined;
+      const requestId = createControlRequestId("ad-trigger");
+      const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
+      const sessionId = await ensureAgentSessionId(base, requestedSessionId, requestId);
+
+      return executeApiAction({
+        module: "stream555.control",
+        action: "STREAM555_AD_TRIGGER",
+        base,
+        endpoint: `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/ads/${encodeURIComponent(adId)}/trigger`,
+        payload: {
+          ...(Number.isFinite(durationMs) ? { durationMs } : {}),
+        },
+        requestContract: {},
+        responseContract: {},
+        successMessage: "ad trigger requested",
+        transport: commandTransport(requestId),
+        context: { sessionId },
+      });
+    } catch (err) {
+      return exceptionAction("stream555.control", "STREAM555_AD_TRIGGER", err);
+    }
+  },
+  parameters: [
+    { name: "sessionId", description: "Optional session id", required: false, schema: { type: "string" as const } },
+    { name: "adId", description: "Ad identifier", required: true, schema: { type: "string" as const } },
+    { name: "durationMs", description: "Optional ad duration override", required: false, schema: { type: "string" as const } },
+  ],
+};
+
+const adsDismissAction: Action = {
+  name: "STREAM555_AD_DISMISS",
+  similes: ["STREAM555_DISMISS_AD", "DISMISS_AD_BREAK_STREAM555"],
+  description: "Dismisses currently active ad break in the resolved session.",
+  validate: async () => true,
+  handler: async (runtime, message, state, options) => {
+    try {
+      assertStreamControlAccess(runtime, message, state, "STREAM555_AD_DISMISS");
+      const requestedSessionId = readParam(
+        options as HandlerOptions | undefined,
+        "sessionId",
+      );
+      const requestId = createControlRequestId("ad-dismiss");
+      const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
+      const sessionId = await ensureAgentSessionId(base, requestedSessionId, requestId);
+
+      return executeApiAction({
+        module: "stream555.control",
+        action: "STREAM555_AD_DISMISS",
+        base,
+        endpoint: `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/ads/dismiss`,
+        payload: {},
+        requestContract: {},
+        responseContract: {},
+        successMessage: "ad dismiss requested",
+        transport: commandTransport(requestId),
+        context: { sessionId },
+      });
+    } catch (err) {
+      return exceptionAction("stream555.control", "STREAM555_AD_DISMISS", err);
+    }
+  },
+  parameters: [
+    { name: "sessionId", description: "Optional session id", required: false, schema: { type: "string" as const } },
+  ],
+};
+
+const radioControlAction: Action = {
+  name: "STREAM555_RADIO_CONTROL",
+  similes: ["STREAM555_RADIO_SET", "RADIO_CONTROL_STREAM555"],
+  description:
+    "Controls radio in-session (toggleTrack|toggleEffect|setAutoDJMode|setVolume|setBackground).",
+  validate: async () => true,
+  handler: async (runtime, message, state, options) => {
+    try {
+      assertStreamControlAccess(
+        runtime,
+        message,
+        state,
+        "STREAM555_RADIO_CONTROL",
+      );
+      const requestedSessionId = readParam(
+        options as HandlerOptions | undefined,
+        "sessionId",
+      );
+      const action =
+        readParam(options as HandlerOptions | undefined, "action") || "setAutoDJMode";
+      const trackId = readParam(options as HandlerOptions | undefined, "trackId");
+      const effectId = readParam(options as HandlerOptions | undefined, "effectId");
+      const mode = readParam(options as HandlerOptions | undefined, "mode");
+      const target = readParam(options as HandlerOptions | undefined, "target");
+      const levelRaw = readParam(options as HandlerOptions | undefined, "level");
+      const level = levelRaw ? Number.parseInt(levelRaw, 10) : undefined;
+      const background = readParam(
+        options as HandlerOptions | undefined,
+        "background",
+      );
+      const radioPayload: JsonObject = {};
+      if (trackId) radioPayload.trackId = trackId;
+      if (effectId) radioPayload.effectId = effectId;
+      if (mode) radioPayload.mode = mode;
+      if (target) radioPayload.target = target;
+      if (Number.isFinite(level)) radioPayload.level = level;
+      if (background) radioPayload.backgroundId = background;
+      const requestId = createControlRequestId("radio-control");
+
+      const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
+      const sessionId = await ensureAgentSessionId(base, requestedSessionId, requestId);
+
+      return executeApiAction({
+        module: "stream555.control",
+        action: "STREAM555_RADIO_CONTROL",
+        base,
+        endpoint: `/api/agent/v1/radio/${encodeURIComponent(sessionId)}/control`,
+        payload: {
+          action,
+          payload: radioPayload,
+        },
+        requestContract: {
+          action: { required: true, type: "string", nonEmpty: true },
+          payload: { required: true, type: "object" },
+        },
+        responseContract: {},
+        successMessage: "radio control requested",
+        transport: commandTransport(requestId),
+        context: { sessionId },
+      });
+    } catch (err) {
+      return exceptionAction("stream555.control", "STREAM555_RADIO_CONTROL", err);
+    }
+  },
+  parameters: [
+    { name: "sessionId", description: "Optional session id", required: false, schema: { type: "string" as const } },
+    { name: "action", description: "toggleTrack|toggleEffect|setAutoDJMode|setVolume|setBackground", required: true, schema: { type: "string" as const } },
+    { name: "trackId", description: "Track id for toggleTrack", required: false, schema: { type: "string" as const } },
+    { name: "effectId", description: "Effect id for toggleEffect", required: false, schema: { type: "string" as const } },
+    { name: "mode", description: "Mode for setAutoDJMode", required: false, schema: { type: "string" as const } },
+    { name: "target", description: "Target for setVolume", required: false, schema: { type: "string" as const } },
+    { name: "level", description: "0-100 volume level", required: false, schema: { type: "string" as const } },
+    { name: "background", description: "Background key/url", required: false, schema: { type: "string" as const } },
+  ],
+};
+
+const guestInviteAction: Action = {
+  name: "STREAM555_GUEST_INVITE",
+  similes: ["STREAM555_INVITE_GUEST", "GUEST_INVITE_STREAM555"],
+  description: "Creates a guest invite link for the resolved session.",
+  validate: async () => true,
+  handler: async (runtime, message, state, options) => {
+    try {
+      assertStreamControlAccess(
+        runtime,
+        message,
+        state,
+        "STREAM555_GUEST_INVITE",
+      );
+      const requestedSessionId = readParam(
+        options as HandlerOptions | undefined,
+        "sessionId",
+      );
+      const name = readParam(options as HandlerOptions | undefined, "name");
+      const email = readParam(options as HandlerOptions | undefined, "email");
+      const expiresInRaw = readParam(
+        options as HandlerOptions | undefined,
+        "expiresIn",
+      );
+      const expiresIn = expiresInRaw
+        ? Number.parseInt(expiresInRaw, 10)
+        : undefined;
+      const requestId = createControlRequestId("guest-invite");
+
+      const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
+      const sessionId = await ensureAgentSessionId(base, requestedSessionId, requestId);
+
+      return executeApiAction({
+        module: "stream555.control",
+        action: "STREAM555_GUEST_INVITE",
+        base,
+        endpoint: `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/guests/invites`,
+        payload: {
+          ...(name ? { name } : {}),
+          ...(email ? { email } : {}),
+          ...(Number.isFinite(expiresIn) ? { expiresIn } : {}),
+        },
+        requestContract: {},
+        responseContract: {},
+        successMessage: "guest invite created",
+        transport: commandTransport(requestId),
+        context: { sessionId },
+      });
+    } catch (err) {
+      return exceptionAction("stream555.control", "STREAM555_GUEST_INVITE", err);
+    }
+  },
+  parameters: [
+    { name: "sessionId", description: "Optional session id", required: false, schema: { type: "string" as const } },
+    { name: "name", description: "Guest display name", required: false, schema: { type: "string" as const } },
+    { name: "email", description: "Guest email hint", required: false, schema: { type: "string" as const } },
+    { name: "expiresIn", description: "Invite ttl in seconds", required: false, schema: { type: "string" as const } },
+  ],
+};
+
+const sceneSetAction: Action = {
+  name: "STREAM555_SCENE_SET",
+  similes: ["STREAM555_SET_SCENE", "SET_SCENE_STREAM555"],
+  description: "Sets active studio scene for resolved session.",
+  validate: async () => true,
+  handler: async (runtime, message, state, options) => {
+    try {
+      assertStreamControlAccess(runtime, message, state, "STREAM555_SCENE_SET");
+      const sceneId =
+        readParam(options as HandlerOptions | undefined, "sceneId") || "default";
+      const requestedSessionId = readParam(
+        options as HandlerOptions | undefined,
+        "sessionId",
+      );
+      const requestId = createControlRequestId("scene-set");
+
+      const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
+      const sessionId = await ensureAgentSessionId(base, requestedSessionId, requestId);
+
+      return executeApiAction({
+        module: "stream555.control",
+        action: "STREAM555_SCENE_SET",
+        base,
+        endpoint: `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/studio/scene/active`,
+        payload: { sceneId },
+        requestContract: {
+          sceneId: { required: true, type: "string", nonEmpty: true },
+        },
+        responseContract: {},
+        successMessage: "scene switch requested",
+        transport: commandTransport(requestId),
+        context: { sessionId },
+      });
+    } catch (err) {
+      return exceptionAction("stream555.control", "STREAM555_SCENE_SET", err);
+    }
+  },
+  parameters: [
+    { name: "sessionId", description: "Optional session id", required: false, schema: { type: "string" as const } },
+    { name: "sceneId", description: "Scene id to activate", required: true, schema: { type: "string" as const } },
+  ],
+};
+
+const pipEnableAction: Action = {
+  name: "STREAM555_PIP_ENABLE",
+  similes: ["STREAM555_ENABLE_PIP", "ENABLE_PIP_STREAM555"],
+  description:
+    "Enables PiP-like presentation by switching to a PiP scene (default: active-pip).",
+  validate: async () => true,
+  handler: async (runtime, message, state, options) => {
+    try {
+      assertStreamControlAccess(runtime, message, state, "STREAM555_PIP_ENABLE");
+      const requestedSessionId = readParam(
+        options as HandlerOptions | undefined,
+        "sessionId",
+      );
+      const pipScene =
+        readParam(options as HandlerOptions | undefined, "sceneId") || "active-pip";
+      const requestId = createControlRequestId("pip-enable");
+      const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
+      const sessionId = await ensureAgentSessionId(base, requestedSessionId, requestId);
+
+      return executeApiAction({
+        module: "stream555.control",
+        action: "STREAM555_PIP_ENABLE",
+        base,
+        endpoint: `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/studio/scene/active`,
+        payload: { sceneId: pipScene },
+        requestContract: {
+          sceneId: { required: true, type: "string", nonEmpty: true },
+        },
+        responseContract: {},
+        successMessage: "pip scene requested",
+        transport: commandTransport(requestId),
+        context: { sessionId },
+      });
+    } catch (err) {
+      return exceptionAction("stream555.control", "STREAM555_PIP_ENABLE", err);
+    }
+  },
+  parameters: [
+    { name: "sessionId", description: "Optional session id", required: false, schema: { type: "string" as const } },
+    { name: "sceneId", description: "PiP scene id (default active-pip)", required: false, schema: { type: "string" as const } },
+  ],
+};
+
+const segmentOverrideAction: Action = {
+  name: "STREAM555_SEGMENT_OVERRIDE",
+  similes: ["STREAM555_OVERRIDE_SEGMENT", "SEGMENT_OVERRIDE_STREAM555"],
+  description:
+    "Queues a segment override for the active live session (e.g. reaction/news/gaming/qa/storytime).",
+  validate: async () => true,
+  handler: async (runtime, message, state, options) => {
+    try {
+      assertStreamControlAccess(
+        runtime,
+        message,
+        state,
+        "STREAM555_SEGMENT_OVERRIDE",
+      );
+      const requestedSessionId = readParam(
+        options as HandlerOptions | undefined,
+        "sessionId",
+      );
+      const segmentType =
+        readParam(options as HandlerOptions | undefined, "segmentType") || "reaction";
+      const reason = readParam(options as HandlerOptions | undefined, "reason");
+      const requestedBy = readParam(
+        options as HandlerOptions | undefined,
+        "requestedBy",
+      );
+      const requestId = createControlRequestId("segment-override");
+
+      const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
+      const sessionId = await ensureAgentSessionId(base, requestedSessionId, requestId);
+
+      return executeApiAction({
+        module: "stream555.control",
+        action: "STREAM555_SEGMENT_OVERRIDE",
+        base,
+        endpoint: `/api/agent/v1/sessions/${encodeURIComponent(sessionId)}/segments/override`,
+        payload: {
+          segmentType,
+          ...(reason ? { reason } : {}),
+          ...(requestedBy ? { requestedBy } : {}),
+        },
+        requestContract: {
+          segmentType: { required: true, type: "string", nonEmpty: true },
+        },
+        responseContract: {},
+        successMessage: "segment override requested",
+        transport: commandTransport(requestId),
+        context: { sessionId },
+      });
+    } catch (err) {
+      return exceptionAction("stream555.control", "STREAM555_SEGMENT_OVERRIDE", err);
+    }
+  },
+  parameters: [
+    { name: "sessionId", description: "Optional session id", required: false, schema: { type: "string" as const } },
+    { name: "segmentType", description: "reaction|news|gaming|storytime|qa", required: true, schema: { type: "string" as const } },
+    { name: "reason", description: "Operator reason for override", required: false, schema: { type: "string" as const } },
+    { name: "requestedBy", description: "Requester identifier", required: false, schema: { type: "string" as const } },
+  ],
+};
+
+const earningsEstimateAction: Action = {
+  name: "STREAM555_EARNINGS_ESTIMATE",
+  similes: ["STREAM555_PROJECTED_EARNINGS", "PROJECTED_EARNINGS_STREAM555"],
+  description:
+    "Evaluates marketplace inventory and returns projected payout-per-impression opportunities.",
+  validate: async () => true,
+  handler: async (runtime, _message, _state, options) => {
+    try {
+      assertStreamReadAccess();
+      const categoriesRaw = readParam(
+        options as HandlerOptions | undefined,
+        "categories",
+      );
+      const categories = parseCsvList(categoriesRaw);
+      const limitRaw = readParam(options as HandlerOptions | undefined, "limit");
+      const poolSizeRaw = readParam(
+        options as HandlerOptions | undefined,
+        "poolSize",
+      );
+      const limit = limitRaw ? Number.parseInt(limitRaw, 10) : 5;
+      const poolSize = poolSizeRaw ? Number.parseInt(poolSizeRaw, 10) : 30;
+      const requestId = createControlRequestId("earnings-estimate");
+      const base = resolveBaseUrl(runtime, options as HandlerOptions | undefined);
+
+      return executeApiAction({
+        module: "stream555.control",
+        action: "STREAM555_EARNINGS_ESTIMATE",
+        base,
+        endpoint: "/api/agent/v1/marketplace/evaluate",
+        payload: {
+          ...(categories ? { categories } : {}),
+          ...(Number.isFinite(limit) ? { limit } : {}),
+          ...(Number.isFinite(poolSize) ? { poolSize } : {}),
+        },
+        requestContract: {},
+        responseContract: {},
+        successMessage: "projected earnings evaluated",
+        transport: commandTransport(requestId),
+      });
+    } catch (err) {
+      return exceptionAction("stream555.control", "STREAM555_EARNINGS_ESTIMATE", err);
+    }
+  },
+  parameters: [
+    { name: "categories", description: "Comma-separated categories", required: false, schema: { type: "string" as const } },
+    { name: "limit", description: "Top campaign count", required: false, schema: { type: "string" as const } },
+    { name: "poolSize", description: "Evaluation candidate pool size", required: false, schema: { type: "string" as const } },
+  ],
+};
+
+interface Stream555ControlPluginOptions {
+  omitCanonicalOverlapActions?: boolean;
+}
+
+const CANONICAL_STREAM_ACTION_OVERLAP = new Set<string>([
+  "STREAM555_GO_LIVE_APP",
+  "STREAM555_RADIO_CONTROL",
+  "STREAM555_GUEST_INVITE",
+]);
+
+export function createStream555ControlPlugin(
+  options: Stream555ControlPluginOptions = {},
+): Plugin {
+  const actions: Action[] = [
+    goLiveAction,
+    destinationsApplyAction,
+    goLiveAppAction,
+    streamStatusAction,
+    goLiveSegmentsAction,
+    segmentStateAction,
+    screenShareAction,
+    endLiveAction,
+    adsCreateAction,
+    adsTriggerAction,
+    adsDismissAction,
+    radioControlAction,
+    guestInviteAction,
+    sceneSetAction,
+    pipEnableAction,
+    segmentOverrideAction,
+    earningsEstimateAction,
+  ];
+
+  const resolvedActions = options.omitCanonicalOverlapActions
+    ? actions.filter((action) => !CANONICAL_STREAM_ACTION_OVERLAP.has(action.name))
+    : actions;
+
+  return {
+    name: "stream555-control",
+    description:
+      "Direct 555stream control surface for go-live, ads, radio, guests, and studio scene operations.",
+    providers: [stream555ControlProvider],
+    actions: resolvedActions,
+  };
+}
+
+export default createStream555ControlPlugin;

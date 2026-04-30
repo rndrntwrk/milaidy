@@ -1,0 +1,18 @@
+{
+  "checkpointId": "ckpt-train-299ca557a555",
+  "label": "p4-012-013-training-job-20260217",
+  "createdAt": 1771371148370,
+  "finalConfig": {
+    "learningRate": 0.000005,
+    "batchSize": 16,
+    "maxEpochs": 3,
+    "klPenalty": 0.05,
+    "minRewardThreshold": 0
+  },
+  "metrics": {
+    "finalAverageReward": 0.4266666666666667,
+    "evaluationAverageReward": 0.3666666666666667,
+    "tuningBestScore": 0.4166666666666667
+  },
+  "sourceJobId": "train-299ca557a555"
+}

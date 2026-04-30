@@ -1,16 +1,25 @@
 ---
 title: "Twitter / X Plugin"
 sidebarTitle: "Twitter"
-description: "Twitter/X connector for Milady — posting, replying, monitoring mentions, and timeline interactions."
+description: "Twitter/X connector for Milady — posting, replying, monitoring mentions, and timeline interactions via the xAI plugin."
 ---
+
+> **Registry note:** `@elizaos/plugin-twitter` is not currently listed in the Milady plugin registry (`plugins.json`). The package may be available from npm or a separate elizaOS plugin repository. Verify availability before configuring.
 
 The Twitter plugin connects Milady agents to Twitter/X, enabling autonomous posting, replying to mentions, monitoring timelines, and engaging with other accounts.
 
+> **On-demand plugin.** This plugin is resolved from the remote elizaOS plugin registry and auto-installs when its credentials are detected. It is not included in Milady's bundled `plugins.json` index.
+
 **Package:** `@elizaos/plugin-twitter`
+
+<Note>
+The separate `@elizaos/plugin-xai` package also bundles X/Twitter integration alongside Grok models. If you already use xAI with `X_*` env vars, you may not need to install this connector separately.
+</Note>
 
 ## Installation
 
 ```bash
+# Requires the package to be available on npm
 milady plugins install twitter
 ```
 
@@ -31,7 +40,7 @@ milady plugins install twitter
   "connectors": {
     "twitter": {
       "apiKey": "YOUR_API_KEY",
-      "apiSecret": "YOUR_API_SECRET",
+      "apiSecretKey": "YOUR_API_SECRET",
       "accessToken": "YOUR_ACCESS_TOKEN",
       "accessTokenSecret": "YOUR_ACCESS_TOKEN_SECRET"
     }
@@ -44,30 +53,29 @@ milady plugins install twitter
 | Field | Required | Description |
 |-------|----------|-------------|
 | `apiKey` | Yes | Twitter API key (consumer key) |
-| `apiSecret` | Yes | Twitter API secret (consumer secret) |
+| `apiSecretKey` | Yes | Twitter API secret key (consumer secret) |
 | `accessToken` | Yes | OAuth 1.0a access token |
 | `accessTokenSecret` | Yes | OAuth 1.0a access token secret |
 | `enabled` | No | Set `false` to disable (default: `true`) |
+| `postEnable` | No | Enable automated posting (default: `true`) |
 | `postIntervalMin` | No | Minimum minutes between posts (default: `90`) |
 | `postIntervalMax` | No | Maximum minutes between posts (default: `180`) |
-| `enableSearch` | No | Enable Twitter search monitoring (default: `false`) |
-| `searchTerms` | No | Terms to monitor via search |
-| `replyToMentions` | No | Auto-reply to @mentions (default: `true`) |
-| `dryRun` | No | Log posts without sending them (default: `false`) |
+| `searchEnable` | No | Enable keyword search monitoring (default: `false`) |
+| `autoRespondMentions` | No | Automatically respond to @mentions (default: `true`) |
+| `dryRun` | No | Generate posts without publishing them (default: `false`) |
 
 ```json
 {
   "connectors": {
     "twitter": {
       "apiKey": "...",
-      "apiSecret": "...",
+      "apiSecretKey": "...",
       "accessToken": "...",
       "accessTokenSecret": "...",
       "postIntervalMin": 60,
       "postIntervalMax": 120,
-      "replyToMentions": true,
-      "enableSearch": true,
-      "searchTerms": ["#ai", "#elizaos"]
+      "autoRespondMentions": true,
+      "searchEnable": true
     }
   }
 }
@@ -110,22 +118,21 @@ Response generated
 Posted as reply to original tweet
 ```
 
-## Auto-Enable
+## Enabling
 
-The plugin auto-enables when `connectors.twitter` contains `apiKey`.
+After installation, the plugin loads when `connectors.twitter` contains `apiKey`. Unlike bundled connectors, it does not auto-enable from config alone — it must be installed first.
+
+## Environment Variables
+
+The plugin also reads `TWITTER_API_KEY`, `TWITTER_API_SECRET_KEY`, `TWITTER_ACCESS_TOKEN`, and `TWITTER_ACCESS_TOKEN_SECRET` as fallbacks when the corresponding config fields are absent. Config fields take precedence.
 
 ## Rate Limits
 
-Twitter enforces strict rate limits on the v2 API. The plugin manages these automatically:
-
-- Free tier: Very limited write access
-- Basic tier: 1,500 posts/month
-- Pro tier: 300,000 posts/month
-
-Consult [developer.twitter.com/en/docs/twitter-api/rate-limits](https://developer.twitter.com/en/docs/twitter-api/rate-limits) for current limits.
+Twitter enforces strict rate limits on the v2 API. The plugin manages these automatically. Limits change frequently — check the [X developer documentation](https://developer.twitter.com/en/docs/twitter-api/rate-limits) for current numbers before choosing a tier.
 
 ## Related
 
+- [Twitter Connector Reference](/connectors/twitter) — Full configuration reference (cookie auth, DM policy, timeline interactions)
 - [Discord Plugin](/plugin-registry/platform/discord) — Discord bot integration
 - [Farcaster Plugin](/plugin-registry/platform/farcaster) — Decentralized social alternative
 - [Connectors Guide](/guides/connectors) — General connector documentation

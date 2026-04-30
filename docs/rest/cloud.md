@@ -30,6 +30,8 @@ Start the Eliza Cloud login flow. Creates a session on the cloud and returns a b
 
 Poll the status of a login session. When status is `"authenticated"`, the API key is automatically saved to config and applied to the process environment.
 
+When the cloud wallet feature is enabled (`ENABLE_CLOUD_WALLET=1`), a successful login also triggers best-effort cloud wallet provisioning. The agent attempts to import EVM and Solana wallets from Eliza Cloud and set them as the primary wallet source. If provisioning fails, the login still succeeds — the API key is saved, and the wallet provisioning failure is logged without affecting the authentication response. You can manually retry wallet provisioning later using `POST /api/wallet/refresh-cloud`.
+
 **Query Parameters**
 
 | Parameter | Type | Required | Description |
@@ -86,9 +88,11 @@ Get cloud connection status, authentication state, and billing URL.
 ```json
 {
   "connected": false,
-  "enabled": false,
+  "enabled": true,
   "hasApiKey": false,
-  "reason": "not_authenticated"
+  "userId": null,
+  "organizationId": null,
+  "topUpUrl": "https://elizacloud.ai"
 }
 ```
 
@@ -96,11 +100,11 @@ Get cloud connection status, authentication state, and billing URL.
 |-------|------|-------------|
 | `connected` | boolean | Whether the cloud auth service is authenticated |
 | `enabled` | boolean | Whether cloud mode is enabled in config |
+| `cloudVoiceProxyAvailable` | boolean | Whether cloud voice proxy is available for the current session (may be omitted) |
 | `hasApiKey` | boolean | Whether an API key is present in config |
-| `userId` | string | Authenticated user ID (when connected) |
-| `organizationId` | string | Authenticated organization ID (when connected) |
+| `userId` | string\|null | Authenticated user ID, or `null` when not connected |
+| `organizationId` | string\|null | Authenticated organization ID, or `null` when not connected |
 | `topUpUrl` | string | URL to the cloud billing page |
-| `reason` | string | Reason for disconnected state |
 
 ---
 
@@ -122,9 +126,12 @@ Get the cloud credit balance. Returns `null` balance when not connected.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `balance` | number \| null | Credit balance in dollars |
+| `connected` | boolean | Whether the cloud auth service is authenticated |
+| `balance` | number \| null | Credit balance in dollars, or `null` when not connected |
 | `low` | boolean | `true` when balance is below $2.00 |
 | `critical` | boolean | `true` when balance is below $0.50 |
+| `authRejected` | boolean | `true` when the cloud API key was rejected during the credit check |
+| `topUpUrl` | string | URL to the cloud billing page |
 
 ---
 
@@ -260,7 +267,7 @@ Create a new cloud agent. Requires an active cloud connection.
 {
   "agentName": "My Cloud Agent",
   "agentConfig": { "character": "milady" },
-  "environmentVars": { "OPENAI_API_KEY": "sk-..." }
+  "environmentVars": { "OPENAI_API_KEY": "<OPENAI_API_KEY>" }
 }
 ```
 

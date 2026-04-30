@@ -23,7 +23,7 @@ const runtime = new AgentRuntime({
   }),
   settings: {
     VALIDATION_LEVEL: "fast",
-    MODEL_PROVIDER: "anthropic/claude-sonnet-4-5",
+    MODEL_PROVIDER: "anthropic/claude-sonnet-4.6",
     BUNDLED_SKILLS_DIRS: "/path/to/skills",
     WORKSPACE_SKILLS_DIR: "~/.milady/workspace/skills",
     SKILLS_ALLOWLIST: "skill-a,skill-b",
@@ -53,7 +53,7 @@ const runtime = new AgentRuntime({
 | Clé du paramètre | Source | Description |
 |---|---|---|
 | `VALIDATION_LEVEL` | Codé en dur | Défini à `"fast"` — contrôle la profondeur de validation d'elizaOS |
-| `MODEL_PROVIDER` | `agents.defaults.model.primary` | Sélection du modèle primaire (par ex., `"anthropic/claude-sonnet-4-5"`) |
+| `MODEL_PROVIDER` | `agents.defaults.model.primary` | Sélection du modèle primaire (par ex., `"anthropic/claude-sonnet-4.6"`) |
 | `BUNDLED_SKILLS_DIRS` | package `@elizaos/skills` | Chemin absolu vers le répertoire des compétences incluses |
 | `WORKSPACE_SKILLS_DIR` | chemin du workspace + `/skills` | Répertoire de surcharge des compétences par agent |
 | `EXTRA_SKILLS_DIRS` | `skills.load.extraDirs` | Répertoires de compétences supplémentaires depuis la configuration |
@@ -216,7 +216,6 @@ const PROVIDER_PLUGIN_MAP = {
   PERPLEXITY_API_KEY:             "@elizaos/plugin-perplexity",
   ELIZAOS_CLOUD_API_KEY:          "@elizaos/plugin-elizacloud",
   ELIZAOS_CLOUD_ENABLED:          "@elizaos/plugin-elizacloud",
-  ELIZA_USE_PI_AI:                "@elizaos/plugin-pi-ai",
   CUA_API_KEY:                    "@elizaos/plugin-cua",
   CUA_HOST:                       "@elizaos/plugin-cua",
   OBSIDIAN_VAULT_PATH:            "@elizaos/plugin-obsidian",

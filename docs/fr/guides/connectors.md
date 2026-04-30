@@ -1,7 +1,7 @@
 ---
 title: "Connecteurs de plateforme"
 sidebarTitle: "Connectors"
-description: "Passerelles de plateforme pour 27 plateformes de messagerie — 18 activées automatiquement depuis la configuration (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Twitter, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, Lens, WeChat) plus 9 installables depuis le registre (Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
+description: "Passerelles de plateforme pour 28 plateformes de messagerie — 18 activées automatiquement depuis la configuration (Discord, Telegram, Slack, WhatsApp, Signal, iMessage, Blooio, MS Teams, Google Chat, Twitter, Farcaster, Twitch, Mattermost, Matrix, Feishu, Nostr, Lens, WeChat) plus 10 installables depuis le registre (BlueBubbles, Bluesky, Instagram, LINE, Zalo, Twilio, GitHub, Gmail Watch, Nextcloud Talk, Tlon)."
 ---
 
 Les connecteurs sont des passerelles de plateforme qui permettent à votre agent de communiquer à travers les plateformes de messagerie et les réseaux sociaux. Chaque connecteur gère l'authentification, le routage des messages, la gestion des sessions et les fonctionnalités spécifiques à la plateforme.
@@ -18,30 +18,31 @@ Les connecteurs sont des passerelles de plateforme qui permettent à votre agent
 6. [WhatsApp](#whatsapp)
 7. [Signal](#signal)
 8. [iMessage](#imessage)
-9. [Blooio](#blooio)
-10. [Microsoft Teams](#microsoft-teams)
+9. [BlueBubbles](#bluebubbles)
+10. [Blooio](#blooio)
+11. [Microsoft Teams](#microsoft-teams)
 11. [Google Chat](#google-chat)
 12. [Twitter](#twitter)
 13. [Farcaster](#farcaster)
-14. [Twitch](#twitch)
-15. [Mattermost](#mattermost)
-16. [WeChat](#wechat)
-17. [Matrix](#matrix)
-18. [Feishu / Lark](#feishu--lark)
-19. [Nostr](#nostr)
-21. [Lens](#lens)
-22. [Bluesky](#bluesky)
-23. [Instagram](#instagram)
-24. [LINE](#line)
-25. [Zalo](#zalo)
-26. [Twilio](#twilio)
-27. [GitHub](#github)
-28. [Gmail Watch](#gmail-watch)
-29. [Nextcloud Talk](#nextcloud-talk)
-30. [Tlon](#tlon)
-31. [Cycle de vie des connecteurs](#connector-lifecycle)
-32. [Support multi-comptes](#multi-account-support)
-33. [Gestion des sessions](#session-management)
+14. [Bluesky](#bluesky)
+15. [Instagram](#instagram)
+16. [Twitch](#twitch)
+17. [Mattermost](#mattermost)
+18. [WeChat](#wechat)
+19. [Matrix](#matrix)
+20. [Feishu / Lark](#feishu--lark)
+21. [Nostr](#nostr)
+22. [LINE](#line)
+23. [Zalo](#zalo)
+24. [Twilio](#twilio)
+25. [GitHub](#github)
+26. [Gmail Watch](#gmail-watch)
+27. [Nextcloud Talk](#nextcloud-talk)
+28. [Tlon](#tlon)
+29. [Lens](#lens)
+30. [Cycle de vie des connecteurs](#connector-lifecycle)
+31. [Support multi-comptes](#multi-account-support)
+32. [Gestion des sessions](#session-management)
 
 ---
 
@@ -59,18 +60,19 @@ Les connecteurs marqués **Auto** se chargent automatiquement lorsque leur confi
 | WhatsApp | Code QR (Baileys) ou Cloud API | Oui | Oui | Oui | Auto |
 | Signal | API HTTP signal-cli | Oui | Oui | Oui | Auto |
 | iMessage | CLI natif (macOS) | Oui | Oui | Oui | Auto |
+| BlueBubbles | Mot de passe serveur | Oui | Oui | Non | Auto |
 | Blooio | Clé API + webhook | Oui | Oui | Non | Auto |
 | Microsoft Teams | ID d'app + mot de passe | Oui | Oui (équipes/salons) | Non | Auto |
 | Google Chat | Compte de service | Oui | Oui (espaces) | Oui | Auto |
-| Twitter | Clés API + tokens | MP | N/A | Non | Auto |
+| Twitter | Clés API + tokens | MP | N/A | Non | Registry |
 | Farcaster | Clé API Neynar + signataire | Casts | Oui (canaux) | Non | Auto |
 | Twitch | ID client + token d'accès | Oui (chat) | Oui (canaux) | Non | Auto |
 | Mattermost | Token de bot | Oui | Oui (salons) | Non | Auto |
-| WeChat | Clé API proxy + code QR | Oui | Oui | Oui | Auto |
+| WeChat | Clé API proxy + code QR | Oui | Oui | Oui | Registry |
 | Matrix | Token d'accès | Oui | Oui (salons) | Non | Auto |
 | Feishu / Lark | ID d'app + secret | Oui | Oui (discussions de groupe) | Non | Auto |
 | Nostr | Clé privée (nsec/hex) | Oui (NIP-04) | N/A | Non | Auto |
-| Lens | Clé API | Oui | N/A | Non | Auto |
+| Lens | Clé API | Oui | N/A | Non | Registry |
 | Bluesky | Identifiants de compte | Publications | N/A | Non | Registry |
 | Instagram | Nom d'utilisateur + mot de passe | MP | N/A | Non | Registry |
 | LINE | Token d'accès + secret du canal | Oui | Oui | Non | Registry |
@@ -241,8 +243,8 @@ Les connecteurs sont configurés dans la section `connectors` de `milady.json`. 
     "slack": {
       "enabled": true,
       "mode": "socket",
-      "botToken": "xoxb-...",
-      "appToken": "xapp-...",
+      "botToken": "<SLACK_BOT_TOKEN>",
+      "appToken": "<SLACK_APP_TOKEN>",
       "groupPolicy": "allowlist",
       "channels": {
         "CHANNEL_ID": {
@@ -401,6 +403,47 @@ Consultez le [Guide d'intégration WhatsApp](/fr/guides/whatsapp) pour des instr
 - Configuration de la région
 - Basculement de l'inclusion des pièces jointes
 - Configuration des mentions et des outils par groupe
+
+---
+
+<div id="bluebubbles">
+## BlueBubbles
+</div>
+
+Se connecte à iMessage via un serveur [BlueBubbles](https://bluebubbles.app) local sur macOS. Contrairement au connecteur iMessage direct, BlueBubbles est accessible par réseau — l'agent n'a pas besoin de tourner sur le même Mac qu'iMessage.
+
+### Prérequis d'installation
+
+- Un Mac avec iMessage connecté et le [serveur BlueBubbles](https://bluebubbles.app) installé
+- Le mot de passe du serveur et l'URL accessible depuis la machine exécutant Milady
+
+### Configuration clé
+
+```json
+{
+  "connectors": {
+    "bluebubbles": {
+      "password": "VOTRE_MOT_DE_PASSE_BLUEBUBBLES",
+      "serverUrl": "http://192.168.1.50:1234"
+    }
+  }
+}
+```
+
+**Variables d'environnement :** `BLUEBUBBLES_PASSWORD`, `BLUEBUBBLES_SERVER_URL`
+
+### Fonctionnalités
+
+- Envoyer et recevoir des iMessages et SMS via un serveur BlueBubbles local
+- Réactions tapback (ajout et suppression)
+- Répondre à des messages spécifiques dans des fils
+- Modifier et annuler des messages envoyés (dépendant de la version macOS)
+- Envoyer des pièces jointes avec légendes et effets iMessage
+- Gestion des participants de discussions de groupe
+- Support des accusés de lecture
+- Gestion des messages entrants basée sur les webhooks
+
+Consultez la [référence du connecteur BlueBubbles](/connectors/bluebubbles) pour la référence complète de configuration.
 
 ---
 
@@ -777,7 +820,7 @@ Se connecte à la messagerie iMessage et SMS via le service Blooio avec des webh
 }
 ```
 
-**Variables d'environnement :** `MATTERMOST_BOT_TOKEN`, `MATTERMOST_BASE_URL`
+**Variables d'environnement :** `MATTERMOST_BOT_TOKEN`, `MATTERMOST_SERVER_URL`
 
 <div id="features-14">
 ### Fonctionnalités
@@ -1258,7 +1301,7 @@ Gmail Watch est activé via le drapeau `features.gmailWatch` ou les variables d'
 {
   connectors: {
     lens: {
-      apiKey: "your-lens-api-key",
+      apiKey: "<LENS_API_KEY>",
     }
   }
 }
@@ -1365,7 +1408,7 @@ Les options de `dmPolicy` sont :
 **Défaillances générales des connecteurs :**
 
 - Le plugin du connecteur ne se charge pas :
-  Vérifiez le mappage des ID de connecteur dans `src/config/plugin-auto-enable.ts`, la disponibilité du plugin et les surcharges de `plugins.entries`. La couche d'activation automatique mappe les clés de configuration du connecteur aux noms de packages de plugins — une incohérence signifie que le plugin est silencieusement ignoré.
+  Vérifiez le mappage des ID de connecteur dans `eliza/packages/agent/src/config/plugin-auto-enable.ts` (dans le sous-module upstream elizaOS), la disponibilité du plugin et les surcharges de `plugins.entries`. La couche d'activation automatique mappe les clés de configuration du connecteur aux noms de packages de plugins — une incohérence signifie que le plugin est silencieusement ignoré.
 - L'authentification réussit mais aucun message n'arrive :
   Vérifiez les paramètres de webhook/socket de la plateforme et les portes de politique (`dmPolicy`, `groupPolicy`). Pour les connecteurs basés sur les webhooks, confirmez que l'URL de rappel est publiquement accessible.
 - Secrets de connecteur mal routés :
@@ -1508,18 +1551,14 @@ Les options de `dmPolicy` sont :
 ### Commandes de vérification
 </div>
 
+Ces chemins de test font référence à des fichiers dans le sous-module `eliza`. Exécutez `bun run setup:upstreams` d'abord pour l'initialiser.
+
 ```bash
-# Connector auto-enable and runtime loading
-bunx vitest run src/config/plugin-auto-enable.test.ts src/runtime/eliza.test.ts
+# Suite de tests complète (depuis la racine du dépôt)
+bun run test
 
-# Platform-specific connector tests
-bunx vitest run src/connectors/discord-connector.test.ts
-
-# Connector e2e tests
-bunx vitest run --config vitest.e2e.config.ts test/discord-connector.e2e.test.ts test/signal-connector.e2e.test.ts
-
-# WhatsApp pairing
-bunx vitest run src/services/__tests__/whatsapp-pairing.test.ts src/api/__tests__/whatsapp-routes.test.ts
+# Tests de bout en bout
+bun run test:e2e
 
 bun run typecheck
 ```

@@ -6,7 +6,7 @@ description: "Compile, sign, and distribute the Milady mobile app for iOS and An
 
 The Milady mobile app (`apps/app`) is a Capacitor project that wraps the shared web UI in a native shell. Building it requires three steps: compiling the nine custom Capacitor plugins, bundling the Vite web assets, and syncing them into the native iOS or Android project. Distribution builds additionally require code signing — Apple certificates and provisioning profiles for iOS, a keystore for Android.
 
-All build commands are invoked via the `scripts/rt.sh` runtime wrapper from inside the `apps/app` directory. The script selects the correct package manager (Bun) and ensures environment variables are sourced before running.
+All build commands are invoked via `bun run` from inside the `apps/app` directory.
 
 ## Features
 
@@ -33,25 +33,82 @@ All build commands are invoked via the `scripts/rt.sh` runtime wrapper from insi
 
 ```bash
 # From apps/app — build everything and sync to iOS
-../../scripts/rt.sh run build:ios
+bun run build:ios
 
 # Build everything and sync to Android
-../../scripts/rt.sh run build:android
+bun run build:android
 
 # Build all nine custom Capacitor plugins only
-../../scripts/rt.sh run plugin:build
+bun run plugin:build
 
 # Push already-built web assets to both native projects
-../../scripts/rt.sh run cap:sync
+bun run cap:sync
 
 # Open native project in IDE
-../../scripts/rt.sh run cap:open:ios      # Xcode
-../../scripts/rt.sh run cap:open:android  # Android Studio
+bun run cap:open:ios      # Xcode
+bun run cap:open:android  # Android Studio
 ```
 
 **iOS signing:** Open `apps/app/ios/App/App.xcworkspace` in Xcode, select the App target, go to Signing & Capabilities, and choose your development team. For App Store distribution, select a distribution certificate and a matching provisioning profile.
 
 **Android signing:** Create a release keystore and configure it in `apps/app/android/app/build.gradle` under `signingConfigs`. Use `./gradlew bundleRelease` (AAB for Play Store) or `./gradlew assembleRelease` (APK for direct distribution) from the `android/` directory.
+
+## iOS Runtime Modes
+
+The iOS bundle supports three runtime modes. Use the root helper scripts so the Vite environment, native sync, CocoaPods, and Xcode project overlay stay aligned.
+
+The iOS target is one app. The first onboarding screen chooses the connection mode:
+remote Mac, Eliza Cloud, or Eliza Cloud plus donated phone compute. The mode-specific
+commands below only pre-seed development builds so Xcode opens with the expected
+defaults; users can still change the connection mode in onboarding.
+
+### 1. Phone build connected to this Mac
+
+Expose the Milady API on the Mac's LAN address, then build/open the iOS project with the phone pointed at that API:
+
+```bash
+MILADY_API_BIND=0.0.0.0 \
+MILADY_API_TOKEN=replace-with-a-short-lived-token \
+MILADY_ALLOWED_ORIGINS=capacitor://localhost,ionic://localhost \
+bun run dev
+
+MILADY_IOS_REMOTE_API_BASE=http://192.168.1.42:31337 \
+MILADY_IOS_REMOTE_API_TOKEN=replace-with-the-same-token \
+bun run dev:ios:remote-mac
+```
+
+If `MILADY_IOS_REMOTE_API_BASE` is omitted, the helper picks the first non-loopback IPv4 address and port `31337`. Run from Xcode with an Apple development team selected to install on a physical phone.
+
+### 2. Phone build running in cloud
+
+Build the bundled iOS shell with the cloud runtime defaults, then select Eliza Cloud
+in the first onboarding view:
+
+```bash
+bun run dev:ios:cloud
+```
+
+Set `MILADY_IOS_CLOUD_BASE` or `VITE_ELIZA_CLOUD_BASE` only when targeting a non-default Eliza Cloud environment.
+
+### 3. Cloud runtime plus donated phone compute
+
+Cloud-hybrid mode keeps the app on the cloud runtime and starts the existing device bridge so eligible local-inference work can route to the phone through the server-side routing preferences. Select the Cloud + phone compute option in the first onboarding view.
+
+```bash
+ELIZA_DEVICE_BRIDGE_ENABLED=1 \
+ELIZA_DEVICE_PAIRING_TOKEN=replace-with-a-short-lived-token \
+bun run dev
+
+MILADY_IOS_DEVICE_BRIDGE_API_BASE=https://agent-or-tunnel.example.com \
+MILADY_IOS_DEVICE_BRIDGE_TOKEN=replace-with-the-same-token \
+bun run dev:ios:cloud-hybrid
+```
+
+`MILADY_IOS_DEVICE_BRIDGE_API_BASE` derives `wss://.../api/local-inference/device-bridge`. Use `MILADY_IOS_DEVICE_BRIDGE_URL` when the bridge lives at a different URL. The server still decides which slots use the paired device through Local models routing; the phone does not override cloud routing on its own.
+
+<Warning>
+Build-time API and bridge tokens are embedded in the web bundle. Use short-lived development or TestFlight credentials, not long-lived production secrets.
+</Warning>
 
 ## Live Reload Development
 
@@ -61,13 +118,13 @@ Live reload lets you see web-layer changes on a physical device or simulator wit
 
 1. Find your machine's local IP address (e.g., `192.168.1.42`). On macOS, check System Settings → Wi-Fi → Details → IP Address, or run `ipconfig getifaddr en0`.
 
-2. Edit `apps/app/capacitor.config.ts` and add a `server` block pointing at the Vite dev server:
+2. Edit `apps/app/capacitor.config.ts` and add a `server` block pointing at the Vite dev server. This repo's Vite UI defaults to port `2138` (or `MILADY_PORT` if you override it), not Vite's stock `5173`:
 
 ```typescript
 const config: CapacitorConfig = {
   // ...existing config
   server: {
-    url: "http://192.168.1.42:5173",
+    url: "http://192.168.1.42:2138",
     cleartext: true, // required for plain HTTP on Android
   },
 };
@@ -82,8 +139,8 @@ bun run dev
 4. Sync and launch on device:
 
 ```bash
-../../scripts/rt.sh run cap:sync
-../../scripts/rt.sh run cap:open:ios    # or cap:open:android
+bun run cap:sync
+bun run cap:open:ios    # or cap:open:android
 ```
 
 5. Run the app from Xcode or Android Studio. The app loads from Vite, and edits to web code hot-reload instantly.
@@ -99,7 +156,7 @@ Remove the `server` override from `capacitor.config.ts` before building for dist
 1. Compile plugins, bundle web assets, and sync to the iOS project:
 
 ```bash
-../../scripts/rt.sh run build:ios
+bun run build:ios
 ```
 
 2. Open the workspace in Xcode:
@@ -133,14 +190,14 @@ This means Xcode cannot find a valid development or distribution certificate. Fi
 1. Compile plugins, bundle web assets, and sync to the Android project:
 
 ```bash
-../../scripts/rt.sh run build:android
+bun run build:android
 ```
 
 2. Open the Android project in Android Studio:
 
 ```bash
 # Or use the helper:
-../../scripts/rt.sh run cap:open:android
+bun run cap:open:android
 ```
 
 3. Wait for Gradle sync to complete. Android Studio will download dependencies and index the project. This can take several minutes on first open.
@@ -254,7 +311,7 @@ Then restart your terminal and retry the build.
 One or more of the nine custom Capacitor plugin TypeScript sources failed to compile. Isolate the error by building plugins separately:
 
 ```bash
-../../scripts/rt.sh run plugin:build
+bun run plugin:build
 ```
 
 Review the TypeScript compiler output to identify which plugin has the error. Fix the TypeScript issue, then re-run the full build.
@@ -264,7 +321,7 @@ Review the TypeScript compiler output to identify which plugin has the error. Fi
 The native shell launched but no web content is visible. This usually means web assets were not synced to the native project. Run:
 
 ```bash
-../../scripts/rt.sh run cap:sync
+bun run cap:sync
 ```
 
 Then rebuild and re-run from the IDE. Also verify that the `server` override in `capacitor.config.ts` is removed if you previously used live reload.

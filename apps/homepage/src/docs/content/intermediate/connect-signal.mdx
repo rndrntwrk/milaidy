@@ -1,0 +1,91 @@
+# Connect to Signal
+
+Signal has no official third-party API — it's a security feature, not an oversight. The only way to automate Signal is to run a local daemon (`signal-cli` or `signal-cli-rest-api`) that holds your account's session and exposes a local HTTP interface. Milady then talks to that daemon.
+
+**What you'll learn:** install `signal-cli-rest-api` via Docker, register or link a phone number, point Milady at the local REST API.
+
+<Callout kind="warning" title="Signal is the fiddliest connector">
+Expect 30+ minutes the first time, and be comfortable with Docker, phone number registration, and encrypted messaging quirks. Signal's whole point is that automation is hard; this workflow works around that intentionally.
+</Callout>
+
+## What you need before you start
+
+- **Docker installed** on the machine that will run the Signal daemon. Docker Desktop on macOS/Windows, or Docker CE on Linux.
+- **A dedicated phone number** — a real one that can receive SMS and voice calls. Google Voice numbers technically work but are higher-risk.
+- **Milady running** with a working provider.
+
+## Step 1 — Start signal-cli-rest-api in Docker
+
+We'll use the [bbernhard/signal-cli-rest-api](https://github.com/bbernhard/signal-cli-rest-api) Docker image — it's the de facto standard for automating Signal.
+
+<Steps>
+  <li>Create a directory for persistent session data, e.g. <code>~/signal-cli-data</code>.</li>
+  <li>
+    <p>Run:</p>
+    <pre><code>docker run -d --name signal-cli-rest-api \
+  -p 8080:8080 \
+  -v ~/signal-cli-data:/home/.local/share/signal-cli \
+  -e MODE=json-rpc \
+  bbernhard/signal-cli-rest-api:latest</code></pre>
+  </li>
+  <li>Confirm it's running: <code>curl http://localhost:8080/v1/about</code> should return JSON.</li>
+</Steps>
+
+## Step 2 — Register or link your phone number
+
+You have two options:
+
+### Option A — Register a new account (number gets its own Signal identity)
+
+<Steps>
+  <li>Run <code>curl -X POST -H "Content-Type: application/json" -d '&#123;"captcha": "signalcaptcha://..." &#125;' 'http://localhost:8080/v1/register/%2B15551234567'</code> — replace with your phone number (URL-encoded).</li>
+  <li>Signal requires a captcha for registration. Get one by opening <a href="https://signalcaptchas.org/registration/generate.html">signalcaptchas.org/registration/generate.html</a> in Chrome, solving it, and copying the resulting <code>signalcaptcha://...</code> link from the "Open Signal" dialog.</li>
+  <li>Signal will send an SMS or call your number with a verification code.</li>
+  <li>Run <code>curl -X POST 'http://localhost:8080/v1/register/%2B15551234567/verify/123456'</code> with the code.</li>
+</Steps>
+
+### Option B — Link as a secondary device (to an existing Signal account on your phone)
+
+<Steps>
+  <li>Run <code>curl -X POST -H "Content-Type: application/json" 'http://localhost:8080/v1/qrcodelink?device_name=Milady'</code></li>
+  <li>Signal returns a PNG. Save it to a file and open it.</li>
+  <li>On your phone's Signal app: <strong>Settings → Linked devices → Link a new device</strong>. Scan the QR code.</li>
+  <li>The daemon is now linked to your existing account as a secondary device.</li>
+</Steps>
+
+## Step 3 — Hand the REST URL to Milady
+
+<Steps>
+  <li>Open Milady. Go to <strong>Settings → Plugins → Signal → Configure</strong>.</li>
+  <li>Set <strong>Account number</strong> to your Signal number in E.164 format (e.g. <code>+15551234567</code>).</li>
+  <li>Set <strong>HTTP URL</strong> to <code>http://localhost:8080</code> (or wherever your Docker container is listening).</li>
+  <li>Click <strong>Save</strong>.</li>
+</Steps>
+
+## Step 4 — Test it
+
+Send a Signal message from another account (your personal phone is fine) to the Signal number you registered. Within a second Milady should reply.
+
+## Useful options
+
+| Option | What it does |
+| --- | --- |
+| **Ignore group messages** | If on, the bot ignores group chats and only responds to direct messages. Useful for privacy-sensitive setups. |
+
+## Troubleshooting
+
+**"Connection refused" when Milady tries to reach the daemon.**
+The Docker container isn't running, or the port mapping is wrong. Check `docker ps` and make sure port 8080 is exposed on the host.
+
+**Verification code never arrives during registration.**
+Signal throttles registration attempts. Wait 10–20 minutes and try again. Some VoIP numbers (Google Voice, Twilio) are blocked entirely — use a real SIM if possible.
+
+**"Account not registered" when sending.**
+Step 2 didn't complete or the account data didn't persist. Check that your `~/signal-cli-data` volume is mounted correctly in the Docker run command.
+
+**Messages are encrypted on arrival (visible as `[Encrypted]`).**
+Signal requires a key exchange on first contact. Send one outgoing message from Milady to the sender before they contact you, or have them add your number to their contacts.
+
+## What's next
+
+- [Connect to Telegram](/docs/intermediate/connect-telegram) — if Signal's setup was too much, Telegram gives you similar messaging with a much friendlier bot API.

@@ -23,7 +23,7 @@ const runtime = new AgentRuntime({
   }),
   settings: {
     VALIDATION_LEVEL: "fast",
-    MODEL_PROVIDER: "anthropic/claude-sonnet-4-5",
+    MODEL_PROVIDER: "anthropic/claude-sonnet-4.6",
     BUNDLED_SKILLS_DIRS: "/path/to/skills",
     WORKSPACE_SKILLS_DIR: "~/.milady/workspace/skills",
     SKILLS_ALLOWLIST: "skill-a,skill-b",
@@ -53,7 +53,7 @@ const runtime = new AgentRuntime({
 | 设置键 | 来源 | 描述 |
 |---|---|---|
 | `VALIDATION_LEVEL` | 硬编码 | 设为 `"fast"` — 控制 elizaOS 验证深度 |
-| `MODEL_PROVIDER` | `agents.defaults.model.primary` | 主模型选择（例如 `"anthropic/claude-sonnet-4-5"`） |
+| `MODEL_PROVIDER` | `agents.defaults.model.primary` | 主模型选择（例如 `"anthropic/claude-sonnet-4.6"`） |
 | `BUNDLED_SKILLS_DIRS` | `@elizaos/skills` 包 | 内置技能目录的绝对路径 |
 | `WORKSPACE_SKILLS_DIR` | 工作区路径 + `/skills` | 每个代理的技能覆盖目录 |
 | `EXTRA_SKILLS_DIRS` | `skills.load.extraDirs` | 来自配置的额外技能目录 |
@@ -216,7 +216,6 @@ const PROVIDER_PLUGIN_MAP = {
   PERPLEXITY_API_KEY:             "@elizaos/plugin-perplexity",
   ELIZAOS_CLOUD_API_KEY:          "@elizaos/plugin-elizacloud",
   ELIZAOS_CLOUD_ENABLED:          "@elizaos/plugin-elizacloud",
-  ELIZA_USE_PI_AI:                "@elizaos/plugin-pi-ai",
   CUA_API_KEY:                    "@elizaos/plugin-cua",
   CUA_HOST:                       "@elizaos/plugin-cua",
   OBSIDIAN_VAULT_PATH:            "@elizaos/plugin-obsidian",

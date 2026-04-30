@@ -3,6 +3,401 @@ title: Changelog
 description: What's new in Milady — features, improvements, and fixes.
 ---
 
+<Update label="2026-04-28" description="Week of April 28; refreshed app heroes, self-correcting action params, LifeOps connector quiet-by-default, MiladyOS role auto-assignment" tags={["Feature", "Update", "Fix"]}>
+
+## Refreshed app catalog artwork
+
+The [apps view](/dashboard/apps) ships with new hero artwork across the catalog, including dedicated Defense of the Agents and ClawVille tiles. The desktop splash screen has also been updated so first-run feels fresher before your agent finishes booting.
+
+## Self-correcting action parameters
+
+When your agent picks an action but a required field is missing or malformed, it now fills the gap automatically with a small targeted LLM call scoped to that action's schema and recent conversation — instead of failing the request. Twenty-two LifeOps and agent actions are wired in, including calendar, inbox, send-message, relationships, password manager, autofill, and Twilio calling, so natural-language requests succeed more reliably the first time.
+
+## Unified PLUGIN action
+
+Plugin install, eject, sync, list, search, and create are now driven through a single unified PLUGIN action with nine sub-modes instead of separate actions. Talk to your agent the same way you always have — "install the Shopify plugin," "show me my plugins," "create a new plugin scaffold" — and the runtime routes to the right behavior. Existing wording continues to work via legacy aliases.
+
+## MiladyOS auto-assigns Milady as default phone roles
+
+On [MiladyOS](/architecture) builds, Milady is now auto-assigned as the default Phone, SMS, and Assistant app on first boot. Previously these roles required manual assignment via shell command after flashing — on a fresh boot they're now wired automatically through a system-level overlay, alongside the existing default-launcher behavior.
+
+## Updates
+
+- **Personal connectors quiet by default** — Signal, Discord, Telegram, iMessage, and WhatsApp [LifeOps connectors](/rest/lifeops) no longer auto-reply to inbound messages on your personal accounts. Your agent still reads incoming messages into the [unified inbox](/rest/inbox) and sends outbound on demand, but it won't talk back unless you explicitly opt in per platform.
+- **Discord DMs route through the desktop bridge** — When your agent runs in local-execution mode, [LifeOps](/rest/lifeops) Discord sends now go through the desktop CDP path so DMs land reliably even when the bot account isn't in the conversation. Previously these sends failed with a "Missing Access" error for most personal DMs.
+- **Companion performance moved into the Companion app** — VRM performance controls (FPS cap, render scale, animation budget) have moved from the main settings sidebar into the [Companion](/dashboard/apps) app's own settings panel, so performance tuning lives next to the avatar it affects.
+- **OWNER_RELATIONSHIP explicit-intent routing** — Relationship lookups now require explicit relationship intent in the prompt before routing to OWNER_RELATIONSHIP, reducing accidental triggers from passing mentions of names in unrelated requests.
+- **Quieter agent logs** — Debug-level logs from the OWNER_RELATIONSHIP path have been dropped, cleaning up the runtime log stream during normal use.
+- **Confirmation gating** — Multi-step action loops now break cleanly on a canonical "requires confirmation" signal, so your agent stops and waits for approval on sensitive operations like wallet transactions instead of looping past the prompt.
+- **Sharper LifeOps benchmarks** — The internal benchmark suite that gates LifeOps changes now seeds Google OAuth and lifeops schema fixtures up front, so quality regressions are caught before reaching your agent.
+
+## Bug fixes
+
+- Fixed the Windows postinstall step failing on PowerShell setups where the `HOME` environment variable wasn't set, which prevented type packages from materializing on a fresh clone
+- Fixed the Telegram plugin postinstall step erroring on missing Node type declarations
+- Fixed the dashboard splash background occasionally failing to load due to an asset format mismatch
+- Fixed account-pool error and status messages missing translations in non-English locales
+
+</Update>
+
+<Update label="2026-04-26" description="Week of April 26; native app windows, screenshare app, plugin role gating, lifeops polish, n8n empty-state translations" tags={["Feature", "Update", "Fix"]}>
+
+## Apps open in dedicated native windows
+
+On the desktop app, [dashboard apps](/dashboard/apps) now launch in their own native windows instead of taking over the main shell. Open a game, the wallet, life-ops, or any other app and it lives in its own resizable window so you can run multiple agent surfaces side by side. A new **App Details** page accompanies apps that need configuration before launch, walking you through any required setup before the app opens.
+
+## Screenshare app
+
+A new screenshare app is wired into the [apps view](/dashboard/apps), letting your agent observe a remote screen alongside its other workspace surfaces. Use it when you want your agent to follow along with what you're doing on another device or session without switching tools.
+
+## Plugin role gating with boot auto-enable
+
+The runtime now respects per-plugin role declarations on startup. Plugins that declare a required role — for example, owner-only or admin-only capabilities — only auto-enable when the active user matches, so the action surface stays focused on what's relevant to you. Boot-time auto-enable runs through the same gate, eliminating cases where role-restricted plugins loaded for the wrong user.
+
+## Updates
+
+- **Direct life-ops launch** — Opening [life-ops](/rest/lifeops) from the dashboard now goes straight to the section you tapped instead of routing through an intermediate landing screen.
+- **n8n empty-state translations** — The [automations](/guides/cloud) empty state for n8n workflows is now fully localized (Spanish, French, and Chinese) so first-time setup reads cleanly in every supported language.
+- **Eliza Cloud TTS polish** — Cloud-hosted text-to-speech has been refreshed for cleaner audio output and more reliable streaming when your agent speaks back through Discord or the desktop voice surface.
+- **Default assistant name sync** — The assistant name shown across the desktop app, chat, and connector greetings now stays in sync with your agent configuration on first run, so renaming your agent applies everywhere immediately.
+- **Inbox routing reliability** — Inbox route handling has been hardened with deeper test coverage, so cross-channel messages land in the [unified inbox](/rest/inbox) consistently across Gmail, Discord, Telegram, Signal, and iMessage.
+- **Cloud app surface stability** — Cloud-deployed agents now ship with the full apps catalog — wallet, life-ops, companion, browser bridge, and screenshare — running reliably in cloud containers without the runtime import gaps that previously forced fallbacks.
+
+## Bug fixes
+
+- Fixed a desktop blank-screen regression caused by a workspace bundling order issue — the desktop app now boots cleanly on first launch
+- Fixed a malformed Anthropic Haiku model ID in the plugin catalog that prevented the model from being selectable in [model settings](/model-providers)
+- Fixed Discord connector status not reflecting the desktop app's foreground state, which could leave your agent showing as offline when the app was active
+- Fixed a Discord channel cache hydration issue that occasionally caused stale channel lists in large servers
+
+</Update>
+
+<Update label="2026-04-25" description="Week of April 25; game app UX overhaul, automations sidebar, mobile pane navigation, lifeops and wallet polish" tags={["Feature", "Update", "Fix"]}>
+
+## Game app UX overhaul
+
+The [game apps](/dashboard/apps) — Defense of the Agents and ClawVille — have been redesigned around a chat-native experience. Each game now leads with a clearer header, a focused operator panel with suggested commands, and an in-game event timeline so you can see what your agent is doing, what changed, and what to try next without parsing engineering states. Implementation details are tucked away while gameplay context, objectives, and outcomes take the front seat.
+
+## Automations sidebar and chat polish
+
+The [automations](/guides/cloud) view has a refreshed sidebar layout and a smoother chat-driven authoring flow. Drafting and iterating on workflows from chat now feels more responsive, and recent automation chat fixes resolve cases where messages could fall out of sync with the active workflow.
+
+## Mobile pane navigation
+
+Mobile-pane navigation and controls in the dashboard have been reworked so switching between chat, agent, and tool panes on phone-sized viewports is faster and more predictable. Active-pane state and back navigation now behave consistently across the app.
+
+## Updates
+
+- **Experience extraction validation** — The [training system](/guides/training) now validates extracted experience against a broader scenario set, improving the quality of patterns your agent learns from real conversations.
+- **Lifeops settings cleanup** — The [life-ops](/rest/lifeops) settings panel has been streamlined with cleaner access visuals and tighter layout, making it easier to review which connectors and capabilities are active.
+- **Lifeops interaction polish** — Small interaction details across the life-ops surface — selection states, hover feedback, and transitions — have been tightened for a more cohesive feel.
+- **Wallet market card sizing** — The [wallet](/guides/wallet) market cards have been resized for better density on the wallet dashboard, so more of your portfolio fits without scrolling.
+- **Chat composer fix** — The chat composer no longer drops focus or input in edge cases that previously required clicking back into the field.
+- **Relationships workspace** — The [contacts view](/rest/inbox) has been updated with workspace improvements for browsing your agent's relationship graph.
+
+## Bug fixes
+
+- Fixed the [life-ops](/rest/lifeops) calendar feed surfacing errors outside its own scope, which could cause unrelated panels to display error states
+- Fixed a payments typecheck regression that affected billing-related flows in the dashboard
+
+</Update>
+
+<Update label="2026-04-24" description="Week of April 24; MiladyOS Android, fine-tuning app, streamlined onboarding, wallet dashboard polish" tags={["Feature", "Update", "Fix"]}>
+
+## MiladyOS Android
+
+Milady now ships as a full Android system image. MiladyOS bakes the agent directly into an AOSP build so your agent runs as a privileged system app on supported devices, with the permissions it needs for messaging, calendar, and background operation pre-granted. A validated boot path and cuttlefish emulator target are available for testing, and the system-level integration lays the groundwork for a first-class Milady phone experience.
+
+## Fine-tuning app
+
+A new **Fine-tuning** tile is available in the [apps view](/dashboard/apps). Use it to run and review fine-tuning jobs against your agent alongside the existing training tools, without leaving the dashboard.
+
+## Streamlined onboarding with RuntimeGate
+
+The legacy three-step onboarding wizard and its connection subflow have been replaced with **RuntimeGate** — a minimal pre-chat gate that gets you to your agent faster. If your backend is already configured, you land directly in chat. Cloud OAuth redirects also now carry the correct `redirect_uri`, so cloud sign-in from the desktop app completes reliably on the first try.
+
+## Wallet dashboard polish
+
+The [wallet](/guides/wallet) dashboard has been refreshed with a cleaner rail header, updated chain badges, live prediction data, and a tighter overall layout. Balance lookups on Eliza Cloud now detect the correct EVM RPC endpoint automatically, so cloud wallets resolve balances without manual RPC configuration.
+
+## Updates
+
+- **Land on chat after setup** — After completing onboarding, the app now lands directly on the chat view instead of an intermediate screen, so you can start talking to your agent immediately.
+- **Compact page chat** — The page-scoped chat input and sidebar have been tightened up for a more compact, consistent layout across dashboard pages.
+- **Refreshed app hero artwork** — Hero images for the Database Viewer, LifeOps, Log Viewer, Memory Viewer, Plugin Viewer, Relationship Viewer, Runtime Debugger, Skills Viewer, and Trajectory Viewer have been updated with higher-resolution artwork.
+- **Mobile shell layout** — The mobile shell layout has been refined for better density on phone-sized viewports.
+- **iMessage startup logging** — The [iMessage connector](/connectors/imessage) now emits clearer startup logs and recovers more reliably when the Messages database is temporarily unavailable.
+- **Faster fresh-clone setup** — A new `./install` / `install.cmd` entry point replaces the previous `bootstrap` alias, giving you a single reliable way to set up the repo after a fresh clone. See [CONTRIBUTING](/guides/contributing) for details.
+
+## Bug fixes
+
+- Fixed web and Android builds emitting spurious warnings during production bundling
+- Fixed Vite bundle chunking and submodule build configuration causing intermittent build failures
+- Fixed the cloud OAuth flow occasionally failing due to an incorrect `redirect_uri` when signing in from the desktop app
+- Fixed the BlueBubbles connector documentation incorrectly claiming auto-enable behavior — the [BlueBubbles connector](/connectors/bluebubbles) must be explicitly enabled in your configuration
+
+</Update>
+
+<Update label="2026-04-23" description="Week of April 23; dual-wallet and cloud wallet provisioning, Agent Browser Bridge, automation drafts, cloud agent provisioning UX, BlueBubbles connector" tags={["Feature", "Update", "Fix"]}>
+
+## Dual-wallet with cloud wallet provisioning
+
+Your agent now supports a dual-wallet architecture where [local and cloud wallets](/rest/wallet) coexist, with a primary source per chain. When you log into [Eliza Cloud](/guides/cloud) with the cloud wallet feature enabled, EVM and Solana wallets are imported from the cloud and set as primary automatically — no manual setup. You can switch the primary source at any time, and cloud wallet descriptors can be re-queried on demand. If provisioning fails during login, authentication still succeeds and you can retry wallet provisioning later.
+
+## Agent Browser Bridge
+
+The LifeOps Browser extension has been renamed and relocated as the **Agent Browser Bridge** — a standalone browser extension (Chrome and Safari) that lets your agent observe and act inside your browser sessions. The bridge runs as its own app with a dedicated setup panel, refreshed installer artifacts, and a new home tab in the browser workspace view. Existing LifeOps browser workflows continue to work against the new bridge.
+
+## Automation drafts
+
+The [automations](/guides/cloud) view now supports drafting workflows before activating them. A new draft pane lets you compose a workflow scoped to a specific room, normalize its title, and handle send errors gracefully if the draft can't be delivered. Drafts stay out of your live automation list until you're ready to ship them.
+
+## Cloud agent provisioning UX
+
+The cloud [dashboard](/guides/cloud) now handles non-running runtime cards clearly. The primary **Open** button is disabled and labeled with the agent's current state ("starting…", "stopped", "paused", "unreachable") while the card polls for readiness, with a pulsing status dot during provisioning and a tooltip explaining the expected boot time. The button flips back to the solid **Open** state automatically as soon as the health probe returns running. Deleting cloud agents and inline provisioning from the dashboard have also been restored.
+
+## BlueBubbles connector
+
+A new [BlueBubbles connector](/connectors/bluebubbles) lets your agent bridge to iMessage through a self-hosted [BlueBubbles](https://bluebubbles.app) server over HTTP. Unlike the native iMessage connector — which reads the local Messages database directly — BlueBubbles can be reached from any machine on the same network, making it a good fit when your agent doesn't run on the Mac that holds the Messages database.
+
+## Updates
+
+- **Chat and page polish** — Page-scoped chat context, chat widget heading, chat title, and chat sidebar have all been refined for cleaner layouts and more reliable context when switching between pages.
+- **Sidebar and apps view modernization** — The dashboard sidebar controls, [apps view](/dashboard/apps) catalog, and apps sidebar have been cleaned up with collapsed controls and tighter density. The character editor, [character](/agents/character-interface) layout, character panel, and character sidebar have also been polished for a more consistent navigation experience.
+- **Connector sidebar cleanup** — The connector configuration sidebar has been cleaned up and polished, with clearer toggles and connector switches for enabling/disabling individual platforms.
+- **Embedded knowledge uploads** — The [knowledge](/guides/knowledge) system now supports embedded uploads directly from the character editor, so you can attach reference material while configuring your agent's persona.
+- **X (Twitter) billing and status** — X connector billing is now surfaced alongside other cloud usage, and status reporting has been hardened with new test coverage.
+- **Cloud migration fix** — A migration issue affecting cloud-deployed agents has been resolved so upgrades apply cleanly on first boot.
+- **iOS runtime onboarding modes** — The iOS app now supports distinct runtime build and onboarding modes, giving mobile users a smoother first-run experience.
+- **Accessibility cleanup** — Dashboard micro-labels, page chrome, and status affordances have been cleaned up for better accessibility parity.
+
+## Bug fixes
+
+- Fixed the n8n sidecar not recovering cleanly in some configurations — the sidecar now starts and fails over reliably
+- Fixed automation deep links not scrolling to the correct section when opened from the sidebar — hash anchors now resolve correctly
+- Fixed the cloud dashboard allowing users to click the Open button on non-running runtime cards, which led to dead pages
+- Fixed the browser workspace tabs not resetting between sessions in the Agent Browser Bridge
+
+</Update>
+
+<Update label="2026-04-22" description="Week of April 22; life-ops page redesign, chat UI refresh, calendar event editor, schedule reliability" tags={["Feature", "Update", "Fix"]}>
+
+## Life-ops page redesign
+
+The [life-ops](/rest/lifeops) page has been completely rebuilt with a new layout. A vertical nav rail on the left lets you switch between dashboard, inbox, calendar, reminders, and setup sections without leaving the page. The inbox and calendar now have their own dedicated views — browse messages from all connected platforms in the inbox section, and view your week at a glance in the calendar section. A right-side chat panel stays visible alongside whichever section you're in, so you can talk to your agent while reviewing your schedule or triaging messages.
+
+## Calendar event editor
+
+You can now edit calendar events directly from the [life-ops](/rest/lifeops) calendar view. Click any event to open an editor drawer where you can update details without switching to Google Calendar. The editor connects to your real calendar data, so changes sync back to Google automatically.
+
+## Chat UI refresh
+
+The chat interface is cleaner and more compact. Message bubbles are flatter with tighter spacing, the composer uses icon-only buttons instead of text labels, and user messages now show a "You" label for clarity. The typing indicator no longer displays an avatar, and chat panels stretch to full height so you use more of the available screen space.
+
+## Updates
+
+- **Life-ops sidebar widgets split** — The life-ops sidebar now uses four separate widgets instead of one monolithic block, with improved density so more information fits without scrolling.
+- **Life-ops schedule accuracy** — Schedule widgets no longer show stale meal windows whose start time has already passed. Bedtime targets, minute humanization, and confidence labels have also been corrected for more accurate daily schedule displays.
+
+## Bug fixes
+
+- Fixed the terminal panel getting stuck on "Starting terminal…" when spawning a shell session — the panel now loads correctly
+- Fixed chat placement in the browser workspace view appearing in the wrong position
+
+</Update>
+
+<Update label="2026-04-21" description="Week of April 21; cloud travel booking, feature toggles, automations UX overhaul, action surface consolidation" tags={["Feature", "Update", "Fix"]}>
+
+## Cloud travel booking
+
+Your agent can now search and book flights and hotels through conversation when connected to [Eliza Cloud](/guides/cloud). Travel features — including flight search, hotel search, and booking — are enabled by default for cloud users. Billing is handled automatically against your cloud credit balance with a service fee applied server-side. If your balance is insufficient, the agent routes you to the wallet top-up flow.
+
+## Feature toggles
+
+A new feature toggles panel in [settings](/user/provider-setup) gives you granular control over sensitive agent capabilities. You can independently enable or disable travel booking, push notifications, cross-channel escalation, browser automation, and email sending. Cloud-linked features show their source clearly in the UI, and cloud-default settings sync automatically when you log in.
+
+## Automations UX overhaul
+
+The [automations](/guides/cloud) view has been redesigned with a smoother getting-started experience. A new workflow templates modal offers six starter recipes — Daily Email Digest, Slack-to-Discord Bridge, RSS to Summary, Calendar to Slack, GitHub Issue Triage, and Email to Notion — so you can spin up common workflows in one click. A zero-state onboarding screen guides new users with clear calls to action. The schedule editor now shows a live preview of your next three trigger times for interval, one-time, and cron schedules, with inline validation for cron expressions.
+
+## Visual workflow graph
+
+Workflow details now render as an interactive node graph instead of a plain list. When your agent generates a workflow, edges stream in live with a pulsing "Building workflow…" overlay. Click any node to open a detail drawer showing its parameters and a link to edit in the n8n editor. A dedicated Nodes tab lets you browse the full node catalog across all available integrations.
+
+## Updates
+
+- **Action surface consolidated** — Twenty-six legacy actions have been collapsed into seven owner-scoped umbrellas (`OWNER_INBOX`, `OWNER_CALENDAR`, `OWNER_SEND_MESSAGE`, etc.) and two agent-scoped entry points. Each umbrella routes to the same underlying handler, so behavior is unchanged — but the cleaner surface helps the action planner pick the right tool more reliably. Old action names still work as aliases.
+- **Action selection accuracy** — The action planner now achieves 100% selection accuracy across a 69-case benchmark suite covering all 27 action categories. Improved action descriptions and rate-limit-aware retry logic contribute to more reliable routing, especially for health, calendar, and cross-channel actions.
+- **iOS companion consolidated** — The separate iOS companion app has been merged into the main Milady iOS bundle. Companion mode — pairing, chat mirroring, and remote sessions — is now accessible within the main app, eliminating the need to install a second app.
+- **Life-ops onboarding polish** — The [life-ops](/rest/lifeops) page now shows a welcome card with capability tiles and friendlier empty states when no data is connected yet, making it easier to discover and set up integrations.
+- **Inbound message readers expanded** — Signal, WhatsApp, and X (Twitter) DM readers are now available for pulling recent messages into your agent's unified inbox, broadening cross-platform message aggregation.
+- **n8n error visibility** — If the n8n sidecar fails to start, the error is now surfaced in the automations UI instead of being silently swallowed, so you can diagnose and fix the issue directly.
+- **Cloud container reliability** — Cloud Docker image builds now pin dependencies to exact versions and correctly restore workspace references during pruning, preventing intermittent build failures when provisioning cloud agents.
+
+## Bug fixes
+
+- Fixed coding agent synthesis occasionally hanging when a subagent session ended without signaling turn completion — the orchestrator now reads end-of-turn signals correctly
+- Fixed the [life-ops](/rest/lifeops) action planner sometimes routing "create a task" or "complete a task" requests to the wrong handler due to stale simile entries
+
+</Update>
+
+<Update label="2026-04-20" description="Week of April 20; smarter action routing, cross-channel messaging accuracy, training optimizer improvements" tags={["Update", "Fix"]}>
+
+## Smarter action routing
+
+Your agent now picks the right action more reliably when you give it natural-language commands. Asking your agent to "post this to Discord" no longer accidentally triggers scheduling, and relationship queries like "how long since I talked to Sarah?" now resolve correctly regardless of phrasing. Cross-channel send, relationship lookup, and device intent-sync actions all have sharper descriptions that help the action planner distinguish between similar-sounding requests.
+
+## Updates
+
+- **Training optimizer accuracy** — The [training system](/guides/training) now scores action planner outputs using strict action-name matching instead of fuzzy token overlap, so optimization runs produce more meaningful improvements to your agent's behavior.
+- **Skill actions consolidated** — Legacy skill invocation methods have been retired. `USE_SKILL` is now the single way to trigger [skills](/plugins/skills), with all previous aliases (`RUN_SKILL`, `INVOKE_SKILL`) redirecting to it automatically.
+- **Skills API streamlined** — The [skills](/plugins/skills) enable/disable endpoint has been consolidated to a single toggle surface, making skill management more predictable for integrations and automations.
+- **Graceful health-connector recovery** — If a connector's health check is temporarily unreachable, the runtime now degrades gracefully instead of blocking other actions from running.
+
+## Bug fixes
+
+- Fixed the Windows desktop installer failing on systems with long file paths — the build now enables extended path support automatically
+- Fixed the desktop app icon not displaying correctly in the Windows installer
+
+</Update>
+
+<Update label="2026-04-19" description="Week of April 19; dashboard redesign, n8n workflow automations, life-ops connector UI, mobile responsiveness" tags={["Feature", "Update", "Fix"]}>
+
+## Dashboard redesign
+
+The [cloud dashboard](/guides/cloud) homepage has been completely redesigned. Agent cards now use a data-first layout with cleaner instance grids and filter chips for quick browsing. A new persistent sidebar with vertical tabs replaces the previous navigation, and the hero section is now typography-focused for a quieter, more readable landing experience. You can provision new cloud agents directly from the dashboard with an inline modal — no more navigating away to create an agent. Deleting cloud agents and managing card actions are also restored.
+
+## n8n workflow automations
+
+Your agent now supports [n8n](https://n8n.io) workflow automations through a new plugin. A dedicated Workflows pane in the Automations view lets you browse, activate, deactivate, and delete workflows. The n8n sidecar starts automatically when the plugin is enabled, and status updates poll in real time. The legacy n8n plugin has been retired in favor of this new integration.
+
+## Life-ops connector UI overhaul
+
+The [life-ops](/rest/lifeops) connector setup panels have been redesigned with a flat, borderless card layout. Each connector — Signal, Discord, Telegram, and iMessage — now shows a clear connect button and platform-aware permissions panel. Redundant borders and card containers have been stripped out, and the cloud warning banner has been demoted to muted inline text so the interface stays clean and scannable.
+
+## Updates
+
+- **Mobile-responsive homepage** — The dashboard homepage is now fully responsive on phones and tablets. The topbar is sticky so the menu button stays reachable on long pages, filter chips scroll horizontally on narrow screens, tap targets meet touch-friendly sizing, and horizontal overflow is eliminated across all viewport widths.
+- **Settings panels compacted** — The Cloud and AI Model settings panels have been streamlined. Placeholder UI like the agents grid, usage metrics, and dead external links have been removed. Model selection dropdowns now appear correctly even before explicitly connecting to the cloud.
+- **OpenRouter SDK upgraded** — The OpenRouter plugin has been upgraded to `@openrouter/ai-sdk-provider` v2.0.0 for improved model routing and compatibility.
+- **Discord task agent cleanup** — [Coding agent](/guides/coding-swarms) messages in Discord are now much cleaner. Heartbeat updates show real elapsed time instead of internal tool names, and debug-level messages like session state and validator analysis no longer leak into the channel.
+- **Homepage accessibility** — Modals and runtime cards now meet accessibility parity standards with proper ARIA attributes, and contrast has been improved across micro-labels, status hints, and sidebar rows.
+
+## Bug fixes
+
+- Fixed the agent web UI showing a blank screen in browsers without WebGPU support (Chrome without flag, Safari, headless Chromium) — a polyfill now prevents the three.js initialization crash
+- Fixed the agent web UI showing a blank screen due to a "require is not defined" error when the browser bundle tried to resolve branding defaults
+- Fixed cloud wallet balance API returning 500 errors because the Steward wallet route stub was missing a subpath export
+- Fixed the "Open Milady" button on the homepage navigating to a dead port when no local runtime was running — it now shows install guidance instead
+- Fixed the cloud agent provisioning modal allowing duplicate agent creation when the submit button re-enabled after success
+- Fixed life-ops connector cards not displaying connect buttons
+- Fixed Vite 6 browser builds crashing from unresolved server-only plugin imports — these are now stubbed correctly
+
+</Update>
+
+<Update label="2026-04-17" description="Week of April 17; life-ops personal account connectors, multi-account Google, Steward cloud wallet provisioning" tags={["Feature", "Update", "Fix"]}>
+
+## Life-ops personal account connectors
+
+Your agent can now connect to your personal Signal, Discord, and Telegram accounts — not just bot accounts — to aggregate messages into the [life-ops](/rest/lifeops) system. Signal uses linked-device QR pairing, Discord uses OAuth2, and Telegram supports phone/code/2FA authentication. Once connected, messages from these platforms flow into your agent's unified inbox alongside Gmail and Calendar, giving your agent a fuller picture of your communications.
+
+## Multi-account Google connector
+
+The [life-ops](/rest/lifeops) Google integration now supports multiple Google accounts per side — both for you (the owner) and for your agent. Calendar events and Gmail messages are aggregated across all connected accounts, so you get a single unified view even if you use separate Google accounts for work and personal. A new accounts management panel in settings lets you add, remove, and configure each account individually. Existing single-account setups continue to work without any changes.
+
+## Steward wallet auto-provisioning on cloud login
+
+When you log into [Eliza Cloud](/guides/cloud) from the desktop app, a [Steward](/guides/wallet)-managed wallet is now provisioned automatically. You no longer need to configure Steward credentials manually after connecting to the cloud — the wallet page, spending policies, and transaction signing all work out of the box as soon as you log in.
+
+## Updates
+
+- **Pipeline hooks** — A new hooks system lets the runtime execute custom logic at key points in the agent pipeline, giving plugin authors and advanced users more control over how requests are processed.
+- **Life-ops UI cleanup** — Redundant descriptions and filler text have been removed from the life-ops settings panels, making connector configuration cleaner and easier to scan.
+- **Cross-platform locale labels** — References to "on this Mac" throughout the interface have been updated to "on this device" so the wording is accurate on Windows, Linux, and mobile.
+- **OAuth auth URL improvements** — The Google OAuth flow in life-ops now surfaces the authorization URL more reliably, fixing cases where the link wasn't displayed when connecting a new account.
+- **Mobile app build improvements** — iOS builds now compile all four official Capacitor plugins from source via CocoaPods with Xcode 16 compatibility, and Android builds handle app identity dynamically from configuration.
+
+## Bug fixes
+
+- Fixed the desktop app stalling after a packaged build relaunch due to a false-positive readiness check that matched loading text in the chat view
+- Fixed iOS builds failing under Swift Package Manager binary stripping with Xcode 16
+- Security: upgraded Vite to 6.4.2 and DOMPurify to 3.4.0 to address path traversal and XSS vulnerabilities in transitive dependencies
+
+</Update>
+
+<Update label="2026-04-15" description="Week of April 15; Steward Vault managed wallets, agent training, character catalog, coding agent sessions, companion emotes" tags={["Feature", "Update", "Fix"]}>
+
+## Steward Vault managed wallets
+
+Your agent now supports a dual-wallet architecture with [Steward Vault](/guides/wallet) integration. When connected, transactions route through a managed vault that evaluates spending policies — including per-transaction, daily, and weekly USD-denominated caps — before signing. You can switch between local and cloud wallets at any time, and your primary wallet selection persists across restarts. Both EVM and Solana chains are supported, with automatic RPC fallbacks when balance lookups fail.
+
+## Agent training
+
+A new [training system](/guides/training) lets you shape your agent's behavior with custom examples and feedback. Provide training data through the dashboard and the training engine processes it into actionable patterns your agent applies in conversation. Training runs are visible in the dashboard so you can track progress and refine results over time.
+
+## Character catalog in desktop
+
+The desktop app now includes an expanded character catalog for browsing and selecting agent personalities. Character previews load faster and the selection flow integrates directly with the [onboarding wizard](/guides/beginners-user-guide) and character editor, so you can explore available characters without leaving the setup process.
+
+## Updates
+
+- **Coding agent session hydration** — [Coding agent](/guides/coding-swarms) sessions now persist their state and restore it when you return, so you pick up where you left off instead of starting a fresh session. The coding agent settings and model configuration panels have also been refreshed.
+- **Companion emote picker** — The [companion](/dashboard/apps) overlay now includes an emote picker, letting you trigger VRM avatar expressions and gestures on demand. The emote system is integrated with the companion chat and shell.
+- **Homepage approval queue and transaction history** — The cloud [dashboard](/guides/cloud) now shows a cleaner approval queue and formatted transaction history, making it easier to review pending actions and past activity at a glance.
+- **Life-ops sidebar cleanup** — The stale todo sidebar widget has been removed from the life-ops section, reducing clutter for users who manage tasks through conversation instead.
+- **Plugin config reconciliation** — Plugin enabled states are now reconciled automatically on startup. If your config file was edited externally or a migration only updated one location, the runtime detects the drift and corrects it — so plugins stay in sync without manual intervention.
+- **Desktop diagnostic redaction** — Bug reports submitted from the desktop app now automatically redact API keys, tokens, and secrets from URLs before they leave your machine, preventing accidental credential exposure in diagnostic logs.
+
+## Bug fixes
+
+- Fixed shell header buttons (voice toggle, new chat, save) appearing as unresponsive when their handlers were unavailable — they are now hidden until functional
+- Fixed Windows desktop builds failing under heavy native plugin compilation by limiting spawn concurrency and terminating stalled child processes
+
+</Update>
+
+<Update label="2026-04-15" description="Week of April 15; Steward wallet follow-ups and CI hardening" tags={["Update", "Fix", "Docs"]}>
+
+## Steward wallet plugin 0.3.0
+
+Milady now targets `@stwd/eliza-plugin` 0.3.0 instead of 0.2.0. The published 0.3.0 package upgrades its Steward SDK dependency from `@stwd/sdk` 0.3.0 to 0.4.0, adds explicit spend-summary and approval-queue actions (`STEWARD_CHECK_SPEND`, `STEWARD_LIST_APPROVALS`), and updates signing flows so pending approvals and signed-but-not-broadcast transactions are surfaced as distinct outcomes.
+
+## Updates
+
+- **Published-only CI restore flow** — CI jobs that temporarily rename `eliza/` now restore it through a shared Node script with an explicit rename failure path, so Windows and cross-platform follow-on failures stop collapsing into vague downstream build errors.
+- **Fork alpha lockfile note** — Any `alpha.0` entries now visible in `bun.lock` come from fork-local version field resets during the Milady/eliza workspace split, not from rolling shipped code back to older upstream releases.
+
+</Update>
+
+<Update label="2026-04-13" description="Week of April 13; life-ops goal grounding, Gmail compose, calendar editing, cloud Docker improvements" tags={["Feature", "Update", "Fix"]}>
+
+## Life-ops goal grounding
+
+Your agent now understands your life goals and uses them to guide its actions. When you set goals through the [life-ops system](/rest/lifeops), a semantic evaluator scores how well each action aligns with what you're working toward — so your agent's suggestions and task prioritization reflect your actual priorities, not just the immediate request.
+
+## Gmail compose and send
+
+The [life-ops](/rest/lifeops) Gmail integration can now compose and send outbound emails, not just read and triage. Ask your agent to draft and send a message and it handles recipient, subject, and body extraction from natural language. HTML entities in email snippets and subjects are now decoded correctly, and sender names display cleanly alongside addresses.
+
+## Calendar event editing
+
+Google Calendar actions now support updating and deleting events through conversation. Ask your agent to rename, reschedule, or cancel a meeting and it handles the right operation automatically. Far-future and "all events" lookups now force-sync with Google to catch events outside the local cache, and time detection skips unnecessary LLM extraction on pure renames so dates in event titles aren't misinterpreted.
+
+## Updates
+
+- **Onboarding streamlined** — Unused onboarding steps have been removed and the setup chooser screen has been restyled for better readability on dark backgrounds. Each setup option now includes a description, and character selection includes a back button so you can revisit earlier choices.
+- **Action context deduplication** — Your agent's LLM context no longer includes duplicate action results. Action state is now the sole source with a generous token budget, which means faster responses and more room for conversation history.
+- **Music player stream reliability** — The [music player](/rest/apps) audio streaming fallback has been hardened to recover more gracefully when the primary stream source is unavailable.
+- **Knowledge view improvements** — The [knowledge](/guides/knowledge) detail view has been updated with a cleaner layout for browsing and managing uploaded documents.
+- **Cloud deployment improvements** — Cloud Docker images now build with all runtime patches applied in a single pipeline, making cloud container provisioning faster and more reliable.
+
+## Bug fixes
+
+- Fixed Gmail compose failing to parse unquoted subject and body fields — the action now handles both quoted and unquoted input formats
+- Fixed calendar event updates producing Google API errors when end time was missing — the system now auto-derives end time from start time
+- Fixed smart quote characters in Gmail regex patterns causing parse failures on certain runtimes
+
+</Update>
+
 <Update label="2026-04-12" description="Week of April 12; Shopify plugin, inbox actions, connector setup, companion overlay, provider switcher" tags={["Feature", "Update", "Fix"]}>
 
 ## Shopify plugin
@@ -42,7 +437,6 @@ The [Apps view](/dashboard/apps) now includes Vincent trading profile and strate
 - Fixed a dev-mode startup crash caused by barrel file resolution in the Rollup bundler
 
 </Update>
-
 <Update label="2026-04-11" description="Week of April 11; 'Scape game app, Shopify plugin, Vincent trading, inbox actions, companion overlay, coding agent streaming" tags={["Feature", "Update", "Fix"]}>
 
 ## 'Scape game app
@@ -490,7 +884,7 @@ Milady now automatically reduces prompt sizes by around 36% for general chat. Th
 
 **Why a hard pin in `package.json`:** A caret range (`^2.0.0-alpha.10`) allowed the resolver to pick **`alpha.12`**, breaking fresh installs and lockfile updates. The fix is version selection, not a small dist patch (the plugin body is missing entirely).
 
-**Docs:** [Plugin resolution — pinned OpenRouter](/plugin-resolution-and-node-path#pinned-elizaosplugin-openrouter), [OpenRouter registry page](/plugin-registry/llm/openrouter#milady-pinned-version-and-upstream-bundle-bug), root `README.md` (upstream note), and `docs/ROADMAP.md` (done item).
+**Docs:** [Plugin resolution — pinned OpenRouter](/plugin-resolution-and-node-path#pinned-elizaosplugin-openrouter), [OpenRouter registry page](/plugin-registry/llm/openrouter#milady-pinned-version-and-upstream-bundle-bug), root `README.md` (upstream note), and `docs/roadmap.md` (done item).
 
 </Update>
 
@@ -727,7 +1121,7 @@ Docs: [Environment variables](/cli/environment#runtime-behavior), [TTS plugin](/
 
 ## Vitest: `packages/app-core/test/**` and `*.test.tsx` under `src/`
 
-Root **`vitest.config.ts`** now includes **`packages/app-core/test/**/*.test.ts(x)`** and **`packages/app-core/src/**/*.test.tsx`**, and excludes **`packages/app-core/test/**/*.e2e.test.*`** from the default unit job (e2e still uses **`vitest.e2e.config.ts`**). **Why:** harness tests under `test/state`, `test/runtime`, etc. were skipped; a single explicit `OnboardingWizard.test.tsx` path was brittle for future colocated TSX tests.
+Root **`vitest.config.ts`** now includes **`packages/app-core/test/**/*.test.ts(x)`** and **`packages/app-core/src/**/*.test.tsx`**, and excludes **`packages/app-core/test/**/*.e2e.test.*`** from the default unit job (e2e still uses **`test/vitest/e2e.config.ts`**). **Why:** harness tests under `test/state`, `test/runtime`, etc. were skipped; a single explicit `OnboardingWizard.test.tsx` path was brittle for future colocated TSX tests.
 
 See [Contributing — Testing](/guides/contributing) (subsection *`packages/app-core` in the root Vitest config*).
 
@@ -740,7 +1134,7 @@ See [Contributing — Testing](/guides/contributing) (subsection *`packages/app-
 <Update label="2026-03-21" description="App onboarding architecture" tags={["Update"]}>
 ## Data-driven onboarding UI (app-core)
 
-The dashboard onboarding wizard now derives **step order**, **back navigation**, and the **sidebar step list** from a small pure module (`@miladyai/app-core/onboarding/flow`) instead of duplicating arrays in `AppContext` and the nav component. **Why:** duplicate lists drifted and made “go back” hard to keep consistent.
+The dashboard onboarding wizard now derives **step order**, **back navigation**, and the **sidebar step list** from a small pure module (`@elizaos/app-core/onboarding/flow`) instead of duplicating arrays in `AppContext` and the nav component. **Why:** duplicate lists drifted and made “go back” hard to keep consistent.
 
 - **Forward motion** is still orchestrated in `AppProvider` as `advanceOnboarding` (wrapped by `handleOnboardingNext`) so cloud login, `handleOnboardingFinish`, and provider auto-fill run in the correct order before the step index changes.
 - **Back** uses `resolveOnboardingPreviousStep` (including **connection → welcome**, even though `welcome` is not listed in the custom-flow sidebar).
@@ -751,7 +1145,7 @@ Developer guide: [Onboarding UI flow](/guides/onboarding-ui-flow).
 
 ## Connection step: pure subflow + view registry
 
-Inside the **`connection`** wizard step (hosting, remote backend, Eliza Cloud, neural link, provider detail), routing and navigation patches now live in **`@miladyai/app-core/onboarding/connection-flow`** — still **pure** (no React), with Vitest table coverage. **Why:** the old single file mixed a large `if` tree with OAuth and API calls, so branch order and `setState` clusters were hard to test and easy to break.
+Inside the **`connection`** wizard step (hosting, remote backend, Eliza Cloud, neural link, provider detail), routing and navigation patches now live in **`@elizaos/app-core/onboarding/connection-flow`** — still **pure** (no React), with Vitest table coverage. **Why:** the old single file mixed a large `if` tree with OAuth and API calls, so branch order and `setState` clusters were hard to test and easy to break.
 
 - **`deriveConnectionScreen`** and **`resolveConnectionUiSpec`** answer “which shell to show” from a snapshot (including steady-state **`forceCloud`** routing so tests match post-bootstrap UI).
 - **`applyConnectionTransition`** returns either a **patch** (applied via `setState` in `ConnectionStep`) or an **effect** token for **`useLocalBackend`** — **why:** disconnecting the remote client and `retryStartup` are not pure and must stay in `AppContext`.
@@ -1433,10 +1827,6 @@ The Telegram connector now automatically splits long agent responses into proper
 ## Agent activity box
 
 A sticky activity indicator now shows real-time per-task progress in the chat view. Routine coding-agent status messages are filtered from chat history to reduce noise. See the [coding swarms guide](/guides/coding-swarms) for details.
-
-## Pi AI model provider
-
-You can now use Pi AI as a model provider with streaming support. Configure it in the [model providers](/model-providers) settings alongside your existing providers.
 
 ## Opinion markets plugin
 

@@ -89,7 +89,7 @@ où obtenir les identifiants, les champs minimum requis et des conseils pour les
 **Variables :**
 - `OPENROUTER_API_KEY` — Depuis openrouter.ai/keys
 - `OPENROUTER_SMALL_MODEL` — ex. `openai/gpt-4o-mini` ou `meta-llama/llama-3.3-70b`
-- `OPENROUTER_LARGE_MODEL` — ex. `anthropic/claude-3.5-sonnet`
+- `OPENROUTER_LARGE_MODEL` — ex. `anthropic/claude-sonnet-4-6`
 - `OPENROUTER_IMAGE_MODEL` — ex. `openai/gpt-4o` (pour les tâches de vision)
 - `OPENROUTER_IMAGE_GENERATION_MODEL` — ex. `openai/dall-e-3`
 - `OPENROUTER_EMBEDDING_MODEL` — ex. `openai/text-embedding-3-small`
@@ -119,7 +119,7 @@ où obtenir les identifiants, les champs minimum requis et des conseils pour les
 </div>
 
 **Obtenir les identifiants :** Aucune clé API nécessaire — installez Ollama localement
-**Installation :** https://ollama.ai — exécutez `ollama pull llama3.2` pour télécharger un modèle
+**Installation :** https://ollama.com — exécutez `ollama pull llama3.2` pour télécharger un modèle
 **Minimum requis :** `OLLAMA_BASE_URL` = `http://localhost:11434` (déclencheur d'activation automatique) ou `OLLAMA_API_ENDPOINT` = `http://localhost:11434/api`
 **Variables :**
 - `OLLAMA_BASE_URL` — Déclencheur d'activation automatique. Par défaut : `http://localhost:11434`
@@ -259,16 +259,6 @@ où obtenir les identifiants, les champs minimum requis et des conseils pour les
 **Variables :**
 - Définissez les identifiants de modèle via le bloc de configuration `providers.minimax` dans `milady.json`
 **Conseils :** Minimax fournit des modèles d'IA chinois et multilingues.
-
-<div id="pi-ai">
-
-### Pi AI
-</div>
-
-**Minimum requis :** `ELIZA_USE_PI_AI=true`
-**Variables :**
-- `ELIZA_USE_PI_AI` — Définissez sur `true` pour activer Pi AI comme fournisseur de modèles
-**Conseils :** Pi AI fournit des modèles conversationnels optimisés pour un dialogue amical et utile.
 
 <div id="zai">
 
@@ -489,7 +479,7 @@ où obtenir les identifiants, les champs minimum requis et des conseils pour les
 1. Obtenez la clé API de votre service proxy WeChat
 2. Configurez `connectors.wechat` dans milady.json avec `apiKey` et `proxyUrl`
 3. Démarrez Milady — scannez le code QR affiché dans le terminal avec WeChat
-**Conseils :** WeChat utilise un service proxy tiers, pas une API officielle. N'utilisez qu'un proxy de confiance — il voit tout le trafic de messages. Support multi-comptes via la carte `accounts`. Package : `@miladyai/plugin-wechat`.
+**Conseils :** WeChat utilise un service proxy tiers, pas une API officielle. N'utilisez qu'un proxy de confiance — il voit tout le trafic de messages. Support multi-comptes via la carte `accounts`. Package : `@elizaos/plugin-wechat`.
 
 <div id="github">
 
@@ -709,9 +699,9 @@ où obtenir les identifiants, les champs minimum requis et des conseils pour les
 </div>
 
 **Obtenir les identifiants :** Votre instance Mattermost → System Console → Integrations → Bot Accounts
-**Minimum requis :** `MATTERMOST_BASE_URL` + `MATTERMOST_BOT_TOKEN`
+**Minimum requis :** `MATTERMOST_SERVER_URL` + `MATTERMOST_BOT_TOKEN`
 **Variables :**
-- `MATTERMOST_BASE_URL` — ex. `https://mattermost.yourcompany.com`
+- `MATTERMOST_SERVER_URL` — ex. `https://mattermost.yourcompany.com`
 - `MATTERMOST_BOT_TOKEN` — Depuis System Console → Bot Accounts → Add Bot Account
 - `MATTERMOST_TEAM_ID` — Votre identifiant d'équipe (depuis l'URL de l'équipe ou l'API)
 - `MATTERMOST_DM_POLICY` / `MATTERMOST_GROUP_POLICY` — `allow-all` ou `allow-from`

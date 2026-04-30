@@ -77,7 +77,7 @@ persisted config schema. The canonical persisted fields are:
     llmText: {
       backend: "anthropic",
       transport: "direct",
-      primaryModel: "anthropic/claude-sonnet-4-5",
+      primaryModel: "anthropic/claude-sonnet-4.6",
     },
     tts: {
       backend: "elizacloud",
@@ -108,7 +108,7 @@ The config file supports **JSON5** syntax, which allows:
 
   // API keys (prefer .env for secrets)
   env: {
-    ANTHROPIC_API_KEY: "sk-ant-...",
+    ANTHROPIC_API_KEY: "<ANTHROPIC_API_KEY>",
   },
 }
 ```
@@ -146,11 +146,11 @@ Milady loads environment variables from two sources:
     ```json5
     {
       env: {
-        ANTHROPIC_API_KEY: "sk-ant-...",
-        OPENAI_API_KEY: "sk-...",
+        ANTHROPIC_API_KEY: "<ANTHROPIC_API_KEY>",
+        OPENAI_API_KEY: "<OPENAI_API_KEY>",
         // Structured form under vars:
         vars: {
-          BRAVE_API_KEY: "BSA...",
+          BRAVE_API_KEY: "<BRAVE_API_KEY>",
         },
       },
     }
@@ -240,7 +240,7 @@ Agents are defined under `agents.list`. The `agents.defaults` section provides s
 {
   agents: {
     defaults: {
-      model: { primary: "anthropic/claude-sonnet-4-5" },
+      model: { primary: "anthropic/claude-sonnet-4.6" },
       workspace: "~/projects/my-agent",
       thinkingDefault: "medium",
       timeoutSeconds: 120,
@@ -251,7 +251,7 @@ Agents are defined under `agents.list`. The `agents.defaults` section provides s
         id: "mila",
         default: true,
         name: "Mila",
-        model: "anthropic/claude-opus-4-5",
+        model: "anthropic/claude-opus-4.7",
         workspace: "~/projects/mila-workspace",
         // Personality (set during onboarding)
         bio: ["A helpful AI assistant"],
@@ -304,7 +304,7 @@ Agents are defined under `agents.list`. The `agents.defaults` section provides s
 {
   agents: {
     defaults: {
-      model: { primary: "anthropic/claude-sonnet-4-5", fallbacks: ["openai/gpt-4o"] },
+      model: { primary: "anthropic/claude-sonnet-4.6", fallbacks: ["openai/gpt-5"] },
       workspace: "~/agent-workspace",
       thinkingDefault: "medium",       // off | minimal | low | medium | high | xhigh
       verboseDefault: "off",           // off | on | full
@@ -317,7 +317,7 @@ Agents are defined under `agents.list`. The `agents.defaults` section provides s
       // Heartbeat (periodic background runs)
       heartbeat: {
         every: "30m",
-        model: "anthropic/claude-haiku-3.5",
+        model: "anthropic/claude-haiku-4-5-20251001",
         target: "last",
       },
       // Sandbox defaults
@@ -334,7 +334,7 @@ Agents are defined under `agents.list`. The `agents.defaults` section provides s
       subagents: {
         maxConcurrent: 1,
         archiveAfterMinutes: 60,
-        model: "anthropic/claude-haiku-3.5",
+        model: "anthropic/claude-haiku-4-5-20251001",
       },
     },
   },
@@ -352,8 +352,8 @@ The simplest way to configure models is through `agents.defaults.model`:
   agents: {
     defaults: {
       model: {
-        primary: "anthropic/claude-sonnet-4-5",
-        fallbacks: ["openai/gpt-4o", "groq/llama-3.3-70b"],
+        primary: "anthropic/claude-sonnet-4.6",
+        fallbacks: ["openai/gpt-5", "groq/llama-3.3-70b"],
       },
     },
   },
@@ -369,12 +369,12 @@ The `models` section at the top level lets you define custom providers, override
     mode: "merge",
     // Quick model aliases set during onboarding
     small: "claude-haiku",
-    large: "claude-sonnet-4-5",
+    large: "claude-sonnet-4-6",
     // Custom or self-hosted providers
     providers: {
       "my-provider": {
         baseUrl: "https://api.example.com/v1",
-        apiKey: "sk-...",
+        apiKey: "<OPENAI_API_KEY>",
         api: "openai-completions",   // openai-completions | openai-responses | anthropic-messages | google-generative-ai | bedrock-converse-stream
         models: [
           {
@@ -447,27 +447,28 @@ Plugins extend Milady with connectors, providers, and feature capabilities.
 
 Milady automatically enables plugins based on your configuration. You do not need to manually add plugins to the allowlist in most cases.
 
-**Connector plugins** are auto-enabled when a connector is configured with credentials:
+**Connector plugins** are auto-enabled when a connector is configured with credentials. Connectors marked with * are upstream elizaOS plugins not included in the Milady bundled registry — they must be installed first (`milady plugins install <package>`):
 
 | Connector | Plugin | Auto-Enable Trigger |
 |-----------|--------|---------------------|
 | `telegram` | `@elizaos/plugin-telegram` | `connectors.telegram.botToken` |
-| `discord` | `@elizaos/plugin-discord` | `connectors.discord.botToken` |
+| `discord` | `@elizaos/plugin-discord` | `connectors.discord.token` (or `botToken`/`apiKey`) |
 | `slack` | `@elizaos/plugin-slack` | `connectors.slack.botToken` |
-| `twitter` | `@elizaos/plugin-twitter` | `connectors.twitter.apiKey` |
+| `twitter` * | `@elizaos/plugin-twitter` | `connectors.twitter.apiKey` |
 | `whatsapp` | `@elizaos/plugin-whatsapp` | `connectors.whatsapp.authDir` (or `authState`, `sessionPath`, or `accounts` with `authDir`) |
 | `signal` | `@elizaos/plugin-signal` | `connectors.signal.account` (or `httpUrl`, `httpHost`, `httpPort`, `cliPath`, or `accounts` with enabled entries) |
-| `farcaster` | `@elizaos/plugin-farcaster` | `connectors.farcaster.token` |
-| `matrix` | `@elizaos/plugin-matrix` | `connectors.matrix.token` |
-| `nostr` | `@elizaos/plugin-nostr` | `connectors.nostr.token` |
-| `msteams` | `@elizaos/plugin-msteams` | `connectors.msteams.token` |
-| `googlechat` | `@elizaos/plugin-google-chat` | `connectors.googlechat.token` |
+| `farcaster` | `@elizaos/plugin-farcaster` | `connectors.farcaster.apiKey` (or `token`/`botToken`) |
+| `matrix` | `@elizaos/plugin-matrix` | `connectors.matrix.token` (or `botToken`/`apiKey`) |
+| `nostr` | `@elizaos/plugin-nostr` | `connectors.nostr.token` (or `botToken`/`apiKey`); actual auth uses `NOSTR_PRIVATE_KEY` env var |
+| `msteams` | `@elizaos/plugin-msteams` | `connectors.msteams.botToken` (or `token`/`apiKey`) |
+| `googlechat` | `@elizaos/plugin-google-chat` | `connectors.googlechat.apiKey` (or `token`/`botToken`) |
 | `imessage` | `@elizaos/plugin-imessage` | `connectors.imessage.cliPath` |
-| `lens` | `@elizaos/plugin-lens` | `connectors.lens.token` |
-| `mattermost` | `@elizaos/plugin-mattermost` | `connectors.mattermost.token` |
-| `feishu` | `@elizaos/plugin-feishu` | `connectors.feishu.token` |
-| `blooio` | `@elizaos/plugin-blooio` | `connectors.blooio.token` |
+| `lens` | `@elizaos/plugin-lens` | `connectors.lens.apiKey` (or `token`/`botToken`) |
+| `mattermost` | `@elizaos/plugin-mattermost` | `connectors.mattermost.botToken` (or `token`/`apiKey`) |
+| `feishu` | `@elizaos/plugin-feishu` | `connectors.feishu.apiKey` (or `token`/`botToken`) |
+| `blooio` | `@elizaos/plugin-blooio` | `connectors.blooio.apiKey` (or `token`/`botToken`) |
 | `twitch` | `@elizaos/plugin-twitch` | `connectors.twitch.accessToken` or `clientId` or `enabled: true` |
+| `wechat` | `@elizaos/plugin-wechat` | `connectors.wechat.apiKey` (or `accounts` with `apiKey`) |
 
 **Provider plugins** are auto-enabled when the corresponding API key environment variable is set:
 
@@ -489,7 +490,6 @@ Milady automatically enables plugins based on your configuration. You do not nee
 | `COHERE_API_KEY` | `@elizaos/plugin-cohere` |
 | `PERPLEXITY_API_KEY` | `@elizaos/plugin-perplexity` |
 | `ELIZAOS_CLOUD_API_KEY` / `ELIZAOS_CLOUD_ENABLED` | `@elizaos/plugin-elizacloud` |
-| `ELIZA_USE_PI_AI` | `@elizaos/plugin-pi-ai` |
 | `CUA_API_KEY` / `CUA_HOST` | `@elizaos/plugin-cua` |
 | `OBSIDIAN_VAULT_PATH` | `@elizaos/plugin-obsidian` |
 | `REPOPROMPT_CLI_PATH` | `@elizaos/plugin-repoprompt` |
@@ -527,7 +527,7 @@ Milady automatically enables plugins based on your configuration. You do not nee
 | `webhooks` | `@elizaos/plugin-webhooks` |
 | `gmailWatch` | `@elizaos/plugin-gmail-watch` |
 | `personality` | `@elizaos/plugin-personality` |
-| `experience` | `@elizaos/plugin-experience` |
+| `experience` | built-in advanced capabilities |
 | `form` | `@elizaos/plugin-form` |
 | `x402` | `@elizaos/plugin-x402` |
 | `fal` | `@elizaos/plugin-fal` |
@@ -554,17 +554,17 @@ Connectors integrate Milady with messaging platforms. Configure them under `conn
   connectors: {
     telegram: {
       enabled: true,
-      botToken: "123456:ABC-...",
+      botToken: "<TELEGRAM_BOT_TOKEN>",
       // Additional connector-specific options
     },
     discord: {
       enabled: true,
-      botToken: "MTk...",
+      token: "<DISCORD_BOT_TOKEN>",
     },
     slack: {
       enabled: true,
-      botToken: "xoxb-...",
-      apiKey: "xapp-...",
+      botToken: "<SLACK_BOT_TOKEN>",
+      appToken: "<SLACK_APP_TOKEN>",
     },
     whatsapp: {
       enabled: true,
@@ -624,7 +624,7 @@ The gateway is the central server that handles WebSocket connections, HTTP API, 
     // Authentication
     auth: {
       mode: "token",            // "token" | "password"
-      token: "my-secret-token",
+      token: "<API_TOKEN>",
       allowTailscale: false,
     },
     // Control UI (web dashboard)
@@ -648,7 +648,7 @@ The gateway is the central server that handles WebSocket connections, HTTP API, 
     remote: {
       url: "wss://remote-host:18789",
       transport: "direct",      // "ssh" | "direct"
-      token: "remote-auth-token",
+      token: "<REMOTE_AUTH_TOKEN>",
       sshTarget: "user@host",
       sshIdentity: "~/.ssh/id_ed25519",
     },
@@ -695,7 +695,7 @@ The `tools` section controls tool availability, web search/fetch, exec permissio
       search: {
         enabled: true,
         provider: "brave",     // "brave" | "perplexity"
-        apiKey: "BSA...",
+        apiKey: "<BRAVE_API_KEY>",
         maxResults: 5,
         cacheTtlMinutes: 15,
       },
@@ -707,7 +707,7 @@ The `tools` section controls tool availability, web search/fetch, exec permissio
         readability: true,
         firecrawl: {
           enabled: true,
-          apiKey: "fc-...",
+          apiKey: "<FIRECRAWL_API_KEY>",
         },
       },
     },
@@ -735,8 +735,8 @@ The `tools` section controls tool availability, web search/fetch, exec permissio
         enabled: true,
         maxBytes: 10485760,
         models: [
-          { provider: "openai", model: "gpt-4o" },
-          { provider: "google", model: "gemini-2.0-flash" },
+          { provider: "openai", model: "gpt-5" },
+          { provider: "google", model: "gemini-2.5-flash" },
         ],
       },
       audio: { enabled: true },
@@ -745,7 +745,7 @@ The `tools` section controls tool availability, web search/fetch, exec permissio
 
     // Sub-agent defaults
     subagents: {
-      model: "anthropic/claude-haiku-3.5",
+      model: "anthropic/claude-haiku-4-5-20251001",
       tools: { allow: ["web_search"], deny: [] },
     },
   },
@@ -805,7 +805,7 @@ Milady supports two database backends:
           port: 5432,
           database: "milady",
           user: "milady",
-          password: "secret",
+          password: "<DB_PASSWORD>",
           ssl: true,
         },
       },
@@ -909,24 +909,24 @@ Configure image, video, audio generation, and vision:
       mode: "own-key",              // "cloud" | "own-key"
       provider: "fal",              // "cloud" | "fal" | "openai" | "google" | "xai"
       defaultSize: "1024x1024",
-      fal: { apiKey: "fal-...", model: "flux/schnell" },
+      fal: { apiKey: "<FAL_API_KEY>", model: "flux/schnell" },
     },
     video: {
       enabled: true,
       mode: "own-key",
       provider: "fal",
-      fal: { apiKey: "fal-..." },
+      fal: { apiKey: "<FAL_API_KEY>" },
     },
     audio: {
       enabled: true,
       mode: "own-key",
       provider: "suno",
-      suno: { apiKey: "suno-..." },
+      suno: { apiKey: "<SUNO_API_KEY>" },
     },
     vision: {
       enabled: true,
       provider: "openai",
-      openai: { apiKey: "sk-...", model: "gpt-4o" },
+      openai: { apiKey: "<OPENAI_API_KEY>", model: "gpt-5" },
     },
   },
 }
@@ -972,7 +972,7 @@ Hooks enable webhook integrations and Gmail watching:
   hooks: {
     enabled: true,
     path: "/hooks",
-    token: "webhook-secret-token",
+    token: "<WEBHOOK_TOKEN>",
     maxBodyBytes: 1048576,
     // Webhook-to-agent mappings
     mappings: [
@@ -1213,7 +1213,7 @@ Forward exec approval requests to chat channels:
     entries: {
       "my-skill": {
         enabled: true,
-        apiKey: "sk-...",
+        apiKey: "<OPENAI_API_KEY>",
         env: { CUSTOM_VAR: "value" },
         config: { maxRetries: 3 },
       },
@@ -1258,8 +1258,8 @@ Key environment variables that affect Milady behavior:
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `MILADY_API_PORT` | `31337` | API + WebSocket port (dev mode only; in production the API is served on `MILADY_PORT`) |
-| `MILADY_PORT` | `2138` | Dashboard (Web UI) port — also serves the API in production |
+| `MILADY_API_PORT` | `31337` | API + WebSocket port. Used in dev mode (`bun run dev`) where the API and UI run on separate ports. In production (`milady start`) the API is served on `MILADY_PORT` instead |
+| `MILADY_PORT` | `2138` | Dashboard (Web UI) port. In production this port also serves the API. In dev mode this port is the Vite dev server only |
 | `MILADY_GATEWAY_PORT` | `18789` | Gateway port |
 | `MILADY_HOME_PORT` | `2142` | Home Dashboard port |
 | `MILADY_WECHAT_WEBHOOK_PORT` | `18790` | WeChat Webhook port |
@@ -1277,16 +1277,9 @@ MILADY_GATEWAY_PORT=19000 MILADY_PORT=3000 milady start
 | `OPENAI_API_KEY` | OpenAI (GPT) |
 | `AI_GATEWAY_API_KEY` | Vercel AI Gateway |
 | `GOOGLE_API_KEY` | Google Gemini |
-| `GOOGLE_CLOUD_API_KEY` | Google Antigravity |
 | `GROQ_API_KEY` | Groq |
-| `XAI_API_KEY` | xAI (Grok) |
-| `OPENROUTER_API_KEY` | OpenRouter |
-| `DEEPSEEK_API_KEY` | DeepSeek |
-| `TOGETHER_API_KEY` | Together AI |
-| `MISTRAL_API_KEY` | Mistral |
-| `COHERE_API_KEY` | Cohere |
-| `PERPLEXITY_API_KEY` | Perplexity |
-| `ZAI_API_KEY` | zAI |
+| `XAI_API_KEY` | xAI (Grok + Twitter/X) |
+| `OPENROUTER_API_KEY` | OpenRouter (200+ models via one key) |
 | `OLLAMA_BASE_URL` | Ollama (local) |
 
 ### Feature-Specific Variables
@@ -1340,7 +1333,7 @@ A complete configuration showing the most common options:
 
   // Environment variables
   env: {
-    ANTHROPIC_API_KEY: "sk-ant-...",
+    ANTHROPIC_API_KEY: "<ANTHROPIC_API_KEY>",
   },
 
   // Logging
@@ -1349,7 +1342,7 @@ A complete configuration showing the most common options:
   // Agent configuration
   agents: {
     defaults: {
-      model: { primary: "anthropic/claude-sonnet-4-5" },
+      model: { primary: "anthropic/claude-sonnet-4.6" },
       workspace: "~/agent-workspace",
       thinkingDefault: "medium",
       sandbox: { mode: "non-main" },
@@ -1374,7 +1367,7 @@ A complete configuration showing the most common options:
 
   // Connectors
   connectors: {
-    telegram: { botToken: "123:ABC..." },
+    telegram: { botToken: "<TELEGRAM_BOT_TOKEN>" },
   },
 
   // Tools

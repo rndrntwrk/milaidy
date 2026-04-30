@@ -1,0 +1,16 @@
+diff --git a/typescript/src/coreExtensions.ts b/typescript/src/coreExtensions.ts
+index 4ac87cc..91b1efd 100644
+--- a/typescript/src/coreExtensions.ts
++++ b/typescript/src/coreExtensions.ts
+@@ -11,9 +11,9 @@
+ /**
+  * Extended runtime interface with plugin management methods.
+- * Only adds optional unregistration helpers that don't conflict with IAgentRuntime.
++ * unregisterEvent is required by the current IAgentRuntime contract.
+  */
+ export interface ExtendedRuntime extends IAgentRuntime {
+-  unregisterEvent?: (
++  unregisterEvent: (
+     event: string,
+     handler: (params: Record<string, unknown>) => Promise<void>
+   ) => void;

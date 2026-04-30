@@ -4,7 +4,7 @@ sidebarTitle: "Agents"
 description: "Points de terminaison de l'API REST pour le cycle de vie des agents, l'administration et le transfert (export/import)."
 ---
 
-Tous les points de terminaison des agents nécessitent que le runtime de l'agent soit initialisé. Le serveur API s'exécute sur le port **2138** par défaut et tous les chemins sont préfixés par `/api/`. Lorsque `MILADY_API_TOKEN` est défini, incluez-le comme jeton `Bearer` dans l'en-tête `Authorization`.
+Tous les points de terminaison des agents nécessitent que le runtime de l'agent soit initialisé. Le serveur API s'exécute sur le port **31337** par défaut et tous les chemins sont préfixés par `/api/`. Lorsque `MILADY_API_TOKEN` est défini, incluez-le comme jeton `Bearer` dans l'en-tête `Authorization`.
 
 <div id="endpoints">
 
@@ -241,7 +241,7 @@ Obtenir un résumé structuré de l'état actuel de l'agent, de ses capacités, 
   "generatedAt": "2026-04-09T12:00:00.000Z",
   "state": "running",
   "agentName": "Milady",
-  "model": "anthropic/claude-sonnet-4-20250514",
+  "model": "anthropic/claude-sonnet-4.6",
   "provider": "anthropic",
   "automationMode": "connectors-only",
   "tradePermissionMode": "ask",
@@ -259,7 +259,7 @@ Obtenir un résumé structuré de l'état actuel de l'agent, de ses capacités, 
   },
   "plugins": {
     "totalActive": 12,
-    "active": ["@elizaos/plugin-bootstrap", "..."],
+    "active": ["..."],
     "aiProviders": ["@elizaos/plugin-anthropic"],
     "connectors": ["@elizaos/plugin-discord"]
   },

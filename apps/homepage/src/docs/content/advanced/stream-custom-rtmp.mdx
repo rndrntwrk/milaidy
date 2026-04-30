@@ -1,0 +1,73 @@
+# Stream to a custom RTMP destination
+
+Any streaming platform that accepts RTMP ingest — Facebook Live, TikTok, Kick, a self-hosted RTMP server, or your own media server — works with the Custom RTMP plugin. You give Milady a URL and a stream key, Milady sends video there.
+
+**What you'll learn:** find the RTMP URL and key for your destination, paste them into Milady.
+
+## What you need before you start
+
+- **A destination that accepts RTMP ingest.** Most streaming platforms do; a few use alternative protocols (SRT, WebRTC) that aren't supported here.
+- **The URL and stream key** for that destination — see "Finding RTMP credentials" below.
+- **Milady running** with the Enable Streaming plugin active.
+
+## Common RTMP URLs
+
+| Platform | RTMP URL |
+| --- | --- |
+| **Facebook Live** | `rtmps://live-api-s.facebook.com:443/rtmp/` |
+| **TikTok Live** | `rtmp://push.tiktokcdn.com/third/` — requires TikTok Live Studio access |
+| **Kick** | `rtmps://fa723fc1b171.global-contribute.live-video.net:443/app/` |
+| **Twitch** | Use the [Twitch streaming plugin](/docs/advanced/stream-twitch) instead — it handles Twitch's per-region routing automatically |
+| **YouTube** | Use the [YouTube streaming plugin](/docs/advanced/stream-youtube) |
+| **Self-hosted (Nginx + RTMP module)** | `rtmp://yourserver.com/live` |
+
+These URLs occasionally change. Always prefer the exact URL your destination's dashboard gives you over this table.
+
+## Finding RTMP credentials
+
+Every streaming platform has a "Stream settings" or "Go Live" area that exposes the RTMP URL and stream key to you. Look for:
+
+- **Facebook Live:** Creator Studio → Live → Go Live → pick "Streaming Software" → Stream key shown.
+- **TikTok Live:** TikTok Live Studio (desktop app) → Go Live → Streaming software → Server URL + Stream Key.
+- **Kick:** kick.com → Settings → Stream Key → copy URL + key.
+- **Self-hosted Nginx:** whatever URL you configured in your nginx.conf `application` block. The stream key is usually the stream name segment at the end of the URL.
+
+## Step 1 — Hand credentials to Milady
+
+<Steps>
+  <li>Open Milady. Go to <strong>Settings → Plugins → Custom RTMP → Configure</strong>.</li>
+  <li>Paste the <strong>RTMP URL</strong>.</li>
+  <li>Paste the <strong>Stream key</strong>.</li>
+  <li>Click <strong>Save</strong>.</li>
+</Steps>
+
+## Step 2 — Go live
+
+<Steps>
+  <li>Open the <strong>Stream</strong> tab in Milady.</li>
+  <li>Pick Custom RTMP as the destination.</li>
+  <li>Click <strong>Go Live</strong>.</li>
+  <li>Open your destination platform's live dashboard to confirm the stream is arriving.</li>
+</Steps>
+
+## Running multiple destinations at once
+
+You can run multiple streaming plugins side by side — Twitch Streaming, YouTube Streaming, and Custom RTMP all configured simultaneously, each pushing the same video to different destinations. This is called "multi-streaming" or "simulcasting."
+
+The catch: each destination uses its own uplink bandwidth. If you're streaming at 6 Mbps and multi-streaming to 3 destinations, you need 18 Mbps of upload capacity. If your internet can't handle it, use a third-party multi-streaming relay (Restream, Castr, etc.) — configure that relay as a single Custom RTMP destination here, and let the relay fan out.
+
+## Troubleshooting
+
+**Stream starts in Milady but destination doesn't show anything.**
+URL or key is wrong for that platform. RTMP URLs can be very picky about trailing slashes — paste exactly what the destination shows you.
+
+**"TLS handshake failed" on `rtmps://` URLs.**
+Your destination requires TLS but something in the path doesn't support it. Some self-hosted RTMP servers don't support RTMPS — use plain `rtmp://` if you control the destination and security isn't a concern.
+
+**Stream works for a few seconds then drops.**
+Destination is rejecting your bitrate. Many platforms cap ingest bitrate — lower yours in Milady's Stream tab.
+
+## What's next
+
+- [Stream to Twitch](/docs/advanced/stream-twitch)
+- [Stream to YouTube](/docs/advanced/stream-youtube)

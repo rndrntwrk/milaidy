@@ -11,7 +11,7 @@ The Slack plugin connects Milady agents to Slack workspaces as a bot app, handli
 ## Installation
 
 ```bash
-milady plugins install slack
+milady plugins install @elizaos/plugin-slack
 ```
 
 ## Setup
@@ -64,8 +64,8 @@ Navigate to **OAuth & Permissions** and click **Install to Workspace**. Copy the
 {
   "connectors": {
     "slack": {
-      "botToken": "xoxb-...",
-      "appToken": "xapp-..."
+      "botToken": "<SLACK_BOT_TOKEN>",
+      "appToken": "<SLACK_APP_TOKEN>"
     }
   }
 }
@@ -76,10 +76,12 @@ Navigate to **OAuth & Permissions** and click **Install to Workspace**. Copy the
 | Field | Required | Description |
 |-------|----------|-------------|
 | `botToken` | Yes | Bot User OAuth Token (`xoxb-...`) |
-| `appToken` | No | App-Level Token for Socket Mode (`xapp-...`) |
-| `signingSecret` | No | Signing secret for webhook verification |
+| `appToken` | No | App-Level Token for Socket Mode (`xapp-...`). Required for Socket Mode (default transport) |
+| `mode` | No | Transport mode: `"socket"` (default) or `"http"` |
+| `signingSecret` | No | Signing secret for HTTP mode webhook verification (required when `mode` is `"http"`) |
+| `userToken` | No | User Token (`xoxp-...`) for user-scoped API calls |
 | `enabled` | No | Set `false` to disable (default: `true`) |
-| `allowedChannels` | No | Array of channel IDs to respond in |
+| `groupPolicy` | No | Group/channel join policy: `"open"`, `"disabled"`, or `"allowlist"` (default: `"allowlist"`) |
 
 ## Features
 
@@ -108,27 +110,44 @@ AgentRuntime processes message
 Response posted to Slack channel/DM
 ```
 
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `SLACK_APP_TOKEN` | Yes | App-Level Token for Socket Mode (`xapp-...`) |
+| `SLACK_BOT_TOKEN` | Yes | Bot User OAuth Token (`xoxb-...`) |
+| `SLACK_USER_TOKEN` | No | User Token (`xoxp-...`) for user-scoped API calls |
+| `SLACK_CHANNEL_IDS` | No | Comma-separated list of channel IDs to monitor |
+| `SLACK_SIGNING_SECRET` | No | Signing secret for HTTP mode webhook verification |
+| `SLACK_SHOULD_IGNORE_BOT_MESSAGES` | No | Ignore messages from other bots |
+| `SLACK_SHOULD_RESPOND_ONLY_TO_MENTIONS` | No | Only respond when @mentioned |
+
 ## Auto-Enable
 
 The plugin auto-enables when `connectors.slack.botToken` is set.
 
 ## Thread Behavior
 
-By default, responses are posted as thread replies to keep channels clean. To post top-level replies:
+Thread history scope is configurable. By default, threads maintain isolated conversation history:
 
 ```json
 {
   "connectors": {
     "slack": {
-      "botToken": "xoxb-...",
-      "replyInThread": false
+      "botToken": "<SLACK_BOT_TOKEN>",
+      "thread": {
+        "historyScope": "thread"
+      }
     }
   }
 }
 ```
 
+Set `historyScope` to `"channel"` to reuse channel conversation history in threads. Set `inheritParent` to `true` to include the parent channel transcript when starting a new thread session.
+
 ## Related
 
+- [Slack Connector Reference](/connectors/slack) — Full configuration reference (multi-account, DM policies, tools governance, slash commands)
 - [Discord Plugin](/plugin-registry/platform/discord) — Discord bot integration
 - [Telegram Plugin](/plugin-registry/platform/telegram) — Telegram bot integration
 - [Connectors Guide](/guides/connectors) — General connector documentation

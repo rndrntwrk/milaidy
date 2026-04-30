@@ -11,7 +11,7 @@ Renderer code talks to the host through `window.__MILADY_ELECTROBUN_RPC__`:
 - `request.<method>(params)` for request/response calls into Bun
 - `onMessage(name, listener)` / `offMessage(name, listener)` for Bun push events
 
-There are **10 native modules** with **118+ request aliases and push messages** in total, covering agent lifecycle, desktop integration, network discovery, voice I/O, wake-word detection, screen capture, camera, canvas windows, geolocation, and system permissions.
+There are **10 native modules** with **140+ request aliases and push messages** in total, covering agent lifecycle, desktop integration, network discovery, voice I/O, wake-word detection, screen capture, camera, canvas windows, geolocation, and system permissions.
 
 ## RPC Alias Conventions
 
@@ -161,7 +161,7 @@ The largest native module. Wraps desktop system APIs for the tray, global shortc
 
 | Channel | Direction | Description |
 |---|---|---|
-| `desktop:getPowerState` | invoke | Returns AC vs battery for companion power policy: **macOS** (`pmset`), **Linux** (`/sys/class/power_supply` Battery `status`), **Windows** (`PowerStatus.PowerLineStatus`). Idle/suspend fields are stubs today. |
+| `desktop:getPowerState` | invoke | Returns AC vs battery **plus** live HID idle time and session lock state for LifeOps circadian inference: **macOS** (`pmset -g batt` + `ioreg -c IOHIDSystem` HID idle-time + `CGSessionCopyCurrentDictionary` lock state), **Linux** (`/sys/class/power_supply` Battery `status`), **Windows** (`PowerStatus.PowerLineStatus`). The `idleTime` (seconds) and `idleState` fields on `DesktopPowerState` are live on macOS; Linux/Windows still return them best-effort. |
 | `desktop:powerSuspend` | event | Fired when the system is about to sleep. |
 | `desktop:powerResume` | event | Fired when the system wakes from sleep. |
 | `desktop:powerOnAC` | event | Fired when the system is plugged in. |
@@ -432,7 +432,7 @@ if (cameraPermission.status !== "granted") {
 }
 ```
 
-The renderer usually should not call this global directly. Prefer the shared app helpers in `packages/app-core/src/bridge/electrobun-rpc.ts`, which wrap the same preload bridge behind request/message helpers used by the app and plugins.
+The renderer usually should not call this global directly. Prefer the shared app helpers in `eliza/packages/app-core/src/bridge/electrobun-rpc.ts`, which wrap the same preload bridge behind request/message helpers used by the app and plugins.
 
 ---
 

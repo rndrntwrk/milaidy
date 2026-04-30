@@ -143,7 +143,7 @@ These three fields define the active runtime topology:
     llmText: {
       backend: "openrouter",
       transport: "direct",
-      primaryModel: "openrouter/anthropic/claude-sonnet-4-5",
+      primaryModel: "openrouter/anthropic/claude-sonnet-4.6",
     },
   },
 }
@@ -197,7 +197,7 @@ Environment variable injection and shell env import.
 | `[key]` | `string` | -- | Sugar: string values placed directly under `env` are treated as env var overrides |
 
 <Info>
-String values placed directly under the `env` key are treated as environment variable overrides. For example, `"env": { "OPENAI_API_KEY": "sk-..." }` sets the key when not already present in the process environment.
+String values placed directly under the `env` key are treated as environment variable overrides. For example, `"env": { "OPENAI_API_KEY": "<OPENAI_API_KEY>" }` sets the key when not already present in the process environment.
 </Info>
 
 ---
@@ -964,7 +964,7 @@ Messaging connector configuration. Each key is a connector ID (e.g. `telegram`, 
     },
     "discord": {
       "enabled": true,
-      "token": "Bot ..."
+      "botToken": "Bot ..."
     }
   }
 }
@@ -1484,7 +1484,9 @@ Feature flags for plugin auto-enable and feature toggles. Each key maps to eithe
 ```json
 {
   "features": {
-    "shellEnabled": true,
+    "shell": true,
+    "browser": true,
+    "cron": true,
     "someFeature": { "enabled": true, "option": "value" }
   }
 }

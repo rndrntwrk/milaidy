@@ -1,0 +1,97 @@
+# Phase 2 Acceptance Report (2026-02-17)
+
+Checklist target: `P2-065`  
+Scope: Phase 2 (Verification loops and tool contracts).
+
+## Executive Summary
+
+Phase 2 implementation is published with code-level completion evidence across contracts, validation, verification, workflow durability, event integrity, compensation, approval controls, invariants, auditability, and performance gates.
+
+Key quantitative gates at current HEAD:
+- Tool contract inventory coverage: `11/11` built-in tools.
+- Canonical inventory now includes runtime + resolved plugin action catalog with plugin load-failure reporting.
+- Runtime action contract coverage: `100%` for discovered runtime actions in inventory runs.
+- Runtime explicit custom-action contracts: available and reported separately from synthesized runtime contracts.
+- Contract versioning is semver-gated in tests for built-in, runtime-synthesized, and custom-action contracts.
+- Post-condition coverage: `100%` (`11/11` built-in tools).
+- Runtime-scope post-condition coverage: supported via report flag (`--include-runtime=true`).
+- Independent verification query paths are wired into verification for install/trigger checks.
+- Reversible compensation coverage: `100%` (`6/6` reversible tools).
+- Unresolved compensation incident workflow is defined and emits incident-opened records for manual/operator follow-up.
+- Reversible success gate (`P2-063`): `>=99.5%` threshold test passed.
+- Unauthorized irreversible execution gate (`P2-064`): `0` unauthorized executions in denial-path suite.
+
+## Evidence Index
+
+### Contracts / Verification Coverage
+
+- `docs/ops/autonomy/reports/contracts-2026-02-17T13-32-36-549Z.tool-contracts.json`
+- `docs/ops/autonomy/reports/postconditions-2026-02-17T13-32-36-584Z.postconditions.json`
+- `docs/ops/autonomy/reports/compensations-2026-02-17T13-32-39-928Z.compensations.json`
+
+Notable metrics:
+- built-in contracts: `11`
+- runtime coverage fields are emitted: `runtimeActionCount`, `runtimeActionCoverageCount`, `runtimeActionUncovered`
+- canonical/plugin inventory fields are emitted: `canonicalActionCount`, `pluginConfiguredCount`, `pluginResolvedCount`, `pluginActionCount`, `pluginLoadFailureCount`, `pluginActionCatalog`
+- explicit vs synthesized runtime contracts are emitted: `runtimeExplicitContractCount`, `runtimeGeneratedContractCount`
+- risk breakdown: `read-only=2`, `reversible=6`, `irreversible=3`
+- postcondition coverage: `100%`
+- independent verification query keys: `plugins:installed`, `triggers:exists`, `events:has-type`
+- compensation coverage for reversible tools: `100%`
+- unresolved compensation incidents emit execution event type: `tool:compensation:incident:opened`
+
+### Phase 2 Gate Tests
+
+- `src/autonomy/workflow/phase2-acceptance-gate.test.ts`
+- `src/autonomy/workflow/compensation-incidents.test.ts`
+- `src/autonomy/tools/runtime-contracts.test.ts`
+- `src/autonomy/service.test.ts` (runtime-only action contract regression)
+- `src/autonomy/tools/schemas/custom-action.schema.test.ts`
+- `src/autonomy/tools/schemas/fixtures.test.ts`
+- `src/autonomy/verification/postconditions/independent-query.test.ts`
+- `src/autonomy/workflow/execution-pipeline.test.ts` (verification query propagation)
+- `src/autonomy/workflow/execution-pipeline.test.ts` (compensation incident workflow coverage)
+- `docs/ops/autonomy/phase2-acceptance-gate-2026-02-17.md`
+
+Validation command:
+
+```bash
+./node_modules/.bin/vitest run \
+  src/autonomy/workflow/execution-pipeline.test.ts \
+  src/autonomy/workflow/integration-pipeline.test.ts \
+  src/autonomy/workflow/phase2-acceptance-gate.test.ts
+```
+
+Runtime-scope post-condition coverage command:
+
+```bash
+node --import tsx scripts/autonomy/postcondition-coverage.ts --include-runtime=true
+```
+
+### Performance Optimization Evidence
+
+- `docs/ops/autonomy/pipeline-latency-optimization-2026-02-17.md`
+- before artifact: `docs/ops/autonomy/reports/pipeline-latency-before-eventcount-opt.pipeline-latency.json`
+- after artifact: `docs/ops/autonomy/reports/pipeline-latency-after-eventcount-opt.pipeline-latency.json`
+
+## Implementation Traceability (Recent Phase 2 Commits)
+
+- `4901043` audit export endpoints and compliance summary API
+- `9c97970` normalized decision logs and invariant metrics
+- `65a417f` invariant ownership catalog/contracts
+- `050cbbb` verification failure taxonomy
+- `ffba92c` schema validator fuzz tests
+- `12b6158` restart durability tests
+- `07eedb4` sustained-load benchmark coverage
+- `2d2d7d7` pipeline latency measurement script
+- `eda3429` bottleneck optimization with before/after latency documentation
+- `b6c0f1a` Phase 2 gate tests for reversible success / irreversible authorization
+
+## Sign-Off Record
+
+Status at publication:
+- Engineering sign-off: complete (code + test evidence published in-repo).
+- Security/compliance sign-off: pending manual review.
+- Product/client sign-off: pending manual review.
+
+This report fulfills the repository publication requirement for Phase 2 acceptance evidence; external stakeholder approvals are tracked as operational follow-up.

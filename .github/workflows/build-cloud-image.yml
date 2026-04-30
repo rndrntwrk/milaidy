@@ -13,7 +13,8 @@
 #
 # Build strategy: publish the complete Milady app image (UI + API + runtime)
 # for hosted cloud deployments. Subordinate per-agent runtimes use the internal
-# deploy/Dockerfile.cloud-agent contract instead of this user-facing image.
+# eliza/packages/app-core/deploy/Dockerfile.cloud-agent contract instead of this
+# user-facing image.
 # =============================================================================
 
 name: Build Cloud App Image
@@ -62,10 +63,12 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: milady-ai/milady/agent
   MILADY_SKIP_LOCAL_UPSTREAMS: "1"
+  DEPOT_PROJECT_ID: m89t0f0p08
 
 permissions:
   contents: read
   packages: write
+  id-token: write
 
 jobs:
   build:
@@ -89,7 +92,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: "1.3.10"
+          bun-version: "1.3.13"
 
       - name: Cache bun store
         uses: actions/cache@v4
@@ -99,6 +102,23 @@ jobs:
           restore-keys: |
             bun-store-${{ runner.os }}-
 
+      - name: Init eliza checkout
+        run: git submodule update --init --depth=1 eliza
+
+      - name: Init cloud image plugin manifests
+        run: |
+          git -C eliza submodule update --init --depth=1 \
+            plugins/plugin-sql \
+            plugins/plugin-elizacloud
+
+      - name: Apply Milady eliza CI patches
+        run: |
+          if [ -f scripts/apply-eliza-ci-patches.mjs ]; then
+            node scripts/apply-eliza-ci-patches.mjs
+          else
+            echo "Skipping Milady eliza CI patches: scripts/apply-eliza-ci-patches.mjs not present"
+          fi
+
       - name: Init non-eliza submodules
         run: |
           node scripts/init-submodules.mjs
@@ -106,6 +126,9 @@ jobs:
 
       - name: Install dependencies
         run: bun install --ignore-scripts
+
+      - name: Install published-workspace fallback dependencies
+        run: bash scripts/install-published-workspace-fallback-deps.sh
 
       - name: Run postinstall patches
         run: bun run postinstall
@@ -118,21 +141,64 @@ jobs:
           cd apps/app
           bun scripts/plugin-build.mjs
 
-      - name: Build bundled orchestrator workspace
+      - name: Build agent workspace
         run: |
-          cd plugins/plugin-agent-orchestrator
-          bun run build
+          cd eliza/packages/agent
+          bun run build:docker-dist
+
+      - name: Install buf CLI
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          version: "1.50.0"
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build @elizaos/core (includes agent-orchestrator)
+        run: |
+          cd eliza/packages/schemas
+          buf dep update && buf generate
+          cd ../typescript
+          node ../shared/scripts/generate-keywords.mjs --target ts 2>/dev/null || echo "keyword gen skipped"
+          node <<'NODE'
+          const fs = require("node:fs");
+          const file = "tsconfig.declarations.json";
+          const config = JSON.parse(fs.readFileSync(file, "utf8"));
+          config.compilerOptions = {
+            ...(config.compilerOptions ?? {}),
+            ignoreDeprecations: "6.0",
+          };
+          fs.writeFileSync(file, JSON.stringify(config, null, 2) + "\n");
+          NODE
+          bun run build:node
 
       - name: Build runtime (tsdown)
         run: |
           npx tsdown
           echo '{"type":"module"}' > dist/package.json
-          node --import tsx scripts/write-build-info.ts 2>/dev/null || true
+          node --import tsx eliza/packages/app-core/scripts/write-build-info.ts 2>/dev/null || true
+
+      - name: Inject tailwindcss into eliza/packages/app-core/node_modules
+        run: |
+          mkdir -p eliza/packages/app-core/node_modules
+          if [ ! -d "eliza/packages/app-core/node_modules/tailwindcss" ]; then
+            echo "Fetching tailwindcss tarball..."
+            TAILWIND_URL=$(npm view tailwindcss dist.tarball 2>/dev/null)
+            if [ -n "$TAILWIND_URL" ]; then
+              rm -rf /tmp/tw_extract
+              mkdir -p /tmp/tw_extract
+              curl -sL "$TAILWIND_URL" | tar xz -C /tmp/tw_extract
+              mv /tmp/tw_extract/package eliza/packages/app-core/node_modules/tailwindcss
+              echo "+ tailwindcss $(node -p "require('./eliza/packages/app-core/node_modules/tailwindcss/package.json').version")"
+            else
+              echo "WARN: could not resolve tailwindcss tarball URL"
+            fi
+          else
+            echo "tailwindcss already present in app-core/node_modules"
+          fi
 
       - name: Build UI (vite)
         run: |
           cd apps/app
-          npx vite build
+          bun run build:web
         env:
           NODE_ENV: production
 
@@ -156,10 +222,121 @@ jobs:
           echo "version_clean=${VERSION_CLEAN}" >> "$GITHUB_OUTPUT"
           echo "Source SHA: $(git rev-parse HEAD)"
 
-      - name: Set up CI dockerignore
-        run: cp .dockerignore.ci .dockerignore
+      - name: Load deploy config
+        run: |
+          set -a
+          source eliza/packages/app-core/deploy/deploy.defaults.env
+          source deploy/deploy.env
+          set +a
+          {
+            echo "APP_ENTRYPOINT=${APP_ENTRYPOINT}"
+            echo "APP_PORT=${APP_PORT}"
+            echo "APP_API_BIND=${APP_API_BIND}"
+            echo "OCI_SOURCE=${OCI_SOURCE}"
+            echo "OCI_LICENSES=${OCI_LICENSES}"
+            echo "APP_CMD_START<<EOF"
+            echo "${APP_CMD_START}"
+            echo "EOF"
+            echo "OCI_TITLE<<EOF"
+            echo "${OCI_TITLE}"
+            echo "EOF"
+            echo "OCI_DESCRIPTION<<EOF"
+            echo "${OCI_DESCRIPTION}"
+            echo "EOF"
+          } >> "$GITHUB_ENV"
 
-      - name: Set up Docker Buildx
+      - name: Stage Dockerfile-expected paths
+        # Dockerfile.cloud was authored against the eliza-monorepo layout where
+        # patches/, plugins/plugin-selfcontrol/, and scripts/docker-entrypoint.sh
+        # all live at repo root. In milady they live at eliza/... and packages/...
+        # so we materialize the expected paths into the build context here.
+        run: |
+          set -eu
+          # patches/ — copy from eliza/packages/app-core/patches
+          if [ ! -e patches ] && [ -d eliza/packages/app-core/patches ]; then
+            cp -R eliza/packages/app-core/patches patches
+          fi
+          # scripts/docker-entrypoint.sh — copy from eliza/packages/app-core/scripts
+          mkdir -p scripts
+          if [ ! -e scripts/docker-entrypoint.sh ] && [ -f eliza/packages/app-core/scripts/docker-entrypoint.sh ]; then
+            cp eliza/packages/app-core/scripts/docker-entrypoint.sh scripts/docker-entrypoint.sh
+            chmod +x scripts/docker-entrypoint.sh
+          fi
+          # plugins/plugin-selfcontrol — copy from packages/plugin-selfcontrol
+          mkdir -p plugins
+          if [ ! -e plugins/plugin-selfcontrol ] && [ -d packages/plugin-selfcontrol ]; then
+            cp -R packages/plugin-selfcontrol plugins/plugin-selfcontrol
+          fi
+          node <<'NODE'
+          const fs = require("fs");
+          const path = require("path");
+          const dockerfile = "eliza/packages/app-core/deploy/Dockerfile.cloud";
+          if (fs.existsSync(dockerfile)) {
+            const rawDockerfile = fs.readFileSync(dockerfile, "utf8");
+            const nextDockerfile = rawDockerfile.replace(
+              "plugin-agent-orchestrator|plugin-cli|plugin-imessage",
+              "plugin-agent-orchestrator|plugin-app-control|plugin-cli|plugin-imessage",
+            );
+            if (nextDockerfile !== rawDockerfile) {
+              fs.writeFileSync(dockerfile, nextDockerfile);
+            }
+          }
+          const manifests = [
+            "package.json",
+            "apps/app/package.json",
+            "eliza/packages/agent/package.json",
+            "eliza/packages/app-core/package.json",
+            "eliza/packages/shared/package.json",
+            "eliza/packages/ui/package.json",
+            "eliza/packages/app-core/platforms/electrobun/package.json",
+            "eliza/packages/app-core/deploy/cloud-agent-template/package.json",
+          ];
+          const fields = [
+            "dependencies",
+            "devDependencies",
+            "optionalDependencies",
+            "peerDependencies",
+            "overrides",
+          ];
+          const unpublished = /^@elizaos\/(app-|capacitor-|plugin-agent-orchestrator|plugin-app-control|plugin-cli|plugin-imessage|plugin-local-ai|plugin-pdf|plugin-wechat|steward-)/;
+          for (const manifest of manifests) {
+            if (!fs.existsSync(manifest)) continue;
+            const pkg = JSON.parse(fs.readFileSync(manifest, "utf8"));
+            let changed = false;
+            for (const field of fields) {
+              const deps = pkg[field];
+              if (!deps || typeof deps !== "object" || Array.isArray(deps)) continue;
+              for (const name of Object.keys(deps)) {
+                if (unpublished.test(name)) {
+                  delete deps[name];
+                  changed = true;
+                }
+              }
+            }
+            if (changed) {
+              fs.writeFileSync(manifest, JSON.stringify(pkg, null, 2) + "\n");
+            }
+          }
+          const root = JSON.parse(fs.readFileSync("package.json", "utf8"));
+          root.overrides = {
+            ...(root.overrides && typeof root.overrides === "object" ? root.overrides : {}),
+            "@elizaos/agent": "file:./eliza/packages/agent",
+            "@elizaos/app-core": "file:./eliza/packages/app-core",
+            "@elizaos/shared": "file:./eliza/packages/shared",
+            "@elizaos/ui": "file:./eliza/packages/ui",
+          };
+          fs.writeFileSync("package.json", JSON.stringify(root, null, 2) + "\n");
+          NODE
+          ls -la patches scripts/docker-entrypoint.sh plugins/plugin-selfcontrol 2>&1 | head -20
+
+      - name: Set up CI dockerignore
+        run: cp eliza/packages/app-core/deploy/Dockerfile.cloud.dockerignore .dockerignore
+
+      - name: Set up Depot CLI
+        if: vars.DEPOT_ENABLED != 'false'
+        uses: depot/setup-action@v1
+
+      - name: Set up Docker Buildx fallback
         uses: docker/setup-buildx-action@v3
 
       - name: Login to GHCR
@@ -180,16 +357,55 @@ jobs:
             type=raw,value=cloud-app-${{ steps.version.outputs.version_clean }}
 
       - name: Build and push cloud app image
-        uses: docker/build-push-action@v6
+        id: depot-build
+        if: vars.DEPOT_ENABLED != 'false'
+        continue-on-error: true
+        uses: depot/build-push-action@v1
         with:
+          project: ${{ env.DEPOT_PROJECT_ID }}
+          token: ${{ secrets.DEPOT_TOKEN }}
           context: .
-          file: Dockerfile.ci
+          file: eliza/packages/app-core/deploy/Dockerfile.cloud
           platforms: linux/amd64
           push: ${{ github.event_name == 'push' || inputs.push_image != false }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=milady-cloud-app
-          cache-to: type=gha,scope=milady-cloud-app,mode=max
+          build-args: |
+            APP_ENTRYPOINT=${{ env.APP_ENTRYPOINT }}
+            APP_CMD_START=${{ env.APP_CMD_START }}
+            APP_PORT=${{ env.APP_PORT }}
+            APP_API_BIND=${{ env.APP_API_BIND }}
+            OCI_SOURCE=${{ env.OCI_SOURCE }}
+            OCI_TITLE=${{ env.OCI_TITLE }}
+            OCI_DESCRIPTION=${{ env.OCI_DESCRIPTION }}
+            OCI_LICENSES=${{ env.OCI_LICENSES }}
+            VERSION=${{ steps.version.outputs.version }}
+            VERSION_CLEAN=${{ steps.version.outputs.version_clean }}
+            REVISION=${{ github.sha }}
+          provenance: false
+
+      - name: Build and push cloud app image with Buildx fallback
+        if: vars.DEPOT_ENABLED == 'false' || steps.depot-build.outcome == 'failure'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: eliza/packages/app-core/deploy/Dockerfile.cloud
+          platforms: linux/amd64
+          push: ${{ github.event_name == 'push' || inputs.push_image != false }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            APP_ENTRYPOINT=${{ env.APP_ENTRYPOINT }}
+            APP_CMD_START=${{ env.APP_CMD_START }}
+            APP_PORT=${{ env.APP_PORT }}
+            APP_API_BIND=${{ env.APP_API_BIND }}
+            OCI_SOURCE=${{ env.OCI_SOURCE }}
+            OCI_TITLE=${{ env.OCI_TITLE }}
+            OCI_DESCRIPTION=${{ env.OCI_DESCRIPTION }}
+            OCI_LICENSES=${{ env.OCI_LICENSES }}
+            VERSION=${{ steps.version.outputs.version }}
+            VERSION_CLEAN=${{ steps.version.outputs.version_clean }}
+            REVISION=${{ github.sha }}
           provenance: false
 
       - name: Build summary

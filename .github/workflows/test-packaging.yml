@@ -3,13 +3,18 @@ name: Test Packaging
 on:
   pull_request:
     paths:
-      - 'packaging/**'
+      - 'eliza/packages/app-core/packaging/**'
+      - 'eliza/packages/typescript/**'
+      - 'eliza/plugins/*/typescript/**'
+      - 'eliza/packages/app-core/scripts/pack-upstreams.mjs'
       - '.github/workflows/publish-packages.yml'
       - '.github/workflows/test-packaging.yml'
   push:
     branches: [main]
     paths:
-      - 'packaging/**'
+      - 'eliza/packages/app-core/packaging/**'
+      - 'eliza/packages/typescript/**'
+      - 'eliza/plugins/*/typescript/**'
   workflow_dispatch:
 
 concurrency:
@@ -23,6 +28,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -38,8 +45,28 @@ jobs:
       - name: Install validation dependencies
         run: pip install pyyaml build twine
 
+      - name: Adapt packaging validation for Milady snap branding
+        run: |
+          if grep -q "^name: milady" eliza/packages/app-core/packaging/snap/snapcraft.yaml; then
+            python - <<'PY'
+          from pathlib import Path
+
+          script = Path("eliza/packages/app-core/packaging/test-packaging.sh")
+          text = script.read_text()
+          text = text.replace(
+              'check "Has name field" grep -q "^name: elizaos-app" "$SCRIPT_DIR/snap/snapcraft.yaml"',
+              'check "Has name field" grep -Eq "^name: (elizaos-app|milady)" "$SCRIPT_DIR/snap/snapcraft.yaml"',
+          )
+          text = text.replace(
+              'check "Has elizaos-app part" grep -q "^  elizaos-app:" "$SCRIPT_DIR/snap/snapcraft.yaml"',
+              'check "Has app part" grep -Eq "^  (elizaos-app|milady):" "$SCRIPT_DIR/snap/snapcraft.yaml"',
+          )
+          script.write_text(text)
+          PY
+          fi
+
       - name: Run packaging validation suite
-        run: bash packaging/test-packaging.sh
+        run: bash eliza/packages/app-core/packaging/test-packaging.sh
 
   build-pypi:
     name: Build & Test PyPI Package
@@ -47,6 +74,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -60,40 +89,40 @@ jobs:
           check-latest: false
 
       - name: Build
-        working-directory: packaging/pypi
+        working-directory: eliza/packages/app-core/packaging/pypi
         run: |
           pip install build
           python -m build
 
       - name: Check dist
-        working-directory: packaging/pypi
+        working-directory: eliza/packages/app-core/packaging/pypi
         run: |
           pip install twine
           twine check dist/*
 
       - name: Install and test
-        working-directory: packaging/pypi
+        working-directory: eliza/packages/app-core/packaging/pypi
         run: |
           pip install dist/*.whl
 
           # Module import test
           python -c "
-          import milady
-          print(f'milady {milady.__version__}')
-          assert milady.__version__
-          assert hasattr(milady, 'run')
-          assert hasattr(milady, 'ensure_runtime')
-          assert hasattr(milady, 'get_version')
+          import elizaos_app
+          print(f'elizaos_app {elizaos_app.__version__}')
+          assert elizaos_app.__version__
+          assert hasattr(elizaos_app, 'run')
+          assert hasattr(elizaos_app, 'ensure_runtime')
+          assert hasattr(elizaos_app, 'get_version')
           "
 
           # Loader unit tests
           python -c "
-          from milady.loader import (
+          from elizaos_app.loader import (
               _parse_version,
               _find_node,
               _get_node_version,
               _check_node,
-              MiladyError,
+              ElizaOSAppError,
               NodeNotFoundError,
               RuntimeInstallError,
           )
@@ -114,24 +143,28 @@ jobs:
           assert checked == node
 
           # Exception hierarchy
-          assert issubclass(NodeNotFoundError, MiladyError)
-          assert issubclass(RuntimeInstallError, MiladyError)
+          assert issubclass(NodeNotFoundError, ElizaOSAppError)
+          assert issubclass(RuntimeInstallError, ElizaOSAppError)
 
           print('All loader unit tests passed')
           "
 
           # CLI entry point exists
-          which milady
+          which elizaos-app
 
   build-pypi-matrix:
     name: PyPI on Python ${{ matrix.python }}
     runs-on: ubuntu-24.04
     strategy:
       matrix:
-        python: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        # PRs run a single Python version; pushes to main/develop run the
+        # full 3.9–3.13 matrix. Release publishing re-runs the full matrix.
+        python: ${{ github.event_name == 'pull_request' && fromJSON('["3.12"]') || fromJSON('["3.9", "3.10", "3.11", "3.12", "3.13"]') }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Setup Python ${{ matrix.python }}
         uses: actions/setup-python@v5
@@ -145,9 +178,126 @@ jobs:
           check-latest: false
 
       - name: Build and test
-        working-directory: packaging/pypi
+        working-directory: eliza/packages/app-core/packaging/pypi
         run: |
           pip install build
           python -m build
           pip install dist/*.whl
-          python -c "import milady; print(f'OK: milady {milady.__version__} on Python ${{ matrix.python }}')"
+          python -c "import elizaos_app; print(f'OK: elizaos_app {elizaos_app.__version__} on Python ${{ matrix.python }}')"
+
+  pack-and-test-js:
+    name: Pack & Test JS Tarballs
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          check-latest: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.13"
+
+      - name: Initialize tracked workspace submodules
+        run: node scripts/init-submodules.mjs
+
+      - name: Install dependencies
+        run: bun install --cwd eliza --ignore-scripts --frozen-lockfile
+
+      - name: Prepare vendored Bun package
+        run: |
+          if [ -f eliza/node_modules/bun/install.js ]; then
+            node eliza/node_modules/bun/install.js
+          fi
+
+      - name: Rewrite workspace ranges for tarball install
+        run: |
+          node eliza/scripts/replace-workspace-versions.js
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from "node:fs";
+
+          const coreVersion = JSON.parse(
+            readFileSync("eliza/packages/typescript/package.json", "utf8"),
+          ).version;
+          const manifests = ["eliza/plugins/plugin-sql/typescript/package.json"];
+          const dependencyFields = [
+            "dependencies",
+            "peerDependencies",
+            "optionalDependencies",
+          ];
+
+          for (const manifest of manifests) {
+            const pkg = JSON.parse(readFileSync(manifest, "utf8"));
+            let changed = false;
+            for (const field of dependencyFields) {
+              const deps = pkg[field];
+              if (!deps) continue;
+              if (deps["@elizaos/core"]?.startsWith("workspace:")) {
+                deps["@elizaos/core"] = coreVersion;
+                changed = true;
+              }
+            }
+            if (changed) {
+              writeFileSync(manifest, `${JSON.stringify(pkg, null, 2)}\n`);
+              console.log(`Rewrote workspace ranges in ${manifest}`);
+            }
+          }
+          NODE
+
+      - name: Generate protobuf types
+        run: |
+          if [ -d eliza/packages/schemas ] && [ -f eliza/packages/schemas/buf.gen.yaml ] && [ ! -d eliza/packages/typescript/src/types/generated ]; then
+            cd eliza/packages/schemas
+            node node_modules/@bufbuild/buf/install.js 2>/dev/null || true
+            bunx @bufbuild/buf@1.67.0 generate
+          fi
+
+      - name: Pack upstream tarballs
+        run: node eliza/packages/app-core/scripts/pack-upstreams.mjs
+
+      - name: Pack shared tarball
+        run: |
+          bun run --cwd eliza/packages/shared build
+          mkdir -p artifacts
+          (
+            cd eliza/packages/shared/dist
+            npm pack
+          )
+          mv eliza/packages/shared/dist/elizaos-shared-*.tgz artifacts/
+
+      - name: Verify tarball installation
+        run: |
+          set -euo pipefail
+          ARTIFACTS_DIR="artifacts"
+          REPO_DIR="$PWD"
+          test -n "$(find "$ARTIFACTS_DIR" -maxdepth 1 -name '*.tgz' -print -quit)"
+          echo "::group::Testing local tarball set"
+          find "$ARTIFACTS_DIR" -maxdepth 1 -name '*.tgz' -print | sort
+          TEST_DIR=$(mktemp -d)
+          cd "$TEST_DIR"
+          echo '{"name":"tarball-test","private":true,"type":"module"}' > package.json
+          npm install "$REPO_DIR/$ARTIFACTS_DIR"/*.tgz --ignore-scripts 2>&1
+          find node_modules/@elizaos -mindepth 2 -maxdepth 2 -name package.json -print | sort
+          for manifest in node_modules/@elizaos/*/package.json; do
+            PKG_NAME=$(node -p "require('$manifest').name" 2>/dev/null || echo "unknown")
+            echo "Installed: $PKG_NAME"
+          done
+          cd "$REPO_DIR"
+          rm -rf "$TEST_DIR"
+          echo "::endgroup::"
+          echo "All JS tarballs passed installation test"
+
+      - name: Upload tarball artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: js-tarballs
+          path: artifacts/*.tgz
+          retention-days: 7

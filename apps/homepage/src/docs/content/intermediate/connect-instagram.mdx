@@ -1,0 +1,76 @@
+# Connect to Instagram
+
+<Callout kind="warning" title="Read this first">
+The Instagram connector uses an <strong>unofficial API</strong> — it logs in as a real user rather than using Meta's Graph API. This means: (1) it may break any time Instagram changes things, (2) your account can be flagged or banned for automated behavior, and (3) it explicitly violates Instagram's Terms of Service. Use a dedicated account you can afford to lose, and never your main one.
+</Callout>
+
+If you're aware of the tradeoffs and still want to proceed, this page will get you set up.
+
+**What you'll learn:** point Milady at Instagram login credentials, handle 2FA, and use a proxy to reduce ban risk.
+
+## What you need before you start
+
+- **A dedicated Instagram account** — not your personal one. Create a fresh account you're OK losing.
+- **Optionally: a residential proxy** that gives you a consistent IP from a normal-looking location. Heavily recommended.
+- **Milady running** with a working provider.
+
+## Step 1 — Prepare the account
+
+<Steps>
+  <li>Create a new Instagram account on a real phone (not an emulator), using a number you control.</li>
+  <li>Post at least 1–2 real photos and interact normally for a day or two. Brand-new accounts that jump straight into API-style behavior get flagged within minutes.</li>
+  <li>Turn off 2FA for first setup — you can re-enable it and handle the code later, but the first login is easier without it.</li>
+</Steps>
+
+## Step 2 — Set up a proxy (strongly recommended)
+
+Instagram's anti-bot systems look at IP address reputation. A residential or mobile proxy in a reasonable location is the single biggest thing you can do to reduce ban rate. Options:
+
+- **Residential proxy services:** Bright Data, IPRoyal, Smartproxy, etc. Expect $5–20/month for hobby use.
+- **Your own VPN with a residential IP:** if you already pay for one and it's in a sensible location, it works.
+
+Avoid: datacenter proxies (Instagram blocks them), public VPNs (same), and residential proxies from countries your account has never logged in from (will trigger "suspicious activity" emails).
+
+## Step 3 — Hand credentials to Milady
+
+<Steps>
+  <li>Open Milady. Go to <strong>Settings → Plugins → Instagram → Configure</strong>.</li>
+  <li>Enter your Instagram <strong>Username</strong>.</li>
+  <li>Enter your <strong>Password</strong>.</li>
+  <li>If you have 2FA on, enter the current code in <strong>Verification code</strong>. You'll need to update this each login until Milady stores a session cookie.</li>
+  <li>Paste your proxy URL into <strong>Proxy</strong>, e.g. <code>http://user:pass@proxy.example.com:8080</code>. Leave blank if you aren't using one.</li>
+  <li>Click <strong>Save</strong>.</li>
+</Steps>
+
+## Step 4 — Test it
+
+Send a DM to your account from another Instagram account. Within a few minutes Milady should see it and reply.
+
+## Troubleshooting
+
+**"Challenge required" or verification email on first login.**
+Instagram noticed the login looks automated. Open the email and approve the login manually, then restart Milady's Instagram connector.
+
+**Account suspended.**
+This happens. Either the account was too new, the IP was flagged, or behavior was too obviously automated. Cool off the account for 48 hours, do a manual appeal, and/or create a new account with a different phone + proxy.
+
+**2FA code keeps being rejected.**
+2FA codes expire in 30 seconds. Enter it and click save immediately. After the first successful login Milady caches a session token and doesn't need the code again until the session expires.
+
+**Messages aren't being delivered from the agent.**
+Rate-limit throttling — Instagram limits unofficial API calls aggressively. Milady backs off automatically; if it's silent for hours, the account is likely shadowbanned.
+
+## Privacy and risk summary
+
+| Risk | Likelihood | Mitigation |
+| --- | --- | --- |
+| Account ban | **High** over months | Dedicated account, proxy, natural behavior |
+| Instagram breaking the API | **Certain eventually** | The connector will need updates; plan on it |
+| Message delivery failures | Medium | Rate-limit backoff is built-in |
+| Other app behaviors being flagged | Medium | Don't also log in from your normal phone with this account |
+
+**Honest recommendation:** if you need reliable DM automation on Instagram specifically for a brand or business, use Meta's official [Messenger Platform for Instagram](https://developers.facebook.com/docs/messenger-platform/instagram) via a Meta Business account. It's harder to set up but doesn't get you banned.
+
+## What's next
+
+- [Connect to WhatsApp](/docs/intermediate/connect-whatsapp) — same Meta family, similar tradeoffs between official and unofficial APIs.

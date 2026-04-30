@@ -399,7 +399,7 @@ If you're maintaining a fork or custom registry:
 
 ```bash
 # Generate plugins.json from installed plugins
-pnpm generate:plugins
+bun run generate:plugins
 ```
 
 This scans `node_modules/@elizaos/plugin-*` and generates an updated index.
@@ -418,7 +418,7 @@ milady plugins list --category model
 milady plugins info openai
 
 # Install and configure
-pnpm add @elizaos/plugin-openai
+bun add @elizaos/plugin-openai
 echo "OPENAI_API_KEY=sk-..." >> .env
 ```
 
@@ -446,7 +446,7 @@ SLACK_BOT_TOKEN=...
 
 ```bash
 # Install community plugin
-pnpm add elizaos-plugin-custom-feature
+bun add elizaos-plugin-custom-feature
 
 # Add to config
 # milady.json
@@ -464,7 +464,7 @@ pnpm add elizaos-plugin-custom-feature
 
 - [Plugin Development Guide](/plugins/development) — Create your own plugins
 - [Local Plugin Development](/plugins/local-plugins) — Develop without publishing
-- [Contributing Guide](./contributing.md) — Submit plugins upstream
+- [Contributing Guide](/guides/contributing) — Submit plugins upstream
 
 ---
 
@@ -520,13 +520,13 @@ pnpm add elizaos-plugin-custom-feature
 bunx vitest run src/services/plugin-installer.test.ts src/services/skill-marketplace.test.ts src/services/mcp-marketplace.test.ts
 
 # Plugin install e2e lifecycle
-bunx vitest run --config vitest.e2e.config.ts test/plugin-install.e2e.test.ts test/skills-marketplace-api.e2e.test.ts test/skills-marketplace-services.e2e.test.ts
+bunx vitest run --config test/vitest/e2e.config.ts test/plugin-install.e2e.test.ts test/skills-marketplace-api.e2e.test.ts test/skills-marketplace-services.e2e.test.ts
 
 # On-chain service tests
 bunx vitest run src/api/tx-service.test.ts src/api/registry-service.test.ts src/api/drop-service.test.ts
 
 # API server e2e (includes registry routes)
-bunx vitest run --config vitest.e2e.config.ts test/api-server.e2e.test.ts
+bunx vitest run --config test/vitest/e2e.config.ts test/api-server.e2e.test.ts
 
 bun run typecheck
 ```

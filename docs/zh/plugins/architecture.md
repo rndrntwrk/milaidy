@@ -22,7 +22,7 @@ AgentRuntime
 └── Local            (来自 plugins/ 目录)
 ```
 
-确定哪些插件始终加载的权威来源位于 `packages/agent/src/runtime/core-plugins.ts`（由 `packages/app-core/src/runtime/core-plugins.ts` 重新导出）：
+确定哪些插件始终加载的权威来源位于 `eliza/packages/agent/src/runtime/core-plugins.ts`（在上游 elizaOS 子模块中，由 `eliza/packages/app-core/src/runtime/core-plugins.ts` 重新导出）：
 
 ```typescript
 export const CORE_PLUGINS: readonly string[] = [
@@ -41,7 +41,7 @@ export const CORE_PLUGINS: readonly string[] = [
 ];
 ```
 
-> **注意：** `@elizaos/plugin-secrets-manager`、`relationships`、`@elizaos/plugin-trust`、`@elizaos/plugin-personality` 和 `@elizaos/plugin-experience` 已静态导入以实现快速解析，但在核心列表中被注释掉了。它们可能会在未来的版本中重新启用。Milady 不附带 `@elizaos/plugin-todo`；待办功能由工作台 API 与 LifeOps 相关的运行时任务处理。
+> **注意：** `@elizaos/plugin-secrets-manager`、`relationships`、`@elizaos/plugin-trust` 和 `@elizaos/plugin-personality` 已静态导入以实现快速解析，但在核心列表中被注释掉了。Experience 现在作为内建高级能力提供，而不是独立插件。Milady 不附带 `@elizaos/plugin-todo`；待办功能由工作台 API 与 LifeOps 相关的运行时任务处理。
 
 <div id="optional-core-plugins">
 
@@ -49,7 +49,7 @@ export const CORE_PLUGINS: readonly string[] = [
 
 </div>
 
-另有一组可选核心插件可从管理面板启用。由于打包或规范约束，这些插件默认不加载。列表位于 `packages/agent/src/runtime/core-plugins.ts`：
+另有一组可选核心插件可从管理面板启用。由于打包或规范约束，这些插件默认不加载。列表位于 `eliza/packages/agent/src/runtime/core-plugins.ts`：
 
 ```typescript
 export const OPTIONAL_CORE_PLUGINS: readonly string[] = [
@@ -144,7 +144,7 @@ interface Plugin {
 
 </div>
 
-当检测到所需配置时，插件会自动启用。此逻辑位于 `packages/agent/src/config/plugin-auto-enable.ts`（由 `packages/app-core/src/config/plugin-auto-enable.ts` 扩展，用于 Milady 特有的连接器如微信），并在运行时初始化之前执行。
+当检测到所需配置时，插件会自动启用。此逻辑位于 `eliza/packages/agent/src/config/plugin-auto-enable.ts`（由 Milady 自身的 `plugin-auto-enable.ts` 扩展，用于微信等连接器），并在运行时初始化之前执行。
 
 <div id="trigger-sources">
 
@@ -177,7 +177,6 @@ const AUTH_PROVIDER_PLUGINS = {
   PERPLEXITY_API_KEY:             "@elizaos/plugin-perplexity",
   ELIZAOS_CLOUD_API_KEY:          "@elizaos/plugin-elizacloud",
   ELIZAOS_CLOUD_ENABLED:          "@elizaos/plugin-elizacloud",
-  ELIZA_USE_PI_AI:                "@elizaos/plugin-pi-ai",
   CUA_API_KEY:                    "@elizaos/plugin-cua",
   CUA_HOST:                       "@elizaos/plugin-cua",
   OBSIDIAN_VAULT_PATH:            "@elizaos/plugin-obsidian",
@@ -207,11 +206,11 @@ const CONNECTOR_PLUGINS = {
   nostr:       "@elizaos/plugin-nostr",
   blooio:      "@elizaos/plugin-blooio",
   twitch:      "@elizaos/plugin-twitch",
-  wechat:      "@miladyai/plugin-wechat",  // Milady-specific (added in app-core)
+  wechat:      "@elizaos/plugin-wechat",  // Milady-specific (added in app-core)
 };
 ```
 
-> **注意：** 上游 `packages/agent` 定义了所有 `@elizaos/*` 连接器。Milady 的 `packages/app-core` 扩展了此映射，添加了指向 `@miladyai/plugin-wechat` 的 `wechat` 条目。
+> **注意：** 上游 `packages/agent` 定义了所有 `@elizaos/*` 连接器。Milady 的 `packages/app-core` 扩展了此映射，添加了指向 `@elizaos/plugin-wechat` 的 `wechat` 条目。
 
 **功能标志** — `milady.json` 的 `features` 部分可自动启用功能插件。功能可以通过 `features.<name>: true` 或 `features.<name>.enabled: true` 启用：
 
@@ -243,7 +242,7 @@ const FEATURE_PLUGINS = {
   webhooks:             "@elizaos/plugin-webhooks",
   gmailWatch:           "@elizaos/plugin-gmail-watch",
   personality:          "@elizaos/plugin-personality",
-  experience:           "@elizaos/plugin-experience",
+  experience:           "(内建高级能力)",
   form:                 "@elizaos/plugin-form",
   x402:                 "@elizaos/plugin-x402",
   fal:                  "@elizaos/plugin-fal",
@@ -319,19 +318,16 @@ const STREAMING_PLUGINS = {
 
 </div>
 
-当动态导入插件包时，运行时按以下顺序检查插件导出：
+当动态导入插件包时，`findRuntimePluginExport()` 按以下优先顺序定位 Plugin 导出：
 
-1. `module.default`
-2. `module.plugin`
-3. 任何值匹配 Plugin 接口结构的键
+1. `module.default` — ES 模块默认导出
+2. `module.plugin` — 名为 `plugin` 的导出
+3. `module` 本身 — CJS 默认模式
+4. 以 `Plugin` 结尾或以 `plugin` 开头的命名导出
+5. 其他匹配 Plugin 接口结构的命名导出
+6. 针对匹配 `plugin` 的命名键的最小 `{ name, description }` 导出
 
-```typescript
-interface PluginModuleShape {
-  default?: Plugin;
-  plugin?: Plugin;
-  [key: string]: Plugin | undefined;
-}
-```
+当模块导出同时具有 `name` 和 `description` 字段，并且至少包含 `services`、`providers`、`actions`、`routes`、`events`（作为数组）或 `init`（作为函数）之一时，该导出会被接受为 Plugin。
 
 <div id="related">
 

@@ -1,0 +1,50 @@
+{
+  "label": "p1-036-retrieval-quality-20260217",
+  "createdAt": "2026-02-17T22:40:18.129Z",
+  "summary": {
+    "topN": 2,
+    "taskCount": 2,
+    "averageRecallAtN": 1,
+    "baselineAverageRecallAtN": 0,
+    "deltaFromBaseline": 1,
+    "generatedAt": 1771368018129,
+    "taskResults": [
+      {
+        "taskId": "rq-001-trust-filtering",
+        "description": "Relevant high-trust memories should outrank low-trust near-duplicate distractors.",
+        "topMemoryIds": [
+          "rq1-rel-1",
+          "rq1-rel-2"
+        ],
+        "baselineTopMemoryIds": [
+          "rq1-irr-1",
+          "rq1-irr-2"
+        ],
+        "relevantMemoryIds": [
+          "rq1-rel-1",
+          "rq1-rel-2"
+        ],
+        "recallAtN": 1,
+        "baselineRecallAtN": 0
+      },
+      {
+        "taskId": "rq-002-preference-grounding",
+        "description": "Preference memories with proven trust should remain in top-N over noisy but highly similar text.",
+        "topMemoryIds": [
+          "rq2-rel-2",
+          "rq2-rel-1"
+        ],
+        "baselineTopMemoryIds": [
+          "rq2-irr-1",
+          "rq2-irr-2"
+        ],
+        "relevantMemoryIds": [
+          "rq2-rel-1",
+          "rq2-rel-2"
+        ],
+        "recallAtN": 1,
+        "baselineRecallAtN": 0
+      }
+    ]
+  }
+}

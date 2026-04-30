@@ -38,7 +38,7 @@ The smoke check validates:
 - `GET /api/lifeops/calendar/next-context?timeZone=UTC` when Google has Calendar capability
 - `GET /api/lifeops/gmail/triage?maxResults=5` when Google has Gmail triage capability or `MILADY_LIFEOPS_EXPECT_GMAIL_TRIAGE=true`
 
-The deploy workflow also runs this automatically on the app origin in [deploy-origin-smoke.yml](/Users/shawwalters/eliza-workspace/milady/.github/workflows/deploy-origin-smoke.yml).
+The deploy workflow also runs this automatically on the app origin in [deploy-origin-smoke.yml](../.github/workflows/deploy-origin-smoke.yml).
 
 ## Assumptions And Limits
 
@@ -96,7 +96,7 @@ Recommended pages:
 3. Any `[lifeops] Reminder delivery failed` log for `sms` or `voice`.
 4. Google connector status flips to `reason: "needs_reauth"` on environments that require calendar or Gmail.
 
-In-repo wiring now exists for deployment smoke via [deploy-origin-smoke.yml](/Users/shawwalters/eliza-workspace/milady/.github/workflows/deploy-origin-smoke.yml), but external notification routing still depends on GitHub notification settings or the deployment platform's alerting destination.
+In-repo wiring now exists for deployment smoke via [deploy-origin-smoke.yml](../.github/workflows/deploy-origin-smoke.yml), but external notification routing still depends on GitHub notification settings or the deployment platform's alerting destination.
 
 ## Rollback
 

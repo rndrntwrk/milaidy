@@ -19,7 +19,7 @@ You are the Electrobun native specialist. Your turf is `apps/app/electrobun/` an
 
 ## Invariants
 
-1. **NODE_PATH is set in `native/agent.ts`** for dynamic `@elizaos/plugin-*` imports. Keep it. Match the other two sites (`packages/agent/src/runtime/eliza.ts`, `scripts/run-node.mjs`).
+1. **NODE_PATH is set in `native/agent.ts`** for dynamic `@elizaos/plugin-*` imports. Keep it. Match the other two sites (`packages/agent/src/runtime/eliza.ts`, `eliza/packages/app-core/scripts/run-node.mjs`).
 2. **Startup try/catch guards** around runtime init in `native/agent.ts` keep the window usable when backend fails. Never remove.
 3. **`rpc-schema.ts` and `electrobun-bridge.ts` must stay in sync.** Every new RPC method: add type to schema, implement handler on bun side, call from renderer via bridge. Type mismatch = silent runtime failure.
 4. **Dev mode**:
@@ -42,7 +42,7 @@ Tracked against the Electrobun migration (`feat/electrobun-migration-v2`):
 3. Swabble / wake word
 4. Auto-launch
 
-When picking any of these up, grep `apps/app/electrobun/src/` for TODO markers and confirm the current state in the branch's most recent commit before designing — the list above drifts as work lands.
+When picking any of these up, grep `apps/app/electrobun/src/` for stale placeholder markers and confirm the current state in the branch's most recent commit before designing — the list above drifts as work lands.
 
 ## When invoked
 

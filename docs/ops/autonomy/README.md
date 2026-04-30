@@ -1,0 +1,133 @@
+# Autonomy Ops Artifacts
+
+This directory contains operational artifacts for Sprint 1 baseline implementation.
+
+Contents:
+- `metrics-dictionary.md`: metric definitions and intent.
+- `dashboard-spec.md`: dashboard panel and query definitions.
+- `alert-thresholds.md`: initial alert policy and thresholds.
+- `invariant-catalog.md`: invariant ownership and severity catalog.
+- `baseline-runbook.md`: commands to generate baseline and red-team reports.
+- `pipeline-latency-optimization-2026-02-17.md`: `P2-062` before/after bottleneck optimization report.
+- `phase2-acceptance-gate-2026-02-17.md`: `P2-063/P2-064` test evidence for reversible success and irreversible authorization controls.
+- `phase2-acceptance-report-2026-02-17.md`: `P2-065` Phase 2 acceptance publication and sign-off record.
+- `phase0-canonical-metric-list-2026-02-17.md`: `P0-013` canonical SOW metric list definition and validation.
+- `phase0-dashboard-foundation-2026-02-17.md`: `P0-016` initial operations + quality dashboard provisioning evidence.
+- `phase0-alert-threshold-policy-2026-02-17.md`: `P0-017` alert thresholds + paging escalation policy evidence.
+- `phase0-cardinality-retention-cost-2026-02-17.md`: `P0-018` metric cardinality + retention-cost validation evidence.
+- `phase0-metrics-dictionary-2026-02-17.md`: `P0-019` metric definition/formula dictionary evidence.
+- `phase0-baseline-data-and-reporting-2026-02-17.md`: `P0-020/P0-021/P0-025/P0-027` baseline scenario definition, baseline-window run, red-team run, and charted report evidence.
+- `phase0-metrics-endpoint-verification-2026-02-17.md`: `P0-015` metrics endpoint scrape-path verification.
+- `phase1-identity-mutation-audit-2026-02-17.md`: `P1-010` identity mutation audit event + telemetry + durable history evidence.
+- `phase1-identity-update-policy-2026-02-17.md`: `P1-004` sanctioned identity update policy and approval-rule enforcement evidence.
+- `phase1-goal-gate-observability-2026-02-17.md`: `P1-018/P1-028` goal transition logging and gate observability metrics wiring evidence.
+- `phase1-identity-memory-validation-2026-02-17.md`: `P1-043/P1-044/P1-045/P1-046` identity/memory API integration, fail-closed integrity, quarantine lifecycle, and drift-alert threshold validation evidence.
+- `phase1-quarantine-review-ui-2026-02-17.md`: `P1-038` governance quarantine review UI wiring and validation evidence.
+- `phase1-preference-source-scope-ui-2026-02-17.md`: `P1-039` preference source/scope visibility UI implementation and validation evidence.
+- `phase1-trust-feature-weight-strategy-2026-02-17.md`: `P1-029` trust feature set and weighting strategy definition.
+- `phase1-trust-ml-baseline-2026-02-17.md`: `P1-031` logistic-regression trust classifier baseline implementation and comparison evidence.
+- `phase1-retrieval-quality-validation-2026-02-17.md`: `P1-036` retrieval quality validation against baseline tasks with Recall@N comparison evidence.
+- `phase1-acceptance-report-2026-02-17.md`: `P1-047` Phase 1 acceptance publication and sign-off record.
+- `phase1-enablement-session-2026-02-17.md`: `P1-042` internal enablement session packet (agenda/materials/attendance template; pending live execution).
+- `phase1-trust-override-policy-2026-02-17.md`: `P1-035` trust override governance policy + audit event enforcement evidence.
+- `phase1-retrieval-rank-guardrails-2026-02-17.md`: `P1-034` retrieval rank tuning configuration guardrails + runtime sanitization evidence.
+- `phase1-drift-report-persistence-2026-02-17.md`: `P1-014` durable drift report persistence in execution event logs.
+- `drift-quarantine-troubleshooting-runbook.md`: `P1-041` troubleshooting runbook for drift spikes and quarantine backlog handling.
+- `phase3-executor-role-2026-02-17.md`: `P3-024` Executor role implementation and wiring evidence.
+- `phase3-role-dataflow-2026-02-17.md`: `P3-030` role dataflow integration evidence across planner/executor/verifier/memory/auditor.
+- `phase3-role-service-modules-2026-02-17.md`: `P3-006` role-specific module lifecycle implementation and validation evidence.
+- `phase3-role-auth-flow-spec-2026-02-17.md`: `P3-003/P3-004/P3-005` role authn/authz trust boundaries, backpressure strategy, and sequence-diagram specification.
+- `phase3-role-authz-guards-2026-02-17.md`: `P3-034` validation that orchestrated roles cannot bypass contract/approval guards.
+- `phase3-role-boundary-contracts-2026-02-17.md`: `P3-001/P3-002` role responsibility boundary definitions and request/response schema enforcement.
+- `phase3-role-transport-adapters-2026-02-17.md`: `P3-007` explicit in-process role transport adapter implementation and wiring evidence.
+- `phase3-role-call-authz-validation-2026-02-17.md`: `P3-008` role-call auth + boundary validation enforcement on every orchestrator role call.
+- `phase3-role-call-resilience-2026-02-17.md`: `P3-009` role-call retries/timeouts/circuit-breaker policy and validation.
+- `phase3-role-health-readiness-2026-02-17.md`: `P3-010` per-role health/readiness endpoint implementation and validation.
+- `phase3-state-transition-persistence-2026-02-17.md`: `P3-012` persistence evidence for invariant decisions and safe-mode transitions.
+- `phase3-state-recovery-replay-2026-02-17.md`: `P3-011/P3-013/P3-014/P3-015` persistent state restoration, strict snapshot ordering, concurrent-update conflict handling, and replay validation evidence.
+- `phase3-lifecycle-validation-2026-02-17.md`: `P3-031/P3-032/P3-033` lifecycle and safe-mode integration validation.
+- `phase3-concurrency-consistency-2026-02-17.md`: `P3-035` concurrency consistency validation for orchestrated lifecycle execution.
+- `phase3-role-telemetry-2026-02-17.md`: `P3-028` role-level telemetry implementation and validation.
+- `phase3-role-dashboard-2026-02-17.md`: `P3-036` role throughput/error/latency dashboard provisioning evidence.
+- `phase3-quality-safe-mode-dashboard-2026-02-17.md`: `P3-037` PSD/ICS/safe-mode dashboard provisioning evidence.
+- `phase3-long-horizon-2026-02-17.md`: `P3-038` long-horizon scenario comparison run and baseline delta evidence.
+- `phase3-threshold-tuning-2026-02-17.md`: `P3-039` empirical threshold tuning and alert-rule updates.
+- `phase3-reduction-demonstration-2026-02-17.md`: `P3-040` PSD/identity-violation reduction demonstration artifact.
+- `phase3-safe-mode-incident-demo-2026-02-17.md`: `P3-041` induced-incident safe-mode demonstration evidence.
+- `phase3-safe-mode-tool-restrictions-2026-02-17.md`: `P3-017` safe-mode tool-class restriction policy + enforcement evidence.
+- `phase3-acceptance-report-2026-02-17.md`: `P3-042` Phase 3 gate report and sign-off decision.
+- `phase4-dataset-schema-extraction-2026-02-17.md`: `P4-001/P4-002` learning dataset schema and event-log extraction implementation/validation evidence.
+- `phase4-prompt-templates-ab-testing-2026-02-17.md`: `P4-008/P4-009/P4-010/P4-011` role-specific prompt template design, anti-sycophancy/tool-guardrail constraints, and held-out variant A/B scoring evidence.
+- `phase4-training-env-orchestration-2026-02-17.md`: `P4-012/P4-013` reproducible training-environment configuration and end-to-end training-job orchestration evidence.
+- `phase4-experiment-tracking-checkpoints-2026-02-17.md`: `P4-014/P4-015` persistent experiment/artifact registry and checkpoint rollback-strategy implementation evidence.
+- `phase4-deidentification-pipeline-2026-02-17.md`: `P4-003` deterministic de-identification/anonymization pipeline for learning dataset export paths.
+- `phase4-quality-filters-2026-02-17.md`: `P4-004` deterministic quality filters for training examples/episodes before dataset export.
+- `phase4-labeling-guidelines-2026-02-17.md`: `P4-005` labeling rubric and QA sampling policy for training trace annotation.
+- `phase4-dataset-splits-2026-02-17.md`: `P4-006/P4-007` deterministic held-out validation split and adversarial split construction.
+- `reports/`: generated run artifacts (`.json` and `.md` outputs).
+
+Primary scripts:
+- `npm run autonomy:baseline:run`
+- `npm run autonomy:long-horizon:run`
+- `npm run autonomy:phase3:reductions`
+- `npm run autonomy:redteam:run`
+- `npm run autonomy:retrieval:quality`
+- `npm run autonomy:learning:extract -- --events-file <path-to-events-json-or-jsonl>`
+- `npm run autonomy:prompt:ab-test -- --holdout-ratio 0.35 --seed p4-011`
+- `npm run autonomy:training:run -- --dataset-file <path-to-learning-dataset-json>`
+- `npm run autonomy:metrics:cardinality`
+- `npm run autonomy:metrics:retention-cost`
+- `npm run autonomy:contracts:inventory`
+- `npm run autonomy:postconditions:coverage`
+- `npm run autonomy:compensation:coverage`
+- `npm run autonomy:pipeline:latency`
+- `npm run autonomy:events:rebuild -- --events-file <path-to-events-json>`
+- `npm run autonomy:events:verify -- --events-file <path-to-events-json>`
+
+Workflow durability controls:
+- `autonomy.workflow.defaultTimeoutMs`: default workflow execution timeout.
+- `autonomy.workflowEngine.temporal.defaultTimeoutMs`: Temporal-specific timeout override.
+- `autonomy.workflowEngine.temporal.deadLetterMax`: in-memory dead-letter retention limit.
+- `autonomy.eventStore.retentionMs`: event-log retention window (`0` disables time eviction).
+- `GET /api/agent/autonomy/workflows/dead-letters`: inspect dead-lettered workflow executions.
+- `POST /api/agent/autonomy/workflows/dead-letters/clear`: clear dead-letter records.
+- `GET /api/agent/autonomy/audit/summary`: compliance summary for retained audit records.
+- `GET /api/agent/autonomy/audit/export`: export retained audit records in JSONL.
+- `POST /api/agent/autonomy/audit/export-expired`: export expired records and optionally evict.
+- `GET /api/agent/autonomy/roles/health`: per-role health status snapshot.
+- `GET /api/agent/autonomy/roles/readiness`: readiness gate for role boundary availability.
+- `autonomy.roles.orchestrator.timeoutMs`: per-role-call timeout used by orchestrator boundary resilience.
+- `autonomy.roles.orchestrator.maxRetries`: retry budget after initial role call attempt.
+- `autonomy.roles.orchestrator.backoffMs`: linear retry backoff base.
+- `autonomy.roles.orchestrator.circuitBreakerThreshold`: failures before a role circuit opens.
+- `autonomy.roles.orchestrator.circuitBreakerResetMs`: cooldown before role circuit resets.
+- `autonomy.roles.orchestrator.minSourceTrust`: minimum caller trust required for all orchestrator role calls.
+- `autonomy.roles.orchestrator.allowedSources`: caller source allowlist for orchestrator role calls.
+
+Provisioned observability:
+- Grafana dashboard: `deploy/grafana/provisioning/dashboards/operational-baseline.json`
+- Grafana dashboard: `deploy/grafana/provisioning/dashboards/role-telemetry.json`
+- Grafana dashboard: `deploy/grafana/provisioning/dashboards/quality-safe-mode.json`
+- Prometheus rules: `deploy/prometheus/alerts.yml`
+- Event bus: `autonomy:decision:logged` emits normalized validation/approval/verification/invariant outcomes per pipeline execution.
+- Event bus: `autonomy:tool:postcondition:checked` includes `failureTaxonomy` (`check_failed`, `check_error`, `timeout`) for verification analytics.
+- Event bus: `autonomy:safe-mode:entered`, `autonomy:safe-mode:exited`, and `autonomy:safe-mode:exit-denied` emit safe-mode lifecycle notifications.
+- Event bus: `autonomy:safe-mode:tool-blocked` emits denied execution attempts for blocked tool classes during safe mode.
+- Event bus: `autonomy:state:transition` emits every kernel FSM transition with trigger metadata.
+- Event bus: `autonomy:identity:updated` emits identity mutation audit records (version change + changed fields + hash + policy metadata).
+- Event bus: `autonomy:retrieval:trust-override` emits trust override decisions with actor/source attribution and rejection reasons.
+- Event bus: `autonomy:retrieval:rank-guardrail` emits retrieval tuning sanitization records when unsafe rank configs are corrected.
+- Event store: `kernel-state-transitions` and `kernel-safe-mode-transitions` persist kernel and safe-mode transition history.
+- Event store: auditor writes `identity:drift:report` events per audited request with drift score/severity and corrective context.
+- Metric: `autonomy_goal_transitions_total{status}` tracks goal lifecycle transitions (`active/paused/completed/failed`).
+- Metric: `autonomy_approval_requests_total{risk_class}` tracks approval-gate request volume by risk class.
+- Metric: `autonomy_approval_queue_size` tracks current pending approval queue depth.
+- Metric: `autonomy_approval_decisions_total{decision}` tracks approval outcomes (`approved/denied/expired/auto_approved`).
+- Metric: `autonomy_approval_turnaround_ms` tracks request-to-decision latency for approval-gate requests.
+- Metric: `autonomy_memory_gate_decisions_total{decision}` tracks allow/quarantine/reject decisions.
+- Metric: `autonomy_quarantine_size` tracks pending quarantine review backlog.
+- Metric: `autonomy_identity_updates_total` tracks identity mutation count.
+- Metric: `autonomy_identity_version` tracks current identity version.
+- Metric: `autonomy_invariant_checks_total{result=pass|fail|error}` increments on every invariant check run.
+- Metric: `autonomy_role_executions_total{role,outcome}` tracks role-level success/failure outcomes.
+- Metric: `autonomy_role_latency_ms{role}` tracks planner/executor/verifier/memory_writer/auditor/orchestrator latencies.

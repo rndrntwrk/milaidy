@@ -4,7 +4,7 @@ sidebarTitle: Référence API
 description: Référence complète de tous les points de terminaison de l'API REST Milady, organisés par groupe de ressources.
 ---
 
-Le serveur API Milady fonctionne sur le port **2138** par défaut. Tous les points de terminaison sont préfixés par `/api/`. L'authentification est requise lorsque `MILADY_API_TOKEN` est défini.
+Le serveur API Milady fonctionne sur le port **31337** par défaut (`MILADY_API_PORT`). Tous les points de terminaison sont préfixés par `/api/`. L'authentification est requise lorsque `MILADY_API_TOKEN` est défini.
 
 <Warning>
 Lorsque `MILADY_API_TOKEN` est configuré, incluez le jeton en tant que jeton `Bearer` dans l'en-tête `Authorization`, ou utilisez le flux d'appairage pour l'obtenir.
@@ -14,21 +14,21 @@ Lorsque `MILADY_API_TOKEN` est configuré, incluez le jeton en tant que jeton `B
 ## Démarrage rapide
 </div>
 
-Ces exemples supposent que l'API fonctionne sur `localhost:2138`. Remplacez `YOUR_TOKEN` par la valeur de `MILADY_API_TOKEN` ou le jeton reçu lors du flux d'appairage.
+Ces exemples supposent que l'API fonctionne sur `localhost:31337`. Remplacez `YOUR_TOKEN` par la valeur de `MILADY_API_TOKEN` ou le jeton reçu lors du flux d'appairage.
 
 <div id="check-agent-status">
 ### Vérifier le statut de l'agent
 </div>
 
 ```bash
-curl http://localhost:2138/api/status
+curl http://localhost:31337/api/status
 ```
 
 ```json
 {
   "name": "Milady",
   "status": "running",
-  "model": "claude-sonnet-4-20250514",
+  "model": "claude-sonnet-4-6",
   "uptime": 3600
 }
 ```
@@ -40,7 +40,7 @@ curl http://localhost:2138/api/status
 Lorsque l'appairage est activé, l'agent affiche un code dans son terminal. Soumettez-le pour recevoir un jeton :
 
 ```bash
-curl -X POST http://localhost:2138/api/auth/pair \
+curl -X POST http://localhost:31337/api/auth/pair \
   -H "Content-Type: application/json" \
   -d '{"code": "ABCD-EFGH"}'
 ```
@@ -56,7 +56,7 @@ curl -X POST http://localhost:2138/api/auth/pair \
 </div>
 
 ```bash
-curl http://localhost:2138/api/character \
+curl http://localhost:31337/api/character \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
@@ -65,7 +65,7 @@ curl http://localhost:2138/api/character \
 </div>
 
 ```bash
-curl -X POST http://localhost:2138/api/conversations/YOUR_CONVERSATION_ID/messages \
+curl -X POST http://localhost:31337/api/conversations/YOUR_CONVERSATION_ID/messages \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"text": "Hello, what can you do?"}'
@@ -76,7 +76,7 @@ curl -X POST http://localhost:2138/api/conversations/YOUR_CONVERSATION_ID/messag
 </div>
 
 ```bash
-curl -N -X POST http://localhost:2138/api/conversations/YOUR_CONVERSATION_ID/messages/stream \
+curl -N -X POST http://localhost:31337/api/conversations/YOUR_CONVERSATION_ID/messages/stream \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"text": "Tell me about yourself"}'
@@ -89,7 +89,7 @@ La réponse est un flux Server-Sent Events. Chaque événement contient un champ
 </div>
 
 ```bash
-curl http://localhost:2138/api/conversations \
+curl http://localhost:31337/api/conversations \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
@@ -98,7 +98,7 @@ curl http://localhost:2138/api/conversations \
 </div>
 
 ```bash
-curl -X POST http://localhost:2138/api/knowledge/documents \
+curl -X POST http://localhost:31337/api/knowledge/documents \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -112,7 +112,7 @@ curl -X POST http://localhost:2138/api/knowledge/documents \
 </div>
 
 ```bash
-curl "http://localhost:2138/api/knowledge/search?q=what+is+milady&limit=5" \
+curl "http://localhost:31337/api/knowledge/search?q=what+is+milady&limit=5" \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
@@ -121,7 +121,7 @@ curl "http://localhost:2138/api/knowledge/search?q=what+is+milady&limit=5" \
 </div>
 
 ```bash
-curl http://localhost:2138/api/plugins \
+curl http://localhost:31337/api/plugins \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
@@ -130,7 +130,7 @@ curl http://localhost:2138/api/plugins \
 </div>
 
 ```bash
-curl http://localhost:2138/api/agent/autonomy \
+curl http://localhost:31337/api/agent/autonomy \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
@@ -146,7 +146,7 @@ curl http://localhost:2138/api/agent/autonomy \
 </div>
 
 ```bash
-curl -X POST http://localhost:2138/api/agent/autonomy \
+curl -X POST http://localhost:31337/api/agent/autonomy \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"enabled": true}'
@@ -174,6 +174,19 @@ curl -X POST http://localhost:2138/api/agent/autonomy \
 | `GET` | `/api/status` | Obtenir le statut actuel de l'agent, le nom, le modèle, le temps de fonctionnement, l'état d'autonomie et les informations de redémarrage en attente |
 | `GET` | `/api/health` | Vérification structurée de la santé des sous-systèmes (environnement d'exécution, base de données, plugins, connecteurs, état de préparation) |
 | `GET` | `/api/runtime` | Obtenir les détails de l'environnement d'exécution (plugins chargés, services, capacités) |
+
+Exemple de réponse de `GET /api/status` :
+
+```json
+{
+  "name": "Milady",
+  "status": "running",
+  "model": "anthropic/claude-sonnet-4-6",
+  "uptime": 3600,
+  "autonomy": { "enabled": true },
+  "pendingRestart": false
+}
+```
 
 ---
 
@@ -379,7 +392,9 @@ La boîte de réception agrège les messages de toutes les plateformes connecté
 | `POST` | `/api/skills/:id/open` | Ouvrir le répertoire d'une compétence |
 | `GET` | `/api/skills/:id/source` | Obtenir le code source d'une compétence |
 | `PUT` | `/api/skills/:id/source` | Mettre à jour le code source d'une compétence |
-| `PUT` | `/api/skills/:id` | Mettre à jour la configuration d'une compétence (activer/désactiver) |
+| `POST` | `/api/skills/:id/enable` | Activer une compétence (respecte les confirmations d'analyse de sécurité) |
+| `POST` | `/api/skills/:id/disable` | Désactiver une compétence |
+| `PUT` | `/api/skills/:id` | **Obsolète** — utilisez `POST /api/skills/:id/enable` ou `POST /api/skills/:id/disable` |
 | `DELETE` | `/api/skills/:id` | Supprimer une compétence |
 
 <div id="skills-catalog-marketplace">
@@ -750,6 +765,15 @@ Les routes sous `/api/cloud/v1/` sont transmises en tant que `/api/v1/` vers le 
 | `POST` | `/api/wallet/generate` | Générer de nouveaux portefeuilles pour EVM, Solana ou les deux |
 | `POST` | `/api/wallet/export` | Exporter les clés privées (nécessite une confirmation) |
 
+<div id="wallet-cloud">
+### Wallet Cloud
+</div>
+
+| Méthode | Chemin | Description |
+|---------|--------|-------------|
+| `POST` | `/api/wallet/primary` | Définir la source de portefeuille principale (local ou cloud) pour une chaîne. Contrôlé par `ENABLE_CLOUD_WALLET` |
+| `POST` | `/api/wallet/refresh-cloud` | Interroger à nouveau Eliza Cloud pour obtenir les derniers descripteurs de portefeuille cloud. Contrôlé par `ENABLE_CLOUD_WALLET` |
+
 ---
 
 <div id="drop--mint">
@@ -835,7 +859,7 @@ Les routes sous `/api/cloud/v1/` sont transmises en tant que `/api/v1/` vers le 
 | `GET` | `/api/nfa/learnings` | Obtenir les entrées d'apprentissage analysées avec la racine de Merkle |
 
 <Info>
-Les points de terminaison NFA dépendent du plugin optionnel `@miladyai/plugin-bnb-identity`. Lorsque le plugin n'est pas installé, `/api/nfa/status` renvoie `null` pour les champs `nfa` et `identity`, et `/api/nfa/learnings` renvoie un tableau d'entrées vide avec une racine de Merkle par défaut.
+Les points de terminaison NFA dépendent du plugin optionnel `@elizaos/plugin-bnb-identity`. Lorsque le plugin n'est pas installé, `/api/nfa/status` renvoie `null` pour les champs `nfa` et `identity`, et `/api/nfa/learnings` renvoie un tableau d'entrées vide avec une racine de Merkle par défaut.
 </Info>
 
 ---

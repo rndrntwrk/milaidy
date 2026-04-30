@@ -32,7 +32,6 @@ COHERE_API_KEY                 → @elizaos/plugin-cohere
 PERPLEXITY_API_KEY             → @elizaos/plugin-perplexity
 ELIZAOS_CLOUD_API_KEY          → @elizaos/plugin-elizacloud
 ELIZAOS_CLOUD_ENABLED          → @elizaos/plugin-elizacloud
-ELIZA_USE_PI_AI                → @elizaos/plugin-pi-ai
 CUA_API_KEY                    → @elizaos/plugin-cua
 CUA_HOST                       → @elizaos/plugin-cua
 OBSIDIAN_VAULT_PATH            → @elizaos/plugin-obsidian
@@ -65,8 +64,8 @@ The primary model is stored in `agents.defaults.model.primary` as a `"provider/m
   "agents": {
     "defaults": {
       "model": {
-        "primary": "anthropic/claude-sonnet-4-5",
-        "fallbacks": ["openai/gpt-4o", "groq/llama-3-70b"]
+        "primary": "anthropic/claude-sonnet-4.6",
+        "fallbacks": ["openai/gpt-5", "groq/llama-3-70b"]
       }
     }
   }
@@ -81,7 +80,7 @@ When Eliza Cloud is enabled and no explicit model is set:
 
 ```typescript
 const small = models?.small || "openai/gpt-5-mini";
-const large = models?.large || "anthropic/claude-sonnet-4.5";
+const large = models?.large || "anthropic/claude-sonnet-4.6";
 ```
 
 These are set as `SMALL_MODEL`, `LARGE_MODEL`, `ELIZAOS_CLOUD_SMALL_MODEL`, and `ELIZAOS_CLOUD_LARGE_MODEL`.
@@ -139,7 +138,7 @@ Define a custom model provider (e.g., a self-hosted OpenAI-compatible endpoint):
 
 | Field | Type | Description |
 |---|---|---|
-| `id` | string | Unique model identifier (e.g., `"anthropic/claude-sonnet-4-5"`) |
+| `id` | string | Unique model identifier (e.g., `"anthropic/claude-sonnet-4.6"`) |
 | `name` | string | Human-readable name |
 | `api` | ModelApi | API format: `"openai-completions"`, `"openai-responses"`, `"anthropic-messages"`, `"google-generative-ai"`, `"bedrock-converse-stream"` |
 | `reasoning` | boolean | Whether the model supports extended thinking / reasoning |
@@ -198,13 +197,13 @@ Each agent in `agents.list` can override the model:
     "list": [
       {
         "id": "main",
-        "model": "anthropic/claude-opus-4-5"
+        "model": "anthropic/claude-opus-4.7"
       },
       {
         "id": "coder",
         "model": {
-          "primary": "anthropic/claude-sonnet-4-5",
-          "fallbacks": ["openai/gpt-4o"]
+          "primary": "anthropic/claude-sonnet-4.6",
+          "fallbacks": ["openai/gpt-5"]
         }
       }
     ]
@@ -240,7 +239,7 @@ Sub-agents spawned via session tools can have their own model:
     "defaults": {
       "subagents": {
         "model": {
-          "primary": "anthropic/claude-haiku-4-5",
+          "primary": "anthropic/claude-haiku-4.5-5",
           "fallbacks": ["openai/gpt-4o-mini"]
         }
       }

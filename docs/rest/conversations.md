@@ -15,9 +15,11 @@ The conversations API manages the agent's web-chat interface. Each conversation 
 | GET | `/api/conversations/:id/messages` | Get messages for a conversation |
 | POST | `/api/conversations/:id/messages` | Send a message (synchronous) |
 | POST | `/api/conversations/:id/messages/stream` | Send a message (SSE streaming) |
+| POST | `/api/conversations/:id/messages/truncate` | Truncate messages from a point |
 | POST | `/api/conversations/:id/greeting` | Generate a greeting message |
 | PATCH | `/api/conversations/:id` | Update conversation metadata |
 | DELETE | `/api/conversations/:id` | Delete a conversation |
+| POST | `/api/conversations/cleanup-empty` | Delete empty conversations |
 
 ---
 
@@ -130,9 +132,13 @@ Send a message and get the agent's response synchronously (non-streaming).
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `message` | string | Yes | User message text |
+| `text` | string | Yes | User message text |
 | `channelType` | string | No | Channel type override |
-| `images` | array | No | Attached image data |
+| `images` | array | No | Attached image data (`[{ data, mimeType }]`) |
+| `conversationMode` | string | No | `"simple"` or `"power"` |
+| `language` | string | No | Preferred response language |
+| `source` | string | No | Source identifier for the message |
+| `metadata` | object | No | Arbitrary metadata to attach to the message |
 
 **Response**
 
@@ -184,7 +190,7 @@ data: {"type":"done","fullText":"Here's what I think...","agentName":"Milady"}
 The conversation title is auto-generated in the background if it is still `"New Chat"`, and a `conversation-updated` WebSocket event is broadcast. If AI title generation fails, the title falls back to the first five words of the user's message.
 
 <Info>
-Action callbacks (e.g. from music playback, wallet flows) use **replace** semantics: each successive callback replaces the callback portion of the message rather than appending. This matches the progressive-message pattern used on Discord and Telegram. See [Action callbacks and SSE streaming](/runtime/action-callback-streaming) for details.
+Action callbacks (e.g. from music playback, wallet flows) use **replace** semantics by default: each successive callback replaces the callback portion of the message rather than appending. Callbacks can optionally set `merge: "append"` or `merge: "replace"` on the callback content when a plugin needs to override that default. See [Action callbacks and SSE streaming](/runtime/action-callback-streaming) for details.
 </Info>
 
 **Error recovery**
@@ -198,6 +204,36 @@ In both cases, an `error` SSE event may also be emitted if the reply cannot be p
 ```
 data: {"type":"error","message":"Failed to persist message"}
 ```
+
+---
+
+### POST /api/conversations/:id/messages/truncate
+
+Truncate (delete) messages in a conversation starting from a specific message. By default, deletes messages after the specified message; set `inclusive` to also delete the specified message itself.
+
+**Request Body**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `messageId` | string | Yes | ID of the message to truncate from |
+| `inclusive` | boolean | No | If `true`, also delete the specified message (default: `false`) |
+
+**Response**
+
+```json
+{
+  "ok": true,
+  "deletedCount": 5
+}
+```
+
+**Errors**
+
+| Status | Condition |
+|--------|-----------|
+| 400 | Missing `messageId` |
+| 404 | Conversation not found |
+| 503 | Agent is not running |
 
 ---
 
@@ -225,13 +261,15 @@ Generate a greeting message for a new conversation. Picks a random `postExample`
 
 ### PATCH /api/conversations/:id
 
-Update conversation metadata (currently supports renaming).
+Update conversation metadata: rename, auto-generate a title, or update structured metadata.
 
 **Request Body**
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `title` | string | No | New conversation title |
+| `generate` | boolean | No | Auto-generate a title from the last user message using the AI model |
+| `metadata` | object\|null | No | Structured metadata to attach to the conversation (set to `null` to clear) |
 
 **Response**
 
@@ -255,6 +293,36 @@ Update conversation metadata (currently supports renaming).
 
 ---
 
+### POST /api/conversations/:id/messages/truncate
+
+Truncate messages in a conversation starting from a given message ID. Useful for "edit and regenerate" flows where the user wants to discard messages from a certain point onward.
+
+**Request Body**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `messageId` | string | Yes | ID of the message to truncate from |
+| `inclusive` | boolean | No | Whether to also delete the specified message (default: `false`) |
+
+**Response**
+
+```json
+{
+  "ok": true,
+  "deletedCount": 3
+}
+```
+
+**Errors**
+
+| Status | Condition |
+|--------|-----------|
+| 400 | Missing `messageId` |
+| 404 | Conversation not found |
+| 503 | Agent is not running |
+
+---
+
 ### DELETE /api/conversations/:id
 
 Delete a conversation. Messages remain in the runtime memory but the conversation metadata is removed.
@@ -267,6 +335,50 @@ Delete a conversation. Messages remain in the runtime memory but the conversatio
 }
 ```
 
+---
+
+### POST /api/conversations/cleanup-empty
+
+Delete all conversations that have no messages. Optionally keep a specific conversation.
+
+**Request Body**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `keepId` | string | No | Conversation ID to exclude from cleanup |
+
+**Response**
+
+```json
+{
+  "deleted": ["uuid1", "uuid2"]
+}
+```
+
+
+### POST /api/conversations/cleanup-empty
+
+Delete all conversations that have no user messages. Useful for clearing auto-created conversations that were never used. Optionally keep a specific conversation.
+
+**Request Body**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `keepId` | string | No | Conversation ID to preserve even if empty |
+
+**Response**
+
+```json
+{
+  "deleted": ["uuid-1", "uuid-2"]
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `deleted` | string[] | IDs of conversations that were deleted |
+
+---
 
 ## Common Error Codes
 

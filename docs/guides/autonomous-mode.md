@@ -6,6 +6,10 @@ description: Configure and monitor the agent's autonomous reasoning loop, where 
 
 Autonomous mode allows the Milady agent to reason and act independently between user conversations. When enabled, the agent runs a continuous loop -- observing its environment, making decisions, and executing actions without waiting for explicit user input. This is useful for background monitoring, scheduled workflows, and proactive behavior.
 
+<Tip>
+For a step-by-step walkthrough with use cases and safety controls, see the [Autonomous Agent Tutorial](/guides/tutorial-autonomous-agent).
+</Tip>
+
 ## How Autonomous Mode Works
 
 The autonomous system is built on elizaOS's core task system and consists of several interconnected components:
@@ -255,7 +259,7 @@ When a trigger fires, the `injectAutonomousInstruction()` method on the Autonomy
 | Limit | Value | Purpose |
 |-------|-------|---------|
 | **Event buffer cap** | 240 events per agent | Bounds memory usage for the autonomous state cache |
-| **Max active triggers** | 100 per creator (default) | Prevents runaway trigger creation. Configurable via `MAX_ACTIVE_TRIGGERS` env var. |
+| **Max active triggers** | 100 per creator (default) | Prevents runaway trigger creation. Configurable via `MILADY_TRIGGERS_MAX_ACTIVE` env var or runtime setting. |
 | **Trigger maxRuns** | Per-trigger configurable | Limits how many times a trigger can execute before auto-deletion |
 
 ### SSRF Protection
@@ -272,12 +276,12 @@ Custom actions executed during autonomous mode enforce the same SSRF guards as u
     Send a POST request to `/api/agent/autonomy`:
     ```bash
     # Disable autonomy
-    curl -X POST http://localhost:2138/api/agent/autonomy \
+    curl -X POST http://localhost:31337/api/agent/autonomy \
       -H "Content-Type: application/json" \
       -d '{"enabled": false}'
 
     # Enable autonomy
-    curl -X POST http://localhost:2138/api/agent/autonomy \
+    curl -X POST http://localhost:31337/api/agent/autonomy \
       -H "Content-Type: application/json" \
       -d '{"enabled": true}'
     ```

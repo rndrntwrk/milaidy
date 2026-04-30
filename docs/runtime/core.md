@@ -4,7 +4,7 @@ sidebarTitle: "Core"
 description: "AgentRuntime class, constructor parameters, plugin registration, and the Milady configuration cascade."
 ---
 
-The `AgentRuntime` class from `@elizaos/core` is the central object that manages plugin registration, message processing, provider context assembly, and service lifecycle. Milady wraps it with additional bootstrap logic in `src/runtime/eliza.ts`.
+The `AgentRuntime` class from `@elizaos/core` is the central object that manages plugin registration, message processing, provider context assembly, and service lifecycle. Milady wraps it with additional bootstrap logic in `eliza/packages/agent/src/runtime/eliza.ts`.
 
 ## AgentRuntime Constructor
 
@@ -12,7 +12,7 @@ The `AgentRuntime` class from `@elizaos/core` is the central object that manages
 const runtime = new AgentRuntime({
   character,
   actionPlanning: true,
-  plugins: [miladyPlugin, ...resolvedPlugins],
+  plugins: [elizaPlugin, ...resolvedPlugins],
   logLevel: "error",
   // sandboxMode and sandboxAuditHandler are only included when sandbox is active
   ...(isSandboxActive && {
@@ -21,7 +21,7 @@ const runtime = new AgentRuntime({
   }),
   settings: {
     VALIDATION_LEVEL: "fast",
-    MODEL_PROVIDER: "anthropic/claude-sonnet-4-5",
+    MODEL_PROVIDER: "anthropic/claude-sonnet-4.6",
     BUNDLED_SKILLS_DIRS: "/path/to/skills",
     WORKSPACE_SKILLS_DIR: "~/.milady/workspace/skills",
     SKILLS_ALLOWLIST: "skill-a,skill-b",
@@ -47,7 +47,7 @@ const runtime = new AgentRuntime({
 | Setting Key | Source | Description |
 |---|---|---|
 | `VALIDATION_LEVEL` | Hardcoded | Set to `"fast"` — controls elizaOS validation depth |
-| `MODEL_PROVIDER` | `agents.defaults.model.primary` | Primary model selection (e.g., `"anthropic/claude-sonnet-4-5"`) |
+| `MODEL_PROVIDER` | `agents.defaults.model.primary` | Primary model selection (e.g., `"anthropic/claude-sonnet-4.6"`) |
 | `BUNDLED_SKILLS_DIRS` | `@elizaos/skills` package | Absolute path to bundled skills directory |
 | `WORKSPACE_SKILLS_DIR` | workspace path + `/skills` | Per-agent skills override directory |
 | `EXTRA_SKILLS_DIRS` | `skills.load.extraDirs` | Additional skill directories from config |
@@ -88,7 +88,7 @@ await runtime.initialize();
 
 ## Plugin Export Detection
 
-`findRuntimePluginExport()` in `src/runtime/eliza.ts` locates the Plugin export from a dynamically-imported module using a priority order:
+`findRuntimePluginExport()` in `eliza/packages/agent/src/runtime/eliza.ts` locates the Plugin export from a dynamically-imported module using a priority order:
 
 ```
 1. module.default   (ES module default export)
@@ -147,17 +147,19 @@ for (const [featureName, enabled] of Object.entries(config.features ?? {})) {
 
 ## Channel to Plugin Mapping
 
+> **Note:** Not all plugins in this map are bundled with Milady. `twitter` (`@elizaos/plugin-twitter`) and `lens` (`@elizaos/plugin-lens`) are upstream elizaOS plugins that must be installed manually. `wechat` (added by Milady's `app-core`) is experimental. See the [connectors availability table](/guides/connectors#supported-platforms).
+
 ```typescript
 const CHANNEL_PLUGIN_MAP = {
   telegram:    "@elizaos/plugin-telegram",
   discord:     "@elizaos/plugin-discord",
   slack:       "@elizaos/plugin-slack",
-  twitter:     "@elizaos/plugin-twitter",
+  twitter:     "@elizaos/plugin-twitter",     // upstream, not bundled
   whatsapp:    "@elizaos/plugin-whatsapp",
   signal:      "@elizaos/plugin-signal",
   imessage:    "@elizaos/plugin-imessage",
   farcaster:   "@elizaos/plugin-farcaster",
-  lens:        "@elizaos/plugin-lens",
+  lens:        "@elizaos/plugin-lens",         // upstream, not bundled
   msteams:     "@elizaos/plugin-msteams",
   mattermost:  "@elizaos/plugin-mattermost",
   googlechat:  "@elizaos/plugin-google-chat",
@@ -166,6 +168,7 @@ const CHANNEL_PLUGIN_MAP = {
   nostr:       "@elizaos/plugin-nostr",
   blooio:      "@elizaos/plugin-blooio",
   twitch:      "@elizaos/plugin-twitch",
+  wechat:      "@elizaos/plugin-wechat",       // experimental
 };
 ```
 
@@ -194,7 +197,6 @@ const PROVIDER_PLUGIN_MAP = {
   PERPLEXITY_API_KEY:             "@elizaos/plugin-perplexity",
   ELIZAOS_CLOUD_API_KEY:          "@elizaos/plugin-elizacloud",
   ELIZAOS_CLOUD_ENABLED:          "@elizaos/plugin-elizacloud",
-  ELIZA_USE_PI_AI:                "@elizaos/plugin-pi-ai",
   CUA_API_KEY:                    "@elizaos/plugin-cua",
   CUA_HOST:                       "@elizaos/plugin-cua",
   OBSIDIAN_VAULT_PATH:            "@elizaos/plugin-obsidian",

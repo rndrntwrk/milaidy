@@ -24,7 +24,7 @@ Para **compilar desde el código fuente** o desarrollo, también necesitas:
 Se requiere Node 22+ porque Milady utiliza módulos ES nativos, el prefijo de protocolo `node:` y otras APIs modernas de Node. Bun solo es necesario para desarrollo y compilación desde el código fuente -- se usa como gestor de paquetes y ejecutor de scripts. El paquete npm publicado y los scripts de instalación se ejecutan solo con Node.js.
 </Info>
 
-También necesitarás una clave API de al menos un proveedor de modelos (Anthropic, OpenAI, OpenRouter, etc.) -- a menos que planees usar [Ollama](https://ollama.ai) para inferencia completamente local, que no requiere clave API.
+También necesitarás una clave API de al menos un proveedor de modelos (Anthropic, OpenAI, OpenRouter, etc.) -- a menos que planees usar [Ollama](https://ollama.com) para inferencia completamente local, que no requiere clave API.
 
 <div id="desktop-app-recommended">
 ## Aplicación de escritorio (Recomendada)
@@ -40,7 +40,7 @@ Descarga desde **[GitHub Releases](https://github.com/milady-ai/milady/releases/
 | macOS (Intel) | [`Milady-x64.dmg`](https://github.com/milady-ai/milady/releases/latest) | Macs anteriores a 2020 |
 | Windows | [`Milady-Setup.exe`](https://github.com/milady-ai/milady/releases/latest) | Windows 10+ |
 | Linux | [`Milady.AppImage`](https://github.com/milady-ai/milady/releases/latest) / [`.deb`](https://github.com/milady-ai/milady/releases/latest) | AppImage o paquete Debian |
-| iOS | [App Store](https://apps.apple.com/app/milady-private-ai-assistant/id0000000000) | iPhone y iPad |
+| iOS | App Store (pronto) | iPhone y iPad |
 | Android | [Google Play](https://play.google.com/store/apps/details?id=ai.milady.app) / [APK](https://github.com/milady-ai/milady/releases/latest) | Android 10+ |
 
 Todas las versiones están firmadas y notarizadas. Sin advertencias de Gatekeeper en macOS.
@@ -64,7 +64,7 @@ shasum -a 256 --check --ignore-missing SHA256SUMS.txt
     El script de instalación descarga la última versión, coloca el binario en tu PATH y ejecuta la configuración inicial:
 
     ```bash
-    curl -fsSL https://milady-ai.github.io/milady/install.sh | bash
+    curl -fsSL https://get.milady.ai | bash
     milady setup
     ```
 
@@ -76,7 +76,7 @@ shasum -a 256 --check --ignore-missing SHA256SUMS.txt
   </Tab>
   <Tab title="Windows (PowerShell)">
     ```powershell
-    irm https://milady-ai.github.io/milady/install.ps1 | iex
+    irm https://get.milady.ai/install.ps1 | iex
     ```
 
     Después de la instalación, abre una nueva ventana de terminal y ejecuta:
@@ -168,7 +168,7 @@ Para colaboradores o cualquier persona que desee la última versión de desarrol
     bun install
     ```
 
-    El script `postinstall` inicializa automáticamente los submódulos de git, asegura que el directorio de habilidades exista, vincula el servidor del navegador y aplica parches a las dependencias.
+    El hook `preinstall` inicializa primero los submódulos de git; el `postinstall` posterior asegura que el directorio de habilidades exista, vincula el servidor del navegador y aplica parches a las dependencias.
   </Step>
   <Step title="Compilar todo">
     ```bash
@@ -272,19 +272,19 @@ campo `env` o en `~/.milady/.env`:
 
 <CodeGroup>
 ```bash Anthropic (recommended)
-export ANTHROPIC_API_KEY="sk-ant-..."
+export ANTHROPIC_API_KEY="<ANTHROPIC_API_KEY>"
 ```
 
 ```bash OpenAI
-export OPENAI_API_KEY="sk-..."
+export OPENAI_API_KEY="<OPENAI_API_KEY>"
 ```
 
 ```bash OpenRouter
-export OPENROUTER_API_KEY="sk-or-..."
+export OPENROUTER_API_KEY="<OPENROUTER_API_KEY>"
 ```
 
 ```bash Google Gemini
-export GOOGLE_API_KEY="AI..."
+export GOOGLE_API_KEY="<GOOGLE_API_KEY>"
 ```
 
 ```bash Ollama (local, no key needed)

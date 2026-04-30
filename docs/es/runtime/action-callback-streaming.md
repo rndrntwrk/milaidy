@@ -38,7 +38,7 @@ Eso es correcto para **deltas de tokens** que extienden la misma respuesta, pero
 ## El comportamiento de Milady
 </div>
 
-Dentro de `generateChatResponse` (`packages/agent/src/api/chat-routes.ts`):
+Dentro de `generateChatResponse` (`eliza/packages/agent/src/api/chat-routes.ts`):
 
 - Los **fragmentos del LLM** siguen usando semántica de **adición** vía `appendIncomingText` → `resolveStreamingUpdate` → `onChunk`.
 - Los **callbacks de acción** usan **`replaceCallbackText`**:
@@ -93,8 +93,8 @@ Sin campos adicionales, sin APIs específicas de Milady, sin adjuntos al runtime
 ## Código y documentación relacionados
 </div>
 
-- **Implementación:** `packages/agent/src/api/chat-routes.ts` — `replaceCallbackText`, `preCallbackText`.
-- **Helper de ejemplo:** `packages/plugin-music-player/src/utils/progressiveMessage.ts`.
+- **Implementación:** `eliza/packages/agent/src/api/chat-routes.ts` — `replaceCallbackText`, `preCallbackText`.
+- **Helper de ejemplo:** `plugins/plugin-music-player/src/utils/progressiveMessage.ts`.
 - **Transmisión en UI:** [Panel — Chat](/es/dashboard/chat) (SSE / indicador de escritura).
 - **Registro de cambios:** [Registro de cambios](/es/changelog) — busca "action callback" o la fecha de publicación.
 
@@ -109,4 +109,4 @@ Posibles seguimientos (no enviados como requisitos aquí):
 - **Metadatos** opcionales en el contenido del callback para distinguir "adición" vs "reemplazo" para plugins exóticos (solo si aparece un caso de uso real).
 - **Persistencia** de estados intermedios (hoy el texto del turno persistido sigue las reglas normales de persistencia del chat).
 
-Consulta `docs/ROADMAP.md` en el repositorio para la dirección general del producto.
+Consulta `docs/roadmap.md` en el repositorio para la dirección general del producto.

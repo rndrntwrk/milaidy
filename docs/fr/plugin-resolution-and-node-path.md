@@ -11,7 +11,7 @@ Ce document explique **pourquoi** les imports dynamiques de plugins échouent sa
 Le runtime (`src/runtime/eliza.ts`) charge les plugins via import dynamique :
 
 ```ts
-import("@elizaos/plugin-coding-agent")
+import("@elizaos/plugin-sql")
 ```
 
 Node résout cela en remontant depuis le **répertoire du fichier importateur**. Quand eliza s'exécute depuis différents emplacements, la résolution peut échouer :
@@ -60,7 +60,7 @@ env.NODE_PATH = ...;
 **Pourquoi ici :** L'exécuteur CLI lance un processus enfant qui exécute `milady.mjs` → `dist/entry.js` → `dist/eliza.js`. Définir `NODE_PATH` dans l'env de l'enfant assure que l'enfant résout depuis la racine même si `dist/` n'a pas son propre `node_modules`.
 
 <div id="3-appsappelectrobunscrnativeagentts-electrobun-native-runtime">
-### 3. `apps/app/electrobun/src/native/agent.ts` (runtime natif Electrobun)
+### 3. `eliza/packages/app-core/platforms/electrobun/src/native/agent.ts` (runtime natif Electrobun)
 </div>
 
 ```ts
@@ -86,17 +86,17 @@ Dans le `.app` empaqueté, `eliza.js` vit à `app.asar.unpacked/milady-dist/eliz
 ## Bun et les exports de packages publiés
 </div>
 
-Certains packages `@elizaos` (par ex. `@elizaos/plugin-coding-agent`) publient un `package.json` avec `exports["."].bun = "./src/index.ts"`. **Pourquoi ils font ça :** Dans le monorepo upstream, Bun peut exécuter TypeScript directement, donc pointer vers `src/` évite une étape de build. Cependant, le tarball npm publié n'inclut que `dist/` — `src/` n'est pas livré. Quand nous installons depuis npm, la condition `"bun"` pointe vers un chemin qui n'existe pas.
+Certains packages `@elizaos` (par ex. `@elizaos/plugin-sql`) publient un `package.json` avec `exports["."].bun = "./src/index.ts"`. **Pourquoi ils font ça :** Dans le monorepo upstream, Bun peut exécuter TypeScript directement, donc pointer vers `src/` évite une étape de build. Cependant, le tarball npm publié n'inclut que `dist/` — `src/` n'est pas livré. Quand nous installons depuis npm, la condition `"bun"` pointe vers un chemin qui n'existe pas.
 
 **Ce qui se passe :** Le résolveur de Bun préfère la condition d'export `"bun"`. Il tente de charger `./src/index.ts`, le fichier est manquant, et nous obtenons "Cannot find module … from …/src/runtime/eliza.ts" même si le package est dans `node_modules`. Bun ne retombe pas sur la condition `"import"` quand la cible `"bun"` est manquante.
 
-**Notre correction :** `scripts/patch-deps.mjs` s'exécute après `bun install` via `scripts/run-repo-setup.mjs` (utilisé par `postinstall` et le bootstrap de build de l'app). Il trouve `@elizaos/plugin-coding-agent` (et tout autre package que nous ajoutons) et, si `exports["."].bun` pointe vers `./src/index.ts` et que ce fichier n'existe pas, supprime les conditions `"bun"` et `"default"` qui référencent `src/`. Après le patch, seuls `"import"` (et similaires) restent, donc Bun résout vers `./dist/index.js`. **Pourquoi nous ne patchons que quand le fichier est manquant :** Dans un workspace de développement où le plugin est checké avec `src/` présent, nous laissons le package inchangé pour que les workflows upstream fonctionnent toujours.
+**Notre correction :** `scripts/patch-deps.mjs` s'exécute après `bun install` via `scripts/run-repo-setup.mjs` (utilisé par `postinstall` et le bootstrap de build de l'app). Il applique le correctif aux paquets `@elizaos` installés qui en ont besoin et, si `exports["."].bun` pointe vers `./src/index.ts` et que ce fichier n'existe pas, supprime les conditions `"bun"` et `"default"` qui référencent `src/`. Après le patch, seuls `"import"` (et similaires) restent, donc Bun résout vers `./dist/index.js`. **Pourquoi nous ne patchons que quand le fichier est manquant :** Dans un workspace de développement où le plugin est checké avec `src/` présent, nous laissons le package inchangé pour que les workflows upstream fonctionnent toujours.
 
 <div id="pinned-elizaosplugin-openrouter">
 ## Épinglé : `@elizaos/plugin-openrouter`
 </div>
 
-Ce repo résout actuellement **`@elizaos/plugin-openrouter`** via un lien workspace local (**`workspace:*`**) pendant le développement. La note importante sur l'artefact publié est inchangée : **`2.0.0-alpha.10`** est le dernier tarball npm connu comme fonctionnel, tandis que **`2.0.0-alpha.12`** a livré des entrypoints dist cassés.
+Ce repo résout actuellement **`@elizaos/plugin-openrouter`** via un lien workspace local (**`workspace:*`**) pendant le développement. Lorsque le checkout local n'est pas utilisé, le `package.json` racine épingle **`2.0.0-alpha.13`** (le tarball npm connu comme fonctionnel actuel). **`2.0.0-alpha.12`** a livré des entrypoints dist cassés et doit être évité.
 
 <div id="what-went-wrong-in-200-alpha12">
 ### Ce qui s'est mal passé dans `2.0.0-alpha.12`
@@ -106,14 +106,14 @@ Le tarball npm publié pour **`2.0.0-alpha.12`** contient des sorties JavaScript
 
 **Pourquoi Bun erreur :** Quand le runtime charge le plugin, Bun build/transpile ce fichier d'entrée et échoue avec des erreurs comme *`openrouterPlugin` is not declared in this file* — les symboles sont exportés mais jamais définis. Le build CommonJS (`dist/cjs/index.node.cjs`) est incomplet de la même manière (les getters d'export référencent un chunk `import_plugin` manquant).
 
-**Pourquoi nous ne patchons pas le dist en postinstall :** La release cassée manque le corps entier du plugin, pas un seul identifiant incorrect (contraste avec `@elizaos/plugin-pdf`, où un petit string replace corrige un mauvais alias d'export). Reconstruire le plugin depuis les sources dans Milady forkerait upstream et serait fragile. Quand vous n'utilisez pas le checkout workspace local, préférez l'artefact **`2.0.0-alpha.10`** connu comme fonctionnel.
+**Pourquoi nous ne patchons pas le dist en postinstall :** La release cassée manque le corps entier du plugin, pas un seul identifiant incorrect (contraste avec `@elizaos/plugin-pdf`, où un petit string replace corrige un mauvais alias d'export). Reconstruire le plugin depuis les sources dans Milady forkerait upstream et serait fragile. Quand vous n'utilisez pas le checkout workspace local, préférez l'artefact **`2.0.0-alpha.13`** connu comme fonctionnel.
 
 <div id="maintainer-notes">
 ### Notes pour les mainteneurs
 </div>
 
 - **Avant de mettre à jour** la dépendance OpenRouter, vérifiez le **tarball publié** sur npm : ouvrez `dist/node/index.node.js` et confirmez qu'il définit l'export default / `openrouterPlugin`, ou lancez `bun build node_modules/@elizaos/plugin-openrouter/dist/node/index.node.js --target=bun` après installation.
-- **Ne remplacez pas le lien workspace par une plage semver non bornée** tant qu'upstream n'a pas publié une version corrigée et que vous n'avez pas confirmé l'artefact. **Pourquoi :** `^2.0.0-alpha.10` permettait à Bun de résoudre **`alpha.12`**, ce qui cassait les installations qui mettaient à jour le lockfile.
+- **Ne remplacez pas le lien workspace par une plage semver non bornée** tant qu'upstream n'a pas publié une version corrigée et que vous n'avez pas confirmé l'artefact. **Pourquoi :** `^2.0.0-alpha.13` permettait à Bun de résoudre des versions défectueuses, ce qui cassait les installations qui mettaient à jour le lockfile.
 
 Le contexte utilisateur et la configuration pour OpenRouter lui-même vivent dans **[Plugin OpenRouter](plugin-registry/llm/openrouter.md)** (Mintlify : `/plugin-registry/llm/openrouter`).
 

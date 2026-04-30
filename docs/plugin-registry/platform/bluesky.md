@@ -10,8 +10,10 @@ The Bluesky plugin connects Milady agents to the Bluesky social network via the 
 
 ## Installation
 
+This connector auto-enables when its configuration is present in `milady.json`. You can also install it explicitly:
+
 ```bash
-milady plugins install bluesky
+milady plugins install @elizaos/plugin-bluesky
 ```
 
 ## Setup
@@ -24,42 +26,59 @@ milady plugins install bluesky
 
 ### 2. Configure Milady
 
+Set the credentials via environment variables in your config:
+
 ```json
 {
+  "env": {
+    "BLUESKY_HANDLE": "yourname.bsky.social",
+    "BLUESKY_PASSWORD": "YOUR_APP_PASSWORD"
+  },
   "connectors": {
     "bluesky": {
-      "username": "YOUR_USERNAME",
-      "password": "YOUR_PASSWORD",
-      "handle": "YOUR_HANDLE"
+      "enabled": true
     }
   }
 }
 ```
 
-Or via environment variables:
+Set credentials via environment variables:
 
 ```bash
-export BLUESKY_USERNAME=YOUR_USERNAME
-export BLUESKY_PASSWORD=YOUR_PASSWORD
-export BLUESKY_HANDLE=YOUR_HANDLE
+export BLUESKY_HANDLE=yourname.bsky.social
+export BLUESKY_PASSWORD=your-app-password
 ```
 
 ## Configuration
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `username` | Yes | Bluesky account username |
-| `password` | Yes | Bluesky account password or app password |
-| `handle` | Yes | Bluesky handle (e.g., `yourname.bsky.social`) |
 | `enabled` | No | Set `false` to disable (default: `true`) |
+| `postEnable` | No | Enable automated posting |
+| `postIntervalMin` | No | Minimum minutes between posts (default: `30`) |
+| `postIntervalMax` | No | Maximum minutes between posts (default: `60`) |
+| `dryRun` | No | Simulate operations without executing them |
 
 ## Environment Variables
 
-```bash
-export BLUESKY_USERNAME=YOUR_USERNAME
-export BLUESKY_PASSWORD=YOUR_PASSWORD
-export BLUESKY_HANDLE=YOUR_HANDLE
-```
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `BLUESKY_HANDLE` | Yes | Bluesky handle (e.g., `yourname.bsky.social`) |
+| `BLUESKY_PASSWORD` | Yes | App password (generate at Settings > App Passwords) |
+| `BLUESKY_ENABLED` | No | Set to `true` to enable |
+| `BLUESKY_SERVICE` | No | Bluesky PDS instance URL |
+| `BLUESKY_DRY_RUN` | No | Set to `true` for testing without posting |
+| `BLUESKY_ENABLE_POSTING` | No | Enable or disable post creation |
+| `BLUESKY_ENABLE_DMS` | No | Enable direct message processing |
+| `BLUESKY_POLL_INTERVAL` | No | Polling interval in seconds |
+| `BLUESKY_ENABLE_POSTING` | No | Enable automated posting |
+| `BLUESKY_ACTION_INTERVAL` | No | Interval between actions in ms |
+| `BLUESKY_MAX_POST_LENGTH` | No | Maximum post length |
+| `BLUESKY_POST_IMMEDIATELY` | No | Post immediately on generation |
+| `BLUESKY_POST_INTERVAL_MAX` | No | Maximum minutes between posts |
+| `BLUESKY_POST_INTERVAL_MIN` | No | Minimum minutes between posts |
+| `BLUESKY_MAX_ACTIONS_PROCESSING` | No | Maximum concurrent actions |
+| `BLUESKY_ENABLE_ACTION_PROCESSING` | No | Enable processing of actions |
 
 ## Related
 

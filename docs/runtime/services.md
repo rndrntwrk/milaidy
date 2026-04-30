@@ -74,15 +74,14 @@ These services are available but not loaded by default — enable via admin pane
 | `@elizaos/plugin-code` | Code writing and file operations |
 | `@elizaos/plugin-repoprompt` | RepoPrompt CLI integration |
 | `@elizaos/plugin-claude-code-workbench` | Claude Code companion workflows |
-| `@elizaos/plugin-computeruse` | Computer use automation (platform-specific) |
+| `@elizaos/plugin-computeruse` | Computer use automation (platform-specific, requires platform binaries) |
 | `@elizaos/plugin-browser` | Browser automation (requires stagehand-server) |
 | `@elizaos/plugin-vision` | Visual understanding (feature-gated) |
 | `@elizaos/plugin-edge-tts` | Text-to-speech (Microsoft Edge TTS) |
 | `@elizaos/plugin-elevenlabs` | ElevenLabs text-to-speech |
+| `@elizaos/plugin-cli` | CLI interface |
 | `@elizaos/plugin-secrets-manager` | Encrypted credential storage (statically imported, may be re-enabled as core) |
 | `relationships` | Contact graph, relationship memory (statically imported, may be re-enabled as core) |
-| `@elizaos/plugin-plugin-manager` | Dynamic plugin install/uninstall at runtime (now a core plugin, always loaded) |
-| `@elizaos/plugin-computeruse` | Computer use automation (requires platform binaries) |
 | `@elizaos/plugin-x402` | x402 HTTP micropayment protocol |
 
 ## Trajectory Logger Service
@@ -128,14 +127,14 @@ SKILLS_DENYLIST = <comma-separated denied skill names>
 
 ## Sandbox Manager
 
-`SandboxManager` from `src/services/sandbox-manager.ts` provides Docker-based code execution isolation when `agents.defaults.sandbox.mode` is `"standard"` or `"max"`:
+`SandboxManager` from `eliza/packages/app-core/src/services/sandbox-manager.ts` provides Docker-based code execution isolation when `agents.defaults.sandbox.mode` is `"standard"` or `"max"`:
 
 ```typescript
 const sandboxManager = new SandboxManager({
   mode: "standard",
   image: dockerSettings?.image ?? undefined,  // no default image — must be configured
   browser: dockerSettings?.browser ?? undefined,
-  containerPrefix: "milady-sandbox-",
+  containerPrefix: "eliza-sandbox",
   network: "bridge",
   memory: "512m",
   cpus: 0.5,
