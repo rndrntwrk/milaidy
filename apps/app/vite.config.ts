@@ -702,7 +702,7 @@ function desktopCorsPlugin(): Plugin {
         );
         res.setHeader(
           "Access-Control-Allow-Headers",
-          "Content-Type, Authorization, X-Milady-Token, X-Api-Key, X-Milady-Export-Token, X-Milady-Client-Id, X-Milady-Terminal-Token, X-Milady-UI-Language",
+          "Content-Type, Authorization, X-API-Token, X-Api-Key, X-ElizaOS-Client-Id, X-ElizaOS-UI-Language, X-ElizaOS-Token, X-Eliza-Export-Token, X-Eliza-Terminal-Token, X-Milady-Token, X-Milady-Client-Id, X-Milady-Export-Token, X-Milady-Terminal-Token, X-Milady-UI-Language, X-Milady-CSRF",
         );
 
         if (req.method === "OPTIONS") {
