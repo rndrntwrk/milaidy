@@ -870,8 +870,21 @@ function applyStoredDetachedShellTheme(): void {
   applyUiTheme(loadUiTheme());
 }
 
+async function initializeStatusBar(): Promise<void> {
+  if (!isNative) return;
+  try {
+    const { StatusBar, Style } = await import("@capacitor/status-bar");
+    await StatusBar.setStyle({ style: Style.Dark });
+    await StatusBar.setOverlaysWebView({ overlay: true });
+    await StatusBar.setBackgroundColor({ color: "#0a0a0a" });
+  } catch {
+    // StatusBar plugin unavailable on this platform — non-fatal.
+  }
+}
+
 async function main(): Promise<void> {
   setupPlatformStyles();
+  await initializeStatusBar();
   applyBuildTimeIosConnection();
 
   try {
