@@ -481,6 +481,9 @@ jobs:
       - name: Apply Milady eliza CI patches
         run: node scripts/apply-eliza-ci-patches.mjs
 
+      - name: Guard eliza runtime copy against recursive package symlinks
+        run: node scripts/patch-eliza-runtime-copy-symlink-guard.mjs
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:

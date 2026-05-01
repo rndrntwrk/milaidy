@@ -124,6 +124,22 @@ test("Electrobun release applies Milady eliza overlay before manual build setup"
   );
 });
 
+test("Electrobun release guards runtime package copy from recursive symlinks", () => {
+  const electrobun = workflow("release-electrobun.yml");
+  const patchScript = fs.readFileSync(
+    "scripts/patch-eliza-runtime-copy-symlink-guard.mjs",
+    "utf8",
+  );
+
+  assert.match(
+    electrobun,
+    /name: Guard eliza runtime copy against recursive package symlinks[\s\S]*?node scripts\/patch-eliza-runtime-copy-symlink-guard\.mjs/,
+  );
+  assert.match(patchScript, /isRecursivePackageSymlinkTarget/);
+  assert.match(patchScript, /path\.relative\(resolvedTarget, entry\)/);
+  assert.match(patchScript, /copy-runtime-node-modules\.ts/);
+});
+
 test("Electrobun release has a lightweight PR contract workflow", () => {
   const workflowText = workflow("test-electrobun-release.yml");
 
