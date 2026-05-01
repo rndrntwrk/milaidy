@@ -508,11 +508,20 @@ describe("compile-libllama shim build invocation", () => {
 
 describe("compile-libllama pinned constants", () => {
   it("matches the SHA referenced in eliza/packages/agent/src/runtime/aosp-llama-adapter.ts", () => {
-    // main-b8198-b2b5273 is the TurboQuant fork pin documented by the
-    // AOSP adapter. Keep this contract explicit so script/cache drift is
-    // caught before Android assets are rebuilt from the wrong source.
+    // apothic/llama.cpp-1bit-turboquant @ main-b8198-b2b5273 — the fork
+    // that adds TBQ3_0 / TBQ4_0 KV-cache codecs (CPU + CUDA). Based on
+    // upstream b8198, so it inherits the post-2024 sampler-chain API and
+    // the renamed model/vocab API the adapter binds against. The matching
+    // Bonsai-8B-1bit GGUF on Hugging Face is trained against this fork.
     expect(LLAMA_CPP_TAG).toBe("main-b8198-b2b5273");
     expect(LLAMA_CPP_COMMIT).toBe("b2b5273e8b275bb96362fe844a5202632eb3e52b");
+  });
+
+  it("clones from the apothic fork (not stock ggml-org)", async () => {
+    const mod = await import("./compile-libllama.mjs");
+    expect(mod.LLAMA_CPP_REMOTE).toBe(
+      "https://github.com/Apothic-AI/llama.cpp-1bit-turboquant.git",
+    );
   });
 
   it("declares a target row for each supported Android ABI", () => {

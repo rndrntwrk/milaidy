@@ -1,6 +1,6 @@
 {
   "lockfileVersion": 1,
-  "configVersion": 1,
+  "configVersion": 0,
   "workspaces": {
     "": {
       "name": "miladyai",
@@ -359,7 +359,7 @@
       "name": "@elizaos/app-elizamaker",
       "version": "0.0.0",
       "dependencies": {
-        "@elizaos/app-steward": "workspace:*",
+        "@elizaos/agent": "workspace:*",
         "@elizaos/core": "workspace:*",
         "ethers": "^6.15.0",
       },
@@ -398,6 +398,7 @@
       "name": "@elizaos/app-knowledge",
       "version": "0.0.1",
       "dependencies": {
+        "@elizaos/agent": "workspace:*",
         "@elizaos/core": "workspace:*",
       },
     },
@@ -505,6 +506,7 @@
       "name": "@elizaos/app-training",
       "version": "0.0.1",
       "dependencies": {
+        "@elizaos/agent": "workspace:*",
         "@elizaos/app-core": "workspace:*",
         "@elizaos/core": "workspace:*",
         "@elizaos/ui": "workspace:*",
@@ -534,7 +536,7 @@
     },
     "eliza/packages/agent": {
       "name": "@elizaos/agent",
-      "version": "2.0.0-alpha.495",
+      "version": "2.0.0-alpha.526",
       "bin": {
         "eliza-autonomous": "./src/bin.ts",
       },
@@ -549,6 +551,7 @@
         "@elizaos/app-training": "workspace:*",
         "@elizaos/core": "workspace:*",
         "@elizaos/plugin-agent-orchestrator": "workspace:*",
+        "@elizaos/plugin-agent-skills": "workspace:*",
         "@elizaos/plugin-browser-bridge": "workspace:*",
         "@elizaos/plugin-local-embedding": "workspace:*",
         "@elizaos/plugin-ollama": "workspace:*",
@@ -608,7 +611,7 @@
     },
     "eliza/packages/app-core": {
       "name": "@elizaos/app-core",
-      "version": "2.0.0-alpha.495",
+      "version": "2.0.0-alpha.526",
       "dependencies": {
         "@capacitor/barcode-scanner": "^3.0.0",
         "@capacitor/core": "8.3.1",
@@ -709,7 +712,7 @@
     },
     "eliza/packages/confidant": {
       "name": "@elizaos/confidant",
-      "version": "2.0.0-alpha.495",
+      "version": "2.0.0-alpha.526",
       "dependencies": {
         "@napi-rs/keyring": "^1.1.6",
       },
@@ -725,7 +728,7 @@
     },
     "eliza/packages/elizaos": {
       "name": "elizaos",
-      "version": "2.0.0-alpha.495",
+      "version": "2.0.0-alpha.526",
       "bin": {
         "elizaos": "./dist/cli.js",
       },
@@ -757,7 +760,7 @@
         "country-flag-icons": "^1.6.12",
         "framer-motion": "^12.29.2",
         "libphonenumber-js": "^1.12.35",
-        "lucide-react": "^0.577.0",
+        "lucide-react": "^1.0.0",
         "qrcode.react": "^4.2.0",
         "react": "19.2.5",
         "react-dom": "19.2.5",
@@ -785,7 +788,7 @@
     },
     "eliza/packages/interop": {
       "name": "@elizaos/interop",
-      "version": "2.0.0-alpha.495",
+      "version": "2.0.0-alpha.526",
       "dependencies": {
         "@elizaos/core": "workspace:*",
       },
@@ -1101,11 +1104,11 @@
     },
     "eliza/packages/rust": {
       "name": "@elizaos/rust",
-      "version": "2.0.0-alpha.495",
+      "version": "2.0.0-alpha.526",
     },
     "eliza/packages/scenario-runner": {
       "name": "@elizaos/scenario-runner",
-      "version": "2.0.0-alpha.495",
+      "version": "2.0.0-alpha.526",
       "bin": {
         "milady-scenarios": "./bin/milady-scenarios",
       },
@@ -1121,18 +1124,18 @@
     },
     "eliza/packages/scenario-schema": {
       "name": "@elizaos/scenario-schema",
-      "version": "2.0.0-alpha.495",
+      "version": "2.0.0-alpha.526",
     },
     "eliza/packages/schemas": {
       "name": "@elizaos/schemas",
-      "version": "2.0.0-alpha.495",
+      "version": "2.0.0-alpha.526",
       "devDependencies": {
         "@bufbuild/buf": "^1.47.2",
       },
     },
     "eliza/packages/shared": {
       "name": "@elizaos/shared",
-      "version": "2.0.0-alpha.495",
+      "version": "2.0.0-alpha.526",
       "dependencies": {
         "@elizaos/core": "workspace:*",
         "zod": "^4.3.6",
@@ -1148,7 +1151,7 @@
     },
     "eliza/packages/skills": {
       "name": "@elizaos/skills",
-      "version": "2.0.0-alpha.495",
+      "version": "2.0.0-alpha.526",
       "dependencies": {
         "@elizaos/core": "workspace:*",
         "yaml": "^2.8.2",
@@ -1159,7 +1162,7 @@
     },
     "eliza/packages/typescript": {
       "name": "@elizaos/core",
-      "version": "2.0.0-alpha.495",
+      "version": "2.0.0-alpha.526",
       "dependencies": {
         "@ai-sdk/anthropic": "^3.0.13",
         "@ai-sdk/google": "^3.0.8",
@@ -1214,7 +1217,7 @@
     },
     "eliza/packages/ui": {
       "name": "@elizaos/ui",
-      "version": "2.0.0-alpha.495",
+      "version": "2.0.0-alpha.526",
       "dependencies": {
         "@radix-ui/react-checkbox": "^1.3.3",
         "@radix-ui/react-dialog": "^1.1.15",
@@ -2129,6 +2132,7 @@
       "devDependencies": {
         "@biomejs/biome": "^2.3.11",
         "@types/node": "^25.0.3",
+        "@types/qrcode": "^1.5.5",
         "typescript": "^6.0.0",
       },
       "peerDependencies": {
@@ -5184,7 +5188,7 @@
 
     "libphonenumber-js": ["libphonenumber-js@1.12.42", "", {}, "sha512-oKQFPTibqQwZZkChCDVMFVJXMZdyJNqDWZWYNn8BgyAaK/6yFJEowxCY0RVFirRyWP63hMRuKlkSEd9qlvbWXg=="],
 
-    "libsignal": ["@whiskeysockets/libsignal-node@github:whiskeysockets/libsignal-node#1c30d7d", { "dependencies": { "curve25519-js": "^0.0.4", "protobufjs": "6.8.8" } }, "WhiskeySockets-libsignal-node-1c30d7d", "sha512-5q4/OuDQaMYx3RpDqMqS3WYyqjrsSMpU8ipQZtpYnm5l6DwNoLV9oIYMDK0NILKW+tyk3tVCIA11BMYQ+A1+GA=="],
+    "libsignal": ["@whiskeysockets/libsignal-node@github:whiskeysockets/libsignal-node#1c30d7d", { "dependencies": { "curve25519-js": "^0.0.4", "protobufjs": "6.8.8" } }, "WhiskeySockets-libsignal-node-1c30d7d"],
 
     "libsodium": ["libsodium@0.7.16", "", {}, "sha512-3HrzSPuzm6Yt9aTYCDxYEG8x8/6C0+ag655Y7rhhWZM9PT4NpdnbqlzXhGZlDnkgR6MeSTnOt/VIyHLs9aSf+Q=="],
 
@@ -6961,6 +6965,8 @@
     "eliza-app/@eslint/js": ["@eslint/js@10.0.1", "", { "peerDependencies": { "eslint": "^10.0.0" }, "optionalPeers": ["eslint"] }, "sha512-zeR9k5pd4gxjZ0abRoIaxdc7I3nDktoXZk2qOv9gCNWx3mVwEn32VRhyLaRsDiJjTs0xq/T8mfPtyuXu7GWBcA=="],
 
     "eliza-app/@types/node": ["@types/node@24.12.2", "", { "dependencies": { "undici-types": "~7.16.0" } }, "sha512-A1sre26ke7HDIuY/M23nd9gfB+nrmhtYyMINbjI1zHJxYteKR6qSMX56FsmjMcDb3SMcjJg5BiRRgOCC/yBD0g=="],
+
+    "eliza-app/lucide-react": ["lucide-react@1.8.0", "", { "peerDependencies": { "react": "^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0" } }, "sha512-WuvlsjngSk7TnTBJ1hsCy3ql9V9VOdcPkd3PKcSmM34vJD8KG6molxz7m7zbYFgICwsanQWmJ13JlYs4Zp7Arw=="],
 
     "eliza-app/vite": ["vite@8.0.10", "", { "dependencies": { "lightningcss": "^1.32.0", "picomatch": "^4.0.4", "postcss": "^8.5.10", "rolldown": "1.0.0-rc.17", "tinyglobby": "^0.2.16" }, "optionalDependencies": { "fsevents": "~2.3.3" }, "peerDependencies": { "@types/node": "^20.19.0 || >=22.12.0", "@vitejs/devtools": "^0.1.0", "esbuild": "^0.27.0 || ^0.28.0", "jiti": ">=1.21.0", "less": "^4.0.0", "sass": "^1.70.0", "sass-embedded": "^1.70.0", "stylus": ">=0.54.8", "sugarss": "^5.0.0", "terser": "^5.16.0", "tsx": "^4.8.1", "yaml": "^2.4.2" }, "optionalPeers": ["@types/node", "@vitejs/devtools", "esbuild", "jiti", "less", "sass", "sass-embedded", "stylus", "sugarss", "terser", "tsx", "yaml"], "bin": { "vite": "bin/vite.js" } }, "sha512-rZuUu9j6J5uotLDs+cAA4O5H4K1SfPliUlQwqa6YEwSrWDZzP4rhm00oJR5snMewjxF5V/K3D4kctsUTsIU9Mw=="],
 

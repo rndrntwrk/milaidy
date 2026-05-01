@@ -106,6 +106,16 @@ const PACKAGE_LINK_ROOTS = [
   ["apps", "app", "node_modules"],
   ["apps", "home", "node_modules"],
 ];
+const MILADY_SINGLETON_DEPENDENCY_LINKS = [
+  {
+    packageDir: path.join("eliza", "packages", "agent"),
+    dependencies: ["drizzle-orm"],
+  },
+  {
+    packageDir: path.join("eliza", "packages", "app-core"),
+    dependencies: ["drizzle-orm"],
+  },
+];
 const ELIZA_AGENT_SKILLS_PLUGIN_BUILD = {
   label: "@elizaos/plugin-agent-skills",
   cwd: path.join("eliza", "plugins", "plugin-agent-skills", "typescript"),
@@ -1523,6 +1533,53 @@ export function ensurePluginDependencyLinks(
   return linkedDependencies;
 }
 
+export function ensureMiladySingletonDependencyLinks(
+  repoRoot = DEFAULT_REPO_ROOT,
+) {
+  let linkedDependencies = 0;
+  const searchRoots = [repoRoot, getRepoElizaRoot(repoRoot)];
+
+  for (const {
+    packageDir: relativePackageDir,
+    dependencies,
+  } of MILADY_SINGLETON_DEPENDENCY_LINKS) {
+    const packageDir = path.join(repoRoot, relativePackageDir);
+    if (!existsSync(packageDir)) {
+      continue;
+    }
+
+    for (const dependencyName of dependencies) {
+      const installedDependencyDir = findInstalledPackageDir(
+        repoRoot,
+        dependencyName,
+        undefined,
+        null,
+        { searchRoots },
+      );
+      if (!installedDependencyDir) {
+        continue;
+      }
+
+      const dependencyLinkPath = path.join(
+        packageDir,
+        "node_modules",
+        ...dependencyName.split("/"),
+      );
+      if (createPackageLink(dependencyLinkPath, installedDependencyDir)) {
+        linkedDependencies += 1;
+      }
+    }
+  }
+
+  if (linkedDependencies > 0) {
+    console.log(
+      `[setup-upstreams] Linked ${linkedDependencies} Milady singleton dependency ${linkedDependencies === 1 ? "entry" : "entries"}`,
+    );
+  }
+
+  return linkedDependencies;
+}
+
 export function getPublishedElizaPackageSpecs(repoRoot = DEFAULT_REPO_ROOT) {
   const rootPackageJson = readPackageJson(repoRoot);
   if (!rootPackageJson) {
@@ -2186,6 +2243,7 @@ export async function setupUpstreams(repoRoot = DEFAULT_REPO_ROOT) {
   await ensureElizaBuildOutputs(elizaRoot);
 
   ensurePluginDependencyLinks(repoRoot, pluginsRoot);
+  ensureMiladySingletonDependencyLinks(repoRoot);
   applyPluginAnthropicBunRuntimePatch(elizaRoot);
   applyPluginAnthropicCliUsagePatch(elizaRoot);
   await ensurePluginBuildOutputs(pluginsRoot);
