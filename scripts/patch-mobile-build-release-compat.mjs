@@ -22,7 +22,7 @@ const runMobileBuildPath =
 const runMobileBuildPatchMarker =
   "function patchAndroidGradleWrapperForReleaseCompat()";
 const packageResolverPatchMarker =
-  "const rootNodeModulesPackage = path.join(repoRoot, \"node_modules\", ...pkgName.split(\"/\"));";
+  'const rootNodeModulesPackage = path.join(repoRoot, "node_modules", ...pkgName.split("/"));';
 
 export function patchGradleWrapperText(source) {
   return source.replace(
