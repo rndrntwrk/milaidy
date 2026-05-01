@@ -29,70 +29,70 @@ const OLD = `    const allTools = Object.keys(CLAUDE_TOOL_CATEGORIES);\n    cliF
 const NEW = `    // milady patch: --tools <list> filters out tools claude.ai OAuth tier exposes\n    // (Monitor, ScheduleWakeup, etc.) because they are not in CLAUDE_TOOL_CATEGORIES.\n    // Skipping --tools entirely lets claude expose its full default toolset;\n    // --dangerously-skip-permissions still bypasses approval. See\n    // scripts/patch-coding-agent-adapters-tools-flag.mjs for context.\n    void CLAUDE_TOOL_CATEGORIES;`;
 
 function candidatePaths() {
-	const candidates = [];
-	const home = os.homedir();
-	const repoRoot = path.resolve(
-		path.dirname(new URL(import.meta.url).pathname),
-		"..",
-	);
-	// Project's resolved node_modules — symlink chain ends at .bun/.../dist/
-	candidates.push(
-		path.join(
-			repoRoot,
-			"node_modules",
-			".bun",
-			`coding-agent-adapters@${PINNED_VERSION}`,
-			"node_modules",
-			"coding-agent-adapters",
-			"dist",
-		),
-	);
-	// Bun's global install cache — Bun resolves imports through this path.
-	candidates.push(
-		path.join(
-			home,
-			".bun",
-			"install",
-			"cache",
-			`coding-agent-adapters@${PINNED_VERSION}@@@1`,
-			"dist",
-		),
-	);
-	return candidates.flatMap((dir) =>
-		["index.js", "index.cjs"].map((f) => path.join(dir, f)),
-	);
+  const candidates = [];
+  const home = os.homedir();
+  const repoRoot = path.resolve(
+    path.dirname(new URL(import.meta.url).pathname),
+    "..",
+  );
+  // Project's resolved node_modules — symlink chain ends at .bun/.../dist/
+  candidates.push(
+    path.join(
+      repoRoot,
+      "node_modules",
+      ".bun",
+      `coding-agent-adapters@${PINNED_VERSION}`,
+      "node_modules",
+      "coding-agent-adapters",
+      "dist",
+    ),
+  );
+  // Bun's global install cache — Bun resolves imports through this path.
+  candidates.push(
+    path.join(
+      home,
+      ".bun",
+      "install",
+      "cache",
+      `coding-agent-adapters@${PINNED_VERSION}@@@1`,
+      "dist",
+    ),
+  );
+  return candidates.flatMap((dir) =>
+    ["index.js", "index.cjs"].map((f) => path.join(dir, f)),
+  );
 }
 
 function patchOne(file) {
-	if (!fs.existsSync(file)) return { file, status: "missing" };
-	const src = fs.readFileSync(file, "utf-8");
-	if (src.includes("milady patch: --tools"))
-		return { file, status: "already-applied" };
-	if (!src.includes(OLD)) {
-		return { file, status: "marker-not-found" };
-	}
-	fs.writeFileSync(file, src.replace(OLD, NEW), "utf-8");
-	return { file, status: "patched" };
+  if (!fs.existsSync(file)) return { file, status: "missing" };
+  const src = fs.readFileSync(file, "utf-8");
+  if (src.includes("milady patch: --tools"))
+    return { file, status: "already-applied" };
+  if (!src.includes(OLD)) {
+    return { file, status: "marker-not-found" };
+  }
+  fs.writeFileSync(file, src.replace(OLD, NEW), "utf-8");
+  return { file, status: "patched" };
 }
 
 let exitCode = 0;
 const results = [];
 for (const file of candidatePaths()) {
-	const r = patchOne(file);
-	results.push(r);
-	if (r.status === "marker-not-found") {
-		exitCode = 1;
-	}
+  const r = patchOne(file);
+  results.push(r);
+  if (r.status === "marker-not-found") {
+    exitCode = 1;
+  }
 }
 
 const tag = "[patch-coding-agent-adapters-tools-flag]";
 for (const r of results) {
-	console.log(`${tag} ${r.status}: ${r.file}`);
+  console.log(`${tag} ${r.status}: ${r.file}`);
 }
 
 if (exitCode !== 0) {
-	console.error(
-		`${tag} aborting — context lines have shifted; review the script.`,
-	);
+  console.error(
+    `${tag} aborting — context lines have shifted; review the script.`,
+  );
 }
 process.exit(exitCode);
