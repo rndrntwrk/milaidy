@@ -82,3 +82,17 @@ test("npm release builds generate gitignored eliza i18n data before bundling", (
     );
   }
 });
+
+test("Electrobun release exposes whisper-node for upstream script layout", () => {
+  const electrobun = workflow("release-electrobun.yml");
+
+  assert.match(
+    electrobun,
+    /name: Expose whisper-node for eliza Electrobun scripts/,
+  );
+  assert.match(electrobun, /req\.resolve\("whisper-node\/package\.json"\)/);
+  assert.match(
+    electrobun,
+    /ln -sfn "\$\(realpath "\$whisper_pkg"\)" eliza\/packages\/node_modules\/whisper-node/,
+  );
+});

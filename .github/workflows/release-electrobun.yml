@@ -243,6 +243,38 @@ jobs:
           install-native-deps: "true"
           run-postinstall: "true"
 
+      - name: Expose whisper-node for eliza Electrobun scripts
+        run: |
+          whisper_pkg="$(node <<'NODE'
+          const { createRequire } = require("node:module");
+          const fs = require("node:fs");
+          const path = require("node:path");
+
+          const anchors = [
+            "package.json",
+            "eliza/package.json",
+            "eliza/packages/app-core/package.json",
+          ];
+          for (const anchor of anchors) {
+            if (!fs.existsSync(anchor)) {
+              continue;
+            }
+            try {
+              const req = createRequire(path.resolve(anchor));
+              process.stdout.write(path.dirname(req.resolve("whisper-node/package.json")));
+              process.exit(0);
+            } catch {
+              // Try the next install anchor.
+            }
+          }
+          throw new Error("Unable to resolve whisper-node from installed dependencies");
+          NODE
+          )"
+          test -d "$whisper_pkg/lib/whisper.cpp"
+          mkdir -p eliza/packages/node_modules node_modules
+          ln -sfn "$(realpath "$whisper_pkg")" eliza/packages/node_modules/whisper-node
+          ln -sfn "$(realpath "$whisper_pkg")" node_modules/whisper-node
+
       # TODO: verify this script exists in eliza or port equivalent.
       # In milady this was `bun run test:regression-matrix:release`.
       - name: Regression matrix contract
@@ -465,6 +497,39 @@ jobs:
 
       - name: Run repository postinstall patches
         run: bun run postinstall
+
+      - name: Expose whisper-node for eliza Electrobun scripts
+        if: matrix.platform.os == 'macos' || matrix.platform.os == 'linux'
+        run: |
+          whisper_pkg="$(node <<'NODE'
+          const { createRequire } = require("node:module");
+          const fs = require("node:fs");
+          const path = require("node:path");
+
+          const anchors = [
+            "package.json",
+            "eliza/package.json",
+            "eliza/packages/app-core/package.json",
+          ];
+          for (const anchor of anchors) {
+            if (!fs.existsSync(anchor)) {
+              continue;
+            }
+            try {
+              const req = createRequire(path.resolve(anchor));
+              process.stdout.write(path.dirname(req.resolve("whisper-node/package.json")));
+              process.exit(0);
+            } catch {
+              // Try the next install anchor.
+            }
+          }
+          throw new Error("Unable to resolve whisper-node from installed dependencies");
+          NODE
+          )"
+          test -d "$whisper_pkg/lib/whisper.cpp"
+          mkdir -p eliza/packages/node_modules node_modules
+          ln -sfn "$(realpath "$whisper_pkg")" eliza/packages/node_modules/whisper-node
+          ln -sfn "$(realpath "$whisper_pkg")" node_modules/whisper-node
 
       - name: Cache Whisper models and binaries
         if: matrix.platform.os == 'macos' || matrix.platform.os == 'linux'
