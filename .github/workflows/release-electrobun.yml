@@ -932,29 +932,13 @@ jobs:
               Write-Error "eliza-dist generated keyword data NOT found: $keywordDataCheck"
               exit 1
             }
-            $agentRuntimeModules = @(
-              "config\env-vars.js",
-              "config\plugin-auto-enable.js",
-              "config\schema.js",
-              "runtime\advanced-capabilities-config.js",
-              "runtime\embedding-presets.js",
-              "runtime\plugin-collector.js",
-              "runtime\plugin-resolver.js",
-              "runtime\plugin-types.js"
-            )
-            foreach ($runtimeModule in $agentRuntimeModules) {
-              $agentRuntimeCheck = Join-Path $elizaDist "node_modules\@elizaos\agent\packages\agent\src\$runtimeModule"
-              Write-Host "Checking for: $agentRuntimeCheck"
-              if (Test-Path $agentRuntimeCheck) {
-                Write-Host "eliza-dist @elizaos/agent runtime module found: $runtimeModule"
-              } else {
-                Write-Error "eliza-dist @elizaos/agent runtime module NOT found: $agentRuntimeCheck"
-                exit 1
-              }
-            }
             $agentManifestPath = Join-Path $elizaDist "node_modules\@elizaos\agent\package.json"
+            if (-not (Test-Path $agentManifestPath)) {
+              Write-Error "eliza-dist @elizaos/agent package.json NOT found: $agentManifestPath"
+              exit 1
+            }
+            $agentPackageRoot = Split-Path -Parent $agentManifestPath
             $agentManifest = Get-Content $agentManifestPath -Raw | ConvertFrom-Json
-            $agentExportNames = @($agentManifest.exports.PSObject.Properties.Name)
             $agentRequiredExports = @(
               "./config/env-vars",
               "./config/plugin-auto-enable",
@@ -966,10 +950,38 @@ jobs:
               "./runtime/plugin-types"
             )
             foreach ($runtimeExport in $agentRequiredExports) {
-              if ($agentExportNames -contains $runtimeExport) {
-                Write-Host "eliza-dist @elizaos/agent package export found: $runtimeExport"
-              } else {
+              $exportProperty = $agentManifest.exports.PSObject.Properties[$runtimeExport]
+              if ($null -eq $exportProperty) {
                 Write-Error "eliza-dist @elizaos/agent package export NOT found: $runtimeExport"
+                exit 1
+              }
+              Write-Host "eliza-dist @elizaos/agent package export found: $runtimeExport"
+
+              $exportValue = $exportProperty.Value
+              if ($exportValue -is [string]) {
+                $exportTargets = @($exportValue)
+              } else {
+                $exportTargets = @(
+                  $exportValue.default,
+                  $exportValue.import,
+                  $exportValue.types
+                ) | Where-Object { $_ -is [string] -and $_.Length -gt 0 }
+              }
+
+              $existingTarget = $null
+              foreach ($exportTarget in $exportTargets) {
+                $normalizedTarget = $exportTarget -replace '/', '\'
+                $runtimePath = Join-Path $agentPackageRoot $normalizedTarget
+                Write-Host "Checking for: $runtimePath"
+                if (Test-Path $runtimePath) {
+                  $existingTarget = $runtimePath
+                  break
+                }
+              }
+              if ($existingTarget) {
+                Write-Host "eliza-dist @elizaos/agent runtime export target found: $runtimeExport -> $existingTarget"
+              } else {
+                Write-Error "eliza-dist @elizaos/agent runtime export target NOT found: $runtimeExport"
                 exit 1
               }
             }

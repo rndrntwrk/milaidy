@@ -14,6 +14,10 @@ describe("Electrobun release runtime root contract", () => {
     );
     expect(workflow).toMatch(/expectedRuntimeSource = path\.resolve\("dist"\)/);
     expect(workflow).toMatch(/destination\]\) => destination === "eliza-dist"/);
+    expect(workflow).toMatch(
+      /runtime export target found: \$runtimeExport -> \$existingTarget/,
+    );
+    expect(workflow).not.toMatch(/packages\\agent\\src\\\$runtimeModule/);
   });
 
   test("Electrobun config exposes wrapper-aware repo root resolution", () => {
