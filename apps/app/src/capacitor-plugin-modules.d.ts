@@ -15,10 +15,6 @@ declare module "@elizaos/capacitor-canvas" {
   export * from "../../../eliza/packages/native-plugins/canvas/src/index";
 }
 
-declare module "@elizaos/capacitor-contacts" {
-  export * from "../../../eliza/packages/native-plugins/contacts/src/index";
-}
-
 declare module "@elizaos/capacitor-desktop" {
   export { Desktop } from "../../../eliza/packages/native-plugins/desktop/src/index";
   export type * from "../../../eliza/packages/native-plugins/desktop/src/index";
@@ -38,10 +34,6 @@ declare module "@elizaos/capacitor-messages" {
 
 declare module "@elizaos/capacitor-mobile-signals" {
   export * from "../../../eliza/packages/native-plugins/mobile-signals/src/index";
-}
-
-declare module "@elizaos/capacitor-phone" {
-  export * from "../../../eliza/packages/native-plugins/phone/src/index";
 }
 
 declare module "@elizaos/capacitor-screencapture" {

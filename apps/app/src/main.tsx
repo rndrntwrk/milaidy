@@ -117,7 +117,11 @@ import "@elizaos/app-shopify/register";
 import "@elizaos/app-vincent/client";
 import { useVincentState } from "@elizaos/app-vincent/ui";
 import "@elizaos/app-vincent/register";
-// Side-effect: register the WiFi overlay app (no-op off Android).
+// Side-effect: register the Android-only overlay apps (no-op off Android).
+// Each register file runtime-checks `Capacitor.getPlatform() === "android"`
+// before mutating the catalog, so importing them on web/desktop/iOS is safe.
+import "@elizaos/app-contacts/register";
+import "@elizaos/app-phone/register";
 import "@elizaos/app-wifi/register";
 import { shouldUseCloudOnlyBranding } from "@elizaos/app-core";
 import {

@@ -32,7 +32,9 @@
   "dependencies": {
     "@clawville/app-clawville": "workspace:*",
     "@elizaos/app-companion": "workspace:*",
+    "@elizaos/app-contacts": "workspace:*",
     "@elizaos/app-lifeops": "workspace:*",
+    "@elizaos/app-phone": "workspace:*",
     "@elizaos/app-screenshare": "workspace:*",
     "@elizaos/app-shopify": "workspace:*",
     "@elizaos/app-vincent": "workspace:*",
