@@ -110,3 +110,29 @@ test("Electrobun release uses Milady whisper cache path", () => {
     /eliza\/packages\/node_modules\/whisper-node\/lib\/whisper\.cpp\/models\/ggml-base\.en\.bin/,
   );
 });
+
+test("Electrobun release applies Milady eliza overlay before manual build setup", () => {
+  const electrobun = workflow("release-electrobun.yml");
+
+  assert.match(
+    electrobun,
+    /name: Apply Milady eliza CI patches[\s\S]*?run: node scripts\/apply-eliza-ci-patches\.mjs[\s\S]*?name: Setup Bun/,
+  );
+  assert.match(
+    electrobun,
+    /node eliza\/packages\/app-core\/scripts\/build-patched-electrobun-cli\.mjs "\$\{\{ steps\.resolve-electrobun\.outputs\.package-dir \}\}" "\$\{\{ matrix\.platform\.artifact-name \}\}"/,
+  );
+});
+
+test("Electrobun release has a lightweight PR contract workflow", () => {
+  const workflowText = workflow("test-electrobun-release.yml");
+
+  assert.match(workflowText, /^name: Validate Electrobun Release Workflow$/m);
+  assert.match(workflowText, /branches: \[main, develop\]/);
+  assert.match(workflowText, /BUN_VERSION: "1\.3\.13"/);
+  assert.match(
+    workflowText,
+    /run: bun run test:regression-matrix:release-contract/,
+  );
+  assert.match(workflowText, /run: bun run test:release:contract/);
+});
