@@ -380,31 +380,69 @@ function normalizeDiscordPayload(payload: Record<string, unknown>): NormalizedCr
 }
 
 function normalizeTelegramPayload(payload: Record<string, unknown>): NormalizedCrossChannelComment {
-  const chat = asRecord(payload.chat);
-  const from = asRecord(payload.from);
+  const message =
+    Object.keys(asRecord(payload.message)).length > 0
+      ? asRecord(payload.message)
+      : Object.keys(asRecord(payload.edited_message)).length > 0
+        ? asRecord(payload.edited_message)
+        : Object.keys(asRecord(payload.channel_post)).length > 0
+          ? asRecord(payload.channel_post)
+          : Object.keys(asRecord(payload.edited_channel_post)).length > 0
+            ? asRecord(payload.edited_channel_post)
+            : payload;
+  const chat = asRecord(message.chat);
+  const from = asRecord(message.from);
   const chatId = String(asString(chat.id) ?? asNumber(chat.id) ?? "unknown-chat");
-  const messageId = String(asNumber(payload.message_id) ?? asString(payload.message_id) ?? hashStable(JSON.stringify(payload)));
+  const messageId = String(asNumber(message.message_id) ?? asString(message.message_id) ?? hashStable(JSON.stringify(payload)));
+  const messageThreadId =
+    asString(message.message_thread_id) ??
+    (asNumber(message.message_thread_id) != null
+      ? String(asNumber(message.message_thread_id))
+      : undefined);
   return normalizeCrossChannelCommentEvent({
     source: "telegram",
     externalId: `telegram:${chatId}:${messageId}`,
-    threadId: `telegram:${chatId}:${asString(payload.message_thread_id) ?? "main"}`,
+    threadId: `telegram:${chatId}:${messageThreadId ?? "main"}`,
     channelId: chatId,
     author: compactObject({
       id: String(asString(from.id) ?? asNumber(from.id) ?? ""),
       name: asString(from.username) ?? asString(from.first_name),
     }),
-    body: asString(payload.text) ?? asString(payload.caption) ?? "Telegram message",
-    createdAt: asNumber(payload.date),
+    body: asString(message.text) ?? asString(message.caption) ?? "Telegram message",
+    createdAt: asNumber(message.date),
     visibility: asString(chat.type) === "private" ? "private" : "internal",
     raw: payload,
   });
 }
 
 function normalizeSlackPayload(payload: Record<string, unknown>): NormalizedCrossChannelComment {
-  const team = asString(payload.team) ?? asString(payload.team_id);
-  const channelId = asString(payload.channel) ?? "unknown-channel";
-  const ts = asString(payload.ts) ?? hashStable(JSON.stringify(payload));
-  const threadTs = asString(payload.thread_ts) ?? ts;
+  const event = asRecord(payload.event);
+  const eventMessage = asRecord(event.message);
+  const message =
+    Object.keys(eventMessage).length > 0
+      ? eventMessage
+      : Object.keys(event).length > 0
+        ? event
+        : payload;
+  const team =
+    asString(payload.team) ??
+    asString(payload.team_id) ??
+    asString(event.team) ??
+    asString(message.team);
+  const channelId =
+    asString(message.channel) ??
+    asString(message.channel_id) ??
+    asString(payload.channel) ??
+    "unknown-channel";
+  const ts =
+    asString(message.ts) ??
+    asString(message.event_ts) ??
+    asString(payload.ts) ??
+    hashStable(JSON.stringify(payload));
+  const threadTs = asString(message.thread_ts) ?? asString(payload.thread_ts) ?? ts;
+  const author = asString(message.user) ?? asString(payload.user) ?? asString(message.bot_id);
+  const username =
+    asString(message.username) ?? asString(payload.username) ?? author;
   return normalizeCrossChannelCommentEvent({
     source: "slack",
     externalId: `slack:${team ?? "workspace"}:${channelId}:${ts}`,
@@ -412,10 +450,10 @@ function normalizeSlackPayload(payload: Record<string, unknown>): NormalizedCros
     channelId,
     accountId: team,
     author: compactObject({
-      id: asString(payload.user) ?? asString(payload.username),
-      name: asString(payload.username) ?? asString(payload.user),
+      id: author,
+      name: username,
     }),
-    body: asString(payload.text) ?? "Slack message",
+    body: asString(message.text) ?? asString(payload.text) ?? "Slack message",
     createdAt: slackTsToIso(ts),
     visibility: "internal",
     raw: payload,

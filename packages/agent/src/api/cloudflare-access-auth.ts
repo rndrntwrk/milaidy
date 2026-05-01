@@ -1,4 +1,5 @@
 import type http from "node:http";
+import crypto from "node:crypto";
 
 const ENABLED_VALUES = new Set(["1", "true", "yes", "on"]);
 
@@ -28,6 +29,22 @@ export function isCloudflareAccessTrustEnabled(
   );
 }
 
+function readTrustedProxySecret(env: NodeJS.ProcessEnv): string | undefined {
+  return (
+    env.MILADY_CLOUDFLARE_ACCESS_PROXY_SECRET ??
+    env.MILAIDY_CLOUDFLARE_ACCESS_PROXY_SECRET ??
+    env.ELIZA_CLOUDFLARE_ACCESS_PROXY_SECRET ??
+    env.CLOUDFLARE_ACCESS_PROXY_SECRET
+  )?.trim();
+}
+
+function tokenMatches(expected: string, provided: string): boolean {
+  const expectedBuffer = Buffer.from(expected, "utf8");
+  const providedBuffer = Buffer.from(provided, "utf8");
+  if (expectedBuffer.length !== providedBuffer.length) return false;
+  return crypto.timingSafeEqual(expectedBuffer, providedBuffer);
+}
+
 export function hasCloudflareAccessIdentity(
   req: Pick<http.IncomingMessage, "headers">,
 ): boolean {
@@ -37,9 +54,28 @@ export function hasCloudflareAccessIdentity(
   );
 }
 
+export function hasCloudflareAccessTrustedProxyProof(
+  req: Pick<http.IncomingMessage, "headers">,
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  const expectedSecret = readTrustedProxySecret(env);
+  if (!expectedSecret) return false;
+  const providedSecret =
+    readHeader(req, "x-milady-cloudflare-access-secret") ??
+    readHeader(req, "x-eliza-cloudflare-access-secret") ??
+    readHeader(req, "x-cloudflare-access-proxy-secret");
+  return providedSecret
+    ? tokenMatches(expectedSecret, providedSecret)
+    : false;
+}
+
 export function isCloudflareAccessAuthenticated(
   req: Pick<http.IncomingMessage, "headers">,
   env: NodeJS.ProcessEnv = process.env,
 ): boolean {
-  return isCloudflareAccessTrustEnabled(env) && hasCloudflareAccessIdentity(req);
+  return (
+    isCloudflareAccessTrustEnabled(env) &&
+    hasCloudflareAccessIdentity(req) &&
+    hasCloudflareAccessTrustedProxyProof(req, env)
+  );
 }

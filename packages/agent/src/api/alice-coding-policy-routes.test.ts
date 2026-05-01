@@ -45,9 +45,9 @@ describe("handleAliceCodingPolicyRoutes", () => {
       ok: true,
       policy: {
         allowedRepos: [
-          "Render-Network-OS/milaidy",
+          "rndrntwrk/milaidy",
           "Render-Network-OS/555-bot",
-          "Render-Network-OS/555stream",
+          "Render-Network-OS/stream",
         ],
         deployRail: "webhook",
         productionDeploys: "approval",
@@ -61,7 +61,7 @@ describe("handleAliceCodingPolicyRoutes", () => {
       pathname: "/api/alice/coding/decision",
       body: {
         action: "deploy",
-        repo: "Render-Network-OS/milaidy",
+        repo: "rndrntwrk/milaidy",
         environment: "production",
         deployRail: "webhook",
       },
@@ -84,7 +84,7 @@ describe("handleAliceCodingPolicyRoutes", () => {
       pathname: "/api/alice/coding/decision",
       body: {
         action: "deploy",
-        repo: "Render-Network-OS/milaidy",
+        repo: "rndrntwrk/milaidy",
         environment: "staging",
         deployRail: "local-shell",
       },
@@ -100,5 +100,40 @@ describe("handleAliceCodingPolicyRoutes", () => {
         reason: "Deploys must use the webhook rail so they are visible in Ops.",
       },
     });
+  });
+
+  it("rejects unknown coding actions before policy evaluation", async () => {
+    const { ctx, errorCalls } = makeContext({
+      method: "POST",
+      pathname: "/api/alice/coding/decision",
+      body: {
+        action: "rm_everything",
+        repo: "rndrntwrk/milaidy",
+      },
+    });
+
+    await handleAliceCodingPolicyRoutes(ctx);
+
+    expect(errorCalls).toEqual([
+      { message: "Invalid Alice coding action request", status: 400 },
+    ]);
+  });
+
+  it("rejects deploy decisions without a valid environment", async () => {
+    const { ctx, errorCalls } = makeContext({
+      method: "POST",
+      pathname: "/api/alice/coding/decision",
+      body: {
+        action: "deploy",
+        repo: "rndrntwrk/milaidy",
+        deployRail: "webhook",
+      },
+    });
+
+    await handleAliceCodingPolicyRoutes(ctx);
+
+    expect(errorCalls).toEqual([
+      { message: "Invalid Alice coding action request", status: 400 },
+    ]);
   });
 });

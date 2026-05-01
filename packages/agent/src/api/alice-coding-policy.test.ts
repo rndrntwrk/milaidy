@@ -11,7 +11,7 @@ describe("Alice coding and deploy policy", () => {
     expect(
       resolveAliceCodingActionDecision(defaults, {
         action: "run_tests",
-        repo: "Render-Network-OS/milaidy",
+        repo: "rndrntwrk/milaidy",
       }),
     ).toMatchObject({ allowed: true, requiresApproval: false });
 
@@ -23,6 +23,22 @@ describe("Alice coding and deploy policy", () => {
         repo: "Render-Network-OS/555-bot",
       }),
     ).toMatchObject({ allowed: true, requiresApproval: false });
+  });
+
+  it("denies deploy decisions without a valid environment", () => {
+    const defaults = resolveAliceOperationalDefaults({});
+
+    expect(
+      resolveAliceCodingActionDecision(defaults, {
+        action: "deploy",
+        deployRail: "webhook",
+        repo: "Render-Network-OS/555-bot",
+      }),
+    ).toEqual({
+      allowed: false,
+      requiresApproval: false,
+      reason: "Deploy environment must be staging or production.",
+    });
   });
 
   it("requires explicit human approval for production deploys", () => {
@@ -88,7 +104,7 @@ describe("Alice coding and deploy policy", () => {
     expect(
       resolveAliceCodingActionDecision(config, {
         action: "open_pr",
-        repo: "Render-Network-OS/555stream",
+        repo: "Render-Network-OS/stream",
       }),
     ).toEqual({
       allowed: false,

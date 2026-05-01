@@ -36,9 +36,9 @@ export interface AliceCodingActionDecision {
 }
 
 const DEFAULT_ALLOWED_REPOS = [
-  "Render-Network-OS/milaidy",
+  "rndrntwrk/milaidy",
   "Render-Network-OS/555-bot",
-  "Render-Network-OS/555stream",
+  "Render-Network-OS/stream",
 ];
 
 function asStringArray(value: unknown): string[] | undefined {
@@ -81,6 +81,14 @@ export function resolveAliceCodingActionDecision(
 
   if (request.action !== "deploy") {
     return { allowed: true, requiresApproval: false };
+  }
+
+  if (request.environment !== "staging" && request.environment !== "production") {
+    return {
+      allowed: false,
+      requiresApproval: false,
+      reason: "Deploy environment must be staging or production.",
+    };
   }
 
   if (request.deployRail !== policy.deployRail) {

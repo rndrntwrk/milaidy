@@ -160,6 +160,59 @@ describe("cross-channel comment ingest", () => {
     expect(comments.every((comment) => comment.receivedAt)).toBe(true);
   });
 
+  it("normalizes live Slack Events API envelopes", () => {
+    const comment = normalizeCrossChannelSourcePayload({
+      source: "slack",
+      payload: {
+        team_id: "T1",
+        event: {
+          type: "message",
+          channel: "C-live",
+          user: "U-live",
+          text: "please ingest the real Slack envelope",
+          ts: "1777639200.000100",
+          thread_ts: "1777639100.000100",
+        },
+      },
+    });
+
+    expect(comment).toMatchObject({
+      source: "slack",
+      externalId: "slack:T1:C-live:1777639200.000100",
+      threadId: "slack:T1:C-live:1777639100.000100",
+      channelId: "C-live",
+      body: "please ingest the real Slack envelope",
+      author: { id: "U-live", name: "U-live" },
+    });
+  });
+
+  it("normalizes live Telegram webhook envelopes", () => {
+    const comment = normalizeCrossChannelSourcePayload({
+      source: "telegram",
+      payload: {
+        update_id: 123,
+        message: {
+          message_id: 42,
+          message_thread_id: 7,
+          date: 1777639200,
+          text: "real Telegram update envelope",
+          chat: { id: -1001, type: "supergroup", title: "ops" },
+          from: { id: 777, username: "telegram_user" },
+        },
+      },
+    });
+
+    expect(comment).toMatchObject({
+      source: "telegram",
+      externalId: "telegram:-1001:42",
+      threadId: "telegram:-1001:7",
+      channelId: "-1001",
+      body: "real Telegram update envelope",
+      visibility: "internal",
+      author: { id: "777", name: "telegram_user" },
+    });
+  });
+
   it("redacts tokens before comments are stored or projected to knowledge", () => {
     const text =
       "github ghp_1234567890abcdef1234567890abcdef1234 openai sk-proj-abcDEF1234567890 twitch live_123456789_secret";
