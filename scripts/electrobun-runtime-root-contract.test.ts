@@ -20,6 +20,12 @@ describe("Electrobun release runtime root contract", () => {
     expect(workflow).toMatch(/Resolve-AgentPackageExportTargets/);
     expect(workflow).toMatch(/\.Replace\("\*", \$replacement\)/);
     expect(workflow).not.toMatch(/packages\\agent\\src\\\$runtimeModule/);
+    expect(workflow).toMatch(
+      /ELIZA_TEST_WINDOWS_ARTIFACTS_DIR: \$\{\{ github\.workspace \}\}\\eliza\\packages\\app-core\\platforms\\electrobun\\artifacts/,
+    );
+    expect(workflow).toMatch(
+      /ELIZA_TEST_WINDOWS_BUILD_DIR: \$\{\{ github\.workspace \}\}\\eliza\\packages\\app-core\\platforms\\electrobun\\build/,
+    );
   });
 
   test("Electrobun config exposes wrapper-aware repo root resolution", () => {
