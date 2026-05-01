@@ -36,6 +36,7 @@
     "@elizaos/app-screenshare": "workspace:*",
     "@elizaos/app-shopify": "workspace:*",
     "@elizaos/app-vincent": "workspace:*",
+    "@elizaos/app-wifi": "workspace:*",
     "@capacitor/android": "8.3.1",
     "@capacitor/app": "8.1.0",
     "@capacitor/barcode-scanner": "3.0.2",
