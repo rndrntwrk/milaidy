@@ -262,6 +262,13 @@ jobs:
           if [ ! -e plugins/plugin-selfcontrol ] && [ -d packages/plugin-selfcontrol ]; then
             cp -R packages/plugin-selfcontrol plugins/plugin-selfcontrol
           fi
+          # Dockerfile.cloud is shared with the upstream elizaOS layout where
+          # the built web app lives at packages/app. Milady's Vite app lives at
+          # apps/app, so materialize the expected manifest and dist tree.
+          mkdir -p packages/app
+          cp apps/app/package.json packages/app/package.json
+          rm -rf packages/app/dist
+          cp -R apps/app/dist packages/app/dist
           node <<'NODE'
           const fs = require("fs");
           const path = require("path");
