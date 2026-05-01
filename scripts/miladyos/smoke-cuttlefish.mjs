@@ -214,14 +214,17 @@ export async function runSmoke({ adb: adbImpl = adb } = {}) {
       // Launch the activity, which kicks the service from inside the
       // Milady uid via MiladyAgentService.start(this).
       const launchAct = adbImpl(
-        ["shell", "am", "start", "-n", `${PACKAGE_NAME}/${PACKAGE_NAME}.MainActivity`],
+        [
+          "shell",
+          "am",
+          "start",
+          "-n",
+          `${PACKAGE_NAME}/${PACKAGE_NAME}.MainActivity`,
+        ],
         { serial },
       );
       const launchText = (launchAct.stdout + launchAct.stderr).trim();
-      if (
-        launchAct.status !== 0 ||
-        /Error:|Unable to find/i.test(launchText)
-      ) {
+      if (launchAct.status !== 0 || /Error:|Unable to find/i.test(launchText)) {
         results.push({
           step: 3,
           label: "MiladyAgentService start",

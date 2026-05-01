@@ -240,6 +240,11 @@ export default defineConfig({
       ...nativePluginAliasMap,
     },
     testTimeout: 30000,
+    hookTimeout: 120000,
+    pool: "forks",
+    minWorkers: 1,
+    maxWorkers: 2,
+    execArgv: ["--max-old-space-size=4096"],
     globals: true,
     server: {
       deps: {
