@@ -194,6 +194,23 @@ bun run workspace:bump-eliza-submodules
 
 Then, if `git status` inside `eliza/` shows updated submodule paths, commit there first, then `git add eliza` at the Milady root. Details: [CONTRIBUTING.md](CONTRIBUTING.md#local-clone-and-eliza-submodule-maintenance).
 
+#### Windows: enable long paths
+
+Bun's cache stores packages in deep directory trees that exceed the default Windows `MAX_PATH` limit (260 characters). Native builds (e.g. `llama-cpp-capacitor` via CMake/ninja) will fail with `mkdir: No such file or directory` unless long paths are enabled at the OS level.
+
+Run once in an elevated PowerShell, then reboot:
+
+```powershell
+New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" `
+  -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
+```
+
+Also enable long paths in Git:
+
+```bash
+git config --global core.longPaths true
+```
+
 ### Homebrew (macOS / Linux)
 
 ```bash

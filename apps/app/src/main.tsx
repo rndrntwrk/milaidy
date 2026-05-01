@@ -289,6 +289,56 @@ const appBootConfig: AppBootConfig = {
   },
 };
 
+// Self-hosted bot bootstrap. The token is read from the URL fragment
+// (#token=...), not the query string, so it never reaches the server, the
+// access log, or Referer headers. Once read, it persists in localStorage
+// scoped to this origin; subsequent visits authenticate without the link.
+const SELF_HOSTED_TOKEN_KEY = "milady:self-hosted-api-token";
+const STALE_BOOTSTRAP_KEYS = [
+  "elizaos:agent-profiles",
+  "elizaos:active-server",
+  MOBILE_RUNTIME_MODE_STORAGE_KEY,
+] as const;
+try {
+  const url = new URL(window.location.href);
+  const hash = url.hash.startsWith("#") ? url.hash.slice(1) : url.hash;
+  const fragmentToken = new URLSearchParams(hash).get("token")?.trim() ?? null;
+  // Query-string is accepted for backwards compatibility but logs a deprecation
+  // notice — fragments don't reach the server, query params do.
+  const queryToken = url.searchParams.get("token")?.trim() ?? null;
+  if (queryToken && !fragmentToken) {
+    console.warn(
+      "[milady] ?token=... is deprecated for security (lands in logs and Referer). Use #token=... instead.",
+    );
+  }
+  const linkToken = fragmentToken ?? queryToken;
+  let bootstrapToken: string | null = linkToken;
+  if (linkToken) {
+    for (const key of STALE_BOOTSTRAP_KEYS) {
+      try {
+        window.localStorage.removeItem(key);
+      } catch {}
+    }
+    try {
+      window.localStorage.setItem(SELF_HOSTED_TOKEN_KEY, linkToken);
+    } catch {}
+    url.hash = "";
+    url.searchParams.delete("token");
+    window.history.replaceState({}, "", url.toString());
+  } else {
+    try {
+      const saved = window.localStorage.getItem(SELF_HOSTED_TOKEN_KEY)?.trim();
+      if (saved) bootstrapToken = saved;
+    } catch {}
+  }
+  if (bootstrapToken) {
+    appBootConfig.apiToken = bootstrapToken;
+    appBootConfig.apiBase ??= window.location.origin;
+    try {
+      client.setToken(bootstrapToken);
+    } catch {}
+  }
+} catch {}
 setBootConfig(appBootConfig);
 
 function getShareQueue(): ShareTargetPayload[] {
@@ -836,8 +886,21 @@ function applyStoredDetachedShellTheme(): void {
   applyUiTheme(loadUiTheme());
 }
 
+async function initializeStatusBar(): Promise<void> {
+  if (!isNative) return;
+  try {
+    const { StatusBar, Style } = await import("@capacitor/status-bar");
+    await StatusBar.setStyle({ style: Style.Dark });
+    await StatusBar.setOverlaysWebView({ overlay: true });
+    await StatusBar.setBackgroundColor({ color: "#0a0a0a" });
+  } catch {
+    // StatusBar plugin unavailable on this platform — non-fatal.
+  }
+}
+
 async function main(): Promise<void> {
   setupPlatformStyles();
+  await initializeStatusBar();
   applyBuildTimeIosConnection();
 
   try {

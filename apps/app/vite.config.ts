@@ -696,13 +696,14 @@ function desktopCorsPlugin(): Plugin {
         if (!origin || !req.url?.startsWith("/api")) return next();
 
         res.setHeader("Access-Control-Allow-Origin", origin);
+        res.setHeader("Access-Control-Allow-Credentials", "true");
         res.setHeader(
           "Access-Control-Allow-Methods",
           "GET, POST, PUT, DELETE, OPTIONS",
         );
         res.setHeader(
           "Access-Control-Allow-Headers",
-          "Content-Type, Authorization, X-Milady-Token, X-Api-Key, X-Milady-Export-Token, X-Milady-Client-Id, X-Milady-Terminal-Token, X-Milady-UI-Language",
+          "Content-Type, Authorization, X-API-Token, X-Api-Key, X-ElizaOS-Client-Id, X-ElizaOS-UI-Language, X-ElizaOS-Token, X-Eliza-Export-Token, X-Eliza-Terminal-Token, X-Milady-Token, X-Milady-Client-Id, X-Milady-Export-Token, X-Milady-Terminal-Token, X-Milady-UI-Language, X-Milady-CSRF",
         );
 
         if (req.method === "OPTIONS") {
@@ -1920,6 +1921,14 @@ export default defineConfig({
     host: true,
     port: uiPort,
     strictPort: true,
+    allowedHosts: [
+      "localhost",
+      "127.0.0.1",
+      ...(process.env.MILADY_ALLOWED_HOSTS ?? "")
+        .split(",")
+        .map((h) => h.trim())
+        .filter(Boolean),
+    ],
     // Only pin the dev origin when the desktop shell explicitly asks for a
     // loopback public URL. Capacitor live reload and LAN/browser clients need
     // Vite to keep serving the current request host instead of rewriting

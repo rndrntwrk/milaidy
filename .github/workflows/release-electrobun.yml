@@ -493,6 +493,35 @@ jobs:
           cp eliza/packages/shared/src/i18n/generated/validation-keyword-data.js dist/node_modules/@elizaos/shared/src/i18n/generated/
           test -f dist/node_modules/@elizaos/shared/src/i18n/generated/validation-keyword-data.js
 
+      - name: Validate Electrobun runtime copy contract
+        env:
+          ELIZA_ELECTROBUN_REPO_ROOT: ${{ github.workspace }}
+        run: |
+          test -f dist/entry.js
+          test -f package.json
+          test -f dist/node_modules/@elizaos/agent/package.json
+          test -f dist/node_modules/@elizaos/shared/src/i18n/generated/validation-keyword-data.js
+          node --import tsx <<'NODE'
+          const path = await import("node:path");
+          const configModule = await import("./eliza/packages/app-core/platforms/electrobun/electrobun.config.ts");
+          const config = configModule.default?.default ?? configModule.default;
+          const electrobunDir = path.resolve("eliza/packages/app-core/platforms/electrobun");
+          const copyMap = config.build?.copy ?? {};
+          const runtimeSource = Object.entries(copyMap).find(
+            ([, destination]) => destination === "eliza-dist",
+          )?.[0];
+          if (!runtimeSource) {
+            throw new Error("Electrobun copy map does not include eliza-dist runtime destination");
+          }
+          const resolvedRuntimeSource = path.resolve(electrobunDir, runtimeSource);
+          const expectedRuntimeSource = path.resolve("dist");
+          if (resolvedRuntimeSource !== expectedRuntimeSource) {
+            throw new Error(
+              `Electrobun runtime source resolves to ${resolvedRuntimeSource}, expected ${expectedRuntimeSource}`,
+            );
+          }
+          NODE
+
       # Import the Developer ID certificate into a temporary keychain.
       # Requires CSC_LINK (base64-encoded .p12) + CSC_KEY_PASSWORD.
       # The signing identity string is extracted and passed to Electrobun as
@@ -731,6 +760,7 @@ jobs:
           ELIZA_ELECTROBUN_NOTARIZE: 0
           ELECTROBUN_REAL_XCRUN: /usr/bin/xcrun
           ELECTROBUN_REAL_ZIP: /usr/bin/zip
+          ELIZA_ELECTROBUN_REPO_ROOT: ${{ github.workspace }}
           # Flat release root for the updater. Env is encoded in the platform prefix
           # (canary-macos-arm64-update.json etc.), so the baseUrl has no env subdir.
           # TODO: Configure releases host on milady-ai/milady repo settings (replace
@@ -902,29 +932,57 @@ jobs:
               Write-Error "eliza-dist generated keyword data NOT found: $keywordDataCheck"
               exit 1
             }
-            $agentRuntimeModules = @(
-              "config\env-vars.js",
-              "config\plugin-auto-enable.js",
-              "config\schema.js",
-              "runtime\advanced-capabilities-config.js",
-              "runtime\embedding-presets.js",
-              "runtime\plugin-collector.js",
-              "runtime\plugin-resolver.js",
-              "runtime\plugin-types.js"
-            )
-            foreach ($runtimeModule in $agentRuntimeModules) {
-              $agentRuntimeCheck = Join-Path $elizaDist "node_modules\@elizaos\agent\packages\agent\src\$runtimeModule"
-              Write-Host "Checking for: $agentRuntimeCheck"
-              if (Test-Path $agentRuntimeCheck) {
-                Write-Host "eliza-dist @elizaos/agent runtime module found: $runtimeModule"
-              } else {
-                Write-Error "eliza-dist @elizaos/agent runtime module NOT found: $agentRuntimeCheck"
-                exit 1
-              }
-            }
             $agentManifestPath = Join-Path $elizaDist "node_modules\@elizaos\agent\package.json"
+            if (-not (Test-Path $agentManifestPath)) {
+              Write-Error "eliza-dist @elizaos/agent package.json NOT found: $agentManifestPath"
+              exit 1
+            }
+            $agentPackageRoot = Split-Path -Parent $agentManifestPath
             $agentManifest = Get-Content $agentManifestPath -Raw | ConvertFrom-Json
-            $agentExportNames = @($agentManifest.exports.PSObject.Properties.Name)
+            function Get-AgentPackageExportTargets($exportValue) {
+              if ($exportValue -is [string]) {
+                return @($exportValue)
+              }
+              return @(
+                $exportValue.default,
+                $exportValue.import,
+                $exportValue.types
+              ) | Where-Object { $_ -is [string] -and $_.Length -gt 0 }
+            }
+            function Resolve-AgentPackageExportTargets($manifest, [string] $runtimeExport) {
+              $directExport = $manifest.exports.PSObject.Properties[$runtimeExport]
+              if ($null -ne $directExport) {
+                return Get-AgentPackageExportTargets $directExport.Value
+              }
+
+              foreach ($exportProperty in $manifest.exports.PSObject.Properties) {
+                $exportName = [string] $exportProperty.Name
+                $wildcardIndex = $exportName.IndexOf("*")
+                if ($wildcardIndex -lt 0) {
+                  continue
+                }
+
+                $prefix = $exportName.Substring(0, $wildcardIndex)
+                $suffix = $exportName.Substring($wildcardIndex + 1)
+                if (-not $runtimeExport.StartsWith($prefix)) {
+                  continue
+                }
+                if ($suffix.Length -gt 0 -and -not $runtimeExport.EndsWith($suffix)) {
+                  continue
+                }
+
+                $replacement = $runtimeExport.Substring(
+                  $prefix.Length,
+                  $runtimeExport.Length - $prefix.Length - $suffix.Length
+                )
+                return @(
+                  (Get-AgentPackageExportTargets $exportProperty.Value) |
+                    ForEach-Object { $_.Replace("*", $replacement) }
+                )
+              }
+
+              return @()
+            }
             $agentRequiredExports = @(
               "./config/env-vars",
               "./config/plugin-auto-enable",
@@ -936,10 +994,27 @@ jobs:
               "./runtime/plugin-types"
             )
             foreach ($runtimeExport in $agentRequiredExports) {
-              if ($agentExportNames -contains $runtimeExport) {
-                Write-Host "eliza-dist @elizaos/agent package export found: $runtimeExport"
-              } else {
+              $exportTargets = Resolve-AgentPackageExportTargets $agentManifest $runtimeExport
+              if ($exportTargets.Count -eq 0) {
                 Write-Error "eliza-dist @elizaos/agent package export NOT found: $runtimeExport"
+                exit 1
+              }
+              Write-Host "eliza-dist @elizaos/agent package export resolved: $runtimeExport"
+
+              $existingTarget = $null
+              foreach ($exportTarget in $exportTargets) {
+                $normalizedTarget = $exportTarget -replace '/', '\'
+                $runtimePath = Join-Path $agentPackageRoot $normalizedTarget
+                Write-Host "Checking for: $runtimePath"
+                if (Test-Path $runtimePath) {
+                  $existingTarget = $runtimePath
+                  break
+                }
+              }
+              if ($existingTarget) {
+                Write-Host "eliza-dist @elizaos/agent runtime export target found: $runtimeExport -> $existingTarget"
+              } else {
+                Write-Error "eliza-dist @elizaos/agent runtime export target NOT found: $runtimeExport"
                 exit 1
               }
             }
@@ -1023,8 +1098,8 @@ jobs:
           ELIZA_TEST_WINDOWS_LAUNCHER_DIR: ${{ runner.temp }}\eliza-windows-ui-launcher
           ELIZA_TEST_WINDOWS_LAUNCHER_PATH_FILE: ${{ runner.temp }}\eliza-windows-ui-launcher.txt
           # Inno installer is built into platforms/electrobun/artifacts.
-          ELIZA_TEST_WINDOWS_ARTIFACTS_DIR: ${{ github.workspace }}\packages\app-core\platforms\electrobun\artifacts
-          ELIZA_TEST_WINDOWS_BUILD_DIR: ${{ github.workspace }}\packages\app-core\platforms\electrobun\build
+          ELIZA_TEST_WINDOWS_ARTIFACTS_DIR: ${{ github.workspace }}\eliza\packages\app-core\platforms\electrobun\artifacts
+          ELIZA_TEST_WINDOWS_BUILD_DIR: ${{ github.workspace }}\eliza\packages\app-core\platforms\electrobun\build
         run: |
           Remove-Item $env:ELIZA_TEST_WINDOWS_INSTALL_DIR -Recurse -Force -ErrorAction SilentlyContinue
           Remove-Item $env:ELIZA_TEST_WINDOWS_LAUNCHER_DIR -Recurse -Force -ErrorAction SilentlyContinue

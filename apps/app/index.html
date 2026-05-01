@@ -41,7 +41,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self' electrobun://* https://* http://localhost:* http://127.0.0.1:*;
                script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' http://localhost:* http://127.0.0.1:* https://*;
                style-src 'self' 'unsafe-inline' http://localhost:* http://127.0.0.1:* https://*;
-               connect-src 'self' blob: data: http://localhost:* ws://localhost:* wss://localhost:* http://127.0.0.1:* ws://127.0.0.1:* wss://127.0.0.1:* https://* wss://*;
+               connect-src 'self' blob: data: http://localhost:* ws://localhost:* wss://localhost:* http://127.0.0.1:* ws://127.0.0.1:* wss://127.0.0.1:* https://* https://*:* wss://* wss://*:* ws://* ws://*:*;
                img-src 'self' data: blob: http://localhost:* http://127.0.0.1:* https://*;
                media-src 'self' blob: http://localhost:* http://127.0.0.1:* https://*;
                frame-src 'self' http://localhost:* http://127.0.0.1:* https://*;
@@ -64,9 +64,11 @@
   <meta property="twitter:description" content="__APP_DESCRIPTION__" />
   <meta property="twitter:image" content="__APP_SHARE_IMAGE__" />
 
-  <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="256x256" href="/favicon-256x256.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/android-chrome-192x192.png" />
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+  <link rel="icon" type="image/x-icon" href="/favicon.ico" />
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
   <link rel="manifest" href="/site.webmanifest" />
   <style>
