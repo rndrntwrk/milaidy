@@ -60,8 +60,17 @@
       "@elizaos/capacitor-agent": [
         "./eliza/packages/native-plugins/agent/src/index.ts"
       ],
+      "@elizaos/capacitor-contacts": [
+        "./eliza/packages/native-plugins/contacts/src/index.ts"
+      ],
       "@elizaos/capacitor-desktop": [
         "./eliza/packages/native-plugins/desktop/src/index.ts"
+      ],
+      "@elizaos/capacitor-phone": [
+        "./eliza/packages/native-plugins/phone/src/index.ts"
+      ],
+      "@elizaos/capacitor-wifi": [
+        "./eliza/packages/native-plugins/wifi/src/index.ts"
       ],
       "@elizaos/capacitor-llama": [
         "./eliza/packages/native-plugins/llama/src/index.ts"
