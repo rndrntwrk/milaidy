@@ -63,8 +63,11 @@ export const LOCAL_ONLY_WORKSPACE_GLOBS = [
 ];
 export const LOCAL_ONLY_ELIZA_PACKAGE_PATHS = {
   "@elizaos/plugin-browser-bridge": "plugins/plugin-browser-bridge",
+  "@elizaos/plugin-app-control": "plugins/plugin-app-control/typescript",
   "@elizaos/plugin-signal": "plugins/plugin-signal/typescript",
+  "@elizaos/plugin-wechat": "plugins/plugin-wechat",
   "@elizaos/skills": "packages/skills",
+  "@elizaos/vault": "packages/vault",
 };
 export const LOCAL_ONLY_WORKSPACE_PATHS = [
   "eliza/packages/shared",

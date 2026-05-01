@@ -21,6 +21,8 @@ const runMobileBuildPath =
   "eliza/packages/app-core/scripts/run-mobile-build.mjs";
 const runMobileBuildPatchMarker =
   "function patchAndroidGradleWrapperForReleaseCompat()";
+const packageResolverPatchMarker =
+  "const rootNodeModulesPackage = path.join(repoRoot, \"node_modules\", ...pkgName.split(\"/\"));";
 
 export function patchGradleWrapperText(source) {
   return source.replace(
@@ -49,12 +51,48 @@ export function patchLlamaBuildGradleText(source) {
 }
 
 export function patchRunMobileBuildText(source) {
-  if (source.includes(runMobileBuildPatchMarker)) {
-    return source;
+  let patched = source;
+
+  if (!patched.includes(packageResolverPatchMarker)) {
+    const resolverAnchor = `function resolvePackagePath(pkgName, relativeTo) {
+  const linked = path.join(appDir, "node_modules", ...pkgName.split("/"));
+  if (!fs.existsSync(linked)) return null;
+  return path.relative(relativeTo, fs.realpathSync(linked));
+}
+`;
+    const resolverReplacement = `function resolvePackagePath(pkgName, relativeTo) {
+  const appPackage = path.join(appDir, "node_modules", ...pkgName.split("/"));
+  const rootNodeModulesPackage = path.join(repoRoot, "node_modules", ...pkgName.split("/"));
+  const candidates = [appPackage, rootNodeModulesPackage];
+  for (const bunStore of [
+    path.join(appDir, "node_modules", ".bun"),
+    path.join(repoRoot, "node_modules", ".bun"),
+  ]) {
+    if (!fs.existsSync(bunStore)) continue;
+    for (const entry of fs.readdirSync(bunStore, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      candidates.push(path.join(bunStore, entry.name, "node_modules", ...pkgName.split("/")));
+    }
+  }
+  const linked = candidates.find((candidate) => fs.existsSync(candidate));
+  if (!linked) return null;
+  return path.relative(relativeTo, fs.realpathSync(linked));
+}
+`;
+    if (!patched.includes(resolverAnchor)) {
+      throw new Error(
+        "Unable to patch run-mobile-build.mjs: resolvePackagePath anchor not found.",
+      );
+    }
+    patched = patched.replace(resolverAnchor, resolverReplacement);
   }
 
   const anchor = "function patchAndroidGradle() {\n";
-  if (!source.includes(anchor)) {
+  if (patched.includes(runMobileBuildPatchMarker)) {
+    return patched;
+  }
+
+  if (!patched.includes(anchor)) {
     throw new Error(
       "Unable to patch run-mobile-build.mjs: patchAndroidGradle anchor not found.",
     );
@@ -64,7 +102,7 @@ export function patchRunMobileBuildText(source) {
     `distributionUrl=${GRADLE_DISTRIBUTION}`,
   );
 
-  return source.replace(
+  return patched.replace(
     anchor,
     `function patchAndroidGradleWrapperForReleaseCompat() {
   const wrapperPath = path.join(

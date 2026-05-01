@@ -353,6 +353,7 @@ jobs:
           run-postinstall: "true"
           skip-avatar-clone: "true"
           no-vision-deps: "true"
+          preserve-android-sdk: "true"
       - name: Restore legacy electrobun compatibility path
         run: node scripts/ensure-legacy-electrobun-compat.mjs
       - name: Install Android NDK
@@ -413,6 +414,23 @@ jobs:
           else
             echo "::warning::Unable to chown / to root:root (sudo unavailable or passwordless sudo disabled). snapd may fail downstream. Remediation: run this job on a standard ubuntu-latest / ubuntu-24.04 GitHub-hosted runner, or configure the container image so / is owned by 0:0."
           fi
+      - name: Preinstall LXD with snap store retry
+        run: |
+          set -euo pipefail
+          if snap list lxd >/dev/null 2>&1; then
+            echo "LXD is already installed."
+            exit 0
+          fi
+          for attempt in 1 2 3; do
+            if sudo snap install lxd; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "::error::Unable to install LXD from the snap store after ${attempt} attempts"
+              exit 1
+            fi
+            sleep $((attempt * 20))
+          done
       - uses: snapcore/action-build@v1
         id: snap
       - name: Verify snap
@@ -587,6 +605,8 @@ jobs:
           no-vision-deps: "true"
       - name: Restore legacy electrobun compatibility path
         run: node scripts/ensure-legacy-electrobun-compat.mjs
+      - name: Patch mobile release build compatibility
+        run: node scripts/patch-mobile-build-release-compat.mjs
       - name: Build iOS simulator app
         run: node eliza/packages/app-core/scripts/run-mobile-build.mjs ios
         env:
@@ -656,6 +676,10 @@ jobs:
     runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@v4
+      - name: Initialize eliza docs
+        run: |
+          git submodule sync -- eliza
+          git submodule update --init --depth=1 eliza
       - uses: actions/setup-node@v4
         with:
           node-version: 22

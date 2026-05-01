@@ -38,6 +38,10 @@ inputs:
     description: "Install repo-local eliza dependencies needed by jobs that execute local eliza scripts after published-only setup"
     required: false
     default: "false"
+  preserve-android-sdk:
+    description: "Keep the preinstalled Android SDK on Linux runners for Android packaging jobs"
+    required: false
+    default: "false"
 
 runs:
   using: "composite"
@@ -50,7 +54,10 @@ runs:
       # extraction. Drop unused preinstalled toolchains to reclaim ~25 GB.
       run: |
         df -h /
-        sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL
+        if [ "${{ inputs.preserve-android-sdk }}" != "true" ]; then
+          sudo rm -rf /usr/local/lib/android
+        fi
+        sudo rm -rf /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL
         df -h /
 
     - name: Setup Python
