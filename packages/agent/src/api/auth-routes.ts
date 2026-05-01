@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { isCloudProvisionedContainer } from "./cloud-provisioning.js";
+import { isCloudflareAccessAuthenticated } from "./cloudflare-access-auth.js";
 import { getConfiguredApiToken, isApiAuthDisabled } from "./server-auth.js";
 import type { RouteRequestContext } from "./route-helpers.js";
 
@@ -34,7 +35,11 @@ export async function handleAuthRoutes(
   if (!pathname.startsWith("/api/auth/")) return false;
 
   if (method === "GET" && pathname === "/api/auth/status") {
-    if (isApiAuthDisabled() || isCloudProvisionedContainer()) {
+    if (
+      isApiAuthDisabled() ||
+      isCloudProvisionedContainer() ||
+      isCloudflareAccessAuthenticated(req)
+    ) {
       // Steward-managed cloud containers enforce API auth upstream, but the
       // local pairing flow is intentionally unavailable there. Reporting
       // required=true would strand app-core clients in PairingView.
@@ -60,7 +65,11 @@ export async function handleAuthRoutes(
     const body = await readJsonBody<{ code?: string }>(req, res);
     if (!body) return true;
 
-    if (isApiAuthDisabled() || isCloudProvisionedContainer()) {
+    if (
+      isApiAuthDisabled() ||
+      isCloudProvisionedContainer() ||
+      isCloudflareAccessAuthenticated(req)
+    ) {
       error(res, "Pairing disabled", 403);
       return true;
     }

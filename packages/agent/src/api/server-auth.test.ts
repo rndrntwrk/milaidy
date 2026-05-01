@@ -19,6 +19,8 @@ describe("agent API auth disable regression guard", () => {
     expect(source).toContain("env.API_AUTH_DISABLED");
     expect(source).toContain("if (isApiAuthDisabled()) return undefined;");
     expect(source).toContain("if (isApiAuthDisabled()) return true;");
+    expect(source).toContain('from "./cloudflare-access-auth.js";');
+    expect(source).toContain("if (isCloudflareAccessAuthenticated(req)) return true;");
   });
 
   it("keeps auth-disabled aliases wired in the monolithic server path", () => {
@@ -31,5 +33,7 @@ describe("agent API auth disable regression guard", () => {
     expect(source).toContain("!isApiAuthDisabled() &&");
     expect(source).toContain("if (isApiAuthDisabled()) return undefined;");
     expect(source).toContain("if (isApiAuthDisabled()) return true;");
+    expect(source).toContain('from "./cloudflare-access-auth.js";');
+    expect(source).toContain("if (isCloudflareAccessAuthenticated(req)) return true;");
   });
 });

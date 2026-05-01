@@ -14,11 +14,11 @@ describe("agent auth routes source regression guard", () => {
     expect(source).toContain(
       'import { getConfiguredApiToken, isApiAuthDisabled } from "./server-auth.js";',
     );
-    expect(source).toContain(
-      "if (isApiAuthDisabled() || isCloudProvisionedContainer())",
-    );
+    expect(source).toContain("isCloudProvisionedContainer() ||");
     expect(source).toContain(
       "const enabled = !isApiAuthDisabled() && pairingEnabled();",
     );
+    expect(source).toContain('from "./cloudflare-access-auth.js";');
+    expect(source).toContain("isCloudflareAccessAuthenticated(req)");
   });
 });
