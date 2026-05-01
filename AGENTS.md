@@ -4,6 +4,19 @@
 
 Milady is a local-first AI assistant built on [elizaOS](https://github.com/elizaOS). It wraps the elizaOS runtime with a CLI, desktop app (Electrobun), web dashboard, and platform connectors (Telegram, Discord, etc.).
 
+## Wallet + trading architecture (locked)
+
+The wallet and trading stack is governed by `docs/architecture/wallet-and-trading.md`. The non-negotiable shape:
+
+- **Steward is cloud-only.** Eliza Cloud (web) and mobile (Capacitor) route signing through the multi-tenant Steward service. Desktop defaults to `LocalEoaBackend` (keys hydrated from the OS keychain). No Vincent, no Lit Protocol — Steward is the only custody primitive in cloud, full stop.
+- **One canonical surface: action + provider + validate.** Roughly 9 canonical planner-visible actions (`TRADE`, `MANAGE_POSITION`, `QUERY_MARKET`, `QUERY_PORTFOLIO`, `LEND`, `MANAGE_LP`, `TRANSFER`, `SET_AUTOMATION`, `MANAGE_AUTOMATION`) plus 13 typed providers. Adding a new venue means adding a provider, **not** a new planner verb. Validate is a strict 6-step gate (zod parse → plugin enabled → provider health → wallet capability → policy → preconditions); handlers trust pre-validated input. Read-only `QUERY_*` actions skip wallet + policy.
+- **No fallback sludge.** Silent autogen of EVM/Solana keys is removed. `POST /api/wallet/export` is removed. Steward unreachable = fail loud, not silent fallback to local. Local policy is absolute (no human approval loop) except the explicit `prompt_user_first` rule kind, which surfaces a chat-surface confirmation above a configurable USD threshold (default $50).
+- **Hyperliquid live mainnet only**, agent-key delegation auto-registered on first use. **Polymarket** has both reads (lifted from otaku) and writes (CLOB place/cancel + on-chain `redeemPositions`). Geographic restrictions surface as `VENUE_GEO_RESTRICTED` at validate based on a client-supplied region.
+- **Audit log is evidence-grade.** Append-only Postgres / PGLite table with row-chained sha256, verified at boot, 90-day rolling retention with checkpoint hashes every 1000 rows. Privacy filter is mandatory on every write.
+- **Ships everywhere.** Desktop (Electrobun + LocalEoaBackend), Eliza Cloud (web + StewardBackend), mobile (Capacitor + cloud-routed StewardBackend).
+
+Implementation order is `docs/architecture/wallet-and-trading.md` §I. Coordinator routes by phase; specialists implement against the spec, not against narrative.
+
 ### elizaOS naming (agents & editors)
 
 Write the framework name as **elizaOS** in prose, comments, user-facing strings, and documentation — not `ElizaOS`. The npm scope remains **`@elizaos/*`** (lowercase). Say **Eliza agents** when you mean agents in plain language (not **elizaOS agents**). The **Eliza Classic** plugin name is an exception (**Eliza** = the 1966 chatbot), not “elizaOS Classic”. Cursor picks this up via `.cursor/rules/elizaos-branding.mdc`.
