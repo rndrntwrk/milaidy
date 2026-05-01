@@ -57,6 +57,14 @@ jobs:
         env:
           RELEASE_VERSION: ${{ inputs.version }}
 
+      - name: Generate eliza i18n keyword data
+        # @elizaos/shared stays workspace-local even with
+        # disable-local-eliza-workspace, and tsdown bundles its source.
+        # generated/validation-keyword-data.js is gitignored, so without
+        # this step the rolldown bundle fails to resolve it on a fresh
+        # checkout.
+        run: node eliza/packages/app-core/scripts/ensure-shared-i18n-data.mjs
+
       - name: Build
         run: |
           bunx tsdown

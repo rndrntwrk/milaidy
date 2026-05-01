@@ -42,6 +42,11 @@ on:
         description: "Release tag override (e.g. v2.0.0-alpha.3)"
         required: false
         type: string
+      channel:
+        description: "Release channel (auto, canary, beta, rc, stable)"
+        required: false
+        type: string
+        default: auto
       draft:
         description: "Create the GitHub release as a draft"
         required: false
@@ -63,6 +68,17 @@ on:
         description: "Release tag (e.g. v2.0.0-alpha.3)"
         required: false
         type: string
+      channel:
+        description: "Release channel"
+        required: false
+        type: choice
+        default: auto
+        options:
+          - auto
+          - canary
+          - beta
+          - rc
+          - stable
       draft:
         description: "Create as draft release"
         required: false
@@ -98,6 +114,7 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       tag: ${{ steps.version.outputs.tag }}
       env: ${{ steps.version.outputs.env }}
+      channel: ${{ steps.version.outputs.channel }}
       source_sha: ${{ steps.version.outputs.source_sha }}
       desktop_matrix: ${{ steps.desktop-matrix.outputs.desktop_matrix }}
     steps:
@@ -108,9 +125,12 @@ jobs:
 
       - name: Determine version + env
         id: version
+        env:
+          RELEASE_TAG: ${{ inputs.tag || '' }}
+          RELEASE_CHANNEL: ${{ inputs.channel || 'auto' }}
         run: |
-          if [[ -n "${{ inputs.tag }}" ]]; then
-            TAG="${{ inputs.tag }}"
+          if [[ -n "$RELEASE_TAG" ]]; then
+            TAG="$RELEASE_TAG"
           elif [[ "${{ github.ref_type }}" == "tag" ]]; then
             TAG="${{ github.ref_name }}"
           else
@@ -118,19 +138,54 @@ jobs:
             exit 1
           fi
           VERSION="${TAG#v}"
-          # canary for pre-release tags, stable for everything else
-          if echo "$VERSION" | grep -qE '(alpha|beta|rc|nightly)'; then
-            BUILD_ENV="canary"
-          else
-            BUILD_ENV="stable"
-          fi
+          CHANNEL="$RELEASE_CHANNEL"
+          case "$CHANNEL" in
+            ""|auto)
+              if echo "$VERSION" | grep -qiE '(alpha|nightly)'; then
+                CHANNEL="canary"
+              elif echo "$VERSION" | grep -qi 'beta'; then
+                CHANNEL="beta"
+              elif echo "$VERSION" | grep -qi 'rc'; then
+                CHANNEL="rc"
+              else
+                CHANNEL="stable"
+              fi
+              ;;
+            canary|beta|rc|stable) ;;
+            *)
+              echo "::error::Invalid release channel: $CHANNEL"
+              exit 1
+              ;;
+          esac
+          case "$CHANNEL" in
+            canary)
+              echo "$VERSION" | grep -qiE '(alpha|nightly)' || { echo "::error::canary desktop release requires an alpha/nightly version, got $VERSION"; exit 1; }
+              BUILD_ENV="canary"
+              ;;
+            beta)
+              echo "$VERSION" | grep -qi 'beta' || { echo "::error::beta desktop release requires a beta version, got $VERSION"; exit 1; }
+              BUILD_ENV="canary"
+              ;;
+            rc)
+              echo "$VERSION" | grep -qi 'rc' || { echo "::error::rc desktop release requires an rc version, got $VERSION"; exit 1; }
+              BUILD_ENV="canary"
+              ;;
+            stable)
+              if echo "$VERSION" | grep -qiE '(alpha|beta|rc|nightly)'; then
+                echo "::error::stable desktop release requires a stable version, got $VERSION"
+                exit 1
+              fi
+              BUILD_ENV="stable"
+              ;;
+          esac
           {
             echo "tag=$TAG"
             echo "version=$VERSION"
             echo "env=$BUILD_ENV"
+            echo "channel=$CHANNEL"
             echo "source_sha=$GITHUB_SHA"
           } >> "$GITHUB_OUTPUT"
-          echo "Release: $VERSION (tag: $TAG, env: $BUILD_ENV, sha: $GITHUB_SHA)"
+          echo "Release: $VERSION (tag: $TAG, channel: $CHANNEL, env: $BUILD_ENV, sha: $GITHUB_SHA)"
 
       - name: Select desktop platform matrix
         id: desktop-matrix
@@ -178,7 +233,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: "22"
+          node-version: "24"
 
       - name: Setup Bun workspace
         uses: ./.github/actions/setup-bun-workspace
@@ -200,7 +255,7 @@ jobs:
           cp "$HOME/.cache/eliza/whisper/ggml-base.en.bin" .artifacts/whisper-model/ggml-base.en.bin
 
       - name: Upload Whisper model artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: whisper-model-base-en
           path: .artifacts/whisper-model/ggml-base.en.bin
@@ -280,7 +335,7 @@ jobs:
     name: Build Agent Browser Bridge companions
     if: ${{ inputs.platform == '' || inputs.platform == 'all' }}
     needs: [prepare, validate-release]
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 60
     outputs:
       packaged: ${{ steps.package-browser-bridge.outputs.packaged }}
@@ -298,7 +353,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: "22"
+          node-version: "24"
 
       - name: Setup Bun workspace
         uses: ./.github/actions/setup-bun-workspace
@@ -320,7 +375,7 @@ jobs:
 
       - name: Upload Agent Browser Bridge release artifacts
         if: steps.package-browser-bridge.outputs.packaged == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: browser-bridge-store-bundles
           path: |
@@ -374,17 +429,12 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: "22"
+          node-version: "24"
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Ensure nested cloud workspace is hydrated
-        run: |
-          git -C eliza submodule update --init cloud
-          test -d eliza/cloud/packages/sdk
 
       - name: Install root dependencies
         # --ignore-scripts skips native dependency install scripts (e.g. @tensorflow/tfjs-node
@@ -429,7 +479,7 @@ jobs:
 
       - name: Download Whisper model artifact
         if: matrix.platform.os == 'macos' || matrix.platform.os == 'linux'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: whisper-model-base-en
           path: .artifacts/whisper-model
@@ -655,9 +705,11 @@ jobs:
           esac
 
           echo "Resolved electrobun package dir: $package_dir"
-          echo "package-dir=$package_dir" >> "$GITHUB_OUTPUT"
-          echo "cache-dir=$package_dir/.cache" >> "$GITHUB_OUTPUT"
-          echo "core-target=$electrobun_core_target" >> "$GITHUB_OUTPUT"
+          {
+            echo "package-dir=$package_dir"
+            echo "cache-dir=$package_dir/.cache"
+            echo "core-target=$electrobun_core_target"
+          } >> "$GITHUB_OUTPUT"
           echo "core-cache-dir=$package_dir/dist-$electrobun_core_target" >> "$GITHUB_OUTPUT"
 
       - name: Cache Electrobun CLI and core binaries
@@ -780,7 +832,7 @@ jobs:
 
       - name: Upload Electrobun build diagnostics
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: electrobun-${{ matrix.platform.artifact-name }}-build-diagnostics
           path: |
@@ -932,57 +984,29 @@ jobs:
               Write-Error "eliza-dist generated keyword data NOT found: $keywordDataCheck"
               exit 1
             }
+            $agentRuntimeModules = @(
+              "config\env-vars.js",
+              "config\plugin-auto-enable.js",
+              "config\schema.js",
+              "runtime\advanced-capabilities-config.js",
+              "runtime\embedding-presets.js",
+              "runtime\plugin-collector.js",
+              "runtime\plugin-resolver.js",
+              "runtime\plugin-types.js"
+            )
+            foreach ($runtimeModule in $agentRuntimeModules) {
+              $agentRuntimeCheck = Join-Path $elizaDist "node_modules\@elizaos\agent\packages\agent\src\$runtimeModule"
+              Write-Host "Checking for: $agentRuntimeCheck"
+              if (Test-Path $agentRuntimeCheck) {
+                Write-Host "eliza-dist @elizaos/agent runtime module found: $runtimeModule"
+              } else {
+                Write-Error "eliza-dist @elizaos/agent runtime module NOT found: $agentRuntimeCheck"
+                exit 1
+              }
+            }
             $agentManifestPath = Join-Path $elizaDist "node_modules\@elizaos\agent\package.json"
-            if (-not (Test-Path $agentManifestPath)) {
-              Write-Error "eliza-dist @elizaos/agent package.json NOT found: $agentManifestPath"
-              exit 1
-            }
-            $agentPackageRoot = Split-Path -Parent $agentManifestPath
             $agentManifest = Get-Content $agentManifestPath -Raw | ConvertFrom-Json
-            function Get-AgentPackageExportTargets($exportValue) {
-              if ($exportValue -is [string]) {
-                return @($exportValue)
-              }
-              return @(
-                $exportValue.default,
-                $exportValue.import,
-                $exportValue.types
-              ) | Where-Object { $_ -is [string] -and $_.Length -gt 0 }
-            }
-            function Resolve-AgentPackageExportTargets($manifest, [string] $runtimeExport) {
-              $directExport = $manifest.exports.PSObject.Properties[$runtimeExport]
-              if ($null -ne $directExport) {
-                return Get-AgentPackageExportTargets $directExport.Value
-              }
-
-              foreach ($exportProperty in $manifest.exports.PSObject.Properties) {
-                $exportName = [string] $exportProperty.Name
-                $wildcardIndex = $exportName.IndexOf("*")
-                if ($wildcardIndex -lt 0) {
-                  continue
-                }
-
-                $prefix = $exportName.Substring(0, $wildcardIndex)
-                $suffix = $exportName.Substring($wildcardIndex + 1)
-                if (-not $runtimeExport.StartsWith($prefix)) {
-                  continue
-                }
-                if ($suffix.Length -gt 0 -and -not $runtimeExport.EndsWith($suffix)) {
-                  continue
-                }
-
-                $replacement = $runtimeExport.Substring(
-                  $prefix.Length,
-                  $runtimeExport.Length - $prefix.Length - $suffix.Length
-                )
-                return @(
-                  (Get-AgentPackageExportTargets $exportProperty.Value) |
-                    ForEach-Object { $_.Replace("*", $replacement) }
-                )
-              }
-
-              return @()
-            }
+            $agentExportNames = @($agentManifest.exports.PSObject.Properties.Name)
             $agentRequiredExports = @(
               "./config/env-vars",
               "./config/plugin-auto-enable",
@@ -994,27 +1018,10 @@ jobs:
               "./runtime/plugin-types"
             )
             foreach ($runtimeExport in $agentRequiredExports) {
-              $exportTargets = Resolve-AgentPackageExportTargets $agentManifest $runtimeExport
-              if ($exportTargets.Count -eq 0) {
-                Write-Error "eliza-dist @elizaos/agent package export NOT found: $runtimeExport"
-                exit 1
-              }
-              Write-Host "eliza-dist @elizaos/agent package export resolved: $runtimeExport"
-
-              $existingTarget = $null
-              foreach ($exportTarget in $exportTargets) {
-                $normalizedTarget = $exportTarget -replace '/', '\'
-                $runtimePath = Join-Path $agentPackageRoot $normalizedTarget
-                Write-Host "Checking for: $runtimePath"
-                if (Test-Path $runtimePath) {
-                  $existingTarget = $runtimePath
-                  break
-                }
-              }
-              if ($existingTarget) {
-                Write-Host "eliza-dist @elizaos/agent runtime export target found: $runtimeExport -> $existingTarget"
+              if ($agentExportNames -contains $runtimeExport) {
+                Write-Host "eliza-dist @elizaos/agent package export found: $runtimeExport"
               } else {
-                Write-Error "eliza-dist @elizaos/agent runtime export target NOT found: $runtimeExport"
+                Write-Error "eliza-dist @elizaos/agent package export NOT found: $runtimeExport"
                 exit 1
               }
             }
@@ -1098,8 +1105,8 @@ jobs:
           ELIZA_TEST_WINDOWS_LAUNCHER_DIR: ${{ runner.temp }}\eliza-windows-ui-launcher
           ELIZA_TEST_WINDOWS_LAUNCHER_PATH_FILE: ${{ runner.temp }}\eliza-windows-ui-launcher.txt
           # Inno installer is built into platforms/electrobun/artifacts.
-          ELIZA_TEST_WINDOWS_ARTIFACTS_DIR: ${{ github.workspace }}\eliza\packages\app-core\platforms\electrobun\artifacts
-          ELIZA_TEST_WINDOWS_BUILD_DIR: ${{ github.workspace }}\eliza\packages\app-core\platforms\electrobun\build
+          ELIZA_TEST_WINDOWS_ARTIFACTS_DIR: ${{ github.workspace }}\packages\app-core\platforms\electrobun\artifacts
+          ELIZA_TEST_WINDOWS_BUILD_DIR: ${{ github.workspace }}\packages\app-core\platforms\electrobun\build
         run: |
           Remove-Item $env:ELIZA_TEST_WINDOWS_INSTALL_DIR -Recurse -Force -ErrorAction SilentlyContinue
           Remove-Item $env:ELIZA_TEST_WINDOWS_LAUNCHER_DIR -Recurse -Force -ErrorAction SilentlyContinue
@@ -1146,7 +1153,7 @@ jobs:
 
       - name: Upload Windows installer proof artifact
         if: always() && matrix.platform.os == 'windows'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: electrobun-windows-installer-proof
           path: eliza/packages/app-core/platforms/electrobun/artifacts/windows-installer-proof/**
@@ -1159,7 +1166,7 @@ jobs:
 
       - name: Upload Windows Playwright UI diagnostics
         if: failure() && matrix.platform.os == 'windows'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: electrobun-windows-ui-playwright-diagnostics
           # TODO: confirm packaged-app Playwright result location in eliza
@@ -1494,7 +1501,7 @@ jobs:
 
       - name: Upload Windows smoke diagnostics
         if: failure() && matrix.platform.os == 'windows'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: electrobun-${{ matrix.platform.artifact-name }}-smoke-diagnostics
           path: eliza/packages/app-core/platforms/electrobun/artifacts/windows-smoke-diagnostics/**
@@ -1503,7 +1510,7 @@ jobs:
 
       - name: Upload macOS smoke diagnostics
         if: failure() && matrix.platform.os == 'macos'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: electrobun-${{ matrix.platform.artifact-name }}-smoke-diagnostics
           path: |
@@ -1605,7 +1612,7 @@ jobs:
 
       - name: Upload public canary installer artifact
         if: matrix.platform.os == 'windows' && needs.prepare.outputs.env == 'canary' && steps.build-electrobun-app.outputs.fallback != 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: electrobun-${{ matrix.platform.artifact-name }}-public-installer
           path: eliza/packages/app-core/platforms/electrobun/artifacts/public-canary-installer/ElizaOSApp-Setup-*.exe
@@ -1614,7 +1621,7 @@ jobs:
           compression-level: 0
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: electrobun-${{ matrix.platform.artifact-name }}
           path: |
@@ -1631,7 +1638,7 @@ jobs:
 
       - name: Upload MSIX artifact
         if: matrix.platform.os == 'windows'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: electrobun-${{ matrix.platform.artifact-name }}-msix
           path: eliza/packages/app-core/platforms/electrobun/artifacts/*.msix
@@ -1653,7 +1660,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: release-artifacts
           pattern: electrobun-*
@@ -1705,7 +1712,7 @@ jobs:
           cat SHA256SUMS.txt
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.prepare.outputs.tag }}
           target_commitish: ${{ needs.prepare.outputs.source_sha }}
@@ -1761,7 +1768,7 @@ jobs:
       contents: write
     steps:
       - name: Download Agent Browser Bridge artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: browser-bridge-release
           pattern: browser-bridge-*
