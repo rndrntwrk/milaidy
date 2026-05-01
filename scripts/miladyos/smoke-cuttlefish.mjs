@@ -78,8 +78,17 @@ const AGENT_PORT = 31337;
 // adb forward picks an arbitrary host port; we always pin to AGENT_PORT
 // for simplicity. cvd binds 6520+ for its own ports so 31337 is free.
 const HOST_PORT = 31337;
-const HEALTH_TIMEOUT_MS = 30_000;
-const HEALTH_POLL_INTERVAL_MS = 1_000;
+// Cold-boot on cvd takes several minutes: the service has to extract
+// the bun musl binary + agent-bundle + GGUF models from the APK, hand
+// the bun process a (clean) PGlite db, register all plugins, and
+// finally bring up Express. A 30 s window only works when the smoke
+// runs against an already-warm service. After the service has been
+// killed (watchdog after a long chat held the bun thread past health-
+// ping window, or `am start` on a re-launched activity) we need to
+// budget for the full boot path. 10 min is generous for cvd CPU and
+// short enough that a real failure still surfaces quickly.
+const HEALTH_TIMEOUT_MS = 600_000;
+const HEALTH_POLL_INTERVAL_MS = 2_000;
 // Cuttlefish x86_64 has no GPU; Llama-3.2-1B decoding a 9k-token
 // planner prompt on CPU runs for several minutes per turn (planner +
 // action evaluator + reply). End-to-end chat lands at 25–45 min on
