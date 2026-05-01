@@ -1,6 +1,5 @@
-import assert from "node:assert/strict";
 import fs from "node:fs";
-import { describe, test } from "node:test";
+import { describe, expect, test } from "vitest";
 
 describe("Electrobun release runtime root contract", () => {
   test("release workflow pins Electrobun copy resolution to the wrapper repo", () => {
@@ -9,13 +8,12 @@ describe("Electrobun release runtime root contract", () => {
       "utf8",
     );
 
-    assert.match(workflow, /name: Validate Electrobun runtime copy contract/);
-    assert.match(
-      workflow,
+    expect(workflow).toMatch(/name: Validate Electrobun runtime copy contract/);
+    expect(workflow).toMatch(
       /ELIZA_ELECTROBUN_REPO_ROOT: \$\{\{ github\.workspace \}\}/,
     );
-    assert.match(workflow, /expectedRuntimeSource = path\.resolve\("dist"\)/);
-    assert.match(workflow, /destination\]\) => destination === "eliza-dist"/);
+    expect(workflow).toMatch(/expectedRuntimeSource = path\.resolve\("dist"\)/);
+    expect(workflow).toMatch(/destination\]\) => destination === "eliza-dist"/);
   });
 
   test("Electrobun config exposes wrapper-aware repo root resolution", () => {
@@ -24,8 +22,8 @@ describe("Electrobun release runtime root contract", () => {
       "utf8",
     );
 
-    assert.match(config, /ELIZA_ELECTROBUN_REPO_ROOT/);
-    assert.match(config, /hasOuterElizaElectrobunCheckout/);
-    assert.match(config, /export function resolveElectrobunRepoRoot/);
+    expect(config).toMatch(/ELIZA_ELECTROBUN_REPO_ROOT/);
+    expect(config).toMatch(/hasOuterElizaElectrobunCheckout/);
+    expect(config).toMatch(/export function resolveElectrobunRepoRoot/);
   });
 });
