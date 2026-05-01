@@ -939,6 +939,50 @@ jobs:
             }
             $agentPackageRoot = Split-Path -Parent $agentManifestPath
             $agentManifest = Get-Content $agentManifestPath -Raw | ConvertFrom-Json
+            function Get-AgentPackageExportTargets($exportValue) {
+              if ($exportValue -is [string]) {
+                return @($exportValue)
+              }
+              return @(
+                $exportValue.default,
+                $exportValue.import,
+                $exportValue.types
+              ) | Where-Object { $_ -is [string] -and $_.Length -gt 0 }
+            }
+            function Resolve-AgentPackageExportTargets($manifest, [string] $runtimeExport) {
+              $directExport = $manifest.exports.PSObject.Properties[$runtimeExport]
+              if ($null -ne $directExport) {
+                return Get-AgentPackageExportTargets $directExport.Value
+              }
+
+              foreach ($exportProperty in $manifest.exports.PSObject.Properties) {
+                $exportName = [string] $exportProperty.Name
+                $wildcardIndex = $exportName.IndexOf("*")
+                if ($wildcardIndex -lt 0) {
+                  continue
+                }
+
+                $prefix = $exportName.Substring(0, $wildcardIndex)
+                $suffix = $exportName.Substring($wildcardIndex + 1)
+                if (-not $runtimeExport.StartsWith($prefix)) {
+                  continue
+                }
+                if ($suffix.Length -gt 0 -and -not $runtimeExport.EndsWith($suffix)) {
+                  continue
+                }
+
+                $replacement = $runtimeExport.Substring(
+                  $prefix.Length,
+                  $runtimeExport.Length - $prefix.Length - $suffix.Length
+                )
+                return @(
+                  (Get-AgentPackageExportTargets $exportProperty.Value) |
+                    ForEach-Object { $_.Replace("*", $replacement) }
+                )
+              }
+
+              return @()
+            }
             $agentRequiredExports = @(
               "./config/env-vars",
               "./config/plugin-auto-enable",
@@ -950,23 +994,12 @@ jobs:
               "./runtime/plugin-types"
             )
             foreach ($runtimeExport in $agentRequiredExports) {
-              $exportProperty = $agentManifest.exports.PSObject.Properties[$runtimeExport]
-              if ($null -eq $exportProperty) {
+              $exportTargets = Resolve-AgentPackageExportTargets $agentManifest $runtimeExport
+              if ($exportTargets.Count -eq 0) {
                 Write-Error "eliza-dist @elizaos/agent package export NOT found: $runtimeExport"
                 exit 1
               }
-              Write-Host "eliza-dist @elizaos/agent package export found: $runtimeExport"
-
-              $exportValue = $exportProperty.Value
-              if ($exportValue -is [string]) {
-                $exportTargets = @($exportValue)
-              } else {
-                $exportTargets = @(
-                  $exportValue.default,
-                  $exportValue.import,
-                  $exportValue.types
-                ) | Where-Object { $_ -is [string] -and $_.Length -gt 0 }
-              }
+              Write-Host "eliza-dist @elizaos/agent package export resolved: $runtimeExport"
 
               $existingTarget = $null
               foreach ($exportTarget in $exportTargets) {

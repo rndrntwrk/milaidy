@@ -17,6 +17,8 @@ describe("Electrobun release runtime root contract", () => {
     expect(workflow).toMatch(
       /runtime export target found: \$runtimeExport -> \$existingTarget/,
     );
+    expect(workflow).toMatch(/Resolve-AgentPackageExportTargets/);
+    expect(workflow).toMatch(/\.Replace\("\*", \$replacement\)/);
     expect(workflow).not.toMatch(/packages\\agent\\src\\\$runtimeModule/);
   });
 
