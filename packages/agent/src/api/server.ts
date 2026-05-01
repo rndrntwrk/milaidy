@@ -143,6 +143,8 @@ import { handleAgentLifecycleRoutes } from "./agent-lifecycle-routes.js";
 import { detectRuntimeModel, resolveProviderFromModel } from "./agent-model.js";
 import { handleAgentStatusRoutes } from "./agent-status-routes.js";
 import { handleAgentTransferRoutes } from "./agent-transfer-routes.js";
+import { handleAliceCodingPolicyRoutes } from "./alice-coding-policy-routes.js";
+import { handleAliceCorpusRoutes } from "./alice-corpus-routes.js";
 import { handleAliceOperatorRoutes } from "./alice-operator-routes.js";
 import { handleAppPackageRoutes } from "./app-package-routes.js";
 import { handleAppsRoutes } from "./apps-routes.js";
@@ -172,6 +174,7 @@ import {
 } from "./chat-routes.js";
 import { handleCloudBillingRoute } from "./cloud-billing-routes.js";
 import { handleCloudCompatRoute } from "./cloud-compat-routes.js";
+import { isCloudflareAccessAuthenticated } from "./cloudflare-access-auth.js";
 import { isCloudProvisionedContainer } from "./cloud-provisioning.js";
 import { handleCloudRelayRoute } from "./cloud-relay-routes.js";
 import { type CloudRouteState, handleCloudRoute } from "./cloud-routes.js";
@@ -181,6 +184,7 @@ import { handleConfigRoutes } from "./config-routes.js";
 import { ConnectorHealthMonitor } from "./connector-health.js";
 import { handleConnectorRoutes } from "./connector-routes.js";
 import { handleConversationRoutes } from "./conversation-routes.js";
+import { handleCrossChannelIngestRoutes } from "./cross-channel-ingest-routes.js";
 import type {
   SwarmEvent,
   TaskCompletionSummary,
@@ -3321,6 +3325,7 @@ export function ensureApiTokenForBindHost(host: string): void {
 
 export function isAuthorized(req: http.IncomingMessage): boolean {
   if (isApiAuthDisabled()) return true;
+  if (isCloudflareAccessAuthenticated(req)) return true;
 
   const expected = getConfiguredApiToken();
   if (!expected) return !isCloudProvisionedContainer();
@@ -5961,6 +5966,41 @@ async function handleRequest(
     return;
   }
 
+  if (pathname.startsWith("/api/alice/coding")) {
+    if (
+      await handleAliceCodingPolicyRoutes({
+        req,
+        res,
+        method,
+        pathname,
+        config: state.config,
+        json,
+        error,
+        readJsonBody,
+      })
+    ) {
+      return;
+    }
+  }
+
+  if (pathname.startsWith("/api/alice/corpus")) {
+    if (
+      await handleAliceCorpusRoutes({
+        req,
+        res,
+        method,
+        pathname,
+        url,
+        config: state.config,
+        stateDir: resolveStateDir(),
+        json,
+        error,
+      })
+    ) {
+      return;
+    }
+  }
+
   // ═══════════════════════════════════════════════════════════════════════
   // Config routes (extracted to config-routes.ts)
   // ═══════════════════════════════════════════════════════════════════════
@@ -6568,6 +6608,25 @@ async function handleRequest(
         resolveMcpServersRejection,
         resolveMcpTerminalAuthorizationRejection,
         decodePathComponent,
+      })
+    ) {
+      return;
+    }
+  }
+
+  if (pathname.startsWith("/api/ingest/comments")) {
+    if (
+      await handleCrossChannelIngestRoutes({
+        req,
+        res,
+        method,
+        pathname,
+        url,
+        json,
+        error,
+        readJsonBody,
+        stateDir: resolveStateDir(),
+        config: state.config,
       })
     ) {
       return;

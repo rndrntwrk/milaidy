@@ -668,6 +668,45 @@ export type ConnectorFieldValue =
  */
 export type ConnectorConfig = { [key: string]: ConnectorFieldValue };
 
+export type AliceCrossChannelIngestConfig = {
+  enabled?: boolean;
+  sources?: Array<
+    "github" | "discord" | "telegram" | "slack" | "gmail" | "ops" | "stream555"
+  >;
+  /** Persist raw redacted envelopes and normalized comments under the state dir. */
+  storeDir?: string;
+  /** Project eligible comments into knowledge/memory for retrieval. Default: true. */
+  knowledgeProjection?: boolean;
+};
+
+export type AliceCorpusRootConfig = {
+  id: string;
+  path: string;
+};
+
+export type AliceCorpusConfig = {
+  enabled?: boolean;
+  /** Configured source-of-truth roots Alice may index. Paths may be absolute or runtime-cwd-relative. */
+  roots?: AliceCorpusRootConfig[];
+};
+
+export type AliceCodingConfig = {
+  /** Repositories Alice may inspect, build, test, and open PRs against. */
+  allowedRepos?: string[];
+  /** Staging deploys may be automatic or approval-gated. Default: allow. */
+  stagingDeploys?: "allow" | "approval";
+  /** Production deploys are approval-gated or disabled. Default: approval. */
+  productionDeploys?: "approval" | "deny";
+  /** Required deploy rail so all deploys are visible in Ops. Default: webhook. */
+  deployRail?: "webhook";
+};
+
+export type AliceOperationalConfig = {
+  ingest?: AliceCrossChannelIngestConfig;
+  corpus?: AliceCorpusConfig;
+  coding?: AliceCodingConfig;
+};
+
 export type ElizaConfig = {
   meta?: {
     /** Explicit onboarding completion marker. Reset clears the entire state dir. */
@@ -772,6 +811,8 @@ export type ElizaConfig = {
   media?: MediaConfig;
   /** Messaging connector configuration (Telegram, Discord, Slack, etc.). */
   connectors?: Record<string, ConnectorConfig>;
+  /** Alice production operating policy: cross-channel ingest and coding/deploy autonomy. */
+  alice?: AliceOperationalConfig;
   /** MCP server configuration. */
   mcp?: {
     servers?: Record<

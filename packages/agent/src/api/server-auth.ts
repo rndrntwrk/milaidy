@@ -14,6 +14,7 @@ import {
   setApiToken,
 } from "../config/runtime-env.js";
 import { isCloudProvisionedContainer } from "./cloud-provisioning.js";
+import { isCloudflareAccessAuthenticated } from "./cloudflare-access-auth.js";
 import { BLOCKED_ENV_KEYS } from "./plugin-discovery-helpers.js";
 import { sendJsonError } from "./http-helpers.js";
 import type { ConversationMeta } from "./server-helpers.js";
@@ -147,6 +148,7 @@ export function ensureApiTokenForBindHost(host: string): void {
 
 export function isAuthorized(req: http.IncomingMessage): boolean {
   if (isApiAuthDisabled()) return true;
+  if (isCloudflareAccessAuthenticated(req)) return true;
 
   const expected = getConfiguredApiToken();
   if (!expected) return !isCloudProvisionedContainer();
