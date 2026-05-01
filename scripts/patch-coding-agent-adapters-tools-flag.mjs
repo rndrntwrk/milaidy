@@ -21,6 +21,7 @@
  * names — whichever comes first).
  */
 import fs from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 
 const PINNED_VERSION = "0.16.3";
@@ -32,16 +33,42 @@ function candidatePaths() {
     path.dirname(new URL(import.meta.url).pathname),
     "..",
   );
-  const distDir = path.join(
-    repoRoot,
-    "node_modules",
-    ".bun",
-    `coding-agent-adapters@${PINNED_VERSION}`,
-    "node_modules",
-    "coding-agent-adapters",
-    "dist",
-  );
-  return [distDir].flatMap((dir) =>
+
+  const distDirs = new Set();
+  const addDistDir = (dir) => {
+    if (dir && fs.existsSync(dir)) {
+      distDirs.add(fs.realpathSync(dir));
+    }
+  };
+
+  for (const root of [repoRoot, path.join(repoRoot, "eliza")]) {
+    const requireFromRoot = createRequire(path.join(root, "package.json"));
+    try {
+      const entry = requireFromRoot.resolve("coding-agent-adapters");
+      addDistDir(path.dirname(entry));
+    } catch {
+      // Package is not installed from this workspace root.
+    }
+
+    const bunCacheDir = path.join(root, "node_modules", ".bun");
+    if (!fs.existsSync(bunCacheDir)) continue;
+    for (const entry of fs.readdirSync(bunCacheDir)) {
+      if (!entry.startsWith(`coding-agent-adapters@${PINNED_VERSION}`)) {
+        continue;
+      }
+      addDistDir(
+        path.join(
+          bunCacheDir,
+          entry,
+          "node_modules",
+          "coding-agent-adapters",
+          "dist",
+        ),
+      );
+    }
+  }
+
+  return [...distDirs].flatMap((dir) =>
     ["index.js", "index.cjs"].map((f) => ({
       file: path.join(dir, f),
       required: true,
@@ -72,6 +99,10 @@ for (const file of candidatePaths()) {
 }
 
 const tag = "[patch-coding-agent-adapters-tools-flag]";
+if (results.length === 0) {
+  console.log(`${tag} coding-agent-adapters not installed; skipping.`);
+  process.exit(0);
+}
 for (const r of results) {
   console.log(`${tag} ${r.status}: ${r.file}`);
 }
