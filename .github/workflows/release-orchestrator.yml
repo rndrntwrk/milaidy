@@ -12,6 +12,11 @@ on:
         description: "Version to distribute (e.g. 2.0.0-alpha.87)"
         required: true
         type: string
+      channel:
+        description: "Release channel (auto, canary, beta, rc, stable)"
+        required: false
+        type: string
+        default: auto
       publish_npm:
         description: "Publish npm package"
         required: false
@@ -48,6 +53,17 @@ on:
         description: "Version to distribute (e.g. 2.0.0-alpha.87)"
         required: true
         type: string
+      channel:
+        description: "Release channel"
+        required: false
+        type: choice
+        default: auto
+        options:
+          - auto
+          - canary
+          - beta
+          - rc
+          - stable
       publish_npm:
         description: "Publish npm package"
         required: false
@@ -93,9 +109,11 @@ jobs:
       version: ${{ steps.meta.outputs.version }}
       tag: ${{ steps.meta.outputs.tag }}
       is_prerelease: ${{ steps.meta.outputs.is_prerelease }}
+      channel: ${{ steps.meta.outputs.channel }}
       npm_dist_tag: ${{ steps.meta.outputs.npm_dist_tag }}
       android_track: ${{ steps.meta.outputs.android_track }}
       apple_track: ${{ steps.meta.outputs.apple_track }}
+      snap_release: ${{ steps.meta.outputs.snap_release }}
       publish_npm: ${{ steps.meta.outputs.publish_npm }}
       publish_packages: ${{ steps.meta.outputs.publish_packages }}
       publish_flatpak: ${{ steps.meta.outputs.publish_flatpak }}
@@ -109,6 +127,7 @@ jobs:
         shell: bash -euo pipefail {0}
         env:
           INPUT_VERSION: ${{ inputs.version }}
+          INPUT_CHANNEL: ${{ inputs.channel || 'auto' }}
           TAG_NAME: ${{ github.event.release.tag_name || '' }}
         run: |
           if [[ -n "$INPUT_VERSION" ]]; then
@@ -118,23 +137,63 @@ jobs:
           fi
 
           TAG="v${VERSION}"
-          IS_PRERELEASE="false"
-          NPM_DIST_TAG="latest"
-          ANDROID_TRACK="production"
-          APPLE_TRACK="app-store"
+          CHANNEL="$INPUT_CHANNEL"
+          case "$CHANNEL" in
+            ""|auto)
+              if echo "$VERSION" | grep -qiE '(alpha|nightly)'; then
+                CHANNEL="canary"
+              elif echo "$VERSION" | grep -qi 'beta'; then
+                CHANNEL="beta"
+              elif echo "$VERSION" | grep -qi 'rc'; then
+                CHANNEL="rc"
+              else
+                CHANNEL="stable"
+              fi
+              ;;
+            canary|beta|rc|stable) ;;
+            *)
+              echo "::error::Invalid release channel: $CHANNEL"
+              exit 1
+              ;;
+          esac
 
-          if echo "$VERSION" | grep -qiE '(alpha|beta|rc|nightly)'; then
-            IS_PRERELEASE="true"
-            ANDROID_TRACK="internal"
-            APPLE_TRACK="testflight"
-            if echo "$VERSION" | grep -qi 'nightly'; then
-              NPM_DIST_TAG="nightly"
-            elif echo "$VERSION" | grep -qi 'beta'; then
+          case "$CHANNEL" in
+            canary)
+              echo "$VERSION" | grep -qiE '(alpha|nightly)' || { echo "::error::canary distribution requires an alpha/nightly version, got $VERSION"; exit 1; }
+              IS_PRERELEASE="true"
+              NPM_DIST_TAG="canary"
+              ANDROID_TRACK="internal"
+              APPLE_TRACK="testflight"
+              SNAP_RELEASE="edge"
+              ;;
+            beta)
+              echo "$VERSION" | grep -qi 'beta' || { echo "::error::beta distribution requires a beta version, got $VERSION"; exit 1; }
+              IS_PRERELEASE="true"
               NPM_DIST_TAG="beta"
-            else
-              NPM_DIST_TAG="next"
-            fi
-          fi
+              ANDROID_TRACK="beta"
+              APPLE_TRACK="testflight"
+              SNAP_RELEASE="beta"
+              ;;
+            rc)
+              echo "$VERSION" | grep -qi 'rc' || { echo "::error::rc distribution requires an rc version, got $VERSION"; exit 1; }
+              IS_PRERELEASE="true"
+              NPM_DIST_TAG="rc"
+              ANDROID_TRACK="internal"
+              APPLE_TRACK="testflight"
+              SNAP_RELEASE="candidate"
+              ;;
+            stable)
+              if echo "$VERSION" | grep -qiE '(alpha|beta|rc|nightly)'; then
+                echo "::error::stable distribution requires a stable version, got $VERSION"
+                exit 1
+              fi
+              IS_PRERELEASE="false"
+              NPM_DIST_TAG="latest"
+              ANDROID_TRACK="production"
+              APPLE_TRACK="app-store"
+              SNAP_RELEASE="stable"
+              ;;
+          esac
 
           if [[ "${{ github.event_name }}" == "workflow_dispatch" || "${{ github.event_name }}" == "workflow_call" ]]; then
             PUBLISH_NPM="${{ inputs.publish_npm }}"
@@ -152,8 +211,13 @@ jobs:
             DEPLOY_HOMEPAGE="true"
           fi
 
+          if [[ "$CHANNEL" == "canary" ]]; then
+            PUBLISH_PACKAGES="false"
+            PUBLISH_ANDROID="false"
+            PUBLISH_APPLE="false"
+          fi
           PUBLISH_FLATPAK="$PUBLISH_PACKAGES"
-          if [[ "$IS_PRERELEASE" == "true" ]]; then
+          if [[ "$CHANNEL" != "stable" ]]; then
             UPDATE_HOMEBREW="false"
           fi
 
@@ -161,9 +225,11 @@ jobs:
             echo "version=$VERSION"
             echo "tag=$TAG"
             echo "is_prerelease=$IS_PRERELEASE"
+            echo "channel=$CHANNEL"
             echo "npm_dist_tag=$NPM_DIST_TAG"
             echo "android_track=$ANDROID_TRACK"
             echo "apple_track=$APPLE_TRACK"
+            echo "snap_release=$SNAP_RELEASE"
             echo "publish_npm=$PUBLISH_NPM"
             echo "publish_packages=$PUBLISH_PACKAGES"
             echo "publish_flatpak=$PUBLISH_FLATPAK"
@@ -182,10 +248,12 @@ jobs:
             echo "|-------|-------|"
             echo "| Version | \`${{ steps.meta.outputs.version }}\` |"
             echo "| Tag | \`${{ steps.meta.outputs.tag }}\` |"
+            echo "| Channel | \`${{ steps.meta.outputs.channel }}\` |"
             echo "| Pre-release | \`${{ steps.meta.outputs.is_prerelease }}\` |"
             echo "| npm dist-tag | \`${{ steps.meta.outputs.npm_dist_tag }}\` |"
             echo "| Android track | \`${{ steps.meta.outputs.android_track }}\` |"
             echo "| Apple track | \`${{ steps.meta.outputs.apple_track }}\` |"
+            echo "| Snap release | \`${{ steps.meta.outputs.snap_release }}\` |"
             echo "| Homebrew enabled | \`${{ steps.meta.outputs.update_homebrew }}\` |"
             echo "| Flatpak enabled | \`${{ steps.meta.outputs.publish_flatpak }}\` |"
           } >> "$GITHUB_STEP_SUMMARY"
@@ -199,6 +267,7 @@ jobs:
       version: ${{ needs.prepare.outputs.version }}
       pypi: true
       snap: true
+      snap_release: ${{ needs.prepare.outputs.snap_release }}
       flatpak: ${{ needs.prepare.outputs.publish_flatpak == 'true' }}
       apt: true
     secrets: inherit

@@ -157,7 +157,7 @@
     "pre-review:local": "bun eliza/packages/app-core/scripts/pre-review-local.mjs",
     "prepack": "node eliza/packages/app-core/scripts/rt.mjs run build",
     "publish:plugins:next": "cd eliza/plugins && bun run publish:next",
-    "release:check": "bun eliza/packages/app-core/scripts/run-node-tsx.mjs eliza/packages/app-core/scripts/release-check.ts",
+    "release:check": "node scripts/run-release-check.mjs",
     "setup:upstreams": "node scripts/setup-upstreams.mjs",
     "workspace:sync-submodules": "node scripts/init-submodules.mjs",
     "workspace:bump-eliza-submodules": "node scripts/update-eliza-submodule-pointers-to-remote.mjs",

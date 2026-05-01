@@ -187,6 +187,68 @@ const workflowSnippetCompatReplacements = [
     "run: bun run test:live:cloud",
     'if bun run test:live:cloud 2>&1 | tee \\"$log_file\\"; then',
   ],
+  [
+    "bash packages/app-core/platforms/electrobun/scripts/ensure-whisper-model.sh base.en",
+    "bash eliza/packages/app-core/platforms/electrobun/scripts/ensure-whisper-model.sh base.en",
+  ],
+  ['"identifier":"com.miladyai.milady"', '"identifier":"ai.elizaos.Eliza"'],
+  ['$extractDir = "C:\\m"', '$extractDir = "C:\\e"'],
+  ['-BuildDir "C:\\m"', '-BuildDir "C:\\e"'],
+  [
+    'Get-ChildItem -Path "packages/app-core/platforms/electrobun/artifacts" -File -Filter "ElizaOSApp-Setup-*.exe"',
+    'Get-ChildItem -Path "eliza/packages/app-core/platforms/electrobun/artifacts" -File -Filter "ElizaOSApp-Setup-*.exe"',
+  ],
+  [
+    "path: packages/app-core/platforms/electrobun/artifacts/public-canary-installer/ElizaOSApp-Setup-*.exe",
+    "path: eliza/packages/app-core/platforms/electrobun/artifacts/public-canary-installer/ElizaOSApp-Setup-*.exe",
+  ],
+  [
+    'const workspacePackageJson = path.resolve("packages/app-core/platforms/electrobun/package.json");',
+    'const workspacePackageJson = path.resolve("eliza/packages/app-core/platforms/electrobun/package.json");',
+  ],
+  [
+    'echo "package-dir=$package_dir" >> "$GITHUB_OUTPUT"',
+    'echo "package-dir=$package_dir"',
+  ],
+  [
+    'echo "cache-dir=$package_dir/.cache" >> "$GITHUB_OUTPUT"',
+    'echo "cache-dir=$package_dir/.cache"',
+  ],
+  [
+    "name: Build patched Electrobun CLI for Windows",
+    "name: Build patched Electrobun CLI",
+  ],
+  [
+    "ELIZA_TEST_WINDOWS_INSTALL_DIR: $" + "{{ runner.temp }}\\mi",
+    "ELIZA_TEST_WINDOWS_INSTALL_DIR: $" + "{{ runner.temp }}\\el",
+  ],
+  [
+    "ELIZA_TEST_WINDOWS_PROOF_INSTALL_DIR: $" + "{{ runner.temp }}\\mi-proof",
+    "ELIZA_TEST_WINDOWS_PROOF_INSTALL_DIR: $" + "{{ runner.temp }}\\el-proof",
+  ],
+  [
+    "path: packages/app-core/platforms/electrobun/artifacts/windows-installer-proof/**",
+    "path: eliza/packages/app-core/platforms/electrobun/artifacts/windows-installer-proof/**",
+  ],
+  [
+    "packages/homepage/src/generated/release-data.ts",
+    "apps/homepage/src/generated/release-data.ts",
+  ],
+  ["/packages/homepage/public/", "/apps/homepage/public/"],
+  [String.raw`'$extractDir = "C:\\m"'`, String.raw`'$extractDir = "C:\\e"'`],
+  [String.raw`'-BuildDir "C:\\m"'`, String.raw`'-BuildDir "C:\\e"'`],
+  [
+    `"path: $" + "{{ steps.resolve-electrobun.outputs.cache-dir }}",`,
+    `"$" + "{{ steps.resolve-electrobun.outputs.cache-dir }}",`,
+  ],
+  [
+    String.raw`"ELIZA_TEST_WINDOWS_INSTALL_DIR: $" + "{{ runner.temp }}\\mi",`,
+    String.raw`"ELIZA_TEST_WINDOWS_INSTALL_DIR: $" + "{{ runner.temp }}\\el",`,
+  ],
+  [
+    String.raw`"ELIZA_TEST_WINDOWS_PROOF_INSTALL_DIR: $" + "{{ runner.temp }}\\mi-proof",`,
+    String.raw`"ELIZA_TEST_WINDOWS_PROOF_INSTALL_DIR: $" + "{{ runner.temp }}\\el-proof",`,
+  ],
 ];
 
 function getLocalPackHotspotPathsBlock(source) {
