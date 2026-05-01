@@ -483,6 +483,10 @@ export async function runSmoke({ adb: adbImpl = adb } = {}) {
   // FFI call ran. No-network host (cvd has no Internet) plus no
   // ANTHROPIC_API_KEY / OPENAI_API_KEY / ELIZAOS_CLOUD_API_KEY is the
   // belt-and-braces argument; the log line is the ground truth.
+  // The regex contains a space and parens, so the device shell interprets
+  // unquoted `(Loaded|gen done)` as a subshell and exits with a syntax
+  // error (logging zero matches even when local inference fired). Single-
+  // quote the pattern so the device shell hands it to grep verbatim.
   const logCheck = adbImpl(
     [
       "shell",
@@ -490,7 +494,7 @@ export async function runSmoke({ adb: adbImpl = adb } = {}) {
       "0",
       "grep",
       "-cE",
-      "aosp-llama. (Loaded|gen done)",
+      "'aosp-llama. (Loaded|gen done)'",
       `/data/data/${PACKAGE_NAME}/files/agent/agent.log`,
     ],
     { serial },
