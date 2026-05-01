@@ -1924,7 +1924,10 @@ export default defineConfig({
     allowedHosts: [
       "localhost",
       "127.0.0.1",
-      ...(process.env.MILADY_ALLOWED_HOSTS ?? "").split(",").map((h) => h.trim()).filter(Boolean),
+      ...(process.env.MILADY_ALLOWED_HOSTS ?? "")
+        .split(",")
+        .map((h) => h.trim())
+        .filter(Boolean),
     ],
     // Only pin the dev origin when the desktop shell explicitly asks for a
     // loopback public URL. Capacitor live reload and LAN/browser clients need

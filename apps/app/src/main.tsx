@@ -315,9 +315,13 @@ try {
   let bootstrapToken: string | null = linkToken;
   if (linkToken) {
     for (const key of STALE_BOOTSTRAP_KEYS) {
-      try { window.localStorage.removeItem(key); } catch {}
+      try {
+        window.localStorage.removeItem(key);
+      } catch {}
     }
-    try { window.localStorage.setItem(SELF_HOSTED_TOKEN_KEY, linkToken); } catch {}
+    try {
+      window.localStorage.setItem(SELF_HOSTED_TOKEN_KEY, linkToken);
+    } catch {}
     url.hash = "";
     url.searchParams.delete("token");
     window.history.replaceState({}, "", url.toString());
@@ -330,7 +334,9 @@ try {
   if (bootstrapToken) {
     appBootConfig.apiToken = bootstrapToken;
     appBootConfig.apiBase ??= window.location.origin;
-    try { client.setToken(bootstrapToken); } catch {}
+    try {
+      client.setToken(bootstrapToken);
+    } catch {}
   }
 } catch {}
 setBootConfig(appBootConfig);
