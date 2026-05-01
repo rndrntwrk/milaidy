@@ -21,6 +21,8 @@
     "install.cmd",
     "scripts/init-submodules.mjs",
     "scripts/milady-postinstall-repo-setup.mjs",
+    "scripts/patch-coding-agent-adapters-tools-flag.mjs",
+    "scripts/patch-elizacloud.mjs",
     "scripts/run-init-then-bun-install.mjs",
     "scripts/setup-upstreams.mjs",
     "scripts/update-eliza-submodule-pointers-to-remote.mjs"
@@ -69,6 +71,7 @@
     "build": "node eliza/packages/app-core/scripts/run-production-build.mjs",
     "build:android": "node eliza/packages/app-core/scripts/run-mobile-build.mjs android",
     "build:android:system": "node eliza/packages/app-core/scripts/run-mobile-build.mjs android-system",
+    "build:android:icons": "node apps/app/scripts/generate-android-icons.mjs",
     "build:desktop": "ELIZA_APP_NAME=Milady ELIZA_APP_ID=com.miladyai.milady ELIZA_NAMESPACE=milady node eliza/packages/app-core/scripts/desktop-build.mjs build --variant=base --stage-macos-release-app",
     "desktop:preflight": "ELIZA_APP_NAME=Milady ELIZA_APP_ID=com.miladyai.milady ELIZA_NAMESPACE=milady node eliza/packages/app-core/scripts/desktop-build.mjs preflight --variant=base",
     "build:preload": "cd eliza/packages/app-core/platforms/electrobun && bun run build:preload",

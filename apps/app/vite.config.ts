@@ -9,6 +9,7 @@ import {
   createLogger,
   defineConfig,
   type Plugin,
+  type ServerOptions,
   transformWithEsbuild,
 } from "vite";
 import { resolveAppBranding } from "../../eliza/packages/app-core/src/config/app-config.ts";
@@ -28,6 +29,7 @@ import {
   resolveDesktopUiPortPreference,
 } from "../../eliza/packages/shared/src/runtime-env.ts";
 import { syncElizaEnvAliases } from "../../scripts/lib/sync-eliza-env-aliases.mjs";
+import { parseAllowedHostEnv, toViteAllowedHosts } from "./allowed-hosts.ts";
 import appConfig from "./app.config";
 import { CAPACITOR_PLUGIN_NAMES } from "./scripts/capacitor-plugin-names.mjs";
 import { resolveViteDevServerRuntime } from "./vite-dev-origin.ts";
@@ -163,6 +165,15 @@ syncElizaEnvAliases({
   cloudManagedAgentsApiSegment: APP_NAMESPACE,
   appRoutePluginModules: DEFAULT_APP_ROUTE_PLUGIN_MODULES,
 });
+
+const viteAllowedHosts: Exclude<
+  NonNullable<ServerOptions["allowedHosts"]>,
+  true
+> = [
+  "localhost",
+  "127.0.0.1",
+  ...toViteAllowedHosts(parseAllowedHostEnv(process.env.ELIZA_ALLOWED_HOSTS)),
+];
 
 const NATIVE_PLUGIN_ALIAS_ENTRIES = CAPACITOR_PLUGIN_NAMES.map((name) => ({
   find: new RegExp(`^@elizaos/capacitor-${escapeRegExp(name)}$`),
@@ -688,6 +699,9 @@ function appDevSettingsBannerPlugin(): Plugin {
 }
 
 function desktopCorsPlugin(): Plugin {
+  const accessControlAllowHeaders =
+    "Content-Type, Authorization, X-API-Token, X-Api-Key, X-ElizaOS-Client-Id, X-ElizaOS-UI-Language, X-ElizaOS-Token, X-Eliza-Export-Token, X-Eliza-Terminal-Token, X-Milady-CSRF";
+
   return {
     name: "desktop-cors",
     configureServer(server) {
@@ -703,7 +717,7 @@ function desktopCorsPlugin(): Plugin {
         );
         res.setHeader(
           "Access-Control-Allow-Headers",
-          "Content-Type, Authorization, X-API-Token, X-Api-Key, X-ElizaOS-Client-Id, X-ElizaOS-UI-Language, X-ElizaOS-Token, X-Eliza-Export-Token, X-Eliza-Terminal-Token, X-Milady-Token, X-Milady-Client-Id, X-Milady-Export-Token, X-Milady-Terminal-Token, X-Milady-UI-Language, X-Milady-CSRF",
+          accessControlAllowHeaders,
         );
 
         if (req.method === "OPTIONS") {
@@ -1921,14 +1935,7 @@ export default defineConfig({
     host: true,
     port: uiPort,
     strictPort: true,
-    allowedHosts: [
-      "localhost",
-      "127.0.0.1",
-      ...(process.env.MILADY_ALLOWED_HOSTS ?? "")
-        .split(",")
-        .map((h) => h.trim())
-        .filter(Boolean),
-    ],
+    allowedHosts: viteAllowedHosts,
     // Only pin the dev origin when the desktop shell explicitly asks for a
     // loopback public URL. Capacitor live reload and LAN/browser clients need
     // Vite to keep serving the current request host instead of rewriting

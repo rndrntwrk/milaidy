@@ -290,9 +290,8 @@ const appBootConfig: AppBootConfig = {
 };
 
 // Self-hosted bot bootstrap. The token is read from the URL fragment
-// (#token=...), not the query string, so it never reaches the server, the
-// access log, or Referer headers. Once read, it persists in localStorage
-// scoped to this origin; subsequent visits authenticate without the link.
+// (#token=...), so it never reaches the server, access log, or Referer
+// headers. Once read, it persists in localStorage scoped to this origin.
 const SELF_HOSTED_TOKEN_KEY = "milady:self-hosted-api-token";
 const STALE_BOOTSTRAP_KEYS = [
   "elizaos:agent-profiles",
@@ -303,29 +302,29 @@ try {
   const url = new URL(window.location.href);
   const hash = url.hash.startsWith("#") ? url.hash.slice(1) : url.hash;
   const fragmentToken = new URLSearchParams(hash).get("token")?.trim() ?? null;
-  // Query-string is accepted for backwards compatibility but logs a deprecation
-  // notice — fragments don't reach the server, query params do.
-  const queryToken = url.searchParams.get("token")?.trim() ?? null;
-  if (queryToken && !fragmentToken) {
-    console.warn(
-      "[milady] ?token=... is deprecated for security (lands in logs and Referer). Use #token=... instead.",
+  const hasQueryToken = url.searchParams.has("token");
+  if (hasQueryToken) {
+    console.error(
+      "[milady] Refusing insecure ?token=... bootstrap. Use #token=... instead.",
     );
   }
-  const linkToken = fragmentToken ?? queryToken;
-  let bootstrapToken: string | null = linkToken;
-  if (linkToken) {
+  let bootstrapToken: string | null = fragmentToken;
+  if (fragmentToken) {
     for (const key of STALE_BOOTSTRAP_KEYS) {
       try {
         window.localStorage.removeItem(key);
       } catch {}
     }
     try {
-      window.localStorage.setItem(SELF_HOSTED_TOKEN_KEY, linkToken);
+      window.localStorage.setItem(SELF_HOSTED_TOKEN_KEY, fragmentToken);
     } catch {}
+  }
+  if (fragmentToken || hasQueryToken) {
     url.hash = "";
     url.searchParams.delete("token");
     window.history.replaceState({}, "", url.toString());
-  } else {
+  }
+  if (!bootstrapToken) {
     try {
       const saved = window.localStorage.getItem(SELF_HOSTED_TOKEN_KEY)?.trim();
       if (saved) bootstrapToken = saved;
