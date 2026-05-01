@@ -96,3 +96,17 @@ test("Electrobun release exposes whisper-node for upstream script layout", () =>
     /ln -sfn "\$\(realpath "\$whisper_pkg"\)" eliza\/packages\/node_modules\/whisper-node/,
   );
 });
+
+test("Electrobun release uses Milady whisper cache path", () => {
+  const electrobun = workflow("release-electrobun.yml");
+
+  assert.match(electrobun, /~\/\.cache\/milady\/whisper/);
+  assert.match(
+    electrobun,
+    /\$HOME\/\.cache\/milady\/whisper\/ggml-base\.en\.bin/,
+  );
+  assert.match(
+    electrobun,
+    /eliza\/packages\/node_modules\/whisper-node\/lib\/whisper\.cpp\/models\/ggml-base\.en\.bin/,
+  );
+});

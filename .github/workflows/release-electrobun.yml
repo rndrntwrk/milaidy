@@ -284,7 +284,22 @@ jobs:
         run: |
           bash eliza/packages/app-core/platforms/electrobun/scripts/ensure-whisper-model.sh base.en
           mkdir -p .artifacts/whisper-model
-          cp "$HOME/.cache/eliza/whisper/ggml-base.en.bin" .artifacts/whisper-model/ggml-base.en.bin
+          model_path=""
+          for candidate in \
+            "$HOME/.cache/milady/whisper/ggml-base.en.bin" \
+            "$HOME/.cache/eliza/whisper/ggml-base.en.bin" \
+            "eliza/packages/node_modules/whisper-node/lib/whisper.cpp/models/ggml-base.en.bin" \
+            "node_modules/whisper-node/lib/whisper.cpp/models/ggml-base.en.bin"; do
+            if [ -f "$candidate" ]; then
+              model_path="$candidate"
+              break
+            fi
+          done
+          if [ -z "$model_path" ]; then
+            echo "::error::Whisper model was not produced in a known cache or working-tree path"
+            exit 1
+          fi
+          cp "$model_path" .artifacts/whisper-model/ggml-base.en.bin
 
       - name: Upload Whisper model artifact
         uses: actions/upload-artifact@v7
@@ -536,6 +551,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: |
+            ~/.cache/milady/whisper
             ~/.cache/eliza/whisper
             node_modules/whisper-node/lib/whisper.cpp/main
             node_modules/whisper-node/lib/whisper.cpp/build
@@ -552,7 +568,9 @@ jobs:
       - name: Seed Whisper model cache
         if: matrix.platform.os == 'macos' || matrix.platform.os == 'linux'
         run: |
+          mkdir -p "$HOME/.cache/milady/whisper"
           mkdir -p "$HOME/.cache/eliza/whisper"
+          cp .artifacts/whisper-model/ggml-base.en.bin "$HOME/.cache/milady/whisper/ggml-base.en.bin"
           cp .artifacts/whisper-model/ggml-base.en.bin "$HOME/.cache/eliza/whisper/ggml-base.en.bin"
 
       - name: Align version with release tag
