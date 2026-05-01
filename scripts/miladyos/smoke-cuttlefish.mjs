@@ -432,11 +432,38 @@ export async function runSmoke({ adb: adbImpl = adb } = {}) {
   }
   clearInterval(heartbeatHandle);
   if (!chatResp) {
+    // Surface the underlying socket cause so "fetch failed" doesn't
+    // shadow ECONNRESET / ECONNREFUSED / EPIPE / UND_ERR_SOCKET. Node's
+    // fetch wraps the real reason in `error.cause`; older callers only
+    // saw "fetch failed: fetch failed" with no actionable detail.
+    const cause = lastFetchError && typeof lastFetchError === "object"
+      ? /* Boundary cast: Error.cause is loosely typed as unknown */
+        ((/** @type {{ cause?: unknown }} */ (lastFetchError)).cause)
+      : null;
+    const causeMessage =
+      cause && typeof cause === "object" && "message" in cause
+        ? /** @type {{ message?: string }} */ (cause).message
+        : cause === undefined || cause === null
+          ? null
+          : String(cause);
+    const causeCode =
+      cause && typeof cause === "object" && "code" in cause
+        ? /** @type {{ code?: string }} */ (cause).code
+        : null;
+    const detail = [
+      `fetch failed: ${lastFetchError?.message ?? "unknown"}`,
+      causeCode ? `cause=${causeCode}` : null,
+      causeMessage && causeMessage !== lastFetchError?.message
+        ? `cause-msg=${causeMessage}`
+        : null,
+    ]
+      .filter(Boolean)
+      .join(" / ");
     results.push({
       step: 6,
       label: "Chat completion request",
       ok: false,
-      detail: `fetch failed: ${lastFetchError?.message ?? "unknown"}`,
+      detail,
     });
     return results;
   }
