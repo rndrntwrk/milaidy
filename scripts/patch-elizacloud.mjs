@@ -4,7 +4,7 @@
  * dist files in node_modules. These patches are also being upstreamed
  * (see https://github.com/elizaos-plugins/plugin-elizacloud/pull/15).
  * Once that PR merges and a new alpha is published, delete this script,
- * the eliza/patches/eliza/elizacloud-patchset/ directory, and the postinstall hook entry.
+ * the eliza/patches/milady/elizacloud-patchset/ directory, and the postinstall hook entry.
  *
  * Pinned to @elizaos/plugin-elizacloud@2.0.0-alpha.8 — refuses to apply
  * to other versions because the patch context lines may have shifted.
@@ -23,7 +23,7 @@ import { fileURLToPath } from "node:url";
 
 const PINNED_VERSION = "2.0.0-alpha.8";
 const PATCH_REL_PATH =
-  "eliza/patches/eliza/elizacloud-patchset/0001-json-output-enforcement-and-fence-strip.patch";
+  "eliza/patches/milady/elizacloud-patchset/0001-json-output-enforcement-and-fence-strip.patch";
 const DIST_ENTRYPOINTS = ["dist/node/index.node.js", "dist/cjs/index.node.cjs"];
 const REQUIRED_DIST_MARKERS = [
   'format: { type: "json_object" }',
