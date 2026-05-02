@@ -41,7 +41,7 @@ try {
 
   const electrobunSmokePatchCheck = spawnSync(
     "node",
-    ["scripts/patch-eliza-electrobun-windows-smoke-startup.mjs", "--check"],
+    ["scripts/patch-eliza-electrobun-windows-smoke-startup.mjs"],
     { stdio: "inherit" },
   );
   if (electrobunSmokePatchCheck.status !== 0) {

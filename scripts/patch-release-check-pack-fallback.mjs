@@ -191,6 +191,11 @@ const workflowSnippetCompatReplacements = [
     "bash packages/app-core/platforms/electrobun/scripts/ensure-whisper-model.sh base.en",
     "bash eliza/packages/app-core/platforms/electrobun/scripts/ensure-whisper-model.sh base.en",
   ],
+  [
+    "process.env.ELIZA_ELECTROBUN_NOTARIZE ??",
+    "process.env.ELIZA_ELECTROBUN_NOTARIZE !==",
+  ],
+  ['"identifier":"com.elizaai.eliza"', '"identifier":"ai.elizaos.Eliza"'],
   ['"identifier":"com.miladyai.milady"', '"identifier":"ai.elizaos.Eliza"'],
   ['$extractDir = "C:\\m"', '$extractDir = "C:\\e"'],
   ['-BuildDir "C:\\m"', '-BuildDir "C:\\e"'],

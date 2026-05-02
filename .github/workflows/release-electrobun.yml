@@ -195,6 +195,11 @@ jobs:
 
       - name: Prepare Whisper model artifact
         run: |
+          if [ ! -e eliza/packages/node_modules/whisper-node ] && [ -e node_modules/whisper-node ]; then
+            mkdir -p eliza/packages/node_modules
+            ln -s ../../../node_modules/whisper-node eliza/packages/node_modules/whisper-node
+          fi
+          export MILADY_WHISPER_MODEL_CACHE_DIR="$HOME/.cache/eliza/whisper"
           bash eliza/packages/app-core/platforms/electrobun/scripts/ensure-whisper-model.sh base.en
           mkdir -p .artifacts/whisper-model
           cp "$HOME/.cache/eliza/whisper/ggml-base.en.bin" .artifacts/whisper-model/ggml-base.en.bin
@@ -652,10 +657,12 @@ jobs:
           esac
 
           echo "Resolved electrobun package dir: $package_dir"
-          echo "package-dir=$package_dir" >> "$GITHUB_OUTPUT"
-          echo "cache-dir=$package_dir/.cache" >> "$GITHUB_OUTPUT"
-          echo "core-target=$electrobun_core_target" >> "$GITHUB_OUTPUT"
-          echo "core-cache-dir=$package_dir/dist-$electrobun_core_target" >> "$GITHUB_OUTPUT"
+          {
+            echo "package-dir=$package_dir"
+            echo "cache-dir=$package_dir/.cache"
+            echo "core-target=$electrobun_core_target"
+            echo "core-cache-dir=$package_dir/dist-$electrobun_core_target"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Cache Electrobun CLI and core binaries
         uses: actions/cache@v5

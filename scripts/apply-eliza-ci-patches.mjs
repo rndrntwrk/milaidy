@@ -8,14 +8,24 @@ import { fileURLToPath } from "node:url";
 const scriptPath = fileURLToPath(import.meta.url);
 const repoRoot = path.resolve(path.dirname(scriptPath), "..");
 const elizaDir = path.join(repoRoot, "eliza");
-const patchPath = path.join(
-  repoRoot,
-  "eliza",
-  "patches",
-  "milady",
-  "eliza-ci-bootstrap",
-  "ci-release-contracts.patch",
-);
+const patchPathCandidates = [
+  path.join(
+    repoRoot,
+    "eliza",
+    "patches",
+    "milady",
+    "eliza-ci-bootstrap",
+    "ci-release-contracts.patch",
+  ),
+  path.join(
+    repoRoot,
+    "eliza",
+    "patches",
+    "eliza",
+    "eliza-ci-bootstrap",
+    "ci-release-contracts.patch",
+  ),
+];
 
 function runGit(args, { allowFailure = false } = {}) {
   const result = spawnSync("git", ["-C", elizaDir, ...args], {
@@ -98,6 +108,9 @@ function main() {
       "eliza submodule is not initialized; run scripts/init-submodules.mjs first",
     );
   }
+  const patchPath =
+    patchPathCandidates.find((candidate) => fs.existsSync(candidate)) ??
+    patchPathCandidates[0];
   if (!fs.existsSync(patchPath)) {
     console.log(
       `[apply-eliza-ci-patches] no eliza CI patch file found at ${path.relative(repoRoot, patchPath)}; assuming current eliza checkout carries the required CI contracts`,

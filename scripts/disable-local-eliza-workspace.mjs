@@ -83,6 +83,7 @@ export const NESTED_INSTALLABLE_PACKAGE_GLOBS = [
 // Entries point at real packages inside eliza/. Published-only CI still runs
 // source paths that import their local builds.
 export const CI_OVERRIDE_SPECIFIERS = {
+  "@elizaos/agent": "file:./eliza/packages/agent",
   "@elizaos/shared": "file:./eliza/packages/shared",
   "@elizaos/ui": "file:./eliza/packages/ui",
 };

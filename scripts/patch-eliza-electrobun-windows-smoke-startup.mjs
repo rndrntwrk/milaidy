@@ -303,6 +303,66 @@ function patchTelegramSessionEsmImport(text) {
   return result;
 }
 
+function patchMacosArtifactStager(text) {
+  let result = replaceRequiredBlock(
+    text,
+    /TARBALL_PATH="\$\(find -L "\$ARTIFACTS_DIR" -maxdepth 1 -type f -name "\*-macos-\*\.app\.tar\.zst" \| sort \| head -1\)"/,
+    `TARBALL_PATH=""
+for tarball_pattern in "*-macos-*.app.tar.zst" "*-macos-*.app.tar.gz" "*-macos-*.tar.gz"; do
+  TARBALL_PATH="$(find -L "$ARTIFACTS_DIR" -maxdepth 1 -type f -name "$tarball_pattern" | sort | head -1)"
+  if [[ -n "$TARBALL_PATH" ]]; then
+    break
+  fi
+done`,
+  );
+  if (!result.matched) {
+    return result;
+  }
+
+  result = replaceRequiredBlock(
+    result.text,
+    /echo "Using updater tarball: \$TARBALL_PATH"\r?\ntar --zstd -xf "\$TARBALL_PATH" -C "\$EXTRACT_DIR"/,
+    `echo "Using updater tarball: $TARBALL_PATH"
+TARBALL_BASENAME="$(basename "$TARBALL_PATH")"
+case "$TARBALL_BASENAME" in
+  *.tar.zst)
+    tar --zstd -xf "$TARBALL_PATH" -C "$EXTRACT_DIR"
+    ;;
+  *.tar.gz)
+    tar -xzf "$TARBALL_PATH" -C "$EXTRACT_DIR"
+    ;;
+  *)
+    echo "stage-macos-release-artifacts: unsupported macOS updater tarball: $TARBALL_BASENAME"
+    exit 1
+    ;;
+esac`,
+  );
+  if (!result.matched) {
+    return result;
+  }
+
+  result = replaceRequiredBlock(
+    result.text,
+    /FINAL_DMG_NAME="\$\(basename "\$\{TARBALL_PATH%\.app\.tar\.zst\}\.dmg"\)"/,
+    `case "$TARBALL_BASENAME" in
+  *.app.tar.zst)
+    FINAL_DMG_NAME="\${TARBALL_BASENAME%.app.tar.zst}.dmg"
+    ;;
+  *.app.tar.gz)
+    FINAL_DMG_NAME="\${TARBALL_BASENAME%.app.tar.gz}.dmg"
+    ;;
+  *.tar.gz)
+    FINAL_DMG_NAME="\${TARBALL_BASENAME%.tar.gz}.dmg"
+    ;;
+  *)
+    echo "stage-macos-release-artifacts: unsupported macOS updater tarball: $TARBALL_BASENAME"
+    exit 1
+    ;;
+esac`,
+  );
+  return result;
+}
+
 const replacements = [
   {
     file: "eliza/packages/app-core/platforms/electrobun/src/startup-trace.ts",
@@ -323,6 +383,11 @@ const replacements = [
     file: "eliza/packages/agent/src/services/telegram-account-auth.ts",
     description: "use explicit Telegram sessions ESM import",
     transform: patchTelegramSessionEsmImport,
+  },
+  {
+    file: "eliza/packages/app-core/platforms/electrobun/scripts/stage-macos-release-artifacts.sh",
+    description: "support gzip macOS release tarball staging",
+    transform: patchMacosArtifactStager,
   },
 ];
 
