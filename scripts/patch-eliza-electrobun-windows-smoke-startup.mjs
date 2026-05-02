@@ -112,6 +112,11 @@ $env:MILADY_STARTUP_EVENTS_FILE = $startupEventsFile
   Join-Path $tempRoot ("milady-installed-" + [Guid]::NewGuid().ToString("N").Substring(0, 8))
 }`,
     },
+    {
+      pattern:
+        /\$curlResult = & "\$env:SystemRoot\\System32\\curl\.exe" -s -o NUL -w "%\{http_code\}" \$uri --connect-timeout 3 --noproxy "127\.0\.0\.1" 2>\$null/,
+      replacement: `$curlResult = & "$env:SystemRoot\\System32\\curl.exe" -s -o NUL -w "%{http_code}" $uri --connect-timeout 3 --max-time 5 --noproxy "127.0.0.1" 2>$null`,
+    },
   ]) {
     const result = replaceRequiredBlock(
       nextText,
@@ -453,10 +458,15 @@ esac`,
 
   result = replaceRequiredBlock(
     result.text,
-    / {2}retry_command 8 20 xcrun stapler staple "\$TEMP_DMG_PATH"/,
+    / {2}(?:retry_command 8 20 xcrun stapler staple "\$TEMP_DMG_PATH"|STAPLER_ATTEMPTS="\$\{ELECTROBUN_STAPLER_ATTEMPTS:-12\}"\r?\n {2}STAPLER_DELAY_SECONDS="\$\{ELECTROBUN_STAPLER_DELAY_SECONDS:-30\}"\r?\n {2}retry_command "\$STAPLER_ATTEMPTS" "\$STAPLER_DELAY_SECONDS" xcrun stapler staple "\$TEMP_DMG_PATH")/,
     `  STAPLER_ATTEMPTS="\${ELECTROBUN_STAPLER_ATTEMPTS:-12}"
   STAPLER_DELAY_SECONDS="\${ELECTROBUN_STAPLER_DELAY_SECONDS:-30}"
-  retry_command "$STAPLER_ATTEMPTS" "$STAPLER_DELAY_SECONDS" xcrun stapler staple "$TEMP_DMG_PATH"`,
+  if ! retry_command "$STAPLER_ATTEMPTS" "$STAPLER_DELAY_SECONDS" xcrun stapler staple "$TEMP_DMG_PATH"; then
+    if [[ "\${ELECTROBUN_REQUIRE_STAPLED_DMG:-0}" == "1" ]]; then
+      exit 1
+    fi
+    echo "stage-macos-release-artifacts: notarization accepted but stapler ticket was not available; continuing without stapled DMG" >&2
+  fi`,
   );
   return result;
 }

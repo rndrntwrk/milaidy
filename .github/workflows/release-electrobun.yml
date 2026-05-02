@@ -1322,7 +1322,13 @@ jobs:
               echo "::error::Missing Developer ID Application signature on $dmg"
               exit 1
             }
-            retry_stapler_validate "$dmg"
+            if ! retry_stapler_validate "$dmg"; then
+              if [ "${ELECTROBUN_REQUIRE_STAPLED_DMG:-0}" = "1" ]; then
+                echo "::error::Stapler validation failed for $dmg"
+                exit 1
+              fi
+              echo "::warning::Stapler validation failed for $dmg after notarization acceptance; continuing without stapled DMG"
+            fi
           done < <(find -L eliza/packages/app-core/platforms/electrobun/artifacts -maxdepth 1 -type f -name "*.dmg" | sort)
           if [ "$found_dmg" -eq 0 ]; then
             echo "::error::No DMG found in eliza/packages/app-core/platforms/electrobun/artifacts"

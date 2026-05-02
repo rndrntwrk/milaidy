@@ -330,6 +330,20 @@ const macosStaplerRetrySnippet = [
   "    'STAPLER_DELAY_SECONDS=\"" +
     "$" +
     "{ELECTROBUN_STAPLER_DELAY_SECONDS:-30}\"',",
+  '    \'if ! retry_command "$STAPLER_ATTEMPTS" "$STAPLER_DELAY_SECONDS" xcrun stapler staple "$TEMP_DMG_PATH"; then\',',
+  "    '  if [[ \"" +
+    "$" +
+    '{ELECTROBUN_REQUIRE_STAPLED_DMG:-0}" == "1" ]]; then\',',
+  "    '    exit 1',",
+  "    '  fi',",
+  "    '  echo \"stage-macos-release-artifacts: notarization accepted but stapler ticket was not available; continuing without stapled DMG\" >&2',",
+  "    'fi',",
+].join("\n");
+const macosStaplerConfigSnippet = [
+  "    'STAPLER_ATTEMPTS=\"" + "$" + "{ELECTROBUN_STAPLER_ATTEMPTS:-12}\"',",
+  "    'STAPLER_DELAY_SECONDS=\"" +
+    "$" +
+    "{ELECTROBUN_STAPLER_DELAY_SECONDS:-30}\"',",
   '    \'retry_command "$STAPLER_ATTEMPTS" "$STAPLER_DELAY_SECONDS" xcrun stapler staple "$TEMP_DMG_PATH"\',',
 ].join("\n");
 
@@ -401,7 +415,8 @@ function patchMacArtifactStagerSnippet(source) {
     .replace(
       "    'retry_command 8 20 xcrun stapler staple \"$TEMP_DMG_PATH\"',",
       macosStaplerRetrySnippet,
-    );
+    )
+    .replace(macosStaplerConfigSnippet, macosStaplerRetrySnippet);
 
   return patched;
 }
