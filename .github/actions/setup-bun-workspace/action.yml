@@ -77,6 +77,10 @@ runs:
         # Force IPv4 and retry apt commands to make CI setup resilient.
         APT_ARGS=(-o Acquire::ForceIPv4=true -o Acquire::Retries=5 -o Acquire::http::Timeout=30)
         for attempt in 1 2 3; do
+          if [ "$attempt" -gt 1 ]; then
+            sudo dpkg --configure -a || true
+            sudo apt-get "${APT_ARGS[@]}" -f install -y --fix-missing || true
+          fi
           if sudo apt-get "${APT_ARGS[@]}" update && \
              sudo apt-get "${APT_ARGS[@]}" install -y --fix-missing \
                build-essential libcairo2-dev libpango1.0-dev libjpeg-dev \
