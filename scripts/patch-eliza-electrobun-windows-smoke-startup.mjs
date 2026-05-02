@@ -7,40 +7,55 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
 const checkOnly = process.argv.includes("--check");
 
+function restoreStartupTraceEnvFallback(text) {
+  let nextText = text;
+
+  for (const block of [
+    {
+      constName: "sessionId",
+      envSuffix: "SESSION_ID",
+      bootstrapField: "session_id",
+    },
+    {
+      constName: "stateFile",
+      envSuffix: "STATE_FILE",
+      bootstrapField: "state_file",
+    },
+    {
+      constName: "eventsFile",
+      envSuffix: "EVENTS_FILE",
+      bootstrapField: "events_file",
+    },
+  ]) {
+    const lineEnd = "\\r?\\n";
+    const pattern = new RegExp(
+      `  const ${block.constName} =${lineEnd}` +
+        `(?:    trimEnv\\(env\\.(?:ELIZA|MILADY)_STARTUP_${block.envSuffix}\\) \\?\\?${lineEnd})+` +
+        `    trimEnv\\(bootstrap\\?\\.${block.bootstrapField} \\?\\? undefined\\) \\?\\?${lineEnd}` +
+        "    null;",
+      "m",
+    );
+    const replacement = `  const ${block.constName} =
+    trimEnv(env.ELIZA_STARTUP_${block.envSuffix}) ??
+    trimEnv(env.MILADY_STARTUP_${block.envSuffix}) ??
+    trimEnv(bootstrap?.${block.bootstrapField} ?? undefined) ??
+    null;`;
+
+    if (!pattern.test(nextText)) {
+      return { matched: false, text };
+    }
+
+    nextText = nextText.replace(pattern, replacement);
+  }
+
+  return { matched: true, text: nextText };
+}
+
 const replacements = [
   {
     file: "eliza/packages/app-core/platforms/electrobun/src/startup-trace.ts",
     description: "restore MILADY startup trace env fallback",
-    before: `  const sessionId =
-    trimEnv(env.ELIZA_STARTUP_SESSION_ID) ??
-    trimEnv(env.ELIZA_STARTUP_SESSION_ID) ??
-    trimEnv(bootstrap?.session_id ?? undefined) ??
-    null;
-  const stateFile =
-    trimEnv(env.ELIZA_STARTUP_STATE_FILE) ??
-    trimEnv(env.ELIZA_STARTUP_STATE_FILE) ??
-    trimEnv(bootstrap?.state_file ?? undefined) ??
-    null;
-  const eventsFile =
-    trimEnv(env.ELIZA_STARTUP_EVENTS_FILE) ??
-    trimEnv(env.ELIZA_STARTUP_EVENTS_FILE) ??
-    trimEnv(bootstrap?.events_file ?? undefined) ??
-    null;`,
-    after: `  const sessionId =
-    trimEnv(env.ELIZA_STARTUP_SESSION_ID) ??
-    trimEnv(env.MILADY_STARTUP_SESSION_ID) ??
-    trimEnv(bootstrap?.session_id ?? undefined) ??
-    null;
-  const stateFile =
-    trimEnv(env.ELIZA_STARTUP_STATE_FILE) ??
-    trimEnv(env.MILADY_STARTUP_STATE_FILE) ??
-    trimEnv(bootstrap?.state_file ?? undefined) ??
-    null;
-  const eventsFile =
-    trimEnv(env.ELIZA_STARTUP_EVENTS_FILE) ??
-    trimEnv(env.MILADY_STARTUP_EVENTS_FILE) ??
-    trimEnv(bootstrap?.events_file ?? undefined) ??
-    null;`,
+    transform: restoreStartupTraceEnvFallback,
   },
   {
     file: "eliza/packages/app-core/platforms/electrobun/scripts/smoke-test-windows.ps1",
@@ -160,6 +175,24 @@ let verified = 0;
 for (const replacement of replacements) {
   const absolutePath = path.join(repoRoot, replacement.file);
   let text = fs.readFileSync(absolutePath, "utf8");
+
+  if (typeof replacement.transform === "function") {
+    const result = replacement.transform(text);
+    if (!result.matched) {
+      throw new Error(
+        `${replacement.description}: patch anchor not found in ${replacement.file}`,
+      );
+    }
+
+    if (result.text === text || checkOnly) {
+      verified += 1;
+      continue;
+    }
+
+    fs.writeFileSync(absolutePath, result.text);
+    changed += 1;
+    continue;
+  }
 
   if (text.includes(replacement.after)) {
     verified += 1;
