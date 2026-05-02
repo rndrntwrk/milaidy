@@ -96,6 +96,17 @@ try {
     packDryRunFilePath,
   });
 
+  const buildInfoResult = spawnSync(
+    "node",
+    ["--import", "tsx", "scripts/write-build-info.ts"],
+    { stdio: "inherit" },
+  );
+  if (buildInfoResult.status !== 0) {
+    exitStatus = buildInfoResult.status ?? 1;
+    exitSignal = buildInfoResult.signal;
+    throw new Error("run-release-check: build metadata generation failed");
+  }
+
   const result = spawnSync(
     "bun",
     [
