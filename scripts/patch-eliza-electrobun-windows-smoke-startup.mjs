@@ -285,6 +285,24 @@ function loadStewardCredentialsModule(): Promise<StewardCredentialsModule> {
   };
 }
 
+function patchTelegramSessionEsmImport(text) {
+  let result = replaceRequiredBlock(
+    text,
+    /import \{ StringSession \} from "telegram\/sessions";/,
+    'import { StringSession } from "telegram/sessions/index.js";',
+  );
+  if (!result.matched) {
+    return result;
+  }
+
+  result = replaceRequiredBlock(
+    result.text,
+    /return \(client\.session as StringSession\)\.save\(\);/,
+    "return client.session.save();",
+  );
+  return result;
+}
+
 const replacements = [
   {
     file: "eliza/packages/app-core/platforms/electrobun/src/startup-trace.ts",
@@ -300,6 +318,11 @@ const replacements = [
     file: "eliza/packages/app-core/platforms/electrobun/src/native/steward.ts",
     description: "lazy-load Steward sidecar runtime imports",
     transform: patchLazyStewardRuntimeImports,
+  },
+  {
+    file: "eliza/packages/agent/src/services/telegram-account-auth.ts",
+    description: "use explicit Telegram sessions ESM import",
+    transform: patchTelegramSessionEsmImport,
   },
 ];
 
