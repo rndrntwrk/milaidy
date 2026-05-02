@@ -163,7 +163,9 @@ ${fatalThrow}`;
 }
 
 function patchLazyStewardRuntimeImports(text) {
-  let nextText = text;
+  const usesCrLf = text.includes("\r\n");
+  const originalText = text;
+  let nextText = text.replace(/\r\n/g, "\n");
 
   const eagerImports = `import { saveStewardCredentials } from "@elizaos/app-core/services/steward-credentials";
 import {
@@ -178,7 +180,7 @@ import {
 
   if (!nextText.includes(lazyImports)) {
     if (!nextText.includes(eagerImports)) {
-      return { matched: false, text };
+      return { matched: false, text: originalText };
     }
     nextText = nextText.replace(eagerImports, lazyImports);
   }
@@ -216,7 +218,7 @@ function loadStewardCredentialsModule(): Promise<StewardCredentialsModule> {
     const singletonMarker =
       "// Singleton\n// ---------------------------------------------------------------------------\n\n";
     if (!nextText.includes(singletonMarker)) {
-      return { matched: false, text };
+      return { matched: false, text: originalText };
     }
     nextText = nextText.replace(
       singletonMarker,
@@ -233,7 +235,7 @@ function loadStewardCredentialsModule(): Promise<StewardCredentialsModule> {
     sidecar = createDesktopStewardSidecar({`;
   if (!nextText.includes(getSidecarAfter)) {
     if (!nextText.includes(getSidecarBefore)) {
-      return { matched: false, text };
+      return { matched: false, text: originalText };
     }
     nextText = nextText.replace(getSidecarBefore, getSidecarAfter);
   }
@@ -250,7 +252,7 @@ function loadStewardCredentialsModule(): Promise<StewardCredentialsModule> {
       saveStewardCredentials({`;
   if (!nextText.includes(saveCredentialsAfter)) {
     if (!nextText.includes(saveCredentialsBefore)) {
-      return { matched: false, text };
+      return { matched: false, text: originalText };
     }
     nextText = nextText.replace(saveCredentialsBefore, saveCredentialsAfter);
   }
@@ -274,10 +276,13 @@ function loadStewardCredentialsModule(): Promise<StewardCredentialsModule> {
     ) ||
     nextText.includes("  createDesktopStewardSidecar,\n  type StewardSidecar")
   ) {
-    return { matched: false, text };
+    return { matched: false, text: originalText };
   }
 
-  return { matched: true, text: nextText };
+  return {
+    matched: true,
+    text: usesCrLf ? nextText.replace(/\n/g, "\r\n") : nextText,
+  };
 }
 
 const replacements = [
