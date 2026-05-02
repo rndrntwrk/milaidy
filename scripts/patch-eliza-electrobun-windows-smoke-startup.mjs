@@ -360,6 +360,19 @@ esac`,
     ;;
 esac`,
   );
+  if (!result.matched) {
+    return result;
+  }
+
+  result = replaceRequiredBlock(
+    result.text,
+    / {2}if \[\[ ! -s "\$TMP_ENTITLEMENTS_PATH" \]\]; then\r?\n {4}echo "stage-macos-release-artifacts: extracted entitlements were empty"\r?\n {4}exit 1\r?\n {2}fi\r?\n {2}entitlement_args=\(--entitlements "\$TMP_ENTITLEMENTS_PATH"\)/,
+    `  if [[ -s "$TMP_ENTITLEMENTS_PATH" ]]; then
+    entitlement_args=(--entitlements "$TMP_ENTITLEMENTS_PATH")
+  else
+    echo "stage-macos-release-artifacts: extracted entitlements were empty; signing without entitlement plist"
+  fi`,
+  );
   return result;
 }
 
