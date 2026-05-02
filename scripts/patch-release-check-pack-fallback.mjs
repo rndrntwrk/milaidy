@@ -325,6 +325,13 @@ const macosLauncherSignSnippet = [
 ].join("\n");
 const macosAppSignSnippet =
   "    'codesign \"$" + '{app_sign_args[@]}" "$STAGED_APP_PATH"\',';
+const macosStaplerRetrySnippet = [
+  "    'STAPLER_ATTEMPTS=\"" + "$" + "{ELECTROBUN_STAPLER_ATTEMPTS:-12}\"',",
+  "    'STAPLER_DELAY_SECONDS=\"" +
+    "$" +
+    "{ELECTROBUN_STAPLER_DELAY_SECONDS:-30}\"',",
+  '    \'retry_command "$STAPLER_ATTEMPTS" "$STAPLER_DELAY_SECONDS" xcrun stapler staple "$TEMP_DMG_PATH"\',',
+].join("\n");
 
 function patchPatchedElectrobunCliSnippets(source) {
   if (
@@ -390,6 +397,10 @@ function patchMacArtifactStagerSnippet(source) {
     .replace(
       / {4}`--options runtime "\\\$\{entitlement_args\[@\]\}" "\$STAGED_APP_PATH"`,/,
       macosAppSignSnippet,
+    )
+    .replace(
+      "    'retry_command 8 20 xcrun stapler staple \"$TEMP_DMG_PATH\"',",
+      macosStaplerRetrySnippet,
     );
 
   return patched;

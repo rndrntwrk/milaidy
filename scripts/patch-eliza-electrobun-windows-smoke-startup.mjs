@@ -303,6 +303,28 @@ function patchTelegramSessionEsmImport(text) {
   return result;
 }
 
+function patchRealRuntimeLiveProviderImport(text) {
+  let result = replaceRequiredBlock(
+    text,
+    /import \{\r?\n {2}type LiveProviderConfig,\r?\n {2}type LiveProviderName,\r?\n {2}selectLiveProvider,\r?\n\} from "\.\/live-provider";/,
+    `import type {
+  LiveProviderConfig,
+  LiveProviderName,
+} from "./live-provider";`,
+  );
+  if (!result.matched) {
+    return result;
+  }
+
+  result = replaceRequiredBlock(
+    result.text,
+    / {6}providerConfig = selectLiveProvider\(options\.preferredProvider\);/,
+    `      const { selectLiveProvider } = await import("./live-provider");
+      providerConfig = selectLiveProvider(options.preferredProvider);`,
+  );
+  return result;
+}
+
 function patchMacosArtifactStager(text) {
   let result = replaceRequiredBlock(
     text,
@@ -425,6 +447,17 @@ esac`,
   sign_macos_runtime_target "$LAUNCHER_PATH"
   codesign "\${app_sign_args[@]}" "$STAGED_APP_PATH"`,
   );
+  if (!result.matched) {
+    return result;
+  }
+
+  result = replaceRequiredBlock(
+    result.text,
+    / {2}retry_command 8 20 xcrun stapler staple "\$TEMP_DMG_PATH"/,
+    `  STAPLER_ATTEMPTS="\${ELECTROBUN_STAPLER_ATTEMPTS:-12}"
+  STAPLER_DELAY_SECONDS="\${ELECTROBUN_STAPLER_DELAY_SECONDS:-30}"
+  retry_command "$STAPLER_ATTEMPTS" "$STAPLER_DELAY_SECONDS" xcrun stapler staple "$TEMP_DMG_PATH"`,
+  );
   return result;
 }
 
@@ -469,6 +502,11 @@ const replacements = [
     file: "eliza/packages/agent/src/services/telegram-account-auth.ts",
     description: "use explicit Telegram sessions ESM import",
     transform: patchTelegramSessionEsmImport,
+  },
+  {
+    file: "eliza/packages/app-core/test/helpers/real-runtime.ts",
+    description: "lazy-load live provider helper in real runtime tests",
+    transform: patchRealRuntimeLiveProviderImport,
   },
   {
     file: "eliza/packages/app-core/platforms/electrobun/scripts/stage-macos-release-artifacts.sh",
