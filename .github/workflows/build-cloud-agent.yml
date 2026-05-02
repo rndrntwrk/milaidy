@@ -204,38 +204,38 @@ jobs:
           # tsx resolves @elizaos/core src/ at runtime, hitting imports that aren't
           # hoisted by bun workspace install (workspace entries get disabled for CI).
           # Check which deps are missing and install them individually via tarball.
-          node -e '
-            const fs = require("fs");
-            const path = require("path");
-            const { execSync } = require("child_process");
-            const pkgPaths = [
-              "eliza/packages/typescript/package.json",
-              "eliza/packages/agent/package.json",
-            ];
-            const missing = new Set();
-            for (const p of pkgPaths) {
-              if (!fs.existsSync(p)) continue;
-              const pkg = JSON.parse(fs.readFileSync(p, "utf8"));
-              for (const dep of Object.keys(pkg.dependencies || {})) {
-                if (!fs.existsSync("node_modules/" + dep)) missing.add(dep);
-              }
+          node <<'NODE'
+          const fs = require("fs");
+          const path = require("path");
+          const { execSync } = require("child_process");
+          const pkgPaths = [
+            "eliza/packages/typescript/package.json",
+            "eliza/packages/agent/package.json",
+          ];
+          const missing = new Set();
+          for (const p of pkgPaths) {
+            if (!fs.existsSync(p)) continue;
+            const pkg = JSON.parse(fs.readFileSync(p, "utf8"));
+            for (const dep of Object.keys(pkg.dependencies || {})) {
+              if (!fs.existsSync("node_modules/" + dep)) missing.add(dep);
             }
-            if (missing.size === 0) { console.log("All deps present"); process.exit(0); }
-            console.log(`Installing ${missing.size} missing deps: ${[...missing].join(", ")}`);
-            for (const dep of missing) {
-              try {
-                const url = execSync(`npm view ${dep} dist.tarball 2>/dev/null`, {encoding: "utf8"}).trim();
-                if (!url) { console.log(`  skip ${dep} (no tarball)`); continue; }
-                const dir = `/tmp/pkg-${dep.replace(/[\/\/@]/g, "_")}`;
-                fs.mkdirSync(dir, {recursive: true});
-                execSync(`curl -sL "${url}" | tar xz -C "${dir}"`, {stdio: "inherit"});
-                const target = path.join("node_modules", dep);
-                fs.mkdirSync(path.dirname(target), {recursive: true});
-                fs.renameSync(path.join(dir, "package"), target);
-                console.log(`  + ${dep}`);
-              } catch (e) { console.log(`  WARN: ${dep}: ${e.message}`); }
-            }
-          '
+          }
+          if (missing.size === 0) { console.log("All deps present"); process.exit(0); }
+          console.log(`Installing ${missing.size} missing deps: ${[...missing].join(", ")}`);
+          for (const dep of missing) {
+            try {
+              const url = execSync(`npm view ${dep} dist.tarball 2>/dev/null`, {encoding: "utf8"}).trim();
+              if (!url) { console.log(`  skip ${dep} (no tarball)`); continue; }
+              const dir = `/tmp/pkg-${dep.replace(/[\/\/@]/g, "_")}`;
+              fs.mkdirSync(dir, {recursive: true});
+              execSync(`curl -sL "${url}" | tar xz -C "${dir}"`, {stdio: "inherit"});
+              const target = path.join("node_modules", dep);
+              fs.mkdirSync(path.dirname(target), {recursive: true});
+              fs.renameSync(path.join(dir, "package"), target);
+              console.log(`  + ${dep}`);
+            } catch (e) { console.log(`  WARN: ${dep}: ${e.message}`); }
+          }
+          NODE
 
       - name: Run postinstall patches
         run: bun run postinstall
@@ -312,10 +312,12 @@ jobs:
             VERSION_CLEAN="${VERSION#cloud-v}"
           fi
 
-          echo "version=${VERSION}"             >> $GITHUB_OUTPUT
-          echo "version_clean=${VERSION_CLEAN}" >> $GITHUB_OUTPUT
-          echo "latest_tag=${LATEST_TAG}"       >> $GITHUB_OUTPUT
-          echo "build_environment=${BUILD_ENVIRONMENT}" >> $GITHUB_OUTPUT
+          {
+            echo "version=${VERSION}"
+            echo "version_clean=${VERSION_CLEAN}"
+            echo "latest_tag=${LATEST_TAG}"
+            echo "build_environment=${BUILD_ENVIRONMENT}"
+          } >> "$GITHUB_OUTPUT"
           echo "Cloud version: ${VERSION}"
           echo "Build environment: ${BUILD_ENVIRONMENT}"
           echo "Source branch: ${SOURCE_REF}"
@@ -505,20 +507,22 @@ jobs:
             ROLLOUT_STATUS="not applicable (staging)"
           fi
 
-          echo "## ☁️ Cloud Agent Image (${BUILD_LABEL})" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "> ${BUILD_LABEL} build for branch \`${SOURCE_REF}\`." >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Environment | \`${{ steps.version.outputs.build_environment }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Image | \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Version | \`${{ steps.version.outputs.version }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Branch | \`${SOURCE_REF}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Commit | \`$(git rev-parse --short HEAD)\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Auto-deploy | ${ROLLOUT_STATUS} |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo '```bash' >> $GITHUB_STEP_SUMMARY
-          echo "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-          echo "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.latest_tag }}" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## ☁️ Cloud Agent Image (${BUILD_LABEL})"
+            echo ""
+            echo "> ${BUILD_LABEL} build for branch \`${SOURCE_REF}\`."
+            echo ""
+            echo "| Property | Value |"
+            echo "|----------|-------|"
+            echo "| Environment | \`${{ steps.version.outputs.build_environment }}\` |"
+            echo "| Image | \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}\` |"
+            echo "| Version | \`${{ steps.version.outputs.version }}\` |"
+            echo "| Branch | \`${SOURCE_REF}\` |"
+            echo "| Commit | \`$(git rev-parse --short HEAD)\` |"
+            echo "| Auto-deploy | ${ROLLOUT_STATUS} |"
+            echo ""
+            echo '```bash'
+            echo "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}"
+            echo "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.latest_tag }}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
