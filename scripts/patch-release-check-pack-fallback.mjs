@@ -319,8 +319,10 @@ const matrixArtifactNameSnippet =
 const matrixArtifactNameSourceLine = `  '${matrixArtifactNameSnippet}',`;
 const electrobunPackageDirSourceLine =
   "    '{{ steps.resolve-electrobun.outputs.package-dir }}\"',";
-const macosLauncherSignSnippet =
-  "    'codesign \"$" + '{launcher_sign_args[@]}" "$LAUNCHER_PATH"\',';
+const macosLauncherSignSnippet = [
+  "    '\"$macos_code_dir/libasar.dylib\"',",
+  "    'sign_macos_runtime_target \"$LAUNCHER_PATH\"',",
+].join("\n");
 const macosAppSignSnippet =
   "    'codesign \"$" + '{app_sign_args[@]}" "$STAGED_APP_PATH"\',';
 

@@ -391,18 +391,38 @@ esac`,
   result = replaceRequiredBlock(
     result.text,
     / {2}if ! codesign --force --timestamp --sign "\$ELECTROBUN_DEVELOPER_ID" --options runtime "\$\{entitlement_args\[@\]\}" "\$LAUNCHER_PATH"; then\r?\n {4}echo "stage-macos-release-artifacts: launcher runtime signing failed, retrying without hardened runtime" >&2\r?\n {4}codesign --force --timestamp --sign "\$ELECTROBUN_DEVELOPER_ID" "\$\{entitlement_args\[@\]\}" "\$LAUNCHER_PATH"\r?\n {2}fi\r?\n {2}codesign --force --timestamp --sign "\$ELECTROBUN_DEVELOPER_ID" --options runtime "\$\{entitlement_args\[@\]\}" "\$STAGED_APP_PATH"/,
-    `  launcher_sign_args=(--force --timestamp --sign "$ELECTROBUN_DEVELOPER_ID" --options runtime)
-  fallback_launcher_sign_args=(--force --timestamp --sign "$ELECTROBUN_DEVELOPER_ID")
+    `  runtime_sign_args=(--force --timestamp --sign "$ELECTROBUN_DEVELOPER_ID" --options runtime)
+  fallback_runtime_sign_args=(--force --timestamp --sign "$ELECTROBUN_DEVELOPER_ID")
   app_sign_args=(--force --timestamp --sign "$ELECTROBUN_DEVELOPER_ID" --options runtime)
   if [[ -s "\${TMP_ENTITLEMENTS_PATH:-}" ]]; then
-    launcher_sign_args+=(--entitlements "$TMP_ENTITLEMENTS_PATH")
-    fallback_launcher_sign_args+=(--entitlements "$TMP_ENTITLEMENTS_PATH")
+    runtime_sign_args+=(--entitlements "$TMP_ENTITLEMENTS_PATH")
+    fallback_runtime_sign_args+=(--entitlements "$TMP_ENTITLEMENTS_PATH")
     app_sign_args+=(--entitlements "$TMP_ENTITLEMENTS_PATH")
   fi
-  if ! codesign "\${launcher_sign_args[@]}" "$LAUNCHER_PATH"; then
-    echo "stage-macos-release-artifacts: launcher runtime signing failed, retrying without hardened runtime" >&2
-    codesign "\${fallback_launcher_sign_args[@]}" "$LAUNCHER_PATH"
-  fi
+  sign_macos_runtime_target() {
+    local target_path="$1"
+    if ! codesign "\${runtime_sign_args[@]}" "$target_path"; then
+      echo "stage-macos-release-artifacts: runtime signing failed for $target_path, retrying without hardened runtime" >&2
+      codesign "\${fallback_runtime_sign_args[@]}" "$target_path"
+    fi
+  }
+  macos_code_dir="$STAGED_APP_PATH/Contents/MacOS"
+  for runtime_target in \\
+    "$macos_code_dir/libNativeWrapper.dylib" \\
+    "$macos_code_dir/libwebgpu_dawn.dylib" \\
+    "$macos_code_dir/libasar.dylib" \\
+    "$macos_code_dir/bun" \\
+    "$macos_code_dir/extractor" \\
+    "$macos_code_dir/process_helper" \\
+    "$macos_code_dir/zig-zstd" \\
+    "$macos_code_dir/zig-asar" \\
+    "$macos_code_dir/bspatch" \\
+    "$macos_code_dir/bsdiff"; do
+    if [[ -e "$runtime_target" ]]; then
+      sign_macos_runtime_target "$runtime_target"
+    fi
+  done
+  sign_macos_runtime_target "$LAUNCHER_PATH"
   codesign "\${app_sign_args[@]}" "$STAGED_APP_PATH"`,
   );
   return result;
