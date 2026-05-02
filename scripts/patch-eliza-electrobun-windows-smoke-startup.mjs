@@ -306,6 +306,15 @@ function patchTelegramSessionEsmImport(text) {
 function patchMacosArtifactStager(text) {
   let result = replaceRequiredBlock(
     text,
+    /NOTARY_WAIT_TIMEOUT="\$\{ELECTROBUN_NOTARY_WAIT_TIMEOUT:-30m\}"/,
+    'NOTARY_WAIT_TIMEOUT="$' + '{ELECTROBUN_NOTARY_WAIT_TIMEOUT:-60m}"',
+  );
+  if (!result.matched) {
+    return result;
+  }
+
+  result = replaceRequiredBlock(
+    result.text,
     /TARBALL_PATH="\$\(find -L "\$ARTIFACTS_DIR" -maxdepth 1 -type f -name "\*-macos-\*\.app\.tar\.zst" \| sort \| head -1\)"/,
     `TARBALL_PATH=""
 for tarball_pattern in "*-macos-*.app.tar.zst" "*-macos-*.app.tar.gz" "*-macos-*.tar.gz"; do
@@ -372,6 +381,27 @@ esac`,
   else
     echo "stage-macos-release-artifacts: extracted entitlements were empty; signing without entitlement plist"
   fi`,
+  );
+  if (!result.matched) {
+    return result;
+  }
+
+  result = replaceRequiredBlock(
+    result.text,
+    / {2}if ! codesign --force --timestamp --sign "\$ELECTROBUN_DEVELOPER_ID" --options runtime "\$\{entitlement_args\[@\]\}" "\$LAUNCHER_PATH"; then\r?\n {4}echo "stage-macos-release-artifacts: launcher runtime signing failed, retrying without hardened runtime" >&2\r?\n {4}codesign --force --timestamp --sign "\$ELECTROBUN_DEVELOPER_ID" "\$\{entitlement_args\[@\]\}" "\$LAUNCHER_PATH"\r?\n {2}fi\r?\n {2}codesign --force --timestamp --sign "\$ELECTROBUN_DEVELOPER_ID" --options runtime "\$\{entitlement_args\[@\]\}" "\$STAGED_APP_PATH"/,
+    `  launcher_sign_args=(--force --timestamp --sign "$ELECTROBUN_DEVELOPER_ID" --options runtime)
+  fallback_launcher_sign_args=(--force --timestamp --sign "$ELECTROBUN_DEVELOPER_ID")
+  app_sign_args=(--force --timestamp --sign "$ELECTROBUN_DEVELOPER_ID" --options runtime)
+  if [[ -s "\${TMP_ENTITLEMENTS_PATH:-}" ]]; then
+    launcher_sign_args+=(--entitlements "$TMP_ENTITLEMENTS_PATH")
+    fallback_launcher_sign_args+=(--entitlements "$TMP_ENTITLEMENTS_PATH")
+    app_sign_args+=(--entitlements "$TMP_ENTITLEMENTS_PATH")
+  fi
+  if ! codesign "\${launcher_sign_args[@]}" "$LAUNCHER_PATH"; then
+    echo "stage-macos-release-artifacts: launcher runtime signing failed, retrying without hardened runtime" >&2
+    codesign "\${fallback_launcher_sign_args[@]}" "$LAUNCHER_PATH"
+  fi
+  codesign "\${app_sign_args[@]}" "$STAGED_APP_PATH"`,
   );
   return result;
 }

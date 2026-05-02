@@ -319,6 +319,10 @@ const matrixArtifactNameSnippet =
 const matrixArtifactNameSourceLine = `  '${matrixArtifactNameSnippet}',`;
 const electrobunPackageDirSourceLine =
   "    '{{ steps.resolve-electrobun.outputs.package-dir }}\"',";
+const macosLauncherSignSnippet =
+  '    \'codesign "$' + '{launcher_sign_args[@]}" "$LAUNCHER_PATH"\',';
+const macosAppSignSnippet =
+  '    \'codesign "$' + '{app_sign_args[@]}" "$STAGED_APP_PATH"\',';
 
 function patchPatchedElectrobunCliSnippets(source) {
   if (
@@ -355,26 +359,38 @@ function patchElectrobunPlatformArgumentSnippet(source) {
 }
 
 function patchMacArtifactStagerSnippet(source) {
+  let patched = source;
+
   if (
-    source.includes(
+    !patched.includes(
       '\'for tarball_pattern in "*-macos-*.app.tar.zst" "*-macos-*.app.tar.gz" "*-macos-*.tar.gz"; do\'',
-    ) ||
-    !source.includes(
+    ) &&
+    patched.includes(
       '\'find -L "$ARTIFACTS_DIR" -maxdepth 1 -type f -name "*-macos-*.app.tar.zst"\'',
     )
   ) {
-    return source;
+    patched = patched.replace(
+      '    \'find -L "$ARTIFACTS_DIR" -maxdepth 1 -type f -name "*-macos-*.app.tar.zst"\',',
+      [
+        '    \'for tarball_pattern in "*-macos-*.app.tar.zst" "*-macos-*.app.tar.gz" "*-macos-*.tar.gz"; do\',',
+        '    \'tar --zstd -xf "$TARBALL_PATH" -C "$EXTRACT_DIR"\',',
+        '    \'tar -xzf "$TARBALL_PATH" -C "$EXTRACT_DIR"\',',
+        '    \'TARBALL_BASENAME="$(basename "$TARBALL_PATH")"\',',
+      ].join("\n"),
+    );
   }
 
-  return source.replace(
-    '    \'find -L "$ARTIFACTS_DIR" -maxdepth 1 -type f -name "*-macos-*.app.tar.zst"\',',
-    [
-      '    \'for tarball_pattern in "*-macos-*.app.tar.zst" "*-macos-*.app.tar.gz" "*-macos-*.tar.gz"; do\',',
-      '    \'tar --zstd -xf "$TARBALL_PATH" -C "$EXTRACT_DIR"\',',
-      '    \'tar -xzf "$TARBALL_PATH" -C "$EXTRACT_DIR"\',',
-      '    \'TARBALL_BASENAME="$(basename "$TARBALL_PATH")"\',',
-    ].join("\n"),
-  );
+  patched = patched
+    .replace(
+      / {4}`--options runtime "\\\$\{entitlement_args\[@\]\}" "\$LAUNCHER_PATH"`,/,
+      macosLauncherSignSnippet,
+    )
+    .replace(
+      / {4}`--options runtime "\\\$\{entitlement_args\[@\]\}" "\$STAGED_APP_PATH"`,/,
+      macosAppSignSnippet,
+    );
+
+  return patched;
 }
 
 export function applyReleaseCheckPackFallback(source) {
