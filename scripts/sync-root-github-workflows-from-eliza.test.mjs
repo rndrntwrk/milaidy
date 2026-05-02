@@ -106,11 +106,27 @@ describe("Milady Windows release smoke contract", () => {
     );
     assert.match(
       workflow,
+      /ELIZA_TEST_WINDOWS_INSTALL_DIR: \$\{\{ runner\.temp \}\}\\el/,
+    );
+    assert.match(
+      workflow,
+      /MILADY_TEST_WINDOWS_INSTALL_DIR: \$\{\{ runner\.temp \}\}\\el/,
+    );
+    assert.match(
+      workflow,
       /ELIZA_TEST_WINDOWS_ARTIFACTS_DIR: \$\{\{ github\.workspace \}\}\\eliza\\packages\\app-core\\platforms\\electrobun\\artifacts/,
     );
     assert.match(
       workflow,
+      /MILADY_TEST_WINDOWS_ARTIFACTS_DIR: \$\{\{ github\.workspace \}\}\\eliza\\packages\\app-core\\platforms\\electrobun\\artifacts/,
+    );
+    assert.match(
+      workflow,
       /ELIZA_TEST_WINDOWS_BUILD_DIR: \$\{\{ github\.workspace \}\}\\eliza\\packages\\app-core\\platforms\\electrobun\\build/,
+    );
+    assert.match(
+      workflow,
+      /MILADY_TEST_WINDOWS_BUILD_DIR: \$\{\{ github\.workspace \}\}\\eliza\\packages\\app-core\\platforms\\electrobun\\build/,
     );
   });
 });

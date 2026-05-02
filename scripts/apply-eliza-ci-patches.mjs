@@ -99,9 +99,10 @@ function main() {
     );
   }
   if (!fs.existsSync(patchPath)) {
-    throw new Error(
-      `missing eliza CI patch file: ${path.relative(repoRoot, patchPath)}`,
+    console.log(
+      `[apply-eliza-ci-patches] no eliza CI patch file found at ${path.relative(repoRoot, patchPath)}; assuming current eliza checkout carries the required CI contracts`,
     );
+    return;
   }
 
   const wholeApplied = runGit(

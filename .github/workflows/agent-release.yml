@@ -407,7 +407,6 @@ jobs:
       tag: ${{ needs.version.outputs.tag }}
       draft: false
       publish_release: false
-      channel: ${{ needs.version.outputs.channel }}
     secrets: inherit
 
   build-docker:
@@ -1210,7 +1209,6 @@ jobs:
     uses: ./.github/workflows/release-orchestrator.yml
     with:
       version: ${{ needs.version.outputs.version }}
-      channel: ${{ needs.version.outputs.channel }}
       publish_npm: true
       publish_packages: ${{ needs.version.outputs.channel != 'canary' }}
       publish_android: ${{ needs.version.outputs.channel != 'canary' }}

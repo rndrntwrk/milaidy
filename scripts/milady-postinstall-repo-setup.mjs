@@ -44,6 +44,8 @@ await runRepoSetup(repoRoot);
 // Remove an entry once the corresponding upstream PR lands and a new
 // alpha is published.
 const miladyBridgePatchScripts = [
+  // Temporary overlay for elizaOS/eliza Windows smoke startup trace drift.
+  "patch-eliza-electrobun-windows-smoke-startup.mjs",
   // https://github.com/elizaos-plugins/plugin-elizacloud/pull/15
   "patch-elizacloud.mjs",
   // milady-only fix for claude.ai OAuth tier — see script header.
