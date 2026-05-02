@@ -376,6 +376,27 @@ esac`,
   return result;
 }
 
+function patchLocalAdhocMacosSigningOrder(text) {
+  return replaceRequiredBlock(
+    text,
+    / {2}return \[\r?\n {4}path\.join\(binaryDir, "launcher"\),\r?\n {4}path\.join\(binaryDir, "bun"\),\r?\n {4}path\.join\(binaryDir, "libNativeWrapper\.dylib"\),\r?\n {4}path\.join\(binaryDir, "libwebgpu_dawn\.dylib"\),\r?\n {4}path\.join\(binaryDir, "libasar\.dylib"\),\r?\n {4}path\.join\(binaryDir, "extractor"\),\r?\n {4}path\.join\(binaryDir, "process_helper"\),\r?\n {4}path\.join\(binaryDir, "zig-zstd"\),\r?\n {4}path\.join\(binaryDir, "zig-asar"\),\r?\n {4}path\.join\(binaryDir, "bspatch"\),\r?\n {4}path\.join\(binaryDir, "bsdiff"\),\r?\n {4}appBundlePath,\r?\n {2}\]/,
+    `  return [
+    path.join(binaryDir, "libNativeWrapper.dylib"),
+    path.join(binaryDir, "libwebgpu_dawn.dylib"),
+    path.join(binaryDir, "libasar.dylib"),
+    path.join(binaryDir, "bun"),
+    path.join(binaryDir, "extractor"),
+    path.join(binaryDir, "process_helper"),
+    path.join(binaryDir, "zig-zstd"),
+    path.join(binaryDir, "zig-asar"),
+    path.join(binaryDir, "bspatch"),
+    path.join(binaryDir, "bsdiff"),
+    path.join(binaryDir, "launcher"),
+    appBundlePath,
+  ]`,
+  );
+}
+
 const replacements = [
   {
     file: "eliza/packages/app-core/platforms/electrobun/src/startup-trace.ts",
@@ -401,6 +422,11 @@ const replacements = [
     file: "eliza/packages/app-core/platforms/electrobun/scripts/stage-macos-release-artifacts.sh",
     description: "support gzip macOS release tarball staging",
     transform: patchMacosArtifactStager,
+  },
+  {
+    file: "eliza/packages/app-core/platforms/electrobun/scripts/local-adhoc-sign-macos.ts",
+    description: "sign nested macOS runtime files before launcher",
+    transform: patchLocalAdhocMacosSigningOrder,
   },
 ];
 
