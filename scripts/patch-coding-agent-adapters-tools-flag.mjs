@@ -23,17 +23,17 @@
 import fs from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const PINNED_VERSION = "0.16.3";
 const OLD = `    const allTools = Object.keys(CLAUDE_TOOL_CATEGORIES);\n    cliFlags.push("--tools", allTools.join(","));`;
 const NEW = `    // milady patch: --tools <list> filters out tools claude.ai OAuth tier exposes\n    // (Monitor, ScheduleWakeup, etc.) because they are not in CLAUDE_TOOL_CATEGORIES.\n    // Skipping --tools entirely lets claude expose its full default toolset;\n    // --dangerously-skip-permissions still bypasses approval. See\n    // scripts/patch-coding-agent-adapters-tools-flag.mjs for context.\n    void CLAUDE_TOOL_CATEGORIES;`;
 
-function candidatePaths() {
-  const repoRoot = path.resolve(
-    path.dirname(new URL(import.meta.url).pathname),
-    "..",
-  );
+export function resolveRepoRootFromScriptUrl(scriptUrl = import.meta.url) {
+  return path.resolve(path.dirname(fileURLToPath(scriptUrl)), "..");
+}
 
+function candidatePaths(repoRoot = resolveRepoRootFromScriptUrl()) {
   const distDirs = new Set();
   const addDistDir = (dir) => {
     if (dir && fs.existsSync(dir)) {
@@ -88,37 +88,46 @@ function patchOne({ file, required }) {
   return { file, required, status: "patched" };
 }
 
-let exitCode = 0;
-const results = [];
-for (const file of candidatePaths()) {
-  const r = patchOne(file);
-  results.push(r);
-  if (r.status === "marker-not-found") {
-    exitCode = 1;
+export function main() {
+  let exitCode = 0;
+  const results = [];
+  for (const file of candidatePaths()) {
+    const r = patchOne(file);
+    results.push(r);
+    if (r.status === "marker-not-found") {
+      exitCode = 1;
+    }
   }
-}
 
-const tag = "[patch-coding-agent-adapters-tools-flag]";
-if (results.length === 0) {
-  console.log(`${tag} coding-agent-adapters not installed; skipping.`);
-  process.exit(0);
-}
-for (const r of results) {
-  console.log(`${tag} ${r.status}: ${r.file}`);
-}
+  const tag = "[patch-coding-agent-adapters-tools-flag]";
+  if (results.length === 0) {
+    console.log(`${tag} coding-agent-adapters not installed; skipping.`);
+    return 0;
+  }
+  for (const r of results) {
+    console.log(`${tag} ${r.status}: ${r.file}`);
+  }
 
-const requiredTargetReady = results.some(
-  (r) =>
-    r.required && (r.status === "patched" || r.status === "already-applied"),
-);
-if (!requiredTargetReady) {
-  exitCode = 1;
-  console.error(`${tag} aborting — no project-installed target was patched.`);
-}
-
-if (exitCode !== 0) {
-  console.error(
-    `${tag} aborting — context lines have shifted; review the script.`,
+  const requiredTargetReady = results.some(
+    (r) =>
+      r.required && (r.status === "patched" || r.status === "already-applied"),
   );
+  if (!requiredTargetReady) {
+    exitCode = 1;
+    console.error(`${tag} aborting — no project-installed target was patched.`);
+  }
+
+  if (exitCode !== 0) {
+    console.error(
+      `${tag} aborting — context lines have shifted; review the script.`,
+    );
+  }
+  return exitCode;
 }
-process.exit(exitCode);
+
+if (
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+) {
+  process.exit(main());
+}
