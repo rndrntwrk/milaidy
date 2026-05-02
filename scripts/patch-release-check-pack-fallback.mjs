@@ -320,9 +320,9 @@ const matrixArtifactNameSourceLine = `  '${matrixArtifactNameSnippet}',`;
 const electrobunPackageDirSourceLine =
   "    '{{ steps.resolve-electrobun.outputs.package-dir }}\"',";
 const macosLauncherSignSnippet =
-  '    \'codesign "$' + '{launcher_sign_args[@]}" "$LAUNCHER_PATH"\',';
+  "    'codesign \"$" + '{launcher_sign_args[@]}" "$LAUNCHER_PATH"\',';
 const macosAppSignSnippet =
-  '    \'codesign "$' + '{app_sign_args[@]}" "$STAGED_APP_PATH"\',';
+  "    'codesign \"$" + '{app_sign_args[@]}" "$STAGED_APP_PATH"\',';
 
 function patchPatchedElectrobunCliSnippets(source) {
   if (
