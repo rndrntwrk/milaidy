@@ -10,10 +10,10 @@ const SMOKE_SOURCE = readFileSync(
 
 describe("smoke-cuttlefish formatters", () => {
   it("formatResult renders PASS lines with detail", () => {
-    const out = formatResult(3, "MiladyAgentService start", true);
+    const out = formatResult(3, "ElizaAgentService start", true);
     expect(out).toContain("[3/8]");
     expect(out).toContain("PASS");
-    expect(out).toContain("MiladyAgentService start");
+    expect(out).toContain("ElizaAgentService start");
   });
 
   it("formatResult renders FAIL lines with the detail tail", () => {

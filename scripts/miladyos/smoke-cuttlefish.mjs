@@ -15,7 +15,7 @@
 // Hard rule from the brief: this verifies LOCAL inference, not cloud-
 // routed. Step 8 hits /api/local-inference/active and asserts the
 // active model state is "ready" with a real modelId. If the runtime
-// fell back to cloud (which it should NOT on AOSP with MILADY_LOCAL_-
+// fell back to cloud (which it should NOT on AOSP with ELIZA_LOCAL_-
 // LLAMA=1) the test fails loudly.
 //
 // Caveat: the AOSP_LLAMA_PROVIDER constant referenced in some earlier
@@ -73,7 +73,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "..", "..");
 
 const PACKAGE_NAME = "com.miladyai.milady";
-const SERVICE_FQN = `${PACKAGE_NAME}/${PACKAGE_NAME}.MiladyAgentService`;
+const SERVICE_FQN = `${PACKAGE_NAME}/${PACKAGE_NAME}.ElizaAgentService`;
 const AGENT_PORT = 31337;
 // adb forward picks an arbitrary host port; we always pin to AGENT_PORT
 // for simplicity. cvd binds 6520+ for its own ports so 31337 is free.
@@ -94,7 +94,7 @@ const HEALTH_POLL_INTERVAL_MS = 2_000;
 // action evaluator + reply). End-to-end chat lands at 25–45 min on
 // cvd's 4 emulated vCPUs (each model call is ~12 min wall-clock; a
 // chat turn fires 3–5 calls). 3600 s matches the service-side
-// ELIZA_CHAT_GENERATION_TIMEOUT_MS we set in MiladyAgentService when
+// ELIZA_CHAT_GENERATION_TIMEOUT_MS we set in ElizaAgentService when
 // AOSP_BUILD=true. Real phone hardware resolves in seconds, so this
 // only matters for cvd runs.
 const CHAT_TIMEOUT_MS = 3_600_000;
@@ -255,13 +255,13 @@ export async function runSmoke({ adb: adbImpl = adb } = {}) {
   });
 
   // ── Step 3: launch the service ──────────────────────────────────────
-  logStep(3, "Starting MiladyAgentService");
-  // The MiladyAgentService is declared android:exported="false" so a
+  logStep(3, "Starting ElizaAgentService");
+  // The ElizaAgentService is declared android:exported="false" so a
   // direct `am start-foreground-service` from adb shell (uid 2000) hits
   // "Requires permission not exported from uid 10036". The legitimate
   // startup path is via MainActivity.onCreate() which calls
-  // MiladyAgentService.start(this) from inside the Milady process. We
-  // also rely on MiladyBootReceiver auto-starting the service on boot.
+  // ElizaAgentService.start(this) from inside the Milady process. We
+  // also rely on ElizaBootReceiver auto-starting the service on boot.
   // Try direct start first (works on debuggable / shell-uid-allowed
   // builds); on permission denial, fall back to launching MainActivity;
   // finally treat an already-running service as success.
@@ -280,7 +280,7 @@ export async function runSmoke({ adb: adbImpl = adb } = {}) {
     }
     if (isPermDenied || startSvc.status !== 0 || /Error:/i.test(svcText)) {
       // Launch the activity, which kicks the service from inside the
-      // Milady uid via MiladyAgentService.start(this).
+      // Milady uid via ElizaAgentService.start(this).
       const launchAct = adbImpl(
         [
           "shell",
@@ -295,7 +295,7 @@ export async function runSmoke({ adb: adbImpl = adb } = {}) {
       if (launchAct.status !== 0 || /Error:|Unable to find/i.test(launchText)) {
         results.push({
           step: 3,
-          label: "MiladyAgentService start",
+          label: "ElizaAgentService start",
           ok: false,
           detail: `service direct-start hit "${svcText.slice(0, 80)}" and activity launch fallback failed: ${launchText.slice(0, 120)}`,
         });
@@ -303,7 +303,7 @@ export async function runSmoke({ adb: adbImpl = adb } = {}) {
       }
     }
   }
-  results.push({ step: 3, label: "MiladyAgentService start", ok: true });
+  results.push({ step: 3, label: "ElizaAgentService start", ok: true });
 
   // Step 4: wait for /api/health via adb forward.
   logStep(4, `Waiting up to ${HEALTH_TIMEOUT_MS / 1000}s for /api/health`);

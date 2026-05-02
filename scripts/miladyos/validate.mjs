@@ -889,17 +889,17 @@ function validateApkManifest(manifest) {
   const bootReceiver = manifestComponentBlock(
     manifest,
     "receiver",
-    `${PACKAGE_NAME}.MiladyBootReceiver`,
+    `${PACKAGE_NAME}.ElizaBootReceiver`,
   );
   assertManifestBlockIncludes(
     bootReceiver,
     "android.intent.action.LOCKED_BOOT_COMPLETED",
-    "MiladyBootReceiver",
+    "ElizaBootReceiver",
   );
   assertManifestBlockIncludes(
     bootReceiver,
     "android.intent.action.BOOT_COMPLETED",
-    "MiladyBootReceiver",
+    "ElizaBootReceiver",
   );
 
   // Replacement activities for the role apps stripped from PRODUCT_PACKAGES.
