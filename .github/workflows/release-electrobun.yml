@@ -1012,15 +1012,23 @@ jobs:
           # Use a short path under runner.temp to avoid MAX_PATH issues with
           # deeply nested node_modules while staying in a user-writable location.
           ELIZA_TEST_WINDOWS_INSTALL_DIR: ${{ runner.temp }}\el
+          MILADY_TEST_WINDOWS_INSTALL_DIR: ${{ runner.temp }}\el
           ELIZA_TEST_WINDOWS_LAUNCHER_DIR: ${{ runner.temp }}\eliza-windows-ui-launcher
+          MILADY_TEST_WINDOWS_LAUNCHER_DIR: ${{ runner.temp }}\eliza-windows-ui-launcher
           ELIZA_TEST_WINDOWS_LAUNCHER_PATH_FILE: ${{ runner.temp }}\eliza-windows-ui-launcher.txt
+          MILADY_TEST_WINDOWS_LAUNCHER_PATH_FILE: ${{ runner.temp }}\eliza-windows-ui-launcher.txt
           # Inno installer is built into platforms/electrobun/artifacts.
           ELIZA_TEST_WINDOWS_ARTIFACTS_DIR: ${{ github.workspace }}\eliza\packages\app-core\platforms\electrobun\artifacts
+          MILADY_TEST_WINDOWS_ARTIFACTS_DIR: ${{ github.workspace }}\eliza\packages\app-core\platforms\electrobun\artifacts
           ELIZA_TEST_WINDOWS_BUILD_DIR: ${{ github.workspace }}\eliza\packages\app-core\platforms\electrobun\build
+          MILADY_TEST_WINDOWS_BUILD_DIR: ${{ github.workspace }}\eliza\packages\app-core\platforms\electrobun\build
         run: |
           Remove-Item $env:ELIZA_TEST_WINDOWS_INSTALL_DIR -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item $env:MILADY_TEST_WINDOWS_INSTALL_DIR -Recurse -Force -ErrorAction SilentlyContinue
           Remove-Item $env:ELIZA_TEST_WINDOWS_LAUNCHER_DIR -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item $env:MILADY_TEST_WINDOWS_LAUNCHER_DIR -Recurse -Force -ErrorAction SilentlyContinue
           Remove-Item $env:ELIZA_TEST_WINDOWS_LAUNCHER_PATH_FILE -Force -ErrorAction SilentlyContinue
+          Remove-Item $env:MILADY_TEST_WINDOWS_LAUNCHER_PATH_FILE -Force -ErrorAction SilentlyContinue
 
           bun run test:desktop:packaged:windows
           if ($LASTEXITCODE -ne 0) {
@@ -1329,8 +1337,8 @@ jobs:
         shell: pwsh
         run: |
           $diagnosticsDir = Join-Path $PWD "eliza/packages/app-core/platforms/electrobun/artifacts/windows-smoke-diagnostics"
-          $appDataRoot = if ($env:ELIZA_TEST_WINDOWS_APPDATA_PATH) { $env:ELIZA_TEST_WINDOWS_APPDATA_PATH } else { $env:APPDATA }
-          $localAppDataRoot = if ($env:ELIZA_TEST_WINDOWS_LOCALAPPDATA_PATH) { $env:ELIZA_TEST_WINDOWS_LOCALAPPDATA_PATH } else { $env:LOCALAPPDATA }
+          $appDataRoot = if ($env:MILADY_TEST_WINDOWS_APPDATA_PATH) { $env:MILADY_TEST_WINDOWS_APPDATA_PATH } elseif ($env:ELIZA_TEST_WINDOWS_APPDATA_PATH) { $env:ELIZA_TEST_WINDOWS_APPDATA_PATH } else { $env:APPDATA }
+          $localAppDataRoot = if ($env:MILADY_TEST_WINDOWS_LOCALAPPDATA_PATH) { $env:MILADY_TEST_WINDOWS_LOCALAPPDATA_PATH } elseif ($env:ELIZA_TEST_WINDOWS_LOCALAPPDATA_PATH) { $env:ELIZA_TEST_WINDOWS_LOCALAPPDATA_PATH } else { $env:LOCALAPPDATA }
           $wrapperRoots = @(@(
             (Join-Path $localAppDataRoot "com.miladyai.milady"),
             (Join-Path $localAppDataRoot "ai.elizaos.Eliza"),
