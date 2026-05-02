@@ -62,6 +62,7 @@ export const LOCAL_ONLY_WORKSPACE_GLOBS = [
   "eliza/apps/*",
 ];
 export const LOCAL_ONLY_ELIZA_PACKAGE_PATHS = {
+  "@elizaos/plugin-agent-wallet": "plugins/plugin-agent-wallet",
   "@elizaos/plugin-browser-bridge": "plugins/plugin-browser-bridge",
   "@elizaos/plugin-app-control": "plugins/plugin-app-control/typescript",
   "@elizaos/plugin-signal": "plugins/plugin-signal/typescript",
