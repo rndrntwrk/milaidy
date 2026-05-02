@@ -162,6 +162,124 @@ ${fatalThrow}`;
   return { matched: true, text: nextText };
 }
 
+function patchLazyStewardRuntimeImports(text) {
+  let nextText = text;
+
+  const eagerImports = `import { saveStewardCredentials } from "@elizaos/app-core/services/steward-credentials";
+import {
+  createDesktopStewardSidecar,
+  type StewardSidecar,
+  type StewardSidecarStatus,
+} from "@elizaos/app-core/services/steward-sidecar";`;
+  const lazyImports = `import type {
+  StewardSidecar,
+  StewardSidecarStatus,
+} from "@elizaos/app-core/services/steward-sidecar";`;
+
+  if (!nextText.includes(lazyImports)) {
+    if (!nextText.includes(eagerImports)) {
+      return { matched: false, text };
+    }
+    nextText = nextText.replace(eagerImports, lazyImports);
+  }
+
+  const moduleLoaderBlock = `// Lazy runtime imports
+// ---------------------------------------------------------------------------
+
+type StewardSidecarModule = typeof import(
+  "@elizaos/app-core/services/steward-sidecar"
+);
+type StewardCredentialsModule = typeof import(
+  "@elizaos/app-core/services/steward-credentials"
+);
+
+let stewardSidecarModulePromise: Promise<StewardSidecarModule> | null = null;
+let stewardCredentialsModulePromise: Promise<StewardCredentialsModule> | null =
+  null;
+
+function loadStewardSidecarModule(): Promise<StewardSidecarModule> {
+  stewardSidecarModulePromise ??= import(
+    "@elizaos/app-core/services/steward-sidecar"
+  );
+  return stewardSidecarModulePromise;
+}
+
+function loadStewardCredentialsModule(): Promise<StewardCredentialsModule> {
+  stewardCredentialsModulePromise ??= import(
+    "@elizaos/app-core/services/steward-credentials"
+  );
+  return stewardCredentialsModulePromise;
+}
+
+`;
+  if (!nextText.includes("function loadStewardSidecarModule()")) {
+    const singletonMarker =
+      "// Singleton\n// ---------------------------------------------------------------------------\n\n";
+    if (!nextText.includes(singletonMarker)) {
+      return { matched: false, text };
+    }
+    nextText = nextText.replace(
+      singletonMarker,
+      moduleLoaderBlock + singletonMarker,
+    );
+  }
+
+  const getSidecarBefore = `export function getStewardSidecar(): StewardSidecar {
+  if (!sidecar) {
+    sidecar = createDesktopStewardSidecar({`;
+  const getSidecarAfter = `export async function getStewardSidecar(): Promise<StewardSidecar> {
+  if (!sidecar) {
+    const { createDesktopStewardSidecar } = await loadStewardSidecarModule();
+    sidecar = createDesktopStewardSidecar({`;
+  if (!nextText.includes(getSidecarAfter)) {
+    if (!nextText.includes(getSidecarBefore)) {
+      return { matched: false, text };
+    }
+    nextText = nextText.replace(getSidecarBefore, getSidecarAfter);
+  }
+
+  nextText = nextText.replace(
+    "function configureStewardEnvFromCredentials(): void {",
+    "async function configureStewardEnvFromCredentials(): Promise<void> {",
+  );
+
+  const saveCredentialsBefore = `    try {
+      saveStewardCredentials({`;
+  const saveCredentialsAfter = `    try {
+      const { saveStewardCredentials } = await loadStewardCredentialsModule();
+      saveStewardCredentials({`;
+  if (!nextText.includes(saveCredentialsAfter)) {
+    if (!nextText.includes(saveCredentialsBefore)) {
+      return { matched: false, text };
+    }
+    nextText = nextText.replace(saveCredentialsBefore, saveCredentialsAfter);
+  }
+
+  nextText = nextText.replace(
+    "  const steward = getStewardSidecar();",
+    "  const steward = await getStewardSidecar();",
+  );
+  nextText = nextText.replace(
+    "    configureStewardEnvFromCredentials();",
+    "    await configureStewardEnvFromCredentials();",
+  );
+  nextText = nextText.replace(
+    "  configureStewardEnvFromCredentials();",
+    "  await configureStewardEnvFromCredentials();",
+  );
+
+  if (
+    nextText.includes(
+      'import { saveStewardCredentials } from "@elizaos/app-core/services/steward-credentials";',
+    ) ||
+    nextText.includes("  createDesktopStewardSidecar,\n  type StewardSidecar")
+  ) {
+    return { matched: false, text };
+  }
+
+  return { matched: true, text: nextText };
+}
+
 const replacements = [
   {
     file: "eliza/packages/app-core/platforms/electrobun/src/startup-trace.ts",
@@ -172,6 +290,11 @@ const replacements = [
     file: "eliza/packages/app-core/platforms/electrobun/scripts/smoke-test-windows.ps1",
     description: "restore Windows smoke release contract",
     transform: patchWindowsSmokeScript,
+  },
+  {
+    file: "eliza/packages/app-core/platforms/electrobun/src/native/steward.ts",
+    description: "lazy-load Steward sidecar runtime imports",
+    transform: patchLazyStewardRuntimeImports,
   },
 ];
 
