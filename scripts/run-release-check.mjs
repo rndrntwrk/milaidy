@@ -33,6 +33,19 @@ try {
     throw new Error("run-release-check: eliza CI patch overlay failed");
   }
 
+  const electrobunSmokePatchCheck = spawnSync(
+    "node",
+    ["scripts/patch-eliza-electrobun-windows-smoke-startup.mjs", "--check"],
+    { stdio: "inherit" },
+  );
+  if (electrobunSmokePatchCheck.status !== 0) {
+    exitStatus = electrobunSmokePatchCheck.status ?? 1;
+    exitSignal = electrobunSmokePatchCheck.signal;
+    throw new Error(
+      "run-release-check: Electrobun Windows smoke startup overlay drifted",
+    );
+  }
+
   const releaseCheckFilePath = findReleaseCheckFile();
   const packDryRunFilePath = findReleaseCheckPackDryRunFile();
   for (const filePath of [releaseCheckFilePath, packDryRunFilePath]) {
