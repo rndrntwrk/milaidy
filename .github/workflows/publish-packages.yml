@@ -22,11 +22,6 @@ on:
         required: false
         type: boolean
         default: true
-      snap_release:
-        description: "Snap channel to release to (auto, edge, beta, candidate, stable)"
-        required: false
-        type: string
-        default: auto
       flatpak:
         description: "Publish Flatpak"
         required: false
@@ -58,16 +53,6 @@ on:
         description: "Publish to Snap Store"
         type: boolean
         default: true
-      snap_release:
-        description: "Snap channel to release to"
-        type: choice
-        default: auto
-        options:
-          - auto
-          - edge
-          - beta
-          - candidate
-          - stable
       flatpak:
         description: "Publish Flatpak"
         type: boolean
@@ -94,7 +79,6 @@ jobs:
       pypi_version: ${{ steps.ver.outputs.pypi_version }}
       deb_version: ${{ steps.ver.outputs.deb_version }}
       is_prerelease: ${{ steps.ver.outputs.is_prerelease }}
-      snap_release: ${{ steps.ver.outputs.snap_release }}
       snap_store_ready: ${{ steps.registry_credentials.outputs.snap_store_ready }}
       apt_repo_ready: ${{ steps.registry_credentials.outputs.apt_repo_ready }}
     steps:
@@ -102,7 +86,6 @@ jobs:
         id: ver
         run: |
           VERSION="${{ inputs.version }}"
-          SNAP_RELEASE="${{ inputs.snap_release || 'auto' }}"
 
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "npm_version=$VERSION" >> "$GITHUB_OUTPUT"
@@ -122,30 +105,9 @@ jobs:
             echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
           fi
 
-          case "$SNAP_RELEASE" in
-            ""|auto)
-              if echo "$VERSION" | grep -qiE '(alpha|nightly)'; then
-                SNAP_RELEASE="edge"
-              elif echo "$VERSION" | grep -qi 'beta'; then
-                SNAP_RELEASE="beta"
-              elif echo "$VERSION" | grep -qi 'rc'; then
-                SNAP_RELEASE="candidate"
-              else
-                SNAP_RELEASE="stable"
-              fi
-              ;;
-            edge|beta|candidate|stable) ;;
-            *)
-              echo "::error::Invalid Snap release channel: $SNAP_RELEASE"
-              exit 1
-              ;;
-          esac
-          echo "snap_release=$SNAP_RELEASE" >> "$GITHUB_OUTPUT"
-
           echo "Version: $VERSION"
           echo "PyPI: $PYPI_VERSION"
           echo "Debian: ${DEB_VERSION}-1"
-          echo "Snap release: $SNAP_RELEASE"
           echo "Pre-release: $(echo "$VERSION" | grep -qE '(alpha|beta|rc)' && echo true || echo false)"
 
       - name: Check registry credentials
@@ -301,7 +263,7 @@ jobs:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAP_STORE_CREDENTIALS }}
         with:
           snap: ${{ steps.snapcraft.outputs.snap }}
-          release: ${{ needs.prepare.outputs.snap_release }}
+          release: ${{ needs.prepare.outputs.is_prerelease == 'true' && 'edge,beta' || 'stable,candidate' }}
 
   # ── Debian / apt ───────────────────────────────────────────────────────
   build-deb:

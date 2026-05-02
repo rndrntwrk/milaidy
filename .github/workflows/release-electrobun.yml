@@ -42,11 +42,6 @@ on:
         description: "Release tag override (e.g. v2.0.0-alpha.3)"
         required: false
         type: string
-      channel:
-        description: "Release channel (auto, canary, beta, rc, stable)"
-        required: false
-        type: string
-        default: auto
       draft:
         description: "Create the GitHub release as a draft"
         required: false
@@ -68,17 +63,6 @@ on:
         description: "Release tag (e.g. v2.0.0-alpha.3)"
         required: false
         type: string
-      channel:
-        description: "Release channel"
-        required: false
-        type: choice
-        default: auto
-        options:
-          - auto
-          - canary
-          - beta
-          - rc
-          - stable
       draft:
         description: "Create as draft release"
         required: false
@@ -114,7 +98,6 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       tag: ${{ steps.version.outputs.tag }}
       env: ${{ steps.version.outputs.env }}
-      channel: ${{ steps.version.outputs.channel }}
       source_sha: ${{ steps.version.outputs.source_sha }}
       desktop_matrix: ${{ steps.desktop-matrix.outputs.desktop_matrix }}
     steps:
@@ -125,12 +108,9 @@ jobs:
 
       - name: Determine version + env
         id: version
-        env:
-          RELEASE_TAG: ${{ inputs.tag || '' }}
-          RELEASE_CHANNEL: ${{ inputs.channel || 'auto' }}
         run: |
-          if [[ -n "$RELEASE_TAG" ]]; then
-            TAG="$RELEASE_TAG"
+          if [[ -n "${{ inputs.tag }}" ]]; then
+            TAG="${{ inputs.tag }}"
           elif [[ "${{ github.ref_type }}" == "tag" ]]; then
             TAG="${{ github.ref_name }}"
           else
@@ -138,54 +118,19 @@ jobs:
             exit 1
           fi
           VERSION="${TAG#v}"
-          CHANNEL="$RELEASE_CHANNEL"
-          case "$CHANNEL" in
-            ""|auto)
-              if echo "$VERSION" | grep -qiE '(alpha|nightly)'; then
-                CHANNEL="canary"
-              elif echo "$VERSION" | grep -qi 'beta'; then
-                CHANNEL="beta"
-              elif echo "$VERSION" | grep -qi 'rc'; then
-                CHANNEL="rc"
-              else
-                CHANNEL="stable"
-              fi
-              ;;
-            canary|beta|rc|stable) ;;
-            *)
-              echo "::error::Invalid release channel: $CHANNEL"
-              exit 1
-              ;;
-          esac
-          case "$CHANNEL" in
-            canary)
-              echo "$VERSION" | grep -qiE '(alpha|nightly)' || { echo "::error::canary desktop release requires an alpha/nightly version, got $VERSION"; exit 1; }
-              BUILD_ENV="canary"
-              ;;
-            beta)
-              echo "$VERSION" | grep -qi 'beta' || { echo "::error::beta desktop release requires a beta version, got $VERSION"; exit 1; }
-              BUILD_ENV="canary"
-              ;;
-            rc)
-              echo "$VERSION" | grep -qi 'rc' || { echo "::error::rc desktop release requires an rc version, got $VERSION"; exit 1; }
-              BUILD_ENV="canary"
-              ;;
-            stable)
-              if echo "$VERSION" | grep -qiE '(alpha|beta|rc|nightly)'; then
-                echo "::error::stable desktop release requires a stable version, got $VERSION"
-                exit 1
-              fi
-              BUILD_ENV="stable"
-              ;;
-          esac
+          # canary for pre-release tags, stable for everything else
+          if echo "$VERSION" | grep -qE '(alpha|beta|rc|nightly)'; then
+            BUILD_ENV="canary"
+          else
+            BUILD_ENV="stable"
+          fi
           {
             echo "tag=$TAG"
             echo "version=$VERSION"
             echo "env=$BUILD_ENV"
-            echo "channel=$CHANNEL"
             echo "source_sha=$GITHUB_SHA"
           } >> "$GITHUB_OUTPUT"
-          echo "Release: $VERSION (tag: $TAG, channel: $CHANNEL, env: $BUILD_ENV, sha: $GITHUB_SHA)"
+          echo "Release: $VERSION (tag: $TAG, env: $BUILD_ENV, sha: $GITHUB_SHA)"
 
       - name: Select desktop platform matrix
         id: desktop-matrix
@@ -243,38 +188,6 @@ jobs:
           install-native-deps: "true"
           run-postinstall: "true"
 
-      - name: Expose whisper-node for eliza Electrobun scripts
-        run: |
-          whisper_pkg="$(node <<'NODE'
-          const { createRequire } = require("node:module");
-          const fs = require("node:fs");
-          const path = require("node:path");
-
-          const anchors = [
-            "package.json",
-            "eliza/package.json",
-            "eliza/packages/app-core/package.json",
-          ];
-          for (const anchor of anchors) {
-            if (!fs.existsSync(anchor)) {
-              continue;
-            }
-            try {
-              const req = createRequire(path.resolve(anchor));
-              process.stdout.write(path.dirname(req.resolve("whisper-node/package.json")));
-              process.exit(0);
-            } catch {
-              // Try the next install anchor.
-            }
-          }
-          throw new Error("Unable to resolve whisper-node from installed dependencies");
-          NODE
-          )"
-          test -d "$whisper_pkg/lib/whisper.cpp"
-          mkdir -p eliza/packages/node_modules node_modules
-          ln -sfn "$(realpath "$whisper_pkg")" eliza/packages/node_modules/whisper-node
-          ln -sfn "$(realpath "$whisper_pkg")" node_modules/whisper-node
-
       # TODO: verify this script exists in eliza or port equivalent.
       # In milady this was `bun run test:regression-matrix:release`.
       - name: Regression matrix contract
@@ -284,22 +197,7 @@ jobs:
         run: |
           bash eliza/packages/app-core/platforms/electrobun/scripts/ensure-whisper-model.sh base.en
           mkdir -p .artifacts/whisper-model
-          model_path=""
-          for candidate in \
-            "$HOME/.cache/milady/whisper/ggml-base.en.bin" \
-            "$HOME/.cache/eliza/whisper/ggml-base.en.bin" \
-            "eliza/packages/node_modules/whisper-node/lib/whisper.cpp/models/ggml-base.en.bin" \
-            "node_modules/whisper-node/lib/whisper.cpp/models/ggml-base.en.bin"; do
-            if [ -f "$candidate" ]; then
-              model_path="$candidate"
-              break
-            fi
-          done
-          if [ -z "$model_path" ]; then
-            echo "::error::Whisper model was not produced in a known cache or working-tree path"
-            exit 1
-          fi
-          cp "$model_path" .artifacts/whisper-model/ggml-base.en.bin
+          cp "$HOME/.cache/eliza/whisper/ggml-base.en.bin" .artifacts/whisper-model/ggml-base.en.bin
 
       - name: Upload Whisper model artifact
         uses: actions/upload-artifact@v7
@@ -478,12 +376,6 @@ jobs:
         with:
           node-version: "24"
 
-      - name: Apply Milady eliza CI patches
-        run: node scripts/apply-eliza-ci-patches.mjs
-
-      - name: Guard eliza runtime copy against recursive package symlinks
-        run: node scripts/patch-eliza-runtime-copy-symlink-guard.mjs
-
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
@@ -519,45 +411,11 @@ jobs:
       - name: Run repository postinstall patches
         run: bun run postinstall
 
-      - name: Expose whisper-node for eliza Electrobun scripts
-        if: matrix.platform.os == 'macos' || matrix.platform.os == 'linux'
-        run: |
-          whisper_pkg="$(node <<'NODE'
-          const { createRequire } = require("node:module");
-          const fs = require("node:fs");
-          const path = require("node:path");
-
-          const anchors = [
-            "package.json",
-            "eliza/package.json",
-            "eliza/packages/app-core/package.json",
-          ];
-          for (const anchor of anchors) {
-            if (!fs.existsSync(anchor)) {
-              continue;
-            }
-            try {
-              const req = createRequire(path.resolve(anchor));
-              process.stdout.write(path.dirname(req.resolve("whisper-node/package.json")));
-              process.exit(0);
-            } catch {
-              // Try the next install anchor.
-            }
-          }
-          throw new Error("Unable to resolve whisper-node from installed dependencies");
-          NODE
-          )"
-          test -d "$whisper_pkg/lib/whisper.cpp"
-          mkdir -p eliza/packages/node_modules node_modules
-          ln -sfn "$(realpath "$whisper_pkg")" eliza/packages/node_modules/whisper-node
-          ln -sfn "$(realpath "$whisper_pkg")" node_modules/whisper-node
-
       - name: Cache Whisper models and binaries
         if: matrix.platform.os == 'macos' || matrix.platform.os == 'linux'
         uses: actions/cache@v5
         with:
           path: |
-            ~/.cache/milady/whisper
             ~/.cache/eliza/whisper
             node_modules/whisper-node/lib/whisper.cpp/main
             node_modules/whisper-node/lib/whisper.cpp/build
@@ -574,9 +432,7 @@ jobs:
       - name: Seed Whisper model cache
         if: matrix.platform.os == 'macos' || matrix.platform.os == 'linux'
         run: |
-          mkdir -p "$HOME/.cache/milady/whisper"
           mkdir -p "$HOME/.cache/eliza/whisper"
-          cp .artifacts/whisper-model/ggml-base.en.bin "$HOME/.cache/milady/whisper/ggml-base.en.bin"
           cp .artifacts/whisper-model/ggml-base.en.bin "$HOME/.cache/eliza/whisper/ggml-base.en.bin"
 
       - name: Align version with release tag
@@ -794,11 +650,9 @@ jobs:
           esac
 
           echo "Resolved electrobun package dir: $package_dir"
-          {
-            echo "package-dir=$package_dir"
-            echo "cache-dir=$package_dir/.cache"
-            echo "core-target=$electrobun_core_target"
-          } >> "$GITHUB_OUTPUT"
+          echo "package-dir=$package_dir" >> "$GITHUB_OUTPUT"
+          echo "cache-dir=$package_dir/.cache" >> "$GITHUB_OUTPUT"
+          echo "core-target=$electrobun_core_target" >> "$GITHUB_OUTPUT"
           echo "core-cache-dir=$package_dir/dist-$electrobun_core_target" >> "$GITHUB_OUTPUT"
 
       - name: Cache Electrobun CLI and core binaries
@@ -1074,90 +928,12 @@ jobs:
               exit 1
             }
             $agentManifestPath = Join-Path $elizaDist "node_modules\@elizaos\agent\package.json"
-            if (-not (Test-Path $agentManifestPath)) {
-              Write-Error "eliza-dist @elizaos/agent package.json NOT found: $agentManifestPath"
+            Write-Host "Checking for: $agentManifestPath"
+            if (Test-Path $agentManifestPath) {
+              Write-Host "eliza-dist @elizaos/agent package manifest found"
+            } else {
+              Write-Error "eliza-dist @elizaos/agent package manifest NOT found: $agentManifestPath"
               exit 1
-            }
-            $agentPackageRoot = Split-Path -Parent $agentManifestPath
-            $agentManifest = Get-Content $agentManifestPath -Raw | ConvertFrom-Json
-            function Get-AgentPackageExportTargets($exportValue) {
-              if ($exportValue -is [string]) {
-                return @($exportValue)
-              }
-              return @(
-                $exportValue.default,
-                $exportValue.import,
-                $exportValue.types
-              ) | Where-Object { $_ -is [string] -and $_.Length -gt 0 }
-            }
-            function Resolve-AgentPackageExportTargets($manifest, [string] $runtimeExport) {
-              $directExport = $manifest.exports.PSObject.Properties[$runtimeExport]
-              if ($null -ne $directExport) {
-                return Get-AgentPackageExportTargets $directExport.Value
-              }
-
-              foreach ($exportProperty in $manifest.exports.PSObject.Properties) {
-                $exportName = [string] $exportProperty.Name
-                $wildcardIndex = $exportName.IndexOf("*")
-                if ($wildcardIndex -lt 0) {
-                  continue
-                }
-
-                $prefix = $exportName.Substring(0, $wildcardIndex)
-                $suffix = $exportName.Substring($wildcardIndex + 1)
-                if (-not $runtimeExport.StartsWith($prefix)) {
-                  continue
-                }
-                if ($suffix.Length -gt 0 -and -not $runtimeExport.EndsWith($suffix)) {
-                  continue
-                }
-
-                $replacement = $runtimeExport.Substring(
-                  $prefix.Length,
-                  $runtimeExport.Length - $prefix.Length - $suffix.Length
-                )
-                return @(
-                  (Get-AgentPackageExportTargets $exportProperty.Value) |
-                    ForEach-Object { $_.Replace("*", $replacement) }
-                )
-              }
-
-              return @()
-            }
-            $agentRequiredExports = @(
-              "./config/env-vars",
-              "./config/plugin-auto-enable",
-              "./config/schema",
-              "./runtime/advanced-capabilities-config",
-              "./runtime/embedding-presets",
-              "./runtime/plugin-collector",
-              "./runtime/plugin-resolver",
-              "./runtime/plugin-types"
-            )
-            foreach ($runtimeExport in $agentRequiredExports) {
-              $exportTargets = Resolve-AgentPackageExportTargets $agentManifest $runtimeExport
-              if ($exportTargets.Count -eq 0) {
-                Write-Error "eliza-dist @elizaos/agent package export NOT found: $runtimeExport"
-                exit 1
-              }
-              Write-Host "eliza-dist @elizaos/agent package export resolved: $runtimeExport"
-
-              $existingTarget = $null
-              foreach ($exportTarget in $exportTargets) {
-                $normalizedTarget = $exportTarget -replace '/', '\'
-                $runtimePath = Join-Path $agentPackageRoot $normalizedTarget
-                Write-Host "Checking for: $runtimePath"
-                if (Test-Path $runtimePath) {
-                  $existingTarget = $runtimePath
-                  break
-                }
-              }
-              if ($existingTarget) {
-                Write-Host "eliza-dist @elizaos/agent runtime export target found: $runtimeExport -> $existingTarget"
-              } else {
-                Write-Error "eliza-dist @elizaos/agent runtime export target NOT found: $runtimeExport"
-                exit 1
-              }
             }
           }
 
@@ -1291,6 +1067,17 @@ jobs:
         with:
           name: electrobun-windows-installer-proof
           path: eliza/packages/app-core/platforms/electrobun/artifacts/windows-installer-proof/**
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload Windows installer .exe + Inno log on smoke failure
+        if: failure() && matrix.platform.os == 'windows'
+        uses: actions/upload-artifact@v7
+        with:
+          name: electrobun-windows-installer-debug
+          path: |
+            eliza/packages/app-core/platforms/electrobun/artifacts/*.exe
+            ${{ runner.temp }}/milady-inno-setup.log
           if-no-files-found: warn
           retention-days: 14
 
@@ -1544,12 +1331,18 @@ jobs:
           $diagnosticsDir = Join-Path $PWD "eliza/packages/app-core/platforms/electrobun/artifacts/windows-smoke-diagnostics"
           $appDataRoot = if ($env:ELIZA_TEST_WINDOWS_APPDATA_PATH) { $env:ELIZA_TEST_WINDOWS_APPDATA_PATH } else { $env:APPDATA }
           $localAppDataRoot = if ($env:ELIZA_TEST_WINDOWS_LOCALAPPDATA_PATH) { $env:ELIZA_TEST_WINDOWS_LOCALAPPDATA_PATH } else { $env:LOCALAPPDATA }
-          $wrapperRoot = Join-Path $localAppDataRoot "ai.elizaos.Eliza"
+          $wrapperRoots = @(@(
+            (Join-Path $localAppDataRoot "com.miladyai.milady"),
+            (Join-Path $localAppDataRoot "ai.elizaos.Eliza"),
+            (Join-Path $localAppDataRoot "ai.elizaos.app")
+          ) | Select-Object -Unique)
 
           Write-Host "Diagnostics roots:"
           Write-Host "  appDataRoot      = $appDataRoot"
           Write-Host "  localAppDataRoot = $localAppDataRoot"
-          Write-Host "  wrapperRoot      = $wrapperRoot"
+          foreach ($wrapperRoot in $wrapperRoots) {
+            Write-Host "  wrapperRoot      = $wrapperRoot"
+          }
 
           Remove-Item $diagnosticsDir -Recurse -Force -ErrorAction SilentlyContinue
           New-Item -ItemType Directory -Force -Path $diagnosticsDir | Out-Null
@@ -1606,7 +1399,7 @@ jobs:
             }
           }
 
-          foreach ($root in @($wrapperRoot, "C:\\e", "D:\\a\\_temp\\el")) {
+          foreach ($root in @($wrapperRoots + @("C:\\e", "D:\\a\\_temp\\el"))) {
             if (Test-Path $root) {
               Get-ChildItem -Path $root -Recurse -File -Filter "startup-session.json" -ErrorAction SilentlyContinue |
                 ForEach-Object {
@@ -1620,17 +1413,19 @@ jobs:
             }
           }
 
-          if (Test-Path $wrapperRoot) {
-            Get-ChildItem -Path $wrapperRoot -Recurse -File -Filter "wrapper-diagnostics.json" -ErrorAction SilentlyContinue |
-              ForEach-Object {
-                $relativePath = $_.FullName.Substring($wrapperRoot.Length).TrimStart('\\')
-                $destination = Join-Path $diagnosticsDir $relativePath
-                $destinationParent = Split-Path -Parent $destination
-                New-Item -ItemType Directory -Force -Path $destinationParent | Out-Null
-                Copy-Item $_.FullName -Destination $destination -Force
-              }
-          } else {
-            Write-Warning "Wrapper diagnostics root not found at $wrapperRoot"
+          foreach ($wrapperRoot in $wrapperRoots) {
+            if (Test-Path $wrapperRoot) {
+              Get-ChildItem -Path $wrapperRoot -Recurse -File -Filter "wrapper-diagnostics.json" -ErrorAction SilentlyContinue |
+                ForEach-Object {
+                  $relativePath = $_.FullName.Substring($wrapperRoot.Length).TrimStart('\\')
+                  $destination = Join-Path $diagnosticsDir $relativePath
+                  $destinationParent = Split-Path -Parent $destination
+                  New-Item -ItemType Directory -Force -Path $destinationParent | Out-Null
+                  Copy-Item $_.FullName -Destination $destination -Force
+                }
+            } else {
+              Write-Warning "Wrapper diagnostics root not found at $wrapperRoot"
+            }
           }
 
       - name: Upload Windows smoke diagnostics

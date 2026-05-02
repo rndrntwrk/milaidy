@@ -31,6 +31,7 @@ const SOURCES = [
 ];
 
 const MASK_APP_CORE = "\x00MASK_APP_CORE\x00";
+const MASK_APP_CORE_WIN = "\x00MASK_APP_CORE_WIN\x00";
 
 /**
  * Core path/org remap from eliza monorepo layout → Milady repo layout (exported for tests).
@@ -43,6 +44,8 @@ export function applyMiladyWorkflowTransform(fileName, content) {
 
   // Prevent `packages/app` rules from corrupting `packages/app-core` (substring overlap).
   out = out.split("packages/app-core").join(MASK_APP_CORE);
+  // Windows-style backslash variant — same masking trick.
+  out = out.split("packages\\app-core").join(MASK_APP_CORE_WIN);
 
   const pathPairs = [
     ["packages/shared", "eliza/packages/shared"],
@@ -57,6 +60,9 @@ export function applyMiladyWorkflowTransform(fileName, content) {
   }
 
   out = out.split(MASK_APP_CORE).join("eliza/packages/app-core");
+  // Restore the Windows variant under the eliza/ prefix so e.g.
+  // ${{ github.workspace }}\packages\app-core → ${{ github.workspace }}\eliza\packages\app-core.
+  out = out.split(MASK_APP_CORE_WIN).join("eliza\\packages\\app-core");
 
   const orgPairs = [
     ["elizaOS/eliza", "milady-ai/milady"],
