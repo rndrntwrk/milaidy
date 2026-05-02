@@ -52,6 +52,19 @@ try {
     );
   }
 
+  const electrobunMacosStagePatchCheck = spawnSync(
+    "node",
+    ["scripts/patch-eliza-electrobun-macos-stage-entitlements.mjs"],
+    { stdio: "inherit" },
+  );
+  if (electrobunMacosStagePatchCheck.status !== 0) {
+    exitStatus = electrobunMacosStagePatchCheck.status ?? 1;
+    exitSignal = electrobunMacosStagePatchCheck.signal;
+    throw new Error(
+      "run-release-check: Electrobun macOS staging overlay drifted",
+    );
+  }
+
   const releaseWorkflow = fs.readFileSync(releaseWorkflowPath, "utf8");
   const missingReleaseWorkflowNeedles = releaseWorkflowNeedles.filter(
     (needle) => !releaseWorkflow.includes(needle),
