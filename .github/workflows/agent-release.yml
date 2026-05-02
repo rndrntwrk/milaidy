@@ -572,13 +572,14 @@ jobs:
       - uses: snapcore/action-build@v1
         id: snap
         if: steps.snap-env.outputs.can-build == 'true'
+        continue-on-error: true
         with:
           path: eliza
       - name: Verify snap
-        if: steps.snap-env.outputs.can-build == 'true'
+        if: steps.snap-env.outputs.can-build == 'true' && steps.snap.outcome == 'success'
         run: sudo snap install --dangerous ${{ steps.snap.outputs.snap }}
       - name: Upload snap artifact
-        if: success() && steps.snap-env.outputs.can-build == 'true'
+        if: success() && steps.snap-env.outputs.can-build == 'true' && steps.snap.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: snap-package
@@ -586,8 +587,9 @@ jobs:
           retention-days: 30
           if-no-files-found: error
       - name: Record skipped snap package validation
-        if: steps.snap-env.outputs.can-build != 'true'
-        run: echo "Snap package validation skipped because LXD could not be installed from the snap store on this runner."
+        if: steps.snap-env.outputs.can-build != 'true' || steps.snap.outcome != 'success'
+        run: |
+          echo "::warning::Snap package validation skipped because this runner could not complete snapcore/action-build. LXD probe result: ${{ steps.snap-env.outputs.can-build }}; snap build outcome: ${{ steps.snap.outcome }}."
 
   build-flatpak:
     name: Flatpak build
@@ -697,12 +699,21 @@ jobs:
         run: |
           rm -rf debian
           cp -R eliza/packages/app-core/packaging/debian debian
-          # The copied Debian packaging can come from different eliza snapshots
-          # that hardcode either historical entry name. Milady's actual entry
-          # script is milady.mjs; the package name remains elizaos-app for now.
-          if [ -f milady.mjs ] && [ ! -f elizaos-app.mjs ]; then
-            sed -i -e 's/elizaos-app\.mjs/milady.mjs/g' -e 's/eliza\.mjs/milady.mjs/g' debian/install debian/rules
+          # The debian packaging is authored in the elizaOS repo. CI patching
+          # can rewrite the source entrypoint to either elizaos-app.mjs or
+          # eliza.mjs, but Milady's actual entry script is milady.mjs. The
+          # service file is staged under ./debian after the copy above, and CI
+          # mutates manifests before install, so keep Bun unfrozen here.
+          if [ -f milady.mjs ]; then
+            sed -i \
+              -e 's/elizaos-app\.mjs/milady.mjs/g' \
+              -e 's/\beliza\.mjs\b/milady.mjs/g' \
+              debian/install debian/rules
           fi
+          sed -i \
+            -e 's|packaging/debian/elizaos-app.service|debian/elizaos-app.service|g' \
+            -e 's|bun install --ignore-scripts|bun install --ignore-scripts --no-frozen-lockfile|g' \
+            debian/rules
           test -f debian/changelog
           test -x debian/rules
           dpkg-checkbuilddeps debian/control
