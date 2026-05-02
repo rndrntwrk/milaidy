@@ -5,6 +5,14 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
+
+if (process.platform === "win32") {
+  console.log(
+    "[patch-eliza-electrobun-macos-stage-entitlements] skipped on Windows",
+  );
+  process.exit(0);
+}
+
 const scriptPath = path.join(
   repoRoot,
   "eliza",
