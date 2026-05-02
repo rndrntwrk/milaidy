@@ -79,10 +79,6 @@ export function distUsesLegacyAiSdkObjectGeneration(pluginRoot) {
 }
 
 export function main() {
-  if (!fs.existsSync(patchPath)) {
-    fail(`patch file missing: ${path.relative(repoRoot, patchPath)}`);
-  }
-
   if (!fs.existsSync(pluginLink)) {
     log(
       "@elizaos/plugin-elizacloud not installed — skipping (will retry on next install)",
@@ -126,6 +122,15 @@ export function main() {
       "legacy AI SDK object generation detected - skipping direct /responses bridge patch",
     );
     return;
+  }
+
+  if (distAlreadyHasBridgeFixes(pluginRoot)) {
+    log("bridge fixes already present in built dist - skipping patch");
+    return;
+  }
+
+  if (!fs.existsSync(patchPath)) {
+    fail(`patch file missing: ${path.relative(repoRoot, patchPath)}`);
   }
 
   // Reverse-check first: if patches are already applied, exit cleanly.

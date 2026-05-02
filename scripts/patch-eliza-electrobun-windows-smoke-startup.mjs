@@ -89,7 +89,7 @@ $startupLogs = @($startupLog, $miladyStartupLog, $defaultStartupLog, $legacyStar
     },
     {
       pattern:
-        /\$env:ELIZA_STARTUP_SESSION_ID = \$startupSessionId\r?\n\$env:MILADY_STARTUP_SESSION_ID = \$startupSessionId\r?\n(?:\$env:(?:ELIZA|MILADY)_STARTUP_(?:STATE|EVENTS)_FILE = \$startup(?:State|Events)File\r?\n)+/,
+        /\$env:ELIZA_STARTUP_SESSION_ID = \$startupSessionId\r?\n(?:\$env:(?:ELIZA|MILADY)_STARTUP_SESSION_ID = \$startupSessionId\r?\n)*\$env:ELIZA_STARTUP_STATE_FILE = \$startupStateFile\r?\n(?:\$env:MILADY_STARTUP_STATE_FILE = \$startupStateFile\r?\n)?\$env:ELIZA_STARTUP_EVENTS_FILE = \$startupEventsFile\r?\n(?:\$env:MILADY_STARTUP_EVENTS_FILE = \$startupEventsFile\r?\n)?/,
       replacement: `$env:ELIZA_STARTUP_SESSION_ID = $startupSessionId
 $env:MILADY_STARTUP_SESSION_ID = $startupSessionId
 $env:ELIZA_STARTUP_STATE_FILE = $startupStateFile
@@ -100,7 +100,7 @@ $env:MILADY_STARTUP_EVENTS_FILE = $startupEventsFile
     },
     {
       pattern:
-        /\$installerRoot = if \(\$env:MILADY_TEST_WINDOWS_INSTALL_DIR\) \{\r?\n {2}\$env:MILADY_TEST_WINDOWS_INSTALL_DIR\r?\n\}(?: elseif \(\$env:ELIZA_TEST_WINDOWS_INSTALL_DIR\) \{\r?\n(?: {2}# .*\r?\n)* {2}\$env:ELIZA_TEST_WINDOWS_INSTALL_DIR\r?\n\})? else \{\r?\n {2}Join-Path \$tempRoot \("milady(?:-windows)?-installed-" \+ \[Guid\]::NewGuid\(\)\.ToString\("N"\)(?:\.Substring\(0, 8\))?\)\r?\n\}/,
+        /\$installerRoot = if \(\$env:(?:MILADY|ELIZA)_TEST_WINDOWS_INSTALL_DIR\) \{\r?\n {2}\$env:(?:MILADY|ELIZA)_TEST_WINDOWS_INSTALL_DIR\r?\n\}(?: elseif \(\$env:ELIZA_TEST_WINDOWS_INSTALL_DIR\) \{\r?\n(?: {2}# .*\r?\n)* {2}\$env:ELIZA_TEST_WINDOWS_INSTALL_DIR\r?\n\})? else \{\r?\n {2}Join-Path \$tempRoot \("(?:milady(?:-windows)?|eliza-windows)-installed-" \+ \[Guid\]::NewGuid\(\)\.ToString\("N"\)(?:\.Substring\(0, 8\))?\)\r?\n\}/,
       replacement: `$installerRoot = if ($env:MILADY_TEST_WINDOWS_INSTALL_DIR) {
   $env:MILADY_TEST_WINDOWS_INSTALL_DIR
 } elseif ($env:ELIZA_TEST_WINDOWS_INSTALL_DIR) {
@@ -297,8 +297,8 @@ function patchTelegramSessionEsmImport(text) {
 
   result = replaceRequiredBlock(
     result.text,
-    /return \(client\.session as StringSession\)\.save\(\);/,
-    "return client.session.save();",
+    /return (?:(?:\(client\.session as StringSession\))|(?:client\.session))\.save\(\);/,
+    "return (client.session as unknown as StringSession).save();",
   );
   return result;
 }
