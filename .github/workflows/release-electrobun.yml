@@ -410,6 +410,8 @@ jobs:
 
       - name: Run repository postinstall patches
         run: bun run postinstall
+        env:
+          MILADY_NO_VISION_DEPS: ${{ matrix.platform.os == 'windows' && '1' || '' }}
 
       - name: Cache Whisper models and binaries
         if: matrix.platform.os == 'macos' || matrix.platform.os == 'linux'

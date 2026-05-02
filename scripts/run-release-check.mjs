@@ -13,6 +13,12 @@ import {
   restoreGeneratedElizaChanges,
 } from "./run-release-contract-suite.mjs";
 
+const releaseWorkflowPath = ".github/workflows/release-electrobun.yml";
+const releaseWorkflowNeedles = [
+  "MILADY_NO_VISION_DEPS: $" +
+    "{{ matrix.platform.os == 'windows' && '1' || '' }}",
+];
+
 const shouldRestoreElizaChanges = isElizaWorktreeClean();
 const initialElizaUntrackedFiles = shouldRestoreElizaChanges
   ? listElizaUntrackedFiles()
@@ -43,6 +49,20 @@ try {
     exitSignal = electrobunSmokePatchCheck.signal;
     throw new Error(
       "run-release-check: Electrobun Windows smoke startup overlay drifted",
+    );
+  }
+
+  const releaseWorkflow = fs.readFileSync(releaseWorkflowPath, "utf8");
+  const missingReleaseWorkflowNeedles = releaseWorkflowNeedles.filter(
+    (needle) => !releaseWorkflow.includes(needle),
+  );
+  if (missingReleaseWorkflowNeedles.length > 0) {
+    exitStatus = 1;
+    throw new Error(
+      [
+        "run-release-check: release workflow is missing Windows postinstall native-script guard:",
+        ...missingReleaseWorkflowNeedles.map((needle) => `  - ${needle}`),
+      ].join("\n"),
     );
   }
 
