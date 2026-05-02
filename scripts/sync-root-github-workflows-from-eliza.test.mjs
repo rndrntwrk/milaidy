@@ -33,7 +33,9 @@ describe("applyMiladyWorkflowTransform", () => {
   });
 
   test("rewrites Windows backslash app-core paths into the eliza submodule prefix", () => {
-    const input = String.raw`ARTIFACTS: ${"${{ github.workspace }}"}\packages\app-core\platforms\electrobun\artifacts`;
+    const input =
+      "ARTIFACTS: $" +
+      String.raw`{{ github.workspace }}\packages\app-core\platforms\electrobun\artifacts`;
     const out = applyMiladyWorkflowTransform("release-electrobun.yml", input);
     assert.match(
       out,
