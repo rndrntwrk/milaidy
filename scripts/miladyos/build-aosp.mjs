@@ -213,14 +213,14 @@ function launchCuttlefish(aospRoot) {
  * eliza/packages/agent/scripts/build-mobile-bundle.mjs).
  *
  * Both flags are propagated explicitly via env so subprocesses spawned by
- * gradle and bun see them. The gradle property `-PmiladyAospBuild=true`
+ * gradle and bun see them. The gradle property `-PelizaAospBuild=true`
  * controls the BuildConfig field via run-mobile-build.mjs.
  */
 function rebuildPrivilegedApk() {
   const env = {
     ...process.env,
     MILADY_AOSP_BUILD: "1",
-    MILADY_GRADLE_AOSP_BUILD: "true",
+    ELIZA_GRADLE_AOSP_BUILD: "true",
   };
   const result = spawnSync("bun", ["run", "build:android:system"], {
     cwd: repoRoot,
@@ -265,7 +265,7 @@ async function rebuildPrivilegedAab() {
   // restructure. Direct gradle invocation keeps the staged DFM
   // structure intact.
   const androidDir = path.join(repoRoot, "apps", "app", "android");
-  const gradleArgs = ["-PmiladyAospBuild=true", ":app:bundleRelease"];
+  const gradleArgs = ["-PelizaAospBuild=true", ":app:bundleRelease"];
   run("./gradlew", gradleArgs, { cwd: androidDir });
 
   // Stage the AAB next to the staged APK so the AOSP product layer

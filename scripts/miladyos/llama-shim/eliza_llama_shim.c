@@ -1,5 +1,5 @@
 /*
- * milady_llama_shim.c — pointer-style wrapper around llama.cpp's
+ * eliza_llama_shim.c — pointer-style wrapper around llama.cpp's
  * struct-by-value entry points.
  *
  * Why this file exists:
@@ -62,7 +62,7 @@
  *   clean.
  *
  * ABI:
- *   Compiled per-Android-ABI as `libmilady-llama-shim.so` and shipped
+ *   Compiled per-Android-ABI as `libeliza-llama-shim.so` and shipped
  *   alongside `libllama.so`. The shim NEEDED-links libllama.so so the
  *   dynamic linker resolves llama.cpp symbols at load time via the
  *   per-ABI LD_LIBRARY_PATH MiladyAgentService.java sets.
@@ -82,7 +82,7 @@ extern "C" {
 /* llama_model_params                                                  */
 /* ------------------------------------------------------------------ */
 
-struct llama_model_params * milady_llama_model_params_default(void) {
+struct llama_model_params * eliza_llama_model_params_default(void) {
     struct llama_model_params defaults = llama_model_default_params();
     struct llama_model_params * out = (struct llama_model_params *) malloc(sizeof(struct llama_model_params));
     if (out == NULL) return NULL;
@@ -97,31 +97,31 @@ struct llama_model_params * milady_llama_model_params_default(void) {
     return out;
 }
 
-void milady_llama_model_params_free(struct llama_model_params * p) {
+void eliza_llama_model_params_free(struct llama_model_params * p) {
     free(p);
 }
 
-void milady_llama_model_params_set_n_gpu_layers(struct llama_model_params * p, int32_t v) {
+void eliza_llama_model_params_set_n_gpu_layers(struct llama_model_params * p, int32_t v) {
     if (p != NULL) p->n_gpu_layers = v;
 }
 
-void milady_llama_model_params_set_use_mmap(struct llama_model_params * p, bool v) {
+void eliza_llama_model_params_set_use_mmap(struct llama_model_params * p, bool v) {
     if (p != NULL) p->use_mmap = v;
 }
 
-void milady_llama_model_params_set_use_mlock(struct llama_model_params * p, bool v) {
+void eliza_llama_model_params_set_use_mlock(struct llama_model_params * p, bool v) {
     if (p != NULL) p->use_mlock = v;
 }
 
-void milady_llama_model_params_set_vocab_only(struct llama_model_params * p, bool v) {
+void eliza_llama_model_params_set_vocab_only(struct llama_model_params * p, bool v) {
     if (p != NULL) p->vocab_only = v;
 }
 
-void milady_llama_model_params_set_check_tensors(struct llama_model_params * p, bool v) {
+void eliza_llama_model_params_set_check_tensors(struct llama_model_params * p, bool v) {
     if (p != NULL) p->check_tensors = v;
 }
 
-struct llama_model * milady_llama_model_load_from_file(const char * path, const struct llama_model_params * p) {
+struct llama_model * eliza_llama_model_load_from_file(const char * path, const struct llama_model_params * p) {
     if (p == NULL) return NULL;
     return llama_model_load_from_file(path, *p);
 }
@@ -130,7 +130,7 @@ struct llama_model * milady_llama_model_load_from_file(const char * path, const 
 /* llama_context_params                                                */
 /* ------------------------------------------------------------------ */
 
-struct llama_context_params * milady_llama_context_params_default(void) {
+struct llama_context_params * eliza_llama_context_params_default(void) {
     struct llama_context_params defaults = llama_context_default_params();
     struct llama_context_params * out = (struct llama_context_params *) malloc(sizeof(struct llama_context_params));
     if (out == NULL) return NULL;
@@ -138,40 +138,40 @@ struct llama_context_params * milady_llama_context_params_default(void) {
     return out;
 }
 
-void milady_llama_context_params_free(struct llama_context_params * p) {
+void eliza_llama_context_params_free(struct llama_context_params * p) {
     free(p);
 }
 
-void milady_llama_context_params_set_n_ctx(struct llama_context_params * p, uint32_t v) {
+void eliza_llama_context_params_set_n_ctx(struct llama_context_params * p, uint32_t v) {
     if (p != NULL) p->n_ctx = v;
 }
 
-void milady_llama_context_params_set_n_batch(struct llama_context_params * p, uint32_t v) {
+void eliza_llama_context_params_set_n_batch(struct llama_context_params * p, uint32_t v) {
     if (p != NULL) p->n_batch = v;
 }
 
-void milady_llama_context_params_set_n_ubatch(struct llama_context_params * p, uint32_t v) {
+void eliza_llama_context_params_set_n_ubatch(struct llama_context_params * p, uint32_t v) {
     if (p != NULL) p->n_ubatch = v;
 }
 
-void milady_llama_context_params_set_n_threads(struct llama_context_params * p, int32_t v) {
+void eliza_llama_context_params_set_n_threads(struct llama_context_params * p, int32_t v) {
     if (p != NULL) p->n_threads = v;
 }
 
-void milady_llama_context_params_set_n_threads_batch(struct llama_context_params * p, int32_t v) {
+void eliza_llama_context_params_set_n_threads_batch(struct llama_context_params * p, int32_t v) {
     if (p != NULL) p->n_threads_batch = v;
 }
 
-void milady_llama_context_params_set_embeddings(struct llama_context_params * p, bool v) {
+void eliza_llama_context_params_set_embeddings(struct llama_context_params * p, bool v) {
     if (p != NULL) p->embeddings = v;
 }
 
-void milady_llama_context_params_set_offload_kqv(struct llama_context_params * p, bool v) {
+void eliza_llama_context_params_set_offload_kqv(struct llama_context_params * p, bool v) {
     if (p != NULL) p->offload_kqv = v;
 }
 
 /* pooling_type is enum llama_pooling_type, ABI-wise an int. We accept i32. */
-void milady_llama_context_params_set_pooling_type(struct llama_context_params * p, int32_t v) {
+void eliza_llama_context_params_set_pooling_type(struct llama_context_params * p, int32_t v) {
     if (p != NULL) p->pooling_type = (enum llama_pooling_type) v;
 }
 
@@ -186,15 +186,15 @@ void milady_llama_context_params_set_pooling_type(struct llama_context_params * 
  * implementations live in ggml/src/ggml-cpu/quants.c. Storage is
  * 14 bytes per 32 floats (tbq3_0) / 16 bytes per 32 floats (tbq4_0)
  * vs 64 bytes for fp16 — a ~4x KV-cache memory reduction on phones. */
-void milady_llama_context_params_set_type_k(struct llama_context_params * p, int32_t v) {
+void eliza_llama_context_params_set_type_k(struct llama_context_params * p, int32_t v) {
     if (p != NULL) p->type_k = (enum ggml_type) v;
 }
 
-void milady_llama_context_params_set_type_v(struct llama_context_params * p, int32_t v) {
+void eliza_llama_context_params_set_type_v(struct llama_context_params * p, int32_t v) {
     if (p != NULL) p->type_v = (enum ggml_type) v;
 }
 
-struct llama_context * milady_llama_init_from_model(struct llama_model * model, const struct llama_context_params * p) {
+struct llama_context * eliza_llama_init_from_model(struct llama_model * model, const struct llama_context_params * p) {
     if (p == NULL) return NULL;
     return llama_init_from_model(model, *p);
 }
@@ -203,7 +203,7 @@ struct llama_context * milady_llama_init_from_model(struct llama_model * model, 
 /* llama_sampler_chain_params                                          */
 /* ------------------------------------------------------------------ */
 
-struct llama_sampler_chain_params * milady_llama_sampler_chain_params_default(void) {
+struct llama_sampler_chain_params * eliza_llama_sampler_chain_params_default(void) {
     struct llama_sampler_chain_params defaults = llama_sampler_chain_default_params();
     struct llama_sampler_chain_params * out =
         (struct llama_sampler_chain_params *) malloc(sizeof(struct llama_sampler_chain_params));
@@ -212,15 +212,15 @@ struct llama_sampler_chain_params * milady_llama_sampler_chain_params_default(vo
     return out;
 }
 
-void milady_llama_sampler_chain_params_free(struct llama_sampler_chain_params * p) {
+void eliza_llama_sampler_chain_params_free(struct llama_sampler_chain_params * p) {
     free(p);
 }
 
-void milady_llama_sampler_chain_params_set_no_perf(struct llama_sampler_chain_params * p, bool v) {
+void eliza_llama_sampler_chain_params_set_no_perf(struct llama_sampler_chain_params * p, bool v) {
     if (p != NULL) p->no_perf = v;
 }
 
-struct llama_sampler * milady_llama_sampler_chain_init(const struct llama_sampler_chain_params * p) {
+struct llama_sampler * eliza_llama_sampler_chain_init(const struct llama_sampler_chain_params * p) {
     if (p == NULL) return NULL;
     return llama_sampler_chain_init(*p);
 }
@@ -236,24 +236,24 @@ struct llama_sampler * milady_llama_sampler_chain_init(const struct llama_sample
  * register depends on hidden caller-allocated storage that bun:ffi
  * doesn't materialize), so we wrap both in pointer-style helpers.
  *
- * milady_llama_batch_get_one()
+ * eliza_llama_batch_get_one()
  *   Heap-allocates a `llama_batch`, fills it via the upstream helper,
  *   and returns the pointer. The token buffer the caller passed in
  *   stays caller-owned — `llama_batch_get_one` only stashes the
  *   pointer in `batch.token`, it does not copy. The caller MUST keep
  *   the token buffer alive across the matching `llama_decode` call.
  *
- * milady_llama_batch_free()
+ * eliza_llama_batch_free()
  *   Frees only the heap-allocated `llama_batch`. It does NOT free the
  *   token / embd / pos / seq_id arrays — those are caller-owned (for
  *   `_get_one` they're the caller's input; for batches built via
  *   `llama_batch_init` the caller frees with `llama_batch_free`).
  *
- * milady_llama_decode()
+ * eliza_llama_decode()
  *   Dereferences the pointer and calls real `llama_decode(ctx, *p)`.
  */
 
-struct llama_batch * milady_llama_batch_get_one(int32_t * tokens, int32_t n_tokens) {
+struct llama_batch * eliza_llama_batch_get_one(int32_t * tokens, int32_t n_tokens) {
     struct llama_batch defaults = llama_batch_get_one(tokens, n_tokens);
     struct llama_batch * out = (struct llama_batch *) malloc(sizeof(struct llama_batch));
     if (out == NULL) return NULL;
@@ -261,11 +261,11 @@ struct llama_batch * milady_llama_batch_get_one(int32_t * tokens, int32_t n_toke
     return out;
 }
 
-void milady_llama_batch_free(struct llama_batch * p) {
+void eliza_llama_batch_free(struct llama_batch * p) {
     free(p);
 }
 
-int32_t milady_llama_decode(struct llama_context * ctx, const struct llama_batch * p) {
+int32_t eliza_llama_decode(struct llama_context * ctx, const struct llama_batch * p) {
     if (p == NULL) return -1;
     return llama_decode(ctx, *p);
 }

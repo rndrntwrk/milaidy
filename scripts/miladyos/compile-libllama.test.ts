@@ -343,7 +343,7 @@ describe("compile-libllama shim build invocation", () => {
     fs.mkdirSync(abiAssetDir, { recursive: true });
     fs.writeFileSync(path.join(abiAssetDir, "libllama.so"), "", "utf8");
     // Fake shim source.
-    const shimSourcePath = path.join(scratchDir, "shim", "milady_llama_shim.c");
+    const shimSourcePath = path.join(scratchDir, "shim", "eliza_llama_shim.c");
     fs.mkdirSync(path.dirname(shimSourcePath), { recursive: true });
     fs.writeFileSync(shimSourcePath, "/* fake */\n", "utf8");
     return { includeDir, abiAssetDir, shimSourcePath };
@@ -370,7 +370,7 @@ describe("compile-libllama shim build invocation", () => {
       log: () => {},
       spawn: fakeSpawn,
     });
-    expect(out).toBe(path.join(abiAssetDir, "libmilady-llama-shim.so"));
+    expect(out).toBe(path.join(abiAssetDir, "libeliza-llama-shim.so"));
     expect(captured.length).toBeGreaterThan(0);
     // First call is the compile; second is the system strip fallback
     // (zig objcopy is invoked separately via the internal stripBinary

@@ -187,7 +187,7 @@ export function buildSigsysShimForAbi({
   // -O2: parity with bun's release optimisation level.
   // -Wl,--disable-new-dtags: don't bake build-host RUNPATH (we're loaded
   //   via LD_PRELOAD anyway, RUNPATH is irrelevant, but keep the flag
-  //   for symmetry with libmilady-llama-shim.so so future audit tools
+  //   for symmetry with libeliza-llama-shim.so so future audit tools
   //   don't see drift).
   spawn(
     ccPath,
