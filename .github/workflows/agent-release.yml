@@ -531,8 +531,8 @@ jobs:
           node scripts/disable-local-eliza-workspace.mjs
       - name: Stage snapcraft.yaml
         run: |
-          mkdir -p snap
-          cp eliza/packages/app-core/packaging/snap/snapcraft.yaml snap/snapcraft.yaml
+          mkdir -p eliza/snap
+          cp eliza/packages/app-core/packaging/snap/snapcraft.yaml eliza/snap/snapcraft.yaml
       - name: Normalize runner root ownership for snapd
         run: |
           set -euo pipefail
@@ -572,6 +572,8 @@ jobs:
       - uses: snapcore/action-build@v1
         id: snap
         if: steps.snap-env.outputs.can-build == 'true'
+        with:
+          path: eliza
       - name: Verify snap
         if: steps.snap-env.outputs.can-build == 'true'
         run: sudo snap install --dangerous ${{ steps.snap.outputs.snap }}
@@ -695,14 +697,11 @@ jobs:
         run: |
           rm -rf debian
           cp -R eliza/packages/app-core/packaging/debian debian
-          # Eliza's debian packaging hardcodes the legacy entry name
-          # "elizaos-app.mjs" from before the upstream rename. Milady's
-          # actual entry script is milady.mjs, so rewrite the install
-          # manifest and rules to point at it. The package itself stays
-          # named elizaos-app for now (binary path /usr/bin/elizaos-app)
-          # since renaming the deb package is its own task.
+          # The copied Debian packaging can come from different eliza snapshots
+          # that hardcode either historical entry name. Milady's actual entry
+          # script is milady.mjs; the package name remains elizaos-app for now.
           if [ -f milady.mjs ] && [ ! -f elizaos-app.mjs ]; then
-            sed -i 's/elizaos-app\.mjs/milady.mjs/g' debian/install debian/rules
+            sed -i -e 's/elizaos-app\.mjs/milady.mjs/g' -e 's/eliza\.mjs/milady.mjs/g' debian/install debian/rules
           fi
           test -f debian/changelog
           test -x debian/rules
