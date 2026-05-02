@@ -19,7 +19,8 @@ const files = {
   disableScript: "scripts/disable-local-eliza-workspace.mjs",
   restoreScript: "scripts/restore-local-eliza-workspace.mjs",
   elizaCiPatchScript: "scripts/apply-eliza-ci-patches.mjs",
-  elizaCiPatch: "patches/eliza/ci-release-contracts.patch",
+  elizaCiPatch:
+    "eliza/patches/milady/eliza-ci-bootstrap/ci-release-contracts.patch",
   localElizaCiOverridesScript: "scripts/build-local-eliza-ci-overrides.mjs",
   publishedFallbackScript:
     "scripts/install-published-workspace-fallback-deps.sh",
@@ -284,6 +285,7 @@ function assertCiPreReviewBootstrap(workflowText, targetFailures) {
   const requiredSnippets = [
     "- name: Install submodule verification dependencies",
     "bun install --cwd eliza --no-frozen-lockfile --ignore-scripts",
+    "bash eliza/cloud/packages/scripts/prepare-steward-workspaces.sh",
     "bun install --cwd eliza/cloud --no-frozen-lockfile --ignore-scripts",
     "- name: Ensure biome uses correct architecture",
     `ln -s "\${{ github.workspace }}/node_modules/@biomejs" eliza/node_modules/@biomejs`,

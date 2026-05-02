@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// scripts/miladyos/smoke-cuttlefish.mjs — end-to-end smoke test for the
-// on-device agent. Confirms: cvd is up → APK is installed → service
-// starts → /api/health responds → bearer token is readable → chat round-
-// trip works → response was generated locally (not cloud-routed).
+// scripts/miladyos/smoke-cuttlefish.mjs - end-to-end smoke test for the
+// on-device agent. Confirms: cvd is up, APK is installed, service
+// starts, /api/health responds, bearer token is readable, chat round-
+// trip works, and response generation stayed local.
 //
 // Designed to run after `node scripts/miladyos/build-aosp.mjs --launch`
 // finishes. Idempotent: re-running on the same cvd is fine; the service
@@ -20,7 +20,7 @@
 //
 // Caveat: the AOSP_LLAMA_PROVIDER constant referenced in some earlier
 // briefs does not exist in the runtime. Local-vs-cloud detection uses
-// the local-inference active-model state as the signal — that endpoint
+// the local-inference active-model state as the signal; that endpoint
 // is only populated when a local libllama-backed model is loaded.
 
 import { spawnSync } from "node:child_process";
@@ -100,7 +100,7 @@ const HEALTH_POLL_INTERVAL_MS = 2_000;
 const CHAT_TIMEOUT_MS = 3_600_000;
 
 
-// ANSI color helpers — output is human-readable, no JSON for now.
+// ANSI color helpers; output is human-readable, no JSON for now.
 const RESET = "[0m";
 const RED = "[31m";
 const GREEN = "[32m";
@@ -118,7 +118,7 @@ function logStep(n, label) {
 
 export function formatResult(step, label, ok, detail) {
   const tag = ok ? color(GREEN, "PASS") : color(RED, "FAIL");
-  const tail = detail ? ` — ${detail}` : "";
+  const tail = detail ? ` - ${detail}` : "";
   return `[${step}/${TOTAL_STEPS}] ${tag} ${label}${tail}`;
 }
 
@@ -174,7 +174,7 @@ async function pollHealth(deadline) {
 /**
  * Run the smoke test against the currently-attached cvd / device.
  *
- * Returns an array of { step, label, ok, detail } records — the caller
+ * Returns an array of { step, label, ok, detail } records; the caller
  * (CLI entry point) prints them and decides the exit code.
  */
 export async function runSmoke({ adb: adbImpl = adb } = {}) {
@@ -228,7 +228,7 @@ export async function runSmoke({ adb: adbImpl = adb } = {}) {
     results.push({ step: 1, label: "cvd / device reachable", ok: true });
   }
 
-  // ── Step 2: verify APK installed + report ABI ───────────────────────
+  // Step 2: verify APK installed and report ABI.
   logStep(2, `Verifying ${PACKAGE_NAME} is installed`);
   const pmList = adbImpl(["shell", "pm", "list", "packages", PACKAGE_NAME], {
     serial,
@@ -282,14 +282,17 @@ export async function runSmoke({ adb: adbImpl = adb } = {}) {
       // Launch the activity, which kicks the service from inside the
       // Milady uid via MiladyAgentService.start(this).
       const launchAct = adbImpl(
-        ["shell", "am", "start", "-n", `${PACKAGE_NAME}/${PACKAGE_NAME}.MainActivity`],
+        [
+          "shell",
+          "am",
+          "start",
+          "-n",
+          `${PACKAGE_NAME}/${PACKAGE_NAME}.MainActivity`,
+        ],
         { serial },
       );
       const launchText = (launchAct.stdout + launchAct.stderr).trim();
-      if (
-        launchAct.status !== 0 ||
-        /Error:|Unable to find/i.test(launchText)
-      ) {
+      if (launchAct.status !== 0 || /Error:|Unable to find/i.test(launchText)) {
         results.push({
           step: 3,
           label: "MiladyAgentService start",
@@ -302,7 +305,7 @@ export async function runSmoke({ adb: adbImpl = adb } = {}) {
   }
   results.push({ step: 3, label: "MiladyAgentService start", ok: true });
 
-  // ── Step 4: wait for /api/health via adb forward ────────────────────
+  // Step 4: wait for /api/health via adb forward.
   logStep(4, `Waiting up to ${HEALTH_TIMEOUT_MS / 1000}s for /api/health`);
   const forwardResult = adbImpl(
     ["forward", `tcp:${HOST_PORT}`, `tcp:${AGENT_PORT}`],
@@ -381,7 +384,7 @@ export async function runSmoke({ adb: adbImpl = adb } = {}) {
     detail: `${token.length} hex chars`,
   });
 
-  // ── Step 6: POST a chat message to /v1/chat/completions ─────────────
+  // Step 6: POST a chat message to /v1/chat/completions.
   logStep(6, "POSTing a chat message to /v1/chat/completions");
   const chatBody = {
     model: "milady",
@@ -485,7 +488,7 @@ export async function runSmoke({ adb: adbImpl = adb } = {}) {
     detail: `${chatElapsedSec}s wall-clock`,
   });
 
-  // ── Step 7: assert the chat response contains a non-empty message ──
+  // Step 7: assert the chat response contains a non-empty message.
   logStep(7, "Asserting response shape");
   const chatJson = await chatResp.json().catch(() => null);
   const messageContent =
@@ -505,7 +508,7 @@ export async function runSmoke({ adb: adbImpl = adb } = {}) {
     step: 7,
     label: "Response shape",
     ok: true,
-    detail: `${messageContent.length} chars: "${messageContent.slice(0, 60).replace(/\n/g, " ")}…"`,
+    detail: `${messageContent.length} chars: "${messageContent.slice(0, 60).replace(/\n/g, " ")}..."`,
   });
 
   // ── Step 8: verify the response was LOCAL, not cloud-routed ─────────

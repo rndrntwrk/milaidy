@@ -9,6 +9,7 @@ import {
   createLogger,
   defineConfig,
   type Plugin,
+  type ServerOptions,
   transformWithEsbuild,
 } from "vite";
 import { resolveAppBranding } from "../../eliza/packages/app-core/src/config/app-config.ts";
@@ -28,6 +29,7 @@ import {
   resolveDesktopUiPortPreference,
 } from "../../eliza/packages/shared/src/runtime-env.ts";
 import { syncElizaEnvAliases } from "../../scripts/lib/sync-eliza-env-aliases.mjs";
+import { parseAllowedHostEnv, toViteAllowedHosts } from "./allowed-hosts.ts";
 import appConfig from "./app.config";
 import { CAPACITOR_PLUGIN_NAMES } from "./scripts/capacitor-plugin-names.mjs";
 import { resolveViteDevServerRuntime } from "./vite-dev-origin.ts";
@@ -149,6 +151,8 @@ const BRANDED_ENV = {
   viteSettingsDebug: `VITE_${APP_ENV_PREFIX}_SETTINGS_DEBUG`,
 };
 const DEFAULT_APP_ROUTE_PLUGIN_MODULES = [
+  "@elizaos/app-hyperliquid/register-routes",
+  "@elizaos/app-polymarket/register-routes",
   "@elizaos/app-vincent/register-routes",
   "@elizaos/app-shopify/register-routes",
   "@elizaos/app-steward/register-routes",
@@ -161,6 +165,15 @@ syncElizaEnvAliases({
   cloudManagedAgentsApiSegment: APP_NAMESPACE,
   appRoutePluginModules: DEFAULT_APP_ROUTE_PLUGIN_MODULES,
 });
+
+const viteAllowedHosts: Exclude<
+  NonNullable<ServerOptions["allowedHosts"]>,
+  true
+> = [
+  "localhost",
+  "127.0.0.1",
+  ...toViteAllowedHosts(parseAllowedHostEnv(process.env.ELIZA_ALLOWED_HOSTS)),
+];
 
 const NATIVE_PLUGIN_ALIAS_ENTRIES = CAPACITOR_PLUGIN_NAMES.map((name) => ({
   find: new RegExp(`^@elizaos/capacitor-${escapeRegExp(name)}$`),
@@ -686,6 +699,9 @@ function appDevSettingsBannerPlugin(): Plugin {
 }
 
 function desktopCorsPlugin(): Plugin {
+  const accessControlAllowHeaders =
+    "Content-Type, Authorization, X-API-Token, X-Api-Key, X-ElizaOS-Client-Id, X-ElizaOS-UI-Language, X-ElizaOS-Token, X-Eliza-Export-Token, X-Eliza-Terminal-Token, X-Milady-CSRF";
+
   return {
     name: "desktop-cors",
     configureServer(server) {
@@ -694,13 +710,14 @@ function desktopCorsPlugin(): Plugin {
         if (!origin || !req.url?.startsWith("/api")) return next();
 
         res.setHeader("Access-Control-Allow-Origin", origin);
+        res.setHeader("Access-Control-Allow-Credentials", "true");
         res.setHeader(
           "Access-Control-Allow-Methods",
           "GET, POST, PUT, DELETE, OPTIONS",
         );
         res.setHeader(
           "Access-Control-Allow-Headers",
-          "Content-Type, Authorization, X-Milady-Token, X-Api-Key, X-Milady-Export-Token, X-Milady-Client-Id, X-Milady-Terminal-Token, X-Milady-UI-Language",
+          accessControlAllowHeaders,
         );
 
         if (req.method === "OPTIONS") {
@@ -1281,7 +1298,7 @@ function nativeModuleStubPlugin(): Plugin {
         /\(\(\)\s*=>\s*\{\s*throw\s+new\s+Error\(\s*"Cannot require module "\s*\+\s*"node:async_hooks"\s*\)\s*;\s*\}\)\(\)/g,
         "(function(){function A(){} A.prototype.getStore=function(){return undefined};A.prototype.run=function(s,fn){return fn.apply(void 0,[].slice.call(arguments,2))};A.prototype.enterWith=function(){};A.prototype.disable=function(){};return{AsyncLocalStorage:A}})()",
       );
-      // Names that downstream plugins (plugin-secrets-manager, agent runtime)
+      // Names that downstream plugins and the agent runtime
       // import from @elizaos/core but that are missing from the browser entry.
       const missingExports: Record<string, string> = {
         resolveSecretKeyAlias: "function(k){return k}",
@@ -1741,7 +1758,7 @@ export default defineConfig({
             ),
           },
           // @elizaos/core — force ALL copies (including nested ones in plugins
-          // like plugin-secrets-manager that ship their own older core) to the
+          // that bundle their own older core) to the
           // main workspace copy's browser entry.  The browser entry has all
           // needed exports and avoids pulling in createRequire/node:fs/etc.
           {
@@ -1842,7 +1859,7 @@ export default defineConfig({
       // Contains native-only pty-state-capture / pty-console imports; skip pre-bundling.
       "@elizaos/plugin-agent-orchestrator",
       "pty-console",
-      // @elizaos/plugin-secrets-manager is now built into @elizaos/core features
+      // Built-in secrets live in @elizaos/core features; Vite must not externalize them as a separate package.
       // Node-only HTTP client — crashes in browser, stub via nativeModuleStubPlugin
       "undici",
       // Browser automation is server-only and pulls in proxy-agent/httpUtil.
@@ -1918,6 +1935,7 @@ export default defineConfig({
     host: true,
     port: uiPort,
     strictPort: true,
+    allowedHosts: viteAllowedHosts,
     // Only pin the dev origin when the desktop shell explicitly asks for a
     // loopback public URL. Capacitor live reload and LAN/browser clients need
     // Vite to keep serving the current request host instead of rewriting

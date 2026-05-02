@@ -1,4 +1,4 @@
-import { ErrorBoundary } from "@elizaos/app-core";
+import { App, ErrorBoundary } from "@elizaos/app-core";
 import "@elizaos/app-core/styles/styles.css";
 import "@elizaos/app-core/styles/brand-gold.css";
 
@@ -114,6 +114,10 @@ import {
 } from "@elizaos/app-task-coordinator";
 import { FineTuningView } from "@elizaos/app-training/ui";
 import "@elizaos/app-shopify/register";
+import "@elizaos/app-hyperliquid/client";
+import "@elizaos/app-hyperliquid/register";
+import "@elizaos/app-polymarket/client";
+import "@elizaos/app-polymarket/register";
 import "@elizaos/app-vincent/client";
 import { useVincentState } from "@elizaos/app-vincent/ui";
 import "@elizaos/app-vincent/register";
@@ -133,10 +137,10 @@ import {
 } from "./app-config";
 import { APP_ENV_ALIASES, APP_ENV_PREFIX } from "./brand-env";
 import { APP_CHARACTER_CATALOG } from "./character-catalog";
-import { App } from "../../../eliza/packages/app-core/src/App";
 import {
   apiBaseToDeviceBridgeUrl,
   type IosRuntimeConfig,
+  type IosRuntimeMode,
   resolveIosRuntimeConfig,
 } from "./ios-runtime";
 
@@ -293,6 +297,55 @@ const appBootConfig: AppBootConfig = {
   },
 };
 
+// Self-hosted bot bootstrap. The token is read from the URL fragment
+// (#token=...), so it never reaches the server, access log, or Referer
+// headers. Once read, it persists in localStorage scoped to this origin.
+const SELF_HOSTED_TOKEN_KEY = "milady:self-hosted-api-token";
+const STALE_BOOTSTRAP_KEYS = [
+  "elizaos:agent-profiles",
+  "elizaos:active-server",
+  MOBILE_RUNTIME_MODE_STORAGE_KEY,
+] as const;
+try {
+  const url = new URL(window.location.href);
+  const hash = url.hash.startsWith("#") ? url.hash.slice(1) : url.hash;
+  const fragmentToken = new URLSearchParams(hash).get("token")?.trim() ?? null;
+  const hasQueryToken = url.searchParams.has("token");
+  if (hasQueryToken) {
+    console.error(
+      "[milady] Refusing insecure ?token=... bootstrap. Use #token=... instead.",
+    );
+  }
+  let bootstrapToken: string | null = fragmentToken;
+  if (fragmentToken) {
+    for (const key of STALE_BOOTSTRAP_KEYS) {
+      try {
+        window.localStorage.removeItem(key);
+      } catch {}
+    }
+    try {
+      window.localStorage.setItem(SELF_HOSTED_TOKEN_KEY, fragmentToken);
+    } catch {}
+  }
+  if (fragmentToken || hasQueryToken) {
+    url.hash = "";
+    url.searchParams.delete("token");
+    window.history.replaceState({}, "", url.toString());
+  }
+  if (!bootstrapToken) {
+    try {
+      const saved = window.localStorage.getItem(SELF_HOSTED_TOKEN_KEY)?.trim();
+      if (saved) bootstrapToken = saved;
+    } catch {}
+  }
+  if (bootstrapToken) {
+    appBootConfig.apiToken = bootstrapToken;
+    appBootConfig.apiBase ??= window.location.origin;
+    try {
+      client.setToken(bootstrapToken);
+    } catch {}
+  }
+} catch {}
 setBootConfig(appBootConfig);
 
 function getShareQueue(): ShareTargetPayload[] {
@@ -715,11 +768,21 @@ function injectDetachedShellApiBase(): void {
   if (apiBase) validateAndSetApiBase(apiBase);
 }
 
+function mobileModeToIosRuntimeMode(
+  mode: ReturnType<typeof normalizeMobileRuntimeMode>,
+): IosRuntimeMode | null {
+  return mode === "remote-mac" || mode === "cloud" || mode === "cloud-hybrid"
+    ? mode
+    : null;
+}
+
 function getCurrentIosRuntimeConfig(): IosRuntimeConfig {
   if (typeof window === "undefined") return IOS_RUNTIME_ENV_CONFIG;
   try {
-    const mode = normalizeMobileRuntimeMode(
-      window.localStorage.getItem(MOBILE_RUNTIME_MODE_STORAGE_KEY),
+    const mode = mobileModeToIosRuntimeMode(
+      normalizeMobileRuntimeMode(
+        window.localStorage.getItem(MOBILE_RUNTIME_MODE_STORAGE_KEY),
+      ),
     );
     // MobileRuntimeMode includes "local" but IosRuntimeConfig.mode does not —
     // the local-agent runtime is Android-only. Drop "local" before assigning.
@@ -830,8 +893,21 @@ function applyStoredDetachedShellTheme(): void {
   applyUiTheme(loadUiTheme());
 }
 
+async function initializeStatusBar(): Promise<void> {
+  if (!isNative) return;
+  try {
+    const { StatusBar, Style } = await import("@capacitor/status-bar");
+    await StatusBar.setStyle({ style: Style.Dark });
+    await StatusBar.setOverlaysWebView({ overlay: true });
+    await StatusBar.setBackgroundColor({ color: "#0a0a0a" });
+  } catch {
+    // StatusBar plugin unavailable on this platform — non-fatal.
+  }
+}
+
 async function main(): Promise<void> {
   setupPlatformStyles();
+  await initializeStatusBar();
   applyBuildTimeIosConnection();
 
   try {

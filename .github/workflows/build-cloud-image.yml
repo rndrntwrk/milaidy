@@ -262,6 +262,15 @@ jobs:
           if [ ! -e plugins/plugin-selfcontrol ] && [ -d packages/plugin-selfcontrol ]; then
             cp -R packages/plugin-selfcontrol plugins/plugin-selfcontrol
           fi
+          # Dockerfile.cloud is shared with the upstream elizaOS layout where
+          # the built web app lives at packages/app. Milady's Vite app lives at
+          # apps/app, so materialize the expected manifest and dist tree.
+          mkdir -p packages/app
+          cp apps/app/package.json packages/app/package.json
+          rm -rf packages/app/dist
+          cp -R apps/app/dist packages/app/dist
+          test -f packages/app/package.json
+          test -d packages/app/dist
           node <<'NODE'
           const fs = require("fs");
           const path = require("path");
@@ -322,7 +331,13 @@ jobs:
           };
           fs.writeFileSync("package.json", JSON.stringify(root, null, 2) + "\n");
           NODE
-          ls -la patches scripts/docker-entrypoint.sh plugins/plugin-selfcontrol 2>&1 | head -20
+          for staged_path in patches scripts/docker-entrypoint.sh plugins/plugin-selfcontrol; do
+            if [ -e "$staged_path" ]; then
+              find "$staged_path" -maxdepth 2 -print | head -20
+            else
+              echo "Missing expected staged path: $staged_path"
+            fi
+          done
 
       - name: Set up CI dockerignore
         run: cp eliza/packages/app-core/deploy/Dockerfile.cloud.dockerignore .dockerignore
@@ -406,17 +421,19 @@ jobs:
       - name: Build summary
         if: always()
         run: |
-          echo "## ☁️ Milady Cloud App Image" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Registry | \`${{ env.REGISTRY }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Image | \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Version | \`${{ steps.version.outputs.version }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Built SHA | \`$(git rev-parse HEAD)\` |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Pull commands" >> $GITHUB_STEP_SUMMARY
-          echo '```bash' >> $GITHUB_STEP_SUMMARY
-          echo "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:cloud-app" >> $GITHUB_STEP_SUMMARY
-          echo "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:cloud-app-${{ steps.version.outputs.version_clean }}" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## ☁️ Milady Cloud App Image"
+            echo ""
+            echo "| Property | Value |"
+            echo "|----------|-------|"
+            echo "| Registry | \`${{ env.REGISTRY }}\` |"
+            echo "| Image | \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}\` |"
+            echo "| Version | \`${{ steps.version.outputs.version }}\` |"
+            echo "| Built SHA | \`$(git rev-parse HEAD)\` |"
+            echo ""
+            echo "### Pull commands"
+            echo '```bash'
+            echo "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:cloud-app"
+            echo "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:cloud-app-${{ steps.version.outputs.version_clean }}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -16,7 +16,6 @@ import {
 } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { asSetupUpstreamsCiStubs } from "./lib/ci-stubs.mjs";
 import { readPackageJson } from "./lib/read-package-json.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -79,13 +78,6 @@ const ELIZA_TYPESCRIPT_AMBIENT_DEPENDENCIES = new Set(
 const OPTIONAL_ELIZA_PLUGIN_FALLBACK_TAG = "alpha";
 const ELIZA_INSTALL_RETRY_DELAY_MS = 3_000;
 
-// Plugins referenced as @elizaos/* workspace:* inside the eliza workspace but
-// provided by a CI stub in the root repo rather than published on npm. Before
-// `bun install --cwd eliza`, we inject an override into eliza/package.json so
-// the workspace:* specifier resolves to the stub instead of failing.
-// Registry is centralized in scripts/lib/ci-stubs.mjs.
-const UNPUBLISHED_ELIZA_PLUGIN_CI_STUBS = asSetupUpstreamsCiStubs();
-
 const OPTIONAL_ELIZA_PLUGIN_PACKAGES = [
   {
     submodulePath: "plugins/plugin-sql",
@@ -105,7 +97,7 @@ const OPTIONAL_ELIZA_PLUGIN_PACKAGES = [
 ];
 const CONDITIONAL_ELIZA_WORKSPACE_ENTRIES = [
   ...OPTIONAL_ELIZA_PLUGIN_PACKAGES.map(({ workspaceEntry }) => workspaceEntry),
-  "cloud/packages/services/billing",
+  "cloud/packages/billing",
 ];
 
 const PACKAGE_LINK_ROOTS = [
@@ -113,6 +105,16 @@ const PACKAGE_LINK_ROOTS = [
   ["eliza", "node_modules"],
   ["apps", "app", "node_modules"],
   ["apps", "home", "node_modules"],
+];
+const MILADY_SINGLETON_DEPENDENCY_LINKS = [
+  {
+    packageDir: path.join("eliza", "packages", "agent"),
+    dependencies: ["drizzle-orm"],
+  },
+  {
+    packageDir: path.join("eliza", "packages", "app-core"),
+    dependencies: ["drizzle-orm"],
+  },
 ];
 const ELIZA_AGENT_SKILLS_PLUGIN_BUILD = {
   label: "@elizaos/plugin-agent-skills",
@@ -682,17 +684,7 @@ export function getTemporaryElizaWorkspaceEntries(
     { pathExists },
   ).map(({ workspaceEntry }) => workspaceEntry);
 
-  const unpublishedStubWorkspaceEntries =
-    UNPUBLISHED_ELIZA_PLUGIN_CI_STUBS.filter(
-      ({ stubRelativePath, workspaceEntry }) => {
-        return (
-          pathExists(path.join(elizaRoot, stubRelativePath, "package.json")) &&
-          !pathExists(path.join(elizaRoot, workspaceEntry, "package.json"))
-        );
-      },
-    ).map(({ stubRelativePath }) => stubRelativePath);
-
-  const cloudBillingWorkspace = "cloud/packages/services/billing";
+  const cloudBillingWorkspace = "cloud/packages/billing";
   const cloudBillingPackageJson = path.join(
     elizaRoot,
     cloudBillingWorkspace,
@@ -700,16 +692,11 @@ export function getTemporaryElizaWorkspaceEntries(
   );
   const cloudBillingWorkspaceEntry =
     pathExists(cloudBillingPackageJson) &&
-    !optionalPluginWorkspaceEntries.includes(cloudBillingWorkspace) &&
-    !unpublishedStubWorkspaceEntries.includes(cloudBillingWorkspace)
+    !optionalPluginWorkspaceEntries.includes(cloudBillingWorkspace)
       ? [cloudBillingWorkspace]
       : [];
 
-  return [
-    ...optionalPluginWorkspaceEntries,
-    ...unpublishedStubWorkspaceEntries,
-    ...cloudBillingWorkspaceEntry,
-  ];
+  return [...optionalPluginWorkspaceEntries, ...cloudBillingWorkspaceEntry];
 }
 
 export function getMissingConditionalElizaWorkspaceEntries(
@@ -924,87 +911,6 @@ function applyOptionalElizaPluginFallback(elizaRoot, missingPlugins) {
   }
 
   return changedFiles;
-}
-
-/**
- * Inject overrides into `eliza/package.json` for @elizaos/* plugins that live
- * in the root repo's CI stub directory but are not published on npm. Without
- * these overrides, `bun install --cwd eliza` fails to resolve the workspace:*
- * specifiers in eliza/packages/agent and eliza/packages/app-core because the
- * local plugin package uses a different npm scope (@miladyai/*).
- *
- * The overrides are idempotent: re-running is safe if they are already present.
- */
-export function applyUnpublishedPluginStubOverrides(
-  elizaRoot,
-  { pathExists = existsSync } = {},
-) {
-  const packageJsonPath = path.join(elizaRoot, "package.json");
-  if (!pathExists(packageJsonPath)) {
-    return 0;
-  }
-
-  const raw = readFileSync(packageJsonPath, "utf8");
-  let pkg;
-  try {
-    pkg = JSON.parse(raw);
-  } catch {
-    return 0;
-  }
-
-  if (typeof pkg !== "object" || pkg === null) {
-    return 0;
-  }
-
-  const overrides =
-    typeof pkg.overrides === "object" && pkg.overrides !== null
-      ? pkg.overrides
-      : {};
-  let changed = false;
-
-  for (const {
-    packageName,
-    stubRelativePath,
-    workspaceEntry,
-  } of UNPUBLISHED_ELIZA_PLUGIN_CI_STUBS) {
-    const stubAbsolutePath = path.resolve(elizaRoot, stubRelativePath);
-    const stubPackageJsonPath = path.join(stubAbsolutePath, "package.json");
-    const realWorkspacePackageJsonPath = path.join(
-      elizaRoot,
-      workspaceEntry,
-      "package.json",
-    );
-    const specifier = `file:${stubRelativePath}`;
-    const shouldUseStub =
-      pathExists(stubPackageJsonPath) &&
-      !pathExists(realWorkspacePackageJsonPath);
-
-    if (!shouldUseStub) {
-      if (overrides[packageName] === specifier) {
-        delete overrides[packageName];
-        changed = true;
-      }
-      continue;
-    }
-
-    if (overrides[packageName] === specifier) {
-      continue;
-    }
-    overrides[packageName] = specifier;
-    changed = true;
-  }
-
-  if (!changed) {
-    return 0;
-  }
-
-  if (Object.keys(overrides).length === 0) {
-    delete pkg.overrides;
-  } else {
-    pkg.overrides = overrides;
-  }
-  writePackageJson(packageJsonPath, raw, pkg);
-  return UNPUBLISHED_ELIZA_PLUGIN_CI_STUBS.length;
 }
 
 function getForceEnvKey(env = process.env) {
@@ -1627,6 +1533,53 @@ export function ensurePluginDependencyLinks(
   return linkedDependencies;
 }
 
+export function ensureMiladySingletonDependencyLinks(
+  repoRoot = DEFAULT_REPO_ROOT,
+) {
+  let linkedDependencies = 0;
+  const searchRoots = [repoRoot, getRepoElizaRoot(repoRoot)];
+
+  for (const {
+    packageDir: relativePackageDir,
+    dependencies,
+  } of MILADY_SINGLETON_DEPENDENCY_LINKS) {
+    const packageDir = path.join(repoRoot, relativePackageDir);
+    if (!existsSync(packageDir)) {
+      continue;
+    }
+
+    for (const dependencyName of dependencies) {
+      const installedDependencyDir = findInstalledPackageDir(
+        repoRoot,
+        dependencyName,
+        undefined,
+        null,
+        { searchRoots },
+      );
+      if (!installedDependencyDir) {
+        continue;
+      }
+
+      const dependencyLinkPath = path.join(
+        packageDir,
+        "node_modules",
+        ...dependencyName.split("/"),
+      );
+      if (createPackageLink(dependencyLinkPath, installedDependencyDir)) {
+        linkedDependencies += 1;
+      }
+    }
+  }
+
+  if (linkedDependencies > 0) {
+    console.log(
+      `[setup-upstreams] Linked ${linkedDependencies} Milady singleton dependency ${linkedDependencies === 1 ? "entry" : "entries"}`,
+    );
+  }
+
+  return linkedDependencies;
+}
+
 export function getPublishedElizaPackageSpecs(repoRoot = DEFAULT_REPO_ROOT) {
   const rootPackageJson = readPackageJson(repoRoot);
   if (!rootPackageJson) {
@@ -1842,13 +1795,6 @@ async function ensureElizaDependencies(elizaRoot) {
         .join(", ")}); updated ${changedFiles} package.json file${
         changedFiles === 1 ? "" : "s"
       }.`,
-    );
-  }
-
-  const stubOverrides = applyUnpublishedPluginStubOverrides(elizaRoot);
-  if (stubOverrides > 0) {
-    console.log(
-      `[setup-upstreams] Added ${stubOverrides} unpublished plugin stub override(s) to eliza/package.json`,
     );
   }
 
@@ -2190,59 +2136,6 @@ export function patchPluginBuildTscBinPaths(
   return patchedFiles;
 }
 
-export function patchPluginManagerWindowsDtsBuild(
-  pluginsRoot,
-  { pathExists = existsSync } = {},
-) {
-  const packageDir = path.join(
-    pluginsRoot,
-    "plugin-plugin-manager",
-    "typescript",
-  );
-  const packageJsonPath = path.join(packageDir, "package.json");
-  const tsupConfigPath = path.join(packageDir, "tsup.config.ts");
-
-  if (!pathExists(packageJsonPath) || !pathExists(tsupConfigPath)) {
-    return 0;
-  }
-
-  let patchedFiles = 0;
-  const packageJsonRaw = readFileSync(packageJsonPath, "utf8");
-  const packageJson = JSON.parse(packageJsonRaw);
-  const scripts =
-    packageJson && typeof packageJson === "object" ? packageJson.scripts : null;
-
-  if (scripts?.build === "tsup && tsc --noEmit") {
-    scripts.build =
-      "tsup && tsc --emitDeclarationOnly -p tsconfig.build.json && tsc --noEmit";
-    const indent = packageJsonRaw.match(/^(\s+)"/m)?.[1] ?? "  ";
-    writeFileSync(
-      packageJsonPath,
-      `${JSON.stringify(packageJson, null, indent)}\n`,
-    );
-    patchedFiles += 1;
-  }
-
-  const tsupConfig = readFileSync(tsupConfigPath, "utf8");
-  const patchedTsupConfig = tsupConfig.replace(
-    "dts: true, // require DTS so we get d.ts in the dist folder on npm",
-    'dts: process.platform === "win32" ? false : true, // Windows tsup DTS is flaky; tsc emits declarations below.',
-  );
-
-  if (patchedTsupConfig !== tsupConfig) {
-    writeFileSync(tsupConfigPath, patchedTsupConfig);
-    patchedFiles += 1;
-  }
-
-  if (patchedFiles > 0) {
-    console.log(
-      `[setup-upstreams] Patched plugin-plugin-manager Windows DTS build (${patchedFiles} file${patchedFiles === 1 ? "" : "s"})`,
-    );
-  }
-
-  return patchedFiles;
-}
-
 export async function ensurePluginBuildOutputs(
   pluginsRoot,
   { pathExists = existsSync, runCommandImpl = runCommand } = {},
@@ -2250,7 +2143,6 @@ export async function ensurePluginBuildOutputs(
   ensurePluginAnthropicBunTypes(pluginsRoot, { pathExists });
   ensurePluginTelegramNodeTypes(pluginsRoot, { pathExists });
   patchPluginBuildTscBinPaths(pluginsRoot, { pathExists });
-  patchPluginManagerWindowsDtsBuild(pluginsRoot, { pathExists });
   for (const packageDir of discoverPluginPackageDirs(pluginsRoot)) {
     const packageJson = readPackageJson(packageDir);
     if (!packageJson?.name?.startsWith("@elizaos/")) {
@@ -2320,12 +2212,6 @@ export async function setupUpstreams(repoRoot = DEFAULT_REPO_ROOT) {
             );
           }
         }
-        const stubOverrides = applyUnpublishedPluginStubOverrides(elizaRoot);
-        if (stubOverrides > 0) {
-          console.log(
-            `[setup-upstreams] Added ${stubOverrides} unpublished plugin stub override(s) to eliza/package.json`,
-          );
-        }
         applyMiladyCopyPatches(elizaRoot);
         applyTypeScriptIgnoreDeprecationsCompatPatch(elizaRoot);
         applyLifeOpsLucideCompatPatch(elizaRoot);
@@ -2357,6 +2243,7 @@ export async function setupUpstreams(repoRoot = DEFAULT_REPO_ROOT) {
   await ensureElizaBuildOutputs(elizaRoot);
 
   ensurePluginDependencyLinks(repoRoot, pluginsRoot);
+  ensureMiladySingletonDependencyLinks(repoRoot);
   applyPluginAnthropicBunRuntimePatch(elizaRoot);
   applyPluginAnthropicCliUsagePatch(elizaRoot);
   await ensurePluginBuildOutputs(pluginsRoot);

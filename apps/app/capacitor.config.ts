@@ -1,5 +1,31 @@
 import type { CapacitorConfig } from "@capacitor/cli";
+import {
+  parseAllowedHostEnv,
+  toCapacitorAllowNavigation,
+} from "./allowed-hosts";
 import appConfig from "./app.config";
+
+type CapacitorAllowNavigation = NonNullable<
+  NonNullable<CapacitorConfig["server"]>["allowNavigation"]
+>;
+
+const allowNavigation: CapacitorAllowNavigation = [
+  "localhost",
+  "127.0.0.1",
+  "*.elizacloud.ai",
+  "app.milady.ai",
+  "cloud.milady.ai",
+  "*.milady.ai",
+  "rs-sdk-demo.fly.dev",
+  "*.fly.dev",
+  "hyperscape.gg",
+  "*.hyperscape.gg",
+  ...toCapacitorAllowNavigation(
+    parseAllowedHostEnv(
+      process.env.ELIZA_ALLOWED_HOSTS ?? process.env.MILADY_ALLOWED_HOSTS,
+    ),
+  ),
+];
 
 const config: CapacitorConfig = {
   appId: appConfig.appId,
@@ -8,19 +34,9 @@ const config: CapacitorConfig = {
   server: {
     androidScheme: "https",
     iosScheme: "https",
-    // Allow the webview to connect to the embedded API server and game servers
-    allowNavigation: [
-      "localhost",
-      "127.0.0.1",
-      "*.elizacloud.ai",
-      "app.milady.ai",
-      "cloud.milady.ai",
-      "*.milady.ai",
-      "rs-sdk-demo.fly.dev",
-      "*.fly.dev",
-      "hyperscape.gg",
-      "*.hyperscape.gg",
-    ],
+    // Self-hosters add their own domains via MILADY_ALLOWED_HOSTS
+    // (build-time env, comma-separated). Listed entries are baseline.
+    allowNavigation,
   },
   plugins: {
     Keyboard: {

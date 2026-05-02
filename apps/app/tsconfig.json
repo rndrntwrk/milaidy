@@ -43,6 +43,10 @@
       "@elizaos/app-lifeops/*": ["./eliza/apps/app-lifeops/src/*"],
       "@elizaos/app-shopify": ["./eliza/apps/app-shopify/src/index.ts"],
       "@elizaos/app-shopify/*": ["./eliza/apps/app-shopify/src/*"],
+      "@elizaos/app-hyperliquid": ["./eliza/apps/app-hyperliquid/src/index.ts"],
+      "@elizaos/app-hyperliquid/*": ["./eliza/apps/app-hyperliquid/src/*"],
+      "@elizaos/app-polymarket": ["./eliza/apps/app-polymarket/src/index.ts"],
+      "@elizaos/app-polymarket/*": ["./eliza/apps/app-polymarket/src/*"],
       "@elizaos/app-steward": ["./eliza/apps/app-steward/src/index.ts"],
       "@elizaos/app-steward/*": ["./eliza/apps/app-steward/src/*"],
       "@elizaos/app-screenshare": ["./eliza/apps/app-screenshare/src/index.ts"],
@@ -53,6 +57,12 @@
       "@elizaos/app-vincent/*": ["./eliza/apps/app-vincent/src/*"],
       "@elizaos/agent": ["./eliza/packages/agent/src/index.ts"],
       "@elizaos/agent/*": ["./eliza/packages/agent/src/*"],
+      "@elizaos/plugin-browser-bridge": [
+        "./eliza/plugins/plugin-browser-bridge/src/index.ts"
+      ],
+      "@elizaos/plugin-browser-bridge/*": [
+        "./eliza/plugins/plugin-browser-bridge/src/*"
+      ],
       "@elizaos/core": ["./eliza/packages/typescript/src/index.ts"],
       "@elizaos/core/*": ["./eliza/packages/typescript/src/*"],
       "@elizaos/shared": ["./eliza/packages/shared/src/index.ts"],

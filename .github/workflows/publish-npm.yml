@@ -4,7 +4,9 @@ name: Publish npm
 #
 # Channel mapping:
 #   - Stable releases (v2.0.0)           → dist-tag "latest"
+#   - Canary releases (v2.0.0-alpha.1)   → dist-tag "canary"
 #   - Beta releases (v2.0.0-beta.1)      → dist-tag "beta"
+#   - RC releases (v2.0.0-rc.1)          → dist-tag "rc"
 #   - Nightly builds are handled by nightly.yml
 #
 # Triggers:
@@ -68,8 +70,10 @@ jobs:
             DIST_TAG="nightly"
           elif [[ -z "$DIST_TAG" ]] && echo "$VERSION" | grep -qE 'beta'; then
             DIST_TAG="beta"
-          elif [[ -z "$DIST_TAG" ]] && echo "$VERSION" | grep -qE 'alpha|rc'; then
-            DIST_TAG="next"
+          elif [[ -z "$DIST_TAG" ]] && echo "$VERSION" | grep -qE 'alpha'; then
+            DIST_TAG="canary"
+          elif [[ -z "$DIST_TAG" ]] && echo "$VERSION" | grep -qE 'rc'; then
+            DIST_TAG="rc"
           elif [[ -z "$DIST_TAG" ]]; then
             DIST_TAG="latest"
           fi

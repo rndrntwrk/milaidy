@@ -6,6 +6,7 @@ import { repoRoot } from "./repo-root";
 import {
   getElizaCoreRolesEntry,
   getOptionalResolvedAliases,
+  getWorkspacePluginAliases,
 } from "./workspace-aliases";
 
 const elizaCoreEntry = getElizaCoreEntry(repoRoot);
@@ -103,6 +104,7 @@ const unitAliasEntries = [
         ]
       : [],
   ),
+  ...getWorkspacePluginAliases(repoRoot, ["plugin-browser-bridge"]),
 ];
 
 export default {

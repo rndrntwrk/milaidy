@@ -1,4 +1,4 @@
-# Agent Release: build-first release pipeline.
+# Canonical Release: build-first release pipeline.
 #
 # Flow: decide (evaluate + trust) → version → FULL BUILD MATRIX → tag → publish
 # Builds are verified BEFORE any tag or release is created.
@@ -6,10 +6,10 @@
 # Triggers:
 #   - PR merged to develop: auto-evaluates if enough changes warrant a release
 #   - `release-ready` label on issue: immediate release
-#   - workflow_dispatch: manual release with optional stable/version override
+#   - workflow_dispatch: manual release with channel/version override
 #
 # Trust-gated: only org members or legendary/trusted contributors (75+).
-name: Agent Release
+name: Release
 
 on:
   issues:
@@ -19,13 +19,23 @@ on:
     branches: [develop]
   workflow_dispatch:
     inputs:
+      channel:
+        description: "Release channel"
+        required: false
+        type: choice
+        default: canary
+        options:
+          - canary
+          - beta
+          - rc
+          - stable
       stable:
-        description: "Create a stable release (not alpha)"
+        description: "Deprecated: use channel=stable"
         required: false
         type: boolean
         default: false
       version_override:
-        description: "Explicit version (e.g. 2.0.0-alpha.126). Leave empty for auto-bump."
+        description: "Explicit version (e.g. 2.0.0-alpha.126, 2.0.0-beta.1, 2.0.0-rc.1, 2.0.0). Leave empty for auto-bump."
         required: false
         type: string
 
@@ -175,6 +185,12 @@ jobs:
       version: ${{ steps.ver.outputs.version }}
       tag: ${{ steps.ver.outputs.tag }}
       prerelease: ${{ steps.ver.outputs.prerelease }}
+      channel: ${{ steps.ver.outputs.channel }}
+      npm_dist_tag: ${{ steps.ver.outputs.npm_dist_tag }}
+      android_track: ${{ steps.ver.outputs.android_track }}
+      apple_track: ${{ steps.ver.outputs.apple_track }}
+      snap_release: ${{ steps.ver.outputs.snap_release }}
+      update_homebrew: ${{ steps.ver.outputs.update_homebrew }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -184,6 +200,7 @@ jobs:
       - name: Compute next version
         id: ver
         env:
+          CHANNEL_INPUT: ${{ github.event.inputs.channel || '' }}
           STABLE: ${{ github.event.inputs.stable || 'false' }}
           VERSION_OVERRIDE: ${{ github.event.inputs.version_override || '' }}
         run: |
@@ -194,26 +211,114 @@ jobs:
             echo "${major}.${minor}.$((patch + 1))"
           }
 
+          highest_version() {
+            grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1
+          }
+
+          latest_stable_tag() {
+            git tag | grep '^v[0-9]\+\.[0-9]\+\.[0-9]\+$' | sort -V | tail -1 || true
+          }
+
+          latest_prerelease_tag() {
+            local ident="$1"
+            git tag | grep "^v[0-9]\+\.[0-9]\+\.[0-9]\+-${ident}\.[0-9]\+$" | sort -V | tail -1 || true
+          }
+
+          prerelease_base() {
+            sed 's/^v//' | sed 's/-[0-9A-Za-z][0-9A-Za-z.-]*$//'
+          }
+
+          current_train_base() {
+            local latest_stable alpha beta rc stable_base next_stable
+            latest_stable="$(latest_stable_tag)"
+            alpha="$(latest_prerelease_tag alpha | prerelease_base)"
+            beta="$(latest_prerelease_tag beta | prerelease_base)"
+            rc="$(latest_prerelease_tag rc | prerelease_base)"
+            if [ -n "$latest_stable" ]; then
+              stable_base="${latest_stable#v}"
+              next_stable="$(bump_patch "$stable_base")"
+            else
+              next_stable="2.0.0"
+            fi
+            printf '%s\n' "$alpha" "$beta" "$rc" "$next_stable" | highest_version
+          }
+
+          CHANNEL="$CHANNEL_INPUT"
+          if [ "$STABLE" = "true" ]; then
+            if [ -n "$CHANNEL" ] && [ "$CHANNEL" != "canary" ] && [ "$CHANNEL" != "stable" ]; then
+              echo "::error::stable=true conflicts with channel=$CHANNEL"
+              exit 1
+            fi
+            CHANNEL="stable"
+          elif [ -z "$CHANNEL" ]; then
+            CHANNEL="canary"
+          fi
+          case "$CHANNEL" in
+            canary|beta|rc|stable) ;;
+            *)
+              echo "::error::Invalid release channel: $CHANNEL"
+              exit 1
+              ;;
+          esac
+
+          case "$CHANNEL" in
+            canary)
+              PRE_ID="alpha"
+              NPM_DIST_TAG="canary"
+              ANDROID_TRACK="internal"
+              APPLE_TRACK="testflight"
+              SNAP_RELEASE="edge"
+              UPDATE_HOMEBREW="false"
+              ;;
+            beta)
+              PRE_ID="beta"
+              NPM_DIST_TAG="beta"
+              ANDROID_TRACK="beta"
+              APPLE_TRACK="testflight"
+              SNAP_RELEASE="beta"
+              UPDATE_HOMEBREW="false"
+              ;;
+            rc)
+              PRE_ID="rc"
+              NPM_DIST_TAG="rc"
+              ANDROID_TRACK="internal"
+              APPLE_TRACK="testflight"
+              SNAP_RELEASE="candidate"
+              UPDATE_HOMEBREW="false"
+              ;;
+            stable)
+              PRE_ID=""
+              NPM_DIST_TAG="latest"
+              ANDROID_TRACK="production"
+              APPLE_TRACK="app-store"
+              SNAP_RELEASE="stable"
+              UPDATE_HOMEBREW="true"
+              ;;
+          esac
+
           if [ -n "$VERSION_OVERRIDE" ]; then
             VERSION="${VERSION_OVERRIDE#v}"
-          elif [ "$STABLE" = "true" ]; then
-            LATEST_ALPHA="$(git tag | grep '^v[0-9]\+\.[0-9]\+\.[0-9]\+-alpha\.[0-9]\+$' | sort -V | tail -1 || true)"
-            LATEST_STABLE="$(git tag | grep '^v[0-9]\+\.[0-9]\+\.[0-9]\+$' | sort -V | tail -1 || true)"
-            ALPHA_BASE="$(echo "$LATEST_ALPHA" | sed 's/^v//' | sed 's/-alpha\.[0-9]*$//' )"
+          elif [ "$CHANNEL" = "stable" ]; then
+            LATEST_ALPHA="$(latest_prerelease_tag alpha)"
+            LATEST_BETA="$(latest_prerelease_tag beta)"
+            LATEST_RC="$(latest_prerelease_tag rc)"
+            LATEST_STABLE="$(latest_stable_tag)"
+            RELEASE_BASE="$(printf '%s\n' "$LATEST_ALPHA" "$LATEST_BETA" "$LATEST_RC" | prerelease_base | highest_version)"
             STABLE_VERSION="${LATEST_STABLE#v}"
 
-            if [ -z "$LATEST_STABLE" ] && [ -z "$LATEST_ALPHA" ]; then
+            if [ -z "$LATEST_STABLE" ] && [ -z "$RELEASE_BASE" ]; then
               VERSION="2.0.0"
-            elif [ -z "$LATEST_STABLE" ]; then
-              VERSION="$ALPHA_BASE"
-            elif [ -n "$ALPHA_BASE" ] && [ "$(printf '%s\n%s\n' "$ALPHA_BASE" "$STABLE_VERSION" | sort -V | tail -1)" = "$ALPHA_BASE" ] && [ "$ALPHA_BASE" != "$STABLE_VERSION" ]; then
-              VERSION="$ALPHA_BASE"
+            elif [ -z "$STABLE_VERSION" ]; then
+              VERSION="$RELEASE_BASE"
+            elif [ -n "$RELEASE_BASE" ] && [ "$(printf '%s\n%s\n' "$RELEASE_BASE" "$STABLE_VERSION" | sort -V | tail -1)" = "$RELEASE_BASE" ] && [ "$RELEASE_BASE" != "$STABLE_VERSION" ]; then
+              VERSION="$RELEASE_BASE"
             else
               VERSION="$(bump_patch "$STABLE_VERSION")"
             fi
           else
-            LATEST="$(git tag | grep '^v[0-9]\+\.[0-9]\+\.[0-9]\+-alpha\.[0-9]\+$' | sort -V | tail -1 || true)"
-            if [ -z "$LATEST" ]; then VERSION="2.0.0-alpha.1"
+            LATEST="$(latest_prerelease_tag "$PRE_ID")"
+            if [ -z "$LATEST" ]; then
+              VERSION="$(current_train_base)-${PRE_ID}.1"
             else
               PREFIX=$(echo "$LATEST" | sed 's/\.[0-9]*$/\./' | sed 's/^v//')
               NUM=$(echo "$LATEST" | grep -oE '[0-9]+$')
@@ -224,17 +329,37 @@ jobs:
             echo "::error::Invalid release version: $VERSION"
             exit 1
           fi
+          case "$CHANNEL" in
+            canary)
+              [[ "$VERSION" =~ -alpha\.[0-9]+$ ]] || { echo "::error::canary releases must use an alpha version, got $VERSION"; exit 1; }
+              ;;
+            beta)
+              [[ "$VERSION" =~ -beta\.[0-9]+$ ]] || { echo "::error::beta releases must use a beta version, got $VERSION"; exit 1; }
+              ;;
+            rc)
+              [[ "$VERSION" =~ -rc\.[0-9]+$ ]] || { echo "::error::rc releases must use an rc version, got $VERSION"; exit 1; }
+              ;;
+            stable)
+              [[ "$VERSION" != *-* ]] || { echo "::error::stable releases must not use a prerelease version, got $VERSION"; exit 1; }
+              ;;
+          esac
           if git ls-remote --exit-code --tags https://github.com/milady-ai/milady.git "refs/tags/v$VERSION" >/dev/null 2>&1; then
             echo "::error::Release tag v$VERSION already exists in the canonical repository"
             exit 1
           fi
-          PRERELEASE=$( [ "$STABLE" = "true" ] && echo false || echo true )
+          PRERELEASE=$( [ "$CHANNEL" = "stable" ] && echo false || echo true )
           {
             echo "version=$VERSION"
             echo "tag=v$VERSION"
             echo "prerelease=$PRERELEASE"
+            echo "channel=$CHANNEL"
+            echo "npm_dist_tag=$NPM_DIST_TAG"
+            echo "android_track=$ANDROID_TRACK"
+            echo "apple_track=$APPLE_TRACK"
+            echo "snap_release=$SNAP_RELEASE"
+            echo "update_homebrew=$UPDATE_HOMEBREW"
           } >> "$GITHUB_OUTPUT"
-          echo "Next: v$VERSION (prerelease=$PRERELEASE)"
+          echo "Next: v$VERSION (channel=$CHANNEL, prerelease=$PRERELEASE)"
 
   # ── 3. FULL BUILD MATRIX (blocking — electrobun + generic/cloud docker) ─
   # ── P0 auth smoke — cloud-provisioned bootstrap exchange ────────────
@@ -282,6 +407,7 @@ jobs:
       tag: ${{ needs.version.outputs.tag }}
       draft: false
       publish_release: false
+      channel: ${{ needs.version.outputs.channel }}
     secrets: inherit
 
   build-docker:
@@ -316,6 +442,13 @@ jobs:
         with:
           disable-local-eliza-workspace: "true"
           install-command: bun install --ignore-scripts --no-frozen-lockfile
+      - name: Generate eliza i18n keyword data
+        # @elizaos/shared stays workspace-local (file:./eliza/packages/shared)
+        # even with disable-local-eliza-workspace, and tsdown bundles its
+        # source. The generated/validation-keyword-data.js sibling is
+        # gitignored, so without this step the rolldown bundle fails to
+        # resolve it on a fresh checkout.
+        run: node eliza/packages/app-core/scripts/ensure-shared-i18n-data.mjs
       - name: Build
         run: |
           bunx tsdown
@@ -332,6 +465,7 @@ jobs:
   build-android:
     name: Android AAB build
     needs: [version]
+    if: needs.version.outputs.channel != 'canary'
     runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@v4
@@ -353,6 +487,7 @@ jobs:
           run-postinstall: "true"
           skip-avatar-clone: "true"
           no-vision-deps: "true"
+          preserve-android-sdk: "true"
       - name: Restore legacy electrobun compatibility path
         run: node scripts/ensure-legacy-electrobun-compat.mjs
       - name: Install Android NDK
@@ -380,6 +515,7 @@ jobs:
   build-snap:
     name: Snap build
     needs: [version]
+    if: needs.version.outputs.channel != 'canary'
     runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
     env:
       MILADY_SKIP_LOCAL_UPSTREAMS: "1"
@@ -413,22 +549,49 @@ jobs:
           else
             echo "::warning::Unable to chown / to root:root (sudo unavailable or passwordless sudo disabled). snapd may fail downstream. Remediation: run this job on a standard ubuntu-latest / ubuntu-24.04 GitHub-hosted runner, or configure the container image so / is owned by 0:0."
           fi
+      - name: Probe LXD availability for snap build
+        id: snap-env
+        run: |
+          set -euo pipefail
+          if snap list lxd >/dev/null 2>&1; then
+            echo "LXD is already installed."
+            echo "can-build=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          for attempt in 1 2 3; do
+            if sudo snap install lxd; then
+              echo "can-build=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "::warning::Unable to install LXD from the snap store after ${attempt} attempts; skipping snap package validation for this release run."
+              echo "can-build=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            sleep $((attempt * 20))
+          done
       - uses: snapcore/action-build@v1
         id: snap
+        if: steps.snap-env.outputs.can-build == 'true'
       - name: Verify snap
+        if: steps.snap-env.outputs.can-build == 'true'
         run: sudo snap install --dangerous ${{ steps.snap.outputs.snap }}
       - name: Upload snap artifact
-        if: success()
+        if: success() && steps.snap-env.outputs.can-build == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: snap-package
           path: ${{ steps.snap.outputs.snap }}
           retention-days: 30
           if-no-files-found: error
+      - name: Record skipped snap package validation
+        if: steps.snap-env.outputs.can-build != 'true'
+        run: echo "Snap package validation skipped because LXD could not be installed from the snap store on this runner."
 
   build-flatpak:
     name: Flatpak build
     needs: [version]
+    if: needs.version.outputs.channel != 'canary'
     runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@v4
@@ -464,6 +627,7 @@ jobs:
   build-pypi:
     name: PyPI package build
     needs: [version]
+    if: needs.version.outputs.channel != 'canary'
     runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@v4
@@ -495,6 +659,7 @@ jobs:
   build-debian:
     name: Debian package build
     needs: [version]
+    if: needs.version.outputs.channel != 'canary'
     runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@v4
@@ -568,6 +733,7 @@ jobs:
   build-ios:
     name: iOS build validation
     needs: [version]
+    if: needs.version.outputs.channel != 'canary'
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
@@ -587,6 +753,8 @@ jobs:
           no-vision-deps: "true"
       - name: Restore legacy electrobun compatibility path
         run: node scripts/ensure-legacy-electrobun-compat.mjs
+      - name: Patch mobile release build compatibility
+        run: node scripts/patch-mobile-build-release-compat.mjs
       - name: Build iOS simulator app
         run: node eliza/packages/app-core/scripts/run-mobile-build.mjs ios
         env:
@@ -604,6 +772,7 @@ jobs:
   build-macos-store:
     name: macOS App Store build validation
     needs: [version]
+    if: needs.version.outputs.channel != 'canary'
     runs-on: macos-14
     env:
       MILADY_SKIP_LOCAL_UPSTREAMS: ""
@@ -656,26 +825,27 @@ jobs:
     runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@v4
+      - name: Initialize eliza docs
+        run: |
+          git submodule sync -- eliza
+          git submodule update --init --depth=1 eliza
       - uses: actions/setup-node@v4
         with:
           node-version: 22
       - name: Validate docs config
-        run: node -e "const c = require('./docs/docs.json'); console.log('Docs config valid:', c.name)"
+        run: node -e "const c = require('./eliza/docs/docs.json'); console.log('Docs config valid:', c.name)"
       - name: Check for broken internal links
         run: |
-          find docs -name '*.md' -o -name '*.mdx' | head -5 | while read -r f; do
+          find eliza/docs -name '*.md' -o -name '*.mdx' | head -5 | while read -r f; do
             grep -oE '\]\([^)]+\)' "$f" | grep -v 'http' | head -3
           done
           echo "Docs link check complete"
 
-  # ── 4. Electrobun + Docker + npm green → tag and publish ────────────
-  # The GitHub release is created with GITHUB_TOKEN for scoped permissions.
-  # Post-release distribution is called explicitly below instead of relying
-  # on release-event fan-out semantics.
-  publish:
-    name: Tag & publish release
+  release-gate:
+    name: Release gate
     needs:
       [
+        decide,
         version,
         smoke-auth,
         build-electrobun,
@@ -692,22 +862,126 @@ jobs:
         build-homepage,
         build-docs,
       ]
+    if: always()
+    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    steps:
+      - name: Require release prerequisites
+        env:
+          DECIDE_RESULT: ${{ needs.decide.result }}
+          PROCEED: ${{ needs.decide.outputs.proceed }}
+          VERSION_RESULT: ${{ needs.version.result }}
+          VERSION: ${{ needs.version.outputs.version }}
+          TAG: ${{ needs.version.outputs.tag }}
+          CHANNEL: ${{ needs.version.outputs.channel }}
+          FULL_DISTRIBUTION: ${{ needs.version.outputs.channel != 'canary' }}
+          SMOKE_AUTH_RESULT: ${{ needs.smoke-auth.result }}
+          BUILD_ELECTROBUN_RESULT: ${{ needs.build-electrobun.result }}
+          BUILD_DOCKER_RESULT: ${{ needs.build-docker.result }}
+          BUILD_CLOUD_IMAGE_RESULT: ${{ needs.build-cloud-image.result }}
+          BUILD_NPM_RESULT: ${{ needs.build-npm.result }}
+          BUILD_ANDROID_RESULT: ${{ needs.build-android.result }}
+          BUILD_SNAP_RESULT: ${{ needs.build-snap.result }}
+          BUILD_FLATPAK_RESULT: ${{ needs.build-flatpak.result }}
+          BUILD_PYPI_RESULT: ${{ needs.build-pypi.result }}
+          BUILD_DEBIAN_RESULT: ${{ needs.build-debian.result }}
+          BUILD_IOS_RESULT: ${{ needs.build-ios.result }}
+          BUILD_MACOS_STORE_RESULT: ${{ needs.build-macos-store.result }}
+          BUILD_HOMEPAGE_RESULT: ${{ needs.build-homepage.result }}
+          BUILD_DOCS_RESULT: ${{ needs.build-docs.result }}
+        run: |
+          set -euo pipefail
+
+          if [ "$DECIDE_RESULT" != "success" ]; then
+            echo "::error::Release decision result was '$DECIDE_RESULT', expected success"
+            exit 1
+          fi
+
+          case "$PROCEED" in
+            true) ;;
+            false)
+              echo "Release decision returned proceed=false; publish jobs will stay skipped."
+              exit 0
+              ;;
+            *)
+              echo "::error::Release decision output proceed was '$PROCEED', expected true or false"
+              exit 1
+              ;;
+          esac
+
+          failed=0
+          require_success() {
+            local label="$1"
+            local result="$2"
+            if [ "$result" != "success" ]; then
+              echo "::error::$label result was '$result', expected success"
+              failed=1
+            fi
+          }
+
+          require_channel_result() {
+            local label="$1"
+            local result="$2"
+            local enabled="$3"
+            if [ "$enabled" = "true" ]; then
+              require_success "$label" "$result"
+              return
+            fi
+            case "$result" in
+              skipped|success) ;;
+              *)
+                echo "::error::$label result was '$result' while disabled for channel '$CHANNEL'; expected skipped"
+                failed=1
+                ;;
+            esac
+          }
+
+          require_non_empty() {
+            local label="$1"
+            local value="$2"
+            if [ -z "$value" ]; then
+              echo "::error::$label was empty"
+              failed=1
+            fi
+          }
+
+          require_success "Resolve version" "$VERSION_RESULT"
+          require_non_empty "Release version" "$VERSION"
+          require_non_empty "Release tag" "$TAG"
+          require_non_empty "Release channel" "$CHANNEL"
+          require_success "Auth bootstrap smoke" "$SMOKE_AUTH_RESULT"
+          require_success "Electrobun full matrix" "$BUILD_ELECTROBUN_RESULT"
+          require_success "Agent image build" "$BUILD_DOCKER_RESULT"
+          require_success "Cloud app image build" "$BUILD_CLOUD_IMAGE_RESULT"
+          require_success "npm package build" "$BUILD_NPM_RESULT"
+          require_channel_result "Android AAB build" "$BUILD_ANDROID_RESULT" "$FULL_DISTRIBUTION"
+          require_channel_result "Snap build" "$BUILD_SNAP_RESULT" "$FULL_DISTRIBUTION"
+          require_channel_result "Flatpak build" "$BUILD_FLATPAK_RESULT" "$FULL_DISTRIBUTION"
+          require_channel_result "PyPI package build" "$BUILD_PYPI_RESULT" "$FULL_DISTRIBUTION"
+          require_channel_result "Debian package build" "$BUILD_DEBIAN_RESULT" "$FULL_DISTRIBUTION"
+          require_channel_result "iOS build validation" "$BUILD_IOS_RESULT" "$FULL_DISTRIBUTION"
+          require_channel_result "macOS App Store build validation" "$BUILD_MACOS_STORE_RESULT" "$FULL_DISTRIBUTION"
+          require_success "Homepage build" "$BUILD_HOMEPAGE_RESULT"
+          require_success "Docs validation" "$BUILD_DOCS_RESULT"
+
+          if [ "$failed" -ne 0 ]; then
+            exit 1
+          fi
+
+          echo "All release gates passed for $TAG."
+
+  # ── 4. Electrobun + Docker + npm green → tag and publish ────────────
+  # The GitHub release is created with GITHUB_TOKEN for scoped permissions.
+  # Post-release distribution is called explicitly below instead of relying
+  # on release-event fan-out semantics.
+  publish:
+    name: Tag & publish release
+    needs: [decide, version, release-gate]
     if: >-
       always() &&
-      needs.smoke-auth.result == 'success' &&
-      needs.build-electrobun.result == 'success' &&
-      needs.build-docker.result == 'success' &&
-      needs.build-cloud-image.result == 'success' &&
-      needs.build-npm.result == 'success' &&
-      needs.build-android.result == 'success' &&
-      needs.build-snap.result == 'success' &&
-      needs.build-flatpak.result == 'success' &&
-      needs.build-pypi.result == 'success' &&
-      needs.build-debian.result == 'success' &&
-      needs.build-ios.result == 'success' &&
-      needs.build-macos-store.result == 'success' &&
-      needs.build-homepage.result == 'success' &&
-      needs.build-docs.result == 'success'
+      needs.decide.result == 'success' &&
+      needs.decide.outputs.proceed == 'true' &&
+      needs.version.result == 'success' &&
+      needs.release-gate.result == 'success'
     runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
     permissions:
       contents: write
@@ -726,6 +1000,11 @@ jobs:
         env:
           TAG: ${{ needs.version.outputs.tag }}
         run: |
+          if [ -z "$TAG" ]; then
+            echo "::error::Release tag is empty"
+            exit 1
+          fi
+
           if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
             echo "Tag $TAG already exists on origin; reusing existing tag"
             exit 0
@@ -771,7 +1050,9 @@ jobs:
         env:
           TAG: ${{ needs.version.outputs.tag }}
           PRERELEASE: ${{ needs.version.outputs.prerelease }}
-          NPM_RESULT: ${{ needs.build-npm.result }}
+          CHANNEL: ${{ needs.version.outputs.channel }}
+          ANDROID_TRACK: ${{ needs.version.outputs.android_track }}
+          APPLE_TRACK: ${{ needs.version.outputs.apple_track }}
           PREVIOUS_TAG: ${{ steps.changelog.outputs.previous_tag }}
           CHANGELOG_FILE: ${{ steps.changelog.outputs.file }}
         with:
@@ -780,7 +1061,7 @@ jobs:
             const fs = require('fs');
             const tag = process.env.TAG;
             const prerelease = process.env.PRERELEASE === 'true';
-            const npmOk = process.env.NPM_RESULT === 'success';
+            const channel = process.env.CHANNEL;
             const previousTag = process.env.PREVIOUS_TAG || '';
             const fullChangelog = fs.readFileSync(process.env.CHANGELOG_FILE, 'utf8').trim();
 
@@ -805,7 +1086,7 @@ jobs:
               body: [
                 `## ${tag}`,
                 '',
-                prerelease ? '⚠️ Pre-release (alpha)' : '✅ Stable release',
+                prerelease ? `Pre-release (${channel})` : 'Stable release',
                 '',
                 previousTag ? `**Previous tag:** ${previousTag}` : '**Previous tag:** none',
                 `**Triggered by:** @${context.actor}`,
@@ -814,7 +1095,7 @@ jobs:
                 '- ✅ Electrobun desktop — full matrix (macOS ARM, macOS Intel, Windows, Linux)',
                 '- ✅ Canonical agent image — built successfully',
                 '- ✅ Cloud app image — built successfully',
-                npmOk ? '- ✅ npm package — built and validated' : '- ❌ npm package — build failed',
+                '- ✅ npm package — built and validated',
                 '',
                 generatedNotes ? '## Release notes' : null,
                 generatedNotes || null,
@@ -828,8 +1109,8 @@ jobs:
                 '- 🔄 Post-release distribution orchestrator → release-orchestrator.yml',
                 '- 🔄 npm publish → publish-npm.yml',
                 '- 🔄 PyPI / Snap / Debian / Flatpak → publish-packages.yml',
-                '- 🔄 Android → android-release.yml (Play Store track by channel)',
-                '- 🔄 iOS / macOS → apple-store-release.yml (TestFlight or App Store by channel)',
+                `- 🔄 Android → android-release.yml (${process.env.ANDROID_TRACK})`,
+                `- 🔄 iOS / macOS → apple-store-release.yml (${process.env.APPLE_TRACK})`,
                 '- 🔄 Homebrew → update-homebrew.yml',
                 '- 🔄 Homepage → deploy-web.yml',
               ].filter(Boolean).join('\n'),
@@ -895,7 +1176,9 @@ jobs:
   push-agent-image:
     name: Push agent image to GHCR
     needs: [version, publish]
-    if: needs.publish.result == 'success'
+    if: >-
+      needs.version.result == 'success' &&
+      needs.publish.result == 'success'
     uses: ./.github/workflows/build-docker.yml
     with:
       version: ${{ needs.version.outputs.tag }}
@@ -906,7 +1189,9 @@ jobs:
   push-cloud-image:
     name: Push cloud app image to GHCR
     needs: [version, publish]
-    if: needs.publish.result == 'success'
+    if: >-
+      needs.version.result == 'success' &&
+      needs.publish.result == 'success'
     uses: ./.github/workflows/build-cloud-image.yml
     with:
       version: ${{ needs.version.outputs.tag }}
@@ -917,14 +1202,19 @@ jobs:
   distribute-release:
     name: Distribute release
     needs: [version, publish, push-agent-image, push-cloud-image]
-    if: needs.publish.result == 'success' && needs.push-agent-image.result == 'success' && needs.push-cloud-image.result == 'success'
+    if: >-
+      needs.version.result == 'success' &&
+      needs.publish.result == 'success' &&
+      needs.push-agent-image.result == 'success' &&
+      needs.push-cloud-image.result == 'success'
     uses: ./.github/workflows/release-orchestrator.yml
     with:
       version: ${{ needs.version.outputs.version }}
+      channel: ${{ needs.version.outputs.channel }}
       publish_npm: true
-      publish_packages: true
-      publish_android: true
-      publish_apple: true
-      update_homebrew: true
+      publish_packages: ${{ needs.version.outputs.channel != 'canary' }}
+      publish_android: ${{ needs.version.outputs.channel != 'canary' }}
+      publish_apple: ${{ needs.version.outputs.channel != 'canary' }}
+      update_homebrew: ${{ needs.version.outputs.update_homebrew == 'true' }}
       deploy_homepage: true
     secrets: inherit
