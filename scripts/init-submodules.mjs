@@ -25,6 +25,11 @@ const LEGACY_ROOT_SUBMODULE_PATHS = ["cloud"];
 const SKIPPED_CLOUD_WORKSPACE_ENTRIES = [
   { packageJson: "package.json", workspaces: ["eliza/cloud/packages/sdk"] },
   { packageJson: "eliza/package.json", workspaces: ["cloud/packages/sdk"] },
+  {
+    packageJson:
+      "eliza/packages/app-core/deploy/cloud-agent-template/package.json",
+    workspaces: [],
+  },
 ];
 const SKIPPED_CLOUD_COUPLED_SUBMODULE_PATHS = new Set([
   "plugins/plugin-elizacloud",
