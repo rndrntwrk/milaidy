@@ -277,6 +277,19 @@ jobs:
       - name: Restore build metadata after test rebuilds
         run: node --import tsx scripts/write-build-info.ts
 
+      - name: Restore cloud template workspace contract
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+          const packagePath = "eliza/packages/app-core/deploy/cloud-agent-template/package.json";
+          if (!fs.existsSync(packagePath)) process.exit(0);
+          const pkg = JSON.parse(fs.readFileSync(packagePath, "utf8"));
+          if (pkg.dependencies?.["@elizaos/plugin-elizacloud"]) {
+            pkg.dependencies["@elizaos/plugin-elizacloud"] = "workspace:*";
+            fs.writeFileSync(packagePath, JSON.stringify(pkg, null, 2) + "\n");
+          }
+          NODE
+
       - name: Release readiness checks
         env:
           ELIZA_RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
