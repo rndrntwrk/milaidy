@@ -532,6 +532,55 @@ function formatError(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+type StartupPhaseFields = Record<
+  string,
+  string | number | boolean | null | undefined
+>;
+
+function formatStartupPhaseFields(fields: StartupPhaseFields = {}): string {
+  const parts = Object.entries(fields)
+    .filter(([, value]) => value !== undefined)
+    .map(([key, value]) => {
+      if (typeof value === "string") {
+        return `${key}=${JSON.stringify(value)}`;
+      }
+      return `${key}=${String(value)}`;
+    });
+
+  return parts.length > 0 ? ` ${parts.join(" ")}` : "";
+}
+
+async function withStartupPhase<T>(
+  phase: string,
+  fields: StartupPhaseFields,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const startedAt = Date.now();
+  logger.info(
+    `[eliza][startup] ${phase}:start${formatStartupPhaseFields(fields)}`,
+  );
+
+  try {
+    const result = await fn();
+    logger.info(
+      `[eliza][startup] ${phase}:done${formatStartupPhaseFields({
+        ...fields,
+        elapsedMs: Date.now() - startedAt,
+      })}`,
+    );
+    return result;
+  } catch (err) {
+    logger.error(
+      `[eliza][startup] ${phase}:error${formatStartupPhaseFields({
+        ...fields,
+        elapsedMs: Date.now() - startedAt,
+        error: formatError(err),
+      })}`,
+    );
+    throw err;
+  }
+}
+
 function trimEnvString(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
@@ -3743,7 +3792,15 @@ export async function startEliza(
     // 7c. Eagerly initialize the database adapter so it's fully ready
     //     BEFORE other plugins run their init(). When legacy/corrupt PGLite
     //     state causes startup aborts, reset the local DB dir and retry once.
-    await registerSqlPluginWithRecovery(runtime, sqlPlugin, config);
+    await withStartupPhase(
+      "sql-plugin-register",
+      {
+        provider: config.database?.provider ?? "pglite",
+        includesPgliteStartup:
+          (config.database?.provider ?? "pglite") === "pglite",
+      },
+      () => registerSqlPluginWithRecovery(runtime, sqlPlugin, config),
+    );
   } else {
     const loadedNames = resolvedPlugins.map((p) => p.name).join(", ");
     logger.error(
@@ -3764,7 +3821,14 @@ export async function startEliza(
   //     because local-embedding's heavier init hasn't completed yet.
   if (localEmbeddingPlugin) {
     configureLocalEmbeddingPlugin(localEmbeddingPlugin.plugin, config);
-    await runtime.registerPlugin(localEmbeddingPlugin.plugin);
+    await withStartupPhase(
+      "local-embedding-register",
+      {
+        model: process.env.LOCAL_EMBEDDING_MODEL ?? null,
+        dimensions: process.env.LOCAL_EMBEDDING_DIMENSIONS ?? null,
+      },
+      () => runtime.registerPlugin(localEmbeddingPlugin.plugin),
+    );
     logger.info(
       "[eliza] plugin-local-embedding pre-registered (TEXT_EMBEDDING ready)",
     );
@@ -3912,8 +3976,20 @@ export async function startEliza(
 
     // 8. Initialize the runtime (registers remaining plugins, starts services)
     assertPersistentDatabaseRequired(runtime);
-    await runtime.initialize();
-    await prepareRuntimeForTrajectoryCapture(runtime, "runtime.initialize()");
+    await withStartupPhase(
+      "runtime-initialize",
+      {
+        pluginCount: runtime.plugins?.length ?? 0,
+        includesPgliteVectorScan: true,
+      },
+      async () => {
+        await runtime.initialize();
+        await prepareRuntimeForTrajectoryCapture(
+          runtime,
+          "runtime.initialize()",
+        );
+      },
+    );
 
     // 8a. Apply role gating to wallet plugins (EVM, Solana) — admin-only actions.
     try {
@@ -3963,7 +4039,11 @@ export async function startEliza(
 
     try {
       if (runtimeKnowledgeEnabled(runtime)) {
-        await seedBundledKnowledge(runtime);
+        await withStartupPhase(
+          "bundled-knowledge-seed",
+          { agentId: runtime.agentId },
+          () => seedBundledKnowledge(runtime),
+        );
       } else {
         logger.info(
           "[eliza] Native knowledge disabled; skipping bundled knowledge seeding",

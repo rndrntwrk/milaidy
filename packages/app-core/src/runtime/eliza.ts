@@ -46,7 +46,11 @@ import {
 } from "@miladyai/shared/runtime-env";
 import { normalizeCharacterMessageExamples } from "../utils/character-message-examples.js";
 import { syncElizaEnvToMilady, syncMiladyEnvToEliza } from "../utils/env.js";
-import { ensureRuntimeSqlCompatibility } from "../utils/sql-compat.js";
+import {
+  ensureRuntimeSqlCompatibility,
+  executeRawSql,
+  sqlLiteral,
+} from "../utils/sql-compat.js";
 import type { EmbeddingProgressCallback } from "./embedding-manager-support.js";
 import {
   DEFAULT_MODELS_DIR,
@@ -95,6 +99,72 @@ type ErrorWithCause = Error & {
 
 /** Guards against registering signal handlers more than once. */
 let signalHandlersRegistered = false;
+
+type StartupLogFields = Record<
+  string,
+  string | number | boolean | null | undefined
+>;
+
+function formatStartupLogFields(fields: StartupLogFields = {}): string {
+  const parts = Object.entries(fields)
+    .filter(([, value]) => value !== undefined)
+    .map(([key, value]) => {
+      if (typeof value === "string") {
+        return `${key}=${JSON.stringify(value)}`;
+      }
+      return `${key}=${String(value)}`;
+    });
+
+  return parts.length > 0 ? ` ${parts.join(" ")}` : "";
+}
+
+function startupInfo(event: string, fields: StartupLogFields = {}): void {
+  logger.info(`[milady][startup] ${event}${formatStartupLogFields(fields)}`);
+}
+
+function startupWarn(event: string, fields: StartupLogFields = {}): void {
+  logger.warn(`[milady][startup] ${event}${formatStartupLogFields(fields)}`);
+}
+
+function startupError(event: string, fields: StartupLogFields = {}): void {
+  logger.error(`[milady][startup] ${event}${formatStartupLogFields(fields)}`);
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+async function withStartupPhase<T>(
+  phase: string,
+  fields: StartupLogFields,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const startedAt = Date.now();
+  startupInfo(`${phase}:start`, fields);
+
+  try {
+    const result = await fn();
+    startupInfo(`${phase}:done`, {
+      ...fields,
+      elapsedMs: Date.now() - startedAt,
+    });
+    return result;
+  } catch (error) {
+    startupError(`${phase}:error`, {
+      ...fields,
+      elapsedMs: Date.now() - startedAt,
+      error: errorMessage(error),
+    });
+    throw error;
+  }
+}
+
+function runtimeStartupFields(runtime: AgentRuntime): StartupLogFields {
+  return {
+    agentId: runtime.agentId,
+    agentName: runtime.character?.name ?? null,
+  };
+}
 
 export function isMiladyEdgeTtsDisabled(
   config: Parameters<typeof upstreamCollectPluginNames>[0],
@@ -490,9 +560,18 @@ async function ensureAutonomyBootstrapContext(
 async function repairRuntimeAfterBoot(
   runtime: AgentRuntime,
 ): Promise<AgentRuntime> {
-  await ensureRuntimeSqlCompatibility(runtime);
-  await ensureMiladyTextToSpeechHandler(runtime);
-  await ensureAutonomyBootstrapContext(runtime);
+  const fields = runtimeStartupFields(runtime);
+
+  await withStartupPhase("sql-compat", fields, () =>
+    ensureRuntimeSqlCompatibility(runtime),
+  );
+  await logStartupCorpusSnapshot(runtime);
+  await withStartupPhase("tts-handler", fields, () =>
+    ensureMiladyTextToSpeechHandler(runtime),
+  );
+  await withStartupPhase("autonomy-bootstrap", fields, () =>
+    ensureAutonomyBootstrapContext(runtime),
+  );
 
   if (!runtime.getService("AUTONOMY")) {
     try {
@@ -531,9 +610,54 @@ async function repairRuntimeAfterBoot(
   // Ensure Telegram bot is polling. The upstream plugin's bot.launch() is
   // not awaited and silently fails on bun/Windows. We create a standalone
   // Telegraf instance with proper lifecycle management.
-  await ensureTelegramBotPolling(runtime);
+  await withStartupPhase("telegram-polling", fields, () =>
+    ensureTelegramBotPolling(runtime),
+  );
 
   return runtime;
+}
+
+async function logStartupCorpusSnapshot(runtime: AgentRuntime): Promise<void> {
+  const startedAt = Date.now();
+  const fields = runtimeStartupFields(runtime);
+  startupInfo("corpus-sql-probe:start", fields);
+
+  try {
+    const { rows } = await executeRawSql(
+      runtime,
+      `SELECT type, COUNT(*) AS count
+         FROM memories
+        WHERE "agentId" = ${sqlLiteral(runtime.agentId)}
+          AND type IN ('documents', 'knowledge')
+        GROUP BY type`,
+    );
+
+    let documents = 0;
+    let knowledge = 0;
+    for (const row of rows) {
+      const count = Number(row.count ?? 0);
+      if (row.type === "documents") {
+        documents = Number.isFinite(count) ? count : 0;
+      }
+      if (row.type === "knowledge") {
+        knowledge = Number.isFinite(count) ? count : 0;
+      }
+    }
+
+    startupInfo("corpus-sql-probe:done", {
+      ...fields,
+      documents,
+      knowledge,
+      totalCorpusRows: documents + knowledge,
+      elapsedMs: Date.now() - startedAt,
+    });
+  } catch (error) {
+    startupWarn("corpus-sql-probe:error", {
+      ...fields,
+      elapsedMs: Date.now() - startedAt,
+      error: errorMessage(error),
+    });
+  }
 }
 
 // Module-level Telegraf bot reference for lifecycle management across restarts.
@@ -817,12 +941,16 @@ export async function bootElizaRuntime(
   opts: BootElizaRuntimeOptionsExt = {},
 ): Promise<Awaited<ReturnType<typeof upstreamBootElizaRuntime>>> {
   syncMiladyEnvToEliza();
+  const bootStartedAt = Date.now();
+  startupInfo("boot-eliza-runtime:start", { serverOnly: false });
 
   try {
     // Eagerly download the embedding model before the full runtime boot.
     // This way the TUI loading screen (or server logs) can show download
     // progress instead of the app silently stalling on first embedding call.
-    await warmupEmbeddingModel(opts.onEmbeddingProgress);
+    await withStartupPhase("embedding-warmup", { serverOnly: false }, () =>
+      warmupEmbeddingModel(opts.onEmbeddingProgress),
+    );
 
     // Cap embedding dimension to 384 — plugin-sql's DIMENSION_MAP only
     // supports up to 3072, and the performance-tier E5-Mistral-7B model
@@ -831,8 +959,23 @@ export async function bootElizaRuntime(
       process.env.EMBEDDING_DIMENSION = "384";
     }
 
-    const runtime = await upstreamBootElizaRuntime(opts);
-    return runtime ? await repairRuntimeAfterBoot(runtime) : runtime;
+    const runtime = await withStartupPhase(
+      "runtime-boot",
+      { serverOnly: false, includesPgliteStartup: true },
+      () => upstreamBootElizaRuntime(opts),
+    );
+    const repaired = runtime
+      ? await withStartupPhase(
+          "runtime-repair",
+          runtimeStartupFields(runtime),
+          () => repairRuntimeAfterBoot(runtime),
+        )
+      : runtime;
+    startupInfo("boot-eliza-runtime:done", {
+      serverOnly: false,
+      elapsedMs: Date.now() - bootStartedAt,
+    });
+    return repaired;
   } finally {
     syncElizaEnvToMilady();
   }
@@ -1054,10 +1197,15 @@ export async function startEliza(
   options?: StartElizaOptionsExt,
 ): Promise<Awaited<ReturnType<typeof upstreamStartEliza>>> {
   syncMiladyEnvToEliza();
+  const startupStartedAt = Date.now();
+  const serverOnly = Boolean(options?.serverOnly);
+  startupInfo("start-eliza:start", { serverOnly });
 
   try {
     // Eagerly download the embedding model with progress reporting
-    await warmupEmbeddingModel(options?.onEmbeddingProgress);
+    await withStartupPhase("embedding-warmup", { serverOnly }, () =>
+      warmupEmbeddingModel(options?.onEmbeddingProgress),
+    );
 
     // Cap embedding dimension to 384 — see comment in bootElizaRuntime.
     if (!process.env.EMBEDDING_DIMENSION) {
@@ -1066,10 +1214,18 @@ export async function startEliza(
 
     if (options?.serverOnly) {
       let currentRuntime =
-        (await upstreamBootElizaRuntime({})) ?? undefined;
+        (await withStartupPhase(
+          "runtime-boot",
+          { serverOnly: true, includesPgliteStartup: true },
+          () => upstreamBootElizaRuntime({}),
+        )) ?? undefined;
 
       currentRuntime = currentRuntime
-        ? await repairRuntimeAfterBoot(currentRuntime)
+        ? await withStartupPhase(
+            "runtime-repair",
+            runtimeStartupFields(currentRuntime),
+            () => repairRuntimeAfterBoot(currentRuntime),
+          )
         : currentRuntime;
 
       if (!currentRuntime) {
@@ -1078,28 +1234,46 @@ export async function startEliza(
 
       const { startApiServer } = await import("../api/server");
       const apiPort = resolveServerOnlyPort(process.env);
-      const { port: actualApiPort } = await startApiServer({
-        port: apiPort,
-        runtime: currentRuntime,
-        onRestart: async () => {
-          if (!currentRuntime) {
-            return null;
-          }
+      const { port: actualApiPort } = await withStartupPhase(
+        "api-bind",
+        { port: apiPort },
+        () =>
+          startApiServer({
+            port: apiPort,
+            runtime: currentRuntime,
+            onRestart: async () => {
+              if (!currentRuntime) {
+                return null;
+              }
 
-          await upstreamShutdownRuntime(
-            currentRuntime,
-            "milady server-only restart",
-          );
+              await withStartupPhase(
+                "runtime-restart-shutdown",
+                runtimeStartupFields(currentRuntime),
+                () =>
+                  upstreamShutdownRuntime(
+                    currentRuntime,
+                    "milady server-only restart",
+                  ),
+              );
 
-          const restarted =
-            (await upstreamBootElizaRuntime({})) ?? undefined;
-          currentRuntime = restarted
-            ? await repairRuntimeAfterBoot(restarted)
-            : undefined;
+              const restarted =
+                (await withStartupPhase(
+                  "runtime-restart-boot",
+                  { serverOnly: true, includesPgliteStartup: true },
+                  () => upstreamBootElizaRuntime({}),
+                )) ?? undefined;
+              currentRuntime = restarted
+                ? await withStartupPhase(
+                    "runtime-restart-repair",
+                    runtimeStartupFields(restarted),
+                    () => repairRuntimeAfterBoot(restarted),
+                  )
+                : undefined;
 
-          return currentRuntime ?? null;
-        },
-      });
+              return currentRuntime ?? null;
+            },
+          }),
+      );
 
       syncResolvedApiPort(process.env, actualApiPort, {
         overwriteUiPort: true,
@@ -1114,6 +1288,11 @@ export async function startEliza(
       logger.info(
         `[milady] API server listening on http://localhost:${actualApiPort}`,
       );
+      startupInfo("start-eliza:done", {
+        serverOnly: true,
+        port: actualApiPort,
+        elapsedMs: Date.now() - startupStartedAt,
+      });
       console.log(`[milady] Control UI: http://localhost:${actualApiPort}`);
       console.log("[milady] Server running. Press Ctrl+C to stop.");
 
@@ -1151,8 +1330,23 @@ export async function startEliza(
       return currentRuntime;
     }
 
-    const runtime = await upstreamStartEliza(options);
-    return runtime ? await repairRuntimeAfterBoot(runtime) : runtime;
+    const runtime = await withStartupPhase(
+      "upstream-start-eliza",
+      { serverOnly: false, includesPgliteStartup: true },
+      () => upstreamStartEliza(options),
+    );
+    const repaired = runtime
+      ? await withStartupPhase(
+          "runtime-repair",
+          runtimeStartupFields(runtime),
+          () => repairRuntimeAfterBoot(runtime),
+        )
+      : runtime;
+    startupInfo("start-eliza:done", {
+      serverOnly: false,
+      elapsedMs: Date.now() - startupStartedAt,
+    });
+    return repaired;
   } finally {
     syncElizaEnvToMilady();
   }
