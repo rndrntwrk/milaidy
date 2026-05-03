@@ -41,6 +41,17 @@ const config = {
     shareImagePath: "/og-image.png",
   },
 
+  android: {
+    // MiladyOS AOSP image sets `ro.miladyos.product` via
+    // `vendor/milady/milady_common.mk:62`. The framework's
+    // `ro.elizaos.product` → `ElizaOS/` marker is always emitted; this
+    // adds a Milady-brand marker so the renderer can sniff
+    // `isMiladyOS()` separately from generic ElizaOS detection.
+    userAgentMarkers: [
+      { systemProp: "ro.miladyos.product", uaPrefix: "MiladyOS/" },
+    ],
+  },
+
   branding: {
     appName: "Milady",
     orgName: "milady-ai",

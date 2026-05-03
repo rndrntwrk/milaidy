@@ -61,6 +61,7 @@ PRODUCT_ARTIFACT_PATH_REQUIREMENT_ALLOWED_LIST += \
 PRODUCT_PRODUCT_PROPERTIES += \
     ro.miladyos.product=$(MILADY_PRODUCT_TAG) \
     ro.miladyos.home=com.miladyai.milady \
+    ro.elizaos.product=$(MILADY_PRODUCT_TAG) \
     ro.setupwizard.mode=DISABLED \
     persist.sys.fflag.override.settings_provider_model=false
 
