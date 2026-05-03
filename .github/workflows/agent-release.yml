@@ -456,7 +456,7 @@ jobs:
           printf '{"type":"module"}\n' > dist/package.json
           node --import tsx scripts/write-build-info.ts
       - name: Sanitize npm package metadata
-        run: node scripts/sanitize-npm-package-metadata.mjs
+        run: node "$GITHUB_WORKSPACE/eliza/packages/app-core/scripts/sanitize-npm-package-metadata.mjs"
       - name: Validate package
         run: |
           npm pack --dry-run 2>&1 | tee /tmp/pack-output.txt

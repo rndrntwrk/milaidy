@@ -72,7 +72,7 @@ jobs:
           echo '{"type":"module"}' > dist/package.json
 
       - name: Sanitize npm package metadata
-        run: node scripts/sanitize-npm-package-metadata.mjs
+        run: node "$GITHUB_WORKSPACE/eliza/packages/app-core/scripts/sanitize-npm-package-metadata.mjs"
 
       - name: Validate package
         if: inputs.run_validation
