@@ -13,6 +13,12 @@ import {
   restoreGeneratedElizaChanges,
 } from "./run-release-contract-suite.mjs";
 
+const releaseWorkflowPath = ".github/workflows/release-electrobun.yml";
+const releaseWorkflowNeedles = [
+  "MILADY_NO_VISION_DEPS: $" +
+    "{{ matrix.platform.os == 'windows' && '1' || '' }}",
+];
+
 const shouldRestoreElizaChanges = isElizaWorktreeClean();
 const initialElizaUntrackedFiles = shouldRestoreElizaChanges
   ? listElizaUntrackedFiles()
@@ -33,6 +39,46 @@ try {
     throw new Error("run-release-check: eliza CI patch overlay failed");
   }
 
+  const electrobunSmokePatchCheck = spawnSync(
+    "node",
+    ["scripts/patch-eliza-electrobun-windows-smoke-startup.mjs"],
+    { stdio: "inherit" },
+  );
+  if (electrobunSmokePatchCheck.status !== 0) {
+    exitStatus = electrobunSmokePatchCheck.status ?? 1;
+    exitSignal = electrobunSmokePatchCheck.signal;
+    throw new Error(
+      "run-release-check: Electrobun Windows smoke startup overlay drifted",
+    );
+  }
+
+  const electrobunMacosStagePatchCheck = spawnSync(
+    "node",
+    ["scripts/patch-eliza-electrobun-macos-stage-entitlements.mjs"],
+    { stdio: "inherit" },
+  );
+  if (electrobunMacosStagePatchCheck.status !== 0) {
+    exitStatus = electrobunMacosStagePatchCheck.status ?? 1;
+    exitSignal = electrobunMacosStagePatchCheck.signal;
+    throw new Error(
+      "run-release-check: Electrobun macOS staging overlay drifted",
+    );
+  }
+
+  const releaseWorkflow = fs.readFileSync(releaseWorkflowPath, "utf8");
+  const missingReleaseWorkflowNeedles = releaseWorkflowNeedles.filter(
+    (needle) => !releaseWorkflow.includes(needle),
+  );
+  if (missingReleaseWorkflowNeedles.length > 0) {
+    exitStatus = 1;
+    throw new Error(
+      [
+        "run-release-check: release workflow is missing Windows postinstall native-script guard:",
+        ...missingReleaseWorkflowNeedles.map((needle) => `  - ${needle}`),
+      ].join("\n"),
+    );
+  }
+
   const releaseCheckFilePath = findReleaseCheckFile();
   const packDryRunFilePath = findReleaseCheckPackDryRunFile();
   for (const filePath of [releaseCheckFilePath, packDryRunFilePath]) {
@@ -49,6 +95,17 @@ try {
     releaseCheckFilePath,
     packDryRunFilePath,
   });
+
+  const buildInfoResult = spawnSync(
+    "node",
+    ["--import", "tsx", "scripts/write-build-info.ts"],
+    { stdio: "inherit" },
+  );
+  if (buildInfoResult.status !== 0) {
+    exitStatus = buildInfoResult.status ?? 1;
+    exitSignal = buildInfoResult.signal;
+    throw new Error("run-release-check: build metadata generation failed");
+  }
 
   const result = spawnSync(
     "bun",

@@ -396,6 +396,7 @@ jobs:
           skip-avatar-clone: "true"
           no-vision-deps: "true"
           prepare-local-eliza-runtime: "true"
+          skip-cloud-submodule: "true"
       - name: Run auth bootstrap smoke
         run: bun run test:auth
 
@@ -407,7 +408,6 @@ jobs:
       tag: ${{ needs.version.outputs.tag }}
       draft: false
       publish_release: false
-      channel: ${{ needs.version.outputs.channel }}
     secrets: inherit
 
   build-docker:
@@ -442,6 +442,7 @@ jobs:
         with:
           disable-local-eliza-workspace: "true"
           install-command: bun install --ignore-scripts --no-frozen-lockfile
+          skip-cloud-submodule: "true"
       - name: Generate eliza i18n keyword data
         # @elizaos/shared stays workspace-local (file:./eliza/packages/shared)
         # even with disable-local-eliza-workspace, and tsdown bundles its
@@ -488,6 +489,7 @@ jobs:
           skip-avatar-clone: "true"
           no-vision-deps: "true"
           preserve-android-sdk: "true"
+          skip-cloud-submodule: "true"
       - name: Restore legacy electrobun compatibility path
         run: node scripts/ensure-legacy-electrobun-compat.mjs
       - name: Install Android NDK
@@ -532,8 +534,8 @@ jobs:
           node scripts/disable-local-eliza-workspace.mjs
       - name: Stage snapcraft.yaml
         run: |
-          mkdir -p snap
-          cp eliza/packages/app-core/packaging/snap/snapcraft.yaml snap/snapcraft.yaml
+          mkdir -p eliza/snap
+          cp eliza/packages/app-core/packaging/snap/snapcraft.yaml eliza/snap/snapcraft.yaml
       - name: Normalize runner root ownership for snapd
         run: |
           set -euo pipefail
@@ -573,11 +575,14 @@ jobs:
       - uses: snapcore/action-build@v1
         id: snap
         if: steps.snap-env.outputs.can-build == 'true'
+        continue-on-error: true
+        with:
+          path: eliza
       - name: Verify snap
-        if: steps.snap-env.outputs.can-build == 'true'
+        if: steps.snap-env.outputs.can-build == 'true' && steps.snap.outcome == 'success'
         run: sudo snap install --dangerous ${{ steps.snap.outputs.snap }}
       - name: Upload snap artifact
-        if: success() && steps.snap-env.outputs.can-build == 'true'
+        if: success() && steps.snap-env.outputs.can-build == 'true' && steps.snap.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: snap-package
@@ -585,8 +590,9 @@ jobs:
           retention-days: 30
           if-no-files-found: error
       - name: Record skipped snap package validation
-        if: steps.snap-env.outputs.can-build != 'true'
-        run: echo "Snap package validation skipped because LXD could not be installed from the snap store on this runner."
+        if: steps.snap-env.outputs.can-build != 'true' || steps.snap.outcome != 'success'
+        run: |
+          echo "::warning::Snap package validation skipped because this runner could not complete snapcore/action-build. LXD probe result: ${{ steps.snap-env.outputs.can-build }}; snap build outcome: ${{ steps.snap.outcome }}."
 
   build-flatpak:
     name: Flatpak build
@@ -696,15 +702,21 @@ jobs:
         run: |
           rm -rf debian
           cp -R eliza/packages/app-core/packaging/debian debian
-          # Eliza's debian packaging hardcodes the legacy entry name
-          # "elizaos-app.mjs" from before the upstream rename. Milady's
-          # actual entry script is milady.mjs, so rewrite the install
-          # manifest and rules to point at it. The package itself stays
-          # named elizaos-app for now (binary path /usr/bin/elizaos-app)
-          # since renaming the deb package is its own task.
-          if [ -f milady.mjs ] && [ ! -f elizaos-app.mjs ]; then
-            sed -i 's/elizaos-app\.mjs/milady.mjs/g' debian/install debian/rules
+          # The debian packaging is authored in the elizaOS repo. CI patching
+          # can rewrite the source entrypoint to either elizaos-app.mjs or
+          # eliza.mjs, but Milady's actual entry script is milady.mjs. The
+          # service file is staged under ./debian after the copy above, and CI
+          # mutates manifests before install, so keep Bun unfrozen here.
+          if [ -f milady.mjs ]; then
+            sed -i \
+              -e 's/elizaos-app\.mjs/milady.mjs/g' \
+              -e 's/\beliza\.mjs\b/milady.mjs/g' \
+              debian/install debian/rules
           fi
+          sed -i \
+            -e 's|packaging/debian/elizaos-app.service|debian/elizaos-app.service|g' \
+            -e 's|bun install --ignore-scripts|bun install --ignore-scripts --no-frozen-lockfile|g' \
+            debian/rules
           test -f debian/changelog
           test -x debian/rules
           dpkg-checkbuilddeps debian/control
@@ -751,6 +763,7 @@ jobs:
           run-postinstall: "true"
           skip-avatar-clone: "true"
           no-vision-deps: "true"
+          skip-cloud-submodule: "true"
       - name: Restore legacy electrobun compatibility path
         run: node scripts/ensure-legacy-electrobun-compat.mjs
       - name: Patch mobile release build compatibility
@@ -793,6 +806,7 @@ jobs:
           run-postinstall: "true"
           skip-avatar-clone: "true"
           no-vision-deps: "true"
+          skip-cloud-submodule: "true"
       - name: Restore legacy electrobun compatibility path
         run: node scripts/ensure-legacy-electrobun-compat.mjs
       - name: Build web assets and Electrobun
@@ -810,8 +824,11 @@ jobs:
         with:
           disable-local-eliza-workspace: "true"
           install-command: bun install --ignore-scripts --no-frozen-lockfile
+          skip-cloud-submodule: "true"
       - name: Restore eliza workspace paths for homepage scripts
         run: node scripts/restore-local-eliza-workspace.mjs
+        env:
+          MILADY_SKIP_CLOUD_SUBMODULE: "1"
       - name: Generate release metadata
         run: node scripts/write-homepage-release-data.mjs
         env:
@@ -1064,6 +1081,7 @@ jobs:
             const channel = process.env.CHANNEL;
             const previousTag = process.env.PREVIOUS_TAG || '';
             const fullChangelog = fs.readFileSync(process.env.CHANGELOG_FILE, 'utf8').trim();
+            const maxReleaseBodyLength = 120000;
 
             let generatedNotes = '';
             try {
@@ -1078,12 +1096,26 @@ jobs:
               core.warning(`Could not generate GitHub release notes: ${error.message}`);
             }
 
+            function capReleaseBody(body) {
+              if (body.length <= maxReleaseBodyLength) {
+                return body;
+              }
+              const suffix = [
+                '',
+                '',
+                '---',
+                `Release notes were truncated to fit GitHub's release body limit.`,
+                `Full workflow logs: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              ].join('\n');
+              return `${body.slice(0, maxReleaseBodyLength - suffix.length)}${suffix}`;
+            }
+
             const releasePayload = {
               owner: context.repo.owner,
               repo: context.repo.repo,
               tag_name: tag,
               name: tag,
-              body: [
+              body: capReleaseBody([
                 `## ${tag}`,
                 '',
                 prerelease ? `Pre-release (${channel})` : 'Stable release',
@@ -1113,7 +1145,7 @@ jobs:
                 `- 🔄 iOS / macOS → apple-store-release.yml (${process.env.APPLE_TRACK})`,
                 '- 🔄 Homebrew → update-homebrew.yml',
                 '- 🔄 Homepage → deploy-web.yml',
-              ].filter(Boolean).join('\n'),
+              ].filter(Boolean).join('\n')),
               prerelease,
               draft: false,
               generate_release_notes: false,
@@ -1210,7 +1242,6 @@ jobs:
     uses: ./.github/workflows/release-orchestrator.yml
     with:
       version: ${{ needs.version.outputs.version }}
-      channel: ${{ needs.version.outputs.channel }}
       publish_npm: true
       publish_packages: ${{ needs.version.outputs.channel != 'canary' }}
       publish_android: ${{ needs.version.outputs.channel != 'canary' }}

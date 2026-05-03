@@ -121,12 +121,6 @@ import "@elizaos/app-polymarket/register";
 import "@elizaos/app-vincent/client";
 import { useVincentState } from "@elizaos/app-vincent/ui";
 import "@elizaos/app-vincent/register";
-// Side-effect: register the Android-only overlay apps (no-op off Android).
-// Each register file runtime-checks `Capacitor.getPlatform() === "android"`
-// before mutating the catalog, so importing them on web/desktop/iOS is safe.
-import "@elizaos/app-contacts/register";
-import "@elizaos/app-phone/register";
-import "@elizaos/app-wifi/register";
 import { shouldUseCloudOnlyBranding } from "@elizaos/app-core";
 import {
   APP_BRANDING_BASE,
@@ -208,6 +202,15 @@ const DEVICE_BRIDGE_ID_KEY = "milady_device_bridge_id";
 
 let mobileDeviceBridgeClient: DeviceBridgeClient | null = null;
 let mobileRuntimeModeListenerInstalled = false;
+
+async function registerMiladyOsSystemApps(): Promise<void> {
+  if (!isMiladyOS()) return;
+  await Promise.all([
+    import("@elizaos/app-contacts/register"),
+    import("@elizaos/app-phone/register"),
+    import("@elizaos/app-wifi/register"),
+  ]);
+}
 
 function isDesktopPlatform(): boolean {
   return isElectrobunRuntime();
@@ -931,6 +934,7 @@ async function main(): Promise<void> {
   // server, so a deliberate cloud/remote choice — including one applied by
   // `applyLaunchConnectionFromUrl` above — is never clobbered.
   if (isMiladyOS()) {
+    await registerMiladyOsSystemApps();
     preSeedAndroidLocalRuntimeIfFresh();
   }
 

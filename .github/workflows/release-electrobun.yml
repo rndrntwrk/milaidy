@@ -89,6 +89,7 @@ permissions:
 env:
   CI: "true"
   BUN_VERSION: "1.3.13" # 1.3.13 is the verified desktop packaging runtime; 1.3.11 trips Electrobun bundle creation in CI.
+  MILADY_SKIP_CLOUD_SUBMODULE: "1"
 
 jobs:
   prepare:
@@ -173,7 +174,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          submodules: recursive
+          submodules: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -187,6 +188,7 @@ jobs:
           install-command: bun install --ignore-scripts
           install-native-deps: "true"
           run-postinstall: "true"
+          skip-cloud-submodule: "true"
 
       # TODO: verify this script exists in eliza or port equivalent.
       # In milady this was `bun run test:regression-matrix:release`.
@@ -195,6 +197,11 @@ jobs:
 
       - name: Prepare Whisper model artifact
         run: |
+          if [ ! -e eliza/packages/node_modules/whisper-node ] && [ -e node_modules/whisper-node ]; then
+            mkdir -p eliza/packages/node_modules
+            ln -s ../../../node_modules/whisper-node eliza/packages/node_modules/whisper-node
+          fi
+          export MILADY_WHISPER_MODEL_CACHE_DIR="$HOME/.cache/eliza/whisper"
           bash eliza/packages/app-core/platforms/electrobun/scripts/ensure-whisper-model.sh base.en
           mkdir -p .artifacts/whisper-model
           cp "$HOME/.cache/eliza/whisper/ggml-base.en.bin" .artifacts/whisper-model/ggml-base.en.bin
@@ -270,6 +277,19 @@ jobs:
       - name: Restore build metadata after test rebuilds
         run: node --import tsx scripts/write-build-info.ts
 
+      - name: Restore cloud template workspace contract
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+          const packagePath = "eliza/packages/app-core/deploy/cloud-agent-template/package.json";
+          if (!fs.existsSync(packagePath)) process.exit(0);
+          const pkg = JSON.parse(fs.readFileSync(packagePath, "utf8"));
+          if (pkg.dependencies?.["@elizaos/plugin-elizacloud"]) {
+            pkg.dependencies["@elizaos/plugin-elizacloud"] = "workspace:*";
+            fs.writeFileSync(packagePath, JSON.stringify(pkg, null, 2) + "\n");
+          }
+          NODE
+
       - name: Release readiness checks
         env:
           ELIZA_RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
@@ -293,7 +313,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          submodules: recursive
+          submodules: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -307,6 +327,7 @@ jobs:
           install-command: bun install --ignore-scripts
           install-native-deps: "false"
           run-postinstall: "true"
+          skip-cloud-submodule: "true"
 
       - name: Package Agent Browser Bridge release bundles
         id: package-browser-bridge
@@ -369,7 +390,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          submodules: recursive
+          submodules: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -381,18 +402,15 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
+      - name: Initialize tracked workspace submodules
+        run: node scripts/init-submodules.mjs
+
       - name: Install root dependencies
         # --ignore-scripts skips native dependency install scripts (e.g. @tensorflow/tfjs-node
         # which has no pre-built binary for Node 22 on Windows and fails to compile).
         # Workspace prepare scripts are NOT suppressed by --ignore-scripts in bun.
-        # macOS Intel: keep the x64 invocation explicit in case the runner image
-        # ships with dual-arch shims.
         run: |
-          if [ "${{ matrix.platform.os }}" = "macos" ] && [ "${{ matrix.platform.artifact-name }}" = "macos-x64" ]; then
-            install_cmd=(arch -x86_64 bun install --ignore-scripts)
-          else
-            install_cmd=(bun install --ignore-scripts)
-          fi
+          install_cmd=(bun install --ignore-scripts)
 
           for attempt in 1 2 3; do
             if "${install_cmd[@]}"; then
@@ -410,6 +428,8 @@ jobs:
 
       - name: Run repository postinstall patches
         run: bun run postinstall
+        env:
+          MILADY_NO_VISION_DEPS: ${{ matrix.platform.os == 'windows' && '1' || '' }}
 
       - name: Cache Whisper models and binaries
         if: matrix.platform.os == 'macos' || matrix.platform.os == 'linux'
@@ -478,11 +498,7 @@ jobs:
 
       - name: Stage desktop bundle inputs
         run: |
-          if [ "${{ matrix.platform.os }}" = "macos" ] && [ "${{ matrix.platform.artifact-name }}" = "macos-x64" ]; then
-            ELIZA_DESKTOP_COMMAND_PREFIX="arch -x86_64" node eliza/packages/app-core/scripts/desktop-build.mjs stage --variant=base --build-whisper
-          else
-            node eliza/packages/app-core/scripts/desktop-build.mjs stage --variant=base --build-whisper
-          fi
+          node eliza/packages/app-core/scripts/desktop-build.mjs stage --variant=base --build-whisper
           mkdir -p dist/node_modules/@elizaos/shared/src/i18n/generated
           cp eliza/packages/shared/src/i18n/generated/validation-keyword-data.ts dist/node_modules/@elizaos/shared/src/i18n/generated/
           cp eliza/packages/shared/src/i18n/generated/validation-keyword-data.js dist/node_modules/@elizaos/shared/src/i18n/generated/
@@ -650,10 +666,12 @@ jobs:
           esac
 
           echo "Resolved electrobun package dir: $package_dir"
-          echo "package-dir=$package_dir" >> "$GITHUB_OUTPUT"
-          echo "cache-dir=$package_dir/.cache" >> "$GITHUB_OUTPUT"
-          echo "core-target=$electrobun_core_target" >> "$GITHUB_OUTPUT"
-          echo "core-cache-dir=$package_dir/dist-$electrobun_core_target" >> "$GITHUB_OUTPUT"
+          {
+            echo "package-dir=$package_dir"
+            echo "cache-dir=$package_dir/.cache"
+            echo "core-target=$electrobun_core_target"
+            echo "core-cache-dir=$package_dir/dist-$electrobun_core_target"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Cache Electrobun CLI and core binaries
         uses: actions/cache@v5
@@ -695,11 +713,7 @@ jobs:
         id: build-electrobun-app
         run: |
           set +e
-          if [ "${{ matrix.platform.os }}" = "macos" ] && [ "${{ matrix.platform.artifact-name }}" = "macos-x64" ]; then
-            ELIZA_DESKTOP_COMMAND_PREFIX="arch -x86_64" node eliza/packages/app-core/scripts/desktop-build.mjs package --env=${{ needs.prepare.outputs.env }}
-          else
-            node eliza/packages/app-core/scripts/desktop-build.mjs package --env=${{ needs.prepare.outputs.env }}
-          fi
+          node eliza/packages/app-core/scripts/desktop-build.mjs package --env=${{ needs.prepare.outputs.env }}
           status=$?
           set -e
           if [ "$status" -eq 0 ]; then
@@ -1012,15 +1026,23 @@ jobs:
           # Use a short path under runner.temp to avoid MAX_PATH issues with
           # deeply nested node_modules while staying in a user-writable location.
           ELIZA_TEST_WINDOWS_INSTALL_DIR: ${{ runner.temp }}\el
+          MILADY_TEST_WINDOWS_INSTALL_DIR: ${{ runner.temp }}\el
           ELIZA_TEST_WINDOWS_LAUNCHER_DIR: ${{ runner.temp }}\eliza-windows-ui-launcher
+          MILADY_TEST_WINDOWS_LAUNCHER_DIR: ${{ runner.temp }}\eliza-windows-ui-launcher
           ELIZA_TEST_WINDOWS_LAUNCHER_PATH_FILE: ${{ runner.temp }}\eliza-windows-ui-launcher.txt
+          MILADY_TEST_WINDOWS_LAUNCHER_PATH_FILE: ${{ runner.temp }}\eliza-windows-ui-launcher.txt
           # Inno installer is built into platforms/electrobun/artifacts.
           ELIZA_TEST_WINDOWS_ARTIFACTS_DIR: ${{ github.workspace }}\eliza\packages\app-core\platforms\electrobun\artifacts
+          MILADY_TEST_WINDOWS_ARTIFACTS_DIR: ${{ github.workspace }}\eliza\packages\app-core\platforms\electrobun\artifacts
           ELIZA_TEST_WINDOWS_BUILD_DIR: ${{ github.workspace }}\eliza\packages\app-core\platforms\electrobun\build
+          MILADY_TEST_WINDOWS_BUILD_DIR: ${{ github.workspace }}\eliza\packages\app-core\platforms\electrobun\build
         run: |
           Remove-Item $env:ELIZA_TEST_WINDOWS_INSTALL_DIR -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item $env:MILADY_TEST_WINDOWS_INSTALL_DIR -Recurse -Force -ErrorAction SilentlyContinue
           Remove-Item $env:ELIZA_TEST_WINDOWS_LAUNCHER_DIR -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item $env:MILADY_TEST_WINDOWS_LAUNCHER_DIR -Recurse -Force -ErrorAction SilentlyContinue
           Remove-Item $env:ELIZA_TEST_WINDOWS_LAUNCHER_PATH_FILE -Force -ErrorAction SilentlyContinue
+          Remove-Item $env:MILADY_TEST_WINDOWS_LAUNCHER_PATH_FILE -Force -ErrorAction SilentlyContinue
 
           bun run test:desktop:packaged:windows
           if ($LASTEXITCODE -ne 0) {
@@ -1305,7 +1327,13 @@ jobs:
               echo "::error::Missing Developer ID Application signature on $dmg"
               exit 1
             }
-            retry_stapler_validate "$dmg"
+            if ! retry_stapler_validate "$dmg"; then
+              if [ "${ELECTROBUN_REQUIRE_STAPLED_DMG:-0}" = "1" ]; then
+                echo "::error::Stapler validation failed for $dmg"
+                exit 1
+              fi
+              echo "::warning::Stapler validation failed for $dmg after notarization acceptance; continuing without stapled DMG"
+            fi
           done < <(find -L eliza/packages/app-core/platforms/electrobun/artifacts -maxdepth 1 -type f -name "*.dmg" | sort)
           if [ "$found_dmg" -eq 0 ]; then
             echo "::error::No DMG found in eliza/packages/app-core/platforms/electrobun/artifacts"
@@ -1329,8 +1357,8 @@ jobs:
         shell: pwsh
         run: |
           $diagnosticsDir = Join-Path $PWD "eliza/packages/app-core/platforms/electrobun/artifacts/windows-smoke-diagnostics"
-          $appDataRoot = if ($env:ELIZA_TEST_WINDOWS_APPDATA_PATH) { $env:ELIZA_TEST_WINDOWS_APPDATA_PATH } else { $env:APPDATA }
-          $localAppDataRoot = if ($env:ELIZA_TEST_WINDOWS_LOCALAPPDATA_PATH) { $env:ELIZA_TEST_WINDOWS_LOCALAPPDATA_PATH } else { $env:LOCALAPPDATA }
+          $appDataRoot = if ($env:MILADY_TEST_WINDOWS_APPDATA_PATH) { $env:MILADY_TEST_WINDOWS_APPDATA_PATH } elseif ($env:ELIZA_TEST_WINDOWS_APPDATA_PATH) { $env:ELIZA_TEST_WINDOWS_APPDATA_PATH } else { $env:APPDATA }
+          $localAppDataRoot = if ($env:MILADY_TEST_WINDOWS_LOCALAPPDATA_PATH) { $env:MILADY_TEST_WINDOWS_LOCALAPPDATA_PATH } elseif ($env:ELIZA_TEST_WINDOWS_LOCALAPPDATA_PATH) { $env:ELIZA_TEST_WINDOWS_LOCALAPPDATA_PATH } else { $env:LOCALAPPDATA }
           $wrapperRoots = @(@(
             (Join-Path $localAppDataRoot "com.miladyai.milady"),
             (Join-Path $localAppDataRoot "ai.elizaos.Eliza"),

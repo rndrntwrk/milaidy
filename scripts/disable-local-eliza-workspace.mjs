@@ -62,6 +62,7 @@ export const LOCAL_ONLY_WORKSPACE_GLOBS = [
   "eliza/apps/*",
 ];
 export const LOCAL_ONLY_ELIZA_PACKAGE_PATHS = {
+  "@elizaos/plugin-agent-wallet": "plugins/plugin-agent-wallet",
   "@elizaos/plugin-browser-bridge": "plugins/plugin-browser-bridge",
   "@elizaos/plugin-app-control": "plugins/plugin-app-control/typescript",
   "@elizaos/plugin-signal": "plugins/plugin-signal/typescript",
@@ -83,6 +84,7 @@ export const NESTED_INSTALLABLE_PACKAGE_GLOBS = [
 // Entries point at real packages inside eliza/. Published-only CI still runs
 // source paths that import their local builds.
 export const CI_OVERRIDE_SPECIFIERS = {
+  "@elizaos/agent": "file:./eliza/packages/agent",
   "@elizaos/shared": "file:./eliza/packages/shared",
   "@elizaos/ui": "file:./eliza/packages/ui",
 };

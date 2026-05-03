@@ -27,6 +27,7 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+
 // Node 22+ ships undici as the fetch implementation but does NOT
 // expose it under the bare `undici` specifier — it lives behind the
 // internal `node:undici` namespace (or via `internalBinding`). Default
@@ -98,7 +99,6 @@ const HEALTH_POLL_INTERVAL_MS = 2_000;
 // AOSP_BUILD=true. Real phone hardware resolves in seconds, so this
 // only matters for cvd runs.
 const CHAT_TIMEOUT_MS = 3_600_000;
-
 
 // ANSI color helpers; output is human-readable, no JSON for now.
 const RESET = "[0m";
@@ -439,10 +439,11 @@ export async function runSmoke({ adb: adbImpl = adb } = {}) {
     // shadow ECONNRESET / ECONNREFUSED / EPIPE / UND_ERR_SOCKET. Node's
     // fetch wraps the real reason in `error.cause`; older callers only
     // saw "fetch failed: fetch failed" with no actionable detail.
-    const cause = lastFetchError && typeof lastFetchError === "object"
-      ? /* Boundary cast: Error.cause is loosely typed as unknown */
-        ((/** @type {{ cause?: unknown }} */ (lastFetchError)).cause)
-      : null;
+    const cause =
+      lastFetchError && typeof lastFetchError === "object"
+        ? /* Boundary cast: Error.cause is loosely typed as unknown */
+          /** @type {{ cause?: unknown }} */ (lastFetchError).cause
+        : null;
     const causeMessage =
       cause && typeof cause === "object" && "message" in cause
         ? /** @type {{ message?: string }} */ (cause).message
@@ -556,7 +557,6 @@ export async function runSmoke({ adb: adbImpl = adb } = {}) {
   });
   return results;
 }
-
 
 export async function main(argv = process.argv.slice(2)) {
   const wantJson = argv.includes("--json");

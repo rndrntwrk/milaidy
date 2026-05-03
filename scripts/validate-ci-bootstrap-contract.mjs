@@ -97,10 +97,6 @@ for (const relativePath of Object.values(files).filter((value) =>
     failures.push(`Missing bootstrap dependency: ${relativePath}`);
   }
 }
-if (!fs.existsSync(path.join(repoRoot, files.elizaCiPatch))) {
-  failures.push(`Missing bootstrap dependency: ${files.elizaCiPatch}`);
-}
-
 const workflowText = readText(files.workflow, failures);
 const actionText = readText(files.action, failures);
 const packageJson = readJson(files.packageJson, failures);

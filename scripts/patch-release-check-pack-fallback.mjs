@@ -191,6 +191,11 @@ const workflowSnippetCompatReplacements = [
     "bash packages/app-core/platforms/electrobun/scripts/ensure-whisper-model.sh base.en",
     "bash eliza/packages/app-core/platforms/electrobun/scripts/ensure-whisper-model.sh base.en",
   ],
+  [
+    "process.env.ELIZA_ELECTROBUN_NOTARIZE ??",
+    "process.env.ELIZA_ELECTROBUN_NOTARIZE !==",
+  ],
+  ['"identifier":"com.elizaai.eliza"', '"identifier":"ai.elizaos.Eliza"'],
   ['"identifier":"com.miladyai.milady"', '"identifier":"ai.elizaos.Eliza"'],
   ['$extractDir = "C:\\m"', '$extractDir = "C:\\e"'],
   ['-BuildDir "C:\\m"', '-BuildDir "C:\\e"'],
@@ -314,6 +319,64 @@ const matrixArtifactNameSnippet =
 const matrixArtifactNameSourceLine = `  '${matrixArtifactNameSnippet}',`;
 const electrobunPackageDirSourceLine =
   "    '{{ steps.resolve-electrobun.outputs.package-dir }}\"',";
+const macosLauncherSignSnippet = [
+  '    "retry_codesign() {",',
+  '    "retry_notarytool_submit() {",',
+  '    "retry_notarytool_wait() {",',
+  '    "retry_notarytool_log() {",',
+  "    '\"$macos_code_dir/libasar.dylib\"',",
+  "    'sign_nested_macos_runtime_targets() {',",
+  "    'runtime_resources_dir=\"$STAGED_APP_PATH/Contents/Resources/app/eliza-dist\"',",
+  "    'file \"$candidate_path\"',",
+  "    '*Mach-O*)',",
+  "    'find \"$runtime_resources_dir\" -type f -print0',",
+  "    'sign_nested_macos_runtime_targets',",
+  "    'sign_macos_runtime_target \"$LAUNCHER_PATH\"',",
+].join("\n");
+const macosAppSignSnippet =
+  "    'retry_codesign \"$" + '{app_sign_args[@]}" "$STAGED_APP_PATH"\',';
+const macosDmgSignSnippet =
+  "    'retry_codesign --force --timestamp --sign \"$ELECTROBUN_DEVELOPER_ID\" \"$TEMP_DMG_PATH\"',";
+const macosNotarySubmitSnippet = [
+  "    'NOTARY_SUBMIT_ATTEMPTS=\"" +
+    "$" +
+    "{ELECTROBUN_NOTARY_SUBMIT_ATTEMPTS:-3}\"',",
+  "    'NOTARY_SUBMIT_RETRY_DELAY_SECONDS=\"" +
+    "$" +
+    "{ELECTROBUN_NOTARY_SUBMIT_RETRY_DELAY_SECONDS:-30}\"',",
+  '    \'if ! retry_notarytool_submit "$NOTARY_SUBMIT_OUTPUT_PATH" "$NOTARY_SUBMIT_ATTEMPTS" "$NOTARY_SUBMIT_RETRY_DELAY_SECONDS"; then\',',
+].join("\n");
+const macosNotaryWaitSnippet = [
+  "    'NOTARY_WAIT_ATTEMPTS=\"" +
+    "$" +
+    "{ELECTROBUN_NOTARY_WAIT_ATTEMPTS:-3}\"',",
+  "    'NOTARY_WAIT_RETRY_DELAY_SECONDS=\"" +
+    "$" +
+    "{ELECTROBUN_NOTARY_WAIT_RETRY_DELAY_SECONDS:-60}\"',",
+  '    \'if ! retry_notarytool_wait "$NOTARY_WAIT_OUTPUT_PATH" "$NOTARY_WAIT_ATTEMPTS" "$NOTARY_WAIT_RETRY_DELAY_SECONDS"; then\',',
+  '    "retry_notarytool_log >&2 || true",',
+].join("\n");
+const macosStaplerRetrySnippet = [
+  "    'STAPLER_ATTEMPTS=\"" + "$" + "{ELECTROBUN_STAPLER_ATTEMPTS:-12}\"',",
+  "    'STAPLER_DELAY_SECONDS=\"" +
+    "$" +
+    "{ELECTROBUN_STAPLER_DELAY_SECONDS:-30}\"',",
+  '    \'if ! retry_command "$STAPLER_ATTEMPTS" "$STAPLER_DELAY_SECONDS" xcrun stapler staple "$TEMP_DMG_PATH"; then\',',
+  "    '  if [[ \"" +
+    "$" +
+    '{ELECTROBUN_REQUIRE_STAPLED_DMG:-0}" == "1" ]]; then\',',
+  "    '    exit 1',",
+  "    '  fi',",
+  "    '  echo \"stage-macos-release-artifacts: notarization accepted but stapler ticket was not available; continuing without stapled DMG\" >&2',",
+  "    'fi',",
+].join("\n");
+const macosStaplerConfigSnippet = [
+  "    'STAPLER_ATTEMPTS=\"" + "$" + "{ELECTROBUN_STAPLER_ATTEMPTS:-12}\"',",
+  "    'STAPLER_DELAY_SECONDS=\"" +
+    "$" +
+    "{ELECTROBUN_STAPLER_DELAY_SECONDS:-30}\"',",
+  '    \'retry_command "$STAPLER_ATTEMPTS" "$STAPLER_DELAY_SECONDS" xcrun stapler staple "$TEMP_DMG_PATH"\',',
+].join("\n");
 
 function patchPatchedElectrobunCliSnippets(source) {
   if (
@@ -350,26 +413,91 @@ function patchElectrobunPlatformArgumentSnippet(source) {
 }
 
 function patchMacArtifactStagerSnippet(source) {
+  let patched = source;
+
   if (
-    source.includes(
+    !patched.includes(
       '\'for tarball_pattern in "*-macos-*.app.tar.zst" "*-macos-*.app.tar.gz" "*-macos-*.tar.gz"; do\'',
-    ) ||
-    !source.includes(
+    ) &&
+    patched.includes(
       '\'find -L "$ARTIFACTS_DIR" -maxdepth 1 -type f -name "*-macos-*.app.tar.zst"\'',
     )
   ) {
-    return source;
+    patched = patched.replace(
+      '    \'find -L "$ARTIFACTS_DIR" -maxdepth 1 -type f -name "*-macos-*.app.tar.zst"\',',
+      [
+        '    \'for tarball_pattern in "*-macos-*.app.tar.zst" "*-macos-*.app.tar.gz" "*-macos-*.tar.gz"; do\',',
+        '    \'tar --zstd -xf "$TARBALL_PATH" -C "$EXTRACT_DIR"\',',
+        '    \'tar -xzf "$TARBALL_PATH" -C "$EXTRACT_DIR"\',',
+        '    \'TARBALL_BASENAME="$(basename "$TARBALL_PATH")"\',',
+      ].join("\n"),
+    );
   }
 
-  return source.replace(
-    '    \'find -L "$ARTIFACTS_DIR" -maxdepth 1 -type f -name "*-macos-*.app.tar.zst"\',',
-    [
-      '    \'for tarball_pattern in "*-macos-*.app.tar.zst" "*-macos-*.app.tar.gz" "*-macos-*.tar.gz"; do\',',
-      '    \'tar --zstd -xf "$TARBALL_PATH" -C "$EXTRACT_DIR"\',',
-      '    \'tar -xzf "$TARBALL_PATH" -C "$EXTRACT_DIR"\',',
-      '    \'TARBALL_BASENAME="$(basename "$TARBALL_PATH")"\',',
-    ].join("\n"),
-  );
+  patched = patched
+    .replace(
+      / {4}`--options runtime "\\\$\{entitlement_args\[@\]\}" "\$LAUNCHER_PATH"`,/,
+      macosLauncherSignSnippet,
+    )
+    .replace(
+      / {4}`--options runtime "\\\$\{entitlement_args\[@\]\}" "\$STAGED_APP_PATH"`,/,
+      macosAppSignSnippet,
+    )
+    .replace(
+      "    'codesign --force --timestamp --sign \"$ELECTROBUN_DEVELOPER_ID\" \"$TEMP_DMG_PATH\"',",
+      macosDmgSignSnippet,
+    )
+    .replace(
+      "    'retry_command 8 20 xcrun stapler staple \"$TEMP_DMG_PATH\"',",
+      macosStaplerRetrySnippet,
+    )
+    .replace(macosStaplerConfigSnippet, macosStaplerRetrySnippet);
+
+  if (!patched.includes("'sign_nested_macos_runtime_targets() {'")) {
+    patched = patched.replace(
+      "    '\"$macos_code_dir/libasar.dylib\"',\n    'sign_macos_runtime_target \"$LAUNCHER_PATH\"',",
+      [
+        "    '\"$macos_code_dir/libasar.dylib\"',",
+        "    'sign_nested_macos_runtime_targets() {',",
+        "    'runtime_resources_dir=\"$STAGED_APP_PATH/Contents/Resources/app/eliza-dist\"',",
+        "    'file \"$candidate_path\"',",
+        "    '*Mach-O*)',",
+        "    'find \"$runtime_resources_dir\" -type f -print0',",
+        "    'sign_nested_macos_runtime_targets',",
+        "    'sign_macos_runtime_target \"$LAUNCHER_PATH\"',",
+      ].join("\n"),
+    );
+  }
+
+  if (
+    !patched.includes(
+      'NOTARY_SUBMIT_ATTEMPTS="${ELECTROBUN_NOTARY_SUBMIT_ATTEMPTS:-3}"',
+    )
+  ) {
+    patched = patched.replace(
+      "    '\"$REAL_XCRUN\" notarytool submit \\\\',",
+      [
+        macosNotarySubmitSnippet,
+        "    '\"$REAL_XCRUN\" notarytool submit \\\\',",
+      ].join("\n"),
+    );
+  }
+
+  if (
+    !patched.includes(
+      'NOTARY_WAIT_ATTEMPTS="${ELECTROBUN_NOTARY_WAIT_ATTEMPTS:-3}"',
+    )
+  ) {
+    patched = patched.replace(
+      "    '\"$REAL_XCRUN\" notarytool submit \\\\',",
+      [
+        "    '\"$REAL_XCRUN\" notarytool submit \\\\',",
+        macosNotaryWaitSnippet,
+      ].join("\n"),
+    );
+  }
+
+  return patched;
 }
 
 export function applyReleaseCheckPackFallback(source) {

@@ -6,10 +6,17 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { applyCiOnlyOverrides } from "./disable-local-eliza-workspace.mjs";
 
-const NESTED_ELIZA_SUBMODULE_SKIP_ARGS = [
-  "-c",
-  "submodule.plugin-openrouter.update=none",
-];
+function getNestedElizaSubmoduleSkipArgs() {
+  const skipped = ["plugin-openrouter"];
+  if (
+    process.env.MILADY_SKIP_CLOUD_SUBMODULE === "1" ||
+    process.env.ELIZA_SKIP_CLOUD_SUBMODULE === "1"
+  ) {
+    skipped.push("cloud");
+  }
+
+  return skipped.flatMap((name) => ["-c", `submodule.${name}.update=none`]);
+}
 
 function hasUninitializedNestedElizaSubmodules(
   elizaRoot,
@@ -64,7 +71,7 @@ export function ensureNestedElizaSubmodules(
     execSync(
       [
         "git",
-        ...NESTED_ELIZA_SUBMODULE_SKIP_ARGS,
+        ...getNestedElizaSubmoduleSkipArgs(),
         "submodule",
         "update",
         "--init",

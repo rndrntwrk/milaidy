@@ -15,10 +15,17 @@ describe("Electrobun release runtime root contract", () => {
     expect(workflow).toMatch(/expectedRuntimeSource = path\.resolve\("dist"\)/);
     expect(workflow).toMatch(/destination\]\) => destination === "eliza-dist"/);
     expect(workflow).toMatch(
-      /runtime export target found: \$runtimeExport -> \$existingTarget/,
+      /Electrobun copy map does not include eliza-dist runtime destination/,
     );
-    expect(workflow).toMatch(/Resolve-AgentPackageExportTargets/);
-    expect(workflow).toMatch(/\.Replace\("\*", \$replacement\)/);
+    expect(workflow).toMatch(
+      /Electrobun runtime source resolves to \$\{resolvedRuntimeSource\}, expected \$\{expectedRuntimeSource\}/,
+    );
+    expect(workflow).toMatch(
+      /test -f dist\/node_modules\/@elizaos\/agent\/package\.json/,
+    );
+    expect(workflow).toMatch(
+      /eliza-dist @elizaos\/agent package manifest found/,
+    );
     expect(workflow).not.toMatch(/packages\\agent\\src\\\$runtimeModule/);
     expect(workflow).toMatch(
       /ELIZA_TEST_WINDOWS_ARTIFACTS_DIR: \$\{\{ github\.workspace \}\}\\eliza\\packages\\app-core\\platforms\\electrobun\\artifacts/,

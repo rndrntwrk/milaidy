@@ -690,8 +690,13 @@ export function getTemporaryElizaWorkspaceEntries(
     cloudBillingWorkspace,
     "package.json",
   );
-  const cloudBillingWorkspaceEntry =
+  const cloudWorkspaceReady =
     pathExists(cloudBillingPackageJson) &&
+    pathExists(
+      path.join(elizaRoot, "cloud", ".external", "steward", "packages"),
+    );
+  const cloudBillingWorkspaceEntry =
+    cloudWorkspaceReady &&
     !optionalPluginWorkspaceEntries.includes(cloudBillingWorkspace)
       ? [cloudBillingWorkspace]
       : [];

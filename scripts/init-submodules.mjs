@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { execSync } from "node:child_process";
-import { existsSync, rmSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -10,6 +10,9 @@ const root = resolve(__dirname, "..");
 const skipLocalUpstreams =
   process.env.MILADY_SKIP_LOCAL_UPSTREAMS === "1" ||
   process.env.ELIZA_SKIP_LOCAL_UPSTREAMS === "1";
+const skipCloudSubmodule =
+  process.env.MILADY_SKIP_CLOUD_SUBMODULE === "1" ||
+  process.env.ELIZA_SKIP_CLOUD_SUBMODULE === "1";
 const SUBMODULE_READINESS_MARKERS = {
   eliza: ["package.json", "packages/typescript/package.json"],
 };
@@ -19,6 +22,30 @@ const SUBMODULE_READINESS_MARKERS = {
 const NO_RECURSE_SUBMODULES = new Set(["eliza"]);
 
 const LEGACY_ROOT_SUBMODULE_PATHS = ["cloud"];
+const SKIPPED_CLOUD_WORKSPACE_ENTRIES = [
+  { packageJson: "package.json", workspaces: ["eliza/cloud/packages/sdk"] },
+  { packageJson: "eliza/package.json", workspaces: ["cloud/packages/sdk"] },
+  {
+    packageJson:
+      "eliza/packages/app-core/deploy/cloud-agent-template/package.json",
+    workspaces: [],
+  },
+];
+const SKIPPED_CLOUD_COUPLED_SUBMODULE_PATHS = new Set([
+  "plugins/plugin-elizacloud",
+  "eliza/plugins/plugin-elizacloud",
+]);
+const SKIPPED_CLOUD_DEPENDENCY_FALLBACKS = {
+  "@elizaos/plugin-elizacloud": "2.0.0-alpha.8",
+};
+const PACKAGE_DEPENDENCY_FIELDS = [
+  "dependencies",
+  "devDependencies",
+  "peerDependencies",
+  "optionalDependencies",
+  "overrides",
+];
+const SKIPPED_CLOUD_LOCKFILES = ["bun.lock", "bun.lockb"];
 
 function shellQuote(value) {
   return `'${String(value).replaceAll("'", "'\"'\"'")}'`;
@@ -93,19 +120,148 @@ export function hydrateSubmoduleFromConfiguredBranch(
 
 function getSubmoduleSkipReason(
   submodulePath,
-  { skipLocal = skipLocalUpstreams } = {},
+  { skipLocal = skipLocalUpstreams, skipCloud = skipCloudSubmodule } = {},
 ) {
   if (skipLocal && submodulePath === "eliza") {
     return "local upstreams are disabled";
+  }
+  if (
+    skipCloud &&
+    (submodulePath === "cloud" || submodulePath === "eliza/cloud")
+  ) {
+    return "cloud submodule is disabled";
+  }
+  if (skipCloud && SKIPPED_CLOUD_COUPLED_SUBMODULE_PATHS.has(submodulePath)) {
+    return "cloud-coupled plugin workspace is disabled";
   }
   return null;
 }
 
 export function shouldSkipSubmoduleInit(
   submodulePath,
-  { skipLocal = skipLocalUpstreams } = {},
+  { skipLocal = skipLocalUpstreams, skipCloud = skipCloudSubmodule } = {},
 ) {
-  return getSubmoduleSkipReason(submodulePath, { skipLocal }) !== null;
+  return (
+    getSubmoduleSkipReason(submodulePath, { skipLocal, skipCloud }) !== null
+  );
+}
+
+function isStringArray(value) {
+  return (
+    Array.isArray(value) && value.every((entry) => typeof entry === "string")
+  );
+}
+
+function getPackageWorkspaces(pkg) {
+  if (isStringArray(pkg.workspaces)) {
+    return pkg.workspaces;
+  }
+  if (
+    pkg.workspaces &&
+    typeof pkg.workspaces === "object" &&
+    isStringArray(pkg.workspaces.packages)
+  ) {
+    return pkg.workspaces.packages;
+  }
+  return null;
+}
+
+function setPackageWorkspaces(pkg, workspaces) {
+  if (Array.isArray(pkg.workspaces)) {
+    pkg.workspaces = workspaces;
+    return;
+  }
+  pkg.workspaces.packages = workspaces;
+}
+
+function rewriteSkippedCloudDependencies(pkg) {
+  let changed = false;
+  for (const field of PACKAGE_DEPENDENCY_FIELDS) {
+    const deps = pkg[field];
+    if (!deps || typeof deps !== "object" || Array.isArray(deps)) {
+      continue;
+    }
+    for (const [name, version] of Object.entries(
+      SKIPPED_CLOUD_DEPENDENCY_FALLBACKS,
+    )) {
+      if (deps[name] === "workspace:*") {
+        deps[name] = version;
+        changed = true;
+      }
+    }
+  }
+  return changed;
+}
+
+export function pruneSkippedCloudWorkspace({
+  rootDir = root,
+  exists = existsSync,
+  readFile = readFileSync,
+  writeFile = writeFileSync,
+  remove = rmSync,
+  log = console.log,
+  skipCloud = skipCloudSubmodule,
+} = {}) {
+  if (!skipCloud) {
+    return [];
+  }
+
+  if (exists(resolve(rootDir, "eliza/cloud/packages/sdk/package.json"))) {
+    return [];
+  }
+
+  const changed = [];
+  for (const entry of SKIPPED_CLOUD_WORKSPACE_ENTRIES) {
+    const packageJsonPath = resolve(rootDir, entry.packageJson);
+    if (!exists(packageJsonPath)) {
+      continue;
+    }
+
+    const raw = readFile(packageJsonPath, "utf8");
+    const pkg = JSON.parse(raw);
+    const workspaces = getPackageWorkspaces(pkg);
+    let packageChanged = false;
+
+    if (workspaces) {
+      const nextWorkspaces = workspaces.filter(
+        (workspaceEntry) => !entry.workspaces.includes(workspaceEntry),
+      );
+      if (nextWorkspaces.length !== workspaces.length) {
+        setPackageWorkspaces(pkg, nextWorkspaces);
+        packageChanged = true;
+      }
+    }
+
+    if (rewriteSkippedCloudDependencies(pkg)) {
+      packageChanged = true;
+    }
+
+    if (!packageChanged) {
+      continue;
+    }
+
+    const indent = raw.match(/^(\s+)"/m)?.[1] ?? "  ";
+    writeFile(packageJsonPath, `${JSON.stringify(pkg, null, indent)}\n`);
+    changed.push(entry.packageJson);
+    log(
+      `[init-submodules] Applied skipped cloud workspace fallbacks to ${entry.packageJson}`,
+    );
+  }
+
+  if (changed.length > 0) {
+    for (const lockfile of SKIPPED_CLOUD_LOCKFILES) {
+      const lockfilePath = resolve(rootDir, lockfile);
+      if (!exists(lockfilePath)) {
+        continue;
+      }
+      remove(lockfilePath, { force: true });
+      log(
+        `[init-submodules] Removed ${lockfile} so Bun regenerates without skipped cloud workspaces`,
+      );
+    }
+  }
+
+  return changed;
 }
 
 export function parseTrackedSubmodules(configOutput) {
@@ -611,6 +767,12 @@ export function runInitSubmodules({
       `[init-submodules] Initialized ${initialized} submodule(s); ${alreadyInitialized} already ready.`,
     );
   }
+
+  pruneSkippedCloudWorkspace({
+    rootDir,
+    exists,
+    log,
+  });
 
   return { initialized, alreadyInitialized, failed, submodules };
 }
