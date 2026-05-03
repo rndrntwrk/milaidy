@@ -50,12 +50,9 @@ import { fileURLToPath } from "node:url";
 
 export const ELIZA_WORKSPACE_GLOB = "eliza/packages/*";
 export const PLUGIN_ROOT_WORKSPACE_GLOB = "eliza/plugins/*";
-export const PLUGIN_TYPESCRIPT_WORKSPACE_GLOB =
-  "eliza/plugins/plugin-*/typescript";
 export const DISABLED_WORKSPACE_GLOBS = [
   ELIZA_WORKSPACE_GLOB,
   PLUGIN_ROOT_WORKSPACE_GLOB,
-  PLUGIN_TYPESCRIPT_WORKSPACE_GLOB,
 ];
 export const LOCAL_ONLY_WORKSPACE_GLOBS = [
   "eliza/packages/native-plugins/*",
@@ -64,8 +61,8 @@ export const LOCAL_ONLY_WORKSPACE_GLOBS = [
 export const LOCAL_ONLY_ELIZA_PACKAGE_PATHS = {
   "@elizaos/plugin-agent-wallet": "plugins/plugin-agent-wallet",
   "@elizaos/plugin-browser-bridge": "plugins/plugin-browser-bridge",
-  "@elizaos/plugin-app-control": "plugins/plugin-app-control/typescript",
-  "@elizaos/plugin-signal": "plugins/plugin-signal/typescript",
+  "@elizaos/plugin-app-control": "plugins/plugin-app-control",
+  "@elizaos/plugin-signal": "plugins/plugin-signal",
   "@elizaos/plugin-wechat": "plugins/plugin-wechat",
   "@elizaos/skills": "packages/skills",
   "@elizaos/vault": "packages/vault",
@@ -91,7 +88,7 @@ export const CI_OVERRIDE_SPECIFIERS = {
 export const ELIZA_RUNTIME_CI_OVERRIDE_SPECIFIERS = {
   "@elizaos/ui": "file:./packages/ui",
   "@elizaos/plugin-browser-bridge": "file:./plugins/plugin-browser-bridge",
-  "@elizaos/plugin-signal": "file:./plugins/plugin-signal/typescript",
+  "@elizaos/plugin-signal": "file:./plugins/plugin-signal",
   "@elizaos/skills": "file:./packages/skills",
 };
 export const DEPENDENCY_FIELDS = [

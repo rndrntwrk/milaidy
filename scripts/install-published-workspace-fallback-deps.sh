@@ -112,7 +112,7 @@ ensure_eliza_submodule_manifest() {
 
 # Append every third-party dependency from a manifest's `dependencies` section,
 # preserving the manifest's pinned spec. Used to keep package builds (e.g.
-# eliza/packages/typescript) functional after disable-local-eliza-workspace
+# eliza/packages/core) functional after disable-local-eliza-workspace
 # drops them from the root workspace graph: their transitive third-party deps
 # are no longer installed at root, but the build still bundles them.
 #
@@ -220,33 +220,33 @@ append_versioned_package \
 # release validation. Keep those published plugins available when the root
 # workspace graph has been rewritten away.
 ensure_eliza_submodule_manifest \
-  "eliza/plugins/plugin-agent-skills/typescript/package.json" \
+  "eliza/plugins/plugin-agent-skills/package.json" \
   "plugins/plugin-agent-skills"
 append_versioned_package \
   "@elizaos/plugin-agent-skills" \
-  "eliza/plugins/plugin-agent-skills/typescript/package.json" \
-  ".eliza.ci-disabled/plugins/plugin-agent-skills/typescript/package.json"
+  "eliza/plugins/plugin-agent-skills/package.json" \
+  ".eliza.ci-disabled/plugins/plugin-agent-skills/package.json"
 ensure_eliza_submodule_manifest \
-  "eliza/plugins/plugin-local-embedding/typescript/package.json" \
+  "eliza/plugins/plugin-local-embedding/package.json" \
   "plugins/plugin-local-embedding"
 append_versioned_package \
   "@elizaos/plugin-local-embedding" \
-  "eliza/plugins/plugin-local-embedding/typescript/package.json" \
-  ".eliza.ci-disabled/plugins/plugin-local-embedding/typescript/package.json"
+  "eliza/plugins/plugin-local-embedding/package.json" \
+  ".eliza.ci-disabled/plugins/plugin-local-embedding/package.json"
 ensure_eliza_submodule_manifest \
-  "eliza/plugins/plugin-pdf/typescript/package.json" \
+  "eliza/plugins/plugin-pdf/package.json" \
   "plugins/plugin-pdf"
 append_versioned_package \
   "@elizaos/plugin-pdf" \
-  "eliza/plugins/plugin-pdf/typescript/package.json" \
-  ".eliza.ci-disabled/plugins/plugin-pdf/typescript/package.json"
+  "eliza/plugins/plugin-pdf/package.json" \
+  ".eliza.ci-disabled/plugins/plugin-pdf/package.json"
 ensure_eliza_submodule_manifest \
-  "eliza/plugins/plugin-sql/typescript/package.json" \
+  "eliza/plugins/plugin-sql/package.json" \
   "plugins/plugin-sql"
 append_versioned_package \
   "@elizaos/plugin-sql" \
-  "eliza/plugins/plugin-sql/typescript/package.json" \
-  ".eliza.ci-disabled/plugins/plugin-sql/typescript/package.json"
+  "eliza/plugins/plugin-sql/package.json" \
+  ".eliza.ci-disabled/plugins/plugin-sql/package.json"
 
 # coding-agent-adapters is a transitive dep of eliza/packages/agent's server.ts.
 # After disable-local-eliza-workspace drops eliza/packages/agent from the
@@ -281,17 +281,17 @@ append_third_party_dependencies_from_manifest \
 append_third_party_dependencies_from_manifest \
   ".eliza.ci-disabled/packages/agent/package.json"
 
-# eliza/packages/typescript (@elizaos/core) is rebuilt from source in the
+# eliza/packages/core (@elizaos/core) is rebuilt from source in the
 # cloud-image and snap pipelines so the local agent-orchestrator override is
 # included. After disable-local-eliza-workspace removes the package from the
 # root workspace, its third-party dependencies (handlebars, dedent, @noble/*,
 # @ai-sdk/*, etc.) are no longer installed at root, and the bundle fails with
 # "Could not resolve: <pkg>. Maybe you need to bun install?".
 append_third_party_dependencies_from_manifest \
-  "eliza/packages/typescript/package.json"
+  "eliza/packages/core/package.json"
 # Fallback path used after disable-local-eliza-workspace renames the dir.
 append_third_party_dependencies_from_manifest \
-  ".eliza.ci-disabled/packages/typescript/package.json"
+  ".eliza.ci-disabled/packages/core/package.json"
 
 # eliza/packages/app-core is rebuilt from source in the cloud-image and
 # Docker CI Smoke pipelines (Vite bundle). Its third-party deps — e.g.
@@ -308,16 +308,16 @@ append_third_party_dependencies_from_manifest \
 # dependencies available after the workspace graph is disabled; otherwise
 # plugin-anthropic fails at import time on jsonrepair.
 ensure_eliza_submodule_manifest \
-  "eliza/plugins/plugin-anthropic/typescript/package.json" \
+  "eliza/plugins/plugin-anthropic/package.json" \
   "plugins/plugin-anthropic"
 append_third_party_dependencies_from_manifest \
-  "eliza/plugins/plugin-anthropic/typescript/package.json"
+  "eliza/plugins/plugin-anthropic/package.json"
 append_third_party_dependencies_from_manifest \
-  ".eliza.ci-disabled/plugins/plugin-anthropic/typescript/package.json"
+  ".eliza.ci-disabled/plugins/plugin-anthropic/package.json"
 append_dependency_spec_package \
   "jsonrepair" \
-  "eliza/plugins/plugin-anthropic/typescript/package.json" \
-  ".eliza.ci-disabled/plugins/plugin-anthropic/typescript/package.json"
+  "eliza/plugins/plugin-anthropic/package.json" \
+  ".eliza.ci-disabled/plugins/plugin-anthropic/package.json"
 
 # @elizaos/core's declaration build expects the explicit `bun-types` ambient
 # library named in tsconfig, plus the @types/bun package used by the source
@@ -329,31 +329,31 @@ append_dependency_spec_package \
   "apps/app/package.json"
 append_dependency_spec_package \
   "@types/bun" \
-  "eliza/packages/typescript/package.json" \
-  ".eliza.ci-disabled/packages/typescript/package.json"
+  "eliza/packages/core/package.json" \
+  ".eliza.ci-disabled/packages/core/package.json"
 append_dependency_spec_package \
   "@types/node" \
   "eliza/package.json" \
   ".eliza.ci-disabled/package.json" \
-  "eliza/packages/typescript/package.json" \
-  ".eliza.ci-disabled/packages/typescript/package.json" \
+  "eliza/packages/core/package.json" \
+  ".eliza.ci-disabled/packages/core/package.json" \
   "package.json"
 append_dependency_spec_package \
   "@types/fast-redact" \
-  "eliza/packages/typescript/package.json" \
-  ".eliza.ci-disabled/packages/typescript/package.json"
+  "eliza/packages/core/package.json" \
+  ".eliza.ci-disabled/packages/core/package.json"
 append_dependency_spec_package \
   "@types/markdown-it" \
-  "eliza/packages/typescript/package.json" \
-  ".eliza.ci-disabled/packages/typescript/package.json"
+  "eliza/packages/core/package.json" \
+  ".eliza.ci-disabled/packages/core/package.json"
 
 for attempt in 1 2 3; do
   if bun add --no-save --dev --ignore-scripts "${packages[@]}"; then
     symlink_installed_packages_into_manifest_node_modules \
-      "eliza/packages/typescript/package.json" \
+      "eliza/packages/core/package.json" \
       1
     symlink_installed_packages_into_manifest_node_modules \
-      ".eliza.ci-disabled/packages/typescript/package.json" \
+      ".eliza.ci-disabled/packages/core/package.json" \
       1
     symlink_installed_packages_into_manifest_node_modules \
       "eliza/package.json"
@@ -378,10 +378,10 @@ for attempt in 1 2 3; do
       "eliza/apps/app-vincent/package.json" \
       1
     symlink_installed_packages_into_manifest_node_modules \
-      "eliza/plugins/plugin-anthropic/typescript/package.json" \
+      "eliza/plugins/plugin-anthropic/package.json" \
       1
     symlink_installed_packages_into_manifest_node_modules \
-      ".eliza.ci-disabled/plugins/plugin-anthropic/typescript/package.json" \
+      ".eliza.ci-disabled/plugins/plugin-anthropic/package.json" \
       1
 
     # @types/uuid shadows uuid@13's bundled types and makes TS report that
@@ -390,9 +390,9 @@ for attempt in 1 2 3; do
     for uuid_types_dir in \
       node_modules/@types/uuid \
       eliza/node_modules/@types/uuid \
-      eliza/packages/typescript/node_modules/@types/uuid \
+      eliza/packages/core/node_modules/@types/uuid \
       .eliza.ci-disabled/node_modules/@types/uuid \
-      .eliza.ci-disabled/packages/typescript/node_modules/@types/uuid; do
+      .eliza.ci-disabled/packages/core/node_modules/@types/uuid; do
       rm -rf "$uuid_types_dir"
     done
     exit 0

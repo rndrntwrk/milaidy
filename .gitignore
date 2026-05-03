@@ -44,8 +44,8 @@ eliza/packages/*/src/**/*.d.ts
 !eliza/packages/shared/src/elizaos-core-roles.d.ts
 eliza/packages/*/src/**/*.d.ts.map
 # Local ./eliza checkout — only @elizaos/core typescript sources had stray emit (see eliza/.gitignore)
-eliza/packages/typescript/src/**/*.d.ts
-eliza/packages/typescript/src/**/*.d.ts.map
+eliza/packages/core/src/**/*.d.ts
+eliza/packages/core/src/**/*.d.ts.map
 src/plugins/**/*.d.ts
 src/plugins/**/*.d.ts.map
 

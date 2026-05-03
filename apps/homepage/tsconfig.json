@@ -60,8 +60,8 @@
       "@elizaos/plugin-browser-bridge/*": [
         "./eliza/plugins/plugin-browser-bridge/src/*"
       ],
-      "@elizaos/core": ["./eliza/packages/typescript/src/index.ts"],
-      "@elizaos/core/*": ["./eliza/packages/typescript/src/*"],
+      "@elizaos/core": ["./eliza/packages/core/src/index.ts"],
+      "@elizaos/core/*": ["./eliza/packages/core/src/*"],
       "@elizaos/shared": ["./eliza/packages/shared/src/index.ts"],
       "@elizaos/shared/*": ["./eliza/packages/shared/src/*"],
       "@elizaos/capacitor-mobile-signals": [

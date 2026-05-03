@@ -209,7 +209,7 @@ jobs:
           const path = require("path");
           const { execSync } = require("child_process");
           const pkgPaths = [
-            "eliza/packages/typescript/package.json",
+            "eliza/packages/core/package.json",
             "eliza/packages/agent/package.json",
           ];
           const missing = new Set();
@@ -263,7 +263,7 @@ jobs:
           cd eliza/packages/schemas
           buf dep update && buf generate
           # i18n keyword generation (needs @elizaos/shared scripts)
-          cd ../typescript
+          cd ../core
           node ../shared/scripts/generate-keywords.mjs --target ts 2>/dev/null || echo "keyword gen skipped"
           # Build core
           bun run build.ts 2>&1 || echo "core build had errors"

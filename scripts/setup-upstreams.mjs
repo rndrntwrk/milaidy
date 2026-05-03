@@ -40,7 +40,7 @@ export const ELIZA_BUILD_STEPS = [
     // never typecheck against stale dist/ output after the submodule changes.
     check: path.join(
       "packages",
-      "typescript",
+      "core",
       "src",
       "types",
       "generated",
@@ -48,7 +48,7 @@ export const ELIZA_BUILD_STEPS = [
       "v1",
       "agent_pb.ts",
     ),
-    cwd: path.join("packages", "typescript"),
+    cwd: path.join("packages", "core"),
     args: ["run", "build"],
     label: "@elizaos/core",
     alwaysRun: true,
@@ -279,8 +279,8 @@ const PLUGIN_ANTHROPIC_CLAUDE_CLI_BUN_REPLACEMENTS = [
   ],
 ];
 const TS_IGNORE_DEPRECATIONS_COMPAT_FILES = [
-  path.join("packages", "typescript", "tsconfig.json"),
-  path.join("packages", "typescript", "tsconfig.declarations.json"),
+  path.join("packages", "core", "tsconfig.json"),
+  path.join("packages", "core", "tsconfig.declarations.json"),
   path.join("packages", "shared", "tsconfig.json"),
   path.join("packages", "interop", "tsconfig.json"),
 ];
@@ -1736,7 +1736,7 @@ export function ensureElizaTypescriptDependencyLinks(
     dependencies = ELIZA_TYPESCRIPT_BUILD_DEPENDENCIES,
   } = {},
 ) {
-  const packageDir = path.join(elizaRoot, "packages", "typescript");
+  const packageDir = path.join(elizaRoot, "packages", "core");
   let linkedDependencies = 0;
 
   for (const dependency of dependencies) {
@@ -1783,7 +1783,7 @@ export function ensureElizaTypescriptDependencyLinks(
         linkedDependencies +
         " @elizaos/core build " +
         (linkedDependencies === 1 ? "dependency" : "dependencies") +
-        " into eliza/packages/typescript",
+        " into eliza/packages/core",
     );
   }
 

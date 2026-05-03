@@ -50,7 +50,7 @@ export function applyMiladyWorkflowTransform(fileName, content) {
   const pathPairs = [
     ["packages/shared", "eliza/packages/shared"],
     ["packages/schemas", "eliza/packages/schemas"],
-    ["packages/typescript", "eliza/packages/typescript"],
+    ["packages/core", "eliza/packages/core"],
     ["apps/browser-bridge", "eliza/apps/browser-bridge"],
     ["packages/app/", "apps/app/"],
     ["packages/app", "apps/app"],

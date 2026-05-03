@@ -30,5 +30,5 @@ linkRootPackage("@biomejs", ["eliza/node_modules/@biomejs"]);
 linkRootPackage("drizzle-orm", [
   "eliza/node_modules/drizzle-orm",
   "eliza/packages/app-core/node_modules/drizzle-orm",
-  "eliza/plugins/plugin-sql/typescript/node_modules/drizzle-orm",
+  "eliza/plugins/plugin-sql/node_modules/drizzle-orm",
 ]);

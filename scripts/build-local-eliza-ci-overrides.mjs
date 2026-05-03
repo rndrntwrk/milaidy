@@ -16,7 +16,7 @@ export const LOCAL_ELIZA_CI_OVERRIDE_PACKAGES = [
   },
   {
     name: "@elizaos/plugin-signal",
-    packageDir: "eliza/plugins/plugin-signal/typescript",
+    packageDir: "eliza/plugins/plugin-signal",
     entrypoint: "dist/index.js",
   },
 ];
