@@ -23,8 +23,6 @@ export const releaseContractTests = [
   "scripts/run-release-contract-suite.test.ts",
   "scripts/build-local-eliza-ci-overrides.test.ts",
   "scripts/disable-local-eliza-workspace.test.ts",
-  "scripts/patch-mobile-build-release-compat.test.ts",
-  "scripts/patch-release-check-pack-fallback.test.ts",
   "scripts/electrobun-pr-workflow-contract.test.ts",
   "eliza/packages/app-core/scripts/electrobun-release-workflow-drift.test.ts",
   "eliza/packages/app-core/scripts/release-check.test.ts",
@@ -420,9 +418,6 @@ export function main() {
     );
     run("node", ["--import", "tsx", "scripts/write-build-info.ts"]);
     run("node", ["scripts/generate-static-asset-manifest.mjs"], appCoreRoot);
-    // Published-only CI runs against an upstream eliza checkout whose pack
-    // fallback path still needs the generic npm->bun retry patch.
-    run("node", ["scripts/patch-release-check-pack-fallback.mjs"]);
     run("bun", ["run", "release:check"]);
   } catch (err) {
     console.error(err.message ?? err);

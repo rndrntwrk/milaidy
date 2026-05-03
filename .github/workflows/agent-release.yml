@@ -496,8 +496,6 @@ jobs:
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;29.0.13113456"
-      - name: Patch Android release build compatibility
-        run: node scripts/patch-mobile-build-release-compat.mjs
       - name: Prepare Android project
         run: node eliza/packages/app-core/scripts/run-mobile-build.mjs android
       - name: Build AAB and APK
@@ -774,8 +772,6 @@ jobs:
           skip-cloud-submodule: "true"
       - name: Restore legacy electrobun compatibility path
         run: node scripts/ensure-legacy-electrobun-compat.mjs
-      - name: Patch mobile release build compatibility
-        run: node scripts/patch-mobile-build-release-compat.mjs
       - name: Build iOS simulator app
         run: node eliza/packages/app-core/scripts/run-mobile-build.mjs ios
         env:
