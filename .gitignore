@@ -164,6 +164,7 @@ apps/app/electron/*.tar.gz
 
 # Test output directories
 test-output/
+artifacts/
 
 # External plugin repos (not submodules)
 elizaos-plugins/
@@ -249,6 +250,8 @@ scripts/bin/*
 
 # Dev workflow artifacts
 milady-*.html
+eliza-develop-full-commits-apply/
+eliza-merge-into-develop/
 # prr state file (auto-generated)
 .pr-resolver-state.json
 

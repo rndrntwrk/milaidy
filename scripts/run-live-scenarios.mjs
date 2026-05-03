@@ -21,6 +21,8 @@
  *   - SCENARIO_INCLUDE_PENDING=1: include scenarios marked status="pending".
  *   - SKIP_REASON: required when any scenario is intentionally skipped.
  *   - REPORT_PATH: where to write the JSON report (default: artifacts/lifeops-scenario-report.json).
+ *   - MILADY_SAVE_TRAJECTORIES=1: preserve the scenario PGLite DB after cleanup.
+ *   - MILADY_SCENARIO_PGLITE_DIR: explicit PGLite directory for saved trajectory runs.
  *
  * Usage:
  *   node scripts/run-live-scenarios.mjs [--list] [--scenario id1,id2] [--report path]
