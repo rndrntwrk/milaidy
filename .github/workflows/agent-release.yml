@@ -1073,6 +1073,7 @@ jobs:
             const channel = process.env.CHANNEL;
             const previousTag = process.env.PREVIOUS_TAG || '';
             const fullChangelog = fs.readFileSync(process.env.CHANGELOG_FILE, 'utf8').trim();
+            const maxReleaseBodyLength = 120000;
 
             let generatedNotes = '';
             try {
@@ -1087,12 +1088,26 @@ jobs:
               core.warning(`Could not generate GitHub release notes: ${error.message}`);
             }
 
+            function capReleaseBody(body) {
+              if (body.length <= maxReleaseBodyLength) {
+                return body;
+              }
+              const suffix = [
+                '',
+                '',
+                '---',
+                `Release notes were truncated to fit GitHub's release body limit.`,
+                `Full workflow logs: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              ].join('\n');
+              return `${body.slice(0, maxReleaseBodyLength - suffix.length)}${suffix}`;
+            }
+
             const releasePayload = {
               owner: context.repo.owner,
               repo: context.repo.repo,
               tag_name: tag,
               name: tag,
-              body: [
+              body: capReleaseBody([
                 `## ${tag}`,
                 '',
                 prerelease ? `Pre-release (${channel})` : 'Stable release',
@@ -1122,7 +1137,7 @@ jobs:
                 `- 🔄 iOS / macOS → apple-store-release.yml (${process.env.APPLE_TRACK})`,
                 '- 🔄 Homebrew → update-homebrew.yml',
                 '- 🔄 Homepage → deploy-web.yml',
-              ].filter(Boolean).join('\n'),
+              ].filter(Boolean).join('\n')),
               prerelease,
               draft: false,
               generate_release_notes: false,
