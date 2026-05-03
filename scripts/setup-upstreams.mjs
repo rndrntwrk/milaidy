@@ -670,9 +670,22 @@ function getPresentOptionalElizaPlugins(
   elizaRoot,
   { pathExists = existsSync } = {},
 ) {
-  return OPTIONAL_ELIZA_PLUGIN_PACKAGES.filter(({ workspaceEntry }) => {
-    return pathExists(path.join(elizaRoot, workspaceEntry, "package.json"));
-  });
+  return OPTIONAL_ELIZA_PLUGIN_PACKAGES.filter(
+    ({ workspaceEntry, submodulePath }) => {
+      if (!pathExists(path.join(elizaRoot, workspaceEntry, "package.json"))) {
+        return false;
+      }
+      // After eliza's monorepo collapse, plugins/<name>/package.json is the
+      // canonical workspace and plugins/<name>/typescript/ is a legacy leftover
+      // that declares the same package name. Adding both makes bun fail with
+      // "Workspace name already exists". Skip the legacy entry when the flat
+      // layout is present.
+      if (pathExists(path.join(elizaRoot, submodulePath, "package.json"))) {
+        return false;
+      }
+      return true;
+    },
+  );
 }
 
 export function getTemporaryElizaWorkspaceEntries(
