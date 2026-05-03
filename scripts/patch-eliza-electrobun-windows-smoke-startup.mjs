@@ -7,50 +7,6 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
 const checkOnly = process.argv.includes("--check");
 
-function restoreStartupTraceEnvFallback(text) {
-  let nextText = text;
-
-  for (const block of [
-    {
-      constName: "sessionId",
-      envSuffix: "SESSION_ID",
-      bootstrapField: "session_id",
-    },
-    {
-      constName: "stateFile",
-      envSuffix: "STATE_FILE",
-      bootstrapField: "state_file",
-    },
-    {
-      constName: "eventsFile",
-      envSuffix: "EVENTS_FILE",
-      bootstrapField: "events_file",
-    },
-  ]) {
-    const lineEnd = "\\r?\\n";
-    const pattern = new RegExp(
-      `  const ${block.constName} =${lineEnd}` +
-        `(?:    trimEnv\\(env\\.(?:ELIZA|MILADY)_STARTUP_${block.envSuffix}\\) \\?\\?${lineEnd})+` +
-        `    trimEnv\\(bootstrap\\?\\.${block.bootstrapField} \\?\\? undefined\\) \\?\\?${lineEnd}` +
-        "    null;",
-      "m",
-    );
-    const replacement = `  const ${block.constName} =
-    trimEnv(env.ELIZA_STARTUP_${block.envSuffix}) ??
-    trimEnv(env.MILADY_STARTUP_${block.envSuffix}) ??
-    trimEnv(bootstrap?.${block.bootstrapField} ?? undefined) ??
-    null;`;
-
-    if (!pattern.test(nextText)) {
-      return { matched: false, text };
-    }
-
-    nextText = nextText.replace(pattern, replacement);
-  }
-
-  return { matched: true, text: nextText };
-}
-
 function replaceRequiredBlock(text, pattern, replacement) {
   if (text.includes(replacement)) {
     return { matched: true, text };
@@ -174,13 +130,13 @@ function patchLazyStewardRuntimeImports(text) {
 
   const eagerImports = `import { saveStewardCredentials } from "@elizaos/app-core/services/steward-credentials";
 import {
-  createDesktopStewardSidecar,
-  type StewardSidecar,
-  type StewardSidecarStatus,
+\tcreateDesktopStewardSidecar,
+\ttype StewardSidecar,
+\ttype StewardSidecarStatus,
 } from "@elizaos/app-core/services/steward-sidecar";`;
   const lazyImports = `import type {
-  StewardSidecar,
-  StewardSidecarStatus,
+\tStewardSidecar,
+\tStewardSidecarStatus,
 } from "@elizaos/app-core/services/steward-sidecar";`;
 
   if (!nextText.includes(lazyImports)) {
@@ -194,28 +150,28 @@ import {
 // ---------------------------------------------------------------------------
 
 type StewardSidecarModule = typeof import(
-  "@elizaos/app-core/services/steward-sidecar"
+\t"@elizaos/app-core/services/steward-sidecar"
 );
 type StewardCredentialsModule = typeof import(
-  "@elizaos/app-core/services/steward-credentials"
+\t"@elizaos/app-core/services/steward-credentials"
 );
 
 let stewardSidecarModulePromise: Promise<StewardSidecarModule> | null = null;
 let stewardCredentialsModulePromise: Promise<StewardCredentialsModule> | null =
-  null;
+\tnull;
 
 function loadStewardSidecarModule(): Promise<StewardSidecarModule> {
-  stewardSidecarModulePromise ??= import(
-    "@elizaos/app-core/services/steward-sidecar"
-  );
-  return stewardSidecarModulePromise;
+\tstewardSidecarModulePromise ??= import(
+\t\t"@elizaos/app-core/services/steward-sidecar"
+\t);
+\treturn stewardSidecarModulePromise;
 }
 
 function loadStewardCredentialsModule(): Promise<StewardCredentialsModule> {
-  stewardCredentialsModulePromise ??= import(
-    "@elizaos/app-core/services/steward-credentials"
-  );
-  return stewardCredentialsModulePromise;
+\tstewardCredentialsModulePromise ??= import(
+\t\t"@elizaos/app-core/services/steward-credentials"
+\t);
+\treturn stewardCredentialsModulePromise;
 }
 
 `;
@@ -232,12 +188,12 @@ function loadStewardCredentialsModule(): Promise<StewardCredentialsModule> {
   }
 
   const getSidecarBefore = `export function getStewardSidecar(): StewardSidecar {
-  if (!sidecar) {
-    sidecar = createDesktopStewardSidecar({`;
+\tif (!sidecar) {
+\t\tsidecar = createDesktopStewardSidecar({`;
   const getSidecarAfter = `export async function getStewardSidecar(): Promise<StewardSidecar> {
-  if (!sidecar) {
-    const { createDesktopStewardSidecar } = await loadStewardSidecarModule();
-    sidecar = createDesktopStewardSidecar({`;
+\tif (!sidecar) {
+\t\tconst { createDesktopStewardSidecar } = await loadStewardSidecarModule();
+\t\tsidecar = createDesktopStewardSidecar({`;
   if (!nextText.includes(getSidecarAfter)) {
     if (!nextText.includes(getSidecarBefore)) {
       return { matched: false, text: originalText };
@@ -250,11 +206,11 @@ function loadStewardCredentialsModule(): Promise<StewardCredentialsModule> {
     "async function configureStewardEnvFromCredentials(): Promise<void> {",
   );
 
-  const saveCredentialsBefore = `    try {
-      saveStewardCredentials({`;
-  const saveCredentialsAfter = `    try {
-      const { saveStewardCredentials } = await loadStewardCredentialsModule();
-      saveStewardCredentials({`;
+  const saveCredentialsBefore = `\t\ttry {
+\t\t\tsaveStewardCredentials({`;
+  const saveCredentialsAfter = `\t\ttry {
+\t\t\tconst { saveStewardCredentials } = await loadStewardCredentialsModule();
+\t\t\tsaveStewardCredentials({`;
   if (!nextText.includes(saveCredentialsAfter)) {
     if (!nextText.includes(saveCredentialsBefore)) {
       return { matched: false, text: originalText };
@@ -263,23 +219,23 @@ function loadStewardCredentialsModule(): Promise<StewardCredentialsModule> {
   }
 
   nextText = nextText.replace(
-    "  const steward = getStewardSidecar();",
-    "  const steward = await getStewardSidecar();",
+    "\tconst steward = getStewardSidecar();",
+    "\tconst steward = await getStewardSidecar();",
   );
   nextText = nextText.replace(
-    "    configureStewardEnvFromCredentials();",
-    "    await configureStewardEnvFromCredentials();",
+    "\t\tconfigureStewardEnvFromCredentials();",
+    "\t\tawait configureStewardEnvFromCredentials();",
   );
   nextText = nextText.replace(
-    "  configureStewardEnvFromCredentials();",
-    "  await configureStewardEnvFromCredentials();",
+    "\tconfigureStewardEnvFromCredentials();",
+    "\tawait configureStewardEnvFromCredentials();",
   );
 
   if (
     nextText.includes(
       'import { saveStewardCredentials } from "@elizaos/app-core/services/steward-credentials";',
     ) ||
-    nextText.includes("  createDesktopStewardSidecar,\n  type StewardSidecar")
+    nextText.includes("\tcreateDesktopStewardSidecar,\n\ttype StewardSidecar")
   ) {
     return { matched: false, text: originalText };
   }
@@ -732,30 +688,25 @@ ${nestedSigningFunction}  macos_code_dir="$STAGED_APP_PATH/Contents/MacOS"
 function patchLocalAdhocMacosSigningOrder(text) {
   return replaceRequiredBlock(
     text,
-    / {2}return \[\r?\n {4}path\.join\(binaryDir, "launcher"\),\r?\n {4}path\.join\(binaryDir, "bun"\),\r?\n {4}path\.join\(binaryDir, "libNativeWrapper\.dylib"\),\r?\n {4}path\.join\(binaryDir, "libwebgpu_dawn\.dylib"\),\r?\n {4}path\.join\(binaryDir, "libasar\.dylib"\),\r?\n {4}path\.join\(binaryDir, "extractor"\),\r?\n {4}path\.join\(binaryDir, "process_helper"\),\r?\n {4}path\.join\(binaryDir, "zig-zstd"\),\r?\n {4}path\.join\(binaryDir, "zig-asar"\),\r?\n {4}path\.join\(binaryDir, "bspatch"\),\r?\n {4}path\.join\(binaryDir, "bsdiff"\),\r?\n {4}appBundlePath,\r?\n {2}\]/,
-    `  return [
-    path.join(binaryDir, "libNativeWrapper.dylib"),
-    path.join(binaryDir, "libwebgpu_dawn.dylib"),
-    path.join(binaryDir, "libasar.dylib"),
-    path.join(binaryDir, "bun"),
-    path.join(binaryDir, "extractor"),
-    path.join(binaryDir, "process_helper"),
-    path.join(binaryDir, "zig-zstd"),
-    path.join(binaryDir, "zig-asar"),
-    path.join(binaryDir, "bspatch"),
-    path.join(binaryDir, "bsdiff"),
-    path.join(binaryDir, "launcher"),
-    appBundlePath,
-  ]`,
+    /\treturn \[\r?\n\t\tpath\.join\(binaryDir, "launcher"\),\r?\n\t\tpath\.join\(binaryDir, "bun"\),\r?\n\t\tpath\.join\(binaryDir, "libNativeWrapper\.dylib"\),\r?\n\t\tpath\.join\(binaryDir, "libwebgpu_dawn\.dylib"\),\r?\n\t\tpath\.join\(binaryDir, "libasar\.dylib"\),\r?\n\t\tpath\.join\(binaryDir, "extractor"\),\r?\n\t\tpath\.join\(binaryDir, "process_helper"\),\r?\n\t\tpath\.join\(binaryDir, "zig-zstd"\),\r?\n\t\tpath\.join\(binaryDir, "zig-asar"\),\r?\n\t\tpath\.join\(binaryDir, "bspatch"\),\r?\n\t\tpath\.join\(binaryDir, "bsdiff"\),\r?\n\t\tappBundlePath,\r?\n\t\]/,
+    `\treturn [
+\t\tpath.join(binaryDir, "libNativeWrapper.dylib"),
+\t\tpath.join(binaryDir, "libwebgpu_dawn.dylib"),
+\t\tpath.join(binaryDir, "libasar.dylib"),
+\t\tpath.join(binaryDir, "bun"),
+\t\tpath.join(binaryDir, "extractor"),
+\t\tpath.join(binaryDir, "process_helper"),
+\t\tpath.join(binaryDir, "zig-zstd"),
+\t\tpath.join(binaryDir, "zig-asar"),
+\t\tpath.join(binaryDir, "bspatch"),
+\t\tpath.join(binaryDir, "bsdiff"),
+\t\tpath.join(binaryDir, "launcher"),
+\t\tappBundlePath,
+\t]`,
   );
 }
 
 const replacements = [
-  {
-    file: "eliza/packages/app-core/platforms/electrobun/src/startup-trace.ts",
-    description: "restore MILADY startup trace env fallback",
-    transform: restoreStartupTraceEnvFallback,
-  },
   {
     file: "eliza/packages/app-core/platforms/electrobun/scripts/smoke-test-windows.ps1",
     description: "restore Windows smoke release contract",
