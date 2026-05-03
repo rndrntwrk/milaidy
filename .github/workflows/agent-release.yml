@@ -500,17 +500,25 @@ jobs:
         run: node scripts/patch-mobile-build-release-compat.mjs
       - name: Prepare Android project
         run: node eliza/packages/app-core/scripts/run-mobile-build.mjs android
-      - name: Build AAB
+      - name: Build AAB and APK
         working-directory: apps/app/android
         run: |
           chmod +x ./gradlew
-          ./gradlew bundleRelease --no-daemon
+          ./gradlew bundleRelease assembleDebug --no-daemon
       - name: Upload AAB artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: android-aab
           path: apps/app/android/app/build/outputs/bundle/release/*.aab
+          retention-days: 30
+          if-no-files-found: error
+      - name: Upload APK artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: apps/app/android/app/build/outputs/apk/debug/*.apk
           retention-days: 30
           if-no-files-found: error
 
