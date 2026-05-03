@@ -19,7 +19,11 @@ const upstream = path.resolve(
   "validate.mjs",
 );
 
-const result = spawnSync(process.execPath, [upstream, ...process.argv.slice(2)], {
-  stdio: "inherit",
-});
+const result = spawnSync(
+  process.execPath,
+  [upstream, ...process.argv.slice(2)],
+  {
+    stdio: "inherit",
+  },
+);
 process.exit(result.status ?? 1);
