@@ -52,6 +52,22 @@ const config = {
     ],
   },
 
+  aosp: {
+    // MiladyOS AOSP product variant. Consumed by
+    // `eliza/packages/app-core/scripts/aosp/*` (build-aosp, validate,
+    // sync-to-aosp, boot-validate, etc.). See `AospVariantConfig` in
+    // `@elizaos/app-core` for the schema.
+    productLunch: "milady_cf_x86_64_phone-trunk_staging-userdebug",
+    vendorDir: "milady",
+    variantName: "MiladyOS",
+    productName: "milady",
+    packageName: "com.miladyai.milady",
+    appName: "Milady",
+    commonMk: "vendor/milady/milady_common.mk",
+    modelSourceLabel: "milady-download",
+    bootanimationAssetDir: "os/android/vendor/milady/bootanimation",
+  },
+
   branding: {
     appName: "Milady",
     orgName: "milady-ai",
