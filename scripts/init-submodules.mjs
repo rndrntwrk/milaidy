@@ -14,7 +14,7 @@ const skipCloudSubmodule =
   process.env.MILADY_SKIP_CLOUD_SUBMODULE === "1" ||
   process.env.ELIZA_SKIP_CLOUD_SUBMODULE === "1";
 const SUBMODULE_READINESS_MARKERS = {
-  eliza: ["package.json", "packages/typescript/package.json"],
+  eliza: ["package.json", "packages/app-core/package.json"],
 };
 
 // Initialize nested eliza submodules in a second pass from inside eliza/ so
