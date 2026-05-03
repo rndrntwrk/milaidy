@@ -6,6 +6,7 @@ import {
 } from "node:http";
 import { request as requestHttps } from "node:https";
 import net from "node:net";
+import os from "node:os";
 import { Readable } from "node:stream";
 import {
   type AgentRuntime,
@@ -1022,6 +1023,22 @@ export async function handleKnowledgeRoutes(
   }
 
   // ── POST /api/knowledge/documents/bulk ──────────────────────────────────
+  //
+  // Two response shapes via Accept-header negotiation:
+  //
+  //   * `Accept: application/x-ndjson` → chunked NDJSON. Headers flush before
+  //     any per-doc work runs, so neither a client-side request timeout nor
+  //     Node's hidden `headersTimeout` (300_000ms in Node 22) can fail a
+  //     long-running batch. Each completed document emits one JSON line of
+  //     shape `{type:"result",index,ok,filename,...}`; the final line is
+  //     `{type:"summary",total,successCount,failureCount,totalElapsedMs,...}`.
+  //     Lines arrive in completion order — clients use `index` to reorder.
+  //
+  //   * Anything else → existing collected JSON shape, unchanged. Old clients
+  //     keep working.
+  //
+  // Both paths use bounded concurrency (KNOWLEDGE_BULK_CONCURRENCY env, default
+  // min(cpus, 8), clamped to >=1). Sequential behavior corresponds to limit=1.
   if (method === "POST" && pathname === "/api/knowledge/documents/bulk") {
     const body = await readJsonBody<{
       documents?: KnowledgeUploadDocumentBody[];
@@ -1043,11 +1060,28 @@ export async function handleKnowledgeRoutes(
       return true;
     }
 
+    const acceptHeader = String(req.headers.accept || "");
+    const wantsStreaming = acceptHeader.includes("application/x-ndjson");
+
     const batchStartedAt = Date.now();
     const totalContentBytes = body.documents.reduce((sum, doc) => {
       if (typeof doc?.content !== "string") return sum;
       return sum + Buffer.byteLength(doc.content, "utf8");
     }, 0);
+
+    const concurrencyLimit = (() => {
+      const fromEnv = Number(process.env.KNOWLEDGE_BULK_CONCURRENCY);
+      if (Number.isFinite(fromEnv) && fromEnv >= 1) {
+        return Math.min(Math.floor(fromEnv), MAX_BULK_DOCUMENTS);
+      }
+      let cpuCount = 4;
+      try {
+        cpuCount = os.cpus().length;
+      } catch {
+        cpuCount = 4;
+      }
+      return Math.max(1, Math.min(8, cpuCount));
+    })();
 
     logger.info(
       {
@@ -1055,11 +1089,13 @@ export async function handleKnowledgeRoutes(
         agentId,
         documentCount: body.documents.length,
         totalContentBytes,
+        streaming: wantsStreaming,
+        concurrencyLimit,
       },
-      `[knowledge-bulk] Begin bulk ingest of ${body.documents.length} documents (${totalContentBytes} bytes)`,
+      `[knowledge-bulk] Begin bulk ingest of ${body.documents.length} documents (${totalContentBytes} bytes, streaming=${wantsStreaming}, concurrency=${concurrencyLimit})`,
     );
 
-    const results: Array<{
+    type BulkDocResult = {
       index: number;
       ok: boolean;
       filename: string;
@@ -1069,9 +1105,35 @@ export async function handleKnowledgeRoutes(
       phaseElapsedMs?: { imageDescription: number; addKnowledge: number };
       error?: string;
       warnings?: string[];
-    }> = [];
+    };
 
-    for (const [index, document] of body.documents.entries()) {
+    const results: BulkDocResult[] = new Array(body.documents.length);
+    let clientDisconnected = false;
+
+    if (wantsStreaming) {
+      res.writeHead(200, {
+        "Content-Type": "application/x-ndjson; charset=utf-8",
+        "Cache-Control": "no-store",
+        "X-Content-Type-Options": "nosniff",
+      });
+      const flushHeaders = (res as { flushHeaders?: () => void })
+        .flushHeaders;
+      if (typeof flushHeaders === "function") {
+        flushHeaders.call(res);
+      }
+      // If the client disconnects mid-stream, stop emitting lines. Workers
+      // currently embedding still complete their await — one wasted doc max
+      // per worker — but no further docs are picked up.
+      const onClose = () => {
+        clientDisconnected = true;
+      };
+      res.once("close", onClose);
+    }
+
+    const processOneDocument = async (
+      document: KnowledgeUploadDocumentBody | undefined,
+      index: number,
+    ): Promise<BulkDocResult> => {
       const filename = document?.filename || `document-${index + 1}`;
       const docStartedAt = Date.now();
 
@@ -1101,14 +1163,13 @@ export async function handleKnowledgeRoutes(
           },
           `[knowledge-bulk-doc] Document validation failed: ${filename}`,
         );
-        results.push({
+        return {
           index,
           ok: false,
           filename,
           elapsedMs: docElapsedMs,
           error: validationError,
-        });
-        continue;
+        };
       }
 
       const normalizedDocument: KnowledgeUploadDocumentBody = {
@@ -1142,7 +1203,7 @@ export async function handleKnowledgeRoutes(
           },
           `[knowledge-bulk-doc] Document ingested: ${filename} in ${docElapsedMs}ms`,
         );
-        results.push({
+        return {
           index,
           ok: true,
           filename,
@@ -1151,7 +1212,7 @@ export async function handleKnowledgeRoutes(
           elapsedMs: docElapsedMs,
           phaseElapsedMs: uploadResult.phaseElapsedMs,
           warnings: uploadResult.warnings,
-        });
+        };
       } catch (err) {
         const docElapsedMs = Date.now() - docStartedAt;
         logger.warn(
@@ -1167,21 +1228,54 @@ export async function handleKnowledgeRoutes(
           },
           `[knowledge-bulk-doc] Document failed: ${filename} after ${docElapsedMs}ms`,
         );
-        results.push({
+        return {
           index,
           ok: false,
           filename,
           elapsedMs: docElapsedMs,
           error: String(err),
-        });
+        };
       }
-    }
+    };
 
-    const successCount = results.filter((item) => item.ok).length;
-    const failureCount = results.length - successCount;
+    // Worker-pool fan-out: each worker pulls the next index until the queue
+    // is empty. Up to `workerCount` workers run concurrently. Results are
+    // written to the pre-sized `results` array indexed by document position
+    // so the non-streaming path preserves input order despite concurrent
+    // completion.
+    const documentsList = body.documents;
+    const total = documentsList.length;
+    let nextIndex = 0;
+
+    const runWorker = async (): Promise<void> => {
+      while (true) {
+        if (clientDisconnected) return;
+        const i = nextIndex++;
+        if (i >= total) return;
+        const result = await processOneDocument(documentsList[i], i);
+        results[i] = result;
+        if (wantsStreaming && !clientDisconnected) {
+          res.write(JSON.stringify({ type: "result", ...result }) + "\n");
+        }
+      }
+    };
+
+    const workerCount = Math.max(1, Math.min(concurrencyLimit, total));
+    await Promise.all(
+      Array.from({ length: workerCount }, () => runWorker()),
+    );
+
+    const successCount = results
+      .filter((item): item is BulkDocResult => item != null)
+      .filter((item) => item.ok).length;
+    const completedCount = results.filter(
+      (item): item is BulkDocResult => item != null,
+    ).length;
+    const failureCount = completedCount - successCount;
     const totalElapsedMs = Date.now() - batchStartedAt;
 
     const sortedDocDurations = results
+      .filter((item): item is BulkDocResult => item != null)
       .map((item) =>
         typeof item.elapsedMs === "number" ? item.elapsedMs : null,
       )
@@ -1211,24 +1305,57 @@ export async function handleKnowledgeRoutes(
         boundary: "knowledge-bulk",
         agentId,
         documentCount: body.documents.length,
+        completedCount,
         successCount,
         failureCount,
         totalContentBytes,
         totalElapsedMs,
         perDocElapsedMs,
+        concurrency: workerCount,
+        streaming: wantsStreaming,
+        clientDisconnected,
       },
-      `[knowledge-bulk] Completed bulk ingest: ${successCount}/${body.documents.length} ok, ${failureCount} failed in ${totalElapsedMs}ms (p50=${perDocElapsedMs.p50}ms p95=${perDocElapsedMs.p95}ms max=${perDocElapsedMs.max}ms)`,
+      `[knowledge-bulk] Completed bulk ingest: ${successCount}/${body.documents.length} ok, ${failureCount} failed in ${totalElapsedMs}ms (p50=${perDocElapsedMs.p50}ms p95=${perDocElapsedMs.p95}ms max=${perDocElapsedMs.max}ms, concurrency=${workerCount}, streaming=${wantsStreaming})`,
     );
 
-    json(res, {
-      ok: failureCount === 0,
-      total: results.length,
-      successCount,
-      failureCount,
-      totalElapsedMs,
-      perDocElapsedMs,
-      results,
-    });
+    if (wantsStreaming) {
+      if (!clientDisconnected) {
+        res.write(
+          JSON.stringify({
+            type: "summary",
+            ok: failureCount === 0,
+            total: completedCount,
+            successCount,
+            failureCount,
+            totalElapsedMs,
+            perDocElapsedMs,
+            concurrency: workerCount,
+          }) + "\n",
+        );
+      }
+      res.end();
+    } else {
+      // Replace any unfilled slots (only possible on client-disconnect, which
+      // doesn't apply to the buffered path but defended for symmetry) with
+      // synthetic skipped entries so the output array length matches input.
+      const collectedResults = results.map((item, i) =>
+        item ?? {
+          index: i,
+          ok: false,
+          filename: documentsList[i]?.filename || `document-${i + 1}`,
+          error: "skipped",
+        },
+      );
+      json(res, {
+        ok: failureCount === 0,
+        total: collectedResults.length,
+        successCount,
+        failureCount,
+        totalElapsedMs,
+        perDocElapsedMs,
+        results: collectedResults,
+      });
+    }
     return true;
   }
 
