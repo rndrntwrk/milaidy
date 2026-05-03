@@ -42,6 +42,10 @@ inputs:
     description: "Keep the preinstalled Android SDK on Linux runners for Android packaging jobs"
     required: false
     default: "false"
+  skip-cloud-submodule:
+    description: "Skip the nested eliza/cloud submodule and remove its workspace entry for jobs that do not need cloud source"
+    required: false
+    default: "false"
 
 runs:
   using: "composite"
@@ -109,6 +113,8 @@ runs:
     - name: Initialize tracked workspace submodules
       shell: bash
       run: node scripts/init-submodules.mjs
+      env:
+        MILADY_SKIP_CLOUD_SUBMODULE: ${{ inputs.skip-cloud-submodule == 'true' && '1' || '' }}
 
     - name: Initialize local eliza workspace
       if: ${{ inputs.disable-local-eliza-workspace != 'true' }}
@@ -119,6 +125,8 @@ runs:
         # skip flags here so the full eliza checkout (including nested plugins)
         # is available to Bun.
         MILADY_SKIP_LOCAL_UPSTREAMS= ELIZA_SKIP_LOCAL_UPSTREAMS= node scripts/init-submodules.mjs
+      env:
+        MILADY_SKIP_CLOUD_SUBMODULE: ${{ inputs.skip-cloud-submodule == 'true' && '1' || '' }}
 
     # disable-local-eliza-workspace.mjs needs eliza/ on disk to read package
     # versions from workspace package.json files (overrides use workspace:*,
@@ -166,7 +174,7 @@ runs:
         NODE
 
     - name: Ensure nested cloud workspace is hydrated
-      if: ${{ inputs.disable-local-eliza-workspace != 'true' }}
+      if: ${{ inputs.disable-local-eliza-workspace != 'true' && inputs.skip-cloud-submodule != 'true' }}
       shell: bash
       run: |
         git -C eliza submodule update --init cloud

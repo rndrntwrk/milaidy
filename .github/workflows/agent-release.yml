@@ -396,6 +396,7 @@ jobs:
           skip-avatar-clone: "true"
           no-vision-deps: "true"
           prepare-local-eliza-runtime: "true"
+          skip-cloud-submodule: "true"
       - name: Run auth bootstrap smoke
         run: bun run test:auth
 
@@ -441,6 +442,7 @@ jobs:
         with:
           disable-local-eliza-workspace: "true"
           install-command: bun install --ignore-scripts --no-frozen-lockfile
+          skip-cloud-submodule: "true"
       - name: Generate eliza i18n keyword data
         # @elizaos/shared stays workspace-local (file:./eliza/packages/shared)
         # even with disable-local-eliza-workspace, and tsdown bundles its
@@ -487,6 +489,7 @@ jobs:
           skip-avatar-clone: "true"
           no-vision-deps: "true"
           preserve-android-sdk: "true"
+          skip-cloud-submodule: "true"
       - name: Restore legacy electrobun compatibility path
         run: node scripts/ensure-legacy-electrobun-compat.mjs
       - name: Install Android NDK
@@ -760,6 +763,7 @@ jobs:
           run-postinstall: "true"
           skip-avatar-clone: "true"
           no-vision-deps: "true"
+          skip-cloud-submodule: "true"
       - name: Restore legacy electrobun compatibility path
         run: node scripts/ensure-legacy-electrobun-compat.mjs
       - name: Patch mobile release build compatibility
@@ -802,6 +806,7 @@ jobs:
           run-postinstall: "true"
           skip-avatar-clone: "true"
           no-vision-deps: "true"
+          skip-cloud-submodule: "true"
       - name: Restore legacy electrobun compatibility path
         run: node scripts/ensure-legacy-electrobun-compat.mjs
       - name: Build web assets and Electrobun
@@ -819,8 +824,11 @@ jobs:
         with:
           disable-local-eliza-workspace: "true"
           install-command: bun install --ignore-scripts --no-frozen-lockfile
+          skip-cloud-submodule: "true"
       - name: Restore eliza workspace paths for homepage scripts
         run: node scripts/restore-local-eliza-workspace.mjs
+        env:
+          MILADY_SKIP_CLOUD_SUBMODULE: "1"
       - name: Generate release metadata
         run: node scripts/write-homepage-release-data.mjs
         env:

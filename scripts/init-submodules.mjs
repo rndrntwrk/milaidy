@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { execSync } from "node:child_process";
-import { existsSync, rmSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -22,6 +22,10 @@ const SUBMODULE_READINESS_MARKERS = {
 const NO_RECURSE_SUBMODULES = new Set(["eliza"]);
 
 const LEGACY_ROOT_SUBMODULE_PATHS = ["cloud"];
+const SKIPPED_CLOUD_WORKSPACE_ENTRIES = [
+  { packageJson: "package.json", workspaces: ["eliza/cloud/packages/sdk"] },
+  { packageJson: "eliza/package.json", workspaces: ["cloud/packages/sdk"] },
+];
 
 function shellQuote(value) {
   return `'${String(value).replaceAll("'", "'\"'\"'")}'`;
@@ -117,6 +121,83 @@ export function shouldSkipSubmoduleInit(
   return (
     getSubmoduleSkipReason(submodulePath, { skipLocal, skipCloud }) !== null
   );
+}
+
+function isStringArray(value) {
+  return (
+    Array.isArray(value) && value.every((entry) => typeof entry === "string")
+  );
+}
+
+function getPackageWorkspaces(pkg) {
+  if (isStringArray(pkg.workspaces)) {
+    return pkg.workspaces;
+  }
+  if (
+    pkg.workspaces &&
+    typeof pkg.workspaces === "object" &&
+    isStringArray(pkg.workspaces.packages)
+  ) {
+    return pkg.workspaces.packages;
+  }
+  return null;
+}
+
+function setPackageWorkspaces(pkg, workspaces) {
+  if (Array.isArray(pkg.workspaces)) {
+    pkg.workspaces = workspaces;
+    return;
+  }
+  pkg.workspaces.packages = workspaces;
+}
+
+export function pruneSkippedCloudWorkspace({
+  rootDir = root,
+  exists = existsSync,
+  readFile = readFileSync,
+  writeFile = writeFileSync,
+  log = console.log,
+  skipCloud = skipCloudSubmodule,
+} = {}) {
+  if (!skipCloud) {
+    return [];
+  }
+
+  if (exists(resolve(rootDir, "eliza/cloud/packages/sdk/package.json"))) {
+    return [];
+  }
+
+  const changed = [];
+  for (const entry of SKIPPED_CLOUD_WORKSPACE_ENTRIES) {
+    const packageJsonPath = resolve(rootDir, entry.packageJson);
+    if (!exists(packageJsonPath)) {
+      continue;
+    }
+
+    const raw = readFile(packageJsonPath, "utf8");
+    const pkg = JSON.parse(raw);
+    const workspaces = getPackageWorkspaces(pkg);
+    if (!workspaces) {
+      continue;
+    }
+
+    const nextWorkspaces = workspaces.filter(
+      (workspaceEntry) => !entry.workspaces.includes(workspaceEntry),
+    );
+    if (nextWorkspaces.length === workspaces.length) {
+      continue;
+    }
+
+    setPackageWorkspaces(pkg, nextWorkspaces);
+    const indent = raw.match(/^(\s+)"/m)?.[1] ?? "  ";
+    writeFile(packageJsonPath, `${JSON.stringify(pkg, null, indent)}\n`);
+    changed.push(entry.packageJson);
+    log(
+      `[init-submodules] Removed skipped cloud workspace entries from ${entry.packageJson}`,
+    );
+  }
+
+  return changed;
 }
 
 export function parseTrackedSubmodules(configOutput) {
@@ -622,6 +703,12 @@ export function runInitSubmodules({
       `[init-submodules] Initialized ${initialized} submodule(s); ${alreadyInitialized} already ready.`,
     );
   }
+
+  pruneSkippedCloudWorkspace({
+    rootDir,
+    exists,
+    log,
+  });
 
   return { initialized, alreadyInitialized, failed, submodules };
 }
