@@ -25,6 +25,7 @@ import {
   LOCAL_AGENT_BASE,
   rewriteAgentUiUrl,
   shouldAllowPublicSandboxDiscoveryFallback,
+  shouldAutoProbeLocalAgent,
 } from "./runtime-config";
 
 // Timeouts for health probes - shorter than before to avoid long waits
@@ -381,11 +382,14 @@ export function AgentProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    // 3. Prepare local agent probe (will run in parallel)
-    const localClient = new CloudApiClient({
-      url: LOCAL_AGENT_BASE,
-      type: "local",
-    });
+    // 3. Prepare local agent probe (will run in parallel when enabled)
+    const shouldProbeLocal = shouldAutoProbeLocalAgent();
+    const localClient = shouldProbeLocal
+      ? new CloudApiClient({
+          url: LOCAL_AGENT_BASE,
+          type: "local",
+        })
+      : null;
     // We'll add local agent placeholder only if probe succeeds (handled in parallel probes)
 
     // 4. Manually-added remote agents (via ConnectionModal)
@@ -479,6 +483,7 @@ export function AgentProvider({ children }: { children: ReactNode }) {
 
     // Probe local agent in parallel with everything else
     const probeLocalAgent = async (): Promise<ManagedAgent | null> => {
+      if (!localClient) return null;
       await semaphore.acquire();
       try {
         const health = await localClient.health({

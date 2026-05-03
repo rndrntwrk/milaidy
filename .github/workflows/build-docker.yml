@@ -214,10 +214,12 @@ jobs:
             fi
           fi
 
-          echo "version=${VERSION}"             >> $GITHUB_OUTPUT
-          echo "version_clean=${VERSION_CLEAN}" >> $GITHUB_OUTPUT
-          echo "is_release=${IS_RELEASE}"       >> $GITHUB_OUTPUT
-          echo "tag_latest=${TAG_LATEST}"       >> $GITHUB_OUTPUT
+          {
+            echo "version=${VERSION}"
+            echo "version_clean=${VERSION_CLEAN}"
+            echo "is_release=${IS_RELEASE}"
+            echo "tag_latest=${TAG_LATEST}"
+          } >> "$GITHUB_OUTPUT"
 
           echo "Version:    ${VERSION}"
           echo "Clean:      ${VERSION_CLEAN}"
@@ -368,22 +370,24 @@ jobs:
       - name: Build summary
         if: always()
         run: |
-          echo "## 🐳 Milady Docker Image" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Registry | \`${{ env.REGISTRY }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Image | \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Version | \`${{ steps.version.outputs.version }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Tagged latest | \`${{ steps.version.outputs.tag_latest }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Trigger | \`${{ github.event_name }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Requested SHA | \`${{ inputs.source_sha || github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Built SHA | \`$(git rev-parse HEAD)\` |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Pull commands" >> $GITHUB_STEP_SUMMARY
-          echo '```bash' >> $GITHUB_STEP_SUMMARY
-          echo "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ steps.version.outputs.tag_latest }}" = "true" ]; then
-            echo "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest" >> $GITHUB_STEP_SUMMARY
-          fi
-          echo '```' >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## 🐳 Milady Docker Image"
+            echo ""
+            echo "| Property | Value |"
+            echo "|----------|-------|"
+            echo "| Registry | \`${{ env.REGISTRY }}\` |"
+            echo "| Image | \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}\` |"
+            echo "| Version | \`${{ steps.version.outputs.version }}\` |"
+            echo "| Tagged latest | \`${{ steps.version.outputs.tag_latest }}\` |"
+            echo "| Trigger | \`${{ github.event_name }}\` |"
+            echo "| Requested SHA | \`${{ inputs.source_sha || github.sha }}\` |"
+            echo "| Built SHA | \`$(git rev-parse HEAD)\` |"
+            echo ""
+            echo "### Pull commands"
+            echo '```bash'
+            echo "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}"
+            if [ "${{ steps.version.outputs.tag_latest }}" = "true" ]; then
+              echo "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+            fi
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

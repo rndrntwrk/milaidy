@@ -404,6 +404,7 @@ jobs:
     uses: ./.github/workflows/release-electrobun.yml
     with:
       tag: ${{ needs.version.outputs.tag }}
+      channel: ${{ needs.version.outputs.channel }}
       draft: false
       publish_release: false
 
@@ -1250,6 +1251,7 @@ jobs:
     uses: ./.github/workflows/release-orchestrator.yml
     with:
       version: ${{ needs.version.outputs.version }}
+      channel: ${{ needs.version.outputs.channel }}
       publish_npm: true
       publish_packages: ${{ needs.version.outputs.channel != 'canary' }}
       publish_android: ${{ needs.version.outputs.channel != 'canary' }}

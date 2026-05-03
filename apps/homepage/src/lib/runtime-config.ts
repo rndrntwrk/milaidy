@@ -84,6 +84,25 @@ export function shouldAllowPublicSandboxDiscoveryFallback(): boolean {
   return false;
 }
 
+export function isLocalAgentAutoProbeDefaultHostname(
+  hostname: string,
+): boolean {
+  const normalized = normalizeCloudHost(hostname);
+  return normalized === "localhost" || normalized === "127.0.0.1";
+}
+
+export function shouldAutoProbeLocalAgent(): boolean {
+  const explicit = import.meta.env.VITE_LOCAL_AGENT_AUTO_PROBE;
+  if (typeof explicit === "string") {
+    const normalized = explicit.trim().toLowerCase();
+    if (normalized.length > 0)
+      return normalized !== "0" && normalized !== "false";
+  }
+
+  if (typeof window === "undefined") return false;
+  return isLocalAgentAutoProbeDefaultHostname(window.location.hostname);
+}
+
 export function getCloudTokenStorageKey(): string {
   try {
     const url = new URL(CLOUD_BASE);

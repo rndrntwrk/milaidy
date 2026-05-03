@@ -42,6 +42,11 @@ on:
         description: "Release tag override (e.g. v2.0.0-alpha.3)"
         required: false
         type: string
+      channel:
+        description: "Release channel"
+        required: false
+        type: string
+        default: ""
       draft:
         description: "Create the GitHub release as a draft"
         required: false
@@ -63,6 +68,17 @@ on:
         description: "Release tag (e.g. v2.0.0-alpha.3)"
         required: false
         type: string
+      channel:
+        description: "Release channel"
+        required: false
+        type: choice
+        default: auto
+        options:
+          - auto
+          - canary
+          - beta
+          - rc
+          - stable
       draft:
         description: "Create as draft release"
         required: false
@@ -98,6 +114,7 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
       tag: ${{ steps.version.outputs.tag }}
+      channel: ${{ steps.version.outputs.channel }}
       env: ${{ steps.version.outputs.env }}
       source_sha: ${{ steps.version.outputs.source_sha }}
       desktop_matrix: ${{ steps.desktop-matrix.outputs.desktop_matrix }}
@@ -109,6 +126,8 @@ jobs:
 
       - name: Determine version + env
         id: version
+        env:
+          INPUT_CHANNEL: ${{ inputs.channel || '' }}
         run: |
           if [[ -n "${{ inputs.tag }}" ]]; then
             TAG="${{ inputs.tag }}"
@@ -119,19 +138,65 @@ jobs:
             exit 1
           fi
           VERSION="${TAG#v}"
-          # canary for pre-release tags, stable for everything else
-          if echo "$VERSION" | grep -qE '(alpha|beta|rc|nightly)'; then
-            BUILD_ENV="canary"
-          else
-            BUILD_ENV="stable"
+          CHANNEL="$INPUT_CHANNEL"
+          if [[ "$CHANNEL" == "auto" ]]; then
+            CHANNEL=""
           fi
+          if [[ -z "$CHANNEL" ]]; then
+            if echo "$VERSION" | grep -qiE '(alpha|nightly)'; then
+              CHANNEL="canary"
+            elif echo "$VERSION" | grep -qi 'beta'; then
+              CHANNEL="beta"
+            elif echo "$VERSION" | grep -qi 'rc'; then
+              CHANNEL="rc"
+            else
+              CHANNEL="stable"
+            fi
+          fi
+
+          case "$CHANNEL" in
+            canary)
+              if ! echo "$VERSION" | grep -qiE '(alpha|nightly)'; then
+                echo "::error::canary desktop release requires an alpha/nightly version"
+                exit 1
+              fi
+              BUILD_ENV="canary"
+              ;;
+            beta)
+              if ! echo "$VERSION" | grep -qi 'beta'; then
+                echo "::error::beta desktop release requires a beta version"
+                exit 1
+              fi
+              BUILD_ENV="stable"
+              ;;
+            rc)
+              if ! echo "$VERSION" | grep -qi 'rc'; then
+                echo "::error::rc desktop release requires an rc version"
+                exit 1
+              fi
+              BUILD_ENV="stable"
+              ;;
+            stable)
+              if echo "$VERSION" | grep -qiE '(alpha|beta|rc|nightly)'; then
+                echo "::error::stable desktop release requires a stable version"
+                exit 1
+              fi
+              BUILD_ENV="stable"
+              ;;
+            *)
+              echo "::error::Invalid desktop release channel: $CHANNEL"
+              exit 1
+              ;;
+          esac
+
           {
             echo "tag=$TAG"
             echo "version=$VERSION"
+            echo "channel=$CHANNEL"
             echo "env=$BUILD_ENV"
             echo "source_sha=$GITHUB_SHA"
           } >> "$GITHUB_OUTPUT"
-          echo "Release: $VERSION (tag: $TAG, env: $BUILD_ENV, sha: $GITHUB_SHA)"
+          echo "Release: $VERSION (tag: $TAG, channel: $CHANNEL, env: $BUILD_ENV, sha: $GITHUB_SHA)"
 
       - name: Select desktop platform matrix
         id: desktop-matrix
@@ -176,6 +241,12 @@ jobs:
         with:
           submodules: false
 
+      - name: Initialize tracked workspace submodules
+        run: node scripts/init-submodules.mjs
+
+      - name: Apply Milady eliza CI patches
+        run: node scripts/apply-eliza-ci-patches.mjs
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
@@ -197,14 +268,15 @@ jobs:
 
       - name: Prepare Whisper model artifact
         run: |
-          if [ ! -e eliza/packages/node_modules/whisper-node ] && [ -e node_modules/whisper-node ]; then
-            mkdir -p eliza/packages/node_modules
-            ln -s ../../../node_modules/whisper-node eliza/packages/node_modules/whisper-node
-          fi
-          export MILADY_WHISPER_MODEL_CACHE_DIR="$HOME/.cache/eliza/whisper"
+          whisper_pkg="$(node -e 'const { createRequire } = require("node:module"); const path = require("node:path"); const req = createRequire(process.cwd() + "/"); console.log(path.dirname(req.resolve("whisper-node/package.json")));')"
+          mkdir -p eliza/packages/node_modules
+          ln -sfn "$(realpath "$whisper_pkg")" eliza/packages/node_modules/whisper-node
+          export MILADY_WHISPER_MODEL_CACHE_DIR="$HOME/.cache/milady/whisper"
           bash eliza/packages/app-core/platforms/electrobun/scripts/ensure-whisper-model.sh base.en
           mkdir -p .artifacts/whisper-model
-          cp "$HOME/.cache/eliza/whisper/ggml-base.en.bin" .artifacts/whisper-model/ggml-base.en.bin
+          cp "$HOME/.cache/milady/whisper/ggml-base.en.bin" .artifacts/whisper-model/ggml-base.en.bin
+          mkdir -p eliza/packages/node_modules/whisper-node/lib/whisper.cpp/models
+          cp "$HOME/.cache/milady/whisper/ggml-base.en.bin" eliza/packages/node_modules/whisper-node/lib/whisper.cpp/models/ggml-base.en.bin
 
       - name: Upload Whisper model artifact
         uses: actions/upload-artifact@v7
@@ -315,6 +387,12 @@ jobs:
         with:
           submodules: false
 
+      - name: Initialize tracked workspace submodules
+        run: node scripts/init-submodules.mjs
+
+      - name: Apply Milady eliza CI patches
+        run: node scripts/apply-eliza-ci-patches.mjs
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
@@ -392,6 +470,12 @@ jobs:
         with:
           submodules: false
 
+      - name: Initialize tracked workspace submodules
+        run: node scripts/init-submodules.mjs
+
+      - name: Apply Milady eliza CI patches
+        run: node scripts/apply-eliza-ci-patches.mjs
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
@@ -401,9 +485,6 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Initialize tracked workspace submodules
-        run: node scripts/init-submodules.mjs
 
       - name: Install root dependencies
         # --ignore-scripts skips native dependency install scripts (e.g. @tensorflow/tfjs-node
@@ -431,12 +512,19 @@ jobs:
         env:
           MILADY_NO_VISION_DEPS: ${{ matrix.platform.os == 'windows' && '1' || '' }}
 
+      - name: Expose whisper-node for eliza Electrobun scripts
+        if: matrix.platform.os == 'macos' || matrix.platform.os == 'linux'
+        run: |
+          whisper_pkg="$(node -e 'const { createRequire } = require("node:module"); const path = require("node:path"); const req = createRequire(process.cwd() + "/"); console.log(path.dirname(req.resolve("whisper-node/package.json")));')"
+          mkdir -p eliza/packages/node_modules
+          ln -sfn "$(realpath "$whisper_pkg")" eliza/packages/node_modules/whisper-node
+
       - name: Cache Whisper models and binaries
         if: matrix.platform.os == 'macos' || matrix.platform.os == 'linux'
         uses: actions/cache@v5
         with:
           path: |
-            ~/.cache/eliza/whisper
+            ~/.cache/milady/whisper
             node_modules/whisper-node/lib/whisper.cpp/main
             node_modules/whisper-node/lib/whisper.cpp/build
           key: whisper-${{ matrix.platform.artifact-name }}-${{ hashFiles('eliza/packages/app-core/platforms/electrobun/scripts/build-whisper.sh', 'eliza/packages/app-core/platforms/electrobun/scripts/build-whisper-universal.sh', 'eliza/packages/app-core/platforms/electrobun/scripts/ensure-whisper-model.sh') }}
@@ -452,8 +540,10 @@ jobs:
       - name: Seed Whisper model cache
         if: matrix.platform.os == 'macos' || matrix.platform.os == 'linux'
         run: |
-          mkdir -p "$HOME/.cache/eliza/whisper"
-          cp .artifacts/whisper-model/ggml-base.en.bin "$HOME/.cache/eliza/whisper/ggml-base.en.bin"
+          mkdir -p "$HOME/.cache/milady/whisper"
+          cp .artifacts/whisper-model/ggml-base.en.bin "$HOME/.cache/milady/whisper/ggml-base.en.bin"
+          mkdir -p eliza/packages/node_modules/whisper-node/lib/whisper.cpp/models
+          cp .artifacts/whisper-model/ggml-base.en.bin eliza/packages/node_modules/whisper-node/lib/whisper.cpp/models/ggml-base.en.bin
 
       - name: Align version with release tag
         run: |

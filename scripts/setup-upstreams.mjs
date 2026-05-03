@@ -65,6 +65,14 @@ export const ELIZA_BUILD_STEPS = [
     args: ["run", "build"],
     label: "@elizaos/skills",
   },
+  {
+    // plugin-elizacloud imports types from @elizaos/cloud-sdk; fresh CI
+    // checkouts need the SDK declarations before plugin builds run.
+    check: path.join("cloud", "packages", "sdk", "dist", "index.d.ts"),
+    cwd: path.join("cloud", "packages", "sdk"),
+    args: ["run", "build"],
+    label: "@elizaos/cloud-sdk",
+  },
 ];
 export const ELIZA_TYPESCRIPT_BUILD_DEPENDENCIES = [
   "@types/node",
@@ -1080,6 +1088,7 @@ function discoverElizaAppPackageDirs(elizaRoot) {
 function discoverElizaPackageDirs(elizaRoot) {
   return discoverElizaPackageDirsForParents(elizaRoot, [
     "apps",
+    path.join("cloud", "packages"),
     "packages",
     "plugins",
   ]);
