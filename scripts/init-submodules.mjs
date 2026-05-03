@@ -45,6 +45,7 @@ const PACKAGE_DEPENDENCY_FIELDS = [
   "optionalDependencies",
   "overrides",
 ];
+const SKIPPED_CLOUD_LOCKFILES = ["bun.lock", "bun.lockb"];
 
 function shellQuote(value) {
   return `'${String(value).replaceAll("'", "'\"'\"'")}'`;
@@ -197,6 +198,7 @@ export function pruneSkippedCloudWorkspace({
   exists = existsSync,
   readFile = readFileSync,
   writeFile = writeFileSync,
+  remove = rmSync,
   log = console.log,
   skipCloud = skipCloudSubmodule,
 } = {}) {
@@ -244,6 +246,19 @@ export function pruneSkippedCloudWorkspace({
     log(
       `[init-submodules] Applied skipped cloud workspace fallbacks to ${entry.packageJson}`,
     );
+  }
+
+  if (changed.length > 0) {
+    for (const lockfile of SKIPPED_CLOUD_LOCKFILES) {
+      const lockfilePath = resolve(rootDir, lockfile);
+      if (!exists(lockfilePath)) {
+        continue;
+      }
+      remove(lockfilePath, { force: true });
+      log(
+        `[init-submodules] Removed ${lockfile} so Bun regenerates without skipped cloud workspaces`,
+      );
+    }
   }
 
   return changed;
