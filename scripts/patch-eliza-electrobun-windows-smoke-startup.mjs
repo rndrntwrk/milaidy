@@ -536,7 +536,9 @@ esac`,
   }
 
   if (
-    !result.text.includes('FINAL_DMG_NAME="${TARBALL_BASENAME%.app.tar.zst}.dmg"')
+    !result.text.includes(
+      'FINAL_DMG_NAME="${TARBALL_BASENAME%.app.tar.zst}.dmg"',
+    )
   ) {
     result = replaceRequiredBlock(
       result.text,
