@@ -75,6 +75,12 @@
       "@elizaos/app-vincent/*": ["./eliza/apps/app-vincent/src/*"],
       "@elizaos/app-wifi": ["./eliza/apps/app-wifi/src/index.ts"],
       "@elizaos/app-wifi/*": ["./eliza/apps/app-wifi/src/*"],
+      "@elizaos/app-workflow-builder": [
+        "./eliza/apps/app-workflow-builder/src/index.ts"
+      ],
+      "@elizaos/app-workflow-builder/*": [
+        "./eliza/apps/app-workflow-builder/src/*"
+      ],
       "@elizaos/agent": ["./eliza/packages/agent/src/index.ts"],
       "@elizaos/agent/*": ["./eliza/packages/agent/src/*"],
       "@elizaos/plugin-browser-bridge": [

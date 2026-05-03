@@ -120,6 +120,7 @@ import "@elizaos/app-polymarket/register";
 import "@elizaos/app-vincent/client";
 import { useVincentState } from "@elizaos/app-vincent/ui";
 import "@elizaos/app-vincent/register";
+import "@elizaos/app-workflow-builder/register";
 import { shouldUseCloudOnlyBranding } from "@elizaos/app-core";
 import {
   APP_BRANDING_BASE,
