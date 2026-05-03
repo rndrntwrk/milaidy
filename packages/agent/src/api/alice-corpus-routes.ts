@@ -7,6 +7,10 @@ import {
   type AliceCorpusRoot,
   buildAliceCorpusManifest,
 } from "./alice-corpus-manifest.js";
+import {
+  readLatestAliceCorpusStoreSnapshot,
+  writeAliceCorpusStoreSnapshot,
+} from "./alice-corpus-store.js";
 
 export interface AliceCorpusRouteContext {
   req: http.IncomingMessage;
@@ -42,19 +46,56 @@ function resolveCorpusRoots(
 }
 
 function resolveSnapshotPath(stateDir?: string): string {
-  return path.join(stateDir ?? resolveStateDir(), "alice", "corpus-manifest.json");
+  return path.join(
+    stateDir ?? resolveStateDir(),
+    "alice",
+    "corpus-manifest.json",
+  );
+}
+
+function resolveStoreDir(
+  config: Pick<ElizaConfig, "alice">,
+  stateDir: string | undefined,
+  cwd: string,
+): string {
+  const configuredStoreDir = config.alice?.corpus?.storeDir;
+  if (typeof configuredStoreDir === "string" && configuredStoreDir.trim()) {
+    return path.resolve(cwd, configuredStoreDir);
+  }
+  return path.join(stateDir ?? resolveStateDir(), "alice", "corpus-store");
 }
 
 export async function handleAliceCorpusRoutes(
   ctx: AliceCorpusRouteContext,
 ): Promise<boolean> {
-  const { res, method, pathname, config, stateDir, cwd = process.cwd(), json, error } = ctx;
+  const {
+    res,
+    method,
+    pathname,
+    config,
+    stateDir,
+    cwd = process.cwd(),
+    json,
+    error,
+  } = ctx;
 
   if (
     pathname !== "/api/alice/corpus/manifest" &&
-    pathname !== "/api/alice/corpus/snapshot"
+    pathname !== "/api/alice/corpus/snapshot" &&
+    pathname !== "/api/alice/corpus/snapshot/latest"
   ) {
     return false;
+  }
+
+  if (method === "GET" && pathname === "/api/alice/corpus/snapshot/latest") {
+    const storeDir = resolveStoreDir(config, stateDir, cwd);
+    const snapshot = readLatestAliceCorpusStoreSnapshot(storeDir);
+    if (!snapshot) {
+      error(res, "No Alice corpus snapshot has been written", 404);
+      return true;
+    }
+    json(res, { ok: true, storeDir, snapshot });
+    return true;
   }
 
   const manifest = buildAliceCorpusManifest({
@@ -69,8 +110,30 @@ export async function handleAliceCorpusRoutes(
   if (method === "POST" && pathname === "/api/alice/corpus/snapshot") {
     const snapshotPath = resolveSnapshotPath(stateDir);
     fs.mkdirSync(path.dirname(snapshotPath), { recursive: true });
-    fs.writeFileSync(snapshotPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf-8");
-    json(res, { ok: true, snapshotPath, manifest });
+    fs.writeFileSync(
+      snapshotPath,
+      `${JSON.stringify(manifest, null, 2)}\n`,
+      "utf-8",
+    );
+    const store = writeAliceCorpusStoreSnapshot({
+      storeDir: resolveStoreDir(config, stateDir, cwd),
+      manifest,
+    });
+    json(res, {
+      ok: true,
+      snapshotPath,
+      manifest,
+      store: {
+        snapshotId: store.snapshot.snapshotId,
+        corpusSha: store.snapshot.corpusSha,
+        snapshotPath: store.snapshotPath,
+        latestPath: store.latestPath,
+        objectCount: store.objectCount,
+        objectsWritten: store.objectsWritten,
+        existingObjects: store.existingObjects,
+        bytesWritten: store.bytesWritten,
+      },
+    });
     return true;
   }
 

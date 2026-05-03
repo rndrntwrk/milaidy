@@ -688,6 +688,8 @@ export type AliceCorpusConfig = {
   enabled?: boolean;
   /** Configured source-of-truth roots Alice may index. Paths may be absolute or runtime-cwd-relative. */
   roots?: AliceCorpusRootConfig[];
+  /** Durable corpus snapshot store. Defaults to `<stateDir>/alice/corpus-store`. */
+  storeDir?: string;
 };
 
 export type AliceCodingConfig = {
