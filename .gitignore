@@ -273,3 +273,8 @@ scripts/codex-sniff.ts
 signal-auth/
 whatsapp-auth/
 test-results/
+# training pipeline (downloaded HF datasets, normalized JSONL, model checkpoints)
+training/data/
+training/checkpoints/
+training/.venv/
+training/wandb/

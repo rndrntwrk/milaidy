@@ -85,7 +85,7 @@ export function parseArgs(argv) {
     cacheDir: path.join(
       os.homedir(),
       ".cache",
-      "milady-android-agent",
+      "eliza-android-agent",
       "seccomp-shim",
     ),
     abis: SHIM_ABI_TARGETS.map((t) => t.androidAbi),
