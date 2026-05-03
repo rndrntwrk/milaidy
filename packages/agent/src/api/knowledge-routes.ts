@@ -1045,8 +1045,8 @@ export async function handleKnowledgeRoutes(
 
     const batchStartedAt = Date.now();
     const totalContentBytes = body.documents.reduce((sum, doc) => {
-      const len = typeof doc?.content === "string" ? doc.content.length : 0;
-      return sum + len;
+      if (typeof doc?.content !== "string") return sum;
+      return sum + Buffer.byteLength(doc.content, "utf8");
     }, 0);
 
     logger.info(
@@ -1073,17 +1073,40 @@ export async function handleKnowledgeRoutes(
 
     for (const [index, document] of body.documents.entries()) {
       const filename = document?.filename || `document-${index + 1}`;
+      const docStartedAt = Date.now();
+
       if (
         typeof document?.content !== "string" ||
         typeof document?.filename !== "string" ||
         document.content.trim().length === 0 ||
         document.filename.trim().length === 0
       ) {
+        const docElapsedMs = Date.now() - docStartedAt;
+        const contentBytes =
+          typeof document?.content === "string"
+            ? Buffer.byteLength(document.content, "utf8")
+            : 0;
+        const validationError =
+          "content and filename must be non-empty strings";
+        logger.warn(
+          {
+            boundary: "knowledge-bulk-doc",
+            agentId,
+            index,
+            filename,
+            elapsedMs: docElapsedMs,
+            contentBytes,
+            error: validationError,
+            kind: "validation",
+          },
+          `[knowledge-bulk-doc] Document validation failed: ${filename}`,
+        );
         results.push({
           index,
           ok: false,
           filename,
-          error: "content and filename must be non-empty strings",
+          elapsedMs: docElapsedMs,
+          error: validationError,
         });
         continue;
       }
@@ -1094,7 +1117,11 @@ export async function handleKnowledgeRoutes(
         filename: document.filename.trim(),
       };
 
-      const docStartedAt = Date.now();
+      const docContentBytes = Buffer.byteLength(
+        normalizedDocument.content,
+        "utf8",
+      );
+
       try {
         const uploadResult = await addKnowledgeDocument(
           knowledgeService,
@@ -1111,7 +1138,7 @@ export async function handleKnowledgeRoutes(
             fragmentCount: uploadResult.fragmentCount,
             elapsedMs: docElapsedMs,
             phaseElapsedMs: uploadResult.phaseElapsedMs,
-            contentBytes: normalizedDocument.content.length,
+            contentBytes: docContentBytes,
           },
           `[knowledge-bulk-doc] Document ingested: ${filename} in ${docElapsedMs}ms`,
         );
@@ -1134,8 +1161,9 @@ export async function handleKnowledgeRoutes(
             index,
             filename,
             elapsedMs: docElapsedMs,
-            contentBytes: normalizedDocument.content.length,
+            contentBytes: docContentBytes,
             error: String(err),
+            kind: "runtime",
           },
           `[knowledge-bulk-doc] Document failed: ${filename} after ${docElapsedMs}ms`,
         );
