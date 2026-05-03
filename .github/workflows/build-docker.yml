@@ -129,6 +129,8 @@ jobs:
 
       - name: Initialize tracked workspace submodules
         run: node scripts/init-submodules.mjs
+        env:
+          MILADY_SKIP_CLOUD_SUBMODULE: "1"
 
       - name: Repair known eliza patch files
         run: |

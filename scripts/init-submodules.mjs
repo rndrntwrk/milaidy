@@ -10,6 +10,9 @@ const root = resolve(__dirname, "..");
 const skipLocalUpstreams =
   process.env.MILADY_SKIP_LOCAL_UPSTREAMS === "1" ||
   process.env.ELIZA_SKIP_LOCAL_UPSTREAMS === "1";
+const skipCloudSubmodule =
+  process.env.MILADY_SKIP_CLOUD_SUBMODULE === "1" ||
+  process.env.ELIZA_SKIP_CLOUD_SUBMODULE === "1";
 const SUBMODULE_READINESS_MARKERS = {
   eliza: ["package.json", "packages/typescript/package.json"],
 };
@@ -93,19 +96,27 @@ export function hydrateSubmoduleFromConfiguredBranch(
 
 function getSubmoduleSkipReason(
   submodulePath,
-  { skipLocal = skipLocalUpstreams } = {},
+  { skipLocal = skipLocalUpstreams, skipCloud = skipCloudSubmodule } = {},
 ) {
   if (skipLocal && submodulePath === "eliza") {
     return "local upstreams are disabled";
+  }
+  if (
+    skipCloud &&
+    (submodulePath === "cloud" || submodulePath === "eliza/cloud")
+  ) {
+    return "cloud submodule is disabled";
   }
   return null;
 }
 
 export function shouldSkipSubmoduleInit(
   submodulePath,
-  { skipLocal = skipLocalUpstreams } = {},
+  { skipLocal = skipLocalUpstreams, skipCloud = skipCloudSubmodule } = {},
 ) {
-  return getSubmoduleSkipReason(submodulePath, { skipLocal }) !== null;
+  return (
+    getSubmoduleSkipReason(submodulePath, { skipLocal, skipCloud }) !== null
+  );
 }
 
 export function parseTrackedSubmodules(configOutput) {
