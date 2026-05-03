@@ -27,7 +27,7 @@ env:
 jobs:
   validate-release-workflow:
     name: Release Workflow Contract
-    runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-24.04' || (vars.RUNNER_UBUNTU || 'ubuntu-24.04') }}
     timeout-minutes: 30
     defaults:
       run:
