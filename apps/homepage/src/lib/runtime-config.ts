@@ -84,23 +84,67 @@ export function shouldAllowPublicSandboxDiscoveryFallback(): boolean {
   return false;
 }
 
+function parseBooleanFlag(
+  value: string | boolean | undefined,
+): boolean | undefined {
+  if (typeof value === "boolean") return value;
+  if (typeof value !== "string") return undefined;
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized.length === 0) return undefined;
+  return normalized !== "0" && normalized !== "false";
+}
+
+function isLoopbackHostname(hostname: string): boolean {
+  const normalized = normalizeCloudHost(hostname).replace(/^\[|\]$/g, "");
+  return (
+    normalized === "localhost" ||
+    normalized === "127.0.0.1" ||
+    normalized === "::1"
+  );
+}
+
+function isLoopbackUrl(value: string): boolean {
+  try {
+    return isLoopbackHostname(new URL(value).hostname);
+  } catch {
+    return false;
+  }
+}
+
 export function isLocalAgentAutoProbeDefaultHostname(
   hostname: string,
 ): boolean {
-  const normalized = normalizeCloudHost(hostname);
-  return normalized === "localhost" || normalized === "127.0.0.1";
+  return isLoopbackHostname(hostname);
+}
+
+export function shouldAutoProbeLocalAgentForConfig({
+  pageHostname,
+  explicit,
+  localAgentBase = DEFAULT_LOCAL_AGENT_BASE,
+}: {
+  pageHostname?: string;
+  explicit?: string | boolean;
+  localAgentBase?: string;
+}): boolean {
+  if (!pageHostname) return false;
+
+  const pageIsLoopback = isLocalAgentAutoProbeDefaultHostname(pageHostname);
+  if (!pageIsLoopback && isLoopbackUrl(localAgentBase)) return false;
+
+  const explicitValue = parseBooleanFlag(explicit);
+  if (explicitValue !== undefined) return explicitValue;
+
+  return pageIsLoopback;
 }
 
 export function shouldAutoProbeLocalAgent(): boolean {
-  const explicit = import.meta.env.VITE_LOCAL_AGENT_AUTO_PROBE;
-  if (typeof explicit === "string") {
-    const normalized = explicit.trim().toLowerCase();
-    if (normalized.length > 0)
-      return normalized !== "0" && normalized !== "false";
-  }
-
   if (typeof window === "undefined") return false;
-  return isLocalAgentAutoProbeDefaultHostname(window.location.hostname);
+  return shouldAutoProbeLocalAgentForConfig({
+    pageHostname: window.location.hostname,
+    explicit: import.meta.env.VITE_LOCAL_AGENT_AUTO_PROBE,
+    localAgentBase: LOCAL_AGENT_BASE,
+  });
 }
 
 export function getCloudTokenStorageKey(): string {
