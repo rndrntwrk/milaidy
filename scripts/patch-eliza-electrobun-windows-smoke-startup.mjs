@@ -346,18 +346,10 @@ function patchMacosArtifactStager(text) {
   }
 
   if (!result.text.includes("retry_codesign() {")) {
-    const retryCodesignAnchor = `  return "$command_status"
-}
-
-parse_notary_submission_id() {`;
-    if (!result.text.includes(retryCodesignAnchor)) {
-      return { matched: false, text };
-    }
-    result = {
-      matched: true,
-      text: result.text.replace(
-        retryCodesignAnchor,
-        `  return "$command_status"
+    result = replaceRequiredBlock(
+      result.text,
+      / {2}return "\$command_status"\r?\n}\r?\n\r?\nparse_notary_submission_id\(\) \{/,
+      `  return "$command_status"
 }
 
 retry_codesign() {
@@ -365,8 +357,10 @@ retry_codesign() {
 }
 
 parse_notary_submission_id() {`,
-      ),
-    };
+    );
+    if (!result.matched) {
+      return result;
+    }
   }
 
   if (!result.text.includes("retry_notarytool_submit() {")) {

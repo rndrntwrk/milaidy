@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 
 const workflow = (name) => fs.readFileSync(`.github/workflows/${name}`, "utf8");
@@ -159,6 +162,62 @@ test("Electrobun macOS release patch signs nested native runtime binaries idempo
     patchScript,
     /result\.text\.includes\('for tarball_pattern in/,
   );
+});
+
+test("Electrobun macOS release patch tolerates CRLF stager checkout", (t) => {
+  const tmpRepo = fs.mkdtempSync(
+    path.join(os.tmpdir(), "milady-release-patch-"),
+  );
+  t.after(() => fs.rmSync(tmpRepo, { recursive: true, force: true }));
+
+  const copyRepoFile = (relativePath) => {
+    const destination = path.join(tmpRepo, relativePath);
+    fs.mkdirSync(path.dirname(destination), { recursive: true });
+    fs.copyFileSync(relativePath, destination);
+  };
+
+  copyRepoFile("scripts/patch-eliza-electrobun-windows-smoke-startup.mjs");
+  for (const relativePath of [
+    "eliza/packages/app-core/platforms/electrobun/src/startup-trace.ts",
+    "eliza/packages/app-core/platforms/electrobun/scripts/smoke-test-windows.ps1",
+    "eliza/packages/app-core/platforms/electrobun/src/native/steward.ts",
+    "eliza/packages/agent/src/services/telegram-account-auth.ts",
+    "eliza/packages/app-core/test/helpers/real-runtime.ts",
+    "eliza/packages/app-core/platforms/electrobun/scripts/local-adhoc-sign-macos.ts",
+  ]) {
+    copyRepoFile(relativePath);
+  }
+
+  const stagerPath = path.join(
+    tmpRepo,
+    "eliza/packages/app-core/platforms/electrobun/scripts/stage-macos-release-artifacts.sh",
+  );
+  fs.mkdirSync(path.dirname(stagerPath), { recursive: true });
+  const cleanStager = execFileSync(
+    "git",
+    [
+      "-C",
+      "eliza",
+      "show",
+      "20a35d6b45914605876c8b43017c831c025d0abe:packages/app-core/platforms/electrobun/scripts/stage-macos-release-artifacts.sh",
+    ],
+    { encoding: "utf8" },
+  );
+  fs.writeFileSync(stagerPath, cleanStager.replace(/\r?\n/g, "\r\n"));
+
+  execFileSync(
+    process.execPath,
+    ["scripts/patch-eliza-electrobun-windows-smoke-startup.mjs"],
+    { cwd: tmpRepo, stdio: "pipe" },
+  );
+
+  const patchedStager = fs.readFileSync(stagerPath, "utf8");
+  assert.match(patchedStager, /retry_codesign\(\) \{/);
+  assert.match(
+    patchedStager,
+    /for tarball_pattern in "\*-macos-\*\.app\.tar\.zst"/,
+  );
+  assert.match(patchedStager, /sign_nested_macos_runtime_targets\(\) \{/);
 });
 
 test("Electrobun release guards runtime package copy from recursive symlinks", () => {
