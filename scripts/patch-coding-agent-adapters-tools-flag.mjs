@@ -18,7 +18,12 @@
  *
  * Remove this script once the upstream package exposes a config knob to
  * disable the --tools cliFlag (or the claude.ai tier ships dev-tier tool
- * names — whichever comes first).
+ * names — whichever comes first). Upstream PR adding the
+ * `disableToolsFlag` config option:
+ *   https://github.com/HaruHunab1320/parallax/pull/43
+ * Once that PR lands and a new alpha of coding-agent-adapters is published,
+ * switch Milady to set `disableToolsFlag: true` on the Claude preset
+ * options and delete this script.
  */
 import fs from "node:fs";
 import { createRequire } from "node:module";
