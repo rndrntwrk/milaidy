@@ -27,7 +27,11 @@ const config = {
   description: "Cute agents for the acceleration",
   envPrefix: "MILADY",
   namespace: "milady",
-  defaultApps: ["@elizaos/app-companion", "@elizaos/app-screenshare"],
+  defaultApps: [
+    "@elizaos/app-companion",
+    "@elizaos/app-screenshare",
+    "@elizaos/app-workflow-builder",
+  ],
 
   desktop: {
     bundleId: "com.miladyai.milady",

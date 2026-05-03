@@ -385,6 +385,7 @@ const DEFAULT_APP_ROUTE_PLUGIN_MODULES = [
   "@elizaos/app-shopify/register-routes",
   "@elizaos/app-steward/register-routes",
   "@elizaos/app-lifeops/register-routes",
+  "@elizaos/app-workflow-builder/register-routes",
 ];
 
 // Mirror branded app env into ELIZA_* before the shared runtime helpers resolve ports.
