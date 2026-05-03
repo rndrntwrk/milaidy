@@ -62,7 +62,6 @@ jobs:
       - name: Install submodule verification dependencies
         run: |
           bun install --cwd eliza --no-frozen-lockfile --ignore-scripts
-          bash eliza/cloud/packages/scripts/prepare-steward-workspaces.sh
           bun install --cwd eliza/cloud --no-frozen-lockfile --ignore-scripts
 
       - name: Align nested eliza package resolution
@@ -105,7 +104,6 @@ jobs:
       - name: Install submodule verification dependencies
         run: |
           bun install --cwd eliza --no-frozen-lockfile --ignore-scripts
-          bash eliza/cloud/packages/scripts/prepare-steward-workspaces.sh
           bun install --cwd eliza/cloud --no-frozen-lockfile --ignore-scripts
 
       - name: Align nested eliza package resolution
@@ -143,7 +141,6 @@ jobs:
       - name: Install submodule verification dependencies
         run: |
           bun install --cwd eliza --no-frozen-lockfile --ignore-scripts
-          bash eliza/cloud/packages/scripts/prepare-steward-workspaces.sh
           bun install --cwd eliza/cloud --no-frozen-lockfile --ignore-scripts
 
       - name: Align nested eliza package resolution

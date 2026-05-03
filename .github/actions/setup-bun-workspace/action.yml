@@ -182,15 +182,13 @@ runs:
         test -d eliza/cloud/packages/billing
 
     # eliza/cloud/package.json declares Steward packages under
-    # `.external/steward/packages/*` as workspaces. Those directories are
-    # populated for real later by `prepare-steward-workspaces.sh`, but Bun
-    # resolves the cloud workspace graph as soon as it walks into
-    # `eliza/cloud/packages/sdk` (a workspace member of milady root and of
-    # eliza). Without these dirs on disk, `bun install` aborts with
-    # "Workspace not found .external/steward/packages/api". Pre-create
-    # minimal stub package.json files so workspace validation passes; the
-    # real Steward checkout overwrites them when `prepare-steward-workspaces.sh`
-    # runs in workflows that actually need the Steward source.
+    # `.external/steward/packages/*` as workspaces. Bun resolves the cloud
+    # workspace graph as soon as it walks into `eliza/cloud/packages/sdk` (a
+    # workspace member of milady root and of eliza). Without these dirs on
+    # disk, `bun install` aborts with "Workspace not found
+    # .external/steward/packages/api". Pre-create minimal stub package.json
+    # files so workspace validation passes in CI jobs that only need install
+    # and type/build verification.
     - name: Stub Steward workspace dirs for nested cloud workspace
       if: ${{ hashFiles('eliza/cloud/package.json') != '' }}
       shell: bash
