@@ -444,7 +444,7 @@ function patchMacArtifactStagerSnippet(source) {
       macosAppSignSnippet,
     )
     .replace(
-      '    \'codesign --force --timestamp --sign "$ELECTROBUN_DEVELOPER_ID" "$TEMP_DMG_PATH"\','
+      '    \'codesign --force --timestamp --sign "$ELECTROBUN_DEVELOPER_ID" "$TEMP_DMG_PATH"\',',
       macosDmgSignSnippet,
     )
     .replace(
@@ -470,8 +470,8 @@ function patchMacArtifactStagerSnippet(source) {
   }
 
   if (
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: intentional bash string
     !patched.includes(
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: intentional bash string
       'NOTARY_SUBMIT_ATTEMPTS="${ELECTROBUN_NOTARY_SUBMIT_ATTEMPTS:-3}"',
     )
   ) {
@@ -485,8 +485,8 @@ function patchMacArtifactStagerSnippet(source) {
   }
 
   if (
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: intentional bash string
     !patched.includes(
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: intentional bash string
       'NOTARY_WAIT_ATTEMPTS="${ELECTROBUN_NOTARY_WAIT_ATTEMPTS:-3}"',
     )
   ) {
