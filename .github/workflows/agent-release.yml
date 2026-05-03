@@ -1053,9 +1053,9 @@ jobs:
             fi
             echo
             if [ -n "$PREVIOUS_TAG" ]; then
-              git log --date=short --pretty=format:'- %s (%h, %ad)' "$PREVIOUS_TAG..HEAD"
+              git log --date=short --pretty=format:'- %s (%h, %ad)' "$PREVIOUS_TAG..HEAD" | head -200
             else
-              git log --date=short --pretty=format:'- %s (%h, %ad)'
+              git log --date=short --pretty=format:'- %s (%h, %ad)' | head -200
             fi
             echo
           } > "$CHANGELOG_FILE"
@@ -1080,8 +1080,11 @@ jobs:
             const prerelease = process.env.PRERELEASE === 'true';
             const channel = process.env.CHANNEL;
             const previousTag = process.env.PREVIOUS_TAG || '';
-            const fullChangelog = fs.readFileSync(process.env.CHANGELOG_FILE, 'utf8').trim();
-            const maxReleaseBodyLength = 120000;
+            const RAW_CHANGELOG = fs.readFileSync(process.env.CHANGELOG_FILE, 'utf8').trim();
+            const MAX_CHANGELOG = 100_000;
+            const fullChangelog = RAW_CHANGELOG.length > MAX_CHANGELOG
+              ? RAW_CHANGELOG.slice(0, MAX_CHANGELOG) + '\n\n_...changelog truncated. See compare URL above for full history._'
+              : RAW_CHANGELOG;
 
             let generatedNotes = '';
             try {
