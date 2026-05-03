@@ -537,6 +537,7 @@ esac`,
 
   if (
     !result.text.includes(
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: intentional bash string
       'FINAL_DMG_NAME="${TARBALL_BASENAME%.app.tar.zst}.dmg"',
     )
   ) {
@@ -668,6 +669,7 @@ ${nestedSigningFunction}  macos_code_dir="$STAGED_APP_PATH/Contents/MacOS"
 
   if (
     !result.text.includes(
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: intentional bash string
       'NOTARY_SUBMIT_ATTEMPTS="${ELECTROBUN_NOTARY_SUBMIT_ATTEMPTS:-3}"',
     )
   ) {
@@ -690,6 +692,7 @@ ${nestedSigningFunction}  macos_code_dir="$STAGED_APP_PATH/Contents/MacOS"
 
   if (
     !result.text.includes(
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: intentional bash string
       'NOTARY_WAIT_ATTEMPTS="${ELECTROBUN_NOTARY_WAIT_ATTEMPTS:-3}"',
     )
   ) {

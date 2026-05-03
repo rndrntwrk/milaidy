@@ -35,7 +35,7 @@ const { allocateFirstFreeLoopbackPort } = await import(
 const { viteRendererBuildNeeded } = await import(
   path.join(libBase, "vite-renderer-dist-stale.mjs")
 );
-const { resolveMainAppDir, resolveElectrobunDir } = await import(
+const { resolveMainAppDir } = await import(
   path.join(libBase, "app-dir.mjs")
 );
 
