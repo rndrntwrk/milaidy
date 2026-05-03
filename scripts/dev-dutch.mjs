@@ -35,9 +35,7 @@ const { allocateFirstFreeLoopbackPort } = await import(
 const { viteRendererBuildNeeded } = await import(
   path.join(libBase, "vite-renderer-dist-stale.mjs")
 );
-const { resolveMainAppDir } = await import(
-  path.join(libBase, "app-dir.mjs")
-);
+const { resolveMainAppDir } = await import(path.join(libBase, "app-dir.mjs"));
 
 // ── Port allocation ───────────────────────────────────────────────────────────
 console.log("[dutch] Allocating ports…");
