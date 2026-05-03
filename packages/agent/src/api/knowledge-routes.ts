@@ -7,7 +7,12 @@ import {
 import { request as requestHttps } from "node:https";
 import net from "node:net";
 import { Readable } from "node:stream";
-import type { AgentRuntime, Memory, UUID } from "@elizaos/core";
+import {
+  type AgentRuntime,
+  logger,
+  type Memory,
+  type UUID,
+} from "@elizaos/core";
 import {
   isBlockedPrivateOrLinkLocalIp,
   normalizeHostLike,
@@ -878,7 +883,14 @@ export async function handleKnowledgeRoutes(
     documentId: UUID;
     fragmentCount: number;
     warnings?: string[];
+    elapsedMs: number;
+    phaseElapsedMs: {
+      imageDescription: number;
+      addKnowledge: number;
+    };
   }> {
+    const startedAt = Date.now();
+    let imageDescriptionMs = 0;
     let content = document.content;
     let contentType = document.contentType || "text/plain";
     const warnings: string[] = [];
@@ -890,6 +902,7 @@ export async function handleKnowledgeRoutes(
         (document.metadata as Record<string, unknown>)
           ?.includeImageDescriptions === true;
       if (includeDescriptions && runtime) {
+        const imageDescriptionStart = Date.now();
         try {
           const { ModelType } = await import("@elizaos/core");
           const dataUri = `data:${contentType};base64,${content}`;
@@ -912,6 +925,7 @@ export async function handleKnowledgeRoutes(
           content = `[Image: ${document.filename}] — Image description unavailable (model error).`;
           contentType = "text/plain";
         }
+        imageDescriptionMs = Date.now() - imageDescriptionStart;
       } else {
         // No vision requested — store as a reference entry
         content = `[Image: ${document.filename}] — Image uploaded without text extraction.`;
@@ -924,6 +938,7 @@ export async function handleKnowledgeRoutes(
       contentType = "text/markdown";
     }
 
+    const addKnowledgeStart = Date.now();
     const result = await service.addKnowledge({
       agentId,
       worldId: agentId,
@@ -935,6 +950,7 @@ export async function handleKnowledgeRoutes(
       content,
       metadata: document.metadata,
     });
+    const addKnowledgeMs = Date.now() - addKnowledgeStart;
 
     const warningsValue = (result as { warnings?: unknown }).warnings;
     if (Array.isArray(warningsValue)) {
@@ -947,6 +963,11 @@ export async function handleKnowledgeRoutes(
       documentId: result.clientDocumentId,
       fragmentCount: result.fragmentCount,
       warnings: warnings.length > 0 ? warnings : undefined,
+      elapsedMs: Date.now() - startedAt,
+      phaseElapsedMs: {
+        imageDescription: imageDescriptionMs,
+        addKnowledge: addKnowledgeMs,
+      },
     };
   }
 
@@ -963,7 +984,13 @@ export async function handleKnowledgeRoutes(
       return true;
     }
 
-    let result: { documentId: string; fragmentCount: number; warnings?: string[] };
+    let result: {
+      documentId: string;
+      fragmentCount: number;
+      warnings?: string[];
+      elapsedMs: number;
+      phaseElapsedMs: { imageDescription: number; addKnowledge: number };
+    };
     try {
       result = await addKnowledgeDocument(knowledgeService, body);
     } catch (err) {
@@ -971,10 +998,24 @@ export async function handleKnowledgeRoutes(
       return true;
     }
 
+    logger.info(
+      {
+        boundary: "knowledge-doc",
+        agentId,
+        filename: body.filename,
+        documentId: result.documentId,
+        fragmentCount: result.fragmentCount,
+        elapsedMs: result.elapsedMs,
+        phaseElapsedMs: result.phaseElapsedMs,
+      },
+      `[knowledge-doc] Document ingested: ${body.filename}`,
+    );
+
     json(res, {
       ok: true,
       documentId: result.documentId,
       fragmentCount: result.fragmentCount,
+      elapsedMs: result.elapsedMs,
       warnings: result.warnings,
     });
     return true;
@@ -1002,29 +1043,70 @@ export async function handleKnowledgeRoutes(
       return true;
     }
 
+    const batchStartedAt = Date.now();
+    const totalContentBytes = body.documents.reduce((sum, doc) => {
+      if (typeof doc?.content !== "string") return sum;
+      return sum + Buffer.byteLength(doc.content, "utf8");
+    }, 0);
+
+    logger.info(
+      {
+        boundary: "knowledge-bulk",
+        agentId,
+        documentCount: body.documents.length,
+        totalContentBytes,
+      },
+      `[knowledge-bulk] Begin bulk ingest of ${body.documents.length} documents (${totalContentBytes} bytes)`,
+    );
+
     const results: Array<{
       index: number;
       ok: boolean;
       filename: string;
       documentId?: UUID;
       fragmentCount?: number;
+      elapsedMs?: number;
+      phaseElapsedMs?: { imageDescription: number; addKnowledge: number };
       error?: string;
       warnings?: string[];
     }> = [];
 
     for (const [index, document] of body.documents.entries()) {
       const filename = document?.filename || `document-${index + 1}`;
+      const docStartedAt = Date.now();
+
       if (
         typeof document?.content !== "string" ||
         typeof document?.filename !== "string" ||
         document.content.trim().length === 0 ||
         document.filename.trim().length === 0
       ) {
+        const docElapsedMs = Date.now() - docStartedAt;
+        const contentBytes =
+          typeof document?.content === "string"
+            ? Buffer.byteLength(document.content, "utf8")
+            : 0;
+        const validationError =
+          "content and filename must be non-empty strings";
+        logger.warn(
+          {
+            boundary: "knowledge-bulk-doc",
+            agentId,
+            index,
+            filename,
+            elapsedMs: docElapsedMs,
+            contentBytes,
+            error: validationError,
+            kind: "validation",
+          },
+          `[knowledge-bulk-doc] Document validation failed: ${filename}`,
+        );
         results.push({
           index,
           ok: false,
           filename,
-          error: "content and filename must be non-empty strings",
+          elapsedMs: docElapsedMs,
+          error: validationError,
         });
         continue;
       }
@@ -1035,10 +1117,30 @@ export async function handleKnowledgeRoutes(
         filename: document.filename.trim(),
       };
 
+      const docContentBytes = Buffer.byteLength(
+        normalizedDocument.content,
+        "utf8",
+      );
+
       try {
         const uploadResult = await addKnowledgeDocument(
           knowledgeService,
           normalizedDocument,
+        );
+        const docElapsedMs = Date.now() - docStartedAt;
+        logger.info(
+          {
+            boundary: "knowledge-bulk-doc",
+            agentId,
+            index,
+            filename,
+            documentId: uploadResult.documentId,
+            fragmentCount: uploadResult.fragmentCount,
+            elapsedMs: docElapsedMs,
+            phaseElapsedMs: uploadResult.phaseElapsedMs,
+            contentBytes: docContentBytes,
+          },
+          `[knowledge-bulk-doc] Document ingested: ${filename} in ${docElapsedMs}ms`,
         );
         results.push({
           index,
@@ -1046,13 +1148,30 @@ export async function handleKnowledgeRoutes(
           filename,
           documentId: uploadResult.documentId,
           fragmentCount: uploadResult.fragmentCount,
+          elapsedMs: docElapsedMs,
+          phaseElapsedMs: uploadResult.phaseElapsedMs,
           warnings: uploadResult.warnings,
         });
       } catch (err) {
+        const docElapsedMs = Date.now() - docStartedAt;
+        logger.warn(
+          {
+            boundary: "knowledge-bulk-doc",
+            agentId,
+            index,
+            filename,
+            elapsedMs: docElapsedMs,
+            contentBytes: docContentBytes,
+            error: String(err),
+            kind: "runtime",
+          },
+          `[knowledge-bulk-doc] Document failed: ${filename} after ${docElapsedMs}ms`,
+        );
         results.push({
           index,
           ok: false,
           filename,
+          elapsedMs: docElapsedMs,
           error: String(err),
         });
       }
@@ -1060,12 +1179,54 @@ export async function handleKnowledgeRoutes(
 
     const successCount = results.filter((item) => item.ok).length;
     const failureCount = results.length - successCount;
+    const totalElapsedMs = Date.now() - batchStartedAt;
+
+    const sortedDocDurations = results
+      .map((item) =>
+        typeof item.elapsedMs === "number" ? item.elapsedMs : null,
+      )
+      .filter((value): value is number => value !== null)
+      .sort((a, b) => a - b);
+
+    const percentile = (sorted: number[], p: number): number => {
+      if (sorted.length === 0) return 0;
+      const idx = Math.min(
+        sorted.length - 1,
+        Math.floor((p / 100) * sorted.length),
+      );
+      return sorted[idx];
+    };
+
+    const perDocElapsedMs = {
+      p50: percentile(sortedDocDurations, 50),
+      p95: percentile(sortedDocDurations, 95),
+      max:
+        sortedDocDurations.length > 0
+          ? sortedDocDurations[sortedDocDurations.length - 1]
+          : 0,
+    };
+
+    logger.info(
+      {
+        boundary: "knowledge-bulk",
+        agentId,
+        documentCount: body.documents.length,
+        successCount,
+        failureCount,
+        totalContentBytes,
+        totalElapsedMs,
+        perDocElapsedMs,
+      },
+      `[knowledge-bulk] Completed bulk ingest: ${successCount}/${body.documents.length} ok, ${failureCount} failed in ${totalElapsedMs}ms (p50=${perDocElapsedMs.p50}ms p95=${perDocElapsedMs.p95}ms max=${perDocElapsedMs.max}ms)`,
+    );
 
     json(res, {
       ok: failureCount === 0,
       total: results.length,
       successCount,
       failureCount,
+      totalElapsedMs,
+      perDocElapsedMs,
       results,
     });
     return true;
