@@ -79,10 +79,7 @@ fs.writeFileSync(
 NODE
 }`;
 
-const helperAnchor = `PY
-}
-
-TARBALL_PATH=`;
+const helperAnchor = `\nTARBALL_PATH=`;
 
 const oldEntitlementsBlock = `entitlement_args=()
 if [[ "$SKIP_SIGNATURE_CHECK" != "1" && -n "\${ELECTROBUN_DEVELOPER_ID:-}" ]]; then
@@ -98,8 +95,7 @@ if [[ "$SKIP_SIGNATURE_CHECK" != "1" && -n "\${ELECTROBUN_DEVELOPER_ID:-}" ]]; t
   entitlement_args=(--entitlements "$TMP_ENTITLEMENTS_PATH")
 fi`;
 
-const patchedEntitlementsBlock = `entitlement_args=()
-if [[ "$SKIP_SIGNATURE_CHECK" != "1" && -n "\${ELECTROBUN_DEVELOPER_ID:-}" ]]; then
+const patchedEntitlementsBlock = `if [[ "$SKIP_SIGNATURE_CHECK" != "1" && -n "\${ELECTROBUN_DEVELOPER_ID:-}" ]]; then
   TMP_ENTITLEMENTS_PATH="$TMP_ROOT/staged-entitlements.plist"
   if ! codesign -d --entitlements :- "$STAGED_APP_PATH" >"$TMP_ENTITLEMENTS_PATH" 2>/dev/null; then
     write_config_entitlements_plist "$TMP_ENTITLEMENTS_PATH"
@@ -111,7 +107,6 @@ if [[ "$SKIP_SIGNATURE_CHECK" != "1" && -n "\${ELECTROBUN_DEVELOPER_ID:-}" ]]; t
     echo "stage-macos-release-artifacts: macOS entitlements plist is empty"
     exit 1
   fi
-  entitlement_args=(--entitlements "$TMP_ENTITLEMENTS_PATH")
 fi`;
 
 if (!fs.existsSync(scriptPath)) {
@@ -135,12 +130,7 @@ if (!nextText.includes("write_config_entitlements_plist()")) {
   }
   nextText = nextText.replace(
     helperAnchor,
-    `PY
-}
-
-${helperFunction}
-
-TARBALL_PATH=`,
+    `\n${helperFunction}\n\nTARBALL_PATH=`,
   );
 }
 
@@ -149,9 +139,14 @@ if (!nextText.includes(patchedEntitlementsBlock)) {
     nextText = nextText.replace(oldEntitlementsBlock, patchedEntitlementsBlock);
   } else {
     const developerIdExpansion = "$" + "{ELECTROBUN_DEVELOPER_ID:-}";
-    const blockStart = nextText.indexOf(
+    const blockStartWithArgs = nextText.indexOf(
       `entitlement_args=()\nif [[ "$SKIP_SIGNATURE_CHECK" != "1" && -n "${developerIdExpansion}" ]]; then`,
     );
+    const blockStartWithoutArgs = nextText.indexOf(
+      `if [[ "$SKIP_SIGNATURE_CHECK" != "1" && -n "${developerIdExpansion}" ]]; then\n  TMP_ENTITLEMENTS_PATH="$TMP_ROOT/staged-entitlements.plist"`,
+    );
+    const blockStart =
+      blockStartWithArgs >= 0 ? blockStartWithArgs : blockStartWithoutArgs;
     const blockEndMarker = "\n\nTMP_LAUNCHER_PATH=";
     const blockEnd =
       blockStart >= 0 ? nextText.indexOf(blockEndMarker, blockStart) : -1;

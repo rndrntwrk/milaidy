@@ -124,6 +124,23 @@ test("Electrobun release applies Milady eliza overlay before manual build setup"
   );
 });
 
+test("Electrobun macOS release keeps one command path for both CPU architectures", () => {
+  const electrobun = workflow("release-electrobun.yml");
+
+  assert.match(electrobun, /"artifact-name"\s*:\s*"macos-arm64"/);
+  assert.match(electrobun, /"artifact-name"\s*:\s*"macos-x64"/);
+  assert.doesNotMatch(electrobun, /arch -x86_64/);
+  assert.doesNotMatch(electrobun, /ELIZA_DESKTOP_COMMAND_PREFIX/);
+  assert.match(
+    electrobun,
+    /node eliza\/packages\/app-core\/scripts\/desktop-build\.mjs stage --variant=base --build-whisper/,
+  );
+  assert.match(
+    electrobun,
+    /node eliza\/packages\/app-core\/scripts\/desktop-build\.mjs package --env=\$\{\{ needs\.prepare\.outputs\.env \}\}/,
+  );
+});
+
 test("Electrobun release guards runtime package copy from recursive symlinks", () => {
   const electrobun = workflow("release-electrobun.yml");
   const patchScript = fs.readFileSync(

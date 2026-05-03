@@ -340,6 +340,161 @@ function patchMacosArtifactStager(text) {
     return result;
   }
 
+  if (!result.text.includes("retry_codesign() {")) {
+    const retryCodesignAnchor = `  return "$command_status"
+}
+
+parse_notary_submission_id() {`;
+    if (!result.text.includes(retryCodesignAnchor)) {
+      return { matched: false, text };
+    }
+    result = {
+      matched: true,
+      text: result.text.replace(
+        retryCodesignAnchor,
+        `  return "$command_status"
+}
+
+retry_codesign() {
+  retry_command "\${ELECTROBUN_CODESIGN_ATTEMPTS:-3}" "\${ELECTROBUN_CODESIGN_RETRY_DELAY_SECONDS:-20}" codesign "$@"
+}
+
+parse_notary_submission_id() {`,
+      ),
+    };
+  }
+
+  if (!result.text.includes("retry_notarytool_submit() {")) {
+    const notaryRetryAnchor = `TARBALL_PATH=`;
+    if (!result.text.includes(notaryRetryAnchor)) {
+      return { matched: false, text };
+    }
+    result = {
+      matched: true,
+      text: result.text.replace(
+        notaryRetryAnchor,
+        `parse_notary_status() {
+  local output_path="$1"
+  /usr/bin/python3 - "$output_path" <<'PY'
+import json
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+if not path.exists():
+    sys.exit(1)
+
+raw = path.read_text(encoding="utf-8", errors="replace")
+
+try:
+    payload = json.loads(raw)
+except json.JSONDecodeError:
+    sys.exit(1)
+
+status = payload.get("status") or ""
+if status:
+    print(status)
+PY
+}
+
+retry_notarytool_submit() {
+  local output_path="$1"
+  local attempts="$2"
+  local delay_seconds="$3"
+
+  local attempt command_status=0
+  for ((attempt = 1; attempt <= attempts; attempt += 1)); do
+    rm -f "$output_path"
+    if "$REAL_XCRUN" notarytool submit \\
+      --apple-id "$ELECTROBUN_APPLEID" \\
+      --password "$ELECTROBUN_APPLEIDPASS" \\
+      --team-id "$ELECTROBUN_TEAMID" \\
+      --output-format json \\
+      "$TEMP_DMG_PATH" >"$output_path"; then
+      return 0
+    else
+      command_status=$?
+    fi
+
+    echo "stage-macos-release-artifacts: notarization submit failed for $TEMP_DMG_PATH (attempt $attempt/$attempts, exit=$command_status)" >&2
+    if [[ "$attempt" -lt "$attempts" ]]; then
+      sleep "$((delay_seconds * attempt))"
+    fi
+  done
+
+  return "$command_status"
+}
+
+retry_notarytool_wait() {
+  local output_path="$1"
+  local attempts="$2"
+  local delay_seconds="$3"
+
+  local attempt command_status=0 notary_status=""
+  for ((attempt = 1; attempt <= attempts; attempt += 1)); do
+    rm -f "$output_path"
+    if "$REAL_XCRUN" notarytool wait \\
+      --apple-id "$ELECTROBUN_APPLEID" \\
+      --password "$ELECTROBUN_APPLEIDPASS" \\
+      --team-id "$ELECTROBUN_TEAMID" \\
+      --timeout "$NOTARY_WAIT_TIMEOUT" \\
+      --output-format json \\
+      "$NOTARY_SUBMISSION_ID" >"$output_path"; then
+      NOTARY_STATUS="$(parse_notary_status "$output_path" || true)"
+      if [[ "$NOTARY_STATUS" == "Accepted" ]]; then
+        return 0
+      fi
+      echo "stage-macos-release-artifacts: notarization ended with status \${NOTARY_STATUS:-unknown} for submission $NOTARY_SUBMISSION_ID" >&2
+      return 1
+    else
+      command_status=$?
+    fi
+
+    notary_status="$(parse_notary_status "$output_path" || true)"
+    if [[ "$notary_status" == "Invalid" || "$notary_status" == "Rejected" ]]; then
+      echo "stage-macos-release-artifacts: notarization ended with status $notary_status for submission $NOTARY_SUBMISSION_ID" >&2
+      return "$command_status"
+    fi
+
+    echo "stage-macos-release-artifacts: notarization wait failed for submission $NOTARY_SUBMISSION_ID (attempt $attempt/$attempts, exit=$command_status)" >&2
+    if [[ "$attempt" -lt "$attempts" ]]; then
+      sleep "$((delay_seconds * attempt))"
+    fi
+  done
+
+  return "$command_status"
+}
+
+retry_notarytool_log() {
+  local attempts="\${ELECTROBUN_NOTARY_LOG_ATTEMPTS:-3}"
+  local delay_seconds="\${ELECTROBUN_NOTARY_LOG_RETRY_DELAY_SECONDS:-20}"
+
+  local attempt command_status=0
+  for ((attempt = 1; attempt <= attempts; attempt += 1)); do
+    if "$REAL_XCRUN" notarytool log \\
+      --apple-id "$ELECTROBUN_APPLEID" \\
+      --password "$ELECTROBUN_APPLEIDPASS" \\
+      --team-id "$ELECTROBUN_TEAMID" \\
+      "$NOTARY_SUBMISSION_ID"; then
+      return 0
+    else
+      command_status=$?
+    fi
+
+    echo "stage-macos-release-artifacts: notarization log fetch failed for submission $NOTARY_SUBMISSION_ID (attempt $attempt/$attempts, exit=$command_status)" >&2
+    if [[ "$attempt" -lt "$attempts" ]]; then
+      sleep "$((delay_seconds * attempt))"
+    fi
+  done
+
+  return "$command_status"
+}
+
+TARBALL_PATH=`,
+      ),
+    };
+  }
+
   result = replaceRequiredBlock(
     result.text,
     /TARBALL_PATH="\$\(find -L "\$ARTIFACTS_DIR" -maxdepth 1 -type f -name "\*-macos-\*\.app\.tar\.zst" \| sort \| head -1\)"/,
@@ -415,10 +570,17 @@ esac`,
     }
   }
 
-  result = replaceRequiredBlock(
-    result.text,
-    / {2}if ! codesign --force --timestamp --sign "\$ELECTROBUN_DEVELOPER_ID" --options runtime "\$\{entitlement_args\[@\]\}" "\$LAUNCHER_PATH"; then\r?\n {4}echo "stage-macos-release-artifacts: launcher runtime signing failed, retrying without hardened runtime" >&2\r?\n {4}codesign --force --timestamp --sign "\$ELECTROBUN_DEVELOPER_ID" "\$\{entitlement_args\[@\]\}" "\$LAUNCHER_PATH"\r?\n {2}fi\r?\n {2}codesign --force --timestamp --sign "\$ELECTROBUN_DEVELOPER_ID" --options runtime "\$\{entitlement_args\[@\]\}" "\$STAGED_APP_PATH"/,
-    `  runtime_sign_args=(--force --timestamp --sign "$ELECTROBUN_DEVELOPER_ID" --options runtime)
+  if (
+    result.text.includes(
+      'retry_codesign "${app_sign_args[@]}" "$STAGED_APP_PATH"',
+    )
+  ) {
+    result = { matched: true, text: result.text };
+  } else {
+    result = replaceRequiredBlock(
+      result.text,
+      / {2}if ! codesign --force --timestamp --sign "\$ELECTROBUN_DEVELOPER_ID" --options runtime "\$\{entitlement_args\[@\]\}" "\$LAUNCHER_PATH"; then\r?\n {4}echo "stage-macos-release-artifacts: launcher runtime signing failed, retrying without hardened runtime" >&2\r?\n {4}codesign --force --timestamp --sign "\$ELECTROBUN_DEVELOPER_ID" "\$\{entitlement_args\[@\]\}" "\$LAUNCHER_PATH"\r?\n {2}fi\r?\n {2}codesign --force --timestamp --sign "\$ELECTROBUN_DEVELOPER_ID" --options runtime "\$\{entitlement_args\[@\]\}" "\$STAGED_APP_PATH"/,
+      `  runtime_sign_args=(--force --timestamp --sign "$ELECTROBUN_DEVELOPER_ID" --options runtime)
   fallback_runtime_sign_args=(--force --timestamp --sign "$ELECTROBUN_DEVELOPER_ID")
   app_sign_args=(--force --timestamp --sign "$ELECTROBUN_DEVELOPER_ID" --options runtime)
   if [[ -s "\${TMP_ENTITLEMENTS_PATH:-}" ]]; then
@@ -428,9 +590,9 @@ esac`,
   fi
   sign_macos_runtime_target() {
     local target_path="$1"
-    if ! codesign "\${runtime_sign_args[@]}" "$target_path"; then
+    if ! retry_codesign "\${runtime_sign_args[@]}" "$target_path"; then
       echo "stage-macos-release-artifacts: runtime signing failed for $target_path, retrying without hardened runtime" >&2
-      codesign "\${fallback_runtime_sign_args[@]}" "$target_path"
+      retry_codesign "\${fallback_runtime_sign_args[@]}" "$target_path"
     fi
   }
   macos_code_dir="$STAGED_APP_PATH/Contents/MacOS"
@@ -450,10 +612,65 @@ esac`,
     fi
   done
   sign_macos_runtime_target "$LAUNCHER_PATH"
-  codesign "\${app_sign_args[@]}" "$STAGED_APP_PATH"`,
+  retry_codesign "\${app_sign_args[@]}" "$STAGED_APP_PATH"`,
+    );
+  }
+  if (!result.matched) {
+    return result;
+  }
+
+  result = replaceRequiredBlock(
+    result.text,
+    / {2}codesign --force --timestamp --sign "\$ELECTROBUN_DEVELOPER_ID" "\$TEMP_DMG_PATH"/,
+    '  retry_codesign --force --timestamp --sign "$ELECTROBUN_DEVELOPER_ID" "$TEMP_DMG_PATH"',
   );
   if (!result.matched) {
     return result;
+  }
+
+  if (
+    !result.text.includes(
+      'NOTARY_SUBMIT_ATTEMPTS="${ELECTROBUN_NOTARY_SUBMIT_ATTEMPTS:-3}"',
+    )
+  ) {
+    result = replaceRequiredBlock(
+      result.text,
+      / {2}NOTARY_SUBMIT_OUTPUT_PATH="\$TMP_ROOT\/notary-submit\.json"\r?\n {2}"\$REAL_XCRUN" notarytool submit \\\r?\n {4}--apple-id "\$ELECTROBUN_APPLEID" \\\r?\n {4}--password "\$ELECTROBUN_APPLEIDPASS" \\\r?\n {4}--team-id "\$ELECTROBUN_TEAMID" \\\r?\n {4}--output-format json \\\r?\n {4}"\$TEMP_DMG_PATH" >"\$NOTARY_SUBMIT_OUTPUT_PATH"/,
+      `  NOTARY_SUBMIT_ATTEMPTS="\${ELECTROBUN_NOTARY_SUBMIT_ATTEMPTS:-3}"
+  NOTARY_SUBMIT_RETRY_DELAY_SECONDS="\${ELECTROBUN_NOTARY_SUBMIT_RETRY_DELAY_SECONDS:-30}"
+  NOTARY_SUBMIT_OUTPUT_PATH="$TMP_ROOT/notary-submit.json"
+  if ! retry_notarytool_submit "$NOTARY_SUBMIT_OUTPUT_PATH" "$NOTARY_SUBMIT_ATTEMPTS" "$NOTARY_SUBMIT_RETRY_DELAY_SECONDS"; then
+    echo "stage-macos-release-artifacts: notarization submit failed for $TEMP_DMG_PATH" >&2
+    sed -n '1,80p' "$NOTARY_SUBMIT_OUTPUT_PATH" >&2 || true
+    exit 1
+  fi`,
+    );
+    if (!result.matched) {
+      return result;
+    }
+  }
+
+  if (
+    !result.text.includes(
+      'NOTARY_WAIT_ATTEMPTS="${ELECTROBUN_NOTARY_WAIT_ATTEMPTS:-3}"',
+    )
+  ) {
+    result = replaceRequiredBlock(
+      result.text,
+      / {2}NOTARY_WAIT_OUTPUT_PATH="\$TMP_ROOT\/notary-wait\.json"\r?\n {2}if ! "\$REAL_XCRUN" notarytool wait \\\r?\n {4}--apple-id "\$ELECTROBUN_APPLEID" \\\r?\n {4}--password "\$ELECTROBUN_APPLEIDPASS" \\\r?\n {4}--team-id "\$ELECTROBUN_TEAMID" \\\r?\n {4}--timeout "\$NOTARY_WAIT_TIMEOUT" \\\r?\n {4}--output-format json \\\r?\n {4}"\$NOTARY_SUBMISSION_ID" >"\$NOTARY_WAIT_OUTPUT_PATH"; then\r?\n {4}echo "stage-macos-release-artifacts: notarization wait failed for submission \$NOTARY_SUBMISSION_ID" >&2\r?\n {4}sed -n '1,80p' "\$NOTARY_WAIT_OUTPUT_PATH" >&2 \|\| true\r?\n {4}"\$REAL_XCRUN" notarytool log \\\r?\n {6}--apple-id "\$ELECTROBUN_APPLEID" \\\r?\n {6}--password "\$ELECTROBUN_APPLEIDPASS" \\\r?\n {6}--team-id "\$ELECTROBUN_TEAMID" \\\r?\n {6}"\$NOTARY_SUBMISSION_ID" >&2 \|\| true\r?\n {4}exit 1\r?\n {2}fi/,
+      `  NOTARY_WAIT_ATTEMPTS="\${ELECTROBUN_NOTARY_WAIT_ATTEMPTS:-3}"
+  NOTARY_WAIT_RETRY_DELAY_SECONDS="\${ELECTROBUN_NOTARY_WAIT_RETRY_DELAY_SECONDS:-60}"
+  NOTARY_WAIT_OUTPUT_PATH="$TMP_ROOT/notary-wait.json"
+  if ! retry_notarytool_wait "$NOTARY_WAIT_OUTPUT_PATH" "$NOTARY_WAIT_ATTEMPTS" "$NOTARY_WAIT_RETRY_DELAY_SECONDS"; then
+    echo "stage-macos-release-artifacts: notarization wait failed for submission $NOTARY_SUBMISSION_ID" >&2
+    sed -n '1,80p' "$NOTARY_WAIT_OUTPUT_PATH" >&2 || true
+    retry_notarytool_log >&2 || true
+    exit 1
+  fi`,
+    );
+    if (!result.matched) {
+      return result;
+    }
   }
 
   result = replaceRequiredBlock(

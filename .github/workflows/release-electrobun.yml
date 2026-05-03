@@ -409,14 +409,8 @@ jobs:
         # --ignore-scripts skips native dependency install scripts (e.g. @tensorflow/tfjs-node
         # which has no pre-built binary for Node 22 on Windows and fails to compile).
         # Workspace prepare scripts are NOT suppressed by --ignore-scripts in bun.
-        # macOS Intel: keep the x64 invocation explicit in case the runner image
-        # ships with dual-arch shims.
         run: |
-          if [ "${{ matrix.platform.os }}" = "macos" ] && [ "${{ matrix.platform.artifact-name }}" = "macos-x64" ]; then
-            install_cmd=(arch -x86_64 bun install --ignore-scripts)
-          else
-            install_cmd=(bun install --ignore-scripts)
-          fi
+          install_cmd=(bun install --ignore-scripts)
 
           for attempt in 1 2 3; do
             if "${install_cmd[@]}"; then
@@ -504,11 +498,7 @@ jobs:
 
       - name: Stage desktop bundle inputs
         run: |
-          if [ "${{ matrix.platform.os }}" = "macos" ] && [ "${{ matrix.platform.artifact-name }}" = "macos-x64" ]; then
-            ELIZA_DESKTOP_COMMAND_PREFIX="arch -x86_64" node eliza/packages/app-core/scripts/desktop-build.mjs stage --variant=base --build-whisper
-          else
-            node eliza/packages/app-core/scripts/desktop-build.mjs stage --variant=base --build-whisper
-          fi
+          node eliza/packages/app-core/scripts/desktop-build.mjs stage --variant=base --build-whisper
           mkdir -p dist/node_modules/@elizaos/shared/src/i18n/generated
           cp eliza/packages/shared/src/i18n/generated/validation-keyword-data.ts dist/node_modules/@elizaos/shared/src/i18n/generated/
           cp eliza/packages/shared/src/i18n/generated/validation-keyword-data.js dist/node_modules/@elizaos/shared/src/i18n/generated/
@@ -723,11 +713,7 @@ jobs:
         id: build-electrobun-app
         run: |
           set +e
-          if [ "${{ matrix.platform.os }}" = "macos" ] && [ "${{ matrix.platform.artifact-name }}" = "macos-x64" ]; then
-            ELIZA_DESKTOP_COMMAND_PREFIX="arch -x86_64" node eliza/packages/app-core/scripts/desktop-build.mjs package --env=${{ needs.prepare.outputs.env }}
-          else
-            node eliza/packages/app-core/scripts/desktop-build.mjs package --env=${{ needs.prepare.outputs.env }}
-          fi
+          node eliza/packages/app-core/scripts/desktop-build.mjs package --env=${{ needs.prepare.outputs.env }}
           status=$?
           set -e
           if [ "$status" -eq 0 ]; then
