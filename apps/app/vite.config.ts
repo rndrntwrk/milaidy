@@ -12,6 +12,7 @@ import {
   type ServerOptions,
   transformWithEsbuild,
 } from "vite";
+import { CAPACITOR_PLUGIN_NAMES } from "../../eliza/packages/app-core/scripts/lib/capacitor-plugin-names.mjs";
 import { resolveAppBranding } from "../../eliza/packages/app-core/src/config/app-config.ts";
 // Keep workspace-relative TS imports in this config so Vite transpiles them
 // while bundling the config instead of asking Node to load package-exported
@@ -31,7 +32,6 @@ import {
 import { syncElizaEnvAliases } from "../../scripts/lib/sync-eliza-env-aliases.mjs";
 import { parseAllowedHostEnv, toViteAllowedHosts } from "./allowed-hosts.ts";
 import appConfig from "./app.config";
-import { CAPACITOR_PLUGIN_NAMES } from "../../eliza/packages/app-core/scripts/lib/capacitor-plugin-names.mjs";
 import { resolveViteDevServerRuntime } from "./vite-dev-origin.ts";
 
 const _require = createRequire(import.meta.url);
@@ -374,9 +374,7 @@ function isElizaCoreBrowserDistId(id: string | undefined): boolean {
       "/node_modules/@elizaos/core/dist/browser/index.browser.js",
     ) ||
     normalized.endsWith("/eliza/packages/core/dist/index.browser.js") ||
-    normalized.endsWith(
-      "/eliza/packages/core/dist/browser/index.browser.js",
-    )
+    normalized.endsWith("/eliza/packages/core/dist/browser/index.browser.js")
   );
 }
 
