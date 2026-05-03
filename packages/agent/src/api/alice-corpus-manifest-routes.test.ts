@@ -49,6 +49,7 @@ function makeContext({
         alice: {
           corpus: {
             roots: [{ id: "milaidy", path: repoRoot }],
+            storeDir: path.join(stateDir, "durable-corpus-store"),
           },
         },
       },
@@ -68,9 +69,13 @@ describe("handleAliceCorpusRoutes", () => {
   it("builds a configured corpus manifest without secrets or backups", async () => {
     const repoRoot = makeTempDir();
     const stateDir = makeTempDir();
-    writeFile(repoRoot, "packages/agent/src/api/server.ts", "export const api = true;\n");
+    writeFile(
+      repoRoot,
+      "packages/agent/src/api/server.ts",
+      "export const api = true;\n",
+    );
     writeFile(repoRoot, ".env.production", "OPENAI_API_KEY=sk-secret\n");
-    writeFile(repoRoot, "backup/old-config.json", "{\"token\":\"ghp_secret\"}");
+    writeFile(repoRoot, "backup/old-config.json", '{"token":"ghp_secret"}');
 
     const { ctx, jsonCalls } = makeContext({
       method: "GET",
@@ -106,16 +111,73 @@ describe("handleAliceCorpusRoutes", () => {
     await handleAliceCorpusRoutes(ctx);
 
     const snapshotPath = path.join(stateDir, "alice", "corpus-manifest.json");
+    const storeDir = path.join(stateDir, "durable-corpus-store");
     expect(jsonCalls[0]?.data).toMatchObject({
       ok: true,
       snapshotPath,
       manifest: {
         items: [{ relativePath: "README.md" }],
       },
+      store: {
+        snapshotId: expect.stringMatching(/^[a-f0-9]{32}$/),
+        corpusSha: expect.stringMatching(/^[a-f0-9]{64}$/),
+        objectCount: 1,
+        objectsWritten: 1,
+        existingObjects: 0,
+      },
     });
     expect(JSON.parse(fs.readFileSync(snapshotPath, "utf-8"))).toMatchObject({
       version: 1,
       items: [{ relativePath: "README.md" }],
     });
+    expect(fs.existsSync(path.join(storeDir, "latest.json"))).toBe(true);
+  });
+
+  it("returns the latest durable corpus snapshot", async () => {
+    const repoRoot = makeTempDir();
+    const stateDir = makeTempDir();
+    writeFile(repoRoot, "README.md", "# Alice\n");
+
+    const post = makeContext({
+      method: "POST",
+      pathname: "/api/alice/corpus/snapshot",
+      repoRoot,
+      stateDir,
+    });
+    await handleAliceCorpusRoutes(post.ctx);
+
+    const get = makeContext({
+      method: "GET",
+      pathname: "/api/alice/corpus/snapshot/latest",
+      repoRoot,
+      stateDir,
+    });
+    await handleAliceCorpusRoutes(get.ctx);
+
+    expect(get.jsonCalls[0]?.data).toMatchObject({
+      ok: true,
+      snapshot: {
+        snapshotId: expect.stringMatching(/^[a-f0-9]{32}$/),
+        items: [{ relativePath: "README.md" }],
+      },
+    });
+  });
+
+  it("returns 404 when no durable corpus snapshot exists", async () => {
+    const repoRoot = makeTempDir();
+    const stateDir = makeTempDir();
+
+    const { ctx, errorCalls } = makeContext({
+      method: "GET",
+      pathname: "/api/alice/corpus/snapshot/latest",
+      repoRoot,
+      stateDir,
+    });
+
+    await handleAliceCorpusRoutes(ctx);
+
+    expect(errorCalls).toEqual([
+      { message: "No Alice corpus snapshot has been written", status: 404 },
+    ]);
   });
 });
