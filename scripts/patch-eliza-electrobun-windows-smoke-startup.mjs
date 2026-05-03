@@ -331,13 +331,18 @@ function patchRealRuntimeLiveProviderImport(text) {
 }
 
 function patchMacosArtifactStager(text) {
-  let result = replaceRequiredBlock(
-    text,
-    /NOTARY_WAIT_TIMEOUT="\$\{ELECTROBUN_NOTARY_WAIT_TIMEOUT:-30m\}"/,
-    'NOTARY_WAIT_TIMEOUT="$' + '{ELECTROBUN_NOTARY_WAIT_TIMEOUT:-60m}"',
-  );
-  if (!result.matched) {
-    return result;
+  const notaryTimeout60 =
+    'NOTARY_WAIT_TIMEOUT="$' + '{ELECTROBUN_NOTARY_WAIT_TIMEOUT:-60m}"';
+  let result = { matched: true, text };
+  if (!result.text.includes(notaryTimeout60)) {
+    result = replaceRequiredBlock(
+      result.text,
+      /NOTARY_WAIT_TIMEOUT="\$\{ELECTROBUN_NOTARY_WAIT_TIMEOUT:-30m\}"/,
+      notaryTimeout60,
+    );
+    if (!result.matched) {
+      return result;
+    }
   }
 
   if (!result.text.includes("retry_codesign() {")) {
@@ -495,25 +500,28 @@ TARBALL_PATH=`,
     };
   }
 
-  result = replaceRequiredBlock(
-    result.text,
-    /TARBALL_PATH="\$\(find -L "\$ARTIFACTS_DIR" -maxdepth 1 -type f -name "\*-macos-\*\.app\.tar\.zst" \| sort \| head -1\)"/,
-    `TARBALL_PATH=""
+  if (!result.text.includes('for tarball_pattern in "*-macos-*.app.tar.zst"')) {
+    result = replaceRequiredBlock(
+      result.text,
+      /TARBALL_PATH="\$\(find -L "\$ARTIFACTS_DIR" -maxdepth 1 -type f -name "\*-macos-\*\.app\.tar\.zst" \| sort \| head -1\)"/,
+      `TARBALL_PATH=""
 for tarball_pattern in "*-macos-*.app.tar.zst" "*-macos-*.app.tar.gz" "*-macos-*.tar.gz"; do
   TARBALL_PATH="$(find -L "$ARTIFACTS_DIR" -maxdepth 1 -type f -name "$tarball_pattern" | sort | head -1)"
   if [[ -n "$TARBALL_PATH" ]]; then
     break
   fi
 done`,
-  );
-  if (!result.matched) {
-    return result;
+    );
+    if (!result.matched) {
+      return result;
+    }
   }
 
-  result = replaceRequiredBlock(
-    result.text,
-    /echo "Using updater tarball: \$TARBALL_PATH"\r?\ntar --zstd -xf "\$TARBALL_PATH" -C "\$EXTRACT_DIR"/,
-    `echo "Using updater tarball: $TARBALL_PATH"
+  if (!result.text.includes('tar -xzf "$TARBALL_PATH" -C "$EXTRACT_DIR"')) {
+    result = replaceRequiredBlock(
+      result.text,
+      /echo "Using updater tarball: \$TARBALL_PATH"\r?\ntar --zstd -xf "\$TARBALL_PATH" -C "\$EXTRACT_DIR"/,
+      `echo "Using updater tarball: $TARBALL_PATH"
 TARBALL_BASENAME="$(basename "$TARBALL_PATH")"
 case "$TARBALL_BASENAME" in
   *.tar.zst)
@@ -527,15 +535,19 @@ case "$TARBALL_BASENAME" in
     exit 1
     ;;
 esac`,
-  );
-  if (!result.matched) {
-    return result;
+    );
+    if (!result.matched) {
+      return result;
+    }
   }
 
-  result = replaceRequiredBlock(
-    result.text,
-    /FINAL_DMG_NAME="\$\(basename "\$\{TARBALL_PATH%\.app\.tar\.zst\}\.dmg"\)"/,
-    `case "$TARBALL_BASENAME" in
+  if (
+    !result.text.includes('FINAL_DMG_NAME="${TARBALL_BASENAME%.app.tar.zst}.dmg"')
+  ) {
+    result = replaceRequiredBlock(
+      result.text,
+      /FINAL_DMG_NAME="\$\(basename "\$\{TARBALL_PATH%\.app\.tar\.zst\}\.dmg"\)"/,
+      `case "$TARBALL_BASENAME" in
   *.app.tar.zst)
     FINAL_DMG_NAME="\${TARBALL_BASENAME%.app.tar.zst}.dmg"
     ;;
@@ -550,9 +562,10 @@ esac`,
     exit 1
     ;;
 esac`,
-  );
-  if (!result.matched) {
-    return result;
+    );
+    if (!result.matched) {
+      return result;
+    }
   }
 
   if (!result.text.includes("write_config_entitlements_plist")) {
@@ -570,11 +583,24 @@ esac`,
     }
   }
 
-  if (
-    result.text.includes(
-      'retry_codesign "${app_sign_args[@]}" "$STAGED_APP_PATH"',
-    )
-  ) {
+  const nestedSigningFunction = `  sign_nested_macos_runtime_targets() {
+    local runtime_resources_dir="$STAGED_APP_PATH/Contents/Resources/app/eliza-dist"
+    local candidate_path file_type
+    if [[ ! -d "$runtime_resources_dir" ]]; then
+      return 0
+    fi
+    while IFS= read -r -d '' candidate_path; do
+      file_type="$(file "$candidate_path" 2>/dev/null || true)"
+      case "$file_type" in
+        *Mach-O*)
+          sign_macos_runtime_target "$candidate_path"
+          ;;
+      esac
+    done < <(find "$runtime_resources_dir" -type f -print0)
+  }
+`;
+
+  if (result.text.includes("sign_nested_macos_runtime_targets()")) {
     result = { matched: true, text: result.text };
   } else {
     result = replaceRequiredBlock(
@@ -595,7 +621,7 @@ esac`,
       retry_codesign "\${fallback_runtime_sign_args[@]}" "$target_path"
     fi
   }
-  macos_code_dir="$STAGED_APP_PATH/Contents/MacOS"
+${nestedSigningFunction}  macos_code_dir="$STAGED_APP_PATH/Contents/MacOS"
   for runtime_target in \\
     "$macos_code_dir/libNativeWrapper.dylib" \\
     "$macos_code_dir/libwebgpu_dawn.dylib" \\
@@ -611,9 +637,25 @@ esac`,
       sign_macos_runtime_target "$runtime_target"
     fi
   done
+  sign_nested_macos_runtime_targets
   sign_macos_runtime_target "$LAUNCHER_PATH"
   retry_codesign "\${app_sign_args[@]}" "$STAGED_APP_PATH"`,
     );
+    if (!result.matched) {
+      result = replaceRequiredBlock(
+        result.text,
+        / {2}macos_code_dir="\$STAGED_APP_PATH\/Contents\/MacOS"/,
+        `${nestedSigningFunction}  macos_code_dir="$STAGED_APP_PATH/Contents/MacOS"`,
+      );
+      if (result.matched) {
+        result = replaceRequiredBlock(
+          result.text,
+          / {2}sign_macos_runtime_target "\$LAUNCHER_PATH"/,
+          `  sign_nested_macos_runtime_targets
+  sign_macos_runtime_target "$LAUNCHER_PATH"`,
+        );
+      }
+    }
   }
   if (!result.matched) {
     return result;

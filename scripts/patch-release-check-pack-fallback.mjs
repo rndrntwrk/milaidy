@@ -325,6 +325,12 @@ const macosLauncherSignSnippet = [
   '    "retry_notarytool_wait() {",',
   '    "retry_notarytool_log() {",',
   "    '\"$macos_code_dir/libasar.dylib\"',",
+  "    'sign_nested_macos_runtime_targets() {',",
+  "    'runtime_resources_dir=\"$STAGED_APP_PATH/Contents/Resources/app/eliza-dist\"',",
+  "    'file \"$candidate_path\"',",
+  "    '*Mach-O*)',",
+  "    'find \"$runtime_resources_dir\" -type f -print0',",
+  "    'sign_nested_macos_runtime_targets',",
   "    'sign_macos_runtime_target \"$LAUNCHER_PATH\"',",
 ].join("\n");
 const macosAppSignSnippet =
@@ -446,6 +452,22 @@ function patchMacArtifactStagerSnippet(source) {
       macosStaplerRetrySnippet,
     )
     .replace(macosStaplerConfigSnippet, macosStaplerRetrySnippet);
+
+  if (!patched.includes("'sign_nested_macos_runtime_targets() {'")) {
+    patched = patched.replace(
+      "    '\"$macos_code_dir/libasar.dylib\"',\n    'sign_macos_runtime_target \"$LAUNCHER_PATH\"',",
+      [
+        "    '\"$macos_code_dir/libasar.dylib\"',",
+        "    'sign_nested_macos_runtime_targets() {',",
+        "    'runtime_resources_dir=\"$STAGED_APP_PATH/Contents/Resources/app/eliza-dist\"',",
+        "    'file \"$candidate_path\"',",
+        "    '*Mach-O*)',",
+        "    'find \"$runtime_resources_dir\" -type f -print0',",
+        "    'sign_nested_macos_runtime_targets',",
+        "    'sign_macos_runtime_target \"$LAUNCHER_PATH\"',",
+      ].join("\n"),
+    );
+  }
 
   if (
     !patched.includes(

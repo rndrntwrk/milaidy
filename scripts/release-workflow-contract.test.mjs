@@ -141,6 +141,26 @@ test("Electrobun macOS release keeps one command path for both CPU architectures
   );
 });
 
+test("Electrobun macOS release patch signs nested native runtime binaries idempotently", () => {
+  const patchScript = fs.readFileSync(
+    "scripts/patch-eliza-electrobun-windows-smoke-startup.mjs",
+    "utf8",
+  );
+
+  assert.match(patchScript, /sign_nested_macos_runtime_targets\(\)/);
+  assert.match(
+    patchScript,
+    /runtime_resources_dir="\$STAGED_APP_PATH\/Contents\/Resources\/app\/eliza-dist"/,
+  );
+  assert.match(patchScript, /find "\$runtime_resources_dir" -type f -print0/);
+  assert.match(patchScript, /file "\$candidate_path"/);
+  assert.match(patchScript, /Mach-O/);
+  assert.match(
+    patchScript,
+    /result\.text\.includes\('for tarball_pattern in/,
+  );
+});
+
 test("Electrobun release guards runtime package copy from recursive symlinks", () => {
   const electrobun = workflow("release-electrobun.yml");
   const patchScript = fs.readFileSync(
