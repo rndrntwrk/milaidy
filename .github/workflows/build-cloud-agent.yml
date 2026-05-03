@@ -247,8 +247,7 @@ jobs:
       # ── 5. Build Capacitor plugins ──────────────────────────────────────────
       - name: Build Capacitor plugins
         run: |
-          cd apps/app
-          bun scripts/plugin-build.mjs
+          node eliza/packages/app-core/scripts/build-native-plugins.mjs
 
       # ── 5.5. Build @elizaos/core + agent (needed for tsx runtime) ───────
       - name: Install buf CLI

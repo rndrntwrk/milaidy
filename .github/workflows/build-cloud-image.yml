@@ -133,8 +133,7 @@ jobs:
 
       - name: Build Capacitor plugins
         run: |
-          cd apps/app
-          bun scripts/plugin-build.mjs
+          node eliza/packages/app-core/scripts/build-native-plugins.mjs
 
       - name: Build agent workspace
         run: |

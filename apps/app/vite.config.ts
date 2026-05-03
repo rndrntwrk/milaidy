@@ -31,7 +31,7 @@ import {
 import { syncElizaEnvAliases } from "../../scripts/lib/sync-eliza-env-aliases.mjs";
 import { parseAllowedHostEnv, toViteAllowedHosts } from "./allowed-hosts.ts";
 import appConfig from "./app.config";
-import { CAPACITOR_PLUGIN_NAMES } from "./scripts/capacitor-plugin-names.mjs";
+import { CAPACITOR_PLUGIN_NAMES } from "../../eliza/packages/app-core/scripts/lib/capacitor-plugin-names.mjs";
 import { resolveViteDevServerRuntime } from "./vite-dev-origin.ts";
 
 const _require = createRequire(import.meta.url);

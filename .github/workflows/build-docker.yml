@@ -163,8 +163,7 @@ jobs:
       # their dist/ built before vite can resolve them.
       - name: Build Capacitor plugins
         run: |
-          cd apps/app
-          bun scripts/plugin-build.mjs
+          node eliza/packages/app-core/scripts/build-native-plugins.mjs
 
       # ── 7. Build runtime workspace packages with source exports ─────────────
       - name: Build agent workspace

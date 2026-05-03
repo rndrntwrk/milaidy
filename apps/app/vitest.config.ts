@@ -14,7 +14,7 @@ import {
   getUiSourceAliases,
   getWorkspaceAppAliases,
 } from "../../eliza/test/vitest/workspace-aliases";
-import { CAPACITOR_PLUGIN_NAMES } from "./scripts/capacitor-plugin-names.mjs";
+import { CAPACITOR_PLUGIN_NAMES } from "../../eliza/packages/app-core/scripts/lib/capacitor-plugin-names.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "../..");
