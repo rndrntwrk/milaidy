@@ -81,6 +81,12 @@ jobs:
         run: node packages/shared/scripts/generate-keywords.mjs --target ts
         working-directory: eliza
 
+      - name: Build eliza packages required for typecheck
+        run: |
+          if [ ! -f eliza/packages/skills/dist/index.js ]; then
+            (cd eliza/packages/skills && bun run build)
+          fi
+
       - name: Fetch upstream develop for pre-review base
         run: |
           git remote add upstream https://github.com/milady-ai/milady.git || true
@@ -112,6 +118,7 @@ jobs:
           install-command: bun install --ignore-scripts --no-frozen-lockfile
           prepare-local-eliza-runtime: "true"
           skip-cloud-submodule: "true"
+          skip-local-upstreams-postinstall: "true"
 
       - name: Restore eliza workspace paths for repo scripts
         run: node scripts/restore-local-eliza-workspace.mjs
@@ -150,6 +157,7 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
           install-command: bun install --ignore-scripts --no-frozen-lockfile
           skip-cloud-submodule: "true"
+          skip-local-upstreams-postinstall: "true"
 
       - name: Restore eliza workspace paths for repo scripts
         run: node scripts/restore-local-eliza-workspace.mjs
@@ -174,6 +182,12 @@ jobs:
         run: node packages/shared/scripts/generate-keywords.mjs --target ts
         working-directory: eliza
 
+      - name: Build eliza packages required for typecheck
+        run: |
+          if [ ! -f eliza/packages/skills/dist/index.js ]; then
+            (cd eliza/packages/skills && bun run build)
+          fi
+
       - name: Run type checker
         run: bun run verify:typecheck
 
@@ -197,12 +211,19 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
           install-command: bun install --ignore-scripts --no-frozen-lockfile
           skip-cloud-submodule: "true"
+          skip-local-upstreams-postinstall: "true"
 
       - name: Restore eliza workspace paths for repo scripts
         run: node scripts/restore-local-eliza-workspace.mjs
 
       - name: Align nested eliza package resolution
         run: node scripts/align-eliza-ci-node-modules.mjs
+
+      - name: Build eliza packages required for typecheck
+        run: |
+          if [ ! -f eliza/packages/skills/dist/index.js ]; then
+            (cd eliza/packages/skills && bun run build)
+          fi
 
       - name: Build project
         run: bun run build
