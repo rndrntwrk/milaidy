@@ -6,10 +6,17 @@ const workflow = (name: string) =>
   fs.readFileSync(`.github/workflows/${name}`, "utf8");
 
 describe("CI bootstrap contract", () => {
-  it("does not pass unsupported setup-bun-workspace inputs", () => {
+  it("declares the local upstream postinstall skip before CI uses it", () => {
     const ci = workflow("ci.yml");
+    const setupAction = fs.readFileSync(
+      ".github/actions/setup-bun-workspace/action.yml",
+      "utf8",
+    );
 
-    expect(ci).not.toContain("skip-local-upstreams-postinstall");
+    expect(setupAction).toContain("skip-local-upstreams-postinstall:");
+    expect(ci.match(/skip-local-upstreams-postinstall: "true"/g)).toHaveLength(
+      3,
+    );
   });
 
   it("builds elizaOS core before bundled skills", () => {
