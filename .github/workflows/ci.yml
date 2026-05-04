@@ -83,6 +83,9 @@ jobs:
 
       - name: Build eliza packages required for typecheck
         run: |
+          if [ ! -f eliza/packages/core/dist/index.node.js ] || [ ! -f eliza/packages/core/dist/index.d.ts ]; then
+            (cd eliza/packages/core && bun run build)
+          fi
           if [ ! -f eliza/packages/skills/dist/index.js ]; then
             (cd eliza/packages/skills && bun run build)
           fi
@@ -184,6 +187,9 @@ jobs:
 
       - name: Build eliza packages required for typecheck
         run: |
+          if [ ! -f eliza/packages/core/dist/index.node.js ] || [ ! -f eliza/packages/core/dist/index.d.ts ]; then
+            (cd eliza/packages/core && bun run build)
+          fi
           if [ ! -f eliza/packages/skills/dist/index.js ]; then
             (cd eliza/packages/skills && bun run build)
           fi
@@ -221,6 +227,9 @@ jobs:
 
       - name: Build eliza packages required for typecheck
         run: |
+          if [ ! -f eliza/packages/core/dist/index.node.js ] || [ ! -f eliza/packages/core/dist/index.d.ts ]; then
+            (cd eliza/packages/core && bun run build)
+          fi
           if [ ! -f eliza/packages/skills/dist/index.js ]; then
             (cd eliza/packages/skills && bun run build)
           fi

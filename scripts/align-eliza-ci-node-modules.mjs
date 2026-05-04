@@ -55,6 +55,14 @@ linkRootPackage("drizzle-orm", [
   "eliza/plugins/plugin-sql/node_modules/drizzle-orm",
 ]);
 
+linkLocalPackage("@elizaos/core", "eliza/packages/core", [
+  "node_modules/@elizaos/core",
+  "eliza/node_modules/@elizaos/core",
+  "eliza/packages/skills/node_modules/@elizaos/core",
+  "apps/app/node_modules/@elizaos/core",
+  "apps/homepage/node_modules/@elizaos/core",
+]);
+
 linkLocalPackage("@elizaos/skills", "eliza/packages/skills", [
   "node_modules/@elizaos/skills",
   "eliza/node_modules/@elizaos/skills",
