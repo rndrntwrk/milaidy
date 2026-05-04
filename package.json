@@ -16,6 +16,7 @@
     "dist",
     "milady.mjs",
     "apps/app/dist",
+    "eliza/packages/app-core/scripts",
     "install",
     "install.cmd",
     "scripts/init-submodules.mjs",

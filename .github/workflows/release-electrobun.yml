@@ -1142,10 +1142,10 @@ jobs:
           # initialize — without it, startApiServer() can fail before
           # server.listen() and the health endpoint never becomes reachable.
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          # Smoke runs against the build tree, not the installer extraction.
-          # The installer is verified separately by the installer proof step.
-          # Extracting the 758MB installer into ~1.5GB exceeds CI runner disk.
-          # Use a short path under runner.temp to avoid MAX_PATH issues with
+          ELIZA_WINDOWS_SMOKE_REQUIRE_INSTALLER: "1"
+          # Smoke runs through the public installer so release validation
+          # exercises the same standalone artifact users download. Use a short
+          # path under runner.temp to avoid MAX_PATH issues with
           # deeply nested node_modules while staying in a user-writable location.
           ELIZA_TEST_WINDOWS_INSTALL_DIR: ${{ runner.temp }}\el
           MILADY_TEST_WINDOWS_INSTALL_DIR: ${{ runner.temp }}\el
