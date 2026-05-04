@@ -164,6 +164,9 @@ jobs:
           if [ -f eliza/plugins/plugin-pdf/package.json ] && [ ! -f eliza/plugins/plugin-pdf/dist/node/index.node.js ]; then
             (cd eliza/plugins/plugin-pdf && bun run build)
           fi
+          if [ -f eliza/plugins/plugin-sql/package.json ] && [ ! -f eliza/plugins/plugin-sql/typescript/dist/index.js ]; then
+            (cd eliza/plugins/plugin-sql && bun run build)
+          fi
 
       - name: Run auth test suite
         run: bun run test:auth

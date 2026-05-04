@@ -24,7 +24,8 @@ describe("app registration contracts", () => {
     const tsconfig = JSON.parse(
       fs.readFileSync(path.join(appRoot, "tsconfig.json"), "utf8"),
     );
-    const paths: Record<string, string[]> = tsconfig?.compilerOptions?.paths ?? {};
+    const paths: Record<string, string[]> =
+      tsconfig?.compilerOptions?.paths ?? {};
     expect(paths["@elizaos/app-workflow-builder"]).toBeDefined();
     expect(paths["@elizaos/app-workflow-builder/*"]).toBeDefined();
   });
@@ -43,10 +44,14 @@ describe("app registration contracts", () => {
     const tsconfig = JSON.parse(
       fs.readFileSync(path.join(appRoot, "tsconfig.json"), "utf8"),
     );
-    const paths: Record<string, string[]> = tsconfig?.compilerOptions?.paths ?? {};
+    const paths: Record<string, string[]> =
+      tsconfig?.compilerOptions?.paths ?? {};
 
     for (const appPkg of appConfig.defaultApps) {
-      expect(paths[appPkg], `${appPkg} missing from tsconfig paths`).toBeDefined();
+      expect(
+        paths[appPkg],
+        `${appPkg} missing from tsconfig paths`,
+      ).toBeDefined();
       expect(
         paths[`${appPkg}/*`],
         `${appPkg}/* missing from tsconfig paths`,
