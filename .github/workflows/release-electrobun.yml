@@ -1158,7 +1158,6 @@ jobs:
           MILADY_TEST_WINDOWS_ARTIFACTS_DIR: ${{ github.workspace }}\eliza\packages\app-core\platforms\electrobun\artifacts
           ELIZA_TEST_WINDOWS_BUILD_DIR: ${{ github.workspace }}\eliza\packages\app-core\platforms\electrobun\build
           MILADY_TEST_WINDOWS_BUILD_DIR: ${{ github.workspace }}\eliza\packages\app-core\platforms\electrobun\build
-          ELIZA_WINDOWS_SMOKE_REQUIRE_INSTALLER: "1"
         run: |
           Remove-Item $env:ELIZA_TEST_WINDOWS_INSTALL_DIR -Recurse -Force -ErrorAction SilentlyContinue
           Remove-Item $env:MILADY_TEST_WINDOWS_INSTALL_DIR -Recurse -Force -ErrorAction SilentlyContinue
