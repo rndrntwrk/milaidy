@@ -81,16 +81,26 @@ describe("CI bootstrap contract", () => {
     const coreBuild = "(cd eliza/packages/core && bun run build)";
     const pluginBuild =
       "(cd eliza/plugins/plugin-agent-skills && bun run build)";
+    const pdfBuild = "(cd eliza/plugins/plugin-pdf && bun run build)";
+    const sqlBuild = "(cd eliza/plugins/plugin-sql && bun run build)";
     const runAuthSuite = "- name: Run auth test suite";
 
     expect(agentReview).toContain(buildPlugins);
     expect(agentReview).toContain(coreBuild);
     expect(agentReview).toContain(pluginBuild);
+    expect(agentReview).toContain(pdfBuild);
+    expect(agentReview).toContain(sqlBuild);
     expect(agentReview.indexOf(align)).toBeLessThan(
       agentReview.indexOf(buildPlugins),
     );
     expect(agentReview.indexOf(coreBuild)).toBeLessThan(
       agentReview.indexOf(pluginBuild),
+    );
+    expect(agentReview.indexOf(pluginBuild)).toBeLessThan(
+      agentReview.indexOf(pdfBuild),
+    );
+    expect(agentReview.indexOf(pdfBuild)).toBeLessThan(
+      agentReview.indexOf(sqlBuild),
     );
     expect(agentReview.indexOf(buildPlugins)).toBeLessThan(
       agentReview.indexOf(runAuthSuite),
