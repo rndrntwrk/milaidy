@@ -284,6 +284,10 @@ function assertCiPreReviewBootstrap(workflowText, targetFailures) {
     "bun install --cwd eliza/cloud --no-frozen-lockfile --ignore-scripts",
     "- name: Align nested eliza package resolution",
     "run: node scripts/align-eliza-ci-node-modules.mjs",
+    "- name: Generate protobuf types",
+    "bunx @bufbuild/buf@1.67.0 generate",
+    "- name: Generate i18n keyword data",
+    "run: node packages/shared/scripts/generate-keywords.mjs --target ts",
     "- name: Run local pre-review gate",
     "run: bun run pre-review:local",
   ];
