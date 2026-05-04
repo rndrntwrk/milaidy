@@ -124,54 +124,62 @@ function linkOptionalLocalPackage(packageName, sourceRel, targets) {
   linkLocalPackage(packageName, sourceRel, targets);
 }
 
+const sharedTypeTargets = [
+  "eliza/node_modules",
+  "eliza/packages/app-core/node_modules",
+  "eliza/packages/core/node_modules",
+  "eliza/packages/ui/node_modules",
+  "apps/app/node_modules",
+  "apps/homepage/node_modules",
+];
+
 linkRootPackage("@biomejs", ["eliza/node_modules/@biomejs"]);
+
+linkRootPackage("react", [
+  "eliza/node_modules/react",
+  "eliza/packages/app-core/node_modules/react",
+  "eliza/packages/ui/node_modules/react",
+  "apps/app/node_modules/react",
+  "apps/homepage/node_modules/react",
+]);
+
+linkRootPackage("react-dom", [
+  "eliza/node_modules/react-dom",
+  "eliza/packages/app-core/node_modules/react-dom",
+  "eliza/packages/ui/node_modules/react-dom",
+  "apps/app/node_modules/react-dom",
+  "apps/homepage/node_modules/react-dom",
+]);
+
+linkRootPackage(
+  "@types/react",
+  sharedTypeTargets.map((target) => `${target}/@types/react`),
+);
+
+linkRootPackage(
+  "@types/react-dom",
+  sharedTypeTargets.map((target) => `${target}/@types/react-dom`),
+);
+
+linkRootPackage(
+  "bun-types",
+  sharedTypeTargets.map((target) => `${target}/bun-types`),
+);
+
+linkRootPackage(
+  "@types/bun",
+  sharedTypeTargets.map((target) => `${target}/@types/bun`),
+);
+
+linkRootPackage(
+  "@types/node",
+  sharedTypeTargets.map((target) => `${target}/@types/node`),
+);
 
 linkRootPackage("drizzle-orm", [
   "eliza/node_modules/drizzle-orm",
   "eliza/packages/app-core/node_modules/drizzle-orm",
   "eliza/plugins/plugin-sql/node_modules/drizzle-orm",
-]);
-
-// bun-types is the real Bun declaration package (ffi, sqlite, etc.).
-// @types/bun is a thin wrapper that does `/// <reference types="bun-types" />`;
-// symlinking bun-types → @types/bun creates a circular reference and loses the
-// actual declarations. Always point bun-types aliases at the real bun-types.
-linkRootPackage("bun-types", [
-  "eliza/node_modules/bun-types",
-  "eliza/packages/core/node_modules/bun-types",
-  "eliza/packages/ui/node_modules/bun-types",
-  "apps/app/node_modules/bun-types",
-  "apps/homepage/node_modules/bun-types",
-]);
-
-linkRootPackage("@types/bun", [
-  "eliza/node_modules/@types/bun",
-  "eliza/packages/core/node_modules/@types/bun",
-  "eliza/packages/ui/node_modules/@types/bun",
-  "apps/app/node_modules/@types/bun",
-  "apps/homepage/node_modules/@types/bun",
-]);
-
-linkRootPackage("@types/node", [
-  "eliza/node_modules/@types/node",
-  "eliza/packages/core/node_modules/@types/node",
-  "eliza/packages/ui/node_modules/@types/node",
-  "apps/app/node_modules/@types/node",
-  "apps/homepage/node_modules/@types/node",
-]);
-
-linkRootPackage("@types/react", [
-  "eliza/node_modules/@types/react",
-  "eliza/packages/ui/node_modules/@types/react",
-  "apps/app/node_modules/@types/react",
-  "apps/homepage/node_modules/@types/react",
-]);
-
-linkRootPackage("@types/react-dom", [
-  "eliza/node_modules/@types/react-dom",
-  "eliza/packages/ui/node_modules/@types/react-dom",
-  "apps/app/node_modules/@types/react-dom",
-  "apps/homepage/node_modules/@types/react-dom",
 ]);
 
 linkLocalPackage("@elizaos/core", "eliza/packages/core", [
@@ -190,6 +198,14 @@ linkLocalPackage("@elizaos/skills", "eliza/packages/skills", [
   "apps/homepage/node_modules/@elizaos/skills",
 ]);
 
+linkLocalPackage("@elizaos/shared", "eliza/packages/shared", [
+  "node_modules/@elizaos/shared",
+  "eliza/node_modules/@elizaos/shared",
+  "eliza/packages/agent/node_modules/@elizaos/shared",
+  "apps/app/node_modules/@elizaos/shared",
+  "apps/homepage/node_modules/@elizaos/shared",
+]);
+
 linkOptionalLocalPackage(
   "@elizaos/plugin-agent-skills",
   "eliza/plugins/plugin-agent-skills",
@@ -199,3 +215,25 @@ linkOptionalLocalPackage(
     "eliza/packages/agent/node_modules/@elizaos/plugin-agent-skills",
   ],
 );
+
+linkOptionalLocalPackage(
+  "@elizaos/plugin-browser-bridge",
+  "eliza/plugins/plugin-browser-bridge",
+  [
+    "node_modules/@elizaos/plugin-browser-bridge",
+    "eliza/node_modules/@elizaos/plugin-browser-bridge",
+    "eliza/packages/agent/node_modules/@elizaos/plugin-browser-bridge",
+  ],
+);
+
+linkOptionalLocalPackage("@elizaos/plugin-pdf", "eliza/plugins/plugin-pdf", [
+  "node_modules/@elizaos/plugin-pdf",
+  "eliza/node_modules/@elizaos/plugin-pdf",
+  "eliza/packages/agent/node_modules/@elizaos/plugin-pdf",
+]);
+
+linkOptionalLocalPackage("@elizaos/plugin-sql", "eliza/plugins/plugin-sql", [
+  "node_modules/@elizaos/plugin-sql",
+  "eliza/node_modules/@elizaos/plugin-sql",
+  "eliza/packages/agent/node_modules/@elizaos/plugin-sql",
+]);
