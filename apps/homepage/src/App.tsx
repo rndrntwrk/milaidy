@@ -218,11 +218,15 @@ function MiladyLanding() {
           alt="Milady"
           className="h-14 w-14 object-contain opacity-[0.92] sm:h-16 sm:w-16"
         />
-        <h1 className="mt-7 flex max-w-[72rem] flex-col items-center text-[44px] font-black uppercase leading-[0.9] text-white sm:text-[72px] md:text-[104px] lg:text-[128px]">
-          <span>AGENTS THAT</span>
+        <h1
+          aria-label={`AGENTS THAT ${phrase}`}
+          className="mt-7 flex max-w-[72rem] flex-col items-center text-[44px] font-black uppercase leading-[0.9] text-white sm:text-[72px] md:text-[104px] lg:text-[128px]"
+        >
+          <span aria-hidden="true">AGENTS THAT</span>
           <span
             key={phrase}
             aria-live="polite"
+            aria-hidden="true"
             className="mt-2 min-h-[2.1em] max-w-full text-brand sm:min-h-[1.85em] md:min-h-[1em]"
           >
             {phrase}
