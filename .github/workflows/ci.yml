@@ -121,7 +121,6 @@ jobs:
           install-command: bun install --ignore-scripts --no-frozen-lockfile
           prepare-local-eliza-runtime: "true"
           skip-cloud-submodule: "true"
-          skip-local-upstreams-postinstall: "true"
 
       - name: Restore eliza workspace paths for repo scripts
         run: node scripts/restore-local-eliza-workspace.mjs
@@ -160,7 +159,6 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
           install-command: bun install --ignore-scripts --no-frozen-lockfile
           skip-cloud-submodule: "true"
-          skip-local-upstreams-postinstall: "true"
 
       - name: Restore eliza workspace paths for repo scripts
         run: node scripts/restore-local-eliza-workspace.mjs
@@ -217,7 +215,6 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
           install-command: bun install --ignore-scripts --no-frozen-lockfile
           skip-cloud-submodule: "true"
-          skip-local-upstreams-postinstall: "true"
 
       - name: Restore eliza workspace paths for repo scripts
         run: node scripts/restore-local-eliza-workspace.mjs
