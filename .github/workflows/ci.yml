@@ -55,6 +55,7 @@ jobs:
           prepare-local-eliza-runtime: "true"
           skip-avatar-clone: "true"
           no-vision-deps: "true"
+          skip-cloud-submodule: "true"
 
       - name: Restore eliza workspace paths for repo scripts
         run: node scripts/restore-local-eliza-workspace.mjs
@@ -62,7 +63,7 @@ jobs:
       - name: Install submodule verification dependencies
         run: |
           bun install --cwd eliza --no-frozen-lockfile --ignore-scripts
-          bun install --cwd eliza/cloud --no-frozen-lockfile --ignore-scripts
+          if [ -d eliza/cloud ]; then bun install --cwd eliza/cloud --no-frozen-lockfile --ignore-scripts; fi
 
       - name: Align nested eliza package resolution
         run: node scripts/align-eliza-ci-node-modules.mjs
@@ -97,6 +98,7 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
           install-command: bun install --ignore-scripts --no-frozen-lockfile
           prepare-local-eliza-runtime: "true"
+          skip-cloud-submodule: "true"
 
       - name: Restore eliza workspace paths for repo scripts
         run: node scripts/restore-local-eliza-workspace.mjs
@@ -104,7 +106,7 @@ jobs:
       - name: Install submodule verification dependencies
         run: |
           bun install --cwd eliza --no-frozen-lockfile --ignore-scripts
-          bun install --cwd eliza/cloud --no-frozen-lockfile --ignore-scripts
+          if [ -d eliza/cloud ]; then bun install --cwd eliza/cloud --no-frozen-lockfile --ignore-scripts; fi
 
       - name: Align nested eliza package resolution
         run: node scripts/align-eliza-ci-node-modules.mjs
@@ -134,6 +136,7 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
           install-command: bun install --ignore-scripts --no-frozen-lockfile
+          skip-cloud-submodule: "true"
 
       - name: Restore eliza workspace paths for repo scripts
         run: node scripts/restore-local-eliza-workspace.mjs
@@ -141,7 +144,7 @@ jobs:
       - name: Install submodule verification dependencies
         run: |
           bun install --cwd eliza --no-frozen-lockfile --ignore-scripts
-          bun install --cwd eliza/cloud --no-frozen-lockfile --ignore-scripts
+          if [ -d eliza/cloud ]; then bun install --cwd eliza/cloud --no-frozen-lockfile --ignore-scripts; fi
 
       - name: Align nested eliza package resolution
         run: node scripts/align-eliza-ci-node-modules.mjs
@@ -180,6 +183,7 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
           install-command: bun install --ignore-scripts --no-frozen-lockfile
+          skip-cloud-submodule: "true"
 
       - name: Restore eliza workspace paths for repo scripts
         run: node scripts/restore-local-eliza-workspace.mjs

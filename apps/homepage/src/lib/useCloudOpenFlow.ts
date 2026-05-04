@@ -28,6 +28,12 @@ interface CloudOpenFlowOptions {
   signIn: () => Promise<void> | void;
 }
 
+interface CloudAgentCandidate {
+  cloudAgentId: string;
+  name: string;
+  status: string;
+}
+
 function generateCloudAgentName(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(2));
   const suffix = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join(
@@ -80,9 +86,20 @@ export function useCloudOpenFlow({
     try {
       let cloudAgentId: string | undefined;
 
-      const cloudAgents = agents.filter(
-        (agent) => agent.source === "cloud" && agent.cloudAgentId,
-      );
+      let cloudAgents: CloudAgentCandidate[] = agents
+        .filter((agent) => agent.source === "cloud" && agent.cloudAgentId)
+        .map((agent) => ({
+          cloudAgentId: agent.cloudAgentId ?? "",
+          name: agent.name,
+          status: agent.status,
+        }));
+      if (cloudAgents.length === 0) {
+        cloudAgents = (await cloudClient.listAgents()).map((agent) => ({
+          cloudAgentId: agent.id,
+          name: agent.name,
+          status: agent.status,
+        }));
+      }
       const existingCloud =
         cloudAgents.find((agent) => agent.status === "running") ??
         cloudAgents.find((agent) => agent.status === "paused") ??

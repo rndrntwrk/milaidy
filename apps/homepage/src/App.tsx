@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { BrandHero } from "./components/dashboard/BrandHero";
 import { ConnectionModal } from "./components/dashboard/ConnectionModal";
 import { InstanceGrid } from "./components/dashboard/InstanceGrid";
@@ -13,6 +13,7 @@ import {
   useAgents,
 } from "./lib/AgentProvider";
 import { resolveHomepageAssetUrl } from "./lib/asset-url";
+import { CloudClient } from "./lib/cloud-api";
 import { openWebUI, openWebUIDirect } from "./lib/open-web-ui";
 import { CLOUD_BASE, LOCAL_AGENT_BASE } from "./lib/runtime-config";
 import { useAuth } from "./lib/useAuth";
@@ -134,20 +135,22 @@ function PlatformBar({ links }: { links: PlatformLink[] }) {
 }
 
 function MiladyLanding() {
-  const { isAuthenticated } = useAuth();
-  const { agents, cloudClient, refresh } = useAgents();
+  const { isAuthenticated, token } = useAuth();
+  const cloudClient = useMemo(
+    () => (token ? new CloudClient(token) : null),
+    [token],
+  );
+  const refresh = useCallback(async () => {}, []);
   const {
     state: loginState,
     error: loginError,
     manualLoginUrl,
     signIn,
-  } = useCloudLogin({
-    onAuthenticated: () => void refresh(),
-  });
+  } = useCloudLogin();
   const [notice, setNotice] = useState<Notice | null>(null);
   const { cloudOpenState, handleCancelCloudOpen, handleOpenCloud } =
     useCloudOpenFlow({
-      agents,
+      agents: [],
       cloudClient,
       isAuthenticated,
       loginError,
@@ -269,8 +272,8 @@ function MiladyLanding() {
         ) : null}
       </main>
 
-      <footer className="absolute bottom-0 left-0 right-0 z-20 px-5 py-6 sm:py-8">
-        <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 font-mono text-[10px] uppercase text-white/48 sm:gap-x-7 sm:text-[11px]">
+      <footer className="absolute bottom-16 left-0 right-0 z-20 px-6 sm:bottom-8">
+        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 font-mono text-[9px] uppercase text-white/48 sm:gap-x-7 sm:text-[11px]">
           <a
             href={GITHUB_RELEASES_URL}
             target="_blank"
@@ -295,7 +298,9 @@ function MiladyLanding() {
           >
             checksums
           </a>
-          <span>{releaseData.release.tagName}</span>
+          <span className="hidden sm:inline">
+            {releaseData.release.tagName}
+          </span>
         </div>
       </footer>
 
@@ -607,11 +612,7 @@ function MiladyControlHub() {
 }
 
 export function Homepage() {
-  return (
-    <AgentProvider>
-      <MiladyLanding />
-    </AgentProvider>
-  );
+  return <MiladyLanding />;
 }
 
 export function Dashboard() {
