@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import { releaseData } from "../../generated/release-data";
 import type { ManagedAgent } from "../../lib/AgentProvider";
-import { resolveHomepageAssetUrl } from "../../lib/asset-url";
 import { SessionTile } from "./SessionTile";
 
 const GITHUB_URL = "https://github.com/milady-ai/milady";
@@ -42,11 +41,6 @@ export function Sidebar({
           className="flex items-center gap-2.5"
           onClick={onClose}
         >
-          <img
-            src={resolveHomepageAssetUrl("logo.png")}
-            alt="Milady"
-            className="h-8 w-8 rounded-md border border-white/10 object-cover"
-          />
           <span className="text-[15px] font-semibold tracking-tight">
             milady
           </span>

@@ -70,6 +70,11 @@ append_versioned_package() {
     fi
   done
 
+  if [[ "$package_name" == @elizaos/* ]]; then
+    packages+=("${package_name}@alpha")
+    return 0
+  fi
+
   packages+=("$package_name")
 }
 
@@ -97,6 +102,10 @@ ensure_eliza_submodule_manifest() {
   local submodule_path="$2"
 
   [[ -f "$manifest" ]] && return 0
+  if [[ "${MILADY_SKIP_LOCAL_UPSTREAMS:-}" == "1" || "${ELIZA_SKIP_LOCAL_UPSTREAMS:-}" == "1" ]]; then
+    echo "::notice::Using published package metadata for eliza/$submodule_path; local upstreams are disabled"
+    return 0
+  fi
   [[ -d eliza ]] || return 0
   command -v git >/dev/null 2>&1 || return 0
 

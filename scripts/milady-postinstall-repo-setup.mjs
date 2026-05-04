@@ -17,6 +17,7 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { resolveElizaAppCoreScript } from "./lib/resolve-eliza-app-core-script.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
@@ -28,10 +29,9 @@ if (!process.env.HOME && process.env.USERPROFILE) {
   process.env.HOME = process.env.USERPROFILE;
 }
 
-const setupPath = path.join(
+const setupPath = resolveElizaAppCoreScript("run-repo-setup.mjs", {
   repoRoot,
-  "eliza/packages/app-core/scripts/run-repo-setup.mjs",
-);
+});
 
 const setupHref = pathToFileURL(setupPath).href;
 const { runRepoSetup } = await import(setupHref);

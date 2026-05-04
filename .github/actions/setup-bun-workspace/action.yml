@@ -114,6 +114,7 @@ runs:
       shell: bash
       run: node scripts/init-submodules.mjs
       env:
+        MILADY_SKIP_LOCAL_UPSTREAMS: ${{ inputs.disable-local-eliza-workspace == 'true' && '1' || '' }}
         MILADY_SKIP_CLOUD_SUBMODULE: ${{ inputs.skip-cloud-submodule == 'true' && '1' || '' }}
 
     - name: Initialize local eliza workspace
@@ -128,12 +129,11 @@ runs:
       env:
         MILADY_SKIP_CLOUD_SUBMODULE: ${{ inputs.skip-cloud-submodule == 'true' && '1' || '' }}
 
-    # disable-local-eliza-workspace.mjs needs eliza/ on disk to read package
-    # versions from workspace package.json files (overrides use workspace:*,
-    # not pinned versions). Shallow-init the submodule so version resolution
-    # succeeds, then the disable script rewrites workspace:* to registry versions.
+    # Some review jobs still execute local eliza runtime scripts after the
+    # published-only install rewrite. Hydrate eliza only for those jobs; normal
+    # published-only CI resolves @elizaos/* versions from npm dist-tags.
     - name: Shallow-init eliza submodule for version resolution
-      if: ${{ inputs.disable-local-eliza-workspace == 'true' }}
+      if: ${{ inputs.disable-local-eliza-workspace == 'true' && inputs.prepare-local-eliza-runtime == 'true' }}
       shell: bash
       run: |
         git submodule sync -- eliza
@@ -142,6 +142,8 @@ runs:
     - name: Apply Milady eliza CI patches
       shell: bash
       run: node scripts/apply-eliza-ci-patches.mjs
+      env:
+        MILADY_SKIP_LOCAL_UPSTREAMS: ${{ inputs.disable-local-eliza-workspace == 'true' && '1' || '' }}
 
     # IMPORTANT: This mode is for published-only CI jobs. Do not enable it for
     # jobs that execute repo-local paths under eliza/ after dependency setup.
@@ -222,6 +224,8 @@ runs:
       if: ${{ inputs.disable-local-eliza-workspace == 'true' }}
       shell: bash
       run: bash scripts/install-published-workspace-fallback-deps.sh
+      env:
+        MILADY_SKIP_LOCAL_UPSTREAMS: "1"
 
     - name: Build local eliza CI override packages
       if: ${{ inputs.disable-local-eliza-workspace == 'true' }}

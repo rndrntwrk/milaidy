@@ -12,7 +12,6 @@ import {
   type ManagedAgent,
   useAgents,
 } from "./lib/AgentProvider";
-import { resolveHomepageAssetUrl } from "./lib/asset-url";
 import { CloudClient } from "./lib/cloud-api";
 import { openWebUI, openWebUIDirect } from "./lib/open-web-ui";
 import { CLOUD_BASE, LOCAL_AGENT_BASE } from "./lib/runtime-config";
@@ -213,14 +212,9 @@ function MiladyLanding() {
       </header>
 
       <main className="relative z-10 flex min-h-[100dvh] flex-col items-center justify-center px-4 py-28 text-center">
-        <img
-          src={resolveHomepageAssetUrl("milady-icon.png")}
-          alt="Milady"
-          className="h-14 w-14 object-contain opacity-[0.92] sm:h-16 sm:w-16"
-        />
         <h1
           aria-label={`AGENTS THAT ${phrase}`}
-          className="mt-7 flex max-w-[72rem] flex-col items-center text-[44px] font-black uppercase leading-[0.9] text-white sm:text-[72px] md:text-[104px] lg:text-[128px]"
+          className="flex max-w-[72rem] flex-col items-center text-[44px] font-black uppercase leading-[0.9] text-white sm:text-[72px] md:text-[104px] lg:text-[128px]"
         >
           <span aria-hidden="true">AGENTS THAT</span>
           <span

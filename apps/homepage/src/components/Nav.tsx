@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { releaseData } from "../generated/release-data";
-import { resolveHomepageAssetUrl } from "../lib/asset-url";
 
 const LATEST_RELEASE_URL =
   "https://github.com/milady-ai/milady/releases/latest";
@@ -20,18 +19,10 @@ export function Nav() {
       style={{ paddingTop: "var(--safe-area-top, 0px)" }}
     >
       <div className="flex h-[56px] items-center justify-between px-4 sm:px-5 md:px-8">
-        {/* Brand mark — square logo container */}
         <Link
           to="/dashboard"
           className="group flex items-center gap-3 transition-opacity hover:opacity-80"
         >
-          <div className="w-10 h-10 overflow-hidden bg-surface flex items-center justify-center">
-            <img
-              src={resolveHomepageAssetUrl("logo.png")}
-              alt="Milady"
-              className="w-full h-full object-cover"
-            />
-          </div>
           <span className="text-lg sm:text-xl font-black tracking-tighter uppercase text-white">
             MILADY
           </span>
