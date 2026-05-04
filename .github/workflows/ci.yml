@@ -84,7 +84,7 @@ jobs:
       - name: Build eliza packages required for typecheck
         run: |
           if [ ! -f eliza/packages/skills/dist/index.js ]; then
-            bun run build --cwd eliza/packages/skills
+            (cd eliza/packages/skills && bun run build)
           fi
 
       - name: Fetch upstream develop for pre-review base
