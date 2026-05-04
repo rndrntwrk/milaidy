@@ -8,6 +8,7 @@ const workflow = (name: string) =>
 describe("CI bootstrap contract", () => {
   it("declares the local upstream postinstall skip before CI uses it", () => {
     const ci = workflow("ci.yml");
+    const buildDocker = workflow("build-docker.yml");
     const setupAction = fs.readFileSync(
       ".github/actions/setup-bun-workspace/action.yml",
       "utf8",
@@ -16,6 +17,29 @@ describe("CI bootstrap contract", () => {
     expect(setupAction).toContain("skip-local-upstreams-postinstall:");
     expect(ci.match(/skip-local-upstreams-postinstall: "true"/g)).toHaveLength(
       3,
+    );
+    expect(buildDocker).toContain('MILADY_SKIP_LOCAL_UPSTREAMS: "1"');
+  });
+
+  it("builds explicit local runtime packages for the agent image", () => {
+    const buildDocker = workflow("build-docker.yml");
+    const postinstall = "- name: Run postinstall patches";
+    const coreBuild = "- name: Build @elizaos/core";
+    const agentBuild = "- name: Build agent workspace";
+    const sharedBuild = "- name: Build @elizaos/shared";
+    const runtimeBuild = "- name: Build runtime (tsdown)";
+
+    expect(buildDocker.indexOf(postinstall)).toBeLessThan(
+      buildDocker.indexOf(coreBuild),
+    );
+    expect(buildDocker.indexOf(coreBuild)).toBeLessThan(
+      buildDocker.indexOf(agentBuild),
+    );
+    expect(buildDocker.indexOf(agentBuild)).toBeLessThan(
+      buildDocker.indexOf(sharedBuild),
+    );
+    expect(buildDocker.indexOf(sharedBuild)).toBeLessThan(
+      buildDocker.indexOf(runtimeBuild),
     );
   });
 

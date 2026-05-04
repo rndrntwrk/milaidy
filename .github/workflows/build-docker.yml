@@ -145,9 +145,9 @@ jobs:
         run: bun install --ignore-scripts
 
       # ── 5b. Install build fallback dependencies ────────────────────────────
-      # setup-upstreams builds @elizaos/core during postinstall. Hydrate the
-      # published-only dependency fallback first so package-local builds can
-      # resolve @noble/*, @types/*, and other third-party deps.
+      # Hydrate published-only dependency fallbacks first so package-local builds
+      # can resolve @noble/*, @types/*, and other third-party deps while
+      # postinstall skips the expensive repo-local upstream setup.
       - name: Install published-workspace fallback dependencies
         run: bash scripts/install-published-workspace-fallback-deps.sh
 
@@ -157,6 +157,7 @@ jobs:
         env:
           SKIP_AVATAR_CLONE: "1"
           MILADY_NO_VISION_DEPS: "1"
+          MILADY_SKIP_LOCAL_UPSTREAMS: "1"
 
       # ── 6. Build Capacitor plugins ──────────────────────────────────────────
       # The Vite UI imports @elizaos/capacitor-* workspace packages which need
@@ -165,11 +166,22 @@ jobs:
         run: |
           node eliza/packages/app-core/scripts/build-native-plugins.mjs
 
+      # ── 6.5. Build eliza runtime packages needed by the agent image ─────────
+      - name: Build @elizaos/core
+        run: |
+          cd eliza/packages/core
+          bun run build
+
       # ── 7. Build runtime workspace packages with source exports ─────────────
       - name: Build agent workspace
         run: |
           cd eliza/packages/agent
           bun run build:docker-dist
+
+      - name: Build @elizaos/shared
+        run: |
+          cd eliza/packages/shared
+          bun run build
 
       # ── 9. Build runtime (tsdown) ───────────────────────────────────────────
       - name: Build runtime (tsdown)

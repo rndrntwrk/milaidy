@@ -104,6 +104,10 @@ const workflowText = readText(files.workflow, failures);
 const actionText = readText(files.action, failures);
 const packageJson = readJson(files.packageJson, failures);
 const ciWorkflowText = readText(".github/workflows/ci.yml", failures);
+const buildDockerText = readText(
+  ".github/workflows/build-docker.yml",
+  failures,
+);
 
 assertContainsAll(
   workflowText,
@@ -137,6 +141,29 @@ assertOrdered(
 );
 assertDisabledWorkspaceInstallsUseNoFrozen(allWorkflowPaths, failures);
 assertAgentReviewAuthBootstrap(failures);
+assertContainsAll(
+  buildDockerText,
+  ".github/workflows/build-docker.yml",
+  [
+    'MILADY_SKIP_LOCAL_UPSTREAMS: "1"',
+    "- name: Build @elizaos/core",
+    "- name: Build agent workspace",
+    "- name: Build @elizaos/shared",
+  ],
+  failures,
+);
+assertOrdered(
+  buildDockerText,
+  ".github/workflows/build-docker.yml",
+  [
+    "- name: Run postinstall patches",
+    "- name: Build @elizaos/core",
+    "- name: Build agent workspace",
+    "- name: Build @elizaos/shared",
+    "- name: Build runtime (tsdown)",
+  ],
+  failures,
+);
 
 const regressionMatrixCommand =
   packageJson?.scripts?.["test:regression-matrix:pr"];
