@@ -360,6 +360,7 @@ function assertAgentReviewAuthBootstrap(targetFailures) {
       "- name: Build local eliza runtime plugins",
       "(cd eliza/packages/core && bun run build)",
       "(cd eliza/plugins/plugin-agent-skills && bun run build)",
+      "(cd eliza/plugins/plugin-pdf && bun run build)",
       "- name: Run auth test suite",
     ],
     targetFailures,
