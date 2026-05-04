@@ -1,6 +1,35 @@
+import { existsSync } from "node:fs";
+import { createRequire } from "node:module";
+import path from "node:path";
+
+const require = createRequire(import.meta.url);
+
 const env = {
   NODE_ENV: "production",
 };
+
+function localUpstreamsDisabled() {
+  return (
+    process.env.MILADY_SKIP_LOCAL_UPSTREAMS === "1" ||
+    process.env.ELIZA_SKIP_LOCAL_UPSTREAMS === "1"
+  );
+}
+
+function appCoreEntry(subpath: string, localRelativePath: string) {
+  const localPath = path.join(
+    "eliza",
+    "packages",
+    "app-core",
+    localRelativePath,
+  );
+  if (!localUpstreamsDisabled() && existsSync(localPath)) {
+    return localPath;
+  }
+
+  const packageSubpath =
+    subpath === "." ? "@elizaos/app-core" : `@elizaos/app-core/${subpath}`;
+  return require.resolve(packageSubpath);
+}
 
 // Native .node packages must stay external; rolldown cannot bundle shared libraries.
 const nativeExternals = [
@@ -35,7 +64,7 @@ const allExternals = [
 
 export default [
   {
-    entry: "eliza/packages/app-core/src/index.ts",
+    entry: appCoreEntry(".", "src/index.ts"),
     env,
     fixedExtension: false,
     platform: "node",
@@ -43,7 +72,7 @@ export default [
     external: allExternals,
   },
   {
-    entry: "eliza/packages/app-core/src/entry.ts",
+    entry: appCoreEntry("entry", "src/entry.ts"),
     env,
     fixedExtension: false,
     platform: "node",
@@ -52,7 +81,7 @@ export default [
     external: allExternals,
   },
   {
-    entry: "eliza/packages/app-core/src/runtime/eliza.ts",
+    entry: appCoreEntry("runtime/eliza", "src/runtime/eliza.ts"),
     env,
     fixedExtension: false,
     platform: "node",
@@ -61,7 +90,7 @@ export default [
     outputOptions: { codeSplitting: false },
   },
   {
-    entry: "eliza/packages/app-core/src/api/server.ts",
+    entry: appCoreEntry("api/server", "src/api/server.ts"),
     env,
     fixedExtension: false,
     platform: "node",
