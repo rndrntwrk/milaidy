@@ -41,10 +41,7 @@ test("root build can resolve app-core entries from npm without eliza", () => {
   assert.match(tsdownConfig, /function appCoreEntry/);
   assert.match(tsdownConfig, /MILADY_SKIP_LOCAL_UPSTREAMS/);
   assert.match(tsdownConfig, /require\.resolve\(packageSubpath\)/);
-  assert.doesNotMatch(
-    tsdownConfig,
-    /entry:\s*["']eliza\/packages\/app-core/,
-  );
+  assert.doesNotMatch(tsdownConfig, /entry:\s*["']eliza\/packages\/app-core/);
 });
 
 test("TypeScript aliases keep npm fallbacks for standalone installs", () => {
@@ -84,9 +81,7 @@ test("native package resolution no longer points at the eliza checkout", () => {
   assert.match(podfile, /node_package_path\('@elizaos\/capacitor-agent'\)/);
   assert.doesNotMatch(podfile, /\.\.\/\.\.\/\.\.\/\.\.\/native-plugins/);
 
-  const nativeDeclarations = read(
-    "apps/app/src/capacitor-plugin-modules.d.ts",
-  );
+  const nativeDeclarations = read("apps/app/src/capacitor-plugin-modules.d.ts");
   assert.doesNotMatch(
     nativeDeclarations,
     /\.\.\/\.\.\/\.\.\/eliza\/packages\/native-plugins/,
@@ -111,6 +106,21 @@ test("Milady app declares every elizaOS app package it imports", () => {
       `${packageName} must be declared until workspace deps are rewritten for publish`,
     );
   }
+});
+
+test("CI dependency alignment covers local elizaOS streaming packages", () => {
+  const alignScript = read("scripts/align-eliza-ci-node-modules.mjs");
+
+  assert.match(alignScript, /@elizaos\/cloud-routing/);
+  assert.match(alignScript, /@elizaos\/plugin-streaming/);
+  assert.match(
+    alignScript,
+    /eliza\/packages\/agent\/node_modules\/@elizaos\/plugin-streaming/,
+  );
+  assert.match(
+    alignScript,
+    /eliza\/plugins\/plugin-streaming\/node_modules\/@elizaos\/cloud-routing/,
+  );
 });
 
 test("eliza dist packaging honors Milady standalone mode", () => {

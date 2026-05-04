@@ -260,6 +260,13 @@ linkLocalPackage("@elizaos/shared", "eliza/packages/shared", [
   "apps/homepage/node_modules/@elizaos/shared",
 ]);
 
+linkLocalPackage("@elizaos/cloud-routing", "eliza/packages/cloud-routing", [
+  "node_modules/@elizaos/cloud-routing",
+  "eliza/node_modules/@elizaos/cloud-routing",
+  "eliza/packages/agent/node_modules/@elizaos/cloud-routing",
+  "eliza/plugins/plugin-streaming/node_modules/@elizaos/cloud-routing",
+]);
+
 linkOptionalLocalPackage(
   "@elizaos/plugin-agent-skills",
   "eliza/plugins/plugin-agent-skills",
@@ -292,10 +299,26 @@ linkOptionalLocalPackage("@elizaos/plugin-sql", "eliza/plugins/plugin-sql", [
   "eliza/packages/agent/node_modules/@elizaos/plugin-sql",
 ]);
 
+linkOptionalLocalPackage(
+  "@elizaos/plugin-streaming",
+  "eliza/plugins/plugin-streaming",
+  [
+    "node_modules/@elizaos/plugin-streaming",
+    "eliza/node_modules/@elizaos/plugin-streaming",
+    "eliza/packages/agent/node_modules/@elizaos/plugin-streaming",
+  ],
+);
+
 ensureBuiltLocalPackage("@elizaos/core", "eliza/packages/core", [
   "dist/index.node.js",
   "dist/index.d.ts",
 ]);
+
+ensureBuiltLocalPackage(
+  "@elizaos/cloud-routing",
+  "eliza/packages/cloud-routing",
+  ["dist/index.js", "dist/index.d.ts"],
+);
 
 ensureBuiltLocalPackage(
   "@elizaos/plugin-agent-skills",
@@ -315,5 +338,12 @@ ensureBuiltLocalPackage(
   "@elizaos/plugin-sql",
   "eliza/plugins/plugin-sql",
   ["typescript/dist/index.js", "typescript/dist/index.d.ts"],
+  { optional: true },
+);
+
+ensureBuiltLocalPackage(
+  "@elizaos/plugin-streaming",
+  "eliza/plugins/plugin-streaming",
+  ["dist/index.js", "dist/index.d.ts"],
   { optional: true },
 );
