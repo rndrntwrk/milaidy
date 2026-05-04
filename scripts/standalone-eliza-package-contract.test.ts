@@ -79,10 +79,10 @@ test("TypeScript aliases keep npm fallbacks for standalone installs", () => {
 });
 
 test("native package resolution no longer points at the eliza checkout", () => {
-  const podfile = read("apps/app/ios/App/Podfile");
+  const podfile = read("eliza/packages/app-core/platforms/ios/App/Podfile");
   assert.match(podfile, /node_package_path\('@capacitor\/ios'\)/);
   assert.match(podfile, /node_package_path\('@elizaos\/capacitor-agent'\)/);
-  assert.doesNotMatch(podfile, /\.\.\/\.\.\/\.\.\/\.\.\/eliza\/packages/);
+  assert.doesNotMatch(podfile, /\.\.\/\.\.\/\.\.\/\.\.\/native-plugins/);
 
   const nativeDeclarations = read(
     "apps/app/src/capacitor-plugin-modules.d.ts",
