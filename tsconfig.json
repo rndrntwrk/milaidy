@@ -38,6 +38,8 @@
       "@elizaos/app-core/*": ["./eliza/packages/app-core/src/*"],
       "@elizaos/shared": ["./eliza/packages/shared/src/index.ts"],
       "@elizaos/shared/*": ["./eliza/packages/shared/src/*"],
+      "@elizaos/skills": ["./eliza/packages/skills/src/index.ts"],
+      "@elizaos/skills/*": ["./eliza/packages/skills/src/*"],
       "@elizaos/core": ["./eliza/packages/core/src/index.ts"],
       "@elizaos/core/*": ["./eliza/packages/core/src/*"],
       "@elizaos/agent": ["./eliza/packages/agent/src/index.ts"],
