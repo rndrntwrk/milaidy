@@ -1792,6 +1792,58 @@ export function ensurePluginTelegramNodeTypes(
   return patchedFiles;
 }
 
+export function ensurePluginVideoTs6Deprecations(
+  pluginsRoot,
+  { pathExists = existsSync } = {},
+) {
+  const configPath = path.join(
+    pluginsRoot,
+    "plugin-video",
+    "tsconfig.json",
+  );
+
+  if (!pathExists(configPath)) {
+    return false;
+  }
+
+  const raw = readFileSync(configPath, "utf8");
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    console.warn(
+      `[setup-upstreams] Could not parse ${toDisplayPath(configPath)}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+    return false;
+  }
+
+  const compilerOptions =
+    parsed && typeof parsed === "object" && parsed.compilerOptions
+      ? parsed.compilerOptions
+      : {};
+
+  if (compilerOptions.ignoreDeprecations === "6.0") {
+    return false;
+  }
+
+  const nextParsed = {
+    ...parsed,
+    compilerOptions: { ...compilerOptions, ignoreDeprecations: "6.0" },
+  };
+
+  const indent = raw.match(/^(\s+)"/m)?.[1] ?? "  ";
+  writeFileSync(
+    configPath,
+    `${JSON.stringify(nextParsed, null, indent)}\n`,
+  );
+  console.log(
+    `[setup-upstreams] Patched ${toDisplayPath(configPath)} ignoreDeprecations to 6.0 for TS6 baseUrl deprecation`,
+  );
+  return true;
+}
+
 export function patchPluginBuildTscBinPaths(
   pluginsRoot,
   { pathExists = existsSync } = {},
@@ -1837,6 +1889,7 @@ export async function ensurePluginBuildOutputs(
 ) {
   ensurePluginAnthropicBunTypes(pluginsRoot, { pathExists });
   ensurePluginTelegramNodeTypes(pluginsRoot, { pathExists });
+  ensurePluginVideoTs6Deprecations(pluginsRoot, { pathExists });
   patchPluginBuildTscBinPaths(pluginsRoot, { pathExists });
   for (const packageDir of discoverPluginPackageDirs(pluginsRoot)) {
     const packageJson = readPackageJson(packageDir);
