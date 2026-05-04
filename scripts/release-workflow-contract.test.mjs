@@ -229,3 +229,16 @@ test("Electrobun release has a lightweight PR contract workflow", () => {
   );
   assert.match(workflowText, /run: bun run test:release:contract/);
 });
+
+test("Electrobun Windows smoke validates the public installer", () => {
+  const electrobun = workflow("release-electrobun.yml");
+
+  assert.match(electrobun, /ELIZA_WINDOWS_SMOKE_REQUIRE_INSTALLER: "1"/);
+  assert.match(electrobun, /Smoke runs through the public installer/);
+});
+
+test("npm package includes app-core release helper scripts", () => {
+  const packageJson = JSON.parse(fs.readFileSync("package.json", "utf8"));
+
+  assert.ok(packageJson.files.includes("eliza/packages/app-core/scripts"));
+});
