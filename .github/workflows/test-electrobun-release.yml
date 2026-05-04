@@ -54,6 +54,8 @@ jobs:
 
       - name: Run repository postinstall patches
         run: bun run postinstall
+        env:
+          MILADY_SKIP_LOCAL_UPSTREAMS: "1"
 
       - name: Run regression matrix contract
         run: bun run test:regression-matrix:release-contract
