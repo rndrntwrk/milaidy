@@ -70,12 +70,15 @@ const forbiddenActionSnippets = ["bun add --no-save --dev"];
 
 const requiredAlignScriptSnippets = [
   "function resolveInstalledPackage(packageName)",
+  "function ensureBuiltLocalPackage",
   'linkRootPackage(\n  "bun-types"',
   'linkRootPackage(\n  "@types/react"',
   '"@elizaos/plugin-agent-skills"',
   '"@elizaos/plugin-browser-bridge"',
   '"@elizaos/plugin-pdf"',
   '"@elizaos/plugin-sql"',
+  '"dist/node/index.node.js"',
+  '"typescript/dist/index.js"',
 ];
 
 const disableMarkers = [

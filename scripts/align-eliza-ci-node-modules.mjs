@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -124,6 +125,59 @@ function linkOptionalLocalPackage(packageName, sourceRel, targets) {
   linkLocalPackage(packageName, sourceRel, targets);
 }
 
+function ensureBuiltLocalPackage(
+  packageName,
+  sourceRel,
+  outputRelPaths,
+  { optional = false } = {},
+) {
+  const source = path.join(repoRoot, sourceRel);
+  if (!fs.existsSync(path.join(source, "package.json"))) {
+    if (optional) {
+      console.log(
+        `[align-eliza-ci-node-modules] skipping ${packageName} build; missing ${sourceRel}/package.json`,
+      );
+      return;
+    }
+    throw new Error(
+      `missing local package source for ${packageName}: ${source}`,
+    );
+  }
+
+  const missingOutputs = outputRelPaths.filter(
+    (outputRelPath) => !fs.existsSync(path.join(source, outputRelPath)),
+  );
+  if (missingOutputs.length === 0) {
+    return;
+  }
+
+  console.log(
+    `[align-eliza-ci-node-modules] building ${packageName}; missing ${missingOutputs.join(", ")}`,
+  );
+  const result = spawnSync("bun", ["run", "build"], {
+    cwd: source,
+    env: process.env,
+    stdio: "inherit",
+  });
+  if (result.error) {
+    throw result.error;
+  }
+  if (result.status !== 0) {
+    throw new Error(
+      `build failed for ${packageName} with exit code ${result.status ?? 1}`,
+    );
+  }
+
+  const stillMissingOutputs = outputRelPaths.filter(
+    (outputRelPath) => !fs.existsSync(path.join(source, outputRelPath)),
+  );
+  if (stillMissingOutputs.length > 0) {
+    throw new Error(
+      `build for ${packageName} did not create required output(s): ${stillMissingOutputs.join(", ")}`,
+    );
+  }
+}
+
 const sharedTypeTargets = [
   "eliza/node_modules",
   "eliza/packages/app-core/node_modules",
@@ -237,3 +291,29 @@ linkOptionalLocalPackage("@elizaos/plugin-sql", "eliza/plugins/plugin-sql", [
   "eliza/node_modules/@elizaos/plugin-sql",
   "eliza/packages/agent/node_modules/@elizaos/plugin-sql",
 ]);
+
+ensureBuiltLocalPackage("@elizaos/core", "eliza/packages/core", [
+  "dist/index.node.js",
+  "dist/index.d.ts",
+]);
+
+ensureBuiltLocalPackage(
+  "@elizaos/plugin-agent-skills",
+  "eliza/plugins/plugin-agent-skills",
+  ["dist/index.js", "dist/index.d.ts"],
+  { optional: true },
+);
+
+ensureBuiltLocalPackage(
+  "@elizaos/plugin-pdf",
+  "eliza/plugins/plugin-pdf",
+  ["dist/node/index.node.js", "dist/index.d.ts"],
+  { optional: true },
+);
+
+ensureBuiltLocalPackage(
+  "@elizaos/plugin-sql",
+  "eliza/plugins/plugin-sql",
+  ["typescript/dist/index.js", "typescript/dist/index.d.ts"],
+  { optional: true },
+);
