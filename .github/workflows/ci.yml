@@ -69,6 +69,14 @@ jobs:
       - name: Align nested eliza package resolution
         run: node scripts/align-eliza-ci-node-modules.mjs
 
+      - name: Generate protobuf types
+        run: |
+          if [ -d eliza/packages/schemas ] && [ -f eliza/packages/schemas/buf.gen.yaml ] && [ ! -d eliza/packages/core/src/types/generated ]; then
+            cd eliza/packages/schemas
+            node node_modules/@bufbuild/buf/install.js 2>/dev/null || true
+            bunx @bufbuild/buf@1.67.0 generate
+          fi
+
       - name: Fetch upstream develop for pre-review base
         run: |
           git remote add upstream https://github.com/milady-ai/milady.git || true
