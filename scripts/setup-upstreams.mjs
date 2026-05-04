@@ -1796,11 +1796,7 @@ export function ensurePluginVideoTs6Deprecations(
   pluginsRoot,
   { pathExists = existsSync } = {},
 ) {
-  const configPath = path.join(
-    pluginsRoot,
-    "plugin-video",
-    "tsconfig.json",
-  );
+  const configPath = path.join(pluginsRoot, "plugin-video", "tsconfig.json");
 
   if (!pathExists(configPath)) {
     return false;
@@ -1834,10 +1830,7 @@ export function ensurePluginVideoTs6Deprecations(
   };
 
   const indent = raw.match(/^(\s+)"/m)?.[1] ?? "  ";
-  writeFileSync(
-    configPath,
-    `${JSON.stringify(nextParsed, null, indent)}\n`,
-  );
+  writeFileSync(configPath, `${JSON.stringify(nextParsed, null, indent)}\n`);
   console.log(
     `[setup-upstreams] Patched ${toDisplayPath(configPath)} ignoreDeprecations to 6.0 for TS6 baseUrl deprecation`,
   );
