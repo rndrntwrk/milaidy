@@ -52,6 +52,28 @@ describe("CI bootstrap contract", () => {
     );
   });
 
+  it("generates protobuf types inside the shared setup action for base-workflow auth gates", () => {
+    const setupAction = fs.readFileSync(
+      ".github/actions/setup-bun-workspace/action.yml",
+      "utf8",
+    );
+    const installDependencies = "- name: Install dependencies";
+    const generateProtobuf = "- name: Generate local eliza protobuf types";
+    const postinstallPatches = "- name: Run repository postinstall patches";
+
+    expect(setupAction).toContain(generateProtobuf);
+    expect(setupAction).toContain(
+      "inputs.prepare-local-eliza-runtime == 'true'",
+    );
+    expect(setupAction).toContain("bunx @bufbuild/buf@1.67.0 generate");
+    expect(setupAction.indexOf(installDependencies)).toBeLessThan(
+      setupAction.indexOf(generateProtobuf),
+    );
+    expect(setupAction.indexOf(generateProtobuf)).toBeLessThan(
+      setupAction.indexOf(postinstallPatches),
+    );
+  });
+
   it("lets elizaCloud patch version drift skip cleanly", () => {
     const output = execFileSync(process.execPath, [
       "scripts/patch-elizacloud.mjs",
