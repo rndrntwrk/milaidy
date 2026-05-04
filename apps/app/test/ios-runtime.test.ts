@@ -4,7 +4,7 @@ import {
   DEFAULT_ELIZA_CLOUD_BASE,
   resolveCloudApiBase,
   resolveIosRuntimeConfig,
-} from "../../eliza/packages/app-core/src/platform/ios-runtime.ts";
+} from "../src/ios-runtime";
 
 describe("iOS runtime config", () => {
   it("defaults to cloud mode on the canonical Eliza Cloud base", () => {
