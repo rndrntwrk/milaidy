@@ -19,6 +19,17 @@ describe("CI bootstrap contract", () => {
     );
   });
 
+  it("does not run nested eliza workspace installs inside CI jobs", () => {
+    const ci = workflow("ci.yml");
+
+    expect(ci).not.toContain(
+      "bun install --cwd eliza --no-frozen-lockfile --ignore-scripts",
+    );
+    expect(ci).not.toContain(
+      "bun install --cwd eliza/cloud --no-frozen-lockfile --ignore-scripts",
+    );
+  });
+
   it("builds elizaOS core before bundled skills", () => {
     const ci = workflow("ci.yml");
     const coreBuild = "(cd eliza/packages/core && bun run build)";
@@ -27,6 +38,18 @@ describe("CI bootstrap contract", () => {
     expect(ci).toContain(coreBuild);
     expect(ci).toContain(skillsBuild);
     expect(ci.indexOf(coreBuild)).toBeLessThan(ci.indexOf(skillsBuild));
+  });
+
+  it("generates protobuf types before auth tests run", () => {
+    const agentReview = workflow("agent-review.yml");
+    const generateProtobuf = "- name: Generate protobuf types";
+    const runAuthSuite = "- name: Run auth test suite";
+
+    expect(agentReview).toContain(generateProtobuf);
+    expect(agentReview).toContain("bunx @bufbuild/buf@1.67.0 generate");
+    expect(agentReview.indexOf(generateProtobuf)).toBeLessThan(
+      agentReview.indexOf(runAuthSuite),
+    );
   });
 
   it("lets elizaCloud patch version drift skip cleanly", () => {
