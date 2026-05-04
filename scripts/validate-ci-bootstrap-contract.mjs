@@ -18,6 +18,7 @@ const files = {
   packageJson: "package.json",
   disableScript: "scripts/disable-local-eliza-workspace.mjs",
   restoreScript: "scripts/restore-local-eliza-workspace.mjs",
+  alignScript: "scripts/align-eliza-ci-node-modules.mjs",
   elizaCiPatchScript: "scripts/apply-eliza-ci-patches.mjs",
   elizaCiPatch:
     "eliza/patches/milady/eliza-ci-bootstrap/ci-release-contracts.patch",
@@ -67,6 +68,16 @@ const requiredActionSnippets = [
 
 const forbiddenActionSnippets = ["bun add --no-save --dev"];
 
+const requiredAlignScriptSnippets = [
+  "function resolveInstalledPackage(packageName)",
+  'linkRootPackage(\n  "bun-types"',
+  'linkRootPackage(\n  "@types/react"',
+  '"@elizaos/plugin-agent-skills"',
+  '"@elizaos/plugin-browser-bridge"',
+  '"@elizaos/plugin-pdf"',
+  '"@elizaos/plugin-sql"',
+];
+
 const disableMarkers = [
   "scripts/disable-local-eliza-workspace.mjs",
   'disable-local-eliza-workspace: "true"',
@@ -102,6 +113,7 @@ for (const relativePath of Object.values(files).filter((value) =>
 }
 const workflowText = readText(files.workflow, failures);
 const actionText = readText(files.action, failures);
+const alignScriptText = readText(files.alignScript, failures);
 const packageJson = readJson(files.packageJson, failures);
 const ciWorkflowText = readText(".github/workflows/ci.yml", failures);
 
@@ -123,6 +135,12 @@ assertContainsNone(
 );
 assertContainsAll(actionText, files.action, requiredActionSnippets, failures);
 assertContainsNone(actionText, files.action, forbiddenActionSnippets, failures);
+assertContainsAll(
+  alignScriptText,
+  files.alignScript,
+  requiredAlignScriptSnippets,
+  failures,
+);
 assertOrdered(
   actionText,
   files.action,

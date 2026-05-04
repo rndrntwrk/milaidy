@@ -111,6 +111,21 @@ describe("CI bootstrap contract", () => {
     );
   });
 
+  it("links elizaOS runtime plugins and ambient UI types for local eliza checks", () => {
+    const alignScript = fs.readFileSync(
+      "scripts/align-eliza-ci-node-modules.mjs",
+      "utf8",
+    );
+
+    expect(alignScript).toContain("function resolveInstalledPackage");
+    expect(alignScript).toContain('linkRootPackage(\n  "bun-types"');
+    expect(alignScript).toContain('linkRootPackage(\n  "@types/react"');
+    expect(alignScript).toContain('"@elizaos/plugin-agent-skills"');
+    expect(alignScript).toContain('"@elizaos/plugin-browser-bridge"');
+    expect(alignScript).toContain('"@elizaos/plugin-pdf"');
+    expect(alignScript).toContain('"@elizaos/plugin-sql"');
+  });
+
   it("lets elizaCloud patch version drift skip cleanly", () => {
     const output = execFileSync(process.execPath, [
       "scripts/patch-elizacloud.mjs",
