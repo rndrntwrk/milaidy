@@ -112,7 +112,6 @@ const PACKAGE_LINK_ROOTS = [
   ["node_modules"],
   ["eliza", "node_modules"],
   ["apps", "app", "node_modules"],
-  ["apps", "home", "node_modules"],
 ];
 const MILADY_SINGLETON_DEPENDENCY_LINKS = [
   {
@@ -937,10 +936,6 @@ export async function ensureRequiredElizaPluginBuilds(
   repoRoot = DEFAULT_REPO_ROOT,
   options = {},
 ) {
-  ensurePluginTelegramNodeTypes(getRepoPluginsRoot(repoRoot), {
-    pathExists: options.pathExists ?? existsSync,
-  });
-
   let builtAny = false;
   for (const buildConfig of ELIZA_REQUIRED_PLUGIN_BUILDS) {
     builtAny =
@@ -1666,224 +1661,10 @@ export async function ensureElizaBuildOutputs(
  *
  * Idempotent: only writes when the desired types list is not already present.
  */
-export function ensurePluginAnthropicBunTypes(
-  pluginsRoot,
-  { pathExists = existsSync } = {},
-) {
-  const buildConfigPath = path.join(
-    pluginsRoot,
-    "plugin-anthropic",
-    "typescript",
-    "tsconfig.build.json",
-  );
-
-  if (!pathExists(buildConfigPath)) {
-    return false;
-  }
-
-  const raw = readFileSync(buildConfigPath, "utf8");
-  let parsed;
-  try {
-    parsed = JSON.parse(raw);
-  } catch (error) {
-    console.warn(
-      `[setup-upstreams] Could not parse ${toDisplayPath(buildConfigPath)}: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
-    );
-    return false;
-  }
-
-  const compilerOptions =
-    parsed && typeof parsed === "object" && parsed.compilerOptions
-      ? parsed.compilerOptions
-      : {};
-  const existingTypes = Array.isArray(compilerOptions.types)
-    ? compilerOptions.types
-    : null;
-
-  if (existingTypes?.includes("bun-types")) {
-    return false;
-  }
-
-  const nextTypes = existingTypes ? [...existingTypes] : ["node"];
-  if (!nextTypes.includes("bun-types")) {
-    nextTypes.push("bun-types");
-  }
-
-  const nextCompilerOptions = {
-    ...compilerOptions,
-    types: nextTypes,
-  };
-  const nextParsed = {
-    ...parsed,
-    compilerOptions: nextCompilerOptions,
-  };
-
-  const indent = raw.match(/^(\s+)"/m)?.[1] ?? "\t";
-  writeFileSync(
-    buildConfigPath,
-    `${JSON.stringify(nextParsed, null, indent)}\n`,
-  );
-  console.log(
-    `[setup-upstreams] Patched ${toDisplayPath(buildConfigPath)} to load Bun types`,
-  );
-  return true;
-}
-
-export function ensurePluginTelegramNodeTypes(
-  pluginsRoot,
-  { pathExists = existsSync } = {},
-) {
-  const configPaths = [
-    path.join(pluginsRoot, "plugin-telegram", "tsconfig.json"),
-    path.join(pluginsRoot, "plugin-telegram", "tsconfig.build.json"),
-  ];
-  let patchedFiles = 0;
-
-  for (const configPath of configPaths) {
-    if (!pathExists(configPath)) {
-      continue;
-    }
-
-    const raw = readFileSync(configPath, "utf8");
-    let parsed;
-    try {
-      parsed = JSON.parse(raw);
-    } catch (error) {
-      console.warn(
-        `[setup-upstreams] Could not parse ${toDisplayPath(configPath)}: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
-      continue;
-    }
-
-    const compilerOptions =
-      parsed && typeof parsed === "object" && parsed.compilerOptions
-        ? parsed.compilerOptions
-        : {};
-    const existingTypes = Array.isArray(compilerOptions.types)
-      ? compilerOptions.types
-      : [];
-
-    if (existingTypes.includes("node")) {
-      continue;
-    }
-
-    const nextParsed = {
-      ...parsed,
-      compilerOptions: {
-        ...compilerOptions,
-        types: [...existingTypes, "node"],
-      },
-    };
-    const indent = raw.match(/^(\s+)"/m)?.[1] ?? "  ";
-    writeFileSync(configPath, `${JSON.stringify(nextParsed, null, indent)}\n`);
-    patchedFiles += 1;
-  }
-
-  if (patchedFiles > 0) {
-    console.log(
-      `[setup-upstreams] Patched plugin-telegram Node type config (${patchedFiles} file${patchedFiles === 1 ? "" : "s"})`,
-    );
-  }
-
-  return patchedFiles;
-}
-
-export function ensurePluginVideoTs6Deprecations(
-  pluginsRoot,
-  { pathExists = existsSync } = {},
-) {
-  const configPath = path.join(pluginsRoot, "plugin-video", "tsconfig.json");
-
-  if (!pathExists(configPath)) {
-    return false;
-  }
-
-  const raw = readFileSync(configPath, "utf8");
-  let parsed;
-  try {
-    parsed = JSON.parse(raw);
-  } catch (error) {
-    console.warn(
-      `[setup-upstreams] Could not parse ${toDisplayPath(configPath)}: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
-    );
-    return false;
-  }
-
-  const compilerOptions =
-    parsed && typeof parsed === "object" && parsed.compilerOptions
-      ? parsed.compilerOptions
-      : {};
-
-  if (compilerOptions.ignoreDeprecations === "6.0") {
-    return false;
-  }
-
-  const nextParsed = {
-    ...parsed,
-    compilerOptions: { ...compilerOptions, ignoreDeprecations: "6.0" },
-  };
-
-  const indent = raw.match(/^(\s+)"/m)?.[1] ?? "  ";
-  writeFileSync(configPath, `${JSON.stringify(nextParsed, null, indent)}\n`);
-  console.log(
-    `[setup-upstreams] Patched ${toDisplayPath(configPath)} ignoreDeprecations to 6.0 for TS6 baseUrl deprecation`,
-  );
-  return true;
-}
-
-export function patchPluginBuildTscBinPaths(
-  pluginsRoot,
-  { pathExists = existsSync } = {},
-) {
-  let patchedFiles = 0;
-  for (const packageDir of discoverPluginPackageDirs(pluginsRoot)) {
-    const buildScriptPath = path.join(packageDir, "build.ts");
-    if (!pathExists(buildScriptPath)) {
-      continue;
-    }
-
-    const original = readFileSync(buildScriptPath, "utf8");
-    const patched = original
-      .replaceAll(
-        'join(rootDir, "node_modules", ".bin", "tsc")',
-        'join(rootDir, "node_modules", ".bin", process.platform === "win32" ? "tsc.cmd" : "tsc")',
-      )
-      .replaceAll(
-        'join(ROOT, "node_modules", ".bin", "tsc")',
-        'join(ROOT, "node_modules", ".bin", process.platform === "win32" ? "tsc.cmd" : "tsc")',
-      );
-
-    if (patched === original) {
-      continue;
-    }
-
-    writeFileSync(buildScriptPath, patched);
-    patchedFiles += 1;
-  }
-
-  if (patchedFiles > 0) {
-    console.log(
-      `[setup-upstreams] Patched ${patchedFiles} plugin build script ${patchedFiles === 1 ? "tsc path" : "tsc paths"} for Windows bin shims`,
-    );
-  }
-
-  return patchedFiles;
-}
-
 export async function ensurePluginBuildOutputs(
   pluginsRoot,
   { pathExists = existsSync, runCommandImpl = runCommand } = {},
 ) {
-  ensurePluginAnthropicBunTypes(pluginsRoot, { pathExists });
-  ensurePluginTelegramNodeTypes(pluginsRoot, { pathExists });
-  ensurePluginVideoTs6Deprecations(pluginsRoot, { pathExists });
-  patchPluginBuildTscBinPaths(pluginsRoot, { pathExists });
   for (const packageDir of discoverPluginPackageDirs(pluginsRoot)) {
     const packageJson = readPackageJson(packageDir);
     if (!packageJson?.name?.startsWith("@elizaos/")) {
@@ -1973,7 +1754,6 @@ export async function setupUpstreams(repoRoot = DEFAULT_REPO_ROOT) {
 
   const elizaRoot = await ensureRepoLocalEliza(repoRoot);
   const pluginsRoot = getRepoPluginsRoot(repoRoot);
-  ensurePluginTelegramNodeTypes(pluginsRoot);
   await ensureElizaDependencies(elizaRoot);
   await ensureElizaBuildOutputs(elizaRoot);
 

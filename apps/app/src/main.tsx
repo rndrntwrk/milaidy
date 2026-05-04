@@ -135,7 +135,7 @@ import {
   type IosRuntimeConfig,
   type IosRuntimeMode,
   resolveIosRuntimeConfig,
-} from "./ios-runtime";
+} from "@elizaos/app-core";
 
 // CharacterEditor is statically re-exported by `@elizaos/app-core/browser`,
 // so the previous `lazy()` wrapper here was eagerly merged back into the

@@ -13,6 +13,10 @@ import {
   transformWithEsbuild,
 } from "vite";
 import { CAPACITOR_PLUGIN_NAMES } from "../../eliza/packages/app-core/scripts/lib/capacitor-plugin-names.mjs";
+import {
+  parseAllowedHostEnv,
+  toViteAllowedHosts,
+} from "../../eliza/packages/app-core/src/config/allowed-hosts.ts";
 import { resolveAppBranding } from "../../eliza/packages/app-core/src/config/app-config.ts";
 // Keep workspace-relative TS imports in this config so Vite transpiles them
 // while bundling the config instead of asking Node to load package-exported
@@ -30,7 +34,6 @@ import {
   resolveDesktopUiPortPreference,
 } from "../../eliza/packages/shared/src/runtime-env.ts";
 import { syncElizaEnvAliases } from "../../scripts/lib/sync-eliza-env-aliases.mjs";
-import { parseAllowedHostEnv, toViteAllowedHosts } from "./allowed-hosts.ts";
 import appConfig from "./app.config";
 import { resolveViteDevServerRuntime } from "./vite-dev-origin.ts";
 

@@ -471,7 +471,7 @@
         "@elizaos/ui": "workspace:*",
         "@noble/curves": "^2.0.1",
         "@simplewebauthn/browser": "^13.0.0",
-        "@solana/web3.js": "^1.98.4",
+        "@solana/web3.js": "1.98.4",
         "@stwd/sdk": "^0.8.1",
         "ethers": "^6.16.0",
         "lucide-react": "^1.0.0",
@@ -572,7 +572,7 @@
         "@elizaos/vault": "workspace:*",
         "@hapi/boom": "^10.0.1",
         "@noble/curves": "^2.0.1",
-        "@solana/web3.js": "^1.98.4",
+        "@solana/web3.js": "1.98.4",
         "@whiskeysockets/baileys": "7.0.0-rc.9",
         "abitype": "^1.0.0",
         "coding-agent-adapters": "0.16.3",
@@ -2483,7 +2483,7 @@
         "@lifi/types": "^17.18.0",
         "@solana/spl-token": "0.4.14",
         "@solana/spl-token-metadata": "^0.1.6",
-        "@solana/web3.js": "^1.98.4",
+        "@solana/web3.js": "1.98.4",
         "bignumber.js": "^11.0.0",
         "bs58": "^6.0.0",
         "tweetnacl": "^1.0.3",
@@ -2619,6 +2619,7 @@
     "electrobun@1.16.0": "patches/electrobun@1.16.0.patch",
     "llama-cpp-capacitor@0.1.5": "patches/llama-cpp-capacitor@0.1.5.patch",
     "@noble/curves@2.0.1": "patches/@noble%2Fcurves@2.0.1.patch",
+    "tsup@8.5.1": "patches/tsup@8.5.1.patch",
     "proper-lockfile@4.1.2": "patches/proper-lockfile@4.1.2.patch",
     "@pixiv/three-vrm@3.5.2": "patches/@pixiv%2Fthree-vrm@3.5.2.patch",
   },
@@ -2643,6 +2644,7 @@
     "@elizaos/plugin-rolodex": "2.0.0-alpha.10",
     "@elizaos/plugin-sql": "workspace:*",
     "@elizaos/plugin-telegram": "workspace:*",
+    "@solana/web3.js": "1.98.4",
     "@stwd/sdk": "^0.3.0",
     "ai": "6.0.30",
     "axios": "1.14.0",
@@ -6119,7 +6121,7 @@
 
     "libphonenumber-js": ["libphonenumber-js@1.12.42", "", {}, "sha512-oKQFPTibqQwZZkChCDVMFVJXMZdyJNqDWZWYNn8BgyAaK/6yFJEowxCY0RVFirRyWP63hMRuKlkSEd9qlvbWXg=="],
 
-    "libsignal": ["@whiskeysockets/libsignal-node@github:whiskeysockets/libsignal-node#1c30d7d", { "dependencies": { "curve25519-js": "^0.0.4", "protobufjs": "6.8.8" } }, "WhiskeySockets-libsignal-node-1c30d7d"],
+    "libsignal": ["@whiskeysockets/libsignal-node@github:whiskeysockets/libsignal-node#1c30d7d", { "dependencies": { "curve25519-js": "^0.0.4", "protobufjs": "6.8.8" } }, "WhiskeySockets-libsignal-node-1c30d7d", "sha512-5q4/OuDQaMYx3RpDqMqS3WYyqjrsSMpU8ipQZtpYnm5l6DwNoLV9oIYMDK0NILKW+tyk3tVCIA11BMYQ+A1+GA=="],
 
     "libsodium": ["libsodium@0.8.4", "", {}, "sha512-lMcYaRi0zcs7tarATsQUYC7rstliIXZuoq0c6zXSgNtSNtdvBgkSegjWhpMJAXzKX3SUSwIp7+zEsob+j3LuRw=="],
 
