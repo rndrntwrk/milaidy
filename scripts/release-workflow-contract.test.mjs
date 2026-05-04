@@ -228,6 +228,9 @@ test("Electrobun release has a lightweight PR contract workflow", () => {
     /run: bun run test:regression-matrix:release-contract/,
   );
   assert.match(workflowText, /run: bun run test:release:contract/);
+  assert.match(workflowText, /SKIP_AVATAR_CLONE: "1"/);
+  assert.match(workflowText, /ELIZA_NO_VISION_DEPS: "1"/);
+  assert.match(workflowText, /MILADY_NO_VISION_DEPS: "1"/);
 });
 
 test("Electrobun Windows smoke validates the public installer", () => {

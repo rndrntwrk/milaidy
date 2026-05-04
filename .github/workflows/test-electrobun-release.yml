@@ -54,6 +54,10 @@ jobs:
 
       - name: Run repository postinstall patches
         run: bun run postinstall
+        env:
+          SKIP_AVATAR_CLONE: "1"
+          ELIZA_NO_VISION_DEPS: "1"
+          MILADY_NO_VISION_DEPS: "1"
 
       - name: Run regression matrix contract
         run: bun run test:regression-matrix:release-contract
