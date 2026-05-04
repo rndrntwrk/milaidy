@@ -128,12 +128,15 @@ describe("CI bootstrap contract", () => {
     );
 
     expect(alignScript).toContain("function resolveInstalledPackage");
+    expect(alignScript).toContain("function ensureBuiltLocalPackage");
     expect(alignScript).toContain('linkRootPackage(\n  "bun-types"');
     expect(alignScript).toContain('linkRootPackage(\n  "@types/react"');
     expect(alignScript).toContain('"@elizaos/plugin-agent-skills"');
     expect(alignScript).toContain('"@elizaos/plugin-browser-bridge"');
     expect(alignScript).toContain('"@elizaos/plugin-pdf"');
     expect(alignScript).toContain('"@elizaos/plugin-sql"');
+    expect(alignScript).toContain('"dist/node/index.node.js"');
+    expect(alignScript).toContain('"typescript/dist/index.js"');
   });
 
   it("lets elizaCloud patch version drift skip cleanly", () => {
