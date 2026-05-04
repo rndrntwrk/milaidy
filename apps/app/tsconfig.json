@@ -27,6 +27,10 @@
         "./eliza/packages/app-core/src/platform/native-plugin-entrypoints.ts"
       ],
       "@elizaos/app-core/*": ["./eliza/packages/app-core/src/*"],
+      "@elizaos/app-2004scape": ["./eliza/apps/app-2004scape/src/index.ts"],
+      "@elizaos/app-2004scape/*": ["./eliza/apps/app-2004scape/src/*"],
+      "@elizaos/app-babylon": ["./eliza/apps/app-babylon/src/index.ts"],
+      "@elizaos/app-babylon/*": ["./eliza/apps/app-babylon/src/*"],
       "@elizaos/app-elizamaker": ["./eliza/apps/app-elizamaker/src/index.ts"],
       "@elizaos/app-elizamaker/*": ["./eliza/apps/app-elizamaker/src/*"],
       "@elizaos/app-task-coordinator": [
@@ -39,10 +43,20 @@
       "@elizaos/app-companion/*": ["./eliza/apps/app-companion/src/*"],
       "@elizaos/app-contacts": ["./eliza/apps/app-contacts/src/index.ts"],
       "@elizaos/app-contacts/*": ["./eliza/apps/app-contacts/src/*"],
+      "@elizaos/app-defense-of-the-agents": [
+        "./eliza/apps/app-defense-of-the-agents/src/index.ts"
+      ],
+      "@elizaos/app-defense-of-the-agents/*": [
+        "./eliza/apps/app-defense-of-the-agents/src/*"
+      ],
       "@clawville/app-clawville": ["./eliza/apps/app-clawville/src/index.ts"],
       "@clawville/app-clawville/*": ["./eliza/apps/app-clawville/src/*"],
       "@elizaos/app-lifeops": ["./eliza/apps/app-lifeops/src/index.ts"],
       "@elizaos/app-lifeops/*": ["./eliza/apps/app-lifeops/src/*"],
+      "@elizaos/app-hyperscape": ["./eliza/apps/app-hyperscape/src/index.ts"],
+      "@elizaos/app-hyperscape/*": ["./eliza/apps/app-hyperscape/src/*"],
+      "@elizaos/app-scape": ["./eliza/apps/app-scape/src/index.ts"],
+      "@elizaos/app-scape/*": ["./eliza/apps/app-scape/src/*"],
       "@elizaos/app-shopify": ["./eliza/apps/app-shopify/src/index.ts"],
       "@elizaos/app-shopify/*": ["./eliza/apps/app-shopify/src/*"],
       "@elizaos/app-hyperliquid": ["./eliza/apps/app-hyperliquid/src/index.ts"],
@@ -73,6 +87,8 @@
       "@elizaos/core/*": ["./eliza/packages/core/src/*"],
       "@elizaos/shared": ["./eliza/packages/shared/src/index.ts"],
       "@elizaos/shared/*": ["./eliza/packages/shared/src/*"],
+      "@elizaos/skills": ["./eliza/packages/skills/src/index.ts"],
+      "@elizaos/skills/*": ["./eliza/packages/skills/src/*"],
       "@elizaos/capacitor-agent": [
         "./eliza/packages/native-plugins/agent/src/index.ts"
       ],
