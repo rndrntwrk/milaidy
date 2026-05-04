@@ -6,8 +6,8 @@
  * Once that PR merges and a new alpha is published, delete this script,
  * the eliza/patches/milady/elizacloud-patchset/ directory, and the postinstall hook entry.
  *
- * Pinned to @elizaos/plugin-elizacloud@2.0.0-alpha.8 — refuses to apply
- * to other versions because the patch context lines may have shifted.
+ * Pinned to @elizaos/plugin-elizacloud@2.0.0-alpha.8 — skips other versions
+ * because the patch context lines may have shifted.
  *
  * The alpha.8 registry artifact and the repo-local alpha.8 workspace package
  * have diverged in the wild. The static patch targets the repo-local
@@ -110,11 +110,10 @@ export function main() {
       );
       return;
     }
-    fail(
-      `version mismatch — patch was authored against @elizaos/plugin-elizacloud@${PINNED_VERSION}, ` +
-        `but installed version is ${pkg.version}. Regenerate the patch against the new version, ` +
-        `or update PINNED_VERSION in this script if the patch still applies cleanly.`,
+    log(
+      `installed version ${pkg.version} does not match pinned ${PINNED_VERSION} - skipping bridge patch`,
     );
+    return;
   }
 
   if (usesLegacyAiSdkObjectGeneration) {
