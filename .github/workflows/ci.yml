@@ -77,6 +77,10 @@ jobs:
             bunx @bufbuild/buf@1.67.0 generate
           fi
 
+      - name: Generate i18n keyword data
+        run: node packages/shared/scripts/generate-keywords.mjs --target ts
+        working-directory: eliza
+
       - name: Fetch upstream develop for pre-review base
         run: |
           git remote add upstream https://github.com/milady-ai/milady.git || true
