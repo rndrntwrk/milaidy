@@ -161,8 +161,6 @@
     "setup:upstreams": "node scripts/setup-upstreams.mjs",
     "workspace:sync-submodules": "node scripts/init-submodules.mjs",
     "workspace:bump-eliza-submodules": "node scripts/update-eliza-submodule-pointers-to-remote.mjs",
-    "sync:github-workflows": "node scripts/sync-root-github-workflows-from-eliza.mjs",
-    "test:github-workflows-sync": "node --test scripts/sync-root-github-workflows-from-eliza.test.mjs",
     "desktop:stack-status": "node eliza/packages/app-core/scripts/desktop-stack-status.mjs",
     "smoke:api-status": "node eliza/packages/app-core/scripts/smoke-api-status.mjs",
     "smoke:api-status:prod": "node eliza/packages/app-core/scripts/smoke-api-status.mjs https://milady.ai https://app.milady.ai",
