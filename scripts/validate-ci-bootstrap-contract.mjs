@@ -289,7 +289,7 @@ function assertCiPreReviewBootstrap(workflowText, targetFailures) {
     "- name: Generate i18n keyword data",
     "run: node packages/shared/scripts/generate-keywords.mjs --target ts",
     "- name: Build eliza packages required for typecheck",
-    "bun run build --cwd eliza/packages/skills",
+    "(cd eliza/packages/skills && bun run build)",
     "- name: Run local pre-review gate",
     "run: bun run pre-review:local",
   ];
