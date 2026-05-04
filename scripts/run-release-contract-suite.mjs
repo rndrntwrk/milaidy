@@ -405,6 +405,9 @@ export function main() {
     ]);
 
     // tsdown and release:check resolve repo-root-relative entries/config.
+    run("node", [
+      "eliza/packages/app-core/scripts/ensure-shared-i18n-data.mjs",
+    ]);
     run("bunx", ["tsdown", "--fail-on-warn", "false"]);
     fs.mkdirSync(path.join(repoRoot, "dist"), { recursive: true });
     fs.writeFileSync(

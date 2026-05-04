@@ -77,6 +77,10 @@ test("cloud image build stages Milady app into Dockerfile layout", () => {
 test("npm release builds generate gitignored eliza i18n data before bundling", () => {
   const release = workflow("agent-release.yml");
   const reusableNpmPublish = workflow("reusable-npm-publish.yml");
+  const releaseContractSuite = fs.readFileSync(
+    "scripts/run-release-contract-suite.mjs",
+    "utf8",
+  );
 
   for (const content of [release, reusableNpmPublish]) {
     assert.match(
@@ -84,6 +88,10 @@ test("npm release builds generate gitignored eliza i18n data before bundling", (
       /node eliza\/packages\/app-core\/scripts\/ensure-shared-i18n-data\.mjs[\s\S]*?bunx tsdown/,
     );
   }
+  assert.match(
+    releaseContractSuite,
+    /ensure-shared-i18n-data\.mjs"[\s\S]*?run\("bunx", \["tsdown"/,
+  );
 });
 
 test("Electrobun release exposes whisper-node for upstream script layout", () => {
@@ -190,14 +198,8 @@ test("Electrobun macOS release patch tolerates CRLF stager checkout", (t) => {
     "eliza/packages/app-core/platforms/electrobun/scripts/stage-macos-release-artifacts.sh",
   );
   fs.mkdirSync(path.dirname(stagerPath), { recursive: true });
-  const cleanStager = execFileSync(
-    "git",
-    [
-      "-C",
-      "eliza",
-      "show",
-      "20a35d6b45914605876c8b43017c831c025d0abe:packages/app-core/platforms/electrobun/scripts/stage-macos-release-artifacts.sh",
-    ],
+  const cleanStager = fs.readFileSync(
+    "eliza/packages/app-core/platforms/electrobun/scripts/stage-macos-release-artifacts.sh",
     { encoding: "utf8" },
   );
   fs.writeFileSync(stagerPath, cleanStager.replace(/\r?\n/g, "\r\n"));
@@ -223,6 +225,7 @@ test("Electrobun release has a lightweight PR contract workflow", () => {
   assert.match(workflowText, /^name: Validate Electrobun Release Workflow$/m);
   assert.match(workflowText, /branches: \[main, develop\]/);
   assert.match(workflowText, /BUN_VERSION: "1\.3\.13"/);
+  assert.match(workflowText, /MILADY_SKIP_LOCAL_UPSTREAMS: "1"/);
   assert.match(
     workflowText,
     /run: bun run test:regression-matrix:release-contract/,
