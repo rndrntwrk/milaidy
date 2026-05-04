@@ -428,12 +428,12 @@
     "dompurify": "3.4.0"
   },
   "patchedDependencies": {
-    "@noble/curves@2.0.1": "eliza/packages/app-core/patches/@noble%2Fcurves@2.0.1.patch",
-    "proper-lockfile@4.1.2": "eliza/packages/app-core/patches/proper-lockfile@4.1.2.patch",
-    "@pixiv/three-vrm@3.5.2": "eliza/packages/app-core/patches/@pixiv%2Fthree-vrm@3.5.2.patch",
-    "electrobun@1.16.0": "eliza/packages/app-core/patches/electrobun@1.16.0.patch",
-    "pty-manager@1.11.0": "eliza/packages/app-core/patches/pty-manager@1.11.0.patch",
-    "coding-agent-adapters@0.16.3": "eliza/packages/app-core/patches/coding-agent-adapters@0.16.3.patch",
-    "llama-cpp-capacitor@0.1.5": "eliza/packages/app-core/patches/llama-cpp-capacitor@0.1.5.patch"
+    "@noble/curves@2.0.1": "patches/@noble%2Fcurves@2.0.1.patch",
+    "proper-lockfile@4.1.2": "patches/proper-lockfile@4.1.2.patch",
+    "@pixiv/three-vrm@3.5.2": "patches/@pixiv%2Fthree-vrm@3.5.2.patch",
+    "electrobun@1.16.0": "patches/electrobun@1.16.0.patch",
+    "pty-manager@1.11.0": "patches/pty-manager@1.11.0.patch",
+    "coding-agent-adapters@0.16.3": "patches/coding-agent-adapters@0.16.3.patch",
+    "llama-cpp-capacitor@0.1.5": "patches/llama-cpp-capacitor@0.1.5.patch"
   }
 }
