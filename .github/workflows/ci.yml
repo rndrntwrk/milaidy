@@ -81,6 +81,12 @@ jobs:
         run: node packages/shared/scripts/generate-keywords.mjs --target ts
         working-directory: eliza
 
+      - name: Build eliza packages required for typecheck
+        run: |
+          if [ ! -f eliza/packages/skills/dist/index.js ]; then
+            bun run build --cwd eliza/packages/skills
+          fi
+
       - name: Fetch upstream develop for pre-review base
         run: |
           git remote add upstream https://github.com/milady-ai/milady.git || true
