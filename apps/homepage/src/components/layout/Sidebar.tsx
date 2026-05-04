@@ -5,6 +5,8 @@ import { resolveHomepageAssetUrl } from "../../lib/asset-url";
 import { SessionTile } from "./SessionTile";
 
 const GITHUB_URL = "https://github.com/milady-ai/milady";
+const LATEST_RELEASE_URL =
+  "https://github.com/milady-ai/milady/releases/latest";
 
 export type LocalRuntimeState = "ready" | "probing" | "offline";
 
@@ -97,7 +99,7 @@ export function Sidebar({
           <NavItemExternal href="/docs" label="docs" internal />
           <NavItemExternal href={GITHUB_URL} label="github" />
           <NavItemExternal
-            href={releaseData.release.url}
+            href={LATEST_RELEASE_URL}
             label={`release ${releaseData.release.tagName}`}
           />
         </NavGroup>

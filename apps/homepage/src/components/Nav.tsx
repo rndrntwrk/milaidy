@@ -3,6 +3,9 @@ import { Link, useLocation } from "react-router-dom";
 import { releaseData } from "../generated/release-data";
 import { resolveHomepageAssetUrl } from "../lib/asset-url";
 
+const LATEST_RELEASE_URL =
+  "https://github.com/milady-ai/milady/releases/latest";
+
 export function Nav() {
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -67,7 +70,7 @@ export function Nav() {
           </Link>
 
           <a
-            href={releaseData.release.url}
+            href={LATEST_RELEASE_URL}
             target="_blank"
             rel="noreferrer"
             className="ml-2 px-3 py-1.5 font-mono text-[11px] tracking-wide uppercase text-brand border border-brand/40
@@ -150,7 +153,7 @@ export function Nav() {
 
           <div className="pt-3 border-t border-border-subtle">
             <a
-              href={releaseData.release.url}
+              href={LATEST_RELEASE_URL}
               target="_blank"
               rel="noreferrer"
               className="flex items-center justify-between px-4 py-3 font-mono text-xs tracking-wide 
