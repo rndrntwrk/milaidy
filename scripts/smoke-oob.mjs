@@ -164,13 +164,18 @@ async function main() {
   log("info", `state dir = ${stateDir}`);
   log("info", `API will bind = ${baseUrl}`);
 
-  // Spawn `bun run dev` with isolated state dir + fixed port.
-  // We use the existing dev orchestrator so the smoke exercises the
-  // same boot path a developer hits — port binding, vault bootstrap,
-  // SECRET_SALT persistence, and so on.
+  // Spawn JUST the API entry directly — no Vite, no Electrobun, no
+  // orchestrator wrapper. The orchestrator is heavy (multiple processes,
+  // long startup) and would conflict with any active dev session on
+  // the same machine. We want a CI-shaped boot: one process, isolated
+  // state dir, known port. Boot exercises the same vault bootstrap,
+  // SECRET_SALT persistence, and route registration paths a real boot
+  // hits — just without the renderer/static-server side.
+  const devServerEntry =
+    "eliza/packages/app-core/src/runtime/dev-server.ts";
   const child = spawn(
-    "node",
-    ["scripts/run-eliza-app-core-script.mjs", "dev-ui.mjs", "--name=milady", "--ui-only=false"],
+    "bun",
+    [devServerEntry],
     {
       cwd: REPO_ROOT,
       env: {
@@ -183,8 +188,20 @@ async function main() {
         FORCE_COLOR: "0",
       },
       stdio: ["ignore", debug ? "inherit" : "pipe", debug ? "inherit" : "pipe"],
+      detached: process.platform !== "win32",
     },
   );
+  // If we asked for piped stdio (non-debug), still capture stderr so
+  // boot failures aren't silently swallowed.
+  if (!debug && child.stderr) {
+    child.stderr.on("data", (chunk) => {
+      process.stderr.write(`[api] ${chunk}`);
+    });
+  }
+  child.on("error", (err) => {
+    log("fail", `failed to spawn API: ${err.message}`);
+    process.exit(1);
+  });
 
   let killed = false;
   const teardown = async (exitCode) => {
