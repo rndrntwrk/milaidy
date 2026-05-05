@@ -13,7 +13,6 @@ import {
   initializeStorageBridge,
   isElectrobunRuntime,
 } from "@elizaos/app-core";
-import { PhoneCompanionApp } from "@elizaos/app-core";
 import type { BrandingConfig } from "@elizaos/app-core";
 import {
   type AppBootConfig,
@@ -73,7 +72,6 @@ import {
   createVectorBrowserRenderer,
   GlobalEmoteOverlay,
   InferenceCloudAlertButton,
-  prefetchVrmToCache,
   resolveCompanionInferenceNotice,
   THREE,
   useCompanionSceneStatus,
@@ -282,7 +280,6 @@ const appBootConfig: AppBootConfig = {
   companionInferenceAlertButton: InferenceCloudAlertButton,
   companionGlobalOverlay: GlobalEmoteOverlay,
   useCompanionSceneStatus,
-  prefetchVrmToCache,
   companionVectorBrowser: {
     THREE,
     createVectorBrowserRenderer,
@@ -661,13 +658,6 @@ function setupPlatformStyles(): void {
   root.style.setProperty("--keyboard-height", "0px");
 }
 
-function isPhoneCompanionMode(): boolean {
-  if (typeof window === "undefined") return false;
-  const params = new URLSearchParams(
-    window.location.search || window.location.hash.split("?")[1] || "",
-  );
-  return params.get("mode") === "companion";
-}
 
 function resolveAppWindowSlug(): string | null {
   if (!isAppWindowRoute()) return null;
@@ -687,7 +677,6 @@ function mountReactApp(): void {
   const rootEl = document.getElementById("root");
   if (!rootEl) throw new Error("Root element #root not found");
 
-  const phoneCompanion = isPhoneCompanionMode();
   const detachedShell = isDetachedWindowShell(windowShellRoute);
   const appWindowSlug = detachedShell ? null : resolveAppWindowSlug();
 
@@ -695,9 +684,7 @@ function mountReactApp(): void {
     <ErrorBoundary>
       <StrictMode>
         <AppProvider branding={APP_BRANDING}>
-          {phoneCompanion ? (
-            <PhoneCompanionApp />
-          ) : detachedShell ? (
+          {detachedShell ? (
             <div className="flex h-screen min-h-0 w-screen flex-col overflow-hidden">
               <DetachedShellRoot route={windowShellRoute} />
             </div>

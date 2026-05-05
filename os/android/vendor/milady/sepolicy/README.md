@@ -114,8 +114,8 @@ service, network stats, and so on. Far broader than the agent needs.
 `file_contexts` in this directory lists patterns like:
 
 ```
-/data/data/com\.miladyai\.milady/files/agent/bin(/.*)?  u:object_r:milady_agent_exec:s0
-/data/data/com\.miladyai\.milady/files/agent(/.*)?      u:object_r:milady_agent_data:s0
+/data/data/ai\.milady\.milady/files/agent/bin(/.*)?  u:object_r:milady_agent_exec:s0
+/data/data/ai\.milady\.milady/files/agent(/.*)?      u:object_r:milady_agent_data:s0
 ```
 
 But Android's `installd` does NOT consult `file_contexts` for files it

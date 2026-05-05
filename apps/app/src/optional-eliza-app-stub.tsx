@@ -29,10 +29,6 @@ export function createVectorBrowserRenderer(): Promise<null> {
   return Promise.resolve(null);
 }
 
-export function prefetchVrmToCache(_url?: string): Promise<void> {
-  return Promise.resolve();
-}
-
 export function resolveCompanionInferenceNotice(): null {
   return null;
 }
