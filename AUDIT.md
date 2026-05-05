@@ -13,7 +13,7 @@ in layer N can't be undone by something we haven't audited in layer N-1.
 
 | Layer | Area                                            | Files | Audited | Refactored | Status   |
 |-------|-------------------------------------------------|-------|---------|------------|----------|
-| 0     | Build / orchestration scripts                   |   213 |   213   |     0      | audited  |
+| 0     | Build / orchestration scripts                   |   213 |   213   |    25      | partial  |
 | 1     | Entry points (CLI, runtime, renderer, shell)    |    21 |    21   |     0      | audited  |
 | 2     | Electrobun desktop shell                        |    63 |    0    |     0      | pending  |
 | 3     | app-core runtime (boot, dev-server, eliza.ts)   |    20 |    0    |     0      | pending  |
@@ -26,7 +26,7 @@ in layer N can't be undone by something we haven't audited in layer N-1.
 | 10    | Plugins + Eliza apps (eliza/plugins/*)          |  2575 |    0    |     0      | pending  |
 | 11    | apps/app renderer + apps/homepage               |    99 |    0    |     0      | pending  |
 | 12    | Remaining app-core/src (autonomy, security…)    |   209 |    0    |     0      | pending  |
-| **Σ** |                                                 |**4359**|  234   |     0      |          |
+| **Σ** |                                                 |**4359**|  234   |    25      |          |
 
 (Counts exclude `*.d.ts`, `*.test.*`, `node_modules`, `dist`, `build`.)
 

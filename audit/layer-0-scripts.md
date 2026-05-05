@@ -2,7 +2,7 @@
 
 **Files: 213** (78 root + 135 app-core).
 **Audited: 213 / 213.**
-**Refactored: 0 / 213.**
+**Refactored: 25 / 213.**
 
 These scripts run *outside* the runtime: postinstall, dev orchestration,
 build, release, CI, cross-package patches. They are the actual root of
@@ -61,15 +61,15 @@ Findings format after path: `axis:short-note, axis:short-note`.
 
 - [x] `scripts/align-eliza-ci-node-modules.mjs` — used by ci.yml/agent-fix-ci.yml workflows
 - [x] `scripts/apply-eliza-ci-patches.mjs` — used by 6+ workflows (build-cloud-image, agent-release, build-docker, ...)
-- [-] `scripts/audit-actions.mjs`  dead:no-callers-found-in-pkg-or-workflows-or-other-scripts
+- [-] `scripts/audit-actions.mjs` — DELETED in commit (replaces dead:no-callers-found-in-pkg-or-workflows-or-other-scripts)
 - [x] `scripts/benchmark-to-training-dataset.mjs` — referenced by `action:trajectories-to-dataset` script in pkg
 - [x] `scripts/build-local-eliza-ci-overrides.mjs` — used by ci-fork workflow
 - [x] `scripts/check-submodule-contract.mjs` — invoked by `scripts/run-repo-checks.mjs`
 - [!] `scripts/check-upstream-drift.mjs`  dedup:diverged-fork-of-app-core-version, dead:zero-callers-in-pkg-or-workflows-or-other-scripts (only self-referential), legacy:may-be-replaceable-by-app-core-version-via-proxy
 - [!] `scripts/copy-runtime-node-modules.ts`  dedup:thin-proxy-to-app-core-version-but-also-contains-its-own-node_modules-prep-logic-(192-lines), boundaries:mixes-proxy-pattern-with-real-work
-- [-] `scripts/depot-ci-sync.mjs`  dead:no-callers-found-in-pkg-or-workflows-or-other-scripts
-- [-] `scripts/dev-dutch-pane.mjs`  dead:only-referenced-by-dev-dutch-which-is-itself-orphan
-- [-] `scripts/dev-dutch.mjs`  dead:no-callers-in-pkg-or-workflows
+- [-] `scripts/depot-ci-sync.mjs` — DELETED in commit (replaces dead:no-callers-found-in-pkg-or-workflows-or-other-scripts)
+- [-] `scripts/dev-dutch-pane.mjs` — DELETED in commit (replaces dead:only-referenced-by-dev-dutch-which-is-itself-orphan)
+- [-] `scripts/dev-dutch.mjs` — DELETED in commit (replaces dead:no-callers-in-pkg-or-workflows)
 - [x] `scripts/dev-local-cloud.mjs` — referenced by `dev:cloud:local` script in pkg
 - [!] `scripts/disable-local-eliza-workspace.mjs`  dedup:diverged-fork-of-app-core-version-(root-uses-MILADY_*-env-and-imports-lib/eliza-package-mode); root-is-canonical-(workflows-call-it-directly-9x); leave-as-is, types:zero-any/unknown-issues
 - [x] `scripts/eliza-source-mode.mjs` — referenced by `eliza:local`/`eliza:packages` scripts in pkg
@@ -89,21 +89,21 @@ Findings format after path: `axis:short-note, axis:short-note`.
 - [!] `scripts/lib/sync-eliza-env-aliases.mjs`  dedup:diverged-fork-of-app-core-version-(root-defines-MILADY_-prefix-aliases); root-is-canonical-since-it-handles-the-Milady-brand-prefix; leave-as-is
 - [x] `scripts/lib/tsconfig-mode.mjs` — used by eliza-source-mode/disable-local-eliza-workspace/restore-local-eliza-workspace
 - [x] `scripts/milady-postinstall-repo-setup.mjs` — root postinstall entry
-- [-] `scripts/miladyos/avd-test.mjs`  dedup:thin-proxy-wrapper-to-app-core/scripts/aosp/avd-test.mjs; could-be-replaced-by-direct-package.json-call-via-run-eliza-app-core-script-pattern
-- [-] `scripts/miladyos/boot-validate.mjs`  dedup:thin-proxy-wrapper, same-as-avd-test
-- [-] `scripts/miladyos/build-aosp.mjs`  dedup:thin-proxy-wrapper
-- [-] `scripts/miladyos/build-bootanimation.mjs`  dedup:thin-proxy-wrapper
-- [-] `scripts/miladyos/capture-screens.mjs`  dedup:thin-proxy-wrapper
-- [-] `scripts/miladyos/compile-libllama.mjs`  dedup:thin-proxy-wrapper
-- [-] `scripts/miladyos/compile-shim.mjs`  dedup:thin-proxy-wrapper
-- [-] `scripts/miladyos/e2e-validate.mjs`  dedup:thin-proxy-wrapper
-- [-] `scripts/miladyos/lint-init-rc.mjs`  dedup:thin-proxy-wrapper
-- [-] `scripts/miladyos/sim.mjs`  dedup:thin-proxy-wrapper
-- [-] `scripts/miladyos/smoke-cuttlefish.mjs`  dedup:thin-proxy-wrapper
-- [-] `scripts/miladyos/stage-default-models.mjs`  dedup:thin-proxy-wrapper
-- [-] `scripts/miladyos/stage-models-dfm.mjs`  dedup:thin-proxy-wrapper
-- [-] `scripts/miladyos/sync-to-aosp.mjs`  dedup:thin-proxy-wrapper
-- [-] `scripts/miladyos/validate.mjs`  dedup:thin-proxy-wrapper
+- [-] `scripts/miladyos/avd-test.mjs` — DELETED in commit (replaces dedup:thin-proxy-wrapper-to-app-core/scripts/aosp/avd-test.mjs; could-be-replaced-by-direct-package.json-call-via-run-eliza-app-core-script-pattern)
+- [-] `scripts/miladyos/boot-validate.mjs` — DELETED in commit (replaces dedup:thin-proxy-wrapper, same-as-avd-test)
+- [-] `scripts/miladyos/build-aosp.mjs` — DELETED in commit (replaces dedup:thin-proxy-wrapper)
+- [-] `scripts/miladyos/build-bootanimation.mjs` — DELETED in commit (replaces dedup:thin-proxy-wrapper)
+- [-] `scripts/miladyos/capture-screens.mjs` — DELETED in commit (replaces dedup:thin-proxy-wrapper)
+- [-] `scripts/miladyos/compile-libllama.mjs` — DELETED in commit (replaces dedup:thin-proxy-wrapper)
+- [-] `scripts/miladyos/compile-shim.mjs` — DELETED in commit (replaces dedup:thin-proxy-wrapper)
+- [-] `scripts/miladyos/e2e-validate.mjs` — DELETED in commit (replaces dedup:thin-proxy-wrapper)
+- [-] `scripts/miladyos/lint-init-rc.mjs` — DELETED in commit (replaces dedup:thin-proxy-wrapper)
+- [-] `scripts/miladyos/sim.mjs` — DELETED in commit (replaces dedup:thin-proxy-wrapper)
+- [-] `scripts/miladyos/smoke-cuttlefish.mjs` — DELETED in commit (replaces dedup:thin-proxy-wrapper)
+- [-] `scripts/miladyos/stage-default-models.mjs` — DELETED in commit (replaces dedup:thin-proxy-wrapper)
+- [-] `scripts/miladyos/stage-models-dfm.mjs` — DELETED in commit (replaces dedup:thin-proxy-wrapper)
+- [-] `scripts/miladyos/sync-to-aosp.mjs` — DELETED in commit (replaces dedup:thin-proxy-wrapper)
+- [-] `scripts/miladyos/validate.mjs` — DELETED in commit (replaces dedup:thin-proxy-wrapper)
 - [x] `scripts/optimize-action-planner.mjs` — referenced by `action:optimize-planner` script in pkg
 - [!] `scripts/patch-coding-agent-adapters-tools-flag.mjs`  legacy:verify-upstream-merged (patches @elizaos/plugin-coding-agent-adapters; check upstream)
 - [!] `scripts/patch-eliza-electrobun-windows-smoke-startup.mjs`  legacy:verify-upstream-merged (patches eliza electrobun smoke startup)
@@ -119,20 +119,20 @@ Findings format after path: `axis:short-note, axis:short-note`.
 - [x] `scripts/run-biome-format-changed.mjs` — referenced by `verify:format:changed` scripts in pkg
 - [x] `scripts/run-eliza-app-core-script.mjs` — proxy entry-point, referenced 50+ times in pkg
 - [x] `scripts/run-init-then-bun-install.mjs` — referenced in pkg
-- [-] `scripts/run-live-scenarios.mjs`  dead:no-callers-found-in-pkg-or-workflows
+- [-] `scripts/run-live-scenarios.mjs` — DELETED in commit (replaces dead:no-callers-found-in-pkg-or-workflows)
 - [!] `scripts/run-production-build.mjs`  dedup:diverged-fork-of-app-core-version-(root-handles-source-mode-routing-via-isLocalElizaDisabled); root-is-canonical-(referenced-by-build-script-in-pkg+workflow); leave-as-is
 - [x] `scripts/run-release-check.mjs` — referenced by `release:check` script in pkg
 - [!] `scripts/run-release-contract-suite.mjs`  dedup:diverged-fork-of-app-core-version-(root-runs-different-test-files-targeting-Milady-specific-contracts); root-is-canonical; leave-as-is
 - [x] `scripts/run-repo-checks.mjs` — referenced by `verify:typecheck`/`verify:lint` scripts in pkg
-- [-] `scripts/run-scenario-benchmark.mjs`  dead:no-callers-found-in-pkg-or-workflows-or-other-scripts
-- [-] `scripts/run-scenarios-isolated.mjs`  dead:no-callers-found-in-pkg-or-workflows-or-other-scripts
+- [-] `scripts/run-scenario-benchmark.mjs` — DELETED in commit (replaces dead:no-callers-found-in-pkg-or-workflows-or-other-scripts)
+- [-] `scripts/run-scenarios-isolated.mjs` — DELETED in commit (replaces dead:no-callers-found-in-pkg-or-workflows-or-other-scripts)
 - [x] `scripts/scenario-creds-pull.mjs` — referenced by `scenarios:creds:pull` script in pkg
 - [x] `scripts/seed-local-cloud.mjs` — referenced by `seed:cloud:local` script in pkg
 - [!] `scripts/setup-upstreams.mjs`  dedup:diverged-fork-of-app-core-version-(root-imports-from-lib/eliza-package-mode); root-is-canonical-(referenced-by-setup:upstreams-script-and-imported-by-check-upstream-drift); leave-as-is
-- [-] `scripts/stochastic-report.mjs`  dead:no-callers-found-in-pkg-or-workflows-or-other-scripts
-- [-] `scripts/sync-upstream-versions.mjs`  dead:no-callers-found-in-pkg-or-workflows-or-other-scripts
+- [-] `scripts/stochastic-report.mjs` — DELETED in commit (replaces dead:no-callers-found-in-pkg-or-workflows-or-other-scripts)
+- [-] `scripts/sync-upstream-versions.mjs` — DELETED in commit (replaces dead:no-callers-found-in-pkg-or-workflows-or-other-scripts)
 - [x] `scripts/sync-workspace-default-skills.mjs` — referenced by repo-setup chain (per CLAUDE.md mention)
-- [-] `scripts/update-eliza-submodule-pointers-to-remote.mjs`  dead:no-callers-found-in-pkg-or-workflows-or-other-scripts
+- [-] `scripts/update-eliza-submodule-pointers-to-remote.mjs` — DELETED in commit (replaces dead:no-callers-found-in-pkg-or-workflows-or-other-scripts)
 - [!] `scripts/validate-cdn-assets.mjs`  dedup:thin-proxy-(21-lines)-spawning-app-core-version; consider-replacing-with-direct-package.json-call-via-run-eliza-app-core-script
 - [x] `scripts/validate-ci-bootstrap-contract.mjs` — referenced by `pre-review:local` script in pkg
 - [!] `scripts/write-build-info.ts`  dedup:diverged-fork-of-app-core-version-(root-uses-resolveRepoRoot-from-lib-and-throws-on-missing-version,-app-core-uses-fallback-null); zero-direct-callers-in-pkg/workflows; possibly-dead-but-could-be-imported
