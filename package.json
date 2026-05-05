@@ -138,6 +138,7 @@
     "action:trajectories-to-dataset": "node scripts/benchmark-to-training-dataset.mjs",
     "action:optimize-planner": "node scripts/optimize-action-planner.mjs",
     "postinstall": "node scripts/milady-postinstall-repo-setup.mjs",
+    "pre-review:local": "node scripts/validate-ci-bootstrap-contract.mjs && bun run verify:format:changed",
     "setup:sync": "node scripts/run-eliza-app-core-script.mjs run-repo-setup.mjs",
     "prepack": "node scripts/run-eliza-app-core-script.mjs rt.mjs run build",
     "release:check": "node scripts/run-release-check.mjs",
