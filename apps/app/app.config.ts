@@ -18,6 +18,10 @@ interface AppWebConfig {
   shareImagePath: string;
 }
 
+type AppConfigWithAospPropertyPrefix = Omit<AppConfig, "aosp"> & {
+  aosp: NonNullable<AppConfig["aosp"]> & { propertyPrefix?: string };
+};
+
 const config = {
   appName: "Milady",
   appId: "ai.milady.milady",
@@ -86,6 +90,6 @@ const config = {
     fileExtension: ".milady-agent",
     packageScope: "miladyai",
   },
-} satisfies AppConfig & { web: AppWebConfig };
+} satisfies AppConfigWithAospPropertyPrefix & { web: AppWebConfig };
 
 export default config;
