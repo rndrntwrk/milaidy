@@ -211,3 +211,16 @@ linkOptionalLocalPackage(
     "eliza/packages/agent/node_modules/@elizaos/plugin-streaming",
   ],
 );
+
+linkOptionalLocalPackage("@elizaos/plugin-pdf", "eliza/plugins/plugin-pdf", [
+  "node_modules/@elizaos/plugin-pdf",
+  "eliza/node_modules/@elizaos/plugin-pdf",
+  "eliza/packages/agent/node_modules/@elizaos/plugin-pdf",
+]);
+
+linkOptionalLocalPackage("@elizaos/plugin-sql", "eliza/plugins/plugin-sql", [
+  "node_modules/@elizaos/plugin-sql",
+  "eliza/node_modules/@elizaos/plugin-sql",
+  "eliza/packages/agent/node_modules/@elizaos/plugin-sql",
+  "eliza/packages/app-core/node_modules/@elizaos/plugin-sql",
+]);
