@@ -56,6 +56,7 @@ const localSourceBridgePatchScripts = [
 ];
 
 const packageSafeBridgePatchScripts = [
+  "repair-elizaos-package-links.mjs",
   "ensure-elizaos-optional-app-stubs.mjs",
   "patch-elizaos-package-esm-imports.mjs",
   "patch-elizaos-package-styles.mjs",

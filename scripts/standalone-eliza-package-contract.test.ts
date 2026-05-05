@@ -202,6 +202,18 @@ test("local eliza source clone target remains explicit and configurable", () => 
   assert.match(helper, /MILADY_ELIZA_GIT_URL/);
 });
 
+test("package-mode install repairs stale local node_modules links", () => {
+  const sourceModeScript = read("scripts/eliza-source-mode.mjs");
+  const postinstallScript = read("scripts/milady-postinstall-repo-setup.mjs");
+  const repairScript = read("scripts/repair-elizaos-package-links.mjs");
+
+  assert.doesNotMatch(sourceModeScript, /--ignore-scripts/);
+  assert.match(postinstallScript, /repair-elizaos-package-links\.mjs/);
+  assert.match(repairScript, /isLocalElizaDisabled/);
+  assert.match(repairScript, /localElizaRoot/);
+  assert.match(repairScript, /findBunStorePackage/);
+});
+
 test("root tsconfig.json is packages-mode-clean by default", () => {
   const tsconfigSource = read("tsconfig.json");
   assert.doesNotMatch(

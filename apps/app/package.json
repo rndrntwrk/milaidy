@@ -18,7 +18,7 @@
     "test:watch": "vitest --config vitest.config.ts",
     "plugin:build": "node ../../scripts/run-eliza-app-core-script.mjs build-native-plugins.mjs",
     "build": "node ../../scripts/run-app-web-build.mjs",
-    "build:ios": "node ../../scripts/run-eliza-app-core-script.mjs run-mobile-build.mjs ios",
+    "build:ios": "MILADY_ELIZA_SOURCE=local node ../../scripts/run-eliza-app-core-script.mjs run-mobile-build.mjs ios",
     "build:android": "node ../../scripts/run-eliza-app-core-script.mjs run-mobile-build.mjs android",
     "ios": "bun run build:ios && capacitor open ios",
     "android": "bun run build:android && capacitor open android",

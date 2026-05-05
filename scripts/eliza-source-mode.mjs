@@ -156,11 +156,7 @@ async function runPackageMode(options) {
   await runNode("scripts/disable-local-eliza-workspace.mjs", [], env);
 
   if (options.install) {
-    await run(
-      "bun",
-      ["install", "--no-frozen-lockfile", "--ignore-scripts"],
-      env,
-    );
+    await run("bun", ["install", "--no-frozen-lockfile"], env);
   }
 
   console.log(
