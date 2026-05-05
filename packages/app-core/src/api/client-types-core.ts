@@ -126,6 +126,26 @@ export interface TradePermissionModeResponse {
   options: TradePermissionMode[];
 }
 
+export type EmoteCategory =
+  | "greeting"
+  | "emotion"
+  | "dance"
+  | "combat"
+  | "idle"
+  | "movement"
+  | "gesture"
+  | "other";
+
+export interface EmoteInfo {
+  id: string;
+  name: string;
+  description: string;
+  path: string;
+  duration: number;
+  loop: boolean;
+  category: EmoteCategory;
+}
+
 export interface ApplyProductionWalletDefaultsResponse {
   ok: boolean;
   profile: "pure-privy-safe";

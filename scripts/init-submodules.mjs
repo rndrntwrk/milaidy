@@ -33,7 +33,15 @@ const SUBMODULE_READINESS_MARKERS = {
 // typescript/ that Windows git rejects as invalid filenames. Skip checkout
 // until elizaos-plugins/plugin-openrouter#25 is merged; the package is
 // available via npm in the meantime.
-const SKIP_SUBMODULES = new Set(["plugins/plugin-openrouter"]);
+//
+// elizaOS/cloud and elizaOS/clone-your-crush are optional upstream repos that
+// are private or moved. They are not required for the Milady/Alice runtime
+// image, so deploy builds must not fail when GitHub returns 404 for them.
+const SKIP_SUBMODULES = new Set([
+  "plugins/plugin-openrouter",
+  "cloud",
+  "examples/clone-your-crush",
+]);
 
 function getSubmoduleSkipReason(
   submodulePath,

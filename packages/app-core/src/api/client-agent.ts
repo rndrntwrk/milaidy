@@ -24,6 +24,10 @@ import {
   type WebsiteBlockerPermissionResult,
   type WebsiteBlockerStatusResult,
 } from "../bridge/native-plugins";
+import type {
+  CompanionStageState,
+  PartialCompanionStageState,
+} from "../components/companion/companion-stage-state";
 import { TERMINAL_STATUSES } from "../coding";
 import { MiladyClient } from "./client-base";
 import type {
@@ -40,6 +44,7 @@ import type {
   ConfigSchemaResponse,
   CorePluginsResponse,
   CreateTriggerRequest,
+  EmoteInfo,
   ExtensionStatus,
   LogsFilter,
   LogsResponse,
@@ -175,6 +180,23 @@ declare module "./client-base" {
       mode: string,
     ): Promise<{ ok: boolean; tradePermissionMode: string }>;
     playEmote(emoteId: string): Promise<{ ok: boolean }>;
+    getEmotes(): Promise<{ emotes: EmoteInfo[] }>;
+    getBroadcastScene(channel: string): Promise<{
+      ok: boolean;
+      channel: string;
+      scene: {
+        selectedVrmIndex: number | null;
+        hasCustomVrm: boolean;
+        hasCustomBackground: boolean;
+      };
+    }>;
+    getCompanionStageState(): Promise<{
+      ok: boolean;
+      state: CompanionStageState;
+    }>;
+    setCompanionStageState(
+      patch: PartialCompanionStageState,
+    ): Promise<{ ok: boolean; state: CompanionStageState }>;
     runTerminalCommand(command: string): Promise<{ ok: boolean }>;
     getOnboardingStatus(): Promise<{
       complete: boolean;
@@ -655,6 +677,50 @@ MiladyClient.prototype.playEmote = async function (
   return this.fetch("/api/emote", {
     method: "POST",
     body: JSON.stringify({ emoteId }),
+  });
+};
+
+MiladyClient.prototype.getEmotes = async function (this: MiladyClient) {
+  return this.fetch("/api/emotes");
+};
+
+MiladyClient.prototype.getBroadcastScene = async function (
+  this: MiladyClient,
+  channel,
+) {
+  return this.fetch(`/api/broadcast/${encodeURIComponent(channel)}/scene`);
+};
+
+MiladyClient.prototype.getCompanionStageState = async function (
+  this: MiladyClient,
+) {
+  // Public broadcast viewers are not allowed through the authenticated
+  // companion endpoint. Use the unauthenticated broadcast stage route for the
+  // public camera-only transport, matching the legacy monolithic client.
+  if (typeof window !== "undefined") {
+    const pathMatch = window.location.pathname.match(
+      /^\/broadcast\/([a-zA-Z0-9-]+)\/?$/,
+    );
+    const hasInjectedConfig = !!(
+      window as unknown as { __injectedShowConfig?: unknown }
+    ).__injectedShowConfig;
+    if (pathMatch && !hasInjectedConfig) {
+      const channel = pathMatch[1];
+      if (channel === "alice-cam") {
+        return this.fetch(`/api/broadcast/${encodeURIComponent(channel)}/stage`);
+      }
+    }
+  }
+  return this.fetch("/api/companion/stage");
+};
+
+MiladyClient.prototype.setCompanionStageState = async function (
+  this: MiladyClient,
+  patch,
+) {
+  return this.fetch("/api/companion/stage", {
+    method: "POST",
+    body: JSON.stringify({ patch }),
   });
 };
 
