@@ -162,6 +162,7 @@ linkRootPackage("@types/node", [
 
 linkRootPackage("@types/react", [
   "eliza/node_modules/@types/react",
+  "eliza/packages/app-core/node_modules/@types/react",
   "eliza/packages/ui/node_modules/@types/react",
   "apps/app/node_modules/@types/react",
   "apps/homepage/node_modules/@types/react",
@@ -169,6 +170,7 @@ linkRootPackage("@types/react", [
 
 linkRootPackage("@types/react-dom", [
   "eliza/node_modules/@types/react-dom",
+  "eliza/packages/app-core/node_modules/@types/react-dom",
   "eliza/packages/ui/node_modules/@types/react-dom",
   "apps/app/node_modules/@types/react-dom",
   "apps/homepage/node_modules/@types/react-dom",
@@ -197,5 +199,15 @@ linkOptionalLocalPackage(
     "node_modules/@elizaos/plugin-agent-skills",
     "eliza/node_modules/@elizaos/plugin-agent-skills",
     "eliza/packages/agent/node_modules/@elizaos/plugin-agent-skills",
+  ],
+);
+
+linkOptionalLocalPackage(
+  "@elizaos/plugin-streaming",
+  "eliza/plugins/plugin-streaming",
+  [
+    "node_modules/@elizaos/plugin-streaming",
+    "eliza/node_modules/@elizaos/plugin-streaming",
+    "eliza/packages/agent/node_modules/@elizaos/plugin-streaming",
   ],
 );

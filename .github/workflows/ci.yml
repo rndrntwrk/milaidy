@@ -84,6 +84,12 @@ jobs:
           if [ ! -f eliza/packages/skills/dist/index.js ]; then
             (cd eliza/packages/skills && bun run build)
           fi
+          if [ ! -f eliza/packages/cloud-routing/dist/index.js ]; then
+            (cd eliza/packages/cloud-routing && bun run build)
+          fi
+          if [ ! -f eliza/plugins/plugin-streaming/dist/index.d.ts ]; then
+            (cd eliza/plugins/plugin-streaming && bun run build)
+          fi
 
       - name: Fetch upstream develop for pre-review base
         run: |
@@ -178,6 +184,12 @@ jobs:
           if [ ! -f eliza/packages/skills/dist/index.js ]; then
             (cd eliza/packages/skills && bun run build)
           fi
+          if [ ! -f eliza/packages/cloud-routing/dist/index.js ]; then
+            (cd eliza/packages/cloud-routing && bun run build)
+          fi
+          if [ ! -f eliza/plugins/plugin-streaming/dist/index.d.ts ]; then
+            (cd eliza/plugins/plugin-streaming && bun run build)
+          fi
 
       - name: Run type checker
         run: bun run verify:typecheck
@@ -217,6 +229,12 @@ jobs:
           fi
           if [ ! -f eliza/packages/skills/dist/index.js ]; then
             (cd eliza/packages/skills && bun run build)
+          fi
+          if [ ! -f eliza/packages/cloud-routing/dist/index.js ]; then
+            (cd eliza/packages/cloud-routing && bun run build)
+          fi
+          if [ ! -f eliza/plugins/plugin-streaming/dist/index.d.ts ]; then
+            (cd eliza/plugins/plugin-streaming && bun run build)
           fi
 
       - name: Build project

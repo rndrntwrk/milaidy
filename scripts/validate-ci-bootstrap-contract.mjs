@@ -330,6 +330,8 @@ function assertCiPreReviewBootstrap(workflowText, targetFailures) {
     "- name: Build eliza packages required for typecheck",
     "(cd eliza/packages/core && bun run build)",
     "(cd eliza/packages/skills && bun run build)",
+    "(cd eliza/packages/cloud-routing && bun run build)",
+    "(cd eliza/plugins/plugin-streaming && bun run build)",
     "- name: Run local pre-review gate",
     "run: bun run pre-review:local",
   ];
