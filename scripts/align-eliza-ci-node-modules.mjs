@@ -6,6 +6,13 @@ import path from "node:path";
 
 const repoRoot = process.cwd();
 
+if (!fs.existsSync(path.join(repoRoot, "eliza", "package.json"))) {
+  console.log(
+    "[align-eliza-ci-node-modules] eliza checkout is absent; package-mode install does not need local alignment",
+  );
+  process.exit(0);
+}
+
 function compareVersions(left, right) {
   const leftParts = String(left)
     .split(/[^0-9]+/)
@@ -215,6 +222,9 @@ linkRootPackage(
   sharedTypeTargets.map((target) => `${target}/@types/react-dom`),
 );
 
+// bun-types is the real Bun declaration package (ffi, sqlite, etc.).
+// @types/bun is a thin wrapper that references bun-types, so keep each alias
+// pointed at its own installed package instead of cross-linking them.
 linkRootPackage(
   "bun-types",
   sharedTypeTargets.map((target) => `${target}/bun-types`),
@@ -297,6 +307,7 @@ linkOptionalLocalPackage("@elizaos/plugin-sql", "eliza/plugins/plugin-sql", [
   "node_modules/@elizaos/plugin-sql",
   "eliza/node_modules/@elizaos/plugin-sql",
   "eliza/packages/agent/node_modules/@elizaos/plugin-sql",
+  "eliza/packages/app-core/node_modules/@elizaos/plugin-sql",
 ]);
 
 linkOptionalLocalPackage(

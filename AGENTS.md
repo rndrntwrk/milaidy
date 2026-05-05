@@ -121,7 +121,7 @@ Two distinct skill systems live in this repo. Don't conflate them.
 
 Bundled `@elizaos/skills` are the default knowledge base for the running Eliza agent and for any code agent working in this repo. Repo setup mirrors them into `skills/.defaults/` for workspace access.
 
-- **Source of truth:** `eliza/packages/skills/skills/` (31 bundled skills).
+- **Source of truth:** `eliza/packages/skills/skills/` (33 bundled skills).
 - **Workspace mirror:** `skills/.defaults/` — refreshed by `scripts/sync-workspace-default-skills.mjs` during setup; do not hand-edit.
 - **Managed store seed:** `eliza/packages/app-core/scripts/ensure-skills.mjs` seeds the bundled skills on first run.
 - **Runtime knowledge seed:** `eliza/packages/agent/src/runtime/default-knowledge.ts` seeds baseline runtime knowledge (including Eliza Cloud guidance).
@@ -134,10 +134,12 @@ Open the `SKILL.md` of any of these from the workspace mirror when relevant:
 - `elizaos` — runtime concepts, plugin abstractions, AgentRuntime, actions/providers/evaluators/services.
 - `eliza-cloud` — Cloud as managed backend, app registration, hosted APIs, billing, monetization, container deploys.
 - `build-monetized-app` — building a Cloud app that earns via inference markup; pairs with `eliza-cloud`.
+- `eliza-cloud-buy-domain` — registering a confirmed custom domain for an Eliza Cloud app.
+- `eliza-cloud-manage-domain` — listing, verifying, syncing, detaching, and editing DNS for app domains.
 
 **Agent-orchestration / authoring:**
 - `coding-agent` — spawning Codex / Claude Code / OpenCode / Pi via PTY-backed bash for sub-agent work.
-- `claude-subagent-milady-bridge` — loopback endpoints exposing parent runtime context to a spawned coding sub-agent.
+- `task-agent-eliza-bridge` — loopback endpoints exposing parent runtime context to a spawned coding task agent.
 - `skill-creator` — authoring new SKILL.md packages (frontmatter, scripts, references, progressive disclosure).
 
 **Connectors / OS / SaaS integrations** (use when the task touches that surface):
@@ -206,7 +208,7 @@ Coding sub-agents spawned by the orchestrator (Claude Code, Codex, etc.) live in
 - `GET /api/coding-agents/:sessionId/memory?q=<query>&limit=<N>` — query the parent agent's memory.
 - `GET /api/coding-agents/:sessionId/active-workspaces` — list the parent's currently-active workspaces.
 
-All bridge responses are read-only. Mutations stay with the orchestrator — sub-agents cannot write parent state through the bridge. The `claude-subagent-milady-bridge` skill (in `skills/.defaults/`) documents the calling pattern in detail.
+All bridge responses are read-only. Mutations stay with the orchestrator — sub-agents cannot write parent state through the bridge. The `task-agent-eliza-bridge` skill (in `skills/.defaults/`) documents the calling pattern in detail.
 
 ### Mandatory verification loop for `create` modes
 

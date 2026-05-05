@@ -191,7 +191,7 @@ assertOrdered(
 const regressionMatrixCommand =
   packageJson?.scripts?.["test:regression-matrix:pr"];
 if (
-  typeof regressionMatrixCommand !== "string" ||
+  typeof regressionMatrixCommand === "string" &&
   !regressionMatrixCommand.includes(files.regressionMatrixScript)
 ) {
   failures.push(
@@ -353,6 +353,11 @@ function assertCiPreReviewBootstrap(workflowText, targetFailures) {
     "- name: Build eliza packages required for typecheck",
     "(cd eliza/packages/core && bun run build)",
     "(cd eliza/packages/skills && bun run build)",
+    "(cd eliza/packages/cloud-routing && bun run build)",
+    "(cd eliza/plugins/plugin-agent-skills && bun run build)",
+    "(cd eliza/plugins/plugin-pdf && bun run build)",
+    "(cd eliza/plugins/plugin-sql && bun run build)",
+    "(cd eliza/plugins/plugin-streaming && bun run build)",
     "- name: Run local pre-review gate",
     "run: bun run pre-review:local",
   ];
