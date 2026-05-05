@@ -61,8 +61,34 @@ test("package manifests default to published elizaOS alpha packages", () => {
   assert.equal(rootPackage.dependencies["@elizaos/agent"], "alpha");
 
   const appPackage = readJson("apps/app/package.json");
+  assert.equal(appPackage.scripts.build, "node ../../scripts/run-app-web-build.mjs");
   assert.equal(appPackage.dependencies["@elizaos/app-core"], "alpha");
   assert.equal(appPackage.dependencies["@elizaos/shared"], "alpha");
+
+  for (const packageName of [
+    "@elizaos/capacitor-agent",
+    "@elizaos/capacitor-appblocker",
+    "@elizaos/capacitor-camera",
+    "@elizaos/capacitor-canvas",
+    "@elizaos/capacitor-contacts",
+    "@elizaos/capacitor-gateway",
+    "@elizaos/capacitor-location",
+    "@elizaos/capacitor-messages",
+    "@elizaos/capacitor-mobile-signals",
+    "@elizaos/capacitor-phone",
+    "@elizaos/capacitor-screencapture",
+    "@elizaos/capacitor-swabble",
+    "@elizaos/capacitor-system",
+    "@elizaos/capacitor-talkmode",
+    "@elizaos/capacitor-websiteblocker",
+  ]) {
+    assert.equal(
+      appPackage.dependencies[packageName],
+      "1.0.0",
+      `${packageName} must resolve from npm for Capacitor package mode`,
+    );
+  }
+  assert.equal(appPackage.dependencies["@elizaos/capacitor-llama"], "0.1.0");
 });
 
 test("root build resolves app-core entries from packages by default", () => {
@@ -71,6 +97,8 @@ test("root build resolves app-core entries from packages by default", () => {
   const tsdownConfig = read("tsdown.config.ts");
 
   assert.match(helper, /DEFAULT_ELIZA_SOURCE_MODE = "packages"/);
+  assert.match(read("scripts/run-app-web-build.mjs"), /isLocalElizaDisabled/);
+  assert.match(read("scripts/run-app-web-build.mjs"), /build:web/);
   assert.match(resolver, /preferLocal && existsSync/);
   assert.match(tsdownConfig, /"packages"/);
   assert.match(tsdownConfig, /require\.resolve\(packageSubpath\)/);
@@ -108,6 +136,38 @@ test("vite only uses local eliza when local source mode is explicit", () => {
   assert.match(viteConfig, /"packages"/);
   assert.match(viteConfig, /optionalElizaAppStubEntry/);
   assert.match(viteConfig, /nativePluginStubEntry/);
+});
+
+test("optional app stubs satisfy route plugin and runtime hook imports", () => {
+  const stubScript = read("scripts/ensure-elizaos-optional-app-stubs.mjs");
+
+  assert.match(stubScript, /isLocalElizaDisabled/);
+  assert.match(stubScript, /local elizaOS source mode; skipping stubs/);
+
+  for (const packageName of [
+    "@elizaos/app-hyperliquid",
+    "@elizaos/app-knowledge",
+    "@elizaos/app-polymarket",
+    "@elizaos/app-shopify",
+    "@elizaos/app-steward",
+    "@elizaos/app-training",
+    "@elizaos/app-vincent",
+  ]) {
+    assert.match(stubScript, new RegExp(packageName.replace("/", "\\/")));
+  }
+
+  for (const exportName of [
+    "hyperliquidPlugin",
+    "knowledgePlugin",
+    "polymarketPlugin",
+    "shopifyPlugin",
+    "stewardPlugin",
+    "trainingPlugin",
+    "vincentPlugin",
+    "registerTrainingRuntimeHooks",
+  ]) {
+    assert.match(stubScript, new RegExp(`export .*${exportName}`));
+  }
 });
 
 test("elizaOS package channel is configurable instead of alpha-only", () => {
@@ -169,10 +229,9 @@ test("root tsconfig.json is packages-mode-clean by default", () => {
 
 test("checked-in tsconfig.json matches the packages-mode template byte-for-byte", () => {
   const checkedIn = read("tsconfig.json").replace(/\n+$/, "");
-  const template = read("scripts/templates/tsconfig.packages-mode.json").replace(
-    /\n+$/,
-    "",
-  );
+  const template = read(
+    "scripts/templates/tsconfig.packages-mode.json",
+  ).replace(/\n+$/, "");
   assert.equal(
     checkedIn,
     template,

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Privileged-permission whitelist for com.miladyai.milady.
+  Privileged-permission whitelist for ai.milady.milady.
 
   Lists every signature|privileged permission the Milady APK declares in
   its AndroidManifest. Without an entry here, PackageManager refuses to
@@ -17,7 +17,7 @@
     sub_dir: "permissions").
 -->
 <permissions>
-    <privapp-permissions package="com.miladyai.milady">
+    <privapp-permissions package="ai.milady.milady">
         <permission name="android.permission.PACKAGE_USAGE_STATS" />
         <!--
           Required by MiladyBootReceiver to flip the GET_USAGE_STATS

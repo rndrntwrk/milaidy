@@ -20,7 +20,7 @@ interface AppWebConfig {
 
 const config = {
   appName: "Milady",
-  appId: "com.miladyai.milady",
+  appId: "ai.milady.milady",
   orgName: "milady-ai",
   repoName: "milady",
   cliName: "milady",
@@ -30,7 +30,7 @@ const config = {
   defaultApps: [],
 
   desktop: {
-    bundleId: "com.miladyai.milady",
+    bundleId: "ai.milady.milady",
     urlScheme: "milady",
   },
 
@@ -61,7 +61,7 @@ const config = {
     vendorDir: "milady",
     variantName: "MiladyOS",
     productName: "milady",
-    packageName: "com.miladyai.milady",
+    packageName: "ai.milady.milady",
     appName: "Milady",
     commonMk: "vendor/milady/milady_common.mk",
     modelSourceLabel: "milady-download",

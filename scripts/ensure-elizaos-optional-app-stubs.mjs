@@ -3,6 +3,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { isLocalElizaDisabled } from "./lib/eliza-package-mode.mjs";
 
 const LOG_PREFIX = "[ensure-elizaos-optional-app-stubs]";
 const repoRoot = path.resolve(
@@ -14,15 +15,20 @@ const nodeModulesDir = path.join(repoRoot, "node_modules");
 const optionalPackages = [
   "@elizaos/app-companion",
   "@elizaos/app-elizamaker",
+  "@elizaos/app-hyperliquid",
   "@elizaos/app-knowledge",
   "@elizaos/app-lifeops",
+  "@elizaos/app-polymarket",
+  "@elizaos/app-shopify",
   "@elizaos/app-steward",
   "@elizaos/app-task-coordinator",
   "@elizaos/app-training",
+  "@elizaos/app-vincent",
 ];
 
 const stubSource = `const optionalStub = Object.freeze({
   name: "milady-optional-elizaos-app-stub",
+  routes: [],
 });
 
 export const EMOTE_BY_ID = Object.freeze({});
@@ -30,8 +36,18 @@ export const EMOTE_CATALOG = Object.freeze([]);
 export const LIFEOPS_CONNECTOR_DEGRADATION_AXES = Object.freeze([]);
 export const appPlugin = optionalStub;
 export const defaultPlugin = optionalStub;
+export const hyperliquidPlugin = optionalStub;
+export const knowledgePlugin = optionalStub;
 export const lifeopsPlugin = optionalStub;
+export const polymarketPlugin = optionalStub;
 export const plugin = optionalStub;
+export const shopifyPlugin = optionalStub;
+export const stewardPlugin = optionalStub;
+export const trainingPlugin = optionalStub;
+export const vincentPlugin = optionalStub;
+
+export const knowledgeRoutes = Object.freeze([]);
+export const trainingRoutes = Object.freeze([]);
 
 export function clearBackendCache() {}
 export async function detectAvailableBackends() {
@@ -74,6 +90,7 @@ export async function openSelfControlPermissionLocation() {
 export async function requestSelfControlPermission() {
   return { granted: false, status: "unavailable" };
 }
+export async function registerTrainingRuntimeHooks() {}
 export function sanitizeAuthResult(result) {
   return result ?? null;
 }
@@ -141,6 +158,11 @@ function ensureStubPackage(packageName) {
 
 if (!fs.existsSync(nodeModulesDir)) {
   console.warn(`${LOG_PREFIX} node_modules is not installed; skipping.`);
+  process.exit(0);
+}
+
+if (!isLocalElizaDisabled()) {
+  console.log(`${LOG_PREFIX} local elizaOS source mode; skipping stubs.`);
   process.exit(0);
 }
 
