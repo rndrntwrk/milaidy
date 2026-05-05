@@ -15,10 +15,11 @@ in layer N can't be undone by something we haven't audited in layer N-1.
 |-------|-------------------------------------------------|-------|---------|------------|----------|
 | 0     | Build / orchestration scripts                   |   213 |   213   |    25      | partial  |
 | 1     | Entry points (CLI, runtime, renderer, shell)    |    21 |    21   |     2      | partial  |
-| 2     | Electrobun desktop shell                        |    63 |    0    |     0      | pending  |
-| 3     | app-core runtime (boot, dev-server, eliza.ts)   |    20 |    0    |     0      | pending  |
-| 4     | app-core API server + routes                    |    89 |    0    |     0      | pending  |
-| 5     | Vault + shared + UI primitives                  |   252 |    0    |     0      | pending  |
+| 2     | Electrobun desktop shell                        |    63 |    56   |     0      | partial  |
+| 3     | app-core runtime (boot, dev-server, eliza.ts)   |    20 |    20   |     4      | partial  |
+| 4     | app-core API server + routes                    |    88 |    88   |     0      | partial  |
+| 5a    | Vault + shared (5b UI ~180 deferred)            |    72 |    72   |     1      | partial  |
+| 6.1   | chat-routes.ts fallback rename (Phase 4 done)   |     1 |     1   |     1      | partial  |
 | 6     | Agent runtime (eliza/packages/agent/src)        |   454 |    0    |     0      | pending  |
 | 7     | app-core UI (components, app-shell, chat)       |   267 |    0    |     0      | pending  |
 | 8     | State, config, providers, registry              |    82 |    0    |     0      | pending  |
@@ -26,7 +27,7 @@ in layer N can't be undone by something we haven't audited in layer N-1.
 | 10    | Plugins + Eliza apps (eliza/plugins/*)          |  2575 |    0    |     0      | pending  |
 | 11    | apps/app renderer + apps/homepage               |    99 |    0    |     0      | pending  |
 | 12    | Remaining app-core/src (autonomy, security…)    |   209 |    0    |     0      | pending  |
-| **Σ** |                                                 |**4359**|  234   |    27      |          |
+| **Σ** |                                                 |**4358**|  471   |    33      |          |
 
 (Counts exclude `*.d.ts`, `*.test.*`, `node_modules`, `dist`, `build`.)
 
@@ -70,10 +71,10 @@ Layer 0 ─→ Layer 1 ─→ Layer 5 (vault, shared, ui)
 
 - [Layer 0 — Build / orchestration scripts](./audit/layer-0-scripts.md)
 - [Layer 1 — Entry points](./audit/layer-1-entry.md)
-- Layer 2 — Electrobun desktop shell *(scaffold pending)*
-- Layer 3 — app-core runtime *(scaffold pending)*
-- Layer 4 — app-core API server *(scaffold pending)*
-- Layer 5 — Vault + shared + UI *(scaffold pending)*
+- [Layer 2 — Electrobun desktop shell](./audit/layer-2-electrobun.md) *(56/63; the 7 boot-immediate files are tracked in Layer 1)*
+- [Layer 3 — app-core runtime](./audit/layer-3-runtime.md)
+- [Layer 4 — app-core API server + routes](./audit/layer-4-api.md)
+- [Layer 5a — Vault + shared](./audit/layer-5a-vault-shared.md) — 72/72 audited; **5b (UI primitives, ~180 files) deferred** to a separate audit run
 - Layer 6 — Agent runtime *(scaffold pending)*
 - Layer 7 — app-core UI *(scaffold pending)*
 - Layer 8 — State + config *(scaffold pending)*
