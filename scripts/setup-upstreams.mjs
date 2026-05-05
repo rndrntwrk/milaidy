@@ -16,22 +16,25 @@ import {
 } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  getElizaGitBranch,
+  getElizaGitUrl,
+  getElizaosPackageSpecifier,
+  isLocalElizaDisabled,
+  isLocalElizaForced,
+  LOCAL_UPSTREAM_FORCE_ENV_KEYS,
+  LOCAL_UPSTREAM_SKIP_ENV_KEYS,
+} from "./lib/eliza-package-mode.mjs";
 import { readPackageJson } from "./lib/read-package-json.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const DEFAULT_REPO_ROOT = path.resolve(__dirname, "..");
 
-export const LOCAL_UPSTREAM_SKIP_ENVS = [
-  "MILADY_SKIP_LOCAL_UPSTREAMS",
-  "ELIZA_SKIP_LOCAL_UPSTREAMS",
-];
-export const LOCAL_UPSTREAM_FORCE_ENVS = [
-  "MILADY_FORCE_LOCAL_UPSTREAMS",
-  "ELIZA_FORCE_LOCAL_UPSTREAMS",
-];
-export const ELIZA_GIT_URL = "https://github.com/elizaos/eliza.git";
-export const ELIZA_BRANCH = "develop";
+export const LOCAL_UPSTREAM_SKIP_ENVS = LOCAL_UPSTREAM_SKIP_ENV_KEYS;
+export const LOCAL_UPSTREAM_FORCE_ENVS = LOCAL_UPSTREAM_FORCE_ENV_KEYS;
+export const ELIZA_GIT_URL = getElizaGitUrl();
+export const ELIZA_BRANCH = getElizaGitBranch();
 export const ELIZA_REQUIRED_FILES = ["package.json"];
 export const ELIZA_BUILD_STEPS = [
   {
@@ -91,7 +94,6 @@ const ELIZA_TYPESCRIPT_AMBIENT_DEPENDENCIES = new Set(
   ELIZA_TYPESCRIPT_BUILD_DEPENDENCIES,
 );
 
-const OPTIONAL_ELIZA_PLUGIN_FALLBACK_TAG = "alpha";
 const ELIZA_INSTALL_RETRY_DELAY_MS = 3_000;
 
 const OPTIONAL_ELIZA_PLUGIN_PACKAGES = [
@@ -540,10 +542,7 @@ async function maybeInitOptionalElizaPluginSubmodules(elizaRoot) {
 }
 
 function shouldApplyOptionalElizaPluginFallback(env = process.env) {
-  const localUpstreamsDisabled = LOCAL_UPSTREAM_SKIP_ENVS.some(
-    (key) => env[key] === "1",
-  );
-  return env.CI === "true" && localUpstreamsDisabled;
+  return env.CI === "true" && isLocalElizaDisabled(env);
 }
 
 function applyOptionalElizaPluginFallback(elizaRoot, missingPlugins) {
@@ -597,7 +596,7 @@ function applyOptionalElizaPluginFallback(elizaRoot, missingPlugins) {
       }
       for (const packageName of missingPackageNames) {
         if (pkg[section][packageName] === "workspace:*") {
-          pkg[section][packageName] = OPTIONAL_ELIZA_PLUGIN_FALLBACK_TAG;
+          pkg[section][packageName] = getElizaosPackageSpecifier();
           changed = true;
         }
       }
@@ -630,10 +629,8 @@ export function getElizaWorkspaceSkipReason(
   repoRoot = DEFAULT_REPO_ROOT,
   { env = process.env, pathExists = existsSync } = {},
 ) {
-  const matchedSkipEnv =
-    LOCAL_UPSTREAM_SKIP_ENVS.find((key) => env[key] === "1") ?? null;
-  if (matchedSkipEnv) {
-    return `${matchedSkipEnv}=1`;
+  if (isLocalElizaDisabled(env)) {
+    return "elizaOS package mode";
   }
 
   const devWorkspaceMarkers = [
@@ -645,7 +642,7 @@ export function getElizaWorkspaceSkipReason(
   const isDevCheckout = devWorkspaceMarkers.every((marker) =>
     pathExists(marker),
   );
-  if (!isDevCheckout && !getForceEnvKey(env)) {
+  if (!isDevCheckout && !getForceEnvKey(env) && !isLocalElizaForced(env)) {
     return "non-development install";
   }
 

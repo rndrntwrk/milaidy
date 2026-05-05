@@ -3,13 +3,15 @@ import { execSync } from "node:child_process";
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  getElizaosPackageSpecifier,
+  isLocalElizaDisabled,
+} from "./lib/eliza-package-mode.mjs";
 
 const scriptFile = fileURLToPath(import.meta.url);
 const __dirname = dirname(scriptFile);
 const root = resolve(__dirname, "..");
-const skipLocalUpstreams =
-  process.env.MILADY_SKIP_LOCAL_UPSTREAMS === "1" ||
-  process.env.ELIZA_SKIP_LOCAL_UPSTREAMS === "1";
+const skipLocalUpstreams = isLocalElizaDisabled();
 const skipCloudSubmodule =
   process.env.MILADY_SKIP_CLOUD_SUBMODULE === "1" ||
   process.env.ELIZA_SKIP_CLOUD_SUBMODULE === "1";
@@ -35,9 +37,11 @@ const SKIPPED_CLOUD_COUPLED_SUBMODULE_PATHS = new Set([
   "plugins/plugin-elizacloud",
   "eliza/plugins/plugin-elizacloud",
 ]);
-const SKIPPED_CLOUD_DEPENDENCY_FALLBACKS = {
-  "@elizaos/plugin-elizacloud": "2.0.0-alpha.8",
-};
+export function getSkippedCloudDependencyFallbacks(env = process.env) {
+  return {
+    "@elizaos/plugin-elizacloud": getElizaosPackageSpecifier(env),
+  };
+}
 const LEGACY_ELIZA_PLUGIN_WORKSPACE_ENTRIES = [
   {
     canonicalEntry: "plugins/plugin-sql",
@@ -188,7 +192,7 @@ function setPackageWorkspaces(pkg, workspaces) {
   pkg.workspaces.packages = workspaces;
 }
 
-function rewriteSkippedCloudDependencies(pkg) {
+function rewriteSkippedCloudDependencies(pkg, { env = process.env } = {}) {
   let changed = false;
   for (const field of PACKAGE_DEPENDENCY_FIELDS) {
     const deps = pkg[field];
@@ -196,7 +200,7 @@ function rewriteSkippedCloudDependencies(pkg) {
       continue;
     }
     for (const [name, version] of Object.entries(
-      SKIPPED_CLOUD_DEPENDENCY_FALLBACKS,
+      getSkippedCloudDependencyFallbacks(env),
     )) {
       if (deps[name] === "workspace:*") {
         deps[name] = version;

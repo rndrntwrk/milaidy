@@ -103,7 +103,7 @@ describe("CI bootstrap contract", () => {
     const align = "- name: Align nested eliza package resolution";
     const buildPlugins = "- name: Build local eliza runtime plugins";
     const coreBuild = "(cd eliza/packages/core && bun run build)";
-    const pluginBuild =
+    const agentSkillsBuild =
       "(cd eliza/plugins/plugin-agent-skills && bun run build)";
     const pdfBuild = "(cd eliza/plugins/plugin-pdf && bun run build)";
     const sqlBuild = "(cd eliza/plugins/plugin-sql && bun run build)";
@@ -111,16 +111,16 @@ describe("CI bootstrap contract", () => {
 
     expect(agentReview).toContain(buildPlugins);
     expect(agentReview).toContain(coreBuild);
-    expect(agentReview).toContain(pluginBuild);
+    expect(agentReview).toContain(agentSkillsBuild);
     expect(agentReview).toContain(pdfBuild);
     expect(agentReview).toContain(sqlBuild);
     expect(agentReview.indexOf(align)).toBeLessThan(
       agentReview.indexOf(buildPlugins),
     );
     expect(agentReview.indexOf(coreBuild)).toBeLessThan(
-      agentReview.indexOf(pluginBuild),
+      agentReview.indexOf(agentSkillsBuild),
     );
-    expect(agentReview.indexOf(pluginBuild)).toBeLessThan(
+    expect(agentReview.indexOf(agentSkillsBuild)).toBeLessThan(
       agentReview.indexOf(pdfBuild),
     );
     expect(agentReview.indexOf(pdfBuild)).toBeLessThan(
@@ -143,6 +143,26 @@ describe("CI bootstrap contract", () => {
     expect(agentReview.indexOf(align)).toBeLessThan(
       agentReview.indexOf(runAuthSuite),
     );
+  });
+
+  it("links elizaOS runtime plugins and ambient UI types for local eliza checks", () => {
+    const alignScript = fs.readFileSync(
+      "scripts/align-eliza-ci-node-modules.mjs",
+      "utf8",
+    );
+
+    expect(alignScript).toContain("function resolveInstalledPackage");
+    expect(alignScript).toContain("function ensureBuiltLocalPackage");
+    expect(alignScript).toContain('linkRootPackage(\n  "bun-types"');
+    expect(alignScript).toContain('linkRootPackage(\n  "@types/react"');
+    expect(alignScript).toContain('"@elizaos/plugin-agent-skills"');
+    expect(alignScript).toContain('"@elizaos/plugin-browser-bridge"');
+    expect(alignScript).toContain('"@elizaos/plugin-pdf"');
+    expect(alignScript).toContain('"@elizaos/plugin-sql"');
+    expect(alignScript).toContain('"@elizaos/plugin-streaming"');
+    expect(alignScript).toContain('"@elizaos/cloud-routing"');
+    expect(alignScript).toContain('"dist/node/index.node.js"');
+    expect(alignScript).toContain('"typescript/dist/index.js"');
   });
 
   it("lets elizaCloud patch version drift skip cleanly", () => {

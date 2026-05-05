@@ -34,7 +34,8 @@ bun run dev:desktop:watch  # Vite dev server + Electrobun (HMR). Set MILADY_DESK
 Optional — link a local elizaOS source checkout:
 
 ```bash
-bun run setup:upstreams    # initialize repo-local ./eliza and link local @elizaos/* packages
+bun run setup:upstreams    # clone ./eliza if needed and link local @elizaos/* packages
+bun run eliza:packages     # switch back to published @elizaos/* packages
 ```
 
 Desktop dev observability (Codex cannot see the native window):
@@ -57,10 +58,12 @@ bun run db:check    # database security + readonly tests
 
 ## Project layout
 
-First-party packages, apps, and orchestrator scripts live under the `eliza/` submodule. The top-level repo holds Milady-specific glue (`apps/app/`, `packages/{vault,confidant}/`, top-level `scripts/`).
+Milady defaults to published `@elizaos/*` packages. A repo-local `./eliza` checkout is optional, ignored by git, and used only when explicitly selected with `bun run setup:upstreams` / `bun run eliza:local`.
 
 ```
-eliza/                              Submodule (milady-ai/eliza) — source of truth for runtime
+node_modules/@elizaos/*             Default runtime source: published elizaOS packages
+
+eliza/                              Optional ignored local checkout (milady-ai/eliza)
   packages/
     app-core/                       Main runtime package
       src/
@@ -154,10 +157,10 @@ When Eliza Cloud is enabled or requested, prefer it as the managed backend (app 
 
 ## Dependencies on elizaOS
 
-- All `@elizaos/*` packages use the `alpha` dist-tag. `bun run setup:upstreams` links repo-local `./eliza` and `./plugins` packages so changes are picked up immediately. `MILADY_SKIP_LOCAL_UPSTREAMS=1` falls back to npm.
-- `@elizaos/plugin-agent-orchestrator` resolves from `eliza/plugins/plugin-agent-orchestrator` via `workspace:*`. Updating the submodule updates the orchestrator.
-- All official elizaOS plugin repos live under https://github.com/elizaOS-plugins. For plugin work, prefer adding the plugin repo as a git submodule under `eliza/plugins/` (tracked in `eliza/.gitmodules`) and depending via `workspace:*`. Publish to npm when ready.
-- The eliza submodule is hosted at **milady-ai/eliza**, not the personal `Dexploarer` fork. Pushes and PRs always go to `milady-ai/eliza`.
+- Milady defaults to published `@elizaos/*` packages. The dist tag defaults to `alpha`; override with `MILADY_ELIZAOS_DIST_TAG`, `ELIZAOS_NPM_TAG`, or `bun run eliza:packages -- --tag <alpha|beta|main>`.
+- Local source mode is opt-in: `bun run setup:upstreams` / `bun run eliza:local -- --install` clones `https://github.com/milady-ai/eliza.git` into ignored `./eliza` if missing, then links local packages.
+- Return to standalone package mode with `bun run eliza:packages -- --install`. Do not add `./eliza` as a submodule or workspace dependency.
+- The elizaOS source checkout is hosted at **milady-ai/eliza**, not the personal `Dexploarer` fork. Pushes and PRs for elizaOS source changes go to `milady-ai/eliza`.
 
 ## Environment variables (commonly touched)
 
@@ -232,8 +235,8 @@ If any claim fails verification, the parent issues a structured failure prompt a
 
 ### Templates
 
-- `eliza/templates/min-app/` — minimal Eliza app (Vite + React entry, `Plugin` with one action, `package.json` with `elizaos.app` metadata, vitest smoke test, hero image placeholder, `SCAFFOLD.md` agent contract).
-- `eliza/templates/min-plugin/` — minimal Eliza runtime plugin (one action, one provider, `package.json` with `elizaos.plugin` metadata, vitest smoke test, `SCAFFOLD.md` agent contract).
+- `@elizaos/app-core` package templates — minimal Eliza app/project scaffolds.
+- `@elizaos/agent` / `@elizaos/app-core` package templates — minimal runtime plugin scaffolds.
 
 Both use placeholders (`__APP_NAME__`, `__APP_DISPLAY_NAME__`, `__PLUGIN_NAME__`, `__PLUGIN_DISPLAY_NAME__`) replaced by the scaffold copy step. Read each template's `SCAFFOLD.md` before customizing.
 

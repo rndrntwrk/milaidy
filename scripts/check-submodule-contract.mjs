@@ -1,12 +1,20 @@
 #!/usr/bin/env node
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { resolveRepoRoot } from "./lib/repo-root.mjs";
 
 const repoRoot = resolveRepoRoot(import.meta.url);
 const gitmodulesPath = resolve(repoRoot, ".gitmodules");
+
+if (!existsSync(gitmodulesPath)) {
+  console.log(
+    "[submodule-contract] package-mode/local-source repo has no tracked eliza submodule.",
+  );
+  process.exit(0);
+}
+
 const gitmodules = readFileSync(gitmodulesPath, "utf8");
 
 function readGitmodulesValue(sectionName, key) {
@@ -36,14 +44,14 @@ function assertEqual(actual, expected, label) {
   if (actual !== expected) {
     throw new Error(
       `${label} must be ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}.\n` +
-        "Do not point Milady's eliza submodule at contributor forks. Land eliza changes upstream in elizaOS/eliza develop, then bump the submodule pointer.",
+        "Do not point Milady's eliza source checkout at contributor forks. Land eliza changes in milady-ai/eliza develop, then update the checkout target.",
     );
   }
 }
 
 assertEqual(
   readGitmodulesValue("eliza", "url"),
-  "https://github.com/elizaOS/eliza.git",
+  "https://github.com/milady-ai/eliza.git",
   "submodule.eliza.url",
 );
 assertEqual(
@@ -53,5 +61,5 @@ assertEqual(
 );
 
 console.log(
-  "[submodule-contract] eliza submodule points at elizaOS/eliza develop.",
+  "[submodule-contract] eliza submodule points at milady-ai/eliza develop.",
 );

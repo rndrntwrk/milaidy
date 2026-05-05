@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+ELIZAOS_PACKAGE_SPECIFIER="${MILADY_ELIZAOS_VERSION:-${ELIZAOS_VERSION:-${MILADY_ELIZAOS_DIST_TAG:-${ELIZAOS_DIST_TAG:-${MILADY_ELIZAOS_NPM_TAG:-${ELIZAOS_NPM_TAG:-alpha}}}}}}"
+
 read_package_spec_from_manifest() {
   local package_name="$1"
   local manifest="$2"
@@ -71,7 +73,7 @@ append_versioned_package() {
   done
 
   if [[ "$package_name" == @elizaos/* ]]; then
-    packages+=("${package_name}@alpha")
+    packages+=("${package_name}@${ELIZAOS_PACKAGE_SPECIFIER}")
     return 0
   fi
 

@@ -2,16 +2,23 @@ import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { isLocalElizaDisabled } from "./eliza-package-mode.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const defaultRepoRoot = path.resolve(__dirname, "..", "..");
 const requireFromHere = createRequire(import.meta.url);
 
 function localUpstreamsDisabled() {
-  return (
-    process.env.MILADY_SKIP_LOCAL_UPSTREAMS === "1" ||
-    process.env.ELIZA_SKIP_LOCAL_UPSTREAMS === "1"
-  );
+  return isLocalElizaDisabled();
+}
+
+function explicitAppCoreRoot() {
+  const rawRoot =
+    process.env.MILADY_ELIZA_APP_CORE_ROOT ?? process.env.ELIZA_APP_CORE_ROOT;
+  if (typeof rawRoot !== "string" || rawRoot.trim().length === 0) {
+    return null;
+  }
+  return path.resolve(rawRoot);
 }
 
 function assertScriptName(scriptName) {
@@ -39,6 +46,16 @@ export function resolveElizaAppCoreRoot({
   repoRoot = defaultRepoRoot,
   preferLocal = !localUpstreamsDisabled(),
 } = {}) {
+  const explicitRoot = explicitAppCoreRoot();
+  if (explicitRoot) {
+    if (!existsSync(path.join(explicitRoot, "package.json"))) {
+      throw new Error(
+        `MILADY_ELIZA_APP_CORE_ROOT does not contain package.json: ${explicitRoot}`,
+      );
+    }
+    return explicitRoot;
+  }
+
   const localRoot = path.join(repoRoot, "eliza", "packages", "app-core");
   if (preferLocal && existsSync(path.join(localRoot, "package.json"))) {
     return localRoot;
@@ -47,7 +64,7 @@ export function resolveElizaAppCoreRoot({
   try {
     return resolvePublishedAppCoreRoot(repoRoot);
   } catch (error) {
-    if (existsSync(path.join(localRoot, "package.json"))) {
+    if (preferLocal && existsSync(path.join(localRoot, "package.json"))) {
       return localRoot;
     }
     const detail = error instanceof Error ? ` ${error.message}` : "";

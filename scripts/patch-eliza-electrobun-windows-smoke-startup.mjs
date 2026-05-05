@@ -614,13 +614,19 @@ ${nestedSigningFunction}  macos_code_dir="$STAGED_APP_PATH/Contents/MacOS"
     return result;
   }
 
-  result = replaceRequiredBlock(
-    result.text,
-    / {2}codesign --force --timestamp --sign "\$ELECTROBUN_DEVELOPER_ID" "\$TEMP_DMG_PATH"/,
-    '  retry_codesign --force --timestamp --sign "$ELECTROBUN_DEVELOPER_ID" "$TEMP_DMG_PATH"',
-  );
-  if (!result.matched) {
-    return result;
+  if (
+    !result.text.includes(
+      'retry_codesign --force --timestamp --sign "$ELECTROBUN_DEVELOPER_ID" "$TEMP_DMG_PATH"',
+    )
+  ) {
+    result = replaceRequiredBlock(
+      result.text,
+      / {2}codesign --force --timestamp --sign "\$ELECTROBUN_DEVELOPER_ID" "\$TEMP_DMG_PATH"/,
+      '  retry_codesign --force --timestamp --sign "$ELECTROBUN_DEVELOPER_ID" "$TEMP_DMG_PATH"',
+    );
+    if (!result.matched) {
+      return result;
+    }
   }
 
   if (
@@ -670,10 +676,15 @@ ${nestedSigningFunction}  macos_code_dir="$STAGED_APP_PATH/Contents/MacOS"
     }
   }
 
-  result = replaceRequiredBlock(
-    result.text,
-    / {2}(?:retry_command 8 20 xcrun stapler staple "\$TEMP_DMG_PATH"|STAPLER_ATTEMPTS="\$\{ELECTROBUN_STAPLER_ATTEMPTS:-12\}"\r?\n {2}STAPLER_DELAY_SECONDS="\$\{ELECTROBUN_STAPLER_DELAY_SECONDS:-30\}"\r?\n {2}retry_command "\$STAPLER_ATTEMPTS" "\$STAPLER_DELAY_SECONDS" xcrun stapler staple "\$TEMP_DMG_PATH")/,
-    `  STAPLER_ATTEMPTS="\${ELECTROBUN_STAPLER_ATTEMPTS:-12}"
+  if (
+    !result.text.includes(
+      "notarization accepted but stapler ticket was not available; continuing without stapled DMG",
+    )
+  ) {
+    result = replaceRequiredBlock(
+      result.text,
+      / {2}(?:retry_command 8 20 xcrun stapler staple "\$TEMP_DMG_PATH"|STAPLER_ATTEMPTS="\$\{ELECTROBUN_STAPLER_ATTEMPTS:-12\}"\r?\n {2}STAPLER_DELAY_SECONDS="\$\{ELECTROBUN_STAPLER_DELAY_SECONDS:-30\}"\r?\n {2}retry_command "\$STAPLER_ATTEMPTS" "\$STAPLER_DELAY_SECONDS" xcrun stapler staple "\$TEMP_DMG_PATH")/,
+      `  STAPLER_ATTEMPTS="\${ELECTROBUN_STAPLER_ATTEMPTS:-12}"
   STAPLER_DELAY_SECONDS="\${ELECTROBUN_STAPLER_DELAY_SECONDS:-30}"
   if ! retry_command "$STAPLER_ATTEMPTS" "$STAPLER_DELAY_SECONDS" xcrun stapler staple "$TEMP_DMG_PATH"; then
     if [[ "\${ELECTROBUN_REQUIRE_STAPLED_DMG:-0}" == "1" ]]; then
@@ -681,7 +692,11 @@ ${nestedSigningFunction}  macos_code_dir="$STAGED_APP_PATH/Contents/MacOS"
     fi
     echo "stage-macos-release-artifacts: notarization accepted but stapler ticket was not available; continuing without stapled DMG" >&2
   fi`,
-  );
+    );
+    if (!result.matched) {
+      return result;
+    }
+  }
   return result;
 }
 

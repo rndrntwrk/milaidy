@@ -6,7 +6,6 @@ import {
   parseAllowedHostEnv,
   toViteAllowedHosts,
 } from "@elizaos/app-core/config/allowed-hosts";
-import { resolveAppBranding } from "@elizaos/app-core/config/app-config";
 import { colorizeDevSettingsStartupBanner } from "@elizaos/shared/dev-settings-banner-style";
 import { prependDevSubsystemFigletHeading } from "@elizaos/shared/dev-settings-figlet-heading";
 import {
@@ -39,6 +38,11 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const miladyRoot = path.resolve(here, "../..");
 const capacitorCoreEntry = _require.resolve("@capacitor/core");
 const patheEntry = _require.resolve("pathe");
+const optionalElizaAppStubEntry = path.join(
+  here,
+  "src/optional-eliza-app-stub.tsx",
+);
+const nativePluginStubEntry = path.join(here, "src/native-plugin-stubs.ts");
 
 function requireResolve(id: string): string {
   try {
@@ -51,10 +55,23 @@ function requireResolve(id: string): string {
   }
 }
 
+function shouldUseLocalElizaSource(): boolean {
+  const sourceMode = (
+    process.env.MILADY_ELIZA_SOURCE ??
+    process.env.ELIZA_SOURCE ??
+    "packages"
+  ).toLowerCase();
+  return (
+    ["local", "source", "workspace"].includes(sourceMode) ||
+    process.env.MILADY_FORCE_LOCAL_UPSTREAMS === "1" ||
+    process.env.ELIZA_FORCE_LOCAL_UPSTREAMS === "1"
+  );
+}
+
 const localElizaRoot = path.join(miladyRoot, "eliza");
-const hasLocalElizaWorkspace = fs.existsSync(
-  path.join(localElizaRoot, "package.json"),
-);
+const hasLocalElizaWorkspace =
+  shouldUseLocalElizaSource() &&
+  fs.existsSync(path.join(localElizaRoot, "package.json"));
 const nativePluginsRoot = path.join(localElizaRoot, "packages/native-plugins");
 const appCoreSrcRoot = hasLocalElizaWorkspace
   ? path.join(localElizaRoot, "packages/app-core/src")
@@ -81,6 +98,15 @@ function tryResolve(id: string): string | undefined {
 const capacitorKeyboardEntry = tryResolve("@capacitor/keyboard");
 const capacitorPreferencesEntry = tryResolve("@capacitor/preferences");
 const capacitorAppEntry = tryResolve("@capacitor/app");
+const shouldResolveRealHyperscapeApp =
+  (hasLocalElizaWorkspace &&
+    fs.existsSync(
+      path.join(localElizaRoot, "apps/app-hyperscape/package.json"),
+    )) ||
+  tryResolve("@elizaos/app-hyperscape/package.json") !== undefined;
+const optionalElizaAppAliasPattern = shouldResolveRealHyperscapeApp
+  ? /^@elizaos\/app-(?!(core|hyperscape)(\/|$)).+$/
+  : /^@elizaos\/app-(?!core(\/|$)).+$/;
 
 function isExpectedWsProxySocketError(
   message: unknown,
@@ -340,8 +366,23 @@ function resolveLocalAppCoreAliases(): Alias[] {
   ];
 }
 
+function resolveAppBrandingForViteConfig() {
+  return {
+    appName: appConfig.appName,
+    orgName: appConfig.orgName,
+    repoName: appConfig.repoName,
+    docsUrl: "https://docs.elizaos.ai",
+    appUrl: "https://app.elizaos.ai",
+    bugReportUrl: "https://github.com/elizaOS/eliza/issues/new",
+    hashtag: "#elizaOS",
+    fileExtension: ".eliza-agent",
+    packageScope: "elizaos",
+    ...appConfig.branding,
+  };
+}
+
 function resolveAppShellMetadata() {
-  const branding = resolveAppBranding(appConfig);
+  const branding = resolveAppBrandingForViteConfig();
   const themeColor = appConfig.web?.themeColor?.trim() || "#08080a";
   const backgroundColor = appConfig.web?.backgroundColor?.trim() || "#0a0a0a";
   const shareImagePath =
@@ -378,14 +419,7 @@ const BRANDED_ENV = {
   viteOrigin: `${APP_ENV_PREFIX}_VITE_ORIGIN`,
   viteSettingsDebug: `VITE_${APP_ENV_PREFIX}_SETTINGS_DEBUG`,
 };
-const DEFAULT_APP_ROUTE_PLUGIN_MODULES = [
-  "@elizaos/app-hyperliquid/register-routes",
-  "@elizaos/app-polymarket/register-routes",
-  "@elizaos/app-vincent/register-routes",
-  "@elizaos/app-shopify/register-routes",
-  "@elizaos/app-steward/register-routes",
-  "@elizaos/app-lifeops/register-routes",
-];
+const DEFAULT_APP_ROUTE_PLUGIN_MODULES: string[] = [];
 
 // Mirror branded app env into ELIZA_* before the shared runtime helpers resolve ports.
 syncElizaEnvAliases({
@@ -1351,6 +1385,19 @@ function nativeModuleStubPlugin(): Plugin {
         ].join("\n");
       }
 
+      if (strippedId === "@elizaos/plugin-sql/drizzle") {
+        return [
+          "const expr = {};",
+          "export const and = () => expr;",
+          "export const desc = () => expr;",
+          "export const eq = () => expr;",
+          "export const isNull = () => expr;",
+          "export const lte = () => expr;",
+          "export const ne = () => expr;",
+          "export default expr;",
+        ].join("\n");
+      }
+
       if (strippedId === "@elizaos/plugin-sql/schema") {
         return [
           "const handler = { get: () => table, apply: () => table };",
@@ -1611,15 +1658,24 @@ function watchWorkspacePackagesPlugin(): Plugin {
   };
 }
 
+function resolveOptionalPackagePublicDir(packageName: string): string | null {
+  try {
+    return path.join(
+      path.dirname(_require.resolve(`${packageName}/package.json`)),
+      "public",
+    );
+  } catch {
+    return null;
+  }
+}
+
 /**
- * Serve @elizaos/app-companion's public/ assets alongside the app's own
- * public/ directory. In dev the companion dir is served as a fallback
- * middleware; in build the files are copied into the output.
+ * Serve @elizaos/app-companion's public/ assets when that optional package is
+ * installed. The decoupled Milady shell does not require the package.
  */
 function companionAssetsPlugin(): Plugin {
-  const companionPublic = path.resolve(
-    miladyRoot,
-    "eliza/apps/app-companion/public",
+  const companionPublic = resolveOptionalPackagePublicDir(
+    "@elizaos/app-companion",
   );
   return {
     name: "companion-assets",
@@ -1628,6 +1684,7 @@ function companionAssetsPlugin(): Plugin {
       server.middlewares.use((req, res, next) => {
         if (!req.url) return next();
         const clean = req.url.split("?")[0];
+        if (!companionPublic) return next();
         const filePath = path.join(companionPublic, clean);
         if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
           res.setHeader(
@@ -1646,7 +1703,7 @@ function companionAssetsPlugin(): Plugin {
     },
     closeBundle() {
       // Copy companion public to dist at build time
-      if (fs.existsSync(companionPublic)) {
+      if (companionPublic && fs.existsSync(companionPublic)) {
         const outDir = path.resolve(here, "dist");
         fs.cpSync(companionPublic, outDir, { recursive: true, force: false });
       }
@@ -1783,6 +1840,22 @@ export default defineConfig({
       {
         find: /^telegram(\/.*)?$/,
         replacement: emptyNodeModuleEntry,
+      },
+      {
+        find: /^@clawville\/app-clawville(\/.*)?$/,
+        replacement: optionalElizaAppStubEntry,
+      },
+      {
+        find: /^@elizaos\/app-hyperscape\/ui(\/.*)?$/,
+        replacement: optionalElizaAppStubEntry,
+      },
+      {
+        find: optionalElizaAppAliasPattern,
+        replacement: optionalElizaAppStubEntry,
+      },
+      {
+        find: /^@elizaos\/capacitor-.+$/,
+        replacement: nativePluginStubEntry,
       },
       // Capacitor plugins — resolve to local plugin sources
       ...NATIVE_PLUGIN_ALIAS_ENTRIES,

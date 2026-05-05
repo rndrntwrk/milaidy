@@ -20,6 +20,7 @@ import { addConnection, getConnections, removeConnection } from "./connections";
 import {
   AGENT_UI_BASE_DOMAIN,
   CLOUD_BASE,
+  getCloudAgentApiPath,
   getCloudTokenStorageKey,
   getSandboxDiscoveryUrls,
   LOCAL_AGENT_BASE,
@@ -244,7 +245,7 @@ export function AgentProvider({ children }: { children: ReactNode }) {
             cloudAgent: ca,
             cloudClient: cc,
             cloudAgentId: ca.id,
-            sourceUrl: `${CLOUD_BASE}/api/v1/milady/agents/${ca.id}`,
+            sourceUrl: `${CLOUD_BASE}${getCloudAgentApiPath(ca.id)}`,
             webUiUrl: ca.webUiUrl ? rewriteAgentUiUrl(ca.webUiUrl) : undefined,
             billing: ca.billing,
             region: ca.region,
@@ -253,7 +254,7 @@ export function AgentProvider({ children }: { children: ReactNode }) {
           });
         }
       } catch (err) {
-        // Cloud API failed — if 404, the milady agents endpoint isn't deployed
+        // Cloud API failed — if 404, the cloud agents endpoint isn't deployed
         // on this cloud instance yet. Silently continue instead of showing an error.
         const errMsg =
           err instanceof Error ? err.message : "Cloud API request failed";

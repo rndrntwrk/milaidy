@@ -1,10 +1,32 @@
+import { createRequire } from "node:module";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
-import {
+
+type RuntimeEnv = Record<string, string | undefined>;
+type IosRuntimeModule = {
+  DEFAULT_ELIZA_CLOUD_BASE: string;
+  resolveCloudApiBase(env: RuntimeEnv): string;
+  apiBaseToDeviceBridgeUrl(apiBase: string): string;
+  resolveIosRuntimeConfig(env: RuntimeEnv): unknown;
+};
+
+const require = createRequire(import.meta.url);
+const appCoreRoot = path.dirname(
+  require.resolve("@elizaos/app-core/package.json"),
+);
+const iosRuntimeModule = (await import(
+  pathToFileURL(
+    path.join(appCoreRoot, "packages/app-core/src/platform/ios-runtime.js"),
+  ).href
+)) as IosRuntimeModule;
+
+const {
   apiBaseToDeviceBridgeUrl,
   DEFAULT_ELIZA_CLOUD_BASE,
   resolveCloudApiBase,
   resolveIosRuntimeConfig,
-} from "../../eliza/packages/app-core/src/platform/ios-runtime.ts";
+} = iosRuntimeModule;
 
 describe("iOS runtime config", () => {
   it("defaults to cloud mode on the canonical Eliza Cloud base", () => {
