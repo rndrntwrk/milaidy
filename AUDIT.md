@@ -1,0 +1,127 @@
+# AUDIT.md — Milady file-by-file detangle index
+
+Companion to [MASTER.md](./MASTER.md). MASTER.md is the *plan*. This is
+the *coverage tracker*. Every code file under our control gets walked,
+audited against the eight axes from [AGENTS.md](./AGENTS.md), and
+checked off here.
+
+**Total in scope: ~4,500 TypeScript files** across 12 layers.
+Walking order is **dependency depth, innermost first** — so a refactor
+in layer N can't be undone by something we haven't audited in layer N-1.
+
+## Coverage roll-up
+
+| Layer | Area                                            | Files | Audited | Refactored | Status   |
+|-------|-------------------------------------------------|-------|---------|------------|----------|
+| 0     | Build / orchestration scripts                   |   213 |   213   |     0      | audited  |
+| 1     | Entry points (CLI, runtime, renderer, shell)    |    21 |    21   |     0      | audited  |
+| 2     | Electrobun desktop shell                        |    63 |    0    |     0      | pending  |
+| 3     | app-core runtime (boot, dev-server, eliza.ts)   |    20 |    0    |     0      | pending  |
+| 4     | app-core API server + routes                    |    89 |    0    |     0      | pending  |
+| 5     | Vault + shared + UI primitives                  |   252 |    0    |     0      | pending  |
+| 6     | Agent runtime (eliza/packages/agent/src)        |   454 |    0    |     0      | pending  |
+| 7     | app-core UI (components, app-shell, chat)       |   267 |    0    |     0      | pending  |
+| 8     | State, config, providers, registry              |    82 |    0    |     0      | pending  |
+| 9     | Onboarding + bridge                             |    15 |    0    |     0      | pending  |
+| 10    | Plugins + Eliza apps (eliza/plugins/*)          |  2575 |    0    |     0      | pending  |
+| 11    | apps/app renderer + apps/homepage               |    99 |    0    |     0      | pending  |
+| 12    | Remaining app-core/src (autonomy, security…)    |   209 |    0    |     0      | pending  |
+| **Σ** |                                                 |**4359**|  234   |     0      |          |
+
+(Counts exclude `*.d.ts`, `*.test.*`, `node_modules`, `dist`, `build`.)
+
+## The eight audit axes (from AGENTS.md)
+
+For every file we walk, we apply these checks:
+
+1. **Dedup** — duplicate logic / utilities that should be unified
+2. **Types** — `any` / `unknown` / weak unions / unsafe casts
+3. **Dead code** — unused exports, fixtures, branches, components
+4. **Cycles** — circular dependencies, barrel misuse
+5. **Errors** — `try/catch` that swallows, fallback sludge
+6. **Legacy** — deprecated paths, v1/v2 bridges, "just in case" code
+7. **Slop** — AI-generated stubs, churn comments, narrative cruft
+8. **Boundaries** — architecture violations (presentation computing, BFF transforming, etc.)
+
+Each per-layer audit file (`audit/layer-N-*.md`) tracks findings against these axes.
+
+## Walking order
+
+Strict innermost-first. A layer cannot be marked **Refactored** until
+all its inbound layers (lower numbers) are at least **Audited**.
+
+```
+Layer 0 ─→ Layer 1 ─→ Layer 5 (vault, shared, ui)
+                ↓               ↓
+                ↓          Layer 6 (agent runtime)
+                ↓               ↓
+              Layer 2 (Electrobun)   Layer 3 (runtime) ─→ Layer 4 (api)
+                ↓                        ↓                    ↓
+                └────────────────────────┴────── Layer 8 (state/config) ─→ Layer 9 (onboarding) ─→ Layer 7 (UI)
+                                                       ↓
+                                                   Layer 12 (remaining app-core)
+                                                       ↓
+                                                   Layer 11 (apps/app, homepage)
+                                                       ↓
+                                                   Layer 10 (plugins) — bulk; sweep last
+```
+
+## Per-layer audit files
+
+- [Layer 0 — Build / orchestration scripts](./audit/layer-0-scripts.md)
+- [Layer 1 — Entry points](./audit/layer-1-entry.md)
+- Layer 2 — Electrobun desktop shell *(scaffold pending)*
+- Layer 3 — app-core runtime *(scaffold pending)*
+- Layer 4 — app-core API server *(scaffold pending)*
+- Layer 5 — Vault + shared + UI *(scaffold pending)*
+- Layer 6 — Agent runtime *(scaffold pending)*
+- Layer 7 — app-core UI *(scaffold pending)*
+- Layer 8 — State + config *(scaffold pending)*
+- Layer 9 — Onboarding + bridge *(scaffold pending)*
+- Layer 10 — Plugins / apps *(scaffold pending)*
+- Layer 11 — apps/app + homepage *(scaffold pending)*
+- Layer 12 — Remaining app-core/src *(scaffold pending)*
+
+## Hard rules during the walk
+
+From AGENTS.md, restated:
+
+- **Never delete without verifying** dynamic imports, framework
+  conventions, registry references. Tooling is a lead, not proof.
+- **Never widen a type to suppress an error.** `as unknown as X` is
+  an admission of defeat. Fix the upstream.
+- **Never preserve a dead branch "for compatibility"** unless the
+  user is on the live migration path.
+- **Always commit per-file** when the audit changes that file.
+  WIP commits over uncommitted changes (per CLAUDE.md git rules).
+- **Smoke test passes** before each layer flips to **Refactored**.
+  (Phase 2 task 11 from MASTER.md will provide this script; until
+  then, manual smoke per the §5 contract in MASTER.md.)
+
+## Conventions for per-file entries
+
+Every file in a per-layer audit gets one of these statuses:
+
+| Status         | Meaning                                                              |
+|----------------|----------------------------------------------------------------------|
+| `[ ] pending`  | Not yet read                                                         |
+| `[~] reading`  | Currently being audited                                              |
+| `[!] findings` | Audited, findings recorded, no edit needed yet                       |
+| `[*] refactor` | Audited and edited (commit hash appended)                            |
+| `[x] clean`    | Audited and no changes warranted                                     |
+| `[-] delete`   | Audited and slated for deletion (DELETED commit hash appended)       |
+| `[?] blocked`  | Audited but refactor blocked by a lower-layer dependency             |
+
+Findings are recorded as `axis:short-note` after the file path. Example:
+
+```
+- [!] eliza/packages/app-core/src/components/shell/RuntimeGate.tsx
+      types:hardcoded-port-base, dedup:4-call-sites-of-pushApiBaseToRenderer
+```
+
+## What this enables
+
+Once every layer is at `[*]` or `[x]`, MASTER.md's Definition of Done
+becomes mechanically achievable: there are no unknown-state files left
+to surprise us. The smoke test gates regressions; this audit gates the
+codebase.
