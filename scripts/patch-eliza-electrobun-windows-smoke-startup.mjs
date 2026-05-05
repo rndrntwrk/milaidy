@@ -265,6 +265,15 @@ function patchTelegramSessionEsmImport(text) {
 }
 
 function patchRealRuntimeLiveProviderImport(text) {
+  // elizaOS main already lazy-loads `./live-provider`; treat as satisfied.
+  if (
+    /const \{ selectLiveProvider \} = await import\("\.\/live-provider"\)/.test(
+      text,
+    )
+  ) {
+    return { matched: true, text };
+  }
+
   let result = replaceRequiredBlock(
     text,
     /import \{\r?\n {2}type LiveProviderConfig,\r?\n {2}type LiveProviderName,\r?\n {2}selectLiveProvider,\r?\n\} from "\.\/live-provider";/,

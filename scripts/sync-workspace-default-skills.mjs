@@ -9,9 +9,9 @@ import {
   statSync,
 } from "node:fs";
 import path from "node:path";
-import { pathToFileURL, fileURLToPath } from "node:url";
-import { resolveElizaAppCoreScript } from "./lib/resolve-eliza-app-core-script.mjs";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { resolveRepoRoot } from "./lib/repo-root.mjs";
+import { resolveElizaAppCoreScript } from "./lib/resolve-eliza-app-core-script.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const DEFAULT_REPO_ROOT = resolveRepoRoot(import.meta.url);

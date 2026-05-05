@@ -61,7 +61,22 @@ test("package manifests default to published elizaOS alpha packages", () => {
   assert.equal(rootPackage.dependencies["@elizaos/agent"], "alpha");
 
   const appPackage = readJson("apps/app/package.json");
-  assert.equal(appPackage.scripts.build, "node ../../scripts/run-app-web-build.mjs");
+  assert.equal(
+    appPackage.scripts.build,
+    "node ../../scripts/run-app-web-build.mjs",
+  );
+  assert.equal(
+    read("apps/app/scripts/build.mjs"),
+    '#!/usr/bin/env node\n\nimport "../../../scripts/run-app-web-build.mjs";\n',
+  );
+  assert.doesNotMatch(
+    rootPackage.scripts["build:ios"],
+    /MILADY_ELIZA_SOURCE=local/,
+  );
+  assert.doesNotMatch(
+    appPackage.scripts["build:ios"],
+    /MILADY_ELIZA_SOURCE=local/,
+  );
   assert.equal(appPackage.dependencies["@elizaos/app-core"], "alpha");
   assert.equal(appPackage.dependencies["@elizaos/shared"], "alpha");
 
@@ -212,6 +227,16 @@ test("package-mode install repairs stale local node_modules links", () => {
   assert.match(repairScript, /isLocalElizaDisabled/);
   assert.match(repairScript, /localElizaRoot/);
   assert.match(repairScript, /findBunStorePackage/);
+});
+
+test("package-mode patches published capacitor-agent native files", () => {
+  const postinstallScript = read("scripts/milady-postinstall-repo-setup.mjs");
+  const patchScript = read("scripts/patch-elizaos-capacitor-agent-package.mjs");
+
+  assert.match(postinstallScript, /patch-elizaos-capacitor-agent-package\.mjs/);
+  assert.match(patchScript, /@elizaos\/capacitor-agent/);
+  assert.match(patchScript, /android\/src\/main\/AndroidManifest\.xml/);
+  assert.match(patchScript, /ElizaosCapacitorAgent\.podspec/);
 });
 
 test("root tsconfig.json is packages-mode-clean by default", () => {

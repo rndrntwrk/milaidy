@@ -45,13 +45,7 @@ function findBunStorePackage(scope, packageName) {
     .readdirSync(bunStoreDir, { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && entry.name.startsWith(prefix))
     .map((entry) =>
-      path.join(
-        bunStoreDir,
-        entry.name,
-        "node_modules",
-        scope,
-        packageName,
-      ),
+      path.join(bunStoreDir, entry.name, "node_modules", scope, packageName),
     )
     .filter((candidate) => fs.existsSync(path.join(candidate, "package.json")))
     .sort((left, right) => right.localeCompare(left));

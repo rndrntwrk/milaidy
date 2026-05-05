@@ -41,11 +41,7 @@ export function tsconfigMatchesMode(repoRoot, mode) {
   return current === expected;
 }
 
-export function applyTsconfigMode(
-  repoRoot,
-  mode,
-  { log = console.log } = {},
-) {
+export function applyTsconfigMode(repoRoot, mode, { log = console.log } = {}) {
   const tsconfigPath = path.join(repoRoot, ROOT_TSCONFIG_RELATIVE);
   const template = readTsconfigTemplate(mode);
   const current = fs.existsSync(tsconfigPath)
