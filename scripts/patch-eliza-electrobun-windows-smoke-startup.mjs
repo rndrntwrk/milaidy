@@ -710,6 +710,15 @@ ${nestedSigningFunction}  macos_code_dir="$STAGED_APP_PATH/Contents/MacOS"
 }
 
 function patchLocalAdhocMacosSigningOrder(text) {
+  if (
+    text.includes('path.join(binaryDir, "libNativeWrapper.dylib")') &&
+    text.includes('path.join(binaryDir, "launcher")') &&
+    text.indexOf('path.join(binaryDir, "libNativeWrapper.dylib")') <
+      text.indexOf('path.join(binaryDir, "launcher")')
+  ) {
+    return { matched: true, text };
+  }
+
   return replaceRequiredBlock(
     text,
     /\treturn \[\r?\n\t\tpath\.join\(binaryDir, "launcher"\),\r?\n\t\tpath\.join\(binaryDir, "bun"\),\r?\n\t\tpath\.join\(binaryDir, "libNativeWrapper\.dylib"\),\r?\n\t\tpath\.join\(binaryDir, "libwebgpu_dawn\.dylib"\),\r?\n\t\tpath\.join\(binaryDir, "libasar\.dylib"\),\r?\n\t\tpath\.join\(binaryDir, "extractor"\),\r?\n\t\tpath\.join\(binaryDir, "process_helper"\),\r?\n\t\tpath\.join\(binaryDir, "zig-zstd"\),\r?\n\t\tpath\.join\(binaryDir, "zig-asar"\),\r?\n\t\tpath\.join\(binaryDir, "bspatch"\),\r?\n\t\tpath\.join\(binaryDir, "bsdiff"\),\r?\n\t\tappBundlePath,\r?\n\t\]/,

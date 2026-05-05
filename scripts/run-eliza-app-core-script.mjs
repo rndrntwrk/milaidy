@@ -7,6 +7,28 @@ import { resolveElizaAppCoreScript } from "./lib/resolve-eliza-app-core-script.m
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
 const [scriptName, ...scriptArgs] = process.argv.slice(2);
+const localElizaRoot = path.join(repoRoot, "eliza");
+
+function resolveBunExecutable() {
+  if (process.versions?.bun) {
+    return process.execPath;
+  }
+
+  const bunHome =
+    process.env.BUN_INSTALL?.trim() ||
+    process.env.HOME?.trim() ||
+    process.env.USERPROFILE?.trim() ||
+    null;
+
+  return bunHome
+    ? path.join(
+        bunHome,
+        ".bun",
+        "bin",
+        process.platform === "win32" ? "bun.exe" : "bun",
+      )
+    : "bun";
+}
 
 if (!scriptName) {
   console.error(
@@ -16,7 +38,10 @@ if (!scriptName) {
 }
 
 const scriptPath = resolveElizaAppCoreScript(scriptName, { repoRoot });
-const child = spawn(process.execPath, [scriptPath, ...scriptArgs], {
+const useBun = path.resolve(scriptPath).startsWith(
+  `${path.resolve(localElizaRoot)}${path.sep}`,
+);
+const child = spawn(useBun ? resolveBunExecutable() : process.execPath, [scriptPath, ...scriptArgs], {
   cwd: repoRoot,
   env: process.env,
   stdio: "inherit",
