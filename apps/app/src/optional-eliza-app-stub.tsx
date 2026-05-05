@@ -14,11 +14,11 @@ import type { InventoryChainFilters } from "@elizaos/app-core/state/types";
 import type {
   WalletAddresses,
   WalletBalancesResponse,
+  WalletChainKind,
   WalletConfigStatus,
   WalletConfigUpdateRequest,
   WalletEntry,
   WalletNftsResponse,
-  WalletChainKind,
   WalletPrimaryMap,
   WalletRpcChain,
   WalletRpcCredentialKey,
@@ -140,7 +140,10 @@ export function getExplorerTokenUrl(
 ): string | null {
   return null;
 }
-export function getExplorerTxUrl(_chain: string, _txHash: string): string | null {
+export function getExplorerTxUrl(
+  _chain: string,
+  _txHash: string,
+): string | null {
   return null;
 }
 export function chainKeyToWalletRpcChain(

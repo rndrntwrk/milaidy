@@ -15,23 +15,34 @@ const repoRoot = path.resolve(
 
 function resolveRunMobileBuildScript() {
   try {
-    const appCorePackageJson = require.resolve("@elizaos/app-core/package.json", {
-      paths: [repoRoot],
-    });
-    return path.join(path.dirname(appCorePackageJson), "scripts", "run-mobile-build.mjs");
+    const appCorePackageJson = require.resolve(
+      "@elizaos/app-core/package.json",
+      {
+        paths: [repoRoot],
+      },
+    );
+    return path.join(
+      path.dirname(appCorePackageJson),
+      "scripts",
+      "run-mobile-build.mjs",
+    );
   } catch {
     return null;
   }
 }
 
 if (!isLocalElizaDisabled()) {
-  console.log(`${LOG_PREFIX} local elizaOS source mode; skipping package patch.`);
+  console.log(
+    `${LOG_PREFIX} local elizaOS source mode; skipping package patch.`,
+  );
   process.exit(0);
 }
 
 const scriptPath = resolveRunMobileBuildScript();
 if (!scriptPath || !fs.existsSync(scriptPath)) {
-  console.warn(`${LOG_PREFIX} @elizaos/app-core run-mobile-build.mjs not found; skipping.`);
+  console.warn(
+    `${LOG_PREFIX} @elizaos/app-core run-mobile-build.mjs not found; skipping.`,
+  );
   process.exit(0);
 }
 
