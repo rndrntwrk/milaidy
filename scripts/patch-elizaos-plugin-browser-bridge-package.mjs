@@ -74,6 +74,31 @@ export async function openBrowserBridgeCompanionPackagePath() {
 export default browserBridgePlugin;
 `;
 
+// Type declarations matching the JS stub. The published @elizaos/plugin-browser-bridge
+// package has TypeScript sources in its exports map; we replace those with a JS stub
+// for packaged alpha builds, but consumers (e.g. eliza/packages/agent/src/runtime/eliza.ts)
+// still type-import this module — so emit a matching .d.ts to keep typecheck green.
+const stubTypesSource = `import type { Action, Plugin } from "@elizaos/core";
+
+export const BROWSER_BRIDGE_ROUTE_SERVICE_TYPE: "browser-bridge-route-service";
+export const browserBridgeActions: readonly Action[];
+export const browserBridgeInstallAction: Action;
+export const browserBridgeOpenManagerAction: Action;
+export const browserBridgePlugin: Plugin;
+export const browserBridgeRefreshAction: Action;
+export const browserBridgeRevealFolderAction: Action;
+export const browserBridgeSchema: Record<string, unknown>;
+
+export function buildBrowserBridgeCompanionPackage(): Promise<Record<string, unknown>>;
+export function getBrowserBridgeCompanionPackageStatus(): Record<string, unknown>;
+export function handleBrowserBridgeRoutes(): Promise<boolean>;
+export function openBrowserBridgeCompanionManager(): Promise<boolean>;
+export function openBrowserBridgeCompanionPackagePath(): Promise<{ path: string }>;
+
+declare const _default: Plugin;
+export default _default;
+`;
+
 function isLocalElizaSymlink(packageDir) {
   try {
     const stat = fs.lstatSync(packageDir);
@@ -102,29 +127,42 @@ function needsPatch(packageJson) {
   const exportValues = Object.values(exportsMap).filter(
     (value) => typeof value === "string",
   );
+  // Re-patch if exports still point at TypeScript sources (alpha
+  // tarballs ship .ts in exports), or if a previous patch stubbed the
+  // package without writing .d.ts — older patch revisions emitted
+  // stub.js only, leaving consumers' typecheck broken with TS7016.
   return (
     packageJson.main?.endsWith(".ts") ||
-    exportValues.some((value) => value.endsWith(".ts"))
+    exportValues.some((value) => value.endsWith(".ts")) ||
+    !packageJson.types
   );
 }
 
 function writeStubPackage(packageDir, existingPackageJson = {}) {
   fs.mkdirSync(packageDir, { recursive: true });
   fs.writeFileSync(path.join(packageDir, "stub.js"), stubSource);
+  fs.writeFileSync(path.join(packageDir, "stub.d.ts"), stubTypesSource);
   const packageJson = {
     ...existingPackageJson,
     name: packageName,
     version: existingPackageJson.version ?? "0.0.0-milady-stub",
     type: "module",
     main: "./stub.js",
+    types: "./stub.d.ts",
     exports: {
       ...defaultExportsMap,
       ...(existingPackageJson.exports ?? {}),
     },
   };
+  // Conditional export form so resolvers pick the .d.ts for type imports
+  // and the .js for runtime — without this, TypeScript sees the JS stub
+  // as having implicit `any` (TS7016).
   for (const key of Object.keys(packageJson.exports)) {
     if (key === "./package.json") continue;
-    packageJson.exports[key] = "./stub.js";
+    packageJson.exports[key] = {
+      types: "./stub.d.ts",
+      default: "./stub.js",
+    };
   }
   fs.writeFileSync(
     path.join(packageDir, "package.json"),
@@ -138,6 +176,18 @@ if (isLocalElizaSymlink(rootPackageDir)) {
   fs.unlinkSync(rootPackageDir);
   writeStubPackage(rootPackageDir);
   patchedCount += 1;
+} else if (fs.existsSync(path.join(rootPackageDir, "package.json"))) {
+  // Root is a real directory (a previous patch overwrote the symlink with
+  // a stub). Re-patch in place if we're missing newer fields (types,
+  // conditional exports) so the d.ts upgrade lands on the path TypeScript
+  // actually resolves through.
+  const rootPackageJson = JSON.parse(
+    fs.readFileSync(path.join(rootPackageDir, "package.json"), "utf8"),
+  );
+  if (needsPatch(rootPackageJson)) {
+    writeStubPackage(rootPackageDir, rootPackageJson);
+    patchedCount += 1;
+  }
 }
 
 for (const packageDir of packageDirsInBunStore()) {

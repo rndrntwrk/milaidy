@@ -1841,6 +1841,22 @@ export default defineConfig({
         find: /^telegram(\/.*)?$/,
         replacement: emptyNodeModuleEntry,
       },
+      // @napi-rs/keyring is the OS keychain bridge used by @elizaos/vault.
+      // It's strictly server-side (Node-only native bindings to libsecret /
+      // Keychain / Credential Manager) and is never invoked in the WebView,
+      // but vault.ts still has a static type import + dynamic `await import`
+      // that Rollup follows into the .node binary, exploding the web build
+      // with `Unexpected "\x7f"` (the ELF magic). Stub for browser bundles —
+      // the runtime code path that would call openKeyring() doesn't run on
+      // Capacitor/Electrobun renderers.
+      {
+        find: /^@napi-rs\/keyring(\/.*)?$/,
+        replacement: emptyNodeModuleEntry,
+      },
+      {
+        find: /^@napi-rs\/keyring-/,
+        replacement: emptyNodeModuleEntry,
+      },
       {
         find: /^@clawville\/app-clawville(\/.*)?$/,
         replacement: optionalElizaAppStubEntry,
