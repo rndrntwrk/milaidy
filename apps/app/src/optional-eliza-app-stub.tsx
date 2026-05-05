@@ -482,3 +482,24 @@ export interface TaskCompletionSummary {
 }
 
 export { THREE };
+
+// ── @elizaos/app-wallet/wallet-rpc stubs ───────────────────────────────
+// Real wallet RPC builder lives in `eliza/plugins/app-wallet`. When milady
+// is in npm-package mode (no local link), stub satisfies imports from
+// useOnboardingCallbacks and the wallet onboarding flow degrades to a
+// no-op RPC update. With `bun run eliza:local`, the alias auto-detect in
+// vite.config.ts routes through the real package instead.
+export function buildWalletRpcUpdateRequest(_args: unknown): {
+  credentials: Record<string, string>;
+  selections: Record<string, never>;
+} {
+  return { credentials: {}, selections: {} };
+}
+
+export function normalizeWalletRpcSelections(_selections: unknown): {} {
+  return {};
+}
+
+export function collectSelectedCredentialKeys(_selections: unknown): string[] {
+  return [];
+}

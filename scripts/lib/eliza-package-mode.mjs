@@ -1,5 +1,5 @@
 export const DEFAULT_ELIZA_SOURCE_MODE = "packages";
-export const DEFAULT_ELIZA_GIT_URL = "https://github.com/milady-ai/eliza.git";
+export const DEFAULT_ELIZA_GIT_URL = "https://github.com/elizaOS/eliza.git";
 export const DEFAULT_ELIZA_BRANCH = "develop";
 export const DEFAULT_ELIZAOS_PACKAGE_DIST_TAG = "alpha";
 

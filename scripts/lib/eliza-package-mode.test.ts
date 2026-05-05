@@ -89,7 +89,7 @@ describe("eliza package mode helpers", () => {
   });
 
   it("makes the local clone target configurable", () => {
-    expect(getElizaGitUrl({})).toBe("https://github.com/milady-ai/eliza.git");
+    expect(getElizaGitUrl({})).toBe("https://github.com/elizaOS/eliza.git");
     expect(getElizaGitBranch({})).toBe("develop");
     expect(
       getElizaGitUrl({ MILADY_ELIZA_GIT_URL: "https://example.test/e.git" }),

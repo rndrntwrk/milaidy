@@ -98,15 +98,43 @@ function tryResolve(id: string): string | undefined {
 const capacitorKeyboardEntry = tryResolve("@capacitor/keyboard");
 const capacitorPreferencesEntry = tryResolve("@capacitor/preferences");
 const capacitorAppEntry = tryResolve("@capacitor/app");
-const shouldResolveRealHyperscapeApp =
-  (hasLocalElizaWorkspace &&
-    fs.existsSync(
-      path.join(localElizaRoot, "apps/app-hyperscape/package.json"),
-    )) ||
-  tryResolve("@elizaos/app-hyperscape/package.json") !== undefined;
-const optionalElizaAppAliasPattern = shouldResolveRealHyperscapeApp
-  ? /^@elizaos\/app-(?!(core|hyperscape)(\/|$)).+$/
-  : /^@elizaos\/app-(?!core(\/|$)).+$/;
+// `@elizaos/app-core` is always real. `@elizaos/app-wallet` is required by
+// onboarding callbacks + AppContext (useWalletState), so resolve it real
+// when present. `app-hyperscape` is real when its package is present.
+// Auto-detect by walking node_modules/@elizaos/* directly (don't follow
+// symlinks via require.resolve — those land at the real source path,
+// which can be in eliza/packages/ instead of eliza/plugins/, missing
+// plugin-only apps like app-wallet).
+const directElizaScope = path.join(miladyRoot, "node_modules", "@elizaos");
+function elizaAppPackageExists(name: string): boolean {
+  if (
+    hasLocalElizaWorkspace &&
+    fs.existsSync(path.join(localElizaRoot, "apps", name, "package.json"))
+  ) {
+    return true;
+  }
+  if (
+    hasLocalElizaWorkspace &&
+    fs.existsSync(path.join(localElizaRoot, "plugins", name, "package.json"))
+  ) {
+    return true;
+  }
+  if (
+    fs.existsSync(directElizaScope) &&
+    fs.existsSync(path.join(directElizaScope, name, "package.json"))
+  ) {
+    return true;
+  }
+  return tryResolve(`@elizaos/${name}/package.json`) !== undefined;
+}
+const shouldResolveRealHyperscapeApp = elizaAppPackageExists("app-hyperscape");
+const shouldResolveRealWalletApp = elizaAppPackageExists("app-wallet");
+const optionalElizaAppAliasPattern = (() => {
+  const realApps = ["core"];
+  if (shouldResolveRealHyperscapeApp) realApps.push("hyperscape");
+  if (shouldResolveRealWalletApp) realApps.push("wallet");
+  return new RegExp(`^@elizaos\\/app-(?!(${realApps.join("|")})(\\/|$)).+$`);
+})();
 
 function isExpectedWsProxySocketError(
   message: unknown,
@@ -1136,6 +1164,10 @@ function nativeModuleStubPlugin(): Plugin {
     "@elizaos/plugin-sql",
     "@elizaos/plugin-agent-skills",
     "@elizaos/plugin-agent-orchestrator",
+    // OS keychain bridge — Node-only native addon (.node binary). Pulled
+    // transitively by @elizaos/vault. Vite's commonjs--resolver chokes on
+    // the platform-specific .node files; stub it for the renderer.
+    "@napi-rs/keyring",
   ]);
   if (!IS_CAPACITOR_MOBILE_BUILD) {
     // Mobile-only Capacitor llama.cpp runtime. Web/Electrobun builds stub it,
@@ -1144,6 +1176,10 @@ function nativeModuleStubPlugin(): Plugin {
     nativePackages.add("llama-cpp-capacitor");
   }
   const nativeScopeRe = /^@node-llama-cpp\//;
+  // @napi-rs/keyring fans out into platform packages
+  // (@napi-rs/keyring-darwin-arm64, -darwin-x64, -win32-x64-msvc, etc.).
+  // Stub the entire scope so we don't have to enumerate every triple.
+  const napiRsKeyringScopeRe = /^@napi-rs\/keyring(-.+)?$/;
   // Capacitor native plugins — mobile-only, must never run in the browser.
   // Stubbing prevents Rollup from failing when bun workspaces don't hoist them.
   const capacitorNativeScopeRe = /^@capacitor\/(?!core)(.+)$/;
@@ -1196,6 +1232,8 @@ function nativeModuleStubPlugin(): Plugin {
         : id.split("/")[0];
       // Scoped: @node-llama-cpp/*
       if (nativeScopeRe.test(id)) return VIRTUAL_PREFIX + id;
+      // Scoped: @napi-rs/keyring + platform binaries
+      if (napiRsKeyringScopeRe.test(id)) return VIRTUAL_PREFIX + id;
       // Capacitor native plugins (@capacitor/* except @capacitor/core)
       if (capacitorNativeScopeRe.test(id) && !IS_CAPACITOR_MOBILE_BUILD) {
         return VIRTUAL_PREFIX + id;
@@ -2034,6 +2072,10 @@ export default defineConfig({
           ].includes(id)
         )
           return true;
+        // OS keychain native addon. Renderer never calls keyring directly —
+        // it goes through the API. Externalize the umbrella + platform
+        // binaries so Rollup doesn't try to bundle the .node files.
+        if (/^@napi-rs\/keyring(-.+)?$/.test(id)) return true;
         if (/^@node-llama-cpp\//.test(id)) return true;
         return false;
       },
