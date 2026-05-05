@@ -24,6 +24,9 @@ export const releaseContractTests = [
   "eliza/packages/app-core/scripts/release-check.test.ts",
   "eliza/packages/app-core/scripts/static-asset-manifest.test.ts",
 ];
+const packageModeReleaseContractTests = [
+  "scripts/electrobun-runtime-root-contract.test.ts",
+];
 
 function hasLocalElizaAppCore(root = repoRoot) {
   return fs.existsSync(path.join(root, "eliza", "packages", "app-core"));
@@ -33,9 +36,7 @@ function selectReleaseContractTests(root = repoRoot) {
   if (hasLocalElizaAppCore(root)) {
     return releaseContractTests;
   }
-  return releaseContractTests.filter(
-    (testPath) => !testPath.startsWith("eliza/"),
-  );
+  return packageModeReleaseContractTests;
 }
 
 export function run(command, args, cwd = repoRoot) {
