@@ -55,6 +55,7 @@
     "@elizaos/app-screenshare": "workspace:*",
     "@elizaos/app-shopify": "workspace:*",
     "@elizaos/app-vincent": "workspace:*",
+    "@elizaos/app-workflow-builder": "workspace:*",
     "@elizaos/capacitor-agent": "workspace:*",
     "@elizaos/capacitor-appblocker": "workspace:*",
     "@elizaos/capacitor-camera": "workspace:*",
