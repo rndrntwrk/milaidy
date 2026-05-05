@@ -12,7 +12,7 @@ function localUpstreamsDisabled() {
   const sourceMode = (
     process.env.MILADY_ELIZA_SOURCE ??
     process.env.ELIZA_SOURCE ??
-    ""
+    "packages"
   ).toLowerCase();
   return (
     ["package", "packages", "published", "npm", "registry", "global"].includes(
@@ -56,7 +56,21 @@ function appCoreEntry(subpath: string, localRelativePath: string) {
 
   const packageSubpath =
     subpath === "." ? "@elizaos/app-core" : `@elizaos/app-core/${subpath}`;
-  return require.resolve(packageSubpath);
+  try {
+    return require.resolve(packageSubpath);
+  } catch (error) {
+    const packageJsonPath = require.resolve("@elizaos/app-core/package.json");
+    const packageRoot = path.dirname(packageJsonPath);
+    const packageEntry = path.join(
+      packageRoot,
+      "packages/app-core",
+      localRelativePath.replace(/\.[cm]?tsx?$/, ".js"),
+    );
+    if (existsSync(packageEntry)) {
+      return packageEntry;
+    }
+    throw error;
+  }
 }
 
 // Native .node packages must stay external; rolldown cannot bundle shared libraries.

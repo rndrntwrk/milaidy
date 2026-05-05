@@ -32,6 +32,7 @@ const DEFAULT_CLOUD_BASE = resolveDefaultCloudBase();
 const DEFAULT_LOCAL_AGENT_BASE = "http://localhost:2138";
 const DEFAULT_SANDBOX_DISCOVERY_URL = "https://sandboxes.waifu.fun/agents";
 const DEFAULT_AGENT_UI_BASE_DOMAIN = "milady.ai";
+const DEFAULT_CLOUD_AGENT_API_BASE_PATH = "/api/v1/eliza/agents";
 const CLOUD_TOKEN_STORAGE_PREFIX = "milady-cloud-token";
 
 function normalizeUrl(
@@ -59,6 +60,15 @@ function normalizeHostname(
   return candidate && candidate.length > 0 ? candidate : fallback;
 }
 
+function normalizePath(
+  value: string | boolean | undefined,
+  fallback: string,
+): string {
+  const candidate = typeof value === "string" ? value.trim() : undefined;
+  const path = candidate && candidate.length > 0 ? candidate : fallback;
+  return `/${path.replace(/^\/+|\/+$/g, "")}`;
+}
+
 export const CLOUD_BASE = normalizeUrl(
   import.meta.env.VITE_ELIZA_CLOUD_BASE,
   DEFAULT_CLOUD_BASE,
@@ -73,6 +83,22 @@ export const AGENT_UI_BASE_DOMAIN = normalizeHostname(
   import.meta.env.VITE_AGENT_UI_BASE_DOMAIN,
   DEFAULT_AGENT_UI_BASE_DOMAIN,
 );
+
+export const CLOUD_AGENT_API_BASE_PATH = normalizePath(
+  import.meta.env.VITE_CLOUD_AGENT_API_BASE_PATH,
+  DEFAULT_CLOUD_AGENT_API_BASE_PATH,
+);
+
+export function getCloudAgentApiPath(
+  agentId?: string,
+  suffix?: string,
+): string {
+  if (!agentId) return CLOUD_AGENT_API_BASE_PATH;
+  const normalizedSuffix = suffix?.replace(/^\/+|\/+$/g, "");
+  return `${CLOUD_AGENT_API_BASE_PATH}/${encodeURIComponent(agentId)}${
+    normalizedSuffix ? `/${normalizedSuffix}` : ""
+  }`;
+}
 
 /**
  * Public sandbox discovery is disabled everywhere.  The sandbox endpoint

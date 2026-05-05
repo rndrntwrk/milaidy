@@ -2,11 +2,9 @@
 /**
  * postinstall entry point.
  *
- * Delegates to elizaOS's `run-repo-setup` (at
- * eliza/packages/app-core/scripts/run-repo-setup.mjs), which runs the
- * post-install patch/link/seed pipeline. Submodule init runs as
- * `preinstall` (see scripts/init-submodules.mjs), not here, so
- * `run-repo-setup` no longer tries to init submodules itself.
+ * Delegates to elizaOS's packaged `run-repo-setup`, which runs the
+ * post-install patch/link/seed pipeline. Local source mode is opt-in through
+ * `bun run eliza:local`; the default install path uses published packages.
  *
  * After elizaOS's pipeline runs, we apply Milady-only bridge patches
  * that target node_modules artifacts whose upstream PRs are still in
@@ -17,6 +15,7 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { isLocalElizaDisabled } from "./lib/eliza-package-mode.mjs";
 import { resolveElizaAppCoreScript } from "./lib/resolve-eliza-app-core-script.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -29,28 +28,45 @@ if (!process.env.HOME && process.env.USERPROFILE) {
   process.env.HOME = process.env.USERPROFILE;
 }
 
-const setupPath = resolveElizaAppCoreScript("run-repo-setup.mjs", {
-  repoRoot,
-});
+const packageMode = isLocalElizaDisabled();
 
-const setupHref = pathToFileURL(setupPath).href;
-const { runRepoSetup } = await import(setupHref);
+if (packageMode) {
+  console.log(
+    "[milady-postinstall] package mode: skipping elizaOS repo-local setup steps.",
+  );
+} else {
+  const setupPath = resolveElizaAppCoreScript("run-repo-setup.mjs", {
+    repoRoot,
+  });
 
-await runRepoSetup(repoRoot);
+  const setupHref = pathToFileURL(setupPath).href;
+  const { runRepoSetup } = await import(setupHref);
+
+  await runRepoSetup(repoRoot);
+}
 
 // Milady-only bridge patches. Each entry runs after elizaOS's pipeline
 // because that pipeline may itself rewrite node_modules (patch-deps,
 // link-external-plugins, etc.) and we want our patches to win on top.
 // Remove an entry once the corresponding upstream PR lands and a new
 // compatible package is published.
-const miladyBridgePatchScripts = [
+const localSourceBridgePatchScripts = [
   // Temporary overlay for elizaOS/eliza Windows smoke startup trace drift.
   "patch-eliza-electrobun-windows-smoke-startup.mjs",
-  // https://github.com/elizaos-plugins/plugin-elizacloud/pull/15
-  "patch-elizacloud.mjs",
+];
+
+const packageSafeBridgePatchScripts = [
+  "ensure-elizaos-optional-app-stubs.mjs",
+  "patch-elizaos-package-esm-imports.mjs",
+  "patch-elizaos-package-styles.mjs",
+  "patch-elizaos-plugin-browser-bridge-package.mjs",
   // milady-only fix for claude.ai OAuth tier — see script header.
   "patch-coding-agent-adapters-tools-flag.mjs",
 ];
+
+const miladyBridgePatchScripts = packageMode
+  ? packageSafeBridgePatchScripts
+  : [...localSourceBridgePatchScripts, ...packageSafeBridgePatchScripts];
 
 for (const scriptName of miladyBridgePatchScripts) {
   const scriptPath = path.join(repoRoot, "scripts", scriptName);

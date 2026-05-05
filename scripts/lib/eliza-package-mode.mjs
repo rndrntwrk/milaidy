@@ -1,5 +1,5 @@
-export const DEFAULT_ELIZA_SOURCE_MODE = "local";
-export const DEFAULT_ELIZA_GIT_URL = "https://github.com/elizaos/eliza.git";
+export const DEFAULT_ELIZA_SOURCE_MODE = "packages";
+export const DEFAULT_ELIZA_GIT_URL = "https://github.com/milady-ai/eliza.git";
 export const DEFAULT_ELIZA_BRANCH = "develop";
 export const DEFAULT_ELIZAOS_PACKAGE_DIST_TAG = "alpha";
 
@@ -74,9 +74,7 @@ export function getElizaSourceMode(env = process.env) {
 }
 
 export function isLocalElizaDisabled(env = process.env) {
-  if (getExplicitElizaSourceMode(env) === "packages") {
-    return true;
-  }
+  if (getElizaSourceMode(env) === "packages") return true;
   return LOCAL_UPSTREAM_SKIP_ENV_KEYS.some((key) => env[key] === "1");
 }
 

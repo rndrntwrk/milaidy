@@ -1,5 +1,5 @@
 export const releaseData = {
-  generatedAt: "2026-05-04T08:33:53.990Z",
+  generatedAt: "2026-05-04T20:00:51.886Z",
   scripts: {
     shell: {
       url: "https://milady.ai/install.sh",

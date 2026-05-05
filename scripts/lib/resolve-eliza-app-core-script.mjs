@@ -64,7 +64,7 @@ export function resolveElizaAppCoreRoot({
   try {
     return resolvePublishedAppCoreRoot(repoRoot);
   } catch (error) {
-    if (existsSync(path.join(localRoot, "package.json"))) {
+    if (preferLocal && existsSync(path.join(localRoot, "package.json"))) {
       return localRoot;
     }
     const detail = error instanceof Error ? ` ${error.message}` : "";

@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import test from "node:test";
+import { test } from "vitest";
 
 const workflow = (name) => fs.readFileSync(`.github/workflows/${name}`, "utf8");
 
@@ -169,54 +169,56 @@ test("Electrobun macOS release patch signs nested native runtime binaries idempo
   assert.match(patchScript, /result\.text\.includes\('for tarball_pattern in/);
 });
 
-test("Electrobun macOS release patch tolerates CRLF stager checkout", (t) => {
+test("Electrobun macOS release patch tolerates CRLF stager checkout", () => {
   const tmpRepo = fs.mkdtempSync(
     path.join(os.tmpdir(), "milady-release-patch-"),
   );
-  t.after(() => fs.rmSync(tmpRepo, { recursive: true, force: true }));
+  try {
+    const copyRepoFile = (relativePath) => {
+      const destination = path.join(tmpRepo, relativePath);
+      fs.mkdirSync(path.dirname(destination), { recursive: true });
+      fs.copyFileSync(relativePath, destination);
+    };
 
-  const copyRepoFile = (relativePath) => {
-    const destination = path.join(tmpRepo, relativePath);
-    fs.mkdirSync(path.dirname(destination), { recursive: true });
-    fs.copyFileSync(relativePath, destination);
-  };
+    copyRepoFile("scripts/patch-eliza-electrobun-windows-smoke-startup.mjs");
+    for (const relativePath of [
+      "eliza/packages/app-core/platforms/electrobun/src/startup-trace.ts",
+      "eliza/packages/app-core/platforms/electrobun/scripts/smoke-test-windows.ps1",
+      "eliza/packages/app-core/platforms/electrobun/src/native/steward.ts",
+      "eliza/packages/agent/src/services/telegram-account-auth.ts",
+      "eliza/packages/app-core/test/helpers/real-runtime.ts",
+      "eliza/packages/app-core/platforms/electrobun/scripts/local-adhoc-sign-macos.ts",
+    ]) {
+      copyRepoFile(relativePath);
+    }
 
-  copyRepoFile("scripts/patch-eliza-electrobun-windows-smoke-startup.mjs");
-  for (const relativePath of [
-    "eliza/packages/app-core/platforms/electrobun/src/startup-trace.ts",
-    "eliza/packages/app-core/platforms/electrobun/scripts/smoke-test-windows.ps1",
-    "eliza/packages/app-core/platforms/electrobun/src/native/steward.ts",
-    "eliza/packages/agent/src/services/telegram-account-auth.ts",
-    "eliza/packages/app-core/test/helpers/real-runtime.ts",
-    "eliza/packages/app-core/platforms/electrobun/scripts/local-adhoc-sign-macos.ts",
-  ]) {
-    copyRepoFile(relativePath);
+    const stagerPath = path.join(
+      tmpRepo,
+      "eliza/packages/app-core/platforms/electrobun/scripts/stage-macos-release-artifacts.sh",
+    );
+    fs.mkdirSync(path.dirname(stagerPath), { recursive: true });
+    const cleanStager = fs.readFileSync(
+      "eliza/packages/app-core/platforms/electrobun/scripts/stage-macos-release-artifacts.sh",
+      { encoding: "utf8" },
+    );
+    fs.writeFileSync(stagerPath, cleanStager.replace(/\r?\n/g, "\r\n"));
+
+    execFileSync(
+      process.execPath,
+      ["scripts/patch-eliza-electrobun-windows-smoke-startup.mjs"],
+      { cwd: tmpRepo, stdio: "pipe" },
+    );
+
+    const patchedStager = fs.readFileSync(stagerPath, "utf8");
+    assert.match(patchedStager, /retry_codesign\(\) \{/);
+    assert.match(
+      patchedStager,
+      /for tarball_pattern in "\*-macos-\*\.app\.tar\.zst"/,
+    );
+    assert.match(patchedStager, /sign_nested_macos_runtime_targets\(\) \{/);
+  } finally {
+    fs.rmSync(tmpRepo, { recursive: true, force: true });
   }
-
-  const stagerPath = path.join(
-    tmpRepo,
-    "eliza/packages/app-core/platforms/electrobun/scripts/stage-macos-release-artifacts.sh",
-  );
-  fs.mkdirSync(path.dirname(stagerPath), { recursive: true });
-  const cleanStager = fs.readFileSync(
-    "eliza/packages/app-core/platforms/electrobun/scripts/stage-macos-release-artifacts.sh",
-    { encoding: "utf8" },
-  );
-  fs.writeFileSync(stagerPath, cleanStager.replace(/\r?\n/g, "\r\n"));
-
-  execFileSync(
-    process.execPath,
-    ["scripts/patch-eliza-electrobun-windows-smoke-startup.mjs"],
-    { cwd: tmpRepo, stdio: "pipe" },
-  );
-
-  const patchedStager = fs.readFileSync(stagerPath, "utf8");
-  assert.match(patchedStager, /retry_codesign\(\) \{/);
-  assert.match(
-    patchedStager,
-    /for tarball_pattern in "\*-macos-\*\.app\.tar\.zst"/,
-  );
-  assert.match(patchedStager, /sign_nested_macos_runtime_targets\(\) \{/);
 });
 
 test("Electrobun release has a lightweight PR contract workflow", () => {
@@ -243,8 +245,14 @@ test("Electrobun Windows smoke validates the public installer", () => {
   assert.match(electrobun, /Smoke runs through the public installer/);
 });
 
-test("npm package includes app-core release helper scripts", () => {
+test("npm package includes package-mode app-core script bridge", () => {
   const packageJson = JSON.parse(fs.readFileSync("package.json", "utf8"));
 
-  assert.ok(packageJson.files.includes("eliza/packages/app-core/scripts"));
+  assert.ok(
+    packageJson.files.includes("scripts/run-eliza-app-core-script.mjs"),
+  );
+  assert.ok(
+    packageJson.files.includes("scripts/lib/resolve-eliza-app-core-script.mjs"),
+  );
+  assert.ok(!packageJson.files.includes("eliza/packages/app-core/scripts"));
 });

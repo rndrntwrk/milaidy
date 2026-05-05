@@ -23,9 +23,9 @@ const registryInfo = {
 };
 
 describe("eliza package mode helpers", () => {
-  it("keeps local source mode as the default without forcing local in installers", () => {
-    expect(getElizaSourceMode({})).toBe("local");
-    expect(isLocalElizaDisabled({})).toBe(false);
+  it("keeps package mode as the default without forcing local in installers", () => {
+    expect(getElizaSourceMode({})).toBe("packages");
+    expect(isLocalElizaDisabled({})).toBe(true);
     expect(isLocalElizaForced({})).toBe(false);
   });
 
@@ -89,7 +89,7 @@ describe("eliza package mode helpers", () => {
   });
 
   it("makes the local clone target configurable", () => {
-    expect(getElizaGitUrl({})).toBe("https://github.com/elizaos/eliza.git");
+    expect(getElizaGitUrl({})).toBe("https://github.com/milady-ai/eliza.git");
     expect(getElizaGitBranch({})).toBe("develop");
     expect(
       getElizaGitUrl({ MILADY_ELIZA_GIT_URL: "https://example.test/e.git" }),

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  getCloudAgentApiPath,
   isLocalAgentAutoProbeDefaultHostname,
   shouldAutoProbeLocalAgentForConfig,
 } from "../lib/runtime-config";
@@ -43,5 +44,12 @@ describe("runtime config", () => {
         localAgentBase: "https://agent.example.com",
       }),
     ).toBe(true);
+  });
+
+  it("uses the upstream Eliza Cloud agent route by default", () => {
+    expect(getCloudAgentApiPath()).toBe("/api/v1/eliza/agents");
+    expect(getCloudAgentApiPath("agent 1", "pairing-token")).toBe(
+      "/api/v1/eliza/agents/agent%201/pairing-token",
+    );
   });
 });

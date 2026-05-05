@@ -184,6 +184,13 @@ export function resolveRootElizaPackageOverrideSpecifier(
 }
 
 export function resolveCiOverrideSpecifiers(repoRoot = DEFAULT_REPO_ROOT) {
+  if (
+    isLocalElizaDisabled() &&
+    process.env.MILADY_DISABLE_LOCAL_UPSTREAMS_USE_FILE_OVERRIDES !== "1"
+  ) {
+    return {};
+  }
+
   const overrides = {};
   for (const [packageName, packagePath] of Object.entries(
     LOCAL_ELIZA_CI_OVERRIDE_PACKAGE_PATHS,
@@ -1079,11 +1086,15 @@ export function disableLocalElizaWorkspace(
   const disabledElizaRoot = path.join(repoRoot, ".eliza.ci-disabled");
   const shouldRenameElizaWorkspace =
     process.env.MILADY_DISABLE_LOCAL_UPSTREAMS_RENAME === "1";
+  const shouldTouchLocalElizaWorkspace =
+    process.env.MILADY_DISABLE_LOCAL_UPSTREAMS_TOUCH_LOCAL_ELIZA === "1";
   const packageJsonPath = path.join(repoRoot, "package.json");
   const elizaPackageJsonPath = path.join(elizaRoot, "package.json");
   const removedLockfiles = [];
 
-  repairKnownElizaPatchFiles(repoRoot, { log });
+  if (shouldTouchLocalElizaWorkspace) {
+    repairKnownElizaPatchFiles(repoRoot, { log });
+  }
 
   const localOnlyPackagePaths = resolveLocalOnlyWorkspacePackagePaths(repoRoot);
   const localOnlyPackages = new Set(localOnlyPackagePaths.keys());
@@ -1274,7 +1285,7 @@ export function disableLocalElizaWorkspace(
 
   writePackageJson(packageJsonPath, rawRootPkg, rootPkg);
 
-  if (fs.existsSync(elizaPackageJsonPath)) {
+  if (shouldTouchLocalElizaWorkspace && fs.existsSync(elizaPackageJsonPath)) {
     try {
       const rawElizaPkg = fs.readFileSync(elizaPackageJsonPath, "utf8");
       const elizaPkg = parseJsonObject(rawElizaPkg);
@@ -1325,8 +1336,8 @@ export function disableLocalElizaWorkspace(
   );
   const rewriteWorkspaceEntries = [
     ...(rootPkg.workspaces ?? []),
-    ...removedWorkspaceGlobs,
-    ...NESTED_INSTALLABLE_PACKAGE_GLOBS,
+    ...(shouldTouchLocalElizaWorkspace ? removedWorkspaceGlobs : []),
+    ...(shouldTouchLocalElizaWorkspace ? NESTED_INSTALLABLE_PACKAGE_GLOBS : []),
   ];
 
   // In rewrite-only CI the eliza/ checkout stays on disk even after we remove

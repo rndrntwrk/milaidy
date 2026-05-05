@@ -6,6 +6,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   DEFAULT_ELIZAOS_PACKAGE_DIST_TAG,
+  getElizaGitBranch,
+  getElizaGitUrl,
   getElizaosPackageSpecifier,
 } from "./lib/eliza-package-mode.mjs";
 import { restoreLocalElizaWorkspace } from "./restore-local-eliza-workspace.mjs";
@@ -98,6 +100,22 @@ function run(command, args, env) {
   });
 }
 
+async function cloneLocalElizaIfMissing(env) {
+  const elizaRoot = path.join(repoRoot, "eliza");
+  if (fs.existsSync(elizaRoot)) {
+    return;
+  }
+
+  const gitUrl = getElizaGitUrl(env);
+  const branch = getElizaGitBranch(env);
+  console.log(`[eliza-source-mode] cloning ${gitUrl}#${branch} into eliza/`);
+  await run(
+    "git",
+    ["clone", "--branch", branch, "--single-branch", gitUrl, "eliza"],
+    env,
+  );
+}
+
 async function runLocalMode(options) {
   const env = {
     ...process.env,
@@ -107,6 +125,7 @@ async function runLocalMode(options) {
   };
 
   restoreLocalElizaWorkspace(repoRoot);
+  await cloneLocalElizaIfMissing(env);
   await runNode("scripts/setup-upstreams.mjs", [], env);
 
   if (options.install) {
