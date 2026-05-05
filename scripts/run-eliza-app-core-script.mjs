@@ -38,14 +38,18 @@ if (!scriptName) {
 }
 
 const scriptPath = resolveElizaAppCoreScript(scriptName, { repoRoot });
-const useBun = path.resolve(scriptPath).startsWith(
-  `${path.resolve(localElizaRoot)}${path.sep}`,
+const useBun = path
+  .resolve(scriptPath)
+  .startsWith(`${path.resolve(localElizaRoot)}${path.sep}`);
+const child = spawn(
+  useBun ? resolveBunExecutable() : process.execPath,
+  [scriptPath, ...scriptArgs],
+  {
+    cwd: repoRoot,
+    env: process.env,
+    stdio: "inherit",
+  },
 );
-const child = spawn(useBun ? resolveBunExecutable() : process.execPath, [scriptPath, ...scriptArgs], {
-  cwd: repoRoot,
-  env: process.env,
-  stdio: "inherit",
-});
 
 child.on("error", (error) => {
   console.error(

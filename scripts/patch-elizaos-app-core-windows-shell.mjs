@@ -27,7 +27,9 @@ function replaceIfPresent(text, before, after) {
 
 function ensureContains(text, marker, filePath) {
   if (!text.includes(marker)) {
-    throw new Error(`${LOG_PREFIX} expected marker not found in ${filePath}: ${marker}`);
+    throw new Error(
+      `${LOG_PREFIX} expected marker not found in ${filePath}: ${marker}`,
+    );
   }
 }
 
@@ -50,7 +52,7 @@ function patchDevPlatform(devPlatformPath) {
   next = replaceIfPresent(
     next,
     "const bundleRoot = isElizaMonorepo ? elizaRoot : elizaRoot;",
-    'const bundleRoot = isElizaMonorepo ? elizaRoot : path.resolve(process.cwd());',
+    "const bundleRoot = isElizaMonorepo ? elizaRoot : path.resolve(process.cwd());",
   );
 
   next = replaceIfPresent(
@@ -89,11 +91,31 @@ function patchDevPlatform(devPlatformPath) {
     `  const tsdownBuild = spawnSync(BUN_EXECUTABLE, ["x", "tsdown"], {\n    cwd: bundleRoot,\n    stdio: "inherit",\n  });\n  if (tsdownBuild.status !== 0) {\n    throw new Error(\`tsdown exited with code \${tsdownBuild.status ?? 1}\`);\n  }`,
   );
 
-  ensureContains(next, 'const packageRoot = path.resolve(here, "..");', devPlatformPath);
-  ensureContains(next, 'const bundleRoot = isElizaMonorepo ? elizaRoot : path.resolve(process.cwd());', devPlatformPath);
-  ensureContains(next, 'const whisperBuild = spawnSync(BUN_EXECUTABLE, ["run", "build:whisper"], {', devPlatformPath);
-  ensureContains(next, 'const viteBuild = spawnSync(BUN_EXECUTABLE, ["run", "vite", "build"], {', devPlatformPath);
-  ensureContains(next, 'const tsdownBuild = spawnSync(BUN_EXECUTABLE, ["x", "tsdown"], {', devPlatformPath);
+  ensureContains(
+    next,
+    'const packageRoot = path.resolve(here, "..");',
+    devPlatformPath,
+  );
+  ensureContains(
+    next,
+    "const bundleRoot = isElizaMonorepo ? elizaRoot : path.resolve(process.cwd());",
+    devPlatformPath,
+  );
+  ensureContains(
+    next,
+    'const whisperBuild = spawnSync(BUN_EXECUTABLE, ["run", "build:whisper"], {',
+    devPlatformPath,
+  );
+  ensureContains(
+    next,
+    'const viteBuild = spawnSync(BUN_EXECUTABLE, ["run", "vite", "build"], {',
+    devPlatformPath,
+  );
+  ensureContains(
+    next,
+    'const tsdownBuild = spawnSync(BUN_EXECUTABLE, ["x", "tsdown"], {',
+    devPlatformPath,
+  );
   ensureContains(next, '".bun",', devPlatformPath);
 
   next = replaceIfPresent(
@@ -108,8 +130,16 @@ function patchDevPlatform(devPlatformPath) {
     'const viteRollupWatch =\n  viteWatch &&\n  (viteRollupWatchCli ||\n    process.env.ELIZA_DESKTOP_VITE_BUILD_WATCH === "1" ||\n    process.env.MILADY_DESKTOP_VITE_BUILD_WATCH === "1");',
   );
 
-  ensureContains(next, 'process.env.MILADY_DESKTOP_VITE_WATCH === "1"', devPlatformPath);
-  ensureContains(next, 'process.env.MILADY_DESKTOP_VITE_BUILD_WATCH === "1"', devPlatformPath);
+  ensureContains(
+    next,
+    'process.env.MILADY_DESKTOP_VITE_WATCH === "1"',
+    devPlatformPath,
+  );
+  ensureContains(
+    next,
+    'process.env.MILADY_DESKTOP_VITE_BUILD_WATCH === "1"',
+    devPlatformPath,
+  );
 
   if (next !== original) {
     fs.writeFileSync(devPlatformPath, next);
@@ -152,9 +182,21 @@ function patchWalletHydrate(walletHydratePath) {
     `            const migrated = await migrateOsStoreWalletKeysIntoVault(missingWalletKeys, {\n                overwriteVaultKeys: unreadableWalletKeys,\n            });`,
   );
 
-  ensureContains(next, "const unreadableWalletKeys = new Set();", walletHydratePath);
-  ensureContains(next, "overwriteVaultKeys: unreadableWalletKeys,", walletHydratePath);
-  ensureContains(next, "Will try legacy OS-store recovery if available.", walletHydratePath);
+  ensureContains(
+    next,
+    "const unreadableWalletKeys = new Set();",
+    walletHydratePath,
+  );
+  ensureContains(
+    next,
+    "overwriteVaultKeys: unreadableWalletKeys,",
+    walletHydratePath,
+  );
+  ensureContains(
+    next,
+    "Will try legacy OS-store recovery if available.",
+    walletHydratePath,
+  );
 
   if (next !== original) {
     fs.writeFileSync(walletHydratePath, next);
@@ -173,9 +215,21 @@ function patchEmptyNodeModule(emptyNodeModulePath) {
     `export const createIntegrationTelemetrySpan = () => ({\n    success: () => { },\n    failure: () => { },\n});\nexport const DEFAULT_MAX_BODY_BYTES = 1_048_576;\nexport const readRequestBodyBuffer = async () => null;\nexport const readRequestBody = async () => null;`,
   );
 
-  ensureContains(next, "export const DEFAULT_MAX_BODY_BYTES = 1_048_576;", emptyNodeModulePath);
-  ensureContains(next, "export const readRequestBodyBuffer = async () => null;", emptyNodeModulePath);
-  ensureContains(next, "export const readRequestBody = async () => null;", emptyNodeModulePath);
+  ensureContains(
+    next,
+    "export const DEFAULT_MAX_BODY_BYTES = 1_048_576;",
+    emptyNodeModulePath,
+  );
+  ensureContains(
+    next,
+    "export const readRequestBodyBuffer = async () => null;",
+    emptyNodeModulePath,
+  );
+  ensureContains(
+    next,
+    "export const readRequestBody = async () => null;",
+    emptyNodeModulePath,
+  );
 
   if (next !== original) {
     fs.writeFileSync(emptyNodeModulePath, next);
