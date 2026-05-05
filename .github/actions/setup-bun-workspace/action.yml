@@ -187,6 +187,10 @@ runs:
           echo "eliza checkout absent; skipping nested cloud submodule init"
           exit 0
         fi
+        if ! git -C eliza rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+          echo "eliza/ is not a git worktree; skipping cloud hydration."
+          exit 0
+        fi
         git -C eliza submodule update --init cloud
         test -d eliza/cloud/packages/sdk
         test -d eliza/cloud/packages/billing
