@@ -104,15 +104,10 @@ function tryApplyPatchChunk(chunk) {
 
 function main() {
   if (!fs.existsSync(path.join(elizaDir, "package.json"))) {
-    if (process.env.MILADY_SKIP_LOCAL_UPSTREAMS === "1") {
-      console.log(
-        "[apply-eliza-ci-patches] eliza checkout is absent in published-only mode; skipping local patch overlay",
-      );
-      return;
-    }
-    throw new Error(
-      "eliza submodule is not initialized; run scripts/init-submodules.mjs first",
+    console.log(
+      "[apply-eliza-ci-patches] eliza checkout is absent; skipping local patch overlay",
     );
+    return;
   }
   const patchPath =
     patchPathCandidates.find((candidate) => fs.existsSync(candidate)) ??

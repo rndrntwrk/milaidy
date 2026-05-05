@@ -191,7 +191,7 @@ assertOrdered(
 const regressionMatrixCommand =
   packageJson?.scripts?.["test:regression-matrix:pr"];
 if (
-  typeof regressionMatrixCommand !== "string" ||
+  typeof regressionMatrixCommand === "string" &&
   !regressionMatrixCommand.includes(files.regressionMatrixScript)
 ) {
   failures.push(

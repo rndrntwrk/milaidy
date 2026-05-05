@@ -121,14 +121,39 @@ jobs:
           restore-keys: |
             bun-store-${{ runner.os }}-
 
-      # ── 4.5. Init eliza submodule ──────────────────────────────────────────
-      # Prime the eliza checkout before init-submodules.mjs recurses into the
-      # nested cloud/steward/plugin submodules that the root workspace expects.
-      - name: Initialize eliza submodule
-        run: git submodule update --init --depth=1 eliza
+      # ── 4.5. Init eliza source checkout ───────────────────────────────────
+      # The Milady repo now defaults to published @elizaos packages and no
+      # longer tracks eliza/ as a gitlink. The image build still needs source
+      # artifacts, so hydrate the canonical eliza repo explicitly.
+      - name: Initialize eliza source checkout
+        run: |
+          if [ ! -f eliza/package.json ]; then
+            git clone --depth=1 --branch "${MILADY_ELIZA_BRANCH:-develop}" https://github.com/milady-ai/eliza.git eliza
+          fi
 
       - name: Initialize tracked workspace submodules
         run: node scripts/init-submodules.mjs
+        env:
+          MILADY_SKIP_CLOUD_SUBMODULE: "1"
+
+      - name: Prepare eliza source workspace
+        run: |
+          if [ -f eliza/.gitmodules ]; then
+            git -C eliza submodule sync --recursive
+            git -C eliza \
+              -c submodule.cloud.update=none \
+              -c submodule.plugins/plugin-elizacloud.update=none \
+              submodule update --init --recursive --depth=1
+          fi
+          node --input-type=module <<'NODE'
+          import {
+            pruneDuplicateLegacyElizaPluginWorkspaces,
+            pruneSkippedCloudWorkspace,
+          } from "./scripts/init-submodules.mjs";
+
+          pruneSkippedCloudWorkspace({ rootDir: process.cwd() });
+          pruneDuplicateLegacyElizaPluginWorkspaces({ rootDir: process.cwd() });
+          NODE
         env:
           MILADY_SKIP_CLOUD_SUBMODULE: "1"
 
@@ -142,7 +167,10 @@ jobs:
 
       # ── 5. Install dependencies ─────────────────────────────────────────────
       - name: Install dependencies
-        run: bun install --ignore-scripts
+        run: bun install --ignore-scripts --no-frozen-lockfile
+
+      - name: Install eliza source dependencies
+        run: bun install --cwd eliza --ignore-scripts --no-frozen-lockfile
 
       # ── 5b. Install build fallback dependencies ────────────────────────────
       # Hydrate published-only dependency fallbacks first so package-local builds
