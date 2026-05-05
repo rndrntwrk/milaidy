@@ -170,7 +170,7 @@ jobs:
         run: bun install --ignore-scripts --no-frozen-lockfile
 
       - name: Install eliza source dependencies
-        run: bun install --cwd eliza --ignore-scripts --no-frozen-lockfile
+        run: bun install --cwd eliza --no-frozen-lockfile
 
       # ── 5b. Install build fallback dependencies ────────────────────────────
       # Hydrate published-only dependency fallbacks first so package-local builds
