@@ -9,13 +9,41 @@ const env = {
 };
 
 function localUpstreamsDisabled() {
+  const sourceMode = (
+    process.env.MILADY_ELIZA_SOURCE ??
+    process.env.ELIZA_SOURCE ??
+    ""
+  ).toLowerCase();
   return (
+    ["package", "packages", "published", "npm", "registry", "global"].includes(
+      sourceMode,
+    ) ||
     process.env.MILADY_SKIP_LOCAL_UPSTREAMS === "1" ||
     process.env.ELIZA_SKIP_LOCAL_UPSTREAMS === "1"
   );
 }
 
+function explicitAppCoreEntry(localRelativePath: string) {
+  const rawRoot =
+    process.env.MILADY_ELIZA_APP_CORE_ROOT ?? process.env.ELIZA_APP_CORE_ROOT;
+  if (!rawRoot) {
+    return null;
+  }
+  const entry = path.join(rawRoot, localRelativePath);
+  if (!existsSync(entry)) {
+    throw new Error(
+      `MILADY_ELIZA_APP_CORE_ROOT is missing ${localRelativePath}`,
+    );
+  }
+  return entry;
+}
+
 function appCoreEntry(subpath: string, localRelativePath: string) {
+  const explicitEntry = explicitAppCoreEntry(localRelativePath);
+  if (explicitEntry) {
+    return explicitEntry;
+  }
+
   const localPath = path.join(
     "eliza",
     "packages",

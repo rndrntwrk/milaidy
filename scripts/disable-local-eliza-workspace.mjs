@@ -21,10 +21,9 @@
  *
  *   3. Every workspace package.json that still pins
  *      `"@elizaos/core": "workspace:*"` must be rewritten to the same
- *      registry version that the root `overrides` block and
- *      `eliza/packages/app-core/deploy/cloud-agent-template` already use
- *      (`@elizaos/core@2.0.0-alpha.115` at time of writing). Without
- *      this rewrite, Bun hoists a registry-resolved `@elizaos/core`
+ *      registry version selected from root overrides, package metadata, or
+ *      the configured elizaOS npm dist-tag. Without this rewrite, Bun hoists
+ *      a registry-resolved `@elizaos/core`
  *      for the workspace:* callers AND a separate registry-resolved
  *      `@elizaos/core` for cloud-agent-template, emitting two
  *      top-level `"@elizaos/core"` entries in bun.lock's packages
@@ -47,6 +46,15 @@ import { execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  getElizaosPackageExactVersion,
+  getElizaosPackageSpecifier,
+  getExplicitElizaosPackageDistTag,
+  isExactRegistryVersion,
+  isLocalElizaDisabled,
+  selectPublishedPackageVersion,
+  selectRegistryPackageVersion,
+} from "./lib/eliza-package-mode.mjs";
 
 export const ELIZA_WORKSPACE_GLOB = "eliza/packages/*";
 export const PLUGIN_ROOT_WORKSPACE_GLOB = "eliza/plugins/*";
@@ -198,7 +206,7 @@ export function resolveCiOverrideSpecifiers(repoRoot = DEFAULT_REPO_ROOT) {
 /**
  * @typedef {object} RegistryPackageInfo
  * @property {string[] | string=} versions
- * @property {{ alpha?: string, latest?: string }=} dist-tags
+ * @property {Record<string, string>=} dist-tags
  * @property {string=} version
  */
 
@@ -267,8 +275,7 @@ function isPackageJsonRecord(value) {
 function isDistTags(value) {
   return (
     isRecord(value) &&
-    (value.alpha === undefined || typeof value.alpha === "string") &&
-    (value.latest === undefined || typeof value.latest === "string")
+    Object.values(value).every((entry) => typeof entry === "string")
   );
 }
 
@@ -304,10 +311,6 @@ function removeStaleLockfiles(
     );
   }
   return removed;
-}
-
-function isExactRegistryVersion(specifier) {
-  return typeof specifier === "string" && /^\d+\.\d+\.\d+/.test(specifier);
 }
 
 export function isWorkspaceProtocolSpecifier(specifier) {
@@ -350,22 +353,8 @@ export function readRegistryPackageInfo(
   return parseRegistryPackageInfo(rawValue);
 }
 
-export function selectRegistryDistTagVersion(registryInfo) {
-  const alphaTag = registryInfo?.["dist-tags"]?.alpha;
-  if (isExactRegistryVersion(alphaTag)) {
-    return alphaTag;
-  }
-
-  const latestTag = registryInfo?.["dist-tags"]?.latest;
-  if (isExactRegistryVersion(latestTag)) {
-    return latestTag;
-  }
-
-  if (isExactRegistryVersion(registryInfo?.version)) {
-    return registryInfo.version;
-  }
-
-  return null;
+export function selectRegistryDistTagVersion(registryInfo, options = {}) {
+  return selectRegistryPackageVersion(registryInfo, options);
 }
 
 /**
@@ -373,37 +362,12 @@ export function selectRegistryDistTagVersion(registryInfo) {
  * @param {RegistryPackageInfo | null} registryInfo
  * @returns {string}
  */
-export function selectPublishedRegistryVersion(preferredVersion, registryInfo) {
-  if (!isExactRegistryVersion(preferredVersion)) {
-    return preferredVersion;
-  }
-
-  const availableVersions = new Set(
-    Array.isArray(registryInfo?.versions)
-      ? registryInfo.versions.filter((value) => typeof value === "string")
-      : typeof registryInfo?.versions === "string"
-        ? [registryInfo.versions]
-        : [],
-  );
-  if (availableVersions.has(preferredVersion)) {
-    return preferredVersion;
-  }
-
-  const alphaTag = registryInfo?.["dist-tags"]?.alpha;
-  if (isExactRegistryVersion(alphaTag)) {
-    return alphaTag;
-  }
-
-  const latestTag = registryInfo?.["dist-tags"]?.latest;
-  if (isExactRegistryVersion(latestTag)) {
-    return latestTag;
-  }
-
-  if (isExactRegistryVersion(registryInfo?.version)) {
-    return registryInfo.version;
-  }
-
-  return preferredVersion;
+export function selectPublishedRegistryVersion(
+  preferredVersion,
+  registryInfo,
+  options = {},
+) {
+  return selectPublishedPackageVersion(preferredVersion, registryInfo, options);
 }
 
 /**
@@ -889,6 +853,124 @@ export function rewriteWorkspaceDependencySpecifiers(
   return mutated;
 }
 
+function shouldRewriteConfiguredElizaRegistrySpecifiers(env = process.env) {
+  return Boolean(
+    getElizaosPackageExactVersion(env) ?? getExplicitElizaosPackageDistTag(env),
+  );
+}
+
+function isRegistryDependencySpecifier(specifier) {
+  return (
+    typeof specifier === "string" &&
+    specifier.length > 0 &&
+    !isWorkspaceProtocolSpecifier(specifier) &&
+    !specifier.startsWith("file:") &&
+    !specifier.startsWith("link:") &&
+    !specifier.startsWith("portal:") &&
+    !specifier.startsWith("npm:")
+  );
+}
+
+function resolveConfiguredElizaRegistrySpecifier(
+  dependencyName,
+  {
+    env = process.env,
+    readRegistryInfo = readRegistryPackageInfo,
+    registryInfoCache = new Map(),
+    warn = console.warn,
+  } = {},
+) {
+  const exactVersion = getElizaosPackageExactVersion(env);
+  if (exactVersion) {
+    return exactVersion;
+  }
+
+  const explicitTag = getExplicitElizaosPackageDistTag(env);
+  if (!explicitTag) {
+    return null;
+  }
+
+  let registryInfo = registryInfoCache.get(dependencyName);
+  if (registryInfo === undefined) {
+    try {
+      registryInfo = readRegistryInfo(dependencyName);
+    } catch (error) {
+      warn(
+        `[disable-local-eliza-workspace] Could not read registry metadata for ${dependencyName}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      registryInfo = null;
+    }
+    registryInfoCache.set(dependencyName, registryInfo);
+  }
+
+  return (
+    selectRegistryPackageVersion(registryInfo, {
+      env,
+      includeLatestFallback: false,
+      includeVersionFallback: false,
+    }) ?? getElizaosPackageSpecifier(env)
+  );
+}
+
+export function rewriteConfiguredElizaRegistrySpecifiers(
+  pkg,
+  {
+    env = process.env,
+    localOnlyPackages = new Set(),
+    readRegistryInfo = readRegistryPackageInfo,
+    registryInfoCache = new Map(),
+    log = console.log,
+    warn = console.warn,
+  } = {},
+) {
+  if (!shouldRewriteConfiguredElizaRegistrySpecifiers(env)) {
+    return false;
+  }
+
+  const rewrites = [];
+  for (const field of [...DEPENDENCY_FIELDS, "overrides"]) {
+    const deps = pkg?.[field];
+    if (!isStringRecord(deps)) continue;
+    for (const [dependencyName, specifier] of Object.entries(deps)) {
+      if (
+        !dependencyName.startsWith("@elizaos/") ||
+        localOnlyPackages.has(dependencyName) ||
+        !isRegistryDependencySpecifier(specifier)
+      ) {
+        continue;
+      }
+
+      const configuredSpecifier = resolveConfiguredElizaRegistrySpecifier(
+        dependencyName,
+        {
+          env,
+          readRegistryInfo,
+          registryInfoCache,
+          warn,
+        },
+      );
+      if (
+        !configuredSpecifier ||
+        deps[dependencyName] === configuredSpecifier
+      ) {
+        continue;
+      }
+
+      deps[dependencyName] = configuredSpecifier;
+      rewrites.push(`${dependencyName} -> ${configuredSpecifier}`);
+    }
+  }
+
+  if (rewrites.length > 0) {
+    log(
+      `[disable-local-eliza-workspace] Rewrote ${rewrites.length} configured elizaOS registry specifier(s) (${rewrites.join(", ")})`,
+    );
+  }
+  return rewrites.length > 0;
+}
+
 function toPosixRelativePath(relativePath) {
   return relativePath.split(path.sep).join("/");
 }
@@ -1327,15 +1409,24 @@ export function disableLocalElizaWorkspace(
   );
 
   let rewrites = 0;
-  if (
-    rewriteWorkspaceDependencySpecifiers(
-      rootPkg,
-      publishSafePinnedWorkspaceVersions,
-      {
-        localOnlyPackages,
-      },
-    )
-  ) {
+  const registrySpecifierCache = new Map();
+  const rewroteRootWorkspaceDeps = rewriteWorkspaceDependencySpecifiers(
+    rootPkg,
+    publishSafePinnedWorkspaceVersions,
+    {
+      localOnlyPackages,
+    },
+  );
+  const rewroteRootRegistryDeps = rewriteConfiguredElizaRegistrySpecifiers(
+    rootPkg,
+    {
+      localOnlyPackages,
+      registryInfoCache: registrySpecifierCache,
+      log,
+      warn,
+    },
+  );
+  if (rewroteRootWorkspaceDeps || rewroteRootRegistryDeps) {
     writePackageJson(packageJsonPath, rawRootPkg, rootPkg);
     rewrites++;
     log("[disable-local-eliza-workspace]   patched .");
@@ -1371,6 +1462,13 @@ export function disableLocalElizaWorkspace(
         localOnlyPackages,
       },
     );
+    const rewroteConfiguredRegistryDeps =
+      rewriteConfiguredElizaRegistrySpecifiers(pkg, {
+        localOnlyPackages,
+        registryInfoCache: registrySpecifierCache,
+        log,
+        warn,
+      });
     const rewroteNestedLocalFileDeps =
       nestedInstallablePackageDirs.has(workspaceRel) &&
       rewriteNestedLocalFileDependencySpecifiers(
@@ -1379,7 +1477,11 @@ export function disableLocalElizaWorkspace(
         localOnlyPackagePaths,
       );
 
-    if (!rewrotePublishedWorkspaceDeps && !rewroteNestedLocalFileDeps) {
+    if (
+      !rewrotePublishedWorkspaceDeps &&
+      !rewroteConfiguredRegistryDeps &&
+      !rewroteNestedLocalFileDeps
+    ) {
       continue;
     }
     if (writePackageJson(pkgPath, originalRaw, pkg)) {
@@ -1413,9 +1515,7 @@ const isMain =
   path.resolve(process.argv[1]) === path.resolve(SCRIPT_PATH);
 
 if (isMain) {
-  const skipLocalUpstreams =
-    process.env.MILADY_SKIP_LOCAL_UPSTREAMS === "1" ||
-    process.env.ELIZA_SKIP_LOCAL_UPSTREAMS === "1";
+  const skipLocalUpstreams = isLocalElizaDisabled();
   const runningInCi = process.env.GITHUB_ACTIONS === "true";
   const forced = process.env.MILADY_DISABLE_LOCAL_UPSTREAMS === "force";
 

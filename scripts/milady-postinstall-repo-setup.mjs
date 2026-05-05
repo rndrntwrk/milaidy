@@ -42,7 +42,7 @@ await runRepoSetup(repoRoot);
 // because that pipeline may itself rewrite node_modules (patch-deps,
 // link-external-plugins, etc.) and we want our patches to win on top.
 // Remove an entry once the corresponding upstream PR lands and a new
-// alpha is published.
+// compatible package is published.
 const miladyBridgePatchScripts = [
   // Temporary overlay for elizaOS/eliza Windows smoke startup trace drift.
   "patch-eliza-electrobun-windows-smoke-startup.mjs",

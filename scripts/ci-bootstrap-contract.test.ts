@@ -159,6 +159,8 @@ describe("CI bootstrap contract", () => {
     expect(alignScript).toContain('"@elizaos/plugin-browser-bridge"');
     expect(alignScript).toContain('"@elizaos/plugin-pdf"');
     expect(alignScript).toContain('"@elizaos/plugin-sql"');
+    expect(alignScript).toContain('"@elizaos/plugin-streaming"');
+    expect(alignScript).toContain('"@elizaos/cloud-routing"');
     expect(alignScript).toContain('"dist/node/index.node.js"');
     expect(alignScript).toContain('"typescript/dist/index.js"');
   });

@@ -39,7 +39,9 @@ test("root build can resolve app-core entries from npm without eliza", () => {
   const tsdownConfig = read("tsdown.config.ts");
 
   assert.match(tsdownConfig, /function appCoreEntry/);
+  assert.match(tsdownConfig, /MILADY_ELIZA_SOURCE/);
   assert.match(tsdownConfig, /MILADY_SKIP_LOCAL_UPSTREAMS/);
+  assert.match(tsdownConfig, /MILADY_ELIZA_APP_CORE_ROOT/);
   assert.match(tsdownConfig, /require\.resolve\(packageSubpath\)/);
   assert.doesNotMatch(tsdownConfig, /entry:\s*["']eliza\/packages\/app-core/);
 });
@@ -131,4 +133,45 @@ test("eliza dist packaging honors Milady standalone mode", () => {
     preparePackageDist,
     /process\.env\.ELIZA_SKIP_LOCAL_UPSTREAMS === "1" \|\|\s*process\.env\.ELIZA_SKIP_LOCAL_UPSTREAMS === "1"/,
   );
+});
+
+test("elizaOS package channel is configurable instead of alpha-only", () => {
+  const helper = read("scripts/lib/eliza-package-mode.mjs");
+  const disableScript = read("scripts/disable-local-eliza-workspace.mjs");
+  const setupScript = read("scripts/setup-upstreams.mjs");
+  const fallbackDeps = read(
+    "scripts/install-published-workspace-fallback-deps.sh",
+  );
+
+  assert.match(helper, /DEFAULT_ELIZAOS_PACKAGE_DIST_TAG = "alpha"/);
+  assert.match(helper, /MILADY_ELIZAOS_DIST_TAG/);
+  assert.match(helper, /ELIZAOS_NPM_TAG/);
+  assert.match(helper, /MILADY_ELIZAOS_VERSION/);
+  assert.match(disableScript, /selectRegistryPackageVersion/);
+  assert.doesNotMatch(disableScript, /\.alpha/);
+  assert.match(setupScript, /getElizaosPackageSpecifier/);
+  assert.doesNotMatch(setupScript, /FALLBACK_TAG = "alpha"/);
+  assert.match(fallbackDeps, /ELIZAOS_PACKAGE_SPECIFIER/);
+  assert.doesNotMatch(fallbackDeps, /@alpha/);
+});
+
+test("Milady-only elizaCloud bridge patch is not pinned to an alpha package", () => {
+  const patchScript = read("scripts/patch-elizacloud.mjs");
+  const postinstall = read("scripts/milady-postinstall-repo-setup.mjs");
+
+  assert.match(patchScript, /distAlreadyHasBridgeFixes/);
+  assert.match(patchScript, /MILADY_REQUIRE_ELIZACLOUD_BRIDGE_PATCH/);
+  assert.doesNotMatch(patchScript, /PINNED_VERSION/);
+  assert.doesNotMatch(patchScript, /2\.0\.0-alpha\.8/);
+  assert.doesNotMatch(postinstall, /new alpha is published/);
+});
+
+test("local eliza source clone target is configurable", () => {
+  const setupScript = read("scripts/setup-upstreams.mjs");
+  const helper = read("scripts/lib/eliza-package-mode.mjs");
+
+  assert.match(setupScript, /getElizaGitUrl/);
+  assert.match(setupScript, /getElizaGitBranch/);
+  assert.match(helper, /MILADY_ELIZA_BRANCH/);
+  assert.match(helper, /MILADY_ELIZA_GIT_URL/);
 });

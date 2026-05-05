@@ -77,6 +77,8 @@ const requiredAlignScriptSnippets = [
   '"@elizaos/plugin-browser-bridge"',
   '"@elizaos/plugin-pdf"',
   '"@elizaos/plugin-sql"',
+  '"@elizaos/plugin-streaming"',
+  '"@elizaos/cloud-routing"',
   '"dist/node/index.node.js"',
   '"typescript/dist/index.js"',
 ];
