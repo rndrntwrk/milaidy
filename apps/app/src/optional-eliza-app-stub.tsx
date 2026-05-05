@@ -46,6 +46,13 @@ export const CodingAgentTasksPanel = EmptyComponent;
 export const PtyConsoleDrawer = EmptyComponent;
 export const FineTuningView = EmptyComponent;
 
+// Restored from before upstream 0a75bd6eb dropped it — main.tsx still imports
+// `prefetchVrmToCache` and registers it on the boot config (used by
+// startup-phase-hydrate to warm the VRM cache before companion mount).
+export function prefetchVrmToCache(_url?: string): Promise<void> {
+  return Promise.resolve();
+}
+
 export function createVectorBrowserRenderer(): Promise<null> {
   return Promise.resolve(null);
 }
@@ -483,19 +490,12 @@ export interface TaskCompletionSummary {
 
 export { THREE };
 
-// ── @elizaos/app-wallet/wallet-rpc stubs ───────────────────────────────
-// Real wallet RPC builder lives in `eliza/plugins/app-wallet`. When milady
-// is in npm-package mode (no local link), stub satisfies imports from
-// useOnboardingCallbacks and the wallet onboarding flow degrades to a
-// no-op RPC update. With `bun run eliza:local`, the alias auto-detect in
-// vite.config.ts routes through the real package instead.
-export function buildWalletRpcUpdateRequest(_args: unknown): {
-  credentials: Record<string, string>;
-  selections: Record<string, never>;
-} {
-  return { credentials: {}, selections: {} };
-}
-
+// ── @elizaos/app-wallet/wallet-rpc helpers ─────────────────────────────
+// `buildWalletRpcUpdateRequest` is already declared earlier in this file
+// (typed against WalletRpcCredentialKey/WalletRpcSelections); upstream
+// 49778114a5 accidentally re-added an `_args: unknown` copy that broke the
+// renderer build with "Multiple exports with the same name". The two helpers
+// below are the unique additions from that commit and stay.
 export function normalizeWalletRpcSelections(_selections: unknown): {} {
   return {};
 }
