@@ -59,6 +59,12 @@ const config = {
     // `@elizaos/app-core` for the schema.
     productLunch: "milady_cf_x86_64_phone-trunk_staging-userdebug",
     vendorDir: "milady",
+    // System-property prefix used by init.milady.rc + boot validators.
+    // Milady follows the Android distro convention where the property
+    // namespace adds an "os" suffix to the brand (lineage→lineageos,
+    // calyx→calyxos, milady→miladyos), so propertyPrefix differs from
+    // vendorDir. When omitted, AospVariantConfig defaults to vendorDir.
+    propertyPrefix: "miladyos",
     variantName: "MiladyOS",
     productName: "milady",
     packageName: "ai.milady.milady",
