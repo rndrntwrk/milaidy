@@ -231,9 +231,13 @@ test("package-mode install repairs stale local node_modules links", () => {
 
 test("package-mode patches published capacitor-agent native files", () => {
   const postinstallScript = read("scripts/milady-postinstall-repo-setup.mjs");
+  const mobilePatchScript = read("scripts/patch-elizaos-app-core-mobile-package.mjs");
   const patchScript = read("scripts/patch-elizaos-capacitor-agent-package.mjs");
 
+  assert.match(postinstallScript, /patch-elizaos-app-core-mobile-package\.mjs/);
   assert.match(postinstallScript, /patch-elizaos-capacitor-agent-package\.mjs/);
+  assert.match(mobilePatchScript, /capacitor", "sync", "android"/);
+  assert.match(mobilePatchScript, /capacitor", "sync", "ios"/);
   assert.match(patchScript, /@elizaos\/capacitor-agent/);
   assert.match(patchScript, /android\/src\/main\/AndroidManifest\.xml/);
   assert.match(patchScript, /ElizaosCapacitorAgent\.podspec/);
