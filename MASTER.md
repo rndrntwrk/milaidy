@@ -61,7 +61,7 @@ The same disease is in three places:
 | Surface              | Symptom                                    | Disease                          |
 |----------------------|--------------------------------------------|----------------------------------|
 | Electrobun main      | port-shift renderer disconnect             | God module, no API-base owner    |
-| App-core persistence | "config came from where?" 24+ stores       | No canonical merger              |
+| App-core persistence | "config came from where?" **60** keys across 29 files (Layer 8 audit, was estimated 24+) | No canonical merger     |
 | Chat fallback        | "provider issue" misnames empty responses  | One string, four trigger paths   |
 
 ---
@@ -131,10 +131,17 @@ single concern with one source of truth and one push path.
 
 | Module                      | Owns                                                                | Replaces in `index.ts`                          |
 |-----------------------------|---------------------------------------------------------------------|-------------------------------------------------|
-| `bridge/api-base-owner.ts`  | current API base, push to every window, listen to agent restarts    | 4 RPC push sites + 1 HTML-inject site (see ⚠ below) |
-| `bridge/heartbeat-menu.ts`  | status tick, menu snapshot, permissions sync                        | the center-right hub in the graph               |
-| `bridge/desktop-session.ts` | `loadOrCreateDesktopSession`, `primeDesktopSessionAuth`, cookie jar | session priming flow                            |
-| `bridge/agent-supervisor.ts`| `getAgentManager`, restart, port resolution                         | agent lifecycle calls                           |
+| `lifecycle/api-base-owner.ts`  | current API base, push to every window, listen to agent restarts    | 4 RPC push sites + 1 HTML-inject site (see ⚠ below) |
+| `lifecycle/heartbeat-menu.ts`  | status tick, menu snapshot, permissions sync                        | the center-right hub in the graph               |
+| `lifecycle/desktop-session.ts` | `loadOrCreateDesktopSession`, `primeDesktopSessionAuth`, cookie jar | session priming flow                            |
+| `lifecycle/agent-supervisor.ts`| `getAgentManager`, restart, port resolution                         | agent lifecycle calls                           |
+
+> ⚠ **Layer 9 audit caught a folder-name collision:** the originally-named
+> `platforms/electrobun/src/bridge/` would clash with the existing
+> `app-core/src/bridge/` (which owns the *renderer-side* RPC client and
+> Capacitor wrappers — completely unrelated). New modules must live under
+> `platforms/electrobun/src/lifecycle/` (or similar) to keep the two
+> "bridges" distinguishable. Updated above.
 
 > ⚠ **Layer 1 audit found a 5th API-base push surface** I missed in my
 > first pass: `injectApiBaseIntoHtml` at `electrobun/src/index.ts:843-861`

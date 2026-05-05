@@ -18,16 +18,17 @@ in layer N can't be undone by something we haven't audited in layer N-1.
 | 2     | Electrobun desktop shell                        |    63 |    56   |     0      | partial  |
 | 3     | app-core runtime (boot, dev-server, eliza.ts)   |    20 |    20   |     4      | partial  |
 | 4     | app-core API server + routes                    |    88 |    88   |     0      | partial  |
-| 5a    | Vault + shared (5b UI ~180 deferred)            |    72 |    72   |     1      | partial  |
+| 5a    | Vault + shared                                  |    72 |    72   |     1      | partial  |
+| 5b    | UI primitives package (`@elizaos/ui`)           |   180 |   180   |    59      | partial  |
 | 6.1   | chat-routes.ts fallback rename (Phase 4 done)   |     1 |     1   |     1      | partial  |
-| 6     | Agent runtime (eliza/packages/agent/src)        |   454 |    0    |     0      | pending  |
-| 7     | app-core UI (components, app-shell, chat)       |   267 |    0    |     0      | pending  |
-| 8     | State, config, providers, registry              |    82 |    0    |     0      | pending  |
-| 9     | Onboarding + bridge                             |    15 |    0    |     0      | pending  |
+| 6     | Agent runtime (eliza/packages/agent/src)        |   454 |   144   |     4      | partial  |
+| 7     | app-core UI (components, app-shell, chat)       |   267 |   267   |     1      | partial  |
+| 8     | State, config, providers, registry              |    82 |    82   |     0      | partial  |
+| 9     | Onboarding + bridge                             |    15 |    15   |     0      | partial  |
 | 10    | Plugins + Eliza apps (eliza/plugins/*)          |  2575 |    0    |     0      | pending  |
 | 11    | apps/app renderer + apps/homepage               |    99 |    0    |     0      | pending  |
 | 12    | Remaining app-core/src (autonomy, security…)    |   209 |    0    |     0      | pending  |
-| **Σ** |                                                 |**4358**|  471   |    33      |          |
+| **Σ** |                                                 |**4538**| 1159   |    97      |          |
 
 (Counts exclude `*.d.ts`, `*.test.*`, `node_modules`, `dist`, `build`.)
 
@@ -74,11 +75,12 @@ Layer 0 ─→ Layer 1 ─→ Layer 5 (vault, shared, ui)
 - [Layer 2 — Electrobun desktop shell](./audit/layer-2-electrobun.md) *(56/63; the 7 boot-immediate files are tracked in Layer 1)*
 - [Layer 3 — app-core runtime](./audit/layer-3-runtime.md)
 - [Layer 4 — app-core API server + routes](./audit/layer-4-api.md)
-- [Layer 5a — Vault + shared](./audit/layer-5a-vault-shared.md) — 72/72 audited; **5b (UI primitives, ~180 files) deferred** to a separate audit run
-- Layer 6 — Agent runtime *(scaffold pending)*
-- Layer 7 — app-core UI *(scaffold pending)*
-- Layer 8 — State + config *(scaffold pending)*
-- Layer 9 — Onboarding + bridge *(scaffold pending)*
+- [Layer 5a — Vault + shared](./audit/layer-5a-vault-shared.md) — 72/72 audited
+- [Layer 5b — UI primitives package (`@elizaos/ui`)](./audit/layer-5b-ui.md) — 180/180 audited
+- [Layer 6 — Agent runtime](./audit/layer-6-agent.md) — 144 / 454 spot-checked; 24 deep-audited; 310 deferred `[?]`
+- [Layer 7 — app-core UI](./audit/layer-7-app-core-ui.md) — 267/267 audited (sample-driven: ~30 deep-reads + 8-axis grep across all 267); App.tsx 8-way extraction map proposed; mega-views (`AutomationsView` 5949, `BrowserWorkspaceView` 2566, `GameView` 2175, `config-field` 1997, `RuntimeGate` 1882) flagged for split; **only 1 verified orphan** (`onboarding/identity-preview-tts.ts`); zero `as any`; no Commandment-3 violations
+- [Layer 8 — State + config](./audit/layer-8-state-config.md) — 82/82 audited; persistence sprawl is **60 unique storage-key constants** across 29 files (MASTER.md "24+" undercount by ~2.5×)
+- [Layer 9 — Onboarding + bridge](./audit/layer-9-onboarding-bridge.md) — 15/15 audited; Phase 2 task 12 ready, task 13 blocked on Layer 8 hook deep audit, task 14 ~70% done
 - Layer 10 — Plugins / apps *(scaffold pending)*
 - Layer 11 — apps/app + homepage *(scaffold pending)*
 - Layer 12 — Remaining app-core/src *(scaffold pending)*
