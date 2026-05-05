@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import * as configModule from "@miladyai/agent/config/config";
 import {
   loadElizaConfig,
   saveElizaConfig,
@@ -234,6 +235,54 @@ describe("buildPluginListResponse", () => {
     });
     expect(telegram.configured).toBe(true);
     expect(telegram.validationErrors).toEqual([]);
+  });
+
+  it("falls back to runtime-only plugins when registry metadata is unavailable", async () => {
+    process.env.ELIZA_API_TOKEN = "test-api-token";
+    const loadSpy = vi
+      .spyOn(configModule, "loadElizaConfig")
+      .mockImplementation(() => {
+        throw new Error("missing registry entries");
+      });
+
+    try {
+      const req = createAsyncJsonRequest(
+        {},
+        {
+          method: "GET",
+          url: "/api/plugins",
+          headers: {
+            authorization: "Bearer test-api-token",
+            host: "localhost:3000",
+          },
+        },
+      );
+      const { res, getJson, getStatus } = createMockHttpResponse<{
+        plugins: Array<Record<string, unknown>>;
+      }>();
+      const state = {
+        current: {
+          plugins: [{ name: "@elizaos/plugin-openai" }],
+        } as never,
+        pendingAgentName: null,
+        pendingRestartReasons: [],
+      };
+
+      const handled = await handlePluginsCompatRoutes(req, res, state);
+
+      expect(handled).toBe(true);
+      expect(getStatus()).toBe(200);
+      expect(getJson().plugins).toEqual([
+        expect.objectContaining({
+          id: "openai",
+          enabled: true,
+          isActive: true,
+          source: "runtime",
+        }),
+      ]);
+    } finally {
+      loadSpy.mockRestore();
+    }
   });
 
   it("marks Discord toggles as pending restart on the compat API route", async () => {

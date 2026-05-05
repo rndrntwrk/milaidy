@@ -33,6 +33,15 @@ describe("shouldSkipSubmoduleInit", () => {
     ).toBe(true);
   });
 
+  it("skips optional upstream repos that are not required for runtime deploys", () => {
+    expect(shouldSkipSubmoduleInit("cloud", { skipLocal: false })).toBe(true);
+    expect(
+      shouldSkipSubmoduleInit("examples/clone-your-crush", {
+        skipLocal: false,
+      }),
+    ).toBe(true);
+  });
+
   it("skips the repo-local eliza checkout when local upstreams are disabled", () => {
     expect(shouldSkipSubmoduleInit("eliza", { skipLocal: true })).toBe(true);
     expect(

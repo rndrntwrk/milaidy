@@ -105,6 +105,11 @@ import type { ConfigUiHint } from "../types";
 import { stripAssistantStageDirections } from "../utils/assistant-text";
 import { getElizaApiBase, getElizaApiToken } from "../utils/eliza-globals";
 import { mergeStreamingText } from "../utils/streaming-text";
+import type {
+  AppRunSummary,
+  CodingAgentTaskThread,
+  LifeOpsOverview,
+} from "./client-types";
 
 export type {
   AllPermissionsState,
@@ -4214,6 +4219,9 @@ export class MiladyClient {
   async listInstalledApps(): Promise<InstalledAppInfo[]> {
     return this.fetch("/api/apps/installed");
   }
+  async listAppRuns(): Promise<AppRunSummary[]> {
+    return this.fetch("/api/apps/runs");
+  }
   async stopApp(name: string): Promise<AppStopResult> {
     return this.fetch("/api/apps/stop", {
       method: "POST",
@@ -4528,6 +4536,10 @@ export class MiladyClient {
     }
   > {
     return this.fetch("/api/workbench/overview");
+  }
+
+  async getLifeOpsOverview(): Promise<LifeOpsOverview> {
+    return this.fetch("/api/lifeops/overview");
   }
 
   async listWorkbenchTasks(): Promise<{ tasks: WorkbenchTask[] }> {
@@ -6055,6 +6067,25 @@ export class MiladyClient {
     } catch {
       return null;
     }
+  }
+
+  async listCodingAgentTaskThreads(options?: {
+    includeArchived?: boolean;
+    status?: string;
+    search?: string;
+    limit?: number;
+  }): Promise<CodingAgentTaskThread[]> {
+    const params = new URLSearchParams();
+    if (options?.includeArchived) params.set("includeArchived", "true");
+    if (options?.status) params.set("status", options.status);
+    if (options?.search) params.set("search", options.search);
+    if (typeof options?.limit === "number" && options.limit > 0) {
+      params.set("limit", String(options.limit));
+    }
+    const query = params.toString();
+    return this.fetch<CodingAgentTaskThread[]>(
+      `/api/coding-agents/coordinator/threads${query ? `?${query}` : ""}`,
+    );
   }
 
   async stopCodingAgent(sessionId: string): Promise<boolean> {

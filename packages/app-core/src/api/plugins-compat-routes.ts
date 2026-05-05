@@ -610,6 +610,39 @@ function resolveLoadedPluginNames(runtime: AgentRuntime | null): Set<string> {
   return loadedNames;
 }
 
+function buildRuntimeOnlyPluginListResponse(runtime: AgentRuntime | null): {
+  plugins: Array<Record<string, unknown>>;
+} {
+  const plugins = Array.from(resolveLoadedPluginNames(runtime))
+    .sort((a, b) => a.localeCompare(b))
+    .map((pluginName) => {
+      const pluginId = normalizePluginId(pluginName);
+      return {
+        id: pluginId,
+        name: titleCasePluginId(pluginId),
+        description: "",
+        tags: [],
+        enabled: true,
+        configured: true,
+        category: "feature" satisfies PluginCategory,
+        source: "runtime",
+        configKeys: [],
+        parameters: [],
+        validationErrors: [],
+        validationWarnings: [
+          {
+            message:
+              "Plugin registry metadata was unavailable; showing runtime-loaded plugins only.",
+          },
+        ],
+        npmName: pluginName,
+        isActive: true,
+      };
+    });
+
+  return { plugins };
+}
+
 function isPluginLoaded(
   pluginId: string,
   npmName: string | undefined,
@@ -1012,7 +1045,15 @@ export async function handlePluginsCompatRoutes(
       return true;
     }
 
-    const pluginResponse = buildPluginListResponse(state.current);
+    let pluginResponse: ReturnType<typeof buildPluginListResponse>;
+    try {
+      pluginResponse = buildPluginListResponse(state.current);
+    } catch (err) {
+      logger.warn(
+        `[api/plugins] failed to build registry-backed plugin list; falling back to runtime-only list: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      pluginResponse = buildRuntimeOnlyPluginListResponse(state.current);
+    }
     const manifestPath = resolvePluginManifestPath();
     logger.debug(
       `[api/plugins] manifest=${manifestPath ?? "NOT_FOUND"} total=${pluginResponse.plugins.length} runtime=${state.current ? "active" : "null"}`,
