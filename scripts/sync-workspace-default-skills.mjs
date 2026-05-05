@@ -9,17 +9,22 @@ import {
   statSync,
 } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-import {
-  hasShippedSkillTree,
-  REPO_ROOT,
-  resolveRepoBundledSkillsAssetsDir,
-  resolveShippedSkillsAssetsDir,
-} from "../eliza/packages/app-core/scripts/ensure-skills.mjs";
+import { pathToFileURL, fileURLToPath } from "node:url";
+import { resolveElizaAppCoreScript } from "./lib/resolve-eliza-app-core-script.mjs";
 import { resolveRepoRoot } from "./lib/repo-root.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const DEFAULT_REPO_ROOT = resolveRepoRoot(import.meta.url);
+
+const ensureSkillsScriptPath = resolveElizaAppCoreScript("ensure-skills.mjs", {
+  repoRoot: DEFAULT_REPO_ROOT,
+});
+const {
+  hasShippedSkillTree,
+  REPO_ROOT,
+  resolveRepoBundledSkillsAssetsDir,
+  resolveShippedSkillsAssetsDir,
+} = await import(pathToFileURL(ensureSkillsScriptPath).href);
 
 export function listBundledSkillIds(sourceDir) {
   return readdirSync(sourceDir)

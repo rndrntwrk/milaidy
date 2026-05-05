@@ -141,3 +141,61 @@ test("local eliza source clone target remains explicit and configurable", () => 
   assert.match(helper, /MILADY_ELIZA_BRANCH/);
   assert.match(helper, /MILADY_ELIZA_GIT_URL/);
 });
+
+test("root tsconfig.json is packages-mode-clean by default", () => {
+  const tsconfigSource = read("tsconfig.json");
+  assert.doesNotMatch(
+    tsconfigSource,
+    /"\.\/eliza\//,
+    "root tsconfig.json must not reference ./eliza/ paths in packages mode",
+  );
+  assert.doesNotMatch(
+    tsconfigSource,
+    /"eliza\/(packages|plugins|test|apps)\//,
+    "root tsconfig.json include/exclude must not reference eliza/ subpaths in packages mode",
+  );
+
+  const tsconfig = readJson("tsconfig.json");
+  assert.deepEqual(tsconfig.compilerOptions.paths["@elizaos/app-core"], [
+    "./node_modules/@elizaos/app-core",
+  ]);
+  assert.deepEqual(tsconfig.compilerOptions.paths["@elizaos/core"], [
+    "./node_modules/@elizaos/core",
+  ]);
+  assert.deepEqual(tsconfig.compilerOptions.paths["@elizaos/shared"], [
+    "./node_modules/@elizaos/shared",
+  ]);
+});
+
+test("checked-in tsconfig.json matches the packages-mode template byte-for-byte", () => {
+  const checkedIn = read("tsconfig.json").replace(/\n+$/, "");
+  const template = read("scripts/templates/tsconfig.packages-mode.json").replace(
+    /\n+$/,
+    "",
+  );
+  assert.equal(
+    checkedIn,
+    template,
+    "tsconfig.json must match scripts/templates/tsconfig.packages-mode.json (run `bun run eliza:packages` to sync)",
+  );
+});
+
+test("local-mode tsconfig template prefers source paths and includes eliza tree", () => {
+  const localTemplate = read("scripts/templates/tsconfig.local-mode.json");
+  const localJson = JSON.parse(localTemplate);
+  assert.deepEqual(localJson.compilerOptions.paths["@elizaos/app-core"], [
+    "./eliza/packages/app-core/src/index.ts",
+    "./node_modules/@elizaos/app-core",
+  ]);
+  assert.ok(
+    localJson.include.includes("eliza/packages/app-core/src/**/*"),
+    "local-mode tsconfig must include the eliza app-core source tree",
+  );
+});
+
+test("eject and uneject scripts wire the tsconfig-mode helper", () => {
+  const disableScript = read("scripts/disable-local-eliza-workspace.mjs");
+  const restoreScript = read("scripts/restore-local-eliza-workspace.mjs");
+  assert.match(disableScript, /applyTsconfigMode\(repoRoot, "packages"/);
+  assert.match(restoreScript, /applyTsconfigMode\(repoRoot, "local"/);
+});

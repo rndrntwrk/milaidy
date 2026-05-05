@@ -55,6 +55,7 @@ import {
   selectPublishedPackageVersion,
   selectRegistryPackageVersion,
 } from "./lib/eliza-package-mode.mjs";
+import { applyTsconfigMode } from "./lib/tsconfig-mode.mjs";
 
 export const ELIZA_WORKSPACE_GLOB = "eliza/packages/*";
 export const PLUGIN_ROOT_WORKSPACE_GLOB = "eliza/plugins/*";
@@ -1145,6 +1146,8 @@ export function disableLocalElizaWorkspace(
       "[disable-local-eliza-workspace] Repo-local eliza workspace already absent",
     );
   }
+
+  applyTsconfigMode(repoRoot, "packages", { log });
 
   if (!fs.existsSync(packageJsonPath)) {
     log(
