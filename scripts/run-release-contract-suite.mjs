@@ -24,6 +24,20 @@ export const releaseContractTests = [
   "eliza/packages/app-core/scripts/release-check.test.ts",
   "eliza/packages/app-core/scripts/static-asset-manifest.test.ts",
 ];
+const packageModeReleaseContractTests = [
+  "scripts/electrobun-runtime-root-contract.test.ts",
+];
+
+function hasLocalElizaAppCore(root = repoRoot) {
+  return fs.existsSync(path.join(root, "eliza", "packages", "app-core"));
+}
+
+function selectReleaseContractTests(root = repoRoot) {
+  if (hasLocalElizaAppCore(root)) {
+    return releaseContractTests;
+  }
+  return packageModeReleaseContractTests;
+}
 
 export function run(command, args, cwd = repoRoot) {
   const result = spawnSync(command, args, {
@@ -382,6 +396,8 @@ function pruneGeneratedLegacyElectrobunEntries(targetPath, trackedPaths) {
 export function main() {
   let exitCode = 0;
   let createdCompatDir = false;
+  const hasLocalEliza = hasLocalElizaAppCore();
+  const selectedReleaseContractTests = selectReleaseContractTests();
   const shouldRestoreElizaChanges = isElizaWorktreeClean();
   const initialElizaUntrackedFiles = shouldRestoreElizaChanges
     ? listElizaUntrackedFiles()
@@ -389,35 +405,41 @@ export function main() {
   try {
     run("node", ["scripts/init-submodules.mjs"]);
     createdCompatDir = ensureLegacyElectrobunCompatDir();
-    assertReleaseContractTestsExist();
+    assertReleaseContractTestsExist(selectedReleaseContractTests);
     run("node", ["scripts/apply-eliza-ci-patches.mjs"]);
 
     run("bunx", [
       "vitest",
       "run",
       "--passWithNoTests",
-      ...releaseContractTests,
+      ...selectedReleaseContractTests,
     ]);
-    run("bunx", [
-      "vitest",
-      "run",
-      "--passWithNoTests",
-      "eliza/packages/app-core/scripts/startup-integration-script-drift.test.ts",
-    ]);
+    if (!hasLocalEliza) {
+      console.warn(
+        "run-release-contract-suite: local eliza/ checkout absent; skipping local release-check contract steps.",
+      );
+    } else {
+      run("bunx", [
+        "vitest",
+        "run",
+        "--passWithNoTests",
+        "eliza/packages/app-core/scripts/startup-integration-script-drift.test.ts",
+      ]);
 
-    // tsdown and release:check resolve repo-root-relative entries/config.
-    run("node", [
-      "eliza/packages/app-core/scripts/ensure-shared-i18n-data.mjs",
-    ]);
-    run("bunx", ["tsdown", "--fail-on-warn", "false"]);
-    fs.mkdirSync(path.join(repoRoot, "dist"), { recursive: true });
-    fs.writeFileSync(
-      path.join(repoRoot, "dist", "package.json"),
-      '{"type":"module"}\n',
-    );
-    run("node", ["--import", "tsx", "scripts/write-build-info.ts"]);
-    run("node", ["scripts/generate-static-asset-manifest.mjs"], appCoreRoot);
-    run("bun", ["run", "release:check"]);
+      // tsdown and release:check resolve repo-root-relative entries/config.
+      run("node", [
+        "eliza/packages/app-core/scripts/ensure-shared-i18n-data.mjs",
+      ]);
+      run("bunx", ["tsdown", "--fail-on-warn", "false"]);
+      fs.mkdirSync(path.join(repoRoot, "dist"), { recursive: true });
+      fs.writeFileSync(
+        path.join(repoRoot, "dist", "package.json"),
+        '{"type":"module"}\n',
+      );
+      run("node", ["--import", "tsx", "scripts/write-build-info.ts"]);
+      run("node", ["scripts/generate-static-asset-manifest.mjs"], appCoreRoot);
+      run("bun", ["run", "release:check"]);
+    }
   } catch (err) {
     console.error(err.message ?? err);
     exitCode = 1;
