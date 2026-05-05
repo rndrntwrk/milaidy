@@ -183,6 +183,10 @@ runs:
       if: ${{ inputs.disable-local-eliza-workspace != 'true' && inputs.skip-cloud-submodule != 'true' }}
       shell: bash
       run: |
+        if [ ! -d eliza ]; then
+          echo "eliza checkout absent; skipping nested cloud submodule init"
+          exit 0
+        fi
         git -C eliza submodule update --init cloud
         test -d eliza/cloud/packages/sdk
         test -d eliza/cloud/packages/billing

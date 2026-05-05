@@ -496,7 +496,9 @@ export { THREE };
 // 49778114a5 accidentally re-added an `_args: unknown` copy that broke the
 // renderer build with "Multiple exports with the same name". The two helpers
 // below are the unique additions from that commit and stay.
-export function normalizeWalletRpcSelections(_selections: unknown): {} {
+export function normalizeWalletRpcSelections(
+  _selections: unknown,
+): Record<string, never> {
   return {};
 }
 
