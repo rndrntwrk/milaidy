@@ -65,6 +65,70 @@ function formatError(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+const TELEGRAM_ACCOUNT_AUTH_EXPORT = "./account-auth-service";
+const TELEGRAM_ACCOUNT_AUTH_TARGET = "./dist/account-auth-service.js";
+
+const TELEGRAM_ACCOUNT_AUTH_FALLBACK = `export const defaultTelegramAccountDeviceModel = "Milady Cloud";
+export const defaultTelegramAccountSystemVersion = "Linux";
+export function loadTelegramAccountSessionString() { return ""; }
+export class TelegramAccountAuthSession {
+  constructor() {}
+  snapshot() { return { state: "idle", error: null, identity: null }; }
+  async begin() { return this.snapshot(); }
+  async submitCode() { return this.snapshot(); }
+  async submitPassword() { return this.snapshot(); }
+  async cancel() { return undefined; }
+}
+export default { TelegramAccountAuthSession, loadTelegramAccountSessionString, defaultTelegramAccountDeviceModel, defaultTelegramAccountSystemVersion };
+`;
+
+async function ensureTelegramAccountAuthExportCompat(
+  installRoot: string,
+): Promise<void> {
+  const packageJsonPath = path.join(
+    installRoot,
+    "node_modules",
+    "@elizaos",
+    "plugin-telegram",
+    "package.json",
+  );
+  if (!existsSync(packageJsonPath)) {
+    return;
+  }
+
+  const packageDir = path.dirname(packageJsonPath);
+  const accountAuthPath = path.join(
+    packageDir,
+    "dist",
+    "account-auth-service.js",
+  );
+
+  await fs.mkdir(path.dirname(accountAuthPath), { recursive: true });
+  if (!existsSync(accountAuthPath)) {
+    await fs.writeFile(accountAuthPath, TELEGRAM_ACCOUNT_AUTH_FALLBACK);
+  }
+
+  const packageJson = JSON.parse(
+    await fs.readFile(packageJsonPath, "utf8"),
+  ) as {
+    main?: string;
+    exports?: unknown;
+  };
+
+  if (!packageJson.exports || typeof packageJson.exports !== "object") {
+    packageJson.exports = { ".": packageJson.main ?? "./dist/index.js" };
+  }
+
+  const exportsMap = packageJson.exports as Record<string, unknown>;
+  if (exportsMap[TELEGRAM_ACCOUNT_AUTH_EXPORT] !== TELEGRAM_ACCOUNT_AUTH_TARGET) {
+    exportsMap[TELEGRAM_ACCOUNT_AUTH_EXPORT] = TELEGRAM_ACCOUNT_AUTH_TARGET;
+    await fs.writeFile(
+      packageJsonPath,
+      `${JSON.stringify(packageJson, null, 2)}\n`,
+    );
+  }
+}
+
 /** Missing npm package, Bun resolve, or browser stagehand — expected when optional plugins are allow-listed but not installed. */
 function isBenignOptionalPluginFailure(msg: string): boolean {
   return (
@@ -645,6 +709,7 @@ async function stagePluginImportRoot(params: {
     packageRoot: params.packageRoot,
     stagedPackageRoot,
   });
+  await ensureTelegramAccountAuthExportCompat(stagedInstallRoot);
 
   return stagedPackageRoot;
 }
@@ -691,6 +756,8 @@ export async function resolvePlugins(
   const plugins: ResolvedPlugin[] = [];
   const failedPlugins: Array<{ name: string; error: string }> = [];
   const repairedInstallRecords = new Set<string>();
+
+  await ensureTelegramAccountAuthExportCompat(process.cwd());
 
   // NOTE: Auto-enable runs before dependency validation intentionally.
   // It returns a new config object (structuredClone under the hood) with
