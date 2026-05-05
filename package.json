@@ -184,7 +184,8 @@
     "eliza:packages": "node scripts/eliza-source-mode.mjs packages --install",
     "eliza:packages:alpha": "node scripts/eliza-source-mode.mjs packages --tag alpha --install",
     "test": "bunx vitest run --passWithNoTests scripts apps/app/test apps/homepage/src",
-    "test:unit": "bunx vitest run --passWithNoTests scripts apps/app/test apps/homepage/src"
+    "test:unit": "bunx vitest run --passWithNoTests scripts apps/app/test apps/homepage/src",
+    "smoke:oob": "node scripts/smoke-oob.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.58",
