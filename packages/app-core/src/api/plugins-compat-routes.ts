@@ -692,14 +692,24 @@ export function buildPluginListResponse(runtime: AgentRuntime | null): {
   for (const entry of manifest?.plugins ?? []) {
     const pluginId = normalizePluginId(entry.id);
     const category = normalizePluginCategory(entry.category);
-    const bundledMeta =
-      entry.dirName && manifestRoot
-        ? readBundledPluginPackageMetadata(
-            manifestRoot,
-            entry.dirName,
-            entry.npmName,
-          )
-        : undefined;
+    let bundledMeta:
+      | ReturnType<typeof readBundledPluginPackageMetadata>
+      | undefined;
+    if (entry.dirName && manifestRoot) {
+      try {
+        bundledMeta = readBundledPluginPackageMetadata(
+          manifestRoot,
+          entry.dirName,
+          entry.npmName,
+        );
+      } catch (err) {
+        logger.warn(
+          `[api/plugins] bundled metadata unavailable for ${entry.id}; continuing with manifest/runtime data: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
+    }
     const configKeys =
       Array.isArray(entry.configKeys) && entry.configKeys.length > 0
         ? entry.configKeys

@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { type AgentRuntime, logger } from "@elizaos/core";
 import { handleCloudBillingRoute } from "@miladyai/agent/api/cloud-billing-routes";
 import { handleCloudCompatRoute } from "@miladyai/agent/api/cloud-compat-routes";
+import { handleMiscRoutes } from "@miladyai/agent/api/misc-routes";
 // Override the wallet export rejection function with the hardened version
 // that adds rate limiting, audit logging, and a forced confirmation delay.
 import {
@@ -549,6 +550,104 @@ function rewriteCompatStatusBody(
   }
 }
 
+type CompatStreamEventEnvelope = {
+  type: string;
+  version: number;
+  eventId: string;
+  ts: number;
+  stream: string;
+  agentId?: string;
+  roomId?: string;
+  payload: Record<string, unknown>;
+};
+
+type CompatShareIngestItem = {
+  id: string;
+  source: string;
+  title?: string;
+  url?: string;
+  text?: string;
+  suggestedPrompt: string;
+  receivedAt: number;
+};
+
+const COMPAT_SHARED_TERMINAL_CLIENT_IDS = new Set([
+  "runtime-terminal-action",
+  "runtime-shell-action",
+]);
+
+const compatEventBuffer: CompatStreamEventEnvelope[] = [];
+const compatShareIngestQueue: CompatShareIngestItem[] = [];
+let compatNextEventId = 1;
+let compatActiveTerminalRunCount = 0;
+
+function isCompatSharedTerminalClientId(clientId: string): boolean {
+  return COMPAT_SHARED_TERMINAL_CLIENT_IDS.has(clientId);
+}
+
+async function handleCompatMiscRoutes(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  state: CompatRuntimeState,
+): Promise<boolean> {
+  const method = (req.method ?? "GET").toUpperCase();
+  const url = new URL(req.url ?? "/", "http://localhost");
+  const config = loadElizaConfig();
+  const agentName =
+    state.current?.character?.name ??
+    config.name ??
+    getConfiguredCompatAgentName();
+  const miscState = {
+    config,
+    runtime: state.current,
+    agentState: state.current ? "running" : "starting",
+    agentName,
+    shellEnabled:
+      typeof (config as { shell?: { enabled?: unknown } }).shell?.enabled ===
+      "boolean"
+        ? (config as { shell?: { enabled?: boolean } }).shell?.enabled
+        : undefined,
+    broadcastWs: null,
+    broadcastWsToClientId: undefined,
+    nextEventId: compatNextEventId,
+    eventBuffer: compatEventBuffer,
+    shareIngestQueue: compatShareIngestQueue,
+    startup: {},
+    pendingRestartReasons: state.pendingRestartReasons,
+    broadcastStatus: undefined,
+  };
+
+  const handled = await handleMiscRoutes({
+    req,
+    res,
+    method,
+    pathname: url.pathname,
+    url,
+    state: miscState,
+    json: (targetRes, body, status = 200) => {
+      sendJsonResponse(targetRes, status, body);
+    },
+    error: (targetRes, message, status = 400) => {
+      sendJsonErrorResponse(targetRes, status, message);
+    },
+    readJsonBody: async <T extends object>(targetReq, targetRes) =>
+      (await readCompatJsonBody(targetReq, targetRes)) as T | null,
+    AGENT_EVENT_ALLOWED_STREAMS,
+    resolveTerminalRunRejection,
+    resolveTerminalRunClientId,
+    isSharedTerminalClientId: isCompatSharedTerminalClientId,
+    activeTerminalRunCount: compatActiveTerminalRunCount,
+    setActiveTerminalRunCount: (delta) => {
+      compatActiveTerminalRunCount = Math.max(
+        0,
+        compatActiveTerminalRunCount + delta,
+      );
+    },
+  });
+  compatNextEventId = Math.max(compatNextEventId, miscState.nextEventId);
+  return handled;
+}
+
 function patchCompatStatusResponse(
   req: http.IncomingMessage,
   res: http.ServerResponse,
@@ -952,6 +1051,12 @@ async function handleMiladyCompatRoute(
 
   // Plugin routes — extracted to plugins-compat-routes.ts
   if (await handlePluginsCompatRoutes(req, res, state)) return true;
+
+  // Misc agent routes (companion stage state, emotes, custom actions,
+  // terminal helpers, share-ingest) are owned by packages/agent. The app-core
+  // compat server is the production entrypoint, so it must mount the same
+  // handler instead of letting these paths fall through to 404.
+  if (await handleCompatMiscRoutes(req, res, state)) return true;
 
   if (await handleOnboardingCompatRoute(req, res, state)) return true;
 
