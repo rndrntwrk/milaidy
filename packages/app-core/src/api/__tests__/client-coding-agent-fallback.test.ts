@@ -148,6 +148,33 @@ describe("MiladyClient.listCodingAgentScratchWorkspaces", () => {
   });
 });
 
+describe("MiladyClient.getCodingAgentStatus", () => {
+  it("does not poll /api/coding-agents when coordinator returns an empty tasks array", async () => {
+    const client = new MiladyClient("http://127.0.0.1:31337");
+    const fetchSpy = vi.spyOn(
+      client as unknown as {
+        fetch: (path: string, init?: RequestInit) => Promise<unknown>;
+      },
+      "fetch",
+    );
+    fetchSpy.mockResolvedValueOnce({
+      supervisionLevel: "autonomous",
+      taskCount: 0,
+      tasks: [],
+      pendingConfirmations: 0,
+    });
+
+    await expect(client.getCodingAgentStatus()).resolves.toMatchObject({
+      taskCount: 0,
+      tasks: [],
+    });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/coding-agents/coordinator/status",
+    );
+  });
+});
+
 describe("MiladyClient task thread APIs", () => {
   it("propagates persisted task thread list failures instead of masking them", async () => {
     const client = new MiladyClient("http://127.0.0.1:31337");

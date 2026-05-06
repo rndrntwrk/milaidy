@@ -47,7 +47,7 @@ import {
   getConfiguredCompatAgentName,
   hasCompatPersistedOnboardingState,
   isLoopbackRemoteAddress,
-  readCompatJsonBody,
+  readCompatJsonBody as readCompatJsonBodyShared,
   type CompatRuntimeState,
 } from "./compat-route-shared";
 
@@ -631,7 +631,7 @@ async function handleCompatMiscRoutes(
       sendJsonErrorResponse(targetRes, status, message);
     },
     readJsonBody: async <T extends object>(targetReq, targetRes) =>
-      (await readCompatJsonBody(targetReq, targetRes)) as T | null,
+      (await readCompatJsonBodyShared(targetReq, targetRes)) as T | null,
     AGENT_EVENT_ALLOWED_STREAMS,
     resolveTerminalRunRejection,
     resolveTerminalRunClientId,

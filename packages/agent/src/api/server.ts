@@ -6372,6 +6372,8 @@ async function handleRequest(
       method === "GET" && pathname === "/api/coding-agents/coordinator/status";
     const isPreflightRoute =
       method === "GET" && pathname === "/api/coding-agents/preflight";
+    const isCodingAgentsRootRoute =
+      method === "GET" && pathname === "/api/coding-agents";
 
     // Try to dynamically load the route handler from the local plugin first
     let handled = false;
@@ -6402,6 +6404,7 @@ async function handleRequest(
     // PTY/coordinator services are not ready yet, prefer the built-in graceful
     // fallback response over the plugin's hard 503.
     if (
+      (isCodingAgentsRootRoute && !ptyService) ||
       (isCoordinatorStatusRoute && !coordinator) ||
       (isPreflightRoute && !ptyService)
     ) {

@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   bundlesDependency,
   findFloatingDependencySpecs,
+  findAliceRuntimeDistIssues,
   findLocalPackHotspots,
   findMismatchedSharedAgentDependencySpecs,
   findMissingPatchedElectrobunCliSnippets,
@@ -66,6 +67,45 @@ describe("release-check local pack behavior", () => {
 });
 
 describe("release-check package guards", () => {
+  it("flags Alice production runtime dist that can reproduce the prod API breakage", () => {
+    expect(
+      findAliceRuntimeDistIssues({
+        appCoreServer:
+          'import { readCompatJsonBody as readCompatJsonBody$1 } from "./compat-route-shared.js";\nawait readCompatJsonBody(req, res);',
+        agentConversationRoutes:
+          'if (pathname === "/api/conversations/:id/messages") return true;',
+        agentServer:
+          'if (pathname === "/api/coding-agents") error(res, "Coding agent task service unavailable", 503);',
+      }),
+    ).toEqual([
+      {
+        id: "app-core-unbound-readCompatJsonBody",
+        path: "dist/api/server.js",
+      },
+      {
+        id: "agent-conversation-operator-action-missing",
+        path: "dist/agent/src/api/conversation-routes.js",
+      },
+      {
+        id: "agent-coding-agents-graceful-empty-missing",
+        path: "dist/agent/src/api/server.js",
+      },
+    ]);
+  });
+
+  it("accepts Alice production runtime dist with bound compat body calls and graceful API routes", () => {
+    expect(
+      findAliceRuntimeDistIssues({
+        appCoreServer:
+          'import { readCompatJsonBody as readCompatJsonBody$1 } from "./compat-route-shared.js";\nawait readCompatJsonBody$1(req, res);',
+        agentConversationRoutes:
+          'method === "POST" && /^\\/api\\/conversations\\/[^/]+\\/operator-action$/.test(pathname)',
+        agentServer:
+          'if (pathname === "/api/coding-agents") { json(res, []); return true; }',
+      }),
+    ).toEqual([]);
+  });
+
   it("treats parent directory file entries as covering required publish files", () => {
     expect(
       isPackPathCoveredByFilesList("dist/index.js", [

@@ -1531,6 +1531,8 @@ export interface CodingAgentStatus {
   taskCount: number;
   tasks: CodingAgentSession[];
   pendingConfirmations: number;
+  taskThreadCount?: number;
+  taskThreads?: CodingAgentTaskThread[];
 }
 
 /** Raw PTY session shape returned by /api/coding-agents. */
@@ -1570,6 +1572,37 @@ export function mapPtySessionsToCodingAgentSessions(
             : ("active" as const),
     decisionCount: 0,
     autoResolvedCount: 0,
+  }));
+}
+
+export function mapTaskThreadsToCodingAgentSessions(
+  taskThreads: CodingAgentTaskThread[],
+): CodingAgentSession[] {
+  return taskThreads.map((thread) => ({
+    sessionId: thread.latestSessionId ?? thread.id,
+    agentType: "task-thread",
+    label: thread.title || thread.latestSessionLabel || "Task",
+    originalTask: thread.originalRequest,
+    workdir: thread.latestWorkdir ?? thread.latestRepo ?? "",
+    status:
+      thread.status === "failed"
+        ? ("error" as const)
+        : thread.status === "done"
+          ? ("completed" as const)
+          : thread.status === "interrupted"
+            ? ("stopped" as const)
+            : thread.status === "validating"
+              ? ("tool_running" as const)
+              : thread.status === "blocked" ||
+                  thread.status === "waiting_on_user"
+                ? ("blocked" as const)
+                : ("active" as const),
+    decisionCount: thread.decisionCount,
+    autoResolvedCount: 0,
+    lastActivity:
+      thread.status === "interrupted"
+        ? "Interrupted - reopen or resume this task"
+        : thread.summary || thread.latestSessionLabel || thread.status,
   }));
 }
 
@@ -6048,10 +6081,19 @@ export class MiladyClient {
       const status = await this.fetch<CodingAgentStatus>(
         "/api/coding-agents/coordinator/status",
       );
-      // If coordinator returned but tasks is empty, fall back to ptyService
-      // session list so the UI shows active PTY sessions even when the
-      // coordinator hasn't registered them yet.
-      if (status && (!status.tasks || status.tasks.length === 0)) {
+      if (
+        status &&
+        (!status.tasks || status.tasks.length === 0) &&
+        Array.isArray(status.taskThreads) &&
+        status.taskThreads.length > 0
+      ) {
+        status.tasks = mapTaskThreadsToCodingAgentSessions(status.taskThreads);
+        status.taskCount = status.tasks.length;
+      }
+      // Only fall back to the legacy root list when the coordinator omitted
+      // tasks entirely. An explicit empty array is authoritative; polling the
+      // old plugin root in that state causes production console 503 storms.
+      if (status && !status.tasks) {
         try {
           const ptySessions =
             await this.fetch<RawPtySession[]>("/api/coding-agents");
