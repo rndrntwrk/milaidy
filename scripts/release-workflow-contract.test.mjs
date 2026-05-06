@@ -110,6 +110,8 @@ test("distribution workflows consume the canonical channel policy", () => {
     /\$HOME\/\.cache\/eliza\/whisper\/ggml-base\.en\.bin/,
   );
   assert.match(electrobun, /node scripts\/align-eliza-agent-package-pins\.mjs/);
+  assert.match(electrobun, /bun install --cwd eliza --no-frozen-lockfile/);
+  assert.match(electrobun, /eliza\/packages\/browser-bridge\/dist\/artifacts/);
   assert.match(
     electrobun,
     /workflow_dispatch:[\s\S]*?tag:\n\s+description: "Release tag \(e\.g\. v2\.0\.0-alpha\.3\)"\n\s+required: true/,
@@ -130,6 +132,7 @@ test("cloud image build stages Milady app into Dockerfile layout", () => {
     cloudImage,
     /export PATH="\$GITHUB_WORKSPACE\/eliza\/node_modules\/\.bin:\$GITHUB_WORKSPACE\/eliza\/packages\/schemas\/node_modules\/\.bin:\$PATH"/,
   );
+  assert.match(cloudImage, /RUN node <<'EOF'[\s\S]*?RUN node - <<'EOF'/);
   assert.match(cloudImage, /git show HEAD:bun\.lock > bun\.lock/);
   assert.doesNotMatch(
     cloudImage,

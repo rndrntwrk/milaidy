@@ -283,10 +283,12 @@ jobs:
           const dockerfile = "eliza/packages/app-core/deploy/Dockerfile.cloud";
           if (fs.existsSync(dockerfile)) {
             const rawDockerfile = fs.readFileSync(dockerfile, "utf8");
-            const nextDockerfile = rawDockerfile.replace(
-              "plugin-agent-orchestrator|plugin-cli|plugin-imessage",
-              "plugin-agent-orchestrator|plugin-app-control|plugin-cli|plugin-imessage",
-            );
+            const nextDockerfile = rawDockerfile
+              .replace("RUN node <<'EOF'", "RUN node - <<'EOF'")
+              .replace(
+                "plugin-agent-orchestrator|plugin-cli|plugin-imessage",
+                "plugin-agent-orchestrator|plugin-app-control|plugin-cli|plugin-imessage",
+              );
             if (nextDockerfile !== rawDockerfile) {
               fs.writeFileSync(dockerfile, nextDockerfile);
             }

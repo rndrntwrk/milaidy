@@ -447,10 +447,10 @@ jobs:
         with:
           name: browser-bridge-store-bundles
           path: |
-            eliza/apps/browser-bridge/dist/artifacts/browser-bridge-chrome-v*.zip
-            eliza/apps/browser-bridge/dist/artifacts/browser-bridge-safari-v*.zip
-            eliza/apps/browser-bridge/dist/artifacts/browser-bridge-safari-project-v*.zip
-            eliza/apps/browser-bridge/dist/artifacts/browser-bridge-release-manifest-v*.json
+            eliza/packages/browser-bridge/dist/artifacts/browser-bridge-chrome-v*.zip
+            eliza/packages/browser-bridge/dist/artifacts/browser-bridge-safari-v*.zip
+            eliza/packages/browser-bridge/dist/artifacts/browser-bridge-safari-project-v*.zip
+            eliza/packages/browser-bridge/dist/artifacts/browser-bridge-release-manifest-v*.json
           if-no-files-found: error
           retention-days: 30
 
@@ -537,6 +537,9 @@ jobs:
             sleep 15
           done
 
+      - name: Install eliza source dependencies
+        run: bun install --cwd eliza --no-frozen-lockfile
+
       - name: Run repository postinstall patches
         run: bun run postinstall
         env:
@@ -595,6 +598,8 @@ jobs:
 
       - name: Generate protobuf types
         run: |
+          workspace_root="$(pwd)"
+          export PATH="$workspace_root/eliza/node_modules/.bin:$workspace_root/eliza/packages/schemas/node_modules/.bin:$PATH"
           node eliza/packages/shared/scripts/generate-keywords.mjs --target ts
           test -f eliza/packages/shared/src/i18n/generated/validation-keyword-data.js
           if [ -d eliza/packages/schemas ] && [ -f eliza/packages/schemas/buf.gen.yaml ]; then
