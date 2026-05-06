@@ -38,19 +38,27 @@ import {
   getCompatApiToken,
 } from "./auth";
 import {
+  type CompatRuntimeState,
+  clearCompatRuntimeRestart,
+  DATABASE_UNAVAILABLE_MESSAGE,
+  getConfiguredCompatAgentName,
+  hasCompatPersistedOnboardingState,
+  isLoopbackRemoteAddress,
+  readCompatJsonBody as readCompatJsonBodyShared,
+} from "./compat-route-shared";
+import {
   sendJsonError as sendJsonErrorResponse,
   sendJson as sendJsonResponse,
 } from "./response";
-import {
+
+export {
+  type CompatRuntimeState,
   DATABASE_UNAVAILABLE_MESSAGE,
-  clearCompatRuntimeRestart,
   getConfiguredCompatAgentName,
   hasCompatPersistedOnboardingState,
   isLoopbackRemoteAddress,
   readCompatJsonBody,
-  type CompatRuntimeState,
 } from "./compat-route-shared";
-
 export {
   __resetCloudBaseUrlCache,
   ensureCloudTtsApiKeyAlias,
@@ -61,12 +69,12 @@ export {
   filterConfigEnvForResponse,
   SENSITIVE_ENV_RESPONSE_KEYS,
 } from "./server-config-filter";
-export { injectApiBaseIntoHtml } from "./server-html";
 export {
   buildCorsAllowedPorts,
   invalidateCorsAllowedPorts,
   isAllowedLocalOrigin,
 } from "./server-cors";
+export { injectApiBaseIntoHtml } from "./server-html";
 // Re-export helpers from split-out modules so tests can import from "./server"
 export {
   ensureApiTokenForBindHost,
@@ -100,14 +108,6 @@ export {
   streamResponseBodyWithByteLimit,
   validateMcpServerConfig,
 };
-export {
-  DATABASE_UNAVAILABLE_MESSAGE,
-  getConfiguredCompatAgentName,
-  hasCompatPersistedOnboardingState,
-  isLoopbackRemoteAddress,
-  readCompatJsonBody,
-  type CompatRuntimeState,
-} from "./compat-route-shared";
 
 import { initStewardWalletCache } from "@miladyai/agent/api/wallet";
 import {
@@ -116,13 +116,13 @@ import {
   saveElizaConfig,
 } from "@miladyai/agent/config/config";
 import { resolveUserPath } from "@miladyai/agent/config/paths";
-import { buildCharacterFromConfig } from "../runtime/eliza";
 import { resolveDefaultAgentWorkspaceDir } from "@miladyai/agent/providers/workspace";
 import {
   isMiladySettingsDebugEnabled,
   sanitizeForSettingsDebug,
   settingsDebugCloudSummary,
 } from "@miladyai/shared";
+import { buildCharacterFromConfig } from "../runtime/eliza";
 import {
   ensureRuntimeSqlCompatibility,
   executeRawSql,
@@ -130,35 +130,35 @@ import {
   sanitizeIdentifier,
   sqlLiteral,
 } from "../utils/sql-compat";
+import { handleAuthPairingCompatRoutes } from "./auth-pairing-compat-routes";
 import { handleCloudRoute } from "./cloud-routes";
 import { handleCloudStatusRoutes } from "./cloud-status-routes";
+import { handleDatabaseRowsCompatRoute } from "./database-rows-compat-routes";
+import { handleDevCompatRoutes } from "./dev-compat-routes";
+import {
+  isAllowedDevConsoleLogPath,
+  readDevConsoleLogTail,
+} from "./dev-console-log";
+import { resolveDevStackFromEnv } from "./dev-stack";
+import { handleOnboardingCompatRoute } from "./onboarding-compat-routes";
+import { handlePluginsCompatRoutes } from "./plugins-compat-routes";
 import {
   buildCorsAllowedPorts,
   getCorsAllowedPorts,
   isAllowedLocalOrigin,
 } from "./server-cors";
-import { handleShopifyRoute } from "./shopify-routes";
-import { handleVincentRoute } from "./vincent-routes";
-import {
-  isAllowedDevConsoleLogPath,
-  readDevConsoleLogTail,
-} from "./dev-console-log";
-import { handleAuthPairingCompatRoutes } from "./auth-pairing-compat-routes";
 import { isCloudProvisioned as _isCloudProvisioned } from "./server-onboarding-compat";
-import { handleDatabaseRowsCompatRoute } from "./database-rows-compat-routes";
-import { handleDevCompatRoutes } from "./dev-compat-routes";
-import { handleOnboardingCompatRoute } from "./onboarding-compat-routes";
-import { handlePluginsCompatRoutes } from "./plugins-compat-routes";
-import { handleWalletBrowserCompatRoutes } from "./wallet-browser-compat-routes";
-import { handleWalletTradeCompatRoutes } from "./wallet-trade-compat-routes";
+import { handleShopifyRoute } from "./shopify-routes";
 import { handleStewardCompatRoutes } from "./steward-compat-routes";
-import { handleWorkbenchCompatRoutes } from "./workbench-compat-routes";
+import { handleVincentRoute } from "./vincent-routes";
+import { handleWalletBrowserCompatRoutes } from "./wallet-browser-compat-routes";
 import { handleWalletCompatRoutes } from "./wallet-compat-routes";
-import { resolveDevStackFromEnv } from "./dev-stack";
+import { handleWalletTradeCompatRoutes } from "./wallet-trade-compat-routes";
+import { handleWorkbenchCompatRoutes } from "./workbench-compat-routes";
 
 const require = createRequire(import.meta.url);
 
-import { syncMiladyEnvToEliza, syncElizaEnvToMilady } from "../utils/env.js";
+import { syncElizaEnvToMilady, syncMiladyEnvToEliza } from "../utils/env.js";
 
 // Lazy-imported to avoid circular dependency with runtime/eliza.ts
 const lazyEnsureTTS = () =>
@@ -180,6 +180,7 @@ import {
   mirrorCompatHeaders,
 } from "./server-cloud-tts";
 import { filterConfigEnvForResponse as _filterConfigEnvForResponse } from "./server-config-filter";
+
 // ---------------------------------------------------------------------------
 // Module-level constants and types that stay in server.ts
 // ---------------------------------------------------------------------------
@@ -631,7 +632,7 @@ async function handleCompatMiscRoutes(
       sendJsonErrorResponse(targetRes, status, message);
     },
     readJsonBody: async <T extends object>(targetReq, targetRes) =>
-      (await readCompatJsonBody(targetReq, targetRes)) as T | null,
+      (await readCompatJsonBodyShared(targetReq, targetRes)) as T | null,
     AGENT_EVENT_ALLOWED_STREAMS,
     resolveTerminalRunRejection,
     resolveTerminalRunClientId,
@@ -1211,16 +1212,12 @@ export function patchHttpCreateServerForMiladyCompat(
       ) {
         const ready = Boolean(state?.current);
         const isReadyRoute = pathname === "/health/ready";
-        sendJsonResponse(
-          res,
-          isReadyRoute && !ready ? 503 : 200,
-          {
-            ok: isReadyRoute ? ready : true,
-            ready,
-            agentState: ready ? "running" : "starting",
-            uptime: Math.floor(process.uptime()),
-          },
-        );
+        sendJsonResponse(res, isReadyRoute && !ready ? 503 : 200, {
+          ok: isReadyRoute ? ready : true,
+          ready,
+          agentState: ready ? "running" : "starting",
+          uptime: Math.floor(process.uptime()),
+        });
         return;
       }
 

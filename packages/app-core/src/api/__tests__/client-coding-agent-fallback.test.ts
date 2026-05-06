@@ -7,9 +7,9 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   MiladyClient,
-  type RawPtySession,
   mapPtySessionsToCodingAgentSessions,
   mapTaskThreadsToCodingAgentSessions,
+  type RawPtySession,
 } from "../client";
 
 describe("mapPtySessionsToCodingAgentSessions", () => {
@@ -144,6 +144,33 @@ describe("MiladyClient.listCodingAgentScratchWorkspaces", () => {
     expect(warnSpy).toHaveBeenCalledWith(
       "[api-client] Failed to list coding agent scratch workspaces:",
       expect.objectContaining({ message: "network down" }),
+    );
+  });
+});
+
+describe("MiladyClient.getCodingAgentStatus", () => {
+  it("does not poll /api/coding-agents when coordinator returns an empty tasks array", async () => {
+    const client = new MiladyClient("http://127.0.0.1:31337");
+    const fetchSpy = vi.spyOn(
+      client as unknown as {
+        fetch: (path: string, init?: RequestInit) => Promise<unknown>;
+      },
+      "fetch",
+    );
+    fetchSpy.mockResolvedValueOnce({
+      supervisionLevel: "autonomous",
+      taskCount: 0,
+      tasks: [],
+      pendingConfirmations: 0,
+    });
+
+    await expect(client.getCodingAgentStatus()).resolves.toMatchObject({
+      taskCount: 0,
+      tasks: [],
+    });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/coding-agents/coordinator/status",
     );
   });
 });

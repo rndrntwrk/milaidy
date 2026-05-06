@@ -47,6 +47,9 @@ describe("ShellOverlays", () => {
     const className = String(status.props.className);
 
     expect(className).toContain("bg-accent text-accent-fg");
+    expect(className).toContain(
+      "bottom-[calc(var(--safe-area-bottom,0px)+6.5rem)]",
+    );
     expect(className).not.toContain("text-white");
   });
 

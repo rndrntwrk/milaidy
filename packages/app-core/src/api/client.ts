@@ -81,11 +81,6 @@ import type {
   WalletTradingProfileSourceFilter,
   WalletTradingProfileWindow,
 } from "@miladyai/agent/contracts/wallet";
-import type { AvatarSpeechManifest } from "@miladyai/shared/contracts";
-import type {
-  CaptureLifeOpsActivitySignalRequest,
-  LifeOpsActivitySignal,
-} from "@miladyai/shared/contracts/lifeops";
 import {
   DEFAULT_WALLET_RPC_SELECTIONS,
   normalizeWalletRpcProviderId,
@@ -97,6 +92,11 @@ import {
   sanitizeForSettingsDebug,
   settingsDebugCloudSummary,
 } from "@miladyai/shared";
+import type { AvatarSpeechManifest } from "@miladyai/shared/contracts";
+import type {
+  CaptureLifeOpsActivitySignalRequest,
+  LifeOpsActivitySignal,
+} from "@miladyai/shared/contracts/lifeops";
 import type {
   CompanionStageState,
   PartialCompanionStageState,
@@ -1531,6 +1531,8 @@ export interface CodingAgentStatus {
   taskCount: number;
   tasks: CodingAgentSession[];
   pendingConfirmations: number;
+  taskThreadCount?: number;
+  taskThreads?: CodingAgentTaskThread[];
 }
 
 /** Raw PTY session shape returned by /api/coding-agents. */
@@ -1570,6 +1572,37 @@ export function mapPtySessionsToCodingAgentSessions(
             : ("active" as const),
     decisionCount: 0,
     autoResolvedCount: 0,
+  }));
+}
+
+export function mapTaskThreadsToCodingAgentSessions(
+  taskThreads: CodingAgentTaskThread[],
+): CodingAgentSession[] {
+  return taskThreads.map((thread) => ({
+    sessionId: thread.latestSessionId ?? thread.id,
+    agentType: "task-thread",
+    label: thread.title || thread.latestSessionLabel || "Task",
+    originalTask: thread.originalRequest,
+    workdir: thread.latestWorkdir ?? thread.latestRepo ?? "",
+    status:
+      thread.status === "failed"
+        ? ("error" as const)
+        : thread.status === "done"
+          ? ("completed" as const)
+          : thread.status === "interrupted"
+            ? ("stopped" as const)
+            : thread.status === "validating"
+              ? ("tool_running" as const)
+              : thread.status === "blocked" ||
+                  thread.status === "waiting_on_user"
+                ? ("blocked" as const)
+                : ("active" as const),
+    decisionCount: thread.decisionCount,
+    autoResolvedCount: 0,
+    lastActivity:
+      thread.status === "interrupted"
+        ? "Interrupted - reopen or resume this task"
+        : thread.summary || thread.latestSessionLabel || thread.status,
   }));
 }
 
@@ -2330,7 +2363,8 @@ export class MiladyClient {
     // Session storage can survive a prior local runtime; it must not beat the
     // boot config injected by the current shell/server process.
     const bootBase = getBootConfig().apiBase;
-    this._baseUrl = baseUrl ?? bootBase ?? getElizaApiBase() ?? storedBase ?? "";
+    this._baseUrl =
+      baseUrl ?? bootBase ?? getElizaApiBase() ?? storedBase ?? "";
   }
 
   /**
@@ -2540,13 +2574,17 @@ export class MiladyClient {
     init?: RequestInit,
     options?: { allowNonOk?: boolean; timeoutMs?: number },
   ): Promise<T> {
-    const res = await this.rawRequest(path, {
-      ...init,
-      headers: {
-        "Content-Type": "application/json",
-        ...init?.headers,
+    const res = await this.rawRequest(
+      path,
+      {
+        ...init,
+        headers: {
+          "Content-Type": "application/json",
+          ...init?.headers,
+        },
       },
-    }, options);
+      options,
+    );
     return res.json() as Promise<T>;
   }
 
@@ -3911,9 +3949,7 @@ export class MiladyClient {
     return this.fetch("/api/wallet/steward-pending-approvals");
   }
 
-  async approveStewardTx(
-    txId: string,
-  ): Promise<StewardApprovalActionResponse> {
+  async approveStewardTx(txId: string): Promise<StewardApprovalActionResponse> {
     return this.fetch("/api/wallet/steward-approve-tx", {
       method: "POST",
       body: JSON.stringify({ txId }),
@@ -4198,9 +4234,7 @@ export class MiladyClient {
     }
 
     try {
-      const stored = localStorage
-        .getItem("milady.arcade555.sessionId")
-        ?.trim();
+      const stored = localStorage.getItem("milady.arcade555.sessionId")?.trim();
       if (stored) return stored;
       localStorage.setItem("milady.arcade555.sessionId", fallback);
     } catch {
@@ -6048,10 +6082,19 @@ export class MiladyClient {
       const status = await this.fetch<CodingAgentStatus>(
         "/api/coding-agents/coordinator/status",
       );
-      // If coordinator returned but tasks is empty, fall back to ptyService
-      // session list so the UI shows active PTY sessions even when the
-      // coordinator hasn't registered them yet.
-      if (status && (!status.tasks || status.tasks.length === 0)) {
+      if (
+        status &&
+        (!status.tasks || status.tasks.length === 0) &&
+        Array.isArray(status.taskThreads) &&
+        status.taskThreads.length > 0
+      ) {
+        status.tasks = mapTaskThreadsToCodingAgentSessions(status.taskThreads);
+        status.taskCount = status.tasks.length;
+      }
+      // Only fall back to the legacy root list when the coordinator omitted
+      // tasks entirely. An explicit empty array is authoritative; polling the
+      // old plugin root in that state causes production console 503 storms.
+      if (status && !status.tasks) {
         try {
           const ptySessions =
             await this.fetch<RawPtySession[]>("/api/coding-agents");

@@ -39,6 +39,11 @@ const autonomousElizaPathCandidates = [
 const homepageReleaseDataPathCandidates = [
   "apps/web/src/generated/release-data.ts",
 ] as const;
+const aliceRuntimeDistPaths = {
+  appCoreServer: "dist/api/server.js",
+  agentConversationRoutes: "dist/agent/src/api/conversation-routes.js",
+  agentServer: "dist/agent/src/api/server.js",
+} as const;
 const requiredWorkflowSnippets = [
   'BUN_VERSION: "1.3.9"',
   "workflow_call:",
@@ -187,6 +192,57 @@ export function findMissingRequiredSnippets(
   snippets: readonly string[],
 ): string[] {
   return snippets.filter((snippet) => !content.includes(snippet));
+}
+
+export type AliceRuntimeDistSources = {
+  appCoreServer: string;
+  agentConversationRoutes: string;
+  agentServer: string;
+};
+
+export type AliceRuntimeDistIssue = {
+  id:
+    | "app-core-unbound-readCompatJsonBody"
+    | "agent-conversation-operator-action-missing"
+    | "agent-coding-agents-graceful-empty-missing";
+  path: string;
+};
+
+export function findAliceRuntimeDistIssues(
+  sources: AliceRuntimeDistSources,
+): AliceRuntimeDistIssue[] {
+  const issues: AliceRuntimeDistIssue[] = [];
+  const exactUnboundCompatReaderCall =
+    /(^|[^\w$])readCompatJsonBody\s*\(/m.test(sources.appCoreServer);
+
+  if (exactUnboundCompatReaderCall) {
+    issues.push({
+      id: "app-core-unbound-readCompatJsonBody",
+      path: aliceRuntimeDistPaths.appCoreServer,
+    });
+  }
+
+  if (!sources.agentConversationRoutes.includes("operator-action")) {
+    issues.push({
+      id: "agent-conversation-operator-action-missing",
+      path: aliceRuntimeDistPaths.agentConversationRoutes,
+    });
+  }
+
+  const hasCodingAgentsRootRoute = sources.agentServer.includes(
+    'pathname === "/api/coding-agents"',
+  );
+  const hasGracefulEmptyResponse =
+    sources.agentServer.includes("json(res, [])") ||
+    sources.agentServer.includes("json(res,[])");
+  if (!hasCodingAgentsRootRoute || !hasGracefulEmptyResponse) {
+    issues.push({
+      id: "agent-coding-agents-graceful-empty-missing",
+      path: aliceRuntimeDistPaths.agentServer,
+    });
+  }
+
+  return issues;
 }
 
 const forbiddenWorkflowSnippets = [
@@ -1211,6 +1267,42 @@ function assertStaticAssetManifestIsCurrent() {
   process.exit(1);
 }
 
+function assertAliceRuntimeDistLooksCurrent() {
+  const missing = Object.values(aliceRuntimeDistPaths).filter(
+    (path) => !existsSync(path),
+  );
+  if (missing.length > 0) {
+    console.error(
+      "release-check: Alice runtime root dist is missing required serving files. Run bun run build before pushing a runtime image.",
+    );
+    for (const path of missing) {
+      console.error(`  - ${path}`);
+    }
+    process.exit(1);
+  }
+
+  const sources: AliceRuntimeDistSources = {
+    appCoreServer: readFileSync(aliceRuntimeDistPaths.appCoreServer, "utf8"),
+    agentConversationRoutes: readFileSync(
+      aliceRuntimeDistPaths.agentConversationRoutes,
+      "utf8",
+    ),
+    agentServer: readFileSync(aliceRuntimeDistPaths.agentServer, "utf8"),
+  };
+  const issues = findAliceRuntimeDistIssues(sources);
+  if (issues.length === 0) {
+    return;
+  }
+
+  console.error(
+    "release-check: Alice runtime root dist is stale or unsafe for production:",
+  );
+  for (const issue of issues) {
+    console.error(`  - ${issue.id}: ${issue.path}`);
+  }
+  process.exit(1);
+}
+
 function assertHomepageReleaseDataUsesCurrentAssetRoot() {
   const releaseDataSource = readExistingReleaseCheckFile(
     "generated homepage release data",
@@ -1252,6 +1344,7 @@ function main() {
   assertServerDynamicHyperscapeImport();
   assertStartApiServerCatchBlockSafety();
   assertStaticAssetManifestIsCurrent();
+  assertAliceRuntimeDistLooksCurrent();
   assertHomepageReleaseDataUsesCurrentAssetRoot();
   maybeValidateCdnAssets();
   assertBundledAgentOrchestratorInstallFix();
