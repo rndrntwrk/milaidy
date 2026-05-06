@@ -112,13 +112,50 @@ function replaceFileText(filePath, transform, label) {
 }
 
 function patchCloudDockerfile(raw) {
-  const match = raw.match(
+  let next = raw;
+  if (!next.includes("COPY patches ./patches")) {
+    next = next.replace(
+      "COPY package.json bun.lock ./\n",
+      "COPY package.json bun.lock ./\nCOPY patches ./patches\n",
+    );
+  }
+
+  const match = next.match(
     /RUN node(?: -)? <<'EOF'\nconst fs = require\("fs"\);[\s\S]*?\nEOF\n(?=# Drop --frozen-lockfile)/,
   );
   if (match?.index === undefined) {
-    return raw;
+    return next;
   }
-  return `${raw.slice(0, match.index)}COPY scripts/cloud-image-prune-deps.mjs ./scripts/cloud-image-prune-deps.mjs\nRUN bun scripts/cloud-image-prune-deps.mjs\n${raw.slice(match.index + match[0].length)}`;
+  return `${next.slice(0, match.index)}COPY scripts/cloud-image-prune-deps.mjs ./scripts/cloud-image-prune-deps.mjs\nRUN bun scripts/cloud-image-prune-deps.mjs\n${next.slice(match.index + match[0].length)}`;
+}
+
+function patchElectrobunCliPatchScript(raw) {
+  return raw.replace(
+    `  const replacements = patched.match(
+    /const rcedit = \\(await import\\("rcedit"\\)\\)\\.default;/g,
+  );
+  if (!replacements || replacements.length !== 3) {
+    throw new Error(
+      \`Expected 3 rcedit dynamic import call sites, found \${replacements?.length ?? 0}\`,
+    );
+  }
+`,
+    `  const replacements = patched.match(
+    /const rcedit = \\(await import\\("rcedit"\\)\\)\\.default;/g,
+  );
+  if (
+    (!replacements || replacements.length === 0) &&
+    original.includes('require.resolve("rcedit/package.json")')
+  ) {
+    return original;
+  }
+  if (!replacements || replacements.length !== 3) {
+    throw new Error(
+      \`Expected 3 rcedit dynamic import call sites, found \${replacements?.length ?? 0}\`,
+    );
+  }
+`,
+  );
 }
 
 function applyMiladyReleaseSourcePatches() {
@@ -142,6 +179,18 @@ function applyMiladyReleaseSourcePatches() {
     path.join(elizaDir, "packages", "app-core", "deploy", "Dockerfile.cloud"),
     patchCloudDockerfile,
     "Dockerfile.cloud dependency pruning runner",
+  );
+
+  replaceFileText(
+    path.join(
+      elizaDir,
+      "packages",
+      "app-core",
+      "scripts",
+      "build-patched-electrobun-cli.mjs",
+    ),
+    patchElectrobunCliPatchScript,
+    "Electrobun rcedit patch compatibility",
   );
 }
 

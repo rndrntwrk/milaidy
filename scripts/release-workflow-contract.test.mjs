@@ -167,6 +167,9 @@ test("eliza CI patches align release source helpers", () => {
     patchScript,
     /COPY scripts\/cloud-image-prune-deps\.mjs \.\/scripts\/cloud-image-prune-deps\.mjs\\nRUN bun scripts\/cloud-image-prune-deps\.mjs/,
   );
+  assert.match(patchScript, /COPY patches \.\/patches/);
+  assert.match(patchScript, /build-patched-electrobun-cli\.mjs/);
+  assert.match(patchScript, /require\.resolve\("rcedit\/package\.json"\)/);
   assert.match(
     pruneScript,
     /plugin-agent-orchestrator\|plugin-app-control\|plugin-cli/,
