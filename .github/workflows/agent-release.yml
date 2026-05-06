@@ -454,6 +454,11 @@ jobs:
           disable-local-eliza-workspace: "true"
           install-command: bun install --ignore-scripts --no-frozen-lockfile
           skip-cloud-submodule: "true"
+      - name: Initialize eliza source checkout
+        run: |
+          if [ ! -f eliza/package.json ]; then
+            git clone --depth=1 --branch "${MILADY_ELIZA_BRANCH:-develop}" https://github.com/milady-ai/eliza.git eliza
+          fi
       - name: Generate eliza i18n keyword data
         run: node scripts/run-eliza-app-core-script.mjs ensure-shared-i18n-data.mjs
       - name: Build
@@ -852,17 +857,17 @@ jobs:
       - uses: actions/checkout@v4
       - name: Initialize eliza docs
         run: |
-          if [ ! -f eliza/docs/docs.json ]; then
+          if [ ! -f eliza/packages/docs/docs.json ]; then
             git clone --depth=1 --branch "${MILADY_ELIZA_BRANCH:-develop}" https://github.com/milady-ai/eliza.git eliza
           fi
       - uses: actions/setup-node@v4
         with:
           node-version: 22
       - name: Validate docs config
-        run: node -e "const c = require('./eliza/docs/docs.json'); console.log('Docs config valid:', c.name)"
+        run: node -e "const c = require('./eliza/packages/docs/docs.json'); console.log('Docs config valid:', c.name)"
       - name: Check for broken internal links
         run: |
-          find eliza/docs -name '*.md' -o -name '*.mdx' | head -5 | while read -r f; do
+          find eliza/packages/docs -name '*.md' -o -name '*.mdx' | head -5 | while read -r f; do
             grep -oE '\]\([^)]+\)' "$f" | grep -v 'http' | head -3
           done
           echo "Docs link check complete"

@@ -241,6 +241,12 @@ jobs:
         with:
           submodules: false
 
+      - name: Initialize eliza source checkout
+        run: |
+          if [ ! -f eliza/package.json ]; then
+            git clone --depth=1 --branch "${MILADY_ELIZA_BRANCH:-develop}" https://github.com/milady-ai/eliza.git eliza
+          fi
+
       - name: Initialize tracked workspace submodules
         run: node scripts/init-submodules.mjs
 
@@ -274,9 +280,18 @@ jobs:
           export MILADY_WHISPER_MODEL_CACHE_DIR="$HOME/.cache/milady/whisper"
           bash eliza/packages/app-core/platforms/electrobun/scripts/ensure-whisper-model.sh base.en
           mkdir -p .artifacts/whisper-model
-          cp "$HOME/.cache/milady/whisper/ggml-base.en.bin" .artifacts/whisper-model/ggml-base.en.bin
+          for candidate in \
+            "$HOME/.cache/milady/whisper/ggml-base.en.bin" \
+            "$HOME/.cache/eliza/whisper/ggml-base.en.bin" \
+            "$whisper_pkg/lib/whisper.cpp/models/ggml-base.en.bin"; do
+            if [ -f "$candidate" ]; then
+              cp "$candidate" .artifacts/whisper-model/ggml-base.en.bin
+              break
+            fi
+          done
+          test -f .artifacts/whisper-model/ggml-base.en.bin
           mkdir -p eliza/packages/node_modules/whisper-node/lib/whisper.cpp/models
-          cp "$HOME/.cache/milady/whisper/ggml-base.en.bin" eliza/packages/node_modules/whisper-node/lib/whisper.cpp/models/ggml-base.en.bin
+          cp .artifacts/whisper-model/ggml-base.en.bin eliza/packages/node_modules/whisper-node/lib/whisper.cpp/models/ggml-base.en.bin
 
       - name: Upload Whisper model artifact
         uses: actions/upload-artifact@v7

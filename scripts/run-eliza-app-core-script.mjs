@@ -43,12 +43,12 @@ if (!scriptName) {
 }
 
 const scriptPath = resolveElizaAppCoreScript(scriptName, { repoRoot });
-const localRegressionMatrixScript = path.join(
+const localScriptPath = path.join(
   localElizaRoot,
   "packages",
   "app-core",
   "scripts",
-  "validate-regression-matrix.mjs",
+  scriptName,
 );
 const localRegressionMatrix = path.join(
   localElizaRoot,
@@ -57,12 +57,12 @@ const localRegressionMatrix = path.join(
   "test",
   "regression-matrix.json",
 );
-const resolvedScriptPath =
-  scriptName === "validate-regression-matrix.mjs" &&
-  fs.existsSync(localRegressionMatrixScript) &&
-  fs.existsSync(localRegressionMatrix)
-    ? localRegressionMatrixScript
-    : scriptPath;
+const shouldUseLocalScript =
+  fs.existsSync(localScriptPath) &&
+  (scriptName === "ensure-shared-i18n-data.mjs" ||
+    (scriptName === "validate-regression-matrix.mjs" &&
+      fs.existsSync(localRegressionMatrix)));
+const resolvedScriptPath = shouldUseLocalScript ? localScriptPath : scriptPath;
 const useBun = path
   .resolve(resolvedScriptPath)
   .startsWith(`${path.resolve(localElizaRoot)}${path.sep}`);

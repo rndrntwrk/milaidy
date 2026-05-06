@@ -125,6 +125,9 @@ jobs:
       - name: Install dependencies
         run: bun install --ignore-scripts --frozen-lockfile
 
+      - name: Install eliza source dependencies
+        run: bun install --cwd eliza --no-frozen-lockfile
+
       - name: Install published-workspace fallback dependencies
         run: bash scripts/install-published-workspace-fallback-deps.sh
 

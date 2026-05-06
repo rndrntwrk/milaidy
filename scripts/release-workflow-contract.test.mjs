@@ -99,6 +99,14 @@ test("distribution workflows consume the canonical channel policy", () => {
   assert.match(electrobun, /channel:\n\s+description: "Release channel/);
   assert.match(
     electrobun,
+    /git clone --depth=1 --branch "\$\{MILADY_ELIZA_BRANCH:-develop\}" https:\/\/github\.com\/milady-ai\/eliza\.git eliza/,
+  );
+  assert.match(
+    electrobun,
+    /\$HOME\/\.cache\/eliza\/whisper\/ggml-base\.en\.bin/,
+  );
+  assert.match(
+    electrobun,
     /workflow_dispatch:[\s\S]*?tag:\n\s+description: "Release tag \(e\.g\. v2\.0\.0-alpha\.3\)"\n\s+required: true/,
   );
   assert.match(electrobun, /beta desktop release requires a beta version/);
@@ -112,6 +120,7 @@ test("cloud image build stages Milady app into Dockerfile layout", () => {
     cloudImage,
     /git clone --depth=1 --branch "\$\{MILADY_ELIZA_BRANCH:-develop\}" https:\/\/github\.com\/milady-ai\/eliza\.git eliza/,
   );
+  assert.match(cloudImage, /bun install --cwd eliza --no-frozen-lockfile/);
   assert.doesNotMatch(
     cloudImage,
     /git submodule update --init --depth=1 eliza/,
@@ -136,6 +145,14 @@ test("release jobs hydrate eliza source without a root eliza gitlink", () => {
   assert.doesNotMatch(release, /git submodule update --init --depth=1 eliza/);
 });
 
+test("release docs validation tracks current eliza docs package layout", () => {
+  const release = workflow("agent-release.yml");
+
+  assert.match(release, /eliza\/packages\/docs\/docs\.json/);
+  assert.match(release, /find eliza\/packages\/docs -name '\*\.md'/);
+  assert.doesNotMatch(release, /eliza\/docs\/docs\.json/);
+});
+
 test("npm release builds generate gitignored eliza i18n data before bundling", () => {
   const release = workflow("agent-release.yml");
   const reusableNpmPublish = workflow("reusable-npm-publish.yml");
@@ -145,6 +162,10 @@ test("npm release builds generate gitignored eliza i18n data before bundling", (
   );
 
   for (const content of [release, reusableNpmPublish]) {
+    assert.match(
+      content,
+      /git clone --depth=1 --branch "\$\{MILADY_ELIZA_BRANCH:-develop\}" https:\/\/github\.com\/milady-ai\/eliza\.git eliza/,
+    );
     assert.match(
       content,
       /node scripts\/run-eliza-app-core-script\.mjs ensure-shared-i18n-data\.mjs[\s\S]*?bunx tsdown/,
@@ -293,6 +314,10 @@ test("Electrobun release has a lightweight PR contract workflow", () => {
   assert.match(workflowText, /branches: \[main, develop\]/);
   assert.match(workflowText, /BUN_VERSION: "1\.3\.13"/);
   assert.match(workflowText, /MILADY_SKIP_LOCAL_UPSTREAMS: "1"/);
+  assert.match(
+    workflowText,
+    /git clone --depth=1 --branch "\$\{MILADY_ELIZA_BRANCH:-develop\}" https:\/\/github\.com\/milady-ai\/eliza\.git eliza/,
+  );
   assert.match(
     workflowText,
     /run: bun run test:regression-matrix:release-contract/,
