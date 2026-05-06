@@ -4,8 +4,8 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   bundlesDependency,
-  findFloatingDependencySpecs,
   findAliceRuntimeDistIssues,
+  findFloatingDependencySpecs,
   findLocalPackHotspots,
   findMismatchedSharedAgentDependencySpecs,
   findMissingPatchedElectrobunCliSnippets,
