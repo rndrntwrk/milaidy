@@ -31,6 +31,29 @@ test("canonical release workflow owns channel routing", () => {
   );
 });
 
+test("canonical release workflow grants reusable workflow permissions", () => {
+  const release = workflow("agent-release.yml");
+
+  for (const jobName of [
+    "build-docker",
+    "build-cloud-image",
+    "push-agent-image",
+    "push-cloud-image",
+  ]) {
+    assert.match(
+      release,
+      new RegExp(
+        `${jobName}:[\\s\\S]*?permissions:\\n\\s+contents: read\\n\\s+packages: write\\n\\s+id-token: write[\\s\\S]*?uses: \\.\\/\\.github\\/workflows\\/(?:build-docker|build-cloud-image)\\.yml`,
+      ),
+    );
+  }
+
+  assert.match(
+    release,
+    /distribute-release:[\s\S]*?permissions:\n\s+contents: write\n\s+packages: write\n\s+id-token: write\n\s+pages: write[\s\S]*?uses: \.\/\.github\/workflows\/release-orchestrator\.yml/,
+  );
+});
+
 test("distribution workflows consume the canonical channel policy", () => {
   const orchestrator = workflow("release-orchestrator.yml");
   const publishPackages = workflow("publish-packages.yml");
@@ -297,6 +320,8 @@ test("E2E secret rotation workflow points at tracked scripts", () => {
     assert.ok(fs.existsSync(scriptPath), `${scriptPath} missing`);
     assert.match(rotate, new RegExp(`node ${scriptPath}`));
   }
+  assert.match(rotate, /id: credentials/);
+  assert.match(rotate, /steps\.credentials\.outputs\.available == 'true'/);
   assert.doesNotMatch(rotate, /bun run scripts\/(?:rotate|check)-e2e-secrets/);
 });
 

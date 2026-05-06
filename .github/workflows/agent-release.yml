@@ -413,6 +413,8 @@ jobs:
     needs: [version]
     permissions:
       contents: read
+      packages: write
+      id-token: write
     uses: ./.github/workflows/build-docker.yml
     with:
       version: ${{ needs.version.outputs.tag }}
@@ -424,6 +426,8 @@ jobs:
     needs: [version]
     permissions:
       contents: read
+      packages: write
+      id-token: write
     uses: ./.github/workflows/build-cloud-image.yml
     with:
       version: ${{ needs.version.outputs.tag }}
@@ -1220,6 +1224,10 @@ jobs:
     if: >-
       needs.version.result == 'success' &&
       needs.publish.result == 'success'
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
     uses: ./.github/workflows/build-docker.yml
     with:
       version: ${{ needs.version.outputs.tag }}
@@ -1233,6 +1241,10 @@ jobs:
     if: >-
       needs.version.result == 'success' &&
       needs.publish.result == 'success'
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
     uses: ./.github/workflows/build-cloud-image.yml
     with:
       version: ${{ needs.version.outputs.tag }}
@@ -1248,6 +1260,11 @@ jobs:
       needs.publish.result == 'success' &&
       needs.push-agent-image.result == 'success' &&
       needs.push-cloud-image.result == 'success'
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+      pages: write
     uses: ./.github/workflows/release-orchestrator.yml
     with:
       version: ${{ needs.version.outputs.version }}
