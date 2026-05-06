@@ -34,6 +34,7 @@ const CLOUD_AGENT_RELEASE_DEPS = [
   "@elizaos/plugin-sql",
   "@elizaos/plugin-elizacloud",
 ];
+const CLOUD_SDK_PACKAGE_SPEC = "file:./eliza/cloud/packages/sdk";
 
 function readJson(path) {
   return JSON.parse(fs.readFileSync(path, "utf8"));
@@ -41,6 +42,18 @@ function readJson(path) {
 
 function writeJson(path, data) {
   fs.writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`);
+}
+
+function requireRecord(target, key) {
+  const value = target[key];
+  if (value === undefined) {
+    target[key] = {};
+    return target[key];
+  }
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`${key} must be an object`);
+  }
+  return value;
 }
 
 function collectVersions() {
@@ -94,6 +107,9 @@ materializeWorkspaceDeps(
 
 const root = readJson("package.json");
 root.workspaces = KEEP;
+requireRecord(root, "dependencies")["@elizaos/cloud-sdk"] =
+  CLOUD_SDK_PACKAGE_SPEC;
+requireRecord(root, "overrides")["@elizaos/cloud-sdk"] = CLOUD_SDK_PACKAGE_SPEC;
 writeJson("package.json", root);
 [
   "package.json",

@@ -351,7 +351,14 @@ jobs:
           done
 
       - name: Set up CI dockerignore
-        run: cp eliza/packages/app-core/deploy/Dockerfile.cloud.dockerignore .dockerignore
+        run: |
+          cp eliza/packages/app-core/deploy/Dockerfile.cloud.dockerignore .dockerignore
+          cat >> .dockerignore <<'EOF'
+          !eliza/cloud/
+          !eliza/cloud/packages/
+          !eliza/cloud/packages/sdk/
+          !eliza/cloud/packages/sdk/**
+          EOF
 
       - name: Set up Depot CLI
         if: vars.DEPOT_ENABLED != 'false'

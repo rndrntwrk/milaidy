@@ -147,6 +147,10 @@ test("cloud image build stages Milady app into Dockerfile layout", () => {
   assert.match(cloudImage, /cp -R apps\/app\/dist packages\/app\/dist/);
   assert.match(cloudImage, /test -f packages\/app\/package\.json/);
   assert.match(cloudImage, /test -d packages\/app\/dist/);
+  assert.match(cloudImage, /!eliza\/cloud\//);
+  assert.match(cloudImage, /!eliza\/cloud\/packages\//);
+  assert.match(cloudImage, /!eliza\/cloud\/packages\/sdk\//);
+  assert.match(cloudImage, /!eliza\/cloud\/packages\/sdk\/\*\*/);
 });
 
 test("eliza CI patches align release source helpers", () => {
@@ -168,12 +172,18 @@ test("eliza CI patches align release source helpers", () => {
     /COPY scripts\/cloud-image-prune-deps\.mjs \.\/scripts\/cloud-image-prune-deps\.mjs\\nRUN bun scripts\/cloud-image-prune-deps\.mjs/,
   );
   assert.match(patchScript, /COPY patches \.\/patches/);
+  assert.match(
+    patchScript,
+    /COPY eliza\/cloud\/packages\/sdk \.\/eliza\/cloud\/packages\/sdk/,
+  );
   assert.match(patchScript, /build-patched-electrobun-cli\.mjs/);
   assert.match(patchScript, /require\.resolve\("rcedit\/package\.json"\)/);
   assert.match(
     pruneScript,
     /plugin-agent-orchestrator\|plugin-app-control\|plugin-cli/,
   );
+  assert.match(pruneScript, /"@elizaos\/cloud-sdk"/);
+  assert.match(pruneScript, /file:\.\/eliza\/cloud\/packages\/sdk/);
 });
 
 test("release jobs hydrate eliza source without a root eliza gitlink", () => {
