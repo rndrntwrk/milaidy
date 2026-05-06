@@ -172,7 +172,7 @@ test("Electrobun macOS release patch signs nested native runtime binaries idempo
   assert.match(patchScript, /find "\$runtime_resources_dir" -type f -print0/);
   assert.match(patchScript, /file "\$candidate_path"/);
   assert.match(patchScript, /Mach-O/);
-  assert.match(patchScript, /result\.text\.includes\('for tarball_pattern in/);
+  assert.match(patchScript, /text\.includes\('for tarball_pattern in/);
 });
 
 test.skipIf(!fs.existsSync(localElectrobunStagerPath))(
