@@ -31,6 +31,15 @@ test("canonical release workflow owns channel routing", () => {
   );
 });
 
+test("canonical release workflow default permissions cover release graph", () => {
+  const release = workflow("agent-release.yml");
+
+  assert.match(
+    release,
+    /^permissions:\n\s+contents: write\n\s+issues: write\n\s+packages: write\n\s+id-token: write\n\s+pages: write\n\s+pull-requests: read/m,
+  );
+});
+
 test("canonical release workflow grants reusable workflow permissions", () => {
   const release = workflow("agent-release.yml");
 

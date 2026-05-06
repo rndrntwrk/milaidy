@@ -44,7 +44,11 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: read
+  contents: write
+  issues: write
+  packages: write
+  id-token: write
+  pages: write
   pull-requests: read
 
 env:
