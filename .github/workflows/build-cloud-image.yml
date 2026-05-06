@@ -337,6 +337,10 @@ jobs:
           };
           fs.writeFileSync("package.json", JSON.stringify(root, null, 2) + "\n");
           NODE
+          if [ ! -f bun.lock ]; then
+            git show HEAD:bun.lock > bun.lock
+          fi
+          test -f bun.lock
           for staged_path in patches scripts/docker-entrypoint.sh plugins/plugin-selfcontrol; do
             if [ -e "$staged_path" ]; then
               find "$staged_path" -maxdepth 2 -print | head -20

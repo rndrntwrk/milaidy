@@ -103,6 +103,10 @@ test("distribution workflows consume the canonical channel policy", () => {
   );
   assert.match(
     electrobun,
+    /\n\s+build:\n\s+name: Build \$\{\{ matrix\.platform\.name \}\}[\s\S]*?name: Initialize eliza source checkout[\s\S]*?git clone --depth=1 --branch "\$\{MILADY_ELIZA_BRANCH:-develop\}" https:\/\/github\.com\/milady-ai\/eliza\.git eliza[\s\S]*?name: Initialize tracked workspace submodules/,
+  );
+  assert.match(
+    electrobun,
     /\$HOME\/\.cache\/eliza\/whisper\/ggml-base\.en\.bin/,
   );
   assert.match(electrobun, /node scripts\/align-eliza-agent-package-pins\.mjs/);
@@ -126,6 +130,7 @@ test("cloud image build stages Milady app into Dockerfile layout", () => {
     cloudImage,
     /export PATH="\$GITHUB_WORKSPACE\/eliza\/node_modules\/\.bin:\$GITHUB_WORKSPACE\/eliza\/packages\/schemas\/node_modules\/\.bin:\$PATH"/,
   );
+  assert.match(cloudImage, /git show HEAD:bun\.lock > bun\.lock/);
   assert.doesNotMatch(
     cloudImage,
     /git submodule update --init --depth=1 eliza/,
