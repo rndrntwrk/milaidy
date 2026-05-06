@@ -60,6 +60,7 @@ const packageSafeBridgePatchScripts = [
   "ensure-elizaos-optional-app-stubs.mjs",
   "patch-elizaos-package-esm-imports.mjs",
   "patch-elizaos-package-styles.mjs",
+  "patch-noble-curves-hashes-v2.mjs",
   "patch-elizaos-app-core-windows-shell.mjs",
   "patch-elizaos-app-core-mobile-package.mjs",
   "patch-elizaos-capacitor-agent-package.mjs",

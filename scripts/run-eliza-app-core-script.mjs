@@ -14,15 +14,19 @@ function resolveBunExecutable() {
     return process.execPath;
   }
 
-  const bunHome =
-    process.env.BUN_INSTALL?.trim() ||
-    process.env.HOME?.trim() ||
-    process.env.USERPROFILE?.trim() ||
-    null;
+  const bunInstall = process.env.BUN_INSTALL?.trim();
+  if (bunInstall) {
+    return path.join(
+      bunInstall,
+      "bin",
+      process.platform === "win32" ? "bun.exe" : "bun",
+    );
+  }
 
-  return bunHome
+  const home = process.env.HOME?.trim() || process.env.USERPROFILE?.trim();
+  return home
     ? path.join(
-        bunHome,
+        home,
         ".bun",
         "bin",
         process.platform === "win32" ? "bun.exe" : "bun",
