@@ -154,6 +154,7 @@ jobs:
 
       - name: Build @elizaos/core (includes agent-orchestrator)
         run: |
+          export PATH="$GITHUB_WORKSPACE/eliza/node_modules/.bin:$GITHUB_WORKSPACE/eliza/packages/schemas/node_modules/.bin:$PATH"
           cd eliza/packages/schemas
           buf dep update && buf generate
           cd ../core
