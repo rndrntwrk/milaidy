@@ -60,6 +60,10 @@ test("distribution workflows consume the canonical channel policy", () => {
   assert.match(publishNpm, /DIST_TAG="rc"/);
 
   assert.match(electrobun, /channel:\n\s+description: "Release channel/);
+  assert.match(
+    electrobun,
+    /workflow_dispatch:[\s\S]*?tag:\n\s+description: "Release tag \(e\.g\. v2\.0\.0-alpha\.3\)"\n\s+required: true/,
+  );
   assert.match(electrobun, /beta desktop release requires a beta version/);
   assert.match(electrobun, /BUILD_ENV="stable"/);
 });
@@ -243,6 +247,45 @@ test("Electrobun release has a lightweight PR contract workflow", () => {
   assert.match(workflowText, /MILADY_NO_VISION_DEPS: "1"/);
 });
 
+test("Electrobun release workflow root bun scripts are wired", () => {
+  const packageJson = JSON.parse(fs.readFileSync("package.json", "utf8"));
+  const scripts = packageJson.scripts ?? {};
+  const requiredScripts = [
+    "test:regression-matrix:release",
+    "test:regression-matrix:release-contract",
+    "test:e2e:heavy",
+    "test:live:cloud",
+    "browser-bridge:package:release",
+    "test:desktop:packaged",
+    "test:desktop:packaged:windows",
+    "test:desktop:playwright",
+  ];
+
+  for (const scriptName of requiredScripts) {
+    assert.ok(scripts[scriptName], `package.json missing ${scriptName}`);
+  }
+  assert.equal(
+    scripts["test:regression-matrix:release-contract"],
+    "node eliza/packages/app-core/scripts/validate-regression-matrix.mjs --workflow release-contract",
+  );
+});
+
+test("GitHub workflows use the verified Bun runtime", () => {
+  const workflowDir = ".github/workflows";
+  const workflowFiles = fs
+    .readdirSync(workflowDir)
+    .filter((fileName) => fileName.endsWith(".yml"));
+
+  for (const fileName of workflowFiles) {
+    const workflowText = fs.readFileSync(
+      path.join(workflowDir, fileName),
+      "utf8",
+    );
+    assert.doesNotMatch(workflowText, /BUN_VERSION:\s*"1\.3\.1[01]"/);
+    assert.doesNotMatch(workflowText, /bun-version:\s*"?1\.3\.1[01]"?/);
+  }
+});
+
 test("Electrobun Windows smoke validates the public installer", () => {
   const electrobun = workflow("release-electrobun.yml");
 
@@ -250,7 +293,7 @@ test("Electrobun Windows smoke validates the public installer", () => {
   assert.match(electrobun, /Smoke runs through the public installer/);
 });
 
-test("npm package includes package-mode app-core script bridge", () => {
+test("npm package includes release script roots", () => {
   const packageJson = JSON.parse(fs.readFileSync("package.json", "utf8"));
 
   assert.ok(
@@ -259,5 +302,9 @@ test("npm package includes package-mode app-core script bridge", () => {
   assert.ok(
     packageJson.files.includes("scripts/lib/resolve-eliza-app-core-script.mjs"),
   );
-  assert.ok(!packageJson.files.includes("eliza/packages/app-core/scripts"));
+  assert.ok(
+    packageJson.files.includes("scripts/generate-static-asset-manifest.mjs"),
+  );
+  assert.ok(packageJson.files.includes("scripts/init-submodules.mjs"));
+  assert.ok(packageJson.files.includes("eliza/packages/app-core/scripts"));
 });

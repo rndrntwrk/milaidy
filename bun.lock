@@ -13,7 +13,7 @@
         "@elizaos/app-core": "alpha",
         "@elizaos/core": "alpha",
         "@elizaos/css-color-cjs": "npm:@asamuzakjp/css-color@4.1.2",
-        "@elizaos/plugin-agent-orchestrator": "alpha",
+        "@elizaos/plugin-agent-orchestrator": "2.0.0-alpha.537",
         "@elizaos/plugin-agent-skills": "alpha",
         "@elizaos/plugin-anthropic": "alpha",
         "@elizaos/plugin-app-control": "alpha",

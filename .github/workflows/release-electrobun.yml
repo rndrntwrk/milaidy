@@ -66,7 +66,7 @@ on:
     inputs:
       tag:
         description: "Release tag (e.g. v2.0.0-alpha.3)"
-        required: false
+        required: true
         type: string
       channel:
         description: "Release channel"

@@ -17,16 +17,21 @@ const canonicalElectrobunDir = path.join(
   "platforms",
   "electrobun",
 );
-export const releaseContractTests = [
+const rootReleaseContractTests = [
   "scripts/electrobun-runtime-root-contract.test.ts",
   "scripts/standalone-eliza-package-contract.test.ts",
+  "scripts/release-workflow-contract.test.mjs",
+];
+const appCoreReleaseContractTests = [
   "eliza/packages/app-core/scripts/electrobun-release-workflow-drift.test.ts",
   "eliza/packages/app-core/scripts/release-check.test.ts",
   "eliza/packages/app-core/scripts/static-asset-manifest.test.ts",
 ];
-const packageModeReleaseContractTests = [
-  "scripts/electrobun-runtime-root-contract.test.ts",
+export const releaseContractTests = [
+  ...rootReleaseContractTests,
+  ...appCoreReleaseContractTests,
 ];
+const packageModeReleaseContractTests = rootReleaseContractTests;
 
 function hasLocalElizaAppCore(root = repoRoot) {
   return fs.existsSync(path.join(root, "eliza", "packages", "app-core"));
@@ -34,6 +39,17 @@ function hasLocalElizaAppCore(root = repoRoot) {
 
 function selectReleaseContractTests(root = repoRoot) {
   if (hasLocalElizaAppCore(root)) {
+    const missingAppCoreTests = appCoreReleaseContractTests.filter(
+      (testPath) => !fs.existsSync(path.join(root, testPath)),
+    );
+    if (missingAppCoreTests.length > 0) {
+      console.warn(
+        `run-release-contract-suite: local eliza checkout is missing app-core release tests; running root release contracts only:\n${missingAppCoreTests
+          .map((testPath) => `- ${testPath}`)
+          .join("\n")}`,
+      );
+      return rootReleaseContractTests;
+    }
     return releaseContractTests;
   }
   return packageModeReleaseContractTests;
