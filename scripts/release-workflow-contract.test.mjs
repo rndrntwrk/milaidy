@@ -59,6 +59,11 @@ test("canonical release workflow grants reusable workflow permissions", () => {
 
   assert.match(
     release,
+    /build-electrobun:[\s\S]*?permissions:\n\s+contents: write\n\s+packages: write[\s\S]*?uses: \.\/\.github\/workflows\/release-electrobun\.yml/,
+  );
+
+  assert.match(
+    release,
     /distribute-release:[\s\S]*?permissions:\n\s+contents: write\n\s+packages: write\n\s+id-token: write\n\s+pages: write[\s\S]*?uses: \.\/\.github\/workflows\/release-orchestrator\.yml/,
   );
 });
