@@ -103,7 +103,10 @@ jobs:
             bun-store-${{ runner.os }}-
 
       - name: Init eliza checkout
-        run: git submodule update --init --depth=1 eliza
+        run: |
+          if [ ! -f eliza/package.json ]; then
+            git clone --depth=1 --branch "${MILADY_ELIZA_BRANCH:-develop}" https://github.com/milady-ai/eliza.git eliza
+          fi
 
       - name: Init cloud image plugin manifests
         run: |

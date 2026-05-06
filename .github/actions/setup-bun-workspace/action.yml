@@ -125,6 +125,9 @@ runs:
       if: ${{ inputs.disable-local-eliza-workspace != 'true' }}
       shell: bash
       run: |
+        if [ ! -f eliza/package.json ]; then
+          git clone --depth=1 --branch "${MILADY_ELIZA_BRANCH:-develop}" https://github.com/milady-ai/eliza.git eliza
+        fi
         # Some workflows export MILADY_SKIP_LOCAL_UPSTREAMS globally even when
         # they immediately restore eliza/ and run repo-local scripts. Clear the
         # skip flags here so the full eliza checkout (including nested plugins)
@@ -140,8 +143,9 @@ runs:
       if: ${{ inputs.disable-local-eliza-workspace == 'true' && inputs.prepare-local-eliza-runtime == 'true' }}
       shell: bash
       run: |
-        git submodule sync -- eliza
-        git submodule update --init --depth=1 eliza
+        if [ ! -f eliza/package.json ]; then
+          git clone --depth=1 --branch "${MILADY_ELIZA_BRANCH:-develop}" https://github.com/milady-ai/eliza.git eliza
+        fi
 
     - name: Apply Milady eliza CI patches
       shell: bash

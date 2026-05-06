@@ -455,12 +455,7 @@ jobs:
           install-command: bun install --ignore-scripts --no-frozen-lockfile
           skip-cloud-submodule: "true"
       - name: Generate eliza i18n keyword data
-        # @elizaos/shared stays workspace-local (file:./eliza/packages/shared)
-        # even with disable-local-eliza-workspace, and tsdown bundles its
-        # source. The generated/validation-keyword-data.js sibling is
-        # gitignored, so without this step the rolldown bundle fails to
-        # resolve it on a fresh checkout.
-        run: node eliza/packages/app-core/scripts/ensure-shared-i18n-data.mjs
+        run: node scripts/run-eliza-app-core-script.mjs ensure-shared-i18n-data.mjs
       - name: Build
         run: |
           bunx tsdown
@@ -544,8 +539,9 @@ jobs:
           submodules: false
       - name: Init non-eliza submodules
         run: |
-          git submodule sync -- eliza
-          git submodule update --init --depth=1 eliza
+          if [ ! -f eliza/package.json ]; then
+            git clone --depth=1 --branch "${MILADY_ELIZA_BRANCH:-develop}" https://github.com/milady-ai/eliza.git eliza
+          fi
           node scripts/init-submodules.mjs
           node scripts/apply-eliza-ci-patches.mjs
           node scripts/disable-local-eliza-workspace.mjs
@@ -622,8 +618,9 @@ jobs:
           submodules: false
       - name: Init non-eliza submodules
         run: |
-          git submodule sync -- eliza
-          git submodule update --init --depth=1 eliza
+          if [ ! -f eliza/package.json ]; then
+            git clone --depth=1 --branch "${MILADY_ELIZA_BRANCH:-develop}" https://github.com/milady-ai/eliza.git eliza
+          fi
           node scripts/init-submodules.mjs
           node scripts/apply-eliza-ci-patches.mjs
           node scripts/disable-local-eliza-workspace.mjs
@@ -658,8 +655,9 @@ jobs:
           submodules: false
       - name: Init non-eliza submodules
         run: |
-          git submodule sync -- eliza
-          git submodule update --init --depth=1 eliza
+          if [ ! -f eliza/package.json ]; then
+            git clone --depth=1 --branch "${MILADY_ELIZA_BRANCH:-develop}" https://github.com/milady-ai/eliza.git eliza
+          fi
           node scripts/init-submodules.mjs
           node scripts/apply-eliza-ci-patches.mjs
           node scripts/disable-local-eliza-workspace.mjs
@@ -690,8 +688,9 @@ jobs:
           submodules: false
       - name: Init non-eliza submodules
         run: |
-          git submodule sync -- eliza
-          git submodule update --init --depth=1 eliza
+          if [ ! -f eliza/package.json ]; then
+            git clone --depth=1 --branch "${MILADY_ELIZA_BRANCH:-develop}" https://github.com/milady-ai/eliza.git eliza
+          fi
           node scripts/init-submodules.mjs
           node scripts/apply-eliza-ci-patches.mjs
           node scripts/disable-local-eliza-workspace.mjs
@@ -708,13 +707,7 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
       - name: Generate eliza i18n keyword data
-        # eliza/packages/shared/src/i18n/keyword-matching.ts imports from
-        # ./generated/validation-keyword-data.js, which is gitignored and
-        # produced by packages/shared/scripts/generate-keywords.mjs. The
-        # Debian build runs a Vite/Rolldown production build via
-        # debian/rules and will fail to resolve the generated module on a
-        # fresh checkout unless this step runs first.
-        run: node eliza/packages/app-core/scripts/ensure-shared-i18n-data.mjs
+        run: node scripts/run-eliza-app-core-script.mjs ensure-shared-i18n-data.mjs
       - name: Stage Debian packaging
         run: |
           rm -rf debian
@@ -859,8 +852,9 @@ jobs:
       - uses: actions/checkout@v4
       - name: Initialize eliza docs
         run: |
-          git submodule sync -- eliza
-          git submodule update --init --depth=1 eliza
+          if [ ! -f eliza/docs/docs.json ]; then
+            git clone --depth=1 --branch "${MILADY_ELIZA_BRANCH:-develop}" https://github.com/milady-ai/eliza.git eliza
+          fi
       - uses: actions/setup-node@v4
         with:
           node-version: 22

@@ -110,11 +110,30 @@ test("cloud image build stages Milady app into Dockerfile layout", () => {
 
   assert.match(
     cloudImage,
+    /git clone --depth=1 --branch "\$\{MILADY_ELIZA_BRANCH:-develop\}" https:\/\/github\.com\/milady-ai\/eliza\.git eliza/,
+  );
+  assert.doesNotMatch(
+    cloudImage,
+    /git submodule update --init --depth=1 eliza/,
+  );
+  assert.match(
+    cloudImage,
     /cp apps\/app\/package\.json packages\/app\/package\.json/,
   );
   assert.match(cloudImage, /cp -R apps\/app\/dist packages\/app\/dist/);
   assert.match(cloudImage, /test -f packages\/app\/package\.json/);
   assert.match(cloudImage, /test -d packages\/app\/dist/);
+});
+
+test("release jobs hydrate eliza source without a root eliza gitlink", () => {
+  const release = workflow("agent-release.yml");
+
+  assert.match(
+    release,
+    /git clone --depth=1 --branch "\$\{MILADY_ELIZA_BRANCH:-develop\}" https:\/\/github\.com\/milady-ai\/eliza\.git eliza/,
+  );
+  assert.doesNotMatch(release, /git submodule sync -- eliza/);
+  assert.doesNotMatch(release, /git submodule update --init --depth=1 eliza/);
 });
 
 test("npm release builds generate gitignored eliza i18n data before bundling", () => {
@@ -128,7 +147,7 @@ test("npm release builds generate gitignored eliza i18n data before bundling", (
   for (const content of [release, reusableNpmPublish]) {
     assert.match(
       content,
-      /node eliza\/packages\/app-core\/scripts\/ensure-shared-i18n-data\.mjs[\s\S]*?bunx tsdown/,
+      /node scripts\/run-eliza-app-core-script\.mjs ensure-shared-i18n-data\.mjs[\s\S]*?bunx tsdown/,
     );
   }
   assert.match(
@@ -303,7 +322,7 @@ test("Electrobun release workflow root bun scripts are wired", () => {
   }
   assert.equal(
     scripts["test:regression-matrix:release-contract"],
-    "node eliza/packages/app-core/scripts/validate-regression-matrix.mjs --workflow release-contract",
+    "node scripts/run-eliza-app-core-script.mjs validate-regression-matrix.mjs --workflow release-contract",
   );
 });
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveElizaAppCoreScript } from "./lib/resolve-eliza-app-core-script.mjs";
@@ -42,12 +43,32 @@ if (!scriptName) {
 }
 
 const scriptPath = resolveElizaAppCoreScript(scriptName, { repoRoot });
+const localRegressionMatrixScript = path.join(
+  localElizaRoot,
+  "packages",
+  "app-core",
+  "scripts",
+  "validate-regression-matrix.mjs",
+);
+const localRegressionMatrix = path.join(
+  localElizaRoot,
+  "packages",
+  "app-core",
+  "test",
+  "regression-matrix.json",
+);
+const resolvedScriptPath =
+  scriptName === "validate-regression-matrix.mjs" &&
+  fs.existsSync(localRegressionMatrixScript) &&
+  fs.existsSync(localRegressionMatrix)
+    ? localRegressionMatrixScript
+    : scriptPath;
 const useBun = path
-  .resolve(scriptPath)
+  .resolve(resolvedScriptPath)
   .startsWith(`${path.resolve(localElizaRoot)}${path.sep}`);
 const child = spawn(
   useBun ? resolveBunExecutable() : process.execPath,
-  [scriptPath, ...scriptArgs],
+  [resolvedScriptPath, ...scriptArgs],
   {
     cwd: repoRoot,
     env: process.env,

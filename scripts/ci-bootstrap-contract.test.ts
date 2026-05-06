@@ -98,6 +98,22 @@ describe("CI bootstrap contract", () => {
     );
   });
 
+  it("hydrates local eliza runtime from the canonical repo in package-mode CI", () => {
+    const setupAction = fs.readFileSync(
+      ".github/actions/setup-bun-workspace/action.yml",
+      "utf8",
+    );
+    const cloneCommand =
+      'git clone --depth=1 --branch "$' +
+      '{MILADY_ELIZA_BRANCH:-develop}" https://github.com/milady-ai/eliza.git eliza';
+
+    expect(setupAction).toContain(cloneCommand);
+    expect(setupAction).not.toContain("git submodule sync -- eliza");
+    expect(setupAction).not.toContain(
+      "git submodule update --init --depth=1 eliza",
+    );
+  });
+
   it("builds local runtime plugins after auth package alignment", () => {
     const agentReview = workflow("agent-review.yml");
     const align = "- name: Align nested eliza package resolution";
