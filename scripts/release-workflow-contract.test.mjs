@@ -132,7 +132,9 @@ test("cloud image build stages Milady app into Dockerfile layout", () => {
     cloudImage,
     /export PATH="\$GITHUB_WORKSPACE\/eliza\/node_modules\/\.bin:\$GITHUB_WORKSPACE\/eliza\/packages\/schemas\/node_modules\/\.bin:\$PATH"/,
   );
-  assert.match(cloudImage, /RUN node <<'EOF'[\s\S]*?RUN node - <<'EOF'/);
+  assert.match(cloudImage, /node scripts\/apply-eliza-ci-patches\.mjs/);
+  assert.match(cloudImage, /cloud-image-prune-deps\.mjs/);
+  assert.doesNotMatch(cloudImage, /RUN node - <<'EOF'/);
   assert.match(cloudImage, /git show HEAD:bun\.lock > bun\.lock/);
   assert.doesNotMatch(
     cloudImage,
@@ -145,6 +147,30 @@ test("cloud image build stages Milady app into Dockerfile layout", () => {
   assert.match(cloudImage, /cp -R apps\/app\/dist packages\/app\/dist/);
   assert.match(cloudImage, /test -f packages\/app\/package\.json/);
   assert.match(cloudImage, /test -d packages\/app\/dist/);
+});
+
+test("eliza CI patches align release source helpers", () => {
+  const patchScript = fs.readFileSync(
+    "scripts/apply-eliza-ci-patches.mjs",
+    "utf8",
+  );
+  const pruneScript = fs.readFileSync(
+    "scripts/cloud-image-prune-deps.mjs",
+    "utf8",
+  );
+
+  assert.match(
+    patchScript,
+    /"@elizaos\/agent\/runtime\/release-plugin-policy\.js"[\s\S]*"@elizaos\/agent\/runtime\/release-plugin-policy"/,
+  );
+  assert.match(
+    patchScript,
+    /COPY scripts\/cloud-image-prune-deps\.mjs \.\/scripts\/cloud-image-prune-deps\.mjs\\nRUN bun scripts\/cloud-image-prune-deps\.mjs/,
+  );
+  assert.match(
+    pruneScript,
+    /plugin-agent-orchestrator\|plugin-app-control\|plugin-cli/,
+  );
 });
 
 test("release jobs hydrate eliza source without a root eliza gitlink", () => {

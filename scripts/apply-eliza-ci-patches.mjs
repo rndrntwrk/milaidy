@@ -102,6 +102,49 @@ function tryApplyPatchChunk(chunk) {
   }
 }
 
+function replaceFileText(filePath, transform, label) {
+  if (!fs.existsSync(filePath)) return;
+  const raw = fs.readFileSync(filePath, "utf8");
+  const next = transform(raw);
+  if (next === raw) return;
+  fs.writeFileSync(filePath, next);
+  console.log(`[apply-eliza-ci-patches] patched ${label}`);
+}
+
+function patchCloudDockerfile(raw) {
+  const match = raw.match(
+    /RUN node(?: -)? <<'EOF'\nconst fs = require\("fs"\);[\s\S]*?\nEOF\n(?=# Drop --frozen-lockfile)/,
+  );
+  if (match?.index === undefined) {
+    return raw;
+  }
+  return `${raw.slice(0, match.index)}COPY scripts/cloud-image-prune-deps.mjs ./scripts/cloud-image-prune-deps.mjs\nRUN bun scripts/cloud-image-prune-deps.mjs\n${raw.slice(match.index + match[0].length)}`;
+}
+
+function applyMiladyReleaseSourcePatches() {
+  replaceFileText(
+    path.join(
+      elizaDir,
+      "packages",
+      "app-core",
+      "scripts",
+      "runtime-package-manifest.ts",
+    ),
+    (raw) =>
+      raw.replace(
+        '"@elizaos/agent/runtime/release-plugin-policy.js"',
+        '"@elizaos/agent/runtime/release-plugin-policy"',
+      ),
+    "runtime-package-manifest release-plugin-policy import",
+  );
+
+  replaceFileText(
+    path.join(elizaDir, "packages", "app-core", "deploy", "Dockerfile.cloud"),
+    patchCloudDockerfile,
+    "Dockerfile.cloud dependency pruning runner",
+  );
+}
+
 function main() {
   if (!fs.existsSync(path.join(elizaDir, "package.json"))) {
     console.log(
@@ -116,6 +159,7 @@ function main() {
     console.log(
       `[apply-eliza-ci-patches] no eliza CI patch file found at ${path.relative(repoRoot, patchPath)}; assuming current eliza checkout carries the required CI contracts`,
     );
+    applyMiladyReleaseSourcePatches();
     return;
   }
 
@@ -125,6 +169,7 @@ function main() {
   );
   if (wholeApplied.status === 0) {
     console.log("[apply-eliza-ci-patches] eliza CI patches already applied");
+    applyMiladyReleaseSourcePatches();
     return;
   }
 
@@ -134,6 +179,7 @@ function main() {
   if (wholeCheck.status === 0) {
     runGit(["apply", "--unidiff-zero", patchPath]);
     console.log("[apply-eliza-ci-patches] applied eliza CI patches");
+    applyMiladyReleaseSourcePatches();
     return;
   }
 
@@ -170,6 +216,7 @@ function main() {
       `[apply-eliza-ci-patches] ${drifted.length} file(s) drifted from upstream and were skipped:\n  - ${drifted.join("\n  - ")}\nRegenerate eliza/patches/milady/eliza-ci-bootstrap/ci-release-contracts.patch against the current eliza submodule HEAD.`,
     );
   }
+  applyMiladyReleaseSourcePatches();
 }
 
 try {
