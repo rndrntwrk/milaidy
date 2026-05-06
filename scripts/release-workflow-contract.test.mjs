@@ -286,6 +286,20 @@ test("GitHub workflows use the verified Bun runtime", () => {
   }
 });
 
+test("E2E secret rotation workflow points at tracked scripts", () => {
+  const rotate = workflow("rotate-e2e-secrets.yml");
+  const scripts = [
+    "scripts/rotate-e2e-secrets.mjs",
+    "scripts/check-e2e-secrets-expiry.mjs",
+  ];
+
+  for (const scriptPath of scripts) {
+    assert.ok(fs.existsSync(scriptPath), `${scriptPath} missing`);
+    assert.match(rotate, new RegExp(`node ${scriptPath}`));
+  }
+  assert.doesNotMatch(rotate, /bun run scripts\/(?:rotate|check)-e2e-secrets/);
+});
+
 test("Electrobun Windows smoke validates the public installer", () => {
   const electrobun = workflow("release-electrobun.yml");
 
