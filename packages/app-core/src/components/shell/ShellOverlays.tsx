@@ -1,8 +1,8 @@
 import { Spinner, Z_SHELL_OVERLAY } from "@miladyai/ui";
 import type { ActionNotice } from "../../state/types";
+import { GlobalEmoteOverlay } from "../companion/GlobalEmoteOverlay";
 import { BugReportModal } from "./BugReportModal";
 import { CommandPalette } from "./CommandPalette";
-import { GlobalEmoteOverlay } from "../companion/GlobalEmoteOverlay";
 import { RestartBanner } from "./RestartBanner";
 import { ShortcutsOverlay } from "./ShortcutsOverlay";
 

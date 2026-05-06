@@ -81,11 +81,6 @@ import type {
   WalletTradingProfileSourceFilter,
   WalletTradingProfileWindow,
 } from "@miladyai/agent/contracts/wallet";
-import type { AvatarSpeechManifest } from "@miladyai/shared/contracts";
-import type {
-  CaptureLifeOpsActivitySignalRequest,
-  LifeOpsActivitySignal,
-} from "@miladyai/shared/contracts/lifeops";
 import {
   DEFAULT_WALLET_RPC_SELECTIONS,
   normalizeWalletRpcProviderId,
@@ -97,6 +92,11 @@ import {
   sanitizeForSettingsDebug,
   settingsDebugCloudSummary,
 } from "@miladyai/shared";
+import type { AvatarSpeechManifest } from "@miladyai/shared/contracts";
+import type {
+  CaptureLifeOpsActivitySignalRequest,
+  LifeOpsActivitySignal,
+} from "@miladyai/shared/contracts/lifeops";
 import type {
   CompanionStageState,
   PartialCompanionStageState,
@@ -2363,7 +2363,8 @@ export class MiladyClient {
     // Session storage can survive a prior local runtime; it must not beat the
     // boot config injected by the current shell/server process.
     const bootBase = getBootConfig().apiBase;
-    this._baseUrl = baseUrl ?? bootBase ?? getElizaApiBase() ?? storedBase ?? "";
+    this._baseUrl =
+      baseUrl ?? bootBase ?? getElizaApiBase() ?? storedBase ?? "";
   }
 
   /**
@@ -2573,13 +2574,17 @@ export class MiladyClient {
     init?: RequestInit,
     options?: { allowNonOk?: boolean; timeoutMs?: number },
   ): Promise<T> {
-    const res = await this.rawRequest(path, {
-      ...init,
-      headers: {
-        "Content-Type": "application/json",
-        ...init?.headers,
+    const res = await this.rawRequest(
+      path,
+      {
+        ...init,
+        headers: {
+          "Content-Type": "application/json",
+          ...init?.headers,
+        },
       },
-    }, options);
+      options,
+    );
     return res.json() as Promise<T>;
   }
 
@@ -3944,9 +3949,7 @@ export class MiladyClient {
     return this.fetch("/api/wallet/steward-pending-approvals");
   }
 
-  async approveStewardTx(
-    txId: string,
-  ): Promise<StewardApprovalActionResponse> {
+  async approveStewardTx(txId: string): Promise<StewardApprovalActionResponse> {
     return this.fetch("/api/wallet/steward-approve-tx", {
       method: "POST",
       body: JSON.stringify({ txId }),
@@ -4231,9 +4234,7 @@ export class MiladyClient {
     }
 
     try {
-      const stored = localStorage
-        .getItem("milady.arcade555.sessionId")
-        ?.trim();
+      const stored = localStorage.getItem("milady.arcade555.sessionId")?.trim();
       if (stored) return stored;
       localStorage.setItem("milady.arcade555.sessionId", fallback);
     } catch {

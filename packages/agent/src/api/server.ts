@@ -174,23 +174,23 @@ import {
 } from "./chat-routes.js";
 import { handleCloudBillingRoute } from "./cloud-billing-routes.js";
 import { handleCloudCompatRoute } from "./cloud-compat-routes.js";
-import { isCloudflareAccessAuthenticated } from "./cloudflare-access-auth.js";
 import { isCloudProvisionedContainer } from "./cloud-provisioning.js";
 import { handleCloudRelayRoute } from "./cloud-relay-routes.js";
 import { type CloudRouteState, handleCloudRoute } from "./cloud-routes.js";
 import { handleCloudStatusRoutes } from "./cloud-status-routes.js";
+import { isCloudflareAccessAuthenticated } from "./cloudflare-access-auth.js";
 import { extractCompatTextContent } from "./compat-utils.js";
 import { handleConfigRoutes } from "./config-routes.js";
 import { ConnectorHealthMonitor } from "./connector-health.js";
 import { handleConnectorRoutes } from "./connector-routes.js";
 import { handleConversationRoutes } from "./conversation-routes.js";
-import { handleCrossChannelIngestRoutes } from "./cross-channel-ingest-routes.js";
 import type {
   SwarmEvent,
   TaskCompletionSummary,
   TaskContext,
 } from "./coordinator-types.js";
 import { wireCoordinatorBridgesWhenReady } from "./coordinator-wiring.js";
+import { handleCrossChannelIngestRoutes } from "./cross-channel-ingest-routes.js";
 import { handleDatabaseRoute } from "./database.js";
 import { handleDiagnosticsRoutes } from "./diagnostics-routes.js";
 import { handleDiscordLocalRoute } from "./discord-local-routes.js";
@@ -717,7 +717,9 @@ export interface ServerState {
     import("../services/signal-pairing.js").SignalPairingSnapshot
   >;
   /** Active Telegram account auth session (user-account login flow). */
-  telegramAccountAuthSession?: import("../services/telegram-account-auth.js").TelegramAccountAuthSessionLike | null;
+  telegramAccountAuthSession?:
+    | import("../services/telegram-account-auth.js").TelegramAccountAuthSessionLike
+    | null;
 }
 
 export interface ShareIngestItem {
@@ -5817,8 +5819,7 @@ async function handleRequest(
       routeState,
       { json, error, readJsonBody },
       {
-        createAuthSession: (options) =>
-          new TelegramAccountAuthSession(options),
+        createAuthSession: (options) => new TelegramAccountAuthSession(options),
         authStateExists: telegramAccountAuthStateExists,
         sessionExists: telegramAccountSessionExists,
         clearAuthState: clearTelegramAccountAuthState,

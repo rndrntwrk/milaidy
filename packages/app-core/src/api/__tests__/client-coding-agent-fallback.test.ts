@@ -7,9 +7,9 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   MiladyClient,
-  type RawPtySession,
   mapPtySessionsToCodingAgentSessions,
   mapTaskThreadsToCodingAgentSessions,
+  type RawPtySession,
 } from "../client";
 
 describe("mapPtySessionsToCodingAgentSessions", () => {
