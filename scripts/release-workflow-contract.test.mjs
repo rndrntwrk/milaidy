@@ -147,10 +147,8 @@ test("cloud image build stages Milady app into Dockerfile layout", () => {
   assert.match(cloudImage, /cp -R apps\/app\/dist packages\/app\/dist/);
   assert.match(cloudImage, /test -f packages\/app\/package\.json/);
   assert.match(cloudImage, /test -d packages\/app\/dist/);
-  assert.match(cloudImage, /!eliza\/cloud\//);
-  assert.match(cloudImage, /!eliza\/cloud\/packages\//);
-  assert.match(cloudImage, /!eliza\/cloud\/packages\/sdk\//);
-  assert.match(cloudImage, /!eliza\/cloud\/packages\/sdk\/\*\*/);
+  assert.match(cloudImage, /cp -R eliza\/cloud\/packages\/sdk cloud-sdk/);
+  assert.match(cloudImage, /test -f cloud-sdk\/package\.json/);
 });
 
 test("eliza CI patches align release source helpers", () => {
@@ -172,10 +170,7 @@ test("eliza CI patches align release source helpers", () => {
     /COPY scripts\/cloud-image-prune-deps\.mjs \.\/scripts\/cloud-image-prune-deps\.mjs\\nRUN bun scripts\/cloud-image-prune-deps\.mjs/,
   );
   assert.match(patchScript, /COPY patches \.\/patches/);
-  assert.match(
-    patchScript,
-    /COPY eliza\/cloud\/packages\/sdk \.\/eliza\/cloud\/packages\/sdk/,
-  );
+  assert.match(patchScript, /COPY cloud-sdk \.\/eliza\/cloud\/packages\/sdk/);
   assert.match(patchScript, /build-patched-electrobun-cli\.mjs/);
   assert.match(patchScript, /require\.resolve\("rcedit\/package\.json"\)/);
   assert.match(

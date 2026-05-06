@@ -119,12 +119,10 @@ function patchCloudDockerfile(raw) {
       "COPY package.json bun.lock ./\nCOPY patches ./patches\n",
     );
   }
-  if (
-    !next.includes("COPY eliza/cloud/packages/sdk ./eliza/cloud/packages/sdk")
-  ) {
+  if (!next.includes("COPY cloud-sdk ./eliza/cloud/packages/sdk")) {
     next = next.replace(
       "COPY eliza/plugins/plugin-elizacloud/package.json ./eliza/plugins/plugin-elizacloud/package.json\n",
-      "COPY eliza/plugins/plugin-elizacloud/package.json ./eliza/plugins/plugin-elizacloud/package.json\nCOPY eliza/cloud/packages/sdk ./eliza/cloud/packages/sdk\n",
+      "COPY eliza/plugins/plugin-elizacloud/package.json ./eliza/plugins/plugin-elizacloud/package.json\nCOPY cloud-sdk ./eliza/cloud/packages/sdk\n",
     );
   }
 
