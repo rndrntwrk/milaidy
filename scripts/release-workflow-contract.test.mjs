@@ -367,7 +367,11 @@ test("Electrobun Windows release runs packaged Playwright check after disk clean
   assert.match(hydrateScript, /@playwright\/test@1\.59\.1/);
   assert.match(hydrateScript, /@elizaos\/plugin-elizacloud/);
   assert.match(hydrateScript, /@elizaos\/cloud-sdk/);
+  assert.match(hydrateScript, /@elizaos\/core/);
+  assert.match(hydrateScript, /@elizaos\/plugin-sql/);
+  assert.match(hydrateScript, /plugins", "plugin-sql/);
   assert.match(hydrateScript, /linkElizaPackage/);
+  assert.match(hydrateScript, /linkScopedPackage/);
   assert.match(hydrateScript, /symlinkSync/);
   assert.match(hydrateScript, /junction/);
   assert.doesNotMatch(

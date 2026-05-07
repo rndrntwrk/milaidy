@@ -18,11 +18,10 @@ function run(args, options = {}) {
 }
 
 function removeExistingLink(linkPath) {
-  if (!fs.existsSync(linkPath)) return;
   fs.rmSync(linkPath, { recursive: true, force: true });
 }
 
-function linkElizaPackage(scopedPackageName, sourcePath) {
+function linkScopedPackage(nodeModulesRoot, scopedPackageName, sourcePath) {
   if (!fs.existsSync(path.join(sourcePath, "package.json"))) return;
 
   const [scopeName, packageName] = scopedPackageName.split("/");
@@ -30,7 +29,7 @@ function linkElizaPackage(scopedPackageName, sourcePath) {
     throw new Error(`Unsupported elizaOS package link: ${scopedPackageName}`);
   }
 
-  const scopeDir = path.join(repoRoot, "eliza", "node_modules", scopeName);
+  const scopeDir = path.join(nodeModulesRoot, scopeName);
   const linkPath = path.join(scopeDir, packageName);
   fs.mkdirSync(scopeDir, { recursive: true });
   removeExistingLink(linkPath);
@@ -45,6 +44,14 @@ function linkElizaPackage(scopedPackageName, sourcePath) {
   }
 }
 
+function linkElizaPackage(scopedPackageName, sourcePath) {
+  linkScopedPackage(
+    path.join(repoRoot, "eliza", "node_modules"),
+    scopedPackageName,
+    sourcePath,
+  );
+}
+
 run(
   ["add", "--no-save", "--dev", "--ignore-scripts", "@playwright/test@1.59.1"],
   {
@@ -54,6 +61,10 @@ run(
 
 const elizaRoot = path.join(repoRoot, "eliza");
 if (fs.existsSync(path.join(elizaRoot, "package.json"))) {
+  const corePath = path.join(elizaRoot, "packages", "core");
+  const sqlPluginPath = path.join(elizaRoot, "plugins", "plugin-sql");
+
+  linkElizaPackage("@elizaos/core", corePath);
   linkElizaPackage(
     "@elizaos/cloud-sdk",
     path.join(elizaRoot, "cloud", "packages", "sdk"),
@@ -61,5 +72,16 @@ if (fs.existsSync(path.join(elizaRoot, "package.json"))) {
   linkElizaPackage(
     "@elizaos/plugin-elizacloud",
     path.join(elizaRoot, "plugins", "plugin-elizacloud"),
+  );
+  linkElizaPackage("@elizaos/plugin-sql", sqlPluginPath);
+  linkScopedPackage(
+    path.join(sqlPluginPath, "node_modules"),
+    "@elizaos/core",
+    corePath,
+  );
+  linkScopedPackage(
+    path.join(sqlPluginPath, "typescript", "node_modules"),
+    "@elizaos/core",
+    corePath,
   );
 }
