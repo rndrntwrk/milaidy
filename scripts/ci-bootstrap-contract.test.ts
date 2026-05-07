@@ -24,11 +24,16 @@ describe("CI bootstrap contract", () => {
   it("builds explicit local runtime packages for the agent image", () => {
     const buildDocker = workflow("build-docker.yml");
     const postinstall = "- name: Run postinstall patches";
+    const sourcePatches = "- name: Apply elizaOS source CI patches";
     const coreBuild = "- name: Build @elizaos/core";
     const agentBuild = "- name: Build agent workspace";
     const sharedBuild = "- name: Build @elizaos/shared";
     const runtimeBuild = "- name: Build runtime (tsdown)";
 
+    expect(buildDocker).toContain(sourcePatches);
+    expect(buildDocker.indexOf(sourcePatches)).toBeLessThan(
+      buildDocker.indexOf(coreBuild),
+    );
     expect(buildDocker.indexOf(postinstall)).toBeLessThan(
       buildDocker.indexOf(coreBuild),
     );

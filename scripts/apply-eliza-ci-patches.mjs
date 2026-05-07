@@ -178,7 +178,14 @@ function patchDesktopSmokeScript(raw) {
     );
 }
 
-function applyMiladyReleaseSourcePatches() {
+function patchCoreRuntimeTypes(raw) {
+  return raw.replace(
+    'type StructuredResponseFormat = "JSON";',
+    'type StructuredResponseFormat = "JSON" | "TOON";',
+  );
+}
+
+function applyReleaseSourcePatches() {
   replaceFileText(
     path.join(
       elizaDir,
@@ -228,6 +235,12 @@ function applyMiladyReleaseSourcePatches() {
       `Electrobun packaged avatar smoke assets (${scriptName})`,
     );
   }
+
+  replaceFileText(
+    path.join(elizaDir, "packages", "core", "src", "runtime.ts"),
+    patchCoreRuntimeTypes,
+    "core structured response format type",
+  );
 }
 
 function main() {
@@ -244,7 +257,7 @@ function main() {
     console.log(
       `[apply-eliza-ci-patches] no eliza CI patch file found at ${path.relative(repoRoot, patchPath)}; assuming current eliza checkout carries the required CI contracts`,
     );
-    applyMiladyReleaseSourcePatches();
+    applyReleaseSourcePatches();
     return;
   }
 
@@ -254,7 +267,7 @@ function main() {
   );
   if (wholeApplied.status === 0) {
     console.log("[apply-eliza-ci-patches] eliza CI patches already applied");
-    applyMiladyReleaseSourcePatches();
+    applyReleaseSourcePatches();
     return;
   }
 
@@ -264,7 +277,7 @@ function main() {
   if (wholeCheck.status === 0) {
     runGit(["apply", "--unidiff-zero", patchPath]);
     console.log("[apply-eliza-ci-patches] applied eliza CI patches");
-    applyMiladyReleaseSourcePatches();
+    applyReleaseSourcePatches();
     return;
   }
 
@@ -301,7 +314,7 @@ function main() {
       `[apply-eliza-ci-patches] ${drifted.length} file(s) drifted from upstream and were skipped:\n  - ${drifted.join("\n  - ")}\nRegenerate eliza/patches/milady/eliza-ci-bootstrap/ci-release-contracts.patch against the current eliza submodule HEAD.`,
     );
   }
-  applyMiladyReleaseSourcePatches();
+  applyReleaseSourcePatches();
 }
 
 try {

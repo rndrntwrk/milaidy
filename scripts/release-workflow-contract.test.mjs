@@ -230,6 +230,10 @@ test("eliza CI patches align release source helpers", () => {
   assert.match(patchScript, /smoke-test-windows\.ps1/);
   assert.match(patchScript, /smoke-test\.sh/);
   assert.match(patchScript, /milady-1/);
+  assert.match(
+    patchScript,
+    /type StructuredResponseFormat = "JSON";[\s\S]*type StructuredResponseFormat = "JSON" \| "TOON";/,
+  );
   assert.match(patchScript, /\/\\\$defaultAvatarAssetSlugs\\s\*=\\s\*@/);
   assert.match(
     patchScript,
@@ -245,6 +249,7 @@ test("eliza CI patches align release source helpers", () => {
 
 test("release jobs hydrate eliza source without a root eliza gitlink", () => {
   const release = workflow("agent-release.yml");
+  const buildDocker = workflow("build-docker.yml");
 
   assert.match(
     release,
@@ -252,6 +257,10 @@ test("release jobs hydrate eliza source without a root eliza gitlink", () => {
   );
   assert.doesNotMatch(release, /git submodule sync -- eliza/);
   assert.doesNotMatch(release, /git submodule update --init --depth=1 eliza/);
+  assert.match(
+    buildDocker,
+    /name: Apply elizaOS source CI patches[\s\S]*?run: node scripts\/apply-eliza-ci-patches\.mjs[\s\S]*?name: Repair known eliza patch files/,
+  );
 });
 
 test("release docs validation tracks current eliza docs package layout", () => {

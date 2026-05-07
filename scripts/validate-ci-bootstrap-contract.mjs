@@ -169,6 +169,8 @@ assertContainsAll(
   ".github/workflows/build-docker.yml",
   [
     'MILADY_SKIP_LOCAL_UPSTREAMS: "1"',
+    "- name: Apply elizaOS source CI patches",
+    "run: node scripts/apply-eliza-ci-patches.mjs",
     "- name: Build @elizaos/core",
     "- name: Build agent workspace",
     "- name: Build @elizaos/shared",
@@ -179,6 +181,7 @@ assertOrdered(
   buildDockerText,
   ".github/workflows/build-docker.yml",
   [
+    "- name: Apply elizaOS source CI patches",
     "- name: Run postinstall patches",
     "- name: Build @elizaos/core",
     "- name: Build agent workspace",

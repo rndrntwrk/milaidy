@@ -156,6 +156,9 @@ jobs:
         env:
           MILADY_SKIP_CLOUD_SUBMODULE: "1"
 
+      - name: Apply elizaOS source CI patches
+        run: node scripts/apply-eliza-ci-patches.mjs
+
       - name: Repair known eliza patch files
         run: |
           node --input-type=module <<'NODE'
