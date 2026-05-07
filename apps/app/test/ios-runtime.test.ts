@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -15,10 +16,19 @@ const require = createRequire(import.meta.url);
 const appCoreRoot = path.dirname(
   require.resolve("@elizaos/app-core/package.json"),
 );
+const iosRuntimePath = [
+  path.join(appCoreRoot, "src/platform/ios-runtime.js"),
+  path.join(appCoreRoot, "src/platform/ios-runtime.ts"),
+  path.join(appCoreRoot, "packages/app-core/src/platform/ios-runtime.js"),
+  path.join(appCoreRoot, "packages/app-core/src/platform/ios-runtime.ts"),
+].find((candidate) => fs.existsSync(candidate));
+
+if (!iosRuntimePath) {
+  throw new Error(`Unable to resolve app-core iOS runtime from ${appCoreRoot}`);
+}
+
 const iosRuntimeModule = (await import(
-  pathToFileURL(
-    path.join(appCoreRoot, "packages/app-core/src/platform/ios-runtime.js"),
-  ).href
+  pathToFileURL(iosRuntimePath).href
 )) as IosRuntimeModule;
 
 const {

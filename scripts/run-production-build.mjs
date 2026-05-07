@@ -50,9 +50,6 @@ if (!isLocalElizaDisabled()) {
   await run(process.execPath, [
     "scripts/ensure-elizaos-optional-app-stubs.mjs",
   ]);
-  await run(process.execPath, [
-    "scripts/patch-elizaos-package-esm-imports.mjs",
-  ]);
   await run(process.execPath, ["scripts/patch-elizaos-package-styles.mjs"]);
   await run(process.execPath, [
     "scripts/patch-elizaos-plugin-browser-bridge-package.mjs",

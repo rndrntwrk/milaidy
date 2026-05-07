@@ -83,6 +83,9 @@ const nativeExternals = [
   "@reflink/reflink-linux-x64-gnu",
   "fsevents",
   "jose",
+  // Bun 1.3.13 fails evaluating Rolldown's unbundled ESM init wrappers for adze.
+  // Keep the package external so the desktop runtime loads its published ESM files.
+  "adze",
   // Keep React external for Node server builds; bundling it introduces incompatible wrappers.
   "react",
   "react-dom",
@@ -118,9 +121,9 @@ export default [
     env,
     fixedExtension: false,
     platform: "node",
-    unbundle: true,
     inlineOnly: false,
     external: allExternals,
+    outputOptions: { codeSplitting: false },
   },
   {
     entry: appCoreEntry("runtime/eliza", "src/runtime/eliza.ts"),

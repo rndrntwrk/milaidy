@@ -17,6 +17,16 @@ describe("package mode aliases", () => {
     ]);
   });
 
+  it("keeps local wallet source real when available because it is enabled by default", () => {
+    const viteConfigText = fs.readFileSync(
+      path.join(appRoot, "vite.config.ts"),
+      "utf8",
+    );
+
+    expect(viteConfigText).toContain("shouldResolveRealWalletApp");
+    expect(viteConfigText).toContain("plugins/app-wallet/package.json");
+  });
+
   it("stubs unpublished native plugin packages", () => {
     const tsconfig = JSON.parse(
       fs.readFileSync(path.join(appRoot, "tsconfig.json"), "utf8"),

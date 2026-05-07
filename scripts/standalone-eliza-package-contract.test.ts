@@ -99,7 +99,7 @@ test("package manifests default to published elizaOS alpha packages", () => {
   ]) {
     assert.equal(
       appPackage.dependencies[packageName],
-      "1.0.0",
+      "alpha",
       `${packageName} must resolve from npm for Capacitor package mode`,
     );
   }
@@ -229,18 +229,25 @@ test("package-mode install repairs stale local node_modules links", () => {
   assert.match(repairScript, /findBunStorePackage/);
 });
 
-test("package-mode patches published capacitor-agent native files", () => {
+test("package-mode no longer carries migrated elizaOS package patches", () => {
+  const rootPackage = readJson("package.json");
   const postinstallScript = read("scripts/milady-postinstall-repo-setup.mjs");
-  const mobilePatchScript = read("scripts/patch-elizaos-app-core-mobile-package.mjs");
-  const patchScript = read("scripts/patch-elizaos-capacitor-agent-package.mjs");
+  const appBuildScript = read("scripts/run-app-web-build.mjs");
+  const productionBuildScript = read("scripts/run-production-build.mjs");
+  const migratedPatchScripts = [
+    "patch-elizaos-package-esm-imports.mjs",
+    "patch-elizaos-app-core-mobile-package.mjs",
+    "patch-elizaos-capacitor-agent-package.mjs",
+  ];
 
-  assert.match(postinstallScript, /patch-elizaos-app-core-mobile-package\.mjs/);
-  assert.match(postinstallScript, /patch-elizaos-capacitor-agent-package\.mjs/);
-  assert.match(mobilePatchScript, /capacitor", "sync", "android"/);
-  assert.match(mobilePatchScript, /capacitor", "sync", "ios"/);
-  assert.match(patchScript, /@elizaos\/capacitor-agent/);
-  assert.match(patchScript, /android\/src\/main\/AndroidManifest\.xml/);
-  assert.match(patchScript, /ElizaosCapacitorAgent\.podspec/);
+  for (const scriptName of migratedPatchScripts) {
+    assert.equal(fs.existsSync(`scripts/${scriptName}`), false);
+    assert.ok(!rootPackage.files.includes(`scripts/${scriptName}`));
+    const scriptPattern = new RegExp(scriptName.replaceAll(".", "\\."));
+    assert.doesNotMatch(postinstallScript, scriptPattern);
+    assert.doesNotMatch(appBuildScript, scriptPattern);
+    assert.doesNotMatch(productionBuildScript, scriptPattern);
+  }
 });
 
 test("root tsconfig.json is packages-mode-clean by default", () => {

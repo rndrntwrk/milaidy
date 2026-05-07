@@ -78,7 +78,6 @@ concurrency:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: milady-ai/agent
-  DEPOT_PROJECT_ID: m89t0f0p08
 
 permissions:
   contents: read
@@ -307,20 +306,10 @@ jobs:
       - name: Set up CI dockerignore
         run: cp eliza/packages/app-core/deploy/.dockerignore.ci .dockerignore
 
-      # ── 13. Set up Depot CLI ────────────────────────────────────────────────
-      # Docker builds run on Depot infrastructure (persistent cache, no GHA
-      # docker-daemon fragility). `DEPOT_TOKEN` secret must be set on the repo.
-      # Set repo variable DEPOT_ENABLED=false to skip Depot entirely and go
-      # straight to the Buildx fallback (e.g. when the Depot account is
-      # unavailable).
-      - name: Set up Depot CLI
-        if: vars.DEPOT_ENABLED != 'false'
-        uses: depot/setup-action@v1
-
-      - name: Set up Docker Buildx fallback
+      - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # ── 14. Login to GHCR ───────────────────────────────────────────────────
+      # ── 13. Login to GHCR ───────────────────────────────────────────────────
       - name: Login to GHCR
         uses: docker/login-action@v3
         if: ${{ github.event_name == 'push' || inputs.push_image != false }}
@@ -329,7 +318,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # ── 13. Docker image metadata ───────────────────────────────────────────
+      # ── 14. Docker image metadata ───────────────────────────────────────────
       - name: Docker metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -340,45 +329,8 @@ jobs:
             type=raw,value=latest,enable=${{ steps.version.outputs.tag_latest == 'true' }}
             type=raw,value=dev,enable=${{ steps.version.outputs.is_release == 'false' }}
 
-      # ── 14. Build and push (on Depot, with Buildx fallback) ────────────────
-      # depot/build-push-action builds on Depot's BuildKit workers (persistent
-      # layer cache, no GHA daemon). Push goes directly from Depot to GHCR,
-      # sidestepping the GHA → GHCR 403 class of failures on restricted tokens.
-      - name: Build and push Docker image with Depot
-        id: depot-build
-        if: vars.DEPOT_ENABLED != 'false'
-        continue-on-error: true
-        uses: depot/build-push-action@v1
-        with:
-          project: ${{ env.DEPOT_PROJECT_ID }}
-          token: ${{ secrets.DEPOT_TOKEN }}
-          context: .
-          file: eliza/packages/app-core/deploy/Dockerfile.ci
-          platforms: linux/amd64
-          push: ${{ github.event_name == 'push' || inputs.push_image != false }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            APP_CORE_DIR=eliza/packages/app-core
-            AGENT_DIR=eliza/packages/agent
-            APP_DIR=apps/app
-            APP_ENTRYPOINT=${{ env.APP_ENTRYPOINT }}
-            APP_CMD_START=${{ env.APP_CMD_START }}
-            APP_PORT=${{ env.APP_PORT }}
-            APP_API_BIND=${{ env.APP_API_BIND }}
-            OCI_SOURCE=${{ env.OCI_SOURCE }}
-            OCI_TITLE=${{ env.OCI_TITLE }}
-            OCI_DESCRIPTION=${{ env.OCI_DESCRIPTION }}
-            OCI_LICENSES=${{ env.OCI_LICENSES }}
-            VERSION=${{ steps.version.outputs.version }}
-            VERSION_CLEAN=${{ steps.version.outputs.version_clean }}
-            REVISION=${{ github.sha }}
-            MILADY_RELEASE_TAG=${{ steps.version.outputs.is_release == 'true' && steps.version.outputs.version || '' }}
-          provenance: false
-          buildx-fallback: true
-
-      - name: Build and push Docker image with Buildx fallback
-        if: vars.DEPOT_ENABLED == 'false' || steps.depot-build.outcome == 'failure'
+      # ── 15. Build and push Docker image ────────────────────────────────────
+      - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -405,7 +357,7 @@ jobs:
             MILADY_RELEASE_TAG=${{ steps.version.outputs.is_release == 'true' && steps.version.outputs.version || '' }}
           provenance: false
 
-      # ── 15. Build summary ───────────────────────────────────────────────────
+      # ── 16. Build summary ───────────────────────────────────────────────────
       - name: Build summary
         if: always()
         run: |

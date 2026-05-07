@@ -1,14 +1,112 @@
 import type {
   CompanionSceneStatus,
+  CompanionShellComponentProps,
   VincentStateHookArgs,
   VincentStateHookResult,
 } from "@elizaos/app-core";
-import type { ComponentType } from "react";
+import {
+  DEFAULT_WALLET_RPC_SELECTIONS,
+  normalizeWalletRpcSelections,
+  type WalletConfigStatus,
+  type WalletConfigUpdateRequest,
+  type WalletRpcChain,
+  type WalletRpcCredentialKey,
+  type WalletRpcSelections,
+} from "@elizaos/shared";
 import * as THREE from "three";
 
-const EmptyComponent: ComponentType = () => null;
+/** Stub that ignores props — optional-app packages resolve here without bundled implementations. */
+function EmptyComponent(_props: object): null {
+  return null;
+}
 
-export const CompanionShell = EmptyComponent;
+export const BSC_GAS_READY_THRESHOLD = 0.005;
+export const BSC_GAS_THRESHOLD = 0.005;
+export const HEX_ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
+export const PRIMARY_CHAIN_KEYS = [
+  "ethereum",
+  "base",
+  "bsc",
+  "avax",
+  "solana",
+] as const;
+export const CHAIN_CONFIGS = {};
+
+export function isAvaxChainName(chain: string): boolean {
+  const normalized = chain.trim().toLowerCase();
+  return (
+    normalized === "avax" ||
+    normalized === "avalanche" ||
+    normalized === "c-chain" ||
+    normalized === "avalanche c-chain"
+  );
+}
+
+export function isBscChainName(chain: string): boolean {
+  const normalized = chain.trim().toLowerCase();
+  return (
+    normalized === "bsc" ||
+    normalized === "bnb chain" ||
+    normalized === "bnb smart chain"
+  );
+}
+
+export function toNormalizedAddress(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+export function resolveChainKey(chain: string): string | null {
+  const normalized = chain.trim().toLowerCase();
+  return (PRIMARY_CHAIN_KEYS as readonly string[]).includes(normalized)
+    ? normalized
+    : null;
+}
+
+export function getChainConfig(): null {
+  return null;
+}
+
+export function getContractLogoUrl(): null {
+  return null;
+}
+
+export function getExplorerTokenUrl(): null {
+  return null;
+}
+
+export function getExplorerTxUrl(): null {
+  return null;
+}
+
+export function getNativeLogoUrl(): null {
+  return null;
+}
+
+export function getStablecoinAddress(): null {
+  return null;
+}
+
+export function chainKeyToWalletRpcChain(
+  chainFocus: string,
+): "evm" | "bsc" | "solana" | null {
+  if (chainFocus === "bsc" || chainFocus === "solana") return chainFocus;
+  if (
+    chainFocus === "ethereum" ||
+    chainFocus === "base" ||
+    chainFocus === "avax"
+  ) {
+    return "evm";
+  }
+  return null;
+}
+
+/** Matches real `@elizaos/app-companion/ui` — stub satisfies `AppBootConfig.companionShell`. */
+export function CompanionShell(_props: CompanionShellComponentProps): null {
+  return null;
+}
+export const ChainIcon = EmptyComponent;
+export const InventoryView = EmptyComponent;
+export const TokenLogo = EmptyComponent;
 export const GlobalEmoteOverlay = EmptyComponent;
 export const InferenceCloudAlertButton = EmptyComponent;
 export const LifeOpsActivitySignalsEffect = EmptyComponent;
@@ -28,6 +126,28 @@ export const FineTuningView = EmptyComponent;
 export function createVectorBrowserRenderer(): Promise<null> {
   return Promise.resolve(null);
 }
+
+export function useInventoryData(): {
+  balances: null;
+  loading: boolean;
+  error: null;
+  refresh: () => Promise<void>;
+} {
+  return {
+    balances: null,
+    loading: false,
+    error: null,
+    refresh: asyncNoop,
+  };
+}
+
+export const WALLET_STATUS_WIDGET = {
+  id: "wallet.status",
+  pluginId: "wallet",
+  order: 70,
+  defaultEnabled: true,
+  Component: EmptyComponent,
+};
 
 export function prefetchVrmToCache(_url?: string): Promise<void> {
   return Promise.resolve();
@@ -52,6 +172,109 @@ export function useVincentState(
     handleVincentLogin: async () => {},
     handleVincentDisconnect: async () => {},
     pollVincentStatus: async () => false,
+  };
+}
+
+export function resolveInitialWalletRpcSelections(
+  walletConfig: WalletConfigStatus | null | undefined,
+): WalletRpcSelections {
+  return normalizeWalletRpcSelections(
+    walletConfig?.selectedRpcProviders ?? DEFAULT_WALLET_RPC_SELECTIONS,
+  );
+}
+
+export function buildWalletRpcUpdateRequest(args: {
+  walletConfig?: WalletConfigStatus | null;
+  rpcFieldValues: Partial<Record<WalletRpcCredentialKey, string>>;
+  selectedProviders:
+    | WalletRpcSelections
+    | Partial<Record<WalletRpcChain, string | null | undefined>>;
+  selectedNetwork?: "mainnet" | "testnet";
+}): WalletConfigUpdateRequest {
+  return {
+    selections: normalizeWalletRpcSelections(args.selectedProviders),
+    walletNetwork:
+      args.selectedNetwork ??
+      (args.walletConfig?.walletNetwork === "testnet" ? "testnet" : "mainnet"),
+    credentials: {},
+  };
+}
+
+function noop(): void {}
+
+async function asyncNoop(): Promise<void> {}
+
+export function useWalletState(_args: object) {
+  return {
+    state: {
+      browserEnabled: true,
+      computerUseEnabled: false,
+      walletEnabled: true,
+      walletAddresses: null,
+      walletConfig: null,
+      walletBalances: null,
+      walletNfts: null,
+      walletLoading: false,
+      walletNftsLoading: false,
+      inventoryView: "tokens",
+      walletExportData: null,
+      walletExportVisible: false,
+      walletApiKeySaving: false,
+      wallets: [],
+      walletPrimary: null,
+      walletPrimaryRestarting: {},
+      walletPrimaryPending: {},
+      cloudRefreshing: false,
+      inventorySort: "value",
+      inventorySortDirection: "desc",
+      inventoryChainFilters: {
+        ethereum: true,
+        base: true,
+        bsc: true,
+        avax: true,
+        solana: true,
+      },
+      walletError: null,
+      registryStatus: null,
+      registryLoading: false,
+      registryRegistering: false,
+      registryError: null,
+      dropStatus: null,
+      dropLoading: false,
+      mintInProgress: false,
+      mintResult: null,
+      mintError: null,
+      mintShiny: false,
+      whitelistStatus: null,
+      whitelistLoading: false,
+    },
+    setBrowserEnabled: noop,
+    setComputerUseEnabled: noop,
+    setWalletEnabled: noop,
+    setWalletAddresses: noop,
+    setInventoryView: noop,
+    setInventorySort: noop,
+    setInventorySortDirection: noop,
+    setInventoryChainFilters: noop,
+    setWalletError: noop,
+    setRegistryError: noop,
+    setMintResult: noop,
+    setMintError: noop,
+    loadWalletConfig: asyncNoop,
+    loadBalances: asyncNoop,
+    loadNfts: asyncNoop,
+    handleWalletApiKeySave: async () => false,
+    setWalletPrimary: asyncNoop,
+    setPrimary: asyncNoop,
+    refreshCloud: asyncNoop,
+    refreshCloudWallets: asyncNoop,
+    handleExportKeys: asyncNoop,
+    loadRegistryStatus: asyncNoop,
+    registerOnChain: asyncNoop,
+    syncRegistryProfile: asyncNoop,
+    loadDropStatus: asyncNoop,
+    mintFromDrop: asyncNoop,
+    loadWhitelistStatus: asyncNoop,
   };
 }
 

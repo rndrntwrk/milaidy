@@ -64,7 +64,7 @@ const AGENT_PHRASES = [
   "AUTOMATE YOUR JOB",
   "SAVE THE WORLD",
   "SMOKE WEED",
-  "HACK VERCEL",  
+  "HACK VERCEL",
   "DESTROY VALUE",
   "GET NXDOMAINED",
   "BOT RUNESCAPE",
@@ -79,7 +79,7 @@ const AGENT_PHRASES = [
   "TUCK YOU IN",
   "WAKE YOU UP",
   "RUN YOUR LIFE",
-  "RUIN YOUR LIFE"
+  "RUIN YOUR LIFE",
 ];
 
 interface ReleaseDownload {

@@ -101,12 +101,21 @@ const capacitorAppEntry = tryResolve("@capacitor/app");
 const shouldResolveRealHyperscapeApp =
   (hasLocalElizaWorkspace &&
     fs.existsSync(
-      path.join(localElizaRoot, "apps/app-hyperscape/package.json"),
+      path.join(localElizaRoot, "plugins/app-hyperscape/package.json"),
     )) ||
   tryResolve("@elizaos/app-hyperscape/package.json") !== undefined;
-const optionalElizaAppAliasPattern = shouldResolveRealHyperscapeApp
-  ? /^@elizaos\/app-(?!(core|hyperscape)(\/|$)).+$/
-  : /^@elizaos\/app-(?!core(\/|$)).+$/;
+const shouldResolveRealWalletApp =
+  (hasLocalElizaWorkspace &&
+    fs.existsSync(path.join(localElizaRoot, "plugins/app-wallet/package.json"))) ||
+  tryResolve("@elizaos/app-wallet/package.json") !== undefined;
+const realElizaAppAliasExclusions = [
+  "core",
+  ...(shouldResolveRealHyperscapeApp ? ["hyperscape"] : []),
+  ...(shouldResolveRealWalletApp ? ["wallet"] : []),
+].join("|");
+const optionalElizaAppAliasPattern = new RegExp(
+  `^@elizaos\\/app-(?!(${realElizaAppAliasExclusions})(\\/|$)).+$`,
+);
 
 function isExpectedWsProxySocketError(
   message: unknown,
@@ -157,7 +166,7 @@ function escapeRegExp(value: string): string {
 }
 
 function resolveNativePluginAliasEntries(): Alias[] {
-  if (!fs.existsSync(nativePluginsRoot)) return [];
+  if (!hasLocalElizaWorkspace || !fs.existsSync(nativePluginsRoot)) return [];
 
   return fs
     .readdirSync(nativePluginsRoot, { withFileTypes: true })
@@ -232,42 +241,71 @@ function resolveLocalUiAliases(): Alias[] {
 }
 
 function resolveLocalElizaAppAliases(): Alias[] {
-  const appsDir = path.join(localElizaRoot, "apps");
-  if (!fs.existsSync(appsDir)) return [];
+  if (!hasLocalElizaWorkspace) return [];
+
+  function resolveExportTarget(value: unknown): string | null {
+    if (typeof value === "string") return value;
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      return null;
+    }
+    const record = value as Record<string, unknown>;
+    for (const condition of ["source", "types", "import", "default"]) {
+      const target = record[condition];
+      if (typeof target === "string") return target;
+    }
+    return null;
+  }
 
   const aliases: Alias[] = [];
-  for (const entry of fs.readdirSync(appsDir, { withFileTypes: true })) {
-    if (!entry.isDirectory()) continue;
-    const pkgPath = path.join(appsDir, entry.name, "package.json");
-    if (!fs.existsSync(pkgPath)) continue;
-    const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8")) as {
-      name?: string;
-      exports?: Record<string, unknown>;
-    };
-    const pkgName = pkg.name;
-    if (!pkgName) continue;
-    const pkgDir = path.dirname(pkgPath);
+  const packageRoots = [
+    { dir: path.join(localElizaRoot, "plugins"), appPrefixOnly: true },
+    { dir: path.join(localElizaRoot, "apps"), appPrefixOnly: false },
+  ];
 
-    for (const [key, value] of Object.entries(pkg.exports || {})) {
-      if (typeof value !== "string") continue;
-      const aliasKey =
-        key === "." ? pkgName : `${pkgName}/${key.replace(/^\.\//, "")}`;
+  for (const packageRoot of packageRoots) {
+    if (!fs.existsSync(packageRoot.dir)) continue;
+
+    for (const entry of fs.readdirSync(packageRoot.dir, {
+      withFileTypes: true,
+    })) {
+      if (!entry.isDirectory()) continue;
+      if (packageRoot.appPrefixOnly && !entry.name.startsWith("app-")) {
+        continue;
+      }
+      const pkgPath = path.join(packageRoot.dir, entry.name, "package.json");
+      if (!fs.existsSync(pkgPath)) continue;
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8")) as {
+        name?: string;
+        exports?: Record<string, unknown>;
+      };
+      const pkgName = pkg.name;
+      if (!pkgName) continue;
+      const pkgDir = path.dirname(pkgPath);
+
+      for (const [key, value] of Object.entries(pkg.exports || {})) {
+        const exportTarget = resolveExportTarget(value);
+        if (!exportTarget) continue;
+        const aliasKey =
+          key === "." ? pkgName : `${pkgName}/${key.replace(/^\.\//, "")}`;
+        aliases.push({
+          find: new RegExp(`^${escapeRegExp(aliasKey)}$`),
+          replacement: path.resolve(pkgDir, exportTarget),
+        });
+      }
+
       aliases.push({
-        find: new RegExp(`^${escapeRegExp(aliasKey)}$`),
-        replacement: path.resolve(pkgDir, value),
+        find: new RegExp(`^${escapeRegExp(pkgName)}/(.*)`),
+        replacement: path.resolve(pkgDir, "src/$1"),
       });
     }
-
-    aliases.push({
-      find: new RegExp(`^${escapeRegExp(pkgName)}/(.*)`),
-      replacement: path.resolve(pkgDir, "src/$1"),
-    });
   }
 
   return aliases;
 }
 
 function resolveLocalSharedAliases(): Alias[] {
+  if (!hasLocalElizaWorkspace) return [];
+
   const sharedPkgPath = path.join(
     localElizaRoot,
     "packages/shared/package.json",
@@ -438,12 +476,16 @@ const viteAllowedHosts: Exclude<
 ];
 
 const NATIVE_PLUGIN_ALIAS_ENTRIES = resolveNativePluginAliasEntries();
+const LOCAL_ELIZA_APP_ALIAS_ENTRIES = resolveLocalElizaAppAliases();
 const CAPACITOR_BUILD_TARGET =
   process.env.MILADY_CAPACITOR_BUILD_TARGET ??
   process.env.ELIZA_CAPACITOR_BUILD_TARGET ??
   "";
 const IS_CAPACITOR_MOBILE_BUILD =
   CAPACITOR_BUILD_TARGET === "ios" || CAPACITOR_BUILD_TARGET === "android";
+const ELIZA_CAPACITOR_PLUGIN_STUB_PATTERN = IS_CAPACITOR_MOBILE_BUILD
+  ? /^@elizaos\/capacitor-(?!(agent|llama)(?:$|\/)).+$/
+  : /^@elizaos\/capacitor-.+$/;
 
 function appShellMetadataPlugin(): Plugin {
   const manifest = `${JSON.stringify(
@@ -1841,6 +1883,9 @@ export default defineConfig({
         find: /^telegram(\/.*)?$/,
         replacement: emptyNodeModuleEntry,
       },
+      // Local app-package aliases must run before optional stubs so local mode
+      // actually exercises eliza/plugins/app-* packages.
+      ...LOCAL_ELIZA_APP_ALIAS_ENTRIES,
       {
         find: /^@clawville\/app-clawville(\/.*)?$/,
         replacement: optionalElizaAppStubEntry,
@@ -1853,16 +1898,15 @@ export default defineConfig({
         find: optionalElizaAppAliasPattern,
         replacement: optionalElizaAppStubEntry,
       },
+      // Capacitor plugins — resolve to local plugin sources when present.
+      ...NATIVE_PLUGIN_ALIAS_ENTRIES,
       {
-        find: /^@elizaos\/capacitor-.+$/,
+        find: ELIZA_CAPACITOR_PLUGIN_STUB_PATTERN,
         replacement: nativePluginStubEntry,
       },
-      // Capacitor plugins — resolve to local plugin sources
-      ...NATIVE_PLUGIN_ALIAS_ENTRIES,
       // Local source aliases are only installed when the eliza checkout exists.
       // Published-only builds should resolve normal @elizaos package exports.
       ...resolveLocalUiAliases(),
-      ...resolveLocalElizaAppAliases(),
       ...resolveLocalSharedAliases(),
       ...resolveLocalAppCoreAliases(),
     ],
@@ -1971,6 +2015,8 @@ export default defineConfig({
       "socks",
       // Native LLM embedding — uses node-llama-cpp, never runs in browser
       "@elizaos/plugin-local-embedding",
+      // OS keychain binding is desktop/server-only and pulls native .node assets.
+      "@napi-rs/keyring",
     ],
   },
   build: {
@@ -2019,6 +2065,7 @@ export default defineConfig({
         )
           return true;
         if (/^@node-llama-cpp\//.test(id)) return true;
+        if (/^@napi-rs\/keyring/.test(id)) return true;
         return false;
       },
       input: {

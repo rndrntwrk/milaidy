@@ -236,11 +236,15 @@ function toDisplayPath(targetPath) {
 
 function runCommand(command, args, { cwd, env = process.env, label } = {}) {
   const printable = label ?? `${command} ${args.join(" ")}`;
+  const childEnv = { ...env };
+  if (cwd && childEnv.npm_package_json) {
+    delete childEnv.npm_package_json;
+  }
 
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd,
-      env,
+      env: childEnv,
       stdio: "inherit",
     });
 
@@ -762,6 +766,7 @@ function discoverElizaPackageDirs(elizaRoot) {
     "apps",
     path.join("cloud", "packages"),
     "packages",
+    path.join("packages", "native-plugins"),
     "plugins",
   ]);
 }

@@ -58,10 +58,8 @@ const localSourceBridgePatchScripts = [
 const packageSafeBridgePatchScripts = [
   "repair-elizaos-package-links.mjs",
   "ensure-elizaos-optional-app-stubs.mjs",
-  "patch-elizaos-package-esm-imports.mjs",
   "patch-elizaos-package-styles.mjs",
-  "patch-elizaos-app-core-mobile-package.mjs",
-  "patch-elizaos-capacitor-agent-package.mjs",
+  "patch-elizaos-app-core-native-browser-package.mjs",
   "patch-elizaos-plugin-browser-bridge-package.mjs",
   // milady-only fix for claude.ai OAuth tier — see script header.
   "patch-coding-agent-adapters-tools-flag.mjs",

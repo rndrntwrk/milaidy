@@ -407,6 +407,7 @@ jobs:
       channel: ${{ needs.version.outputs.channel }}
       draft: false
       publish_release: false
+    secrets: inherit
 
   build-docker:
     name: Agent image build
@@ -418,6 +419,7 @@ jobs:
       version: ${{ needs.version.outputs.tag }}
       push_image: false
       source_sha: ${{ github.sha }}
+    secrets: inherit
 
   build-cloud-image:
     name: Cloud app image build
@@ -429,6 +431,7 @@ jobs:
       version: ${{ needs.version.outputs.tag }}
       push_image: false
       source_sha: ${{ github.sha }}
+    secrets: inherit
 
   build-npm:
     name: npm package build
