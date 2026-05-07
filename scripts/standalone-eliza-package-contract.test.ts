@@ -171,6 +171,7 @@ test("optional app stubs satisfy route plugin and runtime hook imports", () => {
     "@elizaos/app-steward",
     "@elizaos/app-training",
     "@elizaos/app-vincent",
+    "@elizaos/app-wallet",
   ]) {
     assert.match(stubScript, new RegExp(packageName.replace("/", "\\/")));
   }
