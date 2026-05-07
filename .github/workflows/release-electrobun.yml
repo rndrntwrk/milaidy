@@ -1284,7 +1284,7 @@ jobs:
 
       - name: Run Windows packaged renderer bootstrap check
         if: matrix.platform.os == 'windows' && steps.build-electrobun-app.outputs.fallback != 'true'
-        run: bun run test:desktop:playwright
+        run: bun run test:desktop:playwright:windows
 
       - name: Upload Windows Playwright UI diagnostics
         if: failure() && matrix.platform.os == 'windows'

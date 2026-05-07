@@ -166,6 +166,18 @@ function patchElectrobunCliPatchScript(raw) {
   return next === normalized ? raw : next;
 }
 
+function patchDesktopSmokeScript(raw) {
+  return raw
+    .replace(
+      '$defaultAvatarAssetSlugs = @("eliza-1")',
+      '$defaultAvatarAssetSlugs = @("eliza-1", "milady-1")',
+    )
+    .replace(
+      "DEFAULT_AVATAR_ASSET_SLUGS=(eliza-1)",
+      "DEFAULT_AVATAR_ASSET_SLUGS=(eliza-1 milady-1)",
+    );
+}
+
 function applyMiladyReleaseSourcePatches() {
   replaceFileText(
     path.join(
@@ -200,6 +212,22 @@ function applyMiladyReleaseSourcePatches() {
     patchElectrobunCliPatchScript,
     "Electrobun rcedit patch compatibility",
   );
+
+  for (const scriptName of ["smoke-test-windows.ps1", "smoke-test.sh"]) {
+    replaceFileText(
+      path.join(
+        elizaDir,
+        "packages",
+        "app-core",
+        "platforms",
+        "electrobun",
+        "scripts",
+        scriptName,
+      ),
+      patchDesktopSmokeScript,
+      `Electrobun packaged avatar smoke assets (${scriptName})`,
+    );
+  }
 }
 
 function main() {

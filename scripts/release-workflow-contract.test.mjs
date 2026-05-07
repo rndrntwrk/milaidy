@@ -174,6 +174,9 @@ test("eliza CI patches align release source helpers", () => {
   assert.match(patchScript, /build-patched-electrobun-cli\.mjs/);
   assert.match(patchScript, /require\.resolve\("rcedit\/package\.json"\)/);
   assert.match(patchScript, /replace\(\/\\r\\n\/g, "\\n"\)/);
+  assert.match(patchScript, /smoke-test-windows\.ps1/);
+  assert.match(patchScript, /smoke-test\.sh/);
+  assert.match(patchScript, /milady-1/);
   assert.match(
     pruneScript,
     /plugin-agent-orchestrator\|plugin-app-control\|plugin-cli/,
@@ -263,6 +266,15 @@ test("Electrobun release applies Milady eliza overlay before manual build setup"
   assert.match(
     electrobun,
     /node eliza\/packages\/app-core\/scripts\/build-patched-electrobun-cli\.mjs "\$\{\{ steps\.resolve-electrobun\.outputs\.package-dir \}\}" "\$\{\{ matrix\.platform\.artifact-name \}\}"/,
+  );
+});
+
+test("Electrobun Windows release runs packaged Playwright check after disk cleanup", () => {
+  const electrobun = workflow("release-electrobun.yml");
+
+  assert.match(
+    electrobun,
+    /name: Run Windows packaged renderer bootstrap check[\s\S]*?run: bun run test:desktop:playwright:windows/,
   );
 });
 
